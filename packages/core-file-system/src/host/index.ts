@@ -35,6 +35,7 @@ import {
   isEmptySchemaValue,
   normalizeSchemaPack,
   normalizeSchemaValue,
+  sanitizeTagValuesPatch,
   schemaSearchHaystack,
   withBuiltinFields,
   hasCollectionDeleteQuery,
@@ -2361,14 +2362,10 @@ export class DatabaseService extends Service implements Database {
     }
     const pack = this.tags.get(id)
     if (!pack) throw new Error(`unknown tag: ${id}`)
-    for (const key of Object.keys(values)) {
-      const want = String(key ?? '').trim()
-      const hit = pack.fields.some((field) => !field.deleted && (field.key === want || field.label === want))
-      if (!hit) throw new Error(`unknown tag field: ${key}`)
-    }
+    const nextValues = sanitizeTagValuesPatch(pack, values)
     const tags = overlay.tags.includes(id) ? overlay.tags : [...overlay.tags, id]
     return this.update(`${spec.path}/${current.id}`, {
-      tag: { tags, values: { [id]: values } },
+      tag: { tags, values: { [id]: nextValues } },
     })
   }
 

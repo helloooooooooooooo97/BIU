@@ -112,6 +112,7 @@ export type FsContentProps = {
   /** 缺省视为 ready，避免旧调用把未加载当成空正文。 */
   status?: FsContentStatus
   onRetry?: () => void
+  schema?: CollectionSchema
 }
 
 /** 集合自定义呈现：谁 registerView(path)，谁才能在该 path 用这个 mode。整页自己画。 */

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowsPointingInIcon, ArrowsPointingOutIcon, CodeBracketIcon, EyeIcon, QueueListIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
-import type { CollectionSchema, DbRecord, FieldSpec } from '@biu/type-file-system'
+import { fieldIsWritable, sanitizeRecordPatch, type CollectionSchema, type DbRecord, type FieldSpec } from '@biu/type-file-system'
 import { compileHostSource, loadHostComponent } from './page-host-compile.ts'
 import { ExpandNavTitle } from './expand-nav-title.tsx'
 import { SourceEditor } from './source-editor.tsx'
@@ -31,7 +31,13 @@ function viewOf(pageId: string, viewId: string): PagePropSandboxView | undefined
 function propFields(schema?: CollectionSchema) {
   return Object.entries(schema?.fields ?? {})
     .filter(([key, field]) => key !== 'emoji' && key !== schema?.contentField && field.type !== 'file')
-    .map(([key, field]) => ({ key, type: field.type, label: field.label ?? key, writable: field.writable !== false, spec: field }))
+    .map(([key, field]) => ({
+      key,
+      type: field.type,
+      label: field.label ?? key,
+      writable: fieldIsWritable(field),
+      spec: field,
+    }))
 }
 
 function formatValue(value: unknown) {
@@ -102,9 +108,9 @@ function HostField({
       className="page-prop-host-field"
       data-testid={`page-prop-field-${key}`}
       defaultValue={formatValue(record[key])}
-      readOnly={!writable || spec.writable === false || spec.computed === true}
+      readOnly={!writable || !fieldIsWritable(spec)}
       onBlur={(event) => {
-        if (!writable || spec.writable === false || spec.computed === true) return
+        if (!writable || !fieldIsWritable(spec)) return
         onSet(key, parseValue(event.currentTarget.value, spec))
       }}
     />
@@ -224,8 +230,10 @@ export function PagePropHostView({
   const writeRecord = useCallback(
     async (bag: Record<string, unknown>) => {
       try {
-        await patchPageRecord(pageId, bag)
-        setLive((prev) => ({ ...prev, ...bag }))
+        if (!schema) throw new Error('missing collection schema')
+        const patch = sanitizeRecordPatch(schema, bag)
+        await patchPageRecord(pageId, patch)
+        setLive((prev) => ({ ...prev, ...patch }))
         setPatchError('')
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
@@ -233,7 +241,7 @@ export function PagePropHostView({
         throw error
       }
     },
-    [pageId],
+    [pageId, schema],
   )
 
   const compiled = useMemo(() => compileHostSource(source, 'Field'), [source])

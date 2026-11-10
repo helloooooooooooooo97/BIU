@@ -852,6 +852,140 @@ export interface Database {
   writeContent(path: string, value: unknown): Promise<unknown>
 }
 
+function sandboxStringList(value: unknown) {
+  if (value == null || value === '') return []
+  if (Array.isArray(value)) return value.map((item) => String(item)).filter((item) => item !== '')
+  if (typeof value === 'string') {
+    const text = value.trim()
+    if (!text) return []
+    if (text.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(text) as unknown
+        if (Array.isArray(parsed)) return parsed.map((item) => String(item)).filter((item) => item !== '')
+      } catch {
+        /* csv */
+      }
+    }
+    return text.split(',').map((item) => item.trim()).filter(Boolean)
+  }
+  return [String(value)]
+}
+
+function sandboxFieldKind(field: FieldSpec) {
+  if (field.type === 'string[]') return 'multi-select'
+  if (field.type === 'string' && field.enum?.length) return 'select'
+  if (field.format && field.type === 'string') return field.format
+  return field.type
+}
+
+/** Same writability rule as db update: must be explicitly writable and not computed. */
+export function fieldIsWritable(field: FieldSpec | undefined) {
+  return Boolean(field && field.writable && !field.computed)
+}
+
+export function coerceSandboxValue(field: FieldSpec, value: unknown): unknown {
+  const kind = sandboxFieldKind(field)
+  if (kind === 'boolean') return value === true || value === 'true'
+  if (kind === 'multi-select') {
+    const list = sandboxStringList(value)
+    if (field.enum?.length && list.some((item) => !field.enum!.includes(item))) throw new Error('value not in enum')
+    return list
+  }
+  if (kind === 'select') {
+    const selected = String(value ?? '')
+    if (selected && field.enum?.length && !field.enum.includes(selected)) throw new Error('value not in enum')
+    return selected
+  }
+  if (kind === 'number' || kind === 'datetime') {
+    if (value == null || value === '') return null
+    const n = Number(value)
+    if (!Number.isFinite(n)) throw new Error(`expected ${kind}`)
+    return n
+  }
+  if (kind === 'url') {
+    if (value == null || value === '') return ''
+    const href = asHttpHref(value)
+    if (!href) throw new Error('expected url')
+    return href
+  }
+  if (kind === 'person') {
+    if (value == null || value === '') return field.multiple ? [] : null
+    if (field.multiple) return asPersonList(value)
+    const person = asPerson(value)
+    if (!person) throw new Error('expected person')
+    return person
+  }
+  if (kind === 'ref') {
+    if (value == null || value === '') return ''
+    if (Array.isArray(value)) return String(value[0] ?? '').trim()
+    return String(value).trim()
+  }
+  if (kind === 'multi-ref') {
+    return [...new Set(sandboxStringList(value).map((item) => item.trim()).filter(Boolean))]
+  }
+  if (kind === 'image') {
+    if (value == null || value === '') return ''
+    const list = asImageSrcList(value)
+    if (!list.length) throw new Error('expected image')
+    return list.length === 1 ? list[0] : list
+  }
+  if (kind === 'attachment') {
+    if (value == null || value === '') return ''
+    const list = asAttachmentList(value)
+    if (!list.length) return ''
+    return list.length === 1 ? list[0] : list
+  }
+  if (kind === 'file') {
+    if (value == null) return null
+    if (value === '') return ''
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value
+    if (typeof value === 'object') return value
+    throw new Error('expected file')
+  }
+  if (kind === 'action') return value == null ? '' : value
+  if (isTagFieldType(kind)) return normalizeSchemaValue(value)
+  if (Array.isArray(value)) return JSON.stringify(value)
+  if (value && typeof value === 'object') {
+    const rec = value as Record<string, unknown>
+    if (typeof rec.sessionId === 'string' || rec.kind === 'agent' || rec.kind === 'user') return value
+    return JSON.stringify(value)
+  }
+  return String(value ?? '')
+}
+
+export function sanitizeRecordPatch(schema: CollectionSchema, patch: unknown): Record<string, unknown> {
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error('patch values must be an object')
+  const bag = patch as Record<string, unknown>
+  const next: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(bag)) {
+    if (key === 'id') throw new Error('field not writable: id')
+    const field = schema.fields[key]
+    if (!field) {
+      const keys = Object.entries(schema.fields)
+        .filter(([, item]) => fieldIsWritable(item))
+        .map(([item]) => item)
+      throw new Error(`unknown field: ${key}. writable: ${keys.length ? keys.join(', ') : '(none)'}`)
+    }
+    if (!fieldIsWritable(field)) throw new Error(`field not writable: ${key}`)
+    next[key] = coerceSandboxValue(field, value)
+  }
+  return next
+}
+
+export function sanitizeTagValuesPatch(pack: CollectionSchemaPack, values: unknown): Record<string, unknown> {
+  if (!values || typeof values !== 'object' || Array.isArray(values)) throw new Error('patch values must be an object')
+  const bag = values as Record<string, unknown>
+  const next: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(bag)) {
+    const want = String(key ?? '').trim()
+    const field = pack.fields.find((item) => !item.deleted && (item.key === want || item.label === want))
+    if (!field) throw new Error(`unknown tag field: ${key}`)
+    if (!fieldIsWritable(field)) throw new Error(`field not writable: ${field.key}`)
+    next[field.key] = coerceSandboxValue(field, value)
+  }
+  return next
+}
+
 declare module 'cordis' {
   interface Context {
     database: Database

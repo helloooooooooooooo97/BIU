@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { asImageSrc, asImageSrcList, asAttachment, asAttachmentList, asPerson, asPersonList, appendPerson, personKey, actionVisibleToUser, emptySchemaValue, isEmptySchemaValue, hasCollectionDeleteQuery, isReservedSchemaFieldKey, isReservedSchemaFieldLabel, isSchemaFieldKey, normalizeSchemaPack, normalizeSchemaValue, parseAtomicFields, recordBuiltinValues, REQUIRED_RECORD_FIELD_KEYS, REQUIRED_RECORD_FIELDS, retagSchemaValue, schemaSearchHaystack, withBuiltinFields } from './index.ts'
+import { asImageSrc, asImageSrcList, asAttachment, asAttachmentList, asPerson, asPersonList, appendPerson, personKey, actionVisibleToUser, emptySchemaValue, isEmptySchemaValue, hasCollectionDeleteQuery, isReservedSchemaFieldKey, isReservedSchemaFieldLabel, isSchemaFieldKey, normalizeSchemaPack, normalizeSchemaValue, parseAtomicFields, recordBuiltinValues, REQUIRED_RECORD_FIELD_KEYS, REQUIRED_RECORD_FIELDS, retagSchemaValue, sanitizeRecordPatch, sanitizeTagValuesPatch, schemaSearchHaystack, withBuiltinFields } from './index.ts'
 
 test('asImageSrc keeps http, data:image, and same-origin image paths', () => {
   assert.equal(asImageSrc('https://example.com/a.png'), 'https://example.com/a.png')
@@ -283,4 +283,40 @@ test('actionVisibleToUser shows user and both, hides agent', () => {
   assert.equal(actionVisibleToUser({ for: 'both' }), true)
   assert.equal(actionVisibleToUser({ for: 'user' }), true)
   assert.equal(actionVisibleToUser({ for: 'agent' }), false)
+})
+
+test('sanitizeRecordPatch rejects unknown, read-only, computed, and bad types', () => {
+  const schema = {
+    fields: {
+      ...REQUIRED_RECORD_FIELDS,
+      title: { type: 'string', writable: true, label: '标题' },
+      score: { type: 'number', writable: true, label: '分数' },
+      status: { type: 'string', writable: true, enum: ['open', 'done'], label: '状态' },
+      spent: { type: 'number', writable: true, computed: true, label: '耗时' },
+    },
+  }
+  assert.deepEqual(sanitizeRecordPatch(schema, { title: 'A', score: '3' }), { title: 'A', score: 3 })
+  assert.throws(() => sanitizeRecordPatch(schema, { createdBy: { kind: 'user', name: '用户' } }), /field not writable: createdBy/)
+  assert.throws(() => sanitizeRecordPatch(schema, { createdAt: 1 }), /field not writable: createdAt/)
+  assert.throws(() => sanitizeRecordPatch(schema, { id: 'x' }), /field not writable: id/)
+  assert.throws(() => sanitizeRecordPatch(schema, { spent: 1 }), /field not writable: spent/)
+  assert.throws(() => sanitizeRecordPatch(schema, { missing: 1 }), /unknown field: missing/)
+  assert.throws(() => sanitizeRecordPatch(schema, { score: 'nope' }), /expected number/)
+  assert.throws(() => sanitizeRecordPatch(schema, { status: 'closed' }), /value not in enum/)
+})
+
+test('sanitizeTagValuesPatch maps labels and rejects read-only tag fields', () => {
+  const pack = {
+    id: 'movie',
+    label: '电影',
+    fields: [
+      { key: 'status', type: 'string', label: '状态', writable: true },
+      { key: 'locked', type: 'string', label: '锁定', writable: false },
+      { key: 'count', type: 'number', label: '计数', writable: true },
+    ],
+  } as const
+  assert.deepEqual(sanitizeTagValuesPatch(pack, { 状态: '进行中', count: '2' }), { status: '进行中', count: 2 })
+  assert.throws(() => sanitizeTagValuesPatch(pack, { 奥斯卡: true }), /unknown tag field/)
+  assert.throws(() => sanitizeTagValuesPatch(pack, { locked: 'x' }), /field not writable: locked/)
+  assert.throws(() => sanitizeTagValuesPatch(pack, { count: 'nope' }), /expected number/)
 })

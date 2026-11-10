@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowsPointingInIcon, ArrowsPointingOutIcon, CodeBracketIcon, EyeIcon, TagIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
-import type { CollectionSchemaPack, FieldSpec } from '@biu/type-file-system'
+import { fieldIsWritable, sanitizeTagValuesPatch, type CollectionSchemaPack, type FieldSpec } from '@biu/type-file-system'
 import { FieldValuePop } from './field-value-pop.tsx'
 import { compileHostSource, loadHostComponent } from './tag-host-compile.ts'
 import {
@@ -117,7 +117,7 @@ function HostField({
     <FieldValuePop
       record={{ id: 'page-tag-block', title: pack?.label ?? '' }}
       fieldKey={key}
-      field={{ ...field, writable: writable !== false }}
+      field={{ ...field, writable: writable !== false && fieldIsWritable(field) }}
       value={values[key]}
       collectionPath="/pages"
       onSubmit={(next) => onSet(key, next)}
@@ -159,30 +159,29 @@ export function TagHostView({
 
   const writeRecordValues = useCallback(
     async (next: Record<string, unknown>, changed?: Record<string, unknown>) => {
-      const path = liveRecordPath()
-      const bag = changed ?? next
-      if (path.startsWith('/tags/')) {
-        setPatchError('标签定义上没有实例属性值，请在贴了该标签的记录上写入')
-        onValues(next)
-        throw new Error('tag catalog has no instance property values')
-      }
-      if (!path) {
-        setPatchError('没有当前记录，已只更新本块')
-        onValues(next)
-        return
-      }
       try {
+        if (!pack) throw new Error('missing tag schema')
+        const bag = sanitizeTagValuesPatch(pack, changed ?? next)
+        const merged = { ...values, ...bag }
+        const path = liveRecordPath()
+        if (path.startsWith('/tags/')) {
+          throw new Error('tag catalog has no instance property values')
+        }
+        if (!path) {
+          setPatchError('没有当前记录，已只更新本块')
+          onValues(merged)
+          return
+        }
         await patchTagSandbox(path, tagId, bag)
         setPatchError('')
-        onValues(next)
+        onValues(merged)
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         setPatchError(message)
-        onValues(next)
         throw error
       }
     },
-    [onValues, recordPath, tagId],
+    [onValues, pack, recordPath, tagId, values],
   )
 
   useEffect(() => {
@@ -210,7 +209,13 @@ export function TagHostView({
   const biu = useMemo(
     () => ({
       tag: () => ({ id: tagId, title: pack?.label ?? '' }),
-      fields: () => fields.map((item) => ({ key: item.key, type: item.type, label: item.label ?? item.key })),
+      fields: () =>
+        fields.map((item) => ({
+          key: item.key,
+          type: item.type,
+          label: item.label ?? item.key,
+          writable: fieldIsWritable(item),
+        })),
       values: () => ({ ...values }),
       record: () => {
         const path = liveRecordPath()
