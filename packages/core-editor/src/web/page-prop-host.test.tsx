@@ -1,4 +1,4 @@
-import { cleanup, render, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -25,8 +25,12 @@ test('property host paints Field sandbox when the view file is missing', async (
   await waitFor(() => {
     assert.ok(getByTestId('page-prop-host-root'))
   })
-  assert.match(getByTestId('page-prop-host-root').textContent ?? '', /属性沙盒/)
-  assert.ok(getByTestId('page-prop-field-title'))
+  assert.match(getByTestId('page-prop-host-root').textContent ?? '', /属性视图 · 填写进度/)
+  assert.match(getByTestId('page-prop-host-root').textContent ?? '', /演示页/)
+  fireEvent.click([...getByTestId('page-prop-host-root').querySelectorAll('button')].find((btn) => btn.textContent === '编辑')!)
+  await waitFor(() => {
+    assert.ok(getByTestId('page-prop-field-title'))
+  })
   assert.ok(getByTestId('page-prop-field-title').querySelector('.fsdb-pop-host'))
   const pane = getByTestId('page-prop-host-preview')
   assert.equal(pane.hasAttribute('data-sandbox'), true)
@@ -89,6 +93,10 @@ test('property host Field is read-only when the schema field is not writable', a
       }}
     />,
   )
+  await waitFor(() => {
+    assert.ok(getByTestId('page-prop-host-root'))
+  })
+  fireEvent.click([...getByTestId('page-prop-host-root').querySelectorAll('button')].find((btn) => btn.textContent === '编辑')!)
   await waitFor(() => {
     assert.ok(getByTestId('page-prop-field-title'))
     assert.ok(getByTestId('page-prop-field-createdBy'))
