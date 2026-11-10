@@ -114,6 +114,27 @@ export function parseRecordLayouts(raw: unknown, fallbackContent = 'doc'): Recor
   return out
 }
 
+export function parseRecordLayoutDefaultName(raw: unknown) {
+  let list: unknown = raw
+  if (typeof raw === 'string' && raw.trim()) {
+    try {
+      list = JSON.parse(raw) as unknown
+    } catch {
+      return ''
+    }
+  }
+  if (!Array.isArray(list)) return ''
+  for (const item of list) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+    const rec = item as Record<string, unknown>
+    if (String(rec.id ?? '').trim() !== DEFAULT_RECORD_LAYOUT_ID) continue
+    return String(rec.name ?? '').trim()
+  }
+  return ''
+}
+
 export function listedRecordLayouts(raw: unknown, fallbackContent = 'doc'): RecordLayoutView[] {
-  return [defaultRecordLayout(fallbackContent), ...parseRecordLayouts(raw, fallbackContent)]
+  const base = defaultRecordLayout(fallbackContent)
+  const name = parseRecordLayoutDefaultName(raw)
+  return [{ ...base, ...(name ? { name } : {}) }, ...parseRecordLayouts(raw, fallbackContent)]
 }

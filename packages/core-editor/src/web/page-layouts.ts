@@ -4,6 +4,7 @@ import {
   defaultPageLayout,
   listedPageLayouts as mergeListed,
   parsePageLayouts,
+  parseRecordLayoutDefaultName,
   PAGE_DEFAULT_LAYOUT_ID,
   type PageLayoutView,
 } from '../page-layouts.ts'
@@ -65,8 +66,11 @@ function readActiveStore(): Record<string, string> {
 }
 
 function withDisplay(pageId: string, layout: PageLayoutView): PageLayoutView {
+  hydrateDisplay()
   const overlay = display.get(displayKey(pageId, layout.id))
-  return overlay ? { ...layout, ...overlay, id: layout.id, name: layout.name, builtin: layout.builtin } : layout
+  if (!overlay) return layout
+  const name = String(overlay.name ?? '').trim()
+  return { ...layout, ...overlay, id: layout.id, name: name || layout.name, builtin: layout.builtin }
 }
 
 export function getPageLayouts(pageId: string): PageLayoutView[] {
@@ -200,6 +204,8 @@ export async function loadPageLayouts(pageId: string, seed?: unknown) {
   if (seed != null && seed !== '') {
     const parsed = parsePageLayouts(seed)
     setPageLayouts(id, parsed)
+    const name = parseRecordLayoutDefaultName(seed)
+    if (name) persistDisplay(id, PAGE_DEFAULT_LAYOUT_ID, { name })
   } else if (!getPageLayouts(id).length) {
     setPageLayouts(id, [])
   }
@@ -212,10 +218,15 @@ export async function savePageLayouts(pageId: string, views: PageLayoutView[]) {
   if (!id) return false
   const next = parsePageLayouts(views)
   setPageLayouts(id, next)
+  const defaultName = String(display.get(displayKey(id, PAGE_DEFAULT_LAYOUT_ID))?.name ?? '').trim()
+  const payload =
+    defaultName && defaultName !== defaultPageLayout().name
+      ? [{ id: PAGE_DEFAULT_LAYOUT_ID, name: defaultName }, ...next]
+      : next
   const res = await fetch('/api/db/update', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ path: `/pages/${id}`, content: { layouts: JSON.stringify(next) } }),
+    body: JSON.stringify({ path: `/pages/${id}`, content: { layouts: JSON.stringify(payload) } }),
   })
   if (!res.ok) return false
   window.dispatchEvent(new Event('fsdb:change'))
@@ -294,8 +305,13 @@ export async function renamePageLayout(pageId: string, layoutId: string, name: s
   const target = String(layoutId ?? '').trim()
   const nextName = name.trim()
   if (!id || !target || !nextName) return
-  const current = getPageLayouts(id).find((item) => item.id === target)
+  const current = listedPageLayouts(id).find((item) => item.id === target)
   if (!current) return
+  if (current.builtin) {
+    persistDisplay(id, target, { name: nextName })
+    await savePageLayouts(id, getPageLayouts(id))
+    return
+  }
   await savePageLayouts(
     id,
     getPageLayouts(id).map((item) => (item.id === target ? { ...item, name: nextName } : item)),

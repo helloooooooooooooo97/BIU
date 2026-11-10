@@ -4,6 +4,7 @@ import {
   DEFAULT_RECORD_PROP_VIEW_ID,
   defaultRecordLayout,
   listedRecordLayouts as mergeListed,
+  parseRecordLayoutDefaultName,
   parseRecordLayouts,
   uniqueViewName,
   type RecordLayoutView,
@@ -55,9 +56,22 @@ function writeJson(key: string, value: Record<string, unknown>) {
   localStorage.setItem(key, JSON.stringify(value))
 }
 
+function hydrateDisplay() {
+  if (display.size) return
+  const all = readJson(DISPLAY_KEY)
+  for (const [slot, value] of Object.entries(all)) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      display.set(slot, value as Partial<RecordLayoutView>)
+    }
+  }
+}
+
 function withDisplay(key: string, layout: RecordLayoutView): RecordLayoutView {
+  hydrateDisplay()
   const overlay = display.get(displayKey(key, layout.id))
-  return overlay ? { ...layout, ...overlay, id: layout.id, name: layout.name, builtin: layout.builtin } : layout
+  if (!overlay) return layout
+  const name = String(overlay.name ?? '').trim()
+  return { ...layout, ...overlay, id: layout.id, name: name || layout.name, builtin: layout.builtin }
 }
 
 export function getRecordLayouts(collectionPath: string, recordId: string): RecordLayoutView[] {
@@ -123,8 +137,11 @@ export function useActiveRecordLayout(collectionPath: string, recordId: string, 
 export async function loadRecordLayouts(collectionPath: string, recordId: string, seed?: unknown, fallbackContent = 'doc') {
   const id = String(recordId ?? '').trim()
   if (!id) return []
+  hydrateDisplay()
   if (seed != null && seed !== '') {
     setRecordLayouts(collectionPath, id, parseRecordLayouts(seed, fallbackContent))
+    const name = parseRecordLayoutDefaultName(seed)
+    if (name) persistDisplay(recordViewKey(collectionPath, id), DEFAULT_RECORD_LAYOUT_ID, { name })
   } else if (!getRecordLayouts(collectionPath, id).length) {
     setRecordLayouts(collectionPath, id, [])
   }
@@ -137,10 +154,15 @@ export async function saveRecordLayouts(collectionPath: string, recordId: string
   if (!id || !path) return false
   const next = parseRecordLayouts(views)
   setRecordLayouts(path, id, next)
+  const defaultName = String(display.get(displayKey(recordViewKey(path, id), DEFAULT_RECORD_LAYOUT_ID))?.name ?? '').trim()
+  const payload =
+    defaultName && defaultName !== defaultRecordLayout().name
+      ? [{ id: DEFAULT_RECORD_LAYOUT_ID, name: defaultName }, ...next]
+      : next
   const res = await fetch('/api/db/update', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ path: `${path}/${id}`, content: { layouts: JSON.stringify(next) } }),
+    body: JSON.stringify({ path: `${path}/${id}`, content: { layouts: JSON.stringify(payload) } }),
   })
   if (!res.ok) return false
   window.dispatchEvent(new Event('fsdb:change'))
@@ -222,6 +244,13 @@ export async function renameRecordLayout(collectionPath: string, recordId: strin
   const target = String(layoutId ?? '').trim()
   const nextName = name.trim()
   if (!path || !id || !target || !nextName) return
+  const current = listedRecordLayouts(path, id).find((item) => item.id === target)
+  if (!current) return
+  if (current.builtin) {
+    persistDisplay(recordViewKey(path, id), target, { name: nextName })
+    await saveRecordLayouts(path, id, getRecordLayouts(path, id))
+    return
+  }
   await saveRecordLayouts(
     path,
     id,

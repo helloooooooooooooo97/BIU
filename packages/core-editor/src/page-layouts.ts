@@ -2,9 +2,12 @@ import {
   DEFAULT_RECORD_LAYOUT_ID,
   defaultRecordLayout,
   listedRecordLayouts,
+  parseRecordLayoutDefaultName,
   parseRecordLayouts,
   type RecordLayoutView,
 } from '@biu/type-file-system/record-views'
+
+export { parseRecordLayoutDefaultName }
 
 export const PAGE_DEFAULT_LAYOUT_ID = DEFAULT_RECORD_LAYOUT_ID
 export type PageLayoutView = RecordLayoutView

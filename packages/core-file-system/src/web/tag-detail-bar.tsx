@@ -278,38 +278,36 @@ export function TagDetailBar({
                         >
                           <Square2StackIcon aria-hidden className="size-[14px]" />
                         </button>
+                        <button
+                          type="button"
+                          className="tasks-viewdd-act"
+                          title="重命名"
+                          aria-label={`重命名 ${item.name}`}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            setRenamingView(item.id)
+                            setRenameDraft(item.name)
+                          }}
+                        >
+                          <PencilSquareIcon aria-hidden className="size-[14px]" />
+                        </button>
                         {item.builtin ? null : (
-                          <>
-                            <button
-                              type="button"
-                              className="tasks-viewdd-act"
-                              title="重命名"
-                              aria-label={`重命名 ${item.name}`}
-                              onMouseDown={(event) => event.preventDefault()}
-                              onClick={(event) => {
-                                event.preventDefault()
-                                event.stopPropagation()
-                                setRenamingView(item.id)
-                                setRenameDraft(item.name)
-                              }}
-                            >
-                              <PencilSquareIcon aria-hidden className="size-[14px]" />
-                            </button>
-                            <button
-                              type="button"
-                              className="tasks-viewdd-act is-danger"
-                              title="删除"
-                              aria-label={`删除 ${item.name}`}
-                              onMouseDown={(event) => event.preventDefault()}
-                              onClick={(event) => {
-                                event.preventDefault()
-                                event.stopPropagation()
-                                void deleteRecordLayout(TAGS_PATH, tagId, item.id, 'table').catch(() => undefined)
-                              }}
-                            >
-                              <TrashGlyph aria-hidden className="size-[14px]" />
-                            </button>
-                          </>
+                          <button
+                            type="button"
+                            className="tasks-viewdd-act is-danger"
+                            title="删除"
+                            aria-label={`删除 ${item.name}`}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={(event) => {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              void deleteRecordLayout(TAGS_PATH, tagId, item.id, 'table').catch(() => undefined)
+                            }}
+                          >
+                            <TrashGlyph aria-hidden className="size-[14px]" />
+                          </button>
                         )}
                       </span>
                     </div>
