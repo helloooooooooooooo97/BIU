@@ -284,8 +284,15 @@ async function defaultRemove(collectionPath: string, record: DbRecord, fieldKey:
   }
 }
 
+export function canCopyViewCatalogItem(fieldKey: string, item: { builtin?: boolean }) {
+  if (item.builtin) return false
+  return fieldKey === 'views' || fieldKey === 'propViews'
+}
+
 export function copyViewCatalog(collectionPath: string, record: DbRecord, fieldKey: string, viewId: string) {
   if (!isViewCatalogField(fieldKey)) return
+  const option = listViewCatalogOptions(collectionPath, record, fieldKey).find((item) => item.id === viewId)
+  if (!option || !canCopyViewCatalogItem(fieldKey, option)) return
   const host = hostFor(collectionPath)
   if (host?.copy) {
     void host.copy(record, fieldKey, viewId)

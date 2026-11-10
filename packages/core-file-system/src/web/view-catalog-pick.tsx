@@ -4,6 +4,7 @@ import { Square2StackIcon } from '@heroicons/react/16/solid'
 import type { DbRecord } from '@biu/type-file-system'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import {
+  canCopyViewCatalogItem,
   copyViewCatalog,
   deleteViewCatalog,
   listViewCatalogOptions,
@@ -53,7 +54,10 @@ export function ViewCatalogPickPanel({
       empty={!available.length ? <div className="db-search-empty">没有匹配项</div> : null}
     >
       <div className="tasks-sort-list">
-        {available.map((item) => (
+        {available.map((item) => {
+          const canCopy = canCopyViewCatalogItem(fieldKey, item)
+          const canDelete = !item.builtin
+          return (
           <div key={item.id} className={`tasks-viewdd-item${item.id === selected ? ' is-active' : ''}`}>
             <button
               type="button"
@@ -68,7 +72,9 @@ export function ViewCatalogPickPanel({
               <ViewCatalogGlyph icon={item.icon} />
               <span className="tasks-viewdd-item-name">{item.name}</span>
             </button>
+            {canCopy || canDelete ? (
             <span className="tasks-viewdd-item-actions">
+              {canCopy ? (
               <button
                 type="button"
                 className="tasks-viewdd-act"
@@ -82,7 +88,8 @@ export function ViewCatalogPickPanel({
               >
                 <Square2StackIcon aria-hidden className="size-[14px]" />
               </button>
-              {item.builtin ? null : (
+              ) : null}
+              {canDelete ? (
                 <button
                   type="button"
                   className="tasks-viewdd-act is-danger"
@@ -97,10 +104,12 @@ export function ViewCatalogPickPanel({
                 >
                   <TrashGlyph aria-hidden className="size-[14px]" />
                 </button>
-              )}
+              ) : null}
             </span>
+            ) : null}
           </div>
-        ))}
+          )
+        })}
       </div>
     </PickPanel>
   )
