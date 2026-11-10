@@ -182,7 +182,7 @@ export function defaultSandboxSource(_title = '') {
           <span style={{ width: 6, height: 6, borderRadius: 999, background: GREEN, boxShadow: '0 0 0 3px color-mix(in srgb, ' + GREEN + ' 22%, transparent)' }} />
           内容视图 · 页面概览
         </span>
-        <h1 style={{ margin: 0, fontSize: 44, lineHeight: 1.06, fontWeight: 700, letterSpacing: '-.032em' }}>{page.title || '未命名页面'}</h1>
+        <h1 style={{ margin: 0, fontSize: 44, lineHeight: 1.06, fontWeight: 700, letterSpacing: '-.032em' }}>内容视图介绍</h1>
         <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, color: 'var(--biu-color-text-muted)', maxWidth: 600 }}>
           体量、属性填写进度与可用能力，一屏看完。
         </p>
