@@ -7,7 +7,7 @@ import { getPageViews, setPageViews } from './page-views.ts'
 import { getPagePropPresentMode, PAGE_PROP_TABLE_VIEW_ID, setPagePropPresentMode } from './page-prop-present.ts'
 import { setPagePropViews } from './page-prop-views.ts'
 import { getPageFind, getPageViewState, patchPageFind, patchPageViewState } from './page-view-state.ts'
-import { resetPageLayoutState } from './page-layouts.ts'
+import { PAGE_DEFAULT_LAYOUT_ID, resetPageLayoutState } from './page-layouts.ts'
 
 afterEach(() => {
   cleanup()
@@ -191,6 +191,24 @@ test('detail bar new menu creates global, property, and content views', () => {
   assert.ok(layout.querySelector('svg'))
   assert.ok(prop.querySelector('svg'))
   assert.ok(content.querySelector('svg'))
+})
+
+test('toolbar icons match the selected flyout item', () => {
+  const { getByLabelText, getByTestId } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} collectionPath="/pages" />)
+  fireEvent.click(getByLabelText('属性展示'))
+  fireEvent.click(getByTestId('page-prop-view-hidden'))
+  fireEvent.click(getByLabelText('属性展示'))
+  assert.equal(
+    getByTestId('page-prop-view').querySelector('svg')?.innerHTML,
+    getByTestId('page-prop-view-hidden').querySelector('svg')?.innerHTML,
+  )
+  fireEvent.click(getByLabelText('查看模式'))
+  fireEvent.click(getByTestId('page-view-hidden'))
+  fireEvent.click(getByTestId('page-layout-tab'))
+  assert.equal(
+    getByTestId('page-layout-tab').querySelector('svg')?.innerHTML,
+    getByTestId(`page-layout-${PAGE_DEFAULT_LAYOUT_ID}`).querySelector('svg')?.innerHTML,
+  )
 })
 
 test('content and property menus include a builtin hidden view', () => {

@@ -64,6 +64,16 @@ const MODES = [
   { id: 'hidden' as const, label: '隐藏', Icon: EyeSlashIcon },
 ]
 
+function layoutKindIcon(kind?: string) {
+  return kind === 'sandbox' ? CodeBracketIcon : Squares2X2Icon
+}
+
+function propPresentIcon(propViewId: string) {
+  if (propViewId === PAGE_PROP_HIDDEN_VIEW_ID) return EyeSlashIcon
+  if (propViewId === PAGE_PROP_TABLE_VIEW_ID) return TableCellsIcon
+  return QueueListIcon
+}
+
 const KINDS = ['paragraph', 'heading', 'bulletList', 'orderedList', 'blockquote', 'codeBlock', 'table', 'pageBlock', 'slide', 'blockMath', 'image']
 
 const SORTS: { id: PageSort; label: string }[] = [
@@ -149,6 +159,8 @@ export function PageDetailBar({
       : propSandbox
         ? propSandbox.id
         : PAGE_PROP_TABLE_VIEW_ID
+  const LayoutIcon = layoutKindIcon(activeLayout.kind)
+  const PropIcon = propPresentIcon(propViewId)
   const filterOn = pageFilterActive(view)
   const sortOn = view.sort !== 'doc'
   const props = Object.entries(schema?.fields ?? {})
@@ -225,7 +237,7 @@ export function PageDetailBar({
               data-testid="page-layout-tab"
               onClick={() => toggle('view')}
             >
-              <CurrentIcon aria-hidden className="size-[14px]" />
+              <LayoutIcon aria-hidden className="size-[14px]" />
               <span className="tasks-viewdd-name">{activeLayout.name}</span>
             </button>
           </div>
@@ -423,7 +435,7 @@ export function PageDetailBar({
               data-testid="page-prop-view"
               onClick={() => toggle('props')}
             >
-              <QueueListIcon aria-hidden className="size-[14px]" />
+              <PropIcon aria-hidden className="size-[14px]" />
             </button>
             {open === 'props' ? (
               <HeadlessDismiss onDismiss={() => setOpen(null)} insideRef={propRef}>
