@@ -2,7 +2,9 @@ import { afterEach, test } from 'vitest'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { applyPageAssetChanged, peekPageFile, readPageFile, rememberPageFile, resetPageFileState, uniqueViewName, writePageFile } from './page-views.ts'
+import { applyPageAssetChanged, deletePageSandboxView, peekPageFile, readPageFile, rememberPageFile, resetPageFileState, setPageViews, uniqueViewName, writePageFile } from './page-views.ts'
+import { applyPageLayout, getActivePageLayout, setActivePageLayoutId, setPageLayouts } from './page-layouts.ts'
+import { getPagePresentMode, setPagePresentMode } from './source-mode.ts'
 
 afterEach(() => {
   resetPageFileState()
@@ -28,6 +30,22 @@ function mockFetch(handler: (url: string, init?: RequestInit) => { status: numbe
   }) as typeof fetch
   return calls
 }
+
+test('deleting a content view falls back to 文档 even if the layout still points at it', async () => {
+  globalThis.fetch = (async () => ({
+    ok: true,
+    json: async () => ({}),
+  })) as typeof fetch
+  setPageViews('p-del', [{ id: 'need', name: '新视图', kind: 'sandbox', file: 'a.jsx', dataFile: 'b.json' }])
+  setPageLayouts('p-del', [{ id: 'lay', name: '组合', contentViewId: 'need', propViewId: 'table', sort: 'doc', filterKinds: [] }])
+  setActivePageLayoutId('p-del', 'lay')
+  setPagePresentMode('p-del', 'need')
+  applyPageLayout('p-del', getActivePageLayout('p-del'))
+  assert.equal(getPagePresentMode('p-del'), 'need')
+  await deletePageSandboxView('p-del', 'need')
+  applyPageLayout('p-del', getActivePageLayout('p-del'))
+  assert.equal(getPagePresentMode('p-del'), 'doc')
+})
 
 test('unique view names match table copy numbering', () => {
   assert.equal(uniqueViewName('官网 副本', []), '官网 副本')
