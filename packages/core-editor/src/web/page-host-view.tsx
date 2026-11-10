@@ -18,7 +18,7 @@ import { capturePageScroll } from './page-scroll-pin.ts'
 import { getPageEditor, usePageEditorVersion } from './service.ts'
 import { SourceEditor } from './source-editor.tsx'
 import { defaultSandboxSource } from '../page-views.ts'
-import { pageHostPickKey, stampPageHostPickSurfaces } from './page-host-pick.ts'
+import { bindSandboxPickPane, pageHostPickKey } from './page-host-pick.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 
 export type HostBlockInfo = {
@@ -506,22 +506,12 @@ export function PageHostView({
   }, [compiled])
 
   useLayoutEffect(() => {
-    const pane = previewRef.current
-    if (!pane || !showPreview) return
-    const key = pageHostPickKey(pageId, viewId)
-    const source = {
+    if (!showPreview) return
+    return bindSandboxPickPane(previewRef.current, pageHostPickKey(pageId, viewId), {
       path: `/pages/${pageId}`,
       ...(view?.file ? { name: view.file } : {}),
       ...(view?.name ? { title: view.name } : {}),
-    }
-    const observer = new MutationObserver(() => {
-      observer.disconnect()
-      stampPageHostPickSurfaces(pane, key, source)
-      observer.observe(pane, { childList: true, subtree: true })
     })
-    stampPageHostPickSurfaces(pane, key, source)
-    observer.observe(pane, { childList: true, subtree: true })
-    return () => observer.disconnect()
   }, [showPreview, pageId, viewId, view?.file, view?.name, preview.Preview])
 
   const card = (
