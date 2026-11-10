@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
+  canCopyViewCatalogItem,
   isViewCatalogField,
   listViewCatalogOptions,
   selectedViewCatalogOption,
@@ -61,7 +62,26 @@ test('property flyout uses the view switcher instead of a string textarea', () =
   assert.match(pop, /isViewCatalogField\(fieldKey\) \? ' is-select is-view-catalog'/)
   const pick = readFileSync(resolve(import.meta.dirname, './view-catalog-pick.tsx'), 'utf8')
   assert.match(pick, /ViewCatalogGlyph/)
+  assert.match(pick, /canCopyViewCatalogItem/)
   assert.match(pick, /copyViewCatalog/)
   assert.match(pick, /deleteViewCatalog/)
   assert.match(pick, /tasks-viewdd-act is-danger/)
+  assert.match(pick, /fsdb-viewcat-pick-row/)
+})
+
+test('only custom content and property views can be copied', () => {
+  assert.equal(canCopyViewCatalogItem('views', { id: 'doc' }), false)
+  assert.equal(canCopyViewCatalogItem('views', { id: 'outline' }), false)
+  assert.equal(canCopyViewCatalogItem('views', { id: 'table' }), false)
+  assert.equal(canCopyViewCatalogItem('views', { id: 'source' }), false)
+  assert.equal(canCopyViewCatalogItem('propViews', { id: 'table' }), false)
+  assert.equal(canCopyViewCatalogItem('layouts', { id: 'need', builtin: false }), false)
+  assert.equal(canCopyViewCatalogItem('views', { id: 'sandbox-1' }), true)
+  assert.equal(canCopyViewCatalogItem('propViews', { id: 'wide' }), true)
+  const pick = readFileSync(resolve(import.meta.dirname, './view-catalog-pick.tsx'), 'utf8')
+  assert.match(pick, /const canCopy = canCopyViewCatalogItem\(fieldKey, item\)/)
+  assert.match(pick, /flexDirection: 'row'/)
+  const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
+  assert.match(css, /\.fsdb-viewcat-pick-row\{[^}]*flex-direction:row/)
+  assert.match(css, /\.fsdb-viewcat-pick-main\{[^}]*flex-direction:row/)
 })
