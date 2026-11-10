@@ -47,6 +47,8 @@ function prepareJsx(source: string) {
 export type SandboxIO = {
   read: () => Promise<unknown>
   write: (value: unknown) => Promise<void>
+  record?: () => { path: string; collection: string; id: string }
+  patch?: (values: unknown) => Promise<unknown>
 }
 
 function mountJsx(source: string, root: ShadowRoot, io?: SandboxIO) {
@@ -56,6 +58,8 @@ function mountJsx(source: string, root: ShadowRoot, io?: SandboxIO) {
   const biu = {
     read: () => (live && io ? io.read() : Promise.resolve(null)),
     write: (value: unknown) => (live && io ? io.write(value) : Promise.resolve()),
+    record: () => (live && io?.record ? io.record() : { path: '', collection: '', id: '' }),
+    patch: (values: unknown) => (live && io?.patch ? io.patch(values) : Promise.reject(new Error('no current record'))),
   }
   ;(root as ShadowRoot & { __sandboxIoLive?: () => void }).__sandboxIoLive = () => {
     live = false

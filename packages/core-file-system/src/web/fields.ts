@@ -1,5 +1,6 @@
 import type { AtomicFieldType, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType, SchemaFieldValue } from '@biu/type-file-system'
 import { asAttachment, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, asPersonList, BUILTIN_FIELD_KEYS, isTagFieldType, isRefFieldType, isReservedSchemaFieldKey, isSchemaFieldKey, normalizeSchemaValue, personKey } from '@biu/type-file-system'
+import { parseRecordLayouts, parseRecordSandboxes } from '@biu/type-file-system/record-views'
 import { TAG_FLAT_PREFIX, parseTagFlatColumnKey, readTagFieldValue } from '../query-logic.ts'
 import {
   cellGroupValue,
@@ -47,6 +48,42 @@ export function enumDisplayLabel(field: FieldSpec | undefined, value: unknown) {
 export function fieldValueOptions(rows: DbRecord[], key: string, field: FieldSpec) {
   const values = field.enum?.length ? field.enum : uniqueValues(rows, key, field)
   return values.map((value) => ({ value, label: enumDisplayLabel(field, value) }))
+}
+
+export function filterFieldValueOptions(
+  rows: DbRecord[],
+  key: string,
+  field: FieldSpec,
+  tags: Array<{ id: string; label?: string }> = [],
+): Array<{ value: string; label: string }> {
+  const kind = resolveFieldType(field)
+  if (kind === 'boolean') {
+    return [
+      { value: 'true', label: '是' },
+      { value: 'false', label: '否' },
+    ]
+  }
+  if (kind === 'tag') {
+    const seen = new Set<string>()
+    const out: Array<{ value: string; label: string }> = []
+    for (const tag of tags) {
+      const id = String(tag.id ?? '').trim()
+      if (!id || seen.has(id)) continue
+      seen.add(id)
+      out.push({ value: id, label: String(tag.label ?? '').trim() || id })
+    }
+    for (const id of uniqueValues(rows, key, field)) {
+      if (!id || seen.has(id)) continue
+      seen.add(id)
+      const hit = tags.find((tag) => tag.id === id)
+      out.push({ value: id, label: String(hit?.label ?? '').trim() || id })
+    }
+    return out
+  }
+  if ((kind === 'select' || kind === 'multi-select') && field.enum?.length) {
+    return field.enum.map((value) => ({ value, label: enumDisplayLabel(field, value) }))
+  }
+  return fieldValueOptions(rows, key, field)
 }
 
 export function fieldEntries(schema: CollectionSchema | undefined) {
@@ -341,10 +378,20 @@ export function asTime(value: unknown): number {
   return Number.isFinite(n) && n > 0 ? n : 0
 }
 
+export function formatViewCatalog(value: unknown): string {
+  const sandboxes = parseRecordSandboxes(value)
+  if (sandboxes.length) return sandboxes.map((item) => item.name).filter(Boolean).join('、')
+  const layouts = parseRecordLayouts(value)
+  if (layouts.length) return layouts.map((item) => item.name).filter(Boolean).join('、')
+  return ''
+}
+
 export function formatField(field: FieldSpec | undefined, value: unknown): string {
-  if (!field) return value == null || value === '' ? '' : String(value)
-  const kind = resolveFieldType(field)
   if (value == null || value === '') return ''
+  const catalog = formatViewCatalog(value)
+  if (catalog && (!field || resolveFieldType(field) === 'string')) return catalog
+  if (!field) return String(value)
+  const kind = resolveFieldType(field)
   if (kind === 'datetime') {
     const n = asTime(value)
     if (!n) return ''

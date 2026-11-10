@@ -55,6 +55,28 @@ export function pageHostPickKey(pageId: string, viewId: string) {
   return `page-host-${String(pageId ?? '').trim()}-${String(viewId ?? '').trim()}`
 }
 
+export function pagePropHostPickKey(pageId: string, viewId: string) {
+  return `page-prop-host-${String(pageId ?? '').trim()}-${String(viewId ?? '').trim()}`
+}
+
+/** 内容 / 属性 / 其它宿主预览只要挂上 data-sandbox，都走这一处打戳。 */
+export function bindSandboxPickPane(
+  pane: HTMLElement | null,
+  blockKey: string,
+  source?: { path?: string; name?: string; title?: string },
+) {
+  if (!pane) return () => {}
+  const run = () => stampPageHostPickSurfaces(pane, blockKey, source)
+  const observer = new MutationObserver(() => {
+    observer.disconnect()
+    run()
+    observer.observe(pane, { childList: true, subtree: true })
+  })
+  run()
+  observer.observe(pane, { childList: true, subtree: true })
+  return () => observer.disconnect()
+}
+
 export function stampPageHostPickSurfaces(
   root: HTMLElement,
   blockKey: string,

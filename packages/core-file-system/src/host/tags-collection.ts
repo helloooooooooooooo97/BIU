@@ -1,11 +1,14 @@
-import type { CollectionInfo, CollectionListQuery, CollectionSpec, DbRecord } from '@biu/type-file-system'
+import type { CollectionInfo, CollectionListQuery, CollectionNamedDocs, CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { parseAtomicFields, recordBuiltinValues, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 import { TagStore, slugTagId } from './tags-store.ts'
 import { normalizeCollectionPath } from '../paths.ts'
+import { parseTagViews, tagViewFileNames } from '../tag-views.ts'
 
 const TAG_FIELDS_EXAMPLE = '[{"key":"类别","type":"string"}]'
 const TAG_FIELDS_DESCRIPTION =
   '属性定义。db_update / db_create 可传数组或 JSON 字符串，两种形状等价。例 [{"key":"类别","type":"string"}]。同一标签下属性名不能重复。type 必须是 string|number|boolean|select|multi-select|datetime|url|image|attachment|file|action|facet|person|ref|multi-ref（没有 text）。其它表读该属性的列 key 为 tag::<本标签id>::<字段key>，例如 tag::tag::类别。'
+const TAG_VIEWS_DESCRIPTION =
+  '本标签特制沙盒视图。JSON 数组：id、name、kind=sandbox、file、dataFile。改视图源码用 db_file path=/tags/<id> name=<file>。表格是内置视图，不写在这里。标签块可切换这些视图，用来呈现块里的属性值。'
 
 export function stampRecordId(collection: string, recordId: string) {
   const table = normalizeCollectionPath(collection).replace(/^\//, '')
@@ -34,12 +37,14 @@ export function tagsCollection(
     notes = '',
     createdAt = 0,
     updatedAt = 0,
+    views: unknown[] = [],
   ): DbRecord => ({
     id,
     title: label,
     fieldCount: fields.length,
     stampCount,
     fields: JSON.stringify(fields),
+    views,
     notes,
     ...recordBuiltinValues({ createdAt, updatedAt }),
   })
@@ -60,6 +65,7 @@ export function tagsCollection(
       item.notes,
       item.createdAt,
       item.updatedAt,
+      item.views,
     )
   }
 
@@ -74,6 +80,7 @@ export function tagsCollection(
         item.notes,
         item.createdAt,
         item.updatedAt,
+        item.views,
       ),
     )
   }
@@ -101,7 +108,7 @@ export function tagsCollection(
       route: '/db-facets',
       title: '标签',
       inspector: true,
-      blurb: '工作区全局标签定义，可贴到任意表的记录。列表 db_list /tags；某标签已贴过哪些记录用 filter.tagId。新建 db_create /tags records=[{title}]（id 由标题 slug）。改名或属性 db_update /tags/<id>，fields 传数组或 JSON 字符串均可，例 [{"key":"类别","type":"string"}]；同一标签下属性名不能重复；type 必须是白名单（string 不是 text）。其它表 db_list 读属性列用 tag::<标签id>::<字段key>，例如 tag::need::类别。正文 notes 用 db_content。把标签贴到记录并填属性：db_update 那条记录的 tag。一个标签 values 可扁平；多个标签 values 必须按标签 id 分子对象。省略 tags 只改属性，不会撕掉其它标签。本表没有 db_action。',
+      blurb: '工作区全局标签定义，可贴到任意表的记录。列表 db_list /tags；某标签已贴过哪些记录用 filter.tagId。新建 db_create /tags records=[{title}]（id 由标题 slug）。改名或属性 db_update /tags/<id>，fields 传数组或 JSON 字符串均可，例 [{"key":"类别","type":"string"}]；同一标签下属性名不能重复；type 必须是白名单（string 不是 text）。特制沙盒视图 db_update views=[{id,name,kind:"sandbox",file,dataFile}]，源码 db_file path=/tags/<id> name=<file>。其它表 db_list 读属性列用 tag::<标签id>::<字段key>，例如 tag::need::类别。正文 notes 用 db_content。把标签贴到记录并填属性：db_update 那条记录的 tag。一个标签 values 可扁平；多个标签 values 必须按标签 id 分子对象。省略 tags 只改属性，不会撕掉其它标签。本表没有 db_action。',
       order: 31,
       icon: 'tag',
     },
@@ -123,6 +130,12 @@ export function tagsCollection(
           description: TAG_FIELDS_DESCRIPTION,
           example: TAG_FIELDS_EXAMPLE,
         },
+        views: {
+          type: 'string',
+          label: '内容视图',
+          writable: true,
+          description: TAG_VIEWS_DESCRIPTION,
+        },
         notes: { type: 'file', label: '正文', writable: true },
         table: { type: 'string', label: '来源表', computed: true },
         tablePath: { type: 'string', label: '表路径', computed: true },
@@ -130,6 +143,7 @@ export function tagsCollection(
         tagId: { type: 'string', label: '标签', computed: true },
       },
     },
+    namedDocs: tagNamedDocs(store),
     list: (query?: CollectionListQuery) => {
       const tagFilter = String(query?.filter?.tagId ?? '').trim()
       let listed = tagFilter ? stampRows(tagFilter) : tagRows()
@@ -172,6 +186,7 @@ export function tagsCollection(
       const fields = patch.fields != null ? parseAtomicFields(patch.fields) : current.fields
       const notes = patch.notes != null ? String(patch.notes) : store.notes(current.id)
       const pack = store.upsert({ id: current.id, label, fields }, notes)
+      if ('views' in patch) store.writeViews(pack.id, patch.views)
       return fromEntry(pack.id, store.stampCounts()[pack.id] ?? 0)
     },
     remove: (query) => {
@@ -182,5 +197,13 @@ export function tagsCollection(
       }
       return ids
     },
+  }
+}
+
+export function tagNamedDocs(store: TagStore): CollectionNamedDocs {
+  return {
+    names: (record: DbRecord) => tagViewFileNames({ id: record.id, views: record.views ?? parseTagViews(store.views(String(record.id))) }),
+    read: (name) => store.readNamedDoc(name),
+    write: (name, content, opts) => store.writeNamedDoc(name, content, opts),
   }
 }

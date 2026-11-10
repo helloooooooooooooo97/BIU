@@ -6,7 +6,7 @@ import {
   viewsAssetName,
   type PageSandboxView,
 } from '../page-views.ts'
-import { getPagePresentMode, setPagePresentMode } from './source-mode.ts'
+import { getPagePresentMode, isPageBuiltinMode, setPagePresentMode } from './source-mode.ts'
 
 export type { PageSandboxView } from '../page-views.ts'
 export { defaultSandboxSource, parsePageViews, viewsAssetName } from '../page-views.ts'
@@ -27,8 +27,29 @@ export function getPageViews(pageId: string): PageSandboxView[] {
 export function setPageViews(pageId: string, views: PageSandboxView[]) {
   const id = String(pageId ?? '').trim()
   if (!id) return
-  store.set(id, parsePageViews(views))
+  const next = parsePageViews(views)
+  store.set(id, next)
   bump()
+  const present = getPagePresentMode(id)
+  if (!isPageBuiltinMode(present) && !next.some((item) => item.id === present)) setPagePresentMode(id, 'doc')
+}
+
+export function uniqueViewName(base: string, names: Iterable<string>) {
+  const taken = new Set(names)
+  const root = String(base ?? '').trim() || '新视图'
+  if (!taken.has(root)) return root
+  let n = 2
+  while (taken.has(`${root} ${n}`)) n += 1
+  return `${root} ${n}`
+}
+
+export function uniquePageViewName(pageId: string, base: string) {
+  return uniqueViewName(base, getPageViews(pageId).map((item) => item.name))
+}
+
+export function subscribePageViews(fn: () => void) {
+  listeners.add(fn)
+  return () => listeners.delete(fn)
 }
 
 export function usePageViews(pageId: string) {
@@ -193,13 +214,13 @@ export async function savePageViews(pageId: string, views: PageSandboxView[]) {
   window.dispatchEvent(new Event('fsdb:change'))
 }
 
-export async function createPageSandboxView(pageId: string, title = '', name = '沙盒') {
+export async function createPageSandboxView(pageId: string, title = '', name = '新视图') {
   const id = String(pageId ?? '').trim()
   if (!id) throw new Error('missing page')
   const viewId = createPageBlockId()
   const view: PageSandboxView = {
     id: viewId,
-    name: name.trim() || '沙盒',
+    name: uniquePageViewName(id, name.trim() || '新视图'),
     kind: 'sandbox',
     file: `view-${id}-${viewId}.jsx`,
     dataFile: `view-data-${id}-${viewId}.json`,
@@ -220,17 +241,21 @@ export async function renamePageSandboxView(pageId: string, viewId: string, name
   await savePageViews(id, next)
 }
 
-export async function copyPageSandboxView(pageId: string, viewId: string, title = '') {
+export async function copyPageSandboxView(pageId: string, viewId: string, title = '', fallbackName = '') {
   const id = String(pageId ?? '').trim()
   const target = String(viewId ?? '').trim()
+  if (!id || !target) return
   const source = getPageViews(id).find((item) => item.id === target)
-  if (!id || !source) return
+  if (!source) {
+    if (!isPageBuiltinMode(target) && !fallbackName) return
+    return createPageSandboxView(id, title, uniquePageViewName(id, `${fallbackName || '新视图'} 副本`))
+  }
   const body = await readPageFile(source.file, defaultSandboxSource(title))
   const data = await readPageFile(source.dataFile, 'null')
   const viewIdNext = createPageBlockId()
   const view: PageSandboxView = {
     id: viewIdNext,
-    name: `${source.name} 副本`,
+    name: uniquePageViewName(id, `${source.name} 副本`),
     kind: 'sandbox',
     file: `view-${id}-${viewIdNext}.jsx`,
     dataFile: `view-data-${id}-${viewIdNext}.json`,

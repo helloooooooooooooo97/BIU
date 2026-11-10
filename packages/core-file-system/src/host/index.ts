@@ -35,6 +35,7 @@ import {
   isEmptySchemaValue,
   normalizeSchemaPack,
   normalizeSchemaValue,
+  sanitizeTagValuesPatch,
   schemaSearchHaystack,
   withBuiltinFields,
   hasCollectionDeleteQuery,
@@ -57,6 +58,7 @@ import {
 } from '@biu/type-file-system'
 import { parsePageBanner, type PageBanner } from '../page-banner.ts'
 import { SavedViewsStore, clientViewFromDbRow, viewsCollection, type StoredView } from './saved-views.ts'
+import { RecordViewsStore, wrapCollectionRecordViews } from './record-views.ts'
 import { publicShareUrl } from './share-origin.ts'
 import { readSharePluginWebJs, zipSharePluginSource } from './share-plugin-pack.ts'
 import { isSharePluginId } from '../share-resources.ts'
@@ -858,6 +860,7 @@ export class DatabaseService extends Service implements Database {
   shares = new SharesStore()
   assets = new FileSystemAssets()
   viewCatalog?: { viewsFor(collectionPath: string): SharedViewDef[] }
+  recordViews = new RecordViewsStore()
   private ownershipCache: { key: string; map: Map<string, 'personal' | 'workspace' | 'shared'> } | null = null
   private ownerCache: { key: string; map: Map<string, string> } | null = null
   private viewAudienceCache: {
@@ -910,6 +913,7 @@ export class DatabaseService extends Service implements Database {
       }
       assertViewAvailable(entry, [...this.collections.values()])
       assertRecordCaps(entry)
+      entry = wrapCollectionRecordViews(entry, this.recordViews)
       const view = entry.view
       if (view) entry = { ...entry, view: { ...view, route: navPath(view.route) } }
       this.collections.set(entry.id, entry)
@@ -2336,6 +2340,35 @@ export class DatabaseService extends Service implements Database {
     return { kind: 'record' as const, path: `${spec.path}/${record.id}`, value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))) }
   }
 
+  /** Sandbox may write only this record's values for one tag, through the normal update channel. */
+  async patchTagSandbox(path: string, tagId: string, values: unknown) {
+    if (!isPlainObject(values)) throw new Error('patch values must be an object')
+    const parts = splitPath(path)
+    if (parts.length !== 2) throw new Error('sandbox can only patch the current record')
+    const spec = this.collection(`/${parts[0]}`)
+    if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
+    await this.requirePath(`${spec.path}/${parts[1]}`, 'resource:update')
+    if (spec.path === '/tags') throw new Error('tag catalog has no instance property values')
+    const schema = schemaFor(spec)
+    if (!schema.fields.tag) throw new Error('record has no tag field')
+    const current = await spec.get(parts[1]!)
+    if (!current) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
+    this.assertLiveRecord(spec, current.id, 'resource:update', current)
+    const overlay = normalizeSchemaValue(this.decorateRecord(spec, current).tag)
+    let id = String(tagId ?? '').trim()
+    if (!id) {
+      if (overlay.tags.length !== 1) throw new Error('sandbox patch needs a tag id')
+      id = overlay.tags[0]!
+    }
+    const pack = this.tags.get(id)
+    if (!pack) throw new Error(`unknown tag: ${id}`)
+    const nextValues = sanitizeTagValuesPatch(pack, values)
+    const tags = overlay.tags.includes(id) ? overlay.tags : [...overlay.tags, id]
+    return this.update(`${spec.path}/${current.id}`, {
+      tag: { tags, values: { [id]: nextValues } },
+    })
+  }
+
   async create(path: string, content?: unknown, options: { scope?: 'personal' | 'workspace' | 'shared' | 'local' } = {}) {
     const parts = splitPath(path)
     if (parts.length !== 1) throw new Error(`cannot create: ${normalizeCollectionPath(path)}`)
@@ -3184,6 +3217,7 @@ export function apply(ctx: Context) {
   const assets = db.assets
   const savedViews = new SavedViewsStore()
   savedViews.open(process.env.VITEST ? ':memory:' : biuSqlitePath())
+  db.recordViews.open(process.env.VITEST ? ':memory:' : biuSqlitePath())
   const account = ctx.get('account') as {
     authorization?: AuthorizationService
     workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
@@ -4261,6 +4295,66 @@ export function apply(ctx: Context) {
       route.res.end(Buffer.from(zip))
     } catch {
       route.send(404, { error: 'not found' })
+    }
+  })
+  const patchTagSandboxRoute: Parameters<typeof ctx.http.route>[2] = async (route) => {
+    try {
+      const body = (await route.json()) as { path?: string; tagId?: string; values?: unknown }
+      const path = String(body?.path ?? '')
+      const parts = path.split('/').filter(Boolean)
+      if (parts.length === 2) {
+        const forwarded = await forwardCloud(ctx, `/${parts[0]}`, parts[1]!, '/api/tag/sandbox/patch', { body })
+        if (forwarded) {
+          const value = (forwarded.body as { value?: { id?: string } } | null)?.value
+          if (forwarded.status < 300 && value?.id) await db.applySynced(`/${parts[0]}`, [value as { id: string }])
+          route.send(forwarded.status, forwarded.body)
+          return
+        }
+      }
+      route.send(200, await db.patchTagSandbox(path, String(body?.tagId ?? ''), body?.values))
+    } catch (error) {
+      route.send(400, { error: String(error) })
+    }
+  }
+  ctx.http.route('POST', '/api/tag/sandbox/patch', patchTagSandboxRoute)
+  ctx.http.route('POST', '/api/page/sandbox/patch', patchTagSandboxRoute)
+  ctx.http.route('GET', '/api/tag/file/:name', async (route) => {
+    try {
+      const name = route.params.name ?? ''
+      const path = route.query.get('path') || String(route.req.headers['x-biu-resource-path'] ?? '')
+      if (path) await db.requirePath(path, 'resource:read')
+      else db.requireAsset(name, 'resource:read')
+      const { bytes, type, etag } = facets.readNamedDoc(name)
+      route.res.writeHead(200, {
+        'content-type': type,
+        'cache-control': 'no-store',
+        etag: `"${etag}"`,
+      })
+      route.res.end(bytes)
+    } catch {
+      route.send(404, { error: 'not found' })
+    }
+  })
+  ctx.http.route('PUT', '/api/tag/file/:name', async (route) => {
+    try {
+      const name = route.params.name ?? ''
+      const path = route.query.get('path') || String(route.req.headers['x-biu-resource-path'] ?? '')
+      if (path) await db.requirePath(path, 'resource:update')
+      else db.requireAsset(name, 'resource:update')
+      const written = facets.writeNamedDoc(name, await route.bytes(), { etag: parseIfMatch(route.req.headers['if-match']) })
+      ctx.http.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), asset: { name: written.name, etag: written.etag } })
+      route.res.writeHead(200, {
+        'content-type': 'application/json; charset=utf-8',
+        'cache-control': 'no-store',
+        etag: `"${written.etag}"`,
+      })
+      route.res.end(JSON.stringify({ ok: true, ...written }))
+    } catch (error) {
+      if (error instanceof AssetConflictError) {
+        route.send(409, { error: 'etag conflict', etag: error.etag })
+        return
+      }
+      route.send(400, { error: String(error) })
     }
   })
   ctx.http.route('GET', '/api/db/tags', async (route) => {

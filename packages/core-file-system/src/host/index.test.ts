@@ -1695,6 +1695,18 @@ test('db_update /tags writes facet field packs', async () => {
     assert.equal(stat.schema.fields.fields?.example, '[{"key":"类别","type":"string"}]')
     assert.match(String(stat.schema.fields.fields?.description), /tag::<本标签id>::<字段key>/)
   }
+  const views = await db.update(`/tags/${id}`, {
+    views: [{ id: '8fdbc4f8', name: '沙盒 1', kind: 'sandbox', file: `tag-view-${id}-8fdbc4f8.jsx`, dataFile: `tag-view-data-${id}-8fdbc4f8.json` }],
+  })
+  assert.equal((views.value.views as Array<{ id: string }>)[0]?.id, '8fdbc4f8')
+  const written = await db.editDoc(`/tags/${id}`, {
+    command: 'write',
+    name: `tag-view-${id}-8fdbc4f8.jsx`,
+    value: 'export default function App(){return <p>标签沙盒</p>}',
+  })
+  assert.equal(written.ok, true)
+  const viewed = await db.editDoc(`/tags/${id}`, { name: `tag-view-${id}-8fdbc4f8.jsx` })
+  if (viewed.kind === 'doc' && 'text' in viewed) assert.match(String(viewed.text), /标签沙盒/)
   const body = await db.writeContent(`/tags/${id}`, '# 标签说明')
   assert.equal(body.field, 'notes')
   assert.equal(body.value, '# 标签说明')
@@ -1772,6 +1784,63 @@ test('db_update page facet stores flat property values on the stamp', async () =
   const listed = await db.list('/pages', undefined, { columns: [col] })
   if (listed.kind !== 'collection') return
   assert.equal(listed.items[0]?.[col], '查泽雷')
+})
+
+test('sandbox patch writes only the current record and this tag', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const pages = new Map<string, Record<string, unknown>>([
+    ['p1', { id: 'p1', title: '爱乐之城' }],
+    ['p2', { id: 'p2', title: '另一页' }],
+  ])
+  db.register({
+    id: 'pages',
+    path: '/pages',
+    schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
+    records: { update: true },
+    list: () => [...pages.values()] as { id: string }[],
+    get: (id) => pages.get(id) as { id: string } | undefined,
+    update: (id, patch) => {
+      const next = { ...pages.get(id), ...patch, id }
+      pages.set(id, next)
+      return next as { id: string }
+    },
+  })
+  db.register(tagsCollection(db.tags))
+  const movie = await db.create('/tags', [{ title: '电影' }])
+  const movieId = String(movie.items[0]?.value.id)
+  await db.update(`/tags/${movieId}`, {
+    fields: JSON.stringify([
+      { key: 'status', type: 'string', label: '状态' },
+      { key: 'director', type: 'string', label: '导演' },
+    ]),
+  })
+  const award = await db.create('/tags', [{ title: '奖项' }])
+  const awardId = String(award.items[0]?.value.id)
+  await db.update(`/tags/${awardId}`, {
+    fields: JSON.stringify([{ key: 'oscar', type: 'boolean', label: '奥斯卡' }]),
+  })
+  await db.update('/pages/p1', {
+    tag: { tags: [movieId, awardId], values: { [movieId]: { director: '查泽雷' }, [awardId]: { oscar: true } } },
+  })
+  const patched = await db.patchTagSandbox('/pages/p1', movieId, { 状态: '进行中' })
+  assert.equal(patched.value.tag.values[movieId].status, '进行中')
+  assert.equal(patched.value.tag.values[movieId].director, '查泽雷')
+  assert.equal(patched.value.tag.values[awardId].oscar, true)
+  assert.equal(db.tags.recordTag('/pages', 'p2')?.values[movieId]?.status, undefined)
+  await assert.rejects(() => db.patchTagSandbox('/pages/p1', movieId, { 奥斯卡: true }), /unknown tag field/)
+  await db.update(`/tags/${movieId}`, {
+    fields: JSON.stringify([
+      { key: 'status', type: 'string', label: '状态' },
+      { key: 'director', type: 'string', label: '导演' },
+      { key: 'locked', type: 'string', label: '锁定', writable: false },
+      { key: 'year', type: 'number', label: '年份' },
+    ]),
+  })
+  await assert.rejects(() => db.patchTagSandbox('/pages/p1', movieId, { locked: 'x' }), /not writable/)
+  await assert.rejects(() => db.patchTagSandbox('/pages/p1', movieId, { year: 'nope' }), /expected number/)
+  await assert.rejects(() => db.patchTagSandbox('/pages', movieId, { 状态: '进行中' }), /current record/)
+  await assert.rejects(() => db.patchTagSandbox(`/tags/${movieId}`, movieId, { 状态: '进行中' }), /no instance property values/)
 })
 
 test('db_update /views columns accepts array or JSON array and rejects fragments', async () => {

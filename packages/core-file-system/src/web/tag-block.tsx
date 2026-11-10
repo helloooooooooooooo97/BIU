@@ -7,12 +7,15 @@ import { TagPickPanel } from './cell-pop-draft.tsx'
 import { FieldValuePop } from './field-value-pop.tsx'
 import { FieldGlyph } from './fsdb-cells.tsx'
 import { ensureFsdbStyle } from './fsdb-style.ts'
-import { ViewModeGlyph } from './nav-glyphs.tsx'
 import { PropertyRow } from './property-row.tsx'
 import { tagChipIcon, tagChipLabel } from './schema-field.tsx'
-import { createTag, jumpTag, loadTags, pullTags, subscribeTagChrome, tagLabel } from './tag-catalog.ts'
+import { createTag, jumpTag, loadTags, pullTags, subscribeTagChrome } from './tag-catalog.ts'
+import { TagHostView } from './tag-host-view.tsx'
+import { TAG_TABLE_VIEW_ID } from './tag-present.ts'
+import { loadTagViews, useTagViews } from './tag-views.ts'
+import { TABLE_VIEW_NAME, TagViewSwitcher } from './tag-view-switcher.tsx'
 
-const TABLE_VIEW_NAME = '表格'
+export { TABLE_VIEW_NAME }
 
 export function parseTagId(data: Record<string, unknown>): string {
   const direct = String(data.tagId ?? '').trim()
@@ -31,6 +34,11 @@ export function parseBlockValues(data: Record<string, unknown>): Record<string, 
   const raw = data.values
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
   return { ...(raw as Record<string, unknown>) }
+}
+
+export function parseBlockViewId(data: Record<string, unknown>): string {
+  const id = String(data.viewId ?? '').trim()
+  return id || TAG_TABLE_VIEW_ID
 }
 
 async function resolveTagId(catalog: CollectionSchemaPack[], raw: string) {
@@ -116,16 +124,24 @@ export function TagBlockView({
   ensureFsdbStyle()
   const tagId = parseTagId(data)
   const values = parseBlockValues(data)
+  const viewId = parseBlockViewId(data)
   const [catalog, setCatalog] = useState(() => loadTags())
+  const views = useTagViews(tagId)
 
   useEffect(() => subscribeTagChrome(() => setCatalog(loadTags())), [])
   useEffect(() => {
     void pullTags()
   }, [])
+  useEffect(() => {
+    if (!tagId) return
+    void loadTagViews(tagId)
+  }, [tagId])
 
   const pack = catalog.find((tag) => tag.id === tagId)
   const fields = (pack?.fields ?? []).filter((field) => !field.deleted)
   const hostRecord = { id: 'page-tag-block', title: '' }
+  const sandbox = views.find((item) => item.id === viewId)
+  const present = sandbox ? sandbox.id : TAG_TABLE_VIEW_ID
 
   function saveTagId(next: string) {
     update({
@@ -133,6 +149,7 @@ export function TagBlockView({
       tagIds: undefined,
       tags: undefined,
       values: next && next === tagId ? values : {},
+      viewId: TAG_TABLE_VIEW_ID,
     })
   }
 
@@ -145,15 +162,14 @@ export function TagBlockView({
       <div className="tasks-toolbar">
         <div className="tasks-toolbar-left">
           <div className="tasks-viewtabs">
-            <div className="tasks-viewdd-btn tasks-viewtab is-active" data-testid="page-tag-block-view" title="呈现方式">
-              <ViewModeGlyph mode="table" />
-              <span className="tasks-viewdd-name">{TABLE_VIEW_NAME}</span>
-            </div>
+            <TagViewSwitcher tagId={tagId} viewId={present} writable={writable} onPick={(id) => update({ viewId: id })} />
             <TagSwitcher value={tagId} writable={writable} onPick={saveTagId} />
           </div>
         </div>
       </div>
-      {tagId ? (
+      {tagId && present !== TAG_TABLE_VIEW_ID ? (
+        <TagHostView tagId={tagId} viewId={present} pack={pack} values={values} writable={writable} onValues={saveValues} />
+      ) : tagId ? (
         <div className="page-tag-block-table fsdb-detail-aside">
           <table className="tasks-table is-wrap">
             <thead>

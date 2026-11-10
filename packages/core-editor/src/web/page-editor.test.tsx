@@ -5,7 +5,7 @@ import { Context } from 'cordis'
 import { PageEditor } from './page-editor.tsx'
 import { PageEditorService } from './service.ts'
 import { resetPageFileState, setPageViews } from './page-views.ts'
-import { setPagePresentMode } from './source-mode.ts'
+import { getPagePresentMode, setPagePresentMode } from './source-mode.ts'
 
 test('page editor paints markdown headings without a chrome toolbar', async () => {
   const { container, rerender } = render(
@@ -210,6 +210,57 @@ test('sandbox view mounts the host sandbox and skips prosemirror', async () => {
   assert.ok(container.querySelector('[data-testid="page-editor-host"]'))
   assert.equal(container.querySelector('[data-testid="page-editor"]'), null)
   assert.equal(container.querySelector('.tiptap'), null)
+  setPagePresentMode('home', 'doc')
+})
+
+test('dropping a sandbox view unmounts the host even if present still names it', async () => {
+  resetPageFileState()
+  setPageViews('gone', [
+    { id: 'site1', name: '新视图', kind: 'sandbox', file: 'missing-view.jsx', dataFile: 'missing-data.json' },
+  ])
+  setPagePresentMode('gone', 'site1')
+  const { container, rerender } = render(
+    <PageEditor
+      record={{ id: 'gone', title: '演示页' }}
+      field="notes"
+      spec={{ type: 'file', label: '正文', writable: true }}
+      value={'# 文档\n'}
+      writable
+    />,
+  )
+  await waitFor(() => {
+    assert.ok(container.querySelector('[data-testid="page-host-view"]'))
+  })
+  setPageViews('gone', [])
+  rerender(
+    <PageEditor
+      record={{ id: 'gone', title: '演示页' }}
+      field="notes"
+      spec={{ type: 'file', label: '正文', writable: true }}
+      value={'# 文档\n'}
+      writable
+    />,
+  )
+  await waitFor(() => {
+    assert.ok(container.querySelector('[data-testid="page-editor"]'))
+  })
+  assert.equal(container.querySelector('[data-testid="page-host-view"]'), null)
+  assert.equal(getPagePresentMode('gone'), 'doc')
+})
+
+test('hidden content view unmounts the editor', async () => {
+  setPagePresentMode('home', 'hidden')
+  const { container } = render(
+    <PageEditor
+      record={{ id: 'home' }}
+      field="notes"
+      spec={{ type: 'file', label: '正文', writable: true }}
+      value={'# 欢迎\n\n正文'}
+      writable
+    />,
+  )
+  assert.equal(container.querySelector('[data-testid="page-editor"]'), null)
+  assert.equal(container.querySelector('[data-testid="page-host-view"]'), null)
   setPagePresentMode('home', 'doc')
 })
 

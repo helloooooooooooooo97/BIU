@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { pageHostPickKey, stampPageHostPickSurfaces } from './page-host-pick.ts'
+import { bindSandboxPickPane, pageHostPickKey, pagePropHostPickKey, stampPageHostPickSurfaces } from './page-host-pick.ts'
 
 test('stamps page-host preview surfaces without overwriting nested blocks', () => {
   const root = document.createElement('div')
@@ -35,5 +35,29 @@ test('stamps page-host preview surfaces without overwriting nested blocks', () =
   assert.ok(nested)
   assert.equal(nested.hasAttribute('data-sandbox-pick'), false)
   assert.equal(root.querySelector('.page-block')?.getAttribute('data-biu-kind'), 'plugin')
+  root.remove()
+})
+
+test('property host preview uses the same sandbox pick stamps', () => {
+  const root = document.createElement('div')
+  root.setAttribute('data-sandbox', '')
+  root.innerHTML = `<div data-testid="page-prop-host-root"><h1>属性沙盒</h1><input data-testid="page-prop-field-title" /></div>`
+  document.body.append(root)
+  const stop = bindSandboxPickPane(root, pagePropHostPickKey('home', 'card1'), {
+    path: '/pages/home',
+    name: 'prop-view-home-card1.jsx',
+    title: '卡片',
+  })
+  assert.equal(root.getAttribute('data-biu-kind'), 'sandbox')
+  assert.equal(root.getAttribute('data-sandbox-pick'), '')
+  assert.match(root.getAttribute('data-biu-id') ?? '', /^sandbox:page-prop-host-home-card1:/)
+  const heading = root.querySelector('h1')
+  assert.ok(heading)
+  assert.equal(heading.getAttribute('data-sandbox-pick'), '')
+  assert.equal(heading.getAttribute('data-biu-path'), '/pages/home')
+  const field = root.querySelector('[data-testid="page-prop-field-title"]')
+  assert.ok(field)
+  assert.equal(field.getAttribute('data-sandbox-pick'), '')
+  stop()
   root.remove()
 })

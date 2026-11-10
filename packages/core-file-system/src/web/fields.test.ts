@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import type { CollectionSchema } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS, normalizeSchemaValue } from '@biu/type-file-system'
-import { actionWhenKeys, defaultColumnKeys, tagFlatColumnKey, flattenTagColumns, tagColumnTitle, inferPackFieldType, listProjectionKeys, parseTagFlatColumnKey, patchTagFlatValue, pinActionColumn, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, fieldValueOptions, GROUP_STRATEGIES, groupField, groupListFilter, groupListKeys, groupRecords, groupableFields, hasTreeLinks, treeChildren, isGroupableKind, isViewModeId, matchActionWhen, mergeListFilters, overlayListed, previewActionRecord, parentFieldKey, readTagFlatValue, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
+import { actionWhenKeys, defaultColumnKeys, tagFlatColumnKey, flattenTagColumns, tagColumnTitle, inferPackFieldType, listProjectionKeys, parseTagFlatColumnKey, patchTagFlatValue, pinActionColumn, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, fieldValueOptions, filterFieldValueOptions, GROUP_STRATEGIES, groupField, groupListFilter, groupListKeys, groupRecords, groupableFields, hasTreeLinks, treeChildren, isGroupableKind, isViewModeId, matchActionWhen, mergeListFilters, overlayListed, previewActionRecord, parentFieldKey, readTagFlatValue, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
 import { placedActions, visibleActions } from './fsdb-cells.tsx'
 
 test('isViewModeId accepts builtin and custom slugs', () => {
@@ -50,6 +50,23 @@ test('closed enums keep stable values and expose translated labels', () => {
     { value: 'owner', label: '所有者' },
     { value: 'viewer', label: '查看者' },
   ])
+})
+
+test('view catalog columns show names instead of [object Object]', () => {
+  const field = { type: 'string' as const, label: '内容视图' }
+  assert.equal(
+    formatField(field, [{ id: 'site1', name: '官网', kind: 'sandbox', file: 'view-a.jsx' }]),
+    '官网',
+  )
+  assert.equal(
+    formatField(field, [
+      { id: 'a', name: '官网', kind: 'sandbox', file: 'a.jsx' },
+      { id: 'b', name: '海报', kind: 'sandbox', file: 'b.jsx' },
+    ]),
+    '官网、海报',
+  )
+  assert.equal(formatField({ type: 'string', label: '全局视图' }, [{ id: 'need', name: '需求', contentViewId: 'doc' }]), '需求')
+  assert.equal(formatField(field, []), '')
 })
 
 test('fieldHasValue hides missing list/card/board chips', () => {
@@ -667,6 +684,27 @@ test('uniqueValues lists tags already on the table, not schema enum', () => {
   assert.deepEqual(uniqueValues(rows, 'tags', schema.fields.tags!), ['docs', 'wip'])
   assert.deepEqual(uniqueValues(rows, 'status', schema.fields.status!), ['doing'])
   assert.equal(uniqueValues(rows, 'status', schema.fields.status!).includes('todo'), false)
+})
+
+test('filter options prefer the tag catalog and always keep select enums', () => {
+  const rows = [
+    { id: '1', title: 'a', status: 'doing', tags: { tags: ['orphan'] } },
+  ]
+  const tags = [
+    { id: 'docs', label: '文档' },
+    { id: 'wip', label: '进行中' },
+  ]
+  const tagField = { type: 'tag' as const }
+  assert.deepEqual(
+    filterFieldValueOptions([], 'tags', tagField, tags).map((item) => item.value),
+    ['docs', 'wip'],
+  )
+  assert.deepEqual(filterFieldValueOptions(rows, 'tags', tagField, tags).map((item) => item.value), ['docs', 'wip', 'orphan'])
+  assert.deepEqual(filterFieldValueOptions([], 'tags', tagField, []).map((item) => item.value), [])
+  assert.deepEqual(
+    filterFieldValueOptions([], 'status', schema.fields.status!).map((item) => item.value),
+    ['todo', 'doing', 'done'],
+  )
 })
 
 test('recordLinkIds treats ref as one id and multi-ref as many', () => {

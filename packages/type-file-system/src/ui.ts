@@ -50,6 +50,8 @@ export type CollectionChrome = {
   DetailTools?: ComponentType<{ record: DbRecord; onDone?: () => void }>
   /** 标题/属性下方、正文上方的页面操作栏。 */
   DetailBar?: ComponentType<FsDetailBarProps>
+  /** 详情属性区。不传则画默认属性表。 */
+  Properties?: ComponentType<FsPropertiesProps>
   /** 记录独立图标属性。有 emoji 用 emoji；不传则详情/侧栏/面包屑用集合 glyph。 */
   Icon?: ComponentType<{ record: DbRecord; size?: number }>
   Title?: ComponentType<{ record: DbRecord; label: string }>
@@ -70,6 +72,14 @@ export type CollectionChrome = {
 export type FsOpenRow =
   | { kind: 'table'; path: string; viewId?: string }
   | { kind: 'record'; recordId: string; collection?: string }
+
+export type FsPropertiesProps = {
+  record: DbRecord
+  schema?: CollectionSchema
+  collectionPath?: string
+  writable?: boolean
+  children: ReactNode
+}
 
 export type FsDetailBarProps = {
   record: DbRecord
@@ -102,6 +112,7 @@ export type FsContentProps = {
   /** 缺省视为 ready，避免旧调用把未加载当成空正文。 */
   status?: FsContentStatus
   onRetry?: () => void
+  schema?: CollectionSchema
 }
 
 /** 集合自定义呈现：谁 registerView(path)，谁才能在该 path 用这个 mode。整页自己画。 */

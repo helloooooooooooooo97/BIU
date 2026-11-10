@@ -43,8 +43,12 @@ export const BIU_TABLES: Record<string, TableSpec> = {
     indexes: ['tasks_status_sort'],
   },
   tags: {
-    columns: ['id', 'label', 'fields_json', 'created_at', 'updated_at'],
+    columns: ['id', 'label', 'fields_json', 'views_json', 'created_at', 'updated_at'],
     indexes: ['tags_label'],
+  },
+  tag_docs: {
+    columns: ['name', 'tag_id', 'body', 'etag', 'mime'],
+    indexes: ['tag_docs_tag'],
   },
   tag_stamps: {
     columns: ['tag_id', 'collection', 'record_id', 'title'],
@@ -298,7 +302,7 @@ export const BIU_TABLES: Record<string, TableSpec> = {
   },
 }
 
-export const LATEST_BIU_SCHEMA = 44
+export const LATEST_BIU_SCHEMA = 45
 
 export const CREATE_CORE_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -346,11 +350,20 @@ CREATE TABLE IF NOT EXISTS tags (
   id TEXT PRIMARY KEY,
   label TEXT NOT NULL,
   fields_json TEXT NOT NULL DEFAULT '[]',
+  views_json TEXT NOT NULL DEFAULT '[]',
   notes TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL DEFAULT 0,
   updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS tags_label ON tags(label);
+CREATE TABLE IF NOT EXISTS tag_docs (
+  name TEXT PRIMARY KEY,
+  tag_id TEXT NOT NULL,
+  body TEXT NOT NULL,
+  etag TEXT NOT NULL,
+  mime TEXT NOT NULL DEFAULT 'text/plain; charset=utf-8'
+);
+CREATE INDEX IF NOT EXISTS tag_docs_tag ON tag_docs(tag_id);
 CREATE TABLE IF NOT EXISTS tag_stamps (
   tag_id TEXT NOT NULL,
   collection TEXT NOT NULL,

@@ -8,3 +8,16 @@ test('host compile accepts a default export and rejects imports', () => {
   const bad = compileHostSource('import x from "y"\nexport default function App() { return <div /> }')
   assert.equal(bad.ok, false)
 })
+
+test('host compile accepts Field slot for property views', () => {
+  const ok = compileHostSource('export default function App() { return <Field name="title" /> }', 'Field')
+  assert.equal(ok.ok, true)
+})
+
+test('host compile accepts Layout slot with Field and Block', () => {
+  const ok = compileHostSource(
+    'export default function App() { return <div><Field name="title" /><Block id="a" /></div> }',
+    'Layout',
+  )
+  assert.equal(ok.ok, true)
+})

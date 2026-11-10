@@ -18,7 +18,7 @@ const CSS = `
 .db-search-option-main{display:inline-flex;align-items:center;gap:6px;min-width:0}
 .db-search-option .fsdb-field-glyph,.db-cell-select-trigger .fsdb-field-glyph{color:var(--biu-color-icon);flex:none}
 .db-search-empty{padding:8px;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-4)}
-.db-search-foot{border-top:var(--biu-stroke-width) solid var(--biu-color-border);margin-top:4px;padding-top:4px}
+.db-search-foot{border-top:var(--biu-stroke-width) solid color-mix(in srgb,var(--biu-color-text) 12%,transparent);margin-top:4px;padding-top:4px}
 .db-cell-select{display:inline-flex;position:relative;min-width:0;max-width:100%;box-sizing:border-box;vertical-align:middle}
 .db-cell-select-trigger{display:inline-flex;align-items:center;gap:5px;max-width:none;height:var(--biu-size-control-sm);border:0;border-radius:4px;padding:0 6px;background:transparent;color:var(--biu-color-text);font:inherit;font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);line-height:var(--biu-size-control-sm);cursor:pointer;text-align:left}
 .db-cell-select-trigger:hover,.db-cell-select-trigger[data-open]{background:transparent}

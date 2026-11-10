@@ -38,6 +38,19 @@ test('tagsCollection lists facets with stamp counts and supports create/update/d
   assert.equal(store.get('io')?.fields[0]?.key, 'format')
   assert.equal(spec.schema.fields.fields?.writable, true)
   assert.match(String(updated.fields), /format/)
+  assert.equal(spec.schema.fields.views?.writable, true)
+  const withViews = await spec.update!(created[0]!.id, {
+    views: [{ id: '8fdbc4f8', name: '属性卡', kind: 'sandbox', file: 'tag-view-io-8fdbc4f8.jsx', dataFile: 'tag-view-data-io-8fdbc4f8.json' }],
+  })
+  assert.equal((withViews.views as Array<{ id: string }>)[0]?.id, '8fdbc4f8')
+  const names = [...spec.namedDocs!.names(withViews)]
+  assert.ok(names.includes('tag-views-io.json'))
+  assert.ok(names.includes('tag-view-io-8fdbc4f8.jsx'))
+  await spec.namedDocs!.write('tag-view-io-8fdbc4f8.jsx', 'export default function App(){return <p>属性</p>}')
+  const read = await spec.namedDocs!.read('tag-view-io-8fdbc4f8.jsx')
+  assert.match(Buffer.from(read.bytes).toString('utf8'), /属性/)
+  const catalog = await spec.namedDocs!.read('tag-views-io.json')
+  assert.match(Buffer.from(catalog.bytes).toString('utf8'), /8fdbc4f8/)
 
   const withNotes = await spec.update!(created[0]!.id, { notes: '# 标签说明\n' })
   assert.equal(withNotes.notes, '# 标签说明\n')

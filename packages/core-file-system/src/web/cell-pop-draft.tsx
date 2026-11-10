@@ -17,6 +17,8 @@ import { subscribeCrumbs } from './view-storage.ts'
 import { PersonPickPanel } from './person-cell.tsx'
 import { RecordPickPanel } from './record-link-cell.tsx'
 import { asStringList, enumDisplayLabel, isRecordLinkField, isSingleRefField, parseTagFlatColumnKey, resolveFieldType } from './fields.ts'
+import { isViewCatalogField } from './view-catalog.ts'
+import { ViewCatalogPickPanel } from './view-catalog-pick.tsx'
 
 type TagOption = { value: string; label: string; icon?: ReactNode }
 
@@ -233,6 +235,17 @@ export function CellPopDraft({
     },
     [],
   )
+
+  if (isViewCatalogField(fieldKey)) {
+    return (
+      <ViewCatalogPickPanel
+        record={record}
+        fieldKey={fieldKey}
+        collectionPath={collectionPath}
+        onPicked={onClose}
+      />
+    )
+  }
 
   if (isRecordLinkField(field, fieldKey)) {
     return (

@@ -40,7 +40,7 @@ import {
   flattenTree,
   enumDisplayLabel,
   formatField,
-  fieldValueOptions,
+  filterFieldValueOptions,
   groupField,
   groupListKeys,
   groupRecords,
@@ -146,6 +146,7 @@ import { DataSidebarShell } from './data-sidebar-shell.tsx'
 import { builtinAllViewId, catalogLockFilters, collectionNoun, displayNameForView, isBuiltinAllViewId, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stampRecordId, stampRowOpenTarget, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, moveInspectorRecordsToTrash, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
+import { isViewCatalogField, selectedViewCatalogOption } from './view-catalog.ts'
 import { jumpTag, loadTags, pullTags, subscribeTags } from './tag-catalog.ts'
 import {
   collectQueryFields,
@@ -2060,20 +2061,7 @@ export function CollectionBrowser({
   const itemsRef = useRef(items)
   itemsRef.current = items
   const filterValueOptions = useCallback((item: { kind: FieldType; key: string; field: FieldSpec }) => {
-    const rows = itemsRef.current
-    if (item.kind === 'boolean') {
-      return [
-        { value: 'true', label: '是' },
-        { value: 'false', label: '否' },
-      ]
-    }
-    if (item.kind === 'tag') {
-      return uniqueValues(rows, item.key, item.field).map((option) => ({
-        value: option,
-        label: loadTags().find((tag) => tag.id === option)?.label ?? option,
-      }))
-    }
-    return fieldValueOptions(rows, item.key, item.field)
+    return filterFieldValueOptions(itemsRef.current, item.key, item.field, loadTags())
   }, [])
   const totalRef = useRef(total)
   totalRef.current = total
@@ -4201,6 +4189,7 @@ export function CollectionBrowser({
       ? pickDomAttrs(recordKind, row.id, labelOf(row), { path: recordPathOf(row), title: labelOf(row) })
       : EMPTY_PICK
   const cellValueText = (row: DbRecord, key: string, field: FieldSpec) => {
+    if (isViewCatalogField(key)) return selectedViewCatalogOption(collectionPath, row, key)?.name ?? ''
     const raw = parseTagFlatColumnKey(key) ? readTagFlatValue(row, key, tagSourceKey(schema)) : row[key]
     return formatField(field, raw)
   }
@@ -4298,6 +4287,7 @@ export function CollectionBrowser({
         <DefaultCell
           field={field}
           fieldKey={key}
+          record={row}
           records={isRecordLinkField(field, key) ? items : undefined}
           collectionPath={collectionPath}
           labelField={schema?.labelField}
@@ -4659,7 +4649,12 @@ export function CollectionBrowser({
     ) {
       return renderCell(row, key, field, 'table')
     }
-    if (parseTagFlatColumnKey(key) || isRecordLinkField(field, key) || chrome?.cells?.[key]) {
+    if (
+      parseTagFlatColumnKey(key) ||
+      isRecordLinkField(field, key) ||
+      isViewCatalogField(key) ||
+      chrome?.cells?.[key]
+    ) {
       if (key === 'usage' && !(Number(row[key]) > 0)) return <span className="traj-usage-empty">—</span>
       return renderCell(row, key, field, 'table')
     }

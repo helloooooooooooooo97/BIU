@@ -329,6 +329,12 @@ export function RecordDetail({
       if (key === contentFieldKey(schema) && resolveFieldType(field) === 'file') return false
       if (chrome?.panes?.some((pane) => pane.id === key)) return false
       if (key === 'fields' && collectionPath === TAGS_COLLECTION_PATH && String(selected.id).includes('::')) return false
+      if (
+        (key === 'views' || key === 'propViews' || key === 'layouts') &&
+        !(visiblePropertyKeys && visiblePropertyKeys.includes(key))
+      ) {
+        return false
+      }
       const kind = resolveFieldType(field)
       if (kind === 'tag' && !field.writable) return false
       if (field.computed && !fieldHasValue(field, selected[key])) return false
@@ -427,6 +433,9 @@ export function RecordDetail({
                     canNext={canNext}
                   />
                 ) : null}
+                {(() => {
+                  const Properties = chrome?.Properties
+                  const table = (
                 <div className="fsdb-detail-aside">
                   <table className="tasks-table is-wrap">
                     <thead>
@@ -518,6 +527,19 @@ export function RecordDetail({
                     </tbody>
                   </table>
                 </div>
+                  )
+                  if (!Properties) return table
+                  return (
+                    <Properties
+                      record={selected}
+                      schema={schema}
+                      collectionPath={collectionPath}
+                      writable={!readOnly}
+                    >
+                      {table}
+                    </Properties>
+                  )
+                })()}
                 {contentFieldKey(schema) && schema.fields[contentFieldKey(schema)!] ? (() => {
                   const key = contentFieldKey(schema)!
                   const spec = schema.fields[key]!
@@ -529,6 +551,7 @@ export function RecordDetail({
                           record={selected}
                           field={key}
                           spec={spec}
+                          schema={schema}
                           value={detailBody}
                           writable={Boolean(spec.writable) && !readOnly && detailBodyStatus === 'ready'}
                           path={
