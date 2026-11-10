@@ -240,7 +240,7 @@ export function defaultPropSandboxSource(_title = '') {
             maxWidth: '22ch',
           }}
         >
-          {record.title || '未命名记录'}
+          属性视图介绍
         </h1>
         <p
           style={{

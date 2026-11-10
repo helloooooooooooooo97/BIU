@@ -26,6 +26,7 @@ test('property host paints Field sandbox when the view file is missing', async (
     assert.ok(getByTestId('page-prop-host-root'))
   })
   assert.match(getByTestId('page-prop-host-root').textContent ?? '', /属性视图 · 填写进度/)
+  assert.match(getByTestId('page-prop-host-root').textContent ?? '', /属性视图介绍/)
   assert.match(getByTestId('page-prop-host-root').textContent ?? '', /演示页/)
   fireEvent.click([...getByTestId('page-prop-host-root').querySelectorAll('button')].find((btn) => btn.textContent === '编辑')!)
   await waitFor(() => {

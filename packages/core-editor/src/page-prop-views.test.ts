@@ -33,6 +33,7 @@ test('default property sandbox source uses Field and record APIs', async () => {
   assert.match(src, /biu\.read\(\)/)
   assert.match(src, /<Field name=\{field\.key\}/)
   assert.match(src, /属性视图 · 填写进度/)
+  assert.match(src, /属性视图介绍/)
   assert.match(src, /直接编辑/)
   assert.doesNotMatch(src, /biu\.blocks\(\)/)
   assert.doesNotMatch(src, /<Block /)
