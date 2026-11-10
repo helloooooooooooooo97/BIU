@@ -148,7 +148,7 @@ export function PageDetailBar({
   const [renamingPropView, setRenamingPropView] = useState('')
   const [renamePropDraft, setRenamePropDraft] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
-  const [createKind, setCreateKind] = useState<'layout' | 'prop' | 'content'>('layout')
+  const [createKind, setCreateKind] = useState<'prop' | 'content'>('prop')
   const [creatingAny, setCreatingAny] = useState(false)
   const createRef = useRef<HTMLDivElement>(null)
   const pageRecord = !collectionPath || collectionPath === '/pages'
@@ -168,14 +168,13 @@ export function PageDetailBar({
     .map(([key, field]) => ({ key, label: field.label ?? key }))
   const visibleKeys = visiblePropertyKeys ?? props.map((item) => item.key).filter((key) => !hiddenPropertyKeys.includes(key))
 
-  async function createChosen(kind: 'layout' | 'prop' | 'content') {
+  async function createChosen(kind: 'prop' | 'content') {
     setCreateKind(kind)
     setCreateOpen(false)
     if (creatingAny) return
     setCreatingAny(true)
     try {
-      if (kind === 'layout') await addPageLayout(record.id)
-      else if (kind === 'prop') await createPagePropSandboxView(record.id, String(record.title ?? ''), '新视图')
+      if (kind === 'prop') await createPagePropSandboxView(record.id, String(record.title ?? ''), '新视图')
       else await createPageSandboxView(record.id, String(record.title ?? ''), '新视图')
     } catch {
       /* ignore */
@@ -892,10 +891,6 @@ export function PageDetailBar({
                 </button>
                 {createOpen ? (
                   <div className="fsdb-create-scope-menu" role="menu">
-                    <button type="button" role="menuitem" className={createKind === 'layout' ? 'is-on' : ''} onClick={() => void createChosen('layout')}>
-                      <Squares2X2Icon aria-hidden className="size-[14px]" />
-                      全局视图
-                    </button>
                     <button type="button" role="menuitem" className={createKind === 'prop' ? 'is-on' : ''} onClick={() => void createChosen('prop')}>
                       <QueueListIcon aria-hidden className="size-[14px]" />
                       属性视图
