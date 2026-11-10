@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react'
 import { BoolBox } from '@biu/biu-ui/bool-box'
 import { TagChip, TagChips } from '@biu/biu-ui/tag-chip'
 import {
@@ -29,7 +30,7 @@ import {
   resolveFieldType,
   type ViewMode,
 } from './fields.ts'
-import { isViewCatalogField, selectedViewCatalogOption } from './view-catalog.ts'
+import { isViewCatalogField, selectedViewCatalogOption, subscribeViewCatalog } from './view-catalog.ts'
 import { ViewCatalogGlyph } from './view-catalog-glyph.tsx'
 import { AttachmentFile, UrlHref } from './cell-media.tsx'
 import { PersonFace } from './person-cell.tsx'
@@ -325,16 +326,25 @@ export function DefaultCell({
   onOpenLink?: (id: string) => void
 }) {
   const kind = resolveFieldType(field)
+  const catalogKey = fieldKey && isViewCatalogField(fieldKey) ? fieldKey : ''
+  const catalogTick = useSyncExternalStore(
+    (fn) => (collectionPath && catalogKey ? subscribeViewCatalog(collectionPath, fn) : () => undefined),
+    () =>
+      collectionPath && catalogKey && record
+        ? `${selectedViewCatalogOption(collectionPath, record, catalogKey)?.id ?? ''}:${selectedViewCatalogOption(collectionPath, record, catalogKey)?.name ?? ''}`
+        : '',
+  )
   if (kind === 'action') {
     return <ActionCell field={field} fieldKey={fieldKey ?? ''} onRun={onRun} />
   }
-  if (fieldKey && record && collectionPath && isViewCatalogField(fieldKey)) {
-    const option = selectedViewCatalogOption(collectionPath, record, fieldKey)
+  if (catalogKey && record && collectionPath) {
+    const option = selectedViewCatalogOption(collectionPath, record, catalogKey)
     if (!option) return null
     if (plain) return <span className="fsdb-select-text">{option.name}</span>
     return (
       <TagChips>
         <TagChip
+          key={catalogTick}
           id={option.id}
           label={option.name}
           icon={<ViewCatalogGlyph icon={option.icon} className="size-[14px]" />}

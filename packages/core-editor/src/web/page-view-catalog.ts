@@ -3,14 +3,17 @@ import {
   copyPageLayout,
   deletePageLayout,
   listedPageLayouts,
+  getPageLayouts,
+  parsePageLayouts,
   selectPageLayout,
   subscribePageLayouts,
   getActivePageLayout,
   patchActivePageLayout,
   PAGE_DEFAULT_LAYOUT_ID,
 } from './page-layouts.ts'
-import { copyPageSandboxView, deletePageSandboxView, getPageViews, subscribePageViews } from './page-views.ts'
-import { copyPagePropSandboxView, deletePagePropSandboxView, getPagePropViews, subscribePagePropViews } from './page-prop-views.ts'
+import { listedPageLayouts as mergeListedLayouts } from '../page-layouts.ts'
+import { copyPageSandboxView, deletePageSandboxView, getPageViews, parsePageViews, subscribePageViews } from './page-views.ts'
+import { copyPagePropSandboxView, deletePagePropSandboxView, getPagePropViews, parsePagePropViews, subscribePagePropViews } from './page-prop-views.ts'
 import { getPagePresentMode, PAGE_BUILTIN_MODES, subscribePagePresent } from './source-mode.ts'
 import { getPagePropPresentMode, PAGE_PROP_TABLE_VIEW_ID, subscribePagePropPresent } from './page-prop-present.ts'
 
@@ -29,7 +32,8 @@ type Option = { id: string; name: string; icon: 'doc' | 'outline' | 'table' | 's
 function options(record: DbRecord, fieldKey: FieldKey): Option[] {
   const id = String(record.id ?? '').trim()
   if (fieldKey === 'layouts') {
-    return listedPageLayouts(id).map((item) => ({
+    const listed = getPageLayouts(id).length ? listedPageLayouts(id) : mergeListedLayouts(parsePageLayouts(record.layouts))
+    return listed.map((item) => ({
       id: item.id,
       name: item.name,
       icon: item.kind === 'sandbox' ? 'sandbox' : 'layout',
@@ -37,13 +41,17 @@ function options(record: DbRecord, fieldKey: FieldKey): Option[] {
     }))
   }
   if (fieldKey === 'propViews') {
+    const live = getPagePropViews(id)
+    const listed = live.length ? live : parsePagePropViews(record.propViews)
     return [
       { id: PAGE_PROP_TABLE_VIEW_ID, name: '表格', icon: 'table', builtin: true },
-      ...getPagePropViews(id).map((item) => ({ id: item.id, name: item.name, icon: 'props' as const })),
+      ...listed.map((item) => ({ id: item.id, name: item.name, icon: 'props' as const })),
     ]
   }
   const builtins = CONTENT_BUILTINS.filter((item) => (PAGE_BUILTIN_MODES as readonly string[]).includes(item.id))
-  return [...builtins, ...getPageViews(id).map((item) => ({ id: item.id, name: item.name, icon: 'sandbox' as const }))]
+  const live = getPageViews(id)
+  const listed = live.length ? live : parsePageViews(record.views)
+  return [...builtins, ...listed.map((item) => ({ id: item.id, name: item.name, icon: 'sandbox' as const }))]
 }
 
 function selectedId(record: DbRecord, fieldKey: FieldKey) {
