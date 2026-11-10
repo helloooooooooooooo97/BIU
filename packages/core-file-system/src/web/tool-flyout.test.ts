@@ -67,3 +67,21 @@ test('toolbar flyouts share one fsdb-tool-flyout shell', () => {
   assert.match(css, /\.fsdb-bulk-menu\{[^}]*width:max-content/)
   assert.match(readFileSync(resolve(import.meta.dirname, './controls.tsx'), 'utf8'), /fsdb-checkrow fsdb-tool-row/)
 })
+
+test('view menu add-view divider stays 1px and is visible on popover in both themes', () => {
+  const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
+  assert.match(
+    css,
+    /\.fsdb-page \.tasks-viewdd-foot,\.fsdb-tool-flyout \.tasks-viewdd-foot\{[^}]*border-top:var\(--biu-stroke-width\) solid color-mix\(in srgb,var\(--biu-color-text\) 12%,transparent\)/,
+  )
+  assert.match(css, /\.fsdb-page \.tasks-viewdd-foot,\.fsdb-tool-flyout \.tasks-viewdd-foot\{[^}]*margin-top:4px;padding-top:4px/)
+  assert.match(
+    css,
+    /\.fsdb-crumb-menu-foot\{[^}]*border-top:var\(--biu-stroke-width\) solid color-mix\(in srgb,var\(--biu-color-text\) 12%,transparent\)/,
+  )
+  const search = readFileSync(resolve(import.meta.dirname, '../../../database-ui/src/search-menu.tsx'), 'utf8')
+  assert.match(
+    search,
+    /\.db-search-foot\{[^}]*border-top:var\(--biu-stroke-width\) solid color-mix\(in srgb,var\(--biu-color-text\) 12%,transparent\)/,
+  )
+})

@@ -277,7 +277,7 @@ html:not(.dark) .page-bubble{box-shadow:none}
 .page-slash-item.is-failed .page-slash-icon,.page-slash-item.is-failed .page-slash-status{color:var(--biu-color-danger)}
 .page-slash-item.is-loading{opacity:.72}
 .page-slash-plugin-link{flex:none;color:var(--biu-color-danger);font-size:var(--biu-font-size-1);font-weight:var(--biu-font-weight-semibold);text-decoration:underline}
-.page-slash-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;flex:none;margin-top:2px;padding:6px 8px 4px;border-top:var(--biu-stroke-width) solid var(--biu-color-border);color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-2);font-weight:var(--biu-font-weight-medium)}
+.page-slash-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;flex:none;margin-top:2px;padding:6px 8px 4px;border-top:var(--biu-stroke-width) solid color-mix(in srgb,var(--biu-color-text) 12%,transparent);color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-2);font-weight:var(--biu-font-weight-medium)}
 .page-find-count{flex:none;min-width:2.4em;color:var(--biu-color-text-muted);font-size:var(--biu-font-size-2);font-weight:var(--biu-font-weight-semibold);text-align:right}
 .page-find-btn{flex:none;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin:0;border:0;border-radius:5px;padding:0;background:transparent;color:var(--biu-color-icon);cursor:pointer}
 .page-find-btn:hover{background:var(--biu-color-bg-hover);color:var(--biu-color-icon-active)}
