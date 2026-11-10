@@ -881,15 +881,18 @@ button.fsdb-detail-title-icon:hover{background:color-mix(in srgb,var(--biu-color
 .fsdb-cell-pop.is-select,.fsdb-cell-pop.is-multi-select,.fsdb-cell-pop.is-tag,.fsdb-cell-pop.is-attachment,.fsdb-cell-pop.is-image,.fsdb-cell-pop.is-person,.fsdb-cell-pop.is-record-link,.fsdb-cell-pop.is-ref,.fsdb-cell-pop.is-multi-ref{min-width:280px;padding:8px}
 .fsdb-cell-pop.is-string,.fsdb-cell-pop.is-title,.fsdb-cell-pop.is-number{padding:6px 8px}
 .fsdb-cell-pop-tags{display:flex;flex-direction:column;gap:8px;min-width:0}
-.fsdb-cell-pop .tasks-sort-list{display:flex;flex-direction:column;gap:4px;min-height:0}
-.fsdb-cell-pop .tasks-viewdd-item{position:relative;display:flex;align-items:center;gap:2px;min-width:0;width:100%;border-radius:7px}
-.fsdb-cell-pop .tasks-viewdd-item-main{display:inline-flex;flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:flex-start;gap:8px;width:auto;flex:1;min-width:0;border:0;border-radius:7px;padding:4px 6px;background:transparent;color:var(--biu-color-text-muted);font:inherit;font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);cursor:pointer;text-align:left}
-.fsdb-cell-pop .tasks-viewdd-item.is-active .tasks-viewdd-item-main{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
-.fsdb-cell-pop .tasks-viewdd-item-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fsdb-cell-pop .tasks-viewdd-item-actions{display:inline-flex;align-items:center;gap:0;flex:none;margin-left:auto}
-.fsdb-cell-pop .tasks-viewdd-act{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;flex:none;padding:0;border:0;border-radius:6px;background:transparent;color:var(--biu-color-icon);cursor:pointer}
-.fsdb-cell-pop .tasks-viewdd-act:hover{background:var(--biu-color-bg-hover);color:var(--biu-color-icon-active)}
-.fsdb-cell-pop .tasks-viewdd-act.is-danger:hover{background:color-mix(in srgb,var(--biu-color-danger) 16%,transparent);color:var(--biu-color-danger)}
+.fsdb-viewcat-pick{display:flex;flex-direction:column;gap:6px;min-width:0;width:100%}
+.fsdb-viewcat-pick-list{display:flex;flex-direction:column;gap:2px;min-width:0}
+.fsdb-viewcat-pick-row{display:flex !important;flex-direction:row !important;flex-wrap:nowrap !important;align-items:center;gap:2px;width:100%;min-width:0;border-radius:7px}
+.fsdb-viewcat-pick-row.is-active,.fsdb-viewcat-pick-row:hover{background:var(--biu-color-bg-hover)}
+.fsdb-viewcat-pick-main{display:flex !important;flex-direction:row !important;flex-wrap:nowrap !important;align-items:center;justify-content:flex-start;gap:8px;flex:1;min-width:0;width:auto;margin:0;border:0;border-radius:7px;padding:4px 6px;background:transparent;color:var(--biu-color-text-muted);font:inherit;font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);cursor:pointer;text-align:left}
+.fsdb-viewcat-pick-row.is-active .fsdb-viewcat-pick-main{color:var(--biu-color-text)}
+.fsdb-viewcat-pick-ico{display:block !important;flex:none;width:14px;height:14px;color:var(--biu-color-icon)}
+.fsdb-viewcat-pick-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fsdb-viewcat-pick-actions{display:inline-flex !important;flex-direction:row !important;align-items:center;flex:none;margin-left:auto}
+.fsdb-viewcat-pick .tasks-viewdd-act{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;flex:none;padding:0;border:0;border-radius:6px;background:transparent;color:var(--biu-color-icon);cursor:pointer}
+.fsdb-viewcat-pick .tasks-viewdd-act:hover{background:var(--biu-color-bg-hover);color:var(--biu-color-icon-active)}
+.fsdb-viewcat-pick .tasks-viewdd-act.is-danger:hover{background:color-mix(in srgb,var(--biu-color-danger) 16%,transparent);color:var(--biu-color-danger)}
 .fsdb-cell-pop-picked{display:flex;min-width:0}
 .fsdb-cell-pop-text{box-sizing:border-box;width:100%;min-height:72px;margin:0;border:0;border-radius:6px;padding:4px 2px;background:transparent;color:var(--biu-color-text);font:inherit;font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);line-height:1.45;resize:none;outline:none}
 .fsdb-cell-pop-url{box-sizing:border-box;width:100%;margin:0;border:0;border-radius:6px;padding:4px 2px;background:transparent;color:var(--biu-color-text);font:inherit;font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);line-height:1.45;outline:none}

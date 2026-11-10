@@ -284,9 +284,16 @@ async function defaultRemove(collectionPath: string, record: DbRecord, fieldKey:
   }
 }
 
-export function canCopyViewCatalogItem(fieldKey: string, item: { builtin?: boolean }) {
+const CONTENT_BUILTIN_IDS = new Set(['doc', 'outline', 'table', 'source'])
+
+export function canCopyViewCatalogItem(fieldKey: string, item: { id?: string; builtin?: boolean }) {
+  if (fieldKey !== 'views' && fieldKey !== 'propViews') return false
+  const id = String(item.id ?? '').trim()
+  if (!id) return false
   if (item.builtin) return false
-  return fieldKey === 'views' || fieldKey === 'propViews'
+  if (fieldKey === 'views' && (CONTENT_BUILTIN_IDS.has(id) || id === TAG_TABLE_VIEW_ID)) return false
+  if (fieldKey === 'propViews' && (id === DEFAULT_RECORD_PROP_VIEW_ID || id === 'table')) return false
+  return true
 }
 
 export function copyViewCatalog(collectionPath: string, record: DbRecord, fieldKey: string, viewId: string) {
