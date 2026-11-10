@@ -36,7 +36,6 @@ import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { copyPageSandboxView, createPageSandboxView, deletePageSandboxView, loadPageViews, usePageViews } from './page-views.ts'
 import {
   addPageLayout,
-  addPageLayoutSandbox,
   copyPageLayout,
   deletePageLayout,
   loadPageLayouts,
@@ -156,7 +155,7 @@ export function PageDetailBar({
     if (creatingAny) return
     setCreatingAny(true)
     try {
-      if (kind === 'layout') await addPageLayoutSandbox(record.id, String(record.title ?? ''))
+      if (kind === 'layout') await addPageLayout(record.id)
       else if (kind === 'prop') await createPagePropSandboxView(record.id, String(record.title ?? ''), '新视图')
       else await createPageSandboxView(record.id, String(record.title ?? ''), '新视图')
     } catch {

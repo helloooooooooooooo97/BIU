@@ -161,7 +161,7 @@ export function pagesCollection(store: PagesStore, index: PageBlocksIndex): Coll
           type: 'string',
           label: '全局视图',
           writable: true,
-          description: '本页保存的全局视图：可组合内容展示与属性展示，也可以用代码沙盒。内置「默认视图」不写在这里。',
+          description: '本页保存的全局视图：组合内容展示、属性展示、筛选和排序。内置「默认视图」不写在这里。同时画属性和正文用内容沙盒。',
         },
       },
     },
