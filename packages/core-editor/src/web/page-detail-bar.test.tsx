@@ -200,14 +200,13 @@ test('builtin property table view has no copy action', () => {
   assert.ok(queryAllByTitle('拷贝视图').length >= 1)
 })
 
-test('detail bar new menu creates global, property, and content views', () => {
-  const { getByLabelText, getByText } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} collectionPath="/pages" />)
+test('detail bar new menu creates property and content views', () => {
+  const { getByLabelText, getByText, queryByText } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} collectionPath="/pages" />)
   assert.ok(getByLabelText('新建'))
   fireEvent.click(getByLabelText('新建类型'))
-  const layout = getByText('全局视图')
+  assert.equal(queryByText('全局视图'), null)
   const prop = getByText('属性视图')
   const content = getByText('内容视图')
-  assert.ok(layout.querySelector('svg'))
   assert.ok(prop.querySelector('svg'))
   assert.ok(content.querySelector('svg'))
 })

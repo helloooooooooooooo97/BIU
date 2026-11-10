@@ -123,7 +123,7 @@ export function TagDetailBar({
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
-  const [createKind, setCreateKind] = useState<'layout' | 'prop' | 'content'>('layout')
+  const [createKind, setCreateKind] = useState<'prop' | 'content'>('prop')
   const [creatingAny, setCreatingAny] = useState(false)
   const createRef = useRef<HTMLDivElement>(null)
   const searchInput = useRef<HTMLInputElement>(null)
@@ -162,14 +162,13 @@ export function TagDetailBar({
     }
   }
 
-  async function createChosen(kind: 'layout' | 'prop' | 'content') {
+  async function createChosen(kind: 'prop' | 'content') {
     setCreateKind(kind)
     setCreateOpen(false)
     if (creatingAny) return
     setCreatingAny(true)
     try {
-      if (kind === 'layout') await addRecordLayout(TAGS_PATH, tagId, 'table')
-      else if (kind === 'content') await createTagSandboxView(tagId, String(record.title ?? ''), '新视图')
+      if (kind === 'content') await createTagSandboxView(tagId, String(record.title ?? ''), '新视图')
       else {
         const id = crypto.randomUUID().replace(/-/g, '').slice(0, 8)
         const view: RecordSandboxView = {
@@ -742,10 +741,6 @@ export function TagDetailBar({
               </button>
               {createOpen ? (
                 <div className="fsdb-create-scope-menu" role="menu">
-                  <button type="button" role="menuitem" className={createKind === 'layout' ? 'is-on' : ''} onClick={() => void createChosen('layout')}>
-                    <Squares2X2Icon aria-hidden className="size-[14px]" />
-                    全局视图
-                  </button>
                   <button type="button" role="menuitem" className={createKind === 'prop' ? 'is-on' : ''} onClick={() => void createChosen('prop')}>
                     <QueueListIcon aria-hidden className="size-[14px]" />
                     属性视图
