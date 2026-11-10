@@ -12,6 +12,7 @@ import { capturePageScroll } from './page-scroll-pin.ts'
 import { getPageEditor, usePageEditorVersion } from './service.ts'
 import { SourceEditor } from './source-editor.tsx'
 import { defaultSandboxSource } from '../page-views.ts'
+import { defaultLayoutSandboxSource } from '../page-layouts.ts'
 import { pageHostPickKey, stampPageHostPickSurfaces } from './page-host-pick.ts'
 
 export type HostBlockInfo = {
@@ -27,6 +28,104 @@ export type HostBlockInfo = {
 function asData(raw: unknown): Record<string, unknown> {
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) return raw as Record<string, unknown>
   return {}
+}
+
+const LAYOUT_FIELD_SKIP = new Set([
+  'id',
+  'createdAt',
+  'updatedAt',
+  'content',
+  'emoji',
+  'views',
+  'propViews',
+  'layouts',
+  'parentId',
+  'dependsOn',
+  'createdBy',
+  'updatedBy',
+  'file',
+  'tablePath',
+  'sourceId',
+])
+
+function layoutFields(record: DbRecord) {
+  const keys = Object.keys(record).filter((key) => !LAYOUT_FIELD_SKIP.has(key))
+  if (!keys.includes('title')) keys.unshift('title')
+  return keys.map((key) => ({
+    key,
+    type: 'string',
+    label: key === 'title' ? '标题' : key === 'tag' ? '标签' : key,
+    writable: true,
+  }))
+}
+
+function formatHostValue(value: unknown) {
+  if (value == null) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
+}
+
+function parseHostValue(raw: string) {
+  const text = raw.trim()
+  if ((text.startsWith('{') && text.endsWith('}')) || (text.startsWith('[') && text.endsWith(']'))) {
+    try {
+      return JSON.parse(text) as unknown
+    } catch {
+      return raw
+    }
+  }
+  return raw
+}
+
+async function patchPageRecord(pageId: string, bag: Record<string, unknown>) {
+  const res = await fetch('/api/db/update', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ path: `/pages/${pageId}`, content: bag }),
+  })
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(data.error || res.statusText)
+  }
+  window.dispatchEvent(new Event('fsdb:change'))
+}
+
+function HostField({
+  name,
+  record,
+  writable,
+  onSet,
+}: {
+  name: string
+  record: DbRecord
+  writable: boolean
+  onSet: (key: string, value: unknown) => void
+}) {
+  const key = String(name ?? '').trim()
+  if (!key) {
+    return (
+      <div className="page-host-missing" data-testid="page-prop-missing">
+        找不到属性
+      </div>
+    )
+  }
+  return (
+    <input
+      className="page-prop-host-field"
+      data-testid={`page-prop-field-${key}`}
+      defaultValue={formatHostValue(record[key])}
+      readOnly={!writable}
+      onBlur={(event) => {
+        if (!writable) return
+        onSet(key, parseHostValue(event.currentTarget.value))
+      }}
+    />
+  )
 }
 
 export async function writePageHostBlock(pageId: string, blockId: string, patch: Record<string, unknown>) {
@@ -93,10 +192,14 @@ function HostBlock({
   )
 }
 
+function layoutSandboxOf(pageId: string, viewId: string) {
+  return getPageLayouts(pageId).find((item) => item.id === viewId && item.kind === 'sandbox' && item.file)
+}
+
 function viewOf(pageId: string, viewId: string): PageSandboxView | undefined {
   const content = getPageViews(pageId).find((item) => item.id === viewId)
   if (content) return content
-  const layout = getPageLayouts(pageId).find((item) => item.id === viewId && item.kind === 'sandbox' && item.file)
+  const layout = layoutSandboxOf(pageId, viewId)
   if (!layout?.file) return
   return {
     id: layout.id,
@@ -235,15 +338,20 @@ export function PageHostView({
   usePageViews(pageId)
   usePageLayouts(pageId)
   const view = viewOf(pageId, viewId)
-  const fallback = defaultSandboxSource(String(record.title ?? ''))
+  const layoutView = layoutSandboxOf(pageId, viewId)
+  const fallback = layoutView
+    ? defaultLayoutSandboxSource(String(record.title ?? ''))
+    : defaultSandboxSource(String(record.title ?? ''))
   const [source, setSource] = useState(() => peekPageFile(view?.file ?? '') || fallback)
   const [tab, setTab] = useState<HostTab>('preview')
   const [expanded, setExpanded] = useState(false)
+  const [live, setLive] = useState(record)
   const showPreview = tab !== 'code'
   const showCode = tab !== 'preview'
   const hostRef = useRef<HTMLDivElement | null>(null)
   const previewRef = useRef<HTMLDivElement | null>(null)
   const blocks = useMemo(() => listPageHostBlocks(pageId, markdown), [pageId, markdown])
+  const fields = useMemo(() => layoutFields(live), [live])
 
   const setHostTab = useCallback((next: HostTab) => {
     capturePageScroll(hostRef.current)
@@ -251,9 +359,15 @@ export function PageHostView({
   }, [])
 
   useEffect(() => {
+    setLive(record)
+  }, [record])
+
+  useEffect(() => {
     let gone = false
     const file = view?.file
-    const next = defaultSandboxSource(String(record.title ?? ''))
+    const next = layoutView
+      ? defaultLayoutSandboxSource(String(record.title ?? ''))
+      : defaultSandboxSource(String(record.title ?? ''))
     if (!file) {
       setSource(next)
       return
@@ -269,12 +383,29 @@ export function PageHostView({
     return () => {
       gone = true
     }
-  }, [pageId, view?.file, record.title, fileTick])
+  }, [pageId, view?.file, layoutView, record.title, fileTick])
 
-  const compiled = useMemo(() => compileHostSource(source), [source])
+  const writeRecord = useCallback(
+    async (bag: Record<string, unknown>) => {
+      setLive((cur) => ({ ...cur, ...bag }))
+      await patchPageRecord(pageId, bag)
+    },
+    [pageId],
+  )
+
+  const compiled = useMemo(() => compileHostSource(source, layoutView ? 'Layout' : 'Block'), [source, layoutView])
   const biu = useMemo(
     () => ({
-      page: () => ({ id: pageId, title: String(record.title ?? '').trim() }),
+      page: () => ({ id: pageId, title: String(live.title ?? record.title ?? '').trim() }),
+      record: () => ({ ...live }),
+      fields: () => fields.map((item) => ({ ...item })),
+      values: () => Object.fromEntries(fields.map((item) => [item.key, live[item.key]])),
+      get: (key: string) => live[key],
+      set: (key: string, value: unknown) => writeRecord({ [key]: value }),
+      patch: (bag: unknown) => {
+        if (!bag || typeof bag !== 'object' || Array.isArray(bag)) return Promise.resolve()
+        return writeRecord(bag as Record<string, unknown>)
+      },
       blocks: () => blocks.map((item) => ({ ...item })),
       kinds: () => getPageEditor()?.blocks().map((item) => ({ kind: item.kind, plugin: item.plugin, label: item.label })) ?? [],
       read: async () => {
@@ -293,7 +424,7 @@ export function PageHostView({
       },
       update: (id: string, patch: Record<string, unknown>) => writePageHostBlock(pageId, id, patch),
     }),
-    [blocks, editorVersion, pageId, record.title, view?.dataFile],
+    [blocks, editorVersion, fields, live, pageId, record.title, view?.dataFile, writeRecord],
   )
 
   const Block = useCallback(
@@ -301,6 +432,20 @@ export function PageHostView({
       <HostBlock id={String(props.id ?? '')} blocks={blocks} writable={props.writable ?? writable} />
     ),
     [blocks, writable],
+  )
+
+  const Field = useCallback(
+    (props: { name?: string }) => (
+      <HostField
+        name={String(props.name ?? '')}
+        record={live}
+        writable={writable}
+        onSet={(key, value) => {
+          void writeRecord({ [key]: value })
+        }}
+      />
+    ),
+    [live, writable, writeRecord],
   )
 
   useEffect(() => {
@@ -315,14 +460,21 @@ export function PageHostView({
     return () => window.removeEventListener('keydown', onKey, true)
   }, [expanded])
 
-  const envRef = useRef({ Block, biu })
-  envRef.current = { Block, biu }
+  const envRef = useRef({ Block, Field, biu })
+  envRef.current = { Block, Field, biu }
   const preview = useMemo(() => {
     if (!compiled.ok) return { Preview: null as ComponentType | null, error: compiled.error }
     try {
       const BlockProxy = (props: { id?: string; writable?: boolean }) => envRef.current.Block(props)
+      const FieldProxy = (props: { name?: string }) => envRef.current.Field(props)
       const biuProxy = {
         page: () => envRef.current.biu.page(),
+        record: () => envRef.current.biu.record(),
+        fields: () => envRef.current.biu.fields(),
+        values: () => envRef.current.biu.values(),
+        get: (key: string) => envRef.current.biu.get(key),
+        set: (key: string, value: unknown) => envRef.current.biu.set(key, value),
+        patch: (bag: unknown) => envRef.current.biu.patch(bag),
         blocks: () => envRef.current.biu.blocks(),
         kinds: () => envRef.current.biu.kinds(),
         read: () => envRef.current.biu.read(),
@@ -330,7 +482,7 @@ export function PageHostView({
         update: (id: string, patch: Record<string, unknown>) => envRef.current.biu.update(id, patch),
       }
       return {
-        Preview: loadHostComponent(compiled.code, React, BlockProxy, biuProxy) as ComponentType,
+        Preview: loadHostComponent(compiled.code, React, BlockProxy, FieldProxy, biuProxy) as ComponentType,
         error: '',
       }
     } catch (err) {

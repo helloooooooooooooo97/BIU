@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { listPageHostBlocks, PageHostView } from './page-host-view.tsx'
 import { resetPageFileState, setPageViews } from './page-views.ts'
+import { setPageLayouts } from './page-layouts.ts'
 
 test('host view paints the default sandbox when the view file is missing', async () => {
   resetPageFileState()
@@ -35,6 +36,33 @@ test('host view paints the default sandbox when the view file is missing', async
   assert.ok(heading)
   assert.equal(heading.getAttribute('data-sandbox-pick'), '')
   assert.equal(heading.getAttribute('data-biu-kind'), 'sandbox')
+})
+
+test('layout sandbox paints properties and page blocks from the layout template', async () => {
+  cleanup()
+  resetPageFileState()
+  setPageLayouts('home', [
+    {
+      id: 'wide1',
+      name: '宽页',
+      kind: 'sandbox',
+      file: 'missing-layout.jsx',
+      dataFile: 'missing-layout-data.json',
+      contentViewId: 'doc',
+      propViewId: 'table',
+      sort: 'doc',
+      filterKinds: [],
+    },
+  ])
+  const { getByTestId } = render(<PageHostView record={{ id: 'home', title: '演示页', tag: 'need' }} viewId="wide1" />)
+  await waitFor(() => {
+    assert.ok(getByTestId('page-layout-host-root'))
+  })
+  assert.match(getByTestId('page-layout-host-root').textContent ?? '', /全局沙盒/)
+  assert.match(getByTestId('page-layout-host-root').textContent ?? '', /演示页/)
+  assert.ok(getByTestId('page-prop-field-title'))
+  assert.ok(getByTestId('page-prop-field-tag'))
+  assert.match(getByTestId('page-layout-host-root').textContent ?? '', /这一页还没有组件/)
 })
 
 test('host view stays mounted when the page record object changes', async () => {
@@ -152,4 +180,6 @@ test('host blocks come from page markdown and write back through the db api', ()
   assert.match(src, /data-biu-name=\{view\?\.file/)
   assert.match(src, /data-biu-kind="sandbox"/)
   assert.match(src, /:source/)
+  assert.match(src, /defaultLayoutSandboxSource/)
+  assert.match(src, /layoutView \? 'Layout' : 'Block'/)
 })

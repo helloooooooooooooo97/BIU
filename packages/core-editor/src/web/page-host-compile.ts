@@ -6,7 +6,7 @@ export type HostCompileResult =
   | { ok: true; code: string }
   | { ok: false; error: string }
 
-export type HostSlot = 'Block' | 'Field'
+export type HostSlot = 'Block' | 'Field' | 'Layout'
 
 function stripReactImports(source: string) {
   return source
@@ -34,10 +34,10 @@ function compileSlotSource(source: string, slot: HostSlot): HostCompileResult {
       transforms: ['jsx', 'typescript'],
       jsxRuntime: 'classic',
       production: true,
-      filePath: slot === 'Field' ? 'page-prop-view.tsx' : 'page-view.tsx',
+      filePath: slot === 'Field' ? 'page-prop-view.tsx' : slot === 'Layout' ? 'page-layout-view.tsx' : 'page-view.tsx',
     }).code
     // eslint-disable-next-line @typescript-eslint/no-implied-eval
-    new Function('React', slot, 'biu', code)
+    new Function('React', 'Block', 'Field', 'biu', code)
     return { ok: true, code }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) }
@@ -48,16 +48,17 @@ export function compileHostSource(source: string, slot: HostSlot = 'Block'): Hos
   return compileSlotSource(source, slot)
 }
 
-export function loadHostComponent(code: string, React: unknown, Block: unknown, biu: unknown, slot: HostSlot = 'Block') {
+export function loadHostComponent(code: string, React: unknown, Block: unknown, Field: unknown, biu: unknown) {
   const factory = new Function(
     'React',
-    slot,
+    'Block',
+    'Field',
     'biu',
     `"use strict";
      ${code}
      return (typeof __Component === "function" && __Component) || (typeof App === "function" && App);`,
   )
-  const Component = factory(React, Block, biu)
+  const Component = factory(React, Block, Field, biu)
   if (typeof Component !== 'function') throw new Error('sandbox view must export a React component')
   return Component as (...args: unknown[]) => unknown
 }

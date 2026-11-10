@@ -13,3 +13,11 @@ test('host compile accepts Field slot for property views', () => {
   const ok = compileHostSource('export default function App() { return <Field name="title" /> }', 'Field')
   assert.equal(ok.ok, true)
 })
+
+test('host compile accepts Layout slot with Field and Block', () => {
+  const ok = compileHostSource(
+    'export default function App() { return <div><Field name="title" /><Block id="a" /></div> }',
+    'Layout',
+  )
+  assert.equal(ok.ok, true)
+})
