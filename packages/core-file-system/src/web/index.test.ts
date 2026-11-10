@@ -32,6 +32,8 @@ test('file-system web registers 标签块 on the page editor', () => {
   assert.match(detailBar, /fsdb-tag-detail-bar/)
   assert.match(detailBar, /tag-detail-view/)
   assert.match(detailBar, /添加视图/)
+  assert.match(detailBar, /全局视图/)
+  assert.match(detailBar, /aria-label="新建"/)
   assert.match(detailBar, /aria-label="搜索"/)
   assert.match(detailBar, /aria-label="属性展示"/)
   assert.match(detailBar, /aria-label="排序"/)

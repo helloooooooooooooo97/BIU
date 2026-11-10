@@ -25,4 +25,7 @@ test('page layouts keep a builtin default and skip it from stored custom rows', 
   ])
   assert.equal(listedPageLayouts(parsed)[0]?.builtin, true)
   assert.equal(listedPageLayouts(parsed)[1]?.id, 'need')
+  const sandbox = parsePageLayouts([{ id: 'wide', name: '宽页', kind: 'sandbox', file: 'layout-wide.jsx' }])
+  assert.equal(sandbox[0]?.kind, 'sandbox')
+  assert.equal(sandbox[0]?.file, 'layout-wide.jsx')
 })

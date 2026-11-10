@@ -7,6 +7,7 @@ import { compileHostSource, loadHostComponent } from './page-host-compile.ts'
 import { PageBlockStage, writeBlockData } from './page-blocks-view.tsx'
 import { ExpandNavTitle } from './expand-nav-title.tsx'
 import { getPageViews, peekPageFile, readPageFile, renamePageSandboxView, usePageFileTick, usePageViews, writePageFile, type PageSandboxView } from './page-views.ts'
+import { getPageLayouts, usePageLayouts } from './page-layouts.ts'
 import { capturePageScroll } from './page-scroll-pin.ts'
 import { getPageEditor, usePageEditorVersion } from './service.ts'
 import { SourceEditor } from './source-editor.tsx'
@@ -93,7 +94,17 @@ function HostBlock({
 }
 
 function viewOf(pageId: string, viewId: string): PageSandboxView | undefined {
-  return getPageViews(pageId).find((item) => item.id === viewId)
+  const content = getPageViews(pageId).find((item) => item.id === viewId)
+  if (content) return content
+  const layout = getPageLayouts(pageId).find((item) => item.id === viewId && item.kind === 'sandbox' && item.file)
+  if (!layout?.file) return
+  return {
+    id: layout.id,
+    name: layout.name,
+    kind: 'sandbox',
+    file: layout.file,
+    dataFile: layout.dataFile || `layout-data-${layout.id}.json`,
+  }
 }
 
 type HostTab = 'preview' | 'code' | 'split'
@@ -222,6 +233,7 @@ export function PageHostView({
   const fileTick = usePageFileTick()
   const pageId = String(record.id)
   usePageViews(pageId)
+  usePageLayouts(pageId)
   const view = viewOf(pageId, viewId)
   const fallback = defaultSandboxSource(String(record.title ?? ''))
   const [source, setSource] = useState(() => peekPageFile(view?.file ?? '') || fallback)

@@ -179,6 +179,15 @@ test('builtin property table view has no copy action', () => {
   assert.ok(queryAllByTitle('拷贝视图').length >= 1)
 })
 
+test('detail bar new menu creates global, property, and content views', () => {
+  const { getByLabelText, getByText } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} collectionPath="/pages" />)
+  assert.ok(getByLabelText('新建'))
+  fireEvent.click(getByLabelText('新建类型'))
+  assert.ok(getByText('全局视图'))
+  assert.ok(getByText('属性视图'))
+  assert.ok(getByText('内容视图'))
+})
+
 test('property and content presentation bind to the active layout independently', () => {
   setPagePresentMode('p0133', 'doc')
   setPagePropPresentMode('p0133', PAGE_PROP_TABLE_VIEW_ID)

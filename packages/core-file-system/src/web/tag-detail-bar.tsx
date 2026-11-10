@@ -4,6 +4,7 @@ import { HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
 import {
   AdjustmentsHorizontalIcon,
   ArrowPathIcon,
+  ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   EyeIcon,
@@ -20,7 +21,7 @@ import type { FsContentProps, FsDetailBarProps } from '@biu/type-file-system/ui'
 import { normalizeSchemaPack } from '@biu/type-file-system'
 import { parseRecordSandboxes, uniqueViewName, type RecordSandboxView } from '@biu/type-file-system/record-views'
 import { LocalText } from './controls.tsx'
-import { loadTagViews, useTagViews } from './tag-views.ts'
+import { createTagSandboxView, loadTagViews, useTagViews } from './tag-views.ts'
 import { TagHostView } from './tag-host-view.tsx'
 import { TAG_TABLE_VIEW_ID, setTagPresentMode, useTagPresentMode } from './tag-present.ts'
 import { TagViewSwitcher } from './tag-view-switcher.tsx'
@@ -120,6 +121,10 @@ export function TagDetailBar({
   const [refreshing, setRefreshing] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [createOpen, setCreateOpen] = useState(false)
+  const [createKind, setCreateKind] = useState<'layout' | 'prop' | 'content'>('layout')
+  const [creatingAny, setCreatingAny] = useState(false)
+  const createRef = useRef<HTMLDivElement>(null)
   const searchInput = useRef<HTMLInputElement>(null)
   const sortOn = activeLayout.sort !== 'doc'
   const filterOn = activeLayout.filterKinds.length > 0
@@ -153,6 +158,33 @@ export function TagDetailBar({
       const wait = Math.max(0, 480 - (Date.now() - started))
       if (wait) await new Promise((resolve) => window.setTimeout(resolve, wait))
       setRefreshing(false)
+    }
+  }
+
+  async function createChosen(kind: 'layout' | 'prop' | 'content') {
+    setCreateKind(kind)
+    setCreateOpen(false)
+    if (creatingAny) return
+    setCreatingAny(true)
+    try {
+      if (kind === 'layout') await addRecordLayout(TAGS_PATH, tagId, 'table')
+      else if (kind === 'content') await createTagSandboxView(tagId, String(record.title ?? ''), '新视图')
+      else {
+        const id = crypto.randomUUID().replace(/-/g, '').slice(0, 8)
+        const view: RecordSandboxView = {
+          id,
+          name: uniqueViewName('新视图', propViews.map((item) => item.name)),
+          kind: 'sandbox',
+          file: `tag-prop-${tagId}-${id}.jsx`,
+          dataFile: `tag-prop-data-${tagId}-${id}.json`,
+        }
+        const ok = await saveTagPropViews(tagId, [...propViews, view])
+        if (ok) void patchActiveRecordLayout(TAGS_PATH, tagId, { propViewId: view.id }, 'table')
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setCreatingAny(false)
     }
   }
 
@@ -676,6 +708,45 @@ export function TagDetailBar({
         >
           <ArrowPathIcon aria-hidden className={`size-[14px]${refreshing ? ' fsdb-spin' : ''}`} />
         </button>
+        <div className="fsdb-create-group" ref={createRef}>
+          <button
+            type="button"
+            className="fsdb-create-btn"
+            aria-label="新建"
+            title="新建"
+            disabled={creatingAny}
+            onClick={() => void createChosen(createKind)}
+          >
+            {creatingAny ? '正在创建…' : '新建'}
+          </button>
+          <HeadlessDismiss enabled={createOpen} onDismiss={() => setCreateOpen(false)}>
+            <div className="fsdb-create-scope-wrap">
+              <button
+                type="button"
+                className="fsdb-create-scope"
+                aria-label="新建类型"
+                aria-expanded={createOpen}
+                title="新建视图类型"
+                onClick={() => setCreateOpen((open) => !open)}
+              >
+                <ChevronDownIcon aria-hidden className="size-[14px]" />
+              </button>
+              {createOpen ? (
+                <div className="fsdb-create-scope-menu" role="menu">
+                  <button type="button" role="menuitem" className={createKind === 'layout' ? 'is-on' : ''} onClick={() => void createChosen('layout')}>
+                    全局视图
+                  </button>
+                  <button type="button" role="menuitem" className={createKind === 'prop' ? 'is-on' : ''} onClick={() => void createChosen('prop')}>
+                    属性视图
+                  </button>
+                  <button type="button" role="menuitem" className={createKind === 'content' ? 'is-on' : ''} onClick={() => void createChosen('content')}>
+                    内容视图
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </HeadlessDismiss>
+        </div>
         {canPrev ? (
           <button type="button" className="tasks-refresh" title="上一条" aria-label="上一条" onClick={onPrev}>
             <ChevronLeftIcon aria-hidden className="size-[14px]" />

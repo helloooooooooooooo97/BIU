@@ -7,7 +7,7 @@ import {
   PAGE_DEFAULT_LAYOUT_ID,
   type PageLayoutView,
 } from '../page-layouts.ts'
-import { getPageViews, uniqueViewName } from './page-views.ts'
+import { defaultSandboxSource, getPageViews, uniqueViewName, readPageFile, writePageFile } from './page-views.ts'
 import { isPageBuiltinMode, setPagePresentMode } from './source-mode.ts'
 import { getPagePropViews } from './page-prop-views.ts'
 import { PAGE_PROP_TABLE_VIEW_ID, setPagePropPresentMode } from './page-prop-present.ts'
@@ -251,6 +251,30 @@ export async function patchActivePageLayout(pageId: string, patch: Partial<PageL
   await savePageLayouts(id, next)
 }
 
+export async function addPageLayoutSandbox(pageId: string, title = '') {
+  const id = String(pageId ?? '').trim()
+  if (!id) return
+  const listed = listedPageLayouts(id)
+  const viewId = createPageBlockId()
+  const view: PageLayoutView = {
+    id: viewId,
+    name: uniqueViewName('新视图', listed.map((item) => item.name)),
+    kind: 'sandbox',
+    file: `layout-${id}-${viewId}.jsx`,
+    dataFile: `layout-data-${id}-${viewId}.json`,
+    contentViewId: 'doc',
+    propViewId: PAGE_PROP_TABLE_VIEW_ID,
+    sort: 'doc',
+    filterKinds: [],
+  }
+  await writePageFile(view.file, defaultSandboxSource(title), 'text/plain; charset=utf-8')
+  await writePageFile(view.dataFile, 'null', 'application/json')
+  const ok = await savePageLayouts(id, [...getPageLayouts(id), view])
+  if (!ok) return
+  selectPageLayout(id, view)
+  return view
+}
+
 export async function addPageLayout(pageId: string) {
   const id = String(pageId ?? '').trim()
   if (!id) return
@@ -274,13 +298,23 @@ export async function copyPageLayout(pageId: string, source?: PageLayoutView) {
   if (!id) return
   const listed = listedPageLayouts(id)
   const from = source ?? getActivePageLayout(id)
+  const viewId = createPageBlockId()
   const view: PageLayoutView = {
-    id: createPageBlockId(),
+    id: viewId,
     name: uniqueViewName(`${from.name} 副本`, listed.map((item) => item.name)),
     contentViewId: from.contentViewId,
     propViewId: from.propViewId,
     sort: from.sort,
     filterKinds: [...from.filterKinds],
+  }
+  if (from.kind === 'sandbox' && from.file) {
+    view.kind = 'sandbox'
+    view.file = `layout-${id}-${viewId}.jsx`
+    view.dataFile = `layout-data-${id}-${viewId}.json`
+    const body = await readPageFile(from.file, defaultSandboxSource(''))
+    const data = await readPageFile(from.dataFile || '', 'null')
+    await writePageFile(view.file, body, 'text/plain; charset=utf-8')
+    await writePageFile(view.dataFile, data, 'application/json')
   }
   const ok = await savePageLayouts(id, [...getPageLayouts(id), view])
   if (!ok) return

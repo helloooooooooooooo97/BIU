@@ -15,6 +15,9 @@ export type RecordLayoutView = {
   id: string
   name: string
   builtin?: boolean
+  kind?: 'sandbox'
+  file?: string
+  dataFile?: string
   contentViewId: string
   propViewId: string
   sort: RecordLayoutSort
@@ -96,9 +99,12 @@ export function parseRecordLayouts(raw: unknown, fallbackContent = 'doc'): Recor
     const filterKinds = Array.isArray(rec.filterKinds)
       ? rec.filterKinds.map((kind) => String(kind ?? '').trim()).filter(Boolean)
       : []
+    const file = String(rec.file ?? '').trim()
+    const sandbox = rec.kind === 'sandbox' && Boolean(file)
     out.push({
       id,
       name: String(rec.name ?? '').trim() || '新视图',
+      ...(sandbox ? { kind: 'sandbox' as const, file, dataFile: String(rec.dataFile ?? '').trim() || `layout-data-${id}.json` } : {}),
       contentViewId: String(rec.contentViewId ?? '').trim() || fallbackContent,
       propViewId: String(rec.propViewId ?? '').trim() || DEFAULT_RECORD_PROP_VIEW_ID,
       sort,

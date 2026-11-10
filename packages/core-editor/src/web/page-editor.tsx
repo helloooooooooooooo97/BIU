@@ -4,6 +4,7 @@ import { SourceEditor, type SourceEditorHandle } from './source-editor.tsx'
 import { restorePageScroll } from './page-scroll-pin.ts'
 import { isPageCustomView, usePagePresentMode } from './source-mode.ts'
 import { usePageViews } from './page-views.ts'
+import { useActivePageLayout } from './page-layouts.ts'
 import { PageHostView } from './page-host-view.tsx'
 import { ArrowPathIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/16/solid'
 import { EditorContent, useEditor } from '@tiptap/react'
@@ -392,8 +393,12 @@ function PageHostShell({
 export function PageEditor(props: FsContentProps) {
   const present = usePagePresentMode(props.record.id)
   const views = usePageViews(props.record.id)
+  const layout = useActivePageLayout(props.record.id)
   if (props.status === 'loading') return <PageEditorLoading />
   if (props.status === 'failed') return <PageEditorFailed onRetry={props.onRetry} />
+  if (layout.kind === 'sandbox' && layout.file) {
+    return <PageHostShell {...props} viewId={layout.id} />
+  }
   if (isPageCustomView(present) && views.some((item) => item.id === present)) {
     return <PageHostShell {...props} viewId={present} />
   }
