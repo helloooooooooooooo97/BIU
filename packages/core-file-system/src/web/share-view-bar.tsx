@@ -12,7 +12,8 @@ import {
 import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
 import type { CollectionSchema, DbRecord, FieldType } from '@biu/type-file-system'
 import { countFilterRules, isCustomSorts } from '../query-logic.ts'
-import { defaultColumnKeys, resolveFieldType } from './fields.ts'
+import { defaultColumnKeys, filterFieldValueOptions, resolveFieldType } from './fields.ts'
+import { loadTags } from './tag-catalog.ts'
 import { FieldGlyph, ModeGlyph, VIEW_MODES } from './fsdb-cells.tsx'
 import { CheckRow } from './controls.tsx'
 import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search.tsx'
@@ -69,16 +70,7 @@ export function ShareViewQueryBar({
   const searchExpanded = searchOpen || Boolean(state.q)
 
   function valueOptions(item: QueryField) {
-    const seen = new Set<string>()
-    const out: Array<{ value: string; label: string }> = []
-    for (const row of records) {
-      const raw = row[item.key]
-      const value = raw == null ? '' : String(raw)
-      if (!value || seen.has(value)) continue
-      seen.add(value)
-      out.push({ value, label: value })
-    }
-    return out
+    return filterFieldValueOptions(records, item.key, item.field, loadTags())
   }
 
   function toggleColumn(key: string) {

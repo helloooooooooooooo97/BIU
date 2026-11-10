@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import type { CollectionSchema } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS, normalizeSchemaValue } from '@biu/type-file-system'
-import { actionWhenKeys, defaultColumnKeys, tagFlatColumnKey, flattenTagColumns, tagColumnTitle, inferPackFieldType, listProjectionKeys, parseTagFlatColumnKey, patchTagFlatValue, pinActionColumn, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, fieldValueOptions, GROUP_STRATEGIES, groupField, groupListFilter, groupListKeys, groupRecords, groupableFields, hasTreeLinks, treeChildren, isGroupableKind, isViewModeId, matchActionWhen, mergeListFilters, overlayListed, previewActionRecord, parentFieldKey, readTagFlatValue, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
+import { actionWhenKeys, defaultColumnKeys, tagFlatColumnKey, flattenTagColumns, tagColumnTitle, inferPackFieldType, listProjectionKeys, parseTagFlatColumnKey, patchTagFlatValue, pinActionColumn, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, fieldValueOptions, filterFieldValueOptions, GROUP_STRATEGIES, groupField, groupListFilter, groupListKeys, groupRecords, groupableFields, hasTreeLinks, treeChildren, isGroupableKind, isViewModeId, matchActionWhen, mergeListFilters, overlayListed, previewActionRecord, parentFieldKey, readTagFlatValue, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
 import { placedActions, visibleActions } from './fsdb-cells.tsx'
 
 test('isViewModeId accepts builtin and custom slugs', () => {
@@ -684,6 +684,27 @@ test('uniqueValues lists tags already on the table, not schema enum', () => {
   assert.deepEqual(uniqueValues(rows, 'tags', schema.fields.tags!), ['docs', 'wip'])
   assert.deepEqual(uniqueValues(rows, 'status', schema.fields.status!), ['doing'])
   assert.equal(uniqueValues(rows, 'status', schema.fields.status!).includes('todo'), false)
+})
+
+test('filter options prefer the tag catalog and always keep select enums', () => {
+  const rows = [
+    { id: '1', title: 'a', status: 'doing', tags: { tags: ['orphan'] } },
+  ]
+  const tags = [
+    { id: 'docs', label: '文档' },
+    { id: 'wip', label: '进行中' },
+  ]
+  const tagField = { type: 'tag' as const }
+  assert.deepEqual(
+    filterFieldValueOptions([], 'tags', tagField, tags).map((item) => item.value),
+    ['docs', 'wip'],
+  )
+  assert.deepEqual(filterFieldValueOptions(rows, 'tags', tagField, tags).map((item) => item.value), ['docs', 'wip', 'orphan'])
+  assert.deepEqual(filterFieldValueOptions([], 'tags', tagField, []).map((item) => item.value), [])
+  assert.deepEqual(
+    filterFieldValueOptions([], 'status', schema.fields.status!).map((item) => item.value),
+    ['todo', 'doing', 'done'],
+  )
 })
 
 test('recordLinkIds treats ref as one id and multi-ref as many', () => {

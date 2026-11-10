@@ -40,7 +40,7 @@ import {
   flattenTree,
   enumDisplayLabel,
   formatField,
-  fieldValueOptions,
+  filterFieldValueOptions,
   groupField,
   groupListKeys,
   groupRecords,
@@ -2060,20 +2060,7 @@ export function CollectionBrowser({
   const itemsRef = useRef(items)
   itemsRef.current = items
   const filterValueOptions = useCallback((item: { kind: FieldType; key: string; field: FieldSpec }) => {
-    const rows = itemsRef.current
-    if (item.kind === 'boolean') {
-      return [
-        { value: 'true', label: '是' },
-        { value: 'false', label: '否' },
-      ]
-    }
-    if (item.kind === 'tag') {
-      return uniqueValues(rows, item.key, item.field).map((option) => ({
-        value: option,
-        label: loadTags().find((tag) => tag.id === option)?.label ?? option,
-      }))
-    }
-    return fieldValueOptions(rows, item.key, item.field)
+    return filterFieldValueOptions(itemsRef.current, item.key, item.field, loadTags())
   }, [])
   const totalRef = useRef(total)
   totalRef.current = total
