@@ -371,6 +371,7 @@ function PageHostShell({
   writable,
   path,
   viewId,
+  schema,
 }: FsContentProps & { viewId: string }) {
   return (
     <div
@@ -384,6 +385,7 @@ function PageHostShell({
         record={record}
         viewId={viewId}
         markdown={asMarkdown(value)}
+        schema={schema}
         writable={writable !== false}
       />
     </div>

@@ -551,6 +551,7 @@ export function RecordDetail({
                           record={selected}
                           field={key}
                           spec={spec}
+                          schema={schema}
                           value={detailBody}
                           writable={Boolean(spec.writable) && !readOnly && detailBodyStatus === 'ready'}
                           path={

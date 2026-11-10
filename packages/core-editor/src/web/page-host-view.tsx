@@ -1,7 +1,13 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowsPointingInIcon, ArrowsPointingOutIcon, CodeBracketIcon, EyeIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
-import type { DbRecord } from '@biu/type-file-system'
+import {
+  fieldIsWritable,
+  sanitizeRecordPatch,
+  withBuiltinFields,
+  type CollectionSchema,
+  type DbRecord,
+} from '@biu/type-file-system'
 import { listPageBlockFences, pageBlockData, pageBlockRecordId } from '../page-block-fence.ts'
 import { compileHostSource, loadHostComponent } from './page-host-compile.ts'
 import { PageBlockStage, writeBlockData } from './page-blocks-view.tsx'
@@ -47,15 +53,28 @@ const LAYOUT_FIELD_SKIP = new Set([
   'sourceId',
 ])
 
-function layoutFields(record: DbRecord) {
-  const keys = Object.keys(record).filter((key) => !LAYOUT_FIELD_SKIP.has(key))
+function hostSchema(schema?: CollectionSchema): CollectionSchema {
+  if (schema?.fields) return schema
+  return { fields: withBuiltinFields({}) }
+}
+
+function layoutFields(record: DbRecord, schema?: CollectionSchema) {
+  const fields = hostSchema(schema).fields
+  const keys = Object.keys(fields).filter((key) => !LAYOUT_FIELD_SKIP.has(key))
   if (!keys.includes('title')) keys.unshift('title')
-  return keys.map((key) => ({
-    key,
-    type: 'string',
-    label: key === 'title' ? '标题' : key === 'tag' ? '标签' : key,
-    writable: true,
-  }))
+  for (const key of Object.keys(record)) {
+    if (LAYOUT_FIELD_SKIP.has(key) || keys.includes(key) || !fields[key]) continue
+    keys.push(key)
+  }
+  return keys.map((key) => {
+    const spec = fields[key]
+    return {
+      key,
+      type: spec?.type ?? 'string',
+      label: spec?.label ?? (key === 'title' ? '标题' : key === 'tag' ? '标签' : key),
+      writable: fieldIsWritable(spec),
+    }
+  })
 }
 
 function formatHostValue(value: unknown) {
@@ -97,19 +116,22 @@ async function patchPageRecord(pageId: string, bag: Record<string, unknown>) {
 function HostField({
   name,
   record,
+  schema,
   writable,
   onSet,
 }: {
   name: string
   record: DbRecord
+  schema?: CollectionSchema
   writable: boolean
   onSet: (key: string, value: unknown) => void
 }) {
   const key = String(name ?? '').trim()
-  if (!key) {
+  const spec = hostSchema(schema).fields[key]
+  if (!key || !spec) {
     return (
       <div className="page-host-missing" data-testid="page-prop-missing">
-        找不到属性
+        找不到属性 {key}
       </div>
     )
   }
@@ -118,9 +140,9 @@ function HostField({
       className="page-prop-host-field"
       data-testid={`page-prop-field-${key}`}
       defaultValue={formatHostValue(record[key])}
-      readOnly={!writable}
+      readOnly={!writable || !fieldIsWritable(spec)}
       onBlur={(event) => {
-        if (!writable) return
+        if (!writable || !fieldIsWritable(spec)) return
         onSet(key, parseHostValue(event.currentTarget.value))
       }}
     />
@@ -325,11 +347,13 @@ export function PageHostView({
   viewId,
   writable = true,
   markdown = '',
+  schema,
 }: {
   record: DbRecord
   viewId: string
   writable?: boolean
   markdown?: string
+  schema?: CollectionSchema
 }) {
   const editorVersion = usePageEditorVersion()
   const fileTick = usePageFileTick()
@@ -348,7 +372,8 @@ export function PageHostView({
   const hostRef = useRef<HTMLDivElement | null>(null)
   const previewRef = useRef<HTMLDivElement | null>(null)
   const blocks = useMemo(() => listPageHostBlocks(pageId, markdown), [pageId, markdown])
-  const fields = useMemo(() => layoutFields(live), [live])
+  const [patchError, setPatchError] = useState('')
+  const fields = useMemo(() => layoutFields(live, schema), [live, schema])
 
   const setHostTab = useCallback((next: HostTab) => {
     capturePageScroll(hostRef.current)
@@ -382,10 +407,18 @@ export function PageHostView({
 
   const writeRecord = useCallback(
     async (bag: Record<string, unknown>) => {
-      setLive((cur) => ({ ...cur, ...bag }))
-      await patchPageRecord(pageId, bag)
+      try {
+        const patch = sanitizeRecordPatch(hostSchema(schema), bag)
+        await patchPageRecord(pageId, patch)
+        setLive((cur) => ({ ...cur, ...patch }))
+        setPatchError('')
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        setPatchError(message)
+        throw error
+      }
     },
-    [pageId],
+    [pageId, schema],
   )
 
   const compiled = useMemo(() => compileHostSource(source, layoutView ? 'Layout' : 'Block'), [source, layoutView])
@@ -397,10 +430,7 @@ export function PageHostView({
       values: () => Object.fromEntries(fields.map((item) => [item.key, live[item.key]])),
       get: (key: string) => live[key],
       set: (key: string, value: unknown) => writeRecord({ [key]: value }),
-      patch: (bag: unknown) => {
-        if (!bag || typeof bag !== 'object' || Array.isArray(bag)) return Promise.resolve()
-        return writeRecord(bag as Record<string, unknown>)
-      },
+      patch: (bag: unknown) => writeRecord(bag as Record<string, unknown>),
       blocks: () => blocks.map((item) => ({ ...item })),
       kinds: () => getPageEditor()?.blocks().map((item) => ({ kind: item.kind, plugin: item.plugin, label: item.label })) ?? [],
       read: async () => {
@@ -434,13 +464,14 @@ export function PageHostView({
       <HostField
         name={String(props.name ?? '')}
         record={live}
+        schema={schema}
         writable={writable}
         onSet={(key, value) => {
           void writeRecord({ [key]: value })
         }}
       />
     ),
-    [live, writable, writeRecord],
+    [live, schema, writable, writeRecord],
   )
 
   useEffect(() => {
@@ -535,7 +566,14 @@ export function PageHostView({
             data-biu-title={view?.name || undefined}
           >
             {preview.Preview ? (
-              <preview.Preview />
+              <>
+                <preview.Preview />
+                {patchError ? (
+                  <div className="page-host-error" data-testid="page-host-patch-error">
+                    写入失败 · {patchError}
+                  </div>
+                ) : null}
+              </>
             ) : (
               <div className="page-host-error" data-testid="page-host-error">
                 {preview.error || '无法渲染'}
@@ -571,9 +609,9 @@ export function PageHostView({
             <div
               className="page-host-compile"
               data-testid="page-host-compile"
-              data-ok={compiled.ok ? '1' : '0'}
+              data-ok={compiled.ok && !patchError ? '1' : '0'}
             >
-              {compiled.ok ? '编译通过' : `编译失败 · ${compiled.error}`}
+              {compiled.ok ? (patchError ? `写入失败 · ${patchError}` : '编译通过') : `编译失败 · ${compiled.error}`}
             </div>
           </div>
         ) : null}

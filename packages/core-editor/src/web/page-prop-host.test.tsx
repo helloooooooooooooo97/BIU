@@ -49,6 +49,32 @@ test('page properties keep the default table until a custom view is selected', (
   assert.ok(getByTestId('page-prop-host'))
 })
 
+test('property host Field is read-only when the schema field is not writable', async () => {
+  cleanup()
+  resetPageFileState()
+  setPagePropViews('home', [
+    { id: 'card1', name: '卡片', kind: 'sandbox', file: 'missing-prop.jsx', dataFile: 'missing-prop-data.json' },
+  ])
+  const { getByTestId } = render(
+    <PagePropHostView
+      record={{ id: 'home', title: '演示页' }}
+      viewId="card1"
+      schema={{
+        fields: {
+          title: { type: 'string', label: '标题', writable: true },
+          createdBy: { type: 'person', label: '创建人', writable: false },
+        },
+      }}
+    />,
+  )
+  await waitFor(() => {
+    assert.ok(getByTestId('page-prop-field-title'))
+    assert.ok(getByTestId('page-prop-field-createdBy'))
+  })
+  assert.equal((getByTestId('page-prop-field-title') as HTMLInputElement).readOnly, false)
+  assert.equal((getByTestId('page-prop-field-createdBy') as HTMLInputElement).readOnly, true)
+})
+
 test('property sandbox nav tools use the same muted icon color as page chrome', () => {
   assert.match(
     PAGE_EDITOR_STYLE,

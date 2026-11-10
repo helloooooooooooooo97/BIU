@@ -126,7 +126,7 @@ export function defaultTagSandboxSource(title = '') {
         <Api name="biu.record()" use={'返回 { path, collection, id, tagId }'} note="值写回到这条宿主记录，不是标签本身。" />
         <Api name="biu.fields()" use={'返回 { key, type, label }[]'} note="标签上的属性定义。" />
         <Api name="biu.values()" use="当前记录上这些字段的值" note="只读快照。" />
-        <Api name="biu.get / set / patch" use={'get(key)、set(key, value)、await biu.patch({ key: value })'} note="写回当前记录上的标签字段。" />
+        <Api name="biu.get / set / patch" use={'get(key)、set(key, value)、await biu.patch({ key: value })'} note="只写该标签上存在且可写的字段；未知/只读/类型不对会抛错。" />
         <Api name="biu.read() / biu.write(v)" use="本视图自己的 JSON 文件" note="和标签字段分开，适合记这个沙盒的 UI 状态。" />
       </section>
       <section>
