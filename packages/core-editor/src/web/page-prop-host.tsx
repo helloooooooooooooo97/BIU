@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowsPointingInIcon, ArrowsPointingOutIcon, CodeBracketIcon, EyeIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
 import { fieldIsWritable, sanitizeRecordPatch, type CollectionSchema, type DbRecord, type FieldSpec } from '@biu/type-file-system'
@@ -18,6 +18,7 @@ import {
 import { usePageFileTick } from './page-views.ts'
 import { PAGE_PROP_HIDDEN_VIEW_ID, usePagePropPresentMode } from './page-prop-present.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
+import { bindSandboxPickPane, pagePropHostPickKey } from './page-host-pick.ts'
 
 type HostTab = 'preview' | 'code' | 'split'
 
@@ -201,6 +202,7 @@ export function PagePropHostView({
   const showPreview = tab !== 'code'
   const showCode = tab !== 'preview'
   const hostRef = useRef<HTMLDivElement | null>(null)
+  const previewRef = useRef<HTMLDivElement | null>(null)
   const fields = propFields(schema)
 
   useEffect(() => {
@@ -335,11 +337,21 @@ export function PagePropHostView({
     }
   }, [compiled])
 
+  useLayoutEffect(() => {
+    if (!showPreview) return
+    return bindSandboxPickPane(previewRef.current, pagePropHostPickKey(pageId, viewId), {
+      path: `/pages/${pageId}`,
+      ...(view?.file ? { name: view.file } : {}),
+      ...(view?.name ? { title: view.name } : {}),
+    })
+  }, [showPreview, pageId, viewId, view?.file, view?.name, preview.Preview])
+
   const card = (
     <div
       ref={hostRef}
       className={`page-host-view page-prop-host${expanded ? ' is-expanded' : ''}`}
       data-testid="page-prop-host"
+      data-page-host-expanded={expanded ? '1' : undefined}
     >
       <div className="page-block-expand-nav" data-testid={expanded ? 'page-prop-host-expand-nav' : 'page-prop-host-side-bar'} data-biu-ignore>
         <div className="page-block-expand-nav-type" data-testid="page-prop-host-type-icon" title="属性沙盒" aria-label="属性沙盒">
@@ -359,7 +371,16 @@ export function PagePropHostView({
       </div>
       <div className="page-host-stage">
         {showPreview ? (
-          <div className="page-host-preview-pane" data-testid="page-prop-host-preview">
+          <div
+            ref={previewRef}
+            className="page-host-preview-pane"
+            data-testid="page-prop-host-preview"
+            data-sandbox=""
+            data-page-path={`/pages/${pageId}`}
+            data-biu-path={`/pages/${pageId}`}
+            data-biu-name={view?.file || undefined}
+            data-biu-title={view?.name || undefined}
+          >
             {preview.Preview ? (
               <>
                 <preview.Preview />
@@ -377,11 +398,25 @@ export function PagePropHostView({
           </div>
         ) : null}
         {showCode ? (
-          <div className={`page-host-code-pane${showPreview ? ' is-split' : ''}`} data-testid="page-prop-host-code">
+          <div
+            className={`page-host-code-pane${showPreview ? ' is-split' : ''}`}
+            data-testid="page-prop-host-code"
+            data-biu-kind="sandbox"
+            data-biu-id={`sandbox:${pagePropHostPickKey(pageId, viewId)}:source`}
+            data-biu-label={view?.name || '属性沙盒'}
+            data-biu-path={`/pages/${pageId}`}
+            data-biu-name={view?.file || undefined}
+            data-biu-title={view?.name || undefined}
+          >
             <SourceEditor
               value={source}
               language="javascript"
               writable={writable}
+              pickHost={{
+                path: `/pages/${pageId}`,
+                name: view?.file,
+                title: view?.name || String(record.title ?? '').trim(),
+              }}
               onChange={(next) => {
                 setSource(next)
                 if (view?.file && writable) void writePageFile(view.file, next)

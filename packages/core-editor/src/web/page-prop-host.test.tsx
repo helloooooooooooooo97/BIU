@@ -1,6 +1,8 @@
 import { cleanup, render, waitFor } from '@testing-library/react'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { PAGE_EDITOR_STYLE } from './style.ts'
 import { PagePropHostView, PageProperties } from './page-prop-host.tsx'
 import { resetPageFileState } from './page-views.ts'
@@ -25,6 +27,11 @@ test('property host paints Field sandbox when the view file is missing', async (
   })
   assert.match(getByTestId('page-prop-host-root').textContent ?? '', /属性沙盒/)
   assert.ok(getByTestId('page-prop-field-title'))
+  const pane = getByTestId('page-prop-host-preview')
+  assert.equal(pane.hasAttribute('data-sandbox'), true)
+  assert.equal(pane.getAttribute('data-sandbox-pick'), '')
+  assert.equal(pane.getAttribute('data-biu-kind'), 'sandbox')
+  assert.equal(getByTestId('page-prop-host-root').getAttribute('data-sandbox-pick'), '')
 })
 
 test('page properties keep the default table until a custom view is selected', () => {
@@ -86,6 +93,14 @@ test('property host Field is read-only when the schema field is not writable', a
   })
   assert.equal((getByTestId('page-prop-field-title') as HTMLInputElement).readOnly, false)
   assert.equal((getByTestId('page-prop-field-createdBy') as HTMLInputElement).readOnly, true)
+})
+
+test('property sandbox host shares the page-host sandbox pick entry', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './page-prop-host.tsx'), 'utf8')
+  assert.match(src, /bindSandboxPickPane/)
+  assert.match(src, /data-sandbox=""/)
+  assert.match(src, /pickHost=\{\{/)
+  assert.match(src, /page-prop-host-preview/)
 })
 
 test('property sandbox nav tools use the same muted icon color as page chrome', () => {
