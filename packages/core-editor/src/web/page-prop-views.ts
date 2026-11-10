@@ -23,8 +23,13 @@ export function getPagePropViews(pageId: string): PagePropSandboxView[] {
 export function setPagePropViews(pageId: string, views: PagePropSandboxView[]) {
   const id = String(pageId ?? '').trim()
   if (!id) return
-  store.set(id, parsePagePropViews(views))
+  const next = parsePagePropViews(views)
+  store.set(id, next)
   bump()
+  const present = getPagePropPresentMode(id)
+  if (present !== PAGE_PROP_TABLE_VIEW_ID && !next.some((item) => item.id === present)) {
+    setPagePropPresentMode(id, PAGE_PROP_TABLE_VIEW_ID)
+  }
 }
 
 export function subscribePagePropViews(fn: () => void) {

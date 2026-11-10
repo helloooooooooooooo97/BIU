@@ -7,8 +7,9 @@ import {
   PAGE_DEFAULT_LAYOUT_ID,
   type PageLayoutView,
 } from '../page-layouts.ts'
-import { uniqueViewName } from './page-views.ts'
-import { setPagePresentMode } from './source-mode.ts'
+import { getPageViews, uniqueViewName } from './page-views.ts'
+import { isPageBuiltinMode, setPagePresentMode } from './source-mode.ts'
+import { getPagePropViews } from './page-prop-views.ts'
 import { PAGE_PROP_TABLE_VIEW_ID, setPagePropPresentMode } from './page-prop-present.ts'
 import { patchPageViewState, type PageSort } from './page-view-state.ts'
 
@@ -121,12 +122,26 @@ export function getActivePageLayout(pageId: string): PageLayoutView {
   return current ?? listed[0] ?? defaultPageLayout()
 }
 
+function liveContentViewId(pageId: string, contentViewId: string) {
+  const next = String(contentViewId ?? '').trim() || 'doc'
+  if (isPageBuiltinMode(next)) return next
+  if (getPageViews(pageId).some((item) => item.id === next)) return next
+  return 'doc'
+}
+
+function livePropViewId(pageId: string, propViewId: string) {
+  const next = String(propViewId ?? '').trim() || PAGE_PROP_TABLE_VIEW_ID
+  if (next === PAGE_PROP_TABLE_VIEW_ID) return next
+  if (getPagePropViews(pageId).some((item) => item.id === next)) return next
+  return PAGE_PROP_TABLE_VIEW_ID
+}
+
 export function applyPageLayout(pageId: string, layout: PageLayoutView) {
   const id = String(pageId ?? '').trim()
   if (!id) return
   const next = withDisplay(id, layout)
-  setPagePresentMode(id, next.contentViewId)
-  setPagePropPresentMode(id, next.propViewId || PAGE_PROP_TABLE_VIEW_ID)
+  setPagePresentMode(id, liveContentViewId(id, next.contentViewId))
+  setPagePropPresentMode(id, livePropViewId(id, next.propViewId || PAGE_PROP_TABLE_VIEW_ID))
   patchPageViewState(id, { sort: next.sort as PageSort, filterKinds: [...next.filterKinds] })
 }
 

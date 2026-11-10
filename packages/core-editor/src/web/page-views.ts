@@ -27,8 +27,11 @@ export function getPageViews(pageId: string): PageSandboxView[] {
 export function setPageViews(pageId: string, views: PageSandboxView[]) {
   const id = String(pageId ?? '').trim()
   if (!id) return
-  store.set(id, parsePageViews(views))
+  const next = parsePageViews(views)
+  store.set(id, next)
   bump()
+  const present = getPagePresentMode(id)
+  if (!isPageBuiltinMode(present) && !next.some((item) => item.id === present)) setPagePresentMode(id, 'doc')
 }
 
 export function uniqueViewName(base: string, names: Iterable<string>) {
