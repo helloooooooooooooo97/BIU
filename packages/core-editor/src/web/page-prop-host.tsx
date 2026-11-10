@@ -318,7 +318,7 @@ export function PagePropHostView({
         write: (value: unknown) => envRef.current.biu.write(value),
       }
       return {
-        Preview: loadHostComponent(compiled.code, React, FieldProxy, biuProxy, 'Field') as ComponentType,
+        Preview: loadHostComponent(compiled.code, React, () => null, FieldProxy, biuProxy) as ComponentType,
         error: '',
       }
     } catch (err) {

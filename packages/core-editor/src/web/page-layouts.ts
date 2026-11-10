@@ -1,13 +1,14 @@
 import { useSyncExternalStore } from 'react'
 import { createPageBlockId } from '../page-block-fence.ts'
 import {
+  defaultLayoutSandboxSource,
   defaultPageLayout,
   listedPageLayouts as mergeListed,
   parsePageLayouts,
   PAGE_DEFAULT_LAYOUT_ID,
   type PageLayoutView,
 } from '../page-layouts.ts'
-import { defaultSandboxSource, getPageViews, uniqueViewName, readPageFile, writePageFile } from './page-views.ts'
+import { getPageViews, uniqueViewName, readPageFile, writePageFile } from './page-views.ts'
 import { isPageBuiltinMode, setPagePresentMode } from './source-mode.ts'
 import { getPagePropViews } from './page-prop-views.ts'
 import { PAGE_PROP_TABLE_VIEW_ID, setPagePropPresentMode } from './page-prop-present.ts'
@@ -16,6 +17,7 @@ import { patchPageViewState, type PageSort } from './page-view-state.ts'
 export type { PageLayoutView }
 export {
   defaultPageLayout,
+  defaultLayoutSandboxSource,
   layoutsAssetName,
   parsePageLayouts,
   PAGE_DEFAULT_LAYOUT_ID,
@@ -267,7 +269,7 @@ export async function addPageLayoutSandbox(pageId: string, title = '') {
     sort: 'doc',
     filterKinds: [],
   }
-  await writePageFile(view.file, defaultSandboxSource(title), 'text/plain; charset=utf-8')
+  await writePageFile(view.file, defaultLayoutSandboxSource(title), 'text/plain; charset=utf-8')
   await writePageFile(view.dataFile, 'null', 'application/json')
   const ok = await savePageLayouts(id, [...getPageLayouts(id), view])
   if (!ok) return
@@ -311,7 +313,7 @@ export async function copyPageLayout(pageId: string, source?: PageLayoutView) {
     view.kind = 'sandbox'
     view.file = `layout-${id}-${viewId}.jsx`
     view.dataFile = `layout-data-${id}-${viewId}.json`
-    const body = await readPageFile(from.file, defaultSandboxSource(''))
+    const body = await readPageFile(from.file, defaultLayoutSandboxSource(''))
     const data = await readPageFile(from.dataFile || '', 'null')
     await writePageFile(view.file, body, 'text/plain; charset=utf-8')
     await writePageFile(view.dataFile, data, 'application/json')

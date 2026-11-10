@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { defaultPageLayout, layoutsAssetName, listedPageLayouts, parsePageLayouts, PAGE_DEFAULT_LAYOUT_ID } from './page-layouts.ts'
+import { defaultLayoutSandboxSource, defaultPageLayout, layoutsAssetName, listedPageLayouts, parsePageLayouts, PAGE_DEFAULT_LAYOUT_ID } from './page-layouts.ts'
 
 test('page layouts keep a builtin default and skip it from stored custom rows', () => {
   assert.equal(layoutsAssetName('p003'), 'page-layouts-p003.json')
@@ -28,4 +28,15 @@ test('page layouts keep a builtin default and skip it from stored custom rows', 
   const sandbox = parsePageLayouts([{ id: 'wide', name: '宽页', kind: 'sandbox', file: 'layout-wide.jsx' }])
   assert.equal(sandbox[0]?.kind, 'sandbox')
   assert.equal(sandbox[0]?.file, 'layout-wide.jsx')
+})
+
+test('default layout sandbox source shows Field properties and Block content', () => {
+  const src = defaultLayoutSandboxSource('演示页')
+  assert.match(src, /export default function App/)
+  assert.match(src, /全局沙盒/)
+  assert.match(src, /biu\.fields\(\)/)
+  assert.match(src, /<Field name=\{field\.key\}/)
+  assert.match(src, /biu\.blocks\(\)/)
+  assert.match(src, /<Block id=\{open\}/)
+  assert.match(src, /演示页/)
 })
