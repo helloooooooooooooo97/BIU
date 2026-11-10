@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@biu/biu-ui": "0.1.0",
+    "@biu/core-file-system": "0.1.0",
     "@biu/core-pick": "0.1.0",
     "@biu/type-file-system": "0.1.0",
     "@biu/web-event-log": "0.1.0",

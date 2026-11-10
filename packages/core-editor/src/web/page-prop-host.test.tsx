@@ -27,6 +27,7 @@ test('property host paints Field sandbox when the view file is missing', async (
   })
   assert.match(getByTestId('page-prop-host-root').textContent ?? '', /属性沙盒/)
   assert.ok(getByTestId('page-prop-field-title'))
+  assert.ok(getByTestId('page-prop-field-title').querySelector('.fsdb-pop-host'))
   const pane = getByTestId('page-prop-host-preview')
   assert.equal(pane.hasAttribute('data-sandbox'), true)
   assert.equal(pane.getAttribute('data-sandbox-pick'), '')
@@ -77,12 +78,13 @@ test('property host Field is read-only when the schema field is not writable', a
   ])
   const { getByTestId } = render(
     <PagePropHostView
-      record={{ id: 'home', title: '演示页' }}
+      record={{ id: 'home', title: '演示页', createdAt: 1794305209473 }}
       viewId="card1"
       schema={{
         fields: {
           title: { type: 'string', label: '标题', writable: true },
           createdBy: { type: 'person', label: '创建人', writable: false },
+          createdAt: { type: 'datetime', label: '创建时间', writable: false },
         },
       }}
     />,
@@ -90,9 +92,13 @@ test('property host Field is read-only when the schema field is not writable', a
   await waitFor(() => {
     assert.ok(getByTestId('page-prop-field-title'))
     assert.ok(getByTestId('page-prop-field-createdBy'))
+    assert.ok(getByTestId('page-prop-field-createdAt'))
   })
-  assert.equal((getByTestId('page-prop-field-title') as HTMLInputElement).readOnly, false)
-  assert.equal((getByTestId('page-prop-field-createdBy') as HTMLInputElement).readOnly, true)
+  assert.ok(getByTestId('page-prop-field-title').querySelector('.fsdb-pop-host'))
+  assert.equal(getByTestId('page-prop-field-createdBy').querySelector('.fsdb-pop-host'), null)
+  assert.equal(getByTestId('page-prop-field-createdAt').querySelector('.fsdb-pop-host'), null)
+  assert.doesNotMatch(getByTestId('page-prop-field-createdAt').textContent ?? '', /1794305209473/)
+  assert.match(getByTestId('page-prop-field-createdAt').textContent ?? '', /\d{4}\/\d{2}\/\d{2}/)
 })
 
 test('property sandbox host shares the page-host sandbox pick entry', () => {
@@ -101,6 +107,7 @@ test('property sandbox host shares the page-host sandbox pick entry', () => {
   assert.match(src, /data-sandbox=""/)
   assert.match(src, /pickHost=\{\{/)
   assert.match(src, /page-prop-host-preview/)
+  assert.match(readFileSync(resolve(import.meta.dirname, './host-field.tsx'), 'utf8'), /FieldValuePop/)
 })
 
 test('property sandbox nav tools use the same muted icon color as page chrome', () => {

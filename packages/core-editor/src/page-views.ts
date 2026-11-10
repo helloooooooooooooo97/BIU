@@ -76,7 +76,7 @@ export function defaultSandboxSource(title = '') {
         <h2 style={{ margin: '0 0 8px', fontSize: 16 }}>组件 API</h2>
         <Api name="React" use="React.useState / useEffect / JSX" note="宿主注入，不要 import react。" />
         <Api name={'Block'} use={'<Block id={blockId} writable />'} note="渲染真实块。id 用 biu.blocks()[].blockId；writable 默认跟随页面。" />
-        <Api name={'Field'} use={'<Field name={field.key} />'} note="编辑记录上的一个属性。" />
+        <Api name={'Field'} use={'<Field name={field.key} />'} note="按表格单元格同一套控件渲染。" />
       </section>
       <section>
         <h2 style={{ margin: '0 0 8px', fontSize: 16 }}>数据 API</h2>
