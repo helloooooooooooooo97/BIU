@@ -19,7 +19,8 @@ export const PAGE_EDITOR_STYLE = `
 .page-editor.is-table .page-editor-doc,.page-editor.is-host .page-editor-doc{display:none}
 .page-host-view{position:relative;display:flex;flex-direction:column;min-width:0;width:100%;min-height:min(72vh,720px);overflow:visible;box-sizing:border-box;background:var(--biu-color-bg)}
 .page-prop-host{min-height:min(36vh,360px);margin:0 0 8px}
-.page-prop-host-field{box-sizing:border-box;width:100%;min-width:0;height:var(--biu-size-control-md);margin:0;border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:6px;padding:0 8px;background:transparent;color:var(--biu-color-text);font:inherit}
+.page-prop-host-field{box-sizing:border-box;width:100%;min-width:0;margin:0}
+.page-prop-host-field .fsdb-pop-host,.page-prop-host-field .db-datetime{width:100%;min-width:0}
 .page-host-view .page-block{color:var(--biu-color-text);font-family:var(--font-sans);font-size:var(--fsdb-body-size,15px);font-weight:var(--biu-font-weight-regular);line-height:var(--fsdb-body-leading,1.7);letter-spacing:-.003em}
 .page-host-view.is-expanded{position:fixed;inset:0;z-index:var(--biu-z-modal);min-height:0;height:100%;max-width:none;overflow:visible}
 .page-block-expand-nav,.page-editor .page-block-expand-nav{position:relative;top:auto;right:auto;left:auto;flex:none;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;height:var(--biu-size-control-lg);min-height:var(--biu-size-control-lg);max-height:var(--biu-size-control-lg);width:100%;box-sizing:border-box;padding:0 4px;border:0;border-radius:0;background:var(--biu-color-bg-subtle);box-shadow:none;opacity:1;overflow:hidden;z-index:0;font-size:var(--biu-font-size-3);font-weight:var(--biu-font-weight-medium);line-height:var(--biu-size-control-lg)}

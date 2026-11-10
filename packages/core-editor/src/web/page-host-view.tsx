@@ -20,6 +20,7 @@ import { SourceEditor } from './source-editor.tsx'
 import { defaultSandboxSource } from '../page-views.ts'
 import { bindSandboxPickPane, pageHostPickKey } from './page-host-pick.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
+import { HostField } from './host-field.tsx'
 
 export type HostBlockInfo = {
   id: string
@@ -78,29 +79,6 @@ function layoutFields(record: DbRecord, schema?: CollectionSchema) {
   })
 }
 
-function formatHostValue(value: unknown) {
-  if (value == null) return ''
-  if (typeof value === 'string') return value
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
-  try {
-    return JSON.stringify(value)
-  } catch {
-    return String(value)
-  }
-}
-
-function parseHostValue(raw: string) {
-  const text = raw.trim()
-  if ((text.startsWith('{') && text.endsWith('}')) || (text.startsWith('[') && text.endsWith(']'))) {
-    try {
-      return JSON.parse(text) as unknown
-    } catch {
-      return raw
-    }
-  }
-  return raw
-}
-
 async function patchPageRecord(pageId: string, bag: Record<string, unknown>) {
   const res = await fetch('/api/db/update', {
     method: 'POST',
@@ -112,42 +90,6 @@ async function patchPageRecord(pageId: string, bag: Record<string, unknown>) {
     throw new Error(data.error || res.statusText)
   }
   window.dispatchEvent(new Event('fsdb:change'))
-}
-
-function HostField({
-  name,
-  record,
-  schema,
-  writable,
-  onSet,
-}: {
-  name: string
-  record: DbRecord
-  schema?: CollectionSchema
-  writable: boolean
-  onSet: (key: string, value: unknown) => void
-}) {
-  const key = String(name ?? '').trim()
-  const spec = hostSchema(schema).fields[key]
-  if (!key || !spec) {
-    return (
-      <div className="page-host-missing" data-testid="page-prop-missing">
-        找不到属性 {key}
-      </div>
-    )
-  }
-  return (
-    <input
-      className="page-prop-host-field"
-      data-testid={`page-prop-field-${key}`}
-      defaultValue={formatHostValue(record[key])}
-      readOnly={!writable || !fieldIsWritable(spec)}
-      onBlur={(event) => {
-        if (!writable || !fieldIsWritable(spec)) return
-        onSet(key, parseHostValue(event.currentTarget.value))
-      }}
-    />
-  )
 }
 
 export async function writePageHostBlock(pageId: string, blockId: string, patch: Record<string, unknown>) {
@@ -453,7 +395,7 @@ export function PageHostView({
       <HostField
         name={String(props.name ?? '')}
         record={live}
-        schema={schema}
+        schema={hostSchema(schema)}
         writable={writable}
         onSet={(key, value) => {
           void writeRecord({ [key]: value })

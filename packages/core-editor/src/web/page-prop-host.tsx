@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowsPointingInIcon, ArrowsPointingOutIcon, CodeBracketIcon, EyeIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
-import { fieldIsWritable, sanitizeRecordPatch, type CollectionSchema, type DbRecord, type FieldSpec } from '@biu/type-file-system'
+import { fieldIsWritable, sanitizeRecordPatch, type CollectionSchema, type DbRecord } from '@biu/type-file-system'
 import { compileHostSource, loadHostComponent } from './page-host-compile.ts'
 import { ExpandNavTitle } from './expand-nav-title.tsx'
 import { SourceEditor } from './source-editor.tsx'
@@ -19,6 +19,7 @@ import { usePageFileTick } from './page-views.ts'
 import { PAGE_PROP_HIDDEN_VIEW_ID, usePagePropPresentMode } from './page-prop-present.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 import { bindSandboxPickPane, pagePropHostPickKey } from './page-host-pick.ts'
+import { HostField } from './host-field.tsx'
 
 type HostTab = 'preview' | 'code' | 'split'
 
@@ -30,9 +31,11 @@ function viewOf(pageId: string, viewId: string): PagePropSandboxView | undefined
   return getPagePropViews(pageId).find((item) => item.id === viewId)
 }
 
+const PROP_FIELD_SKIP = new Set(['emoji', 'views', 'propViews', 'layouts', 'file', 'tablePath', 'sourceId'])
+
 function propFields(schema?: CollectionSchema) {
   return Object.entries(schema?.fields ?? {})
-    .filter(([key, field]) => key !== 'emoji' && key !== schema?.contentField && field.type !== 'file')
+    .filter(([key, field]) => !PROP_FIELD_SKIP.has(key) && key !== schema?.contentField && field.type !== 'file')
     .map(([key, field]) => ({
       key,
       type: field.type,
@@ -40,34 +43,6 @@ function propFields(schema?: CollectionSchema) {
       writable: fieldIsWritable(field),
       spec: field,
     }))
-}
-
-function formatValue(value: unknown) {
-  if (value == null) return ''
-  if (typeof value === 'string') return value
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
-  try {
-    return JSON.stringify(value)
-  } catch {
-    return String(value)
-  }
-}
-
-function parseValue(raw: string, spec?: FieldSpec) {
-  const text = raw.trim()
-  if (spec?.type === 'number') {
-    const n = Number(text)
-    return Number.isFinite(n) ? n : text
-  }
-  if (spec?.type === 'boolean') return text === 'true' || text === '1'
-  if ((text.startsWith('{') && text.endsWith('}')) || (text.startsWith('[') && text.endsWith(']'))) {
-    try {
-      return JSON.parse(text) as unknown
-    } catch {
-      return raw
-    }
-  }
-  return raw
 }
 
 async function patchPageRecord(pageId: string, bag: Record<string, unknown>) {
@@ -81,42 +56,6 @@ async function patchPageRecord(pageId: string, bag: Record<string, unknown>) {
     throw new Error(data.error || res.statusText)
   }
   window.dispatchEvent(new Event('fsdb:change'))
-}
-
-function HostField({
-  name,
-  record,
-  schema,
-  writable,
-  onSet,
-}: {
-  name: string
-  record: DbRecord
-  schema?: CollectionSchema
-  writable: boolean
-  onSet: (key: string, value: unknown) => void
-}) {
-  const key = String(name ?? '').trim()
-  const spec = schema?.fields?.[key]
-  if (!key || !spec) {
-    return (
-      <div className="page-host-missing" data-testid="page-prop-missing">
-        找不到属性 {key}
-      </div>
-    )
-  }
-  return (
-    <input
-      className="page-prop-host-field"
-      data-testid={`page-prop-field-${key}`}
-      defaultValue={formatValue(record[key])}
-      readOnly={!writable || !fieldIsWritable(spec)}
-      onBlur={(event) => {
-        if (!writable || !fieldIsWritable(spec)) return
-        onSet(key, parseValue(event.currentTarget.value, spec))
-      }}
-    />
-  )
 }
 
 function HostTools({
@@ -183,11 +122,13 @@ export function PagePropHostView({
   viewId,
   schema,
   writable = true,
+  collectionPath = '/pages',
 }: {
   record: DbRecord
   viewId: string
   schema?: CollectionSchema
   writable?: boolean
+  collectionPath?: string
 }) {
   const fileTick = usePageFileTick()
   const pageId = String(record.id)
@@ -292,12 +233,13 @@ export function PagePropHostView({
         record={live}
         schema={schema}
         writable={writable}
+        collectionPath={collectionPath}
         onSet={(key, value) => {
           void writeRecord({ [key]: value })
         }}
       />
     ),
-    [live, schema, writable, writeRecord],
+    [live, schema, writable, writeRecord, collectionPath],
   )
 
   useEffect(() => {
@@ -454,6 +396,12 @@ export function PageProperties({
   if (present === PAGE_PROP_HIDDEN_VIEW_ID) return null
   if (!page || !sandbox) return children
   return (
-    <PagePropHostView record={record} viewId={sandbox.id} schema={schema} writable={writable !== false} />
+    <PagePropHostView
+      record={record}
+      viewId={sandbox.id}
+      schema={schema}
+      writable={writable !== false}
+      collectionPath={collectionPath}
+    />
   )
 }

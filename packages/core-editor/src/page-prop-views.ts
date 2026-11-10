@@ -47,7 +47,7 @@ export function defaultPropSandboxSource(title = '') {
       <section>
         <h2 style={{ margin: '0 0 8px', fontSize: 16 }}>组件 API</h2>
         <Api name="React" use="React.useState / useEffect / JSX" note="宿主注入，不要 import react。" />
-        <Api name={'Field'} use={'<Field name={field.key} />'} note="失焦时写回该字段。只读字段不会提交。" />
+        <Api name={'Field'} use={'<Field name={field.key} />'} note="按表格单元格同一套控件渲染；只读字段不能改。" />
       </section>
       <section>
         <h2 style={{ margin: '0 0 8px', fontSize: 16 }}>数据 API</h2>
