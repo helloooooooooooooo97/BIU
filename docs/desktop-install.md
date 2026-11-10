@@ -9,7 +9,7 @@ GitHub Release 提供打包产物：
 | Windows x64 | `BIU-<version>-win-x64.exe`（NSIS），以及 `.zip` |
 | Linux x64 | `BIU-<version>-linux-x64.AppImage`（另有 `.zip`） |
 
-打 tag `v0.1.1` 并 push，或在 Actions 里手动跑 **desktop-release**。本地：
+打 tag `v0.1.3` 并 push，或在 Actions 里手动跑 **desktop-release**。本地：
 
 ```bash
 npm run electron:pack          # 当前系统
