@@ -36,6 +36,7 @@ import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { copyPageSandboxView, createPageSandboxView, deletePageSandboxView, loadPageViews, usePageViews } from './page-views.ts'
 import {
   addPageLayout,
+  addPageLayoutSandbox,
   copyPageLayout,
   deletePageLayout,
   loadPageLayouts,
@@ -135,6 +136,10 @@ export function PageDetailBar({
   const [creatingPropView, setCreatingPropView] = useState(false)
   const [renamingPropView, setRenamingPropView] = useState('')
   const [renamePropDraft, setRenamePropDraft] = useState('')
+  const [createOpen, setCreateOpen] = useState(false)
+  const [createKind, setCreateKind] = useState<'layout' | 'prop' | 'content'>('layout')
+  const [creatingAny, setCreatingAny] = useState(false)
+  const createRef = useRef<HTMLDivElement>(null)
   const pageRecord = !collectionPath || collectionPath === '/pages'
   const propSandbox = propViews.find((item) => item.id === propPresent)
   const propViewId = propSandbox ? propSandbox.id : PAGE_PROP_TABLE_VIEW_ID
@@ -144,6 +149,22 @@ export function PageDetailBar({
     .filter(([key, field]) => key !== 'emoji' && key !== schema?.labelField && field.type !== 'file')
     .map(([key, field]) => ({ key, label: field.label ?? key }))
   const visibleKeys = visiblePropertyKeys ?? props.map((item) => item.key).filter((key) => !hiddenPropertyKeys.includes(key))
+
+  async function createChosen(kind: 'layout' | 'prop' | 'content') {
+    setCreateKind(kind)
+    setCreateOpen(false)
+    if (creatingAny) return
+    setCreatingAny(true)
+    try {
+      if (kind === 'layout') await addPageLayoutSandbox(record.id, String(record.title ?? ''))
+      else if (kind === 'prop') await createPagePropSandboxView(record.id, String(record.title ?? ''), '新视图')
+      else await createPageSandboxView(record.id, String(record.title ?? ''), '新视图')
+    } catch {
+      /* ignore */
+    } finally {
+      setCreatingAny(false)
+    }
+  }
 
   useEffect(() => {
     setOpen(null)
@@ -210,7 +231,11 @@ export function PageDetailBar({
                     <div key={item.id} className={`tasks-viewdd-item${item.id === activeLayout.id ? ' is-active' : ''}`}>
                       {renamingView === item.id ? (
                         <div className="tasks-viewdd-item-main fsdb-tool-row">
-                          <Squares2X2Icon aria-hidden className="tasks-viewdd-item-ico" />
+                          {item.kind === 'sandbox' ? (
+                            <CodeBracketIcon aria-hidden className="tasks-viewdd-item-ico" />
+                          ) : (
+                            <Squares2X2Icon aria-hidden className="tasks-viewdd-item-ico" />
+                          )}
                           <input
                             className="tasks-viewdd-item-name"
                             aria-label={`视图名称 ${item.name}`}
@@ -243,7 +268,11 @@ export function PageDetailBar({
                             setOpen(null)
                           }}
                         >
-                          <Squares2X2Icon aria-hidden className="tasks-viewdd-item-ico" />
+                          {item.kind === 'sandbox' ? (
+                            <CodeBracketIcon aria-hidden className="tasks-viewdd-item-ico" />
+                          ) : (
+                            <Squares2X2Icon aria-hidden className="tasks-viewdd-item-ico" />
+                          )}
                           <span className="tasks-viewdd-item-name">{item.name}</span>
                         </button>
                       )}
@@ -782,6 +811,47 @@ export function PageDetailBar({
         >
           <ArrowPathIcon aria-hidden className={`size-[14px]${refreshing ? ' fsdb-spin' : ''}`} />
         </button>
+        {pageRecord ? (
+          <div className="fsdb-create-group" ref={createRef}>
+            <button
+              type="button"
+              className="fsdb-create-btn"
+              aria-label="新建"
+              title="新建"
+              disabled={creatingAny}
+              onClick={() => void createChosen(createKind)}
+            >
+              {creatingAny ? '正在创建…' : '新建'}
+            </button>
+            <HeadlessDismiss enabled={createOpen} onDismiss={() => setCreateOpen(false)}>
+              <div className="fsdb-create-scope-wrap">
+                <button
+                  type="button"
+                  className="fsdb-create-scope"
+                  aria-label="新建类型"
+                  aria-expanded={createOpen}
+                  title="新建视图类型"
+                  onClick={() => setCreateOpen((open) => !open)}
+                >
+                  <ChevronDownIcon aria-hidden className="size-[14px]" />
+                </button>
+                {createOpen ? (
+                  <div className="fsdb-create-scope-menu" role="menu">
+                    <button type="button" role="menuitem" className={createKind === 'layout' ? 'is-on' : ''} onClick={() => void createChosen('layout')}>
+                      全局视图
+                    </button>
+                    <button type="button" role="menuitem" className={createKind === 'prop' ? 'is-on' : ''} onClick={() => void createChosen('prop')}>
+                      属性视图
+                    </button>
+                    <button type="button" role="menuitem" className={createKind === 'content' ? 'is-on' : ''} onClick={() => void createChosen('content')}>
+                      内容视图
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </HeadlessDismiss>
+          </div>
+        ) : null}
         {canPrev ? (
           <button
             type="button"

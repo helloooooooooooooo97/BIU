@@ -32,7 +32,7 @@ function options(record: DbRecord, fieldKey: FieldKey): Option[] {
     return listedPageLayouts(id).map((item) => ({
       id: item.id,
       name: item.name,
-      icon: 'layout',
+      icon: item.kind === 'sandbox' ? 'sandbox' : 'layout',
       builtin: Boolean(item.builtin) || item.id === PAGE_DEFAULT_LAYOUT_ID,
     }))
   }

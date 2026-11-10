@@ -114,7 +114,11 @@ function defaultOptions(collectionPath: string, record: DbRecord, fieldKey: View
   if (fieldKey === 'layouts') {
     return withBuiltin(
       { id: DEFAULT_RECORD_LAYOUT_ID, name: '默认视图', icon: 'layout', builtin: true },
-      parseRecordLayouts(record.layouts).map((item) => ({ id: item.id, name: item.name, icon: 'layout' as const })),
+      parseRecordLayouts(record.layouts).map((item) => ({
+        id: item.id,
+        name: item.name,
+        icon: item.kind === 'sandbox' ? ('sandbox' as const) : ('layout' as const),
+      })),
     )
   }
   if (fieldKey === 'propViews') {

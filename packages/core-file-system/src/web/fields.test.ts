@@ -65,7 +65,7 @@ test('view catalog columns show names instead of [object Object]', () => {
     ]),
     '官网、海报',
   )
-  assert.equal(formatField({ type: 'string', label: '组合视图' }, [{ id: 'need', name: '需求', contentViewId: 'doc' }]), '需求')
+  assert.equal(formatField({ type: 'string', label: '全局视图' }, [{ id: 'need', name: '需求', contentViewId: 'doc' }]), '需求')
   assert.equal(formatField(field, []), '')
 })
 

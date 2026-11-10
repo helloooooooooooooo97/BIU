@@ -196,7 +196,7 @@ test('withBuiltinFields always includes writable tag and strips tags', () => {
   assert.equal(fields.views?.writable, true)
   assert.equal(fields.propViews?.writable, true)
   assert.equal(fields.layouts?.writable, true)
-  assert.equal(fields.layouts?.label, '组合视图')
+  assert.equal(fields.layouts?.label, '全局视图')
 })
 
 test('withBuiltinFields keeps 内容视图 even if a collection labels views as 视图', () => {

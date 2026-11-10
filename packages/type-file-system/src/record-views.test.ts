@@ -9,6 +9,15 @@ test('record layouts keep a builtin 默认视图 for every file', () => {
   assert.equal(listedRecordLayouts(parsed)[0]?.builtin, true)
 })
 
+test('record layouts can be a code sandbox', () => {
+  const parsed = parseRecordLayouts([
+    { id: 'wide', name: '宽页', kind: 'sandbox', file: 'layout-wide.jsx', dataFile: 'layout-data-wide.json' },
+  ])
+  assert.equal(parsed[0]?.kind, 'sandbox')
+  assert.equal(parsed[0]?.file, 'layout-wide.jsx')
+  assert.equal(parsed[0]?.contentViewId, 'doc')
+})
+
 test('sandbox catalogs share one parser', () => {
   const views = parseRecordSandboxes([{ id: 'a', name: '', file: 'a.jsx' }])
   assert.equal(views[0]?.name, '新视图')
