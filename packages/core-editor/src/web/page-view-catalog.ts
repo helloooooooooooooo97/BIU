@@ -4,7 +4,6 @@ import {
   deletePageLayout,
   listedPageLayouts,
   getPageLayouts,
-  parsePageLayouts,
   selectPageLayout,
   subscribePageLayouts,
   getActivePageLayout,
@@ -33,7 +32,7 @@ type Option = { id: string; name: string; icon: 'doc' | 'outline' | 'table' | 's
 function options(record: DbRecord, fieldKey: FieldKey): Option[] {
   const id = String(record.id ?? '').trim()
   if (fieldKey === 'layouts') {
-    const listed = getPageLayouts(id).length ? listedPageLayouts(id) : mergeListedLayouts(parsePageLayouts(record.layouts))
+    const listed = getPageLayouts(id).length ? listedPageLayouts(id) : mergeListedLayouts(record.layouts)
     return listed.map((item) => ({
       id: item.id,
       name: item.name,

@@ -17,6 +17,25 @@ afterEach(() => {
   setPagePropPresentMode('p0133', PAGE_PROP_TABLE_VIEW_ID)
 })
 
+test('builtin default layout can be renamed', async () => {
+  const original = globalThis.fetch
+  globalThis.fetch = async () => new Response('{}', { status: 200 })
+  try {
+    const { getByText, getByLabelText, getByTestId, findByDisplayValue } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} />)
+    fireEvent.click(getByText('默认视图'))
+    fireEvent.click(getByLabelText('重命名 默认视图'))
+    const input = await findByDisplayValue('默认视图')
+    fireEvent.change(input, { target: { value: '工作台' } })
+    fireEvent.blur(input)
+    await waitFor(() => {
+      assert.ok(getByTestId('page-layout-tab').textContent?.includes('工作台'))
+      assert.equal(getByTestId('page-layout-builtin-default').textContent, '工作台')
+    })
+  } finally {
+    globalThis.fetch = original
+  }
+})
+
 test('copying a layout uses unique 副本 names like table views', async () => {
   const original = globalThis.fetch
   globalThis.fetch = async () => new Response('{}', { status: 200 })

@@ -296,39 +296,37 @@ export function PageDetailBar({
                         >
                           <Square2StackIcon aria-hidden className="size-[14px]" />
                         </button>
+                        <button
+                          type="button"
+                          className="tasks-viewdd-act"
+                          title="重命名"
+                          aria-label={`重命名 ${item.name}`}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            setRenamingView(item.id)
+                            setRenameDraft(item.name)
+                          }}
+                        >
+                          <PencilSquareIcon aria-hidden className="size-[14px]" />
+                        </button>
                         {item.builtin ? null : (
-                          <>
-                            <button
-                              type="button"
-                              className="tasks-viewdd-act"
-                              title="重命名"
-                              aria-label={`重命名 ${item.name}`}
-                              onMouseDown={(event) => event.preventDefault()}
-                              onClick={(event) => {
-                                event.preventDefault()
-                                event.stopPropagation()
-                                setRenamingView(item.id)
-                                setRenameDraft(item.name)
-                              }}
-                            >
-                              <PencilSquareIcon aria-hidden className="size-[14px]" />
-                            </button>
-                            <button
-                              type="button"
-                              className="tasks-viewdd-act is-danger"
-                              title="删除"
-                              aria-label={`删除 ${item.name}`}
-                              data-testid={`page-layout-delete-${item.id}`}
-                              onMouseDown={(event) => event.preventDefault()}
-                              onClick={(event) => {
-                                event.preventDefault()
-                                event.stopPropagation()
-                                void deletePageLayout(record.id, item.id).catch(() => undefined)
-                              }}
-                            >
-                              <TrashGlyph aria-hidden className="size-[14px]" />
-                            </button>
-                          </>
+                          <button
+                            type="button"
+                            className="tasks-viewdd-act is-danger"
+                            title="删除"
+                            aria-label={`删除 ${item.name}`}
+                            data-testid={`page-layout-delete-${item.id}`}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={(event) => {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              void deletePageLayout(record.id, item.id).catch(() => undefined)
+                            }}
+                          >
+                            <TrashGlyph aria-hidden className="size-[14px]" />
+                          </button>
                         )}
                       </span>
                     </div>
