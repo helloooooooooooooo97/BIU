@@ -34,6 +34,7 @@ test('default sandbox source is a host component that uses Block', async () => {
   assert.match(src, /biu\.read\(\)/)
   assert.match(src, /<Block id=\{open\}/)
   assert.match(src, /<Field name/)
-  assert.match(src, /演示页/)
+  assert.match(src, /内容视图 · 页面概览/)
+  assert.match(src, /page\.title/)
   assert.equal(compileHostSource(src).ok, true)
 })
