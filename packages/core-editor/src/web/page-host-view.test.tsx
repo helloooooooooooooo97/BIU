@@ -23,7 +23,7 @@ test('host view paints the default sandbox when the view file is missing', async
   assert.ok(getByTestId('page-host-expand'))
   assert.ok(getByTestId('page-host-preview'))
   assert.equal(queryByTestId('page-host-code'), null)
-  assert.match(getByTestId('page-host-view-root').textContent ?? '', /本页沙盒/)
+  assert.match(getByTestId('page-host-view-root').textContent ?? '', /内容视图/)
   assert.match(getByTestId('page-host-view-root').textContent ?? '', /演示页/)
   const pane = getByTestId('page-host-preview')
   assert.equal(pane.hasAttribute('data-sandbox'), true)
