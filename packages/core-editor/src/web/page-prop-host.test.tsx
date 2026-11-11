@@ -137,4 +137,6 @@ test('property sandbox nav tools use the same muted icon color as page chrome', 
     /\.page-block-expand-nav \.page-slide-icon,.page-block-expand-nav \.layout-picker-btn\{[^}]*color:var\(--biu-color-icon\)/,
   )
   assert.match(PAGE_EDITOR_STYLE, /\.page-block-expand-nav \.page-slide-icon:hover/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-block-expand-nav \.page-slide-icon\.is-deck\{[^}]*background:var\(--biu-color-bg-hover\)/)
+  assert.doesNotMatch(PAGE_EDITOR_STYLE, /\.page-editor \.page-slide-icon\.is-deck[^{]*\{[^}]*background:transparent/)
 })

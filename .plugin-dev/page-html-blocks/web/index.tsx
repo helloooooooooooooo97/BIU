@@ -680,7 +680,7 @@ function HtmlSideBar({
           ) : null}
           <button
             type="button"
-            className={`page-slide-icon${deck ? ' is-deck' : ''}`}
+            className={`page-slide-icon${deck ? ' is-on is-deck' : ''}`}
             data-testid="html-deck-toggle"
             title={deck ? '已加入演示，点击移出' : '未加入演示，点击加入'}
             aria-label={deck ? '移出演示' : '加入演示'}
