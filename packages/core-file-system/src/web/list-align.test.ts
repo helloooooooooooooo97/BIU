@@ -43,6 +43,15 @@ test('list and detail share the chat column max width with side padding', () => 
   assert.match(css, /\.fsdb-detail-aside \.fsdb-prop-tr\.is-tag-fold \.fsdb-proprow-k\{[^}]*padding-top:0/)
   assert.match(css, /\.fsdb-detail-aside \.fsdb-prop-tr\.is-tag-fold \.fsdb-prop-val\.is-schema\{[^}]*padding-top:0/)
   assert.match(css, /\.fsdb-detail-aside \.fsdb-prop-tr\.is-tag-fold \.fsdb-prop-val\.is-schema>\.fsdb-pop-host[\s\S]*?min-height:22px/)
+  assert.match(css, /\.fsdb-detail-aside \.fsdb-prop-tr\.is-tag-fold:not\(\.is-open\) \.fsdb-prop-val\.is-schema>\.fsdb-pop-host[\s\S]*?padding-top:0/)
+  assert.match(
+    css,
+    /\.fsdb-prop-tr\.is-tag-fold\.is-open \.fsdb-schema>\.fsdb-pop-host[\s\S]*?align-items:center/,
+  )
+  assert.match(
+    css,
+    /\.fsdb-prop-tr\.is-tag-fold\.is-open \.fsdb-schema>\.fsdb-pop-host[\s\S]*?padding:4px 6px/,
+  )
   assert.match(css, /\.fsdb-proprow\.is-tag-fold \.fsdb-proprow-k,\.fsdb-prop-tr\.is-tag-fold \.fsdb-proprow-k\{[^}]*padding-top:0/)
   assert.match(css, /\.fsdb-page \.fsdb-detail-aside \.tasks-table\.is-wrap \.fsdb-prop-tr\.is-tag-fold:not\(\.is-open\) td\{[^}]*vertical-align:middle/)
   assert.match(css, /\.fsdb-page \.fsdb-detail-aside \.tasks-table\.is-wrap \.fsdb-prop-tr\.is-tag-fold\.is-open td\{[^}]*vertical-align:top/)
