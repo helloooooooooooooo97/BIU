@@ -658,7 +658,8 @@ const CSS = `
 .fsdb-schema-pack{display:flex;flex-direction:column;gap:0;min-width:0;padding:0}
 .fsdb-proprow.is-tag-fold:not(.is-open) .fsdb-schema-pack,.fsdb-prop-tr.is-tag-fold:not(.is-open) .fsdb-schema-pack{display:none}
 .fsdb-schema-pack-head{display:flex;align-items:center;box-sizing:border-box;min-height:32px;padding:4px 6px;box-shadow:inset 0 calc(-1 * var(--biu-stroke-width)) 0 color-mix(in srgb,var(--biu-color-border) 80%,transparent)}
-.fsdb-proprow.is-tag-fold.is-open .fsdb-schema>.fsdb-pop-host,.fsdb-prop-tr.is-tag-fold.is-open .fsdb-schema>.fsdb-pop-host,.fsdb-proprow.is-tag-fold.is-open .fsdb-prop-val.is-schema>.fsdb-pop-host,.fsdb-prop-tr.is-tag-fold.is-open .fsdb-prop-val.is-schema>.fsdb-pop-host{display:flex;box-sizing:border-box;align-items:center;align-content:center;min-height:32px;padding:4px 6px;box-shadow:inset 0 calc(-1 * var(--biu-stroke-width)) 0 color-mix(in srgb,var(--biu-color-border) 80%,transparent)}
+.fsdb-proprow.is-tag-fold.is-open .fsdb-schema>.fsdb-pop-host,.fsdb-prop-tr.is-tag-fold.is-open .fsdb-schema>.fsdb-pop-host,.fsdb-proprow.is-tag-fold.is-open .fsdb-prop-val.is-schema>.fsdb-pop-host,.fsdb-prop-tr.is-tag-fold.is-open .fsdb-prop-val.is-schema>.fsdb-pop-host{display:flex;box-sizing:border-box;align-items:center;align-content:center;min-height:32px;padding:4px 6px}
+.fsdb-schema:has(.fsdb-schema-pack)>.fsdb-pop-host{box-shadow:inset 0 calc(-1 * var(--biu-stroke-width)) 0 color-mix(in srgb,var(--biu-color-border) 80%,transparent)}
 .fsdb-schema-pack:last-child>:last-child{box-shadow:none}
 .fsdb-schema-prop{display:grid;grid-template-columns:108px minmax(0,1fr);align-items:center;gap:8px;box-sizing:border-box;min-width:0;width:100%;min-height:32px;border-radius:0;padding:4px 6px;box-shadow:inset 0 calc(-1 * var(--biu-stroke-width)) 0 color-mix(in srgb,var(--biu-color-border) 80%,transparent)}
 .fsdb-schema-prop:hover{background:var(--biu-color-bg-hover)}
