@@ -888,6 +888,7 @@ button.fsdb-detail-title-icon:hover{background:color-mix(in srgb,var(--biu-color
 .fsdb-cell-pop.is-string,.fsdb-cell-pop.is-title,.fsdb-cell-pop.is-number{padding:6px 8px}
 .fsdb-cell-pop-tags{display:flex;flex-direction:column;gap:8px;min-width:0}
 .fsdb-viewcat-pick{display:flex;flex-direction:column;gap:6px;min-width:0;width:100%}
+.fsdb-viewcat-pick .db-search-field,.fsdb-viewcat-pick .db-search-field input,.fsdb-viewcat-pick input{border:0;outline:none;box-shadow:none;background:transparent;appearance:none}
 .fsdb-viewcat-pick-list{display:flex;flex-direction:column;gap:2px;min-width:0}
 .fsdb-viewcat-pick-row{display:flex !important;flex-direction:row !important;flex-wrap:nowrap !important;align-items:center;gap:2px;width:100%;min-width:0;border-radius:7px}
 .fsdb-viewcat-pick-row.is-active,.fsdb-viewcat-pick-row:hover{background:var(--biu-color-bg-hover)}
