@@ -41,6 +41,9 @@ export function kindFromPluginId(id) {
 export function fenceForInstalledPlugin(plugin, index) {
   const id = `all${String(index + 1).padStart(2, '0')}`
   const kind = kindFromPluginId(plugin.id)
+  if (kind === 'html' || plugin.id.includes('html')) {
+    return `:::pageBlock {kind=html plugin=${plugin.id} id=${id}}\n<p>${plugin.label}</p>\n:::`
+  }
   return `:::pageBlock {kind=${kind} plugin=${plugin.id} id=${id}}\n{ "title": ${JSON.stringify(plugin.label)} }\n:::`
 }
 

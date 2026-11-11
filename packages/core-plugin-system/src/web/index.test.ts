@@ -1,7 +1,5 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { Context, Service } from 'cordis'
 import * as slots from '@biu/web-slots'
 import type { CollectionChrome, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
@@ -243,12 +241,37 @@ test('page-excalidraw sandbox stores scenes as page assets', async () => {
   assert.match(src, /props\.selected/)
 })
 
-test('html page block plugin is gone; sandbox covers that surface', async () => {
+test('restored html plugin keeps static and live kinds', async () => {
   const { readFile } = await import('node:fs/promises')
-  assert.equal(existsSync(resolve(import.meta.dirname, '../../../../.plugin-dev/page-html-blocks')), false)
-  const sandbox = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-sandbox/web/index.tsx'), 'utf8')
-  assert.match(sandbox, /kind: 'sandbox'/)
-  assert.doesNotMatch(sandbox, /kind: 'htmlframe'/)
+  const { resolve } = await import('node:path')
+  const html = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-html-blocks/web/index.tsx'), 'utf8')
+  const manifest = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-html-blocks/manifest.json'), 'utf8')
+  assert.match(manifest, /"id": "page-html-blocks"/)
+  assert.match(manifest, /"name": "HTML"/)
+  assert.match(html, /export const name = 'page-html-blocks'/)
+  assert.match(html, /kind: 'html'/)
+  assert.match(html, /kind: 'htmlframe'/)
+  assert.match(html, /label: '静态HTML'/)
+  assert.match(html, /label: '动态HTML'/)
+  assert.match(html, /plugin: name/)
+  assert.match(html, /newHtmlFile/)
+  assert.match(html, /data-testid="html-type-icon"/)
+  assert.match(html, /data-testid="html-side-bar"/)
+  assert.match(html, /page-block-expand-nav/)
+  assert.match(html, /page-block-expand-nav-title/)
+  assert.match(html, /testId="html-title"/)
+  assert.match(html, /title: '静态HTML'/)
+  assert.match(html, /title: '动态HTML'/)
+  assert.match(html, /data-testid="html-deck-expand-nav"/)
+  assert.match(html, /data-testid="html-deck-type-icon"/)
+  assert.match(html, /testId="html-deck-title"/)
+  assert.doesNotMatch(html, /html-floatbar/)
+  assert.doesNotMatch(html, /function FloatBar/)
+  assert.match(html, /data-html-selected/)
+  assert.match(html, /function selectBorder/)
+  assert.match(html, /return 'none'/)
+  assert.doesNotMatch(html, /SELECTED_RING/)
+  assert.doesNotMatch(html, /0 0 0 2px/)
 })
 
 test('html page blocks register plugin id for slash', async () => {
