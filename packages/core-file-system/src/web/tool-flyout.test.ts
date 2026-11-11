@@ -22,11 +22,11 @@ test('toolbar flyouts share one fsdb-tool-flyout shell', () => {
   ]) {
     assert.match(rule, new RegExp(name))
   }
-  assert.match(rule, /border-radius:10px/)
+  assert.match(rule, /border-radius:var\(--biu-radius-popover\)/)
   assert.doesNotMatch(rule, /border-radius:(6|7|8)px/)
-  assert.match(rule, /padding:8px/)
+  assert.match(rule, /padding:var\(--biu-pad-flyout\)/)
   assert.doesNotMatch(rule, /padding:(6|12)px/)
-  assert.match(rule, /box-shadow:var\(--biu-shadow-md\)/)
+  assert.match(rule, /box-shadow:var\(--biu-shadow-popover\)/)
   assert.match(rule, /max-height:min\(70vh,520px\)/)
   assert.match(block, /prefers-reduced-motion/)
   assert.match(block, /\.fsdb-tool-flyout \.db-search-menu/)
