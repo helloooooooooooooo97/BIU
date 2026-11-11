@@ -693,7 +693,7 @@ const CSS = `
 .fsdb-prop-val{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--biu-color-text-subtle)}
 .fsdb-prop-val:not(.is-schema):not(.is-actions):not(.is-pane){display:flex;align-items:center;min-height:22px}
 .fsdb-prop-val .biu-tags,.fsdb-prop-val .biu-tag,.fsdb-prop-val .fsdb-pop-host:has(.biu-tags){align-items:center;align-content:center}
-.fsdb-prop-val .biu-tag-label{line-height:1}
+.fsdb-prop-val .biu-tag-label{height:100%;line-height:inherit}
 .fsdb-prop-val.is-actions{overflow:visible;white-space:normal;text-overflow:clip}
 .fsdb-prop-val.is-actions .tasks-row-actions{flex-wrap:wrap}
 .fsdb-prop-val .fsdb-plain-input,.fsdb-prop-val .fsdb-link,.fsdb-prop-val .fsdb-meta,.fsdb-prop-val .fsdb-file,.fsdb-prop-val .fsdb-file-name{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
