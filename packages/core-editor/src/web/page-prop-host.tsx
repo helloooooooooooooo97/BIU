@@ -20,6 +20,7 @@ import { PAGE_PROP_HIDDEN_VIEW_ID, usePagePropPresentMode } from './page-prop-pr
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 import { bindSandboxPickPane, pagePropHostPickKey } from './page-host-pick.ts'
 import { HostField } from './host-field.tsx'
+import { SplitResize, splitPaneStyle } from './sandbox/split-resize.tsx'
 
 type HostTab = 'preview' | 'code' | 'split'
 
@@ -138,6 +139,7 @@ export function PagePropHostView({
   const [source, setSource] = useState(() => peekPageFile(view?.file ?? '') || fallback)
   const [tab, setTab] = useState<HostTab>('preview')
   const [expanded, setExpanded] = useState(false)
+  const [previewWidth, setPreviewWidth] = useState(0)
   const [live, setLive] = useState(record)
   const [patchError, setPatchError] = useState('')
   const showPreview = tab !== 'code'
@@ -316,6 +318,7 @@ export function PagePropHostView({
           <div
             ref={previewRef}
             className="page-host-preview-pane"
+            style={splitPaneStyle(showCode ? previewWidth : 0)}
             data-testid="page-prop-host-preview"
             data-sandbox=""
             data-page-path={`/pages/${pageId}`}
@@ -337,6 +340,7 @@ export function PagePropHostView({
                 {preview.error || '无法渲染'}
               </div>
             )}
+            {showCode ? <SplitResize paneRef={previewRef} onWidth={setPreviewWidth} testId="page-prop-host-split-resize" /> : null}
           </div>
         ) : null}
         {showCode ? (
