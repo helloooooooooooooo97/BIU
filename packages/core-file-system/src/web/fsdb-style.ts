@@ -615,19 +615,18 @@ const CSS = `
 .fsdb-page .fsdb-detail-aside .tasks-table.is-wrap th,.fsdb-page .fsdb-detail-aside .tasks-table.is-wrap td{vertical-align:middle;max-width:none}
 .fsdb-detail-aside .tasks-table th:first-child,.fsdb-detail-aside .tasks-table td:first-child{width:12rem;min-width:12rem;white-space:nowrap}
 .fsdb-page .fsdb-detail-aside .tasks-table.is-wrap .fsdb-prop-tr.is-tag-fold:not(.is-open) td{vertical-align:middle}
-.fsdb-page .fsdb-detail-aside .tasks-table.is-wrap .fsdb-prop-tr.is-tag-fold.is-open td{vertical-align:top}
+.fsdb-page .fsdb-detail-aside .tasks-table.is-wrap .fsdb-prop-tr.is-tag-fold.is-open:has(.fsdb-schema-pack) td{vertical-align:top}
 .fsdb-page .tasks-table .fsdb-prop-tr td{box-sizing:border-box;height:32px}
-.fsdb-page .tasks-table .fsdb-prop-tr.is-open td{height:auto;min-height:32px}
-.fsdb-page .tasks-table .fsdb-prop-tr.is-tag-fold.is-open td:last-child{padding:0}
+.fsdb-page .tasks-table .fsdb-prop-tr.is-open:has(.fsdb-schema-pack) td{height:auto;min-height:32px}
+.fsdb-page .tasks-table .fsdb-prop-tr.is-tag-fold.is-open:has(.fsdb-schema-pack) td:last-child{padding:0}
 .fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-proprow-k{display:inline-flex;align-items:center;min-height:22px;padding-top:0}
 .fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-proprow-v,.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-prop-val.is-schema{display:flex;flex-direction:column;align-items:stretch;min-height:22px;padding-top:0}
 .fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-schema>:first-child,.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-prop-val.is-schema>.fsdb-pop-host,.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-schema>.fsdb-pop-host{flex:none;display:flex;align-items:center;align-content:center;min-height:22px;margin:0}
 .fsdb-detail-aside .fsdb-prop-tr.is-tag-fold:not(.is-open) .fsdb-schema>:first-child,.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold:not(.is-open) .fsdb-prop-val.is-schema>.fsdb-pop-host,.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold:not(.is-open) .fsdb-schema>.fsdb-pop-host{padding-top:0}
 .fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-schema{gap:0}
 .fsdb-detail-aside .fsdb-prop-tr.is-tag-fold.is-open .fsdb-schema-pack{padding-top:0}
-.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold.is-open .fsdb-schema>:first-child,
-.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold.is-open .fsdb-prop-val.is-schema>.fsdb-pop-host,
-.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold.is-open .fsdb-schema>.fsdb-pop-host{display:flex;box-sizing:border-box;align-items:center;align-content:center;min-height:32px;padding:4px 6px}
+.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold.is-open:has(.fsdb-schema-pack) .fsdb-schema>:first-child,
+.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold.is-open:has(.fsdb-schema-pack) .fsdb-schema>.fsdb-pop-host{display:flex;box-sizing:border-box;align-items:center;align-content:center;min-height:32px;padding:4px 6px}
 .fsdb-detail-aside .fsdb-prop,.fsdb-detail-aside .fsdb-prop-tr{display:table-row;grid-template-columns:none;min-height:0;gap:0}
 .fsdb-detail-aside .fsdb-proprow-k,.fsdb-detail-aside .fsdb-prop>span:first-child,.fsdb-detail-aside .fsdb-proprow-label,.fsdb-detail-aside .fsdb-schema-prop-k,.fsdb-detail-aside .fsdb-schema-prop-k.is-rename{color:var(--biu-color-text)}
 .fsdb-detail-aside .fsdb-proprow-k svg,.fsdb-detail-aside .fsdb-prop>span:first-child svg,.fsdb-detail-aside .fsdb-schema-prop-k svg,.fsdb-detail-aside .fsdb-schema-prop-k .fsdb-field-glyph{color:var(--biu-color-icon);opacity:1}
@@ -650,7 +649,7 @@ const CSS = `
 .fsdb-proprow.is-tag-fold:not(:has(.fsdb-schema)){align-items:center}
 .fsdb-proprow.is-tag-fold .fsdb-proprow-k,.fsdb-prop-tr.is-tag-fold .fsdb-proprow-k{min-height:22px;padding-top:0}
 .fsdb-proprow.is-tag-fold .fsdb-proprow-v,.fsdb-prop-tr.is-tag-fold .fsdb-proprow-v,.fsdb-proprow.is-tag-fold .fsdb-prop-val.is-schema,.fsdb-prop-tr.is-tag-fold .fsdb-prop-val.is-schema{min-height:22px;display:flex;align-items:center}
-.fsdb-proprow.is-tag-fold.is-open .fsdb-proprow-v,.fsdb-prop-tr.is-tag-fold.is-open .fsdb-proprow-v,.fsdb-proprow.is-tag-fold.is-open .fsdb-prop-val.is-schema,.fsdb-prop-tr.is-tag-fold.is-open .fsdb-prop-val.is-schema{align-items:stretch}
+.fsdb-proprow.is-tag-fold.is-open:has(.fsdb-schema-pack) .fsdb-proprow-v,.fsdb-prop-tr.is-tag-fold.is-open:has(.fsdb-schema-pack) .fsdb-proprow-v,.fsdb-proprow.is-tag-fold.is-open:has(.fsdb-schema-pack) .fsdb-prop-val.is-schema,.fsdb-prop-tr.is-tag-fold.is-open:has(.fsdb-schema-pack) .fsdb-prop-val.is-schema{align-items:stretch}
 .fsdb-proprow.is-tag-fold .fsdb-prop-val.is-schema>.fsdb-pop-host,.fsdb-prop-tr.is-tag-fold .fsdb-prop-val.is-schema>.fsdb-pop-host,.fsdb-proprow.is-tag-fold .fsdb-pop-host,.fsdb-prop-tr.is-tag-fold .fsdb-pop-host{min-height:22px;align-items:center;align-content:center}
 .fsdb-proprow.is-tag-fold .fsdb-schema>:first-child,.fsdb-prop-tr.is-tag-fold .fsdb-schema>:first-child{min-height:22px;display:flex;align-items:center}
 .fsdb-prop-val.is-schema{overflow:visible;white-space:normal;max-width:none}
@@ -658,7 +657,7 @@ const CSS = `
 .fsdb-schema-pack{display:flex;flex-direction:column;gap:0;min-width:0;padding:0}
 .fsdb-proprow.is-tag-fold:not(.is-open) .fsdb-schema-pack,.fsdb-prop-tr.is-tag-fold:not(.is-open) .fsdb-schema-pack{display:none}
 .fsdb-schema-pack-head{display:flex;align-items:center;box-sizing:border-box;min-height:32px;padding:4px 6px;box-shadow:inset 0 calc(-1 * var(--biu-stroke-width)) 0 color-mix(in srgb,var(--biu-color-border) 80%,transparent)}
-.fsdb-proprow.is-tag-fold.is-open .fsdb-schema>.fsdb-pop-host,.fsdb-prop-tr.is-tag-fold.is-open .fsdb-schema>.fsdb-pop-host,.fsdb-proprow.is-tag-fold.is-open .fsdb-prop-val.is-schema>.fsdb-pop-host,.fsdb-prop-tr.is-tag-fold.is-open .fsdb-prop-val.is-schema>.fsdb-pop-host{display:flex;box-sizing:border-box;align-items:center;align-content:center;min-height:32px;padding:4px 6px}
+.fsdb-proprow.is-tag-fold.is-open .fsdb-schema:has(.fsdb-schema-pack)>.fsdb-pop-host,.fsdb-prop-tr.is-tag-fold.is-open .fsdb-schema:has(.fsdb-schema-pack)>.fsdb-pop-host{display:flex;box-sizing:border-box;align-items:center;align-content:center;min-height:32px;padding:4px 6px}
 .fsdb-schema:has(.fsdb-schema-pack)>.fsdb-pop-host{box-shadow:inset 0 calc(-1 * var(--biu-stroke-width)) 0 color-mix(in srgb,var(--biu-color-border) 80%,transparent)}
 .fsdb-schema-pack:last-child>:last-child{box-shadow:none}
 .fsdb-schema-prop{display:grid;grid-template-columns:108px minmax(0,1fr);align-items:center;gap:8px;box-sizing:border-box;min-width:0;width:100%;min-height:32px;border-radius:0;padding:4px 6px;box-shadow:inset 0 calc(-1 * var(--biu-stroke-width)) 0 color-mix(in srgb,var(--biu-color-border) 80%,transparent)}
