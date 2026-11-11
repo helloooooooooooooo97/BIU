@@ -30,17 +30,17 @@ const CSS = `
 .fsdb-crumb-btn .chat-view-project-name,.fsdb-crumb-option .chat-view-project-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);color:inherit}
 .fsdb-crumb-btn>svg,.fsdb-crumb-btn>.fsdb-record-mark,.fsdb-crumb-btn>.fsdb-record-emoji,.fsdb-crumb-option>svg,.fsdb-crumb-option>.fsdb-record-mark,.fsdb-crumb-option>.fsdb-record-emoji{flex:none}
 .fsdb-crumb-pick{position:relative;flex:none}
-.fsdb-crumb-menu{position:absolute;left:0;top:calc(100% + 4px);z-index:var(--biu-z-float);display:flex;flex-direction:column;min-width:220px;max-width:280px;max-height:280px;overflow:hidden;border:var(--biu-stroke-width) solid var(--biu-color-border-popover);border-radius:var(--biu-radius-popover);background:var(--biu-color-bg-popover);padding:4px;box-shadow:var(--biu-shadow-popover)}
+.fsdb-crumb-menu{position:absolute;left:0;top:calc(100% + 4px);z-index:var(--biu-z-float);display:flex;flex-direction:column;gap:4px;min-width:220px;max-width:280px;max-height:280px;overflow:hidden;border:var(--biu-stroke-width) solid var(--biu-color-border-popover);border-radius:var(--biu-radius-popover);background:var(--biu-color-bg-popover);padding:6px;box-shadow:var(--biu-shadow-popover)}
 .fsdb-crumb-menu.is-fixed{position:fixed;z-index:140;left:anchor(--fsdb-crumb left);top:calc(anchor(--fsdb-crumb bottom) + 4px)}
-.fsdb-crumb-search{display:flex;flex:none;align-items:center;gap:6px;margin:2px 2px 4px;border:0;border-radius:6px;padding:4px 8px;color:var(--biu-color-icon);background:transparent}
+.fsdb-crumb-search{display:flex;flex:none;align-items:center;gap:6px;margin:0;border:0;border-radius:6px;padding:6px 8px;color:var(--biu-color-icon);background:transparent}
 .fsdb-crumb-search input{flex:1;min-width:0;border:0;background:transparent;color:var(--biu-color-text);font:inherit;font-size:var(--biu-font-size-4);outline:none}
 .fsdb-crumb-search input::placeholder{color:var(--biu-color-text-placeholder)}
-.fsdb-crumb-menu-list{min-height:0;flex:1;overflow:auto}
+.fsdb-crumb-menu-list{display:flex;flex-direction:column;gap:4px;min-height:0;flex:1;overflow:auto}
 .fsdb-crumb-empty{padding:8px;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-3)}
-.fsdb-crumb-menu-foot{flex:none;border-top:var(--biu-stroke-width) solid color-mix(in srgb,var(--biu-color-text) 12%,transparent);margin-top:4px;padding-top:4px}
-.fsdb-crumb-create{display:flex;width:100%;min-width:0;align-items:center;gap:6px;border:0;border-radius:6px;background:transparent;padding:6px 8px;color:var(--biu-color-text-muted);font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);text-align:left;cursor:pointer}
+.fsdb-crumb-menu-foot{flex:none;border-top:var(--biu-stroke-width) solid color-mix(in srgb,var(--biu-color-text) 12%,transparent);margin-top:2px;padding-top:4px}
+.fsdb-crumb-create{display:flex;width:100%;min-width:0;align-items:center;gap:6px;border:0;border-radius:6px;background:transparent;padding:8px;color:var(--biu-color-text-muted);font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);text-align:left;cursor:pointer}
 .fsdb-crumb-create:hover{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
-.fsdb-crumb-option{display:flex;width:100%;min-width:0;align-items:center;gap:6px;border:0;border-radius:6px;background:transparent;padding:6px 8px;color:var(--biu-color-text-muted);font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);text-align:left;cursor:pointer}
+.fsdb-crumb-option{display:flex;width:100%;min-width:0;align-items:center;gap:6px;border:0;border-radius:6px;background:transparent;padding:8px;color:var(--biu-color-text-muted);font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);text-align:left;cursor:pointer}
 .fsdb-crumb-option:hover,.fsdb-crumb-option.is-active{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
 .fsdb-crumb-option svg,.fsdb-crumb-option .chat-view-project-icon,.fsdb-crumb-option .fsdb-record-mark,.fsdb-crumb-create svg{color:var(--biu-color-icon)}
 .fsdb-crumb-option:hover svg,.fsdb-crumb-option.is-active svg,.fsdb-crumb-option:hover .chat-view-project-icon,.fsdb-crumb-option.is-active .chat-view-project-icon,.fsdb-crumb-option:hover .fsdb-record-mark,.fsdb-crumb-option.is-active .fsdb-record-mark,.fsdb-crumb-create:hover svg{color:var(--biu-color-icon-active)}

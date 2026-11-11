@@ -27,6 +27,8 @@ describe('顶栏三级标题', () => {
     expect(trail).toContain('overlayPortalRoot')
     expect(trail).toContain('data-fsdb-crumb-menu')
     expect(trail).toContain('fsdb-crumb-search')
+    expect(style).toContain('.fsdb-crumb-menu-list{display:flex;flex-direction:column;gap:4px')
+    expect(style).toContain('.fsdb-crumb-option{display:flex;width:100%;min-width:0;align-items:center;gap:6px;border:0;border-radius:6px;background:transparent;padding:8px')
     expect(trail).toContain('pullCrumbRecords')
     expect(trail).toContain('加载中…')
     expect(trail).toContain('添加视图')
