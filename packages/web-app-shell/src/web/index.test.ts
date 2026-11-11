@@ -300,6 +300,13 @@ test('chip horizontal padding is a global token shared with tags', () => {
   assert.match(css, /--biu-pad-chip-x: var\(--biu-space-2\)/)
 })
 
+test('flyout item spacing is a global token', () => {
+  const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
+  assert.match(css, /--biu-pad-flyout: var\(--biu-space-2\)/)
+  assert.match(css, /--biu-gap-flyout: var\(--biu-space-1\)/)
+  assert.match(css, /--biu-pad-flyout-item: 6px var\(--biu-space-2\)/)
+})
+
 test('settings nav omits routes, events, and about', () => {
   const shell = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
   assert.doesNotMatch(shell, /key: 'about'/)
