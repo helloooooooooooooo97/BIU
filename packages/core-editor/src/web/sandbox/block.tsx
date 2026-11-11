@@ -12,8 +12,10 @@ import {
   ViewColumnsIcon,
 } from '@heroicons/react/16/solid'
 import { tags } from '@lezer/highlight'
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { compileSandboxSource, looksLikeJsx, sandboxModuleFile } from '../shared/compile.ts'
+import { compileSandboxSource, looksLikeJsx, sandboxModuleFile } from './compile.ts'
+import { BASIC_BLOCK_TYPE, type PageEditorService } from '../service.ts'
 import {
   assetEtag,
   assetName,
@@ -24,7 +26,7 @@ import {
   pageResourcePath,
   saveTextAsset,
 } from './page-file.ts'
-import { mountSandbox, unmountSandbox } from './sandbox.ts'
+import { mountSandbox, unmountSandbox } from './runtime.ts'
 import { sandboxBlockKey, stampSandboxPickSurfaces } from './stamp-picks.ts'
 import {
   clearSandboxIf,
@@ -33,9 +35,6 @@ import {
   selectSandbox,
   setLivePreview,
 } from './active.ts'
-
-const React = globalThis.React
-const { useEffect, useLayoutEffect, useMemo, useRef, useState } = React
 
 function newSandboxFiles() {
   const id = crypto.randomUUID().slice(0, 8)
@@ -244,7 +243,6 @@ function SandboxPreview({
 }
 
 export const name = 'page-sandbox'
-export const inject = ['pageEditor']
 
 type BlockProps = {
   data: Record<string, unknown>
@@ -918,29 +916,16 @@ function SandboxCard({ data, update, writable, selected: nodeSelected }: BlockPr
   return <ReUI>{expanded ? createPortal(card, document.body) : card}</ReUI>
 }
 
-export function apply(ctx: {
-  pageEditor: {
-    registerBlock: (spec: {
-      kind: string
-      plugin: string
-      label: string
-      blockType?: string
-      blockTypeLabel?: string
-      hint?: string
-      aliases?: string[]
-      defaults?: Record<string, unknown> | (() => Record<string, unknown>)
-      View: (props: BlockProps) => unknown
-    }) => void
-  }
-}) {
-  ctx.pageEditor.registerBlock({
+export function registerSandboxBlock(pageEditor: PageEditorService) {
+  return pageEditor.registerBlock({
     kind: 'sandbox',
     plugin: name,
     label: '沙箱',
-    blockType: 'sandbox',
-    blockTypeLabel: '沙箱',
+    blockType: BASIC_BLOCK_TYPE,
+    blockTypeLabel: '基础模块',
     hint: '沙箱跑 React。围栏只写 {"file":"assets/sandbox-….jsx","dataFile":"assets/sandbox-data-….json"}。源码用 db_doc 写 .jsx；要记住的数据用 biu.write 写到 dataFile 的 .json，不要写进源码或围栏',
     aliases: ['sandbox', '沙箱', 'Sandbox'],
+    assets: ['file', 'dataFile'],
     defaults: () => ({ ...newSandboxFiles(), title: '沙箱', height: SANDBOX_DEFAULT_HEIGHT }),
     View: SandboxCard,
   })

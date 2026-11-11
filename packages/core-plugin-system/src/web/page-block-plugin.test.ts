@@ -96,7 +96,7 @@ test('sandbox plugin is packed before start', async () => {
     return { status: 200, body: { ok: true } }
   })
   try {
-    await startStorePlugin('page-sandbox')
+    await startStorePlugin('page-excalidraw')
   } finally {
     fetchMock.restore()
   }

@@ -22,7 +22,7 @@ async function flush() {
 }
 
 test('markup source paints inside the sandbox instead of throwing', async () => {
-  const { mountSandbox, unmountSandbox } = await import('./sandbox.ts')
+  const { mountSandbox, unmountSandbox } = await import('./runtime.ts')
   const host = document.createElement('div')
   document.body.append(host)
   const root = host.attachShadow({ mode: 'open' })
@@ -33,7 +33,7 @@ test('markup source paints inside the sandbox instead of throwing', async () => 
 })
 
 test('sandbox window shortcuts do not fire until the preview is live', async () => {
-  const { mountSandbox, unmountSandbox } = await import('./sandbox.ts')
+  const { mountSandbox, unmountSandbox } = await import('./runtime.ts')
   const { setLivePreview } = await import('./active.ts')
   const host = document.createElement('div')
   host.setAttribute('data-sandbox', '')

@@ -9,6 +9,7 @@ import { PageDetailBar } from './page-detail-bar.tsx'
 import { PageProperties } from './page-prop-host.tsx'
 import { pageBlocksCollectionView, PageBlockContent } from './page-blocks-view.tsx'
 import { bindPageViewCatalogHost } from './page-view-catalog.ts'
+import { registerSandboxBlock } from './sandbox/block.tsx'
 
 export { PageEditor, PageEditor as RecordEditor } from './page-editor.tsx'
 export { PageDetailBar } from './page-detail-bar.tsx'
@@ -30,6 +31,7 @@ export const inject = ['databaseUi']
 
 export function apply(ctx: Context) {
   new PageEditorService(ctx)
+  registerSandboxBlock(ctx.pageEditor)
   const ui = ctx.get('databaseUi') as DatabaseUi
   // 凡是有 file 正文的表都走 Markdown；没有 contentField 的表不会用到这份 chrome。
   ctx.effect(() => ui.decorate(DEFAULT_CHROME_PATH, { Content: PageEditor, DetailBar: PageDetailBar }).dispose)

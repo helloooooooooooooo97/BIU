@@ -67,6 +67,7 @@ const a = 1
   assert.match(out, /苹果/)
   assert.match(out, /先/)
   assert.match(out, /引用/)
+  assert.match(out, /:::code \{lang=ts/)
   assert.match(out, /const a = 1/)
   editor.destroy()
 })
@@ -304,13 +305,13 @@ test('fenced code keeps language on the block and highlights tokens', () => {
   const editor = new Editor({
     element: host,
     extensions: pageEditorExtensions(),
-    content: '```ts\nconst a = 1\n```\n',
+    content: ':::code {lang=ts}\nconst a = 1\n:::\n',
     contentType: 'markdown',
   })
   const pre = host.querySelector('pre')
   assert.equal(pre?.getAttribute('data-language'), 'ts')
   assert.ok(host.querySelector('.hljs-keyword, .hljs-attr, .hljs-number, [class^="hljs-"]'))
-  assert.match(editor.getMarkdown(), /```ts/)
+  assert.match(editor.getMarkdown(), /:::code \{lang=ts/)
   editor.destroy()
   host.remove()
 })

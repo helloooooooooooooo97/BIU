@@ -10,7 +10,7 @@
   - `dataFile`：组件要记住的数据，`assets/sandbox-data-….json`
 - 源码用 `db_doc`（或 `PUT /api/page/file/<名>`）写到 `file`。可以覆盖。**不要用 `db_asset`**（内容寻址，不能改）。
 - 运行时数据不要写进 `.jsx`，也不要写进围栏。组件里调用 `biu.write(value)`，宿主把它存进 `dataFile`。`biu.read()` 读回上次写入的 JSON；还没有文件时是 `null`。
-- 优先 `export default function App()`。不要 `import react` / `import` / `require`，用宿主注入的 `React` 和 `biu`。
+- 优先 `export default function App()`。不要 `import react` / `import` / `require`，用宿主注入的 `React`、`biu` 和 `ui`（`ui.icons` 是 `@heroicons/react/16/solid`）。
 - 颜色、字号、描边走 `--biu-*`，不要写死色值。
 - 顶栏：左边点名称可改；中间预览 / 代码；右边分栏（左预览、右代码）、放大。放大后顶栏还在，Esc 或再点缩小退出。
 - 旧围栏把源码写在体内时，打开块会迁到 `file` 附件，围栏里的源码随后去掉。
@@ -50,8 +50,10 @@ export default function App() {
     })
   }
 
+  const Star = ui.icons.StarIcon
   return (
     <button type="button" onClick={bump}>
+      <Star style={{ width: 16, height: 16 }} />
       {!ready ? '…' : n === 0 ? '试一下 →' : `已点 ${n} 次 →`}
     </button>
   )
