@@ -3,6 +3,7 @@ import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/p
 import type { Node as PmNode } from '@tiptap/pm/model'
 import type { Editor } from '@tiptap/core'
 import { createPageBlockId, isPageBlockId } from '../page-block-fence.ts'
+import { withCodeFenceId } from './code-md.ts'
 
 const assignKey = new PluginKey('page-block-ids-all')
 const STAMP = / <!-- biu:([a-z0-9]{6,32}) -->/gi
@@ -117,10 +118,13 @@ function serializeChild(editor: Editor, node: PmNode) {
 }
 
 function stampChunk(chunk: string, id: string) {
-  if (!chunk || /:::pageBlock[\s\S]*\bid=/.test(chunk.slice(0, 80))) return chunk
+  if (!chunk) return chunk
+  if (/^:::pageBlock\b/.test(chunk) && /\bid=/.test(chunk.slice(0, 160))) return chunk
   const nl = chunk.indexOf('\n')
   const first = nl < 0 ? chunk : chunk.slice(0, nl)
   const rest = nl < 0 ? '' : chunk.slice(nl)
+  const codeHead = withCodeFenceId(first, id)
+  if (codeHead) return `${codeHead}${rest}`
   if (STAMP.test(first)) return chunk
   return `${first} <!-- biu:${id} -->${rest}`
 }
