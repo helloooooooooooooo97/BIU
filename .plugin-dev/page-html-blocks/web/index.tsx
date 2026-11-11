@@ -282,6 +282,59 @@ function hold(event: { preventDefault: () => void }) {
   event.preventDefault()
 }
 
+function htmlBlockTitle(data: Record<string, unknown>, fallback: string) {
+  return String(data.title ?? '').trim() || fallback
+}
+
+function NavTitle({
+  value,
+  readOnly,
+  testId,
+  onCommit,
+}: {
+  value: string
+  readOnly?: boolean
+  testId: string
+  onCommit?: (next: string) => void
+}) {
+  const [draft, setDraft] = useState(value)
+  useEffect(() => {
+    setDraft(value)
+  }, [value])
+  const commit = () => {
+    const next = draft.trim()
+    if (!next || next === value) {
+      setDraft(value)
+      return
+    }
+    onCommit?.(next)
+  }
+  return (
+    <input
+      className="page-block-expand-nav-title"
+      data-testid={testId}
+      data-biu-ignore
+      readOnly={readOnly || !onCommit}
+      value={draft}
+      placeholder="标题"
+      aria-label="标题"
+      onMouseDown={(event) => event.stopPropagation()}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          event.currentTarget.blur()
+        }
+        if (event.key === 'Escape') {
+          setDraft(value)
+          event.currentTarget.blur()
+        }
+      }}
+    />
+  )
+}
+
 function HtmlDeckOverlay({
   slides,
   index,
@@ -372,6 +425,10 @@ function HtmlDeckOverlay({
         <div className="page-block-expand-nav-type" data-testid="html-deck-type-icon" title="HTML" aria-label="HTML">
           <HtmlKindIcon />
         </div>
+        <NavTitle
+          value={String(slide?.title ?? '').trim() || (slide?.kind === 'htmlframe' ? '动态HTML' : '静态HTML')}
+          testId="html-deck-title"
+        />
         <div className="page-block-expand-nav-tools">
           <button
             type="button"
@@ -442,13 +499,14 @@ function useHtmlDeck(
   hostRef: { current: HTMLElement | null },
   kind: 'html' | 'htmlframe',
   html: string,
-  opts?: { width?: unknown; height?: unknown; deck?: boolean },
+  opts?: { width?: unknown; height?: unknown; deck?: boolean; title?: string },
 ) {
   const [open, setOpen] = useState(false)
   const [index, setIndex] = useState(0)
   const [slides, setSlides] = useState<ReturnType<typeof collectHtmlSlides>>([])
   const width = opts?.width
   const height = opts?.height
+  const title = opts?.title
   const deck = htmlDeckEnabled(opts?.deck)
 
   useLayoutEffect(() => {
@@ -457,11 +515,12 @@ function useHtmlDeck(
       kind,
       html,
       deck,
+      ...(title ? { title } : {}),
       ...(width != null && width !== '' ? { width: width as number | string } : {}),
       ...(height != null && height !== '' ? { height: height as number | string } : {}),
     })
     return () => bindHtmlSlide(host, null)
-  }, [hostRef, html, kind, width, height, deck])
+  }, [hostRef, html, kind, width, height, deck, title])
 
   const start = () => {
     const host = hostRef.current?.closest('[data-page-block]') ?? null
@@ -567,6 +626,8 @@ function HtmlSideBar({
   onDeck,
   sized,
   onResetSize,
+  title,
+  onTitle,
 }: {
   editing: boolean
   setEditing: (v: boolean) => void
@@ -576,12 +637,15 @@ function HtmlSideBar({
   onDeck?: (next: boolean) => void
   sized?: boolean
   onResetSize?: () => void
+  title: string
+  onTitle: (next: string) => void
 }) {
   return (
     <div className="page-block-expand-nav" data-testid="html-side-bar" data-biu-ignore>
       <div className="page-block-expand-nav-type" data-testid="html-type-icon" title="HTML" aria-label="HTML">
         <HtmlKindIcon />
       </div>
+      <NavTitle value={title} readOnly={ro} testId="html-title" onCommit={onTitle} />
       <div className="page-block-expand-nav-tools">
       {ro ? null : (
         <>
@@ -678,10 +742,11 @@ function HtmlDirectCard({ data, update, writable, selected }: BlockProps) {
   const fillHost = fill && (height == null || height === '')
   const sized = (width != null && width !== '') || (height != null && height !== '') || fillHost
   const deckOn = htmlDeckEnabled(data.deck)
+  const title = htmlBlockTitle(data, '静态HTML')
   const [editing, setEditing] = useState(false)
   const [hover, setHover] = useState(false)
   const hostRef = useRef<HTMLDivElement | null>(null)
-  const deck = useHtmlDeck(hostRef, 'html', html, { width, height, deck: deckOn })
+  const deck = useHtmlDeck(hostRef, 'html', html, { width, height, deck: deckOn, title })
   const stamped = useMemo(
     () => stampHtmlSource(html, htmlBlockKey(hostRef.current?.closest('[data-page-block]') ?? null, html), name),
     [html],
@@ -720,6 +785,8 @@ function HtmlDirectCard({ data, update, writable, selected }: BlockProps) {
         onDeck={(next) => update({ deck: next })}
         sized={sized}
         onResetSize={() => update({ width: undefined, height: undefined })}
+        title={title}
+        onTitle={(next) => update({ title: next })}
       />
       {editing ? (
         <SourceEditor html={html} onChange={source.save} compile={compiled} />
@@ -806,10 +873,11 @@ function HtmlFrameCard({ data, update, writable, selected }: BlockProps) {
   const html = source.html
   const height = Number(data.height) || 300
   const deckOn = htmlDeckEnabled(data.deck)
+  const title = htmlBlockTitle(data, '动态HTML')
   const [editing, setEditing] = useState(false)
   const [hover, setHover] = useState(false)
   const hostRef = useRef<HTMLDivElement | null>(null)
-  const deck = useHtmlDeck(hostRef, 'htmlframe', html, { height, deck: deckOn })
+  const deck = useHtmlDeck(hostRef, 'htmlframe', html, { height, deck: deckOn, title })
   const compiled = useMemo(() => compileHtmlSource(html), [html])
 
   return (
@@ -832,7 +900,16 @@ function HtmlFrameCard({ data, update, writable, selected }: BlockProps) {
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      <HtmlSideBar editing={editing} setEditing={setEditing} ro={ro} onExpand={deck.start} deck={deckOn} onDeck={(next) => update({ deck: next })} />
+      <HtmlSideBar
+        editing={editing}
+        setEditing={setEditing}
+        ro={ro}
+        onExpand={deck.start}
+        deck={deckOn}
+        onDeck={(next) => update({ deck: next })}
+        title={title}
+        onTitle={(next) => update({ title: next })}
+      />
       {editing ? (
         <SourceEditor html={html} onChange={source.save} compile={compiled} />
       ) : (
@@ -890,7 +967,7 @@ export function apply(ctx: {
     hint: 'HTML/CSS 卡片和刊头，不跑脚本；源码必须 db_doc 附件，围栏只写 {"file":"assets/….html"}，写进围栏会被覆盖',
     aliases: ['html', 'html直', '静态html', '排版', '直接渲染', '静态渲染', '静态演示'],
     assets: htmlBlockAssets,
-    defaults: () => ({ file: newHtmlFile(), deck: true }),
+    defaults: () => ({ file: newHtmlFile(), deck: true, title: '静态HTML' }),
     View: HtmlDirectCard,
   })
   ctx.pageEditor.registerBlock({
@@ -902,7 +979,7 @@ export function apply(ctx: {
     hint: '文档内沙箱跑脚本/React，继承全局样式；源码必须 db_doc 附件，围栏只写 {"file":"assets/….html"}，写进围栏会被覆盖',
     aliases: ['iframe', 'htmlf', 'frame', '幻灯片', 'slide', '沙箱', '小网页', '动态演示'],
     assets: htmlBlockAssets,
-    defaults: () => ({ file: newHtmlFile(), height: 300, deck: true }),
+    defaults: () => ({ file: newHtmlFile(), height: 300, deck: true, title: '动态HTML' }),
     View: HtmlFrameCard,
   })
 }
