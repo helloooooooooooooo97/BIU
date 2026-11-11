@@ -6,7 +6,7 @@
  *   node scripts/check-page-block.mjs <文件>            # 校验裸 JSX 文件（如 .workspace/xxx.jsx）
  *   node scripts/check-page-block.mjs <页面.md> --fence  # 校验 markdown 里第一个 :::pageBlock 围栏体
  *
- * 与宿主同一套配置（见 .plugin-dev/page-html-blocks/shared/compile.ts）：
+ * 与宿主同一套配置（见 .plugin-dev/page-sandbox/shared/compile.ts）：
  *   sucrase { transforms: ['jsx','typescript'], jsxRuntime: 'classic', production: true }
  *   再 new Function(code) 兜住语义层语法错误。
  *
@@ -21,7 +21,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 const root = resolve(here, '..')
 
 const candidates = [
-  resolve(root, '.plugin-dev/page-html-blocks/node_modules/sucrase'),
+  resolve(root, '.plugin-dev/page-sandbox/node_modules/sucrase'),
   resolve(root, 'node_modules/sucrase'),
 ]
 const sucrasePath = candidates.find((p) => existsSync(p))

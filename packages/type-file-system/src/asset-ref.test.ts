@@ -48,8 +48,7 @@ test('undeclared block kinds yield no assets', () => {
     [...assetNamesFromBlock('sandbox', 'page-sandbox', { file: 'assets/sandbox-9b90870f.jsx', dataFile: 'assets/sandbox-data-9b90870f.json' })].sort(),
     ['sandbox-9b90870f.jsx', 'sandbox-data-9b90870f.json'],
   )
-  assert.deepEqual([...assetNamesFromBlock('html', 'page-html-blocks', { file: 'assets/html-a.html' })], ['html-a.html'])
-  assert.deepEqual([...assetNamesFromBlock('htmlframe', 'page-html-blocks', { file: 'assets/html-b.html' })], ['html-b.html'])
+  assert.equal(assetNamesFromBlock('html', 'page-html-blocks', { file: 'assets/html-a.html' }).size, 0)
 })
 
 test('collectAssetNames walks exact urls without prose hits', () => {
