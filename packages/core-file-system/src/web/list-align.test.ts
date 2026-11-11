@@ -409,6 +409,14 @@ test('title column stays pinned when the table scrolls sideways', () => {
   assert.doesNotMatch(css, /\.fsdb-page \.tasks-table tr:hover td\{[^}]*transparent/)
 })
 
+test('property value tags sit vertically centered in the cell', () => {
+  assert.match(css, /\.fsdb-prop-val:not\(\.is-schema\):not\(\.is-actions\):not\(\.is-pane\)\{[^}]*display:flex/)
+  assert.match(css, /\.fsdb-prop-val:not\(\.is-schema\):not\(\.is-actions\):not\(\.is-pane\)\{[^}]*align-items:center/)
+  assert.match(css, /\.fsdb-pop-host,\.fsdb-ref-host\{[^}]*align-content:center/)
+  assert.match(css, /\.fsdb-page \.fsdb-detail-aside \.tasks-table\.is-wrap \.fsdb-pop-host[\s\S]*?align-items:center/)
+  assert.match(css, /\.fsdb-prop-val \.biu-tag-label\{[^}]*line-height:1/)
+})
+
 test('share page portals sit above the share overlay', () => {
   assert.match(css, /\.fsdb-share-page\{[^}]*z-index:220/)
   assert.match(css, /html\.share \.fsdb-crumb-menu\.is-fixed/)

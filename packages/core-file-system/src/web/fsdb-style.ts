@@ -691,6 +691,9 @@ const CSS = `
 .fsdb-schema-type-option:hover,.fsdb-schema-type-option.is-on{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
 .fsdb-schema-type-option:hover .fsdb-field-glyph,.fsdb-schema-type-option.is-on .fsdb-field-glyph,.fsdb-schema-type-option:hover .fsdb-field-hero,.fsdb-schema-type-option.is-on .fsdb-field-hero{color:var(--biu-color-icon-active)}
 .fsdb-prop-val{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--biu-color-text-subtle)}
+.fsdb-prop-val:not(.is-schema):not(.is-actions):not(.is-pane){display:flex;align-items:center;min-height:22px}
+.fsdb-prop-val .biu-tags,.fsdb-prop-val .biu-tag,.fsdb-prop-val .fsdb-pop-host:has(.biu-tags){align-items:center;align-content:center}
+.fsdb-prop-val .biu-tag-label{line-height:1}
 .fsdb-prop-val.is-actions{overflow:visible;white-space:normal;text-overflow:clip}
 .fsdb-prop-val.is-actions .tasks-row-actions{flex-wrap:wrap}
 .fsdb-prop-val .fsdb-plain-input,.fsdb-prop-val .fsdb-link,.fsdb-prop-val .fsdb-meta,.fsdb-prop-val .fsdb-file,.fsdb-prop-val .fsdb-file-name{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -875,9 +878,9 @@ button.fsdb-detail-title-icon:hover{background:color-mix(in srgb,var(--biu-color
 .fsdb-page .tasks-table td .db-cell-select-trigger,.fsdb-page .tasks-table td .fsdb-cellselect-trigger{width:100%;max-width:none;justify-content:space-between;background:transparent}
 .fsdb-page .tasks-table td .db-cell-multi-box,.fsdb-page .tasks-table td .fsdb-tokens-box{width:100%;max-width:none;background:transparent}
 .fsdb-page .tasks-table td .db-cell-multi-box:hover,.fsdb-page .tasks-table td .db-cell-multi-box[aria-expanded="true"]{background:transparent}
-.fsdb-page .tasks-table:not(.is-wrap) .biu-tags,.fsdb-page .tasks-table:not(.is-wrap) .fsdb-tokens-box,.fsdb-page .tasks-table:not(.is-wrap) .db-cell-multi-box,.fsdb-page .tasks-table:not(.is-wrap) .fsdb-person-list,.fsdb-page .tasks-table:not(.is-wrap) .fsdb-pop-host:has(.biu-tags),.fsdb-page .tasks-table:not(.is-wrap) .fsdb-pop-host:has(.fsdb-person-list){display:flex;flex-direction:row;flex-wrap:wrap;width:100%;max-width:100%;min-width:0}
-.fsdb-page .tasks-table.is-wrap .biu-tags,.fsdb-page .tasks-table.is-wrap .fsdb-tokens-box,.fsdb-page .tasks-table.is-wrap .db-cell-multi-box,.fsdb-page .tasks-table.is-wrap .fsdb-person-list,.fsdb-page .tasks-table.is-wrap .fsdb-pop-host:has(.biu-tags),.fsdb-page .tasks-table.is-wrap .fsdb-pop-host:has(.fsdb-person-list){display:inline-flex;flex-direction:row;flex-wrap:wrap;width:auto;max-width:100%;overflow-wrap:normal;word-break:normal;white-space:normal}
-.fsdb-page .fsdb-detail-aside .tasks-table.is-wrap .fsdb-pop-host,.fsdb-page .fsdb-detail-aside .tasks-table.is-wrap .fsdb-pop-host:has(.biu-tags),.fsdb-page .fsdb-detail-aside .tasks-table.is-wrap .fsdb-schema>.fsdb-pop-host{display:flex;flex-direction:row;flex-wrap:wrap;width:100%;max-width:100%;min-width:0}
+.fsdb-page .tasks-table:not(.is-wrap) .biu-tags,.fsdb-page .tasks-table:not(.is-wrap) .fsdb-tokens-box,.fsdb-page .tasks-table:not(.is-wrap) .db-cell-multi-box,.fsdb-page .tasks-table:not(.is-wrap) .fsdb-person-list,.fsdb-page .tasks-table:not(.is-wrap) .fsdb-pop-host:has(.biu-tags),.fsdb-page .tasks-table:not(.is-wrap) .fsdb-pop-host:has(.fsdb-person-list){display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;align-content:center;width:100%;max-width:100%;min-width:0}
+.fsdb-page .tasks-table.is-wrap .biu-tags,.fsdb-page .tasks-table.is-wrap .fsdb-tokens-box,.fsdb-page .tasks-table.is-wrap .db-cell-multi-box,.fsdb-page .tasks-table.is-wrap .fsdb-person-list,.fsdb-page .tasks-table.is-wrap .fsdb-pop-host:has(.biu-tags),.fsdb-page .tasks-table.is-wrap .fsdb-pop-host:has(.fsdb-person-list){display:inline-flex;flex-direction:row;flex-wrap:wrap;align-items:center;align-content:center;width:auto;max-width:100%;overflow-wrap:normal;word-break:normal;white-space:normal}
+.fsdb-page .fsdb-detail-aside .tasks-table.is-wrap .fsdb-pop-host,.fsdb-page .fsdb-detail-aside .tasks-table.is-wrap .fsdb-pop-host:has(.biu-tags),.fsdb-page .fsdb-detail-aside .tasks-table.is-wrap .fsdb-schema>.fsdb-pop-host{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;align-content:center;width:100%;max-width:100%;min-width:0}
 .fsdb-thumbs{display:inline-flex;align-items:center;gap:2px;min-width:0;max-width:100%}
 .fsdb-fileview-imgs{display:flex;flex-wrap:wrap;gap:8px}
 .fsdb-cell-pop{box-sizing:border-box;padding:8px;background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);border-radius:var(--biu-radius-popover);box-shadow:var(--biu-shadow-popover);display:flex;flex-direction:column;gap:8px;max-height:min(70vh,480px);overflow:auto;font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium)}
@@ -929,7 +932,7 @@ a.fsdb-person.is-link:hover .fsdb-person-name,button.fsdb-person.is-link:hover .
 .fsdb-person-option:hover{background:var(--biu-color-bg-hover)}
 .fsdb-person-option.is-selected{background:color-mix(in srgb,var(--biu-color-emphasis) 14%,transparent)}
 .fsdb-person-loading{display:flex;align-items:center;gap:6px;padding:6px;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-2)}
-.fsdb-pop-host,.fsdb-ref-host{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;align-content:flex-start;gap:4px;min-width:0;width:100%;min-height:22px;cursor:pointer}
+.fsdb-pop-host,.fsdb-ref-host{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;align-content:center;gap:4px;min-width:0;width:100%;min-height:22px;cursor:pointer}
 .fsdb-pop-empty,.fsdb-detail-aside .fsdb-pop-empty{color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-semibold);user-select:none}
 .fsdb-ref-chips{display:inline-flex;flex-direction:row;flex-wrap:wrap;align-items:center;align-content:flex-start;gap:4px;min-width:0;width:auto;max-width:100%}
 .fsdb-page .tasks-table:not(.is-wrap) td:has(.fsdb-ref-chips),.fsdb-page .tasks-table:not(.is-wrap) td:has(.biu-tags),.fsdb-page .tasks-table:not(.is-wrap) td:has(.fsdb-person-list){overflow:hidden}

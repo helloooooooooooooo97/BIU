@@ -10,7 +10,7 @@ const CSS = `
 .biu-tag-icon{display:inline-flex;width:var(--biu-size-icon,14px);height:var(--biu-size-icon,14px);flex:none;align-items:center;justify-content:center;color:inherit}
 .biu-tag-icon svg,.biu-tag-icon .fsdb-field-glyph,.biu-tag-icon .fsdb-field-hero{width:var(--biu-size-icon,14px);height:var(--biu-size-icon,14px);display:block;color:inherit}
 .biu-tag-icon .fsdb-record-emoji{width:var(--biu-size-icon,14px);height:var(--biu-size-icon,14px);font-size:var(--biu-chat-chip-font-size,var(--biu-font-size-3))}
-.biu-tag-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.biu-tag-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1}
 .biu-tag-x{border:0;background:transparent;padding:0;margin:0;color:inherit;opacity:.55;cursor:pointer;display:inline-flex;line-height:0}
 .biu-tag-x:hover{opacity:1}
 `
