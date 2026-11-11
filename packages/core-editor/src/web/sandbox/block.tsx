@@ -28,6 +28,7 @@ import {
 } from './page-file.ts'
 import { mountSandbox, unmountSandbox } from './runtime.ts'
 import { SANDBOX_SAMPLE } from './sample.ts'
+import { SplitResize, splitPaneStyle } from './split-resize.tsx'
 import { sandboxBlockKey, stampSandboxPickSurfaces } from './stamp-picks.ts'
 import {
   clearSandboxIf,
@@ -657,7 +658,9 @@ function SandboxCard({ data, update, writable, selected: nodeSelected }: BlockPr
   const [tab, setTab] = useState<'preview' | 'code' | 'split'>('preview')
   const [expanded, setExpanded] = useState(false)
   const [selected, setSelected] = useState(false)
+  const [previewWidth, setPreviewWidth] = useState(0)
   const hostRef = useRef<HTMLDivElement | null>(null)
+  const previewPaneRef = useRef<HTMLDivElement | null>(null)
   const compiled = useMemo(() => compileSandboxSource(source), [source])
   const codeOnly = tab === 'code'
   const showPreview = tab !== 'code'
@@ -766,7 +769,7 @@ function SandboxCard({ data, update, writable, selected: nodeSelected }: BlockPr
       />
       <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
         {showPreview ? (
-          <div style={{ position: 'relative', flex: 1, minWidth: 0, overflow: 'auto' }}>
+          <div ref={previewPaneRef} style={{ position: 'relative', flex: 1, minWidth: 0, overflow: 'auto', ...splitPaneStyle(showCode ? previewWidth : 0) }}>
             <SandboxPreview
               source={source}
               readData={() => ioRef.current.read()}
@@ -780,6 +783,7 @@ function SandboxCard({ data, update, writable, selected: nodeSelected }: BlockPr
                 if (body instanceof HTMLElement) stampSandboxPickSurfaces(body, `${key}-doc`, { plugin: name, includeRoot: false })
               }}
             />
+            {showCode ? <SplitResize paneRef={previewPaneRef} onWidth={setPreviewWidth} /> : null}
           </div>
         ) : null}
         {showCode ? (
