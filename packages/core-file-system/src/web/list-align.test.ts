@@ -59,6 +59,7 @@ test('list and detail share the chat column max width with side padding', () => 
   assert.match(css, /\.fsdb-detail-aside \.fsdb-prop-tr\.is-tag-fold\.is-open \.fsdb-schema-pack\{[^}]*padding-top:0/)
   assert.match(css, /\.fsdb-schema-pack\{[^}]*padding:0/)
   assert.match(css, /\.fsdb-page \.tasks-table \.fsdb-prop-tr\.is-tag-fold\.is-open:has\(\.fsdb-schema-pack\) td:last-child\{[^}]*padding:0/)
+  assert.match(css, /\.fsdb-page \.tasks-table \.fsdb-prop-tr\.is-tag-fold\.is-open:has\(\.fsdb-schema-pack\) td:first-child\{[^}]*padding-top:5px/)
   assert.match(css, /\.fsdb-page \.tasks-table \.fsdb-prop-tr\.is-open:has\(\.fsdb-schema-pack\) td\{[^}]*height:auto/)
   assert.match(css, /\.fsdb-page \.tasks-table \.fsdb-prop-tr td\{[^}]*height:32px/)
   assert.match(css, /\.fsdb-schema-pack-head\{[^}]*min-height:32px/)
