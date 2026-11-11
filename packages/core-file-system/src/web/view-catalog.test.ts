@@ -71,6 +71,7 @@ test('property flyout uses the view switcher instead of a string textarea', () =
   assert.match(pick, /deleteViewCatalog/)
   assert.match(pick, /tasks-viewdd-act is-danger/)
   assert.match(pick, /fsdb-viewcat-pick-row/)
+  assert.match(pick, /ensureDbSearchStyle/)
 })
 
 test('only custom content and property views can be copied', () => {
@@ -89,6 +90,8 @@ test('only custom content and property views can be copied', () => {
   assert.match(pick, /flexDirection: 'row'/)
   const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
   assert.match(css, /\.fsdb-viewcat-pick-row\{[^}]*flex-direction:row/)
+  assert.match(css, /\.fsdb-viewcat-pick \.db-search-field[\s\S]*?border:0/)
+  assert.match(css, /\.fsdb-viewcat-pick input\{[^}]*border:0/)
   assert.match(css, /\.fsdb-viewcat-pick-main\{[^}]*flex-direction:row/)
   assert.match(css, /\.fsdb-fileview:empty\{display:none\}/)
 })
