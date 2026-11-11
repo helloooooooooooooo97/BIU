@@ -34,6 +34,8 @@ export const PAGE_EDITOR_STYLE = `
 .page-host-preview-pane{position:relative;flex:1;min-width:0;overflow:auto}
 .page-host-code-pane{position:relative;flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
 .page-host-code-pane.is-split{border-left:var(--biu-stroke-width) solid var(--biu-color-border)}
+.sandbox-split-resize{position:absolute;inset-block:0;right:-1px;z-index:10;width:0;cursor:col-resize;touch-action:none}
+.sandbox-split-resize::after{content:"";position:absolute;inset-block:0;right:-3px;width:7px}
 .page-host-code-pane .page-source,.page-host-code-pane .page-source .cm-editor{flex:1;min-height:0;height:100%}
 .page-host-code-pane .cm-scroller{overflow:auto}
 .page-host-compile{flex:none;margin:6px 8px 8px;font-size:11px;color:var(--biu-color-ok)}

@@ -11,6 +11,7 @@ import {
   selectedViewCatalogId,
   subscribeViewCatalog,
 } from './view-catalog.ts'
+import { ensureDbSearchStyle } from '@biu/database-ui/search'
 import { ViewCatalogGlyph } from './view-catalog-glyph.tsx'
 
 export function ViewCatalogPickPanel({
@@ -38,6 +39,7 @@ export function ViewCatalogPickPanel({
   const available = options.filter(
     (item) => !q || item.name.toLowerCase().includes(q) || item.id.toLowerCase().includes(q),
   )
+  ensureDbSearchStyle()
   return (
     <div className="fsdb-viewcat-pick">
       <label className="db-search-field">

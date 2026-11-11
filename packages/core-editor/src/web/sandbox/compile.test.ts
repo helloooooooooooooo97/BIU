@@ -1,6 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { compileSandboxSource, looksLikeJsx, sandboxModuleFile } from './compile.ts'
+import { SANDBOX_SAMPLE } from './sample.ts'
 
 test('board json is not a sandbox module file', () => {
   assert.equal(sandboxModuleFile('assets/画板-e7c178eb.json'), false)
@@ -27,6 +28,12 @@ test('jsx may use ui.icons without import', () => {
 test('jsx default export compiles after stripping react import', () => {
   assert.equal(looksLikeJsx('export default function App(){ return <div/> }'), true)
   const result = compileSandboxSource(`import React from 'react'\nexport default function App(){ return <div /> }`)
+  assert.equal(result.ok, true)
+  if (result.ok) assert.equal(result.mode, 'jsx')
+})
+
+test('block sandbox sample compiles', () => {
+  const result = compileSandboxSource(SANDBOX_SAMPLE)
   assert.equal(result.ok, true)
   if (result.ok) assert.equal(result.mode, 'jsx')
 })
@@ -59,9 +66,11 @@ test('sandbox mount flushes react before pick stamp', async () => {
   assert.match(src, /io\.read\(\)/)
   const readme = await readFile(resolve(import.meta.dirname, './README.md'), 'utf8')
   const host = await readFile(resolve(import.meta.dirname, '../../host/index.ts'), 'utf8')
+  assert.match(card, /SplitResize/)
   assert.match(readme, /dataFile/)
   assert.match(readme, /biu\.write/)
   assert.match(readme, /不要用 `db_asset`/)
+  assert.match(readme, /左右宽度/)
   assert.match(host, /tools\.annotate\('db_doc'/)
   assert.match(host, /不要写进 \.jsx/)
   assert.match(src, /'window'/)

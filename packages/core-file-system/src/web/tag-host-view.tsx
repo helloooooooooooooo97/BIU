@@ -18,6 +18,7 @@ import {
   type TagSandboxView,
 } from './tag-views.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
+import { SplitResize, splitPaneStyle } from './split-resize.tsx'
 
 type HostTab = 'preview' | 'code' | 'split'
 
@@ -146,9 +147,11 @@ export function TagHostView({
   const [source, setSource] = useState(() => peekTagFile(view?.file ?? '') || fallback)
   const [tab, setTab] = useState<HostTab>('preview')
   const [expanded, setExpanded] = useState(false)
+  const [previewWidth, setPreviewWidth] = useState(0)
   const showPreview = tab !== 'code'
   const showCode = tab !== 'preview'
   const hostRef = useRef<HTMLDivElement | null>(null)
+  const previewPaneRef = useRef<HTMLDivElement | null>(null)
   const fields = (pack?.fields ?? []).filter((field) => !field.deleted)
   const [patchError, setPatchError] = useState('')
 
@@ -328,7 +331,7 @@ export function TagHostView({
       </div>
       <div className="page-host-stage">
         {showPreview ? (
-          <div className="page-host-preview-pane" data-testid="tag-host-preview">
+          <div ref={previewPaneRef} className="page-host-preview-pane" style={splitPaneStyle(showCode ? previewWidth : 0)} data-testid="tag-host-preview">
             {preview.Preview ? (
               <>
                 <preview.Preview />
@@ -343,6 +346,7 @@ export function TagHostView({
                 {preview.error || '无法渲染'}
               </div>
             )}
+            {showCode ? <SplitResize paneRef={previewPaneRef} onWidth={setPreviewWidth} testId="tag-host-split-resize" /> : null}
           </div>
         ) : null}
         {showCode ? (

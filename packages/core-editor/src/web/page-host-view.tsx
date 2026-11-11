@@ -21,6 +21,7 @@ import { defaultSandboxSource } from '../page-views.ts'
 import { bindSandboxPickPane, pageHostPickKey } from './page-host-pick.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 import { HostField } from './host-field.tsx'
+import { SplitResize, splitPaneStyle } from './sandbox/split-resize.tsx'
 
 export type HostBlockInfo = {
   id: string
@@ -297,6 +298,7 @@ export function PageHostView({
   const [source, setSource] = useState(() => peekPageFile(view?.file ?? '') || fallback)
   const [tab, setTab] = useState<HostTab>('preview')
   const [expanded, setExpanded] = useState(false)
+  const [previewWidth, setPreviewWidth] = useState(0)
   const [live, setLive] = useState(record)
   const showPreview = tab !== 'code'
   const showCode = tab !== 'preview'
@@ -479,6 +481,7 @@ export function PageHostView({
           <div
             ref={previewRef}
             className="page-host-preview-pane"
+            style={splitPaneStyle(showCode ? previewWidth : 0)}
             data-testid="page-host-preview"
             data-sandbox=""
             data-page-path={`/pages/${pageId}`}
@@ -500,6 +503,7 @@ export function PageHostView({
                 {preview.error || '无法渲染'}
               </div>
             )}
+            {showCode ? <SplitResize paneRef={previewRef} onWidth={setPreviewWidth} testId="page-host-split-resize" /> : null}
           </div>
         ) : null}
         {showCode ? (

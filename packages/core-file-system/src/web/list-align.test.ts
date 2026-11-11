@@ -173,10 +173,10 @@ test('list and detail share the chat column max width with side padding', () => 
   assert.match(css, /\.tasks-sort-search\{[^}]*background:transparent/)
   assert.match(css, /\.fsdb-tool-flyout \.db-search-field[\s\S]*?background:transparent/)
   assert.match(css, /\.tasks-sort-list\{[^}]*flex-direction:column/)
-  assert.match(css, /\.fsdb-tool-flyout \.tasks-sort-list,[\s\S]*?gap:4px/)
+  assert.match(css, /\.fsdb-tool-flyout \.tasks-sort-list,[\s\S]*?gap:var\(--biu-gap-flyout\)/)
   assert.match(
     css,
-    /\.fsdb-tool-flyout \.fsdb-tool-row,[\s\S]*?min-height:var\(--biu-size-control-lg\);height:auto;padding:6px 8px/,
+    /\.fsdb-tool-flyout \.fsdb-tool-row,[\s\S]*?min-height:var\(--biu-size-control-lg\);height:auto;padding:var\(--biu-pad-flyout-item\)/,
   )
   assert.match(css, /html:not\(\.dark\) \.tasks-viewdd-menu[\s\S]*color:\s*var\(--biu-color-text\)/)
   assert.match(css, /\.fsdb-page \.tasks-viewdd-menu[\s\S]*?font-weight:var\(--biu-font-weight-medium\)/)
@@ -291,7 +291,7 @@ test('detail share role and facet chips use table cell ink; leftover 13px/400 is
   const tag = readFileSync(resolve(import.meta.dirname, '../../../biu-ui/src/tag-chip.tsx'), 'utf8')
   assert.match(tag, /\.biu-tag\{[^}]*padding:0 var\(--biu-pad-chip-x\)/)
   assert.match(css, /\.fsdb-scope-tag\{[^}]*padding:0 var\(--biu-pad-chip-x\)/)
-  assert.match(tag, /\.biu-tag\{[^}]*font-size:var\(--biu-font-size-3\)/)
+  assert.match(tag, /\.biu-tag\{[\s\S]*?font-size:var\(--biu-chat-chip-font-size,var\(--biu-font-size-3\)\)/)
   assert.match(tag, /\.biu-tag\{[^}]*font-weight:var\(--biu-font-weight-medium\)/)
   assert.match(css, /\.fsdb-page \.fsdb-proprow-v,[\s\S]*?color:var\(--biu-color-text\)/)
   assert.doesNotMatch(css, /\.fsdb-page \.fsdb-proprow-v[\s\S]{0,180}--biu-color-text:var\(--biu-color-text\)/)
@@ -422,7 +422,7 @@ test('property value tags sit vertically centered in the cell', () => {
   assert.match(css, /\.fsdb-prop-val:not\(\.is-schema\):not\(\.is-actions\):not\(\.is-pane\)\{[^}]*align-items:center/)
   assert.match(css, /\.fsdb-pop-host,\.fsdb-ref-host\{[^}]*align-content:center/)
   assert.match(css, /\.fsdb-page \.fsdb-detail-aside \.tasks-table\.is-wrap \.fsdb-pop-host[\s\S]*?align-items:center/)
-  assert.match(css, /\.fsdb-prop-val \.biu-tag-label\{[^}]*line-height:1/)
+  assert.match(css, /\.fsdb-prop-val \.biu-tag-label\{[^}]*line-height:inherit/)
 })
 
 test('share page portals sit above the share overlay', () => {
