@@ -27,6 +27,7 @@ import {
   saveTextAsset,
 } from './page-file.ts'
 import { mountSandbox, unmountSandbox } from './runtime.ts'
+import { SANDBOX_SAMPLE } from './sample.ts'
 import { sandboxBlockKey, stampSandboxPickSurfaces } from './stamp-picks.ts'
 import {
   clearSandboxIf,
@@ -637,120 +638,6 @@ function SandboxBar({
     </div>
   )
 }
-
-const SANDBOX_SAMPLE = `export default function App() {
-  const [n, setN] = React.useState(0)
-  const [ready, setReady] = React.useState(false)
-  const [hover, setHover] = React.useState(false)
-
-  React.useEffect(() => {
-    let gone = false
-    biu.read().then((saved) => {
-      if (gone) return
-      const v = saved && typeof saved === 'object' ? saved.n : 0
-      setN(typeof v === 'number' && isFinite(v) ? v : 0)
-      setReady(true)
-    }).catch(() => setReady(true))
-    return () => { gone = true }
-  }, [])
-
-  const bump = () => {
-    setN((prev) => {
-      const next = prev + 1
-      void biu.write({ n: next })
-      return next
-    })
-  }
-
-  return (
-    <div style={{
-      minHeight: '100%', height: '100%', boxSizing: 'border-box',
-      background: 'transparent', color: 'var(--biu-color-text)',
-      font: 'inherit', display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
-      padding: '0 64px', overflow: 'hidden',
-    }}>
-      <div style={{
-        width: '100%', maxWidth: 760, textAlign: 'center',
-      }}>
-        <div style={{
-          fontSize: 10.5, letterSpacing: '0.42em', textTransform: 'uppercase',
-          color: 'var(--biu-color-text-muted)', opacity: 0.7,
-          marginBottom: 'var(--biu-space-5)', fontWeight: 500,
-        }}>
-          沙箱
-        </div>
-
-        <h1 style={{
-          margin: 0,
-          fontSize: 40, lineHeight: 1.08, fontWeight: 500,
-          letterSpacing: '-0.045em',
-          background: 'linear-gradient(180deg, currentColor 20%, color-mix(in srgb, currentColor 45%, transparent) 100%)',
-          WebkitBackgroundClip: 'text', backgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-        }}>
-          把想法，直接跑起来。
-        </h1>
-
-        <p style={{
-          margin: 'var(--biu-space-4) auto 0', maxWidth: 460,
-          fontSize: 13.5, lineHeight: 1.75, letterSpacing: '-0.005em',
-          color: 'var(--biu-color-text-muted)',
-        }}>
-          一个函数组件，一块会呼吸的现场。不装环境、不写入口，React 由宿主注入。
-        </p>
-      </div>
-
-      <div style={{
-        width: '100%', maxWidth: 760, marginTop: 'var(--biu-space-7)',
-        borderTop: 'var(--biu-stroke-width) solid color-mix(in srgb, var(--biu-color-text) 10%, transparent)',
-        paddingTop: 'var(--biu-space-5)',
-        display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 0,
-      }}>
-        {[
-          { k: '即时', d: '无构建、无入口，改一行就是新的一版' },
-          { k: '原生', d: '颜色字号圆角全来自宿主，跟着主题走' },
-          { k: '持久', d: '状态写回块数据，刷新之后仍在原地' },
-        ].map((c, i) => (
-          <div key={c.k} style={{
-            textAlign: 'center', minWidth: 0,
-            padding: '0 var(--biu-space-4)',
-            borderLeft: i ? 'var(--biu-stroke-width) solid color-mix(in srgb, var(--biu-color-text) 8%, transparent)' : 'none',
-          }}>
-            <div style={{
-              fontSize: 11, letterSpacing: '0.18em',
-              color: 'var(--biu-color-text-muted)', opacity: 0.75,
-              marginBottom: 6,
-            }}>{c.k}</div>
-            <div style={{
-              fontSize: 12, lineHeight: 1.6, letterSpacing: '-0.005em',
-              color: 'color-mix(in srgb, var(--biu-color-text) 72%, transparent)',
-            }}>{c.d}</div>
-          </div>
-        ))}
-      </div>
-
-      <button
-        type="button"
-        onClick={bump}
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
-        style={{
-          marginTop: 'var(--biu-space-6)',
-          border: 0, background: 'transparent', font: 'inherit',
-          fontSize: 12.5, letterSpacing: '0.01em',
-          color: 'var(--biu-color-text)',
-          opacity: hover ? 1 : 0.62,
-          cursor: 'pointer', padding: '4px 2px',
-          transition: 'opacity .2s ease',
-        }}
-      >
-        {!ready ? '…' : n === 0 ? '试一下 →' : \`已点 \${n} 次 →\`}
-      </button>
-    </div>
-  )
-}
-`
 
 function SandboxCard({ data, update, writable, selected: nodeSelected }: BlockProps) {
   const ro = !writable
