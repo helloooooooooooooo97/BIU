@@ -33,7 +33,6 @@ test('page plugin READMEs use live :::pageBlock fences, not wrapped in markdown 
     'page-browser',
     'page-code-runner',
     'page-excalidraw',
-    'page-html-blocks',
     'page-sandbox',
     'page-terminal',
     'page-tag',
