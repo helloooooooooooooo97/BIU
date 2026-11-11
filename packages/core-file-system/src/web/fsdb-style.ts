@@ -980,11 +980,11 @@ a.fsdb-person.is-link:hover .fsdb-person-name,button.fsdb-person.is-link:hover .
 .fsdb-share-scope{display:inline-flex;align-items:center;gap:4px;flex:none;border-radius:999px;background:var(--biu-color-bg-hover);padding:4px 8px;color:var(--biu-color-text-muted);font-size:var(--biu-font-size-2);font-weight:var(--biu-font-weight-bold)}
 .fsdb-share-scope.is-shared{background:var(--biu-color-emphasis-muted);color:var(--biu-color-emphasis)}
 .fsdb-scope-detail{position:relative;display:inline-flex}
-.fsdb-scope-tag{--biu-tag:var(--biu-color-ink-gray);display:inline-flex;align-items:center;gap:4px;height:var(--biu-size-control-sm);border:0;border-radius:var(--biu-radius-sm);background:color-mix(in srgb,var(--biu-tag) 22%,transparent);padding:0 var(--biu-pad-chip-x);color:var(--biu-tag);font:inherit;font-size:var(--biu-chat-chip-font-size);font-weight:var(--biu-font-weight-medium);line-height:1;white-space:nowrap;cursor:pointer}
+.fsdb-scope-tag{--biu-tag:var(--biu-color-ink-gray);display:inline-flex;align-items:center;gap:var(--biu-space-1);height:var(--biu-space-5);border:0;border-radius:var(--biu-radius-sm);background:color-mix(in srgb,var(--biu-tag) 22%,transparent);padding:0 var(--biu-pad-chip-x);color:var(--biu-tag);font:inherit;font-size:var(--biu-chat-chip-font-size,var(--biu-font-size-3));font-weight:var(--biu-font-weight-medium);line-height:var(--biu-space-5);white-space:nowrap;cursor:pointer}
 .fsdb-page .tasks-table th.fsdb-action-col,.fsdb-page .tasks-table td.fsdb-action-col{width:1%;white-space:nowrap}
 .fsdb-page .tasks-row-actions{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px}
 .fsdb-action-tag{--biu-tag:var(--biu-color-ink-gray);display:inline-flex;align-items:center;gap:4px;height:var(--biu-size-control-sm);border:0;border-radius:var(--biu-radius-xl);background:color-mix(in srgb,var(--biu-tag) 22%,transparent);padding:0 var(--biu-pad-chip-x);color:var(--biu-tag);font:inherit;font-size:var(--biu-chat-chip-font-size);font-weight:var(--biu-font-weight-medium);line-height:1;cursor:pointer;white-space:nowrap}
-.fsdb-scope-tag svg,.fsdb-action-tag svg,.fsdb-action-tag .fsdb-ui-glyph{width:var(--biu-size-icon);height:var(--biu-size-icon);flex:none}
+.fsdb-scope-tag svg,.fsdb-action-tag svg,.fsdb-action-tag .fsdb-ui-glyph{width:var(--biu-size-icon,14px);height:var(--biu-size-icon,14px);flex:none;display:block}
 .fsdb-action-tag svg,.fsdb-action-tag .fsdb-ui-glyph{color:var(--biu-tag)}
 .fsdb-action-tag:hover{background:color-mix(in srgb,var(--biu-tag) 34%,transparent);color:var(--biu-tag)}
 .fsdb-action-tag:hover svg,.fsdb-action-tag:hover .fsdb-ui-glyph{color:var(--biu-tag)}
@@ -1000,7 +1000,7 @@ a.fsdb-person.is-link:hover .fsdb-person-name,button.fsdb-person.is-link:hover .
 .fsdb-scope-head>div{display:flex;min-width:0;flex-direction:column;gap:2px}
 .fsdb-scope-head strong{font-size:var(--biu-font-size-3);font-weight:var(--biu-font-weight-semibold)}
 .fsdb-scope-head em{color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-2);font-style:normal;line-height:1.35}
-.fsdb-scope-pill{--biu-tag:var(--biu-color-ink-gray);display:inline-flex;flex:none;align-items:center;gap:4px;height:22px;border-radius:var(--biu-radius-sm);background:color-mix(in srgb,var(--biu-tag) 22%,transparent);padding:0 var(--biu-pad-chip-x);color:var(--biu-tag);font-size:var(--biu-font-size-2);font-weight:var(--biu-font-weight-medium);line-height:1}
+.fsdb-scope-pill{--biu-tag:var(--biu-color-ink-gray);display:inline-flex;flex:none;align-items:center;gap:var(--biu-space-1);height:var(--biu-space-5);border-radius:var(--biu-radius-sm);background:color-mix(in srgb,var(--biu-tag) 22%,transparent);padding:0 var(--biu-pad-chip-x);color:var(--biu-tag);font-size:var(--biu-font-size-2);font-weight:var(--biu-font-weight-medium);line-height:var(--biu-space-5)}
 .fsdb-scope-chain{display:flex;flex-direction:column;gap:0;margin:0;padding:6px 0;list-style:none}
 .fsdb-scope-chain li{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;border-radius:8px;padding:7px 12px}
 .fsdb-scope-chain li+li{margin-top:2px}
