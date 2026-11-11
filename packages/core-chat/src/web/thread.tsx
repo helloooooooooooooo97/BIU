@@ -491,6 +491,13 @@ function findReplyForUser(nodes: ChatNode[], userIndex: number): Extract<ChatNod
 
 const noopToggleDetails = (_replyId: string) => undefined
 
+/** 未展开时用户气泡限高；仅真实超出才显示展开/收起。 */
+export const USER_BUBBLE_CLAMP_PX = 80
+
+export function userBubbleClips(el: { scrollHeight: number; clientHeight: number }): boolean {
+  return el.scrollHeight > el.clientHeight + 1
+}
+
 function NodeView({
   node,
   replyForUser,
@@ -514,11 +521,24 @@ function NodeView({
   sessionId?: string
 }) {
   const [expanded, setExpanded] = useState(false)
-  // 避免每条用户消息 useLayoutEffect 读 layout（滚动时强制同步布局会卡）
-  const textLen = node.kind === 'user' ? node.text.length : 0
-  const lineHints = node.kind === 'user' ? node.text.split('\n').length : 0
-  // 限高约 80px：长文/多行才出展开按钮（避免每条都量 DOM）
-  const overflows = textLen > 140 || lineHints > 3
+  const [overflows, setOverflows] = useState(false)
+  const bubbleRef = useRef<HTMLDivElement>(null)
+  const userText = node.kind === 'user' ? node.text : ''
+
+  useLayoutEffect(() => {
+    if (node.kind !== 'user') return
+    const el = bubbleRef.current
+    if (!el) return
+    const measure = () => {
+      if (expanded) return
+      setOverflows(userBubbleClips(el))
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [expanded, node.kind, userText])
 
   if (node.kind === 'user') {
     const picked = parsePicks(node.text)
@@ -530,7 +550,9 @@ function NodeView({
       >
         <div className="chat-user-card-body text-(--biu-color-text)">
           <div
-            className={`w-full max-w-full border-0 bg-transparent p-0 text-(--biu-color-text) outline-none${canExpand && !expanded ? ' max-h-[80px] overflow-hidden' : ''}${expanded ? ' max-h-none overflow-visible' : ''}`}
+            ref={bubbleRef}
+            className={`w-full max-w-full border-0 bg-transparent p-0 text-(--biu-color-text) outline-none${expanded ? ' overflow-visible' : ' overflow-hidden'}`}
+            style={expanded ? undefined : { maxHeight: USER_BUBBLE_CLAMP_PX }}
             data-testid="user-bubble"
             {...pickDomAttrs('message', node.id, pickPreview(picked.rest || node.text) || 'user')}
           >
