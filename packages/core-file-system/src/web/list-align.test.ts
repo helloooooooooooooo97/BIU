@@ -291,7 +291,7 @@ test('detail share role and facet chips use table cell ink; leftover 13px/400 is
   const tag = readFileSync(resolve(import.meta.dirname, '../../../biu-ui/src/tag-chip.tsx'), 'utf8')
   assert.match(tag, /\.biu-tag\{[^}]*padding:0 var\(--biu-pad-chip-x\)/)
   assert.match(css, /\.fsdb-scope-tag\{[^}]*padding:0 var\(--biu-pad-chip-x\)/)
-  assert.match(tag, /\.biu-tag\{[^}]*font-size:var\(--biu-font-size-3\)/)
+  assert.match(tag, /\.biu-tag\{[\s\S]*?font-size:var\(--biu-chat-chip-font-size,var\(--biu-font-size-3\)\)/)
   assert.match(tag, /\.biu-tag\{[^}]*font-weight:var\(--biu-font-weight-medium\)/)
   assert.match(css, /\.fsdb-page \.fsdb-proprow-v,[\s\S]*?color:var\(--biu-color-text\)/)
   assert.doesNotMatch(css, /\.fsdb-page \.fsdb-proprow-v[\s\S]{0,180}--biu-color-text:var\(--biu-color-text\)/)
@@ -422,7 +422,7 @@ test('property value tags sit vertically centered in the cell', () => {
   assert.match(css, /\.fsdb-prop-val:not\(\.is-schema\):not\(\.is-actions\):not\(\.is-pane\)\{[^}]*align-items:center/)
   assert.match(css, /\.fsdb-pop-host,\.fsdb-ref-host\{[^}]*align-content:center/)
   assert.match(css, /\.fsdb-page \.fsdb-detail-aside \.tasks-table\.is-wrap \.fsdb-pop-host[\s\S]*?align-items:center/)
-  assert.match(css, /\.fsdb-prop-val \.biu-tag-label\{[^}]*line-height:1/)
+  assert.match(css, /\.fsdb-prop-val \.biu-tag-label\{[^}]*line-height:inherit/)
 })
 
 test('share page portals sit above the share overlay', () => {
