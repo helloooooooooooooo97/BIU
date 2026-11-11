@@ -22,6 +22,7 @@ test('TagChip ships the tinted chip markup', () => {
   assert.match(src, /icon\?: ReactNode/)
   assert.match(src, /biu-tag-icon/)
   assert.match(src, /\.biu-tag-icon svg,\.biu-tag-icon \.fsdb-field-glyph,\.biu-tag-icon \.fsdb-field-hero\{[^}]*color:inherit/)
+  assert.match(src, /\.biu-tag-label\{[^}]*line-height:1/)
   assert.match(src, /TAG_TONE_ROSE/)
   assert.match(src, /TAG_TONE_BLUE/)
   assert.match(src, /TAG_TONE_ORANGE/)
