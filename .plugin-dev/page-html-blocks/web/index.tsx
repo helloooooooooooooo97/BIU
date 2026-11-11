@@ -547,33 +547,25 @@ function useHtmlDeck(
   return { start, overlay }
 }
 
-function SizeGrip({
+function HeightGrip({
   boxRef,
-  onSize,
-  reveal,
+  onHeight,
 }: {
   boxRef: { current: HTMLElement | null }
-  onSize: (next: { width: number; height: number }) => void
-  reveal: boolean
+  onHeight: (height: number) => void
 }) {
-  const drag = useRef<{ x: number; y: number; w: number; h: number } | null>(null)
-  const [dragging, setDragging] = useState(false)
-  const onSizeRef = useRef(onSize)
-  onSizeRef.current = onSize
-  const show = reveal || dragging
+  const drag = useRef<{ y: number; h: number } | null>(null)
+  const onHeightRef = useRef(onHeight)
+  onHeightRef.current = onHeight
   useEffect(() => {
     const move = (event: PointerEvent) => {
       const start = drag.current
       if (!start) return
       event.preventDefault()
-      onSizeRef.current({
-        width: Math.max(80, Math.round(start.w + event.clientX - start.x)),
-        height: Math.max(48, Math.round(start.h + event.clientY - start.y)),
-      })
+      onHeightRef.current(Math.max(160, Math.round(start.h + event.clientY - start.y)))
     }
     const up = () => {
       drag.current = null
-      setDragging(false)
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
@@ -582,37 +574,35 @@ function SizeGrip({
       window.removeEventListener('pointerup', up)
     }
   }, [])
-  if (!show) return null
   return (
     <button
       type="button"
       data-testid="html-size-grip"
       data-biu-ignore
       tabIndex={-1}
-      title="拖动调整宽高"
-      aria-label="拖动调整宽高"
+      title="拖动调整高度"
+      aria-label="拖动调整高度"
       onPointerDown={(event) => {
         event.preventDefault()
         event.stopPropagation()
         const box = boxRef.current
         if (!box) return
-        setDragging(true)
-        drag.current = { x: event.clientX, y: event.clientY, w: box.offsetWidth, h: box.offsetHeight }
+        drag.current = { y: event.clientY, h: box.offsetHeight }
       }}
       style={{
         appearance: 'none',
         position: 'absolute',
-        right: 3,
-        bottom: 3,
+        left: 0,
+        right: 0,
+        bottom: 0,
         zIndex: 18,
-        width: 16,
-        height: 16,
+        height: 10,
         margin: 0,
         padding: 0,
-        cursor: 'nwse-resize',
+        cursor: 'ns-resize',
         border: 'none',
         borderRadius: 0,
-        background: 'linear-gradient(135deg, transparent 46%, #111 46%)',
+        background: 'transparent',
       }}
     />
   )
@@ -744,7 +734,6 @@ function HtmlDirectCard({ data, update, writable, selected }: BlockProps) {
   const deckOn = htmlDeckEnabled(data.deck)
   const title = htmlBlockTitle(data, '静态HTML')
   const [editing, setEditing] = useState(false)
-  const [hover, setHover] = useState(false)
   const hostRef = useRef<HTMLDivElement | null>(null)
   const deck = useHtmlDeck(hostRef, 'html', html, { width, height, deck: deckOn, title })
   const stamped = useMemo(
@@ -772,8 +761,6 @@ function HtmlDirectCard({ data, update, writable, selected }: BlockProps) {
         border: selectBorder(selected),
         borderRadius: 0,
       }}
-      onPointerEnter={() => setHover(true)}
-      onPointerLeave={() => setHover(false)}
     >
       {fill ? <style>{HTML_FILL_CSS}</style> : null}
       <HtmlSideBar
@@ -797,7 +784,7 @@ function HtmlDirectCard({ data, update, writable, selected }: BlockProps) {
           dangerouslySetInnerHTML={{ __html: stamped }}
         />
       )}
-      {ro || editing ? null : <SizeGrip reveal={hover} boxRef={hostRef} onSize={(next) => update(next)} />}
+      {ro || editing ? null : <HeightGrip boxRef={hostRef} onHeight={(height) => update({ height })} />}
       {deck.overlay}
     </div>
     </ReUI>
@@ -875,7 +862,6 @@ function HtmlFrameCard({ data, update, writable, selected }: BlockProps) {
   const deckOn = htmlDeckEnabled(data.deck)
   const title = htmlBlockTitle(data, '动态HTML')
   const [editing, setEditing] = useState(false)
-  const [hover, setHover] = useState(false)
   const hostRef = useRef<HTMLDivElement | null>(null)
   const deck = useHtmlDeck(hostRef, 'htmlframe', html, { height, deck: deckOn, title })
   const compiled = useMemo(() => compileHtmlSource(html), [html])
@@ -897,8 +883,6 @@ function HtmlFrameCard({ data, update, writable, selected }: BlockProps) {
         border: selectBorder(selected),
         borderRadius: 0,
       }}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
     >
       <HtmlSideBar
         editing={editing}
@@ -924,7 +908,7 @@ function HtmlFrameCard({ data, update, writable, selected }: BlockProps) {
           }}
         />
       )}
-      {ro || editing ? null : <SizeGrip reveal={hover} boxRef={hostRef} onSize={(next) => update({ height: next.height })} />}
+      {ro || editing ? null : <HeightGrip boxRef={hostRef} onHeight={(height) => update({ height })} />}
       {deck.overlay}
     </div>
     </ReUI>
