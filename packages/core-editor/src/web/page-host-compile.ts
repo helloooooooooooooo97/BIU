@@ -1,4 +1,5 @@
 import { transform } from 'sucrase'
+import { sandboxUi } from './sandbox-ui.ts'
 
 const FORBIDDEN = /\bimport\s*\(|\brequire\s*\(/
 
@@ -37,7 +38,7 @@ function compileSlotSource(source: string, slot: HostSlot): HostCompileResult {
       filePath: slot === 'Field' ? 'page-prop-view.tsx' : slot === 'Layout' ? 'page-layout-view.tsx' : 'page-view.tsx',
     }).code
     // eslint-disable-next-line @typescript-eslint/no-implied-eval
-    new Function('React', 'Block', 'Field', 'biu', code)
+    new Function('React', 'Block', 'Field', 'biu', 'ui', code)
     return { ok: true, code }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) }
@@ -54,11 +55,12 @@ export function loadHostComponent(code: string, React: unknown, Block: unknown, 
     'Block',
     'Field',
     'biu',
+    'ui',
     `"use strict";
      ${code}
      return (typeof __Component === "function" && __Component) || (typeof App === "function" && App);`,
   )
-  const Component = factory(React, Block, Field, biu)
+  const Component = factory(React, Block, Field, biu, sandboxUi)
   if (typeof Component !== 'function') throw new Error('sandbox view must export a React component')
   return Component as (...args: unknown[]) => unknown
 }

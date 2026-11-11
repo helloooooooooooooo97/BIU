@@ -17,6 +17,13 @@ test('rejects import and require', () => {
   assert.equal(compileSandboxSource('import("x")\nexport default function App(){ return <div /> }').ok, false)
 })
 
+test('jsx may use ui.icons without import', () => {
+  const result = compileSandboxSource(
+    'export default function App(){ const Star = ui.icons.StarIcon; return <Star /> }',
+  )
+  assert.equal(result.ok, true)
+})
+
 test('jsx default export compiles after stripping react import', () => {
   assert.equal(looksLikeJsx('export default function App(){ return <div/> }'), true)
   const result = compileSandboxSource(`import React from 'react'\nexport default function App(){ return <div /> }`)
@@ -31,9 +38,9 @@ test('empty source fails', () => {
 test('sandbox mount flushes react before pick stamp', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
-  const src = await readFile(resolve(import.meta.dirname, '../web/sandbox.ts'), 'utf8')
-  const files = await readFile(resolve(import.meta.dirname, '../web/page-file.ts'), 'utf8')
-  const card = await readFile(resolve(import.meta.dirname, '../web/index.tsx'), 'utf8')
+  const src = await readFile(resolve(import.meta.dirname, './runtime.ts'), 'utf8')
+  const files = await readFile(resolve(import.meta.dirname, './page-file.ts'), 'utf8')
+  const card = await readFile(resolve(import.meta.dirname, './block.tsx'), 'utf8')
   assert.match(card, /markFreshSandboxAssets/)
   assert.match(card, /createOnMiss: false/)
   assert.match(files, /fresh.has\(name\) && createOnMiss/)
@@ -47,9 +54,11 @@ test('sandbox mount flushes react before pick stamp', async () => {
   assert.match(src, /data-sandbox-pick-mode/)
   assert.match(src, /sandboxGlobals/)
   assert.match(src, /'biu'/)
+  assert.match(src, /'ui'/)
+  assert.match(src, /sandboxUi/)
   assert.match(src, /io\.read\(\)/)
-  const readme = await readFile(resolve(import.meta.dirname, '../README.md'), 'utf8')
-  const host = await readFile(resolve(import.meta.dirname, '../host/index.ts'), 'utf8')
+  const readme = await readFile(resolve(import.meta.dirname, './README.md'), 'utf8')
+  const host = await readFile(resolve(import.meta.dirname, '../../host/index.ts'), 'utf8')
   assert.match(readme, /dataFile/)
   assert.match(readme, /biu\.write/)
   assert.match(readme, /不要用 `db_asset`/)

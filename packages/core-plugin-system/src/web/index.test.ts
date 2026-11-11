@@ -280,12 +280,15 @@ test('restored html plugin keeps static and live kinds', async () => {
   assert.doesNotMatch(html, /0 0 0 2px/)
 })
 
-test('html page blocks register plugin id for slash', async () => {
+test('sandbox page block is a core-editor builtin', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
-  const html = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-sandbox/web/index.tsx'), 'utf8')
+  const html = await readFile(resolve(import.meta.dirname, '../../../core-editor/src/web/sandbox/block.tsx'), 'utf8')
+  assert.match(html, /function registerSandboxBlock/)
   assert.match(html, /plugin: name/)
   assert.match(html, /kind: 'sandbox'/)
+  assert.match(html, /BASIC_BLOCK_TYPE/)
+  assert.match(html, /assets: \['file', 'dataFile'\]/)
   assert.doesNotMatch(html, /kind: 'html'/)
   assert.doesNotMatch(html, /kind: 'htmlframe'/)
   assert.match(html, /label: '沙箱'/)

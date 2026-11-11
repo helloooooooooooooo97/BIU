@@ -4,7 +4,7 @@ import {
   isSandboxPickSurface,
   stampSandboxPickSurfaces,
   sandboxBlockKey,
-} from '../../../../.plugin-dev/page-sandbox/web/stamp-picks.ts'
+} from '../../../core-editor/src/web/sandbox/stamp-picks.ts'
 
 test('stamps every div and span plus semantic nodes', () => {
   const root = document.createElement('div')

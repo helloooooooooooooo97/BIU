@@ -1,9 +1,9 @@
+import React from 'react'
 import { flushSync } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
-import { compileJsxSource, compileSandboxSource, looksLikeJsx, transpileJsx } from '../shared/compile.ts'
+import { compileJsxSource, compileSandboxSource, looksLikeJsx, transpileJsx } from './compile.ts'
 import { sandboxGlobals } from './gate.ts'
-
-const React = globalThis.React
+import { sandboxUi } from '../sandbox-ui.ts'
 const roots = new WeakMap<ShadowRoot, Root>()
 
 export function hostThemeCss() {
@@ -72,13 +72,14 @@ function mountJsx(source: string, root: ShadowRoot, io?: SandboxIO) {
     'globalThis',
     'self',
     'biu',
+    'ui',
     `"use strict";
      ${transpileJsx(prepareJsx(source))}
      return (typeof __Component === "function" && __Component) || (typeof App === "function" && App);`,
   )
   const preview = root.host instanceof HTMLElement ? root.host : null
   const globals = sandboxGlobals(preview)
-  const Component = factory(React, hostThemeCss(), globals.window, globals.document, globals.globalThis, globals.self, biu)
+  const Component = factory(React, hostThemeCss(), globals.window, globals.document, globals.globalThis, globals.self, biu, sandboxUi)
   const mount = document.createElement('div')
   mount.setAttribute('data-sandbox-root', '')
   root.append(mount)

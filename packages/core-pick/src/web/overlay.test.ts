@@ -136,7 +136,7 @@ test('marquee inside inspector uses the inspector as the query root', () => {
 
 test('pick mode uses a blue white-outline pointer and no hit pulse', () => {
   const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
-  const sandbox = readFileSync(resolve(import.meta.dirname, '../../../../.plugin-dev/page-sandbox/web/sandbox.ts'), 'utf8')
+  const sandbox = readFileSync(resolve(import.meta.dirname, '../../../core-editor/src/web/sandbox/runtime.ts'), 'utf8')
   assert.match(css, /html\.pick-mode[\s\S]*cursor: url\("data:image\/svg\+xml/)
   assert.match(css, /%231a54c4/)
   assert.doesNotMatch(css, /html\.pick-mode[\s\S]*cursor: crosshair/)

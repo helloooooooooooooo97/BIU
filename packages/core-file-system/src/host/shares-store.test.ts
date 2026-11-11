@@ -157,7 +157,7 @@ test('record snapshot only includes the shared row', async () => {
 })
 
 test('snapshot lists page plugins even when source zip is off', async () => {
-  const fence = ':::pageBlock {kind=sandbox plugin=page-sandbox id=ab12}\n<div>x</div>\n:::\n'
+  const fence = ':::pageBlock {kind=excalidraw plugin=page-excalidraw id=ab12}\n<div>x</div>\n:::\n'
   const spec: CollectionSpec = {
     id: 'notes',
     path: '/notes',
@@ -179,7 +179,7 @@ test('snapshot lists page plugins even when source zip is off', async () => {
   const share = shares.upsert({ kind: 'record', collection: '/notes', recordId: 'open' })
   const snap = await buildShareSnapshot(db, views, share)
   assert.equal(snap.sharePlugins, false)
-  assert.deepEqual(snap.pluginIds, ['page-sandbox'])
+  assert.deepEqual(snap.pluginIds, ['page-excalidraw'])
 })
 
 test('session snapshot uses db_content events, not page markdown', async () => {
