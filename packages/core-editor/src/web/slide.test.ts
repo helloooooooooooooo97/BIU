@@ -190,7 +190,7 @@ test('slide cell keeps a code fence and a registered pageBlock apart', () => {
     ],
   })
   const once = editor.getMarkdown()
-  assert.match(once, /```[\s\S]*const a = 1[\s\S]*```\n\n:::pageBlock/)
+  assert.match(once, /:::code[\s\S]*const a = 1[\s\S]*:::\n\n:::pageBlock/)
   assert.match(once, /:::pageBlock \{kind=video[\s\S]*:::\n<track \/>/)
   editor.commands.setContent(once, { contentType: 'markdown' })
   const names: string[] = []

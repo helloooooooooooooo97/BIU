@@ -213,7 +213,7 @@ function pageBlockCloseLooksOuter(lines: string[], closeAt: number) {
   let i = closeAt + 1
   while (i < lines.length && !String(lines[i] ?? '').trim()) i += 1
   if (i >= lines.length) return true
-  return /^(:::((pageBlock|cell|slide|table|row|th|td)\b|$)|`{3,}|#{1,6}\s)/.test(String(lines[i] ?? ''))
+  return /^(:::((pageBlock|cell|slide|table|row|th|td|code)\b|$)|`{3,}|#{1,6}\s)/.test(String(lines[i] ?? ''))
 }
 
 /** 内置块正文是不透明的：正文里的 ::: 不算结束，只认后面接着外层围栏 / 代码围栏 / 文末的 :::。 */
