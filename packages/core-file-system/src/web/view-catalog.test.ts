@@ -74,6 +74,17 @@ test('property flyout uses the view switcher instead of a string textarea', () =
   assert.match(pick, /ensureDbSearchStyle/)
 })
 
+test('hidden content view chip uses 隐藏, not the id', () => {
+  const record = { id: 'skill-1', views: [] }
+  selectViewCatalog('/skills', record, 'views', 'hidden')
+  const current = selectedViewCatalogOption('/skills', record, 'views')
+  assert.equal(current?.id, 'hidden')
+  assert.equal(current?.name, '隐藏')
+  assert.equal(current?.icon, 'hidden')
+  const options = listViewCatalogOptions('/skills', record, 'views')
+  assert.equal(options.find((item) => item.id === 'hidden')?.name, '隐藏')
+})
+
 test('only custom content and property views can be copied', () => {
   assert.equal(canCopyViewCatalogItem('views', { id: 'doc' }), false)
   assert.equal(canCopyViewCatalogItem('views', { id: 'outline' }), false)
