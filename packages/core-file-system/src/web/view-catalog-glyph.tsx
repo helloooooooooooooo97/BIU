@@ -1,4 +1,5 @@
 import {
+  ChatBubbleLeftRightIcon,
   CodeBracketIcon,
   DocumentTextIcon,
   EyeSlashIcon,
@@ -21,6 +22,7 @@ export function ViewCatalogGlyph({
   if (icon === 'table') return <TableCellsIcon aria-hidden className={className} />
   if (icon === 'source') return <CodeBracketIcon aria-hidden className={className} />
   if (icon === 'hidden') return <EyeSlashIcon aria-hidden className={className} />
+  if (icon === 'chat') return <ChatBubbleLeftRightIcon aria-hidden className={className} />
   if (icon === 'sandbox') return <SandboxKindIcon className={className} />
   if (icon === 'layout') return <Squares2X2Icon aria-hidden className={className} />
   if (icon === 'props') return <QueueListIcon aria-hidden className={className} />

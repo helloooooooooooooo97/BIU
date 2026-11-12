@@ -86,12 +86,37 @@ test('hidden content view chip uses 隐藏, not the id', () => {
   assert.equal(options.find((item) => item.id === 'hidden')?.name, '隐藏')
 })
 
+test('agent content catalog lists 聊天 and 隐藏 with the chat glyph', () => {
+  const record = { id: 'agent-1', views: [] }
+  const options = listViewCatalogOptions('/agents', record, 'views')
+  assert.deepEqual(
+    options.map((item) => `${item.id}:${item.name}:${item.icon}`),
+    ['chat:聊天:chat', 'hidden:隐藏:hidden'],
+  )
+  selectViewCatalog('/agents', record, 'views', 'chat')
+  const current = selectedViewCatalogOption('/agents', record, 'views')
+  assert.equal(current?.name, '聊天')
+  assert.equal(current?.icon, 'chat')
+  const glyph = readFileSync(resolve(import.meta.dirname, './view-catalog-glyph.tsx'), 'utf8')
+  assert.match(glyph, /icon === 'chat'/)
+  assert.match(glyph, /ChatBubbleLeftRightIcon/)
+})
+
+test('content catalog chips keep Chinese labels even when the stored name is the id', () => {
+  const record = { id: 'agent-2', views: [{ id: 'chat', name: 'chat', kind: 'sandbox', file: 'x.jsx' }] }
+  const options = listViewCatalogOptions('/agents', record, 'views')
+  assert.equal(options.find((item) => item.id === 'chat')?.name, '聊天')
+  assert.equal(options.find((item) => item.id === 'chat')?.icon, 'chat')
+  assert.ok(options.length >= 2)
+})
+
 test('only custom content and property views can be copied', () => {
   assert.equal(canCopyViewCatalogItem('views', { id: 'doc' }), false)
   assert.equal(canCopyViewCatalogItem('views', { id: 'outline' }), false)
   assert.equal(canCopyViewCatalogItem('views', { id: 'table' }), false)
   assert.equal(canCopyViewCatalogItem('views', { id: 'source' }), false)
   assert.equal(canCopyViewCatalogItem('views', { id: 'hidden' }), false)
+  assert.equal(canCopyViewCatalogItem('views', { id: 'chat' }), false)
   assert.equal(canCopyViewCatalogItem('propViews', { id: 'table' }), false)
   assert.equal(canCopyViewCatalogItem('propViews', { id: 'hidden' }), false)
   assert.equal(canCopyViewCatalogItem('layouts', { id: 'need', builtin: false }), false)
