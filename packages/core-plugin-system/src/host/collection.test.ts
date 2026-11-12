@@ -137,6 +137,12 @@ test('pluginsCollection lists installed plugins and sandboxes in one table', asy
   assert.deepEqual(spec.actions?.find((item) => item.id === 'uninstall')?.when, { installed: true, canManagePackage: true })
   assert.equal(spec.actions?.find((item) => item.id === 'uninstall')?.requiredAction, 'resource:read')
   assert.equal(spec.actions?.find((item) => item.id === 'sandbox')?.for, 'agent')
+  assert.deepEqual(
+    (spec.actions?.find((item) => item.id === 'sandbox')?.parameters as { properties?: { scope?: { enum?: string[] } } } | undefined)
+      ?.properties?.scope?.enum,
+    ['personal', 'workspace', 'shared', 'local'],
+  )
+  assert.match(String(spec.view?.blurb ?? ''), /args\.scope/)
   assert.equal(spec.actions?.find((item) => item.id === 'start')?.for, undefined)
 })
 

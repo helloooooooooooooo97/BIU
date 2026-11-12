@@ -1278,6 +1278,21 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
+  private pluginCreateScope(args?: Record<string, unknown>): 'personal' | 'workspace' | 'shared' {
+    const raw = String(args?.scope ?? '').trim()
+    const device = this.deviceWorkspace()
+    if (raw === 'shared') return 'shared'
+    if (raw === 'workspace' && !device) return 'workspace'
+    return 'personal'
+  }
+
+  private stampPluginCreateScope(recordId: string, args?: Record<string, unknown>) {
+    const scope = this.pluginCreateScope(args)
+    this.rememberScope('/plugins', recordId, scope)
+    const raw = String(args?.scope ?? '').trim()
+    if ((raw === 'local' || this.deviceWorkspace()) && scope !== 'shared') this.markDeviceRecord('/plugins', recordId)
+  }
+
   rememberScope(collection: string, recordId: string, scope: 'personal' | 'workspace' | 'shared') {
     if (scope === 'shared') {
       this.markPublicView(collection, recordId)
@@ -2617,7 +2632,7 @@ export class DatabaseService extends Service implements Database {
       await this.requirePath(spec.path, 'resource:read')
       if (loaded && !builtinPlugin) {
         const owner = this.recordOwner(spec.path, record.id)
-        if (!owner) this.attachWorkspaceRecord(spec.path, record.id, { ownership: 'personal', accessMode: 'private' })
+        if (!owner) this.stampPluginCreateScope(record.id, args)
         else this.assertLiveRecord(spec, record.id, 'resource:read', record)
       }
     } else if (!personalLoad && (loaded || !action.allowMissing)) {
@@ -2628,7 +2643,7 @@ export class DatabaseService extends Service implements Database {
     if (!matchActionWhen(record, action.when)) throw new Error(`action not available: ${actionId}`)
     const result = await action.run(parts[1]!, record, args)
     if (spec.path === '/plugins' && actionId === 'sandbox' && !builtinPlugin && !this.recordOwner(spec.path, parts[1]!)) {
-      this.attachWorkspaceRecord(spec.path, parts[1]!, { ownership: 'personal', accessMode: 'private' })
+      this.stampPluginCreateScope(parts[1]!, args)
     }
     if (spec.path === '/plugins' && !builtinPlugin && (actionId === 'sandbox' || actionId === 'pack')) {
       await this.stampActor(spec.path, parts[1]!)
