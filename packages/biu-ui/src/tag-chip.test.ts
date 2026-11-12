@@ -13,6 +13,8 @@ test('tagTone is stable and stays in the shared palette', () => {
 test('TagChip ships the tinted chip markup', () => {
   const src = readFileSync(resolve(import.meta.dirname, './tag-chip.tsx'), 'utf8')
   assert.match(src, /function TagChip/)
+  assert.match(src, /TAG_TONE_PURPLE = 'var\(--biu-color-ink-purple\)'/)
+  assert.match(src, /tone \|\| tagTone\(id\)/)
   assert.match(src, /className=\{\`biu-tag/)
   assert.match(src, /padding:0 var\(--biu-pad-chip-x\)/)
   assert.match(src, /color-mix\(in srgb,var\(--biu-tag/)

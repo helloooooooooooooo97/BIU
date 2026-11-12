@@ -2,9 +2,12 @@ import type { DbRecord } from '@biu/type-file-system'
 import {
   DEFAULT_RECORD_LAYOUT_ID,
   DEFAULT_RECORD_PROP_VIEW_ID,
+  HIDDEN_CONTENT_VIEW_ID,
+  HIDDEN_CONTENT_VIEW_LABEL,
   parseRecordLayouts,
   parseRecordSandboxes,
 } from '@biu/type-file-system/record-views'
+import { getDatabaseUi } from './database-ui.ts'
 import { TAGS_COLLECTION_PATH, PAGES_COLLECTION_PATH } from './database-path.ts'
 import { normalizeCollectionPath } from '../paths.ts'
 import {
@@ -38,13 +41,20 @@ export type ViewCatalogHost = {
   subscribe?: (fn: () => void) => () => void
 }
 
-const PAGE_CONTENT_BUILTINS: ViewCatalogOption[] = [
-  { id: 'doc', name: '文档', icon: 'doc', builtin: true },
-  { id: 'outline', name: '大纲', icon: 'outline', builtin: true },
-  { id: 'table', name: '表格', icon: 'table', builtin: true },
-  { id: 'source', name: '源码', icon: 'source', builtin: true },
-  { id: 'hidden', name: '隐藏', icon: 'hidden', builtin: true },
-]
+const BUILTIN_CONTENT_NAMES: Record<string, string> = {
+  [HIDDEN_CONTENT_VIEW_ID]: HIDDEN_CONTENT_VIEW_LABEL,
+  doc: '文档',
+  outline: '大纲',
+  table: '表格',
+  source: '源码',
+  chat: '聊天',
+}
+
+function catalogName(id: string, name?: string) {
+  const next = String(name ?? '').trim()
+  if (next && next !== id) return next
+  return BUILTIN_CONTENT_NAMES[id] || next || id
+}
 
 const hosts = new Map<string, ViewCatalogHost>()
 
@@ -89,7 +99,7 @@ function named(items: Array<Partial<ViewCatalogOption> & { id: string; name: str
     seen.add(id)
     out.push({
       id,
-      name: String(item.name ?? '').trim() || id,
+      name: catalogName(id, item.name),
       icon: item.icon ?? 'sandbox',
       builtin: Boolean(item.builtin),
     })
@@ -137,21 +147,23 @@ function defaultOptions(collectionPath: string, record: DbRecord, fieldKey: View
     }
     return withBuiltin({ id: DEFAULT_RECORD_PROP_VIEW_ID, name: '表格', icon: 'table', builtin: true }, listed)
   }
-  if (path === TAGS_COLLECTION_PATH) {
-    const live = getTagViews(String(record.id ?? ''))
-    const listed = live.length ? live : parseRecordSandboxes(record.views)
-    return withBuiltin(
-      { id: TAG_TABLE_VIEW_ID, name: '表格', icon: 'table', builtin: true },
-      listed.map((item) => ({ id: item.id, name: item.name, icon: 'sandbox' as const })),
-    )
-  }
-  const sandboxes = parseRecordSandboxes(record.views).map((item) => ({
+  const liveTag = path === TAGS_COLLECTION_PATH ? getTagViews(String(record.id ?? '')) : []
+  const sandboxes = (liveTag.length ? liveTag : parseRecordSandboxes(record.views)).map((item) => ({
     id: item.id,
     name: item.name,
     icon: 'sandbox' as const,
   }))
-  if (path === PAGES_COLLECTION_PATH) return named([...PAGE_CONTENT_BUILTINS, ...sandboxes])
-  return named(sandboxes)
+  const registered = (getDatabaseUi()?.contentViews(path) ?? []).map((item) => ({
+    id: item.id,
+    name: item.label,
+    icon: contentIcon(item.id),
+    builtin: true,
+  }))
+  return named([
+    ...registered,
+    { id: HIDDEN_CONTENT_VIEW_ID, name: HIDDEN_CONTENT_VIEW_LABEL, icon: 'hidden', builtin: true },
+    ...sandboxes,
+  ])
 }
 
 function defaultSelected(collectionPath: string, record: DbRecord, fieldKey: ViewCatalogFieldKey) {
@@ -201,7 +213,11 @@ export function selectedViewCatalogId(collectionPath: string, record: DbRecord, 
 export function selectedViewCatalogOption(collectionPath: string, record: DbRecord, fieldKey: string) {
   const options = listViewCatalogOptions(collectionPath, record, fieldKey)
   const id = selectedViewCatalogId(collectionPath, record, fieldKey)
-  return options.find((item) => item.id === id) ?? options[0] ?? (id ? { id, name: id, icon: contentIcon(id) } : null)
+  return (
+    options.find((item) => item.id === id) ??
+    options[0] ??
+    (id ? { id, name: catalogName(id), icon: contentIcon(id), builtin: Boolean(BUILTIN_CONTENT_NAMES[id]) } : null)
+  )
 }
 
 export function selectViewCatalog(collectionPath: string, record: DbRecord, fieldKey: string, viewId: string) {

@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { BoolBox } from '@biu/biu-ui/bool-box'
-import { TagChip, TagChips } from '@biu/biu-ui/tag-chip'
+import { TAG_TONE_PURPLE, TagChip, TagChips } from '@biu/biu-ui/tag-chip'
 import {
   ArchiveBoxArrowDownIcon,
   ArrowDownTrayIcon,
@@ -347,6 +347,7 @@ export function DefaultCell({
           key={catalogTick}
           id={option.id}
           label={option.name}
+          tone={option.icon === 'sandbox' ? TAG_TONE_PURPLE : undefined}
           icon={<ViewCatalogGlyph icon={option.icon} className="size-[14px]" />}
         />
       </TagChips>

@@ -5,6 +5,7 @@ export const DEFAULT_RECORD_LAYOUT_ID = 'builtin-default'
 export const DEFAULT_RECORD_PROP_VIEW_ID = 'table'
 /** 文件系统内置内容模式：不画正文。不用插件登记。 */
 export const HIDDEN_CONTENT_VIEW_ID = 'hidden'
+export const HIDDEN_CONTENT_VIEW_LABEL = '隐藏'
 
 export type RecordLayoutSort = 'doc' | 'title-asc' | 'title-desc' | 'kind'
 

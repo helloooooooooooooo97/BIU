@@ -59,6 +59,7 @@ test('property flyout uses the view switcher instead of a string textarea', () =
   assert.match(draft, /<ViewCatalogPickPanel/)
   assert.match(cells, /selectedViewCatalogOption/)
   assert.match(cells, /<TagChip/)
+  assert.match(cells, /tone=\{option\.icon === 'sandbox' \? TAG_TONE_PURPLE : undefined\}/)
   assert.match(cells, /<ViewCatalogGlyph icon=\{option\.icon\}/)
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   assert.match(browser, /isViewCatalogField\(key\)/)
@@ -72,6 +73,17 @@ test('property flyout uses the view switcher instead of a string textarea', () =
   assert.match(pick, /tasks-viewdd-act is-danger/)
   assert.match(pick, /fsdb-viewcat-pick-row/)
   assert.match(pick, /ensureDbSearchStyle/)
+})
+
+test('hidden content view chip uses 隐藏, not the id', () => {
+  const record = { id: 'skill-1', views: [] }
+  selectViewCatalog('/skills', record, 'views', 'hidden')
+  const current = selectedViewCatalogOption('/skills', record, 'views')
+  assert.equal(current?.id, 'hidden')
+  assert.equal(current?.name, '隐藏')
+  assert.equal(current?.icon, 'hidden')
+  const options = listViewCatalogOptions('/skills', record, 'views')
+  assert.equal(options.find((item) => item.id === 'hidden')?.name, '隐藏')
 })
 
 test('only custom content and property views can be copied', () => {
