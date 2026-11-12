@@ -484,9 +484,9 @@ function askNewPresentation(opts: { path: string; title?: string }) {
   })
 }
 
-function askNewPlugin() {
-  const draft =
-    '请帮我写一个新插件。先听我描述它要做什么（窗口应用、页面块还是无头登记）。然后 db_action path=/plugins/<id> action=sandbox 建 .plugin-dev/<id>/（记录可以还不存在），写完代码再 action=pack 打进 .plugin。不要 db_create /plugins，不要直写 .plugin，不要改 packages/ 或 cordis.plugins.json。有窗口写 shell 宽高；无头写 headless:true。'
+function askNewPlugin(scope: 'personal' | 'workspace' | 'shared' | 'local' = 'personal') {
+  const scopeName = scope === 'workspace' ? '空间' : scope === 'shared' ? '共享' : '私人'
+  const draft = `请帮我写一个新插件。先听我描述它要做什么（窗口应用、页面块还是无头登记）。然后 db_action path=/plugins/<id> action=sandbox args={{name, scope:"${scope}"}} 建 .plugin-dev/<id>/（记录可以还不存在，归属${scopeName}），写完代码再 action=pack 打进 .plugin。不要 db_create /plugins，不要直写 .plugin，不要改 packages/ 或 cordis.plugins.json。有窗口写 shell 宽高；无头写 headless:true。`
   void import('@biu/core-pick/web').then((mod) => {
     mod.getPick()?.attach(
       [
@@ -5424,13 +5424,13 @@ export function CollectionBrowser({
                   title="新建"
                   data-testid={canAskNewPlugin ? 'fsdb-ask-new-plugin' : undefined}
                   onClick={() => {
-                    if (canAskNewPlugin) askNewPlugin()
+                    if (canAskNewPlugin) askNewPlugin(createScope)
                     else void createRecord()
                   }}
                 >
                   新建
                 </button>
-                {canAskNewPlugin ? null : isDataOverview ? (
+                {isDataOverview ? (
                 <HeadlessDismiss enabled={createTypeOpen} onDismiss={() => setCreateTypeOpen(false)}>
                   <div className="fsdb-create-scope-wrap">
                   <button

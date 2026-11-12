@@ -2782,6 +2782,10 @@ test('a member sandbox is private until the owner shares it', async () => {
     ])
     const caraList = await runWithAccount(cara.id, () => db.list('/plugins'))
     assert.deepEqual(caraList.items.map((row) => row.id), ['cara-plug'])
+    await runWithAccount(ada.id, () => db.action('/plugins/ada-open', 'sandbox', { scope: 'shared' }))
+    const openList = await runWithAccount(bob.id, () => db.list('/plugins'))
+    assert.equal(openList.items.find((row) => row.id === 'ada-open')?.shareScope, '共享')
+    assert.equal(openList.items.some((row) => row.id === 'ada-plug'), true)
   } finally {
     if (previous === undefined) delete process.env.BIU_ONLINE
     else process.env.BIU_ONLINE = previous
