@@ -269,6 +269,7 @@ test('restored html plugin keeps static and live kinds', async () => {
   assert.match(html, /newHtmlFile/)
   assert.match(html, /data-testid="html-type-icon"/)
   assert.match(html, /data-testid="html-side-bar"/)
+  assert.match(html, /page-slide-icon\$\{deck \? ' is-on'[\s\S]*html-deck-toggle/)
   assert.match(html, /page-block-expand-nav/)
   assert.match(html, /page-block-expand-nav-title/)
   assert.match(html, /testId="html-title"/)
