@@ -43,6 +43,7 @@ export const TAG_TONE_BLUE = 'var(--biu-color-ink-blue)' as const
 export const TAG_TONE_ORANGE = 'var(--biu-color-ink-orange)' as const
 export const TAG_TONE_GREEN = 'var(--biu-color-ink-green)' as const
 export const TAG_TONE_RED = 'var(--biu-color-ink-red)' as const
+export const TAG_TONE_PURPLE = 'var(--biu-color-ink-purple)' as const
 
 export function tagTone(id: string) {
   let hash = 0
@@ -75,6 +76,7 @@ export function TagChip({
   onClick,
   active,
   icon,
+  tone,
 }: {
   id: string
   label: string
@@ -82,13 +84,14 @@ export function TagChip({
   onClick?: () => void
   active?: boolean
   icon?: ReactNode
+  tone?: string
 }) {
   ensureTagChipStyle()
   const chip = (
     <span
       className={`biu-tag${active ? ' is-on' : ''}${onClick ? ' is-btn' : ''}`}
       data-tag-id={id}
-      style={{ ['--biu-tag' as string]: tagTone(id) }}
+      style={{ ['--biu-tag' as string]: tone || tagTone(id) }}
       title={label}
     >
       {icon ? <span className="biu-tag-icon">{icon}</span> : null}

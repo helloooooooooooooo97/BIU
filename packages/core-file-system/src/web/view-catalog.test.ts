@@ -59,6 +59,7 @@ test('property flyout uses the view switcher instead of a string textarea', () =
   assert.match(draft, /<ViewCatalogPickPanel/)
   assert.match(cells, /selectedViewCatalogOption/)
   assert.match(cells, /<TagChip/)
+  assert.match(cells, /tone=\{option\.icon === 'sandbox' \? TAG_TONE_PURPLE : undefined\}/)
   assert.match(cells, /<ViewCatalogGlyph icon=\{option\.icon\}/)
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   assert.match(browser, /isViewCatalogField\(key\)/)
