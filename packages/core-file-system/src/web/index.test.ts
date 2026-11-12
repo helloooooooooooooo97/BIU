@@ -276,6 +276,9 @@ test('record detail falls back to the shared property sandbox host', () => {
   assert.match(host, /export function RecordProperties/)
   assert.match(host, /data-testid="record-prop-host"/)
   assert.match(host, /parseRecordSandboxes\(record\.propViews\)/)
+  assert.match(host, /bindSandboxPickPane/)
+  assert.match(host, /data-sandbox=""/)
+  assert.match(host, /recordPropHostPickKey/)
 })
 
 test('detail facet property sits last, starts collapsed, and the glyph becomes a fold control on hover', () => {

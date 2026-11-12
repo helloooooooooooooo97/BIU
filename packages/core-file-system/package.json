@@ -18,7 +18,8 @@
     "./field-value": "./src/web/field-value-pop.tsx",
     "./record-layouts": "./src/web/record-layouts.ts",
     "./record-sandboxes": "./src/web/record-sandboxes.ts",
-    "./record-prop-host": "./src/web/record-prop-host.tsx"
+    "./record-prop-host": "./src/web/record-prop-host.tsx",
+    "./sandbox-pick-pane": "./src/web/sandbox-pick-pane.ts"
   },
   "dependencies": {
     "@biu/core-pick": "0.1.0",

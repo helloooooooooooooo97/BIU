@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowsPointingInIcon, ArrowsPointingOutIcon, CodeBracketIcon, EyeIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
 import {
@@ -17,6 +17,7 @@ import {
 } from '@biu/type-file-system/record-views'
 import type { FsPropertiesProps } from '@biu/type-file-system/ui'
 import { FieldValuePop } from './field-value-pop.tsx'
+import { bindSandboxPickPane, recordPropHostPickKey } from './sandbox-pick-pane.ts'
 import { compileHostSource, loadHostComponent } from './tag-host-compile.ts'
 import {
   peekRecordViewFile,
@@ -303,6 +304,15 @@ export function RecordPropHostView({
     }
   }, [compiled])
 
+  useLayoutEffect(() => {
+    if (!showPreview) return
+    return bindSandboxPickPane(previewRef.current, recordPropHostPickKey(collectionPath, recordId, view.id), {
+      path: collectionPath,
+      name: view.file,
+      title: view.title,
+    })
+  }, [showPreview, collectionPath, recordId, view.id, view.file, view.title, preview.Preview])
+
   const card = (
     <div
       ref={hostRef}
@@ -334,7 +344,16 @@ export function RecordPropHostView({
       </div>
       <div className="page-host-stage">
         {showPreview ? (
-          <div ref={previewRef} className="page-host-preview-pane" style={splitPaneStyle(showCode ? previewWidth : 0)} data-testid="record-prop-host-preview">
+          <div
+            ref={previewRef}
+            className="page-host-preview-pane"
+            style={splitPaneStyle(showCode ? previewWidth : 0)}
+            data-testid="record-prop-host-preview"
+            data-sandbox=""
+            data-biu-path={collectionPath}
+            data-biu-name={view.file}
+            data-biu-title={view.title}
+          >
             {preview.Preview ? (
               <>
                 <preview.Preview />
@@ -353,7 +372,16 @@ export function RecordPropHostView({
           </div>
         ) : null}
         {showCode ? (
-          <div className={`page-host-code-pane${showPreview ? ' is-split' : ''}`} data-testid="record-prop-host-code">
+          <div
+            className={`page-host-code-pane${showPreview ? ' is-split' : ''}`}
+            data-testid="record-prop-host-code"
+            data-biu-kind="sandbox"
+            data-biu-id={`sandbox:${recordPropHostPickKey(collectionPath, recordId, view.id)}:code`}
+            data-biu-path={collectionPath}
+            data-biu-name={view.file}
+            data-biu-title={view.title}
+            data-biu-label={view.title}
+          >
             <textarea
               className="page-tag-host-source"
               value={source}
