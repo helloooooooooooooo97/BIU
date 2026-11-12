@@ -73,7 +73,7 @@ function nodesFromContent(value: unknown): ChatNode[] | null {
   return mergeDispatchedUsageIntoNodes(projectNodes(events), usageFromContent(value))
 }
 
-function SessionRecordChat({ record, value }: FsContentProps) {
+export function SessionRecordChat({ record, value }: FsContentProps) {
   const sessionId = String(record.id)
   const [nodes, setNodes] = useState<ChatNode[]>(() => nodesFromContent(value) ?? [])
   useEffect(() => {

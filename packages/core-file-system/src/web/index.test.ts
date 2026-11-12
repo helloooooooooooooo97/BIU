@@ -245,6 +245,16 @@ test('tag collect table lives on the record board, not as sidebar views', () => 
   assert.match(viewsUi, /mergeCatalogViews/)
 })
 
+test('record detail hides registered body when the content view is 隐藏', () => {
+  const detail = readFileSync(resolve(import.meta.dirname, './record-detail.tsx'), 'utf8')
+  const body = readFileSync(resolve(import.meta.dirname, './record-content.tsx'), 'utf8')
+  assert.match(detail, /useRecordContentBody/)
+  assert.match(detail, /contentHidden/)
+  assert.match(body, /HIDDEN_CONTENT_VIEW_ID/)
+  assert.match(body, /match\?\.Body/)
+  assert.match(body, /chrome\?\.Content/)
+})
+
 test('hidden content view is a filesystem builtin, not a plugin registration', () => {
   const views = readFileSync(resolve(import.meta.dirname, '../../../type-file-system/src/record-views.ts'), 'utf8')
   const bar = readFileSync(resolve(import.meta.dirname, '../../../core-editor/src/web/page-detail-bar.tsx'), 'utf8')

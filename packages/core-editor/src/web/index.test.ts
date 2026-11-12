@@ -43,6 +43,7 @@ class FakeDatabaseUi extends Service implements DatabaseUi {
   }
   registerContentView(path: string, view: FsRecordContentView) {
     this.content.push({ path, id: view.id })
+    assert.equal(view.Body, PageEditor)
     return { dispose() {} }
   }
   registerDetailTools(path: string, _tools: FsDetailTools) {
