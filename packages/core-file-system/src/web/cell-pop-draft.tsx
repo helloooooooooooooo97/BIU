@@ -216,6 +216,7 @@ export function CellPopDraft({
     kind === 'datetime' ||
     kind === 'image' ||
     kind === 'attachment' ||
+    kind === 'document' ||
     kind === 'tag' ||
     kind === 'person' ||
     isRecordLinkField(field, fieldKey)
@@ -313,7 +314,7 @@ export function CellPopDraft({
     )
   }
 
-  if (kind === 'datetime' || kind === 'image' || kind === 'attachment') {
+  if (kind === 'datetime' || kind === 'image' || kind === 'attachment' || kind === 'document') {
     return (
       <FieldEditor
         fieldKey={flat ? field.label ?? flat.fieldKey : fieldKey}

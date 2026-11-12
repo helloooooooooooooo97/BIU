@@ -11,7 +11,11 @@ import {
   CheckCircleIcon,
   CheckIcon,
   Bars3BottomLeftIcon,
+  DocumentIcon,
+  DocumentTextIcon,
   LinkIcon,
+  PaperClipIcon,
+  PhotoIcon,
   PaperAirplaneIcon,
   PencilSquareIcon,
   PlayIcon,
@@ -84,7 +88,7 @@ export function fieldDraftValue(field: FieldSpec, value: unknown): string {
     if (list.length <= 1) return list[0] ?? ''
     return JSON.stringify(list)
   }
-  if (kind === 'attachment') {
+  if (kind === 'attachment' || kind === 'document') {
     const list = asAttachmentList(value)
     if (list.length <= 1) return list[0] ? JSON.stringify(list[0]) : ''
     return JSON.stringify(list)
@@ -123,13 +127,20 @@ export function fieldGlyphKind(kind: FieldType) {
   if (kind === 'tag') return 'tag'
   if (kind === 'url') return 'link'
   if (kind === 'ref' || kind === 'multi-ref') return 'ref'
-  if (kind === 'image' || kind === 'attachment' || kind === 'file') return 'file'
+  if (kind === 'image') return 'image'
+  if (kind === 'attachment') return 'attachment'
+  if (kind === 'document') return 'document'
+  if (kind === 'file') return 'file'
   return 'text'
 }
 
 export function FieldGlyph({ kind }: { kind: FieldType }) {
   if (kind === 'boolean') return <CheckCircleIcon aria-hidden className="fsdb-field-hero" />
   if (kind === 'url') return <LinkIcon aria-hidden className="fsdb-field-hero" />
+  if (kind === 'image') return <PhotoIcon aria-hidden className="fsdb-field-hero" />
+  if (kind === 'attachment') return <PaperClipIcon aria-hidden className="fsdb-field-hero" />
+  if (kind === 'document') return <DocumentIcon aria-hidden className="fsdb-field-hero" />
+  if (kind === 'file') return <DocumentTextIcon aria-hidden className="fsdb-field-hero" />
   if (fieldGlyphKind(kind) === 'text') return <Bars3BottomLeftIcon aria-hidden className="fsdb-field-hero" />
   return <span aria-hidden className="fsdb-field-glyph" data-kind={fieldGlyphKind(kind)} />
 }
@@ -216,7 +227,7 @@ export function parseFieldValue(field: FieldSpec, raw: string): unknown {
       return { tags: [], values: {} }
     }
   }
-  if (kind === 'file' || kind === 'attachment' || kind === 'image' || kind === 'person') {
+  if (kind === 'file' || kind === 'attachment' || kind === 'document' || kind === 'image' || kind === 'person') {
     const trimmed = raw.trim()
     if (!trimmed) return kind === 'file' ? null : ''
     if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
@@ -232,7 +243,7 @@ export function parseFieldValue(field: FieldSpec, raw: string): unknown {
 }
 
 function previewImageSrc(kind: FieldType | undefined, value: unknown): string {
-  if (kind === 'attachment' || kind === 'url' || kind === 'image') return ''
+  if (kind === 'attachment' || kind === 'document' || kind === 'url' || kind === 'image') return ''
   const src = asImageSrc(value)
   if (!src) return ''
   if (!kind) return src
@@ -276,6 +287,7 @@ export function FilePreview({
           <AttachmentFile
             key={`${file.href}-${index}`}
             file={file}
+            kind={kind === 'document' ? 'document' : 'attachment'}
             onRemove={
               onChange
                 ? () => onChange(commitAttachments(files.filter((_, i) => i !== index)))
@@ -294,7 +306,7 @@ export function FilePreview({
       </a>
     )
   }
-  if (kind === 'url' || kind === 'attachment' || kind === 'image') return null
+  if (kind === 'url' || kind === 'attachment' || kind === 'document' || kind === 'image') return null
   const text = typeof value === 'string' ? value : JSON.stringify(value, null, compact ? 0 : 2)
   if (compact) return <span className="fsdb-meta">{text.length > 80 ? `${text.slice(0, 80)}…` : text}</span>
   return text ? <pre className="fsdb-fileview-pre">{text}</pre> : null
@@ -418,8 +430,8 @@ export function DefaultCell({
     if (!text) return null
     return <span className="fsdb-datetime-text">{text}</span>
   }
-  if (kind === 'url' || kind === 'image' || kind === 'attachment' || kind === 'file') {
-    return <FilePreview value={value} compact kind={kind} onChange={kind === 'attachment' ? onChange : undefined} />
+  if (kind === 'url' || kind === 'image' || kind === 'attachment' || kind === 'document' || kind === 'file') {
+    return <FilePreview value={value} compact kind={kind} onChange={kind === 'attachment' || kind === 'document' ? onChange : undefined} />
   }
   const text = formatField(field, value)
   if (!text) return null

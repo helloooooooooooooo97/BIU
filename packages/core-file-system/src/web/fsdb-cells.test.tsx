@@ -40,12 +40,24 @@ test('attachment cells render a file link, not a broken image', () => {
     <DefaultCell field={{ type: 'attachment' }} value={{ name: 'notes.pdf', href: 'https://cdn.example/notes.pdf' }} />,
   )
   assert.equal(container.querySelector('img'), null)
+  assert.ok(container.querySelector('.fsdb-file.is-chip'))
   const name = container.querySelector('.fsdb-file-name')
   assert.equal(name?.textContent, 'notes.pdf')
+  assert.ok(container.querySelector('svg[data-slot="icon"]'))
   const download = container.querySelector('a.fsdb-file-dl') as HTMLAnchorElement
   assert.equal(download?.href, 'https://cdn.example/notes.pdf')
   assert.equal(download?.getAttribute('download'), 'notes.pdf')
   assert.equal(container.querySelector('[data-testid="fsdb-file-remove"]'), null)
+})
+
+test('db attachment downloads keep the original filename', () => {
+  const hashed = `${'ab'.repeat(32)}.md`
+  const { container } = render(
+    <DefaultCell field={{ type: 'attachment' }} value={{ name: '规划.md', href: `/api/db/file/${hashed}` }} />,
+  )
+  const download = container.querySelector('a.fsdb-file-dl') as HTMLAnchorElement
+  assert.match(download?.getAttribute('href') ?? '', /download=%E8%A7%84%E5%88%92\.md/)
+  assert.equal(download?.getAttribute('download'), '规划.md')
 })
 
 test('writable attachment cells can delete the file', () => {
@@ -112,6 +124,14 @@ test('plain table cells skip tag chips and person faces', () => {
   const person = render(<DefaultCell field={{ type: 'person' }} value={{ kind: 'user', name: 'Ada' }} plain />)
   assert.equal(person.container.querySelector('.fsdb-person-list'), null)
   assert.equal(person.container.querySelector('.fsdb-person-text')?.textContent, 'Ada')
+})
+
+test('document cells use the document chip icon', () => {
+  const { container } = render(
+    <DefaultCell field={{ type: 'document' }} value={{ name: '稿.md', href: '/api/db/file/doc-1-稿.md' }} />,
+  )
+  assert.ok(container.querySelector('.fsdb-file.is-chip'))
+  assert.equal(container.querySelector('.fsdb-file-name')?.textContent, '稿.md')
 })
 
 test('empty cells render no placeholder copy', () => {

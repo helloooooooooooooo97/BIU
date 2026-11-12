@@ -28,4 +28,5 @@ test('default tag sandbox source is the filesystem content view template', () =>
   assert.match(src, /内容视图 · 页面概览/)
   assert.match(src, /<Field name/)
   assert.match(src, /biu\.record\(\)/)
+  assert.match(src, /biu\.files/)
 })

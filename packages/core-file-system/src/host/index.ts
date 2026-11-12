@@ -35,6 +35,7 @@ import {
   isEmptySchemaValue,
   normalizeSchemaPack,
   normalizeSchemaValue,
+  pruneSchemaValue,
   sanitizeTagValuesPatch,
   schemaSearchHaystack,
   withBuiltinFields,
@@ -70,7 +71,7 @@ import { dataCollection, isDataOverviewSource, overviewRecord } from './data-col
 import { effectiveDataScope, highestViewRole, recordMatchesGrantedView, type DataScopeName, type ViewGrantRole } from '../view-access.ts'
 import { recordMatchesSharedView, resolveSharedView, type SharedViewDef } from '../share-view-match.ts'
 import { buildShareSnapshot } from './share-payload.ts'
-import { FileSystemAssets, collectAssetNames, assetNamesFromMarkdown, assetNamesFromHtml, isAssetFileName, isHashedAssetName, mimeOfAsset, AssetConflictError, parseIfMatch } from './assets-store.ts'
+import { FileSystemAssets, collectAssetNames, assetNamesFromMarkdown, assetNamesFromHtml, isAssetFileName, isHashedAssetName, mimeOfAsset, assetContentDisposition, AssetConflictError, parseIfMatch } from './assets-store.ts'
 import { tagsCollection, parseStampRecordId } from './tags-collection.ts'
 import { trashCollection } from './trash-collection.ts'
 import { runWorkspaceAssetGc } from './asset-gc-run.ts'
@@ -350,10 +351,10 @@ function splitPath(path: string): string[] {
   return hit.recordId ? [name, hit.recordId] : [name]
 }
 
-function linkUploadedAsset(db: { tags: { linkContentRef: (collection: string, recordId: string, name: string) => void } }, path: string, name: string) {
+function linkUploadedAsset(db: { tags: { linkContentRef: (collection: string, recordId: string, name: string, source?: string) => void } }, path: string, name: string) {
   const parts = splitPath(path)
   if (parts.length < 2 || !name) return
-  db.tags.linkContentRef(`/${parts[0]}`, parts.slice(1).join('/'), name)
+  db.tags.linkContentRef(`/${parts[0]}`, parts.slice(1).join('/'), name, 'asset')
 }
 
 function coerceList(value: unknown) {
@@ -470,7 +471,7 @@ function coerce(field: FieldSpec, value: unknown) {
     if (!list.length) throw new Error('expected image')
     return list.length === 1 ? list[0] : list
   }
-  if (kind === 'attachment') {
+  if (kind === 'attachment' || kind === 'document') {
     if (value == null || value === '') return ''
     const list = asAttachmentList(value)
     if (!list.length) return ''
@@ -545,7 +546,7 @@ function coerceTagPatch(
   }
   if (Array.isArray(parsed)) {
     const tags = parsed.map((item) => resolvePack(String(item))?.id ?? String(item).trim()).filter(Boolean)
-    return bindSchemaValue(tags, current.values)
+    return pruneTagBags(bindSchemaValue(tags, current.values), resolvePack)
   }
   if (!isPlainObject(parsed)) return normalizeSchemaValue(parsed)
   const rec = parsed
@@ -592,7 +593,17 @@ function coerceTagPatch(
       if (hit) applyBag(hit.id, { [key]: value })
     }
   }
-  return bindSchemaValue(tags, bags)
+  return pruneTagBags(bindSchemaValue(tags, bags), resolvePack)
+}
+
+function pruneTagBags(
+  value: SchemaFieldValue,
+  resolvePack: (idOrLabel: string) => CollectionSchemaPack | null,
+) {
+  const packs = value.tags
+    .map((id) => resolvePack(id))
+    .filter((pack): pack is CollectionSchemaPack => Boolean(pack))
+  return pruneSchemaValue(value, packs)
 }
 
 function writableFieldKeys(schema: CollectionSchema) {
@@ -1602,7 +1613,7 @@ export class DatabaseService extends Service implements Database {
     this.bump()
   }
 
-  private bump() {
+  bump() {
     this.visibleGen += 1
     this.viewShareCache = null
     this.recordShareCache = null
@@ -2025,12 +2036,15 @@ export class DatabaseService extends Service implements Database {
   private refreshContentRefs(spec: CollectionSpec, record: DbRecord) {
     const banner = this.tags.recordBanner(spec.path, record.id)
     const body = readEditorContent(this.tags.ensure(), spec.path, record.id)
+    const properties = this.decorateRecord(spec, record)
+    const tag = this.tags.recordTag(spec.path, record.id) ?? properties.tag
     this.tags.replaceContentRefs(
       spec.path,
       record.id,
       assetNamesFromMarkdown(body),
       assetNamesFromHtml(String(banner?.html ?? '')),
     )
+    this.tags.replaceAssetRefs(spec.path, record.id, collectAssetNames(properties, tag))
   }
 
   private applyPersonOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
@@ -2180,7 +2194,7 @@ export class DatabaseService extends Service implements Database {
       if (!isEmptySchemaValue(value)) overlay = this.persistRecordTag(spec, row.id, value, row)
     }
     if (!overlay) return row
-    return { ...row, tag: overlay }
+    return { ...row, tag: pruneSchemaValue(overlay, this.tags.list()) }
   }
 
   private applyMetaOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
@@ -4395,7 +4409,7 @@ export function apply(ctx: Context) {
         const pack = normalizeSchemaPack(item)
         if (pack) facets.upsert(pack)
       }
-      ctx.emit('database/change')
+      db.bump()
       route.send(200, { ok: true, tags: facets.list(), filled: facets.filledFieldCounts() })
     } catch (error) {
       route.send(400, { error: String(error) })
@@ -4404,10 +4418,15 @@ export function apply(ctx: Context) {
   const serveDbFile: Parameters<typeof ctx.http.route>[2] = async (route) => {
     try {
       const name = route.params.name ?? ''
-      db.requireAsset(name, 'resource:read')
+      const path = route.query.get('path') || String(route.req.headers['x-biu-resource-path'] ?? '')
+      if (path) await db.requirePath(path, 'resource:read')
+      else db.requireAsset(name, 'resource:read')
       const { bytes, type, etag } = await assets.readAny(name)
+      const suggested = route.query.get('download')
+      const inline = !suggested && (type.startsWith('image/') || type.startsWith('audio/') || type.startsWith('video/'))
       route.res.writeHead(200, {
         'content-type': type,
+        'content-disposition': assetContentDisposition(name, suggested, inline),
         'cache-control': isHashedAssetName(name) ? 'public, max-age=31536000, immutable' : 'no-store',
         etag: `"${etag}"`,
       })

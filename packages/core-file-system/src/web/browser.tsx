@@ -4296,7 +4296,7 @@ export function CollectionBrowser({
             labelField={schema?.labelField}
             value={readTagFlatValue(row, key, tagSourceKey(schema))}
             onChange={
-              field.writable && (kind === 'attachment' || kind === 'datetime')
+              field.writable && (kind === 'attachment' || kind === 'document' || kind === 'datetime')
                 ? (next) => writeCellValue(row, key, field, next)
                 : undefined
             }
@@ -4315,7 +4315,7 @@ export function CollectionBrowser({
           labelField={schema?.labelField}
           value={row[key]}
           onChange={
-            field.writable && (kind === 'attachment' || kind === 'datetime')
+            field.writable && (kind === 'attachment' || kind === 'document' || kind === 'datetime')
               ? (next) => writeCellValue(row, key, field, next)
               : undefined
           }
@@ -4667,6 +4667,7 @@ export function CollectionBrowser({
       kind === 'url' ||
       kind === 'image' ||
       kind === 'attachment' ||
+      kind === 'document' ||
       kind === 'file'
     ) {
       return renderCell(row, key, field, 'table')

@@ -19,6 +19,22 @@ export function assetHref(name: string) {
   return `${FILE_SYSTEM_ASSET_PREFIX}${encodeURIComponent(name)}`
 }
 
+export function assetDownloadName(stored: string, suggested?: string | null) {
+  const file = String(suggested ?? '')
+    .replace(/^.*[/\\]/, '')
+    .replace(/[\r\n"]/g, '')
+    .trim()
+  return file || stored
+}
+
+export function assetContentDisposition(stored: string, suggested?: string | null, inline = false) {
+  if (inline) return 'inline'
+  const file = assetDownloadName(stored, suggested)
+  const ext = file.includes('.') ? file.slice(file.lastIndexOf('.')) : ''
+  const ascii = /^[\x20-\x7e]+$/.test(file) ? file : `file${ext}`
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(file)}`
+}
+
 export function mimeOfAsset(name: string) {
   const ext = name.toLowerCase().slice(name.lastIndexOf('.'))
   if (ext === '.png') return 'image/png'

@@ -86,6 +86,17 @@ test('rebuildContentRefs keeps markdown links and drops loose ghosts', () => {
   db.prepare(
     `INSERT OR IGNORE INTO content_refs (collection, record_id, name, source) VALUES (?, ?, ?, ?)`,
   ).run('/plugins', 'page-excalidraw', '画板-', 'content')
+  const hashed = `${'cd'.repeat(32)}.md`
+  db.prepare(
+    `INSERT INTO tag_record_values (collection, record_id, tag_json) VALUES (?, ?, ?)`,
+  ).run(
+    '/pages',
+    'p000',
+    JSON.stringify({
+      tags: ['tag-13'],
+      values: { 'tag-13': { file: [{ name: '规划.md', href: `/api/db/file/${hashed}` }] } },
+    }),
+  )
   rebuildContentRefs(db)
   const rows = db.prepare('SELECT collection, record_id, name FROM content_refs').all() as Array<{
     collection: string
@@ -94,7 +105,7 @@ test('rebuildContentRefs keeps markdown links and drops loose ghosts', () => {
   }>
   assert.deepEqual(
     rows.map((row) => `${row.collection} ${row.record_id} ${row.name}`).sort(),
-    ['/pages p000 keep.png', '/pages p000 画板-edd9.json'],
+    [`/pages p000 ${hashed}`, '/pages p000 keep.png', '/pages p000 画板-edd9.json'],
   )
   db.close()
 })

@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import { ArrowsPointingInIcon, ArrowsPointingOutIcon, CodeBracketIcon, EyeIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
 import {
   fieldIsWritable,
+  matchSchemaField,
+  resolveSchemaFieldKey,
   sanitizeRecordPatch,
   withBuiltinFields,
   type CollectionSchema,
@@ -19,6 +21,8 @@ import { capturePageScroll } from './page-scroll-pin.ts'
 import { getBlockEditor, useBlockEditorVersion } from './service.ts'
 import { RenderBoundary } from '@biu/biu-ui'
 import { HostSourceEditor } from '@biu/core-file-system/host-source-editor'
+import { useLiveDbRecord } from '@biu/core-file-system/record-prop-host'
+import { createSandboxDocsApi, createSandboxFilesApi } from '@biu/core-file-system/sandbox-files'
 import { bindSandboxPickPane, pageHostPickKey } from './page-host-pick.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 import { HostField } from './host-field.tsx'
@@ -300,7 +304,7 @@ export function PageHostView({
   const [tab, setTab] = useState<HostTab>('preview')
   const [expanded, setExpanded] = useState(false)
   const [previewWidth, setPreviewWidth] = useState(0)
-  const [live, setLive] = useState(record)
+  const [live, setLive] = useLiveDbRecord('/pages', record)
   const showPreview = tab !== 'code'
   const showCode = tab !== 'preview'
   const hostRef = useRef<HTMLDivElement | null>(null)
@@ -313,10 +317,6 @@ export function PageHostView({
     capturePageScroll(hostRef.current)
     setTab(next)
   }, [])
-
-  useEffect(() => {
-    setLive(record)
-  }, [record])
 
   useEffect(() => {
     let gone = false
@@ -362,8 +362,10 @@ export function PageHostView({
       record: () => ({ ...live }),
       fields: () => fields.map((item) => ({ ...item })),
       values: () => Object.fromEntries(fields.map((item) => [item.key, live[item.key]])),
-      get: (key: string) => live[key],
-      set: (key: string, value: unknown) => writeRecord({ [key]: value }),
+      findFieldByName: (name: string) => matchSchemaField(fields, name),
+      fieldKey: (name: string) => matchSchemaField(fields, name)?.key ?? '',
+      get: (key: string) => live[resolveSchemaFieldKey(fields, key)],
+      set: (key: string, value: unknown) => writeRecord({ [resolveSchemaFieldKey(fields, key)]: value }),
       patch: (bag: unknown) => writeRecord(bag as Record<string, unknown>),
       blocks: () => blocks.map((item) => ({ ...item })),
       kinds: () => getBlockEditor()?.blocks().map((item) => ({ kind: item.kind, plugin: item.plugin, label: item.label })) ?? [],
@@ -381,6 +383,8 @@ export function PageHostView({
         if (!view?.dataFile) return
         await writePageFile(view.dataFile, JSON.stringify(value ?? null, null, 2), 'application/json')
       },
+      files: createSandboxFilesApi(() => `/pages/${pageId}`),
+      docs: createSandboxDocsApi(() => `/pages/${pageId}`),
       update: (id: string, patch: Record<string, unknown>) => writePageHostBlock(pageId, id, patch),
     }),
     [blocks, editorVersion, fields, live, pageId, record.title, view?.dataFile, writeRecord],
@@ -468,6 +472,7 @@ export function PageHostView({
                 <RenderBoundary key={compiled.code} label={view?.name || view?.file || '页面沙盒'}>
                   <SandboxPreview
                     code={compiled.code}
+                    revision={`${live.updatedAt ?? ''}:${JSON.stringify(live.tag ?? '')}`}
                     errorTestId="page-host-error"
                     load={() => {
                       const BlockProxy = (props: { id?: string; writable?: boolean }) => envRef.current.Block(props)
@@ -477,6 +482,8 @@ export function PageHostView({
                         record: () => envRef.current.biu.record(),
                         fields: () => envRef.current.biu.fields(),
                         values: () => envRef.current.biu.values(),
+                        findFieldByName: (name: string) => envRef.current.biu.findFieldByName(name),
+                        fieldKey: (name: string) => envRef.current.biu.fieldKey(name),
                         get: (key: string) => envRef.current.biu.get(key),
                         set: (key: string, value: unknown) => envRef.current.biu.set(key, value),
                         patch: (bag: unknown) => envRef.current.biu.patch(bag),
@@ -484,6 +491,8 @@ export function PageHostView({
                         kinds: () => envRef.current.biu.kinds(),
                         read: () => envRef.current.biu.read(),
                         write: (value: unknown) => envRef.current.biu.write(value),
+                        files: envRef.current.biu.files,
+                        docs: envRef.current.biu.docs,
                         update: (id: string, patch: Record<string, unknown>) => envRef.current.biu.update(id, patch),
                       }
                       return loadHostComponent(compiled.code, React, BlockProxy, FieldProxy, biuProxy) as ComponentType

@@ -12,6 +12,7 @@ export type FieldType =
   | 'url'
   | 'image'
   | 'attachment'
+  | 'document'
   | 'file'
   | 'string[]'
   | 'tag'
@@ -25,7 +26,7 @@ export type FieldSpec = {
   label?: string
   writable?: boolean
   sortable?: boolean
-  format?: 'datetime' | 'url' | 'image' | 'attachment' | 'file'
+  format?: 'datetime' | 'url' | 'image' | 'attachment' | 'document' | 'file'
   /** select / multi-select 的选项 */
   enum?: string[]
   /** enum 存储值对应的展示文案；未配置时直接显示存储值。 */
@@ -376,6 +377,7 @@ export const ATOMIC_FIELD_TYPES = [
   'url',
   'image',
   'attachment',
+  'document',
   'file',
   'action',
   'tag',
@@ -383,6 +385,9 @@ export const ATOMIC_FIELD_TYPES = [
   'ref',
   'multi-ref',
 ] as const satisfies readonly FieldType[]
+
+/** 标签属性可选类型。`file` 是记录正文（db_content），不是标签字段。 */
+export const TAG_PROPERTY_TYPES = ATOMIC_FIELD_TYPES.filter((type) => type !== 'file')
 
 export function isTagFieldType(type: unknown): boolean {
   return type === 'tag' || type === 'facet'
@@ -525,6 +530,30 @@ export function bindSchemaValue(
     next[id] = { ...bag }
   }
   return { tags: nextTags, values: next }
+}
+
+/** 丢掉已删属性的残留 key。存储仍用字段 id，源码不应再看到删掉的空位。 */
+export function pruneSchemaValue(raw: unknown, packs: CollectionSchemaPack[] = []): SchemaFieldValue {
+  const parsed = normalizeSchemaValue(raw)
+  if (!packs.length) return parsed
+  const byId = new Map(packs.map((pack) => [pack.id, pack]))
+  const values: SchemaFieldValue['values'] = {}
+  for (const id of parsed.tags) {
+    const pack = byId.get(id)
+    const bag = parsed.values[id] ?? {}
+    if (!pack) {
+      values[id] = { ...bag }
+      continue
+    }
+    const keep = new Set(liveSchemaPackFields(pack.fields).map((field) => field.key))
+    const next: Record<string, unknown> = {}
+    for (const [key, item] of Object.entries(bag)) {
+      if (!keep.has(key)) continue
+      next[key] = item
+    }
+    values[id] = next
+  }
+  return bindSchemaValue(parsed.tags, values)
 }
 
 /** 仍贴着的标签保留原值；新贴上的标签从空开始。 */
@@ -754,7 +783,7 @@ export function hasCollectionDeleteQuery(query?: CollectionListQuery | null): bo
   return false
 }
 
-/** 表自己保管的可变文档（例如 /pages 的特制沙盒 .jsx），不走通用 assets/name。 */
+/** 表自己保管的可变命名文档，不走内容寻址 hash。 */
 export type CollectionNamedDocs = {
   names: (record: DbRecord) => Iterable<string>
   read: (name: string) => { bytes: Uint8Array; type: string; etag: string } | Promise<{ bytes: Uint8Array; type: string; etag: string }>
@@ -883,6 +912,34 @@ export function fieldIsWritable(field: FieldSpec | undefined) {
   return Boolean(field && field.writable && !field.computed)
 }
 
+/** 自定义属性的存储 key 常是数字 id；显示名在 label。按 key 或 label 找字段。 */
+export function matchSchemaField<T extends { key: string; label?: string; deleted?: boolean }>(
+  fields: readonly T[] | undefined,
+  name: string,
+): T | undefined {
+  const want = String(name ?? '').trim()
+  if (!want) return undefined
+  const list = (fields ?? []).filter((item) => !item.deleted)
+  const byKey = list.find((item) => item.key === want)
+  if (byKey) return byKey
+  const byLabel = list.find((item) => String(item.label ?? '').trim() === want)
+  if (byLabel) return byLabel
+  const lower = want.toLowerCase()
+  return list.find((item) => String(item.label ?? item.key).trim().toLowerCase() === lower)
+}
+
+export function resolveSchemaFieldKey(
+  fields: ReadonlyArray<{ key: string; label?: string; deleted?: boolean }> | CollectionSchema | undefined,
+  name: string,
+) {
+  const list = !fields
+    ? []
+    : Array.isArray(fields)
+      ? fields
+      : Object.entries((fields as CollectionSchema).fields ?? {}).map(([key, field]) => ({ key, label: field.label }))
+  return matchSchemaField(list, name)?.key ?? String(name ?? '').trim()
+}
+
 export function coerceSandboxValue(field: FieldSpec, value: unknown): unknown {
   const kind = sandboxFieldKind(field)
   if (kind === 'boolean') return value === true || value === 'true'
@@ -929,7 +986,7 @@ export function coerceSandboxValue(field: FieldSpec, value: unknown): unknown {
     if (!list.length) throw new Error('expected image')
     return list.length === 1 ? list[0] : list
   }
-  if (kind === 'attachment') {
+  if (kind === 'attachment' || kind === 'document') {
     if (value == null || value === '') return ''
     const list = asAttachmentList(value)
     if (!list.length) return ''
@@ -958,16 +1015,17 @@ export function sanitizeRecordPatch(schema: CollectionSchema, patch: unknown): R
   const bag = patch as Record<string, unknown>
   const next: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(bag)) {
-    if (key === 'id') throw new Error('field not writable: id')
-    const field = schema.fields[key]
+    if (key === 'id' || key === 'ID') throw new Error('field not writable: id')
+    const resolved = resolveSchemaFieldKey(schema, key)
+    const field = schema.fields[resolved]
     if (!field) {
       const keys = Object.entries(schema.fields)
         .filter(([, item]) => fieldIsWritable(item))
-        .map(([item]) => item)
+        .map(([item, spec]) => (spec.label && spec.label !== item ? `${spec.label} (${item})` : item))
       throw new Error(`unknown field: ${key}. writable: ${keys.length ? keys.join(', ') : '(none)'}`)
     }
-    if (!fieldIsWritable(field)) throw new Error(`field not writable: ${key}`)
-    next[key] = coerceSandboxValue(field, value)
+    if (!fieldIsWritable(field)) throw new Error(`field not writable: ${resolved}`)
+    next[resolved] = coerceSandboxValue(field, value)
   }
   return next
 }

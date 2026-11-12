@@ -71,17 +71,19 @@ export function SandboxPreview({
   code,
   load,
   errorTestId,
+  revision,
 }: {
   code: string
   load: () => ComponentType
   errorTestId?: string
+  revision?: string
 }) {
   const cache = useRef<{ code: string; Preview: ComponentType } | null>(null)
   try {
     if (!cache.current || cache.current.code !== code) {
       cache.current = { code, Preview: load() }
     }
-    return createElement(cache.current.Preview)
+    return createElement(cache.current.Preview, { key: revision || code })
   } catch (error) {
     cache.current = null
     const message = error instanceof Error ? error.message : String(error)

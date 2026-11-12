@@ -66,7 +66,7 @@ export function FieldValuePop({
       collectionPath={collectionPath}
       labelField={labelField}
       value={value}
-      onChange={field.writable && kind === 'attachment' ? onSubmit : undefined}
+      onChange={field.writable && (kind === 'attachment' || kind === 'document') ? onSubmit : undefined}
     />
   ) : (
     <span className="fsdb-pop-empty">空</span>

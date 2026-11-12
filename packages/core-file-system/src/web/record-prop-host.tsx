@@ -3,6 +3,10 @@ import { createPortal } from 'react-dom'
 import { ArrowsPointingInIcon, ArrowsPointingOutIcon, CodeBracketIcon, EyeIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
 import {
   fieldIsWritable,
+  matchSchemaField,
+  normalizeSchemaValue,
+  pruneSchemaValue,
+  resolveSchemaFieldKey,
   sanitizeRecordPatch,
   type CollectionSchema,
   type DbRecord,
@@ -19,12 +23,14 @@ import {
 import { RenderBoundary } from '@biu/biu-ui'
 import type { FsPropertiesProps } from '@biu/type-file-system/ui'
 import { FieldValuePop } from './field-value-pop.tsx'
+import { loadTags } from './tag-catalog.ts'
 import { bindSandboxPickPane, recordPropHostPickKey } from './sandbox-pick-pane.ts'
 import { compileHostSource, loadHostComponent, SandboxPreview } from './tag-host-compile.ts'
 import {
   peekRecordViewFile,
   putRecordViewFile,
   readRecordViewFile,
+  useRecordViewFileTick,
   writeRecordViewCatalog,
 } from './record-sandboxes.ts'
 import { loadRecordLayouts, useActiveRecordLayout } from './record-layouts.ts'
@@ -32,6 +38,10 @@ import { TAGS_COLLECTION_PATH } from './database-path.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 import { SplitResize, splitPaneStyle } from './split-resize.tsx'
 import { HostSourceEditor } from './host-source-editor.tsx'
+import { createSandboxDocsApi, createSandboxFilesApi } from './sandbox-files.ts'
+import { useLiveDbRecord } from './live-db-record.ts'
+
+export { useLiveDbRecord, readDbRecord } from './live-db-record.ts'
 
 type HostTab = 'preview' | 'code' | 'split'
 
@@ -39,6 +49,39 @@ const PROP_FIELD_SKIP = new Set(['emoji', 'views', 'propViews', 'layouts', 'file
 
 function hold(event: { preventDefault: () => void }) {
   event.preventDefault()
+}
+
+/** 库里有的列是 JSON 字符串（如标签 fields），源码里展开成对象，避免二次转义。 */
+export function reviveJsonValue(value: unknown): unknown {
+  if (typeof value === 'string') {
+    const text = value.trim()
+    if (
+      (text.startsWith('{') && text.endsWith('}')) ||
+      (text.startsWith('[') && text.endsWith(']'))
+    ) {
+      try {
+        return reviveJsonValue(JSON.parse(text) as unknown)
+      } catch {
+        return value
+      }
+    }
+    return value
+  }
+  if (Array.isArray(value)) return value.map(reviveJsonValue)
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, next]) => [key, reviveJsonValue(next)]))
+  }
+  return value
+}
+
+export function recordPropSourceText(record: DbRecord, schema?: CollectionSchema) {
+  const bag: Record<string, unknown> = {}
+  for (const field of propFields(schema)) {
+    if (!(field.key in record)) continue
+    const raw = reviveJsonValue(record[field.key])
+    bag[field.key] = field.type === 'tag' ? pruneSchemaValue(raw, loadTags()) : raw
+  }
+  return JSON.stringify(bag, null, 2)
 }
 
 function propFields(schema?: CollectionSchema) {
@@ -68,7 +111,7 @@ function HostField({
   collectionPath: string
   onSet: (key: string, value: unknown) => void
 }) {
-  const key = String(name ?? '').trim()
+  const key = resolveSchemaFieldKey(schema, name)
   const field = schema?.fields?.[key] as FieldSpec | undefined
   if (!field) {
     return (
@@ -162,22 +205,19 @@ export function RecordPropHostView({
   writable?: boolean
 }) {
   const recordId = String(record.id ?? '').trim()
+  const fileTick = useRecordViewFileTick()
   const fallback = defaultPropSandboxSource(String(record.title ?? ''))
   const [source, setSource] = useState(() => peekRecordViewFile(collectionPath, recordId, view.file) || fallback)
   const [tab, setTab] = useState<HostTab>('preview')
   const [expanded, setExpanded] = useState(false)
   const [previewWidth, setPreviewWidth] = useState(0)
-  const [live, setLive] = useState(record)
+  const [live, setLive] = useLiveDbRecord(collectionPath, record)
   const [patchError, setPatchError] = useState('')
   const showPreview = tab !== 'code'
   const showCode = tab !== 'preview'
   const hostRef = useRef<HTMLDivElement | null>(null)
   const previewRef = useRef<HTMLDivElement | null>(null)
   const fields = propFields(schema)
-
-  useEffect(() => {
-    setLive(record)
-  }, [record])
 
   useEffect(() => {
     let gone = false
@@ -192,7 +232,7 @@ export function RecordPropHostView({
     return () => {
       gone = true
     }
-  }, [collectionPath, recordId, view.file, fallback])
+  }, [collectionPath, recordId, view.file, fallback, fileTick])
 
   const writeRecord = useCallback(
     async (bag: Record<string, unknown>) => {
@@ -226,9 +266,16 @@ export function RecordPropHostView({
       record: () => ({ id: live.id, title: live.title, path: `${collectionPath}/${live.id}` }),
       fields: () => fields.map(({ spec: _spec, ...item }) => item),
       values: () => Object.fromEntries(fields.map((item) => [item.key, live[item.key]])),
-      get: (key: string) => live[String(key ?? '').trim()],
+      findFieldByName: (name: string) => {
+        const hit = matchSchemaField(fields, name)
+        if (!hit) return undefined
+        const { spec: _spec, ...info } = hit
+        return info
+      },
+      fieldKey: (name: string) => matchSchemaField(fields, name)?.key ?? '',
+      get: (key: string) => live[resolveSchemaFieldKey(fields, key)],
       set: (key: string, value: unknown) => {
-        const nextKey = String(key ?? '').trim()
+        const nextKey = resolveSchemaFieldKey(fields, key)
         if (!nextKey) return
         void writeRecord({ [nextKey]: value })
       },
@@ -250,6 +297,8 @@ export function RecordPropHostView({
         if (!view.dataFile) return
         await putRecordViewFile(collectionPath, recordId, view.dataFile, JSON.stringify(value ?? null, null, 2), 'application/json')
       },
+      files: createSandboxFilesApi(() => `${collectionPath}/${recordId}`),
+      docs: createSandboxDocsApi(() => `${collectionPath}/${recordId}`),
     }),
     [collectionPath, fields, live, recordId, view.dataFile, writeRecord],
   )
@@ -340,6 +389,7 @@ export function RecordPropHostView({
                 <RenderBoundary key={compiled.code} label={view.name || view.file || '属性沙盒'}>
                   <SandboxPreview
                     code={compiled.code}
+                    revision={`${live.updatedAt ?? ''}:${JSON.stringify(live.tag ?? '')}`}
                     errorTestId="record-prop-host-error"
                     load={() => {
                       const FieldProxy = (props: { name?: string }) => envRef.current.Field(props)
@@ -347,11 +397,15 @@ export function RecordPropHostView({
                         record: () => envRef.current.biu.record(),
                         fields: () => envRef.current.biu.fields(),
                         values: () => envRef.current.biu.values(),
+                        findFieldByName: (name: string) => envRef.current.biu.findFieldByName(name),
+                        fieldKey: (name: string) => envRef.current.biu.fieldKey(name),
                         get: (key: string) => envRef.current.biu.get(key),
                         set: (key: string, value: unknown) => envRef.current.biu.set(key, value),
                         patch: (bag: unknown) => envRef.current.biu.patch(bag),
                         read: () => envRef.current.biu.read(),
                         write: (value: unknown) => envRef.current.biu.write(value),
+                        files: envRef.current.biu.files,
+                        docs: envRef.current.biu.docs,
                       }
                       return loadHostComponent(compiled.code, React, FieldProxy, biuProxy) as ComponentType
                     }}
@@ -410,31 +464,28 @@ export function RecordPropHostView({
 
 export function RecordProperties({ record, schema, collectionPath, writable, children }: FsPropertiesProps) {
   const path = String(collectionPath ?? '').trim()
+  const [liveRecord] = useLiveDbRecord(path, record)
   const id = String(record.id ?? '').trim()
   const fallback = path === TAGS_COLLECTION_PATH ? 'table' : 'doc'
   const layout = useActiveRecordLayout(path, id, fallback)
-  const listed = parseRecordSandboxes(record.propViews)
-  const stored = parseRecordLayouts(record.layouts, fallback)
+  const listed = parseRecordSandboxes(liveRecord.propViews)
+  const stored = parseRecordLayouts(liveRecord.layouts, fallback)
   const storedLayout = stored.find((item) => item.id === layout.id) ?? stored[0]
   const rawProp = [layout.propViewId, storedLayout?.propViewId].find((item) => item && item !== DEFAULT_RECORD_PROP_VIEW_ID)
   const sandbox = listed.find((item) => item.id === rawProp)
   useEffect(() => {
     if (!path || !id) return
-    void loadRecordLayouts(path, id, record.layouts, fallback)
-  }, [path, id, record.layouts, fallback])
+    void loadRecordLayouts(path, id, liveRecord.layouts, fallback)
+  }, [path, id, liveRecord.layouts, fallback])
   if (rawProp === 'hidden') return null
   if (rawProp === SOURCE_RECORD_PROP_VIEW_ID) {
-    const bag: Record<string, unknown> = {}
-    for (const field of propFields(schema)) {
-      if (field.key in record) bag[field.key] = record[field.key]
-    }
-    return <HostSourceEditor value={JSON.stringify(bag, null, 2)} language="json" writable={false} testId="record-prop-source" />
+    return <HostSourceEditor value={recordPropSourceText(liveRecord, schema)} language="json" writable={false} testId="record-prop-source" />
   }
   if (!path || !sandbox) return children
   return (
     <RenderBoundary label={sandbox.name || sandbox.file || '属性沙盒'}>
       <RecordPropHostView
-        record={record}
+        record={liveRecord}
         view={sandbox}
         schema={schema}
         collectionPath={path}

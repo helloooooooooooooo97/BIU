@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { asImageSrc, asImageSrcList, asAttachment, asAttachmentList, asPerson, asPersonList, appendPerson, personKey, actionVisibleToUser, emptySchemaValue, isEmptySchemaValue, hasCollectionDeleteQuery, isReservedSchemaFieldKey, isReservedSchemaFieldLabel, isSchemaFieldKey, normalizeSchemaPack, normalizeSchemaValue, parseAtomicFields, recordBuiltinValues, REQUIRED_RECORD_FIELD_KEYS, REQUIRED_RECORD_FIELDS, retagSchemaValue, sanitizeRecordPatch, sanitizeTagValuesPatch, schemaSearchHaystack, withBuiltinFields } from './index.ts'
+import { asImageSrc, asImageSrcList, asAttachment, asAttachmentList, asPerson, asPersonList, appendPerson, personKey, actionVisibleToUser, BUILTIN_FIELDS, emptySchemaValue, isEmptySchemaValue, hasCollectionDeleteQuery, isReservedSchemaFieldKey, isReservedSchemaFieldLabel, isSchemaFieldKey, matchSchemaField, normalizeSchemaPack, normalizeSchemaValue, parseAtomicFields, pruneSchemaValue, recordBuiltinValues, REQUIRED_RECORD_FIELD_KEYS, REQUIRED_RECORD_FIELDS, resolveSchemaFieldKey, retagSchemaValue, sanitizeRecordPatch, sanitizeTagValuesPatch, schemaSearchHaystack, TAG_PROPERTY_TYPES, withBuiltinFields } from './index.ts'
 
 test('asImageSrc keeps http, data:image, and same-origin image paths', () => {
   assert.equal(asImageSrc('https://example.com/a.png'), 'https://example.com/a.png')
@@ -247,6 +247,11 @@ test('required record fields are icon, timestamps, tag, parent, and dependency',
   assert.equal(REQUIRED_RECORD_FIELDS.updatedAt.type, 'datetime')
   assert.equal(REQUIRED_RECORD_FIELDS.parentId.type, 'ref')
   assert.equal(REQUIRED_RECORD_FIELDS.dependsOn.type, 'multi-ref')
+  assert.equal(BUILTIN_FIELDS.content.type, 'file')
+  assert.equal(TAG_PROPERTY_TYPES.includes('file'), false)
+  assert.equal(TAG_PROPERTY_TYPES.includes('attachment'), true)
+  assert.equal(TAG_PROPERTY_TYPES.includes('document'), true)
+  assert.equal(TAG_PROPERTY_TYPES.includes('image'), true)
 })
 
 test('asPerson reads user, system, and agent session ids', () => {
@@ -303,6 +308,41 @@ test('sanitizeRecordPatch rejects unknown, read-only, computed, and bad types', 
   assert.throws(() => sanitizeRecordPatch(schema, { missing: 1 }), /unknown field: missing/)
   assert.throws(() => sanitizeRecordPatch(schema, { score: 'nope' }), /expected number/)
   assert.throws(() => sanitizeRecordPatch(schema, { status: 'closed' }), /value not in enum/)
+  assert.deepEqual(sanitizeRecordPatch(schema, { 标题: 'B', 分数: 4 }), { title: 'B', score: 4 })
+})
+
+test('pruneSchemaValue drops deleted tag property leftovers', () => {
+  const packed = pruneSchemaValue(
+    {
+      tags: ['tag-13'],
+      values: {
+        'tag-13': {
+          '183359745': '',
+          '530659262': '',
+          '2041995583': [{ name: '规划.md', href: '/api/db/file/doc.md' }],
+        },
+      },
+    },
+    [
+      {
+        id: 'tag-13',
+        label: '附件 1',
+        fields: [{ key: '2041995583', type: 'document', label: '文档', writable: true }],
+      },
+    ],
+  )
+  assert.deepEqual(Object.keys(packed.values['tag-13'] ?? {}).sort(), ['2041995583'])
+})
+
+test('matchSchemaField finds fields by id key or display label', () => {
+  const fields = [
+    { key: '530659262', type: 'document', label: '文档' },
+    { key: 'title', type: 'string', label: '标题' },
+  ]
+  assert.equal(matchSchemaField(fields, '文档')?.key, '530659262')
+  assert.equal(matchSchemaField(fields, '530659262')?.label, '文档')
+  assert.equal(resolveSchemaFieldKey(fields, '标题'), 'title')
+  assert.equal(matchSchemaField(fields, '没有') , undefined)
 })
 
 test('sanitizeTagValuesPatch maps labels and rejects read-only tag fields', () => {

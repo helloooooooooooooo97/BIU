@@ -6,7 +6,7 @@ import { parseTagViews, tagViewFileNames } from '../tag-views.ts'
 
 const TAG_FIELDS_EXAMPLE = '[{"key":"类别","type":"string"}]'
 const TAG_FIELDS_DESCRIPTION =
-  '属性定义。db_update / db_create 可传数组或 JSON 字符串，两种形状等价。例 [{"key":"类别","type":"string"}]。同一标签下属性名不能重复。type 必须是 string|number|boolean|select|multi-select|datetime|url|image|attachment|file|action|facet|person|ref|multi-ref（没有 text）。其它表读该属性的列 key 为 tag::<本标签id>::<字段key>，例如 tag::tag::类别。'
+  '属性定义。db_update / db_create 可传数组或 JSON 字符串，两种形状等价。例 [{"key":"类别","type":"string"}]。同一标签下属性名不能重复。type 必须是 string|number|boolean|select|multi-select|datetime|url|image|attachment|document|action|facet|person|ref|multi-ref（没有 text，也没有 file：file 是记录正文，用 db_content。document 是可覆盖的命名文档）。其它表读该属性的列 key 为 tag::<本标签id>::<字段key>，例如 tag::tag::类别。'
 const TAG_VIEWS_DESCRIPTION =
   '本标签特制沙盒视图。JSON 数组：id、name、kind=sandbox、file、dataFile。改视图源码用 db_file path=/tags/<id> name=<file>。表格是内置视图，不写在这里。标签块可切换这些视图，用来呈现块里的属性值。'
 

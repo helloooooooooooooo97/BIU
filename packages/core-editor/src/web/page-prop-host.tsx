@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { RenderBoundary } from '@biu/biu-ui'
-import { RecordProperties } from '@biu/core-file-system/record-prop-host'
+import { RecordProperties, useLiveDbRecord } from '@biu/core-file-system/record-prop-host'
 import { createPortal } from 'react-dom'
 import { ArrowsPointingInIcon, ArrowsPointingOutIcon, CodeBracketIcon, EyeIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
-import { fieldIsWritable, sanitizeRecordPatch, type CollectionSchema, type DbRecord } from '@biu/type-file-system'
+import { fieldIsWritable, matchSchemaField, resolveSchemaFieldKey, sanitizeRecordPatch, type CollectionSchema, type DbRecord } from '@biu/type-file-system'
 import { compileHostSource, loadHostComponent, SandboxPreview } from './page-host-compile.ts'
 import { ExpandNavTitle } from './expand-nav-title.tsx'
 import { HostSourceEditor } from '@biu/core-file-system/host-source-editor'
+import { createSandboxDocsApi, createSandboxFilesApi } from '@biu/core-file-system/sandbox-files'
 import { defaultPropSandboxSource } from '../page-prop-views.ts'
 import {
   getPagePropViews,
@@ -142,17 +143,13 @@ export function PagePropHostView({
   const [tab, setTab] = useState<HostTab>('preview')
   const [expanded, setExpanded] = useState(false)
   const [previewWidth, setPreviewWidth] = useState(0)
-  const [live, setLive] = useState(record)
+  const [live, setLive] = useLiveDbRecord('/pages', record)
   const [patchError, setPatchError] = useState('')
   const showPreview = tab !== 'code'
   const showCode = tab !== 'preview'
   const hostRef = useRef<HTMLDivElement | null>(null)
   const previewRef = useRef<HTMLDivElement | null>(null)
   const fields = propFields(schema)
-
-  useEffect(() => {
-    setLive(record)
-  }, [record])
 
   useEffect(() => {
     let gone = false
@@ -202,9 +199,16 @@ export function PagePropHostView({
         for (const item of fields) out[item.key] = live[item.key]
         return out
       },
-      get: (key: string) => live[String(key ?? '').trim()],
+      findFieldByName: (name: string) => {
+        const hit = matchSchemaField(fields, name)
+        if (!hit) return undefined
+        const { spec: _spec, ...info } = hit
+        return info
+      },
+      fieldKey: (name: string) => matchSchemaField(fields, name)?.key ?? '',
+      get: (key: string) => live[resolveSchemaFieldKey(fields, key)],
       set: (key: string, value: unknown) => {
-        const nextKey = String(key ?? '').trim()
+        const nextKey = resolveSchemaFieldKey(fields, key)
         if (!nextKey) return
         void writeRecord({ [nextKey]: value })
       },
@@ -226,6 +230,8 @@ export function PagePropHostView({
         if (!view?.dataFile) return
         await writePageFile(view.dataFile, JSON.stringify(value ?? null, null, 2), 'application/json')
       },
+      files: createSandboxFilesApi(() => `/pages/${pageId}`),
+      docs: createSandboxDocsApi(() => `/pages/${pageId}`),
     }),
     [fields, live, pageId, view?.dataFile, writeRecord],
   )
@@ -311,6 +317,7 @@ export function PagePropHostView({
                 <RenderBoundary key={compiled.code} label={view?.name || view?.file || '属性沙盒'}>
                   <SandboxPreview
                     code={compiled.code}
+                    revision={`${live.updatedAt ?? ''}:${JSON.stringify(live.tag ?? '')}`}
                     errorTestId="page-prop-host-error"
                     load={() => {
                       const FieldProxy = (props: { name?: string }) => envRef.current.Field(props)
@@ -318,11 +325,15 @@ export function PagePropHostView({
                         record: () => envRef.current.biu.record(),
                         fields: () => envRef.current.biu.fields(),
                         values: () => envRef.current.biu.values(),
+                        findFieldByName: (name: string) => envRef.current.biu.findFieldByName(name),
+                        fieldKey: (name: string) => envRef.current.biu.fieldKey(name),
                         get: (key: string) => envRef.current.biu.get(key),
                         set: (key: string, value: unknown) => envRef.current.biu.set(key, value),
                         patch: (bag: unknown) => envRef.current.biu.patch(bag),
                         read: () => envRef.current.biu.read(),
                         write: (value: unknown) => envRef.current.biu.write(value),
+                        files: envRef.current.biu.files,
+                        docs: envRef.current.biu.docs,
                       }
                       return loadHostComponent(compiled.code, React, () => null, FieldProxy, biuProxy) as ComponentType
                     }}

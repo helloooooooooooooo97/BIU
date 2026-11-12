@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowsPointingInIcon, ArrowsPointingOutIcon, CodeBracketIcon, EyeIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
-import { fieldIsWritable, normalizeSchemaPack, sanitizeTagValuesPatch, type CollectionSchemaPack, type DbRecord, type FieldSpec } from '@biu/type-file-system'
+import { fieldIsWritable, matchSchemaField, normalizeSchemaPack, normalizeSchemaValue, resolveSchemaFieldKey, sanitizeTagValuesPatch, type CollectionSchemaPack, type DbRecord, type FieldSpec } from '@biu/type-file-system'
 import { defaultContentSandboxSource } from '@biu/type-file-system/record-views'
 import { RenderBoundary } from '@biu/biu-ui'
 import { FieldValuePop } from './field-value-pop.tsx'
@@ -21,6 +21,8 @@ import {
 } from './tag-views.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 import { SplitResize, splitPaneStyle } from './split-resize.tsx'
+import { createSandboxDocsApi, createSandboxFilesApi } from './sandbox-files.ts'
+import { readDbRecord } from './live-db-record.ts'
 
 type HostTab = 'preview' | 'code' | 'split'
 
@@ -96,16 +98,21 @@ function HostField({
   pack,
   values,
   writable,
+  recordPath,
   onSet,
 }: {
   name: string
   pack: CollectionSchemaPack | undefined
   values: Record<string, unknown>
   writable: boolean
+  recordPath?: string
   onSet: (key: string, value: unknown) => void
 }) {
-  const key = String(name ?? '').trim()
+  const key = resolveSchemaFieldKey(pack?.fields ?? [], name)
   const field = (pack?.fields ?? []).find((item) => item.key === key) as FieldSpec | undefined
+  const parts = String(recordPath ?? '').split('/').filter(Boolean)
+  const collectionPath = parts[0] ? `/${parts[0]}` : '/pages'
+  const recordId = parts[1] ?? ''
   if (!field) {
     return (
       <div className="page-host-missing" data-testid="tag-host-missing">
@@ -115,11 +122,11 @@ function HostField({
   }
   return (
     <FieldValuePop
-      record={{ id: 'page-tag-block', title: pack?.label ?? '' }}
+      record={{ id: recordId || 'page-tag-block', title: pack?.label ?? '' }}
       fieldKey={key}
       field={{ ...field, writable: writable !== false && fieldIsWritable(field) }}
       value={values[key]}
-      collectionPath="/pages"
+      collectionPath={collectionPath}
       onSubmit={(next) => onSet(key, next)}
     />
   )
@@ -186,6 +193,34 @@ export function TagHostView({
     [onValues, pack, recordPath, tagId, values],
   )
 
+  const onValuesRef = useRef(onValues)
+  onValuesRef.current = onValues
+  const valuesRef = useRef(values)
+  valuesRef.current = values
+  useEffect(() => {
+    let gone = false
+    const pull = () => {
+      const path = String(recordPath || openHostRecordPath()).trim()
+      if (!path || path.startsWith('/tags/')) return
+      void readDbRecord(path).then((row) => {
+        if (gone || !row) return
+        const bag = normalizeSchemaValue(row.tag).values[tagId] ?? {}
+        if (JSON.stringify(bag) === JSON.stringify(valuesRef.current)) return
+        onValuesRef.current(bag)
+      })
+    }
+    const onChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ views?: boolean }>).detail
+      if (detail?.views) return
+      pull()
+    }
+    window.addEventListener('fsdb:change', onChange)
+    return () => {
+      gone = true
+      window.removeEventListener('fsdb:change', onChange)
+    }
+  }, [recordPath, tagId])
+
   useEffect(() => {
     let gone = false
     const file = view?.file
@@ -228,9 +263,15 @@ export function TagHostView({
         const parts = path.split('/').filter(Boolean)
         return { path, collection: parts[0] ? `/${parts[0]}` : '', id: parts[1] ?? '', tagId }
       },
-      get: (key: string) => values[String(key ?? '').trim()],
+      findFieldByName: (name: string) => {
+        const hit = matchSchemaField(fields, name)
+        if (!hit) return undefined
+        return { key: hit.key, type: hit.type, label: hit.label ?? hit.key, writable: fieldIsWritable(hit) }
+      },
+      fieldKey: (name: string) => matchSchemaField(fields, name)?.key ?? '',
+      get: (key: string) => values[resolveSchemaFieldKey(fields, key)],
       set: (key: string, value: unknown) => {
-        const nextKey = String(key ?? '').trim()
+        const nextKey = resolveSchemaFieldKey(fields, key)
         if (!nextKey) return
         void writeRecordValues({ ...values, [nextKey]: value }, { [nextKey]: value })
       },
@@ -253,6 +294,8 @@ export function TagHostView({
         if (!view?.dataFile) return
         await writeTagFile(tagId, view.dataFile, JSON.stringify(value ?? null, null, 2), 'application/json')
       },
+      files: createSandboxFilesApi(liveRecordPath),
+      docs: createSandboxDocsApi(liveRecordPath),
     }),
     [fields, pack?.label, tagId, values, view?.dataFile, writeRecordValues],
   )
@@ -264,12 +307,13 @@ export function TagHostView({
         pack={pack}
         values={values}
         writable={writable}
+        recordPath={liveRecordPath()}
         onSet={(key, value) => {
           void writeRecordValues({ ...values, [key]: value }, { [key]: value })
         }}
       />
     ),
-    [pack, values, writable, writeRecordValues],
+    [pack, recordPath, values, writable, writeRecordValues],
   )
 
   useEffect(() => {
@@ -320,6 +364,7 @@ export function TagHostView({
                 <RenderBoundary key={compiled.code} label={view?.name || view?.file || '标签沙盒'}>
                   <SandboxPreview
                     code={compiled.code}
+                    revision={JSON.stringify(values)}
                     errorTestId="tag-host-error"
                     load={() => {
                       const FieldProxy = (props: { name?: string }) => envRef.current.Field(props)
@@ -331,12 +376,16 @@ export function TagHostView({
                         update: (id: string, patch: Record<string, unknown>) => envRef.current.biu.update(id, patch),
                         fields: () => envRef.current.biu.fields(),
                         values: () => envRef.current.biu.values(),
+                        findFieldByName: (name: string) => envRef.current.biu.findFieldByName(name),
+                        fieldKey: (name: string) => envRef.current.biu.fieldKey(name),
                         get: (key: string) => envRef.current.biu.get(key),
                         set: (key: string, value: unknown) => envRef.current.biu.set(key, value),
                         record: () => envRef.current.biu.record(),
                         patch: (bag: unknown) => envRef.current.biu.patch(bag),
                         read: () => envRef.current.biu.read(),
                         write: (value: unknown) => envRef.current.biu.write(value),
+                        files: envRef.current.biu.files,
+                        docs: envRef.current.biu.docs,
                       }
                       return loadHostComponent(compiled.code, React, FieldProxy, biuProxy) as ComponentType
                     }}

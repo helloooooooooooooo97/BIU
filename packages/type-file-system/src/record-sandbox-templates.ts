@@ -327,11 +327,15 @@ export function defaultContentSandboxSource(_title = '') {
           <Section title="数据 API">
             <Api name="biu.page()" use="返回 { id, title }" note="当前页面。" />
             <Api name="biu.record() / fields() / values()" use="整条记录、字段定义、当前值" note="values 是 { 字段 key: 当前值 }。" />
-            <Api name="biu.get / set / patch" use="await biu.patch({ 状态: '进行中' })" note="只写可写字段，未知 / 只读 / 类型不对会抛错。" />
+            <Api name="biu.findFieldByName(name)" use="const f = biu.findFieldByName('文档')" note="用显示名或 key 找字段。自定义属性的 key 是内部 id，label 才是名称。" />
+            <Api name="biu.fieldKey(name)" use="biu.fieldKey('文档')" note="显示名 → 存储 key；找不到返回空字符串。" />
+            <Api name="biu.get / set / patch" use="await biu.patch({ 文档: list })" note="key 或显示名都可以。未知 / 只读 / 类型不对会抛错。" />
             <Api name="biu.blocks()" use="返回 { id, pageId, blockId, kind, plugin, title, data }[]" note="正文里的块；改 data 用 biu.update。" />
             <Api name="biu.update(id, patch)" use="await biu.update(blockId, { title: '新标题' })" note="把 patch 写进那一块的 data。" />
             <Api name="biu.kinds()" use="返回 { kind, plugin, label }[]" note="编辑器里已注册、可插入的块类型。" />
             <Api name="biu.read() / biu.write(v)" use="本视图自己的 JSON 文件" note="和页面正文分开，适合记这个沙盒的 UI 状态。" />
+            <Api name="biu.files" use="list / read / upload" note="附件不可改内容。read 读已上传的文件；upload(File) 再挂一份新附件，用 biu.set 写回列表。不要改已有 href 里的字节。" />
+            <Api name="biu.docs" use="list / read / write / upload" note="文档可覆盖。write(href, text) 原地改命名文件；upload(File) 再 biu.set 写回文档字段。" />
           </Section>
         </>
       ) : null}
@@ -846,7 +850,7 @@ export function defaultPropSandboxSource(_title = '') {
             <Api
               name="<Field name={…} />"
               use="<Field name={field.key} />"
-              note="按表格单元格同一套控件渲染；只读字段不能改。"
+              note="按表格单元格同一套控件渲染；name 可以是显示名或 key。只读字段不能改。"
             />
           </Section>
           <Section title="数据 API">
@@ -861,21 +865,37 @@ export function defaultPropSandboxSource(_title = '') {
               use="返回 { 字段 key: 当前值 }"
               note="只读快照；改值请用 set / patch 或 Field。"
             />
-            <Api name="biu.get(key)" use="biu.get('title')" note="读一个字段。" />
+            <Api
+              name="biu.findFieldByName(name)"
+              use="const f = biu.findFieldByName('文档')"
+              note="用显示名或 key 找 { key, type, label, writable }。自定义属性的 key 常是数字 id。"
+            />
+            <Api name="biu.fieldKey(name)" use="biu.fieldKey('文档')" note="显示名 → 存储 key。" />
+            <Api name="biu.get(key)" use="biu.get('文档')" note="读一个字段；key 或显示名都可以。" />
             <Api
               name="biu.set(key, value)"
-              use="biu.set('title', '新标题')"
+              use="biu.set('标题', '新标题')"
               note="写一个字段并保存；未知 / 只读 / 类型不对会抛错。"
             />
             <Api
               name="biu.patch(bag)"
-              use="await biu.patch({ 状态: '进行中' })"
-              note="一次写多个字段，bag 必须是对象。"
+              use="await biu.patch({ 文档: list })"
+              note="一次写多个字段，对象的键可以是显示名。"
             />
             <Api
               name="biu.read() / biu.write(v)"
               use="本视图自己的 JSON 文件"
               note="和记录字段分开，适合记这个沙盒的 UI 状态。"
+            />
+            <Api
+              name="biu.files"
+              use="const files = biu.files.list(biu.get('附件')); await biu.files.read(files[0].href)"
+              note="附件内容不可改。read 只读；要增删用 upload(File) 再 biu.set('附件', 新列表)，或从属性表移除 chip。"
+            />
+            <Api
+              name="biu.docs"
+              use="const docs = biu.docs.list(biu.get('文档')); await biu.docs.write(docs[0].href, '# 新稿')"
+              note="文档走命名覆盖。write 改已有文件；upload(File) 再 biu.set('文档', 列表) 挂新文档。"
             />
           </Section>
         </>

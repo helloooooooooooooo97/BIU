@@ -34,7 +34,7 @@ export function resolveFieldType(field: FieldSpec): FieldType {
   if (field.type === 'string[]') return 'multi-select'
   if (field.type === 'string' && field.enum?.length) return 'select'
   if (field.type === 'number' && field.format === 'datetime') return 'datetime'
-  if (field.type === 'string' && (field.format === 'url' || field.format === 'image' || field.format === 'attachment' || field.format === 'file')) {
+  if (field.type === 'string' && (field.format === 'url' || field.format === 'image' || field.format === 'attachment' || field.format === 'document' || field.format === 'file')) {
     return field.format
   }
   return field.type
@@ -410,7 +410,7 @@ export function formatField(field: FieldSpec | undefined, value: unknown): strin
     const list = asImageSrcList(value)
     return list.length ? list.join(', ') : ''
   }
-  if (kind === 'attachment') {
+  if (kind === 'attachment' || kind === 'document') {
     const list = asAttachmentList(value)
     return list.length ? list.map((file) => file.name).join(', ') : ''
   }

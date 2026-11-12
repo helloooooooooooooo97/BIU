@@ -4,8 +4,11 @@ import {
   getChatOverlay,
   subscribeChatOverlay,
   closeChatOverlay,
+  setChatOverlay,
+  setOverlayAutohide,
   setOverlayThread,
   requestOverlayFocus,
+  requestComposerFocus,
   requestInspectorClose,
   allocateShellColumns,
   applyShellColumnCssVars,
@@ -49,6 +52,7 @@ import { AuthGate, ShellSettingsAccount, ShellSettingsAppearance, ShellSettingsM
 import { hydrateWorkspaceProfile } from '@biu/biu-ui/workspace-profile'
 import { hydrateTheme } from './theme.ts'
 import { hydratePagePrefs } from '@biu/core-file-system/page-width'
+import { overlayDataRoute } from '@biu/core-file-system/main-data-route'
 import { isGlobalSearchHotkey } from './search-hotkey.ts'
 import { useSlotEntries } from '@biu/web-slots'
 import type { SlotsService } from '@biu/web-slots'
@@ -81,6 +85,7 @@ function DockSessionMascot({
   useSessionView: ReturnType<typeof bindSessionView>
 }) {
   const location = useLocation()
+  const navigate = useNavigate()
   const agents = useSessionView((state) => state.sessions)
   const activeId = useSessionView((state) => state.sessionId)
   const overlayOpen = useSyncExternalStore(subscribeChatOverlay, getChatOverlay, () => false)
@@ -96,13 +101,20 @@ function DockSessionMascot({
       activeId={activeId}
       busy={busy}
       open={onChatPage ? false : overlayOpen}
-      tapToDance={onChatPage}
+      tapToDance={false}
       onToggle={() => {
         if (getChatOverlay()) {
           closeChatOverlay()
           return
         }
-        if (isChatPagePath(location.pathname)) return
+        if (isChatPagePath(location.pathname)) {
+          setChatOverlay(true)
+          setOverlayAutohide(false)
+          requestComposerFocus()
+          requestOverlayFocus()
+          navigate(overlayDataRoute())
+          return
+        }
         openOverlayComposer()
         requestOverlayFocus()
       }}

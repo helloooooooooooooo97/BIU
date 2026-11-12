@@ -7,7 +7,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import type { ComponentType } from 'react'
 import React, { useMemo, useState } from 'react'
 import { RenderBoundary } from '@biu/biu-ui'
-import { RecordPropHostView, RecordProperties } from './record-prop-host.tsx'
+import { RecordPropHostView, RecordProperties, recordPropSourceText } from './record-prop-host.tsx'
 import { rememberRecordViewFile } from './record-sandboxes.ts'
 import { compileHostSource, loadHostComponent, SandboxPreview } from './tag-host-compile.ts'
 
@@ -74,6 +74,14 @@ test('property sandbox code pane uses the shared host CodeMirror', () => {
   const src = readFileSync(resolve(import.meta.dirname, './record-prop-host.tsx'), 'utf8')
   const editor = readFileSync(resolve(import.meta.dirname, './host-source-editor.tsx'), 'utf8')
   assert.match(src, /HostSourceEditor/)
+  assert.match(src, /files: createSandboxFilesApi/)
+  assert.match(src, /docs: createSandboxDocsApi/)
+  assert.match(src, /useLiveDbRecord/)
+  assert.match(src, /useRecordViewFileTick/)
+  assert.match(src, /findFieldByName/)
+  assert.match(src, /fieldKey/)
+  assert.match(src, /files: envRef\.current\.biu\.files/)
+  assert.match(src, /docs: envRef\.current\.biu\.docs/)
   assert.match(src, /language="javascript"/)
   assert.doesNotMatch(src, /page-tag-host-source/)
   assert.match(editor, /javascript\(\{ jsx: true, typescript: true \}\)/)
@@ -98,4 +106,29 @@ test('builtin source property view is read-only JSON', () => {
   )
   assert.equal(screen.queryByTestId('prop-table'), null)
   assert.ok(screen.getByTestId('record-prop-source'))
+})
+
+test('property source pretty-prints JSON string fields instead of escaping them', () => {
+  const text = recordPropSourceText(
+    {
+      id: 'tag-13',
+      title: '附件',
+      tag: { tags: ['tag-9'], values: { 'tag-9': { 状态: '321321' } } },
+      fields: JSON.stringify([
+        { key: '530659262', type: 'attachment', writable: true, label: '附件' },
+        { key: '5800840175', type: 'boolean', writable: true, label: '是否你好' },
+      ]),
+    },
+    {
+      fields: {
+        title: { type: 'string', label: '标题' },
+        tag: { type: 'tag', label: '标签' },
+        fields: { type: 'string', label: '属性' },
+      },
+    },
+  )
+  assert.match(text, /"tag": \{/)
+  assert.match(text, /"fields": \[/)
+  assert.match(text, /"type": "attachment"/)
+  assert.doesNotMatch(text, /\\"/)
 })

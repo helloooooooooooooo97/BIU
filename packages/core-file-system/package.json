@@ -22,7 +22,8 @@
     "./record-prop-host": "./src/web/record-prop-host.tsx",
     "./tag-host-view": "./src/web/tag-host-view.tsx",
     "./tag-views": "./src/web/tag-views.ts",
-    "./sandbox-pick-pane": "./src/web/sandbox-pick-pane.ts"
+    "./sandbox-pick-pane": "./src/web/sandbox-pick-pane.ts",
+    "./sandbox-files": "./src/web/sandbox-files.ts"
   },
   "dependencies": {
     "@biu/core-pick": "0.1.0",

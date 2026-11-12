@@ -76,13 +76,14 @@ export function FieldEditor({
       />
     )
   }
-  if (kind === 'url' || kind === 'image' || kind === 'attachment') {
+  if (kind === 'url' || kind === 'image' || kind === 'attachment' || kind === 'document') {
     return (
       <MediaField
         kind={kind}
         value={source ?? value}
         collectionPath={collectionPath}
         recordId={recordId}
+        fieldKey={fieldKey}
         compact={compact}
         onCommit={(next) => {
           if (onCommit) onCommit(next)

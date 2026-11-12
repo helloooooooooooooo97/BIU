@@ -9,23 +9,31 @@ import {
   collectClipboardImages,
   commitImages,
   pasteTargetIsField,
+  documentLogicalName,
   recordResourcePath,
   uniqueFiles,
   uploadDbAsset,
+  uploadDbDocument,
 } from './cell-media.tsx'
+
+function isFileListKind(kind: 'image' | 'attachment' | 'url' | 'document') {
+  return kind === 'attachment' || kind === 'document'
+}
 
 export function MediaField({
   kind,
   value,
   collectionPath,
   recordId,
+  fieldKey,
   compact = false,
   onCommit,
 }: {
-  kind: 'image' | 'attachment' | 'url'
+  kind: 'image' | 'attachment' | 'url' | 'document'
   value: unknown
   collectionPath?: string
   recordId?: string
+  fieldKey?: string
   compact?: boolean
   onCommit: (next: unknown) => void
 }) {
@@ -36,7 +44,7 @@ export function MediaField({
   const images = kind === 'image' ? asImageSrcList(value) : []
   const imagesRef = useRef(images)
   imagesRef.current = images
-  const files = kind === 'attachment' ? asAttachmentList(value) : []
+  const files = isFileListKind(kind) ? asAttachmentList(value) : []
   const filesRef = useRef(files)
   filesRef.current = files
   const href = kind === 'url' ? asHttpHref(value) : ''
@@ -47,16 +55,31 @@ export function MediaField({
       if (kind === 'url') return
       const files = kind === 'image' ? picked.filter((item) => item.type.startsWith('image/')) : picked
       if (kind === 'image' && !files.length) throw new Error('请选择图片')
-      if (kind === 'attachment' && !files.length) throw new Error('请选择文件')
+      if (isFileListKind(kind) && !files.length) throw new Error('请选择文件')
       const addedImages: string[] = []
       const addedFiles: Array<{ name: string; href: string; bytes?: number }> = []
+      const path = recordResourcePath(collectionPath, recordId)
       for (const item of files) {
-        const written = await uploadDbAsset(item, recordResourcePath(collectionPath, recordId))
-        if (kind === 'image') addedImages.push(written.href)
-        else addedFiles.push({ name: item.name || written.name, href: written.href, bytes: item.size })
+        if (kind === 'document') {
+          const logical = documentLogicalName(recordId ?? '', fieldKey ?? 'doc', item.name, filesRef.current)
+          const written = await uploadDbDocument(item, path, logical)
+          addedFiles.push({ name: item.name || written.name, href: written.href, bytes: item.size })
+        } else {
+          const written = await uploadDbAsset(item, path)
+          if (kind === 'image') addedImages.push(written.href)
+          else addedFiles.push({ name: item.name || written.name, href: written.href, bytes: item.size })
+        }
       }
       if (kind === 'image') commitImages([...imagesRef.current, ...addedImages], onCommit)
-      else onCommit(commitAttachments([...filesRef.current, ...addedFiles]))
+      else {
+        const next = [...filesRef.current]
+        for (const file of addedFiles) {
+          const at = next.findIndex((item) => item.name === file.name)
+          if (at >= 0) next[at] = file
+          else next.push(file)
+        }
+        onCommit(commitAttachments(next))
+      }
     } catch (err) {
       setError(String(err instanceof Error ? err.message : err))
     }
@@ -65,7 +88,7 @@ export function MediaField({
   takeFilesRef.current = takeFiles
 
   useEffect(() => {
-    if (kind !== 'image' && kind !== 'attachment') return
+    if (kind !== 'image' && !isFileListKind(kind)) return
     const onPaste = (event: ClipboardEvent) => {
       if (pasteTargetIsField(event.target)) return
       const next = kind === 'image' ? collectClipboardImages(event.clipboardData) : collectClipboardFiles(event.clipboardData)
@@ -88,11 +111,11 @@ export function MediaField({
     )
   }
 
-  const label = kind === 'image' ? '上传图片' : '上传附件'
+  const label = kind === 'image' ? '上传图片' : kind === 'document' ? '上传文档' : '上传附件'
 
   return (
     <div
-      className={`fsdb-media-field${compact ? ' is-compact' : ''} is-stack${kind === 'attachment' ? ' is-files' : ' is-image'}`}
+      className={`fsdb-media-field${compact ? ' is-compact' : ''} is-stack${isFileListKind(kind) ? ' is-files' : ' is-image'}`}
       tabIndex={0}
       title={error || undefined}
     >
@@ -115,12 +138,13 @@ export function MediaField({
         </span>
         </Image.PreviewGroup>
       ) : null}
-      {kind === 'attachment' && files.length ? (
+      {isFileListKind(kind) && files.length ? (
         <span className="fsdb-files">
           {files.map((item, index) => (
             <AttachmentFile
               key={`${item.href}-${index}`}
               file={item}
+              kind={kind === 'document' ? 'document' : 'attachment'}
               onRemove={() => onCommit(commitAttachments(files.filter((_, i) => i !== index)))}
             />
           ))}
@@ -128,7 +152,7 @@ export function MediaField({
       ) : null}
       <button
         type="button"
-        className={`fsdb-media-drop${kind === 'attachment' ? ' is-files' : ''}${dragOver ? ' is-over' : ''}`}
+        className={`fsdb-media-drop${isFileListKind(kind) ? ' is-files' : ''}${dragOver ? ' is-over' : ''}`}
         aria-label={label}
         title={label}
         onClick={() => inputRef.current?.click()}
@@ -161,7 +185,7 @@ export function MediaField({
         ref={inputRef}
         type="file"
         hidden
-        multiple={kind === 'image' || kind === 'attachment'}
+        multiple={kind === 'image' || isFileListKind(kind)}
         accept={kind === 'image' ? 'image/*' : undefined}
         onChange={(event) => {
           const next = Array.from(event.target.files ?? [])

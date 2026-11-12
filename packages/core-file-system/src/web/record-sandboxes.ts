@@ -1,23 +1,23 @@
+import { useSyncExternalStore } from 'react'
 import type { RecordSandboxView } from '@biu/type-file-system/record-views'
 import { parseRecordSandboxes, seedRecordSandbox } from '@biu/type-file-system/record-views'
 import { normalizeCollectionPath } from '../paths.ts'
-import { PAGES_COLLECTION_PATH, TAGS_COLLECTION_PATH } from './database-path.ts'
-
-function fileApi(collectionPath: string) {
-  const path = normalizeCollectionPath(collectionPath)
-  if (path === PAGES_COLLECTION_PATH) return '/api/page/file'
-  if (path === TAGS_COLLECTION_PATH) return '/api/tag/file'
-  return '/api/db/file'
-}
 
 function assetEtag(raw: string) {
   return raw.replace(/^W\//, '').replaceAll('"', '')
 }
 
 const fileCache = new Map<string, { text: string; etag: string }>()
+let fileSeq = 0
+const fileListeners = new Set<() => void>()
 
 function cacheKey(collectionPath: string, recordId: string, name: string) {
   return `${normalizeCollectionPath(collectionPath)}\0${recordId}\0${name}`
+}
+
+function bumpFile() {
+  fileSeq += 1
+  for (const fn of fileListeners) fn()
 }
 
 export function rememberRecordViewFile(collectionPath: string, recordId: string, name: string, text: string, etag = '') {
@@ -26,6 +26,40 @@ export function rememberRecordViewFile(collectionPath: string, recordId: string,
 
 export function peekRecordViewFile(collectionPath: string, recordId: string, name: string) {
   return fileCache.get(cacheKey(collectionPath, recordId, name))?.text
+}
+
+export function useRecordViewFileTick() {
+  return useSyncExternalStore(
+    (fn) => {
+      fileListeners.add(fn)
+      return () => fileListeners.delete(fn)
+    },
+    () => fileSeq,
+  )
+}
+
+/** 远端改了沙盒 jsx：丢掉内存缓存。etag 相同则是本机刚写过，不刷。 */
+export function applyRecordViewAssetChanged(detail?: { name?: string; etag?: string } | null) {
+  const name = String(detail?.name ?? '')
+    .trim()
+    .replace(/^assets\//, '')
+  if (!name) return false
+  const etag = assetEtag(String(detail?.etag ?? ''))
+  const suffix = `\0${name}`
+  let seen = 0
+  let same = 0
+  for (const [key, cached] of fileCache) {
+    if (!key.endsWith(suffix)) continue
+    seen += 1
+    if (etag && cached.etag === etag) {
+      same += 1
+      continue
+    }
+    fileCache.delete(key)
+  }
+  if (seen && same === seen) return false
+  bumpFile()
+  return true
 }
 
 export async function putRecordViewFile(
@@ -40,7 +74,7 @@ export async function putRecordViewFile(
   const cached = fileCache.get(cacheKey(collectionPath, recordId, key))
   const headers: Record<string, string> = { 'content-type': type, 'x-biu-resource-path': path }
   if (cached?.etag) headers['if-match'] = `"${cached.etag}"`
-  const url = `${fileApi(collectionPath)}/${encodeURIComponent(key)}?path=${encodeURIComponent(path)}`
+  const url = `/api/db/file/${encodeURIComponent(key)}?path=${encodeURIComponent(path)}`
   let res = await fetch(url, { method: 'PUT', headers, body })
   if (res.status === 409) {
     const next = assetEtag(String(res.headers.get('etag') ?? ''))
@@ -66,7 +100,7 @@ export async function readRecordViewFile(
   const hit = fileCache.get(cacheKey(collectionPath, recordId, key))
   if (hit) return hit.text
   const path = `${normalizeCollectionPath(collectionPath)}/${recordId}`
-  const url = `${fileApi(collectionPath)}/${encodeURIComponent(key)}?path=${encodeURIComponent(path)}`
+  const url = `/api/db/file/${encodeURIComponent(key)}?path=${encodeURIComponent(path)}`
   try {
     const res = await fetch(url, { headers: { 'x-biu-resource-path': path } })
     if (!res.ok) return fallback
@@ -123,4 +157,10 @@ export async function createRecordSandboxView(opts: {
   const ok = await writeRecordViewCatalog(collectionPath, recordId, opts.fieldKey, [...listed, view])
   if (!ok) throw new Error('could not save view catalog')
   return view
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('biu:asset-changed', (event) => {
+    applyRecordViewAssetChanged((event as CustomEvent<{ name?: string; etag?: string }>).detail)
+  })
 }

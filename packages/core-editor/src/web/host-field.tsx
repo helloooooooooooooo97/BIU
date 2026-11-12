@@ -1,4 +1,4 @@
-import { fieldIsWritable, type CollectionSchema, type DbRecord, type FieldSpec } from '@biu/type-file-system'
+import { fieldIsWritable, resolveSchemaFieldKey, type CollectionSchema, type DbRecord, type FieldSpec } from '@biu/type-file-system'
 import { FieldValuePop } from '@biu/core-file-system/field-value'
 
 export function HostField({
@@ -18,7 +18,7 @@ export function HostField({
   collectionPath?: string
   onSet: (key: string, value: unknown) => void
 }) {
-  const key = String(name ?? '').trim()
+  const key = resolveSchemaFieldKey(schema, name)
   const spec = given ?? schema?.fields?.[key]
   if (!key || !spec) {
     return (

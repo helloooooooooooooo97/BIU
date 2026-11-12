@@ -449,6 +449,14 @@ test('deletable tables can pick rows and bulk-act over the table header', () => 
   assert.match(mediaField, /inputRef\.current\?\.click\(\)/)
   assert.match(mediaField, /item\.type\.startsWith\('image\/'\)/)
   assert.match(media, /function AttachmentFile/)
+  assert.match(media, /className="fsdb-file is-chip"/)
+  assert.match(media, /from '@heroicons\/react\/16\/solid'/)
+  assert.match(media, /<PaperClipIcon aria-hidden className="size-\[14px\] shrink-0" \/>/)
+  assert.match(media, /<ArrowDownTrayIcon aria-hidden className="size-\[14px\]" \/>/)
+  assert.match(media, /<XMarkIcon aria-hidden className="size-\[14px\]" \/>/)
+  assert.doesNotMatch(media, /PaperClipMark/)
+  assert.doesNotMatch(media, /DownloadMark/)
+  assert.doesNotMatch(media, /TagChipCloseMark/)
   assert.match(media, /ArrowDownTrayIcon/)
   assert.match(media, /ArrowTopRightOnSquareIcon/)
   assert.match(media, /target="_blank"/)
@@ -456,6 +464,7 @@ test('deletable tables can pick rows and bulk-act over the table header', () => 
   assert.match(cells, /kind === 'url'/)
   assert.match(cells, /<UrlHref href=\{href\} \/>/)
   assert.match(media, /download=\{file\.name\}/)
+  assert.match(media, /assetDownloadHref\(file\.href, file\.name\)/)
   assert.match(mediaField, /commitAttachments/)
   assert.match(mediaField, /fsdb-media-drop/)
   assert.match(mediaField, /onDrop/)
@@ -469,7 +478,7 @@ test('deletable tables can pick rows and bulk-act over the table header', () => 
   assert.match(mediaField, /recordResourcePath\(collectionPath, recordId\)/)
   assert.doesNotMatch(media, /这张表还没有附件存储/)
   assert.doesNotMatch(media, /fileToDataUrl/)
-  assert.match(mediaField, /multiple=\{kind === 'image' \|\| kind === 'attachment'\}/)
+  assert.match(mediaField, /multiple=\{kind === 'image' \|\| isFileListKind\(kind\)\}/)
   assert.match(browser, /fsdb-file-tools/)
   assert.match(media, /file\.name/)
   assert.match(media, /file\.lastModified/)
@@ -1299,8 +1308,23 @@ test('skill collection uses academic-cap, not the page document glyph', () => {
 
 test('boolean field glyph is a checkbox, not the document list icon', () => {
   const cells = readFileSync(resolve(import.meta.dirname, './fsdb-cells.tsx'), 'utf8')
-  assert.match(cells, /kind === 'boolean'\) return <span aria-hidden className="fsdb-field-bool-glyph"><BoolBox on=\{false\}/)
+  assert.match(cells, /kind === 'boolean'\) return <CheckCircleIcon/)
   assert.doesNotMatch(cells, /kind === 'boolean'\) return <ClipboardDocumentListIcon/)
+})
+
+test('image attachment and body fields use distinct heroicons', () => {
+  const cells = readFileSync(resolve(import.meta.dirname, './fsdb-cells.tsx'), 'utf8')
+  assert.match(cells, /kind === 'image'\) return <PhotoIcon/)
+  assert.match(cells, /kind === 'attachment'\) return <PaperClipIcon/)
+  assert.match(cells, /kind === 'document'\) return <DocumentIcon/)
+  assert.match(cells, /kind === 'file'\) return <DocumentTextIcon/)
+  assert.doesNotMatch(cells, /kind === 'image' \|\| kind === 'attachment' \|\| kind === 'file'\) return 'file'/)
+})
+
+test('tag property type menu does not offer record body file type', () => {
+  const schemaUi = readFileSync(resolve(import.meta.dirname, './schema-field.tsx'), 'utf8')
+  assert.match(schemaUi, /TAG_PROPERTY_TYPES\.map/)
+  assert.doesNotMatch(schemaUi, /ATOMIC_FIELD_TYPES\.map/)
 })
 
 test('parent and depends field glyphs use the share nodes, not the skinny link chain', () => {

@@ -520,6 +520,9 @@ test('update accepts url image and attachment values', async () => {
   assert.equal(emptyPack.value.file, '')
   await assert.rejects(() => db.update('/media/n1', { link: 'javascript:alert(1)' }), /expected url/)
   await assert.rejects(() => db.update('/media/n1', { cover: 'javascript:alert(1)' }), /expected image/)
+  const hashed = `${'ab'.repeat(32)}.md`
+  await db.update('/media/n1', { file: { name: '规划.md', href: `/api/db/file/${hashed}` } })
+  assert.equal(db.tags.recordsReferencingAsset(hashed).length, 1)
 })
 
 test('content is omitted from list/read and served on its own path', async () => {

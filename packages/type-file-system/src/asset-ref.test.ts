@@ -57,3 +57,21 @@ test('collectAssetNames walks exact urls without prose hits', () => {
   assert.equal(names.has('画板-ab12.json'), true)
   assert.equal(names.has('page'), false)
 })
+
+test('collectAssetNames walks record properties and tag field attachments', () => {
+  const propertyFile = `${'ab'.repeat(32)}.md`
+  const tagFile = `${'cd'.repeat(32)}.md`
+  const names = collectAssetNames(
+    { file: { name: '规划.md', href: `/api/db/file/${propertyFile}` } },
+    {
+      tags: ['tag-13'],
+      values: {
+        'tag-13': {
+          '530659262': [{ name: '滕王阁序.md', href: `/api/db/file/${tagFile}` }],
+        },
+      },
+    },
+  )
+  assert.equal(names.has(propertyFile), true)
+  assert.equal(names.has(tagFile), true)
+})

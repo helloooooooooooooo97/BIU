@@ -10,9 +10,11 @@ import { dirname } from 'node:path'
 import {
   asPerson,
   asPersonList,
+  collectAssetNames,
   isEmptySchemaValue,
   normalizeSchemaPack,
   normalizeSchemaValue,
+  pruneSchemaValue,
   type CollectionSchemaPack,
   type PersonValue,
   type SchemaFieldValue,
@@ -217,10 +219,7 @@ export class TagStore {
     writeEditorContent(db, '/tags', pack.id, notes, { transaction: false })
     if (!prev) return
     const keep = new Set(pack.fields.filter((field) => !field.deleted).map((field) => field.key))
-    for (const field of prev.fields) {
-      if (field.deleted || keep.has(field.key)) continue
-      this.purgePackField(pack.id, field.key)
-    }
+    this.pruneRecordBags(pack.id, keep)
   }
 
   private bagValueFilled(value: unknown) {
@@ -228,6 +227,39 @@ export class TagStore {
     if (typeof value === 'string' && !value.trim()) return false
     if (Array.isArray(value) && value.length === 0) return false
     return true
+  }
+
+  pruneRecordBags(tagId: string, keep: Set<string>) {
+    const want = String(tagId ?? '').trim()
+    if (!want) return
+    const db = this.ensure()
+    const rows = db.prepare('SELECT collection, record_id, tag_json FROM tag_record_values').all() as Array<{
+      collection: string
+      record_id: string
+      tag_json: string
+    }>
+    for (const row of rows) {
+      let parsed: ReturnType<typeof normalizeSchemaValue>
+      try {
+        parsed = normalizeSchemaValue(JSON.parse(row.tag_json || '{}'))
+      } catch {
+        continue
+      }
+      const bag = parsed.values[want]
+      if (!bag) continue
+      let changed = false
+      const nextBag: Record<string, unknown> = {}
+      for (const [key, value] of Object.entries(bag)) {
+        if (!keep.has(key)) {
+          changed = true
+          continue
+        }
+        nextBag[key] = value
+      }
+      if (!changed) continue
+      const values = { ...parsed.values, [want]: nextBag }
+      this.writeRecordTag(row.collection, row.record_id, { tags: parsed.tags, values }, row.record_id)
+    }
   }
 
   purgePackField(tagId: string, fieldKey: string) {
@@ -476,7 +508,7 @@ export class TagStore {
   }
 
   writeRecordTag(collection: string, recordId: string, tag: unknown, title: string) {
-    const value = normalizeSchemaValue(tag)
+    const value = pruneSchemaValue(tag, this.list())
     const db = this.ensure()
     if (isEmptySchemaValue(value)) {
       db.prepare('DELETE FROM tag_record_values WHERE collection = ? AND record_id = ?').run(collection, recordId)
@@ -707,6 +739,29 @@ export class TagStore {
     }
   }
 
+  replaceAssetRefs(collection: string, recordId: string, names: Iterable<string>) {
+    const db = this.ensure()
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      db.prepare('DELETE FROM content_refs WHERE collection = ? AND record_id = ? AND source = ?').run(
+        collection,
+        recordId,
+        'asset',
+      )
+      const insert = db.prepare(
+        'INSERT OR IGNORE INTO content_refs (collection, record_id, name, source) VALUES (?, ?, ?, ?)',
+      )
+      for (const name of names) {
+        const file = String(name ?? '').trim()
+        if (file) insert.run(collection, recordId, file, 'asset')
+      }
+      db.exec('COMMIT')
+    } catch (error) {
+      db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
   upsertBlockRef(collection: string, recordId: string, blockId: string, name: string, source: string) {
     this.ensure()
       .prepare(
@@ -769,13 +824,19 @@ export class TagStore {
   }
 
   recordsReferencingAsset(name: string) {
-    return this.ensure()
+    const file = String(name ?? '').trim()
+    const linked = this.ensure()
       .prepare(
         `SELECT collection, record_id FROM content_refs WHERE name = ?
          UNION
          SELECT collection, record_id FROM block_refs WHERE name = ?`,
       )
-      .all(name, name) as Array<{ collection: string; record_id: string }>
+      .all(file, file) as Array<{ collection: string; record_id: string }>
+    if (linked.length || !file) return linked
+    const rows = this.ensure()
+      .prepare('SELECT collection, record_id, tag_json FROM tag_record_values')
+      .all() as Array<{ collection: string; record_id: string; tag_json?: string }>
+    return rows.filter((row) => collectAssetNames(row.tag_json).has(file))
   }
 
   stampedIds(collection: string, tagIdOrLabel: string): Set<string> {

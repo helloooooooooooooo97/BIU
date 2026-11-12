@@ -1,9 +1,17 @@
 import { afterEach, test, vi } from 'vitest'
 import assert from 'node:assert/strict'
-import { recordResourcePath, uploadDbAsset } from './cell-media.tsx'
+import { assetDownloadHref, recordResourcePath, uploadDbAsset } from './cell-media.tsx'
 
 afterEach(() => {
   vi.unstubAllGlobals()
+})
+
+test('asset download href keeps the original filename on db files', () => {
+  assert.equal(
+    assetDownloadHref('/api/db/file/ab.md', '规划.md'),
+    '/api/db/file/ab.md?download=%E8%A7%84%E5%88%92.md',
+  )
+  assert.equal(assetDownloadHref('https://cdn.example/notes.pdf', '规划.md'), 'https://cdn.example/notes.pdf')
 })
 
 test('record resource path joins collection and record id', () => {
