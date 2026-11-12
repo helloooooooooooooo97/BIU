@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { ChatPane, ChatStage } from '@biu/biu-ui/chat-pane'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { MASCOT_COLOR_NAME, MASCOT_EYE_NAME, MASCOT_SHAPE_NAME } from '@biu/type-session'
@@ -75,6 +76,7 @@ function nodesFromContent(value: unknown): ChatNode[] | null {
 
 export function SessionRecordChat({ record, value }: FsContentProps) {
   const sessionId = String(record.id)
+  const navigate = useNavigate()
   const [nodes, setNodes] = useState<ChatNode[]>(() => nodesFromContent(value) ?? [])
   useEffect(() => {
     const seeded = nodesFromContent(value)
@@ -97,6 +99,14 @@ export function SessionRecordChat({ record, value }: FsContentProps) {
       .catch(() => undefined)
     return () => ac.abort()
   }, [sessionId, value])
+  const onFork = useCallback(async () => {
+    const res = await fetch(`/api/agents/${sessionId}/fork`, { method: 'POST' })
+    const body = (await res.json().catch(() => ({}))) as { id?: string }
+    const id = String(body.id ?? '').trim()
+    if (!res.ok || !id) return
+    window.dispatchEvent(new Event('fsdb:change'))
+    navigate(`/agents/${id}`)
+  }, [navigate, sessionId])
   return (
     <ChatPane
       embed
@@ -107,7 +117,7 @@ export function SessionRecordChat({ record, value }: FsContentProps) {
               nodes={nodes}
               sessionId={sessionId}
               onInspect={() => undefined}
-              onFork={() => undefined}
+              onFork={onFork}
             />
           </Suspense>
         </ChatStage>
