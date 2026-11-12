@@ -1,3 +1,4 @@
+import type { ComponentType } from 'react'
 import type { DbRecord } from '@biu/type-file-system'
 import {
   DEFAULT_RECORD_LAYOUT_ID,
@@ -28,9 +29,15 @@ export const VIEW_CATALOG_HOSTS_KEY = '__biuViewCatalogHosts'
 export const VIEW_CATALOG_KEYS = ['views', 'propViews', 'layouts'] as const
 export type ViewCatalogFieldKey = (typeof VIEW_CATALOG_KEYS)[number]
 
-export type ViewCatalogIcon = 'doc' | 'outline' | 'table' | 'source' | 'hidden' | 'chat' | 'sandbox' | 'layout' | 'props'
+export type ViewCatalogIcon = 'doc' | 'outline' | 'table' | 'source' | 'hidden' | 'sandbox' | 'layout' | 'props'
 
-export type ViewCatalogOption = { id: string; name: string; icon: ViewCatalogIcon; builtin?: boolean }
+export type ViewCatalogOption = {
+  id: string
+  name: string
+  icon?: ViewCatalogIcon
+  Icon?: ComponentType<{ className?: string }>
+  builtin?: boolean
+}
 
 export type ViewCatalogHost = {
   options: (record: DbRecord, fieldKey: ViewCatalogFieldKey) => ViewCatalogOption[]
@@ -105,7 +112,8 @@ function named(items: Array<Partial<ViewCatalogOption> & { id: string; name: str
     out.push({
       id,
       name: catalogName(id, item.name),
-      icon: BUILTIN_CONTENT_NAMES[id] ? contentIcon(id) : (item.icon ?? 'sandbox'),
+      icon: item.Icon ? item.icon : item.icon ?? (BUILTIN_CONTENT_NAMES[id] ? contentIcon(id) : 'sandbox'),
+      Icon: item.Icon,
       builtin: Boolean(item.builtin) || Boolean(BUILTIN_CONTENT_NAMES[id]),
     })
   }
@@ -121,7 +129,6 @@ function contentIcon(id: string): ViewCatalogIcon {
   if (id === 'table') return 'table'
   if (id === 'source') return 'source'
   if (id === 'hidden') return 'hidden'
-  if (id === 'chat') return 'chat'
   if (id === 'doc') return 'doc'
   return 'sandbox'
 }
@@ -139,12 +146,12 @@ function registeredContent(path: string): ViewCatalogOption[] {
     return views.map((item) => ({
       id: item.id,
       name: catalogName(item.id, item.label),
-      icon: contentIcon(item.id),
+      Icon: item.Icon,
       builtin: true,
     }))
   }
   if (path === AGENTS_COLLECTION_PATH) {
-    return [{ id: 'chat', name: '聊天', icon: 'chat', builtin: true }]
+    return [{ id: 'chat', name: '聊天', builtin: true }]
   }
   return EDITOR_CONTENT_FALLBACK
 }
