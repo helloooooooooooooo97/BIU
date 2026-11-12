@@ -261,6 +261,15 @@ test('tag collect table lives on the record board, not as sidebar views', () => 
   assert.match(viewsUi, /mergeCatalogViews/)
 })
 
+test('record detail falls back to the shared property sandbox host', () => {
+  const detail = readFileSync(resolve(import.meta.dirname, './record-detail.tsx'), 'utf8')
+  const host = readFileSync(resolve(import.meta.dirname, './record-prop-host.tsx'), 'utf8')
+  assert.match(detail, /chrome\?\.Properties \?\? RecordProperties/)
+  assert.match(host, /export function RecordProperties/)
+  assert.match(host, /data-testid="record-prop-host"/)
+  assert.match(host, /parseRecordSandboxes\(record\.propViews\)/)
+})
+
 test('detail facet property sits last, starts collapsed, and the glyph becomes a fold control on hover', () => {
   const detail = readFileSync(resolve(import.meta.dirname, './record-detail.tsx'), 'utf8')
   const row = readFileSync(resolve(import.meta.dirname, './property-row.tsx'), 'utf8')

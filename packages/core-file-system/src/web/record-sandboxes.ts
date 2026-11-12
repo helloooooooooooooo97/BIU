@@ -24,6 +24,10 @@ export function rememberRecordViewFile(collectionPath: string, recordId: string,
   fileCache.set(cacheKey(collectionPath, recordId, name), { text, etag: assetEtag(etag) })
 }
 
+export function peekRecordViewFile(collectionPath: string, recordId: string, name: string) {
+  return fileCache.get(cacheKey(collectionPath, recordId, name))?.text
+}
+
 export async function putRecordViewFile(
   collectionPath: string,
   recordId: string,
