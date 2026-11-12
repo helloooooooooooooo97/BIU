@@ -348,7 +348,7 @@ export function DefaultCell({
           id={option.id}
           label={option.name}
           tone={option.icon === 'sandbox' ? TAG_TONE_PURPLE : undefined}
-          icon={<ViewCatalogGlyph icon={option.icon} className="size-[14px]" />}
+          icon={<ViewCatalogGlyph icon={option.icon} Icon={option.Icon} className="size-[14px]" />}
         />
       </TagChips>
     )

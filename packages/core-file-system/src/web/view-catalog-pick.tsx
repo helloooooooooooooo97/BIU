@@ -88,7 +88,7 @@ export function ViewCatalogPickPanel({
                   onPicked?.()
                 }}
               >
-                <ViewCatalogGlyph icon={item.icon} className="fsdb-viewcat-pick-ico" />
+                <ViewCatalogGlyph icon={item.icon} Icon={item.Icon} className="fsdb-viewcat-pick-ico" />
                 <span className="fsdb-viewcat-pick-name">{item.name}</span>
               </button>
               {canCopy || canDelete ? (
