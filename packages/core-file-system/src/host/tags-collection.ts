@@ -202,7 +202,12 @@ export function tagsCollection(
 
 export function tagNamedDocs(store: TagStore): CollectionNamedDocs {
   return {
-    names: (record: DbRecord) => tagViewFileNames({ id: record.id, views: record.views ?? parseTagViews(store.views(String(record.id))) }),
+    names: (record: DbRecord) =>
+      tagViewFileNames({
+        id: record.id,
+        views: record.views ?? parseTagViews(store.views(String(record.id))),
+        propViews: record.propViews,
+      }),
     read: (name) => store.readNamedDoc(name),
     write: (name, content, opts) => store.writeNamedDoc(name, content, opts),
   }

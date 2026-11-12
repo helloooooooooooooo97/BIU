@@ -6,19 +6,17 @@ import { defaultTagSandboxSource, isTagViewDocName, parseTagViews, tagIdFromView
 test('parseTagViews keeps sandbox catalog entries', () => {
   const views = parseTagViews([{ id: '8fdbc4f8', name: '卡', file: 'tag-view-need-8fdbc4f8.jsx' }])
   assert.equal(views.length, 1)
-  assert.equal(views[0]?.dataFile, 'tag-view-data-8fdbc4f8.json')
+  assert.equal(views[0]?.dataFile, 'view-data-8fdbc4f8.json')
   assert.equal(isTagViewDocName('tag-view-need-8fdbc4f8.jsx'), true)
   assert.equal(tagIdFromViewDocName('tag-view-need-8fdbc4f8.jsx'), 'need')
   assert.ok(tagViewFileNames({ id: 'need', views }).includes('tag-views-need.json'))
 })
 
-test('default tag sandbox source compiles', () => {
+test('default tag sandbox source is the filesystem content view template', () => {
   const src = defaultTagSandboxSource('动态规划')
   const compiled = compileHostSource(src)
   assert.equal(compiled.ok, true)
-  assert.match(src, /组件 API/)
-  assert.match(src, /数据 API/)
-  assert.match(src, /biu\.tag\(\)/)
-  assert.match(src, /biu\.patch/)
-  assert.match(src, /<Field name=\{field\.key\}/)
+  assert.match(src, /内容视图 · 页面概览/)
+  assert.match(src, /<Field name/)
+  assert.match(src, /biu\.record\(\)/)
 })

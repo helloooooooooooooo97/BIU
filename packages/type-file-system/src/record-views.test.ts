@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { defaultRecordLayout, listedRecordLayouts, parseRecordLayoutDefaultName, parseRecordLayouts, parseRecordSandboxes, uniqueViewName } from './record-views.ts'
+import { allocateRecordSandbox, defaultRecordLayout, listedRecordLayouts, parseRecordLayoutDefaultName, parseRecordLayouts, parseRecordSandboxes, recordSandboxSource, seedRecordSandbox, uniqueViewName } from './record-views.ts'
 
 test('record layouts keep a builtin 默认视图 for every file', () => {
   assert.equal(defaultRecordLayout().name, '默认视图')
@@ -38,4 +38,21 @@ test('sandbox catalogs share one parser', () => {
 
 test('copy names use 副本 then 副本 2', () => {
   assert.equal(uniqueViewName('默认视图 副本', ['默认视图', '默认视图 副本']), '默认视图 副本 2')
+})
+
+test('every collection seeds content and property views from the same templates', async () => {
+  const files = new Map<string, string>()
+  const content = allocateRecordSandbox('views', 'task-1', '新视图', [])
+  assert.match(content.file, /^view-task-1-[a-z0-9]+\.jsx$/)
+  const written = await seedRecordSandbox({
+    fieldKey: 'propViews',
+    recordId: 'plugin-1',
+    listed: [],
+    writeFile: async (name, body) => {
+      files.set(name, body)
+    },
+  })
+  assert.equal(files.get(written.file), recordSandboxSource('propViews'))
+  assert.match(recordSandboxSource('views'), /内容视图介绍/)
+  assert.match(recordSandboxSource('propViews'), /属性视图介绍/)
 })

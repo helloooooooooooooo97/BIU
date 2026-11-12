@@ -18,9 +18,10 @@ import {
 } from '@heroicons/react/16/solid'
 import type { FsContentProps, FsDetailBarProps } from '@biu/type-file-system/ui'
 import { normalizeSchemaPack } from '@biu/type-file-system'
-import { parseRecordSandboxes, uniqueViewName, type RecordSandboxView } from '@biu/type-file-system/record-views'
+import { parseRecordSandboxes, type RecordSandboxView } from '@biu/type-file-system/record-views'
 import { LocalText } from './controls.tsx'
 import { createTagSandboxView, loadTagViews, useTagViews } from './tag-views.ts'
+import { createRecordSandboxView } from './record-sandboxes.ts'
 import { TagHostView } from './tag-host-view.tsx'
 import { TAG_TABLE_VIEW_ID, setTagPresentMode, useTagPresentMode } from './tag-present.ts'
 import { TagViewSwitcher } from './tag-view-switcher.tsx'
@@ -169,16 +170,15 @@ export function TagDetailBar({
     try {
       if (kind === 'content') await createTagSandboxView(tagId, String(record.title ?? ''), '新视图')
       else {
-        const id = crypto.randomUUID().replace(/-/g, '').slice(0, 8)
-        const view: RecordSandboxView = {
-          id,
-          name: uniqueViewName('新视图', propViews.map((item) => item.name)),
-          kind: 'sandbox',
-          file: `tag-prop-${tagId}-${id}.jsx`,
-          dataFile: `tag-prop-data-${tagId}-${id}.json`,
-        }
-        const ok = await saveTagPropViews(tagId, [...propViews, view])
-        if (ok) void patchActiveRecordLayout(TAGS_PATH, tagId, { propViewId: view.id }, 'table')
+        const view = await createRecordSandboxView({
+          collectionPath: TAGS_PATH,
+          recordId: tagId,
+          fieldKey: 'propViews',
+          listed: propViews,
+          name: '新视图',
+          title: String(record.title ?? ''),
+        })
+        void patchActiveRecordLayout(TAGS_PATH, tagId, { propViewId: view.id }, 'table')
       }
     } catch {
       /* ignore */
@@ -477,16 +477,16 @@ export function TagDetailBar({
                           onClick={(event) => {
                             event.preventDefault()
                             event.stopPropagation()
-                            const id = crypto.randomUUID().replace(/-/g, '').slice(0, 8)
-                            const view: RecordSandboxView = {
-                              id,
-                              name: uniqueViewName(`${item.name} 副本`, propViews.map((row) => row.name)),
-                              kind: 'sandbox',
-                              file: `tag-prop-${tagId}-${id}.jsx`,
-                              dataFile: `tag-prop-data-${tagId}-${id}.json`,
-                            }
-                            void saveTagPropViews(tagId, [...propViews, view]).then((ok) => {
-                              if (ok) void patchActiveRecordLayout(TAGS_PATH, tagId, { propViewId: view.id }, 'table')
+                            void createRecordSandboxView({
+                              collectionPath: TAGS_PATH,
+                              recordId: tagId,
+                              fieldKey: 'propViews',
+                              listed: propViews,
+                              name: `${item.name} 副本`,
+                              title: String(record.title ?? ''),
+                              source: item,
+                            }).then((view) => {
+                              void patchActiveRecordLayout(TAGS_PATH, tagId, { propViewId: view.id }, 'table')
                             })
                           }}
                         >
@@ -542,18 +542,15 @@ export function TagDetailBar({
                     onClick={() => {
                       if (creatingPropView) return
                       setCreatingPropView(true)
-                      const id = crypto.randomUUID().replace(/-/g, '').slice(0, 8)
-                      const view: RecordSandboxView = {
-                        id,
-                        name: uniqueViewName('新视图', propViews.map((item) => item.name)),
-                        kind: 'sandbox',
-                        file: `tag-prop-${tagId}-${id}.jsx`,
-                        dataFile: `tag-prop-data-${tagId}-${id}.json`,
-                      }
-                      void saveTagPropViews(tagId, [...propViews, view])
-                        .then((ok) => {
-                          if (ok) return patchActiveRecordLayout(TAGS_PATH, tagId, { propViewId: view.id }, 'table')
-                        })
+                      void createRecordSandboxView({
+                        collectionPath: TAGS_PATH,
+                        recordId: tagId,
+                        fieldKey: 'propViews',
+                        listed: propViews,
+                        name: '新视图',
+                        title: String(record.title ?? ''),
+                      })
+                        .then((view) => patchActiveRecordLayout(TAGS_PATH, tagId, { propViewId: view.id }, 'table'))
                         .catch(() => undefined)
                         .finally(() => {
                           setCreatingPropView(false)

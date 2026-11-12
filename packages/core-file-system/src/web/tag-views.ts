@@ -1,11 +1,7 @@
 import { useSyncExternalStore } from 'react'
-import {
-  createTagViewId,
-  defaultTagSandboxSource,
-  parseTagViews,
-  tagViewsAssetName,
-  type TagSandboxView,
-} from '../tag-views.ts'
+import { parseTagViews, type TagSandboxView } from '../tag-views.ts'
+import { createRecordSandboxView } from './record-sandboxes.ts'
+import { TAGS_COLLECTION_PATH } from './database-path.ts'
 import { getTagPresentMode, setTagPresentMode, TAG_TABLE_VIEW_ID } from './tag-present.ts'
 
 export type { TagSandboxView } from '../tag-views.ts'
@@ -178,21 +174,20 @@ export async function saveTagViews(tagId: string, views: TagSandboxView[]) {
   window.dispatchEvent(new Event('fsdb:change'))
 }
 
-export async function createTagSandboxView(tagId: string, title = '', name = '标签沙盒') {
+export async function createTagSandboxView(tagId: string, title = '', name = '新视图') {
   const id = String(tagId ?? '').trim()
   if (!id) throw new Error('missing tag')
-  const viewId = createTagViewId()
-  const view: TagSandboxView = {
-    id: viewId,
-    name: name.trim() || '沙盒',
-    kind: 'sandbox',
-    file: `tag-view-${id}-${viewId}.jsx`,
-    dataFile: `tag-view-data-${id}-${viewId}.json`,
-  }
-  await putTagFile(id, view.file, defaultTagSandboxSource(title), 'text/plain; charset=utf-8')
-  await putTagFile(id, view.dataFile, 'null', 'application/json')
-  await saveTagViews(id, [...getTagViews(id), view])
-  setTagPresentMode(id, viewId)
+  const listed = getTagViews(id)
+  const view = await createRecordSandboxView({
+    collectionPath: TAGS_COLLECTION_PATH,
+    recordId: id,
+    fieldKey: 'views',
+    listed,
+    name,
+    title,
+  })
+  setTagViews(id, [...listed, view])
+  setTagPresentMode(id, view.id)
   return view
 }
 
@@ -208,22 +203,20 @@ export async function renameTagSandboxView(tagId: string, viewId: string, name: 
 export async function copyTagSandboxView(tagId: string, viewId: string, title = '') {
   const id = String(tagId ?? '').trim()
   const target = String(viewId ?? '').trim()
-  const source = getTagViews(id).find((item) => item.id === target)
+  const listed = getTagViews(id)
+  const source = listed.find((item) => item.id === target)
   if (!id || !source) return
-  const body = await readTagFile(id, source.file, defaultTagSandboxSource(title))
-  const data = await readTagFile(id, source.dataFile, 'null')
-  const viewIdNext = createTagViewId()
-  const view: TagSandboxView = {
-    id: viewIdNext,
+  const view = await createRecordSandboxView({
+    collectionPath: TAGS_COLLECTION_PATH,
+    recordId: id,
+    fieldKey: 'views',
+    listed,
     name: `${source.name} 副本`,
-    kind: 'sandbox',
-    file: `tag-view-${id}-${viewIdNext}.jsx`,
-    dataFile: `tag-view-data-${id}-${viewIdNext}.json`,
-  }
-  await putTagFile(id, view.file, body, 'text/plain; charset=utf-8')
-  await putTagFile(id, view.dataFile, data, 'application/json')
-  await saveTagViews(id, [...getTagViews(id), view])
-  setTagPresentMode(id, viewIdNext)
+    title,
+    source,
+  })
+  setTagViews(id, [...listed, view])
+  setTagPresentMode(id, view.id)
   return view
 }
 

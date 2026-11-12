@@ -209,6 +209,10 @@ export function TagHostView({
   const biu = useMemo(
     () => ({
       tag: () => ({ id: tagId, title: pack?.label ?? '' }),
+      page: () => ({ id: tagId, title: pack?.label ?? '' }),
+      blocks: () => [],
+      kinds: () => [],
+      update: async () => undefined,
       fields: () =>
         fields.map((item) => ({
           key: item.key,
@@ -286,6 +290,10 @@ export function TagHostView({
       const FieldProxy = (props: { name?: string }) => envRef.current.Field(props)
       const biuProxy = {
         tag: () => envRef.current.biu.tag(),
+        page: () => envRef.current.biu.page(),
+        blocks: () => envRef.current.biu.blocks(),
+        kinds: () => envRef.current.biu.kinds(),
+        update: (id: string, patch: Record<string, unknown>) => envRef.current.biu.update(id, patch),
         fields: () => envRef.current.biu.fields(),
         values: () => envRef.current.biu.values(),
         get: (key: string) => envRef.current.biu.get(key),
