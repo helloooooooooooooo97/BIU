@@ -9,6 +9,7 @@ import { PageDetailBar } from './page-detail-bar.tsx'
 import { pageBlocksCollectionView, PageBlockContent } from './page-blocks-view.tsx'
 import { bindPageViewCatalogHost } from './page-view-catalog.ts'
 import { registerSandboxBlock } from './sandbox/block.tsx'
+import { EDITOR_CONTENT_VIEWS, EDITOR_DETAIL_TOOLS } from './editor-content-views.ts'
 
 export { PageEditor, PageEditor as RecordEditor } from './page-editor.tsx'
 export { PageDetailBar } from './page-detail-bar.tsx'
@@ -34,6 +35,14 @@ export function apply(ctx: Context) {
   const ui = ctx.get('databaseUi') as DatabaseUi
   // 凡是有 file 正文的表都走 Markdown；没有 contentField 的表不会用到这份 chrome。
   ctx.effect(() => ui.decorate(DEFAULT_CHROME_PATH, { Content: PageEditor, DetailBar: PageDetailBar }).dispose)
+  ctx.effect(() => {
+    const views = EDITOR_CONTENT_VIEWS.map((view) => ui.registerContentView(DEFAULT_CHROME_PATH, view))
+    const tools = ui.registerDetailTools(DEFAULT_CHROME_PATH, EDITOR_DETAIL_TOOLS)
+    return () => {
+      for (const item of views) item.dispose()
+      tools.dispose()
+    }
+  })
   ctx.effect(() => bindPageViewCatalogHost())
   // page-blocks 用自己的正文组件盖掉上面的通配（精确路径在 mergeChrome 里后写覆盖）。
   ctx.effect(() => ui.decorate('/page-blocks', { Content: PageBlockContent }).dispose)

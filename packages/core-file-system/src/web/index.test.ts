@@ -245,6 +245,15 @@ test('tag collect table lives on the record board, not as sidebar views', () => 
   assert.match(viewsUi, /mergeCatalogViews/)
 })
 
+test('hidden content view is a filesystem builtin, not a plugin registration', () => {
+  const views = readFileSync(resolve(import.meta.dirname, '../../../type-file-system/src/record-views.ts'), 'utf8')
+  const bar = readFileSync(resolve(import.meta.dirname, '../../../core-editor/src/web/page-detail-bar.tsx'), 'utf8')
+  const editor = readFileSync(resolve(import.meta.dirname, '../../../core-editor/src/web/editor-content-views.ts'), 'utf8')
+  assert.match(views, /HIDDEN_CONTENT_VIEW_ID = 'hidden'/)
+  assert.match(bar, /HIDDEN_MODE/)
+  assert.doesNotMatch(editor, /id: 'hidden'/)
+})
+
 test('filesystem default chrome owns Properties for every collection', () => {
   const src = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
   assert.match(src, /decorate\(DEFAULT_CHROME_PATH, \{ Properties: RecordProperties \}\)/)

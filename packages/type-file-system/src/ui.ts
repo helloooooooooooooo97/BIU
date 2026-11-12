@@ -139,6 +139,27 @@ export type CollectionViewType = {
   View: ComponentType<FsViewProps>
 }
 
+/** 记录详情「内容模式」：正文插件向文件系统工具栏登记，hidden 除外。 */
+export type FsRecordContentView = {
+  id: string
+  label: string
+  Icon?: ComponentType<{ className?: string }>
+  plugin?: string
+}
+
+export type FsDetailSearchProps = {
+  record: DbRecord
+  collectionPath?: string
+}
+
+/** 正文插件向详情栏登记的搜索/排序/筛选。没登记则不画对应按钮。 */
+export type FsDetailTools = {
+  Search?: ComponentType<FsDetailSearchProps>
+  sorts?: Array<{ id: string; label: string }>
+  filters?: Array<{ id: string; label: string }>
+  filterAllLabel?: string
+}
+
 /** 所有表共用的默认 chrome。具体表再 decorate 时后写覆盖。 */
 export const DEFAULT_CHROME_PATH = '/*'
 
@@ -156,9 +177,15 @@ export interface DatabaseUi {
   registerView(path: string, view: CollectionViewType): { dispose: () => void }
   /** 登记一行的样子。path 为 * 时所有表都能用。外壳仍由 File System 画。 */
   registerRowView(path: string, view: CollectionRowViewType): { dispose: () => void }
+  /** 正文插件给该 path 登记记录内容模式。hidden 不用登记。有本 path 登记时不继承 /*。 */
+  registerContentView(path: string, view: FsRecordContentView): { dispose: () => void }
+  /** 正文插件给详情栏登记排序/筛选。有本 path 的内容模式登记时不继承 /*。 */
+  registerDetailTools(path: string, tools: FsDetailTools): { dispose: () => void }
   chrome(path: string): CollectionChrome
   views(path: string): CollectionViewType[]
   rowViews(path: string): CollectionRowViewType[]
+  contentViews(path: string): FsRecordContentView[]
+  detailTools(path: string): FsDetailTools
   subscribe(listener: () => void): () => void
 }
 

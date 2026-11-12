@@ -784,6 +784,7 @@ export function TagContent({ record, value, writable, onChange }: FsContentProps
     label: String(record.title ?? ''),
     fields,
   })
+  if (layout.contentViewId === 'hidden') return null
   if (!stamp && sandbox) {
     return (
       <TagHostView

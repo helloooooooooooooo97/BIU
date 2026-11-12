@@ -106,10 +106,14 @@ test('isFindHotkey is command/ctrl f without shift', () => {
 })
 
 test('page find lives in the toolbar, not a floating slot', () => {
-  const src = readFileSync(resolve(import.meta.dirname, './page-detail-bar.tsx'), 'utf8')
+  const src = readFileSync(resolve(import.meta.dirname, './editor-detail-search.tsx'), 'utf8')
+  const tools = readFileSync(resolve(import.meta.dirname, './editor-content-views.ts'), 'utf8')
+  const bar = readFileSync(resolve(import.meta.dirname, './page-detail-bar.tsx'), 'utf8')
   assert.match(src, /tasks-search-wrap/)
   assert.match(src, /aria-label="上一个"/)
   assert.match(src, /aria-label="下一个"/)
+  assert.match(tools, /Search: EditorDetailSearch/)
+  assert.match(bar, /detailTools\.Search/)
   assert.doesNotMatch(src, /createPortal/)
   assert.doesNotMatch(PAGE_EDITOR_STYLE, /\.page-find-slot\{/)
   assert.doesNotMatch(PAGE_EDITOR_STYLE, /\.page-find-box\{/)

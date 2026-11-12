@@ -156,6 +156,21 @@ test('registerRowView merges star path with the collection', () => {
   assert.equal(ui.rowViews('/tasks').find((item) => item.id === 'card')?.label, '卡片')
 })
 
+test('content views inherit /* unless the collection registered its own', () => {
+  const ctx = new Context()
+  const ui = new DatabaseUiService(ctx)
+  ui.registerContentView(DEFAULT_CHROME_PATH, { id: 'doc', label: '文档' })
+  ui.registerContentView(DEFAULT_CHROME_PATH, { id: 'hidden', label: '不该出现' })
+  ui.registerDetailTools(DEFAULT_CHROME_PATH, { sorts: [{ id: 'doc', label: '原文顺序' }] })
+  assert.deepEqual(ui.contentViews('/tasks').map((item) => item.id), ['doc'])
+  assert.equal(ui.detailTools('/tasks').sorts?.[0]?.id, 'doc')
+  ui.registerContentView('/agents', { id: 'chat', label: '聊天' })
+  assert.deepEqual(ui.contentViews('/agents').map((item) => item.id), ['chat'])
+  assert.equal(ui.detailTools('/agents').sorts, undefined)
+  assert.equal(ui.detailTools('/agents').Search, undefined)
+  assert.deepEqual(ui.contentViews('/mcp').map((item) => item.id), ['doc'])
+})
+
 test('refresh notifies chrome subscribers', () => {
   const ctx = new Context()
   const ui = new DatabaseUiService(ctx)
