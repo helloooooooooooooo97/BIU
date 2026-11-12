@@ -1,11 +1,4 @@
-import {
-  defaultContentSandboxSource,
-  defaultPropSandboxSource,
-  parseRecordSandboxes,
-  type RecordSandboxView,
-} from '@biu/type-file-system/record-views'
-
-export { defaultPropSandboxSource }
+import { parseRecordSandboxes, type RecordSandboxView } from '@biu/type-file-system/record-views'
 
 export type TagSandboxView = RecordSandboxView
 
@@ -73,5 +66,3 @@ export function tagIdFromViewDocName(name: string) {
 export function createTagViewId() {
   return crypto.randomUUID().replace(/-/g, '').slice(0, 8)
 }
-
-export const defaultTagSandboxSource = defaultContentSandboxSource

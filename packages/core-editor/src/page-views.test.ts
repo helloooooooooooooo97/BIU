@@ -1,6 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { defaultSandboxSource, parsePageViews, viewsAssetName } from './page-views.ts'
+import { defaultContentSandboxSource } from '@biu/type-file-system/record-views'
+import { parsePageViews, viewsAssetName } from './page-views.ts'
 
 test('parsePageViews keeps sandbox views bound to files', () => {
   assert.deepEqual(
@@ -25,7 +26,7 @@ test('parsePageViews keeps sandbox views bound to files', () => {
 
 test('default sandbox source is a host component that uses Block', async () => {
   const { compileHostSource } = await import('./web/page-host-compile.ts')
-  const src = defaultSandboxSource('演示页')
+  const src = defaultContentSandboxSource('演示页')
   assert.match(src, /export default function App/)
   assert.match(src, /组件 API/)
   assert.match(src, /数据 API/)

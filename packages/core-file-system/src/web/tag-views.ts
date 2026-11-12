@@ -5,7 +5,7 @@ import { TAGS_COLLECTION_PATH } from './database-path.ts'
 import { getTagPresentMode, setTagPresentMode, TAG_TABLE_VIEW_ID } from './tag-present.ts'
 
 export type { TagSandboxView } from '../tag-views.ts'
-export { defaultTagSandboxSource, parseTagViews, tagViewsAssetName, createTagViewId } from '../tag-views.ts'
+export { parseTagViews, tagViewsAssetName, createTagViewId } from '../tag-views.ts'
 
 const store = new Map<string, TagSandboxView[]>()
 let seq = 0

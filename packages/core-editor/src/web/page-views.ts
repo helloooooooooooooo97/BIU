@@ -1,7 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { seedRecordSandbox } from '@biu/type-file-system/record-views'
 import {
-  defaultSandboxSource,
   parsePageViews,
   viewsAssetName,
   type PageSandboxView,
@@ -9,7 +8,7 @@ import {
 import { getPagePresentMode, isPageBuiltinMode, setPagePresentMode } from './source-mode.ts'
 
 export type { PageSandboxView } from '../page-views.ts'
-export { defaultSandboxSource, parsePageViews, viewsAssetName } from '../page-views.ts'
+export { parsePageViews, viewsAssetName } from '../page-views.ts'
 
 const store = new Map<string, PageSandboxView[]>()
 let seq = 0

@@ -1,4 +1,4 @@
-export { defaultContentSandboxSource, defaultPropSandboxSource, defaultSandboxSource } from './record-sandbox-templates.ts'
+export { defaultContentSandboxSource, defaultPropSandboxSource } from './record-sandbox-templates.ts'
 import { defaultContentSandboxSource, defaultPropSandboxSource } from './record-sandbox-templates.ts'
 
 export const DEFAULT_RECORD_LAYOUT_ID = 'builtin-default'

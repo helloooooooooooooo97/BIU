@@ -897,5 +897,3 @@ export function defaultPropSandboxSource(_title = '') {
 }
 `
 }
-
-export const defaultSandboxSource = defaultContentSandboxSource

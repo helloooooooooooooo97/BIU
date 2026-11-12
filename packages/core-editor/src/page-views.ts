@@ -1,7 +1,5 @@
 import { parseRecordSandboxes, type RecordSandboxView } from '@biu/type-file-system/record-views'
 
-export { defaultSandboxSource } from '@biu/type-file-system/record-views'
-
 export type PageSandboxView = RecordSandboxView
 
 export function viewsAssetName(pageId: string) {
