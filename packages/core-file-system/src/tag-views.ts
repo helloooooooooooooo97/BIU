@@ -46,21 +46,28 @@ export function isTagViewDocName(name: string) {
   return /^tag-view-.+\.jsx$/i.test(file)
 }
 
+const TAG_VIEW_FILE_ID = [
+  /^tag-views-(.+)\.json$/i,
+  /^tag-view-data-(.+)-([a-z0-9]{6,32})\.json$/i,
+  /^tag-prop-data-(.+)-([a-z0-9]{6,32})\.json$/i,
+  /^tag-prop-(.+)-([a-z0-9]{6,32})\.jsx$/i,
+  /^tag-view-(.+)-([a-z0-9]{6,32})\.jsx$/i,
+  /^prop-view-data-(.+)-([a-z0-9]{6,32})\.json$/i,
+  /^view-data-(.+)-([a-z0-9]{6,32})\.json$/i,
+  /^prop-view-(.+)-([a-z0-9]{6,32})\.jsx$/i,
+  /^view-(.+)-([a-z0-9]{6,32})\.jsx$/i,
+]
+
 export function tagIdFromViewDocName(name: string) {
   const file = String(name ?? '')
     .trim()
     .replace(/^assets\//, '')
     .replace(/^.*[/\\]/, '')
-  const catalog = /^tag-views-(.+)\.json$/i.exec(file)
-  if (catalog) return catalog[1] ?? ''
-  const data = /^tag-view-data-(.+)-([a-z0-9]{6,32})\.json$/i.exec(file)
-  if (data) return data[1] ?? ''
-  const propData = /^tag-prop-data-(.+)-([a-z0-9]{6,32})\.json$/i.exec(file)
-  if (propData) return propData[1] ?? ''
-  const prop = /^tag-prop-(.+)-([a-z0-9]{6,32})\.jsx$/i.exec(file)
-  if (prop) return prop[1] ?? ''
-  const jsx = /^tag-view-(.+)-([a-z0-9]{6,32})\.jsx$/i.exec(file)
-  return jsx?.[1] ?? ''
+  for (const pattern of TAG_VIEW_FILE_ID) {
+    const hit = pattern.exec(file)
+    if (hit) return hit[1] ?? ''
+  }
+  return ''
 }
 
 export function createTagViewId() {
