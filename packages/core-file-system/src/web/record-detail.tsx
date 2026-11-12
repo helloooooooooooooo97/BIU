@@ -20,6 +20,7 @@ import { dismissInspectorPaneMenu } from './inspector-pane-menu.tsx'
 import { PaneConfigMenuItem } from './pane-more-menu.tsx'
 import { PageContentFailed, PageContentLoading } from './page-content-status.tsx'
 import { RecordProperties } from './record-prop-host.tsx'
+import { useRecordContentBody } from './record-content.tsx'
 
 export { PageContentFailed, PageContentLoading } from './page-content-status.tsx'
 
@@ -276,6 +277,7 @@ export function RecordDetail({
   columnMenu?: ReactNode
 }) {
   const title = labelOf(selected)
+  const { hidden: contentHidden, Body: ContentView } = useRecordContentBody(collectionPath, selected, chrome)
   const recordPath = recordSourcePath(collectionPath, selected.id)
   const propPick = (key: string, field?: FieldSpec, text?: string) =>
     fieldPickAttrs(recordKind, selected.id, key, {
@@ -541,10 +543,9 @@ export function RecordDetail({
                     </Properties>
                   )
                 })()}
-                {contentFieldKey(schema) && schema.fields[contentFieldKey(schema)!] ? (() => {
+                {contentFieldKey(schema) && schema.fields[contentFieldKey(schema)!] && !contentHidden ? (() => {
                   const key = contentFieldKey(schema)!
                   const spec = schema.fields[key]!
-                  const ContentView = chrome?.Content
                   if (ContentView) {
                     return (
                       <div className="fsdb-fileview">

@@ -99,17 +99,19 @@ export function apply(ctx: Context) {
   ctx.inject(['databaseUi'], (inner) => {
     const ui = inner.get('databaseUi') as DatabaseUi
     let sessions: { dispose: () => void } | undefined
-    const chatView = ui.registerContentView('/agents', {
-      id: 'chat',
-      label: '聊天',
-      plugin: 'core-chat',
-      Icon: ChatBubbleLeftRightIcon,
-    })
+    let chatView: { dispose: () => void } | undefined
     void import('./sessions-chrome.tsx').then((mod) => {
       sessions = ui.decorate('/agents', mod.sessionsChrome())
+      chatView = ui.registerContentView('/agents', {
+        id: 'chat',
+        label: '聊天',
+        plugin: 'core-chat',
+        Icon: ChatBubbleLeftRightIcon,
+        Body: mod.SessionRecordChat,
+      })
     })
     return () => {
-      chatView.dispose()
+      chatView?.dispose()
       sessions?.dispose()
     }
   })

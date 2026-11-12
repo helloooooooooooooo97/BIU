@@ -139,11 +139,13 @@ export type CollectionViewType = {
   View: ComponentType<FsViewProps>
 }
 
-/** 记录详情「内容模式」：正文插件向文件系统工具栏登记，hidden 除外。 */
+/** 记录详情「内容模式」：正文插件向文件系统登记工具栏项和正文，hidden 除外。 */
 export type FsRecordContentView = {
   id: string
   label: string
   Icon?: ComponentType<{ className?: string }>
+  /** 该模式的正文。不传则回退集合 chrome.Content。文件系统按当前 contentViewId 选用；hidden 不渲染正文。 */
+  Body?: ComponentType<FsContentProps>
   plugin?: string
 }
 
@@ -177,7 +179,7 @@ export interface DatabaseUi {
   registerView(path: string, view: CollectionViewType): { dispose: () => void }
   /** 登记一行的样子。path 为 * 时所有表都能用。外壳仍由 File System 画。 */
   registerRowView(path: string, view: CollectionRowViewType): { dispose: () => void }
-  /** 正文插件给该 path 登记记录内容模式。hidden 不用登记。有本 path 登记时不继承 /*。 */
+  /** 正文插件给该 path 登记记录内容模式（含 Body）。hidden 不用登记。有本 path 登记时不继承 /*。 */
   registerContentView(path: string, view: FsRecordContentView): { dispose: () => void }
   /** 正文插件给详情栏登记排序/筛选。有本 path 的内容模式登记时不继承 /*。 */
   registerDetailTools(path: string, tools: FsDetailTools): { dispose: () => void }

@@ -36,7 +36,9 @@ export function apply(ctx: Context) {
   // 凡是有 file 正文的表都走 Markdown；没有 contentField 的表不会用到这份 chrome。
   ctx.effect(() => ui.decorate(DEFAULT_CHROME_PATH, { Content: PageEditor, DetailBar: PageDetailBar }).dispose)
   ctx.effect(() => {
-    const views = EDITOR_CONTENT_VIEWS.map((view) => ui.registerContentView(DEFAULT_CHROME_PATH, view))
+    const views = EDITOR_CONTENT_VIEWS.map((view) =>
+      ui.registerContentView(DEFAULT_CHROME_PATH, { ...view, Body: PageEditor }),
+    )
     const tools = ui.registerDetailTools(DEFAULT_CHROME_PATH, EDITOR_DETAIL_TOOLS)
     return () => {
       for (const item of views) item.dispose()

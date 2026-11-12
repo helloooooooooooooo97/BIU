@@ -50,5 +50,7 @@ test('session table uses mascot as the standalone icon property, title is just t
   assert.match(index, /decorate\('\/agents', mod\.sessionsChrome/)
   assert.match(index, /registerContentView\('\/agents'/)
   assert.match(index, /id: 'chat'/)
+  assert.match(index, /Body: mod.SessionRecordChat/)
+  assert.match(src, /export function SessionRecordChat/)
   assert.doesNotMatch(index, /registerDetailTools/)
 })
