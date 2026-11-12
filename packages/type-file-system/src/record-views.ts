@@ -1,3 +1,6 @@
+export { defaultContentSandboxSource, defaultPropSandboxSource } from './record-sandbox-templates.ts'
+import { defaultContentSandboxSource, defaultPropSandboxSource } from './record-sandbox-templates.ts'
+
 export const DEFAULT_RECORD_LAYOUT_ID = 'builtin-default'
 export const DEFAULT_RECORD_PROP_VIEW_ID = 'table'
 
@@ -75,6 +78,53 @@ export function parseRecordSandboxes(raw: unknown, fallbackName = '新视图'): 
     })
   }
   return out
+}
+
+export function recordSandboxSource(fieldKey: 'views' | 'propViews', title = '') {
+  return fieldKey === 'propViews' ? defaultPropSandboxSource(title) : defaultContentSandboxSource(title)
+}
+
+export function allocateRecordSandbox(
+  fieldKey: 'views' | 'propViews',
+  recordId: string,
+  name: string,
+  taken: Iterable<string>,
+): RecordSandboxView {
+  const id = crypto.randomUUID().replace(/-/g, '').slice(0, 8)
+  const prefix = fieldKey === 'propViews' ? 'prop-view' : 'view'
+  const rec = String(recordId ?? '').trim() || 'record'
+  return {
+    id,
+    name: uniqueViewName(name, taken),
+    kind: 'sandbox',
+    file: `${prefix}-${rec}-${id}.jsx`,
+    dataFile: `${prefix}-data-${rec}-${id}.json`,
+  }
+}
+
+export async function seedRecordSandbox(args: {
+  fieldKey: 'views' | 'propViews'
+  recordId: string
+  listed: RecordSandboxView[]
+  name?: string
+  title?: string
+  source?: RecordSandboxView | null
+  readFile?: (name: string, fallback: string) => Promise<string>
+  writeFile: (name: string, body: string, type: string) => Promise<void>
+}): Promise<RecordSandboxView> {
+  const title = args.title ?? ''
+  const fallback = recordSandboxSource(args.fieldKey, title)
+  const view = allocateRecordSandbox(
+    args.fieldKey,
+    args.recordId,
+    args.name?.trim() || '新视图',
+    args.listed.map((item) => item.name),
+  )
+  const jsx = args.source && args.readFile ? await args.readFile(args.source.file, fallback) : fallback
+  const data = args.source && args.readFile ? await args.readFile(args.source.dataFile, 'null') : 'null'
+  await args.writeFile(view.file, jsx, 'text/plain; charset=utf-8')
+  await args.writeFile(view.dataFile, data, 'application/json')
+  return view
 }
 
 export function parseRecordLayouts(raw: unknown, fallbackContent = 'doc'): RecordLayoutView[] {

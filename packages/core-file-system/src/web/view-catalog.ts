@@ -4,8 +4,6 @@ import {
   DEFAULT_RECORD_PROP_VIEW_ID,
   parseRecordLayouts,
   parseRecordSandboxes,
-  uniqueViewName,
-  type RecordSandboxView,
 } from '@biu/type-file-system/record-views'
 import { TAGS_COLLECTION_PATH, PAGES_COLLECTION_PATH } from './database-path.ts'
 import { normalizeCollectionPath } from '../paths.ts'
@@ -20,6 +18,7 @@ import {
 } from './record-layouts.ts'
 import { getTagPresentMode, setTagPresentMode, subscribeTagPresent, TAG_TABLE_VIEW_ID } from './tag-present.ts'
 import { copyTagSandboxView, createTagSandboxView, deleteTagSandboxView, getTagViews, subscribeTagViews } from './tag-views.ts'
+import { createRecordSandboxView } from './record-sandboxes.ts'
 
 export const VIEW_CATALOG_HOSTS_KEY = '__biuViewCatalogHosts'
 
@@ -219,17 +218,6 @@ function fallbackContent(path: string) {
   return path === TAGS_COLLECTION_PATH ? 'table' : 'doc'
 }
 
-function newSandbox(name: string, taken: string[], prefix: string, recordId: string): RecordSandboxView {
-  const id = crypto.randomUUID().replace(/-/g, '').slice(0, 8)
-  return {
-    id,
-    name: uniqueViewName(name, taken),
-    kind: 'sandbox',
-    file: `${prefix}-${recordId}-${id}.jsx`,
-    dataFile: `${prefix}-data-${recordId}-${id}.json`,
-  }
-}
-
 async function writeRecordCatalog(
   collectionPath: string,
   recordId: string,
@@ -265,14 +253,16 @@ async function defaultCopy(collectionPath: string, record: DbRecord, fieldKey: V
   const key = fieldKey === 'propViews' ? 'propViews' : 'views'
   const listed = parseRecordSandboxes(record[key])
   const source = listed.find((item) => item.id === target)
-  const view = newSandbox(
-    `${source?.name || (fieldKey === 'propViews' ? '表格' : '新视图')} 副本`,
-    listed.map((item) => item.name),
-    fieldKey === 'propViews' ? 'prop-view' : 'view',
-    id,
-  )
-  const ok = await writeRecordCatalog(path, id, key, [...listed, view])
-  if (ok) defaultSelect(path, record, fieldKey, view.id)
+  const view = await createRecordSandboxView({
+    collectionPath: path,
+    recordId: id,
+    fieldKey: key,
+    listed,
+    name: `${source?.name || (fieldKey === 'propViews' ? '表格' : '新视图')} 副本`,
+    title: String(record.title ?? ''),
+    source,
+  })
+  defaultSelect(path, record, fieldKey, view.id)
 }
 
 async function defaultRemove(collectionPath: string, record: DbRecord, fieldKey: ViewCatalogFieldKey, viewId: string) {

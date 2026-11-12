@@ -2,10 +2,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, type Componen
 import { createPortal } from 'react-dom'
 import { ArrowsPointingInIcon, ArrowsPointingOutIcon, CodeBracketIcon, EyeIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
 import { fieldIsWritable, sanitizeTagValuesPatch, type CollectionSchemaPack, type FieldSpec } from '@biu/type-file-system'
+import { defaultContentSandboxSource } from '@biu/type-file-system/record-views'
 import { FieldValuePop } from './field-value-pop.tsx'
 import { compileHostSource, loadHostComponent } from './tag-host-compile.ts'
 import {
-  defaultTagSandboxSource,
   getTagViews,
   openHostRecordPath,
   patchTagSandbox,
@@ -143,7 +143,7 @@ export function TagHostView({
   const fileTick = useTagFileTick()
   useTagViews(tagId)
   const view = viewOf(tagId, viewId)
-  const fallback = defaultTagSandboxSource(pack?.label ?? '')
+  const fallback = defaultContentSandboxSource(pack?.label ?? '')
   const [source, setSource] = useState(() => peekTagFile(view?.file ?? '') || fallback)
   const [tab, setTab] = useState<HostTab>('preview')
   const [expanded, setExpanded] = useState(false)
@@ -187,7 +187,7 @@ export function TagHostView({
   useEffect(() => {
     let gone = false
     const file = view?.file
-    const next = defaultTagSandboxSource(pack?.label ?? '')
+    const next = defaultContentSandboxSource(pack?.label ?? '')
     if (!file) {
       setSource(next)
       return
@@ -209,6 +209,10 @@ export function TagHostView({
   const biu = useMemo(
     () => ({
       tag: () => ({ id: tagId, title: pack?.label ?? '' }),
+      page: () => ({ id: tagId, title: pack?.label ?? '' }),
+      blocks: () => [],
+      kinds: () => [],
+      update: async () => undefined,
       fields: () =>
         fields.map((item) => ({
           key: item.key,
@@ -286,6 +290,10 @@ export function TagHostView({
       const FieldProxy = (props: { name?: string }) => envRef.current.Field(props)
       const biuProxy = {
         tag: () => envRef.current.biu.tag(),
+        page: () => envRef.current.biu.page(),
+        blocks: () => envRef.current.biu.blocks(),
+        kinds: () => envRef.current.biu.kinds(),
+        update: (id: string, patch: Record<string, unknown>) => envRef.current.biu.update(id, patch),
         fields: () => envRef.current.biu.fields(),
         values: () => envRef.current.biu.values(),
         get: (key: string) => envRef.current.biu.get(key),

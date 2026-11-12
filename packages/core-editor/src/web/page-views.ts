@@ -1,7 +1,6 @@
 import { useSyncExternalStore } from 'react'
-import { createPageBlockId } from '../page-block-fence.ts'
+import { seedRecordSandbox } from '@biu/type-file-system/record-views'
 import {
-  defaultSandboxSource,
   parsePageViews,
   viewsAssetName,
   type PageSandboxView,
@@ -9,7 +8,7 @@ import {
 import { getPagePresentMode, isPageBuiltinMode, setPagePresentMode } from './source-mode.ts'
 
 export type { PageSandboxView } from '../page-views.ts'
-export { defaultSandboxSource, parsePageViews, viewsAssetName } from '../page-views.ts'
+export { parsePageViews, viewsAssetName } from '../page-views.ts'
 
 const store = new Map<string, PageSandboxView[]>()
 let seq = 0
@@ -217,18 +216,17 @@ export async function savePageViews(pageId: string, views: PageSandboxView[]) {
 export async function createPageSandboxView(pageId: string, title = '', name = '新视图') {
   const id = String(pageId ?? '').trim()
   if (!id) throw new Error('missing page')
-  const viewId = createPageBlockId()
-  const view: PageSandboxView = {
-    id: viewId,
-    name: uniquePageViewName(id, name.trim() || '新视图'),
-    kind: 'sandbox',
-    file: `view-${id}-${viewId}.jsx`,
-    dataFile: `view-data-${id}-${viewId}.json`,
-  }
-  await putPageFile(view.file, defaultSandboxSource(title), 'text/plain; charset=utf-8')
-  await putPageFile(view.dataFile, 'null', 'application/json')
-  await savePageViews(id, [...getPageViews(id), view])
-  setPagePresentMode(id, viewId)
+  const listed = getPageViews(id)
+  const view = await seedRecordSandbox({
+    fieldKey: 'views',
+    recordId: id,
+    listed,
+    name,
+    title,
+    writeFile: putPageFile,
+  })
+  await savePageViews(id, [...listed, view])
+  setPagePresentMode(id, view.id)
   return view
 }
 
@@ -250,20 +248,19 @@ export async function copyPageSandboxView(pageId: string, viewId: string, title 
     if (!isPageBuiltinMode(target) && !fallbackName) return
     return createPageSandboxView(id, title, uniquePageViewName(id, `${fallbackName || '新视图'} 副本`))
   }
-  const body = await readPageFile(source.file, defaultSandboxSource(title))
-  const data = await readPageFile(source.dataFile, 'null')
-  const viewIdNext = createPageBlockId()
-  const view: PageSandboxView = {
-    id: viewIdNext,
-    name: uniquePageViewName(id, `${source.name} 副本`),
-    kind: 'sandbox',
-    file: `view-${id}-${viewIdNext}.jsx`,
-    dataFile: `view-data-${id}-${viewIdNext}.json`,
-  }
-  await putPageFile(view.file, body, 'text/plain; charset=utf-8')
-  await putPageFile(view.dataFile, data, 'application/json')
-  await savePageViews(id, [...getPageViews(id), view])
-  setPagePresentMode(id, viewIdNext)
+  const listed = getPageViews(id)
+  const view = await seedRecordSandbox({
+    fieldKey: 'views',
+    recordId: id,
+    listed,
+    name: `${source.name} 副本`,
+    title,
+    source,
+    readFile: readPageFile,
+    writeFile: putPageFile,
+  })
+  await savePageViews(id, [...listed, view])
+  setPagePresentMode(id, view.id)
   return view
 }
 

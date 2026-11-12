@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./ui": "./src/ui.ts",
-    "./record-views": "./src/record-views.ts"
+    "./record-views": "./src/record-views.ts",
+    "./record-sandbox-templates": "./src/record-sandbox-templates.ts"
   },
   "peerDependencies": {
     "cordis": "4.0.0-rc.8",

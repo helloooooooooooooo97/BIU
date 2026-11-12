@@ -35,7 +35,7 @@ export function compileHostSource(source: string): HostCompileResult {
       filePath: 'tag-view.tsx',
     }).code
     // eslint-disable-next-line @typescript-eslint/no-implied-eval
-    new Function('React', 'Field', 'biu', code)
+    new Function('React', 'Block', 'Field', 'biu', 'ui', code)
     return { ok: true, code }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) }
@@ -45,13 +45,15 @@ export function compileHostSource(source: string): HostCompileResult {
 export function loadHostComponent(code: string, React: unknown, Field: unknown, biu: unknown) {
   const factory = new Function(
     'React',
+    'Block',
     'Field',
     'biu',
+    'ui',
     `"use strict";
      ${code}
      return (typeof __Component === "function" && __Component) || (typeof App === "function" && App);`,
   )
-  const Component = factory(React, Field, biu)
+  const Component = factory(React, () => null, Field, biu, {})
   if (typeof Component !== 'function') throw new Error('sandbox view must export a React component')
   return Component as (...args: unknown[]) => unknown
 }
