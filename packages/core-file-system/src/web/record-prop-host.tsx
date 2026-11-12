@@ -385,14 +385,13 @@ export function RecordProperties({ record, schema, collectionPath, writable, chi
   const listed = parseRecordSandboxes(record.propViews)
   const stored = parseRecordLayouts(record.layouts, fallback)
   const storedLayout = stored.find((item) => item.id === layout.id) ?? stored[0]
-  const propViewId = [layout.propViewId, storedLayout?.propViewId].find(
-    (item) => item && item !== DEFAULT_RECORD_PROP_VIEW_ID && listed.some((view) => view.id === item),
-  )
-  const sandbox = listed.find((item) => item.id === propViewId)
+  const rawProp = [layout.propViewId, storedLayout?.propViewId].find((item) => item && item !== DEFAULT_RECORD_PROP_VIEW_ID)
+  const sandbox = listed.find((item) => item.id === rawProp)
   useEffect(() => {
     if (!path || !id) return
     void loadRecordLayouts(path, id, record.layouts, fallback)
   }, [path, id, record.layouts, fallback])
+  if (rawProp === 'hidden') return null
   if (!path || !sandbox) return children
   return (
     <RecordPropHostView

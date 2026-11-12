@@ -67,11 +67,15 @@ export async function readRecordViewFile(
   if (hit) return hit.text
   const path = `${normalizeCollectionPath(collectionPath)}/${recordId}`
   const url = `${fileApi(collectionPath)}/${encodeURIComponent(key)}?path=${encodeURIComponent(path)}`
-  const res = await fetch(url, { headers: { 'x-biu-resource-path': path } })
-  if (!res.ok) return fallback
-  const text = await res.text()
-  rememberRecordViewFile(collectionPath, recordId, key, text, String(res.headers.get('etag') ?? ''))
-  return text
+  try {
+    const res = await fetch(url, { headers: { 'x-biu-resource-path': path } })
+    if (!res.ok) return fallback
+    const text = await res.text()
+    rememberRecordViewFile(collectionPath, recordId, key, text, String(res.headers.get('etag') ?? ''))
+    return text
+  } catch {
+    return fallback
+  }
 }
 
 export async function writeRecordViewCatalog(

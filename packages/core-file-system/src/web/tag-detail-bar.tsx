@@ -764,11 +764,13 @@ export function TagContent({ record, value, writable, onChange }: FsContentProps
   const stamp = tagId.includes('::')
   const present = useTagPresentMode(tagId)
   const views = useTagViews(tagId)
+  const layout = useActiveRecordLayout(TAGS_PATH, tagId, 'table')
   useEffect(() => {
     if (!tagId || stamp) return
     void loadTagViews(tagId, record.views)
-  }, [tagId, record.views, stamp])
-  const sandbox = views.find((item) => item.id === present)
+    void loadRecordLayouts(TAGS_PATH, tagId, record.layouts, 'table')
+  }, [tagId, record.views, record.layouts, stamp])
+  const sandbox = views.find((item) => item.id === layout.contentViewId) ?? views.find((item) => item.id === present)
   let fields: unknown = record.fields
   if (typeof fields === 'string') {
     try {
