@@ -484,6 +484,27 @@ function askNewPresentation(opts: { path: string; title?: string }) {
   })
 }
 
+function askNewPlugin() {
+  const draft =
+    '请帮我写一个新插件。先听我描述它要做什么（窗口应用、页面块还是无头登记）。然后 db_action path=/plugins/<id> action=sandbox 建 .plugin-dev/<id>/（记录可以还不存在），写完代码再 action=pack 打进 .plugin。不要 db_create /plugins，不要直写 .plugin，不要改 packages/ 或 cordis.plugins.json。有窗口写 shell 宽高；无头写 headless:true。'
+  void import('@biu/core-pick/web').then((mod) => {
+    mod.getPick()?.attach(
+      [
+        {
+          kind: 'collection',
+          id: 'plugins',
+          action: 'plugin',
+          path: '/plugins',
+          label: '插件',
+          title: '插件',
+          route: typeof window === 'undefined' ? '' : window.location.pathname,
+        },
+      ],
+      { text: draft },
+    )
+  })
+}
+
 type CheckSlot = { kind: 'head' | 'gap' | 'row'; id?: string; top: number; h: number }
 
 function TableCheckRail({
@@ -2618,6 +2639,7 @@ export function CollectionBrowser({
   )
   const canCreate =
     (isDataOverview ? overviewCreateTables.length > 0 : Boolean(schema?.records?.create)) && !subsetLocked
+  const canAskNewPlugin = collectionPath === '/plugins' && !subsetLocked
   const createTypeTable =
     overviewCreateTables.find((table) => table.path === createTypePath) ??
     overviewCreateTables.find((table) => table.path === PAGES_COLLECTION_PATH) ??
@@ -4919,6 +4941,7 @@ export function CollectionBrowser({
     overviewCreateTables.map((table) => table.path).join(','),
     Number(localData),
     Number(canCreate),
+    Number(canAskNewPlugin),
     Number(refreshing),
     notice,
     activeViewId ?? '',
@@ -5392,18 +5415,22 @@ export function CollectionBrowser({
                 </span>
               ) : null}
             </div>
-            {canCreate && !sheet ? (
+            {(canCreate || canAskNewPlugin) && !sheet ? (
               <div className="fsdb-create-group">
                 <button
                   type="button"
                   className="fsdb-create-btn"
-                  aria-label="新建记录"
+                  aria-label={canAskNewPlugin ? '新建插件' : '新建记录'}
                   title="新建"
-                  onClick={() => void createRecord()}
+                  data-testid={canAskNewPlugin ? 'fsdb-ask-new-plugin' : undefined}
+                  onClick={() => {
+                    if (canAskNewPlugin) askNewPlugin()
+                    else void createRecord()
+                  }}
                 >
                   新建
                 </button>
-                {isDataOverview ? (
+                {canAskNewPlugin ? null : isDataOverview ? (
                 <HeadlessDismiss enabled={createTypeOpen} onDismiss={() => setCreateTypeOpen(false)}>
                   <div className="fsdb-create-scope-wrap">
                   <button
@@ -5523,6 +5550,7 @@ export function CollectionBrowser({
     Number(nested),
     Number(viewsOpen),
     Number(canCreate),
+    Number(canAskNewPlugin),
     Number(viewStarred),
     activeViewId ?? '',
     selected?.id ?? '',

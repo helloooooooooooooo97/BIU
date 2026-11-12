@@ -570,6 +570,17 @@ test('creating a record opens a new inspector pane instead of covering the view'
   assert.doesNotMatch(createFn, /reloadRef\.current\(\{ force: true \}\)/)
 })
 
+test('plugins toolbar asks for a new plugin via composer draft', () => {
+  assert.match(browser, /function askNewPlugin/)
+  assert.match(browser, /canAskNewPlugin/)
+  assert.match(browser, /data-testid=\{canAskNewPlugin \? 'fsdb-ask-new-plugin'/)
+  assert.match(browser, /db_action path=\/plugins\/<id> action=sandbox/)
+  assert.match(browser, /action=pack/)
+  assert.match(browser, /getPick\(\)\?\.attach/)
+  const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
+  assert.match(css, /:not\(:has\(\.fsdb-create-scope-wrap\)\) \.fsdb-create-btn\{border-radius:var\(--biu-radius-sm\)\}/)
+})
+
 test('create record sits at the right of the toolbar with a blue label', () => {
   assert.match(browser, /aria-label="排序"[\s\S]*aria-label="筛选"[\s\S]*aria-label="分组"/)
   assert.match(browser, /sortCustom \? <span className="tasks-sort-dot"/)

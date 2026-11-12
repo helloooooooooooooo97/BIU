@@ -115,6 +115,7 @@ const CSS = `
 .fsdb-layout-opt.is-active{color:var(--biu-color-text);background:var(--biu-color-bg-hover)}
 .fsdb-create-group{position:relative;display:inline-flex;align-items:stretch;margin-left:var(--biu-space-2);border-radius:var(--biu-radius-sm);background:var(--biu-color-emphasis)}
 .fsdb-create-btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--biu-space-1);height:var(--biu-size-control-md);margin:0;padding:0 var(--biu-space-2);border:0;border-radius:var(--biu-radius-sm) 0 0 var(--biu-radius-sm);background:transparent;color:var(--biu-color-on-emphasis);cursor:pointer;font:inherit;font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);white-space:nowrap}
+.fsdb-create-group:not(:has(.fsdb-create-scope-wrap)) .fsdb-create-btn{border-radius:var(--biu-radius-sm)}
 .fsdb-create-btn:hover{background:color-mix(in srgb,#000 8%,var(--biu-color-emphasis))}
 .fsdb-create-scope-wrap{display:inline-flex;align-items:stretch;position:relative}
 .fsdb-create-scope{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:var(--biu-size-control-md);height:var(--biu-size-control-md);margin:0;padding:0;border:0;border-radius:0 var(--biu-radius-sm) var(--biu-radius-sm) 0;background:color-mix(in srgb,#000 8%,var(--biu-color-emphasis));color:var(--biu-color-on-emphasis);cursor:pointer}
