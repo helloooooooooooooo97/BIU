@@ -24,6 +24,10 @@ export function rememberRecordViewFile(collectionPath: string, recordId: string,
   fileCache.set(cacheKey(collectionPath, recordId, name), { text, etag: assetEtag(etag) })
 }
 
+export function peekRecordViewFile(collectionPath: string, recordId: string, name: string) {
+  return fileCache.get(cacheKey(collectionPath, recordId, name))?.text
+}
+
 export async function putRecordViewFile(
   collectionPath: string,
   recordId: string,
@@ -63,11 +67,15 @@ export async function readRecordViewFile(
   if (hit) return hit.text
   const path = `${normalizeCollectionPath(collectionPath)}/${recordId}`
   const url = `${fileApi(collectionPath)}/${encodeURIComponent(key)}?path=${encodeURIComponent(path)}`
-  const res = await fetch(url, { headers: { 'x-biu-resource-path': path } })
-  if (!res.ok) return fallback
-  const text = await res.text()
-  rememberRecordViewFile(collectionPath, recordId, key, text, String(res.headers.get('etag') ?? ''))
-  return text
+  try {
+    const res = await fetch(url, { headers: { 'x-biu-resource-path': path } })
+    if (!res.ok) return fallback
+    const text = await res.text()
+    rememberRecordViewFile(collectionPath, recordId, key, text, String(res.headers.get('etag') ?? ''))
+    return text
+  } catch {
+    return fallback
+  }
 }
 
 export async function writeRecordViewCatalog(

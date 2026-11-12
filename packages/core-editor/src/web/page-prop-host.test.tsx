@@ -7,7 +7,6 @@ import { PAGE_EDITOR_STYLE } from './style.ts'
 import { PagePropHostView, PageProperties } from './page-prop-host.tsx'
 import { resetPageFileState } from './page-views.ts'
 import { setPagePropViews } from './page-prop-views.ts'
-import { PAGE_PROP_HIDDEN_VIEW_ID, PAGE_PROP_TABLE_VIEW_ID, setPagePropPresentMode } from './page-prop-present.ts'
 
 test('property host paints Field sandbox when the view file is missing', async () => {
   cleanup()
@@ -42,37 +41,44 @@ test('property host paints Field sandbox when the view file is missing', async (
 
 test('page properties keep the default table until a custom view is selected', () => {
   cleanup()
-  setPagePropPresentMode('home', PAGE_PROP_TABLE_VIEW_ID)
-  setPagePropViews('home', [])
   const { getByTestId, rerender } = render(
-    <PageProperties record={{ id: 'home', title: '演示页' }} collectionPath="/pages">
+    <PageProperties record={{ id: 'home', title: '演示页', propViews: [] }} collectionPath="/pages">
       <div data-testid="prop-table">表格</div>
     </PageProperties>,
   )
   assert.equal(getByTestId('prop-table').textContent, '表格')
-  setPagePropViews('home', [
-    { id: 'card1', name: '卡片', kind: 'sandbox', file: 'missing-prop.jsx', dataFile: 'missing-prop-data.json' },
-  ])
-  setPagePropPresentMode('home', 'card1')
   rerender(
-    <PageProperties record={{ id: 'home', title: '演示页' }} collectionPath="/pages">
+    <PageProperties
+      record={{
+        id: 'home',
+        title: '演示页',
+        propViews: [{ id: 'card1', name: '卡片', kind: 'sandbox', file: 'missing-prop.jsx', dataFile: 'missing-prop-data.json' }],
+        layouts: [{ id: 'need', name: '需求', contentViewId: 'doc', propViewId: 'card1' }],
+      }}
+      collectionPath="/pages"
+    >
       <div data-testid="prop-table">表格</div>
     </PageProperties>,
   )
-  assert.ok(getByTestId('page-prop-host'))
+  assert.ok(getByTestId('record-prop-host'))
 })
 
 test('hidden property view unmounts the properties region', () => {
   cleanup()
-  setPagePropPresentMode('home', PAGE_PROP_HIDDEN_VIEW_ID)
-  setPagePropViews('home', [])
   const { queryByTestId } = render(
-    <PageProperties record={{ id: 'home', title: '演示页' }} collectionPath="/pages">
+    <PageProperties
+      record={{
+        id: 'home',
+        title: '演示页',
+        layouts: [{ id: 'need', name: '需求', contentViewId: 'doc', propViewId: 'hidden' }],
+      }}
+      collectionPath="/pages"
+    >
       <div data-testid="prop-table">表格</div>
     </PageProperties>,
   )
   assert.equal(queryByTestId('prop-table'), null)
-  assert.equal(queryByTestId('page-prop-host'), null)
+  assert.equal(queryByTestId('record-prop-host'), null)
 })
 
 test('property host Field is read-only when the schema field is not writable', async () => {

@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType } from 'react'
+import { RecordProperties } from '@biu/core-file-system/record-prop-host'
 import { createPortal } from 'react-dom'
 import { ArrowsPointingInIcon, ArrowsPointingOutIcon, CodeBracketIcon, EyeIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
 import { fieldIsWritable, sanitizeRecordPatch, type CollectionSchema, type DbRecord } from '@biu/type-file-system'
@@ -380,32 +381,6 @@ export function PagePropHostView({
   return expanded ? createPortal(card, document.body) : card
 }
 
-export function PageProperties({
-  record,
-  schema,
-  collectionPath,
-  writable,
-  children,
-}: {
-  record: DbRecord
-  schema?: CollectionSchema
-  collectionPath?: string
-  writable?: boolean
-  children: ReactNode
-}) {
-  const page = !collectionPath || collectionPath === '/pages'
-  const present = usePagePropPresentMode(record.id)
-  const views = usePagePropViews(record.id)
-  const sandbox = views.find((item) => item.id === present)
-  if (present === PAGE_PROP_HIDDEN_VIEW_ID) return null
-  if (!page || !sandbox) return children
-  return (
-    <PagePropHostView
-      record={record}
-      viewId={sandbox.id}
-      schema={schema}
-      writable={writable !== false}
-      collectionPath={collectionPath}
-    />
-  )
+export function PageProperties(props: Parameters<typeof RecordProperties>[0]) {
+  return <RecordProperties {...props} />
 }

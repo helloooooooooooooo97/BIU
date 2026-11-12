@@ -19,6 +19,7 @@ import { fieldPickAttrs, recordSourcePath } from './pick-dom.ts'
 import { dismissInspectorPaneMenu } from './inspector-pane-menu.tsx'
 import { PaneConfigMenuItem } from './pane-more-menu.tsx'
 import { PageContentFailed, PageContentLoading } from './page-content-status.tsx'
+import { RecordProperties } from './record-prop-host.tsx'
 
 export { PageContentFailed, PageContentLoading } from './page-content-status.tsx'
 
@@ -434,7 +435,7 @@ export function RecordDetail({
                   />
                 ) : null}
                 {(() => {
-                  const Properties = chrome?.Properties
+                  const Properties = chrome?.Properties ?? RecordProperties
                   const table = (
                 <div className="fsdb-detail-aside">
                   <table className="tasks-table is-wrap">

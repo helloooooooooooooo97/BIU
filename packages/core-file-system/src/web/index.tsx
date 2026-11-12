@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { CircleStackIcon } from '@heroicons/react/16/solid'
 import type { SlotProps } from '@biu/type-slots'
 import { DATABASE_CHANNEL, type CollectionInfo } from '@biu/type-file-system'
-import type { CollectionChrome } from '@biu/type-file-system/ui'
+import { DEFAULT_CHROME_PATH, type CollectionChrome } from '@biu/type-file-system/ui'
 import { isLegacyDatabasePath, parseAppPath } from '@biu/web-session-view'
 import { pathForCenter, pathForCrumbTarget, type CrumbTarget } from './sidebar-nav.ts'
 import { parseSharePath } from '../share-snapshot.ts'
@@ -21,6 +21,7 @@ import { DATA_COLLECTION_PATH, DATA_MODULE, DATA_MODULE_ID, DATA_MODULE_PATH, TA
 import { dataChrome, setViaDataCrumbs, subscribeViaDataCrumbs, viaDataCrumbsOn, viaDataViewId } from './data-chrome.ts'
 import { writeMainDataRoute } from './main-data-route.ts'
 import { tagsChrome } from './tag-chrome.tsx'
+import { RecordProperties } from './record-prop-host.tsx'
 import { viewsChrome } from './views-chrome.ts'
 import { pageBlocksChrome } from './page-blocks-chrome.ts'
 import { viewsForRegisteredCollection } from './collection-nav.ts'
@@ -307,6 +308,7 @@ export function apply(ctx: Context) {
   ctx.effect(() => {
     const ui = getDatabaseUi()
     if (!ui) return () => undefined
+    const defaults = ui.decorate(DEFAULT_CHROME_PATH, { Properties: RecordProperties })
     const dataUi = ui.decorate(DATA_COLLECTION_PATH, dataChrome)
     const views = ui.decorate(VIEWS_COLLECTION_PATH, viewsChrome)
     const tagsUi = ui.decorate(TAGS_COLLECTION_PATH, tagsChrome)
@@ -318,6 +320,7 @@ export function apply(ctx: Context) {
       }),
     )
     return () => {
+      defaults.dispose()
       dataUi.dispose()
       views.dispose()
       tagsUi.dispose()

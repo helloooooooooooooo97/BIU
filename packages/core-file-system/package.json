@@ -15,7 +15,10 @@
     "./inspector-pane-menu": "./src/web/inspector-pane-menu.tsx",
     "./page-width": "./src/web/page-width.ts",
     "./layout-prefs-menu": "./src/web/layout-prefs-menu.tsx",
-    "./field-value": "./src/web/field-value-pop.tsx"
+    "./field-value": "./src/web/field-value-pop.tsx",
+    "./record-layouts": "./src/web/record-layouts.ts",
+    "./record-sandboxes": "./src/web/record-sandboxes.ts",
+    "./record-prop-host": "./src/web/record-prop-host.tsx"
   },
   "dependencies": {
     "@biu/core-pick": "0.1.0",
