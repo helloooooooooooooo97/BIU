@@ -3,13 +3,22 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { Context, Service } from 'cordis'
-import { DEFAULT_CHROME_PATH, type CollectionChrome, type CollectionViewType, type DatabaseUi } from '@biu/type-file-system/ui'
+import {
+  DEFAULT_CHROME_PATH,
+  type CollectionChrome,
+  type CollectionViewType,
+  type DatabaseUi,
+  type FsDetailTools,
+  type FsRecordContentView,
+} from '@biu/type-file-system/ui'
 import * as editorUi from './index.ts'
 import { PageEditor } from './page-editor.tsx'
 
 class FakeDatabaseUi extends Service implements DatabaseUi {
   paths: string[] = []
   registered: Array<{ path: string; id: string; label: string }> = []
+  content: Array<{ path: string; id: string }> = []
+  tools: Array<{ path: string }> = []
   constructor(ctx: Context) {
     super(ctx, 'databaseUi')
   }
@@ -32,6 +41,14 @@ class FakeDatabaseUi extends Service implements DatabaseUi {
   registerRowView() {
     return { dispose() {} }
   }
+  registerContentView(path: string, view: FsRecordContentView) {
+    this.content.push({ path, id: view.id })
+    return { dispose() {} }
+  }
+  registerDetailTools(path: string, _tools: FsDetailTools) {
+    this.tools.push({ path })
+    return { dispose() {} }
+  }
   chrome() {
     return {}
   }
@@ -40,6 +57,12 @@ class FakeDatabaseUi extends Service implements DatabaseUi {
   }
   rowViews() {
     return []
+  }
+  contentViews() {
+    return []
+  }
+  detailTools() {
+    return {}
   }
   subscribe() {
     return () => undefined
@@ -52,6 +75,13 @@ test('core-editor paints Content as the default for every file body, and page-bl
   await ctx.plugin(editorUi)
   assert.deepEqual(ui.paths, [DEFAULT_CHROME_PATH, '/page-blocks'])
   assert.deepEqual(ui.registered, [{ path: '/page-blocks', id: 'blocks', label: '组件' }])
+  assert.deepEqual(ui.content.map((item) => item.id), ['doc', 'outline', 'table', 'source'])
+  assert.equal(ui.content.every((item) => item.path === DEFAULT_CHROME_PATH), true)
+  assert.deepEqual(ui.tools, [{ path: DEFAULT_CHROME_PATH }])
+  assert.equal(ui.content.some((item) => item.id === 'hidden'), false)
+  const toolsSrc = readFileSync(resolve(import.meta.dirname, './editor-content-views.ts'), 'utf8')
+  assert.match(toolsSrc, /Search: EditorDetailSearch/)
+  assert.doesNotMatch(toolsSrc, /id: 'hidden'/)
   assert.ok(ctx.pageEditor)
   assert.equal(ctx.pageEditor.block('sandbox')?.plugin, 'page-sandbox')
   assert.equal(ctx.pageEditor.block('sandbox')?.label, '沙箱')

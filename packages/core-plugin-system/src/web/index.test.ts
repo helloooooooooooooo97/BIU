@@ -23,11 +23,23 @@ class FakeDatabaseUi extends Service implements DatabaseUi {
   registerRowView() {
     return { dispose() {} }
   }
+  registerContentView() {
+    return { dispose() {} }
+  }
+  registerDetailTools() {
+    return { dispose() {} }
+  }
   views() {
     return [] as CollectionViewType[]
   }
   rowViews() {
     return []
+  }
+  contentViews() {
+    return []
+  }
+  detailTools() {
+    return {}
   }
   subscribe() {
     return () => undefined

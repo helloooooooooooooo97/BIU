@@ -21,6 +21,12 @@ class FakeDatabaseUi extends Service implements DatabaseUi {
   registerRowView() {
     return { dispose() {} }
   }
+  registerContentView() {
+    return { dispose() {} }
+  }
+  registerDetailTools() {
+    return { dispose() {} }
+  }
   chrome() {
     return this.last?.chrome ?? {}
   }
@@ -29,6 +35,12 @@ class FakeDatabaseUi extends Service implements DatabaseUi {
   }
   rowViews() {
     return []
+  }
+  contentViews() {
+    return []
+  }
+  detailTools() {
+    return {}
   }
   subscribe() {
     return () => undefined

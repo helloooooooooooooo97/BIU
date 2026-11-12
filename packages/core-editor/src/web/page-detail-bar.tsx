@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { HeadlessDismiss } from '@biu/biu-ui'
 import { HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
 import type { FsDetailBarProps } from '@biu/type-file-system/ui'
@@ -7,14 +7,10 @@ import {
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  ChevronUpIcon,
   CodeBracketIcon,
-  DocumentTextIcon,
   EyeIcon,
   EyeSlashIcon,
   FunnelIcon,
-  ListBulletIcon,
-  MagnifyingGlassIcon,
   PencilSquareIcon,
   PlusIcon,
   Square2StackIcon,
@@ -45,17 +41,15 @@ import {
   useActivePageLayout,
   usePageLayouts,
 } from './page-layouts.ts'
-import { kindLabel } from './block-id.ts'
 import {
   pageFilterActive,
-  patchPageFind,
-  usePageFind,
   usePageViewState,
-  type PageSort,
 } from './page-view-state.ts'
 import { useStickyToolbar } from './sticky-toolbar.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
-import { parseRecordSandboxes } from '@biu/type-file-system/record-views'
+import { HIDDEN_CONTENT_VIEW_ID, parseRecordSandboxes } from '@biu/type-file-system/record-views'
+import { getDatabaseUi } from '@biu/core-file-system/database-ui'
+import { EDITOR_CONTENT_VIEWS, EDITOR_DETAIL_TOOLS } from './editor-content-views.ts'
 import {
   addRecordLayout,
   copyRecordLayout,
@@ -69,13 +63,7 @@ import {
 } from '@biu/core-file-system/record-layouts'
 import { createRecordSandboxView, writeRecordViewCatalog } from '@biu/core-file-system/record-sandboxes'
 
-const MODES = [
-  { id: 'doc' as const, label: '文档', Icon: DocumentTextIcon },
-  { id: 'outline' as const, label: '大纲', Icon: ListBulletIcon },
-  { id: 'table' as const, label: '表格', Icon: TableCellsIcon },
-  { id: 'source' as const, label: '源码', Icon: CodeBracketIcon },
-  { id: 'hidden' as const, label: '隐藏', Icon: EyeSlashIcon },
-]
+const HIDDEN_MODE = { id: HIDDEN_CONTENT_VIEW_ID, label: '隐藏', Icon: EyeSlashIcon }
 
 function layoutKindIcon(kind?: string) {
   return kind === 'sandbox' ? CodeBracketIcon : Squares2X2Icon
@@ -86,15 +74,6 @@ function propPresentIcon(propViewId: string) {
   if (propViewId === PAGE_PROP_TABLE_VIEW_ID) return TableCellsIcon
   return SandboxKindIcon
 }
-
-const KINDS = ['paragraph', 'heading', 'bulletList', 'orderedList', 'blockquote', 'codeBlock', 'table', 'pageBlock', 'slide', 'blockMath', 'image']
-
-const SORTS: { id: PageSort; label: string }[] = [
-  { id: 'doc', label: '原文顺序' },
-  { id: 'title-asc', label: '按标题 A→Z' },
-  { id: 'title-desc', label: '按标题 Z→A' },
-  { id: 'kind', label: '按块类型' },
-]
 
 function Row({
   label,
@@ -143,10 +122,17 @@ export function PageDetailBar({
   const pagePropViews = usePagePropViews(record.id)
   const listedPropViews = pageRecord ? pagePropViews : parseRecordSandboxes(record.propViews)
   const listedContentViews = pageRecord ? pageViews : parseRecordSandboxes(record.views)
+  const ui = getDatabaseUi()
+  useSyncExternalStore(
+    (fn) => (ui ? ui.subscribe(fn) : () => undefined),
+    () =>
+      ui
+        ? `${ui.contentViews(path).map((item) => item.id).join(',')}|${ui.detailTools(path).sorts?.length ?? 0}|${ui.detailTools(path).filters?.length ?? 0}|${ui.detailTools(path).Search ? 1 : 0}`
+        : '',
+  )
+  const registeredModes = ui?.contentViews(path) ?? EDITOR_CONTENT_VIEWS
+  const detailTools = ui ? ui.detailTools(path) : EDITOR_DETAIL_TOOLS
   const view = usePageViewState(record.id)
-  const find = usePageFind(record.id)
-  const searchRef = useRef<HTMLDivElement>(null)
-  const searchInput = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const viewRef = useRef<HTMLDivElement>(null)
@@ -159,9 +145,10 @@ export function PageDetailBar({
   const toolbarRef = useRef<HTMLDivElement>(null)
   useStickyToolbar(toolbarRef)
   const contentId = pageRecord ? present : fsActiveLayout.contentViewId
+  const builtinModes = [...registeredModes, HIDDEN_MODE]
   const contentMode = listedContentViews.find((item) => item.id === contentId)
     ? { id: contentId, label: listedContentViews.find((item) => item.id === contentId)!.name, Icon: SandboxKindIcon }
-    : (MODES.find((item) => item.id === contentId) ?? MODES[0])
+    : (builtinModes.find((item) => item.id === contentId) ?? registeredModes[0] ?? HIDDEN_MODE)
   const CurrentIcon = contentMode.Icon
   const [creatingView, setCreatingView] = useState(false)
   const [creatingLayout, setCreatingLayout] = useState(false)
@@ -267,12 +254,6 @@ export function PageDetailBar({
     }
     void loadRecordLayouts(path, record.id, record.layouts, fallback)
   }, [record.id, record.views, record.propViews, record.layouts, path, fallback, pageRecord])
-
-  useEffect(() => {
-    if (!find.open) return
-    searchInput.current?.focus({ preventScroll: true })
-    searchInput.current?.select()
-  }, [find.open])
 
   const toggle = (next: string) => setOpen((prev) => (prev === next ? null : next))
 
@@ -450,57 +431,7 @@ export function PageDetailBar({
         </div>
       </div>
       <div className="tasks-toolbar-right">
-        <HeadlessDismiss
-          enabled={find.open}
-          onDismiss={() => {
-            if (!find.query) patchPageFind(record.id, { open: false, index: 0, total: 0 })
-          }}
-        >
-          <div className={`tasks-search-wrap${find.open ? ' is-open is-find' : ''}`} ref={searchRef}>
-            <button
-              type="button"
-              className={`tasks-sort-btn${find.open ? ' is-active' : ''}`}
-              aria-label="搜索"
-              aria-expanded={find.open}
-              title="搜索"
-              onClick={() => patchPageFind(record.id, find.open ? { open: false, query: '', index: 0, total: 0 } : { open: true })}
-            >
-              <MagnifyingGlassIcon aria-hidden className="size-[14px]" />
-            </button>
-            {find.open ? (
-              <>
-                <input
-                  ref={searchInput}
-                  className="tasks-search"
-                  value={find.query}
-                  placeholder="搜索"
-                  aria-label="正文搜索"
-                  data-testid="page-find"
-                  onChange={(event) => patchPageFind(record.id, { query: event.target.value, index: 0 })}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Escape') {
-                      event.preventDefault()
-                      patchPageFind(record.id, { open: false, query: '', index: 0, total: 0 })
-                    }
-                    if (event.key === 'Enter') {
-                      event.preventDefault()
-                      patchPageFind(record.id, { index: find.index + (event.shiftKey ? -1 : 1) })
-                    }
-                  }}
-                />
-                <span className="page-find-count" data-testid="page-find-count">
-                  {find.query.trim() ? `${find.total ? find.index + 1 : 0}/${find.total}` : ''}
-                </span>
-                <button type="button" className="page-find-btn" title="上一个" aria-label="上一个" onClick={() => patchPageFind(record.id, { index: find.index - 1 })}>
-                  <ChevronUpIcon aria-hidden className="size-3.5" />
-                </button>
-                <button type="button" className="page-find-btn" title="下一个" aria-label="下一个" onClick={() => patchPageFind(record.id, { index: find.index + 1 })}>
-                  <ChevronDownIcon aria-hidden className="size-3.5" />
-                </button>
-              </>
-            ) : null}
-          </div>
-        </HeadlessDismiss>
+        {detailTools.Search ? <detailTools.Search record={record} collectionPath={path} /> : null}
         <div className="tasks-sort-wrap" ref={propRef}>
             <button
               type="button"
@@ -714,23 +645,26 @@ export function PageDetailBar({
           {open === 'mode' ? (
             <HeadlessDismiss onDismiss={() => setOpen(null)} insideRef={modeRef}>
               <div className="tasks-sort-menu fsdb-tool-flyout" role="menu">
-                {MODES.map((item) => (
+                {builtinModes.map((item) => {
+                  const Icon = item.Icon ?? EyeSlashIcon
+                  return (
                   <button
                     key={item.id}
                     type="button"
                     role="menuitemradio"
                     aria-checked={item.id === contentId}
                     className={`tasks-viewdd-item-main fsdb-tool-row${item.id === contentId ? ' is-active' : ''}`}
-                    data-testid={item.id === 'hidden' ? 'page-view-hidden' : undefined}
+                    data-testid={item.id === HIDDEN_CONTENT_VIEW_ID ? 'page-view-hidden' : undefined}
                     onClick={() => {
-                      void patchLayout( { contentViewId: item.id })
+                      void patchLayout({ contentViewId: item.id })
                       setOpen(null)
                     }}
                   >
-                    <item.Icon aria-hidden className="tasks-viewdd-item-ico" />
+                    <Icon aria-hidden className="tasks-viewdd-item-ico" />
                     <span className="tasks-viewdd-item-name">{item.label}</span>
                   </button>
-                ))}
+                  )
+                })}
                 {listedContentViews.map((item) => (
                   <div key={item.id} className={`tasks-viewdd-item${item.id === contentId ? ' is-active' : ''}`}>
                     <button
@@ -810,6 +744,7 @@ export function PageDetailBar({
             </HeadlessDismiss>
           ) : null}
         </div>
+        {detailTools.sorts?.length ? (
         <div className="tasks-sort-wrap" ref={sortRef}>
           <button
             type="button"
@@ -824,18 +759,20 @@ export function PageDetailBar({
           {open === 'sort' ? (
             <HeadlessDismiss onDismiss={() => setOpen(null)} insideRef={sortRef}>
               <div className="tasks-sort-menu fsdb-tool-flyout" role="menu">
-                {SORTS.map((item) => (
+                {detailTools.sorts.map((item) => (
                   <Row
                     key={item.id}
                     label={item.label}
                     on={(pageRecord ? view.sort : activeLayout.sort) === item.id}
-                    onToggle={() => void patchLayout( { sort: item.id })}
+                    onToggle={() => void patchLayout({ sort: item.id as typeof activeLayout.sort })}
                   />
                 ))}
               </div>
             </HeadlessDismiss>
           ) : null}
         </div>
+        ) : null}
+        {detailTools.filters?.length ? (
         <div className="tasks-filter-btn-wrap" ref={filterRef}>
           <button
             type="button"
@@ -851,26 +788,30 @@ export function PageDetailBar({
             <HeadlessDismiss onDismiss={() => setOpen(null)} insideRef={filterRef}>
               <div className="tasks-filter-menu fsdb-tool-flyout" role="menu">
                 <Row
-                  label="全部类型"
+                  label={detailTools.filterAllLabel || '全部'}
                   on={!filterOn}
-                  onToggle={() => void patchLayout( { filterKinds: [] })}
+                  onToggle={() => void patchLayout({ filterKinds: [] })}
                 />
-                {KINDS.map((kind) => (
+                {detailTools.filters.map((item) => {
+                  const selected = pageRecord ? view.filterKinds : activeLayout.filterKinds
+                  return (
                   <Row
-                    key={kind}
-                    label={kindLabel(kind)}
-                    on={view.filterKinds.includes(kind)}
+                    key={item.id}
+                    label={item.label}
+                    on={selected.includes(item.id)}
                     onToggle={() => {
-                      const has = view.filterKinds.includes(kind)
-                      const next = has ? view.filterKinds.filter((item) => item !== kind) : [...view.filterKinds, kind]
-                      void patchLayout( { filterKinds: next })
+                      const has = selected.includes(item.id)
+                      const next = has ? selected.filter((key) => key !== item.id) : [...selected, item.id]
+                      void patchLayout({ filterKinds: next })
                     }}
                   />
-                ))}
+                  )
+                })}
               </div>
             </HeadlessDismiss>
           ) : null}
         </div>
+        ) : null}
         <div className="tasks-sort-wrap" ref={columnRef}>
           <button
             type="button"
