@@ -26,7 +26,7 @@ test('page block playground UIs use ReUI tokens instead of hardcoded light-theme
   }
 })
 
-test('page plugin READMEs use live :::pageBlock fences, not wrapped in markdown code fences', () => {
+test('page plugin READMEs use live :::editorBlock fences, not wrapped in markdown code fences', () => {
   const ids = [
     'page-algorithm',
     'page-browser',
@@ -44,13 +44,13 @@ test('page plugin READMEs use live :::pageBlock fences, not wrapped in markdown 
     const live = src.replace(/```[\s\S]*?```/g, '')
     assert.match(
       live,
-      new RegExp(`:::pageBlock \\{kind=\\S+ plugin=${id}(?:[\\s}])`),
-      `${id} README must use :::pageBlock {plugin=${id}} as live markdown, not inside a code fence`,
+      new RegExp(`:::editorBlock \\{kind=\\S+ plugin=${id}(?:[\\s}])`),
+      `${id} README must use :::editorBlock {plugin=${id}} as live markdown, not inside a code fence`,
     )
     assert.doesNotMatch(
       src,
-      /```[^\n]*\n:::pageBlock/,
-      `${id} README must not wrap :::pageBlock in an outer code fence`,
+      /```[^\n]*\n:::editorBlock/,
+      `${id} README must not wrap :::editorBlock in an outer code fence`,
     )
   }
 })

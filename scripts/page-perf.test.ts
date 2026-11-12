@@ -123,7 +123,7 @@ test('discover-routes covers every local-space URL shape', () => {
     '/tags',
     '/mcp',
     '/notices',
-    '/page-blocks',
+    '/editor-blocks',
     '/pages',
     '/plugins',
     '/agents',

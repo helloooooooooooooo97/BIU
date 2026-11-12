@@ -159,7 +159,7 @@ function HtmlSandbox({
 }
 
 export const name = 'page-html-blocks'
-export const inject = ['pageEditor']
+export const inject = ['blockEditor']
 
 type BlockProps = {
   data: Record<string, unknown>
@@ -928,7 +928,7 @@ function htmlBlockAssets(data: Record<string, unknown>) {
 /* ---------------- apply ---------------- */
 
 export function apply(ctx: {
-  pageEditor: {
+  blockEditor: {
     registerBlock: (spec: {
       kind: string
       plugin: string
@@ -942,7 +942,7 @@ export function apply(ctx: {
     }) => void
   }
 }) {
-  ctx.pageEditor.registerBlock({
+  ctx.blockEditor.registerBlock({
     kind: 'html',
     plugin: name,
     label: '静态HTML',
@@ -954,7 +954,7 @@ export function apply(ctx: {
     defaults: () => ({ file: newHtmlFile(), deck: true, title: '静态HTML' }),
     View: HtmlDirectCard,
   })
-  ctx.pageEditor.registerBlock({
+  ctx.blockEditor.registerBlock({
     kind: 'htmlframe',
     plugin: name,
     label: '动态HTML',

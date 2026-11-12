@@ -315,7 +315,7 @@ export function apply(ctx: Context) {
     const blocksUi = ui.decorate(
       PAGE_BLOCKS_COLLECTION_PATH,
       pageBlocksChrome(() => {
-        const editor = ctx.get('pageEditor') as { blocks?: () => Array<{ kind: string; label: string }> } | undefined
+        const editor = ctx.get('blockEditor') as { blocks?: () => Array<{ kind: string; label: string }> } | undefined
         return editor?.blocks?.() ?? []
       }),
     )
@@ -327,8 +327,8 @@ export function apply(ctx: Context) {
       blocksUi.dispose()
     }
   })
-  ctx.inject(['pageEditor'], (inner) => {
-    const editor = inner.get('pageEditor') as {
+  ctx.inject(['blockEditor'], (inner) => {
+    const editor = inner.get('blockEditor') as {
       subscribe: (fn: () => void) => () => void
       blocks: () => Array<{ kind: string }>
       registerBlock: (spec: {

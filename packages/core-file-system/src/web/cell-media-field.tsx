@@ -9,6 +9,7 @@ import {
   collectClipboardImages,
   commitImages,
   pasteTargetIsField,
+  recordResourcePath,
   uniqueFiles,
   uploadDbAsset,
 } from './cell-media.tsx'
@@ -16,12 +17,15 @@ import {
 export function MediaField({
   kind,
   value,
+  collectionPath,
+  recordId,
   compact = false,
   onCommit,
 }: {
   kind: 'image' | 'attachment' | 'url'
   value: unknown
   collectionPath?: string
+  recordId?: string
   compact?: boolean
   onCommit: (next: unknown) => void
 }) {
@@ -47,7 +51,7 @@ export function MediaField({
       const addedImages: string[] = []
       const addedFiles: Array<{ name: string; href: string; bytes?: number }> = []
       for (const item of files) {
-        const written = await uploadDbAsset(item)
+        const written = await uploadDbAsset(item, recordResourcePath(collectionPath, recordId))
         if (kind === 'image') addedImages.push(written.href)
         else addedFiles.push({ name: item.name || written.name, href: written.href, bytes: item.size })
       }

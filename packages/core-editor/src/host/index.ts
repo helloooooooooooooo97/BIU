@@ -22,7 +22,7 @@ export { parsePagePropViews, propViewsAssetName, defaultPropSandboxSource } from
 export { parsePageLayouts, layoutsAssetName, defaultPageLayout, PAGE_DEFAULT_LAYOUT_ID } from '../page-layouts.ts'
 
 const SANDBOX_FENCE_HINT =
-  '沙箱是内置块：围栏 :::pageBlock {kind=sandbox plugin=page-sandbox}，体只写 {"file":"assets/sandbox-….jsx","dataFile":"assets/sandbox-data-….json"}，不要把 React 源码或运行时数据写进围栏。'
+  '沙箱是内置块：围栏 :::editorBlock {kind=sandbox plugin=page-sandbox}，体只写 {"file":"assets/sandbox-….jsx","dataFile":"assets/sandbox-data-….json"}，不要把 React 源码或运行时数据写进围栏。'
 
 const SANDBOX_DOC_HINT =
   '沙箱源码用 db_file 写 file 指向的 .jsx 附件（可覆盖）。运行时数据由组件里的 biu.write 写入 dataFile 指向的 .json 附件，不要写进 .jsx，不要写进围栏，不要用 db_media。'

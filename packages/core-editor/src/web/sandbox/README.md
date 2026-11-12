@@ -17,7 +17,7 @@
 
 ## 示例写法
 
-:::pageBlock {kind=sandbox plugin=page-sandbox height=280}
+:::editorBlock {kind=sandbox plugin=page-sandbox height=280}
 {
   "file": "assets/sandbox-demo.jsx",
   "dataFile": "assets/sandbox-data-demo.json"

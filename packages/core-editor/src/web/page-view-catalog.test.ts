@@ -10,4 +10,6 @@ test('page view catalog falls back to record JSON when the live store is empty',
   assert.match(src, /mergeListedLayouts\(record\.layouts\)/)
   assert.match(src, /id: 'hidden', name: '隐藏'/)
   assert.match(src, /PAGE_PROP_HIDDEN_VIEW_ID/)
+  assert.match(src, /PAGE_PROP_SOURCE_VIEW_ID/)
+  assert.match(src, /name: '源码'/)
 })

@@ -305,8 +305,8 @@ function rewritePageBlockMentions(db: DatabaseSync) {
   for (const row of bodies) {
     let next = String(row.body ?? '')
     for (const block of rows) {
-      const from = `/page-blocks/${block.page_id}::${block.block_id}`
-      const to = `/page-blocks/${block.collection}::${block.page_id}::${block.block_id}`
+      const from = `/editor-blocks/${block.page_id}::${block.block_id}`
+      const to = `/editor-blocks/${block.collection}::${block.page_id}::${block.block_id}`
       if (from !== to) next = next.split(from).join(to)
     }
     if (next !== (row.body ?? '')) update.run(next, row.collection, row.record_id)

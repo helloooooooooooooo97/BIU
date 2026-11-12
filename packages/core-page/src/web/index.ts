@@ -1,14 +1,14 @@
-export {
-  PageEditorService,
-  getPageEditor,
-  usePageEditorVersion,
-  PageEditor,
-  RecordEditor,
-} from '@biu/core-editor/web'
-export type { HeadingReplacement, PageBlockSpec, PageBlockViewProps, SlashCommandSpec, SlashInsert } from '@biu/core-editor/web'
+import type { Context } from 'cordis'
+import type { DatabaseUi } from '@biu/type-file-system/ui'
+import { pageBlocksCollectionView, PageBlockContent } from './page-blocks-view.tsx'
+
+export { PageBlockContent, PageBlocksView, pageBlocksCollectionView, PAGE_BLOCKS_VIEW_ID } from './page-blocks-view.tsx'
 
 export const name = 'page-ui'
 export const inject = ['databaseUi']
 
-/** 正文编辑器由 core-editor 挂到 /pages；Page 只登记表和页面存储。 */
-export function apply() {}
+export function apply(ctx: Context) {
+  const ui = ctx.get('databaseUi') as DatabaseUi
+  ctx.effect(() => ui.decorate('/editor-blocks', { Content: PageBlockContent }).dispose)
+  ctx.effect(() => ui.registerView('/editor-blocks', pageBlocksCollectionView).dispose)
+}

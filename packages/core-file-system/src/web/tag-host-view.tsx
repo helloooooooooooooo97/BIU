@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowsPointingInIcon, ArrowsPointingOutIcon, CodeBracketIcon, EyeIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
-import { fieldIsWritable, sanitizeTagValuesPatch, type CollectionSchemaPack, type FieldSpec } from '@biu/type-file-system'
+import { fieldIsWritable, normalizeSchemaPack, sanitizeTagValuesPatch, type CollectionSchemaPack, type DbRecord, type FieldSpec } from '@biu/type-file-system'
 import { defaultContentSandboxSource } from '@biu/type-file-system/record-views'
+import { RenderBoundary } from '@biu/biu-ui'
 import { FieldValuePop } from './field-value-pop.tsx'
-import { compileHostSource, loadHostComponent } from './tag-host-compile.ts'
+import { compileHostSource, loadHostComponent, SandboxPreview } from './tag-host-compile.ts'
 import {
   getTagViews,
+  loadTagViews,
   openHostRecordPath,
   patchTagSandbox,
   peekTagFile,
@@ -284,33 +286,6 @@ export function TagHostView({
 
   const envRef = useRef({ Field, biu })
   envRef.current = { Field, biu }
-  const preview = useMemo(() => {
-    if (!compiled.ok) return { Preview: null as ComponentType | null, error: compiled.error }
-    try {
-      const FieldProxy = (props: { name?: string }) => envRef.current.Field(props)
-      const biuProxy = {
-        tag: () => envRef.current.biu.tag(),
-        page: () => envRef.current.biu.page(),
-        blocks: () => envRef.current.biu.blocks(),
-        kinds: () => envRef.current.biu.kinds(),
-        update: (id: string, patch: Record<string, unknown>) => envRef.current.biu.update(id, patch),
-        fields: () => envRef.current.biu.fields(),
-        values: () => envRef.current.biu.values(),
-        get: (key: string) => envRef.current.biu.get(key),
-        set: (key: string, value: unknown) => envRef.current.biu.set(key, value),
-        record: () => envRef.current.biu.record(),
-        patch: (bag: unknown) => envRef.current.biu.patch(bag),
-        read: () => envRef.current.biu.read(),
-        write: (value: unknown) => envRef.current.biu.write(value),
-      }
-      return {
-        Preview: loadHostComponent(compiled.code, React, FieldProxy, biuProxy) as ComponentType,
-        error: '',
-      }
-    } catch (err) {
-      return { Preview: null, error: err instanceof Error ? err.message : String(err) }
-    }
-  }, [compiled])
 
   const card = (
     <div
@@ -340,9 +315,33 @@ export function TagHostView({
       <div className="page-host-stage">
         {showPreview ? (
           <div ref={previewPaneRef} className="page-host-preview-pane" style={splitPaneStyle(showCode ? previewWidth : 0)} data-testid="tag-host-preview">
-            {preview.Preview ? (
+            {compiled.ok ? (
               <>
-                <preview.Preview />
+                <RenderBoundary key={compiled.code} label={view?.name || view?.file || '标签沙盒'}>
+                  <SandboxPreview
+                    code={compiled.code}
+                    errorTestId="tag-host-error"
+                    load={() => {
+                      const FieldProxy = (props: { name?: string }) => envRef.current.Field(props)
+                      const biuProxy = {
+                        tag: () => envRef.current.biu.tag(),
+                        page: () => envRef.current.biu.page(),
+                        blocks: () => envRef.current.biu.blocks(),
+                        kinds: () => envRef.current.biu.kinds(),
+                        update: (id: string, patch: Record<string, unknown>) => envRef.current.biu.update(id, patch),
+                        fields: () => envRef.current.biu.fields(),
+                        values: () => envRef.current.biu.values(),
+                        get: (key: string) => envRef.current.biu.get(key),
+                        set: (key: string, value: unknown) => envRef.current.biu.set(key, value),
+                        record: () => envRef.current.biu.record(),
+                        patch: (bag: unknown) => envRef.current.biu.patch(bag),
+                        read: () => envRef.current.biu.read(),
+                        write: (value: unknown) => envRef.current.biu.write(value),
+                      }
+                      return loadHostComponent(compiled.code, React, FieldProxy, biuProxy) as ComponentType
+                    }}
+                  />
+                </RenderBoundary>
                 {patchError ? (
                   <div className="page-host-error" data-testid="tag-host-patch-error">
                     写入失败 · {patchError}
@@ -351,7 +350,7 @@ export function TagHostView({
               </>
             ) : (
               <div className="page-host-error" data-testid="tag-host-error">
-                {preview.error || '无法渲染'}
+                {compiled.error || '无法渲染'}
               </div>
             )}
             {showCode ? <SplitResize paneRef={previewPaneRef} onWidth={setPreviewWidth} testId="tag-host-split-resize" /> : null}
@@ -380,4 +379,47 @@ export function TagHostView({
   )
 
   return expanded ? createPortal(card, document.body) : card
+}
+
+export function TagRecordSandbox({
+  record,
+  viewId,
+  writable = true,
+}: {
+  record: DbRecord
+  viewId: string
+  writable?: boolean
+}) {
+  const tagId = String(record.id ?? '').trim()
+  const views = useTagViews(tagId)
+  useEffect(() => {
+    if (!tagId) return
+    void loadTagViews(tagId, record.views)
+  }, [tagId, record.views])
+  const sandbox = views.find((item) => item.id === viewId)
+  let fields: unknown = record.fields
+  if (typeof fields === 'string') {
+    try {
+      fields = JSON.parse(fields) as unknown
+    } catch {
+      fields = []
+    }
+  }
+  const pack = normalizeSchemaPack({
+    id: tagId,
+    label: String(record.title ?? ''),
+    fields,
+  })
+  if (!sandbox) return null
+  return (
+    <TagHostView
+      tagId={tagId}
+      viewId={sandbox.id}
+      pack={pack ?? undefined}
+      values={{}}
+      recordPath={`/tags/${tagId}`}
+      writable={writable !== false}
+      onValues={() => undefined}
+    />
+  )
 }

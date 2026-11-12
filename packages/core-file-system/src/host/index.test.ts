@@ -104,7 +104,7 @@ test('data overview lists each source record, includes tags, and skips other ind
   assert.equal(published?.view?.inspector, true)
   assert.equal(published?.view?.title, '数据')
   assert.equal(isDataOverviewSource('/tags'), true)
-  assert.equal(isDataOverviewSource('/page-blocks'), false)
+  assert.equal(isDataOverviewSource('/editor-blocks'), false)
   assert.equal(isDataOverviewSource('/trash'), false)
   assert.equal(listed.schema?.fields.title?.writable, true)
   const written = await db.update('/data/notes::n1', { title: '改了' })
@@ -599,8 +599,8 @@ test('writeContent string fields keep JSON objects instead of [object Object]', 
     ['b1', { id: 'b1', title: '块', data: '{"html":"old"}' }],
   ])
   db.register({
-    id: 'page-blocks',
-    path: '/page-blocks',
+    id: 'editor-blocks',
+    path: '/editor-blocks',
     schema: {
       contentField: 'data',
       fields: {
@@ -618,26 +618,26 @@ test('writeContent string fields keep JSON objects instead of [object Object]', 
       return next as { id: string }
     },
   })
-  const written = await db.writeContent('/page-blocks/b1', { html: '<p>new</p>', deck: false })
+  const written = await db.writeContent('/editor-blocks/b1', { html: '<p>new</p>', deck: false })
   assert.equal(written.field, 'data')
   assert.equal(written.value, '{"html":"<p>new</p>","deck":false}')
-  const updated = await db.update('/page-blocks/b1', { data: { html: '<b>via update</b>' } })
+  const updated = await db.update('/editor-blocks/b1', { data: { html: '<b>via update</b>' } })
   assert.equal(updated.value.data, '{"html":"<b>via update</b>"}')
 })
 
-test('page-block records whose id starts with / still read from /page-blocks/', async () => {
+test('page-block records whose id starts with / still read from /editor-blocks/', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
   const id = '/pages::p001::ab12cd34'
   const row = { id, title: '刊头', collection: '/pages', pageId: 'p001', blockId: 'ab12cd34' }
   db.register({
-    id: 'page-blocks',
-    path: '/page-blocks',
+    id: 'editor-blocks',
+    path: '/editor-blocks',
     schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' } } },
     list: () => [row],
     get: (next) => (next === id ? row : undefined),
   })
-  const got = await db.read(`/page-blocks/${id}`)
+  const got = await db.read(`/editor-blocks/${id}`)
   assert.equal(got.kind, 'record')
   assert.equal((got as { value?: { id?: string } }).value?.id, id)
 })
@@ -2515,8 +2515,8 @@ test('index rows follow the user records each person can read and omit share', a
     },
   })
   db.register({
-    id: 'page-blocks',
-    path: '/page-blocks',
+    id: 'editor-blocks',
+    path: '/editor-blocks',
     schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' }, collection: { type: 'string' }, pageId: { type: 'string' } } },
     list: () => blocks,
     get: (id) => blocks.find((row) => row.id === id) ?? null,
@@ -2556,12 +2556,12 @@ test('index rows follow the user records each person can read and omit share', a
   await runWithAccount(ada.id, () => db.update(`/pages/${personalId}`, { tag: { tags: [hiddenId], values: {} } }))
   await runWithAccount(ada.id, () => db.update(`/pages/${sharedId}`, { tag: { tags: [shownId], values: {} } }))
 
-  const adaBlocks = await runWithAccount(ada.id, () => db.list('/page-blocks'))
-  const bobBlocks = await runWithAccount(bob.id, () => db.list('/page-blocks'))
+  const adaBlocks = await runWithAccount(ada.id, () => db.list('/editor-blocks'))
+  const bobBlocks = await runWithAccount(bob.id, () => db.list('/editor-blocks'))
   assert.deepEqual(adaBlocks.items.map((row) => row.title).sort(), ['私人组件', '空间组件'])
   assert.deepEqual(bobBlocks.items.map((row) => row.title), ['空间组件'])
   assert.equal(adaBlocks.items[0]?.shareScope, undefined)
-  const blockStat = await runWithAccount(ada.id, () => db.stat('/page-blocks'))
+  const blockStat = await runWithAccount(ada.id, () => db.stat('/editor-blocks'))
   if (blockStat.kind === 'collection') assert.equal(blockStat.schema.fields.shareScope, undefined)
 
   const adaFacets = await runWithAccount(ada.id, () => db.list('/tags'))
@@ -3064,7 +3064,7 @@ test('concurrent lists of one collection share a single spec.list scan', async (
 
 test('db_content points agents at plugin intros for pageBlock fences', () => {
   const host = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
-  assert.match(host, /写 :::pageBlock 前先 db_content \/plugins\/<plugin> 读介绍里的「示例写法」/)
+  assert.match(host, /写 :::editorBlock 前先 db_content \/plugins\/<plugin> 读介绍里的「示例写法」/)
   assert.equal(host.includes('kind=html 或 htmlframe'), false)
 })
 

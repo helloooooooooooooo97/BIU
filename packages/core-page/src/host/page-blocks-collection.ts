@@ -48,12 +48,12 @@ async function hydratedRecord(index: PageBlocksIndex, row: DbRecord | null) {
 
 export function pageBlocksCollection(store: PagesStore, index: PageBlocksIndex): CollectionSpec {
   return {
-    id: 'page-blocks',
-    path: '/page-blocks',
+    id: 'editor-blocks',
+    path: '/editor-blocks',
     label: '组件',
     view: {
-      moduleId: 'page-blocks',
-      route: '/page-blocks',
+      moduleId: 'editor-blocks',
+      route: '/editor-blocks',
       title: '组件',
       inspector: true,
       blurb:

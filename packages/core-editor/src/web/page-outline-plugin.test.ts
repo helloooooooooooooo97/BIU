@@ -1,14 +1,14 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
-import { pageEditorExtensions } from './kit.ts'
+import { recordEditorExtensions } from './kit.ts'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { collapsedOutlineIndices, listFoldableItems, listOutlineBlocks, outlineFoldGutterHit } from './page-outline-plugin.ts'
 
 test('outline indents h2/h3 and body under the last heading', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '# One\n\nbody\n\n## Two\n\nmore\n\n### Three\n\nend',
     contentType: 'markdown',
   })
@@ -29,7 +29,7 @@ test('outline indents h2/h3 and body under the last heading', () => {
 
 test('outline keeps quote and code at the heading nest depth', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '## Two\n\n> quote\n\n```\ncode\n```\n',
     contentType: 'markdown',
   })
@@ -46,7 +46,7 @@ test('outline keeps quote and code at the heading nest depth', () => {
 
 test('folding a heading hides quote and code until the next heading', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '## Two\n\n> quote\n\n```\ncode\n```\n\n# Next\n\nkeep',
     contentType: 'markdown',
   })
@@ -79,7 +79,7 @@ test('folding a heading hides until the next same-or-higher heading', () => {
 
 test('nested list items can fold', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '- a\n  - b\n- c\n\n1. d\n   1. e',
     contentType: 'markdown',
   })

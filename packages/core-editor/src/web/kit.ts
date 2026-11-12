@@ -241,7 +241,7 @@ const pageMathematics = Mathematics.extend({
   },
 })
 
-export function pageEditorExtensions() {
+export function recordEditorExtensions() {
   return [
     StarterKit.configure({
       heading: { levels: [1, 2, 3] },
@@ -289,5 +289,5 @@ export function pageEditorExtensions() {
 const EMBED_SKIP = new Set(['pageBlockIds', 'pageFilter', 'pageOutline', 'pageFind', 'pageAgentEdit'])
 
 export function pageEmbedExtensions() {
-  return pageEditorExtensions().filter((ext) => !EMBED_SKIP.has(ext.name))
+  return recordEditorExtensions().filter((ext) => !EMBED_SKIP.has(ext.name))
 }

@@ -29,7 +29,7 @@ test('prop view catalog is a single current option plus a switcher list', () => 
   const options = listViewCatalogOptions('/tasks', record, 'propViews')
   assert.deepEqual(
     options.map((item) => item.id),
-    [DEFAULT_RECORD_PROP_VIEW_ID, 'wide'],
+    [DEFAULT_RECORD_PROP_VIEW_ID, 'source', 'wide'],
   )
   const current = selectedViewCatalogOption('/tasks', record, 'propViews')
   assert.equal(current?.id, DEFAULT_RECORD_PROP_VIEW_ID)
@@ -124,6 +124,7 @@ test('only custom content and property views can be copied', () => {
   assert.equal(canCopyViewCatalogItem('views', { id: 'hidden' }), false)
   assert.equal(canCopyViewCatalogItem('views', { id: 'chat' }), false)
   assert.equal(canCopyViewCatalogItem('propViews', { id: 'table' }), false)
+  assert.equal(canCopyViewCatalogItem('propViews', { id: 'source' }), false)
   assert.equal(canCopyViewCatalogItem('propViews', { id: 'hidden' }), false)
   assert.equal(canCopyViewCatalogItem('layouts', { id: 'need', builtin: false }), false)
   assert.equal(canCopyViewCatalogItem('views', { id: 'sandbox-1' }), true)

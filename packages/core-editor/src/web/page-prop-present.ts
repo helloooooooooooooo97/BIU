@@ -1,7 +1,12 @@
 import { useSyncExternalStore } from 'react'
 
 export const PAGE_PROP_TABLE_VIEW_ID = 'table'
+export const PAGE_PROP_SOURCE_VIEW_ID = 'source'
 export const PAGE_PROP_HIDDEN_VIEW_ID = 'hidden'
+
+export function isPagePropBuiltinViewId(id: string) {
+  return id === PAGE_PROP_TABLE_VIEW_ID || id === PAGE_PROP_SOURCE_VIEW_ID || id === PAGE_PROP_HIDDEN_VIEW_ID
+}
 
 const PRESENT_KEY = 'biu.page.props.present'
 const modes = new Map<string, string>()

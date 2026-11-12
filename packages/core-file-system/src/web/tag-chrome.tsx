@@ -3,8 +3,6 @@ import { TagIcon } from '@heroicons/react/16/solid'
 import { tagTone } from '@biu/biu-ui'
 import type { DbRecord } from '@biu/type-file-system'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
-import { TagContent } from './tag-detail-bar.tsx'
-
 const TagCollectBoardLazy = lazy(() => import('./tag-collect.tsx').then((m) => ({ default: m.TagCollectBoard })))
 
 export function TagCollectBoard(props: ComponentProps<typeof TagCollectBoardLazy>) {
@@ -27,5 +25,4 @@ function TagRecordIcon({ record, size = 16 }: { record: DbRecord; size?: number 
 export const tagsChrome: CollectionChrome = {
   Board: TagCollectBoard,
   Icon: TagRecordIcon,
-  Content: TagContent,
 }

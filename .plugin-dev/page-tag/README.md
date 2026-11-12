@@ -8,7 +8,7 @@
 
 ## 示例写法
 
-:::pageBlock {kind=tag plugin=page-tag}
+:::editorBlock {kind=tag plugin=page-tag}
 {
   "tagId": "",
   "values": {}

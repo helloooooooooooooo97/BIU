@@ -81,7 +81,7 @@ const React = globalThis.React
 const { useEffect, useId, useMemo, useRef, useState } = React
 
 export const name = 'page-video'
-export const inject = ['pageEditor']
+export const inject = ['blockEditor']
 
 const STYLE_ID = 'pv-style-v21'
 const STYLE_CSS = `
@@ -1818,7 +1818,7 @@ function Editor({
 }
 
 export function apply(ctx: {
-  pageEditor: {
+  blockEditor: {
     registerBlock: (spec: {
       kind: string
       plugin: string
@@ -1832,7 +1832,7 @@ export function apply(ctx: {
     }) => void
   }
 }) {
-  ctx.pageEditor.registerBlock({
+  ctx.blockEditor.registerBlock({
     kind: 'video',
     plugin: name,
     label: '视频编排',

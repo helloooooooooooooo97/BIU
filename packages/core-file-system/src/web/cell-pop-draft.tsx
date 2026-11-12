@@ -321,6 +321,7 @@ export function CellPopDraft({
         value={text}
         source={raw}
         collectionPath={collectionPath}
+        recordId={String(record.id ?? '').trim() || undefined}
         autoOpen
         options={options}
         onChange={(next) => {

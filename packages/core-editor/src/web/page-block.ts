@@ -4,7 +4,7 @@ import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/p
 import type { Node as PmNode } from '@tiptap/pm/model'
 import { handlePageBlockArrow } from './page-block-arrow.ts'
 import { PageBlockView } from './page-block-view.tsx'
-import { getPageEditor } from './service.ts'
+import { getBlockEditor } from './service.ts'
 import { formatPageBlockFence, parsePageBlockData, parsePageBlockMeta, takePageBlockFence } from './page-block-meta.ts'
 import { createPageBlockId, isPageBlockId } from '../page-block-fence.ts'
 
@@ -59,7 +59,7 @@ export function assignPageBlockIds(state: EditorState): Transaction | null {
   const seen = new Set<string>()
   const patch: { pos: number; node: PmNode }[] = []
   state.doc.descendants((node, pos) => {
-    if (node.type.name !== 'pageBlock') return
+    if (node.type.name !== 'editorBlock') return
     const id = nodePageBlockId(node)
     if (!id || seen.has(id)) {
       patch.push({ pos, node })
@@ -79,7 +79,7 @@ export function assignPageBlockIds(state: EditorState): Transaction | null {
 }
 
 export const pageBlock = Node.create({
-  name: 'pageBlock',
+  name: 'editorBlock',
   group: 'block',
   atom: true,
   selectable: true,
@@ -131,30 +131,30 @@ export const pageBlock = Node.create({
     if (typeof token.attributes?.deck === 'boolean') extras.deck = token.attributes.deck
     if (typeof token.attributes?.height === 'number') extras.height = token.attributes.height
     const data = parsePageBlockData(kind, String(token.content ?? ''), extras)
-    return helpers.createNode('pageBlock', { kind, plugin, id, data })
+    return helpers.createNode('editorBlock', { kind, plugin, id, data })
   },
 
   renderMarkdown: (node) => {
     const kind = String(node.attrs?.kind ?? 'card')
     const stored = String(node.attrs?.plugin ?? '').trim()
-    const plugin = stored || getPageEditor()?.block(kind)?.plugin || ''
+    const plugin = stored || getBlockEditor()?.block(kind)?.plugin || ''
     const id = nodePageBlockId(node as PmNode)
     const data = { ...((node.attrs?.data && typeof node.attrs.data === 'object' ? node.attrs.data : {}) as Record<string, unknown>) }
     return formatPageBlockFence(kind, plugin, data, id)
   },
 
   markdownTokenizer: {
-    name: 'pageBlock',
+    name: 'editorBlock',
     level: 'block',
     start(src) {
-      return src.match(/^:::pageBlock/m)?.index ?? -1
+      return src.match(/^:::(?:editorBlock|pageBlock)/m)?.index ?? -1
     },
     tokenize(src) {
       const taken = takePageBlockFence(src)
       if (!taken) return undefined
       const { kind, plugin, extras, id } = parsePageBlockMeta(taken.header)
       return {
-        type: 'pageBlock',
+        type: 'editorBlock',
         raw: taken.raw,
         attributes: { kind, plugin, id, ...extras },
         content: taken.body,
@@ -199,7 +199,7 @@ export const pageBlock = Node.create({
           const seen = new Set<string>()
           const dupes: { pos: number; node: PmNode }[] = []
           state.doc.descendants((node, pos) => {
-            if (node.type.name !== 'pageBlock') return
+            if (node.type.name !== 'editorBlock') return
             const file = blockFile(node)
             if (!file) return
             const owner = `${String(node.attrs.kind ?? '')}:${file}`
@@ -241,7 +241,7 @@ export const pageBlock = Node.create({
   onCreate() {
     const editor = this.editor
     let refreshQueued = false
-    const stop = getPageEditor()?.subscribe(() => {
+    const stop = getBlockEditor()?.subscribe(() => {
       if (refreshQueued || editor.isDestroyed) return
       refreshQueued = true
       queueMicrotask(() => {

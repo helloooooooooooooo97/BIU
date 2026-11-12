@@ -16,14 +16,14 @@ const BLOCK_TYPES = new Set([
   'codeBlock',
   'horizontalRule',
   'table',
-  'pageBlock',
+  'editorBlock',
   'slide',
   'blockMath',
   'image',
 ])
 
 export function nodeBlockId(node: PmNode) {
-  if (node.type.name === 'pageBlock' && isPageBlockId(node.attrs.id)) return String(node.attrs.id).trim()
+  if (node.type.name === 'editorBlock' && isPageBlockId(node.attrs.id)) return String(node.attrs.id).trim()
   return isPageBlockId(node.attrs.blockId) ? String(node.attrs.blockId).trim() : ''
 }
 
@@ -49,6 +49,7 @@ export function kindLabel(kind: string) {
       codeBlock: '代码',
       horizontalRule: '分隔线',
       table: '表格',
+      editorBlock: '组件',
       pageBlock: '组件',
       slide: '幻灯片',
       blockMath: '公式',
@@ -79,7 +80,7 @@ export function assignTopLevelBlockIds(state: EditorState): Transaction | null {
     while (seen.has(next)) next = createPageBlockId()
     seen.add(next)
     const attrs = { ...node.attrs, blockId: next }
-    if (node.type.name === 'pageBlock' && !isPageBlockId(node.attrs.id)) attrs.id = next
+    if (node.type.name === 'editorBlock' && !isPageBlockId(node.attrs.id)) attrs.id = next
     tr = tr.setNodeMarkup(pos, undefined, attrs)
   }
   return tr
@@ -94,7 +95,7 @@ export function applyStoredBlockIds(editor: Editor, ids: string[]) {
     const want = ids[i++]
     if (!want || nodeBlockId(node) === want) return
     const attrs = { ...node.attrs, blockId: want }
-    if (node.type.name === 'pageBlock' && !isPageBlockId(node.attrs.id)) attrs.id = want
+    if (node.type.name === 'editorBlock' && !isPageBlockId(node.attrs.id)) attrs.id = want
     tr = tr.setNodeMarkup(pos, undefined, attrs)
     dirty = true
   })
@@ -119,7 +120,7 @@ function serializeChild(editor: Editor, node: PmNode) {
 
 function stampChunk(chunk: string, id: string) {
   if (!chunk) return chunk
-  if (/^:::pageBlock\b/.test(chunk) && /\bid=/.test(chunk.slice(0, 160))) return chunk
+  if (/^:::(?:editorBlock|pageBlock)\b/.test(chunk) && /\bid=/.test(chunk.slice(0, 160))) return chunk
   const nl = chunk.indexOf('\n')
   const first = nl < 0 ? chunk : chunk.slice(0, nl)
   const rest = nl < 0 ? '' : chunk.slice(nl)

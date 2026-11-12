@@ -157,7 +157,7 @@ test('record snapshot only includes the shared row', async () => {
 })
 
 test('snapshot lists page plugins even when source zip is off', async () => {
-  const fence = ':::pageBlock {kind=excalidraw plugin=page-excalidraw id=ab12}\n<div>x</div>\n:::\n'
+  const fence = ':::editorBlock {kind=excalidraw plugin=page-excalidraw id=ab12}\n<div>x</div>\n:::\n'
   const spec: CollectionSpec = {
     id: 'notes',
     path: '/notes',

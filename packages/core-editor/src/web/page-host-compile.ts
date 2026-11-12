@@ -1,3 +1,4 @@
+import { createElement, useRef, type ComponentType } from 'react'
 import { transform } from 'sucrase'
 import { sandboxUi } from './sandbox-ui.ts'
 
@@ -63,4 +64,27 @@ export function loadHostComponent(code: string, React: unknown, Block: unknown, 
   const Component = factory(React, Block, Field, biu, sandboxUi)
   if (typeof Component !== 'function') throw new Error('sandbox view must export a React component')
   return Component as (...args: unknown[]) => unknown
+}
+
+/** 必须在 RenderBoundary 里渲染：用户源码顶层 hooks 会算进这个组件，不能算进宿主。 */
+export function SandboxPreview({
+  code,
+  load,
+  errorTestId,
+}: {
+  code: string
+  load: () => ComponentType
+  errorTestId?: string
+}) {
+  const cache = useRef<{ code: string; Preview: ComponentType } | null>(null)
+  try {
+    if (!cache.current || cache.current.code !== code) {
+      cache.current = { code, Preview: load() }
+    }
+    return createElement(cache.current.Preview)
+  } catch (error) {
+    cache.current = null
+    const message = error instanceof Error ? error.message : String(error)
+    return createElement('div', { className: 'page-host-error', 'data-testid': errorTestId }, message || '无法渲染')
+  }
 }

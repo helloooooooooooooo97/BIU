@@ -2,13 +2,13 @@
 
 在页面编辑器里用 `/` 插入画板。场景 JSON 存在 `.biu/assets/page`，页面正文只留 `file` 引用。缩小预览，放大后才能编辑。无头插件：不占运行窗口，关掉后斜杠里不再出现画板块。
 
-改页面或代写块之前，先照下面「示例写法」写 `:::pageBlock` 围栏。
+改页面或代写块之前，先照下面「示例写法」写 `:::editorBlock` 围栏。
 
 ## 示例写法
 
 围栏头：`kind=excalidraw plugin=page-excalidraw`。围栏体是 JSON，`file` 指向页面资源（`assets/….json`）。不要把整份场景嵌进围栏。
 
-:::pageBlock {kind=excalidraw plugin=page-excalidraw}
+:::editorBlock {kind=excalidraw plugin=page-excalidraw}
 {
   "file": "assets/画板-demo.json"
 }

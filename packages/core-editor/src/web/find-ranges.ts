@@ -41,7 +41,7 @@ function pageBlockHtmlText(node: {
   type?: { name?: string }
   attrs?: { kind?: unknown; data?: unknown }
 }) {
-  if (node.type?.name !== 'pageBlock') return ''
+  if (node.type?.name !== 'editorBlock') return ''
   const kind = String(node.attrs?.kind ?? '')
   const data = node.attrs?.data
   if (!data || typeof data !== 'object' || Array.isArray(data)) return ''

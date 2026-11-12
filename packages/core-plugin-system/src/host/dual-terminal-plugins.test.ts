@@ -110,7 +110,7 @@ describe('page terminal store plugin', () => {
 
   it('documents the complete page block fence', async () => {
     const readme = await readFile(pluginFile('page-terminal', 'README.md'), 'utf8')
-    assert.match(readme, /:::pageBlock \{kind=terminal plugin=page-terminal\}/)
+    assert.match(readme, /:::editorBlock \{kind=terminal plugin=page-terminal\}/)
     assert.match(readme, /"height"/)
   })
 

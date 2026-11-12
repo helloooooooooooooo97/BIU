@@ -10,15 +10,17 @@ import {
 } from '@biu/type-file-system'
 import {
   DEFAULT_RECORD_PROP_VIEW_ID,
+  SOURCE_RECORD_PROP_VIEW_ID,
   defaultPropSandboxSource,
   parseRecordLayouts,
   parseRecordSandboxes,
   type RecordSandboxView,
 } from '@biu/type-file-system/record-views'
+import { RenderBoundary } from '@biu/biu-ui'
 import type { FsPropertiesProps } from '@biu/type-file-system/ui'
 import { FieldValuePop } from './field-value-pop.tsx'
 import { bindSandboxPickPane, recordPropHostPickKey } from './sandbox-pick-pane.ts'
-import { compileHostSource, loadHostComponent } from './tag-host-compile.ts'
+import { compileHostSource, loadHostComponent, SandboxPreview } from './tag-host-compile.ts'
 import {
   peekRecordViewFile,
   putRecordViewFile,
@@ -29,6 +31,7 @@ import { loadRecordLayouts, useActiveRecordLayout } from './record-layouts.ts'
 import { TAGS_COLLECTION_PATH } from './database-path.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 import { SplitResize, splitPaneStyle } from './split-resize.tsx'
+import { HostSourceEditor } from './host-source-editor.tsx'
 
 type HostTab = 'preview' | 'code' | 'split'
 
@@ -281,28 +284,6 @@ export function RecordPropHostView({
 
   const envRef = useRef({ Field, biu })
   envRef.current = { Field, biu }
-  const preview = useMemo(() => {
-    if (!compiled.ok) return { Preview: null as ComponentType | null, error: compiled.error }
-    try {
-      const FieldProxy = (props: { name?: string }) => envRef.current.Field(props)
-      const biuProxy = {
-        record: () => envRef.current.biu.record(),
-        fields: () => envRef.current.biu.fields(),
-        values: () => envRef.current.biu.values(),
-        get: (key: string) => envRef.current.biu.get(key),
-        set: (key: string, value: unknown) => envRef.current.biu.set(key, value),
-        patch: (bag: unknown) => envRef.current.biu.patch(bag),
-        read: () => envRef.current.biu.read(),
-        write: (value: unknown) => envRef.current.biu.write(value),
-      }
-      return {
-        Preview: loadHostComponent(compiled.code, React, FieldProxy, biuProxy) as ComponentType,
-        error: '',
-      }
-    } catch (err) {
-      return { Preview: null, error: err instanceof Error ? err.message : String(err) }
-    }
-  }, [compiled])
 
   useLayoutEffect(() => {
     if (!showPreview) return
@@ -311,7 +292,7 @@ export function RecordPropHostView({
       name: view.file,
       title: view.title,
     })
-  }, [showPreview, collectionPath, recordId, view.id, view.file, view.title, preview.Preview])
+  }, [showPreview, collectionPath, recordId, view.id, view.file, view.title, compiled])
 
   const card = (
     <div
@@ -354,9 +335,28 @@ export function RecordPropHostView({
             data-biu-name={view.file}
             data-biu-title={view.title}
           >
-            {preview.Preview ? (
+            {compiled.ok ? (
               <>
-                <preview.Preview />
+                <RenderBoundary key={compiled.code} label={view.name || view.file || '属性沙盒'}>
+                  <SandboxPreview
+                    code={compiled.code}
+                    errorTestId="record-prop-host-error"
+                    load={() => {
+                      const FieldProxy = (props: { name?: string }) => envRef.current.Field(props)
+                      const biuProxy = {
+                        record: () => envRef.current.biu.record(),
+                        fields: () => envRef.current.biu.fields(),
+                        values: () => envRef.current.biu.values(),
+                        get: (key: string) => envRef.current.biu.get(key),
+                        set: (key: string, value: unknown) => envRef.current.biu.set(key, value),
+                        patch: (bag: unknown) => envRef.current.biu.patch(bag),
+                        read: () => envRef.current.biu.read(),
+                        write: (value: unknown) => envRef.current.biu.write(value),
+                      }
+                      return loadHostComponent(compiled.code, React, FieldProxy, biuProxy) as ComponentType
+                    }}
+                  />
+                </RenderBoundary>
                 {patchError ? (
                   <div className="page-host-error" data-testid="record-prop-host-patch-error">
                     写入失败 · {patchError}
@@ -365,7 +365,7 @@ export function RecordPropHostView({
               </>
             ) : (
               <div className="page-host-error" data-testid="record-prop-host-error">
-                {preview.error || '无法渲染'}
+                {compiled.error || '无法渲染'}
               </div>
             )}
             {showCode ? <SplitResize paneRef={previewRef} onWidth={setPreviewWidth} testId="record-prop-host-split-resize" /> : null}
@@ -382,13 +382,16 @@ export function RecordPropHostView({
             data-biu-title={view.title}
             data-biu-label={view.title}
           >
-            <textarea
-              className="page-tag-host-source"
+            <HostSourceEditor
               value={source}
-              readOnly={!writable}
-              spellCheck={false}
-              onChange={(event) => {
-                const next = event.target.value
+              language="javascript"
+              writable={writable}
+              pickHost={{
+                path: collectionPath,
+                name: view.file,
+                title: view.title,
+              }}
+              onChange={(next) => {
                 setSource(next)
                 if (writable) void putRecordViewFile(collectionPath, recordId, view.file, next, 'text/plain; charset=utf-8')
               }}
@@ -420,14 +423,23 @@ export function RecordProperties({ record, schema, collectionPath, writable, chi
     void loadRecordLayouts(path, id, record.layouts, fallback)
   }, [path, id, record.layouts, fallback])
   if (rawProp === 'hidden') return null
+  if (rawProp === SOURCE_RECORD_PROP_VIEW_ID) {
+    const bag: Record<string, unknown> = {}
+    for (const field of propFields(schema)) {
+      if (field.key in record) bag[field.key] = record[field.key]
+    }
+    return <HostSourceEditor value={JSON.stringify(bag, null, 2)} language="json" writable={false} testId="record-prop-source" />
+  }
   if (!path || !sandbox) return children
   return (
-    <RecordPropHostView
-      record={record}
-      view={sandbox}
-      schema={schema}
-      collectionPath={path}
-      writable={writable !== false}
-    />
+    <RenderBoundary label={sandbox.name || sandbox.file || '属性沙盒'}>
+      <RecordPropHostView
+        record={record}
+        view={sandbox}
+        schema={schema}
+        collectionPath={path}
+        writable={writable !== false}
+      />
+    </RenderBoundary>
   )
 }

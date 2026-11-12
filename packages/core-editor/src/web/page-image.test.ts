@@ -10,7 +10,7 @@ import {
   stripPastedDataImages,
   uploadPageImage,
 } from './page-image.ts'
-import { pageEditorExtensions } from './kit.ts'
+import { recordEditorExtensions } from './kit.ts'
 
 test('uploadPageImage PUTs to hash storage and returns the asset href', async () => {
   const calls: Array<{ url: string; method: string; headers?: HeadersInit }> = []
@@ -42,7 +42,7 @@ test('insertClipboardImages writes an asset href, not a data URL', async () => {
       { status: 200, headers: { 'content-type': 'application/json' } },
     )) as typeof fetch
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: 'hello',
     contentType: 'markdown',
   })
@@ -67,7 +67,7 @@ test('pageImageMarkdown keeps simple images and writes html when sized or aligne
 
 test('image size and align persist through markdown', () => {
   const first = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '![封面](/api/db/file/cover.png)',
     contentType: 'markdown',
   })
@@ -79,7 +79,7 @@ test('image size and align persist through markdown', () => {
     const md = first.getMarkdown()
     assert.match(md, /<img /)
     const second = new Editor({
-      extensions: pageEditorExtensions(),
+      extensions: recordEditorExtensions(),
       content: md,
       contentType: 'markdown',
     })

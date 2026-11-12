@@ -2,7 +2,7 @@
 
 在页面里用 `/` 插入只读时间轴。Agent 用 **声明式标签**完成剪辑：`<timeline>` 里每条 `<track>` 是一层，轨内串行、轨间并行。前端只负责实时合成；不要手算绝对秒数去叠图层。
 
-改页面或代写块之前，先照下面「示例写法」写 `:::pageBlock` 围栏。围栏体就是 `<timeline>` 脚本，不要包 JSON，也不要再写旧的 `<video>` 根。
+改页面或代写块之前，先照下面「示例写法」写 `:::editorBlock` 围栏。围栏体就是 `<timeline>` 脚本，不要包 JSON，也不要再写旧的 `<video>` 根。
 
 ## 结构
 
@@ -24,7 +24,7 @@
 
 ## 示例
 
-:::pageBlock {kind=video plugin=page-video}
+:::editorBlock {kind=video plugin=page-video}
 <timeline fps=30 size=1920x1080 background=#191919 description="BIU 动态广告片">
   <track name=scenes layer=3>
     <component id=open src=builtin:ad-scene variant=hero motion=fade-up dur=2s color=#8B5CF6>BIU VIDEO BLOCK|01 / 02|BIU 视频块|介绍|一块内容，也能是一支可播放的视频</component>

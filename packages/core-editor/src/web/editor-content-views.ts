@@ -18,7 +18,7 @@ const FILTER_KINDS = [
   'blockquote',
   'codeBlock',
   'table',
-  'pageBlock',
+  'editorBlock',
   'slide',
   'blockMath',
   'image',

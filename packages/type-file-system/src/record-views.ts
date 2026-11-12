@@ -3,6 +3,9 @@ import { defaultContentSandboxSource, defaultPropSandboxSource } from './record-
 
 export const DEFAULT_RECORD_LAYOUT_ID = 'builtin-default'
 export const DEFAULT_RECORD_PROP_VIEW_ID = 'table'
+/** 属性区只读 JSON 源码。不用插件登记。 */
+export const SOURCE_RECORD_PROP_VIEW_ID = 'source'
+export const SOURCE_RECORD_PROP_VIEW_LABEL = '源码'
 /** 文件系统内置内容模式：不画正文。不用插件登记。 */
 export const HIDDEN_CONTENT_VIEW_ID = 'hidden'
 export const HIDDEN_CONTENT_VIEW_LABEL = '隐藏'

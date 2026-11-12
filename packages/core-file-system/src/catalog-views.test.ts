@@ -132,7 +132,7 @@ test('builtin share titles use collection Chinese names instead of path ids', ()
   assert.equal(displayNameForView(builtinAllViewId('/pages'), pages), '全部页面')
   assert.equal(displayNameForView(builtinAllViewId('/agents'), { path: '/agents', label: '代理', view: { title: '代理' } }), '全部代理')
   assert.equal(displayNameForView(builtinAllViewId('/mcp'), { path: '/mcp', label: 'MCP', view: { title: 'MCP' } }), '全部MCP')
-  assert.equal(displayNameForView(builtinAllViewId('/page-blocks'), { path: '/page-blocks', label: '组件', view: { title: '组件' } }), '全部组件')
+  assert.equal(displayNameForView(builtinAllViewId('/editor-blocks'), { path: '/editor-blocks', label: '组件', view: { title: '组件' } }), '全部组件')
   assert.equal(displayNameForView('mine', pages, '周报'), '周报')
 })
 
@@ -185,7 +185,7 @@ test('data collection noun is 数据, not the path segment', () => {
 })
 
 test('each registered page block kind gets a builtin view', () => {
-  const table = { path: '/page-blocks', label: '组件', view: { title: '组件' } }
+  const table = { path: '/editor-blocks', label: '组件', view: { title: '组件' } }
   const merged = mergePageBlockViews(
     table,
     [
@@ -199,7 +199,7 @@ test('each registered page block kind gets a builtin view', () => {
       { id: 'mine', name: '置顶', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
     ],
   )
-  assert.equal(merged[0]?.id, builtinAllViewId('/page-blocks'))
+  assert.equal(merged[0]?.id, builtinAllViewId('/editor-blocks'))
   assert.equal(merged[0]?.name, '全部组件')
   assert.equal(merged[1]?.id, builtinBlockKindViewId('excalidraw'))
   assert.equal(merged[1]?.name, '画板')

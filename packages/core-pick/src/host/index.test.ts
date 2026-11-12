@@ -28,7 +28,7 @@ test('registers pick instructions on the system prompt', async () => {
   assert.match(text, /带 field/)
   assert.match(text, /表格单元格/)
   assert.match(text, /示例写法/)
-  assert.match(text, /:::pageBlock/)
+  assert.match(text, /:::editorBlock/)
   assert.match(text, /db_content \/plugins/)
   assert.match(text, /\/api\/db\/file\//)
   assert.match(text, /db_media/)

@@ -14,7 +14,7 @@ import { listedPageLayouts as mergeListedLayouts } from '../page-layouts.ts'
 import { copyPageSandboxView, deletePageSandboxView, getPageViews, parsePageViews, subscribePageViews } from './page-views.ts'
 import { copyPagePropSandboxView, deletePagePropSandboxView, getPagePropViews, parsePagePropViews, subscribePagePropViews } from './page-prop-views.ts'
 import { getPagePresentMode, PAGE_BUILTIN_MODES, subscribePagePresent } from './source-mode.ts'
-import { getPagePropPresentMode, PAGE_PROP_HIDDEN_VIEW_ID, PAGE_PROP_TABLE_VIEW_ID, subscribePagePropPresent } from './page-prop-present.ts'
+import { getPagePropPresentMode, PAGE_PROP_HIDDEN_VIEW_ID, PAGE_PROP_SOURCE_VIEW_ID, PAGE_PROP_TABLE_VIEW_ID, subscribePagePropPresent } from './page-prop-present.ts'
 
 const VIEW_CATALOG_HOSTS_KEY = '__biuViewCatalogHosts'
 
@@ -45,6 +45,7 @@ function options(record: DbRecord, fieldKey: FieldKey): Option[] {
     const listed = live.length ? live : parsePagePropViews(record.propViews)
     return [
       { id: PAGE_PROP_TABLE_VIEW_ID, name: '表格', icon: 'table', builtin: true },
+      { id: PAGE_PROP_SOURCE_VIEW_ID, name: '源码', icon: 'source', builtin: true },
       { id: PAGE_PROP_HIDDEN_VIEW_ID, name: '隐藏', icon: 'hidden', builtin: true },
       ...listed.map((item) => ({ id: item.id, name: item.name, icon: 'sandbox' as const })),
     ]

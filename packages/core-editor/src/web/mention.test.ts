@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { createElement } from 'react'
 import { render } from '@testing-library/react'
 import { Editor } from '@tiptap/core'
-import { pageEditorExtensions } from './kit.ts'
+import { recordEditorExtensions } from './kit.ts'
 import { PAGE_EDITOR_STYLE } from './style.ts'
 import { MentionList } from './mention-list.tsx'
 import {
@@ -67,7 +67,7 @@ test('fetchMentionItems lists pages tasks facets and sessions', async () => {
 
 test('mention node roundtrips through markdown and opens inspector', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '',
     contentType: 'markdown',
   })
@@ -95,7 +95,7 @@ test('mention node roundtrips through markdown and opens inspector', () => {
   editor.destroy()
 
   const loaded = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: md,
     contentType: 'markdown',
   })

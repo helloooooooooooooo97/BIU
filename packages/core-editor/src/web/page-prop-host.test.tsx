@@ -63,6 +63,26 @@ test('page properties keep the default table until a custom view is selected', (
   assert.ok(getByTestId('record-prop-host'))
 })
 
+test('source property view shows read-only JSON instead of the table', () => {
+  cleanup()
+  const { getByTestId, queryByTestId } = render(
+    <PageProperties
+      record={{
+        id: 'home',
+        title: '演示页',
+        share: 'private',
+        layouts: [{ id: 'need', name: '需求', contentViewId: 'doc', propViewId: 'source' }],
+      }}
+      collectionPath="/pages"
+      schema={{ fields: { title: { type: 'string', label: '标题' }, share: { type: 'select', label: '分享' } } }}
+    >
+      <div data-testid="prop-table">表格</div>
+    </PageProperties>,
+  )
+  assert.equal(queryByTestId('prop-table'), null)
+  assert.ok(getByTestId('record-prop-source'))
+})
+
 test('hidden property view unmounts the properties region', () => {
   cleanup()
   const { queryByTestId } = render(
@@ -122,6 +142,7 @@ test('property sandbox host shares the page-host sandbox pick entry', () => {
   assert.match(src, /data-sandbox=""/)
   assert.match(src, /pickHost=\{\{/)
   assert.match(src, /page-prop-host-preview/)
+  assert.match(src, /RenderBoundary/)
   assert.match(readFileSync(resolve(import.meta.dirname, './host-field.tsx'), 'utf8'), /FieldValuePop/)
 })
 

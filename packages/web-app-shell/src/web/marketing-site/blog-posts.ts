@@ -43,7 +43,7 @@ export const BLOG_POSTS: BlogPost[] = [
         body: [
           'In BIU, every block on a page is a live component rendered by a plugin: a table, an Excalidraw canvas, an executable coding challenge, or a video editor. Block types are not hard-coded by the platform; installing a plugin adds a new type.',
           'The format is simple: one declaration and one piece of data:',
-          { code: ':::pageBlock {kind=algorithm plugin=page-algorithm}\n{ "title": "1. Two Sum", "lang": "python" }\n:::' },
+          { code: ':::editorBlock {kind=algorithm plugin=page-algorithm}\n{ "title": "1. Two Sum", "lang": "python" }\n:::' },
           'kind and plugin identify what renders the block; the JSON that follows is its data. A person can write it, and so can an agent.',
         ],
       },
@@ -85,7 +85,7 @@ export const BLOG_POSTS: BlogPost[] = [
         body: [
           'In SaaS, the vendor builds the service. Product managers define its boundaries, every customer uses the same interface, and configuration is the only source of variation. If a feature is missing, you either request it and wait or buy another product.',
           'In PaaS, the person serving the client builds the service. Page blocks come from plugins; when a type is missing, an agent can write it. Creating a page of service means writing a declaration, not assembling an interface:',
-          { code: ':::pageBlock {kind=algorithm plugin=page-algorithm}\n{ "title": "1. Two Sum", "lang": "python" }\n:::' },
+          { code: ':::editorBlock {kind=algorithm plugin=page-algorithm}\n{ "title": "1. Two Sum", "lang": "python" }\n:::' },
           'The block declares “what,” while the page declares “how it is arranged” and “in what environment.” The builder shifts from the software vendor to the service provider.',
         ],
       },
@@ -111,7 +111,7 @@ export const BLOG_POSTS: BlogPost[] = [
         body: [
           'SaaS products connect through glue such as APIs and automation tools, or are embedded in iframes. Embedded products cannot read one another’s data; composing N SaaS products means N integrations, and any vendor interface change can break the chain.',
           'In PaaS, blocks on the same page naturally read and write the same data and environment. Pages, tasks, plugins, and sessions all use the same operations, differing only by path:',
-          { code: 'db_list   /tasks\ndb_read   /pages/<id>\ndb_update /page-blocks/<pageId>::<blockId>' },
+          { code: 'db_list   /tasks\ndb_read   /pages/<id>\ndb_update /editor-blocks/<pageId>::<blockId>' },
           'Composition stops being an integration project and becomes placing blocks on the same page.',
         ],
       },
@@ -191,7 +191,7 @@ export const BLOG_POSTS: BlogPost[] = [
         heading: 'One set of operations',
         body: [
           'Every domain is read and written in the same way; only the path changes:',
-          { code: 'db_list   /tasks\ndb_read   /pages/<id>\ndb_update /page-blocks/<pageId>::<blockId>\ndb_create /plugins' },
+          { code: 'db_list   /tasks\ndb_read   /pages/<id>\ndb_update /editor-blocks/<pageId>::<blockId>\ndb_create /plugins' },
           'Adding a domain therefore requires no new API. Register a table, and it becomes readable, writable, and queryable like every existing table.',
         ],
       },
@@ -288,7 +288,7 @@ export const BLOG_POSTS: BlogPost[] = [
         body: [
           'BIU makes this timeline parallel. Service begins with the first line of data: a lesson page, a problem, or a student list can be used by students that same day. The page is both data and the place where software runs.',
           'When a new capability is needed, software joins while the service is underway. Every block is a declaration plus data:',
-          { code: ':::pageBlock {kind=algorithm plugin=page-algorithm}\n{ "title": "1. Two Sum", "lang": "python" }\n:::' },
+          { code: ':::editorBlock {kind=algorithm plugin=page-algorithm}\n{ "title": "1. Two Sum", "lang": "python" }\n:::' },
           'An agent writes a missing block type as a plugin on the spot, attaches it to the page, and reads the existing data directly. Table fields can be added at any time, immediately giving existing records new structure. A need discovered in week three can be met in week three.',
         ],
       },
@@ -415,7 +415,7 @@ export const BLOG_POSTS: BlogPost[] = [
         heading: 'Integrated in one system',
         body: [
           'BIU integrates this content in one workspace. Pages, blocks, tasks, plugins, and conversations are all tables using the same operations, with only their paths differing:',
-          { code: 'db_list   /tasks\ndb_read   /pages/<id>\ndb_update /page-blocks/<pageId>::<blockId>' },
+          { code: 'db_list   /tasks\ndb_read   /pages/<id>\ndb_update /editor-blocks/<pageId>::<blockId>' },
           'Blocks on the same page read and write the same data and share the same page properties. A comparison-table block can directly read submission records written by a coding-challenge block. Composition needs no additional interface: place blocks on the same page and they begin collaborating.',
           { diagram: 'atoms', caption: 'Six atoms combine into tasks, pages, plugins, sessions, and more. Adding a domain is simply another composition.' },
         ],

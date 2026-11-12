@@ -17,7 +17,7 @@ test('collectShareResources splits page files, plugins and facets', () => {
     [{ id: 'p000', title: '讲义' }],
     {
       p000: [
-        ':::pageBlock {kind=excalidraw plugin=page-excalidraw id=ab12}',
+        ':::editorBlock {kind=excalidraw plugin=page-excalidraw id=ab12}',
         '<img src="/api/page/file/cover.png">',
         '见 @page/p001 和 @tag/music-era',
         ':::',

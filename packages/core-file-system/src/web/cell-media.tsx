@@ -5,11 +5,25 @@ function safeFileName(name: string) {
   return base || `file-${Date.now()}`
 }
 
-export async function uploadDbAsset(file: File) {
+export function recordResourcePath(collectionPath?: string, recordId?: string) {
+  const col = String(collectionPath ?? '').trim().replace(/\/+$/, '')
+  const id = String(recordId ?? '').trim()
+  if (!col) return id
+  if (!id) return col
+  if (col === id || col.endsWith(`/${id}`)) return col
+  return `${col}/${id}`
+}
+
+export async function uploadDbAsset(file: File, resourcePath: string) {
+  const path = String(resourcePath ?? '').trim()
+  if (!path) throw new Error('resource path required')
   const name = `${Date.now()}-${safeFileName(file.name)}`
-  const res = await fetch(`/api/db/file/hash/${encodeURIComponent(name)}`, {
+  const res = await fetch(`/api/db/file/hash/${encodeURIComponent(name)}?path=${encodeURIComponent(path)}`, {
     method: 'PUT',
-    headers: { 'content-type': file.type || 'application/octet-stream' },
+    headers: {
+      'content-type': file.type || 'application/octet-stream',
+      'x-biu-resource-path': path,
+    },
     body: file,
   })
   const body = (await res.json().catch(() => ({}))) as { error?: string; href?: string; name?: string }

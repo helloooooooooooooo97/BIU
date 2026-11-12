@@ -767,7 +767,7 @@ test('pick reaches stamped nodes inside an open sandbox shadow', () => {
     locusFromSelection: () => null,
     locusFromElement: (el) =>
       el === block || block.contains(el) || host.contains(el) || inner === el
-        ? { start_line: 3, end_line: 8, text: ':::pageBlock\nexport default function App() {}\n:::' }
+        ? { start_line: 3, end_line: 8, text: ':::editorBlock\nexport default function App() {}\n:::' }
         : null,
   })
   const hit = resolvePickFromNode(inner, '/s/abc')
@@ -780,7 +780,7 @@ test('pick reaches stamped nodes inside an open sandbox shadow', () => {
   assert.equal(hit.ref.selection, '点过 0 次')
   assert.equal(hit.ref.text, undefined)
   assert.equal(chipCaption(hit.ref).span, '')
-  assert.doesNotMatch(formatPicks([hit.ref]), /:::pageBlock|start_line/)
+  assert.doesNotMatch(formatPicks([hit.ref]), /:::editorBlock|start_line/)
   const boxed = resolvePicksInRect({ left: 8, top: 8, width: 40, height: 20 }, '/s/abc', root)
   assert.equal(boxed.some((item) => item.ref.id === 'sandbox:0-x:0/1'), true)
   host.setAttribute('data-biu-kind', 'plugin')
@@ -816,7 +816,7 @@ test('sandbox inner pick does not send the whole fence as text', () => {
   inner.setAttribute('data-biu-id', 'sandbox:0-x:0/0')
   inner.setAttribute('data-biu-label', '能做什么')
   shadow.append(inner)
-  const fence = ':::pageBlock {kind=sandbox}\nexport default function App(){return <h1>能做什么，不能做什么</h1>}\n:::'
+  const fence = ':::editorBlock {kind=sandbox}\nexport default function App(){return <h1>能做什么，不能做什么</h1>}\n:::'
   bindEditorTextHost(root, {
     path: '/pages/p002',
     locusFromSelection: () => null,
@@ -837,7 +837,7 @@ test('sandbox inner pick does not send the whole fence as text', () => {
   assert.equal(chipCaption(hit.ref).span, '')
   const packed = formatPicks([hit.ref])
   assert.match(packed, /"selection":"能做什么，不能做什么"/)
-  assert.doesNotMatch(packed, /:::pageBlock/)
+  assert.doesNotMatch(packed, /:::editorBlock/)
   assert.doesNotMatch(packed, /"text":/)
   assert.doesNotMatch(packed, /start_line/)
   bindEditorTextHost(root, null)

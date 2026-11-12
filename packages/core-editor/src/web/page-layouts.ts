@@ -11,7 +11,7 @@ import {
 import { getPageViews, uniqueViewName } from './page-views.ts'
 import { isPageBuiltinMode, setPagePresentMode } from './source-mode.ts'
 import { getPagePropViews } from './page-prop-views.ts'
-import { PAGE_PROP_HIDDEN_VIEW_ID, PAGE_PROP_TABLE_VIEW_ID, setPagePropPresentMode } from './page-prop-present.ts'
+import { isPagePropBuiltinViewId, PAGE_PROP_TABLE_VIEW_ID, setPagePropPresentMode } from './page-prop-present.ts'
 import { patchPageViewState, type PageSort } from './page-view-state.ts'
 
 export type { PageLayoutView }
@@ -135,7 +135,7 @@ function liveContentViewId(pageId: string, contentViewId: string) {
 
 function livePropViewId(pageId: string, propViewId: string) {
   const next = String(propViewId ?? '').trim() || PAGE_PROP_TABLE_VIEW_ID
-  if (next === PAGE_PROP_TABLE_VIEW_ID || next === PAGE_PROP_HIDDEN_VIEW_ID) return next
+  if (isPagePropBuiltinViewId(next)) return next
   if (getPagePropViews(pageId).some((item) => item.id === next)) return next
   return PAGE_PROP_TABLE_VIEW_ID
 }

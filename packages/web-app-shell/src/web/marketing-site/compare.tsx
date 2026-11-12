@@ -60,7 +60,7 @@ export const COMPARE_PAGES: ComparePage[] = [
     rows: [
       { dimension: 'Core idea', them: 'Everything is a declarative object', biu: 'Everything is /<table>/<id>; declarations take effect immediately' },
       { dimension: 'Where declarations live', them: 'YAML files applied with kubectl', biu: 'Directly in page content or inserted as a page block' },
-      { dimension: 'Declaration unit', them: 'A resource object (Pod / Service / CRD)', biu: 'A block: :::pageBlock {kind=… plugin=…}, followed by JSON' },
+      { dimension: 'Declaration unit', them: 'A resource object (Pod / Service / CRD)', biu: 'A block: :::editorBlock {kind=… plugin=…}, followed by JSON' },
       { dimension: 'What happens after declaration', them: 'The control plane reconciles actual state toward desired state', biu: '✅ Mounts and runs immediately—no apply step or scheduling wait' },
       { dimension: 'Objects per page / file', them: '⚠️ Typically one resource type per YAML; multiple resources require files or a List', biu: '✅ A page can declare any number of plugins, each owning a block' },
       { dimension: 'Composing a service', them: 'Service / Ingress connects multiple Pods', biu: '✅ Multiple plugins occupy blocks on one page; the page itself is the composition' },

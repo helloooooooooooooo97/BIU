@@ -1,7 +1,7 @@
 import { afterEach, test } from 'vitest'
 import assert from 'node:assert/strict'
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
-import { PageDetailBar } from './page-detail-bar.tsx'
+import { RecordDetailBar } from './page-detail-bar.tsx'
 import { getPagePresentMode, isPageSourceMode, setPagePresentMode, setPageSourceMode } from './source-mode.ts'
 import { getPageViews, setPageViews } from './page-views.ts'
 import { getPagePropPresentMode, PAGE_PROP_TABLE_VIEW_ID, setPagePropPresentMode } from './page-prop-present.ts'
@@ -21,7 +21,7 @@ test('builtin default layout can be renamed', async () => {
   const original = globalThis.fetch
   globalThis.fetch = async () => new Response('{}', { status: 200 })
   try {
-    const { getByText, getByLabelText, getByTestId, findByDisplayValue } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} />)
+    const { getByText, getByLabelText, getByTestId, findByDisplayValue } = render(<RecordDetailBar record={{ id: 'p0133', title: '演示' }} />)
     fireEvent.click(getByText('默认视图'))
     fireEvent.click(getByLabelText('重命名 默认视图'))
     const input = await findByDisplayValue('默认视图')
@@ -40,7 +40,7 @@ test('copying a layout uses unique 副本 names like table views', async () => {
   const original = globalThis.fetch
   globalThis.fetch = async () => new Response('{}', { status: 200 })
   try {
-    const { getByText, getAllByTitle, findByText } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} />)
+    const { getByText, getAllByTitle, findByText } = render(<RecordDetailBar record={{ id: 'p0133', title: '演示' }} />)
     fireEvent.click(getByText('默认视图'))
     fireEvent.click(getAllByTitle('拷贝视图')[0])
     assert.ok(await findByText('默认视图 副本'))
@@ -56,7 +56,7 @@ test('left view menu composes layouts and does not list content modes', () => {
   setPageViews('p0133', [
     { id: 'site1', name: '官网', kind: 'sandbox', file: 'view-p0133-site1.jsx', dataFile: 'view-data-p0133-site1.json' },
   ])
-  const { getByText, getByTestId, getByLabelText, queryByText } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} />)
+  const { getByText, getByTestId, getByLabelText, queryByText } = render(<RecordDetailBar record={{ id: 'p0133', title: '演示' }} />)
   fireEvent.click(getByText('默认视图'))
   assert.ok(getByText('添加视图'))
   assert.equal(queryByText('新建沙盒视图'), null)
@@ -77,7 +77,7 @@ test('detail bar deletes a content sandbox from the present-mode menu', async ()
   const original = globalThis.fetch
   globalThis.fetch = async () => new Response('{}', { status: 200 })
   try {
-    const { getByLabelText, getByText } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} />)
+    const { getByLabelText, getByText } = render(<RecordDetailBar record={{ id: 'p0133', title: '演示' }} />)
     fireEvent.click(getByLabelText('查看模式'))
     assert.ok(getByText('官网'))
     fireEvent.click(getByLabelText('删除 官网'))
@@ -92,7 +92,7 @@ test('detail bar deletes a content sandbox from the present-mode menu', async ()
 
 test('detail bar switches document and source modes from the content icon', () => {
   setPageSourceMode('p0133', false)
-  const { getByText, getByLabelText, container, queryByText } = render(<PageDetailBar record={{ id: 'p0133' }} />)
+  const { getByText, getByLabelText, container, queryByText } = render(<RecordDetailBar record={{ id: 'p0133' }} />)
   fireEvent.click(getByText('默认视图'))
   assert.equal(queryByText('大纲'), null)
   fireEvent.click(getByLabelText('查看模式'))
@@ -112,7 +112,7 @@ test('detail bar switches document and source modes from the content icon', () =
 
 test('detail bar config uses the table sliders icon and hosts extra menu', () => {
   const { getByLabelText, getByText, queryByText } = render(
-    <PageDetailBar record={{ id: 'p0133' }} configMenu={<button type="button">删除页面</button>} />,
+    <RecordDetailBar record={{ id: 'p0133' }} configMenu={<button type="button">删除页面</button>} />,
   )
   fireEvent.click(getByLabelText('表格配置'))
   assert.ok(getByText('删除页面'))
@@ -121,7 +121,7 @@ test('detail bar config uses the table sliders icon and hosts extra menu', () =>
 
 test('detail bar search expands in the toolbar with prev and next', () => {
   patchPageFind('p0133', { open: false, query: '', index: 0, total: 0 })
-  const { getByLabelText, getByTestId, queryByTestId } = render(<PageDetailBar record={{ id: 'p0133' }} />)
+  const { getByLabelText, getByTestId, queryByTestId } = render(<RecordDetailBar record={{ id: 'p0133' }} />)
   assert.equal(queryByTestId('page-find'), null)
   fireEvent.click(getByLabelText('搜索'))
   assert.equal(getPageFind('p0133').open, true)
@@ -135,7 +135,7 @@ test('detail bar search expands in the toolbar with prev and next', () => {
 })
 
 test('detail bar refresh spins the icon', () => {
-  const { getByLabelText } = render(<PageDetailBar record={{ id: 'p0133' }} onRetry={() => {}} />)
+  const { getByLabelText } = render(<RecordDetailBar record={{ id: 'p0133' }} onRetry={() => {}} />)
   fireEvent.click(getByLabelText('刷新'))
   assert.ok(getByLabelText('刷新').classList.contains('is-spinning'))
   assert.ok(getByLabelText('刷新').querySelector('.fsdb-spin'))
@@ -143,7 +143,7 @@ test('detail bar refresh spins the icon', () => {
 
 test('detail bar hosts previous and next after refresh', () => {
   const { getByLabelText } = render(
-    <PageDetailBar record={{ id: 'p0133' }} onRetry={() => {}} onPrev={() => {}} onNext={() => {}} canPrev canNext />,
+    <RecordDetailBar record={{ id: 'p0133' }} onRetry={() => {}} onPrev={() => {}} onNext={() => {}} canPrev canNext />,
   )
   const refresh = getByLabelText('刷新')
   const prev = getByLabelText('上一条')
@@ -155,7 +155,7 @@ test('detail bar hosts previous and next after refresh', () => {
 })
 
 test('detail bar has no page insert or child-page create', () => {
-  const { queryByLabelText, queryByText } = render(<PageDetailBar record={{ id: 'p0133' }} />)
+  const { queryByLabelText, queryByText } = render(<RecordDetailBar record={{ id: 'p0133' }} />)
   assert.equal(queryByLabelText('插入'), null)
   assert.equal(queryByLabelText('新建归属'), null)
   assert.equal(queryByText('插入'), null)
@@ -164,12 +164,12 @@ test('detail bar has no page insert or child-page create', () => {
 
 test('detail bar hides missing prev or next', () => {
   const { queryByLabelText, rerender } = render(
-    <PageDetailBar record={{ id: 'p0133' }} onRetry={() => {}} onPrev={() => {}} onNext={() => {}} canNext />,
+    <RecordDetailBar record={{ id: 'p0133' }} onRetry={() => {}} onPrev={() => {}} onNext={() => {}} canNext />,
   )
   assert.equal(queryByLabelText('上一条'), null)
   assert.ok(queryByLabelText('下一条'))
   rerender(
-    <PageDetailBar record={{ id: 'p0133' }} onRetry={() => {}} onPrev={() => {}} onNext={() => {}} canPrev />,
+    <RecordDetailBar record={{ id: 'p0133' }} onRetry={() => {}} onPrev={() => {}} onNext={() => {}} canPrev />,
   )
   assert.ok(queryByLabelText('上一条'))
   assert.equal(queryByLabelText('下一条'), null)
@@ -177,7 +177,7 @@ test('detail bar hides missing prev or next', () => {
 
 test('detail bar visible columns host the same flyout as the table view', () => {
   const { getByLabelText, getByText } = render(
-    <PageDetailBar
+    <RecordDetailBar
       record={{ id: 'p0133' }}
       columnMenu={<div data-testid="view-column-menu">视图列</div>}
     />,
@@ -192,7 +192,7 @@ test('builtin property table view has no copy action', () => {
   setPagePropViews('p0133', [
     { id: 'card1', name: '卡片', kind: 'sandbox', file: 'prop-view-p0133-card1.jsx', dataFile: 'prop-view-data-p0133-card1.json' },
   ])
-  const { getByLabelText, getByTestId, queryAllByTitle } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} />)
+  const { getByLabelText, getByTestId, queryAllByTitle } = render(<RecordDetailBar record={{ id: 'p0133', title: '演示' }} />)
   fireEvent.click(getByLabelText('属性展示'))
   const table = getByTestId('page-prop-view-table')
   assert.equal(table.parentElement?.querySelector('[title="拷贝视图"]'), null)
@@ -201,7 +201,7 @@ test('builtin property table view has no copy action', () => {
 })
 
 test('detail bar new menu creates property and content views', () => {
-  const { getByLabelText, getByText, queryByText } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} collectionPath="/pages" />)
+  const { getByLabelText, getByText, queryByText } = render(<RecordDetailBar record={{ id: 'p0133', title: '演示' }} collectionPath="/pages" />)
   assert.ok(getByLabelText('新建'))
   fireEvent.click(getByLabelText('新建类型'))
   assert.equal(queryByText('全局视图'), null)
@@ -218,8 +218,16 @@ test('toolbar icons match the selected flyout item', () => {
   setPageViews('p0133', [
     { id: 'site1', name: '官网', kind: 'sandbox', file: 'view-p0133-site1.jsx', dataFile: 'view-data-p0133-site1.json' },
   ])
-  const { getByLabelText, getByTestId } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} collectionPath="/pages" />)
+  const { getByLabelText, getByTestId } = render(<RecordDetailBar record={{ id: 'p0133', title: '演示' }} collectionPath="/pages" />)
   fireEvent.click(getByLabelText('属性展示'))
+  assert.ok(getByTestId('page-prop-view-source'))
+  fireEvent.click(getByTestId('page-prop-view-source'))
+  assert.equal(getPagePropPresentMode('p0133'), 'source')
+  fireEvent.click(getByLabelText('属性展示'))
+  assert.equal(
+    getByTestId('page-prop-view').querySelector('svg')?.innerHTML,
+    getByTestId('page-prop-view-source').querySelector('svg')?.innerHTML,
+  )
   fireEvent.click(getByTestId('page-prop-view-hidden'))
   fireEvent.click(getByLabelText('属性展示'))
   assert.equal(
@@ -252,7 +260,7 @@ test('toolbar icons match the selected flyout item', () => {
 test('content and property menus include a builtin hidden view', () => {
   setPagePresentMode('p0133', 'doc')
   setPagePropPresentMode('p0133', PAGE_PROP_TABLE_VIEW_ID)
-  const { getByLabelText, getByTestId, getByText } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} collectionPath="/pages" />)
+  const { getByLabelText, getByTestId, getByText } = render(<RecordDetailBar record={{ id: 'p0133', title: '演示' }} collectionPath="/pages" />)
   fireEvent.click(getByLabelText('属性展示'))
   fireEvent.click(getByTestId('page-prop-view-hidden'))
   assert.equal(getPagePropPresentMode('p0133'), 'hidden')
@@ -275,7 +283,7 @@ test('property and content presentation bind to the active layout independently'
   setPagePropViews('p0133', [
     { id: 'card1', name: '卡片', kind: 'sandbox', file: 'prop-view-p0133-card1.jsx', dataFile: 'prop-view-data-p0133-card1.json' },
   ])
-  const { getByLabelText, getByTestId, getByText } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} collectionPath="/pages" />)
+  const { getByLabelText, getByTestId, getByText } = render(<RecordDetailBar record={{ id: 'p0133', title: '演示' }} collectionPath="/pages" />)
   fireEvent.click(getByLabelText('属性展示'))
   assert.ok(getByText('新建属性视图'))
   fireEvent.click(getByTestId('page-prop-view-card1'))
@@ -289,7 +297,7 @@ test('property and content presentation bind to the active layout independently'
 
 test('detail bar sort and filter write page view state', () => {
   patchPageViewState('p0133', { filterKinds: [], sort: 'doc' })
-  const { getByLabelText, getByText, queryByText } = render(<PageDetailBar record={{ id: 'p0133' }} />)
+  const { getByLabelText, getByText, queryByText } = render(<RecordDetailBar record={{ id: 'p0133' }} />)
   fireEvent.click(getByLabelText('排序'))
   assert.ok(getByText('原文顺序'))
   assert.ok(getByText('按块类型'))

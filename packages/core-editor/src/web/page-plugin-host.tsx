@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, type ComponentType, type ReactNode } from 'react'
 import { PlayIcon } from '@heroicons/react/16/solid'
 import { RenderBoundary } from '@biu/biu-ui'
-import { getPageEditor, usePageEditorVersion, type PageBlockViewProps } from './service.ts'
+import { getBlockEditor, useBlockEditorVersion, type PageBlockViewProps } from './service.ts'
 import {
   ENABLE_PAGE_BLOCK_PLUGIN,
   requestEnablePageBlockPlugin,
@@ -42,8 +42,8 @@ export function pagePluginHostAttrs(opts: {
 }
 
 export function usePagePluginResolve(kind: string, plugin: string) {
-  usePageEditorVersion()
-  const spec = getPageEditor()?.block(kind)
+  useBlockEditorVersion()
+  const spec = getBlockEditor()?.block(kind)
   const View = spec?.View
   const phase = usePageBlockPluginPhase(plugin)
   const retriedReady = useRef(false)

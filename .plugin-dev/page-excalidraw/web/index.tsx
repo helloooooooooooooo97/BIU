@@ -6,9 +6,9 @@ import { createRoot, type Root } from 'react-dom/client'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 export const name = 'page-excalidraw'
-export const inject = ['pageEditor']
+export const inject = ['blockEditor']
 
-type PageEditor = {
+type BlockEditor = {
     registerBlock: (spec: {
       kind: string
       plugin: string
@@ -612,8 +612,8 @@ function Board(props: { data: Record<string, unknown>; update: (p: Record<string
   )
 }
 
-export function apply(ctx: { pageEditor: PageEditor }) {
-  ctx.pageEditor.registerBlock({
+export function apply(ctx: { blockEditor: BlockEditor }) {
+  ctx.blockEditor.registerBlock({
     kind: 'excalidraw',
     plugin: name,
     label: '画板',

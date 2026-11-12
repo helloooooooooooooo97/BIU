@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType } from 'react'
+import { RenderBoundary } from '@biu/biu-ui'
 import { RecordProperties } from '@biu/core-file-system/record-prop-host'
 import { createPortal } from 'react-dom'
 import { ArrowsPointingInIcon, ArrowsPointingOutIcon, CodeBracketIcon, EyeIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
 import { fieldIsWritable, sanitizeRecordPatch, type CollectionSchema, type DbRecord } from '@biu/type-file-system'
-import { compileHostSource, loadHostComponent } from './page-host-compile.ts'
+import { compileHostSource, loadHostComponent, SandboxPreview } from './page-host-compile.ts'
 import { ExpandNavTitle } from './expand-nav-title.tsx'
-import { SourceEditor } from './source-editor.tsx'
+import { HostSourceEditor } from '@biu/core-file-system/host-source-editor'
 import { defaultPropSandboxSource } from '../page-prop-views.ts'
 import {
   getPagePropViews,
@@ -259,28 +260,6 @@ export function PagePropHostView({
 
   const envRef = useRef({ Field, biu })
   envRef.current = { Field, biu }
-  const preview = useMemo(() => {
-    if (!compiled.ok) return { Preview: null as ComponentType | null, error: compiled.error }
-    try {
-      const FieldProxy = (props: { name?: string }) => envRef.current.Field(props)
-      const biuProxy = {
-        record: () => envRef.current.biu.record(),
-        fields: () => envRef.current.biu.fields(),
-        values: () => envRef.current.biu.values(),
-        get: (key: string) => envRef.current.biu.get(key),
-        set: (key: string, value: unknown) => envRef.current.biu.set(key, value),
-        patch: (bag: unknown) => envRef.current.biu.patch(bag),
-        read: () => envRef.current.biu.read(),
-        write: (value: unknown) => envRef.current.biu.write(value),
-      }
-      return {
-        Preview: loadHostComponent(compiled.code, React, () => null, FieldProxy, biuProxy) as ComponentType,
-        error: '',
-      }
-    } catch (err) {
-      return { Preview: null, error: err instanceof Error ? err.message : String(err) }
-    }
-  }, [compiled])
 
   useLayoutEffect(() => {
     if (!showPreview) return
@@ -289,7 +268,7 @@ export function PagePropHostView({
       ...(view?.file ? { name: view.file } : {}),
       ...(view?.name ? { title: view.name } : {}),
     })
-  }, [showPreview, pageId, viewId, view?.file, view?.name, preview.Preview])
+  }, [showPreview, pageId, viewId, view?.file, view?.name, compiled])
 
   const card = (
     <div
@@ -327,9 +306,28 @@ export function PagePropHostView({
             data-biu-name={view?.file || undefined}
             data-biu-title={view?.name || undefined}
           >
-            {preview.Preview ? (
+            {compiled.ok ? (
               <>
-                <preview.Preview />
+                <RenderBoundary key={compiled.code} label={view?.name || view?.file || '属性沙盒'}>
+                  <SandboxPreview
+                    code={compiled.code}
+                    errorTestId="page-prop-host-error"
+                    load={() => {
+                      const FieldProxy = (props: { name?: string }) => envRef.current.Field(props)
+                      const biuProxy = {
+                        record: () => envRef.current.biu.record(),
+                        fields: () => envRef.current.biu.fields(),
+                        values: () => envRef.current.biu.values(),
+                        get: (key: string) => envRef.current.biu.get(key),
+                        set: (key: string, value: unknown) => envRef.current.biu.set(key, value),
+                        patch: (bag: unknown) => envRef.current.biu.patch(bag),
+                        read: () => envRef.current.biu.read(),
+                        write: (value: unknown) => envRef.current.biu.write(value),
+                      }
+                      return loadHostComponent(compiled.code, React, () => null, FieldProxy, biuProxy) as ComponentType
+                    }}
+                  />
+                </RenderBoundary>
                 {patchError ? (
                   <div className="page-host-error" data-testid="page-prop-host-patch-error">
                     写入失败 · {patchError}
@@ -338,7 +336,7 @@ export function PagePropHostView({
               </>
             ) : (
               <div className="page-host-error" data-testid="page-prop-host-error">
-                {preview.error || '无法渲染'}
+                {compiled.error || '无法渲染'}
               </div>
             )}
             {showCode ? <SplitResize paneRef={previewRef} onWidth={setPreviewWidth} testId="page-prop-host-split-resize" /> : null}
@@ -355,7 +353,7 @@ export function PagePropHostView({
             data-biu-name={view?.file || undefined}
             data-biu-title={view?.name || undefined}
           >
-            <SourceEditor
+            <HostSourceEditor
               value={source}
               language="javascript"
               writable={writable}

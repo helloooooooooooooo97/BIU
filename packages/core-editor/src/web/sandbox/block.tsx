@@ -15,7 +15,7 @@ import { tags } from '@lezer/highlight'
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { compileSandboxSource, looksLikeJsx, sandboxModuleFile } from './compile.ts'
-import { BASIC_BLOCK_TYPE, type PageEditorService } from '../service.ts'
+import { BASIC_BLOCK_TYPE, type BlockEditorService } from '../service.ts'
 import {
   assetEtag,
   assetName,
@@ -807,8 +807,8 @@ function SandboxCard({ data, update, writable, selected: nodeSelected }: BlockPr
   return <ReUI>{expanded ? createPortal(card, document.body) : card}</ReUI>
 }
 
-export function registerSandboxBlock(pageEditor: PageEditorService) {
-  return pageEditor.registerBlock({
+export function registerSandboxBlock(blockEditor: BlockEditorService) {
+  return blockEditor.registerBlock({
     kind: 'sandbox',
     plugin: name,
     label: '沙箱',

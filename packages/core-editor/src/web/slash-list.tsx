@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import type { SlashItem } from './slash.ts'
 import { filterSlashItems, slashGroups } from './slash.ts'
-import { usePageEditorVersion } from './service.ts'
+import { useBlockEditorVersion } from './service.ts'
 import { openAppPath, useSlashCatalogVersion } from './slash-memory.ts'
 
 function iconPath(d: string) {
@@ -93,7 +93,7 @@ export const SlashList = forwardRef(function SlashList(
   ref,
 ) {
   const catalogVersion = useSlashCatalogVersion()
-  const editorVersion = usePageEditorVersion()
+  const editorVersion = useBlockEditorVersion()
   const resolved = useMemo(() => {
     if (typeof query === 'string') return filterSlashItems(query)
     return items ?? []

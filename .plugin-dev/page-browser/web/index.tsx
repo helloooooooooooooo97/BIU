@@ -9,7 +9,7 @@ const React = globalThis.React
 const { useEffect, useRef, useState } = React
 
 export const name = 'page-browser'
-export const inject = ['pageEditor', 'slots', 'pick']
+export const inject = ['blockEditor', 'slots', 'pick']
 
 const UI = 'ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif'
 const BAR = 'var(--biu-color-bg-subtle)'
@@ -395,7 +395,7 @@ function BrowserCard({
 }
 
 export function apply(ctx: {
-  pageEditor: {
+  blockEditor: {
     registerBlock: (spec: {
       kind: string
       plugin: string
@@ -422,7 +422,7 @@ export function apply(ctx: {
   get: (name: string) => unknown
 }) {
   placeInspectorBrowser(ctx)
-  ctx.pageEditor.registerBlock({
+  ctx.blockEditor.registerBlock({
     kind: 'browser',
     plugin: name,
     label: '浏览器',

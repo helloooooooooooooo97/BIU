@@ -35,7 +35,7 @@ test('share mount loads page plugins without booting the workstation', () => {
   assert.match(mount, /bootShareRuntime/)
   assert.match(mount, /loadSharePagePlugins/)
   const plugins = readFileSync(resolve(import.meta.dirname, './share-plugins.ts'), 'utf8')
-  assert.match(plugins, /pageEditor/)
+  assert.match(plugins, /blockEditor/)
   assert.match(plugins, /\/api\/share\/\$\{encodeURIComponent\(token\)\}\/plugin\//)
   const page = readFileSync(resolve(import.meta.dirname, '../packages/core-file-system/src/web/share-page.tsx'), 'utf8')
   assert.match(page, /loadPlugins/)

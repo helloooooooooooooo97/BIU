@@ -85,7 +85,7 @@ test('host view shares sandbox block preview, code, split, and expand chrome', a
 test('host blocks come from page markdown and write back through the db api', () => {
   const blocks = listPageHostBlocks(
     'home',
-    `:::pageBlock {kind=sandbox plugin=page-sandbox id=ab12cd34}
+    `:::editorBlock {kind=sandbox plugin=page-sandbox id=ab12cd34}
 {"title":"沙箱"}
 :::
 `,
@@ -94,6 +94,7 @@ test('host blocks come from page markdown and write back through the db api', ()
   assert.equal(blocks[0]?.id, '/pages::home::ab12cd34')
   assert.equal(blocks[0]?.title, '沙箱')
   const src = readFileSync(resolve(import.meta.dirname, './page-host-view.tsx'), 'utf8')
+  assert.match(src, /RenderBoundary/)
   const css = readFileSync(resolve(import.meta.dirname, './style.ts'), 'utf8')
   assert.match(css, /\.page-block-expand-nav,.page-editor \.page-block-expand-nav\{[^}]*grid-template-columns:minmax\(0,1fr\) auto minmax\(0,1fr\)/)
   assert.match(css, /\.page-block-expand-nav,.page-editor \.page-block-expand-nav\{[^}]*height:var\(--biu-size-control-lg\)/)
@@ -110,7 +111,7 @@ test('host blocks come from page markdown and write back through the db api', ()
   assert.doesNotMatch(css, /data-sandbox-selected\]::after/)
   assert.match(css, /page-sandbox-block\]\{[^}]*border:0/)
   assert.match(css, /data-page-block=sandbox\]:has\(\[data-sandbox-selected\]\)\{[^}]*box-shadow:0 0 0 var\(--biu-stroke-width-thick\) var\(--biu-color-emphasis-border\)/)
-  assert.match(css, /\.page-editor \.react-renderer\.node-pageBlock\.ProseMirror-selectednode\{outline:none;box-shadow:none;border-radius:0\}/)
+  assert.match(css, /\.page-editor \.react-renderer\.node-editorBlock\.ProseMirror-selectednode\{outline:none;box-shadow:none;border-radius:0\}/)
   assert.match(css, />\.page-block-expand-nav\{border-top-left-radius:0;border-top-right-radius:0\}/)
   assert.doesNotMatch(css, /\.page-block-expand-nav,.page-editor \.page-block-expand-nav\{[^}]*border-bottom:/)
   assert.match(css, /\.page-block-expand-nav-title,.page-editor \.page-block-expand-nav-title\{[^}]*justify-self:center/)
@@ -134,6 +135,7 @@ test('host blocks come from page markdown and write back through the db api', ()
   assert.match(src, /renamePageSandboxView/)
   assert.match(src, /SandboxKindIcon/)
   assert.match(src, /language="javascript"/)
+  assert.match(src, /HostSourceEditor/)
   assert.match(src, /ViewColumnsIcon/)
   assert.match(src, /createPortal\(card, document\.body\)/)
   assert.doesNotMatch(src, /requestFullscreen/)

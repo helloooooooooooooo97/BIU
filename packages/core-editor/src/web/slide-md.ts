@@ -66,7 +66,7 @@ function openCell(cells: string[]) {
   return [] as string[]
 }
 
-/** ProseMirror 容器围栏：:::slide / :::cell，内层 :::pageBlock 成对消化。 */
+/** ProseMirror 容器围栏：:::slide / :::cell，内层 :::editorBlock 成对消化。 */
 export function takeSlideFence(src: string): SlideFence | null {
   const lines = src.split('\n')
   const head = OPEN.exec(lines[0] ?? '')
@@ -90,7 +90,7 @@ export function takeSlideFence(src: string): SlideFence | null {
     }
     const open = OPEN.exec(line)
     if (open) {
-      if (open[1] === 'pageBlock' && cell) {
+      if ((open[1] === 'editorBlock' || open[1] === 'pageBlock') && cell) {
         const taken = takePageBlockFence(lines.slice(i).join('\n'))
         if (taken) {
           for (const part of taken.raw.split('\n')) cell.push(part)

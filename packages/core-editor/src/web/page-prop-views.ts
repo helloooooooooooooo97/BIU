@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react'
 import { seedRecordSandbox } from '@biu/type-file-system/record-views'
 import { parsePagePropViews, defaultPropSandboxSource, type PagePropSandboxView } from '../page-prop-views.ts'
 import { peekPageFile, readPageFile, uniqueViewName, writePageFile } from './page-views.ts'
-import { getPagePropPresentMode, PAGE_PROP_HIDDEN_VIEW_ID, PAGE_PROP_TABLE_VIEW_ID, setPagePropPresentMode } from './page-prop-present.ts'
+import { getPagePropPresentMode, isPagePropBuiltinViewId, PAGE_PROP_TABLE_VIEW_ID, setPagePropPresentMode } from './page-prop-present.ts'
 
 export type { PagePropSandboxView }
 export { defaultPropSandboxSource, parsePagePropViews, propViewsAssetName } from '../page-prop-views.ts'
@@ -28,8 +28,7 @@ export function setPagePropViews(pageId: string, views: PagePropSandboxView[]) {
   bump()
   const present = getPagePropPresentMode(id)
   if (
-    present !== PAGE_PROP_TABLE_VIEW_ID &&
-    present !== PAGE_PROP_HIDDEN_VIEW_ID &&
+    !isPagePropBuiltinViewId(present) &&
     !next.some((item) => item.id === present)
   ) {
     setPagePropPresentMode(id, PAGE_PROP_TABLE_VIEW_ID)

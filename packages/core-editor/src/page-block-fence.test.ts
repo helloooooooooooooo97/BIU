@@ -12,13 +12,13 @@ import {
 
 const doc = `前言
 
-:::pageBlock {kind=sandbox plugin=page-sandbox id=ab12cd34 deck=true}
+:::editorBlock {kind=sandbox plugin=page-sandbox id=ab12cd34 deck=true}
 <div>旧</div>
 :::
 
 中间
 
-:::pageBlock {kind=excalidraw plugin=page-excalidraw id=ef90ab12}
+:::editorBlock {kind=excalidraw plugin=page-excalidraw id=ef90ab12}
 {"file":"assets/board.json"}
 :::
 `
@@ -57,12 +57,12 @@ test('patchPageBlockMarkdown can replace data and change plugin', () => {
 
 test('patchPageBlockMarkdown rejects missing or duplicate ids', () => {
   assert.throws(() => patchPageBlockMarkdown(doc, 'nope', { data: {} }), /unknown pageBlock/)
-  const dup = `:::pageBlock {kind=html id=ab12cd34}\na\n:::\n\n:::pageBlock {kind=html id=ab12cd34}\nb\n:::\n`
+  const dup = `:::editorBlock {kind=html id=ab12cd34}\na\n:::\n\n:::editorBlock {kind=html id=ab12cd34}\nb\n:::\n`
   assert.throws(() => patchPageBlockMarkdown(dup, 'ab12cd34', { data: { html: 'x' } }), /not unique/)
 })
 
 test('html fence with inline styles still yields the poster html', () => {
-  const md = `:::pageBlock {kind=sandbox plugin=page-sandbox id=d6ac31a5}
+  const md = `:::editorBlock {kind=sandbox plugin=page-sandbox id=d6ac31a5}
 <div style="box-sizing:border-box;height:100%;width:100%;overflow:hidden;position:relative;background:linear-gradient(170deg,#f3ecd8 0%,#eadfc2 100%)">
 <div style="position:absolute;left:26px;top:22px">番附</div>
 </div>
@@ -76,11 +76,11 @@ test('html fence with inline styles still yields the poster html', () => {
 })
 
 test('uniquifyPageBlockMarkdown keeps the first id and rewrites duplicates', () => {
-  const dup = `:::pageBlock {kind=sandbox plugin=page-sandbox id=ab12cd34}
+  const dup = `:::editorBlock {kind=sandbox plugin=page-sandbox id=ab12cd34}
 <div>a</div>
 :::
 
-:::pageBlock {kind=sandbox plugin=page-sandbox id=ab12cd34}
+:::editorBlock {kind=sandbox plugin=page-sandbox id=ab12cd34}
 <div>b</div>
 :::
 `

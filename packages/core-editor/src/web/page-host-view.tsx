@@ -10,14 +10,15 @@ import {
 } from '@biu/type-file-system'
 import { defaultContentSandboxSource } from '@biu/type-file-system/record-views'
 import { listPageBlockFences, pageBlockData, pageBlockRecordId } from '../page-block-fence.ts'
-import { compileHostSource, loadHostComponent } from './page-host-compile.ts'
+import { compileHostSource, loadHostComponent, SandboxPreview } from './page-host-compile.ts'
 import { PageBlockStage, writeBlockData } from './page-blocks-view.tsx'
 import { ExpandNavTitle } from './expand-nav-title.tsx'
 import { getPageViews, peekPageFile, readPageFile, renamePageSandboxView, usePageFileTick, usePageViews, writePageFile, type PageSandboxView } from './page-views.ts'
 import { getPageLayouts, usePageLayouts } from './page-layouts.ts'
 import { capturePageScroll } from './page-scroll-pin.ts'
-import { getPageEditor, usePageEditorVersion } from './service.ts'
-import { SourceEditor } from './source-editor.tsx'
+import { getBlockEditor, useBlockEditorVersion } from './service.ts'
+import { RenderBoundary } from '@biu/biu-ui'
+import { HostSourceEditor } from '@biu/core-file-system/host-source-editor'
 import { bindSandboxPickPane, pageHostPickKey } from './page-host-pick.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 import { HostField } from './host-field.tsx'
@@ -287,7 +288,7 @@ export function PageHostView({
   markdown?: string
   schema?: CollectionSchema
 }) {
-  const editorVersion = usePageEditorVersion()
+  const editorVersion = useBlockEditorVersion()
   const fileTick = usePageFileTick()
   const pageId = String(record.id)
   usePageViews(pageId)
@@ -365,7 +366,7 @@ export function PageHostView({
       set: (key: string, value: unknown) => writeRecord({ [key]: value }),
       patch: (bag: unknown) => writeRecord(bag as Record<string, unknown>),
       blocks: () => blocks.map((item) => ({ ...item })),
-      kinds: () => getPageEditor()?.blocks().map((item) => ({ kind: item.kind, plugin: item.plugin, label: item.label })) ?? [],
+      kinds: () => getBlockEditor()?.blocks().map((item) => ({ kind: item.kind, plugin: item.plugin, label: item.label })) ?? [],
       read: async () => {
         if (!view?.dataFile) return null
         try {
@@ -421,33 +422,6 @@ export function PageHostView({
 
   const envRef = useRef({ Block, Field, biu })
   envRef.current = { Block, Field, biu }
-  const preview = useMemo(() => {
-    if (!compiled.ok) return { Preview: null as ComponentType | null, error: compiled.error }
-    try {
-      const BlockProxy = (props: { id?: string; writable?: boolean }) => envRef.current.Block(props)
-      const FieldProxy = (props: { name?: string }) => envRef.current.Field(props)
-      const biuProxy = {
-        page: () => envRef.current.biu.page(),
-        record: () => envRef.current.biu.record(),
-        fields: () => envRef.current.biu.fields(),
-        values: () => envRef.current.biu.values(),
-        get: (key: string) => envRef.current.biu.get(key),
-        set: (key: string, value: unknown) => envRef.current.biu.set(key, value),
-        patch: (bag: unknown) => envRef.current.biu.patch(bag),
-        blocks: () => envRef.current.biu.blocks(),
-        kinds: () => envRef.current.biu.kinds(),
-        read: () => envRef.current.biu.read(),
-        write: (value: unknown) => envRef.current.biu.write(value),
-        update: (id: string, patch: Record<string, unknown>) => envRef.current.biu.update(id, patch),
-      }
-      return {
-        Preview: loadHostComponent(compiled.code, React, BlockProxy, FieldProxy, biuProxy) as ComponentType,
-        error: '',
-      }
-    } catch (err) {
-      return { Preview: null, error: err instanceof Error ? err.message : String(err) }
-    }
-  }, [compiled])
 
   useLayoutEffect(() => {
     if (!showPreview) return
@@ -456,7 +430,7 @@ export function PageHostView({
       ...(view?.file ? { name: view.file } : {}),
       ...(view?.name ? { title: view.name } : {}),
     })
-  }, [showPreview, pageId, viewId, view?.file, view?.name, preview.Preview])
+  }, [showPreview, pageId, viewId, view?.file, view?.name, compiled])
 
   const card = (
     <div
@@ -489,9 +463,33 @@ export function PageHostView({
             data-biu-name={view?.file || undefined}
             data-biu-title={view?.name || undefined}
           >
-            {preview.Preview ? (
+            {compiled.ok ? (
               <>
-                <preview.Preview />
+                <RenderBoundary key={compiled.code} label={view?.name || view?.file || '页面沙盒'}>
+                  <SandboxPreview
+                    code={compiled.code}
+                    errorTestId="page-host-error"
+                    load={() => {
+                      const BlockProxy = (props: { id?: string; writable?: boolean }) => envRef.current.Block(props)
+                      const FieldProxy = (props: { name?: string }) => envRef.current.Field(props)
+                      const biuProxy = {
+                        page: () => envRef.current.biu.page(),
+                        record: () => envRef.current.biu.record(),
+                        fields: () => envRef.current.biu.fields(),
+                        values: () => envRef.current.biu.values(),
+                        get: (key: string) => envRef.current.biu.get(key),
+                        set: (key: string, value: unknown) => envRef.current.biu.set(key, value),
+                        patch: (bag: unknown) => envRef.current.biu.patch(bag),
+                        blocks: () => envRef.current.biu.blocks(),
+                        kinds: () => envRef.current.biu.kinds(),
+                        read: () => envRef.current.biu.read(),
+                        write: (value: unknown) => envRef.current.biu.write(value),
+                        update: (id: string, patch: Record<string, unknown>) => envRef.current.biu.update(id, patch),
+                      }
+                      return loadHostComponent(compiled.code, React, BlockProxy, FieldProxy, biuProxy) as ComponentType
+                    }}
+                  />
+                </RenderBoundary>
                 {patchError ? (
                   <div className="page-host-error" data-testid="page-host-patch-error">
                     写入失败 · {patchError}
@@ -500,7 +498,7 @@ export function PageHostView({
               </>
             ) : (
               <div className="page-host-error" data-testid="page-host-error">
-                {preview.error || '无法渲染'}
+                {compiled.error || '无法渲染'}
               </div>
             )}
             {showCode ? <SplitResize paneRef={previewRef} onWidth={setPreviewWidth} testId="page-host-split-resize" /> : null}
@@ -517,7 +515,7 @@ export function PageHostView({
             data-biu-name={view?.file || undefined}
             data-biu-title={view?.name || undefined}
           >
-            <SourceEditor
+            <HostSourceEditor
               value={source}
               language="javascript"
               writable={writable}

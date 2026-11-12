@@ -19,7 +19,7 @@ import {
   AdjustmentsHorizontalIcon,
 } from '@heroicons/react/16/solid'
 import { usePagePresentMode } from './source-mode.ts'
-import { PAGE_PROP_HIDDEN_VIEW_ID, PAGE_PROP_TABLE_VIEW_ID, usePagePropPresentMode } from './page-prop-present.ts'
+import { PAGE_PROP_HIDDEN_VIEW_ID, PAGE_PROP_SOURCE_VIEW_ID, PAGE_PROP_TABLE_VIEW_ID, usePagePropPresentMode } from './page-prop-present.ts'
 import {
   copyPagePropSandboxView,
   createPagePropSandboxView,
@@ -62,6 +62,7 @@ import {
   useRecordLayouts,
 } from '@biu/core-file-system/record-layouts'
 import { createRecordSandboxView, writeRecordViewCatalog } from '@biu/core-file-system/record-sandboxes'
+import { loadTagViews } from '@biu/core-file-system/tag-views'
 
 const HIDDEN_MODE = { id: HIDDEN_CONTENT_VIEW_ID, label: '隐藏', Icon: EyeSlashIcon }
 
@@ -71,6 +72,7 @@ function layoutKindIcon(kind?: string) {
 
 function propPresentIcon(propViewId: string) {
   if (propViewId === PAGE_PROP_HIDDEN_VIEW_ID) return EyeSlashIcon
+  if (propViewId === PAGE_PROP_SOURCE_VIEW_ID) return CodeBracketIcon
   if (propViewId === PAGE_PROP_TABLE_VIEW_ID) return TableCellsIcon
   return SandboxKindIcon
 }
@@ -91,7 +93,7 @@ function Row({
   )
 }
 
-export function PageDetailBar({
+export function RecordDetailBar({
   record,
   schema,
   collectionPath,
@@ -163,15 +165,15 @@ export function PageDetailBar({
   const createRef = useRef<HTMLDivElement>(null)
   const propSandbox = listedPropViews.find((item) => item.id === (pageRecord ? propPresent : fsActiveLayout.propViewId))
   const propViewId = pageRecord
-    ? propPresent === PAGE_PROP_HIDDEN_VIEW_ID
-      ? PAGE_PROP_HIDDEN_VIEW_ID
+    ? propPresent === PAGE_PROP_HIDDEN_VIEW_ID || propPresent === PAGE_PROP_SOURCE_VIEW_ID
+      ? propPresent
       : propSandbox
         ? propSandbox.id
         : PAGE_PROP_TABLE_VIEW_ID
     : propSandbox
       ? propSandbox.id
-      : fsActiveLayout.propViewId === 'hidden'
-        ? 'hidden'
+      : fsActiveLayout.propViewId === PAGE_PROP_HIDDEN_VIEW_ID || fsActiveLayout.propViewId === PAGE_PROP_SOURCE_VIEW_ID
+        ? fsActiveLayout.propViewId
         : PAGE_PROP_TABLE_VIEW_ID
   const LayoutIcon = layoutKindIcon(activeLayout.kind)
   const PropIcon = propPresentIcon(propViewId)
@@ -253,6 +255,7 @@ export function PageDetailBar({
       void loadPageLayouts(record.id, record.layouts)
     }
     void loadRecordLayouts(path, record.id, record.layouts, fallback)
+    if (path === '/tags') void loadTagViews(record.id, record.views)
   }, [record.id, record.views, record.propViews, record.layouts, path, fallback, pageRecord])
 
   const toggle = (next: string) => setOpen((prev) => (prev === next ? null : next))
@@ -461,6 +464,22 @@ export function PageDetailBar({
                       >
                         <TableCellsIcon aria-hidden className="tasks-viewdd-item-ico" />
                         <span className="tasks-viewdd-item-name">表格</span>
+                      </button>
+                    </div>
+                    <div className={`tasks-viewdd-item${propViewId === PAGE_PROP_SOURCE_VIEW_ID ? ' is-active' : ''}`}>
+                      <button
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={propViewId === PAGE_PROP_SOURCE_VIEW_ID}
+                        className="tasks-viewdd-item-main fsdb-tool-row"
+                        data-testid="page-prop-view-source"
+                        onClick={() => {
+                          void setPropView(PAGE_PROP_SOURCE_VIEW_ID)
+                          setOpen(null)
+                        }}
+                      >
+                        <CodeBracketIcon aria-hidden className="tasks-viewdd-item-ico" />
+                        <span className="tasks-viewdd-item-name">源码</span>
                       </button>
                     </div>
                     <div className={`tasks-viewdd-item${propViewId === PAGE_PROP_HIDDEN_VIEW_ID ? ' is-active' : ''}`}>

@@ -8,7 +8,7 @@ const React = globalThis.React
 const { useEffect, useMemo, useRef, useState } = React
 
 export const name = 'page-toc'
-export const inject = ['pageEditor']
+export const inject = ['blockEditor']
 
 function folderIds(nodes: TocNode[], out: string[] = []) {
   for (const node of nodes) {
@@ -118,11 +118,11 @@ function TocCard(props: { data: Record<string, unknown>; update: (patch: Record<
 }
 
 export function apply(ctx: {
-  pageEditor: {
+  blockEditor: {
     registerBlock: (spec: Record<string, unknown>) => void
   }
 }) {
-  ctx.pageEditor.registerBlock({
+  ctx.blockEditor.registerBlock({
     kind: 'toc',
     plugin: name,
     label: '目录',

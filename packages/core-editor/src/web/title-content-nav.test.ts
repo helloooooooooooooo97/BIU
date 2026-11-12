@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
 import { Selection } from '@tiptap/pm/state'
-import { pageEditorExtensions } from './kit.ts'
+import { recordEditorExtensions } from './kit.ts'
 import {
   FOCUS_RECORD_TITLE,
   atFirstVisibleLine,
@@ -32,7 +32,7 @@ function makeEditor(md: string) {
   document.body.appendChild(host)
   const editor = new Editor({
     element: host,
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: md,
     contentType: 'markdown',
     editorProps: {
@@ -163,7 +163,7 @@ test('Delete at doc start focuses the title above properties', () => {
   document.body.appendChild(main)
   const editor = new Editor({
     element: host,
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: 'hello',
     contentType: 'markdown',
     editorProps: { handleKeyDown: handleContentTitleNav },
@@ -189,7 +189,7 @@ test('Backspace at doc start focuses the title above properties', () => {
   document.body.appendChild(main)
   const editor = new Editor({
     element: host,
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: 'hello',
     contentType: 'markdown',
     editorProps: { handleKeyDown: handleContentTitleNav },

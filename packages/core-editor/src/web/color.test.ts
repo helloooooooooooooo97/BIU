@@ -1,7 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
-import { pageEditorExtensions } from './kit.ts'
+import { recordEditorExtensions } from './kit.ts'
 import {
   HIGHLIGHT_COLORS,
   INK_TONES,
@@ -47,7 +47,7 @@ test('tiptap Color and Highlight apply palette tokens', () => {
   const text = editorTextColor('var(--biu-color-ink-blue)')
   const wash = editorHighlightColor('var(--biu-color-wash-sky)')
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '你好世界',
     contentType: 'markdown',
   })
@@ -64,7 +64,7 @@ test('tiptap Color and Highlight apply palette tokens', () => {
   editor.destroy()
 
   const again = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: md,
     contentType: 'markdown',
   })

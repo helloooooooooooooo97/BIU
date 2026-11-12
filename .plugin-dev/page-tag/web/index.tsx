@@ -8,7 +8,7 @@ const React = globalThis.React
 const { useEffect, useState } = React
 
 export const name = 'page-tag'
-export const inject = ['pageEditor']
+export const inject = ['blockEditor']
 
 type TagRow = { id: string; label: string }
 
@@ -106,13 +106,13 @@ function TagCard(props: { data: Record<string, unknown>; update: (patch: Record<
 }
 
 export function apply(ctx: {
-  pageEditor: {
+  blockEditor: {
     blocks?: () => Array<{ kind: string }>
     registerBlock: (spec: Record<string, unknown>) => void
   }
 }) {
-  if (ctx.pageEditor.blocks?.().some((item) => item.kind === 'tag')) return
-  ctx.pageEditor.registerBlock({
+  if (ctx.blockEditor.blocks?.().some((item) => item.kind === 'tag')) return
+  ctx.blockEditor.registerBlock({
     kind: 'tag',
     plugin: name,
     label: '标签块',

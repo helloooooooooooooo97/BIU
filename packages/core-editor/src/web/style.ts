@@ -100,8 +100,8 @@ export const PAGE_EDITOR_STYLE = `
 .page-editor .tiptap h2{font-size:1.5em;font-weight:var(--biu-font-weight-semibold);line-height:1.3;margin-top:.75em}
 .page-editor .tiptap h3{font-size:1.25em;font-weight:var(--biu-font-weight-semibold);line-height:1.3;margin-top:.6em}
 .page-editor .tiptap [data-heading-plugin]{border-radius:8px}
-.page-editor .react-renderer.node-pageBlock{overflow:hidden;min-width:0;outline:none;box-shadow:none;border-radius:0}
-.page-editor .react-renderer.node-pageBlock.ProseMirror-selectednode{outline:none;box-shadow:none;border-radius:0}
+.page-editor .react-renderer.node-editorBlock{overflow:hidden;min-width:0;outline:none;box-shadow:none;border-radius:0}
+.page-editor .react-renderer.node-editorBlock.ProseMirror-selectednode{outline:none;box-shadow:none;border-radius:0}
 .page-editor .react-renderer.node-slide{display:block;position:relative;width:100%;min-width:0;border:0;outline:none;box-shadow:none;overflow:visible}
 .page-editor .react-renderer.node-slide.ProseMirror-selectednode{outline:none;box-shadow:none;border-radius:0}
 .page-editor [data-slide]{display:flex;flex-direction:column;position:relative;width:100%;min-width:0;margin:12px 0;box-sizing:border-box;border:0;border-radius:0;background:transparent;overflow:visible}
@@ -141,10 +141,10 @@ export const PAGE_EDITOR_STYLE = `
 .page-editor .page-slide .is-empty::before{content:none}
 .page-editor .page-block[data-page-block]{margin:12px 0;position:relative;z-index:0;isolation:isolate;overflow:hidden}
 .page-editor .page-block[data-page-block=sandbox]{margin:0}
-.page-editor .page-block[data-page-block=html],.page-editor .page-block[data-page-block=htmlframe],.page-editor .page-block[data-page-block=sandbox],.page-editor .react-renderer.node-pageBlock:has([data-page-block=html]),.page-editor .react-renderer.node-pageBlock:has([data-page-block=htmlframe]),.page-editor .react-renderer.node-pageBlock:has([data-page-block=sandbox]){overflow:visible}
+.page-editor .page-block[data-page-block=html],.page-editor .page-block[data-page-block=htmlframe],.page-editor .page-block[data-page-block=sandbox],.page-editor .react-renderer.node-editorBlock:has([data-page-block=html]),.page-editor .react-renderer.node-editorBlock:has([data-page-block=htmlframe]),.page-editor .react-renderer.node-editorBlock:has([data-page-block=sandbox]){overflow:visible}
 .page-editor .page-block[data-page-block=html] [data-testid=page-html-direct],.page-editor .page-block[data-page-block=htmlframe] [data-testid=page-html-frame],.page-editor .page-block[data-page-block=excalidraw] [data-testid=page-excalidraw],.page-editor .page-block[data-page-block=sandbox] [data-testid=page-sandbox-block],[data-testid=page-sandbox-block]{box-sizing:border-box;outline:none;border:0;border-radius:0;box-shadow:none}
 .page-editor [data-testid=page-sandbox-preview],.page-editor [data-sandbox],.page-editor [data-sandbox-live],.page-editor [data-sandbox-live]:focus{outline:none;border:0;box-shadow:none}
-.page-editor .page-block[data-page-block=toc],.page-editor .page-block[data-page-block=tag],.page-editor .page-block[data-page-block=browser],.page-editor .react-renderer.node-pageBlock:has([data-page-block=browser]){display:flex;flex-direction:column;width:100%;max-width:none;box-sizing:border-box}
+.page-editor .page-block[data-page-block=toc],.page-editor .page-block[data-page-block=tag],.page-editor .page-block[data-page-block=browser],.page-editor .react-renderer.node-editorBlock:has([data-page-block=browser]){display:flex;flex-direction:column;width:100%;max-width:none;box-sizing:border-box}
 .page-editor [data-testid=page-browser],.page-editor [data-testid=page-browser] .rui-root,.page-editor [data-testid=page-browser] .page-browser-ui,.page-editor [data-testid=page-browser-surface]{display:flex;flex-direction:column;width:100%;max-width:none;box-sizing:border-box;flex:1 1 auto;min-height:0}
 .page-editor [data-testid=page-browser] .rui-root,.page-editor [data-testid=page-browser] .page-browser-ui,.page-editor [data-testid=page-browser-surface]{height:100%}
 .page-editor .page-block[data-page-block=toc],.page-editor .page-block[data-page-block=tag]{overflow:visible;box-shadow:none;outline:none}
@@ -176,7 +176,7 @@ export const PAGE_EDITOR_STYLE = `
 .page-editor .page-block.ProseMirror-selectednode iframe,.page-editor .ProseMirror[contenteditable=false] .page-block iframe,.page-host-view .page-block iframe{pointer-events:auto}
 .page-editor .page-block.ProseMirror-selectednode{outline:none;box-shadow:none}
 .page-editor .ProseMirror[contenteditable=false] .ProseMirror-selectednode{outline:none;box-shadow:none;background:transparent}
-.page-editor .page-block[data-page-block=excalidraw],.page-editor .react-renderer.node-pageBlock:has([data-page-block=excalidraw]){overflow:visible}
+.page-editor .page-block[data-page-block=excalidraw],.page-editor .react-renderer.node-editorBlock:has([data-page-block=excalidraw]){overflow:visible}
 .page-editor .page-block[data-page-block=excalidraw]{outline:none;box-shadow:none;border:0;border-radius:0}
 .page-editor .page-block[data-page-block=html].ProseMirror-selectednode,.page-editor .page-block[data-page-block=htmlframe].ProseMirror-selectednode,.page-editor .page-block[data-page-block=excalidraw].ProseMirror-selectednode,.page-editor .page-block[data-page-block=sandbox].ProseMirror-selectednode,.page-editor .page-block[data-page-block=html]:has([data-html-selected]),.page-editor .page-block[data-page-block=htmlframe]:has([data-html-selected]),.page-editor .page-block[data-page-block=excalidraw]:has([data-excalidraw-selected]),.page-editor .page-block[data-page-block=sandbox]:has([data-sandbox-selected]){outline:none;border-radius:0;box-shadow:0 0 0 var(--biu-stroke-width-thick) var(--biu-color-emphasis-border)}
 .page-editor .page-block-missing{display:flex;flex-direction:column;gap:0;padding:12px 14px;border:1px dashed var(--biu-color-border);border-radius:8px;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-3)}

@@ -5,6 +5,8 @@ import {
   DEFAULT_RECORD_PROP_VIEW_ID,
   HIDDEN_CONTENT_VIEW_ID,
   HIDDEN_CONTENT_VIEW_LABEL,
+  SOURCE_RECORD_PROP_VIEW_ID,
+  SOURCE_RECORD_PROP_VIEW_LABEL,
   parseRecordLayouts,
   parseRecordSandboxes,
 } from '@biu/type-file-system/record-views'
@@ -20,7 +22,7 @@ import {
   setActiveRecordLayoutId,
   subscribeRecordLayouts,
 } from './record-layouts.ts'
-import { getTagPresentMode, setTagPresentMode, subscribeTagPresent, TAG_TABLE_VIEW_ID } from './tag-present.ts'
+import { subscribeTagPresent, TAG_TABLE_VIEW_ID } from './tag-present.ts'
 import { copyTagSandboxView, createTagSandboxView, deleteTagSandboxView, getTagViews, subscribeTagViews } from './tag-views.ts'
 import { createRecordSandboxView } from './record-sandboxes.ts'
 
@@ -177,11 +179,16 @@ function defaultOptions(collectionPath: string, record: DbRecord, fieldKey: View
     if (path === PAGES_COLLECTION_PATH) {
       return named([
         { id: DEFAULT_RECORD_PROP_VIEW_ID, name: '表格', icon: 'table', builtin: true },
+        { id: SOURCE_RECORD_PROP_VIEW_ID, name: SOURCE_RECORD_PROP_VIEW_LABEL, icon: 'source', builtin: true },
         { id: 'hidden', name: '隐藏', icon: 'hidden', builtin: true },
         ...listed,
       ])
     }
-    return withBuiltin({ id: DEFAULT_RECORD_PROP_VIEW_ID, name: '表格', icon: 'table', builtin: true }, listed)
+    return named([
+      { id: DEFAULT_RECORD_PROP_VIEW_ID, name: '表格', icon: 'table', builtin: true },
+      { id: SOURCE_RECORD_PROP_VIEW_ID, name: SOURCE_RECORD_PROP_VIEW_LABEL, icon: 'source', builtin: true },
+      ...listed,
+    ])
   }
   const liveTag = path === TAGS_COLLECTION_PATH ? getTagViews(String(record.id ?? '')) : []
   const sandboxes = (liveTag.length ? liveTag : parseRecordSandboxes(record.views)).map((item) => ({
@@ -199,7 +206,6 @@ function defaultOptions(collectionPath: string, record: DbRecord, fieldKey: View
 function defaultSelected(collectionPath: string, record: DbRecord, fieldKey: ViewCatalogFieldKey) {
   const path = collectionOf(collectionPath)
   const id = String(record.id ?? '').trim()
-  if (path === TAGS_COLLECTION_PATH && fieldKey === 'views') return getTagPresentMode(id)
   const layout = getActiveRecordLayout(path, id, path === TAGS_COLLECTION_PATH ? 'table' : 'doc')
   if (fieldKey === 'layouts') return layout.id
   if (fieldKey === 'propViews') return layout.propViewId || DEFAULT_RECORD_PROP_VIEW_ID
@@ -211,10 +217,6 @@ function defaultSelect(collectionPath: string, record: DbRecord, fieldKey: ViewC
   const id = String(record.id ?? '').trim()
   const next = String(viewId ?? '').trim()
   if (!path || !id || !next) return
-  if (path === TAGS_COLLECTION_PATH && fieldKey === 'views') {
-    setTagPresentMode(id, next)
-    return
-  }
   if (fieldKey === 'layouts') {
     setActiveRecordLayoutId(path, id, next)
     return
@@ -344,7 +346,7 @@ export function canCopyViewCatalogItem(fieldKey: string, item: { id?: string; bu
   if (!id) return false
   if (item.builtin) return false
   if (fieldKey === 'views' && (CONTENT_BUILTIN_IDS.has(id) || id === TAG_TABLE_VIEW_ID)) return false
-  if (fieldKey === 'propViews' && (id === DEFAULT_RECORD_PROP_VIEW_ID || id === 'table' || id === 'hidden')) return false
+  if (fieldKey === 'propViews' && (id === DEFAULT_RECORD_PROP_VIEW_ID || id === 'table' || id === SOURCE_RECORD_PROP_VIEW_ID || id === 'hidden')) return false
   return true
 }
 

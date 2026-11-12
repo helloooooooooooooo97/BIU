@@ -212,7 +212,7 @@ export function builtinAllView(table: TableRef): SavedView {
     ...builtinViewLayout(),
     filters: {},
     columns: [],
-    groupBy: path === '/page-blocks' || path === '/tags' ? '' : 'shareScope',
+    groupBy: path === '/editor-blocks' || path === '/tags' ? '' : 'shareScope',
     wrap: false,
     truncate: true,
     query: '',
@@ -329,7 +329,7 @@ export function catalogLockFilters(
   return current?.builtin ? { ...(current.filters ?? {}) } : {}
 }
 
-/** /page-blocks：全部组件 + 每种已登记块一条只读视图。 */
+/** /editor-blocks：全部组件 + 每种已登记块一条只读视图。 */
 export function mergePageBlockViews(table: TableRef | undefined, kinds: BlockKindRef[], user: SavedView[]): SavedView[] {
   const extra = userViews(user)
   const unique = new Map<string, BlockKindRef>()

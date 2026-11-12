@@ -2,20 +2,20 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
 import { Context } from 'cordis'
-import { pageEditorExtensions } from './kit.ts'
+import { recordEditorExtensions } from './kit.ts'
 import { filterSlashItems, slashGroups } from './slash.ts'
-import { BASIC_BLOCK_TYPE, PageEditorService } from './service.ts'
+import { BASIC_BLOCK_TYPE, BlockEditorService } from './service.ts'
 import { duplicateAssetPath } from './page-block.ts'
 import { pageTextBubbleOpen } from './page-editor.tsx'
 
 test('registerBlock adds a slash item and inserts pageBlock', async () => {
   const ctx = new Context()
-  new PageEditorService(ctx)
+  new BlockEditorService(ctx)
   const fiber = ctx.plugin({
     name: 'algo',
-    inject: ['pageEditor'],
+    inject: ['blockEditor'],
     apply(inner) {
-      inner.pageEditor.registerBlock({
+      inner.blockEditor.registerBlock({
         kind: 'algorithm',
         plugin: 'page-algorithm',
         label: '算法题',
@@ -29,20 +29,20 @@ test('registerBlock adds a slash item and inserts pageBlock', async () => {
   const item = filterSlashItems('leetcode').find((entry) => entry.id === 'algorithm')
   assert.equal(item?.label, '算法题')
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '/',
     contentType: 'markdown',
   })
   const from = editor.state.selection.from - 1
   item!.command({ editor, range: { from: Math.max(1, from), to: editor.state.selection.from } })
   const json = editor.getJSON()
-  const block = json.content?.find((node) => node.type === 'pageBlock')
+  const block = json.content?.find((node) => node.type === 'editorBlock')
   assert.equal(block?.attrs?.kind, 'algorithm')
   assert.equal(block?.attrs?.plugin, 'page-algorithm')
   assert.match(String(block?.attrs?.id ?? ''), /^[a-z0-9]{8}$/i)
   assert.equal((block?.attrs?.data as { title?: string })?.title, 'Two Sum')
   const md = editor.getMarkdown()
-  assert.match(md, /:::pageBlock \{kind=algorithm plugin=page-algorithm id=[a-z0-9]+\}/)
+  assert.match(md, /:::editorBlock \{kind=algorithm plugin=page-algorithm id=[a-z0-9]+\}/)
   assert.match(md, /Two Sum/)
   editor.destroy()
   await fiber.dispose()
@@ -50,43 +50,43 @@ test('registerBlock adds a slash item and inserts pageBlock', async () => {
 })
 
 test('pageBlock markdown roundtrips kind, plugin, id and data', () => {
-  const src = `:::pageBlock {kind=algorithm plugin=page-algorithm id=ab12cd34}
+  const src = `:::editorBlock {kind=algorithm plugin=page-algorithm id=ab12cd34}
 {"title":"Two Sum","lang":"python"}
 :::
 `
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: src,
     contentType: 'markdown',
   })
   const json = editor.getJSON()
-  const block = json.content?.find((node) => node.type === 'pageBlock')
+  const block = json.content?.find((node) => node.type === 'editorBlock')
   assert.equal(block?.attrs?.kind, 'algorithm')
   assert.equal(block?.attrs?.plugin, 'page-algorithm')
   assert.equal(block?.attrs?.id, 'ab12cd34')
   assert.equal((block?.attrs?.data as { title?: string })?.title, 'Two Sum')
   const out = editor.getMarkdown()
-  assert.match(out, /:::pageBlock \{kind=algorithm plugin=page-algorithm id=ab12cd34\}/)
+  assert.match(out, /:::editorBlock \{kind=algorithm plugin=page-algorithm id=ab12cd34\}/)
   assert.match(out, /Two Sum/)
   editor.destroy()
 })
 
 test('sandbox pageBlock markdown keeps raw source and deck on the fence', () => {
-  const src = `:::pageBlock {kind=sandbox plugin=page-sandbox deck=true}
+  const src = `:::editorBlock {kind=sandbox plugin=page-sandbox deck=true}
 <div style="color:#fff">爱乐之城</div>
 :::
 `
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: src,
     contentType: 'markdown',
   })
-  const block = editor.getJSON().content?.find((node) => node.type === 'pageBlock')
+  const block = editor.getJSON().content?.find((node) => node.type === 'editorBlock')
   assert.equal(block?.attrs?.kind, 'sandbox')
   assert.equal((block?.attrs?.data as { source?: string; deck?: boolean })?.source, '<div style="color:#fff">爱乐之城</div>')
   assert.equal((block?.attrs?.data as { deck?: boolean })?.deck, true)
   const out = editor.getMarkdown()
-  assert.match(out, /:::pageBlock \{kind=sandbox plugin=page-sandbox id=[a-z0-9]+\}/)
+  assert.match(out, /:::editorBlock \{kind=sandbox plugin=page-sandbox id=[a-z0-9]+\}/)
   assert.doesNotMatch(out, /\bdeck=/)
   assert.match(out, /<div style="color:#fff">爱乐之城<\/div>/)
   assert.doesNotMatch(out, /"html":/)
@@ -94,37 +94,37 @@ test('sandbox pageBlock markdown keeps raw source and deck on the fence', () => 
 })
 
 test('video pageBlock markdown keeps the tag script, not JSON', () => {
-  const src = `:::pageBlock {kind=video plugin=page-video id=viddemo1}
+  const src = `:::editorBlock {kind=video plugin=page-video id=viddemo1}
 <timeline fps=30 size=1280x720>
   <track><title dur=2s>Biu</title></track>
 </timeline>
 :::
 `
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: src,
     contentType: 'markdown',
   })
-  const data = editor.getJSON().content?.find((node) => node.type === 'pageBlock')?.attrs?.data as { script?: string }
+  const data = editor.getJSON().content?.find((node) => node.type === 'editorBlock')?.attrs?.data as { script?: string }
   assert.match(String(data?.script), /<title dur=2s>Biu<\/title>/)
   const out = editor.getMarkdown()
-  assert.match(out, /:::pageBlock \{kind=video plugin=page-video id=viddemo1\}/)
+  assert.match(out, /:::editorBlock \{kind=video plugin=page-video id=viddemo1\}/)
   assert.match(out, /<timeline fps=30 size=1280x720>/)
   assert.doesNotMatch(out, /"script":/)
   editor.destroy()
 })
 
 test('video pageBlock still reads the old JSON body', () => {
-  const src = `:::pageBlock {kind=video plugin=page-video}
+  const src = `:::editorBlock {kind=video plugin=page-video}
 {"script":"<timeline fps=24>\\n  <track><scene dur=1s>Hi</scene></track>\\n</timeline>"}
 :::
 `
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: src,
     contentType: 'markdown',
   })
-  const data = editor.getJSON().content?.find((node) => node.type === 'pageBlock')?.attrs?.data as { script?: string }
+  const data = editor.getJSON().content?.find((node) => node.type === 'editorBlock')?.attrs?.data as { script?: string }
   assert.match(String(data?.script), /<scene dur=1s>Hi<\/scene>/)
   const out = editor.getMarkdown()
   assert.match(out, /<timeline fps=24>/)
@@ -133,16 +133,16 @@ test('video pageBlock still reads the old JSON body', () => {
 })
 
 test('sandbox pageBlock still reads the old JSON body as source', () => {
-  const src = `:::pageBlock {kind=sandbox plugin=page-sandbox}
+  const src = `:::editorBlock {kind=sandbox plugin=page-sandbox}
 {"html":"<div>旧写法</div>","deck":true}
 :::
 `
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: src,
     contentType: 'markdown',
   })
-  const data = editor.getJSON().content?.find((node) => node.type === 'pageBlock')?.attrs?.data as {
+  const data = editor.getJSON().content?.find((node) => node.type === 'editorBlock')?.attrs?.data as {
     source?: string
     deck?: boolean
   }
@@ -156,22 +156,22 @@ test('sandbox pageBlock still reads the old JSON body as source', () => {
 })
 
 test('pageBlock markdown keeps old fences without plugin id', () => {
-  const src = `:::pageBlock {kind=excalidraw}
+  const src = `:::editorBlock {kind=excalidraw}
 {"file":"assets/excalidraw-demo.json"}
 :::
 `
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: src,
     contentType: 'markdown',
   })
   const json = editor.getJSON()
-  const block = json.content?.find((node) => node.type === 'pageBlock')
+  const block = json.content?.find((node) => node.type === 'editorBlock')
   assert.equal(block?.attrs?.kind, 'excalidraw')
   assert.equal(block?.attrs?.plugin, '')
   assert.deepEqual(block?.attrs?.data, { file: 'assets/excalidraw-demo.json' })
   const out = editor.getMarkdown()
-  assert.match(out, /:::pageBlock \{kind=excalidraw id=[a-z0-9]+\}/)
+  assert.match(out, /:::editorBlock \{kind=excalidraw id=[a-z0-9]+\}/)
   assert.match(out, /"file": "assets\/excalidraw-demo.json"/)
   assert.doesNotMatch(out, /"elements"/)
   assert.doesNotMatch(out, /"height"/)
@@ -180,12 +180,12 @@ test('pageBlock markdown keeps old fences without plugin id', () => {
 
 test('slash insert for excalidraw only puts a file pointer in the node', async () => {
   const ctx = new Context()
-  new PageEditorService(ctx)
+  new BlockEditorService(ctx)
   const fiber = ctx.plugin({
     name: 'draw',
-    inject: ['pageEditor'],
+    inject: ['blockEditor'],
     apply(inner) {
-      inner.pageEditor.registerBlock({
+      inner.blockEditor.registerBlock({
         kind: 'excalidraw',
         plugin: 'page-excalidraw',
         label: '画板',
@@ -197,13 +197,13 @@ test('slash insert for excalidraw only puts a file pointer in the node', async (
   await fiber
   const item = filterSlashItems('画板').find((entry) => entry.id === 'excalidraw')
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '/',
     contentType: 'markdown',
   })
   const from = editor.state.selection.from - 1
   item!.command({ editor, range: { from: Math.max(1, from), to: editor.state.selection.from } })
-  const block = editor.getJSON().content?.find((node) => node.type === 'pageBlock')
+  const block = editor.getJSON().content?.find((node) => node.type === 'editorBlock')
   const data = block?.attrs?.data as { file?: string; title?: string }
   assert.equal(block?.attrs?.plugin, 'page-excalidraw')
   assert.equal(data?.file, 'assets/excalidraw-new.json')
@@ -216,17 +216,17 @@ test('slash insert for excalidraw only puts a file pointer in the node', async (
 test('duplicate pageBlock file pointers get a cloneFrom copy', () => {
   assert.match(duplicateAssetPath('assets/画板.json'), /^assets\/画板-copy-[0-9a-f]{8}\.json$/)
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: { type: 'doc', content: [{ type: 'paragraph' }] },
   })
   editor.commands.setContent({
     type: 'doc',
     content: [
-      { type: 'pageBlock', attrs: { kind: 'excalidraw', data: { file: 'assets/board.json' } } },
-      { type: 'pageBlock', attrs: { kind: 'excalidraw', data: { file: 'assets/board.json' } } },
+      { type: 'editorBlock', attrs: { kind: 'excalidraw', data: { file: 'assets/board.json' } } },
+      { type: 'editorBlock', attrs: { kind: 'excalidraw', data: { file: 'assets/board.json' } } },
     ],
   })
-  const blocks = editor.getJSON().content?.filter((node) => node.type === 'pageBlock') ?? []
+  const blocks = editor.getJSON().content?.filter((node) => node.type === 'editorBlock') ?? []
   assert.equal(blocks.length, 2)
   const first = blocks[0]?.attrs?.data as { file?: string; cloneFrom?: string }
   const second = blocks[1]?.attrs?.data as { file?: string; cloneFrom?: string }
@@ -238,29 +238,29 @@ test('duplicate pageBlock file pointers get a cloneFrom copy', () => {
 
 test('editor assigns a stable id when inserting or loading a pageBlock without one', async () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
-    content: `:::pageBlock {kind=sandbox plugin=page-sandbox}\n<div>x</div>\n:::\n`,
+    extensions: recordEditorExtensions(),
+    content: `:::editorBlock {kind=sandbox plugin=page-sandbox}\n<div>x</div>\n:::\n`,
     contentType: 'markdown',
   })
   await Promise.resolve()
-  const block = editor.getJSON().content?.find((node) => node.type === 'pageBlock')
+  const block = editor.getJSON().content?.find((node) => node.type === 'editorBlock')
   assert.match(String(block?.attrs?.id ?? ''), /^[a-z0-9]{8}$/i)
-  assert.match(editor.getMarkdown(), /:::pageBlock \{kind=sandbox plugin=page-sandbox id=[a-z0-9]+\}/)
+  assert.match(editor.getMarkdown(), /:::editorBlock \{kind=sandbox plugin=page-sandbox id=[a-z0-9]+\}/)
   editor.destroy()
 })
 
 test('setContent from agent without id or with a bad id gets a valid id', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: 'hello',
     contentType: 'markdown',
   })
   editor.commands.setContent(
-    `:::pageBlock {kind=sandbox plugin=page-sandbox}\n<div>a</div>\n:::\n\n:::pageBlock {kind=sandbox plugin=page-sandbox id=no}\n<div>b</div>\n:::\n`,
+    `:::editorBlock {kind=sandbox plugin=page-sandbox}\n<div>a</div>\n:::\n\n:::editorBlock {kind=sandbox plugin=page-sandbox id=no}\n<div>b</div>\n:::\n`,
     { contentType: 'markdown', emitUpdate: false },
   )
   const ids = (editor.getJSON().content ?? [])
-    .filter((node) => node.type === 'pageBlock')
+    .filter((node) => node.type === 'editorBlock')
     .map((node) => String(node.attrs?.id ?? ''))
   assert.equal(ids.length, 2)
   assert.match(ids[0]!, /^[a-z0-9]{8}$/i)
@@ -271,18 +271,18 @@ test('setContent from agent without id or with a bad id gets a valid id', () => 
 
 test('copied pageBlocks do not share an id', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: { type: 'doc', content: [{ type: 'paragraph' }] },
   })
   editor.commands.setContent({
     type: 'doc',
     content: [
-      { type: 'pageBlock', attrs: { kind: 'sandbox', id: 'ab12cd34', data: { html: '<div>a</div>' } } },
-      { type: 'pageBlock', attrs: { kind: 'sandbox', id: 'ab12cd34', data: { html: '<div>b</div>' } } },
+      { type: 'editorBlock', attrs: { kind: 'sandbox', id: 'ab12cd34', data: { html: '<div>a</div>' } } },
+      { type: 'editorBlock', attrs: { kind: 'sandbox', id: 'ab12cd34', data: { html: '<div>b</div>' } } },
     ],
   })
   const ids = (editor.getJSON().content ?? [])
-    .filter((node) => node.type === 'pageBlock')
+    .filter((node) => node.type === 'editorBlock')
     .map((node) => String(node.attrs?.id ?? ''))
   assert.equal(ids.length, 2)
   assert.equal(ids[0], 'ab12cd34')
@@ -293,18 +293,18 @@ test('copied pageBlocks do not share an id', () => {
 
 test('pasted pageBlocks with the same id are rewritten immediately', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: {
       type: 'doc',
-      content: [{ type: 'pageBlock', attrs: { kind: 'sandbox', id: 'ab12cd34', data: { html: '<div>a</div>' } } }],
+      content: [{ type: 'editorBlock', attrs: { kind: 'sandbox', id: 'ab12cd34', data: { html: '<div>a</div>' } } }],
     },
   })
   editor.commands.insertContentAt(editor.state.doc.content.size, {
-    type: 'pageBlock',
+    type: 'editorBlock',
     attrs: { kind: 'sandbox', id: 'ab12cd34', data: { html: '<div>b</div>' } },
   })
   const live = (editor.getJSON().content ?? [])
-    .filter((node) => node.type === 'pageBlock')
+    .filter((node) => node.type === 'editorBlock')
     .map((node) => String(node.attrs?.id ?? ''))
   assert.equal(live.length, 2)
   assert.equal(live[0], 'ab12cd34')
@@ -360,33 +360,33 @@ test('pageBlock capture includes every registered block shell', async () => {
 
 test('Enter on a selected pageBlock does not delete it', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
-    content: `hello\n\n:::pageBlock {kind=excalidraw plugin=page-excalidraw}\n{"file":"assets/x.json"}\n:::\n`,
+    extensions: recordEditorExtensions(),
+    content: `hello\n\n:::editorBlock {kind=excalidraw plugin=page-excalidraw}\n{"file":"assets/x.json"}\n:::\n`,
     contentType: 'markdown',
   })
   let pos = -1
   editor.state.doc.descendants((node, p) => {
-    if (node.type.name === 'pageBlock') pos = p
+    if (node.type.name === 'editorBlock') pos = p
   })
   assert.ok(pos >= 0)
   editor.chain().setNodeSelection(pos).run()
   editor.commands.keyboardShortcut('Enter')
   const types = editor.getJSON().content?.map((node) => node.type) ?? []
-  assert.equal(types.includes('pageBlock'), true)
+  assert.equal(types.includes('editorBlock'), true)
   assert.match(editor.getMarkdown(), /hello/)
-  assert.match(editor.getMarkdown(), /pageBlock/)
+  assert.match(editor.getMarkdown(), /editorBlock/)
   editor.destroy()
 })
 
 test('text style bubble stays closed when the cursor is on a pageBlock', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
-    content: `hello\n\n:::pageBlock {kind=sandbox plugin=page-sandbox}\nexport default function App(){return <div/>}\n:::\n`,
+    extensions: recordEditorExtensions(),
+    content: `hello\n\n:::editorBlock {kind=sandbox plugin=page-sandbox}\nexport default function App(){return <div/>}\n:::\n`,
     contentType: 'markdown',
   })
   let pos = -1
   editor.state.doc.descendants((node, p) => {
-    if (node.type.name === 'pageBlock') pos = p
+    if (node.type.name === 'editorBlock') pos = p
   })
   editor.chain().setNodeSelection(pos).run()
   const { from, to } = editor.state.selection
@@ -400,10 +400,10 @@ test('text style bubble stays closed when the cursor is on a pageBlock', () => {
 
 test('registerBlock requires plugin id', () => {
   const ctx = new Context()
-  new PageEditorService(ctx)
+  new BlockEditorService(ctx)
   assert.throws(
     () =>
-      ctx.pageEditor.registerBlock({
+      ctx.blockEditor.registerBlock({
         kind: 'algorithm',
         plugin: '',
         label: '算法题',
@@ -415,12 +415,12 @@ test('registerBlock requires plugin id', () => {
 
 test('saving an old fence backfills plugin from the running spec', async () => {
   const ctx = new Context()
-  new PageEditorService(ctx)
+  new BlockEditorService(ctx)
   const fiber = ctx.plugin({
     name: 'draw',
-    inject: ['pageEditor'],
+    inject: ['blockEditor'],
     apply(inner) {
-      inner.pageEditor.registerBlock({
+      inner.blockEditor.registerBlock({
         kind: 'excalidraw',
         plugin: 'page-excalidraw',
         label: '画板',
@@ -430,8 +430,8 @@ test('saving an old fence backfills plugin from the running spec', async () => {
   })
   await fiber
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
-    content: `:::pageBlock {kind=excalidraw}\n{"file":"assets/excalidraw-demo.json"}\n:::\n`,
+    extensions: recordEditorExtensions(),
+    content: `:::editorBlock {kind=excalidraw}\n{"file":"assets/excalidraw-demo.json"}\n:::\n`,
     contentType: 'markdown',
   })
   assert.match(editor.getMarkdown(), /plugin=page-excalidraw/)
@@ -441,12 +441,12 @@ test('saving an old fence backfills plugin from the running spec', async () => {
 
 test('registerBlock puts custom kinds in their own slash group', async () => {
   const ctx = new Context()
-  new PageEditorService(ctx)
+  new BlockEditorService(ctx)
   const fiber = ctx.plugin({
     name: 'draw',
-    inject: ['pageEditor'],
+    inject: ['blockEditor'],
     apply(inner) {
-      inner.pageEditor.registerBlock({
+      inner.blockEditor.registerBlock({
         kind: 'excalidraw',
         plugin: 'page-excalidraw',
         label: '画板',
@@ -454,7 +454,7 @@ test('registerBlock puts custom kinds in their own slash group', async () => {
         blockTypeLabel: '画板',
         View: () => null,
       })
-      inner.pageEditor.registerBlock({
+      inner.blockEditor.registerBlock({
         kind: 'algorithm',
         plugin: 'page-algorithm',
         label: '算法题',

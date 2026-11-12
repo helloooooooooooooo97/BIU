@@ -22,11 +22,11 @@ import {
 } from '@heroicons/react/16/solid'
 import { HeadlessPopover, TagChip, TagChips } from '@biu/biu-ui'
 import { normalizeSchemaValue, retagSchemaValue, type SchemaFieldValue } from '@biu/type-file-system'
-import { pageBlockRecordId } from '../page-block-fence.ts'
+import { pageBlockRecordId, parsePageBlockRecordId } from '../page-block-fence.ts'
 import { kindLabel, nodeBlockId } from './block-id.ts'
 import { comparePageBlocks } from './page-filter-plugin.ts'
 import { usePageViewState } from './page-view-state.ts'
-import { getPageEditor, usePageEditorVersion } from './service.ts'
+import { getBlockEditor, useBlockEditorVersion } from './service.ts'
 import { rememberedPageBlocks, useSlashCatalogVersion } from './slash-memory.ts'
 
 type Hero = ComponentType<SVGProps<SVGSVGElement>>
@@ -38,7 +38,7 @@ function kindIcon(type: string, heading = 0): Hero {
   if (type === 'codeBlock') return CodeBracketIcon
   if (type === 'horizontalRule') return MinusIcon
   if (type === 'table') return TableCellsIcon
-  if (type === 'pageBlock') return CubeIcon
+  if (type === 'editorBlock') return CubeIcon
   if (type === 'slide') return RectangleStackIcon
   if (type === 'blockMath') return VariableIcon
   if (type === 'image') return PhotoIcon
@@ -47,8 +47,8 @@ function kindIcon(type: string, heading = 0): Hero {
 
 export function pageBlockKindLabel(node: Node) {
   const raw = String(node.attrs.kind ?? '').trim()
-  if (!raw) return kindLabel('pageBlock')
-  const spec = getPageEditor()?.block(raw)
+  if (!raw) return kindLabel('editorBlock')
+  const spec = getBlockEditor()?.block(raw)
   if (spec?.label) return spec.label
   const remembered = rememberedPageBlocks().find((item) => item.kind === raw)
   if (remembered?.label) return remembered.label
@@ -69,7 +69,7 @@ export function listPageTableBlocks(doc: Node) {
   doc.forEach((node, pos) => {
     const type = node.type.name
     const heading = type === 'heading' ? Math.min(3, Math.max(1, Number(node.attrs.level) || 1)) : 0
-    const kind = heading ? `标题 ${heading}` : type === 'pageBlock' ? pageBlockKindLabel(node) : kindLabel(type)
+    const kind = heading ? `标题 ${heading}` : type === 'editorBlock' ? pageBlockKindLabel(node) : kindLabel(type)
     const imageName = type === 'image' ? String(node.attrs.alt ?? '').trim() : ''
     const label = node.textContent.replace(/\s+/g, ' ').trim() || imageName || blockTitle(node) || kind
     out.push({ id: nodeBlockId(node), kind, type, label, pos })
@@ -215,6 +215,12 @@ function useFacetCatalog() {
   return tags
 }
 
+export function pageBlockFacetPath(collection: string, pageId: string, blockId: string) {
+  const id = pageBlockRecordId(collection, pageId, blockId)
+  if (!parsePageBlockRecordId(id)) return null
+  return `/editor-blocks/${id}`
+}
+
 function BlockFacetCell({
   collection,
   pageId,
@@ -228,10 +234,11 @@ function BlockFacetCell({
   writable: boolean
   catalog: FacetOption[]
 }) {
-  const recordPath = `/page-blocks/${pageBlockRecordId(collection, pageId, blockId)}`
+  const recordPath = pageBlockFacetPath(collection, pageId, blockId)
   const [value, setValue] = useState<SchemaFieldValue>({ tags: [], values: {} })
   const [open, setOpen] = useState(false)
   useEffect(() => {
+    if (!recordPath) return
     let gone = false
     void fetch(`/api/db/read?path=${encodeURIComponent(recordPath)}`)
       .then((res) => res.json())
@@ -258,7 +265,7 @@ function BlockFacetCell({
     save(value.tags.includes(id) ? value.tags.filter((item) => item !== id) : [...value.tags, id])
   }
 
-  if (!blockId) return <div className="fsdb-cell">—</div>
+  if (!recordPath) return <div className="fsdb-cell">—</div>
   const byId = new Map(catalog.map((item) => [item.id, item.label]))
   return (
     <div className="page-blocks-table-tag" onMouseDown={(event) => event.stopPropagation()}>
@@ -362,7 +369,7 @@ export function PageBlocksTable({
   path?: string
   writable?: boolean
 }) {
-  usePageEditorVersion()
+  useBlockEditorVersion()
   useSlashCatalogVersion()
   const view = usePageViewState(recordId)
   const collection = collectionFromPath(path)
