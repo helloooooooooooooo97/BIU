@@ -197,7 +197,7 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec {
       columns: ['title', 'pinned', 'tag', 'eventCount', 'projectPath', 'updatedAt'],
       fields: {
         ...REQUIRED_RECORD_FIELDS,
-        events: { type: 'file', label: '对话', writable: false },
+        events: { type: 'file', label: '会话', writable: false },
         title: { type: 'string', label: '标题', writable: true },
         pinned: { type: 'boolean', label: '置顶', writable: true },
         eventCount: { type: 'number', label: '事件数', computed: true, sortable: true },
@@ -288,10 +288,10 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec {
     actions: [
       {
         id: 'chat',
-        label: '对话',
+        label: '会话',
         for: 'user',
         placement: ['row', 'detail'],
-        description: '把当前代理换成这一行，打开对话。',
+        description: '把当前代理换成这一行，打开会话。',
         run: async (id) => ({ ok: true, sessionId: id }),
       },
       {

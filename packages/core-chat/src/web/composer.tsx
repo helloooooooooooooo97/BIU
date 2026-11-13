@@ -479,7 +479,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
       attributes: {
         class: 'composer-tiptap',
         role: 'textbox',
-        'aria-label': '对话输入',
+        'aria-label': '会话输入',
       },
       handlePaste(_view, event) {
         const images = collectClipboardImages(event.clipboardData)

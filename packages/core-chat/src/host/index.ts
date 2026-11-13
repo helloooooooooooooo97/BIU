@@ -1257,7 +1257,7 @@ export function apply(ctx: Context) {
 
   ctx.hub.register({
     id: 'chat',
-    title: '对话',
+    title: '会话',
     subtitle: 'session + ctx.agents',
     plugin: 'chat',
     kind: 'chat',

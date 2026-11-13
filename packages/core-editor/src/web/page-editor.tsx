@@ -303,8 +303,8 @@ function Bubble({
       <button
         type="button"
         className="page-bubble-chat"
-        title="送到对话"
-        aria-label="送到对话"
+        title="送到会话"
+        aria-label="送到会话"
         onMouseDown={(event: MouseEvent) => {
           event.preventDefault()
           onSendChat()

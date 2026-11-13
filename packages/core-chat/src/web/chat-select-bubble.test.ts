@@ -8,7 +8,7 @@ const dir = import.meta.dirname
 test('chat selection bubble attaches a text pick', () => {
   const src = readFileSync(resolve(dir, './chat-select-bubble.tsx'), 'utf8')
   assert.match(src, /data-testid="chat-select-bubble"/)
-  assert.match(src, /加入对话/)
+  assert.match(src, /加入会话/)
   assert.match(src, /ChatBubbleLeftRightIcon/)
   assert.match(src, /chat-select-bubble-key/)
   assert.match(src, /⌘L/)

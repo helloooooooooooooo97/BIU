@@ -29,7 +29,7 @@ export function sidebarColumnWidth(collapsed: boolean, width: number) {
   return collapsed ? SIDEBAR_RAIL : width
 }
 
-/** 窄屏时先压中间、再把检查器收到 INSPECTOR_MIN；左侧尽量保持，两侧都压到顶后才收到 SIDEBAR_MIN，仍不够才整栏关掉。 */
+/** 窄屏先压检查器，尽量保住中间列宽度；不够再压左侧。`holdCenter` 时中间列锁死，窗口缩放只挤右边。 */
 export function allocateShellColumns(opts: {
   viewportWidth: number
   railWidth?: number
@@ -37,14 +37,20 @@ export function allocateShellColumns(opts: {
   leftWidth?: number
   inspectorOpen: boolean
   inspectorWidth: number
+  holdCenter?: number | null
 }) {
   const rail = opts.railWidth ?? RAIL
   const available = Math.max(0, opts.viewportWidth - rail)
   let left = opts.leftPane ? clampSidebarWidth(opts.leftWidth ?? SIDEBAR_MAX) : 0
+  if (opts.inspectorOpen && opts.holdCenter != null && opts.holdCenter > 0) {
+    const center = Math.min(opts.holdCenter, Math.max(0, available - left))
+    const inspector = Math.max(0, available - left - center)
+    return { left, inspector, center }
+  }
   let inspector = opts.inspectorOpen ? Math.max(INSPECTOR_MIN, opts.inspectorWidth) : 0
   let center = available - left - inspector
-  if (center < CENTER_MIN && inspector > INSPECTOR_MIN) {
-    const take = Math.min(inspector - INSPECTOR_MIN, CENTER_MIN - center)
+  if (center < CENTER_MIN && inspector > 0) {
+    const take = Math.min(inspector, CENTER_MIN - center)
     inspector -= take
     center += take
   }
@@ -66,10 +72,11 @@ export function allocateShellColumns(opts: {
   return { left, inspector, center }
 }
 
-export function applyShellColumnCssVars(el: HTMLElement | null, cols: { left: number; inspector: number }) {
+export function applyShellColumnCssVars(el: HTMLElement | null, cols: { left: number; inspector: number; center?: number }) {
   if (!el) return
   el.style.setProperty('--sidebar-col', `${cols.left}px`)
   el.style.setProperty('--inspector-width', `${cols.inspector}px`)
+  if (cols.center != null) el.style.setProperty('--center-col', `${cols.center}px`)
 }
 
 export type ShellLayoutSnap = {

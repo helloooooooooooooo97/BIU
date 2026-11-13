@@ -3530,6 +3530,9 @@ select.settings-account-input {
 .app-shell-agent {
   grid-template-columns: var(--sidebar-col, 0px) minmax(0, 1fr) var(--inspector-width, 0px);
 }
+.app-shell-agent.is-inspector-open {
+  grid-template-columns: var(--sidebar-col, 0px) minmax(0, var(--center-col, 1fr)) minmax(0, 1fr);
+}
 
 .app-shell-agent.is-resizing,
 .app-shell-agent.is-window-resizing {
@@ -4181,6 +4184,9 @@ html.dark .composer-model-flyout {
 
 .app-shell-module {
   grid-template-columns: minmax(0, 1fr) var(--inspector-width, 0px);
+}
+.app-shell-module.is-inspector-open {
+  grid-template-columns: minmax(0, var(--center-col, 1fr)) minmax(0, 1fr);
 }
 
 .app-shell-module.is-resizing,

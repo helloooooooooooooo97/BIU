@@ -122,6 +122,14 @@ test('shell columns stay three tracks without animating on window resize', () =>
     css,
     /\.app-shell-agent\s*\{[^}]*grid-template-columns:\s*var\(--sidebar-col, 0px\) minmax\(0, 1fr\) var\(--inspector-width, 0px\)/s,
   )
+  assert.match(
+    css,
+    /\.app-shell-agent\.is-inspector-open\s*\{[^}]*grid-template-columns:\s*var\(--sidebar-col, 0px\) minmax\(0, var\(--center-col, 1fr\)\) minmax\(0, 1fr\)/s,
+  )
+  assert.match(
+    css,
+    /\.app-shell-module\.is-inspector-open\s*\{[^}]*grid-template-columns:\s*minmax\(0, var\(--center-col, 1fr\)\) minmax\(0, 1fr\)/s,
+  )
   assert.match(css, /\.app-shell-agent\.is-window-resizing\s*\{[^}]*transition:\s*none/s)
   assert.match(css, /\.app-shell-module\.is-window-resizing\s*\{[^}]*transition:\s*none/s)
   assert.doesNotMatch(css, /\.app-shell-agent\.is-sidebar-collapsed\s*\{/)

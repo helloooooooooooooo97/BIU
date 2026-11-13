@@ -71,7 +71,7 @@ export const ChatSessionTitle = memo(function ChatSessionTitle({
         type="button"
         className="chat-view-session-title-magic"
         aria-label="命名"
-        title="根据对话给这个代理命名"
+        title="根据会话给这个代理命名"
         disabled={naming}
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => void nameWithModel()}

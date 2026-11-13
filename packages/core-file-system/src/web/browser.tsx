@@ -4689,7 +4689,7 @@ export function CollectionBrowser({
 
   function renderCellPop() {
     if (!cellPop || !schema) return null
-    const row = items.find((item) => item.id === cellPop.id)
+    const row = findPaintedRow(cellPop.id)
     const col = columns.find((item) => item.key === cellPop.key)
     if (!row || !col) return null
     const key = col.key
@@ -4914,6 +4914,18 @@ export function CollectionBrowser({
     return ids
   }
 
+  function findPaintedRow(id: string) {
+    const node = tablePaintNodes.find((item) => item.kind === 'row' && item.row.id === id)
+    if (node?.kind === 'row') return node.row
+    const listed = items.find((item) => item.id === id) ?? itemsRef.current.find((item) => item.id === id)
+    if (listed) return listed
+    for (const kids of Object.values(treeKidsByParentRef.current)) {
+      const hit = kids.find((item) => item.id === id)
+      if (hit) return hit
+    }
+    return undefined
+  }
+
   function findPaintedCellTd(id: string, key: string) {
     const table = tableRef.current
     if (!table) return null
@@ -5063,7 +5075,7 @@ export function CollectionBrowser({
       const empty = tableClearedValue(kind)
       if (empty === undefined || cursor.key === 'actions' || cursor.key === 'shareScope' || cursor.key === 'shareRole') return
       if (isViewCatalogField(cursor.key)) return
-      const row = itemsRef.current.find((item) => item.id === cursor.id)
+      const row = findPaintedRow(cursor.id)
       if (!row) return
       event.preventDefault()
       writeCellValue(row, cursor.key, col.field, empty)

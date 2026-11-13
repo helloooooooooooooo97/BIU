@@ -146,7 +146,7 @@ describe('composer dock stacking above sticky user', () => {
     expect(overlayWin).toContain('chat-composer-dock')
     expect(overlayWin).toContain('chat-overlay-head')
     expect(overlayWin).not.toContain('chat-overlay-peek')
-    expect(overlayWin).not.toContain('查看对话')
+    expect(overlayWin).not.toContain('查看会话')
     expect(overlayWin).not.toContain('startDrag')
     expect(overlayWin).not.toContain('chat-overlay-drag')
     expect(overlayWin).toContain('data-biu-ignore')

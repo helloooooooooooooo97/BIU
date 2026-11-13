@@ -110,9 +110,10 @@ test('commitShellLayoutSnap writes collapse before the next render', () => {
 
 test('applyShellColumnCssVars writes grid tracks without React state', () => {
   const el = document.createElement('div')
-  applyShellColumnCssVars(el, { left: 240, inspector: 320 })
+  applyShellColumnCssVars(el, { left: 240, inspector: 320, center: 720 })
   assert.equal(el.style.getPropertyValue('--sidebar-col'), '240px')
   assert.equal(el.style.getPropertyValue('--inspector-width'), '320px')
+  assert.equal(el.style.getPropertyValue('--center-col'), '720px')
 })
 
 test('shell column drag starts from CSS tracks, not a fractional bounding box', () => {
@@ -172,8 +173,8 @@ test('narrow viewport shrinks center and inspector first; left hides last', () =
     inspectorWidth: 320,
   })
   assert.equal(keepLeft.left, SIDEBAR_MAX)
-  assert.equal(keepLeft.inspector, INSPECTOR_MIN)
-  assert.equal(keepLeft.center, SIDEBAR_MAX + CENTER_MIN + 320 - 100 - SIDEBAR_MAX - INSPECTOR_MIN)
+  assert.equal(keepLeft.inspector, 220)
+  assert.equal(keepLeft.center, CENTER_MIN)
 
   const squeezeInspector = allocateShellColumns({
     viewportWidth: SIDEBAR_MAX + 200 + INSPECTOR_MIN,
@@ -182,8 +183,8 @@ test('narrow viewport shrinks center and inspector first; left hides last', () =
     inspectorWidth: 320,
   })
   assert.equal(squeezeInspector.left, SIDEBAR_MAX)
-  assert.equal(squeezeInspector.inspector, INSPECTOR_MIN)
-  assert.equal(squeezeInspector.center, 200)
+  assert.equal(squeezeInspector.inspector, 0)
+  assert.equal(squeezeInspector.center, 200 + INSPECTOR_MIN)
 
   const hideLeft = allocateShellColumns({
     viewportWidth: SIDEBAR_MIN + INSPECTOR_MIN - 1,
@@ -191,9 +192,33 @@ test('narrow viewport shrinks center and inspector first; left hides last', () =
     inspectorOpen: true,
     inspectorWidth: 320,
   })
-  assert.equal(hideLeft.left, 0)
-  assert.equal(hideLeft.inspector, INSPECTOR_MIN)
-  assert.equal(hideLeft.center, SIDEBAR_MIN + INSPECTOR_MIN - 1 - INSPECTOR_MIN)
+  assert.equal(hideLeft.left, SIDEBAR_MAX)
+  assert.equal(hideLeft.inspector, 0)
+  assert.equal(hideLeft.center, SIDEBAR_MIN + INSPECTOR_MIN - 1 - SIDEBAR_MAX)
+})
+
+test('holdCenter keeps the middle column and only squeezes the inspector', () => {
+  const wide = allocateShellColumns({
+    viewportWidth: 1600,
+    leftPane: true,
+    inspectorOpen: true,
+    inspectorWidth: 320,
+    holdCenter: 800,
+  })
+  assert.equal(wide.left, SIDEBAR_MAX)
+  assert.equal(wide.center, 800)
+  assert.equal(wide.inspector, 1600 - SIDEBAR_MAX - 800)
+
+  const squeezed = allocateShellColumns({
+    viewportWidth: SIDEBAR_MAX + 800 + 80,
+    leftPane: true,
+    inspectorOpen: true,
+    inspectorWidth: 320,
+    holdCenter: 800,
+  })
+  assert.equal(squeezed.left, SIDEBAR_MAX)
+  assert.equal(squeezed.center, 800)
+  assert.equal(squeezed.inspector, 80)
 })
 
 test('center min is two thirds of the old 768; inspector shrinks before the left pane', () => {

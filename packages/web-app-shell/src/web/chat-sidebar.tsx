@@ -444,8 +444,8 @@ export const ChatSidebar = memo(function ChatSidebar({
                                     <button
                                       type="button"
                                       className="sidebar-add"
-                                      title={isUngrouped ? '在未分组下添加聊天' : `在 ${group.label} 下添加聊天`}
-                                      aria-label={isUngrouped ? '在未分组下添加聊天' : `在 ${group.label} 下添加聊天`}
+                                      title={isUngrouped ? '在未分组下添加会话' : `在 ${group.label} 下添加会话`}
+                                      aria-label={isUngrouped ? '在未分组下添加会话' : `在 ${group.label} 下添加会话`}
                                       onClick={(e) => {
                                         e.stopPropagation()
                                         createChat({
@@ -488,7 +488,7 @@ export const ChatSidebar = memo(function ChatSidebar({
         className="brand-agent-menu chat-sidebar-popover"
         data-testid="dock-chat-sidebar"
         role="dialog"
-        aria-label="聊天"
+        aria-label="会话"
       >
         {body}
       </div>

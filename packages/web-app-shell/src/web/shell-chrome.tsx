@@ -1684,7 +1684,7 @@ export function ShellSettingsShortcuts() {
           <span className="settings-kbd"><kbd>⌘</kbd><kbd>2</kbd></span>
         </li>
         <li>
-          <span>选区送到对话</span>
+          <span>选区送到会话</span>
           <span className="settings-kbd"><kbd>⌘</kbd><kbd>L</kbd></span>
         </li>
       </ul>
@@ -2411,7 +2411,7 @@ export function ShellSidePlaces({
         onClick={onSettings}
       />
       <SideAction
-        title="对话"
+        title="会话"
         active={activeId === 'agent'}
         testId="chrome-chat-panel"
         icon={<ChatBubbleLeftRightIcon {...chromeIcon} />}

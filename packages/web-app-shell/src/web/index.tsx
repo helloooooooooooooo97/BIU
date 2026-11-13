@@ -334,9 +334,11 @@ function Shell(props: SlotProps) {
   const lastWideSidebar = useRef(sidebarWidth >= SIDEBAR_LABEL_AT ? sidebarWidth : SIDEBAR_MAX)
   const sidebarCollapsedRef = useRef(sidebarCollapsed)
   const sidebarWidthRef = useRef(sidebarWidth)
+  const holdCenterRef = useRef<number | null>(null)
   sidebarCollapsedRef.current = sidebarCollapsed
   sidebarWidthRef.current = sidebarWidth
   const persistSidebar = useCallback((width: number, collapsed: boolean) => {
+    holdCenterRef.current = null
     if (collapsed) {
       paintLiveLayoutRef.current({ sidebarCollapsed: true })
       setSidebarCollapsed(true)
@@ -461,6 +463,7 @@ function Shell(props: SlotProps) {
   const inspectorOpenRef = useRef(inspectorOpen)
   inspectorOpenRef.current = inspectorOpen
   const applyInspector = useCallback((next: boolean) => {
+    holdCenterRef.current = null
     inspectorOpenRef.current = next
     paintLiveLayoutRef.current({ inspectorOpen: next })
     setInspectorOpen(next)
@@ -477,6 +480,7 @@ function Shell(props: SlotProps) {
   }, [applyInspector])
   const persistInspectorWidth = useCallback((width: number) => {
     const next = Math.min(1000, Math.max(240, Math.round(width)))
+    holdCenterRef.current = null
     layoutSnap.current = commitShellLayoutSnap(layoutSnap.current, { inspectorWidth: next })
     setInspectorWidth(next)
     try {
@@ -566,10 +570,14 @@ function Shell(props: SlotProps) {
     leftWidth: leftPane ? sidebarCol : undefined,
     inspectorOpen: inspectorVisible,
     inspectorWidth,
+    holdCenter: columnResizing || !inspectorVisible ? null : holdCenterRef.current,
   })
   layoutSnap.current.leftPane = leftPane
-  const paintedCols = useRef({ left: shellColumns.left, inspector: shellColumns.inspector })
-  if (!columnResizing) paintedCols.current = { left: shellColumns.left, inspector: shellColumns.inspector }
+  const paintedCols = useRef({ left: shellColumns.left, inspector: shellColumns.inspector, center: shellColumns.center })
+  if (!columnResizing) {
+    paintedCols.current = { left: shellColumns.left, inspector: shellColumns.inspector, center: shellColumns.center }
+    holdCenterRef.current = inspectorVisible ? shellColumns.center : null
+  }
   const dragPaintRaf = useRef(0)
   const dragPaintPending = useRef<{ sidebar?: number; inspector?: number }>({})
   const applyPendingColumnDrag = useCallback((patch?: { sidebar?: number; inspector?: number }) => {
@@ -588,7 +596,7 @@ function Shell(props: SlotProps) {
       inspectorOpen: snap.inspectorVisible,
       inspectorWidth: pending.inspector ?? snap.inspectorWidth,
     })
-    paintedCols.current = { left: cols.left, inspector: cols.inspector }
+    paintedCols.current = { left: cols.left, inspector: cols.inspector, center: cols.center }
     applyShellColumnCssVars(shellRef.current, cols)
     if (pending.sidebar != null) {
       const wantRail = cols.left === SIDEBAR_RAIL
@@ -634,7 +642,7 @@ function Shell(props: SlotProps) {
       inspectorOpen: snap.inspectorVisible,
       inspectorWidth: snap.inspectorWidth,
     })
-    paintedCols.current = { left: cols.left, inspector: cols.inspector }
+    paintedCols.current = { left: cols.left, inspector: cols.inspector, center: cols.center }
     applyShellColumnCssVars(shellRef.current, cols)
     publishShellLayout(cols)
   }, [])
@@ -851,8 +859,8 @@ function Shell(props: SlotProps) {
         <button
           type="button"
           className="chat-view-header-expand"
-          title="收起对话"
-          aria-label="收起对话"
+          title="收起会话"
+          aria-label="收起会话"
           data-testid="chat-overlay-shrink"
           onPointerDown={(event) => {
             event.preventDefault()
@@ -880,8 +888,8 @@ function Shell(props: SlotProps) {
         <button
           type="button"
           className="chat-view-header-expand"
-          title="关闭聊天窗口"
-          aria-label="关闭聊天窗口"
+          title="关闭会话"
+          aria-label="关闭会话"
           data-testid="chat-overlay-close"
           onPointerDown={(event) => {
             event.preventDefault()
@@ -909,6 +917,7 @@ function Shell(props: SlotProps) {
           ['--sidebar-col' as string]: `${paintedCols.current.left}px`,
           ['--sidebar-flyout-width' as string]: `${Math.max(SIDEBAR_MIN, sidebarWidth)}px`,
           ['--inspector-width' as string]: `${paintedCols.current.inspector}px`,
+          ['--center-col' as string]: `${paintedCols.current.center}px`,
         } as CSSProperties
       }
     >
