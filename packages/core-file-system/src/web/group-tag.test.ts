@@ -23,6 +23,23 @@ const packs = [
   },
 ]
 
+test('tag grouping keys come from attached tag ids and use pack labels', () => {
+  const rows = [
+    { id: '1', title: 'a', tag: { tags: ['haohao'], values: {} } },
+    { id: '2', title: 'b', tag: { tags: ['other'], values: {} } },
+    { id: '3', title: 'c' },
+  ]
+  const grouped = groupRecords(rows, schema, 'tag', packs)
+  assert.deepEqual(
+    grouped.map((item) => [item.key, item.label, item.rows.map((row) => row.id)]),
+    [
+      ['haohao', '好好哈', ['1']],
+      ['other', 'other', ['2']],
+      ['', '未填', ['3']],
+    ],
+  )
+})
+
 test('groupListKeys uses facet packs without waiting for collection schema', () => {
   const key = tagFlatColumnKey('haohao', 'mood')
   const listed = groupListKeys(undefined, key, [], packs)

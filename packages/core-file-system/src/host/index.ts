@@ -1042,14 +1042,43 @@ export class DatabaseService extends Service implements Database {
         if (!places.includes('row') || !actionVisibleToUser(action)) continue
         if (seen.has(action.id)) continue
         seen.add(action.id)
-        out.push({ ...action, collection: source.path })
+        const { run: _run, ...info } = action as CollectionAction
+        out.push({ ...info, collection: source.path })
       }
     }
     return out
   }
 
+  private overviewTableEnum() {
+    const listed: string[] = []
+    for (const source of this.collectionsList()) {
+      if (!isDataOverviewSource(source.path)) continue
+      const title = String(source.view?.title ?? source.label ?? source.id).trim() || source.path
+      if (!listed.includes(title)) listed.push(title)
+    }
+    return listed
+  }
+
+  private withOverviewTableSelect(spec: CollectionSpec, schema: CollectionSchema) {
+    if (spec.path !== DATA_COLLECTION_PATH || !schema.fields.table) return schema
+    const listed = this.overviewTableEnum()
+    return {
+      ...schema,
+      fields: {
+        ...schema.fields,
+        table: {
+          ...schema.fields.table,
+          type: 'select' as const,
+          enum: listed,
+          enumLabels: Object.fromEntries(listed.map((title) => [title, title])),
+        },
+      },
+    }
+  }
+
   private schemaForCurrent(spec: CollectionSpec, schema = schemaFor(spec)) {
     if (spec.path === DATA_COLLECTION_PATH) schema = { ...schema, actions: this.overviewRowActions() }
+    schema = this.withOverviewTableSelect(spec, schema)
     schema = this.withLocationShareScope(schema)
     const authorization = this.authorization()
     const actor = authorization?.currentActor()
@@ -1719,13 +1748,21 @@ export class DatabaseService extends Service implements Database {
       delete liveFilter.$scope
     }
     const tableFilter = normalizeCollectionPath(String(liveFilter?.tablePath ?? ''))
-    if (liveFilter) delete liveFilter.tablePath
+    const tableNameFilter = String(liveFilter?.table ?? '').trim()
+    if (liveFilter) {
+      delete liveFilter.tablePath
+      delete liveFilter.table
+    }
     const overlay = listNeedsMatchOverlay(liveFilter, q, sortField, page?.sorts)
     const query: CollectionListQuery = { q: '', trash: false }
     const gathered: DbRecord[] = []
     for (const source of this.collectionsList()) {
       if (!isDataOverviewSource(source.path)) continue
       if (tableFilter && tableFilter !== '/' && source.path !== tableFilter) continue
+      if (tableNameFilter) {
+        const title = String(source.view?.title ?? source.label ?? source.id).trim() || source.path
+        if (title !== tableNameFilter) continue
+      }
       const pack = await this.visibleSortedCollectionRows(source, query, sortField, sortDir, page?.sorts, overlay)
       const visible = scopeFilter ? pack[scopeFilter] : pack.rows
       const decorated = this.decorateSlice(source, visible, null)
@@ -2655,6 +2692,9 @@ export class DatabaseService extends Service implements Database {
       await this.requirePath(spec.path, (action.requiredAction ?? 'resource:update') as PermissionAction)
     }
     if (!matchActionWhen(record, action.when)) throw new Error(`action not available: ${actionId}`)
+    if ((actionId === 'delete' || actionId === 'trash') && spec.path !== '/trash') {
+      return this.remove(spec.path, { ids: [parts[1]!] })
+    }
     const result = await action.run(parts[1]!, record, args)
     if (spec.path === '/plugins' && actionId === 'sandbox' && !builtinPlugin && !this.recordOwner(spec.path, parts[1]!)) {
       this.stampPluginCreateScope(parts[1]!, args)

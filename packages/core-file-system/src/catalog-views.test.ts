@@ -58,6 +58,22 @@ test('personal and workspace scopes keep independent custom views', () => {
   assert.deepEqual(personal.find((view) => view.id === 'legacy-personal')?.filters, { $scope: 'personal' })
 })
 
+test('overlay keeps stored seed edits and honors omitted ids', () => {
+  const table = { path: '/pages', label: '页面', view: { title: '页面' } }
+  const allId = builtinAllViewId('/pages')
+  const renamed = mergeTableViews(table, [
+    { id: allId, name: '我的页面', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] },
+  ])
+  assert.equal(renamed[0]?.name, '我的页面')
+  const omitted = mergeTableViews(
+    table,
+    [{ id: 'mine', name: '周报', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] }],
+    [allId],
+  )
+  assert.equal(omitted.some((view) => view.id === allId), false)
+  assert.equal(omitted.some((view) => view.id === 'mine'), true)
+})
+
 test('member directory exposes builtin audience views', () => {
   const views = mergeTableViews({ path: '/workspace-members', label: '成员' }, [])
   assert.deepEqual(views.slice(1).map((view) => view.name), ['空间成员', '外部成员', '临时访客'])
@@ -85,7 +101,7 @@ test('each registered table gets a builtin catalog view', () => {
   ])
   assert.equal(merged[0]?.id, builtinAllViewId('/views'))
   assert.equal(merged[0]?.name, '全部视图')
-  assert.equal(merged.filter((view) => view.builtin).length, 4)
+  assert.equal(merged.find((view) => view.id === builtinCatalogViewId('/pages'))?.name, '旧的')
   assert.equal(merged.some((view) => view.id === 'user-1'), true)
   assert.equal(merged.filter((view) => view.id === builtinCatalogViewId('/pages')).length, 1)
 })
@@ -105,7 +121,7 @@ test('builtin all view ids belong to one collection', () => {
   assert.equal(isBuiltinAllViewForCollection('mine', '/agents'), false)
 })
 
-test('every registered table gets a read-only 全部xx view', () => {
+test('every registered table gets a 全部xx seed view', () => {
   const sessions = { id: 'sessions', path: '/agents', kind: 'collection' as const, label: '代理', view: { title: '代理' } }
   const all = builtinAllView(sessions)
   assert.equal(all.id, builtinAllViewId('/agents'))
@@ -120,7 +136,7 @@ test('every registered table gets a read-only 全部xx view', () => {
     { id: 'mine', name: '置顶', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
   ])
   assert.equal(all.groupBy, 'shareScope')
-  assert.deepEqual(merged.slice(0, 1).map((view) => view.name), ['全部代理'])
+  assert.deepEqual(merged.slice(0, 1).map((view) => view.name), ['假的'])
   assert.equal(merged.some((view) => view.name === '私人代理'), false)
   assert.equal(merged.filter((view) => view.id === builtinAllViewId('/agents')).length, 1)
   assert.equal(merged.some((view) => view.id === 'mine'), true)
@@ -169,7 +185,7 @@ test('stamp rows open the source record, not a tag view', () => {
   assert.equal(stampRecordId('/agents', 's1'), 'agents::s1')
 })
 
-test('builtin all views are read-only', () => {
+test('seed view ids still use builtin-all prefixes', () => {
   assert.equal(isReadOnlyViewId(builtinAllViewId('/agents')), true)
   assert.equal(isReadOnlyViewId('user-traj'), false)
 })
@@ -206,7 +222,7 @@ test('each registered page block kind gets a builtin view', () => {
   assert.deepEqual(merged[1]?.filters, { blockKind: 'excalidraw' })
   assert.equal(merged[1]?.builtin, true)
   assert.equal(merged[2]?.id, builtinBlockKindViewId('html'))
-  assert.equal(merged[2]?.name, 'HTML')
+  assert.equal(merged[2]?.name, '旧的')
   assert.equal(merged.filter((view) => view.id === builtinBlockKindViewId('html')).length, 1)
   assert.equal(merged.some((view) => view.id === 'mine'), true)
   assert.equal(isReadOnlyViewId(builtinBlockKindViewId('html')), true)
@@ -217,7 +233,7 @@ test('each registered page block kind gets a builtin view', () => {
   assert.deepEqual(catalogLockFilters('builtin-block:terminal', []), { blockKind: 'terminal' })
   assert.deepEqual(
     catalogLockFilters('builtin-block:terminal', [{ id: 'builtin-block:terminal', builtin: true, filters: {} }]),
-    { blockKind: 'terminal' },
+    {},
   )
-  assert.deepEqual(catalogLockFilters('mine', [{ id: 'mine', builtin: false, filters: { blockKind: 'html' } }]), {})
+  assert.deepEqual(catalogLockFilters('mine', [{ id: 'mine', builtin: false, filters: { blockKind: 'html' } }]), { blockKind: 'html' })
 })

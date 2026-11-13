@@ -22,6 +22,8 @@ import {
   SIDEBAR_TAG_AT,
   SIDEBAR_MAX,
   SIDEBAR_MIN,
+  SIDEBAR_RAIL,
+  sidebarColumnWidth,
 } from './chat-overlay.ts'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { Context } from 'cordis'
@@ -521,8 +523,8 @@ function Shell(props: SlotProps) {
   const showChatSidebar = activeModule === 'agent'
   const visitedChatSidebar = useRef(false)
   if (showChatSidebar) visitedChatSidebar.current = true
-  const sidebarCol = sidebarCollapsed ? 0 : sidebarWidth
-  const sidebarNarrow = sidebarWidth < SIDEBAR_LABEL_AT
+  const sidebarCol = sidebarColumnWidth(sidebarCollapsed, sidebarWidth)
+  const sidebarNarrow = sidebarCollapsed || sidebarWidth < SIDEBAR_LABEL_AT
   const sidebarShowTags = sidebarWidth >= SIDEBAR_TAG_AT
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window === 'undefined' ? 1440 : window.innerWidth,
@@ -580,12 +582,22 @@ function Shell(props: SlotProps) {
     const cols = allocateShellColumns({
       viewportWidth: window.innerWidth,
       leftPane: snap.leftPane,
-      leftWidth: snap.leftPane ? (pending.sidebar ?? (snap.sidebarCollapsed ? 0 : snap.sidebarWidth)) : undefined,
+      leftWidth: snap.leftPane
+        ? (pending.sidebar ?? sidebarColumnWidth(snap.sidebarCollapsed, snap.sidebarWidth))
+        : undefined,
       inspectorOpen: snap.inspectorVisible,
       inspectorWidth: pending.inspector ?? snap.inspectorWidth,
     })
     paintedCols.current = { left: cols.left, inspector: cols.inspector }
     applyShellColumnCssVars(shellRef.current, cols)
+    if (pending.sidebar != null) {
+      const wantRail = cols.left === SIDEBAR_RAIL
+      if (wantRail !== sidebarCollapsedRef.current) {
+        sidebarCollapsedRef.current = wantRail
+        layoutSnap.current.sidebarCollapsed = wantRail
+        setSidebarCollapsed(wantRail)
+      }
+    }
     return paintedCols.current
   }, [])
   const flushColumnDrag = useCallback((patch?: { sidebar?: number; inspector?: number }) => {
@@ -599,7 +611,10 @@ function Shell(props: SlotProps) {
     const axis = columnDragAxisRef.current
     const cols = flushColumnDrag(patch)
     if (patch?.sidebar != null || axis === 'sidebar') {
-      persistSidebar(cols.left === 0 ? sidebarWidthRef.current : cols.left, cols.left === 0)
+      persistSidebar(
+        cols.left < SIDEBAR_MIN ? sidebarWidthRef.current : cols.left,
+        cols.left < SIDEBAR_MIN,
+      )
     }
     if (patch?.inspector != null || axis === 'inspector') {
       persistInspectorWidth(cols.inspector)
@@ -615,7 +630,7 @@ function Shell(props: SlotProps) {
     const cols = allocateShellColumns({
       viewportWidth: window.innerWidth,
       leftPane: snap.leftPane,
-      leftWidth: snap.leftPane ? (snap.sidebarCollapsed ? 0 : snap.sidebarWidth) : undefined,
+      leftWidth: snap.leftPane ? sidebarColumnWidth(snap.sidebarCollapsed, snap.sidebarWidth) : undefined,
       inspectorOpen: snap.inspectorVisible,
       inspectorWidth: snap.inspectorWidth,
     })
@@ -638,6 +653,7 @@ function Shell(props: SlotProps) {
       const target = event.target
       if (!(target instanceof Element)) return
       if (target.closest('.sidebar-resize')) {
+        if (target.closest('.app-side-bar.is-narrow')) return
         columnDragAxisRef.current = 'sidebar'
         columnResizingRef.current = true
         setColumnResizing(true)
@@ -770,7 +786,7 @@ function Shell(props: SlotProps) {
   const chatHeader = (
     <header className="chat-view-header" data-biu-ignore>
       <div className="chat-view-header-left">
-        {leftHidden || sidebarNarrow ? (
+        {leftHidden ? (
           <button
             type="button"
             className="chat-view-header-expand"

@@ -4,6 +4,7 @@ import { mergePageBlockViews, type BlockKindRef } from '../catalog-views.ts'
 import { PAGE_BLOCKS_COLLECTION_PATH } from './database-path.ts'
 import { normalizeCollectionPath } from '../paths.ts'
 import type { SavedView } from './saved-view.ts'
+import { loadOmittedViewIds } from './view-storage.ts'
 
 export function pageBlocksChrome(kinds: () => BlockKindRef[]): CollectionChrome {
   return {
@@ -13,7 +14,7 @@ export function pageBlocksChrome(kinds: () => BlockKindRef[]): CollectionChrome 
         label: '组件',
         view: { title: '组件' },
       }
-      return mergePageBlockViews(table, kinds(), user as SavedView[])
+      return mergePageBlockViews(table, kinds(), user as SavedView[], loadOmittedViewIds(PAGE_BLOCKS_COLLECTION_PATH))
     },
   }
 }

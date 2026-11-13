@@ -1,6 +1,7 @@
 import type { CollectionInfo, DbRecord } from '@biu/type-file-system'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { catalogRowOpenTarget, mergeCatalogViews } from '../catalog-views.ts'
+import { loadOmittedViewIds } from './view-storage.ts'
 import { viewsCatalogSource } from './database-path.ts'
 import type { SavedView } from './saved-view.ts'
 
@@ -17,6 +18,6 @@ export const viewsChrome: CollectionChrome = {
     return source ? { tablePath: source } : EMPTY_FILTERS
   },
   listViews(tables: CollectionInfo[], user: unknown[]) {
-    return mergeCatalogViews(tables, user as SavedView[])
+    return mergeCatalogViews(tables, user as SavedView[], loadOmittedViewIds('/views'))
   },
 }

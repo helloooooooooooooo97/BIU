@@ -333,12 +333,16 @@ function HitActions({ hit }: { hit: SearchHit }) {
     if (acting.current) return
     acting.current = true
     try {
+      const cornerSessionId = String(
+        document.querySelector('[data-testid="brand-corner-mascot"]')?.getAttribute('data-session-id') ?? '',
+      ).trim()
       const res = await fetch('/api/db/action', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           path: `${searchCollection(hit.kind)}/${hit.id}`,
           action: action.id,
+          ...(action.id === 'deliver' && cornerSessionId ? { args: { sessionId: cornerSessionId, wait: false } } : {}),
         }),
       })
       if (!res.ok) return

@@ -75,6 +75,8 @@ test('property flyout uses the view switcher instead of a string textarea', () =
   assert.match(pick, /tasks-viewdd-act is-danger/)
   assert.match(pick, /fsdb-viewcat-pick-row/)
   assert.match(pick, /ensureDbSearchStyle/)
+  assert.match(pick, /useOptionCursor/)
+  assert.match(pick, /onKeyDown=\{\(event\) => onKeyDown\(event\)\}/)
 })
 
 test('hidden content view chip uses 隐藏, not the id', () => {

@@ -164,8 +164,8 @@ test('savedViewFromRecord restores columns from a JSON string', () => {
   assert.equal(view?.pageSize, 50)
 })
 
-test('savedViewFromRecord skips builtin rows and keeps filters', () => {
-  assert.equal(savedViewFromRecord({ viewId: builtinAllViewId('/tasks'), title: '全部' }), null)
+test('savedViewFromRecord keeps seed rows and filters', () => {
+  assert.equal(savedViewFromRecord({ viewId: builtinAllViewId('/tasks'), title: '全部' })?.name, '全部')
   const view = savedViewFromRecord({
     viewId: 'v1',
     title: '看板',

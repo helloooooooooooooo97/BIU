@@ -133,4 +133,34 @@ test('property source pretty-prints JSON string fields instead of escaping them'
   assert.match(text, /"fields": \[/)
   assert.match(text, /"type": "attachment"/)
   assert.doesNotMatch(text, /\\"/)
+  assert.match(text, /"views": \[\]/)
+  assert.match(text, /"propViews": \[\]/)
+  assert.match(text, /"layouts": \[\]/)
+})
+
+test('property source includes content, property and layout view catalogs', () => {
+  const text = recordPropSourceText(
+    {
+      id: 'p187',
+      title: '石犀平台需求拆解',
+      views: [{ id: 'doc', name: '文档', kind: 'sandbox', file: 'view-doc.jsx' }],
+      propViews: [{ id: 'card', name: '卡片', kind: 'sandbox', file: 'prop-view-card.jsx', dataFile: 'prop-view-card.json' }],
+      layouts: [{ id: 'need', name: '需求', contentViewId: 'doc', propViewId: 'card' }],
+    },
+    {
+      fields: {
+        title: { type: 'string', label: '标题' },
+        views: { type: 'string', label: '内容视图' },
+        propViews: { type: 'string', label: '属性视图' },
+        layouts: { type: 'string', label: '全局视图' },
+      },
+    },
+  )
+  assert.match(text, /"views": \[/)
+  assert.match(text, /"file": "view-doc.jsx"/)
+  assert.match(text, /"propViews": \[/)
+  assert.match(text, /"file": "prop-view-card.jsx"/)
+  assert.match(text, /"layouts": \[/)
+  assert.match(text, /"contentViewId": "doc"/)
+  assert.match(text, /"propViewId": "card"/)
 })

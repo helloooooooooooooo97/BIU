@@ -3,7 +3,9 @@ export const CHAT_OVERLAY_ENTER = 420
 export const SIDEBAR_MAX = 360
 /** 默认就是能正常看会话名的宽度，不是图标细条。 */
 export const SIDEBAR_DEFAULT = 240
-/** 再窄就整栏关掉；最小宽度仍是正常侧栏（有会话名），不会压成图标轨。 */
+/** 收起/最小模式留下的 VS Code 式图标轨宽度。 */
+export const SIDEBAR_RAIL = 48
+/** 再窄就收到图标轨；这个宽度仍显示文字。 */
 export const SIDEBAR_MIN = 160
 /** 到这个宽度就显示文字标签（会话名、「添加聊天」等）。 */
 export const SIDEBAR_LABEL_AT = SIDEBAR_MIN
@@ -15,11 +17,16 @@ export const INSPECTOR_MIN = 240
 const RAIL = 0
 const SIDEBAR = SIDEBAR_MAX
 
-/** 低于最小宽度则 0（整栏消失）；否则夹在 [MIN, MAX]。 */
+/** 低于图标轨则 0（视口实在不够）；低于文字最小宽度则收到图标轨。 */
 export function clampSidebarWidth(width: number) {
   const n = Math.round(Number(width))
-  if (!Number.isFinite(n) || n < SIDEBAR_MIN) return 0
+  if (!Number.isFinite(n) || n < SIDEBAR_RAIL) return 0
+  if (n < SIDEBAR_MIN) return SIDEBAR_RAIL
   return Math.min(SIDEBAR_MAX, n)
+}
+
+export function sidebarColumnWidth(collapsed: boolean, width: number) {
+  return collapsed ? SIDEBAR_RAIL : width
 }
 
 /** 窄屏时先压中间、再把检查器收到 INSPECTOR_MIN；左侧尽量保持，两侧都压到顶后才收到 SIDEBAR_MIN，仍不够才整栏关掉。 */
@@ -140,7 +147,7 @@ export function chatColumnWidth(opts: {
   return allocateShellColumns({
     viewportWidth: opts.viewportWidth,
     leftPane: true,
-    leftWidth: opts.sidebarCollapsed ? 0 : SIDEBAR_MAX,
+    leftWidth: opts.sidebarCollapsed ? SIDEBAR_RAIL : SIDEBAR_MAX,
     inspectorOpen: opts.inspectorOpen,
     inspectorWidth: opts.inspectorWidth,
   }).center
@@ -152,7 +159,7 @@ export function inspectorWidthForExpandedChat(opts: {
   inspectorWidth: number
   sidebarCollapsed: boolean
 }) {
-  const side = opts.sidebarCollapsed ? 0 : SIDEBAR
+  const side = opts.sidebarCollapsed ? SIDEBAR_RAIL : SIDEBAR
   const maxInspector = opts.viewportWidth - RAIL - side - CHAT_OVERLAY_ENTER
   return Math.min(opts.inspectorWidth, Math.max(INSPECTOR_MIN, Math.round(maxInspector)))
 }

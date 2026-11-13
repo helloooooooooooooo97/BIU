@@ -17,6 +17,7 @@ import {
   SIDEBAR_MIN,
   SIDEBAR_DEFAULT,
   SIDEBAR_LABEL_AT,
+  SIDEBAR_RAIL,
   SIDEBAR_TAG_AT,
   getChatOverlay,
   setChatOverlay,
@@ -54,25 +55,26 @@ import {
   focusComposerEditor,
 } from './chat-overlay.ts'
 
-test('collapsed chat sidebar disappears instead of leaving a thin rail', () => {
+test('collapsed sidebar keeps a VS Code-style icon rail', () => {
+  assert.equal(SIDEBAR_RAIL, 48)
   assert.equal(
     chatColumnWidth({ viewportWidth: 1600, inspectorOpen: true, inspectorWidth: 320, sidebarCollapsed: true }),
-    1600 - 320,
+    1600 - 320 - SIDEBAR_RAIL,
   )
 })
 
-test('sidebar below min width is gone', () => {
-  const gone = allocateShellColumns({
+test('sidebar below min width becomes the icon rail', () => {
+  const rail = allocateShellColumns({
     viewportWidth: 1600,
     leftPane: true,
     leftWidth: SIDEBAR_MIN - 1,
     inspectorOpen: false,
     inspectorWidth: 320,
   })
-  assert.equal(gone.left, 0)
+  assert.equal(rail.left, SIDEBAR_RAIL)
 })
 
-test('sidebar stays a normal pane at min width, never an icon rail', () => {
+test('sidebar stays a normal pane at min width', () => {
   assert.equal(SIDEBAR_MIN, 160)
   assert.equal(SIDEBAR_DEFAULT, 240)
   assert.equal(SIDEBAR_LABEL_AT, SIDEBAR_MIN)

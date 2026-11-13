@@ -13,6 +13,7 @@ import {
   RectangleGroupIcon,
   TableCellsIcon,
   TrashIcon,
+  UserGroupIcon,
 } from '@heroicons/react/16/solid'
 
 export function idleTableIconKind(icon?: string) {
@@ -23,6 +24,7 @@ export function idleTableIconKind(icon?: string) {
   if (name === 'document' || name === 'document-text' || name === 'page') return 'page'
   if (name === 'tag' || name === 'rectangle-stack' || name === 'collection') return 'tag'
   if (name === 'circle-stack' || name === 'data' || name === 'database') return 'data'
+  if (name === 'users' || name === 'user-group' || name === 'member' || name === 'members') return 'users'
   return 'table'
 }
 
@@ -45,5 +47,8 @@ export function TableGlyph({ icon, className = 'size-4' }: { icon?: string; clas
   if (name === 'tag' || name === 'rectangle-stack' || name === 'collection') return <TagIcon aria-hidden className={className} />
   if (name === 'rectangle-group' || name === 'squares-2x2' || name === 'widgets') return <RectangleGroupIcon aria-hidden className={className} />
   if (name === 'circle-stack' || name === 'data' || name === 'database') return <CircleStackIcon aria-hidden className={className} />
+  if (name === 'users' || name === 'user-group' || name === 'member' || name === 'members') {
+    return <UserGroupIcon aria-hidden className={className} />
+  }
   return <TableCellsIcon aria-hidden className={className} />
 }

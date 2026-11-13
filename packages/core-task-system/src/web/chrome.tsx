@@ -1,22 +1,5 @@
-import { LockClosedIcon } from '@heroicons/react/16/solid'
-import type { DbRecord } from '@biu/type-file-system'
 import type { CollectionChrome, FsCellProps } from '@biu/type-file-system/ui'
 import { ReportsPane, ScriptPane } from './detail-panes.tsx'
-
-function TaskTitle({ record, label }: { record: DbRecord; label: string }) {
-  const chain = String(record.parentChain ?? '')
-  return (
-    <span className={`tasks2-title${record.status === 'done' || record.status === 'failed' ? ' is-done' : ''}`}>
-      {chain ? <span className="tasks-queue-chain">{chain} / </span> : null}
-      {label}
-      {record.blocked ? (
-        <span className="tasks-queue-lock" title="被依赖任务阻塞">
-          <LockClosedIcon aria-hidden className="size-[14px]" />
-        </span>
-      ) : null}
-    </span>
-  )
-}
 
 function formatTokens(n: number) {
   if (!n) return '0'
@@ -82,7 +65,6 @@ function UsageCell({ record, value }: FsCellProps) {
 }
 
 export const tasksChrome: CollectionChrome = {
-  Title: TaskTitle,
   cells: {
     usage: UsageCell,
   },

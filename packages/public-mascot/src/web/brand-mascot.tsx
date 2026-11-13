@@ -196,7 +196,7 @@ export function BrandCornerMascot({
         : name
 
   return (
-    <div className="brand-corner-cluster" data-testid="brand-corner-mascot">
+    <div className="brand-corner-cluster" data-testid="brand-corner-mascot" data-session-id={current?.id ?? activeId ?? ''}>
       <div className="brand-corner-leading" data-plugin-tray>
         {leading}
       </div>

@@ -40,6 +40,9 @@ export const EDITOR_BLOCKS_COLLECTION_PATH = '/editor-blocks'
 export const PAGE_BLOCKS_COLLECTION_PATH = EDITOR_BLOCKS_COLLECTION_PATH
 export const PAGES_COLLECTION_PATH = '/pages'
 export const TASKS_COLLECTION_PATH = '/tasks'
+export const MCP_COLLECTION_PATH = '/mcp'
+export const SKILLS_COLLECTION_PATH = '/skills'
+export const PLUGINS_COLLECTION_PATH = '/plugins'
 export const TRASH_COLLECTION_PATH = '/trash'
 export const WORKSPACE_MEMBERS_COLLECTION_PATH = '/workspace-members'
 
@@ -56,13 +59,29 @@ const SYSTEM_COLLECTION_ORDER = [
   TRASH_COLLECTION_PATH,
 ] as const
 
-/** 用户表侧栏顺序。组件和标签是反查索引，不排在这里。 */
-const USER_COLLECTION_ORDER = [AGENTS_COLLECTION_PATH, '/tasks', '/pages', '/plugins'] as const
+/** 侧栏「核心数据」：代理、任务、页面、标签。 */
+const CORE_COLLECTION_ORDER = [AGENTS_COLLECTION_PATH, TASKS_COLLECTION_PATH, PAGES_COLLECTION_PATH, TAGS_COLLECTION_PATH] as const
 
-/** 从当前用户能看到的用户数据反查出来，每人一份，没有分享。 */
+/** 侧栏「能力数据」：MCP、技能、组件、视图。插件表若还在也放这里。 */
+const CAPABILITY_COLLECTION_ORDER = [
+  MCP_COLLECTION_PATH,
+  SKILLS_COLLECTION_PATH,
+  PAGE_BLOCKS_COLLECTION_PATH,
+  VIEWS_COLLECTION_PATH,
+  PLUGINS_COLLECTION_PATH,
+] as const
+
+/** 侧栏「系统数据」：成员、通知、回收站。视图改到能力数据，但分享规则仍按系统表。 */
+const SYSTEM_SIDEBAR_ORDER = [
+  WORKSPACE_MEMBERS_COLLECTION_PATH,
+  NOTICES_COLLECTION_PATH,
+  TRASH_COLLECTION_PATH,
+] as const
+
+/** 组件和标签仍是反查索引（每人一份、没有分享）；侧栏分组另走 dataSidebarKind。 */
 const INDEX_COLLECTION_ORDER = [PAGE_BLOCKS_COLLECTION_PATH, TAGS_COLLECTION_PATH] as const
 
-/** 成员、视图、通知、回收站由系统维护，侧栏归在系统数据。会话事件不进文件系统。 */
+/** 成员、视图、通知、回收站由系统维护。会话事件不进文件系统。 */
 export function isSystemCollection(path: string) {
   const normalized = normalizeCollectionPath(path)
   return (SYSTEM_COLLECTION_ORDER as readonly string[]).includes(normalized)
@@ -73,23 +92,37 @@ export function isIndexCollection(path: string) {
   return (INDEX_COLLECTION_ORDER as readonly string[]).includes(normalized)
 }
 
+export function dataSidebarKind(path: string): 'user' | 'index' | 'system' {
+  const normalized = normalizeCollectionPath(path)
+  if ((CORE_COLLECTION_ORDER as readonly string[]).includes(normalized)) return 'user'
+  if ((CAPABILITY_COLLECTION_ORDER as readonly string[]).includes(normalized)) return 'index'
+  if ((SYSTEM_SIDEBAR_ORDER as readonly string[]).includes(normalized)) return 'system'
+  if (isSystemCollection(normalized)) return 'system'
+  if (isIndexCollection(normalized)) return 'index'
+  return 'user'
+}
+
 export function sortDataCollections<T extends { path: string }>(tables: T[]): { user: T[]; index: T[]; system: T[] } {
   const user: T[] = []
   const index: T[] = []
   const system: T[] = []
   for (const table of tables) {
     if (normalizeCollectionPath(table.path) === DATA_COLLECTION_PATH) continue
-    if (isSystemCollection(table.path)) system.push(table)
-    else if (isIndexCollection(table.path)) index.push(table)
+    const kind = dataSidebarKind(table.path)
+    if (kind === 'system') system.push(table)
+    else if (kind === 'index') index.push(table)
     else user.push(table)
   }
   const rank = (order: readonly string[], path: string) => {
     const idx = order.indexOf(normalizeCollectionPath(path))
     return idx >= 0 ? idx : 50
   }
-  user.sort((a, b) => rank(USER_COLLECTION_ORDER, a.path) - rank(USER_COLLECTION_ORDER, b.path) || a.path.localeCompare(b.path))
-  index.sort((a, b) => rank(INDEX_COLLECTION_ORDER, a.path) - rank(INDEX_COLLECTION_ORDER, b.path) || a.path.localeCompare(b.path))
-  system.sort((a, b) => rank(SYSTEM_COLLECTION_ORDER, a.path) - rank(SYSTEM_COLLECTION_ORDER, b.path) || a.path.localeCompare(b.path))
+  user.sort((a, b) => rank(CORE_COLLECTION_ORDER, a.path) - rank(CORE_COLLECTION_ORDER, b.path) || a.path.localeCompare(b.path))
+  index.sort(
+    (a, b) =>
+      rank(CAPABILITY_COLLECTION_ORDER, a.path) - rank(CAPABILITY_COLLECTION_ORDER, b.path) || a.path.localeCompare(b.path),
+  )
+  system.sort((a, b) => rank(SYSTEM_SIDEBAR_ORDER, a.path) - rank(SYSTEM_SIDEBAR_ORDER, b.path) || a.path.localeCompare(b.path))
   return { user, index, system }
 }
 

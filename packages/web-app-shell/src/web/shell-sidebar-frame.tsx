@@ -1,7 +1,8 @@
-import { memo, useEffect, useRef, useState, type ReactNode } from 'react'
-import { ChevronDoubleLeftIcon, ChevronDoubleRightIcon } from '@heroicons/react/16/solid'
+import { memo, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { createPortal } from 'react-dom'
+import { ChevronDoubleLeftIcon, ChevronDoubleRightIcon, CloudIcon, ComputerDesktopIcon } from '@heroicons/react/16/solid'
 import { chromeIcon } from './chrome-icon.ts'
-import { ShellSidePlaces, ShellWorkspaceSwitcher } from './shell-chrome.tsx'
+import { ShellSidePlaces, ShellWorkspaceSwitcher, useActiveWorkspaceLocation } from './shell-chrome.tsx'
 import {
   isSidebarFlyoutKeepTarget,
   isSidebarFlyoutIgnoreTarget,
@@ -140,12 +141,13 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
       data-testid="sidebar-flyout-host"
     >
       {visible ? null : <div className="sidebar-edge-hot" data-testid="sidebar-edge-hot" aria-hidden />}
+      {narrow ? <RailHoverTip hostRef={hostRef} /> : null}
     <aside
-      className={`app-side-bar min-h-0 flex-col overflow-hidden border-r border-(--biu-color-border) bg-(--biu-color-bg-subtle)${narrow ? ' is-narrow' : ''}${showTags ? ' is-wide' : ''}${visible ? ' flex' : ' is-closed flex'}`}
+      className={`app-side-bar min-h-0 flex-col border-r border-(--biu-color-border) bg-(--biu-color-bg-subtle)${narrow ? ' is-narrow overflow-visible' : ' overflow-hidden'}${showTags ? ' is-wide' : ''}${visible ? ' flex' : ' is-closed flex'}`}
       aria-hidden={!visible}
       data-testid={testId}
     >
-      {onWidthChange ? (
+      {onWidthChange && !narrow ? (
         <div
           className="sidebar-resize"
           data-biu-ignore
@@ -160,34 +162,38 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
           }}
         />
       ) : null}
-      <div className="app-side-bar-head app-side-bar-head-brand" data-biu-ignore>
-        <div className="shell-workspace-head">
-          <ShellWorkspaceSwitcher onWorkspaceSettings={() => onSettings?.('workspace')} />
+      {visible && narrow ? (
+        <ShellRailHead onExpand={onExpand} />
+      ) : (
+        <div className="app-side-bar-head app-side-bar-head-brand" data-biu-ignore>
+          <div className="shell-workspace-head">
+            <ShellWorkspaceSwitcher onWorkspaceSettings={() => onSettings?.('workspace')} />
+          </div>
+          {!visible ? (
+            <button
+              type="button"
+              className="chat-view-header-expand"
+              title="展开左侧边栏"
+              aria-label="展开左侧边栏"
+              data-testid="sidebar-expand"
+              onClick={onExpand}
+            >
+              <ChevronDoubleRightIcon {...chromeIcon} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="chat-view-header-expand"
+              title="收起左侧边栏"
+              aria-label="收起左侧边栏"
+              data-testid="sidebar-collapse"
+              onClick={onCollapse}
+            >
+              <ChevronDoubleLeftIcon {...chromeIcon} />
+            </button>
+          )}
         </div>
-        {!visible || narrow ? (
-          <button
-            type="button"
-            className="chat-view-header-expand"
-            title="展开左侧边栏"
-            aria-label="展开左侧边栏"
-            data-testid="sidebar-expand"
-            onClick={onExpand}
-          >
-            <ChevronDoubleRightIcon {...chromeIcon} />
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="chat-view-header-expand"
-            title="收起左侧边栏"
-            aria-label="收起左侧边栏"
-            data-testid="sidebar-collapse"
-            onClick={onCollapse}
-          >
-            <ChevronDoubleLeftIcon {...chromeIcon} />
-          </button>
-        )}
-      </div>
+      )}
       {onSettings && agentHref && activeId != null ? (
         <div className="shrink-0 px-2 pt-1" data-biu-ignore>
           <ShellSidePlaces
@@ -204,3 +210,57 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
     </div>
   )
 })
+
+function RailHoverTip({ hostRef }: { hostRef: RefObject<HTMLDivElement | null> }) {
+  const [tip, setTip] = useState<{ text: string; x: number; y: number } | null>(null)
+  useEffect(() => {
+    const host = hostRef.current
+    if (!host) return
+    const read = (node: EventTarget | null) => {
+      if (!(node instanceof Element)) return null
+      const el = node.closest('[data-dock-tip]')
+      if (!(el instanceof HTMLElement) || !host.contains(el) || el.closest('.shell-rail-expand')) return null
+      const text = el.getAttribute('data-dock-tip')?.trim()
+      if (!text) return null
+      const box = el.getBoundingClientRect()
+      return { text, x: Math.round(box.right + 8), y: Math.round(box.top + box.height / 2) }
+    }
+    const onOver = (event: PointerEvent) => setTip(read(event.target))
+    const onOut = (event: PointerEvent) => setTip(read(event.relatedTarget))
+    host.addEventListener('pointerover', onOver)
+    host.addEventListener('pointerout', onOut)
+    return () => {
+      host.removeEventListener('pointerover', onOver)
+      host.removeEventListener('pointerout', onOut)
+    }
+  }, [hostRef])
+  if (!tip) return null
+  return createPortal(
+    <div className="shell-rail-tip" role="tooltip" data-testid="shell-rail-tip" style={{ left: tip.x, top: tip.y }}>
+      {tip.text}
+    </div>,
+    document.body,
+  )
+}
+
+function ShellRailHead({ onExpand }: { onExpand?: () => void }) {
+  const location = useActiveWorkspaceLocation()
+  return (
+    <div className="shell-rail-head" data-biu-ignore>
+      <button
+        type="button"
+        className="shell-rail-expand"
+        aria-label="展开左侧边栏"
+        data-testid="sidebar-expand"
+        onClick={onExpand}
+      >
+        <span className="shell-rail-expand-mark" aria-hidden>
+          {location === 'cloud' ? <CloudIcon {...chromeIcon} /> : <ComputerDesktopIcon {...chromeIcon} />}
+        </span>
+        <span className="shell-rail-expand-chevron" aria-hidden>
+          <ChevronDoubleRightIcon {...chromeIcon} />
+        </span>
+      </button>
+    </div>
+  )
+}

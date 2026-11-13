@@ -107,6 +107,14 @@ test('data overview lists each source record, includes tags, and skips other ind
   assert.equal(isDataOverviewSource('/editor-blocks'), false)
   assert.equal(isDataOverviewSource('/trash'), false)
   assert.equal(listed.schema?.fields.title?.writable, true)
+  assert.equal(listed.schema?.fields.table?.type, 'select')
+  assert.ok((listed.schema?.fields.table?.enum ?? []).includes('笔记2号'))
+  const byTable = await db.list('/data', { table: '笔记2号' })
+  assert.equal(byTable.kind, 'collection')
+  if (byTable.kind === 'collection') {
+    assert.ok(byTable.items.length)
+    assert.ok(byTable.items.every((item) => item.table === '笔记2号'))
+  }
   const written = await db.update('/data/notes::n1', { title: '改了' })
   assert.equal(written.kind, 'record')
   assert.equal(written.path, '/data/notes::n1')

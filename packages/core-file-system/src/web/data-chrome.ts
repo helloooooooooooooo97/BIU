@@ -1,7 +1,8 @@
 import type { CollectionChrome } from '@biu/type-file-system/ui'
-import { builtinAllView, builtinAllViewId, stampRowOpenTarget } from '../catalog-views.ts'
+import { builtinAllView, builtinAllViewId, overlayListedViews, stampRowOpenTarget } from '../catalog-views.ts'
 import { DATA_COLLECTION_PATH } from './database-path.ts'
 import type { SavedView } from './saved-view.ts'
+import { loadOmittedViewIds } from './view-storage.ts'
 
 const VIA_DATA_KEY = 'biu.fsdb.via-data'
 
@@ -63,10 +64,11 @@ export const dataChrome: CollectionChrome = {
     return { kind: 'record', recordId: stamp.recordId, collection: stamp.collection }
   },
   listViews(_tables, user) {
-    const all = builtinAllView({ path: DATA_COLLECTION_PATH, label: '数据', view: { title: '数据' } })
-    return [
-      { ...all, groupBy: '', columns: ['title', 'actions', 'table'] },
-      ...(user as SavedView[]).filter((view) => !view.builtin),
-    ]
+    const all = {
+      ...builtinAllView({ path: DATA_COLLECTION_PATH, label: '数据', view: { title: '数据' } }),
+      groupBy: '',
+      columns: ['title', 'actions', 'table'],
+    }
+    return overlayListedViews([all], user as SavedView[], loadOmittedViewIds(DATA_COLLECTION_PATH))
   },
 }

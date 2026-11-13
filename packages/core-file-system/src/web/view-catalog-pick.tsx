@@ -11,7 +11,7 @@ import {
   selectedViewCatalogId,
   subscribeViewCatalog,
 } from './view-catalog.ts'
-import { ensureDbSearchStyle } from '@biu/database-ui/search'
+import { ensureDbSearchStyle, useOptionCursor } from '@biu/database-ui/search'
 import { ViewCatalogGlyph } from './view-catalog-glyph.tsx'
 
 export function ViewCatalogPickPanel({
@@ -39,26 +39,20 @@ export function ViewCatalogPickPanel({
   const available = options.filter(
     (item) => !q || item.name.toLowerCase().includes(q) || item.id.toLowerCase().includes(q),
   )
+  const { listRef, onKeyDown } = useOptionCursor(query)
   ensureDbSearchStyle()
   return (
-    <div className="fsdb-viewcat-pick">
+    <div className="fsdb-viewcat-pick" onKeyDown={(event) => onKeyDown(event)}>
       <label className="db-search-field">
         <input
           value={query}
           autoFocus
           placeholder="搜索视图"
           onChange={(event) => setQuery(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key !== 'Enter') return
-            event.preventDefault()
-            const hit = available[0]
-            if (!hit) return
-            selectViewCatalog(collectionPath, record, fieldKey, hit.id)
-            onPicked?.()
-          }}
+          onKeyDown={(event) => onKeyDown(event)}
         />
       </label>
-      <div className="fsdb-viewcat-pick-list">
+      <div className="fsdb-viewcat-pick-list" ref={listRef}>
         {!available.length ? <div className="db-search-empty">没有匹配项</div> : null}
         {available.map((item) => {
           const canCopy = canCopyViewCatalogItem(fieldKey, item)

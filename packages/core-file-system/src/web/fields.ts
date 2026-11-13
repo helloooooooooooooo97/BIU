@@ -138,13 +138,20 @@ export function hasTreeLinks(rows: DbRecord[], parentKey: string | null): boolea
 
 export type TreeRow = { row: DbRecord; depth: number; hasKids: boolean; kidCount: number }
 
+/** `collapsed[id] === false` 才展开；未标记的节点默认收起，表格只画这一页的顶层。 */
+export function treeNodeCollapsed(collapsed: Record<string, boolean>, id: string) {
+  return collapsed[id] !== false
+}
+
 export function flattenTree(rows: DbRecord[], parentKey: string, collapsed: Record<string, boolean> = {}): TreeRow[] {
   const ids = new Set(rows.map((row) => row.id))
   const children = new Map<string, DbRecord[]>()
   const hasKids = new Set<string>()
   for (const row of rows) {
     const raw = String(row[parentKey] ?? '')
-    const parent = raw && raw !== row.id && ids.has(raw) ? raw : ''
+    const linked = Boolean(raw) && raw !== row.id
+    if (linked && !ids.has(raw)) continue
+    const parent = linked ? raw : ''
     if (parent) hasKids.add(parent)
     const bucket = children.get(parent)
     if (bucket) bucket.push(row)
@@ -174,16 +181,18 @@ export function flattenTree(rows: DbRecord[], parentKey: string, collapsed: Reco
       if (seen.has(row.id)) continue
       seen.add(row.id)
       out.push({ row, depth, hasKids: hasKids.has(row.id), kidCount: kidCountOf(row.id) })
-      if (collapsed[row.id]) skip(row.id)
+      if (treeNodeCollapsed(collapsed, row.id)) skip(row.id)
       else visit(row.id, depth + 1)
     }
   }
   visit('', 0)
   for (const row of rows) {
     if (seen.has(row.id)) continue
+    const raw = String(row[parentKey] ?? '')
+    if (raw && raw !== row.id && !ids.has(raw)) continue
     seen.add(row.id)
     out.push({ row, depth: 0, hasKids: hasKids.has(row.id), kidCount: kidCountOf(row.id) })
-    if (!collapsed[row.id]) visit(row.id, 1)
+    if (!treeNodeCollapsed(collapsed, row.id)) visit(row.id, 1)
   }
   return out
 }
@@ -551,11 +560,32 @@ export function groupField(
   return match ? { key: match.key, field: match.field } : null
 }
 
+export function recordGroupLabels(rows: DbRecord[]): Record<string, string> {
+  const out: Record<string, string> = {}
+  const put = (id: unknown, title: unknown) => {
+    const key = String(id ?? '').trim()
+    const label = String(title ?? '').trim()
+    if (key && label) out[key] = label
+  }
+  for (const row of rows) {
+    put(row.id, row.title)
+    const chain = row.parentChain
+    if (!Array.isArray(chain)) continue
+    for (const node of chain) {
+      if (!node || typeof node !== 'object') continue
+      const item = node as { id?: unknown; title?: unknown }
+      put(item.id, item.title)
+    }
+  }
+  return out
+}
+
 function groupContext(
   schema: CollectionSchema | undefined,
   preferred: string | undefined,
   extraValues: string[] = [],
   packs: CollectionSchemaPack[] = [],
+  recordLabels?: Record<string, string>,
 ): GroupStrategyContext | null {
   const group = resolveGroupField(schema, preferred, packs)
   if (!group) return null
@@ -564,6 +594,8 @@ function groupContext(
     groupBy: preferred ?? group.key,
     field: group.field,
     extraValues,
+    packs,
+    recordLabels,
   }
 }
 
@@ -580,13 +612,14 @@ export function groupListKeys(
   preferred?: string,
   extraValues: string[] = [],
   packs: CollectionSchemaPack[] = [],
+  recordLabels?: Record<string, string>,
 ): { key: string; label: string }[] {
-  const ctx = groupContext(schema, preferred, extraValues, packs)
+  const ctx = groupContext(schema, preferred, extraValues, packs, recordLabels)
   const strategy = ctx ? strategyForField(ctx.field) : null
   if (!ctx || !strategy) return []
   const listed = strategy.keys(ctx)
-  if (!listed.length) return []
   if (!strategy.skipEmpty?.(ctx)) listed.push({ key: '', label: strategy.emptyLabel ?? '未填' })
+  if (!listed.length) return []
   return listed
 }
 
@@ -648,7 +681,7 @@ export function groupRecords(
 ): GroupBucket[] {
   const group = resolveGroupField(schema, preferred, packs)
   const extra = group ? uniqueValues(rows, group.key, group.field) : []
-  const ctx = groupContext(schema, preferred, extra, packs)
+  const ctx = groupContext(schema, preferred, extra, packs, recordGroupLabels(rows))
   const strategy = ctx ? strategyForField(ctx.field) : null
   if (!ctx || !strategy) return [{ key: '', label: '全部', rows }]
   const labels = new Map(strategy.keys(ctx).map((item) => [item.key, item.label]))

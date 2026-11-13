@@ -27,7 +27,7 @@ import { useSlotEntries } from '@biu/web-slots'
 import type { SlotsService } from '@biu/web-slots'
 import { inspectorTabFromEvent, requestInspectorAction, shellColumnStartWidth } from './chat-overlay.ts'
 import { getInspectorCaption, getInspectorCaptionVersion, subscribeInspectorCaptions } from './inspector-captions.ts'
-import { inspectorPanelMatches, inspectorViewProps, nextRepeatableTabId, pruneOpenedForCollections, resolveInspectorTab, slotTabId } from './inspector-panels.ts'
+import { inspectorPanelMatches, inspectorPlusPinRank, inspectorViewProps, isInspectorHomeOffer, nextRepeatableTabId, pruneOpenedForCollections, resolveInspectorTab, slotTabId } from './inspector-panels.ts'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import {
@@ -595,8 +595,11 @@ export const SessionInspector = memo(function SessionInspector({
                 )
               })}
               <div className="inspector-add-foot">
-                {displayTabs
-                  .filter((item) => item.repeatable || !opened.some((id) => slotTabId(id) === item.id))
+                {[
+                  ...toolTabs,
+                  ...displayTabs.filter((item) => item.repeatable || !opened.some((id) => slotTabId(id) === item.id)),
+                ]
+                  .sort((a, b) => inspectorPlusPinRank(a.id) - inspectorPlusPinRank(b.id))
                   .map((item) => (
                     <button
                       key={item.id}
@@ -604,25 +607,12 @@ export const SessionInspector = memo(function SessionInspector({
                       className="inspector-catalog-item"
                       role="menuitem"
                       onClick={() => pickOffer(item)}
-                      data-testid={`inspector-offer-add-${item.id}`}
+                      data-testid={item.action ? `inspector-offer-${item.id}` : `inspector-offer-add-${item.id}`}
                     >
                       {item.Icon ? <item.Icon {...chromeIcon} /> : <Squares2X2Icon {...chromeIcon} />}
                       <span className="min-w-0 flex-1 truncate">{item.label}</span>
                     </button>
                   ))}
-                {toolTabs.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className="inspector-catalog-item"
-                    role="menuitem"
-                    onClick={() => pickOffer(item)}
-                    data-testid={`inspector-offer-${item.id}`}
-                  >
-                    {item.Icon ? <item.Icon {...chromeIcon} /> : <Squares2X2Icon {...chromeIcon} />}
-                    <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                  </button>
-                ))}
               </div>
             </div>
             </HeadlessDismiss>,
@@ -656,9 +646,10 @@ export const SessionInspector = memo(function SessionInspector({
           aria-hidden={Boolean(extraActive)}
           inert={extraActive ? true : undefined}
         >
-          {displayTabs.length || toolTabs.length ? (
+          {displayTabs.some((item) => isInspectorHomeOffer(item.id)) ? (
             <div className="inspector-empty-list">
               {displayTabs
+                .filter((item) => isInspectorHomeOffer(item.id))
                 .filter((item) => item.repeatable || !opened.some((id) => slotTabId(id) === item.id))
                 .map((item) => (
                   <button
@@ -672,18 +663,6 @@ export const SessionInspector = memo(function SessionInspector({
                     <span className="min-w-0 flex-1 truncate">{item.label}</span>
                   </button>
                 ))}
-              {toolTabs.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className="inspector-empty-item"
-                  onClick={() => pickOffer(item)}
-                  data-testid={`inspector-empty-${item.id}`}
-                >
-                  {item.Icon ? <item.Icon {...chromeIcon} /> : <Squares2X2Icon {...chromeIcon} />}
-                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                </button>
-              ))}
             </div>
           ) : null}
         </div>

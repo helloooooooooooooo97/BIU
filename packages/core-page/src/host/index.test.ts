@@ -282,6 +282,26 @@ test('clearing the last pageBlock fence drops the index row immediately', async 
   assert.equal((await index.list()).length, 0)
 })
 
+test('pagesCollection can add a child page', async () => {
+  const ctx = new Context()
+  await ctx.plugin(tools)
+  const root = await mkdtemp(join(tmpdir(), 'page-add-child-'))
+  await ctx.plugin(fsPlugin, { root })
+  const store = new PagesStore(ctx.fs.workspace as never, join(root, '.biu/assets/page'))
+  const index = new PageBlocksIndex(store, { hotWindowMs: 60_000, hotLimit: 0, warmLimit: 0 })
+  const pages = page.pagesCollection(store, index)
+  const addChild = pages.actions?.find((item) => item.id === 'add-child')
+  assert.equal(addChild?.label, '添加子页面')
+  assert.deepEqual(addChild?.placement, ['row', 'detail'])
+  const trash = pages.actions?.find((item) => item.id === 'delete')
+  assert.equal(trash?.label, '删除')
+  assert.equal(trash?.tone, 'danger')
+  assert.deepEqual(trash?.placement, ['row', 'detail'])
+  const [parent] = await pages.create!([{ title: '父页' }])
+  const child = (await addChild!.run(parent.id, parent)) as { parentId?: string }
+  assert.equal(child.parentId, parent.id)
+})
+
 test('reindex rewrites duplicate pageBlock ids instead of crashing', async () => {
   const ctx = new Context()
   await ctx.plugin(tools)

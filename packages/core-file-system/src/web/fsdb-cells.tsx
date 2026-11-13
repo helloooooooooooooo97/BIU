@@ -16,13 +16,14 @@ import {
   LinkIcon,
   PaperClipIcon,
   PhotoIcon,
+  PlusIcon,
   PaperAirplaneIcon,
   PencilSquareIcon,
   PlayIcon,
   SparklesIcon,
   StopIcon,
+  TrashIcon,
 } from '@heroicons/react/16/solid'
-import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { CollectionSchema, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
 import { actionVisibleToUser, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, asPersonList, commitAttachments, normalizeSchemaValue } from '@biu/type-file-system'
 import type { CollectionRowViewType, CollectionViewType } from '@biu/type-file-system/ui'
@@ -48,13 +49,14 @@ export function actionIcon(id: string, opts?: { fallback?: boolean; className?: 
   if (id === 'start' || id === 'play' || id === 'run' || id === 'open' || id === 'enable') return <PlayIcon aria-hidden className={cls} />
   if (id === 'stop' || id === 'close' || id === 'pause' || id === 'disable') return <StopIcon aria-hidden className={cls} />
   if (id === 'pack') return <ArchiveBoxArrowDownIcon aria-hidden className={cls} />
-  if (id === 'uninstall' || id === 'delete' || id === 'remove') return <TrashGlyph aria-hidden className={cls} />
+  if (id === 'uninstall' || id === 'delete' || id === 'remove' || id === 'trash') return <TrashIcon aria-hidden className={cls} />
   if (id === 'edit') return <PencilSquareIcon aria-hidden className={cls} />
   if (id === 'rename') return <SparklesIcon aria-hidden className={cls} />
   if (id === 'refresh') return <ArrowPathIcon aria-hidden className={cls} />
   if (id === 'sync-from-directory') return <ArrowDownTrayIcon aria-hidden className={cls} />
   if (id === 'sync-to-directory') return <ArrowUpTrayIcon aria-hidden className={cls} />
   if (id === 'deliver') return <PaperAirplaneIcon aria-hidden className={cls} />
+  if (id === 'add-child' || id === 'add-subpage' || id === 'add-subtask') return <PlusIcon aria-hidden className={cls} />
   if (id === 'chat' || id === 'report' || id === 'progress') return <ChatBubbleLeftRightIcon aria-hidden className={cls} />
   if (opts?.fallback === false) return null
   return <BoltIcon aria-hidden className={cls} />

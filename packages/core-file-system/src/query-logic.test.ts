@@ -222,3 +222,12 @@ test('seedRecordFromViewFilters skips unknown and non-writable fields when schem
   assert.deepEqual(seed, { title: '草稿' })
 })
 
+test('tag is_empty matches missing and empty tag objects', () => {
+  const tree = emptyFilterGroup()
+  tree.children = [{ kind: 'rule', id: 'e', field: 'tag', op: 'is_empty', value: '' }]
+  const filter = encodeListFilter({}, tree)
+  assert.equal(matchListFilterRecord({ id: '1' }, filter, pagesSchema), true)
+  assert.equal(matchListFilterRecord({ id: '2', tag: { tags: [], values: {} } }, filter, pagesSchema), true)
+  assert.equal(matchListFilterRecord({ id: '3', tag: { tags: ['dp'], values: {} } }, filter, pagesSchema), false)
+})
+

@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useOptionCursor } from '@biu/database-ui/search'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { PencilSquareIcon, PlusIcon, Square2StackIcon } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
@@ -34,6 +35,11 @@ export function TagViewSwitcher({
   const wrapRef = useRef<HTMLDivElement>(null)
   const views = useTagViews(tagId)
   const [open, setOpen] = useState(false)
+  const { listRef, onKeyDown } = useOptionCursor('')
+  useEffect(() => {
+    if (!open) return
+    listRef.current?.closest<HTMLElement>('[role="menu"]')?.focus({ preventScroll: true })
+  }, [open, listRef])
   const [creating, setCreating] = useState(false)
   const [renaming, setRenaming] = useState('')
   const [renameDraft, setRenameDraft] = useState('')
@@ -56,8 +62,13 @@ export function TagViewSwitcher({
       </button>
       {open ? (
         <HeadlessDismiss onDismiss={() => setOpen(false)} insideRef={wrapRef}>
-          <div className="fsdb-tool-flyout tasks-viewdd-menu" role="menu">
-            <div className="tasks-sort-list">
+          <div
+            className="fsdb-tool-flyout tasks-viewdd-menu"
+            role="menu"
+            tabIndex={-1}
+            onKeyDown={(event) => onKeyDown(event)}
+          >
+            <div className="tasks-sort-list" ref={listRef}>
               <div className={`tasks-viewdd-item${viewId === TAG_TABLE_VIEW_ID ? ' is-active' : ''}`}>
                 <button
                   type="button"

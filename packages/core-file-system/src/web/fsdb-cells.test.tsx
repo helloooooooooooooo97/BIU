@@ -30,6 +30,12 @@ test('chat action uses the chat bubble icon', () => {
   assert.notEqual(chat.container.innerHTML, bolt.container.innerHTML)
 })
 
+test('add-child action uses the plus icon', () => {
+  const add = render(actionIcon('add-child'))
+  const bolt = render(actionIcon('unknown-action'))
+  assert.notEqual(add.container.innerHTML, bolt.container.innerHTML)
+})
+
 test('enable and disable actions use play and stop glyphs', () => {
   const on = render(actionIcon('enable'))
   const off = render(actionIcon('disable'))

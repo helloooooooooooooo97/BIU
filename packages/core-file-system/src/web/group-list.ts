@@ -1,8 +1,8 @@
-import type { CollectionSchema, CollectionSchemaPack, DbRecord } from '@biu/type-file-system'
+import { isRefFieldType, type CollectionSchema, type CollectionSchemaPack, type DbRecord } from '@biu/type-file-system'
 import type { SortRule } from '../query-logic.ts'
 import type { ListPage } from './db-client.ts'
-import { groupListFilter, groupListKeys, mergeListFilters, type GroupBucket } from './fields.ts'
-import { groupedFullFetchCount } from './table-window.ts'
+import { groupListFilter, groupListKeys, mergeListFilters, recordGroupLabels, type GroupBucket } from './fields.ts'
+import { resolveGroupField } from './group-strategies.ts'
 
 export type GroupedCollectionPage = {
   buckets: GroupBucket[]
@@ -42,18 +42,46 @@ export async function listGroupedCollection(opts: {
     columns?: string[]
   }) => Promise<ListPage>
 }): Promise<GroupedCollectionPage | null> {
-  const keys = groupListKeys(opts.schema, opts.groupBy, opts.extraValues, opts.packs)
+  const packs = opts.packs ?? []
+  const group = resolveGroupField(opts.schema, opts.groupBy, packs)
+  const refGroup = group && isRefFieldType(group.field.type)
+  const seedLabels = recordGroupLabels((opts.previous ?? []).flatMap((bucket) => bucket.rows))
+  let keys = groupListKeys(opts.schema, opts.groupBy, opts.extraValues, packs, seedLabels)
   if (!keys.length) return null
+  if (refGroup) {
+    const missing = keys.map((item) => item.key).filter((key) => key && !seedLabels[key])
+    if (missing.length) {
+      const listed = await opts.list({
+        path: opts.path,
+        limit: missing.length,
+        filters: {
+          $tree: {
+            kind: 'group',
+            id: 'group-ref-labels',
+            combinator: 'or',
+            children: missing.map((id, index) => ({
+              kind: 'rule',
+              id: `group-ref-${index}`,
+              field: 'id',
+              op: 'eq',
+              value: id,
+            })),
+          },
+        },
+        columns: ['id', 'title'],
+      })
+      const labels = { ...seedLabels, ...recordGroupLabels(listed.items) }
+      keys = groupListKeys(opts.schema, opts.groupBy, opts.extraValues, packs, labels)
+    }
+  }
   const pageSize = Math.max(1, opts.pageSize)
-  const fullCount = groupedFullFetchCount(pageSize, keys.length, opts.wrap)
-  const filled = new Set(opts.fillKeys ?? [])
   const previous = opts.previous
   const prevByKey = new Map((previous ?? []).map((bucket) => [bucket.key || 'unset', bucket]))
   const prevPages = opts.previousPages ?? {}
-  const fetchGroup = (filters: Record<string, unknown>, pageIndex: number, limit: number) =>
+  const fetchGroup = (filters: Record<string, unknown>, pageIndex: number) =>
     opts.list({
       path: opts.path,
-      limit,
+      limit: pageSize,
       offset: pageIndex * pageSize,
       query: opts.query,
       sortField: opts.sortField,
@@ -63,58 +91,28 @@ export async function listGroupedCollection(opts: {
       columns: opts.columns,
     })
   const pages = await Promise.all(
-    keys.map(async (item, index) => {
+    keys.map(async (item) => {
       const filters = mergeListFilters(opts.filters ?? {}, groupListFilter(opts.groupBy, item.key, opts.schema, opts.packs))
       const groupKey = item.key || 'unset'
       const pageIndex = Math.max(0, opts.groupPages?.[groupKey] ?? 0)
       if (!filters) {
-        return { ...item, rows: [] as DbRecord[], total: 0, schema: undefined as CollectionSchema | undefined, full: true, filters, pageIndex }
+        return { ...item, rows: [] as DbRecord[], total: 0, schema: undefined as CollectionSchema | undefined, filters, pageIndex }
       }
-      const full = index < fullCount || filled.has(item.key) || filled.has(groupKey)
       const prev = prevByKey.get(groupKey)
       const samePage = pageIndex === (prevPages[groupKey] ?? 0)
       if (previous && samePage) {
-        if (full && prev && prev.rows.length > 0) {
-          return { ...item, rows: prev.rows, total: prev.total ?? prev.rows.length, schema: undefined as CollectionSchema | undefined, full: true, filters, pageIndex }
+        if (prev) {
+          return { ...item, rows: prev.rows, total: prev.total ?? prev.rows.length, schema: undefined as CollectionSchema | undefined, filters, pageIndex }
         }
-        if (!full && prev) {
-          return { ...item, rows: [] as DbRecord[], total: prev.total ?? 0, schema: undefined as CollectionSchema | undefined, full: false, filters, pageIndex }
-        }
-        if (!prev) {
-          return { ...item, rows: [] as DbRecord[], total: 0, schema: undefined as CollectionSchema | undefined, full: true, filters, pageIndex }
-        }
+        return { ...item, rows: [] as DbRecord[], total: 0, schema: undefined as CollectionSchema | undefined, filters, pageIndex }
       }
-      const listed = await fetchGroup(filters, pageIndex, full ? pageSize : 1)
-      return { ...item, rows: full ? listed.items : [], total: listed.total, schema: listed.schema, full, filters, pageIndex }
+      const listed = await fetchGroup(filters, pageIndex)
+      return { ...item, rows: listed.items, total: listed.total, schema: listed.schema, filters, pageIndex }
     }),
   )
-  /** 前几组是空的时候，首屏会先画出「共享 13」却没有行。把还没拉行的第一屏组在这次返回前补上。 */
-  let haveRows = pages.filter((item) => item.rows.length > 0).length
-  if (haveRows < fullCount) {
-    const pending: number[] = []
-    for (let i = 0; i < pages.length && haveRows < fullCount; i += 1) {
-      const item = pages[i]!
-      if (item.full || !item.filters || item.total <= 0 || item.rows.length) continue
-      pending.push(i)
-      haveRows += 1
-    }
-    if (pending.length) {
-      const extra = await Promise.all(
-        pending.map(async (index) => {
-          const item = pages[index]!
-          const listed = await fetchGroup(item.filters!, item.pageIndex ?? 0, pageSize)
-          return { index, listed }
-        }),
-      )
-      for (const { index, listed } of extra) {
-        const item = pages[index]!
-        pages[index] = { ...item, rows: listed.items, total: listed.total, schema: listed.schema ?? item.schema, full: true }
-      }
-    }
-  }
   const buckets = pages
     .map(({ key, label, rows, total }) => ({ key, label, rows, total }))
-    .filter((item) => item.total > 0)
+    .filter((item) => item.total > 0 || item.key === '')
   const items = buckets.flatMap((item) => item.rows) as Array<DbRecord & { path?: string }>
   const total = buckets.reduce((sum, item) => sum + item.total, 0)
   const schema = pages.find((item) => item.schema)?.schema

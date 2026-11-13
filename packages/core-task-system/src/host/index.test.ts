@@ -5,7 +5,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { Context } from 'cordis'
-import { buildDeliverText, coerceAssigneeArg, computeBlocked, computeBlockedBy, computeNextTriggerAt, computeTurnUsage, defaultTrigger, depsSatisfied, deriveExecution, deriveExecutionFromReports, MAX_REPORT_PROMPTS, normalizeTrigger, parseCron, reportBackToCreator, shouldPromptProgress, sumReportUsage, TasksService } from './index.ts'
+import { buildDeliverText, coerceAssigneeArg, computeBlocked, computeBlockedBy, computeNextTriggerAt, computeTurnUsage, defaultTrigger, depsSatisfied, deriveExecution, deriveExecutionFromReports, MAX_REPORT_PROMPTS, normalizeTrigger, parseCron, reportBackToCreator, resolveTaskDeliverAssignee, shouldPromptProgress, sumReportUsage, TasksService } from './index.ts'
 
 test('tasks sqlite crud and status move', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'tasks-'))
@@ -23,7 +23,10 @@ test('tasks sqlite crud and status move', async () => {
     assert.equal(a.assignedAt, null)
     assert.equal(a.description, '')
 
+    const cleared = tasks.update(a.id, { title: '' })
+    assert.equal(cleared.title, '')
     const b = tasks.update(a.id, {
+      title: '写需求',
       status: 'doing',
       priority: 'high',
       description: '把需求写清楚',
@@ -339,6 +342,29 @@ test('buildDeliverText renders a派工 message with task key fields', () => {
   assert.match(text, /db_create/)
   assert.match(text, /action=deliver/)
   assert.match(text, /action=report/)
+})
+
+test('deliver falls back to the hinted current agent when assignee is empty', async () => {
+  const host = {
+    sessions: {
+      peek: (id: string) =>
+        id === 'corner-agent'
+          ? { id: 'corner-agent', config: { title: '右下角' }, mascot: { shape: 'pebble', color: 'orange', eye: 1 } }
+          : undefined,
+      sendMessage: async () => ({ text: '', steps: [] }),
+    },
+  }
+  const assigned = await resolveTaskDeliverAssignee(
+    host as never,
+    { assignee: { kind: 'agent', sessionId: 'worker', name: 'Worker' } },
+    { sessionId: 'corner-agent' },
+  )
+  assert.equal(assigned?.sessionId, 'worker')
+  const fallback = await resolveTaskDeliverAssignee(host as never, { assignee: null }, { sessionId: 'corner-agent' })
+  assert.equal(fallback?.sessionId, 'corner-agent')
+  assert.equal(fallback?.name, '右下角')
+  const missing = await resolveTaskDeliverAssignee(host as never, { assignee: null }, {})
+  assert.equal(missing, null)
 })
 
 test('reportBackToCreator sends a progress message to the assigner session via sendMessage (wake-first)', async () => {

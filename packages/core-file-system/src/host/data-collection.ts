@@ -72,7 +72,7 @@ export function dataCollection(tables: () => CollectionSpec[]): CollectionSpec {
       fields: {
         ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '标题', writable: true },
-        table: { type: 'string', label: '来源表', computed: true },
+        table: { type: 'select', label: '来源表', computed: true },
         tablePath: { type: 'string', label: '表路径', computed: true },
         sourceId: { type: 'string', label: '记录', computed: true },
       },

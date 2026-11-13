@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import {
   normalizeSchemaValue,
   retagSchemaValue,
@@ -171,6 +171,51 @@ function FacetPickPanel({
   )
 }
 
+function placeCaretEnd(el: HTMLInputElement | HTMLTextAreaElement | null) {
+  if (!el) return
+  el.focus()
+  const n = el.value.length
+  try {
+    el.setSelectionRange(n, n)
+  } catch {
+    /* ignore */
+  }
+}
+
+function CellPopCaretField({
+  as,
+  className,
+  value,
+  placeholder,
+  rows,
+  onChange,
+  onKeyDown,
+}: {
+  as: 'input' | 'textarea'
+  className: string
+  value: string
+  placeholder?: string
+  rows?: number
+  onChange: (next: string) => void
+  onKeyDown: (event: ReactKeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void
+}) {
+  const ref = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
+  useLayoutEffect(() => {
+    placeCaretEnd(ref.current)
+  }, [])
+  const shared = {
+    ref: ref as never,
+    className,
+    autoFocus: true,
+    value,
+    placeholder,
+    onChange: (event: { target: { value: string } }) => onChange(event.target.value),
+    onKeyDown,
+  }
+  if (as === 'textarea') return <textarea {...shared} rows={rows} />
+  return <input {...shared} />
+}
+
 function sameDraft(left: unknown, right: unknown) {
   if (left === right) return true
   try {
@@ -185,6 +230,7 @@ export function CellPopDraft({
   fieldKey,
   field,
   initial,
+  typeChar,
   options,
   collectionPath,
   seed,
@@ -196,6 +242,7 @@ export function CellPopDraft({
   fieldKey: string
   field: FieldSpec
   initial: unknown
+  typeChar?: string
   options: string[]
   collectionPath: string
   seed?: DbRecord[]
@@ -205,9 +252,15 @@ export function CellPopDraft({
 }) {
   const kind = resolveFieldType(field)
   const flat = parseTagFlatColumnKey(fieldKey)
-  const [text, setText] = useState(() => fieldDraftValue(field, initial))
-  const [raw, setRaw] = useState<unknown>(initial)
-  const rawRef = useRef(initial)
+  const [text, setText] = useState(() => {
+    const draft = fieldDraftValue(field, initial)
+    return typeChar ? `${draft}${typeChar}` : draft
+  })
+  const [raw, setRaw] = useState<unknown>(() => {
+    const draft = fieldDraftValue(field, initial)
+    return typeChar ? `${draft}${typeChar}` : initial
+  })
+  const rawRef = useRef<unknown>(typeChar ? `${fieldDraftValue(field, initial)}${typeChar}` : initial)
   const onSubmitRef = useRef(onSubmit)
   onSubmitRef.current = onSubmit
   const live =
@@ -294,13 +347,12 @@ export function CellPopDraft({
 
   if (kind === 'url') {
     return (
-      <input
+      <CellPopCaretField
+        as="input"
         className="fsdb-cell-pop-url"
-        autoFocus
         placeholder="https://"
         value={text}
-        onChange={(event) => {
-          const next = event.target.value
+        onChange={(next) => {
           setText(next)
           rawRef.current = next.trim()
         }}
@@ -335,13 +387,12 @@ export function CellPopDraft({
   }
 
   return (
-    <textarea
+    <CellPopCaretField
+      as="textarea"
       className="fsdb-cell-pop-text"
       rows={3}
-      autoFocus
       value={text}
-      onChange={(event) => {
-        const next = event.target.value
+      onChange={(next) => {
         setText(next)
         rawRef.current = next
       }}

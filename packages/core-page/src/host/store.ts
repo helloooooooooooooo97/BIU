@@ -128,10 +128,7 @@ function applyPatch(current: PageRow, patch: Record<string, unknown>): PageRow {
   return {
     ...current,
     id: current.id,
-    title:
-      typeof patch.title === 'string' && patch.title.trim()
-        ? patch.title.trim()
-        : current.title,
+    title: 'title' in patch ? String(patch.title ?? '').trim() : current.title,
     notes: 'notes' in patch ? (notes ?? '') : current.notes,
     tags: current.tags,
     parentId: 'parentId' in patch
@@ -269,7 +266,7 @@ export class PagesStore {
     row.id = id
     row.createdAt = typeof fields.createdAt === 'number' && fields.createdAt > 0 ? fields.createdAt : ts
     row.updatedAt = typeof fields.updatedAt === 'number' && fields.updatedAt > 0 ? fields.updatedAt : ts
-    if (typeof fields.title === 'string' && fields.title.trim()) row.title = fields.title.trim()
+    if (typeof fields.title === 'string') row.title = fields.title.trim()
     await this.write(row)
     return (await this.get(id))!
   }

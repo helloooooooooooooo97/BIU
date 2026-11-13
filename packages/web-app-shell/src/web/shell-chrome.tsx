@@ -5,7 +5,7 @@ import {
   ArrowDownTrayIcon,
   ArrowRightStartOnRectangleIcon,
   BellIcon,
-  CursorArrowRaysIcon,
+  ChatBubbleLeftRightIcon,
   CheckIcon,
   ChevronRightIcon,
   CircleStackIcon,
@@ -775,6 +775,36 @@ export function AuthGate({ children }: { children: ReactNode }) {
 }
 
 type CollabWorkspace = { id: string; name: string; role: string; location?: 'device' | 'cloud' }
+
+export function useActiveWorkspaceLocation(): 'device' | 'cloud' {
+  const [location, setLocation] = useState<'device' | 'cloud'>('device')
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      const token = readAccountToken()
+      if (!token) return
+      try {
+        const [listed, current] = await Promise.all([
+          accountFetch(token, '/api/account/workspaces') as Promise<{ workspaces?: CollabWorkspace[] }>,
+          accountFetch(token, '/api/account/active') as Promise<{ workspaceId?: string }>,
+        ])
+        if (cancelled) return
+        const id = String(current.workspaceId ?? '')
+        const workspace = (listed.workspaces ?? []).find((item) => item.id === id)
+        setLocation(workspace?.location === 'cloud' ? 'cloud' : 'device')
+      } catch {
+        if (!cancelled) setLocation('device')
+      }
+    }
+    void load()
+    window.addEventListener(ACCOUNT_EVENT, load)
+    return () => {
+      cancelled = true
+      window.removeEventListener(ACCOUNT_EVENT, load)
+    }
+  }, [])
+  return location
+}
 type CollabMember = { id: string; name: string; email?: string; role: string }
 type CollabPresence = { accountId: string; name: string; collection: string; recordId: string }
 
@@ -1658,6 +1688,50 @@ export function ShellSettingsShortcuts() {
           <span className="settings-kbd"><kbd>⌘</kbd><kbd>L</kbd></span>
         </li>
       </ul>
+      <h4 className="settings-pane-subtitle">表格</h4>
+      <p className="settings-muted settings-pane-lead">先点选一个单元格，再按键。</p>
+      <ul className="settings-shortcut-list">
+        <li>
+          <span>移动格子</span>
+          <span className="settings-kbd"><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd></span>
+        </li>
+        <li>
+          <span>展开 / 收起子记录</span>
+          <span className="settings-kbd"><kbd>⇧</kbd><kbd>→</kbd> / <kbd>⇧</kbd><kbd>←</kbd></span>
+        </li>
+        <li>
+          <span>下一格 / 上一格</span>
+          <span className="settings-kbd"><kbd>Tab</kbd> / <kbd>⇧</kbd><kbd>Tab</kbd></span>
+        </li>
+        <li>
+          <span>行首 / 行末</span>
+          <span className="settings-kbd"><kbd>Home</kbd> / <kbd>End</kbd></span>
+        </li>
+        <li>
+          <span>编辑</span>
+          <span className="settings-kbd"><kbd>Enter</kbd></span>
+        </li>
+        <li>
+          <span>文字 / 数字直接编辑</span>
+          <span className="settings-kbd">字母或数字</span>
+        </li>
+        <li>
+          <span>清空单元格</span>
+          <span className="settings-kbd"><kbd>Delete</kbd></span>
+        </li>
+        <li>
+          <span>动作列进入</span>
+          <span className="settings-kbd"><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd></span>
+        </li>
+        <li>
+          <span>动作列执行</span>
+          <span className="settings-kbd"><kbd>Enter</kbd></span>
+        </li>
+        <li>
+          <span>退出编辑</span>
+          <span className="settings-kbd"><kbd>Esc</kbd></span>
+        </li>
+      </ul>
     </section>
   )
 }
@@ -2072,6 +2146,8 @@ function SideAction({
       title={title}
       aria-label={title}
       aria-pressed={active}
+      data-dock-tip={title}
+      data-dock-tip-at="e"
       data-testid={testId}
       onClick={onClick}
     >
@@ -2309,8 +2385,8 @@ export function ShellSidePlaces({
   onSearch?: () => void
   searchOpen?: boolean
 }) {
-  const navigate = useNavigate()
   const [notifyOpen, setNotifyOpen] = useState(false)
+  const navigate = useNavigate()
 
   return (
     <div className="app-side-actions shell-side-places" role="navigation" aria-label="面板" data-testid="shell-side-places">
@@ -2335,22 +2411,18 @@ export function ShellSidePlaces({
         onClick={onSettings}
       />
       <SideAction
-        title="代理"
+        title="对话"
         active={activeId === 'agent'}
         testId="chrome-chat-panel"
-        icon={<CursorArrowRaysIcon {...chromeIcon} />}
-        onClick={() => {
-          navigate(agentHref)
-        }}
+        icon={<ChatBubbleLeftRightIcon {...chromeIcon} />}
+        onClick={() => navigate(agentHref)}
       />
       <SideAction
         title="数据"
-        active={activeId === 'database'}
+        active={activeId === 'data'}
         testId="chrome-data-panel"
         icon={<CircleStackIcon {...chromeIcon} />}
-        onClick={() => {
-          navigate('/database')
-        }}
+        onClick={() => navigate('/database')}
       />
     </div>
   )

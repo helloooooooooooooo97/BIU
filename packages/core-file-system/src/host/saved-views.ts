@@ -3,7 +3,7 @@ import { dirname } from 'node:path'
 import { openAndMigrateBiu } from '@biu/host-plugin-loader/data-dir'
 import type { CollectionInfo, CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { normalizeSchemaValue, recordBuiltinValues, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
-import { builtinAllView, isReadOnlyViewId } from '../catalog-views.ts'
+import { builtinAllView, builtinAllViewId, isReadOnlyViewId } from '../catalog-views.ts'
 import { normalizeColumnWidths, normalizePageSize, parseViewColumns, type SavedView } from '../web/saved-view.ts'
 import { isViewModeId } from '../web/fields.ts'
 import { normalizeCollectionPath } from '../paths.ts'
@@ -68,6 +68,13 @@ export class SavedViewsStore {
     return this.tombstones.get(normalizeCollectionPath(collectionPath))?.has(String(viewId)) ?? false
   }
 
+  private visibleCount(path: string, views: StoredView[], gone: Set<string>) {
+    const ids = new Set(views.map((view) => String(view.id)).filter((id) => id && !gone.has(id)))
+    const allId = builtinAllViewId(path)
+    if (!gone.has(allId)) ids.add(allId)
+    return ids.size
+  }
+
   private hydrate() {
     if (!this.db) return
     this.byPath.clear()
@@ -84,7 +91,7 @@ export class SavedViewsStore {
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue
       const id = String(parsed.id ?? '').trim()
       const name = String(parsed.name ?? id).trim()
-      if (!id || isReadOnlyViewId(id) || parsed.builtin) continue
+      if (!id) continue
       const list = this.byPath.get(collection) ?? []
       list.push({ ...parsed, id, name })
       this.byPath.set(collection, list)
@@ -108,8 +115,8 @@ export class SavedViewsStore {
       this.db.prepare('DELETE FROM saved_views WHERE collection = ?').run(path)
       const alive = new Set<string>()
       for (const view of views) {
-        if (view.builtin || isReadOnlyViewId(String(view.id))) continue
-        const id = String(view.id)
+        const id = String(view.id ?? '').trim()
+        if (!id) continue
         alive.add(id)
         upsert.run(path, id, JSON.stringify(view), Date.now())
       }
@@ -125,7 +132,10 @@ export class SavedViewsStore {
       for (const row of before) {
         if (alive.has(row.view_id)) continue
         marked.add(row.view_id)
-        tomb.run(path, row.view_id, Date.now())
+      }
+      for (const viewId of marked) {
+        if (alive.has(viewId)) continue
+        tomb.run(path, viewId, Date.now())
       }
       for (const viewId of alive) {
         marked.delete(viewId)
@@ -154,7 +164,7 @@ export class SavedViewsStore {
     const kept = prev.filter((view) => view.createdBy && view.createdBy !== accountId)
     const foreign = new Set(kept.map((view) => view.id))
     const mine = views
-      .filter((view) => !view.builtin && !isReadOnlyViewId(String(view.id)) && !foreign.has(String(view.id)))
+      .filter((view) => !foreign.has(String(view.id)))
       .map((view) => ({ ...view, id: String(view.id), name: String(view.name || view.id), createdBy: accountId }))
     this.byPath.set(path, [...kept, ...mine])
     this.persistPath(path)
@@ -165,7 +175,6 @@ export class SavedViewsStore {
     this.byPath.set(
       path,
       views
-        .filter((view) => !view.builtin && !isReadOnlyViewId(String(view.id)))
         .map((view) => ({ ...view, id: String(view.id), name: String(view.name || view.id) })),
     )
     this.persistPath(path)
@@ -194,7 +203,7 @@ export class SavedViewsStore {
     const next = kept.slice()
     for (const incoming of patch.upsert ?? []) {
       const id = String(incoming.id ?? '').trim()
-      if (!id || incoming.builtin || isReadOnlyViewId(id)) continue
+      if (!id) continue
       const prevView = prev.find((view) => String(view.id) === id)
       if (prevView && !mine(prevView)) continue
       if (!prevView && foreign.has(id)) continue
@@ -218,8 +227,11 @@ export class SavedViewsStore {
     }
     // 显式删除立刻记墓碑（哪怕这条本来就不在这份列表里），
     // 别的窗口拿旧快照推 upsert 也不会把它带回来。
-    const marked = this.tombstones.get(path) ?? new Set<string>()
+    const marked = new Set(this.tombstones.get(path) ?? [])
     for (const viewId of removed) marked.add(viewId)
+    if (removed.size && this.visibleCount(path, next, marked) < 1) {
+      throw new Error('至少保留一个视图')
+    }
     this.tombstones.set(path, marked)
     this.byPath.set(path, next)
     this.persistPath(path)
@@ -239,11 +251,12 @@ export class SavedViewsStore {
       const path = normalizeCollectionPath(table.path)
       if (!path || path === '/') continue
       const label = String(labels.get(path) ?? table.label ?? path)
-      const all = builtinAllView({ path, label, view: table.view })
-      emit(path, label, all)
       const gone = this.tombstones.get(path)
-      for (const view of this.byPath.get(path) ?? []) {
-        if (view.builtin || isReadOnlyViewId(view.id)) continue
+      const stored = this.byPath.get(path) ?? []
+      const all = builtinAllView({ path, label, view: table.view })
+      const paintedAll = stored.find((view) => String(view.id) === all.id) ?? all
+      if (!gone?.has(all.id)) emit(path, label, paintedAll)
+      for (const view of stored) {
         if (gone?.has(String(view.id))) continue
         if (isIndexCollection(path) && view.createdBy !== accountId) continue
         emit(path, label, view)
@@ -253,7 +266,6 @@ export class SavedViewsStore {
       if (tables.some((table) => normalizeCollectionPath(table.path) === path)) continue
       const gone = this.tombstones.get(path)
       for (const view of views) {
-        if (view.builtin || isReadOnlyViewId(view.id)) continue
         if (gone?.has(String(view.id))) continue
         if (isIndexCollection(path) && view.createdBy !== accountId) continue
         emit(path, labels.get(path) ?? path, view)
@@ -274,7 +286,6 @@ export class SavedViewsStore {
     const table = tables.find((item) => normalizeCollectionPath(item.path) === tablePath)
     const label = table?.view?.title ?? table?.label ?? tablePath
     const id = String(fields.viewId ?? '').trim() || `${Date.now()}`
-    if (isReadOnlyViewId(id)) throw new Error('builtin view is read-only')
     const views = this.byPath.get(tablePath) ?? []
     if (views.some((view) => view.id === id)) throw new Error(`view exists: ${id}`)
     const name = uniqueViewName(String(fields.title ?? fields.name ?? '新视图').trim() || '新视图', views)
@@ -305,40 +316,43 @@ export class SavedViewsStore {
   }
 
   remove(id: string, accountId = '', tables: CollectionInfo[] = []): boolean {
-    if (isReadOnlyViewId(viewIdOfRow(id))) throw new Error('builtin view is read-only')
     const cut = id.indexOf('::')
     const tablePath = cut >= 0 ? normalizeCollectionPath(id.slice(0, cut)) : ''
     const viewId = tablePath ? id.slice(cut + 2) : id
-    const candidates = tablePath ? [tablePath] : [...this.byPath.keys()]
+    const candidates = tablePath ? [tablePath] : [...this.byPath.keys(), ...tables.map((table) => normalizeCollectionPath(table.path))]
     for (const path of candidates) {
+      if (!path) continue
       const views = this.byPath.get(path) ?? []
       const hit = findView(views, path, viewId, accountId)
-      if (hit) {
-        if (hit.builtin || isReadOnlyViewId(String(hit.id))) throw new Error('builtin view is read-only')
-        this.byPath.set(path, views.filter((view) => view !== hit))
-        this.persistPath(path)
-        return true
-      }
-      // 视图记录在案但不在当前账号名下：与「不存在」同样处理，不泄露他人视图
-      if (views.some((view) => String(view.id) === viewId)) throw new Error(`unknown view: ${id}`)
+      const targetId = String(hit?.id ?? viewId)
+      if (!hit && views.some((view) => String(view.id) === viewId)) throw new Error(`unknown view: ${id}`)
+      if (!hit && !isReadOnlyViewId(targetId)) continue
+      const gone = new Set(this.tombstones.get(path) ?? [])
+      gone.add(targetId)
+      const remaining = hit ? views.filter((view) => view !== hit) : views
+      if (this.visibleCount(path, remaining, gone) < 1) throw new Error('至少保留一个视图')
+      this.byPath.set(path, remaining)
+      this.tombstones.set(path, gone)
+      this.persistPath(path)
+      return true
     }
-    void tables
     throw new Error(`unknown view: ${id}`)
   }
 
   write(id: string, patch: Record<string, unknown>, accountId = '', tables: CollectionInfo[] = []): DbRecord {
-    if (isReadOnlyViewId(viewIdOfRow(id))) throw new Error('builtin view is read-only')
     const cut = id.indexOf('::')
     const tablePath = cut >= 0 ? normalizeCollectionPath(id.slice(0, cut)) : ''
     const viewId = tablePath ? id.slice(cut + 2) : id
-    const candidates = tablePath ? [tablePath] : [...this.byPath.keys()]
+    const candidates = [...new Set(tablePath ? [tablePath, ...this.byPath.keys(), ...tables.map((table) => normalizeCollectionPath(table.path))] : [...this.byPath.keys(), ...tables.map((table) => normalizeCollectionPath(table.path))])].filter(Boolean)
     for (const path of candidates) {
       const views = this.byPath.get(path) ?? []
       const hit = findView(views, path, viewId, accountId)
-      if (!hit) continue
-      const idx = views.indexOf(hit)
-      const cur = views[idx]!
-      if (cur.builtin || isReadOnlyViewId(cur.id)) throw new Error('builtin view is read-only')
+      if (!hit && views.some((view) => String(view.id) === viewId)) throw new Error(`unknown view: ${id}`)
+      const table = tables.find((item) => normalizeCollectionPath(item.path) === path)
+      const seed = hit ?? (viewId === builtinAllViewId(path) ? builtinAllView({ path, label: tableLabelOf(table, path), view: table?.view }) : null)
+      if (!seed) continue
+      const idx = hit ? views.indexOf(hit) : -1
+      const cur = (hit ?? seed) as StoredView
       const next: StoredView = {
         ...cur,
         ...(typeof patch.title === 'string' ? { name: patch.title } : {}),
@@ -363,9 +377,10 @@ export class SavedViewsStore {
         updatedAt: Date.now(),
         createdAt: Number((cur as { createdAt?: number }).createdAt) || Date.now(),
       }
-      views[idx] = next
+      if (idx >= 0) views[idx] = next
+      else views.push(next)
+      this.byPath.set(path, views)
       this.persistPath(path)
-      const table = tables.find((item) => normalizeCollectionPath(item.path) === path)
       return asRecord(path, tableLabelOf(table, path), next)
     }
     throw new Error(`unknown view: ${id}`)
@@ -483,7 +498,7 @@ function asRecord(path: string, tableName: string, view: StoredView): DbRecord {
 export function clientViewFromDbRow(row: Record<string, unknown> | undefined) {
   if (!row) return undefined
   const id = String(row.viewId ?? '').trim()
-  if (!id || isReadOnlyViewId(id)) return undefined
+  if (!id) return undefined
   const parsedFilters = filtersFromPatch(row.filters)
   const fromTree = parseJsonValue(row.filterTree)
   const tree = looksLikeFilterTree(fromTree) ? normalizeFilterGroup(fromTree) : parsedFilters.filterTree
@@ -526,7 +541,7 @@ export function viewsCollection(
       route: '/db-views',
       title: '视图',
       inspector: false,
-      blurb: '各表已保存的视图。列表 db_list /views。新建 db_create /views records=[{title, tablePath, mode}]，tablePath 如 /pages。改列 db_update 写 columns 数组或 JSON 数组字符串，标签属性列 key 为 tag::<标签id>::<字段key>。改筛选 db_update 写 filters 或 filterTree（JSON 字符串）。filters 扁平等于：{"project":"biu","status":"open"}。OR/复杂条件用 filterTree：{"kind":"group","combinator":"or","children":[{"kind":"rule","field":"tag","op":"eq","value":"dp"},{"kind":"rule","field":"status","op":"eq","value":"open"}]}。rule.op=eq|neq|contains|not_contains|is_empty|not_empty|gt|lt|within，value 是字符串。排序 sorts：[{"field":"title","dir":"asc"}]。内置「全部 xx」只读。',
+      blurb: '各表已保存的视图。列表 db_list /views。新建 db_create /views records=[{title, tablePath, mode}]，tablePath 如 /pages。改列 db_update 写 columns 数组或 JSON 数组字符串，标签属性列 key 为 tag::<标签id>::<字段key>。改筛选 db_update 写 filters 或 filterTree（JSON 字符串）。filters 扁平等于：{"project":"biu","status":"open"}。OR/复杂条件用 filterTree：{"kind":"group","combinator":"or","children":[{"kind":"rule","field":"tag","op":"eq","value":"dp"},{"kind":"rule","field":"status","op":"eq","value":"open"}]}。rule.op=eq|neq|contains|not_contains|is_empty|not_empty|gt|lt|within，value 是字符串。排序 sorts：[{"field":"title","dir":"asc"}]。同一数据类型至少保留一个视图。',
       order: 17,
       icon: 'eye',
     },

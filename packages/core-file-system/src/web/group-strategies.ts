@@ -37,6 +37,9 @@ export type GroupStrategyContext = {
   field: FieldSpec
   extraValues?: string[]
   now?: number
+  packs?: CollectionSchemaPack[]
+  /** ref / multi-ref 分组头：记录 id → 标题 */
+  recordLabels?: Record<string, string>
 }
 
 export type GroupStrategy = {
@@ -146,7 +149,7 @@ function singleValueStrategy(
       return eqFilter(ctx.fieldKey, groupKey)
     },
     skipEmpty(ctx) {
-      return ctx.fieldKey === 'shareScope' || Boolean(ctx.field.enum?.length)
+      return ctx.fieldKey === 'shareScope'
     },
   }
 }
@@ -170,8 +173,8 @@ function multiValueStrategy(
       if (!groupKey) return emptyFilter(ctx.fieldKey)
       return eqFilter(ctx.fieldKey, groupKey)
     },
-    skipEmpty(ctx) {
-      return Boolean(ctx.field.enum?.length)
+    skipEmpty() {
+      return false
     },
   }
 }
@@ -472,16 +475,45 @@ const booleanStrategy: GroupStrategy = {
   },
 }
 
+function refGroupLabel(key: string, ctx?: GroupStrategyContext) {
+  const label = ctx?.recordLabels?.[key]?.trim()
+  return label || key
+}
+
 const refStrategy: GroupStrategy = {
   ...singleValueStrategy('ref', (key) => key),
   emptyLabel: '未关联',
   skipEmpty: () => false,
+  keys(ctx) {
+    return enumOrExtraKeys(ctx, (key) => refGroupLabel(key, ctx))
+  },
+  label(key, ctx) {
+    return refGroupLabel(key, ctx)
+  },
+}
+
+const multiRefStrategy: GroupStrategy = {
+  ...multiValueStrategy('multi-ref', asStringList, (key) => key, '未关联'),
+  keys(ctx) {
+    return enumOrExtraKeys(ctx, (key) => refGroupLabel(key, ctx))
+  },
+  label(key, ctx) {
+    return refGroupLabel(key, ctx)
+  },
 }
 
 export const GROUP_STRATEGIES: Record<string, GroupStrategy> = {
   select: singleValueStrategy('select', (key, field) => enumLabel(field, key)),
   'multi-select': multiValueStrategy('multi-select', asStringList, (key, field) => enumLabel(field, key)),
-  tag: multiValueStrategy('tag', (raw) => normalizeSchemaValue(raw).tags, (key) => key),
+  tag: {
+    ...multiValueStrategy('tag', (raw) => normalizeSchemaValue(raw).tags, (key) => key),
+    keys(ctx) {
+      return enumOrExtraKeys(ctx, (key) => ctx.packs?.find((pack) => pack.id === key)?.label?.trim() || key)
+    },
+    label(key, ctx) {
+      return ctx.packs?.find((pack) => pack.id === key)?.label?.trim() || key
+    },
+  },
   boolean: booleanStrategy,
   datetime: datetimeStrategy,
   person: multiValueStrategy(
@@ -491,7 +523,7 @@ export const GROUP_STRATEGIES: Record<string, GroupStrategy> = {
     '未指派',
   ),
   ref: refStrategy,
-  'multi-ref': multiValueStrategy('multi-ref', asStringList, (key) => key, '未关联'),
+  'multi-ref': multiRefStrategy,
   number: numberStrategy,
 }
 

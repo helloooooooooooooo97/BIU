@@ -1,4 +1,4 @@
-import { createContext, lazy, memo, Suspense, type ComponentProps, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { createContext, lazy, memo, Suspense, type ComponentProps, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import {
@@ -19,12 +19,12 @@ import {
   UserIcon,
   UsersIcon,
   ViewColumnsIcon,
+  TrashIcon,
 } from '@heroicons/react/16/solid'
 import type { CollectionActionInfo, CollectionInfo, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
 import { normalizeSchemaValue } from '@biu/type-file-system'
 import type { CollectionChrome, CollectionRowViewType, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
 import { parseAppPath } from '@biu/web-session-view'
-import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { BoolBox } from '@biu/biu-ui/bool-box'
 import { ChatCount } from '@biu/biu-ui/chat-count'
 import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
@@ -46,7 +46,6 @@ import {
   groupRecords,
   groupRowBucketKeys,
   groupableFields,
-  hasTreeLinks,
   isRecordLinkField,
   listProjectionKeys,
   overlayListed,
@@ -63,6 +62,7 @@ import {
   type ViewMode,
 } from './fields.ts'
 import { listGroupedCollection } from './group-list.ts'
+import { TREE_HAS_KIDS, listTreeChildren, listTreeCollection } from './tree-list.ts'
 import { AppDialog, CheckRow } from './controls.tsx'
 import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search.tsx'
 import { buildCrumbs, type CrumbTarget } from './sidebar-nav.ts'
@@ -70,7 +70,7 @@ import { CrumbTrail } from './crumb-trail.tsx'
 import { fieldPickAttrs, pickDomAttrs, recordPickKind, recordSourcePath } from './pick-dom.ts'
 import { normalizeRecordEmoji, recordPreviewEmoji, crumbRecordLabel } from './sidebar-preview.ts'
 import { recordPreviewMascot, RecordMark } from './record-mark.tsx'
-import { COL_WIDTH_MAX, COL_WIDTH_MIN, colWidthStyle, normalizeColumnWidths, normalizeSavedView, normalizePageSize, rankListedViews, viewIsFresher, viewStateKey, type SavedView } from './saved-view.ts'
+import { COL_WIDTH_MAX, COL_WIDTH_MIN, canRemoveCollectionView, colWidthStyle, normalizeColumnWidths, normalizeSavedView, normalizePageSize, rankListedViews, viewIsFresher, viewStateKey, type SavedView } from './saved-view.ts'
 import { useStickyToolbar } from './sticky-toolbar.ts'
 import { PagerSizeControl } from './pager-size.tsx'
 import {
@@ -102,12 +102,15 @@ import {
   getStarredViews,
   getStarredViewsVersion,
   isViewStarred,
+  loadOmittedViewIds,
   loadViews,
   noteLocalSavedViewsWrite,
+  omitSavedViewIds,
   pullSavedViews,
   applyListedCrumbMutation,
   rememberRecords,
   rememberViews,
+  reviveSavedViewIds,
   persistStarredViews,
   persistCollapsedGroups,
   persistViewDisplay,
@@ -140,12 +143,13 @@ import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage, locateViewRecord, pageOfIndex, type ViewNeighborQuery } from './view-adjacent.ts'
 import { setViaDataCrumbs, viaDataViewId } from './data-chrome.ts'
 import { paintCollectionViews } from './collection-nav.ts'
-import { TABLE_WINDOW_OVERSCAN, medianPaintedRowPx, rememberedTableWrap, settlePaintedRowPx, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
+import { TABLE_WINDOW_OVERSCAN, medianPaintedRowPx, rememberedTableWrap, settlePaintedRowPx, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tablePinColClass, tablePinCount, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
 import { forgetPreviewTotalsForPath, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady } from './sidebar-preview.ts'
 import { DataSidebarShell } from './data-sidebar-shell.tsx'
 import { builtinAllViewId, catalogLockFilters, collectionNoun, displayNameForView, isBuiltinAllViewId, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stampRecordId, stampRowOpenTarget, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, moveInspectorRecordsToTrash, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
+import { moveTableCell, tableActionArrowLeave, tableActionButtons, tableActionButtonStep, tableClearKey, tableClearedValue, tableKeyDir, tableKeyFromEditingTarget, tableNavKeys, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
 import { isViewCatalogField, selectedViewCatalogOption } from './view-catalog.ts'
 import { jumpTag, loadTags, pullTags, subscribeTags } from './tag-catalog.ts'
 import {
@@ -204,6 +208,61 @@ function ShareScopeDetail(props: ComponentProps<typeof LazyShareScopeDetail>) {
     <Suspense fallback={<ShareScopeLabel label={props.label} />}>
       <LazyShareScopeDetail {...props} />
     </Suspense>
+  )
+}
+
+function DockHoverTip() {
+  const [tip, setTip] = useState<{ text: string; x: number; y: number; below: boolean } | null>(null)
+  useEffect(() => {
+    const read = (node: EventTarget | null) => {
+      if (!(node instanceof Element)) return null
+      const el = node.closest('[data-dock-tip]')
+      if (!(el instanceof HTMLElement) || !el.closest('.fsdb-page')) return null
+      const text = el.getAttribute('data-dock-tip')?.trim()
+      if (!text) return null
+      const box = el.getBoundingClientRect()
+      const gap = 8
+      const below = box.top < 36
+      return {
+        text,
+        x: Math.round(Math.min(window.innerWidth - 12, Math.max(12, box.left + box.width / 2))),
+        y: Math.round(below ? box.bottom + gap : box.top - gap),
+        below,
+      }
+    }
+    const onOver = (event: PointerEvent) => setTip(read(event.target))
+    const onOut = (event: PointerEvent) => setTip(read(event.relatedTarget))
+    const onFocusIn = (event: FocusEvent) => setTip(read(event.target))
+    const onFocusOut = (event: FocusEvent) => setTip(read(event.relatedTarget))
+    const clear = () => setTip(null)
+    document.addEventListener('pointerover', onOver)
+    document.addEventListener('pointerout', onOut)
+    document.addEventListener('focusin', onFocusIn)
+    document.addEventListener('focusout', onFocusOut)
+    window.addEventListener('scroll', clear, true)
+    return () => {
+      document.removeEventListener('pointerover', onOver)
+      document.removeEventListener('pointerout', onOut)
+      document.removeEventListener('focusin', onFocusIn)
+      document.removeEventListener('focusout', onFocusOut)
+      window.removeEventListener('scroll', clear, true)
+    }
+  }, [])
+  if (!tip) return null
+  return createPortal(
+    <div
+      className="fsdb-dock-tip"
+      role="tooltip"
+      style={{
+        left: tip.x,
+        top: tip.y,
+        transform: tip.below ? 'translate(-50%, 0)' : 'translate(-50%, -100%)',
+        zIndex: overlayZ(240),
+      }}
+    >
+      {tip.text}
+    </div>,
+    overlayPortalRoot() ?? document.body,
   )
 }
 
@@ -411,7 +470,9 @@ function RecordTitle({
               )}
             </button>
           ) : (
-            <span className="tasks-tree-toggle is-empty" aria-hidden />
+            <span className="tasks-tree-toggle is-empty" aria-hidden>
+              <ChevronRightIcon className="size-[14px]" />
+            </span>
           )
         ) : null}
         {openDetail && toolsLive ? (
@@ -686,6 +747,10 @@ function schemaFingerprint(schema?: CollectionSchema) {
     const field = fields[key]
     out += `\0${key}:${field?.type ?? ''}:${field?.writable ? 1 : 0}`
   }
+  for (const action of schema.actions ?? []) {
+    const places = (action.placement ?? []).join(',')
+    out += `\0a:${action.id}:${places}:${action.for ?? ''}`
+  }
   return out
 }
 
@@ -747,7 +812,7 @@ const EMPTY_FILTERS: Record<string, string> = {}
 /** 与选区拖选同一阈值：位移超过这个距离只当拖，不当点击。 */
 const CELL_POP_DRAG_PX = 6
 const CELL_POP_IGNORE =
-  '.fsdb-row-check, .fsdb-col-resizer, .tasks-row-tools, .tasks-title-open, .fsdb-action-btn, .fsdb-action-tag, .fsdb-boolbtn, .fsdb-thumb-btn, .fsdb-thumb, .biu-image, .fsdb-file-tools, .fsdb-ref-chip, .biu-tag-wrap, .db-datetime, .biu-calendar, .fsdb-scope-detail, .fsdb-source-table'
+  '.fsdb-row-check, .fsdb-col-resizer, .tasks-row-tools, .tasks-title-open, .fsdb-action-btn, .tasks-row-actions, .fsdb-boolbtn, .fsdb-thumb-btn, .fsdb-thumb, .biu-image, .fsdb-file-tools, .fsdb-ref-chip, .biu-tag-wrap, .db-datetime, .biu-calendar, .fsdb-scope-detail, .fsdb-source-table'
 
 type TablePaintNode =
   | { kind: 'empty'; key: string }
@@ -790,9 +855,27 @@ function placeCreatedRow(
   groupBy: string,
   schema?: CollectionSchema,
   packs: CollectionSchemaPack[] = [],
+  parentId = '',
 ) {
   if (!groups.length) return groups
   if (groups.some((group) => group.rows.some((item) => item.id === row.id))) return groups
+  const parentKey = String(parentId ?? '').trim()
+  if (parentKey) {
+    const parentIndex = groups.findIndex((group) =>
+      group.rows.some((item) => String(item.id) === parentKey || String(item.sourceId ?? '') === parentKey),
+    )
+    if (parentIndex >= 0) {
+      return groups.map((group, i) =>
+        i !== parentIndex
+          ? group
+          : {
+              ...group,
+              rows: [row, ...group.rows],
+              total: group.total != null ? group.total + 1 : group.rows.length + 1,
+            },
+      )
+    }
+  }
   const key = createdRowGroupKey(row, groupBy, schema, packs)
   const index = groups.findIndex((group) => group.key === key || group.label === key)
   if (index >= 0) {
@@ -872,6 +955,22 @@ type ListedMutation =
 
 function overlayListedRow(row: DbRecord, next: DbRecord): DbRecord {
   return { ...row, ...next, banner: next.banner ?? row.banner ?? null }
+}
+
+function appendTreeKids(rows: DbRecord[], kids: DbRecord[]) {
+  if (!kids.length) return rows
+  const ids = new Set(rows.map((row) => String(row.id)))
+  const extra = kids.filter((row) => !ids.has(String(row.id)))
+  return extra.length ? [...rows, ...extra] : rows
+}
+
+function rowsWithTreeKids(rows: DbRecord[], kidsByParent: Record<string, DbRecord[]>) {
+  let next = rows
+  for (const [parentId, kids] of Object.entries(kidsByParent)) {
+    if (!next.some((row) => String(row.id) === parentId || String(row.sourceId ?? '') === parentId)) continue
+    next = appendTreeKids(next, kids)
+  }
+  return next
 }
 
 function patchListCacheRecords(path: string, map: (row: DbRecord) => DbRecord, groupBy?: string) {
@@ -1108,7 +1207,7 @@ function listHoldFromCache(cached: ListCacheSnap, view: SavedView | null, path: 
       }
     }),
     columnWidths: normalizeColumnWidths(view?.columnWidths),
-    columnPinCount: keys[0] === label ? 1 : 0,
+    columnPinCount: tablePinCount(keys, label),
     wrapCells: !!view?.wrap,
     truncateCells: view ? view.truncate !== false : true,
     nodes,
@@ -1188,6 +1287,7 @@ type TableChromeBag = {
   onPointerDown: ComponentProps<'table'>['onPointerDown']
   onPointerMove: ComponentProps<'table'>['onPointerMove']
   onClick: (event: { target: EventTarget | null; currentTarget: EventTarget; clientX: number; clientY: number }) => void
+  onKeyDown?: (event: ReactKeyboardEvent<HTMLTableElement>) => void
   onMouseOver: ComponentProps<'table'>['onMouseOver']
 }
 
@@ -1214,6 +1314,7 @@ type PendingPathQuery = {
   groupBy: string
   pageSize: number
   wrapCells: boolean
+  tree: boolean
   listColumns: string[] | undefined
   activeViewId: string
 }
@@ -1299,7 +1400,7 @@ const WindowedTable = memo(function WindowedTable({
   colWindowRef.current = colWindow
   const windowedColumns = useMemo(() => windowedColumnsOf(columns, colWindow), [colWindow, columns])
   const tableColSpan = Math.max(
-    windowedColumns.length + (colWindow.padLeft > 0 ? 1 : 0) + (colWindow.padRight > 0 ? 1 : 0),
+    windowedColumns.length + (colWindow.padLeft > 0 ? 1 : 0) + (colWindow.padRight > 0 ? 1 : 0) + 1,
     1,
   )
   const paintedTablePx = useMemo(() => {
@@ -1410,11 +1511,18 @@ const WindowedTable = memo(function WindowedTable({
       />
       <table
         ref={tableRef}
+        tabIndex={0}
         className={`tasks-table${wrapCells ? ' is-wrap' : ''} is-cols-fixed${truncateCells ? ' is-truncate' : ''}${resizingCol ? ' is-col-resize' : ''}`}
-        style={{ width: `${paintedTablePx}px`, minWidth: `${paintedTablePx}px`, maxWidth: `${paintedTablePx}px` }}
+        style={{
+          width: '100%',
+          minWidth: `${paintedTablePx}px`,
+          outline: 'none',
+          ['--fsdb-pin-title' as string]: `${columnPx[0] || 240}px`,
+        }}
         onPointerDown={chrome.onPointerDown}
         onPointerMove={chrome.onPointerMove}
         onClick={chrome.onClick}
+        onKeyDown={(event) => chromeRef.current.onKeyDown?.(event)}
         onMouseOver={chrome.onMouseOver}
       >
         <colgroup>
@@ -1426,6 +1534,7 @@ const WindowedTable = memo(function WindowedTable({
             <col key={col.key} style={paintedColStyle(colWindow.start + index)} />
           ))}
           {colWindow.padRight > 0 ? <col key="pad-right" style={padColBox(colWindow.padRight)} /> : null}
+          <col key="fill" className="fsdb-col-fill" />
         </colgroup>
         <thead>
           <tr>
@@ -1433,6 +1542,7 @@ const WindowedTable = memo(function WindowedTable({
             {colWindow.padLeft > 0 ? <th key="pad-left" className="fsdb-col-pad" aria-hidden style={padColBox(colWindow.padLeft)} /> : null}
             {columns.slice(colWindow.start, colWindow.end).map((col) => chrome.paintHeadTh(col))}
             {colWindow.padRight > 0 ? <th key="pad-right" className="fsdb-col-pad" aria-hidden style={padColBox(colWindow.padRight)} /> : null}
+            <th key="fill" className="fsdb-col-fill" aria-hidden />
           </tr>
         </thead>
         <TablePaintCtx.Provider value={paintRef}>
@@ -1529,6 +1639,7 @@ export function CollectionBrowser({
     return scope === 'workspace' ? 'workspace' : stored ? 'personal' : null
   })()
   const listedViews = (path: string, user: SavedView[]) => {
+    const skipIds = loadOmittedViewIds(path)
     const listed = resolveViews
       ? resolveViews(path, user)
       : mergeTableViews(
@@ -1537,6 +1648,7 @@ export function CollectionBrowser({
             label: path === collectionPath ? title : path.replace(/^\//, ''),
           },
           user,
+          skipIds,
         )
     return listed
   }
@@ -1625,10 +1737,18 @@ export function CollectionBrowser({
   )
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => normalizeColumnWidths(initialView?.columnWidths))
   const [resizingCol, setResizingCol] = useState<string | null>(null)
-  const [cellPop, setCellPop] = useState<{ id: string; key: string } | null>(null)
+  const [cellPop, setCellPop] = useState<{ id: string; key: string; seed?: string } | null>(null)
   const cellPickRef = useRef<{ id: string; key: string } | null>(null)
+  const actionHoverIndexRef = useRef(0)
+  const cellRepickRef = useRef(false)
   const cellAnchorRef = useRef<HTMLElement | null>(null)
   const cellPopPtrRef = useRef<{ x: number; y: number; dragged: boolean } | null>(null)
+  const tableNavLiveRef = useRef<(event: KeyboardEvent) => void>(() => {})
+  useEffect(() => {
+    const onTableNavKey = (event: KeyboardEvent) => tableNavLiveRef.current(event)
+    window.addEventListener('keydown', onTableNavKey)
+    return () => window.removeEventListener('keydown', onTableNavKey)
+  }, [])
   const [tagCatalog, setFacetCatalog] = useState(() => loadTags())
   const tablePathsKey = tables
     .map((table) => table.path)
@@ -1685,13 +1805,8 @@ export function CollectionBrowser({
     setDetailId(row.id, row)
   }
   const [hydrated, setHydrated] = useState(false)
-  const [viewsOpen, setViewsOpen] = useState(() => {
-    try {
-      return localStorage.getItem('cordis.sidebar.collapsed') !== '1'
-    } catch {
-      return true
-    }
-  })
+  const [viewsOpen, setViewsOpen] = useState(true)
+  const [sidebarGone, setSidebarGone] = useState(false)
   const [inspectorOpen, setInspectorOpen] = useState(() => {
     try {
       return localStorage.getItem('cordis.inspector.open') === '1'
@@ -1729,6 +1844,10 @@ export function CollectionBrowser({
   const [groupBy, setGroupBy] = useState(initialView?.groupBy ?? '')
   const [showTree, setShowTree] = useState(initialView?.tree !== false)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const [treeKidsByParent, setTreeKidsByParent] = useState<Record<string, DbRecord[]>>({})
+  const treeKidsByParentRef = useRef(treeKidsByParent)
+  treeKidsByParentRef.current = treeKidsByParent
+  const treeKidsInflight = useRef(new Set<string>())
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() =>
     loadCollapsedGroups(collectionPath, initialView?.id ?? routeViewId ?? '', initialView?.groupBy ?? ''),
   )
@@ -1841,6 +1960,8 @@ export function CollectionBrowser({
       setGroupFillKeys([])
       setCollapsedGroups(loadCollapsedGroups(dataPath, next.id, next.groupBy ?? ''))
       setCollapsed({})
+      setTreeKidsByParent({})
+      treeKidsInflight.current = new Set()
       setError('')
       setPage(0)
       adoptView(next, cached.stat?.schema)
@@ -1863,6 +1984,7 @@ export function CollectionBrowser({
             groupBy: next.groupBy ?? '',
             pageSize: normalizePageSize(next.pageSize),
             wrapCells: !!next.wrap,
+            tree: next.tree !== false,
             listColumns: listProjectionKeys({
               schema: undefined,
               columns: next.columns.length ? next.columns : LIST_SEED_COLUMNS,
@@ -1999,6 +2121,7 @@ export function CollectionBrowser({
     if (nested) return
     function applyLayout(left: number, inspector: number) {
       setViewsOpen(left > 0)
+      setSidebarGone(left <= 0)
       setInspectorOpen(inspector > 0)
     }
     function onLayout(event: Event) {
@@ -2012,6 +2135,7 @@ export function CollectionBrowser({
       const n = (event as CustomEvent<number>).detail
       if (typeof n !== 'number' || !Number.isFinite(n)) return
       setViewsOpen(n > 0)
+      setSidebarGone(n <= 0)
     }
     function onOpen() {
       setInspectorOpen(true)
@@ -2086,7 +2210,8 @@ export function CollectionBrowser({
   }, [])
   const totalRef = useRef(total)
   totalRef.current = total
-  const listIdentityKey = `${dataPath}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${customView ? 'full' : 'proj'}\0${groupBy}`
+  const treeParentKey = parentFieldKey(stat?.schema)
+  const listIdentityKey = `${dataPath}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${customView ? 'full' : 'proj'}\0${groupBy}\0tree:${showTree && treeParentKey && dataPath !== DATA_COLLECTION_PATH ? treeParentKey : ''}`
   const reloadKey = `${listIdentityKey}\0${groupBy ? JSON.stringify(groupPages) : page}\0${groupFillKeys.join('\0')}`
   if (releaseHoldOnPaintRef.current && paintedPath === dataPath && tableHoldRef.current?.nodes !== EMPTY_HOLD_NODES) {
     releaseHoldOnPaintRef.current = false
@@ -2110,6 +2235,7 @@ export function CollectionBrowser({
     const reqPageSize = pageSize
     if (pending) pending.pageSize = reqPageSize
     const reqWrap = pending?.wrapCells ?? wrapCells
+    const reqTree = (pending?.tree ?? showTree) && dataPath !== DATA_COLLECTION_PATH
     const reqColumns = pending?.listColumns ?? listColumns
     const reqViewId = pending?.activeViewId ?? activeViewId
     const listOpts = {
@@ -2127,13 +2253,39 @@ export function CollectionBrowser({
       const nextStatPromise = heldStat?.schema
         ? Promise.resolve(heldStat)
         : readJson<StatResult>(`/api/db/stat?path=${encodeURIComponent(dataPath)}`, undefined, { fresh: Boolean(opts?.force) })
+      let reqParentKey = parentFieldKey(schemaRef.current)
+      if (reqTree && !reqParentKey) {
+        reqParentKey = parentFieldKey((await nextStatPromise).schema)
+      }
+      const listPage = (input: {
+        path: string
+        limit: number
+        offset?: number
+        query?: string
+        sortField?: string
+        sortDir?: string
+        sorts?: typeof reqSorts
+        filters?: Record<string, unknown>
+        columns?: string[]
+      }) =>
+        listTreeCollection({
+          ...input,
+          tree: reqTree && Boolean(reqParentKey),
+          parentKey: reqParentKey,
+          list: (next) => listCollection({ ...next, fresh: Boolean(opts?.force) }),
+        })
       const extraGroupValues = (schema?: CollectionSchema) => {
-        if (switching) return []
         const group = groupField(schema, reqGroupBy, tagCatalog)
         if (!group || group.field.enum?.length) return []
         const kind = resolveFieldType(group.field)
         if (kind === 'datetime' || kind === 'number' || kind === 'boolean') return []
-        return uniqueValues(itemsRef.current, group.key, group.field)
+        const fromRows = switching ? [] : uniqueValues(itemsRef.current, group.key, group.field)
+        if (kind === 'tag' && !parseTagFlatColumnKey(group.key)) {
+          const fromCatalog = tagCatalog.map((pack) => String(pack.id ?? '').trim()).filter(Boolean)
+          return [...new Set([...fromCatalog, ...fromRows])]
+        }
+        if (switching) return []
+        return fromRows
       }
       const loadGroups = (schema?: CollectionSchema) =>
         listGroupedCollection({
@@ -2151,12 +2303,18 @@ export function CollectionBrowser({
               ? groupBucketsRef.current
               : undefined,
           previousPages: switching || opts?.force ? {} : loadedPagesRef.current,
-          list: (input) => listCollection({ ...input, fresh: Boolean(opts?.force) }),
+          list: (input) =>
+            listTreeCollection({
+              ...input,
+              tree: reqTree && Boolean(reqParentKey),
+              parentKey: reqParentKey,
+              list: (next) => listCollection({ ...next, fresh: Boolean(opts?.force) }),
+            }),
         })
       let nextStat: StatResult
       let listed: { items: Array<DbRecord & { path?: string }>; total: number; schema?: CollectionSchema }
       let buckets: GroupBucket[] = []
-      const loadUngrouped = () => listCollection({ ...listOpts, limit: reqPageSize, offset: switching ? 0 : page * reqPageSize })
+      const loadUngrouped = () => listPage({ ...listOpts, limit: reqPageSize, offset: switching ? 0 : page * reqPageSize })
       if (reqGroupBy) {
         const cachedSchema = switching ? undefined : schemaRef.current
         const cachedKeys = groupListKeys(cachedSchema, reqGroupBy, extraGroupValues(cachedSchema), tagCatalog)
@@ -2218,12 +2376,26 @@ export function CollectionBrowser({
         setGroupPages({})
         setGroupFillKeys([])
         setCollapsed({})
+        setTreeKidsByParent({})
+        treeKidsInflight.current = new Set()
         setCollapsedGroups(loadCollapsedGroups(dataPath, pendingView.activeViewId, pendingView.groupBy))
       }
       setStat((prev) =>
         prev?.schema && schemaFingerprint(prev.schema) === schemaFingerprint(nextSchema) ? prev : { ...nextStat, schema: nextSchema },
       )
-      setGroupBuckets((prev) => (JSON.stringify(prev) === JSON.stringify(buckets) ? prev : buckets))
+      const listedIds = new Set(listed.items.map((row) => String(row.id)))
+      const keptCreates = itemsRef.current.filter(
+        (item) => confirmedCreates.current.has(String(item.id)) && !listedIds.has(String(item.id)),
+      )
+      let nextBuckets = buckets
+      if (reqGroupBy && keptCreates.length) {
+        const parentField = parentFieldKey(nextSchema)
+        for (const row of keptCreates) {
+          const parentId = parentField ? String(row[parentField] ?? '').trim() : ''
+          nextBuckets = placeCreatedRow(nextBuckets, row, reqGroupBy, nextSchema, tagCatalog, parentId)
+        }
+      }
+      setGroupBuckets((prev) => (JSON.stringify(prev) === JSON.stringify(nextBuckets) ? prev : nextBuckets))
       setItems((prev) => {
         if (pendingView) {
           confirmedCreates.current = new Set()
@@ -2275,7 +2447,7 @@ export function CollectionBrowser({
     } finally {
       if (reloadInflightRef.current?.promise === promise) reloadInflightRef.current = null
     }
-  }, [activeViewId, collectionPath, customView, dataPath, tagCatalog, fetchQuery, groupBy, groupFillKeys, listColumns, listIdentityKey, queryFilters, page, pageSize, reloadKey, sortDir, sortField, sorts, wrapCells])
+  }, [activeViewId, collectionPath, customView, dataPath, tagCatalog, fetchQuery, groupBy, groupFillKeys, listColumns, listIdentityKey, queryFilters, page, pageSize, reloadKey, sortDir, sortField, sorts, wrapCells, showTree])
   const reloadRef = useRef(reload)
   reloadRef.current = reload
   const detailIdRef = useRef<string | null>(null)
@@ -2357,7 +2529,7 @@ export function CollectionBrowser({
     setPage((prev) => (prev === 0 ? prev : 0))
     setGroupPages((prev) => (Object.keys(prev).length ? {} : prev))
     setGroupFillKeys((prev) => (prev.length ? [] : prev))
-  }, [fetchQuery, queryFiltersKey, sortField, sortDir, pageSize, groupBy, collectionPath, dataPath])
+  }, [fetchQuery, queryFiltersKey, sortField, sortDir, pageSize, groupBy, collectionPath, dataPath, showTree])
 
   async function refreshNow() {
     if (refreshing) return
@@ -2420,6 +2592,8 @@ export function CollectionBrowser({
     }
     if (pathHandled) return
     setCollapsed((prev) => (Object.keys(prev).length ? {} : prev))
+    setTreeKidsByParent((prev) => (Object.keys(prev).length ? {} : prev))
+    treeKidsInflight.current = new Set()
     const cached = peekListCache(dataPath, routeViewId, pageSize)
     setItems(cached?.items ?? [])
     setStat(cached?.stat ?? null)
@@ -2500,6 +2674,8 @@ export function CollectionBrowser({
           // 装全部页面插件会连续 bump /plugins，每个 change 都 force list 会把 Chrome 打到 ERR_INSUFFICIENT_RESOURCES。
           if (detailIdRef.current) {
             refreshOpenDetail()
+          } else if (Date.now() < quietUntil.current) {
+            // 刚创建的子行还在本地树里；立刻 force 顶层列表会把子节点从分组里冲掉。
           } else {
             void reloadRef.current({ force: true })
           }
@@ -2704,6 +2880,7 @@ export function CollectionBrowser({
       .map((key) => {
         const hit = allColumns.find((item) => item.key === key)
         if (hit) return hit
+        if (key === 'actions') return { key, kind: 'action' as const, field: { type: 'action' as const, label: '动作' } }
         if (key === 'shareScope') return { key, kind: 'select' as const, field: { type: 'select' as const, label: '分享' } }
         if (key === 'shareRole') return { key, kind: 'select' as const, field: { type: 'select' as const, label: '权限' } }
         const facet = parseTagFlatColumnKey(key)
@@ -2721,6 +2898,7 @@ export function CollectionBrowser({
     onPointerDown: undefined,
     onPointerMove: undefined,
     onClick: undefined,
+    onKeyDown: undefined,
     onMouseOver: undefined,
   })
 
@@ -2842,20 +3020,65 @@ export function CollectionBrowser({
 
   const grouped = useMemo(() => {
     if (!grouping) return groupRecords(visible, schema, groupBy, tagCatalog)
-    if (groupBuckets.length) return groupBuckets.filter((item) => (item.total ?? item.rows.length) > 0)
+    if (groupBuckets.length) return groupBuckets.filter((item) => (item.total ?? item.rows.length) > 0 || item.key === '')
     // 分享列是计算属性。用行上的 shareScope 再分组，会把「分享出去的私人记录」先画进共享，等 $scope 组桶到了再跳。
     if (groupBy === 'shareScope') return []
-    return groupRecords(visible, schema, groupBy, tagCatalog).filter((item) => item.rows.length)
+    return groupRecords(visible, schema, groupBy, tagCatalog).filter((item) => item.rows.length || item.key === '')
   }, [tagCatalog, groupBuckets, groupBy, grouping, schema, visible])
   const parentKey = useMemo(() => parentFieldKey(schema, items), [items, schema])
-  const treeable = useMemo(() => hasTreeLinks(items, parentKey), [items, parentKey])
-  const treeOn = treeable && showTree
+  const treeOn = Boolean(parentKey) && showTree && dataPath !== DATA_COLLECTION_PATH
   const flattenRows = useCallback(
     (rows: DbRecord[]) => {
       if (!parentKey || !treeOn) return rows.map((row) => ({ row, depth: 0, hasKids: false, kidCount: 0 }))
-      return flattenTree(rows, parentKey, collapsed)
+      return flattenTree(rowsWithTreeKids(rows, treeKidsByParent), parentKey, collapsed).map((item) => {
+        const loaded = treeKidsByParent[item.row.id] ?? treeKidsByParent[String(item.row.sourceId ?? '')]
+        const hasKids = loaded ? loaded.length > 0 : Boolean(item.row[TREE_HAS_KIDS]) || item.hasKids
+        return {
+          ...item,
+          hasKids,
+          kidCount: loaded ? loaded.length : item.kidCount,
+        }
+      })
     },
-    [collapsed, parentKey, treeOn],
+    [collapsed, parentKey, treeKidsByParent, treeOn],
+  )
+  const loadTreeKids = useCallback(
+    async (parentId: string, force = false) => {
+      const key = String(parentId ?? '').trim()
+      const field = String(parentKey ?? '').trim()
+      if (!key || !field || !treeOn) return
+      if (
+        (!force && Object.prototype.hasOwnProperty.call(treeKidsByParentRef.current, key)) ||
+        treeKidsInflight.current.has(key)
+      ) {
+        return
+      }
+      treeKidsInflight.current.add(key)
+      try {
+        const listed = await listTreeChildren({
+          path: dataPath,
+          parentKey: field,
+          parentId: key,
+          sortField,
+          sortDir,
+          sorts,
+          columns: listColumns,
+          list: (input) => listCollection({ ...input, fresh: true }),
+        })
+        setTreeKidsByParent((prev) => {
+          const incoming = listed.items
+          if (!force && Object.prototype.hasOwnProperty.call(prev, key)) return prev
+          const incomingIds = new Set(incoming.map((row) => String(row.id)))
+          const kept = (prev[key] ?? []).filter(
+            (row) => confirmedCreates.current.has(String(row.id)) && !incomingIds.has(String(row.id)),
+          )
+          return { ...prev, [key]: kept.length ? [...kept, ...incoming] : incoming }
+        })
+      } finally {
+        treeKidsInflight.current.delete(key)
+      }
+    },
+    [dataPath, listColumns, parentKey, sortDir, sortField, sorts, treeOn],
   )
   const pickableIds = useMemo(() => {
     const rows = grouping ? grouped.flatMap((group) => group.rows) : visible
@@ -2928,7 +3151,7 @@ export function CollectionBrowser({
   const tableStageRef = useRef<HTMLDivElement>(null)
   const checkStackRef = useRef<HTMLDivElement>(null)
   const checkHoverRef = useRef<string | 'head' | null>(null)
-  const columnPinCount = columns[0]?.key === schema?.labelField ? 1 : 0
+  const columnPinCount = tablePinCount(columns.map((col) => col.key), schema?.labelField)
   const tableResetKey = `${activeViewId ?? ''}\0${collectionPath}\0${groupBy}\0${page}\0${pageSize}\0${query}`
   const checkLayoutExtra = [
     grouping ? 1 : 0,
@@ -2944,7 +3167,6 @@ export function CollectionBrowser({
   ].join('\0')
 
   const onVisibleRange = useCallback((start: number, end: number) => {
-    if (tableHoldRef.current) return
     if (!grouping) return
     const until = Math.min(tablePaintNodes.length, end + TABLE_WINDOW_OVERSCAN)
     const needed = new Set<string>()
@@ -3236,11 +3458,10 @@ export function CollectionBrowser({
   }, [dlg])
 
   function adoptPersistedViews(path: string, listed: SavedView[]) {
-    const stored = listed.filter((view) => !view.builtin)
     rememberViews(path, listed)
     noteLocalSavedViewsWrite(path)
     if (!nested) {
-      localStorage.setItem(viewsKey(path), JSON.stringify(stored))
+      localStorage.setItem(viewsKey(path), JSON.stringify(listed))
     }
     if (path === collectionPath) {
       viewsRef.current = listed
@@ -3257,10 +3478,13 @@ export function CollectionBrowser({
   ) {
     if (sheet) return true
     const forced = extra?.upsert ?? []
+    if (extra?.remove?.length) omitSavedViewIds(path, extra.remove)
+    if (forced.length) reviveSavedViewIds(path, forced.map((view) => view.id))
     const incoming = [
       ...next.filter((view) => !forced.some((item) => item.id === view.id)),
       ...forced,
     ]
+    for (const view of incoming) persistViewDisplay(path, view.id, view)
     const listed = rankListedViews(
       listedViews(path, incoming).map((view) => {
         const painted = withViewDisplay(path, view)
@@ -3268,10 +3492,7 @@ export function CollectionBrowser({
       }),
       incoming,
     )
-    for (const view of listed) {
-      if (view.builtin) persistViewDisplay(path, view.id, { rank: view.rank })
-    }
-    const stored = listed.filter((view) => !view.builtin)
+    const stored = listed
     const previous = extra?.baseline ?? loadViews(path)
     // 只推差异：别的窗口（会话 / 右检查器）新建的视图不会被这份快照整份冲掉。
     // extra.upsert/remove 是调用方点名的条目，不依赖 baseline 里有没有这个 id。
@@ -3600,11 +3821,6 @@ export function CollectionBrowser({
     if (!activeViewId) return
     const current = views.find((view) => view.id === activeViewId)
     if (!current) return
-    if (current.builtin) {
-      persistViewDisplay(collectionPath, current.id, patch)
-      persistViews(views)
-      return
-    }
     persistViews(views.map((view) => (view.id === activeViewId ? { ...view, ...patch } : view)))
   }
 
@@ -3620,10 +3836,6 @@ export function CollectionBrowser({
 
   function applyRename(name?: string) {
     if (!dlg || dlg.kind !== 'rename') return
-    if (dlg.view.builtin) {
-      setDlg(null)
-      return
-    }
     const next = (name ?? '').trim()
     if (!next) {
       setDlgError('请填写名称')
@@ -3641,7 +3853,7 @@ export function CollectionBrowser({
 
   function applyDeleteView() {
     if (!dlg || dlg.kind !== 'delete') return
-    if (dlg.view.builtin) {
+    if (!canRemoveCollectionView(views)) {
       setDlg(null)
       return
     }
@@ -3681,11 +3893,6 @@ export function CollectionBrowser({
     if (sheet || !activeViewId) return
     const current = views.find((view) => view.id === activeViewId)
     if (!current) return
-    if (current.builtin) {
-      persistViewDisplay(collectionPath, current.id, { columns: pinned })
-      persistViews(views)
-      return
-    }
     persistViews(views.map((view) => (view.id === activeViewId ? { ...view, columns: pinned } : view)))
   }
 
@@ -3727,6 +3934,15 @@ export function CollectionBrowser({
   }
 
   async function runAction(row: DbRecord, action: CollectionActionInfo) {
+    if (action.id === 'add-child') {
+      await createChildRecord(row)
+      return
+    }
+    if (action.id === 'delete' || action.id === 'trash' || action.id === 'remove') {
+      if (collectionPath === '/plugins' && row.builtin === true) return
+      setDlg({ kind: 'delete-record', row })
+      return
+    }
     if (action.id === 'chat') {
       const sessionId = String(row.sourceId ?? row.id ?? '').trim()
       if (sessionId) {
@@ -3840,10 +4056,18 @@ export function CollectionBrowser({
     const actionPath =
       dataPath === DATA_COLLECTION_PATH && sourcePath && sourceId ? `${sourcePath}/${sourceId}` : `${dataPath}/${row.id}`
     try {
+      const cornerSessionId =
+        typeof document === 'undefined'
+          ? ''
+          : String(document.querySelector('[data-testid="brand-corner-mascot"]')?.getAttribute('data-session-id') ?? '').trim()
       await readJson('/api/db/action', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ path: actionPath, action: action.id }),
+        body: JSON.stringify({
+          path: actionPath,
+          action: action.id,
+          ...(action.id === 'deliver' && cornerSessionId ? { args: { sessionId: cornerSessionId, wait: false } } : {}),
+        }),
       })
       if (action.id === 'start') {
         window.dispatchEvent(new CustomEvent('biu:enable-page-block-plugin', { detail: { plugin: sourceId || String(row.id) } }))
@@ -3950,19 +4174,56 @@ export function CollectionBrowser({
     }
   }
 
+  async function createChildRecord(parent: DbRecord) {
+    if (!canCreate) return
+    const parentId = String(parent.sourceId ?? parent.id ?? '').trim()
+    if (!parentId) return
+    const targetPath = isDataOverview
+      ? String(parent.tablePath ?? createTypeTable?.path ?? PAGES_COLLECTION_PATH)
+      : dataPath
+    const targetTable = isDataOverview
+      ? overviewCreateTables.find((table) => table.path === targetPath) ?? {
+          path: targetPath,
+          label: targetPath.replace(/^\//, ''),
+        }
+      : undefined
+    const field = parentFieldKey(schema) || 'parentId'
+    const fields: Record<string, unknown> = { [field]: parentId }
+    const groupedBy = String(groupBy ?? '').trim()
+    const groupedField = groupedBy ? schema?.fields?.[groupedBy] : undefined
+    if (
+      groupedBy &&
+      groupedField?.writable &&
+      !groupedField.computed &&
+      parent[groupedBy] != null &&
+      parent[groupedBy] !== ''
+    ) {
+      fields[groupedBy] = parent[groupedBy]
+    }
+    await insertCreatedRecord(targetPath, fields, targetTable)
+  }
+
   async function createRecord() {
     if (!canCreate) return
     const targetPath = isDataOverview ? createTypeTable?.path || PAGES_COLLECTION_PATH : dataPath
     const targetTable = isDataOverview
       ? createTypeTable ?? { path: targetPath, label: targetPath.replace(/^\//, '') }
       : undefined
+    await insertCreatedRecord(targetPath, seedRecordFromViewFilters(catalogLocks, filterTree, schema), targetTable)
+  }
+
+  async function insertCreatedRecord(
+    targetPath: string,
+    fields: Record<string, unknown>,
+    targetTable?: { path: string; label?: string; view?: { title?: string; icon?: string } },
+  ) {
     try {
       const data = await readJson<{ items?: Array<{ value?: DbRecord }> }>('/api/db/create', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           path: targetPath,
-          records: [seedRecordFromViewFilters(catalogLocks, filterTree, schema)],
+          records: [fields],
           scope: createScope,
         }),
       })
@@ -3972,7 +4233,9 @@ export function CollectionBrowser({
         setError('没有写入')
         return
       }
-      const value = targetTable
+      const parentField = parentFieldKey(schemaRef.current)
+      const parentId = parentField ? String(fields[parentField] ?? created[parentField] ?? '').trim() : ''
+      const stamped = targetTable
         ? {
             ...created,
             id: `${String(targetTable.path).replace(/^\//, '')}::${sourceId}`,
@@ -3983,6 +4246,10 @@ export function CollectionBrowser({
             sourceId,
           }
         : created
+      const value =
+        parentField && parentId && (stamped[parentField] == null || stamped[parentField] === '')
+          ? { ...stamped, [parentField]: parentId }
+          : stamped
       const id = value.id
       confirmedCreates.current.add(id)
       setItems((prev) => {
@@ -3992,7 +4259,15 @@ export function CollectionBrowser({
       })
       totalRef.current += 1
       setTotal(totalRef.current)
-      setGroupBuckets((prev) => placeCreatedRow(prev, value, groupBy))
+      setGroupBuckets((prev) => placeCreatedRow(prev, value, groupBy, schemaRef.current, tagCatalog, parentId))
+      if (parentId) {
+        setCollapsed((prev) => ({ ...prev, [parentId]: false }))
+        setTreeKidsByParent((prev) => ({
+          ...prev,
+          [parentId]: [value, ...(prev[parentId] ?? []).filter((row) => row.id !== id)],
+        }))
+        void loadTreeKids(parentId, true)
+      }
       publishListedMutation({
         path: dataPath,
         op: 'create',
@@ -4002,7 +4277,7 @@ export function CollectionBrowser({
         total: totalRef.current,
       })
       announceListChange()
-      quietUntil.current = 0
+      quietUntil.current = Date.now() + 2000
       if (isDataOverview) setViaDataCrumbs(true, activeViewId)
       if (activeViewId && !isDataOverview) rememberInspectorWorkingView(targetPath, activeViewId)
       window.setTimeout(() => showRecordInInspector(targetPath, sourceId, isDataOverview ? undefined : activeViewId), 0)
@@ -4442,6 +4717,7 @@ export function CollectionBrowser({
           fieldKey={key}
           field={field}
           initial={initial}
+          typeChar={cellPop.seed}
           options={options}
           collectionPath={collectionPath}
           seed={items}
@@ -4487,13 +4763,13 @@ export function CollectionBrowser({
           <button
             key={action.id}
             type="button"
-            className={`fsdb-action-tag${action.tone === 'danger' ? ' is-danger' : ''}`}
+            className={`tasks-icon-btn${action.tone === 'danger' ? ' is-danger' : ''}`}
             aria-label={`${action.label} ${labelOf(row)}`}
+            data-dock-tip={action.label}
             disabled={busy}
             onClick={run}
           >
             {glyph}
-            <span>{action.label}</span>
           </button>
         )
       }),
@@ -4592,8 +4868,10 @@ export function CollectionBrowser({
     if (!cell) return
     const col = columns.find((item) => item.key === cell.key)
     cellAnchorRef.current = cell.td
+    cellRepickRef.current = cellPickRef.current?.id === cell.id && cellPickRef.current?.key === cell.key
     cellPickRef.current = { id: cell.id, key: cell.key }
     markCellOn(cell.td, col ? cellFieldWritable(col.field) : false)
+    tableRef.current?.focus({ preventScroll: true })
     cellPopPtrRef.current = { x: event.clientX, y: event.clientY, dragged: false }
   }
 
@@ -4621,8 +4899,182 @@ export function CollectionBrowser({
         return
       }
     }
+    if (!cellRepickRef.current) {
+      setCellPop(null)
+      return
+    }
     setCellPop(cellUsesPop(kind, col.field.writable) ? { id: cell.id, key: cell.key } : null)
   }
+
+  function tableNavRowIds() {
+    const ids: string[] = []
+    for (const node of tablePaintNodes) {
+      if (node.kind === 'row' && node.row.id) ids.push(node.row.id)
+    }
+    return ids
+  }
+
+  function findPaintedCellTd(id: string, key: string) {
+    const table = tableRef.current
+    if (!table) return null
+    return table.querySelector(`tr[data-record-id="${CSS.escape(id)}"] td[data-col-key="${CSS.escape(key)}"]`) as HTMLElement | null
+  }
+
+  function hoverActionCell(td: HTMLElement | null, index = 0) {
+    const btns = tableActionButtons(td)
+    if (!btns.length) return
+    const i = Math.max(0, Math.min(index, btns.length - 1))
+    actionHoverIndexRef.current = i
+    btns[i]?.focus()
+  }
+
+  function revealTableCell(next: { id: string; key: string }) {
+    cellPickRef.current = next
+    const wrap = tableWrapRef.current
+    const index = tablePaintNodes.findIndex((node) => node.kind === 'row' && node.row.id === next.id)
+    if (wrap && index >= 0) {
+      const rowPx = tableRowFallbackPx(wrapCells)
+      const top = index * rowPx
+      const bottom = top + rowPx
+      const viewTop = wrap.scrollTop
+      const viewBot = viewTop + wrap.clientHeight
+      if (top < viewTop) wrap.scrollTop = top
+      else if (bottom > viewBot) wrap.scrollTop = Math.max(0, bottom - wrap.clientHeight)
+    }
+    const apply = () => {
+      const td = findPaintedCellTd(next.id, next.key)
+      if (!td) return
+      const col = columns.find((item) => item.key === next.key)
+      cellAnchorRef.current = td
+      markCellOn(td, col ? cellFieldWritable(col.field) : false)
+      td.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    }
+    apply()
+    requestAnimationFrame(apply)
+  }
+
+  function enterTableCell(cursor: { id: string; key: string }, seed?: string) {
+    const col = columns.find((item) => item.key === cursor.key)
+    if (!col) return
+    const kind = resolveFieldType(col.field)
+    const td = findPaintedCellTd(cursor.id, cursor.key)
+    if (td) cellAnchorRef.current = td
+    if (kind === 'boolean' && col.field.writable) {
+      const btn = td?.querySelector('button') as HTMLElement | null
+      btn?.click()
+      return
+    }
+    if (cursor.key === 'actions' || kind === 'action') {
+      hoverActionCell(td, 0)
+      return
+    }
+    if (cellUsesPop(kind, col.field.writable)) {
+      setCellPop({ id: cursor.id, key: cursor.key, ...(seed ? { seed } : {}) })
+    }
+  }
+
+  function landTableCell(next: { id: string; key: string }) {
+    revealTableCell(next)
+    if (next.key === 'actions') {
+      requestAnimationFrame(() => hoverActionCell(findPaintedCellTd(next.id, next.key), 0))
+      return
+    }
+    tableRef.current?.focus({ preventScroll: true })
+  }
+
+  function onTableKeyDown(event: { key: string; shiftKey: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean; defaultPrevented: boolean; target: EventTarget | null; preventDefault: () => void }) {
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return
+    if (!cellPickRef.current) return
+    const table = tableRef.current
+    const hit = event.target instanceof Element ? event.target : null
+    if (hit && table && !table.contains(hit) && hit !== table) {
+      if (tableKeyFromEditingTarget(hit)) return
+      if (hit.closest('input, textarea, select, [contenteditable="true"], [role="textbox"], .composer, .page-editor')) return
+    }
+    const actionBtn = hit instanceof Element ? hit.closest('td[data-col-key="actions"] button, td[data-col-key="actions"] [role="button"]') : null
+    if (event.key === 'Escape') {
+      if (cellPop) {
+        event.preventDefault()
+        setCellPop(null)
+        table?.focus({ preventScroll: true })
+      } else if (actionBtn instanceof HTMLElement) {
+        event.preventDefault()
+        table?.focus({ preventScroll: true })
+      }
+      return
+    }
+    if (actionBtn instanceof HTMLElement && table?.contains(actionBtn) && (event.key === 'Enter' || event.key === ' ')) return
+    if (cellPop || (hit && tableKeyFromEditingTarget(hit) && hit !== table && !table?.contains(hit))) return
+    if (hit && table?.contains(hit) && tableKeyFromEditingTarget(hit)) return
+    const dir = tableKeyDir(event.key, event.shiftKey)
+    if (
+      actionBtn instanceof HTMLElement &&
+      table?.contains(actionBtn) &&
+      !event.shiftKey &&
+      (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+    ) {
+      const td = actionBtn.closest('td')
+      const btns = tableActionButtons(td)
+      const index = btns.indexOf(actionBtn)
+      if (!tableActionArrowLeave(btns.length, Math.max(0, index), dir === 'left' ? 'left' : 'right')) {
+        event.preventDefault()
+        hoverActionCell(td, tableActionButtonStep(btns.length, Math.max(0, index), dir === 'left' ? 'left' : 'right'))
+        return
+      }
+    }
+    if (dir) {
+      event.preventDefault()
+      const cursor = cellPickRef.current
+      if (cursor && event.shiftKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+        const node = tablePaintNodes.find((item) => item.kind === 'row' && item.row.id === cursor.id)
+        const fold = tableTreeArrowAction(dir, {
+          shift: true,
+          treeOn,
+          labelKey: schema?.labelField,
+          cellKey: cursor.key,
+          hasKids: node?.kind === 'row' ? node.hasKids : false,
+          collapsed: collapsed[cursor.id] !== false,
+        })
+        if (fold === 'expand') {
+          setCollapsed((prev) => ({ ...prev, [cursor.id]: false }))
+          void loadTreeKids(String(cursor.id))
+        } else if (fold === 'collapse') {
+          setCollapsed((prev) => ({ ...prev, [cursor.id]: true }))
+        }
+        table?.focus({ preventScroll: true })
+        return
+      }
+      const next = moveTableCell(tableNavRowIds(), tableNavKeys(columns), cursor, dir)
+      if (next) landTableCell(next)
+      else table?.focus({ preventScroll: true })
+      return
+    }
+    const cursor = cellPickRef.current
+    if (!cursor) return
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      enterTableCell(cursor)
+      return
+    }
+    const col = columns.find((item) => item.key === cursor.key)
+    if (!col || !cellFieldWritable(col.field)) return
+    if (tableClearKey(event.key)) {
+      const kind = resolveFieldType(col.field)
+      const empty = tableClearedValue(kind)
+      if (empty === undefined || cursor.key === 'actions' || cursor.key === 'shareScope' || cursor.key === 'shareRole') return
+      if (isViewCatalogField(cursor.key)) return
+      const row = itemsRef.current.find((item) => item.id === cursor.id)
+      if (!row) return
+      event.preventDefault()
+      writeCellValue(row, cursor.key, col.field, empty)
+      return
+    }
+    const typed = tableTypeToEditChar(event.key, resolveFieldType(col.field))
+    if (!typed) return
+    event.preventDefault()
+    enterTableCell(cursor, typed)
+  }
+  tableNavLiveRef.current = (event) => onTableKeyDown(event)
 
   function paintColPad(px: number, side: 'left' | 'right') {
     if (px <= 0) return null
@@ -4635,7 +5087,7 @@ export function CollectionBrowser({
     return (
       <th
         key={col.key}
-        className={[col.key === schema?.labelField ? 'is-pin-col' : '', tone ? 'is-tag-col' : ''].filter(Boolean).join(' ') || undefined}
+        className={[tablePinColClass(col.key, schema?.labelField), tone ? 'is-tag-col' : ''].filter(Boolean).join(' ') || undefined}
         style={tone ? { ['--biu-tag' as string]: tone } : undefined}
       >
         <span className={`tasks-th${queryFields.has(col.key) ? ' is-on' : ''}`}>
@@ -4700,7 +5152,7 @@ export function CollectionBrowser({
         data-col-key={col.key}
         {...cellPickOf(row, col.key, col.field)}
         className={[
-          col.key === paintSchema?.labelField ? 'is-pin-col' : '',
+          tablePinColClass(col.key, paintSchema?.labelField),
           cellPick?.id === row.id && cellPick.key === col.key
             ? col.field && cellFieldWritable(col.field)
               ? 'is-cell-on'
@@ -4711,14 +5163,18 @@ export function CollectionBrowser({
         {col.key === paintSchema?.labelField ? (
           <RecordTitle
             row={row}
-            label={labelOf(row)}
+            label={String(row[paintSchema?.labelField ?? 'title'] ?? '')}
             Title={chrome?.Title}
             depth={depth}
             hasKids={hasKids}
             kidCount={kidCount}
             treeOn={treeOn}
-            collapsed={Boolean(collapsed[row.id])}
-            onToggleCollapsed={() => setCollapsed((prev) => ({ ...prev, [row.id]: !prev[row.id] }))}
+            collapsed={collapsed[row.id] !== false}
+            onToggleCollapsed={() => {
+              const expanding = collapsed[row.id] !== false
+              setCollapsed((prev) => ({ ...prev, [row.id]: prev[row.id] === false }))
+              if (expanding) void loadTreeKids(String(row.id))
+            }}
             tableIcon={currentTable?.view?.icon}
             Icon={chrome?.Icon}
             pick={recordPick(row)}
@@ -4758,6 +5214,7 @@ export function CollectionBrowser({
         {paintColPad(colWindow.padLeft, 'left')}
         {paintColumns.slice(colWindow.start, colWindow.end).map(paintLiveTd)}
         {paintColPad(colWindow.padRight, 'right')}
+        <td className="fsdb-col-fill" aria-hidden />
       </tr>
     )
   }
@@ -4843,8 +5300,8 @@ export function CollectionBrowser({
     if (hydratePath.current !== `${collectionPath}\0${dataPath}`) return
     const current = viewsRef.current.find((view) => view.id === activeViewId)
     if (!current) return
-    const liveTree = current.builtin || !countFilterRules(filterTree) ? undefined : filterTree
-    const liveFilters = current.builtin ? current.filters : liveTree ? filters : {}
+    const liveTree = !countFilterRules(filterTree) ? undefined : filterTree
+    const liveFilters = liveTree ? filters : {}
     const next = normalizeSavedView({
       ...current,
       mode,
@@ -4863,11 +5320,7 @@ export function CollectionBrowser({
       columnWidths,
     })
     if (viewStateKey(current) === viewStateKey(next)) return
-    if (current.builtin) {
-      persistViewDisplay(collectionPath, current.id, next)
-      persistViews(viewsRef.current)
-      return
-    }
+    persistViewDisplay(collectionPath, next.id, next)
     persistViews(viewsRef.current.map((view) => (view.id === activeViewId ? next : view)))
   }
   persistActiveViewRef.current = persistActiveViewNow
@@ -4963,7 +5416,6 @@ export function CollectionBrowser({
     groupBy,
     Number(wrapCells),
     Number(truncateCells),
-    Number(treeable),
     Number(showTree),
     columns.map((col) => col.key).join(','),
     allColumnKeys.join(','),
@@ -4972,6 +5424,9 @@ export function CollectionBrowser({
     viewBanner == null ? '' : JSON.stringify(viewBanner),
     activeView?.name ?? title,
     idleTableIconKind(currentTable?.view?.icon),
+    pickedIds.join('\n'),
+    Number(bulkMenuOpen),
+    `${bulkMenuBox.top},${bulkMenuBox.left}`,
   ].join('\0')
   const listChrome = useMemo(
     () => (
@@ -5060,6 +5515,108 @@ export function CollectionBrowser({
               ) : null}
             </div>
             )}
+            {pickedIds.length ? (
+                  <div className="fsdb-bulk-slot">
+                  <div className="fsdb-bulk" data-testid="fsdb-bulk-bar">
+                    <span
+                      className="fsdb-bulk-count"
+                      role="button"
+                      tabIndex={0}
+                      title="取消选择"
+                      onClick={() => setPickedIds([])}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          setPickedIds([])
+                        }
+                      }}
+                    >
+                      {pickedIds.length} 已选
+                    </span>
+                    {canBulkDelete && pickedIds.some((id) => !(collectionPath === '/plugins' && items.find((row) => row.id === id)?.builtin === true)) ? (
+                      <button
+                        type="button"
+                        className="tasks-icon-btn is-danger"
+                        data-testid="fsdb-bulk-delete"
+                        aria-label={inTrash ? '彻底删除选中' : '删除选中'}
+                        title={`${inTrash ? '彻底删除' : '删除'}选中的 ${pickedIds.length} 条`}
+                        onClick={() => setDlg({
+                          kind: 'delete-records',
+                          ids: pickedIds.filter((id) => !(collectionPath === '/plugins' && items.find((row) => row.id === id)?.builtin === true)),
+                        })}
+                      >
+                        <TrashIcon aria-hidden className="size-[14px]" />
+                      </button>
+                    ) : null}
+                    <div className="fsdb-bulk-more" ref={bulkRef}>
+                      <button
+                        type="button"
+                        className={`tasks-icon-btn${bulkMenuOpen ? ' is-active' : ''}`}
+                        data-testid="fsdb-bulk-more"
+                        aria-label="更多操作"
+                        aria-expanded={bulkMenuOpen}
+                        title="更多"
+                        onClick={() => setBulkMenuOpen((open) => !open)}
+                      >
+                        <EllipsisHorizontalIcon aria-hidden className="size-[14px]" />
+                      </button>
+                      {bulkMenuOpen
+                        ? createPortal(
+                        <HeadlessDismiss
+                          onDismiss={() => setBulkMenuOpen(false)}
+                          inside={(node) =>
+                            Boolean(
+                              node instanceof Node &&
+                                (bulkRef.current?.contains(node) || bulkMenuRef.current?.contains(node)),
+                            )
+                          }
+                        >
+                          <div
+                            ref={bulkMenuRef}
+                            className="fsdb-tool-flyout fsdb-bulk-menu is-fixed"
+                            role="menu"
+                            style={{ top: bulkMenuBox.top, left: bulkMenuBox.left, zIndex: overlayZ(200) }}
+                          >
+                            {canTag ? (
+                              <button
+                                type="button"
+                                className="tasks-sort-item fsdb-tool-row"
+                                data-testid="fsdb-bulk-tag"
+                                onClick={() => {
+                                  setBulkFacetIds([])
+                                  setDlg({ kind: 'bulk-tag', ids: pickedIds })
+                                  setBulkMenuOpen(false)
+                                }}
+                              >
+                                <span className="tasks-sort-item-label">
+                                  <TagIcon aria-hidden className="size-[14px]" />
+                                  标签
+                                </span>
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="tasks-sort-item fsdb-tool-row"
+                              data-testid="fsdb-bulk-export"
+                              onClick={() => {
+                                void exportPicked()
+                                setBulkMenuOpen(false)
+                              }}
+                            >
+                              <span className="tasks-sort-item-label">
+                                <ArrowDownTrayIcon aria-hidden className="size-[14px]" />
+                                导出
+                              </span>
+                            </button>
+                          </div>
+                        </HeadlessDismiss>,
+                        overlayPortalRoot() ?? document.body,
+                      )
+                        : null}
+                    </div>
+                  </div>
+                  </div>
+                ) : null}
             {lockedSource ? (
               <span className="fsdb-locked-filter" title="按当前数据类型筛选，不可更改">
                 {tables.find((item) => item.path === lockedSource)?.view?.title ??
@@ -5234,7 +5791,6 @@ export function CollectionBrowser({
                 </Suspense>
               ) : null}
             </div>
-            {activeView?.builtin ? null : (
             <div className="tasks-filter-btn-wrap" ref={filterRef}>
               <button
                 type="button"
@@ -5264,7 +5820,6 @@ export function CollectionBrowser({
                 </Suspense>
               ) : null}
             </div>
-            )}
             <div className="tasks-sort-wrap" ref={groupRef}>
               <button
                 type="button"
@@ -5551,6 +6106,7 @@ export function CollectionBrowser({
   const listHeaderLock = [
     Number(nested),
     Number(viewsOpen),
+    Number(sidebarGone),
     Number(canCreate),
     Number(canAskNewPlugin),
     Number(viewStarred),
@@ -5573,7 +6129,7 @@ export function CollectionBrowser({
       nested ? null : (
         <header className="chat-view-header" data-biu-ignore>
           <div className="chat-view-header-left">
-            {!viewsOpen ? (
+            {sidebarGone ? (
               <button
                 type="button"
                 className="chat-view-header-expand"
@@ -5692,6 +6248,7 @@ export function CollectionBrowser({
       onPointerDown: onTablePointerDown,
       onPointerMove: onTablePointerMove,
       onClick: onTableClick,
+      onKeyDown: onTableKeyDown,
       onMouseOver: (event) => {
         const hit = event.target as HTMLElement | null
         const tr = hit?.closest('tr')
@@ -5783,108 +6340,6 @@ export function CollectionBrowser({
             ) : null}
             {!customView && !rowView ? (
               <div className="tasks-table-wrap" ref={tableWrapRef}>
-                {pickedIds.length ? (
-                  <div className="fsdb-bulk-slot">
-                  <div className="fsdb-bulk" data-testid="fsdb-bulk-bar">
-                    <span
-                      className="fsdb-bulk-count"
-                      role="button"
-                      tabIndex={0}
-                      title="取消选择"
-                      onClick={() => setPickedIds([])}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault()
-                          setPickedIds([])
-                        }
-                      }}
-                    >
-                      {pickedIds.length} 已选
-                    </span>
-                    {canBulkDelete && pickedIds.some((id) => !(collectionPath === '/plugins' && items.find((row) => row.id === id)?.builtin === true)) ? (
-                      <button
-                        type="button"
-                        className="tasks-icon-btn is-danger"
-                        data-testid="fsdb-bulk-delete"
-                        aria-label={inTrash ? '彻底删除选中' : '删除选中'}
-                        title={`${inTrash ? '彻底删除' : '删除'}选中的 ${pickedIds.length} 条`}
-                        onClick={() => setDlg({
-                          kind: 'delete-records',
-                          ids: pickedIds.filter((id) => !(collectionPath === '/plugins' && items.find((row) => row.id === id)?.builtin === true)),
-                        })}
-                      >
-                        <TrashGlyph aria-hidden className="size-[14px]" />
-                      </button>
-                    ) : null}
-                    <div className="fsdb-bulk-more" ref={bulkRef}>
-                      <button
-                        type="button"
-                        className={`tasks-icon-btn${bulkMenuOpen ? ' is-active' : ''}`}
-                        data-testid="fsdb-bulk-more"
-                        aria-label="更多操作"
-                        aria-expanded={bulkMenuOpen}
-                        title="更多"
-                        onClick={() => setBulkMenuOpen((open) => !open)}
-                      >
-                        <EllipsisHorizontalIcon aria-hidden className="size-[14px]" />
-                      </button>
-                      {bulkMenuOpen
-                        ? createPortal(
-                        <HeadlessDismiss
-                          onDismiss={() => setBulkMenuOpen(false)}
-                          inside={(node) =>
-                            Boolean(
-                              node instanceof Node &&
-                                (bulkRef.current?.contains(node) || bulkMenuRef.current?.contains(node)),
-                            )
-                          }
-                        >
-                          <div
-                            ref={bulkMenuRef}
-                            className="fsdb-tool-flyout fsdb-bulk-menu is-fixed"
-                            role="menu"
-                            style={{ top: bulkMenuBox.top, left: bulkMenuBox.left, zIndex: overlayZ(200) }}
-                          >
-                            {canTag ? (
-                              <button
-                                type="button"
-                                className="tasks-sort-item fsdb-tool-row"
-                                data-testid="fsdb-bulk-tag"
-                                onClick={() => {
-                                  setBulkFacetIds([])
-                                  setDlg({ kind: 'bulk-tag', ids: pickedIds })
-                                  setBulkMenuOpen(false)
-                                }}
-                              >
-                                <span className="tasks-sort-item-label">
-                                  <TagIcon aria-hidden className="size-[14px]" />
-                                  标签
-                                </span>
-                              </button>
-                            ) : null}
-                            <button
-                              type="button"
-                              className="tasks-sort-item fsdb-tool-row"
-                              data-testid="fsdb-bulk-export"
-                              onClick={() => {
-                                void exportPicked()
-                                setBulkMenuOpen(false)
-                              }}
-                            >
-                              <span className="tasks-sort-item-label">
-                                <ArrowDownTrayIcon aria-hidden className="size-[14px]" />
-                                导出
-                              </span>
-                            </button>
-                          </div>
-                        </HeadlessDismiss>,
-                        overlayPortalRoot() ?? document.body,
-                      )
-                        : null}
-                    </div>
-                  </div>
-                  </div>
-                ) : null}
                 <WindowedTable
                   columns={held?.columns ?? columns}
                   columnWidths={held?.columnWidths ?? columnWidths}
@@ -6168,6 +6623,7 @@ export function CollectionBrowser({
         />
       ) : null}
       {renderCellPop()}
+      <DockHoverTip />
     </div>
   )
 }

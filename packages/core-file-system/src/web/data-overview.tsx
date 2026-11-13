@@ -34,13 +34,13 @@ function SourceActions({
         <button
           key={action.id}
           type="button"
-          className={`fsdb-action-tag${action.tone === 'danger' ? ' is-danger' : ''}`}
+          className={`tasks-icon-btn${action.tone === 'danger' ? ' is-danger' : ''}`}
           aria-label={action.label}
+          data-dock-tip={action.label}
           disabled={busy}
           onClick={() => run(action)}
         >
           {actionIcon(action.id)}
-          <span>{action.label}</span>
         </button>
       ))}
     </>

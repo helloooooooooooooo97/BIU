@@ -22,6 +22,7 @@
   --biu-color-bg-hover: #ececec;
   --biu-color-bg-hover-weak: #f4f4f4;
   --biu-color-bg-hover-strong: #e0e0e0;
+  --biu-color-bg-hover-subtle: var(--biu-color-bg-hover);
   --biu-color-text: #2c2c2b;
   --biu-color-text-muted: color-mix(in srgb, var(--biu-color-text) 72%, var(--biu-color-bg-subtle));
   --biu-color-text-subtle: color-mix(in srgb, var(--biu-color-text) 45%, transparent);
@@ -185,9 +186,10 @@ html.dark {
   --biu-color-bg-subtle: #202020;
   --biu-color-bg-muted: #262626;
   --biu-color-bg-elevated: #202020;
-  --biu-color-bg-hover: #2c2c2c;
-  --biu-color-bg-hover-weak: #242424;
-  --biu-color-bg-hover-strong: #2c2c2c;
+  --biu-color-bg-hover: color-mix(in srgb, #fff 9%, var(--biu-color-bg));
+  --biu-color-bg-hover-weak: color-mix(in srgb, #fff 4%, var(--biu-color-bg));
+  --biu-color-bg-hover-strong: color-mix(in srgb, #fff 12%, var(--biu-color-bg));
+  --biu-color-bg-hover-subtle: color-mix(in srgb, #fff 9%, var(--biu-color-bg-subtle));
   --biu-color-text: #d4d4d4;
   --biu-color-bg-code: #1e1e1e;
   --biu-color-icon: #bab9b5;
@@ -4274,6 +4276,7 @@ html.dark .composer-model-flyout {
   min-width: 0;
   width: 100%;
   max-width: none;
+  --biu-color-bg-hover: var(--biu-color-bg-hover-subtle);
 }
 
 .sidebar-resize {
@@ -4292,6 +4295,12 @@ html.dark .composer-model-flyout {
   inset-block: 0;
   right: -3px;
   width: 7px;
+}
+
+.app-side-bar.is-narrow .sidebar-resize {
+  display: none;
+  pointer-events: none;
+  cursor: default;
 }
 
 .sidebar-label,
@@ -4321,18 +4330,9 @@ html.dark .composer-model-flyout {
   display: none;
 }
 
-.app-side-bar.is-narrow .app-side-bar-head-brand {
-  justify-content: center;
-  padding-left: 0;
-  padding-right: 0;
-}
-
-.app-side-bar.is-narrow .app-side-bar-head-brand .chat-view-header-expand {
-  position: static;
-}
-
-.app-side-bar.is-narrow .shell-workspace-switch-wrap {
-  display: none;
+.app-side-bar.is-narrow .app-side-actions {
+  gap: 4px;
+  margin: 4px 0 8px;
 }
 
 .app-side-bar.is-narrow .app-side-actions-item {
@@ -4342,6 +4342,7 @@ html.dark .composer-model-flyout {
 
 .app-side-bar.is-narrow .chat-session-row {
   justify-content: center;
+  margin-bottom: 4px;
   padding-inline: 0;
 }
 
@@ -4349,6 +4350,95 @@ html.dark .composer-model-flyout {
 .app-side-bar.is-narrow .chat-session-row>.chat-session-row-main {
   justify-content: center;
   padding-left: 0;
+}
+
+.app-side-bar.is-narrow .fsdb-views-full {
+  display: none;
+}
+
+.fsdb-icon-rail {
+  display: none;
+}
+
+.app-side-bar.is-narrow .fsdb-icon-rail {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  align-items: stretch;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 6px 8px 12px;
+  gap: 4px;
+}
+
+.fsdb-icon-rail-btn {
+  display: grid;
+  width: 100%;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--biu-color-icon);
+  cursor: pointer;
+}
+
+.fsdb-icon-rail-btn:hover,
+.fsdb-icon-rail-btn.is-active {
+  background: var(--biu-color-bg-hover);
+  color: var(--biu-color-icon-active);
+}
+
+.shell-rail-head {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 6px 8px;
+}
+
+.shell-rail-expand {
+  display: grid;
+  width: 100%;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--biu-color-icon);
+  cursor: pointer;
+}
+
+.shell-rail-expand:hover,
+.shell-rail-expand:focus-visible {
+  background: var(--biu-color-bg-hover);
+  color: var(--biu-color-icon-active);
+}
+
+.shell-rail-brand {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+
+.shell-rail-expand-chevron {
+  display: none;
+}
+
+.shell-rail-expand:hover .shell-rail-expand-mark,
+.shell-rail-expand:focus-visible .shell-rail-expand-mark {
+  display: none;
+}
+
+.shell-rail-expand:hover .shell-rail-expand-chevron,
+.shell-rail-expand:focus-visible .shell-rail-expand-chevron {
+  display: grid;
 }
 
 .app-side-actions {
@@ -4371,6 +4461,7 @@ html.dark .composer-model-flyout {
   width: 16px;
   height: 16px;
 }
+
 
 .app-stage .app-side-actions {
   margin-top: 0;
@@ -5334,6 +5425,58 @@ html.dark .composer-model-flyout {
   left: 100%;
   bottom: calc(100% + 6px);
   transform: none;
+}
+
+[data-dock-tip-at='e']::after {
+  left: calc(100% + 8px);
+  bottom: auto;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: var(--biu-z-float);
+}
+
+.app-side-bar:not(.is-narrow) [data-dock-tip-at='e']::after,
+.app-side-bar.is-narrow [data-dock-tip]::after {
+  display: none;
+  content: none;
+}
+
+.shell-rail-tip {
+  position: fixed;
+  z-index: 240;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  padding: 4px 8px;
+  border: var(--biu-stroke-width) solid var(--biu-color-border);
+  border-radius: 6px;
+  background: var(--biu-color-bg-elevated);
+  color: var(--biu-color-text);
+  font-size: 11px;
+  font-weight: var(--biu-font-weight-semibold);
+  line-height: 1.3;
+  pointer-events: none;
+  box-shadow: var(--biu-shadow-md);
+}
+
+.app-side-bar.is-narrow {
+  overflow: visible;
+  contain: none;
+  transform: none;
+  z-index: 20;
+}
+
+.app-side-bar.is-narrow [data-chat-scroll],
+.app-side-bar.is-narrow .fsdb-icon-rail {
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.app-side-bar.is-narrow [data-chat-scroll]::-webkit-scrollbar,
+.app-side-bar.is-narrow .fsdb-icon-rail::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 

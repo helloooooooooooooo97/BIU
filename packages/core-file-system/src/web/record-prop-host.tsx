@@ -47,6 +47,9 @@ export { useLiveDbRecord, readDbRecord } from './live-db-record.ts'
 type HostTab = 'preview' | 'code' | 'split'
 
 const PROP_FIELD_SKIP = new Set(['emoji', 'views', 'propViews', 'layouts', 'file', 'tablePath', 'sourceId'])
+const SOURCE_FIELD_SKIP = new Set(['emoji', 'file', 'tablePath', 'sourceId'])
+const SOURCE_VIEW_KEYS = ['views', 'propViews', 'layouts'] as const
+const SOURCE_VIEW_KEY_SET = new Set<string>(SOURCE_VIEW_KEYS)
 
 function hold(event: { preventDefault: () => void }) {
   event.preventDefault()
@@ -77,12 +80,28 @@ export function reviveJsonValue(value: unknown): unknown {
 
 export function recordPropSourceText(record: DbRecord, schema?: CollectionSchema) {
   const bag: Record<string, unknown> = {}
-  for (const field of propFields(schema)) {
-    if (!(field.key in record)) continue
-    const raw = reviveJsonValue(record[field.key])
+  for (const field of sourceFields(schema)) {
+    if (!(field.key in record) && !SOURCE_VIEW_KEY_SET.has(field.key)) continue
+    const raw = field.key in record ? reviveJsonValue(record[field.key]) : []
     bag[field.key] = field.type === 'tag' ? pruneSchemaValue(raw, loadTags()) : raw
   }
+  for (const key of SOURCE_VIEW_KEYS) {
+    if (key in bag) continue
+    bag[key] = key in record ? reviveJsonValue(record[key]) : []
+  }
   return JSON.stringify(bag, null, 2)
+}
+
+function sourceFields(schema?: CollectionSchema) {
+  return Object.entries(schema?.fields ?? {})
+    .filter(([key, field]) => !SOURCE_FIELD_SKIP.has(key) && key !== schema?.contentField && field.type !== 'file')
+    .map(([key, field]) => ({
+      key,
+      type: field.type,
+      label: field.label ?? key,
+      writable: fieldIsWritable(field),
+      spec: field,
+    }))
 }
 
 function propFields(schema?: CollectionSchema) {

@@ -66,7 +66,7 @@ const SessionRow = memo(function SessionRow({
         busy={busy}
         animate={false}
         dancing={dancing}
-        title={dancing ? '跳舞中 🎉' : `${identity.shape} · ${identity.color}`}
+        title={item.title}
       />
       <span className="sidebar-label min-w-0 flex-1 truncate font-medium">
         {item.title}
@@ -79,6 +79,8 @@ const SessionRow = memo(function SessionRow({
       data-biu-kind="session"
       data-biu-id={item.id}
       data-biu-label={item.title}
+      data-dock-tip={item.title}
+      data-dock-tip-at="e"
     >
       {onOpen ? (
         <button
@@ -87,6 +89,8 @@ const SessionRow = memo(function SessionRow({
           onDragStart={(event) => event.preventDefault()}
           onClick={() => onOpen(item)}
           className={sessionRowMainClass}
+          data-dock-tip={item.title}
+          data-dock-tip-at="e"
         >
           {inner}
         </button>
@@ -96,6 +100,8 @@ const SessionRow = memo(function SessionRow({
           draggable={false}
           onDragStart={(event) => event.preventDefault()}
           className={sessionRowMainClass}
+          data-dock-tip={item.title}
+          data-dock-tip-at="e"
         >
           {inner}
         </Link>
