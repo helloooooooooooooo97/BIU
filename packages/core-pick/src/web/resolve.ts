@@ -541,11 +541,8 @@ export function resolvePickAtPoint(x: number, y: number, route: string) {
   const stacked = elementsFromPointDeep(x, y)
   const inner = sandboxInnerAtPoint(x, y)
   if (inner && !isPickIgnored(inner) && !inHiddenPane(inner)) {
-    const surface = pickSurfaceAtPoint(x, y)
-    const hit = resolvePickFromNode(inner, route, surface)
+    const hit = resolvePickFromNode(inner, route, null)
     if (hit) return hit
-    const raw = resolvePickFromNode(inner, route, null)
-    if (raw?.ref.kind === 'sandbox') return raw
   }
   const surface = pickSurfaceAtPoint(x, y)
   const pool = surface

@@ -268,7 +268,7 @@ function PickChipData({ pick }: { pick: PickRef }) {
       data-testid="pick-chip-data"
       role="dialog"
       aria-label={card.title}
-      style={{ zIndex: overlayZ(300) }}
+      style={{ zIndex: overlayZ(500) }}
     >
       <p className="pick-chip-data-head" style={{ ['--biu-tag' as string]: pickKindTone(pick.kind) }}>
         <PickKindGlyph kind={pick.kind} hint={pick.path || pick.id} />

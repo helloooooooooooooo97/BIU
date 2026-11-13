@@ -1,3 +1,5 @@
+import { bindSandboxPickRelay } from '@biu/core-pick/web'
+
 const SKIP = new Set(['SCRIPT', 'STYLE', 'LINK', 'META', 'NOSCRIPT', 'BR', 'HR'])
 const HIT = new Set([
   'DIV',
@@ -78,7 +80,11 @@ export function bindSandboxPickPane(
   })
   run()
   observer.observe(pane, { childList: true, subtree: true })
-  return () => observer.disconnect()
+  const stopRelay = bindSandboxPickRelay(pane)
+  return () => {
+    observer.disconnect()
+    stopRelay()
+  }
 }
 
 export function stampPageHostPickSurfaces(

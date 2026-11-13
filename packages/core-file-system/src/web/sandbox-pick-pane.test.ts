@@ -8,7 +8,7 @@ test('property host preview stamps inner sandbox surfaces for pick', () => {
   root.innerHTML = `<div data-testid="record-prop-host-root"><h1>属性沙盒</h1><button type="button">标题</button></div>`
   document.body.append(root)
   const stop = bindSandboxPickPane(root, recordPropHostPickKey('/pages', 'home', 'card1'), {
-    path: '/pages',
+    path: '/pages/home',
     name: 'prop-view-card1.jsx',
     title: '卡片',
   })
@@ -19,7 +19,7 @@ test('property host preview stamps inner sandbox surfaces for pick', () => {
   assert.ok(heading)
   assert.equal(heading.getAttribute('data-sandbox-pick'), '')
   assert.equal(heading.getAttribute('data-biu-kind'), 'sandbox')
-  assert.equal(heading.getAttribute('data-biu-path'), '/pages')
+  assert.equal(heading.getAttribute('data-biu-path'), '/pages/home')
   const chip = root.querySelector('button')
   assert.ok(chip)
   assert.equal(chip.getAttribute('data-sandbox-pick'), '')

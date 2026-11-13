@@ -412,7 +412,7 @@ function HtmlDeckOverlay({
         width: '100%',
         height: '100%',
         maxWidth: 'none',
-        zIndex: 2147483646,
+        zIndex: 'var(--biu-z-modal)',
         display: 'flex',
         flexDirection: 'column',
         background: '#0b0b12',

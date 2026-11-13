@@ -138,6 +138,8 @@
   --biu-z-dropdown: 90;
   --biu-z-modal: 200;
   --biu-z-toast: 300;
+  --biu-z-corner: 400;
+  --biu-z-pick: 500;
 
   --biu-size-control-sm: 22px;
   --biu-size-control-md: 26px;
@@ -2746,7 +2748,7 @@ select.settings-account-input {
   position: fixed;
   right: 16px;
   bottom: 16px;
-  z-index: var(--biu-z-modal);
+  z-index: var(--biu-z-corner);
   display: flex;
   overflow: visible;
   align-items: center;
@@ -3676,7 +3678,7 @@ select.settings-account-input {
   position: fixed;
   top: auto;
   bottom: 12px;
-  z-index: var(--biu-z-float);
+  z-index: var(--biu-z-corner);
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -3691,6 +3693,11 @@ select.settings-account-input {
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+  pointer-events: none;
+}
+
+.chat-overlay-panel .chat-pane,
+.chat-overlay-panel .chat-composer-dock {
   pointer-events: auto;
 }
 
@@ -4249,9 +4256,12 @@ html.dark .composer-model-flyout {
 }
 
 /* Radix 定位层默认 z-index:auto，会被侧栏 contain/transform 合成层盖住 */
-[data-radix-popper-content-wrapper]:has(.biu-headless-pop),
-[data-radix-popper-content-wrapper]:has(.pick-chip-data) {
+[data-radix-popper-content-wrapper]:has(.biu-headless-pop) {
   z-index: var(--biu-z-toast) !important;
+}
+
+[data-radix-popper-content-wrapper]:has(.pick-chip-data) {
+  z-index: var(--biu-z-pick) !important;
 }
 
 /* 侧栏独立合成层：右侧 Markdown 重绘时少拖累左侧 :hover */

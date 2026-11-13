@@ -742,7 +742,7 @@ function SandboxCard({ data, update, writable, selected: nodeSelected }: BlockPr
       style={{
         position: expanded ? 'fixed' : 'relative',
         inset: expanded ? 0 : undefined,
-        zIndex: expanded ? 2147483646 : undefined,
+        zIndex: expanded ? 'var(--biu-z-modal)' : undefined,
         display: 'flex',
         flexDirection: 'column',
         width: expanded ? '100%' : cssBoxSize(width) ?? '100%',

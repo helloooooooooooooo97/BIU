@@ -24,6 +24,7 @@ import { RenderBoundary } from '@biu/biu-ui'
 import type { FsPropertiesProps } from '@biu/type-file-system/ui'
 import { FieldValuePop } from './field-value-pop.tsx'
 import { loadTags } from './tag-catalog.ts'
+import { recordResourcePath } from './cell-media.tsx'
 import { bindSandboxPickPane, recordPropHostPickKey } from './sandbox-pick-pane.ts'
 import { compileHostSource, loadHostComponent, SandboxPreview } from './tag-host-compile.ts'
 import {
@@ -205,6 +206,7 @@ export function RecordPropHostView({
   writable?: boolean
 }) {
   const recordId = String(record.id ?? '').trim()
+  const recordPath = recordResourcePath(collectionPath, recordId)
   const fileTick = useRecordViewFileTick()
   const fallback = defaultPropSandboxSource(String(record.title ?? ''))
   const [source, setSource] = useState(() => peekRecordViewFile(collectionPath, recordId, view.file) || fallback)
@@ -337,17 +339,18 @@ export function RecordPropHostView({
   useLayoutEffect(() => {
     if (!showPreview) return
     return bindSandboxPickPane(previewRef.current, recordPropHostPickKey(collectionPath, recordId, view.id), {
-      path: collectionPath,
+      path: recordPath,
       name: view.file,
       title: view.title,
     })
-  }, [showPreview, collectionPath, recordId, view.id, view.file, view.title, compiled])
+  }, [showPreview, collectionPath, recordId, view.id, view.file, view.title, compiled, expanded])
 
   const card = (
     <div
       ref={hostRef}
       className={`page-host-view page-prop-host${expanded ? ' is-expanded' : ''}`}
       data-testid="record-prop-host"
+      data-page-host-expanded={expanded ? '1' : undefined}
     >
       <div className="page-block-expand-nav" data-testid={expanded ? 'record-prop-host-expand-nav' : 'record-prop-host-side-bar'} data-biu-ignore>
         <div className="page-block-expand-nav-type" title="属性沙盒" aria-label="属性沙盒">
@@ -380,7 +383,7 @@ export function RecordPropHostView({
             style={splitPaneStyle(showCode ? previewWidth : 0)}
             data-testid="record-prop-host-preview"
             data-sandbox=""
-            data-biu-path={collectionPath}
+            data-biu-path={recordPath}
             data-biu-name={view.file}
             data-biu-title={view.title}
           >
@@ -431,7 +434,7 @@ export function RecordPropHostView({
             data-testid="record-prop-host-code"
             data-biu-kind="sandbox"
             data-biu-id={`sandbox:${recordPropHostPickKey(collectionPath, recordId, view.id)}:code`}
-            data-biu-path={collectionPath}
+            data-biu-path={recordPath}
             data-biu-name={view.file}
             data-biu-title={view.title}
             data-biu-label={view.title}
@@ -441,7 +444,7 @@ export function RecordPropHostView({
               language="javascript"
               writable={writable}
               pickHost={{
-                path: collectionPath,
+                path: recordPath,
                 name: view.file,
                 title: view.title,
               }}

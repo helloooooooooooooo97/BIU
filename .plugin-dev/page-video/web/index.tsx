@@ -255,7 +255,7 @@ const STYLE_CSS = `
   --studio-panel:var(--pv-panel);
   --script-w:420px;
   --foot-h:208px;
-  position:fixed;inset:0;z-index:2147483646;
+  position:fixed;inset:0;z-index:var(--biu-z-modal);
   display:grid;grid-template-rows:48px minmax(0,1fr) 6px var(--foot-h);
   background:var(--pv-panel);color:var(--pv-ink);
   font-family:var(--font-sans);

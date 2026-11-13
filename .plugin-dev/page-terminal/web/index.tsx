@@ -1244,7 +1244,7 @@ function PageTerminal({
               inset: 0,
               width: '100%',
               height: '100%',
-              zIndex: 2147483647,
+              zIndex: 'var(--biu-z-modal)',
               borderRadius: 0,
               border: 'none',
             }

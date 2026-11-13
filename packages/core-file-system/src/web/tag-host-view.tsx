@@ -336,6 +336,7 @@ export function TagHostView({
       ref={hostRef}
       className={`page-host-view page-tag-host-view${expanded ? ' is-expanded' : ''}`}
       data-testid="tag-host-view"
+      data-page-host-expanded={expanded ? '1' : undefined}
     >
       <div className="page-block-expand-nav" data-testid={expanded ? 'tag-host-expand-nav' : 'tag-host-side-bar'} data-biu-ignore>
         <div className="page-block-expand-nav-type" title="标签沙盒" aria-label="标签沙盒">

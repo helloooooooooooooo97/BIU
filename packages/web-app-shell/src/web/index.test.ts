@@ -218,6 +218,8 @@ test('settings appearance toggles day and night themes', () => {
   assert.match(css, /:root \{[^}]*--biu-stroke-width: 1px/)
   assert.match(css, /:root \{[^}]*--biu-z-float: 80/)
   assert.match(css, /:root \{[^}]*--biu-z-modal: 200/)
+  assert.match(css, /:root \{[^}]*--biu-z-corner: 400/)
+  assert.match(css, /:root \{[^}]*--biu-z-pick: 500/)
   assert.match(css, /:root \{[^}]*--biu-size-control-md: 26px/)
   assert.match(css, /:root \{[^}]*--biu-radius-sm: 4px/)
   assert.match(css, /@theme inline \{/)

@@ -73,6 +73,8 @@ test('sandbox throw is caught as a child so the host keeps its own hooks', () =>
 test('property sandbox code pane uses the shared host CodeMirror', () => {
   const src = readFileSync(resolve(import.meta.dirname, './record-prop-host.tsx'), 'utf8')
   const editor = readFileSync(resolve(import.meta.dirname, './host-source-editor.tsx'), 'utf8')
+  assert.match(src, /recordResourcePath\(collectionPath, recordId\)/)
+  assert.match(src, /path: recordPath/)
   assert.match(src, /HostSourceEditor/)
   assert.match(src, /files: createSandboxFilesApi/)
   assert.match(src, /docs: createSandboxDocsApi/)

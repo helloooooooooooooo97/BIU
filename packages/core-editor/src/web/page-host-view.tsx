@@ -434,7 +434,7 @@ export function PageHostView({
       ...(view?.file ? { name: view.file } : {}),
       ...(view?.name ? { title: view.name } : {}),
     })
-  }, [showPreview, pageId, viewId, view?.file, view?.name, compiled])
+  }, [showPreview, pageId, viewId, view?.file, view?.name, compiled, expanded])
 
   const card = (
     <div

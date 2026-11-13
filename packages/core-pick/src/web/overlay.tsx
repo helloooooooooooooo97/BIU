@@ -1,7 +1,9 @@
 import { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import type { SlotProps } from '@biu/type-slots'
 import { getPick, usePickState } from './service.ts'
-import { boxFromPoints, pickSurfaceAtPoint, resolvePickFromEvent, resolvePicksInRect, visiblePickBox } from './resolve.ts'
+import { boxFromPoints, pickSurfaceAtPoint, resolvePickFromEvent, resolvePickFromNode, resolvePicksInRect, visiblePickBox } from './resolve.ts'
+import { SANDBOX_PICK_EVENT } from './sandbox-relay.ts'
 
 const DRAG_PX = 6
 
@@ -112,11 +114,25 @@ export function PickOverlay(_props: SlotProps) {
       }
     }
 
+    const onSandbox = (event: Event) => {
+      const detail = (event as CustomEvent<{ el?: HTMLElement; type?: string }>).detail
+      const el = detail?.el
+      if (!(el instanceof HTMLElement)) return
+      const hit = resolvePickFromNode(el, route(), null)
+      if (!hit) return
+      if (detail?.type === 'pointerup') {
+        if (pick.picking) pick.add(hit.ref)
+        return
+      }
+      pick.setHover(hoverBox(hit.el))
+    }
+
     window.addEventListener('pointerdown', onDown, true)
     window.addEventListener('pointermove', onMove, true)
     window.addEventListener('pointerup', onUp, true)
     window.addEventListener('click', onClick, true)
     window.addEventListener('keydown', onKey, true)
+    window.addEventListener(SANDBOX_PICK_EVENT, onSandbox)
     return () => {
       document.documentElement.classList.remove('pick-mode')
       window.removeEventListener('pointerdown', onDown, true)
@@ -124,6 +140,7 @@ export function PickOverlay(_props: SlotProps) {
       window.removeEventListener('pointerup', onUp, true)
       window.removeEventListener('click', onClick, true)
       window.removeEventListener('keydown', onKey, true)
+      window.removeEventListener(SANDBOX_PICK_EVENT, onSandbox)
     }
   }, [picking, pick])
 
@@ -143,7 +160,7 @@ export function PickOverlay(_props: SlotProps) {
   }, [pick])
 
   if (!picking) return null
-  return (
+  const layer = (
     <>
       {marquee ? (
         <div
@@ -173,4 +190,6 @@ export function PickOverlay(_props: SlotProps) {
       ))}
     </>
   )
+  if (typeof document === 'undefined') return layer
+  return createPortal(layer, document.body)
 }

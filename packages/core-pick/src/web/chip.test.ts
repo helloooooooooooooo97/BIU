@@ -81,7 +81,7 @@ test('pick chips can show the facet close mark', () => {
   assert.match(src, /container=\{typeof document === 'undefined' \? null : document\.body\}/)
   assert.match(src, /event\.stopPropagation\(\)/)
   assert.match(src, /z-index:300/)
-  assert.match(src, /overlayZ\(300\)/)
+  assert.match(src, /overlayZ\(500\)/)
   assert.match(src, /pick-chip-data/)
   assert.doesNotMatch(src, /pick-chip-data-quote/)
   assert.match(src, /pick-chip-data-fields/)

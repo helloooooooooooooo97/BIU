@@ -127,9 +127,9 @@ function ShellDockPins({
 }: {
   useSessionView: ReturnType<typeof bindSessionView>
 }) {
-  const overlayOpen = useSyncExternalStore(subscribeChatOverlay, getChatOverlay, () => false)
-  if (overlayOpen) return null
-  return <DockSessionMascot useSessionView={useSessionView} />
+  const mascot = <DockSessionMascot useSessionView={useSessionView} />
+  if (typeof document === 'undefined') return mascot
+  return createPortal(mascot, document.body)
 }
 
 /** 主区固定聊天；轨迹改在右侧检查器。悬浮形态可挂到任意页面最顶层。 */

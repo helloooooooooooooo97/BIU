@@ -59,6 +59,7 @@ test('sandbox mount flushes react before pick stamp', async () => {
   assert.match(src, /%231a54c4/)
   assert.doesNotMatch(src, /cursor:crosshair/)
   assert.match(src, /data-sandbox-pick-mode/)
+  assert.match(src, /bindSandboxPickRelay/)
   assert.match(src, /sandboxGlobals/)
   assert.match(src, /'biu'/)
   assert.match(src, /'ui'/)

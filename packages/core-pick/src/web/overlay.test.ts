@@ -107,6 +107,11 @@ test('Escape blurs the focused control so the UA focus ring does not linger', ()
   assert.match(overlay, /active.blur\(\)/)
 })
 
+test('sandbox reports picks from inside the host', () => {
+  assert.match(overlay, /SANDBOX_PICK_EVENT/)
+  assert.match(overlay, /resolvePickFromNode/)
+})
+
 test('click and hover use the same point resolver', () => {
   assert.match(overlay, /resolvePickFromEvent/)
   assert.doesNotMatch(overlay, /resolvePickAtPoint/)
@@ -132,6 +137,13 @@ test('Command/Ctrl+2 toggles pick mode', () => {
 
 test('marquee inside inspector uses the inspector as the query root', () => {
   assert.match(overlay, /pickSurfaceAtPoint/)
+})
+
+test('pick highlight portals to body', () => {
+  assert.match(overlay, /createPortal/)
+  assert.match(overlay, /createPortal\(layer, document\.body\)/)
+  const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
+  assert.match(css, /box-shadow: none;\n  pointer-events: none;\n\}\n\n\.chat-overlay-panel \.chat-pane,\n\.chat-overlay-panel \.chat-composer-dock \{\n  pointer-events: auto;/)
 })
 
 test('pick mode uses a blue white-outline pointer and no hit pulse', () => {
