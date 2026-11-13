@@ -14,7 +14,6 @@ import {
   UNGROUPED_PROJECT_KEY,
   UNGROUPED_TAG_KEY,
   buildSidebarSections,
-  type SidebarGroupBy,
   type SidebarSectionKind,
 } from '@biu/web-session-view'
 import { useSidebarCollapseStore } from '@biu/web-session-view'
@@ -22,8 +21,6 @@ import { SidebarMascot } from '@biu/public-mascot'
 import { resolveSessionMascot } from '@biu/public-mascot'
 import { FolderGlyph } from '@biu/web-session-view/folder-glyph'
 import { chromeIcon, chromeIconClass } from './chrome-icon.ts'
-import { TagChip } from '@biu/biu-ui/tag-chip'
-import { tagCatalogRevision, tagEmoji, tagLabel, pullTags, subscribeTagChrome } from '@biu/core-file-system/tag-catalog'
 import { isChatPagePath, openOverlayComposer } from './chat-overlay.ts'
 import { ShellSidebarFrame } from './shell-sidebar-frame.tsx'
 import {
@@ -31,53 +28,12 @@ import {
   ChevronRightIcon,
   PlusIcon,
   StarIcon,
-  FolderIcon,
   TagIcon,
   FolderMinusIcon,
   BookmarkSlashIcon,
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { chatScrollRoot, sessionWindowFromHost, sessionWindowHidden, type SessionWindowSlice } from './session-window.ts'
-
-/** 项目/标签分组视图的持久化 key。旧值 tag 仍按标签读。 */
-const GROUP_BY_KEY = 'cordis.sidebar.groupBy'
-
-function readGroupBy(): SidebarGroupBy {
-  try {
-    const stored = localStorage.getItem(GROUP_BY_KEY)
-    return stored === 'tag' || stored === 'tag' ? 'tag' : 'project'
-  } catch {
-    return 'project'
-  }
-}
-
-/** 每行标签徽标：最多显示 2 个，其余以 +N（剩余数量）展示。 */
-function SessionTagBadges({ tags }: { tags?: string[] }) {
-  const list = (tags ?? []).map((tag) => tag.trim()).filter(Boolean)
-  if (!list.length) return null
-  const shown = list.slice(0, 2)
-  const extra = list.length - shown.length
-  return (
-    <span className="flex min-w-0 shrink-0 items-center gap-0.5 pl-0.5">
-      {shown.map((tag) => {
-        const emoji = tagEmoji(tag)
-        return (
-          <TagChip
-            key={tag}
-            id={tag}
-            label={tagLabel(tag)}
-            icon={emoji ? <span className="fsdb-record-emoji">{emoji}</span> : <TagIcon aria-hidden />}
-          />
-        )
-      })}
-      {extra > 0 ? (
-        <span className="sidebar-tag shrink-0 rounded-sm px-0.5 opacity-80">
-          +{extra}
-        </span>
-      ) : null}
-    </span>
-  )
-}
 
 const sessionRowMainClass =
   'flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5'
@@ -115,7 +71,6 @@ const SessionRow = memo(function SessionRow({
       <span className="sidebar-label min-w-0 flex-1 truncate font-medium">
         {item.title}
       </span>
-      <SessionTagBadges tags={item.tag?.tags} />
     </>
   )
   return (
@@ -318,19 +273,7 @@ export const ChatSidebar = memo(function ChatSidebar({
   const collapsedProjects = useSidebarCollapseStore((state) => state.collapsed)
   const toggleProjectGroup = useSidebarCollapseStore((state) => state.toggle)
   const expandProjectGroup = useSidebarCollapseStore((state) => state.expand)
-  // 数据分组视图：项目树 / 标签树（持久化记忆用户选择）
-  const [groupBy, setGroupBy] = useState<SidebarGroupBy>(readGroupBy)
-  const changeGroupBy = useCallback((next: SidebarGroupBy) => {
-    setGroupBy(next)
-    // 完整保存/恢复，不截断
-    try {
-      localStorage.setItem(GROUP_BY_KEY, next)
-    } catch {
-      /* ignore */
-    }
-  }, [])
-  // 板块并存：收藏 + (项目|标签)，由上而下
-  const sections = useMemo(() => buildSidebarSections(sessions, groupBy), [sessions, groupBy])
+  const sections = useMemo(() => buildSidebarSections(sessions, 'project'), [sessions])
   // 板块级收缩（点击标题可展开/收缩，不显示收缩按钮，层级靠 kind 图标表达）
   const [collapsedSections, setCollapsedSections] = useState<Partial<Record<SidebarSectionKind, boolean>>>({})
   const toggleSection = useCallback((kind: SidebarSectionKind) => {
@@ -408,12 +351,10 @@ export const ChatSidebar = memo(function ChatSidebar({
   const body = (
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3" data-chat-scroll="">
         <div className="mt-2 space-y-1.5">
-          {sessions.length === 0 && groupBy !== 'project' ? null : (
-            sections.map((section) => {
+          {sections.map((section) => {
               const sectionCollapsed = Boolean(collapsedSections[section.kind])
               return (
                 <section key={section.kind} className="min-w-0">
-                  {/* 板块标题：收藏 / (项目|标签)，可点击整行展开/收缩；层级靠 kind 图标表达；悬浮时右侧露出分组切换 tab */}
                   <div className="sidebar-section-head min-w-0">
                       <button
                         type="button"
@@ -430,32 +371,6 @@ export const ChatSidebar = memo(function ChatSidebar({
                           : section.groups?.reduce((sum, g) => sum + g.sessions.length, 0) ?? 0
                       }
                     />
-                      {section.kind !== 'pinned' ? (
-                        <div
-                          className="sidebar-view-switch"
-                          role="group"
-                          aria-label="分组视图切换"
-                        >
-                          <button
-                            type="button"
-                            title="按项目分组"
-                            aria-pressed={groupBy === 'project'}
-                            className={`sidebar-view-switch-btn${groupBy === 'project' ? ' is-on' : ''}`}
-                            onClick={() => changeGroupBy('project')}
-                          >
-                            <FolderIcon {...chromeIcon} />
-                          </button>
-                          <button
-                            type="button"
-                            title="按标签分组"
-                            aria-pressed={groupBy === 'tag'}
-                            className={`sidebar-view-switch-btn${groupBy === 'tag' ? ' is-on' : ''}`}
-                            onClick={() => changeGroupBy('tag')}
-                          >
-                            <TagIcon {...chromeIcon} />
-                          </button>
-                        </div>
-                      ) : null}
                   </div>
 
                   <SidebarFold open={!sectionCollapsed}>
@@ -556,8 +471,7 @@ export const ChatSidebar = memo(function ChatSidebar({
                   </SidebarFold>
                 </section>
               )
-            })
-          )}
+            })}
         </div>
       </div>
   )

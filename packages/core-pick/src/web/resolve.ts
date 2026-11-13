@@ -11,6 +11,7 @@ const PATH = 'data-biu-path'
 const TITLE = 'data-biu-title'
 const TEXT = 'data-biu-text'
 const FIELD = 'data-biu-field'
+const TYPE = 'data-biu-type'
 const NAME = 'data-biu-name'
 
 type ClientBox = { left: number; top: number; width: number; height: number }
@@ -99,6 +100,7 @@ export function resolvePickFromNode(
   let title: string | undefined
   let text: string | undefined
   let field: string | undefined
+  let type: string | undefined
   let name: string | undefined
   let highlight: HTMLElement | null = null
   let node: Element | null = start
@@ -114,6 +116,7 @@ export function resolvePickFromNode(
       const nextTitle = read(node, TITLE)
       const nextText = read(node, TEXT)
       const nextField = read(node, FIELD)
+      const nextType = read(node, TYPE)
       const nextName = read(node, NAME)
       if (!highlight && (nextKind || nextId || nextAction || nextLabel || nextPlugin || nextPath || nextField || nextName)) highlight = node
       if (!kind) kind = nextKind
@@ -125,6 +128,7 @@ export function resolvePickFromNode(
       if (!title) title = nextTitle
       if (!text) text = nextText
       if (!field) field = nextField
+      if (!type) type = nextType
       if (!name) name = nextName
     }
     if (kind && id && highlight) break
@@ -148,6 +152,7 @@ export function resolvePickFromNode(
         ...(path ? { path } : {}),
         ...(name ? { name } : {}),
         ...(field ? { field } : {}),
+        ...(type ? { type } : {}),
         ...(text ? { text } : {}),
         label: label || id,
         title: title || label || id,
@@ -176,6 +181,7 @@ function stripPickMarks(root: HTMLElement) {
     node.removeAttribute('data-biu-title')
     node.removeAttribute('data-biu-text')
     node.removeAttribute('data-biu-field')
+    node.removeAttribute('data-biu-type')
   }
 }
 

@@ -455,7 +455,7 @@ function Shell(props: SlotProps) {
   const shellRef = useRef<HTMLDivElement>(null)
   const columnResizingRef = useRef(false)
   const columnDragAxisRef = useRef<'sidebar' | 'inspector' | null>(null)
-  const endColumnResizeRef = useRef<(patch?: { sidebar?: number; inspector?: number }) => void>(() => {})
+  const endColumnResizeRef = useRef<(patch?: { sidebar?: number; inspector?: number }) => void>(() => { })
   const inspectorOpenRef = useRef(inspectorOpen)
   inspectorOpenRef.current = inspectorOpen
   const applyInspector = useCallback((next: boolean) => {
@@ -883,9 +883,9 @@ function Shell(props: SlotProps) {
     <div
       ref={shellRef}
       className={`app-shell${leftPane
-          ? ` app-shell-agent${leftHidden ? ' is-sidebar-collapsed' : ''}${sidebarNarrow && !leftHidden ? ' is-sidebar-narrow' : ''}${inspectorVisible ? ' is-inspector-open' : ''
-          }${columnResizing ? ' is-resizing' : ''}${windowResizing ? ' is-window-resizing' : ''}`
-          : ` app-shell-module${inspectorVisible ? ' is-inspector-open' : ''}${columnResizing ? ' is-resizing' : ''}${windowResizing ? ' is-window-resizing' : ''}`
+        ? ` app-shell-agent${leftHidden ? ' is-sidebar-collapsed' : ''}${sidebarNarrow && !leftHidden ? ' is-sidebar-narrow' : ''}${inspectorVisible ? ' is-inspector-open' : ''
+        }${columnResizing ? ' is-resizing' : ''}${windowResizing ? ' is-window-resizing' : ''}`
+        : ` app-shell-module${inspectorVisible ? ' is-inspector-open' : ''}${columnResizing ? ' is-resizing' : ''}${windowResizing ? ' is-window-resizing' : ''}`
         }${leftHidden ? ' is-left-hidden' : ''}`}
       data-testid="app-shell"
       style={

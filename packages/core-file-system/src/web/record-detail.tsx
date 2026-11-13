@@ -285,6 +285,7 @@ export function RecordDetail({
       title,
       path: recordPath,
       text,
+      type: field?.type,
     })
   const mainRef = useRef<HTMLDivElement>(null)
   useEffect(() => {

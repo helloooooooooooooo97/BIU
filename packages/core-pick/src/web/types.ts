@@ -27,6 +27,8 @@ export type PickRef = {
   element?: string
   /** 表格单元格 / 详情属性：db_update 的字段名。 */
   field?: string
+  /** 单元格对应的属性类型，芯片图标跟表头一致。 */
+  type?: string
 }
 
 export function pickKey(ref: PickRef) {
@@ -56,6 +58,7 @@ export function dedupePicks(refs: PickRef[]): PickRef[] {
       ...(ref.action || prev.action ? { action: ref.action || prev.action } : {}),
       ...(ref.plugin || prev.plugin ? { plugin: ref.plugin || prev.plugin } : {}),
       ...(ref.field || prev.field ? { field: ref.field || prev.field } : {}),
+      ...(ref.type || prev.type ? { type: ref.type || prev.type } : {}),
       ...locusFields(ref.start_line != null ? ref : prev),
       ...sourceFields(ref.path || ref.name ? ref : prev),
       ...(ref.element || prev.element ? { element: ref.element || prev.element } : {}),
@@ -89,6 +92,7 @@ function pickPayload(ref: PickRef) {
   else if (ref.insert != null) data.insert = ref.insert
   if (ref.element) data.element = ref.element
   if (ref.field) data.field = ref.field
+  if (ref.type) data.type = ref.type
   return data
 }
 
@@ -132,6 +136,7 @@ function parsePickAttrs(raw: string): PickRef | null {
     ...(attrs.title?.trim() ? { title: attrs.title.trim() } : {}),
     ...(attrs.plugin?.trim() ? { plugin: attrs.plugin.trim() } : {}),
     ...(attrs.field?.trim() ? { field: attrs.field.trim() } : {}),
+    ...(attrs.type?.trim() ? { type: attrs.type.trim() } : {}),
     ...sourceFields({ path: attrs.path?.trim(), name: attrs.name?.trim() }),
     ...locusFields({
       start_line: Number.isInteger(start) && start >= 1 ? start : undefined,
@@ -363,6 +368,7 @@ export function pickChipAttrs(ref: PickRef) {
     insert: ref.insert ?? null,
     element: ref.element ?? null,
     field: ref.field ?? null,
+    type: ref.type ?? null,
   }
 }
 
@@ -386,6 +392,7 @@ export function pickRefFromAttrs(attrs: Record<string, unknown>): PickRef | null
     ...sourceFields({ path, title: String(attrs.title ?? '').trim(), name: String(attrs.name ?? '').trim() }),
     ...(String(attrs.plugin ?? '').trim() ? { plugin: String(attrs.plugin).trim() } : {}),
     ...(String(attrs.field ?? '').trim() ? { field: String(attrs.field).trim() } : {}),
+    ...(String(attrs.type ?? '').trim() ? { type: String(attrs.type).trim() } : {}),
     ...locusFields({
       start_line: Number.isInteger(start) && start >= 1 ? start : undefined,
       end_line: Number.isInteger(end) && end >= 1 ? end : undefined,

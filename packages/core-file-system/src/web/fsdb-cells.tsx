@@ -19,6 +19,7 @@ import {
   PaperAirplaneIcon,
   PencilSquareIcon,
   PlayIcon,
+  SparklesIcon,
   StopIcon,
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
@@ -48,7 +49,8 @@ export function actionIcon(id: string, opts?: { fallback?: boolean; className?: 
   if (id === 'stop' || id === 'close' || id === 'pause' || id === 'disable') return <StopIcon aria-hidden className={cls} />
   if (id === 'pack') return <ArchiveBoxArrowDownIcon aria-hidden className={cls} />
   if (id === 'uninstall' || id === 'delete' || id === 'remove') return <TrashGlyph aria-hidden className={cls} />
-  if (id === 'edit' || id === 'rename') return <PencilSquareIcon aria-hidden className={cls} />
+  if (id === 'edit') return <PencilSquareIcon aria-hidden className={cls} />
+  if (id === 'rename') return <SparklesIcon aria-hidden className={cls} />
   if (id === 'refresh') return <ArrowPathIcon aria-hidden className={cls} />
   if (id === 'sync-from-directory') return <ArrowDownTrayIcon aria-hidden className={cls} />
   if (id === 'sync-to-directory') return <ArrowUpTrayIcon aria-hidden className={cls} />

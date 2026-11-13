@@ -26,6 +26,7 @@ test('field pick attrs carry path field and current value', () => {
       title: '写需求',
       path: '/tasks/t1',
       text: '进行中',
+      type: 'select',
     }),
     {
       'data-biu-kind': 'task',
@@ -35,6 +36,7 @@ test('field pick attrs carry path field and current value', () => {
       'data-biu-title': '写需求',
       'data-biu-text': '进行中',
       'data-biu-field': 'status',
+      'data-biu-type': 'select',
     },
   )
 })

@@ -300,6 +300,7 @@ test('table title opens record from the title-side button', () => {
   assert.doesNotMatch(browser, /recordPick\(row\)\} onClick=\{\(\) => setDetailId\(row\.id\)\}/)
   assert.match(browser, /cellPickOf\(row, col.key, col.field\)/)
   assert.match(detail, /propPick\(key, field/)
+  assert.match(detail, /type: field\?\.type/)
 })
 
 test('leaving a plugin record does not keep a permission error on the plugin list', () => {
@@ -1206,6 +1207,7 @@ test('collection reload does not follow callback identity', () => {
   assert.match(browser, /if \(query\) \{\s*\n\s*searchInputRef\.current\?\.focus\(\)/)
   assert.match(browser, /pickMode\s*\?\s*pickDomAttrs/)
   assert.match(browser, /pickMode\s*\?\s*fieldPickAttrs/)
+  assert.match(browser, /type: field\.type/)
   assert.match(browser, /: EMPTY_PICK/)
   assert.doesNotMatch(browser, /pickMode \? \{ text: cellValueText/)
   assert.doesNotMatch(browser, /searchExpanded && !query \? false : true/)

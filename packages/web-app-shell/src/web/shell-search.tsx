@@ -10,6 +10,7 @@ import {
   PaperAirplaneIcon,
   PencilSquareIcon,
   PlayIcon,
+  SparklesIcon,
   PuzzlePieceIcon,
   TagIcon,
   Squares2X2Icon,
@@ -292,7 +293,8 @@ function actionGlyph(id: string) {
   if (id === 'stop' || id === 'close' || id === 'pause' || id === 'disable') return <StopIcon aria-hidden className={cls} />
   if (id === 'pack') return <ArchiveBoxArrowDownIcon aria-hidden className={cls} />
   if (id === 'uninstall' || id === 'delete' || id === 'remove') return <TrashGlyph aria-hidden className={cls} />
-  if (id === 'edit' || id === 'rename') return <PencilSquareIcon aria-hidden className={cls} />
+  if (id === 'edit') return <PencilSquareIcon aria-hidden className={cls} />
+  if (id === 'rename') return <SparklesIcon aria-hidden className={cls} />
   if (id === 'refresh') return <ArrowPathIcon aria-hidden className={cls} />
   if (id === 'deliver') return <PaperAirplaneIcon aria-hidden className={cls} />
   return null

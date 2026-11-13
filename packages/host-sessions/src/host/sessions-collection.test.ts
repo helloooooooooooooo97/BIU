@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { sessionsCollection } from './sessions-collection.ts'
+import { formatUserMessagesForTitle, lastUserMessages, sanitizeGeneratedTitle, sessionsCollection } from './sessions-collection.ts'
 
 test('sessionsCollection maps summaries and writes title/pinned/facet', async () => {
   const calls: unknown[] = []
@@ -52,6 +52,9 @@ test('sessionsCollection maps summaries and writes title/pinned/facet', async ()
   assert.deepEqual((rows[0]?.tag as { tags?: string[] })?.tags, ['a'])
   assert.equal(rows[0]?.createdAt, 100)
   assert.equal(rows[0]?.events, undefined)
+  assert.equal(rows[0]?.project, undefined)
+  assert.equal(spec.schema.fields.project, undefined)
+  assert.equal(spec.schema.fields.projectPath?.type, 'string')
   const got = await spec.get?.('s1')
   assert.equal(Array.isArray(got?.events), true)
   await spec.update?.('s1', {
@@ -69,9 +72,11 @@ test('sessionsCollection maps summaries and writes title/pinned/facet', async ()
     ['delete', 's1'],
   ])
   const actionIds = (spec.actions ?? []).map((item) => item.id)
-  assert.deepEqual(actionIds, ['chat', 'inspect', 'query', 'progress', 'compact', 'clear', 'retrieve', 'status'])
+  assert.deepEqual(actionIds, ['chat', 'rename', 'inspect', 'query', 'progress', 'compact', 'clear', 'retrieve', 'status'])
   assert.equal(spec.actions?.find((item) => item.id === 'chat')?.for, 'user')
   assert.deepEqual(spec.actions?.find((item) => item.id === 'chat')?.placement, ['row', 'detail'])
+  assert.equal(spec.actions?.find((item) => item.id === 'rename')?.for, 'both')
+  assert.deepEqual(spec.actions?.find((item) => item.id === 'rename')?.placement, ['row', 'detail'])
   assert.equal(spec.actions?.find((item) => item.id === 'progress')?.for, 'agent')
   assert.deepEqual(spec.actions?.find((item) => item.id === 'progress')?.placement, [])
   assert.equal(spec.actions?.find((item) => item.id === 'compact')?.for, 'agent')
@@ -122,5 +127,66 @@ test('query reads one session timeline', async () => {
   const typed = await query?.run('s1', { id: 's1' }, { type: 'user/message' })
   assert.equal(typed.hits, 1)
   assert.match(String(typed.results[0]?.summary), /查一下页面/)
+})
+
+test('rename action titles from the last 100 user messages with timestamps', async () => {
+  const calls: unknown[] = []
+  const events = []
+  const epoch = Date.parse('2026-01-01T00:00:00.000Z')
+  for (let i = 1; i <= 102; i += 1) {
+    events.push({
+      type: 'user/message' as const,
+      text: `用户${i}`,
+      seq: i * 2 - 1,
+      ts: epoch + i * 1000,
+      kind: 'user' as const,
+    })
+    events.push({ type: 'assistant/message' as const, text: `助手${i} 不该进标题`, seq: i * 2, ts: epoch + i * 1000 })
+  }
+  const spec = sessionsCollection({
+    listSummaries: async () => [],
+    rename: async (id, title) => {
+      calls.push(['rename', id, title])
+    },
+    patchConfig: async () => undefined,
+    delete: async () => true,
+    require: async (id) => ({ id, events }),
+    suggestTitle: async (id, messages) => {
+      calls.push(['suggest', id, messages])
+      return '「页面排查」'
+    },
+  })
+  const messages = lastUserMessages(events, 100)
+  assert.equal(messages.length, 100)
+  assert.equal(messages[0]?.text, '用户3')
+  assert.equal(messages[99]?.text, '用户102')
+  assert.equal(messages[0]?.ts, epoch + 3 * 1000)
+  const payload = formatUserMessagesForTitle(messages)
+  assert.match(payload, /^1\. \[2026-01-01T00:00:03.000Z\] 用户3/)
+  assert.match(payload, /100\. \[2026-01-01T00:01:42.000Z\] 用户102/)
+  assert.doesNotMatch(payload, /助手/)
+  assert.equal(sanitizeGeneratedTitle('「页面排查」\nextra'), '页面排查')
+  const rename = spec.actions?.find((item) => item.id === 'rename')
+  const got = await rename?.run('s1', { id: 's1' }, {})
+  assert.equal(got.ok, true)
+  assert.equal(got.title, '页面排查')
+  assert.deepEqual(calls[0], ['suggest', 's1', messages])
+  assert.deepEqual(calls[1], ['rename', 's1', '页面排查'])
+})
+
+test('rename action fails without user messages', async () => {
+  const spec = sessionsCollection({
+    listSummaries: async () => [],
+    rename: async () => undefined,
+    patchConfig: async () => undefined,
+    delete: async () => true,
+    require: async (id) => ({
+      id,
+      events: [{ type: 'assistant/message', text: '只有助手', seq: 1, ts: 1 }],
+    }),
+    suggestTitle: async () => '不该调用',
+  })
+  const rename = spec.actions?.find((item) => item.id === 'rename')
+  await assert.rejects(() => rename?.run('s1', { id: 's1' }, {}), /没有用户消息/)
 })
 

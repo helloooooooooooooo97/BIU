@@ -337,6 +337,7 @@ export class SqliteSessionStore implements SessionStore {
               : row.title || row.id.slice(0, 8),
         updatedAt: row.updated_at,
         ...(lastMessageAt > 0 ? { lastMessageAt } : {}),
+        ...(project ? { project } : {}),
         ...(mascot ? { mascot } : {}),
         ...(config || stamp ? { config: { ...(config ?? {}), createdAt: stamp } } : {}),
       }

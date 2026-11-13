@@ -4222,6 +4222,7 @@ export function CollectionBrowser({
           title: labelOf(row),
           path: recordPathOf(row),
           text: cellValueText(row, key, field),
+          type: field.type,
         })
       : EMPTY_PICK
 
