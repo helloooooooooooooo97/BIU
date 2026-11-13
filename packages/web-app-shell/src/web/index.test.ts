@@ -301,6 +301,8 @@ test('settings lists search and pick shortcuts', () => {
   assert.doesNotMatch(chrome, /就地编辑选区/)
   assert.match(chrome, /<kbd>⌘<\/kbd><kbd>L<\/kbd>/)
   assert.match(chrome, /选区送到会话/)
+  assert.match(chrome, /最左格进入侧栏/)
+  assert.match(chrome, /侧栏切换入口/)
   assert.match(chrome, />表格</)
   assert.match(chrome, /移动格子/)
   assert.match(chrome, /展开 \/ 收起子记录/)

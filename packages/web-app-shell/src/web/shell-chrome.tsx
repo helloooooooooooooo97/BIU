@@ -1687,6 +1687,14 @@ export function ShellSettingsShortcuts() {
           <span>选区送到会话</span>
           <span className="settings-kbd"><kbd>⌘</kbd><kbd>L</kbd></span>
         </li>
+        <li>
+          <span>最左格进入侧栏</span>
+          <span className="settings-kbd"><kbd>←</kbd></span>
+        </li>
+        <li>
+          <span>侧栏切换入口</span>
+          <span className="settings-kbd"><kbd>↑</kbd><kbd>↓</kbd></span>
+        </li>
       </ul>
       <h4 className="settings-pane-subtitle">表格</h4>
       <p className="settings-muted settings-pane-lead">先点选一个单元格，再按键。</p>

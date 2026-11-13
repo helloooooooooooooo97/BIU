@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { moveTableCell, tableActionArrowLeave, tableActionButtonStep, tableClearKey, tableClearedValue, tableKeyDir, tableNavKeys, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
+import { FOCUS_SHELL_SIDEBAR, moveTableCell, tableActionArrowLeave, tableActionButtonStep, tableClearKey, tableClearedValue, tableKeyDir, tableLeaveToSidebar, tableNavKeys, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
 
 test('table nav keys include actions and skip pad columns', () => {
   assert.deepEqual(
@@ -61,6 +61,18 @@ test('letters and digits type into text and number cells', () => {
   assert.equal(tableTypeToEditChar('a', 'number'), null)
   assert.equal(tableTypeToEditChar('Enter', 'string'), null)
   assert.equal(tableTypeToEditChar('a', 'select'), null)
+})
+
+test('left from the first column leaves the table for the sidebar', () => {
+  const keys = ['title', 'actions', 'status']
+  const atTitle = { id: 'a', key: 'title' }
+  assert.equal(tableLeaveToSidebar('left', { key: 'ArrowLeft', keys, current: atTitle }), true)
+  assert.equal(tableLeaveToSidebar('left', { key: 'ArrowLeft', keys, current: { id: 'a', key: 'missing' } }), false)
+  assert.equal(tableLeaveToSidebar('left', { key: 'ArrowLeft', shift: true, keys, current: atTitle }), false)
+  assert.equal(tableLeaveToSidebar('left', { key: 'Tab', keys, current: atTitle }), false)
+  assert.equal(tableLeaveToSidebar('left', { key: 'ArrowLeft', keys, current: { id: 'a', key: 'status' } }), false)
+  assert.equal(tableLeaveToSidebar('right', { key: 'ArrowRight', keys, current: atTitle }), false)
+  assert.equal(FOCUS_SHELL_SIDEBAR, 'biu:focus-shell-sidebar')
 })
 
 test('table keys map like Linear', () => {

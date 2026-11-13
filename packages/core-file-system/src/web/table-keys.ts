@@ -82,6 +82,19 @@ export function tableKeyFromEditingTarget(target: EventTarget | null): boolean {
   return Boolean(el.closest('.fsdb-cell-pop, [role="menu"], [role="listbox"], .fsdb-headless-pop, dialog'))
 }
 
+/** 最左格再按 ←（不是 Tab / Shift）离开表格，交给左侧边栏。 */
+export function tableLeaveToSidebar(
+  dir: TableKeyDir | null,
+  opts: { key: string; shift?: boolean; keys: string[]; current: TableCellCursor | null },
+) {
+  if (dir !== 'left' || opts.shift || opts.key !== 'ArrowLeft') return false
+  if (!opts.current || !opts.keys.length) return false
+  return opts.keys.indexOf(opts.current.key) === 0
+}
+
+export const FOCUS_SHELL_SIDEBAR = 'biu:focus-shell-sidebar'
+export const FOCUS_SHELL_TABLE = 'biu:focus-shell-table'
+
 export function moveTableCell(
   rowIds: string[],
   keys: string[],

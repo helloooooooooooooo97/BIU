@@ -149,7 +149,7 @@ import { DataSidebarShell } from './data-sidebar-shell.tsx'
 import { builtinAllViewId, catalogLockFilters, collectionNoun, displayNameForView, isBuiltinAllViewId, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stampRecordId, stampRowOpenTarget, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, moveInspectorRecordsToTrash, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
-import { moveTableCell, tableActionArrowLeave, tableActionButtons, tableActionButtonStep, tableClearKey, tableClearedValue, tableKeyDir, tableKeyFromEditingTarget, tableNavKeys, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
+import { FOCUS_SHELL_SIDEBAR, FOCUS_SHELL_TABLE, moveTableCell, tableActionArrowLeave, tableActionButtons, tableActionButtonStep, tableClearKey, tableClearedValue, tableKeyDir, tableKeyFromEditingTarget, tableLeaveToSidebar, tableNavKeys, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
 import { isViewCatalogField, selectedViewCatalogOption } from './view-catalog.ts'
 import { jumpTag, loadTags, pullTags, subscribeTags } from './tag-catalog.ts'
 import {
@@ -1747,7 +1747,12 @@ export function CollectionBrowser({
   useEffect(() => {
     const onTableNavKey = (event: KeyboardEvent) => tableNavLiveRef.current(event)
     window.addEventListener('keydown', onTableNavKey)
-    return () => window.removeEventListener('keydown', onTableNavKey)
+    const onFocusTable = () => tableRef.current?.focus({ preventScroll: true })
+    window.addEventListener(FOCUS_SHELL_TABLE, onFocusTable)
+    return () => {
+      window.removeEventListener('keydown', onTableNavKey)
+      window.removeEventListener(FOCUS_SHELL_TABLE, onFocusTable)
+    }
   }, [])
   const [tagCatalog, setFacetCatalog] = useState(() => loadTags())
   const tablePathsKey = tables
@@ -5001,7 +5006,7 @@ export function CollectionBrowser({
     const hit = event.target instanceof Element ? event.target : null
     if (hit && table && !table.contains(hit) && hit !== table) {
       if (tableKeyFromEditingTarget(hit)) return
-      if (hit.closest('input, textarea, select, [contenteditable="true"], [role="textbox"], .composer, .page-editor')) return
+      if (hit.closest('input, textarea, select, [contenteditable="true"], [role="textbox"], .composer, .page-editor, .app-side-bar')) return
     }
     const actionBtn = hit instanceof Element ? hit.closest('td[data-col-key="actions"] button, td[data-col-key="actions"] [role="button"]') : null
     if (event.key === 'Escape') {
@@ -5056,7 +5061,13 @@ export function CollectionBrowser({
         table?.focus({ preventScroll: true })
         return
       }
-      const next = moveTableCell(tableNavRowIds(), tableNavKeys(columns), cursor, dir)
+      const keys = tableNavKeys(columns)
+      if (tableLeaveToSidebar(dir, { key: event.key, shift: event.shiftKey, keys, current: cursor })) {
+        const leave = new CustomEvent(FOCUS_SHELL_SIDEBAR, { cancelable: true })
+        window.dispatchEvent(leave)
+        if (leave.defaultPrevented) return
+      }
+      const next = moveTableCell(tableNavRowIds(), keys, cursor, dir)
       if (next) landTableCell(next)
       else table?.focus({ preventScroll: true })
       return

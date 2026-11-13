@@ -10,6 +10,7 @@ import {
   shouldKeepSidebarFlyout,
 } from './sidebar-flyout.ts'
 import { shellColumnStartWidth } from './chat-overlay.ts'
+import { FOCUS_SHELL_SIDEBAR, FOCUS_SHELL_TABLE, focusShellSidebar, sidebarStops, stepSidebarStop } from './sidebar-focus.ts'
 
 export type ShellSidebarFrameProps = {
   visible: boolean
@@ -134,6 +135,23 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
     }
   }, [visible])
 
+  useEffect(() => {
+    const onFocusSidebar = (event: Event) => {
+      const host = hostRef.current
+      const run = () => {
+        if (focusShellSidebar(host)) event.preventDefault()
+      }
+      if (!visible) {
+        onExpand?.()
+        requestAnimationFrame(run)
+        return
+      }
+      run()
+    }
+    window.addEventListener(FOCUS_SHELL_SIDEBAR, onFocusSidebar)
+    return () => window.removeEventListener(FOCUS_SHELL_SIDEBAR, onFocusSidebar)
+  }, [onExpand, visible])
+
   return (
     <div
       ref={hostRef}
@@ -146,6 +164,24 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
       className={`app-side-bar min-h-0 flex-col border-r border-(--biu-color-border) bg-(--biu-color-bg-subtle)${narrow ? ' is-narrow overflow-visible' : ' overflow-hidden'}${showTags ? ' is-wide' : ''}${visible ? ' flex' : ' is-closed flex'}`}
       aria-hidden={!visible}
       data-testid={testId}
+      onKeyDown={(event) => {
+        if (event.metaKey || event.ctrlKey || event.altKey) return
+        const target = event.target instanceof Element ? event.target : null
+        if (!target || target.closest('input, textarea, select, [contenteditable="true"]')) return
+        const stops = sidebarStops(event.currentTarget)
+        const current = stops.find((stop) => stop === target || stop.contains(target)) ?? null
+        if (event.key === 'ArrowRight') {
+          event.preventDefault()
+          window.dispatchEvent(new CustomEvent(FOCUS_SHELL_TABLE))
+          return
+        }
+        if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'ArrowLeft') return
+        const dir = event.key === 'ArrowDown' ? 1 : -1
+        const next = stepSidebarStop(stops, current, dir)
+        if (!next || next === current) return
+        event.preventDefault()
+        next.focus()
+      }}
     >
       {onWidthChange && !narrow ? (
         <div

@@ -4393,7 +4393,8 @@ html.dark .composer-model-flyout {
 }
 
 .fsdb-icon-rail-btn:hover,
-.fsdb-icon-rail-btn.is-active {
+.fsdb-icon-rail-btn.is-active,
+.fsdb-icon-rail-btn:focus-visible {
   background: var(--biu-color-bg-hover);
   color: var(--biu-color-icon-active);
 }
@@ -4508,12 +4509,14 @@ html.dark .composer-model-flyout {
 }
 
 .app-side-actions-item:hover,
-.app-side-actions-item.is-active {
+.app-side-actions-item.is-active,
+.app-side-actions-item:focus-visible {
   color: var(--biu-color-text);
 }
 
 .app-side-actions-item:hover::before,
-.app-side-actions-item.is-active::before {
+.app-side-actions-item.is-active::before,
+.app-side-actions-item:focus-visible::before {
   background: var(--biu-color-bg-hover);
 }
 
@@ -4598,12 +4601,14 @@ html.dark .composer-model-flyout {
   background: var(--biu-color-bg-hover);
 }
 
-.chat-session-row.is-active {
+.chat-session-row.is-active,
+.chat-session-row:focus-within {
   color: var(--biu-color-text);
   transition: color 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.chat-session-row.is-active::before {
+.chat-session-row.is-active::before,
+.chat-session-row:focus-within::before {
   background: var(--biu-color-bg-hover);
 }
 
