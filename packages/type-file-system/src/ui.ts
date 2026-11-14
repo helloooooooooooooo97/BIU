@@ -50,6 +50,8 @@ export type CollectionChrome = {
   DetailTools?: ComponentType<{ record: DbRecord; onDone?: () => void }>
   /** 标题/属性下方、正文上方的页面操作栏。 */
   DetailBar?: ComponentType<FsDetailBarProps>
+  /** 详情属性区。不传则画默认属性表。 */
+  Properties?: ComponentType<FsPropertiesProps>
   /** 记录独立图标属性。有 emoji 用 emoji；不传则详情/侧栏/面包屑用集合 glyph。 */
   Icon?: ComponentType<{ record: DbRecord; size?: number }>
   Title?: ComponentType<{ record: DbRecord; label: string }>
@@ -71,6 +73,14 @@ export type FsOpenRow =
   | { kind: 'table'; path: string; viewId?: string }
   | { kind: 'record'; recordId: string; collection?: string }
 
+export type FsPropertiesProps = {
+  record: DbRecord
+  schema?: CollectionSchema
+  collectionPath?: string
+  writable?: boolean
+  children: ReactNode
+}
+
 export type FsDetailBarProps = {
   record: DbRecord
   schema?: CollectionSchema
@@ -82,6 +92,10 @@ export type FsDetailBarProps = {
   columnMenu?: ReactNode
   onRetry?: () => void
   configMenu?: ReactNode
+  onPrev?: () => void
+  onNext?: () => void
+  canPrev?: boolean
+  canNext?: boolean
 }
 
 export type FsContentStatus = 'loading' | 'ready' | 'failed'
@@ -98,6 +112,7 @@ export type FsContentProps = {
   /** 缺省视为 ready，避免旧调用把未加载当成空正文。 */
   status?: FsContentStatus
   onRetry?: () => void
+  schema?: CollectionSchema
 }
 
 /** 集合自定义呈现：谁 registerView(path)，谁才能在该 path 用这个 mode。整页自己画。 */
@@ -124,6 +139,29 @@ export type CollectionViewType = {
   View: ComponentType<FsViewProps>
 }
 
+/** 记录详情「内容模式」：正文插件向文件系统登记工具栏项和正文，hidden 除外。 */
+export type FsRecordContentView = {
+  id: string
+  label: string
+  Icon?: ComponentType<{ className?: string }>
+  /** 该模式的正文。不传则回退集合 chrome.Content。文件系统按当前 contentViewId 选用；hidden 不渲染正文。 */
+  Body?: ComponentType<FsContentProps>
+  plugin?: string
+}
+
+export type FsDetailSearchProps = {
+  record: DbRecord
+  collectionPath?: string
+}
+
+/** 正文插件向详情栏登记的搜索/排序/筛选。没登记则不画对应按钮。 */
+export type FsDetailTools = {
+  Search?: ComponentType<FsDetailSearchProps>
+  sorts?: Array<{ id: string; label: string }>
+  filters?: Array<{ id: string; label: string }>
+  filterAllLabel?: string
+}
+
 /** 所有表共用的默认 chrome。具体表再 decorate 时后写覆盖。 */
 export const DEFAULT_CHROME_PATH = '/*'
 
@@ -141,9 +179,15 @@ export interface DatabaseUi {
   registerView(path: string, view: CollectionViewType): { dispose: () => void }
   /** 登记一行的样子。path 为 * 时所有表都能用。外壳仍由 File System 画。 */
   registerRowView(path: string, view: CollectionRowViewType): { dispose: () => void }
+  /** 正文插件给该 path 登记记录内容模式（含 Body）。hidden 不用登记。有本 path 登记时不继承 /*。 */
+  registerContentView(path: string, view: FsRecordContentView): { dispose: () => void }
+  /** 正文插件给详情栏登记排序/筛选。有本 path 的内容模式登记时不继承 /*。 */
+  registerDetailTools(path: string, tools: FsDetailTools): { dispose: () => void }
   chrome(path: string): CollectionChrome
   views(path: string): CollectionViewType[]
   rowViews(path: string): CollectionRowViewType[]
+  contentViews(path: string): FsRecordContentView[]
+  detailTools(path: string): FsDetailTools
   subscribe(listener: () => void): () => void
 }
 

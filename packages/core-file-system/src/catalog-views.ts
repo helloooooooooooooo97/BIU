@@ -177,7 +177,9 @@ export function stubBuiltinScopeView(id: string, listed: SavedView[] = []): Save
 
 export function collectionNoun(table: TableRef) {
   const path = normalizeCollectionPath(table.path)
-  return (table.view?.title ?? table.label ?? path.replace(/^\//, '')) || '记录'
+  const named = String(table.view?.title ?? table.label ?? '').trim()
+  if (path === '/data') return named && named !== 'data' ? named : '数据'
+  return named || path.replace(/^\//, '') || '记录'
 }
 
 /** 分享/面包屑用：内置视图不在 saved-views 里，不能把路径 id 当名称。 */
@@ -210,7 +212,7 @@ export function builtinAllView(table: TableRef): SavedView {
     ...builtinViewLayout(),
     filters: {},
     columns: [],
-    groupBy: path === '/page-blocks' || path === '/tags' ? '' : 'shareScope',
+    groupBy: path === '/editor-blocks' || path === '/tags' ? '' : 'shareScope',
     wrap: false,
     truncate: true,
     query: '',
@@ -245,26 +247,51 @@ export function builtinCatalogViews(tables: CollectionInfo[]): SavedView[] {
     })
 }
 
-function userViews(user: SavedView[]): SavedView[] {
-  return user.filter((view) => !view.builtin && !isReadOnlyViewId(view.id))
+/** 工作区种子视图和后来保存的视图同一套：同 id 以已存为准，删掉的 id 不再插回去。 */
+export function overlayListedViews(
+  seeds: SavedView[],
+  user: SavedView[],
+  skipIds: Iterable<string> = [],
+): SavedView[] {
+  const skip = new Set([...skipIds].map((id) => String(id ?? '').trim()).filter(Boolean))
+  const byId = new Map<string, SavedView>()
+  for (const view of user) {
+    const id = String(view?.id ?? '').trim()
+    if (!id || skip.has(id)) continue
+    byId.set(id, normalizeSavedView(view))
+  }
+  const out: SavedView[] = []
+  const used = new Set<string>()
+  for (const seed of seeds) {
+    const id = String(seed.id ?? '').trim()
+    if (!id || skip.has(id)) continue
+    out.push(byId.get(id) ?? normalizeSavedView(seed))
+    used.add(id)
+  }
+  for (const view of user) {
+    const id = String(view?.id ?? '').trim()
+    if (!id || skip.has(id) || used.has(id)) continue
+    out.push(byId.get(id) ?? normalizeSavedView(view))
+    used.add(id)
+  }
+  return out
 }
 
-export function mergeCatalogViews(tables: CollectionInfo[], user: SavedView[]): SavedView[] {
+export function mergeCatalogViews(tables: CollectionInfo[], user: SavedView[], skipIds: Iterable<string> = []): SavedView[] {
   const viewsTable = tables.find((table) => normalizeCollectionPath(table.path) === '/views') ?? {
     path: '/views',
     label: '视图',
     view: { title: '视图' },
   }
-  return [builtinAllView(viewsTable), ...builtinCatalogViews(tables), ...userViews(user)]
+  return overlayListedViews([builtinAllView(viewsTable), ...builtinCatalogViews(tables)], user, skipIds)
 }
 
-export function mergeTableViews(table: TableRef | undefined, user: SavedView[]): SavedView[] {
-  const extra = userViews(user)
-  if (!table?.path || table.path === '/') return extra
-  if (normalizeCollectionPath(table.path) === '/workspace-members') {
-    return [builtinAllView(table), ...builtinMemberViews(), ...extra]
-  }
-  return [builtinAllView(table), ...extra]
+export function mergeTableViews(table: TableRef | undefined, user: SavedView[], skipIds: Iterable<string> = []): SavedView[] {
+  if (!table?.path || table.path === '/') return overlayListedViews([], user, skipIds)
+  const seeds = normalizeCollectionPath(table.path) === '/workspace-members'
+    ? [builtinAllView(table), ...builtinMemberViews()]
+    : [builtinAllView(table)]
+  return overlayListedViews(seeds, user, skipIds)
 }
 
 export type BlockKindRef = { kind: string; label: string }
@@ -314,22 +341,26 @@ export function stubAnyBuiltinView(id: string, listed: SavedView[] = []): SavedV
     ?? stubBuiltinAllView(id)
 }
 
-/** 内置视图按 id 带锁定筛选。组件类型视图一定带 blockKind，不依赖列表里有没有这条。 */
+/** 视图自己的扁平筛选；没有已存条目时才回退到种子 id 的默认条件。 */
 export function catalogLockFilters(
   viewId: string | null | undefined,
   listed: Array<{ id: string; builtin?: boolean; filters?: Record<string, string> }> = [],
 ): Record<string, string> {
   const key = String(viewId ?? '').trim()
   if (!key) return {}
-  const stub = stubAnyBuiltinView(key, listed as SavedView[])
-  if (stub) return { ...(stub.filters ?? {}) }
   const current = listed.find((view) => view.id === key)
-  return current?.builtin ? { ...(current.filters ?? {}) } : {}
+  if (current) return { ...(current.filters ?? {}) }
+  const stub = stubAnyBuiltinView(key, listed as SavedView[])
+  return stub ? { ...(stub.filters ?? {}) } : {}
 }
 
-/** /page-blocks：全部组件 + 每种已登记块一条只读视图。 */
-export function mergePageBlockViews(table: TableRef | undefined, kinds: BlockKindRef[], user: SavedView[]): SavedView[] {
-  const extra = userViews(user)
+/** /editor-blocks：全部组件 + 每种已登记块一条种子视图。 */
+export function mergePageBlockViews(
+  table: TableRef | undefined,
+  kinds: BlockKindRef[],
+  user: SavedView[],
+  skipIds: Iterable<string> = [],
+): SavedView[] {
   const unique = new Map<string, BlockKindRef>()
   for (const item of kinds) {
     const kind = String(item.kind ?? '').trim()
@@ -339,8 +370,8 @@ export function mergePageBlockViews(table: TableRef | undefined, kinds: BlockKin
   const kindViews = [...unique.values()]
     .sort((a, b) => a.kind.localeCompare(b.kind) || a.label.localeCompare(b.label))
     .map(builtinBlockKindView)
-  if (!table?.path || table.path === '/') return [...kindViews, ...extra]
-  return [builtinAllView(table), ...kindViews, ...extra]
+  const seeds = !table?.path || table.path === '/' ? kindViews : [builtinAllView(table), ...kindViews]
+  return overlayListedViews(seeds, user, skipIds)
 }
 
 export type TagRef = { id: string; label: string }
@@ -367,6 +398,13 @@ export function stubBuiltinTagView(id: string): SavedView | null {
   const tagId = tagIdFromViewId(id)
   if (!tagId) return null
   return builtinTagView({ id: tagId, label: tagId })
+}
+
+export function stampRecordId(collection: string, recordId: string) {
+  const table = normalizeCollectionPath(collection).replace(/^\//, '')
+  const id = String(recordId ?? '').trim()
+  if (!table || !id) return ''
+  return `${table}::${id}`
 }
 
 /** 收集表里的一行：打开原始表里的那条记录。 */

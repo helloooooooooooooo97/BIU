@@ -6,6 +6,11 @@ import assert from 'node:assert/strict'
 const inspector = readFileSync(resolve(import.meta.dirname, './session-inspector.tsx'), 'utf8')
 const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
 
+test('data collection captions use the stack glyph, not the table glyph', () => {
+  assert.match(inspector, /name === 'circle-stack' \|\| name === 'data' \|\| name === 'database'/)
+  assert.match(inspector, /return CircleStackIcon/)
+})
+
 test('inspector header keeps opened tabs on top and a plus menu on the right', () => {
   assert.match(inspector, /data-testid="inspector-more"/)
   assert.match(inspector, /data-testid="inspector-more"[\s\S]*data-testid="inspector-add"/)
@@ -15,9 +20,13 @@ test('inspector header keeps opened tabs on top and a plus menu on the right', (
   assert.doesNotMatch(inspector, /关闭 \$\{name\}/)
   assert.match(inspector, /data-testid="inspector-add"/)
   assert.match(inspector, /data-testid="inspector-add-menu"/)
+  assert.match(inspector, /inspectorPlusPinRank/)
   assert.match(inspector, /className="app-side-bar-head" data-biu-ignore/)
   assert.match(inspector, /PlusIcon/)
   assert.match(inspector, /inspector-empty/)
+  assert.match(inspector, /isInspectorHomeOffer/)
+  assert.match(inspector, /displayTabs\.some\(\(item\) => isInspectorHomeOffer\(item\.id\)\)/)
+  assert.doesNotMatch(inspector, /inspector-empty-list[\s\S]*toolTabs\.map/)
   assert.doesNotMatch(inspector, /选择要看的内容/)
   assert.doesNotMatch(inspector, /点右上角加号/)
   assert.doesNotMatch(inspector, />面板</)
@@ -77,6 +86,10 @@ test('plus menu can add another database tab', () => {
   assert.match(css, /\.inspector-crumb-tab\.is-active \.inspector-crumb-full \.fsdb-crumb:not\(:last-child\)/)
   assert.match(css, /\.inspector-crumb-tab\.is-active \.fsdb-crumb svg/)
   assert.match(css, /\.inspector-crumb-tab\.is-active \.fsdb-crumb svg[\s\S]*?color:\s*var\(--biu-color-icon-active\)/)
+  assert.match(css, /\.inspector-tab svg,\s*\n\.inspector-crumb-close svg\s*\{[^}]*width:\s*16px/s)
+  assert.match(css, /\.inspector-tab svg,\s*\n\.inspector-crumb-close svg\s*\{[^}]*height:\s*16px/s)
+  assert.match(css, /\.inspector-crumb-tab \.fsdb-crumb-btn\s*\{[^}]*height:\s*var\(--biu-size-control-md\)/s)
+  assert.match(css, /\.inspector-crumb-tab \.fsdb-crumb svg[\s\S]*?width:\s*16px/)
   assert.doesNotMatch(css, /is-crumb-open/)
   assert.doesNotMatch(css, /inspector-crumb-toggle/)
   assert.match(css, /\.inspector-add-close/)

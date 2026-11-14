@@ -198,8 +198,8 @@ test('list share column uses the same capsule and loads the chain on click', () 
   assert.match(src, /data-testid="fsdb-scope-tag"/)
   assert.match(labelSrc, /className=\{`fsdb-scope-tag is-\$\{scopeTone\(label\)\}`\}/)
   assert.doesNotMatch(browser, /groupBy === 'shareScope' \? <ShareScopeLabel/)
-  assert.match(css, /\.fsdb-scope-tag\{[^}]*border-radius:999px/)
-  assert.match(css, /\.fsdb-scope-tag\{[^}]*height:22px/)
+  assert.match(css, /\.fsdb-scope-tag\{[^}]*border-radius:var\(--biu-radius-sm\)/)
+  assert.match(css, /\.fsdb-scope-tag\{[^}]*height:var\(--biu-space-5\)/)
   assert.match(
     css,
     /\.fsdb-scope-tag\.is-workspace,\.fsdb-scope-pill\.is-workspace,\.fsdb-scope-tag\.is-personal,\.fsdb-scope-pill\.is-personal\{background:var\(--biu-color-bg-hover\);color:var\(--biu-color-text-muted\)\}/,

@@ -3,10 +3,10 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
 import { Context } from 'cordis'
-import { pageEditorExtensions } from './kit.ts'
+import { recordEditorExtensions } from './kit.ts'
 import { activateSlashBlock, filterSlashItems, SLASH_ITEMS } from './slash.ts'
 import { ENABLE_PAGE_BLOCK_PLUGIN, setPageBlockPluginPhase } from './page-block-meta.ts'
-import { PageEditorService } from './service.ts'
+import { BlockEditorService } from './service.ts'
 import {
   INSTALLED_PAGE_BLOCK_TYPE,
   installedPageBlocksFromRows,
@@ -53,14 +53,14 @@ test('picking an installed placeholder starts the plugin and inserts the block',
   resetSlashCatalog()
   setInstalledPageBlocks([{ id: 'page-toc', label: '目录', hint: '大纲' }])
   const ctx = new Context()
-  new PageEditorService(ctx)
+  new BlockEditorService(ctx)
   let fiber: { dispose: () => Promise<void> } | undefined
   const onEnable = () => {
     fiber = ctx.plugin({
       name: 'toc',
-      inject: ['pageEditor'],
+      inject: ['blockEditor'],
       apply(inner) {
-        inner.pageEditor.registerBlock({
+        inner.blockEditor.registerBlock({
           kind: 'toc',
           plugin: 'page-toc',
           label: '目录',
@@ -72,7 +72,7 @@ test('picking an installed placeholder starts the plugin and inserts the block',
   }
   window.addEventListener(ENABLE_PAGE_BLOCK_PLUGIN, onEnable)
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '/',
     contentType: 'markdown',
   })
@@ -81,7 +81,7 @@ test('picking an installed placeholder starts the plugin and inserts the block',
   try {
     await activateSlashBlock(editor, range, 'page-toc')
     const md = editor.getMarkdown()
-    assert.match(md, /:::pageBlock \{kind=toc plugin=page-toc id=[a-z0-9]+\}/)
+    assert.match(md, /:::editorBlock \{kind=toc plugin=page-toc id=[a-z0-9]+\}/)
     assert.match(md, /大纲/)
   } finally {
     window.removeEventListener(ENABLE_PAGE_BLOCK_PLUGIN, onEnable)
@@ -95,11 +95,11 @@ test('failed start keeps the slash item and points at the plugin record', async 
   resetSlashCatalog()
   setInstalledPageBlocks([{ id: 'page-toc', label: '目录', hint: '大纲' }])
   const ctx = new Context()
-  new PageEditorService(ctx)
+  new BlockEditorService(ctx)
   const onEnable = () => setPageBlockPluginPhase('page-toc', 'failed')
   window.addEventListener(ENABLE_PAGE_BLOCK_PLUGIN, onEnable)
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '/',
     contentType: 'markdown',
   })
@@ -107,7 +107,7 @@ test('failed start keeps the slash item and points at the plugin record', async 
   const range = { from: Math.max(1, from), to: editor.state.selection.from }
   try {
     await activateSlashBlock(editor, range, 'page-toc')
-    assert.equal(editor.getJSON().content?.some((node) => node.type === 'pageBlock'), false)
+    assert.equal(editor.getJSON().content?.some((node) => node.type === 'editorBlock'), false)
     const item = filterSlashItems('').find((entry) => entry.id === 'page-toc')
     assert.equal(item?.status, 'failed')
     assert.equal(item?.pluginHref, pluginRecordPath('page-toc'))
@@ -143,12 +143,12 @@ test('confirmed remembered blocks stay after the live view unmounts', async () =
   resetSlashCatalog()
   setInstalledPageBlocks([{ id: 'page-algorithm', label: '算法题', hint: '' }])
   const ctx = new Context()
-  new PageEditorService(ctx)
+  new BlockEditorService(ctx)
   const fiber = ctx.plugin({
     name: 'algo',
-    inject: ['pageEditor'],
+    inject: ['blockEditor'],
     apply(inner) {
-      inner.pageEditor.registerBlock({
+      inner.blockEditor.registerBlock({
         kind: 'algorithm',
         plugin: 'page-algorithm',
         label: '算法题',

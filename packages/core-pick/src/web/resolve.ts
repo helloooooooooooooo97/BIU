@@ -11,6 +11,8 @@ const PATH = 'data-biu-path'
 const TITLE = 'data-biu-title'
 const TEXT = 'data-biu-text'
 const FIELD = 'data-biu-field'
+const TYPE = 'data-biu-type'
+const NAME = 'data-biu-name'
 
 type ClientBox = { left: number; top: number; width: number; height: number }
 
@@ -98,6 +100,8 @@ export function resolvePickFromNode(
   let title: string | undefined
   let text: string | undefined
   let field: string | undefined
+  let type: string | undefined
+  let name: string | undefined
   let highlight: HTMLElement | null = null
   let node: Element | null = start
   while (node && node !== document.documentElement) {
@@ -112,7 +116,9 @@ export function resolvePickFromNode(
       const nextTitle = read(node, TITLE)
       const nextText = read(node, TEXT)
       const nextField = read(node, FIELD)
-      if (!highlight && (nextKind || nextId || nextAction || nextLabel || nextPlugin || nextPath || nextField)) highlight = node
+      const nextType = read(node, TYPE)
+      const nextName = read(node, NAME)
+      if (!highlight && (nextKind || nextId || nextAction || nextLabel || nextPlugin || nextPath || nextField || nextName)) highlight = node
       if (!kind) kind = nextKind
       if (!id) id = nextId
       if (!action) action = nextAction
@@ -122,6 +128,8 @@ export function resolvePickFromNode(
       if (!title) title = nextTitle
       if (!text) text = nextText
       if (!field) field = nextField
+      if (!type) type = nextType
+      if (!name) name = nextName
     }
     if (kind && id && highlight) break
     node = composedParent(node)
@@ -131,9 +139,10 @@ export function resolvePickFromNode(
     plugin =
       (host instanceof Element ? read(host, PLUGIN) || read(host, 'data-page-block-plugin') || read(host, 'data-plugin-id') : undefined)
   }
-  if (!kind || !id || !highlight) return editorBlockPick(start, route, surface)
+  if (!kind || !id || !highlight) return sourceEditorPick(start, route, surface) || editorBlockPick(start, route, surface)
+  const line = sourceLineEl(start)
   return {
-    el: highlight,
+    el: line && composedContains(highlight, line) ? line : highlight,
     ref: withEditorPickContext(
       {
         kind,
@@ -141,7 +150,9 @@ export function resolvePickFromNode(
         ...(action ? { action } : {}),
         ...(plugin ? { plugin } : {}),
         ...(path ? { path } : {}),
+        ...(name ? { name } : {}),
         ...(field ? { field } : {}),
+        ...(type ? { type } : {}),
         ...(text ? { text } : {}),
         label: label || id,
         title: title || label || id,
@@ -170,6 +181,7 @@ function stripPickMarks(root: HTMLElement) {
     node.removeAttribute('data-biu-title')
     node.removeAttribute('data-biu-text')
     node.removeAttribute('data-biu-field')
+    node.removeAttribute('data-biu-type')
   }
 }
 
@@ -211,25 +223,31 @@ export function sandboxInnerFromEvent(event?: Event | null): HTMLElement | null 
 function sandboxInnerAtPoint(x: number, y: number): HTMLElement | null {
   let best: HTMLElement | null = null
   let bestArea = Infinity
+  const consider = (el: Element) => {
+    if (!(el instanceof HTMLElement) || !isSandboxInnerEl(el)) return
+    const box = rawBox(el)
+    if (box.width <= 0 || box.height <= 0 || !pointInBox(box, x, y)) return
+    const area = box.width * box.height
+    if (area < bestArea) {
+      best = el
+      bestArea = area
+    }
+  }
   for (const host of document.querySelectorAll('[data-sandbox]')) {
-    if (!(host instanceof HTMLElement) || !host.shadowRoot) continue
-    try {
-      for (const el of host.shadowRoot.elementsFromPoint(x, y)) {
-        if (isSandboxInnerEl(el)) return el
+    if (!(host instanceof HTMLElement)) continue
+    if (host.shadowRoot) {
+      try {
+        for (const el of host.shadowRoot.elementsFromPoint(x, y)) {
+          if (isSandboxInnerEl(el)) return el
+        }
+      } catch {
+        /* jsdom */
       }
-    } catch {
-      /* jsdom */
+      for (const el of host.shadowRoot.querySelectorAll('[data-sandbox-pick], [data-biu-kind="sandbox"]')) consider(el)
+      continue
     }
-    for (const el of host.shadowRoot.querySelectorAll('[data-sandbox-pick], [data-biu-kind="sandbox"]')) {
-      if (!(el instanceof HTMLElement) || !isSandboxInnerEl(el)) continue
-      const box = rawBox(el)
-      if (box.width <= 0 || box.height <= 0 || !pointInBox(box, x, y)) continue
-      const area = box.width * box.height
-      if (area < bestArea) {
-        best = el
-        bestArea = area
-      }
-    }
+    consider(host)
+    for (const el of host.querySelectorAll('[data-sandbox-pick], [data-biu-kind="sandbox"]')) consider(el)
   }
   return best
 }
@@ -296,8 +314,62 @@ function withoutFenceLocus(ref: PickRef): PickRef {
   return rest
 }
 
+const SOURCE_EDITOR_SEL = '.page-source, .page-host-code-pane, [data-testid="page-source-editor"]'
+
+function isSourceEditorNode(node: Element | null) {
+  return Boolean(composedClosest(node, SOURCE_EDITOR_SEL))
+}
+
+function sourceLineEl(start: Element | null): HTMLElement | null {
+  const line = start instanceof Element ? composedClosest(start, '.cm-line') : null
+  return line instanceof HTMLElement ? line : null
+}
+
+function sourceEditorPick(
+  start: Element | null,
+  route: string,
+  surface: Element | null,
+): { el: HTMLElement; ref: PickRef } | null {
+  if (!start || !isSourceEditorNode(start) || isPickIgnored(start) || inHiddenPane(start)) return null
+  const host = editorHostFromNode(start)
+  if (!host) return null
+  const locus = host.locusFromElement(start)
+  if (!locus || (!locus.text.trim() && !locus.selection?.trim() && locus.insert == null)) return null
+  const root = composedClosest(start, SOURCE_EDITOR_SEL)
+  const line = sourceLineEl(start)
+  const el = line ?? (root instanceof HTMLElement ? root : null)
+  if (!el) return null
+  if (surface && !composedContains(surface, el)) return null
+  const tagged = composedClosest(start, '[data-biu-kind][data-biu-id]')
+  const kind = tagged instanceof Element ? read(tagged, KIND) : undefined
+  const id = tagged instanceof Element ? read(tagged, ID) : undefined
+  const label = pickPreview(locus.selection || locus.text, 80) || (locus.start_line ? `L${locus.start_line}` : '')
+  if (!label) return null
+  return {
+    el,
+    ref: withPickLocus(
+      {
+        kind: kind || 'text',
+        id: id || pickIdFromText(locus.text || `${locus.start_line}:${locus.insert ?? ''}`),
+        label,
+        route,
+        ...(host.path ? { path: host.path } : {}),
+        ...(host.name ? { name: host.name } : {}),
+        ...(host.title ? { title: host.title } : {}),
+      },
+      locus,
+    ),
+  }
+}
+
 /** 内部节点只挂页面 path，不把整块围栏行号/正文当成选区。 */
 function withEditorPickContext(ref: PickRef, el: HTMLElement, start: Element = el): PickRef {
+  if (isSourceEditorNode(start) || isSourceEditorNode(el)) {
+    const sourced = withHostSource(ref, start)
+    const target = start instanceof HTMLElement ? start : el
+    const locus = editorLocusFromNode(target)
+    return locus ? withPickLocus(sourced, locus) : sourced
+  }
   const sourced = withHtmlElement(withHostSource(ref, el), start, el)
   if (ref.kind === 'html' || ref.kind === 'sandbox') {
     const inner = liveHighlightIn(el) || pickPreview(el.textContent ?? '', 120)
@@ -475,11 +547,8 @@ export function resolvePickAtPoint(x: number, y: number, route: string) {
   const stacked = elementsFromPointDeep(x, y)
   const inner = sandboxInnerAtPoint(x, y)
   if (inner && !isPickIgnored(inner) && !inHiddenPane(inner)) {
-    const surface = pickSurfaceAtPoint(x, y)
-    const hit = resolvePickFromNode(inner, route, surface)
+    const hit = resolvePickFromNode(inner, route, null)
     if (hit) return hit
-    const raw = resolvePickFromNode(inner, route, null)
-    if (raw?.ref.kind === 'sandbox') return raw
   }
   const surface = pickSurfaceAtPoint(x, y)
   const pool = surface

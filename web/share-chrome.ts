@@ -1,8 +1,9 @@
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { DEFAULT_CHROME_PATH } from '@biu/type-file-system/ui'
-import { PageEditor, PageBlockContent, getPageEditor } from '@biu/core-editor/web'
+import { RecordEditor, getBlockEditor } from '@biu/core-editor/web'
+import { PageBlockContent } from '@biu/core-page/web'
 import { sessionsChrome } from '../packages/core-chat/src/web/sessions-chrome.tsx'
-import { SkillsContent } from '@biu/host-skills/web'
+import { skillsChrome } from '@biu/host-skills/web'
 import { pluginsChrome } from '../packages/core-plugin-system/src/web/chrome.tsx'
 import { tasksChrome } from '../packages/core-task-system/src/web/chrome.tsx'
 import { DatabaseUiService, getDatabaseUi } from '../packages/core-file-system/src/web/database-ui.ts'
@@ -17,13 +18,13 @@ export function installShareCollectionChrome(ctx: Context) {
   new DatabaseUiService(ctx)
   const ui = getDatabaseUi()
   if (!ui) return
-  ui.decorate(DEFAULT_CHROME_PATH, { Content: PageEditor })
+  ui.decorate(DEFAULT_CHROME_PATH, { Content: RecordEditor })
   ui.decorate(PAGE_BLOCKS_COLLECTION_PATH, {
-    ...pageBlocksChrome(() => getPageEditor()?.blocks() ?? []),
+    ...pageBlocksChrome(() => getBlockEditor()?.blocks() ?? []),
     Content: PageBlockContent,
   })
   ui.decorate('/agents', sessionsChrome())
-  ui.decorate('/skills', { Content: SkillsContent })
+  ui.decorate('/skills', skillsChrome)
   ui.decorate('/plugins', pluginsChrome)
   ui.decorate('/tasks', tasksChrome)
   ui.decorate(TAGS_COLLECTION_PATH, tagsChrome)

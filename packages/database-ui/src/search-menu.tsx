@@ -1,24 +1,24 @@
-import { useEffect, useRef, type ReactNode, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject } from 'react'
 import { AnchorMenu } from '@biu/biu-ui'
 
 const STYLE_ID = 'biu-database-ui-search'
 const CSS = `
-.db-search-menu{box-sizing:border-box;padding:6px;background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);border-radius:var(--biu-radius-popover);box-shadow:var(--biu-shadow-popover);display:flex;flex-direction:column;gap:4px;font-size:var(--biu-font-size-4)}
+.db-search-menu{box-sizing:border-box;padding:var(--biu-pad-flyout);background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);border-radius:var(--biu-radius-popover);box-shadow:var(--biu-shadow-popover);display:flex;flex-direction:column;gap:var(--biu-gap-flyout);font-size:var(--biu-font-size-4)}
 .db-search-field{display:flex;align-items:center;gap:6px;border:0;border-radius:8px;padding:4px 8px;color:var(--biu-color-text-subtle);background:transparent;font-size:var(--biu-font-size-4)}
 .db-search-field input{flex:1;min-width:0;border:0;background:transparent;color:var(--biu-color-text);font-family:inherit;font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-regular);line-height:1.4;outline:none}
 .db-search-field input::placeholder{font-size:var(--biu-font-size-4);color:var(--biu-color-text-subtle)}
 .db-search-list{display:flex;flex-direction:column;gap:1px;max-height:220px;overflow:auto}
 .db-search-option{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;border:0;border-radius:6px;padding:5px 6px;background:transparent;color:var(--biu-color-text);font-family:inherit;font-size:var(--biu-font-size-4);cursor:pointer;text-align:left}
-.db-search-option:hover,.db-search-option.is-selected,.db-search-option.is-active{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
+.db-search-option:hover,.db-search-option.is-selected,.db-search-option.is-active,.db-search-option.is-cursor{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
 .db-pick{display:flex;flex-direction:column;gap:6px;min-width:0}
 .db-pick-picked{display:flex;flex-wrap:wrap;gap:4px;align-items:center;align-content:flex-start;min-width:0;width:100%}
 .db-pick-list{display:flex;flex-direction:column;gap:1px;max-height:240px;overflow:auto}
 .db-pick-option{display:flex;align-items:center;gap:6px;min-width:0;width:100%;box-sizing:border-box;border:0;border-radius:5px;padding:4px 6px;background:transparent;color:var(--biu-color-text-muted);font-family:inherit;font-size:var(--biu-font-size-4);cursor:pointer;text-align:left}
-.db-pick-option.is-on,.db-pick-option:hover{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
+.db-pick-option.is-on,.db-pick-option:hover,.db-pick-option.is-cursor{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
 .db-search-option-main{display:inline-flex;align-items:center;gap:6px;min-width:0}
 .db-search-option .fsdb-field-glyph,.db-cell-select-trigger .fsdb-field-glyph{color:var(--biu-color-icon);flex:none}
 .db-search-empty{padding:8px;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-4)}
-.db-search-foot{border-top:var(--biu-stroke-width) solid var(--biu-color-border);margin-top:4px;padding-top:4px}
+.db-search-foot{border-top:var(--biu-stroke-width) solid color-mix(in srgb,var(--biu-color-text) 12%,transparent);margin-top:4px;padding-top:4px}
 .db-cell-select{display:inline-flex;position:relative;min-width:0;max-width:100%;box-sizing:border-box;vertical-align:middle}
 .db-cell-select-trigger{display:inline-flex;align-items:center;gap:5px;max-width:none;height:var(--biu-size-control-sm);border:0;border-radius:4px;padding:0 6px;background:transparent;color:var(--biu-color-text);font:inherit;font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);line-height:var(--biu-size-control-sm);cursor:pointer;text-align:left}
 .db-cell-select-trigger:hover,.db-cell-select-trigger[data-open]{background:transparent}
@@ -52,6 +52,59 @@ export function ensureDbSearchStyle() {
     document.head.appendChild(style)
   }
   if (style.textContent !== CSS) style.textContent = CSS
+}
+
+const OPTION_SEL = [
+  'button.db-pick-option',
+  'button.db-search-option',
+  'button.fsdb-viewcat-pick-main',
+  'button.fsdb-person-option',
+  'button.fsdb-ref-row',
+  'button.tasks-viewdd-item-main',
+  'button.tasks-sort-item',
+  'button.tasks-viewdd-saveas',
+].join(', ')
+
+export function useOptionCursor(query: string) {
+  const listRef = useRef<HTMLDivElement>(null)
+  const cursor = useRef(0)
+  const paint = () => {
+    const list = [...(listRef.current?.querySelectorAll<HTMLElement>(OPTION_SEL) ?? [])]
+    if (!list.length) return
+    if (cursor.current < 0) cursor.current = 0
+    if (cursor.current >= list.length) cursor.current = list.length - 1
+    list.forEach((el, i) => {
+      const on = i === cursor.current
+      el.classList.toggle('is-cursor', on)
+      el.closest('.fsdb-viewcat-pick-row, .tasks-viewdd-item')?.classList.toggle('is-cursor', on)
+    })
+    list[cursor.current]?.scrollIntoView({ block: 'nearest' })
+  }
+  useLayoutEffect(() => {
+    cursor.current = 0
+  }, [query])
+  useLayoutEffect(() => {
+    paint()
+  })
+  function onKeyDown(event: ReactKeyboardEvent, onEnter?: () => void) {
+    const list = [...(listRef.current?.querySelectorAll<HTMLElement>(OPTION_SEL) ?? [])]
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      event.stopPropagation()
+      if (!list.length) return
+      const dir = event.key === 'ArrowDown' ? 1 : -1
+      cursor.current = (cursor.current + dir + list.length) % list.length
+      paint()
+      return
+    }
+    if (event.key !== 'Enter') return
+    event.preventDefault()
+    event.stopPropagation()
+    const hit = list[cursor.current] ?? list[0]
+    if (hit) hit.click()
+    else onEnter?.()
+  }
+  return { listRef, onKeyDown }
 }
 
 function SearchMark() {
@@ -120,12 +173,22 @@ export function DbSearchMenu({
 } & Record<string, unknown>) {
   const innerRef = useRef<HTMLInputElement>(null)
   const inputRef = searchRef ?? innerRef
+  const { listRef, onKeyDown } = useOptionCursor(query)
   useEffect(() => {
     const id = window.setTimeout(() => inputRef.current?.focus(), 0)
     return () => window.clearTimeout(id)
   }, [inputRef])
   return (
-    <DbMenu anchor={anchor} onClose={onClose} footer={footer} {...rest}>
+    <DbMenu
+      anchor={anchor}
+      onClose={onClose}
+      footer={footer}
+      onKeyDown={(event: ReactKeyboardEvent<HTMLDivElement>) => {
+        if (event.key === 'Escape') return
+        onKeyDown(event, onEnter)
+      }}
+      {...rest}
+    >
       <label className="db-search-field">
         <SearchMark />
         <input
@@ -140,14 +203,11 @@ export function DbSearchMenu({
               onClose()
               return
             }
-            if (event.key === 'Enter') {
-              event.preventDefault()
-              onEnter?.()
-            }
+            onKeyDown(event, onEnter)
           }}
         />
       </label>
-      <div className="db-search-list">
+      <div className="db-search-list" ref={listRef}>
         {children}
         {empty}
       </div>
@@ -175,8 +235,12 @@ export function PickPanel({
   className?: string
 }) {
   ensureDbSearchStyle()
+  const { listRef, onKeyDown } = useOptionCursor(query)
   return (
-    <div className={className ? `db-pick ${className}` : 'db-pick'}>
+    <div
+      className={className ? `db-pick ${className}` : 'db-pick'}
+      onKeyDown={(event) => onKeyDown(event, onEnter)}
+    >
       {picked ? <div className="db-pick-picked">{picked}</div> : null}
       <label className="db-search-field">
         <input
@@ -184,15 +248,10 @@ export function PickPanel({
           autoFocus
           placeholder={placeholder}
           onChange={(event) => onQuery(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault()
-              onEnter?.()
-            }
-          }}
+          onKeyDown={(event) => onKeyDown(event, onEnter)}
         />
       </label>
-      <div className="db-pick-list">
+      <div className="db-pick-list" ref={listRef}>
         {children}
         {empty}
       </div>

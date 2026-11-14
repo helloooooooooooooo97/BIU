@@ -77,6 +77,24 @@ test('AppDialog can hide cancel so an alert only has a confirm button', () => {
   assert.ok(screen.getByRole('dialog', { name: '安装失败' }))
 })
 
+test('AppDialog closes on Escape even when focus is outside the dialog', () => {
+  let canceled = false
+  render(
+    <AppDialog
+      title="命名失败"
+      confirm="知道了"
+      hideCancel
+      body={<p>没有用户消息，无法生成标题</p>}
+      onCancel={() => {
+        canceled = true
+      }}
+      onConfirm={() => {}}
+    />,
+  )
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+  assert.equal(canceled, true)
+})
+
 test('LocalText keeps keystrokes inside the field and only commits on blur', () => {
   let parentRenders = 0
   let committed = ''

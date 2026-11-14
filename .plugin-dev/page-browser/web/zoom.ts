@@ -1,7 +1,7 @@
 /**
  * 页面块插件的全屏放大：fixed 覆盖层直接挂在 body，
  * 并临时把沿途祖先的 overflow/包含块限制改写掉（只动内联样式，退出时原样还原）。
- * 不依赖 HTML 页面块的 :::pageBlock 约定，纯 DOM。
+ * 不依赖 HTML 页面块的 :::editorBlock 约定，纯 DOM。
  */
 
 const OWN = 'data-page-zoom-own'

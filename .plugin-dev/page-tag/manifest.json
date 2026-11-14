@@ -1,0 +1,14 @@
+{
+  "id": "page-tag",
+  "name": "标签块",
+  "blurb": "在页面里用 / 插入标签块：把标签直接放进正文，点击打开标签。",
+  "tags": [
+    "page",
+    "editor"
+  ],
+  "author": "BIU官方",
+  "authorUrl": "https://github.com/helloooooooooooooo97/biu",
+  "createdAt": 1793870000000,
+  "headless": true,
+  "builtin": true
+}

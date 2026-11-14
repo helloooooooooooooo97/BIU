@@ -47,21 +47,21 @@ test('authoritative empty saved views hide stale local workspace data', () => {
 })
 
 test('index all views do not group by share', () => {
-  const all = builtinAllView({ path: '/page-blocks', label: '组件' })
+  const all = builtinAllView({ path: '/editor-blocks', label: '组件' })
   assert.equal(all.groupBy, '')
-  assert.equal(withViewDisplay('/page-blocks', { ...all, groupBy: 'shareScope' }).groupBy, '')
+  assert.equal(withViewDisplay('/editor-blocks', { ...all, groupBy: 'shareScope' }).groupBy, '')
   assert.equal(builtinAllView({ path: '/tasks', label: '任务' }).groupBy, 'shareScope')
 })
 
 test('views collection still resolves catalog stubs from the route', () => {
   assert.equal(viewForPath(VIEWS_COLLECTION_PATH, 'builtin:/events')?.filters.tablePath, '/events')
   assert.equal(viewForPath(VIEWS_COLLECTION_PATH, builtinCatalogViewId('/events'))?.id, builtinCatalogViewId('/events'))
-  assert.equal(viewForPath('/page-blocks', 'builtin-block:terminal')?.filters.blockKind, 'terminal')
+  assert.equal(viewForPath('/editor-blocks', 'builtin-block:terminal')?.filters.blockKind, 'terminal')
 })
 
 test('pickViewForRoute keeps builtin-block from the URL when the list is still only 全部', () => {
-  const all = builtinAllView({ path: '/page-blocks', label: '组件', view: { title: '组件' } })
-  const picked = pickViewForRoute([all], '/page-blocks', 'builtin-block:terminal')
+  const all = builtinAllView({ path: '/editor-blocks', label: '组件', view: { title: '组件' } })
+  const picked = pickViewForRoute([all], '/editor-blocks', 'builtin-block:terminal')
   assert.equal(picked?.id, 'builtin-block:terminal')
   assert.equal(picked?.filters.blockKind, 'terminal')
 })
@@ -164,8 +164,8 @@ test('savedViewFromRecord restores columns from a JSON string', () => {
   assert.equal(view?.pageSize, 50)
 })
 
-test('savedViewFromRecord skips builtin rows and keeps filters', () => {
-  assert.equal(savedViewFromRecord({ viewId: builtinAllViewId('/tasks'), title: '全部' }), null)
+test('savedViewFromRecord keeps seed rows and filters', () => {
+  assert.equal(savedViewFromRecord({ viewId: builtinAllViewId('/tasks'), title: '全部' })?.name, '全部')
   const view = savedViewFromRecord({
     viewId: 'v1',
     title: '看板',

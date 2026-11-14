@@ -2,12 +2,12 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
 import { TextSelection } from '@tiptap/pm/state'
-import { pageEditorExtensions } from './kit.ts'
+import { recordEditorExtensions } from './kit.ts'
 import { adjacentSlideCellPos, atSlideCellEdge, enterSlideFromOutside, moveSlideCellSelection, slideCellDepth } from './slide-nav.ts'
 
 function editorOf() {
   return new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '',
     contentType: 'markdown',
   })
@@ -22,8 +22,8 @@ function cellStarts(editor: Editor) {
 }
 
 test('slide cells refuse gap cursor like table cells', () => {
-  assert.equal(pageEditorExtensions().find((ext) => ext.name === 'slideCell')?.config.allowGapCursor, false)
-  assert.equal(pageEditorExtensions().find((ext) => ext.name === 'slide')?.config.allowGapCursor, false)
+  assert.equal(recordEditorExtensions().find((ext) => ext.name === 'slideCell')?.config.allowGapCursor, false)
+  assert.equal(recordEditorExtensions().find((ext) => ext.name === 'slide')?.config.allowGapCursor, false)
 })
 
 test('arrow down at the end of a slide cell enters the next cell', () => {
@@ -64,7 +64,7 @@ test('selection inside a slide cell is a text caret, not a node gap', () => {
 
 test('arrow down from the block above a slide enters the first cell', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: `上面
 
 :::slide {layout=stack}

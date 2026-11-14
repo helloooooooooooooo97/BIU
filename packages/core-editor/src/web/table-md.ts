@@ -80,7 +80,7 @@ export function takeTableFence(src: string) {
     }
     const open = OPEN.exec(line)
     if (open) {
-      if (open[1] === 'pageBlock' && cell) {
+      if ((open[1] === 'editorBlock' || open[1] === 'pageBlock') && cell) {
         const taken = takePageBlockFence(lines.slice(i).join('\n'))
         if (taken) {
           for (const part of taken.raw.split('\n')) cell.push(part)

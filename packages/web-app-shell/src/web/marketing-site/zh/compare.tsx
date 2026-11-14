@@ -60,7 +60,7 @@ export const COMPARE_PAGES: ComparePage[] = [
     rows: [
       { dimension: '核心主张', them: '一切皆声明式对象', biu: '一切皆 /<table>/<id>，声明即生效' },
       { dimension: '声明在哪写', them: 'YAML 文件，交给 kubectl apply', biu: '直接写在页面正文里（或以页面块形式插入）' },
-      { dimension: '声明的单位', them: '一个资源对象（Pod / Service / CRD）', biu: '一个块：:::pageBlock {kind=… plugin=…}，后面跟一段 JSON' },
+      { dimension: '声明的单位', them: '一个资源对象（Pod / Service / CRD）', biu: '一个块：:::editorBlock {kind=… plugin=…}，后面跟一段 JSON' },
       { dimension: '声明之后发生什么', them: '控制面调谐，把实际状态拉向期望', biu: '✅ 立刻挂载运行，无需 apply / 等待调度' },
       { dimension: '一个页面/文件能放几个', them: '⚠️ 通常一份 YAML 一类资源，多个靠多文件或 List', biu: '✅ 一页里可以声明任意多个插件，各管一块' },
       { dimension: '多个如何组合成服务', them: 'Service / Ingress 把多个 Pod 串起来', biu: '✅ 同页多个插件各占一块，页面本身就是组合结果' },

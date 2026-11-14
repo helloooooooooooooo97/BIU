@@ -1,15 +1,87 @@
-import { PaperClipIcon, XMarkIcon, ArrowDownTrayIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/16/solid'
+import { DocumentIcon, PaperClipIcon, XMarkIcon, ArrowDownTrayIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/16/solid'
 
 function safeFileName(name: string) {
   const base = name.replace(/^.*[/\\]/, '').replace(/[^\p{L}\p{N}._-]+/gu, '-')
   return base || `file-${Date.now()}`
 }
 
-export async function uploadDbAsset(file: File) {
+export function recordResourcePath(collectionPath?: string, recordId?: string) {
+  const col = String(collectionPath ?? '').trim().replace(/\/+$/, '')
+  const id = String(recordId ?? '').trim()
+  if (!col) return id
+  if (!id) return col
+  if (col === id || col.endsWith(`/${id}`)) return col
+  return `${col}/${id}`
+}
+
+export function isHashedFileName(name: string) {
+  return /^[a-f0-9]{64}\./i.test(String(name ?? '').replace(/^.*[/\\]/, ''))
+}
+
+export function documentLogicalName(
+  recordId: string,
+  fieldKey: string,
+  original: string,
+  existing: Array<{ name: string; href: string }> = [],
+) {
+  const display = original.replace(/^.*[/\\]/, '') || `doc-${Date.now()}`
+  const hit = existing.find((item) => item.name === display)
+  const fromHref = hit
+    ? String(hit.href ?? '')
+        .split('?')[0]
+        ?.replace(/^.*\//, '')
+    : ''
+  let decoded = fromHref
+  try {
+    decoded = fromHref ? decodeURIComponent(fromHref) : ''
+  } catch {
+    decoded = fromHref
+  }
+  if (decoded && !isHashedFileName(decoded)) return decoded
+  const id = String(recordId || 'rec').replace(/[^\p{L}\p{N}_-]+/gu, '-') || 'rec'
+  const field = String(fieldKey || 'doc').replace(/[^\p{L}\p{N}_-]+/gu, '-') || 'doc'
+  return `doc-${id}-${field}-${safeFileName(display)}`
+}
+
+export async function uploadDbDocument(file: File, resourcePath: string, logicalName: string) {
+  const path = String(resourcePath ?? '').trim()
+  if (!path) throw new Error('resource path required')
+  const name = String(logicalName ?? '').replace(/^.*[/\\]/, '').trim()
+  if (!name || name.includes('/') || isHashedFileName(name)) throw new Error('invalid document name')
+  const url = `/api/db/file/${encodeURIComponent(name)}?path=${encodeURIComponent(path)}`
+  const headers: Record<string, string> = {
+    'content-type': file.type || 'application/octet-stream',
+    'x-biu-resource-path': path,
+  }
+  const prev = await fetch(url)
+  if (prev.ok) {
+    const etag = String(prev.headers.get('etag') ?? '').replace(/^W\//, '').replaceAll('"', '')
+    if (etag) headers['if-match'] = `"${etag}"`
+  }
+  let res = await fetch(url, { method: 'PUT', headers, body: file })
+  if (res.status === 409) {
+    const body = (await res.json().catch(() => ({}))) as { etag?: string }
+    const next = String(body.etag ?? res.headers.get('etag') ?? '').replace(/^W\//, '').replaceAll('"', '')
+    if (next) {
+      headers['if-match'] = `"${next}"`
+      res = await fetch(url, { method: 'PUT', headers, body: file })
+    }
+  }
+  const data = (await res.json().catch(() => ({}))) as { error?: string; href?: string; name?: string }
+  if (!res.ok) throw new Error(data.error || res.statusText)
+  return { name: data.name || name, href: data.href || `/api/db/file/${encodeURIComponent(data.name || name)}` }
+}
+
+export async function uploadDbAsset(file: File, resourcePath: string) {
+  const path = String(resourcePath ?? '').trim()
+  if (!path) throw new Error('resource path required')
   const name = `${Date.now()}-${safeFileName(file.name)}`
-  const res = await fetch(`/api/db/file/hash/${encodeURIComponent(name)}`, {
+  const res = await fetch(`/api/db/file/hash/${encodeURIComponent(name)}?path=${encodeURIComponent(path)}`, {
     method: 'PUT',
-    headers: { 'content-type': file.type || 'application/octet-stream' },
+    headers: {
+      'content-type': file.type || 'application/octet-stream',
+      'x-biu-resource-path': path,
+    },
     body: file,
   })
   const body = (await res.json().catch(() => ({}))) as { error?: string; href?: string; name?: string }
@@ -69,21 +141,35 @@ export function pasteTargetIsField(target: EventTarget | null) {
   return tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable
 }
 
+export function assetDownloadHref(href: string, name: string) {
+  const path = String(href ?? '').trim()
+  const file = String(name ?? '').replace(/^.*[/\\]/, '').trim()
+  if (!file || !/^\/api\/(?:db|doc)\/file\//.test(path.split('?')[0] ?? '')) return path
+  const join = path.includes('?') ? '&' : '?'
+  return `${path}${join}download=${encodeURIComponent(file)}`
+}
+
 export function AttachmentFile({
   file,
   onRemove,
+  kind = 'attachment',
 }: {
   file: { name: string; href: string }
   onRemove?: () => void
+  kind?: 'attachment' | 'document'
 }) {
   return (
-    <span className="fsdb-file">
-      <PaperClipIcon aria-hidden className="size-[14px] shrink-0 opacity-80" />
+    <span className="fsdb-file is-chip" title={file.name}>
+      {kind === 'document' ? (
+        <DocumentIcon aria-hidden className="size-[14px] shrink-0" />
+      ) : (
+        <PaperClipIcon aria-hidden className="size-[14px] shrink-0" />
+      )}
       <span className="fsdb-file-name">{file.name}</span>
       <span className="fsdb-file-tools">
         <a
-          className="tasks-icon-btn fsdb-file-dl"
-          href={file.href}
+          className="fsdb-file-act fsdb-file-dl"
+          href={assetDownloadHref(file.href, file.name)}
           download={file.name}
           title="下载"
           aria-label={`下载 ${file.name}`}
@@ -96,7 +182,7 @@ export function AttachmentFile({
         {onRemove ? (
           <button
             type="button"
-            className="tasks-icon-btn is-danger fsdb-file-del"
+            className="fsdb-file-act fsdb-file-del"
             title="删除"
             aria-label={`删除 ${file.name}`}
             data-testid="fsdb-file-remove"

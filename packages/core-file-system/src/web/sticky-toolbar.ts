@@ -37,11 +37,9 @@ function pinCollectionHead(toolbar: HTMLElement) {
   const table = wrap?.querySelector('.tasks-table')
   const thead = table instanceof HTMLTableElement ? table.tHead : null
   const checkHead = wrap?.querySelector('.fsdb-check-slot.is-head')
-  const bulk = wrap?.querySelector('.fsdb-bulk-slot')
   if (!(table instanceof HTMLTableElement) || !thead) {
     clearPin(thead)
     if (checkHead instanceof HTMLElement) clearPin(checkHead)
-    if (bulk instanceof HTMLElement) clearPin(bulk)
     return
   }
   const desired = toolbar.getBoundingClientRect().bottom + 10
@@ -49,17 +47,6 @@ function pinCollectionHead(toolbar: HTMLElement) {
   const pin = y > 0
   writePin(thead, y, pin)
   if (checkHead instanceof HTMLElement) writePin(checkHead, y, pin)
-  if (bulk instanceof HTMLElement) {
-    const cell = wrap.querySelector('th.is-pin-col, th[data-col-key="title"]')
-    const label = cell instanceof HTMLElement ? cell.querySelector('.tasks-th') : null
-    const pad = cell instanceof HTMLElement ? Number.parseFloat(getComputedStyle(cell).paddingLeft) || 0 : 0
-    const gap = label instanceof HTMLElement ? Number.parseFloat(getComputedStyle(label).gap) || 5 : 5
-    const labelW = label instanceof HTMLElement ? label.offsetWidth : 0
-    const shift = Math.round(pad + labelW + gap)
-    bulk.style.setProperty('--fsdb-bulk-shift', `${shift}px`)
-    bulk.style.setProperty('--fsdb-head-h', `${Math.round(thead.offsetHeight)}px`)
-    writePin(bulk, y, pin)
-  }
 }
 
 export function useStickyToolbar(ref: RefObject<HTMLElement | null>) {
@@ -110,8 +97,6 @@ export function useStickyToolbar(ref: RefObject<HTMLElement | null>) {
       clearPin(wrap?.querySelector('thead'))
       const checkHead = wrap?.querySelector('.fsdb-check-slot.is-head')
       if (checkHead instanceof HTMLElement) clearPin(checkHead)
-      const bulk = wrap?.querySelector('.fsdb-bulk-slot')
-      if (bulk instanceof HTMLElement) clearPin(bulk)
     }
   }, [ref])
 }

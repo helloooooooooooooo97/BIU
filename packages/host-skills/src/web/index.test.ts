@@ -21,8 +21,9 @@ test('warehouse view imports a standard Skill directory', () => {
   assert.match(source, /new CustomEvent\('fsdb:change'\)/)
 })
 
-test('skills only keeps the shared content renderer', () => {
-  assert.match(source, /export function SkillsContent/)
+test('skills do not override Content; they inherit the default record editor', () => {
+  assert.doesNotMatch(source, /SkillsContent/)
+  assert.doesNotMatch(source, /Content:\s*Skills/)
 })
 
 test('fileList is rendered by a skill-owned cell, not the attachment preview', () => {

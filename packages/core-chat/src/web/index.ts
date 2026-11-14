@@ -1,6 +1,6 @@
 import { createElement, lazy, Suspense, type ComponentType } from 'react'
 import type { Context } from 'cordis'
-import { SignalIcon, MapIcon } from '@heroicons/react/16/solid'
+import { ChatBubbleLeftRightIcon, SignalIcon, MapIcon } from '@heroicons/react/16/solid'
 import { bindSessionView, type SessionViewService } from '@biu/web-session-view'
 import type { SlotProps } from '@biu/web-slots'
 import { ChatSelectBubble } from './chat-select-bubble.tsx'
@@ -99,10 +99,19 @@ export function apply(ctx: Context) {
   ctx.inject(['databaseUi'], (inner) => {
     const ui = inner.get('databaseUi') as DatabaseUi
     let sessions: { dispose: () => void } | undefined
+    let chatView: { dispose: () => void } | undefined
     void import('./sessions-chrome.tsx').then((mod) => {
       sessions = ui.decorate('/agents', mod.sessionsChrome())
+      chatView = ui.registerContentView('/agents', {
+        id: 'chat',
+        label: '聊天',
+        plugin: 'core-chat',
+        Icon: ChatBubbleLeftRightIcon,
+        Body: mod.SessionRecordChat,
+      })
     })
     return () => {
+      chatView?.dispose()
       sessions?.dispose()
     }
   })

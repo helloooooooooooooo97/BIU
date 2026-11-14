@@ -1,24 +1,30 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { Context, Service } from 'cordis'
-import { DEFAULT_CHROME_PATH, type CollectionChrome, type CollectionViewType, type DatabaseUi } from '@biu/type-file-system/ui'
+import {
+  DEFAULT_CHROME_PATH,
+  type CollectionChrome,
+  type CollectionViewType,
+  type DatabaseUi,
+  type FsDetailTools,
+  type FsRecordContentView,
+} from '@biu/type-file-system/ui'
 import * as editorUi from './index.ts'
-import { PageEditor } from './page-editor.tsx'
+import { RecordEditor } from './page-editor.tsx'
 
 class FakeDatabaseUi extends Service implements DatabaseUi {
   paths: string[] = []
   registered: Array<{ path: string; id: string; label: string }> = []
+  content: Array<{ path: string; id: string }> = []
+  tools: Array<{ path: string }> = []
   constructor(ctx: Context) {
     super(ctx, 'databaseUi')
   }
   decorate(path: string, chrome: CollectionChrome) {
     this.paths.push(path)
-    if (path === '/page-blocks') {
-      assert.ok(chrome.Content)
-      assert.notEqual(chrome.Content, PageEditor)
-      return { dispose() {} }
-    }
-    assert.equal(chrome.Content, PageEditor)
+    assert.equal(chrome.Content, RecordEditor)
     assert.equal(chrome.DetailTools, undefined)
     assert.ok(chrome.DetailBar)
     return { dispose() {} }
@@ -30,6 +36,15 @@ class FakeDatabaseUi extends Service implements DatabaseUi {
   registerRowView() {
     return { dispose() {} }
   }
+  registerContentView(path: string, view: FsRecordContentView) {
+    this.content.push({ path, id: view.id })
+    assert.equal(view.Body, RecordEditor)
+    return { dispose() {} }
+  }
+  registerDetailTools(path: string, _tools: FsDetailTools) {
+    this.tools.push({ path })
+    return { dispose() {} }
+  }
   chrome() {
     return {}
   }
@@ -39,16 +54,34 @@ class FakeDatabaseUi extends Service implements DatabaseUi {
   rowViews() {
     return []
   }
+  contentViews() {
+    return []
+  }
+  detailTools() {
+    return {}
+  }
   subscribe() {
     return () => undefined
   }
 }
 
-test('core-editor paints Content as the default for every file body, and page-blocks overrides it', async () => {
+test('core-editor paints Content as the default for every file body', async () => {
   const ctx = new Context()
   const ui = new FakeDatabaseUi(ctx)
   await ctx.plugin(editorUi)
-  assert.deepEqual(ui.paths, [DEFAULT_CHROME_PATH, '/page-blocks'])
-  assert.deepEqual(ui.registered, [{ path: '/page-blocks', id: 'blocks', label: '组件' }])
-  assert.ok(ctx.pageEditor)
+  assert.deepEqual(ui.paths, [DEFAULT_CHROME_PATH])
+  assert.deepEqual(ui.registered, [])
+  assert.deepEqual(ui.content.map((item) => item.id), ['doc', 'outline', 'table', 'source'])
+  assert.equal(ui.content.every((item) => item.path === DEFAULT_CHROME_PATH), true)
+  assert.deepEqual(ui.tools, [{ path: DEFAULT_CHROME_PATH }])
+  assert.equal(ui.content.some((item) => item.id === 'hidden'), false)
+  const toolsSrc = readFileSync(resolve(import.meta.dirname, './editor-content-views.ts'), 'utf8')
+  assert.match(toolsSrc, /Search: EditorDetailSearch/)
+  assert.doesNotMatch(toolsSrc, /id: 'hidden'/)
+  assert.ok(ctx.blockEditor)
+  assert.equal(ctx.blockEditor.block('sandbox')?.plugin, 'page-sandbox')
+  assert.equal(ctx.blockEditor.block('sandbox')?.label, '沙箱')
+  const src = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
+  assert.match(src, /bindPageViewCatalogHost/)
+  assert.match(src, /registerSandboxBlock/)
 })

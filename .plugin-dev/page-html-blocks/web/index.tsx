@@ -2,6 +2,8 @@ import { ReUI, Textarea } from '@biu/reui'
 import {
   ArrowsPointingInIcon,
   ArrowsPointingOutIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   CodeBracketIcon,
   EyeIcon,
   PlayCircleIcon,
@@ -145,7 +147,7 @@ function HtmlSandbox({
         data-testid={live ? 'page-html-sandbox' : 'page-html-static-host'}
         data-html-sandbox=""
         data-page-block-capture=""
-        style={{ display: 'block', width: '100%', height: '100%', minHeight: live ? 80 : undefined }}
+        style={{ display: 'block', flex: 1, minHeight: live ? 80 : 0, width: '100%', height: '100%' }}
       />
       {error ? (
         <div data-testid="html-sandbox-error" style={{ color: 'var(--biu-color-danger)', fontSize: 12, padding: 8 }}>
@@ -157,7 +159,7 @@ function HtmlSandbox({
 }
 
 export const name = 'page-html-blocks'
-export const inject = ['pageEditor']
+export const inject = ['blockEditor']
 
 type BlockProps = {
   data: Record<string, unknown>
@@ -166,7 +168,9 @@ type BlockProps = {
   selected?: boolean
 }
 
-const SELECTED_RING = '0 0 0 2px color-mix(in srgb, var(--biu-color-emphasis) 55%, transparent)'
+function selectBorder(_on?: boolean) {
+  return 'none'
+}
 
 /* ---------------- shared bits ---------------- */
 
@@ -262,22 +266,73 @@ const MAG_INK = '#0a0a0a'
 const MAG_PAPER = '#ece7dc'
 const MAG_BLUE = '#1c7cff'
 
-const barBtn: Record<string, unknown> = {
-  cursor: 'pointer',
-  border: 'none',
-  borderRadius: 6,
-  padding: '4px 8px',
-  background: 'transparent',
-  color: '#c9cdd6',
-  fontWeight: 700,
-  fontSize: 11,
-  lineHeight: '16px',
-  display: 'inline-flex',
-  alignItems: 'center',
+function HtmlKindIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="var(--biu-color-ink-purple)" aria-hidden>
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M5.4 3.55 1.85 8l3.55 4.45a.75.75 0 0 1-1.18.9L.32 8.48a.75.75 0 0 1 0-.96L4.22 2.65a.75.75 0 1 1 1.18.9Zm5.2 0 3.55 4.45-3.55 4.45a.75.75 0 0 0 1.18.9l3.9-4.87a.75.75 0 0 0 0-.96L11.78 2.65a.75.75 0 1 0-1.18.9ZM9.7 2.48a.75.75 0 0 1 .32 1.01L7.08 12.7a.75.75 0 1 1-1.34-.7L8.68 2.8a.75.75 0 0 1 1.02-.32Z"
+      />
+    </svg>
+  )
 }
 
 function hold(event: { preventDefault: () => void }) {
   event.preventDefault()
+}
+
+function htmlBlockTitle(data: Record<string, unknown>, fallback: string) {
+  return String(data.title ?? '').trim() || fallback
+}
+
+function NavTitle({
+  value,
+  readOnly,
+  testId,
+  onCommit,
+}: {
+  value: string
+  readOnly?: boolean
+  testId: string
+  onCommit?: (next: string) => void
+}) {
+  const [draft, setDraft] = useState(value)
+  useEffect(() => {
+    setDraft(value)
+  }, [value])
+  const commit = () => {
+    const next = draft.trim()
+    if (!next || next === value) {
+      setDraft(value)
+      return
+    }
+    onCommit?.(next)
+  }
+  return (
+    <input
+      className="page-block-expand-nav-title"
+      data-testid={testId}
+      data-biu-ignore
+      readOnly={readOnly || !onCommit}
+      value={draft}
+      placeholder="标题"
+      aria-label="标题"
+      onMouseDown={(event) => event.stopPropagation()}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          event.currentTarget.blur()
+        }
+        if (event.key === 'Escape') {
+          setDraft(value)
+          event.currentTarget.blur()
+        }
+      }}
+    />
+  )
 }
 
 function HtmlDeckOverlay({
@@ -294,7 +349,6 @@ function HtmlDeckOverlay({
   const closeRef = useRef(onClose)
   closeRef.current = onClose
   const boxRef = useRef<HTMLDivElement | null>(null)
-  const [navHot, setNavHot] = useState(false)
   const slide = slides[index]
   const total = slides.length
   useEffect(() => {
@@ -358,7 +412,7 @@ function HtmlDeckOverlay({
         width: '100%',
         height: '100%',
         maxWidth: 'none',
-        zIndex: 2147483646,
+        zIndex: 'var(--biu-z-modal)',
         display: 'flex',
         flexDirection: 'column',
         background: '#0b0b12',
@@ -367,6 +421,51 @@ function HtmlDeckOverlay({
       }}
     >
       <style>{`[data-testid="html-deck"]:fullscreen,[data-testid="html-deck"]:-webkit-full-screen{inset:0!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important}[data-testid="html-deck-slide"]>*{width:100%!important;height:100%!important;max-width:none!important;box-sizing:border-box}`}</style>
+      <div className="page-block-expand-nav" data-testid="html-deck-expand-nav" data-biu-ignore>
+        <div className="page-block-expand-nav-type" data-testid="html-deck-type-icon" title="HTML" aria-label="HTML">
+          <HtmlKindIcon />
+        </div>
+        <NavTitle
+          value={String(slide?.title ?? '').trim() || (slide?.kind === 'htmlframe' ? '动态HTML' : '静态HTML')}
+          testId="html-deck-title"
+        />
+        <div className="page-block-expand-nav-tools">
+          <button
+            type="button"
+            className="page-slide-icon"
+            disabled={index <= 0}
+            style={index <= 0 ? { opacity: 0.35, cursor: 'default' } : undefined}
+            onClick={() => onIndex(stepHtmlDeck(index, -1, total))}
+            aria-label="上一张"
+          >
+            <ChevronLeftIcon aria-hidden className="page-slide-ico" />
+          </button>
+          <span data-testid="html-deck-index" style={{ minWidth: 48, textAlign: 'center', fontSize: 12, color: 'var(--biu-color-text-muted)' }}>
+            {index + 1} / {total}
+          </span>
+          <button
+            type="button"
+            className="page-slide-icon"
+            disabled={index >= total - 1}
+            style={index >= total - 1 ? { opacity: 0.35, cursor: 'default' } : undefined}
+            onClick={() => onIndex(stepHtmlDeck(index, 1, total))}
+            aria-label="下一张"
+          >
+            <ChevronRightIcon aria-hidden className="page-slide-ico" />
+          </button>
+          <button
+            type="button"
+            className="page-slide-icon"
+            data-page-block-expand=""
+            data-testid="html-deck-exit"
+            title="退出放映"
+            aria-label="退出放映"
+            onClick={onClose}
+          >
+            <ArrowsPointingInIcon aria-hidden className="page-slide-ico" />
+          </button>
+        </div>
+      </div>
       <div
         data-testid="html-deck-stage"
         style={{
@@ -391,55 +490,6 @@ function HtmlDeckOverlay({
           />
         )}
       </div>
-      <div
-        data-testid="html-deck-nav"
-        onMouseEnter={() => setNavHot(true)}
-        onMouseLeave={() => setNavHot(false)}
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 2,
-          display: 'flex',
-          alignItems: 'flex-end',
-          justifyContent: 'center',
-          height: 96,
-          padding: '0 16px 18px',
-          background: navHot ? 'linear-gradient(transparent, rgba(0,0,0,.55))' : 'transparent',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 10,
-            opacity: navHot ? 1 : 0,
-            transition: 'opacity 160ms ease',
-            pointerEvents: navHot ? 'auto' : 'none',
-          }}
-        >
-          <button type="button" style={{ ...barBtn, ...(index <= 0 ? { opacity: 0.35, cursor: 'default' } : {}) }} disabled={index <= 0} onClick={() => onIndex(stepHtmlDeck(index, -1, total))} aria-label="上一张">
-            上一张
-          </button>
-          <span data-testid="html-deck-index" style={{ color: '#8b93a7', minWidth: 64, textAlign: 'center' }}>
-            {index + 1} / {total}
-          </span>
-          <button
-            type="button"
-            style={{ ...barBtn, ...(index >= total - 1 ? { opacity: 0.35, cursor: 'default' } : {}) }}
-            disabled={index >= total - 1}
-            onClick={() => onIndex(stepHtmlDeck(index, 1, total))}
-            aria-label="下一张"
-          >
-            下一张
-          </button>
-          <button type="button" data-page-block-expand="" style={{ ...barBtn, marginLeft: 12 }} onClick={onClose} title="退出放映" aria-label="退出放映">
-            <ArrowsPointingInIcon aria-hidden className="page-slide-ico" />
-          </button>
-        </div>
-      </div>
     </div>,
     document.body,
   )
@@ -449,13 +499,14 @@ function useHtmlDeck(
   hostRef: { current: HTMLElement | null },
   kind: 'html' | 'htmlframe',
   html: string,
-  opts?: { width?: unknown; height?: unknown; deck?: boolean },
+  opts?: { width?: unknown; height?: unknown; deck?: boolean; title?: string },
 ) {
   const [open, setOpen] = useState(false)
   const [index, setIndex] = useState(0)
   const [slides, setSlides] = useState<ReturnType<typeof collectHtmlSlides>>([])
   const width = opts?.width
   const height = opts?.height
+  const title = opts?.title
   const deck = htmlDeckEnabled(opts?.deck)
 
   useLayoutEffect(() => {
@@ -464,11 +515,12 @@ function useHtmlDeck(
       kind,
       html,
       deck,
+      ...(title ? { title } : {}),
       ...(width != null && width !== '' ? { width: width as number | string } : {}),
       ...(height != null && height !== '' ? { height: height as number | string } : {}),
     })
     return () => bindHtmlSlide(host, null)
-  }, [hostRef, html, kind, width, height, deck])
+  }, [hostRef, html, kind, width, height, deck, title])
 
   const start = () => {
     const host = hostRef.current?.closest('[data-page-block]') ?? null
@@ -495,33 +547,25 @@ function useHtmlDeck(
   return { start, overlay }
 }
 
-function SizeGrip({
+function HeightGrip({
   boxRef,
-  onSize,
-  reveal,
+  onHeight,
 }: {
   boxRef: { current: HTMLElement | null }
-  onSize: (next: { width: number; height: number }) => void
-  reveal: boolean
+  onHeight: (height: number) => void
 }) {
-  const drag = useRef<{ x: number; y: number; w: number; h: number } | null>(null)
-  const [dragging, setDragging] = useState(false)
-  const onSizeRef = useRef(onSize)
-  onSizeRef.current = onSize
-  const show = reveal || dragging
+  const drag = useRef<{ y: number; h: number } | null>(null)
+  const onHeightRef = useRef(onHeight)
+  onHeightRef.current = onHeight
   useEffect(() => {
     const move = (event: PointerEvent) => {
       const start = drag.current
       if (!start) return
       event.preventDefault()
-      onSizeRef.current({
-        width: Math.max(80, Math.round(start.w + event.clientX - start.x)),
-        height: Math.max(48, Math.round(start.h + event.clientY - start.y)),
-      })
+      onHeightRef.current(Math.max(160, Math.round(start.h + event.clientY - start.y)))
     }
     const up = () => {
       drag.current = null
-      setDragging(false)
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
@@ -530,37 +574,35 @@ function SizeGrip({
       window.removeEventListener('pointerup', up)
     }
   }, [])
-  if (!show) return null
   return (
     <button
       type="button"
       data-testid="html-size-grip"
       data-biu-ignore
       tabIndex={-1}
-      title="拖动调整宽高"
-      aria-label="拖动调整宽高"
+      title="拖动调整高度"
+      aria-label="拖动调整高度"
       onPointerDown={(event) => {
         event.preventDefault()
         event.stopPropagation()
         const box = boxRef.current
         if (!box) return
-        setDragging(true)
-        drag.current = { x: event.clientX, y: event.clientY, w: box.offsetWidth, h: box.offsetHeight }
+        drag.current = { y: event.clientY, h: box.offsetHeight }
       }}
       style={{
         appearance: 'none',
         position: 'absolute',
-        right: 3,
-        bottom: 3,
+        left: 0,
+        right: 0,
+        bottom: 0,
         zIndex: 18,
-        width: 16,
-        height: 16,
+        height: 10,
         margin: 0,
         padding: 0,
-        cursor: 'nwse-resize',
+        cursor: 'ns-resize',
         border: 'none',
         borderRadius: 0,
-        background: 'linear-gradient(135deg, transparent 46%, #111 46%)',
+        background: 'transparent',
       }}
     />
   )
@@ -574,6 +616,8 @@ function HtmlSideBar({
   onDeck,
   sized,
   onResetSize,
+  title,
+  onTitle,
 }: {
   editing: boolean
   setEditing: (v: boolean) => void
@@ -583,9 +627,16 @@ function HtmlSideBar({
   onDeck?: (next: boolean) => void
   sized?: boolean
   onResetSize?: () => void
+  title: string
+  onTitle: (next: string) => void
 }) {
   return (
-    <div className="page-slide-bar" data-testid="html-side-bar" data-biu-ignore>
+    <div className="page-block-expand-nav" data-testid="html-side-bar" data-biu-ignore>
+      <div className="page-block-expand-nav-type" data-testid="html-type-icon" title="HTML" aria-label="HTML">
+        <HtmlKindIcon />
+      </div>
+      <NavTitle value={title} readOnly={ro} testId="html-title" onCommit={onTitle} />
+      <div className="page-block-expand-nav-tools">
       {ro ? null : (
         <>
           <button
@@ -619,7 +670,7 @@ function HtmlSideBar({
           ) : null}
           <button
             type="button"
-            className={`page-slide-icon${deck ? ' is-deck' : ''}`}
+            className={`page-slide-icon${deck ? ' is-on' : ''}`}
             data-testid="html-deck-toggle"
             title={deck ? '已加入演示，点击移出' : '未加入演示，点击加入'}
             aria-label={deck ? '移出演示' : '加入演示'}
@@ -643,6 +694,7 @@ function HtmlSideBar({
       >
         <ArrowsPointingOutIcon aria-hidden className="page-slide-ico" />
       </button>
+      </div>
     </div>
   )
 }
@@ -680,10 +732,10 @@ function HtmlDirectCard({ data, update, writable, selected }: BlockProps) {
   const fillHost = fill && (height == null || height === '')
   const sized = (width != null && width !== '') || (height != null && height !== '') || fillHost
   const deckOn = htmlDeckEnabled(data.deck)
+  const title = htmlBlockTitle(data, '静态HTML')
   const [editing, setEditing] = useState(false)
-  const [hover, setHover] = useState(false)
   const hostRef = useRef<HTMLDivElement | null>(null)
-  const deck = useHtmlDeck(hostRef, 'html', html, { width, height, deck: deckOn })
+  const deck = useHtmlDeck(hostRef, 'html', html, { width, height, deck: deckOn, title })
   const stamped = useMemo(
     () => stampHtmlSource(html, htmlBlockKey(hostRef.current?.closest('[data-page-block]') ?? null, html), name),
     [html],
@@ -699,16 +751,16 @@ function HtmlDirectCard({ data, update, writable, selected }: BlockProps) {
       className={fill ? 'html-direct-fill' : undefined}
       style={{
         position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
         width: cssBoxSize(width) ?? '100%',
         height: cssBoxSize(height) ?? (fillHost ? HTML_FILL_HOST_PX : undefined),
         maxWidth: '100%',
         overflow: 'visible',
         boxSizing: 'border-box',
-        boxShadow: selected ? SELECTED_RING : undefined,
-        borderRadius: selected ? 4 : undefined,
+        border: selectBorder(selected),
+        borderRadius: 0,
       }}
-      onPointerEnter={() => setHover(true)}
-      onPointerLeave={() => setHover(false)}
     >
       {fill ? <style>{HTML_FILL_CSS}</style> : null}
       <HtmlSideBar
@@ -720,17 +772,19 @@ function HtmlDirectCard({ data, update, writable, selected }: BlockProps) {
         onDeck={(next) => update({ deck: next })}
         sized={sized}
         onResetSize={() => update({ width: undefined, height: undefined })}
+        title={title}
+        onTitle={(next) => update({ title: next })}
       />
       {editing ? (
         <SourceEditor html={html} onChange={source.save} compile={compiled} />
       ) : (
         <div
           className={fill ? 'html-direct-fill-inner' : undefined}
-          style={{ overflow: sized ? 'auto' : undefined, overflowX: sized ? undefined : 'auto', height: fill || sized ? '100%' : undefined }}
+          style={{ flex: 1, minHeight: 0, overflow: sized ? 'auto' : undefined, overflowX: sized ? undefined : 'auto', height: fill || sized ? '100%' : undefined }}
           dangerouslySetInnerHTML={{ __html: stamped }}
         />
       )}
-      {ro || editing ? null : <SizeGrip reveal={hover} boxRef={hostRef} onSize={(next) => update(next)} />}
+      {ro || editing ? null : <HeightGrip boxRef={hostRef} onHeight={(height) => update({ height })} />}
       {deck.overlay}
     </div>
     </ReUI>
@@ -806,10 +860,10 @@ function HtmlFrameCard({ data, update, writable, selected }: BlockProps) {
   const html = source.html
   const height = Number(data.height) || 300
   const deckOn = htmlDeckEnabled(data.deck)
+  const title = htmlBlockTitle(data, '动态HTML')
   const [editing, setEditing] = useState(false)
-  const [hover, setHover] = useState(false)
   const hostRef = useRef<HTMLDivElement | null>(null)
-  const deck = useHtmlDeck(hostRef, 'htmlframe', html, { height, deck: deckOn })
+  const deck = useHtmlDeck(hostRef, 'htmlframe', html, { height, deck: deckOn, title })
   const compiled = useMemo(() => compileHtmlSource(html), [html])
 
   return (
@@ -820,16 +874,26 @@ function HtmlFrameCard({ data, update, writable, selected }: BlockProps) {
       data-html-selected={selected ? '1' : undefined}
       style={{
         position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
         width: '100%',
         height,
         overflow: 'visible',
-        boxShadow: selected ? SELECTED_RING : undefined,
-        borderRadius: selected ? 4 : undefined,
+        boxSizing: 'border-box',
+        border: selectBorder(selected),
+        borderRadius: 0,
       }}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
     >
-      <HtmlSideBar editing={editing} setEditing={setEditing} ro={ro} onExpand={deck.start} deck={deckOn} onDeck={(next) => update({ deck: next })} />
+      <HtmlSideBar
+        editing={editing}
+        setEditing={setEditing}
+        ro={ro}
+        onExpand={deck.start}
+        deck={deckOn}
+        onDeck={(next) => update({ deck: next })}
+        title={title}
+        onTitle={(next) => update({ title: next })}
+      />
       {editing ? (
         <SourceEditor html={html} onChange={source.save} compile={compiled} />
       ) : (
@@ -844,7 +908,7 @@ function HtmlFrameCard({ data, update, writable, selected }: BlockProps) {
           }}
         />
       )}
-      {ro || editing ? null : <SizeGrip reveal={hover} boxRef={hostRef} onSize={(next) => update({ height: next.height })} />}
+      {ro || editing ? null : <HeightGrip boxRef={hostRef} onHeight={(height) => update({ height })} />}
       {deck.overlay}
     </div>
     </ReUI>
@@ -864,7 +928,7 @@ function htmlBlockAssets(data: Record<string, unknown>) {
 /* ---------------- apply ---------------- */
 
 export function apply(ctx: {
-  pageEditor: {
+  blockEditor: {
     registerBlock: (spec: {
       kind: string
       plugin: string
@@ -878,7 +942,7 @@ export function apply(ctx: {
     }) => void
   }
 }) {
-  ctx.pageEditor.registerBlock({
+  ctx.blockEditor.registerBlock({
     kind: 'html',
     plugin: name,
     label: '静态HTML',
@@ -887,10 +951,10 @@ export function apply(ctx: {
     hint: 'HTML/CSS 卡片和刊头，不跑脚本；源码必须 db_doc 附件，围栏只写 {"file":"assets/….html"}，写进围栏会被覆盖',
     aliases: ['html', 'html直', '静态html', '排版', '直接渲染', '静态渲染', '静态演示'],
     assets: htmlBlockAssets,
-    defaults: () => ({ file: newHtmlFile(), deck: true }),
+    defaults: () => ({ file: newHtmlFile(), deck: true, title: '静态HTML' }),
     View: HtmlDirectCard,
   })
-  ctx.pageEditor.registerBlock({
+  ctx.blockEditor.registerBlock({
     kind: 'htmlframe',
     plugin: name,
     label: '动态HTML',
@@ -899,7 +963,7 @@ export function apply(ctx: {
     hint: '文档内沙箱跑脚本/React，继承全局样式；源码必须 db_doc 附件，围栏只写 {"file":"assets/….html"}，写进围栏会被覆盖',
     aliases: ['iframe', 'htmlf', 'frame', '幻灯片', 'slide', '沙箱', '小网页', '动态演示'],
     assets: htmlBlockAssets,
-    defaults: () => ({ file: newHtmlFile(), height: 300, deck: true }),
+    defaults: () => ({ file: newHtmlFile(), height: 300, deck: true, title: '动态HTML' }),
     View: HtmlFrameCard,
   })
 }

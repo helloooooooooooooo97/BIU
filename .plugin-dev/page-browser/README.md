@@ -15,7 +15,7 @@
 
 围栏头：`kind=browser plugin=page-browser`。
 
-:::pageBlock {kind=browser plugin=page-browser}
+:::editorBlock {kind=browser plugin=page-browser}
 {
   "url": "https://example.com",
   "height": 640

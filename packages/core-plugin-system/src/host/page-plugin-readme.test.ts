@@ -1,18 +1,17 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '../../../../')
 const sandbox = join(root, '.plugin-dev')
 
-test('page-sandbox store listing is 沙箱, not HTML', () => {
-  const manifest = JSON.parse(readFileSync(join(sandbox, 'page-sandbox', 'manifest.json'), 'utf8')) as {
-    id: string
-    name: string
-  }
-  assert.equal(manifest.id, 'page-sandbox')
-  assert.equal(manifest.name, '沙箱')
+test('sandbox is a core page block, not a store plugin', () => {
+  const src = readFileSync(join(root, 'packages/core-editor/src/web/sandbox/block.tsx'), 'utf8')
+  assert.match(src, /export const name = 'page-sandbox'/)
+  assert.match(src, /label: '沙箱'/)
+  assert.match(src, /function registerSandboxBlock/)
+  assert.equal(existsSync(join(sandbox, 'page-sandbox')), false)
 })
 
 test('page block playground UIs use ReUI tokens instead of hardcoded light-theme colors', () => {
@@ -27,15 +26,15 @@ test('page block playground UIs use ReUI tokens instead of hardcoded light-theme
   }
 })
 
-test('page plugin READMEs use live :::pageBlock fences, not wrapped in markdown code fences', () => {
+test('page plugin READMEs use live :::editorBlock fences, not wrapped in markdown code fences', () => {
   const ids = [
     'page-algorithm',
     'page-browser',
     'page-code-runner',
     'page-excalidraw',
     'page-html-blocks',
-    'page-sandbox',
     'page-terminal',
+    'page-tag',
     'page-toc',
     'page-video',
   ]
@@ -45,13 +44,13 @@ test('page plugin READMEs use live :::pageBlock fences, not wrapped in markdown 
     const live = src.replace(/```[\s\S]*?```/g, '')
     assert.match(
       live,
-      new RegExp(`:::pageBlock \\{kind=\\S+ plugin=${id}(?:[\\s}])`),
-      `${id} README must use :::pageBlock {plugin=${id}} as live markdown, not inside a code fence`,
+      new RegExp(`:::editorBlock \\{kind=\\S+ plugin=${id}(?:[\\s}])`),
+      `${id} README must use :::editorBlock {plugin=${id}} as live markdown, not inside a code fence`,
     )
     assert.doesNotMatch(
       src,
-      /```[^\n]*\n:::pageBlock/,
-      `${id} README must not wrap :::pageBlock in an outer code fence`,
+      /```[^\n]*\n:::editorBlock/,
+      `${id} README must not wrap :::editorBlock in an outer code fence`,
     )
   }
 })

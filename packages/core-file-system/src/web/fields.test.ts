@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import type { CollectionSchema } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS, normalizeSchemaValue } from '@biu/type-file-system'
-import { actionWhenKeys, defaultColumnKeys, tagFlatColumnKey, flattenTagColumns, tagColumnTitle, inferPackFieldType, listProjectionKeys, parseTagFlatColumnKey, patchTagFlatValue, pinActionColumn, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, fieldValueOptions, GROUP_STRATEGIES, groupField, groupListFilter, groupListKeys, groupRecords, groupableFields, hasTreeLinks, treeChildren, isGroupableKind, isViewModeId, matchActionWhen, mergeListFilters, overlayListed, previewActionRecord, parentFieldKey, readTagFlatValue, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
+import { actionWhenKeys, defaultColumnKeys, tagFlatColumnKey, flattenTagColumns, tagColumnTitle, inferPackFieldType, listProjectionKeys, parseTagFlatColumnKey, patchTagFlatValue, pinActionColumn, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, fieldValueOptions, filterFieldValueOptions, GROUP_STRATEGIES, groupField, groupListFilter, groupListKeys, groupRecords, groupableFields, hasTreeLinks, treeChildren, isGroupableKind, isViewModeId, matchActionWhen, mergeListFilters, overlayListed, previewActionRecord, parentFieldKey, readTagFlatValue, recordGroupLabels, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
 import { placedActions, visibleActions } from './fsdb-cells.tsx'
 
 test('isViewModeId accepts builtin and custom slugs', () => {
@@ -33,6 +33,7 @@ test('resolveFieldType maps legacy aliases', () => {
   assert.equal(resolveFieldType({ type: 'string', format: 'url' }), 'url')
   assert.equal(resolveFieldType({ type: 'image' }), 'image')
   assert.equal(resolveFieldType({ type: 'attachment' }), 'attachment')
+  assert.equal(resolveFieldType({ type: 'document' }), 'document')
   assert.equal(resolveFieldType({ type: 'tag' }), 'tag')
   assert.equal(resolveFieldType({ type: 'action' }), 'action')
   assert.equal(resolveFieldType({ type: 'ref' }), 'ref')
@@ -50,6 +51,23 @@ test('closed enums keep stable values and expose translated labels', () => {
     { value: 'owner', label: '所有者' },
     { value: 'viewer', label: '查看者' },
   ])
+})
+
+test('view catalog columns show names instead of [object Object]', () => {
+  const field = { type: 'string' as const, label: '内容视图' }
+  assert.equal(
+    formatField(field, [{ id: 'site1', name: '官网', kind: 'sandbox', file: 'view-a.jsx' }]),
+    '官网',
+  )
+  assert.equal(
+    formatField(field, [
+      { id: 'a', name: '官网', kind: 'sandbox', file: 'a.jsx' },
+      { id: 'b', name: '海报', kind: 'sandbox', file: 'b.jsx' },
+    ]),
+    '官网、海报',
+  )
+  assert.equal(formatField({ type: 'string', label: '全局视图' }, [{ id: 'need', name: '需求', contentViewId: 'doc' }]), '需求')
+  assert.equal(formatField(field, []), '')
 })
 
 test('fieldHasValue hides missing list/card/board chips', () => {
@@ -81,6 +99,7 @@ test('formatField renders datetime tags and media', () => {
   assert.equal(formatField({ type: 'url' }, 'https://example.com/x'), 'https://example.com/x')
   assert.equal(formatField({ type: 'url' }, 'javascript:alert(1)'), '')
   assert.equal(formatField({ type: 'attachment' }, { name: 'a.pdf', href: 'https://cdn.example/a.pdf' }), 'a.pdf')
+  assert.equal(formatField({ type: 'document' }, { name: '稿.md', href: '/api/db/file/doc-a-稿.md' }), '稿.md')
   assert.equal(formatField({ type: 'person' }, { kind: 'user', name: '用户' }), '用户')
   assert.equal(formatField({ type: 'person' }, { kind: 'system', name: '系统' }), '系统')
   assert.equal(formatField({ type: 'ref' }, 'rec-1'), 'rec-1')
@@ -310,6 +329,33 @@ test('contentFieldKey prefers content then contentField then notes', () => {
   )
 })
 
+test('all-data source table is a groupable select', () => {
+  const dataSchema: CollectionSchema = {
+    labelField: 'title',
+    fields: {
+      title: { type: 'string' },
+      table: { type: 'select', label: '来源表', computed: true, enum: ['页面', '代理'] },
+    },
+  }
+  assert.equal(groupableFields(dataSchema).some((item) => item.key === 'table'), true)
+  const buckets = groupRecords(
+    [
+      { id: '1', title: 'a', table: '页面' },
+      { id: '2', title: 'b', table: '代理' },
+      { id: '3', title: 'c', table: '页面' },
+    ],
+    dataSchema,
+    'table',
+  )
+  assert.deepEqual(
+    buckets.map((item) => [item.key, item.rows.length]),
+    [
+      ['页面', 2],
+      ['代理', 1],
+    ],
+  )
+})
+
 test('groupField follows the strategy registry and skips free text', () => {
   assert.equal(groupField(schema), null)
   assert.equal(groupField(schema, 'status')?.key, 'status')
@@ -326,10 +372,10 @@ test('groupField follows the strategy registry and skips free text', () => {
   )
 })
 
-test('groupListKeys uses schema enum and skips 未填 when enum is declared', () => {
+test('groupListKeys keeps 未填 except for shareScope', () => {
   assert.deepEqual(
     groupListKeys(schema, 'status').map((item) => item.key),
-    ['todo', 'doing', 'done'],
+    ['todo', 'doing', 'done', ''],
   )
   const scoped = groupListKeys(
     {
@@ -346,7 +392,7 @@ test('groupListKeys uses schema enum and skips 未填 when enum is declared', ()
     scoped.map((item) => item.key),
     ['私人', '空间', '共享'],
   )
-  assert.deepEqual(groupListKeys(schema, 'tags'), [])
+  assert.deepEqual(groupListKeys(schema, 'tags').map((item) => item.key), [''])
   assert.deepEqual(
     groupListKeys(schema, 'tags', ['game']).map((item) => item.key),
     ['game', ''],
@@ -495,6 +541,7 @@ test('person and ref grouping reuse multi-value buckets', () => {
   )
   const refs = groupRecords(
     [
+      { id: 'p1', title: '产品手册', project: '' },
       { id: '1', title: 'a', project: 'p1' },
       { id: '2', title: 'b' },
     ],
@@ -504,10 +551,11 @@ test('person and ref grouping reuse multi-value buckets', () => {
   assert.deepEqual(
     refs.map((item) => [item.key, item.label, item.rows.map((row) => row.id)]),
     [
-      ['p1', 'p1', ['1']],
-      ['', '未关联', ['2']],
+      ['p1', '产品手册', ['1']],
+      ['', '未关联', ['p1', '2']],
     ],
   )
+  assert.equal(recordGroupLabels([{ id: 'p1', title: '产品手册' }]).p1, '产品手册')
 })
 
 test('number grouping uses interval buckets instead of distinct values', () => {
@@ -624,6 +672,10 @@ test('flattenTree keeps sibling order, indents children, and hides collapsed sub
   ]
   assert.deepEqual(
     flattenTree(rows, 'parentId').map((item) => [item.row.id, item.depth, item.hasKids, item.kidCount]),
+    [['p', 0, true, 3]],
+  )
+  assert.deepEqual(
+    flattenTree(rows, 'parentId', { p: false, c1: false }).map((item) => [item.row.id, item.depth, item.hasKids, item.kidCount]),
     [
       ['p', 0, true, 3],
       ['c2', 1, false, 0],
@@ -637,12 +689,23 @@ test('flattenTree keeps sibling order, indents children, and hides collapsed sub
   )
 })
 
+test('flattenTree does not promote children to root when the parent is missing', () => {
+  const rows = [
+    { id: 'child', title: '设计BUG', parentId: 'parent-elsewhere' },
+    { id: 'root', title: '顶层', parentId: '' },
+  ]
+  assert.deepEqual(
+    flattenTree(rows, 'parentId').map((item) => item.row.id),
+    ['root'],
+  )
+})
+
 test('flattenTree does not blow the stack on a parent cycle', () => {
   const rows = [
     { id: 'a', title: 'A', parentId: 'b' },
     { id: 'b', title: 'B', parentId: 'a' },
   ]
-  const flat = flattenTree(rows, 'parentId')
+  const flat = flattenTree(rows, 'parentId', { a: false, b: false })
   assert.deepEqual(flat.map((item) => item.row.id).sort(), ['a', 'b'])
   assert.ok(flat.every((item) => item.kidCount >= 0))
 })
@@ -667,6 +730,27 @@ test('uniqueValues lists tags already on the table, not schema enum', () => {
   assert.deepEqual(uniqueValues(rows, 'tags', schema.fields.tags!), ['docs', 'wip'])
   assert.deepEqual(uniqueValues(rows, 'status', schema.fields.status!), ['doing'])
   assert.equal(uniqueValues(rows, 'status', schema.fields.status!).includes('todo'), false)
+})
+
+test('filter options prefer the tag catalog and always keep select enums', () => {
+  const rows = [
+    { id: '1', title: 'a', status: 'doing', tags: { tags: ['orphan'] } },
+  ]
+  const tags = [
+    { id: 'docs', label: '文档' },
+    { id: 'wip', label: '进行中' },
+  ]
+  const tagField = { type: 'tag' as const }
+  assert.deepEqual(
+    filterFieldValueOptions([], 'tags', tagField, tags).map((item) => item.value),
+    ['docs', 'wip'],
+  )
+  assert.deepEqual(filterFieldValueOptions(rows, 'tags', tagField, tags).map((item) => item.value), ['docs', 'wip', 'orphan'])
+  assert.deepEqual(filterFieldValueOptions([], 'tags', tagField, []).map((item) => item.value), [])
+  assert.deepEqual(
+    filterFieldValueOptions([], 'status', schema.fields.status!).map((item) => item.value),
+    ['todo', 'doing', 'done'],
+  )
 })
 
 test('recordLinkIds treats ref as one id and multi-ref as many', () => {

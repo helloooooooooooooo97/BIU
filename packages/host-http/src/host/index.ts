@@ -481,7 +481,11 @@ export class HttpService extends Service {
         bytes: () => body(),
         send: (status, body) => {
           res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', ...corsHeaders })
-          res.end(JSON.stringify(body))
+          try {
+            res.end(JSON.stringify(body))
+          } catch (error) {
+            res.end(JSON.stringify({ error: String(error) }))
+          }
         },
       }
       const started = Date.now()

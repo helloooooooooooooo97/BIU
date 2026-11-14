@@ -91,6 +91,33 @@ export function pathForCrumbTarget(target: CrumbTarget) {
   return pathForCenter({ collection: target.collection, recordId: target.recordId })
 }
 
+/** 面包屑上一级：最后一级的父级。 */
+export function parentCrumbTarget(crumbs: Crumb[]): CrumbTarget | null {
+  if (crumbs.length < 2) return null
+  return crumbLabelAction(crumbs[crumbs.length - 1]!, crumbs[crumbs.length - 2])
+}
+
+/** ⌘← 回到面包屑上一级。 */
+export function crumbParentHotkey(event: {
+  key: string
+  metaKey: boolean
+  ctrlKey: boolean
+  altKey: boolean
+  shiftKey: boolean
+  isComposing?: boolean
+  defaultPrevented?: boolean
+}) {
+  if (event.defaultPrevented || event.isComposing) return false
+  if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return false
+  return event.key === 'ArrowLeft'
+}
+
+export function crumbHotkeyPane(target: EventTarget | null): 'inspector' | 'main' | null {
+  const el = target instanceof Element ? target : null
+  if (el?.closest('dialog, [role="dialog"], [role="menu"]')) return null
+  return el?.closest('.session-inspector') ? 'inspector' : 'main'
+}
+
 /** 标题还没到时不要用记录 id 充页面名。id 本身也不当标题。 */
 export function recordCrumbLabel(label: string | undefined, id: string) {
   const text = String(label ?? '').trim()

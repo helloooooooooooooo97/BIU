@@ -1,7 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
-import { pageEditorExtensions } from './kit.ts'
+import { recordEditorExtensions } from './kit.ts'
 import { recentlyLocalEdit, shouldApplyRemoteMarkdown } from './page-editor.tsx'
 
 function insertAfter(text: string, insertLine: number, newStr: string) {
@@ -20,7 +20,7 @@ test('insert writes the new line into markdown source', () => {
 test('tiptap paints an inserted markdown line as a paragraph', () => {
   const md = insertAfter('# 欢迎\n\n第一段\n\n末段', 2, '你好')
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: md,
     contentType: 'markdown',
   })

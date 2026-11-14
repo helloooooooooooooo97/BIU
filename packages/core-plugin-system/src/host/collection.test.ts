@@ -107,7 +107,7 @@ test('pluginsCollection lists installed plugins and sandboxes in one table', asy
   assert.equal(typeof spec.update, 'function')
   assert.equal(spec.schema.contentField, 'readme')
   assert.match(String(spec.view?.blurb ?? ''), /示例写法/)
-  assert.match(String(spec.view?.blurb ?? ''), /:::pageBlock/)
+  assert.match(String(spec.view?.blurb ?? ''), /:::editorBlock/)
   assert.equal(spec.schema.labelField, 'title')
   assert.ok(spec.schema.fields.title)
   assert.equal(spec.schema.fields.builtin?.type, 'boolean')
@@ -137,6 +137,12 @@ test('pluginsCollection lists installed plugins and sandboxes in one table', asy
   assert.deepEqual(spec.actions?.find((item) => item.id === 'uninstall')?.when, { installed: true, canManagePackage: true })
   assert.equal(spec.actions?.find((item) => item.id === 'uninstall')?.requiredAction, 'resource:read')
   assert.equal(spec.actions?.find((item) => item.id === 'sandbox')?.for, 'agent')
+  assert.deepEqual(
+    (spec.actions?.find((item) => item.id === 'sandbox')?.parameters as { properties?: { scope?: { enum?: string[] } } } | undefined)
+      ?.properties?.scope?.enum,
+    ['personal', 'workspace', 'shared', 'local'],
+  )
+  assert.match(String(spec.view?.blurb ?? ''), /args\.scope/)
   assert.equal(spec.actions?.find((item) => item.id === 'start')?.for, undefined)
 })
 

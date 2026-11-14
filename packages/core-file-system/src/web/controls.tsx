@@ -74,6 +74,17 @@ export function AppDialog({
     return () => window.cancelAnimationFrame(id)
   }, [named])
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      event.stopPropagation()
+      onCancel()
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [onCancel])
+
   function submit() {
     onConfirm(input ? inputRef.current?.value : undefined)
   }
@@ -92,10 +103,10 @@ export function AppDialog({
         aria-label={title}
         onMouseDown={(event) => event.stopPropagation()}
         onKeyDown={(event) => {
-          if (event.key === 'Escape') {
-            event.stopPropagation()
-            onCancel()
-          }
+          if (event.key !== 'Escape') return
+          event.preventDefault()
+          event.stopPropagation()
+          onCancel()
         }}
       >
         <div className="fsdb-dlg-title">{title}</div>

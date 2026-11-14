@@ -302,8 +302,12 @@ export function matchFilterRule(
   const actual = readTagFieldValue(record, rule.field)
   const field = specForFilterField(rule.field, schema, packs)
   const want = rule.value
-  if (rule.op === 'is_empty') return isEmptyValue(actual)
-  if (rule.op === 'not_empty') return !isEmptyValue(actual)
+  if (rule.op === 'is_empty' || rule.op === 'not_empty') {
+    const empty = isTagFieldType(field?.type)
+      ? normalizeSchemaValue(actual).tags.length === 0
+      : isEmptyValue(actual)
+    return rule.op === 'is_empty' ? empty : !empty
+  }
   if (rule.op === 'eq' && ['1h', '24h', '7d', '30d'].includes(want) && (field?.type === 'datetime' || field?.format === 'datetime')) {
     return matchFilterRule(record, { ...rule, op: 'within' }, schema, packs)
   }
@@ -442,7 +446,6 @@ export function resolveViewFilterTree(view: {
   filterTree?: FilterGroup | null
 }): FilterGroup {
   if (view.filterTree && countFilterRules(view.filterTree) > 0) return normalizeFilterGroup(view.filterTree)
-  if (view.builtin) return emptyFilterGroup()
   return flatFiltersToTree(view.filters)
 }
 

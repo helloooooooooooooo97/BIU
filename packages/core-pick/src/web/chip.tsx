@@ -19,6 +19,8 @@ import {
   BellIcon,
   UserGroupIcon,
   RectangleGroupIcon,
+  PhotoIcon,
+  PaperClipIcon,
 } from '@heroicons/react/16/solid'
 import { useState, type ComponentType } from 'react'
 import { ensureTagChipStyle, HeadlessPopover, TagChipCloseMark, overlayZ, tagTone } from '@biu/biu-ui'
@@ -119,7 +121,51 @@ export function pickKindIcon(kind: string, hint?: string): Glyph {
   return KIND_ICONS[canon] ?? TagIcon
 }
 
-export function PickKindGlyph({ kind, hint }: { kind: string; hint?: string }) {
+const FIELD_TYPE_ICONS: Record<string, Glyph> = {
+  boolean: CheckCircleIcon,
+  url: LinkIcon,
+  image: PhotoIcon,
+  attachment: PaperClipIcon,
+  document: DocumentIcon,
+  file: DocumentTextIcon,
+  string: Bars3BottomLeftIcon,
+  text: Bars3BottomLeftIcon,
+}
+
+function fieldPickGlyphKind(type: string) {
+  if (type === 'person') return 'person'
+  if (type === 'datetime') return 'date'
+  if (type === 'number') return 'num'
+  if (type === 'action') return 'play'
+  if (type === 'select' || type === 'multi-select') return 'stack'
+  if (type === 'tag') return 'tag'
+  if (type === 'url') return 'link'
+  if (type === 'ref' || type === 'multi-ref') return 'ref'
+  if (type === 'image') return 'image'
+  if (type === 'attachment') return 'attachment'
+  if (type === 'document') return 'document'
+  if (type === 'file') return 'file'
+  return 'text'
+}
+
+export function PickKindGlyph({ kind, hint, type }: { kind: string; hint?: string; type?: string }) {
+  const fieldType = String(type ?? '').trim()
+  if (fieldType) {
+    const Icon = FIELD_TYPE_ICONS[fieldType]
+    if (Icon) {
+      return <Icon className="pick-kind-icon" aria-hidden data-testid="pick-kind-icon" data-pick-kind={kind} data-pick-type={fieldType} />
+    }
+    return (
+      <span
+        className="fsdb-field-glyph pick-kind-icon"
+        data-kind={fieldPickGlyphKind(fieldType)}
+        aria-hidden
+        data-testid="pick-kind-icon"
+        data-pick-kind={kind}
+        data-pick-type={fieldType}
+      />
+    )
+  }
   const Icon = pickKindIcon(kind, hint)
   return <Icon className="pick-kind-icon" aria-hidden data-testid="pick-kind-icon" data-pick-kind={kind} />
 }
@@ -131,7 +177,7 @@ export function PickChipLabel({ pick }: { pick: PickRef }) {
   const split = Boolean(field && host && host !== field)
   return (
     <>
-      <PickKindGlyph kind={pick.kind} hint={pick.path || pick.id} />
+      <PickKindGlyph kind={pick.kind} hint={pick.path || pick.id} type={pick.type} />
       <span className="pick-chip-name">
         {split ? (
           <>
@@ -268,10 +314,10 @@ function PickChipData({ pick }: { pick: PickRef }) {
       data-testid="pick-chip-data"
       role="dialog"
       aria-label={card.title}
-      style={{ zIndex: overlayZ(300) }}
+      style={{ zIndex: overlayZ(500) }}
     >
       <p className="pick-chip-data-head" style={{ ['--biu-tag' as string]: pickKindTone(pick.kind) }}>
-        <PickKindGlyph kind={pick.kind} hint={pick.path || pick.id} />
+        <PickKindGlyph kind={pick.kind} hint={pick.path || pick.id} type={pick.type} />
         <span>{card.kind}</span>
       </p>
       <div className="pick-chip-data-fields">

@@ -3,7 +3,6 @@ import { TagIcon } from '@heroicons/react/16/solid'
 import { tagTone } from '@biu/biu-ui'
 import type { DbRecord } from '@biu/type-file-system'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
-
 const TagCollectBoardLazy = lazy(() => import('./tag-collect.tsx').then((m) => ({ default: m.TagCollectBoard })))
 
 export function TagCollectBoard(props: ComponentProps<typeof TagCollectBoardLazy>) {

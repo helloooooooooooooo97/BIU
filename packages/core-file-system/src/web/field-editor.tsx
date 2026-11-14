@@ -16,6 +16,7 @@ export function FieldEditor({
   onAction,
   autoOpen = false,
   collectionPath,
+  recordId,
   source,
   onCommit,
   compact = false,
@@ -28,6 +29,7 @@ export function FieldEditor({
   onAction?: () => void
   autoOpen?: boolean
   collectionPath?: string
+  recordId?: string
   source?: unknown
   onCommit?: (next: unknown) => void
   compact?: boolean
@@ -74,12 +76,14 @@ export function FieldEditor({
       />
     )
   }
-  if (kind === 'url' || kind === 'image' || kind === 'attachment') {
+  if (kind === 'url' || kind === 'image' || kind === 'attachment' || kind === 'document') {
     return (
       <MediaField
         kind={kind}
         value={source ?? value}
         collectionPath={collectionPath}
+        recordId={recordId}
+        fieldKey={fieldKey}
         compact={compact}
         onCommit={(next) => {
           if (onCommit) onCommit(next)

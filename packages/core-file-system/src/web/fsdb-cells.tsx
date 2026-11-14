@@ -1,5 +1,6 @@
+import { useSyncExternalStore } from 'react'
 import { BoolBox } from '@biu/biu-ui/bool-box'
-import { TagChip, TagChips } from '@biu/biu-ui/tag-chip'
+import { TAG_TONE_PURPLE, TagChip, TagChips } from '@biu/biu-ui/tag-chip'
 import {
   ArchiveBoxArrowDownIcon,
   ArrowDownTrayIcon,
@@ -10,13 +11,19 @@ import {
   CheckCircleIcon,
   CheckIcon,
   Bars3BottomLeftIcon,
+  DocumentIcon,
+  DocumentTextIcon,
   LinkIcon,
+  PaperClipIcon,
+  PhotoIcon,
+  PlusIcon,
   PaperAirplaneIcon,
   PencilSquareIcon,
   PlayIcon,
+  SparklesIcon,
   StopIcon,
+  TrashIcon,
 } from '@heroicons/react/16/solid'
-import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { CollectionSchema, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
 import { actionVisibleToUser, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, asPersonList, commitAttachments, normalizeSchemaValue } from '@biu/type-file-system'
 import type { CollectionRowViewType, CollectionViewType } from '@biu/type-file-system/ui'
@@ -29,6 +36,8 @@ import {
   resolveFieldType,
   type ViewMode,
 } from './fields.ts'
+import { isViewCatalogField, selectedViewCatalogOption, subscribeViewCatalog } from './view-catalog.ts'
+import { ViewCatalogGlyph } from './view-catalog-glyph.tsx'
 import { AttachmentFile, UrlHref } from './cell-media.tsx'
 import { PersonFace } from './person-cell.tsx'
 import { RecordLinkChips } from './record-link-cell.tsx'
@@ -40,12 +49,14 @@ export function actionIcon(id: string, opts?: { fallback?: boolean; className?: 
   if (id === 'start' || id === 'play' || id === 'run' || id === 'open' || id === 'enable') return <PlayIcon aria-hidden className={cls} />
   if (id === 'stop' || id === 'close' || id === 'pause' || id === 'disable') return <StopIcon aria-hidden className={cls} />
   if (id === 'pack') return <ArchiveBoxArrowDownIcon aria-hidden className={cls} />
-  if (id === 'uninstall' || id === 'delete' || id === 'remove') return <TrashGlyph aria-hidden className={cls} />
-  if (id === 'edit' || id === 'rename') return <PencilSquareIcon aria-hidden className={cls} />
+  if (id === 'uninstall' || id === 'delete' || id === 'remove' || id === 'trash') return <TrashIcon aria-hidden className={cls} />
+  if (id === 'edit') return <PencilSquareIcon aria-hidden className={cls} />
+  if (id === 'rename') return <SparklesIcon aria-hidden className={cls} />
   if (id === 'refresh') return <ArrowPathIcon aria-hidden className={cls} />
   if (id === 'sync-from-directory') return <ArrowDownTrayIcon aria-hidden className={cls} />
   if (id === 'sync-to-directory') return <ArrowUpTrayIcon aria-hidden className={cls} />
   if (id === 'deliver') return <PaperAirplaneIcon aria-hidden className={cls} />
+  if (id === 'add-child' || id === 'add-subpage' || id === 'add-subtask') return <PlusIcon aria-hidden className={cls} />
   if (id === 'chat' || id === 'report' || id === 'progress') return <ChatBubbleLeftRightIcon aria-hidden className={cls} />
   if (opts?.fallback === false) return null
   return <BoltIcon aria-hidden className={cls} />
@@ -81,7 +92,7 @@ export function fieldDraftValue(field: FieldSpec, value: unknown): string {
     if (list.length <= 1) return list[0] ?? ''
     return JSON.stringify(list)
   }
-  if (kind === 'attachment') {
+  if (kind === 'attachment' || kind === 'document') {
     const list = asAttachmentList(value)
     if (list.length <= 1) return list[0] ? JSON.stringify(list[0]) : ''
     return JSON.stringify(list)
@@ -98,7 +109,8 @@ export function fieldDraftValue(field: FieldSpec, value: unknown): string {
     return JSON.stringify(value, null, 2)
   }
   if (value == null) return ''
-  return String(value)
+  const catalog = formatField(field, value)
+  return catalog
 }
 
 export function draftFromRecord(schema: CollectionSchema, row: DbRecord, bodyKey: string | null | undefined, detailBody: unknown) {
@@ -119,13 +131,20 @@ export function fieldGlyphKind(kind: FieldType) {
   if (kind === 'tag') return 'tag'
   if (kind === 'url') return 'link'
   if (kind === 'ref' || kind === 'multi-ref') return 'ref'
-  if (kind === 'image' || kind === 'attachment' || kind === 'file') return 'file'
+  if (kind === 'image') return 'image'
+  if (kind === 'attachment') return 'attachment'
+  if (kind === 'document') return 'document'
+  if (kind === 'file') return 'file'
   return 'text'
 }
 
 export function FieldGlyph({ kind }: { kind: FieldType }) {
   if (kind === 'boolean') return <CheckCircleIcon aria-hidden className="fsdb-field-hero" />
   if (kind === 'url') return <LinkIcon aria-hidden className="fsdb-field-hero" />
+  if (kind === 'image') return <PhotoIcon aria-hidden className="fsdb-field-hero" />
+  if (kind === 'attachment') return <PaperClipIcon aria-hidden className="fsdb-field-hero" />
+  if (kind === 'document') return <DocumentIcon aria-hidden className="fsdb-field-hero" />
+  if (kind === 'file') return <DocumentTextIcon aria-hidden className="fsdb-field-hero" />
   if (fieldGlyphKind(kind) === 'text') return <Bars3BottomLeftIcon aria-hidden className="fsdb-field-hero" />
   return <span aria-hidden className="fsdb-field-glyph" data-kind={fieldGlyphKind(kind)} />
 }
@@ -212,7 +231,7 @@ export function parseFieldValue(field: FieldSpec, raw: string): unknown {
       return { tags: [], values: {} }
     }
   }
-  if (kind === 'file' || kind === 'attachment' || kind === 'image' || kind === 'person') {
+  if (kind === 'file' || kind === 'attachment' || kind === 'document' || kind === 'image' || kind === 'person') {
     const trimmed = raw.trim()
     if (!trimmed) return kind === 'file' ? null : ''
     if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
@@ -228,7 +247,7 @@ export function parseFieldValue(field: FieldSpec, raw: string): unknown {
 }
 
 function previewImageSrc(kind: FieldType | undefined, value: unknown): string {
-  if (kind === 'attachment' || kind === 'url' || kind === 'image') return ''
+  if (kind === 'attachment' || kind === 'document' || kind === 'url' || kind === 'image') return ''
   const src = asImageSrc(value)
   if (!src) return ''
   if (!kind) return src
@@ -272,6 +291,7 @@ export function FilePreview({
           <AttachmentFile
             key={`${file.href}-${index}`}
             file={file}
+            kind={kind === 'document' ? 'document' : 'attachment'}
             onRemove={
               onChange
                 ? () => onChange(commitAttachments(files.filter((_, i) => i !== index)))
@@ -290,7 +310,7 @@ export function FilePreview({
       </a>
     )
   }
-  if (kind === 'url' || kind === 'attachment' || kind === 'image') return null
+  if (kind === 'url' || kind === 'attachment' || kind === 'document' || kind === 'image') return null
   const text = typeof value === 'string' ? value : JSON.stringify(value, null, compact ? 0 : 2)
   if (compact) return <span className="fsdb-meta">{text.length > 80 ? `${text.slice(0, 80)}…` : text}</span>
   return text ? <pre className="fsdb-fileview-pre">{text}</pre> : null
@@ -300,6 +320,7 @@ export function DefaultCell({
   field,
   value,
   fieldKey,
+  record,
   records,
   collectionPath,
   labelField,
@@ -311,6 +332,7 @@ export function DefaultCell({
   field: FieldSpec
   value: unknown
   fieldKey?: string
+  record?: DbRecord
   records?: DbRecord[]
   collectionPath?: string
   labelField?: string
@@ -320,8 +342,32 @@ export function DefaultCell({
   onOpenLink?: (id: string) => void
 }) {
   const kind = resolveFieldType(field)
+  const catalogKey = fieldKey && isViewCatalogField(fieldKey) ? fieldKey : ''
+  const catalogTick = useSyncExternalStore(
+    (fn) => (collectionPath && catalogKey ? subscribeViewCatalog(collectionPath, fn) : () => undefined),
+    () =>
+      collectionPath && catalogKey && record
+        ? `${selectedViewCatalogOption(collectionPath, record, catalogKey)?.id ?? ''}:${selectedViewCatalogOption(collectionPath, record, catalogKey)?.name ?? ''}`
+        : '',
+  )
   if (kind === 'action') {
     return <ActionCell field={field} fieldKey={fieldKey ?? ''} onRun={onRun} />
+  }
+  if (catalogKey && record && collectionPath) {
+    const option = selectedViewCatalogOption(collectionPath, record, catalogKey)
+    if (!option) return null
+    if (plain) return <span className="fsdb-select-text">{option.name}</span>
+    return (
+      <TagChips>
+        <TagChip
+          key={catalogTick}
+          id={option.id}
+          label={option.name}
+          tone={option.icon === 'sandbox' ? TAG_TONE_PURPLE : undefined}
+          icon={<ViewCatalogGlyph icon={option.icon} Icon={option.Icon} className="size-[14px]" />}
+        />
+      </TagChips>
+    )
   }
   if (fieldKey && isRecordLinkField(field, fieldKey)) {
     return (
@@ -388,8 +434,8 @@ export function DefaultCell({
     if (!text) return null
     return <span className="fsdb-datetime-text">{text}</span>
   }
-  if (kind === 'url' || kind === 'image' || kind === 'attachment' || kind === 'file') {
-    return <FilePreview value={value} compact kind={kind} onChange={kind === 'attachment' ? onChange : undefined} />
+  if (kind === 'url' || kind === 'image' || kind === 'attachment' || kind === 'document' || kind === 'file') {
+    return <FilePreview value={value} compact kind={kind} onChange={kind === 'attachment' || kind === 'document' ? onChange : undefined} />
   }
   const text = formatField(field, value)
   if (!text) return null

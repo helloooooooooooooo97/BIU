@@ -1,6 +1,6 @@
 import { formatPageBlockFence, parsePageBlockData, parsePageBlockMeta } from './web/page-block-meta.ts'
 
-const FENCE = /^:::pageBlock(?:\s+\{([^}]*)\})?\s*\n([\s\S]*?)\n:::/gm
+const FENCE = /^:::(?:editorBlock|pageBlock)(?:\s+\{([^}]*)\})?\s*\n([\s\S]*?)\n:::/gm
 
 export type PageBlockFence = {
   id: string
@@ -115,10 +115,10 @@ export function uniquifyPageBlockMarkdown(markdown: string) {
 
 export function patchPageBlockMarkdown(markdown: string, id: string, patch: PageBlockAttrsPatch): string {
   const needle = String(id ?? '').trim()
-  if (!needle) throw new Error('pageBlock id is required')
+  if (!needle) throw new Error('editorBlock id is required')
   const hits = listPageBlockFences(markdown).filter((item) => item.id === needle)
-  if (!hits.length) throw new Error(`unknown pageBlock: ${needle}`)
-  if (hits.length > 1) throw new Error(`pageBlock id is not unique: ${needle}`)
+  if (!hits.length) throw new Error(`unknown editorBlock: ${needle}`)
+  if (hits.length > 1) throw new Error(`editorBlock id is not unique: ${needle}`)
   const fence = hits[0]!
   const current = pageBlockData(fence)
   const data = patch.replace

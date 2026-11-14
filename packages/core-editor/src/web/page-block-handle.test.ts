@@ -15,11 +15,11 @@ import {
   insertParagraphBefore,
   resolveHandleBlock,
 } from './page-block-handle.ts'
-import { pageEditorExtensions } from './kit.ts'
+import { recordEditorExtensions } from './kit.ts'
 
 function editorOf(markdown: string) {
   return new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: markdown,
     contentType: 'markdown',
   })
@@ -74,24 +74,24 @@ test('insert before / after / duplicate / delete a paragraph', () => {
 })
 
 test('resolveHandleBlock picks pageBlock atom at the gap beside it', () => {
-  const editor = editorOf(`:::pageBlock {kind=sandbox plugin=page-sandbox}
+  const editor = editorOf(`:::editorBlock {kind=sandbox plugin=page-sandbox}
 {"html":"<p>hi</p>"}
 :::
 `)
   let blockPos = -1
   let blockSize = 0
   editor.state.doc.descendants((node, pos) => {
-    if (node.type.name === 'pageBlock') {
+    if (node.type.name === 'editorBlock') {
       blockPos = pos
       blockSize = node.nodeSize
     }
   })
   assert.ok(blockPos >= 0)
   const atStart = resolveHandleBlock(editor.state.doc.resolve(blockPos))
-  assert.equal(atStart?.node.type.name, 'pageBlock')
+  assert.equal(atStart?.node.type.name, 'editorBlock')
   assert.equal(atStart?.pos, blockPos)
   const after = resolveHandleBlock(editor.state.doc.resolve(blockPos + blockSize))
-  assert.equal(after?.node.type.name, 'pageBlock')
+  assert.equal(after?.node.type.name, 'editorBlock')
   assert.equal(after?.pos, blockPos)
   editor.destroy()
 })
@@ -101,8 +101,8 @@ test('handleBlockFromDom maps a nested iframe back to the pageBlock atom', () =>
   document.body.append(host)
   const editor = new Editor({
     element: host,
-    extensions: pageEditorExtensions(),
-    content: `:::pageBlock {kind=sandbox plugin=page-sandbox}
+    extensions: recordEditorExtensions(),
+    content: `:::editorBlock {kind=sandbox plugin=page-sandbox}
 {"html":"<p>hi</p>"}
 :::
 `,
@@ -110,7 +110,7 @@ test('handleBlockFromDom maps a nested iframe back to the pageBlock atom', () =>
   })
   let hole: HTMLElement | null = null
   editor.state.doc.descendants((node, pos) => {
-    if (node.type.name !== 'pageBlock' || hole) return
+    if (node.type.name !== 'editorBlock' || hole) return
     const raw = editor.view.nodeDOM(pos)
     hole = visibleHandleEl(raw instanceof Node ? raw : null)
   })
@@ -120,7 +120,7 @@ test('handleBlockFromDom maps a nested iframe back to the pageBlock atom', () =>
   const iframe = document.createElement('iframe')
   hole.append(iframe)
   const found = handleBlockFromDom(editor, iframe)
-  assert.equal(found?.node.type.name, 'pageBlock')
+  assert.equal(found?.node.type.name, 'editorBlock')
   editor.destroy()
   host.remove()
 })

@@ -241,7 +241,7 @@ flowchart TB
   API --> T["Task<br/>/tasks"]
   API --> L["Plugin<br/>/plugins"]
   API --> P["Page<br/>/pages"]
-  API --> C["Component<br/>/page-blocks"]
+  API --> C["Component<br/>/editor-blocks"]
   API --> F["Facet<br/>/facets"]
 ```
 
@@ -348,36 +348,36 @@ Page       声明「什么环境」  它自己的属性
 Markdown 里可以携带**块**——一段围栏，渲染成活组件：
 
 ```md
-:::pageBlock {kind=algorithm plugin=page-algorithm}
+:::editorBlock {kind=algorithm plugin=page-algorithm}
 { "title": "1. Two Sum", "lang": "python", "code": "……" }
 :::
 ```
 
-任何已安装插件都能注册块类型，然后得到三样东西：斜杠菜单入口、页面里渲染的组件、**以及 `/page-blocks` 表里的一条记录**。
+任何已安装插件都能注册块类型，然后得到三样东西：斜杠菜单入口、页面里渲染的组件、**以及 `/editor-blocks` 表里的一条记录**。
 
 **最后一样是分野所在：内容不被封闭在编辑器内部。** 块类型随插件安装，块本身则像普通记录一样由 Agent 查询和修改。工作区里已经在运行的 HTML 块（静态内容和可执行脚本的 iframe）、Excalidraw 画板、算法题卡片，全都通过这种方式在运行时安装，并不随仓库发布。
 
 ### Component：声明式的内容单元
 
-页面里的一个**块**（`/page-blocks`）就是一个 Component。它同时是三样东西：
+页面里的一个**块**（`/editor-blocks`）就是一个 Component。它同时是三样东西：
 
 | 层面 | 它是什么 |
 |---|---|
 | 写法 | 一段声明：`kind` 说明类型，`plugin` 说明谁来渲染，后面是数据 |
 | 渲染 | 页面里一个活组件——由插件实现，像插件一样安装和版本化 |
-| 数据 | `/page-blocks` 里的一行：`pageId` · `blockId` · `blockKind` · `plugin` · `data` |
+| 数据 | `/editor-blocks` 里的一行：`pageId` · `blockId` · `blockKind` · `plugin` · `data` |
 
 第三层是关键：由于块同时也是记录，因此可以在页面之外被读写、查询和聚合。
 
 ```
-$ db_list   /page-blocks                        # 工作区里所有内嵌组件
-$ db_update /page-blocks/<pageId>::<blockId>    # 改块的 data（默认合并）
+$ db_list   /editor-blocks                        # 工作区里所有内嵌组件
+$ db_update /editor-blocks/<pageId>::<blockId>    # 改块的 data（默认合并）
 ```
 
 **跨页面聚合**：每条块记录都带有 `plugin` 和 `pageId`，因此只需一次查询，就能知道某类组件出现在哪些页面：
 
 ```
-$ db_list /page-blocks filter.plugin=page-algorithm
+$ db_list /editor-blocks filter.plugin=page-algorithm
   → 所有页面里所有用这个插件渲染的块
 ```
 
@@ -503,7 +503,7 @@ Agent 不是被「通知」人的操作，而是**能读到操作留下的结果
 页面里的一个块，就是一段声明：
 
 ```md
-:::pageBlock {kind=algorithm plugin=page-algorithm}
+:::editorBlock {kind=algorithm plugin=page-algorithm}
 { "title": "1. Two Sum", "lang": "python", "code": "……" }
 :::
 ```
@@ -580,7 +580,7 @@ Biu 有两个来源，都不靠猜：
 Biu 里，让 Agent 产出一个界面 = 写三个字段：
 
 ```md
-:::pageBlock {kind=algorithm plugin=page-algorithm}
+:::editorBlock {kind=algorithm plugin=page-algorithm}
 { "title": "1. Two Sum", "lang": "python" }
 :::
 ```

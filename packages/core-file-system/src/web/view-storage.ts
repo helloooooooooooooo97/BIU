@@ -1,4 +1,4 @@
-import { builtinAllViewId, stubBuiltinAllView, stubBuiltinBlockKindView, stubBuiltinCatalogView, stubBuiltinTagView, stubBuiltinScopeView, stubBuiltinMemberView, isReadOnlyViewId, isBuiltinAllViewForCollection, isBuiltinAllViewId } from '../catalog-views.ts'
+import { builtinAllViewId, stubBuiltinAllView, stubBuiltinBlockKindView, stubBuiltinCatalogView, stubBuiltinTagView, stubBuiltinScopeView, stubBuiltinMemberView, isBuiltinAllViewForCollection, isBuiltinAllViewId } from '../catalog-views.ts'
 import { isIndexCollection } from './database-path.ts'
 import { invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
@@ -7,6 +7,43 @@ import { normalizePageSize, normalizeSavedView, parseViewColumns, rankListedView
 
 export function viewsKey(collectionPath: string) {
   return `fsdb.views:${collectionPath}`
+}
+
+export function omittedViewsKey(collectionPath: string) {
+  return `fsdb.omittedViews:${collectionPath}`
+}
+
+export function loadOmittedViewIds(collectionPath: string): string[] {
+  try {
+    const raw = localStorage.getItem(omittedViewsKey(collectionPath))
+    const parsed = raw ? (JSON.parse(raw) as unknown) : []
+    if (!Array.isArray(parsed)) return []
+    return parsed.map((id) => String(id ?? '').trim()).filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
+function persistOmittedViewIds(collectionPath: string, ids: Iterable<string>) {
+  const next = [...new Set([...ids].map((id) => String(id ?? '').trim()).filter(Boolean))]
+  try {
+    if (next.length) localStorage.setItem(omittedViewsKey(collectionPath), JSON.stringify(next))
+    else localStorage.removeItem(omittedViewsKey(collectionPath))
+  } catch {
+    /* ignore */
+  }
+}
+
+export function omitSavedViewIds(collectionPath: string, ids: Iterable<string>) {
+  persistOmittedViewIds(collectionPath, [...loadOmittedViewIds(collectionPath), ...ids])
+}
+
+export function reviveSavedViewIds(collectionPath: string, ids: Iterable<string>) {
+  const drop = new Set([...ids].map((id) => String(id ?? '').trim()))
+  persistOmittedViewIds(
+    collectionPath,
+    loadOmittedViewIds(collectionPath).filter((id) => !drop.has(id)),
+  )
 }
 
 export function activeViewStorageKey(collectionPath: string) {
@@ -194,7 +231,10 @@ export function pickViewForRoute(listed: SavedView[], collectionPath: string, ro
 /** 冷 origin 上 URL 里的已存视图不在 localStorage；内置 stub 不用拉。 */
 export function routeViewNeedsFetch(collectionPath: string, routeViewId?: string) {
   const id = String(routeViewId ?? '').trim()
-  if (!id || isReadOnlyViewId(id)) return false
+  if (!id) return false
+  if (stubBuiltinAllView(id) || stubBuiltinBlockKindView(id) || stubBuiltinCatalogView(id) || stubBuiltinTagView(id) || stubBuiltinMemberView(id) || stubBuiltinScopeView(id)) {
+    return false
+  }
   return !loadViews(collectionPath).some((view) => view.id === id)
 }
 
@@ -203,7 +243,6 @@ const routeViewFetchByKey = new Map<string, Promise<SavedView | null>>()
 export async function fetchSavedView(collectionPath: string, viewId: string): Promise<SavedView | null> {
   const id = String(viewId ?? '').trim()
   if (!id) return null
-  if (isReadOnlyViewId(id)) return viewForPath(collectionPath, id)
   const hit = loadViews(collectionPath).find((view) => view.id === id)
   if (hit) return withViewDisplay(collectionPath, hit)
   const key = `${collectionPath}\0${id}`
@@ -329,11 +368,11 @@ export function pushSavedViews(collectionPath: string, views: SavedView[]) {
 
 /** 两份视图列表的差异：新增/改了什么、删了哪些 id。 */
 export function diffSavedViews(prev: SavedView[], next: SavedView[]): SavedViewsPatch {
-  const before = new Map(prev.filter((view) => !view.builtin).map((view) => [view.id, view]))
+  const before = new Map(prev.map((view) => [view.id, view]))
   const upsert: SavedView[] = []
   const seen = new Set<string>()
   for (const view of next) {
-    if (view.builtin || isReadOnlyViewId(view.id)) continue
+    if (!view.id) continue
     seen.add(view.id)
     const old = before.get(view.id)
     if (!old || viewPatchKey(old) !== viewPatchKey(view)) upsert.push(view)
@@ -343,7 +382,7 @@ export function diffSavedViews(prev: SavedView[], next: SavedView[]): SavedViews
 }
 
 function writableSavedView(view: SavedView) {
-  return !view.builtin && !isReadOnlyViewId(view.id)
+  return Boolean(String(view.id ?? '').trim())
 }
 
 /** 把调用方点名的 upsert/remove 并进 diff，避免新 id 不在 baseline 时整次写入被 skipped。 */
@@ -391,7 +430,7 @@ function parseViewFilters(value: unknown): Record<string, string> {
 
 export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mode?: unknown; sortField?: unknown; sortDir?: unknown; sorts?: unknown; query?: unknown; groupBy?: unknown; columns?: unknown; filters?: unknown; filterTree?: unknown; tree?: unknown; wrap?: unknown; truncate?: unknown; pageSize?: unknown; columnWidths?: unknown; rank?: unknown }): SavedView | null {
   const id = String(row.viewId ?? '').trim()
-  if (!id || isReadOnlyViewId(id)) return null
+  if (!id) return null
   const sortDir = row.sortDir === 'desc' ? 'desc' : 'asc'
   const sortField = String(row.sortField ?? 'title')
   const filters = parseViewFilters(row.filters)
@@ -590,8 +629,9 @@ async function pullSavedViewsNow(
 }
 
 export function upsertSavedView(collectionPath: string, view: SavedView) {
-  const next = normalizeSavedView({ ...view, builtin: false })
-  const stored = loadViews(collectionPath).filter((item) => item.id !== next.id && !item.builtin)
+  const next = normalizeSavedView(view)
+  reviveSavedViewIds(collectionPath, [next.id])
+  const stored = loadViews(collectionPath).filter((item) => item.id !== next.id)
   stored.push(next)
   rememberViews(collectionPath, stored)
   noteLocalSavedViewsWrite(collectionPath)
@@ -789,7 +829,7 @@ export function withViewDisplay(collectionPath: string, view: SavedView): SavedV
         name: view.name,
         builtin: view.builtin,
         filters: view.filters,
-        filterTree: view.builtin ? overlay.filterTree ?? view.filterTree : view.filterTree,
+        filterTree: overlay.filterTree ?? view.filterTree,
         rank: Number.isFinite(Number(overlay.rank)) ? overlay.rank : view.rank,
       }
     : view

@@ -266,6 +266,20 @@ type HostCtx = Context & {
   }
 }
 
+export async function resolveTaskDeliverAssignee(
+  host: HostCtx,
+  row: { assignee?: TaskActor | null },
+  args: Record<string, unknown> = {},
+): Promise<TaskActor | null> {
+  if (row.assignee?.sessionId) return row.assignee
+  const hinted = String(args.sessionId ?? args.assigneeSessionId ?? '').trim()
+  const sid = hinted || currentSessionId()?.trim() || ''
+  if (!sid) return null
+  const peeked = host.sessions?.peek(sid) ?? (await host.sessions?.get?.(sid))
+  if (peeked) return actorFromSession(peeked)
+  return { kind: 'agent', sessionId: sid, name: sid.slice(0, 8) }
+}
+
 const STATUSES = new Set<TaskStatus>(['todo', 'doing', 'done', 'failed'])
 const PRIORITIES = new Set<TaskPriority>(['low', 'med', 'high'])
 const DIFFICULTIES = new Set<TaskDifficulty>(['low', 'med', 'high'])
@@ -1128,7 +1142,6 @@ export class TasksService extends Service {
 
   create(input: TaskCreateInput & { creator: TaskActor; assignee?: TaskActor | null; assignedAt?: number | null }): TaskRow {
     const title = String(input.title ?? '').trim()
-    if (!title) throw new Error('title required')
     const requested = typeof input.id === 'string' ? input.id.trim() : ''
     const id = /^task_[A-Za-z0-9_-]+$/.test(requested) ? requested : nextId()
     const ts = typeof input.updatedAt === 'number' && input.updatedAt > 0 ? input.updatedAt : now()
@@ -1214,7 +1227,6 @@ export class TasksService extends Service {
     const current = this.get(id)
     if (!current) throw new Error('unknown task')
     const title = patch.title != null ? String(patch.title).trim() : current.title
-    if (!title) throw new Error('title required')
     const status = patch.status != null ? asStatus(patch.status) : current.status
     const priority = patch.priority != null ? asPriority(patch.priority) : current.priority
     const difficulty = patch.difficulty != null ? asDifficulty(patch.difficulty) : current.difficulty
@@ -1468,11 +1480,15 @@ export function apply(ctx: Context) {
   }
 
   async function runTaskDeliver(id: string, args: Record<string, unknown> = {}) {
-    const row = tasks.get(id)
+    let row = tasks.get(id)
     if (!row) throw new Error('unknown task')
-    const targetSessionId = row.assignee?.sessionId
+    const assignee = await resolveTaskDeliverAssignee(host, row, args)
+    if (!row.assignee?.sessionId && assignee?.sessionId) {
+      row = tasks.update(id, { assignee })
+    }
+    const targetSessionId = row.assignee?.sessionId ?? assignee?.sessionId
     if (!targetSessionId) {
-      throw new Error(`task ${id} 未分配执行代理。请先 db_update /tasks/${id} 写入 assignee（代理 id）`)
+      throw new Error(`task ${id} 未分配执行代理，也没有当前代理可派给`)
     }
     if (!host.sessions?.sendMessage) {
       throw new Error('sessions.sendMessage 不可用：sessions 服务未就绪')

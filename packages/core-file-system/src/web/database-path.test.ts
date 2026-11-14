@@ -61,7 +61,7 @@ test('only pages and tasks nest records in the data sidebar', () => {
   assert.equal(isRecordTreeCollection('/pages/'), true)
   assert.equal(isRecordTreeCollection('/tasks'), true)
   assert.equal(isRecordTreeCollection('/agents'), false)
-  assert.equal(isRecordTreeCollection('/page-blocks'), false)
+  assert.equal(isRecordTreeCollection('/editor-blocks'), false)
   assert.equal(isRecordTreeCollection('/plugins'), false)
 })
 
@@ -75,7 +75,7 @@ test('members and views are system collections; blocks and facets are index data
   assert.equal(isSystemCollection('/views'), true)
   assert.equal(isSystemCollection('/tags'), false)
   assert.equal(isIndexCollection('/tags'), true)
-  assert.equal(isIndexCollection('/page-blocks'), true)
+  assert.equal(isIndexCollection('/editor-blocks'), true)
   assert.equal(isIndexCollection('/pages'), false)
   assert.equal(isSystemCollection('/events'), false)
   assert.equal(isSystemCollection('/notices'), true)
@@ -90,20 +90,22 @@ test('members and views are system collections; blocks and facets are index data
     { path: '/tags' },
     { path: '/agents' },
     { path: '/pages' },
-    { path: '/page-blocks' },
+    { path: '/editor-blocks' },
     { path: '/tasks' },
+    { path: '/mcp' },
+    { path: '/skills' },
     { path: '/data' },
   ])
   assert.deepEqual(
     user.map((item) => item.path),
-    ['/agents', '/tasks', '/pages', '/plugins'],
+    ['/agents', '/tasks', '/pages', '/tags'],
   )
   assert.deepEqual(
     index.map((item) => item.path),
-    ['/page-blocks', '/tags'],
+    ['/mcp', '/skills', '/editor-blocks', '/views', '/plugins'],
   )
   assert.deepEqual(
     system.map((item) => item.path),
-    ['/workspace-members', '/views', '/notices', '/trash'],
+    ['/workspace-members', '/notices', '/trash'],
   )
 })

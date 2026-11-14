@@ -55,6 +55,21 @@ export function inspectorTabCollectionPath(tabId: string) {
   return slot.startsWith('database:') ? slot.slice('database:'.length) : null
 }
 
+const INSPECTOR_HOME_PATHS = new Set(['/agents', '/tasks', '/pages', '/tags'])
+const INSPECTOR_PLUS_PIN = ['usage', 'traj']
+
+/** 加号菜单：用量、轨迹固定在最上面。 */
+export function inspectorPlusPinRank(tabId: string) {
+  const i = INSPECTOR_PLUS_PIN.indexOf(slotTabId(tabId))
+  return i === -1 ? INSPECTOR_PLUS_PIN.length : i
+}
+
+/** 检查器空白页只放四个核心表；加号菜单才有全部数据、轨迹和用量。 */
+export function isInspectorHomeOffer(tabId: string) {
+  const path = inspectorTabCollectionPath(tabId)
+  return Boolean(path && INSPECTOR_HOME_PATHS.has(path))
+}
+
 export function pruneOpenedForCollections(opened: string[], collections: Array<{ path: string }> | undefined) {
   if (!collections) return opened
   const live = new Set(collections.map((item) => item.path))

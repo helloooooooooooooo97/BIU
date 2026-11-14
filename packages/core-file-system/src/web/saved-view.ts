@@ -19,7 +19,7 @@ export type SavedView = {
   pageSize?: number
   /** 表格列宽（px），按字段 key。 */
   columnWidths?: Record<string, number>
-  /** 系统内置视图（全部 xx / 目录），不能改筛选、不能删改名。 */
+  /** 工作区创建时写入的种子视图。与后来保存的视图同一套改名 / 筛选 / 删除规则。 */
   builtin?: boolean
   /** 本地最后修改时间（ms）。多窗口下用来丢弃比库里更旧的快照。 */
   updatedAt?: number
@@ -108,6 +108,10 @@ export function normalizeSavedView(view: SavedView): SavedView {
     updatedAt: Number(view.updatedAt) || 0,
     rank: Number.isFinite(Number(view.rank)) ? Math.round(Number(view.rank)) : undefined,
   }
+}
+
+export function canRemoveCollectionView(views: Array<{ id: string }>) {
+  return views.length > 1
 }
 
 export function sortViewsByRank(views: SavedView[]): SavedView[] {

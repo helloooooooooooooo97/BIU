@@ -66,7 +66,7 @@ test('cross-table ref chips load the title from field.collection', async () => {
         field={{ type: 'ref', collection: '/pages' }}
         fieldKey="pageId"
         value="p012"
-        collectionPath="/page-blocks"
+        collectionPath="/editor-blocks"
         records={[{ id: 'p012::aaaa', title: 'Two Sum' }]}
       />,
     )
@@ -126,13 +126,13 @@ test('cross-table chips share one read for the same peer id', async () => {
           field={{ type: 'ref', collection: '/pages' }}
           fieldKey="pageId"
           value="p-share-1"
-          collectionPath="/page-blocks"
+          collectionPath="/editor-blocks"
         />
         <RecordLinkChips
           field={{ type: 'ref', collection: '/pages' }}
           fieldKey="pageId"
           value="p-share-1"
-          collectionPath="/page-blocks"
+          collectionPath="/editor-blocks"
         />
       </div>,
     )

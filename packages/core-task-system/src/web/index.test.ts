@@ -21,6 +21,12 @@ class FakeDatabaseUi extends Service implements DatabaseUi {
   registerRowView() {
     return { dispose() {} }
   }
+  registerContentView() {
+    return { dispose() {} }
+  }
+  registerDetailTools() {
+    return { dispose() {} }
+  }
   chrome() {
     return this.last?.chrome ?? {}
   }
@@ -29,6 +35,12 @@ class FakeDatabaseUi extends Service implements DatabaseUi {
   }
   rowViews() {
     return []
+  }
+  contentViews() {
+    return []
+  }
+  detailTools() {
+    return {}
   }
   subscribe() {
     return () => undefined
@@ -40,7 +52,7 @@ test('task-system web paints /tasks chrome without importing file-system', async
   const ui = new FakeDatabaseUi(ctx)
   await ctx.plugin(taskSystemUi)
   assert.equal(ui.last?.path, '/tasks')
-  assert.equal(typeof ui.last?.chrome.Title, 'function')
+  assert.equal(ui.last?.chrome.Title, undefined)
   assert.equal(ui.last?.chrome.cells?.status, undefined)
   assert.equal(ui.last?.chrome.cells?.priority, undefined)
   assert.equal(ui.last?.chrome.cells?.difficulty, undefined)
@@ -56,6 +68,7 @@ test('task-system web paints /tasks chrome without importing file-system', async
   assert.doesNotMatch(chrome, /function ChipSelect/)
   assert.doesNotMatch(chrome, /function TagsCell/)
   assert.doesNotMatch(chrome, /function ProjectCell/)
+  assert.doesNotMatch(chrome, /function TaskTitle/)
   assert.doesNotMatch(chrome, /function DueCell/)
   assert.doesNotMatch(chrome, /function PersonPicker/)
   assert.doesNotMatch(chrome, /选择承担者/)

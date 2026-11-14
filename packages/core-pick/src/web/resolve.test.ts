@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { pickSurfaceAtPoint, resolvePickFromNode, resolvePickAtPoint, resolvePicksInRect, visiblePickBox, editorBlockElFromNode } from './resolve.ts'
+import { pickSurfaceAtPoint, resolvePickFromNode, resolvePickAtPoint, resolvePickFromEvent, resolvePicksInRect, visiblePickBox, editorBlockElFromNode } from './resolve.ts'
 import { formatPicks, parsePicks, splitPickStream, chipLabel, chipCaption, dedupePicks, textPickFromSelection, textPickFromPlain, filePickFromPath } from './types.ts'
 import { bindEditorTextHost } from './editor-host.ts'
 
@@ -562,6 +562,7 @@ test('marquee on table cells keeps the cells not the parent row', () => {
   status.setAttribute('data-biu-path', '/tasks/t1')
   status.setAttribute('data-biu-title', '写需求')
   status.setAttribute('data-biu-field', 'status')
+  status.setAttribute('data-biu-type', 'select')
   status.setAttribute('data-biu-text', '进行中')
   const title = document.createElement('td')
   title.setAttribute('data-biu-kind', 'task')
@@ -585,11 +586,13 @@ test('marquee on table cells keeps the cells not the parent row', () => {
   assert.equal(hits.length, 1)
   assert.equal(hits[0]?.ref.id, 't1:status')
   assert.equal(hits[0]?.ref.field, 'status')
+  assert.equal(hits[0]?.ref.type, 'select')
   assert.equal(hits[0]?.ref.path, '/tasks/t1')
   assert.equal(hits[0]?.ref.text, '进行中')
   assert.equal(chipCaption(hits[0]!.ref).name, '写需求 · 状态')
   const packed = formatPicks([hits[0]!.ref])
   assert.match(packed, /"field":"status"/)
+  assert.match(packed, /"type":"select"/)
   assert.match(packed, /"path":"\/tasks\/t1"/)
   table.remove()
 })
@@ -602,6 +605,7 @@ test('clicking a cell reads field path and value from the td', () => {
   cell.setAttribute('data-biu-kind', 'task')
   cell.setAttribute('data-biu-id', 't1:dueAt')
   cell.setAttribute('data-biu-field', 'dueAt')
+  cell.setAttribute('data-biu-type', 'datetime')
   cell.setAttribute('data-biu-path', '/tasks/t1')
   cell.setAttribute('data-biu-text', '2026/09/21 00:00')
   cell.setAttribute('data-biu-label', '截止')
@@ -613,6 +617,7 @@ test('clicking a cell reads field path and value from the td', () => {
   const hit = resolvePickFromNode(inner, '/tasks')
   assert.ok(hit)
   assert.equal(hit.ref.field, 'dueAt')
+  assert.equal(hit.ref.type, 'datetime')
   assert.equal(hit.ref.path, '/tasks/t1')
   assert.equal(hit.ref.id, 't1:dueAt')
   row.remove()
@@ -767,7 +772,7 @@ test('pick reaches stamped nodes inside an open sandbox shadow', () => {
     locusFromSelection: () => null,
     locusFromElement: (el) =>
       el === block || block.contains(el) || host.contains(el) || inner === el
-        ? { start_line: 3, end_line: 8, text: ':::pageBlock\nexport default function App() {}\n:::' }
+        ? { start_line: 3, end_line: 8, text: ':::editorBlock\nexport default function App() {}\n:::' }
         : null,
   })
   const hit = resolvePickFromNode(inner, '/s/abc')
@@ -780,7 +785,7 @@ test('pick reaches stamped nodes inside an open sandbox shadow', () => {
   assert.equal(hit.ref.selection, '点过 0 次')
   assert.equal(hit.ref.text, undefined)
   assert.equal(chipCaption(hit.ref).span, '')
-  assert.doesNotMatch(formatPicks([hit.ref]), /:::pageBlock|start_line/)
+  assert.doesNotMatch(formatPicks([hit.ref]), /:::editorBlock|start_line/)
   const boxed = resolvePicksInRect({ left: 8, top: 8, width: 40, height: 20 }, '/s/abc', root)
   assert.equal(boxed.some((item) => item.ref.id === 'sandbox:0-x:0/1'), true)
   host.setAttribute('data-biu-kind', 'plugin')
@@ -816,7 +821,7 @@ test('sandbox inner pick does not send the whole fence as text', () => {
   inner.setAttribute('data-biu-id', 'sandbox:0-x:0/0')
   inner.setAttribute('data-biu-label', '能做什么')
   shadow.append(inner)
-  const fence = ':::pageBlock {kind=sandbox}\nexport default function App(){return <h1>能做什么，不能做什么</h1>}\n:::'
+  const fence = ':::editorBlock {kind=sandbox}\nexport default function App(){return <h1>能做什么，不能做什么</h1>}\n:::'
   bindEditorTextHost(root, {
     path: '/pages/p002',
     locusFromSelection: () => null,
@@ -837,7 +842,7 @@ test('sandbox inner pick does not send the whole fence as text', () => {
   assert.equal(chipCaption(hit.ref).span, '')
   const packed = formatPicks([hit.ref])
   assert.match(packed, /"selection":"能做什么，不能做什么"/)
-  assert.doesNotMatch(packed, /:::pageBlock/)
+  assert.doesNotMatch(packed, /:::editorBlock/)
   assert.doesNotMatch(packed, /"text":/)
   assert.doesNotMatch(packed, /start_line/)
   bindEditorTextHost(root, null)
@@ -863,6 +868,95 @@ test('html block pick names the inner node even when the host is the plugin shel
   assert.match(hit.ref.element ?? '', /达米恩·查泽雷/)
   assert.doesNotMatch(hit.ref.element ?? '', /data-biu-kind="plugin"/)
   root.remove()
+})
+
+test('page-host source lines keep sandbox locus instead of inner html', () => {
+  const pane = document.createElement('div')
+  pane.className = 'page-host-code-pane'
+  pane.setAttribute('data-testid', 'page-host-code')
+  pane.setAttribute('data-biu-kind', 'sandbox')
+  pane.setAttribute('data-biu-id', 'sandbox:page-host-home-site1:source')
+  pane.setAttribute('data-biu-label', '官网')
+  const source = document.createElement('div')
+  source.className = 'page-source'
+  const line = document.createElement('div')
+  line.className = 'cm-line'
+  line.textContent = 'export default function App() {}'
+  source.append(line)
+  pane.append(source)
+  document.body.append(pane)
+  bindEditorTextHost(source, {
+    path: '/pages/home',
+    name: 'view-home-site1.jsx',
+    title: '官网',
+    locusFromSelection: () => null,
+    locusFromElement: (el) =>
+      el === line || line.contains(el)
+        ? { start_line: 4, end_line: 4, text: 'export default function App() {}' }
+        : null,
+  })
+  stubBox(line, 10, 40, 240, 18)
+  stubBox(pane, 0, 0, 400, 200)
+  const hit = resolvePickFromNode(line, '/pages/home')
+  assert.ok(hit)
+  assert.equal(hit.el, line)
+  assert.equal(hit.ref.kind, 'sandbox')
+  assert.equal(hit.ref.start_line, 4)
+  assert.equal(hit.ref.end_line, 4)
+  assert.equal(hit.ref.text, 'export default function App() {}')
+  assert.equal(hit.ref.path, '/pages/home')
+  assert.equal(hit.ref.name, 'view-home-site1.jsx')
+  assert.equal(hit.ref.element, undefined)
+  assert.match(formatPicks([hit.ref]), /"name":"view-home-site1.jsx"/)
+  bindEditorTextHost(source, null)
+  pane.remove()
+})
+
+test('pick reaches stamped nodes inside a light-DOM page-host sandbox', () => {
+  const shell = document.createElement('div')
+  shell.className = 'page-editor is-host'
+  const host = document.createElement('div')
+  host.setAttribute('data-sandbox', '')
+  host.setAttribute('data-testid', 'page-host-preview')
+  host.setAttribute('data-biu-path', '/pages/home')
+  host.setAttribute('data-biu-name', 'view-home-site1.jsx')
+  const inner = document.createElement('button')
+  inner.textContent = '表格'
+  inner.setAttribute('data-sandbox-pick', '')
+  inner.setAttribute('data-biu-kind', 'sandbox')
+  inner.setAttribute('data-biu-id', 'sandbox:page-host-home-site1:0/1')
+  inner.setAttribute('data-biu-label', '表格')
+  inner.setAttribute('data-biu-path', '/pages/home')
+  inner.setAttribute('data-biu-name', 'view-home-site1.jsx')
+  host.append(inner)
+  shell.append(host)
+  document.body.append(shell)
+  stubBox(inner, 10, 10, 80, 20)
+  stubBox(host, 0, 0, 200, 160)
+  const fromNode = resolvePickFromNode(inner, '/pages/home')
+  assert.ok(fromNode)
+  assert.equal(fromNode.ref.kind, 'sandbox')
+  assert.equal(fromNode.ref.id, 'sandbox:page-host-home-site1:0/1')
+  assert.equal(fromNode.ref.path, '/pages/home')
+  assert.equal(fromNode.ref.name, 'view-home-site1.jsx')
+  Object.defineProperty(document, 'elementsFromPoint', {
+    configurable: true,
+    value: () => [inner, host, shell],
+  })
+  const at = resolvePickAtPoint(20, 15, '/pages/home')
+  assert.ok(at)
+  assert.equal(at.ref.kind, 'sandbox')
+  assert.equal(at.ref.id, 'sandbox:page-host-home-site1:0/1')
+  const event = {
+    clientX: 20,
+    clientY: 15,
+    composedPath: () => [inner, host, shell, document.body],
+  } as unknown as PointerEvent
+  const fromEvent = resolvePickFromEvent(event, '/pages/home')
+  assert.ok(fromEvent)
+  assert.equal(fromEvent.ref.kind, 'sandbox')
+  assert.equal(fromEvent.ref.id, 'sandbox:page-host-home-site1:0/1')
+  shell.remove()
 })
 
 test('sandbox pick walks composed path and prefers inner sandbox stamps', async () => {

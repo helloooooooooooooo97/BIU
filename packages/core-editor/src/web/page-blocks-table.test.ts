@@ -2,13 +2,13 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { Editor } from '@tiptap/core'
-import { pageEditorExtensions } from './kit.ts'
-import { listPageTableBlocks, replaceBlockPlainText, writeBackTableBlock } from './page-blocks-table.tsx'
+import { recordEditorExtensions } from './kit.ts'
+import { listPageTableBlocks, pageBlockFacetPath, replaceBlockPlainText, writeBackTableBlock } from './page-blocks-table.tsx'
 import { PAGE_EDITOR_STYLE } from './style.ts'
 
 test('table view lists every top-level block', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '# 甲\n\n乙\n\n- 丙',
     contentType: 'markdown',
   })
@@ -27,7 +27,7 @@ test('table view lists every top-level block', () => {
 
 test('replaceBlockPlainText writes the first textblock back', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '# 甲\n\n乙',
     contentType: 'markdown',
   })
@@ -48,14 +48,20 @@ test('table mode hides the document and keeps the content peek', () => {
 test('table view has a facet column for block ids', () => {
   const src = readFileSync(new URL('./page-blocks-table.tsx', import.meta.url), 'utf8')
   assert.match(src, /标签/)
-  assert.match(src, /pageBlockRecordId/)
+  assert.match(src, /pageBlockFacetPath/)
   assert.match(src, /BlockFacetCell/)
   assert.match(src, /row\.id/)
 })
 
+test('facet path skips headings and empty block ids', () => {
+  assert.equal(pageBlockFacetPath('/tags', 'tag-4', ''), null)
+  assert.equal(pageBlockFacetPath('/pages', 'p001', ''), null)
+  assert.equal(pageBlockFacetPath('/pages', 'p001', 'ab12cd34'), '/editor-blocks//pages::p001::ab12cd34')
+})
+
 test('writeBackTableBlock replaces the row with a different block', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '乙',
     contentType: 'markdown',
   })
@@ -70,7 +76,7 @@ test('writeBackTableBlock replaces the row with a different block', () => {
 
 test('writeBackTableBlock replaces one row with several blocks', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '乙',
     contentType: 'markdown',
   })
@@ -95,7 +101,7 @@ test('writeBackTableBlock replaces one row with several blocks', () => {
 
 test('writeBackTableBlock writes paragraph text of the same type', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '乙',
     contentType: 'markdown',
   })
@@ -111,14 +117,14 @@ test('writeBackTableBlock writes paragraph text of the same type', () => {
 
 test('table view names page blocks by their kind, not 组件', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
-    content: `:::pageBlock {kind=algorithm plugin=page-algorithm id=ab12cd34}
+    extensions: recordEditorExtensions(),
+    content: `:::editorBlock {kind=algorithm plugin=page-algorithm id=ab12cd34}
 {"title":"Two Sum"}
 :::
 `,
     contentType: 'markdown',
   })
-  const row = listPageTableBlocks(editor.state.doc).find((item) => item.type === 'pageBlock')
+  const row = listPageTableBlocks(editor.state.doc).find((item) => item.type === 'editorBlock')
   assert.ok(row)
   assert.equal(row.kind, 'algorithm')
   assert.notEqual(row.kind, '组件')

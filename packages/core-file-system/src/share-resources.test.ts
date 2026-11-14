@@ -17,16 +17,17 @@ test('collectShareResources splits page files, plugins and facets', () => {
     [{ id: 'p000', title: '讲义' }],
     {
       p000: [
-        ':::pageBlock {kind=sandbox plugin=page-sandbox id=ab12}',
+        ':::editorBlock {kind=excalidraw plugin=page-excalidraw id=ab12}',
         '<img src="/api/page/file/cover.png">',
-        '见 @page/p001 和 facet/music-era',
+        '见 @page/p001 和 @tag/music-era',
         ':::',
       ].join('\n'),
     },
     ['p000'],
   )
   assert.equal(stats.pages >= 2, true)
-  assert.equal(stats.pluginIds.includes('page-sandbox'), true)
+  assert.equal(stats.pluginIds.includes('page-excalidraw'), true)
+  assert.equal(stats.pluginIds.includes('page-sandbox'), false)
   assert.equal(stats.collections >= 1, true)
   assert.equal(shareResourceTypeCount(stats), 3)
 })

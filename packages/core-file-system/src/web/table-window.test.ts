@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_PX, TABLE_COL_PIN_PX, TABLE_COL_ACTIONS_PX, TABLE_COL_VIEWPORT_FALLBACK, GROUPED_FULL_FETCH_ALL_MAX, groupedFullFetchCount, medianPaintedRowPx, rememberedTableWrap, rememberTableWrap, resetRememberedTableWrap, settlePaintedRowPx, tableColumnSlice, tableColumnWidth, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll } from './table-window.ts'
+import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_PX, TABLE_COL_PIN_PX, TABLE_COL_ACTIONS_PX, TABLE_COL_VIEWPORT_FALLBACK, GROUPED_FULL_FETCH_ALL_MAX, groupedFullFetchCount, medianPaintedRowPx, rememberedTableWrap, rememberTableWrap, resetRememberedTableWrap, settlePaintedRowPx, tableColumnSlice, tableColumnWidth, tablePinColClass, tablePinCount, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll } from './table-window.ts'
 
 test('table window keeps overscan around the viewport', () => {
   const slice = tableWindowSlice(200, 0, TABLE_ROW_PX * 10)
@@ -93,10 +93,10 @@ test('grouped first paint fetches every group when a page still fits the window'
   assert.equal(groupedFullFetchCount(12, 3, true), 3)
 })
 
-test('grouped wrap pages larger than the window only fully fetch the first group', () => {
+test('grouped wrap pages still fully fetch every group', () => {
   assert.equal(groupedFullFetchCount(50, 3), 3)
   assert.equal(groupedFullFetchCount(100, 4, true), 4)
-  assert.equal(groupedFullFetchCount(100, GROUPED_FULL_FETCH_ALL_MAX + 4, true), 1)
+  assert.equal(groupedFullFetchCount(100, GROUPED_FULL_FETCH_ALL_MAX + 4, true), GROUPED_FULL_FETCH_ALL_MAX + 4)
   assert.equal(groupedFullFetchCount(100, 1, true), 1)
 })
 
@@ -111,7 +111,10 @@ test('tables paint every column without a horizontal window', () => {
 
 test('unsaved columns use fixed defaults; saved widths stay as-is', () => {
   assert.equal(tableColumnWidth('title', undefined, true), TABLE_COL_PIN_PX)
-  assert.equal(tableColumnWidth('actions', undefined), TABLE_COL_ACTIONS_PX)
+  assert.equal(tableColumnWidth('actions', undefined, true), TABLE_COL_ACTIONS_PX)
+  assert.equal(tablePinCount(['title', 'actions', 'status'], 'title'), 2)
+  assert.equal(tablePinCount(['title', 'status'], 'title'), 1)
+  assert.equal(tablePinColClass('actions', 'title'), 'is-pin-col')
   assert.equal(tableColumnWidth('updatedBy', undefined), TABLE_COL_PX)
   assert.equal(tableColumnWidth('status', undefined), TABLE_COL_PX)
   assert.equal(tableColumnWidth('createdBy', 180), 180)

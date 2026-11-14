@@ -2,7 +2,7 @@ import type { CollectionSpec, CollectionInfo, DbRecord } from '@biu/type-file-sy
 import { actionVisibleToUser, REQUIRED_RECORD_FIELDS, recordBuiltinValues } from '@biu/type-file-system'
 import { parseStampRecordId, stampRecordId } from './tags-collection.ts'
 import { normalizeCollectionPath } from '../paths.ts'
-import { DATA_COLLECTION_PATH, TAGS_COLLECTION_PATH, isIndexCollection, isSystemCollection } from '../web/database-path.ts'
+import { DATA_COLLECTION_PATH, DATA_MODULE_ID, TAGS_COLLECTION_PATH, isIndexCollection, isSystemCollection } from '../web/database-path.ts'
 import { matchActionWhen } from '../web/fields.ts'
 
 export function overviewActionIds(spec: Pick<CollectionSpec, 'actions'>, row: DbRecord): string[] {
@@ -57,14 +57,22 @@ export function dataCollection(tables: () => CollectionSpec[]): CollectionSpec {
     id: 'data',
     path: DATA_COLLECTION_PATH,
     label: '数据',
-    records: {},
+    view: {
+      moduleId: DATA_MODULE_ID,
+      route: DATA_COLLECTION_PATH,
+      title: '数据',
+      inspector: true,
+      order: 0,
+      icon: 'circle-stack',
+    },
+    records: { update: true },
     schema: {
       labelField: 'title',
       columns: ['title', 'actions', 'table'],
       fields: {
         ...REQUIRED_RECORD_FIELDS,
-        title: { type: 'string', label: '标题' },
-        table: { type: 'string', label: '来源表', computed: true },
+        title: { type: 'string', label: '标题', writable: true },
+        table: { type: 'select', label: '来源表', computed: true },
         tablePath: { type: 'string', label: '表路径', computed: true },
         sourceId: { type: 'string', label: '记录', computed: true },
       },
@@ -77,6 +85,15 @@ export function dataCollection(tables: () => CollectionSpec[]): CollectionSpec {
       if (!spec) return null
       const row = await spec.get(stamp.recordId)
       return row ? overviewRecord(spec, row) : null
+    },
+    update: async (id, patch) => {
+      const stamp = parseStampRecordId(id)
+      if (!stamp) throw new Error(`unknown record: ${id}`)
+      const spec = sources().find((item) => item.path === stamp.collection)
+      if (!spec) throw new Error(`unknown record: ${id}`)
+      if (!spec.update) throw new Error(`collection cannot update: ${spec.path}`)
+      const written = await spec.update(stamp.recordId, patch)
+      return overviewRecord(spec, written)
     },
   }
 }

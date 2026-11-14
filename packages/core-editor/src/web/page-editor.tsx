@@ -1,15 +1,21 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { loadRecordLayouts, useActiveRecordLayout } from '@biu/core-file-system/record-layouts'
+import { TagRecordSandbox } from '@biu/core-file-system/tag-host-view'
+import { loadTagViews, useTagViews } from '@biu/core-file-system/tag-views'
 import { HeadlessPopover } from '@biu/biu-ui'
 import { SourceEditor, type SourceEditorHandle } from './source-editor.tsx'
 import { restorePageScroll } from './page-scroll-pin.ts'
-import { usePagePresentMode } from './source-mode.ts'
+import { isPageCustomView, usePagePresentMode } from './source-mode.ts'
+import { usePageViews } from './page-views.ts'
+import { useActivePageLayout } from './page-layouts.ts'
+import { PageHostView } from './page-host-view.tsx'
 import { ArrowPathIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/16/solid'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import type { Editor } from '@tiptap/core'
 import { NodeSelection, Selection } from '@tiptap/pm/state'
 import type { FsContentProps } from '@biu/type-file-system/ui'
-import { pageEditorExtensions } from './kit.ts'
+import { recordEditorExtensions } from './kit.ts'
 import { PageBlockHandle } from './page-block-handle.tsx'
 import { editorHostIsLive } from './editor-live.ts'
 import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, handleContentTitleNav, shouldLeaveContentForTitle, focusRecordTitleNear, isDocStartSelection, atFirstVisibleLine } from './title-content-nav.ts'
@@ -20,8 +26,8 @@ import { markdownLocusFromElement, markdownLocusFromSelection } from './markdown
 import { isFindHotkey } from './find-bar.tsx'
 import { applyEditorFind } from './find-plugin.ts'
 import { applyStoredBlockIds, markdownWithBlockIds, stripBlockIdStamps } from './block-id.ts'
-import { getLivePageEditor, setLivePageEditor } from './page-live-editor.ts'
-import { PAGE_FIND_OPEN_EVENT, PAGE_INSERT_EVENT, getPageFind, patchPageFind, usePageFind } from './page-view-state.ts'
+import { getLivePageEditor, setLivePageEditor, setLivePagePersist } from './page-live-editor.ts'
+import { PAGE_FIND_OPEN_EVENT, getPageFind, patchPageFind, usePageFind } from './page-view-state.ts'
 import { PageBlocksTable } from './page-blocks-table.tsx'
 import {
   INK_TONES,
@@ -253,7 +259,7 @@ function ColorMenus({
 
 /** 节点选中（sandbox 等 pageBlock）不是文字选区，不要出加粗/斜体条。 */
 export function pageTextBubbleOpen(editor: Editor, from: number, to: number, colorOpen = false) {
-  if (editor.isActive('table') || editor.isActive('pageBlock')) return false
+  if (editor.isActive('table') || editor.isActive('editorBlock')) return false
   if (editor.state.selection instanceof NodeSelection) return false
   if (colorOpen) return true
   return from !== to
@@ -297,8 +303,8 @@ function Bubble({
       <button
         type="button"
         className="page-bubble-chat"
-        title="送到对话"
-        aria-label="送到对话"
+        title="送到会话"
+        aria-label="送到会话"
         onMouseDown={(event: MouseEvent) => {
           event.preventDefault()
           onSendChat()
@@ -340,7 +346,7 @@ function TableBar({ editor }: { editor: Editor }) {
   )
 }
 
-function PageEditorLoading() {
+function RecordEditorLoading() {
   return (
     <div className="page-editor page-editor-loading" data-testid="page-editor-loading" aria-busy="true" aria-live="polite">
       <ArrowPathIcon className="page-editor-loading-icon" width={22} height={22} aria-hidden />
@@ -349,7 +355,7 @@ function PageEditorLoading() {
   )
 }
 
-function PageEditorFailed({ onRetry }: { onRetry?: () => void }) {
+function RecordEditorFailed({ onRetry }: { onRetry?: () => void }) {
   return (
     <div className="page-editor page-editor-failed" data-testid="page-editor-failed" role="alert">
       <p>正文加载失败</p>
@@ -362,8 +368,71 @@ function PageEditorFailed({ onRetry }: { onRetry?: () => void }) {
   )
 }
 
-export function PageEditor({ record, value, writable, onChange, path, status = 'ready', onRetry }: FsContentProps) {
-  const present = usePagePresentMode(record.id)
+function PageHostShell({
+  record,
+  value,
+  writable,
+  path,
+  viewId,
+  schema,
+}: FsContentProps & { viewId: string }) {
+  return (
+    <div
+      className="page-editor is-host"
+      data-testid="page-editor-host"
+      data-page-record={record.id}
+      data-page-path={path || `/pages/${record.id}`}
+      tabIndex={-1}
+    >
+      <PageHostView
+        record={record}
+        viewId={viewId}
+        markdown={asMarkdown(value)}
+        schema={schema}
+        writable={writable !== false}
+      />
+    </div>
+  )
+}
+
+function collectionOf(path?: string) {
+  const raw = String(path ?? '').trim()
+  if (!raw) return '/pages'
+  const rest = raw.replace(/^\/+/, '').replace(/\/+$/, '')
+  const slash = rest.indexOf('/')
+  const name = slash < 0 ? rest : rest.slice(0, slash)
+  return name ? `/${name}` : '/pages'
+}
+
+export function RecordEditor(props: FsContentProps) {
+  const collection = collectionOf(props.path)
+  const fallback = collection === '/tags' ? 'table' : 'doc'
+  const pagePresent = usePagePresentMode(props.record.id)
+  const fsLayout = useActiveRecordLayout(collection, props.record.id, fallback)
+  const present = collection === '/pages' ? pagePresent : fsLayout.contentViewId
+  const views = usePageViews(props.record.id)
+  const tagViews = useTagViews(props.record.id)
+  const layout = useActivePageLayout(props.record.id)
+  useEffect(() => {
+    void loadRecordLayouts(collection, props.record.id, props.record.layouts, fallback)
+    if (collection === '/tags') void loadTagViews(props.record.id, props.record.views)
+  }, [collection, fallback, props.record.id, props.record.layouts, props.record.views])
+  if (props.status === 'loading') return <RecordEditorLoading />
+  if (props.status === 'failed') return <RecordEditorFailed onRetry={props.onRetry} />
+  if (present === 'hidden') return null
+  if (collection === '/tags' && tagViews.some((item) => item.id === present)) {
+    return <TagRecordSandbox record={props.record} viewId={present} writable={props.writable !== false} />
+  }
+  if (layout.kind === 'sandbox' && layout.file) {
+    return <PageHostShell {...props} viewId={layout.id} />
+  }
+  if (isPageCustomView(present) && views.some((item) => item.id === present)) {
+    return <PageHostShell {...props} viewId={present} />
+  }
+  return <PageDocEditor {...props} present={present} />
+}
+
+function PageDocEditor({ record, value, writable, onChange, path, status = 'ready', onRetry, present }: FsContentProps & { present: string }) {
   const source = present === 'source'
   const saved = useRef(asMarkdown(value))
   const sourceMode = useRef(source)
@@ -389,7 +458,7 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
       immediatelyRender: false,
       shouldRerenderOnTransaction: false,
       editable: writable !== false && status !== 'loading' && status !== 'failed',
-      extensions: pageEditorExtensions(),
+      extensions: recordEditorExtensions(),
       content: asMarkdown(value),
       contentType: 'markdown',
       editorProps: {
@@ -466,10 +535,18 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
   useEffect(() => {
     if (!editor || editor.isDestroyed) return
     setLivePageEditor(editor)
+    setLivePagePersist((current) => {
+      if (current.isDestroyed || writableRef.current === false) return
+      const next = persistEditorMarkdown(current)
+      if (next === saved.current) return
+      saved.current = next
+      onChange?.(next)
+    })
     return () => {
       if (getLivePageEditor() === editor) setLivePageEditor(null)
+      setLivePagePersist(null)
     }
-  }, [editor])
+  }, [editor, onChange])
 
   useEffect(() => {
     const onFind = (event: Event) => {
@@ -477,15 +554,9 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
       if (id && id !== record.id) return
       patchPageFind(record.id, { open: true })
     }
-    const onInsert = () => {
-      if (!editor || editor.isDestroyed || writableRef.current === false) return
-      editor.chain().focus('end').insertContent('/').run()
-    }
     window.addEventListener(PAGE_FIND_OPEN_EVENT, onFind)
-    window.addEventListener(PAGE_INSERT_EVENT, onInsert)
     return () => {
       window.removeEventListener(PAGE_FIND_OPEN_EVENT, onFind)
-      window.removeEventListener(PAGE_INSERT_EVENT, onInsert)
     }
   }, [editor, record.id])
 
@@ -727,8 +798,8 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
     event.currentTarget.focus({ preventScroll: true })
   }
 
-  if (status === 'loading') return <PageEditorLoading />
-  if (status === 'failed') return <PageEditorFailed onRetry={onRetry} />
+  if (status === 'loading') return <RecordEditorLoading />
+  if (status === 'failed') return <RecordEditorFailed onRetry={onRetry} />
   if (!editor) return <div className="page-editor" data-testid="page-editor-pending" />
 
   return (

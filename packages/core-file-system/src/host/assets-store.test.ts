@@ -4,7 +4,7 @@ import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { hashedAssetRel } from '@biu/host-plugin-loader/data-dir'
-import { FileSystemAssets, AssetConflictError, assetHref, collectAssetNames, isAssetFileName } from './assets-store.ts'
+import { FileSystemAssets, AssetConflictError, assetContentDisposition, assetHref, collectAssetNames, isAssetFileName } from './assets-store.ts'
 
 test('shared assets are content-addressed and reject path escape', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'fs-assets-'))
@@ -25,6 +25,8 @@ test('shared assets are content-addressed and reject path escape', async () => {
   const changed = await store.write('shot.png', 'next')
   assert.notEqual(changed.name, written.name)
   assert.deepEqual([...collectAssetNames({ file: 'assets/画板-ab12.json' })], ['画板-ab12.json'])
+  assert.match(assetContentDisposition('ab.md', '规划.md'), /filename\*=UTF-8''%E8%A7%84%E5%88%92\.md/)
+  assert.equal(assetContentDisposition('ab.png', null, true), 'inline')
   await assert.rejects(() => store.read('old.png'), /not found/)
 })
 

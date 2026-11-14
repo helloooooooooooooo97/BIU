@@ -1,5 +1,6 @@
 import type { AtomicFieldType, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType, SchemaFieldValue } from '@biu/type-file-system'
 import { asAttachment, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, asPersonList, BUILTIN_FIELD_KEYS, isTagFieldType, isRefFieldType, isReservedSchemaFieldKey, isSchemaFieldKey, normalizeSchemaValue, personKey } from '@biu/type-file-system'
+import { parseRecordLayouts, parseRecordSandboxes } from '@biu/type-file-system/record-views'
 import { TAG_FLAT_PREFIX, parseTagFlatColumnKey, readTagFieldValue } from '../query-logic.ts'
 import {
   cellGroupValue,
@@ -33,7 +34,7 @@ export function resolveFieldType(field: FieldSpec): FieldType {
   if (field.type === 'string[]') return 'multi-select'
   if (field.type === 'string' && field.enum?.length) return 'select'
   if (field.type === 'number' && field.format === 'datetime') return 'datetime'
-  if (field.type === 'string' && (field.format === 'url' || field.format === 'image' || field.format === 'attachment' || field.format === 'file')) {
+  if (field.type === 'string' && (field.format === 'url' || field.format === 'image' || field.format === 'attachment' || field.format === 'document' || field.format === 'file')) {
     return field.format
   }
   return field.type
@@ -47,6 +48,42 @@ export function enumDisplayLabel(field: FieldSpec | undefined, value: unknown) {
 export function fieldValueOptions(rows: DbRecord[], key: string, field: FieldSpec) {
   const values = field.enum?.length ? field.enum : uniqueValues(rows, key, field)
   return values.map((value) => ({ value, label: enumDisplayLabel(field, value) }))
+}
+
+export function filterFieldValueOptions(
+  rows: DbRecord[],
+  key: string,
+  field: FieldSpec,
+  tags: Array<{ id: string; label?: string }> = [],
+): Array<{ value: string; label: string }> {
+  const kind = resolveFieldType(field)
+  if (kind === 'boolean') {
+    return [
+      { value: 'true', label: '是' },
+      { value: 'false', label: '否' },
+    ]
+  }
+  if (kind === 'tag') {
+    const seen = new Set<string>()
+    const out: Array<{ value: string; label: string }> = []
+    for (const tag of tags) {
+      const id = String(tag.id ?? '').trim()
+      if (!id || seen.has(id)) continue
+      seen.add(id)
+      out.push({ value: id, label: String(tag.label ?? '').trim() || id })
+    }
+    for (const id of uniqueValues(rows, key, field)) {
+      if (!id || seen.has(id)) continue
+      seen.add(id)
+      const hit = tags.find((tag) => tag.id === id)
+      out.push({ value: id, label: String(hit?.label ?? '').trim() || id })
+    }
+    return out
+  }
+  if ((kind === 'select' || kind === 'multi-select') && field.enum?.length) {
+    return field.enum.map((value) => ({ value, label: enumDisplayLabel(field, value) }))
+  }
+  return fieldValueOptions(rows, key, field)
 }
 
 export function fieldEntries(schema: CollectionSchema | undefined) {
@@ -101,13 +138,20 @@ export function hasTreeLinks(rows: DbRecord[], parentKey: string | null): boolea
 
 export type TreeRow = { row: DbRecord; depth: number; hasKids: boolean; kidCount: number }
 
+/** `collapsed[id] === false` 才展开；未标记的节点默认收起，表格只画这一页的顶层。 */
+export function treeNodeCollapsed(collapsed: Record<string, boolean>, id: string) {
+  return collapsed[id] !== false
+}
+
 export function flattenTree(rows: DbRecord[], parentKey: string, collapsed: Record<string, boolean> = {}): TreeRow[] {
   const ids = new Set(rows.map((row) => row.id))
   const children = new Map<string, DbRecord[]>()
   const hasKids = new Set<string>()
   for (const row of rows) {
     const raw = String(row[parentKey] ?? '')
-    const parent = raw && raw !== row.id && ids.has(raw) ? raw : ''
+    const linked = Boolean(raw) && raw !== row.id
+    if (linked && !ids.has(raw)) continue
+    const parent = linked ? raw : ''
     if (parent) hasKids.add(parent)
     const bucket = children.get(parent)
     if (bucket) bucket.push(row)
@@ -137,16 +181,18 @@ export function flattenTree(rows: DbRecord[], parentKey: string, collapsed: Reco
       if (seen.has(row.id)) continue
       seen.add(row.id)
       out.push({ row, depth, hasKids: hasKids.has(row.id), kidCount: kidCountOf(row.id) })
-      if (collapsed[row.id]) skip(row.id)
+      if (treeNodeCollapsed(collapsed, row.id)) skip(row.id)
       else visit(row.id, depth + 1)
     }
   }
   visit('', 0)
   for (const row of rows) {
     if (seen.has(row.id)) continue
+    const raw = String(row[parentKey] ?? '')
+    if (raw && raw !== row.id && !ids.has(raw)) continue
     seen.add(row.id)
     out.push({ row, depth: 0, hasKids: hasKids.has(row.id), kidCount: kidCountOf(row.id) })
-    if (!collapsed[row.id]) visit(row.id, 1)
+    if (!treeNodeCollapsed(collapsed, row.id)) visit(row.id, 1)
   }
   return out
 }
@@ -341,10 +387,20 @@ export function asTime(value: unknown): number {
   return Number.isFinite(n) && n > 0 ? n : 0
 }
 
+export function formatViewCatalog(value: unknown): string {
+  const sandboxes = parseRecordSandboxes(value)
+  if (sandboxes.length) return sandboxes.map((item) => item.name).filter(Boolean).join('、')
+  const layouts = parseRecordLayouts(value)
+  if (layouts.length) return layouts.map((item) => item.name).filter(Boolean).join('、')
+  return ''
+}
+
 export function formatField(field: FieldSpec | undefined, value: unknown): string {
-  if (!field) return value == null || value === '' ? '' : String(value)
-  const kind = resolveFieldType(field)
   if (value == null || value === '') return ''
+  const catalog = formatViewCatalog(value)
+  if (catalog && (!field || resolveFieldType(field) === 'string')) return catalog
+  if (!field) return String(value)
+  const kind = resolveFieldType(field)
   if (kind === 'datetime') {
     const n = asTime(value)
     if (!n) return ''
@@ -363,7 +419,7 @@ export function formatField(field: FieldSpec | undefined, value: unknown): strin
     const list = asImageSrcList(value)
     return list.length ? list.join(', ') : ''
   }
-  if (kind === 'attachment') {
+  if (kind === 'attachment' || kind === 'document') {
     const list = asAttachmentList(value)
     return list.length ? list.map((file) => file.name).join(', ') : ''
   }
@@ -504,11 +560,32 @@ export function groupField(
   return match ? { key: match.key, field: match.field } : null
 }
 
+export function recordGroupLabels(rows: DbRecord[]): Record<string, string> {
+  const out: Record<string, string> = {}
+  const put = (id: unknown, title: unknown) => {
+    const key = String(id ?? '').trim()
+    const label = String(title ?? '').trim()
+    if (key && label) out[key] = label
+  }
+  for (const row of rows) {
+    put(row.id, row.title)
+    const chain = row.parentChain
+    if (!Array.isArray(chain)) continue
+    for (const node of chain) {
+      if (!node || typeof node !== 'object') continue
+      const item = node as { id?: unknown; title?: unknown }
+      put(item.id, item.title)
+    }
+  }
+  return out
+}
+
 function groupContext(
   schema: CollectionSchema | undefined,
   preferred: string | undefined,
   extraValues: string[] = [],
   packs: CollectionSchemaPack[] = [],
+  recordLabels?: Record<string, string>,
 ): GroupStrategyContext | null {
   const group = resolveGroupField(schema, preferred, packs)
   if (!group) return null
@@ -517,6 +594,8 @@ function groupContext(
     groupBy: preferred ?? group.key,
     field: group.field,
     extraValues,
+    packs,
+    recordLabels,
   }
 }
 
@@ -533,13 +612,14 @@ export function groupListKeys(
   preferred?: string,
   extraValues: string[] = [],
   packs: CollectionSchemaPack[] = [],
+  recordLabels?: Record<string, string>,
 ): { key: string; label: string }[] {
-  const ctx = groupContext(schema, preferred, extraValues, packs)
+  const ctx = groupContext(schema, preferred, extraValues, packs, recordLabels)
   const strategy = ctx ? strategyForField(ctx.field) : null
   if (!ctx || !strategy) return []
   const listed = strategy.keys(ctx)
-  if (!listed.length) return []
   if (!strategy.skipEmpty?.(ctx)) listed.push({ key: '', label: strategy.emptyLabel ?? '未填' })
+  if (!listed.length) return []
   return listed
 }
 
@@ -601,7 +681,7 @@ export function groupRecords(
 ): GroupBucket[] {
   const group = resolveGroupField(schema, preferred, packs)
   const extra = group ? uniqueValues(rows, group.key, group.field) : []
-  const ctx = groupContext(schema, preferred, extra, packs)
+  const ctx = groupContext(schema, preferred, extra, packs, recordGroupLabels(rows))
   const strategy = ctx ? strategyForField(ctx.field) : null
   if (!ctx || !strategy) return [{ key: '', label: '全部', rows }]
   const labels = new Map(strategy.keys(ctx).map((item) => [item.key, item.label]))

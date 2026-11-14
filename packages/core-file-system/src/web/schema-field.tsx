@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
-  ATOMIC_FIELD_TYPES,
+  TAG_PROPERTY_TYPES,
   normalizeSchemaValue,
+  pruneSchemaValue,
   retagSchemaValue,
   type AtomicFieldType,
   type CollectionSchemaPack,
@@ -28,6 +29,7 @@ const TYPE_LABEL: Partial<Record<FieldType, string>> = {
   url: '链接',
   image: '图片',
   attachment: '附件',
+  document: '文档',
   file: '正文',
   action: '动作',
   tag: '标签',
@@ -109,7 +111,7 @@ function TypeMenu({ value, onChange }: { value: AtomicFieldType; onChange: (next
         }
       >
         <div className="fsdb-schema-type-menu" role="listbox">
-          {ATOMIC_FIELD_TYPES.map((type) => (
+          {TAG_PROPERTY_TYPES.map((type) => (
             <button
               key={type}
               type="button"
@@ -412,8 +414,10 @@ export function SchemaFieldEditor({
     void persistTags(next)
   }
 
-  function patchValue(next: SchemaFieldValue) {
-    onChange(next)
+  function patchValue(next: SchemaFieldValue, packs = catalog) {
+    const cleaned = pruneSchemaValue(next, packs)
+    liveRef.current = cleaned
+    onChange(cleaned)
   }
 
   function finishTags(resolved: string[]) {
@@ -488,11 +492,13 @@ export function SchemaFieldEditor({
   }
 
   function removeField(tagId: string, key: string) {
-    saveCatalog(
-      catalog.map((tag) =>
-        tag.id === tagId ? { ...tag, fields: tag.fields.filter((item) => item.key !== key) } : tag,
-      ),
+    const nextCatalog = catalog.map((tag) =>
+      tag.id === tagId ? { ...tag, fields: tag.fields.filter((item) => item.key !== key) } : tag,
     )
+    saveCatalog(nextCatalog)
+    const bag = { ...(parsed.values[tagId] ?? {}) }
+    delete bag[key]
+    patchValue({ tags: parsed.tags, values: { ...parsed.values, [tagId]: bag } }, nextCatalog)
   }
 
   function restoreField(tag: CollectionSchemaPack, key: string, value: unknown) {

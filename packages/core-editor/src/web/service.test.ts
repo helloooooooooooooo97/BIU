@@ -1,34 +1,34 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Context } from 'cordis'
-import { PageEditorService, getPageEditor } from './service.ts'
+import { BlockEditorService, getBlockEditor } from './service.ts'
 import { filterSlashItems } from './slash.ts'
 
 test('replaceHeading is scoped to the calling plugin fiber', async () => {
   const ctx = new Context()
-  new PageEditorService(ctx)
-  assert.ok(getPageEditor())
+  new BlockEditorService(ctx)
+  assert.ok(getBlockEditor())
   const fiber = ctx.plugin({
     name: 'theme',
-    inject: ['pageEditor'],
+    inject: ['blockEditor'],
     apply(inner) {
-      inner.pageEditor.replaceHeading(1, { label: 'H1' })
+      inner.blockEditor.replaceHeading(1, { label: 'H1' })
     },
   })
   await fiber
-  assert.equal(ctx.pageEditor.headingView(1)?.label, 'H1')
+  assert.equal(ctx.blockEditor.headingView(1)?.label, 'H1')
   await fiber.dispose()
-  assert.equal(ctx.pageEditor.headingView(1), undefined)
+  assert.equal(ctx.blockEditor.headingView(1), undefined)
 })
 
 test('slash extras override built-in labels and dispose', async () => {
   const ctx = new Context()
-  new PageEditorService(ctx)
+  new BlockEditorService(ctx)
   const fiber = ctx.plugin({
     name: 'slash-theme',
-    inject: ['pageEditor'],
+    inject: ['blockEditor'],
     apply(inner) {
-      inner.pageEditor.slash({ id: 'h1', label: '封面标题', hint: '插件', aliases: ['cover'] })
+      inner.blockEditor.slash({ id: 'h1', label: '封面标题', hint: '插件', aliases: ['cover'] })
     },
   })
   await fiber

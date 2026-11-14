@@ -245,6 +245,23 @@ test('annotate appends to catalog and schemas and unregisters', async () => {
   assert.equal(ctx.tools.schemas().find((item) => item.function.name === 'db_doc')?.function.description, '文档')
 })
 
+test('alias keeps old names invokable and merges annotate notes', async () => {
+  const ctx = new Context()
+  await ctx.plugin(tools)
+  ctx.tools.register({
+    name: 'db_file',
+    description: '可变文件',
+    parameters: { type: 'object', properties: {} },
+    execute: () => 'ok',
+  })
+  ctx.tools.alias('db_file', ['db_doc'])
+  ctx.tools.annotate('db_doc', '沙盒源码走这里')
+  assert.equal(ctx.tools.catalog().some((item) => item.name === 'db_doc'), false)
+  assert.equal(ctx.tools.catalog().find((item) => item.name === 'db_file')?.description, '可变文件 沙盒源码走这里')
+  assert.equal(await ctx.tools.invoke('db_doc'), 'ok')
+  assert.equal(ctx.tools.executionMode('db_doc'), 'exclusive')
+})
+
 test('Chinese tool names are sanitized for OpenAI-style APIs', async () => {
   const ctx = new Context()
   await ctx.plugin(tools)

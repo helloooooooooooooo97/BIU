@@ -23,7 +23,7 @@ export type PageBlockViewProps = {
 /** 斜杠菜单分类。'basic' 进「基础模块」；其它字符串各自成组。 */
 export const BASIC_BLOCK_TYPE = 'basic'
 
-export type PageBlockSpec = {
+export type EditorBlockSpec = {
   kind: string
   /** 写入文档的插件 id（与 export const name / manifest.id 相同）。编辑器不推断。 */
   plugin: string
@@ -72,7 +72,7 @@ export type SlashCommandSpec = {
   insert?: SlashInsert
 }
 
-let bound: PageEditorService | undefined
+let bound: BlockEditorService | undefined
 let generation = 0
 const waiters = new Set<() => void>()
 
@@ -81,19 +81,19 @@ function noteEditorBinding() {
   for (const fn of waiters) fn()
 }
 
-export function getPageEditor() {
+export function getBlockEditor() {
   return bound
 }
 
-export class PageEditorService extends Service {
+export class BlockEditorService extends Service {
   private headings = new Map<HeadingLevel, HeadingReplacement>()
   private extras: SlashCommandSpec[] = []
-  private customBlocks = new Map<string, PageBlockSpec>()
+  private customBlocks = new Map<string, EditorBlockSpec>()
   private seq = 0
   private listeners = new Set<() => void>()
 
   constructor(ctx: Context) {
-    super(ctx, 'pageEditor')
+    super(ctx, 'blockEditor')
     bound = this
     noteEditorBinding()
     ctx.effect(() => () => {
@@ -128,9 +128,9 @@ export class PageEditorService extends Service {
   }
 
   /** 往页面里插一块：只用这个。表的整页/行呈现走 databaseUi.registerView / registerRowView。 */
-  registerBlock(spec: PageBlockSpec) {
+  registerBlock(spec: EditorBlockSpec) {
     const plugin = String(spec.plugin ?? '').trim()
-    if (!plugin) throw new Error('page block needs plugin id')
+    if (!plugin) throw new Error('editor block needs plugin id')
     if (spec.assets === undefined) {
       console.warn(`[${plugin}] 块 "${spec.kind}" 未声明 assets，其 data 里的资产引用不会被登记，可能被 GC 回收`)
     } else {
@@ -192,10 +192,10 @@ export class PageEditorService extends Service {
   }
 }
 
-export function usePageEditorVersion(editor?: PageEditorService) {
+export function useBlockEditorVersion(editor?: BlockEditorService) {
   return useSyncExternalStore(
     (fn) => {
-      const svc = editor ?? getPageEditor()
+      const svc = editor ?? getBlockEditor()
       const off = svc ? svc.subscribe(fn) : () => undefined
       if (!editor) waiters.add(fn)
       return () => {
@@ -203,13 +203,13 @@ export function usePageEditorVersion(editor?: PageEditorService) {
         waiters.delete(fn)
       }
     },
-    () => generation + ((editor ?? getPageEditor())?.version() ?? 0),
+    () => generation + ((editor ?? getBlockEditor())?.version() ?? 0),
     () => 0,
   )
 }
 
 declare module 'cordis' {
   interface Context {
-    pageEditor: PageEditorService
+    blockEditor: BlockEditorService
   }
 }

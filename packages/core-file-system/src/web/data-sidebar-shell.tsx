@@ -4,6 +4,42 @@ import { ChatCount } from '@biu/biu-ui/chat-count'
 import type { CollectionInfo } from '@biu/type-file-system'
 import { sortDataCollections } from './database-path.ts'
 import { getStarredRecords, getStarredViews } from './view-storage.ts'
+import { TableGlyph } from './nav-glyphs.tsx'
+import { builtinAllViewId } from '../catalog-views.ts'
+
+export function DataIconRail({
+  tables,
+  collectionPath,
+  onOpenTable,
+}: {
+  tables: CollectionInfo[]
+  collectionPath: string
+  onOpenTable?: (path: string, viewId?: string) => void
+}) {
+  return (
+    <nav className="fsdb-icon-rail" aria-label="数据" data-testid="data-icon-rail">
+      {tables.map((table) => {
+        const name = table.view?.title ?? table.label
+        const active = table.path === collectionPath
+        return (
+          <button
+            key={table.path}
+            type="button"
+            className={`fsdb-icon-rail-btn${active ? ' is-active' : ''}`}
+            title={name}
+            aria-label={name}
+            data-dock-tip={name}
+            data-dock-tip-at="e"
+            aria-current={active ? 'page' : undefined}
+            onClick={() => onOpenTable?.(table.path, builtinAllViewId(table.path))}
+          >
+            <TableGlyph icon={table.view?.icon} />
+          </button>
+        )
+      })}
+    </nav>
+  )
+}
 
 function SectionHead({ label, count, testId }: { label: string; count: number; testId?: string }) {
   return (
@@ -45,12 +81,13 @@ export function DataSidebarShell({
   useLayoutEffect(() => {
     setSlot(document.getElementById('shell-module-sidebar'))
   }, [])
+  const listed = [...grouped.user, ...grouped.index, ...grouped.system]
   const body = (
-    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3">
+    <div className="fsdb-views-full min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3">
       <div className="mt-2 space-y-1.5">
         {favCount ? <SectionHead label="收藏" count={favCount} /> : null}
-        <SectionHead label="用户数据" count={grouped.user.length} testId="sidebar-user-home" />
-        <SectionHead label="索引数据" count={grouped.index.length} testId="sidebar-index-home" />
+        <SectionHead label="核心数据" count={grouped.user.length} testId="sidebar-user-home" />
+        <SectionHead label="能力数据" count={grouped.index.length} testId="sidebar-index-home" />
         <SectionHead label="系统数据" count={grouped.system.length} />
       </div>
     </div>
@@ -59,6 +96,7 @@ export function DataSidebarShell({
     return createPortal(
       <div className="fsdb-views flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" aria-label="数据">
         {body}
+        <DataIconRail tables={listed} collectionPath={collectionPath} />
       </div>,
       slot,
     )
@@ -69,6 +107,7 @@ export function DataSidebarShell({
       aria-label="数据"
     >
       {body}
+      <DataIconRail tables={listed} collectionPath={collectionPath} />
     </aside>
   )
 }

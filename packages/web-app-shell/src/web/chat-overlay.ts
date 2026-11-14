@@ -3,7 +3,9 @@ export const CHAT_OVERLAY_ENTER = 420
 export const SIDEBAR_MAX = 360
 /** 默认就是能正常看会话名的宽度，不是图标细条。 */
 export const SIDEBAR_DEFAULT = 240
-/** 再窄就整栏关掉；最小宽度仍是正常侧栏（有会话名），不会压成图标轨。 */
+/** 收起/最小模式留下的 VS Code 式图标轨宽度。 */
+export const SIDEBAR_RAIL = 48
+/** 再窄就收到图标轨；这个宽度仍显示文字。 */
 export const SIDEBAR_MIN = 160
 /** 到这个宽度就显示文字标签（会话名、「添加聊天」等）。 */
 export const SIDEBAR_LABEL_AT = SIDEBAR_MIN
@@ -15,14 +17,19 @@ export const INSPECTOR_MIN = 240
 const RAIL = 0
 const SIDEBAR = SIDEBAR_MAX
 
-/** 低于最小宽度则 0（整栏消失）；否则夹在 [MIN, MAX]。 */
+/** 低于图标轨则 0（视口实在不够）；低于文字最小宽度则收到图标轨。 */
 export function clampSidebarWidth(width: number) {
   const n = Math.round(Number(width))
-  if (!Number.isFinite(n) || n < SIDEBAR_MIN) return 0
+  if (!Number.isFinite(n) || n < SIDEBAR_RAIL) return 0
+  if (n < SIDEBAR_MIN) return SIDEBAR_RAIL
   return Math.min(SIDEBAR_MAX, n)
 }
 
-/** 窄屏时先压中间、再把检查器收到 INSPECTOR_MIN；左侧尽量保持，两侧都压到顶后才收到 SIDEBAR_MIN，仍不够才整栏关掉。 */
+export function sidebarColumnWidth(collapsed: boolean, width: number) {
+  return collapsed ? SIDEBAR_RAIL : width
+}
+
+/** 窄屏先压检查器，尽量保住中间列宽度；不够再压左侧。`holdCenter` 时中间列锁死，窗口缩放只挤右边。 */
 export function allocateShellColumns(opts: {
   viewportWidth: number
   railWidth?: number
@@ -30,14 +37,20 @@ export function allocateShellColumns(opts: {
   leftWidth?: number
   inspectorOpen: boolean
   inspectorWidth: number
+  holdCenter?: number | null
 }) {
   const rail = opts.railWidth ?? RAIL
   const available = Math.max(0, opts.viewportWidth - rail)
   let left = opts.leftPane ? clampSidebarWidth(opts.leftWidth ?? SIDEBAR_MAX) : 0
+  if (opts.inspectorOpen && opts.holdCenter != null && opts.holdCenter > 0) {
+    const center = Math.min(opts.holdCenter, Math.max(0, available - left))
+    const inspector = Math.max(0, available - left - center)
+    return { left, inspector, center }
+  }
   let inspector = opts.inspectorOpen ? Math.max(INSPECTOR_MIN, opts.inspectorWidth) : 0
   let center = available - left - inspector
-  if (center < CENTER_MIN && inspector > INSPECTOR_MIN) {
-    const take = Math.min(inspector - INSPECTOR_MIN, CENTER_MIN - center)
+  if (center < CENTER_MIN && inspector > 0) {
+    const take = Math.min(inspector, CENTER_MIN - center)
     inspector -= take
     center += take
   }
@@ -59,10 +72,11 @@ export function allocateShellColumns(opts: {
   return { left, inspector, center }
 }
 
-export function applyShellColumnCssVars(el: HTMLElement | null, cols: { left: number; inspector: number }) {
+export function applyShellColumnCssVars(el: HTMLElement | null, cols: { left: number; inspector: number; center?: number }) {
   if (!el) return
   el.style.setProperty('--sidebar-col', `${cols.left}px`)
   el.style.setProperty('--inspector-width', `${cols.inspector}px`)
+  if (cols.center != null) el.style.setProperty('--center-col', `${cols.center}px`)
 }
 
 export type ShellLayoutSnap = {
@@ -140,7 +154,7 @@ export function chatColumnWidth(opts: {
   return allocateShellColumns({
     viewportWidth: opts.viewportWidth,
     leftPane: true,
-    leftWidth: opts.sidebarCollapsed ? 0 : SIDEBAR_MAX,
+    leftWidth: opts.sidebarCollapsed ? SIDEBAR_RAIL : SIDEBAR_MAX,
     inspectorOpen: opts.inspectorOpen,
     inspectorWidth: opts.inspectorWidth,
   }).center
@@ -152,7 +166,7 @@ export function inspectorWidthForExpandedChat(opts: {
   inspectorWidth: number
   sidebarCollapsed: boolean
 }) {
-  const side = opts.sidebarCollapsed ? 0 : SIDEBAR
+  const side = opts.sidebarCollapsed ? SIDEBAR_RAIL : SIDEBAR
   const maxInspector = opts.viewportWidth - RAIL - side - CHAT_OVERLAY_ENTER
   return Math.min(opts.inspectorWidth, Math.max(INSPECTOR_MIN, Math.round(maxInspector)))
 }
@@ -267,7 +281,7 @@ export function toggleOverlayThread() {
 
 /** 收缩态点外面关掉；展开态、选取态或点在窗口/弹出菜单里则留下。 */
 export const OVERLAY_OUTSIDE_KEEP =
-  '[data-testid="chat-overlay-panel"], [data-testid="pick-chip-data"], .pick-chip-data, .composer-model-flyout, [data-testid="page-mention"], [data-testid="chat-session-title-pop"], [role="dialog"]'
+  '[data-testid="chat-overlay-panel"], [data-testid="pick-chip-data"], .pick-chip-data, .composer-model-flyout, [data-testid="page-mention"], [role="dialog"]'
 
 let pickLive = false
 

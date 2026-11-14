@@ -100,9 +100,31 @@ test('data overview lists each source record, includes tags, and skips other ind
   assert.ok((listed.schema?.actions ?? []).some((action) => action.id === 'pin'))
   assert.ok(!(listed.schema?.actions ?? []).some((action) => action.id === 'open'))
   assert.deepEqual(listed.items.find((item) => item.id === 'notes::n1')?.actionIds, ['pin'])
+  const published = db.collectionsList().map((item) => db.publishCollection(item)).find((item) => item.path === '/data')
+  assert.equal(published?.view?.inspector, true)
+  assert.equal(published?.view?.title, '数据')
   assert.equal(isDataOverviewSource('/tags'), true)
-  assert.equal(isDataOverviewSource('/page-blocks'), false)
+  assert.equal(isDataOverviewSource('/editor-blocks'), false)
   assert.equal(isDataOverviewSource('/trash'), false)
+  assert.equal(listed.schema?.fields.title?.writable, true)
+  assert.equal(listed.schema?.fields.table?.type, 'select')
+  assert.ok((listed.schema?.fields.table?.enum ?? []).includes('笔记2号'))
+  const byTable = await db.list('/data', { table: '笔记2号' })
+  assert.equal(byTable.kind, 'collection')
+  if (byTable.kind === 'collection') {
+    assert.ok(byTable.items.length)
+    assert.ok(byTable.items.every((item) => item.table === '笔记2号'))
+  }
+  const written = await db.update('/data/notes::n1', { title: '改了' })
+  assert.equal(written.kind, 'record')
+  assert.equal(written.path, '/data/notes::n1')
+  assert.equal(written.value.id, 'notes::n1')
+  assert.equal(written.value.title, '改了')
+  assert.equal(written.value.tablePath, '/notes')
+  assert.equal(written.value.sourceId, 'n1')
+  const source = await db.read('/notes/n1')
+  assert.equal(source.kind, 'record')
+  if (source.kind === 'record') assert.equal(source.value.title, '改了')
 })
 
 test('root lists registered collections; record read/update follows schema', async () => {
@@ -506,6 +528,9 @@ test('update accepts url image and attachment values', async () => {
   assert.equal(emptyPack.value.file, '')
   await assert.rejects(() => db.update('/media/n1', { link: 'javascript:alert(1)' }), /expected url/)
   await assert.rejects(() => db.update('/media/n1', { cover: 'javascript:alert(1)' }), /expected image/)
+  const hashed = `${'ab'.repeat(32)}.md`
+  await db.update('/media/n1', { file: { name: '规划.md', href: `/api/db/file/${hashed}` } })
+  assert.equal(db.tags.recordsReferencingAsset(hashed).length, 1)
 })
 
 test('content is omitted from list/read and served on its own path', async () => {
@@ -585,8 +610,8 @@ test('writeContent string fields keep JSON objects instead of [object Object]', 
     ['b1', { id: 'b1', title: '块', data: '{"html":"old"}' }],
   ])
   db.register({
-    id: 'page-blocks',
-    path: '/page-blocks',
+    id: 'editor-blocks',
+    path: '/editor-blocks',
     schema: {
       contentField: 'data',
       fields: {
@@ -604,26 +629,26 @@ test('writeContent string fields keep JSON objects instead of [object Object]', 
       return next as { id: string }
     },
   })
-  const written = await db.writeContent('/page-blocks/b1', { html: '<p>new</p>', deck: false })
+  const written = await db.writeContent('/editor-blocks/b1', { html: '<p>new</p>', deck: false })
   assert.equal(written.field, 'data')
   assert.equal(written.value, '{"html":"<p>new</p>","deck":false}')
-  const updated = await db.update('/page-blocks/b1', { data: { html: '<b>via update</b>' } })
+  const updated = await db.update('/editor-blocks/b1', { data: { html: '<b>via update</b>' } })
   assert.equal(updated.value.data, '{"html":"<b>via update</b>"}')
 })
 
-test('page-block records whose id starts with / still read from /page-blocks/', async () => {
+test('page-block records whose id starts with / still read from /editor-blocks/', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
   const id = '/pages::p001::ab12cd34'
   const row = { id, title: '刊头', collection: '/pages', pageId: 'p001', blockId: 'ab12cd34' }
   db.register({
-    id: 'page-blocks',
-    path: '/page-blocks',
+    id: 'editor-blocks',
+    path: '/editor-blocks',
     schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' } } },
     list: () => [row],
     get: (next) => (next === id ? row : undefined),
   })
-  const got = await db.read(`/page-blocks/${id}`)
+  const got = await db.read(`/editor-blocks/${id}`)
   assert.equal(got.kind, 'record')
   assert.equal((got as { value?: { id?: string } }).value?.id, id)
 })
@@ -983,7 +1008,7 @@ test('apply registers db_* tools', async () => {
   new HttpStub(ctx)
   await ctx.plugin({ inject: ['tools', 'http'], apply: applyFileSystem })
   const names = ctx.tools.names()
-  for (const name of ['db_list', 'db_read', 'db_update', 'db_create', 'db_delete', 'db_restore', 'db_stat', 'db_action', 'db_content', 'db_asset', 'db_doc']) {
+  for (const name of ['db_list', 'db_read', 'db_update', 'db_create', 'db_delete', 'db_restore', 'db_stat', 'db_action', 'db_content', 'db_file', 'db_media']) {
     assert.equal(names.includes(name), true, name)
   }
   for (const name of ['db_list', 'db_read', 'db_stat']) {
@@ -992,8 +1017,9 @@ test('apply registers db_* tools', async () => {
   assert.equal(ctx.tools.executionMode('db_update'), 'exclusive')
   assert.equal(ctx.tools.executionMode('db_content', { path: '/pages/p1', command: 'view' }), 'parallel')
   assert.equal(ctx.tools.executionMode('db_content', { path: '/pages/p1', command: 'write', value: 'x' }), 'exclusive')
-  assert.equal(ctx.tools.executionMode('db_asset', { path: '/pages/p1', command: 'view' }), 'parallel')
-  assert.equal(ctx.tools.executionMode('db_asset', { path: '/pages/p1', command: 'write', value: 'x' }), 'exclusive')
+  assert.equal(ctx.tools.executionMode('db_file', { path: '/pages/p1', command: 'view' }), 'parallel')
+  assert.equal(ctx.tools.executionMode('db_media', { path: '/pages/p1', command: 'view' }), 'parallel')
+  assert.equal(ctx.tools.executionMode('db_media', { path: '/pages/p1', command: 'write', value: 'x' }), 'exclusive')
   const listed = await ctx.tools.invoke('db_list', { path: '/' })
   assert.equal((listed as { kind: string }).kind, 'root')
   const items = ((listed as { items: Array<{ path: string; view?: { blurb?: string } }> }).items ?? [])
@@ -1680,6 +1706,18 @@ test('db_update /tags writes facet field packs', async () => {
     assert.equal(stat.schema.fields.fields?.example, '[{"key":"类别","type":"string"}]')
     assert.match(String(stat.schema.fields.fields?.description), /tag::<本标签id>::<字段key>/)
   }
+  const views = await db.update(`/tags/${id}`, {
+    views: [{ id: '8fdbc4f8', name: '沙盒 1', kind: 'sandbox', file: `tag-view-${id}-8fdbc4f8.jsx`, dataFile: `tag-view-data-${id}-8fdbc4f8.json` }],
+  })
+  assert.equal((views.value.views as Array<{ id: string }>)[0]?.id, '8fdbc4f8')
+  const written = await db.editDoc(`/tags/${id}`, {
+    command: 'write',
+    name: `tag-view-${id}-8fdbc4f8.jsx`,
+    value: 'export default function App(){return <p>标签沙盒</p>}',
+  })
+  assert.equal(written.ok, true)
+  const viewed = await db.editDoc(`/tags/${id}`, { name: `tag-view-${id}-8fdbc4f8.jsx` })
+  if (viewed.kind === 'doc' && 'text' in viewed) assert.match(String(viewed.text), /标签沙盒/)
   const body = await db.writeContent(`/tags/${id}`, '# 标签说明')
   assert.equal(body.field, 'notes')
   assert.equal(body.value, '# 标签说明')
@@ -1757,6 +1795,63 @@ test('db_update page facet stores flat property values on the stamp', async () =
   const listed = await db.list('/pages', undefined, { columns: [col] })
   if (listed.kind !== 'collection') return
   assert.equal(listed.items[0]?.[col], '查泽雷')
+})
+
+test('sandbox patch writes only the current record and this tag', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const pages = new Map<string, Record<string, unknown>>([
+    ['p1', { id: 'p1', title: '爱乐之城' }],
+    ['p2', { id: 'p2', title: '另一页' }],
+  ])
+  db.register({
+    id: 'pages',
+    path: '/pages',
+    schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
+    records: { update: true },
+    list: () => [...pages.values()] as { id: string }[],
+    get: (id) => pages.get(id) as { id: string } | undefined,
+    update: (id, patch) => {
+      const next = { ...pages.get(id), ...patch, id }
+      pages.set(id, next)
+      return next as { id: string }
+    },
+  })
+  db.register(tagsCollection(db.tags))
+  const movie = await db.create('/tags', [{ title: '电影' }])
+  const movieId = String(movie.items[0]?.value.id)
+  await db.update(`/tags/${movieId}`, {
+    fields: JSON.stringify([
+      { key: 'status', type: 'string', label: '状态' },
+      { key: 'director', type: 'string', label: '导演' },
+    ]),
+  })
+  const award = await db.create('/tags', [{ title: '奖项' }])
+  const awardId = String(award.items[0]?.value.id)
+  await db.update(`/tags/${awardId}`, {
+    fields: JSON.stringify([{ key: 'oscar', type: 'boolean', label: '奥斯卡' }]),
+  })
+  await db.update('/pages/p1', {
+    tag: { tags: [movieId, awardId], values: { [movieId]: { director: '查泽雷' }, [awardId]: { oscar: true } } },
+  })
+  const patched = await db.patchTagSandbox('/pages/p1', movieId, { 状态: '进行中' })
+  assert.equal(patched.value.tag.values[movieId].status, '进行中')
+  assert.equal(patched.value.tag.values[movieId].director, '查泽雷')
+  assert.equal(patched.value.tag.values[awardId].oscar, true)
+  assert.equal(db.tags.recordTag('/pages', 'p2')?.values[movieId]?.status, undefined)
+  await assert.rejects(() => db.patchTagSandbox('/pages/p1', movieId, { 奥斯卡: true }), /unknown tag field/)
+  await db.update(`/tags/${movieId}`, {
+    fields: JSON.stringify([
+      { key: 'status', type: 'string', label: '状态' },
+      { key: 'director', type: 'string', label: '导演' },
+      { key: 'locked', type: 'string', label: '锁定', writable: false },
+      { key: 'year', type: 'number', label: '年份' },
+    ]),
+  })
+  await assert.rejects(() => db.patchTagSandbox('/pages/p1', movieId, { locked: 'x' }), /not writable/)
+  await assert.rejects(() => db.patchTagSandbox('/pages/p1', movieId, { year: 'nope' }), /expected number/)
+  await assert.rejects(() => db.patchTagSandbox('/pages', movieId, { 状态: '进行中' }), /current record/)
+  await assert.rejects(() => db.patchTagSandbox(`/tags/${movieId}`, movieId, { 状态: '进行中' }), /no instance property values/)
 })
 
 test('db_update /views columns accepts array or JSON array and rejects fragments', async () => {
@@ -2431,8 +2526,8 @@ test('index rows follow the user records each person can read and omit share', a
     },
   })
   db.register({
-    id: 'page-blocks',
-    path: '/page-blocks',
+    id: 'editor-blocks',
+    path: '/editor-blocks',
     schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' }, collection: { type: 'string' }, pageId: { type: 'string' } } },
     list: () => blocks,
     get: (id) => blocks.find((row) => row.id === id) ?? null,
@@ -2472,12 +2567,12 @@ test('index rows follow the user records each person can read and omit share', a
   await runWithAccount(ada.id, () => db.update(`/pages/${personalId}`, { tag: { tags: [hiddenId], values: {} } }))
   await runWithAccount(ada.id, () => db.update(`/pages/${sharedId}`, { tag: { tags: [shownId], values: {} } }))
 
-  const adaBlocks = await runWithAccount(ada.id, () => db.list('/page-blocks'))
-  const bobBlocks = await runWithAccount(bob.id, () => db.list('/page-blocks'))
+  const adaBlocks = await runWithAccount(ada.id, () => db.list('/editor-blocks'))
+  const bobBlocks = await runWithAccount(bob.id, () => db.list('/editor-blocks'))
   assert.deepEqual(adaBlocks.items.map((row) => row.title).sort(), ['私人组件', '空间组件'])
   assert.deepEqual(bobBlocks.items.map((row) => row.title), ['空间组件'])
   assert.equal(adaBlocks.items[0]?.shareScope, undefined)
-  const blockStat = await runWithAccount(ada.id, () => db.stat('/page-blocks'))
+  const blockStat = await runWithAccount(ada.id, () => db.stat('/editor-blocks'))
   if (blockStat.kind === 'collection') assert.equal(blockStat.schema.fields.shareScope, undefined)
 
   const adaFacets = await runWithAccount(ada.id, () => db.list('/tags'))
@@ -2698,6 +2793,10 @@ test('a member sandbox is private until the owner shares it', async () => {
     ])
     const caraList = await runWithAccount(cara.id, () => db.list('/plugins'))
     assert.deepEqual(caraList.items.map((row) => row.id), ['cara-plug'])
+    await runWithAccount(ada.id, () => db.action('/plugins/ada-open', 'sandbox', { scope: 'shared' }))
+    const openList = await runWithAccount(bob.id, () => db.list('/plugins'))
+    assert.equal(openList.items.find((row) => row.id === 'ada-open')?.shareScope, '共享')
+    assert.equal(openList.items.some((row) => row.id === 'ada-plug'), true)
   } finally {
     if (previous === undefined) delete process.env.BIU_ONLINE
     else process.env.BIU_ONLINE = previous
@@ -2976,7 +3075,7 @@ test('concurrent lists of one collection share a single spec.list scan', async (
 
 test('db_content points agents at plugin intros for pageBlock fences', () => {
   const host = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
-  assert.match(host, /写 :::pageBlock 前先 db_content \/plugins\/<plugin> 读介绍里的「示例写法」/)
+  assert.match(host, /写 :::editorBlock 前先 db_content \/plugins\/<plugin> 读介绍里的「示例写法」/)
   assert.equal(host.includes('kind=html 或 htmlframe'), false)
 })
 
@@ -3087,4 +3186,79 @@ test('deleting a /views row is a hard delete and drops the stored view', async (
     db.viewCatalog!.viewsFor('/notes').map((view) => view.id).filter((id) => id === viewId),
     [],
   )
+})
+
+test('db_doc view/write uses collection namedDocs for page sandbox files', async () => {
+  const files = new Map<string, { text: string; etag: string }>([
+    ['view-p194-8fdbc4f8.jsx', { text: 'export default function App(){return <p>你好</p>}\n', etag: 'e1' }],
+  ])
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  db.register({
+    id: 'pages',
+    path: '/pages',
+    schema: { labelField: 'title', fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
+    namedDocs: {
+      names: (record) => [`view-${record.id}-8fdbc4f8.jsx`, `page-views-${record.id}.json`],
+      read: (name) => {
+        const hit = files.get(name)
+        if (!hit) throw new Error('not found')
+        return { bytes: Buffer.from(hit.text), type: 'text/javascript; charset=utf-8', etag: hit.etag }
+      },
+      write: (name, content, opts) => {
+        const hit = files.get(name)
+        if (hit && opts?.etag && opts.etag !== hit.etag) throw new Error('etag conflict')
+        const text = typeof content === 'string' ? content : Buffer.from(content).toString('utf8')
+        const next = { text, etag: `e${files.size + 1}` }
+        files.set(name, next)
+        return { name, etag: next.etag, bytes: Buffer.byteLength(text) }
+      },
+    },
+    list: () => [{ id: 'p194', title: '沙盒页' }],
+    get: (id) => (id === 'p194' ? { id: 'p194', title: '沙盒页', views: [{ id: '8fdbc4f8', file: 'view-p194-8fdbc4f8.jsx' }] } : null),
+  })
+  const listed = await db.editDoc('/pages/p194')
+  assert.equal(listed.kind, 'doc')
+  if (listed.kind === 'doc' && 'assets' in listed) {
+    assert.ok((listed.assets as Array<{ name: string }>).some((item) => item.name === 'view-p194-8fdbc4f8.jsx'))
+  }
+  const viewed = await db.editDoc('/pages/p194', { name: 'view-p194-8fdbc4f8.jsx' })
+  assert.equal(viewed.kind, 'doc')
+  if (viewed.kind === 'doc' && 'text' in viewed) {
+    assert.match(String(viewed.text), /你好/)
+    const written = await db.editDoc('/pages/p194', {
+      command: 'write',
+      name: 'view-p194-8fdbc4f8.jsx',
+      value: String(viewed.text).replace('你好', 'hello'),
+      etag: viewed.etag,
+    })
+    assert.equal(written.ok, true)
+  }
+  const again = await db.editDoc('/pages/p194', { name: 'view-p194-8fdbc4f8.jsx' })
+  if (again.kind === 'doc' && 'text' in again) assert.match(String(again.text), /hello/)
+  const patched = await db.editDoc('/pages/p194', {
+    command: 'str_replace',
+    name: 'view-p194-8fdbc4f8.jsx',
+    old_str: 'hello',
+    new_str: 'hi',
+  })
+  assert.equal(patched.ok, true)
+  assert.equal(patched.command, 'str_replace')
+  const afterPatch = await db.editDoc('/pages/p194', { name: 'view-p194-8fdbc4f8.jsx' })
+  if (afterPatch.kind === 'doc' && 'text' in afterPatch) assert.match(String(afterPatch.text), /hi/)
+  const lined = await db.editDoc('/pages/p194', {
+    command: 'replace_lines',
+    name: 'view-p194-8fdbc4f8.jsx',
+    start_line: 1,
+    end_line: 1,
+    new_str: 'export default function App(){return <p>ok</p>}',
+  })
+  assert.equal(lined.ok, true)
+  const inserted = await db.editDoc('/pages/p194', {
+    command: 'insert',
+    name: 'view-p194-8fdbc4f8.jsx',
+    insert_line: 1,
+    new_str: '// note',
+  })
+  assert.equal(inserted.ok, true)
 })

@@ -57,3 +57,21 @@ export function focusRecordTitleNear(from: Element | null | undefined) {
   }
   return true
 }
+
+/** 进入详情后多拍几次，避开表格弹层卸载 / 正文编辑器抢焦点。 */
+export function scheduleFocusRecordTitle(from: () => Element | null | undefined) {
+  const go = () => focusRecordTitleNear(from())
+  go()
+  const frames: number[] = []
+  frames.push(requestAnimationFrame(() => {
+    go()
+    frames.push(requestAnimationFrame(go))
+  }))
+  const t0 = window.setTimeout(go, 0)
+  const t1 = window.setTimeout(go, 80)
+  return () => {
+    for (const id of frames) cancelAnimationFrame(id)
+    window.clearTimeout(t0)
+    window.clearTimeout(t1)
+  }
+}

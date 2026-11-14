@@ -70,6 +70,24 @@ test('sqlite file round-trips facet catalog and stamp index', async () => {
   assert.equal(again.list().length, 0)
 })
 
+test('TagStore persists sandbox views and named docs', () => {
+  const store = new TagStore()
+  store.upsert({ id: 'need', label: '需求', fields: [{ key: 'owner', type: 'string' }] })
+  const views = store.writeViews('need', [
+    { id: '8fdbc4f8', name: '卡', kind: 'sandbox', file: 'tag-view-need-8fdbc4f8.jsx', dataFile: 'tag-view-data-need-8fdbc4f8.json' },
+  ])
+  assert.equal(views[0]?.name, '卡')
+  store.writeNamedDoc('view-need-8fdbc4f8.jsx', 'export default function App(){return <p>ok</p>}')
+  const read = store.readNamedDoc('view-need-8fdbc4f8.jsx')
+  assert.match(read.bytes.toString('utf8'), /ok/)
+  const catalog = store.readNamedDoc('tag-views-need.json')
+  assert.match(catalog.bytes.toString('utf8'), /8fdbc4f8/)
+  store.writeNamedDoc('view-tag-9-0ae784c0.jsx', 'export default function App(){return <p>tag-9</p>}')
+  assert.match(store.readNamedDoc('view-tag-9-0ae784c0.jsx').bytes.toString('utf8'), /tag-9/)
+  store.removeFacet('need')
+  assert.throws(() => store.readNamedDoc('view-need-8fdbc4f8.jsx'))
+})
+
 test('sqlite stores facet overlay for records that cannot update', async () => {
   const store = new TagStore()
   store.writeRecordTag('/plugins', 'demo', { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } }, 'Demo')
@@ -89,6 +107,40 @@ test('upserting a soft-deleted facet id brings it back', () => {
   store.upsert({ id: 'facet-6', label: '新标签', fields: [] })
   assert.equal(store.isDeleted('/tags', 'facet-6'), false)
   assert.equal(store.get('facet-6')?.label, '新标签')
+})
+
+test('removing a tag field strips leftover values from records', () => {
+  const store = new TagStore()
+  store.upsert({
+    id: 'tag-13',
+    label: '附件 1',
+    fields: [
+      { key: '183359745', type: 'string', label: '旧文本', writable: true },
+      { key: '2041995583', type: 'document', label: '文档', writable: true },
+    ],
+  })
+  store.writeRecordTag(
+    '/pages',
+    'p219',
+    {
+      tags: ['tag-13'],
+      values: {
+        'tag-13': {
+          '183359745': '',
+          '2041995583': [{ name: '规划.md', href: '/api/db/file/a.md' }],
+        },
+      },
+    },
+    '页',
+  )
+  store.upsert({
+    id: 'tag-13',
+    label: '附件 1',
+    fields: [{ key: '2041995583', type: 'document', label: '文档', writable: true }],
+  })
+  const bag = store.recordTag('/pages', 'p219')?.values['tag-13'] ?? {}
+  assert.equal(Object.prototype.hasOwnProperty.call(bag, '183359745'), false)
+  assert.equal((bag['2041995583'] as Array<{ name: string }>)[0]?.name, '规划.md')
 })
 
 test('empty facet overlay is not stored', async () => {
@@ -136,14 +188,20 @@ test('sqlite stores html banner in its own table without wrapping json', () => {
 test('attachments and refs live next to record_meta', () => {
   const store = new TagStore()
   store.putAttachment({ name: 'ab'.repeat(32) + '.png', etag: 'ab'.repeat(32) + '.png', mime: 'image/png', bytes: 4, kind: 'asset' })
-  store.linkContentRef('/pages', 'p1', 'fresh.png')
+  store.linkContentRef('/pages', 'p1', 'fresh.png', 'asset')
   const linked = store.recordsReferencingAsset('fresh.png')
   assert.equal(linked.length, 1)
   assert.equal(linked[0]?.collection, '/pages')
   assert.equal(linked[0]?.record_id, 'p1')
   store.replaceContentRefs('/pages', 'p1', ['hero.png'], ['cover.png'])
   store.replaceBlockRefs('/pages', 'p1', 'e4945888', [{ name: 'ab'.repeat(32) + '.html', source: 'block:e4945888:core' }])
-  assert.deepEqual(store.listedAttachmentNames('/pages', 'p1'), ['ab'.repeat(32) + '.html', 'cover.png', 'hero.png'].sort())
+  assert.deepEqual(
+    store.listedAttachmentNames('/pages', 'p1'),
+    ['ab'.repeat(32) + '.html', 'cover.png', 'fresh.png', 'hero.png'].sort(),
+  )
+  store.replaceAssetRefs('/pages', 'p1', ['tag-file.md'])
+  assert.ok(store.recordsReferencingAsset('tag-file.md').length)
+  assert.equal(store.recordsReferencingAsset('fresh.png').length, 0)
   store.removeRecord('/pages', 'p1')
   assert.deepEqual(store.listedAttachmentNames('/pages', 'p1'), [])
 })

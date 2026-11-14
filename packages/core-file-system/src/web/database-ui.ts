@@ -1,5 +1,12 @@
 import { Service, type Context } from 'cordis'
-import type { CollectionChrome, CollectionRowViewType, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
+import type {
+  CollectionChrome,
+  CollectionRowViewType,
+  CollectionViewType,
+  DatabaseUi,
+  FsDetailTools,
+  FsRecordContentView,
+} from '@biu/type-file-system/ui'
 import { DEFAULT_CHROME_PATH } from '@biu/type-file-system/ui'
 import { normalizeCollectionPath } from '../paths.ts'
 
@@ -13,6 +20,7 @@ function mergeChrome(layers: CollectionChrome[]): CollectionChrome {
   let Actions: CollectionChrome['Actions']
   let DetailTools: CollectionChrome['DetailTools']
   let DetailBar: CollectionChrome['DetailBar']
+  let Properties: CollectionChrome['Properties']
   let Icon: CollectionChrome['Icon']
   let Title: CollectionChrome['Title']
   let Board: CollectionChrome['Board']
@@ -27,6 +35,7 @@ function mergeChrome(layers: CollectionChrome[]): CollectionChrome {
     if (layer.Actions) Actions = layer.Actions
     if (layer.DetailTools) DetailTools = layer.DetailTools
     if (layer.DetailBar) DetailBar = layer.DetailBar
+    if (layer.Properties) Properties = layer.Properties
     if (layer.Icon) Icon = layer.Icon
     if (layer.Title) Title = layer.Title
     if (layer.Board) Board = layer.Board
@@ -42,7 +51,7 @@ function mergeChrome(layers: CollectionChrome[]): CollectionChrome {
       }
     }
   }
-  return { cells, Action, Actions, DetailTools, DetailBar, Icon, Title, Board, Content, panes: panes.length ? panes : undefined, openRow, listViews, lockedFiltersFromSearch }
+  return { cells, Action, Actions, DetailTools, DetailBar, Properties, Icon, Title, Board, Content, panes: panes.length ? panes : undefined, openRow, listViews, lockedFiltersFromSearch }
 }
 
 function mergeViews(layers: CollectionViewType[]): CollectionViewType[] {
@@ -63,6 +72,26 @@ function mergeRowViews(layers: CollectionRowViewType[]): CollectionRowViewType[]
   return [...byId.values()]
 }
 
+function mergeContentViews(layers: FsRecordContentView[]): FsRecordContentView[] {
+  const byId = new Map<string, FsRecordContentView>()
+  for (const view of layers) {
+    if (!view.id || view.id === 'hidden') continue
+    byId.set(view.id, view)
+  }
+  return [...byId.values()]
+}
+
+function mergeDetailTools(layers: FsDetailTools[]): FsDetailTools {
+  const out: FsDetailTools = {}
+  for (const layer of layers) {
+    if (layer.Search) out.Search = layer.Search
+    if (layer.sorts) out.sorts = layer.sorts
+    if (layer.filters) out.filters = layer.filters
+    if (layer.filterAllLabel) out.filterAllLabel = layer.filterAllLabel
+  }
+  return out
+}
+
 function rowViewScope(path: string) {
   const raw = String(path ?? '').trim()
   if (!raw || raw === ALL_ROW_VIEWS_PATH) return ALL_ROW_VIEWS_PATH
@@ -79,9 +108,13 @@ export class DatabaseUiService extends Service implements DatabaseUi {
   private layers = new Map<string, CollectionChrome[]>()
   private viewLayers = new Map<string, CollectionViewType[]>()
   private rowLayers = new Map<string, CollectionRowViewType[]>()
+  private contentLayers = new Map<string, FsRecordContentView[]>()
+  private toolLayers = new Map<string, FsDetailTools[]>()
   private snapshot = new Map<string, CollectionChrome>()
   private viewSnapshot = new Map<string, CollectionViewType[]>()
   private rowSnapshot = new Map<string, CollectionRowViewType[]>()
+  private contentSnapshot = new Map<string, FsRecordContentView[]>()
+  private toolSnapshot = new Map<string, FsDetailTools>()
   private listeners = new Set<() => void>()
 
   constructor(ctx: Context) {
@@ -137,6 +170,38 @@ export class DatabaseUiService extends Service implements DatabaseUi {
     }
   }
 
+  registerContentView(path: string, view: FsRecordContentView) {
+    const key = normalizeCollectionPath(path)
+    const list = this.contentLayers.get(key) ?? []
+    list.push(view)
+    this.contentLayers.set(key, list)
+    this.emit()
+    return {
+      dispose: () => {
+        const next = (this.contentLayers.get(key) ?? []).filter((item) => item !== view)
+        if (next.length) this.contentLayers.set(key, next)
+        else this.contentLayers.delete(key)
+        this.emit()
+      },
+    }
+  }
+
+  registerDetailTools(path: string, tools: FsDetailTools) {
+    const key = normalizeCollectionPath(path)
+    const list = this.toolLayers.get(key) ?? []
+    list.push(tools)
+    this.toolLayers.set(key, list)
+    this.emit()
+    return {
+      dispose: () => {
+        const next = (this.toolLayers.get(key) ?? []).filter((item) => item !== tools)
+        if (next.length) this.toolLayers.set(key, next)
+        else this.toolLayers.delete(key)
+        this.emit()
+      },
+    }
+  }
+
   chrome(path: string): CollectionChrome {
     const key = normalizeCollectionPath(path)
     const cached = this.snapshot.get(key)
@@ -165,6 +230,32 @@ export class DatabaseUiService extends Service implements DatabaseUi {
     return merged
   }
 
+  contentViews(path: string): FsRecordContentView[] {
+    const key = normalizeCollectionPath(path)
+    const cached = this.contentSnapshot.get(key)
+    if (cached) return cached
+    const own = this.contentLayers.get(key)
+    const layers = own?.length ? own : key === DEFAULT_CHROME_PATH ? [] : (this.contentLayers.get(DEFAULT_CHROME_PATH) ?? [])
+    const merged = mergeContentViews(layers)
+    this.contentSnapshot.set(key, merged)
+    return merged
+  }
+
+  detailTools(path: string): FsDetailTools {
+    const key = normalizeCollectionPath(path)
+    const cached = this.toolSnapshot.get(key)
+    if (cached) return cached
+    const ownContent = Boolean(this.contentLayers.get(key)?.length)
+    const layers = ownContent
+      ? (this.toolLayers.get(key) ?? [])
+      : key === DEFAULT_CHROME_PATH
+        ? (this.toolLayers.get(key) ?? [])
+        : [...(this.toolLayers.get(DEFAULT_CHROME_PATH) ?? []), ...(this.toolLayers.get(key) ?? [])]
+    const merged = mergeDetailTools(layers)
+    this.toolSnapshot.set(key, merged)
+    return merged
+  }
+
   subscribe(listener: () => void) {
     this.listeners.add(listener)
     return () => {
@@ -180,6 +271,8 @@ export class DatabaseUiService extends Service implements DatabaseUi {
     this.snapshot.clear()
     this.viewSnapshot.clear()
     this.rowSnapshot.clear()
+    this.contentSnapshot.clear()
+    this.toolSnapshot.clear()
     for (const fn of this.listeners) fn()
   }
 }

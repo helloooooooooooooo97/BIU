@@ -21,6 +21,8 @@ test('facet chips jump to the tag record like parent and depend chips', () => {
   const cells = readFileSync(resolve(import.meta.dirname, './fsdb-cells.tsx'), 'utf8')
   const pop = readFileSync(resolve(import.meta.dirname, './field-value-pop.tsx'), 'utf8')
   assert.match(catalog, /showRecordInInspector\('\/tags', resolved\)/)
+  assert.match(catalog, /OPEN_TAG_EVENT = 'biu:open-tag'/)
+  assert.match(catalog, /listenOpenTag/)
   assert.match(schemaUi, /jumpTag\(id, onOpen\)/)
   assert.match(schemaUi, /<FieldValuePop/)
   assert.doesNotMatch(schemaUi, /<CellMulti/)

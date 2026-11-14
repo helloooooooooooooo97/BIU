@@ -57,6 +57,18 @@ test('kind maps to distinct heroicons', () => {
   assert.equal(pickKindIcon('unknown'), lu.TagIcon)
 })
 
+test('cell pick chips use the field-type glyph, not the record kind', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './chip.tsx'), 'utf8')
+  assert.match(src, /type=\{pick\.type\}/)
+  assert.match(src, /FIELD_TYPE_ICONS/)
+  assert.match(src, /fieldPickGlyphKind/)
+  assert.match(src, /fsdb-field-glyph pick-kind-icon/)
+  assert.match(src, /type === 'datetime'\) return 'date'/)
+  assert.match(src, /type === 'person'\) return 'person'/)
+  assert.equal(lu.Bars3BottomLeftIcon, pickKindIcon('text'))
+  assert.notEqual(pickKindIcon('page'), lu.Bars3BottomLeftIcon)
+})
+
 test('pick kind maps to the facet palette by string', () => {
   assert.equal(pickKindTone('session'), tagTone('session'))
   assert.equal(pickKindTone('task'), tagTone('task'))
@@ -81,7 +93,7 @@ test('pick chips can show the facet close mark', () => {
   assert.match(src, /container=\{typeof document === 'undefined' \? null : document\.body\}/)
   assert.match(src, /event\.stopPropagation\(\)/)
   assert.match(src, /z-index:300/)
-  assert.match(src, /overlayZ\(300\)/)
+  assert.match(src, /overlayZ\(500\)/)
   assert.match(src, /pick-chip-data/)
   assert.doesNotMatch(src, /pick-chip-data-quote/)
   assert.match(src, /pick-chip-data-fields/)

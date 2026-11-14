@@ -10,10 +10,10 @@ test('page-blocks chrome lists all plus one view per kind', () => {
     { kind: 'html', label: 'HTML' },
   ])
   const listed = chrome.listViews?.(
-    [{ id: 'page-blocks', path: '/page-blocks', kind: 'collection', label: '组件', view: { title: '组件' } }],
+    [{ id: 'editor-blocks', path: '/editor-blocks', kind: 'collection', label: '组件', view: { title: '组件' } }],
     [],
   ) as SavedView[]
-  assert.equal(listed[0]?.id, builtinAllViewId('/page-blocks'))
+  assert.equal(listed[0]?.id, builtinAllViewId('/editor-blocks'))
   assert.equal(listed.some((view) => view.id === builtinBlockKindViewId('html')), true)
   assert.equal(listed.some((view) => view.id === builtinBlockKindViewId('algorithm')), true)
 })

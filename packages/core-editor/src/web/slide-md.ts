@@ -38,7 +38,13 @@ export type SlideFence = {
   raw: string
   layout: SlideLayout
   bg: string
+  title: string
   cells: string[]
+}
+
+function slideTitleAttr(raw: string) {
+  const hit = raw.match(/\btitle=(?:"([^"]*)"|'([^']*)'|([^\s}]+))/i)
+  return String(hit?.[1] ?? hit?.[2] ?? hit?.[3] ?? '').trim()
 }
 
 function attrMap(raw: string) {
@@ -60,7 +66,7 @@ function openCell(cells: string[]) {
   return [] as string[]
 }
 
-/** ProseMirror 容器围栏：:::slide / :::cell，内层 :::pageBlock 成对消化。 */
+/** ProseMirror 容器围栏：:::slide / :::cell，内层 :::editorBlock 成对消化。 */
 export function takeSlideFence(src: string): SlideFence | null {
   const lines = src.split('\n')
   const head = OPEN.exec(lines[0] ?? '')
@@ -84,7 +90,7 @@ export function takeSlideFence(src: string): SlideFence | null {
     }
     const open = OPEN.exec(line)
     if (open) {
-      if (open[1] === 'pageBlock' && cell) {
+      if ((open[1] === 'editorBlock' || open[1] === 'pageBlock') && cell) {
         const taken = takePageBlockFence(lines.slice(i).join('\n'))
         if (taken) {
           for (const part of taken.raw.split('\n')) cell.push(part)
@@ -119,14 +125,14 @@ export function takeSlideFence(src: string): SlideFence | null {
   if (end < 0) return null
   const raw = lines.slice(0, end + 1).join('\n')
   const layout = isSlideLayout(slideAttrs.layout) ? slideAttrs.layout : 'split'
-  return { raw, layout, bg: parseSlideBg(slideAttrs.bg), cells: cells.length ? cells : [''] }
+  return { raw, layout, bg: parseSlideBg(slideAttrs.bg), title: slideTitleAttr(head[2] ?? ''), cells: cells.length ? cells : [''] }
 }
 
-export function emptySlideJSON(layout: SlideLayout = 'split', bg = '') {
+export function emptySlideJSON(layout: SlideLayout = 'split', bg = '', title = '幻灯片') {
   const slots = SLIDE_LAYOUT_META[layout].slots
   return {
     type: 'slide',
-    attrs: { layout, bg: parseSlideBg(bg) },
+    attrs: { layout, bg: parseSlideBg(bg), title },
     content: Array.from({ length: slots }, () => ({
       type: 'slideCell',
       content: [{ type: 'paragraph' }],
@@ -134,7 +140,11 @@ export function emptySlideJSON(layout: SlideLayout = 'split', bg = '') {
   }
 }
 
-export function slideFenceOpen(layout: SlideLayout, bg?: unknown) {
+export function slideFenceOpen(layout: SlideLayout, bg?: unknown, title?: unknown) {
+  const parts = [`layout=${layout}`]
   const token = slideBgToken(bg)
-  return token ? `:::slide {layout=${layout} bg=${token}}` : `:::slide {layout=${layout}}`
+  if (token) parts.push(`bg=${token}`)
+  const name = String(title ?? '').trim()
+  if (name && name !== '幻灯片') parts.push(`title=${JSON.stringify(name)}`)
+  return `:::slide {${parts.join(' ')}}`
 }

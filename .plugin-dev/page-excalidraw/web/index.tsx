@@ -1,14 +1,14 @@
-import { Button, Input, ReUI } from '@biu/reui'
+import { ArrowsPointingInIcon, ArrowsPointingOutIcon } from '@heroicons/react/16/solid'
 import { Excalidraw } from '@excalidraw/excalidraw'
 import '@excalidraw/excalidraw/index.css'
 import { createPortal } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 export const name = 'page-excalidraw'
-export const inject = ['pageEditor']
+export const inject = ['blockEditor']
 
-type PageEditor = {
+type BlockEditor = {
     registerBlock: (spec: {
       kind: string
       plugin: string
@@ -43,9 +43,24 @@ function emptyScene(): Scene {
   return { elements: [], appState: { showWelcomeScreen: false }, files: {} }
 }
 
+const VIEWPORT_KEYS = new Set([
+  'scrollX',
+  'scrollY',
+  'zoom',
+  'width',
+  'height',
+  'offsetLeft',
+  'offsetTop',
+  'cursorButton',
+  'scrolledOutside',
+  'isLoading',
+  'showWelcomeScreen',
+])
+
 function withoutCollab(appState: unknown): Record<string, unknown> {
   if (!appState || typeof appState !== 'object' || Array.isArray(appState)) return {}
   const { collaborators: _c, ...rest } = appState as Record<string, unknown>
+  for (const key of VIEWPORT_KEYS) delete rest[key]
   return rest
 }
 
@@ -61,17 +76,6 @@ function parseScene(raw: unknown): Scene {
 
 function assetName(file: string) {
   return file.replace(/^assets\//, '')
-}
-
-function assetStem(file: string) {
-  return assetName(file).replace(/\.[^.]+$/, '')
-}
-
-function normalizeStem(raw: string, fallback: string) {
-  const trimmed = raw.trim() || fallback
-  const stem = trimmed.replace(/\.[^.]+$/, '')
-  if (!stem || /[\\/]/.test(stem) || !/^[\p{L}\p{N}._-]+$/u.test(stem)) return fallback
-  return stem
 }
 
 async function loadScene(file: string, bust = false): Promise<{ scene: Scene; etag: string }> {
@@ -99,7 +103,12 @@ function etagFromResponse(res: Response) {
   return String(res.headers.get('etag') ?? '').replace(/^W\//, '').replaceAll('"', '')
 }
 
+function isSceneFile(file: string) {
+  return /\.(json|excalidraw)$/i.test(String(file ?? '').trim())
+}
+
 async function saveScene(file: string, scene: Scene, etag: string) {
+  if (!isSceneFile(file)) return { ok: false as const, etag }
   const name = assetName(file)
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (etag) headers['If-Match'] = `"${etag}"`
@@ -238,17 +247,20 @@ function placeHost(host: Host, slot: HTMLElement | null) {
   if (host.expanded) {
     if (el.parentElement !== document.body) document.body.appendChild(el)
     el.style.cssText =
-      'position:fixed;top:36px;left:0;right:0;bottom:0;width:auto;height:auto;z-index:9992;pointer-events:auto;visibility:visible;overflow:hidden;isolation:isolate;background:var(--biu-color-bg)'
+      'position:fixed;inset:var(--biu-size-control-lg) 0 0 0;width:auto;height:auto;z-index:9992;pointer-events:auto;visibility:visible;overflow:hidden;isolation:isolate;background:var(--biu-color-bg)'
     return
   }
   if (!slot?.isConnected) {
     parkHost(host)
     return
   }
-  if (el.parentElement !== slot) slot.appendChild(el)
-  el.style.cssText =
-    'position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;visibility:visible;overflow:hidden;isolation:isolate;background:var(--biu-color-bg)'
-  requestAnimationFrame(() => fitView(host.api))
+  const moved = el.parentElement !== slot
+  if (moved) slot.appendChild(el)
+  const live = Boolean(slot.closest('.page-host-view'))
+  el.style.cssText = live
+    ? 'position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:auto;visibility:visible;overflow:hidden;isolation:isolate;background:var(--biu-color-bg)'
+    : 'position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;visibility:visible;overflow:hidden;isolation:isolate;background:var(--biu-color-bg)'
+  if (moved) requestAnimationFrame(() => fitView(host.api))
 }
 
 function paintHost(host: Host) {
@@ -404,132 +416,133 @@ function PersistentDraw(props: {
   )
 }
 
-const BAR: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-  height: 36,
-  padding: '0 8px',
-  background: 'var(--biu-color-bg-muted)',
-  borderBottom: 'var(--biu-stroke-width) solid var(--biu-color-border)',
-  color: 'var(--biu-color-text-subtle)',
-  fontSize: 12,
-}
-
-const ICON_BTN: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  flex: 'none',
-  width: 28,
-  height: 28,
-  margin: 0,
-  padding: 0,
-  border: 0,
-  borderRadius: 8,
-  background: 'transparent',
-  color: 'var(--biu-color-text-muted)',
-  cursor: 'pointer',
-}
-
-function Glyph(props: { d: string; evenodd?: boolean }) {
+function BoardKindIcon() {
   return (
-    <svg width={16} height={16} viewBox="0 0 16 16" fill="currentColor" aria-hidden>
-      <path d={props.d} fillRule={props.evenodd ? 'evenodd' : undefined} clipRule={props.evenodd ? 'evenodd' : undefined} />
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden>
+      <rect
+        x="1.75"
+        y="2.2"
+        width="12.5"
+        height="11.6"
+        rx="2.4"
+        stroke="var(--biu-color-ink-purple)"
+        strokeWidth="1.4"
+      />
+      <circle cx="5.2" cy="5.55" r="1.15" stroke="var(--biu-color-ink-purple)" strokeWidth="1.25" />
+      <path
+        d="M4.15 10.15c1.7-2.85 2.55-.75 3.85.4 1.5 1.3 2.15-3 4.75-3.85"
+        stroke="var(--biu-color-ink-purple)"
+        strokeWidth="1.35"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   )
 }
 
-function BoardBar(props: {
-  file: string
-  expanded: boolean
-  writable: boolean
-  onToggle: () => void
-  onRename: (name: string) => void
-}) {
-  const [draft, setDraft] = useState(assetStem(props.file))
-  useEffect(() => {
-    setDraft(assetStem(props.file))
-  }, [props.file])
-
-  const commit = () => {
-    const next = normalizeStem(draft, assetStem(props.file))
-    setDraft(next)
-    if (next === assetStem(props.file)) return
-    props.onRename(`${next}.json`)
-  }
-
+function DrawTools(props: { expanded: boolean; onToggle: () => void }) {
   return (
-    <ReUI>
-    <div className="rui-card-head" style={{ ...BAR, background: 'var(--biu-color-bg-muted)', borderBottom: 'var(--biu-stroke-width) solid var(--biu-color-border)' }}>
-      <span style={{ display: 'inline-flex', color: 'var(--biu-color-text)' }} title="画板">
-        <Glyph
-          evenodd
-          d="M2 12V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2Zm1.5-5.5V12a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V6.5A.5.5 0 0 0 12 6H4a.5.5 0 0 0-.5.5Zm.75-1.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM7 4a.75.75 0 1 1-1.5 0A.75.75 0 0 1 7 4Zm1.25.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z"
-        />
-      </span>
-      <Input
-        data-page-block-capture=""
-        style={{
-          minWidth: 0,
-          flex: 1,
-          height: 32,
-          margin: 0,
-          border: 0,
-          background: 'transparent',
-          color: 'var(--biu-color-text)',
-          font: 'inherit',
-          textAlign: 'center',
-          outline: 'none',
-        }}
-        value={draft}
-        disabled={!props.writable}
-        aria-label="画板名称"
-        onChange={(event) => setDraft(event.target.value)}
-        onBlur={commit}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            event.preventDefault()
-            ;(event.target as HTMLInputElement).blur()
-          }
-        }}
-      />
-      <Button
-        type="button"
-        size="icon"
-        variant="ghost"
-        tabIndex={-1}
-        data-page-block-expand=""
-        title={props.expanded ? '缩小' : '放大'}
-        aria-label={props.expanded ? '缩小' : '放大'}
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={props.onToggle}
-      >
-        {props.expanded ? (
-          <Glyph
-            evenodd
-            d="M2.22 2.22a.75.75 0 0 1 1.06 0L5.5 4.44V2.75a.75.75 0 0 1 1.5 0v3.5a.75.75 0 0 1-.75.75h-3.5a.75.75 0 0 1 0-1.5h1.69L2.22 3.28a.75.75 0 0 1 0-1.06Zm10.5 0a.75.75 0 1 1 1.06 1.06L11.56 5.5h1.69a.75.75 0 0 1 0 1.5h-3.5A.75.75 0 0 1 9 6.25v-3.5a.75.75 0 0 1 1.5 0v1.69l2.22-2.22ZM2.75 9h3.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-1.69l-2.22 2.22a.75.75 0 0 1-1.06-1.06l2.22-2.22H2.75a.75.75 0 0 1 0-1.5ZM9 9.75A.75.75 0 0 1 9.75 9h3.5a.75.75 0 0 1 0 1.5h-1.69l2.22 2.22a.75.75 0 1 1-1.06 1.06l-2.22-2.22v1.69a.75.75 0 0 1-1.5 0v-3.5Z"
-          />
-        ) : (
-          <Glyph
-            evenodd
-            d="M2.75 9a.75.75 0 0 1 .75.75v1.69l2.22-2.22a.75.75 0 0 1 1.06 1.06L4.56 12.5h1.69a.75.75 0 0 1 0 1.5h-3.5a.75.75 0 0 1-.75-.75v-3.5A.75.75 0 0 1 2.75 9ZM2.75 7a.75.75 0 0 0 .75-.75V4.56l2.22 2.22a.75.75 0 0 0 1.06-1.06L4.56 3.5h1.69a.75.75 0 0 0 0-1.5h-3.5a.75.75 0 0 0-.75.75v3.5c0 .414.336.75.75.75ZM13.25 9a.75.75 0 0 0-.75.75v1.69l-2.22-2.22a.75.75 0 1 0-1.06 1.06l2.22 2.22H9.75a.75.75 0 0 0 0 1.5h3.5a.75.75 0 0 0 .75-.75v-3.5a.75.75 0 0 0-.75-.75ZM13.25 7a.75.75 0 0 1-.75-.75V4.56l-2.22 2.22a.75.75 0 1 1-1.06-1.06l2.22-2.22H9.75a.75.75 0 0 1 0-1.5h3.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-.75.75Z"
-          />
-        )}
-      </Button>
-    </div>
-    </ReUI>
+    <button
+      type="button"
+      className="page-slide-icon"
+      tabIndex={-1}
+      data-page-block-expand=""
+      data-testid="excalidraw-expand"
+      title={props.expanded ? '缩小' : '放大'}
+      aria-label={props.expanded ? '缩小' : '放大'}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={props.onToggle}
+    >
+      {props.expanded ? (
+        <ArrowsPointingInIcon aria-hidden className="page-slide-ico" />
+      ) : (
+        <ArrowsPointingOutIcon aria-hidden className="page-slide-ico" />
+      )}
+    </button>
   )
 }
 
-function Board(props: { data: Record<string, unknown>; update: (p: Record<string, unknown>) => void; writable: boolean }) {
+function NavTitle({
+  value,
+  readOnly,
+  onCommit,
+}: {
+  value: string
+  readOnly?: boolean
+  onCommit: (next: string) => void
+}) {
+  const [draft, setDraft] = useState(value)
+  useEffect(() => {
+    setDraft(value)
+  }, [value])
+  const commit = () => {
+    const next = draft.trim()
+    if (!next || next === value) {
+      setDraft(value)
+      return
+    }
+    onCommit(next)
+  }
+  return (
+    <input
+      className="page-block-expand-nav-title"
+      data-testid="excalidraw-title"
+      data-biu-ignore
+      readOnly={readOnly}
+      value={draft}
+      placeholder="标题"
+      aria-label="标题"
+      onMouseDown={(event) => event.stopPropagation()}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          event.currentTarget.blur()
+        }
+        if (event.key === 'Escape') {
+          setDraft(value)
+          event.currentTarget.blur()
+        }
+      }}
+    />
+  )
+}
+
+function DrawSideBar(props: {
+  expanded: boolean
+  onToggle: () => void
+  title: string
+  readOnly?: boolean
+  onTitle: (next: string) => void
+}) {
+  const tools = <DrawTools expanded={props.expanded} onToggle={props.onToggle} />
+  return (
+    <div
+      className="page-block-expand-nav"
+      data-testid={props.expanded ? 'excalidraw-expand-nav' : 'excalidraw-side-bar'}
+      data-biu-ignore
+      style={props.expanded ? { position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9993 } : undefined}
+    >
+      <div className="page-block-expand-nav-type" data-testid="excalidraw-type-icon" title="画板" aria-label="画板">
+        <BoardKindIcon />
+      </div>
+      <NavTitle value={props.title} readOnly={props.readOnly} onCommit={props.onTitle} />
+      <div className="page-block-expand-nav-tools">{tools}</div>
+    </div>
+  )
+}
+
+function Board(props: { data: Record<string, unknown>; update: (p: Record<string, unknown>) => void; writable: boolean; selected?: boolean }) {
   const file = String(props.data.file || '')
   const [expanded, setExpanded] = useState(false)
   const slotRef = useRef<HTMLDivElement>(null)
 
+  const updateRef = useRef(props.update)
+  updateRef.current = props.update
   useEffect(() => {
     if (!file) {
-      props.update({ file: `assets/画板-${crypto.randomUUID().slice(0, 8)}.json` })
+      updateRef.current({ file: `assets/excalidraw-${crypto.randomUUID().slice(0, 8)}.json` })
     }
   }, [file])
 
@@ -565,55 +578,42 @@ function Board(props: { data: Record<string, unknown>; update: (p: Record<string
     }
   }, [file, expanded])
 
-  const onRename = (name: string) => {
-    const nextFile = `assets/${name}`
-    const hosted = hosts.get(file)
-    const scene = hosted?.lastScene
-    if (scene) void saveScene(nextFile, scene, '')
-    props.update({ file: nextFile })
-  }
-
   if (!file) return <div className="text-sm text-[var(--muted-foreground)]">正在创建画板文件…</div>
 
+  const title = String(props.data.title ?? '').trim() || '画板'
+  const bar = (
+    <DrawSideBar
+      expanded={expanded}
+      onToggle={() => setExpanded((v) => !v)}
+      title={title}
+      readOnly={!props.writable}
+      onTitle={(next) => props.update({ title: next })}
+    />
+  )
+
   return (
-    <div style={{ overflow: 'hidden', background: 'var(--biu-color-bg)', borderRadius: 8 }}>
-      <BoardBar
-        file={file}
-        expanded={expanded}
-        writable={props.writable}
-        onToggle={() => setExpanded((v) => !v)}
-        onRename={onRename}
-      />
-      <div ref={slotRef} style={{ position: 'relative', height: 280 }} />
-      {expanded
-        ? createPortal(
-            <div
-              style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                zIndex: 9993,
-                pointerEvents: 'auto',
-              }}
-            >
-              <BoardBar
-                file={file}
-                expanded={expanded}
-                writable={props.writable}
-                onToggle={() => setExpanded(false)}
-                onRename={onRename}
-              />
-            </div>,
-            document.body,
-          )
-        : null}
+    <div
+      data-testid="page-excalidraw"
+      data-excalidraw-selected={props.selected ? '1' : undefined}
+      style={{
+        position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'visible',
+        background: 'var(--biu-color-bg)',
+        boxSizing: 'border-box',
+        border: 'none',
+        borderRadius: 0,
+      }}
+    >
+      {expanded ? createPortal(bar, document.body) : bar}
+      <div ref={slotRef} style={{ position: 'relative', height: 280, overflow: 'hidden', borderRadius: 8 }} />
     </div>
   )
 }
 
-export function apply(ctx: { pageEditor: PageEditor }) {
-  ctx.pageEditor.registerBlock({
+export function apply(ctx: { blockEditor: BlockEditor }) {
+  ctx.blockEditor.registerBlock({
     kind: 'excalidraw',
     plugin: name,
     label: '画板',
@@ -622,7 +622,7 @@ export function apply(ctx: { pageEditor: PageEditor }) {
     hint: '手绘白板，放大后编辑',
     aliases: ['excalidraw', 'draw', '白板', '画板', 'board'],
     assets: ['file'],
-    defaults: () => ({ file: `assets/画板-${crypto.randomUUID().slice(0, 8)}.json` }),
+    defaults: () => ({ file: `assets/excalidraw-${crypto.randomUUID().slice(0, 8)}.json`, title: '画板' }),
     View: Board,
   })
 }

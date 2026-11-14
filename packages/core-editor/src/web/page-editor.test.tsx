@@ -2,12 +2,14 @@ import { fireEvent, render, waitFor } from '@testing-library/react'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Context } from 'cordis'
-import { PageEditor } from './page-editor.tsx'
-import { PageEditorService } from './service.ts'
+import { RecordEditor } from './page-editor.tsx'
+import { BlockEditorService } from './service.ts'
+import { resetPageFileState, setPageViews } from './page-views.ts'
+import { getPagePresentMode, setPagePresentMode } from './source-mode.ts'
 
 test('page editor paints markdown headings without a chrome toolbar', async () => {
   const { container, rerender } = render(
-    <PageEditor
+    <RecordEditor
       record={{ id: 'home' }}
       field="notes"
       spec={{ type: 'file', label: '正文', writable: true }}
@@ -21,7 +23,7 @@ test('page editor paints markdown headings without a chrome toolbar', async () =
   assert.equal(container.querySelector('h1')?.textContent?.trim(), '欢迎')
   assert.match(container.textContent ?? '', /正文/)
   rerender(
-    <PageEditor
+    <RecordEditor
       record={{ id: 'home' }}
       field="notes"
       spec={{ type: 'file', label: '正文', writable: true }}
@@ -34,10 +36,10 @@ test('page editor paints markdown headings without a chrome toolbar', async () =
 
 test('heading plugin skins native h1 and does not install a node view', async () => {
   const ctx = new Context()
-  new PageEditorService(ctx)
-  ctx.pageEditor.replaceHeading(1, { label: 'H1', className: 'page-heading-card' })
+  new BlockEditorService(ctx)
+  ctx.blockEditor.replaceHeading(1, { label: 'H1', className: 'page-heading-card' })
   const { container } = render(
-    <PageEditor
+    <RecordEditor
       record={{ id: 'home' }}
       field="notes"
       spec={{ type: 'file', label: '正文', writable: true }}
@@ -56,20 +58,20 @@ test('heading plugin skins native h1 and does not install a node view', async ()
 
 test('page editor paints a registered algorithm block', async () => {
   const ctx = new Context()
-  new PageEditorService(ctx)
-  ctx.pageEditor.registerBlock({
+  new BlockEditorService(ctx)
+  ctx.blockEditor.registerBlock({
     kind: 'algorithm',
     plugin: 'page-algorithm',
     label: '算法题',
     defaults: { title: 'Two Sum' },
     View: ({ data }) => <div data-testid="algo-view">{String(data.title ?? '')}</div>,
   })
-  const src = `:::pageBlock {kind=algorithm}
+  const src = `:::editorBlock {kind=algorithm}
 {"title":"Two Sum"}
 :::
 `
   const { container } = render(
-    <PageEditor
+    <RecordEditor
       record={{ id: 'home' }}
       field="notes"
       spec={{ type: 'file', label: '正文', writable: true }}
@@ -85,22 +87,22 @@ test('page editor paints a registered algorithm block', async () => {
 
 test('page editor hydrates markdown after content fetch', async () => {
   const ctx = new Context()
-  new PageEditorService(ctx)
-  ctx.pageEditor.registerBlock({
+  new BlockEditorService(ctx)
+  ctx.blockEditor.registerBlock({
     kind: 'algorithm',
     plugin: 'page-algorithm',
     label: '算法题',
     defaults: { title: 'Two Sum' },
     View: ({ data }) => <div data-testid="algo-view">{String(data.title ?? '')}</div>,
   })
-  const src = `:::pageBlock {kind=algorithm}
+  const src = `:::editorBlock {kind=algorithm}
 {"title":"Two Sum"}
 :::
 
 一段正文
 `
   const { container, rerender } = render(
-    <PageEditor
+    <RecordEditor
       record={{ id: 'home' }}
       field="notes"
       spec={{ type: 'file', label: '正文', writable: true }}
@@ -113,7 +115,7 @@ test('page editor hydrates markdown after content fetch', async () => {
   })
   assert.equal(container.querySelector('[data-testid="algo-view"]'), null)
   rerender(
-    <PageEditor
+    <RecordEditor
       record={{ id: 'home' }}
       field="notes"
       spec={{ type: 'file', label: '正文', writable: true }}
@@ -155,7 +157,7 @@ test('page editor applies later value when it is not focused', async () => {
 
 test('page editor shows a spinner and is not editable while content loads', async () => {
   const { container, rerender } = render(
-    <PageEditor
+    <RecordEditor
       record={{ id: 'home' }}
       field="notes"
       spec={{ type: 'file', label: '正文', writable: true }}
@@ -171,7 +173,7 @@ test('page editor shows a spinner and is not editable while content loads', asyn
   assert.equal(container.querySelector('[data-testid="page-editor"]'), null)
   assert.equal(container.querySelector('[contenteditable]'), null)
   rerender(
-    <PageEditor
+    <RecordEditor
       record={{ id: 'home' }}
       field="notes"
       spec={{ type: 'file', label: '正文', writable: true }}
@@ -187,10 +189,85 @@ test('page editor shows a spinner and is not editable while content loads', asyn
   assert.equal(container.querySelector('[contenteditable="true"]')?.getAttribute('contenteditable'), 'true')
 })
 
+test('sandbox view mounts the host sandbox and skips prosemirror', async () => {
+  resetPageFileState()
+  setPageViews('home', [
+    { id: 'site1', name: '官网', kind: 'sandbox', file: 'missing-view.jsx', dataFile: 'missing-data.json' },
+  ])
+  setPagePresentMode('home', 'site1')
+  const { container } = render(
+    <RecordEditor
+      record={{ id: 'home', title: '演示页' }}
+      field="notes"
+      spec={{ type: 'file', label: '正文', writable: true }}
+      value={':::editorBlock {kind=sandbox plugin=page-sandbox id=ab12cd34}\n{"title":"沙箱"}\n:::\n'}
+      writable
+    />,
+  )
+  await waitFor(() => {
+    assert.ok(container.querySelector('[data-testid="page-host-view"]'))
+  })
+  assert.ok(container.querySelector('[data-testid="page-editor-host"]'))
+  assert.equal(container.querySelector('[data-testid="page-editor"]'), null)
+  assert.equal(container.querySelector('.tiptap'), null)
+  setPagePresentMode('home', 'doc')
+})
+
+test('dropping a sandbox view unmounts the host even if present still names it', async () => {
+  resetPageFileState()
+  setPageViews('gone', [
+    { id: 'site1', name: '新视图', kind: 'sandbox', file: 'missing-view.jsx', dataFile: 'missing-data.json' },
+  ])
+  setPagePresentMode('gone', 'site1')
+  const { container, rerender } = render(
+    <RecordEditor
+      record={{ id: 'gone', title: '演示页' }}
+      field="notes"
+      spec={{ type: 'file', label: '正文', writable: true }}
+      value={'# 文档\n'}
+      writable
+    />,
+  )
+  await waitFor(() => {
+    assert.ok(container.querySelector('[data-testid="page-host-view"]'))
+  })
+  setPageViews('gone', [])
+  rerender(
+    <RecordEditor
+      record={{ id: 'gone', title: '演示页' }}
+      field="notes"
+      spec={{ type: 'file', label: '正文', writable: true }}
+      value={'# 文档\n'}
+      writable
+    />,
+  )
+  await waitFor(() => {
+    assert.ok(container.querySelector('[data-testid="page-editor"]'))
+  })
+  assert.equal(container.querySelector('[data-testid="page-host-view"]'), null)
+  assert.equal(getPagePresentMode('gone'), 'doc')
+})
+
+test('hidden content view unmounts the editor', async () => {
+  setPagePresentMode('home', 'hidden')
+  const { container } = render(
+    <RecordEditor
+      record={{ id: 'home' }}
+      field="notes"
+      spec={{ type: 'file', label: '正文', writable: true }}
+      value={'# 欢迎\n\n正文'}
+      writable
+    />,
+  )
+  assert.equal(container.querySelector('[data-testid="page-editor"]'), null)
+  assert.equal(container.querySelector('[data-testid="page-host-view"]'), null)
+  setPagePresentMode('home', 'doc')
+})
+
 test('page editor shows retry when content failed to load', () => {
   let retries = 0
   const { container } = render(
-    <PageEditor
+    <RecordEditor
       record={{ id: 'home' }}
       field="notes"
       spec={{ type: 'file', label: '正文', writable: true }}

@@ -1,21 +1,10 @@
 import { useRef, useState, type ChangeEvent } from 'react'
 import type { Context } from 'cordis'
-import type { DatabaseUi, FsCellProps, FsContentProps, FsViewProps } from '@biu/type-file-system/ui'
+import type { DatabaseUi, FsCellProps, FsViewProps } from '@biu/type-file-system/ui'
 import { AttachmentList } from '@biu/biu-ui'
 
 export const name = 'host-skills-ui'
 export const inject = ['databaseUi']
-
-/** 分享 Skill 时展示何时使用；正文在本表 notes 里。 */
-export function SkillsContent({ record }: FsContentProps) {
-  return (
-    <div style={{ paddingTop: 12 }}>
-      <p style={{ margin: 0, color: 'var(--biu-color-text-muted)', lineHeight: 1.6 }}>
-        {String(record.description ?? '')}
-      </p>
-    </div>
-  )
-}
 
 function fileHref(recordId: string, path: string) {
   return `/api/skills/file?id=${encodeURIComponent(recordId)}&path=${encodeURIComponent(path)}`

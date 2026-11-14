@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import hljs from 'highlight.js'
 import { Editor } from '@tiptap/core'
-import { pageEditorExtensions } from './kit.ts'
+import { recordEditorExtensions } from './kit.ts'
 import { filterSlashItems, SLASH_ITEMS } from './slash.ts'
 
 test('slash filter matches chinese labels and aliases', () => {
@@ -24,7 +24,7 @@ test('slash filter matches chinese labels and aliases', () => {
 test('http and unknown code fences do not crash the page editor', () => {
   assert.ok(hljs.getLanguage('http'), 'full highlight.js registers http globally')
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '```http\nGET /api HTTP/1.1\n\n```\n\n```not-a-lang\nhello\n```\n',
     contentType: 'markdown',
   })
@@ -52,7 +52,7 @@ const a = 1
 \`\`\`
 `
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: src,
     contentType: 'markdown',
   })
@@ -67,13 +67,14 @@ const a = 1
   assert.match(out, /苹果/)
   assert.match(out, /先/)
   assert.match(out, /引用/)
+  assert.match(out, /:::code \{lang=ts/)
   assert.match(out, /const a = 1/)
   editor.destroy()
 })
 
 test('heading stays a native h1 without node-view wrappers', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '# 标题\n\n正文',
     contentType: 'markdown',
   })
@@ -85,7 +86,7 @@ test('heading stays a native h1 without node-view wrappers', () => {
 
 test('empty paragraphs serialize as blank lines, not &nbsp;', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: {
       type: 'doc',
       content: [
@@ -102,7 +103,7 @@ test('empty paragraphs serialize as blank lines, not &nbsp;', () => {
   assert.match(md, /hi/)
   editor.destroy()
   const loaded = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: 'a\n\n&nbsp;\n\n&nbsp;\n\nb',
     contentType: 'markdown',
   })
@@ -137,14 +138,15 @@ test('slash suggestion uses a fixed high stacking context', async () => {
   assert.match(src, /width: Math.max\(rects.floating.width, 240\)/)
   assert.match(css, /\.page-editor\{[^}]*font-family:var\(--font-sans\)/)
   assert.match(css, /\.page-editor\{[^}]*font-size:var\(--fsdb-body-size,15px\)/)
-  assert.match(css, /\.page-editor \.react-renderer\.node-pageBlock\{[^}]*overflow:hidden/)
+  assert.match(css, /\.page-editor \.react-renderer\.node-editorBlock\{[^}]*overflow:hidden/)
   assert.match(css, /\.page-editor \.page-block\[data-page-block\]\{[^}]*isolation:isolate/)
   assert.match(css, /\.page-editor \.page-block\[data-page-block=sandbox\]\{margin:0\}/)
   assert.match(css, /\.page-editor \.page-block-idle\{[^}]*min-height:200px/)
+  assert.match(css, /\.page-editor \.page-block\[data-page-block=excalidraw\],\.page-editor \.react-renderer\.node-editorBlock:has\(\[data-page-block=excalidraw\]\)\{overflow:visible\}/)
   assert.match(css, /\.page-editor \.page-block\[data-page-block=excalidraw\] img\{[^}]*margin:0/)
   assert.match(css, /\.page-editor \.page-block\[data-page-block=excalidraw\] \.welcome-screen-center\{display:none\}/)
   assert.match(css, /\.page-editor \.page-block\[data-page-block=terminal\] \.pt-scroll-rail\{/)
-  assert.match(css, /\.ProseMirror\[contenteditable=false\] \.page-block iframe\{[^}]*pointer-events:auto/)
+  assert.match(css, /\.ProseMirror\[contenteditable=false\] \.page-block iframe[^{]*\{[^}]*pointer-events:auto/)
   assert.match(css, /\.page-outline-block\.is-empty::before[\s\S]*?top:0;bottom:0/)
   assert.match(css, /\.page-outline-block\.is-empty::before[\s\S]*?--page-outline-icon\)\/2\)/)
   assert.match(css, /\.page-outline-block\.is-empty::after[\s\S]*?content:attr\(data-placeholder\)/)
@@ -173,7 +175,7 @@ test('markdown roundtrips image and table', () => {
 | 1 | 2 |
 `
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: src,
     contentType: 'markdown',
   })
@@ -188,7 +190,7 @@ test('markdown roundtrips image and table', () => {
 
 test('slash command inserts a table', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '/',
     contentType: 'markdown',
   })
@@ -216,7 +218,7 @@ test('markdown roundtrips inline and block latex', () => {
 $$\\sum_{i=1}^{n} x_i$$
 `
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: src,
     contentType: 'markdown',
   })
@@ -234,7 +236,7 @@ test('latex markdown does not accumulate backslashes across reloads', () => {
   const counts: number[] = []
   for (let i = 0; i < 4; i++) {
     const editor = new Editor({
-      extensions: pageEditorExtensions(),
+      extensions: recordEditorExtensions(),
       content: md,
       contentType: 'markdown',
     })
@@ -244,7 +246,7 @@ test('latex markdown does not accumulate backslashes across reloads', () => {
   }
   assert.equal(counts[0], counts[3])
   const again = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: md,
     contentType: 'markdown',
   })
@@ -254,7 +256,7 @@ test('latex markdown does not accumulate backslashes across reloads', () => {
 
 test('slash command inserts inline math into the current paragraph', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '/',
     contentType: 'markdown',
   })
@@ -270,7 +272,7 @@ test('slash command inserts inline math into the current paragraph', () => {
 
 test('slash command inserts block math', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '/',
     contentType: 'markdown',
   })
@@ -285,7 +287,7 @@ test('slash command inserts block math', () => {
 
 test('slash command turns the current block into a heading', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '/',
     contentType: 'markdown',
   })
@@ -302,14 +304,14 @@ test('fenced code keeps language on the block and highlights tokens', () => {
   document.body.appendChild(host)
   const editor = new Editor({
     element: host,
-    extensions: pageEditorExtensions(),
-    content: '```ts\nconst a = 1\n```\n',
+    extensions: recordEditorExtensions(),
+    content: ':::code {lang=ts}\nconst a = 1\n:::\n',
     contentType: 'markdown',
   })
   const pre = host.querySelector('pre')
   assert.equal(pre?.getAttribute('data-language'), 'ts')
   assert.ok(host.querySelector('.hljs-keyword, .hljs-attr, .hljs-number, [class^="hljs-"]'))
-  assert.match(editor.getMarkdown(), /```ts/)
+  assert.match(editor.getMarkdown(), /:::code \{lang=ts/)
   editor.destroy()
   host.remove()
 })
@@ -319,7 +321,7 @@ test('code fence without language still auto-highlights', () => {
   document.body.appendChild(host)
   const editor = new Editor({
     element: host,
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '```\nfunction hello() { return 1 }\n```\n',
     contentType: 'markdown',
   })
