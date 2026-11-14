@@ -2435,7 +2435,7 @@ export function ShellSidePlaces({
       />
       <SideAction
         title="数据"
-        active={activeId === 'data'}
+        active={activeId === 'database'}
         testId="chrome-data-panel"
         icon={<CircleStackIcon {...chromeIcon} />}
         onClick={() => navigate('/database')}
