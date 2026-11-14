@@ -8,6 +8,13 @@ export function tableNavKeys(columns: { key: string }[]): string[] {
   return columns.map((col) => col.key).filter((key) => key && key !== 'fsdb-col-fill' && !key.startsWith('pad:'))
 }
 
+/** 表格页默认落点：第一行标题格。 */
+export function firstTableTitleCell(rowIds: string[], keys: string[], labelKey?: string | null): TableCellCursor | null {
+  if (!rowIds.length || !keys.length) return null
+  const key = labelKey && keys.includes(labelKey) ? labelKey : keys[0]
+  return { id: rowIds[0], key }
+}
+
 export function tableKeyDir(key: string, shift = false): TableKeyDir | null {
   if (key === 'ArrowUp') return 'up'
   if (key === 'ArrowDown') return 'down'
@@ -17,6 +24,22 @@ export function tableKeyDir(key: string, shift = false): TableKeyDir | null {
   if (key === 'End') return 'end'
   if (key === 'Tab') return shift ? 'left' : 'right'
   return null
+}
+
+/** 标题格：⌘Enter 当前页打开，⌘⇧Enter 在右侧打开。 */
+export function tableTitleOpenWhere(opts: {
+  key: string
+  shift: boolean
+  meta?: boolean
+  ctrl?: boolean
+  alt?: boolean
+  labelKey?: string | null
+  cellKey: string
+}): 'page' | 'inspector' | null {
+  if (opts.alt || opts.key !== 'Enter') return null
+  if (!(opts.meta || opts.ctrl)) return null
+  if (!opts.labelKey || opts.cellKey !== opts.labelKey) return null
+  return opts.shift ? 'inspector' : 'page'
 }
 
 /** 标题格上：Shift+→ 展开，Shift+← 收起。 */
@@ -82,18 +105,84 @@ export function tableKeyFromEditingTarget(target: EventTarget | null): boolean {
   return Boolean(el.closest('.fsdb-cell-pop, [role="menu"], [role="listbox"], .fsdb-headless-pop, dialog'))
 }
 
-/** 最左格再按 ←（不是 Tab / Shift）离开表格，交给左侧边栏。 */
-export function tableLeaveToSidebar(
-  dir: TableKeyDir | null,
-  opts: { key: string; shift?: boolean; keys: string[]; current: TableCellCursor | null },
-) {
-  if (dir !== 'left' || opts.shift || opts.key !== 'ArrowLeft') return false
-  if (!opts.current || !opts.keys.length) return false
-  return opts.keys.indexOf(opts.current.key) === 0
+export const FOCUS_SHELL_TABLE = 'biu:focus-shell-table'
+export const CLEAR_SHELL_TABLE_CELL = 'biu:clear-shell-table-cell'
+
+export type TablePane = 'main' | 'inspector'
+
+let pendingTablePane: { pane: TablePane; at: number } | null = null
+
+/** ⌘\\ 在主栏和检查器之间来回切。 */
+export function tablePaneHotkey(event: {
+  key: string
+  code?: string
+  metaKey: boolean
+  ctrlKey: boolean
+  altKey: boolean
+  shiftKey: boolean
+  isComposing?: boolean
+}) {
+  if (event.isComposing) return false
+  if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return false
+  return event.key === '\\' || event.code === 'Backslash'
 }
 
-export const FOCUS_SHELL_SIDEBAR = 'biu:focus-shell-sidebar'
-export const FOCUS_SHELL_TABLE = 'biu:focus-shell-table'
+export function tablePaneOther(pane: TablePane): TablePane {
+  return pane === 'inspector' ? 'main' : 'inspector'
+}
+
+export type TablePaneRest =
+  | { kind: 'cell'; path: string; viewId: string; id: string; key: string }
+  | { kind: 'title'; path: string; viewId: string; detailId: string; start: number; end: number }
+  | { kind: 'content'; path: string; viewId: string; detailId: string }
+
+const paneRest: Record<TablePane, TablePaneRest | null> = { main: null, inspector: null }
+
+export function rememberTablePaneRest(pane: TablePane, rest: TablePaneRest | null) {
+  paneRest[pane] = rest
+}
+
+export function readTablePaneRest(
+  pane: TablePane,
+  place: { path: string; viewId: string; detailId?: string | null },
+): TablePaneRest | null {
+  const rest = paneRest[pane]
+  if (!rest) return null
+  if (rest.path !== place.path || rest.viewId !== place.viewId) return null
+  if (rest.kind === 'cell') return place.detailId ? null : rest
+  if (rest.detailId !== (place.detailId ?? '')) return null
+  return rest
+}
+
+export function tablePaneFromEvent(event: Event): TablePane | null {
+  const pane = (event as CustomEvent<{ pane?: TablePane }>).detail?.pane
+  return pane === 'inspector' || pane === 'main' ? pane : null
+}
+
+export function requestTablePaneFocus(pane: TablePane) {
+  pendingTablePane = { pane, at: Date.now() }
+  if (typeof window === 'undefined') return
+  if (pane === 'inspector') window.dispatchEvent(new Event('biu:inspector-open'))
+  window.dispatchEvent(new CustomEvent(FOCUS_SHELL_TABLE, { detail: { pane } }))
+}
+
+/** 左右栏同时只保留一个选中格：声明本栏占用，另一栏清掉。 */
+export function claimTableCellPick(pane: TablePane) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent(CLEAR_SHELL_TABLE_CELL, { detail: { pane } }))
+}
+
+export function consumePendingTablePane(pane: TablePane) {
+  if (!pendingTablePane || pendingTablePane.pane !== pane) return false
+  if (Date.now() - pendingTablePane.at > 1500) return false
+  pendingTablePane = null
+  return true
+}
+
+export function peekPendingTablePane(pane: TablePane) {
+  if (!pendingTablePane || pendingTablePane.pane !== pane) return false
+  return Date.now() - pendingTablePane.at <= 1500
+}
 
 export function moveTableCell(
   rowIds: string[],

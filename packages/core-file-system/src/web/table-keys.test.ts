@@ -1,6 +1,12 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { FOCUS_SHELL_SIDEBAR, moveTableCell, tableActionArrowLeave, tableActionButtonStep, tableClearKey, tableClearedValue, tableKeyDir, tableLeaveToSidebar, tableNavKeys, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
+import { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE, claimTableCellPick, consumePendingTablePane, firstTableTitleCell, moveTableCell, readTablePaneRest, rememberTablePaneRest, requestTablePaneFocus, tableActionArrowLeave, tableActionButtonStep, tableClearKey, tableClearedValue, tableKeyDir, tableNavKeys, tablePaneFromEvent, tablePaneHotkey, tablePaneOther, tableTitleOpenWhere, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
+
+test('first table cell is the title of the first row', () => {
+  assert.deepEqual(firstTableTitleCell(['a', 'b'], ['status', 'title', 'actions'], 'title'), { id: 'a', key: 'title' })
+  assert.deepEqual(firstTableTitleCell(['a'], ['status', 'actions'], 'title'), { id: 'a', key: 'status' })
+  assert.equal(firstTableTitleCell([], ['title'], 'title'), null)
+})
 
 test('table nav keys include actions and skip pad columns', () => {
   assert.deepEqual(
@@ -18,6 +24,15 @@ test('table cell move stays on the grid and stops at edges', () => {
   assert.deepEqual(moveTableCell(rows, keys, { id: 'a', key: 'status' }, 'down'), { id: 'b', key: 'status' })
   assert.deepEqual(moveTableCell(rows, keys, { id: 'b', key: 'status' }, 'down'), { id: 'b', key: 'status' })
   assert.deepEqual(moveTableCell(rows, keys, { id: 'b', key: 'status' }, 'home'), { id: 'b', key: 'title' })
+})
+
+test('title cell ⌘Enter opens here, ⌘⇧Enter opens in the inspector', () => {
+  const title = { labelKey: 'title', cellKey: 'title', key: 'Enter', meta: true }
+  assert.equal(tableTitleOpenWhere({ ...title, shift: false }), 'page')
+  assert.equal(tableTitleOpenWhere({ ...title, shift: true }), 'inspector')
+  assert.equal(tableTitleOpenWhere({ ...title, shift: false, ctrl: true, meta: false }), 'page')
+  assert.equal(tableTitleOpenWhere({ ...title, shift: false, meta: false }), null)
+  assert.equal(tableTitleOpenWhere({ ...title, shift: false, cellKey: 'status' }), null)
 })
 
 test('title cell Shift+arrows expand and collapse tree parents', () => {
@@ -63,21 +78,55 @@ test('letters and digits type into text and number cells', () => {
   assert.equal(tableTypeToEditChar('a', 'select'), null)
 })
 
-test('left from the first column leaves the table for the sidebar', () => {
-  const keys = ['title', 'actions', 'status']
-  const atTitle = { id: 'a', key: 'title' }
-  assert.equal(tableLeaveToSidebar('left', { key: 'ArrowLeft', keys, current: atTitle }), true)
-  assert.equal(tableLeaveToSidebar('left', { key: 'ArrowLeft', keys, current: { id: 'a', key: 'missing' } }), false)
-  assert.equal(tableLeaveToSidebar('left', { key: 'ArrowLeft', shift: true, keys, current: atTitle }), false)
-  assert.equal(tableLeaveToSidebar('left', { key: 'Tab', keys, current: atTitle }), false)
-  assert.equal(tableLeaveToSidebar('left', { key: 'ArrowLeft', keys, current: { id: 'a', key: 'status' } }), false)
-  assert.equal(tableLeaveToSidebar('right', { key: 'ArrowRight', keys, current: atTitle }), false)
-  assert.equal(FOCUS_SHELL_SIDEBAR, 'biu:focus-shell-sidebar')
-})
-
 test('table keys map like Linear', () => {
   assert.equal(tableKeyDir('ArrowDown'), 'down')
   assert.equal(tableKeyDir('Tab'), 'right')
   assert.equal(tableKeyDir('Tab', true), 'left')
   assert.equal(tableKeyDir('Enter'), null)
+})
+
+test('⌘\\ toggles the main and inspector panes', () => {
+  const slash = { key: '\\', metaKey: true, ctrlKey: false, altKey: false, shiftKey: false }
+  assert.equal(tablePaneHotkey(slash), true)
+  assert.equal(tablePaneHotkey({ ...slash, code: 'Backslash', key: '¥' }), true)
+  assert.equal(tablePaneHotkey({ ...slash, shiftKey: true }), false)
+  assert.equal(tablePaneHotkey({ ...slash, metaKey: false }), false)
+  assert.equal(tablePaneHotkey({ ...slash, key: 'l' }), false)
+  assert.equal(tablePaneOther('main'), 'inspector')
+  assert.equal(tablePaneOther('inspector'), 'main')
+  assert.equal(FOCUS_SHELL_TABLE, 'biu:focus-shell-table')
+  assert.equal(tablePaneFromEvent(new CustomEvent(FOCUS_SHELL_TABLE, { detail: { pane: 'inspector' } })), 'inspector')
+  requestTablePaneFocus('inspector')
+  assert.equal(consumePendingTablePane('main'), false)
+  assert.equal(consumePendingTablePane('inspector'), true)
+  assert.equal(consumePendingTablePane('inspector'), false)
+})
+
+test('pane rest cache restores the same cell after switching back', () => {
+  rememberTablePaneRest('main', { kind: 'cell', path: '/tasks', viewId: 'all', id: 'a', key: 'title' })
+  rememberTablePaneRest('inspector', { kind: 'title', path: '/pages', viewId: 'v', detailId: 'p1', start: 3, end: 3 })
+  assert.deepEqual(readTablePaneRest('main', { path: '/tasks', viewId: 'all' }), {
+    kind: 'cell',
+    path: '/tasks',
+    viewId: 'all',
+    id: 'a',
+    key: 'title',
+  })
+  assert.equal(readTablePaneRest('main', { path: '/pages', viewId: 'all' }), null)
+  assert.equal(readTablePaneRest('main', { path: '/tasks', viewId: 'all', detailId: 'x' }), null)
+  assert.deepEqual(readTablePaneRest('inspector', { path: '/pages', viewId: 'v', detailId: 'p1' })?.kind, 'title')
+  rememberTablePaneRest('main', null)
+  rememberTablePaneRest('inspector', null)
+})
+
+test('claiming a table cell pick tells the other pane to clear', () => {
+  const seen: string[] = []
+  const onClear = (event: Event) => {
+    seen.push(tablePaneFromEvent(event) ?? '')
+  }
+  window.addEventListener(CLEAR_SHELL_TABLE_CELL, onClear)
+  claimTableCellPick('inspector')
+  window.removeEventListener(CLEAR_SHELL_TABLE_CELL, onClear)
+  assert.deepEqual(seen, ['inspector'])
+  assert.equal(CLEAR_SHELL_TABLE_CELL, 'biu:clear-shell-table-cell')
 })

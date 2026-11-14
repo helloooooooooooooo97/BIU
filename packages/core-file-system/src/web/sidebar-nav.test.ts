@@ -11,6 +11,9 @@ import {
   crumbLabelAction,
   parseCenterPath,
   pathForCenter,
+  parentCrumbTarget,
+  crumbParentHotkey,
+  crumbHotkeyPane,
   pathForCrumbTarget,
   previewKey,
   starPreviewKey,
@@ -190,6 +193,23 @@ test('记录页面包屑是表 / 视图 / 记录，点表回到全部视图', ()
   assert.ok(pathForCrumbTarget(crumbs[2]!.target).includes('/view/1787983501816/record/'))
   assert.ok(!pathForCrumbTarget(crumbs[0]!.target).includes('/record/'))
   assert.ok(!pathForCrumbTarget(crumbs[1]!.target).includes('/record/'))
+  assert.deepEqual(parentCrumbTarget(crumbs), crumbs[1]!.target)
+  assert.deepEqual(parentCrumbTarget(crumbs.slice(0, 2)), crumbs[0]!.target)
+  assert.equal(parentCrumbTarget(crumbs.slice(0, 1)), null)
+})
+
+test('⌘← is the breadcrumb parent hotkey', () => {
+  const left = { key: 'ArrowLeft', metaKey: true, ctrlKey: false, altKey: false, shiftKey: false }
+  assert.equal(crumbParentHotkey(left), true)
+  assert.equal(crumbParentHotkey({ ...left, shiftKey: true }), false)
+  assert.equal(crumbParentHotkey({ ...left, key: 'ArrowUp' }), false)
+  const main = document.createElement('textarea')
+  const inspector = document.createElement('div')
+  inspector.className = 'session-inspector'
+  const inside = document.createElement('textarea')
+  inspector.appendChild(inside)
+  assert.equal(crumbHotkeyPane(main), 'main')
+  assert.equal(crumbHotkeyPane(inside), 'inspector')
 })
 
 test('表视图记录点标题一律出选择菜单', () => {

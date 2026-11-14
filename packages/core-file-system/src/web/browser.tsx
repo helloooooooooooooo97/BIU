@@ -65,7 +65,7 @@ import { listGroupedCollection } from './group-list.ts'
 import { TREE_HAS_KIDS, listTreeChildren, listTreeCollection } from './tree-list.ts'
 import { AppDialog, CheckRow } from './controls.tsx'
 import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search.tsx'
-import { buildCrumbs, type CrumbTarget } from './sidebar-nav.ts'
+import { buildCrumbs, crumbHotkeyPane, crumbParentHotkey, parentCrumbTarget, type CrumbTarget } from './sidebar-nav.ts'
 import { CrumbTrail } from './crumb-trail.tsx'
 import { fieldPickAttrs, pickDomAttrs, recordPickKind, recordSourcePath } from './pick-dom.ts'
 import { normalizeRecordEmoji, recordPreviewEmoji, crumbRecordLabel } from './sidebar-preview.ts'
@@ -149,7 +149,8 @@ import { DataSidebarShell } from './data-sidebar-shell.tsx'
 import { builtinAllViewId, catalogLockFilters, collectionNoun, displayNameForView, isBuiltinAllViewId, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stampRecordId, stampRowOpenTarget, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, moveInspectorRecordsToTrash, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
-import { FOCUS_SHELL_SIDEBAR, FOCUS_SHELL_TABLE, moveTableCell, tableActionArrowLeave, tableActionButtons, tableActionButtonStep, tableClearKey, tableClearedValue, tableKeyDir, tableKeyFromEditingTarget, tableLeaveToSidebar, tableNavKeys, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
+import { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE, claimTableCellPick, consumePendingTablePane, firstTableTitleCell, peekPendingTablePane, moveTableCell, readTablePaneRest, rememberTablePaneRest, requestTablePaneFocus, tableActionArrowLeave, tableActionButtons, tableActionButtonStep, tableClearKey, tableClearedValue, tableKeyDir, tableKeyFromEditingTarget, tableNavKeys, tablePaneFromEvent, tablePaneHotkey, tablePaneOther, tableTitleOpenWhere, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
+import { focusRecordTitleNear } from './title-content-nav.ts'
 import { isViewCatalogField, selectedViewCatalogOption } from './view-catalog.ts'
 import { jumpTag, loadTags, pullTags, subscribeTags } from './tag-catalog.ts'
 import {
@@ -1738,22 +1739,51 @@ export function CollectionBrowser({
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => normalizeColumnWidths(initialView?.columnWidths))
   const [resizingCol, setResizingCol] = useState<string | null>(null)
   const [cellPop, setCellPop] = useState<{ id: string; key: string; seed?: string } | null>(null)
+  const [, setCellPickEpoch] = useState(0)
   const cellPickRef = useRef<{ id: string; key: string } | null>(null)
   const actionHoverIndexRef = useRef(0)
   const cellRepickRef = useRef(false)
   const cellAnchorRef = useRef<HTMLElement | null>(null)
   const cellPopPtrRef = useRef<{ x: number; y: number; dragged: boolean } | null>(null)
   const tableNavLiveRef = useRef<(event: KeyboardEvent) => void>(() => {})
+  const tablePaneHotkeyLiveRef = useRef<(event: KeyboardEvent) => void>(() => {})
+  const tablePaneFocusLiveRef = useRef<(event?: Event) => void>(() => {})
+  const tableAutoLandLiveRef = useRef<() => void>(() => {})
+  const tableAutoLandedRef = useRef('')
+  const crumbBackLiveRef = useRef<(event: KeyboardEvent) => void>(() => {})
+  const tableCellClaimLiveRef = useRef<(event: Event) => void>(() => {})
+  const tablePaneFocusInLiveRef = useRef<(event: FocusEvent) => void>(() => {})
   useEffect(() => {
     const onTableNavKey = (event: KeyboardEvent) => tableNavLiveRef.current(event)
+    const onPaneHotkey = (event: KeyboardEvent) => tablePaneHotkeyLiveRef.current(event)
+    const onCrumbBack = (event: KeyboardEvent) => crumbBackLiveRef.current(event)
+    const onFocusTable = (event: Event) => tablePaneFocusLiveRef.current(event)
+    const onCellClaim = (event: Event) => tableCellClaimLiveRef.current(event)
+    const onFocusIn = (event: FocusEvent) => tablePaneFocusInLiveRef.current(event)
     window.addEventListener('keydown', onTableNavKey)
-    const onFocusTable = () => tableRef.current?.focus({ preventScroll: true })
+    window.addEventListener('keydown', onPaneHotkey, true)
+    window.addEventListener('keydown', onCrumbBack, true)
     window.addEventListener(FOCUS_SHELL_TABLE, onFocusTable)
+    window.addEventListener(CLEAR_SHELL_TABLE_CELL, onCellClaim)
+    window.addEventListener('focusin', onFocusIn)
     return () => {
       window.removeEventListener('keydown', onTableNavKey)
+      window.removeEventListener('keydown', onPaneHotkey, true)
+      window.removeEventListener('keydown', onCrumbBack, true)
       window.removeEventListener(FOCUS_SHELL_TABLE, onFocusTable)
+      window.removeEventListener(CLEAR_SHELL_TABLE_CELL, onCellClaim)
+      window.removeEventListener('focusin', onFocusIn)
     }
   }, [])
+  useEffect(() => {
+    if (sheet) return
+    const pane = embed ? 'inspector' : 'main'
+    if (!peekPendingTablePane(pane)) return
+    tablePaneFocusLiveRef.current()
+  })
+  useEffect(() => {
+    tableAutoLandLiveRef.current()
+  })
   const [tagCatalog, setFacetCatalog] = useState(() => loadTags())
   const tablePathsKey = tables
     .map((table) => table.path)
@@ -1788,6 +1818,7 @@ export function CollectionBrowser({
   }, [lockedSource])
   const detailId = openDetailId
   const setDetailId = (id: string | null, row?: DbRecord | null) => {
+    if (id) setCellPop(null)
     setOpenDetailId(id)
     if (id && row) setDetailRow(row)
     if (!id) setDetailRow(null)
@@ -1797,6 +1828,7 @@ export function CollectionBrowser({
     })
   }
   const openRow = (row: DbRecord) => {
+    setCellPop(null)
     const jump = chrome?.openRow?.(row)
     if (jump && jump.kind === 'table') {
       onOpenTable?.(jump.path, jump.viewId)
@@ -1808,6 +1840,20 @@ export function CollectionBrowser({
     }
     if (onOpenRow?.(row)) return
     setDetailId(row.id, row)
+  }
+  const openRowSplit = (row: DbRecord) => {
+    const jump = chrome?.openRow?.(row)
+    const fromData = isDataOverview || crumbFromData
+    if (fromData) setViaDataCrumbs(true, isDataOverview ? activeViewId : viaDataViewId())
+    if (jump && jump.kind === 'record') {
+      showRecordInInspector(jump.collection ?? collectionPath, jump.recordId, fromData ? undefined : activeViewId, nested ? { newTab: true } : undefined)
+      return
+    }
+    if (jump && jump.kind === 'table') {
+      onOpenTable?.(jump.path, jump.viewId)
+      return
+    }
+    showRecordInInspector(collectionPath, row.id, fromData ? undefined : activeViewId, nested ? { newTab: true } : undefined)
   }
   const [hydrated, setHydrated] = useState(false)
   const [viewsOpen, setViewsOpen] = useState(true)
@@ -4432,6 +4478,38 @@ export function CollectionBrowser({
     td.classList.toggle('is-cell-ro', !writable)
   }
 
+  function blurPaneCaret() {
+    const root = pageRef.current
+    const active = typeof document !== 'undefined' ? document.activeElement : null
+    if (!(active instanceof HTMLElement) || !root?.contains(active)) return
+    if (active === tableRef.current) {
+      active.blur()
+      return
+    }
+    if (active.closest('input, textarea, select, [contenteditable="true"], .tiptap, .page-editor, .fsdb-detail-title-input')) {
+      active.blur()
+    }
+  }
+
+  function clearTableCellPick() {
+    const had = Boolean(cellPickRef.current || cellPop)
+    cellPickRef.current = null
+    cellAnchorRef.current = null
+    tableRef.current?.querySelectorAll('td.is-cell-on').forEach((node) => {
+      node.classList.remove('is-cell-on', 'is-cell-ro')
+    })
+    blurPaneCaret()
+    if (had) {
+      setCellPop(null)
+      setCellPickEpoch((n) => n + 1)
+    }
+  }
+
+  function claimThisTableCell() {
+    if (sheet) return
+    claimTableCellPick(embed ? 'inspector' : 'main')
+  }
+
   async function writeOne(row: DbRecord, key: string, field: FieldSpec, raw: string) {
     await writePatch(row, { [key]: parseFieldValue(field, raw) })
   }
@@ -4875,6 +4953,7 @@ export function CollectionBrowser({
     cellAnchorRef.current = cell.td
     cellRepickRef.current = cellPickRef.current?.id === cell.id && cellPickRef.current?.key === cell.key
     cellPickRef.current = { id: cell.id, key: cell.key }
+    claimThisTableCell()
     markCellOn(cell.td, col ? cellFieldWritable(col.field) : false)
     tableRef.current?.focus({ preventScroll: true })
     cellPopPtrRef.current = { x: event.clientX, y: event.clientY, dragged: false }
@@ -4947,6 +5026,7 @@ export function CollectionBrowser({
 
   function revealTableCell(next: { id: string; key: string }) {
     cellPickRef.current = next
+    claimThisTableCell()
     const wrap = tableWrapRef.current
     const index = tablePaintNodes.findIndex((node) => node.kind === 'row' && node.row.id === next.id)
     if (wrap && index >= 0) {
@@ -4999,8 +5079,140 @@ export function CollectionBrowser({
     tableRef.current?.focus({ preventScroll: true })
   }
 
+  function tablePaneOwnsFocus(pane: ReturnType<typeof tablePaneFromEvent>) {
+    if (sheet || !pane) return false
+    if (pane === 'inspector') return Boolean(embed)
+    return !embed
+  }
+
+  function inspectorTableIsActive() {
+    const root = tableRef.current ?? pageRef.current
+    if (!root) return false
+    const host = root.closest('.session-inspector')
+    if (host instanceof HTMLElement && (host.classList.contains('is-closed') || host.hasAttribute('inert'))) return false
+    const stage = root.closest('.inspector-stage-pane')
+    if (stage instanceof HTMLElement && !stage.classList.contains('is-active')) return false
+    return true
+  }
+
+  function panePlace() {
+    return { path: collectionPath, viewId: activeViewId ?? '', detailId: detailId ?? '' }
+  }
+
+  function rememberThisPaneRest() {
+    if (sheet) return
+    const pane = embed ? 'inspector' : 'main'
+    const place = panePlace()
+    const pick = cellPickRef.current
+    if (pick && !detailId) {
+      rememberTablePaneRest(pane, { kind: 'cell', path: place.path, viewId: place.viewId, id: pick.id, key: pick.key })
+      return
+    }
+    const active = typeof document !== 'undefined' ? document.activeElement : null
+    if (active instanceof HTMLTextAreaElement || active instanceof HTMLInputElement) {
+      if (pageRef.current?.contains(active) && active.classList.contains('fsdb-detail-title-input')) {
+        rememberTablePaneRest(pane, {
+          kind: 'title',
+          path: place.path,
+          viewId: place.viewId,
+          detailId: place.detailId,
+          start: active.selectionStart ?? active.value.length,
+          end: active.selectionEnd ?? active.value.length,
+        })
+        return
+      }
+    }
+    if (active instanceof HTMLElement && pageRef.current?.contains(active) && active.closest('.tiptap, .page-editor, [data-testid="page-editor"]')) {
+      rememberTablePaneRest(pane, { kind: 'content', path: place.path, viewId: place.viewId, detailId: place.detailId })
+    }
+  }
+
+  function landPaneSurface() {
+    const pane = embed ? 'inspector' : 'main'
+    if (!tablePaneOwnsFocus(pane)) return false
+    if (embed && !inspectorTableIsActive()) return false
+    claimThisTableCell()
+    const rest = readTablePaneRest(pane, panePlace())
+    if (rest?.kind === 'cell' && !detailId) {
+      const keys = tableNavKeys(columns)
+      const ids = tableNavRowIds()
+      if (ids.includes(rest.id) && keys.includes(rest.key)) {
+        landTableCell({ id: rest.id, key: rest.key })
+        return true
+      }
+    }
+    if (rest?.kind === 'title' && focusRecordTitleNear(pageRef.current)) {
+      const el = pageRef.current?.querySelector<HTMLTextAreaElement | HTMLInputElement>('.fsdb-detail-title-input')
+      if (el) {
+        const n = el.value.length
+        try {
+          el.setSelectionRange(Math.min(rest.start, n), Math.min(rest.end, n))
+        } catch {
+          /* ignore */
+        }
+      }
+      return true
+    }
+    if (rest?.kind === 'content') {
+      const editor = pageRef.current?.querySelector<HTMLElement>('.tiptap, [data-testid="page-editor"]')
+      if (editor) {
+        editor.focus()
+        return true
+      }
+    }
+    if (!detailId && landFirstTableCell(false)) return true
+    if (focusRecordTitleNear(pageRef.current)) return true
+    const editor = pageRef.current?.querySelector<HTMLElement>('.tiptap, [data-testid="page-editor"]')
+    if (editor) {
+      editor.focus()
+      return true
+    }
+    if (landFirstTableCell(false)) return true
+    pageRef.current?.focus?.({ preventScroll: true } as FocusOptions)
+    return Boolean(pageRef.current)
+  }
+
+  function landFirstTableCell(editTitle = false) {
+    const pane = embed ? 'inspector' : 'main'
+    if (!tablePaneOwnsFocus(pane)) return false
+    if (embed && !inspectorTableIsActive()) return false
+    const keys = tableNavKeys(columns)
+    const ids = tableNavRowIds()
+    const next = firstTableTitleCell(ids, keys, schema?.labelField)
+    if (!next) {
+      tableRef.current?.focus({ preventScroll: true })
+      return Boolean(tableRef.current)
+    }
+    landTableCell(next)
+    if (editTitle) requestAnimationFrame(() => enterTableCell(next))
+    return true
+  }
+
   function onTableKeyDown(event: { key: string; shiftKey: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean; defaultPrevented: boolean; target: EventTarget | null; preventDefault: () => void }) {
-    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return
+    if (event.defaultPrevented) return
+    if (tableKeyFromEditingTarget(event.target)) return
+    const titleCursor = cellPickRef.current
+    const titleOpen = titleCursor
+      ? tableTitleOpenWhere({
+          key: event.key,
+          shift: event.shiftKey,
+          meta: event.metaKey,
+          ctrl: event.ctrlKey,
+          alt: event.altKey,
+          labelKey: schema?.labelField,
+          cellKey: titleCursor.key,
+        })
+      : null
+    if (titleOpen && titleCursor) {
+      event.preventDefault()
+      const row = findPaintedRow(titleCursor.id)
+      if (row) {
+        if (titleOpen === 'inspector') openRowSplit(row)
+        else openRow(row)
+      }
+      return
+    }
+    if (event.metaKey || event.ctrlKey || event.altKey) return
     if (!cellPickRef.current) return
     const table = tableRef.current
     const hit = event.target instanceof Element ? event.target : null
@@ -5062,11 +5274,6 @@ export function CollectionBrowser({
         return
       }
       const keys = tableNavKeys(columns)
-      if (tableLeaveToSidebar(dir, { key: event.key, shift: event.shiftKey, keys, current: cursor })) {
-        const leave = new CustomEvent(FOCUS_SHELL_SIDEBAR, { cancelable: true })
-        window.dispatchEvent(leave)
-        if (leave.defaultPrevented) return
-      }
       const next = moveTableCell(tableNavRowIds(), keys, cursor, dir)
       if (next) landTableCell(next)
       else table?.focus({ preventScroll: true })
@@ -5097,7 +5304,93 @@ export function CollectionBrowser({
     event.preventDefault()
     enterTableCell(cursor, typed)
   }
+  function pickCrumbTarget(target: CrumbTarget) {
+    if (target.kind === 'view' && target.collection === collectionPath) {
+      const view = views.find((item) => item.id === target.viewId)
+      if (view) selectView(view)
+      return
+    }
+    onCrumbTarget?.(target)
+  }
   tableNavLiveRef.current = (event) => onTableKeyDown(event)
+  tableCellClaimLiveRef.current = (event) => {
+    if (sheet) return
+    const owner = tablePaneFromEvent(event)
+    if (!owner) return
+    if (tablePaneOwnsFocus(owner)) return
+    rememberThisPaneRest()
+    clearTableCellPick()
+  }
+  tablePaneFocusInLiveRef.current = (event) => {
+    if (sheet) return
+    const hit = event.target instanceof Element ? event.target : null
+    const page = pageRef.current
+    if (!hit || !page?.contains(hit)) return
+    if (hit.closest('dialog, [role="dialog"], [role="menu"], [role="listbox"]')) return
+    if (
+      !hit.closest(
+        '.fsdb-detail-title-input, .tiptap, .page-editor, .tasks-table, td.is-cell-on, [data-testid="page-editor"]',
+      ) &&
+      hit !== tableRef.current
+    ) {
+      return
+    }
+    claimThisTableCell()
+  }
+  crumbBackLiveRef.current = (event) => {
+    if (sheet || nested) return
+    if (!crumbParentHotkey(event)) return
+    if (crumbHotkeyPane(event.target) !== 'main') return
+    const parent = parentCrumbTarget(crumbs)
+    if (!parent) return
+    event.preventDefault()
+    event.stopPropagation()
+    pickCrumbTarget(parent)
+  }
+  tablePaneFocusLiveRef.current = (event) => {
+    const pane = event ? tablePaneFromEvent(event) : embed ? 'inspector' : 'main'
+    if (!tablePaneOwnsFocus(pane)) return
+    if (landPaneSurface()) consumePendingTablePane(pane ?? (embed ? 'inspector' : 'main'))
+  }
+  tableAutoLandLiveRef.current = () => {
+    if (sheet || embed || mode !== 'table' || detailId) return
+    if (peekPendingTablePane('inspector')) return
+    const pick = cellPickRef.current
+    if (pick) {
+      const td = findPaintedCellTd(pick.id, pick.key)
+      if (!td?.classList.contains('is-cell-on')) revealTableCell(pick)
+      return
+    }
+    const stamp = `${collectionPath}\0${activeViewId ?? ''}\0${dataPath}`
+    if (tableAutoLandedRef.current === stamp) return
+    const live = typeof document !== 'undefined' ? document.activeElement : null
+    if (
+      live instanceof HTMLElement &&
+      tableKeyFromEditingTarget(live) &&
+      !tableRef.current?.contains(live) &&
+      !live.closest('.fsdb-cell-pop')
+    ) {
+      return
+    }
+    const next = firstTableTitleCell(tableNavRowIds(), tableNavKeys(columns), schema?.labelField)
+    if (!next) return
+    if (!landFirstTableCell(false)) return
+    if (!findPaintedCellTd(next.id, next.key)) return
+    tableAutoLandedRef.current = stamp
+  }
+  tablePaneHotkeyLiveRef.current = (event) => {
+    if (sheet) return
+    if (!tablePaneHotkey(event)) return
+    const hit = event.target instanceof Element ? event.target : null
+    if (hit?.closest('dialog, [role="dialog"], [role="menu"], [role="listbox"], .fsdb-headless-pop')) return
+    const from = crumbHotkeyPane(event.target) === 'inspector' ? 'inspector' : 'main'
+    const pane = tablePaneOther(from)
+    if (from === (embed ? 'inspector' : 'main')) rememberThisPaneRest()
+    event.preventDefault()
+    event.stopPropagation()
+    requestTablePaneFocus(pane)
+    if (tablePaneOwnsFocus(pane) && landPaneSurface()) consumePendingTablePane(pane)
+  }
 
   function paintColPad(px: number, side: 'left' | 'right') {
     if (px <= 0) return null
@@ -5201,20 +5494,7 @@ export function CollectionBrowser({
             tableIcon={currentTable?.view?.icon}
             Icon={chrome?.Icon}
             pick={recordPick(row)}
-            onOpenSplit={() => {
-              const jump = chrome?.openRow?.(row)
-              const fromData = isDataOverview || crumbFromData
-              if (fromData) setViaDataCrumbs(true, isDataOverview ? activeViewId : viaDataViewId())
-              if (jump && jump.kind === 'record') {
-                showRecordInInspector(jump.collection ?? collectionPath, jump.recordId, fromData ? undefined : activeViewId, nested ? { newTab: true } : undefined)
-                return
-              }
-              if (jump && jump.kind === 'table') {
-                onOpenTable?.(jump.path, jump.viewId)
-                return
-              }
-              showRecordInInspector(collectionPath, row.id, fromData ? undefined : activeViewId, nested ? { newTab: true } : undefined)
-            }}
+            onOpenSplit={() => openRowSplit(row)}
             onOpenRow={() => openRow(row)}
             onWriteEmoji={(next) => void writePatch(row, { emoji: next })}
             toolsArmed={toolsArmed}

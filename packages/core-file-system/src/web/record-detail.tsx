@@ -12,7 +12,7 @@ import { TagPackEditor } from './schema-field.tsx'
 import { idleTableIconKind } from './nav-glyphs.tsx'
 import { TAGS_COLLECTION_PATH } from './database-path.ts'
 import { normalizeRecordEmoji, recordPreviewEmoji } from './sidebar-preview.ts'
-import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, shouldLeaveContentForTitle, shouldLeaveTitleForContent, focusRecordTitleNear } from './title-content-nav.ts'
+import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, shouldLeaveContentForTitle, shouldLeaveTitleForContent, focusRecordTitleNear, scheduleFocusRecordTitle } from './title-content-nav.ts'
 import { HeadingOutline } from './heading-outline.tsx'
 import { PageBanner } from './page-banner.tsx'
 import { fieldPickAttrs, recordSourcePath } from './pick-dom.ts'
@@ -295,8 +295,12 @@ export function RecordDetail({
       requestAnimationFrame(go)
     }
     window.addEventListener(FOCUS_RECORD_TITLE, onTitle)
-    return () => window.removeEventListener(FOCUS_RECORD_TITLE, onTitle)
-  }, [])
+    const stop = inspectorPaneId ? undefined : scheduleFocusRecordTitle(() => mainRef.current)
+    return () => {
+      window.removeEventListener(FOCUS_RECORD_TITLE, onTitle)
+      stop?.()
+    }
+  }, [inspectorPaneId, selected.id])
 
   const paneMenu = (
     <RecordPaneMenu

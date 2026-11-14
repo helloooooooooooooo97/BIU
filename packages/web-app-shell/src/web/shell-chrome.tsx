@@ -1684,16 +1684,12 @@ export function ShellSettingsShortcuts() {
           <span className="settings-kbd"><kbd>⌘</kbd><kbd>2</kbd></span>
         </li>
         <li>
-          <span>选区送到会话</span>
+          <span>编辑器内送到会话</span>
           <span className="settings-kbd"><kbd>⌘</kbd><kbd>L</kbd></span>
         </li>
         <li>
-          <span>最左格进入侧栏</span>
-          <span className="settings-kbd"><kbd>←</kbd></span>
-        </li>
-        <li>
-          <span>侧栏切换入口</span>
-          <span className="settings-kbd"><kbd>↑</kbd><kbd>↓</kbd></span>
+          <span>左右栏切换</span>
+          <span className="settings-kbd"><kbd>⌘</kbd><kbd>\\</kbd></span>
         </li>
       </ul>
       <h4 className="settings-pane-subtitle">表格</h4>
@@ -1718,6 +1714,18 @@ export function ShellSettingsShortcuts() {
         <li>
           <span>编辑</span>
           <span className="settings-kbd"><kbd>Enter</kbd></span>
+        </li>
+        <li>
+          <span>面包屑上一级</span>
+          <span className="settings-kbd"><kbd>⌘</kbd><kbd>←</kbd></span>
+        </li>
+        <li>
+          <span>标题在当前页打开</span>
+          <span className="settings-kbd"><kbd>⌘</kbd><kbd>Enter</kbd></span>
+        </li>
+        <li>
+          <span>标题在右侧打开</span>
+          <span className="settings-kbd"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>Enter</kbd></span>
         </li>
         <li>
           <span>文字 / 数字直接编辑</span>

@@ -4,7 +4,7 @@ import type { SlotProps } from '@biu/type-slots'
 import type { CollectionInfo } from '@biu/type-file-system'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { parseAppPath } from '@biu/web-session-view'
-import { buildCrumbs, pathForCrumbTarget, type Crumb, type CrumbTarget } from './sidebar-nav.ts'
+import { buildCrumbs, crumbHotkeyPane, crumbParentHotkey, parentCrumbTarget, pathForCrumbTarget, type Crumb, type CrumbTarget } from './sidebar-nav.ts'
 import { CrumbTrail } from './crumb-trail.tsx'
 import { defaultViewId, loadRecords, loadViews, peekRecord, subscribeCrumbs, viewForPath } from './view-storage.ts'
 import { builtinAllViewId, displayNameForView, isBuiltinAllViewId, stampRecordId, stampRowOpenTarget } from '../catalog-views.ts'
@@ -242,6 +242,23 @@ export function DatabaseInspectorTab({
   const { crumbs } = crumbsForRoute(inspectorPath, tables, viaData)
   const leaf = crumbs.at(-1)
   const leafChoice = leaf?.choices.find((item) => item.id === leaf.id)
+  const crumbsRef = useRef(crumbs)
+  crumbsRef.current = crumbs
+  useEffect(() => {
+    if (!active) return
+    const onCrumbBack = (event: KeyboardEvent) => {
+      if (!crumbParentHotkey(event)) return
+      if (crumbHotkeyPane(event.target) !== 'inspector') return
+      const parent = parentCrumbTarget(crumbsRef.current)
+      if (!parent) return
+      event.preventDefault()
+      event.stopPropagation()
+      onActivate?.()
+      goInspector(id, parent)
+    }
+    window.addEventListener('keydown', onCrumbBack, true)
+    return () => window.removeEventListener('keydown', onCrumbBack, true)
+  }, [active, id, onActivate])
   useEffect(() => {
     window.dispatchEvent(
       new CustomEvent('biu:inspector-caption', {

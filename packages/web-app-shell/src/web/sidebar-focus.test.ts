@@ -74,13 +74,12 @@ test('focusShellSidebar lands on the active list row, not a random place', () =>
   root.remove()
 })
 
-test('sidebar frame listens for table leave and returns with ArrowRight', () => {
+test('sidebar frame has no keyboard wiring to the table', () => {
   const frame = readFileSync(resolve(import.meta.dirname, './shell-sidebar-frame.tsx'), 'utf8')
   const chrome = readFileSync(resolve(import.meta.dirname, './shell-chrome.tsx'), 'utf8')
-  assert.match(frame, /FOCUS_SHELL_SIDEBAR/)
-  assert.match(frame, /FOCUS_SHELL_TABLE/)
-  assert.match(frame, /focusShellSidebar\(host\)/)
-  assert.match(frame, /event\.preventDefault\(\)/)
-  assert.match(chrome, /最左格进入侧栏/)
-  assert.match(chrome, /侧栏切换入口/)
+  assert.doesNotMatch(frame, /FOCUS_SHELL_SIDEBAR/)
+  assert.doesNotMatch(frame, /focusShellSidebar/)
+  assert.doesNotMatch(frame, /onKeyDown/)
+  assert.doesNotMatch(chrome, /最左格进入侧栏/)
+  assert.doesNotMatch(chrome, /侧栏切换入口/)
 })
