@@ -338,6 +338,16 @@ test('all-data source table is a groupable select', () => {
     },
   }
   assert.equal(groupableFields(dataSchema).some((item) => item.key === 'table'), true)
+  assert.equal(
+    groupableFields({
+      labelField: 'title',
+      fields: {
+        title: { type: 'string', label: '视图' },
+        table: { type: 'select', label: '来源表', computed: true },
+      },
+    }).some((item) => item.key === 'table'),
+    true,
+  )
   const buckets = groupRecords(
     [
       { id: '1', title: 'a', table: '页面' },
@@ -372,7 +382,7 @@ test('groupField follows the strategy registry and skips free text', () => {
   )
 })
 
-test('groupListKeys keeps 未填 except for shareScope', () => {
+test('groupListKeys keeps 未填 except for shareScope and source table', () => {
   assert.deepEqual(
     groupListKeys(schema, 'status').map((item) => item.key),
     ['todo', 'doing', 'done', ''],
@@ -396,6 +406,21 @@ test('groupListKeys keeps 未填 except for shareScope', () => {
   assert.deepEqual(
     groupListKeys(schema, 'tags', ['game']).map((item) => item.key),
     ['game', ''],
+  )
+  const source = groupListKeys(
+    {
+      labelField: 'title',
+      fields: {
+        title: { type: 'string' },
+        table: { type: 'select', label: '来源表', computed: true },
+      },
+    },
+    'table',
+    ['页面', '任务'],
+  )
+  assert.deepEqual(
+    source.map((item) => item.key),
+    ['页面', '任务'],
   )
 })
 

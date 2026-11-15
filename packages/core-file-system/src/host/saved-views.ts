@@ -239,10 +239,11 @@ export class SavedViewsStore {
 
   rows(tables: CollectionInfo[], accountId = ''): DbRecord[] {
     const labels = new Map(tables.map((item) => [normalizeCollectionPath(item.path), item.view?.title ?? item.label]))
+    const icons = new Map(tables.map((item) => [normalizeCollectionPath(item.path), item.view?.icon]))
     const out: DbRecord[] = []
     const seen = new Set<string>()
     const emit = (path: string, tableName: string, view: StoredView) => {
-      const rec = asRecord(path, tableName, view)
+      const rec = asRecord(path, tableName, view, icons.get(path))
       if (seen.has(rec.id)) return
       seen.add(rec.id)
       out.push(rec)
@@ -312,7 +313,7 @@ export class SavedViewsStore {
     }
     this.byPath.set(tablePath, [...views, view])
     this.persistPath(tablePath)
-    return asRecord(tablePath, label, view)
+    return asRecord(tablePath, label, view, table?.view?.icon)
   }
 
   remove(id: string, accountId = '', tables: CollectionInfo[] = []): boolean {
@@ -381,7 +382,7 @@ export class SavedViewsStore {
       else views.push(next)
       this.byPath.set(path, views)
       this.persistPath(path)
-      return asRecord(path, tableLabelOf(table, path), next)
+      return asRecord(path, tableLabelOf(table, path), next, table?.view?.icon)
     }
     throw new Error(`unknown view: ${id}`)
   }
@@ -465,7 +466,7 @@ function asFilters(value: unknown): Record<string, string> {
   return {}
 }
 
-function asRecord(path: string, tableName: string, view: StoredView): DbRecord {
+function asRecord(path: string, tableName: string, view: StoredView, tableIcon?: string): DbRecord {
   const filters = view.filters && typeof view.filters === 'object' ? view.filters : {}
   const sorts = parseSortsInput(view.sorts, view.sortField, view.sortDir === 'desc' ? 'desc' : 'asc')
   const filterTree = view.filterTree
@@ -474,6 +475,7 @@ function asRecord(path: string, tableName: string, view: StoredView): DbRecord {
     title: view.name,
     table: tableName,
     tablePath: path,
+    tableIcon,
     viewId: view.id,
     mode: view.mode ?? 'table',
     sortField: sorts[0]?.field || view.sortField || 'title',
@@ -552,7 +554,7 @@ export function viewsCollection(
       fields: {
         ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '视图', writable: true },
-        table: { type: 'string', label: '来源表' },
+        table: { type: 'select', label: '来源表', computed: true },
         tablePath: { type: 'string', label: '表路径', writable: true },
         viewId: { type: 'string', label: '视图 ID' },
         mode: { type: 'string', label: '呈现', writable: true },

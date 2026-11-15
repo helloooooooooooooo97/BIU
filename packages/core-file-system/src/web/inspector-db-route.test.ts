@@ -25,6 +25,7 @@ import {
   inspectorPageKey,
   reuseInspectorOfferPane,
 } from './inspector-db-route.ts'
+import { loadViews, rememberViews } from './view-storage.ts'
 
 function clearInspectorPanes() {
   resetInspectorDbPathMemory()
@@ -432,6 +433,7 @@ test('a revealed view becomes the working view for later table operations', () =
 })
 
 test('applyDatabaseChannelPayload upserts a created view then opens it', () => {
+  rememberViews('/tasks', [])
   const mem: Record<string, string> = {}
   Object.defineProperty(globalThis, 'localStorage', {
     configurable: true,
@@ -471,7 +473,7 @@ test('applyDatabaseChannelPayload upserts a created view then opens it', () => {
   )
   assert.equal(getInspectorDbPath('database:/tasks'), '/database/tasks/view/board-1')
   assert.equal(isInspectorAgentWorking('/tasks'), false)
-  const stored = JSON.parse(mem['fsdb.views:/tasks'] ?? '[]') as Array<{ id: string; name: string; mode: string; filters?: Record<string, string> }>
+  const stored = loadViews('/tasks')
   assert.equal(stored[0]?.id, 'board-1')
   assert.equal(stored[0]?.name, '看板')
   assert.equal(stored[0]?.mode, 'table')
@@ -479,6 +481,8 @@ test('applyDatabaseChannelPayload upserts a created view then opens it', () => {
 })
 
 test('view db_update writes the source table view, not /views', () => {
+  rememberViews('/pages', [])
+  rememberViews('/views', [])
   const mem: Record<string, string> = {}
   Object.defineProperty(globalThis, 'localStorage', {
     configurable: true,
@@ -511,8 +515,8 @@ test('view db_update writes the source table view, not /views', () => {
     'main',
   )
   window.removeEventListener('fsdb:saved-view', onSaved)
-  assert.equal(mem['fsdb.views:/views'], undefined)
-  const stored = JSON.parse(mem['fsdb.views:/pages'] ?? '[]') as Array<{ id: string; filters?: Record<string, string> }>
+  assert.deepEqual(loadViews('/views'), [])
+  const stored = loadViews('/pages')
   assert.equal(stored[0]?.id, 'mine')
   assert.equal(stored[0]?.filters?.project, 'biu')
   assert.equal(seen[0]?.collection, '/pages')

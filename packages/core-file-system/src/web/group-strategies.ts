@@ -149,7 +149,7 @@ function singleValueStrategy(
       return eqFilter(ctx.fieldKey, groupKey)
     },
     skipEmpty(ctx) {
-      return ctx.fieldKey === 'shareScope'
+      return ctx.fieldKey === 'shareScope' || ctx.fieldKey === 'table' || ctx.fieldKey === 'tablePath'
     },
   }
 }

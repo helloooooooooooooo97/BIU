@@ -22,6 +22,13 @@ test('active view tab opens the view menu; the more button is gone', () => {
   assert.doesNotMatch(src, /tasks-viewdd-check/)
 })
 
+test('catalog table lock does not add a duplicate source chip next to the view tab', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  assert.match(src, /const lockedSource = catalogLocks\.tablePath/)
+  assert.doesNotMatch(src, /lockedSource \? \(/)
+  assert.doesNotMatch(src, /title="按当前数据类型筛选，不可更改"/)
+})
+
 test('toolbar shows only the current view, not a switcher strip', () => {
   const src = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')

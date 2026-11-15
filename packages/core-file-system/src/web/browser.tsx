@@ -93,6 +93,7 @@ import { ensureFsdbStyle } from './fsdb-style.ts'
 import { workspaceColumnsForLocation } from './workspace-columns.ts'
 import { PageBanner } from './page-banner.tsx'
 import { TableGlyph, UiGlyph, ViewModeGlyph, idleTableIconKind } from './nav-glyphs.tsx'
+import { SourceTableCell } from './source-table-cell.tsx'
 import { DATA_COLLECTION_PATH, DATA_MODULE, PAGES_COLLECTION_PATH, isIndexCollection, isSystemCollection } from './database-path.ts'
 import { ViewOrderMenu } from './view-order-menu.tsx'
 import { getDatabaseUi } from './database-ui.ts'
@@ -104,6 +105,7 @@ import {
   isViewStarred,
   loadOmittedViewIds,
   loadViews,
+  mergeSavedViewLists,
   noteLocalSavedViewsWrite,
   omitSavedViewIds,
   pullSavedViews,
@@ -125,7 +127,6 @@ import {
   subscribeStarredViews,
   toggleStarredView,
   viewForPath,
-  viewsKey,
   withViewDisplay,
 } from './view-storage.ts'
 import {
@@ -2339,6 +2340,16 @@ export function CollectionBrowser({
         const kind = resolveFieldType(group.field)
         if (kind === 'datetime' || kind === 'number' || kind === 'boolean') return []
         const fromRows = switching ? [] : uniqueValues(itemsRef.current, group.key, group.field)
+        if (group.key === 'table' || group.key === 'tablePath') {
+          const fromTables = tables
+            .map((table) =>
+              group.key === 'tablePath'
+                ? String(table.path ?? '').trim()
+                : String(table.view?.title ?? table.label ?? table.path.replace(/^\//, '')).trim(),
+            )
+            .filter(Boolean)
+          return [...new Set([...fromTables, ...fromRows])]
+        }
         if (kind === 'tag' && !parseTagFlatColumnKey(group.key)) {
           const fromCatalog = tagCatalog.map((pack) => String(pack.id ?? '').trim()).filter(Boolean)
           return [...new Set([...fromCatalog, ...fromRows])]
@@ -3525,15 +3536,16 @@ export function CollectionBrowser({
     setDlgError('')
   }, [dlg])
 
-  function adoptPersistedViews(path: string, listed: SavedView[]) {
-    rememberViews(path, listed)
+  function adoptPersistedViews(path: string, listed: SavedView[], removed?: string[]) {
+    const merged = rankListedViews(
+      listedViews(path, mergeSavedViewLists(loadViews(path), listed, removed)).map((view) => withViewDisplay(path, view)),
+      listed,
+    )
+    rememberViews(path, merged)
     noteLocalSavedViewsWrite(path)
-    if (!nested) {
-      localStorage.setItem(viewsKey(path), JSON.stringify(listed))
-    }
     if (path === collectionPath) {
-      viewsRef.current = listed
-      setViews(listed)
+      viewsRef.current = merged
+      setViews(merged)
     }
     window.dispatchEvent(new Event('fsdb:change'))
     window.dispatchEvent(new Event('fsdb:crumb-labels'))
@@ -3562,12 +3574,14 @@ export function CollectionBrowser({
     )
     const stored = listed
     const previous = extra?.baseline ?? loadViews(path)
-    // 只推差异：别的窗口（会话 / 右检查器）新建的视图不会被这份快照整份冲掉。
-    // extra.upsert/remove 是调用方点名的条目，不依赖 baseline 里有没有这个 id。
-    const patch = mergeSavedViewsPatch(diffSavedViews(previous, stored), {
-      upsert: forced.map((view) => stampSavedView(view)),
-      remove: extra?.remove,
-    })
+    // 只推这次改过的条目。快照里少了的视图不能当成删除——侧栏新加的视图经常不在中间栏那份 viewsRef 里。
+    const patch = mergeSavedViewsPatch(
+      { upsert: diffSavedViews(previous, stored).upsert, remove: [] },
+      {
+        upsert: forced.map((view) => stampSavedView(view)),
+        remove: extra?.remove,
+      },
+    )
     const stamped = (patch.upsert ?? []).map((view) => stampSavedView(view))
     const stampById = new Map(stamped.map((view) => [view.id, view]))
     const adopted = listed.map((view) => stampById.get(view.id) ?? view)
@@ -3580,7 +3594,23 @@ export function CollectionBrowser({
     }
     if (gen !== viewsWriteGenRef.current) return false
     if (result === 'skipped') return true
-    adoptPersistedViews(path, adopted)
+    noteLocalSavedViewsWrite(path)
+    const pulled = await pullSavedViews([path], { force: true })
+    if (gen !== viewsWriteGenRef.current) return false
+    if (pulled === false) adoptPersistedViews(path, adopted, extra?.remove)
+    else {
+      const listedNow = rankListedViews(
+        listedViews(path, loadViews(path)).map((view) => withViewDisplay(path, view)),
+        adopted,
+      )
+      rememberViews(path, listedNow)
+      if (path === collectionPath) {
+        viewsRef.current = listedNow
+        setViews(listedNow)
+      }
+      window.dispatchEvent(new Event('fsdb:change'))
+      window.dispatchEvent(new Event('fsdb:crumb-labels'))
+    }
     setViewsSaveError(false)
     return true
   }
@@ -3715,7 +3745,7 @@ export function CollectionBrowser({
   }
   syncViewsRef.current = async () => {
     if (sheet) return
-    await pullSavedViews([collectionPath])
+    await pullSavedViews([collectionPath], { force: true })
     const listed = rankListedViews(paintListedViews(collectionPath), viewsRef.current)
     const prev = viewsRef.current
     const activeId = activeViewIdRef.current
@@ -3787,6 +3817,11 @@ export function CollectionBrowser({
       live = false
     }
   }, [collectionPath, routeViewId])
+
+  useEffect(() => {
+    if (sheet) return
+    void syncViewsRef.current()
+  }, [collectionPath, sheet])
 
   useEffect(() => {
     if (!viewMenuOpen) return
@@ -4684,6 +4719,9 @@ export function CollectionBrowser({
       }
       const Custom = chrome?.cells?.[key]
       if (Custom) return <Custom field={key} spec={field} value={row[key]} record={row} fallback={formatField(field, row[key])} />
+      if (key === 'table') {
+        return <SourceTableCell record={row} tables={tables} onOpenTable={onOpenTable} />
+      }
       return (
         <DefaultCell
           field={field}
@@ -4770,6 +4808,9 @@ export function CollectionBrowser({
     const Custom = chrome?.cells?.[key]
     const fallback = formatField(field, row[key])
     if (Custom) return <Custom field={key} spec={field} value={row[key]} record={row} fallback={fallback} />
+    if (key === 'table') {
+      return <SourceTableCell record={row} tables={tables} onOpenTable={onOpenTable} />
+    }
     if (kind !== 'file') {
       return (
         <Suspense fallback={<DefaultCell field={field} fieldKey={key} records={items} collectionPath={collectionPath} labelField={schema?.labelField} value={row[key]} />}>
@@ -4901,6 +4942,18 @@ export function CollectionBrowser({
                 <UiGlyph
                   icon={label === '共享' ? 'globe' : label === '空间' ? 'users' : 'user'}
                   className={label === '共享' ? 'tasks-queue-gshare' : undefined}
+                />
+              ) : groupBy === 'table' || groupBy === 'tablePath' ? (
+                <span
+                  className="fsdb-record-mark is-sm"
+                  data-icon={idleTableIconKind(
+                    tables.find((table) =>
+                      groupBy === 'tablePath'
+                        ? table.path === groupKey
+                        : (table.view?.title ?? table.label) === groupKey || table.path === groupKey,
+                    )?.view?.icon,
+                  )}
+                  aria-hidden
                 />
               ) : (
                 <UiGlyph icon="stack" />
@@ -5961,13 +6014,6 @@ export function CollectionBrowser({
                   </div>
                   </div>
                 ) : null}
-            {lockedSource ? (
-              <span className="fsdb-locked-filter" title="按当前数据类型筛选，不可更改">
-                {tables.find((item) => item.path === lockedSource)?.view?.title ??
-                  tables.find((item) => item.path === lockedSource)?.label ??
-                  lockedSource}
-              </span>
-            ) : null}
             {lockedKind ? (
               <span className="fsdb-locked-filter" data-testid="fsdb-locked-kind" title="按组件类型筛选，不可更改">
                 {lockedKindLabel}

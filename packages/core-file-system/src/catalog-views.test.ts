@@ -103,6 +103,7 @@ test('each registered table gets a builtin catalog view', () => {
   ])
   assert.equal(merged[0]?.id, builtinAllViewId('/views'))
   assert.equal(merged[0]?.name, '全部视图')
+  assert.equal(merged[0]?.groupBy, 'table')
   assert.equal(merged.find((view) => view.id === builtinCatalogViewId('/pages'))?.name, '旧的')
   assert.equal(merged.some((view) => view.id === 'user-1'), true)
   assert.equal(merged.filter((view) => view.id === builtinCatalogViewId('/pages')).length, 1)

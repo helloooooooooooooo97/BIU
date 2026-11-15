@@ -54,6 +54,7 @@ import {
   subscribeCrumbs,
   persistStarredRecords,
   persistStarredViews,
+  pullSavedViews,
   rememberRecords,
   starredRecordEmoji,
   starredRecordLabel,
@@ -559,8 +560,16 @@ export const DataSidebar = memo(function DataSidebar({
   const expandedViewKey = expandedViewKeyProp !== undefined ? expandedViewKeyProp : expandedViewKeyLocal
   const setExpandedViewKey = onExpandedViewKeyChange ?? setExpandedViewKeyLocal
   const totalsVersion = usePreviewTotalsVersion()
+  const [viewsTick, setViewsTick] = useState(0)
+  const tablePathsKey = listedTables.map((table) => table.path).join('\0')
+  useEffect(() => {
+    const paths = tablePathsKey.split('\0').filter(Boolean)
+    if (!paths.length) return
+    void pullSavedViews(paths, { force: true }).then(() => setViewsTick((n) => n + 1))
+  }, [tablePathsKey])
   useEffect(() => {
     const onChange = (event: Event) => {
+      setViewsTick((n) => n + 1)
       if ((event as CustomEvent<{ views?: boolean }>).detail?.views) return
       previewCache.clear()
     }
@@ -569,6 +578,7 @@ export const DataSidebar = memo(function DataSidebar({
   }, [])
 
   function viewsFor(path: string) {
+    void viewsTick
     return paintCollectionViews(path, tables)
   }
 

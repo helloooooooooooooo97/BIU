@@ -165,6 +165,7 @@ test('grouped table fetch no longer uses a mixed 200-row page', () => {
   const grouped = readFileSync(resolve(import.meta.dirname, './group-list.ts'), 'utf8')
   assert.doesNotMatch(browser, /groupBy \? 200/)
   assert.match(browser, /listGroupedCollection\(/)
+  assert.match(browser, /group.key === 'table' \|\| group.key === 'tablePath'/)
   assert.match(browser, /listTreeCollection\(/)
   assert.match(browser, /listTreeCollection\(\{\s*\n\s*\.\.\.input,\s*\n\s*tree: reqTree && Boolean\(reqParentKey\)/)
   assert.match(browser, /wrap: reqWrap/)

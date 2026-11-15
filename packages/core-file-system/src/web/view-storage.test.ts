@@ -18,6 +18,7 @@ import {
   collapsedGroupsKey,
   pickViewForRoute,
   pullSavedViews,
+  mergeSavedViewLists,
   rememberViews,
   rememberRecords,
   applyListedCrumbMutation,
@@ -41,6 +42,8 @@ test('authoritative empty saved views hide stale local workspace data', () => {
       removeItem: () => undefined,
     },
   })
+  assert.deepEqual(loadViews(path), [])
+  rememberViews(path, stale as never)
   assert.equal(loadViews(path)[0]?.id, 'old')
   rememberViews(path, [])
   assert.deepEqual(loadViews(path), [])
@@ -53,6 +56,8 @@ test('index all views do not group by share', () => {
   assert.equal(builtinAllView({ path: '/tasks', label: '任务' }).groupBy, 'shareScope')
   assert.equal(builtinAllView({ path: '/workspace-members', label: '成员' }).groupBy, 'membershipKind')
   assert.equal(withViewDisplay('/workspace-members', { ...builtinAllView({ path: '/workspace-members' }), groupBy: 'shareScope' }).groupBy, 'membershipKind')
+  assert.equal(builtinAllView({ path: '/views', label: '视图' }).groupBy, 'table')
+  assert.equal(withViewDisplay('/views', { ...builtinAllView({ path: '/views' }), groupBy: 'shareScope' }).groupBy, 'table')
 })
 
 test('views collection still resolves catalog stubs from the route', () => {
@@ -237,16 +242,26 @@ test('rememberRecords scopes crumb rows to the current view', () => {
   assert.equal(loadRecords('/pages', 'all').some((row) => row.id === 't1'), false)
 })
 
+test('incomplete persist snapshots keep sibling views', () => {
+  const keep = { id: 'keep', name: '留下', mode: 'table' as const, sortField: 'title', sortDir: 'asc' as const, filters: {}, columns: [] }
+  const extra = { id: 'extra', name: '侧栏新视图', mode: 'table' as const, sortField: 'title', sortDir: 'asc' as const, filters: {}, columns: [] }
+  const painted = { ...keep, name: '留下改过' }
+  const merged = mergeSavedViewLists([keep, extra], [painted])
+  assert.equal(merged.some((view) => view.id === 'extra'), true)
+  assert.equal(merged.find((view) => view.id === 'keep')?.name, '留下改过')
+  assert.equal(mergeSavedViewLists([keep, extra], [painted], ['extra']).some((view) => view.id === 'extra'), false)
+})
+
 test('saved views pull shares one in-flight list and a short ttl', () => {
   const src = readFileSync(resolve(import.meta.dirname, './view-storage.ts'), 'utf8')
   assert.match(src, /const viewsPullByKey = new Map/)
   assert.match(src, /VIEWS_PULL_TTL_MS = 2500/)
   assert.match(src, /VIEWS_PULL_IDLE_MS = 2800/)
-  assert.match(src, /VIEWS_PULL_LIMIT = 80/)
+  assert.match(src, /VIEWS_PULL_LIMIT = 200/)
   assert.match(src, /filters: \{ tablePath \}/)
   assert.doesNotMatch(src, /columns: \[\.\.\.VIEWS_PULL/)
   assert.match(src, /if \(pending\) return pending/)
-  assert.match(src, /opts\?: \{ idle\?: boolean \}/)
+  assert.match(src, /opts\?: \{ idle\?: boolean; force\?: boolean \}/)
   assert.match(src, /export function noteLocalSavedViewsWrite/)
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   assert.match(browser, /noteLocalSavedViewsWrite\(path\)/)
@@ -272,19 +287,20 @@ test('local view delete is not restored by a stale /views pull', async () => {
     { id: 'keep', name: '留下', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] },
     { id: 'gone', name: '删掉', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] },
   ])
+  let includeGone = true
   const prev = globalThis.fetch
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input)
     if (url.includes('/api/db/list')) {
       await new Promise((resolve) => setTimeout(resolve, 40))
-      return new Response(
-        JSON.stringify({
-          items: [
+      const items = includeGone
+        ? [
             { viewId: 'keep', title: '留下', tablePath: path },
             { viewId: 'gone', title: '删掉', tablePath: path },
-          ],
-          total: 2,
-        }),
+          ]
+        : [{ viewId: 'keep', title: '留下', tablePath: path }]
+      return new Response(
+        JSON.stringify({ items, total: items.length }),
         { status: 200, headers: { 'content-type': 'application/json' } },
       )
     }
@@ -296,6 +312,7 @@ test('local view delete is not restored by a stale /views pull', async () => {
       { id: 'keep', name: '留下', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] },
     ])
     noteLocalSavedViewsWrite(path)
+    includeGone = false
     await pulling
     assert.deepEqual(
       loadViews(path).map((view) => view.id),

@@ -1,13 +1,12 @@
 import type { CollectionActionInfo, CollectionInfo, DbRecord } from '@biu/type-file-system'
-import { builtinAllView, builtinAllViewId, collectionNoun, stampRowOpenTarget } from '../catalog-views.ts'
-import { normalizeCollectionPath } from '../paths.ts'
+import { builtinAllViewId, stampRowOpenTarget } from '../catalog-views.ts'
 import { CollectionBrowser } from './browser.tsx'
 import type { CrumbTarget } from './sidebar-nav.ts'
 import { viewsForRegisteredCollection } from './collection-nav.ts'
 import { dataChrome, setViaDataCrumbs } from './data-chrome.ts'
 import { actionIcon } from './fsdb-cells.tsx'
 import { DATA_COLLECTION_PATH, DATA_MODULE_ID } from './database-path.ts'
-import { idleTableIconKind } from './nav-glyphs.tsx'
+import { SourceTableCell } from './source-table-cell.tsx'
 import type { SavedView } from './saved-view.ts'
 
 function SourceActions({
@@ -44,40 +43,6 @@ function SourceActions({
         </button>
       ))}
     </>
-  )
-}
-
-function SourceTableCell({
-  record,
-  tables,
-  onOpenTable,
-}: {
-  record: DbRecord
-  tables: CollectionInfo[]
-  onOpenTable: (path: string, viewId?: string) => void
-}) {
-  const path = normalizeCollectionPath(String(record.tablePath ?? ''))
-  if (!path || path === '/') return null
-  const table = tables.find((item) => item.path === path)
-  const viewId = builtinAllViewId(path)
-  const name = collectionNoun({ path, label: table?.label, view: table?.view })
-  const jump = builtinAllView({ path, label: table?.label, view: table?.view }).name
-  return (
-    <button
-      type="button"
-      className="fsdb-source-table"
-      data-biu-ignore
-      title={jump}
-      aria-label={jump}
-      onClick={(event) => {
-        event.stopPropagation()
-        onOpenTable(path, viewId)
-      }}
-      onPointerDown={(event) => event.stopPropagation()}
-    >
-      <span className="fsdb-record-mark is-sm" data-icon={idleTableIconKind(table?.view?.icon)} aria-hidden />
-      <span className="fsdb-title-text">{name}</span>
-    </button>
   )
 }
 

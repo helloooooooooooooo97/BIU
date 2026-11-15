@@ -206,6 +206,7 @@ export function displayNameForView(viewId: string, table: TableRef, storedName?:
 export function builtinAllGroupBy(collectionPath: string) {
   const path = normalizeCollectionPath(collectionPath)
   if (path === '/workspace-members') return 'membershipKind'
+  if (path === '/views') return 'table'
   if (path === '/editor-blocks' || path === '/tags') return ''
   return 'shareScope'
 }
