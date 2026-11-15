@@ -56,6 +56,8 @@ import {
   type ListPage,
   type PersonValue,
   parseContentJump,
+  allocateRecordId,
+  isAssignableRecordId,
 } from '@biu/type-file-system'
 import { parsePageBanner, type PageBanner } from '../page-banner.ts'
 import { SavedViewsStore, clientViewFromDbRow, viewsCollection, type StoredView } from './saved-views.ts'
@@ -88,6 +90,13 @@ import {
   mutationLocus,
   type ContentCommand,
 } from './content-edit.ts'
+import {
+  MENTION_KIND_PATH,
+  listMentionRefs,
+  mentionRefsByCollection,
+  projectMentionLabels,
+  stripMentionLabels,
+} from '../mention-markup.ts'
 import { currentSessionId } from '@biu/host-sessions/scope'
 import { databaseRevealForTool, normalizeCollectionPath, splitResourcePath } from '../paths.ts'
 import { matchListFilterRecord, normalizeSorts, parseTagFlatColumnKey, readTagFieldValue, sortRecordsBy } from '../query-logic.ts'
@@ -612,6 +621,21 @@ function writableFieldKeys(schema: CollectionSchema) {
     .map(([key]) => key)
 }
 
+function takeRequestedRecordId(row: Record<string, unknown>) {
+  const requested = String(row.id ?? '').trim()
+  delete row.id
+  return requested
+}
+
+async function unusedRecordId(spec: CollectionSpec, requested: string) {
+  if (isAssignableRecordId(requested) && !(await spec.get(requested))) return requested
+  for (let i = 0; i < 8; i += 1) {
+    const id = allocateRecordId()
+    if (!(await spec.get(id))) return id
+  }
+  throw new Error(`could not allocate record id: ${spec.path}`)
+}
+
 function pickWritablePatch(schema: CollectionSchema, patch: Record<string, unknown>) {
   const next: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(patch)) {
@@ -733,7 +757,7 @@ export function listNeedsMatchOverlay(
   if (!filter) return false
   if (filter.$tree && typeof filter.$tree === 'object') return true
   for (const [key, expected] of Object.entries(filter)) {
-    if (key === '$tree' || key === '$scope' || key === 'shareScope' || expected == null || expected === '') continue
+    if (key === '$tree' || key === '$scope' || key === '$ids' || key === 'shareScope' || expected == null || expected === '') continue
     if (overlayListField(key)) return true
   }
   return false
@@ -1815,12 +1839,15 @@ export class DatabaseService extends Service implements Database {
     const columnKeys = listedColumnKeys(page?.columns, schema.labelField ?? 'title', schema)
     const trash = filter?.deleted === true || filter?.trash === true
     const liveFilter = filter ? { ...filter } : undefined
+    const idFilter = asIds(liveFilter?.$ids)
     if (liveFilter) {
       delete liveFilter.deleted
       delete liveFilter.trash
       delete liveFilter.$scope
+      delete liveFilter.$ids
     }
     const query: CollectionListQuery = { q, filter: liveFilter, trash }
+    if (idFilter?.length) query.ids = idFilter
     if (schemaFilter && schema.fields.tag && spec.path !== '/tags') {
       const stamped = this.tags.stampedIds(spec.path, schemaFilter)
       if (!stamped.size) {
@@ -2424,6 +2451,13 @@ export class DatabaseService extends Service implements Database {
     })
   }
 
+  private async withCreateRecordId(spec: CollectionSpec, patch: Record<string, unknown>, requested: string) {
+    if (spec.records?.allocateId === false) {
+      return isAssignableRecordId(requested) ? { ...patch, id: requested } : patch
+    }
+    return { ...patch, id: await unusedRecordId(spec, requested) }
+  }
+
   async create(path: string, content?: unknown, options: { scope?: 'personal' | 'workspace' | 'shared' | 'local' } = {}) {
     const parts = splitPath(path)
     if (parts.length !== 1) throw new Error(`cannot create: ${normalizeCollectionPath(path)}`)
@@ -2443,9 +2477,11 @@ export class DatabaseService extends Service implements Database {
     const rows = parseRecords(content)
     const records: Record<string, unknown>[] = []
     const banners: Array<PageBanner | null | undefined> = []
+    const requestedIds: string[] = []
     for (const row of rows) {
       const bannerPatch = takeBannerPatch(row)
       banners.push(bannerPatch.present ? bannerPatch.value : undefined)
+      requestedIds.push(takeRequestedRecordId(row))
       if ('facet' in row && !('tag' in row)) row.tag = row.facet
       if ('tag' in row && schema.fields.tag) {
         row.tag = coerceTagPatch(row.tag, emptySchemaValue(), (id) => this.tags.get(id))
@@ -2454,13 +2490,22 @@ export class DatabaseService extends Service implements Database {
       await assertSameTableLinks(spec, patch)
       records.push(patch)
     }
-    const meaningful = records.filter((record) => Object.keys(record).length > 0)
-    const created = await spec.create(meaningful.length ? meaningful : records.slice(0, 1))
+    const meaningful = records
+      .map((record, index) => ({ record, index }))
+      .filter((item) => Object.keys(item.record).length > 0)
+    const selected = meaningful.length ? meaningful : records.slice(0, 1).map((record, index) => ({ record, index }))
+    const payloads: Record<string, unknown>[] = []
+    for (const item of selected) {
+      const requested = requestedIds[item.index] ?? ''
+      payloads.push(await this.withCreateRecordId(spec, item.record, requested))
+    }
+    const created = await spec.create(payloads)
     for (const [index, record] of created.entries()) {
       await this.stampActor(spec.path, record.id)
-      const banner = banners[index]
+      const sourceIndex = selected[index]?.index ?? index
+      const banner = banners[sourceIndex]
       if (banner !== undefined) this.tags.writeRecordBanner(spec.path, record.id, banner)
-      const input = records[index] ?? record
+      const input = payloads[index] ?? records[sourceIndex] ?? record
       if ('emoji' in input) {
         this.tags.writeRecordMeta(spec.path, record.id, {
           emoji: String(input.emoji ?? ''),
@@ -2731,12 +2776,13 @@ export class DatabaseService extends Service implements Database {
     if (!existing) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
     this.assertLiveRecord(spec, existing.id, 'resource:update', existing)
     if (!schema.fields[field]) throw new Error(`no content field: ${field}`)
+    const persisted = typeof value === 'string' ? stripMentionLabels(value) : value
     if (isEditorContentSpec(spec)) {
-      writeEditorContent(this.tags.ensure(), spec.path, parts[1]!, String(value ?? ''), { expectedVersion })
+      writeEditorContent(this.tags.ensure(), spec.path, parts[1]!, String(persisted ?? ''), { expectedVersion })
     }
     const patch = this.collectionCanUpdate(spec)
-      ? pickWritablePatch(schema, { [field]: value })
-      : { [field]: value }
+      ? pickWritablePatch(schema, { [field]: persisted })
+      : { [field]: persisted }
     const record = await spec.update(parts[1]!, patch)
     await this.stampActor(spec.path, record.id)
     this.refreshContentRefs(spec, this.withBanner(spec, record))
@@ -2763,12 +2809,31 @@ export class DatabaseService extends Service implements Database {
     return title || parts[1] || path
   }
 
+  private async mentionTitles(markdown: string) {
+    const groups = mentionRefsByCollection(listMentionRefs(markdown))
+    const titles: Record<string, string> = {}
+    for (const [path, ids] of groups) {
+      const spec = this.collection(path)
+      if (!spec) continue
+      const rows = await spec.list({ ids })
+      const kind = (Object.entries(MENTION_KIND_PATH).find(([, item]) => item === path)?.[0] ?? 'page') as keyof typeof MENTION_KIND_PATH
+      for (const row of rows) {
+        const id = String(row.id ?? '').trim()
+        if (!id || !ids.includes(id)) continue
+        const title = String(row.title ?? row.name ?? '').trim()
+        if (title) titles[`${kind}/${id}`] = title
+      }
+    }
+    return titles
+  }
+
   async editContent(path: string, args: Record<string, unknown> = {}) {
     const command = resolveContentCommand(args)
     const current = await this.content(path)
-    const text = asContentText(current.value)
+    const text = stripMentionLabels(asContentText(current.value))
     if (command === 'view') {
       const viewed = viewContent(text, args.view_range)
+      const titles = await this.mentionTitles(viewed.text)
       return {
         kind: 'content' as const,
         path: current.path,
@@ -2778,19 +2843,20 @@ export class DatabaseService extends Service implements Database {
         end: viewed.end,
         total: viewed.total,
         truncated: viewed.truncated,
-        text: viewed.text,
+        text: projectMentionLabels(viewed.text, titles),
       }
     }
     let replaced: number | undefined
-    const incoming = await resolveIncomingText(command, args)
-    const patch = { ...args, new_str: incoming, ...(command === 'write' ? { value: incoming } : {}) }
+    const incoming = stripMentionLabels(await resolveIncomingText(command, args))
+    const oldStr = args.old_str != null ? stripMentionLabels(String(args.old_str)) : args.old_str
+    const patch = { ...args, old_str: oldStr, new_str: incoming, ...(command === 'write' ? { value: incoming } : {}) }
     const next =
       command === 'write'
         ? writeContentText(incoming)
         : command === 'str_replace'
-          ? strReplaceText(text, args.old_str, incoming)
+          ? strReplaceText(text, oldStr, incoming)
           : command === 'find_replace'
-            ? resolveFindReplace(text, { ...args, new_str: incoming })
+            ? resolveFindReplace(text, { ...args, old_str: oldStr, new_str: incoming })
             : command === 'insert'
               ? insertText(text, args.insert_line, incoming)
               : replaceLinesText(text, args.start_line, args.end_line, incoming)
@@ -3544,7 +3610,7 @@ export function apply(ctx: Context) {
     name: 'db_content',
     description: [
       '读写一条记录的正文（一篇，只要 path）。list/read 不含正文。path 为 /<表>/<id>。',
-      'command=view：带行号读一段正文，默认前 80 行，可用 view_range=[start,end]（1-based，end=-1 到末尾）；truncated 表示还有未读行。',
+      'command=view：带行号读一段正文，默认前 80 行，可用 view_range=[start,end]（1-based，end=-1 到末尾）；truncated 表示还有未读行。引用形如 [@ id="page/<id>"]，view 会补当前 label；落盘只留 id，写回时不要依赖 label。',
       'command=str_replace：old_str 必须在正文里唯一，替换为 new_str（短文本）或 from 文件内容（长文本）。',
       'command=replace_lines：按 1-based 闭区间 start_line..end_line 换成 new_str（短）或 from 文件内容（长）。',
       'command=insert：在 insert_line 之后插入。短文本用 new_str；长文本用 from=<本地文件>。',

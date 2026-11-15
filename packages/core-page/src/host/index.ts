@@ -165,7 +165,7 @@ export function pagesCollection(store: PagesStore, index: PageBlocksIndex): Coll
         },
       },
     },
-    records: { update: true, create: true, delete: true },
+    records: { update: true, create: true, delete: true, allocateId: true },
     list: (query) => store.list(query?.ids),
     get: async (id) => withPageViews(store, await store.get(id)),
     update: async (id, patch) => {

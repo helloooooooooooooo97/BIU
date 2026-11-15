@@ -112,7 +112,7 @@ export function tagsCollection(
       order: 31,
       icon: 'tag',
     },
-    records: { update: true, create: true, delete: true },
+    records: { update: true, create: true, delete: true, allocateId: false },
     schema: {
       labelField: 'title',
       contentField: 'notes',

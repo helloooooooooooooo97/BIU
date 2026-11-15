@@ -388,7 +388,7 @@ export function matchListFilterRecord(
   if (!filter) return true
   const tree = filter.$tree
   for (const [key, expected] of Object.entries(filter)) {
-    if (key === '$tree' || key === '$scope' || key === 'shareScope' || expected == null || expected === '') continue
+    if (key === '$tree' || key === '$scope' || key === '$ids' || key === 'shareScope' || expected == null || expected === '') continue
     const pass = matchFilterRule(record, { kind: 'rule', id: key, field: key, op: 'eq', value: String(expected) }, schema, packs)
     if (!pass) return false
   }

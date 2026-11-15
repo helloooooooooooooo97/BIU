@@ -3,7 +3,7 @@ import { dirname } from 'node:path'
 import { biuSqlitePath, openAndMigrateBiu, readEditorContent, writeEditorContent } from '@biu/host-plugin-loader/data-dir'
 import { Service, type Context } from 'cordis'
 import { currentSessionId } from '@biu/host-sessions/scope'
-import { emptySchemaValue, normalizeSchemaValue, type SchemaFieldValue } from '@biu/type-file-system'
+import { allocateRecordId, emptySchemaValue, isAssignableRecordId, normalizeSchemaValue, type SchemaFieldValue } from '@biu/type-file-system'
 import { startTaskClock } from './clock.ts'
 import { tasksCollection } from './collection.ts'
 
@@ -289,7 +289,7 @@ function now() {
 }
 
 function nextId() {
-  return `task_${now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
+  return allocateRecordId()
 }
 
 /** 树的嵌套最大深度（根=0，叶子到 MAX_DEPTH 为止） */
@@ -1143,7 +1143,7 @@ export class TasksService extends Service {
   create(input: TaskCreateInput & { creator: TaskActor; assignee?: TaskActor | null; assignedAt?: number | null }): TaskRow {
     const title = String(input.title ?? '').trim()
     const requested = typeof input.id === 'string' ? input.id.trim() : ''
-    const id = /^task_[A-Za-z0-9_-]+$/.test(requested) ? requested : nextId()
+    const id = isAssignableRecordId(requested) ? requested : nextId()
     const ts = typeof input.updatedAt === 'number' && input.updatedAt > 0 ? input.updatedAt : now()
     const status = asStatus(input.status)
     const priority = asPriority(input.priority)

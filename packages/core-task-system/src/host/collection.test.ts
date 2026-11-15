@@ -68,7 +68,7 @@ test('tasksCollection maps /tasks rows with rolled-up usage', async () => {
   assert.equal(child?.notes, undefined)
   const written = await spec.update!('t1', { status: 'doing' })
   assert.equal(written.status, 'doing')
-  assert.deepEqual(spec.records, { update: true, create: true, delete: true })
+  assert.deepEqual(spec.records, { update: true, create: true, delete: true, allocateId: true })
   assert.equal(spec.actions?.find((item) => item.id === 'report')?.for, 'agent')
   assert.equal(spec.actions?.find((item) => item.id === 'deliver')?.for, 'both')
   assert.deepEqual(spec.actions?.find((item) => item.id === 'deliver')?.placement, ['row', 'detail'])

@@ -123,7 +123,7 @@ export function mcpCollection(mcp: McpService): CollectionSpec {
       order: 40,
       icon: 'link',
     },
-    records: { update: true, create: true, delete: true },
+    records: { update: true, create: true, delete: true, allocateId: false },
     schema: {
       labelField: 'title',
       columns: ['title', 'transport', 'status', 'enabled', 'command', 'args', 'url', 'toolCount', 'totalToolCount', 'allow', 'deny', 'error'],

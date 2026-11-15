@@ -5,6 +5,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { Context } from 'cordis'
+import { isAllocatedRecordId } from '@biu/type-file-system'
 import { buildDeliverText, coerceAssigneeArg, computeBlocked, computeBlockedBy, computeNextTriggerAt, computeTurnUsage, defaultTrigger, depsSatisfied, deriveExecution, deriveExecutionFromReports, MAX_REPORT_PROMPTS, normalizeTrigger, parseCron, reportBackToCreator, resolveTaskDeliverAssignee, shouldPromptProgress, sumReportUsage, TasksService } from './index.ts'
 
 test('tasks sqlite crud and status move', async () => {
@@ -17,6 +18,8 @@ test('tasks sqlite crud and status move', async () => {
       title: '写需求',
       creator: { kind: 'user', name: '用户' },
     })
+    assert.ok(isAllocatedRecordId(a.id))
+    assert.equal(a.id.startsWith('task_'), false)
     assert.equal(a.status, 'todo')
     assert.equal(a.creator.name, '用户')
     assert.equal(a.assignee, null)

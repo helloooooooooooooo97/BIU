@@ -248,7 +248,7 @@ export function tasksCollection(tasks: TasksLike, recordActions?: TaskRecordActi
         dependsOn: { type: 'multi-ref', label: '依赖', writable: true },
       },
     },
-    records: { update: true, create: true, delete: true },
+    records: { update: true, create: true, delete: true, allocateId: true },
     list: (query) => {
       if (query?.ids?.length) {
         const rows = query.ids.map((id) => tasks.get(id)).filter((row): row is TaskRow => Boolean(row))

@@ -1,7 +1,7 @@
 import { mkdir, unlink } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import type { DbRecord, SchemaFieldValue } from '@biu/type-file-system'
-import { emptySchemaValue, isAssetFileName, normalizeSchemaValue } from '@biu/type-file-system'
+import { allocateRecordId, emptySchemaValue, isAssetFileName, isAssignableRecordId, normalizeSchemaValue } from '@biu/type-file-system'
 import {
   DATA_DIR_NAME,
   adoptCasAssets,
@@ -254,13 +254,11 @@ export class PagesStore {
   async create(fields: Record<string, unknown> = {}): Promise<PageRow> {
     const db = await this.openDb()
     const existing = new Set((db.prepare('SELECT id FROM pages').all() as Array<{ id: string }>).map((row) => row.id))
-    let n = existing.size
-    let id = `p${String(n).padStart(3, '0')}`
-    while (existing.has(id) || !ID_RE.test(id)) {
-      n += 1
-      id = `p${String(n).padStart(3, '0')}`
-    }
-    if (typeof fields.id === 'string' && ID_RE.test(fields.id) && !existing.has(fields.id)) id = fields.id
+    const requested = typeof fields.id === 'string' ? fields.id.trim() : ''
+    let id = requested && isAssignableRecordId(requested) && ID_RE.test(requested) && !existing.has(requested)
+      ? requested
+      : allocateRecordId()
+    while (existing.has(id) || !ID_RE.test(id)) id = allocateRecordId()
     const ts = Date.now()
     const row = applyPatch(emptyRow(id, ts), { ...fields })
     row.id = id

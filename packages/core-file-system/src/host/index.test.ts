@@ -9,7 +9,7 @@ import { join, resolve } from 'node:path'
 import { DatabaseService, apply as applyFileSystem, databaseHttpFailure, listNeedsMatchOverlay, specListQuery } from './index.ts'
 import { FileSystemAssets } from './assets-store.ts'
 import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
-import { REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
+import { isAllocatedRecordId, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 import { dataCollection, isDataOverviewSource } from './data-collection.ts'
 import { tagsCollection } from './tags-collection.ts'
 import { SavedViewsStore, viewsCollection } from './saved-views.ts'
@@ -701,6 +701,53 @@ test('editContent view/str_replace/replace_lines/insert/write', async () => {
   assert.equal((await db.content('/docs/n1')).value, 'done')
 })
 
+test('editContent view projects mention titles and writes drop labels', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const pages = new Map<string, Record<string, unknown>>([['p053', { id: 'p053', title: '现在的标题' }]])
+  const docs = new Map<string, Record<string, unknown>>([
+    ['n1', { id: 'n1', title: 'a', content: '见 [@ id="page/p053" label="未命名页面"]' }],
+  ])
+  db.register({
+    id: 'pages',
+    path: '/pages',
+    schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
+    list: (query) => {
+      const rows = [...pages.values()] as { id: string }[]
+      return query?.ids?.length ? rows.filter((row) => query.ids!.includes(row.id)) : rows
+    },
+    get: (id) => pages.get(id) as { id: string } | undefined,
+  })
+  db.register({
+    id: 'docs',
+    path: '/docs',
+    schema: {
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string', writable: true },
+        content: { type: 'file', writable: true },
+      },
+    },
+    list: () => [...docs.values()] as { id: string }[],
+    get: (id) => docs.get(id) as { id: string } | undefined,
+    records: { update: true },
+    update: (id, patch) => {
+      const next = { ...docs.get(id), ...patch, id }
+      docs.set(id, next)
+      return next as { id: string }
+    },
+  })
+  const viewed = await db.editContent('/docs/n1', { command: 'view' })
+  assert.match(String(viewed.text), /label="现在的标题"/)
+  const replaced = await db.editContent('/docs/n1', {
+    command: 'str_replace',
+    old_str: '见 [@ id="page/p053" label="现在的标题"]',
+    new_str: '见 [@ id="page/p053" label="不要存"] 了',
+  })
+  assert.equal(replaced.ok, true)
+  assert.equal((await db.content('/docs/n1')).value, '见 [@ id="page/p053"] 了')
+})
+
 test('editContent find_replace supports unique, all and regex modes', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
@@ -1074,10 +1121,73 @@ test('db_create tool ignores empty companion records instead of creating blank r
     records: [{ title: '目标技能' }, {}],
   })
 
-  assert.deepEqual(received, [{ title: '目标技能' }])
+  assert.equal(received.length, 1)
+  assert.equal(received[0]?.title, '目标技能')
+  assert.ok(isAllocatedRecordId(String(received[0]?.id ?? '')))
   received.length = 0
   await db.create('/drafts', [{}, {}])
-  assert.deepEqual(received, [{}])
+  assert.equal(received.length, 1)
+  assert.ok(isAllocatedRecordId(String(received[0]?.id ?? '')))
+})
+
+test('db_create keeps requested id when unused; allocateId false does not stamp random ids', async () => {
+  const ctx = new Context()
+  await ctx.plugin(tools)
+  class HttpStub extends Service {
+    constructor(c: Context) {
+      super(c, 'http')
+    }
+    route() {}
+  }
+  new HttpStub(ctx)
+  await ctx.plugin({ inject: ['tools', 'http'], apply: applyFileSystem })
+  const db = ctx.get('database') as DatabaseService
+  const notes: DbRecord[] = []
+  db.register({
+    id: 'draft-ids',
+    path: '/draft-ids',
+    schema: {
+      labelField: 'title',
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string', writable: true },
+      },
+    },
+    records: { create: true },
+    list: () => notes,
+    get: (id) => notes.find((row) => row.id === id) ?? null,
+    create: (rows) => {
+      const created = rows.map((row) => ({ id: String(row.id), title: row.title }))
+      notes.push(...created)
+      return created
+    },
+  })
+  const named = await db.create('/draft-ids', [{ id: 'keep-me', title: '指定' }])
+  assert.equal(named.items[0]?.value.id, 'keep-me')
+  const auto = await db.create('/draft-ids', [{ title: '随机' }])
+  assert.ok(isAllocatedRecordId(String(auto.items[0]?.value.id ?? '')))
+
+  const own: Array<Record<string, unknown>> = []
+  db.register({
+    id: 'own-ids',
+    path: '/own-ids',
+    schema: {
+      labelField: 'title',
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string', writable: true },
+      },
+    },
+    records: { create: true, allocateId: false },
+    list: () => [],
+    get: () => null,
+    create: (rows) => {
+      own.push(...rows)
+      return rows.map((row, index) => ({ id: String(row.id ?? `own-${index}`), ...row }))
+    },
+  })
+  await db.create('/own-ids', [{ title: '标签式' }])
+  assert.deepEqual(own, [{ title: '标签式' }])
 })
 
 test('title-only plugin list still returns action when flags', async () => {

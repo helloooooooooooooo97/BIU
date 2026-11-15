@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context, Service } from 'cordis'
 import type { CollectionSpec } from '@biu/type-file-system'
+import { isAllocatedRecordId } from '@biu/type-file-system'
 import * as tools from '@biu/host-tools'
 import * as fsPlugin from '@biu/host-fs'
 import * as page from './index.ts'
@@ -71,7 +72,7 @@ test('page plugin stores pages in SQLite under .biu', async () => {
   assert.equal(fields.propViews?.writable, true)
   assert.equal(fields.layouts?.writable, true)
   assert.deepEqual(registered[0]?.schema.columns, ['title', 'tag', 'createdBy', 'updatedBy'])
-  assert.deepEqual(registered[0]?.records, { update: true, create: true, delete: true })
+  assert.deepEqual(registered[0]?.records, { update: true, create: true, delete: true, allocateId: true })
   assert.equal(registered[1]?.path, '/editor-blocks')
   assert.equal(registered[1]?.label, '组件')
   assert.equal(registered[1]?.view?.title, '组件')
@@ -93,6 +94,7 @@ test('page plugin stores pages in SQLite under .biu', async () => {
     tags: ['docs', 'wip'],
   }])
   assert.deepEqual(created[0]?.tags, [])
+  assert.ok(isAllocatedRecordId(String(created[0]?.id ?? '')))
   assert.equal(created[0]?.title, '新页面')
   assert.equal(created[0]?.notes, '# 标题\n内容')
   const linked = await spec.update!(created[0]!.id, { parentId: 'p999', dependsOn: ['p001'] })

@@ -545,7 +545,7 @@ export function viewsCollection(
       order: 17,
       icon: 'eye',
     },
-    records: { update: true, create: true, delete: true },
+    records: { update: true, create: true, delete: true, allocateId: false },
     schema: {
       labelField: 'title',
       columns: ['title', 'table', 'mode', 'sortField', 'sortDir', 'query', 'groupBy', 'pageSize'],

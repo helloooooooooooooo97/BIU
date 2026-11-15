@@ -75,7 +75,7 @@ export function workspaceMembersCollection(
       order: 18,
       icon: 'users',
     } } : {}),
-    records: { update: true, create: true, delete: true },
+    records: { update: true, create: true, delete: true, allocateId: false },
     schema: {
       labelField: 'title',
       columns: ['title', 'email', 'role', 'membershipKind', 'joinedAt'],

@@ -189,7 +189,7 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec {
       order: 18,
       icon: 'cursor',
     },
-    records: { update: true, create: Boolean(sessions.create), delete: true },
+    records: { update: true, create: Boolean(sessions.create), delete: true, allocateId: false },
     schema: {
       labelField: 'title',
       contentField: 'events',

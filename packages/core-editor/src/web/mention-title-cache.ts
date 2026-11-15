@@ -1,0 +1,103 @@
+import { MENTION_KIND_PATH, parseMentionId } from '@biu/core-file-system/mention-markup'
+
+const titles = new Map<string, string>()
+const listeners = new Set<() => void>()
+const pending = new Set<string>()
+let inflight: Promise<void> | null = null
+let bound = false
+
+function notify() {
+  for (const listener of listeners) listener()
+}
+
+export function peekMentionTitle(id: string) {
+  return titles.get(id)
+}
+
+export function rememberMentionTitle(id: string, title: string) {
+  const parsed = parseMentionId(id)
+  if (!parsed) return
+  const key = `${parsed.kind}/${parsed.recordId}`
+  const next = title.trim()
+  if (!next || titles.get(key) === next) return
+  titles.set(key, next)
+  notify()
+}
+
+export function subscribeMentionTitles(listener: () => void) {
+  listeners.add(listener)
+  bindChange()
+  return () => {
+    listeners.delete(listener)
+  }
+}
+
+export function requestMentionTitles(ids: Iterable<string>) {
+  bindChange()
+  let queued = false
+  for (const raw of ids) {
+    const parsed = parseMentionId(raw)
+    if (!parsed) continue
+    const key = `${parsed.kind}/${parsed.recordId}`
+    if (titles.has(key) || pending.has(key)) continue
+    pending.add(key)
+    queued = true
+  }
+  if (queued) void flushMentionTitles()
+}
+
+function bindChange() {
+  if (bound || typeof window === 'undefined') return
+  bound = true
+  window.addEventListener('fsdb:change', () => {
+    titles.clear()
+    notify()
+  })
+}
+
+async function flushMentionTitles() {
+  if (inflight) return inflight
+  inflight = (async () => {
+    while (pending.size) {
+      const batch = [...pending]
+      pending.clear()
+      const groups = new Map<string, string[]>()
+      for (const id of batch) {
+        const parsed = parseMentionId(id)
+        if (!parsed) continue
+        const path = MENTION_KIND_PATH[parsed.kind]
+        const ids = groups.get(path) ?? []
+        if (!ids.includes(parsed.recordId)) ids.push(parsed.recordId)
+        groups.set(path, ids)
+      }
+      await Promise.all(
+        [...groups].map(async ([path, ids]) => {
+          const params = new URLSearchParams({
+            path,
+            limit: String(Math.max(ids.length, 1)),
+            offset: '0',
+            q: '',
+            sort: 'title',
+            dir: 'asc',
+            filter: JSON.stringify({ $ids: ids }),
+            columns: 'id,title',
+          })
+          const res = await fetch(`/api/db/list?${params}`)
+          const body = (await res.json()) as { items?: Array<Record<string, unknown>> }
+          const items = Array.isArray(body.items) ? body.items : []
+          for (const row of items) {
+            const recordId = String(row.id ?? '').trim()
+            const title = String(row.title ?? row.name ?? '').trim()
+            if (!recordId || !title) continue
+            const kind = (Object.entries(MENTION_KIND_PATH).find(([, item]) => item === path)?.[0] ?? 'page') as string
+            titles.set(`${kind}/${recordId}`, title)
+          }
+        }),
+      )
+      notify()
+    }
+  })().finally(() => {
+    inflight = null
+  })
+  return inflight
+}

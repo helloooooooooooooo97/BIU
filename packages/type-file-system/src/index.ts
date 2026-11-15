@@ -1,5 +1,12 @@
 export { isAssetFileName, assetNameFromUrl, assetNamesFromMarkdown, assetNamesFromHtml, collectAssetNames, registerBlockAssets, assetNamesFromBlock } from './asset-ref.ts'
 export type { BlockAssetsDecl } from './asset-ref.ts'
+export {
+  ALLOCATED_RECORD_ID_LENGTH,
+  ALLOCATED_RECORD_ID_RE,
+  allocateRecordId,
+  isAllocatedRecordId,
+  isAssignableRecordId,
+} from './record-id.ts'
 
 /** 列类型：登记时声明，Core-File System 按类型渲染。string[] 视为 multi-select。 */
 export type FieldType =
@@ -739,6 +746,11 @@ export type CollectionRecordCaps = {
   update?: boolean
   create?: boolean
   delete?: boolean
+  /**
+   * 新建时是否由文件系统分配短随机 id。缺省 true。
+   * 标签 slug、代理 session、成员账号、MCP、技能、视图等有自己身份的表设 false。
+   */
+  allocateId?: boolean
 }
 
 export type DbRecord = { id: string } & Record<string, unknown>

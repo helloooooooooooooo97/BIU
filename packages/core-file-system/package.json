@@ -23,7 +23,8 @@
     "./tag-host-view": "./src/web/tag-host-view.tsx",
     "./tag-views": "./src/web/tag-views.ts",
     "./sandbox-pick-pane": "./src/web/sandbox-pick-pane.ts",
-    "./sandbox-files": "./src/web/sandbox-files.ts"
+    "./sandbox-files": "./src/web/sandbox-files.ts",
+    "./mention-markup": "./src/mention-markup.ts"
   },
   "dependencies": {
     "@biu/core-pick": "0.1.0",

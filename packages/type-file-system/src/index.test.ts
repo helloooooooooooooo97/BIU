@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { asImageSrc, asImageSrcList, asAttachment, asAttachmentList, asPerson, asPersonList, appendPerson, personKey, actionVisibleToUser, BUILTIN_FIELDS, emptySchemaValue, isEmptySchemaValue, hasCollectionDeleteQuery, isReservedSchemaFieldKey, isReservedSchemaFieldLabel, isSchemaFieldKey, matchSchemaField, normalizeSchemaPack, normalizeSchemaValue, parseAtomicFields, pruneSchemaValue, recordBuiltinValues, REQUIRED_RECORD_FIELD_KEYS, REQUIRED_RECORD_FIELDS, resolveSchemaFieldKey, retagSchemaValue, sanitizeRecordPatch, sanitizeTagValuesPatch, schemaSearchHaystack, TAG_PROPERTY_TYPES, withBuiltinFields } from './index.ts'
+import { allocateRecordId, asImageSrc, asImageSrcList, asAttachment, asAttachmentList, asPerson, asPersonList, appendPerson, personKey, actionVisibleToUser, BUILTIN_FIELDS, emptySchemaValue, isAllocatedRecordId, isAssignableRecordId, isEmptySchemaValue, hasCollectionDeleteQuery, isReservedSchemaFieldKey, isReservedSchemaFieldLabel, isSchemaFieldKey, matchSchemaField, normalizeSchemaPack, normalizeSchemaValue, parseAtomicFields, pruneSchemaValue, recordBuiltinValues, REQUIRED_RECORD_FIELD_KEYS, REQUIRED_RECORD_FIELDS, resolveSchemaFieldKey, retagSchemaValue, sanitizeRecordPatch, sanitizeTagValuesPatch, schemaSearchHaystack, TAG_PROPERTY_TYPES, withBuiltinFields } from './index.ts'
 
 test('asImageSrc keeps http, data:image, and same-origin image paths', () => {
   assert.equal(asImageSrc('https://example.com/a.png'), 'https://example.com/a.png')
@@ -359,4 +359,16 @@ test('sanitizeTagValuesPatch maps labels and rejects read-only tag fields', () =
   assert.throws(() => sanitizeTagValuesPatch(pack, { 奥斯卡: true }), /unknown tag field/)
   assert.throws(() => sanitizeTagValuesPatch(pack, { locked: 'x' }), /field not writable: locked/)
   assert.throws(() => sanitizeTagValuesPatch(pack, { count: 'nope' }), /expected number/)
+})
+
+test('allocateRecordId is a short lowercase id; legacy page/task ids stay assignable', () => {
+  const a = allocateRecordId()
+  const b = allocateRecordId()
+  assert.ok(isAllocatedRecordId(a))
+  assert.ok(isAllocatedRecordId(b))
+  assert.notEqual(a, b)
+  assert.equal(isAssignableRecordId('p053'), true)
+  assert.equal(isAssignableRecordId('task_x'), true)
+  assert.equal(isAllocatedRecordId('p053'), false)
+  assert.equal(isAssignableRecordId('../x'), false)
 })
