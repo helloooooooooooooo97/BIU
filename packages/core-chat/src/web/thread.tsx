@@ -620,6 +620,7 @@ export const ChatNodeList = memo(function ChatNodeList({
   sessions = [],
   dispatchedTasksByTurn = {},
   sessionId,
+  newestFirst = false,
 }: {
   nodes: ChatNode[]
   onInspect: (callId: string) => void
@@ -630,6 +631,7 @@ export const ChatNodeList = memo(function ChatNodeList({
     import('@biu/web-session-view').DispatchedTaskRow[]
   >
   sessionId?: string
+  newestFirst?: boolean
 }) {
   const [detailsOpenByReply, setDetailsOpenByReply] = useState<Record<string, boolean>>({})
 
@@ -637,8 +639,9 @@ export const ChatNodeList = memo(function ChatNodeList({
     setDetailsOpenByReply((prev) => ({ ...prev, [replyId]: !prev[replyId] }))
   }, [])
 
-  const turns = useMemo(() => groupNodesIntoTurns(nodes), [nodes])
-  const liveTurnId = turns.at(-1)?.[0]?.id
+  const grouped = useMemo(() => groupNodesIntoTurns(nodes), [nodes])
+  const liveTurnId = grouped.at(-1)?.[0]?.id
+  const turns = newestFirst ? [...grouped].reverse() : grouped
 
   return (
     <div className="chat-node-list">

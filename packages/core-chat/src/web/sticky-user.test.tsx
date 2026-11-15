@@ -39,6 +39,16 @@ function sampleNodes(): ChatNode[] {
 }
 
 describe('sticky user message markers', () => {
+  it('puts the newest turn first when newestFirst is set', () => {
+    const onInspect = vi.fn()
+    const onFork = vi.fn(async () => {})
+    render(<ChatNodeList nodes={sampleNodes()} newestFirst onInspect={onInspect} onFork={onFork} />)
+    const turns = document.querySelectorAll('[data-testid="chat-turn"]')
+    expect(turns[0]?.getAttribute('data-turn-anchor')).toBe('u-2')
+    expect(turns[1]?.getAttribute('data-turn-anchor')).toBe('u-1')
+    expect(turns[0]?.className).toMatch(/is-live/)
+  })
+
   it('groups one user + following reply into a turn sticky container', () => {
     const turns = groupNodesIntoTurns(sampleNodes())
     expect(turns).toHaveLength(2)

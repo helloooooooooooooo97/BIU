@@ -335,6 +335,7 @@ export class SessionViewService extends Service {
   /** 切会话时画面还是上一段：ingest 不能往旧 events 上叠新 session */
   private holdPreviousThread = false
   private sessionsRefreshTimer: ReturnType<typeof setTimeout> | null = null
+  private recordDetailTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(ctx: Context) {
     super(ctx, 'sessionView')
@@ -354,7 +355,10 @@ export class SessionViewService extends Service {
       window.addEventListener('biu:account-token', onToken)
       this.ctx.effect(() => () => window.removeEventListener('biu:account-token', onToken))
     }
-    this.ctx.effect(() => () => this.stopDispatchedPoll())
+    this.ctx.effect(() => () => {
+      this.stopDispatchedPoll()
+      if (this.recordDetailTimer != null) clearTimeout(this.recordDetailTimer)
+    })
     if (typeof window !== 'undefined') {
       const onLibrary = () => this.scheduleRefreshSessions()
       window.addEventListener('fsdb:change', onLibrary)
@@ -612,6 +616,7 @@ export class SessionViewService extends Service {
     this.stashCurrent()
     if (event.type === 'turn/end' || event.type === 'turn/start') this.syncDispatchedPoll()
     if (event.type === 'turn/end') void this.refreshDispatchedUsage()
+    if (event.type === 'user/message' || event.type === 'turn/end') this.scheduleRecordDetailBump(sessionId)
     // 检查器打开后 trajectoryLive=true：即使 URL 仍是 chat 也要刷新右侧轨迹
     if (this.wantsTrajectory()) void this.refreshTrajectoryIndex()
     this.scheduleRefreshSessions()
@@ -836,6 +841,16 @@ export class SessionViewService extends Service {
 
   removeApproval(id: string) {
     this.replace({ approvals: this.value.approvals.filter((row) => row.id !== id) })
+  }
+
+  private scheduleRecordDetailBump(sessionId: string) {
+    if (typeof window === 'undefined' || !sessionId) return
+    if (this.recordDetailTimer != null) clearTimeout(this.recordDetailTimer)
+    this.recordDetailTimer = setTimeout(() => {
+      this.recordDetailTimer = null
+      window.dispatchEvent(new CustomEvent('fsdb:detail-refresh', { detail: { path: '/agents', id: sessionId } }))
+      window.dispatchEvent(new Event('fsdb:change'))
+    }, 80)
   }
 
   private scheduleRefreshSessions() {

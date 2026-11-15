@@ -488,7 +488,7 @@ export function RecordProperties({ record, schema, collectionPath, writable, chi
   const path = String(collectionPath ?? '').trim()
   const [liveRecord] = useLiveDbRecord(path, record)
   const id = String(record.id ?? '').trim()
-  const fallback = path === TAGS_COLLECTION_PATH ? 'table' : 'doc'
+  const fallback = path === TAGS_COLLECTION_PATH ? 'table' : path === '/agents' ? 'chat' : 'doc'
   const layout = useActiveRecordLayout(path, id, fallback)
   const listed = parseRecordSandboxes(liveRecord.propViews)
   const stored = parseRecordLayouts(liveRecord.layouts, fallback)

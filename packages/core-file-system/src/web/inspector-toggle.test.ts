@@ -1161,6 +1161,11 @@ test('open detail still reloads body when the collection changes', () => {
   assert.match(browser, /window.dispatchEvent\(new Event\('fsdb:change'\)\)/)
   assert.match(browser, /onRetryBody=\{refreshOpenDetail\}/)
   assert.match(browser, /invalidateListReads\(\)/)
+  assert.match(browser, /fsdb:detail-refresh/)
+  assert.match(
+    browser,
+    /readJson<\{ value\?: unknown; version\?: number \}>\(`\/api\/db\/content\?path=\$\{encodeURIComponent\(path\)\}`, undefined, \{ fresh: true \}\)/,
+  )
   assert.match(browser, /readJson<\{ value\?: DbRecord \}>\(`\/api\/db\/read\?path=\$\{encodeURIComponent\(`\$\{dataPath\}\/\$\{id\}`\)\}`, undefined, \{ fresh: true \}\)/)
   assert.match(browser, /mapListedRecords\(\(item\) => \(item.id === row.id \? overlayListedRow\(item, row\) : item\)\)/)
 })

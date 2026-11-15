@@ -111,7 +111,7 @@ export function RecordDetailBar({
 }: FsDetailBarProps) {
   const path = String(collectionPath ?? '').trim() || '/pages'
   const pageRecord = path === '/pages'
-  const fallback = path === '/tags' ? 'table' : 'doc'
+  const fallback = path === '/tags' ? 'table' : path === '/agents' ? 'chat' : 'doc'
   const present = usePagePresentMode(record.id)
   const pageViews = usePageViews(record.id)
   const pageLayouts = usePageLayouts(record.id)
@@ -178,7 +178,10 @@ export function RecordDetailBar({
   const LayoutIcon = layoutKindIcon(activeLayout.kind)
   const PropIcon = propPresentIcon(propViewId)
   const filterOn = pageRecord ? pageFilterActive(view) : activeLayout.filterKinds.length > 0
-  const sortOn = pageRecord ? view.sort !== 'doc' : activeLayout.sort !== 'doc'
+  const rawSort = pageRecord ? view.sort : activeLayout.sort
+  const defaultSortId = detailTools.sorts?.[0]?.id ?? 'doc'
+  const currentSort = detailTools.sorts?.some((item) => item.id === rawSort) ? rawSort : defaultSortId
+  const sortOn = currentSort !== defaultSortId
   const props = Object.entries(schema?.fields ?? {})
     .filter(([key, field]) => key !== 'emoji' && key !== schema?.labelField && field.type !== 'file')
     .map(([key, field]) => ({ key, label: field.label ?? key }))
@@ -782,7 +785,7 @@ export function RecordDetailBar({
                   <Row
                     key={item.id}
                     label={item.label}
-                    on={(pageRecord ? view.sort : activeLayout.sort) === item.id}
+                    on={currentSort === item.id}
                     onToggle={() => void patchLayout({ sort: item.id as typeof activeLayout.sort })}
                   />
                 ))}

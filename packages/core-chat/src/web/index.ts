@@ -100,6 +100,7 @@ export function apply(ctx: Context) {
     const ui = inner.get('databaseUi') as DatabaseUi
     let sessions: { dispose: () => void } | undefined
     let chatView: { dispose: () => void } | undefined
+    let chatTools: { dispose: () => void } | undefined
     void import('./sessions-chrome.tsx').then((mod) => {
       sessions = ui.decorate('/agents', mod.sessionsChrome())
       chatView = ui.registerContentView('/agents', {
@@ -107,10 +108,12 @@ export function apply(ctx: Context) {
         label: '聊天',
         plugin: 'core-chat',
         Icon: ChatBubbleLeftRightIcon,
-        Body: mod.SessionRecordChat,
+        Body: (props) => createElement(mod.SessionRecordChat, { ...props, sessionView: view }),
       })
+      chatTools = ui.registerDetailTools('/agents', mod.AGENTS_DETAIL_TOOLS)
     })
     return () => {
+      chatTools?.dispose()
       chatView?.dispose()
       sessions?.dispose()
     }

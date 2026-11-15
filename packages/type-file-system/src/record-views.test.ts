@@ -4,6 +4,8 @@ import { allocateRecordSandbox, defaultRecordLayout, listedRecordLayouts, parseR
 
 test('record layouts keep a builtin 默认视图 for every file', () => {
   assert.equal(defaultRecordLayout().name, '默认视图')
+  assert.equal(defaultRecordLayout().sort, 'doc')
+  assert.equal(defaultRecordLayout('chat').sort, 'time-desc')
   const parsed = parseRecordLayouts([{ id: 'need', name: '需求', contentViewId: 'outline', propViewId: 'card1' }])
   assert.equal(parsed[0]?.id, 'need')
   assert.equal(listedRecordLayouts(parsed)[0]?.builtin, true)

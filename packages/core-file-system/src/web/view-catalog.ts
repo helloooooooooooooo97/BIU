@@ -206,7 +206,7 @@ function defaultOptions(collectionPath: string, record: DbRecord, fieldKey: View
 function defaultSelected(collectionPath: string, record: DbRecord, fieldKey: ViewCatalogFieldKey) {
   const path = collectionOf(collectionPath)
   const id = String(record.id ?? '').trim()
-  const layout = getActiveRecordLayout(path, id, path === TAGS_COLLECTION_PATH ? 'table' : 'doc')
+  const layout = getActiveRecordLayout(path, id, fallbackContent(path))
   if (fieldKey === 'layouts') return layout.id
   if (fieldKey === 'propViews') return layout.propViewId || DEFAULT_RECORD_PROP_VIEW_ID
   return layout.contentViewId
@@ -222,10 +222,10 @@ function defaultSelect(collectionPath: string, record: DbRecord, fieldKey: ViewC
     return
   }
   if (fieldKey === 'propViews') {
-    void patchActiveRecordLayout(path, id, { propViewId: next }, path === TAGS_COLLECTION_PATH ? 'table' : 'doc')
+    void patchActiveRecordLayout(path, id, { propViewId: next }, fallbackContent(path))
     return
   }
-  void patchActiveRecordLayout(path, id, { contentViewId: next }, path === TAGS_COLLECTION_PATH ? 'table' : 'doc')
+  void patchActiveRecordLayout(path, id, { contentViewId: next }, fallbackContent(path))
 }
 
 export function listViewCatalogOptions(collectionPath: string, record: DbRecord, fieldKey: string): ViewCatalogOption[] {
@@ -264,7 +264,7 @@ export function selectViewCatalog(collectionPath: string, record: DbRecord, fiel
 }
 
 function fallbackContent(path: string) {
-  return path === TAGS_COLLECTION_PATH ? 'table' : 'doc'
+  return path === TAGS_COLLECTION_PATH ? 'table' : path === '/agents' ? 'chat' : 'doc'
 }
 
 async function writeRecordCatalog(

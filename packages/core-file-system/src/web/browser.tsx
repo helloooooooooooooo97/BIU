@@ -2539,7 +2539,7 @@ export function CollectionBrowser({
     }
     const path = sourceRecordPath(detailRowRef.current, id)
     const gen = ++contentGen.current
-    void readJson<{ value?: unknown; version?: number }>(`/api/db/content?path=${encodeURIComponent(path)}`)
+    void readJson<{ value?: unknown; version?: number }>(`/api/db/content?path=${encodeURIComponent(path)}`, undefined, { fresh: true })
       .then((data) => {
         if (gen !== contentGen.current || (contentWritePending.current.get(path) ?? 0) > 0) return
         if (Number.isInteger(data.version)) contentVersions.current.set(path, data.version!)
@@ -2577,6 +2577,12 @@ export function CollectionBrowser({
     void pullTags()
     pullDetailBody()
     pullDetailRecord()
+    const id = detailIdRef.current
+    if (id) {
+      window.dispatchEvent(
+        new CustomEvent('fsdb:detail-refresh', { detail: { path: dataPath, id } }),
+      )
+    }
   }, [dataPath, pullDetailBody, pullDetailRecord])
   const steppingView = useRef(false)
 

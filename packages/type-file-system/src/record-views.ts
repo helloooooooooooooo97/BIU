@@ -10,7 +10,7 @@ export const SOURCE_RECORD_PROP_VIEW_LABEL = '源码'
 export const HIDDEN_CONTENT_VIEW_ID = 'hidden'
 export const HIDDEN_CONTENT_VIEW_LABEL = '隐藏'
 
-export type RecordLayoutSort = 'doc' | 'title-asc' | 'title-desc' | 'kind'
+export type RecordLayoutSort = 'doc' | 'title-asc' | 'title-desc' | 'kind' | 'time-desc' | 'time-asc'
 
 export type RecordSandboxView = {
   id: string
@@ -33,7 +33,7 @@ export type RecordLayoutView = {
   filterKinds: string[]
 }
 
-const SORTS = new Set<RecordLayoutSort>(['doc', 'title-asc', 'title-desc', 'kind'])
+const SORTS = new Set<RecordLayoutSort>(['doc', 'title-asc', 'title-desc', 'kind', 'time-desc', 'time-asc'])
 
 export function uniqueViewName(base: string, names: Iterable<string>) {
   const taken = new Set(names)
@@ -51,7 +51,7 @@ export function defaultRecordLayout(contentViewId = 'doc'): RecordLayoutView {
     builtin: true,
     contentViewId,
     propViewId: DEFAULT_RECORD_PROP_VIEW_ID,
-    sort: 'doc',
+    sort: contentViewId === 'chat' ? 'time-desc' : 'doc',
     filterKinds: [],
   }
 }

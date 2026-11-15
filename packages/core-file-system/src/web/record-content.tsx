@@ -30,7 +30,7 @@ export function useRecordContentBody(
 ) {
   const path = String(collectionPath ?? '').trim()
   const id = String(record.id ?? '').trim()
-  const fallback = path === TAGS_COLLECTION_PATH ? 'table' : 'doc'
+  const fallback = path === TAGS_COLLECTION_PATH ? 'table' : path === '/agents' ? 'chat' : 'doc'
   const layout = useActiveRecordLayout(path, id, fallback)
   useSyncExternalStore(
     (fn) => getDatabaseUi()?.subscribe(fn) ?? (() => undefined),

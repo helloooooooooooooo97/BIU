@@ -406,7 +406,7 @@ function collectionOf(path?: string) {
 
 export function RecordEditor(props: FsContentProps) {
   const collection = collectionOf(props.path)
-  const fallback = collection === '/tags' ? 'table' : 'doc'
+  const fallback = collection === '/tags' ? 'table' : collection === '/agents' ? 'chat' : 'doc'
   const pagePresent = usePagePresentMode(props.record.id)
   const fsLayout = useActiveRecordLayout(collection, props.record.id, fallback)
   const present = collection === '/pages' ? pagePresent : fsLayout.contentViewId

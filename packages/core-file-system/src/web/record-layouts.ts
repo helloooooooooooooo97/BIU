@@ -209,7 +209,7 @@ export async function addRecordLayout(collectionPath: string, recordId: string, 
     name: uniqueViewName('新视图', listed.map((item) => item.name)),
     contentViewId: fallbackContent,
     propViewId: DEFAULT_RECORD_PROP_VIEW_ID,
-    sort: 'doc',
+    sort: fallbackContent === 'chat' ? 'time-desc' : 'doc',
     filterKinds: [],
   }
   const ok = await saveRecordLayouts(path, id, [...getRecordLayouts(path, id), view])
