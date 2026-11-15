@@ -26,6 +26,7 @@ test('inspector header keeps opened tabs on top and a plus menu on the right', (
   assert.match(inspector, /inspector-empty/)
   assert.match(inspector, /isInspectorHomeOffer/)
   assert.match(inspector, /displayTabs\.some\(\(item\) => isInspectorHomeOffer\(item\.id\)\)/)
+  assert.match(inspector, /inspectorHomeRank\(a\.id\) - inspectorHomeRank\(b\.id\)/)
   assert.doesNotMatch(inspector, /inspector-empty-list[\s\S]*toolTabs\.map/)
   assert.doesNotMatch(inspector, /选择要看的内容/)
   assert.doesNotMatch(inspector, /点右上角加号/)

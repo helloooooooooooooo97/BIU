@@ -160,7 +160,7 @@ test('desktop keeps only records the signed-in accounts can read', async () => {
   remote.authorization.attach(
     { type: 'account', accountId: cara.id, workspaceId: workspace.id },
     page(workspace.id, 'cara-private'),
-    { ownership: 'personal', accessMode: 'private' },
+    { accessMode: 'private' },
   )
   remote.sync({
     actorId: cara.id,
@@ -174,7 +174,7 @@ test('desktop keeps only records the signed-in accounts can read', async () => {
   remote.authorization.attach(
     { type: 'account', accountId: bob.id, workspaceId: workspace.id },
     page(workspace.id, 'shared'),
-    { ownership: 'personal', accessMode: 'private' },
+    { accessMode: 'private' },
   )
   remote.authorization.grant(bob.id, page(workspace.id, 'shared'), 'account', ada.id, 'viewer')
   remote.sync({

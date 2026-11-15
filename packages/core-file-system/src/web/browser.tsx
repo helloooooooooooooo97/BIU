@@ -149,7 +149,7 @@ import { DataSidebarShell } from './data-sidebar-shell.tsx'
 import { builtinAllViewId, catalogLockFilters, collectionNoun, displayNameForView, isBuiltinAllViewId, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stampRecordId, stampRowOpenTarget, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, moveInspectorRecordsToTrash, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
-import { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE, claimTableCellPick, consumePendingTablePane, firstTableTitleCell, peekPendingTablePane, moveTableCell, readTablePaneRest, rememberTablePaneRest, requestTablePaneFocus, tableActionArrowLeave, tableActionButtons, tableActionButtonStep, tableClearKey, tableClearedValue, tableKeyDir, tableKeyFromEditingTarget, tableNavKeys, tablePaneFromEvent, tablePaneHotkey, tablePaneOther, tableTitleOpenWhere, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
+import { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE, claimTableCellPick, consumePendingTablePane, firstTableTitleCell, peekPendingTablePane, moveTableCell, readTablePaneRest, rememberTablePaneRest, requestTablePaneFocus, tableActionArrowLeave, tableActionButtons, tableActionButtonStep, tableClearKey, tableClearedValue, tableCreateKey, tableKeyDir, tableKeyFromEditingTarget, tableNavKeys, tablePaneFromEvent, tablePaneHotkey, tablePaneOther, tableTitleOpenWhere, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
 import { focusRecordTitleNear } from './title-content-nav.ts'
 import { isViewCatalogField, selectedViewCatalogOption } from './view-catalog.ts'
 import { jumpTag, loadTags, pullTags, subscribeTags } from './tag-catalog.ts'
@@ -1915,6 +1915,8 @@ export function CollectionBrowser({
   const [, setHoldNav] = useState(0)
   const collectionPathRef = useRef(collectionPath)
   collectionPathRef.current = collectionPath
+  const dataPathRef = useRef(dataPath)
+  dataPathRef.current = dataPath
   const pendingPathQueryRef = useRef<PendingPathQuery | null>(null)
   const adoptListCacheForViewRef = useRef<(path: string, view: SavedView | null | undefined) => void>(() => undefined)
   adoptListCacheForViewRef.current = (path, view) => {
@@ -2018,6 +2020,9 @@ export function CollectionBrowser({
       adoptView(next, cached.stat?.schema)
     } else {
       // 上一张表的 shareScope 组（私人/空间）不能顶到新表 URL 上，否则看起来像同一张表在重分组。
+      // 成员表没有分享列：若 groupBy 还留着 shareScope，会走空组桶，主区只剩表头。
+      setGroupBy(next?.groupBy ?? '')
+      setGroupBuckets([])
       releaseHoldOnPaintRef.current = false
       tableHoldRef.current = emptyListHold(tablePaintSnapshotRef.current, next, dataPath)
       pendingPathQueryRef.current = next
@@ -2269,11 +2274,14 @@ export function CollectionBrowser({
     tableHoldRef.current = null
   }
   const reload = useCallback(async (opts?: { force?: boolean }) => {
-    if (!opts?.force && !routeViewReadyRef.current) return true
+    const waitingHold = Boolean(pendingPathQueryRef.current || tableHoldRef.current)
+    if (!opts?.force && !waitingHold && !routeViewReadyRef.current) return true
     if (!opts?.force && Date.now() < quietUntil.current) return true
     const hit = reloadInflightRef.current
     if (!opts?.force && hit?.key === reloadKey) return hit.promise
     const gen = ++reloadGen.current
+    const fetchPath = dataPath
+    const staleFetch = () => gen !== reloadGen.current || dataPathRef.current !== fetchPath
     const promise = (async () => {
     const pending = pendingPathQueryRef.current
     const switching = Boolean(pending || tableHoldRef.current)
@@ -2372,7 +2380,7 @@ export function CollectionBrowser({
         if (cachedKeys.length) {
           const [statResult, grouped] = await Promise.all([nextStatPromise, loadGroups(cachedSchema)])
           nextStat = statResult
-          if (gen !== reloadGen.current) return true
+          if (staleFetch()) return true
           if (grouped) {
             listed = grouped
             buckets = grouped.buckets
@@ -2381,9 +2389,9 @@ export function CollectionBrowser({
           }
         } else {
           nextStat = await nextStatPromise
-          if (gen !== reloadGen.current) return true
+          if (staleFetch()) return true
           const grouped = await loadGroups(nextStat.schema)
-          if (gen !== reloadGen.current) return true
+          if (staleFetch()) return true
           if (grouped) {
             listed = grouped
             buckets = grouped.buckets
@@ -2396,7 +2404,7 @@ export function CollectionBrowser({
         nextStat = statResult
         listed = ungrouped
       }
-      if (gen !== reloadGen.current) return true
+      if (staleFetch()) return true
       const nextSchema = listed.schema ?? nextStat.schema
       const pendingView = pendingPathQueryRef.current
       pendingPathQueryRef.current = null
@@ -2484,7 +2492,7 @@ export function CollectionBrowser({
       if (!listReadySent.current) listReadySent.current = true
       return true
     } catch (err) {
-      if (gen !== reloadGen.current) return false
+      if (staleFetch()) return false
       pendingPathQueryRef.current = null
       tableHoldRef.current = null
       setError(String(err))
@@ -2497,6 +2505,9 @@ export function CollectionBrowser({
       return await promise
     } finally {
       if (reloadInflightRef.current?.promise === promise) reloadInflightRef.current = null
+      if ((pendingPathQueryRef.current || tableHoldRef.current) && !reloadInflightRef.current) {
+        void reloadRef.current({ force: true })
+      }
     }
   }, [activeViewId, collectionPath, customView, dataPath, tagCatalog, fetchQuery, groupBy, groupFillKeys, listColumns, listIdentityKey, queryFilters, page, pageSize, reloadKey, sortDir, sortField, sorts, wrapCells, showTree])
   const reloadRef = useRef(reload)
@@ -2813,7 +2824,7 @@ export function CollectionBrowser({
       if (!needsLoad) return
     }
     if (routeRecordId && loadedIdentityRef.current === listIdentityKey) return
-    if (!routeViewReadyRef.current) return
+    if (!routeViewReadyRef.current && !pendingPathQueryRef.current && !tableHoldRef.current) return
     void reloadRef.current({ force: needsLoad })
   }, [listIdentityKey, reloadKey, routeRecordId, routeViewReady])
 
@@ -4331,7 +4342,10 @@ export function CollectionBrowser({
       quietUntil.current = Date.now() + 2000
       if (isDataOverview) setViaDataCrumbs(true, activeViewId)
       if (activeViewId && !isDataOverview) rememberInspectorWorkingView(targetPath, activeViewId)
-      window.setTimeout(() => showRecordInInspector(targetPath, sourceId, isDataOverview ? undefined : activeViewId), 0)
+      window.setTimeout(() => {
+        showRecordInInspector(targetPath, sourceId, isDataOverview ? undefined : activeViewId)
+        landCreatedTitleCell(String(id))
+      }, 0)
     } catch (err) {
       setError(String(err))
     }
@@ -5172,6 +5186,21 @@ export function CollectionBrowser({
     return Boolean(pageRef.current)
   }
 
+  function landCreatedTitleCell(rowId: string) {
+    const keys = tableNavKeys(columns)
+    const label = schemaRef.current?.labelField
+    const key = label && keys.includes(label) ? label : keys[0]
+    if (!key) return
+    const cursor = { id: rowId, key }
+    cellPickRef.current = cursor
+    setCellPickEpoch((n) => n + 1)
+    const go = () => {
+      landTableCell(cursor)
+      enterTableCell(cursor)
+    }
+    requestAnimationFrame(go)
+  }
+
   function landFirstTableCell(editTitle = false) {
     const pane = embed ? 'inspector' : 'main'
     if (!tablePaneOwnsFocus(pane)) return false
@@ -5230,6 +5259,12 @@ export function CollectionBrowser({
         event.preventDefault()
         table?.focus({ preventScroll: true })
       }
+      return
+    }
+    if (tableCreateKey({ key: event.key, shift: event.shiftKey, meta: event.metaKey, ctrl: event.ctrlKey, alt: event.altKey })) {
+      if (!canCreate) return
+      event.preventDefault()
+      void createRecord()
       return
     }
     if (actionBtn instanceof HTMLElement && table?.contains(actionBtn) && (event.key === 'Enter' || event.key === ' ')) return

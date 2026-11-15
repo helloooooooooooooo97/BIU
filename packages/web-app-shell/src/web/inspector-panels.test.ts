@@ -1,19 +1,20 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { inspectorPanelMatches, inspectorViewProps, inspectorTabCollectionPath, inspectorTabIsOpen, inspectorPlusPinRank, isInspectorHomeOffer, pruneOpenedForCollections, resolveInspectorTab, rememberedInspectorTab } from './inspector-panels.ts'
+import { inspectorPanelMatches, inspectorViewProps, inspectorTabCollectionPath, inspectorTabIsOpen, inspectorPlusPinRank, inspectorHomeRank, isInspectorHomeOffer, pruneOpenedForCollections, resolveInspectorTab, rememberedInspectorTab } from './inspector-panels.ts'
 
 test('inspector home only lists the four core collections', () => {
   assert.equal(isInspectorHomeOffer('database:/agents'), true)
-  assert.equal(isInspectorHomeOffer('database:/tasks'), true)
   assert.equal(isInspectorHomeOffer('database:/pages'), true)
   assert.equal(isInspectorHomeOffer('database:/tags'), true)
+  assert.equal(isInspectorHomeOffer('database:/plugins'), true)
+  assert.equal(isInspectorHomeOffer('database:/tasks'), false)
   assert.equal(isInspectorHomeOffer('database:/data'), false)
   assert.equal(isInspectorHomeOffer('database:/mcp'), false)
   assert.equal(isInspectorHomeOffer('database:/skills'), false)
-  assert.equal(isInspectorHomeOffer('database:/plugins'), false)
   assert.equal(isInspectorHomeOffer('database:/editor-blocks'), false)
   assert.equal(isInspectorHomeOffer('traj'), false)
   assert.equal(isInspectorHomeOffer('usage'), false)
+  assert.ok(inspectorHomeRank('database:/tags') < inspectorHomeRank('database:/plugins'))
 })
 
 test('inspector plus menu pins trajectory and usage first', () => {

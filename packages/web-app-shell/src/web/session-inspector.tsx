@@ -27,7 +27,7 @@ import { useSlotEntries } from '@biu/web-slots'
 import type { SlotsService } from '@biu/web-slots'
 import { inspectorTabFromEvent, requestInspectorAction, shellColumnStartWidth } from './chat-overlay.ts'
 import { getInspectorCaption, getInspectorCaptionVersion, subscribeInspectorCaptions } from './inspector-captions.ts'
-import { inspectorPanelMatches, inspectorPlusPinRank, inspectorViewProps, isInspectorHomeOffer, nextRepeatableTabId, pruneOpenedForCollections, resolveInspectorTab, slotTabId } from './inspector-panels.ts'
+import { inspectorHomeRank, inspectorPanelMatches, inspectorPlusPinRank, inspectorViewProps, isInspectorHomeOffer, nextRepeatableTabId, pruneOpenedForCollections, resolveInspectorTab, slotTabId } from './inspector-panels.ts'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import {
@@ -651,6 +651,8 @@ export const SessionInspector = memo(function SessionInspector({
               {displayTabs
                 .filter((item) => isInspectorHomeOffer(item.id))
                 .filter((item) => item.repeatable || !opened.some((id) => slotTabId(id) === item.id))
+                .slice()
+                .sort((a, b) => inspectorHomeRank(a.id) - inspectorHomeRank(b.id))
                 .map((item) => (
                   <button
                     key={item.id}

@@ -202,7 +202,6 @@ export const BIU_TABLES: Record<string, TableSpec> = {
       'workspace_id',
       'collection',
       'record_id',
-      'ownership',
       'owner_account_id',
       'access_mode',
       'member_default_role',
@@ -302,7 +301,7 @@ export const BIU_TABLES: Record<string, TableSpec> = {
   },
 }
 
-export const LATEST_BIU_SCHEMA = 45
+export const LATEST_BIU_SCHEMA = 46
 
 export const CREATE_CORE_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -627,7 +626,6 @@ CREATE TABLE IF NOT EXISTS resource_policies (
   workspace_id TEXT NOT NULL,
   collection TEXT NOT NULL,
   record_id TEXT NOT NULL,
-  ownership TEXT NOT NULL,
   owner_account_id TEXT NOT NULL,
   access_mode TEXT NOT NULL,
   member_default_role TEXT NOT NULL DEFAULT 'viewer',

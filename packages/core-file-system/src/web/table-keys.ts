@@ -26,6 +26,13 @@ export function tableKeyDir(key: string, shift = false): TableKeyDir | null {
   return null
 }
 
+/** 选中格子后：Shift+Enter 与工具栏「新建」相同。⌘Enter / ⌘⇧Enter 留给标题打开。 */
+export function tableCreateKey(opts: { key: string; shift: boolean; meta?: boolean; ctrl?: boolean; alt?: boolean }) {
+  if (opts.key !== 'Enter' || !opts.shift) return false
+  if (opts.meta || opts.ctrl || opts.alt) return false
+  return true
+}
+
 /** 标题格：⌘Enter 当前页打开，⌘⇧Enter 在右侧打开。 */
 export function tableTitleOpenWhere(opts: {
   key: string

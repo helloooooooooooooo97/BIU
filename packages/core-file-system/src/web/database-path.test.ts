@@ -98,11 +98,11 @@ test('members and views are system collections; blocks and facets are index data
   ])
   assert.deepEqual(
     user.map((item) => item.path),
-    ['/agents', '/tasks', '/pages', '/tags'],
+    ['/agents', '/pages', '/tags', '/plugins'],
   )
   assert.deepEqual(
     index.map((item) => item.path),
-    ['/mcp', '/skills', '/editor-blocks', '/views', '/plugins'],
+    ['/tasks', '/mcp', '/skills', '/editor-blocks', '/views'],
   )
   assert.deepEqual(
     system.map((item) => item.path),

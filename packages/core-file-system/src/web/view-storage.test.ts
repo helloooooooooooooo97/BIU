@@ -51,6 +51,8 @@ test('index all views do not group by share', () => {
   assert.equal(all.groupBy, '')
   assert.equal(withViewDisplay('/editor-blocks', { ...all, groupBy: 'shareScope' }).groupBy, '')
   assert.equal(builtinAllView({ path: '/tasks', label: '任务' }).groupBy, 'shareScope')
+  assert.equal(builtinAllView({ path: '/workspace-members', label: '成员' }).groupBy, 'membershipKind')
+  assert.equal(withViewDisplay('/workspace-members', { ...builtinAllView({ path: '/workspace-members' }), groupBy: 'shareScope' }).groupBy, 'membershipKind')
 })
 
 test('views collection still resolves catalog stubs from the route', () => {

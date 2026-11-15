@@ -191,7 +191,7 @@ function schemaFor(spec: CollectionSpec): CollectionSchema {
       writable: false,
       sortable: true,
       enum: ['私人', '空间', '共享'],
-      description: '计算属性。云端空间：私人仅创建者、空间给成员、共享为公开链接。本机空间只有私人和共享，数据都在这台设备上。',
+      description: '计算属性。按当前能进的人：只有创建者是私人，有内部成员是空间，有外部协作者或公开/局域网链接是共享。',
     }
     fields.shareRole = {
       type: 'select',
@@ -807,7 +807,6 @@ type WorkspaceFiles = {
     recordId: string,
     now?: number,
     policy?: {
-      ownership?: 'personal' | 'workspace' | 'shared'
       accessMode?: 'inherit' | 'private' | 'members' | 'restricted'
       memberDefaultRole?: 'viewer' | 'editor'
       parentCollection?: string
@@ -948,17 +947,9 @@ export class DatabaseService extends Service implements Database {
     return [...this.collections.values()].sort((a, b) => a.path.localeCompare(b.path))
   }
 
-  /** 成员只出现在云端空间的系统数据里。本地空间不提供这张表。 */
+  /** 成员表在本地和云端都出现：本机用户自己是成员，局域网访客按设备码列入。 */
   membersInSystemData() {
-    if (isOnlineRuntime()) return true
-    const workspaceId = this.collabStore()?.activeWorkspaceId?.() ?? ''
-    if (!workspaceId) return false
-    try {
-      const account = this.ctx.get('account') as { workspaceLocation?: (id: string) => string } | undefined
-      return account?.workspaceLocation?.(workspaceId) === 'cloud'
-    } catch {
-      return false
-    }
+    return true
   }
 
   publishCollection(item: CollectionSpec): CollectionInfo {
@@ -1281,7 +1272,6 @@ export class DatabaseService extends Service implements Database {
     collection: string,
     recordId: string,
     policy?: {
-      ownership?: 'personal' | 'workspace' | 'shared'
       accessMode?: 'inherit' | 'private' | 'members' | 'restricted'
       memberDefaultRole?: 'viewer' | 'editor'
       parentCollection?: string
@@ -1335,28 +1325,27 @@ export class DatabaseService extends Service implements Database {
 
   rememberScope(collection: string, recordId: string, scope: 'personal' | 'workspace' | 'shared') {
     if (scope === 'shared') {
+      const device = this.deviceWorkspace()
+      this.attachWorkspaceRecord(collection, recordId, {
+        accessMode: device ? 'private' : 'members',
+        ...(!device ? { memberDefaultRole: 'viewer' as const } : {}),
+      })
       this.markPublicView(collection, recordId)
       return
     }
     this.attachWorkspaceRecord(collection, recordId, {
-      ownership: scope === 'workspace' ? 'workspace' : 'personal',
       accessMode: scope === 'workspace' ? 'members' : 'private',
       ...(scope === 'workspace' ? { memberDefaultRole: 'editor' as const } : {}),
     })
     if (scope === 'workspace') this.grantAllMembersEditable(collection, recordId)
   }
 
-  /** 公开链接：无密码，所有人只读查看。 */
+  /** 开启公开/局域网链接。不改协作者归属，关掉链接后仍按创建者和协作者计算。 */
   markPublicView(collection: string, recordId: string) {
-    this.attachWorkspaceRecord(collection, recordId, {
-      ownership: 'shared',
-      accessMode: 'members',
-      memberDefaultRole: 'viewer',
-    })
     try {
       this.shares.upsert({ kind: 'record', collection, recordId, password: null, allowCopy: false })
     } catch {
-      /* 分享库还没打开时，记录仍然按共享归属 */
+      /* 分享库还没打开时，列表仍按协作者计算 */
     }
   }
 
@@ -1928,7 +1917,7 @@ export class DatabaseService extends Service implements Database {
   }
 
   private shareScopeLabel(collection: string, id: string, record: DbRecord, stored: 'personal' | 'workspace' | 'shared') {
-    if (this.hasPublicShare(collection, id, record, stored) || stored === 'shared') return '共享'
+    if (this.hasPublicShare(collection, id, record, stored)) return '共享'
     if (this.deviceWorkspace()) return '私人'
     const scope = this.effectiveScope(collection, record, stored)
     if (scope === 'workspace') return '空间'
@@ -2489,21 +2478,9 @@ export class DatabaseService extends Service implements Database {
         const workspaceOwned = options.scope === 'workspace' && !device
         const shared = options.scope === 'shared' && !parentRecordId
         const local = options.scope === 'local' && !parentRecordId
-        const parentOwn = parentRecordId ? this.ownershipOf(spec.path, parentRecordId) : null
-        const ownership = device
-          ? shared || parentOwn === 'shared'
-            ? 'shared'
-            : 'personal'
-          : parentRecordId || workspaceOwned
-            ? 'workspace'
-            : shared
-              ? 'shared'
-              : 'personal'
         this.attachWorkspaceRecord(spec.path, record.id, {
-          ownership,
-          accessMode: parentRecordId ? 'inherit' : workspaceOwned || shared ? 'members' : 'private',
+          accessMode: parentRecordId ? 'inherit' : workspaceOwned ? 'members' : 'private',
           ...(workspaceOwned ? { memberDefaultRole: 'editor' as const } : {}),
-          ...(shared ? { memberDefaultRole: 'viewer' as const } : {}),
           ...(parentRecordId ? { parentCollection: spec.path, parentRecordId } : {}),
         })
         if (shared) this.markPublicView(spec.path, record.id)
@@ -4037,6 +4014,20 @@ export function apply(ctx: Context) {
     if (query) return query
     return String(body?.password ?? '')
   }
+  const rememberShareLan = (route: { req: { headers: IncomingMessage['headers'] } }) => {
+    if (isOnlineRuntime()) return
+    const code = String(route.req.headers['x-lan-member'] ?? '').trim()
+    if (!code) return
+    try {
+      const account = ctx.get('account') as {
+        store?: { activeWorkspaceId?: () => string | null; rememberLanMember?: (workspaceId: string, code: string) => unknown }
+      }
+      const workspaceId = account.store?.activeWorkspaceId?.() ?? ''
+      account.store?.rememberLanMember?.(workspaceId, code)
+    } catch {
+      /* 没有账号库时分享页仍可打开 */
+    }
+  }
   ctx.http.route('GET', '/api/db/shares', async (route) => {
     if (activeDataLocation() === 'cloud' && !isOnlineRuntime()) {
       const search = route.query.toString()
@@ -4202,6 +4193,7 @@ export function apply(ctx: Context) {
       route.send(401, { needsPassword: true })
       return
     }
+    rememberShareLan(route)
     try {
       const snapshot = await buildShareSnapshot(db, savedViews, share, shareSnapshotOpts(route.query))
       route.send(200, snapshot)
@@ -4227,6 +4219,7 @@ export function apply(ctx: Context) {
       route.send(401, { needsPassword: true })
       return
     }
+    rememberShareLan(route)
     try {
       const snapshot = await buildShareSnapshot(db, savedViews, share, shareSnapshotOpts(route.query))
       route.send(200, snapshot)

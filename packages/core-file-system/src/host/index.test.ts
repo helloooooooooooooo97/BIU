@@ -2146,6 +2146,10 @@ test('shared create is a public view link', async () => {
   assert.equal(link?.allowCopy, false)
   const listed = await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'shared' }))
   assert.deepEqual(listed.items.map((row) => row.title), ['公开'])
+  db.shares.revokeRecord('/docs', 'pub')
+  db.notifyShareChange()
+  const closed = await runWithAccount(ada.id, () => db.list('/docs'))
+  assert.equal(closed.items[0]?.shareScope, '私人')
 })
 
 test('device workspace share column is only personal or shared', async () => {

@@ -10,6 +10,7 @@ test('share page loads a record body only after that row is opened', () => {
   assert.match(src, /contents: 'all'/)
   assert.match(host, /GET', '\/api\/share\/:token\/content\/:recordId'/)
   assert.match(host, /shareSnapshotOpts/)
+  assert.match(host, /rememberShareLan/)
 })
 
 test('share page uses matching side padding on small screens', () => {
@@ -71,6 +72,8 @@ test('share header has a theme toggle for this session', () => {
   assert.match(src, /data-testid="fsdb-share-theme"/)
   assert.match(src, /persistShareTheme/)
   assert.doesNotMatch(src, /localStorage/)
+  assert.match(src, /x-lan-member/)
+  assert.match(src, /readLanMemberId/)
   assert.match(src, /MoonIcon/)
   assert.match(src, /SunIcon/)
   assert.match(src, /夜间模式/)

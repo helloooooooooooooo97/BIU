@@ -908,6 +908,9 @@ export const BIU_MIGRATIONS: Migration[] = [
       CREATE INDEX IF NOT EXISTS tag_docs_tag ON tag_docs(tag_id);
     `)
   } },
+  { version: 46, module: 'host-account', name: 'drop.resource-ownership', up: (db) => {
+    dropColumn(db, 'resource_policies', 'ownership')
+  } },
 ]
 
 export function assertBiuMigrationLog(rows: Array<{ version: number }> = BIU_MIGRATIONS) {

@@ -1,5 +1,6 @@
-import { builtinAllViewId, stubBuiltinAllView, stubBuiltinBlockKindView, stubBuiltinCatalogView, stubBuiltinTagView, stubBuiltinScopeView, stubBuiltinMemberView, isBuiltinAllViewForCollection, isBuiltinAllViewId } from '../catalog-views.ts'
-import { isIndexCollection } from './database-path.ts'
+import { builtinAllGroupBy, builtinAllViewId, stubBuiltinAllView, stubBuiltinBlockKindView, stubBuiltinCatalogView, stubBuiltinTagView, stubBuiltinScopeView, stubBuiltinMemberView, isBuiltinAllViewForCollection, isBuiltinAllViewId } from '../catalog-views.ts'
+import { isIndexCollection, WORKSPACE_MEMBERS_COLLECTION_PATH } from './database-path.ts'
+import { normalizeCollectionPath } from '../paths.ts'
 import { invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { looksLikeFilterTree, normalizeFilterGroup, parseSortsInput } from '../query-logic.ts'
@@ -818,7 +819,7 @@ export function persistViewDisplay(collectionPath: string, viewId: string, patch
   }
 }
 
-/** 内置「全部 xx」不能当用户视图存整份，显示项（换行等）单独记。索引表没有分享，全部视图不按分享分组。 */
+/** 内置「全部 xx」不能当用户视图存整份，显示项（换行等）单独记。索引表没有分享；成员全部按成员类型分组。 */
 export function withViewDisplay(collectionPath: string, view: SavedView): SavedView {
   const overlay = loadViewDisplay(collectionPath, view.id)
   const painted = Object.keys(overlay).length
@@ -833,8 +834,16 @@ export function withViewDisplay(collectionPath: string, view: SavedView): SavedV
         rank: Number.isFinite(Number(overlay.rank)) ? overlay.rank : view.rank,
       }
     : view
+  const forcedGroup =
+    isIndexCollection(collectionPath) && isBuiltinAllViewId(view.id)
+      ? ''
+      : normalizeCollectionPath(collectionPath) === WORKSPACE_MEMBERS_COLLECTION_PATH &&
+          isBuiltinAllViewId(view.id) &&
+          (!painted.groupBy || painted.groupBy === 'shareScope')
+        ? builtinAllGroupBy(collectionPath)
+        : undefined
   return normalizeSavedView({
     ...painted,
-    ...(isIndexCollection(collectionPath) && isBuiltinAllViewId(view.id) ? { groupBy: '' } : {}),
+    ...(forcedGroup !== undefined ? { groupBy: forcedGroup } : {}),
   })
 }

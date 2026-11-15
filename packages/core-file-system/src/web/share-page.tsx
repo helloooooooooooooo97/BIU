@@ -15,6 +15,7 @@ import { ShareOwnerCorner } from './share-owner-corner.tsx'
 
 export { registerShareOwnerExtra } from './share-owner-corner.tsx'
 import { parseSharePath, sharePublicPath, type ShareSnapshot } from '../share-snapshot.ts'
+import { readLanMemberId } from './lan-member.ts'
 import { parsePageBanner } from '../page-banner.ts'
 import { RecordDetail } from './record-detail.tsx'
 import { recordPickKind } from './pick-dom.ts'
@@ -53,6 +54,8 @@ function persistShareTheme(mode: 'light' | 'dark') {
 function shareHeaders(password = '') {
   const headers: Record<string, string> = { 'content-type': 'application/json' }
   if (password) headers['x-share-password'] = password
+  const lan = readLanMemberId()
+  if (lan) headers['x-lan-member'] = lan
   return headers
 }
 

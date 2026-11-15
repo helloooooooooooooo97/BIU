@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE, claimTableCellPick, consumePendingTablePane, firstTableTitleCell, moveTableCell, readTablePaneRest, rememberTablePaneRest, requestTablePaneFocus, tableActionArrowLeave, tableActionButtonStep, tableClearKey, tableClearedValue, tableKeyDir, tableNavKeys, tablePaneFromEvent, tablePaneHotkey, tablePaneOther, tableTitleOpenWhere, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
+import { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE, claimTableCellPick, consumePendingTablePane, firstTableTitleCell, moveTableCell, readTablePaneRest, rememberTablePaneRest, requestTablePaneFocus, tableActionArrowLeave, tableActionButtonStep, tableClearKey, tableClearedValue, tableCreateKey, tableKeyDir, tableNavKeys, tablePaneFromEvent, tablePaneHotkey, tablePaneOther, tableTitleOpenWhere, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
 
 test('first table cell is the title of the first row', () => {
   assert.deepEqual(firstTableTitleCell(['a', 'b'], ['status', 'title', 'actions'], 'title'), { id: 'a', key: 'title' })
@@ -24,6 +24,16 @@ test('table cell move stays on the grid and stops at edges', () => {
   assert.deepEqual(moveTableCell(rows, keys, { id: 'a', key: 'status' }, 'down'), { id: 'b', key: 'status' })
   assert.deepEqual(moveTableCell(rows, keys, { id: 'b', key: 'status' }, 'down'), { id: 'b', key: 'status' })
   assert.deepEqual(moveTableCell(rows, keys, { id: 'b', key: 'status' }, 'home'), { id: 'b', key: 'title' })
+})
+
+test('Shift+Enter creates a record; ⌘Enter still opens the title', () => {
+  const enter = { key: 'Enter', shift: true, meta: false, ctrl: false, alt: false }
+  assert.equal(tableCreateKey(enter), true)
+  assert.equal(tableCreateKey({ ...enter, shift: false }), false)
+  assert.equal(tableCreateKey({ ...enter, meta: true }), false)
+  assert.equal(tableCreateKey({ ...enter, ctrl: true }), false)
+  assert.equal(tableCreateKey({ ...enter, alt: true }), false)
+  assert.equal(tableCreateKey({ ...enter, key: ' ' }), false)
 })
 
 test('title cell ⌘Enter opens here, ⌘⇧Enter opens in the inspector', () => {

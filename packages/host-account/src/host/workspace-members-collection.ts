@@ -40,7 +40,7 @@ export function workspaceMembersCollection(
 ): CollectionSpec {
   const rows = () => {
     const workspaceId = store.activeWorkspaceId()
-    if (!workspaceId || !collaborativeWorkspace(workspaceId)) return []
+    if (!workspaceId) return []
     return store.currentMembers().map(asRecord)
   }
   const list = async (query?: CollectionListQuery) => {
@@ -59,8 +59,7 @@ export function workspaceMembersCollection(
     const actorId = currentAccountId()
     const workspaceId = store.activeWorkspaceId()
     if (!actorId || !workspaceId) throw new Error('permission denied: UNAUTHENTICATED')
-    if (!collaborativeWorkspace(workspaceId)) throw new Error('本机空间不提供成员功能')
-    return { actorId, workspaceId }
+    return { actorId, workspaceId, collaborative: collaborativeWorkspace(workspaceId) }
   }
   return {
     id: 'workspace-members',
@@ -117,7 +116,8 @@ export function workspaceMembersCollection(
           required: ['email'],
         },
         run: (_id, _record, args = {}) => {
-          const { actorId, workspaceId } = identity()
+          const { actorId, workspaceId, collaborative } = identity()
+          if (!collaborative) throw new Error('本机空间不提供邮箱邀请，局域网访问者会自动出现在成员列表')
           return store.addMemberByEmail(actorId, workspaceId, String(args.email ?? ''))
         },
       },
@@ -125,7 +125,8 @@ export function workspaceMembersCollection(
     list,
     get: async (id) => rows().find((row) => row.id === id) ?? null,
     create: async (records) => {
-      const { actorId, workspaceId } = identity()
+      const { actorId, workspaceId, collaborative } = identity()
+      if (!collaborative) throw new Error('本机空间不提供邮箱邀请，局域网访问者会自动出现在成员列表')
       const created: DbRecord[] = []
       for (const record of records) {
         const email = String(record.email ?? '').trim()
@@ -137,7 +138,8 @@ export function workspaceMembersCollection(
       return created
     },
     update: async (id, patch) => {
-      const { actorId, workspaceId } = identity()
+      const { actorId, workspaceId, collaborative } = identity()
+      if (!collaborative) throw new Error('本机空间不能改成员角色')
       if (!('role' in patch)) {
         const current = rows().find((row) => row.id === id)
         if (!current) throw new Error('member not found')

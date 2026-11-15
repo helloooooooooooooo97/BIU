@@ -1,6 +1,8 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import {
+  createPageBlockId,
+  isPageBlockId,
   listPageBlockFences,
   pageBlockData,
   pageBlockRecordId,
@@ -118,4 +120,20 @@ test('default page block title is page name plus kind label', () => {
   assert.equal(defaultPageBlockTitle('海报', 'HTML'), '海报 HTML')
   assert.equal(defaultPageBlockTitle('', '画板'), '画板')
   assert.equal(defaultPageBlockTitle('海报', ''), '海报')
+})
+
+test('createPageBlockId works when randomUUID is missing', () => {
+  const cryptoObj = globalThis.crypto as Crypto | undefined
+  const original = cryptoObj?.randomUUID
+  if (cryptoObj && original) {
+    Object.defineProperty(cryptoObj, 'randomUUID', { configurable: true, value: undefined })
+  }
+  try {
+    const id = createPageBlockId()
+    assert.equal(isPageBlockId(id), true)
+  } finally {
+    if (cryptoObj && original) {
+      Object.defineProperty(cryptoObj, 'randomUUID', { configurable: true, value: original })
+    }
+  }
 })

@@ -21,7 +21,15 @@ export type PageBlockAttrsPatch = {
 }
 
 export function createPageBlockId() {
-  return crypto.randomUUID().replace(/-/g, '').slice(0, 8)
+  const webCrypto = globalThis.crypto as Crypto | undefined
+  if (webCrypto && typeof webCrypto.randomUUID === 'function') {
+    return webCrypto.randomUUID().replace(/-/g, '').slice(0, 8)
+  }
+  if (webCrypto && typeof webCrypto.getRandomValues === 'function') {
+    const bytes = webCrypto.getRandomValues(new Uint8Array(4))
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+  }
+  return Math.random().toString(16).slice(2, 10).padEnd(8, '0')
 }
 
 export function isPageBlockId(raw: unknown) {

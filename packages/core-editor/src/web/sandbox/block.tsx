@@ -15,6 +15,7 @@ import { tags } from '@lezer/highlight'
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { compileSandboxSource, looksLikeJsx, sandboxModuleFile } from './compile.ts'
+import { createPageBlockId } from '../../page-block-fence.ts'
 import { BASIC_BLOCK_TYPE, type BlockEditorService } from '../service.ts'
 import {
   assetEtag,
@@ -39,7 +40,7 @@ import {
 } from './active.ts'
 
 function newSandboxFiles() {
-  const id = crypto.randomUUID().slice(0, 8)
+  const id = createPageBlockId()
   const files = { file: `assets/sandbox-${id}.jsx`, dataFile: `assets/sandbox-data-${id}.json` }
   markFreshSandboxAssets(files.file, files.dataFile)
   return files

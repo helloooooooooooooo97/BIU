@@ -38,7 +38,7 @@ function setup() {
 
 test('private resources require a direct grant and roles gate actions', () => {
   const { auth, ada, bob, actor, page } = setup()
-  auth.attach(actor(ada.id), page('private'), { ownership: 'personal', accessMode: 'private' })
+  auth.attach(actor(ada.id), page('private'), { accessMode: 'private' })
   assert.equal(auth.authorize(actor(ada.id), 'resource:update', page('private')).allowed, true)
   assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('private')).allowed, false)
 
@@ -96,7 +96,7 @@ test('workspace viewers can only read resources made visible to them', () => {
   assert.equal(auth.authorize(actor(bob.id), 'resource:read', collection).allowed, true)
   assert.equal(auth.authorize(actor(bob.id), 'resource:create', collection).allowed, false)
 
-  auth.attach(actor(ada.id), page('shared'), { ownership: 'workspace', accessMode: 'members' })
+  auth.attach(actor(ada.id), page('shared'), { accessMode: 'members' })
   assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('shared')).allowed, true)
   assert.equal(auth.authorize(actor(bob.id), 'resource:update', page('shared')).allowed, false)
   assert.equal(auth.authorize(actor(cara.id), 'resource:update', page('shared')).allowed, true)
@@ -106,13 +106,13 @@ test('workspace viewers can only read resources made visible to them', () => {
   auth.grant(ada.id, page('shared'), 'account', bob.id, 'editor')
   assert.equal(auth.authorize(actor(bob.id), 'resource:update', page('shared')).allowed, false)
 
-  auth.attach(actor(ada.id), page('private-viewer'), { ownership: 'personal', accessMode: 'private' })
+  auth.attach(actor(ada.id), page('private-viewer'), { accessMode: 'private' })
   assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('private-viewer')).allowed, false)
 })
 
 test('a group grant applies dynamically to its workspace members', () => {
   const { store, auth, ada, bob, actor, page, workspace } = setup()
-  auth.attach(actor(ada.id), page('roadmap'), { ownership: 'workspace', accessMode: 'restricted' })
+  auth.attach(actor(ada.id), page('roadmap'), { accessMode: 'restricted' })
   const product = store.createGroup(ada.id, workspace.id, '产品组')
   store.addGroupMemberByEmail(ada.id, workspace.id, product.id, bob.email)
   auth.grant(ada.id, page('roadmap'), 'group', product.id, 'editor')
@@ -124,7 +124,7 @@ test('a group grant applies dynamically to its workspace members', () => {
 
 test('a member-view grant evaluates its audience dynamically', () => {
   const { auth, ada, bob, cara, actor, page } = setup()
-  auth.attach(actor(ada.id), page('dynamic'), { ownership: 'personal', accessMode: 'private' })
+  auth.attach(actor(ada.id), page('dynamic'), { accessMode: 'private' })
   let matching = new Set([bob.id])
   auth.setMemberViewMatcher((_workspaceId, viewId, accountId) => viewId === 'product-view' && matching.has(accountId))
   auth.grant(ada.id, page('dynamic'), 'member_view', 'product-view', 'viewer')
@@ -137,16 +137,14 @@ test('a member-view grant evaluates its audience dynamically', () => {
 
 test('nested pages inherit, while a restricted child cuts inheritance', () => {
   const { auth, ada, bob, actor, page } = setup()
-  auth.attach(actor(ada.id), page('parent'), { ownership: 'personal', accessMode: 'private' })
+  auth.attach(actor(ada.id), page('parent'), { accessMode: 'private' })
   auth.grant(ada.id, page('parent'), 'account', bob.id, 'editor')
   auth.attach(actor(ada.id), page('child'), {
-    ownership: 'workspace',
     accessMode: 'inherit',
     parentCollection: '/pages',
     parentRecordId: 'parent',
   })
   auth.attach(actor(ada.id), page('secret-child'), {
-    ownership: 'workspace',
     accessMode: 'restricted',
     parentCollection: '/pages',
     parentRecordId: 'parent',
@@ -160,7 +158,7 @@ test('nested pages inherit, while a restricted child cuts inheritance', () => {
 
 test('a direct child grant overrides a stronger inherited grant', () => {
   const { auth, ada, bob, actor, page } = setup()
-  auth.attach(actor(ada.id), page('parent'), { ownership: 'personal', accessMode: 'private' })
+  auth.attach(actor(ada.id), page('parent'), { accessMode: 'private' })
   auth.grant(ada.id, page('parent'), 'account', bob.id, 'editor')
   auth.attach(actor(ada.id), page('child'), {
     accessMode: 'inherit',
@@ -175,23 +173,22 @@ test('a direct child grant overrides a stronger inherited grant', () => {
 
 test('collection scan preload matches live sqlite authorization', () => {
   const { store, auth, ada, bob, cara, actor, page, workspace } = setup()
-  auth.attach(actor(ada.id), page('private'), { ownership: 'personal', accessMode: 'private' })
-  auth.attach(actor(ada.id), page('members'), { ownership: 'workspace', accessMode: 'members' })
-  auth.attach(actor(ada.id), page('parent'), { ownership: 'personal', accessMode: 'private' })
+  auth.attach(actor(ada.id), page('private'), { accessMode: 'private' })
+  auth.attach(actor(ada.id), page('members'), { accessMode: 'members' })
+  auth.attach(actor(ada.id), page('parent'), { accessMode: 'private' })
   auth.grant(ada.id, page('parent'), 'account', bob.id, 'editor')
   auth.attach(actor(ada.id), page('child'), {
-    ownership: 'workspace',
     accessMode: 'inherit',
     parentCollection: '/pages',
     parentRecordId: 'parent',
   })
   const product = store.createGroup(ada.id, workspace.id, '产品组')
   store.addGroupMemberByEmail(ada.id, workspace.id, product.id, bob.email)
-  auth.attach(actor(ada.id), page('roadmap'), { ownership: 'workspace', accessMode: 'restricted' })
+  auth.attach(actor(ada.id), page('roadmap'), { accessMode: 'restricted' })
   auth.grant(ada.id, page('roadmap'), 'group', product.id, 'editor')
   const matching = new Set([cara.id])
   auth.setMemberViewMatcher((_workspaceId, viewId, accountId) => viewId === 'product-view' && matching.has(accountId))
-  auth.attach(actor(ada.id), page('dynamic'), { ownership: 'personal', accessMode: 'private' })
+  auth.attach(actor(ada.id), page('dynamic'), { accessMode: 'private' })
   auth.grant(ada.id, page('dynamic'), 'member_view', 'product-view', 'viewer')
 
   const snapshot = () => {
@@ -249,10 +246,10 @@ test('grant notifies invalidators so list caches can drop', () => {
   const stop = auth.onInvalidate(() => {
     n += 1
   })
-  auth.attach(actor(ada.id), page('private'), { ownership: 'personal', accessMode: 'private' })
+  auth.attach(actor(ada.id), page('private'), { accessMode: 'private' })
   assert.ok(n >= 1)
   const afterAttach = n
-  auth.attach(actor(ada.id), page('private'), { ownership: 'personal', accessMode: 'private' })
+  auth.attach(actor(ada.id), page('private'), { accessMode: 'private' })
   assert.equal(n, afterAttach)
   auth.grant(ada.id, page('private'), 'account', bob.id, 'viewer')
   assert.ok(n > afterAttach)

@@ -76,6 +76,8 @@ test('overlay keeps stored seed edits and honors omitted ids', () => {
 
 test('member directory exposes builtin audience views', () => {
   const views = mergeTableViews({ path: '/workspace-members', label: '成员' }, [])
+  assert.equal(views[0]?.name, '全部成员')
+  assert.equal(views[0]?.groupBy, 'membershipKind')
   assert.deepEqual(views.slice(1).map((view) => view.name), ['空间成员', '外部成员', '临时访客'])
   assert.deepEqual(builtinMemberViews().map((view) => view.filters.membershipKind), ['member', 'external', 'guest'])
 })

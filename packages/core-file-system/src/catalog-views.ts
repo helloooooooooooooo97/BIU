@@ -203,6 +203,13 @@ export function displayNameForView(viewId: string, table: TableRef, storedName?:
   return collectionNoun(table)
 }
 
+export function builtinAllGroupBy(collectionPath: string) {
+  const path = normalizeCollectionPath(collectionPath)
+  if (path === '/workspace-members') return 'membershipKind'
+  if (path === '/editor-blocks' || path === '/tags') return ''
+  return 'shareScope'
+}
+
 export function builtinAllView(table: TableRef): SavedView {
   const path = normalizeCollectionPath(table.path)
   return normalizeSavedView({
@@ -212,7 +219,7 @@ export function builtinAllView(table: TableRef): SavedView {
     ...builtinViewLayout(),
     filters: {},
     columns: [],
-    groupBy: path === '/editor-blocks' || path === '/tags' ? '' : 'shareScope',
+    groupBy: builtinAllGroupBy(path),
     wrap: false,
     truncate: true,
     query: '',

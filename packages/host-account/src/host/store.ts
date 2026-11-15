@@ -995,6 +995,46 @@ export class CollabStore {
     return this.members(actorId, workspaceId)
   }
 
+  /** 局域网分享访客：浏览器 localStorage 随机码稳定对应一名访客。 */
+  rememberLanMember(workspaceId: string, deviceCode: string, now = Date.now()) {
+    const raw = deviceCode.trim().slice(0, 80)
+    if (!workspaceId || raw.length < 8 || !/^[0-9a-zA-Z._-]+$/.test(raw)) return null
+    const accountId = `lan_${createHash('sha256').update(`lan-member:${raw}`).digest('hex').slice(0, 22)}`
+    const name = `局域网 ${accountId.slice(4, 12)}`
+    const token = `lan.${createHash('sha256').update(`lan-token:${raw}`).digest('hex').slice(0, 40)}`
+    const sessionId = `gss_${accountId.slice(4)}`
+    const expiresAt = now + 400 * 24 * 60 * 60 * 1000
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      this.db
+        .prepare(
+          `INSERT INTO accounts (id, name, token, password_hash, created_at, email, active_workspace_id)
+           VALUES (?, ?, ?, '', ?, NULL, ?)
+           ON CONFLICT(id) DO UPDATE SET name = excluded.name`,
+        )
+        .run(accountId, name, token, now, workspaceId)
+      this.db
+        .prepare(
+          `INSERT INTO workspace_members (workspace_id, account_id, role, member_kind, created_at, display_name)
+           VALUES (?, ?, 'viewer', 'guest', ?, ?)
+           ON CONFLICT(workspace_id, account_id) DO UPDATE SET display_name = excluded.display_name`,
+        )
+        .run(workspaceId, accountId, now, name)
+      this.db
+        .prepare(
+          `INSERT INTO guest_sessions (id, account_id, workspace_id, expires_at, created_at, last_seen_at)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(account_id) DO UPDATE SET last_seen_at = excluded.last_seen_at, workspace_id = excluded.workspace_id, expires_at = excluded.expires_at, revoked_at = NULL`,
+        )
+        .run(sessionId, accountId, workspaceId, expiresAt, now, now)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+    return { id: accountId, name }
+  }
+
   removeMember(actorId: string, workspaceId: string, accountId: string) {
     const actorRole = this.requireManager(actorId, workspaceId)
     const target = this.db
@@ -2243,23 +2283,38 @@ export class CollabStore {
   collectionOwnership(workspaceId: string, collection: string) {
     const policies = this.db
       .prepare(
-        `SELECT record_id, ownership FROM resource_policies
+        `SELECT record_id, access_mode, owner_account_id FROM resource_policies
          WHERE workspace_id = ? AND collection = ?`,
       )
-      .all(workspaceId, collection) as Array<{ record_id: string; ownership: string }>
+      .all(workspaceId, collection) as Array<{ record_id: string; access_mode: string; owner_account_id: string }>
     const map = new Map<string, 'personal' | 'workspace' | 'shared'>()
     for (const row of policies) {
-      map.set(
-        row.record_id,
-        row.ownership === 'shared' || row.ownership === 'workspace' ? row.ownership : 'personal',
-      )
+      map.set(row.record_id, row.access_mode === 'members' ? 'workspace' : 'personal')
     }
-    const owners = this.db
+    const grants = this.db
+      .prepare(
+        `SELECT g.record_id, g.subject_id, COALESCE(m.member_kind, '') AS member_kind
+         FROM record_grants g
+         LEFT JOIN workspace_members m
+           ON g.subject_type = 'account'
+          AND m.workspace_id = g.workspace_id
+          AND m.account_id = g.subject_id
+         WHERE g.workspace_id = ? AND g.collection = ?`,
+      )
+      .all(workspaceId, collection) as Array<{ record_id: string; subject_id: string; member_kind: string }>
+    const owners = new Map(policies.map((row) => [row.record_id, row.owner_account_id]))
+    for (const grant of grants) {
+      if (grant.subject_id === owners.get(grant.record_id)) continue
+      const current = map.get(grant.record_id) ?? 'personal'
+      if (grant.member_kind === 'external' || grant.member_kind === 'guest') map.set(grant.record_id, 'shared')
+      else if (current !== 'shared') map.set(grant.record_id, 'workspace')
+    }
+    const owned = this.db
       .prepare(
         `SELECT record_id FROM record_owners WHERE workspace_id = ? AND collection = ?`,
       )
       .all(workspaceId, collection) as Array<{ record_id: string }>
-    for (const row of owners) {
+    for (const row of owned) {
       if (!map.has(row.record_id)) map.set(row.record_id, 'workspace')
     }
     return map
@@ -2470,11 +2525,11 @@ export class CollabStore {
       .all(workspaceId, collection, recordId) as Array<{ id: string; role: string }>
     const policy = this.db
       .prepare(
-        `SELECT ownership, owner_account_id FROM resource_policies
+        `SELECT access_mode, owner_account_id FROM resource_policies
          WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
       )
       .get(workspaceId, collection, recordId) as
-      | { ownership: 'personal' | 'workspace' | 'shared'; owner_account_id: string }
+      | { access_mode: string; owner_account_id: string }
       | undefined
     const ownerRow = policy?.owner_account_id
       ? { owner_id: policy.owner_account_id }
@@ -2486,9 +2541,17 @@ export class CollabStore {
     const ownerId = policy?.owner_account_id || ownerRow?.owner_id || ''
     const collaboratorCount =
       rows.filter((row) => row.id !== ownerId).length + groups.length + memberViews.length
+    const hasExternal = rows.some(
+      (row) => row.id !== ownerId && (row.member_kind === 'external' || row.member_kind === 'guest'),
+    )
+    const scope = hasExternal
+      ? 'shared' as const
+      : collaboratorCount || policy?.access_mode === 'members'
+        ? 'workspace' as const
+        : 'personal' as const
     return {
       private: collaboratorCount === 0,
-      scope: policy?.ownership ?? 'personal',
+      scope,
       ownerId,
       people: rows.map(({ member_kind, ...row }) => ({ ...row, memberKind: member_kind })),
       groups,
@@ -2514,9 +2577,9 @@ export class CollabStore {
       this.db
         .prepare(
           `INSERT INTO resource_policies
-            (workspace_id, collection, record_id, ownership, owner_account_id, access_mode,
+            (workspace_id, collection, record_id, owner_account_id, access_mode,
              member_default_role, parent_collection, parent_record_id, created_by, created_at)
-           VALUES (?, ?, ?, 'personal', ?, 'private', 'viewer', '', '', ?, ?)`,
+           VALUES (?, ?, ?, ?, 'private', 'viewer', '', '', ?, ?)`,
         )
         .run(workspaceId, collection, recordId, owner.owner_id, owner.owner_id, Date.now())
       policy = { owner_account_id: owner.owner_id }
@@ -2542,15 +2605,14 @@ export class CollabStore {
     const hasExternal = collaborators.some(
       (row) => row.subject_type === 'account' && (row.member_kind === 'external' || row.member_kind === 'guest'),
     )
-    const ownership = hasExternal ? 'shared' : collaborators.length ? 'workspace' : 'personal'
     this.db
       .prepare(
         `UPDATE resource_policies
-         SET ownership = ?, access_mode = ?
+         SET access_mode = ?
          WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
       )
-      .run(ownership, collaborators.length ? 'restricted' : 'private', workspaceId, collection, recordId)
-    return ownership
+      .run(collaborators.length ? 'restricted' : 'private', workspaceId, collection, recordId)
+    return hasExternal ? 'shared' : collaborators.length ? 'workspace' : 'personal'
   }
 
   private recordGrantKeysForAccount(workspaceId: string, accountId: string) {
