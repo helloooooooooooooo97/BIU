@@ -581,6 +581,7 @@ async function listAllSavedViewRows(tablePath?: string) {
       path: '/views',
       limit: VIEWS_PULL_LIMIT,
       offset,
+      fresh: true,
       ...(tablePath ? { filters: { tablePath } } : {}),
     })
     items.push(...page.items)
@@ -618,7 +619,11 @@ async function pullSavedViewsNow(
       const views = byPath.get(path) ?? []
       const previous = memoryViews.get(path) ?? loadViews(path)
       const ranked = rankListedViews(
-        views.map((view) => withViewDisplay(path, view)),
+        mergeSavedViewLists(
+          previous,
+          views.map((view) => withViewDisplay(path, view)),
+          loadOmittedViewIds(path),
+        ),
         previous,
       )
       const prev = JSON.stringify(previous)

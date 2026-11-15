@@ -565,7 +565,7 @@ export const DataSidebar = memo(function DataSidebar({
   useEffect(() => {
     const paths = tablePathsKey.split('\0').filter(Boolean)
     if (!paths.length) return
-    void pullSavedViews(paths, { force: true }).then(() => setViewsTick((n) => n + 1))
+    void pullSavedViews(paths, { idle: true }).then(() => setViewsTick((n) => n + 1))
   }, [tablePathsKey])
   useEffect(() => {
     const onChange = (event: Event) => {

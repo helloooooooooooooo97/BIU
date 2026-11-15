@@ -268,6 +268,37 @@ test('saved views pull shares one in-flight list and a short ttl', () => {
   assert.match(browser, /function applyDeleteView/)
 })
 
+test('saved views pull keeps a newly remembered view missing from a stale list', async () => {
+  const path = '/pages-keep-new-view'
+  rememberViews(path, [
+    { id: 'keep', name: '留下', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] },
+    { id: 'fresh', name: '新视图', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] },
+  ])
+  const prev = globalThis.fetch
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.includes('/api/db/list')) {
+      return new Response(
+        JSON.stringify({
+          items: [{ viewId: 'keep', title: '留下', tablePath: path }],
+          total: 1,
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    }
+    return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })
+  }) as typeof fetch
+  try {
+    await pullSavedViews([path], { force: true })
+    assert.deepEqual(
+      loadViews(path).map((view) => view.id),
+      ['keep', 'fresh'],
+    )
+  } finally {
+    globalThis.fetch = prev
+  }
+})
+
 test('local view delete is not restored by a stale /views pull', async () => {
   const path = '/pages-delete-view-stay'
   const mem: Record<string, string> = {}

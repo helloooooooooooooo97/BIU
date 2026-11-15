@@ -3600,7 +3600,10 @@ export function CollectionBrowser({
     if (pulled === false) adoptPersistedViews(path, adopted, extra?.remove)
     else {
       const listedNow = rankListedViews(
-        listedViews(path, loadViews(path)).map((view) => withViewDisplay(path, view)),
+        listedViews(
+          path,
+          mergeSavedViewLists(loadViews(path), adopted, extra?.remove),
+        ).map((view) => withViewDisplay(path, view)),
         adopted,
       )
       rememberViews(path, listedNow)
@@ -3879,10 +3882,28 @@ export function CollectionBrowser({
       query: '',
       rank: listed.length,
     }
+    const nextStored = mergeSavedViewLists(stored, [view])
+    rememberViews(target, nextStored)
+    if (target === collectionPath) {
+      const painted = paintListedViews(target)
+      viewsRef.current = painted
+      setViews(painted)
+    }
+    window.dispatchEvent(new Event('fsdb:change'))
     void persistViewsFor(target, [...listed.filter((item) => item.id !== view.id), view], {
       upsert: [view],
+      baseline: stored,
     }).then((ok) => {
-      if (!ok) return
+      if (!ok) {
+        rememberViews(target, stored)
+        if (target === collectionPath) {
+          const painted = paintListedViews(target)
+          viewsRef.current = painted
+          setViews(painted)
+        }
+        window.dispatchEvent(new Event('fsdb:change'))
+        return
+      }
       if (target === collectionPath) {
         selectView(view)
         return
