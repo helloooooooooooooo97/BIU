@@ -89,7 +89,7 @@ test('pick chips can show the facet close mark', () => {
   assert.match(src, /onOpenChange=\{setOpen\}/)
   assert.match(src, /type="button"/)
   assert.match(src, /side="top"/)
-  assert.match(src, /avoidCollisions=\{false\}/)
+  assert.doesNotMatch(src, /avoidCollisions=\{false\}/)
   assert.match(src, /container=\{typeof document === 'undefined' \? null : document\.body\}/)
   assert.match(src, /event\.stopPropagation\(\)/)
   assert.match(src, /z-index:300/)

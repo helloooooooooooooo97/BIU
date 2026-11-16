@@ -416,7 +416,6 @@ export function PickChip({
       side="top"
       align="start"
       sideOffset={10}
-      avoidCollisions={false}
       container={typeof document === 'undefined' ? null : document.body}
     >
       <PickChipData pick={pick} />
