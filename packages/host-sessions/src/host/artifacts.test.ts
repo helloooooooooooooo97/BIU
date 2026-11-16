@@ -7,6 +7,8 @@ import {
   extractImagePathCandidates,
   findRecentImageFiles,
   ingestSessionImages,
+  MAX_DROPPED_FILE_BYTES,
+  persistDroppedFile,
   persistPastedImages,
   pastedImagePickText,
   readArtifactFile,
@@ -110,6 +112,25 @@ test('persistPastedImages writes data URLs into session artifacts and names pick
   assert.match(picks, /"kind":"file"/)
   assert.match(picks, /shot\.png/)
   assert.equal(withPastedImagePicks('看看', saved).startsWith('看看\n<pick>'), true)
+})
+
+test('persistDroppedFile writes bytes and rejects files over 32MB', async () => {
+  const baseDir = await mkdtemp(join(tmpdir(), 'biu-drop-'))
+  const saved = await persistDroppedFile(
+    'sess-drop',
+    { name: 'spec.pdf', mime: 'application/pdf', data: Buffer.from('hello') },
+    baseDir,
+  )
+  assert.equal(saved.name, 'spec.pdf')
+  assert.ok(saved.path.endsWith(join('artifacts', 'sess-drop', 'spec.pdf')))
+  const file = await readArtifactFile('sess-drop', 'spec.pdf', baseDir)
+  assert.equal(file?.data.toString(), 'hello')
+  assert.equal(MAX_DROPPED_FILE_BYTES, 32 * 1024 * 1024)
+  const oversized = { byteLength: MAX_DROPPED_FILE_BYTES + 1 } as Buffer
+  await assert.rejects(
+    () => persistDroppedFile('sess-drop', { name: 'huge.bin', data: oversized }, baseDir),
+    /file too large/,
+  )
 })
 
 test('persistPastedImages rejects non data URLs', async () => {

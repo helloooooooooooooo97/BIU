@@ -5,8 +5,6 @@ import type { FsDetailBarProps } from '@biu/type-file-system/ui'
 import {
   ArrowPathIcon,
   ChevronDownIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
   CodeBracketIcon,
   EyeIcon,
   EyeSlashIcon,
@@ -104,10 +102,6 @@ export function RecordDetailBar({
   columnMenu,
   onRetry,
   configMenu,
-  onPrev,
-  onNext,
-  canPrev,
-  canNext,
 }: FsDetailBarProps) {
   const path = String(collectionPath ?? '').trim() || '/pages'
   const pageRecord = path === '/pages'
@@ -914,28 +908,6 @@ export function RecordDetailBar({
         >
           <ArrowPathIcon aria-hidden className={`size-[14px]${refreshing ? ' fsdb-spin' : ''}`} />
         </button>
-        {canPrev ? (
-          <button
-            type="button"
-            className="tasks-refresh"
-            title="上一条"
-            aria-label="上一条"
-            onClick={onPrev}
-          >
-            <ChevronLeftIcon aria-hidden className="size-[14px]" />
-          </button>
-        ) : null}
-        {canNext ? (
-          <button
-            type="button"
-            className="tasks-refresh"
-            title="下一条"
-            aria-label="下一条"
-            onClick={onNext}
-          >
-            <ChevronRightIcon aria-hidden className="size-[14px]" />
-          </button>
-        ) : null}
         <div className="fsdb-create-group" ref={createRef}>
             <button
               type="button"
