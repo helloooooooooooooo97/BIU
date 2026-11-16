@@ -227,9 +227,10 @@ export const PAGE_EDITOR_STYLE = `
 .page-editor .tiptap .page-image-caption::placeholder{color:var(--biu-color-text-placeholder)}
 .page-image-lightbox{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:24px;background:color-mix(in srgb,var(--biu-color-bg) 28%,#000 72%);cursor:zoom-out}
 .page-image-lightbox img{max-width:min(92vw,1400px);max-height:92vh;width:auto;height:auto;border-radius:10px;box-shadow:0 18px 48px color-mix(in srgb,#000 42%,transparent)}
-.page-editor .page-block[data-page-block=excalidraw] img{margin:0;max-width:none;height:unset;border-radius:0}
-.page-editor .page-block[data-page-block=excalidraw] svg,.page-editor .page-block[data-page-block=excalidraw] canvas{display:block;max-width:none;margin:0;border-radius:0}
-.page-editor .page-block[data-page-block=excalidraw] .welcome-screen-center{display:none}
+.page-editor .page-block[data-page-block=excalidraw] img,[data-testid=page-excalidraw] img{margin:0;max-width:none;height:unset;border-radius:0}
+.page-editor .page-block[data-page-block=excalidraw] svg,.page-editor .page-block[data-page-block=excalidraw] canvas,[data-testid=page-excalidraw] svg,[data-testid=page-excalidraw] canvas{display:block;max-width:none;margin:0;border-radius:0}
+.page-editor .page-block[data-page-block=excalidraw] .welcome-screen-center,[data-testid=page-excalidraw] .welcome-screen-center{display:none}
+[data-testid=page-excalidraw] > div[style]{min-width:0}
 .page-editor .page-block[data-page-block=terminal] .pt-scroll-rail{position:absolute;top:4px;right:3px;bottom:4px;width:6px;z-index:12}
 .page-editor .tiptap table{width:100%;margin:8px 0;border-collapse:collapse;table-layout:fixed}
 .page-editor .tiptap th,.page-editor .tiptap td{border:var(--biu-stroke-width) solid var(--biu-color-border);padding:6px 8px;vertical-align:top}

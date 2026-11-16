@@ -14,6 +14,16 @@ test('sandbox is a core page block, not a store plugin', () => {
   assert.equal(existsSync(join(sandbox, 'page-sandbox')), false)
 })
 
+test('tag block View is registered by core-file-system, store page-tag is metadata only', () => {
+  const page = readFileSync(join(root, 'packages/core-file-system/src/web/index.tsx'), 'utf8')
+  const block = readFileSync(join(root, 'packages/core-file-system/src/web/tag-block.tsx'), 'utf8')
+  const plugin = readFileSync(join(sandbox, 'page-tag/web/index.tsx'), 'utf8')
+  assert.match(page, /kind: 'tag'/)
+  assert.match(page, /View: TagBlockView/)
+  assert.match(block, /page-tag-block-table/)
+  assert.doesNotMatch(plugin, /registerBlock\s*\(/)
+})
+
 test('page block playground UIs use ReUI tokens instead of hardcoded light-theme colors', () => {
   const files = [
     'page-toc/web/index.tsx',

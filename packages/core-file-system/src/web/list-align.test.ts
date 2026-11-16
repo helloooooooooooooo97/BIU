@@ -364,6 +364,15 @@ test('detail facet value host fills the cell so a click beside the tag opens the
   assert.match(css, /\.fsdb-page \.fsdb-detail-aside \.tasks-table\.is-wrap \.fsdb-schema>\.fsdb-pop-host[\s\S]*?width:100%/)
 })
 
+test('table stage does not take width 100% beside the check rail', () => {
+  assert.match(css, /\.fsdb-page \.tasks-table-stage\{[^}]*width:max-content/)
+  assert.match(css, /\.fsdb-page \.tasks-table-stage\{[^}]*min-width:100%/)
+  assert.match(css, /\.fsdb-page \.tasks-table-stage > \.tasks-table\{[^}]*min-width:calc\(100cqw - var\(--fsdb-check-gutter\)\)/)
+  assert.match(css, /\.fsdb-page \.tasks-table-stage > \.tasks-table\{[^}]*width:auto/)
+  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  assert.doesNotMatch(browser, /style=\{\{\s*width: '100%',\s*minWidth: `\$\{paintedTablePx\}px`/)
+})
+
 test('table columns resize with a Super Tag blue highlight on the divider', () => {
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   assert.match(browser, /data-testid="fsdb-col-resizer"/)

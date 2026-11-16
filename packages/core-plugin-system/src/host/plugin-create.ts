@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
@@ -397,7 +398,9 @@ function storeBundlePlugins(kind: 'host' | 'web'): EsbuildPlugin[] {
     setup(build) {
       build.onLoad({ filter: /\.css$/ }, (args) => {
         const css = inlineCssUrls(readFileSync(args.path, 'utf8'), args.path)
-        const id = `store-css-${Buffer.from(args.path).toString('base64url').slice(0, 24)}`
+        // 必须用整路径哈希：base64 截断 24 只覆盖到 `/Users/…/Document`，
+        // page-excalidraw 与 page-terminal 等会撞同一个 style id，后加载的 CSS 被跳过。
+        const id = `store-css-${createHash('sha256').update(args.path).digest('base64url').slice(0, 16)}`
         return {
           contents: `if (typeof document !== "undefined" && !document.getElementById(${JSON.stringify(id)})) {
   const el = document.createElement("style")

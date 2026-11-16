@@ -8231,7 +8231,8 @@ html:not(.dark) .composer-plus {
 
 .composer-model-flyout {
   position: fixed;
-  z-index: 240;
+  /* 实际 z-index 由 overlayZ(260) 内联写入，保证压过一级 panel 和聊天浮层 */
+  z-index: 260;
   display: flex;
   width: 200px;
   max-height: min(380px, 56vh);
@@ -9079,24 +9080,81 @@ html.pick-mode .chat-overlay-panel * {
   background: var(--biu-color-emphasis-muted);
 }
 
-/* 画板挂在 body 上时，不要被 Tailwind 的 svg/img 默认撑满视口 */
+/* 画板挂在 body / 页面块里时：隔离 Tailwind preflight，避免工具条竖排撑满、图标被撑爆 */
 [data-excalidraw-host] {
+  position: relative;
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+[data-excalidraw-host] > div {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
   min-height: 0;
 }
 
 [data-excalidraw-host] .excalidraw {
-  width: 100%;
-  height: 100%;
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
 }
 
-[data-excalidraw-host] img {
-  margin: 0;
+[data-excalidraw-host] .excalidraw .layer-ui__wrapper,
+[data-excalidraw-host] .excalidraw .FixedSideContainer {
+  box-sizing: border-box;
+}
+
+/*
+ * 收起预览（host z-index:2）只留画布。
+ * 窄栏会触发 excalidraw--mobile，工具条 DOM 在 FixedSideContainer / App-bottom-bar，
+ * 不是 layer-ui__wrapper；CSS 没挂上时还会露出原生 radio 和 “Shapes” 标题。
+ */
+[data-excalidraw-host][style*='z-index:2'] .FixedSideContainer,
+[data-excalidraw-host][style*='z-index:2'] .App-bottom-bar,
+[data-excalidraw-host][style*='z-index:2'] .mobile-misc-tools-container,
+[data-excalidraw-host]:not([data-excalidraw-expanded='1']):not([style*='z-index:9992']) .FixedSideContainer,
+[data-excalidraw-host]:not([data-excalidraw-expanded='1']):not([style*='z-index:9992']) .App-bottom-bar,
+[data-excalidraw-host]:not([data-excalidraw-expanded='1']):not([style*='z-index:9992']) .mobile-misc-tools-container {
+  display: none !important;
+}
+
+[data-excalidraw-host] img,
+[data-excalidraw-host] svg,
+[data-excalidraw-host] canvas {
+  display: block;
   max-width: none;
+  margin: 0;
   border-radius: 0;
 }
 
-[data-excalidraw-host] .welcome-screen-center {
-  display: none;
+[data-excalidraw-host] .ToolIcon__icon,
+[data-excalidraw-host] .ToolIcon__icon svg,
+[data-excalidraw-host] .dropdown-menu-button svg,
+[data-excalidraw-host] .Island svg {
+  width: auto;
+  height: auto;
+  max-width: 2.25rem;
+  max-height: 2.25rem;
+  flex: none;
+}
+
+[data-excalidraw-host] .welcome-screen-center,
+[data-excalidraw-host] .welcome-screen-decor,
+[data-excalidraw-host] .welcome-screen-decor-hint {
+  display: none !important;
 }
 
 [data-excalidraw-host] .unlocked-icon {

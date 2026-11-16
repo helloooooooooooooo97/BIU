@@ -128,6 +128,14 @@ function fitView(api: DrawApi | null) {
   api.scrollToContent?.(undefined, { fitToContent: true, animate: false })
 }
 
+/** 等布局落到真实宽高后再适配；缩略 320×280 时若仍沿用放大态的 zoom/scroll 会看到一片空。 */
+function fitViewAfterLayout(api: DrawApi | null) {
+  if (!api) return
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => fitView(api))
+  })
+}
+
 function readAppTheme(): 'light' | 'dark' {
   return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
 }
@@ -233,10 +241,18 @@ function queueHostSync() {
   })
 }
 
+function stampHostChrome(host: Host) {
+  const el = host.el
+  el.dataset.excalidrawHost = host.file
+  if (host.expanded) el.dataset.excalidrawExpanded = '1'
+  else delete el.dataset.excalidrawExpanded
+}
+
 /** 卸下或卸载时先藏起来再挂到 body，避免 inset:0 铺满视口闪一下全屏。 */
 function parkHost(host: Host) {
   host.expanded = false
   const el = host.el
+  stampHostChrome(host)
   el.style.cssText =
     'position:fixed;width:0;height:0;overflow:hidden;visibility:hidden;pointer-events:none;inset:auto'
   if (el.parentElement !== document.body) document.body.appendChild(el)
@@ -244,6 +260,7 @@ function parkHost(host: Host) {
 
 function placeHost(host: Host, slot: HTMLElement | null) {
   const el = host.el
+  stampHostChrome(host)
   if (host.expanded) {
     if (el.parentElement !== document.body) document.body.appendChild(el)
     el.style.cssText =
@@ -260,7 +277,8 @@ function placeHost(host: Host, slot: HTMLElement | null) {
   el.style.cssText = live
     ? 'position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:auto;visibility:visible;overflow:hidden;isolation:isolate;background:var(--biu-color-bg)'
     : 'position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;visibility:visible;overflow:hidden;isolation:isolate;background:var(--biu-color-bg)'
-  if (moved) requestAnimationFrame(() => fitView(host.api))
+  // 缩略态始终 fit：从全屏收回或首次挂上时，都不能沿用放大态视口
+  fitViewAfterLayout(host.api)
 }
 
 function paintHost(host: Host) {
@@ -278,6 +296,7 @@ function retainHost(file: string) {
   }
   const el = document.createElement('div')
   el.dataset.excalidrawHost = file
+  delete el.dataset.excalidrawExpanded
   document.body.appendChild(el)
   const host: Host = {
     file,
@@ -346,6 +365,8 @@ function PersistentDraw(props: {
     apiRef.current = api
     const hosted = hosts.get(file)
     if (hosted) hosted.api = api
+    // API 就绪时缩略态也要 fit；此前 placeHost 时 api 往往还是 null
+    if (api && !hosts.get(file)?.expanded) fitViewAfterLayout(api)
   }, [file])
   const onChange = useCallback((elements: unknown[], appState: Record<string, unknown>, files: Record<string, unknown>) => {
     if (!file) return
@@ -389,20 +410,32 @@ function PersistentDraw(props: {
   }, [file])
 
   useEffect(() => {
-    if (!props.expanded) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') hosts.get(props.file)?.onCollapse?.()
+    if (props.expanded) {
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') hosts.get(props.file)?.onCollapse?.()
+      }
+      window.addEventListener('keydown', onKey)
+      fitViewAfterLayout(apiRef.current)
+      return () => window.removeEventListener('keydown', onKey)
     }
-    window.addEventListener('keydown', onKey)
-    const id = requestAnimationFrame(() => fitView(apiRef.current))
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      cancelAnimationFrame(id)
-    }
+    // 从放大收回缩略：视口还停在 144% 等缩放，必须重新 fit 才能看见图
+    fitViewAfterLayout(apiRef.current)
+    return undefined
   }, [props.expanded, props.file])
 
   return (
-    <div style={{ height: '100%', width: '100%', isolation: 'isolate', overflow: 'hidden' }}>
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        width: '100%',
+        height: '100%',
+        minWidth: 0,
+        minHeight: 0,
+        isolation: 'isolate',
+        overflow: 'hidden',
+      }}
+    >
       <Excalidraw
         theme={theme}
         initialData={props.initialData as never}

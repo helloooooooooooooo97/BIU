@@ -1516,7 +1516,6 @@ const WindowedTable = memo(function WindowedTable({
         tabIndex={0}
         className={`tasks-table${wrapCells ? ' is-wrap' : ''} is-cols-fixed${truncateCells ? ' is-truncate' : ''}${resizingCol ? ' is-col-resize' : ''}`}
         style={{
-          width: '100%',
           minWidth: `${paintedTablePx}px`,
           outline: 'none',
           ['--fsdb-pin-title' as string]: `${columnPx[0] || 240}px`,

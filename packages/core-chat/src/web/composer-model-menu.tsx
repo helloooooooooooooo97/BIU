@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import { ChevronRightIcon, MagnifyingGlassIcon } from '@heroicons/react/16/solid'
 import {
   inferModelCapabilities,
@@ -24,6 +25,8 @@ const FLYOUT_GAP = 6
 const FLYOUT_PAD = 8
 const FLYOUT_WIDTH = 200
 const FLYOUT_COMPACT_WIDTH = 140
+/** 二级菜单要比一级 panel / 同级 tip 更高；遇到聊天浮层时走 overlayZ 抬升。 */
+const FLYOUT_Z = 260
 
 export function placeComposerModelFlyout(
   anchor: Pick<DOMRect, 'left' | 'right' | 'bottom'>,
@@ -117,13 +120,14 @@ export function ComposerModelMenu(props: {
     }
   }, [flyoutOpen, pane])
 
+  const flyoutStyle = { left: flyBox.left, bottom: flyBox.bottom, zIndex: overlayZ(FLYOUT_Z) }
   const flyout =
     pane === 'model' ? (
       <div
         className="composer-model-flyout"
         role="listbox"
         aria-label="选择模型"
-        style={{ left: flyBox.left, bottom: flyBox.bottom }}
+        style={flyoutStyle}
       >
         <div className="composer-model-search">
           <MagnifyingGlassIcon className="size-3.5 opacity-60" aria-hidden />
@@ -176,7 +180,7 @@ export function ComposerModelMenu(props: {
         className="composer-model-flyout is-compact"
         role="listbox"
         aria-label={openChoice.label}
-        style={{ left: flyBox.left, bottom: flyBox.bottom }}
+        style={flyoutStyle}
       >
         {openChoice.options.map((item) => {
           const active = knobValue(openChoice, mode) === item.value
@@ -200,7 +204,9 @@ export function ComposerModelMenu(props: {
 
   return (
     <div className="composer-model-pop" data-testid="composer-model-menu">
-      {flyout && typeof document !== 'undefined' ? createPortal(flyout, document.body) : flyout}
+      {flyout && typeof document !== 'undefined'
+        ? createPortal(flyout, overlayPortalRoot() ?? document.body)
+        : flyout}
       <div className="composer-model-panel" ref={panelRef} data-testid="composer-model-panel">
         {knobs.map((knob) => {
           if (knob.kind === 'toggle') {
