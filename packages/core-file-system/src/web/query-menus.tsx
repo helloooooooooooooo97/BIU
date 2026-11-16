@@ -130,15 +130,17 @@ export function QueryFlyout({
   onClose,
   ignoreSelector,
   inside,
+  align = 'end',
   children,
 }: {
   anchorRef: RefObject<HTMLElement | null>
   onClose: () => void
   ignoreSelector?: string
   inside?: (node: Node) => boolean
+  align?: 'start' | 'end'
   children: ReactNode
 }) {
-  const [box, setBox] = useState({ top: 0, right: 8 })
+  const [box, setBox] = useState({ top: 0, right: 8, left: 8 })
   useLayoutEffect(() => {
     const el = anchorRef.current
     if (!el) return
@@ -147,6 +149,7 @@ export function QueryFlyout({
       setBox({
         top: rect.bottom + 6,
         right: Math.max(8, Math.round(window.innerWidth - rect.right)),
+        left: Math.max(8, Math.round(rect.left)),
       })
     }
     place()
@@ -159,6 +162,7 @@ export function QueryFlyout({
   }, [anchorRef])
   if (typeof document === 'undefined') return null
   const ignore = ignoreSelector ? `${QUERY_FLYOUT_IGNORE}, ${ignoreSelector}` : QUERY_FLYOUT_IGNORE
+  const start = align === 'start'
   return createPortal(
     <HeadlessDismiss
       onDismiss={onClose}
@@ -172,11 +176,11 @@ export function QueryFlyout({
       }
     >
       <div
-        className="fsdb-page fsdb-query-flyout"
+        className={`fsdb-page fsdb-query-flyout${start ? ' is-start' : ''}`}
         data-testid="fsdb-query-flyout"
         style={{
           top: box.top,
-          right: box.right,
+          ...(start ? { left: box.left, right: 'auto' } : { right: box.right }),
           zIndex: overlayZ(200),
         }}
       >

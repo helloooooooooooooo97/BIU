@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from 'react'
+import { createPortal } from 'react-dom'
 import type { CollectionChrome, FsDetailPane } from '@biu/type-file-system/ui'
 import type { CollectionSchema, DbRecord, FieldSpec } from '@biu/type-file-system'
 import { ChevronDownIcon, ChevronLeftIcon, ChevronUpIcon, HashtagIcon, ShareIcon } from '@heroicons/react/16/solid'
@@ -209,6 +210,55 @@ function RecordPaneMenu({
           {share}
         </AnchorMenu>
       ) : null}
+    </>
+  )
+}
+
+function RecordFloatNav({
+  canPrev,
+  canNext,
+  onPrev,
+  onNext,
+}: {
+  canPrev?: boolean
+  canNext?: boolean
+  onPrev?: () => void
+  onNext?: () => void
+}) {
+  const mark = useRef<HTMLSpanElement>(null)
+  const [host, setHost] = useState<HTMLElement | null>(null)
+
+  useLayoutEffect(() => {
+    const stage = mark.current?.closest('.fsdb-detail-stage')
+    const main = stage?.querySelector('.fsdb-detail-main')
+    const root =
+      (main instanceof HTMLElement
+        ? main.closest('.fsdb-right') ?? main.closest('.fsdb-right-body')
+        : null) ?? stage
+    setHost(root instanceof HTMLElement ? root : null)
+  }, [])
+
+  if (!canPrev && !canNext) return null
+  const nav = (
+    <div className="fsdb-detail-float-host">
+      <nav className="fsdb-detail-float-nav" aria-label="按视图顺序切换记录">
+        {canPrev ? (
+          <button type="button" className="fsdb-detail-float-btn" title="上一条" aria-label="上一条" onClick={onPrev}>
+            <ChevronUpIcon aria-hidden />
+          </button>
+        ) : null}
+        {canNext ? (
+          <button type="button" className="fsdb-detail-float-btn" title="下一条" aria-label="下一条" onClick={onNext}>
+            <ChevronDownIcon aria-hidden />
+          </button>
+        ) : null}
+      </nav>
+    </div>
+  )
+  return (
+    <>
+      <span ref={mark} hidden aria-hidden="true" />
+      {host ? createPortal(nav, host) : nav}
     </>
   )
 }
@@ -634,32 +684,7 @@ export function RecordDetail({
             </div>
           </div>
           <HeadingOutline enabled={outlineOn} />
-          {chrome?.DetailBar ? null : canPrev || canNext ? (
-            <nav className="fsdb-detail-float-nav" aria-label="按视图顺序切换记录">
-              {canPrev ? (
-                <button
-                  type="button"
-                  className="fsdb-detail-float-btn"
-                  title="上一条"
-                  aria-label="上一条"
-                  onClick={onPrev}
-                >
-                  <ChevronUpIcon aria-hidden />
-                </button>
-              ) : null}
-              {canNext ? (
-                <button
-                  type="button"
-                  className="fsdb-detail-float-btn"
-                  title="下一条"
-                  aria-label="下一条"
-                  onClick={onNext}
-                >
-                  <ChevronDownIcon aria-hidden />
-                </button>
-              ) : null}
-            </nav>
-          ) : null}
+          <RecordFloatNav canPrev={canPrev} canNext={canNext} onPrev={onPrev} onNext={onNext} />
         </div>
   )
 }

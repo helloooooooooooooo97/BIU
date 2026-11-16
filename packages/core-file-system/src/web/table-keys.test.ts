@@ -1,6 +1,8 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE, claimTableCellPick, consumePendingTablePane, firstTableTitleCell, moveTableCell, readTablePaneRest, rememberTablePaneRest, requestTablePaneFocus, tableActionArrowLeave, tableActionButtonStep, tableClearKey, tableClearedValue, tableCreateKey, tableKeyDir, tableNavKeys, tablePaneFromEvent, tablePaneHotkey, tablePaneOther, tableTitleOpenWhere, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE, claimTableCellPick, consumePendingTablePane, firstTableTitleCell, moveTableCell, readTablePaneRest, rememberTablePaneRest, requestTablePaneFocus, tableActionArrowLeave, tableActionButtonStep, tableCellRange, tableCellRangeKey, tableClearKey, tableClearedValue, tableCreateKey, tableKeyDir, tableNavKeys, tablePaneFromEvent, tablePaneHotkey, tablePaneOther, tableSendChatHotkey, tableTitleOpenWhere, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
 
 test('first table cell is the title of the first row', () => {
   assert.deepEqual(firstTableTitleCell(['a', 'b'], ['status', 'title', 'actions'], 'title'), { id: 'a', key: 'title' })
@@ -13,6 +15,24 @@ test('table nav keys include actions and skip pad columns', () => {
     tableNavKeys([{ key: 'title' }, { key: 'actions' }, { key: 'status' }, { key: 'pad:1' }, { key: 'fsdb-col-fill' }]),
     ['title', 'actions', 'status'],
   )
+})
+
+test('table cell range is a closed rectangle like Excel', () => {
+  const rows = ['a', 'b', 'c']
+  const keys = ['title', 'status', 'owner']
+  assert.deepEqual(
+    tableCellRange(rows, keys, { id: 'a', key: 'title' }, { id: 'b', key: 'status' }),
+    [
+      { id: 'a', key: 'title' },
+      { id: 'a', key: 'status' },
+      { id: 'b', key: 'title' },
+      { id: 'b', key: 'status' },
+    ],
+  )
+  assert.deepEqual(tableCellRange(rows, keys, { id: 'c', key: 'owner' }, { id: 'c', key: 'owner' }), [
+    { id: 'c', key: 'owner' },
+  ])
+  assert.equal(tableCellRangeKey('a', 'title'), 'a\0title')
 })
 
 test('table cell move stays on the grid and stops at edges', () => {
@@ -93,6 +113,22 @@ test('table keys map like Linear', () => {
   assert.equal(tableKeyDir('Tab'), 'right')
   assert.equal(tableKeyDir('Tab', true), 'left')
   assert.equal(tableKeyDir('Enter'), null)
+})
+
+test('⌘L on a table cell is the same chat hotkey as the document', () => {
+  const chord = { key: 'l', metaKey: true, ctrlKey: false, altKey: false, shiftKey: false }
+  assert.equal(tableSendChatHotkey(chord), true)
+  assert.equal(tableSendChatHotkey({ ...chord, ctrlKey: true, metaKey: false }), true)
+  assert.equal(tableSendChatHotkey({ ...chord, key: 'L' }), true)
+  assert.equal(tableSendChatHotkey({ ...chord, shiftKey: true }), false)
+  assert.equal(tableSendChatHotkey({ ...chord, altKey: true }), false)
+  assert.equal(tableSendChatHotkey({ ...chord, key: 'k' }), false)
+  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  assert.match(browser, /tableSendChatHotkey\(event\)/)
+  assert.match(browser, /sendSelectedCellToChat/)
+  assert.match(browser, /fieldPickId\(row\.id, cursor\.key\)/)
+  assert.match(browser, /field: cursor\.key/)
+  assert.match(browser, /inCell && selected/)
 })
 
 test('⌘\\ toggles the main and inspector panes', () => {

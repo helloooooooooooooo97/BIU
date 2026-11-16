@@ -26,6 +26,7 @@ import { EFFORT_KNOB, THINKING_KNOB } from '../host/model-catalog.ts'
 import { ImageThumbs } from './image-thumbs.tsx'
 import { collectClipboardImages, collectImageFiles } from './clipboard-images.ts'
 import { collectDroppedFilePaths, fileAbsolutePath } from './drop-file-paths.ts'
+import { filePickFromUpload, filesNeedingUpload, uploadComposerFile } from './upload-composer-file.ts'
 import { focusComposerEditor, isComposerFocusPending } from '@biu/web-app-shell/chat-overlay'
 import { shouldNavigateToSession } from './composer-nav.ts'
 import { getChatConfig } from './chat-config.ts'
@@ -461,8 +462,9 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
     picked,
     catalog,
     route: location.pathname,
+    sessionView,
   })
-  live.current = { slash, filtered, pick, pickRefs, pendingImages, picked, catalog, route: location.pathname }
+  live.current = { slash, filtered, pick, pickRefs, pendingImages, picked, catalog, route: location.pathname, sessionView }
   const pickToolRef = useRef<(name: string) => void>(() => {})
   const activeIndexRef = useRef(0)
   activeIndexRef.current = activeIndex
@@ -497,11 +499,9 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
         return true
       },
       handleDrop(_view, event) {
-        if (takeDroppedRef.current(event.dataTransfer)) {
-          event.preventDefault()
-          return true
-        }
-        if ([...(event.dataTransfer?.types ?? [])].includes('Files')) {
+        const hasFiles = [...(event.dataTransfer?.types ?? [])].includes('Files')
+        const handled = takeDroppedRef.current(event.dataTransfer)
+        if (handled || hasFiles) {
           event.preventDefault()
           return true
         }
@@ -678,7 +678,8 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
       const files = dt.files
       const paths = collectDroppedFilePaths(files, { uriList })
       const images = collectImageFiles(files).filter((file) => !fileAbsolutePath(file))
-      if (!paths.length && !images.length) return false
+      const uploads = filesNeedingUpload(files)
+      if (!paths.length && !images.length && !uploads.length) return false
       if (paths.length) {
         const refs = paths
           .map((path) => filePickFromPath(path, live.current.route))
@@ -689,6 +690,21 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
         }
       }
       if (images.length) addImageFiles(images)
+      if (uploads.length) {
+        void (async () => {
+          const sessionId = await live.current.sessionView.ensureSession()
+          const refs = []
+          for (const file of uploads) {
+            const path = await uploadComposerFile(sessionId, file)
+            const ref = filePickFromUpload(path, file, live.current.route)
+            if (ref) refs.push(ref)
+          }
+          if (!refs.length) return
+          const ed = editorRef.current
+          if (live.current.pick) live.current.pick.addMany(refs)
+          else if (ed) insertPickChips(ed, refs)
+        })()
+      }
       return true
     },
     [addImageFiles, editor],
@@ -715,8 +731,9 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
   }
 
   function onDrop(event: DragEvent<HTMLFormElement>) {
-    if (!takeDroppedFiles(event.dataTransfer)) return
-    event.preventDefault()
+    const hasFiles = [...(event.dataTransfer?.types ?? [])].includes('Files')
+    const handled = takeDroppedFiles(event.dataTransfer)
+    if (handled || hasFiles) event.preventDefault()
   }
 
   const openSlashMenu = useCallback(() => {
@@ -982,7 +999,10 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
         className={`composer-pill${expanded ? ' is-expanded' : ''}${pickRefs.length || picked.length || pendingImages.length ? ' has-chips' : ''}`}
         onSubmit={onSubmit}
         onDragOver={(event) => {
-          if ([...(event.dataTransfer?.types ?? [])].includes('Files')) event.preventDefault()
+          if ([...(event.dataTransfer?.types ?? [])].includes('Files')) {
+            event.preventDefault()
+            event.dataTransfer.dropEffect = 'copy'
+          }
         }}
         onDrop={onDrop}
       >
