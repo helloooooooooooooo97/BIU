@@ -152,7 +152,7 @@ import { DataSidebarShell } from './data-sidebar-shell.tsx'
 import { builtinAllViewId, catalogLockFilters, collectionNoun, displayNameForView, isBuiltinAllViewId, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stampRecordId, stampRowOpenTarget, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, moveInspectorRecordsToTrash, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
-import { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE, claimTableCellPick, consumePendingTablePane, firstTableTitleCell, peekPendingTablePane, moveTableCell, readTablePaneRest, rememberTablePaneRest, requestTablePaneFocus, tableActionArrowLeave, tableActionButtons, tableActionButtonStep, tableCellRange, tableCellRangeKey, tableCellRangeRowIds, tableClearKey, tableClearedValue, tableCreateKey, tableKeyDir, tableKeyFromEditingTarget, tableNavKeys, tablePaneFromEvent, tablePaneHotkey, tablePaneOther, tableSendChatHotkey, tableTitleOpenWhere, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
+import { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE, claimTableCellPick, consumePendingTablePane, firstTableTitleCell, peekPendingTablePane, moveTableCell, readTablePaneRest, rememberTablePaneRest, requestTablePaneFocus, tableActionArrowLeave, tableActionButtons, tableActionButtonStep, tableAutoLandPickAction, tableCellRange, tableCellRangeKey, tableCellRangeRowIds, tableClearKey, tableClearedValue, tableCreateKey, tableKeyDir, tableKeyFromEditingTarget, tableNavKeys, tablePaneFromEvent, tablePaneHotkey, tablePaneOther, tableSendChatHotkey, tableTitleOpenWhere, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
 import { focusRecordTitleNear } from './title-content-nav.ts'
 import { isViewCatalogField, selectedViewCatalogOption } from './view-catalog.ts'
 import { jumpTag, loadTags, pullTags, subscribeTags } from './tag-catalog.ts'
@@ -1983,6 +1983,10 @@ export function CollectionBrowser({
     setPaintedPath(dataPath)
     pathSwitchHandledRef.current = true
     prevSchemaDefaultSig.current = ''
+    cellPickRef.current = null
+    cellRangeRef.current = null
+    cellRangeSetRef.current = new Set()
+    tableAutoLandedRef.current = ''
     const stored = viewForPath(collectionPath, routeViewId)
     const listed = paintListedViews(collectionPath)
     rememberViews(collectionPath, listed)
@@ -4597,12 +4601,20 @@ export function CollectionBrowser({
   }
 
   function applyCellRange(anchor: { id: string; key: string }, focus: { id: string; key: string }, commit = true) {
+    const prevPick = cellPickRef.current
+    const prevRange = cellRangeRef.current
+    const cells = tableCellRange(tableNavRowIds(), tableNavKeys(columns), anchor, focus)
+    const nextSet = new Set(cells.map((cell) => tableCellRangeKey(cell.id, cell.key)))
+    const samePick = prevPick?.id === focus.id && prevPick?.key === focus.key
+    const sameAnchor = prevRange?.anchor.id === anchor.id && prevRange?.anchor.key === anchor.key
+    const sameFocus = prevRange?.focus.id === focus.id && prevRange?.focus.key === focus.key
+    const sameRange =
+      nextSet.size === cellRangeSetRef.current.size && [...nextSet].every((key) => cellRangeSetRef.current.has(key))
     cellRangeRef.current = { anchor, focus }
     cellPickRef.current = focus
-    const cells = tableCellRange(tableNavRowIds(), tableNavKeys(columns), anchor, focus)
-    cellRangeSetRef.current = new Set(cells.map((cell) => tableCellRangeKey(cell.id, cell.key)))
+    cellRangeSetRef.current = nextSet
     paintCellRangeClasses()
-    if (commit) setCellPickEpoch((n) => n + 1)
+    if (commit && !(samePick && sameAnchor && sameFocus && sameRange)) setCellPickEpoch((n) => n + 1)
   }
 
   function tableCellFromPoint(x: number, y: number) {
@@ -5241,11 +5253,11 @@ export function CollectionBrowser({
     btns[i]?.focus()
   }
 
-  function revealTableCell(next: { id: string; key: string }, extend = false) {
+  function revealTableCell(next: { id: string; key: string }, extend = false, commit = true) {
     if (extend && (cellRangeRef.current || cellPickRef.current)) {
-      applyCellRange(cellRangeRef.current?.anchor ?? cellPickRef.current ?? next, next)
+      applyCellRange(cellRangeRef.current?.anchor ?? cellPickRef.current ?? next, next, commit)
     } else {
-      applyCellRange(next, next)
+      applyCellRange(next, next, commit)
     }
     claimThisTableCell()
     const wrap = tableWrapRef.current
@@ -5690,8 +5702,24 @@ export function CollectionBrowser({
     const pick = cellPickRef.current
     if (pick) {
       const td = findPaintedCellTd(pick.id, pick.key)
-      if (!td?.classList.contains('is-cell-on')) revealTableCell(pick)
-      return
+      const action = tableAutoLandPickAction({
+        pick,
+        rowIds: tableNavRowIds(),
+        keys: tableNavKeys(columns),
+        tdMounted: Boolean(td),
+        paintedOn: Boolean(td?.classList.contains('is-cell-on')),
+      })
+      if (action === 'drop') {
+        cellPickRef.current = null
+        cellRangeRef.current = null
+        cellRangeSetRef.current = new Set()
+        tableRef.current?.querySelectorAll('td.is-cell-on, td.is-cell-range').forEach((node) => {
+          node.classList.remove('is-cell-on', 'is-cell-ro', 'is-cell-range')
+        })
+      } else {
+        if (action === 'paint' || action === 'scroll') revealTableCell(pick, false, false)
+        return
+      }
     }
     const stamp = `${collectionPath}\0${activeViewId ?? ''}\0${dataPath}`
     if (tableAutoLandedRef.current === stamp) return
