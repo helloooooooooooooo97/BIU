@@ -31,8 +31,6 @@ export {
   isLegacyDatabasePath,
   encodeCollectionSeg,
   decodeCollectionSeg,
-  subscribeAppPathname,
-  getAppPathname,
 } from './session-route.ts'
 export {
   compactSessionEvents,
