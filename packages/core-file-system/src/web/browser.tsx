@@ -1246,6 +1246,7 @@ type TableBodyProps = {
   error: string
   pickMode: boolean
   activeRowId: string | null
+  cellPaintKey: number
 }
 
 const TableBody = memo(function TableBody({
@@ -1385,7 +1386,6 @@ const WindowedTable = memo(function WindowedTable({
   frozen = false,
   cellPaintKey = 0,
 }: WindowedTableProps) {
-  void cellPaintKey
   const [tableScroll, setTableScroll] = useState(() => ({
     top: 0,
     left: 0,
@@ -1567,6 +1567,7 @@ const WindowedTable = memo(function WindowedTable({
             error={error}
             pickMode={pickMode}
             activeRowId={activeRowId}
+            cellPaintKey={cellPaintKey}
           />
         </TablePaintCtx.Provider>
       </table>
@@ -4650,6 +4651,14 @@ export function CollectionBrowser({
     }
   }
 
+  useLayoutEffect(() => {
+    // A cursor belongs to its table/view, even when the destination reuses row ids.
+    tableDragScrollStopRef.current?.()
+    tableDragScrollStopRef.current = null
+    clearTableCellPick()
+    tableAutoLandedRef.current = ''
+  }, [collectionPath, dataPath, activeViewId])
+
   function claimThisTableCell() {
     if (sheet) return
     claimTableCellPick(embed ? 'inspector' : 'main')
@@ -5687,11 +5696,18 @@ export function CollectionBrowser({
   tableAutoLandLiveRef.current = () => {
     if (sheet || embed || mode !== 'table' || detailId) return
     if (peekPendingTablePane('inspector')) return
+    if (tableHoldRef.current || pendingPathQueryRef.current) return
     const pick = cellPickRef.current
     if (pick) {
-      const td = findPaintedCellTd(pick.id, pick.key)
-      if (!td?.classList.contains('is-cell-on')) revealTableCell(pick)
-      return
+      if (tableNavRowIds().includes(pick.id) && tableNavKeys(columns).includes(pick.key)) {
+        // Virtual rows may be unmounted. Restore paint without setting state or
+        // scrolling back to the cursor on every commit (which can loop forever).
+        const td = findPaintedCellTd(pick.id, pick.key)
+        if (td && !td.classList.contains('is-cell-on')) paintCellRangeClasses()
+        return
+      }
+      clearTableCellPick()
+      tableAutoLandedRef.current = ''
     }
     const stamp = `${collectionPath}\0${activeViewId ?? ''}\0${dataPath}`
     if (tableAutoLandedRef.current === stamp) return
@@ -6943,7 +6959,11 @@ export function CollectionBrowser({
           onOpenTable={onOpenTable}
           onApplyView={(view) => {
             selectView(view)
-            setDetailId(null)
+            // selectView already navigates to the destination view. Closing via
+            // setDetailId would queue onCloseRecord with the previous route.
+            setOpenDetailId(null)
+            setDetailRow(null)
+            setCellPop(null)
           }}
           onRenameView={renameView}
           onDeleteView={deleteView}

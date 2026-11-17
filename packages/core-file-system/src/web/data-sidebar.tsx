@@ -73,6 +73,14 @@ import { DataIconRail } from './data-sidebar-shell.tsx'
 
 const RecordEmojiBoard = lazy(() => import('@biu/biu-ui/emoji-board').then((m) => ({ default: m.RecordEmojiBoard })))
 
+/** 高亮行的留白、计数和图标使用标题按钮的操作；独立按钮仍处理自己的点击。 */
+function onSidebarRowClick(event: MouseEvent<HTMLElement>) {
+  const hit = event.target
+  if (event.defaultPrevented || !(hit instanceof Element) || !event.currentTarget.contains(hit)) return
+  if (hit.closest('button, a, input, textarea, select, [contenteditable], [role="button"], [role="menuitem"]')) return
+  event.currentTarget.querySelector<HTMLButtonElement>('button.min-w-0.flex-1')?.click()
+}
+
 type PreviewState = {
   items: DbRecord[]
   total: number
@@ -318,6 +326,7 @@ function ViewRecordPreview({
           <div
             key={row.id}
             className="chat-session-row"
+            onClick={onSidebarRowClick}
             role="listitem"
             {...pickDomAttrs(recordKind, row.id, label)}
           >
@@ -353,6 +362,7 @@ function ViewRecordPreview({
         <div key={row.id} className="min-w-0" role="listitem">
           <div
             className={`chat-session-row group${starred ? ' is-pinned' : ''}`}
+            onClick={onSidebarRowClick}
             {...pickDomAttrs(recordKind, row.id, label)}
           >
             <div className="chat-session-row-main flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5">
@@ -439,7 +449,7 @@ function ViewRecordPreview({
           const expanded = openGroups[groupKey] ?? index === 0
           return (
             <div key={groupKey} className="min-w-0" data-testid="sidebar-view-group">
-              <div className="chat-session-row fsdb-view-preview-group">
+              <div className="chat-session-row fsdb-view-preview-group" onClick={onSidebarRowClick}>
                 <div className="chat-session-row-main flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5">
                   <button
                     type="button"
@@ -779,7 +789,7 @@ export const DataSidebar = memo(function DataSidebar({
       const system = isSystemCollection(table.path)
       return (
         <div key={`${group}:${table.path}`} className="flex min-w-0 flex-col gap-px" data-collection-kind={group}>
-          <div className="sidebar-group-head">
+          <div className="sidebar-group-head" onClick={onSidebarRowClick}>
             <div
               className="flex min-h-8 min-w-0 flex-1 items-center gap-1.5 rounded-md text-left text-[14px] font-medium tracking-normal text-inherit"
               title={name}
@@ -843,6 +853,7 @@ export const DataSidebar = memo(function DataSidebar({
                 <div key={view.id} className="min-w-0">
                   <div
                     className={`chat-session-row group${active ? ' is-active' : ''}${starred ? ' is-pinned' : ''}`}
+                    onClick={onSidebarRowClick}
                     {...pickDomAttrs('view', viewPickId(table.path, view.id), view.name, { path: table.path })}
                   >
                     <div className="chat-session-row-main flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5">
@@ -986,6 +997,7 @@ export const DataSidebar = memo(function DataSidebar({
                       <div key={previewKey} className="min-w-0">
                         <div
                           className="chat-session-row group is-pinned"
+                          onClick={onSidebarRowClick}
                           {...pickDomAttrs(recordPickKind(table.view?.moduleId || table.id), item.recordId, label)}
                         >
                           <div className="chat-session-row-main flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5">
@@ -1100,6 +1112,7 @@ export const DataSidebar = memo(function DataSidebar({
                       <div key={previewKey} className="min-w-0">
                         <div
                           className={`chat-session-row group${active ? ' is-active' : ''} is-pinned`}
+                          onClick={onSidebarRowClick}
                           {...pickDomAttrs('view', viewPickId(table.path, view.id), view.name, { path: table.path })}
                         >
                           <div className="chat-session-row-main flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5">

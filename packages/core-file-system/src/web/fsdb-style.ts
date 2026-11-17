@@ -60,6 +60,7 @@ const CSS = `
 .fsdb-page>.fsdb-views{width:var(--sidebar-col,var(--biu-sidebar-min,160px));max-width:var(--biu-sidebar-max,360px);flex:none}
 .fsdb-views .chat-session-row-main{border:0;background:transparent;color:inherit;cursor:default}
 .fsdb-views .chat-session-row-main button{cursor:default}
+.fsdb-views .chat-session-row:hover,.fsdb-views .sidebar-group-head:hover{color:var(--biu-color-text)}
 .fsdb-views .chat-session-row-delete,.fsdb-views .chat-session-row-star{cursor:pointer}
 .fsdb-main{box-sizing:border-box;width:100%;max-width:none;margin-inline:0;display:flex;min-width:0;min-height:min-content;flex:none;flex-direction:column;gap:10px;padding:0 0 16px;overflow:visible}
 .fsdb-main > :not(.fsdb-page-banner){box-sizing:border-box;width:100%;max-width:var(--biu-chat-max-width);margin-inline:auto;padding-right:var(--biu-pad-page);padding-left:calc(var(--biu-pad-page) - var(--fsdb-check-gutter))}
