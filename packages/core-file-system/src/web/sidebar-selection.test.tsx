@@ -6,7 +6,7 @@ import { REQUIRED_RECORD_FIELDS, type CollectionInfo, type CollectionSchema } fr
 import { builtinAllViewId } from '../catalog-views.ts'
 import { invalidateListReads } from './db-client.ts'
 import { CollectionBrowser } from './browser.tsx'
-import { getStarredViews, persistStarredViews, upsertSavedView } from './view-storage.ts'
+import { getStarredViews, omitSavedViewIds, persistStarredViews, persistViewDisplay, upsertSavedView } from './view-storage.ts'
 import { DataSidebar } from './data-sidebar.tsx'
 import { rememberPreviewTotal, viewTotalKey } from './sidebar-preview.ts'
 import { normalizeSavedView } from './saved-view.ts'
@@ -118,6 +118,42 @@ test('sidebar view clicks do not close a record through the previous view route'
   })
 })
 
+
+test('sidebar collection and icon navigation open the first remaining view after deleting the builtin', () => {
+  const path = '/selection-deleted-builtin'
+  const first = normalizeSavedView({ id: 'first-remaining', name: '第一个视图', rank: 0 })
+  const second = normalizeSavedView({ id: 'second-remaining', name: '第二个视图', rank: 1 })
+  upsertSavedView(path, second)
+  upsertSavedView(path, first)
+  omitSavedViewIds(path, [builtinAllViewId(path)])
+  const onOpenTable = vi.fn()
+  const result = render(<DataSidebar collectionPath="/selection-other" title="其他表"
+    tables={[{ path, kind: 'collection', label: '删除后的页面' }]}
+    views={[]} activeViewId={null} onOpenTable={onOpenTable}
+    onApplyView={vi.fn()} onRenameView={vi.fn()} onDeleteView={vi.fn()} onAddView={vi.fn()} />)
+  const heading = result.getAllByRole('button', { name: '删除后的页面', exact: true })
+    .find((button) => button.closest('.sidebar-group-head'))!
+  fireEvent.click(heading)
+  fireEvent.click(within(result.getByTestId('data-icon-rail')).getByRole('button', { name: '删除后的页面' }))
+  assert.deepEqual(onOpenTable.mock.calls, [[path, first.id], [path, first.id]])
+})
+
+test('sidebar collection navigation follows the displayed view order', () => {
+  const path = '/selection-ranked-views'
+  const first = normalizeSavedView({ id: 'ranked-first', name: '排在最前', rank: 0 })
+  upsertSavedView(path, first)
+  persistViewDisplay(path, builtinAllViewId(path), { rank: 1 })
+  const onOpenTable = vi.fn()
+  const result = render(<DataSidebar collectionPath="/selection-other" title="其他表"
+    tables={[{ path, kind: 'collection', label: '排序后的页面' }]}
+    views={[]} activeViewId={null} onOpenTable={onOpenTable}
+    onApplyView={vi.fn()} onRenameView={vi.fn()} onDeleteView={vi.fn()} onAddView={vi.fn()} />)
+  const heading = result.getAllByRole('button', { name: '排序后的页面', exact: true })
+    .find((button) => button.closest('.sidebar-group-head'))!
+  fireEvent.click(heading)
+  fireEvent.click(within(result.getByTestId('data-icon-rail')).getByRole('button', { name: '排序后的页面' }))
+  assert.deepEqual(onOpenTable.mock.calls, [[path, first.id], [path, first.id]])
+})
 
 test('highlighted sidebar row backgrounds activate the title action without hijacking controls', () => {
   const path = '/selection-hit-area'

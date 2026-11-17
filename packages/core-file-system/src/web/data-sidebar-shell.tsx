@@ -5,7 +5,7 @@ import type { CollectionInfo } from '@biu/type-file-system'
 import { sortDataCollections } from './database-path.ts'
 import { getStarredRecords, getStarredViews } from './view-storage.ts'
 import { TableGlyph } from './nav-glyphs.tsx'
-import { builtinAllViewId } from '../catalog-views.ts'
+import { paintCollectionViews } from './collection-nav.ts'
 
 export function DataIconRail({
   tables,
@@ -31,7 +31,7 @@ export function DataIconRail({
             data-dock-tip={name}
             data-dock-tip-at="e"
             aria-current={active ? 'page' : undefined}
-            onClick={() => onOpenTable?.(table.path, builtinAllViewId(table.path))}
+            onClick={() => onOpenTable?.(table.path, paintCollectionViews(table.path, tables)[0]?.id)}
           >
             <TableGlyph icon={table.view?.icon} />
           </button>

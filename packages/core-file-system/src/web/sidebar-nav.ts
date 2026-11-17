@@ -1,6 +1,6 @@
 /** 侧栏展开/收起与数据路由切换的纯逻辑，UI 和压测共用。 */
 import { parseAppPath } from '@biu/web-session-view'
-import { builtinAllViewId } from '../catalog-views.ts'
+import { builtinAllViewId, displayNameForView, isReadOnlyViewId } from '../catalog-views.ts'
 import { DATA_COLLECTION_PATH, DATA_MODULE, databaseAllViewPath, databaseRecordPath, databaseViewPath } from './database-path.ts'
 import type { ViewMode } from './fields.ts'
 
@@ -155,12 +155,17 @@ export function buildCrumbs(input: {
       })),
   })
   if (input.viewId) {
+    const storedName = input.viewName || input.views?.find((view) => view.id === input.viewId)?.name
+    // 内置视图被隐藏后仍可通过导航打开，名称不能依赖可见视图列表。
+    const viewName = storedName || (isReadOnlyViewId(input.viewId)
+      ? displayNameForView(input.viewId, { path: input.collection, label: input.collectionLabel })
+      : input.viewId)
     crumbs.push({
       kind: 'view',
       id: input.viewId,
-      label: input.viewName || input.viewId,
+      label: viewName,
       target: { kind: 'view', collection: input.collection, viewId: input.viewId },
-      choices: (input.views ?? [{ id: input.viewId, name: input.viewName || input.viewId }]).map((view) => ({
+      choices: (input.views ?? [{ id: input.viewId, name: viewName }]).map((view) => ({
         id: view.id,
         label: view.name,
         mode: view.mode,
