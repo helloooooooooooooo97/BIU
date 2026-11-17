@@ -91,6 +91,8 @@ test('collection URL without a view paints 全部 immediately, not the last dens
   const page = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
   assert.match(page, /routeCollection\.viewId \|\| builtinAllViewId\(routeCollection\.collection\)/)
   assert.match(page, /go\(\{ collection: parsed.collection, viewId: builtinAllViewId\(parsed.collection\) \}/)
+  assert.match(page, /useSyncExternalStore\(subscribeAppPathname, getAppPathname/)
+  assert.match(page, /parseAppPath\(pathname, \[DATA_MODULE\]\)/)
 })
 
 test('share page stays off the data first-paint graph until a share route opens', () => {

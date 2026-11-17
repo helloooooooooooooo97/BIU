@@ -177,3 +177,45 @@ export function normalizePath(pathname: string) {
   if (!pathname || pathname === '/') return '/'
   return pathname.replace(/\/+$/, '') || '/'
 }
+
+const appPathListeners = new Set<() => void>()
+let appPathPatched = false
+let origPushState: History['pushState'] | undefined
+let origReplaceState: History['replaceState'] | undefined
+
+function emitAppPath() {
+  for (const fn of appPathListeners) fn()
+}
+
+function patchAppPathHistory() {
+  if (appPathPatched || typeof history === 'undefined') return
+  appPathPatched = true
+  origPushState = history.pushState
+  origReplaceState = history.replaceState
+  history.pushState = function (this: History, ...args: Parameters<History['pushState']>) {
+    const result = origPushState!.apply(this, args)
+    emitAppPath()
+    return result
+  }
+  history.replaceState = function (this: History, ...args: Parameters<History['replaceState']>) {
+    const result = origReplaceState!.apply(this, args)
+    emitAppPath()
+    return result
+  }
+}
+
+/** Browser URL, including pushState that React Router has not committed yet. */
+export function subscribeAppPathname(onStoreChange: () => void) {
+  if (typeof window === 'undefined') return () => undefined
+  patchAppPathHistory()
+  appPathListeners.add(onStoreChange)
+  window.addEventListener('popstate', onStoreChange)
+  return () => {
+    appPathListeners.delete(onStoreChange)
+    window.removeEventListener('popstate', onStoreChange)
+  }
+}
+
+export function getAppPathname() {
+  return typeof window === 'undefined' ? '/' : window.location.pathname
+}

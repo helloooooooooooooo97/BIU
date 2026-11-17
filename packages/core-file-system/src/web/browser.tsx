@@ -2509,6 +2509,11 @@ export function CollectionBrowser({
   }, [activeViewId, collectionPath, customView, dataPath, tagCatalog, fetchQuery, groupBy, groupFillKeys, listColumns, listIdentityKey, queryFilters, page, pageSize, reloadKey, sortDir, sortField, sorts, wrapCells, showTree])
   const reloadRef = useRef(reload)
   reloadRef.current = reload
+  useEffect(() => {
+    if (sheet) return
+    loadedIdentityRef.current = ''
+    void reloadRef.current({ force: true })
+  }, [collectionPath, dataPath, routeViewId, sheet])
   const detailIdRef = useRef<string | null>(null)
   detailIdRef.current = detailId
   const detailRowRef = useRef(detailRow)

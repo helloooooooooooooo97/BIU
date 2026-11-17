@@ -5,7 +5,7 @@ import { CircleStackIcon } from '@heroicons/react/16/solid'
 import type { SlotProps } from '@biu/type-slots'
 import { DATABASE_CHANNEL, type CollectionInfo } from '@biu/type-file-system'
 import { DEFAULT_CHROME_PATH, type CollectionChrome } from '@biu/type-file-system/ui'
-import { isLegacyDatabasePath, parseAppPath } from '@biu/web-session-view'
+import { getAppPathname, isLegacyDatabasePath, parseAppPath, subscribeAppPathname } from '@biu/web-session-view'
 import { pathForCenter, pathForCrumbTarget, type CrumbTarget } from './sidebar-nav.ts'
 import { parseSharePath } from '../share-snapshot.ts'
 import { DatabaseInspectorBrowse, DatabaseInspectorTab, bindInspectorSnapshot, collectionTabIcon } from './inspector-database.tsx'
@@ -94,9 +94,10 @@ function CollectionPage(props: SlotProps) {
   const ui = getDatabaseUi()
   const location = useLocation()
   const navigate = useNavigate()
+  const pathname = useSyncExternalStore(subscribeAppPathname, getAppPathname, () => '/')
   const [expandedViewKey, setExpandedViewKey] = useState<string | null>(null)
   const viaDataCrumbs = useSyncExternalStore(subscribeViaDataCrumbs, viaDataCrumbsOn, () => false)
-  const parsed = useMemo(() => parseAppPath(location.pathname, [DATA_MODULE]), [location.pathname])
+  const parsed = useMemo(() => parseAppPath(pathname, [DATA_MODULE]), [pathname])
   const dataHome = parsed.kind === 'module' && parsed.moduleId === DATA_MODULE_ID
   const routeCollection = parsed.kind === 'collection-view' || parsed.kind === 'record' ? parsed : null
   const collectionFromRoute = routeCollection?.collection ?? ''
@@ -127,7 +128,7 @@ function CollectionPage(props: SlotProps) {
   }
 
   useEffect(() => {
-    if (isLegacyDatabasePath(location.pathname) && (parsed.kind === 'collection-view' || parsed.kind === 'record')) {
+    if (isLegacyDatabasePath(pathname) && (parsed.kind === 'collection-view' || parsed.kind === 'record')) {
       go(
         {
           collection: parsed.collection,
@@ -137,11 +138,11 @@ function CollectionPage(props: SlotProps) {
         { replace: true },
       )
     }
-  }, [location.pathname, parsed])
+  }, [pathname, parsed])
 
   useEffect(() => {
-    if (parsed.kind === 'collection-view' || parsed.kind === 'record') writeMainDataRoute(location.pathname)
-  }, [location.pathname, parsed])
+    if (parsed.kind === 'collection-view' || parsed.kind === 'record') writeMainDataRoute(pathname)
+  }, [pathname, parsed])
 
   useEffect(() => {
     if (dataHome) {

@@ -1724,6 +1724,8 @@ test('switching tables holds an empty body until the next list arrives', () => {
   assert.match(painted, /adoptView\(next\)/)
   assert.match(painted, /setItems\(\[\]\)/)
   assert.match(painted, /setGroupBy\(next\?\.groupBy \?\? ''\)/)
+  assert.match(browser, /\[collectionPath, dataPath, routeViewId, sheet\]/)
+  assert.match(browser, /loadedIdentityRef\.current = ''\s*\n\s*void reloadRef\.current\(\{ force: true \}\)/)
   const sidebar = readFileSync(resolve(import.meta.dirname, './data-sidebar.tsx'), 'utf8')
   assert.doesNotMatch(sidebar, /fsdb:warm-list/)
 })
