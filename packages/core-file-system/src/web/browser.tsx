@@ -1,4 +1,4 @@
-import { createContext, lazy, memo, Suspense, type ComponentProps, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { createContext, lazy, memo, Suspense, type ComponentProps, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import {
@@ -15,6 +15,7 @@ import {
   PlusIcon,
   TagIcon,
   ArrowDownTrayIcon,
+  ChatBubbleLeftRightIcon,
   GlobeAltIcon,
   UserIcon,
   UsersIcon,
@@ -151,7 +152,7 @@ import { DataSidebarShell } from './data-sidebar-shell.tsx'
 import { builtinAllViewId, catalogLockFilters, collectionNoun, displayNameForView, isBuiltinAllViewId, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stampRecordId, stampRowOpenTarget, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, moveInspectorRecordsToTrash, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
-import { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE, claimTableCellPick, consumePendingTablePane, firstTableTitleCell, peekPendingTablePane, moveTableCell, readTablePaneRest, rememberTablePaneRest, requestTablePaneFocus, tableActionArrowLeave, tableActionButtons, tableActionButtonStep, tableCellRange, tableCellRangeKey, tableClearKey, tableClearedValue, tableCreateKey, tableKeyDir, tableKeyFromEditingTarget, tableNavKeys, tablePaneFromEvent, tablePaneHotkey, tablePaneOther, tableSendChatHotkey, tableTitleOpenWhere, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
+import { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE, claimTableCellPick, consumePendingTablePane, firstTableTitleCell, peekPendingTablePane, moveTableCell, readTablePaneRest, rememberTablePaneRest, requestTablePaneFocus, tableActionArrowLeave, tableActionButtons, tableActionButtonStep, tableCellRange, tableCellRangeKey, tableCellRangeRowIds, tableClearKey, tableClearedValue, tableCreateKey, tableKeyDir, tableKeyFromEditingTarget, tableNavKeys, tablePaneFromEvent, tablePaneHotkey, tablePaneOther, tableSendChatHotkey, tableTitleOpenWhere, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
 import { focusRecordTitleNear } from './title-content-nav.ts'
 import { isViewCatalogField, selectedViewCatalogOption } from './view-catalog.ts'
 import { jumpTag, loadTags, pullTags, subscribeTags } from './tag-catalog.ts'
@@ -1294,6 +1295,7 @@ type TableChromeBag = {
   onClick: (event: { target: EventTarget | null; currentTarget: EventTarget; clientX: number; clientY: number }) => void
   onKeyDown?: (event: ReactKeyboardEvent<HTMLTableElement>) => void
   onMouseOver: ComponentProps<'table'>['onMouseOver']
+  onContextMenu?: ComponentProps<'table'>['onContextMenu']
 }
 
 type TableHoldSnap = {
@@ -1531,6 +1533,7 @@ const WindowedTable = memo(function WindowedTable({
         onClick={(event) => chromeRef.current.onClick?.(event)}
         onKeyDown={(event) => chromeRef.current.onKeyDown?.(event)}
         onMouseOver={chrome.onMouseOver}
+        onContextMenu={(event) => chromeRef.current.onContextMenu?.(event)}
       >
         <colgroup>
           {columns.slice(0, colWindow.pin).map((col, index) => (
@@ -1945,6 +1948,11 @@ export function CollectionBrowser({
       setGroupFillKeys([])
       setCollapsedGroups(loadCollapsedGroups(path, view?.id ?? '', view?.groupBy ?? ''))
       setPage(0)
+      return
+    }
+    if (path === collectionPathRef.current) {
+      tableHoldRef.current = null
+      releaseHoldOnPaintRef.current = false
       return
     }
     tableHoldRef.current = tablePaintSnapshotRef.current ?? emptyListHold(tablePaintSnapshotRef.current, view, path)
@@ -5185,6 +5193,20 @@ export function CollectionBrowser({
     setCellPop(cellUsesPop(kind, col.field.writable) ? { id: cell.id, key: cell.key } : null)
   }
 
+  function onTableContextMenu(event: ReactMouseEvent<HTMLTableElement>) {
+    if (typeof document !== 'undefined' && document.documentElement.classList.contains('pick-mode')) return
+    const range = cellRangeRef.current
+    if (!range) return
+    const cells = tableCellRange(tableNavRowIds(), tableNavKeys(columns), range.anchor, range.focus)
+    if (cells.length < 2) return
+    const ids = tableCellRangeRowIds(cells)
+    if (!ids.length) return
+    event.preventDefault()
+    event.stopPropagation()
+    setPickedIds(ids)
+    setCellPop(null)
+  }
+
   function tableNavRowIds() {
     const ids: string[] = []
     for (const node of tablePaintNodes) {
@@ -5381,7 +5403,6 @@ export function CollectionBrowser({
     setCellPickEpoch((n) => n + 1)
     const go = () => {
       landTableCell(cursor)
-      enterTableCell(cursor)
     }
     requestAnimationFrame(go)
   }
@@ -5460,10 +5481,39 @@ export function CollectionBrowser({
     return true
   }
 
+  function sendPickedRowsToChat() {
+    const picks = pickedIds.flatMap((id) => {
+      const row = findPaintedRow(id)
+      if (!row) return []
+      const path = recordPathOf(row)
+      const title = labelOf(row)
+      return [
+        {
+          kind: recordKind,
+          id: row.id,
+          label: title || recordKind,
+          route: typeof window === 'undefined' ? '' : window.location.pathname,
+          ...(path ? { path } : {}),
+          ...(title ? { title } : {}),
+        },
+      ]
+    })
+    if (!picks.length) return false
+    void import('@biu/core-pick/web').then((mod) => {
+      mod.getPick()?.attach(picks)
+    })
+    return true
+  }
+
+  function sendTableSelectionToChat() {
+    if (pickedIds.length) return sendPickedRowsToChat()
+    return sendSelectedCellToChat()
+  }
+
   function onTableKeyDown(event: { key: string; shiftKey: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean; defaultPrevented: boolean; target: EventTarget | null; preventDefault: () => void; isComposing?: boolean }) {
     if (event.defaultPrevented) return
     if (tableSendChatHotkey(event)) {
-      if (sendSelectedCellToChat()) event.preventDefault()
+      if (sendTableSelectionToChat()) event.preventDefault()
       return
     }
     if (tableKeyFromEditingTarget(event.target)) return
@@ -5920,9 +5970,17 @@ export function CollectionBrowser({
       hydratePath.current = ''
       return
     }
-    if (tableHoldRef.current || pendingPathQueryRef.current) return
     const hydrateKey = `${collectionPath}\0${dataPath}`
-    if (hydratePath.current === hydrateKey) return
+    if (hydratePath.current === hydrateKey) {
+      const routed = pickViewForRoute(paintListedViews(collectionPath), collectionPath, routeViewId)
+      if (routed && routed.id !== activeViewIdRef.current) {
+        skipPersistGen.current += 1
+        adoptListCacheForViewRef.current(dataPath, routed)
+        applyView(routed)
+      }
+      return
+    }
+    if (tableHoldRef.current || pendingPathQueryRef.current) return
     hydratePath.current = hydrateKey
     const listedViewsNow = paintListedViews(collectionPath)
     rememberViews(collectionPath, listedViewsNow)
@@ -6127,6 +6185,16 @@ export function CollectionBrowser({
                     >
                       {pickedIds.length} 已选
                     </span>
+                    <button
+                      type="button"
+                      className="tasks-icon-btn"
+                      data-testid="fsdb-bulk-chat"
+                      aria-label="送到会话"
+                      title="送到会话 ⌘L"
+                      onClick={() => sendPickedRowsToChat()}
+                    >
+                      <ChatBubbleLeftRightIcon aria-hidden className="size-[14px]" />
+                    </button>
                     {canBulkDelete && pickedIds.some((id) => !(collectionPath === '/plugins' && items.find((row) => row.id === id)?.builtin === true)) ? (
                       <button
                         type="button"
@@ -6835,6 +6903,7 @@ export function CollectionBrowser({
       onPointerDown: onTablePointerDown,
       onPointerMove: onTablePointerMove,
       onClick: onTableClick,
+      onContextMenu: onTableContextMenu,
       onKeyDown: onTableKeyDown,
       onMouseOver: (event) => {
         const hit = event.target as HTMLElement | null

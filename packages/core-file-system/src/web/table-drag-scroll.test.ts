@@ -51,4 +51,7 @@ test('table pointer down starts edge autoscroll while dragging', () => {
   assert.match(src, /paintCellRangeClasses/)
   assert.match(src, /CELL_RANGE_IGNORE/)
   assert.match(src, /is-cell-drag/)
+  assert.match(src, /onTableContextMenu/)
+  assert.match(src, /tableCellRangeRowIds/)
+  assert.match(src, /setPickedIds\(ids\)/)
 })
