@@ -24,9 +24,9 @@ export type AppRoute =
   | { kind: 'collection-view'; moduleId: string; path: string; collection: string; viewId?: string }
   | { kind: 'record'; moduleId: string; path: string; collection: string; recordId: string; viewId?: string }
 
-const DATABASE_FLAT = /^\/(?:c\/)?([^/]+)(?:\/(?:view|v)\/(.+)|\/(?:record|r)\/([^/]+))?$/
+const DATABASE_FLAT = /^\/(?:c\/)?([^/]+)(?:\/(?:view|v)\/([^/]+)|\/(?:record|r)\/([^/]+))?$/
 const DATABASE_NESTED_RECORD =
-  /^\/(?:c\/)?([^/]+)\/(?:view|v)\/(.+)\/(?:record|r)\/([^/]+)$/
+  /^\/(?:c\/)?([^/]+)\/(?:view|v)\/([^/]+)\/(?:record|r)\/([^/]+)$/
 const SESSION_APP = /^\/agents\/([^/]+)(?:\/(chat|debug|trajectory))?$/
 
 export function sessionAppPath(sessionId: string, view: RouteView = 'chat') {
@@ -177,4 +177,3 @@ export function normalizePath(pathname: string) {
   if (!pathname || pathname === '/') return '/'
   return pathname.replace(/\/+$/, '') || '/'
 }
-

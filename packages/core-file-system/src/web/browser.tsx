@@ -25,6 +25,7 @@ import {
 import type { CollectionActionInfo, CollectionInfo, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
 import { normalizeSchemaValue } from '@biu/type-file-system'
 import type { CollectionChrome, CollectionRowViewType, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
+import { parseAppPath } from '@biu/web-session-view'
 import { BoolBox } from '@biu/biu-ui/bool-box'
 import { ChatCount } from '@biu/biu-ui/chat-count'
 import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
@@ -94,7 +95,7 @@ import { workspaceColumnsForLocation } from './workspace-columns.ts'
 import { PageBanner } from './page-banner.tsx'
 import { TableGlyph, UiGlyph, ViewModeGlyph, idleTableIconKind } from './nav-glyphs.tsx'
 import { SourceTableCell } from './source-table-cell.tsx'
-import { DATA_COLLECTION_PATH, PAGES_COLLECTION_PATH, isIndexCollection, isSystemCollection } from './database-path.ts'
+import { DATA_COLLECTION_PATH, DATA_MODULE, PAGES_COLLECTION_PATH, isIndexCollection, isSystemCollection } from './database-path.ts'
 import { ViewOrderMenu } from './view-order-menu.tsx'
 import { getDatabaseUi } from './database-ui.ts'
 import {
@@ -826,6 +827,21 @@ type TablePaintNode =
   | { kind: 'group-pager'; key: string; groupKey: string; count: number; pageIndex: number }
 
 const EMPTY_HOLD_NODES: TablePaintNode[] = [{ kind: 'empty', key: 'empty' }]
+
+function collectionFromAppUrl(url: string): { collection: string; viewId: string } | null {
+  let pathname = url
+  try {
+    pathname = url.startsWith('http') ? new URL(url).pathname : url
+  } catch {
+    return null
+  }
+  const parsed = parseAppPath(pathname, [DATA_MODULE])
+  if (parsed.kind !== 'collection-view' && parsed.kind !== 'record') return null
+  return {
+    collection: parsed.collection,
+    viewId: parsed.viewId || builtinAllViewId(parsed.collection),
+  }
+}
 
 const SHARE_SCOPE_ORDER = ['私人', '空间', '共享']
 
@@ -1910,6 +1926,7 @@ export function CollectionBrowser({
   const tablePaintSnapshotRef = useRef<TableHoldSnap | null>(null)
   const tableHoldRef = useRef<TableHoldSnap | null>(null)
   const releaseHoldOnPaintRef = useRef(false)
+  const [, setHoldNav] = useState(0)
   const collectionPathRef = useRef(collectionPath)
   collectionPathRef.current = collectionPath
   const dataPathRef = useRef(dataPath)
@@ -1940,6 +1957,24 @@ export function CollectionBrowser({
     }
     tableHoldRef.current = tablePaintSnapshotRef.current ?? emptyListHold(tablePaintSnapshotRef.current, view, path)
     releaseHoldOnPaintRef.current = false
+  }
+  const holdNavRef = useRef<(path: string, viewId?: string) => void>(() => undefined)
+  holdNavRef.current = (path, viewId) => {
+    if (!path) return
+    const sameCollection = path === collectionPathRef.current
+    if (sameCollection && (!viewId || viewId === activeViewIdRef.current)) return
+    const listed = paintListedViews(path)
+    const view = pickViewForRoute(listed, path, viewId) || viewForPath(path, viewId)
+    if (sameCollection) {
+      adoptListCacheForViewRef.current(path, view)
+      return
+    }
+    const cached = peekListCache(path, view?.id, normalizePageSize(view?.pageSize))
+    if (cached) {
+      tableHoldRef.current = listHoldFromCache(cached, view, path)
+      return
+    }
+    tableHoldRef.current = emptyListHold(tablePaintSnapshotRef.current, view, path)
   }
   const pathSwitchHandledRef = useRef(false)
   const layoutPathRef = useRef<string | null>(null)
@@ -2005,13 +2040,10 @@ export function CollectionBrowser({
     } else {
       // 上一张表的 shareScope 组（私人/空间）不能顶到新表 URL 上，否则看起来像同一张表在重分组。
       // 成员表没有分享列：若 groupBy 还留着 shareScope，会走空组桶，主区只剩表头。
-      setItems([])
-      setTotal(0)
       setGroupBy(next?.groupBy ?? '')
       setGroupBuckets([])
-      adoptView(next)
       releaseHoldOnPaintRef.current = false
-      tableHoldRef.current = emptyListHold(null, next, dataPath)
+      tableHoldRef.current = emptyListHold(tablePaintSnapshotRef.current, next, dataPath)
       pendingPathQueryRef.current = next
         ? {
             listed,
@@ -2509,11 +2541,6 @@ export function CollectionBrowser({
   }, [activeViewId, collectionPath, customView, dataPath, tagCatalog, fetchQuery, groupBy, groupFillKeys, listColumns, listIdentityKey, queryFilters, page, pageSize, reloadKey, sortDir, sortField, sorts, wrapCells, showTree])
   const reloadRef = useRef(reload)
   reloadRef.current = reload
-  useEffect(() => {
-    if (sheet) return
-    loadedIdentityRef.current = ''
-    void reloadRef.current({ force: true })
-  }, [collectionPath, dataPath, sheet])
   const detailIdRef = useRef<string | null>(null)
   detailIdRef.current = detailId
   const detailRowRef = useRef(detailRow)
@@ -2773,6 +2800,27 @@ export function CollectionBrowser({
     if (routeRecordId) return
     void pullTags()
   }, [collectionPath, routeRecordId])
+
+  useEffect(() => {
+    if (nested) return
+    const origPush = history.pushState
+    const origReplace = history.replaceState
+    const intercept = (orig: typeof history.pushState): History['pushState'] =>
+      (data, unused, url) => {
+        orig.call(history, data, unused, url)
+        const next = collectionFromAppUrl(url != null ? String(url) : window.location.pathname)
+        if (!next) return
+        const before = tableHoldRef.current
+        holdNavRef.current(next.collection, next.viewId)
+        if (tableHoldRef.current !== before) setHoldNav((n) => n + 1)
+      }
+    history.pushState = intercept(origPush)
+    history.replaceState = intercept(origReplace)
+    return () => {
+      history.pushState = origPush
+      history.replaceState = origReplace
+    }
+  }, [nested])
 
   useEffect(() => subscribeTags(undefined, () => setFacetCatalog(loadTags())), [])
 
@@ -3643,9 +3691,8 @@ export function CollectionBrowser({
   }
 
   function applyView(view: SavedView) {
-    const switching = view.id !== activeViewIdRef.current
     const current = viewsRef.current.find((item) => item.id === view.id)
-    if (!switching && current && !viewIsFresher(view, current)) return
+    if (current && view.id === activeViewIdRef.current && !viewIsFresher(view, current)) return
     const next = normalizeSavedView({
       ...view,
       filters: { ...catalogLockFilters(view.id, [view]), ...view.filters },
@@ -3658,7 +3705,6 @@ export function CollectionBrowser({
     const nextPageSize = normalizePageSize(next.pageSize)
     const nextGroup = next.groupBy ?? ''
     if (
-      !switching &&
       next.id === activeViewId &&
       mode === next.mode &&
       sortField === next.sortField &&
@@ -3677,7 +3723,6 @@ export function CollectionBrowser({
     ) {
       return
     }
-    if (switching) loadedIdentityRef.current = ''
     rememberActiveView(next.id)
     setMode(next.mode)
     setSortField(next.sortField)
@@ -3740,9 +3785,12 @@ export function CollectionBrowser({
 
   function selectView(view: SavedView) {
     persistActiveViewRef.current()
-    skipPersistGen.current += 1
-    adoptListCacheForViewRef.current(dataPath, view)
-    applyView(view)
+    if (view.id !== activeViewIdRef.current) {
+      adoptListCacheForViewRef.current(dataPath, view)
+      applyView(view)
+    } else {
+      setViewMenuOpen(false)
+    }
     rememberInspectorWorkingView(collectionPath, view.id)
     onOpenView?.(view.id)
   }
