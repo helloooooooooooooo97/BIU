@@ -95,10 +95,3 @@ test('POST /api/agents/:id/messages persists pasted images before enqueue', () =
   assert.match(src, /withPastedImagePicks/)
   assert.match(src, /粘贴的图片未能保存到本地/)
 })
-
-test('POST /api/agents/:id/artifacts stores dropped files without a native path', () => {
-  const src = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
-  assert.match(src, /persistDroppedFile/)
-  assert.match(src, /POST', '\/api\/agents\/:id\/artifacts'/)
-  assert.match(src, /文件太大/)
-})

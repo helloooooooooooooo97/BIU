@@ -12,19 +12,11 @@ function escapeId(id: string) {
   return typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(id) : id
 }
 
-function stickyToolbarOffset(el: HTMLElement) {
-  const main = el.closest('.fsdb-detail-main, .fsdb-main')
-  const bar = main?.querySelector(':scope > .tasks-toolbar')
-  if (!(bar instanceof HTMLElement)) return 0
-  return Math.ceil(bar.getBoundingClientRect().height) + 8
-}
-
-/** 详情正文滚动：停在置顶操作条下方，避免标题被挡住。 */
+/** 详情正文滚动：和悬浮目录点 heading 一样。 */
 export function scrollOutlineTarget(el: HTMLElement | null) {
-  if (!el || typeof el.scrollIntoView !== 'function') return
-  const offset = stickyToolbarOffset(el)
-  if (offset) el.style.scrollMarginTop = `${offset}px`
-  el.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  if (el && typeof el.scrollIntoView === 'function') {
+    el.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  }
 }
 
 /** 左侧刻度条 + 悬停展开列表。聊天区和会话详情共用。 */

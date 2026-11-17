@@ -141,13 +141,17 @@ test('detail bar refresh spins the icon', () => {
   assert.ok(getByLabelText('刷新').querySelector('.fsdb-spin'))
 })
 
-test('detail bar does not host previous and next', () => {
-  const { getByLabelText, queryByLabelText } = render(
+test('detail bar hosts previous and next after refresh', () => {
+  const { getByLabelText } = render(
     <RecordDetailBar record={{ id: 'p0133' }} onRetry={() => {}} onPrev={() => {}} onNext={() => {}} canPrev canNext />,
   )
-  assert.ok(getByLabelText('刷新'))
-  assert.equal(queryByLabelText('上一条'), null)
-  assert.equal(queryByLabelText('下一条'), null)
+  const refresh = getByLabelText('刷新')
+  const prev = getByLabelText('上一条')
+  const next = getByLabelText('下一条')
+  const create = getByLabelText('新建')
+  assert.ok(refresh.compareDocumentPosition(prev) & Node.DOCUMENT_POSITION_FOLLOWING)
+  assert.ok(prev.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING)
+  assert.ok(next.compareDocumentPosition(create) & Node.DOCUMENT_POSITION_FOLLOWING)
 })
 
 test('detail bar has no page insert or child-page create', () => {
@@ -158,16 +162,16 @@ test('detail bar has no page insert or child-page create', () => {
   assert.equal(queryByText('新建子页面'), null)
 })
 
-test('detail bar never shows prev or next even when only one side is available', () => {
+test('detail bar hides missing prev or next', () => {
   const { queryByLabelText, rerender } = render(
     <RecordDetailBar record={{ id: 'p0133' }} onRetry={() => {}} onPrev={() => {}} onNext={() => {}} canNext />,
   )
   assert.equal(queryByLabelText('上一条'), null)
-  assert.equal(queryByLabelText('下一条'), null)
+  assert.ok(queryByLabelText('下一条'))
   rerender(
     <RecordDetailBar record={{ id: 'p0133' }} onRetry={() => {}} onPrev={() => {}} onNext={() => {}} canPrev />,
   )
-  assert.equal(queryByLabelText('上一条'), null)
+  assert.ok(queryByLabelText('上一条'))
   assert.equal(queryByLabelText('下一条'), null)
 })
 

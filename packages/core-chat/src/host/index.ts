@@ -21,7 +21,7 @@ import {
   findEvent,
 } from '@biu/host-sessions/trajectory'
 import { estimateTokens, liftToolImages } from '@biu/host-sessions'
-import { persistDroppedFile, persistPastedImages, readArtifactFile, withPastedImagePicks } from '@biu/host-sessions/artifacts'
+import { persistPastedImages, readArtifactFile, withPastedImagePicks } from '@biu/host-sessions/artifacts'
 import { collectLiveDispatchedTasks } from '@biu/host-live-sessions/usage'
 import { decorateDispatchedTasks, loadLiveDispatchTasks, registerChatInspectorRoutes } from './inspector.ts'
 import { forwardCloud } from '@biu/host-account/mirror'
@@ -1619,21 +1619,6 @@ export function apply(ctx: Context) {
       return route.send(200, result)
     }
     route.send(200, { turns: result as Record<string, TurnStat> })
-  })
-  ctx.http.route('POST', '/api/agents/:id/artifacts', async (route) => {
-    const record = await visibleSession(route.params.id)
-    if (!record) return route.send(404, { error: 'unknown session' })
-    try {
-      const saved = await persistDroppedFile(route.params.id, {
-        name: String(route.query.get('name') ?? '').trim(),
-        mime: String(route.req.headers['content-type'] ?? ''),
-        data: await route.bytes(),
-      })
-      route.send(200, saved)
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error)
-      route.send(msg === 'file too large' ? 413 : 400, { error: msg === 'file too large' ? '文件太大' : msg })
-    }
   })
   ctx.http.route('GET', '/api/agents/:id/artifacts/:name', async (route) => {
     const record = await visibleSession(route.params.id)

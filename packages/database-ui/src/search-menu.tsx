@@ -65,37 +65,23 @@ const OPTION_SEL = [
   'button.tasks-viewdd-saveas',
 ].join(', ')
 
-function optionCursorIndex(list: HTMLElement[]) {
-  const i = list.findIndex(
-    (el) =>
-      el.classList.contains('is-active') ||
-      el.classList.contains('is-selected') ||
-      Boolean(el.closest('.is-active, .is-selected, .is-on')),
-  )
-  return i >= 0 ? i : 0
-}
-
 export function useOptionCursor(query: string) {
   const listRef = useRef<HTMLDivElement>(null)
   const cursor = useRef(0)
-  const armed = useRef(false)
   const paint = () => {
     const list = [...(listRef.current?.querySelectorAll<HTMLElement>(OPTION_SEL) ?? [])]
     if (!list.length) return
     if (cursor.current < 0) cursor.current = 0
     if (cursor.current >= list.length) cursor.current = list.length - 1
     list.forEach((el, i) => {
-      const on = armed.current && i === cursor.current
+      const on = i === cursor.current
       el.classList.toggle('is-cursor', on)
       el.closest('.fsdb-viewcat-pick-row, .tasks-viewdd-item')?.classList.toggle('is-cursor', on)
     })
-    if (armed.current) list[cursor.current]?.scrollIntoView({ block: 'nearest' })
+    list[cursor.current]?.scrollIntoView({ block: 'nearest' })
   }
   useLayoutEffect(() => {
-    armed.current = false
-    const list = [...(listRef.current?.querySelectorAll<HTMLElement>(OPTION_SEL) ?? [])]
-    cursor.current = optionCursorIndex(list)
-    paint()
+    cursor.current = 0
   }, [query])
   useLayoutEffect(() => {
     paint()
@@ -106,10 +92,6 @@ export function useOptionCursor(query: string) {
       event.preventDefault()
       event.stopPropagation()
       if (!list.length) return
-      if (!armed.current) {
-        armed.current = true
-        cursor.current = optionCursorIndex(list)
-      }
       const dir = event.key === 'ArrowDown' ? 1 : -1
       cursor.current = (cursor.current + dir + list.length) % list.length
       paint()

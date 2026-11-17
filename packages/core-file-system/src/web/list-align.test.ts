@@ -220,8 +220,6 @@ test('list and detail share the chat column max width with side padding', () => 
   assert.match(css, /\.fsdb-page \.tasks-toolbar-right:has\(\.fsdb-query-menu\)/)
   assert.match(css, /\.fsdb-page \.fsdb-query-menu\{/)
   assert.match(css, /\.fsdb-query-flyout\.fsdb-page\{[^}]*position:fixed/)
-  assert.match(css, /\.fsdb-query-flyout\.fsdb-page\.is-start\{[^}]*align-items:flex-start/)
-  assert.match(css, /\.fsdb-query-flyout \.tasks-viewdd-menu\{[^}]*position:relative/)
   assert.match(css, /\.fsdb-page \.fsdb-query-menu\{[^}]*overflow-x:hidden/)
   assert.match(css, /\.fsdb-page \.fsdb-query-menu\{[^}]*width:min\(92vw,280px\)/)
   assert.match(css, /\.fsdb-page \.fsdb-query-menu\.is-filter\{[^}]*width:min\(92vw,560px\)/)
@@ -400,8 +398,6 @@ test('table columns resize with a Super Tag blue highlight on the divider', () =
 
 test('selected table cells use Super Tag blue when writable and gray when locked', () => {
   assert.match(css, /\.fsdb-page \.tasks-table td\.is-cell-on\{[^}]*box-shadow:inset 0 0 0 2px var\(--biu-color-emphasis/)
-  assert.match(css, /\.fsdb-page \.tasks-table td\.is-cell-range\{[^}]*background:color-mix/)
-  assert.match(css, /\.fsdb-page \.tasks-table\.is-cell-drag\{[^}]*user-select:none/)
   assert.match(css, /\.fsdb-page \.tasks-table td\.is-cell-on:not\(\.is-pin-col\)\{[^}]*position:relative/)
   assert.doesNotMatch(css, /\.fsdb-page \.tasks-table td\.is-cell-on\{[^}]*position:relative/)
   assert.match(css, /\.fsdb-page \.tasks-table td\.is-cell-on\.is-cell-ro\{[^}]*box-shadow:inset 0 0 0 2px var\(--biu-color-text-subtle\)/)
@@ -441,10 +437,6 @@ test('selected table cells use Super Tag blue when writable and gray when locked
   assert.match(css, /\.fsdb-page \.tasks-table\.is-wrap \.fsdb-ref-chips\{[^}]*flex-wrap:wrap/)
   assert.match(css, /\.fsdb-page \.tasks-table td \.fsdb-cell\{[^}]*width:100%/)
   assert.match(css, /\.fsdb-page \.tasks-table td:has\(\.biu-tags\) \.fsdb-cell\{[^}]*width:100%/)
-  assert.match(css, /\.fsdb-page \.tasks-table\.is-truncate:not\(\.is-wrap\) \.fsdb-cell\{[^}]*max-width:100%/)
-  assert.doesNotMatch(css, /\.fsdb-page \.tasks-table\.is-truncate:not\(\.is-wrap\) \.fsdb-cell\{[^}]*max-width:220px/)
-  assert.match(css, /\.fsdb-page \.tasks-table\.is-wrap td\{[^}]*max-width:none/)
-  assert.doesNotMatch(css, /\.fsdb-page \.tasks-table\.is-wrap td\{[^}]*max-width:28rem/)
   assert.match(css, /\.fsdb-page \.tasks-table\.is-truncate:not\(\.is-wrap\) td:has\(\.biu-tags\) \.fsdb-cell[\s\S]*?max-width:100%/)
   assert.match(css, /\.fsdb-page \.tasks-table:not\(\.is-wrap\) \.biu-tags,[\s\S]*?flex-wrap:wrap/)
   assert.match(css, /\.fsdb-page \.tasks-table\.is-wrap \.biu-tags,[\s\S]*?flex-wrap:wrap/)

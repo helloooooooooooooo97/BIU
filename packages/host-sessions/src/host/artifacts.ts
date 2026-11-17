@@ -77,10 +77,10 @@ export function extractImagePathCandidates(text: string): string[] {
   return found
 }
 
-function safeArtifactName(sourcePath: string, used: Set<string>, fallbackExt = '.png') {
-  const base = basename(sourcePath).replace(/[^\w.\-]+/g, '_') || `file${fallbackExt}`
-  const ext = extname(base) || fallbackExt
-  const stem = basename(base, ext) || 'file'
+function safeArtifactName(sourcePath: string, used: Set<string>) {
+  const base = basename(sourcePath).replace(/[^\w.\-]+/g, '_') || 'image.png'
+  const ext = extname(base) || '.png'
+  const stem = basename(base, ext) || 'image'
   let name = `${stem}${ext}`
   let i = 1
   while (used.has(name)) {
@@ -248,46 +248,6 @@ export async function persistPastedImages(
     })
   }
   return out
-}
-
-/** 拖入输入框、没有 File.path 时落盘上限 32MB。 */
-export const MAX_DROPPED_FILE_BYTES = 32 * 1024 * 1024
-
-export type DroppedFileMeta = {
-  name: string
-  mime: string
-  path: string
-  url: string
-}
-
-/** 把输入框拖入、浏览器拿不到 File.path 的文件写到 `.biu/artifacts/<sessionId>/`。 */
-export async function persistDroppedFile(
-  sessionId: string,
-  file: { name?: string; mime?: string; data: Buffer | Uint8Array },
-  baseDir = dataHome(),
-): Promise<DroppedFileMeta> {
-  if (!sessionId) throw new Error('session required')
-  if (file.data.byteLength > MAX_DROPPED_FILE_BYTES) throw new Error('file too large')
-  const data = Buffer.from(file.data)
-  const dir = artifactsDir(sessionId, baseDir)
-  await mkdir(dir, { recursive: true })
-  const used = new Set<string>()
-  try {
-    for (const entry of await readdir(dir)) used.add(entry)
-  } catch {
-    /* empty dir */
-  }
-  const hint = String(file.name ?? '').trim() || 'file.bin'
-  const name = safeArtifactName(hint, used, '.bin')
-  const dest = join(dir, name)
-  await writeFile(dest, data)
-  const mime = String(file.mime ?? '').trim() || artifactMime(name)
-  return {
-    name,
-    mime,
-    path: dest,
-    url: `/api/agents/${encodeURIComponent(sessionId)}/artifacts/${encodeURIComponent(name)}`,
-  }
 }
 
 export function pastedImagePickText(images: Array<{ name: string; path?: string }>) {

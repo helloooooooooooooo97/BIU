@@ -119,20 +119,6 @@ export type TablePane = 'main' | 'inspector'
 
 let pendingTablePane: { pane: TablePane; at: number } | null = null
 
-/** ⌘L：把当前格子送到会话，和文档选区一样。 */
-export function tableSendChatHotkey(event: {
-  key: string
-  metaKey: boolean
-  ctrlKey: boolean
-  altKey: boolean
-  shiftKey: boolean
-  isComposing?: boolean
-}) {
-  if (event.isComposing) return false
-  if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return false
-  return event.key === 'l' || event.key === 'L'
-}
-
 /** ⌘\\ 在主栏和检查器之间来回切。 */
 export function tablePaneHotkey(event: {
   key: string
@@ -203,37 +189,6 @@ export function consumePendingTablePane(pane: TablePane) {
 export function peekPendingTablePane(pane: TablePane) {
   if (!pendingTablePane || pendingTablePane.pane !== pane) return false
   return Date.now() - pendingTablePane.at <= 1500
-}
-
-/** Excel 式矩形选区：从锚点拖到焦点，包含两端。 */
-export function tableCellRange(
-  rowIds: string[],
-  keys: string[],
-  a: TableCellCursor,
-  b: TableCellCursor,
-): TableCellCursor[] {
-  const r1 = rowIds.indexOf(a.id)
-  const r2 = rowIds.indexOf(b.id)
-  const c1 = keys.indexOf(a.key)
-  const c2 = keys.indexOf(b.key)
-  if (r1 < 0 || r2 < 0 || c1 < 0 || c2 < 0) return [b]
-  const rMin = Math.min(r1, r2)
-  const rMax = Math.max(r1, r2)
-  const cMin = Math.min(c1, c2)
-  const cMax = Math.max(c1, c2)
-  const out: TableCellCursor[] = []
-  for (let r = rMin; r <= rMax; r += 1) {
-    for (let c = cMin; c <= cMax; c += 1) {
-      const id = rowIds[r]
-      const key = keys[c]
-      if (id && key) out.push({ id, key })
-    }
-  }
-  return out.length ? out : [b]
-}
-
-export function tableCellRangeKey(id: string, key: string) {
-  return `${id}\0${key}`
 }
 
 export function moveTableCell(
