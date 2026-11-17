@@ -1,8 +1,10 @@
-import type { DbRecord } from '@biu/type-file-system'
+import type { CollectionSchema, CollectionSchemaPack, DbRecord } from '@biu/type-file-system'
 import { stubAnyBuiltinView } from './catalog-views.ts'
 import {
   encodeListFilter,
+  looksLikeFilterTree,
   matchListFilterRecord,
+  normalizeFilterGroup,
   resolveViewFilterTree,
   type FilterGroup,
 } from './query-logic.ts'
@@ -17,22 +19,47 @@ export type SharedViewDef = {
 }
 
 /** 和分享页快照同一套筛选，避免列上的命中和链接里列出的记录对不上。 */
+function parseMaybeJson(value: unknown): unknown {
+  if (typeof value !== 'string' || !value.trim()) return value
+  try {
+    return JSON.parse(value) as unknown
+  } catch {
+    return value
+  }
+}
+
+function asFilterMap(value: unknown): Record<string, unknown> {
+  const parsed = parseMaybeJson(value)
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && !looksLikeFilterTree(parsed)) {
+    return parsed as Record<string, unknown>
+  }
+  return {}
+}
+
+function asFilterTree(value: unknown): FilterGroup | null {
+  const parsed = parseMaybeJson(value)
+  if (!looksLikeFilterTree(parsed)) return null
+  return normalizeFilterGroup(parsed)
+}
+
 export function viewShareListFilter(view: {
   filters?: Record<string, unknown>
   filterTree?: unknown
   builtin?: boolean
 }) {
+  const raw = asFilterMap(view.filters)
   const filters: Record<string, string> = {}
-  for (const [key, value] of Object.entries(view.filters ?? {})) {
-    if (key === '$tree' || value == null || typeof value === 'object') continue
+  for (const [key, value] of Object.entries(raw)) {
+    if (key === '$tree' || key === '$scope' || key === '$ids' || value == null || typeof value === 'object') continue
     filters[key] = String(value)
   }
+  const filterTree = asFilterTree(view.filterTree) ?? asFilterTree(raw.$tree) ?? asFilterTree(view.filters)
   return encodeListFilter(
     filters,
     resolveViewFilterTree({
       builtin: view.builtin,
       filters,
-      filterTree: view.filterTree as FilterGroup | null | undefined,
+      filterTree,
     }),
   )
 }
@@ -49,9 +76,11 @@ export function recordMatchesSharedView(
   record: DbRecord,
   view: SharedViewDef,
   storedScope: DataScopeName,
+  schema?: CollectionSchema,
+  packs: CollectionSchemaPack[] = [],
 ) {
   const declared = view.filters?.$scope
   const scope = declared === 'personal' || declared === 'workspace' || declared === 'shared' ? declared : ''
   if (scope && storedScope !== scope) return false
-  return matchListFilterRecord(record, viewShareListFilter(view))
+  return matchListFilterRecord(record, viewShareListFilter(view), schema, packs)
 }

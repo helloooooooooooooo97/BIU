@@ -236,6 +236,18 @@ export function tableCellRangeKey(id: string, key: string) {
   return `${id}\0${key}`
 }
 
+/** 单元格矩形里的行，去重且保持从上到下的顺序。 */
+export function tableCellRangeRowIds(cells: TableCellCursor[]): string[] {
+  const ids: string[] = []
+  const seen = new Set<string>()
+  for (const cell of cells) {
+    if (!cell.id || seen.has(cell.id)) continue
+    seen.add(cell.id)
+    ids.push(cell.id)
+  }
+  return ids
+}
+
 export function moveTableCell(
   rowIds: string[],
   keys: string[],

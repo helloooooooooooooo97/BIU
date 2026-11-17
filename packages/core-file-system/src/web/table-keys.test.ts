@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE, claimTableCellPick, consumePendingTablePane, firstTableTitleCell, moveTableCell, readTablePaneRest, rememberTablePaneRest, requestTablePaneFocus, tableActionArrowLeave, tableActionButtonStep, tableCellRange, tableCellRangeKey, tableClearKey, tableClearedValue, tableCreateKey, tableKeyDir, tableNavKeys, tablePaneFromEvent, tablePaneHotkey, tablePaneOther, tableSendChatHotkey, tableTitleOpenWhere, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
+import { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE, claimTableCellPick, consumePendingTablePane, firstTableTitleCell, moveTableCell, readTablePaneRest, rememberTablePaneRest, requestTablePaneFocus, tableActionArrowLeave, tableActionButtonStep, tableCellRange, tableCellRangeKey, tableCellRangeRowIds, tableClearKey, tableClearedValue, tableCreateKey, tableKeyDir, tableNavKeys, tablePaneFromEvent, tablePaneHotkey, tablePaneOther, tableSendChatHotkey, tableTitleOpenWhere, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
 
 test('first table cell is the title of the first row', () => {
   assert.deepEqual(firstTableTitleCell(['a', 'b'], ['status', 'title', 'actions'], 'title'), { id: 'a', key: 'title' })
@@ -33,6 +33,12 @@ test('table cell range is a closed rectangle like Excel', () => {
     { id: 'c', key: 'owner' },
   ])
   assert.equal(tableCellRangeKey('a', 'title'), 'a\0title')
+  assert.deepEqual(
+    tableCellRangeRowIds(
+      tableCellRange(rows, keys, { id: 'a', key: 'title' }, { id: 'b', key: 'status' }),
+    ),
+    ['a', 'b'],
+  )
 })
 
 test('table cell move stays on the grid and stops at edges', () => {
@@ -126,6 +132,8 @@ test('⌘L on a table cell is the same chat hotkey as the document', () => {
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   assert.match(browser, /tableSendChatHotkey\(event\)/)
   assert.match(browser, /sendSelectedCellToChat/)
+  assert.match(browser, /sendTableSelectionToChat/)
+  assert.match(browser, /sendPickedRowsToChat/)
   assert.match(browser, /fieldPickId\(row\.id, cursor\.key\)/)
   assert.match(browser, /field: cursor\.key/)
   assert.match(browser, /inCell && selected/)
