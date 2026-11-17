@@ -229,6 +229,7 @@ test('sidebar records paint detail immediately without reloading the view', () =
   assert.match(css, /\.fsdb-record-emoji \{[^}]*display:\s*inline-flex/s)
   assert.match(css, /\.fsdb-record-emoji \{[^}]*width:\s*16px/s)
   assert.match(css, /\.fsdb-record-emoji \{[^}]*height:\s*16px/s)
+  assert.match(css, /\.fsdb-record-emoji \{[^}]*font-size:\s*12px/s)
   assert.match(css, /\.fsdb-record-emoji \{[^}]*align-items:\s*center/s)
   assert.match(css, /\.fsdb-record-emoji \{[^}]*justify-content:\s*center/s)
   assert.match(css, /\.fsdb-emoji-picker \{[^}]*border-radius:\s*var\(--biu-radius-popover\)/s)
