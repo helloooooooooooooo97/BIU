@@ -747,7 +747,7 @@ const CSS = `
 .fsdb-detail-title-icon svg{width:78px;height:78px;color:var(--biu-color-icon)}
 button.fsdb-detail-title-icon{cursor:pointer}
 button.fsdb-detail-title-icon:hover{background:color-mix(in srgb,var(--biu-color-bg-hover) 80%,transparent);color:var(--biu-color-icon-active)}
-.fsdb-detail-title-icon .fsdb-record-emoji{display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:78px;line-height:1}
+.fsdb-detail-title-icon .fsdb-record-emoji{display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:58px;line-height:1}
 .fsdb-detail-title-icon .fsdb-record-mark.is-lg{width:78px;height:78px;display:inline-flex;align-items:center;justify-content:center}
 .fsdb-detail-title-icon .sidebar-mascot,
 .fsdb-detail-title-icon .sidebar-mascot svg{width:78px!important;height:78px!important}

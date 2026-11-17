@@ -1535,7 +1535,7 @@ body {
 }
 
 .shell-search-hit-icon .fsdb-record-emoji {
-  font-size: 16px;
+  font-size: 12px;
   line-height: 1;
 }
 
@@ -3097,7 +3097,8 @@ select.settings-account-input {
 .inspector-crumb-tab .fsdb-crumb svg,
 .inspector-crumb-tab .fsdb-crumb-btn svg,
 .inspector-crumb-tab .chat-view-project-icon,
-.inspector-crumb-tab .fsdb-record-mark {
+.inspector-crumb-tab .fsdb-record-mark,
+.inspector-crumb-tab .fsdb-record-emoji {
   width: 16px;
   height: 16px;
   flex: none;
@@ -4874,7 +4875,8 @@ html.dark .composer-model-flyout {
   height: 16px;
   flex-shrink: 0;
   overflow: hidden;
-  font-size: 16px;
+  /* Heroicon 16 实际墨水大约 12px；彩色 emoji 会铺满整个 em，16px 字号会明显更大 */
+  font-size: 12px;
   line-height: 1;
 }
 
