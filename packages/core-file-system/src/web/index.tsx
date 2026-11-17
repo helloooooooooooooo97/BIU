@@ -1,13 +1,12 @@
 import { lazy, Suspense, useEffect, useMemo, useState, useSyncExternalStore, type ComponentType } from 'react'
 import type { Context } from 'cordis'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { CircleStackIcon } from '@heroicons/react/16/solid'
 import type { SlotProps } from '@biu/type-slots'
 import { DATABASE_CHANNEL, type CollectionInfo } from '@biu/type-file-system'
 import { DEFAULT_CHROME_PATH, type CollectionChrome } from '@biu/type-file-system/ui'
-import { isLegacyDatabasePath, parseAppPath } from '@biu/web-session-view'
-import { useDatabaseCenter } from './database-route.ts'
-import { pathForCrumbTarget, type CrumbTarget } from './sidebar-nav.ts'
+import { getAppPathname, isLegacyDatabasePath, parseAppPath, subscribeAppPathname } from '@biu/web-session-view'
+import { pathForCenter, pathForCrumbTarget, type CrumbTarget } from './sidebar-nav.ts'
 import { parseSharePath } from '../share-snapshot.ts'
 import { DatabaseInspectorBrowse, DatabaseInspectorTab, bindInspectorSnapshot, collectionTabIcon } from './inspector-database.tsx'
 import { applyDatabaseChannelPayload } from './inspector-db-route.ts'
@@ -94,19 +93,39 @@ function CollectionPage(props: SlotProps) {
   }, [tables])
   const ui = getDatabaseUi()
   const location = useLocation()
-  const { open: go, navigate, pathname, kind: centerKind, collection: currentPath, viewId: viewFromRoute, recordId: recordFromRoute } =
-    useDatabaseCenter()
+  const navigate = useNavigate()
+  const pathname = useSyncExternalStore(subscribeAppPathname, getAppPathname, () => '/')
   const [expandedViewKey, setExpandedViewKey] = useState<string | null>(null)
   const viaDataCrumbs = useSyncExternalStore(subscribeViaDataCrumbs, viaDataCrumbsOn, () => false)
   const parsed = useMemo(() => parseAppPath(pathname, [DATA_MODULE]), [pathname])
-  const dataHome = centerKind === 'overview'
-  const collectionFromRoute = currentPath
+  const dataHome = parsed.kind === 'module' && parsed.moduleId === DATA_MODULE_ID
+  const routeCollection = parsed.kind === 'collection-view' || parsed.kind === 'record' ? parsed : null
+  const collectionFromRoute = routeCollection?.collection ?? ''
+  const viewFromRoute = routeCollection
+    ? routeCollection.viewId || builtinAllViewId(routeCollection.collection)
+    : undefined
+  const recordFromRoute = parsed.kind === 'record' ? parsed.recordId : null
+  const currentPath = collectionFromRoute
   const row = orderedTables.find((item) => item.path === currentPath)
   const chrome = useSyncExternalStore(
     (fn) => (ui ? ui.subscribe(fn) : () => undefined),
     () => ui?.chrome(currentPath) ?? EMPTY_CHROME,
     () => ui?.chrome(currentPath) ?? EMPTY_CHROME,
   )
+
+  const go = (
+    next: { collection: string; viewId?: string; recordId?: string | null },
+    opts?: { replace?: boolean },
+  ) => {
+    navigate(
+      pathForCenter({
+        collection: next.collection,
+        viewId: next.viewId,
+        recordId: next.recordId ?? undefined,
+      }),
+      opts,
+    )
+  }
 
   useEffect(() => {
     if (isLegacyDatabasePath(pathname) && (parsed.kind === 'collection-view' || parsed.kind === 'record')) {

@@ -2513,7 +2513,7 @@ export function CollectionBrowser({
     if (sheet) return
     loadedIdentityRef.current = ''
     void reloadRef.current({ force: true })
-  }, [collectionPath, dataPath, sheet])
+  }, [collectionPath, dataPath, routeViewId, sheet])
   const detailIdRef = useRef<string | null>(null)
   detailIdRef.current = detailId
   const detailRowRef = useRef(detailRow)
