@@ -2239,11 +2239,6 @@ export function CollectionBrowser({
   }, [nested])
 
   useEffect(() => {
-    if (embed || nested || !inspectorOpen || !detailId || !crumbFromData) return
-    showRecordInInspector(collectionPath, detailId)
-  }, [collectionPath, crumbFromData, detailId, embed, inspectorOpen, nested])
-
-  useEffect(() => {
     if (nested) return
     function onToggle(event: Event) {
       const id = (event as CustomEvent<{ id?: string }>).detail?.id
