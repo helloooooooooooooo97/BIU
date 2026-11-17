@@ -473,8 +473,8 @@ test('title column stays pinned when the table scrolls sideways', () => {
   assert.match(browser, /tablePinColClass\(col\.key, schema\?\.labelField\)/)
   assert.match(browser, /tablePinCount\(/)
   assert.match(css, /\.fsdb-page \.tasks-table th\.is-pin-col\+\.is-pin-col,\.fsdb-page \.tasks-table td\.is-pin-col\+\.is-pin-col\{[^}]*--fsdb-pin-title/)
-  assert.match(css, /\.fsdb-page \.tasks-table tr:hover td\{[^}]*background:color-mix\(in srgb,var\(--biu-color-bg-hover\) 55%,var\(--biu-color-surface\)\)/)
-  assert.doesNotMatch(css, /\.fsdb-page \.tasks-table tr:hover td\{[^}]*transparent/)
+  assert.doesNotMatch(css, /\.fsdb-page \.tasks-table tr:hover td\{[^}]*background/)
+  assert.doesNotMatch(css, /\.fsdb-page \.tasks-table tr\.is-link:hover\{[^}]*background/)
 })
 
 test('property value tags sit vertically centered in the cell', () => {

@@ -20,7 +20,6 @@ const CSS = `
 .fsdb-page .tasks-table .fsdb-cellselect-trigger *,.fsdb-page .tasks-table .db-cell-select-trigger *,.fsdb-page .tasks-table .db-cell-multi-box *,.fsdb-page .tasks-table .fsdb-boolbtn *,.fsdb-page .tasks-table .fsdb-scope-tag *,.fsdb-page .tasks-table .biu-tag *,.fsdb-page .tasks-table .tasks-icon-btn *,.fsdb-page .tasks-table .tasks-title-open *,.fsdb-page .tasks-table .tasks-tree-toggle *{cursor:inherit}
 .fsdb-page .tasks-table svg{pointer-events:none}
 .fsdb-page .tasks-table tr.is-link{cursor:pointer}
-.fsdb-page .tasks-table tr.is-link:hover{background:var(--biu-color-bg-hover)}
 .fsdb-crumb-btn:hover,.fsdb-crumb-btn.is-open{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
 .fsdb-crumb .fsdb-crumb-btn,.fsdb-crumb:last-child .fsdb-crumb-btn,.fsdb-crumb:last-child .fsdb-crumb-btn:hover,.fsdb-crumb:last-child .fsdb-crumb-btn.is-open{color:var(--biu-color-text)}
 .fsdb-crumb-btn.is-open{anchor-name:--fsdb-crumb}
@@ -426,7 +425,6 @@ const CSS = `
 .fsdb-page .tasks-th svg,.fsdb-page .tasks-th .fsdb-field-glyph{color:var(--biu-color-icon)}
 .fsdb-page .tasks-th.is-on svg{color:var(--biu-color-icon-active)}
 .fsdb-page .tasks-table tr{cursor:default}
-.fsdb-page .tasks-table tr:hover td{background:color-mix(in srgb,var(--biu-color-bg-hover) 55%,var(--biu-color-surface))}
 .fsdb-page .tasks-table tr.is-active td{background:color-mix(in srgb,var(--biu-color-text) 8%,var(--biu-color-surface))}
 .fsdb-page .tasks-table tr.fsdb-group-row td{padding:6px 6px 4px;background:transparent;cursor:default}
 .fsdb-page .tasks-table tr.fsdb-group-row:hover td{background:transparent}
