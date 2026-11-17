@@ -1962,16 +1962,13 @@ export function CollectionBrowser({
   holdNavRef.current = (path, viewId) => {
     if (!path) return
     const sameCollection = path === collectionPathRef.current
-    // 同一张表切视图：不要冻住旧行。selectView / 路由会自己套视图再拉数。
     if (sameCollection) return
     const listed = paintListedViews(path)
     const view = pickViewForRoute(listed, path, viewId) || viewForPath(path, viewId)
     const cached = peekListCache(path, view?.id, normalizePageSize(view?.pageSize))
     if (cached) {
       tableHoldRef.current = listHoldFromCache(cached, view, path)
-      return
     }
-    tableHoldRef.current = emptyListHold(tablePaintSnapshotRef.current, view, path)
   }
   const pathSwitchHandledRef = useRef(false)
   const layoutPathRef = useRef<string | null>(null)
@@ -2037,10 +2034,13 @@ export function CollectionBrowser({
     } else {
       // 上一张表的 shareScope 组（私人/空间）不能顶到新表 URL 上，否则看起来像同一张表在重分组。
       // 成员表没有分享列：若 groupBy 还留着 shareScope，会走空组桶，主区只剩表头。
+      setItems([])
+      setTotal(0)
       setGroupBy(next?.groupBy ?? '')
       setGroupBuckets([])
+      adoptView(next)
       releaseHoldOnPaintRef.current = false
-      tableHoldRef.current = emptyListHold(tablePaintSnapshotRef.current, next, dataPath)
+      tableHoldRef.current = emptyListHold(null, next, dataPath)
       pendingPathQueryRef.current = next
         ? {
             listed,
