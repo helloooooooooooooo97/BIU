@@ -1,0 +1,180 @@
+import { Component, Profiler, useState, type ReactNode } from 'react'
+import { afterEach, beforeEach, test, vi } from 'vitest'
+import assert from 'node:assert/strict'
+import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react'
+import { REQUIRED_RECORD_FIELDS, type CollectionInfo, type CollectionSchema } from '@biu/type-file-system'
+import { builtinAllViewId } from '../catalog-views.ts'
+import { invalidateListReads } from './db-client.ts'
+import { CollectionBrowser } from './browser.tsx'
+import { getStarredViews, persistStarredViews, upsertSavedView } from './view-storage.ts'
+import { DataSidebar } from './data-sidebar.tsx'
+import { rememberPreviewTotal, viewTotalKey } from './sidebar-preview.ts'
+import { normalizeSavedView } from './saved-view.ts'
+
+const schema: CollectionSchema = {
+  labelField: 'title',
+  fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } },
+}
+const tables: CollectionInfo[] = ['/selection-a', '/selection-b'].map((path) => ({
+  path, kind: 'collection', label: path.slice(1),
+}))
+
+class RenderBoundary extends Component<{ children: ReactNode }, { error: string }> {
+  state = { error: '' }
+  static getDerivedStateFromError(error: Error) { return { error: error.message } }
+  render() {
+    return this.state.error ? <div data-testid="render-error">{this.state.error}</div> : this.props.children
+  }
+}
+
+const originalScrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView')
+
+beforeEach(() => {
+  vi.stubGlobal('CSS', { escape: (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, (char) => `\\${char}`) })
+  vi.stubGlobal('ResizeObserver', class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  })
+  vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {}, removeEventListener() {} }))
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: vi.fn() })
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input), 'http://test.local')
+    const path = url.searchParams.get('path') ?? ''
+    const body = url.pathname === '/api/db/list' && path.startsWith('/selection-')
+      ? { schema, items: [{ id: `${path}${url.searchParams.get('q') === 'only-target' ? '-target-row' : '-row'}`, title: `${path} content` }], total: 1 }
+      : url.pathname === '/api/db/stat'
+        ? { schema, total: 1 }
+        : { items: [], total: 0 }
+    return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })
+  }))
+})
+
+afterEach(() => {
+  cleanup()
+  invalidateListReads()
+  if (originalScrollIntoView) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', originalScrollIntoView)
+  else delete (HTMLElement.prototype as Partial<HTMLElement>).scrollIntoView
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
+
+test('switching collections after selecting a cell paints the destination without an update loop', async () => {
+  let commits = 0
+  const view = (path: string) => (
+    <RenderBoundary>
+      <Profiler id="table" onRender={() => {
+        if (++commits > 80) throw new Error('table selection triggered an update loop')
+      }}>
+        <CollectionBrowser collectionPath={path} routeViewId={builtinAllViewId(path)}
+          title={path} blurb="" tables={tables} />
+      </Profiler>
+    </RenderBoundary>
+  )
+  const result = render(view('/selection-a'))
+  await waitFor(() => assert.ok(result.container.querySelector('tr[data-record-id="/selection-a-row"] td.is-cell-on')))
+  result.rerender(view('/selection-b'))
+  await waitFor(() => {
+    assert.equal(result.queryByTestId('render-error')?.textContent ?? '', '')
+    assert.ok(result.container.querySelector('tr[data-record-id="/selection-b-row"]'))
+    assert.equal(result.container.querySelector('tr[data-record-id="/selection-a-row"]'), null)
+  })
+  assert.ok(commits < 80)
+})
+
+
+test('sidebar view clicks do not close a record through the previous view route', async () => {
+  const path = '/selection-views'
+  const target = normalizeSavedView({
+    id: 'selection-target-view', name: '目标页面视图', mode: 'table',
+    sortField: 'title', sortDir: 'asc', columns: ['title'], filters: {}, query: 'only-target', groupBy: '',
+  })
+  upsertSavedView(path, target)
+  const viewTables: CollectionInfo[] = [{ path, kind: 'collection', label: '页面' }]
+  const closeRecord = vi.fn()
+  function RoutedCollection() {
+    const [routeView, setRouteView] = useState(builtinAllViewId(path))
+    return <>
+      <output data-testid="route-view">{routeView}</output>
+      <CollectionBrowser collectionPath={path} routeViewId={routeView} title="页面" blurb="" tables={viewTables}
+        onOpenView={setRouteView}
+        onOpenTable={(_path, id) => setRouteView(id!)}
+        onCloseRecord={() => { closeRecord(); setRouteView(routeView) }} />
+    </>
+  }
+  const result = render(<RoutedCollection />)
+  const button = await result.findByRole('button', { name: target.name, exact: true })
+  await waitFor(() => assert.ok(result.container.querySelector('tr[data-record-id="/selection-views-row"]')))
+  fireEvent.click(button)
+  await act(async () => { await Promise.resolve() })
+  assert.equal(result.getByTestId('route-view').textContent, target.id, 'the selected view route must survive queued callbacks')
+  assert.equal(closeRecord.mock.calls.length, 0, 'a view switch must not navigate back through onCloseRecord')
+  await waitFor(() => {
+    assert.equal(result.getByTestId('route-view').textContent, target.id)
+    assert.ok(result.getAllByRole('button', { name: target.name, exact: true }).some((button) => button.closest('.chat-session-row')?.classList.contains('is-active')))
+    assert.ok(result.container.querySelector('tr[data-record-id="/selection-views-target-row"]'))
+    assert.equal(Boolean(result.container.querySelector('tr[data-record-id="/selection-views-row"]')), false)
+    assert.ok(result.getByTestId('fsdb-view-tab').textContent?.includes(target.name))
+  })
+})
+
+
+test('highlighted sidebar row backgrounds activate the title action without hijacking controls', () => {
+  const path = '/selection-hit-area'
+  const target = normalizeSavedView({
+    id: 'hit-area-view', name: '整行可点击视图', mode: 'table',
+    sortField: 'title', sortDir: 'asc', columns: ['title'], filters: {}, groupBy: '',
+  })
+  upsertSavedView(path, target)
+  rememberPreviewTotal(viewTotalKey(path, target), 7)
+  const starredBefore = getStarredViews()
+  const onOpenTable = vi.fn(), onApplyView = vi.fn(), onRenameView = vi.fn()
+  const onDeleteView = vi.fn(), onAddView = vi.fn(), onExpandedViewKeyChange = vi.fn()
+  const result = render(<DataSidebar collectionPath={path} title="点击区域表"
+    tables={[{ path, kind: 'collection', label: '点击区域表' }]}
+    views={[target]} activeViewId={builtinAllViewId(path)} onOpenTable={onOpenTable}
+    onApplyView={onApplyView} onRenameView={onRenameView} onDeleteView={onDeleteView}
+    onAddView={onAddView} onExpandedViewKeyChange={onExpandedViewKeyChange} />)
+  try {
+    const label = result.getByRole('button', { name: target.name, exact: true })
+    const row = label.closest<HTMLElement>('.chat-session-row')!
+    for (const hit of [row, row.querySelector('.chat-session-row-main')!, row.querySelector('.sidebar-chat-count-num')!, label]) {
+      onOpenTable.mockClear()
+      onApplyView.mockClear()
+      fireEvent.click(hit)
+      assert.equal(onOpenTable.mock.calls.length, 1)
+      assert.deepEqual(onOpenTable.mock.calls[0], [path, target.id])
+      assert.equal(onApplyView.mock.calls.length, 1)
+    }
+    onOpenTable.mockClear()
+    onApplyView.mockClear()
+    fireEvent.click(within(row).getByTitle('展开记录'))
+    fireEvent.click(within(row).getByRole('button', { name: `重命名 ${target.name}` }))
+    fireEvent.click(within(row).getByRole('button', { name: `删除 ${target.name}` }))
+    fireEvent.click(within(row).getByRole('button', { name: `收藏 ${target.name}` }))
+    assert.equal(onExpandedViewKeyChange.mock.calls.length, 1)
+    assert.equal(onRenameView.mock.calls.length, 1)
+    assert.equal(onDeleteView.mock.calls.length, 1)
+    assert.equal(onApplyView.mock.calls.length, 0)
+    assert.equal(onOpenTable.mock.calls.length, 0)
+
+    const starredLabel = result.getAllByRole('button', { name: target.name, exact: true })
+      .find((button) => button.closest('.chat-session-row') !== row)!
+    fireEvent.click(starredLabel.closest('.chat-session-row')!)
+    assert.deepEqual(onOpenTable.mock.calls, [[path, target.id]])
+
+    onOpenTable.mockClear()
+    const head = result.getAllByRole('button', { name: '点击区域表', exact: true })
+      .find((button) => button.closest('.sidebar-group-head'))!.closest('.sidebar-group-head')!
+    fireEvent.click(head)
+    assert.deepEqual(onOpenTable.mock.calls, [[path, builtinAllViewId(path)]])
+    onOpenTable.mockClear()
+    fireEvent.click(within(head as HTMLElement).getByRole('button', { name: '收起视图' }))
+    fireEvent.click(result.getByTestId(`sidebar-add-view-${path}`))
+    assert.equal(onOpenTable.mock.calls.length, 0)
+    assert.equal(onAddView.mock.calls.length, 1)
+  } finally {
+    result.unmount()
+    persistStarredViews(starredBefore)
+  }
+})
