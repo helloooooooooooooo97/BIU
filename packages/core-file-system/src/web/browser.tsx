@@ -1962,10 +1962,13 @@ export function CollectionBrowser({
   holdNavRef.current = (path, viewId) => {
     if (!path) return
     const sameCollection = path === collectionPathRef.current
-    // 同一张表切视图：不要冻住旧行。selectView / 路由会自己套视图再拉数。
-    if (sameCollection) return
+    if (sameCollection && (!viewId || viewId === activeViewIdRef.current)) return
     const listed = paintListedViews(path)
     const view = pickViewForRoute(listed, path, viewId) || viewForPath(path, viewId)
+    if (sameCollection) {
+      adoptListCacheForViewRef.current(path, view)
+      return
+    }
     const cached = peekListCache(path, view?.id, normalizePageSize(view?.pageSize))
     if (cached) {
       tableHoldRef.current = listHoldFromCache(cached, view, path)
@@ -3688,9 +3691,8 @@ export function CollectionBrowser({
   }
 
   function applyView(view: SavedView) {
-    const switching = view.id !== activeViewIdRef.current
     const current = viewsRef.current.find((item) => item.id === view.id)
-    if (!switching && current && !viewIsFresher(view, current)) return
+    if (current && view.id === activeViewIdRef.current && !viewIsFresher(view, current)) return
     const next = normalizeSavedView({
       ...view,
       filters: { ...catalogLockFilters(view.id, [view]), ...view.filters },
@@ -3703,7 +3705,6 @@ export function CollectionBrowser({
     const nextPageSize = normalizePageSize(next.pageSize)
     const nextGroup = next.groupBy ?? ''
     if (
-      !switching &&
       next.id === activeViewId &&
       mode === next.mode &&
       sortField === next.sortField &&
@@ -3722,7 +3723,6 @@ export function CollectionBrowser({
     ) {
       return
     }
-    if (switching) loadedIdentityRef.current = ''
     rememberActiveView(next.id)
     setMode(next.mode)
     setSortField(next.sortField)
@@ -3785,9 +3785,12 @@ export function CollectionBrowser({
 
   function selectView(view: SavedView) {
     persistActiveViewRef.current()
-    skipPersistGen.current += 1
-    adoptListCacheForViewRef.current(dataPath, view)
-    applyView(view)
+    if (view.id !== activeViewIdRef.current) {
+      adoptListCacheForViewRef.current(dataPath, view)
+      applyView(view)
+    } else {
+      setViewMenuOpen(false)
+    }
     rememberInspectorWorkingView(collectionPath, view.id)
     onOpenView?.(view.id)
   }

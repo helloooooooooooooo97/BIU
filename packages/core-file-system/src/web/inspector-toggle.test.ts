@@ -200,7 +200,6 @@ test('sidebar view rows apply the current collection view instead of only changi
   assert.match(open, /if \(path === collectionPath\)/)
   assert.match(open, /onApplyView\(view\)/)
   assert.match(open, /onOpenTable\?\.\(path, viewId\)/)
-  assert.doesNotMatch(open, /onApplyView\(view\)\s*\n\s*return/)
   assert.match(browser, /onApplyView=\{\(view\) => \{\s*selectView\(view\)/)
 })
 
@@ -718,7 +717,7 @@ test('create record sits at the right of the toolbar with a blue label', () => {
   assert.match(browser, /onChange=\{applyFilterTree\}/)
   assert.match(browser, /persistActiveViewRef\.current\(\)/)
   assert.match(browser, /liveTree \? filters : \{\}/)
-  assert.match(browser, /function selectView\(view: SavedView\) \{[\s\S]*adoptListCacheForViewRef\.current\(dataPath, view\)[\s\S]*applyView\(view\)/)
+  assert.match(browser, /if \(view\.id !== activeViewIdRef\.current\) \{[\s\S]*applyView\(view\)[\s\S]*\} else \{\s*setViewMenuOpen\(false\)/)
   assert.match(browser, /const listChrome = useMemo\([\s\S]*<PageBanner/)
   assert.doesNotMatch(browser, /const \[measureOn, setMeasureOn\] = useState\(false\)/)
   assert.match(browser, /measure\(\)\s*\n\s*const ro = new ResizeObserver\(schedule\)/)
