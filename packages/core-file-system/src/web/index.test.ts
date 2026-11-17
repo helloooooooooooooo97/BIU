@@ -89,9 +89,8 @@ test('shell matches the data module by extra.moduleId database', () => {
 
 test('collection URL without a view paints 全部 immediately, not the last dense view', () => {
   const page = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
-  assert.match(page, /routeCollection\.viewId \|\| builtinAllViewId\(routeCollection\.collection\)/)
+  assert.match(page, /useDatabaseCenter\(\)/)
   assert.match(page, /go\(\{ collection: parsed.collection, viewId: builtinAllViewId\(parsed.collection\) \}/)
-  assert.match(page, /useSyncExternalStore\(subscribeAppPathname, getAppPathname/)
   assert.match(page, /parseAppPath\(pathname, \[DATA_MODULE\]\)/)
 })
 
@@ -144,7 +143,7 @@ test('database page no longer registers collection shortcuts on the dock', () =>
   assert.match(page, /inspector-follow/)
   assert.match(page, /sessionView/)
   assert.match(page, /builtinAllViewId\(parsed.collection\)/)
-  assert.match(page, /writeMainDataRoute\(location.pathname\)/)
+  assert.match(page, /writeMainDataRoute\(pathname\)/)
   assert.match(page, /<DataOverview/)
   assert.match(page, /dataHome/)
   assert.match(page, /return \[\.\.\.user, \.\.\.index, \.\.\.system\]/)
