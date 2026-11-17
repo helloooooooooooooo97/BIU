@@ -3017,11 +3017,11 @@ select.settings-account-input {
   display: none;
 }
 
-.inspector-crumb-tab.is-active .inspector-crumb-full .fsdb-crumb:not(:last-child) {
+.inspector-crumb-tab .inspector-crumb-full.is-parents-open .fsdb-crumb:not(:last-child):not(:first-child) {
   display: inline-flex;
 }
 
-.inspector-crumb-tab.is-active .inspector-crumb-full .fsdb-crumb:last-child .fsdb-crumb-sep {
+.inspector-crumb-tab .inspector-crumb-full.is-parents-open .fsdb-crumb:last-child .fsdb-crumb-sep {
   display: inline;
 }
 
@@ -3103,15 +3103,8 @@ select.settings-account-input {
   flex: none;
 }
 
-.inspector-crumb-full .fsdb-crumb-btn.is-static {
-  cursor: default;
-  pointer-events: none;
+.inspector-crumb-full .fsdb-crumb:first-child .fsdb-crumb-btn {
   padding: 0;
-}
-
-.inspector-crumb-full .fsdb-crumb-btn.is-static:hover {
-  background: transparent;
-  color: inherit;
 }
 
 .inspector-crumb-full .fsdb-crumb-btn {
