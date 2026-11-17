@@ -57,6 +57,27 @@ test('database nested routes identify view vs record without touching /agents/:i
     collection: '/pages',
     viewId: 'default',
   })
+  assert.deepEqual(parseAppPath('/database/skills/view/builtin-all%3A%2Fskills', plugins), {
+    kind: 'collection-view',
+    moduleId: 'database',
+    path: '/database',
+    collection: '/skills',
+    viewId: 'builtin-all:/skills',
+  })
+  assert.deepEqual(parseAppPath('/database/skills/view/builtin-all:%2Fskills', plugins), {
+    kind: 'collection-view',
+    moduleId: 'database',
+    path: '/database',
+    collection: '/skills',
+    viewId: 'builtin-all:/skills',
+  })
+  assert.deepEqual(parseAppPath('/database/skills/view/builtin-all:/skills', plugins), {
+    kind: 'collection-view',
+    moduleId: 'database',
+    path: '/database',
+    collection: '/skills',
+    viewId: 'builtin-all:/skills',
+  })
   assert.deepEqual(parseAppPath('/database/pages/record/rec-1', plugins), {
     kind: 'record',
     moduleId: 'database',
