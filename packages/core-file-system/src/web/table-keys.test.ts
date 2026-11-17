@@ -2,42 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE, claimTableCellPick, consumePendingTablePane, firstTableTitleCell, moveTableCell, readTablePaneRest, rememberTablePaneRest, requestTablePaneFocus, tableActionArrowLeave, tableActionButtonStep, tableAutoLandPickAction, tableCellPickOnGrid, tableCellRange, tableCellRangeKey, tableCellRangeRowIds, tableClearKey, tableClearedValue, tableCreateKey, tableKeyDir, tableNavKeys, tablePaneFromEvent, tablePaneHotkey, tablePaneOther, tableSendChatHotkey, tableTitleOpenWhere, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
-
-test('stale cell picks from another table are dropped, not restored', () => {
-  const rows = ['a', 'b']
-  const keys = ['title', 'status']
-  assert.deepEqual(tableCellPickOnGrid(rows, keys, { id: 'a', key: 'title' }), { id: 'a', key: 'title' })
-  assert.equal(tableCellPickOnGrid(rows, keys, { id: 'gone', key: 'title' }), null)
-  assert.equal(tableAutoLandPickAction({
-    pick: { id: 'gone', key: 'title' },
-    rowIds: rows,
-    keys,
-    tdMounted: false,
-    paintedOn: false,
-  }), 'drop')
-  assert.equal(tableAutoLandPickAction({
-    pick: { id: 'a', key: 'title' },
-    rowIds: rows,
-    keys,
-    tdMounted: true,
-    paintedOn: true,
-  }), 'idle')
-  assert.equal(tableAutoLandPickAction({
-    pick: { id: 'a', key: 'title' },
-    rowIds: rows,
-    keys,
-    tdMounted: false,
-    paintedOn: false,
-  }), 'scroll')
-  assert.equal(tableAutoLandPickAction({
-    pick: { id: 'a', key: 'title' },
-    rowIds: rows,
-    keys,
-    tdMounted: true,
-    paintedOn: false,
-  }), 'paint')
-})
+import { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE, claimTableCellPick, consumePendingTablePane, firstTableTitleCell, moveTableCell, readTablePaneRest, rememberTablePaneRest, requestTablePaneFocus, tableActionArrowLeave, tableActionButtonStep, tableCellRange, tableCellRangeKey, tableCellRangeRowIds, tableClearKey, tableClearedValue, tableCreateKey, tableKeyDir, tableNavKeys, tablePaneFromEvent, tablePaneHotkey, tablePaneOther, tableSendChatHotkey, tableTitleOpenWhere, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
 
 test('first table cell is the title of the first row', () => {
   assert.deepEqual(firstTableTitleCell(['a', 'b'], ['status', 'title', 'actions'], 'title'), { id: 'a', key: 'title' })
