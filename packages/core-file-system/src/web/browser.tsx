@@ -25,6 +25,7 @@ import {
 import type { CollectionActionInfo, CollectionInfo, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
 import { normalizeSchemaValue } from '@biu/type-file-system'
 import type { CollectionChrome, CollectionRowViewType, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
+import { parseAppPath } from '@biu/web-session-view'
 import { BoolBox } from '@biu/biu-ui/bool-box'
 import { ChatCount } from '@biu/biu-ui/chat-count'
 import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
@@ -94,7 +95,7 @@ import { workspaceColumnsForLocation } from './workspace-columns.ts'
 import { PageBanner } from './page-banner.tsx'
 import { TableGlyph, UiGlyph, ViewModeGlyph, idleTableIconKind } from './nav-glyphs.tsx'
 import { SourceTableCell } from './source-table-cell.tsx'
-import { DATA_COLLECTION_PATH, PAGES_COLLECTION_PATH, isIndexCollection, isSystemCollection } from './database-path.ts'
+import { DATA_COLLECTION_PATH, DATA_MODULE, PAGES_COLLECTION_PATH, isIndexCollection, isSystemCollection } from './database-path.ts'
 import { ViewOrderMenu } from './view-order-menu.tsx'
 import { getDatabaseUi } from './database-ui.ts'
 import {
@@ -826,6 +827,21 @@ type TablePaintNode =
   | { kind: 'group-pager'; key: string; groupKey: string; count: number; pageIndex: number }
 
 const EMPTY_HOLD_NODES: TablePaintNode[] = [{ kind: 'empty', key: 'empty' }]
+
+function collectionFromAppUrl(url: string): { collection: string; viewId: string } | null {
+  let pathname = url
+  try {
+    pathname = url.startsWith('http') ? new URL(url).pathname : url
+  } catch {
+    return null
+  }
+  const parsed = parseAppPath(pathname, [DATA_MODULE])
+  if (parsed.kind !== 'collection-view' && parsed.kind !== 'record') return null
+  return {
+    collection: parsed.collection,
+    viewId: parsed.viewId || builtinAllViewId(parsed.collection),
+  }
+}
 
 const SHARE_SCOPE_ORDER = ['私人', '空间', '共享']
 
@@ -1910,6 +1926,7 @@ export function CollectionBrowser({
   const tablePaintSnapshotRef = useRef<TableHoldSnap | null>(null)
   const tableHoldRef = useRef<TableHoldSnap | null>(null)
   const releaseHoldOnPaintRef = useRef(false)
+  const [, setHoldNav] = useState(0)
   const collectionPathRef = useRef(collectionPath)
   collectionPathRef.current = collectionPath
   const dataPathRef = useRef(dataPath)
@@ -1940,6 +1957,18 @@ export function CollectionBrowser({
     }
     tableHoldRef.current = tablePaintSnapshotRef.current ?? emptyListHold(tablePaintSnapshotRef.current, view, path)
     releaseHoldOnPaintRef.current = false
+  }
+  const holdNavRef = useRef<(path: string, viewId?: string) => void>(() => undefined)
+  holdNavRef.current = (path, viewId) => {
+    if (!path) return
+    const sameCollection = path === collectionPathRef.current
+    if (sameCollection) return
+    const listed = paintListedViews(path)
+    const view = pickViewForRoute(listed, path, viewId) || viewForPath(path, viewId)
+    const cached = peekListCache(path, view?.id, normalizePageSize(view?.pageSize))
+    if (cached) {
+      tableHoldRef.current = listHoldFromCache(cached, view, path)
+    }
   }
   const pathSwitchHandledRef = useRef(false)
   const layoutPathRef = useRef<string | null>(null)
@@ -2768,6 +2797,27 @@ export function CollectionBrowser({
     if (routeRecordId) return
     void pullTags()
   }, [collectionPath, routeRecordId])
+
+  useEffect(() => {
+    if (nested) return
+    const origPush = history.pushState
+    const origReplace = history.replaceState
+    const intercept = (orig: typeof history.pushState): History['pushState'] =>
+      (data, unused, url) => {
+        orig.call(history, data, unused, url)
+        const next = collectionFromAppUrl(url != null ? String(url) : window.location.pathname)
+        if (!next) return
+        const before = tableHoldRef.current
+        holdNavRef.current(next.collection, next.viewId)
+        if (tableHoldRef.current !== before) setHoldNav((n) => n + 1)
+      }
+    history.pushState = intercept(origPush)
+    history.replaceState = intercept(origReplace)
+    return () => {
+      history.pushState = origPush
+      history.replaceState = origReplace
+    }
+  }, [nested])
 
   useEffect(() => subscribeTags(undefined, () => setFacetCatalog(loadTags())), [])
 
