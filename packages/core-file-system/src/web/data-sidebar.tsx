@@ -753,13 +753,6 @@ export const DataSidebar = memo(function DataSidebar({
       /* ignore */
     }
     rememberInspectorWorkingView(path, viewId)
-    if (path === collectionPath) {
-      const view = viewsFor(path).find((item) => item.id === viewId)
-      if (view) {
-        onApplyView(view)
-        return
-      }
-    }
     onOpenTable?.(path, viewId)
   }
 

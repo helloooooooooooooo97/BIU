@@ -307,12 +307,11 @@ type ListDecorateNeed = {
 function listDecorateNeed(wanted: string[] | null | undefined): ListDecorateNeed | null {
   if (!wanted?.length) return null
   const set = new Set(wanted)
-  const shareScope = set.has('shareScope')
   return {
-    tag: shareScope || set.has('tag') || wanted.some((key) => key.startsWith('tag::')),
+    tag: set.has('tag') || wanted.some((key) => key.startsWith('tag::')),
     people: set.has('createdBy') || set.has('updatedBy'),
     meta: set.has('emoji'),
-    shareScope,
+    shareScope: set.has('shareScope'),
     shareRole: set.has('shareRole'),
   }
 }
@@ -1923,7 +1922,7 @@ export class DatabaseService extends Service implements Database {
   }
 
   private decorateRecord(spec: CollectionSpec, row: DbRecord, need: ListDecorateNeed | null = null): DbRecord {
-    const withTag = !need || need.tag || need.shareScope ? this.applyTagOverlay(spec, row) : row
+    const withTag = !need || need.tag ? this.applyTagOverlay(spec, row) : row
     const withPeople = !need || need.people ? this.applyPersonOverlay(spec, withTag) : withTag
     const withMeta = !need || need.meta ? this.applyMetaOverlay(spec, withPeople) : withPeople
     if (isSystemCollection(spec.path) || isIndexCollection(spec.path)) return withMeta
@@ -1971,11 +1970,7 @@ export class DatabaseService extends Service implements Database {
   private hasPublicShare(collection: string, id: string, record?: DbRecord, stored?: DataScopeName) {
     if (this.recordShareIds(collection).has(id)) return true
     if (!record || !stored) return false
-    const spec = this.collections.get(collection)
-    const tagged = spec ? this.applyTagOverlay(spec, record) : record
-    const schema = spec ? schemaFor(spec) : undefined
-    const packs = this.tags.list()
-    return this.sharedViewsFor(collection).some((view) => recordMatchesSharedView(tagged, view, stored, schema, packs))
+    return this.sharedViewsFor(collection).some((view) => recordMatchesSharedView(record, view, stored))
   }
 
   private sharedViewsFor(collection: string): SharedViewDef[] {

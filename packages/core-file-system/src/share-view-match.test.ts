@@ -18,21 +18,3 @@ test('a shared view hits the same records the share snapshot would list', () => 
   assert.equal(resolveSharedView(all.id, [])?.id, all.id)
   assert.equal(resolveSharedView('missing', [open]), null)
 })
-
-test('a shared tag view still hits records when schema is not passed', () => {
-  const view = {
-    id: 'sec',
-    name: '安全项目',
-    filterTree: {
-      kind: 'group' as const,
-      id: 'g',
-      combinator: 'and' as const,
-      children: [{ kind: 'rule' as const, id: 'r', field: 'tag', op: 'eq' as const, value: 'sec' }],
-    },
-  }
-  const hit = { id: 'p1', title: 'Robust Intelligence', tag: { tags: ['sec'] } }
-  const miss = { id: 'p2', title: 'Other', tag: { tags: ['other'] } }
-  assert.equal(recordMatchesSharedView(hit, view, 'personal'), true)
-  assert.equal(recordMatchesSharedView(miss, view, 'personal'), false)
-  assert.equal(recordMatchesSharedView(hit, { ...view, filterTree: JSON.stringify(view.filterTree) as never }, 'personal'), true)
-})

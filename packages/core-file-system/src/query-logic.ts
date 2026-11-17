@@ -293,19 +293,6 @@ function asText(actual: unknown) {
   return String(actual ?? '')
 }
 
-function isTagShapedValue(actual: unknown) {
-  return Boolean(actual && typeof actual === 'object' && !Array.isArray(actual) && Array.isArray((actual as { tags?: unknown }).tags))
-}
-
-function isTagFilterField(
-  rule: FilterRule,
-  field: FieldSpec | undefined,
-  actual: unknown,
-) {
-  if (parseTagFlatColumnKey(rule.field)) return false
-  return isTagFieldType(field?.type) || rule.field === 'tag' || isTagShapedValue(actual)
-}
-
 export function matchFilterRule(
   record: DbRecord,
   rule: FilterRule,
@@ -315,9 +302,8 @@ export function matchFilterRule(
   const actual = readTagFieldValue(record, rule.field)
   const field = specForFilterField(rule.field, schema, packs)
   const want = rule.value
-  const tagField = isTagFilterField(rule, field, actual)
   if (rule.op === 'is_empty' || rule.op === 'not_empty') {
-    const empty = tagField
+    const empty = isTagFieldType(field?.type)
       ? normalizeSchemaValue(actual).tags.length === 0
       : isEmptyValue(actual)
     return rule.op === 'is_empty' ? empty : !empty
@@ -332,7 +318,7 @@ export function matchFilterRule(
     if (!span) return false
     return Date.now() - n <= span
   }
-  if (tagField) {
+  if (isTagFieldType(field?.type)) {
     const parsed = normalizeSchemaValue(actual)
     const hit = parsed.tags.some((id) => id === want || packs.find((item) => item.id === id)?.label === want)
     if (rule.op === 'eq') return hit

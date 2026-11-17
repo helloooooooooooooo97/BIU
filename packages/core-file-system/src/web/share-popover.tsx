@@ -615,7 +615,6 @@ export function ShareScopeDetail({
   const [box, setBox] = useState<{ top: number; left: number } | null>(null)
   const shown = scopeTone(label)
   const [scope, setScope] = useState(shown)
-  const chip = scope === 'shared' || shown === 'shared' ? 'shared' : scope === 'workspace' || shown === 'workspace' ? 'workspace' : shown
   const [direct, setDirect] = useState<Array<{ id: string; name: string; role: string; note: string }>>([])
   const [chain, setChain] = useState<Array<{ id: string; title: string; detail: string; result: string }>>([])
   const [error, setError] = useState('')
@@ -675,20 +674,20 @@ export function ShareScopeDetail({
         setChain([
           {
             id: 'stored',
-            title: '本条',
-            detail: '未单独开链接',
+            title: '这条内容自己的归属',
+            detail: '只有创建者，数据留在本机',
             result: '私人',
           },
           ...(recordShare ? [{
             id: 'record-link',
-            title: '本条链接',
-            detail: '局域网',
+            title: '记录局域网链接',
+            detail: '已开启局域网链接，同一局域网可查看',
             result: '共享',
           }] : []),
           ...viewHits.map((view) => ({
             id: `view:${view.id}`,
-            title: `视图「${view.title}」`,
-            detail: '局域网',
+            title: `命中已分享的视图「${view.title}」`,
+            detail: '已开启局域网链接，同一局域网可查看',
             result: '共享',
           })),
         ])
@@ -699,11 +698,11 @@ export function ShareScopeDetail({
         setScope(shared ? 'shared' : 'personal')
         setChain([{
           id: 'stored',
-          title: '本条',
-          detail: shared ? '局域网' : '未单独开链接',
+          title: '这条内容自己的归属',
+          detail: shared ? '已开启局域网链接，同一局域网可查看' : '只有创建者，数据留在本机',
           result: shared ? '共享' : '私人',
         }])
-        setError(err instanceof Error ? err.message : '无法读取分享')
+        setError(err instanceof Error ? err.message : '无法读取局域网链接')
       })
       return () => {
         cancelled = true
@@ -808,9 +807,9 @@ export function ShareScopeDetail({
     <div className="fsdb-scope-detail" ref={wrapRef}>
       <button
         type="button"
-        className={`fsdb-scope-tag is-${chip}`}
+        className={`fsdb-scope-tag is-${shown}`}
         data-testid="fsdb-scope-tag"
-        aria-label={`${label || scopeText(chip)}的权限详情`}
+        aria-label={`${label || scopeText(shown)}的权限详情`}
         aria-expanded={open}
         onPointerDown={(event) => event.stopPropagation()}
         onClick={(event) => {
@@ -820,27 +819,27 @@ export function ShareScopeDetail({
           setOpen((prev) => !prev)
         }}
       >
-        <ScopeMark scope={chip} />
+        <ScopeMark scope={shown} />
       </button>
       {open && box ? createPortal(
         <HeadlessDismiss
           onDismiss={() => setOpen(false)}
           inside={(node) => Boolean(wrapRef.current?.contains(node) || panelRef.current?.contains(node))}
         >
-          <div ref={panelRef} className="fsdb-scope-panel" role="dialog" aria-label={localOnly ? '分享' : '数据归属'} style={{ top: box.top, left: box.left }}>
+          <div ref={panelRef} className="fsdb-scope-panel" role="dialog" aria-label={localOnly ? '局域网链接' : '数据归属链路'} style={{ top: box.top, left: box.left }}>
             <header className="fsdb-scope-head">
               <div>
-                <strong>{localOnly ? '分享' : '数据归属'}</strong>
-                <em>{localOnly ? '本条、链接、视图，取最宽一档' : '直接协作者和匹配到的视图，取最宽的一档'}</em>
+                <strong>{localOnly ? '局域网链接' : '数据归属'}</strong>
+                <em>{localOnly ? '这条记录命中的局域网链接' : '直接协作者和匹配到的视图，取最宽的一档'}</em>
               </div>
-              <b className={`fsdb-scope-pill is-${chip}`}><ScopeMark scope={chip} /></b>
+              <b className={`fsdb-scope-pill is-${shown}`}><ScopeMark scope={shown} /></b>
             </header>
             <ol className="fsdb-scope-chain">
               {chain.length ? chain.map((step) => (
                 <li key={step.id}>
                   <div>
                     <strong>{step.title}</strong>
-                    {step.detail ? <em>{step.detail}</em> : null}
+                    <em>{step.detail}</em>
                   </div>
                   <b className={`fsdb-scope-pill is-${step.result === '共享' ? 'shared' : step.result === '空间' ? 'workspace' : 'personal'}`}><ScopeMark scope={step.result} /></b>
                 </li>
