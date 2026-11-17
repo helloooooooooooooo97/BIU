@@ -232,6 +232,33 @@ export function tableCellRange(
   return out.length ? out : [b]
 }
 
+/** 切表/切视图后：旧选中格还在当前网格里才恢复，否则丢掉。 */
+export function tableCellPickOnGrid(
+  rowIds: string[],
+  keys: string[],
+  pick: TableCellCursor | null | undefined,
+): TableCellCursor | null {
+  if (!pick) return null
+  if (!rowIds.includes(pick.id) || !keys.includes(pick.key)) return null
+  return pick
+}
+
+export type TableAutoLandPick = 'idle' | 'drop' | 'paint' | 'scroll'
+
+/** 自动恢复选中格：不在网格则 drop；已高亮则 idle；行在网格但格未挂载则只滚动，禁止 bump React state。 */
+export function tableAutoLandPickAction(opts: {
+  pick: TableCellCursor | null | undefined
+  rowIds: string[]
+  keys: string[]
+  tdMounted: boolean
+  paintedOn: boolean
+}): TableAutoLandPick {
+  if (!tableCellPickOnGrid(opts.rowIds, opts.keys, opts.pick)) return opts.pick ? 'drop' : 'idle'
+  if (opts.paintedOn) return 'idle'
+  if (!opts.tdMounted) return 'scroll'
+  return 'paint'
+}
+
 export function tableCellRangeKey(id: string, key: string) {
   return `${id}\0${key}`
 }
