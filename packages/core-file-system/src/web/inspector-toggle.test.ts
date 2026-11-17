@@ -1097,7 +1097,7 @@ test('database extras sit after the record detail, not in the inspector', () => 
   assert.match(style, /\.fsdb-detail-title-icon\{[^}]*align-items:center/)
   assert.match(style, /\.fsdb-detail-title-icon\{[^}]*height:78px/)
   assert.match(style, /\.fsdb-detail-icon-slot\{[^}]*margin:-42px/)
-  assert.match(style, /\.fsdb-detail-title-icon \.fsdb-record-emoji\{[^}]*font-size:64px/)
+  assert.match(style, /\.fsdb-detail-title-icon \.fsdb-record-emoji\{[^}]*font-size:58px/)
   assert.match(style, /\.fsdb-detail-title-icon \.sidebar-mascot,\s*\n\.fsdb-detail-title-icon \.sidebar-mascot svg\{[^}]*width:78px/)
   assert.match(detail, /size=\{64\}/)
   assert.match(detail, /<DetailTitleIcon/)
