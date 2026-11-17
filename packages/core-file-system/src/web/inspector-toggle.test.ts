@@ -200,6 +200,7 @@ test('sidebar view rows apply the current collection view instead of only changi
   assert.match(open, /if \(path === collectionPath\)/)
   assert.match(open, /onApplyView\(view\)/)
   assert.match(open, /onOpenTable\?\.\(path, viewId\)/)
+  assert.doesNotMatch(open, /onApplyView\(view\)\s*\n\s*return/)
   assert.match(browser, /onApplyView=\{\(view\) => \{\s*selectView\(view\)/)
 })
 
