@@ -803,6 +803,7 @@ test('create record sits at the right of the toolbar with a blue label', () => {
   assert.doesNotMatch(css, /tr\[data-table-idle\]/)
   assert.match(browser, /tableWrapRef/)
   assert.match(browser, /tablePaintNodes/)
+  assert.match(browser, /reusePaintNodes/)
   assert.match(browser, /fsdb-table-pad/)
   assert.match(browser, /wrapCells/)
   assert.match(browser, /tableRowFallbackPx/)

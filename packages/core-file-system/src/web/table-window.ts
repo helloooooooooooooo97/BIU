@@ -191,6 +191,43 @@ export function tableCheckSlots(
   return slots
 }
 
+type ReusePaintNode = {
+  kind: string
+  key: string
+  row?: unknown
+  depth?: number
+  hasKids?: boolean
+  kidCount?: number
+  groupKey?: string
+  label?: string
+  count?: number
+  pageIndex?: number
+}
+
+function samePaintNode(prev: ReusePaintNode, next: ReusePaintNode) {
+  if (prev === next) return true
+  if (prev.kind !== next.kind || prev.key !== next.key) return false
+  if (prev.kind === 'row') {
+    return prev.row === next.row && prev.depth === next.depth && prev.hasKids === next.hasKids && prev.kidCount === next.kidCount
+  }
+  if (prev.kind === 'group-head') return prev.groupKey === next.groupKey && prev.label === next.label && prev.count === next.count
+  if (prev.kind === 'group-pager') return prev.groupKey === next.groupKey && prev.count === next.count && prev.pageIndex === next.pageIndex
+  return true
+}
+
+/** Keep node object identity when row/group payloads did not change. */
+export function reusePaintNodes<T extends ReusePaintNode>(prev: T[] | undefined, next: T[]): T[] {
+  if (!prev?.length || prev === next) return next
+  let changed = prev.length !== next.length
+  const out = next.map((node, i) => {
+    const old = prev[i]
+    if (old && samePaintNode(old, node)) return old
+    changed = true
+    return node
+  })
+  return changed ? out : prev
+}
+
 /** 标签等分组超过 8 个时也要首屏按页大小拉齐，不能只探第一条。 */
 export const GROUPED_FULL_FETCH_ALL_MAX = 8
 

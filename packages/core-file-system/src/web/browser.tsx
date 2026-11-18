@@ -148,7 +148,7 @@ import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage, locateViewRecord, pageOfIndex, type ViewNeighborQuery } from './view-adjacent.ts'
 import { setViaDataCrumbs, viaDataViewId } from './data-chrome.ts'
 import { paintCollectionViews } from './collection-nav.ts'
-import { TABLE_CHECK_MEASURE_MAX, TABLE_WINDOW_OVERSCAN, medianPaintedRowPx, rememberedTableWrap, settlePaintedRowPx, tableCheckSlots, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tablePinColClass, tablePinCount, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableCheckSlot, type TableColumnSlice } from './table-window.ts'
+import { TABLE_CHECK_MEASURE_MAX, TABLE_WINDOW_OVERSCAN, medianPaintedRowPx, rememberedTableWrap, reusePaintNodes, settlePaintedRowPx, tableCheckSlots, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tablePinColClass, tablePinCount, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableCheckSlot, type TableColumnSlice } from './table-window.ts'
 import { bindTableDragScroll, tableVertScroller } from './table-drag-scroll.ts'
 import { forgetPreviewTotalsForPath, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady } from './sidebar-preview.ts'
 import { publishDataSidebar, type DataSidebarLive } from './data-sidebar-host.ts'
@@ -1238,10 +1238,15 @@ const TableBody = memo(function TableBody({
         </td>
       </tr>
     )
+  const painted: ReactNode[] = []
+  for (let i = start; i < end; i += 1) {
+    const node = nodes[i]
+    if (node) painted.push(bag.renderNode(node))
+  }
   return (
     <tbody>
       {padRow(padTop, 'top')}
-      {nodes.slice(start, end).map((node) => bag.renderNode(node))}
+      {painted}
       {padRow(padBottom, 'bottom')}
     </tbody>
   )
@@ -3137,12 +3142,18 @@ export function CollectionBrowser({
     const rows = grouping ? grouped.flatMap((group) => group.rows) : visible
     return flattenRows(rows).map((item) => item.row.id)
   }, [flattenRows, grouped, grouping, visible])
+  const tablePaintNodesPrev = useRef<TablePaintNode[]>([])
   const tablePaintNodes = useMemo(() => {
+    const finish = (nodes: TablePaintNode[]) => {
+      const shared = reusePaintNodes(tablePaintNodesPrev.current, nodes)
+      tablePaintNodesPrev.current = shared
+      return shared
+    }
     const nodes: TablePaintNode[] = []
     if (grouping) {
       if (!grouped.length) {
         nodes.push({ kind: 'empty', key: 'empty' })
-        return nodes
+        return finish(nodes)
       }
       for (const group of grouped) {
         const groupKey = group.key || 'unset'
@@ -3178,12 +3189,12 @@ export function CollectionBrowser({
           pageIndex,
         })
       }
-      return nodes
+      return finish(nodes)
     }
     const listed = flattenRows(visible)
     if (!listed.length) {
       nodes.push({ kind: 'empty', key: 'empty' })
-      return nodes
+      return finish(nodes)
     }
     for (const item of listed) {
       nodes.push({
@@ -3196,7 +3207,7 @@ export function CollectionBrowser({
         kidCount: item.kidCount,
       })
     }
-    return nodes
+    return finish(nodes)
   }, [collapsedGroups, flattenRows, groupPages, grouped, grouping, pageSize, visible])
   const tablePaintRef = useRef<TablePaintBag>({ colSpan: 1, error: '', renderNode: () => null })
   const tableRef = useRef<HTMLTableElement>(null)
