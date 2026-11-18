@@ -3575,6 +3575,8 @@ test('indexed custom attribute groups respect filters, searches and empty record
   assert.deepEqual((await db.attributeGroups('/notes', field)).groups, [
     { key: 'supply', total: 1 }, { key: '', total: 1 },
   ])
+  const paged = await db.attributeGroups('/notes', field, undefined, '', { limit: 10 })
+  assert.equal(paged.groups?.find((item) => item.key === 'supply')?.rows?.length, 1)
 })
 
 

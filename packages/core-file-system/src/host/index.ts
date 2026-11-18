@@ -102,7 +102,7 @@ import {
 import { currentSessionId } from '@biu/host-sessions/scope'
 import { databaseRevealForTool, normalizeCollectionPath, splitResourcePath } from '../paths.ts'
 import { matchListFilterRecord, normalizeSorts, parseTagFlatColumnKey, readTagFieldValue, sortRecordsBy } from '../query-logic.ts'
-import { actionWhenKeys } from '../web/fields.ts'
+import { actionWhenKeys, groupRecords } from '../web/fields.ts'
 import { AgentDbCompact } from './agent-payload.ts'
 
 const agentDbCompact = new AgentDbCompact()
@@ -1891,10 +1891,22 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
-  async attributeGroups(path: string, field: string, filter?: Record<string, unknown>, q = '') {
-    const parsed = parseTagFlatColumnKey(field)
+  async attributeGroups(
+    path: string,
+    field: string,
+    filter?: Record<string, unknown>,
+    q = '',
+    page?: {
+      limit?: number
+      columns?: string[]
+      sortField?: string
+      sortDir?: 'asc' | 'desc'
+      sorts?: Array<{ field: string; dir: 'asc' | 'desc' }>
+      groupPages?: Record<string, number>
+    },
+  ) {
     const spec = this.collection(normalizeCollectionPath(path))
-    if (!spec || spec.path === DATA_COLLECTION_PATH || !parsed) return { groups: null }
+    if (!spec || spec.path === DATA_COLLECTION_PATH || !field) return { groups: null }
     const liveFilter = { ...filter }
     const scope = liveFilter.$scope
     const ids = asIds(liveFilter.$ids)
@@ -1909,12 +1921,44 @@ export class DatabaseService extends Service implements Database {
     const actor = auth?.currentActor()
     if (auth && actor) auth.preloadCollection(actor.workspaceId, spec.path, actor.accountId)
     try {
-      const pack = await this.visibleSortedCollectionRows(spec, query, 'id', 'asc', undefined, true)
+      const sortField = page?.sortField || 'id'
+      const sortDir = page?.sortDir === 'desc' ? 'desc' : 'asc'
+      const pack = await this.visibleSortedCollectionRows(spec, query, sortField, sortDir, page?.sorts, true)
       const visible = scope === 'personal' || scope === 'workspace' || scope === 'shared' ? pack[scope] : pack.rows
       const schema = schemaFor(spec)
       const packs = this.tags.list()
       const matching = visible.filter(row => matchListFilter(row, liveFilter, schema, packs) && matchQuery(row, q, packs))
-      return { groups: this.tags.attributeGroups(spec.path, field, matching.map(row => row.id)) }
+      const parsed = parseTagFlatColumnKey(field)
+      const limit = page?.limit && page.limit > 0 ? Math.max(1, Math.round(page.limit)) : 0
+      let groups: Array<{ key: string; total: number; label?: string; rows?: Array<DbRecord & { path: string; kind: 'record' }> }>
+      if (parsed && !limit) {
+        groups = this.tags.attributeGroups(spec.path, field, matching.map(row => row.id))
+      } else {
+        const buckets = groupRecords(matching, schema, field, packs).slice(0, 80)
+        const columnKeys = page?.columns
+        groups = buckets.map((bucket) => {
+          const groupKey = bucket.key || 'unset'
+          const pageIndex = Math.max(0, page?.groupPages?.[groupKey] ?? 0)
+          const start = limit ? pageIndex * limit : 0
+          const sliceRows = limit ? bucket.rows.slice(start, start + limit) : []
+          const slice = limit ? this.decorateSlice(spec, sliceRows, columnKeys) : []
+          return {
+            key: bucket.key,
+            label: bucket.label,
+            total: bucket.rows.length,
+            ...(limit
+              ? {
+                  rows: slice.map((row) => {
+                    const value = withoutContent(spec, row)
+                    const picked = columnKeys ? pickListedFields(value, columnKeys) : value
+                    return { ...picked, path: `${spec.path}/${row.id}`, kind: 'record' as const }
+                  }),
+                }
+              : {}),
+          }
+        })
+      }
+      return { groups, schema: this.schemaForCurrent(spec, schema) }
     } finally {
       if (auth && actor) auth.releaseCollection(actor.workspaceId, spec.path, actor.accountId)
     }
@@ -4018,7 +4062,24 @@ export function apply(ctx: Context) {
   ctx.http.route('GET', '/api/db/groups', route => send(route, () => {
     const raw = route.query.get('filter')
     const filter = raw ? JSON.parse(raw) as Record<string, unknown> : undefined
-    return db.attributeGroups(route.query.get('path') || '/', route.query.get('field') || '', filter, route.query.get('q') || '')
+    const pagesRaw = route.query.get('pages')
+    let groupPages: Record<string, number> | undefined
+    if (pagesRaw) {
+      try {
+        const parsed = JSON.parse(pagesRaw) as unknown
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) groupPages = parsed as Record<string, number>
+      } catch {
+        groupPages = undefined
+      }
+    }
+    return db.attributeGroups(route.query.get('path') || '/', route.query.get('field') || '', filter, route.query.get('q') || '', {
+      limit: route.query.get('limit') ? Number(route.query.get('limit')) : undefined,
+      columns: parseListColumnsParam(route.query.get('columns')),
+      sortField: route.query.get('sort') || '',
+      sortDir: route.query.get('dir') === 'desc' ? 'desc' : 'asc',
+      sorts: parseSortsParam(route.query.get('sorts')),
+      groupPages,
+    })
   }))
   ctx.http.route('GET', '/api/db/read', (route) => send(route, () => db.read(route.query.get('path') || '/')))
   ctx.http.route('GET', '/api/db/detail', async (route) => {

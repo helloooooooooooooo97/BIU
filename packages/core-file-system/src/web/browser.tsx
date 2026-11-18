@@ -64,7 +64,7 @@ import {
   type ViewMode,
 } from './fields.ts'
 import { seedGroupRecord } from './group-create.ts'
-import { listAttributeGroups, listGroupedCollection } from './group-list.ts'
+import { listAttributeGroups, listGroupedCollection, listGroupedPage } from './group-list.ts'
 import { TREE_HAS_KIDS, listTreeChildren, listTreeCollection, treeRootFilter } from './tree-list.ts'
 import { AppDialog, CheckRow, LocalText } from './controls.tsx'
 import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search.tsx'
@@ -2355,6 +2355,20 @@ export function CollectionBrowser({
             filters: reqTree && reqParentKey
               ? mergeListFilters(reqFilters, treeRootFilter(reqParentKey)) ?? reqFilters
               : reqFilters,
+          }),
+          groups: () => listGroupedPage({
+            ...listOpts,
+            groupBy: reqGroupBy,
+            filters: reqTree && reqParentKey
+              ? mergeListFilters(reqFilters, treeRootFilter(reqParentKey)) ?? reqFilters
+              : reqFilters,
+            pageSize: reqPageSize,
+            sortField: reqSortField,
+            sortDir: reqSortDir,
+            sorts: reqSorts,
+            columns: reqColumns,
+            groupPages: switching || opts?.force ? {} : groupPagesRef.current,
+            fresh: Boolean(opts?.force),
           }),
           schema,
           packs: tagCatalog,
