@@ -148,7 +148,7 @@ import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage, locateViewRecord, pageOfIndex, type ViewNeighborQuery } from './view-adjacent.ts'
 import { setViaDataCrumbs, viaDataViewId } from './data-chrome.ts'
 import { paintCollectionViews } from './collection-nav.ts'
-import { TABLE_CHECK_MEASURE_MAX, TABLE_WINDOW_OVERSCAN, medianPaintedRowPx, rememberedTableWrap, reusePaintNodes, settlePaintedRowPx, tableCheckSlots, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tableFrozenKeys, tablePinColClass, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, toggleFrozenPrefix, type TableCheckSlot, type TableColumnSlice } from './table-window.ts'
+import { TABLE_WINDOW_OVERSCAN, rememberedTableWrap, reusePaintNodes, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tableFrozenKeys, tablePinColClass, tableRowFallbackPx, tableWindowUnchanged, tableWrapScroll, toggleFrozenPrefix, type TableCheckSlot, type TableColumnSlice } from './table-window.ts'
 import { bindTableDragScroll, tableVertScroller } from './table-drag-scroll.ts'
 import { forgetPreviewTotalsForPath, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady } from './sidebar-preview.ts'
 import { publishDataSidebar, type DataSidebarLive } from './data-sidebar-host.ts'
@@ -1448,9 +1448,10 @@ const WindowedTable = memo(function WindowedTable({
   }, [colWindow.pin, columnPx, columns])
   paintRef.current.pinLeftByKey = pinLeftByKey
   paintRef.current.frozenKeys = columns.slice(0, colWindow.pin).map((col) => col.key)
+  // The page owns vertical scrolling. Render every row in the current page without virtual spacers.
   const tableWindow = useMemo(
-    () => tableWindowSlice(nodes.length, tableScroll.top, tableScroll.height, rowPx),
-    [nodes.length, rowPx, tableScroll.height, tableScroll.top],
+    () => ({ start: 0, end: nodes.length, padTop: 0, padBottom: 0 }),
+    [nodes.length],
   )
   paintCountRef.current = nodes.length
   paintRef.current.colSpan = tableColSpan
@@ -1462,37 +1463,43 @@ const WindowedTable = memo(function WindowedTable({
     setRowPx(next)
   }, [wrapCells])
 
-  const checkSlots = useMemo(
-    () => tableCheckSlots(nodes, tableWindow, rowPx),
-    [nodes, rowPx, tableWindow],
-  )
-
+  const [checkSlots, setCheckSlots] = useState<TableCheckSlot[]>([])
   useLayoutEffect(() => {
     const table = tableRef.current
     if (!table) return
-    const heights: number[] = []
-    let n = 0
-    for (const tr of Array.from(table.tBodies[0]?.rows ?? [])) {
-      if (tr.classList.contains('fsdb-table-pad')) continue
-      if (tr.classList.contains('fsdb-group-row') || tr.classList.contains('fsdb-group-pager')) continue
-      const h = tr.getBoundingClientRect().height
-      if (h > 0) heights.push(h)
-      n += 1
-      if (n >= TABLE_CHECK_MEASURE_MAX) break
+    let frame = 0
+    const measure = () => {
+      frame = 0
+      const top = table.getBoundingClientRect().top
+      const next: TableCheckSlot[] = [{ kind: 'head', top: 0, h: table.tHead?.getBoundingClientRect().height ?? 37 }]
+      for (const row of Array.from(table.tBodies[0]?.rows ?? [])) {
+        const id = row.dataset.recordId
+        if (!id) continue
+        const rect = row.getBoundingClientRect()
+        next.push({ kind: 'row', id, top: rect.top - top, h: rect.height })
+      }
+      setCheckSlots((previous) => previous.length === next.length && previous.every((slot, i) => {
+        const item = next[i]!
+        return slot.kind === item.kind && slot.id === item.id && Math.abs(slot.top - item.top) < 0.5 && Math.abs(slot.h - item.h) < 0.5
+      }) ? previous : next)
     }
-    const next = settlePaintedRowPx(medianPaintedRowPx(heights, rowPxRef.current), rowPxRef.current)
-    if (next === rowPxRef.current) return
-    rowPxRef.current = next
-    setRowPx(next)
-  }, [nodes.length, tableRef, tableScroll.height, wrapCells])
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(measure) }
+    measure()
+    const observer = new ResizeObserver(schedule)
+    observer.observe(table)
+    if (table.tHead) observer.observe(table.tHead)
+    for (const row of Array.from(table.tBodies[0]?.rows ?? [])) observer.observe(row)
+    return () => { cancelAnimationFrame(frame); observer.disconnect() }
+  }, [nodes, columnWidths, wrapCells, checkLayoutExtra, tableRef])
 
   useEffect(() => {
     onVisibleRange?.(tableWindow.start, tableWindow.end)
   }, [onVisibleRange, tableWindow.end, tableWindow.start])
 
   const applyWrapScroll = (wrap: HTMLElement, top?: number) => {
+    if (wrap.scrollTop) wrap.scrollTop = 0
     if (frozenRef.current && top == null) return
-    const next = tableWrapScroll(wrap, top)
+    const next = tableWrapScroll(wrap, 0)
     const rowPx = rowPxRef.current
     const count = paintCountRef.current
     const cols = columnMetaRef.current
@@ -1515,6 +1522,8 @@ const WindowedTable = memo(function WindowedTable({
     if (!wrap) return
     let raf = 0
     const onScroll = () => {
+      // overflow-x:auto creates a scroll container on both axes. Never allow an inner vertical offset.
+      if (wrap.scrollTop) wrap.scrollTop = 0
       if (raf) return
       raf = requestAnimationFrame(() => {
         raf = 0
@@ -5423,24 +5432,31 @@ export function CollectionBrowser({
       applyCellRange(next, next)
     }
     claimThisTableCell()
-    const wrap = tableWrapRef.current
-    const index = tablePaintNodes.findIndex((node) => node.kind === 'row' && node.row.id === next.id)
-    if (wrap && index >= 0) {
-      const rowPx = tableRowFallbackPx(wrapCells)
-      const top = index * rowPx
-      const bottom = top + rowPx
-      const viewTop = wrap.scrollTop
-      const viewBot = viewTop + wrap.clientHeight
-      if (top < viewTop) wrap.scrollTop = top
-      else if (bottom > viewBot) wrap.scrollTop = Math.max(0, bottom - wrap.clientHeight)
-    }
     const apply = () => {
       const td = findPaintedCellTd(next.id, next.key)
       if (!td) return
       const col = columns.find((item) => item.key === next.key)
       cellAnchorRef.current = td
       if (!extend && cellRangeSetRef.current.size <= 1) markCellOn(td, col ? cellFieldWritable(col.field) : false)
-      td.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+      const wrap = tableWrapRef.current
+      const scroller = tableVertScroller(wrap)
+      if (!wrap || !scroller) return
+      if (wrap.scrollTop) wrap.scrollTop = 0
+      const rect = td.getBoundingClientRect()
+      const page = scroller.getBoundingClientRect()
+      const headBottom = tableRef.current?.tHead?.getBoundingClientRect().bottom ?? page.top
+      const visibleTop = Math.max(page.top + scroller.clientTop, headBottom)
+      const visibleBottom = page.top + scroller.clientTop + scroller.clientHeight
+      if (rect.top < visibleTop) scroller.scrollTop += rect.top - visibleTop
+      else if (rect.bottom > visibleBottom) scroller.scrollTop += rect.bottom - visibleBottom
+      // Horizontal navigation belongs to the table; vertical navigation belongs to the page.
+      if (!td.classList.contains('is-pin-col')) {
+        const bounds = wrap.getBoundingClientRect()
+        const pinned = Array.from(tableRef.current?.querySelectorAll<HTMLElement>('thead th.is-pin-col') ?? [])
+        const left = Math.max(bounds.left, ...pinned.map((head) => head.getBoundingClientRect().right))
+        if (rect.left < left) wrap.scrollLeft += rect.left - left
+        else if (rect.right > bounds.right) wrap.scrollLeft += rect.right - bounds.right
+      }
     }
     apply()
     requestAnimationFrame(apply)

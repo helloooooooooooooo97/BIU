@@ -90,9 +90,14 @@ export function bindTableDragScroll(opts: {
   let raf = 0
   let ptr = { x: opts.origin.x, y: opts.origin.y }
   let dragged = false
+  let stopped = false
   const dragPx = opts.dragPx ?? 6
 
   const stop = () => {
+    if (stopped) return
+    stopped = true
+    // Flush the latest pointer once; do not leave a delayed selection behind on release.
+    if (raf && dragged) opts.onDrag?.(ptr)
     if (raf) cancelAnimationFrame(raf)
     raf = 0
     window.removeEventListener('pointermove', onMove)
@@ -103,8 +108,12 @@ export function bindTableDragScroll(opts: {
 
   const tick = () => {
     raf = 0
+    if (stopped) return
     const scroller = opts.scroller()
-    if (!scroller) return
+    if (!scroller) {
+      opts.onDrag?.(ptr)
+      return
+    }
     const dy = runTableDragScrollStep({
       scroller,
       clientX: ptr.x,
@@ -113,10 +122,8 @@ export function bindTableDragScroll(opts: {
       overlayTop: opts.overlayTop?.(),
       selectText: opts.selectText,
     })
-    if (dy) {
-      opts.onDrag?.(ptr)
-      raf = requestAnimationFrame(tick)
-    }
+    opts.onDrag?.(ptr)
+    if (dy) raf = requestAnimationFrame(tick)
   }
 
   const onMove = (event: PointerEvent) => {
@@ -130,7 +137,7 @@ export function bindTableDragScroll(opts: {
       dragged = true
       opts.onArmed?.()
     }
-    opts.onDrag?.(ptr)
+    // Pointer events can arrive faster than display frames. Hit-test and paint once per frame.
     if (!raf) raf = requestAnimationFrame(tick)
   }
 
