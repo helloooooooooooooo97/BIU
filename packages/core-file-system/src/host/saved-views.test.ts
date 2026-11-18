@@ -154,7 +154,7 @@ test('index collection views stay with the account that saved them', async () =>
   let who = 'ada'
   const spec = viewsCollection(
     store,
-    () => [{ path: '/tags', id: 'facets', kind: 'collection', label: '标签', view: { moduleId: 'facets', route: '/tags', title: '标签' } }],
+    () => [{ path: '/tags', id: 'tags', kind: 'collection', label: '标签', view: { moduleId: 'tags', route: '/tags', title: '标签' } }],
     () => who,
   )
   const adaRows = await spec.list()
@@ -188,7 +188,7 @@ test('update of another account view on an index collection stays unknown', asyn
   const spec = (account: string) =>
     viewsCollection(
       store,
-      () => [{ path: '/tags', id: 'facets', kind: 'collection', label: '标签', view: { moduleId: 'facets', route: '/tags', title: '标签' } }],
+      () => [{ path: '/tags', id: 'tags', kind: 'collection', label: '标签', view: { moduleId: 'tags', route: '/tags', title: '标签' } }],
       () => account,
     )
   spec('ada').create!([{ tablePath: '/tags', viewId: 'ada-view', title: 'Ada 的标签' }])

@@ -343,7 +343,7 @@ export const REQUIRED_RECORD_FIELDS: RequiredRecordFields = {
   layouts: BUILTIN_FIELDS.layouts,
 }
 
-/** 表格默认不展开这些内置列（标题除外）。分面作为默认业务列留下。 */
+/** 表格默认不展开这些内置列（标题除外）。标签作为默认业务列留下。 */
 export const BUILTIN_FIELD_KEYS = ['id', 'createdAt', 'updatedAt', 'content', 'emoji', 'parentId', 'dependsOn', 'createdBy', 'updatedBy', 'views', 'propViews', 'layouts'] as const
 
 export const RESERVED_SCHEMA_FIELD_KEYS = Object.keys(BUILTIN_FIELDS)
@@ -730,7 +730,7 @@ export type CollectionSchema = {
   contentField?: string
   /** 正文后端：sqlite 旁表 / 文件 / 只读投影。 */
   contentBackend?: 'editorContent' | 'file' | 'computed'
-  /** 必须包含图标、创建/更新时间、分面、父级、依赖、创建人/编辑人；登记方自己持久化。 */
+  /** 必须包含图标、创建/更新时间、标签、父级、依赖、创建人/编辑人；登记方自己持久化。 */
   fields: CollectionFields
   /** 表格默认可见列（须为 fields 的键）。不写则列出全部列表列。详情仍显示全部字段。 */
   columns?: string[]
@@ -775,7 +775,7 @@ export type CollectionView = {
 }
 
 export type CollectionListQuery = {
-  /** 只取这些 id。File System 在分面筛选时传入，避免整表 list。 */
+  /** 只取这些 id。File System 在标签筛选时传入，避免整表 list。 */
   ids?: string[]
   q?: string
   filter?: Record<string, unknown>

@@ -93,9 +93,9 @@ function entryFromRow(db: DatabaseSync, row: TagRow): TagEntry | null {
   }
 }
 
-const FACET_ROW_SQL = 'id, label, fields_json, created_at, updated_at'
+const TAG_ROW_SQL = 'id, label, fields_json, created_at, updated_at'
 
-/** 分面目录由 File System 用 SQLite 管：目录 + 跨表倒排，查询不扫全表。 */
+/** 标签目录由 File System 用 SQLite 管：目录 + 跨表倒排，查询不扫全表。 */
 export class TagStore {
   private db: DatabaseSync | null = null
   private deletedIdsCache = new Map<string, Set<string>>()
@@ -389,12 +389,12 @@ export class TagStore {
       q
         ? (db
             .prepare(
-              `SELECT ${FACET_ROW_SQL} FROM tags
+              `SELECT ${TAG_ROW_SQL} FROM tags
                WHERE instr(lower(id), ?) > 0 OR instr(lower(label), ?) > 0
                ORDER BY label`,
             )
             .all(q, q) as TagRow[])
-        : (db.prepare(`SELECT ${FACET_ROW_SQL} FROM tags ORDER BY label`).all() as TagRow[])
+        : (db.prepare(`SELECT ${TAG_ROW_SQL} FROM tags ORDER BY label`).all() as TagRow[])
     )
     return rows
       .map((row) => entryFromRow(db, row))
@@ -414,7 +414,7 @@ export class TagStore {
     const want = String(idOrLabel ?? '').trim()
     if (!want) return null
     const row = this.ensure()
-      .prepare(`SELECT ${FACET_ROW_SQL} FROM tags WHERE id = ? OR label = ? LIMIT 1`)
+      .prepare(`SELECT ${TAG_ROW_SQL} FROM tags WHERE id = ? OR label = ? LIMIT 1`)
       .get(want, want) as TagRow | undefined
     return row ? entryFromRow(this.ensure(), row) : null
   }

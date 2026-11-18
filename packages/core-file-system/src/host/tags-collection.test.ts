@@ -5,16 +5,20 @@ import { TagStore } from './tags-store.ts'
 import { tagsCollection } from './tags-collection.ts'
 import { RecordViewsStore, wrapCollectionRecordViews } from './record-views.ts'
 
-test('tagsCollection lists facets with stamp counts and supports create/update/delete', async () => {
+test('tagsCollection lists tags with stamp counts and supports create/update/delete', async () => {
   const store = new TagStore()
   store.replace([{ id: 'dp', label: '动态规划', fields: [{ key: 'complexity', type: 'string' }] }])
   store.indexRecord('/pages', 'home', '首页', ['dp'])
   store.writeRecordTag('/pages', 'home', { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } }, '首页')
   const spec = wrapCollectionRecordViews(tagsCollection(store), new RecordViewsStore().open())
+  assert.equal(spec.id, 'tags')
   assert.equal(spec.path, '/tags')
   assert.equal(spec.label, '标签')
   assert.equal(spec.view?.title, '标签')
+  assert.equal(spec.view?.route, '/db-tags')
   assert.equal(spec.view?.icon, 'tag')
+  assert.doesNotMatch(String(spec.schema.fields.fields?.description ?? ''), /facet/)
+  assert.doesNotMatch(JSON.stringify(spec.view), /facet/)
   const listed = await spec.list()
   assert.equal(listed.length, 1)
   assert.equal(listed[0]?.title, '动态规划')
