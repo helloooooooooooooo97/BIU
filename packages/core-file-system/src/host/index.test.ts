@@ -6,7 +6,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises'
 import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { DatabaseService, apply as applyFileSystem, databaseHttpFailure, listNeedsMatchOverlay, specListQuery } from './index.ts'
+import { DatabaseService, apply as applyFileSystem, databaseHttpFailure, listNeedsMatchOverlay, schemaRequestBuildCount, specListQuery, withSchemaRequestCache } from './index.ts'
 import { FileSystemAssets } from './assets-store.ts'
 import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { DATABASE_CHANNEL, isAllocatedRecordId, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
@@ -206,6 +206,11 @@ test('root lists registered collections; record read/update follows schema', asy
   assert.equal(detail.path, '/notes/n1')
   assert.equal(detail.value.status, 'open')
   assert.equal(detail.content.value, null)
+  await withSchemaRequestCache(async () => {
+    await db.read('/notes/n1')
+    await db.stat('/notes/n1')
+    assert.equal(schemaRequestBuildCount(), 1)
+  })
 
   const written = await db.update('/notes/n1', { status: 'done' })
   assert.equal(written.value.status, 'done')

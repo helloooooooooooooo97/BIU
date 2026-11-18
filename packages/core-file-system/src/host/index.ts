@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { readFile } from 'node:fs/promises'
 import type { IncomingMessage } from 'node:http'
 import { isAbsolute, resolve } from 'node:path'
@@ -889,6 +890,18 @@ function viewRowKeys(rows: DbRecord[]) {
   return out
 }
 
+type SchemaRequestCache = { map: Map<string, CollectionSchema>; builds: number }
+
+const schemaRequestCache = new AsyncLocalStorage<SchemaRequestCache>()
+
+export function withSchemaRequestCache<T>(fn: () => T): T {
+  return schemaRequestCache.run({ map: new Map(), builds: 0 }, fn)
+}
+
+export function schemaRequestBuildCount() {
+  return schemaRequestCache.getStore()?.builds ?? 0
+}
+
 export class DatabaseService extends Service implements Database {
   private collections = new Map<string, CollectionSpec>()
   private contentWrites = new Map<string, Promise<void>>()
@@ -1102,19 +1115,31 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
-  private schemaForCurrent(spec: CollectionSpec, schema = schemaFor(spec)) {
+  private schemaForCurrent(spec: CollectionSpec, schema?: CollectionSchema) {
+    const cache = schemaRequestCache.getStore()
+    const hit = cache?.map.get(spec.path)
+    if (hit) return hit
+    if (!schema) schema = schemaFor(spec)
     if (spec.path === DATA_COLLECTION_PATH) schema = { ...schema, actions: this.overviewRowActions() }
     schema = this.withOverviewTableSelect(spec, schema)
     schema = this.withLocationShareScope(schema)
     const authorization = this.authorization()
     const actor = authorization?.currentActor()
-    if (!authorization || !actor) return schema
+    if (!authorization || !actor) {
+      cache?.map.set(spec.path, schema)
+      if (cache) cache.builds += 1
+      return schema
+    }
     const resource = { type: 'collection' as const, workspaceId: actor.workspaceId, collection: spec.path }
     const canUpdate = authorization.authorize(actor, 'resource:update', resource).allowed
     const canCreate = authorization.authorize(actor, 'resource:create', resource).allowed
     const canDelete = authorization.authorize(actor, 'resource:delete', resource).allowed
-    if (canUpdate && canCreate && canDelete) return schema
-    return {
+    if (canUpdate && canCreate && canDelete) {
+      cache?.map.set(spec.path, schema)
+      if (cache) cache.builds += 1
+      return schema
+    }
+    const next = {
       ...schema,
       fields: canUpdate
         ? schema.fields
@@ -1126,6 +1151,9 @@ export class DatabaseService extends Service implements Database {
         delete: Boolean(schema.records?.delete && canDelete),
       },
     }
+    cache?.map.set(spec.path, next)
+    if (cache) cache.builds += 1
+    return next
   }
 
   private workspaceMembership() {
@@ -3879,7 +3907,7 @@ export function apply(ctx: Context) {
 
   const send = async (route: { query: URLSearchParams; send: (status: number, body: unknown) => void }, op: () => unknown) => {
     try {
-      route.send(200, await op())
+      route.send(200, await withSchemaRequestCache(op))
     } catch (error) {
       const failure = databaseHttpFailure(error)
       route.send(failure.status, failure.body)
