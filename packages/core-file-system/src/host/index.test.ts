@@ -9,7 +9,7 @@ import { join, resolve } from 'node:path'
 import { DatabaseService, apply as applyFileSystem, databaseHttpFailure, listNeedsMatchOverlay, specListQuery } from './index.ts'
 import { FileSystemAssets } from './assets-store.ts'
 import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
-import { isAllocatedRecordId, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
+import { DATABASE_CHANNEL, isAllocatedRecordId, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 import { dataCollection, isDataOverviewSource } from './data-collection.ts'
 import { tagsCollection } from './tags-collection.ts'
 import { SavedViewsStore, viewsCollection } from './saved-views.ts'
@@ -126,6 +126,39 @@ test('data overview lists each source record, includes tags, and skips other ind
   const source = await db.read('/notes/n1')
   assert.equal(source.kind, 'record')
   if (source.kind === 'record') assert.equal(source.value.title, '改了')
+  await db.action('/data/notes::n1', 'pin')
+  const pinned = await db.read('/notes/n1')
+  assert.equal(pinned.kind, 'record')
+  if (pinned.kind === 'record') assert.equal(pinned.value.pinned, true)
+})
+
+test('data overview delete forwards to the source collection', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const rows = new Map<string, { id: string; title: string }>([['p1', { id: 'p1', title: '一页' }]])
+  db.register({
+    id: 'pages',
+    path: '/pages',
+    label: '页面',
+    schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
+    records: { update: true, delete: true },
+    list: () => [...rows.values()],
+    get: (id) => rows.get(id) ?? null,
+    update: (id, patch) => {
+      const current = rows.get(id)
+      if (!current) throw new Error('missing')
+      const next = { ...current, ...patch, id }
+      rows.set(id, next)
+      return next
+    },
+    remove: async (query) => {
+      for (const id of query.ids ?? []) rows.delete(String(id))
+      return [...(query.ids ?? [])].map(String)
+    },
+  })
+  db.register(dataCollection(() => db.collectionsList()))
+  await db.remove('/data', { ids: ['pages::p1'], purge: true })
+  assert.equal(rows.has('p1'), false)
 })
 
 test('root lists registered collections; record read/update follows schema', async () => {
@@ -206,12 +239,15 @@ test('html banner is stored by file system and never written as a table field', 
 test('each view keeps its own html banner outside list rows', async () => {
   const ctx = new Context()
   await ctx.plugin(tools)
+  const seen: Array<{ type: string; payload: Record<string, unknown> }> = []
   class HttpStub extends Service {
     constructor(c: Context) {
       super(c, 'http')
     }
     route() {}
-    broadcast() {}
+    broadcast(type: string, payload: unknown) {
+      seen.push({ type, payload: payload as Record<string, unknown> })
+    }
   }
   new HttpStub(ctx)
   await ctx.plugin({ inject: ['tools', 'http'], apply: applyFileSystem })
@@ -219,6 +255,10 @@ test('each view keeps its own html banner outside list rows', async () => {
   db.register(notesCollection())
   const allPath = savedViewRecordPath('/notes', builtinAllViewId('/notes'))
   await db.update(allPath, { banner: { kind: 'html', html: '<div>all</div>' } })
+  assert.ok(
+    seen.some((row) => row.type === DATABASE_CHANNEL && row.payload.scope === 'content' && row.payload.path === allPath),
+    'view banner update broadcasts content so the open view can subscribe',
+  )
   const all = await db.read(allPath)
   if (all.kind !== 'record') return
   assert.deepEqual(all.value.banner, { kind: 'html', html: '<div>all</div>' })
@@ -3296,6 +3336,7 @@ test('collection list preloads authorization scans and releases them', () => {
   assert.match(host, /notifyTagCatalog\(\)/)
   assert.match(host, /notifyViewCatalog\(/)
   assert.match(host, /notifyContent\(`\$\{spec\.path\}\/\$\{record\.id\}`\)/)
+  assert.match(host, /writeRecordBanner\(spec\.path, record\.id, bannerPatch\.value\)\s*\n\s*this\.notifyContent\(`\$\{spec\.path\}\/\$\{record\.id\}`\)/)
   assert.match(host, /databaseChannelPayload\('tags'\)/)
   assert.match(host, /databaseChannelPayload\('views'/)
   assert.match(host, /databaseChannelPayload\('content'/)

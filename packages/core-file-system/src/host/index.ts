@@ -1049,6 +1049,15 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
+  private rewriteOverviewRecordPath(path: string) {
+    const parts = splitPath(path)
+    if (parts.length !== 2 || parts[0] !== 'data') return ''
+    const stamp = parseStampRecordId(parts[1]!)
+    if (!stamp || stamp.collection === DATA_COLLECTION_PATH) return ''
+    if (!this.collection(stamp.collection)) return ''
+    return `${stamp.collection}/${stamp.recordId}`
+  }
+
   private overviewRowActions(): CollectionActionInfo[] {
     const out: CollectionActionInfo[] = []
     for (const source of this.collectionsList()) {
@@ -2407,6 +2416,7 @@ export class DatabaseService extends Service implements Database {
       if (bannerPatch.present) {
         this.tags.writeRecordBanner(spec.path, current.id, bannerPatch.value)
         next = this.withBanner(spec, next)
+        this.notifyContent(`${spec.path}/${current.id}`)
       }
       this.refreshContentRefs(spec, next)
       await this.stampActor(spec.path, current.id)
@@ -2461,6 +2471,7 @@ export class DatabaseService extends Service implements Database {
     }
     if (bannerPatch.present) {
       this.tags.writeRecordBanner(spec.path, record.id, bannerPatch.value)
+      this.notifyContent(`${spec.path}/${record.id}`)
     }
     if (!viewOnly) this.indexTagRecord(spec, this.decorateRecord(spec, record))
     this.refreshContentRefs(spec, this.withBanner(spec, record), !viewOnly)
@@ -2612,6 +2623,17 @@ export class DatabaseService extends Service implements Database {
     if (parts.length !== 1) throw new Error(`cannot delete: ${normalizeCollectionPath(path)}`)
     const spec = this.collection(`/${parts[0]}`)
     if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
+    if (spec.path === DATA_COLLECTION_PATH) {
+      const ids = (query.ids ?? []).map(String).filter(Boolean)
+      const deleted: string[] = []
+      for (const id of ids) {
+        const stamp = parseStampRecordId(id)
+        if (!stamp || stamp.collection === DATA_COLLECTION_PATH) continue
+        await this.remove(stamp.collection, { ids: [stamp.recordId], purge: query.purge })
+        deleted.push(id)
+      }
+      return { kind: 'deleted' as const, path: spec.path, ids: deleted }
+    }
     if (!spec.records?.delete || !spec.remove) throw new Error(`collection cannot delete: ${spec.path}`)
     if (!hasCollectionDeleteQuery(query)) throw new Error('delete requires ids, q, or filter')
     const schema = schemaFor(spec)
@@ -2746,6 +2768,8 @@ export class DatabaseService extends Service implements Database {
   }
 
   async action(path: string, actionId: string, args?: Record<string, unknown>) {
+    const rewritten = this.rewriteOverviewRecordPath(path)
+    if (rewritten) return this.action(rewritten, actionId, args)
     const parts = splitPath(path)
     if (parts.length !== 2) throw new Error(`cannot action: ${normalizeCollectionPath(path)}`)
     const spec = this.collection(`/${parts[0]}`)
@@ -2793,6 +2817,8 @@ export class DatabaseService extends Service implements Database {
   }
 
   async content(path: string) {
+    const rewritten = this.rewriteOverviewRecordPath(path)
+    if (rewritten) return this.content(rewritten)
     const parts = splitPath(path)
     if (parts.length !== 2) throw new Error(`cannot content: ${normalizeCollectionPath(path)}`)
     const spec = this.collection(`/${parts[0]}`)
@@ -2822,6 +2848,8 @@ export class DatabaseService extends Service implements Database {
   }
 
   private async writeContentNow(path: string, value: unknown, expectedVersion?: number) {
+    const rewritten = this.rewriteOverviewRecordPath(path)
+    if (rewritten) return this.writeContentNow(rewritten, value, expectedVersion)
     const parts = splitPath(path)
     if (parts.length !== 2) throw new Error(`cannot write content: ${normalizeCollectionPath(path)}`)
     const spec = this.collection(`/${parts[0]}`)

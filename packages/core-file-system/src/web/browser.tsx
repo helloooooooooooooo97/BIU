@@ -2546,6 +2546,13 @@ export function CollectionBrowser({
     return `${dataPath}/${id || row?.id || ''}`
   }
 
+  const sourceDeleteTarget = (row?: DbRecord | null) => {
+    const table = String(row?.tablePath ?? '').trim()
+    const source = String(row?.sourceId ?? '').trim()
+    if (dataPath === DATA_COLLECTION_PATH && table && source) return { path: table, id: source }
+    return { path: dataPath, id: String(row?.id ?? '') }
+  }
+
   const pullDetailBody = useCallback(() => {
     const id = detailIdRef.current
     if (!id) {
@@ -2916,7 +2923,7 @@ export function CollectionBrowser({
     overviewCreateTables.find((table) => table.path === createTypePath) ??
     overviewCreateTables.find((table) => table.path === PAGES_COLLECTION_PATH) ??
     overviewCreateTables[0]
-  const canDelete = Boolean(schema?.records?.delete) && !subsetLocked
+  const canDelete = (Boolean(schema?.records?.delete) || isDataOverview) && !subsetLocked
   const inTrash = collectionPath === '/trash'
   const canBulkDelete = (canDelete || inTrash) && !subsetLocked
   const canTag = Boolean(schema?.fields.tag?.writable) && !subsetLocked
@@ -3459,7 +3466,7 @@ export function CollectionBrowser({
   )
   const [viewBanner, setViewBanner] = useState<unknown>(null)
   useEffect(() => {
-    if (sheet || !activeViewId || isReadOnlyViewId(activeViewId)) {
+    if (sheet || !activeViewId) {
       setViewBanner(null)
       return
     }
@@ -3468,17 +3475,27 @@ export function CollectionBrowser({
       setViewBanner(null)
       return
     }
-    setViewBanner(null)
     let cancelled = false
-    void readJson<{ value?: { banner?: unknown } }>(`/api/db/read?path=${encodeURIComponent(path)}`)
-      .then((data) => {
-        if (!cancelled) setViewBanner(data.value?.banner ?? null)
-      })
-      .catch(() => {
-        if (!cancelled) setViewBanner(null)
-      })
+    const load = (clear = false) => {
+      if (clear) setViewBanner(null)
+      void readJson<{ value?: { banner?: unknown } }>(`/api/db/read?path=${encodeURIComponent(path)}`, undefined, { fresh: true })
+        .then((data) => {
+          if (!cancelled) setViewBanner(data.value?.banner ?? null)
+        })
+        .catch(() => {
+          if (!cancelled && clear) setViewBanner(null)
+        })
+    }
+    load(true)
+    const onChange = (event: Event) => {
+      const change = parseFsdbChange(event)
+      if (change.scope !== 'content' || (change.path && change.path !== path)) return
+      load(false)
+    }
+    window.addEventListener('fsdb:change', onChange)
     return () => {
       cancelled = true
+      window.removeEventListener('fsdb:change', onChange)
     }
   }, [sheet, collectionPath, activeViewId])
   useSyncExternalStore(subscribeStarredViews, getStarredViewsVersion, () => 0)
@@ -4205,10 +4222,8 @@ export function CollectionBrowser({
     if (actingRef.current) return
     actingRef.current = true
     setActing(true)
-    const sourcePath = String(row.tablePath ?? '').trim()
     const sourceId = String(row.sourceId ?? '').trim()
-    const actionPath =
-      dataPath === DATA_COLLECTION_PATH && sourcePath && sourceId ? `${sourcePath}/${sourceId}` : `${dataPath}/${row.id}`
+    const actionPath = sourceRecordPath(row, row.id)
     try {
       const cornerSessionId =
         typeof document === 'undefined'
@@ -4493,10 +4508,11 @@ export function CollectionBrowser({
 
   async function executeDeleteRecord(row: DbRecord) {
     try {
+      const target = sourceDeleteTarget(row)
       await readJson('/api/db/delete', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ path: dataPath, ids: [row.id] }),
+        body: JSON.stringify({ path: target.path, ids: [target.id] }),
       })
       if (!embed) onCloseRecord?.()
       dropListedRecords([String(row.id)])
@@ -4507,7 +4523,7 @@ export function CollectionBrowser({
         viewId: activeViewIdRef.current,
         total: totalRef.current,
       })
-      publishDeletedRowsToTrash(dataPath, [row], title)
+      publishDeletedRowsToTrash(target.path, [{ ...row, id: target.id }], title)
       announceListChange()
       quietUntil.current = 0
       await reload({ force: true })
@@ -4529,11 +4545,23 @@ export function CollectionBrowser({
           ),
         )
       } else {
-        await readJson('/api/db/delete', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ path: dataPath, ids }),
-        })
+        const grouped = new Map<string, string[]>()
+        for (const id of ids) {
+          const row = itemsRef.current.find((item) => String(item.id) === String(id))
+          const target = sourceDeleteTarget(row ?? { id })
+          const bucket = grouped.get(target.path) ?? []
+          bucket.push(target.id)
+          grouped.set(target.path, bucket)
+        }
+        await Promise.all(
+          [...grouped].map(([path, sourceIds]) =>
+            readJson('/api/db/delete', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ path, ids: sourceIds }),
+            }),
+          ),
+        )
       }
       if (!embed && detailId && ids.includes(detailId)) onCloseRecord?.()
       const gone = new Set(ids.map(String))
@@ -4547,7 +4575,16 @@ export function CollectionBrowser({
         viewId: activeViewIdRef.current,
         total: totalRef.current,
       })
-      if (dataPath !== '/trash') publishDeletedRowsToTrash(dataPath, deletedRows, title)
+      if (dataPath !== '/trash') {
+        const byTable = new Map<string, DbRecord[]>()
+        for (const row of deletedRows) {
+          const target = sourceDeleteTarget(row)
+          const bucket = byTable.get(target.path) ?? []
+          bucket.push({ ...row, id: target.id })
+          byTable.set(target.path, bucket)
+        }
+        for (const [path, rows] of byTable) publishDeletedRowsToTrash(path, rows, title)
+      }
       announceListChange()
       quietUntil.current = 0
       await reload({ force: true })
@@ -6180,6 +6217,7 @@ export function CollectionBrowser({
               body: JSON.stringify({ path, content: { banner: next } }),
             }).then((data) => {
               setViewBanner(data.value?.banner ?? next)
+              emitFsdbChange({ scope: 'content', path })
             }).catch(() => {
               setViewBanner(prev)
             })
