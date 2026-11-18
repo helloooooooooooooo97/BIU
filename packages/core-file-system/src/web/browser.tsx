@@ -73,7 +73,7 @@ import { CrumbTrail } from './crumb-trail.tsx'
 import { fieldPickAttrs, fieldPickId, pickDomAttrs, recordPickKind, recordSourcePath } from './pick-dom.ts'
 import { normalizeRecordEmoji, recordPreviewEmoji, crumbRecordLabel } from './sidebar-preview.ts'
 import { recordPreviewMascot, RecordMark } from './record-mark.tsx'
-import { COL_WIDTH_MAX, COL_WIDTH_MIN, canRemoveCollectionView, colWidthStyle, normalizeColumnWidths, normalizeSavedView, normalizePageSize, rankListedViews, viewIsFresher, viewStateKey, type SavedView } from './saved-view.ts'
+import { COL_WIDTH_MAX, COL_WIDTH_MIN, canRemoveCollectionView, colWidthStyle, normalizeColumnWidths, normalizeFrozenColumns, normalizeSavedView, normalizePageSize, rankListedViews, viewIsFresher, viewStateKey, type SavedView } from './saved-view.ts'
 import { useStickyToolbar } from './sticky-toolbar.ts'
 import { PagerSizeControl } from './pager-size.tsx'
 import {
@@ -148,7 +148,7 @@ import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage, locateViewRecord, pageOfIndex, type ViewNeighborQuery } from './view-adjacent.ts'
 import { setViaDataCrumbs, viaDataViewId } from './data-chrome.ts'
 import { paintCollectionViews } from './collection-nav.ts'
-import { TABLE_CHECK_MEASURE_MAX, TABLE_WINDOW_OVERSCAN, medianPaintedRowPx, rememberedTableWrap, reusePaintNodes, settlePaintedRowPx, tableCheckSlots, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tablePinColClass, tablePinCount, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableCheckSlot, type TableColumnSlice } from './table-window.ts'
+import { TABLE_CHECK_MEASURE_MAX, TABLE_WINDOW_OVERSCAN, medianPaintedRowPx, rememberedTableWrap, reusePaintNodes, settlePaintedRowPx, tableCheckSlots, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tableFrozenKeys, tablePinColClass, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, toggleFrozenPrefix, type TableCheckSlot, type TableColumnSlice } from './table-window.ts'
 import { bindTableDragScroll, tableVertScroller } from './table-drag-scroll.ts'
 import { forgetPreviewTotalsForPath, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady } from './sidebar-preview.ts'
 import { publishDataSidebar, type DataSidebarLive } from './data-sidebar-host.ts'
@@ -1184,7 +1184,7 @@ function listHoldFromCache(cached: ListCacheSnap, view: SavedView | null, path: 
       }
     }),
     columnWidths: normalizeColumnWidths(view?.columnWidths),
-    columnPinCount: tablePinCount(keys, label),
+    columnPinCount: tableFrozenKeys(keys, view?.frozenColumns, label).length,
     wrapCells: !!view?.wrap,
     truncateCells: view ? view.truncate !== false : true,
     nodes,
@@ -1198,10 +1198,20 @@ type TablePaintBag = {
   colSpan: number
   error: string
   renderNode: (node: TablePaintNode) => ReactNode
+  frozenKeys: string[]
+  pinLeftByKey: Record<string, number>
 }
 
 const TABLE_PAINT_REF: RefObject<TablePaintBag> = {
-  current: { colSpan: 1, error: '', renderNode: () => null },
+  current: { colSpan: 1, error: '', renderNode: () => null, frozenKeys: [], pinLeftByKey: {} },
+}
+
+function FreezeColIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
+      <path fill="currentColor" d="M3.5 1.5h2v13h-2zm7 0h2v13h-2z" />
+    </svg>
+  )
 }
 
 const TablePaintCtx = createContext<RefObject<TablePaintBag>>(TABLE_PAINT_REF)
@@ -1395,6 +1405,19 @@ const WindowedTable = memo(function WindowedTable({
     for (let i = colWindow.start; i < colWindow.end; i += 1) sum += columnPx[i] || 0
     return Math.max(sum, 1)
   }, [colWindow.end, colWindow.padLeft, colWindow.padRight, colWindow.pin, colWindow.start, columnPx])
+  const pinLeftByKey = useMemo(() => {
+    const next: Record<string, number> = {}
+    let left = 0
+    for (let i = 0; i < colWindow.pin; i += 1) {
+      const col = columns[i]
+      if (!col) break
+      next[col.key] = left
+      left += columnPx[i] || 0
+    }
+    return next
+  }, [colWindow.pin, columnPx, columns])
+  paintRef.current.pinLeftByKey = pinLeftByKey
+  paintRef.current.frozenKeys = columns.slice(0, colWindow.pin).map((col) => col.key)
   const tableWindow = useMemo(
     () => tableWindowSlice(nodes.length, tableScroll.top, tableScroll.height, rowPx),
     [nodes.length, rowPx, tableScroll.height, tableScroll.top],
@@ -1721,6 +1744,7 @@ export function CollectionBrowser({
       : initialView?.columns ?? [],
   )
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => normalizeColumnWidths(initialView?.columnWidths))
+  const [frozenColumns, setFrozenColumns] = useState<string[] | undefined>(() => normalizeFrozenColumns(initialView?.frozenColumns))
   const [resizingCol, setResizingCol] = useState<string | null>(null)
   const [cellPop, setCellPop] = useState<{ id: string; key: string; seed?: string } | null>(null)
   const [cellPickEpoch, setCellPickEpoch] = useState(0)
@@ -1980,6 +2004,7 @@ export function CollectionBrowser({
         pinActionColumn(schema, view.columns, placedActions(schema, 'row').length > 0),
       )
       setColumnWidths(normalizeColumnWidths(view.columnWidths))
+      setFrozenColumns(normalizeFrozenColumns(view.frozenColumns))
       setGroupBy(view.groupBy ?? '')
       setShowTree(view.tree !== false)
       setWrapCells(!!view.wrap)
@@ -2405,6 +2430,7 @@ export function CollectionBrowser({
           pinActionColumn(nextSchema, view.columns, placedActions(nextSchema, 'row').length > 0),
         )
         setColumnWidths(normalizeColumnWidths(view.columnWidths))
+        setFrozenColumns(normalizeFrozenColumns(view.frozenColumns))
         setGroupBy(pendingView.groupBy)
         setShowTree(view.tree !== false)
         setWrapCells(pendingView.wrapCells)
@@ -2697,6 +2723,7 @@ export function CollectionBrowser({
           ),
         )
         setColumnWidths(normalizeColumnWidths(next.columnWidths))
+        setFrozenColumns(normalizeFrozenColumns(next.frozenColumns))
         setGroupBy(next.groupBy ?? '')
         setShowTree(next.tree !== false)
         setWrapCells(!!next.wrap)
@@ -3209,13 +3236,17 @@ export function CollectionBrowser({
     }
     return finish(nodes)
   }, [collapsedGroups, flattenRows, groupPages, grouped, grouping, pageSize, visible])
-  const tablePaintRef = useRef<TablePaintBag>({ colSpan: 1, error: '', renderNode: () => null })
+  const tablePaintRef = useRef<TablePaintBag>({ colSpan: 1, error: '', renderNode: () => null, frozenKeys: [], pinLeftByKey: {} })
   const tableRef = useRef<HTMLTableElement>(null)
   const tableWrapRef = useRef<HTMLDivElement>(null)
   const tableStageRef = useRef<HTMLDivElement>(null)
   const checkStackRef = useRef<HTMLDivElement>(null)
   const checkHoverRef = useRef<string | 'head' | null>(null)
-  const columnPinCount = tablePinCount(columns.map((col) => col.key), schema?.labelField)
+  const frozenKeys = useMemo(
+    () => tableFrozenKeys(columns.map((col) => col.key), frozenColumns, schema?.labelField),
+    [columns, frozenColumns, schema?.labelField],
+  )
+  const columnPinCount = frozenKeys.length
   const tableResetKey = `${activeViewId ?? ''}\0${collectionPath}\0${groupBy}\0${page}\0${pageSize}\0${query}`
   const checkLayoutExtra = useMemo(
     () =>
@@ -3712,7 +3743,8 @@ export function CollectionBrowser({
       filterTreeStateKey(filterTree) === filterTreeStateKey(resolveViewFilterTree(next)) &&
       JSON.stringify(filters) === JSON.stringify(next.filters) &&
       JSON.stringify(columnKeys) === JSON.stringify(nextColumns) &&
-      JSON.stringify(columnWidths) === JSON.stringify(normalizeColumnWidths(next.columnWidths))
+      JSON.stringify(columnWidths) === JSON.stringify(normalizeColumnWidths(next.columnWidths)) &&
+      JSON.stringify(normalizeFrozenColumns(frozenColumns) ?? null) === JSON.stringify(normalizeFrozenColumns(next.frozenColumns) ?? null)
     ) {
       return
     }
@@ -3725,6 +3757,7 @@ export function CollectionBrowser({
     setFilterTree(resolveViewFilterTree(next))
     setColumnKeys(nextColumns)
     setColumnWidths(normalizeColumnWidths(next.columnWidths))
+    setFrozenColumns(normalizeFrozenColumns(next.frozenColumns))
     setGroupBy(nextGroup)
     setShowTree(next.tree !== false)
     setWrapCells(!!next.wrap)
@@ -3950,6 +3983,7 @@ export function CollectionBrowser({
             truncate: truncateCells,
             query,
             columnWidths,
+            frozenColumns,
           },
     )
   }
@@ -5835,15 +5869,46 @@ export function CollectionBrowser({
   function paintHeadTh(col: (typeof columns)[number]) {
     const flat = parseTagFlatColumnKey(col.key)
     const tone = flat ? schemaTagTone(flat.packId) : undefined
+    const bag = tablePaintRef.current
+    const pinned = bag.frozenKeys.includes(col.key)
+    const pinLeft = bag.pinLeftByKey[col.key]
+    const pinRank = bag.frozenKeys.indexOf(col.key)
     return (
       <th
         key={col.key}
-        className={[tablePinColClass(col.key, schema?.labelField), tone ? 'is-tag-col' : ''].filter(Boolean).join(' ') || undefined}
-        style={tone ? { ['--biu-tag' as string]: tone } : undefined}
+        className={[tablePinColClass(col.key, bag.frozenKeys), tone ? 'is-tag-col' : ''].filter(Boolean).join(' ') || undefined}
+        style={{
+          ...(tone ? { ['--biu-tag' as string]: tone } : {}),
+          ...(pinned
+            ? {
+                ['--fsdb-pin-left' as string]: `${pinLeft ?? 0}px`,
+                ['--fsdb-pin-z' as string]: String(12 + Math.max(0, pinRank)),
+              }
+            : {}),
+        }}
       >
         <span className={`tasks-th${queryFields.has(col.key) ? ' is-on' : ''}`}>
-          <span className="tasks-th-ico">
+          <span className={`tasks-th-ico${pinned ? ' is-frozen' : ''}`}>
             <FieldGlyph kind={col.kind} />
+            <button
+              type="button"
+              className={`fsdb-th-freeze${pinned ? ' is-on' : ''}`}
+              aria-label={pinned ? '解冻列' : '冻结列'}
+              aria-pressed={pinned}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                setFrozenColumns(toggleFrozenPrefix(
+                  columns.map((item) => item.key),
+                  frozenColumns,
+                  col.key,
+                  schema?.labelField,
+                ))
+              }}
+            >
+              <FreezeColIcon />
+            </button>
           </span>
           {tagColumnTitle(col)}
         </span>
@@ -5904,7 +5969,7 @@ export function CollectionBrowser({
         data-col-key={col.key}
         {...cellPickOf(row, col.key, col.field)}
         className={[
-          tablePinColClass(col.key, paintSchema?.labelField),
+          tablePinColClass(col.key, tablePaintRef.current.frozenKeys),
           cellPick?.id === row.id && cellPick.key === col.key
             ? col.field && cellFieldWritable(col.field)
               ? 'is-cell-on'
@@ -5913,6 +5978,14 @@ export function CollectionBrowser({
               ? 'is-cell-range'
               : '',
         ].filter(Boolean).join(' ') || undefined}
+        style={
+          tablePaintRef.current.frozenKeys.includes(col.key)
+            ? {
+                ['--fsdb-pin-left' as string]: `${tablePaintRef.current.pinLeftByKey[col.key] ?? 0}px`,
+                ['--fsdb-pin-z' as string]: String(7 + Math.max(0, tablePaintRef.current.frozenKeys.indexOf(col.key))),
+              }
+            : undefined
+        }
       >
         {col.key === paintSchema?.labelField ? (
           <RecordTitle
@@ -6062,6 +6135,7 @@ export function CollectionBrowser({
       query,
       pageSize,
       columnWidths,
+      frozenColumns,
     })
     if (viewStateKey(current) === viewStateKey(next)) return
     persistViewDisplay(collectionPath, next.id, next)
@@ -6112,6 +6186,7 @@ export function CollectionBrowser({
     collectionPath,
     columnKeys,
     columnWidths,
+    frozenColumns,
     filters,
     filterTree,
     groupBy,

@@ -4,7 +4,7 @@ import { openAndMigrateBiu } from '@biu/host-plugin-loader/data-dir'
 import type { CollectionInfo, CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { normalizeSchemaValue, recordBuiltinValues, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 import { builtinAllView, builtinAllViewId, isReadOnlyViewId } from '../catalog-views.ts'
-import { normalizeColumnWidths, normalizePageSize, parseViewColumns, type SavedView } from '../web/saved-view.ts'
+import { normalizeColumnWidths, normalizeFrozenColumns, normalizePageSize, parseViewColumns, type SavedView } from '../web/saved-view.ts'
 import { isViewModeId } from '../web/fields.ts'
 import { normalizeCollectionPath } from '../paths.ts'
 import { DATA_COLLECTION_PATH, isIndexCollection } from '../web/database-path.ts'
@@ -306,6 +306,7 @@ export class SavedViewsStore {
       truncate: fields.truncate !== false,
       pageSize: normalizePageSize(fields.pageSize),
       columnWidths: normalizeColumnWidths(fields.columnWidths),
+      frozenColumns: normalizeFrozenColumns(fields.frozenColumns),
       rank: Number.isFinite(Number(fields.rank)) ? Math.round(Number(fields.rank)) : views.length,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -372,6 +373,7 @@ export class SavedViewsStore {
         ...(typeof patch.wrap === 'boolean' ? { wrap: patch.wrap } : {}),
         ...(typeof patch.truncate === 'boolean' ? { truncate: patch.truncate } : {}),
         ...('columnWidths' in patch ? { columnWidths: normalizeColumnWidths(patch.columnWidths) } : {}),
+        ...('frozenColumns' in patch ? { frozenColumns: normalizeFrozenColumns(patch.frozenColumns) } : {}),
         ...(Number.isFinite(Number(patch.rank)) ? { rank: Math.round(Number(patch.rank)) } : {}),
         ...('emoji' in patch ? { emoji: String(patch.emoji ?? '') } : {}),
         ...('tag' in patch ? { tag: normalizeSchemaValue(patch.tag) } : {}),
@@ -389,7 +391,7 @@ export class SavedViewsStore {
 }
 
 /**
- * 标签表（/facets 这类索引表）的视图按创建人分开存，同一个 viewId 可能属于多个账号。
+ * 标签表（/tags 这类索引表）的视图按创建人分开存，同一个 viewId 可能属于多个账号。
  * 只在当前账号名下的视图里找，避免把别人的视图当成「未知视图」或误改误删。
  */
 function findView(views: StoredView[], path: string, viewId: string, accountId: string) {
@@ -489,6 +491,7 @@ function asRecord(path: string, tableName: string, view: StoredView, tableIcon?:
     pageSize: normalizePageSize(view.pageSize),
     columns: parseViewColumns(view.columns),
     columnWidths: view.columnWidths ?? {},
+    ...(view.frozenColumns != null ? { frozenColumns: view.frozenColumns } : {}),
     rank: Number.isFinite(Number(view.rank)) ? Math.round(Number(view.rank)) : 0,
     filters: JSON.stringify(filters),
     sorts: JSON.stringify(sorts.map((item) => ({ field: item.field, dir: item.dir }))),
@@ -524,6 +527,7 @@ export function clientViewFromDbRow(row: Record<string, unknown> | undefined) {
     truncate: row.truncate !== false,
     pageSize: normalizePageSize(row.pageSize),
     columnWidths: row.columnWidths,
+    frozenColumns: normalizeFrozenColumns(row.frozenColumns),
     builtin: false,
     rank: Number.isFinite(Number(row.rank)) ? Math.round(Number(row.rank)) : undefined,
   }
@@ -575,6 +579,12 @@ export function viewsCollection(
           writable: true,
           description: VIEW_COLUMNS_DESCRIPTION,
           example: ['title', 'tag', 'tag::tag::category'],
+        },
+        frozenColumns: {
+          type: 'multi-select',
+          label: '冻结列',
+          writable: true,
+          description: '可见列前缀。冻结第 K 列会连同前 K 列一起冻住；解冻第 K 列会解冻它以及后面的列。缺省为标题列和动作列。',
         },
         filters: { type: 'string', label: '筛选', writable: true, description: VIEW_FILTERS_DESCRIPTION },
         filterTree: { type: 'string', label: '筛选树', writable: true, description: VIEW_FILTER_TREE_DESCRIPTION },

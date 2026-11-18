@@ -362,10 +362,8 @@ const CSS = `
 .fsdb-fileview-pre{margin:0;padding:10px 12px;border-radius:8px;background:var(--biu-color-bg-input);color:var(--biu-color-text);font:inherit;font-size:var(--biu-font-size-4);font-family:var(--font-mono);white-space:pre-wrap;overflow:visible;height:auto;min-height:0;max-height:none}
 .fsdb-fileview-img{display:block;width:auto;max-width:100%;height:auto;max-height:none;object-fit:contain;border-radius:8px;background:var(--biu-color-bg-hover)}
 .fsdb-fileview-img .biu-image img{display:block;width:auto;max-width:100%;height:auto;max-height:none;object-fit:contain;border-radius:8px}
-.fsdb-page .tasks-table th.is-pin-col,.fsdb-page .tasks-table td.is-pin-col{position:sticky;left:var(--fsdb-check-gutter);z-index:7;background:var(--biu-color-surface)}
-.fsdb-page .tasks-table th.is-pin-col+.is-pin-col,.fsdb-page .tasks-table td.is-pin-col+.is-pin-col{left:calc(var(--fsdb-check-gutter) + var(--fsdb-pin-title,240px))}
-.fsdb-page .tasks-table th.is-pin-col{z-index:12}
-.fsdb-page .tasks-table th.is-pin-col+.is-pin-col{z-index:13}
+.fsdb-page .tasks-table th.is-pin-col,.fsdb-page .tasks-table td.is-pin-col{position:sticky;left:calc(var(--fsdb-check-gutter) + var(--fsdb-pin-left,0px));z-index:var(--fsdb-pin-z,7);background:var(--biu-color-surface)}
+.fsdb-page .tasks-table th.is-pin-col{z-index:var(--fsdb-pin-z,12)}
 .fsdb-page .tasks-table tr.is-active td.is-pin-col{background:color-mix(in srgb,var(--biu-color-text) 8%,var(--biu-color-surface))}
 .fsdb-page .tasks-tree-toggle{width:20px;height:20px;flex:none;display:inline-flex;align-items:center;justify-content:center;align-self:center;border:0;background:transparent;color:var(--biu-color-text-subtle);border-radius:4px;cursor:pointer;padding:0;line-height:0}
 .fsdb-page .tasks-tree-toggle:hover{background:var(--biu-color-bg-hover)}
@@ -423,7 +421,12 @@ const CSS = `
 .fsdb-row-check{position:relative;top:auto;left:auto;z-index:12;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin:0;transform:none;opacity:0;pointer-events:auto;transition:none}
 .fsdb-check-slot.is-hover .fsdb-row-check,.fsdb-check-slot:hover .fsdb-row-check,.fsdb-row-check.is-on,.fsdb-row-check:hover,.fsdb-row-check:focus-visible{opacity:1}
 .fsdb-page .tasks-th{display:inline-flex;align-items:center;gap:5px;font-weight:var(--biu-font-weight-medium);white-space:nowrap;flex-wrap:nowrap}
-.fsdb-page .tasks-th-ico{display:inline-flex;align-items:center;flex:none;line-height:0}
+.fsdb-page .tasks-th-ico{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:none;width:16px;height:16px;line-height:0}
+.fsdb-page .tasks-th-ico .fsdb-th-freeze{position:absolute;inset:0;display:inline-flex;align-items:center;justify-content:center;margin:0;border:0;padding:0;border-radius:3px;background:var(--biu-color-surface);color:var(--biu-color-icon);opacity:0;pointer-events:none;cursor:pointer}
+.fsdb-page .tasks-th-ico:hover .fsdb-th-freeze,.fsdb-page .tasks-th-ico .fsdb-th-freeze:focus-visible{opacity:1;pointer-events:auto}
+.fsdb-page .tasks-th-ico:hover .fsdb-field-hero,.fsdb-page .tasks-th-ico:hover .fsdb-field-glyph{opacity:0}
+.fsdb-page .tasks-th-ico .fsdb-th-freeze.is-on,.fsdb-page .tasks-th-ico.is-frozen:hover .fsdb-th-freeze{color:var(--biu-color-icon-active)}
+.fsdb-page .tasks-th-ico .fsdb-th-freeze svg{width:14px;height:14px}
 .fsdb-page .tasks-th svg,.fsdb-page .tasks-th .fsdb-field-glyph{color:var(--biu-color-icon)}
 .fsdb-page .tasks-th.is-on svg{color:var(--biu-color-icon-active)}
 .fsdb-page .tasks-table tr{cursor:default}
@@ -980,8 +983,9 @@ a.fsdb-person.is-link:hover .fsdb-person-name,button.fsdb-person.is-link:hover .
 .fsdb-page .tasks-table:not(.is-wrap) td:has(.fsdb-ref-chips),.fsdb-page .tasks-table:not(.is-wrap) td:has(.biu-tags),.fsdb-page .tasks-table:not(.is-wrap) td:has(.fsdb-person-list),.fsdb-page .tasks-table:not(.is-wrap) td:has(.fsdb-files){overflow:hidden}
 .fsdb-page .tasks-table:not(.is-wrap) .fsdb-cell:has(.fsdb-ref-chips),.fsdb-page .tasks-table:not(.is-wrap) .fsdb-ref-host:has(.fsdb-ref-chips),.fsdb-page .tasks-table:not(.is-wrap) .fsdb-cell:has(.biu-tags),.fsdb-page .tasks-table:not(.is-wrap) .fsdb-cell:has(.fsdb-person-list),.fsdb-page .tasks-table:not(.is-wrap) .fsdb-cell:has(.fsdb-files),.fsdb-page .tasks-table:not(.is-wrap) .fsdb-pop-host:has(.biu-tags),.fsdb-page .tasks-table:not(.is-wrap) .fsdb-pop-host:has(.fsdb-person-list){min-width:0;width:100%;max-width:100%;overflow:hidden;flex-wrap:nowrap}
 .fsdb-page .tasks-table:not(.is-wrap) .fsdb-ref-chips,.fsdb-page .tasks-table:not(.is-wrap) .biu-tags,.fsdb-page .tasks-table:not(.is-wrap) .fsdb-person-list,.fsdb-page .tasks-table:not(.is-wrap) .fsdb-files{display:flex;flex-wrap:nowrap;width:100%;min-width:0;max-width:100%}
-.fsdb-page .tasks-table:not(.is-wrap) .fsdb-ref-chip,.fsdb-page .tasks-table:not(.is-wrap) .biu-tag,.fsdb-page .tasks-table:not(.is-wrap) .fsdb-person{flex:0 0 auto;min-width:max-content;max-width:none}
-.fsdb-page .tasks-table:not(.is-wrap) .fsdb-person-name{overflow:visible;text-overflow:clip}
+.fsdb-page .tasks-table:not(.is-wrap) .fsdb-ref-chip,.fsdb-page .tasks-table:not(.is-wrap) .biu-tag,.fsdb-page .tasks-table:not(.is-wrap) .fsdb-person{flex:0 1 auto;min-width:0;max-width:100%}
+.fsdb-page .tasks-table:not(.is-wrap) .biu-tags{overflow:hidden}
+.fsdb-page .tasks-table:not(.is-wrap) .fsdb-person-name{overflow:hidden;text-overflow:ellipsis}
 .fsdb-page .tasks-table.is-wrap .fsdb-ref-chips{display:inline-flex;flex-direction:row;flex-wrap:wrap;width:auto;max-width:100%;overflow-wrap:normal;word-break:normal;white-space:normal}
 .fsdb-ref-chip{display:inline-flex;flex-direction:row;align-items:center;gap:4px;flex:0 0 auto;width:auto;max-width:100%;margin:0;border:0;border-radius:4px;padding:1px 6px 1px 7px;background:var(--biu-color-bg-hover);color:var(--biu-color-text);font:inherit;font-size:var(--biu-chat-chip-font-size);line-height:var(--biu-space-5);cursor:pointer;text-align:left;white-space:nowrap;overflow-wrap:normal;word-break:keep-all}
 .fsdb-ref-chip-title{min-width:0;overflow:visible;text-overflow:clip;white-space:nowrap}
