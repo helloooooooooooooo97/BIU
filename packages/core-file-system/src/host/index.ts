@@ -766,6 +766,23 @@ export function listNeedsMatchOverlay(
   return false
 }
 
+export function canPageInStore(
+  spec: Pick<CollectionSpec, 'pagedList'>,
+  liveFilter: Record<string, unknown> | undefined,
+  overlay: boolean,
+  scopeFilter: string,
+  query: CollectionListQuery,
+) {
+  if (!spec.pagedList) return false
+  if (overlay || scopeFilter || query.ids?.length) return false
+  if (!liveFilter) return true
+  for (const [key, expected] of Object.entries(liveFilter)) {
+    if (expected == null || expected === '') continue
+    return false
+  }
+  return true
+}
+
 /** spec.list 真正用到的查询。分组筛选在内存里做，好让并发的组页共用一次整表扫描。 */
 export function specListQuery(query: CollectionListQuery): CollectionListQuery {
   const tagId = String(query.filter?.tagId ?? '').trim()
@@ -1960,6 +1977,39 @@ export class DatabaseService extends Service implements Database {
     if (auth && actor) auth.preloadCollection(actor.workspaceId, spec.path, actor.accountId)
     try {
       const overlay = listNeedsMatchOverlay(liveFilter, q, sortField, page?.sorts)
+      if (canPageInStore(spec, liveFilter, overlay, scopeFilter, query)) {
+        const paged = await spec.pagedList!({
+          ...query,
+          q,
+          sortField,
+          sortDir,
+          sorts: page?.sorts,
+          limit,
+          offset,
+        })
+        const visible = this.visibleRecords(spec.path, paged.items)
+        const slice = this.decorateSlice(spec, visible, columnKeys)
+        return {
+          kind: 'collection' as const,
+          path: spec.path,
+          id: spec.id,
+          label: spec.label ?? spec.id,
+          view: spec.view ?? null,
+          schema: this.schemaForCurrent(spec, schema),
+          total: paged.total,
+          offset,
+          limit,
+          items: slice.map((row): DbRecord & { path: string; kind: 'record' } => {
+            const value = withoutContent(spec, row)
+            const picked = columnKeys ? pickListedFields(value, columnKeys) : value
+            return {
+              ...picked,
+              path: `${spec.path}/${row.id}`,
+              kind: 'record',
+            }
+          }),
+        }
+      }
       const pack = await this.visibleSortedCollectionRows(spec, query, sortField, sortDir, page?.sorts, overlay)
       const visible = scopeFilter ? pack[scopeFilter] : pack.rows
       const tagFilter = spec.path === '/tags' ? String(filter?.tagId ?? '').trim() : ''

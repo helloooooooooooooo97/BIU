@@ -783,6 +783,11 @@ export type CollectionListQuery = {
   trash?: boolean
   /** 从回收站彻底删除，不再保留。 */
   purge?: boolean
+  sortField?: string
+  sortDir?: 'asc' | 'desc'
+  sorts?: Array<{ field: string; dir: 'asc' | 'desc' }>
+  limit?: number
+  offset?: number
 }
 
 export function hasCollectionDeleteQuery(query?: CollectionListQuery | null): boolean {
@@ -808,6 +813,8 @@ export type CollectionSpec = {
   records?: CollectionRecordCaps
   /** 可接收查询；不认 ids 时 File System 仍会在内存里收窄。 */
   list: (query?: CollectionListQuery) => DbRecord[] | Promise<DbRecord[]>
+  /** 存储层分页。有实现时普通列表不再全表排序再 slice。 */
+  pagedList?: (query?: CollectionListQuery) => { items: DbRecord[]; total: number } | Promise<{ items: DbRecord[]; total: number }>
   get: (id: string) => DbRecord | null | undefined | Promise<DbRecord | null | undefined>
   /** 更新已有记录的可写字段。不要叫 write。 */
   update?: (id: string, patch: Record<string, unknown>) => DbRecord | Promise<DbRecord>
