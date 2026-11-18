@@ -1481,6 +1481,11 @@ test('row actions reload even when updatedAt is unchanged', () => {
   assert.match(browser, /quietUntil\.current = 0\s*\n\s*await reload\(\{ force: true \}\)/)
 })
 
+test('check layout extra is memoized and does not join every row id', () => {
+  assert.match(browser, /const checkLayoutExtra = useMemo\(/)
+  assert.doesNotMatch(browser, /items\.map\(\(row\) => row\.id\)\.join/)
+})
+
 test('action column buttons use the same icon button style and show a hover tip', () => {
   const actions = browser.slice(browser.indexOf('function RecordActions'), browser.indexOf('function GroupHead'))
   assert.match(actions, /data-dock-tip=\{action\.label\}/)
