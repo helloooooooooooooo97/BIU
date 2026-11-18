@@ -3358,10 +3358,41 @@ test('collection list preloads authorization scans and releases them', () => {
   assert.match(host, /specListQuery\(query\)/)
   assert.match(host, /listDecorateNeed/)
   assert.match(host, /decorateSlice\(spec, sorted.slice\(offset, offset \+ limit\), columnKeys\)/)
+  assert.doesNotMatch(host, /private decorateSlice\([\s\S]*?this\.recordShareCache = null/)
+  assert.match(host, /private recordShareCache = new Map<string, Set<string>>\(\)/)
+  assert.match(host, /notifyShareChange\(\) \{\s*this\.viewShareCache\.clear\(\)\s*this\.recordShareCache\.clear\(\)/)
   assert.match(
     host,
     /try \{\s*const overlay = listNeedsMatchOverlay\(liveFilter, q, sortField, page\?\.sorts\)[\s\S]*?\} finally \{\s*if \(auth && actor\) \{[\s\S]*?releaseCollection\(actor\.workspaceId, spec\.path, actor\.accountId\)/,
   )
+})
+
+test('paged lists reuse share listings until notifyShareChange', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  db.shares.open(':memory:')
+  const rows = new Map<string, DbRecord>()
+  for (let i = 0; i < 10; i += 1) rows.set(`n${i}`, { id: `n${i}`, title: `行${i}` })
+  db.register({
+    id: 'notes',
+    path: '/notes',
+    schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
+    list: () => [...rows.values()],
+    get: (id) => rows.get(id) ?? null,
+  })
+  let listed = 0
+  const original = db.shares.listRecords.bind(db.shares)
+  db.shares.listRecords = ((collection: string) => {
+    listed += 1
+    return original(collection)
+  }) as typeof db.shares.listRecords
+  for (let offset = 0; offset < 10; offset += 1) {
+    await db.list('/notes', undefined, { limit: 1, offset })
+  }
+  assert.equal(listed, 1)
+  db.notifyShareChange()
+  await db.list('/notes', undefined, { limit: 1, offset: 0 })
+  assert.equal(listed, 2)
 })
 
 test('sequential lists reuse the authorized collection pack until bump', async () => {
