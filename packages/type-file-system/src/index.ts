@@ -815,6 +815,8 @@ export type CollectionSpec = {
   list: (query?: CollectionListQuery) => DbRecord[] | Promise<DbRecord[]>
   /** 存储层分页。有实现时普通列表不再全表排序再 slice。 */
   pagedList?: (query?: CollectionListQuery) => { items: DbRecord[]; total: number } | Promise<{ items: DbRecord[]; total: number }>
+  /** pagedList 能用 SQL 等值过滤的字段。其它 filter 仍走内存。 */
+  pagedFilterKeys?: string[]
   get: (id: string) => DbRecord | null | undefined | Promise<DbRecord | null | undefined>
   /** 更新已有记录的可写字段。不要叫 write。 */
   update?: (id: string, patch: Record<string, unknown>) => DbRecord | Promise<DbRecord>

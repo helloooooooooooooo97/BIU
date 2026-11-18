@@ -767,7 +767,7 @@ export function listNeedsMatchOverlay(
 }
 
 export function canPageInStore(
-  spec: Pick<CollectionSpec, 'pagedList'>,
+  spec: Pick<CollectionSpec, 'pagedList' | 'pagedFilterKeys'>,
   liveFilter: Record<string, unknown> | undefined,
   overlay: boolean,
   scopeFilter: string,
@@ -776,9 +776,10 @@ export function canPageInStore(
   if (!spec.pagedList) return false
   if (overlay || scopeFilter || query.ids?.length) return false
   if (!liveFilter) return true
+  const allowed = new Set(spec.pagedFilterKeys ?? [])
   for (const [key, expected] of Object.entries(liveFilter)) {
     if (expected == null || expected === '') continue
-    return false
+    if (!allowed.has(key)) return false
   }
   return true
 }
