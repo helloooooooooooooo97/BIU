@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
 import type { CollectionChrome, FsDetailPane } from '@biu/type-file-system/ui'
 import type { CollectionSchema, DbRecord, FieldSpec } from '@biu/type-file-system'
@@ -20,8 +20,9 @@ import { fieldPickAttrs, recordSourcePath } from './pick-dom.ts'
 import { dismissInspectorPaneMenu } from './inspector-pane-menu.tsx'
 import { PaneConfigMenuItem } from './pane-more-menu.tsx'
 import { PageContentFailed, PageContentLoading } from './page-content-status.tsx'
-import { RecordProperties } from './record-prop-host.tsx'
 import { useRecordContentBody } from './record-content.tsx'
+
+const RecordProperties = lazy(() => import('./record-prop-host.tsx').then((m) => ({ default: m.RecordProperties })))
 
 export { PageContentFailed, PageContentLoading } from './page-content-status.tsx'
 
@@ -588,6 +589,7 @@ export function RecordDetail({
                   )
                   if (!Properties) return table
                   return (
+                    <Suspense fallback={table}>
                     <Properties
                       record={selected}
                       schema={schema}
@@ -596,6 +598,7 @@ export function RecordDetail({
                     >
                       {table}
                     </Properties>
+                    </Suspense>
                   )
                 })()}
                 {contentFieldKey(schema) && schema.fields[contentFieldKey(schema)!] && !contentHidden ? (() => {
@@ -603,7 +606,9 @@ export function RecordDetail({
                   const spec = schema.fields[key]!
                   if (ContentView) {
                     return (
-                      <div className="fsdb-fileview">
+                      <Suspense fallback={<PageContentLoading />}>
+                      <div className="fsdb-fileview" aria-busy={detailBodyStatus === 'loading'}>
+                        {detailBodyStatus === 'loading' && detailBody == null ? <PageContentLoading /> : (
                         <ContentView
                           record={selected}
                           field={key}
@@ -622,11 +627,13 @@ export function RecordDetail({
                           onRetry={onRetryBody}
                           onChange={(next) => void writePatch(selected, { [key]: next })}
                         />
+                        )}
                       </div>
+                      </Suspense>
                     )
                   }
-                  if (detailBodyStatus === 'loading') return <PageContentLoading />
-                  if (detailBodyStatus === 'failed') {
+                  if (detailBodyStatus === 'loading' && detailBody == null) return <PageContentLoading />
+                  if (detailBodyStatus === 'failed' && detailBody == null) {
                     return <PageContentFailed error={detailBodyError} onRetry={onRetryBody} />
                   }
                   if (spec.writable) {

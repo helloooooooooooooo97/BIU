@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType } from 'react'
+import React, { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowsPointingInIcon, ArrowsPointingOutIcon, CodeBracketIcon, EyeIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
 import {
@@ -501,8 +501,10 @@ export function RecordProperties({ record, schema, collectionPath, writable, chi
   const sandbox = listed.find((item) => item.id === present)
   useEffect(() => {
     if (!path || !id) return
-    hydrateRecordViewCatalog(path, id, liveRecord)
-    void loadRecordLayouts(path, id, liveRecord.layouts, fallback)
+    startTransition(() => {
+      hydrateRecordViewCatalog(path, id, liveRecord)
+      void loadRecordLayouts(path, id, liveRecord.layouts, fallback)
+    })
   }, [path, id, liveRecord, fallback])
   if (present === 'hidden') return null
   if (present === SOURCE_RECORD_PROP_VIEW_ID) {
