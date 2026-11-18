@@ -733,7 +733,7 @@ function schemaFingerprint(schema?: CollectionSchema) {
   return out
 }
 
-const LIST_CACHE_MAX = 32
+const LIST_CACHE_MAX = 64
 type ListCacheSnap = {
   items: Array<DbRecord & { path?: string }>
   total: number
@@ -741,14 +741,38 @@ type ListCacheSnap = {
   groupBuckets?: GroupBucket[]
   listLimit?: number
 }
+type ListCacheQuery = {
+  viewId?: string | null
+  page?: number
+  pageSize?: number
+  query?: string
+  sortField?: string
+  sortDir?: string
+  sorts?: string
+  filters?: string
+  groupBy?: string
+  pages?: string
+}
 const listCache = new Map<string, ListCacheSnap>()
 
-function listCacheKey(path: string, viewId?: string | null) {
-  return `${path}\0${viewId ?? ''}`
+function listCacheKey(path: string, query: ListCacheQuery = {}) {
+  return [
+    path,
+    query.viewId ?? '',
+    String(query.page ?? 0),
+    String(query.pageSize ?? ''),
+    normalizeListQuery(query.query ?? ''),
+    query.sortField ?? '',
+    query.sortDir ?? '',
+    query.sorts ?? '',
+    query.filters ?? '',
+    query.groupBy ?? '',
+    query.pages ?? '',
+  ].join('\0')
 }
 
-function peekListCache(path: string, viewId?: string | null, minLimit?: number) {
-  const snap = listCache.get(listCacheKey(path, viewId))
+function peekListCache(path: string, viewId?: string | null, minLimit?: number, query: ListCacheQuery = {}) {
+  const snap = listCache.get(listCacheKey(path, { ...query, viewId: query.viewId ?? viewId, page: query.page ?? 0 }))
   if (!snap) return
   const loaded = snap.listLimit ?? snap.items.length
   if (minLimit != null && loaded < minLimit && snap.total > loaded) return undefined
@@ -760,9 +784,9 @@ function bucketsReadyToCache(buckets?: GroupBucket[]) {
   return buckets.every((bucket) => (bucket.total ?? 0) <= 0 || bucket.rows.length > 0)
 }
 
-function rememberListCache(path: string, snap: ListCacheSnap, viewId?: string | null) {
+function rememberListCache(path: string, snap: ListCacheSnap, viewId?: string | null, query: ListCacheQuery = {}) {
   if (!bucketsReadyToCache(snap.groupBuckets)) return
-  const key = listCacheKey(path, viewId)
+  const key = listCacheKey(path, { ...query, viewId: query.viewId ?? viewId, page: query.page ?? 0 })
   if (listCache.has(key)) listCache.delete(key)
   listCache.set(key, snap)
   while (listCache.size > LIST_CACHE_MAX) {
@@ -2306,6 +2330,18 @@ export function CollectionBrowser({
     }
     try {
       const heldStat = switching ? null : statHoldRef.current
+      const cacheQuery: ListCacheQuery = {
+        viewId: reqViewId,
+        page: switching ? 0 : page,
+        pageSize: reqPageSize,
+        query: reqQuery,
+        sortField: reqSortField,
+        sortDir: reqSortDir,
+        sorts: sortsStateKey(reqSorts),
+        filters: JSON.stringify(reqFilters),
+        groupBy: reqGroupBy,
+        pages: reqGroupBy ? JSON.stringify(switching || opts?.force ? {} : groupPagesRef.current) : '',
+      }
       let reqParentKey = parentFieldKey(schemaRef.current ?? heldStat?.schema)
       if (reqTree && !reqParentKey) {
         reqParentKey = parentFieldKey(peekListCache(dataPath, reqViewId)?.stat?.schema)
@@ -2397,7 +2433,11 @@ export function CollectionBrowser({
       let listed: { items: Array<DbRecord & { path?: string }>; total: number; schema?: CollectionSchema }
       let buckets: GroupBucket[] = []
       const loadUngrouped = () => listPage({ ...listOpts, limit: reqPageSize, offset: switching ? 0 : page * reqPageSize })
-      if (reqGroupBy) {
+      const cachedList = !opts?.force ? peekListCache(dataPath, reqViewId, reqPageSize, cacheQuery) : undefined
+      if (cachedList && (!reqGroupBy || bucketsReadyToCache(cachedList.groupBuckets))) {
+        listed = { items: cachedList.items, total: cachedList.total, schema: cachedList.stat?.schema }
+        buckets = cachedList.groupBuckets ?? []
+      } else if (reqGroupBy) {
         const cachedSchema = switching ? undefined : schemaRef.current ?? heldStat?.schema
         const grouped = await loadGroups(cachedSchema)
         if (staleFetch()) return true
@@ -2490,6 +2530,7 @@ export function CollectionBrowser({
           listLimit: reqPageSize,
         },
         reqViewId,
+        cacheQuery,
       )
       if (reqViewId) rememberPreviewTotalForView(collectionPath, reqViewId, listed.total)
       setError('')
