@@ -1534,6 +1534,7 @@ const WindowedTable = memo(function WindowedTable({
         style={{
           minWidth: `${paintedTablePx}px`,
           outline: 'none',
+          ['--fsdb-table-px' as string]: `${paintedTablePx}px`,
           ['--fsdb-pin-title' as string]: `${columnPx[0] || 240}px`,
         }}
         onPointerDown={(event) => chromeRef.current.onPointerDown?.(event)}
