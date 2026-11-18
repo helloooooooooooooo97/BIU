@@ -1,4 +1,4 @@
-import { createContext, lazy, memo, Suspense, type ComponentProps, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { createContext, lazy, memo, startTransition, Suspense, type ComponentProps, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import {
@@ -711,6 +711,12 @@ function sameListedRows(a: Array<DbRecord & { path?: string }>, b: Array<DbRecor
   }
   return true
 }
+
+function normalizeListQuery(value: string) {
+  return value.trim()
+}
+
+const SEARCH_DEBOUNCE_MS = 280
 
 function schemaFingerprint(schema?: CollectionSchema) {
   if (!schema) return ''
@@ -2257,7 +2263,8 @@ export function CollectionBrowser({
   const totalRef = useRef(total)
   totalRef.current = total
   const treeParentKey = parentFieldKey(stat?.schema)
-  const listIdentityKey = `${dataPath}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${customView ? 'full' : 'proj'}\0${groupBy}\0tree:${showTree && treeParentKey && dataPath !== DATA_COLLECTION_PATH ? treeParentKey : ''}`
+  const listQuery = normalizeListQuery(fetchQuery)
+  const listIdentityKey = `${dataPath}\0${pageSize}\0${listQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${customView ? 'full' : 'proj'}\0${groupBy}\0tree:${showTree && treeParentKey && dataPath !== DATA_COLLECTION_PATH ? treeParentKey : ''}`
   const reloadKey = `${listIdentityKey}\0${groupBy ? JSON.stringify(groupPages) : page}\0${groupFillKeys.join('\0')}`
   if (releaseHoldOnPaintRef.current && paintedPath === dataPath && tableHoldRef.current?.nodes !== EMPTY_HOLD_NODES) {
     releaseHoldOnPaintRef.current = false
@@ -2275,7 +2282,7 @@ export function CollectionBrowser({
     const promise = (async () => {
     const pending = pendingPathQueryRef.current
     const switching = Boolean(pending || tableHoldRef.current)
-    const reqQuery = pending?.fetchQuery ?? fetchQuery
+    const reqQuery = normalizeListQuery(pending?.fetchQuery ?? fetchQuery)
     const reqSortField = pending?.sortField ?? sortField
     const reqSortDir = pending?.sortDir ?? sortDir
     const reqSorts = pending?.sorts ?? sorts
@@ -2610,9 +2617,12 @@ export function CollectionBrowser({
   const steppingView = useRef(false)
 
   useEffect(() => {
+    const next = normalizeListQuery(query)
     const id = window.setTimeout(() => {
-      setFetchQuery((prev) => (prev === query ? prev : query))
-    }, 280)
+      startTransition(() => {
+        setFetchQuery((prev) => (normalizeListQuery(prev) === next ? prev : next))
+      })
+    }, SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(id)
   }, [query])
 
@@ -2620,7 +2630,7 @@ export function CollectionBrowser({
     setPage((prev) => (prev === 0 ? prev : 0))
     setGroupPages((prev) => (Object.keys(prev).length ? {} : prev))
     setGroupFillKeys((prev) => (prev.length ? [] : prev))
-  }, [fetchQuery, queryFiltersKey, sortField, sortDir, pageSize, groupBy, collectionPath, dataPath, showTree])
+  }, [listQuery, queryFiltersKey, sortField, sortDir, pageSize, groupBy, collectionPath, dataPath, showTree])
 
   async function refreshNow() {
     if (refreshing) return
