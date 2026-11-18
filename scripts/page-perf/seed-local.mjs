@@ -10,13 +10,13 @@ const sessionTarget = Math.max(0, Number(process.env.BIU_PERF_SESSIONS || 200))
 const folderTarget = Math.max(0, Number(process.env.BIU_PERF_FOLDERS || 50))
 const contentTarget = Math.max(0, Number(process.env.BIU_PERF_CONTENT || 80))
 const skillTarget = Math.max(0, Number(process.env.BIU_PERF_SKILLS || 40))
-const facetTarget = Math.max(0, Number(process.env.BIU_PERF_FACETS || 40))
+const tagTarget = Math.max(0, Number(process.env.BIU_PERF_TAGS || 40))
 const pagePrefix = '压测页 '
 const folderPrefix = '压测夹 '
 const taskPrefix = '压测任务 '
 const sessionPrefix = '压测会话 '
 const skillPrefix = '压测技能 '
-const facetPrefix = '压测合集 '
+const tagPrefix = '压测合集 '
 const blockPageTitle = '压测块页'
 const viewTitle = '压测百行'
 const statuses = ['todo', 'doing', 'done', 'failed']
@@ -201,8 +201,8 @@ const skills = await ensurePrefixed('/skills', skillPrefix, skillTarget, (index)
   description: '本机空间压测技能，给技能表和记录页用。',
   enabled: true,
 }))
-const facets = await ensurePrefixed('/tags', facetPrefix, facetTarget, (index) => ({
-  title: `${facetPrefix}${index}`,
+const tags = await ensurePrefixed('/tags', tagPrefix, tagTarget, (index) => ({
+  title: `${tagPrefix}${index}`,
 }))
 let blockPage = (await listPage('/pages', { q: blockPageTitle, limit: 5, columns: 'id,title' })).items.find(
   (row) => String(row.title || '') === blockPageTitle,
@@ -225,7 +225,7 @@ const pageCount = await listPage('/pages', { limit: 1 })
 const taskCount = await listPage('/tasks', { limit: 1 })
 const sessionCount = await listPage('/sessions', { limit: 1 })
 const skillCount = await listPage('/skills', { limit: 1 })
-const facetCount = await listPage('/tags', { limit: 1 })
+const tagCount = await listPage('/tags', { limit: 1 })
 const blockCount = await listPage('/page-blocks', { limit: 1 })
 const stat = await apiJson('/api/db/stat?path=/')
 
@@ -237,7 +237,7 @@ console.log(
       tasks: { path: tasks.path, prefix: tasks.prefix, existing: tasks.existing, created: tasks.created, seeded: tasks.seeded, total: taskCount.total },
       sessions: { path: sessions.path, prefix: sessions.prefix, existing: sessions.existing, created: sessions.created, seeded: sessions.seeded, total: sessionCount.total },
       skills: { path: skills.path, prefix: skills.prefix, existing: skills.existing, created: skills.created, seeded: skills.seeded, total: skillCount.total },
-      facets: { path: facets.path, prefix: facets.prefix, existing: facets.existing, created: facets.created, seeded: facets.seeded, total: facetCount.total },
+      tags: { path: tags.path, prefix: tags.prefix, existing: tags.existing, created: tags.created, seeded: tags.seeded, total: tagCount.total },
       pageBlocks: blockCount.total,
       contentWrote,
       views: { tasks: taskView, pages: pageView },

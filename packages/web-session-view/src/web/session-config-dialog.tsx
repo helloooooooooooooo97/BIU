@@ -73,7 +73,7 @@ function slugTagId(label: string, used: Set<string>) {
   return id
 }
 
-function SessionFacetPicker({
+function SessionTagPicker({
   value,
   disabled,
   onChange,
@@ -322,7 +322,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
 
               <label className="flex flex-col gap-1 text-[11px] text-(--biu-color-text-subtle)">
                 <span>标签</span>
-                <SessionFacetPicker
+                <SessionTagPicker
                   value={data?.config?.tag}
                   disabled={busy}
                   onChange={(tag) => void patchSessionConfig({ tag })}

@@ -48,7 +48,7 @@ test('asImageSrc rejects scripts and non-image paths', () => {
   assert.equal(asImageSrc('../secret.png'), '')
 })
 
-test('schemaSearchHaystack includes facet labels and field values', () => {
+test('schemaSearchHaystack includes tag labels and field values', () => {
   const text = schemaSearchHaystack(
     { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } },
     [{ id: 'dp', label: '动态规划', fields: [] }],
@@ -95,7 +95,7 @@ test('reserved schema fields include 标签 / tag by key or label', () => {
   assert.equal(isReservedSchemaFieldLabel('编辑人'), true)
 })
 
-test('normalizeSchemaPack keeps nested facet fields and action', () => {
+test('normalizeSchemaPack keeps nested tag fields and action', () => {
   const pack = normalizeSchemaPack({
     id: 'dp',
     label: '动态规划',
@@ -179,7 +179,6 @@ test('withBuiltinFields always includes writable tag and strips tags', () => {
   assert.equal(fields.tag?.type, 'tag')
   assert.equal(fields.tag?.writable, true)
   assert.equal(fields.tag?.label, '标签')
-  assert.equal(fields.facet, undefined)
   assert.equal(fields.tags, undefined)
   assert.equal(fields.emoji?.writable, true)
   assert.equal(fields.parentId?.writable, true)

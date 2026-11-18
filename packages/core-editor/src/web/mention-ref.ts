@@ -19,7 +19,7 @@ export function decodeMentionId(id: string) {
   const slash = text.indexOf('/')
   if (slash <= 0) return null
   const rawKind = text.slice(0, slash)
-  const kind = rawKind === 'facet' ? 'tag' : rawKind
+  const kind = rawKind
   const recordId = text.slice(slash + 1).trim()
   if (!KIND_SET.has(kind) || !recordId) return null
   return { kind: kind as MentionKind, recordId }

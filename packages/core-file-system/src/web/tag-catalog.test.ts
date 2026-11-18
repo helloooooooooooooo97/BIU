@@ -65,9 +65,9 @@ test('persistTags upserts the incoming pack and adopts the server catalog', asyn
   }) as typeof fetch
   try {
     await persistTags([{ id: 'risk', label: '风险', fields: [] }])
-    const facets = (posted as { tags: Array<{ id: string; label: string }> }).tags
-    assert.equal(facets.some((item) => item.id === 'keep'), false)
-    assert.equal(facets.some((item) => item.id === 'risk' && item.label === '风险'), true)
+    const tags = (posted as { tags: Array<{ id: string; label: string }> }).tags
+    assert.equal(tags.some((item) => item.id === 'keep'), false)
+    assert.equal(tags.some((item) => item.id === 'risk' && item.label === '风险'), true)
     assert.equal(loadTags().some((item) => item.id === 'keep' && item.label === '保留'), true)
     assert.equal(loadTags().some((item) => item.id === 'risk' && item.label === '风险'), true)
   } finally {
@@ -80,16 +80,16 @@ test('createTag keeps the typed title as label and adopts the returned id', asyn
   globalThis.fetch = (async () =>
     new Response(
       JSON.stringify({
-        items: [{ value: { id: 'facet-3', title: '风险', fields: [] } }],
+        items: [{ value: { id: 'tag-3', title: '风险', fields: [] } }],
       }),
       { status: 200, headers: { 'content-type': 'application/json' } },
     )) as typeof fetch
   try {
     const pack = await createTag('风险')
-    assert.equal(pack.id, 'facet-3')
+    assert.equal(pack.id, 'tag-3')
     assert.equal(pack.label, '风险')
-    assert.equal(tagLabel('facet-3'), '风险')
-    assert.equal(loadTags().some((item) => item.id === 'facet-3' && item.label === '风险'), true)
+    assert.equal(tagLabel('tag-3'), '风险')
+    assert.equal(loadTags().some((item) => item.id === 'tag-3' && item.label === '风险'), true)
   } finally {
     globalThis.fetch = originalFetch
   }

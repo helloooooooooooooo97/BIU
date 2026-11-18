@@ -10,7 +10,6 @@ import { peekRecord, subscribeCrumbs } from './view-storage.ts'
 import { showRecordInInspector } from './inspector-db-route.ts'
 
 export const TAGS_KEY = 'fsdb.tags'
-const LEGACY_TAGS_KEY = 'fsdb.facets'
 
 let memory: CollectionSchemaPack[] | null = null
 let filledMemory: Record<string, Record<string, number>> = {}
@@ -93,7 +92,7 @@ export function subscribeTags(_collectionPath: string | undefined, fn: () => voi
 export function loadTags(_collectionPath?: string): CollectionSchemaPack[] {
   if (memory) return memory
   try {
-    memory = parseTags(JSON.parse(localStorage.getItem(TAGS_KEY) ?? localStorage.getItem(LEGACY_TAGS_KEY) ?? '[]'))
+    memory = parseTags(JSON.parse(localStorage.getItem(TAGS_KEY) ?? '[]'))
     return memory
   } catch {
     memory = []
@@ -121,7 +120,6 @@ function adoptTags(next: CollectionSchemaPack[]) {
   try {
     localStorage.setItem(TAGS_KEY, JSON.stringify(next))
     try {
-      localStorage.removeItem(LEGACY_TAGS_KEY)
     } catch {
       /* ignore */
     }
@@ -131,8 +129,8 @@ function adoptTags(next: CollectionSchemaPack[]) {
   emit()
 }
 
-export async function persistTags(facets: CollectionSchemaPack[], _collectionPath?: string) {
-  const incoming = parseTags(facets)
+export async function persistTags(tags: CollectionSchemaPack[], _collectionPath?: string) {
+  const incoming = parseTags(tags)
   const res = await fetch('/api/db/tags', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -172,16 +170,16 @@ export async function createTag(title: string): Promise<CollectionSchemaPack> {
 export async function pullTags(_collectionPath?: string, opts?: { filled?: boolean }) {
   try {
     const res = await fetch(opts?.filled ? '/api/db/tags?filled=1' : '/api/db/tags')
-    const body = (await res.json()) as { tags?: unknown[]; facets?: unknown[]; filled?: unknown }
-    const listed = body.tags ?? body.facets
+    const body = (await res.json()) as { tags?: unknown[]; filled?: unknown }
+    const listed = body.tags
     if (!res.ok || !Array.isArray(listed)) return loadTags()
-    const facets = parseTags(listed)
+    const tags = parseTags(listed)
     adoptFilled(body.filled)
     const prev = JSON.stringify(memory ?? [])
-    const next = JSON.stringify(facets)
-    if (prev !== next) adoptTags(facets)
-    else memory = facets
-    return facets
+    const next = JSON.stringify(tags)
+    if (prev !== next) adoptTags(tags)
+    else memory = tags
+    return tags
   } catch {
     /* ignore */
   }
@@ -206,7 +204,7 @@ export function slugTagId(label: string, used: Set<string>) {
   return id
 }
 
-export function randomFacetFieldKey(used: Set<string>) {
+export function randomTagFieldKey(used: Set<string>) {
   const blocked = new Set([...used, ...Object.keys(BUILTIN_FIELDS)])
   for (let i = 0; i < 64; i++) {
     const key = String((Math.random() * 0x7fffffff) | 0)
@@ -222,7 +220,7 @@ export function randomFacetFieldKey(used: Set<string>) {
 }
 
 export function fieldKeyFromLabel(_label: string, used: Set<string>) {
-  return randomFacetFieldKey(used)
+  return randomTagFieldKey(used)
 }
 
 export function tagFieldLabelOk(label: string, usedLabels: Iterable<string> = []) {
@@ -239,7 +237,7 @@ export function registerTagFieldKey(
 ): string | null {
   if (!tagFieldLabelOk(label, used.labels ?? [])) return null
   const usedKeys = new Set(used.keys ?? [])
-  const key = randomFacetFieldKey(usedKeys)
+  const key = randomTagFieldKey(usedKeys)
   if (usedKeys.has(key)) return null
   return key
 }

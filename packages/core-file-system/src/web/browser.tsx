@@ -65,6 +65,7 @@ import {
 } from './fields.ts'
 import { createdRowGroupKey, placeCreatedRow } from './group-insert.ts'
 import { seedGroupRecord } from './group-create.ts'
+import { collectionListCachePath } from './list-cache-scope.ts'
 import { listAttributeGroups, listGroupedCollection } from './group-list.ts'
 import { TREE_HAS_KIDS, listTreeChildren, listTreeCollection, treeRootFilter } from './tree-list.ts'
 import { AppDialog, CheckRow, LocalText } from './controls.tsx'
@@ -739,7 +740,7 @@ function isListColumn(key: string) {
   return key !== 'description' && key !== 'notes' && key !== 'content' && key !== 'emoji' && key !== 'banner' && key !== 'tags'
 }
 
-/** Saved view columns stay until we know the field is gone. Facet / share overlay keys are not schema fields. */
+/** Saved view columns stay until we know the field is gone. Tag / share overlay keys are not schema fields. */
 function retainSavedColumn(key: string, schema: CollectionSchema | undefined, allColumnKeys: string[]) {
   if (key === 'actions' || key === 'shareScope' || key === 'shareRole') return true
   if (key === 'createdBy' || key === 'updatedBy' || key === 'createdAt' || key === 'updatedAt') return true
@@ -1581,8 +1582,11 @@ export function CollectionBrowser({
     )
   }
   const dataPath = collectionPath
-  const [stat, setStat] = useState<StatResult | null>(() => peekListCache(dataPath, routeViewId)?.stat ?? null)
-  const [items, setItems] = useState<Array<DbRecord & { path?: string }>>(() => peekListCache(dataPath, routeViewId)?.items ?? [])
+  const cachePath = collectionListCachePath(dataPath, sheet, lockedFilters)
+  const peekBrowserCache: typeof peekListCache = (path, viewId, minLimit) =>
+    peekListCache(collectionListCachePath(path, sheet, lockedFilters), viewId, minLimit)
+  const [stat, setStat] = useState<StatResult | null>(() => peekBrowserCache(dataPath, routeViewId)?.stat ?? null)
+  const [items, setItems] = useState<Array<DbRecord & { path?: string }>>(() => peekBrowserCache(dataPath, routeViewId)?.items ?? [])
   const [error, setError] = useState('')
   const [openDetailId, setOpenDetailId] = useState<string | null>(routeRecordId)
   const [detailRow, setDetailRow] = useState<DbRecord | null>(null)
@@ -1641,7 +1645,7 @@ export function CollectionBrowser({
     }
   }, [])
   const [pageSize, setPageSize] = useState(() => normalizePageSize(initialView?.pageSize))
-  const [total, setTotal] = useState(() => peekListCache(dataPath, routeViewId)?.total ?? 0)
+  const [total, setTotal] = useState(() => peekBrowserCache(dataPath, routeViewId)?.total ?? 0)
   const [fetchQuery, setFetchQuery] = useState(initialView?.query ?? '')
   const [mode, setMode] = useState<ViewMode>(initialView?.mode ?? 'table')
   const customView = extraViews.find((view) => view.id === mode)
@@ -1711,7 +1715,7 @@ export function CollectionBrowser({
   useEffect(() => {
     tableAutoLandLiveRef.current()
   })
-  const [tagCatalog, setFacetCatalog] = useState(() => loadTags())
+  const [tagCatalog, setTagCatalog] = useState(() => loadTags())
   const tablePathsKey = tables
     .map((table) => table.path)
     .slice()
@@ -1828,7 +1832,7 @@ export function CollectionBrowser({
   }, [activeViewId, collectionPath, groupBy, routeViewId])
   const [groupPages, setGroupPages] = useState<Record<string, number>>({})
   const [groupFillKeys, setGroupFillKeys] = useState<string[]>([])
-  const [groupBuckets, setGroupBuckets] = useState<GroupBucket[]>(() => peekListCache(dataPath, routeViewId)?.groupBuckets ?? [])
+  const [groupBuckets, setGroupBuckets] = useState<GroupBucket[]>(() => peekBrowserCache(dataPath, routeViewId)?.groupBuckets ?? [])
   const [paintedPath, setPaintedPath] = useState(dataPath)
   const tablePaintSnapshotRef = useRef<TableHoldSnap | null>(null)
   const tableHoldRef = useRef<TableHoldSnap | null>(null)
@@ -1841,7 +1845,7 @@ export function CollectionBrowser({
   const pendingPathQueryRef = useRef<PendingPathQuery | null>(null)
   const adoptListCacheForViewRef = useRef<(path: string, view: SavedView | null | undefined) => void>(() => undefined)
   adoptListCacheForViewRef.current = (path, view) => {
-    const cached = view ? peekListCache(path, view.id, normalizePageSize(view.pageSize)) : undefined
+    const cached = view ? peekBrowserCache(path, view.id, normalizePageSize(view.pageSize)) : undefined
     if (cached) {
       const snap = listHoldFromCache(cached, view, path)
       tableHoldRef.current = snap
@@ -1876,7 +1880,7 @@ export function CollectionBrowser({
       adoptListCacheForViewRef.current(path, view)
       return
     }
-    const cached = peekListCache(path, view?.id, normalizePageSize(view?.pageSize))
+    const cached = peekBrowserCache(path, view?.id, normalizePageSize(view?.pageSize))
     if (cached) {
       tableHoldRef.current = listHoldFromCache(cached, view, path)
       return
@@ -1894,7 +1898,7 @@ export function CollectionBrowser({
     const listed = paintListedViews(collectionPath)
     rememberViews(collectionPath, listed)
     const next = stored || listed[0] ? pickViewForRoute(listed, collectionPath, routeViewId) || stored || listed[0] : null
-    const cached = peekListCache(dataPath, next?.id, normalizePageSize(next?.pageSize))
+    const cached = peekBrowserCache(dataPath, next?.id, normalizePageSize(next?.pageSize))
     const adoptView = (view: SavedView | null | undefined, schema?: CollectionSchema) => {
       if (!view) {
         setViews([])
@@ -2062,7 +2066,7 @@ export function CollectionBrowser({
   >(null)
   const [bulkEditKey, setBulkEditKey] = useState('')
   const [bulkEditRaw, setBulkEditRaw] = useState('')
-  const [bulkFacetIds, setBulkFacetIds] = useState<string[]>([])
+  const [bulkTagIds, setBulkTagIds] = useState<string[]>([])
   const crumbRef = useRef<HTMLElement>(null)
   const viewRef = useRef<HTMLDivElement>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
@@ -2395,7 +2399,7 @@ export function CollectionBrowser({
         if (hit) setDetailRow((prev) => (prev?.id === openId ? overlayListed(prev, hit, listColumns) : prev))
       }
       rememberListCache(
-        dataPath,
+        cachePath,
         {
           items: listed.items,
           total: listed.total,
@@ -2431,7 +2435,7 @@ export function CollectionBrowser({
         void reloadRef.current({ force: true })
       }
     }
-  }, [activeViewId, collectionPath, customView, dataPath, tagCatalog, fetchQuery, groupBy, groupFillKeys, listColumns, listIdentityKey, queryFilters, page, pageSize, reloadKey, sortDir, sortField, sorts, wrapCells, showTree])
+  }, [activeViewId, cachePath, collectionPath, customView, dataPath, tagCatalog, fetchQuery, groupBy, groupFillKeys, listColumns, listIdentityKey, queryFilters, page, pageSize, reloadKey, sortDir, sortField, sorts, wrapCells, showTree])
   const reloadRef = useRef(reload)
   reloadRef.current = reload
   const detailIdRef = useRef<string | null>(null)
@@ -2580,7 +2584,7 @@ export function CollectionBrowser({
     setRouteViewReady((prev) => (prev === !pendingRouteView ? prev : !pendingRouteView))
     const holding = Boolean(tableHoldRef.current)
     const holdingRows = holding && tableHoldRef.current?.nodes !== EMPTY_HOLD_NODES
-    const destCached = peekListCache(dataPath, routeViewId, pageSize)
+    const destCached = peekBrowserCache(dataPath, routeViewId, pageSize)
     if (!holdingRows && !destCached) {
       listReadySent.current = false
       pageRef.current?.removeAttribute('data-list-ready')
@@ -2591,7 +2595,7 @@ export function CollectionBrowser({
     setCollapsed((prev) => (Object.keys(prev).length ? {} : prev))
     setTreeKidsByParent((prev) => (Object.keys(prev).length ? {} : prev))
     treeKidsInflight.current = new Set()
-    const cached = peekListCache(dataPath, routeViewId, pageSize)
+    const cached = peekBrowserCache(dataPath, routeViewId, pageSize)
     setItems(cached?.items ?? [])
     setStat(cached?.stat ?? null)
     setTotal(cached?.total ?? 0)
@@ -2733,7 +2737,7 @@ export function CollectionBrowser({
     }
   }, [nested])
 
-  useEffect(() => subscribeTags(undefined, () => setFacetCatalog(loadTags())), [])
+  useEffect(() => subscribeTags(undefined, () => setTagCatalog(loadTags())), [])
 
   useEffect(() => {
     const onMode = (event: Event) => {
@@ -2891,9 +2895,9 @@ export function CollectionBrowser({
         if (key === 'actions') return { key, kind: 'action' as const, field: { type: 'action' as const, label: '动作' } }
         if (key === 'shareScope') return { key, kind: 'select' as const, field: { type: 'select' as const, label: '分享' } }
         if (key === 'shareRole') return { key, kind: 'select' as const, field: { type: 'select' as const, label: '权限' } }
-        const facet = parseTagFlatColumnKey(key)
-        if (facet) {
-          return { key, kind: 'select' as const, field: { type: 'select' as const, label: facet.fieldKey }, packId: facet.packId }
+        const tag = parseTagFlatColumnKey(key)
+        if (tag) {
+          return { key, kind: 'select' as const, field: { type: 'select' as const, label: tag.fieldKey }, packId: tag.packId }
         }
         return null
       })
@@ -3353,6 +3357,9 @@ export function CollectionBrowser({
     }
   }, [collectionPath, crumbFromData, detailId, detailRow])
   useEffect(() => {
+    // A sheet shows source records, not tag definitions. Publishing its stamped
+    // IDs under /tags overwrites the outer tag list's breadcrumb records.
+    if (sheet) return
     const rows = items.map((row) => ({
       id: row.id,
       label: crumbRecordLabel(row, schema?.labelField),
@@ -3369,7 +3376,7 @@ export function CollectionBrowser({
     }
     rememberRecords(collectionPath, rows, routeViewId ?? activeViewId ?? undefined)
     window.dispatchEvent(new Event('fsdb:crumb-labels'))
-  }, [activeViewId, collectionPath, items, routeViewId, schema?.labelField, selected])
+  }, [activeViewId, collectionPath, items, routeViewId, schema?.labelField, selected, sheet])
   const filterActive = countFilterRules(filterTree) > 0
   const activeView = views.find((view) => view.id === activeViewId)
   const sortCustom = isCustomSorts(
@@ -4554,7 +4561,7 @@ export function CollectionBrowser({
     }
   }
 
-  async function executeBulkFacet(ids: string[], addTags: string[]) {
+  async function executeBulkTag(ids: string[], addTags: string[]) {
     if (!addTags.length) return
     const rows = items.filter((row) => ids.includes(row.id))
     try {
@@ -6303,7 +6310,7 @@ export function CollectionBrowser({
                                 className="tasks-sort-item fsdb-tool-row"
                                 data-testid="fsdb-bulk-tag"
                                 onClick={() => {
-                                  setBulkFacetIds([])
+                                  setBulkTagIds([])
                                   setDlg({ kind: 'bulk-tag', ids: pickedIds })
                                   setBulkMenuOpen(false)
                                 }}
@@ -6343,7 +6350,7 @@ export function CollectionBrowser({
               </span>
             ) : null}
           </div>
-          <div className="tasks-toolbar-right" ref={toolbarRightRef}>
+          <div className={`tasks-toolbar-right${searchExpanded ? ' is-searching' : ''}`} ref={toolbarRightRef}>
             {viewsSaveError ? (
               <div className="fsdb-views-error" role="alert">
                 <span>视图没有保存到数据库，本地仍是上一次成功保存的状态。请重试。</span>
@@ -6395,6 +6402,8 @@ export function CollectionBrowser({
               ) : null}
             </div>
             </HeadlessDismiss>
+            {!searchExpanded ? (
+            <>
             <div className="tasks-sort-wrap" ref={modeRef}>
               <button
                 type="button"
@@ -6807,6 +6816,8 @@ export function CollectionBrowser({
                 </HeadlessDismiss>
                 )}
               </div>
+            ) : null}
+            </>
             ) : null}
           </div>
         </div>
@@ -7266,19 +7277,19 @@ export function CollectionBrowser({
         <AppDialog
           title={`标签 · ${dlg.ids.length} 条`}
           confirm="贴上"
-          disabled={!bulkFacetIds.length}
+          disabled={!bulkTagIds.length}
           onCancel={() => setDlg(null)}
           onConfirm={() => {
             const { ids } = dlg
-            const tags = bulkFacetIds
+            const tags = bulkTagIds
             setDlg(null)
-            void executeBulkFacet(ids, tags)
+            void executeBulkTag(ids, tags)
           }}
           body={
             loadTags().length ? (
               <div className="fsdb-bulk-form">
                 {loadTags().map((pack) => {
-                  const on = bulkFacetIds.includes(pack.id)
+                  const on = bulkTagIds.includes(pack.id)
                   return (
                     <CheckRow
                       key={pack.id}
@@ -7286,7 +7297,7 @@ export function CollectionBrowser({
                       icon={<TagIcon aria-hidden className="size-[14px]" />}
                       on={on}
                       onToggle={() =>
-                        setBulkFacetIds((prev) => (on ? prev.filter((id) => id !== pack.id) : [...prev, pack.id]))
+                        setBulkTagIds((prev) => (on ? prev.filter((id) => id !== pack.id) : [...prev, pack.id]))
                       }
                     />
                   )

@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { CollectionBrowser } from './browser.tsx'
 import { stampRowOpenTarget } from '../catalog-views.ts'
@@ -21,6 +22,7 @@ export function TagCollectBoard({
   openRecord?: (recordId: string, collection?: string) => void
 }) {
   const tagId = String(record.id ?? '').trim()
+  const lockedFilters = useMemo(() => ({ tagId }), [tagId])
   if (!tagId || tagId.includes('::')) return null
   return (
     <div className="fsdb-tag-collect" data-testid="fsdb-tag-collect">
@@ -31,7 +33,7 @@ export function TagCollectBoard({
         collectionPath={TAGS_COLLECTION_PATH}
         title={String(record.title ?? tagId)}
         blurb=""
-        lockedFilters={{ tagId }}
+        lockedFilters={lockedFilters}
         onOpenRow={(row) => {
           const stamp = stampRowOpenTarget(row)
           if (stamp) openRecord?.(stamp.recordId, stamp.collection)

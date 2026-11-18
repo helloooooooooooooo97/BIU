@@ -5,7 +5,7 @@ import { TagStore } from './tags-store.ts'
 import { tagsCollection } from './tags-collection.ts'
 import { RecordViewsStore, wrapCollectionRecordViews } from './record-views.ts'
 
-test('tagsCollection lists facets with stamp counts and supports create/update/delete', async () => {
+test('tagsCollection lists tags with stamp counts and supports create/update/delete', async () => {
   const store = new TagStore()
   store.replace([{ id: 'dp', label: '动态规划', fields: [{ key: 'complexity', type: 'string' }] }])
   store.indexRecord('/pages', 'home', '首页', ['dp'])

@@ -111,7 +111,7 @@ export function ShareViewQueryBar({
       }}
     >
       <div className="tasks-toolbar-left" />
-      <div className="tasks-toolbar-right">
+      <div className={`tasks-toolbar-right${searchExpanded ? ' is-searching' : ''}`}>
         <HeadlessDismiss
           enabled={searchExpanded}
           onDismiss={() => {
@@ -141,6 +141,8 @@ export function ShareViewQueryBar({
             ) : null}
           </div>
         </HeadlessDismiss>
+        {!searchExpanded ? (
+        <>
         <div className="tasks-sort-wrap" ref={modeRef}>
           <button
             type="button"
@@ -314,6 +316,8 @@ export function ShareViewQueryBar({
             <ArrowPathIcon aria-hidden className={`size-[14px]${refreshing ? ' fsdb-spin' : ''}`} />
           </button>
         </div>
+        </>
+        ) : null}
       </div>
     </div>
   )

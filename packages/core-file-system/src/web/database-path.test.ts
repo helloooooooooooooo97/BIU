@@ -70,7 +70,7 @@ test('views catalog source is a query filter', () => {
   assert.equal(viewsCatalogSource(''), '')
 })
 
-test('members and views are system collections; blocks and facets are index data', () => {
+test('members and views are system collections; blocks and tags are index data', () => {
   assert.equal(isSystemCollection('/workspace-members'), true)
   assert.equal(isSystemCollection('/views'), true)
   assert.equal(isSystemCollection('/tags'), false)

@@ -22,7 +22,6 @@ test('mention id encodes collection kind for jump targets', () => {
   assert.equal(mentionHref('page/p1'), '/database/pages/record/p1')
   assert.equal(mentionHref('session/abc'), '/agents/abc')
   assert.deepEqual(mentionReveal('tag/f1'), { collection: '/tags', recordId: 'f1', unique: true })
-  assert.deepEqual(mentionReveal('facet/f1'), { collection: '/tags', recordId: 'f1', unique: true })
   assert.equal(decodeMentionId('nope'), null)
 })
 
@@ -41,7 +40,7 @@ test('mention suggestion inserts pickChip when the schema has it', () => {
   assert.equal((mentionOnly[0] as { attrs: { label?: string } }).attrs.label, undefined)
 })
 
-test('fetchMentionItems lists pages tasks facets and sessions', async () => {
+test('fetchMentionItems lists pages tasks tags and sessions', async () => {
   const seen: string[] = []
   const orig = globalThis.fetch
   globalThis.fetch = (async (input: RequestInfo | URL) => {

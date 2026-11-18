@@ -45,7 +45,7 @@ export function parseMentionId(id: string) {
   const slash = text.indexOf('/')
   if (slash <= 0) return null
   const rawKind = text.slice(0, slash)
-  const kind = (rawKind === 'facet' ? 'tag' : rawKind) as MentionKind
+  const kind = rawKind as MentionKind
   const recordId = text.slice(slash + 1).trim()
   if (!(kind in MENTION_KIND_PATH) || !recordId) return null
   return { kind, recordId }

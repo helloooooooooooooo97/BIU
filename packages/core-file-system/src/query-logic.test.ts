@@ -182,7 +182,7 @@ test('seedRecordFromViewFilters skips scope / neq and unknown tag locks', () => 
   assert.deepEqual(seed.tags, ['bug'])
 })
 
-test('seedRecordFromViewFilters takes the first OR branch and writes facet tags', () => {
+test('seedRecordFromViewFilters takes the first OR branch and writes tag tags', () => {
   const tree = emptyFilterGroup()
   tree.combinator = 'or'
   tree.children = [

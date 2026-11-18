@@ -4,7 +4,6 @@ import { asPersonList, isTagFieldType, normalizeSchemaValue, personKey } from '@
 export const TAG_FLAT_PREFIX = 'tag::'
 
 export function parseTagFlatColumnKey(key: string): { packId: string; fieldKey: string } | null {
-  if (key.startsWith('facet::')) key = `tag::${key.slice('facet::'.length)}`
   if (!key.startsWith(TAG_FLAT_PREFIX)) return null
   const rest = key.slice(TAG_FLAT_PREFIX.length)
   const split = rest.indexOf('::')

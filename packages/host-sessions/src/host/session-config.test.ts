@@ -25,7 +25,7 @@ test('session config title overrides derived title', async () => {
   assert.equal(again.config?.title, '指挥台-A')
 })
 
-test('session config stores facet and pin; legacy tags become facet', async () => {
+test('session config stores tag and pin; legacy tags become tag', async () => {
   const ctx = new Context()
   await ctx.plugin(sessionStore, { driver: 'memory' })
   await ctx.plugin(sessions)

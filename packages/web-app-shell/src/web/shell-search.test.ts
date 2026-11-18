@@ -56,7 +56,7 @@ test('searchHref opens the left main pane by changing the route', () => {
   assert.equal(searchHref({ kind: 'tag', id: 'f1' }), '/database/tags/record/f1')
 })
 
-test('search hits collect 标签 from facet.tags and config.tag.tags', () => {
+test('search hits collect 标签 from tag.tags and config.tag.tags', () => {
   assert.deepEqual(tagsFromRecord({ tags: ['a', 'b'] }), [])
   assert.deepEqual(tagsFromRecord({ tag: { tags: ['dp'] } }), ['dp'])
   assert.deepEqual(tagsFromRecord({ config: { tag: { tags: ['host-ui'] } } }), ['host-ui'])
@@ -141,7 +141,7 @@ test('search hit icons follow record mark: emoji, else session mascot', () => {
   assert.match(src, /scrollIntoView\(\{ block: 'nearest' \}\)/)
 })
 
-test('facet search scope is named 标签 with tag icon', () => {
+test('tag search scope is named 标签 with tag icon', () => {
   const src = readFileSync(resolve(import.meta.dirname, './shell-search.tsx'), 'utf8')
   assert.match(src, /label: '视图'/)
   assert.match(src, /kind === 'view'[\s\S]*return <TableCellsIcon/)

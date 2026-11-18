@@ -1192,7 +1192,7 @@ export class DatabaseService extends Service implements Database {
           recordId: target.id,
         }
         if (collection === '/tags' && !String(row.sourceId ?? '') && !String(row.tablePath ?? '')) {
-          return this.indexFacetVisible(String(row.id ?? ''), actor.accountId)
+          return this.indexTagVisible(String(row.id ?? ''), actor.accountId)
         }
         if (authorization.authorize(actor, action, resource).allowed) return true
         const viaView = this.viewGrantRole(actor.workspaceId, collection, row, actor.accountId)
@@ -1223,7 +1223,7 @@ export class DatabaseService extends Service implements Database {
   }
 
   /** 标签目录只留下当前用户能读到的源记录上贴过的标签；还没贴到公开数据上的，只留给创建人。 */
-  private indexFacetVisible(id: string, accountId: string) {
+  private indexTagVisible(id: string, accountId: string) {
     const found = this.tags.collect(id)
     for (const item of found.items) {
       if (this.tags.isDeleted(item.collection, item.id)) continue
@@ -1415,7 +1415,7 @@ export class DatabaseService extends Service implements Database {
         if (
           spec.path === '/tags' &&
           (action === 'resource:read' || action === 'resource:list') &&
-          this.indexFacetVisible(id, actor.accountId)
+          this.indexTagVisible(id, actor.accountId)
         ) {
           return
         }
@@ -1637,14 +1637,9 @@ export class DatabaseService extends Service implements Database {
     const wanted = pack.fields.filter((field) => !field.deleted && !STAMP_FIELD_BLOCKLIST.has(field.key))
     if (!wanted.length) return
     for (const row of rows) {
-      const collection = String(row.tablePath ?? '')
-      const id = String(row.sourceId ?? '')
-      const spec = collection ? this.collection(collection) : undefined
-      if (!spec || !id) continue
-      const found = await spec.get(id)
-      if (!found) continue
-      const record = this.decorateRecord(spec, found)
-      const bag = normalizeSchemaValue(record.tag).values[pack.id] ?? {}
+      // stampRows already reads canonical tag values from the source index.
+      // Re-reading every source record here turns each detail refresh into N reads.
+      const bag = normalizeSchemaValue(row.tag).values[pack.id] ?? {}
       for (const field of wanted) {
         if (bag[field.key] !== undefined) row[field.key] = bag[field.key]
       }
@@ -1889,9 +1884,7 @@ export class DatabaseService extends Service implements Database {
     const sortDir = page?.sortDir === 'desc' ? 'desc' : 'asc'
     const schemaFilter = typeof filter?.tag === 'string' && filter.tag !== ''
       ? filter.tag
-      : typeof filter?.facet === 'string' && filter.facet !== ''
-        ? filter.facet
-        : ''
+      : ''
     const scopeFilter = filter?.$scope === 'workspace' || filter?.$scope === 'personal' || filter?.$scope === 'shared' ? filter.$scope : ''
     const columnKeys = listedColumnKeys(page?.columns, schema.labelField ?? 'title', schema)
     const trash = filter?.deleted === true || filter?.trash === true
@@ -2304,17 +2297,21 @@ export class DatabaseService extends Service implements Database {
 
   private applyTagOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
     if (!schemaFor(spec).fields.tag) return row
-    let overlay = this.tags.recordTag(spec.path, row.id)
+    // Collected rows are projections, not records owned by /tags. Never write
+    // them back to /tags: that would collect the projection again on each read.
+    const stamp = spec.path === '/tags' ? parseStampRecordId(row.id) : null
+    let overlay = this.tags.recordTag(stamp?.collection ?? spec.path, stamp?.recordId ?? row.id)
     if (!overlay && row.tag != null) {
       const value = normalizeSchemaValue(row.tag)
-      if (!isEmptySchemaValue(value)) overlay = this.persistRecordTag(spec, row.id, value, row)
+      if (!isEmptySchemaValue(value)) overlay = stamp ? value : this.persistRecordTag(spec, row.id, value, row)
     }
     if (!overlay) return row
     return { ...row, tag: pruneSchemaValue(overlay, this.tags.list()) }
   }
 
   private applyMetaOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
-    let meta = this.tags.recordMeta(spec.path, row.id)
+    const stamp = spec.path === '/tags' ? parseStampRecordId(row.id) : null
+    const meta = this.tags.recordMeta(stamp?.collection ?? spec.path, stamp?.recordId ?? row.id)
     if (!meta) return row
     return {
       ...row,
@@ -2383,7 +2380,6 @@ export class DatabaseService extends Service implements Database {
     if (!current) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
     this.assertLiveRecord(spec, current.id, 'resource:update', current)
     const bannerPatch = takeBannerPatch(raw)
-    if ('facet' in raw && !('tag' in raw)) raw.tag = raw.facet
     if ('tag' in raw && schema.fields.tag) {
       if (!schema.fields.tag.writable || schema.fields.tag.computed) throw new Error(`field not writable: tag`)
       raw.tag = coerceTagPatch(raw.tag, normalizeSchemaValue(this.decorateRecord(spec, current).tag), (id) =>
@@ -2550,7 +2546,6 @@ export class DatabaseService extends Service implements Database {
       const bannerPatch = takeBannerPatch(row)
       banners.push(bannerPatch.present ? bannerPatch.value : undefined)
       requestedIds.push(takeRequestedRecordId(row))
-      if ('facet' in row && !('tag' in row)) row.tag = row.facet
       if ('tag' in row && schema.fields.tag) {
         row.tag = coerceTagPatch(row.tag, emptySchemaValue(), (id) => this.tags.get(id))
       }
@@ -2642,9 +2637,7 @@ export class DatabaseService extends Service implements Database {
     const listQuery: CollectionListQuery = { q, filter, ids: query.ids }
     const schemaFilter = typeof filter?.tag === 'string' && filter.tag !== ''
       ? filter.tag
-      : typeof filter?.facet === 'string' && filter.facet !== ''
-        ? filter.facet
-        : ''
+      : ''
     if (schemaFilter && schema.fields.tag && spec.path !== '/tags') {
       const stamped = this.tags.stampedIds(spec.path, schemaFilter)
       if (!stamped.size) return { kind: 'deleted' as const, path: spec.path, ids: [] as string[] }
@@ -3462,10 +3455,10 @@ export function apply(ctx: Context) {
   })
   const shares = db.shares
   shares.open(process.env.VITEST ? ':memory:' : biuSqlitePath())
-  const facets = db.tags
+  const tags = db.tags
   db.register(dataCollection(() => db.collectionsList()))
   db.register(viewsCollection(savedViews, () => db.collectionsList().map((item) => db.publishCollection(item)), () => currentAccountId()))
-  db.register(tagsCollection(facets, () => db.collectionsList().map((item) => ({
+  db.register(tagsCollection(tags, () => db.collectionsList().map((item) => ({
     id: item.id,
     path: item.path,
     label: item.label ?? item.id,
@@ -4530,10 +4523,10 @@ export function apply(ctx: Context) {
         return
       }
       const q = route.query.get('q') || ''
-      const payload: { tags: ReturnType<typeof facets.list>; filled?: ReturnType<typeof facets.filledFieldCounts> } = {
-        tags: facets.list(q),
+      const payload: { tags: ReturnType<typeof tags.list>; filled?: ReturnType<typeof tags.filledFieldCounts> } = {
+        tags: tags.list(q),
       }
-      if (route.query.get('filled')) payload.filled = facets.filledFieldCounts()
+      if (route.query.get('filled')) payload.filled = tags.filledFieldCounts()
       route.send(200, payload)
     } catch (error) {
       route.send(400, { error: String(error) })
@@ -4542,14 +4535,14 @@ export function apply(ctx: Context) {
   ctx.http.route('POST', '/api/db/tags', async (route) => {
     try {
       await db.requirePath('/tags', 'resource:update')
-      const body = (await route.json()) as { tags?: unknown[]; facets?: unknown[] }
-      const listed = Array.isArray(body.tags) ? body.tags : Array.isArray(body.facets) ? body.facets : []
+      const body = (await route.json()) as { tags?: unknown[] }
+      const listed = Array.isArray(body.tags) ? body.tags : []
       for (const item of listed) {
         const pack = normalizeSchemaPack(item)
-        if (pack) facets.upsert(pack)
+        if (pack) tags.upsert(pack)
       }
       db.notifyTagCatalog()
-      route.send(200, { ok: true, tags: facets.list() })
+      route.send(200, { ok: true, tags: tags.list() })
     } catch (error) {
       route.send(400, { error: String(error) })
     }

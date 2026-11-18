@@ -221,7 +221,7 @@ describe('composer dock stacking above sticky user', () => {
     expect(css).toMatch(/\.composer-pill\.has-chips[\s\S]*border-radius:\s*var\(--biu-radius-lg\)/)
   })
 
-  it('uses facet tones for pick chips and dock controls, not the plus', () => {
+  it('uses tag tones for pick chips and dock controls, not the plus', () => {
     const css = cssBundle()
     const chip = readFileSync(resolve(root, 'packages/core-pick/src/web/chip.tsx'), 'utf8')
     const node = readFileSync(resolve(root, 'packages/core-chat/src/web/composer-pick-node.tsx'), 'utf8')

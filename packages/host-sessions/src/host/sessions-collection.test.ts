@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { formatUserMessagesForTitle, lastUserMessages, sanitizeGeneratedTitle, sessionsCollection } from './sessions-collection.ts'
 
-test('sessionsCollection maps summaries and writes title/pinned/facet', async () => {
+test('sessionsCollection maps summaries and writes title/pinned/tag', async () => {
   const calls: unknown[] = []
   const spec = sessionsCollection({
     listSummaries: async () => [

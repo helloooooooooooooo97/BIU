@@ -12,7 +12,7 @@ test('share clipboard includes the pin when password is on', () => {
   assert.equal(shareClipboardText('https://x/share/a', '482901'), 'https://x/share/a\n密码 482901')
 })
 
-test('collectShareResources splits page files, plugins and facets', () => {
+test('collectShareResources splits page files, plugins and tags', () => {
   const stats = collectShareResources(
     [{ id: 'p000', title: '讲义' }],
     {

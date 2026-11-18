@@ -242,7 +242,7 @@ flowchart TB
   API --> L["Plugin<br/>/plugins"]
   API --> P["Page<br/>/pages"]
   API --> C["Component<br/>/editor-blocks"]
-  API --> F["Facet<br/>/facets"]
+  API --> F["Tag<br/>/tags"]
 ```
 
 每个都回答同样三个问题：**它是什么、人怎么用、Agent 怎么用。**
@@ -390,7 +390,7 @@ $ db_list /editor-blocks filter.plugin=page-algorithm
 `/tags` 把这件事翻过来：**维度自己也是表里的行。**
 
 ```bash
-db_create /facets records=[{title:"获奖"}]                     # 新维度，零代码
+db_create /tags records=[{title:"获奖"}]                     # 新维度，零代码
 db_update /tags/获奖 {fields:[{key:"name",type:"string"},    # 维度自带 schema
                                 {key:"year",type:"number"}]}
 
@@ -465,7 +465,7 @@ db_create /agents   ← 造一个 Agent
 db_create /tasks      ← 造一个任务
 db_create /pages      ← 造一页内容
 db_create /skills     ← 造一个技能
-db_create /facets     ← 造一个维度
+db_create /tags     ← 造一个维度
 db_create /plugins    ← 造一个能力（唯一需要 pack 的，因为它是代码）
 ```
 

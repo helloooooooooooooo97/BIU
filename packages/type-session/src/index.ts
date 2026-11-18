@@ -263,7 +263,7 @@ export function normalizeSessionConfig(value: unknown): SessionConfig | undefine
   if (Array.isArray(raw.extraTools)) {
     next.extraTools = [...new Set(raw.extraTools.map((name) => String(name).trim()).filter(Boolean))]
   }
-  const tag = absorbLegacySessionTags(asSessionTag(raw.tag ?? raw.facet), raw.tags)
+  const tag = absorbLegacySessionTags(asSessionTag(raw.tag), raw.tags)
   if (tag) next.tag = tag
   if (typeof raw.pinned === 'boolean') next.pinned = raw.pinned
   if (typeof raw.emoji === 'string') next.emoji = raw.emoji

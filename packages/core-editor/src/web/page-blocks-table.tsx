@@ -183,7 +183,7 @@ function BlockEmbed({ editor, pos }: { editor: Editor; pos: number }) {
   )
 }
 
-type FacetOption = { id: string; label: string }
+type TagOption = { id: string; label: string }
 
 function collectionFromPath(path?: string) {
   const raw = String(path ?? '').trim()
@@ -192,8 +192,8 @@ function collectionFromPath(path?: string) {
   return name ? `/${name}` : ''
 }
 
-function useFacetCatalog() {
-  const [tags, setTags] = useState<FacetOption[]>([])
+function useTagCatalog() {
+  const [tags, setTags] = useState<TagOption[]>([])
   useEffect(() => {
     let gone = false
     void fetch('/api/db/list?path=/tags&limit=200')
@@ -205,7 +205,7 @@ function useFacetCatalog() {
           items.map((item: { id?: unknown; label?: unknown; title?: unknown }) => {
             const id = String(item.id ?? '').trim()
             return { id, label: String(item.label || item.title || id).trim() || id }
-          }).filter((item: FacetOption) => item.id),
+          }).filter((item: TagOption) => item.id),
         )
       })
       .catch(() => {})
@@ -216,13 +216,13 @@ function useFacetCatalog() {
   return tags
 }
 
-export function pageBlockFacetPath(collection: string, pageId: string, blockId: string) {
+export function pageBlockTagPath(collection: string, pageId: string, blockId: string) {
   const id = pageBlockRecordId(collection, pageId, blockId)
   if (!parsePageBlockRecordId(id)) return null
   return `/editor-blocks/${id}`
 }
 
-function BlockFacetCell({
+function BlockTagCell({
   collection,
   pageId,
   blockId,
@@ -233,9 +233,9 @@ function BlockFacetCell({
   pageId: string
   blockId: string
   writable: boolean
-  catalog: FacetOption[]
+  catalog: TagOption[]
 }) {
-  const recordPath = pageBlockFacetPath(collection, pageId, blockId)
+  const recordPath = pageBlockTagPath(collection, pageId, blockId)
   const [value, setValue] = useState<SchemaFieldValue>({ tags: [], values: {} })
   const [open, setOpen] = useState(false)
   useEffect(() => {
@@ -375,7 +375,7 @@ export function PageBlocksTable({
   const collection = collectionFromPath(path)
   const fallback = recordContentFallback(collection)
   const view = useActiveRecordLayout(collection, recordId, fallback)
-  const catalog = useFacetCatalog()
+  const catalog = useTagCatalog()
   const [openIds, setOpenIds] = useState<string[]>([])
   const openRef = useRef(openIds)
   openRef.current = openIds
@@ -471,7 +471,7 @@ function FragmentRow({
   collection: string
   pageId: string
   writable: boolean
-  catalog: FacetOption[]
+  catalog: TagOption[]
   onToggle: () => void
 }) {
   return (
@@ -487,7 +487,7 @@ function FragmentRow({
           <div className="page-blocks-table-content">{row.label}</div>
         </td>
         <td>
-          <BlockFacetCell collection={collection} pageId={pageId} blockId={row.id} writable={writable} catalog={catalog} />
+          <BlockTagCell collection={collection} pageId={pageId} blockId={row.id} writable={writable} catalog={catalog} />
         </td>
       </tr>
       {open ? (

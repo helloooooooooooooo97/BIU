@@ -50,7 +50,7 @@ test('list and detail share the chat column max width with side padding', () => 
   assert.match(css, /\.fsdb-detail-aside \.fsdb-prop-tr\.is-tag-fold \.fsdb-proprow-k\{[^}]*padding-top:0/)
   assert.match(css, /\.fsdb-detail-aside \.fsdb-prop-tr\.is-tag-fold \.fsdb-prop-val\.is-schema\{[^}]*padding-top:0/)
   assert.match(css, /\.fsdb-detail-aside \.fsdb-prop-tr\.is-tag-fold \.fsdb-prop-val\.is-schema>\.fsdb-pop-host[\s\S]*?min-height:22px/)
-  assert.match(css, /\.fsdb-detail-aside \.fsdb-prop-tr\.is-tag-fold:not\(\.is-open\) \.fsdb-prop-val\.is-schema>\.fsdb-pop-host[\s\S]*?padding-top:0/)
+  assert.match(css, /\.fsdb-detail-aside \.fsdb-prop-tr\.is-tag-fold \.fsdb-prop-val\.is-schema>\.fsdb-pop-host[^}]*min-height:calc\(32px - var\(--biu-stroke-width\)\)[^}]*padding:4px 6px/)
   assert.match(
     css,
     /\.fsdb-prop-tr\.is-tag-fold\.is-open \.fsdb-schema:has\(\.fsdb-schema-pack\)>\.fsdb-pop-host[\s\S]*?align-items:center/,
@@ -60,13 +60,13 @@ test('list and detail share the chat column max width with side padding', () => 
     /\.fsdb-prop-tr\.is-tag-fold\.is-open \.fsdb-schema:has\(\.fsdb-schema-pack\)>\.fsdb-pop-host[\s\S]*?padding:4px 6px/,
   )
   assert.match(css, /\.fsdb-proprow\.is-tag-fold \.fsdb-proprow-k,\.fsdb-prop-tr\.is-tag-fold \.fsdb-proprow-k\{[^}]*padding-top:0/)
-  assert.match(css, /\.fsdb-page \.fsdb-detail-aside \.tasks-table\.is-wrap \.fsdb-prop-tr\.is-tag-fold:not\(\.is-open\) td\{[^}]*vertical-align:middle/)
+  assert.match(css, /\.fsdb-page \.tasks-table \.fsdb-prop-tr\.is-tag-fold td:first-child\{[^}]*vertical-align:top[^}]*padding-top:4px/)
   assert.match(css, /\.fsdb-page \.fsdb-detail-aside \.tasks-table\.is-wrap \.fsdb-prop-tr\.is-tag-fold\.is-open:has\(\.fsdb-schema-pack\) td\{[^}]*vertical-align:top/)
   assert.match(css, /\.fsdb-detail-aside \.fsdb-prop-tr\.is-tag-fold \.fsdb-schema\{[^}]*gap:0/)
   assert.match(css, /\.fsdb-detail-aside \.fsdb-prop-tr\.is-tag-fold\.is-open \.fsdb-schema-pack\{[^}]*padding-top:0/)
   assert.match(css, /\.fsdb-schema-pack\{[^}]*padding:0/)
-  assert.match(css, /\.fsdb-page \.tasks-table \.fsdb-prop-tr\.is-tag-fold\.is-open:has\(\.fsdb-schema-pack\) td:last-child\{[^}]*padding:0/)
-  assert.match(css, /\.fsdb-page \.tasks-table \.fsdb-prop-tr\.is-tag-fold\.is-open:has\(\.fsdb-schema-pack\) td:first-child\{[^}]*padding-top:4\.5px/)
+  assert.match(css, /\.fsdb-page \.fsdb-detail-aside \.tasks-table \.fsdb-prop-tr\.is-tag-fold td:last-child\{[^}]*padding:0/)
+  assert.match(css, /\.fsdb-page \.tasks-table \.fsdb-prop-tr\.is-tag-fold td:first-child\{[^}]*padding-top:4px/)
   assert.match(css, /\.fsdb-page \.tasks-table \.fsdb-prop-tr\.is-open:has\(\.fsdb-schema-pack\) td\{[^}]*height:auto/)
   assert.match(css, /\.fsdb-page \.tasks-table \.fsdb-prop-tr td\{[^}]*height:32px/)
   assert.match(css, /\.fsdb-schema-pack-head\{[^}]*min-height:32px/)
@@ -330,7 +330,7 @@ test('share and role chips match tag chip height', () => {
   assert.match(tag, /\.biu-tag\{[^}]*height:var\(--biu-space-5\)/)
 })
 
-test('detail share role and facet chips use table cell ink; leftover 13px/400 is biu-ui .biu-tag', () => {
+test('detail share role and tag chips use table cell ink; leftover 13px/400 is biu-ui .biu-tag', () => {
   const tag = readFileSync(resolve(import.meta.dirname, '../../../biu-ui/src/tag-chip.tsx'), 'utf8')
   assert.match(tag, /\.biu-tag\{[^}]*padding:0 var\(--biu-pad-chip-x\)/)
   assert.match(css, /\.fsdb-scope-tag\{[^}]*padding:0 var\(--biu-pad-chip-x\)/)
@@ -367,7 +367,7 @@ test('empty select cells fill the table cell so a click opens the tag menu', () 
   assert.match(css, /td:has\(\.db-cell-multi\.is-empty\) \.db-cell-multi\.is-empty[\s\S]*?inset:0/)
 })
 
-test('detail facet value host fills the cell so a click beside the tag opens the pop', () => {
+test('detail tag value host fills the cell so a click beside the tag opens the pop', () => {
   assert.match(css, /\.fsdb-page \.fsdb-detail-aside \.tasks-table\.is-wrap \.fsdb-pop-host[\s\S]*?width:100%/)
   assert.match(css, /\.fsdb-page \.fsdb-detail-aside \.tasks-table\.is-wrap \.fsdb-schema>\.fsdb-pop-host[\s\S]*?width:100%/)
 })

@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { mergeSessionConfig, normalizeSessionConfig } from './index.ts'
 
-test('normalizeSessionConfig folds legacy tags into facet and drops tags', () => {
+test('normalizeSessionConfig folds legacy tags into tag and drops tags', () => {
   const next = normalizeSessionConfig({
     title: 'A',
     tags: ['host-ui', 'bug', 'host-ui'],

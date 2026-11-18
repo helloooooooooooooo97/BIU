@@ -40,14 +40,14 @@ test('tag grouping keys come from attached tag ids and use pack labels', () => {
   )
 })
 
-test('groupListKeys uses facet packs without waiting for collection schema', () => {
+test('groupListKeys uses tag packs without waiting for collection schema', () => {
   const key = tagFlatColumnKey('haohao', 'mood')
   const listed = groupListKeys(undefined, key, [], packs)
   assert.ok(listed.some((item) => item.key === 'ok'))
   assert.ok(listed.some((item) => item.key === 'meh'))
 })
 
-test('facet pack menus only list groupable kinds, including number intervals', () => {
+test('tag pack menus only list groupable kinds, including number intervals', () => {
   const keys = groupableFields(schema, packs).map((item) => item.key)
   assert.equal(keys.includes('tag'), true)
   assert.equal(keys.includes(tagFlatColumnKey('haohao', 'mood')), true)
@@ -58,7 +58,7 @@ test('facet pack menus only list groupable kinds, including number intervals', (
   assert.equal('number' in GROUP_STRATEGIES, true)
 })
 
-test('number facet fields group by interval, not distinct values', () => {
+test('number tag fields group by interval, not distinct values', () => {
   const key = tagFlatColumnKey('haohao', 'count')
   assert.equal(groupField(schema, key, packs)?.key, key)
   const rows = [

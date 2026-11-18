@@ -1121,8 +1121,8 @@ test('apply registers db_* tools', async () => {
   assert.match(String(views?.view?.blurb ?? ''), /db_list \/views/)
   assert.match(String(views?.view?.blurb ?? ''), /filterTree/)
   assert.match(String(views?.view?.blurb ?? ''), /kind":"rule"/)
-  const facets = items.find((item) => item.path === '/tags')
-  assert.match(String(facets?.view?.blurb ?? ''), /db_list \/tags/)
+  const tags = items.find((item) => item.path === '/tags')
+  assert.match(String(tags?.view?.blurb ?? ''), /db_list \/tags/)
 })
 
 test('db_create tool ignores empty companion records instead of creating blank rows', async () => {
@@ -1655,7 +1655,7 @@ test('trash collection lists deleted rows and restore/delete actions', async () 
   assert.equal(gone.items.length, 0)
 })
 
-test('facet catalog is workspace-wide and collect uses sqlite stamps', async () => {
+test('tag catalog is workspace-wide and collect uses sqlite stamps', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
   db.register(notesCollection())
@@ -1682,7 +1682,7 @@ test('facet catalog is workspace-wide and collect uses sqlite stamps', async () 
   assert.deepEqual(collected.items.map((item) => item.path).sort(), ['/notes/n1', '/pages/p1'])
 })
 
-test('listing /facets with tag filter returns stamped records as a table', async () => {
+test('listing /tags with tag filter returns stamped records as a table', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
   db.register(notesCollection())
@@ -1700,7 +1700,7 @@ test('listing /facets with tag filter returns stamped records as a table', async
   assert.deepEqual(listed.schema.columns, ['title', 'table', 'complexity'])
 })
 
-test('facet list filter asks the collection only for stamped ids', async () => {
+test('tag list filter asks the collection only for stamped ids', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
   const rows = new Map<string, Record<string, unknown>>([
@@ -1739,7 +1739,7 @@ test('facet list filter asks the collection only for stamped ids', async () => {
   assert.equal(filtered.items[0]?.id, 'a')
 })
 
-test('facet schema can be written on tables that cannot update other fields', async () => {
+test('tag schema can be written on tables that cannot update other fields', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
   const rows = new Map<string, Record<string, unknown>>([['p1', { id: 'p1', title: 'Demo' }]])
@@ -1814,20 +1814,20 @@ test('writeContent can persist intro on tables that cannot update other fields',
   assert.equal(body.value, '# Demo\n')
 })
 
-test('facet records can be read by title after catalog replace', async () => {
+test('tag records can be read by title after catalog replace', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
   db.register(tagsCollection(db.tags))
-  db.tags.replace([{ id: 'facet-3', label: '测试', fields: [] }])
-  const byId = await db.read('/tags/facet-3')
+  db.tags.replace([{ id: 'tag-3', label: '测试', fields: [] }])
+  const byId = await db.read('/tags/tag-3')
   const byTitle = await db.read('/tags/测试')
   assert.equal(byId.kind, 'record')
   assert.equal(byTitle.kind, 'record')
   if (byId.kind === 'record') assert.equal(byId.value.title, '测试')
-  if (byTitle.kind === 'record') assert.equal(byTitle.value.id, 'facet-3')
+  if (byTitle.kind === 'record') assert.equal(byTitle.value.id, 'tag-3')
 })
 
-test('db_update /tags writes facet field packs', async () => {
+test('db_update /tags writes tag field packs', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
   db.register(tagsCollection(db.tags))
@@ -1879,7 +1879,7 @@ test('db_update /tags writes facet field packs', async () => {
   assert.equal(read.value, '# 标签说明')
 })
 
-test('db_update page facet stores flat property values on the stamp', async () => {
+test('db_update page tag stores flat property values on the stamp', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
   const pages = new Map<string, Record<string, unknown>>([['p1', { id: 'p1', title: '爱乐之城' }]])
@@ -2740,10 +2740,10 @@ test('index rows follow the user records each person can read and omit share', a
   const blockStat = await runWithAccount(ada.id, () => db.stat('/editor-blocks'))
   if (blockStat.kind === 'collection') assert.equal(blockStat.schema.fields.shareScope, undefined)
 
-  const adaFacets = await runWithAccount(ada.id, () => db.list('/tags'))
-  const bobFacets = await runWithAccount(bob.id, () => db.list('/tags'))
-  assert.deepEqual(adaFacets.items.map((row) => row.id).sort(), [hiddenId, shownId].sort())
-  assert.deepEqual(bobFacets.items.map((row) => row.id), [shownId])
+  const adaTags = await runWithAccount(ada.id, () => db.list('/tags'))
+  const bobTags = await runWithAccount(bob.id, () => db.list('/tags'))
+  assert.deepEqual(adaTags.items.map((row) => row.id).sort(), [hiddenId, shownId].sort())
+  assert.deepEqual(bobTags.items.map((row) => row.id), [shownId])
   const bobStamps = await runWithAccount(bob.id, () => db.list('/tags', { tagId: hiddenId }))
   assert.equal(bobStamps.items.length, 0)
   const adaStamps = await runWithAccount(ada.id, () => db.list('/tags', { tagId: hiddenId }))
@@ -3209,7 +3209,7 @@ test('list with columns skips shareRole decorate', async () => {
   assert.equal(full.items[0]?.shareRole, '管理')
 })
 
-test('spec.list query keeps facet and session filters and drops group filters', () => {
+test('spec.list query keeps tag and session filters and drops group filters', () => {
   assert.deepEqual(specListQuery({ q: 'hi', trash: true, ids: ['a'], filter: { status: 'open', $scope: 'personal' } }), {
     q: 'hi',
     trash: true,
@@ -3344,7 +3344,7 @@ test('collection list preloads authorization scans and releases them', () => {
   assert.match(host, /databaseChannelPayload\('asset'/)
   assert.match(host, /if \(viewOnly\) this\.notifyViewCatalog\(`\$\{spec\.path\}\/\$\{record\.id\}`\)/)
   assert.match(host, /else this\.bump\(\)/)
-  assert.doesNotMatch(host, /db\.bump\(\)\s*\n\s*route\.send\(200, \{ ok: true, tags: facets\.list\(\), filled:/)
+  assert.doesNotMatch(host, /db\.bump\(\)\s*\n\s*route\.send\(200, \{ ok: true, tags: tags\.list\(\), filled:/)
   assert.match(host, /listRecords\(collection\)/)
   assert.match(host, /shareInflight/)
   assert.match(host, /setImmediate\(\(\) => \{\s*setImmediate/)
@@ -3559,4 +3559,32 @@ test('group create persists the custom tag attribute through the real creation p
   if (listed.kind !== 'collection') throw new Error('expected collection')
   assert.equal(listed.total, 1)
   assert.deepEqual((listed.items[0].tag as { tags: string[] }).tags, ['security'])
+})
+
+test('tag detail refreshes after emoji edits never re-index collected pages as tags', async () => {
+  const db = new DatabaseService(new Context())
+  const pages = Array.from({ length: 100 }, (_, i) => ({ id: `p${i}`, title: `页面 ${i}` }))
+  let sourceReads = 0
+  db.register({ id: 'pages', path: '/pages', schema: { fields: { ...REQUIRED_RECORD_FIELDS } },
+    list: () => pages, get: id => { sourceReads++; return pages.find(row => row.id === id) ?? null },
+  })
+  db.register(tagsCollection(db.tags))
+  db.tags.upsert({ id: 'stress', label: '性能压测', fields: [{ key: 'lane', type: 'string' }] })
+  for (const row of pages) db.tags.writeRecordTag('/pages', row.id, {
+    tags: ['stress'], values: { stress: { lane: 'test' } },
+  }, row.title)
+  for (const emoji of ['🔥', '🎯', '🚀']) {
+    await db.update('/tags/stress', { emoji })
+    const listed = await db.list('/tags', { tagId: 'stress' }, { limit: 20 })
+    assert.equal(listed.kind, 'collection')
+    if (listed.kind !== 'collection') continue
+    assert.equal(listed.total, 100)
+    assert.equal(listed.items[0]?.lane, 'test')
+    assert.equal(db.tags.collect('stress').items.length, 100, 'reads must not add synthetic stamp rows')
+    assert.ok(db.tags.collect('stress').items.every(row => row.collection === '/pages'))
+    const tags = await db.list('/tags')
+    assert.equal(tags.items.length, 1)
+    assert.equal(tags.items[0]?.id, 'stress')
+  }
+  assert.equal(sourceReads, 0, 'indexed tag attributes do not load every page before pagination')
 })

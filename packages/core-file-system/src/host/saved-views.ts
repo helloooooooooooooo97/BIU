@@ -389,7 +389,7 @@ export class SavedViewsStore {
 }
 
 /**
- * 标签表（/facets 这类索引表）的视图按创建人分开存，同一个 viewId 可能属于多个账号。
+ * 标签表（/tags 这类索引表）的视图按创建人分开存，同一个 viewId 可能属于多个账号。
  * 只在当前账号名下的视图里找，避免把别人的视图当成「未知视图」或误改误删。
  */
 function findView(views: StoredView[], path: string, viewId: string, accountId: string) {

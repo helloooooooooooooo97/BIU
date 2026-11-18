@@ -534,9 +534,9 @@ export function resolveGroupField(
 ): { key: string; field: FieldSpec; grain?: GroupGrain } | null {
   const parsed = parseGroupByKey(preferred)
   if (!parsed.fieldKey) return null
-  const facet = parseTagFlatColumnKey(parsed.fieldKey)
-  const field = facet
-    ? packs.find((pack) => pack.id === facet.packId)?.fields.find((item) => item.key === facet.fieldKey)
+  const tag = parseTagFlatColumnKey(parsed.fieldKey)
+  const field = tag
+    ? packs.find((pack) => pack.id === tag.packId)?.fields.find((item) => item.key === tag.fieldKey)
     : schema?.fields[parsed.fieldKey]
   if (!field) return null
   const kind = fieldKind(field)

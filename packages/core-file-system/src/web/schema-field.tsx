@@ -389,10 +389,10 @@ export function SchemaFieldEditor({
     liveRef.current = normalizeSchemaValue(value)
   }, [record.id])
   const [catalog, setCatalog] = useState(() => loadTags())
-  const [, setFacetMarks] = useState(0)
+  const [, setTagMarks] = useState(0)
 
   useEffect(() => subscribeTags(undefined, () => setCatalog(loadTags())), [])
-  useEffect(() => subscribeCrumbs(() => setFacetMarks((n) => n + 1)), [])
+  useEffect(() => subscribeCrumbs(() => setTagMarks((n) => n + 1)), [])
 
   const shown = pruneSchemaValue(parsed, catalog)
   const selected = useMemo(

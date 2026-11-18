@@ -348,8 +348,8 @@ export const BUILTIN_FIELD_KEYS = ['id', 'createdAt', 'updatedAt', 'content', 'e
 
 export const RESERVED_SCHEMA_FIELD_KEYS = Object.keys(BUILTIN_FIELDS)
 
-/** 已去掉的 tags 记录列，禁止再登记同名列。旧字段名 facet 一并封掉。 */
-const DROPPED_SCHEMA_FIELDS: Record<string, string> = { tags: '标签', facet: '标签' }
+/** 已去掉的 tags 记录列，禁止再登记同名列。 */
+const DROPPED_SCHEMA_FIELDS: Record<string, string> = { tags: '标签' }
 
 /** 标签属性 key：可与显示名相同（含中文）。禁止空、控制符、路径分隔和 tag:: 列分隔。 */
 export function isSchemaFieldKey(key: string) {
@@ -397,7 +397,7 @@ export const ATOMIC_FIELD_TYPES = [
 export const TAG_PROPERTY_TYPES = ATOMIC_FIELD_TYPES.filter((type) => type !== 'file')
 
 export function isTagFieldType(type: unknown): boolean {
-  return type === 'tag' || type === 'facet'
+  return type === 'tag'
 }
 
 export function isRefFieldType(type: unknown): type is 'ref' | 'multi-ref' {
@@ -617,7 +617,7 @@ export function recordBuiltinValues(row: Record<string, unknown> = {}) {
     createdAt: created,
     updatedAt: updated,
     emoji: String(row.emoji ?? ''),
-    tag: normalizeSchemaValue(row.tag ?? row.facet),
+    tag: normalizeSchemaValue(row.tag),
     parentId,
     dependsOn,
     createdBy: asPerson(row.createdBy),
@@ -659,8 +659,6 @@ export function withBuiltinFields(
   if (!next.emoji) next.emoji = BUILTIN_FIELDS.emoji
   else if (!next.emoji.computed) next.emoji = { ...BUILTIN_FIELDS.emoji, ...next.emoji, writable: true }
   delete next.tags
-  if (next.facet && !next.tag) next.tag = { ...next.facet, type: 'tag' }
-  delete next.facet
   if (!next.tag) next.tag = BUILTIN_FIELDS.tag
   else next.tag = { ...BUILTIN_FIELDS.tag, ...next.tag, type: 'tag' }
   if (!next.parentId) next.parentId = BUILTIN_FIELDS.parentId

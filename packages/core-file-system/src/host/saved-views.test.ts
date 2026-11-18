@@ -154,7 +154,7 @@ test('index collection views stay with the account that saved them', async () =>
   let who = 'ada'
   const spec = viewsCollection(
     store,
-    () => [{ path: '/tags', id: 'facets', kind: 'collection', label: '标签', view: { moduleId: 'facets', route: '/tags', title: '标签' } }],
+    () => [{ path: '/tags', id: 'tags', kind: 'collection', label: '标签', view: { moduleId: 'tags', route: '/tags', title: '标签' } }],
     () => who,
   )
   const adaRows = await spec.list()
@@ -163,7 +163,7 @@ test('index collection views stay with the account that saved them', async () =>
   who = 'bob'
   const bobRows = await spec.list()
   assert.deepEqual(bobRows.map((row) => row.viewId).filter((id) => id !== builtinAllViewId('/tags')), ['bob-view'])
-  await assert.rejects(() => spec.remove!({ ids: ['facets::ada-view'] }), /unknown view/)
+  await assert.rejects(() => spec.remove!({ ids: ['tags::ada-view'] }), /unknown view/)
 })
 
 test('update and delete accept row ids (table::viewId) and keep the source table label', async () => {
@@ -188,15 +188,15 @@ test('update of another account view on an index collection stays unknown', asyn
   const spec = (account: string) =>
     viewsCollection(
       store,
-      () => [{ path: '/tags', id: 'facets', kind: 'collection', label: '标签', view: { moduleId: 'facets', route: '/tags', title: '标签' } }],
+      () => [{ path: '/tags', id: 'tags', kind: 'collection', label: '标签', view: { moduleId: 'tags', route: '/tags', title: '标签' } }],
       () => account,
     )
   spec('ada').create!([{ tablePath: '/tags', viewId: 'ada-view', title: 'Ada 的标签' }])
   assert.equal(store.viewsFor('/tags', 'bob').length, 0)
-  assert.throws(() => store.write('facets::ada-view', { title: '抢改' }, 'bob'), /unknown view/)
-  assert.throws(() => spec('bob').update!('facets::ada-view', { title: '抢改' }), /unknown view/)
-  await assert.rejects(() => spec('bob').remove!({ ids: ['facets::ada-view'] }), /unknown view/)
-  assert.equal(spec('ada').update!('facets::ada-view', { title: 'Ada 改' }).title, 'Ada 改')
+  assert.throws(() => store.write('tags::ada-view', { title: '抢改' }, 'bob'), /unknown view/)
+  assert.throws(() => spec('bob').update!('tags::ada-view', { title: '抢改' }), /unknown view/)
+  await assert.rejects(() => spec('bob').remove!({ ids: ['tags::ada-view'] }), /unknown view/)
+  assert.equal(spec('ada').update!('tags::ada-view', { title: 'Ada 改' }).title, 'Ada 改')
   assert.equal(store.viewsFor('/tags', 'ada')[0]?.name, 'Ada 改')
 })
 

@@ -15,7 +15,7 @@ test('type pack fields cannot reuse file-system keys or labels', () => {
   assert.equal(registerTagFieldKey('复杂度', { keys: [ok!], labels: ['复杂度'] }), null)
 })
 
-test('facet chips jump to the tag record like parent and depend chips', () => {
+test('tag chips jump to the tag record like parent and depend chips', () => {
   const catalog = readFileSync(resolve(import.meta.dirname, './tag-catalog.ts'), 'utf8')
   const schemaUi = readFileSync(resolve(import.meta.dirname, './schema-field.tsx'), 'utf8')
   const cells = readFileSync(resolve(import.meta.dirname, './fsdb-cells.tsx'), 'utf8')
@@ -31,7 +31,7 @@ test('facet chips jump to the tag record like parent and depend chips', () => {
   assert.match(pop, /\.biu-tag-wrap/)
 })
 
-test('detail facet cell opens FieldValuePop unless the click is on a tag', () => {
+test('detail tag cell opens FieldValuePop unless the click is on a tag', () => {
   const schemaUi = readFileSync(resolve(import.meta.dirname, './schema-field.tsx'), 'utf8')
   const pop = readFileSync(resolve(import.meta.dirname, './field-value-pop.tsx'), 'utf8')
   const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
@@ -50,14 +50,14 @@ test('tag pack editor hard-deletes a property without a restore row', () => {
   assert.doesNotMatch(schemaUi, /retired\.map/)
 })
 
-test('facet pack property chips use the field glyph instead of the tag icon', () => {
+test('tag pack property chips use the field glyph instead of the tag icon', () => {
   const schemaUi = readFileSync(resolve(import.meta.dirname, './schema-field.tsx'), 'utf8')
   assert.match(schemaUi, /icon=\{icon \?\? tagChipIcon\(id\)\}/)
   assert.match(schemaUi, /icon=\{<FieldGlyph kind=\{field\.type\} \/>\}/)
   assert.match(schemaUi, /data-testid="fsdb-tag-fields"/)
 })
 
-test('facet tag label appends the live property count', () => {
+test('tag tag label appends the live property count', () => {
   assert.equal(tagPropertyCount({ fields: [{}, { deleted: true }, {}] }), 2)
   assert.equal(tagChipLabel({ id: 'need', label: '需求', fields: [{}, {}, {}] }), '需求 3')
   assert.equal(tagChipLabel(undefined, '需求'), '需求 0')

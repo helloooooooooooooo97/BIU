@@ -106,9 +106,9 @@ export const COMPARE_PAGES: ComparePage[] = [
     biuWhen: 'You need to combine software on one page for clients or teams, add properties without changing the source table, organize the same data from multiple angles, grant access by conditions instead of lists, or let agents read and write the workspace',
     columns: ['Notion', 'BIU'],
     rows: [
-      { dimension: 'Adding information to data', them: '⚠️ Changes the database schema and affects every row; system tables cannot be changed', biu: '✅ Attach a facet: the property lives outside the record, leaves the source table unchanged, and affects only attached records—any record can use one' },
-      { dimension: 'Organizing one record', them: '⚠️ A page belongs to one database; multiple perspectives require relations, rollups, or copies', biu: '✅ A record can carry multiple facets, and one facet can span different tables' },
-      { dimension: 'Filtering by property', them: '✅ Database views can filter by properties', biu: '✅ Views can filter by facet fields' },
+      { dimension: 'Adding information to data', them: '⚠️ Changes the database schema and affects every row; system tables cannot be changed', biu: '✅ Attach a tag: the property lives outside the record, leaves the source table unchanged, and affects only attached records—any record can use one' },
+      { dimension: 'Organizing one record', them: '⚠️ A page belongs to one database; multiple perspectives require relations, rollups, or copies', biu: '✅ A record can carry multiple tags, and one tag can span different tables' },
+      { dimension: 'Filtering by property', them: '✅ Database views can filter by properties', biu: '✅ Views can filter by tag fields' },
       { dimension: 'What a page can contain', them: '⚠️ Notion defines the block types; embedded sites are iframes with no workspace data access', biu: '✅ Installable plugins provide blocks that people and agents can build; plugins on one page share data, making the page a complete service' },
       { dimension: 'What gets shared', them: 'Page content and links', biu: '✅ Content, attachments, and plugin source are packaged together and work when opened' },
       { dimension: 'Data location', them: '⚠️ Primarily cloud-based; offline access is limited to previously downloaded pages', biu: '✅ Choose local or cloud when creating a space; local spaces work offline' },

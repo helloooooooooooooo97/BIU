@@ -17,6 +17,7 @@ import {
   AdjustmentsHorizontalIcon,
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
+import { usePageFind } from './page-view-state.ts'
 import { useStickyToolbar } from './sticky-toolbar.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 import {
@@ -72,6 +73,7 @@ export function RecordDetailBar({
   onRetry,
   configMenu,
 }: FsDetailBarProps) {
+  const find = usePageFind(record.id)
   const path = String(collectionPath ?? '').trim()
   const fallback = recordContentFallback(path)
   const layouts = useRecordLayouts(path, record.id, fallback)
@@ -335,8 +337,10 @@ export function RecordDetailBar({
           ) : null}
         </div>
       </div>
-      <div className="tasks-toolbar-right">
+      <div className={`tasks-toolbar-right${find.open ? ' is-searching' : ''}`}>
         {detailTools.Search ? <detailTools.Search record={record} collectionPath={path} /> : null}
+        {!find.open ? (
+        <>
         <div className="tasks-sort-wrap" ref={propRef}>
             <button
               type="button"
@@ -808,6 +812,8 @@ export function RecordDetailBar({
               </div>
             </HeadlessDismiss>
           </div>
+        </>
+        ) : null}
       </div>
     </div>
   )

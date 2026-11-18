@@ -93,7 +93,7 @@ function entryFromRow(db: DatabaseSync, row: TagRow): TagEntry | null {
   }
 }
 
-const FACET_ROW_SQL = 'id, label, fields_json, created_at, updated_at'
+const TAG_ROW_SQL = 'id, label, fields_json, created_at, updated_at'
 
 /** 分面目录由 File System 用 SQLite 管：目录 + 跨表倒排，查询不扫全表。 */
 export class TagStore {
@@ -107,7 +107,27 @@ export class TagStore {
     this.ensurePersonMetaColumns()
     this.ensureDeletedAtColumn()
     this.ensureBannerTable()
+    this.removeCollectedRowIndexes()
     return this
+  }
+
+  /** Repair old read-side indexing of synthetic /tags/<collection>::<id> rows. */
+  private removeCollectedRowIndexes() {
+    // These rows are derived projections; real tag definitions and all source
+    // records are retained, including any legacy tag definition with this ID.
+    const db = this.db!
+    db.exec('SAVEPOINT repair_collected_tag_indexes')
+    try {
+      for (const table of ['tag_stamps', 'tag_record_values', 'tag_group_values']) {
+        db.exec(`DELETE FROM ${table} WHERE collection = '/tags' AND instr(record_id, '::') > 0
+          AND NOT EXISTS (SELECT 1 FROM tags WHERE tags.id = ${table}.record_id)`)
+      }
+      db.exec('RELEASE repair_collected_tag_indexes')
+    } catch (error) {
+      db.exec('ROLLBACK TO repair_collected_tag_indexes')
+      db.exec('RELEASE repair_collected_tag_indexes')
+      throw error
+    }
   }
 
   private ensureGroupIndexTables() {
@@ -388,12 +408,12 @@ export class TagStore {
       q
         ? (db
             .prepare(
-              `SELECT ${FACET_ROW_SQL} FROM tags
+              `SELECT ${TAG_ROW_SQL} FROM tags
                WHERE instr(lower(id), ?) > 0 OR instr(lower(label), ?) > 0
                ORDER BY label`,
             )
             .all(q, q) as TagRow[])
-        : (db.prepare(`SELECT ${FACET_ROW_SQL} FROM tags ORDER BY label`).all() as TagRow[])
+        : (db.prepare(`SELECT ${TAG_ROW_SQL} FROM tags ORDER BY label`).all() as TagRow[])
     )
     return rows
       .map((row) => entryFromRow(db, row))
@@ -413,7 +433,7 @@ export class TagStore {
     const want = String(idOrLabel ?? '').trim()
     if (!want) return null
     const row = this.ensure()
-      .prepare(`SELECT ${FACET_ROW_SQL} FROM tags WHERE id = ? OR label = ? LIMIT 1`)
+      .prepare(`SELECT ${TAG_ROW_SQL} FROM tags WHERE id = ? OR label = ? LIMIT 1`)
       .get(want, want) as TagRow | undefined
     return row ? entryFromRow(this.ensure(), row) : null
   }
@@ -451,7 +471,7 @@ export class TagStore {
     return pack
   }
 
-  removeFacet(id: string): boolean {
+  removeTag(id: string): boolean {
     const db = this.ensure()
     const want = String(id ?? '').trim()
     if (!want) return false

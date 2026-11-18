@@ -429,9 +429,7 @@ export function RecordDetail({
                   record={selected}
                   Icon={chrome?.Icon}
                   onChange={(next) => {
-                    void Promise.resolve(writePatch(selected, { emoji: next })).then(() => {
-                      window.dispatchEvent(new Event('fsdb:change'))
-                    })
+                    void writePatch(selected, { emoji: next })
                   }}
                   locked={readOnly}
                 />
@@ -534,9 +532,9 @@ export function RecordDetail({
                   ) : null}
                   {propertyEntries.map(([key, field]) => {
                     const kind = resolveFieldType(field)
-                    const facet = kind === 'tag'
+                    const tag = kind === 'tag'
                     const packFields = key === 'fields' && collectionPath === TAGS_COLLECTION_PATH
-                    const fold = facet || packFields
+                    const fold = tag || packFields
                     return (
                       <PropertyRow
                         key={key}

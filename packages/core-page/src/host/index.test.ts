@@ -237,7 +237,7 @@ export default function App() { return <div>旧</div> }
   assert.equal(blocks.remove, undefined)
 })
 
-test('page-blocks get synthesizes a row for any block id so facets can attach', async () => {
+test('page-blocks get synthesizes a row for any block id so tags can attach', async () => {
   const ctx = new Context()
   const registered: CollectionSpec[] = []
   class FakeDb extends Service {
@@ -250,7 +250,7 @@ test('page-blocks get synthesizes a row for any block id so facets can attach', 
   }
   new FakeDb(ctx)
   await ctx.plugin(tools)
-  const root = await mkdtemp(join(tmpdir(), 'page-block-facet-'))
+  const root = await mkdtemp(join(tmpdir(), 'page-block-tag-'))
   await ctx.plugin(fsPlugin, { root })
   await ctx.plugin(page)
   const pages = registered.find((item) => item.path === '/pages')!

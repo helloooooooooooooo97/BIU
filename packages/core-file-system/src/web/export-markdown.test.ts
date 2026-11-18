@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { contentToMarkdown, markdownFileName, recordMatter, recordToMarkdown, zipMarkdownPack } from './export-markdown.ts'
 
-test('yaml carries tags, times, and filled facet values', () => {
+test('yaml carries tags, times, and filled tag values', () => {
   const md = recordToMarkdown(
     {
       id: 'p1',

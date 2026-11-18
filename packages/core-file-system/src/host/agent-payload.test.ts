@@ -112,7 +112,7 @@ test('compact record read omits schema', () => {
   assert.deepEqual(read.value, { id: 'n1', title: '草稿' })
 })
 
-test('compact list keeps empty facet columns', () => {
+test('compact list keeps empty tag columns', () => {
   const listed = pack.query({
     kind: 'collection',
     path: '/pages',

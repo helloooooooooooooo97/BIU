@@ -167,7 +167,7 @@ test('tag collect table lives on the record board, not as sidebar views', () => 
   assert.doesNotMatch(chrome, /panes:/)
   assert.match(detail, /TagPackEditor/)
   assert.match(collect, /sheet/)
-  assert.match(collect, /lockedFilters=\{\{ tagId \}\}/)
+  assert.match(collect, /lockedFilters=\{lockedFilters\}/)
   assert.match(collect, /openRow: collectOpenRow/)
   assert.match(collect, /chrome=\{collectChrome\}/)
   assert.match(collect, /<CollectionBrowser/)
@@ -199,7 +199,7 @@ test('tag collect table lives on the record board, not as sidebar views', () => 
   assert.match(browser, /field\.type !== 'file'/)
   assert.match(browser, /setDetailRow\(\(prev\) => \(prev\?\.id === row.id \? merge\(prev\) : prev\)\)/)
   assert.doesNotMatch(views, /normalized === '\/views'/)
-  assert.doesNotMatch(views, /normalized === '\/facets'/)
+  assert.doesNotMatch(views, /normalized === '\/tags'/)
   const viewsUi = readFileSync(resolve(import.meta.dirname, './views-chrome.ts'), 'utf8')
   assert.match(viewsUi, /openRow/)
   assert.match(viewsUi, /mergeCatalogViews/)
@@ -246,7 +246,7 @@ test('record detail falls back to the shared property sandbox host', () => {
   assert.doesNotMatch(host, /page-tag-host-source/)
 })
 
-test('detail facet property sits last, starts collapsed, and the glyph becomes a fold control on hover', () => {
+test('detail tag property sits last, starts collapsed, and the glyph becomes a fold control on hover', () => {
   const detail = readFileSync(resolve(import.meta.dirname, './record-detail.tsx'), 'utf8')
   const row = readFileSync(resolve(import.meta.dirname, './property-row.tsx'), 'utf8')
   const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
@@ -272,7 +272,7 @@ test('detail facet property sits last, starts collapsed, and the glyph becomes a
   assert.match(css, /\.fsdb-schema-prop-k\.is-rename\{/)
   assert.match(css, /\.fsdb-right-body:has\(> \* > \.fsdb-workspace > \.fsdb-pager\)/)
   assert.match(css, /\.fsdb-right-body:has\(\.fsdb-detail-stage\)\{[^}]*overflow:auto/)
-  assert.doesNotMatch(detail, /stacked=\{facet && tagOpen\}/)
+  assert.doesNotMatch(detail, /stacked=\{tag && tagOpen\}/)
   assert.doesNotMatch(detail, /\bsetTagOpen\b/)
   assert.doesNotMatch(detail, /\btagOpen\b/)
   assert.match(detail, /const nextVisible = visibleColumnsKey \? visibleColumnsKey.split/)

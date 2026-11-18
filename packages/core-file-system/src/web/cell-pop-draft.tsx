@@ -117,7 +117,7 @@ export function TagPickPanel({
   )
 }
 
-async function applyFacetTags(parsed: SchemaFieldValue, catalog: CollectionSchemaPack[], nextIds: string[]) {
+async function applySelectedTags(parsed: SchemaFieldValue, catalog: CollectionSchemaPack[], nextIds: string[]) {
   let packs = catalog
   const used = new Set(packs.map((tag) => tag.id))
   const resolved: string[] = []
@@ -139,7 +139,7 @@ async function applyFacetTags(parsed: SchemaFieldValue, catalog: CollectionSchem
   return retagSchemaValue(parsed, resolved)
 }
 
-function FacetPickPanel({
+function RecordTagsPicker({
   value,
   onChange,
   onJump,
@@ -151,9 +151,9 @@ function FacetPickPanel({
   const parsed = normalizeSchemaValue(value)
   const liveRef = useRef(parsed)
   const [catalog, setCatalog] = useState(() => loadTags())
-  const [, setFacetMarks] = useState(0)
+  const [, setTagMarks] = useState(0)
   useEffect(() => subscribeTags(undefined, () => setCatalog(loadTags())), [])
-  useEffect(() => subscribeCrumbs(() => setFacetMarks((n) => n + 1)), [])
+  useEffect(() => subscribeCrumbs(() => setTagMarks((n) => n + 1)), [])
   return (
     <TagPickPanel
       values={parsed.tags}
@@ -162,7 +162,7 @@ function FacetPickPanel({
       onChipClick={(id) => jumpTag(id)}
       onJump={onJump}
       onChange={(next) => {
-        void applyFacetTags(liveRef.current, catalog, next).then((updated) => {
+        void applySelectedTags(liveRef.current, catalog, next).then((updated) => {
           liveRef.current = updated
           onChange(updated)
         })
@@ -338,7 +338,7 @@ export function CellPopDraft({
   }
 
   if (kind === 'tag') {
-    return <FacetPickPanel value={raw} onChange={(next) => put(next)} onJump={onClose} />
+    return <RecordTagsPicker value={raw} onChange={(next) => put(next)} onJump={onClose} />
   }
 
   if (kind === 'person') {

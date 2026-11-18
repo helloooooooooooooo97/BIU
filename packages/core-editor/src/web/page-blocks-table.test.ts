@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { Editor } from '@tiptap/core'
 import { recordEditorExtensions } from './kit.ts'
-import { listPageTableBlocks, pageBlockFacetPath, replaceBlockPlainText, writeBackTableBlock } from './page-blocks-table.tsx'
+import { listPageTableBlocks, pageBlockTagPath, replaceBlockPlainText, writeBackTableBlock } from './page-blocks-table.tsx'
 import { PAGE_EDITOR_STYLE } from './style.ts'
 
 test('table view lists every top-level block', () => {
@@ -47,18 +47,18 @@ test('table mode hides the document and keeps the content peek', () => {
   assert.match(PAGE_EDITOR_STYLE, /tr:hover \.page-blocks-table-kind-expand/)
 })
 
-test('table view has a facet column for block ids', () => {
+test('table view has a tag column for block ids', () => {
   const src = readFileSync(resolve(import.meta.dirname, './page-blocks-table.tsx'), 'utf8')
   assert.match(src, /标签/)
-  assert.match(src, /pageBlockFacetPath/)
-  assert.match(src, /BlockFacetCell/)
+  assert.match(src, /pageBlockTagPath/)
+  assert.match(src, /BlockTagCell/)
   assert.match(src, /row\.id/)
 })
 
-test('facet path skips headings and empty block ids', () => {
-  assert.equal(pageBlockFacetPath('/tags', 'tag-4', ''), null)
-  assert.equal(pageBlockFacetPath('/pages', 'p001', ''), null)
-  assert.equal(pageBlockFacetPath('/pages', 'p001', 'ab12cd34'), '/editor-blocks//pages::p001::ab12cd34')
+test('tag path skips headings and empty block ids', () => {
+  assert.equal(pageBlockTagPath('/tags', 'tag-4', ''), null)
+  assert.equal(pageBlockTagPath('/pages', 'p001', ''), null)
+  assert.equal(pageBlockTagPath('/pages', 'p001', 'ab12cd34'), '/editor-blocks//pages::p001::ab12cd34')
 })
 
 test('writeBackTableBlock replaces the row with a different block', () => {

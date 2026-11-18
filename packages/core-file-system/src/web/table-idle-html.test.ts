@@ -54,7 +54,7 @@ test('idle chips, person, and actions paint without waiting for hover', () => {
   assert.equal(idleActionsInnerHtml([]), '')
 })
 
-test('idle cells match the text / bool / usage / facet first paint', () => {
+test('idle cells match the text / bool / usage / tag first paint', () => {
   assert.match(idleBoolInnerHtml(true), /fsdb-boolbox is-on/)
   assert.match(idleBoolInnerHtml(false), /title="否"/)
   assert.doesNotMatch(idleBoolInnerHtml(true), /<svg/)

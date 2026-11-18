@@ -88,7 +88,7 @@ As Picasso famously said, "Good artists copy, great artists steal." Rather than 
   - [Plugins: the system extends itself the same way](#plugins-the-system-extends-itself-the-same-way)
   - [Pages: the container for components](#pages-the-container-for-components)
   - [Components: declarative content units](#components-declarative-content-units)
-  - [Facets: dimensions become data](#facets-dimensions-become-data)
+  - [Tags: dimensions become data](#tags-dimensions-become-data)
   - [Second-class objects: the same interface, a smaller surface](#second-class-objects-the-same-interface-a-smaller-surface)
 - [3. Transparent: files are the floor, not a cage](#3-transparent-files-are-the-floor-not-a-cage)
 - [4. What that gets you](#4-what-that-gets-you)
@@ -122,7 +122,7 @@ Biu's set of atoms is small:
 path · table · record · schema · operations · blurb
 ```
 
-Everything else is composed out of those six: tasks, pages, skills, plugins, facets, components, sessions, events…
+Everything else is composed out of those six: tasks, pages, skills, plugins, tags, components, sessions, events…
 
 So **adding a domain is not adding a concept — it is composing the same atoms once more.**
 
@@ -155,12 +155,12 @@ This principle shows up again and again below, always as the same move:
 
 | Case | What was done |
 |---|---|
-| Facets | no new schema mechanism — reuse "table" |
+| Tags | no new schema mechanism — reuse "table" |
 | Page environment | no new `env` field — reuse "attributes" |
 | Component composition | components are finite atoms; pages are unlimited recipes |
 | Skill files | no new attachment mechanism — reuse a directory plus one read-only derived field |
 
-> **Note: this is not "the system is simple."** The concepts still have to be learned — path, table, record, facet, component, blurb, projection.
+> **Note: this is not "the system is simple."** The concepts still have to be learned — path, table, record, tag, component, blurb, projection.
 > It says something else: **neither the number of concepts nor the number of interaction patterns grows with the number of features.**
 
 ---
@@ -242,7 +242,7 @@ flowchart TB
   API --> L["Plugin<br/>/plugins"]
   API --> P["Page<br/>/pages"]
   API --> C["Component<br/>/editor-blocks"]
-  API --> F["Facet<br/>/facets"]
+  API --> F["Tag<br/>/tags"]
 ```
 
 Each one answers the same three questions: **what is it, how does a human use it, how does an agent use it.**
@@ -340,12 +340,12 @@ That is also why composition doesn't explode: **components are a finite set of a
 Page bodies live in SQLite; attachments share one tree with two layers:
 
 ```
-.biu/biu.sqlite       ← pages, tasks, sessions, facets, views
+.biu/biu.sqlite       ← pages, tasks, sessions, tags, views
 .biu/events.sqlite    ← session event log
 .biu/assets/          ← attachments
 ```
 
-Back up those sqlite files with `VACUUM INTO '/path/to/backup.sqlite'` (a single file, no WAL). Do not `cp` a live `.sqlite` while WAL exists. Facet stamp tables (`tag_stamps`, `tag_record_values`) are reserved for the 标签 overlay and may be empty until that overlay is used.
+Back up those sqlite files with `VACUUM INTO '/path/to/backup.sqlite'` (a single file, no WAL). Do not `cp` a live `.sqlite` while WAL exists. Tag stamp tables (`tag_stamps`, `tag_record_values`) are reserved for the 标签 overlay and may be empty until that overlay is used.
 
 Markdown can carry **blocks** — a fenced section that renders as a live component:
 
@@ -385,14 +385,14 @@ $ db_list /editor-blocks filter.plugin=page-algorithm
 
 That is what it means for components to be first-class objects: **they do not only live inside one page — they are a category of workspace data that can be aggregated.** And because they are declarative, an agent does not need to write UI code — three fields are enough.
 
-### Facets: dimensions become data
+### Tags: dimensions become data
 
 In every section above, the schema was defined by plugin code. But some dimensions emerge **while the system is running**. Whether a movie needs a "director" or a task needs a "quarterly rating" depends on the current use case; adding either dimension should not require a new plugin.
 
 `/tags` flips this around: **a dimension is itself a row in a table.**
 
 ```bash
-db_create /facets records=[{title:"Awards"}]                   # a new dimension, zero code
+db_create /tags records=[{title:"Awards"}]                   # a new dimension, zero code
 db_update /tags/Awards {fields:[{key:"name",type:"string"},  # the dimension carries its own schema
                                   {key:"year",type:"number"}]}
 
@@ -403,7 +403,7 @@ db_update /tasks/build {tags:["Awards"], values:{name:"Q4 best",year:2022}}
 Three consequences:
 
 1. **A new dimension needs no code change and no migration.**
-2. **One facet spans every table** — the same "Awards" can be attached to a movie, a task, or a page.
+2. **One tag spans every table** — the same "Awards" can be attached to a movie, a task, or a page.
 3. **A record never leaves the table that defines it.** One movie can be both a "Sci-fi" item and a "2021 release" item, each lens carrying properties that only make sense under that lens.
 
 This makes the division of labour between the two kinds of schema explicit:
@@ -411,11 +411,11 @@ This makes the division of labour between the two kinds of schema explicit:
 | | Defined in | Responsible for |
 |---|---|---|
 | A table's schema | plugin code (static) | **Structure** — what this thing is |
-| A facet's schema | data (dynamic) | **Lens** — how you look at it right now |
+| A tag's schema | data (dynamic) | **Lens** — how you look at it right now |
 
 > **"Unlimited extension" does not mean the File System knows every dimension in advance. It means it lets dimensions appear at runtime, as data.**
 
-The facet index (`tag_stamps`) makes "give me everything tagged X" cheap instead of a table scan: given one facet, it returns every record in the workspace carrying it. It is a derived index, rebuildable at any time.
+The tag index (`tag_stamps`) makes "give me everything tagged X" cheap instead of a table scan: given one tag, it returns every record in the workspace carrying it. It is a derived index, rebuildable at any time.
 
 ### Second-class objects: the same interface, a smaller surface
 
@@ -467,7 +467,7 @@ db_create /agents   ← make an agent
 db_create /tasks      ← make a task
 db_create /pages      ← make a page of content
 db_create /skills     ← make a skill
-db_create /facets     ← make a dimension
+db_create /tags     ← make a dimension
 db_create /plugins    ← make a capability (the only one needing pack, because it is code)
 ```
 

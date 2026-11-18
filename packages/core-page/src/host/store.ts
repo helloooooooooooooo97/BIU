@@ -101,7 +101,7 @@ function rowFromFile(id: string, raw: string): PageRow {
     notes: body,
     parentId: matter.parentId == null || matter.parentId === '' ? null : String(matter.parentId),
     dependsOn: asStringList(matter.dependsOn),
-    tag: normalizeSchemaValue(matter.tag ?? matter.facet),
+    tag: normalizeSchemaValue(matter.tag),
     emoji: String(matter.emoji ?? ''),
     createdAt,
     updatedAt,

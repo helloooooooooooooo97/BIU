@@ -17,7 +17,7 @@ test('tag schema writes mark the pack and leave record bags for read-time prune'
   assert.doesNotMatch(host, /db\.bump\(\)\s*\n\s*route\.send\(200, \{ ok: true, tags:/)
 })
 
-test('TagStore keeps packs in sqlite including nested facet types', () => {
+test('TagStore keeps packs in sqlite including nested tag types', () => {
   const store = new TagStore()
   store.replace([
     {
@@ -30,10 +30,10 @@ test('TagStore keeps packs in sqlite including nested facet types', () => {
     },
     { id: '??', label: '坏的', fields: [] },
   ])
-  const facets = store.list()
-  assert.equal(facets.length, 1)
-  assert.equal(facets[0]?.id, 'dp')
-  assert.deepEqual(facets[0]?.fields.map((field) => field.key), ['complexity', 'nested'])
+  const tags = store.list()
+  assert.equal(tags.length, 1)
+  assert.equal(tags[0]?.id, 'dp')
+  assert.deepEqual(tags[0]?.fields.map((field) => field.key), ['complexity', 'nested'])
   assert.equal(store.list('动态').length, 1)
   assert.equal(store.list('nope').length, 0)
 })
@@ -53,8 +53,8 @@ test('TagStore writes createdAt on insert and keeps it across updates', () => {
   assert.ok((again?.updatedAt ?? 0) >= first!.updatedAt)
 })
 
-test('sqlite file round-trips facet catalog and stamp index', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'fs-facet-'))
+test('sqlite file round-trips tag catalog and stamp index', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'fs-tag-'))
   const path = join(dir, 'file-system.sqlite')
   const store = new TagStore()
   store.open(path)
@@ -78,12 +78,12 @@ test('sqlite file round-trips facet catalog and stamp index', async () => {
   assert.equal(again.notes('dp'), '# 说明')
   again.upsert({ id: 'dp', label: 'DP2', fields: [{ key: 'complexity', type: 'string' }] })
   assert.equal(again.notes('dp'), '# 说明')
-  assert.equal(again.removeFacet('dp'), true)
+  assert.equal(again.removeTag('dp'), true)
   assert.equal(again.list().length, 0)
 })
 
 
-test('sqlite stores facet overlay for records that cannot update', async () => {
+test('sqlite stores tag overlay for records that cannot update', async () => {
   const store = new TagStore()
   store.writeRecordTag('/plugins', 'demo', { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } }, 'Demo')
   assert.deepEqual(store.recordTag('/plugins', 'demo')?.tags, ['dp'])
@@ -93,15 +93,15 @@ test('sqlite stores facet overlay for records that cannot update', async () => {
   assert.equal(store.stampedIds('/plugins', 'dp').has('demo'), false)
 })
 
-test('upserting a soft-deleted facet id brings it back', () => {
+test('upserting a soft-deleted tag id brings it back', () => {
   const store = new TagStore()
-  store.upsert({ id: 'facet-6', label: '未命名标签', fields: [] })
-  store.markDeleted('/tags', 'facet-6')
-  assert.equal(store.isDeleted('/tags', 'facet-6'), true)
-  assert.equal(store.entries().some((item) => item.pack.id === 'facet-6'), false)
-  store.upsert({ id: 'facet-6', label: '新标签', fields: [] })
-  assert.equal(store.isDeleted('/tags', 'facet-6'), false)
-  assert.equal(store.get('facet-6')?.label, '新标签')
+  store.upsert({ id: 'tag-6', label: '未命名标签', fields: [] })
+  store.markDeleted('/tags', 'tag-6')
+  assert.equal(store.isDeleted('/tags', 'tag-6'), true)
+  assert.equal(store.entries().some((item) => item.pack.id === 'tag-6'), false)
+  store.upsert({ id: 'tag-6', label: '新标签', fields: [] })
+  assert.equal(store.isDeleted('/tags', 'tag-6'), false)
+  assert.equal(store.get('tag-6')?.label, '新标签')
 })
 
 test('removing a tag field leaves record bags until read prunes them', () => {
@@ -147,7 +147,7 @@ test('removing a tag field leaves record bags until read prunes them', () => {
   assert.equal((read['2041995583'] as Array<{ name: string }>)[0]?.name, '规划.md')
 })
 
-test('empty facet overlay is not stored', async () => {
+test('empty tag overlay is not stored', async () => {
   const store = new TagStore()
   store.writeRecordTag('/pages', 'p1', { tags: ['dp'], values: { dp: {} } }, 'P')
   assert.equal(store.recordTag('/pages', 'p1')?.tags[0], 'dp')
@@ -287,7 +287,7 @@ test('custom attribute grouping index is lazy, persistent and incrementally main
   assert.equal(reopened.ensure().prepare('SELECT COUNT(*) AS n FROM tag_group_fields').get()!.n, 0)
   reopened.writeRecordTag('/pages', 'b', { tags: ['security'], values: { security: { lane: 'changed' } } }, 'B')
   assert.deepEqual(reopened.attributeGroups('/pages', field, ['b']), [{ key: 'changed', total: 1 }, { key: '', total: 0 }])
-  reopened.removeFacet('security')
+  reopened.removeTag('security')
   assert.equal(reopened.ensure().prepare('SELECT COUNT(*) AS n FROM tag_group_values').get()!.n, 0)
 })
 
@@ -310,4 +310,27 @@ test('schema reads and edits skip editor content and preserve notes', () => {
   }
   assert.equal(store.notes('fast'), '# 保留正文')
   assert.deepEqual(store.get('fast')?.fields, [])
+})
+
+test('opening a store repairs recursively indexed collected rows without changing source records', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'fs-tag-projection-repair-'))
+  const path = join(dir, 'db.sqlite')
+  const store = new TagStore().open(path)
+  store.upsert({ id: 'stress', label: '性能压测', fields: [{ key: 'lane', type: 'string' }] })
+  const tag = { tags: ['stress'], values: { stress: { lane: 'keep' } } }
+  store.writeRecordTag('/pages', 'p1', tag, '页面')
+  store.writeRecordMeta('/pages', 'p1', { emoji: '🔥' })
+  for (const id of ['pages::p1', 'tags::pages::p1', 'tags::tags::pages::p1']) {
+    store.writeRecordTag('/tags', id, tag, '错误的投影')
+    store.ensure().prepare('INSERT INTO tag_group_values VALUES (?, ?, ?, ?)').run('/tags', 'lane', id, 'keep')
+  }
+  assert.equal(store.collect('stress').items.length, 4)
+  const repaired = new TagStore().open(path)
+  assert.deepEqual(repaired.collect('stress').items.map(row => row.path), ['/pages/p1'])
+  assert.deepEqual(repaired.recordTag('/pages', 'p1'), tag)
+  assert.equal(repaired.recordMeta('/pages', 'p1')?.emoji, '🔥')
+  assert.equal(repaired.get('stress')?.label, '性能压测')
+  assert.equal(repaired.recordTag('/tags', 'pages::p1'), null)
+  assert.equal(repaired.ensure().prepare("SELECT COUNT(*) AS n FROM tag_group_values WHERE collection = '/tags'").get()?.n, 0)
+  assert.deepEqual(new TagStore().open(path).stampCounts(), { stress: 1 })
 })
