@@ -30,6 +30,10 @@ export async function listGroupedCollection(opts: {
   filters?: Record<string, unknown>
   columns?: string[]
   groupValues?: () => Promise<Array<{ key: string; total: number }> | null>
+  groups?: () => Promise<{
+    groups: Array<{ key: string; total: number; label?: string; rows?: DbRecord[] }> | null
+    schema?: CollectionSchema
+  }>
   previous?: GroupBucket[]
   previousPages?: Record<string, number>
   list: (input: {
@@ -45,13 +49,64 @@ export async function listGroupedCollection(opts: {
   }) => Promise<ListPage>
 }): Promise<GroupedCollectionPage | null> {
   const packs = opts.packs ?? []
+  const grouped = opts.groups ? await opts.groups() : null
+  if (grouped?.groups) {
+    const group = resolveGroupField(opts.schema ?? grouped.schema, opts.groupBy, packs)
+    const refGroup = group && isRefFieldType(group.field.type)
+    const seedLabels = recordGroupLabels((opts.previous ?? []).flatMap((bucket) => bucket.rows))
+    let keys = grouped.groups.map((item) => ({
+      key: item.key,
+      label: item.label ?? (item.key || '未填'),
+    }))
+    if (refGroup) {
+      const missing = keys.map((item) => item.key).filter((key) => key && !seedLabels[key])
+      if (missing.length) {
+        const listed = await opts.list({
+          path: opts.path,
+          limit: missing.length,
+          filters: {
+            $tree: {
+              kind: 'group',
+              id: 'group-ref-labels',
+              combinator: 'or',
+              children: missing.map((id, index) => ({
+                kind: 'rule',
+                id: `group-ref-${index}`,
+                field: 'id',
+                op: 'eq',
+                value: id,
+              })),
+            },
+          },
+          columns: ['id', 'title'],
+        })
+        const labels = { ...seedLabels, ...recordGroupLabels(listed.items) }
+        keys = keys.map((item) => ({ ...item, label: labels[item.key] ?? item.label }))
+      }
+    }
+    const byKey = new Map(grouped.groups.map((item) => [item.key, item]))
+    const buckets = keys
+      .map((item) => {
+        const hit = byKey.get(item.key)
+        return {
+          key: item.key,
+          label: item.label,
+          rows: hit?.rows ?? [],
+          total: hit?.total ?? hit?.rows?.length ?? 0,
+        }
+      })
+      .filter((item) => item.total > 0 || item.key === '')
+    const items = buckets.flatMap((item) => item.rows) as Array<DbRecord & { path?: string }>
+    const total = buckets.reduce((sum, item) => sum + item.total, 0)
+    return { buckets, items, total, schema: grouped.schema ?? opts.schema }
+  }
   const group = resolveGroupField(opts.schema, opts.groupBy, packs)
   const refGroup = group && isRefFieldType(group.field.type)
   const seedLabels = recordGroupLabels((opts.previous ?? []).flatMap((bucket) => bucket.rows))
   // Values of open-ended fields must come from the collection, not the rows
   // left in memory before a refresh. Otherwise a cold load queries only “unset”.
   const extraValues = new Set(opts.extraValues ?? [])
-  const indexed = parseTagFlatColumnKey(opts.groupBy) && opts.groupValues ? await opts.groupValues() : null
+  const indexed = opts.groupValues ? await opts.groupValues() : null
   for (const item of indexed ?? []) if (item.key) extraValues.add(item.key)
   const kind = group ? strategyForField(group.field)?.kind : undefined
   if (!indexed && group && !group.field.enum?.length &&
@@ -148,10 +203,36 @@ export async function listGroupedCollection(opts: {
 export function listAttributeGroups(opts: {
   path: string; groupBy: string; query?: string; filters?: Record<string, unknown>; fresh?: boolean
 }) {
-  const params = new URLSearchParams({ path: opts.path, field: opts.groupBy,
-    q: opts.query ?? '', filter: JSON.stringify(opts.filters ?? {}),
+  return listGroupedPage({ ...opts, pageSize: 0 }).then((result) => result.groups)
+}
+
+export function listGroupedPage(opts: {
+  path: string
+  groupBy: string
+  query?: string
+  filters?: Record<string, unknown>
+  fresh?: boolean
+  pageSize?: number
+  sortField?: string
+  sortDir?: string
+  sorts?: SortRule[]
+  columns?: string[]
+  groupPages?: Record<string, number>
+}) {
+  const params = new URLSearchParams({
+    path: opts.path,
+    field: opts.groupBy,
+    q: opts.query ?? '',
+    filter: JSON.stringify(opts.filters ?? {}),
   })
-  return readJson<{ groups: Array<{ key: string; total: number }> | null }>(
-    `/api/db/groups?${params}`, undefined, { fresh: opts.fresh },
-  ).then(result => result.groups)
+  if (opts.pageSize && opts.pageSize > 0) params.set('limit', String(opts.pageSize))
+  if (opts.sortField) params.set('sort', opts.sortField)
+  if (opts.sortDir) params.set('dir', opts.sortDir)
+  if (opts.sorts?.length) params.set('sorts', JSON.stringify(opts.sorts))
+  if (opts.columns?.length) params.set('columns', opts.columns.join(','))
+  if (opts.groupPages && Object.keys(opts.groupPages).length) params.set('pages', JSON.stringify(opts.groupPages))
+  return readJson<{
+    groups: Array<{ key: string; total: number; label?: string; rows?: DbRecord[] }> | null
+    schema?: CollectionSchema
+  }>(`/api/db/groups?${params}`, undefined, { fresh: opts.fresh })
 }

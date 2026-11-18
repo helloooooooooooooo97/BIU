@@ -176,6 +176,39 @@ test('grouped table fetch no longer uses a mixed 200-row page', () => {
   assert.match(browser, /group\.total != null \? group\.rows/)
   assert.match(grouped, /limit: pageSize/)
   assert.match(grouped, /rows: listed.items/)
+  assert.match(browser, /listGroupedPage\(/)
+  assert.match(grouped, /if \(grouped\?\.groups\)/)
+})
+
+test('batched groups response fills every bucket without per-group list calls', async () => {
+  const calls: unknown[] = []
+  const page = await listGroupedCollection({
+    path: '/tasks',
+    groupBy: 'status',
+    schema,
+    pageSize: 20,
+    list: async (input) => {
+      calls.push(input.filters)
+      return { items: [], total: 0, schema }
+    },
+    groups: async () => ({
+      groups: [
+        { key: 'todo', label: 'todo', total: 2, rows: [{ id: 't1', status: 'todo' }] },
+        { key: 'doing', label: 'doing', total: 1, rows: [{ id: 'd1', status: 'doing' }] },
+        { key: '', label: '未填', total: 0, rows: [] },
+      ],
+      schema,
+    }),
+  })
+  assert.deepEqual(calls, [])
+  assert.deepEqual(
+    page!.buckets.map((item) => [item.key, item.total, item.rows.map((row) => row.id)]),
+    [
+      ['todo', 2, ['t1']],
+      ['doing', 1, ['d1']],
+      ['', 0, []],
+    ],
+  )
 })
 
 test('ref group headers resolve record titles instead of ids', async () => {
