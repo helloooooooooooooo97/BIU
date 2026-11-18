@@ -244,3 +244,37 @@ test('preset banners are not copied into the custom gallery', async () => {
   store.rememberBannerGallery({ kind: sample.kind, html: sample.html })
   assert.equal(store.listBannerGallery().length, 0)
 })
+
+
+test('custom attribute grouping index is lazy, persistent and incrementally maintained', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'tag-group-index-'))
+  const path = join(dir, 'groups.sqlite')
+  const store = new TagStore().open(path)
+  const field = 'tag::security::lane'
+  store.upsert({ id: 'security', label: '安全项目', fields: [{ key: 'lane', type: 'multi-select' }] })
+  const tag = (values: string[]) => ({ tags: ['security'], values: { security: { lane: values } } })
+  store.writeRecordTag('/pages', 'a', tag(['compute', 'compute', 'supply']), 'A')
+  store.writeRecordTag('/pages', 'b', tag(['compute']), 'B')
+  assert.equal(store.ensure().prepare('SELECT COUNT(*) AS n FROM tag_group_fields').get()!.n, 0)
+  assert.deepEqual(store.attributeGroups('/pages', field, ['a', 'b', 'empty']), [
+    { key: 'compute', total: 2 }, { key: 'supply', total: 1 }, { key: '', total: 1 },
+  ])
+  const changes = store.ensure().prepare('SELECT total_changes() AS n').get()!.n
+  assert.deepEqual(store.attributeGroups('/pages', field, ['b']), [{ key: 'compute', total: 1 }, { key: '', total: 0 }])
+  assert.equal(store.ensure().prepare('SELECT total_changes() AS n').get()!.n, changes)
+  const reopened = new TagStore().open(path)
+  assert.deepEqual(reopened.attributeGroups('/pages', field, ['a']), [
+    { key: 'compute', total: 1 }, { key: 'supply', total: 1 }, { key: '', total: 0 },
+  ])
+  reopened.writeRecordTag('/pages', 'a', tag(['new']), 'A')
+  reopened.writeRecordTag('/pages', 'b', { tags: [], values: {} }, 'B')
+  assert.deepEqual(reopened.attributeGroups('/pages', field, ['a', 'b']), [{ key: 'new', total: 1 }, { key: '', total: 1 }])
+  reopened.removeRecord('/pages', 'a')
+  assert.deepEqual(reopened.attributeGroups('/pages', field, ['b']), [{ key: '', total: 1 }])
+  reopened.upsert({ id: 'security', label: '安全项目', fields: [{ key: 'lane', type: 'select' }] })
+  assert.equal(reopened.ensure().prepare('SELECT COUNT(*) AS n FROM tag_group_fields').get()!.n, 0)
+  reopened.writeRecordTag('/pages', 'b', { tags: ['security'], values: { security: { lane: 'changed' } } }, 'B')
+  assert.deepEqual(reopened.attributeGroups('/pages', field, ['b']), [{ key: 'changed', total: 1 }, { key: '', total: 0 }])
+  reopened.removeFacet('security')
+  assert.equal(reopened.ensure().prepare('SELECT COUNT(*) AS n FROM tag_group_values').get()!.n, 0)
+})

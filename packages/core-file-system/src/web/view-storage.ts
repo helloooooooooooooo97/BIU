@@ -3,7 +3,7 @@ import { isIndexCollection, VIEWS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_
 import { normalizeCollectionPath } from '../paths.ts'
 import { invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
-import { looksLikeFilterTree, normalizeFilterGroup, parseSortsInput } from '../query-logic.ts'
+import { emptyFilterGroup, looksLikeFilterTree, normalizeFilterGroup, parseSortsInput, resolveViewFilterTree } from '../query-logic.ts'
 import { normalizePageSize, normalizeSavedView, parseViewColumns, rankListedViews, type SavedView } from './saved-view.ts'
 
 export function viewsKey(collectionPath: string) {
@@ -343,7 +343,7 @@ export function viewPatchKey(view: SavedView) {
 
 /** 推给后端的载荷：带上本地修改时间，后端据此丢掉比库更旧的快照。 */
 function viewWirePayload(view: SavedView) {
-  return { ...view, updatedAt: Number(view.updatedAt) || 0 }
+  return { ...view, filterTree: resolveViewFilterTree(view), updatedAt: Number(view.updatedAt) || 0 }
 }
 
 /** 本地改了哪些视图就打个时间戳，切窗口/切会话时旧快照不会盖掉刚做的修改。 */
@@ -797,6 +797,10 @@ function pickDisplay(patch: Partial<SavedView>): ViewDisplayPatch {
   const next: ViewDisplayPatch = {}
   for (const key of DISPLAY_KEYS) {
     if (patch[key] !== undefined) (next as Record<string, unknown>)[key] = patch[key]
+  }
+  // An explicit clear must overwrite the previously stored tree.
+  if (Object.prototype.hasOwnProperty.call(patch, 'filterTree') && patch.filterTree === undefined) {
+    next.filterTree = emptyFilterGroup()
   }
   return next
 }

@@ -1,8 +1,9 @@
 import { isRefFieldType, type CollectionSchema, type CollectionSchemaPack, type DbRecord } from '@biu/type-file-system'
 import type { SortRule } from '../query-logic.ts'
-import type { ListPage } from './db-client.ts'
-import { groupListFilter, groupListKeys, mergeListFilters, recordGroupLabels, type GroupBucket } from './fields.ts'
-import { resolveGroupField } from './group-strategies.ts'
+import { readJson, type ListPage } from './db-client.ts'
+import { parseTagFlatColumnKey } from '../query-logic.ts'
+import { groupListFilter, groupListKeys, mergeListFilters, recordGroupLabels, uniqueValues, type GroupBucket } from './fields.ts'
+import { resolveGroupField, strategyForField } from './group-strategies.ts'
 
 export type GroupedCollectionPage = {
   buckets: GroupBucket[]
@@ -28,6 +29,7 @@ export async function listGroupedCollection(opts: {
   sorts?: SortRule[]
   filters?: Record<string, unknown>
   columns?: string[]
+  groupValues?: () => Promise<Array<{ key: string; total: number }> | null>
   previous?: GroupBucket[]
   previousPages?: Record<string, number>
   list: (input: {
@@ -46,7 +48,33 @@ export async function listGroupedCollection(opts: {
   const group = resolveGroupField(opts.schema, opts.groupBy, packs)
   const refGroup = group && isRefFieldType(group.field.type)
   const seedLabels = recordGroupLabels((opts.previous ?? []).flatMap((bucket) => bucket.rows))
-  let keys = groupListKeys(opts.schema, opts.groupBy, opts.extraValues, packs, seedLabels)
+  // Values of open-ended fields must come from the collection, not the rows
+  // left in memory before a refresh. Otherwise a cold load queries only “unset”.
+  const extraValues = new Set(opts.extraValues ?? [])
+  const indexed = parseTagFlatColumnKey(opts.groupBy) && opts.groupValues ? await opts.groupValues() : null
+  for (const item of indexed ?? []) if (item.key) extraValues.add(item.key)
+  const kind = group ? strategyForField(group.field)?.kind : undefined
+  if (!indexed && group && !group.field.enum?.length &&
+      ['select', 'multi-select', 'tag', 'person', 'ref', 'multi-ref'].includes(kind ?? '') &&
+      !['shareScope', 'table', 'tablePath'].includes(group.key) && !opts.previous) {
+    const limit = 200
+    for (let offset = 0; ; offset += limit) {
+      const page = await opts.list({
+        path: opts.path, limit, offset, query: opts.query,
+        filters: opts.filters, columns: [group.key],
+        sortField: 'id', sortDir: 'asc',
+      })
+      for (const value of uniqueValues(page.items, group.key, group.field)) extraValues.add(value)
+      if (!page.items.length || offset + page.items.length >= page.total || extraValues.size >= 80) break
+    }
+  }
+  let keys = groupListKeys(opts.schema, opts.groupBy, [...extraValues], packs, seedLabels)
+  if (indexed) {
+    const labels = new Map(keys.map(item => [item.key, item.label]))
+    keys = indexed.filter(item => item.total > 0 || item.key === '').map(item => ({
+      key: item.key, label: labels.get(item.key) ?? (item.key || '未填'),
+    }))
+  }
   if (!keys.length) return null
   if (refGroup) {
     const missing = keys.map((item) => item.key).filter((key) => key && !seedLabels[key])
@@ -71,7 +99,7 @@ export async function listGroupedCollection(opts: {
         columns: ['id', 'title'],
       })
       const labels = { ...seedLabels, ...recordGroupLabels(listed.items) }
-      keys = groupListKeys(opts.schema, opts.groupBy, opts.extraValues, packs, labels)
+      keys = keys.map(item => ({ ...item, label: labels[item.key] ?? item.label }))
     }
   }
   const pageSize = Math.max(1, opts.pageSize)
@@ -100,11 +128,8 @@ export async function listGroupedCollection(opts: {
       }
       const prev = prevByKey.get(groupKey)
       const samePage = pageIndex === (prevPages[groupKey] ?? 0)
-      if (previous && samePage) {
-        if (prev) {
-          return { ...item, rows: prev.rows, total: prev.total ?? prev.rows.length, schema: undefined as CollectionSchema | undefined, filters, pageIndex }
-        }
-        return { ...item, rows: [] as DbRecord[], total: 0, schema: undefined as CollectionSchema | undefined, filters, pageIndex }
+      if (previous && samePage && (prev || !indexed)) {
+        return { ...item, rows: prev?.rows ?? [], total: prev?.total ?? prev?.rows.length ?? 0, schema: undefined as CollectionSchema | undefined, filters, pageIndex }
       }
       const listed = await fetchGroup(filters, pageIndex)
       return { ...item, rows: listed.items, total: listed.total, schema: listed.schema, filters, pageIndex }
@@ -117,4 +142,16 @@ export async function listGroupedCollection(opts: {
   const total = buckets.reduce((sum, item) => sum + item.total, 0)
   const schema = pages.find((item) => item.schema)?.schema
   return { buckets, items, total, schema }
+}
+
+
+export function listAttributeGroups(opts: {
+  path: string; groupBy: string; query?: string; filters?: Record<string, unknown>; fresh?: boolean
+}) {
+  const params = new URLSearchParams({ path: opts.path, field: opts.groupBy,
+    q: opts.query ?? '', filter: JSON.stringify(opts.filters ?? {}),
+  })
+  return readJson<{ groups: Array<{ key: string; total: number }> | null }>(
+    `/api/db/groups?${params}`, undefined, { fresh: opts.fresh },
+  ).then(result => result.groups)
 }

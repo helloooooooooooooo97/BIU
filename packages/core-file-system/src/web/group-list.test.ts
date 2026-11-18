@@ -202,7 +202,7 @@ test('ref group headers resolve record titles instead of ids', async () => {
       return { items: [{ id: 'c1', title: '子页', parentId: 'parent-1' }], total: 1, schema }
     },
   })
-  assert.ok(calls.some((call) => JSON.stringify(call.filters).includes('group-ref-labels')))
+  assert.ok(calls.some((call) => JSON.stringify(call.filters ?? {}).includes('group-ref-labels')))
   assert.equal(page!.buckets.find((item) => item.key === 'parent-1')?.label, '产品手册')
 })
 
@@ -234,4 +234,78 @@ test('grouped pager reuses buckets whose page did not change', async () => {
       ['', 0, []],
     ],
   )
+})
+
+
+test('cold grouped load discovers values beyond the first page without cached rows', async () => {
+  const coldSchema: CollectionSchema = { labelField: 'title', fields: {
+    ...REQUIRED_RECORD_FIELDS, title: { type: 'string' }, lane: { type: 'multi-select' },
+  } }
+  const offsets: number[] = []
+  const page = await listGroupedCollection({
+    path: '/pages', groupBy: 'lane', schema: coldSchema, pageSize: 20,
+    filters: { tag: 'security' },
+    list: async (input) => {
+      assert.equal(input.filters?.tag, 'security')
+      if (input.columns?.length === 1 && input.columns[0] === 'lane') {
+        offsets.push(input.offset ?? 0)
+        return { items: input.offset ? [{ id: 'last', lane: ['supply'] }] :
+          Array.from({ length: 200 }, (_, i) => ({ id: String(i), lane: ['compute'] })), total: 201 }
+      }
+      const lane = input.filters?.lane
+      return { items: lane ? [{ id: String(lane), lane: [String(lane)] }] : [], total: lane ? 1 : 0 }
+    },
+  })
+  assert.deepEqual(offsets, [0, 200])
+  assert.deepEqual(page?.buckets.filter(x => x.total).map(x => x.key).sort(), ['compute', 'supply'])
+})
+
+
+test('cold grouping reads projected custom tag attributes returned by the host', async () => {
+  const key = 'tag::security::lane'
+  const packs = [{ id: 'security', label: '安全项目', fields: [
+    { key: 'lane', label: '赛道', type: 'multi-select' as const },
+  ] }]
+  const rows = [
+    { id: 'a', [key]: ['机密计算'] },
+    { id: 'b', [key]: ['模型供应链'] },
+    { id: 'c', [key]: undefined },
+  ]
+  const load = () => listGroupedCollection({
+    path: '/pages', groupBy: key, schema, packs, pageSize: 100,
+    list: async input => {
+      // pickListedFields returns the projected property directly, without a tag bag.
+      if (input.columns?.length === 1 && input.columns[0] === key) return { items: rows, total: 3 }
+      const value = input.filters?.[key]
+      const items = rows.filter(row => value ? row[key]?.includes(String(value)) : !row[key])
+      return { items, total: items.length }
+    },
+  })
+  for (let refresh = 0; refresh < 2; refresh++) {
+    const page = await load()
+    assert.deepEqual(page?.buckets.map(x => [x.key, x.total]), [
+      ['机密计算', 1], ['模型供应链', 1], ['', 1],
+    ])
+    assert.equal(page?.total, 3)
+  }
+})
+
+
+test('indexed custom groups bypass value discovery and fetch newly discovered groups', async () => {
+  const key = 'tag::security::lane'
+  const calls: unknown[] = []
+  const page = await listGroupedCollection({
+    path: '/pages', groupBy: key, schema, pageSize: 20,
+    packs: [{ id: 'security', label: '安全项目', fields: [{ key: 'lane', type: 'multi-select' }] }],
+    previous: [{ key: '', label: '未填', rows: [], total: 0 }],
+    groupValues: async () => [{ key: 'compute', total: 1 }, { key: '', total: 0 }],
+    list: async input => {
+      assert.equal(input.columns, undefined)
+      calls.push(input.filters?.[key])
+      return { items: [{ id: 'a', [key]: ['compute'] }], total: 1 }
+    },
+  })
+  assert.deepEqual(calls, ['compute'])
+  assert.equal(page?.buckets[0].key, 'compute')
+  assert.equal(page?.total, 1)
 })

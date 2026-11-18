@@ -19,6 +19,8 @@ import {
   type PersonValue,
   type SchemaFieldValue,
 } from '@biu/type-file-system'
+import { parseTagFlatColumnKey } from '../query-logic.ts'
+import { strategyForField } from '../web/group-strategies.ts'
 import { createHash } from 'node:crypto'
 import { parsePageBanner, type PageBanner, type PageBannerKind } from '../page-banner.ts'
 import { bannerGalleryId, isBannerPreset } from '../banner-presets.ts'
@@ -119,10 +121,68 @@ export class TagStore {
     this.ensureCreatedAtColumn()
     this.ensureViewsColumn()
     this.ensureTagDocsTable()
+    this.ensureGroupIndexTables()
     this.ensurePersonMetaColumns()
     this.ensureDeletedAtColumn()
     this.ensureBannerTable()
     return this
+  }
+
+  private ensureGroupIndexTables() {
+    this.db!.exec(`
+      CREATE TABLE IF NOT EXISTS tag_group_fields (
+        collection TEXT NOT NULL, field TEXT NOT NULL, signature TEXT NOT NULL,
+        PRIMARY KEY (collection, field)
+      );
+      CREATE TABLE IF NOT EXISTS tag_group_values (
+        collection TEXT NOT NULL, field TEXT NOT NULL, record_id TEXT NOT NULL, value TEXT NOT NULL,
+        PRIMARY KEY (collection, field, record_id, value)
+      );
+      CREATE INDEX IF NOT EXISTS tag_group_lookup ON tag_group_values(collection, field, value, record_id);
+    `)
+  }
+
+  private indexGroupRecord(collection: string, field: string, recordId: string, tag: unknown) {
+    const parsed = parseTagFlatColumnKey(field)!
+    const spec = this.get(parsed.packId)?.fields.find(item => item.key === parsed.fieldKey && !item.deleted)
+    const strategy = spec && strategyForField(spec)
+    const db = this.ensure()
+    db.prepare('DELETE FROM tag_group_values WHERE collection = ? AND field = ? AND record_id = ?').run(collection, field, recordId)
+    if (!spec || !strategy) return
+    const row = { id: recordId, tag: normalizeSchemaValue(tag) }
+    // A detached tag must not keep contributing stale attribute values.
+    if (!row.tag.tags.includes(parsed.packId)) return
+    const values = strategy.bucketOf(row, { fieldKey: field, groupBy: field, field: spec })
+    const insert = db.prepare('INSERT OR IGNORE INTO tag_group_values VALUES (?, ?, ?, ?)')
+    for (const value of values) if (value !== '') insert.run(collection, field, recordId, value)
+  }
+
+  /** On-demand, persistent attribute index. Only indexed fields incur write work. */
+  attributeGroups(collection: string, field: string, visibleIds: string[]) {
+    const parsed = parseTagFlatColumnKey(field)
+    const spec = parsed && this.get(parsed.packId)?.fields.find(item => item.key === parsed.fieldKey && !item.deleted)
+    const strategy = spec && strategyForField(spec)
+    if (!spec || !strategy || !['select', 'multi-select', 'tag', 'person', 'ref', 'multi-ref'].includes(strategy.kind)) return null
+    const db = this.ensure()
+    const signature = JSON.stringify(spec)
+    const indexed = db.prepare('SELECT signature FROM tag_group_fields WHERE collection = ? AND field = ?').get(collection, field) as { signature: string } | undefined
+    if (indexed?.signature !== signature) {
+      db.exec('BEGIN IMMEDIATE')
+      try {
+        db.prepare('DELETE FROM tag_group_values WHERE collection = ? AND field = ?').run(collection, field)
+        const rows = db.prepare('SELECT record_id, tag_json FROM tag_record_values WHERE collection = ?').all(collection) as Array<{ record_id: string; tag_json: string }>
+        for (const row of rows) this.indexGroupRecord(collection, field, row.record_id, row.tag_json)
+        db.prepare('INSERT OR REPLACE INTO tag_group_fields VALUES (?, ?, ?)').run(collection, field, signature)
+        db.exec('COMMIT')
+      } catch (error) { db.exec('ROLLBACK'); throw error }
+    }
+    const ids = JSON.stringify([...new Set(visibleIds)])
+    const groups = db.prepare(`SELECT v.value AS key, COUNT(*) AS total FROM json_each(?) a
+      CROSS JOIN tag_group_values v ON a.value = v.record_id
+      WHERE v.collection = ? AND v.field = ? GROUP BY v.value ORDER BY v.value`).all(ids, collection, field) as Array<{ key: string; total: number }>
+    const filled = db.prepare(`SELECT COUNT(DISTINCT v.record_id) AS n FROM json_each(?) a
+      CROSS JOIN tag_group_values v ON a.value = v.record_id WHERE v.collection = ? AND v.field = ?`).get(ids, collection, field) as { n: number }
+    return [...groups.map(row => ({ key: row.key, total: Number(row.total) })), { key: '', total: new Set(visibleIds).size - filled.n }]
   }
 
   private ensureViewsColumn() {
@@ -203,6 +263,16 @@ export class TagStore {
     return readEditorContent(this.ensure(), '/tags', want)
   }
 
+  private dropTagGroupIndexes(tagId: string) {
+    const db = this.ensure()
+    const fields = db.prepare('SELECT collection, field FROM tag_group_fields').all() as Array<{ collection: string; field: string }>
+    for (const item of fields) {
+      if (parseTagFlatColumnKey(item.field)?.packId !== tagId) continue
+      db.prepare('DELETE FROM tag_group_values WHERE collection = ? AND field = ?').run(item.collection, item.field)
+      db.prepare('DELETE FROM tag_group_fields WHERE collection = ? AND field = ?').run(item.collection, item.field)
+    }
+  }
+
   private savePack(pack: CollectionSchemaPack, notes: string) {
     const now = Date.now()
     const db = this.ensure()
@@ -218,6 +288,7 @@ export class TagStore {
       .run(pack.id, pack.label, JSON.stringify(pack.fields), now, now)
     writeEditorContent(db, '/tags', pack.id, notes, { transaction: false })
     if (!prev) return
+    if (JSON.stringify(prev.fields) !== JSON.stringify(pack.fields)) this.dropTagGroupIndexes(pack.id)
     const keep = new Set(pack.fields.filter((field) => !field.deleted).map((field) => field.key))
     this.pruneRecordBags(pack.id, keep)
   }
@@ -366,6 +437,7 @@ export class TagStore {
         db.prepare('DELETE FROM tag_stamps WHERE tag_id = ?').run(row.id)
         db.prepare('DELETE FROM tag_docs WHERE tag_id = ?').run(row.id)
         db.prepare('DELETE FROM tags WHERE id = ?').run(row.id)
+        this.dropTagGroupIndexes(row.id)
       }
       db.exec('COMMIT')
     } catch (error) {
@@ -465,6 +537,7 @@ export class TagStore {
       db.prepare('DELETE FROM tag_stamps WHERE tag_id = ?').run(want)
       db.prepare('DELETE FROM tag_docs WHERE tag_id = ?').run(want)
       const result = db.prepare('DELETE FROM tags WHERE id = ?').run(want)
+      this.dropTagGroupIndexes(want)
       db.exec('COMMIT')
       return Number(result.changes) > 0
     } catch (error) {
@@ -485,16 +558,17 @@ export class TagStore {
   indexRecord(collection: string, recordId: string, title: string, tagIds: string[]) {
     const db = this.ensure()
     const ids = [...new Set(tagIds.map((id) => String(id).trim()).filter(Boolean))]
-    db.exec('BEGIN IMMEDIATE')
+    db.exec('SAVEPOINT tag_stamp_write')
     try {
       db.prepare('DELETE FROM tag_stamps WHERE collection = ? AND record_id = ?').run(collection, recordId)
       const insert = db.prepare(
         'INSERT INTO tag_stamps (tag_id, collection, record_id, title) VALUES (?, ?, ?, ?)',
       )
       for (const tagId of ids) insert.run(tagId, collection, recordId, title)
-      db.exec('COMMIT')
+      db.exec('RELEASE tag_stamp_write')
     } catch (error) {
-      db.exec('ROLLBACK')
+      db.exec('ROLLBACK TO tag_stamp_write')
+      db.exec('RELEASE tag_stamp_write')
       throw error
     }
   }
@@ -510,18 +584,33 @@ export class TagStore {
   writeRecordTag(collection: string, recordId: string, tag: unknown, title: string) {
     const value = pruneSchemaValue(tag, this.list())
     const db = this.ensure()
-    if (isEmptySchemaValue(value)) {
-      db.prepare('DELETE FROM tag_record_values WHERE collection = ? AND record_id = ?').run(collection, recordId)
-      this.indexRecord(collection, recordId, title, [])
+    db.exec('SAVEPOINT tag_value_write')
+    try {
+      if (isEmptySchemaValue(value)) {
+        db.prepare('DELETE FROM tag_record_values WHERE collection = ? AND record_id = ?').run(collection, recordId)
+        this.indexRecord(collection, recordId, title, [])
+        this.updateGroupRecord(collection, recordId, value)
+        return value
+      }
+      db.prepare(
+        `INSERT INTO tag_record_values (collection, record_id, tag_json)
+         VALUES (?, ?, ?)
+         ON CONFLICT(collection, record_id) DO UPDATE SET tag_json = excluded.tag_json`,
+      ).run(collection, recordId, JSON.stringify(value))
+      this.indexRecord(collection, recordId, title, value.tags)
+      this.updateGroupRecord(collection, recordId, value)
       return value
+    } catch (error) {
+      db.exec('ROLLBACK TO tag_value_write')
+      throw error
+    } finally {
+      db.exec('RELEASE tag_value_write')
     }
-    db.prepare(
-      `INSERT INTO tag_record_values (collection, record_id, tag_json)
-       VALUES (?, ?, ?)
-       ON CONFLICT(collection, record_id) DO UPDATE SET tag_json = excluded.tag_json`,
-    ).run(collection, recordId, JSON.stringify(value))
-    this.indexRecord(collection, recordId, title, value.tags)
-    return value
+  }
+
+  private updateGroupRecord(collection: string, recordId: string, tag: unknown) {
+    const fields = this.ensure().prepare('SELECT field FROM tag_group_fields WHERE collection = ?').all(collection) as Array<{ field: string }>
+    for (const { field } of fields) this.indexGroupRecord(collection, field, recordId, tag)
   }
 
   recordMeta(collection: string, recordId: string): {
@@ -709,6 +798,7 @@ export class TagStore {
     const db = this.ensure()
     db.prepare('DELETE FROM tag_stamps WHERE collection = ? AND record_id = ?').run(collection, recordId)
     db.prepare('DELETE FROM tag_record_values WHERE collection = ? AND record_id = ?').run(collection, recordId)
+    db.prepare('DELETE FROM tag_group_values WHERE collection = ? AND record_id = ?').run(collection, recordId)
     db.prepare('DELETE FROM record_meta WHERE collection = ? AND record_id = ?').run(collection, recordId)
     db.prepare('DELETE FROM record_banners WHERE collection = ? AND record_id = ?').run(collection, recordId)
     db.prepare('DELETE FROM content_refs WHERE collection = ? AND record_id = ?').run(collection, recordId)

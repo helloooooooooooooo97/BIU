@@ -19,6 +19,7 @@ import { openAndMigrateBiu, runWithAccount } from '@biu/host-plugin-loader/data-
 import { CollabStore } from '@biu/host-account/store'
 import { workspaceMembersCollection } from '@biu/host-account/workspace-members-collection'
 import { builtinAllViewId, stubBuiltinAllView, stubBuiltinMemberView } from '../catalog-views.ts'
+import { seedGroupRecord } from '../web/group-create.ts'
 import { matchListFilterRecord } from '../query-logic.ts'
 import { savedViewRecordPath } from '../paths.ts'
 
@@ -2103,6 +2104,16 @@ test('file-system CRUD uses the unified account authorization decision', async (
   const bobList = await runWithAccount(bob.id, () => db.list('/notes'))
   if (adaList.kind === 'collection') assert.deepEqual(adaList.items.map((row) => row.id), ['n1'])
   if (bobList.kind === 'collection') assert.deepEqual(bobList.items.map((row) => row.id), ['n2'])
+  db.tags.upsert({ id: 'private-groups', label: '私有分组', fields: [{ key: 'lane', type: 'select' }] })
+  db.tags.writeRecordTag('/notes', 'n1', { tags: ['private-groups'], values: { 'private-groups': { lane: 'ada-only' } } }, 'A')
+  db.tags.writeRecordTag('/notes', 'n2', { tags: ['private-groups'], values: { 'private-groups': { lane: 'bob-only' } } }, 'B')
+  const field = 'tag::private-groups::lane'
+  assert.deepEqual((await runWithAccount(ada.id, () => db.attributeGroups('/notes', field))).groups, [
+    { key: 'ada-only', total: 1 }, { key: '', total: 0 },
+  ])
+  assert.deepEqual((await runWithAccount(bob.id, () => db.attributeGroups('/notes', field))).groups, [
+    { key: 'bob-only', total: 1 }, { key: '', total: 0 },
+  ])
   const stamped = await runWithAccount(ada.id, () => db.update('/notes/n1', { status: 'done' }))
   assert.deepEqual(stamped.value.createdBy, { kind: 'user', name: 'Ada 空间昵称', accountId: ada.id })
   assert.deepEqual(stamped.value.updatedBy, [{ kind: 'user', name: 'Ada 空间昵称', accountId: ada.id }])
@@ -3452,4 +3463,53 @@ test('db_doc view/write uses collection namedDocs for page sandbox files', async
     new_str: '// note',
   })
   assert.equal(inserted.ok, true)
+})
+
+
+test('indexed custom attribute groups respect filters, searches and empty records', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  db.register(notesCollection())
+  db.tags.upsert({ id: 'security', label: '安全项目', fields: [{ key: 'lane', type: 'multi-select' }] })
+  await db.update('/notes/n1', { tag: { tags: ['security'], values: { security: { lane: ['compute'] } } } })
+  await db.update('/notes/n2', { tag: { tags: ['security'], values: { security: { lane: ['supply'] } } } })
+  const field = 'tag::security::lane'
+  assert.deepEqual((await db.attributeGroups('/notes', field)).groups, [
+    { key: 'compute', total: 1 }, { key: 'supply', total: 1 }, { key: '', total: 0 },
+  ])
+  assert.deepEqual((await db.attributeGroups('/notes', field, { $ids: ['n1'] })).groups, [
+    { key: 'compute', total: 1 }, { key: '', total: 0 },
+  ])
+  assert.deepEqual((await db.attributeGroups('/notes', field, undefined, '另一篇')).groups, [
+    { key: 'supply', total: 1 }, { key: '', total: 0 },
+  ])
+  await db.update('/notes/n1', { tag: { tags: [], values: {} } })
+  assert.deepEqual((await db.attributeGroups('/notes', field)).groups, [
+    { key: 'supply', total: 1 }, { key: '', total: 1 },
+  ])
+})
+
+
+test('group create persists the custom tag attribute through the real creation path', async () => {
+  const db = new DatabaseService(new Context())
+  const records = new Map<string, DbRecord>()
+  db.register({ id: 'group-notes', path: '/group-notes',
+    schema: { labelField: 'title', fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true }, tag: { type: 'tag', writable: true } } },
+    records: { create: true }, list: () => [...records.values()], get: id => records.get(id) ?? null,
+    create: rows => rows.map(row => { const record = { ...row, id: String(row.id) }; records.set(record.id, record); return record }),
+  })
+  const packs = [{ id: 'security', label: '安全项目', fields: [{ key: 'lane', type: 'multi-select' as const }] }]
+  db.tags.replace(packs)
+  const stat = await db.stat('/group-notes')
+  if (stat.kind !== 'collection') throw new Error('expected collection')
+  const field = 'tag::security::lane'
+  const seed = seedGroupRecord({ title: '新建项目' }, field, 'AI红队', stat.schema, packs)!
+  await db.create('/group-notes', [seed])
+  assert.deepEqual((await db.attributeGroups('/group-notes', field)).groups, [
+    { key: 'AI红队', total: 1 }, { key: '', total: 0 },
+  ])
+  const listed = await db.list('/group-notes', { [field]: 'AI红队' })
+  if (listed.kind !== 'collection') throw new Error('expected collection')
+  assert.equal(listed.total, 1)
+  assert.deepEqual((listed.items[0].tag as { tags: string[] }).tags, ['security'])
 })

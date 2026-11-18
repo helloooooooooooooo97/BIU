@@ -18,6 +18,9 @@ export function parseTagFlatColumnKey(key: string): { packId: string; fieldKey: 
 export function readTagFieldValue(record: DbRecord, field: string, sourceKey = 'tag') {
   const parsed = parseTagFlatColumnKey(field)
   if (!parsed) return record[field]
+  // Projected list responses carry custom tag attributes as flat properties.
+  // Keep explicit empty values too; an omitted property falls back to the tag bag.
+  if (Object.prototype.hasOwnProperty.call(record, field)) return record[field]
   return normalizeSchemaValue(record[sourceKey]).values[parsed.packId]?.[parsed.fieldKey]
 }
 

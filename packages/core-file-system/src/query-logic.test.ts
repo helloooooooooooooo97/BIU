@@ -2,6 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import {
   collectQueryFields,
+  readTagFieldValue,
   isCustomSorts,
   countFilterRules,
   emptyFilterGroup,
@@ -231,3 +232,13 @@ test('tag is_empty matches missing and empty tag objects', () => {
   assert.equal(matchListFilterRecord({ id: '3', tag: { tags: ['dp'], values: {} } }, filter, pagesSchema), false)
 })
 
+
+
+test('custom tag attributes support nested records and flat list projections', () => {
+  const key = 'tag::security::lane'
+  const nested = { id: 'a', tag: { tags: ['security'], values: { security: { lane: ['机密计算'] } } } }
+  assert.deepEqual(readTagFieldValue(nested, key), ['机密计算'])
+  assert.deepEqual(readTagFieldValue({ id: 'a', [key]: ['机密计算'] }, key), ['机密计算'])
+  assert.equal(readTagFieldValue({ ...nested, [key]: null }, key), null)
+  assert.equal(readTagFieldValue({ ...nested, [key]: undefined }, key), undefined)
+})

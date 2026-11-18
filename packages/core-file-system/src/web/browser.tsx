@@ -44,6 +44,7 @@ import {
   filterFieldValueOptions,
   groupField,
   groupListKeys,
+  mergeListFilters,
   groupRecords,
   groupRowBucketKeys,
   groupableFields,
@@ -62,8 +63,9 @@ import {
   type GroupBucket,
   type ViewMode,
 } from './fields.ts'
-import { listGroupedCollection } from './group-list.ts'
-import { TREE_HAS_KIDS, listTreeChildren, listTreeCollection } from './tree-list.ts'
+import { seedGroupRecord } from './group-create.ts'
+import { listAttributeGroups, listGroupedCollection } from './group-list.ts'
+import { TREE_HAS_KIDS, listTreeChildren, listTreeCollection, treeRootFilter } from './tree-list.ts'
 import { AppDialog, CheckRow } from './controls.tsx'
 import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search.tsx'
 import { buildCrumbs, crumbHotkeyPane, crumbParentHotkey, parentCrumbTarget, type CrumbTarget } from './sidebar-nav.ts'
@@ -1524,6 +1526,8 @@ const WindowedTable = memo(function WindowedTable({
         tabIndex={0}
         className={`tasks-table${wrapCells ? ' is-wrap' : ''} is-cols-fixed${truncateCells ? ' is-truncate' : ''}${resizingCol ? ' is-col-resize' : ''}`}
         style={{
+          // A definite width enables fixed table layout; auto lets content widen the title past its sticky offset.
+          width: `${paintedTablePx}px`,
           minWidth: `${paintedTablePx}px`,
           outline: 'none',
           ['--fsdb-pin-title' as string]: `${columnPx[0] || 240}px`,
@@ -1706,6 +1710,8 @@ export function CollectionBrowser({
   const [createScope, setCreateScope] = useState<'personal' | 'workspace' | 'shared' | 'local'>(
     routeScope === 'workspace' ? 'workspace' : routeScope === 'shared' ? 'shared' : 'personal',
   )
+  const creatingGroupsRef = useRef(new Set<string>())
+  const [creatingGroup, setCreatingGroup] = useState<string | null>(null)
   const [createScopeOpen, setCreateScopeOpen] = useState(false)
   const [createTypePath, setCreateTypePath] = useState(PAGES_COLLECTION_PATH)
   const [createTypeOpen, setCreateTypeOpen] = useState(false)
@@ -2375,6 +2381,12 @@ export function CollectionBrowser({
         listGroupedCollection({
           ...listOpts,
           groupBy: reqGroupBy,
+          groupValues: () => listAttributeGroups({
+            ...listOpts, groupBy: reqGroupBy,
+            filters: reqTree && reqParentKey
+              ? mergeListFilters(reqFilters, treeRootFilter(reqParentKey)) ?? reqFilters
+              : reqFilters,
+          }),
           schema,
           packs: tagCatalog,
           extraValues: extraGroupValues(schema),
@@ -4342,6 +4354,49 @@ export function CollectionBrowser({
     await insertCreatedRecord(targetPath, fields, targetTable)
   }
 
+  function groupCreateSeed(groupKey: string) {
+    const bucket = grouped.find(item => (item.key || 'unset') === groupKey)
+    if (!bucket) return null
+    const base = seedRecordFromViewFilters(catalogLocks, filterTree, schema)
+    if (groupBy === 'shareScope' && ['私人', '空间', '共享'].includes(bucket.key)) return base
+    if (isDataOverview && (groupBy === 'table' || groupBy === 'tablePath')) {
+      return overviewCreateTables.some(table => groupBy === 'tablePath' ? table.path === bucket.key
+        : (table.view?.title ?? table.label) === bucket.key) ? base : null
+    }
+    return seedGroupRecord(base,
+      groupBy, bucket.key, schema, tagCatalog, bucket.rows[0])
+  }
+
+  async function createInGroup(groupKey: string) {
+    if (!canCreate || creatingGroupsRef.current.size) return
+    const fields = groupCreateSeed(groupKey)
+    if (!fields) return
+    creatingGroupsRef.current.add(groupKey)
+    setCreatingGroup(groupKey)
+    try {
+      const bucket = grouped.find(item => (item.key || 'unset') === groupKey)
+      const targetTable = isDataOverview && (groupBy === 'table' || groupBy === 'tablePath')
+        ? overviewCreateTables.find(table => groupBy === 'tablePath' ? table.path === bucket?.key
+          : (table.view?.title ?? table.label) === bucket?.key)
+        : isDataOverview ? createTypeTable : undefined
+      const targetPath = targetTable?.path ?? dataPath
+      const scope = groupBy === 'shareScope'
+        ? ({ 私人: 'personal', 空间: 'workspace', 共享: 'shared' } as const)[bucket?.key as '私人' | '空间' | '共享']
+        : undefined
+      const created = await insertCreatedRecord(targetPath, fields, targetTable, scope)
+      if (!created) return
+      setCollapsedGroups(prev => {
+        const next = { ...prev, [groupKey]: false }
+        persistCollapsedGroups(collectionPath, activeViewId ?? routeViewId ?? '', groupBy, next)
+        return next
+      })
+      setGroupPages(prev => ({ ...prev, [groupKey]: 0 }))
+    } finally {
+      creatingGroupsRef.current.delete(groupKey)
+      setCreatingGroup(null)
+    }
+  }
+
   async function createRecord() {
     if (!canCreate) return
     const targetPath = isDataOverview ? createTypeTable?.path || PAGES_COLLECTION_PATH : dataPath
@@ -4355,6 +4410,7 @@ export function CollectionBrowser({
     targetPath: string,
     fields: Record<string, unknown>,
     targetTable?: { path: string; label?: string; view?: { title?: string; icon?: string } },
+    scope: typeof createScope = createScope,
   ) {
     try {
       const data = await readJson<{ items?: Array<{ value?: DbRecord }> }>('/api/db/create', {
@@ -4363,7 +4419,7 @@ export function CollectionBrowser({
         body: JSON.stringify({
           path: targetPath,
           records: [fields],
-          scope: createScope,
+          scope,
         }),
       })
       const created = data.items?.[0]?.value
@@ -4426,6 +4482,7 @@ export function CollectionBrowser({
         }
         landCreatedTitleCell(String(id))
       }, 0)
+      return value
     } catch (err) {
       setError(String(err))
     }
@@ -5014,7 +5071,7 @@ export function CollectionBrowser({
     )
   }
 
-  function GroupHead({ groupKey, label, count }: { groupKey: string; label: string; count: number }) {
+  function GroupHead({ groupKey, label }: { groupKey: string; label: string }) {
     const folded = Boolean(collapsedGroups[groupKey])
     return (
       <header className="tasks-queue-ghead">
@@ -5059,7 +5116,18 @@ export function CollectionBrowser({
           </span>
         </button>
         <span className="tasks-queue-glabel">{label}</span>
-        <span className="tasks-queue-count">{count}</span>
+        {canCreate && !sheet ? (
+          <button
+            type="button"
+            className="tasks-icon-btn tasks-group-create"
+            aria-label={`在「${label}」分组中新增`}
+            title={groupCreateSeed(groupKey) ? `在「${label}」分组中新增` : '当前分组属性无法在新建时指定'}
+            disabled={Boolean(creatingGroup) || !groupCreateSeed(groupKey)}
+            onClick={() => void createInGroup(groupKey)}
+          >
+            <PlusIcon aria-hidden className="size-[14px]" />
+          </button>
+        ) : null}
       </header>
     )
   }
@@ -5893,7 +5961,7 @@ export function CollectionBrowser({
       return (
         <tr key={node.key} className="fsdb-group-row">
           <td colSpan={tablePaintRef.current.colSpan}>
-            <GroupHead groupKey={node.groupKey} label={node.label} count={node.count} />
+            <GroupHead groupKey={node.groupKey} label={node.label} />
           </td>
         </tr>
       )
@@ -5941,6 +6009,9 @@ export function CollectionBrowser({
   function applyFilterTree(next: FilterGroup) {
     setFilterTree(next)
     if (!countFilterRules(next)) setFilters({})
+    // Persist user edits immediately so a refresh cannot restore the old tree
+    // during the general view-save debounce.
+    if (!sheet && activeViewId) patchActiveView({ filterTree: next, filters: {} })
   }
 
   function persistActiveViewNow() {
@@ -7038,7 +7109,7 @@ export function CollectionBrowser({
                   onVisibleRange={onVisibleRange}
                   frozen={Boolean(held)}
                   activeRowId={detailId}
-                  cellPaintKey={cellPickEpoch}
+                  cellPaintKey={cellPickEpoch * 2 + Number(Boolean(creatingGroup))}
                 />
         </div>
             ) : null}

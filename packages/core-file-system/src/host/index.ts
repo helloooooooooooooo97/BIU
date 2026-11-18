@@ -1813,6 +1813,35 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
+  async attributeGroups(path: string, field: string, filter?: Record<string, unknown>, q = '') {
+    const parsed = parseTagFlatColumnKey(field)
+    const spec = this.collection(normalizeCollectionPath(path))
+    if (!spec || spec.path === DATA_COLLECTION_PATH || !parsed) return { groups: null }
+    const liveFilter = { ...filter }
+    const scope = liveFilter.$scope
+    const ids = asIds(liveFilter.$ids)
+    const trash = liveFilter.deleted === true || liveFilter.trash === true
+    delete liveFilter.$scope
+    delete liveFilter.$ids
+    delete liveFilter.deleted
+    delete liveFilter.trash
+    const query: CollectionListQuery = { q, filter: liveFilter, trash }
+    if (ids?.length) query.ids = ids
+    const auth = this.authorization()
+    const actor = auth?.currentActor()
+    if (auth && actor) auth.preloadCollection(actor.workspaceId, spec.path, actor.accountId)
+    try {
+      const pack = await this.visibleSortedCollectionRows(spec, query, 'id', 'asc', undefined, true)
+      const visible = scope === 'personal' || scope === 'workspace' || scope === 'shared' ? pack[scope] : pack.rows
+      const schema = schemaFor(spec)
+      const packs = this.tags.list()
+      const matching = visible.filter(row => matchListFilter(row, liveFilter, schema, packs) && matchQuery(row, q, packs))
+      return { groups: this.tags.attributeGroups(spec.path, field, matching.map(row => row.id)) }
+    } finally {
+      if (auth && actor) auth.releaseCollection(actor.workspaceId, spec.path, actor.accountId)
+    }
+  }
+
   async list(path: string, filter?: Record<string, unknown>, page?: ListPage) {
     const parts = splitPath(path)
     if (parts.length === 0) {
@@ -3826,6 +3855,11 @@ export function apply(ctx: Context) {
       })
     }),
   )
+  ctx.http.route('GET', '/api/db/groups', route => send(route, () => {
+    const raw = route.query.get('filter')
+    const filter = raw ? JSON.parse(raw) as Record<string, unknown> : undefined
+    return db.attributeGroups(route.query.get('path') || '/', route.query.get('field') || '', filter, route.query.get('q') || '')
+  }))
   ctx.http.route('GET', '/api/db/read', (route) => send(route, () => db.read(route.query.get('path') || '/')))
   ctx.http.route('GET', '/api/db/banner-gallery', (route) =>
     send(route, async () => {

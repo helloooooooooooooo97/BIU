@@ -573,3 +573,22 @@ test('starred records toggle by collection path and id', () => {
   assert.equal(isRecordStarred(next, '/tasks', 'home'), false)
   assert.equal(isRecordStarred(toggleStarredRecord(next, '/pages', 'home'), '/pages', 'home'), false)
 })
+
+
+test('clearing a filter overwrites the persisted display tree after a refresh', () => {
+  const mem: Record<string, string> = {}
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
+    getItem: (key: string) => mem[key] ?? null,
+    setItem: (key: string, value: string) => { mem[key] = value },
+  } })
+  const view = { ...builtinAllView({ path: '/pages', label: '页面' }),
+    filterTree: { kind: 'group' as const, id: 'root', combinator: 'and' as const, children: [
+      { kind: 'rule' as const, id: 'rule', field: 'tag', op: 'eq' as const, value: 'security' },
+    ] },
+  }
+  persistViewDisplay('/pages', view.id, { filterTree: view.filterTree })
+  persistViewDisplay('/pages', view.id, { filterTree: undefined })
+  assert.equal(withViewDisplay('/pages', view).filterTree, undefined)
+  persistViewDisplay('/pages', view.id, { wrap: true })
+  assert.equal(withViewDisplay('/pages', view).filterTree, undefined)
+})
