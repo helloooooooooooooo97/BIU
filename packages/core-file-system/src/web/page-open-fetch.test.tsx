@@ -43,25 +43,20 @@ function json(body: unknown) {
   })
 }
 
-test('opening a record requests content before /api/db/read returns', async () => {
+test('opening a record uses /api/db/detail instead of split content and read', async () => {
   const hits: string[] = []
-  let releaseRead!: () => void
-  const readGate = new Promise<void>((resolve) => {
-    releaseRead = resolve
-  })
   const original = globalThis.fetch
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input)
-    if (url.includes('/api/db/content?')) {
-      hits.push('content')
-      return json({ value: '正文', version: 1 })
+    if (url.includes('/api/db/detail?')) {
+      hits.push('detail')
+      return json({
+        value: { id: 'p1', title: '一页' },
+        content: { value: '正文', version: 1 },
+      })
     }
-    if (url.includes('/api/db/read?')) {
-      hits.push('read-start')
-      await readGate
-      hits.push('read-done')
-      return json({ value: { id: 'p1', title: '一页', content: '正文' } })
-    }
+    if (url.includes('/api/db/content?')) hits.push('content')
+    if (url.includes('/api/db/read?')) hits.push('read')
     if (url.includes('/api/db/list?')) {
       hits.push('list')
       return json({
@@ -91,13 +86,11 @@ test('opening a record requests content before /api/db/read returns', async () =
       />,
     )
     await waitFor(() => {
-      assert.ok(hits.includes('content'), `hits=${hits.join(',')}`)
+      assert.ok(hits.includes('detail'), `hits=${hits.join(',')}`)
     })
-    assert.equal(hits.includes('read-done'), false)
-    assert.ok(hits.includes('read-start'))
+    assert.equal(hits.includes('content'), false)
     assert.equal(hits.includes('list'), false)
   } finally {
-    releaseRead()
     globalThis.fetch = original
   }
 })
@@ -107,14 +100,15 @@ test('embedded inspector page paints editor without /api/db/list', async () => {
   const original = globalThis.fetch
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input)
-    if (url.includes('/api/db/content?')) {
-      hits.push('content')
-      return json({ value: '', version: 1 })
+    if (url.includes('/api/db/detail?')) {
+      hits.push('detail')
+      return json({
+        value: { id: 'p1', title: '轻量页' },
+        content: { value: '', version: 1 },
+      })
     }
-    if (url.includes('/api/db/read?')) {
-      hits.push('read')
-      return json({ value: { id: 'p1', title: '轻量页' } })
-    }
+    if (url.includes('/api/db/content?')) hits.push('content')
+    if (url.includes('/api/db/read?')) hits.push('read')
     if (url.includes('/api/db/list?')) {
       hits.push('list')
       return json({ schema, items: [], total: 0 })
@@ -153,8 +147,8 @@ test('embedded inspector page paints editor without /api/db/list', async () => {
     const paintedAt = Math.round(performance.now() - t0)
     console.log(JSON.stringify({ paintedAt, hits }))
     assert.equal(hits.includes('list'), false)
-    assert.ok(hits.includes('content'))
-    assert.ok(hits.includes('read'))
+    assert.ok(hits.includes('detail'))
+    assert.equal(hits.includes('content'), false)
     assert.ok(paintedAt < 2000, `inspector page took ${paintedAt}ms to paint`)
   } finally {
     globalThis.fetch = original

@@ -1196,11 +1196,12 @@ test('opening a record fetches content without waiting for detailRow', () => {
     browser.indexOf('useEffect(() => {\n    if (!detailId) {\n      contentGen.current += 1'),
     browser.indexOf('function adoptPersistedViews'),
   )
-  assert.match(effect, /pullDetailBody\(\)/)
+  assert.match(effect, /pullDetail\(\)/)
   assert.doesNotMatch(effect, /detailRow/)
-  assert.match(browser, /\[collectionPath, dataPath, detailId, pullDetailBody\]/)
+  assert.match(browser, /\[collectionPath, dataPath, detailId, pullDetail\]/)
   assert.match(browser, /sourceRecordPath\(detailRowRef\.current, id\)/)
-  assert.match(browser, /\}, \[dataPath\]\)/)
+  assert.match(browser, /\/api\/db\/detail\?path=/)
+  assert.doesNotMatch(browser, /pullDetailRecord/)
   assert.match(browser, /<Suspense fallback=\{<PageContentLoading \/>\}>/)
   assert.doesNotMatch(browser, /warmSiblingListCaches/)
   assert.doesNotMatch(browser, /WARM_LIST_CONCURRENCY/)
@@ -1218,11 +1219,7 @@ test('open detail still reloads body when the collection changes', () => {
   assert.match(browser, /onRetryBody=\{refreshOpenDetail\}/)
   assert.match(browser, /invalidateListReads\(\)/)
   assert.match(browser, /fsdb:detail-refresh/)
-  assert.match(
-    browser,
-    /readJson<\{ value\?: unknown; version\?: number \}>\(`\/api\/db\/content\?path=\$\{encodeURIComponent\(path\)\}`, undefined, \{ fresh: true \}\)/,
-  )
-  assert.match(browser, /readJson<\{ value\?: DbRecord \}>\(`\/api\/db\/read\?path=\$\{encodeURIComponent\(`\$\{dataPath\}\/\$\{id\}`\)\}`, undefined, \{ fresh: true \}\)/)
+  assert.match(browser, /\/api\/db\/detail\?path=\$\{encodeURIComponent\(path\)\}/)
   assert.match(browser, /mapListedRecords\(\(item\) => \(item.id === row.id \? overlayListedRow\(item, row\) : item\)\)/)
 })
 
@@ -1444,11 +1441,16 @@ test('parent and depends field glyphs use the share nodes, not the skinny link c
   assert.match(style, /--fsdb-field:var\(--fsdb-ui-share\)/)
 })
 
-test('facet field glyph matches the tag icon', () => {
+test('tag field glyph matches the tag icon', () => {
   const glyphs = readFileSync(resolve(import.meta.dirname, './table-glyph.tsx'), 'utf8')
   const cells = readFileSync(resolve(import.meta.dirname, './fsdb-cells.tsx'), 'utf8')
   const spec = readFileSync(resolve(import.meta.dirname, '../host/tags-collection.ts'), 'utf8')
   assert.match(spec, /icon: 'tag'/)
+  assert.match(spec, /id: 'tags'/)
+  assert.match(spec, /route: '\/db-tags'/)
+  assert.doesNotMatch(spec, /id: 'facets'/)
+  assert.doesNotMatch(spec, /db-facets/)
+  assert.doesNotMatch(spec, /action\|facet\|person/)
   assert.match(glyphs, /name === 'tag' \|\| name === 'rectangle-stack' \|\| name === 'collection'/)
   assert.match(glyphs, /<TagIcon/)
   assert.match(cells, /kind === 'tag'\) return 'tag'/)

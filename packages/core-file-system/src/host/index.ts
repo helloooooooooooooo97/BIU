@@ -2842,6 +2842,44 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
+  async detail(path: string) {
+    const rewritten = this.rewriteOverviewRecordPath(path)
+    if (rewritten) return this.detail(rewritten)
+    const parts = splitPath(path)
+    if (parts.length !== 2) throw new Error(`cannot detail: ${normalizeCollectionPath(path)}`)
+    const spec = this.collection(`/${parts[0]}`)
+    if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
+    const loaded = await spec.get(parts[1]!)
+    if (!loaded) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
+    this.assertLiveRecord(spec, loaded.id, 'resource:read', loaded)
+    const rawSchema = schemaFor(spec)
+    const schema = this.schemaForCurrent(spec, rawSchema)
+    const decorated = this.withBanner(spec, this.decorateRecord(spec, loaded))
+    const field = rawSchema.contentField ?? 'content'
+    let contentValue: unknown = null
+    let version: number | undefined
+    if (rawSchema.fields[field]) {
+      const editorContent = isEditorContentSpec(spec)
+        ? readEditorContentRecord(this.tags.ensure(), spec.path, loaded.id)
+        : null
+      contentValue = editorContent ? editorContent.body : (loaded[field] ?? null)
+      if (editorContent) version = editorContent.version
+    }
+    return {
+      kind: 'detail' as const,
+      path: `${spec.path}/${loaded.id}`,
+      schema,
+      value: withoutContent(spec, decorated),
+      content: {
+        kind: 'content' as const,
+        path: `${spec.path}/${loaded.id}`,
+        field,
+        value: contentValue,
+        ...(version != null ? { version } : {}),
+      },
+    }
+  }
+
   async writeContent(path: string, value: unknown, expectedVersion?: number) {
     const normalized = normalizeCollectionPath(path)
     return this.serializeContentWrite(normalized, () => this.writeContentNow(path, value, expectedVersion))
@@ -3462,10 +3500,10 @@ export function apply(ctx: Context) {
   })
   const shares = db.shares
   shares.open(process.env.VITEST ? ':memory:' : biuSqlitePath())
-  const facets = db.tags
+  const tags = db.tags
   db.register(dataCollection(() => db.collectionsList()))
   db.register(viewsCollection(savedViews, () => db.collectionsList().map((item) => db.publishCollection(item)), () => currentAccountId()))
-  db.register(tagsCollection(facets, () => db.collectionsList().map((item) => ({
+  db.register(tagsCollection(tags, () => db.collectionsList().map((item) => ({
     id: item.id,
     path: item.path,
     label: item.label ?? item.id,
@@ -3897,6 +3935,25 @@ export function apply(ctx: Context) {
     return db.attributeGroups(route.query.get('path') || '/', route.query.get('field') || '', filter, route.query.get('q') || '')
   }))
   ctx.http.route('GET', '/api/db/read', (route) => send(route, () => db.read(route.query.get('path') || '/')))
+  ctx.http.route('GET', '/api/db/detail', async (route) => {
+    const path = route.query.get('path') || '/'
+    const parts = path.split('/').filter(Boolean)
+    if (parts.length === 2) {
+      const search = route.query.toString()
+      const forwarded = await forwardCloud(
+        ctx,
+        `/${parts[0]}`,
+        parts[1]!,
+        search ? `/api/db/detail?${search}` : '/api/db/detail',
+        { method: 'GET' },
+      )
+      if (forwarded) {
+        route.send(forwarded.status, forwarded.body)
+        return
+      }
+    }
+    await send(route, () => db.detail(path))
+  })
   ctx.http.route('GET', '/api/db/banner-gallery', (route) =>
     send(route, async () => {
       await db.requirePath('/pages', 'resource:read')
@@ -4530,10 +4587,10 @@ export function apply(ctx: Context) {
         return
       }
       const q = route.query.get('q') || ''
-      const payload: { tags: ReturnType<typeof facets.list>; filled?: ReturnType<typeof facets.filledFieldCounts> } = {
-        tags: facets.list(q),
+      const payload: { tags: ReturnType<typeof tags.list>; filled?: ReturnType<typeof tags.filledFieldCounts> } = {
+        tags: tags.list(q),
       }
-      if (route.query.get('filled')) payload.filled = facets.filledFieldCounts()
+      if (route.query.get('filled')) payload.filled = tags.filledFieldCounts()
       route.send(200, payload)
     } catch (error) {
       route.send(400, { error: String(error) })
@@ -4546,10 +4603,10 @@ export function apply(ctx: Context) {
       const listed = Array.isArray(body.tags) ? body.tags : Array.isArray(body.facets) ? body.facets : []
       for (const item of listed) {
         const pack = normalizeSchemaPack(item)
-        if (pack) facets.upsert(pack)
+        if (pack) tags.upsert(pack)
       }
       db.notifyTagCatalog()
-      route.send(200, { ok: true, tags: facets.list() })
+      route.send(200, { ok: true, tags: tags.list() })
     } catch (error) {
       route.send(400, { error: String(error) })
     }

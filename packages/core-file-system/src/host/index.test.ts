@@ -201,6 +201,11 @@ test('root lists registered collections; record read/update follows schema', asy
   assert.equal(read.kind, 'record')
   if (read.kind !== 'record') return
   assert.equal(read.value.status, 'open')
+  const detail = await db.detail('/notes/n1')
+  assert.equal(detail.kind, 'detail')
+  assert.equal(detail.path, '/notes/n1')
+  assert.equal(detail.value.status, 'open')
+  assert.equal(detail.content.value, null)
 
   const written = await db.update('/notes/n1', { status: 'done' })
   assert.equal(written.value.status, 'done')

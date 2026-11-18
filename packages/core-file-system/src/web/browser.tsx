@@ -2553,7 +2553,7 @@ export function CollectionBrowser({
     return { path: dataPath, id: String(row?.id ?? '') }
   }
 
-  const pullDetailBody = useCallback(() => {
+  const pullDetail = useCallback(() => {
     const id = detailIdRef.current
     if (!id) {
       setDetailBody(null)
@@ -2562,52 +2562,57 @@ export function CollectionBrowser({
       return
     }
     const path = sourceRecordPath(detailRowRef.current, id)
-    const gen = ++contentGen.current
-    void readJson<{ value?: unknown; version?: number }>(`/api/db/content?path=${encodeURIComponent(path)}`, undefined, { fresh: true })
+    const bodyGen = ++contentGen.current
+    const recGen = ++recordGen.current
+    void readJson<{
+      value?: DbRecord
+      content?: { value?: unknown; version?: number }
+    }>(`/api/db/detail?path=${encodeURIComponent(path)}`, undefined, { fresh: true })
       .then((data) => {
-        if (gen !== contentGen.current || (contentWritePending.current.get(path) ?? 0) > 0) return
-        if (Number.isInteger(data.version)) contentVersions.current.set(path, data.version!)
+        if (bodyGen !== contentGen.current || recGen !== recordGen.current) return
+        const row = data.value
+        if (row?.id) {
+          setDetailRow((prev) => {
+            if (prev?.id && prev.id !== row.id) return prev
+            return { ...prev, ...row, banner: row.banner ?? null }
+          })
+          mapListedRecords((item) => (item.id === row.id ? overlayListedRow(item, row) : item))
+          patchListCacheRecords(dataPath, (item) => (item.id === row.id ? overlayListedRow(item, row) : item))
+        }
+        if ((contentWritePending.current.get(path) ?? 0) > 0) return
+        if (Number.isInteger(data.content?.version)) contentVersions.current.set(path, data.content!.version!)
         else contentVersions.current.delete(path)
-        setDetailBody(data.value ?? null)
+        setDetailBody(data.content?.value ?? null)
         setDetailBodyStatus('ready')
         setDetailBodyError('')
       })
       .catch((error) => {
-        if (gen !== contentGen.current) return
+        if (bodyGen !== contentGen.current) return
+        if (error instanceof HttpError && error.status === 404) {
+          if (!itemsRef.current.some((item) => item.id === id)) {
+            setOpenDetailId(null)
+            setDetailRow(null)
+            queueMicrotask(() => onCloseRecord?.())
+          }
+          return
+        }
         setDetailBody(null)
         setDetailBodyStatus('failed')
         setDetailBodyError(error instanceof Error ? error.message : '正文加载失败')
       })
-  }, [dataPath])
-  const pullDetailRecord = useCallback(() => {
-    const id = detailIdRef.current
-    if (!id) return
-    const gen = ++recordGen.current
-    void readJson<{ value?: DbRecord }>(`/api/db/read?path=${encodeURIComponent(`${dataPath}/${id}`)}`, undefined, { fresh: true })
-      .then((data) => {
-        const row = data.value
-        if (gen !== recordGen.current || !row?.id) return
-        setDetailRow((prev) => {
-          if (prev?.id && prev.id !== row.id) return prev
-          return { ...prev, ...row, banner: row.banner ?? null }
-        })
-        mapListedRecords((item) => (item.id === row.id ? overlayListedRow(item, row) : item))
-        patchListCacheRecords(dataPath, (item) => (item.id === row.id ? overlayListedRow(item, row) : item))
-      })
-      .catch(() => undefined)
-  }, [dataPath])
+  }, [dataPath, onCloseRecord])
+  const pullDetailBody = pullDetail
   const refreshOpenDetail = useCallback(() => {
     invalidateListReads()
     void pullTags()
-    pullDetailBody()
-    pullDetailRecord()
+    pullDetail()
     const id = detailIdRef.current
     if (id) {
       window.dispatchEvent(
         new CustomEvent('fsdb:detail-refresh', { detail: { path: dataPath, id } }),
       )
     }
-  }, [dataPath, pullDetailBody, pullDetailRecord])
+  }, [dataPath, pullDetail])
   const steppingView = useRef(false)
 
   useEffect(() => {
@@ -2800,7 +2805,7 @@ export function CollectionBrowser({
       window.removeEventListener('fsdb:change', onChange)
       window.removeEventListener('fsdb:shares-change', onChange)
     }
-  }, [collectionPath, dataPath, nested, pullDetailBody, pullDetailRecord, refreshOpenDetail])
+  }, [collectionPath, dataPath, nested, pullDetail, refreshOpenDetail])
 
   useEffect(() => {
     if (routeRecordId) return
@@ -2876,30 +2881,6 @@ export function CollectionBrowser({
       setError('')
     }
   }, [routeRecordId])
-
-  useEffect(() => {
-    if (!detailId) {
-      setDetailRow(null)
-      return
-    }
-    let cancelled = false
-    void readJson<{ value?: DbRecord }>(`/api/db/read?path=${encodeURIComponent(`${dataPath}/${detailId}`)}`)
-      .then((data) => {
-        const row = data.value
-        if (cancelled || !row?.id) return
-        setDetailRow(row)
-      })
-      .catch((error) => {
-        if (cancelled || !(error instanceof HttpError) || error.status !== 404) return
-        if (itemsRef.current.some((item) => item.id === detailId)) return
-        setOpenDetailId(null)
-        setDetailRow(null)
-        queueMicrotask(() => onCloseRecord?.())
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [collectionPath, dataPath, detailId, reloadKey])
 
   useEffect(() => () => window.clearTimeout(noticeTimer.current), [])
 
@@ -3563,8 +3544,8 @@ export function CollectionBrowser({
     setDetailBody(null)
     setDetailBodyStatus('loading')
     setDetailBodyError('')
-    pullDetailBody()
-  }, [collectionPath, dataPath, detailId, pullDetailBody])
+    pullDetail()
+  }, [collectionPath, dataPath, detailId, pullDetail])
 
   function adoptPersistedViews(path: string, listed: SavedView[], removed?: string[]) {
     const merged = rankListedViews(
