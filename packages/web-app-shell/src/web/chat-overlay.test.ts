@@ -18,7 +18,6 @@ import {
   SIDEBAR_DEFAULT,
   SIDEBAR_LABEL_AT,
   SIDEBAR_RAIL,
-  SIDEBAR_TAG_AT,
   getChatOverlay,
   setChatOverlay,
   closeChatOverlay,
@@ -78,7 +77,6 @@ test('sidebar stays a normal pane at min width', () => {
   assert.equal(SIDEBAR_MIN, 160)
   assert.equal(SIDEBAR_DEFAULT, 240)
   assert.equal(SIDEBAR_LABEL_AT, SIDEBAR_MIN)
-  assert.equal(SIDEBAR_TAG_AT, SIDEBAR_MAX)
   assert.ok(SIDEBAR_MIN <= SIDEBAR_DEFAULT)
   assert.ok(SIDEBAR_DEFAULT < SIDEBAR_MAX)
   const atMin = allocateShellColumns({

@@ -66,7 +66,7 @@ import {
 import { seedGroupRecord } from './group-create.ts'
 import { listAttributeGroups, listGroupedCollection } from './group-list.ts'
 import { TREE_HAS_KIDS, listTreeChildren, listTreeCollection, treeRootFilter } from './tree-list.ts'
-import { AppDialog, CheckRow } from './controls.tsx'
+import { AppDialog, CheckRow, LocalText } from './controls.tsx'
 import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search.tsx'
 import { buildCrumbs, crumbHotkeyPane, crumbParentHotkey, parentCrumbTarget, type CrumbTarget } from './sidebar-nav.ts'
 import { CrumbTrail } from './crumb-trail.tsx'
@@ -810,7 +810,7 @@ function sameSavedViews(a: SavedView[], b: SavedView[]) {
   if (a === b) return true
   if (a.length !== b.length) return false
   for (let i = 0; i < a.length; i += 1) {
-    if (a[i]!.id !== b[i]!.id || viewStateKey(a[i]!) !== viewStateKey(b[i]!)) return false
+    if (a[i]!.id !== b[i]!.id || a[i]!.name !== b[i]!.name || viewStateKey(a[i]!) !== viewStateKey(b[i]!)) return false
   }
   return true
 }
@@ -1529,8 +1529,6 @@ const WindowedTable = memo(function WindowedTable({
         tabIndex={0}
         className={`tasks-table${wrapCells ? ' is-wrap' : ''} is-cols-fixed${truncateCells ? ' is-truncate' : ''}${resizingCol ? ' is-col-resize' : ''}`}
         style={{
-          // A definite width enables fixed table layout; auto lets content widen the title past its sticky offset.
-          width: `${paintedTablePx}px`,
           minWidth: `${paintedTablePx}px`,
           outline: 'none',
           ['--fsdb-pin-title' as string]: `${columnPx[0] || 240}px`,
@@ -2153,8 +2151,6 @@ export function CollectionBrowser({
   const adoptViewRef = useRef<(view: SavedView) => void>(() => undefined)
   const hydratedDetail = useRef('')
   const [dlg, setDlg] = useState<
-    | { kind: 'rename'; view: SavedView }
-    | { kind: 'delete'; view: SavedView }
     | { kind: 'action'; row: DbRecord; action: CollectionActionInfo }
     | { kind: 'alert'; title: string; body: string }
     | { kind: 'delete-record'; row: DbRecord }
@@ -2166,7 +2162,6 @@ export function CollectionBrowser({
   const [bulkEditKey, setBulkEditKey] = useState('')
   const [bulkEditRaw, setBulkEditRaw] = useState('')
   const [bulkFacetIds, setBulkFacetIds] = useState<string[]>([])
-  const [dlgError, setDlgError] = useState('')
   const crumbRef = useRef<HTMLElement>(null)
   const viewRef = useRef<HTMLDivElement>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
@@ -3572,11 +3567,6 @@ export function CollectionBrowser({
     pullDetailBody()
   }, [collectionPath, dataPath, detailId, pullDetailBody])
 
-  useEffect(() => {
-    if (dlg?.kind !== 'rename') return
-    setDlgError('')
-  }, [dlg])
-
   function adoptPersistedViews(path: string, listed: SavedView[], removed?: string[]) {
     const merged = rankListedViews(
       listedViews(path, mergeSavedViewLists(loadViews(path), listed, removed)).map((view) => withViewDisplay(path, view)),
@@ -3644,7 +3634,11 @@ export function CollectionBrowser({
         listedViews(
           path,
           mergeSavedViewLists(loadViews(path), adopted, extra?.remove),
-        ).map((view) => withViewDisplay(path, view)),
+        ).map((view) => {
+          const painted = withViewDisplay(path, view)
+          const forcedView = stampById.get(view.id)
+          return forcedView ? { ...painted, name: forcedView.name, updatedAt: forcedView.updatedAt } : painted
+        }),
         adopted,
       )
       rememberViews(path, listedNow)
@@ -3892,6 +3886,7 @@ export function CollectionBrowser({
 
   function uniqueViewName(base: string, listed: SavedView[] = paintListedViews(collectionPath)) {
     const names = new Set(listed.map((item) => item.name))
+    if (base === '新视图') return base
     if (!names.has(base)) return base
     let n = 2
     while (names.has(`${base} ${n}`)) n += 1
@@ -3989,47 +3984,52 @@ export function CollectionBrowser({
     persistViews(views.map((view) => (view.id === activeViewId ? { ...view, ...patch } : view)))
   }
 
+  function commitViewName(viewId: string, raw: string) {
+    const nextName = raw.trim()
+    if (!nextName) return
+    const current = viewsRef.current
+    const target = current.find((item) => item.id === viewId)
+    if (!target || target.name === nextName) return
+    if (current.some((item) => item.id !== viewId && item.name === nextName)) return
+    const updated = stampSavedView({ ...target, name: nextName })
+    const listed = current.map((item) => (item.id === viewId ? updated : item))
+    viewsRef.current = listed
+    setViews(listed)
+    rememberViews(collectionPath, listed)
+    void persistViewsWith(collectionPath, listed, { upsert: [updated], baseline: current }).then((ok) => {
+      if (ok) return
+      const live = viewsRef.current
+      const liveTarget = live.find((item) => item.id === viewId)
+      if (liveTarget && liveTarget.name === nextName && live !== listed) return
+      viewsRef.current = current
+      setViews(current)
+      rememberViews(collectionPath, current)
+    })
+  }
+
   function renameView(view: SavedView) {
     setViewMenuOpen(false)
-    setDlg({ kind: 'rename', view })
+    if (isReadOnlyViewId(view.id)) return
+    if (view.id !== activeViewId) selectView(view)
+    window.requestAnimationFrame(() => {
+      const el = pageRef.current?.querySelector<HTMLTextAreaElement>('.fsdb-main > .fsdb-detail-title-row .fsdb-detail-title-input')
+      el?.focus()
+      el?.select()
+    })
   }
 
   function deleteView(view: SavedView) {
     setViewMenuOpen(false)
-    setDlg({ kind: 'delete', view })
-  }
-
-  function applyRename(name?: string) {
-    if (!dlg || dlg.kind !== 'rename') return
-    const next = (name ?? '').trim()
-    if (!next) {
-      setDlgError('请填写名称')
-      return
-    }
-    if (views.some((item) => item.id !== dlg.view.id && item.name === next)) {
-      setDlgError('已有同名视图')
-      return
-    }
-    void persistViews(views.map((item) => (item.id === dlg.view.id ? { ...item, name: next } : item))).then((ok) => {
-      if (!ok) return
-      setDlg(null)
-    })
-  }
-
-  function applyDeleteView() {
-    if (!dlg || dlg.kind !== 'delete') return
-    if (!canRemoveCollectionView(views)) {
-      setDlg(null)
-      return
-    }
-    const removedId = dlg.view.id
+    if (isReadOnlyViewId(view.id)) return
+    const current = viewsRef.current
+    if (!canRemoveCollectionView(current)) return
+    const removedId = view.id
     // 删除要立刻发出去：这条可能刚建、本地列表里还没有，
     // 只靠 diffSavedViews 会漏掉它，删除就丢了。
-    const remaining = views.filter((item) => item.id !== removedId)
-    setDlg(null)
+    const remaining = current.filter((item) => item.id !== removedId)
     void persistViewsWith(collectionPath, remaining, { remove: [removedId] }).then((ok) => {
       if (!ok) return
-      if (activeViewId === removedId) {
+      if (activeViewIdRef.current === removedId) {
         const next = viewsRef.current[0]
         if (next) selectView(next)
       }
@@ -6203,7 +6203,26 @@ export function CollectionBrowser({
         </div>
         <div className="fsdb-detail-title-row">
           <div className="fsdb-detail-title-block">
-          <h1 className="fsdb-detail-title">{activeView?.name ?? title}</h1>
+          {activeView && !isReadOnlyViewId(activeView.id) ? (
+            <h1 className="fsdb-detail-title">
+              <LocalText
+                as="textarea"
+                className="fsdb-detail-title-input"
+                value={activeView.name}
+                autoSize
+                aria-label="视图名称"
+                onKeyDown={(event) => {
+                  if (event.nativeEvent.isComposing) return
+                  if (event.key !== 'Enter' || event.shiftKey) return
+                  event.preventDefault()
+                  event.currentTarget.blur()
+                }}
+                onCommit={(raw) => commitViewName(activeView.id, raw)}
+              />
+            </h1>
+          ) : (
+            <h1 className="fsdb-detail-title">{activeView?.name ?? title}</h1>
+          )}
           </div>
         </div>
         </>
@@ -6253,7 +6272,6 @@ export function CollectionBrowser({
                     setViewMenuOpen(false)
                   }}
                   onCopy={copyView}
-                  onRename={renameView}
                   onDelete={deleteView}
                   onReorder={persistViewOrder}
                   onAdd={() => addEmptyView()}
@@ -6919,7 +6937,7 @@ export function CollectionBrowser({
                 title={viewStarred ? '取消收藏视图' : '收藏视图'}
                 aria-label={viewStarred ? '取消收藏视图' : '收藏视图'}
                 aria-pressed={viewStarred}
-                onClick={() => persistStarredViews(toggleStarredView(getStarredViews(), collectionPath, activeViewId))}
+                onClick={() => persistStarredViews(toggleStarredView(getStarredViews(), collectionPath, activeViewId, activeView?.name))}
               >
                 <UiGlyph icon="star" className={viewStarred ? 'text-[#f5b700]' : undefined} />
               </button>
@@ -7045,7 +7063,6 @@ export function CollectionBrowser({
             setDetailRow(null)
             setCellPop(null)
           }}
-          onRenameView={renameView}
           onDeleteView={deleteView}
           onAddView={addEmptyView}
           onOpenRecord={(path, view, recordId, row) => {
@@ -7225,28 +7242,6 @@ export function CollectionBrowser({
         </div>
         </div>
       </div>
-      {dlg?.kind === 'rename' ? (
-        <AppDialog
-          key={dlg.view.id}
-          title="重命名视图"
-          confirm="保存"
-          onCancel={() => setDlg(null)}
-          onConfirm={applyRename}
-          input={{ defaultValue: dlg.view.name, placeholder: '视图名称', maxLength: 80 }}
-          error={dlgError}
-          onClearError={() => setDlgError('')}
-        />
-      ) : null}
-      {dlg?.kind === 'delete' ? (
-        <AppDialog
-          title="删除视图"
-          confirm="删除"
-          danger
-          onCancel={() => setDlg(null)}
-          onConfirm={applyDeleteView}
-          body={<p>确定删除视图「{dlg.view.name}」？会放进回收站，可随时恢复。</p>}
-        />
-      ) : null}
       {dlg?.kind === 'delete-record' ? (
         <AppDialog
           title="删除记录"

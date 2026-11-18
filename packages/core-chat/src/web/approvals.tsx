@@ -256,12 +256,10 @@ export function ApprovalsRail(props: SlotProps) {
               busy={sessionBusy}
               menu={(close) => (
                 <ChatSidebar
-                  variant="popover"
-                  visible
                   routeSessionId={sessionId}
                   useSessionView={useSessionView}
                   sessionView={sessionView}
-                  onActivate={close}
+                  popoverClose={close}
                 />
               )}
             />

@@ -9,8 +9,6 @@ export const SIDEBAR_RAIL = 48
 export const SIDEBAR_MIN = 160
 /** 到这个宽度就显示文字标签（会话名、「添加聊天」等）。 */
 export const SIDEBAR_LABEL_AT = SIDEBAR_MIN
-/** 拉到侧栏最大宽度才显示会话 tag（日报、总结、+N 等）。 */
-export const SIDEBAR_TAG_AT = SIDEBAR_MAX
 /** 中间列希望至少这么宽；不够时先压检查器，不够再压左侧，不要一窄就把侧栏关掉。 */
 export const CENTER_MIN = 512
 export const INSPECTOR_MIN = 240

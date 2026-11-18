@@ -5,9 +5,7 @@ export const SIDEBAR_PROJECT_COLLAPSE_KEY = 'cordis.sidebar.projectCollapsed'
 
 export type SidebarCollapseState = {
   collapsed: Record<string, boolean>
-  isCollapsed: (key: string) => boolean
   toggle: (key: string) => void
-  setCollapsed: (key: string, collapsed: boolean) => void
   expand: (key: string) => void
 }
 
@@ -57,16 +55,11 @@ export function createSidebarCollapseStorage(base: Pick<Storage, 'getItem' | 'se
 
 export const useSidebarCollapseStore = create<SidebarCollapseState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       collapsed: {},
-      isCollapsed: (key) => Boolean(get().collapsed[key]),
       toggle: (key) =>
         set((state) => ({
           collapsed: { ...state.collapsed, [key]: !state.collapsed[key] },
-        })),
-      setCollapsed: (key, collapsed) =>
-        set((state) => ({
-          collapsed: { ...state.collapsed, [key]: collapsed },
         })),
       expand: (key) =>
         set((state) => {

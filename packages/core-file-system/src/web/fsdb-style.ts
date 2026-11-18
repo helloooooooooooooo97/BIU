@@ -310,7 +310,8 @@ const CSS = `
 .fsdb-page .tasks-table td .fsdb-person-avatar,.fsdb-page .tasks-table td .fsdb-person.is-empty svg,.fsdb-page .tasks-table td .fsdb-file svg,.fsdb-page .tasks-table td .fsdb-cellselect-trigger svg{color:var(--biu-color-icon-fixed)}
 .fsdb-page .tasks-table td .fsdb-cellselect-trigger.is-empty,.fsdb-page .tasks-table td .fsdb-plain-input::placeholder{color:var(--biu-color-text-subtle)}
 .fsdb-page .tasks-table th:last-child,.fsdb-page .tasks-table td:last-child{border-right:0}
-.fsdb-page .tasks-table th.fsdb-col-fill,.fsdb-page .tasks-table td.fsdb-col-fill{padding:0;border:0;min-width:0}
+.fsdb-page .tasks-table col.fsdb-col-fill{width:auto}
+.fsdb-page .tasks-table th.fsdb-col-fill,.fsdb-page .tasks-table td.fsdb-col-fill{padding:0;border:0;border-bottom:var(--biu-stroke-width) solid color-mix(in srgb,var(--biu-color-border) 80%,transparent);min-width:0}
 .fsdb-page .tasks-table tbody tr:last-child:not(.fsdb-table-pad) td,.fsdb-page .tasks-table tbody tr:last-child:not(.fsdb-table-pad) th{border-bottom:0}
 .fsdb-page .tasks-table:not(.is-wrap) td{white-space:nowrap}
 .fsdb-page .tasks-table.is-wrap{width:100%;max-width:100%;white-space:normal}

@@ -50,6 +50,24 @@ export function sessionWindowHidden(count: number, rowPx = SESSION_ROW_PX): Sess
   return { start: 0, end: 0, padTop: 0, padBottom: count * rowPx }
 }
 
+export function sessionHostScroll(
+  host: HTMLElement,
+  scroller: HTMLElement,
+  rowPx = SESSION_ROW_PX,
+  overscan = SESSION_WINDOW_OVERSCAN,
+) {
+  const hostRect = host.getBoundingClientRect()
+  const scrollerRect = scroller.getBoundingClientRect()
+  const slack = overscan * rowPx
+  const hidden =
+    hostRect.height <= 0 ||
+    hostRect.bottom < scrollerRect.top - slack ||
+    hostRect.top > scrollerRect.bottom + slack
+  const top = Math.max(0, scrollerRect.top - hostRect.top)
+  const height = scroller.clientHeight || scrollerRect.height || SESSION_WINDOW_VIEWPORT_FALLBACK
+  return { top, height, hidden }
+}
+
 export function sessionWindowFromHost(
   count: number,
   host: HTMLElement,
@@ -58,21 +76,11 @@ export function sessionWindowFromHost(
   overscan = SESSION_WINDOW_OVERSCAN,
 ): SessionWindowSlice {
   if (count <= 0) return EMPTY_SESSION_WINDOW
-  const hostRect = host.getBoundingClientRect()
-  const scrollerRect = scroller.getBoundingClientRect()
-  const slack = overscan * rowPx
+  const metrics = sessionHostScroll(host, scroller, rowPx, overscan)
   // Folded/off-screen groups have no box. A one-row group can measure under
   // `rowPx` after subpixel rounding; treating that as hidden flash-loops.
-  if (
-    hostRect.height <= 0 ||
-    hostRect.bottom < scrollerRect.top - slack ||
-    hostRect.top > scrollerRect.bottom + slack
-  ) {
-    return sessionWindowHidden(count, rowPx)
-  }
-  const top = Math.max(0, scrollerRect.top - hostRect.top)
-  const view = scroller.clientHeight || scrollerRect.height || SESSION_WINDOW_VIEWPORT_FALLBACK
-  return sessionWindowSlice(count, top, view, rowPx, overscan)
+  if (metrics.hidden) return sessionWindowHidden(count, rowPx)
+  return sessionWindowSlice(count, metrics.top, metrics.height, rowPx, overscan)
 }
 
 export function chatScrollRoot(from: HTMLElement | null) {

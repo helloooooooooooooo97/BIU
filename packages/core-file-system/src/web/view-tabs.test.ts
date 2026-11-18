@@ -14,6 +14,8 @@ test('active view tab opens the view menu; the more button is gone', () => {
   assert.doesNotMatch(orderMenu, />视图</)
   assert.match(orderMenu, /title="拷贝视图"/)
   assert.match(orderMenu, /onCopy\(view\)/)
+  assert.doesNotMatch(orderMenu, /title="重命名"/)
+  assert.doesNotMatch(orderMenu, /PencilSquareIcon/)
   assert.match(orderMenu, /DndGrip/)
   assert.match(orderMenu, /activationConstraint: \{ distance: 4 \}/)
   assert.match(src, /persistViewOrder/)

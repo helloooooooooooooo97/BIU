@@ -5,6 +5,7 @@
  * BIU design tokens. Groups: color / space / font / radius / shadow / stroke.
  * --biu-color-* are colors. --biu-stroke-width is a length. No aliases.
  * Popovers use --biu-color-bg-popover / --biu-color-bg-popover-hover / --biu-color-border-popover / --biu-radius-popover / --biu-shadow-popover.
+ * Sidebar row hover uses --biu-color-bg-sidebar-hover.
  * --biu-color-emphasis is view/highlight only, never body ink.
  */
 :root {
@@ -23,6 +24,7 @@
   --biu-color-bg-hover-weak: #f4f4f4;
   --biu-color-bg-hover-strong: #e0e0e0;
   --biu-color-bg-hover-subtle: var(--biu-color-bg-hover);
+  --biu-color-bg-sidebar-hover: #ececec;
   --biu-color-text: #2c2c2b;
   --biu-color-text-muted: color-mix(in srgb, var(--biu-color-text) 72%, var(--biu-color-bg-subtle));
   --biu-color-text-subtle: color-mix(in srgb, var(--biu-color-text) 45%, transparent);
@@ -190,6 +192,7 @@ html.dark {
   --biu-color-bg-hover-weak: color-mix(in srgb, #fff 4%, var(--biu-color-bg));
   --biu-color-bg-hover-strong: color-mix(in srgb, #fff 12%, var(--biu-color-bg));
   --biu-color-bg-hover-subtle: color-mix(in srgb, #fff 9%, var(--biu-color-bg-subtle));
+  --biu-color-bg-sidebar-hover: #2D2D2D;
   --biu-color-text: #d4d4d4;
   --biu-color-bg-code: #1e1e1e;
   --biu-color-icon: #bab9b5;
@@ -4294,7 +4297,7 @@ html.dark .composer-model-flyout {
   min-width: 0;
   width: 100%;
   max-width: none;
-  --biu-color-bg-hover: var(--biu-color-bg-hover-subtle);
+  --biu-color-bg-hover: var(--biu-color-bg-sidebar-hover);
 }
 
 .sidebar-resize {
@@ -4326,22 +4329,11 @@ html.dark .composer-model-flyout {
   font-size: var(--biu-font-size-4);
 }
 
-.sidebar-tag {
-  font-size: 11px;
-  font-weight: var(--biu-font-weight-medium);
-  line-height: 16px;
-}
-
-.app-side-bar:not(.is-wide) .sidebar-tag {
-  display: none;
-}
-
 .app-side-bar.is-narrow .sidebar-label,
 .app-side-bar.is-narrow .app-side-actions-label,
 .app-side-bar.is-narrow .sidebar-section-head,
 .app-side-bar.is-narrow .sidebar-group-head,
 .app-side-bar.is-narrow .sidebar-chat-count,
-.app-side-bar.is-narrow .sidebar-tag,
 .app-side-bar.is-narrow .chat-session-row-delete,
 .app-side-bar.is-narrow .chat-session-row-star,
 .app-side-bar.is-narrow .sidebar-trail-icon {

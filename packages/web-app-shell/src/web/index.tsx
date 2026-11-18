@@ -19,7 +19,6 @@ import {
   openOverlayComposer,
   SIDEBAR_DEFAULT,
   SIDEBAR_LABEL_AT,
-  SIDEBAR_TAG_AT,
   SIDEBAR_MAX,
   SIDEBAR_MIN,
   SIDEBAR_RAIL,
@@ -529,7 +528,6 @@ function Shell(props: SlotProps) {
   if (showChatSidebar) visitedChatSidebar.current = true
   const sidebarCol = sidebarColumnWidth(sidebarCollapsed, sidebarWidth)
   const sidebarNarrow = sidebarCollapsed || sidebarWidth < SIDEBAR_LABEL_AT
-  const sidebarShowTags = sidebarWidth >= SIDEBAR_TAG_AT
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window === 'undefined' ? 1440 : window.innerWidth,
   )
@@ -925,7 +923,6 @@ function Shell(props: SlotProps) {
         <ShellSidebarFrame
           visible={!leftHidden}
           narrow={sidebarNarrow}
-          showTags={sidebarShowTags}
           onCollapse={collapseSidebar}
           onExpand={expandSidebar}
           onWidthChange={onSidebarWidthChange}
@@ -946,10 +943,6 @@ function Shell(props: SlotProps) {
               {showChatSidebar || visitedChatSidebar.current ? (
                 <Suspense fallback={null}>
                   <ChatSidebar
-                    embedded
-                    visible
-                    narrow={sidebarNarrow}
-                    showTags={sidebarShowTags}
                     routeSessionId={routeSessionId}
                     useSessionView={useSessionView}
                     sessionView={sessionView}

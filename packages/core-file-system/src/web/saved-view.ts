@@ -170,11 +170,12 @@ export function viewStateKey(
   })
 }
 
-/** incoming 的 updatedAt 不低于 current 时才算更新；缺时间戳视为可采纳。 */
+/** incoming 的 updatedAt 不低于 current 时才算更新；本地已打戳、对端没有时间戳时保住本地。 */
 export function viewIsFresher(incoming: SavedView, current?: SavedView | null) {
   if (!current) return true
   const incomingAt = Number(incoming.updatedAt) || 0
   const currentAt = Number(current.updatedAt) || 0
+  if (!incomingAt && currentAt) return false
   if (!incomingAt || !currentAt) return true
   return incomingAt >= currentAt
 }

@@ -4,7 +4,7 @@ import { normalizeCollectionPath } from '../paths.ts'
 import { invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { emptyFilterGroup, looksLikeFilterTree, normalizeFilterGroup, parseSortsInput, resolveViewFilterTree } from '../query-logic.ts'
-import { normalizePageSize, normalizeSavedView, parseViewColumns, rankListedViews, type SavedView } from './saved-view.ts'
+import { normalizePageSize, normalizeSavedView, parseViewColumns, rankListedViews, viewIsFresher, type SavedView } from './saved-view.ts'
 
 export function viewsKey(collectionPath: string) {
   return `fsdb.views:${collectionPath}`
@@ -73,7 +73,10 @@ export function mergeSavedViewLists(
   for (const view of incoming) {
     const id = String(view.id ?? '').trim()
     if (!id || gone.has(id)) continue
-    byId.set(id, normalizeSavedView(view))
+    const next = normalizeSavedView(view)
+    const prev = byId.get(id)
+    if (prev && !viewIsFresher(next, prev)) continue
+    byId.set(id, next)
   }
   return [...byId.values()]
 }
@@ -309,7 +312,7 @@ async function fetchSavedViewNow(collectionPath: string, viewId: string): Promis
   return listed ? withViewDisplay(collectionPath, listed) : null
 }
 
-export type StarredView = { path: string; viewId: string }
+export type StarredView = { path: string; viewId: string; name?: string }
 
 const STARRED_VIEWS_KEY = 'fsdb.starredViews'
 
@@ -323,7 +326,8 @@ export function loadStarredViews(): StarredView[] {
       const rec = item as Record<string, unknown>
       const path = String(rec.path ?? '').trim()
       const viewId = String(rec.viewId ?? '').trim()
-      return path && viewId ? [{ path, viewId }] : []
+      const name = String(rec.name ?? '').trim()
+      return path && viewId ? [{ path, viewId, ...(name ? { name } : {}) }] : []
     })
   } catch {
     return []
@@ -462,7 +466,7 @@ function parseViewFilters(value: unknown): Record<string, string> {
   return {}
 }
 
-export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mode?: unknown; sortField?: unknown; sortDir?: unknown; sorts?: unknown; query?: unknown; groupBy?: unknown; columns?: unknown; filters?: unknown; filterTree?: unknown; tree?: unknown; wrap?: unknown; truncate?: unknown; pageSize?: unknown; columnWidths?: unknown; rank?: unknown }): SavedView | null {
+export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mode?: unknown; sortField?: unknown; sortDir?: unknown; sorts?: unknown; query?: unknown; groupBy?: unknown; columns?: unknown; filters?: unknown; filterTree?: unknown; tree?: unknown; wrap?: unknown; truncate?: unknown; pageSize?: unknown; columnWidths?: unknown; rank?: unknown; updatedAt?: unknown }): SavedView | null {
   const id = String(row.viewId ?? '').trim()
   if (!id) return null
   const sortDir = row.sortDir === 'desc' ? 'desc' : 'asc'
@@ -488,6 +492,7 @@ export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mo
     columnWidths: row.columnWidths,
     builtin: false,
     rank: Number.isFinite(Number(row.rank)) ? Math.round(Number(row.rank)) : undefined,
+    updatedAt: Number(row.updatedAt) || 0,
   })
 }
 
@@ -574,9 +579,13 @@ export async function pullSavedViews(
   }
   const idleDone = viewsIdleResolve
   viewsIdleResolve = null
-  if (pending) {
+  if (pending && !opts?.force) {
     if (idleDone) void pending.then(idleDone)
     return pending
+  }
+  if (pending && opts?.force) {
+    viewsPullByKey.delete(key)
+    await pending.catch(() => false)
   }
   const started = snapshotViewWriteEpochs(
     collectionPaths.map((path) => String(path ?? '').trim()).filter(Boolean),
@@ -671,9 +680,10 @@ export function isViewStarred(items: StarredView[], path: string, viewId: string
   return items.some((item) => item.path === path && item.viewId === viewId)
 }
 
-export function toggleStarredView(items: StarredView[], path: string, viewId: string): StarredView[] {
+export function toggleStarredView(items: StarredView[], path: string, viewId: string, name?: string): StarredView[] {
   if (isViewStarred(items, path, viewId)) return items.filter((item) => item.path !== path || item.viewId !== viewId)
-  return [...items, { path, viewId }]
+  const label = String(name ?? '').trim()
+  return [...items, { path, viewId, ...(label ? { name: label } : {}) }]
 }
 
 export type StarredRecord = { path: string; recordId: string; label?: string; emoji?: string }

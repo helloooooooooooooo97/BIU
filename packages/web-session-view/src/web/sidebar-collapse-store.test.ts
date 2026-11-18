@@ -1,13 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
-import {
-  SIDEBAR_PROJECT_COLLAPSE_KEY,
-  createSidebarCollapseStorage,
-  parseSidebarCollapsePersisted,
-  type SidebarCollapseState,
-} from './sidebar-collapse-store.ts'
+import { createSidebarCollapseStorage, parseSidebarCollapsePersisted } from './sidebar-collapse-store.ts'
 
 test('parseSidebarCollapsePersisted migrates flat legacy map', () => {
   const migrated = parseSidebarCollapsePersisted(JSON.stringify({ '/tmp/a': true }))
@@ -21,7 +14,12 @@ test('parseSidebarCollapsePersisted keeps zustand envelope', () => {
   assert.equal(parseSidebarCollapsePersisted(raw), raw)
 })
 
-test('zustand persist round-trips collapse map via custom storage', async () => {
+test('parseSidebarCollapsePersisted ignores garbage', () => {
+  assert.equal(parseSidebarCollapsePersisted(null), null)
+  assert.equal(parseSidebarCollapsePersisted('not json'), null)
+})
+
+test('custom storage migrates on read and coalesces writes', async () => {
   const mem = new Map<string, string>()
   const base = {
     getItem: (key: string) => mem.get(key) ?? null,
@@ -32,55 +30,25 @@ test('zustand persist round-trips collapse map via custom storage', async () => 
       mem.delete(key)
     },
   }
-  // seed legacy flat format
-  base.setItem(SIDEBAR_PROJECT_COLLAPSE_KEY, JSON.stringify({ '/tmp/legacy': true }))
+  const storage = createSidebarCollapseStorage(base)
 
-  const useStore = create<SidebarCollapseState>()(
-    persist(
-      (set, get) => ({
-        collapsed: {},
-        isCollapsed: (key) => Boolean(get().collapsed[key]),
-        toggle: (key) =>
-          set((state) => ({
-            collapsed: { ...state.collapsed, [key]: !state.collapsed[key] },
-          })),
-        setCollapsed: (key, collapsed) =>
-          set((state) => ({
-            collapsed: { ...state.collapsed, [key]: collapsed },
-          })),
-        expand: (key) =>
-          set((state) => {
-            if (!state.collapsed[key]) return state
-            return { collapsed: { ...state.collapsed, [key]: false } }
-          }),
-      }),
-      {
-        name: SIDEBAR_PROJECT_COLLAPSE_KEY,
-        storage: createJSONStorage(() => createSidebarCollapseStorage(base)),
-        partialize: (state) => ({ collapsed: state.collapsed }),
-      },
-    ),
-  )
-
-  await new Promise<void>((resolve) => {
-    const unsub = useStore.persist.onFinishHydration(() => {
-      unsub()
-      resolve()
-    })
-    useStore.persist.rehydrate()
-  })
-
-  assert.equal(useStore.getState().isCollapsed('/tmp/legacy'), true)
-  useStore.getState().toggle('/tmp/b')
-  assert.equal(useStore.getState().isCollapsed('/tmp/b'), true)
-  useStore.getState().expand('/tmp/legacy')
-  assert.equal(useStore.getState().isCollapsed('/tmp/legacy'), false)
-
-  await new Promise((resolve) => setTimeout(resolve, 150))
-
-  const saved = JSON.parse(mem.get(SIDEBAR_PROJECT_COLLAPSE_KEY)!) as {
+  // 读：旧版扁平 `{ [key]: boolean }` 升级成 zustand persist 信封
+  base.setItem('k', JSON.stringify({ '/tmp/legacy': true }))
+  const migrated = JSON.parse(storage.getItem('k')!) as {
     state: { collapsed: Record<string, boolean> }
   }
-  assert.equal(saved.state.collapsed['/tmp/b'], true)
-  assert.equal(saved.state.collapsed['/tmp/legacy'], false)
+  assert.equal(migrated.state.collapsed['/tmp/legacy'], true)
+
+  // 写：连点多次只落盘最后一次
+  storage.setItem('k', 'first')
+  storage.setItem('k', 'second')
+  assert.equal(mem.get('k'), JSON.stringify({ '/tmp/legacy': true }))
+  await new Promise((resolve) => setTimeout(resolve, 150))
+  assert.equal(mem.get('k'), 'second')
+
+  // 删：清掉待写
+  storage.setItem('k', 'third')
+  storage.removeItem('k')
+  await new Promise((resolve) => setTimeout(resolve, 150))
+  assert.equal(mem.has('k'), false)
 })

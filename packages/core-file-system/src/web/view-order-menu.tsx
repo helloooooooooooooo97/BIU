@@ -12,7 +12,7 @@ import {
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS as DndCSS } from '@dnd-kit/utilities'
-import { PencilSquareIcon, PlusIcon, Square2StackIcon } from '@heroicons/react/16/solid'
+import { PlusIcon, Square2StackIcon } from '@heroicons/react/16/solid'
 import { overlayZ } from '@biu/biu-ui/overlay-portal'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { moveList } from '../query-logic.ts'
@@ -26,7 +26,6 @@ function ViewRowShell({
   active,
   onSelect,
   onCopy,
-  onRename,
   onDelete,
   canRemove,
   grip,
@@ -38,7 +37,6 @@ function ViewRowShell({
   active: boolean
   onSelect: (view: SavedView) => void
   onCopy: (view: SavedView) => void
-  onRename: (view: SavedView) => void
   onDelete: (view: SavedView) => void
   canRemove: boolean
   grip: ReactNode
@@ -65,9 +63,6 @@ function ViewRowShell({
         <button type="button" className="tasks-viewdd-act" title="拷贝视图" onClick={() => onCopy(view)}>
           <Square2StackIcon aria-hidden className="size-[14px]" />
         </button>
-        <button type="button" className="tasks-viewdd-act" title="重命名" onClick={() => onRename(view)}>
-          <PencilSquareIcon aria-hidden className="size-[14px]" />
-        </button>
         {canRemove ? (
           <button type="button" className="tasks-viewdd-act is-danger" title="删除" onClick={() => onDelete(view)}>
             <TrashGlyph aria-hidden className="size-[14px]" />
@@ -83,7 +78,6 @@ function SortableViewRow({
   active,
   onSelect,
   onCopy,
-  onRename,
   onDelete,
   canRemove,
 }: {
@@ -91,7 +85,6 @@ function SortableViewRow({
   active: boolean
   onSelect: (view: SavedView) => void
   onCopy: (view: SavedView) => void
-  onRename: (view: SavedView) => void
   onDelete: (view: SavedView) => void
   canRemove: boolean
 }) {
@@ -102,7 +95,6 @@ function SortableViewRow({
       active={active}
       onSelect={onSelect}
       onCopy={onCopy}
-      onRename={onRename}
       onDelete={onDelete}
       canRemove={canRemove}
       rowRef={setNodeRef}
@@ -122,7 +114,6 @@ export function ViewOrderMenu({
   activeViewId,
   onSelect,
   onCopy,
-  onRename,
   onDelete,
   onReorder,
   onAdd,
@@ -131,7 +122,6 @@ export function ViewOrderMenu({
   activeViewId: string | null
   onSelect: (view: SavedView) => void
   onCopy: (view: SavedView) => void
-  onRename: (view: SavedView) => void
   onDelete: (view: SavedView) => void
   onReorder: (ids: string[]) => void
   onAdd: () => void
@@ -174,7 +164,6 @@ export function ViewOrderMenu({
                     active={view.id === activeViewId}
                     onSelect={onSelect}
                     onCopy={onCopy}
-                    onRename={onRename}
                     onDelete={onDelete}
                     canRemove={canRemove}
                     grip={
@@ -217,7 +206,6 @@ export function ViewOrderMenu({
                     active={view.id === activeViewId}
                     onSelect={onSelect}
                     onCopy={onCopy}
-                    onRename={onRename}
                     onDelete={onDelete}
                     canRemove={canRemove}
                   />
@@ -231,7 +219,6 @@ export function ViewOrderMenu({
                       active={active.id === activeViewId}
                       onSelect={() => undefined}
                       onCopy={() => undefined}
-                      onRename={() => undefined}
                       onDelete={() => undefined}
                       canRemove={canRemove}
                       grip={

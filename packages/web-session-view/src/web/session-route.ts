@@ -38,11 +38,6 @@ export function isSessionAppPath(pathname: string) {
   return SESSION_APP.test(normalizePath(pathname))
 }
 
-export function isAgentSurfacePath(pathname: string) {
-  const path = normalizePath(pathname)
-  return path === '/' || path === '/agents' || isSessionAppPath(path)
-}
-
 function parseSessionApp(path: string): Extract<AppRoute, { kind: 'session' }> | null {
   const match = path.match(SESSION_APP)
   if (!match?.[1]) return null
@@ -164,13 +159,6 @@ export function buildAppPath(route: AppRoute): string {
 export function routeFromState(sessionId: string | null, view: RouteView): AppRoute {
   if (!sessionId) return { kind: 'home' }
   return { kind: 'session', sessionId, view }
-}
-
-export function centerKindFromRoute(route: AppRoute): InspectorCenterKind {
-  if (route.kind === 'collection-view') return 'collection-view'
-  if (route.kind === 'record') return 'record'
-  if (route.kind === 'module') return route.moduleId === 'tasks' ? 'task' : 'module'
-  return 'session'
 }
 
 export function normalizePath(pathname: string) {

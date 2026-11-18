@@ -8,7 +8,6 @@ import { invalidateListReads } from './db-client.ts'
 import { CollectionBrowser } from './browser.tsx'
 import { getStarredViews, omitSavedViewIds, persistStarredViews, persistViewDisplay, upsertSavedView } from './view-storage.ts'
 import { DataSidebar } from './data-sidebar.tsx'
-import { rememberPreviewTotal, viewTotalKey } from './sidebar-preview.ts'
 import { normalizeSavedView } from './saved-view.ts'
 
 const schema: CollectionSchema = {
@@ -130,7 +129,7 @@ test('sidebar collection and icon navigation open the first remaining view after
   const result = render(<DataSidebar collectionPath="/selection-other" title="其他表"
     tables={[{ path, kind: 'collection', label: '删除后的页面' }]}
     views={[]} activeViewId={null} onOpenTable={onOpenTable}
-    onApplyView={vi.fn()} onRenameView={vi.fn()} onDeleteView={vi.fn()} onAddView={vi.fn()} />)
+    onApplyView={vi.fn()} onDeleteView={vi.fn()} onAddView={vi.fn()} />)
   const heading = result.getAllByRole('button', { name: '删除后的页面', exact: true })
     .find((button) => button.closest('.sidebar-group-head'))!
   fireEvent.click(heading)
@@ -147,7 +146,7 @@ test('sidebar collection navigation follows the displayed view order', () => {
   const result = render(<DataSidebar collectionPath="/selection-other" title="其他表"
     tables={[{ path, kind: 'collection', label: '排序后的页面' }]}
     views={[]} activeViewId={null} onOpenTable={onOpenTable}
-    onApplyView={vi.fn()} onRenameView={vi.fn()} onDeleteView={vi.fn()} onAddView={vi.fn()} />)
+    onApplyView={vi.fn()} onDeleteView={vi.fn()} onAddView={vi.fn()} />)
   const heading = result.getAllByRole('button', { name: '排序后的页面', exact: true })
     .find((button) => button.closest('.sidebar-group-head'))!
   fireEvent.click(heading)
@@ -162,19 +161,18 @@ test('highlighted sidebar row backgrounds activate the title action without hija
     sortField: 'title', sortDir: 'asc', columns: ['title'], filters: {}, groupBy: '',
   })
   upsertSavedView(path, target)
-  rememberPreviewTotal(viewTotalKey(path, target), 7)
   const starredBefore = getStarredViews()
-  const onOpenTable = vi.fn(), onApplyView = vi.fn(), onRenameView = vi.fn()
+  const onOpenTable = vi.fn(), onApplyView = vi.fn()
   const onDeleteView = vi.fn(), onAddView = vi.fn(), onExpandedViewKeyChange = vi.fn()
   const result = render(<DataSidebar collectionPath={path} title="点击区域表"
     tables={[{ path, kind: 'collection', label: '点击区域表' }]}
     views={[target]} activeViewId={builtinAllViewId(path)} onOpenTable={onOpenTable}
-    onApplyView={onApplyView} onRenameView={onRenameView} onDeleteView={onDeleteView}
+    onApplyView={onApplyView} onDeleteView={onDeleteView}
     onAddView={onAddView} onExpandedViewKeyChange={onExpandedViewKeyChange} />)
   try {
     const label = result.getByRole('button', { name: target.name, exact: true })
     const row = label.closest<HTMLElement>('.chat-session-row')!
-    for (const hit of [row, row.querySelector('.chat-session-row-main')!, row.querySelector('.sidebar-chat-count-num')!, label]) {
+    for (const hit of [row, row.querySelector('.chat-session-row-main')!, label]) {
       onOpenTable.mockClear()
       onApplyView.mockClear()
       fireEvent.click(hit)
@@ -184,12 +182,9 @@ test('highlighted sidebar row backgrounds activate the title action without hija
     }
     onOpenTable.mockClear()
     onApplyView.mockClear()
-    fireEvent.click(within(row).getByTitle('展开记录'))
-    fireEvent.click(within(row).getByRole('button', { name: `重命名 ${target.name}` }))
     fireEvent.click(within(row).getByRole('button', { name: `删除 ${target.name}` }))
     fireEvent.click(within(row).getByRole('button', { name: `收藏 ${target.name}` }))
-    assert.equal(onExpandedViewKeyChange.mock.calls.length, 1)
-    assert.equal(onRenameView.mock.calls.length, 1)
+    assert.equal(onExpandedViewKeyChange.mock.calls.length, 0)
     assert.equal(onDeleteView.mock.calls.length, 1)
     assert.equal(onApplyView.mock.calls.length, 0)
     assert.equal(onOpenTable.mock.calls.length, 0)
@@ -205,7 +200,6 @@ test('highlighted sidebar row backgrounds activate the title action without hija
     fireEvent.click(head)
     assert.deepEqual(onOpenTable.mock.calls, [[path, builtinAllViewId(path)]])
     onOpenTable.mockClear()
-    fireEvent.click(within(head as HTMLElement).getByRole('button', { name: '收起视图' }))
     fireEvent.click(result.getByTestId(`sidebar-add-view-${path}`))
     assert.equal(onOpenTable.mock.calls.length, 0)
     assert.equal(onAddView.mock.calls.length, 1)

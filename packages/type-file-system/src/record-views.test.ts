@@ -48,6 +48,11 @@ test('copy names use 副本 then 副本 2', () => {
   assert.equal(uniqueViewName('默认视图 副本', ['默认视图', '默认视图 副本']), '默认视图 副本 2')
 })
 
+test('new views keep 新视图 without a numeric suffix', () => {
+  assert.equal(uniqueViewName('新视图', ['新视图']), '新视图')
+  assert.equal(uniqueViewName('新视图', ['新视图', '新视图 2']), '新视图')
+})
+
 test('every collection seeds content and property views from the same templates', async () => {
   const files = new Map<string, string>()
   const content = allocateRecordSandbox('views', 'task-1', '新视图', [])

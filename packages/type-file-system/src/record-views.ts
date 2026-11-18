@@ -37,6 +37,7 @@ const SORTS = new Set<RecordLayoutSort>(['doc', 'title-asc', 'title-desc', 'kind
 export function uniqueViewName(base: string, names: Iterable<string>) {
   const taken = new Set(names)
   const root = String(base ?? '').trim() || '新视图'
+  if (root === '新视图') return root
   if (!taken.has(root)) return root
   let n = 2
   while (taken.has(`${root} ${n}`)) n += 1

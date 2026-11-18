@@ -419,6 +419,7 @@ function tablePathOf(fields: Record<string, unknown>) {
 
 function uniqueViewName(base: string, views: StoredView[]) {
   const names = new Set(views.map((view) => view.name))
+  if (base === '新视图') return base
   if (!names.has(base)) return base
   let n = 2
   while (names.has(`${base} ${n}`)) n += 1

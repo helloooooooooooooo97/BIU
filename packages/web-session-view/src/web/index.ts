@@ -22,11 +22,9 @@ export {
   parseAppPath,
   isKnownAppPath,
   isSessionAppPath,
-  isAgentSurfacePath,
   sessionAppPath,
   buildAppPath,
   routeFromState,
-  centerKindFromRoute,
   parseDatabaseRest,
   isLegacyDatabasePath,
   encodeCollectionSeg,
@@ -53,14 +51,11 @@ export {
 } from './session-project.ts'
 export {
   UNGROUPED_PROJECT_KEY,
-  UNGROUPED_TAG_KEY,
   PINNED_GROUP_KEY,
   mostRecentSessionId,
-  groupSessionsByProject,
-  groupSessionsByTag,
-  buildSidebarGroups,
   buildSidebarSections,
-  type SidebarGroupBy,
+  type SessionSidebarGroup,
+  type SidebarGroupKind,
   type SidebarSection,
   type SidebarSectionKind,
 } from './session-groups.ts'

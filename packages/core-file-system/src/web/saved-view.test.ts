@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { colWidthStyle, DEFAULT_VIEW_PAGE_SIZE, normalizePageSize, normalizeSavedView, parseViewColumns, rankListedViews, sortViewsByRank, tableWidthStyle, viewStateKey, type SavedView } from './saved-view.ts'
+import { colWidthStyle, DEFAULT_VIEW_PAGE_SIZE, normalizePageSize, normalizeSavedView, parseViewColumns, rankListedViews, sortViewsByRank, tableWidthStyle, viewIsFresher, viewStateKey, type SavedView } from './saved-view.ts'
 
 const base: SavedView = {
   id: '1',
@@ -90,6 +90,13 @@ test('rankListedViews can put a custom view before builtin', () => {
   const all = normalizeSavedView({ ...base, id: 'all', name: '全部', builtin: true, rank: 1 })
   const mine = normalizeSavedView({ ...base, id: 'mine', name: '我的', rank: 0 })
   assert.deepEqual(rankListedViews([all, mine]).map((view) => view.id), ['mine', 'all'])
+})
+
+test('viewIsFresher keeps a stamped local rename over a pull with no timestamp', () => {
+  const local = normalizeSavedView({ ...base, name: '什么呢？？？', updatedAt: 9 })
+  const pulled = normalizeSavedView({ ...base, name: '新视图 2' })
+  assert.equal(viewIsFresher(pulled, local), false)
+  assert.equal(viewIsFresher(local, pulled), true)
 })
 
 test('viewStateKey ignores name and treats missing query as empty', () => {

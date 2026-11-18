@@ -6,7 +6,6 @@ import {
   ChevronDoubleLeftIcon,
   ChevronDownIcon,
   ChevronRightIcon,
-  PencilSquareIcon,
   PlusIcon,
   RectangleStackIcon,
   StarIcon,
@@ -19,26 +18,20 @@ import { dataSidebarKind, isRecordTreeCollection, isSystemCollection, sortDataCo
 import { rememberInspectorWorkingView } from './inspector-db-route.ts'
 import { readJson } from './db-client.ts'
 import { paintCollectionViews } from './collection-nav.ts'
-import { canRemoveCollectionView, type SavedView } from './saved-view.ts'
+import { canRemoveCollectionView, normalizeSavedView, type SavedView } from './saved-view.ts'
 import {
   fetchViewPreview,
-  fetchViewTotal,
   getPreviewTotal,
   getPreviewTotalsVersion,
   nextPreviewLimit,
-  orderViewTotalJobs,
   previewCacheKey,
   shouldFetchViewPreview,
-  shouldFetchViewTotal,
   whenListIdle,
   recordPreviewEmoji,
   recordPreviewLabel,
   rememberPreviewTotal,
   SIDEBAR_PREVIEW_MAX,
   subscribePreviewTotals,
-  VIEW_TOTAL_IDLE_MS,
-  viewTotalKey,
-  writeRecordEmoji,
 } from './sidebar-preview.ts'
 import {
   activeViewStorageKey,
@@ -50,10 +43,12 @@ import {
   isViewStarred,
   getCrumbsVersion,
   loadRecords,
+  loadViews,
   peekRecord,
   subscribeCrumbs,
   persistStarredRecords,
   persistStarredViews,
+  mergeSavedViewLists,
   pullSavedViews,
   rememberRecords,
   starredRecordEmoji,
@@ -506,10 +501,6 @@ function ViewRecordPreview({
   )
 }
 
-function usePreviewTotalsVersion() {
-  return useSyncExternalStore(subscribePreviewTotals, getPreviewTotalsVersion, () => 0)
-}
-
 export const DataSidebar = memo(function DataSidebar({
   tables,
   collectionPath,
@@ -518,7 +509,6 @@ export const DataSidebar = memo(function DataSidebar({
   activeViewId,
   onOpenTable,
   onApplyView,
-  onRenameView,
   onDeleteView,
   onAddView,
   onOpenRecord,
@@ -533,7 +523,6 @@ export const DataSidebar = memo(function DataSidebar({
   activeViewId: string | null
   onOpenTable?: (path: string, viewId?: string) => void
   onApplyView: (view: SavedView) => void
-  onRenameView: (view: SavedView) => void
   onDeleteView: (view: SavedView) => void
   onAddView: (path?: string, scope?: DataScope) => void
   onOpenRecord?: (path: string, view: SavedView, recordId: string, row?: DbRecord) => void
@@ -553,6 +542,10 @@ export const DataSidebar = memo(function DataSidebar({
       [`${group}:${collectionPath}`]: true,
     }
   })
+  useEffect(() => {
+    const group = dataSidebarKind(collectionPath)
+    setOpenTables({ [`${group}:${collectionPath}`]: true })
+  }, [collectionPath])
   useSyncExternalStore(subscribeStarredViews, getStarredViewsVersion, () => 0)
   useSyncExternalStore(subscribeStarredRecords, getStarredRecordsVersion, () => 0)
   const starredViews = getStarredViews()
@@ -569,14 +562,22 @@ export const DataSidebar = memo(function DataSidebar({
   const [expandedViewKeyLocal, setExpandedViewKeyLocal] = useState<string | null>(null)
   const expandedViewKey = expandedViewKeyProp !== undefined ? expandedViewKeyProp : expandedViewKeyLocal
   const setExpandedViewKey = onExpandedViewKeyChange ?? setExpandedViewKeyLocal
-  const totalsVersion = usePreviewTotalsVersion()
   const [viewsTick, setViewsTick] = useState(0)
   const tablePathsKey = listedTables.map((table) => table.path).join('\0')
+  const starredPathsKey = starredViews.map((item) => `${item.path}\0${item.viewId}`).join('\n')
   useEffect(() => {
     const paths = tablePathsKey.split('\0').filter(Boolean)
-    if (!paths.length) return
-    void pullSavedViews(paths, { idle: true }).then(() => setViewsTick((n) => n + 1))
-  }, [tablePathsKey])
+    const starredPaths = [...new Set(starredViews.map((item) => item.path).filter(Boolean))]
+    let live = true
+    const bump = () => {
+      if (live) setViewsTick((n) => n + 1)
+    }
+    if (starredPaths.length) void pullSavedViews(starredPaths, { force: true }).then(bump, bump)
+    if (paths.length) void pullSavedViews(paths, { idle: true }).then(bump, bump)
+    return () => {
+      live = false
+    }
+  }, [starredPathsKey, tablePathsKey])
   useEffect(() => {
     const onChange = (event: Event) => {
       const detail = (event as CustomEvent<{ views?: boolean; tags?: boolean }>).detail
@@ -591,13 +592,26 @@ export const DataSidebar = memo(function DataSidebar({
 
   function viewsFor(path: string) {
     void viewsTick
-    return paintCollectionViews(path, tables)
+    const stored = loadViews(path)
+    const user = path === collectionPath && views.length ? mergeSavedViewLists(stored, views) : stored
+    return paintCollectionViews(path, tables, user)
   }
 
   const starredRows = starredViews.flatMap((item) => {
     const table = listedTables.find((row) => row.path === item.path)
-    const view = viewsFor(item.path).find((row) => row.id === item.viewId)
-    if (!table || !view) return []
+    if (!table) return []
+    const listedView = viewsFor(item.path).find((row) => row.id === item.viewId)
+    const storedName = String(item.name ?? '').trim()
+    if (!listedView && !storedName) return []
+    const view = listedView ?? normalizeSavedView({
+      id: item.viewId,
+      name: storedName,
+      mode: 'table',
+      sortField: 'title',
+      sortDir: 'asc',
+      filters: {},
+      columns: [],
+    })
     return [{ table, view }]
   })
   const starredRecordRows = starredRecords.flatMap((item) => {
@@ -606,84 +620,6 @@ export const DataSidebar = memo(function DataSidebar({
     return [{ table, item }]
   })
   const favCount = starredRows.length + starredRecordRows.length
-
-  const countJobs = useMemo(() => {
-    const jobs: Array<{ path: string; view: SavedView }> = []
-    const take = (path: string, view: SavedView) => {
-      if (
-        shouldFetchViewTotal({
-          path,
-          view,
-          collectionPath,
-          activeViewId,
-        })
-      ) {
-        jobs.push({ path, view })
-      }
-    }
-    if (favOpen) {
-      for (const { table, view } of starredRows) take(table.path, view)
-    }
-    if (userOpen) {
-      for (const table of userTables) {
-        if (openTables[`user:${table.path}`]) {
-          for (const view of viewsFor(table.path)) take(table.path, view)
-        }
-      }
-    }
-    if (indexOpen) {
-      for (const table of indexTables) {
-        if (openTables[`index:${table.path}`]) {
-          for (const view of viewsFor(table.path)) take(table.path, view)
-        }
-      }
-    }
-    for (const table of systemTables) {
-      if (openTables[`system:${table.path}`]) {
-        for (const view of viewsFor(table.path)) take(table.path, view)
-      }
-    }
-    return jobs
-  }, [userOpen, indexOpen, favOpen, userTables, indexTables, systemTables, listedTables, openTables, starredRows, tables, views, collectionPath, activeViewId])
-
-  const countJobKey = countJobs.map((job) => viewTotalKey(job.path, job.view)).join('|')
-  useEffect(() => {
-    let cancelled = false
-    const missing = countJobs.some((job) => getPreviewTotal(viewTotalKey(job.path, job.view)) == null)
-    const stop = whenListIdle(() => {
-      if (cancelled) return
-      const jobs = orderViewTotalJobs(countJobs, collectionPath)
-      const urgent = jobs.filter((job) => job.path === collectionPath)
-      const rest = jobs.filter((job) => job.path !== collectionPath)
-      void (async () => {
-        await Promise.all(
-          urgent.map((job) => {
-            if (getPreviewTotal(viewTotalKey(job.path, job.view)) != null) return Promise.resolve()
-            return fetchViewTotal(job.path, job.view).catch(() => {
-              if (cancelled) return
-            })
-          }),
-        )
-        for (const job of rest) {
-          if (cancelled) return
-          if (getPreviewTotal(viewTotalKey(job.path, job.view)) != null) continue
-          await new Promise<void>((resolve) => {
-            const ric = window.requestIdleCallback
-            if (typeof ric === 'function') ric(() => resolve(), { timeout: 200 })
-            else window.setTimeout(() => resolve(), 0)
-          })
-          if (cancelled) return
-          await fetchViewTotal(job.path, job.view).catch(() => {
-            if (cancelled) return
-          })
-        }
-      })()
-    }, missing ? 0 : VIEW_TOTAL_IDLE_MS)
-    return () => {
-      cancelled = true
-      stop()
-    }
-  }, [collectionPath, countJobKey, countJobs, totalsVersion])
 
   useEffect(() => {
     let cancelled = false
@@ -755,7 +691,8 @@ export const DataSidebar = memo(function DataSidebar({
   }, [favOpen, starredTreePreviewKey, tables, views, collectionPath])
 
   function toggleStar(path: string, viewId: string) {
-    persistStarredViews(toggleStarredView(getStarredViews(), path, viewId))
+    const view = viewsFor(path).find((item) => item.id === viewId)
+    persistStarredViews(toggleStarredView(getStarredViews(), path, viewId, view?.name))
   }
 
   function openView(path: string, viewId: string) {
@@ -782,13 +719,17 @@ export const DataSidebar = memo(function DataSidebar({
     onOpenRecord?.(path, view, recordId, row)
   }
 
+  function revealTable(tableStateKey: string, path: string, viewId?: string) {
+    setOpenTables({ [tableStateKey]: true })
+    onOpenTable?.(path, viewId)
+  }
+
   function renderTableRows(rows: CollectionInfo[], group: 'user' | 'index' | 'system' = 'system') {
     return rows.map((table) => {
       const name = table.view?.title ?? table.label
       const tableStateKey = `${group}:${table.path}`
       const open = openTables[tableStateKey] ?? false
       const listed = viewsFor(table.path)
-      const system = isSystemCollection(table.path)
       return (
         <div key={`${group}:${table.path}`} className="flex min-w-0 flex-col gap-px" data-collection-kind={group}>
           <div className="sidebar-group-head" onClick={onSidebarRowClick}>
@@ -798,33 +739,13 @@ export const DataSidebar = memo(function DataSidebar({
               aria-expanded={open}
               {...pickDomAttrs('collection', table.path, name, { path: table.path })}
             >
-              <button
-                type="button"
-                className="grid size-6 shrink-0 place-items-center border-0 bg-transparent p-0 text-inherit"
-                title={open ? '收起视图' : '展开视图'}
-                aria-label={open ? '收起视图' : '展开视图'}
-                onClick={() => setOpenTables((prev) => ({ ...prev, [tableStateKey]: !open }))}
-              >
-                <span className="sidebar-rail-icon sidebar-group-fold" aria-hidden>
-                  <span className="sidebar-group-fold-face">
-                    <TableGlyph icon={table.view?.icon} />
-                  </span>
-                  <span className="sidebar-group-fold-chevron">
-                    {open ? (
-                      <ChevronDownIcon className="size-4 shrink-0 opacity-80" />
-                    ) : (
-                      <ChevronRightIcon className="size-4 shrink-0 opacity-80" />
-                    )}
-                  </span>
-                </span>
-              </button>
+              <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+                <TableGlyph icon={table.view?.icon} />
+              </span>
               <button
                 type="button"
                 className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit outline-none hover:text-(--biu-color-text) focus-visible:ring-1 focus-visible:ring-(--biu-color-border)"
-                onClick={() => onOpenTable?.(
-                  table.path,
-                  listed[0]?.id,
-                )}
+                onClick={() => revealTable(tableStateKey, table.path, listed[0]?.id)}
               >
                 {name}
               </button>
@@ -838,7 +759,7 @@ export const DataSidebar = memo(function DataSidebar({
                 data-testid={`sidebar-add-view-${table.path}`}
                 onClick={(event) => {
                   event.stopPropagation()
-                  setOpenTables((prev) => ({ ...prev, [tableStateKey]: true }))
+                  setOpenTables({ [tableStateKey]: true })
                   onAddView(table.path)
                 }}
               >
@@ -849,8 +770,6 @@ export const DataSidebar = memo(function DataSidebar({
             {listed.map((view) => {
               const starred = isViewStarred(starredViews, table.path, view.id)
               const active = table.path === collectionPath && view.id === activeViewId
-              const previewKey = `${group}:${table.path}:${view.id}`
-              const expanded = expandedViewKey === previewKey
               return (
                 <div key={view.id} className="min-w-0">
                   <div
@@ -859,26 +778,9 @@ export const DataSidebar = memo(function DataSidebar({
                     {...pickDomAttrs('view', viewPickId(table.path, view.id), view.name, { path: table.path })}
                   >
                     <div className="chat-session-row-main flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5">
-                      <button
-                        type="button"
-                        className="grid size-6 shrink-0 place-items-center border-0 bg-transparent p-0 text-inherit"
-                        title={expanded ? '收起记录' : '展开记录'}
-                        aria-expanded={expanded}
-                        onClick={() => toggleViewPreview(previewKey)}
-                      >
-                        <span className="sidebar-rail-icon sidebar-group-fold">
-                          <span className="sidebar-group-fold-face">
-                            <ViewModeGlyph mode={view.mode} />
-                          </span>
-                          <span className="sidebar-group-fold-chevron">
-                            {expanded ? (
-                              <ChevronDownIcon className="size-4 shrink-0 opacity-80" />
-                            ) : (
-                              <ChevronRightIcon className="size-4 shrink-0 opacity-80" />
-                            )}
-                          </span>
-                        </span>
-                      </button>
+                      <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+                        <ViewModeGlyph mode={view.mode} />
+                      </span>
                       <button
                         type="button"
                         className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
@@ -887,19 +789,7 @@ export const DataSidebar = memo(function DataSidebar({
                         {view.name}
                       </button>
                     </div>
-                    <ChatCount count={getPreviewTotal(viewTotalKey(table.path, view))} />
-                    {table.path === collectionPath ? (
-                      <>
-                        <button
-                          type="button"
-                          className="chat-session-row-delete"
-                          title="重命名"
-                          aria-label={`重命名 ${view.name}`}
-                          onClick={() => onRenameView(view)}
-                        >
-                          <PencilSquareIcon className="size-4 shrink-0" />
-                        </button>
-                        {canRemoveCollectionView(listed) ? (
+                    {table.path === collectionPath && canRemoveCollectionView(listed) ? (
                         <button
                           type="button"
                           className="chat-session-row-delete"
@@ -909,8 +799,6 @@ export const DataSidebar = memo(function DataSidebar({
                         >
                           <TrashGlyph className="size-4 shrink-0" />
                         </button>
-                        ) : null}
-                      </>
                     ) : null}
                     <button
                       type="button"
@@ -923,17 +811,6 @@ export const DataSidebar = memo(function DataSidebar({
                       <StarIcon className="size-4 shrink-0" />
                     </button>
                   </div>
-                  <SidebarFold open={expanded}>
-                  <ViewRecordPreview
-                    path={table.path}
-                    view={view}
-                    open={expanded}
-                    skipFetch={!shouldFetchViewPreview({ path: table.path, view, collectionPath, activeViewId })}
-                    recordKind={recordPickKind(table.view?.moduleId || table.id)}
-                    tableIcon={table.view?.icon}
-                    onOpenRecord={(id, row) => openRecord(table.path, view, id, row)}
-                  />
-                  </SidebarFold>
                 </div>
               )
             })}
@@ -1109,7 +986,6 @@ export const DataSidebar = memo(function DataSidebar({
                     const tableName = table.view?.title ?? table.label
                     const active = table.path === collectionPath && view.id === activeViewId
                     const previewKey = `star:${table.path}:${view.id}`
-                    const expanded = expandedViewKey === previewKey
                     return (
                       <div key={previewKey} className="min-w-0">
                         <div
@@ -1118,26 +994,9 @@ export const DataSidebar = memo(function DataSidebar({
                           {...pickDomAttrs('view', viewPickId(table.path, view.id), view.name, { path: table.path })}
                         >
                           <div className="chat-session-row-main flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5">
-                            <button
-                              type="button"
-                              className="grid size-6 shrink-0 place-items-center border-0 bg-transparent p-0 text-inherit"
-                              title={expanded ? '收起记录' : '展开记录'}
-                              aria-expanded={expanded}
-                              onClick={() => toggleViewPreview(previewKey)}
-                            >
-                              <span className="sidebar-rail-icon sidebar-group-fold">
-                                <span className="sidebar-group-fold-face">
-                                  <ViewModeGlyph mode={view.mode} />
-                                </span>
-                                <span className="sidebar-group-fold-chevron">
-                                  {expanded ? (
-                                    <ChevronDownIcon className="size-4 shrink-0 opacity-80" />
-                                  ) : (
-                                    <ChevronRightIcon className="size-4 shrink-0 opacity-80" />
-                                  )}
-                                </span>
-                              </span>
-                            </button>
+                            <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+                              <TableGlyph icon={table.view?.icon} />
+                            </span>
                             <button
                               type="button"
                               className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
@@ -1146,7 +1005,6 @@ export const DataSidebar = memo(function DataSidebar({
                               {view.name}
                             </button>
                           </div>
-                          <ChatCount count={getPreviewTotal(viewTotalKey(table.path, view))} />
                           <span className="sidebar-trail-icon" title={tableName} aria-label={tableName}>
                             <TableGlyph icon={table.view?.icon} />
                           </span>
@@ -1161,17 +1019,6 @@ export const DataSidebar = memo(function DataSidebar({
                             <StarIcon className="size-4 shrink-0" />
                           </button>
                         </div>
-                        <SidebarFold open={expanded}>
-                        <ViewRecordPreview
-                          path={table.path}
-                          view={view}
-                          open={expanded}
-                          skipFetch={!shouldFetchViewPreview({ path: table.path, view, collectionPath, activeViewId })}
-                          recordKind={recordPickKind(table.view?.moduleId || table.id)}
-                          tableIcon={table.view?.icon}
-                          onOpenRecord={(id, row) => openRecord(table.path, view, id, row)}
-                        />
-                        </SidebarFold>
                       </div>
                     )
                   })}

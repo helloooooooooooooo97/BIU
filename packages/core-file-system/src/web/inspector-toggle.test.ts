@@ -67,21 +67,14 @@ test('data sidebar view rows paint SVG view icons', () => {
   assert.match(viewMode, /ShareIcon/)
 })
 
-test('data sidebar loads view totals idle and current collection first', () => {
+test('data sidebar does not fetch view record totals for hover counts', () => {
   const sidebar = readFileSync(resolve(import.meta.dirname, './data-sidebar.tsx'), 'utf8')
-  assert.match(sidebar, /shouldFetchViewTotal/)
+  assert.doesNotMatch(sidebar, /fetchViewTotal/)
+  assert.doesNotMatch(sidebar, /shouldFetchViewTotal/)
+  assert.doesNotMatch(sidebar, /orderViewTotalJobs/)
+  assert.doesNotMatch(sidebar, /countJobs/)
   assert.match(sidebar, /shouldFetchViewPreview/)
-  assert.match(sidebar, /skipFetch=\{!shouldFetchViewPreview/)
-  assert.match(sidebar, /crumbsToPreviewItems/)
-  assert.match(sidebar, /subscribeCrumbs/)
-  assert.match(sidebar, /crumbsVersion/)
-  assert.match(sidebar, /orderViewTotalJobs\(countJobs, collectionPath\)/)
-  assert.match(sidebar, /job.path === collectionPath/)
-  assert.match(sidebar, /for \(const job of rest\)/)
-  assert.match(sidebar, /VIEW_TOTAL_IDLE_MS/)
   assert.match(sidebar, /whenListIdle/)
-  assert.match(sidebar, /requestIdleCallback/)
-  assert.doesNotMatch(sidebar, /Promise\.all\(\s*countJobs/)
 })
 
 test('data sidebar brand sits left with a collapse control on the right', () => {
@@ -150,6 +143,7 @@ test('grouped views nest a foldable group layer in the sidebar', () => {
   assert.doesNotMatch(browser, /tasks-group-fold[\s\S]{0,500}FieldGlyph/)
   assert.match(sidebar, /fsdb-view-preview-records/)
   assert.match(css, /\.fsdb-view-preview-records \.chat-session-row > \.chat-session-row-main/)
+  assert.doesNotMatch(sidebar, /title=\{expanded \? '收起记录' : '展开记录'\}/)
 })
 
 test('table and view rows only expand from the fold column', () => {
@@ -189,6 +183,9 @@ test('table and view rows only expand from the fold column', () => {
   assert.match(sidebar, /isSystemCollection/)
   assert.match(sidebar, /className="sidebar-add"/)
   assert.match(sidebar, /onAddView\(table\.path\)/)
+  assert.match(sidebar, /function revealTable/)
+  assert.doesNotMatch(sidebar, /展开视图/)
+  assert.doesNotMatch(sidebar, /收起视图/)
   assert.match(css, /\.sidebar-group-fold:hover \.sidebar-group-fold-chevron/)
   assert.doesNotMatch(css, /\.chat-session-row:hover \.sidebar-group-fold-chevron/)
 })
@@ -274,6 +271,11 @@ test('starred pages and tasks also list in the sidebar favorites section', () =>
   assert.match(sidebar, /isRecordTreeCollection\(table\.path\)/)
   assert.match(sidebar, /title=\{expanded \? '收起子记录' : '展开子记录'\}/)
   assert.doesNotMatch(sidebar, /\{starredRows\.length \?/)
+  const favViews = sidebar.slice(sidebar.indexOf('{starredRows.map'), sidebar.indexOf('核心数据'))
+  assert.match(favViews, /<TableGlyph icon=\{table\.view\?\.icon\} \/>/)
+  assert.doesNotMatch(favViews, /<ViewModeGlyph mode=\{view\.mode\} \/>/)
+  assert.match(sidebar, /pullSavedViews\(starredPaths, \{ force: true \}\)/)
+  assert.match(sidebar, /item\.name \?\? ''/)
 })
 
 test('table title opens record from the title-side button', () => {
@@ -780,6 +782,7 @@ test('create record sits at the right of the toolbar with a blue label', () => {
   assert.match(browser, /is-cols-fixed/)
   assert.match(css, /\.fsdb-page \.tasks-table\.is-cols-fixed\.is-wrap\{[^}]*width:100%/)
   assert.match(browser, /className="fsdb-col-fill"/)
+  assert.match(css, /\.fsdb-page \.tasks-table th\.fsdb-col-fill,\.fsdb-page \.tasks-table td\.fsdb-col-fill\{[^}]*border-bottom/)
   assert.doesNotMatch(css, /tr\[data-table-idle\]/)
   assert.match(browser, /tableWrapRef/)
   assert.match(browser, /tablePaintNodes/)
@@ -1040,7 +1043,10 @@ test('database extras sit after the record detail, not in the inspector', () => 
   assert.match(style, /\.fsdb-detail-title-input\{[^}]*max-height:none/)
   assert.match(detail, /autoSize/)
   assert.doesNotMatch(detail, /length > 48/)
+  assert.match(browser, /className="fsdb-detail-title-input"/)
+  assert.match(browser, /commitViewName\(activeView\.id, raw\)/)
   assert.match(browser, /<h1 className="fsdb-detail-title">\{activeView\?\.name \?\? title\}<\/h1>/)
+  assert.doesNotMatch(browser, /title="重命名视图"/)
   assert.match(browser, /savedViewRecordPath\(collectionPath, activeViewId\)/)
   assert.match(browser, /isReadOnlyViewId\(activeViewId\)/)
   assert.match(browser, /<PageBanner/)
@@ -1171,7 +1177,7 @@ test('detail body uses an explicit loading phase instead of a blank editor', () 
 test('opening a record fetches content without waiting for detailRow', () => {
   const effect = browser.slice(
     browser.indexOf('useEffect(() => {\n    if (!detailId) {\n      contentGen.current += 1'),
-    browser.indexOf("useEffect(() => {\n    if (dlg?.kind !== 'rename') return"),
+    browser.indexOf('function adoptPersistedViews'),
   )
   assert.match(effect, /pullDetailBody\(\)/)
   assert.doesNotMatch(effect, /detailRow/)

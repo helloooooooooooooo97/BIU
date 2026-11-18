@@ -14,7 +14,6 @@ import { shellColumnStartWidth } from './chat-overlay.ts'
 export type ShellSidebarFrameProps = {
   visible: boolean
   narrow?: boolean
-  showTags?: boolean
   onCollapse?: () => void
   onExpand?: () => void
   onWidthChange?: (width: number) => void
@@ -32,7 +31,6 @@ export type ShellSidebarFrameProps = {
 export const ShellSidebarFrame = memo(function ShellSidebarFrame({
   visible,
   narrow = false,
-  showTags = false,
   onCollapse,
   onExpand,
   onWidthChange,
@@ -143,7 +141,7 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
       {visible ? null : <div className="sidebar-edge-hot" data-testid="sidebar-edge-hot" aria-hidden />}
       {narrow ? <RailHoverTip hostRef={hostRef} /> : null}
     <aside
-      className={`app-side-bar min-h-0 flex-col border-r border-(--biu-color-border) bg-(--biu-color-bg-subtle)${narrow ? ' is-narrow overflow-visible' : ' overflow-hidden'}${showTags ? ' is-wide' : ''}${visible ? ' flex' : ' is-closed flex'}`}
+      className={`app-side-bar min-h-0 flex-col border-r border-(--biu-color-border) bg-(--biu-color-bg-subtle)${narrow ? ' is-narrow overflow-visible' : ' overflow-hidden'}${visible ? ' flex' : ' is-closed flex'}`}
       aria-hidden={!visible}
       data-testid={testId}
     >

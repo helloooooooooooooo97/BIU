@@ -26,11 +26,17 @@ import {
   routeViewNeedsFetch,
   savedViewFromRecord,
   toggleStarredRecord,
+  toggleStarredView,
   isRecordStarred,
   viewDisplayKey,
   viewForPath,
   withViewDisplay,
 } from './view-storage.ts'
+
+test('starring a view keeps its display name', () => {
+  const next = toggleStarredView([], '/pages', 'v1', '安全项目')
+  assert.deepEqual(next, [{ path: '/pages', viewId: 'v1', name: '安全项目' }])
+})
 
 test('authoritative empty saved views hide stale local workspace data', () => {
   const path = '/workspace-empty-views'
@@ -267,6 +273,26 @@ test('rememberRecords scopes crumb rows to the current view', () => {
   assert.equal(loadRecords('/pages', 'all').some((row) => row.id === 't1'), false)
 })
 
+test('stale /views titles do not overwrite a locally stamped rename', () => {
+  const prev = {
+    id: 'mine',
+    name: '什么呢？？？',
+    mode: 'table' as const,
+    sortField: 'title',
+    sortDir: 'asc' as const,
+    filters: {},
+    columns: [] as string[],
+    updatedAt: 9,
+  }
+  const pulled = {
+    ...prev,
+    name: '新视图 2',
+    updatedAt: 0,
+  }
+  const merged = mergeSavedViewLists([prev], [pulled])
+  assert.equal(merged.find((view) => view.id === 'mine')?.name, '什么呢？？？')
+})
+
 test('incomplete persist snapshots keep sibling views', () => {
   const keep = { id: 'keep', name: '留下', mode: 'table' as const, sortField: 'title', sortDir: 'asc' as const, filters: {}, columns: [] }
   const extra = { id: 'extra', name: '侧栏新视图', mode: 'table' as const, sortField: 'title', sortDir: 'asc' as const, filters: {}, columns: [] }
@@ -285,12 +311,12 @@ test('saved views pull shares one in-flight list and a short ttl', () => {
   assert.match(src, /VIEWS_PULL_LIMIT = 200/)
   assert.match(src, /filters: \{ tablePath \}/)
   assert.doesNotMatch(src, /columns: \[\.\.\.VIEWS_PULL/)
-  assert.match(src, /if \(pending\) return pending/)
+  assert.match(src, /if \(pending && !opts\?\.force\)/)
   assert.match(src, /opts\?: \{ idle\?: boolean; force\?: boolean \}/)
   assert.match(src, /export function noteLocalSavedViewsWrite/)
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   assert.match(browser, /noteLocalSavedViewsWrite\(path\)/)
-  assert.match(browser, /function applyDeleteView/)
+  assert.match(browser, /function deleteView/)
 })
 
 test('saved views pull keeps a newly remembered view missing from a stale list', async () => {
