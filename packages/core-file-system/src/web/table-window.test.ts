@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_PX, TABLE_COL_PIN_PX, TABLE_COL_ACTIONS_PX, TABLE_COL_VIEWPORT_FALLBACK, GROUPED_FULL_FETCH_ALL_MAX, groupedFullFetchCount, medianPaintedRowPx, rememberedTableWrap, rememberTableWrap, resetRememberedTableWrap, settlePaintedRowPx, tableColumnSlice, tableColumnWidth, tablePinColClass, tablePinCount, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll } from './table-window.ts'
+import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_PX, TABLE_COL_PIN_PX, TABLE_COL_ACTIONS_PX, TABLE_COL_VIEWPORT_FALLBACK, GROUPED_FULL_FETCH_ALL_MAX, groupedFullFetchCount, medianPaintedRowPx, rememberedTableWrap, rememberTableWrap, resetRememberedTableWrap, settlePaintedRowPx, tableCheckSlots, tableColumnSlice, tableColumnWidth, tablePinColClass, tablePinCount, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll } from './table-window.ts'
 
 test('table window keeps overscan around the viewport', () => {
   const slice = tableWindowSlice(200, 0, TABLE_ROW_PX * 10)
@@ -65,6 +65,20 @@ test('settlePaintedRowPx ignores sub-pixel median chatter from a new window', ()
 
 test('empty table has no pad', () => {
   assert.deepEqual(tableWindowSlice(0, 0, 400), { start: 0, end: 0, padTop: 0, padBottom: 0 })
+})
+
+test('check rail slots follow the virtual window without measuring rows', () => {
+  const nodes = Array.from({ length: 40 }, (_, i) => ({ kind: 'row', row: { id: `r${i}` } }))
+  const window = tableWindowSlice(40, TABLE_ROW_PX * 10, TABLE_ROW_PX * 4)
+  const slots = tableCheckSlots(nodes, window, TABLE_ROW_PX)
+  assert.equal(slots[0]?.kind, 'head')
+  assert.equal(slots[0]?.h, TABLE_ROW_PX)
+  assert.equal(slots[1]?.kind, 'gap')
+  assert.equal(slots[1]?.h, window.padTop)
+  const firstRow = slots.find((slot) => slot.kind === 'row')
+  assert.equal(firstRow?.kind, 'row')
+  assert.equal(firstRow?.id, `r${window.start}`)
+  assert.ok(slots.some((slot) => slot.kind === 'gap' && slot.h === window.padBottom))
 })
 
 test('unmeasured viewport still paints a first screen', () => {
