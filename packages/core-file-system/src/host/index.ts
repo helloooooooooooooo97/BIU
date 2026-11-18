@@ -903,8 +903,8 @@ export class DatabaseService extends Service implements Database {
     key: string
     rows: Array<{ view_id: string; subject_type: 'account' | 'member_view'; subject_id: string; granted_by?: string; member_kind: string }>
   } | null = null
-  private viewShareCache: { key: string; views: SharedViewDef[] } | null = null
-  private recordShareCache: { key: string; ids: Set<string> } | null = null
+  private viewShareCache = new Map<string, SharedViewDef[]>()
+  private recordShareCache = new Map<string, Set<string>>()
   private inflightMatches = new Map<string, Promise<DbRecord[]>>()
   private inflightScans = new Map<string, Promise<DbRecord[]>>()
   private inflightVisible = new Map<string, Promise<VisibleSortedPack>>()
@@ -918,6 +918,19 @@ export class DatabaseService extends Service implements Database {
 
   constructor(ctx: Context) {
     super(ctx, 'database')
+    this.bindShareInvalidation()
+  }
+
+  private bindShareInvalidation() {
+    const names = ['upsert', 'revoke', 'revokeTarget', 'revokeRecord', 'revokeView'] as const
+    for (const name of names) {
+      const original = this.shares[name].bind(this.shares) as (...args: never[]) => unknown
+      ;(this.shares[name] as unknown as (...args: never[]) => unknown) = (...args: never[]) => {
+        const result = original(...args)
+        this.notifyShareChange()
+        return result
+      }
+    }
   }
 
   private async serializeContentWrite<T>(path: string, run: () => Promise<T>): Promise<T> {
@@ -995,21 +1008,8 @@ export class DatabaseService extends Service implements Database {
   }
 
   private decorateSlice(spec: CollectionSpec, rows: DbRecord[], wanted?: string[] | null) {
-    this.ownershipCache = null
-    this.ownerCache = null
-    this.viewAudienceCache = null
-    this.viewShareCache = null
-    this.recordShareCache = null
-    try {
-      const need = listDecorateNeed(wanted)
-      return rows.map((row) => this.decorateRecord(spec, row, need))
-    } finally {
-      this.ownershipCache = null
-      this.ownerCache = null
-      this.viewAudienceCache = null
-      this.viewShareCache = null
-      this.recordShareCache = null
-    }
+    const need = listDecorateNeed(wanted)
+    return rows.map((row) => this.decorateRecord(spec, row, need))
   }
 
   private collabStore() {
@@ -1661,8 +1661,8 @@ export class DatabaseService extends Service implements Database {
   }
 
   notifyShareChange() {
-    this.viewShareCache = null
-    this.recordShareCache = null
+    this.viewShareCache.clear()
+    this.recordShareCache.clear()
     this.bump()
   }
 
@@ -1673,6 +1673,7 @@ export class DatabaseService extends Service implements Database {
   }
 
   notifyViewCatalog(path?: string) {
+    this.viewShareCache.clear()
     const http = this.ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
     const recPath = String(path ?? '').trim()
     http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('views', recPath ? { path: recPath } : {}))
@@ -1685,8 +1686,11 @@ export class DatabaseService extends Service implements Database {
 
   bump() {
     this.visibleGen += 1
-    this.viewShareCache = null
-    this.recordShareCache = null
+    this.ownershipCache = null
+    this.ownerCache = null
+    this.viewAudienceCache = null
+    this.viewShareCache.clear()
+    this.recordShareCache.clear()
     this.inflightMatches.clear()
     this.inflightScans.clear()
     this.inflightVisible.clear()
@@ -2010,7 +2014,8 @@ export class DatabaseService extends Service implements Database {
   }
 
   private recordShareIds(collection: string) {
-    if (this.recordShareCache?.key === collection) return this.recordShareCache.ids
+    const cached = this.recordShareCache.get(collection)
+    if (cached) return cached
     const ids = new Set<string>()
     try {
       for (const share of this.shares.listRecords(collection)) {
@@ -2020,7 +2025,7 @@ export class DatabaseService extends Service implements Database {
     } catch {
       /* 分享库还没打开时，仍按视图链接现算 */
     }
-    this.recordShareCache = { key: collection, ids }
+    this.recordShareCache.set(collection, ids)
     return ids
   }
 
@@ -2035,7 +2040,8 @@ export class DatabaseService extends Service implements Database {
   }
 
   private sharedViewsFor(collection: string): SharedViewDef[] {
-    if (this.viewShareCache?.key === collection) return this.viewShareCache.views
+    const cached = this.viewShareCache.get(collection)
+    if (cached) return cached
     let shares: Array<{ viewId: string }> = []
     try {
       shares = this.shares.listViews(collection)
@@ -2051,7 +2057,7 @@ export class DatabaseService extends Service implements Database {
       const view = resolveSharedView(share.viewId, saved)
       if (view) views.push(view)
     }
-    this.viewShareCache = { key: collection, views }
+    this.viewShareCache.set(collection, views)
     return views
   }
 
