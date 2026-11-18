@@ -513,6 +513,39 @@ test('PagesStore.list(ids) uses one IN query and skips notes', async () => {
   assert.equal(listed[0]?.title, 'C')
 })
 
+test('PagesStore.pagedList uses COUNT and LIMIT OFFSET', async () => {
+  const ctx = new Context()
+  class FakeDb extends Service {
+    constructor(c: Context) {
+      super(c, 'database')
+    }
+    register() {}
+  }
+  new FakeDb(ctx)
+  await ctx.plugin(tools)
+  const root = await mkdtemp(join(tmpdir(), 'page-paged-'))
+  await ctx.plugin(fsPlugin, { root })
+  await ctx.plugin(page)
+  const store = new PagesStore(ctx.fs.workspace as never)
+  for (const title of ['alpha', 'bravo', 'charlie', 'delta', 'echo']) {
+    await store.create({ title, notes: `# ${title}` })
+  }
+  const db = await store.sqlite()
+  const orig = db.prepare.bind(db)
+  const sqls: string[] = []
+  db.prepare = ((sql: string) => {
+    sqls.push(sql)
+    return orig(sql)
+  }) as typeof db.prepare
+  const paged = await store.pagedList({ limit: 2, offset: 2, sortField: 'title', sortDir: 'asc' })
+  assert.equal(paged.total, 5)
+  assert.equal(paged.items.length, 2)
+  assert.deepEqual(paged.items.map((row) => row.title), ['charlie', 'delta'])
+  assert.ok(sqls.some((sql) => /COUNT\(\*\)/.test(sql)))
+  assert.ok(sqls.some((sql) => /LIMIT \? OFFSET \?/.test(sql)))
+  assert.ok(paged.items.every((row) => row.notes === ''))
+})
+
 test('page file GET authorizes through the open page path like PUT', async () => {
   const src = await readFile(join(import.meta.dirname, 'index.ts'), 'utf8')
   assert.match(src, /route\('GET', '\/api\/page\/file\/:name'/)

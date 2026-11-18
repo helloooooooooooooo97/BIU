@@ -1,6 +1,6 @@
 import { access, mkdir, unlink } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import type { DbRecord, SchemaFieldValue } from '@biu/type-file-system'
+import type { CollectionListQuery, DbRecord, SchemaFieldValue } from '@biu/type-file-system'
 import { allocateRecordId, emptySchemaValue, isAssetFileName, isAssignableRecordId, normalizeSchemaValue } from '@biu/type-file-system'
 import {
   DATA_DIR_NAME,
@@ -147,6 +147,33 @@ function applyPatch(current: PageRow, patch: Record<string, unknown>): PageRow {
 
 const NAMED_ASSET_CACHE_LIMIT = 16
 
+const PAGE_ORDER_COLUMNS: Record<string, string> = {
+  id: 'id',
+  title: 'title COLLATE NOCASE',
+  createdAt: 'created_at',
+  updatedAt: 'updated_at',
+  parentId: 'parent_id',
+}
+
+function pageOrderSql(
+  sorts: Array<{ field: string; dir: string }> | undefined,
+  sortField: string | undefined,
+  dir: 'ASC' | 'DESC',
+) {
+  const rules = sorts?.length
+    ? sorts
+    : [{ field: sortField?.trim() || 'title', dir: dir.toLowerCase() }]
+  const parts: string[] = []
+  for (const rule of rules) {
+    const column = PAGE_ORDER_COLUMNS[rule.field]
+    if (!column) continue
+    parts.push(`${column} ${rule.dir === 'desc' ? 'DESC' : 'ASC'}`)
+  }
+  if (!parts.length) parts.push('title COLLATE NOCASE ASC')
+  if (!parts.some((part) => part.startsWith('id '))) parts.push('id ASC')
+  return parts.join(', ')
+}
+
 export class PagesStore {
   constructor(
     private fs: WorkspaceFs,
@@ -242,6 +269,34 @@ export class PagesStore {
       FROM pages ORDER BY id
     `).all() as SqlPage[]
     return listed.map(rowFromSql)
+  }
+
+  async pagedList(query?: CollectionListQuery): Promise<{ items: PageRow[]; total: number }> {
+    if (query?.ids?.length) {
+      const items = await this.list(query.ids)
+      return { items, total: items.length }
+    }
+    const db = await this.openDb()
+    const limit = Math.min(200, Math.max(1, Number(query?.limit) || 50))
+    const offset = Math.max(0, Math.floor(Number(query?.offset) || 0))
+    const dir = query?.sortDir === 'desc' ? 'DESC' : 'ASC'
+    const order = pageOrderSql(query?.sorts, query?.sortField, dir)
+    const q = String(query?.q ?? '').trim().toLowerCase()
+    const trash = query?.trash === true
+    const deleted = trash
+      ? `EXISTS (SELECT 1 FROM record_meta m WHERE m.collection = '/pages' AND m.record_id = pages.id AND m.deleted_at > 0)`
+      : `NOT EXISTS (SELECT 1 FROM record_meta m WHERE m.collection = '/pages' AND m.record_id = pages.id AND m.deleted_at > 0)`
+    const where = q ? `${deleted} AND instr(lower(title), ?) > 0` : deleted
+    const params = q ? [q] : []
+    const total = Number((db.prepare(`SELECT COUNT(*) AS n FROM pages WHERE ${where}`).get(...params) as { n: number }).n)
+    const listed = db.prepare(`
+      SELECT id, title, parent_id,
+        depends_on_json, emoji, created_at, updated_at
+      FROM pages WHERE ${where}
+      ORDER BY ${order}
+      LIMIT ? OFFSET ?
+    `).all(...params, limit, offset) as SqlPage[]
+    return { items: listed.map((row) => ({ ...rowFromSql(row), notes: '' })), total }
   }
 
   async get(id: string): Promise<PageRow | null> {

@@ -6,7 +6,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises'
 import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { DatabaseService, apply as applyFileSystem, databaseHttpFailure, listNeedsMatchOverlay, schemaRequestBuildCount, specListQuery, withSchemaRequestCache } from './index.ts'
+import { DatabaseService, apply as applyFileSystem, canPageInStore, databaseHttpFailure, listNeedsMatchOverlay, schemaRequestBuildCount, specListQuery, withSchemaRequestCache } from './index.ts'
 import { FileSystemAssets } from './assets-store.ts'
 import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { DATABASE_CHANNEL, isAllocatedRecordId, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
@@ -3600,4 +3600,36 @@ test('group create persists the custom tag attribute through the real creation p
   if (listed.kind !== 'collection') throw new Error('expected collection')
   assert.equal(listed.total, 1)
   assert.deepEqual((listed.items[0].tag as { tags: string[] }).tags, ['security'])
+})
+
+test('list uses store pagedList instead of sorting the whole table', async () => {
+  assert.equal(canPageInStore({ pagedList: async () => ({ items: [], total: 0 }) }, undefined, false, '', {}), true)
+  assert.equal(canPageInStore({ pagedList: async () => ({ items: [], total: 0 }) }, { status: 'open' }, false, '', {}), false)
+  assert.equal(canPageInStore({}, undefined, false, '', {}), false)
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const rows = Array.from({ length: 8 }, (_, i) => ({ id: `n${i}`, title: `row-${i}` }))
+  let scanned = 0
+  db.register({
+    id: 'notes',
+    path: '/notes',
+    schema: { labelField: 'title', fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
+    list: () => {
+      scanned += 1
+      return rows
+    },
+    pagedList: (query) => {
+      const limit = Number(query?.limit) || 50
+      const offset = Number(query?.offset) || 0
+      return { items: rows.slice(offset, offset + limit), total: rows.length }
+    },
+    get: (id) => rows.find((row) => row.id === id),
+  })
+  const listed = await db.list('/notes', undefined, { limit: 3, offset: 3, sortField: 'title' })
+  assert.equal(listed.kind, 'collection')
+  if (listed.kind !== 'collection') return
+  assert.equal(listed.total, 8)
+  assert.equal(listed.items.length, 3)
+  assert.equal(listed.items[0]?.id, 'n3')
+  assert.equal(scanned, 0)
 })
