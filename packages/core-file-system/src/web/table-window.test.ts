@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_PX, TABLE_COL_PIN_PX, TABLE_COL_ACTIONS_PX, TABLE_COL_VIEWPORT_FALLBACK, GROUPED_FULL_FETCH_ALL_MAX, groupedFullFetchCount, medianPaintedRowPx, rememberedTableWrap, rememberTableWrap, resetRememberedTableWrap, reusePaintNodes, settlePaintedRowPx, tableCheckSlots, tableColumnSlice, tableColumnWidth, tablePinColClass, tablePinCount, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll } from './table-window.ts'
+import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_PX, TABLE_COL_PIN_PX, TABLE_COL_ACTIONS_PX, TABLE_COL_VIEWPORT_FALLBACK, GROUPED_FULL_FETCH_ALL_MAX, groupedFullFetchCount, medianPaintedRowPx, rememberedTableWrap, rememberTableWrap, resetRememberedTableWrap, reusePaintNodes, settlePaintedRowPx, tableCheckSlots, tableColumnSlice, tableColumnWidth, tableFrozenKeys, tablePinColClass, tablePinCount, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, toggleFrozenPrefix } from './table-window.ts'
 
 test('table window keeps overscan around the viewport', () => {
   const slice = tableWindowSlice(200, 0, TABLE_ROW_PX * 10)
@@ -140,7 +140,12 @@ test('unsaved columns use fixed defaults; saved widths stay as-is', () => {
   assert.equal(tableColumnWidth('actions', undefined, true), TABLE_COL_ACTIONS_PX)
   assert.equal(tablePinCount(['title', 'actions', 'status'], 'title'), 2)
   assert.equal(tablePinCount(['title', 'status'], 'title'), 1)
-  assert.equal(tablePinColClass('actions', 'title'), 'is-pin-col')
+  assert.deepEqual(tableFrozenKeys(['title', 'actions', 'status'], undefined, 'title'), ['title', 'actions'])
+  assert.deepEqual(toggleFrozenPrefix(['title', 'actions', 'status'], undefined, 'status', 'title'), ['title', 'actions', 'status'])
+  assert.deepEqual(toggleFrozenPrefix(['title', 'actions', 'status'], ['title', 'actions', 'status'], 'actions', 'title'), ['title'])
+  assert.deepEqual(tableFrozenKeys(['title', 'actions', 'status'], [], 'title'), [])
+  assert.equal(tablePinColClass('actions', ['title', 'actions']), 'is-pin-col')
+  assert.equal(tablePinColClass('status', ['title', 'actions']), '')
   assert.equal(tableColumnWidth('updatedBy', undefined), TABLE_COL_PX)
   assert.equal(tableColumnWidth('status', undefined), TABLE_COL_PX)
   assert.equal(tableColumnWidth('createdBy', 180), 180)
