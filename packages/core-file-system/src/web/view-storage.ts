@@ -466,7 +466,7 @@ function parseViewFilters(value: unknown): Record<string, string> {
   return {}
 }
 
-export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mode?: unknown; sortField?: unknown; sortDir?: unknown; sorts?: unknown; query?: unknown; groupBy?: unknown; columns?: unknown; filters?: unknown; filterTree?: unknown; tree?: unknown; wrap?: unknown; truncate?: unknown; pageSize?: unknown; columnWidths?: unknown; rank?: unknown; updatedAt?: unknown }): SavedView | null {
+export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mode?: unknown; sortField?: unknown; sortDir?: unknown; sorts?: unknown; query?: unknown; groupBy?: unknown; columns?: unknown; filters?: unknown; filterTree?: unknown; tree?: unknown; wrap?: unknown; truncate?: unknown; pageSize?: unknown; columnWidths?: unknown; frozenColumns?: unknown; rank?: unknown; updatedAt?: unknown }): SavedView | null {
   const id = String(row.viewId ?? '').trim()
   if (!id) return null
   const sortDir = row.sortDir === 'desc' ? 'desc' : 'asc'
@@ -490,6 +490,7 @@ export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mo
     truncate: row.truncate !== false,
     pageSize: normalizePageSize(row.pageSize),
     columnWidths: row.columnWidths,
+    frozenColumns: row.frozenColumns,
     builtin: false,
     rank: Number.isFinite(Number(row.rank)) ? Math.round(Number(row.rank)) : undefined,
     updatedAt: Number(row.updatedAt) || 0,
@@ -776,6 +777,7 @@ const DISPLAY_KEYS = [
   'query',
   'pageSize',
   'columnWidths',
+  'frozenColumns',
   'filterTree',
   'rank',
 ] as const
