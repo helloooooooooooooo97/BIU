@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_PX, TABLE_COL_PIN_PX, TABLE_COL_ACTIONS_PX, TABLE_COL_VIEWPORT_FALLBACK, GROUPED_FULL_FETCH_ALL_MAX, groupedFullFetchCount, medianPaintedRowPx, rememberedTableWrap, rememberTableWrap, resetRememberedTableWrap, settlePaintedRowPx, tableCheckSlots, tableColumnSlice, tableColumnWidth, tablePinColClass, tablePinCount, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll } from './table-window.ts'
+import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_PX, TABLE_COL_PIN_PX, TABLE_COL_ACTIONS_PX, TABLE_COL_VIEWPORT_FALLBACK, GROUPED_FULL_FETCH_ALL_MAX, groupedFullFetchCount, medianPaintedRowPx, rememberedTableWrap, rememberTableWrap, resetRememberedTableWrap, reusePaintNodes, settlePaintedRowPx, tableCheckSlots, tableColumnSlice, tableColumnWidth, tablePinColClass, tablePinCount, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll } from './table-window.ts'
 
 test('table window keeps overscan around the viewport', () => {
   const slice = tableWindowSlice(200, 0, TABLE_ROW_PX * 10)
@@ -65,6 +65,18 @@ test('settlePaintedRowPx ignores sub-pixel median chatter from a new window', ()
 
 test('empty table has no pad', () => {
   assert.deepEqual(tableWindowSlice(0, 0, 400), { start: 0, end: 0, padTop: 0, padBottom: 0 })
+})
+
+test('reusePaintNodes keeps unchanged row object identity', () => {
+  const row = { id: 'a' }
+  const prev = [{ kind: 'row', key: 'a', row, depth: 0, hasKids: false, kidCount: 0 }]
+  const next = [{ kind: 'row', key: 'a', row, depth: 0, hasKids: false, kidCount: 0 }]
+  const shared = reusePaintNodes(prev, next)
+  assert.equal(shared, prev)
+  assert.equal(shared[0], prev[0])
+  const moved = { id: 'a' }
+  const rebuilt = reusePaintNodes(prev, [{ kind: 'row', key: 'a', row: moved, depth: 0, hasKids: false, kidCount: 0 }])
+  assert.equal(rebuilt[0]?.row, moved)
 })
 
 test('check rail slots follow the virtual window without measuring rows', () => {
