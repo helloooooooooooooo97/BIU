@@ -3605,6 +3605,16 @@ test('group create persists the custom tag attribute through the real creation p
 test('list uses store pagedList instead of sorting the whole table', async () => {
   assert.equal(canPageInStore({ pagedList: async () => ({ items: [], total: 0 }) }, undefined, false, '', {}), true)
   assert.equal(canPageInStore({ pagedList: async () => ({ items: [], total: 0 }) }, { status: 'open' }, false, '', {}), false)
+  assert.equal(
+    canPageInStore(
+      { pagedList: async () => ({ items: [], total: 0 }), pagedFilterKeys: ['parentId'] },
+      { parentId: 'home' },
+      false,
+      '',
+      {},
+    ),
+    true,
+  )
   assert.equal(canPageInStore({}, undefined, false, '', {}), false)
   const ctx = new Context()
   const db = new DatabaseService(ctx)

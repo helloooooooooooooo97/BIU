@@ -544,6 +544,14 @@ test('PagesStore.pagedList uses COUNT and LIMIT OFFSET', async () => {
   assert.ok(sqls.some((sql) => /COUNT\(\*\)/.test(sql)))
   assert.ok(sqls.some((sql) => /LIMIT \? OFFSET \?/.test(sql)))
   assert.ok(paged.items.every((row) => row.notes === ''))
+  const parent = await store.create({ title: 'parent' })
+  await store.create({ title: 'kid', parentId: parent.id })
+  const kids = await store.pagedList({ filter: { parentId: parent.id }, limit: 20, offset: 0 })
+  assert.equal(kids.total, 1)
+  assert.equal(kids.items[0]?.title, 'kid')
+  const found = await store.pagedList({ q: 'char', limit: 20, offset: 0 })
+  assert.equal(found.total, 1)
+  assert.equal(found.items[0]?.title, 'charlie')
 })
 
 test('page file GET authorizes through the open page path like PUT', async () => {

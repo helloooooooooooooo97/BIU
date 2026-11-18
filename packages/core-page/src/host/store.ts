@@ -155,6 +155,13 @@ const PAGE_ORDER_COLUMNS: Record<string, string> = {
   parentId: 'parent_id',
 }
 
+const PAGE_FILTER_COLUMNS: Record<string, string> = {
+  id: 'id',
+  title: 'title',
+  parentId: 'parent_id',
+  emoji: 'emoji',
+}
+
 function pageOrderSql(
   sorts: Array<{ field: string; dir: string }> | undefined,
   sortField: string | undefined,
@@ -286,8 +293,21 @@ export class PagesStore {
     const deleted = trash
       ? `EXISTS (SELECT 1 FROM record_meta m WHERE m.collection = '/pages' AND m.record_id = pages.id AND m.deleted_at > 0)`
       : `NOT EXISTS (SELECT 1 FROM record_meta m WHERE m.collection = '/pages' AND m.record_id = pages.id AND m.deleted_at > 0)`
-    const where = q ? `${deleted} AND instr(lower(title), ?) > 0` : deleted
-    const params = q ? [q] : []
+    const clauses = [deleted]
+    const params: unknown[] = []
+    if (q) {
+      clauses.push('instr(lower(title), ?) > 0')
+      params.push(q)
+    }
+    const filter = query?.filter ?? {}
+    for (const [key, expected] of Object.entries(filter)) {
+      if (expected == null || expected === '') continue
+      const column = PAGE_FILTER_COLUMNS[key]
+      if (!column) continue
+      clauses.push(`${column} = ?`)
+      params.push(String(expected))
+    }
+    const where = clauses.join(' AND ')
     const total = Number((db.prepare(`SELECT COUNT(*) AS n FROM pages WHERE ${where}`).get(...params) as { n: number }).n)
     const listed = db.prepare(`
       SELECT id, title, parent_id,
