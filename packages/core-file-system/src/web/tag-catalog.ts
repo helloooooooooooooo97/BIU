@@ -169,9 +169,9 @@ export async function createTag(title: string): Promise<CollectionSchemaPack> {
   return pack
 }
 
-export async function pullTags(_collectionPath?: string) {
+export async function pullTags(_collectionPath?: string, opts?: { filled?: boolean }) {
   try {
-    const res = await fetch('/api/db/tags')
+    const res = await fetch(opts?.filled ? '/api/db/tags?filled=1' : '/api/db/tags')
     const body = (await res.json()) as { tags?: unknown[]; facets?: unknown[]; filled?: unknown }
     const listed = body.tags ?? body.facets
     if (!res.ok || !Array.isArray(listed)) return loadTags()

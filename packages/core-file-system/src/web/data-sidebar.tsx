@@ -579,8 +579,10 @@ export const DataSidebar = memo(function DataSidebar({
   }, [tablePathsKey])
   useEffect(() => {
     const onChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ views?: boolean; tags?: boolean }>).detail
+      if (detail?.tags) return
       setViewsTick((n) => n + 1)
-      if ((event as CustomEvent<{ views?: boolean }>).detail?.views) return
+      if (detail?.views) return
       previewCache.clear()
     }
     window.addEventListener('fsdb:change', onChange)

@@ -1656,6 +1656,12 @@ export class DatabaseService extends Service implements Database {
     this.bump()
   }
 
+  notifyTagCatalog() {
+    this.ctx.emit('database/change')
+    const http = this.ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
+    http?.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), tags: true })
+  }
+
   bump() {
     this.visibleGen += 1
     this.viewShareCache = null
@@ -4533,7 +4539,11 @@ export function apply(ctx: Context) {
         return
       }
       const q = route.query.get('q') || ''
-      route.send(200, { tags: facets.list(q), filled: facets.filledFieldCounts() })
+      const payload: { tags: ReturnType<typeof facets.list>; filled?: ReturnType<typeof facets.filledFieldCounts> } = {
+        tags: facets.list(q),
+      }
+      if (route.query.get('filled')) payload.filled = facets.filledFieldCounts()
+      route.send(200, payload)
     } catch (error) {
       route.send(400, { error: String(error) })
     }
@@ -4547,8 +4557,8 @@ export function apply(ctx: Context) {
         const pack = normalizeSchemaPack(item)
         if (pack) facets.upsert(pack)
       }
-      db.bump()
-      route.send(200, { ok: true, tags: facets.list(), filled: facets.filledFieldCounts() })
+      db.notifyTagCatalog()
+      route.send(200, { ok: true, tags: facets.list() })
     } catch (error) {
       route.send(400, { error: String(error) })
     }

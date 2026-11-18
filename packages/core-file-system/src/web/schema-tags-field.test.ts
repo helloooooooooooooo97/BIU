@@ -43,8 +43,10 @@ test('detail facet cell opens FieldValuePop unless the click is on a tag', () =>
 
 test('tag pack editor hard-deletes a property without a restore row', () => {
   const schemaUi = readFileSync(resolve(import.meta.dirname, './schema-field.tsx'), 'utf8')
-  assert.match(schemaUi, /fields: item\.fields\.filter\(\(row\) => row\.key !== key\)/)
+  assert.match(schemaUi, /persistTags\(\[pack\]\)/)
+  assert.match(schemaUi, /fields: pack\.fields\.filter\(\(row\) => row\.key !== key\)/)
   assert.match(schemaUi, /fields: tag\.fields\.filter\(\(item\) => item\.key !== key\)/)
+  assert.doesNotMatch(schemaUi, /persistTags\(next\)/)
   assert.doesNotMatch(schemaUi, /retired\.map/)
 })
 

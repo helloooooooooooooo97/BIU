@@ -170,7 +170,11 @@ export class TagStore {
       db.exec('BEGIN IMMEDIATE')
       try {
         db.prepare('DELETE FROM tag_group_values WHERE collection = ? AND field = ?').run(collection, field)
-        const rows = db.prepare('SELECT record_id, tag_json FROM tag_record_values WHERE collection = ?').all(collection) as Array<{ record_id: string; tag_json: string }>
+        const rows = db.prepare(
+          `SELECT v.record_id, v.tag_json FROM tag_stamps s
+           INNER JOIN tag_record_values v ON v.collection = s.collection AND v.record_id = s.record_id
+           WHERE s.collection = ? AND s.tag_id = ?`,
+        ).all(collection, parsed.packId) as Array<{ record_id: string; tag_json: string }>
         for (const row of rows) this.indexGroupRecord(collection, field, row.record_id, row.tag_json)
         db.prepare('INSERT OR REPLACE INTO tag_group_fields VALUES (?, ?, ?)').run(collection, field, signature)
         db.exec('COMMIT')
@@ -263,20 +267,23 @@ export class TagStore {
     return readEditorContent(this.ensure(), '/tags', want)
   }
 
-  private dropTagGroupIndexes(tagId: string) {
+  private dropTagGroupIndexes(tagId: string, fieldKey?: string) {
     const db = this.ensure()
     const fields = db.prepare('SELECT collection, field FROM tag_group_fields').all() as Array<{ collection: string; field: string }>
     for (const item of fields) {
-      if (parseTagFlatColumnKey(item.field)?.packId !== tagId) continue
+      const parsed = parseTagFlatColumnKey(item.field)
+      if (parsed?.packId !== tagId) continue
+      if (fieldKey && parsed.fieldKey !== fieldKey) continue
       db.prepare('DELETE FROM tag_group_values WHERE collection = ? AND field = ?').run(item.collection, item.field)
       db.prepare('DELETE FROM tag_group_fields WHERE collection = ? AND field = ?').run(item.collection, item.field)
     }
   }
 
-  private savePack(pack: CollectionSchemaPack, notes: string) {
+  private savePack(pack: CollectionSchemaPack, notes?: string) {
     const now = Date.now()
     const db = this.ensure()
     const prev = this.get(pack.id)
+    const prevNotes = notes !== undefined && prev ? this.notes(pack.id) : ''
     db.prepare(
         `INSERT INTO tags (id, label, fields_json, views_json, created_at, updated_at)
          VALUES (?, ?, ?, '[]', ?, ?)
@@ -286,11 +293,15 @@ export class TagStore {
            updated_at = excluded.updated_at`,
       )
       .run(pack.id, pack.label, JSON.stringify(pack.fields), now, now)
-    writeEditorContent(db, '/tags', pack.id, notes, { transaction: false })
+    if (!prev || (notes !== undefined && notes !== prevNotes)) {
+      writeEditorContent(db, '/tags', pack.id, notes ?? '', { transaction: false })
+    }
     if (!prev) return
-    if (JSON.stringify(prev.fields) !== JSON.stringify(pack.fields)) this.dropTagGroupIndexes(pack.id)
-    const keep = new Set(pack.fields.filter((field) => !field.deleted).map((field) => field.key))
-    this.pruneRecordBags(pack.id, keep)
+    const liveNext = new Map(pack.fields.filter((field) => !field.deleted).map((field) => [field.key, field]))
+    for (const field of prev.fields.filter((item) => !item.deleted)) {
+      const next = liveNext.get(field.key)
+      if (!next || JSON.stringify(next) !== JSON.stringify(field)) this.dropTagGroupIndexes(pack.id, field.key)
+    }
   }
 
   private bagValueFilled(value: unknown) {
@@ -360,6 +371,12 @@ export class TagStore {
   }
 
   filledFieldCounts(): Record<string, Record<string, number>> {
+    const live = new Map(
+      this.list().map((pack) => [
+        pack.id,
+        new Set(pack.fields.filter((field) => !field.deleted).map((field) => field.key)),
+      ]),
+    )
     const rows = this.ensure().prepare('SELECT tag_json FROM tag_record_values').all() as Array<{ tag_json: string }>
     const out: Record<string, Record<string, number>> = {}
     for (const row of rows) {
@@ -371,11 +388,15 @@ export class TagStore {
       }
       for (const [tagId, bag] of Object.entries(parsed.values)) {
         if (!bag || typeof bag !== 'object' || Array.isArray(bag)) continue
+        const keep = live.get(tagId)
+        if (keep && keep.size === 0) continue
         const counts = (out[tagId] ??= {})
         for (const [key, value] of Object.entries(bag)) {
+          if (keep && !keep.has(key)) continue
           if (!this.bagValueFilled(value)) continue
           counts[key] = (counts[key] ?? 0) + 1
         }
+        if (!Object.keys(counts).length) delete out[tagId]
       }
     }
     return out
@@ -387,7 +408,16 @@ export class TagStore {
   }
 
   list(query = ''): CollectionSchemaPack[] {
-    return this.entries(query).map((item) => item.pack)
+    const q = query.trim().toLowerCase()
+    const rows = this.ensure().prepare(`
+      SELECT t.id, t.label, t.fields_json FROM tags t
+      WHERE NOT EXISTS (
+        SELECT 1 FROM record_meta m
+        WHERE m.collection = '/tags' AND m.record_id = t.id AND m.deleted_at > 0
+      ) AND (? = '' OR instr(lower(t.id), ?) > 0 OR instr(lower(t.label), ?) > 0)
+      ORDER BY t.label
+    `).all(q, q, q) as TagRow[]
+    return rows.map(packFromRow).filter((pack): pack is CollectionSchemaPack => Boolean(pack))
   }
 
   entries(query = ''): TagEntry[] {
@@ -410,7 +440,12 @@ export class TagStore {
   }
 
   get(idOrLabel: string): CollectionSchemaPack | null {
-    return this.entry(idOrLabel)?.pack ?? null
+    const want = String(idOrLabel ?? '').trim()
+    if (!want) return null
+    const row = this.ensure()
+      .prepare('SELECT id, label, fields_json FROM tags WHERE id = ? OR label = ? LIMIT 1')
+      .get(want, want) as TagRow | undefined
+    return row ? packFromRow(row) : null
   }
 
   entry(idOrLabel: string): TagEntry | null {
@@ -429,7 +464,7 @@ export class TagStore {
     db.exec('BEGIN IMMEDIATE')
     try {
       for (const tag of next) {
-        this.savePack(tag, this.notes(tag.id))
+        this.savePack(tag)
       }
       const existing = db.prepare('SELECT id FROM tags').all() as Array<{ id: string }>
       for (const row of existing) {
@@ -450,7 +485,7 @@ export class TagStore {
   upsert(raw: unknown, notes?: string): CollectionSchemaPack {
     const pack = normalizeSchemaPack(raw)
     if (!pack) throw new Error('invalid 标签')
-    const nextNotes = notes !== undefined ? String(notes) : this.notes(pack.id)
+    const nextNotes = notes !== undefined ? String(notes) : undefined
     if (this.isDeleted('/tags', pack.id)) this.restoreDeleted('/tags', pack.id)
     this.savePack(pack, nextNotes)
     return pack

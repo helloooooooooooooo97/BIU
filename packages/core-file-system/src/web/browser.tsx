@@ -2767,17 +2767,20 @@ export function CollectionBrowser({
   useEffect(() => {
     let debounce = 0
     let pendingViews = false
+    let pendingTags = false
     let pendingData = false
     const onChange = (event: Event) => {
       const detail = (event as CustomEvent<{ views?: boolean; tags?: boolean }>).detail
       if (detail?.views) pendingViews = true
-      else if (detail?.tags) return
+      else if (detail?.tags) pendingTags = true
       else pendingData = true
       window.clearTimeout(debounce)
       debounce = window.setTimeout(() => {
         const viewsTouched = pendingViews
+        const tagsTouched = pendingTags
         const dataTouched = pendingData
         pendingViews = false
+        pendingTags = false
         pendingData = false
         if (dataTouched) {
           void pullTags()
@@ -2790,6 +2793,8 @@ export function CollectionBrowser({
           } else {
             void reloadRef.current({ force: true })
           }
+        } else if (tagsTouched) {
+          void pullTags()
         }
         if (viewsTouched) void syncViewsRef.current()
       }, 120)

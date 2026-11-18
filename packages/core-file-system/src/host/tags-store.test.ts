@@ -1,9 +1,21 @@
-import { test } from 'vitest'
+import { test, vi } from 'vitest'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
+import { pruneSchemaValue } from '@biu/type-file-system'
 import { TagStore } from './tags-store.ts'
+
+test('tag schema writes mark the pack and leave record bags for read-time prune', () => {
+  const source = readFileSync(resolve(import.meta.dirname, './tags-store.ts'), 'utf8')
+  assert.match(source, /FROM tag_stamps s/)
+  assert.doesNotMatch(source, /this\.pruneRecordBags\(pack\.id/)
+  const host = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
+  assert.match(host, /notifyTagCatalog\(\)/)
+  assert.match(host, /if \(route\.query\.get\('filled'\)\)/)
+  assert.doesNotMatch(host, /db\.bump\(\)\s*\n\s*route\.send\(200, \{ ok: true, tags:/)
+})
 
 test('TagStore keeps packs in sqlite including nested facet types', () => {
   const store = new TagStore()
@@ -109,7 +121,7 @@ test('upserting a soft-deleted facet id brings it back', () => {
   assert.equal(store.get('facet-6')?.label, '新标签')
 })
 
-test('removing a tag field strips leftover values from records', () => {
+test('removing a tag field leaves record bags until read prunes them', () => {
   const store = new TagStore()
   store.upsert({
     id: 'tag-13',
@@ -133,14 +145,23 @@ test('removing a tag field strips leftover values from records', () => {
     },
     '页',
   )
+  const before = store.ensure().prepare('SELECT tag_json FROM tag_record_values WHERE record_id = ?').get('p219') as {
+    tag_json: string
+  }
   store.upsert({
     id: 'tag-13',
     label: '附件 1',
     fields: [{ key: '2041995583', type: 'document', label: '文档', writable: true }],
   })
-  const bag = store.recordTag('/pages', 'p219')?.values['tag-13'] ?? {}
-  assert.equal(Object.prototype.hasOwnProperty.call(bag, '183359745'), false)
-  assert.equal((bag['2041995583'] as Array<{ name: string }>)[0]?.name, '规划.md')
+  const after = store.ensure().prepare('SELECT tag_json FROM tag_record_values WHERE record_id = ?').get('p219') as {
+    tag_json: string
+  }
+  assert.equal(after.tag_json, before.tag_json)
+  const stored = store.recordTag('/pages', 'p219')?.values['tag-13'] ?? {}
+  assert.equal(Object.prototype.hasOwnProperty.call(stored, '183359745'), true)
+  const read = pruneSchemaValue(store.recordTag('/pages', 'p219'), store.list()).values['tag-13'] ?? {}
+  assert.equal(Object.prototype.hasOwnProperty.call(read, '183359745'), false)
+  assert.equal((read['2041995583'] as Array<{ name: string }>)[0]?.name, '规划.md')
 })
 
 test('empty facet overlay is not stored', async () => {
@@ -206,7 +227,7 @@ test('attachments and refs live next to record_meta', () => {
   assert.deepEqual(store.listedAttachmentNames('/pages', 'p1'), [])
 })
 
-test('removing a pack field clears that value on stamped records and keeps the pages', () => {
+test('removing a pack field keeps stamped records and prunes leftovers on read', () => {
   const store = new TagStore()
   store.upsert({
     id: 'dp',
@@ -220,16 +241,24 @@ test('removing a pack field clears that value on stamped records and keeps the p
   store.writeRecordTag('/pages', 'p2', { tags: ['dp'], values: { dp: { complexity: 'O(1)' } } }, '页二')
   store.writeRecordTag('/notes', 'n1', { tags: ['dp'], values: { dp: { year: 2020 } } }, '笔记')
   assert.deepEqual(store.filledFieldCounts(), { dp: { complexity: 2, year: 2 } })
+  const before = store.ensure().prepare('SELECT tag_json FROM tag_record_values WHERE record_id = ?').get('p1') as {
+    tag_json: string
+  }
   store.upsert({
     id: 'dp',
     label: '动态规划',
     fields: [{ key: 'year', type: 'number', label: '年份' }],
   })
+  const after = store.ensure().prepare('SELECT tag_json FROM tag_record_values WHERE record_id = ?').get('p1') as {
+    tag_json: string
+  }
+  assert.equal(after.tag_json, before.tag_json)
   assert.equal(store.get('dp')?.fields.map((field) => field.key).join(), 'year')
-  assert.equal(store.recordTag('/pages', 'p1')?.values.dp.complexity, undefined)
+  assert.equal(store.recordTag('/pages', 'p1')?.values.dp.complexity, 'O(n)')
+  assert.equal(pruneSchemaValue(store.recordTag('/pages', 'p1'), store.list()).values.dp.complexity, undefined)
   assert.equal(store.recordTag('/pages', 'p1')?.values.dp.year, 2016)
   assert.deepEqual(store.recordTag('/pages', 'p1')?.tags, ['dp'])
-  assert.equal(store.recordTag('/pages', 'p2')?.values.dp.complexity, undefined)
+  assert.equal(store.recordTag('/pages', 'p2')?.values.dp.complexity, 'O(1)')
   assert.equal(store.stampedIds('/pages', 'dp').has('p1'), true)
   assert.equal(store.stampedIds('/pages', 'dp').has('p2'), true)
   assert.deepEqual(store.filledFieldCounts(), { dp: { year: 2 } })
@@ -277,4 +306,25 @@ test('custom attribute grouping index is lazy, persistent and incrementally main
   assert.deepEqual(reopened.attributeGroups('/pages', field, ['b']), [{ key: 'changed', total: 1 }, { key: '', total: 0 }])
   reopened.removeFacet('security')
   assert.equal(reopened.ensure().prepare('SELECT COUNT(*) AS n FROM tag_group_values').get()!.n, 0)
+})
+
+
+test('schema reads and edits skip editor content and preserve notes', () => {
+  const store = new TagStore()
+  store.upsert({ id: 'fast', label: '性能', fields: [] }, '# 保留正文')
+  store.upsert({ id: 'hidden', label: '隐藏', fields: [] })
+  store.markDeleted('/tags', 'hidden')
+  const prepare = vi.spyOn(store.ensure(), 'prepare')
+  try {
+    assert.deepEqual(store.list().map(pack => pack.id), ['fast'])
+    assert.equal(store.list('性能')[0]?.id, 'fast')
+    const pack = store.get('fast')!
+    store.upsert({ ...pack, fields: [{ key: 'speed', type: 'number' }] })
+    store.upsert({ ...pack, fields: [] })
+    assert.equal(prepare.mock.calls.some(([sql]) => /editor_content|sqlite_master|sqlite_schema/.test(sql)), false)
+  } finally {
+    prepare.mockRestore()
+  }
+  assert.equal(store.notes('fast'), '# 保留正文')
+  assert.deepEqual(store.get('fast')?.fields, [])
 })

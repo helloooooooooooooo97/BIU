@@ -286,14 +286,14 @@ export function AddProperty({ onAdd }: { onAdd: (label: string, type: AtomicFiel
   )
 }
 
+function persistPack(pack: CollectionSchemaPack) {
+  void persistTags([pack])
+}
+
 export function TagPackEditor({ tagId }: { tagId: string }) {
   const [catalog, setCatalog] = useState(() => loadTags())
   useEffect(() => subscribeTags(undefined, () => setCatalog(loadTags())), [])
   const tag = catalog.find((item) => item.id === tagId)
-
-  function saveCatalog(next: CollectionSchemaPack[]) {
-    void persistTags(next)
-  }
 
   if (!tag) return <p className="fsdb-muted">这条标签已不在目录里。</p>
   const pack = tag
@@ -306,7 +306,7 @@ export function TagPackEditor({ tagId }: { tagId: string }) {
     })
     if (!key) return false
     const field: SchemaPackField = { key, type, label: name.trim(), writable: true }
-    saveCatalog(catalog.map((item) => (item.id === pack.id ? { ...item, fields: [...item.fields, field] } : item)))
+    persistPack({ ...pack, fields: [...pack.fields, field] })
     return true
   }
 
@@ -314,30 +314,20 @@ export function TagPackEditor({ tagId }: { tagId: string }) {
     const others = pack.fields.filter((item) => item.key !== from)
     if (!tagFieldLabelOk(name, others.map((item) => item.label ?? item.key))) return false
     const label = name.trim()
-    saveCatalog(
-      catalog.map((item) =>
-        item.id === pack.id
-          ? {
-              ...item,
-              fields: item.fields.map((row) => {
-                if (row.key !== from) return row
-                const next = { ...row, label }
-                if (label === row.key) delete next.label
-                return next
-              }),
-            }
-          : item,
-      ),
-    )
+    persistPack({
+      ...pack,
+      fields: pack.fields.map((row) => {
+        if (row.key !== from) return row
+        const next = { ...row, label }
+        if (label === row.key) delete next.label
+        return next
+      }),
+    })
     return true
   }
 
   function removeField(key: string) {
-    saveCatalog(
-      catalog.map((item) =>
-        item.id === pack.id ? { ...item, fields: item.fields.filter((row) => row.key !== key) } : item,
-      ),
-    )
+    persistPack({ ...pack, fields: pack.fields.filter((row) => row.key !== key) })
   }
 
   return (
@@ -404,15 +394,12 @@ export function SchemaFieldEditor({
   useEffect(() => subscribeTags(undefined, () => setCatalog(loadTags())), [])
   useEffect(() => subscribeCrumbs(() => setFacetMarks((n) => n + 1)), [])
 
+  const shown = pruneSchemaValue(parsed, catalog)
   const selected = useMemo(
     () =>
       parsed.tags.map((id) => catalog.find((tag) => tag.id === id) ?? { id, label: tagLabel(id), fields: [] }),
     [catalog, parsed.tags],
   )
-
-  function saveCatalog(next: CollectionSchemaPack[]) {
-    void persistTags(next)
-  }
 
   function patchValue(next: SchemaFieldValue, packs = catalog) {
     const cleaned = pruneSchemaValue(next, packs)
@@ -465,7 +452,7 @@ export function SchemaFieldEditor({
     })
     if (!key) return false
     const field: SchemaPackField = { key, type, label: name.trim(), writable: true }
-    saveCatalog(catalog.map((item) => (item.id === tag.id ? { ...item, fields: [...item.fields, field] } : item)))
+    persistPack({ ...tag, fields: [...tag.fields, field] })
     return true
   }
 
@@ -473,63 +460,45 @@ export function SchemaFieldEditor({
     const others = tag.fields.filter((item) => item.key !== from)
     if (!tagFieldLabelOk(name, others.map((item) => item.label ?? item.key))) return false
     const label = name.trim()
-    saveCatalog(
-      catalog.map((item) =>
-        item.id === tag.id
-          ? {
-              ...item,
-              fields: item.fields.map((row) => {
-                if (row.key !== from) return row
-                const next = { ...row, label }
-                if (label === row.key) delete next.label
-                return next
-              }),
-            }
-          : item,
-      ),
-    )
+    persistPack({
+      ...tag,
+      fields: tag.fields.map((row) => {
+        if (row.key !== from) return row
+        const next = { ...row, label }
+        if (label === row.key) delete next.label
+        return next
+      }),
+    })
     return true
   }
 
-  function removeField(tagId: string, key: string) {
-    const nextCatalog = catalog.map((tag) =>
-      tag.id === tagId ? { ...tag, fields: tag.fields.filter((item) => item.key !== key) } : tag,
-    )
-    saveCatalog(nextCatalog)
-    const bag = { ...(parsed.values[tagId] ?? {}) }
-    delete bag[key]
-    patchValue({ tags: parsed.tags, values: { ...parsed.values, [tagId]: bag } }, nextCatalog)
+  function removeField(tag: CollectionSchemaPack, key: string) {
+    persistPack({ ...tag, fields: tag.fields.filter((item) => item.key !== key) })
   }
 
   function restoreField(tag: CollectionSchemaPack, key: string, value: unknown) {
     const hit = catalog.find((item) => item.id === tag.id)
     const kept = hit?.fields.find((item) => item.key === key)
     if (kept && !kept.deleted) return
-    if (kept?.deleted) {
-      saveCatalog(
-        catalog.map((item) =>
-          item.id === tag.id
-            ? {
-                ...item,
-                fields: item.fields.map((row) => {
-                  if (row.key !== key) return row
-                  const next = { ...row }
-                  delete next.deleted
-                  return next
-                }),
-              }
-            : item,
-        ),
-      )
+    if (kept?.deleted && hit) {
+      persistPack({
+        ...hit,
+        fields: hit.fields.map((row) => {
+          if (row.key !== key) return row
+          const next = { ...row }
+          delete next.deleted
+          return next
+        }),
+      })
       return
     }
     const type = inferPackFieldType(value)
     const field: SchemaPackField = { key, type, writable: true }
     if (hit) {
-      saveCatalog(catalog.map((item) => (item.id === tag.id ? { ...item, fields: [...item.fields, field] } : item)))
+      persistPack({ ...hit, fields: [...hit.fields, field] })
       return
     }
-    saveCatalog([...catalog, { id: tag.id, label: tag.label, fields: [field] }])
+    persistPack({ id: tag.id, label: tag.label, fields: [field] })
   }
 
   const tagPop = (
@@ -551,7 +520,7 @@ export function SchemaFieldEditor({
       {compact
         ? null
         : selected.map((tag) => {
-        const bag = parsed.values[tag.id] ?? {}
+        const bag = shown.values[tag.id] ?? {}
         const orphans = orphanPackEntries(tag.fields, bag)
         return (
           <div key={tag.id} className="fsdb-schema-pack">
@@ -583,7 +552,7 @@ export function SchemaFieldEditor({
                     type="button"
                     className="fsdb-schema-prop-del"
                     aria-label={`删除 ${field.label ?? field.key}`}
-                    onClick={() => removeField(tag.id, field.key)}
+                    onClick={() => removeField(tag, field.key)}
                   >
                     <XMarkIcon aria-hidden className="size-3" />
                   </button>
