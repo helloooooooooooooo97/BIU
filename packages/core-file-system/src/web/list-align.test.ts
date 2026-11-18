@@ -263,10 +263,10 @@ test('list and detail share the chat column max width with side padding', () => 
   assert.doesNotMatch(css, /\.inspector-database-page \.fsdb-pager\{/)
   assert.match(css, /\.fsdb-page \.tasks-table\{[^}]*border-left:0|border:0/)
   assert.match(css, /\.fsdb-page \.tasks-table th,\.fsdb-page \.tasks-table td\{[^}]*border-right:var\(--biu-stroke-width\) solid color-mix\(in srgb,var\(--biu-color-border\) 80%,transparent\)/)
-  assert.match(css, /\.fsdb-page \.tasks-table\{[^}]*border-right:var\(--biu-stroke-width\) solid color-mix\(in srgb,var\(--biu-color-border\) 80%,transparent\)/)
+  assert.doesNotMatch(css, /\.fsdb-page \.tasks-table\{[^}]*border-right:var\(--biu-stroke-width\)/)
   assert.match(css, /\.fsdb-page \.tasks-table th:last-child,\.fsdb-page \.tasks-table td:last-child\{[^}]*border-right:0/)
   assert.match(css, /\.fsdb-page \.tasks-table th,\.fsdb-page \.tasks-table td\{[^}]*border-right:var\(--biu-stroke-width\) solid color-mix\(in srgb,var\(--biu-color-border\) 80%,transparent\)/)
-  assert.match(css, /\.fsdb-page \.tasks-table th:last-child \.fsdb-col-resizer\{[^}]*right:0/)
+  assert.doesNotMatch(css, /\.fsdb-page \.tasks-table th:last-child \.fsdb-col-resizer/)
 })
 
 test('leaf tree title cells keep the same toggle box as parents', () => {
@@ -356,8 +356,9 @@ test('visible column menu scrolls inside a max height', () => {
   assert.match(columns, /className="fsdb-col-menu-list"/)
   assert.match(browser, /<VisibleColumnsFlyout/)
   assert.match(browser, /columnMenu=\{renderVisibleColumnsFlyout\(\)\}/)
-  assert.match(css, /\.fsdb-page \.fsdb-col-menu\{[^}]*max-height:min\(60vh,360px\)/)
-  assert.match(css, /\.fsdb-tool-flyout\.fsdb-col-menu\{[^}]*max-height:min\(70vh,520px\)/)
+  assert.match(css, /\.fsdb-page \.fsdb-col-menu\{[^}]*max-height:min\(42vh,280px\)/)
+  assert.match(css, /\.fsdb-tool-flyout\.fsdb-col-menu\{[^}]*max-height:min\(42vh,280px\)/)
+  assert.match(css, /\.fsdb-tool-flyout\.tasks-sort-menu\{[^}]*max-height:min\(42vh,280px\)/)
   assert.match(css, /\.fsdb-page \.fsdb-col-menu-list\{[^}]*overflow:auto/)
 })
 
@@ -396,7 +397,7 @@ test('table columns resize with a Super Tag blue highlight on the divider', () =
   assert.match(css, /\.fsdb-page \.tasks-table \.fsdb-col-resizer\{[^}]*top:0/)
   assert.match(css, /\.fsdb-page \.tasks-table \.fsdb-col-resizer\{[^}]*bottom:0/)
   assert.match(css, /\.fsdb-page \.tasks-table \.fsdb-col-resizer\{[^}]*right:-5px/)
-  assert.match(css, /\.fsdb-page \.tasks-table th:last-child \.fsdb-col-resizer\{[^}]*right:0/)
+  assert.doesNotMatch(css, /\.fsdb-page \.tasks-table th:last-child \.fsdb-col-resizer/)
   assert.match(css, /\.fsdb-page \.tasks-table \.fsdb-col-resizer::after\{[^}]*left:50%/)
   assert.match(css, /\.fsdb-page \.tasks-table \.fsdb-col-resizer::after\{[^}]*width:4px/)
   assert.match(css, /\.fsdb-page \.tasks-table \.fsdb-col-resizer::after\{[^}]*top:0/)

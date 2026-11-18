@@ -779,7 +779,7 @@ test('create record sits at the right of the toolbar with a blue label', () => {
   assert.match(browser, /paintedColStyle/)
   assert.match(browser, /is-cols-fixed/)
   assert.match(css, /\.fsdb-page \.tasks-table\.is-cols-fixed\.is-wrap\{[^}]*width:100%/)
-  assert.doesNotMatch(browser, /className="fsdb-col-fill"/)
+  assert.match(browser, /className="fsdb-col-fill"/)
   assert.doesNotMatch(css, /tr\[data-table-idle\]/)
   assert.match(browser, /tableWrapRef/)
   assert.match(browser, /tablePaintNodes/)
