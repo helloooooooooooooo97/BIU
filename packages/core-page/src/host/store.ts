@@ -1,4 +1,4 @@
-import { mkdir, unlink } from 'node:fs/promises'
+import { access, mkdir, unlink } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import type { DbRecord, SchemaFieldValue } from '@biu/type-file-system'
 import { allocateRecordId, emptySchemaValue, isAssetFileName, isAssignableRecordId, normalizeSchemaValue } from '@biu/type-file-system'
@@ -11,6 +11,9 @@ import {
   openAndMigrateBiu,
   PAGE_DB,
   PAGE_ROOT,
+  hashedAssetRel,
+  isHashedAssetName,
+  readContentAddressed,
   readDocument,
   writeDocument,
   AssetConflictError,
@@ -142,6 +145,8 @@ function applyPatch(current: PageRow, patch: Record<string, unknown>): PageRow {
   }
 }
 
+const NAMED_ASSET_CACHE_LIMIT = 16
+
 export class PagesStore {
   constructor(
     private fs: WorkspaceFs,
@@ -149,6 +154,7 @@ export class PagesStore {
   ) {}
 
   private db: import('node:sqlite').DatabaseSync | null = null
+  private namedAssetCache = new Map<string, { bytes: Buffer; type: string; etag: string }>()
 
   private async ensureDirs() {
     migrateLegacyPageDir(this.fs.resolve('.'))
@@ -293,17 +299,58 @@ export class PagesStore {
       kind: 'asset',
       storage: 'name',
     })
+    this.rememberNamedAsset(written.name, { bytes: written.bytes, type: mimeOf(written.name), etag: written.etag })
     return { name: written.name, href: fileUrl(written.name), etag: written.etag }
+  }
+
+  async assetEtag(name: string): Promise<string> {
+    const file = basename(name)
+    if (!file || file !== name.replace(/\\/g, '/')) throw new Error('invalid asset')
+    if (isHashedAssetName(file)) {
+      await access(join(this.assetsDir, 'hash', hashedAssetRel(file)))
+      return file
+    }
+    const cached = this.namedAssetCache.get(file)
+    if (cached) return cached.etag
+    const db = await this.openDb()
+    const row = db.prepare('SELECT etag FROM attachments WHERE name = ?').get(file) as { etag?: string } | undefined
+    if (row?.etag) return row.etag
+    return (await this.readAsset(file)).etag
   }
 
   async readAsset(name: string): Promise<{ bytes: Buffer; type: string; etag: string }> {
     const file = basename(name)
     if (!file || file !== name.replace(/\\/g, '/')) throw new Error('invalid asset')
+    if (isHashedAssetName(file)) {
+      try {
+        const { bytes } = await readContentAddressed(join(this.assetsDir, 'hash'), file)
+        return { bytes, type: mimeOf(file), etag: file }
+      } catch {
+        /* named fallback */
+      }
+    }
+    const cached = this.namedAssetCache.get(file)
+    if (cached) {
+      this.rememberNamedAsset(file, cached)
+      return cached
+    }
     try {
       const { bytes, etag } = await readDocument(join(this.assetsDir, 'name'), file)
-      return { bytes, type: mimeOf(file), etag }
+      const rec = { bytes, type: mimeOf(file), etag }
+      this.rememberNamedAsset(file, rec)
+      return rec
     } catch {
       throw new Error('not found')
+    }
+  }
+
+  private rememberNamedAsset(file: string, rec: { bytes: Buffer; type: string; etag: string }) {
+    this.namedAssetCache.delete(file)
+    this.namedAssetCache.set(file, rec)
+    while (this.namedAssetCache.size > NAMED_ASSET_CACHE_LIMIT) {
+      const oldest = this.namedAssetCache.keys().next().value
+      if (oldest == null) break
+      this.namedAssetCache.delete(oldest)
     }
   }
 

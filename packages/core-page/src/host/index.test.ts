@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { existsSync } from 'node:fs'
-import { mkdtemp, mkdir, readFile, utimes, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, unlink, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context, Service } from 'cordis'
@@ -11,8 +11,9 @@ import { isAllocatedRecordId } from '@biu/type-file-system'
 import * as tools from '@biu/host-tools'
 import * as fsPlugin from '@biu/host-fs'
 import * as page from './index.ts'
+import { pageFileCacheControl } from './index.ts'
 import { dumpMarkdown, splitMarkdown } from './markdown.ts'
-import { hashedAssetName, hashedAssetRel, writeEditorContent } from '@biu/host-plugin-loader/data-dir'
+import { hashedAssetName, hashedAssetRel, writeContentAddressed, writeEditorContent } from '@biu/host-plugin-loader/data-dir'
 import { assetNamesFromBlock, collectAssetNames } from '@biu/type-file-system'
 import { ASSET_GC_GRACE_MS, PAGE_DB, PAGE_ROOT, PageAssetConflictError, PagesStore } from './store.ts'
 import { PageBlocksIndex } from './page-blocks-index.ts'
@@ -153,6 +154,19 @@ test('page plugin stores pages in SQLite under .biu', async () => {
   const overwritten = await store.writeAsset('board.json', '{}', { etag: asset.etag })
   assert.equal(overwritten.name, 'board.json')
   assert.notEqual(overwritten.etag, asset.etag)
+  await unlink(join(assetsDir, 'name', 'board.json'))
+  const cached = await store.readAsset('board.json')
+  assert.equal(cached.bytes.toString(), '{}')
+  assert.equal(await store.assetEtag('board.json'), overwritten.etag)
+
+  const hashedBytes = Buffer.from('banner-bytes')
+  const hashed = hashedAssetName(hashedBytes, 'hero.png')
+  await writeContentAddressed(join(assetsDir, 'hash'), hashed, hashedBytes)
+  const hashedRead = await store.readAsset(hashed)
+  assert.equal(hashedRead.etag, hashed)
+  assert.equal(await store.assetEtag(hashed), hashed)
+  assert.equal(pageFileCacheControl(hashed), 'public, max-age=31536000, immutable')
+  assert.equal(pageFileCacheControl('board.json'), 'no-cache')
 })
 
 test('page-blocks collection updates one fence by page::block id', async () => {
