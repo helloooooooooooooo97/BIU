@@ -21,9 +21,9 @@ import {
   findEvent,
 } from '@biu/host-sessions/trajectory'
 import { estimateTokens, liftToolImages } from '@biu/host-sessions'
-import { persistPastedImages, readArtifactFile, withPastedImagePicks } from '@biu/host-sessions/artifacts'
+import { persistDroppedFile, persistPastedImages, readArtifactFile, withPastedImagePicks } from '@biu/host-sessions/artifacts'
 import { collectLiveDispatchedTasks } from '@biu/host-live-sessions/usage'
-import { loadLiveDispatchTasks, registerChatInspectorRoutes } from './inspector.ts'
+import { decorateDispatchedTasks, loadLiveDispatchTasks, registerChatInspectorRoutes } from './inspector.ts'
 import { forwardCloud } from '@biu/host-account/mirror'
 
 function workspaceIsCloud(ctx: Context) {
@@ -1135,55 +1135,9 @@ export async function openSessionHttpPayload(ctx: Context, id: string, limitTurn
   } catch {
     liveTasks = []
   }
-  const workerIds = new Set(
-    liveTasks.map((task) => task.sessionId).filter((id) => id && id !== record.id),
-  )
-  let summaries: Awaited<ReturnType<typeof ctx.sessions.listSummaries>> = []
-  if (workerIds.size) {
-    try {
-      summaries = liveSessionItems(ctx, await ctx.sessions.listSummaries())
-    } catch {
-      summaries = []
-    }
-  }
-  const workers = []
-  const titles = new Map<string, string>()
-  const mascots = new Map<string, NonNullable<(typeof summaries)[number]['mascot']>>()
-  const projects = new Map<string, { name: string; path?: string }>()
-  for (const item of summaries) {
-    if (!workerIds.has(item.id)) continue
-    titles.set(item.id, item.title)
-    if (item.mascot) mascots.set(item.id, item.mascot)
-    if (item.project?.name) {
-      projects.set(item.id, {
-        name: item.project.name,
-        ...(item.project.path ? { path: item.project.path } : {}),
-      })
-    }
-  }
-  for (const id of workerIds) {
-    try {
-      const worker = await ctx.sessions.require(id)
-      workers.push({ id, events: worker.events })
-    } catch {
-      // 执行会话读失败不能挡住当前这条。
-    }
-  }
-  const dispatched = collectLiveDispatchedTasks(record.id, record.events, workers, liveTasks)
-  payload.dispatchedUsage = dispatched.total
-  payload.dispatchedUsageByTurn = Object.fromEntries(
-    Object.entries(dispatched.byLiveTurn).map(([key, value]) => [key, value.usage]),
-  )
-  payload.dispatchedTasksByTurn = Object.fromEntries(
-    Object.entries(dispatched.byLiveTurn).map(([key, value]) => [
-      key,
-      value.tasks.map((task) => ({
-        ...task,
-        title: titles.get(task.sessionId) ?? task.sessionId.slice(0, 8),
-        ...(mascots.get(task.sessionId) ? { mascot: mascots.get(task.sessionId) } : {}),
-        ...(projects.get(task.sessionId) ? { project: projects.get(task.sessionId) } : {}),
-      })),
-    ]),
+  Object.assign(
+    payload,
+    decorateDispatchedTasks(ctx, collectLiveDispatchedTasks(record.id, record.events, [], liveTasks)),
   )
   return { status: 200 as const, body: payload }
 }
@@ -1303,7 +1257,7 @@ export function apply(ctx: Context) {
 
   ctx.hub.register({
     id: 'chat',
-    title: '对话',
+    title: '会话',
     subtitle: 'session + ctx.agents',
     plugin: 'chat',
     kind: 'chat',
@@ -1665,6 +1619,21 @@ export function apply(ctx: Context) {
       return route.send(200, result)
     }
     route.send(200, { turns: result as Record<string, TurnStat> })
+  })
+  ctx.http.route('POST', '/api/agents/:id/artifacts', async (route) => {
+    const record = await visibleSession(route.params.id)
+    if (!record) return route.send(404, { error: 'unknown session' })
+    try {
+      const saved = await persistDroppedFile(route.params.id, {
+        name: String(route.query.get('name') ?? '').trim(),
+        mime: String(route.req.headers['content-type'] ?? ''),
+        data: await route.bytes(),
+      })
+      route.send(200, saved)
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      route.send(msg === 'file too large' ? 413 : 400, { error: msg === 'file too large' ? '文件太大' : msg })
+    }
   })
   ctx.http.route('GET', '/api/agents/:id/artifacts/:name', async (route) => {
     const record = await visibleSession(route.params.id)

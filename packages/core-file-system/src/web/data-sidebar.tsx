@@ -1,44 +1,37 @@
 import { lazy, memo, Suspense, useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore, type MouseEvent } from 'react'
-import { createPortal } from 'react-dom'
 import { ChatCount } from '@biu/biu-ui/chat-count'
 import { SidebarFold } from '@biu/biu-ui/sidebar-fold'
 import {
   ChevronDoubleLeftIcon,
   ChevronDownIcon,
   ChevronRightIcon,
-  PencilSquareIcon,
   PlusIcon,
   RectangleStackIcon,
   StarIcon,
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
+import { SidebarRow, SidebarRowMain } from '@biu/web-session-view/sidebar-row'
 import type { CollectionInfo, CollectionSchema, DbRecord } from '@biu/type-file-system'
 import { groupField, groupRecords, parentFieldKey, treeChildren } from './fields.ts'
-import { builtinAllViewId, type DataScope } from '../catalog-views.ts'
-import { isIndexCollection, isRecordTreeCollection, isSystemCollection, sortDataCollections } from './database-path.ts'
+import { builtinAllViewId, isReadOnlyViewId, type DataScope } from '../catalog-views.ts'
+import { dataSidebarKind, isRecordTreeCollection, isSystemCollection, sortDataCollections } from './database-path.ts'
 import { rememberInspectorWorkingView } from './inspector-db-route.ts'
 import { readJson } from './db-client.ts'
 import { paintCollectionViews } from './collection-nav.ts'
-import type { SavedView } from './saved-view.ts'
+import { canRemoveCollectionView, normalizeSavedView, type SavedView } from './saved-view.ts'
 import {
   fetchViewPreview,
-  fetchViewTotal,
   getPreviewTotal,
   getPreviewTotalsVersion,
   nextPreviewLimit,
-  orderViewTotalJobs,
   previewCacheKey,
   shouldFetchViewPreview,
-  shouldFetchViewTotal,
   whenListIdle,
   recordPreviewEmoji,
   recordPreviewLabel,
   rememberPreviewTotal,
   SIDEBAR_PREVIEW_MAX,
   subscribePreviewTotals,
-  VIEW_TOTAL_IDLE_MS,
-  viewTotalKey,
-  writeRecordEmoji,
 } from './sidebar-preview.ts'
 import {
   activeViewStorageKey,
@@ -50,10 +43,13 @@ import {
   isViewStarred,
   getCrumbsVersion,
   loadRecords,
+  loadViews,
   peekRecord,
   subscribeCrumbs,
   persistStarredRecords,
   persistStarredViews,
+  mergeSavedViewLists,
+  pullSavedViews,
   rememberRecords,
   starredRecordEmoji,
   starredRecordLabel,
@@ -68,8 +64,98 @@ import { TableGlyph, ViewModeGlyph } from './nav-glyphs.tsx'
 import { getDatabaseUi } from './database-ui.ts'
 import { RecordMark, recordMarkStub } from './record-mark.tsx'
 import { SidebarBrandLockup } from '@biu/public-mascot'
+import { useSidebarCollapseStore } from '@biu/web-session-view'
 
 const RecordEmojiBoard = lazy(() => import('@biu/biu-ui/emoji-board').then((m) => ({ default: m.RecordEmojiBoard })))
+
+const DATA_SECTION_FAV = 'fsdb.section.fav'
+const DATA_SECTION_USER = 'fsdb.section.user'
+const DATA_SECTION_INDEX = 'fsdb.section.index'
+
+function SectionHead({
+  label,
+  count,
+  open,
+  onToggle,
+  title,
+  testId,
+}: {
+  label: string
+  count: number
+  open?: boolean
+  onToggle?: () => void
+  title?: string
+  testId?: string
+}) {
+  return (
+    <div className="sidebar-section-head min-w-0">
+      <div className="flex min-h-8 min-w-0 flex-1 items-center">
+        {onToggle ? (
+          <button
+            type="button"
+            className="flex h-full min-w-0 flex-1 items-center gap-2 text-left text-[12px] font-bold tracking-wider"
+            aria-expanded={open}
+            title={title}
+            data-testid={testId}
+            onClick={onToggle}
+          >
+            <span className="min-w-0 flex-1 truncate tracking-normal">{label}</span>
+          </button>
+        ) : (
+          <span
+            className="flex h-full min-w-0 flex-1 items-center gap-2 text-left text-[12px] font-bold tracking-wider"
+            title={title}
+          >
+            <span className="min-w-0 flex-1 truncate tracking-normal">{label}</span>
+          </span>
+        )}
+      </div>
+      <ChatCount count={count} />
+    </div>
+  )
+}
+
+export function DataIconRail({
+  tables,
+  collectionPath,
+  onOpenTable,
+}: {
+  tables: CollectionInfo[]
+  collectionPath: string
+  onOpenTable?: (path: string, viewId?: string) => void
+}) {
+  return (
+    <nav className="fsdb-icon-rail" aria-label="数据" data-testid="data-icon-rail">
+      {tables.map((table) => {
+        const name = table.view?.title ?? table.label
+        const active = table.path === collectionPath
+        return (
+          <button
+            key={table.path}
+            type="button"
+            className={`fsdb-icon-rail-btn${active ? ' is-active' : ''}`}
+            title={name}
+            aria-label={name}
+            data-dock-tip={name}
+            data-dock-tip-at="e"
+            aria-current={active ? 'page' : undefined}
+            onClick={() => onOpenTable?.(table.path, paintCollectionViews(table.path, tables)[0]?.id)}
+          >
+            <TableGlyph icon={table.view?.icon} />
+          </button>
+        )
+      })}
+    </nav>
+  )
+}
+
+/** 高亮行的留白、计数和图标使用标题按钮的操作；独立按钮仍处理自己的点击。 */
+function onSidebarRowClick(event: MouseEvent<HTMLElement>) {
+  const hit = event.target
+  if (event.defaultPrevented || !(hit instanceof Element) || !event.currentTarget.contains(hit)) return
+  if (hit.closest('button, a, input, textarea, select, [contenteditable], [role="button"], [role="menuitem"]')) return
+  event.currentTarget.querySelector<HTMLButtonElement>('button.min-w-0.flex-1')?.click()
+}
 
 type PreviewState = {
   items: DbRecord[]
@@ -316,10 +402,11 @@ function ViewRecordPreview({
           <div
             key={row.id}
             className="chat-session-row"
+            onClick={onSidebarRowClick}
             role="listitem"
             {...pickDomAttrs(recordKind, row.id, label)}
           >
-            <div className="chat-session-row-main flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5">
+            <SidebarRowMain>
               <span className="fsdb-record-icon relative grid size-6 shrink-0 place-items-center">
                 <button
                   type="button"
@@ -343,76 +430,73 @@ function ViewRecordPreview({
               >
                 {label}
               </button>
-            </div>
+            </SidebarRowMain>
           </div>
         )
       }
       return (
         <div key={row.id} className="min-w-0" role="listitem">
-          <div
-            className={`chat-session-row group${starred ? ' is-pinned' : ''}`}
-            {...pickDomAttrs(recordKind, row.id, label)}
-          >
-            <div className="chat-session-row-main flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5">
-              <button
-                type="button"
-                className="relative grid size-6 shrink-0 place-items-center border-0 bg-transparent p-0 text-inherit"
-                title={expanded ? '收起子记录' : '展开子记录'}
-                aria-expanded={expanded}
-                onClick={() => toggleKid(row.id)}
-                onContextMenu={(event) => openEmojiPicker(event, row)}
-              >
-                <span className="sidebar-rail-icon sidebar-group-fold">
-                  <span className="sidebar-group-fold-face">{recordFace(row)}</span>
-                  <span className="sidebar-group-fold-chevron">
-                    {expanded ? (
-                      <ChevronDownIcon className="size-4 shrink-0 opacity-80" />
-                    ) : (
-                      <ChevronRightIcon className="size-4 shrink-0 opacity-80" />
-                    )}
+          <SidebarRow
+            pinned={starred}
+            onClick={onSidebarRowClick}
+            attrs={pickDomAttrs(recordKind, row.id, label)}
+            main={
+              <SidebarRowMain>
+                <button
+                  type="button"
+                  className="relative grid size-6 shrink-0 place-items-center border-0 bg-transparent p-0 text-inherit"
+                  title={expanded ? '收起子记录' : '展开子记录'}
+                  aria-expanded={expanded}
+                  onClick={() => toggleKid(row.id)}
+                  onContextMenu={(event) => openEmojiPicker(event, row)}
+                >
+                  <span className="sidebar-rail-icon sidebar-group-fold">
+                    <span className="sidebar-group-fold-face">{recordFace(row)}</span>
+                    <span className="sidebar-group-fold-chevron">
+                      {expanded ? (
+                        <ChevronDownIcon className="size-4 shrink-0 opacity-80" />
+                      ) : (
+                        <ChevronRightIcon className="size-4 shrink-0 opacity-80" />
+                      )}
+                    </span>
                   </span>
-                </span>
-                {emojiBoard(row)}
-              </button>
-              <button
-                type="button"
-                className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
-                title={label}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onOpenRecord?.(row.id, row)
-                }}
-              >
-                {label}
-              </button>
-            </div>
-            <ChatCount count={kidCount} title={`${kidCount} 个子记录`} />
-            <button
-              type="button"
-              className="sidebar-add"
-              title={`在 ${label} 下添加子记录`}
-              aria-label={`在 ${label} 下添加子记录`}
-              onClick={(event) => {
-                event.stopPropagation()
-                void createChild(row)
-              }}
-            >
-              <PlusIcon className="size-4 shrink-0" />
-            </button>
-            <button
-              type="button"
-              className={`chat-session-row-star${starred ? ' is-on' : ''}`}
-              aria-pressed={starred}
-              aria-label={starred ? `取消收藏 ${label}` : `收藏 ${label}`}
-              title={starred ? '取消收藏' : '收藏'}
-              onClick={(event) => {
-                event.stopPropagation()
-                toggleRecordStar(row)
-              }}
-            >
-              <StarIcon className="size-4 shrink-0" />
-            </button>
-          </div>
+                  {emojiBoard(row)}
+                </button>
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
+                  title={label}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onOpenRecord?.(row.id, row)
+                  }}
+                >
+                  {label}
+                </button>
+              </SidebarRowMain>
+            }
+            trail={
+              <>
+                <ChatCount count={kidCount} title={`${kidCount} 个子记录`} />
+                <button
+                  type="button"
+                  className="sidebar-add"
+                  title={`在 ${label} 下添加子记录`}
+                  aria-label={`在 ${label} 下添加子记录`}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    void createChild(row)
+                  }}
+                >
+                  <PlusIcon className="size-4 shrink-0" />
+                </button>
+              </>
+            }
+            onStar={() => toggleRecordStar(row)}
+            starOn={starred}
+            starLabel={starred ? `取消收藏 ${label}` : `收藏 ${label}`}
+            starIcon={<StarIcon className="size-4 shrink-0" />}
+          />
           <SidebarFold open={expanded}>
             <div className="fsdb-record-kids">{renderRecords(scope, row.id, nextTrail)}</div>
           </SidebarFold>
@@ -437,8 +521,8 @@ function ViewRecordPreview({
           const expanded = openGroups[groupKey] ?? index === 0
           return (
             <div key={groupKey} className="min-w-0" data-testid="sidebar-view-group">
-              <div className="chat-session-row fsdb-view-preview-group">
-                <div className="chat-session-row-main flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5">
+              <div className="chat-session-row fsdb-view-preview-group" onClick={onSidebarRowClick}>
+                <SidebarRowMain>
                   <button
                     type="button"
                     className="grid size-6 shrink-0 place-items-center border-0 bg-transparent p-0 text-inherit"
@@ -467,7 +551,7 @@ function ViewRecordPreview({
                   >
                     {bucket.label}
                   </button>
-                </div>
+                </SidebarRowMain>
                 <ChatCount count={bucket.rows.length} />
               </div>
               <SidebarFold open={expanded}>
@@ -494,10 +578,6 @@ function ViewRecordPreview({
   )
 }
 
-function usePreviewTotalsVersion() {
-  return useSyncExternalStore(subscribePreviewTotals, getPreviewTotalsVersion, () => 0)
-}
-
 export const DataSidebar = memo(function DataSidebar({
   tables,
   collectionPath,
@@ -506,13 +586,13 @@ export const DataSidebar = memo(function DataSidebar({
   activeViewId,
   onOpenTable,
   onApplyView,
-  onRenameView,
   onDeleteView,
   onAddView,
   onOpenRecord,
   expandedViewKey: expandedViewKeyProp,
   onExpandedViewKeyChange,
   onCollapse,
+  framed,
 }: {
   tables: CollectionInfo[]
   collectionPath: string
@@ -521,13 +601,13 @@ export const DataSidebar = memo(function DataSidebar({
   activeViewId: string | null
   onOpenTable?: (path: string, viewId?: string) => void
   onApplyView: (view: SavedView) => void
-  onRenameView: (view: SavedView) => void
-  onDeleteView: (view: SavedView) => void
+  onDeleteView: (view: SavedView, path?: string) => void
   onAddView: (path?: string, scope?: DataScope) => void
   onOpenRecord?: (path: string, view: SavedView, recordId: string, row?: DbRecord) => void
   expandedViewKey?: string | null
   onExpandedViewKeyChange?: (key: string | null) => void
   onCollapse?: () => void
+  framed?: boolean
 }) {
   const listedTables = useMemo(() => {
     const raw = tables.length ? tables : ([{ path: collectionPath, label: title, view: { title } }] as CollectionInfo[])
@@ -536,32 +616,64 @@ export const DataSidebar = memo(function DataSidebar({
   }, [collectionPath, tables, title])
   const { user: userTables, index: indexTables, system: systemTables } = useMemo(() => sortDataCollections(listedTables), [listedTables])
   const [openTables, setOpenTables] = useState<Record<string, boolean>>(() => {
-    const group = isIndexCollection(collectionPath) ? 'index' : isSystemCollection(collectionPath) ? 'system' : 'user'
+    const group = dataSidebarKind(collectionPath)
     return {
       [`${group}:${collectionPath}`]: true,
     }
   })
+  useLayoutEffect(() => {
+    const group = dataSidebarKind(collectionPath)
+    setOpenTables({ [`${group}:${collectionPath}`]: true })
+  }, [collectionPath])
+  const [pendingPick, setPendingPick] = useState<{ path: string; viewId: string } | null>(null)
+  useEffect(() => {
+    if (!pendingPick) return
+    if (pendingPick.path === collectionPath && pendingPick.viewId === activeViewId) setPendingPick(null)
+  }, [activeViewId, collectionPath, pendingPick])
+  const litPath = pendingPick?.path ?? collectionPath
+  const litViewId = pendingPick?.viewId ?? activeViewId
   useSyncExternalStore(subscribeStarredViews, getStarredViewsVersion, () => 0)
   useSyncExternalStore(subscribeStarredRecords, getStarredRecordsVersion, () => 0)
   const starredViews = getStarredViews()
   const starredRecords = getStarredRecords()
-  const [favOpen, setFavOpen] = useState(() => {
-    try {
-      return localStorage.getItem('fsdb.favOpen') !== '0'
-    } catch {
-      return true
-    }
-  })
-  const [userOpen, setUserOpen] = useState(true)
-  const [indexOpen, setIndexOpen] = useState(true)
-  const [systemOpen, setSystemOpen] = useState(false)
+  const collapsedSections = useSidebarCollapseStore((state) => state.collapsed)
+  const toggleSection = useSidebarCollapseStore((state) => state.toggle)
+  const favOpen = collapsedSections[DATA_SECTION_FAV] !== true
+  const userOpen = collapsedSections[DATA_SECTION_USER] !== true
+  const indexOpen = collapsedSections[DATA_SECTION_INDEX] !== true
   const [expandedViewKeyLocal, setExpandedViewKeyLocal] = useState<string | null>(null)
   const expandedViewKey = expandedViewKeyProp !== undefined ? expandedViewKeyProp : expandedViewKeyLocal
   const setExpandedViewKey = onExpandedViewKeyChange ?? setExpandedViewKeyLocal
-  const totalsVersion = usePreviewTotalsVersion()
+  const [viewsTick, setViewsTick] = useState(0)
+  const tablePathsKey = listedTables.map((table) => table.path).join('\0')
+  const starredPathsKey = starredViews.map((item) => `${item.path}\0${item.viewId}`).join('\n')
+  useEffect(() => {
+    const paths = tablePathsKey.split('\0').filter(Boolean)
+    const starredPaths = [...new Set(starredViews.map((item) => item.path).filter(Boolean))]
+    let live = true
+    const bump = () => {
+      if (live) setViewsTick((n) => n + 1)
+    }
+    if (starredPaths.length) {
+      void pullSavedViews(starredPaths, { force: true }).then((changed) => {
+        if (live && changed) bump()
+      }, bump)
+    }
+    if (paths.length) {
+      void pullSavedViews(paths, { idle: true }).then((changed) => {
+        if (live && changed) bump()
+      }, bump)
+    }
+    return () => {
+      live = false
+    }
+  }, [starredPathsKey, tablePathsKey])
   useEffect(() => {
     const onChange = (event: Event) => {
-      if ((event as CustomEvent<{ views?: boolean }>).detail?.views) return
+      const detail = (event as CustomEvent<{ views?: boolean; tags?: boolean }>).detail
+      if (detail?.tags) return
+      setViewsTick((n) => n + 1)
+      if (detail?.views) return
       previewCache.clear()
     }
     window.addEventListener('fsdb:change', onChange)
@@ -569,13 +681,27 @@ export const DataSidebar = memo(function DataSidebar({
   }, [])
 
   function viewsFor(path: string) {
-    return paintCollectionViews(path, tables)
+    void viewsTick
+    const stored = loadViews(path)
+    const user = path === collectionPath && views.length ? mergeSavedViewLists(stored, views) : stored
+    return paintCollectionViews(path, tables, user)
   }
 
   const starredRows = starredViews.flatMap((item) => {
     const table = listedTables.find((row) => row.path === item.path)
-    const view = viewsFor(item.path).find((row) => row.id === item.viewId)
-    if (!table || !view) return []
+    if (!table) return []
+    const listedView = viewsFor(item.path).find((row) => row.id === item.viewId)
+    const storedName = String(item.name ?? '').trim()
+    if (!listedView && !storedName) return []
+    const view = listedView ?? normalizeSavedView({
+      id: item.viewId,
+      name: storedName,
+      mode: 'table',
+      sortField: 'title',
+      sortDir: 'asc',
+      filters: {},
+      columns: [],
+    })
     return [{ table, view }]
   })
   const starredRecordRows = starredRecords.flatMap((item) => {
@@ -584,86 +710,6 @@ export const DataSidebar = memo(function DataSidebar({
     return [{ table, item }]
   })
   const favCount = starredRows.length + starredRecordRows.length
-
-  const countJobs = useMemo(() => {
-    const jobs: Array<{ path: string; view: SavedView }> = []
-    const take = (path: string, view: SavedView) => {
-      if (
-        shouldFetchViewTotal({
-          path,
-          view,
-          collectionPath,
-          activeViewId,
-        })
-      ) {
-        jobs.push({ path, view })
-      }
-    }
-    if (favOpen) {
-      for (const { table, view } of starredRows) take(table.path, view)
-    }
-    if (userOpen) {
-      for (const table of userTables) {
-        if (openTables[`user:${table.path}`]) {
-          for (const view of viewsFor(table.path)) take(table.path, view)
-        }
-      }
-    }
-    if (indexOpen) {
-      for (const table of indexTables) {
-        if (openTables[`index:${table.path}`]) {
-          for (const view of viewsFor(table.path)) take(table.path, view)
-        }
-      }
-    }
-    if (systemOpen) {
-      for (const table of systemTables) {
-        if (openTables[`system:${table.path}`]) {
-          for (const view of viewsFor(table.path)) take(table.path, view)
-        }
-      }
-    }
-    return jobs
-  }, [userOpen, indexOpen, systemOpen, favOpen, userTables, indexTables, systemTables, listedTables, openTables, starredRows, tables, views, collectionPath, activeViewId])
-
-  const countJobKey = countJobs.map((job) => viewTotalKey(job.path, job.view)).join('|')
-  useEffect(() => {
-    let cancelled = false
-    const missing = countJobs.some((job) => getPreviewTotal(viewTotalKey(job.path, job.view)) == null)
-    const stop = whenListIdle(() => {
-      if (cancelled) return
-      const jobs = orderViewTotalJobs(countJobs, collectionPath)
-      const urgent = jobs.filter((job) => job.path === collectionPath)
-      const rest = jobs.filter((job) => job.path !== collectionPath)
-      void (async () => {
-        await Promise.all(
-          urgent.map((job) => {
-            if (getPreviewTotal(viewTotalKey(job.path, job.view)) != null) return Promise.resolve()
-            return fetchViewTotal(job.path, job.view).catch(() => {
-              if (cancelled) return
-            })
-          }),
-        )
-        for (const job of rest) {
-          if (cancelled) return
-          if (getPreviewTotal(viewTotalKey(job.path, job.view)) != null) continue
-          await new Promise<void>((resolve) => {
-            const ric = window.requestIdleCallback
-            if (typeof ric === 'function') ric(() => resolve(), { timeout: 200 })
-            else window.setTimeout(() => resolve(), 0)
-          })
-          if (cancelled) return
-          await fetchViewTotal(job.path, job.view).catch(() => {
-            if (cancelled) return
-          })
-        }
-      })()
-    }, missing ? 0 : VIEW_TOTAL_IDLE_MS)
-    return () => {
-      cancelled = true
-      stop()
-    }
-  }, [collectionPath, countJobKey, countJobs, totalsVersion])
 
   useEffect(() => {
     let cancelled = false
@@ -735,16 +781,23 @@ export const DataSidebar = memo(function DataSidebar({
   }, [favOpen, starredTreePreviewKey, tables, views, collectionPath])
 
   function toggleStar(path: string, viewId: string) {
-    persistStarredViews(toggleStarredView(getStarredViews(), path, viewId))
+    const view = viewsFor(path).find((item) => item.id === viewId)
+    persistStarredViews(toggleStarredView(getStarredViews(), path, viewId, view?.name))
   }
 
   function openView(path: string, viewId: string) {
+    setPendingPick({ path, viewId })
+    setOpenTables({ [`${dataSidebarKind(path)}:${path}`]: true })
     try {
       localStorage.setItem(activeViewStorageKey(path), viewId)
     } catch {
       /* ignore */
     }
     rememberInspectorWorkingView(path, viewId)
+    if (path === collectionPath) {
+      const view = viewsFor(path).find((item) => item.id === viewId)
+      if (view) onApplyView(view)
+    }
     onOpenTable?.(path, viewId)
   }
 
@@ -758,49 +811,38 @@ export const DataSidebar = memo(function DataSidebar({
     onOpenRecord?.(path, view, recordId, row)
   }
 
+  function revealTable(tableStateKey: string, path: string, viewId?: string) {
+    setOpenTables({ [tableStateKey]: true })
+    onOpenTable?.(path, viewId)
+  }
+
+  function viewRowDelete(path: string, view: SavedView, listed: SavedView[]) {
+    if (isReadOnlyViewId(view.id) || !canRemoveCollectionView(listed)) return undefined
+    return () => onDeleteView(view, path)
+  }
+
   function renderTableRows(rows: CollectionInfo[], group: 'user' | 'index' | 'system' = 'system') {
     return rows.map((table) => {
       const name = table.view?.title ?? table.label
       const tableStateKey = `${group}:${table.path}`
       const open = openTables[tableStateKey] ?? false
       const listed = viewsFor(table.path)
-      const system = isSystemCollection(table.path)
       return (
         <div key={`${group}:${table.path}`} className="flex min-w-0 flex-col gap-px" data-collection-kind={group}>
-          <div className="sidebar-group-head">
+          <div className="sidebar-group-head" onClick={onSidebarRowClick}>
             <div
               className="flex min-h-8 min-w-0 flex-1 items-center gap-1.5 rounded-md text-left text-[14px] font-medium tracking-normal text-inherit"
               title={name}
               aria-expanded={open}
               {...pickDomAttrs('collection', table.path, name, { path: table.path })}
             >
-              <button
-                type="button"
-                className="grid size-6 shrink-0 place-items-center border-0 bg-transparent p-0 text-inherit"
-                title={open ? '收起视图' : '展开视图'}
-                aria-label={open ? '收起视图' : '展开视图'}
-                onClick={() => setOpenTables((prev) => ({ ...prev, [tableStateKey]: !open }))}
-              >
-                <span className="sidebar-rail-icon sidebar-group-fold" aria-hidden>
-                  <span className="sidebar-group-fold-face">
-                    <TableGlyph icon={table.view?.icon} />
-                  </span>
-                  <span className="sidebar-group-fold-chevron">
-                    {open ? (
-                      <ChevronDownIcon className="size-4 shrink-0 opacity-80" />
-                    ) : (
-                      <ChevronRightIcon className="size-4 shrink-0 opacity-80" />
-                    )}
-                  </span>
-                </span>
-              </button>
+              <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+                <TableGlyph icon={table.view?.icon} />
+              </span>
               <button
                 type="button"
                 className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit outline-none hover:text-(--biu-color-text) focus-visible:ring-1 focus-visible:ring-(--biu-color-border)"
-                onClick={() => onOpenTable?.(
-                  table.path,
-                  builtinAllViewId(table.path),
-                )}
+                onClick={() => revealTable(tableStateKey, table.path, listed[0]?.id)}
               >
                 {name}
               </button>
@@ -814,99 +856,46 @@ export const DataSidebar = memo(function DataSidebar({
                 data-testid={`sidebar-add-view-${table.path}`}
                 onClick={(event) => {
                   event.stopPropagation()
-                  setOpenTables((prev) => ({ ...prev, [tableStateKey]: true }))
+                  setOpenTables({ [tableStateKey]: true })
                   onAddView(table.path)
                 }}
               >
                 <PlusIcon className="size-4 shrink-0" />
               </button>
           </div>
-          <SidebarFold open={open} className="sidebar-session-list min-w-0">
+          <SidebarFold open={open} animate={false} className="sidebar-session-list min-w-0">
             {listed.map((view) => {
               const starred = isViewStarred(starredViews, table.path, view.id)
-              const active = table.path === collectionPath && view.id === activeViewId
-              const previewKey = `${group}:${table.path}:${view.id}`
-              const expanded = expandedViewKey === previewKey
+              const active = table.path === litPath && view.id === litViewId
               return (
                 <div key={view.id} className="min-w-0">
-                  <div
-                    className={`chat-session-row group${active ? ' is-active' : ''}${starred ? ' is-pinned' : ''}`}
-                    {...pickDomAttrs('view', viewPickId(table.path, view.id), view.name, { path: table.path })}
-                  >
-                    <div className="chat-session-row-main flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5">
-                      <button
-                        type="button"
-                        className="grid size-6 shrink-0 place-items-center border-0 bg-transparent p-0 text-inherit"
-                        title={expanded ? '收起记录' : '展开记录'}
-                        aria-expanded={expanded}
-                        onClick={() => toggleViewPreview(previewKey)}
-                      >
-                        <span className="sidebar-rail-icon sidebar-group-fold">
-                          <span className="sidebar-group-fold-face">
-                            <ViewModeGlyph mode={view.mode} />
-                          </span>
-                          <span className="sidebar-group-fold-chevron">
-                            {expanded ? (
-                              <ChevronDownIcon className="size-4 shrink-0 opacity-80" />
-                            ) : (
-                              <ChevronRightIcon className="size-4 shrink-0 opacity-80" />
-                            )}
-                          </span>
+                  <SidebarRow
+                    active={active}
+                    pinned={starred}
+                    onClick={onSidebarRowClick}
+                    attrs={pickDomAttrs('view', viewPickId(table.path, view.id), view.name, { path: table.path })}
+                    main={
+                      <SidebarRowMain>
+                        <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+                          <ViewModeGlyph mode={view.mode} />
                         </span>
-                      </button>
-                      <button
-                        type="button"
-                        className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
-                        onClick={() => openView(table.path, view.id)}
-                      >
-                        {view.name}
-                      </button>
-                    </div>
-                    <ChatCount count={getPreviewTotal(viewTotalKey(table.path, view))} />
-                    {table.path === collectionPath && !view.builtin ? (
-                      <>
                         <button
                           type="button"
-                          className="chat-session-row-delete"
-                          title="重命名"
-                          aria-label={`重命名 ${view.name}`}
-                          onClick={() => onRenameView(view)}
+                          className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
+                          onClick={() => openView(table.path, view.id)}
                         >
-                          <PencilSquareIcon className="size-4 shrink-0" />
+                          {view.name}
                         </button>
-                        <button
-                          type="button"
-                          className="chat-session-row-delete"
-                          title="删除"
-                          aria-label={`删除 ${view.name}`}
-                          onClick={() => onDeleteView(view)}
-                        >
-                          <TrashGlyph className="size-4 shrink-0" />
-                        </button>
-                      </>
-                    ) : null}
-                    <button
-                      type="button"
-                      className={`chat-session-row-star${starred ? ' is-on' : ''}`}
-                      aria-pressed={starred}
-                      aria-label={starred ? `取消收藏 ${view.name}` : `收藏 ${view.name}`}
-                      title={starred ? '取消收藏' : '收藏'}
-                      onClick={() => toggleStar(table.path, view.id)}
-                    >
-                      <StarIcon className="size-4 shrink-0" />
-                    </button>
-                  </div>
-                  <SidebarFold open={expanded}>
-                  <ViewRecordPreview
-                    path={table.path}
-                    view={view}
-                    open={expanded}
-                    skipFetch={!shouldFetchViewPreview({ path: table.path, view, collectionPath, activeViewId })}
-                    recordKind={recordPickKind(table.view?.moduleId || table.id)}
-                    tableIcon={table.view?.icon}
-                    onOpenRecord={(id, row) => openRecord(table.path, view, id, row)}
+                      </SidebarRowMain>
+                    }
+                    onDelete={viewRowDelete(table.path, view, listed)}
+                    deleteLabel={`删除 ${view.name}`}
+                    deleteIcon={<TrashGlyph className="size-4 shrink-0" />}
+                    onStar={() => toggleStar(table.path, view.id)}
+                    starOn={starred}
+                    starLabel={starred ? `取消收藏 ${view.name}` : `收藏 ${view.name}`}
+                    starIcon={<StarIcon className="size-4 shrink-0" />}
                   />
-                  </SidebarFold>
                 </div>
               )
             })}
@@ -916,39 +905,12 @@ export const DataSidebar = memo(function DataSidebar({
     })
   }
 
-  const [shellSlot, setShellSlot] = useState<HTMLElement | null>(() =>
-    typeof document === 'undefined' ? null : document.getElementById('shell-module-sidebar'),
-  )
-  useLayoutEffect(() => {
-    setShellSlot(document.getElementById('shell-module-sidebar'))
-  }, [])
-
   const body = (
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3">
+      <div className="fsdb-views-full min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3">
         <div className="mt-2 space-y-1.5">
           {favCount ? (
             <section className="min-w-0">
-              <div className="sidebar-section-head min-w-0">
-                <div className="flex min-h-8 min-w-0 flex-1 items-center">
-                  <button
-                    type="button"
-                    className="flex h-full min-w-0 flex-1 items-center gap-2 text-left text-[12px] font-bold tracking-wider"
-                    aria-expanded={favOpen}
-                    onClick={() => {
-                      const next = !favOpen
-                      setFavOpen(next)
-                      try {
-                        localStorage.setItem('fsdb.favOpen', next ? '1' : '0')
-                      } catch {
-                        /* ignore */
-                      }
-                    }}
-                  >
-                    <span className="min-w-0 flex-1 truncate tracking-normal">收藏</span>
-                  </button>
-                </div>
-                <ChatCount count={favCount} />
-              </div>
+              <SectionHead label="收藏" count={favCount} open={favOpen} onToggle={() => toggleSection(DATA_SECTION_FAV)} />
               <SidebarFold open={favOpen}>
                 <div className="min-w-0 pt-0.5">
                   {starredRecordRows.map(({ table, item }) => {
@@ -970,97 +932,97 @@ export const DataSidebar = memo(function DataSidebar({
                     )
                     return (
                       <div key={previewKey} className="min-w-0">
-                        <div
-                          className="chat-session-row group is-pinned"
-                          {...pickDomAttrs(recordPickKind(table.view?.moduleId || table.id), item.recordId, label)}
-                        >
-                          <div className="chat-session-row-main flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5">
-                            {nested ? (
+                        <SidebarRow
+                          pinned
+                          onClick={onSidebarRowClick}
+                          attrs={pickDomAttrs(recordPickKind(table.view?.moduleId || table.id), item.recordId, label)}
+                          main={
+                            <SidebarRowMain>
+                              {nested ? (
+                                <button
+                                  type="button"
+                                  className="relative grid size-6 shrink-0 place-items-center border-0 bg-transparent p-0 text-inherit"
+                                  title={expanded ? '收起子记录' : '展开子记录'}
+                                  aria-expanded={expanded}
+                                  onClick={() => toggleViewPreview(previewKey)}
+                                >
+                                  <span className="sidebar-rail-icon sidebar-group-fold">
+                                    <span className="sidebar-group-fold-face">{face}</span>
+                                    <span className="sidebar-group-fold-chevron">
+                                      {expanded ? (
+                                        <ChevronDownIcon className="size-4 shrink-0 opacity-80" />
+                                      ) : (
+                                        <ChevronRightIcon className="size-4 shrink-0 opacity-80" />
+                                      )}
+                                    </span>
+                                  </span>
+                                </button>
+                              ) : (
+                                <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+                                  {face}
+                                </span>
+                              )}
                               <button
                                 type="button"
-                                className="relative grid size-6 shrink-0 place-items-center border-0 bg-transparent p-0 text-inherit"
-                                title={expanded ? '收起子记录' : '展开子记录'}
-                                aria-expanded={expanded}
-                                onClick={() => toggleViewPreview(previewKey)}
+                                className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
+                                title={label}
+                                onClick={() => {
+                                  if (!view) return
+                                  openRecord(table.path, view, item.recordId, {
+                                    id: item.recordId,
+                                    title: label,
+                                    emoji,
+                                  })
+                                }}
                               >
-                                <span className="sidebar-rail-icon sidebar-group-fold">
-                                  <span className="sidebar-group-fold-face">{face}</span>
-                                  <span className="sidebar-group-fold-chevron">
-                                    {expanded ? (
-                                      <ChevronDownIcon className="size-4 shrink-0 opacity-80" />
-                                    ) : (
-                                      <ChevronRightIcon className="size-4 shrink-0 opacity-80" />
-                                    )}
-                                  </span>
-                                </span>
+                                {label}
                               </button>
-                            ) : (
-                              <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
-                                {face}
+                            </SidebarRowMain>
+                          }
+                          trail={
+                            <>
+                              {nested ? <ChatCount count={kidCount} title={`${kidCount} 个子记录`} /> : null}
+                              <span className="sidebar-trail-icon" title={tableName} aria-label={tableName}>
+                                <TableGlyph icon={table.view?.icon} />
                               </span>
-                            )}
-                            <button
-                              type="button"
-                              className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
-                              title={label}
-                              onClick={() => {
-                                if (!view) return
-                                openRecord(table.path, view, item.recordId, {
-                                  id: item.recordId,
-                                  title: label,
-                                  emoji,
-                                })
-                              }}
-                            >
-                              {label}
-                            </button>
-                          </div>
-                          {nested ? <ChatCount count={kidCount} title={`${kidCount} 个子记录`} /> : null}
-                          <span className="sidebar-trail-icon" title={tableName} aria-label={tableName}>
-                            <TableGlyph icon={table.view?.icon} />
-                          </span>
-                          {nested ? (
-                            <button
-                              type="button"
-                              className="sidebar-add"
-                              title={`在 ${label} 下添加子记录`}
-                              aria-label={`在 ${label} 下添加子记录`}
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                void (async () => {
-                                  try {
-                                    const data = await readJson<{ items?: Array<{ value?: DbRecord }> }>('/api/db/create', {
-                                      method: 'POST',
-                                      headers: { 'content-type': 'application/json' },
-                                      body: JSON.stringify({ path: table.path, records: [{ parentId: item.recordId }] }),
-                                    })
-                                    for (const key of [...previewCache.keys()]) {
-                                      if (key.startsWith(`${table.path}\0`)) previewCache.delete(key)
-                                    }
-                                    window.dispatchEvent(new Event('fsdb:change'))
-                                    if (expandedViewKey !== previewKey) toggleViewPreview(previewKey)
-                                    const created = data.items?.[0]?.value
-                                    if (created?.id && view) openRecord(table.path, view, created.id, created)
-                                  } catch {
-                                    /* ignore */
-                                  }
-                                })()
-                              }}
-                            >
-                              <PlusIcon className="size-4 shrink-0" />
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            className="chat-session-row-star is-on"
-                            aria-pressed
-                            aria-label={`取消收藏 ${label}`}
-                            title="取消收藏"
-                            onClick={() => persistStarredRecords(toggleStarredRecord(getStarredRecords(), table.path, item.recordId))}
-                          >
-                            <StarIcon className="size-4 shrink-0" />
-                          </button>
-                        </div>
+                              {nested ? (
+                                <button
+                                  type="button"
+                                  className="sidebar-add"
+                                  title={`在 ${label} 下添加子记录`}
+                                  aria-label={`在 ${label} 下添加子记录`}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    void (async () => {
+                                      try {
+                                        const data = await readJson<{ items?: Array<{ value?: DbRecord }> }>('/api/db/create', {
+                                          method: 'POST',
+                                          headers: { 'content-type': 'application/json' },
+                                          body: JSON.stringify({ path: table.path, records: [{ parentId: item.recordId }] }),
+                                        })
+                                        for (const key of [...previewCache.keys()]) {
+                                          if (key.startsWith(`${table.path}\0`)) previewCache.delete(key)
+                                        }
+                                        window.dispatchEvent(new Event('fsdb:change'))
+                                        if (expandedViewKey !== previewKey) toggleViewPreview(previewKey)
+                                        const created = data.items?.[0]?.value
+                                        if (created?.id && view) openRecord(table.path, view, created.id, created)
+                                      } catch {
+                                        /* ignore */
+                                      }
+                                    })()
+                                  }}
+                                >
+                                  <PlusIcon className="size-4 shrink-0" />
+                                </button>
+                              ) : null}
+                            </>
+                          }
+                          onStar={() => persistStarredRecords(toggleStarredRecord(getStarredRecords(), table.path, item.recordId))}
+                          starOn
+                          starLabel={`取消收藏 ${label}`}
+                          starIcon={<StarIcon className="size-4 shrink-0" />}
+                        />
                         {nested && view ? (
                           <SidebarFold open={expanded}>
                             <ViewRecordPreview
@@ -1079,70 +1041,42 @@ export const DataSidebar = memo(function DataSidebar({
                   })}
                   {starredRows.map(({ table, view }) => {
                     const tableName = table.view?.title ?? table.label
-                    const active = table.path === collectionPath && view.id === activeViewId
+                    const active = table.path === litPath && view.id === litViewId
                     const previewKey = `star:${table.path}:${view.id}`
-                    const expanded = expandedViewKey === previewKey
                     return (
                       <div key={previewKey} className="min-w-0">
-                        <div
-                          className={`chat-session-row group${active ? ' is-active' : ''} is-pinned`}
-                          {...pickDomAttrs('view', viewPickId(table.path, view.id), view.name, { path: table.path })}
-                        >
-                          <div className="chat-session-row-main flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5">
-                            <button
-                              type="button"
-                              className="grid size-6 shrink-0 place-items-center border-0 bg-transparent p-0 text-inherit"
-                              title={expanded ? '收起记录' : '展开记录'}
-                              aria-expanded={expanded}
-                              onClick={() => toggleViewPreview(previewKey)}
-                            >
-                              <span className="sidebar-rail-icon sidebar-group-fold">
-                                <span className="sidebar-group-fold-face">
-                                  <ViewModeGlyph mode={view.mode} />
-                                </span>
-                                <span className="sidebar-group-fold-chevron">
-                                  {expanded ? (
-                                    <ChevronDownIcon className="size-4 shrink-0 opacity-80" />
-                                  ) : (
-                                    <ChevronRightIcon className="size-4 shrink-0 opacity-80" />
-                                  )}
-                                </span>
+                        <SidebarRow
+                          active={active}
+                          pinned
+                          onClick={onSidebarRowClick}
+                          attrs={pickDomAttrs('view', viewPickId(table.path, view.id), view.name, { path: table.path })}
+                          main={
+                            <SidebarRowMain>
+                              <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+                                <ViewModeGlyph mode={view.mode} />
                               </span>
-                            </button>
-                            <button
-                              type="button"
-                              className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
-                              onClick={() => openView(table.path, view.id)}
-                            >
-                              {view.name}
-                            </button>
-                          </div>
-                          <ChatCount count={getPreviewTotal(viewTotalKey(table.path, view))} />
-                          <span className="sidebar-trail-icon" title={tableName} aria-label={tableName}>
-                            <TableGlyph icon={table.view?.icon} />
-                          </span>
-                          <button
-                            type="button"
-                            className="chat-session-row-star is-on"
-                            aria-pressed
-                            aria-label={`取消收藏 ${view.name}`}
-                            title="取消收藏"
-                            onClick={() => toggleStar(table.path, view.id)}
-                          >
-                            <StarIcon className="size-4 shrink-0" />
-                          </button>
-                        </div>
-                        <SidebarFold open={expanded}>
-                        <ViewRecordPreview
-                          path={table.path}
-                          view={view}
-                          open={expanded}
-                          skipFetch={!shouldFetchViewPreview({ path: table.path, view, collectionPath, activeViewId })}
-                          recordKind={recordPickKind(table.view?.moduleId || table.id)}
-                          tableIcon={table.view?.icon}
-                          onOpenRecord={(id, row) => openRecord(table.path, view, id, row)}
+                              <button
+                                type="button"
+                                className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
+                                onClick={() => openView(table.path, view.id)}
+                              >
+                                {view.name}
+                              </button>
+                            </SidebarRowMain>
+                          }
+                          trail={
+                            <span className="sidebar-trail-icon" title={tableName} aria-label={tableName}>
+                              <TableGlyph icon={table.view?.icon} />
+                            </span>
+                          }
+                          onDelete={viewRowDelete(table.path, view, viewsFor(table.path))}
+                          deleteLabel={`删除 ${view.name}`}
+                          deleteIcon={<TrashGlyph className="size-4 shrink-0" />}
+                          onStar={() => toggleStar(table.path, view.id)}
+                          starOn
+                          starLabel={`取消收藏 ${view.name}`}
+                          starIcon={<StarIcon className="size-4 shrink-0" />}
                         />
-                        </SidebarFold>
                       </div>
                     )
                   })}
@@ -1152,86 +1086,58 @@ export const DataSidebar = memo(function DataSidebar({
           ) : null}
 
           <section className="min-w-0">
-            <div className="sidebar-section-head min-w-0">
-              <div className="flex min-h-8 min-w-0 flex-1 items-center">
-                <button
-                  type="button"
-                  className="flex h-full min-w-0 flex-1 items-center gap-2 text-left text-[12px] font-bold tracking-wider"
-                  aria-expanded={userOpen}
-                  title="展开或收起用户数据"
-                  data-testid="sidebar-user-home"
-                  onClick={() => setUserOpen((prev) => !prev)}
-                >
-                  <span className="min-w-0 flex-1 truncate tracking-normal">用户数据</span>
-                </button>
-              </div>
-              <ChatCount count={userTables.length} />
-            </div>
+            <SectionHead
+              label="核心数据"
+              count={userTables.length}
+              open={userOpen}
+              title="展开或收起核心数据"
+              testId="sidebar-user-home"
+              onToggle={() => toggleSection(DATA_SECTION_USER)}
+            />
             <SidebarFold open={userOpen}>
               <div className="flex min-w-0 flex-col gap-px" data-testid="sidebar-user-collections">
                 {userTables.length ? renderTableRows(userTables, 'user') : (
-                  <div className="px-1 py-1 text-[12px] text-(--biu-color-text-subtle)">还没有用户数据表</div>
+                  <div className="px-1 py-1 text-[12px] text-(--biu-color-text-subtle)">还没有核心数据表</div>
                 )}
               </div>
             </SidebarFold>
           </section>
 
           <section className="min-w-0">
-            <div className="sidebar-section-head min-w-0">
-              <div className="flex min-h-8 min-w-0 flex-1 items-center">
-                <button
-                  type="button"
-                  className="flex h-full min-w-0 flex-1 items-center gap-2 text-left text-[12px] font-bold tracking-wider"
-                  aria-expanded={indexOpen}
-                  title="从你能看到的用户数据反查出来"
-                  data-testid="sidebar-index-home"
-                  onClick={() => setIndexOpen((prev) => !prev)}
-                >
-                  <span className="min-w-0 flex-1 truncate tracking-normal">索引数据</span>
-                </button>
-              </div>
-              <ChatCount count={indexTables.length} />
-            </div>
+            <SectionHead
+              label="能力数据"
+              count={indexTables.length}
+              open={indexOpen}
+              title="展开或收起能力数据"
+              testId="sidebar-index-home"
+              onToggle={() => toggleSection(DATA_SECTION_INDEX)}
+            />
             <SidebarFold open={indexOpen}>
               <div className="flex min-w-0 flex-col gap-px" data-testid="sidebar-index-collections">
                 {indexTables.length ? renderTableRows(indexTables, 'index') : (
-                  <div className="px-1 py-1 text-[12px] text-(--biu-color-text-subtle)">还没有索引数据</div>
+                  <div className="px-1 py-1 text-[12px] text-(--biu-color-text-subtle)">还没有能力数据</div>
                 )}
               </div>
             </SidebarFold>
           </section>
 
           <section className="min-w-0">
-            <div className="sidebar-section-head min-w-0">
-              <div className="flex min-h-8 min-w-0 flex-1 items-center">
-                <button
-                  type="button"
-                  className="flex h-full min-w-0 flex-1 items-center gap-2 text-left text-[12px] font-bold tracking-wider"
-                  aria-expanded={systemOpen}
-                  title="系统运行时记下的数据"
-                  onClick={() => setSystemOpen((prev) => !prev)}
-                >
-                  <span className="min-w-0 flex-1 truncate tracking-normal">系统数据</span>
-                </button>
-              </div>
-              <ChatCount count={systemTables.length} />
+            <SectionHead label="系统数据" count={systemTables.length} title="系统运行时记下的数据" />
+            <div className="flex min-w-0 flex-col gap-px" data-testid="sidebar-system-collections">
+              {renderTableRows(systemTables)}
             </div>
-              <SidebarFold open={systemOpen}>
-                <div className="flex min-w-0 flex-col gap-px" data-testid="sidebar-system-collections">
-                  {renderTableRows(systemTables)}
-                </div>
-              </SidebarFold>
-            </section>
+          </section>
         </div>
       </div>
   )
 
-  if (shellSlot) {
-    return createPortal(
+  const rail = <DataIconRail tables={listedTables} collectionPath={collectionPath} onOpenTable={onOpenTable} />
+  if (framed) {
+    return (
       <div className="fsdb-views flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" aria-label="数据">
         {body}
-      </div>,
-      shellSlot,
+        {rail}
+      </div>
     )
   }
 
@@ -1254,6 +1160,7 @@ export const DataSidebar = memo(function DataSidebar({
         </button>
       </div>
       {body}
+      {rail}
     </aside>
   )
 })

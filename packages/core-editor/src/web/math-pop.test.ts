@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
 import { closeMathPop, openMathPop } from './math-pop.ts'
-import { pageEditorExtensions } from './kit.ts'
+import { recordEditorExtensions } from './kit.ts'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
@@ -73,7 +73,7 @@ test('clicking inline math opens the latex pop without crashing', () => {
   document.body.appendChild(host)
   const editor = new Editor({
     element: host,
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '见 $x^2$ 公式',
     contentType: 'markdown',
   })

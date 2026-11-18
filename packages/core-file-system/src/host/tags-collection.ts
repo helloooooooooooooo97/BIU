@@ -5,7 +5,7 @@ import { normalizeCollectionPath } from '../paths.ts'
 
 const TAG_FIELDS_EXAMPLE = '[{"key":"类别","type":"string"}]'
 const TAG_FIELDS_DESCRIPTION =
-  '属性定义。db_update / db_create 可传数组或 JSON 字符串，两种形状等价。例 [{"key":"类别","type":"string"}]。同一标签下属性名不能重复。type 必须是 string|number|boolean|select|multi-select|datetime|url|image|attachment|file|action|facet|person|ref|multi-ref（没有 text）。其它表读该属性的列 key 为 tag::<本标签id>::<字段key>，例如 tag::tag::类别。'
+  '属性定义。db_update / db_create 可传数组或 JSON 字符串，两种形状等价。例 [{"key":"类别","type":"string"}]。同一标签下属性名不能重复。type 必须是 string|number|boolean|select|multi-select|datetime|url|image|attachment|document|action|tag|person|ref|multi-ref（没有 text，也没有 file：file 是记录正文，用 db_content。document 是可覆盖的命名文档）。其它表读该属性的列 key 为 tag::<本标签id>::<字段key>，例如 tag::tag::类别。'
 
 export function stampRecordId(collection: string, recordId: string) {
   const table = normalizeCollectionPath(collection).replace(/^\//, '')
@@ -93,19 +93,19 @@ export function tagsCollection(
   }
 
   return {
-    id: 'facets',
+    id: 'tags',
     path: '/tags',
     label: '标签',
     view: {
       moduleId: 'tags-db',
-      route: '/db-facets',
+      route: '/db-tags',
       title: '标签',
       inspector: true,
-      blurb: '工作区全局标签定义，可贴到任意表的记录。列表 db_list /tags；某标签已贴过哪些记录用 filter.tagId。新建 db_create /tags records=[{title}]（id 由标题 slug）。改名或属性 db_update /tags/<id>，fields 传数组或 JSON 字符串均可，例 [{"key":"类别","type":"string"}]；同一标签下属性名不能重复；type 必须是白名单（string 不是 text）。其它表 db_list 读属性列用 tag::<标签id>::<字段key>，例如 tag::need::类别。正文 notes 用 db_content。把标签贴到记录并填属性：db_update 那条记录的 tag。一个标签 values 可扁平；多个标签 values 必须按标签 id 分子对象。省略 tags 只改属性，不会撕掉其它标签。本表没有 db_action。',
+      blurb: '工作区全局标签定义，可贴到任意表的记录。列表 db_list /tags；某标签已贴过哪些记录用 filter.tagId。新建 db_create /tags records=[{title}]（id 由标题 slug）。改名或属性 db_update /tags/<id>，fields 传数组或 JSON 字符串均可，例 [{"key":"类别","type":"string"}]；同一标签下属性名不能重复；type 必须是白名单（string 不是 text）。三视图走记录 catalog，源码 db_file path=/tags/<id> name=<file>。其它表 db_list 读属性列用 tag::<标签id>::<字段key>。正文 notes 用 db_content。把标签贴到记录并填属性：db_update 那条记录的 tag。本表没有 db_action。',
       order: 31,
       icon: 'tag',
     },
-    records: { update: true, create: true, delete: true },
+    records: { update: true, create: true, delete: true, allocateId: false },
     schema: {
       labelField: 'title',
       contentField: 'notes',
@@ -146,11 +146,22 @@ export function tagsCollection(
     get: (id) => {
       const stamp = parseStampRecordId(id)
       if (stamp) {
-        for (const facet of store.list()) {
-          const hit = stampRows(facet.id).find((row) => row.id === id)
-          if (hit) return hit
+        const hits = store.stampsForRecord(stamp.collection, stamp.recordId)
+        if (!hits.length) return null
+        const order = store.list().map((pack) => pack.id)
+        const hit = hits
+          .slice()
+          .sort((a, b) => order.indexOf(a.tag_id) - order.indexOf(b.tag_id))[0]!
+        const tagId = hit.tag_id
+        return {
+          id: stampRecordId(hit.collection, hit.record_id),
+          title: hit.title || hit.record_id,
+          table: tableLabel(hit.collection),
+          tablePath: hit.collection,
+          sourceId: hit.record_id,
+          tagId,
+          ...recordBuiltinValues({ tag: store.recordTag(hit.collection, hit.record_id) }),
         }
-        return null
       }
       const pack = store.get(id)
       if (!pack || store.isDeleted('/tags', pack.id)) return null

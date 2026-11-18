@@ -1,13 +1,12 @@
 import type { CollectionActionInfo, CollectionInfo, DbRecord } from '@biu/type-file-system'
-import { builtinAllView, builtinAllViewId, collectionNoun, stampRowOpenTarget } from '../catalog-views.ts'
-import { normalizeCollectionPath } from '../paths.ts'
+import { builtinAllViewId, stampRowOpenTarget } from '../catalog-views.ts'
 import { CollectionBrowser } from './browser.tsx'
 import type { CrumbTarget } from './sidebar-nav.ts'
 import { viewsForRegisteredCollection } from './collection-nav.ts'
-import { dataChrome } from './data-chrome.ts'
+import { dataChrome, setViaDataCrumbs } from './data-chrome.ts'
 import { actionIcon } from './fsdb-cells.tsx'
 import { DATA_COLLECTION_PATH, DATA_MODULE_ID } from './database-path.ts'
-import { idleTableIconKind } from './nav-glyphs.tsx'
+import { SourceTableCell } from './source-table-cell.tsx'
 import type { SavedView } from './saved-view.ts'
 
 function SourceActions({
@@ -34,71 +33,43 @@ function SourceActions({
         <button
           key={action.id}
           type="button"
-          className={`fsdb-action-tag${action.tone === 'danger' ? ' is-danger' : ''}`}
+          className={`tasks-icon-btn${action.tone === 'danger' ? ' is-danger' : ''}`}
           aria-label={action.label}
+          data-dock-tip={action.label}
           disabled={busy}
           onClick={() => run(action)}
         >
           {actionIcon(action.id)}
-          <span>{action.label}</span>
         </button>
       ))}
     </>
   )
 }
 
-function SourceTableCell({
-  record,
-  tables,
-  onOpenTable,
-}: {
-  record: DbRecord
-  tables: CollectionInfo[]
-  onOpenTable: (path: string, viewId?: string) => void
-}) {
-  const path = normalizeCollectionPath(String(record.tablePath ?? ''))
-  if (!path || path === '/') return null
-  const table = tables.find((item) => item.path === path)
-  const viewId = builtinAllViewId(path)
-  const name = collectionNoun({ path, label: table?.label, view: table?.view })
-  const jump = builtinAllView({ path, label: table?.label, view: table?.view }).name
-  return (
-    <button
-      type="button"
-      className="fsdb-source-table"
-      data-biu-ignore
-      title={jump}
-      aria-label={jump}
-      onClick={(event) => {
-        event.stopPropagation()
-        onOpenTable(path, viewId)
-      }}
-      onPointerDown={(event) => event.stopPropagation()}
-    >
-      <span className="fsdb-record-mark is-sm" data-icon={idleTableIconKind(table?.view?.icon)} aria-hidden />
-      <span className="fsdb-title-text">{name}</span>
-    </button>
-  )
-}
-
 export function DataOverview({
   tables,
   routeViewId,
+  routeRecordId,
   onOpenTable,
   onOpenView,
   onOpenRecord,
   onCrumbTarget,
   expandedViewKey,
   onExpandedViewKeyChange,
+  embed = false,
+  inspectorPaneId,
 }: {
   tables: CollectionInfo[]
   routeViewId?: string
+  routeRecordId?: string | null
   onOpenTable: (path: string, viewId?: string) => void
   onOpenView?: (viewId: string) => void
   onOpenRecord?: (path: string, view: SavedView, recordId: string) => void
   onCrumbTarget?: (target: CrumbTarget) => void
   expandedViewKey?: string | null
   onExpandedViewKeyChange?: (key: string | null) => void
+  embed?: boolean
+  inspectorPaneId?: string
 }) {
   return (
     <div className="fsdb-data-overview" data-testid="fsdb-data-overview">
@@ -118,21 +89,24 @@ export function DataOverview({
             <SourceActions actions={actions} record={record} busy={busy} run={run} />
           ),
         }}
+        embed={embed}
+        inspectorPaneId={inspectorPaneId}
         tables={tables}
         routeViewId={routeViewId}
+        routeRecordId={routeRecordId}
         onOpenTable={onOpenTable}
         onOpenView={onOpenView}
         onCrumbTarget={onCrumbTarget}
         onOpenRecord={(recordId, viewId, collection) => {
-          const stamp =
-            collection && collection !== DATA_COLLECTION_PATH
-              ? { collection, recordId }
-              : stampRowOpenTarget({ id: recordId })
-          if (!stamp) return
+          const stamp = stampRowOpenTarget({ id: recordId, tablePath: collection })
+          const path = stamp?.collection ?? collection ?? DATA_COLLECTION_PATH
+          if (path !== DATA_COLLECTION_PATH) {
+            setViaDataCrumbs(true, viewId || builtinAllViewId(DATA_COLLECTION_PATH))
+          }
           onOpenRecord?.(
-            stamp.collection,
-            { id: viewId || builtinAllViewId(stamp.collection) } as SavedView,
-            stamp.recordId,
+            path,
+            { id: builtinAllViewId(path) } as SavedView,
+            stamp?.recordId ?? recordId,
           )
         }}
         resolveViews={(path, user) => viewsForRegisteredCollection(path, tables, user)}

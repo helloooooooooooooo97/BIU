@@ -43,7 +43,7 @@ export const BLOG_POSTS: BlogPost[] = [
         body: [
           '在 BIU 里，页面上的每一块都是一个插件渲染出来的活组件：一张表、一块 Excalidraw 画板、一道能运行的算法题、一个视频剪辑器。块的类型不是平台写死的，装一个插件就多一种块。',
           '写法很简单，一段声明加一段数据：',
-          { code: ':::pageBlock {kind=algorithm plugin=page-algorithm}\n{ "title": "1. Two Sum", "lang": "python" }\n:::' },
+          { code: ':::editorBlock {kind=algorithm plugin=page-algorithm}\n{ "title": "1. Two Sum", "lang": "python" }\n:::' },
           'kind 和 plugin 说明谁来渲染，后面的 JSON 是它要的数据。人可以写，智能体也可以写。',
         ],
       },
@@ -85,7 +85,7 @@ export const BLOG_POSTS: BlogPost[] = [
         body: [
           'SaaS 里，服务由厂商来造。功能边界由产品经理决定，所有客户用同一套界面，差异只能靠配置项。缺一个功能，要么提需求等排期，要么再买一个软件。',
           'PaaS 里，服务由直接面对客户的人来造。页面上的块来自插件，缺哪一种，就让智能体写一个。做一页服务，是写一份声明，而不是搭一个界面：',
-          { code: ':::pageBlock {kind=algorithm plugin=page-algorithm}\n{ "title": "1. Two Sum", "lang": "python" }\n:::' },
+          { code: ':::editorBlock {kind=algorithm plugin=page-algorithm}\n{ "title": "1. Two Sum", "lang": "python" }\n:::' },
           '块声明「要什么」，页面声明「怎么排」和「在什么环境下」。造服务的人，从软件厂商变成了服务者自己。',
         ],
       },
@@ -111,7 +111,7 @@ export const BLOG_POSTS: BlogPost[] = [
         body: [
           'SaaS 之间靠 API、自动化工具这类胶水连起来，或者用 iframe 嵌进来。嵌进来的东西读不到彼此的数据，组合 N 个 SaaS 就是 N 次集成，任何一家改了接口，链路就断。',
           'PaaS 里，同一页的块天然读写同一份数据和环境。无论是页面、任务、插件还是代理，都用同一套操作，只有路径不同：',
-          { code: 'db_list   /tasks\ndb_read   /pages/<id>\ndb_update /page-blocks/<pageId>::<blockId>' },
+          { code: 'db_list   /tasks\ndb_read   /pages/<id>\ndb_update /editor-blocks/<pageId>::<blockId>' },
           '组合不再是一个集成项目，而是把块放进同一页。',
         ],
       },
@@ -191,7 +191,7 @@ export const BLOG_POSTS: BlogPost[] = [
         heading: '一套操作',
         body: [
           '无论哪个领域，读写方式都一样，只有路径不同：',
-          { code: 'db_list   /tasks\ndb_read   /pages/<id>\ndb_update /page-blocks/<pageId>::<blockId>\ndb_create /plugins' },
+          { code: 'db_list   /tasks\ndb_read   /pages/<id>\ndb_update /editor-blocks/<pageId>::<blockId>\ndb_create /plugins' },
           '所以新增一个领域不需要再设计一套 API，登记一张表，它就和已有的表一样可读、可写、可查。',
         ],
       },
@@ -288,7 +288,7 @@ export const BLOG_POSTS: BlogPost[] = [
         body: [
           'BIU 把这条时间线并行了。服务从写下第一行数据开始：一页讲义、一道题目、一份学员名单，当天就可以交给学员使用。页面本身既是数据，也是软件运行的地方。',
           '需要新的能力时，软件在服务进行中加入。页面上的每一块都是一段声明加一段数据：',
-          { code: ':::pageBlock {kind=algorithm plugin=page-algorithm}\n{ "title": "1. Two Sum", "lang": "python" }\n:::' },
+          { code: ':::editorBlock {kind=algorithm plugin=page-algorithm}\n{ "title": "1. Two Sum", "lang": "python" }\n:::' },
           '缺少的那种块，由智能体当场编写成插件，挂进页面，直接读取已经存在的数据。表的字段可以随时增加，已有记录随即获得新的结构。第三周出现的需求，第三周就能满足。',
         ],
       },
@@ -415,7 +415,7 @@ export const BLOG_POSTS: BlogPost[] = [
         heading: '集成在同一个系统里',
         body: [
           'BIU 把这些内容集成在同一个工作区里。页面、块、任务、插件和代理都是表，使用同一套操作，只有路径不同：',
-          { code: 'db_list   /tasks\ndb_read   /pages/<id>\ndb_update /page-blocks/<pageId>::<blockId>' },
+          { code: 'db_list   /tasks\ndb_read   /pages/<id>\ndb_update /editor-blocks/<pageId>::<blockId>' },
           '同一页里的块读写同一份数据，共享同一组页面属性。算法题块写入的提交记录，对比表块可以直接读取。组合不需要额外的接口，把块放进同一页，它们就开始协作。',
           { diagram: 'atoms', caption: '六种原子组合出任务、页面、插件、代理……新增一个领域只是再组合一次。' },
         ],

@@ -2,12 +2,12 @@ import { Extension } from '@tiptap/core'
 import type { Node } from '@tiptap/pm/model'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
-import { getPageEditor } from './service.ts'
+import { getBlockEditor } from './service.ts'
 
 const key = new PluginKey('heading-skin')
 
 function headingDecorations(doc: Node) {
-  const svc = getPageEditor()
+  const svc = getBlockEditor()
   if (!svc) return DecorationSet.empty
   const decos: Decoration[] = []
   doc.descendants((node, pos) => {
@@ -33,7 +33,7 @@ export const headingSkin = Extension.create({
   },
   onCreate() {
     const editor = this.editor
-    this.storage.stop = getPageEditor()?.subscribe(() => {
+    this.storage.stop = getBlockEditor()?.subscribe(() => {
       if (editor.isDestroyed) return
       editor.view.dispatch(editor.state.tr.setMeta(key, true))
     })

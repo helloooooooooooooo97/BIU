@@ -1,7 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { REQUIRED_RECORD_FIELDS, type CollectionSchema } from '@biu/type-file-system'
-import { applyShareQuery, shareQueryFromView, shareQueryStorageKey } from './share-query.ts'
+import { applyShareQuery, loadShareQuery, shareQueryFromView, shareQueryStorageKey } from './share-query.ts'
 
 const schema: CollectionSchema = {
   labelField: 'title',
@@ -35,4 +35,15 @@ test('applyShareQuery searches filters and sorts locally', () => {
     sorts: [{ id: 's', field: 'title', dir: 'desc' }],
   })
   assert.deepEqual(filtered.map((row) => row.id), ['c', 'a'])
+})
+
+test('share query restores tag columns if a stale visitor cache dropped them', () => {
+  const token = 'share-tag-cols'
+  const fallback = shareQueryFromView({
+    columns: ['title', 'tag::security::lane', 'tag'],
+  })
+  localStorage.setItem(shareQueryStorageKey(token), JSON.stringify({ ...fallback, columns: ['title', 'tag', 'shareRole'] }))
+  const loaded = loadShareQuery(token, fallback)
+  assert.deepEqual(loaded.columns, ['title', 'tag::security::lane', 'tag'])
+  localStorage.removeItem(shareQueryStorageKey(token))
 })

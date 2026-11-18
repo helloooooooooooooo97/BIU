@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { createElement } from 'react'
 import { render } from '@testing-library/react'
 import { Editor } from '@tiptap/core'
-import { pageEditorExtensions } from './kit.ts'
+import { recordEditorExtensions } from './kit.ts'
 import { PAGE_EDITOR_STYLE } from './style.ts'
 import { MentionList } from './mention-list.tsx'
 import {
@@ -37,6 +37,8 @@ test('mention suggestion inserts pickChip when the schema has it', () => {
   assert.equal((withPick[0] as { attrs: { kind: string; id: string; label: string } }).attrs.label, '首页')
   const mentionOnly = mentionSuggestionContent({ nodes: { mention: {} } }, { id: 'task/t1', label: '任务甲' })
   assert.equal(mentionOnly[0]?.type, 'mention')
+  assert.equal((mentionOnly[0] as { attrs: { id: string; label?: string } }).attrs.id, 'task/t1')
+  assert.equal((mentionOnly[0] as { attrs: { label?: string } }).attrs.label, undefined)
 })
 
 test('fetchMentionItems lists pages tasks facets and sessions', async () => {
@@ -67,7 +69,7 @@ test('fetchMentionItems lists pages tasks facets and sessions', async () => {
 
 test('mention node roundtrips through markdown and opens inspector', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '',
     contentType: 'markdown',
   })
@@ -88,19 +90,29 @@ test('mention node roundtrips through markdown and opens inspector', () => {
   assert.match(html, /--biu-tag/)
   assert.doesNotMatch(html, /@首页/)
   assert.doesNotMatch(html, /<a[^>]*data-type="mention"/)
-  assert.match(md, /page\/p1/)
-  assert.match(PAGE_EDITOR_STYLE, /span\[data-type=mention\]\.biu-tag\{[^}]*height:1\.7em/)
-  assert.match(PAGE_EDITOR_STYLE, /span\[data-type=mention\]\.biu-tag\{[^}]*line-height:1\.7em/)
+  assert.match(md, /\[@ id="page\/p1"\]/)
+  assert.doesNotMatch(md, /label=/)
+  assert.match(PAGE_EDITOR_STYLE, /span\[data-type=mention\]\.biu-tag\{[^}]*height:var\(--biu-space-5\)/)
+  assert.match(PAGE_EDITOR_STYLE, /span\[data-type=mention\]\.biu-tag\{[^}]*line-height:var\(--biu-space-5\)/)
   assert.doesNotMatch(PAGE_EDITOR_STYLE, /vertical-align:text-top/)
   editor.destroy()
 
   const loaded = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: md,
     contentType: 'markdown',
   })
   assert.match(loaded.getHTML(), /data-id="page\/p1"/)
   loaded.destroy()
+
+  const legacy = new Editor({
+    extensions: recordEditorExtensions(),
+    content: '见 [@ id="page/p1" label="首页"]',
+    contentType: 'markdown',
+  })
+  assert.match(legacy.getHTML(), /data-id="page\/p1"/)
+  assert.doesNotMatch(legacy.getMarkdown(), /label=/)
+  legacy.destroy()
 
   const seen: unknown[] = []
   const onReveal = (event: Event) => seen.push((event as CustomEvent).detail)

@@ -19,7 +19,9 @@ export type SavedView = {
   pageSize?: number
   /** 表格列宽（px），按字段 key。 */
   columnWidths?: Record<string, number>
-  /** 系统内置视图（全部 xx / 目录），不能改筛选、不能删改名。 */
+  /** 冻结列 key 前缀；缺省为标题列 + 动作列。空数组表示全部解冻。 */
+  frozenColumns?: string[]
+  /** 工作区创建时写入的种子视图。与后来保存的视图同一套改名 / 筛选 / 删除规则。 */
   builtin?: boolean
   /** 本地最后修改时间（ms）。多窗口下用来丢弃比库里更旧的快照。 */
   updatedAt?: number
@@ -51,6 +53,12 @@ export function parseViewColumns(value: unknown): string[] {
     }
   }
   return []
+}
+
+/** Missing value keeps the default title+actions pin; `[]` means every column is thawed. */
+export function normalizeFrozenColumns(value: unknown): string[] | undefined {
+  if (value == null || value === '') return undefined
+  return parseViewColumns(value)
 }
 
 export function normalizeColumnWidths(value: unknown): Record<string, number> {
@@ -104,10 +112,15 @@ export function normalizeSavedView(view: SavedView): SavedView {
     query: view.query ?? '',
     pageSize: normalizePageSize(view.pageSize),
     columnWidths: normalizeColumnWidths(view.columnWidths),
+    frozenColumns: normalizeFrozenColumns(view.frozenColumns),
     builtin: Boolean(view.builtin),
     updatedAt: Number(view.updatedAt) || 0,
     rank: Number.isFinite(Number(view.rank)) ? Math.round(Number(view.rank)) : undefined,
   }
+}
+
+export function canRemoveCollectionView(views: Array<{ id: string }>) {
+  return views.length > 1
 }
 
 export function sortViewsByRank(views: SavedView[]): SavedView[] {
@@ -146,7 +159,7 @@ export function normalizePageSize(value: unknown) {
 }
 
 export function viewStateKey(
-  view: Pick<SavedView, 'mode' | 'sortField' | 'sortDir' | 'sorts' | 'filters' | 'filterTree' | 'columns' | 'groupBy' | 'tree' | 'wrap' | 'truncate' | 'query' | 'pageSize' | 'columnWidths'>,
+  view: Pick<SavedView, 'mode' | 'sortField' | 'sortDir' | 'sorts' | 'filters' | 'filterTree' | 'columns' | 'groupBy' | 'tree' | 'wrap' | 'truncate' | 'query' | 'pageSize' | 'columnWidths' | 'frozenColumns'>,
 ) {
   return JSON.stringify({
     mode: view.mode,
@@ -163,14 +176,16 @@ export function viewStateKey(
     query: view.query ?? '',
     pageSize: normalizePageSize(view.pageSize),
     columnWidths: normalizeColumnWidths(view.columnWidths),
+    frozenColumns: normalizeFrozenColumns(view.frozenColumns) ?? null,
   })
 }
 
-/** incoming 的 updatedAt 不低于 current 时才算更新；缺时间戳视为可采纳。 */
+/** incoming 的 updatedAt 不低于 current 时才算更新；本地已打戳、对端没有时间戳时保住本地。 */
 export function viewIsFresher(incoming: SavedView, current?: SavedView | null) {
   if (!current) return true
   const incomingAt = Number(incoming.updatedAt) || 0
   const currentAt = Number(current.updatedAt) || 0
+  if (!incomingAt && currentAt) return false
   if (!incomingAt || !currentAt) return true
   return incomingAt >= currentAt
 }

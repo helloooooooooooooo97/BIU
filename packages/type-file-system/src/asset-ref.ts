@@ -1,3 +1,5 @@
+import { recordSandboxFileNames } from './record-views.ts'
+
 /** Shared asset URL helpers. No node / host imports. */
 
 const ASSET_FILE_RE = /^[\p{L}\p{N}._-]+$/u
@@ -145,7 +147,11 @@ export function collectAssetNames(...chunks: unknown[]): Set<string> {
       return
     }
     if (typeof value === 'object') {
-      for (const item of Object.values(value as Record<string, unknown>)) walk(item)
+      const rec = value as Record<string, unknown>
+      if (rec.views != null || rec.propViews != null) {
+        for (const name of recordSandboxFileNames(rec)) names.add(name)
+      }
+      for (const item of Object.values(rec)) walk(item)
     }
   }
   for (const chunk of chunks) walk(chunk)

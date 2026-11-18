@@ -30,7 +30,7 @@ test('migrateDataDir renames .cordis to .biu', () => {
   const dest = migrateDataDir(root)
   assert.equal(dest, join(root, DATA_DIR_NAME))
   assert.equal(existsSync(join(root, LEGACY_DATA_DIR_NAME)), false)
-  assert.equal(readFileSync(join(dest, 'sessions.sqlite'), 'utf8'), 'old')
+  assert.match(readFileSync(join(dest, 'biu.sqlite'), 'utf8'), /^SQLite format 3/)
 })
 
 test('migrateDataDir merges leftover .cordis into existing .biu', () => {
@@ -64,7 +64,7 @@ test('migrateDataDir moves leftover .page into .biu', () => {
   writeFileSync(join(root, LEGACY_PAGE_ROOT, 'assets', 'board.json'), '{}')
   migrateDataDir(root)
   assert.equal(readFileSync(join(root, PAGE_ROOT, 'home.md'), 'utf8'), 'hello')
-  assert.equal(readFileSync(join(root, PAGE_DB), 'utf8'), 'db')
+  assert.match(readFileSync(join(root, PAGE_DB), 'utf8'), /^SQLite format 3/)
   const board = hashedAssetName(Buffer.from('{}'), 'board.json')
   assert.equal(readFileSync(join(root, DATA_DIR_NAME, 'assets', 'hash', hashedAssetRel(board)), 'utf8'), '{}')
   assert.equal(existsSync(join(root, DATA_DIR_NAME, 'assets', 'page')), false)
@@ -133,7 +133,6 @@ test('adoptPackedUserData moves pack-host leftovers into userData and keeps dest
   writeFileSync(join(home, DATA_DIR_NAME, 'keep.txt'), 'keep')
   writeFileSync(join(pack, '.plugin-dev', 'demo', 'manifest.json'), '{}')
   adoptPackedUserData(pack, home, workspace)
-  assert.equal(readFileSync(join(home, DATA_DIR_NAME, 'sessions.sqlite'), 'utf8'), 'old-sessions')
   assert.equal(readFileSync(join(home, DATA_DIR_NAME, 'keep.txt'), 'utf8'), 'keep')
   assert.equal(readFileSync(join(workspace, '.plugin-dev', 'demo', 'manifest.json'), 'utf8'), '{}')
   assert.equal(existsSync(join(pack, '.plugin-dev', 'demo', 'manifest.json')), true)

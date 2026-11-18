@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'vitest'
-import { buildInspectorTools, isToolActiveForSession, toolSourceOf } from './inspector.ts'
+import { buildInspectorTools, isToolActiveForSession, loadLiveDispatchTasks, toolSourceOf } from './inspector.ts'
 
 test('toolSourceOf tags minimal / db / plugin / store', () => {
   assert.equal(toolSourceOf('bash'), 'minimal')
@@ -124,4 +124,32 @@ test('inspector tool sources do not use a live type', async () => {
   assert.doesNotMatch(approvals, /FolderIcon/)
   assert.match(approvals, /id: 'minimal'/)
   assert.match(approvals, /id: 'standard'/)
+  assert.doesNotMatch(src, /listSummaries/)
+  assert.doesNotMatch(src, /sessions\.require/)
+})
+
+test('loadLiveDispatchTasks reads stored report usage', async () => {
+  const rows = await loadLiveDispatchTasks(
+    {
+      tasks: {
+        list: () => [
+          {
+            id: 't1',
+            title: 'go',
+            status: 'done',
+            createdAt: 10,
+            assignee: { sessionId: 'w1' },
+            reports: [
+              { sessionId: 'w1', turn: 1, usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 } },
+              { sessionId: 'w1', turn: 2, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } },
+            ],
+          },
+        ],
+      },
+    },
+    'live',
+  )
+  assert.equal(rows[0]?.sessionId, 'w1')
+  assert.deepEqual(rows[0]?.usage, { inputTokens: 5, outputTokens: 3, totalTokens: 8 })
+  assert.equal(rows[0]?.workerTurn, 2)
 })

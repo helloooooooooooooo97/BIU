@@ -4,18 +4,20 @@ export function SidebarFold({
   open,
   children,
   className,
+  animate = true,
 }: {
   open: boolean
   children: ReactNode
   className?: string
+  animate?: boolean
 }) {
   const [animating, setAnimating] = useState(false)
   const openRef = useRef(open)
   useLayoutEffect(() => {
     if (openRef.current === open) return
     openRef.current = open
-    setAnimating(true)
-  }, [open])
+    setAnimating(animate)
+  }, [animate, open])
 
   function onTransitionEnd(event: TransitionEvent<HTMLDivElement>) {
     if (event.target !== event.currentTarget) return

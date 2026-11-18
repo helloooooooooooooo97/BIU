@@ -21,6 +21,8 @@ test('facet chips jump to the tag record like parent and depend chips', () => {
   const cells = readFileSync(resolve(import.meta.dirname, './fsdb-cells.tsx'), 'utf8')
   const pop = readFileSync(resolve(import.meta.dirname, './field-value-pop.tsx'), 'utf8')
   assert.match(catalog, /showRecordInInspector\('\/tags', resolved\)/)
+  assert.match(catalog, /OPEN_TAG_EVENT = 'biu:open-tag'/)
+  assert.match(catalog, /listenOpenTag/)
   assert.match(schemaUi, /jumpTag\(id, onOpen\)/)
   assert.match(schemaUi, /<FieldValuePop/)
   assert.doesNotMatch(schemaUi, /<CellMulti/)
@@ -41,8 +43,10 @@ test('detail facet cell opens FieldValuePop unless the click is on a tag', () =>
 
 test('tag pack editor hard-deletes a property without a restore row', () => {
   const schemaUi = readFileSync(resolve(import.meta.dirname, './schema-field.tsx'), 'utf8')
-  assert.match(schemaUi, /fields: item\.fields\.filter\(\(row\) => row\.key !== key\)/)
+  assert.match(schemaUi, /persistTags\(\[pack\]\)/)
+  assert.match(schemaUi, /fields: pack\.fields\.filter\(\(row\) => row\.key !== key\)/)
   assert.match(schemaUi, /fields: tag\.fields\.filter\(\(item\) => item\.key !== key\)/)
+  assert.doesNotMatch(schemaUi, /persistTags\(next\)/)
   assert.doesNotMatch(schemaUi, /retired\.map/)
 })
 

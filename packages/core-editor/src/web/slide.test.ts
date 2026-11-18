@@ -1,15 +1,17 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
-import { pageEditorExtensions } from './kit.ts'
+import { recordEditorExtensions } from './kit.ts'
 import { filterSlashItems } from './slash.ts'
 import { takeSlideFence } from './slide-md.ts'
 import { WASH_TONES } from './color-swatches.ts'
 import { PAGE_EDITOR_STYLE } from './style.ts'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 function editorOf(markdown: string) {
   return new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: markdown,
     contentType: 'markdown',
   })
@@ -20,17 +22,35 @@ test('slide css grids cells on the slide body', () => {
   assert.match(PAGE_EDITOR_STYLE, /\[data-slide\]\[data-layout=split\] \.page-slide-body/)
   assert.match(PAGE_EDITOR_STYLE, /\.page-slide-body\{display:grid/)
   assert.match(PAGE_EDITOR_STYLE, /page-slide-body>\[data-node-view-content-react\].*display:contents/)
-  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar\{[^}]*top:0/)
-  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar\{[^}]*left:calc\(100% \+ 8px\)/)
-  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar\{[^}]*border-radius:8px/)
-  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar\{[^}]*opacity:0/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar[^{]*\{[^}]*top:8px/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar[^{]*\{[^}]*right:8px/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar[^{]*\{[^}]*flex-direction:row/)
+  assert.doesNotMatch(PAGE_EDITOR_STYLE, /\.page-slide-bar[^{]*\{[^}]*left:calc\(100% \+ 8px\)/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar[^{]*\{[^}]*border-radius:8px/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar[^{]*\{[^}]*opacity:0/)
   assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar>\*\{[^}]*place-items:center/)
   assert.match(PAGE_EDITOR_STYLE, /\.page-slide-body\{[^}]*height:auto/)
   assert.doesNotMatch(PAGE_EDITOR_STYLE, /page-slide-body\{[^}]*aspect-ratio:16\/9/)
   assert.match(PAGE_EDITOR_STYLE, /react-renderer\.node-slide\{display:block;position:relative;width:100%;min-width:0;border:0/)
   assert.match(PAGE_EDITOR_STYLE, /\[data-slide\]\{display:flex/)
   assert.match(PAGE_EDITOR_STYLE, /\[data-slide\]\{[^}]*background:transparent/)
+  assert.match(PAGE_EDITOR_STYLE, /\[data-slide\]\{[^}]*border:0/)
+  assert.doesNotMatch(PAGE_EDITOR_STYLE, /\[data-slide\]\{[^}]*border:var\(--biu-stroke-width-thick\)/)
+  assert.match(PAGE_EDITOR_STYLE, /\[data-slide\]\.is-selected/)
+  assert.match(PAGE_EDITOR_STYLE, /\[data-slide\]:focus-within\{outline:none\}/)
+  assert.match(PAGE_EDITOR_STYLE, /node-slide\.ProseMirror-selectednode \[data-slide\]/)
+  assert.match(PAGE_EDITOR_STYLE, /\[data-slide\]\.is-selected,.page-editor \.react-renderer\.node-slide\.ProseMirror-selectednode \[data-slide\],.page-editor \[data-slide-selected\]\{[^}]*box-shadow:0 0 0 var\(--biu-stroke-width-thick\) var\(--biu-color-emphasis-border\)/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-image-frame\{[^}]*border:var\(--biu-stroke-width-thick\)/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-image\.is-selected \.page-image-frame\{[^}]*38%/)
+  assert.doesNotMatch(PAGE_EDITOR_STYLE, /page-image\.is-selected \.page-image-frame\{box-shadow:0 0 0 1\.5px/)
   assert.doesNotMatch(PAGE_EDITOR_STYLE, /data-deck|page-deck|:::deck/)
+  const view = readFileSync(resolve(import.meta.dirname, './slide-view.tsx'), 'utf8')
+  assert.match(view, /data-slide-selected/)
+  assert.match(view, /is-selected/)
+  assert.match(view, /selectionUpdate/)
+  assert.match(view, /page-block-expand-nav/)
+  assert.match(view, /slide-title/)
+  assert.doesNotMatch(view, /className="page-slide-bar"/)
 })
 
 test('slash lists Slide as a core container, not a page plugin', () => {
@@ -38,7 +58,7 @@ test('slash lists Slide as a core container, not a page plugin', () => {
   assert.equal(item?.label, 'Slide')
   assert.equal(item?.pluginId, undefined)
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '/',
     contentType: 'markdown',
   })
@@ -64,6 +84,29 @@ test('slide markdown does not glue cell fences into ::::::cell', () => {
   editor.destroy()
 })
 
+test('slide fence keeps an editable title on the header', () => {
+  const fence = takeSlideFence(`:::slide {layout=split title="封面"}
+:::cell
+hi
+:::
+:::
+`)
+  assert.equal(fence?.title, '封面')
+  const editor = editorOf(`:::slide {layout=split title="封面"}
+
+:::cell
+hi
+:::
+
+:::
+`)
+  const slide = editor.state.doc.firstChild
+  assert.equal(slide?.attrs.title, '封面')
+  editor.commands.setSlideTitle('新封面')
+  assert.match(editor.getMarkdown(), /title="新封面"/)
+  editor.destroy()
+})
+
 test('takeSlideFence accepts a stamped opener and glued cell close', () => {
   const fence = takeSlideFence(`:::slide {layout=split bg=teal} <!-- biu:34623e55 -->
 :::cell
@@ -82,7 +125,7 @@ test('slide markdown keeps nested pageBlock fences', () => {
   const src = `:::slide {layout=split}
 
 :::cell
-:::pageBlock {kind=excalidraw plugin=page-excalidraw id=ab12cd34}
+:::editorBlock {kind=excalidraw plugin=page-excalidraw id=ab12cd34}
 {"file":"assets/board.json"}
 :::
 :::
@@ -96,7 +139,7 @@ test('slide markdown keeps nested pageBlock fences', () => {
   const fence = takeSlideFence(src)
   assert.ok(fence)
   assert.equal(fence?.layout, 'split')
-  assert.match(fence?.cells[0] ?? '', /:::pageBlock \{kind=excalidraw/)
+  assert.match(fence?.cells[0] ?? '', /:::editorBlock \{kind=excalidraw/)
   assert.match(fence?.cells[0] ?? '', /assets\/board\.json/)
   const editor = editorOf(src)
   const types: string[] = []
@@ -106,11 +149,11 @@ test('slide markdown keeps nested pageBlock fences', () => {
   assert.equal(types.includes('slide'), true)
   assert.equal(types.includes('slideCell'), true)
   assert.equal(types.includes('deck'), false)
-  assert.equal(types.includes('pageBlock'), true)
+  assert.equal(types.includes('editorBlock'), true)
   const out = editor.getMarkdown()
   assert.match(out, /:::slide \{layout=split\}/)
   assert.doesNotMatch(out, /:::deck/)
-  assert.match(out, /:::pageBlock \{kind=excalidraw plugin=page-excalidraw id=ab12cd34\}/)
+  assert.match(out, /:::editorBlock \{kind=excalidraw plugin=page-excalidraw id=ab12cd34\}/)
   editor.destroy()
 })
 
@@ -125,7 +168,7 @@ test('slide cell keeps a code fence and a registered pageBlock apart', () => {
         content: [
           { type: 'codeBlock', content: [{ type: 'text', text: 'const a = 1' }] },
           {
-            type: 'pageBlock',
+            type: 'editorBlock',
             attrs: { kind: 'sandbox', plugin: 'page-sandbox', id: 'ab12cd34', data: { file: 'assets/a.isx' } },
           },
         ],
@@ -134,7 +177,7 @@ test('slide cell keeps a code fence and a registered pageBlock apart', () => {
         type: 'slideCell',
         content: [
           {
-            type: 'pageBlock',
+            type: 'editorBlock',
             attrs: {
               kind: 'video',
               plugin: 'page-video',
@@ -147,15 +190,15 @@ test('slide cell keeps a code fence and a registered pageBlock apart', () => {
     ],
   })
   const once = editor.getMarkdown()
-  assert.match(once, /```[\s\S]*const a = 1[\s\S]*```\n\n:::pageBlock/)
-  assert.match(once, /:::pageBlock \{kind=video[\s\S]*:::\n<track \/>/)
+  assert.match(once, /:::code[\s\S]*const a = 1[\s\S]*:::\n\n:::editorBlock/)
+  assert.match(once, /:::editorBlock \{kind=video[\s\S]*:::\n<track \/>/)
   editor.commands.setContent(once, { contentType: 'markdown' })
   const names: string[] = []
   editor.state.doc.descendants((node) => {
     names.push(node.type.name)
   })
   assert.equal(names.includes('codeBlock'), true)
-  assert.equal(names.filter((name) => name === 'pageBlock').length, 2)
+  assert.equal(names.filter((name) => name === 'editorBlock').length, 2)
   assert.doesNotMatch(editor.getMarkdown(), /:{4,}cell/)
   editor.destroy()
 })
@@ -216,7 +259,7 @@ test('slideCell accepts real block children: table and pageBlock', () => {
         type: 'slideCell',
         content: [
           {
-            type: 'pageBlock',
+            type: 'editorBlock',
             attrs: { kind: 'excalidraw', plugin: 'page-excalidraw', id: 'ab12cd34', data: { file: 'assets/board.json' } },
           },
         ],
@@ -230,6 +273,6 @@ test('slideCell accepts real block children: table and pageBlock', () => {
   assert.equal(names.has('slide'), true)
   assert.equal(names.has('slideCell'), true)
   assert.equal(names.has('table'), true)
-  assert.equal(names.has('pageBlock'), true)
+  assert.equal(names.has('editorBlock'), true)
   editor.destroy()
 })

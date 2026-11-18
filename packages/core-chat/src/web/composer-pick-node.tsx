@@ -26,6 +26,8 @@ export const PickChipNode = Node.create({
       path: { default: null },
       title: { default: null },
       field: { default: null },
+      type: { default: null },
+      name: { default: null },
       plugin: { default: null },
       start_line: { default: null },
       end_line: { default: null },

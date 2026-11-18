@@ -312,15 +312,15 @@ test('对比页：六个分类 13 个对手都在，且 BIU 列如实标注弱�
   cleanup()
 })
 
-test('对比页：Notion 页的落点是 facet —— 属性在记录之外，不用改表', () => {
+test('对比页：Notion 页的落点是 tag —— 属性在记录之外，不用改表', () => {
   renderSite('/compare/vs-notion')
   const body = document.body.textContent ?? ''
 
-  // facet 的语义：属性挂在记录外面，原表不动（合并后一句话讲完）
-  assert.match(body, /facet/, '要出现 facet 这个概念')
+  // tag 的语义：属性挂在记录外面，原表不动（合并后一句话讲完）
+  assert.match(body, /tag/, '要出现 tag 这个概念')
   assert.match(body, /property lives outside the record, leaves the source table unchanged/, '要点出「不改表」')
   assert.match(body, /any record can use one/, '要点出「对任何数据都能加」')
-  assert.match(body, /record can carry multiple facets/, '要点出一条记录可以挂多个')
+  assert.match(body, /record can carry multiple tags/, '要点出一条记录可以挂多个')
   assert.match(body, /span different tables/, '要点出跨表')
 
   // 对照：Notion 那边是改 schema
@@ -410,7 +410,7 @@ test('博客：总览列出每篇文章，文章页能打开并链到下一篇',
 
   renderSite('/blog/all-in-one')
   assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', /All in One/)
-  assert.match(document.body.textContent ?? '', /:::pageBlock/)
+  assert.match(document.body.textContent ?? '', /:::editorBlock/)
   assert.ok(screen.getByRole('navigation', { name: 'Next article' }).querySelector('a[href^="/blog/"]'))
   cleanup()
 
@@ -590,7 +590,7 @@ test('对比页：Kubernetes 对比独立成页，归入基础设施，且 BIU �
   // 核心差异：声明写在页面里，一页可声明多个插件，组合成服务
   assert.match(body, /YAML files applied with kubectl/, '要有 k8s 的声明方式')
   assert.match(body, /Directly in page content/, '要讲清 BIU 的声明写在哪')
-  assert.match(body, /:::pageBlock \{kind=… plugin=…\}/, '要给出块的真实声明写法')
+  assert.match(body, /:::editorBlock \{kind=… plugin=…\}/, '要给出块的真实声明写法')
   assert.match(body, /any number of plugins/, '要点明一页可以声明多个插件')
   assert.match(body, /page itself is the composition/, '要讲清多个插件如何组合成服务')
 

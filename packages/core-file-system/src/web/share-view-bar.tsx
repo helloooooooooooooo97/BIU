@@ -10,9 +10,10 @@ import {
   MagnifyingGlassIcon,
 } from '@heroicons/react/16/solid'
 import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
-import type { CollectionSchema, DbRecord, FieldType } from '@biu/type-file-system'
-import { countFilterRules, isCustomSorts } from '../query-logic.ts'
-import { defaultColumnKeys, resolveFieldType } from './fields.ts'
+import type { CollectionSchema, CollectionSchemaPack, DbRecord, FieldType } from '@biu/type-file-system'
+import { countFilterRules, isCustomSorts, parseTagFlatColumnKey } from '../query-logic.ts'
+import { defaultColumnKeys, filterFieldValueOptions, flattenTagColumns, resolveFieldType, tagColumnTitle } from './fields.ts'
+import { loadTags } from './tag-catalog.ts'
 import { FieldGlyph, ModeGlyph, VIEW_MODES } from './fsdb-cells.tsx'
 import { CheckRow } from './controls.tsx'
 import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search.tsx'
@@ -22,15 +23,26 @@ import type { ShareQueryState } from './share-query.ts'
 
 const QUERY_NEST_IGNORE = `${HEADLESS_DISMISS_IGNORE}, .db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`
 
-function queryFieldsOf(schema: CollectionSchema): QueryField[] {
+function queryFieldsOf(schema: CollectionSchema, tags: CollectionSchemaPack[] = []): QueryField[] {
   const body = schema.contentField
-  return Object.entries(schema.fields)
-    .filter(([key, field]) => key !== body && resolveFieldType(field) !== 'file')
+  const schemaFields = Object.entries(schema.fields)
+    .filter(([key, field]) => key !== body && resolveFieldType(field) !== 'file' && resolveFieldType(field) !== 'action')
     .map(([key, field]) => ({ key, field, kind: resolveFieldType(field) as FieldType }))
+  const tagFields = flattenTagColumns(tags).map((col) => ({
+    key: col.key,
+    field: { ...col.field, label: tagColumnTitle(col) },
+    kind: col.kind as FieldType,
+  }))
+  return [...schemaFields, ...tagFields]
 }
 
-function allColumnKeys(schema: CollectionSchema) {
-  return shareTableColumns(schema, { columns: defaultColumnKeys(schema, Object.keys(schema.fields)) }).map((item) => item.key)
+function allColumnKeys(schema: CollectionSchema, tags: CollectionSchemaPack[] = []) {
+  return shareTableColumns(
+    schema,
+    { columns: [...defaultColumnKeys(schema, Object.keys(schema.fields)), ...flattenTagColumns(tags).map((col) => col.key)] },
+    undefined,
+    tags,
+  ).map((item) => item.key)
 }
 
 export function ShareViewQueryBar({
@@ -40,6 +52,7 @@ export function ShareViewQueryBar({
   onChange,
   onRefresh,
   refreshing = false,
+  tags = [],
 }: {
   schema: CollectionSchema
   records: DbRecord[]
@@ -47,13 +60,14 @@ export function ShareViewQueryBar({
   onChange: (next: ShareQueryState) => void
   onRefresh?: () => void
   refreshing?: boolean
+  tags?: CollectionSchemaPack[]
 }) {
-  const fields = queryFieldsOf(schema)
+  const fields = queryFieldsOf(schema, tags)
   const sortFields = fields.filter((item) => item.field.sortable !== false)
   const filterActive = countFilterRules(state.filterTree) > 0
   const sortCustom = isCustomSorts(state.sorts, schema.labelField)
-  const defaults = allColumnKeys(schema)
-  const visible = (state.columns.length ? state.columns : defaults).filter((key) => schema.fields[key])
+  const defaults = allColumnKeys(schema, tags)
+  const visible = (state.columns.length ? state.columns : defaults).filter((key) => schema.fields[key] || parseTagFlatColumnKey(key))
   const searchRef = useRef<HTMLDivElement>(null)
   const modeRef = useRef<HTMLDivElement>(null)
   const sortRef = useRef<HTMLDivElement>(null)
@@ -69,16 +83,7 @@ export function ShareViewQueryBar({
   const searchExpanded = searchOpen || Boolean(state.q)
 
   function valueOptions(item: QueryField) {
-    const seen = new Set<string>()
-    const out: Array<{ value: string; label: string }> = []
-    for (const row of records) {
-      const raw = row[item.key]
-      const value = raw == null ? '' : String(raw)
-      if (!value || seen.has(value)) continue
-      seen.add(value)
-      out.push({ value, label: value })
-    }
-    return out
+    return filterFieldValueOptions(records, item.key, item.field, tags.length ? tags : loadTags())
   }
 
   function toggleColumn(key: string) {

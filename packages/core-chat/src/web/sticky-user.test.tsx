@@ -4,7 +4,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, waitFor } from '@testing-library/react'
-import { ChatNodeList, groupNodesIntoTurns } from './thread.tsx'
+import { ChatNodeList, groupNodesIntoTurns, userBubbleClips } from './thread.tsx'
 import type { ChatNode } from '@biu/web-session-view'
 import { resetMarkdownRenderForTests } from './markdown-render.ts'
 
@@ -39,6 +39,16 @@ function sampleNodes(): ChatNode[] {
 }
 
 describe('sticky user message markers', () => {
+  it('puts the newest turn first when newestFirst is set', () => {
+    const onInspect = vi.fn()
+    const onFork = vi.fn(async () => {})
+    render(<ChatNodeList nodes={sampleNodes()} newestFirst onInspect={onInspect} onFork={onFork} />)
+    const turns = document.querySelectorAll('[data-testid="chat-turn"]')
+    expect(turns[0]?.getAttribute('data-turn-anchor')).toBe('u-2')
+    expect(turns[1]?.getAttribute('data-turn-anchor')).toBe('u-1')
+    expect(turns[0]?.className).toMatch(/is-live/)
+  })
+
   it('groups one user + following reply into a turn sticky container', () => {
     const turns = groupNodesIntoTurns(sampleNodes())
     expect(turns).toHaveLength(2)
@@ -183,5 +193,61 @@ describe('sticky user message markers', () => {
     expect(html.indexOf('user-pick-chip')).toBeGreaterThanOrEqual(0)
     expect(html.indexOf('user-pick-chip')).toBeLessThan(html.indexOf('处理这个'))
     expect(bubble?.textContent).toContain('处理这个')
+  })
+
+  it('hides the expand toggle until the bubble actually clips', () => {
+    expect(userBubbleClips({ scrollHeight: 80, clientHeight: 80 })).toBe(false)
+    expect(userBubbleClips({ scrollHeight: 81, clientHeight: 80 })).toBe(false)
+    expect(userBubbleClips({ scrollHeight: 82, clientHeight: 80 })).toBe(true)
+
+    const onInspect = vi.fn()
+    const onFork = vi.fn(async () => {})
+    render(
+      <ChatNodeList
+        nodes={[{ id: 'u-short', kind: 'user', text: 'short ask that still fits', ts: 1 }]}
+        onInspect={onInspect}
+        onFork={onFork}
+      />,
+    )
+    expect(document.querySelector('[data-testid="user-expand-toggle"]')).toBeNull()
+    const bubble = document.querySelector('[data-testid="user-bubble"]') as HTMLElement | null
+    expect(bubble?.style.maxHeight).toBe('80px')
+  })
+
+  it('shows the expand toggle when the clamped bubble overflows', async () => {
+    const proto = HTMLElement.prototype
+    const clientDesc = Object.getOwnPropertyDescriptor(proto, 'clientHeight')
+    const scrollDesc = Object.getOwnPropertyDescriptor(proto, 'scrollHeight')
+    Object.defineProperty(proto, 'clientHeight', {
+      configurable: true,
+      get() {
+        return (this as HTMLElement).getAttribute?.('data-testid') === 'user-bubble' ? 80 : 0
+      },
+    })
+    Object.defineProperty(proto, 'scrollHeight', {
+      configurable: true,
+      get() {
+        return (this as HTMLElement).getAttribute?.('data-testid') === 'user-bubble' ? 160 : 0
+      },
+    })
+    try {
+    const onInspect = vi.fn()
+    const onFork = vi.fn(async () => {})
+    render(
+      <ChatNodeList
+        nodes={[{ id: 'u-long', kind: 'user', text: 'long user request\n'.repeat(20), ts: 1 }]}
+        onInspect={onInspect}
+        onFork={onFork}
+      />,
+    )
+    await waitFor(() => {
+      expect(document.querySelector('[data-testid="user-expand-toggle"]')).toBeTruthy()
+    })
+    } finally {
+      if (clientDesc) Object.defineProperty(proto, 'clientHeight', clientDesc)
+      else delete (proto as { clientHeight?: unknown }).clientHeight
+      if (scrollDesc) Object.defineProperty(proto, 'scrollHeight', scrollDesc)
+      else delete (proto as { scrollHeight?: unknown }).scrollHeight
+    }
   })
 })

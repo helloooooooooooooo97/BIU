@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import type { Plugin as VitePlugin } from 'vite'
@@ -161,6 +161,11 @@ export function linkConfiguredPackages(root: string) {
     try {
       const stat = lstatSync(linkPath)
       if (stat.isSymbolicLink() || stat.isDirectory()) {
+        try {
+          if (realpathSync(linkPath) === realpathSync(dir)) continue
+        } catch {
+          /* 坏链或目标不在，下面拆掉再建 */
+        }
         rmSync(linkPath, { recursive: true, force: true })
       }
     } catch {

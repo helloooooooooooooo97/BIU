@@ -4,7 +4,7 @@ import { AnchorMenu } from '@biu/biu-ui/anchor-menu'
 import { dismissInspectorPaneMenu } from './inspector-pane-menu.tsx'
 import { LayoutPrefsMenu } from './layout-prefs-menu.tsx'
 import { getPagePrefs, getPageWidthVersion, subscribePageWidth } from './page-width.ts'
-import { getStarredViews, getStarredViewsVersion, isViewStarred, persistStarredViews, subscribeStarredViews, toggleStarredView } from './view-storage.ts'
+import { getStarredViews, getStarredViewsVersion, isViewStarred, loadViews, persistStarredViews, subscribeStarredViews, toggleStarredView } from './view-storage.ts'
 
 export function PaneConfigMenuItem() {
   useSyncExternalStore(subscribePageWidth, getPageWidthVersion, () => 0)
@@ -85,7 +85,7 @@ export function ViewPaneMenu({
           aria-pressed={starred}
           data-testid="fsdb-view-star"
           onClick={() => {
-            persistStarredViews(toggleStarredView(getStarredViews(), collectionPath, viewId))
+            persistStarredViews(toggleStarredView(getStarredViews(), collectionPath, viewId, loadViews(collectionPath).find((item) => item.id === viewId)?.name))
             dismissInspectorPaneMenu()
           }}
         >

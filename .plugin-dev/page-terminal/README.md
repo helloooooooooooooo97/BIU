@@ -2,13 +2,13 @@
 
 在页面里用 `/` 插入**真实可交互的终端块**。每个块拥有独立 PTY 代理，会自动适配块尺寸；页面卸载时代理仍保留，插件停用时才统一关闭。无头插件，不占运行窗口。
 
-改页面或代写块之前，先照下面「示例写法」写 `:::pageBlock` 围栏。
+改页面或代写块之前，先照下面「示例写法」写 `:::editorBlock` 围栏。
 
 ## 示例写法
 
 围栏头：`kind=terminal plugin=page-terminal`。围栏体是 JSON：`title`（标题，可省）、`height`（终端高度像素，默认 240）。
 
-:::pageBlock {kind=terminal plugin=page-terminal}
+:::editorBlock {kind=terminal plugin=page-terminal}
 {
   "title": "终端",
   "height": 260
@@ -21,7 +21,7 @@
 
 - `host.ts`：注册 WebSocket 端点 `/ws/page-terminal`，用 node-pty 拉起交互 zsh（补齐 Unix PATH，不用登录壳）；
 维护**代理池**（见下）；转发输入输出与尺寸。
-- `web.tsx`：`pageEditor.registerBlock({ kind: 'terminal' })` 注册块；
+- `web.tsx`：`blockEditor.registerBlock({ kind: 'terminal' })` 注册块；
 xterm + FitAddon 渲染 + 历史采集 + 历史面板。
 
 ## MySQL 批处理 API
@@ -46,7 +46,7 @@ xterm + FitAddon 渲染 + 历史采集 + 历史面板。
 | 超过 50 个代理     | LRU 淘汰最久没被连接的                              |
 
 
-**代理键** `sid` 存在块数据里（`:::pageBlock` 的 JSON 中），跟着 markdown 走，
+**代理键** `sid` 存在块数据里（`:::editorBlock` 的 JSON 中），跟着 markdown 走，
 所以块在哪个页面、什么时候打开，都能连回它自己的 shell。
 
 **重连回放**：后端为每个代理保留最近 `MAX_BUFFER_BYTES`（512KB）的输出字节，

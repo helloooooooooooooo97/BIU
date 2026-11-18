@@ -50,7 +50,6 @@ export type Decision =
     }
 
 export type ResourcePolicyInput = {
-  ownership?: 'personal' | 'workspace' | 'shared'
   accessMode?: AccessMode
   memberDefaultRole?: 'viewer' | 'editor'
   parentCollection?: string
@@ -61,7 +60,6 @@ type PolicyRow = {
   workspace_id: string
   collection: string
   record_id: string
-  ownership: 'personal' | 'workspace' | 'shared'
   owner_account_id: string
   access_mode: AccessMode
   member_default_role: 'viewer' | 'editor'
@@ -88,7 +86,7 @@ type CollectionScan = {
   membershipKind: 'member' | 'external' | 'guest'
 }
 
-const POLICY_SELECT = `workspace_id, collection, record_id, ownership, owner_account_id, access_mode,
+const POLICY_SELECT = `workspace_id, collection, record_id, owner_account_id, access_mode,
                 member_default_role, parent_collection, parent_record_id`
 
 const ROLE_RANK: Record<ResourceRole, number> = { viewer: 1, editor: 2, manager: 3, owner: 4 }
@@ -108,7 +106,7 @@ export function roleCoversAction(role: ResourceRole, action: Action) {
 function memberAccessRole(policy: PolicyRow, membership: string): ResourceRole {
   if (membership === 'owner' || membership === 'admin') return 'manager'
   if (membership === 'viewer') return 'viewer'
-  if (policy.ownership === 'workspace' || policy.member_default_role === 'editor') return 'editor'
+  if (policy.access_mode === 'members' || policy.member_default_role === 'editor') return 'editor'
   return 'viewer'
 }
 
@@ -356,8 +354,7 @@ export class AuthorizationService {
         depth + 1,
       )
     }
-    if (policy.ownership === 'shared') return 'shared'
-    return policy.ownership === 'workspace' || policy.access_mode === 'members' ? 'workspace' : 'personal'
+    return policy.access_mode === 'members' ? 'workspace' : 'personal'
   }
 
   attach(
@@ -369,20 +366,18 @@ export class AuthorizationService {
     const parentRecordId = input.parentRecordId?.trim() ?? ''
     const parentCollection = parentRecordId ? (input.parentCollection?.trim() || resource.collection) : ''
     const accessMode = input.accessMode ?? (parentRecordId ? 'inherit' : 'private')
-    const ownership = input.ownership ?? 'personal'
     const inserted = this.db
       .prepare(
         `INSERT INTO resource_policies
-          (workspace_id, collection, record_id, ownership, owner_account_id, access_mode,
+          (workspace_id, collection, record_id, owner_account_id, access_mode,
            member_default_role, parent_collection, parent_record_id, created_by, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(workspace_id, collection, record_id) DO NOTHING`,
       )
       .run(
         resource.workspaceId,
         resource.collection,
         resource.recordId,
-        ownership,
         actor.accountId,
         accessMode,
         input.memberDefaultRole ?? 'viewer',

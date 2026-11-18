@@ -1,86 +1,51 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { Link, useNavigate } from 'react-router-dom'
-import { isMascotDancing, subscribeMascotDance } from '@biu/public-mascot'
+import {
+  SidebarMascot,
+  isMascotDancing,
+  resolveSessionMascot,
+  subscribeMascotDance,
+} from '@biu/public-mascot'
 import { ChatCount } from '@biu/biu-ui/chat-count'
 import { SidebarFold } from '@biu/biu-ui/sidebar-fold'
 import {
+  PINNED_GROUP_KEY,
   bindSessionView,
+  buildSidebarSections,
   sessionAppPath,
+  useSidebarCollapseStore,
   type SessionListItem,
   type SessionViewService,
-} from '@biu/web-session-view'
-import {
-  PINNED_GROUP_KEY,
-  UNGROUPED_PROJECT_KEY,
-  UNGROUPED_TAG_KEY,
-  buildSidebarSections,
-  type SidebarGroupBy,
+  type SessionSidebarGroup,
+  type SidebarSection,
   type SidebarSectionKind,
 } from '@biu/web-session-view'
-import { useSidebarCollapseStore } from '@biu/web-session-view'
-import { SidebarMascot } from '@biu/public-mascot'
-import { resolveSessionMascot } from '@biu/public-mascot'
 import { FolderGlyph } from '@biu/web-session-view/folder-glyph'
+import { SIDEBAR_ROW_MAIN_CLASS, SidebarRow } from '@biu/web-session-view/sidebar-row'
 import { chromeIcon, chromeIconClass } from './chrome-icon.ts'
-import { TagChip } from '@biu/biu-ui/tag-chip'
-import { tagCatalogRevision, tagEmoji, tagLabel, pullTags, subscribeTagChrome } from '@biu/core-file-system/tag-catalog'
 import { isChatPagePath, openOverlayComposer } from './chat-overlay.ts'
-import { ShellSidebarFrame } from './shell-sidebar-frame.tsx'
 import {
   ChevronDownIcon,
   ChevronRightIcon,
+  FolderMinusIcon,
   PlusIcon,
   StarIcon,
-  FolderIcon,
-  TagIcon,
-  FolderMinusIcon,
-  BookmarkSlashIcon,
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
-import { chatScrollRoot, sessionWindowFromHost, sessionWindowHidden, type SessionWindowSlice } from './session-window.ts'
+const SESSION_ROW_PX = 29
+const SESSION_RAIL_ROW_PX = 36
+const SESSION_WINDOW_OVERSCAN = 4
 
-/** 项目/标签分组视图的持久化 key。旧值 tag 仍按标签读。 */
-const GROUP_BY_KEY = 'cordis.sidebar.groupBy'
+const sessionRowMainClass = SIDEBAR_ROW_MAIN_CLASS
 
-function readGroupBy(): SidebarGroupBy {
-  try {
-    const stored = localStorage.getItem(GROUP_BY_KEY)
-    return stored === 'tag' || stored === 'tag' ? 'tag' : 'project'
-  } catch {
-    return 'project'
-  }
-}
-
-/** 每行标签徽标：最多显示 2 个，其余以 +N（剩余数量）展示。 */
-function SessionTagBadges({ tags }: { tags?: string[] }) {
-  const list = (tags ?? []).map((tag) => tag.trim()).filter(Boolean)
-  if (!list.length) return null
-  const shown = list.slice(0, 2)
-  const extra = list.length - shown.length
-  return (
-    <span className="flex min-w-0 shrink-0 items-center gap-0.5 pl-0.5">
-      {shown.map((tag) => {
-        const emoji = tagEmoji(tag)
-        return (
-          <TagChip
-            key={tag}
-            id={tag}
-            label={tagLabel(tag)}
-            icon={emoji ? <span className="fsdb-record-emoji">{emoji}</span> : <TagIcon aria-hidden />}
-          />
-        )
-      })}
-      {extra > 0 ? (
-        <span className="sidebar-tag shrink-0 rounded-sm px-0.5 opacity-80">
-          +{extra}
-        </span>
-      ) : null}
-    </span>
-  )
-}
-
-const sessionRowMainClass =
-  'flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5'
+/** 弹层里的会话行改成按钮（点了要关弹层），页面里的行仍是真链接。 */
+const sessionRowMainProps = {
+  draggable: false,
+  onDragStart: (event: DragEvent<HTMLElement>) => event.preventDefault(),
+  className: sessionRowMainClass,
+  'data-dock-tip-at': 'e',
+} as const
 
 const SessionRow = memo(function SessionRow({
   item,
@@ -99,80 +64,63 @@ const SessionRow = memo(function SessionRow({
   onPin: (item: SessionListItem) => void
   onOpen?: (item: SessionListItem) => void
 }) {
-  const identity = resolveSessionMascot(item.id, item.mascot)
   const pinned = Boolean(item.pinned)
-  const inner = (
-    <>
-      <SidebarMascot
-        size={20}
-        sessionId={item.id}
-        identity={identity}
-        busy={busy}
-        animate={false}
-        dancing={dancing}
-        title={dancing ? '跳舞中 🎉' : `${identity.shape} · ${identity.color}`}
-      />
-      <span className="sidebar-label min-w-0 flex-1 truncate font-medium">
-        {item.title}
-      </span>
-      <SessionTagBadges tags={item.tag?.tags} />
-    </>
+  const label = (
+    <span className="sidebar-label min-w-0 flex-1 truncate font-medium">{item.title}</span>
+  )
+  const main = onOpen ? (
+    <button type="button" {...sessionRowMainProps} data-dock-tip={item.title} onClick={() => onOpen(item)}>
+      <SessionRowMascot item={item} busy={busy} dancing={dancing} />
+      {label}
+    </button>
+  ) : (
+    <Link to={sessionAppPath(item.id)} {...sessionRowMainProps} data-dock-tip={item.title}>
+      <SessionRowMascot item={item} busy={busy} dancing={dancing} />
+      {label}
+    </Link>
   )
   return (
-    <div
-      className={`chat-session-row group${active ? ' is-active' : ''}${pinned ? ' is-pinned' : ''}`}
-      data-biu-kind="session"
-      data-biu-id={item.id}
-      data-biu-label={item.title}
-    >
-      {onOpen ? (
-        <button
-          type="button"
-          draggable={false}
-          onDragStart={(event) => event.preventDefault()}
-          onClick={() => onOpen(item)}
-          className={sessionRowMainClass}
-        >
-          {inner}
-        </button>
-      ) : (
-        <Link
-          to={sessionAppPath(item.id)}
-          draggable={false}
-          onDragStart={(event) => event.preventDefault()}
-          className={sessionRowMainClass}
-        >
-          {inner}
-        </Link>
-      )}
-      <button
-        type="button"
-        className="chat-session-row-delete"
-        aria-label={`Delete session ${item.title}`}
-        title="Delete"
-        onClick={(event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          onDelete(item)
-        }}
-      >
-        <TrashGlyph {...chromeIcon} />
-      </button>
-      <button
-        type="button"
-        className={`chat-session-row-star${pinned ? ' is-on' : ''}`}
-        aria-pressed={pinned}
-        aria-label={pinned ? `取消收藏 ${item.title}` : `收藏 ${item.title}`}
-        title={pinned ? '取消收藏' : '收藏'}
-        onClick={(event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          onPin(item)
-        }}
-      >
-        <StarIcon {...chromeIcon} />
-      </button>
-    </div>
+    <SidebarRow
+      active={active}
+      pinned={pinned}
+      main={main}
+      onDelete={() => onDelete(item)}
+      deleteLabel={`Delete session ${item.title}`}
+      deleteIcon={<TrashGlyph {...chromeIcon} />}
+      onStar={() => onPin(item)}
+      starOn={pinned}
+      starLabel={pinned ? `取消收藏 ${item.title}` : `收藏 ${item.title}`}
+      starIcon={<StarIcon {...chromeIcon} />}
+      attrs={{
+        'data-biu-kind': 'session',
+        'data-biu-id': item.id,
+        'data-biu-label': item.title,
+        'data-dock-tip': item.title,
+        'data-dock-tip-at': 'e',
+      }}
+    />
+  )
+})
+
+const SessionRowMascot = memo(function SessionRowMascot({
+  item,
+  busy,
+  dancing,
+}: {
+  item: SessionListItem
+  busy: boolean
+  dancing: boolean
+}) {
+  return (
+    <SidebarMascot
+      size={20}
+      sessionId={item.id}
+      identity={resolveSessionMascot(item.id, item.mascot)}
+      busy={busy}
+      animate={false}
+      dancing={dancing}
+      title={item.title}
+    />
   )
 })
 
@@ -185,6 +133,7 @@ const WindowedSessionList = memo(function WindowedSessionList({
   onDelete,
   onPin,
   onOpen,
+  iconRail,
 }: {
   sessions: SessionListItem[]
   rowKey: string
@@ -194,109 +143,85 @@ const WindowedSessionList = memo(function WindowedSessionList({
   onDelete: (item: SessionListItem) => void
   onPin: (item: SessionListItem) => void
   onOpen?: (item: SessionListItem) => void
+  iconRail?: boolean
 }) {
   const hostRef = useRef<HTMLDivElement>(null)
-  const countRef = useRef(sessions.length)
-  countRef.current = sessions.length
-  const [slice, setSlice] = useState(() => sessionWindowHidden(sessions.length))
-
-  const applySlice = useCallback((next: SessionWindowSlice) => {
-    setSlice((prev) =>
-      prev.start === next.start && prev.end === next.end && prev.padTop === next.padTop && prev.padBottom === next.padBottom
-        ? prev
-        : next,
-    )
+  const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null)
+  const bindHost = useCallback((node: HTMLDivElement | null) => {
+    hostRef.current = node
+    setScrollEl(node?.closest('[data-chat-scroll]') as HTMLElement | null)
   }, [])
-
-  useLayoutEffect(() => {
-    const host = hostRef.current
-    if (!host) return
-    const scroller = chatScrollRoot(host)
-    applySlice(scroller ? sessionWindowFromHost(countRef.current, host, scroller) : sessionWindowHidden(countRef.current))
-  }, [applySlice, sessions.length])
-
-  useEffect(() => {
-    const host = hostRef.current
-    if (!host) return
-    const scroller = chatScrollRoot(host)
-    if (!scroller) return
-    let raf = 0
-    const sync = () => applySlice(sessionWindowFromHost(countRef.current, host, scroller))
-    const onScroll = () => {
-      if (raf) return
-      raf = requestAnimationFrame(() => {
-        raf = 0
-        sync()
-      })
-    }
-    scroller.addEventListener('scroll', onScroll, { passive: true })
-    const ro = new ResizeObserver(onScroll)
-    ro.observe(scroller)
-    ro.observe(host)
-    return () => {
-      cancelAnimationFrame(raf)
-      scroller.removeEventListener('scroll', onScroll)
-      ro.disconnect()
-    }
-  }, [applySlice, sessions.length])
+  const count = sessions.length
+  const virtualizer = useVirtualizer({
+    count,
+    getScrollElement: () => scrollEl,
+    estimateSize: () => (iconRail ? SESSION_RAIL_ROW_PX : SESSION_ROW_PX),
+    overscan: SESSION_WINDOW_OVERSCAN,
+    scrollMargin: hostRef.current?.offsetTop ?? 0,
+  })
+  const items = virtualizer.getVirtualItems()
+  const start = items[0]?.index ?? 0
+  const end = items.length ? (items[items.length - 1]?.index ?? 0) + 1 : 0
 
   return (
     <div
-      ref={hostRef}
+      ref={bindHost}
       className="sidebar-session-window"
       data-session-window=""
-      data-session-window-start={slice.start}
-      data-session-window-end={slice.end}
-      data-session-window-count={sessions.length}
-      style={{ paddingTop: slice.padTop, paddingBottom: slice.padBottom }}
+      data-session-window-start={start}
+      data-session-window-end={end}
+      data-session-window-count={count}
+      style={{ height: virtualizer.getTotalSize(), position: 'relative' }}
     >
-      {sessions.slice(slice.start, slice.end).map((item) => (
-        <SessionRow
-          key={`${rowKey}:${item.id}`}
-          item={item}
-          active={item.id === highlightId}
-          busy={Boolean(busySessions[item.id])}
-          dancing={dancing}
-          onDelete={onDelete}
-          onPin={onPin}
-          onOpen={onOpen}
-        />
-      ))}
+      {items.map((row) => {
+        const item = sessions[row.index]
+        if (!item) return null
+        return (
+          <div
+            key={`${rowKey}:${item.id}`}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              transform: `translateY(${row.start - virtualizer.options.scrollMargin}px)`,
+            }}
+          >
+            <SessionRow
+              item={item}
+              active={item.id === highlightId}
+              busy={Boolean(busySessions[item.id])}
+              dancing={dancing}
+              onDelete={onDelete}
+              onPin={onPin}
+              onOpen={onOpen}
+            />
+          </div>
+        )
+      })}
     </div>
   )
 })
 
 export type ChatSidebarProps = {
-  visible: boolean
-  narrow?: boolean
-  showTags?: boolean
-  variant?: 'page' | 'popover'
   routeSessionId: string | null
   useSessionView: ReturnType<typeof bindSessionView>
   sessionView: SessionViewService
-  onCollapse?: () => void
-  onExpand?: () => void
-  onWidthChange?: (width: number) => void
-  onActivate?: () => void
-  embedded?: boolean
+  /** 弹层（小人菜单）里使用时：会话行变成按钮并关闭弹层，不再做页面跳转。 */
+  popoverClose?: () => void
+  iconRail?: boolean
 }
 
 /**
  * 独立订阅折叠态与 sessions：组展开/收缩只重渲侧栏，不拖垮 Shell 里的 Chat Markdown 主区。
+ * 外框（品牌头、收起/展开、拖宽）由 Shell 的 ShellSidebarFrame 提供，这里只画列表本体。
  */
 export const ChatSidebar = memo(function ChatSidebar({
-  visible,
-  narrow = false,
-  showTags = false,
-  variant = 'page',
   routeSessionId,
   useSessionView,
   sessionView,
-  onCollapse,
-  onExpand,
-  onWidthChange,
-  onActivate,
-  embedded = false,
+  popoverClose,
+  iconRail = false,
 }: ChatSidebarProps) {
   const navigate = useNavigate()
   const sessions = useSessionView((state) => state.sessions)
@@ -318,24 +243,10 @@ export const ChatSidebar = memo(function ChatSidebar({
   const collapsedProjects = useSidebarCollapseStore((state) => state.collapsed)
   const toggleProjectGroup = useSidebarCollapseStore((state) => state.toggle)
   const expandProjectGroup = useSidebarCollapseStore((state) => state.expand)
-  // 数据分组视图：项目树 / 标签树（持久化记忆用户选择）
-  const [groupBy, setGroupBy] = useState<SidebarGroupBy>(readGroupBy)
-  const changeGroupBy = useCallback((next: SidebarGroupBy) => {
-    setGroupBy(next)
-    // 完整保存/恢复，不截断
-    try {
-      localStorage.setItem(GROUP_BY_KEY, next)
-    } catch {
-      /* ignore */
-    }
-  }, [])
-  // 板块并存：收藏 + (项目|标签)，由上而下
-  const sections = useMemo(() => buildSidebarSections(sessions, groupBy), [sessions, groupBy])
-  // 板块级收缩（点击标题可展开/收缩，不显示收缩按钮，层级靠 kind 图标表达）
-  const [collapsedSections, setCollapsedSections] = useState<Partial<Record<SidebarSectionKind, boolean>>>({})
+  const sections = useMemo(() => buildSidebarSections(sessions), [sessions])
   const toggleSection = useCallback((kind: SidebarSectionKind) => {
-    setCollapsedSections((prev) => ({ ...prev, [kind]: !prev[kind] }))
-  }, [])
+    toggleProjectGroup(`chat.section.${kind}`)
+  }, [toggleProjectGroup])
   const dancing = useSyncExternalStore(
     subscribeMascotDance,
     () => isMascotDancing(),
@@ -355,48 +266,47 @@ export const ChatSidebar = memo(function ChatSidebar({
     expandProjectGroup(group.key)
   }, [routeSessionId, sections, expandProjectGroup])
 
-  const highlightId = variant === 'popover' ? sessionId : routeSessionId
+  const popover = Boolean(popoverClose)
+  const highlightId = popover ? sessionId : routeSessionId
+  // 已经在会话页里就直接换 session，否则把输入框拉起来（悬浮聊天），别把人踢出当前页面。
+  const openSessionPath = useCallback(
+    (id: string) => {
+      if (isChatPagePath(window.location.pathname)) navigate(sessionAppPath(id))
+      else openOverlayComposer()
+    },
+    [navigate],
+  )
 
   const createChat = useCallback(
     (opts: { projectPath?: string } = {}) => {
       void sessionView.newSession(opts).then((id) => {
-        onActivate?.()
-        if (isChatPagePath(window.location.pathname)) {
-          navigate(sessionAppPath(id))
-          return
-        }
-        if (variant === 'popover') {
-          openOverlayComposer()
-          return
-        }
-        navigate(sessionAppPath(id))
+        popoverClose?.()
+        openSessionPath(id)
       })
     },
-    [navigate, onActivate, sessionView, variant],
+    [openSessionPath, popoverClose, sessionView],
   )
 
   const openSession = useCallback(
     (item: SessionListItem) => {
       void sessionView.load(item.id, { view: 'chat' })
-      if (isChatPagePath(window.location.pathname)) {
-        navigate(sessionAppPath(item.id))
-      } else {
-        openOverlayComposer()
-      }
-      onActivate?.()
+      openSessionPath(item.id)
+      popoverClose?.()
     },
-    [navigate, onActivate, sessionView],
+    [openSessionPath, popoverClose, sessionView],
   )
 
-  const deleteChat = useCallback((item: SessionListItem) => {
-    const wasActive = item.id === sessionId
-    void sessionView.deleteSession(item.id).then(() => {
-      if (variant === 'popover') return
-      if (!wasActive) return
-      const next = sessionView.get().sessionId
-      navigate(next ? sessionAppPath(next) : '/')
-    })
-  }, [navigate, sessionId, sessionView, variant])
+  const deleteChat = useCallback(
+    (item: SessionListItem) => {
+      const wasActive = item.id === sessionId
+      void sessionView.deleteSession(item.id).then(() => {
+        if (popover || !wasActive) return
+        const next = sessionView.get().sessionId
+        navigate(next ? sessionAppPath(next) : '/')
+      })
+    },
+    [navigate, popover, sessionId, sessionView],
+  )
 
   const pinChat = useCallback(
     (item: SessionListItem) => {
@@ -405,191 +315,132 @@ export const ChatSidebar = memo(function ChatSidebar({
     [sessionView],
   )
 
-  const body = (
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3" data-chat-scroll="">
-        <div className="mt-2 space-y-1.5">
-          {sessions.length === 0 && groupBy !== 'project' ? null : (
-            sections.map((section) => {
-              const sectionCollapsed = Boolean(collapsedSections[section.kind])
-              return (
-                <section key={section.kind} className="min-w-0">
-                  {/* 板块标题：收藏 / (项目|标签)，可点击整行展开/收缩；层级靠 kind 图标表达；悬浮时右侧露出分组切换 tab */}
-                  <div className="sidebar-section-head min-w-0">
-                      <button
-                        type="button"
-                        className="flex h-full min-h-8 min-w-0 flex-1 items-center gap-2 text-left text-[12px] font-bold tracking-wider"
-                        aria-expanded={!sectionCollapsed}
-                        onClick={() => toggleSection(section.kind)}
-                      >
-                        <span className="min-w-0 flex-1 truncate tracking-normal">{section.label}</span>
-                      </button>
-                    <ChatCount
-                      count={
-                        section.sessions
-                          ? section.sessions.length
-                          : section.groups?.reduce((sum, g) => sum + g.sessions.length, 0) ?? 0
-                      }
-                    />
-                      {section.kind !== 'pinned' ? (
-                        <div
-                          className="sidebar-view-switch"
-                          role="group"
-                          aria-label="分组视图切换"
-                        >
-                          <button
-                            type="button"
-                            title="按项目分组"
-                            aria-pressed={groupBy === 'project'}
-                            className={`sidebar-view-switch-btn${groupBy === 'project' ? ' is-on' : ''}`}
-                            onClick={() => changeGroupBy('project')}
-                          >
-                            <FolderIcon {...chromeIcon} />
-                          </button>
-                          <button
-                            type="button"
-                            title="按标签分组"
-                            aria-pressed={groupBy === 'tag'}
-                            className={`sidebar-view-switch-btn${groupBy === 'tag' ? ' is-on' : ''}`}
-                            onClick={() => changeGroupBy('tag')}
-                          >
-                            <TagIcon {...chromeIcon} />
-                          </button>
-                        </div>
-                      ) : null}
-                  </div>
-
-                  <SidebarFold open={!sectionCollapsed}>
-                    <div className="flex min-w-0 flex-col gap-px pt-0.5">
-                      {section.sessions
-                        ? (
-                          <WindowedSessionList
-                            sessions={section.sessions}
-                            rowKey="pinned"
-                            highlightId={highlightId}
-                            busySessions={busySessions}
-                            dancing={dancing}
-                            onDelete={deleteChat}
-                            onPin={pinChat}
-                            onOpen={variant === 'popover' ? openSession : undefined}
-                          />
-                        )
-                        : section.groups?.map((group) => {
-                          const collapsed = Boolean(collapsedProjects[group.key])
-                          const isUngrouped = group.key === UNGROUPED_PROJECT_KEY || group.key === UNGROUPED_TAG_KEY
-                          const canAddHere = group.kind === 'project' || group.kind === 'ungrouped'
-                          return (
-                            <div key={group.key} className="min-w-0">
-                              <div className="sidebar-group-head">
-                                <div
-                                  role="button"
-                                  tabIndex={0}
-                                  className="flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md text-left text-[14px] font-medium tracking-normal text-inherit outline-none hover:text-(--biu-color-text) focus-visible:ring-1 focus-visible:ring-(--biu-color-border)"
-                                  title={group.path ?? group.label}
-                                  aria-expanded={!collapsed}
-                                  onClick={() => toggleProjectGroup(group.key)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter' || e.key === ' ') {
-                                      e.preventDefault()
-                                      toggleProjectGroup(group.key)
-                                    }
-                                  }}
-                                >
-                                  <span className="sidebar-rail-icon sidebar-group-fold" aria-hidden>
-                                    <span className="sidebar-group-fold-face">
-                                      {group.kind === 'pinned' ? (
-                                        <StarIcon {...chromeIcon} />
-                                      ) : group.key === UNGROUPED_PROJECT_KEY ? (
-                                        <FolderMinusIcon className={chromeIconClass('opacity-80')} />
-                                      ) : group.key === UNGROUPED_TAG_KEY ? (
-                                        <BookmarkSlashIcon className={chromeIconClass('opacity-80')} />
-                                      ) : group.kind === 'tag' ? (
-                                        <TagIcon className={chromeIconClass('opacity-80')} />
-                                      ) : (
-                                        <FolderGlyph />
-                                      )}
-                                    </span>
-                                    <span className="sidebar-group-fold-chevron">
-                                      {collapsed ? (
-                                        <ChevronRightIcon className={chromeIconClass('opacity-80')} />
-                                      ) : (
-                                        <ChevronDownIcon className={chromeIconClass('opacity-80')} />
-                                      )}
-                                    </span>
-                                  </span>
-                                  <span className="sidebar-label min-w-0 flex-1 truncate">{group.label}</span>
-                                </div>
-                                <ChatCount count={group.sessions.length} />
-                                  {canAddHere ? (
-                                    <button
-                                      type="button"
-                                      className="sidebar-add"
-                                      title={isUngrouped ? '在未分组下添加聊天' : `在 ${group.label} 下添加聊天`}
-                                      aria-label={isUngrouped ? '在未分组下添加聊天' : `在 ${group.label} 下添加聊天`}
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        createChat({
-                                          ...(group.path ? { projectPath: group.path } : {}),
-                                        })
-                                      }}
-                                    >
-                                      <PlusIcon {...chromeIcon} />
-                                    </button>
-                                  ) : null}
-                              </div>
-                              <SidebarFold open={!collapsed} className="sidebar-session-list min-w-0">
-                                <WindowedSessionList
-                                  sessions={group.sessions}
-                                  rowKey={group.key}
-                                  highlightId={highlightId}
-                                  busySessions={busySessions}
-                                  dancing={dancing}
-                                  onDelete={deleteChat}
-                                  onPin={pinChat}
-                                  onOpen={variant === 'popover' ? openSession : undefined}
-                                />
-                              </SidebarFold>
-                            </div>
-                          )
-                        })
-                      }
-                    </div>
-                  </SidebarFold>
-                </section>
-              )
-            })
-          )}
-        </div>
-      </div>
+  const list = (section: SidebarSection, rowKey: string, rows: SessionListItem[]) => (
+    <WindowedSessionList
+      sessions={rows}
+      rowKey={rowKey}
+      highlightId={highlightId}
+      busySessions={busySessions}
+      dancing={dancing}
+      onDelete={deleteChat}
+      onPin={pinChat}
+      onOpen={popover ? openSession : undefined}
+      iconRail={iconRail}
+    />
   )
 
-  if (variant === 'popover') {
-    return (
-      <div
-        className="brand-agent-menu chat-sidebar-popover"
-        data-testid="dock-chat-sidebar"
-        role="dialog"
-        aria-label="聊天"
-      >
-        {body}
-      </div>
-    )
-  }
+  const body = (
+    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3" data-chat-scroll="">
+      <div className="mt-2 space-y-1.5">
+        {sections.map((section) => {
+          const sectionCollapsed = Boolean(collapsedProjects[`chat.section.${section.kind}`])
+          const count =
+            section.sessions?.length ?? section.groups?.reduce((sum, group) => sum + group.sessions.length, 0) ?? 0
+          return (
+            <section key={section.kind} className="min-w-0">
+              <div className="sidebar-section-head min-w-0">
+                <button
+                  type="button"
+                  className="flex h-full min-h-8 min-w-0 flex-1 items-center gap-2 text-left text-[12px] font-bold tracking-wider"
+                  aria-expanded={!sectionCollapsed}
+                  onClick={() => toggleSection(section.kind)}
+                >
+                  <span className="min-w-0 flex-1 truncate tracking-normal">{section.label}</span>
+                </button>
+                <ChatCount count={count} />
+              </div>
 
-  if (embedded) {
-    return body
-  }
+              <SidebarFold open={!sectionCollapsed}>
+                <div className="flex min-w-0 flex-col gap-px pt-0.5">
+                  {section.sessions ? list(section, 'pinned', section.sessions) : null}
+                  {section.groups?.map((group) => {
+                    const collapsed = Boolean(collapsedProjects[group.key])
+                    const addLabel = group.kind === 'ungrouped' ? '在未分组下添加会话' : `在 ${group.label} 下添加会话`
+                    return (
+                      <div key={group.key} className="min-w-0">
+                        <div className="sidebar-group-head">
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            className="flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md text-left text-[14px] font-medium tracking-normal text-inherit outline-none hover:text-(--biu-color-text) focus-visible:ring-1 focus-visible:ring-(--biu-color-border)"
+                            title={group.path ?? group.label}
+                            aria-expanded={!collapsed}
+                            onClick={() => toggleProjectGroup(group.key)}
+                            onKeyDown={(event) => {
+                              if (event.key !== 'Enter' && event.key !== ' ') return
+                              event.preventDefault()
+                              toggleProjectGroup(group.key)
+                            }}
+                          >
+                            <GroupFoldGlyph group={group} collapsed={collapsed} />
+                            <span className="sidebar-label min-w-0 flex-1 truncate">{group.label}</span>
+                          </div>
+                          <ChatCount count={group.sessions.length} />
+                          <button
+                            type="button"
+                            className="sidebar-add"
+                            title={addLabel}
+                            aria-label={addLabel}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              createChat(group.path ? { projectPath: group.path } : {})
+                            }}
+                          >
+                            <PlusIcon {...chromeIcon} />
+                          </button>
+                        </div>
+                        <SidebarFold open={!collapsed} className="sidebar-session-list min-w-0">
+                          {list(section, group.key, group.sessions)}
+                        </SidebarFold>
+                      </div>
+                    )
+                  })}
+                </div>
+              </SidebarFold>
+            </section>
+          )
+        })}
+      </div>
+    </div>
+  )
+
+  if (!popoverClose) return body
 
   return (
-    <ShellSidebarFrame
-      visible={visible}
-      narrow={narrow}
-      showTags={showTags}
-      onCollapse={onCollapse}
-      onExpand={onExpand}
-      onWidthChange={onWidthChange}
-      testId="chat-sidebar"
+    <div
+      className="brand-agent-menu chat-sidebar-popover"
+      data-testid="dock-chat-sidebar"
+      role="dialog"
+      aria-label="会话"
     >
       {body}
-    </ShellSidebarFrame>
+    </div>
+  )
+})
+
+/** 分组头的「脸 + 折叠箭头」：hover/聚焦时脸让位给箭头。 */
+const GroupFoldGlyph = memo(function GroupFoldGlyph({
+  group,
+  collapsed,
+}: {
+  group: SessionSidebarGroup
+  collapsed: boolean
+}) {
+  const chevron = collapsed ? (
+    <ChevronRightIcon className={chromeIconClass('opacity-80')} />
+  ) : (
+    <ChevronDownIcon className={chromeIconClass('opacity-80')} />
+  )
+  return (
+    <span className="sidebar-rail-icon sidebar-group-fold" aria-hidden>
+      <span className="sidebar-group-fold-face">
+        {group.kind === 'ungrouped' ? (
+          <FolderMinusIcon className={chromeIconClass('opacity-80')} />
+        ) : (
+          <FolderGlyph />
+        )}
+      </span>
+      <span className="sidebar-group-fold-chevron">{chevron}</span>
+    </span>
   )
 })

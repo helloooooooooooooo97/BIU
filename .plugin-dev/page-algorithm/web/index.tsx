@@ -13,7 +13,7 @@ const React = globalThis.React
 const { useEffect, useRef, useState } = React
 
 export const name = 'page-algorithm'
-export const inject = ['pageEditor']
+export const inject = ['blockEditor']
 
 type Example = { input: string; output: string; explanation?: string }
 
@@ -498,7 +498,7 @@ function AlgorithmCard({
 }
 
 export function apply(ctx: {
-  pageEditor: {
+  blockEditor: {
     registerBlock: (spec: {
       kind: string
       plugin: string
@@ -512,7 +512,7 @@ export function apply(ctx: {
     }) => void
   }
 }) {
-  ctx.pageEditor.registerBlock({
+  ctx.blockEditor.registerBlock({
     kind: 'algorithm',
     plugin: name,
     label: '算法题',

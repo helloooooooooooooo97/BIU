@@ -46,7 +46,7 @@ function TagColumnPackRow({
       open={open}
       onOpenChange={(next) => {
         setOpen(next)
-        if (next) void pullTags()
+        if (next) void pullTags(undefined, { filled: true })
       }}
       side="left"
       align="start"

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useOptionCursor } from '@biu/database-ui/search'
 
 export function flyoutQueryMatch(text: string, q: string) {
   const needle = q.trim().toLowerCase()
@@ -9,9 +10,11 @@ export function flyoutQueryMatch(text: string, q: string) {
 export function FlyoutSearch({
   value,
   onChange,
+  onListKeyDown,
 }: {
   value: string
   onChange: (next: string) => void
+  onListKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void
 }) {
   const ref = useRef<HTMLInputElement>(null)
   useEffect(() => {
@@ -28,11 +31,14 @@ export function FlyoutSearch({
       aria-label="搜索"
       onChange={(event) => onChange(event.target.value)}
       onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
-        if (event.key !== 'Escape') return
-        if (!value) return
-        event.preventDefault()
-        event.stopPropagation()
-        onChange('')
+        if (event.key === 'Escape') {
+          if (!value) return
+          event.preventDefault()
+          event.stopPropagation()
+          onChange('')
+          return
+        }
+        onListKeyDown?.(event)
       }}
     />
   )
@@ -54,10 +60,13 @@ export function SearchableFlyout({
   children: (q: string) => ReactNode
 }) {
   const [q, setQ] = useState('')
+  const { listRef, onKeyDown } = useOptionCursor(q)
   return (
-    <div className={`fsdb-tool-flyout ${className}`} role="menu">
-      <FlyoutSearch value={q} onChange={setQ} />
-      <div className="tasks-sort-list">{children(q)}</div>
+    <div className={`fsdb-tool-flyout ${className}`} role="menu" onKeyDown={(event) => onKeyDown(event)}>
+      <FlyoutSearch value={q} onChange={setQ} onListKeyDown={onKeyDown} />
+      <div className="tasks-sort-list" ref={listRef}>
+        {children(q)}
+      </div>
     </div>
   )
 }

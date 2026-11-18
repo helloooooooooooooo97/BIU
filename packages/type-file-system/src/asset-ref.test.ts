@@ -57,3 +57,31 @@ test('collectAssetNames walks exact urls without prose hits', () => {
   assert.equal(names.has('画板-ab12.json'), true)
   assert.equal(names.has('page'), false)
 })
+
+test('collectAssetNames walks record properties and tag field attachments', () => {
+  const propertyFile = `${'ab'.repeat(32)}.md`
+  const tagFile = `${'cd'.repeat(32)}.md`
+  const names = collectAssetNames(
+    { file: { name: '规划.md', href: `/api/db/file/${propertyFile}` } },
+    {
+      tags: ['tag-13'],
+      values: {
+        'tag-13': {
+          '530659262': [{ name: '滕王阁序.md', href: `/api/db/file/${tagFile}` }],
+        },
+      },
+    },
+  )
+  assert.equal(names.has(propertyFile), true)
+  assert.equal(names.has(tagFile), true)
+})
+
+test('collectAssetNames includes record sandbox files', () => {
+  const names = collectAssetNames({
+    views: [{ id: 'a', file: 'view-p1-a.jsx', dataFile: 'view-data-p1-a.json' }],
+    propViews: [{ id: 'b', file: 'prop-view-p1-b.jsx', dataFile: 'prop-view-data-p1-b.json' }],
+  })
+  assert.equal(names.has('view-p1-a.jsx'), true)
+  assert.equal(names.has('view-data-p1-a.json'), true)
+  assert.equal(names.has('prop-view-p1-b.jsx'), true)
+})

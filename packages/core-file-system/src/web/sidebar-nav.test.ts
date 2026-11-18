@@ -2,7 +2,8 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { parseAppPath } from '@biu/web-session-view'
 import { DATA_MODULE } from './database-path.ts'
-import { builtinAllViewId } from '../catalog-views.ts'
+import { builtinAllViewId, builtinScopeViewId, mergeTableViews } from '../catalog-views.ts'
+import { normalizeSavedView } from './saved-view.ts'
 import {
   applySidebarAction,
   assertSidebarInvariants,
@@ -11,6 +12,9 @@ import {
   crumbLabelAction,
   parseCenterPath,
   pathForCenter,
+  parentCrumbTarget,
+  crumbParentHotkey,
+  crumbHotkeyPane,
   pathForCrumbTarget,
   previewKey,
   starPreviewKey,
@@ -136,6 +140,33 @@ test('从记录返回回到上次视图，展开状态仍在', () => {
   assert.equal(pathForCenter(closed), '/database/tasks/view/board')
 })
 
+test('deleted builtin all view keeps its breadcrumb name when opened from navigation', () => {
+  const table = { path: '/pages', label: '页面' }
+  const viewId = builtinAllViewId(table.path)
+  const views = mergeTableViews(table, [normalizeSavedView({ id: 'mine', name: '我的页面' })], [viewId])
+  assert.ok(!views.some((view) => view.id === viewId))
+  const crumbs = buildCrumbs({
+    collection: table.path,
+    collectionLabel: table.label,
+    tables: [table],
+    viewId,
+    views,
+  })
+  assert.equal(crumbs[1]!.label, '全部页面')
+  assert.equal(pathForCrumbTarget(crumbs[1]!.target), `/database/pages/view/${encodeURIComponent(viewId)}`)
+  assert.deepEqual(crumbs[1]!.choices.map((view) => view.id), ['mine'])
+})
+
+test('unlisted builtin breadcrumbs resolve names without changing saved view names', () => {
+  const input = { collection: '/pages', collectionLabel: '页面', tables: [] }
+  const all = buildCrumbs({ ...input, viewId: builtinAllViewId('/pages') })[1]!
+  assert.equal(all.label, '全部页面')
+  assert.equal(all.choices[0]!.label, '全部页面')
+  assert.equal(buildCrumbs({ ...input, viewId: builtinScopeViewId('personal', builtinAllViewId('/pages')), views: [] })[1]!.label, '私人页面')
+  assert.equal(buildCrumbs({ ...input, viewId: 'mine', views: [{ id: 'mine', name: '我的页面' }] })[1]!.label, '我的页面')
+  assert.equal(buildCrumbs({ ...input, viewId: all.id, viewName: '自定义名称' })[1]!.label, '自定义名称')
+})
+
 test('面包屑点上级会清掉后面几级', () => {
   const crumbs = buildCrumbs({
     collection: '/tasks',
@@ -190,6 +221,23 @@ test('记录页面包屑是表 / 视图 / 记录，点表回到全部视图', ()
   assert.ok(pathForCrumbTarget(crumbs[2]!.target).includes('/view/1787983501816/record/'))
   assert.ok(!pathForCrumbTarget(crumbs[0]!.target).includes('/record/'))
   assert.ok(!pathForCrumbTarget(crumbs[1]!.target).includes('/record/'))
+  assert.deepEqual(parentCrumbTarget(crumbs), crumbs[1]!.target)
+  assert.deepEqual(parentCrumbTarget(crumbs.slice(0, 2)), crumbs[0]!.target)
+  assert.equal(parentCrumbTarget(crumbs.slice(0, 1)), null)
+})
+
+test('⌘← is the breadcrumb parent hotkey', () => {
+  const left = { key: 'ArrowLeft', metaKey: true, ctrlKey: false, altKey: false, shiftKey: false }
+  assert.equal(crumbParentHotkey(left), true)
+  assert.equal(crumbParentHotkey({ ...left, shiftKey: true }), false)
+  assert.equal(crumbParentHotkey({ ...left, key: 'ArrowUp' }), false)
+  const main = document.createElement('textarea')
+  const inspector = document.createElement('div')
+  inspector.className = 'session-inspector'
+  const inside = document.createElement('textarea')
+  inspector.appendChild(inside)
+  assert.equal(crumbHotkeyPane(main), 'main')
+  assert.equal(crumbHotkeyPane(inside), 'inspector')
 })
 
 test('表视图记录点标题一律出选择菜单', () => {

@@ -9,6 +9,7 @@ export { formatPicks, formatPick, parsePicks, splitPickStream, dedupePicks, chip
 export { bindEditorTextHost, editorHostFromNode } from './editor-host.ts'
 export { PickChip, PickChipLabel, PickKindGlyph, pickKindIcon, pickKindTone, canonicalPickKind, collectionPickKind, pickInspectCard, inspectPathTarget, revealInspectPath } from './chip.tsx'
 export { resolvePickFromNode, resolvePickFromEvent, resolvePickAtPoint, resolvePicksInRect, visiblePickBox, pickSurfaceFromNode, pickSurfaceAtPoint, serializeHtmlPickElement, sandboxInnerFromEvent } from './resolve.ts'
+export { bindSandboxPickRelay, SANDBOX_PICK_EVENT } from './sandbox-relay.ts'
 
 export const name = 'pick-ui'
 export const inject = ['slots']

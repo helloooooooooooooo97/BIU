@@ -12,22 +12,22 @@ import {
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS as DndCSS } from '@dnd-kit/utilities'
-import { PencilSquareIcon, PlusIcon, Square2StackIcon } from '@heroicons/react/16/solid'
+import { PlusIcon, Square2StackIcon } from '@heroicons/react/16/solid'
 import { overlayZ } from '@biu/biu-ui/overlay-portal'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { moveList } from '../query-logic.ts'
 import { DndGrip } from './dnd-grip.tsx'
 import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search.tsx'
 import { ViewModeGlyph } from './nav-glyphs.tsx'
-import type { SavedView } from './saved-view.ts'
+import { canRemoveCollectionView, type SavedView } from './saved-view.ts'
 
 function ViewRowShell({
   view,
   active,
   onSelect,
   onCopy,
-  onRename,
   onDelete,
+  canRemove,
   grip,
   rowRef,
   className,
@@ -37,8 +37,8 @@ function ViewRowShell({
   active: boolean
   onSelect: (view: SavedView) => void
   onCopy: (view: SavedView) => void
-  onRename: (view: SavedView) => void
   onDelete: (view: SavedView) => void
+  canRemove: boolean
   grip: ReactNode
   rowRef?: (node: HTMLElement | null) => void
   className?: string
@@ -63,16 +63,11 @@ function ViewRowShell({
         <button type="button" className="tasks-viewdd-act" title="拷贝视图" onClick={() => onCopy(view)}>
           <Square2StackIcon aria-hidden className="size-[14px]" />
         </button>
-        {view.builtin ? null : (
-          <>
-            <button type="button" className="tasks-viewdd-act" title="重命名" onClick={() => onRename(view)}>
-              <PencilSquareIcon aria-hidden className="size-[14px]" />
-            </button>
-            <button type="button" className="tasks-viewdd-act is-danger" title="删除" onClick={() => onDelete(view)}>
-              <TrashGlyph aria-hidden className="size-[14px]" />
-            </button>
-          </>
-        )}
+        {canRemove ? (
+          <button type="button" className="tasks-viewdd-act is-danger" title="删除" onClick={() => onDelete(view)}>
+            <TrashGlyph aria-hidden className="size-[14px]" />
+          </button>
+        ) : null}
       </span>
     </div>
   )
@@ -83,15 +78,15 @@ function SortableViewRow({
   active,
   onSelect,
   onCopy,
-  onRename,
   onDelete,
+  canRemove,
 }: {
   view: SavedView
   active: boolean
   onSelect: (view: SavedView) => void
   onCopy: (view: SavedView) => void
-  onRename: (view: SavedView) => void
   onDelete: (view: SavedView) => void
+  canRemove: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: view.id })
   return (
@@ -100,8 +95,8 @@ function SortableViewRow({
       active={active}
       onSelect={onSelect}
       onCopy={onCopy}
-      onRename={onRename}
       onDelete={onDelete}
+      canRemove={canRemove}
       rowRef={setNodeRef}
       className={isDragging ? 'is-drag' : undefined}
       style={{ transform: DndCSS.Transform.toString(transform), transition }}
@@ -119,7 +114,6 @@ export function ViewOrderMenu({
   activeViewId,
   onSelect,
   onCopy,
-  onRename,
   onDelete,
   onReorder,
   onAdd,
@@ -128,7 +122,6 @@ export function ViewOrderMenu({
   activeViewId: string | null
   onSelect: (view: SavedView) => void
   onCopy: (view: SavedView) => void
-  onRename: (view: SavedView) => void
   onDelete: (view: SavedView) => void
   onReorder: (ids: string[]) => void
   onAdd: () => void
@@ -136,6 +129,7 @@ export function ViewOrderMenu({
   const [activeId, setActiveId] = useState<string | null>(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
   const ids = views.map((view) => view.id)
+  const canRemove = canRemoveCollectionView(views)
   const active = views.find((view) => view.id === activeId)
   const foot = (
     <div className="tasks-viewdd-foot">
@@ -170,8 +164,8 @@ export function ViewOrderMenu({
                     active={view.id === activeViewId}
                     onSelect={onSelect}
                     onCopy={onCopy}
-                    onRename={onRename}
                     onDelete={onDelete}
+                    canRemove={canRemove}
                     grip={
                       <span className="fsdb-query-grip is-locked" aria-hidden>
                         <DndGrip />
@@ -212,8 +206,8 @@ export function ViewOrderMenu({
                     active={view.id === activeViewId}
                     onSelect={onSelect}
                     onCopy={onCopy}
-                    onRename={onRename}
                     onDelete={onDelete}
+                    canRemove={canRemove}
                   />
                 ))}
               </SortableContext>
@@ -225,8 +219,8 @@ export function ViewOrderMenu({
                       active={active.id === activeViewId}
                       onSelect={() => undefined}
                       onCopy={() => undefined}
-                      onRename={() => undefined}
                       onDelete={() => undefined}
+                      canRemove={canRemove}
                       grip={
                         <button type="button" className="fsdb-query-grip" tabIndex={-1}>
                           <DndGrip />

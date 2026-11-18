@@ -10,13 +10,17 @@ import { dirname } from 'node:path'
 import {
   asPerson,
   asPersonList,
+  collectAssetNames,
   isEmptySchemaValue,
   normalizeSchemaPack,
   normalizeSchemaValue,
+  pruneSchemaValue,
   type CollectionSchemaPack,
   type PersonValue,
   type SchemaFieldValue,
 } from '@biu/type-file-system'
+import { parseTagFlatColumnKey } from '../query-logic.ts'
+import { strategyForField } from '../web/group-strategies.ts'
 import { parsePageBanner, type PageBanner, type PageBannerKind } from '../page-banner.ts'
 import { bannerGalleryId, isBannerPreset } from '../banner-presets.ts'
 
@@ -89,20 +93,83 @@ function entryFromRow(db: DatabaseSync, row: TagRow): TagEntry | null {
   }
 }
 
-const FACET_ROW_SQL = 'id, label, fields_json, created_at, updated_at'
+const TAG_ROW_SQL = 'id, label, fields_json, created_at, updated_at'
 
-/** 分面目录由 File System 用 SQLite 管：目录 + 跨表倒排，查询不扫全表。 */
+/** 标签目录由 File System 用 SQLite 管：目录 + 跨表倒排，查询不扫全表。 */
 export class TagStore {
   private db: DatabaseSync | null = null
+  private deletedIdsCache = new Map<string, Set<string>>()
 
   open(path = ':memory:') {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true })
     this.db = openAndMigrateBiu(path)
     this.ensureCreatedAtColumn()
+    this.ensureGroupIndexTables()
     this.ensurePersonMetaColumns()
     this.ensureDeletedAtColumn()
     this.ensureBannerTable()
     return this
+  }
+
+  private ensureGroupIndexTables() {
+    this.db!.exec(`
+      CREATE TABLE IF NOT EXISTS tag_group_fields (
+        collection TEXT NOT NULL, field TEXT NOT NULL, signature TEXT NOT NULL,
+        PRIMARY KEY (collection, field)
+      );
+      CREATE TABLE IF NOT EXISTS tag_group_values (
+        collection TEXT NOT NULL, field TEXT NOT NULL, record_id TEXT NOT NULL, value TEXT NOT NULL,
+        PRIMARY KEY (collection, field, record_id, value)
+      );
+      CREATE INDEX IF NOT EXISTS tag_group_lookup ON tag_group_values(collection, field, value, record_id);
+    `)
+  }
+
+  private indexGroupRecord(collection: string, field: string, recordId: string, tag: unknown) {
+    const parsed = parseTagFlatColumnKey(field)!
+    const spec = this.get(parsed.packId)?.fields.find(item => item.key === parsed.fieldKey && !item.deleted)
+    const strategy = spec && strategyForField(spec)
+    const db = this.ensure()
+    db.prepare('DELETE FROM tag_group_values WHERE collection = ? AND field = ? AND record_id = ?').run(collection, field, recordId)
+    if (!spec || !strategy) return
+    const row = { id: recordId, tag: normalizeSchemaValue(tag) }
+    // A detached tag must not keep contributing stale attribute values.
+    if (!row.tag.tags.includes(parsed.packId)) return
+    const values = strategy.bucketOf(row, { fieldKey: field, groupBy: field, field: spec })
+    const insert = db.prepare('INSERT OR IGNORE INTO tag_group_values VALUES (?, ?, ?, ?)')
+    for (const value of values) if (value !== '') insert.run(collection, field, recordId, value)
+  }
+
+  /** On-demand, persistent attribute index. Only indexed fields incur write work. */
+  attributeGroups(collection: string, field: string, visibleIds: string[]) {
+    const parsed = parseTagFlatColumnKey(field)
+    const spec = parsed && this.get(parsed.packId)?.fields.find(item => item.key === parsed.fieldKey && !item.deleted)
+    const strategy = spec && strategyForField(spec)
+    if (!spec || !strategy || !['select', 'multi-select', 'tag', 'person', 'ref', 'multi-ref'].includes(strategy.kind)) return null
+    const db = this.ensure()
+    const signature = JSON.stringify(spec)
+    const indexed = db.prepare('SELECT signature FROM tag_group_fields WHERE collection = ? AND field = ?').get(collection, field) as { signature: string } | undefined
+    if (indexed?.signature !== signature) {
+      db.exec('BEGIN IMMEDIATE')
+      try {
+        db.prepare('DELETE FROM tag_group_values WHERE collection = ? AND field = ?').run(collection, field)
+        const rows = db.prepare(
+          `SELECT v.record_id, v.tag_json FROM tag_stamps s
+           INNER JOIN tag_record_values v ON v.collection = s.collection AND v.record_id = s.record_id
+           WHERE s.collection = ? AND s.tag_id = ?`,
+        ).all(collection, parsed.packId) as Array<{ record_id: string; tag_json: string }>
+        for (const row of rows) this.indexGroupRecord(collection, field, row.record_id, row.tag_json)
+        db.prepare('INSERT OR REPLACE INTO tag_group_fields VALUES (?, ?, ?)').run(collection, field, signature)
+        db.exec('COMMIT')
+      } catch (error) { db.exec('ROLLBACK'); throw error }
+    }
+    const ids = JSON.stringify([...new Set(visibleIds)])
+    const groups = db.prepare(`SELECT v.value AS key, COUNT(*) AS total FROM json_each(?) a
+      CROSS JOIN tag_group_values v ON a.value = v.record_id
+      WHERE v.collection = ? AND v.field = ? GROUP BY v.value ORDER BY v.value`).all(ids, collection, field) as Array<{ key: string; total: number }>
+    const filled = db.prepare(`SELECT COUNT(DISTINCT v.record_id) AS n FROM json_each(?) a
+      CROSS JOIN tag_group_values v ON a.value = v.record_id WHERE v.collection = ? AND v.field = ?`).get(ids, collection, field) as { n: number }
+    return [...groups.map(row => ({ key: row.key, total: Number(row.total) })), { key: '', total: new Set(visibleIds).size - filled.n }]
   }
 
   private ensureCreatedAtColumn() {
@@ -162,10 +229,23 @@ export class TagStore {
     return readEditorContent(this.ensure(), '/tags', want)
   }
 
-  private savePack(pack: CollectionSchemaPack, notes: string) {
+  private dropTagGroupIndexes(tagId: string, fieldKey?: string) {
+    const db = this.ensure()
+    const fields = db.prepare('SELECT collection, field FROM tag_group_fields').all() as Array<{ collection: string; field: string }>
+    for (const item of fields) {
+      const parsed = parseTagFlatColumnKey(item.field)
+      if (parsed?.packId !== tagId) continue
+      if (fieldKey && parsed.fieldKey !== fieldKey) continue
+      db.prepare('DELETE FROM tag_group_values WHERE collection = ? AND field = ?').run(item.collection, item.field)
+      db.prepare('DELETE FROM tag_group_fields WHERE collection = ? AND field = ?').run(item.collection, item.field)
+    }
+  }
+
+  private savePack(pack: CollectionSchemaPack, notes?: string) {
     const now = Date.now()
     const db = this.ensure()
     const prev = this.get(pack.id)
+    const prevNotes = notes !== undefined && prev ? this.notes(pack.id) : ''
     db.prepare(
         `INSERT INTO tags (id, label, fields_json, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?)
@@ -175,12 +255,14 @@ export class TagStore {
            updated_at = excluded.updated_at`,
       )
       .run(pack.id, pack.label, JSON.stringify(pack.fields), now, now)
-    writeEditorContent(db, '/tags', pack.id, notes, { transaction: false })
+    if (!prev || (notes !== undefined && notes !== prevNotes)) {
+      writeEditorContent(db, '/tags', pack.id, notes ?? '', { transaction: false })
+    }
     if (!prev) return
-    const keep = new Set(pack.fields.filter((field) => !field.deleted).map((field) => field.key))
-    for (const field of prev.fields) {
-      if (field.deleted || keep.has(field.key)) continue
-      this.purgePackField(pack.id, field.key)
+    const liveNext = new Map(pack.fields.filter((field) => !field.deleted).map((field) => [field.key, field]))
+    for (const field of prev.fields.filter((item) => !item.deleted)) {
+      const next = liveNext.get(field.key)
+      if (!next || JSON.stringify(next) !== JSON.stringify(field)) this.dropTagGroupIndexes(pack.id, field.key)
     }
   }
 
@@ -189,6 +271,39 @@ export class TagStore {
     if (typeof value === 'string' && !value.trim()) return false
     if (Array.isArray(value) && value.length === 0) return false
     return true
+  }
+
+  pruneRecordBags(tagId: string, keep: Set<string>) {
+    const want = String(tagId ?? '').trim()
+    if (!want) return
+    const db = this.ensure()
+    const rows = db.prepare('SELECT collection, record_id, tag_json FROM tag_record_values').all() as Array<{
+      collection: string
+      record_id: string
+      tag_json: string
+    }>
+    for (const row of rows) {
+      let parsed: ReturnType<typeof normalizeSchemaValue>
+      try {
+        parsed = normalizeSchemaValue(JSON.parse(row.tag_json || '{}'))
+      } catch {
+        continue
+      }
+      const bag = parsed.values[want]
+      if (!bag) continue
+      let changed = false
+      const nextBag: Record<string, unknown> = {}
+      for (const [key, value] of Object.entries(bag)) {
+        if (!keep.has(key)) {
+          changed = true
+          continue
+        }
+        nextBag[key] = value
+      }
+      if (!changed) continue
+      const values = { ...parsed.values, [want]: nextBag }
+      this.writeRecordTag(row.collection, row.record_id, { tags: parsed.tags, values }, row.record_id)
+    }
   }
 
   purgePackField(tagId: string, fieldKey: string) {
@@ -218,6 +333,12 @@ export class TagStore {
   }
 
   filledFieldCounts(): Record<string, Record<string, number>> {
+    const live = new Map(
+      this.list().map((pack) => [
+        pack.id,
+        new Set(pack.fields.filter((field) => !field.deleted).map((field) => field.key)),
+      ]),
+    )
     const rows = this.ensure().prepare('SELECT tag_json FROM tag_record_values').all() as Array<{ tag_json: string }>
     const out: Record<string, Record<string, number>> = {}
     for (const row of rows) {
@@ -229,11 +350,15 @@ export class TagStore {
       }
       for (const [tagId, bag] of Object.entries(parsed.values)) {
         if (!bag || typeof bag !== 'object' || Array.isArray(bag)) continue
+        const keep = live.get(tagId)
+        if (keep && keep.size === 0) continue
         const counts = (out[tagId] ??= {})
         for (const [key, value] of Object.entries(bag)) {
+          if (keep && !keep.has(key)) continue
           if (!this.bagValueFilled(value)) continue
           counts[key] = (counts[key] ?? 0) + 1
         }
+        if (!Object.keys(counts).length) delete out[tagId]
       }
     }
     return out
@@ -245,7 +370,16 @@ export class TagStore {
   }
 
   list(query = ''): CollectionSchemaPack[] {
-    return this.entries(query).map((item) => item.pack)
+    const q = query.trim().toLowerCase()
+    const rows = this.ensure().prepare(`
+      SELECT t.id, t.label, t.fields_json FROM tags t
+      WHERE NOT EXISTS (
+        SELECT 1 FROM record_meta m
+        WHERE m.collection = '/tags' AND m.record_id = t.id AND m.deleted_at > 0
+      ) AND (? = '' OR instr(lower(t.id), ?) > 0 OR instr(lower(t.label), ?) > 0)
+      ORDER BY t.label
+    `).all(q, q, q) as TagRow[]
+    return rows.map(packFromRow).filter((pack): pack is CollectionSchemaPack => Boolean(pack))
   }
 
   entries(query = ''): TagEntry[] {
@@ -255,12 +389,12 @@ export class TagStore {
       q
         ? (db
             .prepare(
-              `SELECT ${FACET_ROW_SQL} FROM tags
+              `SELECT ${TAG_ROW_SQL} FROM tags
                WHERE instr(lower(id), ?) > 0 OR instr(lower(label), ?) > 0
                ORDER BY label`,
             )
             .all(q, q) as TagRow[])
-        : (db.prepare(`SELECT ${FACET_ROW_SQL} FROM tags ORDER BY label`).all() as TagRow[])
+        : (db.prepare(`SELECT ${TAG_ROW_SQL} FROM tags ORDER BY label`).all() as TagRow[])
     )
     return rows
       .map((row) => entryFromRow(db, row))
@@ -268,14 +402,19 @@ export class TagStore {
   }
 
   get(idOrLabel: string): CollectionSchemaPack | null {
-    return this.entry(idOrLabel)?.pack ?? null
+    const want = String(idOrLabel ?? '').trim()
+    if (!want) return null
+    const row = this.ensure()
+      .prepare('SELECT id, label, fields_json FROM tags WHERE id = ? OR label = ? LIMIT 1')
+      .get(want, want) as TagRow | undefined
+    return row ? packFromRow(row) : null
   }
 
   entry(idOrLabel: string): TagEntry | null {
     const want = String(idOrLabel ?? '').trim()
     if (!want) return null
     const row = this.ensure()
-      .prepare(`SELECT ${FACET_ROW_SQL} FROM tags WHERE id = ? OR label = ? LIMIT 1`)
+      .prepare(`SELECT ${TAG_ROW_SQL} FROM tags WHERE id = ? OR label = ? LIMIT 1`)
       .get(want, want) as TagRow | undefined
     return row ? entryFromRow(this.ensure(), row) : null
   }
@@ -287,13 +426,14 @@ export class TagStore {
     db.exec('BEGIN IMMEDIATE')
     try {
       for (const tag of next) {
-        this.savePack(tag, this.notes(tag.id))
+        this.savePack(tag)
       }
       const existing = db.prepare('SELECT id FROM tags').all() as Array<{ id: string }>
       for (const row of existing) {
         if (keep.has(row.id)) continue
         db.prepare('DELETE FROM tag_stamps WHERE tag_id = ?').run(row.id)
         db.prepare('DELETE FROM tags WHERE id = ?').run(row.id)
+        this.dropTagGroupIndexes(row.id)
       }
       db.exec('COMMIT')
     } catch (error) {
@@ -306,7 +446,7 @@ export class TagStore {
   upsert(raw: unknown, notes?: string): CollectionSchemaPack {
     const pack = normalizeSchemaPack(raw)
     if (!pack) throw new Error('invalid 标签')
-    const nextNotes = notes !== undefined ? String(notes) : this.notes(pack.id)
+    const nextNotes = notes !== undefined ? String(notes) : undefined
     if (this.isDeleted('/tags', pack.id)) this.restoreDeleted('/tags', pack.id)
     this.savePack(pack, nextNotes)
     return pack
@@ -320,6 +460,7 @@ export class TagStore {
     try {
       db.prepare('DELETE FROM tag_stamps WHERE tag_id = ?').run(want)
       const result = db.prepare('DELETE FROM tags WHERE id = ?').run(want)
+      this.dropTagGroupIndexes(want)
       db.exec('COMMIT')
       return Number(result.changes) > 0
     } catch (error) {
@@ -340,16 +481,17 @@ export class TagStore {
   indexRecord(collection: string, recordId: string, title: string, tagIds: string[]) {
     const db = this.ensure()
     const ids = [...new Set(tagIds.map((id) => String(id).trim()).filter(Boolean))]
-    db.exec('BEGIN IMMEDIATE')
+    db.exec('SAVEPOINT tag_stamp_write')
     try {
       db.prepare('DELETE FROM tag_stamps WHERE collection = ? AND record_id = ?').run(collection, recordId)
       const insert = db.prepare(
         'INSERT INTO tag_stamps (tag_id, collection, record_id, title) VALUES (?, ?, ?, ?)',
       )
       for (const tagId of ids) insert.run(tagId, collection, recordId, title)
-      db.exec('COMMIT')
+      db.exec('RELEASE tag_stamp_write')
     } catch (error) {
-      db.exec('ROLLBACK')
+      db.exec('ROLLBACK TO tag_stamp_write')
+      db.exec('RELEASE tag_stamp_write')
       throw error
     }
   }
@@ -363,20 +505,35 @@ export class TagStore {
   }
 
   writeRecordTag(collection: string, recordId: string, tag: unknown, title: string) {
-    const value = normalizeSchemaValue(tag)
+    const value = pruneSchemaValue(tag, this.list())
     const db = this.ensure()
-    if (isEmptySchemaValue(value)) {
-      db.prepare('DELETE FROM tag_record_values WHERE collection = ? AND record_id = ?').run(collection, recordId)
-      this.indexRecord(collection, recordId, title, [])
+    db.exec('SAVEPOINT tag_value_write')
+    try {
+      if (isEmptySchemaValue(value)) {
+        db.prepare('DELETE FROM tag_record_values WHERE collection = ? AND record_id = ?').run(collection, recordId)
+        this.indexRecord(collection, recordId, title, [])
+        this.updateGroupRecord(collection, recordId, value)
+        return value
+      }
+      db.prepare(
+        `INSERT INTO tag_record_values (collection, record_id, tag_json)
+         VALUES (?, ?, ?)
+         ON CONFLICT(collection, record_id) DO UPDATE SET tag_json = excluded.tag_json`,
+      ).run(collection, recordId, JSON.stringify(value))
+      this.indexRecord(collection, recordId, title, value.tags)
+      this.updateGroupRecord(collection, recordId, value)
       return value
+    } catch (error) {
+      db.exec('ROLLBACK TO tag_value_write')
+      throw error
+    } finally {
+      db.exec('RELEASE tag_value_write')
     }
-    db.prepare(
-      `INSERT INTO tag_record_values (collection, record_id, tag_json)
-       VALUES (?, ?, ?)
-       ON CONFLICT(collection, record_id) DO UPDATE SET tag_json = excluded.tag_json`,
-    ).run(collection, recordId, JSON.stringify(value))
-    this.indexRecord(collection, recordId, title, value.tags)
-    return value
+  }
+
+  private updateGroupRecord(collection: string, recordId: string, tag: unknown) {
+    const fields = this.ensure().prepare('SELECT field FROM tag_group_fields WHERE collection = ?').all(collection) as Array<{ field: string }>
+    for (const { field } of fields) this.indexGroupRecord(collection, field, recordId, tag)
   }
 
   recordMeta(collection: string, recordId: string): {
@@ -521,10 +678,14 @@ export class TagStore {
   }
 
   deletedIds(collection: string) {
+    const hit = this.deletedIdsCache.get(collection)
+    if (hit) return hit
     const rows = this.ensure()
       .prepare('SELECT record_id FROM record_meta WHERE collection = ? AND deleted_at IS NOT NULL AND deleted_at > 0')
       .all(collection) as Array<{ record_id: string }>
-    return new Set(rows.map((row) => row.record_id))
+    const set = new Set(rows.map((row) => row.record_id))
+    this.deletedIdsCache.set(collection, set)
+    return set
   }
 
   isDeleted(collection: string, recordId: string) {
@@ -542,12 +703,14 @@ export class TagStore {
          ON CONFLICT(collection, record_id) DO UPDATE SET deleted_at = excluded.deleted_at`,
       )
       .run(collection, recordId, at)
+    this.deletedIdsCache.delete(collection)
   }
 
   restoreDeleted(collection: string, recordId: string) {
     this.ensure()
       .prepare('UPDATE record_meta SET deleted_at = NULL WHERE collection = ? AND record_id = ?')
       .run(collection, recordId)
+    this.deletedIdsCache.delete(collection)
   }
 
   listDeleted() {
@@ -564,6 +727,7 @@ export class TagStore {
     const db = this.ensure()
     db.prepare('DELETE FROM tag_stamps WHERE collection = ? AND record_id = ?').run(collection, recordId)
     db.prepare('DELETE FROM tag_record_values WHERE collection = ? AND record_id = ?').run(collection, recordId)
+    db.prepare('DELETE FROM tag_group_values WHERE collection = ? AND record_id = ?').run(collection, recordId)
     db.prepare('DELETE FROM record_meta WHERE collection = ? AND record_id = ?').run(collection, recordId)
     db.prepare('DELETE FROM record_banners WHERE collection = ? AND record_id = ?').run(collection, recordId)
     db.prepare('DELETE FROM content_refs WHERE collection = ? AND record_id = ?').run(collection, recordId)
@@ -587,6 +751,29 @@ export class TagStore {
     db.exec('BEGIN IMMEDIATE')
     try {
       replaceContentRefsRows(db, collection, recordId, content, banner)
+      db.exec('COMMIT')
+    } catch (error) {
+      db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  replaceAssetRefs(collection: string, recordId: string, names: Iterable<string>) {
+    const db = this.ensure()
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      db.prepare('DELETE FROM content_refs WHERE collection = ? AND record_id = ? AND source = ?').run(
+        collection,
+        recordId,
+        'asset',
+      )
+      const insert = db.prepare(
+        'INSERT OR IGNORE INTO content_refs (collection, record_id, name, source) VALUES (?, ?, ?, ?)',
+      )
+      for (const name of names) {
+        const file = String(name ?? '').trim()
+        if (file) insert.run(collection, recordId, file, 'asset')
+      }
       db.exec('COMMIT')
     } catch (error) {
       db.exec('ROLLBACK')
@@ -656,13 +843,19 @@ export class TagStore {
   }
 
   recordsReferencingAsset(name: string) {
-    return this.ensure()
+    const file = String(name ?? '').trim()
+    const linked = this.ensure()
       .prepare(
         `SELECT collection, record_id FROM content_refs WHERE name = ?
          UNION
          SELECT collection, record_id FROM block_refs WHERE name = ?`,
       )
-      .all(name, name) as Array<{ collection: string; record_id: string }>
+      .all(file, file) as Array<{ collection: string; record_id: string }>
+    if (linked.length || !file) return linked
+    const rows = this.ensure()
+      .prepare('SELECT collection, record_id, tag_json FROM tag_record_values')
+      .all() as Array<{ collection: string; record_id: string; tag_json?: string }>
+    return rows.filter((row) => collectAssetNames(row.tag_json).has(file))
   }
 
   stampedIds(collection: string, tagIdOrLabel: string): Set<string> {
@@ -672,6 +865,24 @@ export class TagStore {
       .prepare('SELECT record_id FROM tag_stamps WHERE collection = ? AND tag_id = ?')
       .all(collection, tagId) as Array<{ record_id: string }>
     return new Set(rows.map((row) => row.record_id))
+  }
+
+  stampsForRecord(collection: string, recordId: string, tagId?: string): StampRow[] {
+    const path = String(collection ?? '').trim()
+    const id = String(recordId ?? '').trim()
+    if (!path || !id) return []
+    const wantTag = String(tagId ?? '').trim()
+    const db = this.ensure()
+    if (wantTag) {
+      return db
+        .prepare(
+          'SELECT tag_id, collection, record_id, title FROM tag_stamps WHERE collection = ? AND record_id = ? AND tag_id = ?',
+        )
+        .all(path, id, wantTag) as StampRow[]
+    }
+    return db
+      .prepare('SELECT tag_id, collection, record_id, title FROM tag_stamps WHERE collection = ? AND record_id = ?')
+      .all(path, id) as StampRow[]
   }
 
   collect(idOrLabel: string): { tag: CollectionSchemaPack | null; items: TagStamp[] } {

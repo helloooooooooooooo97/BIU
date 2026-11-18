@@ -3,6 +3,7 @@ export const HTML_DECK_SEL = '[data-page-block="html"], [data-page-block="htmlfr
 export type HtmlSlide = {
   kind: 'html' | 'htmlframe'
   html: string
+  title?: string
   width?: number | string
   height?: number | string
   /** 默认 true；false 时不进放映。 */

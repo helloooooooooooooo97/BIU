@@ -184,36 +184,36 @@ export function formatPageBlockFence(kind: string, plugin: string, data: Record<
       const pointer: Record<string, string> = { file }
       const dataFile = typeof body.dataFile === 'string' ? body.dataFile.trim() : ''
       if (dataFile) pointer.dataFile = dataFile
-      return `:::pageBlock ${formatMeta(kind, plugin, extras, id)}\n${JSON.stringify(pointer, null, 2)}\n:::`
+      return `:::editorBlock ${formatMeta(kind, plugin, extras, id)}\n${JSON.stringify(pointer, null, 2)}\n:::`
     }
     const source = typeof body.source === 'string' ? body.source : typeof body.html === 'string' ? body.html : ''
-    return `:::pageBlock ${formatMeta(kind, plugin, extras, id)}\n${source}\n:::`
+    return `:::editorBlock ${formatMeta(kind, plugin, extras, id)}\n${source}\n:::`
   }
   if (HTML_KINDS.has(kind)) {
     const extras = fenceAttrExtras(body)
     const file = typeof body.file === 'string' ? body.file.trim() : ''
     if (file) {
-      return `:::pageBlock ${formatMeta(kind, plugin, extras, id)}\n${JSON.stringify({ file }, null, 2)}\n:::`
+      return `:::editorBlock ${formatMeta(kind, plugin, extras, id)}\n${JSON.stringify({ file }, null, 2)}\n:::`
     }
     const html = typeof body.html === 'string' ? body.html : ''
-    return `:::pageBlock ${formatMeta(kind, plugin, extras, id)}\n${html}\n:::`
+    return `:::editorBlock ${formatMeta(kind, plugin, extras, id)}\n${html}\n:::`
   }
   if (VIDEO_KINDS.has(kind)) {
     const script = typeof body.script === 'string' ? body.script.trim() : ''
-    return `:::pageBlock ${formatMeta(kind, plugin, [], id)}\n${script}\n:::`
+    return `:::editorBlock ${formatMeta(kind, plugin, [], id)}\n${script}\n:::`
   }
   const meta = formatMeta(kind, plugin, [], id)
-  return `:::pageBlock ${meta}\n${JSON.stringify(body, null, 2)}\n:::`
+  return `:::editorBlock ${meta}\n${JSON.stringify(body, null, 2)}\n:::`
 }
 
-const PAGE_BLOCK_OPEN = /^:::pageBlock(?:\s+\{([^}]*)\})?\s*(?:<!--.*?-->\s*)?$/
+const PAGE_BLOCK_OPEN = /^:::(?:editorBlock|pageBlock)(?:\s+\{([^}]*)\})?\s*(?:<!--.*?-->\s*)?$/
 const FENCE_CLOSE = /^:::\s*(?:<!--.*?-->\s*)?$/
 
 function pageBlockCloseLooksOuter(lines: string[], closeAt: number) {
   let i = closeAt + 1
   while (i < lines.length && !String(lines[i] ?? '').trim()) i += 1
   if (i >= lines.length) return true
-  return /^(:::((pageBlock|cell|slide|table|row|th|td)\b|$)|`{3,}|#{1,6}\s)/.test(String(lines[i] ?? ''))
+  return /^(:::((editorBlock|pageBlock|cell|slide|table|row|th|td|code)\b|$)|`{3,}|#{1,6}\s)/.test(String(lines[i] ?? ''))
 }
 
 /** 内置块正文是不透明的：正文里的 ::: 不算结束，只认后面接着外层围栏 / 代码围栏 / 文末的 :::。 */

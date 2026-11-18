@@ -15,6 +15,7 @@ import { ShareOwnerCorner } from './share-owner-corner.tsx'
 
 export { registerShareOwnerExtra } from './share-owner-corner.tsx'
 import { parseSharePath, sharePublicPath, type ShareSnapshot } from '../share-snapshot.ts'
+import { readLanMemberId } from './lan-member.ts'
 import { parsePageBanner } from '../page-banner.ts'
 import { RecordDetail } from './record-detail.tsx'
 import { recordPickKind } from './pick-dom.ts'
@@ -53,6 +54,8 @@ function persistShareTheme(mode: 'light' | 'dark') {
 function shareHeaders(password = '') {
   const headers: Record<string, string> = { 'content-type': 'application/json' }
   if (password) headers['x-share-password'] = password
+  const lan = readLanMemberId()
+  if (lan) headers['x-lan-member'] = lan
   return headers
 }
 
@@ -355,12 +358,13 @@ function SharePage({
   const schema = snapshot.schema
   const live = snapshot
   const listed = snapshot.kind === 'view' && queryState
-    ? applyShareQuery(snapshot.records, schema, queryState, snapshot.contents)
+    ? applyShareQuery(snapshot.records, schema, queryState, snapshot.contents, snapshot.tags)
     : snapshot.records
   const total = listed.length
   const lastPage = Math.max(0, Math.ceil(total / pageSize) - 1)
   const safePage = Math.min(page, lastPage)
-  const paged = snapshot.kind === 'view' ? listed.slice(safePage * pageSize, safePage * pageSize + pageSize) : listed
+  const grouped = Boolean(snapshot.kind === 'view' && snapshot.view?.groupBy)
+  const paged = snapshot.kind === 'view' && !grouped ? listed.slice(safePage * pageSize, safePage * pageSize + pageSize) : listed
   const shown = selected ?? (snapshot.kind === 'record' ? snapshot.records[0] : null)
   const detailChrome = chromeFor?.(snapshot.collection) ?? chrome
   if (recordId && !shown) {
@@ -655,6 +659,7 @@ function SharePage({
               onChange={setQueryState}
               refreshing={refreshing}
               onRefresh={() => setReload((n) => n + 1)}
+              tags={snapshot.tags}
             />
           ) : null}
           <div className="fsdb-workspace">

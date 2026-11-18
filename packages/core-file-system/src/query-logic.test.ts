@@ -1,7 +1,10 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import {
   collectQueryFields,
+  readTagFieldValue,
   isCustomSorts,
   countFilterRules,
   emptyFilterGroup,
@@ -79,6 +82,13 @@ test('list filter still supports equality locks plus a tree', () => {
   const row = { id: '1', title: '页面', status: 'open' }
   assert.equal(matchListFilterRecord(row, { status: 'open', $tree: tree }), true)
   assert.equal(matchListFilterRecord(row, { status: 'done', $tree: tree }), false)
+})
+
+test('in-memory sorts precompute keys and do not call localeCompare', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './query-logic.ts'), 'utf8')
+  const fn = src.slice(src.indexOf('export function sortRecordsBy'), src.indexOf('export function looksLikeFilterTree'))
+  assert.match(fn, /decorated/)
+  assert.doesNotMatch(fn, /localeCompare/)
 })
 
 test('multi-key sorts apply in order', () => {
@@ -222,3 +232,22 @@ test('seedRecordFromViewFilters skips unknown and non-writable fields when schem
   assert.deepEqual(seed, { title: '草稿' })
 })
 
+test('tag is_empty matches missing and empty tag objects', () => {
+  const tree = emptyFilterGroup()
+  tree.children = [{ kind: 'rule', id: 'e', field: 'tag', op: 'is_empty', value: '' }]
+  const filter = encodeListFilter({}, tree)
+  assert.equal(matchListFilterRecord({ id: '1' }, filter, pagesSchema), true)
+  assert.equal(matchListFilterRecord({ id: '2', tag: { tags: [], values: {} } }, filter, pagesSchema), true)
+  assert.equal(matchListFilterRecord({ id: '3', tag: { tags: ['dp'], values: {} } }, filter, pagesSchema), false)
+})
+
+
+
+test('custom tag attributes support nested records and flat list projections', () => {
+  const key = 'tag::security::lane'
+  const nested = { id: 'a', tag: { tags: ['security'], values: { security: { lane: ['机密计算'] } } } }
+  assert.deepEqual(readTagFieldValue(nested, key), ['机密计算'])
+  assert.deepEqual(readTagFieldValue({ id: 'a', [key]: ['机密计算'] }, key), ['机密计算'])
+  assert.equal(readTagFieldValue({ ...nested, [key]: null }, key), null)
+  assert.equal(readTagFieldValue({ ...nested, [key]: undefined }, key), undefined)
+})

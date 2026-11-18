@@ -60,7 +60,7 @@ export const COMPARE_PAGES: ComparePage[] = [
     rows: [
       { dimension: '核心主张', them: '一切皆声明式对象', biu: '一切皆 /<table>/<id>，声明即生效' },
       { dimension: '声明在哪写', them: 'YAML 文件，交给 kubectl apply', biu: '直接写在页面正文里（或以页面块形式插入）' },
-      { dimension: '声明的单位', them: '一个资源对象（Pod / Service / CRD）', biu: '一个块：:::pageBlock {kind=… plugin=…}，后面跟一段 JSON' },
+      { dimension: '声明的单位', them: '一个资源对象（Pod / Service / CRD）', biu: '一个块：:::editorBlock {kind=… plugin=…}，后面跟一段 JSON' },
       { dimension: '声明之后发生什么', them: '控制面调谐，把实际状态拉向期望', biu: '✅ 立刻挂载运行，无需 apply / 等待调度' },
       { dimension: '一个页面/文件能放几个', them: '⚠️ 通常一份 YAML 一类资源，多个靠多文件或 List', biu: '✅ 一页里可以声明任意多个插件，各管一块' },
       { dimension: '多个如何组合成服务', them: 'Service / Ingress 把多个 Pod 串起来', biu: '✅ 同页多个插件各占一块，页面本身就是组合结果' },
@@ -106,9 +106,9 @@ export const COMPARE_PAGES: ComparePage[] = [
     biuWhen: '要在一页里组合几个软件交给客户或团队、要给已有数据加属性而不动原表、同一批数据要能同时从多个角度组织、授权要按条件圈人而不是按名单、智能体要能读写工作区',
     columns: ['Notion', 'BIU'],
     rows: [
-      { dimension: '给数据加一项信息', them: '⚠️ 改数据库 schema，动的是表本身、影响该表所有行；系统表还改不了', biu: '✅ 挂一个 facet：属性存在记录之外，原表不动，只影响被挂上的那些记录 —— 任意记录都能挂' },
-      { dimension: '一条记录的组织方式', them: '⚠️ 一个页面属于一个数据库，多视角靠关联、rollup 或复制', biu: '✅ 可同时挂多个 facet，一个 facet 还能横跨不同的表' },
-      { dimension: '按属性筛选', them: '✅ 数据库视图可以按属性过滤', biu: '✅ 视图可以按 facet 的字段筛选' },
+      { dimension: '给数据加一项信息', them: '⚠️ 改数据库 schema，动的是表本身、影响该表所有行；系统表还改不了', biu: '✅ 挂一个标签：属性存在记录之外，原表不动，只影响被挂上的那些记录 —— 任意记录都能挂' },
+      { dimension: '一条记录的组织方式', them: '⚠️ 一个页面属于一个数据库，多视角靠关联、rollup 或复制', biu: '✅ 可同时挂多个标签，一个标签还能横跨不同的表' },
+      { dimension: '按属性筛选', them: '✅ 数据库视图可以按属性过滤', biu: '✅ 视图可以按标签的字段筛选' },
       { dimension: '页面里能放什么', them: '⚠️ 块类型由 Notion 定义；嵌入的网页只是一个 iframe，读不到工作区的数据', biu: '✅ 块由可安装插件提供，人和智能体都能写；同页的插件共用一份数据，一页就是一套服务' },
       { dimension: '分享出去的是什么', them: '页面内容与链接', biu: '✅ 正文、附件和插件源码一起打包，对方打开就能用' },
       { dimension: '数据在哪', them: '⚠️ 云端为主，离线只能打开提前下载的页面', biu: '✅ 建空间时选：本机 / 云端，本机空间离线可用' },

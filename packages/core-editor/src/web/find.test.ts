@@ -6,7 +6,7 @@ import { findInPmDoc, findRanges, htmlVisibleText, wrapFindIndex } from './find-
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { applyEditorFind } from './find-plugin.ts'
-import { pageEditorExtensions } from './kit.ts'
+import { recordEditorExtensions } from './kit.ts'
 import { isFindHotkey } from './find-bar.tsx'
 import { PAGE_EDITOR_STYLE } from './style.ts'
 import { TAG_TONE_ROSE } from '@biu/biu-ui'
@@ -30,7 +30,7 @@ test('wrapFindIndex wraps around', () => {
 
 test('findInPmDoc matches visible text positions', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '第一段\n\n你好世界\n\n你好',
     contentType: 'markdown',
   })
@@ -53,8 +53,8 @@ test('htmlVisibleText keeps inner copy', () => {
 
 test('findInPmDoc highlights an html pageBlock once, not each inner match', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
-    content: `正文\n\n:::pageBlock {kind=sandbox plugin=page-sandbox}\n{"html":"<div>爱乐之城海报 爱乐之城</div>"}\n:::\n`,
+    extensions: recordEditorExtensions(),
+    content: `正文\n\n:::editorBlock {kind=sandbox plugin=page-sandbox}\n{"html":"<div>爱乐之城海报 爱乐之城</div>"}\n:::\n`,
     contentType: 'markdown',
   })
   const hits = findInPmDoc(editor.state.doc, '爱乐之城')
@@ -64,14 +64,14 @@ test('findInPmDoc highlights an html pageBlock once, not each inner match', () =
   assert.equal(next.total, 1)
   assert.equal(editor.state.selection instanceof NodeSelection, true)
   if (editor.state.selection instanceof NodeSelection) {
-    assert.equal(editor.state.selection.node.type.name, 'pageBlock')
+    assert.equal(editor.state.selection.node.type.name, 'editorBlock')
   }
   editor.destroy()
 })
 
 test('findInPmDoc matches across marks in one paragraph', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '前 **你好**世界 后',
     contentType: 'markdown',
   })
@@ -106,10 +106,14 @@ test('isFindHotkey is command/ctrl f without shift', () => {
 })
 
 test('page find lives in the toolbar, not a floating slot', () => {
-  const src = readFileSync(resolve(import.meta.dirname, './page-detail-bar.tsx'), 'utf8')
+  const src = readFileSync(resolve(import.meta.dirname, './editor-detail-search.tsx'), 'utf8')
+  const tools = readFileSync(resolve(import.meta.dirname, './editor-content-views.ts'), 'utf8')
+  const bar = readFileSync(resolve(import.meta.dirname, './page-detail-bar.tsx'), 'utf8')
   assert.match(src, /tasks-search-wrap/)
   assert.match(src, /aria-label="上一个"/)
   assert.match(src, /aria-label="下一个"/)
+  assert.match(tools, /Search: EditorDetailSearch/)
+  assert.match(bar, /detailTools\.Search/)
   assert.doesNotMatch(src, /createPortal/)
   assert.doesNotMatch(PAGE_EDITOR_STYLE, /\.page-find-slot\{/)
   assert.doesNotMatch(PAGE_EDITOR_STYLE, /\.page-find-box\{/)

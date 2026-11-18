@@ -82,7 +82,7 @@ export function idleActionsInnerHtml(actions: { label: string; danger?: boolean 
   return `<div class="tasks-row-actions">${actions
     .map((action) => {
       const label = escapeTableHtml(action.label)
-      return `<span class="fsdb-action-tag${action.danger ? ' is-danger' : ''}">${label}</span>`
+      return `<span class="tasks-icon-btn${action.danger ? ' is-danger' : ''}" data-dock-tip="${label}"></span>`
     })
     .join('')}</div>`
 }

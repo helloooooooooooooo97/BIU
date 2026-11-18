@@ -1,10 +1,17 @@
 import { useSyncExternalStore } from 'react'
-import { capturePageScroll } from './page-scroll-pin.ts'
 import { PAGE_VIEW_EVENT } from './page-view-state.ts'
 
-export type PagePresentMode = 'doc' | 'outline' | 'table' | 'source'
+export const PAGE_BUILTIN_MODES = ['doc', 'outline', 'table', 'source', 'hidden'] as const
+export type PageBuiltinMode = (typeof PAGE_BUILTIN_MODES)[number]
 
-const modes = new Map<string, PagePresentMode>()
+export function isPageBuiltinMode(mode: string): mode is PageBuiltinMode {
+  return (PAGE_BUILTIN_MODES as readonly string[]).includes(mode)
+}
+
+export function isPageCustomView(mode: string) {
+  return Boolean(mode) && !isPageBuiltinMode(mode)
+}
+
 const folded = new Map<string, Set<string>>()
 let seq = 0
 const listeners = new Set<() => void>()
@@ -13,31 +20,6 @@ function bump() {
   seq += 1
   for (const fn of listeners) fn()
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(PAGE_VIEW_EVENT))
-}
-
-export function getPagePresentMode(recordId: string): PagePresentMode {
-  return modes.get(String(recordId ?? '')) ?? 'doc'
-}
-
-export function setPagePresentMode(recordId: string, mode: PagePresentMode) {
-  const id = String(recordId ?? '').trim()
-  if (!id) return
-  if (getPagePresentMode(id) === mode) return
-  capturePageScroll()
-  modes.set(id, mode)
-  bump()
-}
-
-export function isPageSourceMode(recordId: string) {
-  return getPagePresentMode(recordId) === 'source'
-}
-
-export function setPageSourceMode(recordId: string, on: boolean) {
-  setPagePresentMode(recordId, on ? 'source' : 'doc')
-}
-
-export function togglePageSourceMode(recordId: string) {
-  setPageSourceMode(recordId, !isPageSourceMode(recordId))
 }
 
 export function pageOutlineFolded(recordId: string) {
@@ -55,17 +37,13 @@ export function togglePageOutlineFold(recordId: string, blockId: string) {
   bump()
 }
 
-export function usePagePresentMode(recordId: string) {
-  useSyncExternalStore(
-    (fn) => {
-      listeners.add(fn)
-      return () => listeners.delete(fn)
-    },
-    () => seq,
-  )
-  return getPagePresentMode(recordId)
+export function subscribePagePresent(fn: () => void) {
+  listeners.add(fn)
+  return () => {
+    listeners.delete(fn)
+  }
 }
 
-export function usePageSourceMode(recordId: string) {
-  return usePagePresentMode(recordId) === 'source'
+export function usePageOutlineFoldTick() {
+  return useSyncExternalStore(subscribePagePresent, () => seq)
 }

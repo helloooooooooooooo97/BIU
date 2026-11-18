@@ -42,7 +42,7 @@ function merge(left, right) {
 
 &nbsp;
 
-:::pageBlock {kind=code-run plugin=page-code-runner}
+:::editorBlock {kind=code-run plugin=page-code-runner}
 {
   "lang": "python",
   "code": "sdef merge_sort(arr):\n    if len(arr) <= 1:\n        return arr\n    mid = len(arr) // 2\n    return merge(merge_sort(arr[:mid]), merge_sort(arr[mid:]))\n\ndef merge(left, right):\n    result = []\n    i = j = 0\n    while i < len(left) and j < len(right):\n        if left[i] <= right[j]:\n            result.append(left[i]); i += 1\n        else:\n            result.append(right[j]); j += 1\n    return result + left[i:] + right[j:]\n\nprint(merge_sort([38, 27, 43, 3, 9, 82, 10]))",
@@ -53,7 +53,7 @@ function merge(left, right) {
 
 
 
-:::pageBlock {kind=code-run plugin=page-code-runner}
+:::editorBlock {kind=code-run plugin=page-code-runner}
 {
   "lang": "python",
   "code": "def merge_sort(arr):\n    if len(arr) <= 1:\n        return arr\n    mid = len(arr) // 2\n    return merge(merge_sort(arr[:mid]), merge_sort(arr[mid:]))\n\ndef merge(left, right):\n    result = []\n    i = j = 0\n    while i < len(left) and j < len(right):\n        if left[i] <= right[j]:\n            result.append(left[i]); i += 1\n        else:\n            result.append(right[j]); j += 1\n    return result + left[i:] + right[j:]\n\nprint(merge_sort([38, 27, 43, 3, 9, 82, 10]))",

@@ -6,7 +6,7 @@
 
 ## 示例写法
 
-:::pageBlock {kind=toc plugin=page-toc}
+:::editorBlock {kind=toc plugin=page-toc}
 {
   "collapsed": [],
   "maxLevel": 3

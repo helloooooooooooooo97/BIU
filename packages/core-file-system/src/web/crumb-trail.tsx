@@ -6,6 +6,7 @@ import { overlayPortalRoot } from '@biu/biu-ui/overlay-portal'
 import { delayCrumbQuery, pullCrumbRecords, recordChoicesFromRows } from './crumb-records.ts'
 import { CrumbItemGlyph, TableGlyph } from './nav-glyphs.tsx'
 import { crumbButtonAction, type Crumb, type CrumbChoice, type CrumbTarget } from './sidebar-nav.ts'
+import { emitFsdbChange } from '@biu/type-file-system'
 import { pullSavedViews } from './view-storage.ts'
 
 function canOpenCrumbMenu(crumb: Crumb) {
@@ -62,7 +63,7 @@ function CrumbMenu({
       void pullSavedViews([viewCollection])
         .then(() => {
           if (!live) return
-          window.dispatchEvent(new CustomEvent('fsdb:change', { detail: { views: true } }))
+          emitFsdbChange({ scope: 'views' })
           window.dispatchEvent(new Event('fsdb:crumb-labels'))
         })
         .finally(() => {
@@ -220,20 +221,23 @@ export function CrumbTrail({
   label?: string
   /** 收起时只激活面板，不弹出某一级的选择菜单 */
   allowMenu?: boolean
-  /** 右侧检查器：一级只显示图标且不可点选，从第二级开始切换 */
+  /** 右侧检查器：一级只显示类型图标；点该图标才展开父级 */
   lockRootCrumb?: boolean
   /** 宽度不够时只显示最后一级，避免顶栏挤成一排省略号 */
   collapseToLeaf?: boolean
 }) {
   const trailRef = useRef<HTMLElement | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
+  const [parentsOpen, setParentsOpen] = useState(false)
   const [leafOnly, setLeafOnly] = useState(false)
   const openCrumb = crumbs.find((item) => item.id === openId)
   const tableCrumb = crumbs.find((item) => item.kind === 'collection')
   const tableIcon = tableCrumb?.icon
 
   useEffect(() => {
-    if (!allowMenu) setOpenId(null)
+    if (allowMenu) return
+    setOpenId(null)
+    setParentsOpen(false)
   }, [allowMenu])
 
   useEffect(() => {
@@ -259,7 +263,7 @@ export function CrumbTrail({
 
   return (
     <nav
-      className={`${className ?? 'fsdb-crumbs'}${leafOnly ? ' is-leaf-only' : ''}`}
+      className={`${className ?? 'fsdb-crumbs'}${leafOnly ? ' is-leaf-only' : ''}${lockRootCrumb && parentsOpen ? ' is-parents-open' : ''}`}
       aria-label={label ?? '位置'}
       ref={(node) => {
         trailRef.current = node
@@ -291,21 +295,22 @@ export function CrumbTrail({
           <span key={crumb.id} className="fsdb-crumb">
             {index && !(lockRootCrumb && index === 1) ? <span className="fsdb-crumb-sep" aria-hidden>/</span> : null}
             <span className="fsdb-crumb-pick">
-              {rootLocked ? (
-                <span className="fsdb-crumb-btn is-static" aria-label={crumb.label}>
-                  {glyph}
-                </span>
-              ) : (
               <button
                 type="button"
-                className={`fsdb-crumb-btn${open ? ' is-open' : ''}`}
-                aria-label={crumb.label}
+                className={`fsdb-crumb-btn${open || (rootLocked && parentsOpen) ? ' is-open' : ''}`}
+                aria-label={rootLocked ? '展开父级' : crumb.label}
                 aria-haspopup={canPick ? 'menu' : undefined}
-                aria-expanded={canPick ? open : undefined}
+                aria-expanded={rootLocked ? (allowMenu ? parentsOpen : undefined) : canPick ? open : undefined}
                 onPointerDown={(event: PointerEvent<HTMLButtonElement>) => {
                   if (event.button !== 0) return
                   event.preventDefault()
                   event.stopPropagation()
+                  if (rootLocked) {
+                    if (allowMenu) setParentsOpen((value) => !value)
+                    else onActivate?.()
+                    setOpenId(null)
+                    return
+                  }
                   if (!allowMenu) {
                     onActivate?.()
                     setOpenId(null)
@@ -323,7 +328,6 @@ export function CrumbTrail({
               >
                 {glyph}
               </button>
-              )}
             </span>
           </span>
         )

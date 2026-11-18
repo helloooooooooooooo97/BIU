@@ -321,7 +321,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
               </label>
 
               <label className="flex flex-col gap-1 text-[11px] text-(--biu-color-text-subtle)">
-                <span>标签 · 侧栏可按标签分组</span>
+                <span>标签</span>
                 <SessionFacetPicker
                   value={data?.config?.tag}
                   disabled={busy}

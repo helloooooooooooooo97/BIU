@@ -107,7 +107,7 @@ const ECOSYSTEM = [
     title: 'Your page needs a new block',
     body: 'Build a plugin to add a new block type. Use it on any page and package it automatically when you share.',
     file: 'Page content',
-    code: ':::pageBlock {kind=checkin plugin=page-checkin}\n{ "title": "Week 3 check-in" }\n:::',
+    code: ':::editorBlock {kind=checkin plugin=page-checkin}\n{ "title": "Week 3 check-in" }\n:::',
   },
   {
     name: 'Skills',

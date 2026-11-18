@@ -1,12 +1,12 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
-import { pageEditorExtensions } from './kit.ts'
+import { recordEditorExtensions } from './kit.ts'
 import { markdownLocusFromElement, markdownLocusFromRange, markdownLocusFromSelection } from './markdown-locus.ts'
 
 function editorOf(markdown: string) {
   return new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: markdown,
     contentType: 'markdown',
   })

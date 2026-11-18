@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { shouldLeaveTitleForContent, shouldLeaveContentForTitle, focusRecordTitleNear } from './title-content-nav.ts'
+import { shouldLeaveTitleForContent, shouldLeaveContentForTitle, focusRecordTitleNear, scheduleFocusRecordTitle } from './title-content-nav.ts'
 
 test('title Enter and last-line ArrowDown leave for content', () => {
   assert.equal(shouldLeaveTitleForContent('Enter', false, 'hello', 5), true)
@@ -43,5 +43,20 @@ test('focusRecordTitleNear uses the title above properties, not another title on
   assert.equal(document.activeElement, title)
   assert.equal(title.selectionStart, '页面标题'.length)
   decoy.remove()
+  main.remove()
+})
+
+test('scheduleFocusRecordTitle puts the caret at the end of the title', () => {
+  const main = document.createElement('div')
+  main.className = 'fsdb-detail-main'
+  const title = document.createElement('textarea')
+  title.className = 'fsdb-detail-title-input'
+  title.value = '详情标题'
+  main.appendChild(title)
+  document.body.appendChild(main)
+  const stop = scheduleFocusRecordTitle(() => main)
+  assert.equal(document.activeElement, title)
+  assert.equal(title.selectionStart, '详情标题'.length)
+  stop()
   main.remove()
 })

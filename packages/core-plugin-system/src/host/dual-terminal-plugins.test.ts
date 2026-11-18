@@ -70,6 +70,20 @@ describe('page terminal store plugin', () => {
     assert.doesNotMatch(web, /from"@biu\//)
   })
 
+  it('gives terminal and excalidraw distinct store-css style ids', async () => {
+    const create = await readFile(resolve(import.meta.dirname, './plugin-create.ts'), 'utf8')
+    assert.match(create, /createHash\('sha256'\)\.update\(args\.path\)/)
+    assert.doesNotMatch(create, /base64url\)\.slice\(0, 24\)/)
+    const terminal = await bundleStoreEntry(pluginFile('page-terminal', 'web/index.tsx'), 'web')
+    const board = await bundleStoreEntry(pluginFile('page-excalidraw', 'web/index.tsx'), 'web')
+    const ids = (src: string) => [...src.matchAll(/store-css-[A-Za-z0-9_-]+/g)].map((m) => m[0])
+    const terminalIds = [...new Set(ids(terminal))]
+    const boardIds = [...new Set(ids(board))]
+    assert.ok(terminalIds.length >= 1)
+    assert.ok(boardIds.length >= 1)
+    assert.equal(terminalIds.some((id) => boardIds.includes(id)), false)
+  })
+
   it('installs xterm from the plugin package.json instead of the host', async () => {
     const src = await readFile(resolve(import.meta.dirname, './plugin-create.ts'), 'utf8')
     const pagePkg = JSON.parse(await readFile(pluginFile('page-terminal', 'package.json'), 'utf8')) as {
@@ -110,7 +124,7 @@ describe('page terminal store plugin', () => {
 
   it('documents the complete page block fence', async () => {
     const readme = await readFile(pluginFile('page-terminal', 'README.md'), 'utf8')
-    assert.match(readme, /:::pageBlock \{kind=terminal plugin=page-terminal\}/)
+    assert.match(readme, /:::editorBlock \{kind=terminal plugin=page-terminal\}/)
     assert.match(readme, /"height"/)
   })
 

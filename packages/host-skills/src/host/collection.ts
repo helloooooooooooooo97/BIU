@@ -40,7 +40,7 @@ export function skillsCollection(skills: SkillsService): CollectionSpec {
       order: 50,
       icon: 'academic-cap',
     },
-    records: { update: true, create: true, delete: true },
+    records: { update: true, create: true, delete: true, allocateId: false },
     schema: {
       labelField: 'title',
       contentField: 'notes',

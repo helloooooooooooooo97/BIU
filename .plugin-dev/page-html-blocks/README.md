@@ -1,6 +1,6 @@
 # HTML（page-html-blocks）
 
-在页面里用 `/` 插入 **静态HTML** 或 **动态HTML**，把卡片、刊头、小应用直接放进文档。改页面或代写块之前，先照下面「示例写法」写 `:::pageBlock` 围栏。
+在页面里用 `/` 插入 **静态HTML** 或 **动态HTML**，把卡片、刊头、小应用直接放进文档。改页面或代写块之前，先照下面「示例写法」写 `:::editorBlock` 围栏。
 
 ## 设计要点：无外框，源码走附件
 
@@ -33,13 +33,13 @@
 
 静态 HTML：围栏头写 `kind` / `plugin` / 可选 `deck`、`width`、`height`；**体只写附件指针**。
 
-:::pageBlock {kind=html plugin=page-html-blocks deck=true}
+:::editorBlock {kind=html plugin=page-html-blocks deck=true}
 {"file":"assets/html-sample.html"}
 :::
 
 动态 HTML：`kind=htmlframe`，高度用围栏头 `height=`，源码同样只在附件里。
 
-:::pageBlock {kind=htmlframe plugin=page-html-blocks deck=true height=300}
+:::editorBlock {kind=htmlframe plugin=page-html-blocks deck=true height=300}
 {"file":"assets/html-live.html"}
 :::
 

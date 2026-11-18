@@ -6,10 +6,10 @@ import { mkdtemp, writeFile } from 'node:fs/promises'
 import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { DatabaseService, apply as applyFileSystem, databaseHttpFailure, listNeedsMatchOverlay, specListQuery } from './index.ts'
+import { DatabaseService, apply as applyFileSystem, canPageInStore, databaseHttpFailure, listNeedsMatchOverlay, schemaRequestBuildCount, specListQuery, withSchemaRequestCache } from './index.ts'
 import { FileSystemAssets } from './assets-store.ts'
 import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
-import { REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
+import { DATABASE_CHANNEL, isAllocatedRecordId, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 import { dataCollection, isDataOverviewSource } from './data-collection.ts'
 import { tagsCollection } from './tags-collection.ts'
 import { SavedViewsStore, viewsCollection } from './saved-views.ts'
@@ -19,6 +19,7 @@ import { openAndMigrateBiu, runWithAccount } from '@biu/host-plugin-loader/data-
 import { CollabStore } from '@biu/host-account/store'
 import { workspaceMembersCollection } from '@biu/host-account/workspace-members-collection'
 import { builtinAllViewId, stubBuiltinAllView, stubBuiltinMemberView } from '../catalog-views.ts'
+import { seedGroupRecord } from '../web/group-create.ts'
 import { matchListFilterRecord } from '../query-logic.ts'
 import { savedViewRecordPath } from '../paths.ts'
 
@@ -100,9 +101,64 @@ test('data overview lists each source record, includes tags, and skips other ind
   assert.ok((listed.schema?.actions ?? []).some((action) => action.id === 'pin'))
   assert.ok(!(listed.schema?.actions ?? []).some((action) => action.id === 'open'))
   assert.deepEqual(listed.items.find((item) => item.id === 'notes::n1')?.actionIds, ['pin'])
+  const published = db.collectionsList().map((item) => db.publishCollection(item)).find((item) => item.path === '/data')
+  assert.equal(published?.view?.inspector, true)
+  assert.equal(published?.view?.title, '数据')
   assert.equal(isDataOverviewSource('/tags'), true)
-  assert.equal(isDataOverviewSource('/page-blocks'), false)
+  assert.equal(isDataOverviewSource('/editor-blocks'), false)
   assert.equal(isDataOverviewSource('/trash'), false)
+  assert.equal(listed.schema?.fields.title?.writable, true)
+  assert.equal(listed.schema?.fields.table?.type, 'select')
+  assert.ok((listed.schema?.fields.table?.enum ?? []).includes('笔记2号'))
+  const byTable = await db.list('/data', { table: '笔记2号' })
+  assert.equal(byTable.kind, 'collection')
+  if (byTable.kind === 'collection') {
+    assert.ok(byTable.items.length)
+    assert.ok(byTable.items.every((item) => item.table === '笔记2号'))
+  }
+  const written = await db.update('/data/notes::n1', { title: '改了' })
+  assert.equal(written.kind, 'record')
+  assert.equal(written.path, '/data/notes::n1')
+  assert.equal(written.value.id, 'notes::n1')
+  assert.equal(written.value.title, '改了')
+  assert.equal(written.value.tablePath, '/notes')
+  assert.equal(written.value.sourceId, 'n1')
+  const source = await db.read('/notes/n1')
+  assert.equal(source.kind, 'record')
+  if (source.kind === 'record') assert.equal(source.value.title, '改了')
+  await db.action('/data/notes::n1', 'pin')
+  const pinned = await db.read('/notes/n1')
+  assert.equal(pinned.kind, 'record')
+  if (pinned.kind === 'record') assert.equal(pinned.value.pinned, true)
+})
+
+test('data overview delete forwards to the source collection', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const rows = new Map<string, { id: string; title: string }>([['p1', { id: 'p1', title: '一页' }]])
+  db.register({
+    id: 'pages',
+    path: '/pages',
+    label: '页面',
+    schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
+    records: { update: true, delete: true },
+    list: () => [...rows.values()],
+    get: (id) => rows.get(id) ?? null,
+    update: (id, patch) => {
+      const current = rows.get(id)
+      if (!current) throw new Error('missing')
+      const next = { ...current, ...patch, id }
+      rows.set(id, next)
+      return next
+    },
+    remove: async (query) => {
+      for (const id of query.ids ?? []) rows.delete(String(id))
+      return [...(query.ids ?? [])].map(String)
+    },
+  })
+  db.register(dataCollection(() => db.collectionsList()))
+  await db.remove('/data', { ids: ['pages::p1'], purge: true })
+  assert.equal(rows.has('p1'), false)
 })
 
 test('root lists registered collections; record read/update follows schema', async () => {
@@ -145,6 +201,16 @@ test('root lists registered collections; record read/update follows schema', asy
   assert.equal(read.kind, 'record')
   if (read.kind !== 'record') return
   assert.equal(read.value.status, 'open')
+  const detail = await db.detail('/notes/n1')
+  assert.equal(detail.kind, 'detail')
+  assert.equal(detail.path, '/notes/n1')
+  assert.equal(detail.value.status, 'open')
+  assert.equal(detail.content.value, null)
+  await withSchemaRequestCache(async () => {
+    await db.read('/notes/n1')
+    await db.stat('/notes/n1')
+    assert.equal(schemaRequestBuildCount(), 1)
+  })
 
   const written = await db.update('/notes/n1', { status: 'done' })
   assert.equal(written.value.status, 'done')
@@ -183,12 +249,15 @@ test('html banner is stored by file system and never written as a table field', 
 test('each view keeps its own html banner outside list rows', async () => {
   const ctx = new Context()
   await ctx.plugin(tools)
+  const seen: Array<{ type: string; payload: Record<string, unknown> }> = []
   class HttpStub extends Service {
     constructor(c: Context) {
       super(c, 'http')
     }
     route() {}
-    broadcast() {}
+    broadcast(type: string, payload: unknown) {
+      seen.push({ type, payload: payload as Record<string, unknown> })
+    }
   }
   new HttpStub(ctx)
   await ctx.plugin({ inject: ['tools', 'http'], apply: applyFileSystem })
@@ -196,6 +265,10 @@ test('each view keeps its own html banner outside list rows', async () => {
   db.register(notesCollection())
   const allPath = savedViewRecordPath('/notes', builtinAllViewId('/notes'))
   await db.update(allPath, { banner: { kind: 'html', html: '<div>all</div>' } })
+  assert.ok(
+    seen.some((row) => row.type === DATABASE_CHANNEL && row.payload.scope === 'content' && row.payload.path === allPath),
+    'view banner update broadcasts content so the open view can subscribe',
+  )
   const all = await db.read(allPath)
   if (all.kind !== 'record') return
   assert.deepEqual(all.value.banner, { kind: 'html', html: '<div>all</div>' })
@@ -506,6 +579,9 @@ test('update accepts url image and attachment values', async () => {
   assert.equal(emptyPack.value.file, '')
   await assert.rejects(() => db.update('/media/n1', { link: 'javascript:alert(1)' }), /expected url/)
   await assert.rejects(() => db.update('/media/n1', { cover: 'javascript:alert(1)' }), /expected image/)
+  const hashed = `${'ab'.repeat(32)}.md`
+  await db.update('/media/n1', { file: { name: '规划.md', href: `/api/db/file/${hashed}` } })
+  assert.equal(db.tags.recordsReferencingAsset(hashed).length, 1)
 })
 
 test('content is omitted from list/read and served on its own path', async () => {
@@ -585,8 +661,8 @@ test('writeContent string fields keep JSON objects instead of [object Object]', 
     ['b1', { id: 'b1', title: '块', data: '{"html":"old"}' }],
   ])
   db.register({
-    id: 'page-blocks',
-    path: '/page-blocks',
+    id: 'editor-blocks',
+    path: '/editor-blocks',
     schema: {
       contentField: 'data',
       fields: {
@@ -604,26 +680,26 @@ test('writeContent string fields keep JSON objects instead of [object Object]', 
       return next as { id: string }
     },
   })
-  const written = await db.writeContent('/page-blocks/b1', { html: '<p>new</p>', deck: false })
+  const written = await db.writeContent('/editor-blocks/b1', { html: '<p>new</p>', deck: false })
   assert.equal(written.field, 'data')
   assert.equal(written.value, '{"html":"<p>new</p>","deck":false}')
-  const updated = await db.update('/page-blocks/b1', { data: { html: '<b>via update</b>' } })
+  const updated = await db.update('/editor-blocks/b1', { data: { html: '<b>via update</b>' } })
   assert.equal(updated.value.data, '{"html":"<b>via update</b>"}')
 })
 
-test('page-block records whose id starts with / still read from /page-blocks/', async () => {
+test('page-block records whose id starts with / still read from /editor-blocks/', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
   const id = '/pages::p001::ab12cd34'
   const row = { id, title: '刊头', collection: '/pages', pageId: 'p001', blockId: 'ab12cd34' }
   db.register({
-    id: 'page-blocks',
-    path: '/page-blocks',
+    id: 'editor-blocks',
+    path: '/editor-blocks',
     schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' } } },
     list: () => [row],
     get: (next) => (next === id ? row : undefined),
   })
-  const got = await db.read(`/page-blocks/${id}`)
+  const got = await db.read(`/editor-blocks/${id}`)
   assert.equal(got.kind, 'record')
   assert.equal((got as { value?: { id?: string } }).value?.id, id)
 })
@@ -674,6 +750,53 @@ test('editContent view/str_replace/replace_lines/insert/write', async () => {
   const written = await db.editContent('/docs/n1', { command: 'write', value: 'done' })
   assert.equal(written.start_line, 1)
   assert.equal((await db.content('/docs/n1')).value, 'done')
+})
+
+test('editContent view projects mention titles and writes drop labels', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const pages = new Map<string, Record<string, unknown>>([['p053', { id: 'p053', title: '现在的标题' }]])
+  const docs = new Map<string, Record<string, unknown>>([
+    ['n1', { id: 'n1', title: 'a', content: '见 [@ id="page/p053" label="未命名页面"]' }],
+  ])
+  db.register({
+    id: 'pages',
+    path: '/pages',
+    schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
+    list: (query) => {
+      const rows = [...pages.values()] as { id: string }[]
+      return query?.ids?.length ? rows.filter((row) => query.ids!.includes(row.id)) : rows
+    },
+    get: (id) => pages.get(id) as { id: string } | undefined,
+  })
+  db.register({
+    id: 'docs',
+    path: '/docs',
+    schema: {
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string', writable: true },
+        content: { type: 'file', writable: true },
+      },
+    },
+    list: () => [...docs.values()] as { id: string }[],
+    get: (id) => docs.get(id) as { id: string } | undefined,
+    records: { update: true },
+    update: (id, patch) => {
+      const next = { ...docs.get(id), ...patch, id }
+      docs.set(id, next)
+      return next as { id: string }
+    },
+  })
+  const viewed = await db.editContent('/docs/n1', { command: 'view' })
+  assert.match(String(viewed.text), /label="现在的标题"/)
+  const replaced = await db.editContent('/docs/n1', {
+    command: 'str_replace',
+    old_str: '见 [@ id="page/p053" label="现在的标题"]',
+    new_str: '见 [@ id="page/p053" label="不要存"] 了',
+  })
+  assert.equal(replaced.ok, true)
+  assert.equal((await db.content('/docs/n1')).value, '见 [@ id="page/p053"] 了')
 })
 
 test('editContent find_replace supports unique, all and regex modes', async () => {
@@ -983,7 +1106,7 @@ test('apply registers db_* tools', async () => {
   new HttpStub(ctx)
   await ctx.plugin({ inject: ['tools', 'http'], apply: applyFileSystem })
   const names = ctx.tools.names()
-  for (const name of ['db_list', 'db_read', 'db_update', 'db_create', 'db_delete', 'db_restore', 'db_stat', 'db_action', 'db_content', 'db_asset', 'db_doc']) {
+  for (const name of ['db_list', 'db_read', 'db_update', 'db_create', 'db_delete', 'db_restore', 'db_stat', 'db_action', 'db_content', 'db_file', 'db_media']) {
     assert.equal(names.includes(name), true, name)
   }
   for (const name of ['db_list', 'db_read', 'db_stat']) {
@@ -992,8 +1115,9 @@ test('apply registers db_* tools', async () => {
   assert.equal(ctx.tools.executionMode('db_update'), 'exclusive')
   assert.equal(ctx.tools.executionMode('db_content', { path: '/pages/p1', command: 'view' }), 'parallel')
   assert.equal(ctx.tools.executionMode('db_content', { path: '/pages/p1', command: 'write', value: 'x' }), 'exclusive')
-  assert.equal(ctx.tools.executionMode('db_asset', { path: '/pages/p1', command: 'view' }), 'parallel')
-  assert.equal(ctx.tools.executionMode('db_asset', { path: '/pages/p1', command: 'write', value: 'x' }), 'exclusive')
+  assert.equal(ctx.tools.executionMode('db_file', { path: '/pages/p1', command: 'view' }), 'parallel')
+  assert.equal(ctx.tools.executionMode('db_media', { path: '/pages/p1', command: 'view' }), 'parallel')
+  assert.equal(ctx.tools.executionMode('db_media', { path: '/pages/p1', command: 'write', value: 'x' }), 'exclusive')
   const listed = await ctx.tools.invoke('db_list', { path: '/' })
   assert.equal((listed as { kind: string }).kind, 'root')
   const items = ((listed as { items: Array<{ path: string; view?: { blurb?: string } }> }).items ?? [])
@@ -1048,10 +1172,73 @@ test('db_create tool ignores empty companion records instead of creating blank r
     records: [{ title: '目标技能' }, {}],
   })
 
-  assert.deepEqual(received, [{ title: '目标技能' }])
+  assert.equal(received.length, 1)
+  assert.equal(received[0]?.title, '目标技能')
+  assert.ok(isAllocatedRecordId(String(received[0]?.id ?? '')))
   received.length = 0
   await db.create('/drafts', [{}, {}])
-  assert.deepEqual(received, [{}])
+  assert.equal(received.length, 1)
+  assert.ok(isAllocatedRecordId(String(received[0]?.id ?? '')))
+})
+
+test('db_create keeps requested id when unused; allocateId false does not stamp random ids', async () => {
+  const ctx = new Context()
+  await ctx.plugin(tools)
+  class HttpStub extends Service {
+    constructor(c: Context) {
+      super(c, 'http')
+    }
+    route() {}
+  }
+  new HttpStub(ctx)
+  await ctx.plugin({ inject: ['tools', 'http'], apply: applyFileSystem })
+  const db = ctx.get('database') as DatabaseService
+  const notes: DbRecord[] = []
+  db.register({
+    id: 'draft-ids',
+    path: '/draft-ids',
+    schema: {
+      labelField: 'title',
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string', writable: true },
+      },
+    },
+    records: { create: true },
+    list: () => notes,
+    get: (id) => notes.find((row) => row.id === id) ?? null,
+    create: (rows) => {
+      const created = rows.map((row) => ({ id: String(row.id), title: row.title }))
+      notes.push(...created)
+      return created
+    },
+  })
+  const named = await db.create('/draft-ids', [{ id: 'keep-me', title: '指定' }])
+  assert.equal(named.items[0]?.value.id, 'keep-me')
+  const auto = await db.create('/draft-ids', [{ title: '随机' }])
+  assert.ok(isAllocatedRecordId(String(auto.items[0]?.value.id ?? '')))
+
+  const own: Array<Record<string, unknown>> = []
+  db.register({
+    id: 'own-ids',
+    path: '/own-ids',
+    schema: {
+      labelField: 'title',
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string', writable: true },
+      },
+    },
+    records: { create: true, allocateId: false },
+    list: () => [],
+    get: () => null,
+    create: (rows) => {
+      own.push(...rows)
+      return rows.map((row, index) => ({ id: String(row.id ?? `own-${index}`), ...row }))
+    },
+  })
+  await db.create('/own-ids', [{ title: '标签式' }])
+  assert.deepEqual(own, [{ title: '标签式' }])
 })
 
 test('title-only plugin list still returns action when flags', async () => {
@@ -1680,6 +1867,18 @@ test('db_update /tags writes facet field packs', async () => {
     assert.equal(stat.schema.fields.fields?.example, '[{"key":"类别","type":"string"}]')
     assert.match(String(stat.schema.fields.fields?.description), /tag::<本标签id>::<字段key>/)
   }
+  const views = await db.update(`/tags/${id}`, {
+    views: [{ id: '8fdbc4f8', name: '沙盒 1', kind: 'sandbox', file: `tag-view-${id}-8fdbc4f8.jsx`, dataFile: `tag-view-data-${id}-8fdbc4f8.json` }],
+  })
+  assert.equal((views.value.views as Array<{ id: string }>)[0]?.id, '8fdbc4f8')
+  const written = await db.editDoc(`/tags/${id}`, {
+    command: 'write',
+    name: `tag-view-${id}-8fdbc4f8.jsx`,
+    value: 'export default function App(){return <p>标签沙盒</p>}',
+  })
+  assert.equal(written.ok, true)
+  const viewed = await db.editDoc(`/tags/${id}`, { name: `tag-view-${id}-8fdbc4f8.jsx` })
+  if (viewed.kind === 'doc' && 'text' in viewed) assert.match(String(viewed.text), /标签沙盒/)
   const body = await db.writeContent(`/tags/${id}`, '# 标签说明')
   assert.equal(body.field, 'notes')
   assert.equal(body.value, '# 标签说明')
@@ -1757,6 +1956,63 @@ test('db_update page facet stores flat property values on the stamp', async () =
   const listed = await db.list('/pages', undefined, { columns: [col] })
   if (listed.kind !== 'collection') return
   assert.equal(listed.items[0]?.[col], '查泽雷')
+})
+
+test('sandbox patch writes only the current record and this tag', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const pages = new Map<string, Record<string, unknown>>([
+    ['p1', { id: 'p1', title: '爱乐之城' }],
+    ['p2', { id: 'p2', title: '另一页' }],
+  ])
+  db.register({
+    id: 'pages',
+    path: '/pages',
+    schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
+    records: { update: true },
+    list: () => [...pages.values()] as { id: string }[],
+    get: (id) => pages.get(id) as { id: string } | undefined,
+    update: (id, patch) => {
+      const next = { ...pages.get(id), ...patch, id }
+      pages.set(id, next)
+      return next as { id: string }
+    },
+  })
+  db.register(tagsCollection(db.tags))
+  const movie = await db.create('/tags', [{ title: '电影' }])
+  const movieId = String(movie.items[0]?.value.id)
+  await db.update(`/tags/${movieId}`, {
+    fields: JSON.stringify([
+      { key: 'status', type: 'string', label: '状态' },
+      { key: 'director', type: 'string', label: '导演' },
+    ]),
+  })
+  const award = await db.create('/tags', [{ title: '奖项' }])
+  const awardId = String(award.items[0]?.value.id)
+  await db.update(`/tags/${awardId}`, {
+    fields: JSON.stringify([{ key: 'oscar', type: 'boolean', label: '奥斯卡' }]),
+  })
+  await db.update('/pages/p1', {
+    tag: { tags: [movieId, awardId], values: { [movieId]: { director: '查泽雷' }, [awardId]: { oscar: true } } },
+  })
+  const patched = await db.patchTagSandbox('/pages/p1', movieId, { 状态: '进行中' })
+  assert.equal(patched.value.tag.values[movieId].status, '进行中')
+  assert.equal(patched.value.tag.values[movieId].director, '查泽雷')
+  assert.equal(patched.value.tag.values[awardId].oscar, true)
+  assert.equal(db.tags.recordTag('/pages', 'p2')?.values[movieId]?.status, undefined)
+  await assert.rejects(() => db.patchTagSandbox('/pages/p1', movieId, { 奥斯卡: true }), /unknown tag field/)
+  await db.update(`/tags/${movieId}`, {
+    fields: JSON.stringify([
+      { key: 'status', type: 'string', label: '状态' },
+      { key: 'director', type: 'string', label: '导演' },
+      { key: 'locked', type: 'string', label: '锁定', writable: false },
+      { key: 'year', type: 'number', label: '年份' },
+    ]),
+  })
+  await assert.rejects(() => db.patchTagSandbox('/pages/p1', movieId, { locked: 'x' }), /not writable/)
+  await assert.rejects(() => db.patchTagSandbox('/pages/p1', movieId, { year: 'nope' }), /expected number/)
+  await assert.rejects(() => db.patchTagSandbox('/pages', movieId, { 状态: '进行中' }), /current record/)
+  await assert.rejects(() => db.patchTagSandbox(`/tags/${movieId}`, movieId, { 状态: '进行中' }), /no instance property values/)
 })
 
 test('db_update /views columns accepts array or JSON array and rejects fragments', async () => {
@@ -1898,6 +2154,16 @@ test('file-system CRUD uses the unified account authorization decision', async (
   const bobList = await runWithAccount(bob.id, () => db.list('/notes'))
   if (adaList.kind === 'collection') assert.deepEqual(adaList.items.map((row) => row.id), ['n1'])
   if (bobList.kind === 'collection') assert.deepEqual(bobList.items.map((row) => row.id), ['n2'])
+  db.tags.upsert({ id: 'private-groups', label: '私有分组', fields: [{ key: 'lane', type: 'select' }] })
+  db.tags.writeRecordTag('/notes', 'n1', { tags: ['private-groups'], values: { 'private-groups': { lane: 'ada-only' } } }, 'A')
+  db.tags.writeRecordTag('/notes', 'n2', { tags: ['private-groups'], values: { 'private-groups': { lane: 'bob-only' } } }, 'B')
+  const field = 'tag::private-groups::lane'
+  assert.deepEqual((await runWithAccount(ada.id, () => db.attributeGroups('/notes', field))).groups, [
+    { key: 'ada-only', total: 1 }, { key: '', total: 0 },
+  ])
+  assert.deepEqual((await runWithAccount(bob.id, () => db.attributeGroups('/notes', field))).groups, [
+    { key: 'bob-only', total: 1 }, { key: '', total: 0 },
+  ])
   const stamped = await runWithAccount(ada.id, () => db.update('/notes/n1', { status: 'done' }))
   assert.deepEqual(stamped.value.createdBy, { kind: 'user', name: 'Ada 空间昵称', accountId: ada.id })
   assert.deepEqual(stamped.value.updatedBy, [{ kind: 'user', name: 'Ada 空间昵称', accountId: ada.id }])
@@ -2051,6 +2317,10 @@ test('shared create is a public view link', async () => {
   assert.equal(link?.allowCopy, false)
   const listed = await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'shared' }))
   assert.deepEqual(listed.items.map((row) => row.title), ['公开'])
+  db.shares.revokeRecord('/docs', 'pub')
+  db.notifyShareChange()
+  const closed = await runWithAccount(ada.id, () => db.list('/docs'))
+  assert.equal(closed.items[0]?.shareScope, '私人')
 })
 
 test('device workspace share column is only personal or shared', async () => {
@@ -2431,8 +2701,8 @@ test('index rows follow the user records each person can read and omit share', a
     },
   })
   db.register({
-    id: 'page-blocks',
-    path: '/page-blocks',
+    id: 'editor-blocks',
+    path: '/editor-blocks',
     schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' }, collection: { type: 'string' }, pageId: { type: 'string' } } },
     list: () => blocks,
     get: (id) => blocks.find((row) => row.id === id) ?? null,
@@ -2472,12 +2742,12 @@ test('index rows follow the user records each person can read and omit share', a
   await runWithAccount(ada.id, () => db.update(`/pages/${personalId}`, { tag: { tags: [hiddenId], values: {} } }))
   await runWithAccount(ada.id, () => db.update(`/pages/${sharedId}`, { tag: { tags: [shownId], values: {} } }))
 
-  const adaBlocks = await runWithAccount(ada.id, () => db.list('/page-blocks'))
-  const bobBlocks = await runWithAccount(bob.id, () => db.list('/page-blocks'))
+  const adaBlocks = await runWithAccount(ada.id, () => db.list('/editor-blocks'))
+  const bobBlocks = await runWithAccount(bob.id, () => db.list('/editor-blocks'))
   assert.deepEqual(adaBlocks.items.map((row) => row.title).sort(), ['私人组件', '空间组件'])
   assert.deepEqual(bobBlocks.items.map((row) => row.title), ['空间组件'])
   assert.equal(adaBlocks.items[0]?.shareScope, undefined)
-  const blockStat = await runWithAccount(ada.id, () => db.stat('/page-blocks'))
+  const blockStat = await runWithAccount(ada.id, () => db.stat('/editor-blocks'))
   if (blockStat.kind === 'collection') assert.equal(blockStat.schema.fields.shareScope, undefined)
 
   const adaFacets = await runWithAccount(ada.id, () => db.list('/tags'))
@@ -2698,6 +2968,10 @@ test('a member sandbox is private until the owner shares it', async () => {
     ])
     const caraList = await runWithAccount(cara.id, () => db.list('/plugins'))
     assert.deepEqual(caraList.items.map((row) => row.id), ['cara-plug'])
+    await runWithAccount(ada.id, () => db.action('/plugins/ada-open', 'sandbox', { scope: 'shared' }))
+    const openList = await runWithAccount(bob.id, () => db.list('/plugins'))
+    assert.equal(openList.items.find((row) => row.id === 'ada-open')?.shareScope, '共享')
+    assert.equal(openList.items.some((row) => row.id === 'ada-plug'), true)
   } finally {
     if (previous === undefined) delete process.env.BIU_ONLINE
     else process.env.BIU_ONLINE = previous
@@ -2761,6 +3035,83 @@ test('a lan view share marks matching records shared without stamping ownership'
   const all = await db.list('/docs')
   assert.equal(scopeOf(all.items, '进行中'), '共享')
   assert.equal(scopeOf(all.items, '已完成'), '共享')
+})
+
+test('a lan tag-view share marks tagged records shared', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const rows = new Map<string, DbRecord>([
+    ['sec1', { id: 'sec1', title: 'Robust Intelligence', tag: { tags: ['sec'] } }],
+    ['other1', { id: 'other1', title: 'Other', tag: { tags: ['other'] } }],
+  ])
+  db.register({
+    id: 'pages',
+    path: '/pages',
+    schema: {
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string', writable: true },
+        tag: { type: 'tag', writable: true },
+      },
+    },
+    list: () => [...rows.values()],
+    get: (id) => rows.get(id) ?? null,
+  })
+  db.viewCatalog = {
+    viewsFor: (path) => path === '/pages' ? [{
+      id: 'sec',
+      name: '安全项目',
+      filterTree: {
+        kind: 'group',
+        id: 'g',
+        combinator: 'and',
+        children: [{ kind: 'rule', id: 'r', field: 'tag', op: 'eq', value: 'sec' }],
+      },
+    }] : [],
+  }
+  db.shares.upsert({ kind: 'view', collection: '/pages', viewId: 'sec' })
+  const listed = await db.list('/pages')
+  assert.equal(listed.items.find((row) => row.title === 'Robust Intelligence')?.shareScope, '共享')
+  assert.equal(listed.items.find((row) => row.title === 'Other')?.shareScope, '私人')
+})
+
+test('a lan tag-view share reads tag overlay when listing shareScope', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const rows = new Map<string, DbRecord>([
+    ['sec1', { id: 'sec1', title: 'Robust Intelligence' }],
+    ['other1', { id: 'other1', title: 'Other' }],
+  ])
+  db.register({
+    id: 'pages',
+    path: '/pages',
+    schema: {
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string', writable: true },
+        tag: { type: 'tag', writable: true },
+      },
+    },
+    list: () => [...rows.values()],
+    get: (id) => rows.get(id) ?? null,
+  })
+  db.tags.replace([{ id: 'sec', label: '安全项目', fields: [] }])
+  db.tags.writeRecordTag('/pages', 'sec1', { tags: ['sec'] }, 'Robust Intelligence')
+  db.viewCatalog = {
+    viewsFor: (path) => path === '/pages' ? [{
+      id: 'sec-view',
+      name: '安全项目',
+      filterTree: JSON.stringify({
+        kind: 'group',
+        combinator: 'and',
+        children: [{ kind: 'rule', field: 'tag', op: 'eq', value: 'sec' }],
+      }) as never,
+    }] : [],
+  }
+  db.shares.upsert({ kind: 'view', collection: '/pages', viewId: 'sec-view' })
+  const listed = await db.list('/pages', undefined, { columns: ['title', 'shareScope'] })
+  assert.equal(listed.items.find((row) => row.title === 'Robust Intelligence')?.shareScope, '共享')
+  assert.equal(listed.items.find((row) => row.title === 'Other')?.shareScope, '私人')
 })
 
 test('$scope packs follow shareScope labels for public and lan shares', async () => {
@@ -2976,7 +3327,7 @@ test('concurrent lists of one collection share a single spec.list scan', async (
 
 test('db_content points agents at plugin intros for pageBlock fences', () => {
   const host = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
-  assert.match(host, /写 :::pageBlock 前先 db_content \/plugins\/<plugin> 读介绍里的「示例写法」/)
+  assert.match(host, /写 :::editorBlock 前先 db_content \/plugins\/<plugin> 读介绍里的「示例写法」/)
   assert.equal(host.includes('kind=html 或 htmlframe'), false)
 })
 
@@ -2992,6 +3343,18 @@ test('collection list preloads authorization scans and releases them', () => {
   assert.match(host, /partitionVisibleRows/)
   assert.match(host, /this\.shareScopeLabel\(collection, id, row, stored\)/)
   assert.match(host, /notifyShareChange\(\)/)
+  assert.match(host, /notifyTagCatalog\(\)/)
+  assert.match(host, /notifyViewCatalog\(/)
+  assert.match(host, /notifyContent\(`\$\{spec\.path\}\/\$\{record\.id\}`\)/)
+  assert.match(host, /writeRecordBanner\(spec\.path, record\.id, bannerPatch\.value\)\s*\n\s*this\.notifyContent\(`\$\{spec\.path\}\/\$\{record\.id\}`\)/)
+  assert.match(host, /databaseChannelPayload\('tags'\)/)
+  assert.match(host, /databaseChannelPayload\('views'/)
+  assert.match(host, /databaseChannelPayload\('content'/)
+  assert.match(host, /databaseChannelPayload\('records'\)/)
+  assert.match(host, /databaseChannelPayload\('asset'/)
+  assert.match(host, /if \(viewOnly\) this\.notifyViewCatalog\(`\$\{spec\.path\}\/\$\{record\.id\}`\)/)
+  assert.match(host, /else this\.bump\(\)/)
+  assert.doesNotMatch(host, /db\.bump\(\)\s*\n\s*route\.send\(200, \{ ok: true, tags: facets\.list\(\), filled:/)
   assert.match(host, /listRecords\(collection\)/)
   assert.match(host, /shareInflight/)
   assert.match(host, /setImmediate\(\(\) => \{\s*setImmediate/)
@@ -3000,10 +3363,41 @@ test('collection list preloads authorization scans and releases them', () => {
   assert.match(host, /specListQuery\(query\)/)
   assert.match(host, /listDecorateNeed/)
   assert.match(host, /decorateSlice\(spec, sorted.slice\(offset, offset \+ limit\), columnKeys\)/)
+  assert.doesNotMatch(host, /private decorateSlice\([\s\S]*?this\.recordShareCache = null/)
+  assert.match(host, /private recordShareCache = new Map<string, Set<string>>\(\)/)
+  assert.match(host, /notifyShareChange\(\) \{\s*this\.viewShareCache\.clear\(\)\s*this\.recordShareCache\.clear\(\)/)
   assert.match(
     host,
     /try \{\s*const overlay = listNeedsMatchOverlay\(liveFilter, q, sortField, page\?\.sorts\)[\s\S]*?\} finally \{\s*if \(auth && actor\) \{[\s\S]*?releaseCollection\(actor\.workspaceId, spec\.path, actor\.accountId\)/,
   )
+})
+
+test('paged lists reuse share listings until notifyShareChange', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  db.shares.open(':memory:')
+  const rows = new Map<string, DbRecord>()
+  for (let i = 0; i < 10; i += 1) rows.set(`n${i}`, { id: `n${i}`, title: `行${i}` })
+  db.register({
+    id: 'notes',
+    path: '/notes',
+    schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
+    list: () => [...rows.values()],
+    get: (id) => rows.get(id) ?? null,
+  })
+  let listed = 0
+  const original = db.shares.listRecords.bind(db.shares)
+  db.shares.listRecords = ((collection: string) => {
+    listed += 1
+    return original(collection)
+  }) as typeof db.shares.listRecords
+  for (let offset = 0; offset < 10; offset += 1) {
+    await db.list('/notes', undefined, { limit: 1, offset })
+  }
+  assert.equal(listed, 1)
+  db.notifyShareChange()
+  await db.list('/notes', undefined, { limit: 1, offset: 0 })
+  assert.equal(listed, 2)
 })
 
 test('sequential lists reuse the authorized collection pack until bump', async () => {
@@ -3087,4 +3481,167 @@ test('deleting a /views row is a hard delete and drops the stored view', async (
     db.viewCatalog!.viewsFor('/notes').map((view) => view.id).filter((id) => id === viewId),
     [],
   )
+})
+
+test('db_doc view/write uses record sandbox files as assets', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  db.assets = new FileSystemAssets(await mkdtemp(join(tmpdir(), 'db-doc-sandbox-')))
+  const rows = new Map([['p194', { id: 'p194', title: '沙盒页' }]])
+  db.register({
+    id: 'pages',
+    path: '/pages',
+    schema: { labelField: 'title', fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
+    records: { update: true },
+    list: () => [...rows.values()],
+    get: (id) => rows.get(id) ?? null,
+    update: (id, patch) => {
+      const current = rows.get(id)
+      if (!current) throw new Error('missing')
+      const next = { ...current, ...patch }
+      rows.set(id, next)
+      return next
+    },
+  })
+  await db.assets.writeDoc('view-p194-8fdbc4f8.jsx', 'export default function App(){return <p>你好</p>}\n')
+  await db.update('/pages/p194', {
+    views: [{ id: '8fdbc4f8', name: '沙盒 1', kind: 'sandbox', file: 'view-p194-8fdbc4f8.jsx' }],
+  })
+  const listed = await db.editDoc('/pages/p194')
+  assert.equal(listed.kind, 'doc')
+  if (listed.kind === 'doc' && 'assets' in listed) {
+    assert.ok((listed.assets as Array<{ name: string }>).some((item) => item.name === 'view-p194-8fdbc4f8.jsx'))
+  }
+  const viewed = await db.editDoc('/pages/p194', { name: 'view-p194-8fdbc4f8.jsx' })
+  assert.equal(viewed.kind, 'doc')
+  if (viewed.kind === 'doc' && 'text' in viewed) {
+    assert.match(String(viewed.text), /你好/)
+    const written = await db.editDoc('/pages/p194', {
+      command: 'write',
+      name: 'view-p194-8fdbc4f8.jsx',
+      value: String(viewed.text).replace('你好', 'hello'),
+      etag: viewed.etag,
+    })
+    assert.equal(written.ok, true)
+  }
+  const again = await db.editDoc('/pages/p194', { name: 'view-p194-8fdbc4f8.jsx' })
+  if (again.kind === 'doc' && 'text' in again) assert.match(String(again.text), /hello/)
+  const patched = await db.editDoc('/pages/p194', {
+    command: 'str_replace',
+    name: 'view-p194-8fdbc4f8.jsx',
+    old_str: 'hello',
+    new_str: 'hi',
+  })
+  assert.equal(patched.ok, true)
+  assert.equal(patched.command, 'str_replace')
+  const afterPatch = await db.editDoc('/pages/p194', { name: 'view-p194-8fdbc4f8.jsx' })
+  if (afterPatch.kind === 'doc' && 'text' in afterPatch) assert.match(String(afterPatch.text), /hi/)
+  const lined = await db.editDoc('/pages/p194', {
+    command: 'replace_lines',
+    name: 'view-p194-8fdbc4f8.jsx',
+    start_line: 1,
+    end_line: 1,
+    new_str: 'export default function App(){return <p>ok</p>}',
+  })
+  assert.equal(lined.ok, true)
+  const inserted = await db.editDoc('/pages/p194', {
+    command: 'insert',
+    name: 'view-p194-8fdbc4f8.jsx',
+    insert_line: 1,
+    new_str: '// note',
+  })
+  assert.equal(inserted.ok, true)
+})
+
+
+test('indexed custom attribute groups respect filters, searches and empty records', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  db.register(notesCollection())
+  db.tags.upsert({ id: 'security', label: '安全项目', fields: [{ key: 'lane', type: 'multi-select' }] })
+  await db.update('/notes/n1', { tag: { tags: ['security'], values: { security: { lane: ['compute'] } } } })
+  await db.update('/notes/n2', { tag: { tags: ['security'], values: { security: { lane: ['supply'] } } } })
+  const field = 'tag::security::lane'
+  assert.deepEqual((await db.attributeGroups('/notes', field)).groups, [
+    { key: 'compute', total: 1 }, { key: 'supply', total: 1 }, { key: '', total: 0 },
+  ])
+  assert.deepEqual((await db.attributeGroups('/notes', field, { $ids: ['n1'] })).groups, [
+    { key: 'compute', total: 1 }, { key: '', total: 0 },
+  ])
+  assert.deepEqual((await db.attributeGroups('/notes', field, undefined, '另一篇')).groups, [
+    { key: 'supply', total: 1 }, { key: '', total: 0 },
+  ])
+  await db.update('/notes/n1', { tag: { tags: [], values: {} } })
+  assert.deepEqual((await db.attributeGroups('/notes', field)).groups, [
+    { key: 'supply', total: 1 }, { key: '', total: 1 },
+  ])
+  const paged = await db.attributeGroups('/notes', field, undefined, '', { limit: 10 })
+  assert.equal(paged.groups?.find((item) => item.key === 'supply')?.rows?.length, 1)
+})
+
+
+test('group create persists the custom tag attribute through the real creation path', async () => {
+  const db = new DatabaseService(new Context())
+  const records = new Map<string, DbRecord>()
+  db.register({ id: 'group-notes', path: '/group-notes',
+    schema: { labelField: 'title', fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true }, tag: { type: 'tag', writable: true } } },
+    records: { create: true }, list: () => [...records.values()], get: id => records.get(id) ?? null,
+    create: rows => rows.map(row => { const record = { ...row, id: String(row.id) }; records.set(record.id, record); return record }),
+  })
+  const packs = [{ id: 'security', label: '安全项目', fields: [{ key: 'lane', type: 'multi-select' as const }] }]
+  db.tags.replace(packs)
+  const stat = await db.stat('/group-notes')
+  if (stat.kind !== 'collection') throw new Error('expected collection')
+  const field = 'tag::security::lane'
+  const seed = seedGroupRecord({ title: '新建项目' }, field, 'AI红队', stat.schema, packs)!
+  await db.create('/group-notes', [seed])
+  assert.deepEqual((await db.attributeGroups('/group-notes', field)).groups, [
+    { key: 'AI红队', total: 1 }, { key: '', total: 0 },
+  ])
+  const listed = await db.list('/group-notes', { [field]: 'AI红队' })
+  if (listed.kind !== 'collection') throw new Error('expected collection')
+  assert.equal(listed.total, 1)
+  assert.deepEqual((listed.items[0].tag as { tags: string[] }).tags, ['security'])
+})
+
+test('list uses store pagedList instead of sorting the whole table', async () => {
+  assert.equal(canPageInStore({ pagedList: async () => ({ items: [], total: 0 }) }, undefined, false, '', {}), true)
+  assert.equal(canPageInStore({ pagedList: async () => ({ items: [], total: 0 }) }, { status: 'open' }, false, '', {}), false)
+  assert.equal(
+    canPageInStore(
+      { pagedList: async () => ({ items: [], total: 0 }), pagedFilterKeys: ['parentId'] },
+      { parentId: 'home' },
+      false,
+      '',
+      {},
+    ),
+    true,
+  )
+  assert.equal(canPageInStore({}, undefined, false, '', {}), false)
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const rows = Array.from({ length: 8 }, (_, i) => ({ id: `n${i}`, title: `row-${i}` }))
+  let scanned = 0
+  db.register({
+    id: 'notes',
+    path: '/notes',
+    schema: { labelField: 'title', fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
+    list: () => {
+      scanned += 1
+      return rows
+    },
+    pagedList: (query) => {
+      const limit = Number(query?.limit) || 50
+      const offset = Number(query?.offset) || 0
+      return { items: rows.slice(offset, offset + limit), total: rows.length }
+    },
+    get: (id) => rows.find((row) => row.id === id),
+  })
+  const listed = await db.list('/notes', undefined, { limit: 3, offset: 3, sortField: 'title' })
+  assert.equal(listed.kind, 'collection')
+  if (listed.kind !== 'collection') return
+  assert.equal(listed.total, 8)
+  assert.equal(listed.items.length, 3)
+  assert.equal(listed.items[0]?.id, 'n3')
+  assert.equal(scanned, 0)
 })

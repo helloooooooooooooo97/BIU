@@ -13,7 +13,7 @@ test('page block fence keeps plugin id in the document', () => {
   })
   assert.match(
     formatPageBlockFence('excalidraw', 'page-excalidraw', { file: 'assets/a.json' }, 'ab12cd34'),
-    /:::pageBlock \{kind=excalidraw plugin=page-excalidraw id=ab12cd34\}/,
+    /:::editorBlock \{kind=excalidraw plugin=page-excalidraw id=ab12cd34\}/,
   )
 })
 
@@ -47,7 +47,7 @@ test('sandbox pageBlock fence stores code and data as attachments', () => {
     source: 'export default function App() { return <div>爱乐之城</div> }',
     deck: true,
   })
-  assert.match(src, /:::pageBlock \{kind=sandbox plugin=page-sandbox\}/)
+  assert.match(src, /:::editorBlock \{kind=sandbox plugin=page-sandbox\}/)
   assert.doesNotMatch(src, /\bdeck=/)
   assert.match(src, /"file": "assets\/sandbox-ab12cd34.jsx"/)
   assert.match(src, /"dataFile": "assets\/sandbox-data-ab12cd34.json"/)
@@ -89,7 +89,7 @@ test('video pageBlock fence stores the tag script, not JSON', () => {
     script: '<timeline fps=30>\n  <track><title dur=1s>Hi</title></track>\n</timeline>',
     clips: [{ kind: 'title' }],
   }, 'viddemo1')
-  assert.match(src, /:::pageBlock \{kind=video plugin=page-video id=viddemo1\}/)
+  assert.match(src, /:::editorBlock \{kind=video plugin=page-video id=viddemo1\}/)
   assert.match(src, /<title dur=1s>Hi<\/title>/)
   assert.doesNotMatch(src, /"script":/)
   assert.deepEqual(parsePageBlockData('video', '<timeline fps=24>\n  <track><scene dur=1s>A</scene></track>\n</timeline>'), {
@@ -99,7 +99,7 @@ test('video pageBlock fence stores the tag script, not JSON', () => {
 })
 
 test('takePageBlockFence does not close on ::: inside the registered body', () => {
-  const src = `:::pageBlock {kind=video plugin=page-video id=viddemo1}
+  const src = `:::editorBlock {kind=video plugin=page-video id=viddemo1}
 <timeline>
 :::
 <track />
@@ -160,7 +160,7 @@ test('missing plugin keeps the fence and says it does not exist', () => {
   assert.equal(container.querySelector('[data-testid="page-block-missing"]')?.getAttribute('data-plugin-phase'), 'missing')
   assert.match(container.textContent ?? '', /插件不存在/)
   assert.match(container.textContent ?? '', /"title": "地球"/)
-  assert.doesNotMatch(container.textContent ?? '', /:::pageBlock/)
+  assert.doesNotMatch(container.textContent ?? '', /:::editorBlock/)
   assert.doesNotMatch(container.textContent ?? '', /正在加载/)
   assert.ok(container.querySelector('[data-testid="page-source-editor"]'))
   assert.ok(container.querySelector('[data-testid="page-block-enable"]'))

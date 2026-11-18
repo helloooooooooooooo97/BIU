@@ -5,6 +5,7 @@ export type PickDomExtra = {
   title?: string
   text?: string
   field?: string
+  type?: string
 }
 
 export function pickDomAttrs(kind: string, id: string, label?: string, extra?: PickDomExtra) {
@@ -18,6 +19,7 @@ export function pickDomAttrs(kind: string, id: string, label?: string, extra?: P
     ...(extra?.title ? { 'data-biu-title': extra.title } : {}),
     ...(text ? { 'data-biu-text': text } : {}),
     ...(extra?.field ? { 'data-biu-field': extra.field } : {}),
+    ...(extra?.type ? { 'data-biu-type': extra.type } : {}),
   }
 }
 
@@ -37,15 +39,17 @@ export function fieldPickAttrs(
   kind: string,
   recordId: string,
   field: string,
-  opts: { label?: string; title?: string; path?: string; text?: string },
+  opts: { label?: string; title?: string; path?: string; text?: string; type?: string },
 ) {
   const path = opts.path || ''
   const title = opts.title?.trim() || ''
   const label = opts.label?.trim() || field
+  const type = opts.type?.trim() || ''
   return pickDomAttrs(kind, fieldPickId(recordId, field), label, {
     ...(path ? { path } : {}),
     ...(title ? { title } : {}),
     field,
+    ...(type ? { type } : {}),
     ...(opts.text?.trim() ? { text: opts.text.trim() } : {}),
   })
 }

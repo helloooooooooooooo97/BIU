@@ -44,7 +44,8 @@ test('viewsCollection lists saved views with source table', async () => {
   assert.equal(sorted.sortField, 'title')
   assert.equal(sorted.sortDir, 'desc')
   assert.equal(String(sorted.sorts).includes('"field":"title"'), true)
-  assert.throws(() => spec.update!(String(all?.id), { title: '改掉' }), /read-only/)
+  const renamed = await spec.update!(String(all?.id), { title: '改掉' })
+  assert.equal(renamed.title, '改掉')
   const graphed = await spec.update!(String(user?.id), { mode: 'graph' })
   assert.equal(graphed.mode, 'graph')
 })
@@ -56,6 +57,10 @@ test('viewsCollection creates and deletes user views on a registered table', asy
   ])
   assert.equal(spec.records?.create, true)
   assert.equal(spec.records?.delete, true)
+  const [firstNew] = await spec.create!([{ tablePath: '/tasks', title: '新视图', viewId: 'new-a' }])
+  const [secondNew] = await spec.create!([{ tablePath: '/tasks', title: '新视图', viewId: 'new-b' }])
+  assert.equal(firstNew?.title, '新视图')
+  assert.equal(secondNew?.title, '新视图')
   const [row] = await spec.create!([{ tablePath: '/tasks', title: '看板', mode: 'graph', filters: '{"status":"doing"}', columnWidths: { title: 240 } }])
   assert.equal(row?.tablePath, '/tasks')
   assert.equal(row?.title, '看板')
@@ -77,13 +82,14 @@ test('viewsCollection creates and deletes user views on a registered table', asy
 test('every registered table gets a builtin all-view even before the client syncs', async () => {
   const store = new SavedViewsStore()
   const spec = viewsCollection(store, () => [
-    { path: '/agents', id: 'sessions', kind: 'collection', label: '代理', view: { title: '代理' } },
+    { path: '/agents', id: 'sessions', kind: 'collection', label: '代理', view: { title: '代理', icon: 'sparkles' } },
     { path: '/events', id: 'events', kind: 'collection', label: '事件', view: { title: '事件' } },
   ])
   const rows = await spec.list()
   assert.equal(rows.length, 2)
   assert.equal(rows.find((row) => row.tablePath === '/agents')?.title, '全部代理')
   assert.equal(rows.find((row) => row.tablePath === '/events')?.title, '全部事件')
+  assert.equal(rows.find((row) => row.tablePath === '/agents')?.tableIcon, 'sparkles')
 })
 
 test('saved views persist created fields and updates across reopen', async () => {
@@ -148,7 +154,7 @@ test('index collection views stay with the account that saved them', async () =>
   let who = 'ada'
   const spec = viewsCollection(
     store,
-    () => [{ path: '/tags', id: 'facets', kind: 'collection', label: '标签', view: { moduleId: 'facets', route: '/tags', title: '标签' } }],
+    () => [{ path: '/tags', id: 'tags', kind: 'collection', label: '标签', view: { moduleId: 'tags', route: '/tags', title: '标签' } }],
     () => who,
   )
   const adaRows = await spec.list()
@@ -182,7 +188,7 @@ test('update of another account view on an index collection stays unknown', asyn
   const spec = (account: string) =>
     viewsCollection(
       store,
-      () => [{ path: '/tags', id: 'facets', kind: 'collection', label: '标签', view: { moduleId: 'facets', route: '/tags', title: '标签' } }],
+      () => [{ path: '/tags', id: 'tags', kind: 'collection', label: '标签', view: { moduleId: 'tags', route: '/tags', title: '标签' } }],
       () => account,
     )
   spec('ada').create!([{ tablePath: '/tags', viewId: 'ada-view', title: 'Ada 的标签' }])

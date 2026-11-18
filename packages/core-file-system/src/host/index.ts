@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { readFile } from 'node:fs/promises'
 import type { IncomingMessage } from 'node:http'
 import { isAbsolute, resolve } from 'node:path'
@@ -22,6 +23,7 @@ import { forwardCloud } from '@biu/host-account/mirror'
 import { Service, type Context } from 'cordis'
 import {
   DATABASE_CHANNEL,
+  databaseChannelPayload,
   asAttachmentList,
   asPerson,
   asPersonList,
@@ -35,6 +37,8 @@ import {
   isEmptySchemaValue,
   normalizeSchemaPack,
   normalizeSchemaValue,
+  pruneSchemaValue,
+  sanitizeTagValuesPatch,
   schemaSearchHaystack,
   withBuiltinFields,
   hasCollectionDeleteQuery,
@@ -54,9 +58,12 @@ import {
   type ListPage,
   type PersonValue,
   parseContentJump,
+  allocateRecordId,
+  isAssignableRecordId,
 } from '@biu/type-file-system'
 import { parsePageBanner, type PageBanner } from '../page-banner.ts'
 import { SavedViewsStore, clientViewFromDbRow, viewsCollection, type StoredView } from './saved-views.ts'
+import { RecordViewsStore, wrapCollectionRecordViews } from './record-views.ts'
 import { publicShareUrl } from './share-origin.ts'
 import { readSharePluginWebJs, zipSharePluginSource } from './share-plugin-pack.ts'
 import { isSharePluginId } from '../share-resources.ts'
@@ -68,7 +75,7 @@ import { dataCollection, isDataOverviewSource, overviewRecord } from './data-col
 import { effectiveDataScope, highestViewRole, recordMatchesGrantedView, type DataScopeName, type ViewGrantRole } from '../view-access.ts'
 import { recordMatchesSharedView, resolveSharedView, type SharedViewDef } from '../share-view-match.ts'
 import { buildShareSnapshot } from './share-payload.ts'
-import { FileSystemAssets, collectAssetNames, assetNamesFromMarkdown, assetNamesFromHtml, isAssetFileName, isHashedAssetName, mimeOfAsset, AssetConflictError, parseIfMatch } from './assets-store.ts'
+import { FileSystemAssets, collectAssetNames, assetNamesFromMarkdown, assetNamesFromHtml, isAssetFileName, isHashedAssetName, mimeOfAsset, assetContentDisposition, AssetConflictError, parseIfMatch } from './assets-store.ts'
 import { tagsCollection, parseStampRecordId } from './tags-collection.ts'
 import { trashCollection } from './trash-collection.ts'
 import { runWorkspaceAssetGc } from './asset-gc-run.ts'
@@ -85,10 +92,17 @@ import {
   mutationLocus,
   type ContentCommand,
 } from './content-edit.ts'
+import {
+  MENTION_KIND_PATH,
+  listMentionRefs,
+  mentionRefsByCollection,
+  projectMentionLabels,
+  stripMentionLabels,
+} from '../mention-markup.ts'
 import { currentSessionId } from '@biu/host-sessions/scope'
 import { databaseRevealForTool, normalizeCollectionPath, splitResourcePath } from '../paths.ts'
 import { matchListFilterRecord, normalizeSorts, parseTagFlatColumnKey, readTagFieldValue, sortRecordsBy } from '../query-logic.ts'
-import { actionWhenKeys } from '../web/fields.ts'
+import { actionWhenKeys, groupRecords } from '../web/fields.ts'
 import { AgentDbCompact } from './agent-payload.ts'
 
 const agentDbCompact = new AgentDbCompact()
@@ -188,7 +202,7 @@ function schemaFor(spec: CollectionSpec): CollectionSchema {
       writable: false,
       sortable: true,
       enum: ['私人', '空间', '共享'],
-      description: '计算属性。云端空间：私人仅创建者、空间给成员、共享为公开链接。本机空间只有私人和共享，数据都在这台设备上。',
+      description: '计算属性。按当前能进的人：只有创建者是私人，有内部成员是空间，有外部协作者或公开/局域网链接是共享。',
     }
     fields.shareRole = {
       type: 'select',
@@ -295,11 +309,12 @@ type ListDecorateNeed = {
 function listDecorateNeed(wanted: string[] | null | undefined): ListDecorateNeed | null {
   if (!wanted?.length) return null
   const set = new Set(wanted)
+  const shareScope = set.has('shareScope')
   return {
-    tag: set.has('tag') || wanted.some((key) => key.startsWith('tag::')),
+    tag: shareScope || set.has('tag') || wanted.some((key) => key.startsWith('tag::')),
     people: set.has('createdBy') || set.has('updatedBy'),
     meta: set.has('emoji'),
-    shareScope: set.has('shareScope'),
+    shareScope,
     shareRole: set.has('shareRole'),
   }
 }
@@ -348,10 +363,10 @@ function splitPath(path: string): string[] {
   return hit.recordId ? [name, hit.recordId] : [name]
 }
 
-function linkUploadedAsset(db: { tags: { linkContentRef: (collection: string, recordId: string, name: string) => void } }, path: string, name: string) {
+function linkUploadedAsset(db: { tags: { linkContentRef: (collection: string, recordId: string, name: string, source?: string) => void } }, path: string, name: string) {
   const parts = splitPath(path)
   if (parts.length < 2 || !name) return
-  db.tags.linkContentRef(`/${parts[0]}`, parts.slice(1).join('/'), name)
+  db.tags.linkContentRef(`/${parts[0]}`, parts.slice(1).join('/'), name, 'asset')
 }
 
 function coerceList(value: unknown) {
@@ -468,7 +483,7 @@ function coerce(field: FieldSpec, value: unknown) {
     if (!list.length) throw new Error('expected image')
     return list.length === 1 ? list[0] : list
   }
-  if (kind === 'attachment') {
+  if (kind === 'attachment' || kind === 'document') {
     if (value == null || value === '') return ''
     const list = asAttachmentList(value)
     if (!list.length) return ''
@@ -543,7 +558,7 @@ function coerceTagPatch(
   }
   if (Array.isArray(parsed)) {
     const tags = parsed.map((item) => resolvePack(String(item))?.id ?? String(item).trim()).filter(Boolean)
-    return bindSchemaValue(tags, current.values)
+    return pruneTagBags(bindSchemaValue(tags, current.values), resolvePack)
   }
   if (!isPlainObject(parsed)) return normalizeSchemaValue(parsed)
   const rec = parsed
@@ -590,13 +605,38 @@ function coerceTagPatch(
       if (hit) applyBag(hit.id, { [key]: value })
     }
   }
-  return bindSchemaValue(tags, bags)
+  return pruneTagBags(bindSchemaValue(tags, bags), resolvePack)
+}
+
+function pruneTagBags(
+  value: SchemaFieldValue,
+  resolvePack: (idOrLabel: string) => CollectionSchemaPack | null,
+) {
+  const packs = value.tags
+    .map((id) => resolvePack(id))
+    .filter((pack): pack is CollectionSchemaPack => Boolean(pack))
+  return pruneSchemaValue(value, packs)
 }
 
 function writableFieldKeys(schema: CollectionSchema) {
   return Object.entries(schema.fields)
     .filter(([, field]) => field.writable && !field.computed)
     .map(([key]) => key)
+}
+
+function takeRequestedRecordId(row: Record<string, unknown>) {
+  const requested = String(row.id ?? '').trim()
+  delete row.id
+  return requested
+}
+
+async function unusedRecordId(spec: CollectionSpec, requested: string) {
+  if (isAssignableRecordId(requested) && !(await spec.get(requested))) return requested
+  for (let i = 0; i < 8; i += 1) {
+    const id = allocateRecordId()
+    if (!(await spec.get(id))) return id
+  }
+  throw new Error(`could not allocate record id: ${spec.path}`)
 }
 
 function pickWritablePatch(schema: CollectionSchema, patch: Record<string, unknown>) {
@@ -720,10 +760,28 @@ export function listNeedsMatchOverlay(
   if (!filter) return false
   if (filter.$tree && typeof filter.$tree === 'object') return true
   for (const [key, expected] of Object.entries(filter)) {
-    if (key === '$tree' || key === '$scope' || key === 'shareScope' || expected == null || expected === '') continue
+    if (key === '$tree' || key === '$scope' || key === '$ids' || key === 'shareScope' || expected == null || expected === '') continue
     if (overlayListField(key)) return true
   }
   return false
+}
+
+export function canPageInStore(
+  spec: Pick<CollectionSpec, 'pagedList' | 'pagedFilterKeys'>,
+  liveFilter: Record<string, unknown> | undefined,
+  overlay: boolean,
+  scopeFilter: string,
+  query: CollectionListQuery,
+) {
+  if (!spec.pagedList) return false
+  if (overlay || scopeFilter || query.ids?.length) return false
+  if (!liveFilter) return true
+  const allowed = new Set(spec.pagedFilterKeys ?? [])
+  for (const [key, expected] of Object.entries(liveFilter)) {
+    if (expected == null || expected === '') continue
+    if (!allowed.has(key)) return false
+  }
+  return true
 }
 
 /** spec.list 真正用到的查询。分组筛选在内存里做，好让并发的组页共用一次整表扫描。 */
@@ -794,7 +852,6 @@ type WorkspaceFiles = {
     recordId: string,
     now?: number,
     policy?: {
-      ownership?: 'personal' | 'workspace' | 'shared'
       accessMode?: 'inherit' | 'private' | 'members' | 'restricted'
       memberDefaultRole?: 'viewer' | 'editor'
       parentCollection?: string
@@ -851,6 +908,18 @@ function viewRowKeys(rows: DbRecord[]) {
   return out
 }
 
+type SchemaRequestCache = { map: Map<string, CollectionSchema>; builds: number }
+
+const schemaRequestCache = new AsyncLocalStorage<SchemaRequestCache>()
+
+export function withSchemaRequestCache<T>(fn: () => T): T {
+  return schemaRequestCache.run({ map: new Map(), builds: 0 }, fn)
+}
+
+export function schemaRequestBuildCount() {
+  return schemaRequestCache.getStore()?.builds ?? 0
+}
+
 export class DatabaseService extends Service implements Database {
   private collections = new Map<string, CollectionSpec>()
   private contentWrites = new Map<string, Promise<void>>()
@@ -858,14 +927,15 @@ export class DatabaseService extends Service implements Database {
   shares = new SharesStore()
   assets = new FileSystemAssets()
   viewCatalog?: { viewsFor(collectionPath: string): SharedViewDef[] }
+  recordViews = new RecordViewsStore()
   private ownershipCache: { key: string; map: Map<string, 'personal' | 'workspace' | 'shared'> } | null = null
   private ownerCache: { key: string; map: Map<string, string> } | null = null
   private viewAudienceCache: {
     key: string
     rows: Array<{ view_id: string; subject_type: 'account' | 'member_view'; subject_id: string; granted_by?: string; member_kind: string }>
   } | null = null
-  private viewShareCache: { key: string; views: SharedViewDef[] } | null = null
-  private recordShareCache: { key: string; ids: Set<string> } | null = null
+  private viewShareCache = new Map<string, SharedViewDef[]>()
+  private recordShareCache = new Map<string, Set<string>>()
   private inflightMatches = new Map<string, Promise<DbRecord[]>>()
   private inflightScans = new Map<string, Promise<DbRecord[]>>()
   private inflightVisible = new Map<string, Promise<VisibleSortedPack>>()
@@ -879,6 +949,19 @@ export class DatabaseService extends Service implements Database {
 
   constructor(ctx: Context) {
     super(ctx, 'database')
+    this.bindShareInvalidation()
+  }
+
+  private bindShareInvalidation() {
+    const names = ['upsert', 'revoke', 'revokeTarget', 'revokeRecord', 'revokeView'] as const
+    for (const name of names) {
+      const original = this.shares[name].bind(this.shares) as (...args: never[]) => unknown
+      ;(this.shares[name] as unknown as (...args: never[]) => unknown) = (...args: never[]) => {
+        const result = original(...args)
+        this.notifyShareChange()
+        return result
+      }
+    }
   }
 
   private async serializeContentWrite<T>(path: string, run: () => Promise<T>): Promise<T> {
@@ -910,6 +993,7 @@ export class DatabaseService extends Service implements Database {
       }
       assertViewAvailable(entry, [...this.collections.values()])
       assertRecordCaps(entry)
+      entry = wrapCollectionRecordViews(entry, this.recordViews)
       const view = entry.view
       if (view) entry = { ...entry, view: { ...view, route: navPath(view.route) } }
       this.collections.set(entry.id, entry)
@@ -933,17 +1017,9 @@ export class DatabaseService extends Service implements Database {
     return [...this.collections.values()].sort((a, b) => a.path.localeCompare(b.path))
   }
 
-  /** 成员只出现在云端空间的系统数据里。本地空间不提供这张表。 */
+  /** 成员表在本地和云端都出现：本机用户自己是成员，局域网访客按设备码列入。 */
   membersInSystemData() {
-    if (isOnlineRuntime()) return true
-    const workspaceId = this.collabStore()?.activeWorkspaceId?.() ?? ''
-    if (!workspaceId) return false
-    try {
-      const account = this.ctx.get('account') as { workspaceLocation?: (id: string) => string } | undefined
-      return account?.workspaceLocation?.(workspaceId) === 'cloud'
-    } catch {
-      return false
-    }
+    return true
   }
 
   publishCollection(item: CollectionSpec): CollectionInfo {
@@ -954,7 +1030,8 @@ export class DatabaseService extends Service implements Database {
 
   private async loadCollectionRows(spec: CollectionSpec, query: CollectionListQuery) {
     const rows = await spec.list(query)
-    const listed = !query.ids?.length ? rows : rows.filter((row) => query.ids!.includes(row.id))
+    const wanted = query.ids?.length ? new Set(query.ids) : null
+    const listed = wanted ? rows.filter((row) => wanted.has(row.id)) : rows
     const hidden = this.tags.deletedIds(spec.path)
     const builtinPlugin = (row: { builtin?: unknown }) => spec.path === '/plugins' && row.builtin === true
     return query.trash
@@ -963,21 +1040,8 @@ export class DatabaseService extends Service implements Database {
   }
 
   private decorateSlice(spec: CollectionSpec, rows: DbRecord[], wanted?: string[] | null) {
-    this.ownershipCache = null
-    this.ownerCache = null
-    this.viewAudienceCache = null
-    this.viewShareCache = null
-    this.recordShareCache = null
-    try {
-      const need = listDecorateNeed(wanted)
-      return rows.map((row) => this.decorateRecord(spec, row, need))
-    } finally {
-      this.ownershipCache = null
-      this.ownerCache = null
-      this.viewAudienceCache = null
-      this.viewShareCache = null
-      this.recordShareCache = null
-    }
+    const need = listDecorateNeed(wanted)
+    return rows.map((row) => this.decorateRecord(spec, row, need))
   }
 
   private collabStore() {
@@ -1017,6 +1081,15 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
+  private rewriteOverviewRecordPath(path: string) {
+    const parts = splitPath(path)
+    if (parts.length !== 2 || parts[0] !== 'data') return ''
+    const stamp = parseStampRecordId(parts[1]!)
+    if (!stamp || stamp.collection === DATA_COLLECTION_PATH) return ''
+    if (!this.collection(stamp.collection)) return ''
+    return `${stamp.collection}/${stamp.recordId}`
+  }
+
   private overviewRowActions(): CollectionActionInfo[] {
     const out: CollectionActionInfo[] = []
     for (const source of this.collectionsList()) {
@@ -1027,24 +1100,65 @@ export class DatabaseService extends Service implements Database {
         if (!places.includes('row') || !actionVisibleToUser(action)) continue
         if (seen.has(action.id)) continue
         seen.add(action.id)
-        out.push({ ...action, collection: source.path })
+        const { run: _run, ...info } = action as CollectionAction
+        out.push({ ...info, collection: source.path })
       }
     }
     return out
   }
 
-  private schemaForCurrent(spec: CollectionSpec, schema = schemaFor(spec)) {
+  private overviewTableEnum() {
+    const listed: string[] = []
+    for (const source of this.collectionsList()) {
+      if (!isDataOverviewSource(source.path)) continue
+      const title = String(source.view?.title ?? source.label ?? source.id).trim() || source.path
+      if (!listed.includes(title)) listed.push(title)
+    }
+    return listed
+  }
+
+  private withOverviewTableSelect(spec: CollectionSpec, schema: CollectionSchema) {
+    if (spec.path !== DATA_COLLECTION_PATH || !schema.fields.table) return schema
+    const listed = this.overviewTableEnum()
+    return {
+      ...schema,
+      fields: {
+        ...schema.fields,
+        table: {
+          ...schema.fields.table,
+          type: 'select' as const,
+          enum: listed,
+          enumLabels: Object.fromEntries(listed.map((title) => [title, title])),
+        },
+      },
+    }
+  }
+
+  private schemaForCurrent(spec: CollectionSpec, schema?: CollectionSchema) {
+    const cache = schemaRequestCache.getStore()
+    const hit = cache?.map.get(spec.path)
+    if (hit) return hit
+    if (!schema) schema = schemaFor(spec)
     if (spec.path === DATA_COLLECTION_PATH) schema = { ...schema, actions: this.overviewRowActions() }
+    schema = this.withOverviewTableSelect(spec, schema)
     schema = this.withLocationShareScope(schema)
     const authorization = this.authorization()
     const actor = authorization?.currentActor()
-    if (!authorization || !actor) return schema
+    if (!authorization || !actor) {
+      cache?.map.set(spec.path, schema)
+      if (cache) cache.builds += 1
+      return schema
+    }
     const resource = { type: 'collection' as const, workspaceId: actor.workspaceId, collection: spec.path }
     const canUpdate = authorization.authorize(actor, 'resource:update', resource).allowed
     const canCreate = authorization.authorize(actor, 'resource:create', resource).allowed
     const canDelete = authorization.authorize(actor, 'resource:delete', resource).allowed
-    if (canUpdate && canCreate && canDelete) return schema
-    return {
+    if (canUpdate && canCreate && canDelete) {
+      cache?.map.set(spec.path, schema)
+      if (cache) cache.builds += 1
+      return schema
+    }
+    const next = {
       ...schema,
       fields: canUpdate
         ? schema.fields
@@ -1056,6 +1170,9 @@ export class DatabaseService extends Service implements Database {
         delete: Boolean(schema.records?.delete && canDelete),
       },
     }
+    cache?.map.set(spec.path, next)
+    if (cache) cache.builds += 1
+    return next
   }
 
   private workspaceMembership() {
@@ -1065,7 +1182,7 @@ export class DatabaseService extends Service implements Database {
   }
 
   private scopeTarget(collection: string, id: string, row?: { pageId?: unknown; collection?: unknown; sessionId?: unknown; sourceId?: unknown; tablePath?: unknown }) {
-    if (collection === '/trash') {
+    if (collection === '/trash' || collection === DATA_COLLECTION_PATH) {
       const tablePath = String(row?.tablePath ?? '')
       const sourceId = String(row?.sourceId ?? '')
       if (tablePath && sourceId) return { collection: tablePath, id: sourceId }
@@ -1081,7 +1198,7 @@ export class DatabaseService extends Service implements Database {
       const sourceId = String(row?.sourceId ?? '')
       if (tablePath && sourceId) return { collection: tablePath, id: sourceId }
     }
-    if (collection === '/page-blocks') {
+    if (collection === '/editor-blocks') {
       const pageId = String(row?.pageId ?? '')
       const parent = String(row?.collection ?? '')
       if (pageId && parent) return { collection: parent, id: pageId }
@@ -1237,7 +1354,6 @@ export class DatabaseService extends Service implements Database {
     collection: string,
     recordId: string,
     policy?: {
-      ownership?: 'personal' | 'workspace' | 'shared'
       accessMode?: 'inherit' | 'private' | 'members' | 'restricted'
       memberDefaultRole?: 'viewer' | 'editor'
       parentCollection?: string
@@ -1274,30 +1390,44 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
+  private pluginCreateScope(args?: Record<string, unknown>): 'personal' | 'workspace' | 'shared' {
+    const raw = String(args?.scope ?? '').trim()
+    const device = this.deviceWorkspace()
+    if (raw === 'shared') return 'shared'
+    if (raw === 'workspace' && !device) return 'workspace'
+    return 'personal'
+  }
+
+  private stampPluginCreateScope(recordId: string, args?: Record<string, unknown>) {
+    const scope = this.pluginCreateScope(args)
+    this.rememberScope('/plugins', recordId, scope)
+    const raw = String(args?.scope ?? '').trim()
+    if ((raw === 'local' || this.deviceWorkspace()) && scope !== 'shared') this.markDeviceRecord('/plugins', recordId)
+  }
+
   rememberScope(collection: string, recordId: string, scope: 'personal' | 'workspace' | 'shared') {
     if (scope === 'shared') {
+      const device = this.deviceWorkspace()
+      this.attachWorkspaceRecord(collection, recordId, {
+        accessMode: device ? 'private' : 'members',
+        ...(!device ? { memberDefaultRole: 'viewer' as const } : {}),
+      })
       this.markPublicView(collection, recordId)
       return
     }
     this.attachWorkspaceRecord(collection, recordId, {
-      ownership: scope === 'workspace' ? 'workspace' : 'personal',
       accessMode: scope === 'workspace' ? 'members' : 'private',
       ...(scope === 'workspace' ? { memberDefaultRole: 'editor' as const } : {}),
     })
     if (scope === 'workspace') this.grantAllMembersEditable(collection, recordId)
   }
 
-  /** 公开链接：无密码，所有人只读查看。 */
+  /** 开启公开/局域网链接。不改协作者归属，关掉链接后仍按创建者和协作者计算。 */
   markPublicView(collection: string, recordId: string) {
-    this.attachWorkspaceRecord(collection, recordId, {
-      ownership: 'shared',
-      accessMode: 'members',
-      memberDefaultRole: 'viewer',
-    })
     try {
       this.shares.upsert({ kind: 'record', collection, recordId, password: null, allowCopy: false })
     } catch {
-      /* 分享库还没打开时，记录仍然按共享归属 */
+      /* 分享库还没打开时，列表仍按协作者计算 */
     }
   }
 
@@ -1424,7 +1554,7 @@ export class DatabaseService extends Service implements Database {
   }
 
   private listRemapsRecords(path: string) {
-    return path === '/trash' || path === '/events' || path === '/tags' || path === '/page-blocks'
+    return path === '/trash' || path === '/events' || path === '/tags' || path === '/editor-blocks'
   }
 
   private preloadRelatedCollections(
@@ -1578,15 +1708,36 @@ export class DatabaseService extends Service implements Database {
   }
 
   notifyShareChange() {
-    this.viewShareCache = null
-    this.recordShareCache = null
+    this.viewShareCache.clear()
+    this.recordShareCache.clear()
     this.bump()
   }
 
-  private bump() {
+  notifyTagCatalog() {
+    this.ctx.emit('database/change')
+    const http = this.ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
+    http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('tags'))
+  }
+
+  notifyViewCatalog(path?: string) {
+    this.viewShareCache.clear()
+    const http = this.ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
+    const recPath = String(path ?? '').trim()
+    http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('views', recPath ? { path: recPath } : {}))
+  }
+
+  notifyContent(path: string) {
+    const http = this.ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
+    http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('content', { path }))
+  }
+
+  bump() {
     this.visibleGen += 1
-    this.viewShareCache = null
-    this.recordShareCache = null
+    this.ownershipCache = null
+    this.ownerCache = null
+    this.viewAudienceCache = null
+    this.viewShareCache.clear()
+    this.recordShareCache.clear()
     this.inflightMatches.clear()
     this.inflightScans.clear()
     this.inflightVisible.clear()
@@ -1597,7 +1748,7 @@ export class DatabaseService extends Service implements Database {
     queueMicrotask(() => {
       this.bumpQueued = false
       const http = this.ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
-      http?.broadcast?.(DATABASE_CHANNEL, { ts: Date.now() })
+      http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('records'))
     })
   }
 
@@ -1689,13 +1840,21 @@ export class DatabaseService extends Service implements Database {
       delete liveFilter.$scope
     }
     const tableFilter = normalizeCollectionPath(String(liveFilter?.tablePath ?? ''))
-    if (liveFilter) delete liveFilter.tablePath
+    const tableNameFilter = String(liveFilter?.table ?? '').trim()
+    if (liveFilter) {
+      delete liveFilter.tablePath
+      delete liveFilter.table
+    }
     const overlay = listNeedsMatchOverlay(liveFilter, q, sortField, page?.sorts)
     const query: CollectionListQuery = { q: '', trash: false }
     const gathered: DbRecord[] = []
     for (const source of this.collectionsList()) {
       if (!isDataOverviewSource(source.path)) continue
       if (tableFilter && tableFilter !== '/' && source.path !== tableFilter) continue
+      if (tableNameFilter) {
+        const title = String(source.view?.title ?? source.label ?? source.id).trim() || source.path
+        if (title !== tableNameFilter) continue
+      }
       const pack = await this.visibleSortedCollectionRows(source, query, sortField, sortDir, page?.sorts, overlay)
       const visible = scopeFilter ? pack[scopeFilter] : pack.rows
       const decorated = this.decorateSlice(source, visible, null)
@@ -1732,6 +1891,79 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
+  async attributeGroups(
+    path: string,
+    field: string,
+    filter?: Record<string, unknown>,
+    q = '',
+    page?: {
+      limit?: number
+      columns?: string[]
+      sortField?: string
+      sortDir?: 'asc' | 'desc'
+      sorts?: Array<{ field: string; dir: 'asc' | 'desc' }>
+      groupPages?: Record<string, number>
+    },
+  ) {
+    const spec = this.collection(normalizeCollectionPath(path))
+    if (!spec || spec.path === DATA_COLLECTION_PATH || !field) return { groups: null }
+    const liveFilter = { ...filter }
+    const scope = liveFilter.$scope
+    const ids = asIds(liveFilter.$ids)
+    const trash = liveFilter.deleted === true || liveFilter.trash === true
+    delete liveFilter.$scope
+    delete liveFilter.$ids
+    delete liveFilter.deleted
+    delete liveFilter.trash
+    const query: CollectionListQuery = { q, filter: liveFilter, trash }
+    if (ids?.length) query.ids = ids
+    const auth = this.authorization()
+    const actor = auth?.currentActor()
+    if (auth && actor) auth.preloadCollection(actor.workspaceId, spec.path, actor.accountId)
+    try {
+      const sortField = page?.sortField || 'id'
+      const sortDir = page?.sortDir === 'desc' ? 'desc' : 'asc'
+      const pack = await this.visibleSortedCollectionRows(spec, query, sortField, sortDir, page?.sorts, true)
+      const visible = scope === 'personal' || scope === 'workspace' || scope === 'shared' ? pack[scope] : pack.rows
+      const schema = schemaFor(spec)
+      const packs = this.tags.list()
+      const matching = visible.filter(row => matchListFilter(row, liveFilter, schema, packs) && matchQuery(row, q, packs))
+      const parsed = parseTagFlatColumnKey(field)
+      const limit = page?.limit && page.limit > 0 ? Math.max(1, Math.round(page.limit)) : 0
+      let groups: Array<{ key: string; total: number; label?: string; rows?: Array<DbRecord & { path: string; kind: 'record' }> }>
+      if (parsed && !limit) {
+        groups = this.tags.attributeGroups(spec.path, field, matching.map(row => row.id))
+      } else {
+        const buckets = groupRecords(matching, schema, field, packs).slice(0, 80)
+        const columnKeys = page?.columns
+        groups = buckets.map((bucket) => {
+          const groupKey = bucket.key || 'unset'
+          const pageIndex = Math.max(0, page?.groupPages?.[groupKey] ?? 0)
+          const start = limit ? pageIndex * limit : 0
+          const sliceRows = limit ? bucket.rows.slice(start, start + limit) : []
+          const slice = limit ? this.decorateSlice(spec, sliceRows, columnKeys) : []
+          return {
+            key: bucket.key,
+            label: bucket.label,
+            total: bucket.rows.length,
+            ...(limit
+              ? {
+                  rows: slice.map((row) => {
+                    const value = withoutContent(spec, row)
+                    const picked = columnKeys ? pickListedFields(value, columnKeys) : value
+                    return { ...picked, path: `${spec.path}/${row.id}`, kind: 'record' as const }
+                  }),
+                }
+              : {}),
+          }
+        })
+      }
+      return { groups, schema: this.schemaForCurrent(spec, schema) }
+    } finally {
+      if (auth && actor) auth.releaseCollection(actor.workspaceId, spec.path, actor.accountId)
+    }
+  }
+
   async list(path: string, filter?: Record<string, unknown>, page?: ListPage) {
     const parts = splitPath(path)
     if (parts.length === 0) {
@@ -1759,12 +1991,15 @@ export class DatabaseService extends Service implements Database {
     const columnKeys = listedColumnKeys(page?.columns, schema.labelField ?? 'title', schema)
     const trash = filter?.deleted === true || filter?.trash === true
     const liveFilter = filter ? { ...filter } : undefined
+    const idFilter = asIds(liveFilter?.$ids)
     if (liveFilter) {
       delete liveFilter.deleted
       delete liveFilter.trash
       delete liveFilter.$scope
+      delete liveFilter.$ids
     }
     const query: CollectionListQuery = { q, filter: liveFilter, trash }
+    if (idFilter?.length) query.ids = idFilter
     if (schemaFilter && schema.fields.tag && spec.path !== '/tags') {
       const stamped = this.tags.stampedIds(spec.path, schemaFilter)
       if (!stamped.size) {
@@ -1788,6 +2023,39 @@ export class DatabaseService extends Service implements Database {
     if (auth && actor) auth.preloadCollection(actor.workspaceId, spec.path, actor.accountId)
     try {
       const overlay = listNeedsMatchOverlay(liveFilter, q, sortField, page?.sorts)
+      if (canPageInStore(spec, liveFilter, overlay, scopeFilter, query)) {
+        const paged = await spec.pagedList!({
+          ...query,
+          q,
+          sortField,
+          sortDir,
+          sorts: page?.sorts,
+          limit,
+          offset,
+        })
+        const visible = this.visibleRecords(spec.path, paged.items)
+        const slice = this.decorateSlice(spec, visible, columnKeys)
+        return {
+          kind: 'collection' as const,
+          path: spec.path,
+          id: spec.id,
+          label: spec.label ?? spec.id,
+          view: spec.view ?? null,
+          schema: this.schemaForCurrent(spec, schema),
+          total: paged.total,
+          offset,
+          limit,
+          items: slice.map((row): DbRecord & { path: string; kind: 'record' } => {
+            const value = withoutContent(spec, row)
+            const picked = columnKeys ? pickListedFields(value, columnKeys) : value
+            return {
+              ...picked,
+              path: `${spec.path}/${row.id}`,
+              kind: 'record',
+            }
+          }),
+        }
+      }
       const pack = await this.visibleSortedCollectionRows(spec, query, sortField, sortDir, page?.sorts, overlay)
       const visible = scopeFilter ? pack[scopeFilter] : pack.rows
       const tagFilter = spec.path === '/tags' ? String(filter?.tagId ?? '').trim() : ''
@@ -1839,7 +2107,7 @@ export class DatabaseService extends Service implements Database {
   }
 
   private decorateRecord(spec: CollectionSpec, row: DbRecord, need: ListDecorateNeed | null = null): DbRecord {
-    const withTag = !need || need.tag ? this.applyTagOverlay(spec, row) : row
+    const withTag = !need || need.tag || need.shareScope ? this.applyTagOverlay(spec, row) : row
     const withPeople = !need || need.people ? this.applyPersonOverlay(spec, withTag) : withTag
     const withMeta = !need || need.meta ? this.applyMetaOverlay(spec, withPeople) : withPeople
     if (isSystemCollection(spec.path) || isIndexCollection(spec.path)) return withMeta
@@ -1861,7 +2129,7 @@ export class DatabaseService extends Service implements Database {
   }
 
   private shareScopeLabel(collection: string, id: string, record: DbRecord, stored: 'personal' | 'workspace' | 'shared') {
-    if (this.hasPublicShare(collection, id, record, stored) || stored === 'shared') return '共享'
+    if (this.hasPublicShare(collection, id, record, stored)) return '共享'
     if (this.deviceWorkspace()) return '私人'
     const scope = this.effectiveScope(collection, record, stored)
     if (scope === 'workspace') return '空间'
@@ -1870,7 +2138,8 @@ export class DatabaseService extends Service implements Database {
   }
 
   private recordShareIds(collection: string) {
-    if (this.recordShareCache?.key === collection) return this.recordShareCache.ids
+    const cached = this.recordShareCache.get(collection)
+    if (cached) return cached
     const ids = new Set<string>()
     try {
       for (const share of this.shares.listRecords(collection)) {
@@ -1880,18 +2149,23 @@ export class DatabaseService extends Service implements Database {
     } catch {
       /* 分享库还没打开时，仍按视图链接现算 */
     }
-    this.recordShareCache = { key: collection, ids }
+    this.recordShareCache.set(collection, ids)
     return ids
   }
 
   private hasPublicShare(collection: string, id: string, record?: DbRecord, stored?: DataScopeName) {
     if (this.recordShareIds(collection).has(id)) return true
     if (!record || !stored) return false
-    return this.sharedViewsFor(collection).some((view) => recordMatchesSharedView(record, view, stored))
+    const spec = this.collections.get(collection)
+    const tagged = spec ? this.applyTagOverlay(spec, record) : record
+    const schema = spec ? schemaFor(spec) : undefined
+    const packs = this.tags.list()
+    return this.sharedViewsFor(collection).some((view) => recordMatchesSharedView(tagged, view, stored, schema, packs))
   }
 
   private sharedViewsFor(collection: string): SharedViewDef[] {
-    if (this.viewShareCache?.key === collection) return this.viewShareCache.views
+    const cached = this.viewShareCache.get(collection)
+    if (cached) return cached
     let shares: Array<{ viewId: string }> = []
     try {
       shares = this.shares.listViews(collection)
@@ -1907,7 +2181,7 @@ export class DatabaseService extends Service implements Database {
       const view = resolveSharedView(share.viewId, saved)
       if (view) views.push(view)
     }
-    this.viewShareCache = { key: collection, views }
+    this.viewShareCache.set(collection, views)
     return views
   }
 
@@ -2003,15 +2277,20 @@ export class DatabaseService extends Service implements Database {
     return next
   }
 
-  private refreshContentRefs(spec: CollectionSpec, record: DbRecord) {
+  private refreshContentRefs(spec: CollectionSpec, record: DbRecord, refreshBody = true) {
     const banner = this.tags.recordBanner(spec.path, record.id)
-    const body = readEditorContent(this.tags.ensure(), spec.path, record.id)
-    this.tags.replaceContentRefs(
-      spec.path,
-      record.id,
-      assetNamesFromMarkdown(body),
-      assetNamesFromHtml(String(banner?.html ?? '')),
-    )
+    const properties = this.decorateRecord(spec, record)
+    const tag = this.tags.recordTag(spec.path, record.id) ?? properties.tag
+    if (refreshBody) {
+      const body = readEditorContent(this.tags.ensure(), spec.path, record.id)
+      this.tags.replaceContentRefs(
+        spec.path,
+        record.id,
+        assetNamesFromMarkdown(body),
+        assetNamesFromHtml(String(banner?.html ?? '')),
+      )
+    }
+    this.tags.replaceAssetRefs(spec.path, record.id, collectAssetNames(properties, tag))
   }
 
   private applyPersonOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
@@ -2161,7 +2440,7 @@ export class DatabaseService extends Service implements Database {
       if (!isEmptySchemaValue(value)) overlay = this.persistRecordTag(spec, row.id, value, row)
     }
     if (!overlay) return row
-    return { ...row, tag: overlay }
+    return { ...row, tag: pruneSchemaValue(overlay, this.tags.list()) }
   }
 
   private applyMetaOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
@@ -2210,6 +2489,21 @@ export class DatabaseService extends Service implements Database {
 
   async update(path: string, content: unknown) {
     const parts = splitPath(path)
+    if (parts.length === 2 && parts[0] === 'data') {
+      const stamp = parseStampRecordId(parts[1]!)
+      if (stamp && stamp.collection !== DATA_COLLECTION_PATH) {
+        const written = await this.update(`${stamp.collection}/${stamp.recordId}`, content)
+        if (written.kind !== 'record') return written
+        const source = this.collection(stamp.collection)
+        return {
+          ...written,
+          path: `${DATA_COLLECTION_PATH}/${parts[1]}`,
+          value: source
+            ? overviewRecord(source, written.value as DbRecord)
+            : { ...(written.value as DbRecord), id: parts[1]! },
+        }
+      }
+    }
     if (parts.length !== 2) throw new Error(`cannot update: ${normalizeCollectionPath(path)}`)
     const spec = this.collection(`/${parts[0]}`)
     if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
@@ -2252,6 +2546,7 @@ export class DatabaseService extends Service implements Database {
       if (bannerPatch.present) {
         this.tags.writeRecordBanner(spec.path, current.id, bannerPatch.value)
         next = this.withBanner(spec, next)
+        this.notifyContent(`${spec.path}/${current.id}`)
       }
       this.refreshContentRefs(spec, next)
       await this.stampActor(spec.path, current.id)
@@ -2289,7 +2584,9 @@ export class DatabaseService extends Service implements Database {
     if (moving && resource) authorization!.validateMove(actor!, resource, parent)
     let record = Object.keys(patch).length ? await spec.update(parts[1]!, patch) : current
     if (moving && resource) authorization!.move(actor!, resource, parent)
-    await this.stampActor(spec.path, record.id)
+    const viewOnly = !bannerPatch.present && Object.keys(patch).length > 0 &&
+      Object.keys(patch).every((key) => ['views', 'propViews', 'layouts'].includes(key))
+    if (!viewOnly) await this.stampActor(spec.path, record.id)
     if ('emoji' in patch) {
       const meta = this.tags.writeRecordMeta(spec.path, record.id, {
         emoji: String(patch.emoji ?? ''),
@@ -2304,10 +2601,12 @@ export class DatabaseService extends Service implements Database {
     }
     if (bannerPatch.present) {
       this.tags.writeRecordBanner(spec.path, record.id, bannerPatch.value)
+      this.notifyContent(`${spec.path}/${record.id}`)
     }
-    this.indexTagRecord(spec, this.decorateRecord(spec, record))
-    this.refreshContentRefs(spec, this.withBanner(spec, record))
-    this.bump()
+    if (!viewOnly) this.indexTagRecord(spec, this.decorateRecord(spec, record))
+    this.refreshContentRefs(spec, this.withBanner(spec, record), !viewOnly)
+    if (viewOnly) this.notifyViewCatalog(`${spec.path}/${record.id}`)
+    else this.bump()
     const beforeSnap: Record<string, unknown> = {}
     const afterSnap: Record<string, unknown> = {}
     for (const key of Object.keys(patch)) {
@@ -2315,10 +2614,46 @@ export class DatabaseService extends Service implements Database {
       afterSnap[key] = record[key] ?? null
     }
     const title = String(record.title ?? record.name ?? record.id).trim() || record.id
-    if (Object.keys(patch).length) {
+    if (!viewOnly && Object.keys(patch).length) {
       await this.ctx.get('contentTurns')?.recordUpdate(`${spec.path}/${record.id}`, title, beforeSnap, afterSnap)
     }
     return { kind: 'record' as const, path: `${spec.path}/${record.id}`, value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))) }
+  }
+
+  /** Sandbox may write only this record's values for one tag, through the normal update channel. */
+  async patchTagSandbox(path: string, tagId: string, values: unknown) {
+    if (!isPlainObject(values)) throw new Error('patch values must be an object')
+    const parts = splitPath(path)
+    if (parts.length !== 2) throw new Error('sandbox can only patch the current record')
+    const spec = this.collection(`/${parts[0]}`)
+    if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
+    await this.requirePath(`${spec.path}/${parts[1]}`, 'resource:update')
+    if (spec.path === '/tags') throw new Error('tag catalog has no instance property values')
+    const schema = schemaFor(spec)
+    if (!schema.fields.tag) throw new Error('record has no tag field')
+    const current = await spec.get(parts[1]!)
+    if (!current) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
+    this.assertLiveRecord(spec, current.id, 'resource:update', current)
+    const overlay = normalizeSchemaValue(this.decorateRecord(spec, current).tag)
+    let id = String(tagId ?? '').trim()
+    if (!id) {
+      if (overlay.tags.length !== 1) throw new Error('sandbox patch needs a tag id')
+      id = overlay.tags[0]!
+    }
+    const pack = this.tags.get(id)
+    if (!pack) throw new Error(`unknown tag: ${id}`)
+    const nextValues = sanitizeTagValuesPatch(pack, values)
+    const tags = overlay.tags.includes(id) ? overlay.tags : [...overlay.tags, id]
+    return this.update(`${spec.path}/${current.id}`, {
+      tag: { tags, values: { [id]: nextValues } },
+    })
+  }
+
+  private async withCreateRecordId(spec: CollectionSpec, patch: Record<string, unknown>, requested: string) {
+    if (spec.records?.allocateId === false) {
+      return isAssignableRecordId(requested) ? { ...patch, id: requested } : patch
+    }
+    return { ...patch, id: await unusedRecordId(spec, requested) }
   }
 
   async create(path: string, content?: unknown, options: { scope?: 'personal' | 'workspace' | 'shared' | 'local' } = {}) {
@@ -2340,9 +2675,11 @@ export class DatabaseService extends Service implements Database {
     const rows = parseRecords(content)
     const records: Record<string, unknown>[] = []
     const banners: Array<PageBanner | null | undefined> = []
+    const requestedIds: string[] = []
     for (const row of rows) {
       const bannerPatch = takeBannerPatch(row)
       banners.push(bannerPatch.present ? bannerPatch.value : undefined)
+      requestedIds.push(takeRequestedRecordId(row))
       if ('facet' in row && !('tag' in row)) row.tag = row.facet
       if ('tag' in row && schema.fields.tag) {
         row.tag = coerceTagPatch(row.tag, emptySchemaValue(), (id) => this.tags.get(id))
@@ -2351,13 +2688,22 @@ export class DatabaseService extends Service implements Database {
       await assertSameTableLinks(spec, patch)
       records.push(patch)
     }
-    const meaningful = records.filter((record) => Object.keys(record).length > 0)
-    const created = await spec.create(meaningful.length ? meaningful : records.slice(0, 1))
+    const meaningful = records
+      .map((record, index) => ({ record, index }))
+      .filter((item) => Object.keys(item.record).length > 0)
+    const selected = meaningful.length ? meaningful : records.slice(0, 1).map((record, index) => ({ record, index }))
+    const payloads: Record<string, unknown>[] = []
+    for (const item of selected) {
+      const requested = requestedIds[item.index] ?? ''
+      payloads.push(await this.withCreateRecordId(spec, item.record, requested))
+    }
+    const created = await spec.create(payloads)
     for (const [index, record] of created.entries()) {
       await this.stampActor(spec.path, record.id)
-      const banner = banners[index]
+      const sourceIndex = selected[index]?.index ?? index
+      const banner = banners[sourceIndex]
       if (banner !== undefined) this.tags.writeRecordBanner(spec.path, record.id, banner)
-      const input = records[index] ?? record
+      const input = payloads[index] ?? records[sourceIndex] ?? record
       if ('emoji' in input) {
         this.tags.writeRecordMeta(spec.path, record.id, {
           emoji: String(input.emoji ?? ''),
@@ -2375,21 +2721,9 @@ export class DatabaseService extends Service implements Database {
         const workspaceOwned = options.scope === 'workspace' && !device
         const shared = options.scope === 'shared' && !parentRecordId
         const local = options.scope === 'local' && !parentRecordId
-        const parentOwn = parentRecordId ? this.ownershipOf(spec.path, parentRecordId) : null
-        const ownership = device
-          ? shared || parentOwn === 'shared'
-            ? 'shared'
-            : 'personal'
-          : parentRecordId || workspaceOwned
-            ? 'workspace'
-            : shared
-              ? 'shared'
-              : 'personal'
         this.attachWorkspaceRecord(spec.path, record.id, {
-          ownership,
-          accessMode: parentRecordId ? 'inherit' : workspaceOwned || shared ? 'members' : 'private',
+          accessMode: parentRecordId ? 'inherit' : workspaceOwned ? 'members' : 'private',
           ...(workspaceOwned ? { memberDefaultRole: 'editor' as const } : {}),
-          ...(shared ? { memberDefaultRole: 'viewer' as const } : {}),
           ...(parentRecordId ? { parentCollection: spec.path, parentRecordId } : {}),
         })
         if (shared) this.markPublicView(spec.path, record.id)
@@ -2419,6 +2753,17 @@ export class DatabaseService extends Service implements Database {
     if (parts.length !== 1) throw new Error(`cannot delete: ${normalizeCollectionPath(path)}`)
     const spec = this.collection(`/${parts[0]}`)
     if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
+    if (spec.path === DATA_COLLECTION_PATH) {
+      const ids = (query.ids ?? []).map(String).filter(Boolean)
+      const deleted: string[] = []
+      for (const id of ids) {
+        const stamp = parseStampRecordId(id)
+        if (!stamp || stamp.collection === DATA_COLLECTION_PATH) continue
+        await this.remove(stamp.collection, { ids: [stamp.recordId], purge: query.purge })
+        deleted.push(id)
+      }
+      return { kind: 'deleted' as const, path: spec.path, ids: deleted }
+    }
     if (!spec.records?.delete || !spec.remove) throw new Error(`collection cannot delete: ${spec.path}`)
     if (!hasCollectionDeleteQuery(query)) throw new Error('delete requires ids, q, or filter')
     const schema = schemaFor(spec)
@@ -2553,6 +2898,8 @@ export class DatabaseService extends Service implements Database {
   }
 
   async action(path: string, actionId: string, args?: Record<string, unknown>) {
+    const rewritten = this.rewriteOverviewRecordPath(path)
+    if (rewritten) return this.action(rewritten, actionId, args)
     const parts = splitPath(path)
     if (parts.length !== 2) throw new Error(`cannot action: ${normalizeCollectionPath(path)}`)
     const spec = this.collection(`/${parts[0]}`)
@@ -2569,7 +2916,7 @@ export class DatabaseService extends Service implements Database {
       await this.requirePath(spec.path, 'resource:read')
       if (loaded && !builtinPlugin) {
         const owner = this.recordOwner(spec.path, record.id)
-        if (!owner) this.attachWorkspaceRecord(spec.path, record.id, { ownership: 'personal', accessMode: 'private' })
+        if (!owner) this.stampPluginCreateScope(record.id, args)
         else this.assertLiveRecord(spec, record.id, 'resource:read', record)
       }
     } else if (!personalLoad && (loaded || !action.allowMissing)) {
@@ -2578,9 +2925,12 @@ export class DatabaseService extends Service implements Database {
       await this.requirePath(spec.path, (action.requiredAction ?? 'resource:update') as PermissionAction)
     }
     if (!matchActionWhen(record, action.when)) throw new Error(`action not available: ${actionId}`)
+    if ((actionId === 'delete' || actionId === 'trash') && spec.path !== '/trash') {
+      return this.remove(spec.path, { ids: [parts[1]!] })
+    }
     const result = await action.run(parts[1]!, record, args)
     if (spec.path === '/plugins' && actionId === 'sandbox' && !builtinPlugin && !this.recordOwner(spec.path, parts[1]!)) {
-      this.attachWorkspaceRecord(spec.path, parts[1]!, { ownership: 'personal', accessMode: 'private' })
+      this.stampPluginCreateScope(parts[1]!, args)
     }
     if (spec.path === '/plugins' && !builtinPlugin && (actionId === 'sandbox' || actionId === 'pack')) {
       await this.stampActor(spec.path, parts[1]!)
@@ -2597,6 +2947,8 @@ export class DatabaseService extends Service implements Database {
   }
 
   async content(path: string) {
+    const rewritten = this.rewriteOverviewRecordPath(path)
+    if (rewritten) return this.content(rewritten)
     const parts = splitPath(path)
     if (parts.length !== 2) throw new Error(`cannot content: ${normalizeCollectionPath(path)}`)
     const spec = this.collection(`/${parts[0]}`)
@@ -2620,12 +2972,52 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
+  async detail(path: string) {
+    const rewritten = this.rewriteOverviewRecordPath(path)
+    if (rewritten) return this.detail(rewritten)
+    const parts = splitPath(path)
+    if (parts.length !== 2) throw new Error(`cannot detail: ${normalizeCollectionPath(path)}`)
+    const spec = this.collection(`/${parts[0]}`)
+    if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
+    const loaded = await spec.get(parts[1]!)
+    if (!loaded) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
+    this.assertLiveRecord(spec, loaded.id, 'resource:read', loaded)
+    const rawSchema = schemaFor(spec)
+    const schema = this.schemaForCurrent(spec, rawSchema)
+    const decorated = this.withBanner(spec, this.decorateRecord(spec, loaded))
+    const field = rawSchema.contentField ?? 'content'
+    let contentValue: unknown = null
+    let version: number | undefined
+    if (rawSchema.fields[field]) {
+      const editorContent = isEditorContentSpec(spec)
+        ? readEditorContentRecord(this.tags.ensure(), spec.path, loaded.id)
+        : null
+      contentValue = editorContent ? editorContent.body : (loaded[field] ?? null)
+      if (editorContent) version = editorContent.version
+    }
+    return {
+      kind: 'detail' as const,
+      path: `${spec.path}/${loaded.id}`,
+      schema,
+      value: withoutContent(spec, decorated),
+      content: {
+        kind: 'content' as const,
+        path: `${spec.path}/${loaded.id}`,
+        field,
+        value: contentValue,
+        ...(version != null ? { version } : {}),
+      },
+    }
+  }
+
   async writeContent(path: string, value: unknown, expectedVersion?: number) {
     const normalized = normalizeCollectionPath(path)
     return this.serializeContentWrite(normalized, () => this.writeContentNow(path, value, expectedVersion))
   }
 
   private async writeContentNow(path: string, value: unknown, expectedVersion?: number) {
+    const rewritten = this.rewriteOverviewRecordPath(path)
+    if (rewritten) return this.writeContentNow(rewritten, value, expectedVersion)
     const parts = splitPath(path)
     if (parts.length !== 2) throw new Error(`cannot write content: ${normalizeCollectionPath(path)}`)
     const spec = this.collection(`/${parts[0]}`)
@@ -2637,16 +3029,17 @@ export class DatabaseService extends Service implements Database {
     if (!existing) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
     this.assertLiveRecord(spec, existing.id, 'resource:update', existing)
     if (!schema.fields[field]) throw new Error(`no content field: ${field}`)
+    const persisted = typeof value === 'string' ? stripMentionLabels(value) : value
     if (isEditorContentSpec(spec)) {
-      writeEditorContent(this.tags.ensure(), spec.path, parts[1]!, String(value ?? ''), { expectedVersion })
+      writeEditorContent(this.tags.ensure(), spec.path, parts[1]!, String(persisted ?? ''), { expectedVersion })
     }
     const patch = this.collectionCanUpdate(spec)
-      ? pickWritablePatch(schema, { [field]: value })
-      : { [field]: value }
+      ? pickWritablePatch(schema, { [field]: persisted })
+      : { [field]: persisted }
     const record = await spec.update(parts[1]!, patch)
     await this.stampActor(spec.path, record.id)
     this.refreshContentRefs(spec, this.withBanner(spec, record))
-    this.bump()
+    this.notifyContent(`${spec.path}/${record.id}`)
     const editorContent = isEditorContentSpec(spec)
       ? readEditorContentRecord(this.tags.ensure(), spec.path, record.id)
       : null
@@ -2669,12 +3062,31 @@ export class DatabaseService extends Service implements Database {
     return title || parts[1] || path
   }
 
+  private async mentionTitles(markdown: string) {
+    const groups = mentionRefsByCollection(listMentionRefs(markdown))
+    const titles: Record<string, string> = {}
+    for (const [path, ids] of groups) {
+      const spec = this.collection(path)
+      if (!spec) continue
+      const rows = await spec.list({ ids })
+      const kind = (Object.entries(MENTION_KIND_PATH).find(([, item]) => item === path)?.[0] ?? 'page') as keyof typeof MENTION_KIND_PATH
+      for (const row of rows) {
+        const id = String(row.id ?? '').trim()
+        if (!id || !ids.includes(id)) continue
+        const title = String(row.title ?? row.name ?? '').trim()
+        if (title) titles[`${kind}/${id}`] = title
+      }
+    }
+    return titles
+  }
+
   async editContent(path: string, args: Record<string, unknown> = {}) {
     const command = resolveContentCommand(args)
     const current = await this.content(path)
-    const text = asContentText(current.value)
+    const text = stripMentionLabels(asContentText(current.value))
     if (command === 'view') {
       const viewed = viewContent(text, args.view_range)
+      const titles = await this.mentionTitles(viewed.text)
       return {
         kind: 'content' as const,
         path: current.path,
@@ -2684,19 +3096,20 @@ export class DatabaseService extends Service implements Database {
         end: viewed.end,
         total: viewed.total,
         truncated: viewed.truncated,
-        text: viewed.text,
+        text: projectMentionLabels(viewed.text, titles),
       }
     }
     let replaced: number | undefined
-    const incoming = await resolveIncomingText(command, args)
-    const patch = { ...args, new_str: incoming, ...(command === 'write' ? { value: incoming } : {}) }
+    const incoming = stripMentionLabels(await resolveIncomingText(command, args))
+    const oldStr = args.old_str != null ? stripMentionLabels(String(args.old_str)) : args.old_str
+    const patch = { ...args, old_str: oldStr, new_str: incoming, ...(command === 'write' ? { value: incoming } : {}) }
     const next =
       command === 'write'
         ? writeContentText(incoming)
         : command === 'str_replace'
-          ? strReplaceText(text, args.old_str, incoming)
+          ? strReplaceText(text, oldStr, incoming)
           : command === 'find_replace'
-            ? resolveFindReplace(text, { ...args, new_str: incoming })
+            ? resolveFindReplace(text, { ...args, old_str: oldStr, new_str: incoming })
             : command === 'insert'
               ? insertText(text, args.insert_line, incoming)
               : replaceLinesText(text, args.start_line, args.end_line, incoming)
@@ -2817,8 +3230,7 @@ export class DatabaseService extends Service implements Database {
     if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
     const record = await spec.get(parts[1]!)
     if (!record) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
-    const from = String(args.from ?? '').trim()
-    const command = String(args.command ?? (args.value != null || from ? 'write' : 'view'))
+    const command = resolveContentCommand(args)
     this.assertLiveRecord(spec, record.id, command === 'view' ? 'resource:read' : 'resource:update', record)
     const names = new Set([
       ...collectAssetNames(record, this.tags.recordBanner(spec.path, record.id)?.html),
@@ -2829,12 +3241,18 @@ export class DatabaseService extends Service implements Database {
       .replace(/^assets\//, '')
       .replace(/^.*[/\\]/, '')
     const recPath = `${spec.path}/${record.id}`
+    const readOwnedOrAsset = async (name: string) => this.assets.readAny(name)
     if (command === 'view' && !file) {
       const assets = []
       for (const name of [...names].sort()) {
         try {
-          const read = await this.assets.readAny(name)
-          assets.push({ name, etag: read.etag, type: read.type, storage: read.storage })
+          const read = await readOwnedOrAsset(name)
+          assets.push({
+            name,
+            etag: read.etag,
+            type: read.type,
+            ...('storage' in read ? { storage: (read as { storage?: string }).storage } : {}),
+          })
         } catch {
           assets.push({ name, missing: true })
         }
@@ -2842,36 +3260,55 @@ export class DatabaseService extends Service implements Database {
       return { kind: 'doc' as const, path: recPath, command: 'view' as const, assets }
     }
     if (!isAssetFileName(file)) throw new Error('invalid asset')
+    if (!names.has(file)) throw new Error(`doc not referenced: ${file}`)
+    const readDoc = async () => this.assets.readDoc(file)
+    let current: { text: string; etag: string; type: string } | null = null
+    try {
+      const read = await readDoc()
+      const raw = Buffer.from(read.bytes).toString('utf8')
+      current = { text: raw, etag: read.etag, type: read.type }
+    } catch {
+      current = null
+    }
     if (command === 'view') {
-      if (!names.has(file)) throw new Error(`doc not referenced: ${file}`)
-      try {
-        const read = await this.assets.readDoc(file)
-        const text =
-          read.type.startsWith('text/') || read.type.includes('json') ? read.bytes.toString('utf8') : undefined
-        return {
-          kind: 'doc' as const,
-          path: recPath,
-          command: 'view' as const,
-          name: file,
-          etag: read.etag,
-          type: read.type,
-          ...(text != null ? { text } : {}),
-        }
-      } catch {
-        return {
-          kind: 'doc' as const,
-          path: recPath,
-          command: 'view' as const,
-          name: file,
-          missing: true,
-          etag: '',
-        }
+      if (!current) {
+        return { kind: 'doc' as const, path: recPath, command: 'view' as const, name: file, missing: true, etag: '' }
+      }
+      const viewed = viewContent(current.text, args.view_range)
+      return {
+        kind: 'doc' as const,
+        path: recPath,
+        command: 'view' as const,
+        name: file,
+        etag: current.etag,
+        type: current.type,
+        start: viewed.start,
+        end: viewed.end,
+        total: viewed.total,
+        truncated: viewed.truncated,
+        text: viewed.text,
       }
     }
-    if (command !== 'write') throw new Error(`unknown doc command: ${command}`)
-    const body = from ? await readLocalWriteFile(from) : String(args.value ?? '')
-    if (!from && args.value == null) throw new Error('write needs value or from')
-    const written = await this.assets.writeDoc(file, body, { etag: String(args.etag ?? '') })
+    if (command !== 'write' && !current) throw new Error(`doc missing: ${file}`)
+    if (command !== 'write' && current && !isTextDoc(file, current.type)) throw new Error(`doc is not text: ${file}`)
+    let replaced: number | undefined
+    const incoming = await resolveIncomingText(command, args)
+    const base = current?.text ?? ''
+    const patch = { ...args, new_str: incoming, ...(command === 'write' ? { value: incoming } : {}) }
+    const next =
+      command === 'write'
+        ? writeContentText(incoming)
+        : command === 'str_replace'
+          ? strReplaceText(base, args.old_str, incoming)
+          : command === 'find_replace'
+            ? resolveFindReplace(base, { ...args, new_str: incoming })
+            : command === 'insert'
+              ? insertText(base, args.insert_line, incoming)
+              : replaceLinesText(base, args.start_line, args.end_line, incoming)
+    if (typeof next === 'object') replaced = next.replaced
+    const nextText = typeof next === 'object' ? next.text : next
+    const matchEtag = String(args.etag ?? current?.etag ?? '')
+    const written = await this.assets.writeDoc(file, nextText, { etag: matchEtag })
     const kind = String(args.kind ?? '') === 'core' ? 'core' : 'asset'
     const blockId = String(args.block_id ?? args.blockId ?? '').trim()
     const source = String(args.source ?? (blockId ? `block:${blockId}` : 'doc')).trim() || 'doc'
@@ -2879,19 +3316,35 @@ export class DatabaseService extends Service implements Database {
       name: written.name,
       etag: written.etag,
       mime: mimeOfAsset(written.name),
-      bytes: written.bytes,
+      bytes: written.bytes ?? Buffer.byteLength(nextText),
       kind,
       storage: 'name',
     })
     if (blockId) this.tags.upsertBlockRef(spec.path, record.id, blockId, written.name, source)
     this.broadcastAsset(recPath, written.name, written.etag)
-    return { kind: 'doc' as const, ok: true as const, path: recPath, name: written.name, etag: written.etag, storage: 'name' as const }
+    const locus = mutationLocus(command === 'find_replace' ? 'str_replace' : command, base, nextText, patch)
+    return {
+      kind: 'doc' as const,
+      ok: true as const,
+      path: recPath,
+      name: written.name,
+      etag: written.etag,
+      storage: 'name' as const,
+      command,
+      ...(replaced != null ? { replaced } : {}),
+      ...(locus ? { start_line: locus.start_line, end_line: locus.end_line, ...(locus.text ? { text: locus.text } : {}) } : {}),
+    }
   }
 
   private broadcastAsset(path: string, name: string, etag: string) {
     const http = this.ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
-    http?.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), asset: { name, etag, path } })
+    http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('asset', { asset: { name, etag, path } }))
   }
+}
+
+function isTextDoc(name: string, type: string) {
+  if (type.startsWith('text/') || /json|javascript|xml|svg/.test(type)) return true
+  return /\.(?:jsx?|tsx?|html?|md|css|svg|json)$/i.test(name)
 }
 
 async function readLocalWriteFile(raw: string) {
@@ -3043,14 +3496,17 @@ function broadcastInspectorReveal(
   if (!reveal) return
   const http = ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
   const contentJump = phase === 'done' ? parseContentJump(result) : null
-  http?.broadcast?.(DATABASE_CHANNEL, {
-    ts: Date.now(),
-    reveal,
-    phase,
-    sessionId: currentSessionId(),
-    ...(savedViewFromToolResult(result) ? { savedView: savedViewFromToolResult(result) } : {}),
-    ...(contentJump ? { contentJump } : {}),
-  })
+  const savedView = savedViewFromToolResult(result)
+  http?.broadcast?.(
+    DATABASE_CHANNEL,
+    databaseChannelPayload(savedView ? 'views' : 'records', {
+      reveal,
+      phase,
+      sessionId: currentSessionId(),
+      ...(savedView ? { savedView } : {}),
+      ...(contentJump ? { contentJump } : {}),
+    }),
+  )
 }
 
 function rowFromToolResult(result: unknown): Record<string, unknown> | undefined {
@@ -3111,6 +3567,7 @@ export function apply(ctx: Context) {
   const assets = db.assets
   const savedViews = new SavedViewsStore()
   savedViews.open(process.env.VITEST ? ':memory:' : biuSqlitePath())
+  db.recordViews.open(biuSqlitePath())
   const account = ctx.get('account') as {
     authorization?: AuthorizationService
     workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
@@ -3173,10 +3630,10 @@ export function apply(ctx: Context) {
   })
   const shares = db.shares
   shares.open(process.env.VITEST ? ':memory:' : biuSqlitePath())
-  const facets = db.tags
+  const tags = db.tags
   db.register(dataCollection(() => db.collectionsList()))
   db.register(viewsCollection(savedViews, () => db.collectionsList().map((item) => db.publishCollection(item)), () => currentAccountId()))
-  db.register(tagsCollection(facets, () => db.collectionsList().map((item) => ({
+  db.register(tagsCollection(tags, () => db.collectionsList().map((item) => ({
     id: item.id,
     path: item.path,
     label: item.label ?? item.id,
@@ -3390,15 +3847,15 @@ export function apply(ctx: Context) {
   ctx.tools.register({
     name: 'db_content',
     description: [
-      '读写一条记录的正文。list/read 不含正文。path 为 /<表>/<id>。',
-      'command=view：带行号读一段正文，默认前 80 行，可用 view_range=[start,end]（1-based，end=-1 到末尾）；truncated 表示还有未读行。',
+      '读写一条记录的正文（一篇，只要 path）。list/read 不含正文。path 为 /<表>/<id>。',
+      'command=view：带行号读一段正文，默认前 80 行，可用 view_range=[start,end]（1-based，end=-1 到末尾）；truncated 表示还有未读行。引用形如 [@ id="page/<id>"]，view 会补当前 label；落盘只留 id，写回时不要依赖 label。',
       'command=str_replace：old_str 必须在正文里唯一，替换为 new_str（短文本）或 from 文件内容（长文本）。',
       'command=replace_lines：按 1-based 闭区间 start_line..end_line 换成 new_str（短）或 from 文件内容（长）。',
       'command=insert：在 insert_line 之后插入。短文本用 new_str；长文本用 from=<本地文件>。',
       'command=find_replace：批量替换。默认等价 str_replace（old_str 必须唯一）；all=true 替换所有匹配（可用 count 限制次数），regex=true 时 old_str 按正则解释。返回 replaced 为实际替换次数。新文本同样：短用 new_str，长用 from。',
       'command=write：整篇覆盖。短全文用 value 内联，长全文用 from=<本地文件路径>（工作区或 /tmp）。new_str / value 与 from 都保留；同时给时以 from 为准。写成功只返回 {ok, path}，不含全文。str_replace / find_replace / replace_lines / insert 成功额外返回 start_line、end_line（改后正文的 1-based 行）。编辑器会标出该段改动，不抢输入焦点、不自动跳转；跳转只在用户主动点目录或查找时发生。',
-      '页面插图：不要把 data URL / base64 写进正文。先把图片文件落到工作区（下载或生成），再用 db_asset command=write name=<逻辑名.ext> from=<本地路径> 入库（内容寻址，返回 name=<哈希.ext>），然后 insert/str_replace 写入一行 Markdown：![说明](/api/db/file/<哈希.ext>)。也可以先写这一行再 write 附件。',
-      '写 :::pageBlock 前先 db_content /plugins/<plugin> 读介绍里的「示例写法」，不要猜围栏，也不要把块源码写进围栏体。',
+      '页面插图：不要把 data URL / base64 写进正文。先把图片文件落到工作区（下载或生成），再用 db_media command=write name=<逻辑名.ext> from=<本地路径> 入库（内容寻址，返回 name=<哈希.ext>），然后 insert/str_replace 写入一行 Markdown：![说明](/api/db/file/<哈希.ext>)。也可以先写这一行再 write 附件。',
+      '写 :::editorBlock 前先 db_content /plugins/<plugin> 读介绍里的「示例写法」，不要猜围栏，也不要把块源码写进围栏体。',
     ].join(' '),
     parameters: {
       type: 'object',
@@ -3442,9 +3899,9 @@ export function apply(ctx: Context) {
       ),
   })
   ctx.tools.register({
-    name: 'db_asset',
+    name: 'db_media',
     description: [
-      '读写一条记录的不可变资源（图片、音频、导入文件）。可变文档（画板 json、块本体）用 db_doc。正文仍用 db_content。',
+      '读写一条记录的不可变附件（图片、音频、导入文件）。旧名 db_asset 仍可用。可变文件（画板、沙盒 jsx）用 db_file。正文用 db_content。',
       'path 为 /<表>/<id>。write 落盘 .biu/assets/hash/<2>/<2>/<哈希>.<ext>，返回 name=<哈希.ext>。引用写成 /api/db/file/<哈希.ext>。',
       'command=view：列出已引用附件；带 name 读该文件。missing=true 合法。',
       'command=write：内容寻址，只增不改。可带 block_id / source / kind=core|asset；refs 为该块当前引用完整列表。',
@@ -3466,7 +3923,7 @@ export function apply(ctx: Context) {
           type: 'string',
           description: 'write 时读这个本地文件作为内容，代替 value。相对工作区根，或绝对路径。',
         },
-        etag: { type: 'string', description: '资源路径不用 etag；文档请用 db_doc' },
+        etag: { type: 'string', description: '资源路径不用 etag；可变文件请用 db_file' },
         block_id: { type: 'string', description: '块级归属，写入 block_refs' },
         source: { type: 'string', description: '引用子键，如 block:<id>:bgm' },
         kind: { type: 'string', description: 'core（永不自动回收）或 asset' },
@@ -3488,41 +3945,65 @@ export function apply(ctx: Context) {
       ),
   })
   ctx.tools.register({
-    name: 'db_doc',
+    name: 'db_file',
     description: [
-      '读写一条记录的可变文档（画板场景、视频脚本、htmlframe HTML）。图片等不可变资源用 db_asset。',
-      'path 为 /<表>/<id>。write 落盘 .biu/assets/name/<逻辑名>，覆盖必须带 etag（上次 view 的内容哈希），对不上返回 etag conflict。引用写成 /api/db/file/<逻辑名>（按名字寻址；哈希名则是不可变文件）。画板也可走 /api/page/file/<逻辑名>。',
-      'command=view：列出引用或读该文档（文本带 text）和 etag。',
-      'command=write：稳定名覆盖 + If-Match。可带 block_id / source / kind=core|asset。',
+      '读写一条记录上的可变文件（画板、视频脚本、htmlframe、页面沙盒 jsx）。旧名 db_doc 仍可用。不可变附件用 db_media。正文用 db_content。',
+      'path 为 /<表>/<id>，name 为稳定逻辑名。页面沙盒用 path=/pages/<id> name=view-<id>-<viewId>.jsx。',
+      '命令与 db_content 相同：view / str_replace / find_replace / replace_lines / insert / write。局部改写会先读当前文件再覆盖，不必先 view 再带 etag；并发冲突仍返回 etag conflict。write 整篇覆盖。',
+      'command=view：不带 name 列出引用；带 name 按行号读（可用 view_range）。',
     ].join(' '),
     parameters: {
       type: 'object',
       properties: {
         path: { type: 'string' },
-        name: { type: 'string', description: '稳定逻辑名，如 画板-ab12cd.json' },
+        name: { type: 'string', description: '稳定逻辑名，如 view-p194-8fdbc4f8.jsx' },
         command: {
           type: 'string',
-          enum: ['view', 'write'],
-          description: 'view | write。省略时：有 value 或 from 则 write，否则 view。',
+          enum: ['view', 'str_replace', 'find_replace', 'replace_lines', 'insert', 'write'],
+          description:
+            'view | str_replace | find_replace | replace_lines | insert | write。省略时：有 value 或 from 则 write，否则 view。',
         },
-        value: { type: 'string' },
-        from: { type: 'string' },
-        etag: { type: 'string', description: '覆盖已有文档时必填，等于上次 view 的 etag' },
+        value: { type: 'string', description: 'write 的短全文。长文本用 from。' },
+        from: {
+          type: 'string',
+          description:
+            '长文本：从本地文件读入。write 对应 value；insert / str_replace / find_replace / replace_lines 对应 new_str。',
+        },
+        old_str: { type: 'string', description: 'str_replace / find_replace 要替换的原文' },
+        new_str: {
+          type: 'string',
+          description: 'str_replace / find_replace / insert / replace_lines 的短新文本。长文本用 from。',
+        },
+        regex: { type: 'boolean', description: 'find_replace：old_str 是否按正则解释' },
+        all: { type: 'boolean', description: 'find_replace：是否替换所有匹配' },
+        count: { type: 'integer', description: 'find_replace：最多替换几处' },
+        insert_line: { type: 'integer', description: 'insert：在该行之后插入' },
+        start_line: { type: 'integer', description: 'replace_lines 起始行（含）' },
+        end_line: { type: 'integer', description: 'replace_lines 结束行（含）' },
+        view_range: {
+          type: 'array',
+          items: { type: 'integer' },
+          description: 'view 的行区间，如 [11, 20] 或 [80, -1]',
+        },
+        etag: { type: 'string', description: '可选 If-Match；省略则用刚读到的当前 etag' },
         block_id: { type: 'string' },
         source: { type: 'string' },
         kind: { type: 'string' },
       },
       required: ['path'],
     },
+    execution: (args) => (resolveContentCommand(args) === 'view' ? 'parallel' : 'exclusive'),
     execute: (args) =>
       withInspectorReveal(ctx, String(args.path), () =>
         db.editDoc(String(args.path), args).then((body) => agentDbCompact.query(body)),
       ),
   })
+  ctx.tools.alias('db_file', ['db_doc'])
+  ctx.tools.alias('db_media', ['db_asset'])
 
   const send = async (route: { query: URLSearchParams; send: (status: number, body: unknown) => void }, op: () => unknown) => {
     try {
-      route.send(200, await op())
+      route.send(200, await withSchemaRequestCache(op))
     } catch (error) {
       const failure = databaseHttpFailure(error)
       route.send(failure.status, failure.body)
@@ -3578,7 +4059,48 @@ export function apply(ctx: Context) {
       })
     }),
   )
+  ctx.http.route('GET', '/api/db/groups', route => send(route, () => {
+    const raw = route.query.get('filter')
+    const filter = raw ? JSON.parse(raw) as Record<string, unknown> : undefined
+    const pagesRaw = route.query.get('pages')
+    let groupPages: Record<string, number> | undefined
+    if (pagesRaw) {
+      try {
+        const parsed = JSON.parse(pagesRaw) as unknown
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) groupPages = parsed as Record<string, number>
+      } catch {
+        groupPages = undefined
+      }
+    }
+    return db.attributeGroups(route.query.get('path') || '/', route.query.get('field') || '', filter, route.query.get('q') || '', {
+      limit: route.query.get('limit') ? Number(route.query.get('limit')) : undefined,
+      columns: parseListColumnsParam(route.query.get('columns')),
+      sortField: route.query.get('sort') || '',
+      sortDir: route.query.get('dir') === 'desc' ? 'desc' : 'asc',
+      sorts: parseSortsParam(route.query.get('sorts')),
+      groupPages,
+    })
+  }))
   ctx.http.route('GET', '/api/db/read', (route) => send(route, () => db.read(route.query.get('path') || '/')))
+  ctx.http.route('GET', '/api/db/detail', async (route) => {
+    const path = route.query.get('path') || '/'
+    const parts = path.split('/').filter(Boolean)
+    if (parts.length === 2) {
+      const search = route.query.toString()
+      const forwarded = await forwardCloud(
+        ctx,
+        `/${parts[0]}`,
+        parts[1]!,
+        search ? `/api/db/detail?${search}` : '/api/db/detail',
+        { method: 'GET' },
+      )
+      if (forwarded) {
+        route.send(forwarded.status, forwarded.body)
+        return
+      }
+    }
+    await send(route, () => db.detail(path))
+  })
   ctx.http.route('GET', '/api/db/banner-gallery', (route) =>
     send(route, async () => {
       await db.requirePath('/pages', 'resource:read')
@@ -3837,6 +4359,20 @@ export function apply(ctx: Context) {
     if (query) return query
     return String(body?.password ?? '')
   }
+  const rememberShareLan = (route: { req: { headers: IncomingMessage['headers'] } }) => {
+    if (isOnlineRuntime()) return
+    const code = String(route.req.headers['x-lan-member'] ?? '').trim()
+    if (!code) return
+    try {
+      const account = ctx.get('account') as {
+        store?: { activeWorkspaceId?: () => string | null; rememberLanMember?: (workspaceId: string, code: string) => unknown }
+      }
+      const workspaceId = account.store?.activeWorkspaceId?.() ?? ''
+      account.store?.rememberLanMember?.(workspaceId, code)
+    } catch {
+      /* 没有账号库时分享页仍可打开 */
+    }
+  }
   ctx.http.route('GET', '/api/db/shares', async (route) => {
     if (activeDataLocation() === 'cloud' && !isOnlineRuntime()) {
       const search = route.query.toString()
@@ -4002,6 +4538,7 @@ export function apply(ctx: Context) {
       route.send(401, { needsPassword: true })
       return
     }
+    rememberShareLan(route)
     try {
       const snapshot = await buildShareSnapshot(db, savedViews, share, shareSnapshotOpts(route.query))
       route.send(200, snapshot)
@@ -4027,6 +4564,7 @@ export function apply(ctx: Context) {
       route.send(401, { needsPassword: true })
       return
     }
+    rememberShareLan(route)
     try {
       const snapshot = await buildShareSnapshot(db, savedViews, share, shareSnapshotOpts(route.query))
       route.send(200, snapshot)
@@ -4166,6 +4704,27 @@ export function apply(ctx: Context) {
       route.send(404, { error: 'not found' })
     }
   })
+  const patchTagSandboxRoute: Parameters<typeof ctx.http.route>[2] = async (route) => {
+    try {
+      const body = (await route.json()) as { path?: string; tagId?: string; values?: unknown }
+      const path = String(body?.path ?? '')
+      const parts = path.split('/').filter(Boolean)
+      if (parts.length === 2) {
+        const forwarded = await forwardCloud(ctx, `/${parts[0]}`, parts[1]!, '/api/tag/sandbox/patch', { body })
+        if (forwarded) {
+          const value = (forwarded.body as { value?: { id?: string } } | null)?.value
+          if (forwarded.status < 300 && value?.id) await db.applySynced(`/${parts[0]}`, [value as { id: string }])
+          route.send(forwarded.status, forwarded.body)
+          return
+        }
+      }
+      route.send(200, await db.patchTagSandbox(path, String(body?.tagId ?? ''), body?.values))
+    } catch (error) {
+      route.send(400, { error: String(error) })
+    }
+  }
+  ctx.http.route('POST', '/api/tag/sandbox/patch', patchTagSandboxRoute)
+  ctx.http.route('POST', '/api/page/sandbox/patch', patchTagSandboxRoute)
   ctx.http.route('GET', '/api/db/tags', async (route) => {
     try {
       await db.requirePath('/tags', 'resource:read')
@@ -4175,7 +4734,11 @@ export function apply(ctx: Context) {
         return
       }
       const q = route.query.get('q') || ''
-      route.send(200, { tags: facets.list(q), filled: facets.filledFieldCounts() })
+      const payload: { tags: ReturnType<typeof tags.list>; filled?: ReturnType<typeof tags.filledFieldCounts> } = {
+        tags: tags.list(q),
+      }
+      if (route.query.get('filled')) payload.filled = tags.filledFieldCounts()
+      route.send(200, payload)
     } catch (error) {
       route.send(400, { error: String(error) })
     }
@@ -4187,10 +4750,10 @@ export function apply(ctx: Context) {
       const listed = Array.isArray(body.tags) ? body.tags : Array.isArray(body.facets) ? body.facets : []
       for (const item of listed) {
         const pack = normalizeSchemaPack(item)
-        if (pack) facets.upsert(pack)
+        if (pack) tags.upsert(pack)
       }
-      ctx.emit('database/change')
-      route.send(200, { ok: true, tags: facets.list(), filled: facets.filledFieldCounts() })
+      db.notifyTagCatalog()
+      route.send(200, { ok: true, tags: tags.list() })
     } catch (error) {
       route.send(400, { error: String(error) })
     }
@@ -4198,10 +4761,15 @@ export function apply(ctx: Context) {
   const serveDbFile: Parameters<typeof ctx.http.route>[2] = async (route) => {
     try {
       const name = route.params.name ?? ''
-      db.requireAsset(name, 'resource:read')
+      const path = route.query.get('path') || String(route.req.headers['x-biu-resource-path'] ?? '')
+      if (path) await db.requirePath(path, 'resource:read')
+      else db.requireAsset(name, 'resource:read')
       const { bytes, type, etag } = await assets.readAny(name)
+      const suggested = route.query.get('download')
+      const inline = !suggested && (type.startsWith('image/') || type.startsWith('audio/') || type.startsWith('video/'))
       route.res.writeHead(200, {
         'content-type': type,
+        'content-disposition': assetContentDisposition(name, suggested, inline),
         'cache-control': isHashedAssetName(name) ? 'public, max-age=31536000, immutable' : 'no-store',
         etag: `"${etag}"`,
       })
@@ -4232,7 +4800,7 @@ export function apply(ctx: Context) {
         storage: written.storage,
       })
       linkUploadedAsset(db, path, written.name)
-      ctx.http.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), asset: { name: written.name, etag: written.etag } })
+      ctx.http.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('asset', { asset: { name: written.name, etag: written.etag } }))
       route.send(200, { ok: true, ...written })
     } catch (error) {
       if (error instanceof AssetConflictError) {
@@ -4262,7 +4830,7 @@ export function apply(ctx: Context) {
         storage: written.storage,
       })
       linkUploadedAsset(db, path, written.name)
-      ctx.http.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), asset: { name: written.name, etag: written.etag } })
+      ctx.http.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('asset', { asset: { name: written.name, etag: written.etag } }))
       route.send(200, { ok: true, ...written })
     } catch (error) {
       route.send(400, { error: String(error) })

@@ -1,4 +1,6 @@
 /** 打开会话只拉最近 100 轮。和 SESSION_TAIL_TURNS 同值，单独放这个文件是为了入口能早打 GET。 */
+import { mostRecentSessionId } from './session-groups.ts'
+
 export const SESSION_LOAD_TURNS = 100
 
 const SESSIONS_LIST_HOLD_MS = 400
@@ -75,23 +77,6 @@ export async function getSessionTurns<T = Record<string, unknown>>(
   )
   sessionTurnsInflight.set(sessionId, request)
   return request as Promise<{ status: number; body: T } | null>
-}
-
-function mostRecentSessionId(sessions: Array<{ id?: unknown; updatedAt?: unknown }>) {
-  let best: { id: string; updatedAt: number } | undefined
-  for (const item of sessions) {
-    const id = typeof item.id === 'string' ? item.id : ''
-    if (!id) continue
-    const updatedAt = typeof item.updatedAt === 'number' ? item.updatedAt : 0
-    if (
-      !best ||
-      updatedAt > best.updatedAt ||
-      (updatedAt === best.updatedAt && id.localeCompare(best.id) < 0)
-    ) {
-      best = { id, updatedAt }
-    }
-  }
-  return best?.id
 }
 
 function hasAccountToken() {

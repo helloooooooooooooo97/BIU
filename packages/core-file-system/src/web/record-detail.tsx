@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from 'react'
+import { createPortal } from 'react-dom'
 import type { CollectionChrome, FsDetailPane } from '@biu/type-file-system/ui'
 import type { CollectionSchema, DbRecord, FieldSpec } from '@biu/type-file-system'
 import { ChevronDownIcon, ChevronLeftIcon, ChevronUpIcon, HashtagIcon, ShareIcon } from '@heroicons/react/16/solid'
@@ -12,13 +13,16 @@ import { TagPackEditor } from './schema-field.tsx'
 import { idleTableIconKind } from './nav-glyphs.tsx'
 import { TAGS_COLLECTION_PATH } from './database-path.ts'
 import { normalizeRecordEmoji, recordPreviewEmoji } from './sidebar-preview.ts'
-import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, shouldLeaveContentForTitle, shouldLeaveTitleForContent, focusRecordTitleNear } from './title-content-nav.ts'
+import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, shouldLeaveContentForTitle, shouldLeaveTitleForContent, focusRecordTitleNear, scheduleFocusRecordTitle } from './title-content-nav.ts'
 import { HeadingOutline } from './heading-outline.tsx'
 import { PageBanner } from './page-banner.tsx'
 import { fieldPickAttrs, recordSourcePath } from './pick-dom.ts'
 import { dismissInspectorPaneMenu } from './inspector-pane-menu.tsx'
 import { PaneConfigMenuItem } from './pane-more-menu.tsx'
 import { PageContentFailed, PageContentLoading } from './page-content-status.tsx'
+import { useRecordContentBody } from './record-content.tsx'
+
+const RecordProperties = lazy(() => import('./record-prop-host.tsx').then((m) => ({ default: m.RecordProperties })))
 
 export { PageContentFailed, PageContentLoading } from './page-content-status.tsx'
 
@@ -211,6 +215,55 @@ function RecordPaneMenu({
   )
 }
 
+function RecordFloatNav({
+  canPrev,
+  canNext,
+  onPrev,
+  onNext,
+}: {
+  canPrev?: boolean
+  canNext?: boolean
+  onPrev?: () => void
+  onNext?: () => void
+}) {
+  const mark = useRef<HTMLSpanElement>(null)
+  const [host, setHost] = useState<HTMLElement | null>(null)
+
+  useLayoutEffect(() => {
+    const stage = mark.current?.closest('.fsdb-detail-stage')
+    const main = stage?.querySelector('.fsdb-detail-main')
+    const root =
+      (main instanceof HTMLElement
+        ? main.closest('.fsdb-right') ?? main.closest('.fsdb-right-body')
+        : null) ?? stage
+    setHost(root instanceof HTMLElement ? root : null)
+  }, [])
+
+  if (!canPrev && !canNext) return null
+  const nav = (
+    <div className="fsdb-detail-float-host">
+      <nav className="fsdb-detail-float-nav" aria-label="按视图顺序切换记录">
+        {canPrev ? (
+          <button type="button" className="fsdb-detail-float-btn" title="上一条" aria-label="上一条" onClick={onPrev}>
+            <ChevronUpIcon aria-hidden />
+          </button>
+        ) : null}
+        {canNext ? (
+          <button type="button" className="fsdb-detail-float-btn" title="下一条" aria-label="下一条" onClick={onNext}>
+            <ChevronDownIcon aria-hidden />
+          </button>
+        ) : null}
+      </nav>
+    </div>
+  )
+  return (
+    <>
+      <span ref={mark} hidden aria-hidden="true" />
+      {host ? createPortal(nav, host) : nav}
+    </>
+  )
+}
+
 export function RecordDetail({
   selected,
   schema,
@@ -275,6 +328,7 @@ export function RecordDetail({
   columnMenu?: ReactNode
 }) {
   const title = labelOf(selected)
+  const { hidden: contentHidden, Body: ContentView } = useRecordContentBody(collectionPath, selected, chrome)
   const recordPath = recordSourcePath(collectionPath, selected.id)
   const propPick = (key: string, field?: FieldSpec, text?: string) =>
     fieldPickAttrs(recordKind, selected.id, key, {
@@ -282,6 +336,7 @@ export function RecordDetail({
       title,
       path: recordPath,
       text,
+      type: field?.type,
     })
   const mainRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -291,8 +346,12 @@ export function RecordDetail({
       requestAnimationFrame(go)
     }
     window.addEventListener(FOCUS_RECORD_TITLE, onTitle)
-    return () => window.removeEventListener(FOCUS_RECORD_TITLE, onTitle)
-  }, [])
+    const stop = inspectorPaneId ? undefined : scheduleFocusRecordTitle(() => mainRef.current)
+    return () => {
+      window.removeEventListener(FOCUS_RECORD_TITLE, onTitle)
+      stop?.()
+    }
+  }, [inspectorPaneId, selected.id])
 
   const paneMenu = (
     <RecordPaneMenu
@@ -329,6 +388,12 @@ export function RecordDetail({
       if (key === contentFieldKey(schema) && resolveFieldType(field) === 'file') return false
       if (chrome?.panes?.some((pane) => pane.id === key)) return false
       if (key === 'fields' && collectionPath === TAGS_COLLECTION_PATH && String(selected.id).includes('::')) return false
+      if (
+        (key === 'views' || key === 'propViews' || key === 'layouts') &&
+        !(visiblePropertyKeys && visiblePropertyKeys.includes(key))
+      ) {
+        return false
+      }
       const kind = resolveFieldType(field)
       if (kind === 'tag' && !field.writable) return false
       if (field.computed && !fieldHasValue(field, selected[key])) return false
@@ -421,8 +486,15 @@ export function RecordDetail({
                     columnMenu={columnMenu}
                     onRetry={onRetryBody}
                     configMenu={paneMenu}
+                    onPrev={onPrev}
+                    onNext={onNext}
+                    canPrev={canPrev}
+                    canNext={canNext}
                   />
                 ) : null}
+                {(() => {
+                  const Properties = chrome?.Properties ?? RecordProperties
+                  const table = (
                 <div className="fsdb-detail-aside">
                   <table className="tasks-table is-wrap">
                     <thead>
@@ -514,29 +586,54 @@ export function RecordDetail({
                     </tbody>
                   </table>
                 </div>
-                {contentFieldKey(schema) && schema.fields[contentFieldKey(schema)!] ? (() => {
+                  )
+                  if (!Properties) return table
+                  return (
+                    <Suspense fallback={table}>
+                    <Properties
+                      record={selected}
+                      schema={schema}
+                      collectionPath={collectionPath}
+                      writable={!readOnly}
+                    >
+                      {table}
+                    </Properties>
+                    </Suspense>
+                  )
+                })()}
+                {contentFieldKey(schema) && schema.fields[contentFieldKey(schema)!] && !contentHidden ? (() => {
                   const key = contentFieldKey(schema)!
                   const spec = schema.fields[key]!
-                  const ContentView = chrome?.Content
                   if (ContentView) {
                     return (
-                      <div className="fsdb-fileview">
+                      <Suspense fallback={<PageContentLoading />}>
+                      <div className="fsdb-fileview" aria-busy={detailBodyStatus === 'loading'}>
+                        {detailBodyStatus === 'loading' && detailBody == null ? <PageContentLoading /> : (
                         <ContentView
                           record={selected}
                           field={key}
                           spec={spec}
+                          schema={schema}
                           value={detailBody}
                           writable={Boolean(spec.writable) && !readOnly && detailBodyStatus === 'ready'}
-                          path={collectionPath ? `${collectionPath}/${selected.id}` : undefined}
+                          path={
+                            collectionPath === '/data' && selected.tablePath && selected.sourceId
+                              ? `${String(selected.tablePath)}/${String(selected.sourceId)}`
+                              : collectionPath
+                                ? `${collectionPath}/${selected.id}`
+                                : undefined
+                          }
                           status={detailBodyStatus}
                           onRetry={onRetryBody}
                           onChange={(next) => void writePatch(selected, { [key]: next })}
                         />
+                        )}
                       </div>
+                      </Suspense>
                     )
                   }
-                  if (detailBodyStatus === 'loading') return <PageContentLoading />
-                  if (detailBodyStatus === 'failed') {
+                  if (detailBodyStatus === 'loading' && detailBody == null) return <PageContentLoading />
+                  if (detailBodyStatus === 'failed' && detailBody == null) {
                     return <PageContentFailed error={detailBodyError} onRetry={onRetryBody} />
                   }
                   if (spec.writable) {
@@ -594,30 +691,7 @@ export function RecordDetail({
             </div>
           </div>
           <HeadingOutline enabled={outlineOn} />
-          {onPrev || onNext ? (
-            <nav className="fsdb-detail-float-nav" aria-label="按视图顺序切换记录">
-              <button
-                type="button"
-                className="fsdb-detail-float-btn"
-                title="上一条"
-                aria-label="上一条"
-                disabled={!canPrev}
-                onClick={onPrev}
-              >
-                <ChevronUpIcon aria-hidden />
-              </button>
-              <button
-                type="button"
-                className="fsdb-detail-float-btn"
-                title="下一条"
-                aria-label="下一条"
-                disabled={!canNext}
-                onClick={onNext}
-              >
-                <ChevronDownIcon aria-hidden />
-              </button>
-            </nav>
-          ) : null}
+          <RecordFloatNav canPrev={canPrev} canNext={canNext} onPrev={onPrev} onNext={onNext} />
         </div>
   )
 }

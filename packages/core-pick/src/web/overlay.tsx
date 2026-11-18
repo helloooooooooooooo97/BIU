@@ -1,7 +1,11 @@
 import { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import type { SlotProps } from '@biu/type-slots'
 import { getPick, usePickState } from './service.ts'
-import { boxFromPoints, pickSurfaceAtPoint, resolvePickFromEvent, resolvePicksInRect, visiblePickBox } from './resolve.ts'
+import { boxFromPoints, pickSurfaceAtPoint, resolvePickFromEvent, resolvePickFromNode, resolvePicksInRect, visiblePickBox } from './resolve.ts'
+import { bindPickDragScroll, pickDragScroller } from './drag-scroll.ts'
+import { pickKey, type PickRef } from './types.ts'
+import { SANDBOX_PICK_EVENT } from './sandbox-relay.ts'
 
 const DRAG_PX = 6
 
@@ -41,25 +45,73 @@ export function PickOverlay(_props: SlotProps) {
     }
     document.documentElement.classList.add('pick-mode')
     const route = () => window.location.pathname
-    const EDITOR_SEL = '.page-editor, .tiptap, [data-testid="page-editor"], .cm-editor'
+    const EDITOR_SEL = '.page-editor:not(.is-host), .tiptap, [data-testid="page-editor"], .cm-editor'
     const pathHasEditor = (event: Event) =>
       event.composedPath().some((node) => node instanceof Element && (node.matches(EDITOR_SEL) || Boolean(node.closest(EDITOR_SEL))))
 
-    let drag: { x: number; y: number; boxed: boolean; editor: boolean } | null = null
+    type DragHit = { ref: PickRef; left: number; top: number; width: number; height: number }
+    let drag: {
+      x: number; y: number; boxed: boolean; editor: boolean
+      pointer: { x: number; y: number }
+      root: ParentNode
+      scroller: HTMLElement | null
+      scrollTop: number; scrollLeft: number
+      hits: Map<string, DragHit>
+    } | null = null
+    let autoScroll: ReturnType<typeof bindPickDragScroll> | null = null
+    let paintRaf = 0
+
+    const paintDrag = () => {
+      if (!drag || !drag.boxed) return
+      const dx = (drag.scroller?.scrollLeft ?? 0) - drag.scrollLeft
+      const dy = (drag.scroller?.scrollTop ?? 0) - drag.scrollTop
+      const box = boxFromPoints(drag.x - dx, drag.y - dy, drag.pointer.x, drag.pointer.y)
+      const hits = resolvePicksInRect(box, route(), drag.root)
+      for (const hit of hits) {
+        const rect = hit.el.getBoundingClientRect()
+        drag.hits.set(pickKey(hit.ref), {
+          ref: hit.ref, left: rect.left + dx, top: rect.top + dy, width: rect.width, height: rect.height,
+        })
+      }
+      const content = boxFromPoints(drag.x, drag.y, drag.pointer.x + dx, drag.pointer.y + dy)
+      for (const [key, hit] of drag.hits) {
+        if (hit.left >= content.left + content.width || hit.left + hit.width <= content.left ||
+            hit.top >= content.top + content.height || hit.top + hit.height <= content.top) drag.hits.delete(key)
+      }
+      // Keep refs for rows that virtualization unmounted, but draw within the original pane.
+      const viewport = drag.scroller ? visiblePickBox(drag.scroller) : null
+      const left = viewport ? Math.max(box.left, viewport.left) : box.left
+      const top = viewport ? Math.max(box.top, viewport.top) : box.top
+      const right = viewport ? Math.min(box.left + box.width, viewport.left + viewport.width) : box.left + box.width
+      const bottom = viewport ? Math.min(box.top + box.height, viewport.top + viewport.height) : box.top + box.height
+      pick.setMarquee(
+        { top, left, width: Math.max(0, right - left), height: Math.max(0, bottom - top) },
+        hits.map((hit) => hoverBox(hit.el)),
+      )
+    }
+    const onScroll = () => {
+      if (paintRaf) return
+      paintRaf = requestAnimationFrame(() => { paintRaf = 0; paintDrag() })
+    }
+    const stopDrag = () => {
+      autoScroll?.stop()
+      autoScroll = null
+      drag?.scroller?.removeEventListener('scroll', onScroll)
+      if (paintRaf) cancelAnimationFrame(paintRaf)
+      paintRaf = 0
+      drag = null
+    }
 
     const onMove = (event: PointerEvent) => {
       if (drag) {
+        if (event.buttons === 0) { stopDrag(); pick.setMarquee(null); return }
+        drag.pointer = { x: event.clientX, y: event.clientY }
         const dx = event.clientX - drag.x
         const dy = event.clientY - drag.y
         if (!drag.boxed && dx * dx + dy * dy >= DRAG_PX * DRAG_PX) drag.boxed = true
         if (!drag.boxed || drag.editor) return
-        const box = boxFromPoints(drag.x, drag.y, event.clientX, event.clientY)
-        const root = pickSurfaceAtPoint(drag.x, drag.y) ?? document
-        const hits = resolvePicksInRect(box, route(), root)
-        pick.setMarquee(
-          { top: box.top, left: box.left, width: box.width, height: box.height },
-          hits.map((hit) => hoverBox(hit.el)),
-        )
+        paintDrag()
+        autoScroll?.update(drag.pointer)
         return
       }
       const hit = resolvePickFromEvent(event, route())
@@ -73,29 +125,39 @@ export function PickOverlay(_props: SlotProps) {
     const onDown = (event: PointerEvent) => {
       if (event.button !== 0) return
       if (ignorePickCapture(event.target, event)) return
+      stopDrag()
       const inReadable = pathHasEditor(event) || event.composedPath().some((node) => node instanceof Element && Boolean(node.closest('.chat-stage')))
       if (!inReadable) event.preventDefault()
-      drag = { x: event.clientX, y: event.clientY, boxed: false, editor: pathHasEditor(event) }
+      const editor = pathHasEditor(event)
+      const scroller = editor ? null : pickDragScroller(event.composedPath())
+      drag = {
+        x: event.clientX, y: event.clientY, boxed: false, editor,
+        pointer: { x: event.clientX, y: event.clientY },
+        root: pickSurfaceAtPoint(event.clientX, event.clientY) ?? scroller ?? document,
+        scroller, scrollTop: scroller?.scrollTop ?? 0, scrollLeft: scroller?.scrollLeft ?? 0,
+        hits: new Map(),
+      }
+      if (scroller) {
+        autoScroll = bindPickDragScroll(scroller, onScroll)
+        scroller.addEventListener('scroll', onScroll, { passive: true })
+      }
     }
 
     const onUp = (event: PointerEvent) => {
       if (!drag) return
+      drag.pointer = { x: event.clientX, y: event.clientY }
+      paintDrag()
       const started = drag
-      drag = null
+      stopDrag()
       if (!pick.picking) return
       if (started.boxed) {
-        pick.addMany(
-          resolvePicksInRect(
-            boxFromPoints(started.x, started.y, event.clientX, event.clientY),
-            route(),
-            pickSurfaceAtPoint(started.x, started.y) ?? document,
-          ).map((hit) => hit.ref),
-        )
+        pick.addMany([...started.hits.values()].map((hit) => hit.ref))
         return
       }
       const hit = resolvePickFromEvent(event, route())
       if (hit) pick.add(hit.ref)
     }
+    const onCancel = () => { stopDrag(); pick.setMarquee(null) }
 
     const onClick = (event: MouseEvent) => {
       if (ignorePickCapture(event.target, event)) return
@@ -112,18 +174,38 @@ export function PickOverlay(_props: SlotProps) {
       }
     }
 
+    const onSandbox = (event: Event) => {
+      const detail = (event as CustomEvent<{ el?: HTMLElement; type?: string }>).detail
+      const el = detail?.el
+      if (!(el instanceof HTMLElement)) return
+      const hit = resolvePickFromNode(el, route(), null)
+      if (!hit) return
+      if (detail?.type === 'pointerup') {
+        if (pick.picking) pick.add(hit.ref)
+        return
+      }
+      pick.setHover(hoverBox(hit.el))
+    }
+
     window.addEventListener('pointerdown', onDown, true)
     window.addEventListener('pointermove', onMove, true)
     window.addEventListener('pointerup', onUp, true)
+    window.addEventListener('pointercancel', onCancel, true)
+    window.addEventListener('blur', onCancel)
     window.addEventListener('click', onClick, true)
     window.addEventListener('keydown', onKey, true)
+    window.addEventListener(SANDBOX_PICK_EVENT, onSandbox)
     return () => {
+      stopDrag()
       document.documentElement.classList.remove('pick-mode')
       window.removeEventListener('pointerdown', onDown, true)
       window.removeEventListener('pointermove', onMove, true)
       window.removeEventListener('pointerup', onUp, true)
+      window.removeEventListener('pointercancel', onCancel, true)
+      window.removeEventListener('blur', onCancel)
       window.removeEventListener('click', onClick, true)
       window.removeEventListener('keydown', onKey, true)
+      window.removeEventListener(SANDBOX_PICK_EVENT, onSandbox)
     }
   }, [picking, pick])
 
@@ -143,7 +225,7 @@ export function PickOverlay(_props: SlotProps) {
   }, [pick])
 
   if (!picking) return null
-  return (
+  const layer = (
     <>
       {marquee ? (
         <div
@@ -173,4 +255,6 @@ export function PickOverlay(_props: SlotProps) {
       ))}
     </>
   )
+  if (typeof document === 'undefined') return layer
+  return createPortal(layer, document.body)
 }

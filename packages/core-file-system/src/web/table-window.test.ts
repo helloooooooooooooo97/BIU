@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_PX, TABLE_COL_PIN_PX, TABLE_COL_ACTIONS_PX, TABLE_COL_VIEWPORT_FALLBACK, GROUPED_FULL_FETCH_ALL_MAX, groupedFullFetchCount, medianPaintedRowPx, rememberedTableWrap, rememberTableWrap, resetRememberedTableWrap, settlePaintedRowPx, tableColumnSlice, tableColumnWidth, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll } from './table-window.ts'
+import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_PX, TABLE_COL_PIN_PX, TABLE_COL_ACTIONS_PX, TABLE_COL_VIEWPORT_FALLBACK, GROUPED_FULL_FETCH_ALL_MAX, groupedFullFetchCount, medianPaintedRowPx, rememberedTableWrap, rememberTableWrap, resetRememberedTableWrap, reusePaintNodes, settlePaintedRowPx, tableCheckSlots, tableColumnSlice, tableColumnWidth, tableFrozenKeys, tablePinColClass, tablePinCount, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, toggleFrozenPrefix } from './table-window.ts'
 
 test('table window keeps overscan around the viewport', () => {
   const slice = tableWindowSlice(200, 0, TABLE_ROW_PX * 10)
@@ -67,6 +67,32 @@ test('empty table has no pad', () => {
   assert.deepEqual(tableWindowSlice(0, 0, 400), { start: 0, end: 0, padTop: 0, padBottom: 0 })
 })
 
+test('reusePaintNodes keeps unchanged row object identity', () => {
+  const row = { id: 'a' }
+  const prev = [{ kind: 'row', key: 'a', row, depth: 0, hasKids: false, kidCount: 0 }]
+  const next = [{ kind: 'row', key: 'a', row, depth: 0, hasKids: false, kidCount: 0 }]
+  const shared = reusePaintNodes(prev, next)
+  assert.equal(shared, prev)
+  assert.equal(shared[0], prev[0])
+  const moved = { id: 'a' }
+  const rebuilt = reusePaintNodes(prev, [{ kind: 'row', key: 'a', row: moved, depth: 0, hasKids: false, kidCount: 0 }])
+  assert.equal(rebuilt[0]?.row, moved)
+})
+
+test('check rail slots follow the virtual window without measuring rows', () => {
+  const nodes = Array.from({ length: 40 }, (_, i) => ({ kind: 'row', row: { id: `r${i}` } }))
+  const window = tableWindowSlice(40, TABLE_ROW_PX * 10, TABLE_ROW_PX * 4)
+  const slots = tableCheckSlots(nodes, window, TABLE_ROW_PX)
+  assert.equal(slots[0]?.kind, 'head')
+  assert.equal(slots[0]?.h, TABLE_ROW_PX)
+  assert.equal(slots[1]?.kind, 'gap')
+  assert.equal(slots[1]?.h, window.padTop)
+  const firstRow = slots.find((slot) => slot.kind === 'row')
+  assert.equal(firstRow?.kind, 'row')
+  assert.equal(firstRow?.id, `r${window.start}`)
+  assert.ok(slots.some((slot) => slot.kind === 'gap' && slot.h === window.padBottom))
+})
+
 test('unmeasured viewport still paints a first screen', () => {
   const slice = tableWindowSlice(200, 0, 0)
   assert.equal(slice.start, 0)
@@ -93,10 +119,10 @@ test('grouped first paint fetches every group when a page still fits the window'
   assert.equal(groupedFullFetchCount(12, 3, true), 3)
 })
 
-test('grouped wrap pages larger than the window only fully fetch the first group', () => {
+test('grouped wrap pages still fully fetch every group', () => {
   assert.equal(groupedFullFetchCount(50, 3), 3)
   assert.equal(groupedFullFetchCount(100, 4, true), 4)
-  assert.equal(groupedFullFetchCount(100, GROUPED_FULL_FETCH_ALL_MAX + 4, true), 1)
+  assert.equal(groupedFullFetchCount(100, GROUPED_FULL_FETCH_ALL_MAX + 4, true), GROUPED_FULL_FETCH_ALL_MAX + 4)
   assert.equal(groupedFullFetchCount(100, 1, true), 1)
 })
 
@@ -111,7 +137,15 @@ test('tables paint every column without a horizontal window', () => {
 
 test('unsaved columns use fixed defaults; saved widths stay as-is', () => {
   assert.equal(tableColumnWidth('title', undefined, true), TABLE_COL_PIN_PX)
-  assert.equal(tableColumnWidth('actions', undefined), TABLE_COL_ACTIONS_PX)
+  assert.equal(tableColumnWidth('actions', undefined, true), TABLE_COL_ACTIONS_PX)
+  assert.equal(tablePinCount(['title', 'actions', 'status'], 'title'), 2)
+  assert.equal(tablePinCount(['title', 'status'], 'title'), 1)
+  assert.deepEqual(tableFrozenKeys(['title', 'actions', 'status'], undefined, 'title'), ['title', 'actions'])
+  assert.deepEqual(toggleFrozenPrefix(['title', 'actions', 'status'], undefined, 'status', 'title'), ['title', 'actions', 'status'])
+  assert.deepEqual(toggleFrozenPrefix(['title', 'actions', 'status'], ['title', 'actions', 'status'], 'actions', 'title'), ['title'])
+  assert.deepEqual(tableFrozenKeys(['title', 'actions', 'status'], [], 'title'), [])
+  assert.equal(tablePinColClass('actions', ['title', 'actions']), 'is-pin-col')
+  assert.equal(tablePinColClass('status', ['title', 'actions']), '')
   assert.equal(tableColumnWidth('updatedBy', undefined), TABLE_COL_PX)
   assert.equal(tableColumnWidth('status', undefined), TABLE_COL_PX)
   assert.equal(tableColumnWidth('createdBy', 180), 180)

@@ -43,6 +43,7 @@ export class AgentDbCompact {
       return next
     }
     if (kind === 'content') return this.content(rec)
+    if (kind === 'doc') return this.doc(rec)
     if (kind === 'asset') return this.asset(rec)
     return result
   }
@@ -100,6 +101,26 @@ export class AgentDbCompact {
     if (typeof rec.end === 'number') next.end = rec.end
     if (typeof rec.total === 'number') next.total = rec.total
     if (rec.truncated) next.truncated = true
+    return next
+  }
+
+  private doc(rec: Record<string, unknown>) {
+    if (Array.isArray(rec.assets)) return { path: rec.path, assets: rec.assets }
+    if (rec.ok === true || (typeof rec.command === 'string' && rec.command !== 'view')) {
+      const next: Record<string, unknown> = { ok: true, path: rec.path, name: rec.name, etag: rec.etag }
+      if (typeof rec.command === 'string' && rec.command !== 'write') next.command = rec.command
+      if (typeof rec.start_line === 'number') next.start_line = rec.start_line
+      if (typeof rec.end_line === 'number') next.end_line = rec.end_line
+      if (typeof rec.text === 'string' && rec.text.trim()) next.text = rec.text.trim()
+      if (typeof rec.replaced === 'number') next.replaced = rec.replaced
+      return next
+    }
+    const next: Record<string, unknown> = { path: rec.path, name: rec.name, etag: rec.etag, text: rec.text }
+    if (typeof rec.start === 'number') next.start = rec.start
+    if (typeof rec.end === 'number') next.end = rec.end
+    if (typeof rec.total === 'number') next.total = rec.total
+    if (rec.truncated) next.truncated = true
+    if (typeof rec.type === 'string') next.type = rec.type
     return next
   }
 

@@ -8,7 +8,7 @@ export function adjacentPageBlockPos($pos: ResolvedPos, dir: 1 | -1): number | n
     const index = dir > 0 ? $pos.indexAfter(depth - 1) : $pos.index(depth - 1) - 1
     if (index < 0 || index >= parent.childCount) continue
     const child = parent.child(index)
-    if (child.type.name !== 'pageBlock') return null
+    if (child.type.name !== 'editorBlock') return null
     return dir > 0 ? $pos.after(depth) : $pos.before(depth) - child.nodeSize
   }
   return null
@@ -33,7 +33,7 @@ export function handlePageBlockArrow(view: EditorView, event: KeyboardEvent): bo
   if (!dir) return false
   const { state } = view
   const sel = state.selection
-  if (sel instanceof NodeSelection && sel.node.type.name === 'pageBlock') {
+  if (sel instanceof NodeSelection && sel.node.type.name === 'editorBlock') {
     const next = Selection.near(state.doc.resolve(dir > 0 ? sel.to : sel.from), dir)
     if (next.eq(sel)) return false
     event.preventDefault()

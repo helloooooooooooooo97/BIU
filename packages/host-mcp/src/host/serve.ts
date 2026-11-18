@@ -25,7 +25,19 @@ import {
 } from './host-token.ts'
 
 const SERVER_INFO = { name: 'biu', version: '0.1.0' } as const
-const MCP_WRITE_TOOLS = new Set(['db_update', 'db_create', 'db_delete', 'db_restore', 'db_action', 'db_asset'])
+const MCP_WRITE_TOOLS = new Set([
+  'db_update',
+  'db_create',
+  'db_delete',
+  'db_restore',
+  'db_action',
+  'db_content',
+  'db_file',
+  'db_media',
+  'db_content',
+  'db_doc',
+  'db_asset',
+])
 
 const MCP_CORS = {
   'Access-Control-Allow-Origin': '*',

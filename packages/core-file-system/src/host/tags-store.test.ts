@@ -1,9 +1,21 @@
-import { test } from 'vitest'
+import { test, vi } from 'vitest'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
+import { pruneSchemaValue } from '@biu/type-file-system'
 import { TagStore } from './tags-store.ts'
+
+test('tag schema writes mark the pack and leave record bags for read-time prune', () => {
+  const source = readFileSync(resolve(import.meta.dirname, './tags-store.ts'), 'utf8')
+  assert.match(source, /FROM tag_stamps s/)
+  assert.doesNotMatch(source, /this\.pruneRecordBags\(pack\.id/)
+  const host = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
+  assert.match(host, /notifyTagCatalog\(\)/)
+  assert.match(host, /if \(route\.query\.get\('filled'\)\)/)
+  assert.doesNotMatch(host, /db\.bump\(\)\s*\n\s*route\.send\(200, \{ ok: true, tags:/)
+})
 
 test('TagStore keeps packs in sqlite including nested facet types', () => {
   const store = new TagStore()
@@ -70,6 +82,7 @@ test('sqlite file round-trips facet catalog and stamp index', async () => {
   assert.equal(again.list().length, 0)
 })
 
+
 test('sqlite stores facet overlay for records that cannot update', async () => {
   const store = new TagStore()
   store.writeRecordTag('/plugins', 'demo', { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } }, 'Demo')
@@ -89,6 +102,49 @@ test('upserting a soft-deleted facet id brings it back', () => {
   store.upsert({ id: 'facet-6', label: '新标签', fields: [] })
   assert.equal(store.isDeleted('/tags', 'facet-6'), false)
   assert.equal(store.get('facet-6')?.label, '新标签')
+})
+
+test('removing a tag field leaves record bags until read prunes them', () => {
+  const store = new TagStore()
+  store.upsert({
+    id: 'tag-13',
+    label: '附件 1',
+    fields: [
+      { key: '183359745', type: 'string', label: '旧文本', writable: true },
+      { key: '2041995583', type: 'document', label: '文档', writable: true },
+    ],
+  })
+  store.writeRecordTag(
+    '/pages',
+    'p219',
+    {
+      tags: ['tag-13'],
+      values: {
+        'tag-13': {
+          '183359745': '',
+          '2041995583': [{ name: '规划.md', href: '/api/db/file/a.md' }],
+        },
+      },
+    },
+    '页',
+  )
+  const before = store.ensure().prepare('SELECT tag_json FROM tag_record_values WHERE record_id = ?').get('p219') as {
+    tag_json: string
+  }
+  store.upsert({
+    id: 'tag-13',
+    label: '附件 1',
+    fields: [{ key: '2041995583', type: 'document', label: '文档', writable: true }],
+  })
+  const after = store.ensure().prepare('SELECT tag_json FROM tag_record_values WHERE record_id = ?').get('p219') as {
+    tag_json: string
+  }
+  assert.equal(after.tag_json, before.tag_json)
+  const stored = store.recordTag('/pages', 'p219')?.values['tag-13'] ?? {}
+  assert.equal(Object.prototype.hasOwnProperty.call(stored, '183359745'), true)
+  const read = pruneSchemaValue(store.recordTag('/pages', 'p219'), store.list()).values['tag-13'] ?? {}
+  assert.equal(Object.prototype.hasOwnProperty.call(read, '183359745'), false)
+  assert.equal((read['2041995583'] as Array<{ name: string }>)[0]?.name, '规划.md')
 })
 
 test('empty facet overlay is not stored', async () => {
@@ -136,19 +192,25 @@ test('sqlite stores html banner in its own table without wrapping json', () => {
 test('attachments and refs live next to record_meta', () => {
   const store = new TagStore()
   store.putAttachment({ name: 'ab'.repeat(32) + '.png', etag: 'ab'.repeat(32) + '.png', mime: 'image/png', bytes: 4, kind: 'asset' })
-  store.linkContentRef('/pages', 'p1', 'fresh.png')
+  store.linkContentRef('/pages', 'p1', 'fresh.png', 'asset')
   const linked = store.recordsReferencingAsset('fresh.png')
   assert.equal(linked.length, 1)
   assert.equal(linked[0]?.collection, '/pages')
   assert.equal(linked[0]?.record_id, 'p1')
   store.replaceContentRefs('/pages', 'p1', ['hero.png'], ['cover.png'])
   store.replaceBlockRefs('/pages', 'p1', 'e4945888', [{ name: 'ab'.repeat(32) + '.html', source: 'block:e4945888:core' }])
-  assert.deepEqual(store.listedAttachmentNames('/pages', 'p1'), ['ab'.repeat(32) + '.html', 'cover.png', 'hero.png'].sort())
+  assert.deepEqual(
+    store.listedAttachmentNames('/pages', 'p1'),
+    ['ab'.repeat(32) + '.html', 'cover.png', 'fresh.png', 'hero.png'].sort(),
+  )
+  store.replaceAssetRefs('/pages', 'p1', ['tag-file.md'])
+  assert.ok(store.recordsReferencingAsset('tag-file.md').length)
+  assert.equal(store.recordsReferencingAsset('fresh.png').length, 0)
   store.removeRecord('/pages', 'p1')
   assert.deepEqual(store.listedAttachmentNames('/pages', 'p1'), [])
 })
 
-test('removing a pack field clears that value on stamped records and keeps the pages', () => {
+test('removing a pack field keeps stamped records and prunes leftovers on read', () => {
   const store = new TagStore()
   store.upsert({
     id: 'dp',
@@ -162,16 +224,24 @@ test('removing a pack field clears that value on stamped records and keeps the p
   store.writeRecordTag('/pages', 'p2', { tags: ['dp'], values: { dp: { complexity: 'O(1)' } } }, '页二')
   store.writeRecordTag('/notes', 'n1', { tags: ['dp'], values: { dp: { year: 2020 } } }, '笔记')
   assert.deepEqual(store.filledFieldCounts(), { dp: { complexity: 2, year: 2 } })
+  const before = store.ensure().prepare('SELECT tag_json FROM tag_record_values WHERE record_id = ?').get('p1') as {
+    tag_json: string
+  }
   store.upsert({
     id: 'dp',
     label: '动态规划',
     fields: [{ key: 'year', type: 'number', label: '年份' }],
   })
+  const after = store.ensure().prepare('SELECT tag_json FROM tag_record_values WHERE record_id = ?').get('p1') as {
+    tag_json: string
+  }
+  assert.equal(after.tag_json, before.tag_json)
   assert.equal(store.get('dp')?.fields.map((field) => field.key).join(), 'year')
-  assert.equal(store.recordTag('/pages', 'p1')?.values.dp.complexity, undefined)
+  assert.equal(store.recordTag('/pages', 'p1')?.values.dp.complexity, 'O(n)')
+  assert.equal(pruneSchemaValue(store.recordTag('/pages', 'p1'), store.list()).values.dp.complexity, undefined)
   assert.equal(store.recordTag('/pages', 'p1')?.values.dp.year, 2016)
   assert.deepEqual(store.recordTag('/pages', 'p1')?.tags, ['dp'])
-  assert.equal(store.recordTag('/pages', 'p2')?.values.dp.complexity, undefined)
+  assert.equal(store.recordTag('/pages', 'p2')?.values.dp.complexity, 'O(1)')
   assert.equal(store.stampedIds('/pages', 'dp').has('p1'), true)
   assert.equal(store.stampedIds('/pages', 'dp').has('p2'), true)
   assert.deepEqual(store.filledFieldCounts(), { dp: { year: 2 } })
@@ -185,4 +255,77 @@ test('preset banners are not copied into the custom gallery', async () => {
   assert.equal(store.listBannerGallery().length, 0)
   store.rememberBannerGallery({ kind: sample.kind, html: sample.html })
   assert.equal(store.listBannerGallery().length, 0)
+})
+
+
+test('custom attribute grouping index is lazy, persistent and incrementally maintained', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'tag-group-index-'))
+  const path = join(dir, 'groups.sqlite')
+  const store = new TagStore().open(path)
+  const field = 'tag::security::lane'
+  store.upsert({ id: 'security', label: '安全项目', fields: [{ key: 'lane', type: 'multi-select' }] })
+  const tag = (values: string[]) => ({ tags: ['security'], values: { security: { lane: values } } })
+  store.writeRecordTag('/pages', 'a', tag(['compute', 'compute', 'supply']), 'A')
+  store.writeRecordTag('/pages', 'b', tag(['compute']), 'B')
+  assert.equal(store.ensure().prepare('SELECT COUNT(*) AS n FROM tag_group_fields').get()!.n, 0)
+  assert.deepEqual(store.attributeGroups('/pages', field, ['a', 'b', 'empty']), [
+    { key: 'compute', total: 2 }, { key: 'supply', total: 1 }, { key: '', total: 1 },
+  ])
+  const changes = store.ensure().prepare('SELECT total_changes() AS n').get()!.n
+  assert.deepEqual(store.attributeGroups('/pages', field, ['b']), [{ key: 'compute', total: 1 }, { key: '', total: 0 }])
+  assert.equal(store.ensure().prepare('SELECT total_changes() AS n').get()!.n, changes)
+  const reopened = new TagStore().open(path)
+  assert.deepEqual(reopened.attributeGroups('/pages', field, ['a']), [
+    { key: 'compute', total: 1 }, { key: 'supply', total: 1 }, { key: '', total: 0 },
+  ])
+  reopened.writeRecordTag('/pages', 'a', tag(['new']), 'A')
+  reopened.writeRecordTag('/pages', 'b', { tags: [], values: {} }, 'B')
+  assert.deepEqual(reopened.attributeGroups('/pages', field, ['a', 'b']), [{ key: 'new', total: 1 }, { key: '', total: 1 }])
+  reopened.removeRecord('/pages', 'a')
+  assert.deepEqual(reopened.attributeGroups('/pages', field, ['b']), [{ key: '', total: 1 }])
+  reopened.upsert({ id: 'security', label: '安全项目', fields: [{ key: 'lane', type: 'select' }] })
+  assert.equal(reopened.ensure().prepare('SELECT COUNT(*) AS n FROM tag_group_fields').get()!.n, 0)
+  reopened.writeRecordTag('/pages', 'b', { tags: ['security'], values: { security: { lane: 'changed' } } }, 'B')
+  assert.deepEqual(reopened.attributeGroups('/pages', field, ['b']), [{ key: 'changed', total: 1 }, { key: '', total: 0 }])
+  reopened.removeFacet('security')
+  assert.equal(reopened.ensure().prepare('SELECT COUNT(*) AS n FROM tag_group_values').get()!.n, 0)
+})
+
+
+test('schema reads and edits skip editor content and preserve notes', () => {
+  const store = new TagStore()
+  store.upsert({ id: 'fast', label: '性能', fields: [] }, '# 保留正文')
+  store.upsert({ id: 'hidden', label: '隐藏', fields: [] })
+  store.markDeleted('/tags', 'hidden')
+  const prepare = vi.spyOn(store.ensure(), 'prepare')
+  try {
+    assert.deepEqual(store.list().map(pack => pack.id), ['fast'])
+    assert.equal(store.list('性能')[0]?.id, 'fast')
+    const pack = store.get('fast')!
+    store.upsert({ ...pack, fields: [{ key: 'speed', type: 'number' }] })
+    store.upsert({ ...pack, fields: [] })
+    assert.equal(prepare.mock.calls.some(([sql]) => /editor_content|sqlite_master|sqlite_schema/.test(sql)), false)
+  } finally {
+    prepare.mockRestore()
+  }
+  assert.equal(store.notes('fast'), '# 保留正文')
+  assert.deepEqual(store.get('fast')?.fields, [])
+})
+
+test('deletedIds is cached until markDeleted or restoreDeleted', () => {
+  const store = new TagStore()
+  store.markDeleted('/pages', 'p1')
+  const db = store.ensure()
+  const orig = db.prepare.bind(db)
+  let scans = 0
+  db.prepare = ((sql: string) => {
+    if (/FROM record_meta WHERE collection = \? AND deleted_at IS NOT NULL/.test(sql)) scans += 1
+    return orig(sql)
+  }) as typeof db.prepare
+  assert.equal(store.deletedIds('/pages').has('p1'), true)
+  assert.equal(store.deletedIds('/pages').has('p1'), true)
+  assert.equal(scans, 1)
+  store.restoreDeleted('/pages', 'p1')
+  assert.equal(store.deletedIds('/pages').has('p1'), false)
+  assert.equal(scans, 2)
 })

@@ -30,6 +30,7 @@ export function CellSelect({
   className,
   allowCreate = false,
   chips = false,
+  empty,
 }: {
   value: string
   options: CellSelectOption[]
@@ -40,6 +41,7 @@ export function CellSelect({
   className?: string
   allowCreate?: boolean
   chips?: boolean
+  empty?: ReactNode
 }) {
   ensureDbSearchStyle()
   const [open, setOpen] = useState(false)
@@ -104,7 +106,7 @@ export function CellSelect({
             if (filtered[0]) pick(filtered[0].value)
             else if (canCreate) pick(draft)
           }}
-          empty={!filtered.length && !canCreate ? <div className="db-search-empty">没有匹配项</div> : null}
+          empty={!filtered.length && !canCreate ? empty ?? <div className="db-search-empty">没有匹配项</div> : null}
         >
           {filtered.map((item) => (
             <DbSearchOption

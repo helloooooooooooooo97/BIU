@@ -38,3 +38,20 @@ test('confirm dialog closes through its custom cancel action', () => {
   fireEvent.click(screen.getByText('取消'))
   assert.equal(cancelled, true)
 })
+
+test('confirm dialog closes on Escape', () => {
+  let cancelled = false
+  render(
+    <ConfirmDialog
+      title="命名失败"
+      message="没有用户消息，无法生成标题"
+      confirmLabel="知道了"
+      onCancel={() => {
+        cancelled = true
+      }}
+      onConfirm={() => undefined}
+    />,
+  )
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+  assert.equal(cancelled, true)
+})

@@ -15,4 +15,6 @@ test('OutlineNav is the shared tick rail and hover panel', () => {
   assert.match(src, /level\?: 1 \| 2 \| 3/)
   assert.match(src, /is-h\$\{item\.level\}/)
   assert.doesNotMatch(src, /requestChatOutlineGo/)
+  assert.match(src, /scrollMarginTop/)
+  assert.match(src, /tasks-toolbar/)
 })

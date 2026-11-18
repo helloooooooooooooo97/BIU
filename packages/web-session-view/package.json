@@ -9,7 +9,8 @@
     ".": "./src/web/index.ts",
     "./dialog": "./src/web/session-config-dialog.tsx",
     "./folder-glyph": "./src/web/folder-glyph.tsx",
-    "./trash-glyph": "./src/web/trash-glyph.tsx"
+    "./trash-glyph": "./src/web/trash-glyph.tsx",
+    "./sidebar-row": "./src/web/sidebar-row.tsx"
   },
   "peerDependencies": {
     "cordis": "4.0.0-rc.8",

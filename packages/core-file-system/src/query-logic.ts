@@ -18,6 +18,9 @@ export function parseTagFlatColumnKey(key: string): { packId: string; fieldKey: 
 export function readTagFieldValue(record: DbRecord, field: string, sourceKey = 'tag') {
   const parsed = parseTagFlatColumnKey(field)
   if (!parsed) return record[field]
+  // Projected list responses carry custom tag attributes as flat properties.
+  // Keep explicit empty values too; an omitted property falls back to the tag bag.
+  if (Object.prototype.hasOwnProperty.call(record, field)) return record[field]
   return normalizeSchemaValue(record[sourceKey]).values[parsed.packId]?.[parsed.fieldKey]
 }
 
@@ -293,6 +296,19 @@ function asText(actual: unknown) {
   return String(actual ?? '')
 }
 
+function isTagShapedValue(actual: unknown) {
+  return Boolean(actual && typeof actual === 'object' && !Array.isArray(actual) && Array.isArray((actual as { tags?: unknown }).tags))
+}
+
+function isTagFilterField(
+  rule: FilterRule,
+  field: FieldSpec | undefined,
+  actual: unknown,
+) {
+  if (parseTagFlatColumnKey(rule.field)) return false
+  return isTagFieldType(field?.type) || rule.field === 'tag' || isTagShapedValue(actual)
+}
+
 export function matchFilterRule(
   record: DbRecord,
   rule: FilterRule,
@@ -302,8 +318,13 @@ export function matchFilterRule(
   const actual = readTagFieldValue(record, rule.field)
   const field = specForFilterField(rule.field, schema, packs)
   const want = rule.value
-  if (rule.op === 'is_empty') return isEmptyValue(actual)
-  if (rule.op === 'not_empty') return !isEmptyValue(actual)
+  const tagField = isTagFilterField(rule, field, actual)
+  if (rule.op === 'is_empty' || rule.op === 'not_empty') {
+    const empty = tagField
+      ? normalizeSchemaValue(actual).tags.length === 0
+      : isEmptyValue(actual)
+    return rule.op === 'is_empty' ? empty : !empty
+  }
   if (rule.op === 'eq' && ['1h', '24h', '7d', '30d'].includes(want) && (field?.type === 'datetime' || field?.format === 'datetime')) {
     return matchFilterRule(record, { ...rule, op: 'within' }, schema, packs)
   }
@@ -314,7 +335,7 @@ export function matchFilterRule(
     if (!span) return false
     return Date.now() - n <= span
   }
-  if (isTagFieldType(field?.type)) {
+  if (tagField) {
     const parsed = normalizeSchemaValue(actual)
     const hit = parsed.tags.some((id) => id === want || packs.find((item) => item.id === id)?.label === want)
     if (rule.op === 'eq') return hit
@@ -384,7 +405,7 @@ export function matchListFilterRecord(
   if (!filter) return true
   const tree = filter.$tree
   for (const [key, expected] of Object.entries(filter)) {
-    if (key === '$tree' || key === '$scope' || key === 'shareScope' || expected == null || expected === '') continue
+    if (key === '$tree' || key === '$scope' || key === '$ids' || key === 'shareScope' || expected == null || expected === '') continue
     const pass = matchFilterRule(record, { kind: 'rule', id: key, field: key, op: 'eq', value: String(expected) }, schema, packs)
     if (!pass) return false
   }
@@ -394,27 +415,40 @@ export function matchListFilterRecord(
   return true
 }
 
+const zhCollator = new Intl.Collator('zh')
+
+function sortKey(record: DbRecord, field: string): { n: number | null; s: string } {
+  const value = readTagFieldValue(record, field)
+  const n = Number(value)
+  if (Number.isFinite(n) && String(value).trim() !== '') return { n, s: '' }
+  return { n: null, s: String(value ?? '') }
+}
+
 export function compareRecords(a: DbRecord, b: DbRecord, field: string, dir: 'asc' | 'desc') {
-  const av = readTagFieldValue(a, field)
-  const bv = readTagFieldValue(b, field)
-  const an = Number(av)
-  const bn = Number(bv)
-  const numeric = Number.isFinite(an) && Number.isFinite(bn) && String(av).trim() !== '' && String(bv).trim() !== ''
-  const c = numeric ? an - bn : String(av ?? '').localeCompare(String(bv ?? ''), 'zh')
-  const sign = dir === 'desc' ? -1 : 1
-  return c * sign
+  const ak = sortKey(a, field)
+  const bk = sortKey(b, field)
+  const c = ak.n != null && bk.n != null ? ak.n - bk.n : zhCollator.compare(ak.s, bk.s)
+  return c * (dir === 'desc' ? -1 : 1)
 }
 
 export function sortRecordsBy(rows: DbRecord[], sorts: SortRule[]) {
   const rules = sorts.filter((item) => item.field)
   if (!rules.length) return rows
-  return [...rows].sort((a, b) => {
-    for (const rule of rules) {
-      const c = compareRecords(a, b, rule.field, rule.dir)
-      if (c !== 0) return c
+  const decorated = rows.map((row) => ({
+    row,
+    id: String(row.id),
+    keys: rules.map((rule) => sortKey(row, rule.field)),
+  }))
+  decorated.sort((a, b) => {
+    for (let i = 0; i < rules.length; i++) {
+      const ak = a.keys[i]!
+      const bk = b.keys[i]!
+      const c = ak.n != null && bk.n != null ? ak.n - bk.n : zhCollator.compare(ak.s, bk.s)
+      if (c) return c * (rules[i]!.dir === 'desc' ? -1 : 1)
     }
-    return String(a.id).localeCompare(String(b.id))
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
   })
+  return decorated.map((item) => item.row)
 }
 
 export function looksLikeFilterTree(raw: unknown): boolean {
@@ -442,7 +476,6 @@ export function resolveViewFilterTree(view: {
   filterTree?: FilterGroup | null
 }): FilterGroup {
   if (view.filterTree && countFilterRules(view.filterTree) > 0) return normalizeFilterGroup(view.filterTree)
-  if (view.builtin) return emptyFilterGroup()
   return flatFiltersToTree(view.filters)
 }
 

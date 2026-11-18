@@ -8,7 +8,7 @@ const React = globalThis.React
 const { useState, useCallback, useRef, useEffect } = React
 
 export const name = 'page-code-runner'
-export const inject = ['pageEditor']
+export const inject = ['blockEditor']
 
 type BlockProps = {
   data: Record<string, unknown>
@@ -772,7 +772,7 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
 }
 
 export function apply(ctx: {
-  pageEditor: {
+  blockEditor: {
     registerBlock: (spec: {
       kind: string
       plugin: string
@@ -786,7 +786,7 @@ export function apply(ctx: {
     }) => void
   }
 }) {
-  ctx.pageEditor.registerBlock({
+  ctx.blockEditor.registerBlock({
     kind: 'code-run',
     plugin: name,
     label: '代码运行块',

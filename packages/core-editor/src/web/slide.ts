@@ -19,6 +19,7 @@ declare module '@tiptap/core' {
       insertSlide: (layout?: SlideLayout) => ReturnType
       setSlideLayout: (layout: SlideLayout) => ReturnType
       setSlideBg: (bg: string) => ReturnType
+      setSlideTitle: (title: string) => ReturnType
     }
   }
 }
@@ -89,6 +90,7 @@ export const slide = Node.create({
   addAttributes() {
     return {
       layout: { default: 'split' },
+      title: { default: '幻灯片' },
       bg: {
         default: '',
         parseHTML: (el) => parseSlideBg(el.getAttribute('data-bg')),
@@ -106,7 +108,11 @@ export const slide = Node.create({
         getAttrs: (el) => {
           if (!(el instanceof HTMLElement)) return false
           const layout = el.getAttribute('data-layout')
-          return { layout: isSlideLayout(layout) ? layout : 'split', bg: parseSlideBg(el.getAttribute('data-bg')) }
+          return {
+            layout: isSlideLayout(layout) ? layout : 'split',
+            bg: parseSlideBg(el.getAttribute('data-bg')),
+            title: String(el.getAttribute('data-title') ?? '').trim() || '幻灯片',
+          }
         },
       },
     ]
@@ -117,6 +123,7 @@ export const slide = Node.create({
       mergeAttributes(HTMLAttributes, {
         'data-slide': '',
         'data-layout': String(node.attrs.layout ?? 'split'),
+        'data-title': String(node.attrs.title ?? '').trim() || '幻灯片',
         ...(parseSlideBg(node.attrs.bg) ? { 'data-bg': parseSlideBg(node.attrs.bg) } : {}),
       }),
       0,
@@ -125,12 +132,13 @@ export const slide = Node.create({
   parseMarkdown: (token, helpers) => {
     const layout = isSlideLayout((token as { layout?: unknown }).layout) ? (token as { layout: SlideLayout }).layout : 'split'
     const bg = parseSlideBg((token as { bg?: unknown }).bg)
+    const title = String((token as { title?: unknown }).title ?? '').trim() || '幻灯片'
     const cells = Array.isArray((token as { cells?: unknown }).cells) ? (token as { cells: unknown[] }).cells : []
     const content = (cells.length ? cells : [[]]).map((tokens) => {
       const kids = helpers.parseChildren(Array.isArray(tokens) ? tokens : [])
       return helpers.createNode('slideCell', {}, kids.length ? kids : [{ type: 'paragraph' }])
     })
-    return helpers.createNode('slide', { layout, bg }, content.length ? content : emptySlideJSON(layout, bg).content)
+    return helpers.createNode('slide', { layout, bg, title }, content.length ? content : emptySlideJSON(layout, bg, title).content)
   },
   renderMarkdown: (node, h) => {
     const layout = isSlideLayout(node.attrs?.layout) ? node.attrs.layout : 'split'
@@ -144,7 +152,7 @@ export const slide = Node.create({
         return `:::cell\n${String(inner ?? '').trim()}\n:::`
       })
       .join('\n\n')
-    return `${slideFenceOpen(layout, node.attrs?.bg)}\n${body}\n:::`
+    return `${slideFenceOpen(layout, node.attrs?.bg, node.attrs?.title)}\n${body}\n:::`
   },
   markdownTokenizer: {
     name: 'slide',
@@ -161,6 +169,7 @@ export const slide = Node.create({
         raw: taken.raw,
         layout: taken.layout,
         bg: taken.bg,
+        title: taken.title,
         cells: taken.cells.map((md) => (blockTokens ? blockTokens(md || '') : [])),
       }
     },
@@ -207,6 +216,20 @@ export const slide = Node.create({
           if (!node) return false
           if (dispatch) {
             tr.setNodeMarkup(slidePos, undefined, { ...node.attrs, bg: parseSlideBg(bg) })
+            dispatch(tr)
+          }
+          return true
+        },
+      setSlideTitle:
+        (title) =>
+        ({ state, tr, dispatch }) => {
+          const slidePos = nearestSlidePos(state)
+          if (slidePos < 0) return false
+          const node = state.doc.nodeAt(slidePos)
+          if (!node) return false
+          const next = String(title ?? '').trim() || '幻灯片'
+          if (dispatch) {
+            tr.setNodeMarkup(slidePos, undefined, { ...node.attrs, title: next })
             dispatch(tr)
           }
           return true

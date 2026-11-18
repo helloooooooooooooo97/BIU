@@ -7,7 +7,7 @@ import { flushSync } from 'react-dom'
 import * as ReactJSXRuntime from 'react/jsx-runtime'
 import * as BiuUi from '@biu/biu-ui'
 import * as ReUI from '@biu/reui'
-import { PageEditorService } from '@biu/core-editor/web'
+import { BlockEditorService } from '@biu/core-editor/web'
 import { installShareCollectionChrome } from './share-chrome.ts'
 
 let shareCtx: Context | null = null
@@ -44,7 +44,7 @@ export function shareWebPluginOf(loaded: unknown): Plugin | undefined {
 
 export function sharePluginInjectOk(inject: unknown) {
   const list = Array.isArray(inject) ? inject.map((item) => String(item)) : []
-  return list.every((item) => item === 'pageEditor' || item === 'databaseUi')
+  return list.every((item) => item === 'blockEditor' || item === 'databaseUi')
 }
 
 function installShareReactGlobals() {
@@ -67,7 +67,7 @@ export function bootShareRuntime() {
   if (shareCtx) return shareCtx
   installShareReactGlobals()
   shareCtx = new Context()
-  new PageEditorService(shareCtx)
+  new BlockEditorService(shareCtx)
   installShareCollectionChrome(shareCtx)
   return shareCtx
 }

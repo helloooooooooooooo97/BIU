@@ -589,7 +589,6 @@ test('a temporary guest gets an expiring identity scoped to one record', () => {
   runWithAccount(ada.id, () => {
     collab.attach(workspaceId, '/pages', 'guest-page')
     collab.attach(workspaceId, '/pages', 'other-page', now, {
-      ownership: 'workspace',
       accessMode: 'members',
     })
   })
@@ -665,7 +664,7 @@ test('cross-workspace matrix denies strangers, viewers who write, and revoked se
     collab.updateMemberRole(ada.id, spaceA.id, bob.id, 'viewer')
     runWithAccount(ada.id, () =>
       runWithRequestWorkspace(spaceA.id, () => {
-        collab.attach(spaceA.id, '/pages', 'shared-page', now, { ownership: 'workspace', accessMode: 'members' })
+        collab.attach(spaceA.id, '/pages', 'shared-page', now, { accessMode: 'members' })
         collab.attach(spaceA.id, '/agents', 'session-a', now)
       }),
     )
@@ -738,4 +737,22 @@ test('session execution leases exclude other devices and can be released', () =>
   assert.equal(collab.hasExecutionLease('session-1', now + 3), false)
   const next = collab.acquireExecutionLease(ada.id, 'session-1', 'Ada desktop', 60_000, now + 4)
   assert.notEqual(next.leaseId, first.leaseId)
+})
+
+test('LAN visitors reuse the same localStorage device code as a guest member', () => {
+  const collab = store()
+  const ada = collab.register('', Date.now(), 'secret1', 'lan-ada@example.com')
+  const workspace = collab.createWorkspace(ada.id, '本地空间')
+  collab.setActive(ada.id, workspace.id)
+  const first = collab.rememberLanMember(workspace.id, '11111111-2222-3333-4444-555555555555')
+  const second = collab.rememberLanMember(workspace.id, '11111111-2222-3333-4444-555555555555')
+  assert.equal(first?.id, second?.id)
+  assert.equal(first?.name.startsWith('局域网 '), true)
+  const other = collab.rememberLanMember(workspace.id, 'lanmwh8waaaaaaaa')
+  const clash = collab.rememberLanMember(workspace.id, 'lanmwh8wbbbbbbbb')
+  assert.notEqual(other?.name, clash?.name)
+  assert.equal(collab.rememberLanMember(workspace.id, 'nope'), null)
+  const listed = collab.members(ada.id, workspace.id)
+  assert.equal(listed.some((row) => row.id === first?.id && row.member_kind === 'guest'), true)
+  assert.equal(listed.some((row) => row.id === ada.id), true)
 })

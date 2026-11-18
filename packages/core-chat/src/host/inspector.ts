@@ -2,8 +2,11 @@ import type { Context } from 'cordis'
 import { FILE_TOOL_NAMES, MINIMAL_TOOL_NAMES, normalizeAgentMode, type AgentToolMode } from '@biu/host-tools'
 import {
   collectLiveDispatchedTasks,
+  usageFromTaskReports,
   type DispatchedTask,
+  type LiveTurnDispatch,
   type TaskDispatchSource,
+  type TokenUsageSum,
 } from '@biu/host-live-sessions/usage'
 import type { SessionEvent } from '@biu/type-session'
 
@@ -119,18 +122,7 @@ export function registerChatInspectorRoutes(ctx: Context) {
       contextWindow: ctx.chat.contextWindowFor(id),
       contextWindowTokens: ctx.chat.contextWindowFor(id) === '1m' ? 1_000_000 : 200_000,
     }
-    const dispatched = await loadDispatchedUsage(ctx, id, record.events)
-    const { titles, mascots, projects } = await sessionDecorations(ctx)
-    body.dispatchedUsage = dispatched.total
-    body.dispatchedUsageByTurn = Object.fromEntries(
-      Object.entries(dispatched.byLiveTurn).map(([key, value]) => [key, value.usage]),
-    )
-    body.dispatchedTasksByTurn = Object.fromEntries(
-      Object.entries(dispatched.byLiveTurn).map(([key, value]) => [
-        key,
-        value.tasks.map((task) => decorateTask(task, titles, mascots, projects)),
-      ]),
-    )
+    Object.assign(body, decorateDispatchedTasks(ctx, await loadDispatchedUsage(ctx, id, record.events)))
     route.send(200, body)
   })
 
@@ -138,35 +130,34 @@ export function registerChatInspectorRoutes(ctx: Context) {
     const id = route.params.id
     const record = await ctx.sessions.get(id)
     if (!record) return route.send(404, { error: 'unknown session' })
-    const dispatched = await loadDispatchedUsage(ctx, id, record.events)
-    const { titles, mascots, projects } = await sessionDecorations(ctx)
-    const tasksByTurn: Record<string, Array<Record<string, unknown>>> = {}
-    const usageByTurn: Record<string, unknown> = {}
-    for (const [key, value] of Object.entries(dispatched.byLiveTurn)) {
-      usageByTurn[key] = value.usage
-      tasksByTurn[key] = value.tasks.map((task) => decorateTask(task, titles, mascots, projects))
-    }
     route.send(200, {
       sessionId: id,
-      dispatchedUsage: dispatched.total,
-      dispatchedUsageByTurn: usageByTurn,
-      dispatchedTasksByTurn: tasksByTurn,
+      ...decorateDispatchedTasks(ctx, await loadDispatchedUsage(ctx, id, record.events)),
     })
   })
 }
 
-async function sessionDecorations(ctx: Context) {
+function sessionDecorations(ctx: Context, ids: Iterable<string>) {
   const titles = new Map<string, string>()
   const mascots = new Map<string, { shape: string; color: string; eye?: number }>()
   const projects = new Map<string, { name: string; path?: string }>()
-  let summaries: Awaited<ReturnType<Context['sessions']['listSummaries']>> = []
-  try {
-    summaries = await ctx.sessions.listSummaries()
-  } catch {
-    summaries = []
-  }
-  for (const item of summaries) {
-    titles.set(item.id, item.title)
+  const seen = new Set<string>()
+  for (const id of ids) {
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    let item: {
+      id: string
+      title?: string
+      mascot?: { shape: string; color: string; eye?: number }
+      project?: { name: string; path?: string }
+    } | null = null
+    try {
+      item = ctx.sessions.peekSummary?.(id) ?? null
+    } catch {
+      item = null
+    }
+    if (!item) continue
+    titles.set(item.id, item.title ?? item.id.slice(0, 8))
     if (item.mascot) mascots.set(item.id, item.mascot)
     if (item.project?.name) {
       projects.set(item.id, {
@@ -176,6 +167,28 @@ async function sessionDecorations(ctx: Context) {
     }
   }
   return { titles, mascots, projects }
+}
+
+export function decorateDispatchedTasks(
+  ctx: Context,
+  dispatched: { tasks: DispatchedTask[]; byLiveTurn: Record<string, LiveTurnDispatch>; total: TokenUsageSum },
+) {
+  const { titles, mascots, projects } = sessionDecorations(
+    ctx,
+    dispatched.tasks.map((task) => task.sessionId),
+  )
+  return {
+    dispatchedUsage: dispatched.total,
+    dispatchedUsageByTurn: Object.fromEntries(
+      Object.entries(dispatched.byLiveTurn).map(([key, value]) => [key, value.usage]),
+    ),
+    dispatchedTasksByTurn: Object.fromEntries(
+      Object.entries(dispatched.byLiveTurn).map(([key, value]) => [
+        key,
+        value.tasks.map((task) => decorateTask(task, titles, mascots, projects)),
+      ]),
+    ),
+  }
 }
 
 function decorateTask(
@@ -192,46 +205,48 @@ function decorateTask(
   }
 }
 
-/** 从 task 体系取出本 live（作为 creator）派发的任务，作为派工统计数据源（替代旧的 wake/inject 扫描）。 */
+/** 从 task 体系取出本 live（作为 creator）派发的任务；用量读 reports 里已经累加好的字段。 */
 export async function loadLiveDispatchTasks(
-  ctx: Context & { tasks?: { list(filter: { creatorSessionId?: string }): Array<{ id: string; title: string; status: 'todo' | 'doing' | 'done'; createdAt: number; assignee?: { sessionId?: string } | null }> } },
+  ctx: Context & {
+    tasks?: {
+      list(filter: { creatorSessionId?: string }): Array<{
+        id: string
+        title: string
+        status: 'todo' | 'doing' | 'done'
+        createdAt: number
+        assignee?: { sessionId?: string } | null
+        reports?: Array<{
+          sessionId?: string
+          turn?: number | null
+          usage?: TokenUsageSum
+        }>
+      }>
+    }
+  },
   liveId: string,
 ): Promise<TaskDispatchSource[]> {
   if (!ctx.tasks) return []
   const rows = ctx.tasks.list({ creatorSessionId: liveId })
   return rows
-    .map((row) => ({
-      id: row.id,
-      title: row.title,
-      sessionId: row.assignee?.sessionId ?? '',
-      createdAt: row.createdAt,
-      status: row.status,
-    }))
+    .map((row) => {
+      const usage = usageFromTaskReports(row.reports)
+      const workerTurn = [...(row.reports ?? [])]
+        .reverse()
+        .find((report) => report.turn != null)?.turn
+      return {
+        id: row.id,
+        title: row.title,
+        sessionId: row.assignee?.sessionId ?? '',
+        createdAt: row.createdAt,
+        status: row.status,
+        ...(usage ? { usage } : {}),
+        ...(workerTurn != null ? { workerTurn } : {}),
+      }
+    })
     .filter((item) => Boolean(item.sessionId))
 }
 
-async function workerEventsForTasks(
-  ctx: Context,
-  liveId: string,
-  tasks: TaskDispatchSource[],
-) {
-  const workers: Array<{ id: string; events: SessionEvent[] }> = []
-  const wanted = new Set<string>()
-  for (const task of tasks) {
-    if (task.sessionId && task.sessionId !== liveId) wanted.add(task.sessionId)
-  }
-  for (const id of wanted) {
-    try {
-      const worker = await ctx.sessions.require(id)
-      workers.push({ id, events: worker.events })
-    } catch {
-      // 执行会话读不出来时，派工行仍按任务状态显示。
-    }
-  }
-  return workers
-}
-
-async function loadDispatchedUsage(
+export async function loadDispatchedUsage(
   ctx: Context,
   liveId: string,
   liveEvents: SessionEvent[],
@@ -242,6 +257,5 @@ async function loadDispatchedUsage(
   } catch {
     liveTasks = []
   }
-  const workers = await workerEventsForTasks(ctx, liveId, liveTasks)
-  return collectLiveDispatchedTasks(liveId, liveEvents, workers, liveTasks)
+  return collectLiveDispatchedTasks(liveId, liveEvents, [], liveTasks)
 }

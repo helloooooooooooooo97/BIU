@@ -191,12 +191,12 @@ export function BrandCornerMascot({
         : '跳舞'
       : onToggle
         ? expanded
-          ? '关闭聊天窗'
-          : '打开聊天窗'
+          ? '关闭会话'
+          : '打开会话'
         : name
 
   return (
-    <div className="brand-corner-cluster" data-testid="brand-corner-mascot">
+    <div className="brand-corner-cluster" data-testid="brand-corner-mascot" data-session-id={current?.id ?? activeId ?? ''}>
       <div className="brand-corner-leading" data-plugin-tray>
         {leading}
       </div>

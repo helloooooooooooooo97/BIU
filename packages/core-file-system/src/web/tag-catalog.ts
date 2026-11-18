@@ -30,6 +30,18 @@ export function tagFieldFilled(tagId: string, fieldKey: string) {
   return filledMemory[tagId]?.[fieldKey] ?? 0
 }
 
+export const OPEN_TAG_EVENT = 'biu:open-tag'
+
+export function listenOpenTag() {
+  if (typeof window === 'undefined') return () => undefined
+  const onOpen = (event: Event) => {
+    const id = String((event as CustomEvent<{ id?: unknown }>).detail?.id ?? '').trim()
+    if (id) jumpTag(id)
+  }
+  window.addEventListener(OPEN_TAG_EVENT, onOpen)
+  return () => window.removeEventListener(OPEN_TAG_EVENT, onOpen)
+}
+
 export function jumpTag(id: string, onOpen?: (id: string) => void) {
   const key = String(id ?? '').trim()
   if (!key) return
@@ -157,9 +169,9 @@ export async function createTag(title: string): Promise<CollectionSchemaPack> {
   return pack
 }
 
-export async function pullTags(_collectionPath?: string) {
+export async function pullTags(_collectionPath?: string, opts?: { filled?: boolean }) {
   try {
-    const res = await fetch('/api/db/tags')
+    const res = await fetch(opts?.filled ? '/api/db/tags?filled=1' : '/api/db/tags')
     const body = (await res.json()) as { tags?: unknown[]; facets?: unknown[]; filled?: unknown }
     const listed = body.tags ?? body.facets
     if (!res.ok || !Array.isArray(listed)) return loadTags()

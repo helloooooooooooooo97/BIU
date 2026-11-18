@@ -29,7 +29,12 @@ import {
   type SessionMascot as AssignedMascot,
 } from './session-mascot.ts'
 import { rebuildHealedEvents } from './session-heal.ts'
-import { sessionsCollection } from './sessions-collection.ts'
+import {
+  formatUserMessagesForTitle,
+  sanitizeGeneratedTitle,
+  sessionsCollection,
+  TITLE_FROM_USER_PROMPT,
+} from './sessions-collection.ts'
 import type { AuthorizationService } from '@biu/host-account/authorization'
 
 export type { SessionEvent, SessionEventBody, SessionProject, SessionRecord, SessionMascot, SessionConfig }
@@ -371,6 +376,7 @@ export class SessionsService extends Service {
               return 0
             }
           },
+          suggestTitle: (id, messages) => this.suggestTitleFromUserMessages(id, messages),
         }),
       )
     })
@@ -536,6 +542,37 @@ export class SessionsService extends Service {
 
   async rename(id: string, title: string) {
     return this.patchConfig(id, { title })
+  }
+
+  async suggestTitleFromUserMessages(id: string, messages: Array<{ text: string; ts: number }>) {
+    const chat = this.ctx.get('chat') as
+      | { resolveLlm?: (sessionId?: string | null) => { apiKey?: string; model?: string; provider?: string; baseUrl?: string; thinking?: string } }
+      | undefined
+    const llm = this.ctx.get('llm') as
+      | {
+          forConfig: (config: {
+            provider: string
+            apiKey: string
+            model: string
+            baseUrl?: string
+            thinking?: 'enabled' | 'disabled'
+          }) => { chat: (messages: LlmMessage[], tools?: unknown[]) => Promise<{ content?: string | null }> }
+        }
+      | undefined
+    if (!chat?.resolveLlm || !llm?.forConfig) throw new Error('模型未就绪')
+    const config = chat.resolveLlm(id)
+    if (!String(config.apiKey ?? '').trim()) throw new Error('未配置模型 API Key')
+    const numbered = formatUserMessagesForTitle(messages)
+    const reply = await llm.forConfig({ ...config, thinking: 'disabled' }).chat(
+      [
+        { role: 'system', content: TITLE_FROM_USER_PROMPT },
+        { role: 'user', content: numbered },
+      ],
+      [],
+    )
+    const title = sanitizeGeneratedTitle(String(reply.content ?? ''))
+    if (!title) throw new Error('模型没有给出标题')
+    return title
   }
 
   async append(id: string, body: SessionEventBody) {

@@ -5,7 +5,7 @@ import {
   ArrowDownTrayIcon,
   ArrowRightStartOnRectangleIcon,
   BellIcon,
-  CursorArrowRaysIcon,
+  ChatBubbleLeftRightIcon,
   CheckIcon,
   ChevronRightIcon,
   CircleStackIcon,
@@ -614,7 +614,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
   if (token && !joining) return children
   if (!token && !guestInvite) {
     return (
-      <Suspense fallback={null}>
+      <Suspense fallback={
+        <div className="auth-gate" data-testid="auth-gate">
+          <p className="auth-status">登录</p>
+        </div>
+      }>
         <MarketingSite
           onLogin={() => goAuth('login')}
           onStart={() => goAuth('register')}
@@ -775,6 +779,36 @@ export function AuthGate({ children }: { children: ReactNode }) {
 }
 
 type CollabWorkspace = { id: string; name: string; role: string; location?: 'device' | 'cloud' }
+
+export function useActiveWorkspaceLocation(): 'device' | 'cloud' {
+  const [location, setLocation] = useState<'device' | 'cloud'>('device')
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      const token = readAccountToken()
+      if (!token) return
+      try {
+        const [listed, current] = await Promise.all([
+          accountFetch(token, '/api/account/workspaces') as Promise<{ workspaces?: CollabWorkspace[] }>,
+          accountFetch(token, '/api/account/active') as Promise<{ workspaceId?: string }>,
+        ])
+        if (cancelled) return
+        const id = String(current.workspaceId ?? '')
+        const workspace = (listed.workspaces ?? []).find((item) => item.id === id)
+        setLocation(workspace?.location === 'cloud' ? 'cloud' : 'device')
+      } catch {
+        if (!cancelled) setLocation('device')
+      }
+    }
+    void load()
+    window.addEventListener(ACCOUNT_EVENT, load)
+    return () => {
+      cancelled = true
+      window.removeEventListener(ACCOUNT_EVENT, load)
+    }
+  }, [])
+  return location
+}
 type CollabMember = { id: string; name: string; email?: string; role: string }
 type CollabPresence = { accountId: string; name: string; collection: string; recordId: string }
 
@@ -1639,6 +1673,69 @@ export function ShellSettingsAbout() {
   )
 }
 
+const KBD_LABEL: Record<string, string> = {
+  cmd: '⌘',
+  shift: '⇧',
+  up: '↑',
+  down: '↓',
+  left: '←',
+  right: '→',
+  enter: 'Enter',
+  tab: 'Tab',
+  esc: 'Esc',
+  delete: 'Delete',
+  home: 'Home',
+  end: 'End',
+  backslash: '\\',
+}
+
+const KBD_PATH: Record<string, string> = {
+  cmd: 'M6 6H4.25A1.75 1.75 0 1 1 6 4.25V6zm0 0h4m0 0h1.75A1.75 1.75 0 1 0 10 4.25V6m0 0v4m0 0h1.75A1.75 1.75 0 1 1 10 11.75V10m0 0H6m0 0H4.25A1.75 1.75 0 1 0 6 11.75V10m0 0V6',
+  shift: 'M8 3.2 13.4 9H10.5v3.8H5.5V9H2.6z',
+  up: 'M4 9.5 8 5.5l4 4',
+  down: 'M4 6.5 8 10.5l4-4',
+  left: 'M9.5 4 5.5 8l4 4',
+  right: 'M6.5 4 10.5 8l-4 4',
+  enter: 'M11.2 3.4v5.4H4.4m0 0 2.3-2.3M4.4 8.8l2.3 2.3',
+  tab: 'M2.6 8h7.2m0 0-2.1-2.1M9.8 8 7.7 10.1M13.4 4.2v7.6',
+  delete: 'M6.1 4.2h7.2v7.6H6.1L3.2 8zM8 6.5l3 3m0-3-3 3',
+}
+
+function SettingsKbdIcon({ name }: { name: string }) {
+  const d = KBD_PATH[name]
+  if (!d) return <>{KBD_LABEL[name] ?? name}</>
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden>
+      <path
+        d={d}
+        fill={name === 'shift' ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth={name === 'shift' ? 0 : 1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function SettingsKbd({ keys }: { keys: string[] }) {
+  return (
+    <span className="settings-kbd">
+      {keys.map((key, index) =>
+        key === '/' ? (
+          <span key={`${key}-${index}`} className="settings-kbd-or">
+            /
+          </span>
+        ) : (
+          <kbd key={`${key}-${index}`} data-kbd={key} title={KBD_LABEL[key] ?? key}>
+            <SettingsKbdIcon name={key} />
+          </kbd>
+        ),
+      )}
+    </span>
+  )
+}
+
 export function ShellSettingsShortcuts() {
   return (
     <section data-testid="settings-shortcuts">
@@ -1647,15 +1744,79 @@ export function ShellSettingsShortcuts() {
       <ul className="settings-shortcut-list">
         <li>
           <span>搜索</span>
-          <span className="settings-kbd"><kbd>⌘</kbd><kbd>F</kbd> / <kbd>⌘</kbd><kbd>⇧</kbd><kbd>F</kbd></span>
+          <SettingsKbd keys={['cmd', 'F', '/', 'cmd', 'shift', 'F']} />
         </li>
         <li>
           <span>快速选取</span>
-          <span className="settings-kbd"><kbd>⌘</kbd><kbd>2</kbd></span>
+          <SettingsKbd keys={['cmd', '2']} />
         </li>
         <li>
-          <span>选区送到对话</span>
-          <span className="settings-kbd"><kbd>⌘</kbd><kbd>L</kbd></span>
+          <span>编辑器内送到会话</span>
+          <SettingsKbd keys={['cmd', 'L']} />
+        </li>
+        <li>
+          <span>左右栏切换</span>
+          <SettingsKbd keys={['cmd', 'backslash']} />
+        </li>
+      </ul>
+      <h4 className="settings-pane-subtitle">表格</h4>
+      <p className="settings-muted settings-pane-lead">先点选一个单元格，再按键。</p>
+      <ul className="settings-shortcut-list">
+        <li>
+          <span>移动格子</span>
+          <SettingsKbd keys={['up', 'down', 'left', 'right']} />
+        </li>
+        <li>
+          <span>展开 / 收起子记录</span>
+          <SettingsKbd keys={['shift', 'right', '/', 'shift', 'left']} />
+        </li>
+        <li>
+          <span>下一格 / 上一格</span>
+          <SettingsKbd keys={['tab', '/', 'shift', 'tab']} />
+        </li>
+        <li>
+          <span>行首 / 行末</span>
+          <SettingsKbd keys={['home', '/', 'end']} />
+        </li>
+        <li>
+          <span>编辑</span>
+          <SettingsKbd keys={['enter']} />
+        </li>
+        <li>
+          <span>新建</span>
+          <SettingsKbd keys={['shift', 'enter']} />
+        </li>
+        <li>
+          <span>面包屑上一级</span>
+          <SettingsKbd keys={['cmd', 'left']} />
+        </li>
+        <li>
+          <span>标题在当前页打开</span>
+          <SettingsKbd keys={['cmd', 'enter']} />
+        </li>
+        <li>
+          <span>标题在右侧打开</span>
+          <SettingsKbd keys={['cmd', 'shift', 'enter']} />
+        </li>
+        <li>
+          <span>文字 / 数字直接编辑</span>
+          <span className="settings-kbd">字母或数字</span>
+        </li>
+        <li>
+          <span>清空单元格</span>
+          <SettingsKbd keys={['delete']} />
+        </li>
+        <li>
+          <span>动作列进入</span>
+          <SettingsKbd keys={['up', 'down', 'left', 'right']} />
+        </li>
+        <li>
+          <span>动作列执行</span>
+          <SettingsKbd keys={['enter']} />
+        </li>
+        <li>
+          <span>退出编辑</span>
+          <SettingsKbd keys={['esc']} />
         </li>
       </ul>
     </section>
@@ -2072,6 +2233,8 @@ function SideAction({
       title={title}
       aria-label={title}
       aria-pressed={active}
+      data-dock-tip={title}
+      data-dock-tip-at="e"
       data-testid={testId}
       onClick={onClick}
     >
@@ -2309,8 +2472,8 @@ export function ShellSidePlaces({
   onSearch?: () => void
   searchOpen?: boolean
 }) {
-  const navigate = useNavigate()
   const [notifyOpen, setNotifyOpen] = useState(false)
+  const navigate = useNavigate()
 
   return (
     <div className="app-side-actions shell-side-places" role="navigation" aria-label="面板" data-testid="shell-side-places">
@@ -2335,22 +2498,18 @@ export function ShellSidePlaces({
         onClick={onSettings}
       />
       <SideAction
-        title="代理"
+        title="会话"
         active={activeId === 'agent'}
         testId="chrome-chat-panel"
-        icon={<CursorArrowRaysIcon {...chromeIcon} />}
-        onClick={() => {
-          navigate(agentHref)
-        }}
+        icon={<ChatBubbleLeftRightIcon {...chromeIcon} />}
+        onClick={() => navigate(agentHref)}
       />
       <SideAction
         title="数据"
         active={activeId === 'database'}
         testId="chrome-data-panel"
         icon={<CircleStackIcon {...chromeIcon} />}
-        onClick={() => {
-          navigate('/database')
-        }}
+        onClick={() => navigate('/database')}
       />
     </div>
   )

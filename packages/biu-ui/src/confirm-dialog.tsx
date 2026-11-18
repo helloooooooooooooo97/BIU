@@ -33,8 +33,8 @@ export function ConfirmDialog({
       event.preventDefault()
       onCancel()
     }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
   }, [onCancel])
 
   if (typeof document === 'undefined') return null

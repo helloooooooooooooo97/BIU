@@ -74,6 +74,17 @@ export function AppDialog({
     return () => window.cancelAnimationFrame(id)
   }, [named])
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      event.stopPropagation()
+      onCancel()
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [onCancel])
+
   function submit() {
     onConfirm(input ? inputRef.current?.value : undefined)
   }
@@ -92,10 +103,10 @@ export function AppDialog({
         aria-label={title}
         onMouseDown={(event) => event.stopPropagation()}
         onKeyDown={(event) => {
-          if (event.key === 'Escape') {
-            event.stopPropagation()
-            onCancel()
-          }
+          if (event.key !== 'Escape') return
+          event.preventDefault()
+          event.stopPropagation()
+          onCancel()
         }}
       >
         <div className="fsdb-dlg-title">{title}</div>
@@ -143,6 +154,7 @@ export function LocalText({
   autoSize = false,
   placeholder,
   title,
+  'aria-label': ariaLabel,
   onCommit,
   onKeyDown,
 }: {
@@ -153,6 +165,7 @@ export function LocalText({
   autoSize?: boolean
   placeholder?: string
   title?: string
+  'aria-label'?: string
   onCommit: (next: string) => void
   onKeyDown?: (event: ReactKeyboardEvent<HTMLTextAreaElement | HTMLInputElement>) => void
 }) {
@@ -191,6 +204,7 @@ export function LocalText({
     value: draft,
     title,
     placeholder,
+    'aria-label': ariaLabel,
     onChange: (event: { target: { value: string } }) => setDraft(event.target.value),
     onBlur: commit,
     onKeyDown,

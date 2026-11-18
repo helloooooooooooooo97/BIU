@@ -11,7 +11,7 @@ export function isShareHref(pathname = window.location.pathname) {
   return Boolean(parseSharePath(pathname))
 }
 
-/** LAN share route. Boot pageEditor so page blocks can register. */
+/** LAN share route. Boot blockEditor so page blocks can register. */
 export function mountShareApp(el: HTMLElement) {
   document.documentElement.classList.add('share')
   applyStoredTheme()

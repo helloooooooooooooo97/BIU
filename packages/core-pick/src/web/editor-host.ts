@@ -1,8 +1,10 @@
 export type EditorTextLocus = { start_line: number; end_line: number; text: string; selection?: string; insert?: number }
 
 export type EditorTextHost = {
-  /** db_content 路径，如 /pages/p002 */
+  /** db_content / db_doc 记录路径，如 /pages/p002 */
   path?: string
+  /** db_doc 文件名，如 view-p194-8fdbc4f8.jsx */
+  name?: string
   /** 记录标题，如「爱乐之城」 */
   title?: string
   locusFromSelection: () => EditorTextLocus | null

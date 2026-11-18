@@ -12,8 +12,10 @@ const PAGE_MENTION_RE = /(?:^|[^\w/])page\/([A-Za-z0-9._-]+)/g
 const TAG_MENTION_RE = /(?:^|[^\w/])tag\/([A-Za-z0-9._-]+)/g
 const COLLECTION_PATH_RE = /\/(?:database\/)?(pages|tasks|tags|plugins)\b/g
 
+const CORE_PAGE_BLOCK_PLUGIN_IDS = new Set(['page-sandbox'])
+
 export function isSharePluginId(id: string) {
-  return /^[A-Za-z][A-Za-z0-9._-]{0,63}$/.test(id)
+  return /^[A-Za-z][A-Za-z0-9._-]{0,63}$/.test(id) && !CORE_PAGE_BLOCK_PLUGIN_IDS.has(id)
 }
 
 export function mintSharePin() {

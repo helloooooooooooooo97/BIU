@@ -256,12 +256,10 @@ export function ApprovalsRail(props: SlotProps) {
               busy={sessionBusy}
               menu={(close) => (
                 <ChatSidebar
-                  variant="popover"
-                  visible
                   routeSessionId={sessionId}
                   useSessionView={useSessionView}
                   sessionView={sessionView}
-                  onActivate={close}
+                  popoverClose={close}
                 />
               )}
             />
@@ -309,8 +307,8 @@ export function ApprovalsRail(props: SlotProps) {
             <button
               type="button"
               className={`project-chip project-chip-icon-only${overlayThread ? ' is-active' : ''}`}
-              title={overlayThread ? '收起对话' : '查看对话'}
-              aria-label={overlayThread ? '收起对话' : '查看对话'}
+              title={overlayThread ? '收起会话' : '查看会话'}
+              aria-label={overlayThread ? '收起会话' : '查看会话'}
               aria-pressed={overlayThread}
               data-testid="chat-overlay-thread-toggle"
               onClick={() => toggleOverlayThread()}

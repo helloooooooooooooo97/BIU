@@ -17,6 +17,7 @@
     "@biu/core-editor": "0.1.0",
     "@biu/host-plugin-loader": "0.1.0",
     "@biu/type-file-system": "0.1.0",
+    "@heroicons/react": "^2.2.0",
     "yaml": "^2.9.0"
   }
 }

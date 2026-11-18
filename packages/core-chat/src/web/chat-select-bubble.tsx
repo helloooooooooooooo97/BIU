@@ -78,8 +78,8 @@ export function ChatSelectBubble() {
     <button
       type="button"
       className="chat-select-bubble"
-      title="加入对话"
-      aria-label="加入对话"
+      title="加入会话"
+      aria-label="加入会话"
       data-testid="chat-select-bubble"
       style={{ top: box.top, left: box.left }}
       onMouseDown={(event) => event.preventDefault()}

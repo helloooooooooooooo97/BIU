@@ -1,5 +1,12 @@
 export { isAssetFileName, assetNameFromUrl, assetNamesFromMarkdown, assetNamesFromHtml, collectAssetNames, registerBlockAssets, assetNamesFromBlock } from './asset-ref.ts'
 export type { BlockAssetsDecl } from './asset-ref.ts'
+export {
+  ALLOCATED_RECORD_ID_LENGTH,
+  ALLOCATED_RECORD_ID_RE,
+  allocateRecordId,
+  isAllocatedRecordId,
+  isAssignableRecordId,
+} from './record-id.ts'
 
 /** 列类型：登记时声明，Core-File System 按类型渲染。string[] 视为 multi-select。 */
 export type FieldType =
@@ -12,6 +19,7 @@ export type FieldType =
   | 'url'
   | 'image'
   | 'attachment'
+  | 'document'
   | 'file'
   | 'string[]'
   | 'tag'
@@ -25,7 +33,7 @@ export type FieldSpec = {
   label?: string
   writable?: boolean
   sortable?: boolean
-  format?: 'datetime' | 'url' | 'image' | 'attachment' | 'file'
+  format?: 'datetime' | 'url' | 'image' | 'attachment' | 'document' | 'file'
   /** select / multi-select 的选项 */
   enum?: string[]
   /** enum 存储值对应的展示文案；未配置时直接显示存储值。 */
@@ -280,6 +288,24 @@ export const BUILTIN_FIELDS = {
   dependsOn: { type: 'multi-ref', label: '依赖', writable: true },
   createdBy: { type: 'person', label: '创建人', writable: false },
   updatedBy: { type: 'person', label: '编辑人', writable: false, multiple: true },
+  views: {
+    type: 'string',
+    label: '内容视图',
+    writable: true,
+    description: '这条记录的内容沙盒视图。JSON 数组：id、name、kind=sandbox、file、dataFile。所有表的记录都有。内置内容模式不写在这里。',
+  },
+  propViews: {
+    type: 'string',
+    label: '属性视图',
+    writable: true,
+    description: '这条记录的属性沙盒视图，与内容视图独立。JSON 数组：id、name、kind=sandbox、file、dataFile。内置默认是属性表。所有表的记录都有。',
+  },
+  layouts: {
+    type: 'string',
+    label: '全局视图',
+    writable: true,
+    description: '这条记录保存的全局视图：组合内容展示、属性展示、筛选、排序。内置「默认视图」不写在这里。同时画属性和正文用内容沙盒。所有表的记录都有。',
+  },
 } as const satisfies Record<string, FieldSpec>
 
 /** 登记 CollectionSpec.schema.fields 必须声明的记录列。由登记方自己存；创建人/编辑人也可由 Core 叠一层。 */
@@ -292,6 +318,9 @@ export const REQUIRED_RECORD_FIELD_KEYS = [
   'dependsOn',
   'createdBy',
   'updatedBy',
+  'views',
+  'propViews',
+  'layouts',
 ] as const
 
 export type RequiredRecordFieldKey = (typeof REQUIRED_RECORD_FIELD_KEYS)[number]
@@ -309,10 +338,13 @@ export const REQUIRED_RECORD_FIELDS: RequiredRecordFields = {
   dependsOn: BUILTIN_FIELDS.dependsOn,
   createdBy: BUILTIN_FIELDS.createdBy,
   updatedBy: BUILTIN_FIELDS.updatedBy,
+  views: BUILTIN_FIELDS.views,
+  propViews: BUILTIN_FIELDS.propViews,
+  layouts: BUILTIN_FIELDS.layouts,
 }
 
-/** 表格默认不展开这些内置列（标题除外）。分面作为默认业务列留下。 */
-export const BUILTIN_FIELD_KEYS = ['id', 'createdAt', 'updatedAt', 'content', 'emoji', 'parentId', 'dependsOn', 'createdBy', 'updatedBy'] as const
+/** 表格默认不展开这些内置列（标题除外）。标签作为默认业务列留下。 */
+export const BUILTIN_FIELD_KEYS = ['id', 'createdAt', 'updatedAt', 'content', 'emoji', 'parentId', 'dependsOn', 'createdBy', 'updatedBy', 'views', 'propViews', 'layouts'] as const
 
 export const RESERVED_SCHEMA_FIELD_KEYS = Object.keys(BUILTIN_FIELDS)
 
@@ -352,6 +384,7 @@ export const ATOMIC_FIELD_TYPES = [
   'url',
   'image',
   'attachment',
+  'document',
   'file',
   'action',
   'tag',
@@ -359,6 +392,9 @@ export const ATOMIC_FIELD_TYPES = [
   'ref',
   'multi-ref',
 ] as const satisfies readonly FieldType[]
+
+/** 标签属性可选类型。`file` 是记录正文（db_content），不是标签字段。 */
+export const TAG_PROPERTY_TYPES = ATOMIC_FIELD_TYPES.filter((type) => type !== 'file')
 
 export function isTagFieldType(type: unknown): boolean {
   return type === 'tag' || type === 'facet'
@@ -503,6 +539,30 @@ export function bindSchemaValue(
   return { tags: nextTags, values: next }
 }
 
+/** 丢掉已删属性的残留 key。存储仍用字段 id，源码不应再看到删掉的空位。 */
+export function pruneSchemaValue(raw: unknown, packs: CollectionSchemaPack[] = []): SchemaFieldValue {
+  const parsed = normalizeSchemaValue(raw)
+  if (!packs.length) return parsed
+  const byId = new Map(packs.map((pack) => [pack.id, pack]))
+  const values: SchemaFieldValue['values'] = {}
+  for (const id of parsed.tags) {
+    const pack = byId.get(id)
+    const bag = parsed.values[id] ?? {}
+    if (!pack) {
+      values[id] = { ...bag }
+      continue
+    }
+    const keep = new Set(liveSchemaPackFields(pack.fields).map((field) => field.key))
+    const next: Record<string, unknown> = {}
+    for (const [key, item] of Object.entries(bag)) {
+      if (!keep.has(key)) continue
+      next[key] = item
+    }
+    values[id] = next
+  }
+  return bindSchemaValue(parsed.tags, values)
+}
+
 /** 仍贴着的标签保留原值；新贴上的标签从空开始。 */
 export function retagSchemaValue(prev: SchemaFieldValue, nextTags: string[]): SchemaFieldValue {
   const attached = new Set(prev.tags)
@@ -611,6 +671,9 @@ export function withBuiltinFields(
   else next.createdBy = { ...BUILTIN_FIELDS.createdBy, ...next.createdBy, type: 'person', writable: false }
   if (!next.updatedBy) next.updatedBy = BUILTIN_FIELDS.updatedBy
   else next.updatedBy = { ...BUILTIN_FIELDS.updatedBy, ...next.updatedBy, type: 'person', writable: false, multiple: true }
+  next.views = { ...BUILTIN_FIELDS.views, ...next.views, type: 'string', writable: true, label: BUILTIN_FIELDS.views.label }
+  next.propViews = { ...BUILTIN_FIELDS.propViews, ...next.propViews, type: 'string', writable: true, label: BUILTIN_FIELDS.propViews.label }
+  next.layouts = { ...BUILTIN_FIELDS.layouts, ...next.layouts, type: 'string', writable: true, label: BUILTIN_FIELDS.layouts.label }
   if (contentField === 'content' && !next.content) next.content = BUILTIN_FIELDS.content
   const ordered: Record<string, FieldSpec> = {
     id: next.id,
@@ -667,7 +730,7 @@ export type CollectionSchema = {
   contentField?: string
   /** 正文后端：sqlite 旁表 / 文件 / 只读投影。 */
   contentBackend?: 'editorContent' | 'file' | 'computed'
-  /** 必须包含图标、创建/更新时间、分面、父级、依赖、创建人/编辑人；登记方自己持久化。 */
+  /** 必须包含图标、创建/更新时间、标签、父级、依赖、创建人/编辑人；登记方自己持久化。 */
   fields: CollectionFields
   /** 表格默认可见列（须为 fields 的键）。不写则列出全部列表列。详情仍显示全部字段。 */
   columns?: string[]
@@ -683,6 +746,11 @@ export type CollectionRecordCaps = {
   update?: boolean
   create?: boolean
   delete?: boolean
+  /**
+   * 新建时是否由文件系统分配短随机 id。缺省 true。
+   * 标签 slug、代理 session、成员账号、MCP、技能、视图等有自己身份的表设 false。
+   */
+  allocateId?: boolean
 }
 
 export type DbRecord = { id: string } & Record<string, unknown>
@@ -707,7 +775,7 @@ export type CollectionView = {
 }
 
 export type CollectionListQuery = {
-  /** 只取这些 id。File System 在分面筛选时传入，避免整表 list。 */
+  /** 只取这些 id。File System 在标签筛选时传入，避免整表 list。 */
   ids?: string[]
   q?: string
   filter?: Record<string, unknown>
@@ -715,6 +783,11 @@ export type CollectionListQuery = {
   trash?: boolean
   /** 从回收站彻底删除，不再保留。 */
   purge?: boolean
+  sortField?: string
+  sortDir?: 'asc' | 'desc'
+  sorts?: Array<{ field: string; dir: 'asc' | 'desc' }>
+  limit?: number
+  offset?: number
 }
 
 export function hasCollectionDeleteQuery(query?: CollectionListQuery | null): boolean {
@@ -740,6 +813,10 @@ export type CollectionSpec = {
   records?: CollectionRecordCaps
   /** 可接收查询；不认 ids 时 File System 仍会在内存里收窄。 */
   list: (query?: CollectionListQuery) => DbRecord[] | Promise<DbRecord[]>
+  /** 存储层分页。有实现时普通列表不再全表排序再 slice。 */
+  pagedList?: (query?: CollectionListQuery) => { items: DbRecord[]; total: number } | Promise<{ items: DbRecord[]; total: number }>
+  /** pagedList 能用 SQL 等值过滤的字段。其它 filter 仍走内存。 */
+  pagedFilterKeys?: string[]
   get: (id: string) => DbRecord | null | undefined | Promise<DbRecord | null | undefined>
   /** 更新已有记录的可写字段。不要叫 write。 */
   update?: (id: string, patch: Record<string, unknown>) => DbRecord | Promise<DbRecord>
@@ -756,7 +833,25 @@ export type CollectionInfo = {
   view: CollectionView | null
 }
 
-export const DATABASE_CHANNEL = 'database' as const
+export {
+  DATABASE_CHANNEL,
+  FSDB_CHANGE_EVENT,
+  BIU_ASSET_CHANGED_EVENT,
+  databaseChannelPayload,
+  parseDatabaseChannel,
+  fsdbChangeDetail,
+  channelNeedsCollectionSync,
+  emitFsdbChange,
+  parseFsdbChange,
+  emitAssetChanged,
+} from './database-channel.ts'
+export type {
+  DatabaseChannelScope,
+  DatabaseChannelAsset,
+  DatabaseChannelPayload,
+  ParsedDatabaseChannel,
+  FsdbChangeDetail,
+} from './database-channel.ts'
 export const CONTENT_JUMP_EVENT = 'biu:content-jump' as const
 
 export type ContentJump = {
@@ -811,6 +906,169 @@ export interface Database {
   /** 单独读写记录正文（content 字段），不走 list/read。 */
   content(path: string): Promise<unknown>
   writeContent(path: string, value: unknown): Promise<unknown>
+}
+
+function sandboxStringList(value: unknown) {
+  if (value == null || value === '') return []
+  if (Array.isArray(value)) return value.map((item) => String(item)).filter((item) => item !== '')
+  if (typeof value === 'string') {
+    const text = value.trim()
+    if (!text) return []
+    if (text.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(text) as unknown
+        if (Array.isArray(parsed)) return parsed.map((item) => String(item)).filter((item) => item !== '')
+      } catch {
+        /* csv */
+      }
+    }
+    return text.split(',').map((item) => item.trim()).filter(Boolean)
+  }
+  return [String(value)]
+}
+
+function sandboxFieldKind(field: FieldSpec) {
+  if (field.type === 'string[]') return 'multi-select'
+  if (field.type === 'string' && field.enum?.length) return 'select'
+  if (field.format && field.type === 'string') return field.format
+  return field.type
+}
+
+/** Same writability rule as db update: must be explicitly writable and not computed. */
+export function fieldIsWritable(field: FieldSpec | undefined) {
+  return Boolean(field && field.writable && !field.computed)
+}
+
+/** 自定义属性的存储 key 常是数字 id；显示名在 label。按 key 或 label 找字段。 */
+export function matchSchemaField<T extends { key: string; label?: string; deleted?: boolean }>(
+  fields: readonly T[] | undefined,
+  name: string,
+): T | undefined {
+  const want = String(name ?? '').trim()
+  if (!want) return undefined
+  const list = (fields ?? []).filter((item) => !item.deleted)
+  const byKey = list.find((item) => item.key === want)
+  if (byKey) return byKey
+  const byLabel = list.find((item) => String(item.label ?? '').trim() === want)
+  if (byLabel) return byLabel
+  const lower = want.toLowerCase()
+  return list.find((item) => String(item.label ?? item.key).trim().toLowerCase() === lower)
+}
+
+export function resolveSchemaFieldKey(
+  fields: ReadonlyArray<{ key: string; label?: string; deleted?: boolean }> | CollectionSchema | undefined,
+  name: string,
+) {
+  const list = !fields
+    ? []
+    : Array.isArray(fields)
+      ? fields
+      : Object.entries((fields as CollectionSchema).fields ?? {}).map(([key, field]) => ({ key, label: field.label }))
+  return matchSchemaField(list, name)?.key ?? String(name ?? '').trim()
+}
+
+export function coerceSandboxValue(field: FieldSpec, value: unknown): unknown {
+  const kind = sandboxFieldKind(field)
+  if (kind === 'boolean') return value === true || value === 'true'
+  if (kind === 'multi-select') {
+    const list = sandboxStringList(value)
+    if (field.enum?.length && list.some((item) => !field.enum!.includes(item))) throw new Error('value not in enum')
+    return list
+  }
+  if (kind === 'select') {
+    const selected = String(value ?? '')
+    if (selected && field.enum?.length && !field.enum.includes(selected)) throw new Error('value not in enum')
+    return selected
+  }
+  if (kind === 'number' || kind === 'datetime') {
+    if (value == null || value === '') return null
+    const n = Number(value)
+    if (!Number.isFinite(n)) throw new Error(`expected ${kind}`)
+    return n
+  }
+  if (kind === 'url') {
+    if (value == null || value === '') return ''
+    const href = asHttpHref(value)
+    if (!href) throw new Error('expected url')
+    return href
+  }
+  if (kind === 'person') {
+    if (value == null || value === '') return field.multiple ? [] : null
+    if (field.multiple) return asPersonList(value)
+    const person = asPerson(value)
+    if (!person) throw new Error('expected person')
+    return person
+  }
+  if (kind === 'ref') {
+    if (value == null || value === '') return ''
+    if (Array.isArray(value)) return String(value[0] ?? '').trim()
+    return String(value).trim()
+  }
+  if (kind === 'multi-ref') {
+    return [...new Set(sandboxStringList(value).map((item) => item.trim()).filter(Boolean))]
+  }
+  if (kind === 'image') {
+    if (value == null || value === '') return ''
+    const list = asImageSrcList(value)
+    if (!list.length) throw new Error('expected image')
+    return list.length === 1 ? list[0] : list
+  }
+  if (kind === 'attachment' || kind === 'document') {
+    if (value == null || value === '') return ''
+    const list = asAttachmentList(value)
+    if (!list.length) return ''
+    return list.length === 1 ? list[0] : list
+  }
+  if (kind === 'file') {
+    if (value == null) return null
+    if (value === '') return ''
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value
+    if (typeof value === 'object') return value
+    throw new Error('expected file')
+  }
+  if (kind === 'action') return value == null ? '' : value
+  if (isTagFieldType(kind)) return normalizeSchemaValue(value)
+  if (Array.isArray(value)) return JSON.stringify(value)
+  if (value && typeof value === 'object') {
+    const rec = value as Record<string, unknown>
+    if (typeof rec.sessionId === 'string' || rec.kind === 'agent' || rec.kind === 'user') return value
+    return JSON.stringify(value)
+  }
+  return String(value ?? '')
+}
+
+export function sanitizeRecordPatch(schema: CollectionSchema, patch: unknown): Record<string, unknown> {
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error('patch values must be an object')
+  const bag = patch as Record<string, unknown>
+  const next: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(bag)) {
+    if (key === 'id' || key === 'ID') throw new Error('field not writable: id')
+    const resolved = resolveSchemaFieldKey(schema, key)
+    const field = schema.fields[resolved]
+    if (!field) {
+      const keys = Object.entries(schema.fields)
+        .filter(([, item]) => fieldIsWritable(item))
+        .map(([item, spec]) => (spec.label && spec.label !== item ? `${spec.label} (${item})` : item))
+      throw new Error(`unknown field: ${key}. writable: ${keys.length ? keys.join(', ') : '(none)'}`)
+    }
+    if (!fieldIsWritable(field)) throw new Error(`field not writable: ${resolved}`)
+    next[resolved] = coerceSandboxValue(field, value)
+  }
+  return next
+}
+
+export function sanitizeTagValuesPatch(pack: CollectionSchemaPack, values: unknown): Record<string, unknown> {
+  if (!values || typeof values !== 'object' || Array.isArray(values)) throw new Error('patch values must be an object')
+  const bag = values as Record<string, unknown>
+  const next: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(bag)) {
+    const want = String(key ?? '').trim()
+    const field = pack.fields.find((item) => !item.deleted && (item.key === want || item.label === want))
+    if (!field) throw new Error(`unknown tag field: ${key}`)
+    if (!fieldIsWritable(field)) throw new Error(`field not writable: ${field.key}`)
+    next[field.key] = coerceSandboxValue(field, value)
+  }
+  return next
 }
 
 declare module 'cordis' {

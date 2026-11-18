@@ -1,6 +1,6 @@
 import { formatPageBlockFence, parsePageBlockData, parsePageBlockMeta } from './web/page-block-meta.ts'
 
-const FENCE = /^:::pageBlock(?:\s+\{([^}]*)\})?\s*\n([\s\S]*?)\n:::/gm
+const FENCE = /^:::(?:editorBlock|pageBlock)(?:\s+\{([^}]*)\})?\s*\n([\s\S]*?)\n:::/gm
 
 export type PageBlockFence = {
   id: string
@@ -21,7 +21,15 @@ export type PageBlockAttrsPatch = {
 }
 
 export function createPageBlockId() {
-  return crypto.randomUUID().replace(/-/g, '').slice(0, 8)
+  const webCrypto = globalThis.crypto as Crypto | undefined
+  if (webCrypto && typeof webCrypto.randomUUID === 'function') {
+    return webCrypto.randomUUID().replace(/-/g, '').slice(0, 8)
+  }
+  if (webCrypto && typeof webCrypto.getRandomValues === 'function') {
+    const bytes = webCrypto.getRandomValues(new Uint8Array(4))
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+  }
+  return Math.random().toString(16).slice(2, 10).padEnd(8, '0')
 }
 
 export function isPageBlockId(raw: unknown) {
@@ -115,10 +123,10 @@ export function uniquifyPageBlockMarkdown(markdown: string) {
 
 export function patchPageBlockMarkdown(markdown: string, id: string, patch: PageBlockAttrsPatch): string {
   const needle = String(id ?? '').trim()
-  if (!needle) throw new Error('pageBlock id is required')
+  if (!needle) throw new Error('editorBlock id is required')
   const hits = listPageBlockFences(markdown).filter((item) => item.id === needle)
-  if (!hits.length) throw new Error(`unknown pageBlock: ${needle}`)
-  if (hits.length > 1) throw new Error(`pageBlock id is not unique: ${needle}`)
+  if (!hits.length) throw new Error(`unknown editorBlock: ${needle}`)
+  if (hits.length > 1) throw new Error(`editorBlock id is not unique: ${needle}`)
   const fence = hits[0]!
   const current = pageBlockData(fence)
   const data = patch.replace

@@ -55,6 +55,28 @@ export function inspectorTabCollectionPath(tabId: string) {
   return slot.startsWith('database:') ? slot.slice('database:'.length) : null
 }
 
+const INSPECTOR_HOME_PATHS = ['/agents', '/pages', '/tags', '/plugins'] as const
+const INSPECTOR_PLUS_PIN = ['usage', 'traj']
+
+/** 加号菜单：用量、轨迹固定在最上面。 */
+export function inspectorPlusPinRank(tabId: string) {
+  const i = INSPECTOR_PLUS_PIN.indexOf(slotTabId(tabId))
+  return i === -1 ? INSPECTOR_PLUS_PIN.length : i
+}
+
+/** 检查器空白页顺序：代理、页面、标签、插件。 */
+export function inspectorHomeRank(tabId: string) {
+  const path = inspectorTabCollectionPath(tabId)
+  const i = path ? INSPECTOR_HOME_PATHS.indexOf(path as (typeof INSPECTOR_HOME_PATHS)[number]) : -1
+  return i === -1 ? INSPECTOR_HOME_PATHS.length : i
+}
+
+/** 检查器空白页只放核心数据：代理、页面、标签、插件。加号菜单才有任务、轨迹和用量。 */
+export function isInspectorHomeOffer(tabId: string) {
+  const path = inspectorTabCollectionPath(tabId)
+  return Boolean(path && (INSPECTOR_HOME_PATHS as readonly string[]).includes(path))
+}
+
 export function pruneOpenedForCollections(opened: string[], collections: Array<{ path: string }> | undefined) {
   if (!collections) return opened
   const live = new Set(collections.map((item) => item.path))

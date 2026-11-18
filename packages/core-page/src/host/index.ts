@@ -1,7 +1,7 @@
-import { assetsRootPath, dataHome, migrateLegacyPageDir } from '@biu/host-plugin-loader/data-dir'
+import { assetsRootPath, dataHome, isHashedAssetName, migrateLegacyPageDir, parseIfMatch } from '@biu/host-plugin-loader/data-dir'
 import type { Context } from 'cordis'
 import type { CollectionSpec } from '@biu/type-file-system'
-import { DATABASE_CHANNEL, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
+import { DATABASE_CHANNEL, REQUIRED_RECORD_FIELDS, databaseChannelPayload } from '@biu/type-file-system'
 import { PagesStore, PageAssetConflictError, type WorkspaceFs } from './store.ts'
 import { pageBlocksCollection } from './page-blocks-collection.ts'
 import { PAGE_BLOCK_TICK_MS, PageBlocksIndex } from './page-blocks-index.ts'
@@ -20,7 +20,7 @@ export function pagesCollection(store: PagesStore, index: PageBlocksIndex): Coll
       route: '/pages',
       title: '页面',
       inspector: true,
-      blurb: '每页正文在 .biu/biu.sqlite 的 editor_content。正文用 db_content；改标题等用 db_update。标签用 db_update 写 tag：{tags:["tag-2"],values:{导演:"查泽雷"}}。图片不要写 data URL：先 db_asset write name=xxx.png from=本地文件，再 db_content 插入 ![说明](/api/db/file/xxx.png)。附件在 .biu/assets。树用 parentId。新建 db_create，删除 db_delete。本表没有 db_action。',
+      blurb: '每页正文在 .biu/biu.sqlite 的 editor_content。正文用 db_content；改标题等用 db_update。标签用 db_update 写 tag：{tags:["tag-2"],values:{导演:"查泽雷"}}。图片不要写 data URL：先 db_media write name=xxx.png from=本地文件，再 db_content 插入 ![说明](/api/db/file/xxx.png)。附件在 .biu/assets。树用 parentId。新建 db_create，删除 db_delete 或 db_action action=delete（进回收站）。加子页 db_action action=add-child。',
       order: 25,
       icon: 'document',
     },
@@ -29,7 +29,7 @@ export function pagesCollection(store: PagesStore, index: PageBlocksIndex): Coll
       contentField: 'notes',
       contentBackend: 'editorContent',
       parentField: 'parentId',
-        columns: ['title', 'tag', 'createdBy', 'updatedBy'],
+      columns: ['title', 'tag', 'createdBy', 'updatedBy'],
       fields: {
         ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '标题', writable: true },
@@ -38,8 +38,10 @@ export function pagesCollection(store: PagesStore, index: PageBlocksIndex): Coll
         dependsOn: { type: 'multi-ref', label: '依赖', writable: true },
       },
     },
-    records: { update: true, create: true, delete: true },
+    records: { update: true, create: true, delete: true, allocateId: true },
     list: (query) => store.list(query?.ids),
+    pagedList: (query) => store.pagedList(query),
+    pagedFilterKeys: ['id', 'title', 'parentId', 'emoji'],
     get: (id) => store.get(id),
     update: async (id, patch) => {
       const row = await store.update(id, patch)
@@ -63,7 +65,36 @@ export function pagesCollection(store: PagesStore, index: PageBlocksIndex): Coll
       }
       return ids
     },
+    actions: [
+      {
+        id: 'add-child',
+        label: '添加子页面',
+        for: 'both',
+        placement: ['row', 'detail'],
+        requiredAction: 'resource:create',
+        description: '在当前页面下新建子页面。parentId 写成这一页。',
+        run: async (id) => {
+          const row = await store.create({ parentId: id })
+          await index.reindexPage(row)
+          return row
+        },
+      },
+      {
+        id: 'delete',
+        label: '删除',
+        for: 'both',
+        placement: ['row', 'detail'],
+        tone: 'danger',
+        requiredAction: 'resource:delete',
+        description: '软删除：把这一页放进回收站，列表不再显示。恢复走 /trash。彻底删除不要用这个动作。',
+        run: async (id) => ({ id, trash: true }),
+      },
+    ],
   }
+}
+
+export function pageFileCacheControl(name: string) {
+  return isHashedAssetName(name) ? 'public, max-age=31536000, immutable' : 'no-cache'
 }
 
 function servePageFile(ctx: Context, store: PagesStore) {
@@ -71,11 +102,25 @@ function servePageFile(ctx: Context, store: PagesStore) {
     inner.http.route('GET', '/api/page/file/:name', async (route) => {
       try {
         const name = route.params.name ?? ''
-        inner.database.requireAsset(name, 'resource:read')
+        const path = route.query.get('path') || String(route.req.headers['x-biu-resource-path'] ?? '')
+        if (path) await inner.database.requirePath(path, 'resource:read')
+        else inner.database.requireAsset(name, 'resource:read')
+        const noneMatch = parseIfMatch(route.req.headers['if-none-match'])
+        if (noneMatch) {
+          const etag = await store.assetEtag(name)
+          if (noneMatch === etag) {
+            route.res.writeHead(304, {
+              etag: `"${etag}"`,
+              'cache-control': pageFileCacheControl(name),
+            })
+            route.res.end()
+            return
+          }
+        }
         const { bytes, type, etag } = await store.readAsset(name)
         route.res.writeHead(200, {
           'content-type': type,
-          'cache-control': 'no-store',
+          'cache-control': pageFileCacheControl(name),
           etag: `"${etag}"`,
         })
         route.res.end(bytes)
@@ -93,7 +138,7 @@ function servePageFile(ctx: Context, store: PagesStore) {
         const written = await store.writeAsset(name, await route.bytes(), {
           etag: ifMatch && ifMatch !== '*' ? ifMatch : '',
         })
-        inner.http.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), asset: { name: written.name, etag: written.etag } })
+        inner.http.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('asset', { asset: { name: written.name, etag: written.etag } }))
         route.res.writeHead(200, {
           'content-type': 'application/json; charset=utf-8',
           'cache-control': 'no-store',

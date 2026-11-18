@@ -2,7 +2,6 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import {
   buildAppPath,
-  centerKindFromRoute,
   isKnownAppPath,
   isLegacyDatabasePath,
   parseAppPath,
@@ -158,32 +157,6 @@ test('buildAppPath round-trips with parseAppPath', () => {
   for (const route of routes) {
     assert.deepEqual(parseAppPath(buildAppPath(route), plugins), route)
   }
-})
-
-test('centerKindFromRoute follows the center pane', () => {
-  assert.equal(centerKindFromRoute({ kind: 'home' }), 'session')
-  assert.equal(centerKindFromRoute({ kind: 'session', sessionId: 'a', view: 'chat' }), 'session')
-  assert.equal(centerKindFromRoute({ kind: 'module', moduleId: 'tasks', path: '/tasks' }), 'task')
-  assert.equal(centerKindFromRoute({ kind: 'module', moduleId: 'extra', path: '/extra' }), 'module')
-  assert.equal(
-    centerKindFromRoute({
-      kind: 'collection-view',
-      moduleId: 'database',
-      path: '/database',
-      collection: '/pages',
-    }),
-    'collection-view',
-  )
-  assert.equal(
-    centerKindFromRoute({
-      kind: 'record',
-      moduleId: 'database',
-      path: '/database',
-      collection: '/pages',
-      recordId: 'r1',
-    }),
-    'record',
-  )
 })
 
 test('routeFromState maps sessionView fields', () => {

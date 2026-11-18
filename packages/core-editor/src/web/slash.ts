@@ -7,7 +7,7 @@ import { placeSlashInWindow } from './slash-place.ts'
 import { slashMayOpen } from './editor-live.ts'
 import { createPageBlockId } from './page-block.ts'
 import { defaultPageBlockTitle } from '../page-block-fence.ts'
-import { BASIC_BLOCK_TYPE, getPageEditor, type PageBlockSpec, type SlashInsert } from './service.ts'
+import { BASIC_BLOCK_TYPE, getBlockEditor, type EditorBlockSpec, type SlashInsert } from './service.ts'
 import { pageResourcePath, uploadPageImage } from './page-image.ts'
 import { clientLog, clientLogErrorText } from '@biu/web-event-log/log'
 import {
@@ -230,7 +230,7 @@ function runInsert(editor: Editor, range: Range, insert: SlashInsert) {
   return chain.setHorizontalRule().run()
 }
 
-function insertPageBlock(editor: Editor, range: Range, block: PageBlockSpec) {
+function insertPageBlock(editor: Editor, range: Range, block: EditorBlockSpec) {
   const id = createPageBlockId()
   const defaults = typeof block.defaults === 'function' ? block.defaults() : { ...(block.defaults ?? {}) }
   const pageName = editorPageTitle(editor)
@@ -240,7 +240,7 @@ function insertPageBlock(editor: Editor, range: Range, block: PageBlockSpec) {
     .focus()
     .deleteRange(range)
     .insertContent({
-      type: 'pageBlock',
+      type: 'editorBlock',
       attrs: {
         kind: block.kind,
         plugin: block.plugin,
@@ -252,7 +252,7 @@ function insertPageBlock(editor: Editor, range: Range, block: PageBlockSpec) {
 }
 
 function livePageBlock(plugin: string, kind?: string) {
-  const blocks = getPageEditor()?.blocks() ?? []
+  const blocks = getBlockEditor()?.blocks() ?? []
   if (kind) return blocks.find((block) => block.kind === kind && block.plugin === plugin)
   return blocks.find((block) => block.plugin === plugin)
 }
@@ -260,8 +260,8 @@ function livePageBlock(plugin: string, kind?: string) {
 export function waitForPageBlock(plugin: string, kind?: string, timeoutMs = 20000) {
   const hit = livePageBlock(plugin, kind)
   if (hit) return Promise.resolve(hit)
-  return new Promise<PageBlockSpec>((resolve, reject) => {
-    const editor = getPageEditor()
+  return new Promise<EditorBlockSpec>((resolve, reject) => {
+    const editor = getBlockEditor()
     const timer = setTimeout(() => {
       off()
       reject(new Error(`${plugin} 启动超时`))
@@ -305,7 +305,7 @@ export async function activateSlashBlock(editor: Editor, range: Range, plugin: s
     if (editor.isDestroyed) return
     insertPageBlock(editor, range, spec)
   } catch (error) {
-    const leftover = (getPageEditor()?.blocks() ?? []).some((block) => block.plugin === id)
+    const leftover = (getBlockEditor()?.blocks() ?? []).some((block) => block.plugin === id)
     if (!leftover) setPageBlockPluginPhase(id, 'failed')
     clientLog('error', 'page-block', `${kind || id}（${id}）斜杠启动失败: ${clientLogErrorText(error)}`)
   }
@@ -314,7 +314,7 @@ export async function activateSlashBlock(editor: Editor, range: Range, plugin: s
 function decorateSlashStatus(item: SlashItem): SlashItem {
   const plugin = item.pluginId?.trim()
   if (!plugin) return item
-  const live = getPageEditor()?.blocks() ?? []
+  const live = getBlockEditor()?.blocks() ?? []
   const hasLive = live.some((block) => block.kind === item.id || (item.id === plugin && block.plugin === plugin))
   if (hasLive) return { ...item, status: undefined, pluginHref: undefined }
   const phase = pageBlockPluginPhase(plugin)
@@ -329,8 +329,8 @@ function decorateSlashStatus(item: SlashItem): SlashItem {
 }
 
 export function slashCatalog(): SlashItem[] {
-  const extras = getPageEditor()?.slashCommands() ?? []
-  const blocks = getPageEditor()?.blocks() ?? []
+  const extras = getBlockEditor()?.slashCommands() ?? []
+  const blocks = getBlockEditor()?.blocks() ?? []
   const remembered = rememberedPageBlocks()
   const installed = installedPageBlocks()
   if (!extras.length && !blocks.length && !remembered.length && !installed.length) return SLASH_ITEMS

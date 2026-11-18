@@ -3,6 +3,14 @@ import { resolve } from 'node:path'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 
+test('share list keeps the shared view grouping', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './share-page.tsx'), 'utf8')
+  const payload = readFileSync(resolve(import.meta.dirname, '../host/share-payload.ts'), 'utf8')
+  assert.match(payload, /groupBy: stored\?\.groupBy/)
+  assert.match(src, /snapshot\.view\?\.groupBy/)
+  assert.match(src, /tags=\{snapshot\.tags\}/)
+})
+
 test('share page loads a record body only after that row is opened', () => {
   const src = readFileSync(resolve(import.meta.dirname, './share-page.tsx'), 'utf8')
   const host = readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8')
@@ -10,6 +18,7 @@ test('share page loads a record body only after that row is opened', () => {
   assert.match(src, /contents: 'all'/)
   assert.match(host, /GET', '\/api\/share\/:token\/content\/:recordId'/)
   assert.match(host, /shareSnapshotOpts/)
+  assert.match(host, /rememberShareLan/)
 })
 
 test('share page uses matching side padding on small screens', () => {
@@ -71,6 +80,8 @@ test('share header has a theme toggle for this session', () => {
   assert.match(src, /data-testid="fsdb-share-theme"/)
   assert.match(src, /persistShareTheme/)
   assert.doesNotMatch(src, /localStorage/)
+  assert.match(src, /x-lan-member/)
+  assert.match(src, /readLanMemberId/)
   assert.match(src, /MoonIcon/)
   assert.match(src, /SunIcon/)
   assert.match(src, /夜间模式/)

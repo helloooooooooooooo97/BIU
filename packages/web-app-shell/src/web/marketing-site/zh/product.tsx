@@ -107,7 +107,7 @@ const ECOSYSTEM = [
     title: '页面缺一种块',
     body: '写一个插件，就多一种块。之后每一页都能放，分享时跟着页面一起走。',
     file: '页面正文',
-    code: ':::pageBlock {kind=checkin plugin=page-checkin}\n{ "title": "第 3 周签到" }\n:::',
+    code: ':::editorBlock {kind=checkin plugin=page-checkin}\n{ "title": "第 3 周签到" }\n:::',
   },
   {
     name: '技能',

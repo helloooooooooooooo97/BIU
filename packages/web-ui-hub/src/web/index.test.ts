@@ -82,12 +82,12 @@ test('runtimeWebPlugin keeps inject when default is apply', () => {
   function apply() {}
   const plugin = runtimeWebPlugin({
     name: 'page-excalidraw',
-    inject: ['pageEditor'],
+    inject: ['blockEditor'],
     apply,
     default: apply,
   }) as { name?: string; inject?: string[]; apply?: unknown }
   assert.equal(plugin.name, 'page-excalidraw')
-  assert.deepEqual(plugin.inject, ['pageEditor'])
+  assert.deepEqual(plugin.inject, ['blockEditor'])
   assert.equal(plugin.apply, apply)
 })
 

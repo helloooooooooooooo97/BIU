@@ -18,12 +18,12 @@ test('databaseRevealFromPath ignores root and splits table vs record', () => {
   assert.deepEqual(databaseRevealFromPath('pages/p1'), { collection: '/pages', recordId: 'p1' })
 })
 
-test('page-block ids keep the leading slash after /page-blocks/', () => {
+test('page-block ids keep the leading slash after /editor-blocks/', () => {
   const id = '/pages::p001::ab12cd34'
-  const path = `/page-blocks/${id}`
-  assert.equal(path, '/page-blocks//pages::p001::ab12cd34')
-  assert.deepEqual(splitResourcePath(path), { collection: '/page-blocks', recordId: id })
-  assert.deepEqual(databaseRevealFromPath(path), { collection: '/page-blocks', recordId: id })
+  const path = `/editor-blocks/${id}`
+  assert.equal(path, '/editor-blocks//pages::p001::ab12cd34')
+  assert.deepEqual(splitResourcePath(path), { collection: '/editor-blocks', recordId: id })
+  assert.deepEqual(databaseRevealFromPath(path), { collection: '/editor-blocks', recordId: id })
   assert.deepEqual(splitResourcePath('/views/pages::mine'), { collection: '/views', recordId: 'pages::mine' })
   assert.deepEqual(
     splitResourcePath('/views/pages::builtin-all:/pages'),

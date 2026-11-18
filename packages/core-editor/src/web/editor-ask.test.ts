@@ -1,7 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
-import { pageEditorExtensions } from './kit.ts'
+import { recordEditorExtensions } from './kit.ts'
 import { isSendChatHotkey, pickFromEditor, pickFromLocus } from './editor-ask.ts'
 
 test('chat hotkey is command/ctrl l', () => {
@@ -26,7 +26,7 @@ test('pickFromLocus keeps path and markdown lines', () => {
 
 test('pickFromEditor uses the current selection', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '你好世界',
     contentType: 'markdown',
   })
@@ -47,7 +47,7 @@ test('pickFromEditor uses the current selection', () => {
 
 test('pickFromEditor on block math uses the latex markdown', () => {
   const editor = new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: '$$E = mc^2$$',
     contentType: 'markdown',
   })

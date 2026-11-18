@@ -3,13 +3,20 @@ import { Plugin, PluginKey } from '@tiptap/pm/state'
 import type { Node } from '@tiptap/pm/model'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { nodeBlockId } from './block-id.ts'
-import { getPageViewState, PAGE_VIEW_EVENT, type PageSort } from './page-view-state.ts'
+import { PAGE_VIEW_EVENT, type PageSort } from './page-view-state.ts'
+import { getActiveRecordLayout } from '@biu/core-file-system/record-layouts'
+import { subscribeRecordViewCatalog } from '@biu/core-file-system/record-view-catalog'
 
 const key = new PluginKey('page-filter')
 
-function recordIdFromDom(view: { dom?: HTMLElement } | null | undefined) {
+function hostFromDom(view: { dom?: HTMLElement } | null | undefined) {
   const host = view?.dom?.closest('[data-page-record]')
-  return host instanceof HTMLElement ? host.dataset.pageRecord ?? '' : ''
+  if (!(host instanceof HTMLElement)) return { id: '', collection: '' }
+  const raw = String(host.dataset.pagePath ?? '')
+  const rest = raw.replace(/^\/+/, '').replace(/\/+$/, '')
+  const slash = rest.indexOf('/')
+  const name = slash < 0 ? rest : rest.slice(0, slash)
+  return { id: host.dataset.pageRecord ?? '', collection: name ? `/${name}` : '' }
 }
 
 function blockLabel(node: Node) {
@@ -27,8 +34,8 @@ export function comparePageBlocks(
   return 0
 }
 
-function decorations(doc: Node, recordId: string) {
-  const view = getPageViewState(recordId)
+function decorations(doc: Node, collection: string, recordId: string) {
+  const view = getActiveRecordLayout(collection, recordId)
   const kinds = view.filterKinds
   const allow = kinds.length ? new Set(kinds) : null
   const decos: Decoration[] = []
@@ -72,7 +79,11 @@ export const pageFilter = Extension.create({
       editor.view.dispatch(editor.state.tr.setMeta(key, true))
     }
     window.addEventListener(PAGE_VIEW_EVENT, onView)
-    this.storage.stop = () => window.removeEventListener(PAGE_VIEW_EVENT, onView)
+    const offCatalog = subscribeRecordViewCatalog(onView)
+    this.storage.stop = () => {
+      window.removeEventListener(PAGE_VIEW_EVENT, onView)
+      offCatalog()
+    }
   },
   onDestroy() {
     this.storage.stop?.()
@@ -85,8 +96,8 @@ export const pageFilter = Extension.create({
         state: {
           init: () => DecorationSet.empty,
           apply(tr, old, _oldState, state) {
-            const id = recordIdFromDom(editor.view)
-            if (tr.docChanged || tr.getMeta(key) || !id) return decorations(state.doc, id)
+            const host = hostFromDom(editor.view)
+            if (tr.docChanged || tr.getMeta(key) || !host.id) return decorations(state.doc, host.collection, host.id)
             return old.map(tr.mapping, tr.doc)
           },
         },

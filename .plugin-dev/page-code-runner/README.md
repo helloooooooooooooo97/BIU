@@ -11,7 +11,7 @@
 
 ## 示例写法
 
-:::pageBlock {kind=code-run plugin=page-code-runner}
+:::editorBlock {kind=code-run plugin=page-code-runner}
 {
   "lang": "python",
   "code": "print('hello')"

@@ -190,6 +190,7 @@ test('accumulates usage and stepCount while the turn is still streaming', () => 
   assert.equal(reply.startTs, 1)
   assert.equal(reply.stepCount, 2)
   assert.deepEqual(reply.usage, {
+    contextInputTokens: 8,
     inputTokens: 20,
     outputTokens: 7,
     totalTokens: 27,

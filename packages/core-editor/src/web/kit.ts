@@ -22,6 +22,8 @@ import { pageAgentEdit } from './agent-edit-plugin.ts'
 import { slashCommand } from './slash.ts'
 import { pageMention } from './mention.ts'
 import { openMathPop } from './math-pop.ts'
+import { formatCodeFence, takeCodeFence } from './code-md.ts'
+import { isPageBlockId } from '../page-block-fence.ts'
 
 function latexFromMarkdown(raw: unknown) {
   return String(raw ?? '').trim().replace(/\\([`*_[\]~])/g, '$1')
@@ -152,6 +154,45 @@ const pageCodeBlock = CodeBlockLowlight.extend({
       ],
     ]
   },
+  parseMarkdown: (token, helpers) => {
+    const raw = String(token.raw ?? '')
+    const fence = raw.startsWith(':::code')
+    const ticks = raw.startsWith('```') || raw.startsWith('~~~') || token.codeBlockStyle === 'indented'
+    if (!fence && !ticks) return []
+    const language = String(token.language ?? token.lang ?? '').trim()
+    const id = String(token.id ?? '').trim()
+    const text = String(token.text ?? '')
+    return helpers.createNode(
+      'codeBlock',
+      { language: language || null, ...(isPageBlockId(id) ? { blockId: id } : {}) },
+      text ? [helpers.createTextNode(text)] : [],
+    )
+  },
+  renderMarkdown: (node, h) => {
+    const language = String(node.attrs?.language ?? '').trim()
+    const id = isPageBlockId(node.attrs?.blockId) ? String(node.attrs.blockId).trim() : ''
+    const body = node.content ? String(h.renderChildren(node.content) ?? '') : ''
+    return formatCodeFence(language, id, body)
+  },
+  markdownTokenizer: {
+    name: 'pageCode',
+    level: 'block',
+    start(src) {
+      return src.startsWith(':::code') ? 0 : -1
+    },
+    tokenize(src) {
+      const taken = takeCodeFence(src)
+      if (!taken) return undefined
+      return {
+        type: 'code',
+        raw: taken.raw,
+        language: taken.language,
+        lang: taken.language,
+        id: taken.id,
+        text: taken.body,
+      }
+    },
+  },
 }).configure({
   lowlight: pageLowlight,
   defaultLanguage: null,
@@ -200,7 +241,7 @@ const pageMathematics = Mathematics.extend({
   },
 })
 
-export function pageEditorExtensions() {
+export function recordEditorExtensions() {
   return [
     StarterKit.configure({
       heading: { levels: [1, 2, 3] },
@@ -248,5 +289,5 @@ export function pageEditorExtensions() {
 const EMBED_SKIP = new Set(['pageBlockIds', 'pageFilter', 'pageOutline', 'pageFind', 'pageAgentEdit'])
 
 export function pageEmbedExtensions() {
-  return pageEditorExtensions().filter((ext) => !EMBED_SKIP.has(ext.name))
+  return recordEditorExtensions().filter((ext) => !EMBED_SKIP.has(ext.name))
 }

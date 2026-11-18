@@ -28,10 +28,6 @@ if (typeof document !== 'undefined') {
   const style = document.getElementById(id) ?? document.createElement('style')
   style.id = id
   style.textContent = `
-.tasks2-title{display:inline-flex;align-items:center;gap:6px;min-width:0;max-width:100%}
-.tasks2-title.is-done{text-decoration:line-through;color:var(--biu-color-text-subtle)}
-.tasks-queue-chain{color:var(--biu-color-text-subtle);font-weight:var(--biu-font-weight-medium)}
-.tasks-queue-lock{flex:none;display:inline-flex;color:var(--biu-color-warning)}
 .tasks-queue-pill{flex:none;display:inline-flex;align-items:center;gap:3px;border-radius:999px;padding:1px 6px;font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-bold);white-space:nowrap}
 .tasks-queue-pill.is-p-high{color:var(--biu-color-danger);background:color-mix(in srgb,var(--biu-color-danger) 12%,transparent)}
 .tasks-queue-pill.is-p-med{color:var(--biu-color-text);background:color-mix(in srgb,var(--biu-color-text) 12%,transparent)}

@@ -3,12 +3,9 @@ import assert from 'node:assert/strict'
 import {
   PINNED_GROUP_KEY,
   UNGROUPED_PROJECT_KEY,
-  UNGROUPED_TAG_KEY,
-  buildSidebarGroups,
   buildSidebarSections,
   folderNameFromPath,
   groupSessionsByProject,
-  groupSessionsByTag,
   mostRecentSessionId,
 } from './session-groups.ts'
 import type { SessionListItem } from './index.ts'
@@ -24,42 +21,19 @@ function item(partial: Partial<SessionListItem> & { id: string }): SessionListIt
 
 test('groupSessionsByProject groups by path and puts bare chats in Ungrouped', () => {
   const groups = groupSessionsByProject([
-    item({
-      id: 'a',
-      updatedAt: 10,
-      project: { name: 'alpha', path: '/tmp/alpha', boundAt: 1 },
-    }),
-    item({ id: 'b', updatedAt: 30 }),
-    item({
-      id: 'c',
-      updatedAt: 20,
-      project: { name: 'alpha', path: '/tmp/alpha', boundAt: 2 },
-    }),
-    item({
-      id: 'd',
-      updatedAt: 40,
-      project: { name: 'beta', path: '/tmp/beta', boundAt: 3 },
-    }),
+    item({ id: 'a', updatedAt: 10, project: { name: 'alpha', path: '/tmp/alpha', boundAt: 1 } }),
+    item({ id: 'b', updatedAt: 20, project: { name: 'beta', path: '/tmp/beta', boundAt: 1 } }),
+    item({ id: 'c', updatedAt: 30 }),
   ])
-
-  assert.equal(groups.length, 3)
-  assert.equal(groups[0]?.key, '/tmp/beta')
-  assert.equal(groups[0]?.label, 'beta')
   assert.deepEqual(
-    groups[0]?.sessions.map((row) => row.id),
-    ['d'],
+    groups.map((group) => group.key),
+    ['/tmp/beta', '/tmp/alpha', UNGROUPED_PROJECT_KEY],
   )
-  assert.equal(groups[1]?.key, '/tmp/alpha')
   assert.deepEqual(
-    groups[1]?.sessions.map((row) => row.id),
-    ['c', 'a'],
+    groups.at(-1)?.sessions.map((row) => row.id),
+    ['c'],
   )
-  assert.equal(groups[2]?.key, UNGROUPED_PROJECT_KEY)
-  assert.equal(groups[2]?.label, '未分组')
-  assert.deepEqual(
-    groups[2]?.sessions.map((row) => row.id),
-    ['b'],
-  )
+  assert.equal(groups.at(-1)?.kind, 'ungrouped')
 })
 
 test('project sidebar keeps an empty ungrouped row so a chat can be added without a project', () => {
@@ -100,114 +74,49 @@ test('pinned rows sort first inside a project group', () => {
   )
 })
 
-test('groupSessionsByTag splits multi-facet chats and isolates untagged', () => {
-  const groups = groupSessionsByTag([
-    item({ id: 'a', updatedAt: 3, tag: { tags: ['host-ui', 'bug'] } }),
-    item({ id: 'b', updatedAt: 2, tag: { tags: ['host-ui'] } }),
-    item({ id: 'c', updatedAt: 9 }),
-  ])
-  const host = groups.find((g) => g.label === 'host-ui')
-  assert.ok(host)
-  assert.deepEqual(
-    host?.sessions.map((row) => row.id),
-    ['a', 'b'],
-  )
-  const bug = groups.find((g) => g.label === 'bug')
-  assert.deepEqual(
-    bug?.sessions.map((row) => row.id),
-    ['a'],
-  )
-  assert.equal(groups.at(-1)?.key, UNGROUPED_TAG_KEY)
-  assert.deepEqual(
-    groups.at(-1)?.sessions.map((row) => row.id),
-    ['c'],
-  )
-})
-
-test('buildSidebarGroups prepends a pinned section', () => {
-  const groups = buildSidebarGroups(
-    [
-      item({ id: 'a', updatedAt: 2, pinned: true, project: { name: 'a', path: '/a', boundAt: 1 } }),
-      item({ id: 'b', updatedAt: 9, project: { name: 'b', path: '/b', boundAt: 1 } }),
-    ],
-    'project',
-  )
-  assert.equal(groups[0]?.key, PINNED_GROUP_KEY)
-  assert.deepEqual(
-    groups[0]?.sessions.map((row) => row.id),
-    ['a'],
-  )
-  assert.equal(groups[1]?.key, '/b')
-})
-
 test('folderNameFromPath takes the last segment', () => {
   assert.equal(folderNameFromPath('/Users/me/work/cordis-web/'), 'cordis-web')
   assert.equal(folderNameFromPath('C:\\repos\\demo'), 'demo')
 })
 
-test('buildSidebarSections groups by project by default', () => {
-  const sections = buildSidebarSections([
-    item({ id: 'a', updatedAt: 2, project: { name: 'x', path: '/x', boundAt: 1 } }),
-    item({ id: 'b', updatedAt: 1 }),
-  ])
-  assert.deepEqual(
-    sections.map((s) => s.kind),
-    ['project'],
-  )
-  const projectSection = sections[0]!
-  assert.equal(projectSection.label, '项目')
-  assert.deepEqual(
-    projectSection.groups?.map((g) => g.kind),
-    ['project', 'ungrouped'],
-  )
-})
-
-test('buildSidebarSections groups by facet when groupBy=tag', () => {
-  const sections = buildSidebarSections(
-    [
-      item({ id: 'a', updatedAt: 2, tag: { tags: ['ui', 'bug'] } }),
-      item({ id: 'b', updatedAt: 1 }),
-    ],
-    'tag',
-  )
-  assert.deepEqual(
-    sections.map((s) => s.kind),
-    ['tag'],
-  )
-  const tagSection = sections[0]!
-  assert.equal(tagSection.label, '标签')
-  assert.deepEqual(
-    tagSection.groups?.map((g) => g.kind),
-    ['tag', 'tag', 'ungrouped'],
-  )
-  assert.deepEqual(
-    tagSection.groups?.map((g) => g.label),
-    ['bug', 'ui', '无标签'],
-  )
-})
-
-test('buildSidebarSections keeps a pinned section that holds pinned rows', () => {
-  const sections = buildSidebarSections(
-    [item({ id: 'a', updatedAt: 2, pinned: true }), item({ id: 'b', updatedAt: 1 })],
-    'tag',
-  )
-  assert.deepEqual(
-    sections.map((s) => s.kind),
-    ['pinned', 'tag'],
-  )
-  assert.deepEqual(
-    sections[0]?.sessions?.map((r) => r.id),
-    ['a'],
-  )
-})
-
-test('mostRecentSessionId prefers newest chat and ignores pin', () => {
+test('mostRecentSessionId ignores pins and breaks ties by id', () => {
   assert.equal(
     mostRecentSessionId([
-      item({ id: 'old', updatedAt: 1, pinned: true }),
-      item({ id: 'new', updatedAt: 9 }),
-      item({ id: 'older', updatedAt: 2 }),
+      item({ id: 'b', updatedAt: 5, pinned: true }),
+      item({ id: 'a', updatedAt: 5 }),
+      item({ id: 'c', updatedAt: 1 }),
     ]),
-    'new',
+    'a',
+  )
+  assert.equal(mostRecentSessionId([]), undefined)
+})
+
+test('buildSidebarSections puts pinned rows in their own section above projects', () => {
+  const sections = buildSidebarSections([
+    item({ id: 'a', updatedAt: 2, pinned: true, project: { name: 'x', path: '/x', boundAt: 1 } }),
+    item({ id: 'b', updatedAt: 9, project: { name: 'x', path: '/x', boundAt: 1 } }),
+  ])
+  assert.deepEqual(
+    sections.map((section) => section.kind),
+    ['pinned', 'project'],
+  )
+  assert.deepEqual(
+    sections[0]?.sessions?.map((row) => row.id),
+    ['a'],
+  )
+  assert.equal(sections[0]?.label, '收藏')
+  // 收藏行仍然留在项目分组里，分组自己不重复出现「收藏」
+  assert.deepEqual(
+    sections[1]?.groups?.map((group) => group.key),
+    ['/x', UNGROUPED_PROJECT_KEY],
+  )
+  assert.notEqual(sections[1]?.groups?.[0]?.key, PINNED_GROUP_KEY)
+})
+
+test('buildSidebarSections has no pinned section when nothing is pinned', () => {
+  const sections = buildSidebarSections([item({ id: 'a', updatedAt: 2 })])
+  assert.deepEqual(
+    sections.map((section) => section.kind),
+    ['project'],
   )
 })

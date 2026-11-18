@@ -10,6 +10,7 @@ import {
   PaperAirplaneIcon,
   PencilSquareIcon,
   PlayIcon,
+  SparklesIcon,
   PuzzlePieceIcon,
   TagIcon,
   Squares2X2Icon,
@@ -292,7 +293,8 @@ function actionGlyph(id: string) {
   if (id === 'stop' || id === 'close' || id === 'pause' || id === 'disable') return <StopIcon aria-hidden className={cls} />
   if (id === 'pack') return <ArchiveBoxArrowDownIcon aria-hidden className={cls} />
   if (id === 'uninstall' || id === 'delete' || id === 'remove') return <TrashGlyph aria-hidden className={cls} />
-  if (id === 'edit' || id === 'rename') return <PencilSquareIcon aria-hidden className={cls} />
+  if (id === 'edit') return <PencilSquareIcon aria-hidden className={cls} />
+  if (id === 'rename') return <SparklesIcon aria-hidden className={cls} />
   if (id === 'refresh') return <ArrowPathIcon aria-hidden className={cls} />
   if (id === 'deliver') return <PaperAirplaneIcon aria-hidden className={cls} />
   return null
@@ -331,12 +333,16 @@ function HitActions({ hit }: { hit: SearchHit }) {
     if (acting.current) return
     acting.current = true
     try {
+      const cornerSessionId = String(
+        document.querySelector('[data-testid="brand-corner-mascot"]')?.getAttribute('data-session-id') ?? '',
+      ).trim()
       const res = await fetch('/api/db/action', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           path: `${searchCollection(hit.kind)}/${hit.id}`,
           action: action.id,
+          ...(action.id === 'deliver' && cornerSessionId ? { args: { sessionId: cornerSessionId, wait: false } } : {}),
         }),
       })
       if (!res.ok) return

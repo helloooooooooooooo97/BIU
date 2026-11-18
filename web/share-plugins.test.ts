@@ -8,17 +8,17 @@ test('share plugin urls try packed share API then sandbox source', () => {
   assert.ok(urls.some((item) => item.includes('/.plugin-dev/page-terminal/web/index.tsx')))
 })
 
-test('share web plugin keeps pageEditor inject', () => {
+test('share web plugin keeps blockEditor inject', () => {
   function apply() {}
   const plugin = shareWebPluginOf({
     name: 'page-terminal',
-    inject: ['pageEditor'],
+    inject: ['blockEditor'],
     apply,
     default: apply,
   }) as { name?: string; inject?: string[] }
   assert.equal(plugin.name, 'page-terminal')
-  assert.deepEqual(plugin.inject, ['pageEditor'])
+  assert.deepEqual(plugin.inject, ['blockEditor'])
   assert.equal(sharePluginInjectOk(plugin.inject), true)
-  assert.equal(sharePluginInjectOk(['pageEditor', 'databaseUi']), true)
-  assert.equal(sharePluginInjectOk(['pageEditor', 'slots']), false)
+  assert.equal(sharePluginInjectOk(['blockEditor', 'databaseUi']), true)
+  assert.equal(sharePluginInjectOk(['blockEditor', 'slots']), false)
 })

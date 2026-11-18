@@ -1,6 +1,6 @@
 type DatabaseSync = import('node:sqlite').DatabaseSync
 
-import { assetNamesFromHtml, assetNamesFromMarkdown } from '../../../type-file-system/src/asset-ref.ts'
+import { assetNamesFromHtml, assetNamesFromMarkdown, collectAssetNames } from '../../../type-file-system/src/asset-ref.ts'
 import { tableColumnNames, tableNames } from './biu-schema.ts'
 
 const LEGACY_BODY: Record<string, { table: string; id: string; column: string }> = {
@@ -183,6 +183,18 @@ export function rebuildContentRefs(db: DatabaseSync) {
     for (const row of rows) {
       for (const name of assetNamesFromHtml(row.html ?? '')) {
         insert.run(row.collection, row.record_id, name, 'banner')
+      }
+    }
+  }
+  if (tableNames(db).includes('tag_record_values')) {
+    const rows = db.prepare('SELECT collection, record_id, tag_json FROM tag_record_values').all() as Array<{
+      collection: string
+      record_id: string
+      tag_json?: string
+    }>
+    for (const row of rows) {
+      for (const name of collectAssetNames(row.tag_json)) {
+        insert.run(row.collection, row.record_id, name, 'asset')
       }
     }
   }

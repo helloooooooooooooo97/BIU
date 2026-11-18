@@ -14,7 +14,7 @@ test('tool panels match the step bar: sidebar fill, no border', () => {
   assert.match(css, /\.chat-step-bar\s*\{[^}]*background:\s*var\(--biu-color-bg-subtle\)/s)
   assert.match(
     css,
-    /\.tool-call-head:hover::before,\s*\.tool-call-head\.is-open::before\s*\{[^}]*background:\s*var\(--biu-color-bg-subtle\)/s,
+    /\.tool-call-head:hover::before,\s*\.tool-call-head\.is-open::before\s*\{[^}]*background-color:\s*var\(--biu-color-bg-subtle\)/s,
   )
   assert.doesNotMatch(source, /CheckCircleIcon|XCircleIcon|tool-call-status/)
   assert.match(source, /tool-call-chevron \$\{status\.className\}/)
@@ -34,8 +34,12 @@ test('tool panels match the step bar: sidebar fill, no border', () => {
   assert.match(css, /html:not\(\.dark\) \[data-testid="content-edits-table"\] \.content-edits-icon[\s\S]*color:\s*var\(--biu-color-icon\)/)
   assert.match(css, /\.tool-call-tools\s*\{[^}]*width:\s*0/s)
   assert.match(css, /\.tool-call-head:hover \.tool-call-tools[\s\S]*width:\s*auto/)
-  assert.match(css, /\.tool-call-head\.is-running::after/)
+  assert.match(css, /\.tool-call-head\.is-running \.tool-call-title/)
+  assert.match(css, /\.tool-call-head\.is-running \.tool-call-summary/)
   assert.match(css, /@keyframes tool-call-text-pulse/)
+  assert.match(css, /background-clip:\s*text/)
+  assert.doesNotMatch(css, /\.tool-call-head\.is-running::after/)
+  assert.doesNotMatch(css, /\.tool-call-head\.is-running::before/)
   assert.match(source, /className: 'is-running'/)
   assert.match(source, /className="tool-call-tools"/)
   assert.match(source, /CopyIconButton/)
@@ -43,7 +47,11 @@ test('tool panels match the step bar: sidebar fill, no border', () => {
   assert.match(css, /\.tool-call-copy,\s*\.chat-code-copy\s*\{[^}]*width:\s*24px[^}]*height:\s*24px/s)
   assert.match(css, /\.chat-code-copy\s*\{[^}]*right:\s*8px[^}]*bottom:\s*8px/s)
   assert.match(css, /\.chat-reply-block:hover \.chat-code-copy/)
-  assert.doesNotMatch(css, /\.tool-call-head\.is-running \.tool-call-title[\s\S]{0,400}color:\s*transparent/)
+  assert.match(css, /\.tool-call-head\.is-running \.tool-call-title[\s\S]{0,500}background-color:\s*var\(--biu-color-text-muted\)/)
+  assert.doesNotMatch(
+    css,
+    /\.tool-call-head\.is-running \.tool-call-title,\s*\n\.tool-call-head\.is-running \.tool-call-summary\s*\{[^}]*[^a-z-]color:\s*transparent/s,
+  )
   assert.match(source, /toolOutputChars/)
   assert.match(source, /parsed\.kind === 'insert'/)
   assert.match(source, /parsed\.kind === 'str_replace'/)
@@ -73,7 +81,7 @@ test('any tool result can be zoomed: shared float chrome, no height caps inside'
   assert.match(css, /\.tool-zoom\s*\{[^}]*width:\s*100%[^}]*height:\s*100%/s)
   assert.match(css, /\.tool-zoom-overlay\s*\{[^}]*padding:\s*0/s)
   // 全屏下关闭按钮不能被内容挤走
-  assert.match(css, /\.tool-zoom > \.biu-float-head\s*\{[^}]*flex:\s*none/s)
+  assert.match(css, /\.tool-zoom>\.biu-float-head\s*\{[^}]*flex:\s*none/s)
   assert.match(source, /biu-float-overlay tool-zoom-overlay/)
   assert.match(css, /\.tool-call-chars\s*\{[^}]*tabular-nums/s)
 })

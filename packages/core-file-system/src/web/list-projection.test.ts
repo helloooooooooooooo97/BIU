@@ -41,5 +41,5 @@ test('table list and previews pass view columns to /api/db/list', () => {
   assert.match(preview, /const columns = \['title', 'emoji', 'mascot', 'parentId'\]/)
   assert.match(preview, /columns: previewColumns\(view\)/)
   assert.match(people, /columns: \['title', 'mascot'\]/)
-  assert.match(links, /columns: \['label'\]/)
+  assert.match(links, /columns: \['label', 'emoji'\]/)
 })

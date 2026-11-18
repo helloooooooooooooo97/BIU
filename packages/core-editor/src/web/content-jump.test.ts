@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
 import { CONTENT_JUMP_EVENT } from '@biu/type-file-system'
-import { pageEditorExtensions } from './kit.ts'
+import { recordEditorExtensions } from './kit.ts'
 import {
   applyContentJump,
   clearContentJump,
@@ -17,7 +17,7 @@ import {
 
 function editorOf(markdown: string) {
   return new Editor({
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: markdown,
     contentType: 'markdown',
   })

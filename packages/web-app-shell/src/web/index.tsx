@@ -4,8 +4,11 @@ import {
   getChatOverlay,
   subscribeChatOverlay,
   closeChatOverlay,
+  setChatOverlay,
+  setOverlayAutohide,
   setOverlayThread,
   requestOverlayFocus,
+  requestComposerFocus,
   requestInspectorClose,
   allocateShellColumns,
   applyShellColumnCssVars,
@@ -16,17 +19,17 @@ import {
   openOverlayComposer,
   SIDEBAR_DEFAULT,
   SIDEBAR_LABEL_AT,
-  SIDEBAR_TAG_AT,
   SIDEBAR_MAX,
   SIDEBAR_MIN,
+  SIDEBAR_RAIL,
+  sidebarColumnWidth,
 } from './chat-overlay.ts'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { Context } from 'cordis'
 import type { SlotProps } from '@biu/web-slots'
 import { bindSnapshot, type SnapshotService } from '@biu/web-snapshot'
-import { bindSessionView, type SessionViewService } from '@biu/web-session-view'
+import { bindSessionView, getSidebarPersist, parseAppPath, sessionAppPath, setSidebarPersist, SIDEBAR_PERSIST, type SessionViewService } from '@biu/web-session-view'
 import { bindProjectView, type ProjectViewService } from '@biu/web-project-view'
-import { parseAppPath, sessionAppPath } from '@biu/web-session-view'
 import {
   isMascotDancing,
   mascotDanceShape,
@@ -49,6 +52,7 @@ import { AuthGate, ShellSettingsAccount, ShellSettingsAppearance, ShellSettingsM
 import { hydrateWorkspaceProfile } from '@biu/biu-ui/workspace-profile'
 import { hydrateTheme } from './theme.ts'
 import { hydratePagePrefs } from '@biu/core-file-system/page-width'
+import { overlayDataRoute } from '@biu/core-file-system/main-data-route'
 import { isGlobalSearchHotkey } from './search-hotkey.ts'
 import { useSlotEntries } from '@biu/web-slots'
 import type { SlotsService } from '@biu/web-slots'
@@ -81,6 +85,7 @@ function DockSessionMascot({
   useSessionView: ReturnType<typeof bindSessionView>
 }) {
   const location = useLocation()
+  const navigate = useNavigate()
   const agents = useSessionView((state) => state.sessions)
   const activeId = useSessionView((state) => state.sessionId)
   const overlayOpen = useSyncExternalStore(subscribeChatOverlay, getChatOverlay, () => false)
@@ -96,13 +101,20 @@ function DockSessionMascot({
       activeId={activeId}
       busy={busy}
       open={onChatPage ? false : overlayOpen}
-      tapToDance={onChatPage}
+      tapToDance={false}
       onToggle={() => {
         if (getChatOverlay()) {
           closeChatOverlay()
           return
         }
-        if (isChatPagePath(location.pathname)) return
+        if (isChatPagePath(location.pathname)) {
+          setChatOverlay(true)
+          setOverlayAutohide(false)
+          requestComposerFocus()
+          requestOverlayFocus()
+          navigate(overlayDataRoute())
+          return
+        }
         openOverlayComposer()
         requestOverlayFocus()
       }}
@@ -115,9 +127,9 @@ function ShellDockPins({
 }: {
   useSessionView: ReturnType<typeof bindSessionView>
 }) {
-  const overlayOpen = useSyncExternalStore(subscribeChatOverlay, getChatOverlay, () => false)
-  if (overlayOpen) return null
-  return <DockSessionMascot useSessionView={useSessionView} />
+  const mascot = <DockSessionMascot useSessionView={useSessionView} />
+  if (typeof document === 'undefined') return mascot
+  return createPortal(mascot, document.body)
 }
 
 /** 主区固定聊天；轨迹改在右侧检查器。悬浮形态可挂到任意页面最顶层。 */
@@ -301,68 +313,44 @@ function Shell(props: SlotProps) {
       live = false
     }
   }, [settingsOpen])
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    try {
-      return localStorage.getItem('cordis.sidebar.collapsed') === '1'
-    } catch {
-      return false
-    }
-  })
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => getSidebarPersist(SIDEBAR_PERSIST.collapsed) === '1')
   const [sidebarWidth, setSidebarWidth] = useState(() => {
-    try {
-      const n = Number(localStorage.getItem('cordis.sidebar.width'))
-      if (Number.isFinite(n) && n >= SIDEBAR_MIN && n <= SIDEBAR_MAX) return n
-    } catch {
-      /* ignore */
-    }
+    const n = Number(getSidebarPersist(SIDEBAR_PERSIST.width))
+    if (Number.isFinite(n) && n >= SIDEBAR_MIN && n <= SIDEBAR_MAX) return n
     return SIDEBAR_DEFAULT
   })
   const lastWideSidebar = useRef(sidebarWidth >= SIDEBAR_LABEL_AT ? sidebarWidth : SIDEBAR_MAX)
   const sidebarCollapsedRef = useRef(sidebarCollapsed)
   const sidebarWidthRef = useRef(sidebarWidth)
+  const holdCenterRef = useRef<number | null>(null)
   sidebarCollapsedRef.current = sidebarCollapsed
   sidebarWidthRef.current = sidebarWidth
   const persistSidebar = useCallback((width: number, collapsed: boolean) => {
+    holdCenterRef.current = null
     if (collapsed) {
       paintLiveLayoutRef.current({ sidebarCollapsed: true })
       setSidebarCollapsed(true)
-      try {
-        localStorage.setItem('cordis.sidebar.collapsed', '1')
-      } catch {
-        /* ignore */
-      }
+      setSidebarPersist(SIDEBAR_PERSIST.collapsed, '1')
       return
     }
     const next = clampSidebarWidth(width)
     if (next === 0) {
       paintLiveLayoutRef.current({ sidebarCollapsed: true })
       setSidebarCollapsed(true)
-      try {
-        localStorage.setItem('cordis.sidebar.collapsed', '1')
-      } catch {
-        /* ignore */
-      }
+      setSidebarPersist(SIDEBAR_PERSIST.collapsed, '1')
       return
     }
     setSidebarWidth(next)
     setSidebarCollapsed(false)
     paintLiveLayoutRef.current({ sidebarCollapsed: false, sidebarWidth: next })
     if (next >= SIDEBAR_LABEL_AT) lastWideSidebar.current = next
-    try {
-      localStorage.setItem('cordis.sidebar.width', String(next))
-      localStorage.setItem('cordis.sidebar.collapsed', '0')
-    } catch {
-      /* ignore */
-    }
+    setSidebarPersist(SIDEBAR_PERSIST.width, String(next))
+    setSidebarPersist(SIDEBAR_PERSIST.collapsed, '0')
   }, [])
   const collapseSidebar = useCallback(() => {
     paintLiveLayoutRef.current({ sidebarCollapsed: true })
     setSidebarCollapsed(true)
-    try {
-      localStorage.setItem('cordis.sidebar.collapsed', '1')
-    } catch {
-      /* ignore */
-    }
+    setSidebarPersist(SIDEBAR_PERSIST.collapsed, '1')
   }, [])
   const expandSidebar = useCallback(
     () => persistSidebar(Math.max(SIDEBAR_LABEL_AT, lastWideSidebar.current, sidebarWidthRef.current), false),
@@ -415,20 +403,10 @@ function Shell(props: SlotProps) {
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   }, [openSearch])
-  const [inspectorOpen, setInspectorOpen] = useState(() => {
-    try {
-      return localStorage.getItem('cordis.inspector.open') === '1'
-    } catch {
-      return false
-    }
-  })
+  const [inspectorOpen, setInspectorOpen] = useState(() => getSidebarPersist(SIDEBAR_PERSIST.inspectorOpen) === '1')
   const [inspectorWidth, setInspectorWidth] = useState(() => {
-    try {
-      const n = Number(localStorage.getItem('cordis.inspector.width'))
-      if (Number.isFinite(n) && n >= 240 && n <= 1000) return n
-    } catch {
-      /* ignore */
-    }
+    const n = Number(getSidebarPersist(SIDEBAR_PERSIST.inspectorWidth))
+    if (Number.isFinite(n) && n >= 240 && n <= 1000) return n
     return 320
   })
   const layoutSnap = useRef({
@@ -443,18 +421,15 @@ function Shell(props: SlotProps) {
   const shellRef = useRef<HTMLDivElement>(null)
   const columnResizingRef = useRef(false)
   const columnDragAxisRef = useRef<'sidebar' | 'inspector' | null>(null)
-  const endColumnResizeRef = useRef<(patch?: { sidebar?: number; inspector?: number }) => void>(() => {})
+  const endColumnResizeRef = useRef<(patch?: { sidebar?: number; inspector?: number }) => void>(() => { })
   const inspectorOpenRef = useRef(inspectorOpen)
   inspectorOpenRef.current = inspectorOpen
   const applyInspector = useCallback((next: boolean) => {
+    holdCenterRef.current = null
     inspectorOpenRef.current = next
     paintLiveLayoutRef.current({ inspectorOpen: next })
     setInspectorOpen(next)
-    try {
-      localStorage.setItem('cordis.inspector.open', next ? '1' : '0')
-    } catch {
-      /* ignore */
-    }
+    setSidebarPersist(SIDEBAR_PERSIST.inspectorOpen, next ? '1' : '0')
   }, [])
   const toggleInspector = useCallback(() => {
     const next = !inspectorOpenRef.current
@@ -463,13 +438,10 @@ function Shell(props: SlotProps) {
   }, [applyInspector])
   const persistInspectorWidth = useCallback((width: number) => {
     const next = Math.min(1000, Math.max(240, Math.round(width)))
+    holdCenterRef.current = null
     layoutSnap.current = commitShellLayoutSnap(layoutSnap.current, { inspectorWidth: next })
     setInspectorWidth(next)
-    try {
-      localStorage.setItem('cordis.inspector.width', String(next))
-    } catch {
-      /* ignore */
-    }
+    setSidebarPersist(SIDEBAR_PERSIST.inspectorWidth, String(next))
   }, [])
   const onInspectorWidthChange = useCallback((width: number) => {
     endColumnResizeRef.current({ inspector: width })
@@ -509,9 +481,8 @@ function Shell(props: SlotProps) {
   const showChatSidebar = activeModule === 'agent'
   const visitedChatSidebar = useRef(false)
   if (showChatSidebar) visitedChatSidebar.current = true
-  const sidebarCol = sidebarCollapsed ? 0 : sidebarWidth
-  const sidebarNarrow = sidebarWidth < SIDEBAR_LABEL_AT
-  const sidebarShowTags = sidebarWidth >= SIDEBAR_TAG_AT
+  const sidebarCol = sidebarColumnWidth(sidebarCollapsed, sidebarWidth)
+  const sidebarNarrow = sidebarCollapsed || sidebarWidth < SIDEBAR_LABEL_AT
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window === 'undefined' ? 1440 : window.innerWidth,
   )
@@ -552,10 +523,14 @@ function Shell(props: SlotProps) {
     leftWidth: leftPane ? sidebarCol : undefined,
     inspectorOpen: inspectorVisible,
     inspectorWidth,
+    holdCenter: columnResizing || !inspectorVisible ? null : holdCenterRef.current,
   })
   layoutSnap.current.leftPane = leftPane
-  const paintedCols = useRef({ left: shellColumns.left, inspector: shellColumns.inspector })
-  if (!columnResizing) paintedCols.current = { left: shellColumns.left, inspector: shellColumns.inspector }
+  const paintedCols = useRef({ left: shellColumns.left, inspector: shellColumns.inspector, center: shellColumns.center })
+  if (!columnResizing) {
+    paintedCols.current = { left: shellColumns.left, inspector: shellColumns.inspector, center: shellColumns.center }
+    holdCenterRef.current = inspectorVisible ? shellColumns.center : null
+  }
   const dragPaintRaf = useRef(0)
   const dragPaintPending = useRef<{ sidebar?: number; inspector?: number }>({})
   const applyPendingColumnDrag = useCallback((patch?: { sidebar?: number; inspector?: number }) => {
@@ -568,12 +543,22 @@ function Shell(props: SlotProps) {
     const cols = allocateShellColumns({
       viewportWidth: window.innerWidth,
       leftPane: snap.leftPane,
-      leftWidth: snap.leftPane ? (pending.sidebar ?? (snap.sidebarCollapsed ? 0 : snap.sidebarWidth)) : undefined,
+      leftWidth: snap.leftPane
+        ? (pending.sidebar ?? sidebarColumnWidth(snap.sidebarCollapsed, snap.sidebarWidth))
+        : undefined,
       inspectorOpen: snap.inspectorVisible,
       inspectorWidth: pending.inspector ?? snap.inspectorWidth,
     })
-    paintedCols.current = { left: cols.left, inspector: cols.inspector }
+    paintedCols.current = { left: cols.left, inspector: cols.inspector, center: cols.center }
     applyShellColumnCssVars(shellRef.current, cols)
+    if (pending.sidebar != null) {
+      const wantRail = cols.left === SIDEBAR_RAIL
+      if (wantRail !== sidebarCollapsedRef.current) {
+        sidebarCollapsedRef.current = wantRail
+        layoutSnap.current.sidebarCollapsed = wantRail
+        setSidebarCollapsed(wantRail)
+      }
+    }
     return paintedCols.current
   }, [])
   const flushColumnDrag = useCallback((patch?: { sidebar?: number; inspector?: number }) => {
@@ -587,7 +572,10 @@ function Shell(props: SlotProps) {
     const axis = columnDragAxisRef.current
     const cols = flushColumnDrag(patch)
     if (patch?.sidebar != null || axis === 'sidebar') {
-      persistSidebar(cols.left === 0 ? sidebarWidthRef.current : cols.left, cols.left === 0)
+      persistSidebar(
+        cols.left < SIDEBAR_MIN ? sidebarWidthRef.current : cols.left,
+        cols.left < SIDEBAR_MIN,
+      )
     }
     if (patch?.inspector != null || axis === 'inspector') {
       persistInspectorWidth(cols.inspector)
@@ -603,11 +591,11 @@ function Shell(props: SlotProps) {
     const cols = allocateShellColumns({
       viewportWidth: window.innerWidth,
       leftPane: snap.leftPane,
-      leftWidth: snap.leftPane ? (snap.sidebarCollapsed ? 0 : snap.sidebarWidth) : undefined,
+      leftWidth: snap.leftPane ? sidebarColumnWidth(snap.sidebarCollapsed, snap.sidebarWidth) : undefined,
       inspectorOpen: snap.inspectorVisible,
       inspectorWidth: snap.inspectorWidth,
     })
-    paintedCols.current = { left: cols.left, inspector: cols.inspector }
+    paintedCols.current = { left: cols.left, inspector: cols.inspector, center: cols.center }
     applyShellColumnCssVars(shellRef.current, cols)
     publishShellLayout(cols)
   }, [])
@@ -626,6 +614,7 @@ function Shell(props: SlotProps) {
       const target = event.target
       if (!(target instanceof Element)) return
       if (target.closest('.sidebar-resize')) {
+        if (target.closest('.app-side-bar.is-narrow')) return
         columnDragAxisRef.current = 'sidebar'
         columnResizingRef.current = true
         setColumnResizing(true)
@@ -758,7 +747,7 @@ function Shell(props: SlotProps) {
   const chatHeader = (
     <header className="chat-view-header" data-biu-ignore>
       <div className="chat-view-header-left">
-        {leftHidden || sidebarNarrow ? (
+        {leftHidden ? (
           <button
             type="button"
             className="chat-view-header-expand"
@@ -823,8 +812,8 @@ function Shell(props: SlotProps) {
         <button
           type="button"
           className="chat-view-header-expand"
-          title="收起对话"
-          aria-label="收起对话"
+          title="收起会话"
+          aria-label="收起会话"
           data-testid="chat-overlay-shrink"
           onPointerDown={(event) => {
             event.preventDefault()
@@ -852,8 +841,8 @@ function Shell(props: SlotProps) {
         <button
           type="button"
           className="chat-view-header-expand"
-          title="关闭聊天窗口"
-          aria-label="关闭聊天窗口"
+          title="关闭会话"
+          aria-label="关闭会话"
           data-testid="chat-overlay-close"
           onPointerDown={(event) => {
             event.preventDefault()
@@ -871,9 +860,9 @@ function Shell(props: SlotProps) {
     <div
       ref={shellRef}
       className={`app-shell${leftPane
-          ? ` app-shell-agent${leftHidden ? ' is-sidebar-collapsed' : ''}${sidebarNarrow && !leftHidden ? ' is-sidebar-narrow' : ''}${inspectorVisible ? ' is-inspector-open' : ''
-          }${columnResizing ? ' is-resizing' : ''}${windowResizing ? ' is-window-resizing' : ''}`
-          : ` app-shell-module${inspectorVisible ? ' is-inspector-open' : ''}${columnResizing ? ' is-resizing' : ''}${windowResizing ? ' is-window-resizing' : ''}`
+        ? ` app-shell-agent${leftHidden ? ' is-sidebar-collapsed' : ''}${sidebarNarrow && !leftHidden ? ' is-sidebar-narrow' : ''}${inspectorVisible ? ' is-inspector-open' : ''
+        }${columnResizing ? ' is-resizing' : ''}${windowResizing ? ' is-window-resizing' : ''}`
+        : ` app-shell-module${inspectorVisible ? ' is-inspector-open' : ''}${columnResizing ? ' is-resizing' : ''}${windowResizing ? ' is-window-resizing' : ''}`
         }${leftHidden ? ' is-left-hidden' : ''}`}
       data-testid="app-shell"
       style={
@@ -881,6 +870,7 @@ function Shell(props: SlotProps) {
           ['--sidebar-col' as string]: `${paintedCols.current.left}px`,
           ['--sidebar-flyout-width' as string]: `${Math.max(SIDEBAR_MIN, sidebarWidth)}px`,
           ['--inspector-width' as string]: `${paintedCols.current.inspector}px`,
+          ['--center-col' as string]: `${paintedCols.current.center}px`,
         } as CSSProperties
       }
     >
@@ -888,7 +878,6 @@ function Shell(props: SlotProps) {
         <ShellSidebarFrame
           visible={!leftHidden}
           narrow={sidebarNarrow}
-          showTags={sidebarShowTags}
           onCollapse={collapseSidebar}
           onExpand={expandSidebar}
           onWidthChange={onSidebarWidthChange}
@@ -909,24 +898,22 @@ function Shell(props: SlotProps) {
               {showChatSidebar || visitedChatSidebar.current ? (
                 <Suspense fallback={null}>
                   <ChatSidebar
-                    embedded
-                    visible
-                    narrow={sidebarNarrow}
-                    showTags={sidebarShowTags}
                     routeSessionId={routeSessionId}
                     useSessionView={useSessionView}
                     sessionView={sessionView}
+                    iconRail={sidebarNarrow}
                   />
                 </Suspense>
               ) : null}
             </div>
             <div
-              id="shell-module-sidebar"
               className={`app-stage-pane app-side-bar-module-slot min-h-0 flex min-w-0 flex-1 flex-col overflow-hidden${showChatSidebar ? '' : ' is-active'}`}
               data-testid="module-sidebar"
               aria-hidden={showChatSidebar}
               inert={showChatSidebar || undefined}
-            />
+            >
+              {props.renderSlot('module-sidebar')}
+            </div>
           </div>
         </ShellSidebarFrame>
       ) : null}
@@ -1079,6 +1066,7 @@ export function apply(ctx: Context) {
   }, {
     children: {
       sidebar: { kind: 'single' },
+      'module-sidebar': { kind: 'single' },
       demos: { kind: 'list' },
       dock: { kind: 'list' },
       stage: { kind: 'list' },

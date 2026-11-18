@@ -62,6 +62,9 @@ export const FILE_TOOL_NAMES = [
   'db_stat',
   'db_action',
   'db_content',
+  'db_file',
+  'db_media',
+  'db_doc',
   'db_asset',
 ] as const
 
@@ -207,8 +210,39 @@ export class ToolsService extends Service {
     }, `tools.annotate ${key}`)
   }
 
+  /** 给已注册工具挂旧名：模型目录只显示正式名，invoke / annotate 仍认别名。 */
+  alias(canonical: string, names: readonly string[]) {
+    const target = this.resolveName(canonical)
+    if (!this.tools.has(target)) throw new Error(`unknown tool: ${canonical}`)
+    const added: string[] = []
+    for (const raw of names) {
+      const name = String(raw ?? '').trim()
+      if (!name || name === target) continue
+      this.aliases.set(name, target)
+      added.push(name)
+    }
+    return this.ctx.effect(() => {
+      this.ctx.emit('hub/change')
+      return () => {
+        for (const name of added) {
+          if (this.aliases.get(name) === target) this.aliases.delete(name)
+        }
+        this.ctx.emit('hub/change')
+      }
+    }, `tools.alias ${target}`)
+  }
+
+  private noteTexts(name: string) {
+    const canonical = this.resolveName(name)
+    const keys = new Set<string>([canonical, name])
+    for (const [alias, target] of this.aliases) {
+      if (target === canonical) keys.add(alias)
+    }
+    return [...keys].flatMap((key) => this.notes.get(key) ?? [])
+  }
+
   private describe(tool: ToolSpec) {
-    const extra = this.notes.get(tool.name) ?? []
+    const extra = this.noteTexts(tool.name)
     if (!extra.length) return tool.description
     return [tool.description, ...extra].join(' ')
   }
@@ -275,7 +309,7 @@ export class ToolsService extends Service {
   }
 
   executionMode(name: string, args: Record<string, unknown> = {}): ToolExecutionMode {
-    const execution = this.tools.get(name)?.execution
+    const execution = this.tools.get(this.resolveName(name))?.execution
     if (typeof execution !== 'function') return execution ?? 'exclusive'
     try {
       return execution(args)

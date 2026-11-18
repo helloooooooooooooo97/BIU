@@ -61,19 +61,28 @@ test('workspace members collection lists and manages only the active workspace',
   assert.notEqual(await runWithAccount(ada.id, () => collection.get(cara.id)), null)
 })
 
-test('a device-only workspace exposes no member collection or mutations', async () => {
+test('a device-only workspace lists the owner and LAN visitors, but not email invites', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'biu-local-members-collection-'))
   dirs.push(dir)
   const store = new CollabStore(openAndMigrateBiu(join(dir, 'biu.sqlite')))
   const ada = store.register('', Date.now(), 'secret1', 'local-ada@example.com')
   const workspace = store.createWorkspace(ada.id, 'Private device')
   store.setActive(ada.id, workspace.id)
-  const collection = workspaceMembersCollection(store, () => false, false)
+  const collection = workspaceMembersCollection(store, () => false, true)
 
-  assert.equal(collection.view, undefined)
-  assert.deepEqual(await runWithAccount(ada.id, () => collection.list()), [])
+  assert.equal(collection.view?.title, '成员')
+  const listed = await runWithAccount(ada.id, () => collection.list())
+  assert.equal(listed.length, 1)
+  assert.equal(listed[0]?.id, ada.id)
   await assert.rejects(
     () => runWithAccount(ada.id, () => collection.create!([{ email: 'nobody@example.com' }])),
-    /本机空间不提供成员功能/,
+    /邮箱邀请/,
   )
+  const guest = store.rememberLanMember(workspace.id, 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee')
+  assert.equal(guest?.id.startsWith('lan_'), true)
+  const again = store.rememberLanMember(workspace.id, 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee')
+  assert.equal(again?.id, guest?.id)
+  const withLan = await runWithAccount(ada.id, () => collection.list())
+  assert.equal(withLan.length, 2)
+  assert.ok(withLan.some((row) => row.id === guest?.id))
 })

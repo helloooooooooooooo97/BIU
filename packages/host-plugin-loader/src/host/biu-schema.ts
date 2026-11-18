@@ -102,6 +102,10 @@ export const BIU_TABLES: Record<string, TableSpec> = {
     columns: ['collection', 'view_id', 'payload_json', 'updated_at'],
     indexes: [],
   },
+  record_views: {
+    columns: ['collection', 'record_id', 'views_json', 'prop_views_json', 'layouts_json'],
+    indexes: [],
+  },
   saved_view_tombstones: {
     columns: ['collection', 'view_id', 'deleted_at'],
     indexes: [],
@@ -198,7 +202,6 @@ export const BIU_TABLES: Record<string, TableSpec> = {
       'workspace_id',
       'collection',
       'record_id',
-      'ownership',
       'owner_account_id',
       'access_mode',
       'member_default_role',
@@ -298,7 +301,7 @@ export const BIU_TABLES: Record<string, TableSpec> = {
   },
 }
 
-export const LATEST_BIU_SCHEMA = 44
+export const LATEST_BIU_SCHEMA = 49
 
 export const CREATE_CORE_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -439,6 +442,14 @@ CREATE TABLE IF NOT EXISTS saved_views (
   payload_json TEXT NOT NULL,
   updated_at INTEGER NOT NULL,
   PRIMARY KEY (collection, view_id)
+);
+CREATE TABLE IF NOT EXISTS record_views (
+  collection TEXT NOT NULL,
+  record_id TEXT NOT NULL,
+  views_json TEXT NOT NULL DEFAULT '[]',
+  prop_views_json TEXT NOT NULL DEFAULT '[]',
+  layouts_json TEXT NOT NULL DEFAULT '[]',
+  PRIMARY KEY (collection, record_id)
 );
 -- 已删视图的墓碑：别的窗口拿着旧快照推 upsert 时不能把删掉的视图复活
 CREATE TABLE IF NOT EXISTS saved_view_tombstones (
@@ -614,7 +625,6 @@ CREATE TABLE IF NOT EXISTS resource_policies (
   workspace_id TEXT NOT NULL,
   collection TEXT NOT NULL,
   record_id TEXT NOT NULL,
-  ownership TEXT NOT NULL,
   owner_account_id TEXT NOT NULL,
   access_mode TEXT NOT NULL,
   member_default_role TEXT NOT NULL DEFAULT 'viewer',

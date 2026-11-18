@@ -14,6 +14,8 @@ import {
   mentionPickFromAttrs,
   openMention,
 } from './mention-ref.ts'
+import { formatMentionMarkup, takeMentionMarkup } from '@biu/core-file-system/mention-markup'
+import { rememberMentionTitle } from './mention-title-cache.ts'
 import { placeSlashInWindow } from './slash-place.ts'
 import { slashMayOpen } from './editor-live.ts'
 
@@ -76,6 +78,7 @@ export function mentionSuggestionContent(
   props: { id: string; label: string },
 ) {
   const space = { type: 'text', text: ' ' }
+  if (props.label) rememberMentionTitle(props.id, props.label)
   if (schema.nodes.pickChip) {
     return [
       {
@@ -85,7 +88,7 @@ export function mentionSuggestionContent(
       space,
     ]
   }
-  return [{ type: 'mention', attrs: { id: props.id, label: props.label } }, space]
+  return [{ type: 'mention', attrs: { id: props.id } }, space]
 }
 
 function mentionAnchor(target: EventTarget | null, root: Element) {
@@ -143,6 +146,31 @@ function renderMentionMenu() {
 }
 
 export const pageMention = Mention.extend({
+  renderMarkdown: (node) => formatMentionMarkup(String(node.attrs?.id ?? '')) || '',
+  parseMarkdown: (token, helpers) => {
+    const id = String((token as { id?: unknown }).id ?? '').trim()
+    if (!id) return []
+    const label = String((token as { label?: unknown }).label ?? '').trim()
+    if (label) rememberMentionTitle(id, label)
+    return helpers.createNode('mention', { id, mentionSuggestionChar: '@' })
+  },
+  markdownTokenizer: {
+    name: 'mention',
+    level: 'inline' as const,
+    start(src: string) {
+      return src.indexOf('[@')
+    },
+    tokenize(src: string) {
+      const taken = takeMentionMarkup(src)
+      if (!taken) return undefined
+      return {
+        type: 'mention',
+        raw: taken.raw,
+        id: taken.id,
+        label: taken.label,
+      }
+    },
+  },
   addNodeView() {
     return ReactNodeViewRenderer(MentionChipView, { as: 'span' })
   },
@@ -210,7 +238,7 @@ export const pageMention = Mention.extend({
           { from: range.from, to },
           mentionSuggestionContent(editor.schema, {
             id: String(props.id ?? ''),
-            label: String(props.label ?? props.id ?? ''),
+            label: String(props.label ?? ''),
           }),
         )
         .run()

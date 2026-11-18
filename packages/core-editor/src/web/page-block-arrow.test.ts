@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
 import { NodeSelection, TextSelection } from '@tiptap/pm/state'
-import { pageEditorExtensions } from './kit.ts'
+import { recordEditorExtensions } from './kit.ts'
 import { adjacentPageBlockPos, handlePageBlockArrow } from './page-block-arrow.ts'
 
 function editorOf(md: string) {
@@ -10,7 +10,7 @@ function editorOf(md: string) {
   document.body.append(host)
   return new Editor({
     element: host,
-    extensions: pageEditorExtensions(),
+    extensions: recordEditorExtensions(),
     content: md,
     contentType: 'markdown',
   })
@@ -19,7 +19,7 @@ function editorOf(md: string) {
 function pageBlockPos(editor: Editor) {
   let pos = -1
   editor.state.doc.descendants((node, p) => {
-    if (node.type.name === 'pageBlock') pos = p
+    if (node.type.name === 'editorBlock') pos = p
   })
   return pos
 }
@@ -30,7 +30,7 @@ function key(name: string) {
 
 const DOC = `hello
 
-:::pageBlock {kind=sandbox plugin=page-sandbox}
+:::editorBlock {kind=sandbox plugin=page-sandbox}
 export default function App(){return <div/>}
 :::
 
@@ -55,7 +55,7 @@ test('ArrowDown from the paragraph before a pageBlock selects it', () => {
   assert.equal(handlePageBlockArrow(editor.view, key('ArrowDown')), true)
   assert.equal(editor.state.selection instanceof NodeSelection, true)
   if (editor.state.selection instanceof NodeSelection) {
-    assert.equal(editor.state.selection.node.type.name, 'pageBlock')
+    assert.equal(editor.state.selection.node.type.name, 'editorBlock')
   }
   editor.destroy()
 })

@@ -49,8 +49,8 @@ test('idle chips, person, and actions paint without waiting for hover', () => {
   assert.match(person, />Ada</)
   const actions = idleActionsInnerHtml([{ label: '打开' }, { label: '删除', danger: true }])
   assert.match(actions, /tasks-row-actions/)
-  assert.match(actions, /fsdb-action-tag is-danger/)
-  assert.match(actions, />打开</)
+  assert.match(actions, /tasks-icon-btn is-danger/)
+  assert.match(actions, /data-dock-tip="打开"/)
   assert.equal(idleActionsInnerHtml([]), '')
 })
 

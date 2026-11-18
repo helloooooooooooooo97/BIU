@@ -25,7 +25,7 @@ test('tasksCollection maps /tasks rows with rolled-up usage', async () => {
       return { id, title: '写方案', status: patch.status ?? 'todo' }
     },
     create(input) {
-      return { id: 'new', title: input.title, status: 'todo' }
+      return { id: 'new', title: input.title, status: 'todo', parentId: input.parentId }
     },
     delete() {
       return true
@@ -68,10 +68,16 @@ test('tasksCollection maps /tasks rows with rolled-up usage', async () => {
   assert.equal(child?.notes, undefined)
   const written = await spec.update!('t1', { status: 'doing' })
   assert.equal(written.status, 'doing')
-  assert.deepEqual(spec.records, { update: true, create: true, delete: true })
+  assert.deepEqual(spec.records, { update: true, create: true, delete: true, allocateId: true })
   assert.equal(spec.actions?.find((item) => item.id === 'report')?.for, 'agent')
   assert.equal(spec.actions?.find((item) => item.id === 'deliver')?.for, 'both')
   assert.deepEqual(spec.actions?.find((item) => item.id === 'deliver')?.placement, ['row', 'detail'])
+  const addChild = spec.actions?.find((item) => item.id === 'add-child')
+  assert.equal(addChild?.label, '添加子任务')
+  assert.deepEqual(addChild?.placement, ['row', 'detail'])
+  const childRow = await addChild!.run('t1', { id: 't1' })
+  assert.equal(childRow?.parentId, 't1')
+  assert.equal(childRow?.title, '未命名任务')
 })
 
 test('tasksCollection get reads one row instead of listing the table', async () => {

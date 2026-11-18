@@ -1,7 +1,8 @@
 /** 侧栏展开/收起与数据路由切换的纯逻辑，UI 和压测共用。 */
 import { parseAppPath } from '@biu/web-session-view'
-import { builtinAllViewId } from '../catalog-views.ts'
+import { displayNameForView, isReadOnlyViewId } from '../catalog-views.ts'
 import { DATA_COLLECTION_PATH, DATA_MODULE, databaseAllViewPath, databaseRecordPath, databaseViewPath } from './database-path.ts'
+import { defaultViewId } from './view-storage.ts'
 import type { ViewMode } from './fields.ts'
 
 const DATABASE = [DATA_MODULE]
@@ -82,13 +83,40 @@ export function pathForCenter(center: Pick<DataCenter, 'collection' | 'viewId' |
 export function pathForCrumbTarget(target: CrumbTarget) {
   if (target.kind === 'root') return DATABASE_ROOT_PATH
   if (target.kind === 'collection') {
-    return pathForCenter({ collection: target.collection, viewId: builtinAllViewId(target.collection) })
+    return pathForCenter({ collection: target.collection, viewId: defaultViewId(target.collection) })
   }
   if (target.kind === 'view') return pathForCenter({ collection: target.collection, viewId: target.viewId })
   if (target.kind === 'record') {
     return pathForCenter({ collection: target.collection, viewId: target.viewId, recordId: target.recordId })
   }
   return pathForCenter({ collection: target.collection, recordId: target.recordId })
+}
+
+/** 面包屑上一级：最后一级的父级。 */
+export function parentCrumbTarget(crumbs: Crumb[]): CrumbTarget | null {
+  if (crumbs.length < 2) return null
+  return crumbLabelAction(crumbs[crumbs.length - 1]!, crumbs[crumbs.length - 2])
+}
+
+/** ⌘← 回到面包屑上一级。 */
+export function crumbParentHotkey(event: {
+  key: string
+  metaKey: boolean
+  ctrlKey: boolean
+  altKey: boolean
+  shiftKey: boolean
+  isComposing?: boolean
+  defaultPrevented?: boolean
+}) {
+  if (event.defaultPrevented || event.isComposing) return false
+  if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return false
+  return event.key === 'ArrowLeft'
+}
+
+export function crumbHotkeyPane(target: EventTarget | null): 'inspector' | 'main' | null {
+  const el = target instanceof Element ? target : null
+  if (el?.closest('dialog, [role="dialog"], [role="menu"]')) return null
+  return el?.closest('.session-inspector') ? 'inspector' : 'main'
 }
 
 /** 标题还没到时不要用记录 id 充页面名。id 本身也不当标题。 */
@@ -128,12 +156,17 @@ export function buildCrumbs(input: {
       })),
   })
   if (input.viewId) {
+    const storedName = input.viewName || input.views?.find((view) => view.id === input.viewId)?.name
+    // 内置视图被隐藏后仍可通过导航打开，名称不能依赖可见视图列表。
+    const viewName = storedName || (isReadOnlyViewId(input.viewId)
+      ? displayNameForView(input.viewId, { path: input.collection, label: input.collectionLabel })
+      : input.viewId)
     crumbs.push({
       kind: 'view',
       id: input.viewId,
-      label: input.viewName || input.viewId,
+      label: viewName,
       target: { kind: 'view', collection: input.collection, viewId: input.viewId },
-      choices: (input.views ?? [{ id: input.viewId, name: input.viewName || input.viewId }]).map((view) => ({
+      choices: (input.views ?? [{ id: input.viewId, name: viewName }]).map((view) => ({
         id: view.id,
         label: view.name,
         mode: view.mode,

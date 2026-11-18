@@ -8,7 +8,7 @@ const React = globalThis.React
 const { useEffect, useLayoutEffect, useRef } = React
 
 export const name = 'page-terminal'
-export const inject = ['pageEditor']
+export const inject = ['blockEditor']
 
 const DEFAULTS = { title: '终端', height: 240 }
 
@@ -1244,7 +1244,7 @@ function PageTerminal({
               inset: 0,
               width: '100%',
               height: '100%',
-              zIndex: 2147483647,
+              zIndex: 'var(--biu-z-modal)',
               borderRadius: 0,
               border: 'none',
             }
@@ -1290,7 +1290,7 @@ function PageTerminal({
 }
 
 export function apply(ctx: {
-  pageEditor: {
+  blockEditor: {
     registerBlock: (spec: {
       kind: string
       plugin: string
@@ -1308,7 +1308,7 @@ export function apply(ctx: {
     }) => void
   }
 }) {
-  ctx.pageEditor.registerBlock({
+  ctx.blockEditor.registerBlock({
     kind: 'terminal',
     plugin: name,
     label: '终端',

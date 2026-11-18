@@ -16,6 +16,11 @@ export function readMainDataRoute() {
   }
 }
 
+/** 代理页点小人：回到上次数据路由，没有就进页面表。 */
+export function overlayDataRoute() {
+  return readMainDataRoute() || `${DATA_MODULE_PATH}/pages`
+}
+
 export function writeMainDataRoute(pathname: string) {
   try {
     if (!isMainDataRoute(pathname)) return

@@ -291,6 +291,26 @@ test('setProject binds host absolute path and clears it', async () => {
   assert.equal((await ctx.sessions.require(record.id)).project, undefined)
 })
 
+test('sqlite listSummaries keeps bound project for the sidebar', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'cordis-sqlite-proj-'))
+  const path = join(dir, 'sessions.sqlite')
+  const projectDir = await mkdtemp(join(tmpdir(), 'cordis-proj-'))
+  const ctx = new Context()
+  await ctx.plugin(sessionStore, { driver: 'sqlite', path })
+  await ctx.plugin(sessions)
+  const record = await ctx.sessions.create()
+  const project = await ctx.sessions.setProject(record.id, { path: projectDir })
+  const listed = (await ctx.sessions.listSummaries()).find((item) => item.id === record.id)
+  assert.equal(listed?.project?.path, project?.path)
+  assert.equal(listed?.project?.name, project?.name)
+
+  const ctx2 = new Context()
+  await ctx2.plugin(sessionStore, { driver: 'sqlite', path })
+  await ctx2.plugin(sessions)
+  const again = (await ctx2.sessions.listSummaries()).find((item) => item.id === record.id)
+  assert.equal(again?.project?.path, project?.path)
+})
+
 test('delete removes session from store and cache', async () => {
   const ctx = new Context()
   await ctx.plugin(sessionStore, { driver: 'memory' })

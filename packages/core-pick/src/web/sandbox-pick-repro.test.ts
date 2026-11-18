@@ -57,9 +57,9 @@ function layoutTree(host: HTMLElement, inner: HTMLElement) {
 
 async function mountLiveSandbox() {
   const { mountSandbox, hostThemeCss, SANDBOX_PICK_MODE_CSS } = await import(
-    '../../../../.plugin-dev/page-sandbox/web/sandbox.ts'
+    '../../../core-editor/src/web/sandbox/runtime.ts'
   )
-  const { stampSandboxPickSurfaces } = await import('../../../../.plugin-dev/page-sandbox/web/stamp-picks.ts')
+  const { stampSandboxPickSurfaces } = await import('../../../core-editor/src/web/sandbox/stamp-picks.ts')
   const sheet = document.createElement('style')
   sheet.setAttribute('data-testid', 'light-pick-mode-css')
   sheet.textContent = LIGHT_PICK_MODE_CSS
@@ -107,7 +107,7 @@ async function mountLiveSandbox() {
     injectedCss: [...root.querySelectorAll('style')].map((el) => el.textContent ?? '').join('\n'),
     bodyHtml: body instanceof HTMLElement ? body.innerHTML : '',
     unmount: async () => {
-      const { unmountSandbox } = await import('../../../../.plugin-dev/page-sandbox/web/sandbox.ts')
+      const { unmountSandbox } = await import('../../../core-editor/src/web/sandbox/runtime.ts')
       unmountSandbox(root)
       sheet.remove()
       editor.remove()

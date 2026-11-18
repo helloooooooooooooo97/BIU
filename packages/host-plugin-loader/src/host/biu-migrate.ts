@@ -305,8 +305,8 @@ function rewritePageBlockMentions(db: DatabaseSync) {
   for (const row of bodies) {
     let next = String(row.body ?? '')
     for (const block of rows) {
-      const from = `/page-blocks/${block.page_id}::${block.block_id}`
-      const to = `/page-blocks/${block.collection}::${block.page_id}::${block.block_id}`
+      const from = `/editor-blocks/${block.page_id}::${block.block_id}`
+      const to = `/editor-blocks/${block.collection}::${block.page_id}::${block.block_id}`
       if (from !== to) next = next.split(from).join(to)
     }
     if (next !== (row.body ?? '')) update.run(next, row.collection, row.record_id)
@@ -894,6 +894,47 @@ export const BIU_MIGRATIONS: Migration[] = [
   } },
   { version: 44, module: 'core-file-system', name: 'facet-to-tag', up: (db) => {
     migrateFacetNameToTag(db)
+  } },
+  { version: 45, module: 'core-file-system', name: 'tag.views', up: (db) => {
+    addColumn(db, 'tags', 'views_json', `views_json TEXT NOT NULL DEFAULT '[]'`)
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS tag_docs (
+        name TEXT PRIMARY KEY,
+        tag_id TEXT NOT NULL,
+        body TEXT NOT NULL,
+        etag TEXT NOT NULL,
+        mime TEXT NOT NULL DEFAULT 'text/plain; charset=utf-8'
+      );
+      CREATE INDEX IF NOT EXISTS tag_docs_tag ON tag_docs(tag_id);
+    `)
+  } },
+  { version: 46, module: 'host-account', name: 'drop.resource-ownership', up: (db) => {
+    dropColumn(db, 'resource_policies', 'ownership')
+  } },
+  { version: 47, module: 'core-page', name: 'page.views', up: (db) => {
+    addColumn(db, 'pages', 'views_json', `views_json TEXT NOT NULL DEFAULT '[]'`)
+    addColumn(db, 'pages', 'prop_views_json', `prop_views_json TEXT NOT NULL DEFAULT '[]'`)
+    addColumn(db, 'pages', 'layouts_json', `layouts_json TEXT NOT NULL DEFAULT '[]'`)
+  } },
+  { version: 48, module: 'core-file-system', name: 'record.views', up: (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS record_views (
+        collection TEXT NOT NULL,
+        record_id TEXT NOT NULL,
+        views_json TEXT NOT NULL DEFAULT '[]',
+        prop_views_json TEXT NOT NULL DEFAULT '[]',
+        layouts_json TEXT NOT NULL DEFAULT '[]',
+        PRIMARY KEY (collection, record_id)
+      )
+    `)
+    dropColumn(db, 'pages', 'views_json')
+    dropColumn(db, 'pages', 'prop_views_json')
+    dropColumn(db, 'pages', 'layouts_json')
+    dropColumn(db, 'tags', 'views_json')
+    dropColumn(db, 'tags', 'prop_views_json')
+  } },
+  { version: 49, module: 'core-file-system', name: 'drop.tag-docs', up: (db) => {
+    if (hasTable(db, 'tag_docs')) db.exec('DROP TABLE tag_docs')
   } },
 ]
 

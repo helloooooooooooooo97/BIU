@@ -241,7 +241,7 @@ flowchart TB
   API --> T["Task<br/>/tasks"]
   API --> L["Plugin<br/>/plugins"]
   API --> P["Page<br/>/pages"]
-  API --> C["Component<br/>/page-blocks"]
+  API --> C["Component<br/>/editor-blocks"]
   API --> F["Facet<br/>/facets"]
 ```
 
@@ -350,36 +350,36 @@ Back up those sqlite files with `VACUUM INTO '/path/to/backup.sqlite'` (a single
 Markdown can carry **blocks** — a fenced section that renders as a live component:
 
 ```md
-:::pageBlock {kind=algorithm plugin=page-algorithm}
+:::editorBlock {kind=algorithm plugin=page-algorithm}
 { "title": "1. Two Sum", "lang": "python", "code": "……" }
 :::
 ```
 
-Any installed plugin can register a block type, and gets three things: an entry in the slash menu, a component rendered in the page, **and a row in the `/page-blocks` table**.
+Any installed plugin can register a block type, and gets three things: an entry in the slash menu, a component rendered in the page, **and a row in the `/editor-blocks` table**.
 
 That last one is the dividing line: **content is not an opaque text blob owned by the editor.** Block types are installed with plugins, while blocks themselves are read and edited by agents like ordinary records. The HTML blocks already running in this workspace (static content and iframes that execute scripts), Excalidraw boards, and algorithm cards are installed at runtime rather than shipped in the repository.
 
 ### Components: declarative content units
 
-A **block** inside a page (`/page-blocks`) is a Component. It is three things at once:
+A **block** inside a page (`/editor-blocks`) is a Component. It is three things at once:
 
 | Layer | What it is |
 |---|---|
 | How it is written | A declaration: `kind` is the type, `plugin` says who renders it, and the rest is data |
 | How it renders | A live component in the page — implemented by a plugin, installed and versioned like one |
-| As data | A row in `/page-blocks`: `pageId` · `blockId` · `blockKind` · `plugin` · `data` |
+| As data | A row in `/editor-blocks`: `pageId` · `blockId` · `blockKind` · `plugin` · `data` |
 
 The third layer is the key one: because a block is also a record, it can be read, written, queried, and aggregated from outside the page.
 
 ```
-$ db_list   /page-blocks                        # every embedded component in the workspace
-$ db_update /page-blocks/<pageId>::<blockId>    # change a block's data (merged by default)
+$ db_list   /editor-blocks                        # every embedded component in the workspace
+$ db_update /editor-blocks/<pageId>::<blockId>    # change a block's data (merged by default)
 ```
 
 **Aggregating across pages**: every block record carries `plugin` and `pageId`, so one query can show where and how widely a component type is used:
 
 ```
-$ db_list /page-blocks filter.plugin=page-algorithm
+$ db_list /editor-blocks filter.plugin=page-algorithm
   → every block in every page rendered by that plugin
 ```
 
@@ -505,7 +505,7 @@ That makes context injection stop being a guessing game about what to stuff in:
 A block inside a page is a declaration:
 
 ```md
-:::pageBlock {kind=algorithm plugin=page-algorithm}
+:::editorBlock {kind=algorithm plugin=page-algorithm}
 { "title": "1. Two Sum", "lang": "python", "code": "……" }
 :::
 ```
@@ -582,7 +582,7 @@ In most agent products, having an agent produce a UI means having it write a hun
 In Biu, having an agent produce a UI means writing three fields:
 
 ```md
-:::pageBlock {kind=algorithm plugin=page-algorithm}
+:::editorBlock {kind=algorithm plugin=page-algorithm}
 { "title": "1. Two Sum", "lang": "python" }
 :::
 ```
