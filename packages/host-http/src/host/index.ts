@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { existsSync, readFileSync } from 'node:fs'
 import { extname, join } from 'node:path'
@@ -480,12 +481,33 @@ export class HttpService extends Service {
         json: async <T = unknown>() => parseJson(await body()) as T,
         bytes: () => body(),
         send: (status, body) => {
-          res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', ...corsHeaders })
-          try {
-            res.end(JSON.stringify(body))
-          } catch (error) {
-            res.end(JSON.stringify({ error: String(error) }))
+          if (status === 304) {
+            res.writeHead(304, { ...corsHeaders })
+            res.end()
+            return
           }
+          let raw: string
+          try {
+            raw = JSON.stringify(body)
+          } catch (error) {
+            res.writeHead(500, { 'content-type': 'application/json; charset=utf-8', ...corsHeaders })
+            res.end(JSON.stringify({ error: String(error) }))
+            return
+          }
+          const headers: Record<string, string> = { 'content-type': 'application/json; charset=utf-8', ...corsHeaders }
+          if (method === 'GET' && status === 200) {
+            const etag = `"${createHash('sha1').update(raw).digest('hex')}"`
+            const noneMatch = String(req.headers['if-none-match'] ?? '').trim().replace(/^W\//, '').replaceAll('"', '')
+            if (noneMatch && noneMatch === etag.slice(1, -1)) {
+              res.writeHead(304, { etag, 'cache-control': 'private, no-cache', ...corsHeaders })
+              res.end()
+              return
+            }
+            headers.etag = etag
+            headers['cache-control'] = 'private, no-cache'
+          }
+          res.writeHead(status, headers)
+          res.end(raw)
         },
       }
       const started = Date.now()

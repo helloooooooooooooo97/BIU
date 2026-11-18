@@ -46,6 +46,32 @@ test('port zero reports the actual bound port', async () => {
   }
 })
 
+test('GET JSON responses support ETag If-None-Match 304', async () => {
+  const base = await mkdtemp(join(tmpdir(), 'cordis-http-etag-'))
+  const publicDir = join(base, 'public')
+  await mkdir(publicDir, { recursive: true })
+  await writeFile(join(publicDir, 'index.html'), '<html>etag</html>')
+  const ctx = new Context()
+  const ready = new Promise<number>((resolve) => ctx.on('http/ready', ({ port }) => resolve(port)))
+  const fiber = await ctx.plugin(http, { port: 0, host: '127.0.0.1', publicDir, sharePort: 0 })
+  try {
+    const port = await ready
+    ctx.http.route('GET', '/api/db/read', (route) => {
+      route.send(200, { kind: 'record', path: '/notes/n1' })
+    })
+    const first = await fetch(`http://127.0.0.1:${port}/api/db/read`)
+    assert.equal(first.status, 200)
+    const etag = first.headers.get('etag')
+    assert.ok(etag)
+    assert.equal(await first.text(), '{"kind":"record","path":"/notes/n1"}')
+    const again = await fetch(`http://127.0.0.1:${port}/api/db/read`, { headers: { 'if-none-match': etag! } })
+    assert.equal(again.status, 304)
+    assert.equal(await again.text(), '')
+  } finally {
+    await fiber.dispose()
+  }
+})
+
 test('missing hashed assets 404 instead of falling back to index html', async () => {
   const base = await mkdtemp(join(tmpdir(), 'cordis-http-asset-'))
   const publicDir = join(base, 'public')
