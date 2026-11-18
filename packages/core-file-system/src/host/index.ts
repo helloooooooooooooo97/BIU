@@ -1030,7 +1030,8 @@ export class DatabaseService extends Service implements Database {
 
   private async loadCollectionRows(spec: CollectionSpec, query: CollectionListQuery) {
     const rows = await spec.list(query)
-    const listed = !query.ids?.length ? rows : rows.filter((row) => query.ids!.includes(row.id))
+    const wanted = query.ids?.length ? new Set(query.ids) : null
+    const listed = wanted ? rows.filter((row) => wanted.has(row.id)) : rows
     const hidden = this.tags.deletedIds(spec.path)
     const builtinPlugin = (row: { builtin?: unknown }) => spec.path === '/plugins' && row.builtin === true
     return query.trash

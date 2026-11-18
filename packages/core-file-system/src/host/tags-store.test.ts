@@ -311,3 +311,21 @@ test('schema reads and edits skip editor content and preserve notes', () => {
   assert.equal(store.notes('fast'), '# 保留正文')
   assert.deepEqual(store.get('fast')?.fields, [])
 })
+
+test('deletedIds is cached until markDeleted or restoreDeleted', () => {
+  const store = new TagStore()
+  store.markDeleted('/pages', 'p1')
+  const db = store.ensure()
+  const orig = db.prepare.bind(db)
+  let scans = 0
+  db.prepare = ((sql: string) => {
+    if (/FROM record_meta WHERE collection = \? AND deleted_at IS NOT NULL/.test(sql)) scans += 1
+    return orig(sql)
+  }) as typeof db.prepare
+  assert.equal(store.deletedIds('/pages').has('p1'), true)
+  assert.equal(store.deletedIds('/pages').has('p1'), true)
+  assert.equal(scans, 1)
+  store.restoreDeleted('/pages', 'p1')
+  assert.equal(store.deletedIds('/pages').has('p1'), false)
+  assert.equal(scans, 2)
+})
