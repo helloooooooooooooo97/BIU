@@ -133,17 +133,27 @@ export function tableColumnWidth(key: string, saved: unknown, pin = false) {
   return TABLE_COL_PX
 }
 
-/** 表格列一次画全，不做横向虚拟化。钉住列仍占 slice 前缀，便于表头/单元格共用。 */
+/** Frozen columns plus the visible horizontal range and one-column overscan. */
 export function tableColumnSlice(
   count: number,
   pinCount: number,
-  _scrollLeft?: number,
-  _viewportW?: number,
-  _widths?: number[],
+  scrollLeft = 0,
+  viewportW = TABLE_COL_VIEWPORT_FALLBACK,
+  widths: number[] = [],
 ): TableColumnSlice {
   const pin = Math.min(Math.max(0, pinCount), Math.max(0, count))
   if (count <= 0) return { start: 0, end: 0, pin: 0, padLeft: 0, padRight: 0 }
-  return { start: pin, end: count, pin, padLeft: 0, padRight: 0 }
+  const offsets = [0]
+  for (let i = 0; i < count; i += 1) offsets.push(offsets[i]! + (widths[i] && widths[i]! > 0 ? widths[i]! : TABLE_COL_PX))
+  const left = Math.max(0, scrollLeft) + offsets[pin]!
+  const right = Math.max(left, Math.max(0, scrollLeft) + (viewportW > 0 ? viewportW : TABLE_COL_VIEWPORT_FALLBACK))
+  let start = pin
+  while (start < count && offsets[start + 1]! <= left) start += 1
+  let end = start
+  while (end < count && offsets[end]! < right) end += 1
+  start = Math.max(pin, Math.min(count, start) - TABLE_COL_OVERSCAN)
+  end = Math.min(count, Math.max(start + 1, end + TABLE_COL_OVERSCAN))
+  return { start, end, pin, padLeft: offsets[start]! - offsets[pin]!, padRight: offsets[count]! - offsets[end]! }
 }
 
 export function tableColumnUnchanged(

@@ -1,4 +1,4 @@
-export type TableCellCursor = { id: string; key: string }
+export type TableCellCursor = { id: string; key: string; rowKey?: string }
 
 export type TableKeyDir = 'up' | 'down' | 'left' | 'right' | 'home' | 'end'
 
@@ -9,10 +9,10 @@ export function tableNavKeys(columns: { key: string }[]): string[] {
 }
 
 /** 表格页默认落点：第一行标题格。 */
-export function firstTableTitleCell(rowIds: string[], keys: string[], labelKey?: string | null): TableCellCursor | null {
+export function firstTableTitleCell(rowIds: string[], keys: string[], labelKey?: string | null, rowKeys?: string[]): TableCellCursor | null {
   if (!rowIds.length || !keys.length) return null
   const key = labelKey && keys.includes(labelKey) ? labelKey : keys[0]
-  return { id: rowIds[0], key }
+  return { id: rowIds[0], key, ...(rowKeys ? { rowKey: rowKeys[0] } : {}) }
 }
 
 export function tableKeyDir(key: string, shift = false): TableKeyDir | null {
@@ -211,9 +211,10 @@ export function tableCellRange(
   keys: string[],
   a: TableCellCursor,
   b: TableCellCursor,
+  rowKeys?: string[],
 ): TableCellCursor[] {
-  const r1 = rowIds.indexOf(a.id)
-  const r2 = rowIds.indexOf(b.id)
+  const r1 = rowKeys && a.rowKey ? rowKeys.indexOf(a.rowKey) : rowIds.indexOf(a.id)
+  const r2 = rowKeys && b.rowKey ? rowKeys.indexOf(b.rowKey) : rowIds.indexOf(b.id)
   const c1 = keys.indexOf(a.key)
   const c2 = keys.indexOf(b.key)
   if (r1 < 0 || r2 < 0 || c1 < 0 || c2 < 0) return [b]
@@ -226,7 +227,7 @@ export function tableCellRange(
     for (let c = cMin; c <= cMax; c += 1) {
       const id = rowIds[r]
       const key = keys[c]
-      if (id && key) out.push({ id, key })
+      if (id && key) out.push({ id, key, ...(rowKeys ? { rowKey: rowKeys[r] } : {}) })
     }
   }
   return out.length ? out : [b]
@@ -253,29 +254,17 @@ export function moveTableCell(
   keys: string[],
   current: TableCellCursor | null,
   dir: TableKeyDir,
+  rowKeys?: string[],
 ): TableCellCursor | null {
   if (!rowIds.length || !keys.length) return current
-  const first: TableCellCursor = { id: rowIds[0], key: keys[0] }
-  if (!current) return first
-  const row = Math.max(0, rowIds.indexOf(current.id))
+  const at = (row: number, col: number): TableCellCursor => ({ id: rowIds[row]!, key: keys[col]!, ...(rowKeys ? { rowKey: rowKeys[row] } : {}) })
+  if (!current) return at(0, 0)
+  const row = Math.max(0, rowKeys && current.rowKey ? rowKeys.indexOf(current.rowKey) : rowIds.indexOf(current.id))
   const col = Math.max(0, keys.indexOf(current.key))
-  const at = { id: rowIds[row] ?? first.id, key: keys[col] ?? first.key }
-  if (dir === 'up') {
-    if (row <= 0) return at
-    return { id: rowIds[row - 1], key: at.key }
-  }
-  if (dir === 'down') {
-    if (row >= rowIds.length - 1) return at
-    return { id: rowIds[row + 1], key: at.key }
-  }
-  if (dir === 'left') {
-    if (col <= 0) return at
-    return { id: at.id, key: keys[col - 1] }
-  }
-  if (dir === 'right') {
-    if (col >= keys.length - 1) return at
-    return { id: at.id, key: keys[col + 1] }
-  }
-  if (dir === 'home') return { id: at.id, key: keys[0] }
-  return { id: at.id, key: keys[keys.length - 1] }
+  if (dir === 'up') return at(Math.max(0, row - 1), col)
+  if (dir === 'down') return at(Math.min(rowIds.length - 1, row + 1), col)
+  if (dir === 'left') return at(row, Math.max(0, col - 1))
+  if (dir === 'right') return at(row, Math.min(keys.length - 1, col + 1))
+  if (dir === 'home') return at(row, 0)
+  return at(row, keys.length - 1)
 }

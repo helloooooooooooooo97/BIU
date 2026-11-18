@@ -1,4 +1,4 @@
-import { createContext, lazy, memo, Suspense, type ComponentProps, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { cloneElement, isValidElement, type ReactElement, createContext, lazy, memo, Suspense, type ComponentProps, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import {
@@ -74,6 +74,11 @@ import { fieldPickAttrs, fieldPickId, pickDomAttrs, recordPickKind, recordSource
 import { normalizeRecordEmoji, recordPreviewEmoji, crumbRecordLabel } from './sidebar-preview.ts'
 import { recordPreviewMascot, RecordMark } from './record-mark.tsx'
 import { COL_WIDTH_MAX, COL_WIDTH_MIN, canRemoveCollectionView, colWidthStyle, normalizeColumnWidths, normalizeSavedView, normalizePageSize, rankListedViews, viewIsFresher, viewStateKey, type SavedView } from './saved-view.ts'
+import { usePinnedTableHead } from './pinned-table-head.ts'
+import { LiveTableCellSelection, tableCursorFromCell, type TableSelectionModel } from './table-cell-selection.ts'
+import { useTableColumnViewport } from './table-column-viewport.ts'
+import { useTableViewport } from './table-viewport.ts'
+import type { VirtualItem } from '@tanstack/react-virtual'
 import { useStickyToolbar } from './sticky-toolbar.ts'
 import { PagerSizeControl } from './pager-size.tsx'
 import {
@@ -148,14 +153,14 @@ import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage, locateViewRecord, pageOfIndex, type ViewNeighborQuery } from './view-adjacent.ts'
 import { setViaDataCrumbs, viaDataViewId } from './data-chrome.ts'
 import { paintCollectionViews } from './collection-nav.ts'
-import { TABLE_WINDOW_OVERSCAN, medianPaintedRowPx, rememberedTableWrap, settlePaintedRowPx, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tablePinColClass, tablePinCount, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
+import { TABLE_WINDOW_OVERSCAN, tableColumnWidth, tablePinColClass, tablePinCount, type TableColumnSlice } from './table-window.ts'
 import { bindTableDragScroll, tableVertScroller } from './table-drag-scroll.ts'
 import { forgetPreviewTotalsForPath, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady } from './sidebar-preview.ts'
 import { publishDataSidebar, type DataSidebarLive } from './data-sidebar-host.ts'
 import { builtinAllViewId, catalogLockFilters, collectionNoun, displayNameForView, isBuiltinAllViewId, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stampRecordId, stampRowOpenTarget, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, moveInspectorRecordsToTrash, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
-import { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE, claimTableCellPick, consumePendingTablePane, firstTableTitleCell, peekPendingTablePane, moveTableCell, readTablePaneRest, rememberTablePaneRest, requestTablePaneFocus, tableActionArrowLeave, tableActionButtons, tableActionButtonStep, tableCellRange, tableCellRangeKey, tableCellRangeRowIds, tableClearKey, tableClearedValue, tableCreateKey, tableKeyDir, tableKeyFromEditingTarget, tableNavKeys, tablePaneFromEvent, tablePaneHotkey, tablePaneOther, tableSendChatHotkey, tableTitleOpenWhere, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
+import { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE, claimTableCellPick, consumePendingTablePane, firstTableTitleCell, peekPendingTablePane, moveTableCell, readTablePaneRest, rememberTablePaneRest, requestTablePaneFocus, tableActionArrowLeave, tableActionButtons, tableActionButtonStep, tableCellRange, tableCellRangeKey, tableCellRangeRowIds, tableClearKey, tableClearedValue, tableCreateKey, tableKeyDir, tableKeyFromEditingTarget, tableNavKeys, tablePaneFromEvent, tablePaneHotkey, tablePaneOther, tableSendChatHotkey, tableTitleOpenWhere, tableTreeArrowAction, tableTypeToEditChar, type TableCellCursor } from './table-keys.ts'
 import { focusRecordTitleNear } from './title-content-nav.ts'
 import { isViewCatalogField, selectedViewCatalogOption } from './view-catalog.ts'
 import { jumpTag, loadTags, pullTags, subscribeTags } from './tag-catalog.ts'
@@ -625,11 +630,13 @@ function TableCheckRail({
     const measure = () => {
       if (!table.offsetHeight) return
       const next: CheckSlot[] = []
+      const tableTop = table.getBoundingClientRect().top
       const head = table.tHead?.rows[0]
-      if (head) next.push({ kind: 'head', top: head.offsetTop, h: head.offsetHeight })
+      if (head) next.push({ kind: 'head', top: 0, h: head.getBoundingClientRect().height })
       for (const tr of Array.from(table.tBodies[0]?.rows ?? [])) {
-        const top = tr.offsetTop
-        const h = tr.offsetHeight
+        const rect = tr.getBoundingClientRect()
+        const top = rect.top - tableTop
+        const h = rect.height
         if (tr.classList.contains('fsdb-group-row') || !tr.dataset.recordId) next.push({ kind: 'gap', top, h })
         else next.push({ kind: 'row', id: tr.dataset.recordId, top, h })
       }
@@ -1235,6 +1242,9 @@ type TablePaintBag = {
   colSpan: number
   error: string
   renderNode: (node: TablePaintNode) => ReactNode
+  revealRow?: (id: string, rowKey?: string) => void
+  revealColumn?: (key: string) => void
+  paintSelection?: () => void
 }
 
 const TABLE_PAINT_REF: RefObject<TablePaintBag> = {
@@ -1245,10 +1255,10 @@ const TablePaintCtx = createContext<RefObject<TablePaintBag>>(TABLE_PAINT_REF)
 
 type TableBodyProps = {
   nodes: TablePaintNode[]
-  start: number
-  end: number
-  padTop: number
-  padBottom: number
+  items: VirtualItem[]
+  margin: number
+  totalSize: number
+  measureRow: (row: HTMLTableRowElement | null) => void
   colSpan: number
   colKeys: string
   error: string
@@ -1257,31 +1267,30 @@ type TableBodyProps = {
   cellPaintKey: number
 }
 
-const TableBody = memo(function TableBody({
-  nodes,
-  start,
-  end,
-  padTop,
-  padBottom,
-  colSpan,
-}: TableBodyProps) {
-  const bag = useContext(TablePaintCtx).current
-  const span = colSpan || bag.colSpan
-  const padRow = (px: number, side: 'top' | 'bottom') =>
-    px <= 0 ? null : (
-      <tr key={`pad-${side}`} className="fsdb-table-pad" aria-hidden>
-        <td colSpan={span} style={{ height: px }}>
-          <div style={{ height: px }} />
-        </td>
-      </tr>
-    )
-  return (
-    <tbody>
-      {padRow(padTop, 'top')}
-      {nodes.slice(start, end).map((node) => bag.renderNode(node))}
-      {padRow(padBottom, 'bottom')}
-    </tbody>
+const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, measureRow, colSpan }: TableBodyProps) {
+  const paintRef = useContext(TablePaintCtx)
+  const bag = paintRef.current
+  // React can reuse cells whose selection classes were painted during a gesture.
+  // Restore the authoritative live selection after every virtual-window commit.
+  useLayoutEffect(() => { paintRef.current.paintSelection?.() })
+  const pad = (height: number, key: string) => height <= 0.25 ? null : (
+    <tr key={key} className="fsdb-table-pad" aria-hidden><td colSpan={colSpan} style={{ height }}><div style={{ height }} /></td></tr>
   )
+  const children: ReactNode[] = []
+  let end = 0
+  for (const item of items) {
+    const node = nodes[item.index]
+    if (!node) continue
+    const top = item.start - margin
+    children.push(pad(top - end, `pad:${node.key}`))
+    const element = bag.renderNode(node)
+    children.push(isValidElement(element) ? cloneElement(element as ReactElement<ComponentProps<'tr'>>, {
+      key: node.key, 'data-index': item.index, ref: measureRow,
+    } as ComponentProps<'tr'>) : element)
+    end = top + item.size
+  }
+  children.push(pad(totalSize - end, 'pad:end'))
+  return <tbody>{children}</tbody>
 })
 
 function windowedColumnsOf<T>(columns: T[], colWindow: TableColumnSlice) {
@@ -1363,9 +1372,13 @@ type WindowedTableProps = {
   activeRowId: string | null
   frozen?: boolean
   cellPaintKey?: number
+  retainedRowId?: string | null
+  retainedRowKey?: string | null
+  retainedColumnKey?: string | null
+  preserveMountedRows?: boolean
 }
 
-const WindowedTable = memo(function WindowedTable({
+export const WindowedTable = memo(function WindowedTable({
   columns,
   columnWidths,
   columnPinCount,
@@ -1391,30 +1404,33 @@ const WindowedTable = memo(function WindowedTable({
   renderCheckRow,
   onVisibleRange,
   activeRowId,
-  frozen = false,
+  frozen: _frozen = false,
   cellPaintKey = 0,
+  retainedRowId,
+  retainedRowKey,
+  retainedColumnKey,
+  preserveMountedRows,
 }: WindowedTableProps) {
-  const [tableScroll, setTableScroll] = useState(() => ({
-    top: 0,
-    left: 0,
-    ...rememberedTableWrap(),
-  }))
-  const paintCountRef = useRef(0)
-  const frozenRef = useRef(frozen)
-  frozenRef.current = frozen
-  const [rowPx, setRowPx] = useState(() => tableRowFallbackPx(wrapCells))
-  const rowPxRef = useRef(rowPx)
-  rowPxRef.current = rowPx
-  const columnMetaRef = useRef({ count: 0, pin: 0, widths: [] as number[] })
+  const pinnedHead = usePinnedTableHead(tableRef, wrapRef)
+  const dockedViewportRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    if (dockedViewportRef.current && wrapRef.current) dockedViewportRef.current.scrollLeft = wrapRef.current.scrollLeft
+  }, [pinnedHead, wrapRef])
+  const { virtualizer, items, margin, revealRow } = useTableViewport({
+    nodes, wrapCells, resetKey, layoutKey: JSON.stringify([columns.map((col) => col.key), resizingCol ? null : columnWidths, wrapCells, truncateCells]),
+    tableRef, wrapRef, retainedRowId, retainedRowKey, preserveMountedRows,
+  })
+  paintRef.current.revealRow = revealRow
   const columnPx = useMemo(
     () => columns.map((col, index) => tableColumnWidth(col.key, columnWidths[col.key], index < columnPinCount)),
     [columnPinCount, columnWidths, columns],
   )
-  const colWindow = useMemo(
-    () => tableColumnSlice(columns.length, columnPinCount, tableScroll.left, tableScroll.width, columnPx),
-    [columnPinCount, columnPx, columns.length, tableScroll.left, tableScroll.width],
-  )
-  columnMetaRef.current = { count: columns.length, pin: columnPinCount, widths: columnPx }
+  const columnKeys = useMemo(() => columns.map((col) => col.key), [columns])
+  const { slice: colWindow, revealColumn } = useTableColumnViewport({
+    keys: columnKeys, widths: columnPx, pinCount: columnPinCount, resetKey, wrapCells,
+    tableRef, wrapRef, retainedKey: retainedColumnKey, resizingKey: resizingCol, preserveMounted: preserveMountedRows,
+  })
+  paintRef.current.revealColumn = revealColumn
   colWindowRef.current = colWindow
   const windowedColumns = useMemo(() => windowedColumnsOf(columns, colWindow), [colWindow, columns])
   const tableColSpan = Math.max(
@@ -1427,95 +1443,42 @@ const WindowedTable = memo(function WindowedTable({
     for (let i = colWindow.start; i < colWindow.end; i += 1) sum += columnPx[i] || 0
     return Math.max(sum, 1)
   }, [colWindow.end, colWindow.padLeft, colWindow.padRight, colWindow.pin, colWindow.start, columnPx])
-  const tableWindow = useMemo(
-    () => tableWindowSlice(nodes.length, tableScroll.top, tableScroll.height, rowPx),
-    [nodes.length, rowPx, tableScroll.height, tableScroll.top],
-  )
-  paintCountRef.current = nodes.length
   paintRef.current.colSpan = tableColSpan
-
-  useLayoutEffect(() => {
-    const next = tableRowFallbackPx(wrapCells)
-    if (next === rowPxRef.current) return
-    rowPxRef.current = next
-    setRowPx(next)
-  }, [wrapCells])
-
-  useLayoutEffect(() => {
-    const table = tableRef.current
-    if (!table) return
-    const heights: number[] = []
-    for (const tr of Array.from(table.tBodies[0]?.rows ?? [])) {
-      if (tr.classList.contains('fsdb-table-pad')) continue
-      if (tr.classList.contains('fsdb-group-row') || tr.classList.contains('fsdb-group-pager')) continue
-      const h = tr.offsetHeight
-      if (h > 0) heights.push(h)
-    }
-    // 不能依赖 tableWindow.start/end：setRowPx 会改窗口，窗口再测高再 setState，滚动时会打穿 React #185。
-    const next = settlePaintedRowPx(medianPaintedRowPx(heights, rowPxRef.current), rowPxRef.current)
-    if (next === rowPxRef.current) return
-    rowPxRef.current = next
-    setRowPx(next)
-  }, [nodes.length, tableRef, tableScroll.height, tableScroll.top, wrapCells])
-
-  useEffect(() => {
-    onVisibleRange?.(tableWindow.start, tableWindow.end)
-  }, [onVisibleRange, tableWindow.end, tableWindow.start])
-
-  const applyWrapScroll = (wrap: HTMLElement, top?: number) => {
-    if (frozenRef.current && top == null) return
-    const next = tableWrapScroll(wrap, top)
-    const rowPx = rowPxRef.current
-    const count = paintCountRef.current
-    const cols = columnMetaRef.current
-    setTableScroll((prev) => {
-      const rowSame = tableWindowUnchanged(count, prev, next, rowPx)
-      const colSame = tableColumnUnchanged(cols.count, cols.pin, prev, next, cols.widths)
-      return rowSame && colSame ? prev : next
-    })
-  }
-
-  useLayoutEffect(() => {
-    const wrap = wrapRef.current
-    if (!wrap) return
-    if (wrap.scrollTop) wrap.scrollTop = 0
-    applyWrapScroll(wrap, 0)
-  }, [resetKey, wrapRef])
-
-  useEffect(() => {
-    const wrap = wrapRef.current
-    if (!wrap) return
-    let raf = 0
-    const onScroll = () => {
-      if (raf) return
-      raf = requestAnimationFrame(() => {
-        raf = 0
-        applyWrapScroll(wrap)
-      })
-    }
-    wrap.addEventListener('scroll', onScroll, { passive: true })
-    const ro = new ResizeObserver(onScroll)
-    ro.observe(wrap)
-    return () => {
-      cancelAnimationFrame(raf)
-      wrap.removeEventListener('scroll', onScroll)
-      ro.disconnect()
-    }
-  }, [wrapRef])
-
-  const checkLayoutKey = [
-    tableWindow.start, tableWindow.end, tableWindow.padTop, tableWindow.padBottom,
-    colWindow.start, colWindow.end, colWindow.padLeft, colWindow.padRight,
-    wrapCells ? 1 : 0,
-    truncateCells ? 1 : 0,
-    columns.length,
-    checkLayoutExtra,
-  ].join('\0')
+  const rangeStart = virtualizer.range?.startIndex ?? 0
+  const rangeEnd = virtualizer.range ? Math.min(nodes.length, virtualizer.range.endIndex + TABLE_WINDOW_OVERSCAN + 1) : 0
+  useEffect(() => { onVisibleRange?.(rangeStart, rangeEnd) }, [onVisibleRange, rangeStart, rangeEnd])
+  const measureRow = useCallback((node: HTMLTableRowElement | null) => virtualizer.measureElement(node), [virtualizer])
+  const checkLayoutKey = [items.map((item) => `${item.index}:${item.start}:${item.size}`).join(','), checkLayoutExtra].join('\0')
   const chrome = chromeRef.current
   const paintedColStyle = (index: number) => colWidthStyle(columnPx[index]) ?? padColBox(columnPx[index] || 72)
 
   return (
     <div className="tasks-table-stage" ref={stageRef} onMouseLeave={() => paintCheckHover(null)}>
+      {pinnedHead ? createPortal(
+        <div className="fsdb-pinned-head-viewport" ref={dockedViewportRef} style={{ width: pinnedHead.width }}
+          onScroll={(event) => { if (wrapRef.current) wrapRef.current.scrollLeft = event.currentTarget.scrollLeft }}
+          onWheel={(event) => { if (event.deltaX && wrapRef.current) wrapRef.current.scrollLeft += event.deltaX }}>
+          <div className="fsdb-pinned-head-stage" style={{ width: `calc(${pinnedHead.tableWidth}px + var(--fsdb-check-gutter))` }}>
+            <div className="fsdb-pinned-head-check">{renderCheckHead()}</div>
+            <table className="tasks-table is-cols-fixed fsdb-pinned-head-table" style={{ width: pinnedHead.tableWidth, ['--fsdb-pin-title' as string]: `${columnPx[0] || 240}px` }}>
+              <colgroup>
+                {columns.slice(0, colWindow.pin).map((col, index) => <col key={col.key} style={paintedColStyle(index)} />)}
+                {colWindow.padLeft > 0 ? <col key="pad-left" style={padColBox(colWindow.padLeft)} /> : null}
+                {columns.slice(colWindow.start, colWindow.end).map((col, index) => <col key={col.key} style={paintedColStyle(colWindow.start + index)} />)}
+                {colWindow.padRight > 0 ? <col key="pad-right" style={padColBox(colWindow.padRight)} /> : null}
+                <col key="fill" className="fsdb-col-fill" />
+              </colgroup>
+              <thead><tr>
+                {columns.slice(0, colWindow.pin).map((col) => chrome.paintHeadTh(col))}
+                {colWindow.padLeft > 0 ? <th key="pad-left" className="fsdb-col-pad" aria-hidden style={padColBox(colWindow.padLeft)} /> : null}
+                {columns.slice(colWindow.start, colWindow.end).map((col) => chrome.paintHeadTh(col))}
+                {colWindow.padRight > 0 ? <th key="pad-right" className="fsdb-col-pad" aria-hidden style={padColBox(colWindow.padRight)} /> : null}
+                <th key="fill" className="fsdb-col-fill" aria-hidden />
+              </tr></thead>
+            </table>
+          </div>
+        </div>, pinnedHead.host,
+      ) : null}
       <TableCheckRail
         tableRef={tableRef}
         stackRef={checkStackRef}
@@ -1567,10 +1530,10 @@ const WindowedTable = memo(function WindowedTable({
         <TablePaintCtx.Provider value={paintRef}>
           <TableBody
             nodes={nodes}
-            start={tableWindow.start}
-            end={tableWindow.end}
-            padTop={tableWindow.padTop}
-            padBottom={tableWindow.padBottom}
+            items={items}
+            margin={margin}
+            totalSize={virtualizer.getTotalSize()}
+            measureRow={measureRow}
             colSpan={tableColSpan}
             colKeys={`${windowedColumns.map((col) => col.key).join('\0')}\0${colWindow.padLeft}:${colWindow.padRight}`}
             error={error}
@@ -1759,10 +1722,10 @@ export function CollectionBrowser({
   )
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => normalizeColumnWidths(initialView?.columnWidths))
   const [resizingCol, setResizingCol] = useState<string | null>(null)
-  const [cellPop, setCellPop] = useState<{ id: string; key: string; seed?: string } | null>(null)
+  const [cellPop, setCellPop] = useState<(TableCellCursor & { seed?: string }) | null>(null)
   const [cellPickEpoch, setCellPickEpoch] = useState(0)
-  const cellPickRef = useRef<{ id: string; key: string } | null>(null)
-  const cellRangeRef = useRef<{ anchor: { id: string; key: string }; focus: { id: string; key: string } } | null>(null)
+  const cellPickRef = useRef<TableCellCursor | null>(null)
+  const cellRangeRef = useRef<{ anchor: TableCellCursor; focus: TableCellCursor } | null>(null)
   const cellRangeSetRef = useRef(new Set<string>())
   const actionHoverIndexRef = useRef(0)
   const cellRepickRef = useRef(false)
@@ -3020,7 +2983,7 @@ export function CollectionBrowser({
     for (let i = 0; i < windowed.length; i += 1) {
       const key = windowed[i]!.key
       const measured = heads[i]?.getBoundingClientRect().width ?? 120
-      snapshot[key] = columnWidths[key] ?? Math.round(measured)
+      snapshot[key] = Math.round(measured)
     }
     for (const col of columns) {
       if (snapshot[col.key] == null) snapshot[col.key] = tableColumnWidth(col.key, columnWidths[col.key], col.key === schema?.labelField)
@@ -3249,6 +3212,18 @@ export function CollectionBrowser({
     }
     return nodes
   }, [collapsedGroups, flattenRows, groupPages, grouped, grouping, pageSize, visible])
+  const selectionModel = useMemo<TableSelectionModel>(() => ({
+    rowIds: tablePaintNodes.flatMap((node) => node.kind === 'row' && node.row.id ? [node.row.id] : []),
+    rowKeys: tablePaintNodes.flatMap((node) => node.kind === 'row' && node.row.id ? [node.key] : []),
+    keys: tableNavKeys(columns),
+    writable: new Set(columns.filter((col) => cellFieldWritable(col.field)).map((col) => col.key)),
+  }), [tablePaintNodes, columns])
+  const selectionModelRef = useRef(selectionModel)
+  selectionModelRef.current = selectionModel
+  const liveSelectionRef = useRef<LiveTableCellSelection | null>(null)
+  if (!liveSelectionRef.current) liveSelectionRef.current = new LiveTableCellSelection(() => selectionModelRef.current, {
+    focus: cellPickRef, range: cellRangeRef, members: cellRangeSetRef,
+  })
   const tablePaintRef = useRef<TablePaintBag>({ colSpan: 1, error: '', renderNode: () => null })
   const tableRef = useRef<HTMLTableElement>(null)
   const tableWrapRef = useRef<HTMLDivElement>(null)
@@ -4672,32 +4647,18 @@ export function CollectionBrowser({
   }
 
   function paintCellRangeClasses() {
-    const table = tableRef.current
-    if (!table) return
-    const focus = cellPickRef.current
-    const range = cellRangeSetRef.current
-    table.querySelectorAll('td[data-col-key]').forEach((node) => {
-      const td = node as HTMLElement
-      const id = td.closest('tr')?.dataset.recordId
-      const key = td.dataset.colKey
-      if (!id || !key) return
-      const inRange = range.has(tableCellRangeKey(id, key))
-      const isFocus = Boolean(focus && focus.id === id && focus.key === key)
-      const col = columns.find((item) => item.key === key)
-      td.classList.toggle('is-cell-on', isFocus)
-      td.classList.toggle('is-cell-range', inRange && !isFocus)
-      td.classList.toggle('is-cell-ro', isFocus && col ? !cellFieldWritable(col.field) : false)
-    })
+    liveSelectionRef.current!.paint(tableRef.current)
   }
 
-  function applyCellRange(anchor: { id: string; key: string }, focus: { id: string; key: string }, commit = true) {
-    cellRangeRef.current = { anchor, focus }
-    cellPickRef.current = focus
-    const cells = tableCellRange(tableNavRowIds(), tableNavKeys(columns), anchor, focus)
-    cellRangeSetRef.current = new Set(cells.map((cell) => tableCellRangeKey(cell.id, cell.key)))
-    paintCellRangeClasses()
+  function applyCellRange(anchor: TableCellCursor, focus: TableCellCursor, commit = true) {
+    liveSelectionRef.current!.apply(anchor, focus, tableRef.current)
     if (commit) setCellPickEpoch((n) => n + 1)
   }
+
+  // Loading, grouping, sorting and column changes can happen during an active gesture.
+  useLayoutEffect(() => {
+    liveSelectionRef.current!.reconcile(tableRef.current)
+  }, [selectionModel])
 
   function tableCellFromPoint(x: number, y: number) {
     const table = tableRef.current
@@ -4710,7 +4671,8 @@ export function CollectionBrowser({
       const id = td.closest('tr')?.dataset.recordId
       const key = td.dataset.colKey
       if (!id || !key || key.startsWith('pad:') || key === 'fsdb-col-fill') continue
-      return { td, id, key }
+      const cursor = tableCursorFromCell(td)
+      return cursor ? { td, ...cursor } : null
     }
     return null
   }
@@ -5221,7 +5183,8 @@ export function CollectionBrowser({
     const id = td.closest('tr')?.dataset.recordId
     const key = td.dataset.colKey
     if (!id || !key) return null
-    return { td, id, key }
+    const cursor = tableCursorFromCell(td)
+    return cursor ? { td, ...cursor } : null
   }
 
   function onTablePointerDown(event: ReactPointerEvent<HTMLTableElement>) {
@@ -5229,11 +5192,11 @@ export function CollectionBrowser({
     if (typeof document !== 'undefined' && document.documentElement.classList.contains('pick-mode')) return
     const cell = tableCellFromEvent(event, CELL_RANGE_IGNORE)
     if (!cell) return
-    const focus = { id: cell.id, key: cell.key }
+    const focus = { id: cell.id, key: cell.key, rowKey: cell.rowKey }
     const shifting = event.shiftKey && Boolean(cellRangeRef.current || cellPickRef.current)
     const anchor = shifting ? (cellRangeRef.current?.anchor ?? cellPickRef.current ?? focus) : focus
     cellAnchorRef.current = cell.td
-    cellRepickRef.current = !shifting && cellPickRef.current?.id === cell.id && cellPickRef.current?.key === cell.key
+    cellRepickRef.current = !shifting && cellPickRef.current?.id === cell.id && cellPickRef.current?.key === cell.key && cellPickRef.current?.rowKey === cell.rowKey
     applyCellRange(anchor, focus)
     claimThisTableCell()
     tableRef.current?.focus({ preventScroll: true })
@@ -5247,7 +5210,7 @@ export function CollectionBrowser({
     tableDragScrollStopRef.current?.()
     tableDragScrollStopRef.current = bindTableDragScroll({
       scroller: () => tableVertScroller(tableWrapRef.current),
-      headBottom: () => tableRef.current?.tHead?.getBoundingClientRect().bottom,
+      headBottom: () => (tableVertScroller(tableWrapRef.current)?.querySelector<HTMLElement>('.fsdb-pinned-head-viewport') ?? tableRef.current?.tHead)?.getBoundingClientRect().bottom,
       overlayTop: () => {
         const overlay = document.querySelector('[data-testid="chat-overlay-panel"]')
         return overlay instanceof HTMLElement ? overlay.getBoundingClientRect().top : undefined
@@ -5264,8 +5227,8 @@ export function CollectionBrowser({
         const hit = tableCellFromPoint(ptr.x, ptr.y)
         if (!hit) return
         const cur = cellRangeRef.current
-        if (cur?.focus.id === hit.id && cur.focus.key === hit.key) return
-        applyCellRange(cur?.anchor ?? focus, { id: hit.id, key: hit.key }, false)
+        if (cur?.focus.id === hit.id && cur.focus.key === hit.key && cur.focus.rowKey === hit.rowKey) return
+        applyCellRange(cur?.anchor ?? focus, { id: hit.id, key: hit.key, rowKey: hit.rowKey }, false)
       },
       onEnd: () => {
         tableRef.current?.classList.remove('is-cell-drag')
@@ -5303,14 +5266,14 @@ export function CollectionBrowser({
       setCellPop(null)
       return
     }
-    setCellPop(cellUsesPop(kind, col.field.writable) ? { id: cell.id, key: cell.key } : null)
+    setCellPop(cellUsesPop(kind, col.field.writable) ? { id: cell.id, key: cell.key, rowKey: cell.rowKey } : null)
   }
 
   function onTableContextMenu(event: ReactMouseEvent<HTMLTableElement>) {
     if (typeof document !== 'undefined' && document.documentElement.classList.contains('pick-mode')) return
     const range = cellRangeRef.current
     if (!range) return
-    const cells = tableCellRange(tableNavRowIds(), tableNavKeys(columns), range.anchor, range.focus)
+    const cells = tableCellRange(tableNavRowIds(), tableNavKeys(columns), range.anchor, range.focus, selectionModelRef.current.rowKeys)
     if (cells.length < 2) return
     const ids = tableCellRangeRowIds(cells)
     if (!ids.length) return
@@ -5321,11 +5284,7 @@ export function CollectionBrowser({
   }
 
   function tableNavRowIds() {
-    const ids: string[] = []
-    for (const node of tablePaintNodes) {
-      if (node.kind === 'row' && node.row.id) ids.push(node.row.id)
-    }
-    return ids
+    return selectionModelRef.current.rowIds
   }
 
   function findPaintedRow(id: string) {
@@ -5340,10 +5299,11 @@ export function CollectionBrowser({
     return undefined
   }
 
-  function findPaintedCellTd(id: string, key: string) {
+  function findPaintedCellTd(id: string, key: string, rowKey?: string) {
     const table = tableRef.current
     if (!table) return null
-    return table.querySelector(`tr[data-record-id="${CSS.escape(id)}"] td[data-col-key="${CSS.escape(key)}"]`) as HTMLElement | null
+    const row = rowKey ? `tr[data-row-key="${CSS.escape(rowKey)}"]` : `tr[data-record-id="${CSS.escape(id)}"]`
+    return table.querySelector(`${row} td[data-col-key="${CSS.escape(key)}"]`) as HTMLElement | null
   }
 
   function hoverActionCell(td: HTMLElement | null, index = 0) {
@@ -5354,42 +5314,57 @@ export function CollectionBrowser({
     btns[i]?.focus()
   }
 
-  function revealTableCell(next: { id: string; key: string }, extend = false) {
+  function revealTableCell(next: TableCellCursor, extend = false) {
     if (extend && (cellRangeRef.current || cellPickRef.current)) {
       applyCellRange(cellRangeRef.current?.anchor ?? cellPickRef.current ?? next, next)
     } else {
       applyCellRange(next, next)
     }
     claimThisTableCell()
-    const wrap = tableWrapRef.current
-    const index = tablePaintNodes.findIndex((node) => node.kind === 'row' && node.row.id === next.id)
-    if (wrap && index >= 0) {
-      const rowPx = tableRowFallbackPx(wrapCells)
-      const top = index * rowPx
-      const bottom = top + rowPx
-      const viewTop = wrap.scrollTop
-      const viewBot = viewTop + wrap.clientHeight
-      if (top < viewTop) wrap.scrollTop = top
-      else if (bottom > viewBot) wrap.scrollTop = Math.max(0, bottom - wrap.clientHeight)
-    }
+    tablePaintRef.current.revealRow?.(next.id, next.rowKey ?? cellPickRef.current?.rowKey)
+    tablePaintRef.current.revealColumn?.(next.key)
+    let attempts = 0
     const apply = () => {
-      const td = findPaintedCellTd(next.id, next.key)
-      if (!td) return
+      if (cellPickRef.current?.id !== next.id || cellPickRef.current.key !== next.key || (next.rowKey && cellPickRef.current.rowKey !== next.rowKey)) return
+      const td = findPaintedCellTd(next.id, next.key, next.rowKey)
+      if (!td) { if (attempts++ < 12) requestAnimationFrame(apply); return }
       const col = columns.find((item) => item.key === next.key)
       cellAnchorRef.current = td
       if (!extend && cellRangeSetRef.current.size <= 1) markCellOn(td, col ? cellFieldWritable(col.field) : false)
-      td.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+      const wrap = tableWrapRef.current, page = tableVertScroller(wrap)
+      if (!wrap || !page) return
+      const rect = td.getBoundingClientRect(), bounds = page.getBoundingClientRect()
+      const docked = page.querySelector<HTMLElement>('.fsdb-pinned-head-viewport')
+      const top = Math.max(bounds.top, (docked ?? tableRef.current?.tHead)?.getBoundingClientRect().bottom ?? bounds.top)
+      if (rect.top < top) page.scrollTop += rect.top - top
+      else if (rect.bottom > bounds.bottom) page.scrollTop += rect.bottom - bounds.bottom
+      if (!td.classList.contains('is-pin-col')) {
+        const viewport = wrap.getBoundingClientRect()
+        const pinned = Array.from(tableRef.current?.querySelectorAll<HTMLElement>('thead th.is-pin-col') ?? [])
+        const left = Math.max(viewport.left, ...pinned.map((head) => head.getBoundingClientRect().right))
+        if (rect.left < left) wrap.scrollLeft += rect.left - left
+        else if (rect.right > viewport.right) wrap.scrollLeft += rect.right - viewport.right
+      }
     }
-    apply()
     requestAnimationFrame(apply)
   }
 
-  function enterTableCell(cursor: { id: string; key: string }, seed?: string) {
+  function enterTableCell(cursor: TableCellCursor, seed?: string, attempt = 0) {
     const col = columns.find((item) => item.key === cursor.key)
     if (!col) return
     const kind = resolveFieldType(col.field)
-    const td = findPaintedCellTd(cursor.id, cursor.key)
-    if (td) cellAnchorRef.current = td
+    const td = findPaintedCellTd(cursor.id, cursor.key, cursor.rowKey)
+    if (!td) {
+      if (attempt < 12) {
+        tablePaintRef.current.revealRow?.(cursor.id, cursor.rowKey)
+        tablePaintRef.current.revealColumn?.(cursor.key)
+        requestAnimationFrame(() => {
+          if (cellPickRef.current?.id === cursor.id && cellPickRef.current.key === cursor.key && (!cursor.rowKey || cellPickRef.current.rowKey === cursor.rowKey)) enterTableCell(cursor, seed, attempt + 1)
+        })
+      }
+      return
+    }
+    cellAnchorRef.current = td
     if (kind === 'boolean' && col.field.writable) {
       const btn = td?.querySelector('button') as HTMLElement | null
       btn?.click()
@@ -5400,14 +5375,14 @@ export function CollectionBrowser({
       return
     }
     if (cellUsesPop(kind, col.field.writable)) {
-      setCellPop({ id: cursor.id, key: cursor.key, ...(seed ? { seed } : {}) })
+      setCellPop({ id: cursor.id, key: cursor.key, rowKey: cursor.rowKey, ...(seed ? { seed } : {}) })
     }
   }
 
-  function landTableCell(next: { id: string; key: string }, extend = false) {
+  function landTableCell(next: TableCellCursor, extend = false) {
     revealTableCell(next, extend)
     if (next.key === 'actions') {
-      requestAnimationFrame(() => hoverActionCell(findPaintedCellTd(next.id, next.key), 0))
+      requestAnimationFrame(() => enterTableCell(next))
       return
     }
     tableRef.current?.focus({ preventScroll: true })
@@ -5526,7 +5501,7 @@ export function CollectionBrowser({
     if (embed && !inspectorTableIsActive()) return false
     const keys = tableNavKeys(columns)
     const ids = tableNavRowIds()
-    const next = firstTableTitleCell(ids, keys, schema?.labelField)
+    const next = firstTableTitleCell(ids, keys, schema?.labelField, selectionModelRef.current.rowKeys)
     if (!next) {
       tableRef.current?.focus({ preventScroll: true })
       return Boolean(tableRef.current)
@@ -5546,7 +5521,7 @@ export function CollectionBrowser({
     }
     const range = cellRangeRef.current
     const cursors = range
-      ? tableCellRange(tableNavRowIds(), tableNavKeys(columns), range.anchor, range.focus)
+      ? tableCellRange(tableNavRowIds(), tableNavKeys(columns), range.anchor, range.focus, selectionModelRef.current.rowKeys)
       : cellPop || cellPickRef.current
         ? [cellPop ?? cellPickRef.current!]
         : []
@@ -5556,7 +5531,7 @@ export function CollectionBrowser({
       const col = columns.find((item) => item.key === cursor.key)
       if (!row || !col) return []
       const stored = cellValueText(row, cursor.key, col.field)
-      const isFocus = cellPickRef.current?.id === cursor.id && cellPickRef.current.key === cursor.key
+      const isFocus = cellPickRef.current?.id === cursor.id && cellPickRef.current.key === cursor.key && (!cursor.rowKey || cellPickRef.current.rowKey === cursor.rowKey)
       const draft =
         isFocus && (live instanceof HTMLInputElement || live instanceof HTMLTextAreaElement)
           ? live.value
@@ -5719,7 +5694,7 @@ export function CollectionBrowser({
         return
       }
       const keys = tableNavKeys(columns)
-      const next = moveTableCell(tableNavRowIds(), keys, cursor, dir)
+      const next = moveTableCell(tableNavRowIds(), keys, cursor, dir, selectionModelRef.current.rowKeys)
       if (next) landTableCell(next, event.shiftKey)
       else table?.focus({ preventScroll: true })
       return
@@ -5806,7 +5781,7 @@ export function CollectionBrowser({
       if (tableNavRowIds().includes(pick.id) && tableNavKeys(columns).includes(pick.key)) {
         // Virtual rows may be unmounted. Restore paint without setting state or
         // scrolling back to the cursor on every commit (which can loop forever).
-        const td = findPaintedCellTd(pick.id, pick.key)
+        const td = findPaintedCellTd(pick.id, pick.key, pick.rowKey)
         if (td && !td.classList.contains('is-cell-on')) paintCellRangeClasses()
         return
       }
@@ -5824,10 +5799,10 @@ export function CollectionBrowser({
     ) {
       return
     }
-    const next = firstTableTitleCell(tableNavRowIds(), tableNavKeys(columns), schema?.labelField)
+    const next = firstTableTitleCell(tableNavRowIds(), tableNavKeys(columns), schema?.labelField, selectionModelRef.current.rowKeys)
     if (!next) return
     if (!landFirstTableCell(false)) return
-    if (!findPaintedCellTd(next.id, next.key)) return
+    if (!findPaintedCellTd(next.id, next.key, next.rowKey)) return
     tableAutoLandedRef.current = stamp
   }
   tablePaneHotkeyLiveRef.current = (event) => {
@@ -5922,7 +5897,7 @@ export function CollectionBrowser({
         {...cellPickOf(row, col.key, col.field)}
         className={[
           tablePinColClass(col.key, paintSchema?.labelField),
-          cellPick?.id === row.id && cellPick.key === col.key
+          Boolean(cellPick && (cellPick.rowKey ? cellPick.rowKey === rowKey : cellPick.id === row.id) && cellPick.key === col.key)
             ? col.field && cellFieldWritable(col.field)
               ? 'is-cell-on'
               : 'is-cell-on is-cell-ro'
@@ -5965,6 +5940,7 @@ export function CollectionBrowser({
       <tr
         key={rowKey}
         data-record-id={row.id}
+        data-row-key={rowKey}
         className={row.id === detailId ? 'is-active' : undefined}
         {...recordPick(row)}
       >
@@ -7034,9 +7010,11 @@ export function CollectionBrowser({
   const holdingRows = Boolean(tableHoldRef.current) && tableHoldRef.current?.nodes !== EMPTY_HOLD_NODES
   if (!holdingRows) {
     tablePaintRef.current = {
+      ...tablePaintRef.current,
       colSpan: tablePaintRef.current.colSpan,
       error: tableHoldRef.current ? '' : error,
       renderNode: renderPaintNode,
+      paintSelection: paintCellRangeClasses,
     }
   }
   if (!tableHoldRef.current) {
@@ -7167,6 +7145,10 @@ export function CollectionBrowser({
                   frozen={Boolean(held)}
                   activeRowId={detailId}
                   cellPaintKey={cellPickEpoch * 2 + Number(Boolean(creatingGroup))}
+                  retainedRowId={cellPop?.id}
+                  retainedRowKey={cellPop?.rowKey}
+                  retainedColumnKey={cellPop?.key}
+                  preserveMountedRows={columns.some((col) => Boolean(chrome?.cells?.[col.key]))}
                 />
         </div>
             ) : null}

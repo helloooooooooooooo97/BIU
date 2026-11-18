@@ -184,3 +184,13 @@ test('claiming a table cell pick tells the other pane to clear', () => {
   assert.deepEqual(seen, ['inspector'])
   assert.equal(CLEAR_SHELL_TABLE_CELL, 'biu:clear-shell-table-cell')
 })
+
+test('grouped ranges and keyboard movement use the displayed occurrence, not the first matching record', () => {
+  const ids = ['107', '190', '003', '004', '008', '009', '101', '102', '107']
+  const rows = ['React:107', 'React:190', 'Python:003', 'Python:004', 'Python:008', 'Python:009', 'Python:101', 'Python:102', 'Python:107']
+  const anchor = { id: '003', key: 'title', rowKey: 'Python:003' }
+  const focus = { id: '107', key: 'title', rowKey: 'Python:107' }
+  assert.deepEqual(tableCellRange(ids, ['title'], anchor, focus, rows).map((cell) => cell.id), ['003', '004', '008', '009', '101', '102', '107'])
+  assert.deepEqual(moveTableCell(ids, ['title'], focus, 'up', rows), { id: '102', key: 'title', rowKey: 'Python:102' })
+  assert.deepEqual(tableCellRangeRowIds(tableCellRange(ids, ['title'], { id: '107', key: 'title', rowKey: 'React:107' }, focus, rows)), ['107', '190', '003', '004', '008', '009', '101', '102'])
+})

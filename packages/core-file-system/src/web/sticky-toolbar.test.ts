@@ -10,11 +10,10 @@ test('sticky head offset is whole pixels and ignores sub-pixel chatter', () => {
   assert.equal(stickyHeadOffset(120, 120.2, 800, 32), 0)
 })
 
-test('pinned head transform is not rewritten for a sub-pixel delta', () => {
+test('toolbar scrolling leaves the header position to the anchored portal', () => {
   const src = readFileSync(resolve(import.meta.dirname, './sticky-toolbar.ts'), 'utf8')
-  assert.match(src, /Math\.abs\(readPinY\(node\) - next\) < 1/)
+  assert.doesNotMatch(src, /translateY|writePin|pinCollectionHead/)
   assert.match(src, /requestAnimationFrame/)
   assert.doesNotMatch(src, /querySelector\('\.fsdb-bulk-slot'\)/)
   assert.doesNotMatch(src, /--fsdb-bulk-shift/)
-  assert.match(src, /writePin\(thead, y, pin\)/)
 })

@@ -11,44 +11,6 @@ function readProgress(scroller: Element, el: HTMLElement) {
   el.style.setProperty('--page-read', String(p))
 }
 
-function readPinY(node: HTMLElement) {
-  const raw = node.style.transform.match(/translateY\(([-\d.]+)px\)/)
-  return raw ? Number(raw[1]) : 0
-}
-
-function writePin(node: HTMLElement, y: number, pin: boolean) {
-  const next = pin ? y : 0
-  const was = node.classList.contains('is-pinned')
-  if (was === pin && Math.abs(readPinY(node) - next) < 1) return
-  node.style.transform = pin ? `translateY(${next}px)` : ''
-  node.classList.toggle('is-pinned', pin)
-}
-
-function clearPin(node: HTMLElement | null | undefined) {
-  if (!node) return
-  node.style.removeProperty('transform')
-  node.classList.remove('is-pinned')
-}
-
-/** 集合表格：操作栏贴顶时表头跟在栏下。页面详情不处理。 */
-function pinCollectionHead(toolbar: HTMLElement) {
-  const main = toolbar.parentElement
-  const wrap = main?.classList.contains('fsdb-main') ? main.querySelector('.tasks-table-wrap') : null
-  const table = wrap?.querySelector('.tasks-table')
-  const thead = table instanceof HTMLTableElement ? table.tHead : null
-  const checkHead = wrap?.querySelector('.fsdb-check-slot.is-head')
-  if (!(table instanceof HTMLTableElement) || !thead) {
-    clearPin(thead)
-    if (checkHead instanceof HTMLElement) clearPin(checkHead)
-    return
-  }
-  const desired = toolbar.getBoundingClientRect().bottom + 10
-  const y = stickyHeadOffset(desired, table.getBoundingClientRect().top, table.offsetHeight, thead.offsetHeight)
-  const pin = y > 0
-  writePin(thead, y, pin)
-  if (checkHead instanceof HTMLElement) writePin(checkHead, y, pin)
-}
-
 export function useStickyToolbar(ref: RefObject<HTMLElement | null>) {
   useLayoutEffect(() => {
     const el = ref.current
@@ -73,7 +35,6 @@ export function useStickyToolbar(ref: RefObject<HTMLElement | null>) {
       raf = requestAnimationFrame(() => {
         raf = 0
         if (scroller) readProgress(scroller, el)
-        pinCollectionHead(el)
       })
     }
     onScroll()
@@ -94,9 +55,6 @@ export function useStickyToolbar(ref: RefObject<HTMLElement | null>) {
       mark.remove()
       el.classList.remove('is-stuck')
       el.style.removeProperty('--page-read')
-      clearPin(wrap?.querySelector('thead'))
-      const checkHead = wrap?.querySelector('.fsdb-check-slot.is-head')
-      if (checkHead instanceof HTMLElement) clearPin(checkHead)
     }
   }, [ref])
 }
