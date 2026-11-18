@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { colWidthStyle, DEFAULT_VIEW_PAGE_SIZE, normalizeFrozenColumns, normalizePageSize, normalizeSavedView, parseViewColumns, rankListedViews, sortViewsByRank, tableWidthStyle, viewIsFresher, viewStateKey, type SavedView } from './saved-view.ts'
+import { colWidthStyle, DEFAULT_VIEW_PAGE_SIZE, normalizePageSize, normalizeSavedView, parseViewColumns, rankListedViews, sortViewsByRank, tableWidthStyle, viewIsFresher, viewStateKey, type SavedView } from './saved-view.ts'
 
 const base: SavedView = {
   id: '1',
@@ -55,10 +55,6 @@ test('normalizeColumnWidths clamps and viewStateKey includes widths', () => {
   assert.equal(wide.columnWidths?.status, 720)
   assert.equal(wide.columnWidths?.skip, undefined)
   assert.notEqual(viewStateKey(wide), viewStateKey({ ...wide, columnWidths: {} }))
-  assert.equal(normalizeFrozenColumns(undefined), undefined)
-  assert.deepEqual(normalizeFrozenColumns([]), [])
-  assert.deepEqual(normalizeSavedView({ ...base, frozenColumns: ['title', 'status'] }).frozenColumns, ['title', 'status'])
-  assert.notEqual(viewStateKey(wide), viewStateKey({ ...wide, frozenColumns: ['title'] }))
 })
 
 test('colWidthStyle and tableWidthStyle declare explicit px boxes', () => {

@@ -102,59 +102,25 @@ function TagColumnPackRow({
   )
 }
 
-function FreezeColIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
-      <path fill="currentColor" d="M3.5 1.5h2v13h-2zm7 0h2v13h-2z" />
-    </svg>
-  )
-}
-
-function ColumnFreezeBtn({ frozen, onFreeze }: { frozen: boolean; onFreeze: () => void }) {
-  return (
-    <button
-      type="button"
-      className={`fsdb-col-freeze${frozen ? ' is-on' : ''}`}
-      aria-label={frozen ? '解冻列' : '冻结列'}
-      aria-pressed={frozen}
-      onPointerDown={(event) => event.stopPropagation()}
-      onClick={(event) => {
-        event.preventDefault()
-        event.stopPropagation()
-        onFreeze()
-      }}
-    >
-      <FreezeColIcon />
-    </button>
-  )
-}
-
 function ColumnMenuCheck({
   col,
   on,
   locked,
-  frozen,
   onToggle,
-  onFreeze,
 }: {
   col: { key: string; kind: FieldType; field: FieldSpec }
   on: boolean
   locked?: boolean
-  frozen?: boolean
   onToggle: () => void
-  onFreeze?: () => void
 }) {
   return (
-    <>
-      <CheckRow
-        icon={<FieldGlyph kind={col.kind} />}
-        label={col.field.label ?? col.key}
-        on={on}
-        locked={locked}
-        onToggle={onToggle}
-      />
-      {on && onFreeze ? <ColumnFreezeBtn frozen={!!frozen} onFreeze={onFreeze} /> : null}
-    </>
+    <CheckRow
+      icon={<FieldGlyph kind={col.kind} />}
+      label={col.field.label ?? col.key}
+      on={on}
+      locked={locked}
+      onToggle={onToggle}
+    />
   )
 }
 
@@ -165,7 +131,7 @@ function ColumnRowShell({
   rowRef,
   style,
 }: {
-  grip?: ReactNode
+  grip: ReactNode
   children: ReactNode
   className?: string
   rowRef?: (node: HTMLElement | null) => void
@@ -182,15 +148,11 @@ function ColumnRowShell({
 function ColumnDragRow({
   col,
   on,
-  frozen,
   onToggle,
-  onFreeze,
 }: {
   col: { key: string; kind: FieldType; field: FieldSpec }
   on: boolean
-  frozen?: boolean
   onToggle: () => void
-  onFreeze?: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: col.key })
   return (
@@ -204,7 +166,7 @@ function ColumnDragRow({
         </button>
       }
     >
-      <ColumnMenuCheck col={col} on={on} frozen={frozen} onToggle={onToggle} onFreeze={onFreeze} />
+      <ColumnMenuCheck col={col} on={on} onToggle={onToggle} />
     </ColumnRowShell>
   )
 }
@@ -215,20 +177,16 @@ export function ColumnOrderMenu({
   labelField,
   tagCatalog,
   query = '',
-  frozenKeys = [],
   onToggle,
   onReorder,
-  onToggleFreeze,
 }: {
   columns: Array<{ key: string; kind: FieldType; field: FieldSpec }>
   allColumns: Array<{ key: string; kind: FieldType; field: FieldSpec }>
   labelField?: string
   tagCatalog: CollectionSchemaPack[]
   query?: string
-  frozenKeys?: string[]
   onToggle: (key: string) => void
   onReorder: (next: string[]) => void
-  onToggleFreeze?: (key: string) => void
 }) {
   const [activeId, setActiveId] = useState<string | null>(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
@@ -265,16 +223,13 @@ export function ColumnOrderMenu({
     return (
       <>
         {menuCols.map((item) => (
-          <ColumnRowShell key={item.key}>
-            <ColumnMenuCheck
-              col={item}
-              on={visibleKeys.has(item.key) || locked.has(item.key)}
-              locked={locked.has(item.key)}
-              frozen={frozenKeys.includes(item.key)}
-              onToggle={() => onToggle(item.key)}
-              onFreeze={onToggleFreeze ? () => onToggleFreeze(item.key) : undefined}
-            />
-          </ColumnRowShell>
+          <ColumnMenuCheck
+            key={item.key}
+            col={item}
+            on={visibleKeys.has(item.key) || locked.has(item.key)}
+            locked={locked.has(item.key)}
+            onToggle={() => onToggle(item.key)}
+          />
         ))}
         {packs.map((pack) => (
           <TagColumnPackRow key={pack.id} pack={pack} visibleKeys={visibleKeys} onToggle={onToggle} />
@@ -315,14 +270,7 @@ export function ColumnOrderMenu({
                 </span>
               }
             >
-              <ColumnMenuCheck
-                col={item}
-                on
-                locked
-                frozen={frozenKeys.includes(item.key)}
-                onToggle={() => onToggle(item.key)}
-                onFreeze={onToggleFreeze ? () => onToggleFreeze(item.key) : undefined}
-              />
+              <ColumnMenuCheck col={item} on locked onToggle={() => onToggle(item.key)} />
             </ColumnRowShell>
           ))}
         <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
@@ -333,9 +281,7 @@ export function ColumnOrderMenu({
                 key={item.key}
                 col={item}
                 on={visibleKeys.has(item.key)}
-                frozen={frozenKeys.includes(item.key)}
                 onToggle={() => onToggle(item.key)}
-                onFreeze={onToggleFreeze ? () => onToggleFreeze(item.key) : undefined}
               />
             ))}
         </SortableContext>
@@ -346,12 +292,7 @@ export function ColumnOrderMenu({
                 <button type="button" className="fsdb-query-grip" tabIndex={-1}>
                   <DndGrip />
                 </button>
-                <ColumnMenuCheck
-                  col={active}
-                  on={visibleKeys.has(active.key)}
-                  frozen={frozenKeys.includes(active.key)}
-                  onToggle={() => {}}
-                />
+                <ColumnMenuCheck col={active} on={visibleKeys.has(active.key)} onToggle={() => {}} />
               </div>
             </div>
           ) : null}
@@ -380,10 +321,8 @@ export function VisibleColumnsFlyout({
   allColumns,
   labelField,
   tagCatalog,
-  frozenKeys,
   onToggle,
   onReorder,
-  onToggleFreeze,
 }: Omit<Parameters<typeof ColumnOrderMenu>[0], 'query'>) {
   return (
     <SearchableFlyout className="tasks-sort-menu fsdb-col-menu">
@@ -395,10 +334,8 @@ export function VisibleColumnsFlyout({
             labelField={labelField}
             tagCatalog={tagCatalog}
             query={q}
-            frozenKeys={frozenKeys}
             onToggle={onToggle}
             onReorder={onReorder}
-            onToggleFreeze={onToggleFreeze}
           />
         </div>
       )}

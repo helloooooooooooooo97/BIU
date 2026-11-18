@@ -19,8 +19,6 @@ export type SavedView = {
   pageSize?: number
   /** 表格列宽（px），按字段 key。 */
   columnWidths?: Record<string, number>
-  /** 冻结列 key 前缀；缺省为标题列 + 动作列。空数组表示全部解冻。 */
-  frozenColumns?: string[]
   /** 工作区创建时写入的种子视图。与后来保存的视图同一套改名 / 筛选 / 删除规则。 */
   builtin?: boolean
   /** 本地最后修改时间（ms）。多窗口下用来丢弃比库里更旧的快照。 */
@@ -53,12 +51,6 @@ export function parseViewColumns(value: unknown): string[] {
     }
   }
   return []
-}
-
-/** Missing value keeps the default title+actions pin; `[]` means every column is thawed. */
-export function normalizeFrozenColumns(value: unknown): string[] | undefined {
-  if (value == null || value === '') return undefined
-  return parseViewColumns(value)
 }
 
 export function normalizeColumnWidths(value: unknown): Record<string, number> {
@@ -112,7 +104,6 @@ export function normalizeSavedView(view: SavedView): SavedView {
     query: view.query ?? '',
     pageSize: normalizePageSize(view.pageSize),
     columnWidths: normalizeColumnWidths(view.columnWidths),
-    frozenColumns: normalizeFrozenColumns(view.frozenColumns),
     builtin: Boolean(view.builtin),
     updatedAt: Number(view.updatedAt) || 0,
     rank: Number.isFinite(Number(view.rank)) ? Math.round(Number(view.rank)) : undefined,
@@ -159,7 +150,7 @@ export function normalizePageSize(value: unknown) {
 }
 
 export function viewStateKey(
-  view: Pick<SavedView, 'mode' | 'sortField' | 'sortDir' | 'sorts' | 'filters' | 'filterTree' | 'columns' | 'groupBy' | 'tree' | 'wrap' | 'truncate' | 'query' | 'pageSize' | 'columnWidths' | 'frozenColumns'>,
+  view: Pick<SavedView, 'mode' | 'sortField' | 'sortDir' | 'sorts' | 'filters' | 'filterTree' | 'columns' | 'groupBy' | 'tree' | 'wrap' | 'truncate' | 'query' | 'pageSize' | 'columnWidths'>,
 ) {
   return JSON.stringify({
     mode: view.mode,
@@ -176,7 +167,6 @@ export function viewStateKey(
     query: view.query ?? '',
     pageSize: normalizePageSize(view.pageSize),
     columnWidths: normalizeColumnWidths(view.columnWidths),
-    frozenColumns: normalizeFrozenColumns(view.frozenColumns) ?? null,
   })
 }
 

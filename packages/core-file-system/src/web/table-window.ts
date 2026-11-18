@@ -120,29 +120,8 @@ export function tablePinCount(keys: string[], labelField?: string | null) {
   return n
 }
 
-/** Prefix of visible keys that stay sticky. Missing frozen list keeps the default title+actions pin. */
-export function tableFrozenKeys(keys: string[], frozen?: string[] | null, labelField?: string | null) {
-  if (!keys.length) return []
-  const wanted = frozen == null ? new Set(keys.slice(0, tablePinCount(keys, labelField))) : new Set(frozen)
-  const out: string[] = []
-  for (const key of keys) {
-    if (!wanted.has(key)) break
-    out.push(key)
-  }
-  return out
-}
-
-/** Freeze column K ⇒ first K stay frozen. Unfreeze K ⇒ K and everything after thaw. */
-export function toggleFrozenPrefix(keys: string[], frozen: string[] | undefined, key: string, labelField?: string | null) {
-  const index = keys.indexOf(key)
-  if (index < 0) return tableFrozenKeys(keys, frozen, labelField)
-  const current = tableFrozenKeys(keys, frozen, labelField)
-  if (current.includes(key)) return keys.slice(0, index)
-  return keys.slice(0, index + 1)
-}
-
-export function tablePinColClass(key: string, frozenKeys: string[] = []) {
-  return frozenKeys.includes(key) ? 'is-pin-col' : ''
+export function tablePinColClass(key: string, labelField?: string | null) {
+  return key === labelField || key === 'actions' ? 'is-pin-col' : ''
 }
 
 /** 有手动值用手动值；否则钉住列 / 操作列 / 其余列各一个固定默认宽，不随视口缩放。 */
