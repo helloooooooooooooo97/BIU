@@ -3258,18 +3258,27 @@ export function CollectionBrowser({
   const checkHoverRef = useRef<string | 'head' | null>(null)
   const columnPinCount = tablePinCount(columns.map((col) => col.key), schema?.labelField)
   const tableResetKey = `${activeViewId ?? ''}\0${collectionPath}\0${groupBy}\0${page}\0${pageSize}\0${query}`
-  const checkLayoutExtra = [
-    grouping ? 1 : 0,
-    page,
-    pageSize,
-    detailId ?? '',
-    pickedIds.join(','),
-    items.map((row) => row.id).join(','),
-    grouped.map((group) => `${group.key}:${group.rows.length}`).join(','),
-    JSON.stringify(collapsed),
-    JSON.stringify(collapsedGroups),
-    JSON.stringify(columnWidths),
-  ].join('\0')
+  const checkLayoutExtra = useMemo(
+    () =>
+      [
+        grouping ? 1 : 0,
+        page,
+        pageSize,
+        detailId ?? '',
+        pickedIds.length,
+        pickedIds[0] ?? '',
+        items.length,
+        items[0]?.id ?? '',
+        items.at(-1)?.id ?? '',
+        grouped.length,
+        grouped[0]?.key ?? '',
+        grouped[0]?.rows.length ?? 0,
+        JSON.stringify(collapsed),
+        JSON.stringify(collapsedGroups),
+        JSON.stringify(columnWidths),
+      ].join('\0'),
+    [grouping, page, pageSize, detailId, pickedIds, items, grouped, collapsed, collapsedGroups, columnWidths],
+  )
 
   const onVisibleRange = useCallback((start: number, end: number) => {
     if (!grouping) return
