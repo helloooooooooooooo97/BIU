@@ -415,27 +415,40 @@ export function matchListFilterRecord(
   return true
 }
 
+const zhCollator = new Intl.Collator('zh')
+
+function sortKey(record: DbRecord, field: string): { n: number | null; s: string } {
+  const value = readTagFieldValue(record, field)
+  const n = Number(value)
+  if (Number.isFinite(n) && String(value).trim() !== '') return { n, s: '' }
+  return { n: null, s: String(value ?? '') }
+}
+
 export function compareRecords(a: DbRecord, b: DbRecord, field: string, dir: 'asc' | 'desc') {
-  const av = readTagFieldValue(a, field)
-  const bv = readTagFieldValue(b, field)
-  const an = Number(av)
-  const bn = Number(bv)
-  const numeric = Number.isFinite(an) && Number.isFinite(bn) && String(av).trim() !== '' && String(bv).trim() !== ''
-  const c = numeric ? an - bn : String(av ?? '').localeCompare(String(bv ?? ''), 'zh')
-  const sign = dir === 'desc' ? -1 : 1
-  return c * sign
+  const ak = sortKey(a, field)
+  const bk = sortKey(b, field)
+  const c = ak.n != null && bk.n != null ? ak.n - bk.n : zhCollator.compare(ak.s, bk.s)
+  return c * (dir === 'desc' ? -1 : 1)
 }
 
 export function sortRecordsBy(rows: DbRecord[], sorts: SortRule[]) {
   const rules = sorts.filter((item) => item.field)
   if (!rules.length) return rows
-  return [...rows].sort((a, b) => {
-    for (const rule of rules) {
-      const c = compareRecords(a, b, rule.field, rule.dir)
-      if (c !== 0) return c
+  const decorated = rows.map((row) => ({
+    row,
+    id: String(row.id),
+    keys: rules.map((rule) => sortKey(row, rule.field)),
+  }))
+  decorated.sort((a, b) => {
+    for (let i = 0; i < rules.length; i++) {
+      const ak = a.keys[i]!
+      const bk = b.keys[i]!
+      const c = ak.n != null && bk.n != null ? ak.n - bk.n : zhCollator.compare(ak.s, bk.s)
+      if (c) return c * (rules[i]!.dir === 'desc' ? -1 : 1)
     }
-    return String(a.id).localeCompare(String(b.id))
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
   })
+  return decorated.map((item) => item.row)
 }
 
 export function looksLikeFilterTree(raw: unknown): boolean {

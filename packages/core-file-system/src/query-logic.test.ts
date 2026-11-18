@@ -1,5 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import {
   collectQueryFields,
   readTagFieldValue,
@@ -80,6 +82,13 @@ test('list filter still supports equality locks plus a tree', () => {
   const row = { id: '1', title: '页面', status: 'open' }
   assert.equal(matchListFilterRecord(row, { status: 'open', $tree: tree }), true)
   assert.equal(matchListFilterRecord(row, { status: 'done', $tree: tree }), false)
+})
+
+test('in-memory sorts precompute keys and do not call localeCompare', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './query-logic.ts'), 'utf8')
+  const fn = src.slice(src.indexOf('export function sortRecordsBy'), src.indexOf('export function looksLikeFilterTree'))
+  assert.match(fn, /decorated/)
+  assert.doesNotMatch(fn, /localeCompare/)
 })
 
 test('multi-key sorts apply in order', () => {

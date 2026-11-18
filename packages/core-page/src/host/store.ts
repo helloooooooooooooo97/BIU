@@ -200,6 +200,10 @@ export class PagesStore {
     if (this.db) return this.db
     const db = openAndMigrateBiu(this.fs.resolve(PAGE_DB), { foreignKeys: false })
     this.db = db
+    db.exec('CREATE INDEX IF NOT EXISTS pages_title ON pages(title)')
+    db.exec('CREATE INDEX IF NOT EXISTS pages_updated_at ON pages(updated_at)')
+    db.exec('CREATE INDEX IF NOT EXISTS pages_created_at ON pages(created_at)')
+    db.exec('CREATE INDEX IF NOT EXISTS pages_parent_id ON pages(parent_id)')
     await this.migrateMarkdown()
     adoptCasAssets(this.fs.resolve(DATA_DIR_NAME))
     return db
