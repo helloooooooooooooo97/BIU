@@ -98,6 +98,7 @@ const FACET_ROW_SQL = 'id, label, fields_json, created_at, updated_at'
 /** 分面目录由 File System 用 SQLite 管：目录 + 跨表倒排，查询不扫全表。 */
 export class TagStore {
   private db: DatabaseSync | null = null
+  private deletedIdsCache = new Map<string, Set<string>>()
 
   open(path = ':memory:') {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true })
@@ -677,10 +678,14 @@ export class TagStore {
   }
 
   deletedIds(collection: string) {
+    const hit = this.deletedIdsCache.get(collection)
+    if (hit) return hit
     const rows = this.ensure()
       .prepare('SELECT record_id FROM record_meta WHERE collection = ? AND deleted_at IS NOT NULL AND deleted_at > 0')
       .all(collection) as Array<{ record_id: string }>
-    return new Set(rows.map((row) => row.record_id))
+    const set = new Set(rows.map((row) => row.record_id))
+    this.deletedIdsCache.set(collection, set)
+    return set
   }
 
   isDeleted(collection: string, recordId: string) {
@@ -698,12 +703,14 @@ export class TagStore {
          ON CONFLICT(collection, record_id) DO UPDATE SET deleted_at = excluded.deleted_at`,
       )
       .run(collection, recordId, at)
+    this.deletedIdsCache.delete(collection)
   }
 
   restoreDeleted(collection: string, recordId: string) {
     this.ensure()
       .prepare('UPDATE record_meta SET deleted_at = NULL WHERE collection = ? AND record_id = ?')
       .run(collection, recordId)
+    this.deletedIdsCache.delete(collection)
   }
 
   listDeleted() {
