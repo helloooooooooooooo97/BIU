@@ -14,7 +14,7 @@ describe('顶栏三级标题', () => {
     expect(trail).toContain('icon={crumb.icon ?? current?.icon}')
     expect(trail).toContain('emoji={current?.emoji ?? crumb.emoji}')
     expect(trail).toContain('tableCrumb?.icon')
-    expect(nav).toContain('builtinAllViewId(target.collection)')
+    expect(nav).toContain('defaultViewId(target.collection)')
     expect(browser).not.toContain('{ catalog: true }')
     expect(trail).not.toContain("crumb.kind === 'collection' && index < crumbs.length - 1")
     expect(trail).toContain('crumbButtonAction(crumb')

@@ -377,7 +377,7 @@ export function DatabaseInspectorBrowse(props: SlotProps) {
       routeViewId={viewId}
       routeRecordId={recordId ?? null}
       onOpenTable={(path, nextViewId) => {
-        setInspectorDbPath(id, databaseViewPath(path, nextViewId ?? builtinAllViewId(path)))
+        setInspectorDbPath(id, databaseViewPath(path, nextViewId ?? defaultViewId(path)))
       }}
       onOpenView={(nextViewId) => setInspectorDbPath(id, databaseViewPath(DATA_COLLECTION_PATH, nextViewId))}
       onOpenRecord={(path, view, recordIdNext) => {
@@ -399,7 +399,7 @@ export function DatabaseInspectorBrowse(props: SlotProps) {
       routeViewId={viewId}
       crumbFromData={viaData && currentPath !== DATA_COLLECTION_PATH}
       onOpenTable={(path, nextViewId) => {
-        setInspectorDbPath(id, databaseViewPath(path, nextViewId ?? builtinAllViewId(path)))
+        setInspectorDbPath(id, databaseViewPath(path, nextViewId ?? defaultViewId(path)))
       }}
       onOpenView={(nextViewId) => setInspectorDbPath(id, databaseViewPath(currentPath, nextViewId))}
       onOpenRecord={(recordIdNext, nextViewId, nextCollection) => {

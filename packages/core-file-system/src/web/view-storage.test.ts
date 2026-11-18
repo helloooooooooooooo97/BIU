@@ -17,6 +17,7 @@ import {
   loadCollapsedGroups,
   collapsedGroupsKey,
   pickViewForRoute,
+  omitSavedViewIds,
   pullSavedViews,
   mergeSavedViewLists,
   rememberViews,
@@ -79,6 +80,30 @@ test('tables default to the builtin 全部xx view', () => {
   assert.equal(viewForPath('/agents')?.builtin, true)
   assert.deepEqual(viewForPath('/agents')?.filters, {})
   assert.equal(viewForPath('/pages', builtinAllViewId('/agents'))?.id, builtinAllViewId('/pages'))
+})
+
+test('omitted builtin all view is not restored from the route', () => {
+  const path = '/pages'
+  const allId = builtinAllViewId(path)
+  const mem: Record<string, string> = {}
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => mem[key] ?? null,
+      setItem: (key: string, value: string) => {
+        mem[key] = value
+      },
+      removeItem: (key: string) => {
+        delete mem[key]
+      },
+    },
+  })
+  rememberViews(path, [{ id: 'safe', name: '安全项目', mode: 'table' }] as never)
+  omitSavedViewIds(path, [allId])
+  assert.equal(viewForPath(path, allId)?.id, 'safe')
+  assert.equal(defaultViewId(path, allId), 'safe')
+  assert.equal(pickViewForRoute([{ id: 'safe', name: '安全项目', mode: 'table' }] as never, path, allId)?.id, 'safe')
+  assert.equal(routeViewNeedsFetch(path, allId), false)
 })
 
 test('builtin view wrap is stored as display prefs and restored', () => {

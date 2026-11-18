@@ -16,7 +16,7 @@ import {
   bootLoadCollections,
   collectionNavKey,
 } from './nav-boot.ts'
-import { defaultViewId } from './view-storage.ts'
+import { defaultViewId, isOmittedViewId } from './view-storage.ts'
 import { DATA_COLLECTION_PATH, DATA_MODULE, DATA_MODULE_ID, DATA_MODULE_PATH, TAGS_COLLECTION_PATH, PAGE_BLOCKS_COLLECTION_PATH, VIEWS_COLLECTION_PATH, sortDataCollections } from './database-path.ts'
 import { dataChrome, setViaDataCrumbs, subscribeViaDataCrumbs, viaDataCrumbsOn, viaDataViewId } from './data-chrome.ts'
 import { writeMainDataRoute } from './main-data-route.ts'
@@ -101,7 +101,9 @@ function CollectionPage(props: SlotProps) {
   const routeCollection = parsed.kind === 'collection-view' || parsed.kind === 'record' ? parsed : null
   const collectionFromRoute = routeCollection?.collection ?? ''
   const viewFromRoute = routeCollection
-    ? routeCollection.viewId || builtinAllViewId(routeCollection.collection)
+    ? routeCollection.viewId && !isOmittedViewId(routeCollection.collection, routeCollection.viewId)
+      ? routeCollection.viewId
+      : defaultViewId(routeCollection.collection)
     : undefined
   const recordFromRoute = parsed.kind === 'record' ? parsed.recordId : null
   const currentPath = collectionFromRoute
@@ -148,9 +150,14 @@ function CollectionPage(props: SlotProps) {
       go({ collection: DATA_COLLECTION_PATH, viewId: builtinAllViewId(DATA_COLLECTION_PATH) }, { replace: true })
       return
     }
-    if (parsed.kind !== 'collection-view' || parsed.viewId || recordFromRoute) return
+    if (parsed.kind !== 'collection-view' || recordFromRoute) return
     if (!parsed.collection) return
-    go({ collection: parsed.collection, viewId: builtinAllViewId(parsed.collection) }, { replace: true })
+    const next = defaultViewId(parsed.collection, parsed.viewId)
+    if (!next) return
+    if (parsed.viewId === next) return
+    if (!parsed.viewId || isOmittedViewId(parsed.collection, parsed.viewId)) {
+      go({ collection: parsed.collection, viewId: next }, { replace: true })
+    }
   }, [dataHome, parsed, recordFromRoute])
 
   useEffect(() => {
@@ -189,7 +196,7 @@ function CollectionPage(props: SlotProps) {
           routeRecordId={recordFromRoute}
           onOpenTable={(path, viewId) => {
             setViaDataCrumbs(false)
-            go({ collection: path, viewId: viewId ?? builtinAllViewId(path) })
+            go({ collection: path, viewId: viewId ?? defaultViewId(path) })
           }}
           onOpenView={(viewId) => go({ collection: DATA_COLLECTION_PATH, viewId })}
           onOpenRecord={(path, view, recordId) => {
@@ -229,7 +236,7 @@ function CollectionPage(props: SlotProps) {
           setViaDataCrumbs(false)
           go({
             collection: path,
-            viewId: viewId ?? builtinAllViewId(path),
+            viewId: viewId ?? defaultViewId(path),
           })
         }}
       onOpenView={(viewId) => go({ collection: currentPath, viewId })}

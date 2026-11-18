@@ -121,6 +121,7 @@ import {
   persistViewDisplay,
   loadCollapsedGroups,
   pickViewForRoute,
+  defaultViewId,
   pushSavedViews,
   pushSavedViewsPatch,
   stampSavedView,
@@ -841,7 +842,9 @@ function collectionFromAppUrl(url: string): { collection: string; viewId: string
   if (parsed.kind !== 'collection-view' && parsed.kind !== 'record') return null
   return {
     collection: parsed.collection,
-    viewId: parsed.viewId || builtinAllViewId(parsed.collection),
+    viewId: parsed.viewId && !loadOmittedViewIds(parsed.collection).includes(parsed.viewId)
+      ? parsed.viewId
+      : defaultViewId(parsed.collection, parsed.viewId),
   }
 }
 

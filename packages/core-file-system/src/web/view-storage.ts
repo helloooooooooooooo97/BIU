@@ -209,18 +209,27 @@ export function loadActiveViewId(collectionPath: string, listed: SavedView[]) {
   return listed[0]?.id ?? null
 }
 
+export function isOmittedViewId(collectionPath: string, viewId: string) {
+  const id = String(viewId ?? '').trim()
+  return Boolean(id) && loadOmittedViewIds(collectionPath).includes(id)
+}
+
 export function viewForPath(collectionPath: string, routeViewId?: string): SavedView | null {
-  const listed = loadViews(collectionPath)
-  const fallback = stubBuiltinAllView(builtinAllViewId(collectionPath))
+  const omitted = new Set(loadOmittedViewIds(collectionPath))
+  const listed = loadViews(collectionPath).filter((item) => !omitted.has(item.id))
+  const allId = builtinAllViewId(collectionPath)
+  const fallback = omitted.has(allId) ? null : stubBuiltinAllView(allId)
+  const route = String(routeViewId ?? '').trim()
+  const want = route && !omitted.has(route) ? route : ''
   const preferred =
-    (routeViewId
-      ? listed.find((item) => item.id === routeViewId) ??
-        stubBuiltinScopeView(routeViewId, listed) ??
-        stubBuiltinMemberView(routeViewId) ??
-        stubBuiltinCatalogView(routeViewId) ??
-        stubBuiltinTagView(routeViewId) ??
-        stubBuiltinBlockKindView(routeViewId) ??
-        (isBuiltinAllViewForCollection(routeViewId, collectionPath) ? stubBuiltinAllView(routeViewId) : null)
+    (want
+      ? listed.find((item) => item.id === want) ??
+        stubBuiltinScopeView(want, listed) ??
+        stubBuiltinMemberView(want) ??
+        stubBuiltinCatalogView(want) ??
+        stubBuiltinTagView(want) ??
+        stubBuiltinBlockKindView(want) ??
+        (isBuiltinAllViewForCollection(want, collectionPath) ? stubBuiltinAllView(want) : null)
       : undefined) ??
     listed.find((item) => item.id === loadActiveViewId(collectionPath, listed)) ??
     fallback ??
@@ -229,14 +238,25 @@ export function viewForPath(collectionPath: string, routeViewId?: string): Saved
 }
 
 export function defaultViewId(collectionPath: string, routeViewId?: string) {
-  return viewForPath(collectionPath, routeViewId)?.id ?? builtinAllViewId(collectionPath)
+  const hit = viewForPath(collectionPath, routeViewId)
+  if (hit) return hit.id
+  const omitted = new Set(loadOmittedViewIds(collectionPath))
+  const listed = loadViews(collectionPath).filter((item) => !omitted.has(item.id))
+  if (listed[0]) return listed[0].id
+  const allId = builtinAllViewId(collectionPath)
+  return omitted.has(allId) ? '' : allId
 }
 
 /** 水合时列表可能还没有内置块类型视图；URL 上的 builtin-block: 仍用 stub 还原，不能退回「全部」。 */
 export function pickViewForRoute(listed: SavedView[], collectionPath: string, routeViewId?: string) {
   const route = String(routeViewId ?? '').trim()
   if (route) {
-    return listed.find((item) => item.id === route) ?? viewForPath(collectionPath, route)
+    const hit = listed.find((item) => item.id === route)
+    if (hit) return hit
+    if (isOmittedViewId(collectionPath, route)) {
+      return listed.find((item) => item.id === loadActiveViewId(collectionPath, listed)) ?? listed[0] ?? null
+    }
+    return viewForPath(collectionPath, route)
   }
   return listed.find((item) => item.id === loadActiveViewId(collectionPath, listed)) ?? listed[0] ?? null
 }
@@ -245,6 +265,7 @@ export function pickViewForRoute(listed: SavedView[], collectionPath: string, ro
 export function routeViewNeedsFetch(collectionPath: string, routeViewId?: string) {
   const id = String(routeViewId ?? '').trim()
   if (!id) return false
+  if (isOmittedViewId(collectionPath, id)) return false
   if (stubBuiltinAllView(id) || stubBuiltinBlockKindView(id) || stubBuiltinCatalogView(id) || stubBuiltinTagView(id) || stubBuiltinMemberView(id) || stubBuiltinScopeView(id)) {
     return false
   }
