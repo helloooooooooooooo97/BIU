@@ -307,3 +307,55 @@ test('view snapshot reads requested bodies concurrently', async () => {
   assert.equal(Object.keys(snap.contents).length, 12)
   assert.ok(peak > 1, `expected concurrent content reads, peak=${peak}`)
 })
+
+test('view snapshot keeps grouping and custom tag columns', async () => {
+  const pack = {
+    id: 'security',
+    label: '安全项目',
+    fields: [
+      { key: 'lane', label: '赛道', type: 'string', enum: ['AI红队', 'AI网关'], writable: true },
+      { key: 'vendor', label: '代表厂商', type: 'string', writable: true },
+    ],
+  }
+  const laneKey = 'tag::security::lane'
+  const vendorKey = 'tag::security::vendor'
+  const db = {
+    stat: async () => ({
+      kind: 'collection',
+      label: '页面',
+      view: { title: '页面' },
+      schema: {
+        labelField: 'title',
+        contentField: 'notes',
+        fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true }, notes: { type: 'file', writable: true } },
+      },
+    }),
+    list: async () => ({
+      items: [{
+        id: 'p1',
+        title: 'P1',
+        tag: { tags: ['security'], values: { security: { lane: 'AI红队', vendor: 'OpenAI' } } },
+      }],
+    }),
+    read: async () => ({ value: null }),
+    content: async () => ({ value: null }),
+    tags: { list: () => [pack] },
+  }
+  const views = new SavedViewsStore().open(':memory:')
+  const created = views.create(
+    {
+      title: '安全项目',
+      tablePath: '/pages',
+      groupBy: laneKey,
+      columns: ['title', laneKey, vendorKey, 'tag', 'shareRole', 'createdBy'],
+    },
+    [{ id: 'pages', path: '/pages', kind: 'collection', label: '页面', view: null }],
+  )
+  const shares = new SharesStore().open(':memory:')
+  const share = shares.upsert({ kind: 'view', collection: '/pages', viewId: String(created.viewId) })
+  const snap = await buildShareSnapshot(db, views, share)
+  assert.equal(snap.view?.groupBy, laneKey)
+  assert.deepEqual(snap.view?.columns, ['title', laneKey, vendorKey, 'tag', 'shareRole', 'createdBy'])
+  assert.equal(snap.tags?.[0]?.id, 'security')
+  assert.ok(snap.tags?.[0]?.fields.some((field) => field.key === 'lane'))
+})

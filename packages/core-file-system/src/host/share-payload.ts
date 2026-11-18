@@ -8,6 +8,7 @@ import { savedViewRecordPath } from '../paths.ts'
 import { displayNameForView } from '../catalog-views.ts'
 import type { ShareRecord } from './shares-store.ts'
 import { asPublicProfile } from '@biu/host-workspace'
+import { parseTagFlatColumnKey } from '../query-logic.ts'
 import { viewShareListFilter } from '../share-view-match.ts'
 
 const SHARE_LIMIT = 200
@@ -95,12 +96,17 @@ async function loadContents(
 function shareTagCatalog(
   db: { tags?: { list: () => CollectionSchemaPack[] } },
   records: DbRecord[],
+  view?: { groupBy?: string; columns?: string[] },
 ): CollectionSchemaPack[] {
   const catalog = db.tags?.list() ?? []
   if (!catalog.length) return []
   const used = new Set<string>()
   for (const row of records) {
     for (const id of normalizeSchemaValue(row.tag).tags) used.add(id)
+  }
+  for (const key of [view?.groupBy, ...(view?.columns ?? [])]) {
+    const parsed = parseTagFlatColumnKey(String(key ?? ''))
+    if (parsed) used.add(parsed.packId)
   }
   if (!used.size) return []
   return catalog.filter((tag) => used.has(tag.id))
@@ -164,6 +170,7 @@ export async function buildShareSnapshot(
     wrap: stored?.wrap,
     truncate: stored?.truncate,
     pageSize: stored?.pageSize,
+    groupBy: stored?.groupBy ?? '',
   }
   const listed = (await db.list(share.collection, viewShareListFilter(view), {
     q: String(view.query ?? ''),
@@ -188,7 +195,7 @@ export async function buildShareSnapshot(
     contents,
     assets: [...collectAssetNames(...records, ...Object.values(contents), banner)],
     banner,
-    tags: shareTagCatalog(db, records),
+      tags: shareTagCatalog(db, records, view),
   }, share)
 }
 

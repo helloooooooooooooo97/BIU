@@ -1412,7 +1412,7 @@ const WindowedTable = memo(function WindowedTable({
   colWindowRef.current = colWindow
   const windowedColumns = useMemo(() => windowedColumnsOf(columns, colWindow), [colWindow, columns])
   const tableColSpan = Math.max(
-    windowedColumns.length + (colWindow.padLeft > 0 ? 1 : 0) + (colWindow.padRight > 0 ? 1 : 0) + 1,
+    windowedColumns.length + (colWindow.padLeft > 0 ? 1 : 0) + (colWindow.padRight > 0 ? 1 : 0),
     1,
   )
   const paintedTablePx = useMemo(() => {
@@ -1506,7 +1506,12 @@ const WindowedTable = memo(function WindowedTable({
     checkLayoutExtra,
   ].join('\0')
   const chrome = chromeRef.current
-  const paintedColStyle = (index: number) => colWidthStyle(columnPx[index]) ?? padColBox(columnPx[index] || 72)
+  const paintedColStyle = (index: number, grow = false) => {
+    const box = colWidthStyle(columnPx[index]) ?? padColBox(columnPx[index] || 72)
+    if (!grow || !box) return box
+    return { minWidth: box.minWidth }
+  }
+  const growLastCol = colWindow.padRight <= 0 && columns.length > 0
 
   return (
     <div className="tasks-table-stage" ref={stageRef} onMouseLeave={() => paintCheckHover(null)}>
@@ -1526,8 +1531,6 @@ const WindowedTable = memo(function WindowedTable({
         tabIndex={0}
         className={`tasks-table${wrapCells ? ' is-wrap' : ''} is-cols-fixed${truncateCells ? ' is-truncate' : ''}${resizingCol ? ' is-col-resize' : ''}`}
         style={{
-          // A definite width enables fixed table layout; auto lets content widen the title past its sticky offset.
-          width: `${paintedTablePx}px`,
           minWidth: `${paintedTablePx}px`,
           outline: 'none',
           ['--fsdb-pin-title' as string]: `${columnPx[0] || 240}px`,
@@ -1541,14 +1544,16 @@ const WindowedTable = memo(function WindowedTable({
       >
         <colgroup>
           {columns.slice(0, colWindow.pin).map((col, index) => (
-            <col key={col.key} style={paintedColStyle(index)} />
+            <col key={col.key} style={paintedColStyle(index, growLastCol && index === columns.length - 1)} />
           ))}
           {colWindow.padLeft > 0 ? <col key="pad-left" style={padColBox(colWindow.padLeft)} /> : null}
           {columns.slice(colWindow.start, colWindow.end).map((col, index) => (
-            <col key={col.key} style={paintedColStyle(colWindow.start + index)} />
+            <col
+              key={col.key}
+              style={paintedColStyle(colWindow.start + index, growLastCol && colWindow.start + index === columns.length - 1)}
+            />
           ))}
           {colWindow.padRight > 0 ? <col key="pad-right" style={padColBox(colWindow.padRight)} /> : null}
-          <col key="fill" className="fsdb-col-fill" />
         </colgroup>
         <thead>
           <tr>
@@ -1556,7 +1561,6 @@ const WindowedTable = memo(function WindowedTable({
             {colWindow.padLeft > 0 ? <th key="pad-left" className="fsdb-col-pad" aria-hidden style={padColBox(colWindow.padLeft)} /> : null}
             {columns.slice(colWindow.start, colWindow.end).map((col) => chrome.paintHeadTh(col))}
             {colWindow.padRight > 0 ? <th key="pad-right" className="fsdb-col-pad" aria-hidden style={padColBox(colWindow.padRight)} /> : null}
-            <th key="fill" className="fsdb-col-fill" aria-hidden />
           </tr>
         </thead>
         <TablePaintCtx.Provider value={paintRef}>
@@ -5931,7 +5935,6 @@ export function CollectionBrowser({
         {paintColPad(colWindow.padLeft, 'left')}
         {paintColumns.slice(colWindow.start, colWindow.end).map(paintLiveTd)}
         {paintColPad(colWindow.padRight, 'right')}
-        <td className="fsdb-col-fill" aria-hidden />
       </tr>
     )
   }

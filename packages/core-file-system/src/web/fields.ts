@@ -308,9 +308,11 @@ export function tagColumnTitle(col: {
   packLabel?: string
   field?: { label?: string }
 }) {
-  const fieldLabel = String(col.field?.label ?? col.key).trim() || col.key
-  const pack = String(col.packLabel ?? '').trim()
-  return pack ? `${pack}.${fieldLabel}` : fieldLabel
+  const fieldLabel = String(col.field?.label ?? '').trim()
+  if (fieldLabel) return fieldLabel
+  const parsed = parseTagFlatColumnKey(col.key)
+  if (parsed?.fieldKey) return parsed.fieldKey
+  return String(col.key).trim() || col.key
 }
 
 export function readTagFlatValue(row: DbRecord, columnKey: string, sourceKey = 'tag') {

@@ -215,7 +215,7 @@ test('default columns omit flattened type properties', () => {
   ])
   assert.equal(cols.length, 1)
   assert.equal(cols[0]?.key, nested)
-  assert.equal(tagColumnTitle(cols[0]!), '好好哈.的的')
+  assert.equal(tagColumnTitle(cols[0]!), '的的')
   assert.equal(tagColumnTitle({ key: 'title', field: { label: '标题' } }), '标题')
   const row = { id: '1', tag: { tags: ['haohao'], values: { haohao: { dede: 'v' } } } }
   assert.equal(readTagFlatValue(row, nested), 'v')

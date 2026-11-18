@@ -358,12 +358,13 @@ function SharePage({
   const schema = snapshot.schema
   const live = snapshot
   const listed = snapshot.kind === 'view' && queryState
-    ? applyShareQuery(snapshot.records, schema, queryState, snapshot.contents)
+    ? applyShareQuery(snapshot.records, schema, queryState, snapshot.contents, snapshot.tags)
     : snapshot.records
   const total = listed.length
   const lastPage = Math.max(0, Math.ceil(total / pageSize) - 1)
   const safePage = Math.min(page, lastPage)
-  const paged = snapshot.kind === 'view' ? listed.slice(safePage * pageSize, safePage * pageSize + pageSize) : listed
+  const grouped = Boolean(snapshot.kind === 'view' && snapshot.view?.groupBy)
+  const paged = snapshot.kind === 'view' && !grouped ? listed.slice(safePage * pageSize, safePage * pageSize + pageSize) : listed
   const shown = selected ?? (snapshot.kind === 'record' ? snapshot.records[0] : null)
   const detailChrome = chromeFor?.(snapshot.collection) ?? chrome
   if (recordId && !shown) {
@@ -658,6 +659,7 @@ function SharePage({
               onChange={setQueryState}
               refreshing={refreshing}
               onRefresh={() => setReload((n) => n + 1)}
+              tags={snapshot.tags}
             />
           ) : null}
           <div className="fsdb-workspace">

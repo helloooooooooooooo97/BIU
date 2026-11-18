@@ -1,10 +1,11 @@
-import type { CollectionSchema, DbRecord } from '@biu/type-file-system'
+import type { CollectionSchema, CollectionSchemaPack, DbRecord } from '@biu/type-file-system'
 import { schemaSearchHaystack } from '@biu/type-file-system'
 import {
   countFilterRules,
   encodeListFilter,
   matchListFilterRecord,
   normalizeSorts,
+  parseTagFlatColumnKey,
   resolveViewFilterTree,
   sortRecordsBy,
   type FilterGroup,
@@ -24,6 +25,15 @@ export type ShareQueryState = {
 
 export function shareQueryStorageKey(token: string) {
   return `fsdb.share.query:${token}`
+}
+
+function restoreShareColumns(parsed: unknown, fallback: string[]) {
+  if (!Array.isArray(parsed)) return fallback
+  const columns = parsed.filter((key): key is string => typeof key === 'string')
+  const parsedHasTag = columns.some((key) => parseTagFlatColumnKey(key))
+  const fallbackHasTag = fallback.some((key) => parseTagFlatColumnKey(key))
+  if (fallbackHasTag && !parsedHasTag) return fallback
+  return columns
 }
 
 export function shareQueryFromView(view?: Partial<SavedView>): ShareQueryState {
@@ -50,7 +60,7 @@ export function loadShareQuery(token: string, fallback: ShareQueryState): ShareQ
       q: typeof parsed.q === 'string' ? parsed.q : fallback.q,
       sorts: Array.isArray(parsed.sorts) ? normalizeSorts(parsed.sorts, fallback.sorts[0]?.field, fallback.sorts[0]?.dir) : fallback.sorts,
       filterTree: parsed.filterTree ? resolveViewFilterTree({ filterTree: parsed.filterTree, filters: {} }) : fallback.filterTree,
-      columns: Array.isArray(parsed.columns) ? parsed.columns.filter((key) => typeof key === 'string') : fallback.columns,
+      columns: restoreShareColumns(parsed.columns, fallback.columns),
       wrap: typeof parsed.wrap === 'boolean' ? parsed.wrap : fallback.wrap,
       truncate: typeof parsed.truncate === 'boolean' ? parsed.truncate : fallback.truncate,
       pageSize: normalizePageSize(parsed.pageSize ?? fallback.pageSize),
@@ -73,11 +83,12 @@ export function applyShareQuery(
   schema: CollectionSchema,
   state: ShareQueryState,
   contents: Record<string, unknown> = {},
+  packs: CollectionSchemaPack[] = [],
 ) {
   const filter = encodeListFilter({}, countFilterRules(state.filterTree) ? state.filterTree : undefined)
   const needle = state.q.trim().toLowerCase()
   const matched = records.filter((row) => {
-    if (!matchListFilterRecord(row, filter, schema)) return false
+    if (!matchListFilterRecord(row, filter, schema, packs)) return false
     if (!needle) return true
     const bits = [
       schemaSearchHaystack(row),

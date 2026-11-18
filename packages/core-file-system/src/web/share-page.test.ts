@@ -3,6 +3,14 @@ import { resolve } from 'node:path'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 
+test('share list keeps the shared view grouping', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './share-page.tsx'), 'utf8')
+  const payload = readFileSync(resolve(import.meta.dirname, '../host/share-payload.ts'), 'utf8')
+  assert.match(payload, /groupBy: stored\?\.groupBy/)
+  assert.match(src, /snapshot\.view\?\.groupBy/)
+  assert.match(src, /tags=\{snapshot\.tags\}/)
+})
+
 test('share page loads a record body only after that row is opened', () => {
   const src = readFileSync(resolve(import.meta.dirname, './share-page.tsx'), 'utf8')
   const host = readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8')
