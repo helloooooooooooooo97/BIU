@@ -217,13 +217,24 @@ export class PagesStore {
   async list(ids?: string[]): Promise<PageRow[]> {
     const db = await this.openDb()
     if (ids) {
-      const rows: PageRow[] = []
-      for (const id of ids) {
-        if (!ID_RE.test(id)) continue
-        const row = await this.get(id)
-        if (row) rows.push({ ...row, notes: '' })
+      const wanted = ids.filter((id) => ID_RE.test(id))
+      if (!wanted.length) return []
+      const found = new Map<string, PageRow>()
+      const chunkSize = 999
+      for (let i = 0; i < wanted.length; i += chunkSize) {
+        const chunk = wanted.slice(i, i + chunkSize)
+        const placeholders = chunk.map(() => '?').join(',')
+        const listed = db.prepare(`
+          SELECT id, title, parent_id,
+            depends_on_json, emoji, created_at, updated_at
+          FROM pages WHERE id IN (${placeholders})
+        `).all(...chunk) as SqlPage[]
+        for (const row of listed) found.set(row.id, { ...rowFromSql(row), notes: '' })
       }
-      return rows
+      return wanted.flatMap((id) => {
+        const row = found.get(id)
+        return row ? [row] : []
+      })
     }
     const listed = db.prepare(`
       SELECT id, title, parent_id,
