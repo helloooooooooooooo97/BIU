@@ -146,11 +146,22 @@ export function tagsCollection(
     get: (id) => {
       const stamp = parseStampRecordId(id)
       if (stamp) {
-        for (const facet of store.list()) {
-          const hit = stampRows(facet.id).find((row) => row.id === id)
-          if (hit) return hit
+        const hits = store.stampsForRecord(stamp.collection, stamp.recordId)
+        if (!hits.length) return null
+        const order = store.list().map((pack) => pack.id)
+        const hit = hits
+          .slice()
+          .sort((a, b) => order.indexOf(a.tag_id) - order.indexOf(b.tag_id))[0]!
+        const tagId = hit.tag_id
+        return {
+          id: stampRecordId(hit.collection, hit.record_id),
+          title: hit.title || hit.record_id,
+          table: tableLabel(hit.collection),
+          tablePath: hit.collection,
+          sourceId: hit.record_id,
+          tagId,
+          ...recordBuiltinValues({ tag: store.recordTag(hit.collection, hit.record_id) }),
         }
-        return null
       }
       const pack = store.get(id)
       if (!pack || store.isDeleted('/tags', pack.id)) return null
