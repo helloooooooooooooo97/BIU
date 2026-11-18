@@ -4208,7 +4208,7 @@ export function CollectionBrowser({
     tableHoldRef.current = null
     pendingPathQueryRef.current = null
     if (!keepCache) forgetListCache(dataPath)
-    invalidateListReads()
+    invalidateListReads(dataPath)
     emitFsdbChange()
   }
 
