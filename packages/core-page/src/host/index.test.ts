@@ -482,6 +482,37 @@ test('PagesStore reads existing markdown files from .biu/page', async () => {
   assert.equal(existsSync(join(root, PAGE_ROOT, 'home.md')), false)
 })
 
+test('PagesStore.list(ids) uses one IN query and skips notes', async () => {
+  const ctx = new Context()
+  class FakeDb extends Service {
+    constructor(c: Context) {
+      super(c, 'database')
+    }
+    register() {}
+  }
+  new FakeDb(ctx)
+  await ctx.plugin(tools)
+  const root = await mkdtemp(join(tmpdir(), 'page-list-ids-'))
+  await ctx.plugin(fsPlugin, { root })
+  await ctx.plugin(page)
+  const store = new PagesStore(ctx.fs.workspace as never)
+  const a = await store.create({ title: 'A', notes: '# a' })
+  const b = await store.create({ title: 'B', notes: '# b' })
+  const c = await store.create({ title: 'C', notes: '# c' })
+  const db = await store.sqlite()
+  const orig = db.prepare.bind(db)
+  let prepares = 0
+  db.prepare = ((sql: string) => {
+    prepares += 1
+    return orig(sql)
+  }) as typeof db.prepare
+  const listed = await store.list([c.id, a.id, 'not-a-real-id!!!!', b.id, a.id])
+  assert.equal(prepares, 1)
+  assert.deepEqual(listed.map((row) => row.id), [c.id, a.id, b.id, a.id])
+  assert.deepEqual(listed.map((row) => row.notes), ['', '', '', ''])
+  assert.equal(listed[0]?.title, 'C')
+})
+
 test('page file GET authorizes through the open page path like PUT', async () => {
   const src = await readFile(join(import.meta.dirname, 'index.ts'), 'utf8')
   assert.match(src, /route\('GET', '\/api\/page\/file\/:name'/)
