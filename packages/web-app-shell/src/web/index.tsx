@@ -28,9 +28,8 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import type { Context } from 'cordis'
 import type { SlotProps } from '@biu/web-slots'
 import { bindSnapshot, type SnapshotService } from '@biu/web-snapshot'
-import { bindSessionView, type SessionViewService } from '@biu/web-session-view'
+import { bindSessionView, getSidebarPersist, parseAppPath, sessionAppPath, setSidebarPersist, SIDEBAR_PERSIST, type SessionViewService } from '@biu/web-session-view'
 import { bindProjectView, type ProjectViewService } from '@biu/web-project-view'
-import { parseAppPath, sessionAppPath } from '@biu/web-session-view'
 import {
   isMascotDancing,
   mascotDanceShape,
@@ -314,20 +313,10 @@ function Shell(props: SlotProps) {
       live = false
     }
   }, [settingsOpen])
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    try {
-      return localStorage.getItem('cordis.sidebar.collapsed') === '1'
-    } catch {
-      return false
-    }
-  })
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => getSidebarPersist(SIDEBAR_PERSIST.collapsed) === '1')
   const [sidebarWidth, setSidebarWidth] = useState(() => {
-    try {
-      const n = Number(localStorage.getItem('cordis.sidebar.width'))
-      if (Number.isFinite(n) && n >= SIDEBAR_MIN && n <= SIDEBAR_MAX) return n
-    } catch {
-      /* ignore */
-    }
+    const n = Number(getSidebarPersist(SIDEBAR_PERSIST.width))
+    if (Number.isFinite(n) && n >= SIDEBAR_MIN && n <= SIDEBAR_MAX) return n
     return SIDEBAR_DEFAULT
   })
   const lastWideSidebar = useRef(sidebarWidth >= SIDEBAR_LABEL_AT ? sidebarWidth : SIDEBAR_MAX)
@@ -341,43 +330,27 @@ function Shell(props: SlotProps) {
     if (collapsed) {
       paintLiveLayoutRef.current({ sidebarCollapsed: true })
       setSidebarCollapsed(true)
-      try {
-        localStorage.setItem('cordis.sidebar.collapsed', '1')
-      } catch {
-        /* ignore */
-      }
+      setSidebarPersist(SIDEBAR_PERSIST.collapsed, '1')
       return
     }
     const next = clampSidebarWidth(width)
     if (next === 0) {
       paintLiveLayoutRef.current({ sidebarCollapsed: true })
       setSidebarCollapsed(true)
-      try {
-        localStorage.setItem('cordis.sidebar.collapsed', '1')
-      } catch {
-        /* ignore */
-      }
+      setSidebarPersist(SIDEBAR_PERSIST.collapsed, '1')
       return
     }
     setSidebarWidth(next)
     setSidebarCollapsed(false)
     paintLiveLayoutRef.current({ sidebarCollapsed: false, sidebarWidth: next })
     if (next >= SIDEBAR_LABEL_AT) lastWideSidebar.current = next
-    try {
-      localStorage.setItem('cordis.sidebar.width', String(next))
-      localStorage.setItem('cordis.sidebar.collapsed', '0')
-    } catch {
-      /* ignore */
-    }
+    setSidebarPersist(SIDEBAR_PERSIST.width, String(next))
+    setSidebarPersist(SIDEBAR_PERSIST.collapsed, '0')
   }, [])
   const collapseSidebar = useCallback(() => {
     paintLiveLayoutRef.current({ sidebarCollapsed: true })
     setSidebarCollapsed(true)
-    try {
-      localStorage.setItem('cordis.sidebar.collapsed', '1')
-    } catch {
-      /* ignore */
-    }
+    setSidebarPersist(SIDEBAR_PERSIST.collapsed, '1')
   }, [])
   const expandSidebar = useCallback(
     () => persistSidebar(Math.max(SIDEBAR_LABEL_AT, lastWideSidebar.current, sidebarWidthRef.current), false),
@@ -430,20 +403,10 @@ function Shell(props: SlotProps) {
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   }, [openSearch])
-  const [inspectorOpen, setInspectorOpen] = useState(() => {
-    try {
-      return localStorage.getItem('cordis.inspector.open') === '1'
-    } catch {
-      return false
-    }
-  })
+  const [inspectorOpen, setInspectorOpen] = useState(() => getSidebarPersist(SIDEBAR_PERSIST.inspectorOpen) === '1')
   const [inspectorWidth, setInspectorWidth] = useState(() => {
-    try {
-      const n = Number(localStorage.getItem('cordis.inspector.width'))
-      if (Number.isFinite(n) && n >= 240 && n <= 1000) return n
-    } catch {
-      /* ignore */
-    }
+    const n = Number(getSidebarPersist(SIDEBAR_PERSIST.inspectorWidth))
+    if (Number.isFinite(n) && n >= 240 && n <= 1000) return n
     return 320
   })
   const layoutSnap = useRef({
@@ -466,11 +429,7 @@ function Shell(props: SlotProps) {
     inspectorOpenRef.current = next
     paintLiveLayoutRef.current({ inspectorOpen: next })
     setInspectorOpen(next)
-    try {
-      localStorage.setItem('cordis.inspector.open', next ? '1' : '0')
-    } catch {
-      /* ignore */
-    }
+    setSidebarPersist(SIDEBAR_PERSIST.inspectorOpen, next ? '1' : '0')
   }, [])
   const toggleInspector = useCallback(() => {
     const next = !inspectorOpenRef.current
@@ -482,11 +441,7 @@ function Shell(props: SlotProps) {
     holdCenterRef.current = null
     layoutSnap.current = commitShellLayoutSnap(layoutSnap.current, { inspectorWidth: next })
     setInspectorWidth(next)
-    try {
-      localStorage.setItem('cordis.inspector.width', String(next))
-    } catch {
-      /* ignore */
-    }
+    setSidebarPersist(SIDEBAR_PERSIST.inspectorWidth, String(next))
   }, [])
   const onInspectorWidthChange = useCallback((width: number) => {
     endColumnResizeRef.current({ inspector: width })
@@ -951,12 +906,13 @@ function Shell(props: SlotProps) {
               ) : null}
             </div>
             <div
-              id="shell-module-sidebar"
               className={`app-stage-pane app-side-bar-module-slot min-h-0 flex min-w-0 flex-1 flex-col overflow-hidden${showChatSidebar ? '' : ' is-active'}`}
               data-testid="module-sidebar"
               aria-hidden={showChatSidebar}
               inert={showChatSidebar || undefined}
-            />
+            >
+              {props.renderSlot('module-sidebar')}
+            </div>
           </div>
         </ShellSidebarFrame>
       ) : null}
@@ -1109,6 +1065,7 @@ export function apply(ctx: Context) {
   }, {
     children: {
       sidebar: { kind: 'single' },
+      'module-sidebar': { kind: 'single' },
       demos: { kind: 'list' },
       dock: { kind: 'list' },
       stage: { kind: 'list' },

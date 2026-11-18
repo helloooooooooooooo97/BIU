@@ -8,6 +8,7 @@ import { invalidateListReads } from './db-client.ts'
 import { CollectionBrowser } from './browser.tsx'
 import { getStarredViews, omitSavedViewIds, persistStarredViews, persistViewDisplay, upsertSavedView } from './view-storage.ts'
 import { DataSidebar } from './data-sidebar.tsx'
+import { DataSidebarSlot } from './data-sidebar-slot.tsx'
 import { normalizeSavedView } from './saved-view.ts'
 
 const schema: CollectionSchema = {
@@ -95,6 +96,7 @@ test('sidebar view clicks do not close a record through the previous view route'
     const [routeView, setRouteView] = useState(builtinAllViewId(path))
     return <>
       <output data-testid="route-view">{routeView}</output>
+      <DataSidebarSlot renderSlot={() => null} />
       <CollectionBrowser collectionPath={path} routeViewId={routeView} title="页面" blurb="" tables={viewTables}
         onOpenView={setRouteView}
         onOpenTable={(_path, id) => setRouteView(id!)}

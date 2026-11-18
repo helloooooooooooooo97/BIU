@@ -1,3 +1,4 @@
+/** 侧栏飞出热区几何与 `shell-sidebar-frame` 解耦，方便单测（sidebar-flyout.test.ts）。 */
 export const SIDEBAR_FLYOUT_EDGE = 20
 export const SIDEBAR_FLYOUT_HIDE_MS = 240
 /** 唤醒热区：视口中间偏上，把正中留给标题目录。 */

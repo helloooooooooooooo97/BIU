@@ -573,7 +573,7 @@ const CSS = `
 .fsdb-detail-more-item.is-danger:hover{background:color-mix(in srgb,var(--biu-color-danger) 16%,transparent)}
 .fsdb-detail-more-item svg{flex:none;width:16px;height:16px;color:var(--biu-color-icon)}
 .fsdb-detail-more-item:hover svg,.fsdb-detail-more-item[aria-checked=true] svg{color:var(--biu-color-icon-active)}
-.fsdb-detail-more-item svg.is-starred{color:#f5b700}
+.fsdb-detail-more-item svg.is-starred{color:var(--biu-color-warning-on-surface)}
 .fsdb-detail-more-item .fsdb-detail-more-caret{margin-left:auto}
 .fsdb-detail-main .tasks-filter-menu .fsdb-detail-more-item{width:100%}
 .fsdb-detail-more-item.is-danger svg{color:var(--biu-color-danger)}

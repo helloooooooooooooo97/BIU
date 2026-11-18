@@ -1,4 +1,5 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent } from 'react'
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   SidebarMascot,
@@ -21,6 +22,7 @@ import {
   type SidebarSectionKind,
 } from '@biu/web-session-view'
 import { FolderGlyph } from '@biu/web-session-view/folder-glyph'
+import { SIDEBAR_ROW_MAIN_CLASS, SidebarRow } from '@biu/web-session-view/sidebar-row'
 import { chromeIcon, chromeIconClass } from './chrome-icon.ts'
 import { isChatPagePath, openOverlayComposer } from './chat-overlay.ts'
 import {
@@ -31,17 +33,10 @@ import {
   StarIcon,
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
-import {
-  chatScrollRoot,
-  sessionHostScroll,
-  sessionWindowHidden,
-  sessionWindowSlice,
-  sessionWindowUnchanged,
-  type SessionWindowSlice,
-} from './session-window.ts'
+const SESSION_ROW_PX = 29
+const SESSION_WINDOW_OVERSCAN = 4
 
-const sessionRowMainClass =
-  'flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5'
+const sessionRowMainClass = SIDEBAR_ROW_MAIN_CLASS
 
 /** 弹层里的会话行改成按钮（点了要关弹层），页面里的行仍是真链接。 */
 const sessionRowMainProps = {
@@ -84,43 +79,25 @@ const SessionRow = memo(function SessionRow({
     </Link>
   )
   return (
-    <div
-      className={`chat-session-row group${active ? ' is-active' : ''}${pinned ? ' is-pinned' : ''}`}
-      data-biu-kind="session"
-      data-biu-id={item.id}
-      data-biu-label={item.title}
-      data-dock-tip={item.title}
-      data-dock-tip-at="e"
-    >
-      {main}
-      <button
-        type="button"
-        className="chat-session-row-delete"
-        aria-label={`Delete session ${item.title}`}
-        title="Delete"
-        onClick={(event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          onDelete(item)
-        }}
-      >
-        <TrashGlyph {...chromeIcon} />
-      </button>
-      <button
-        type="button"
-        className={`chat-session-row-star${pinned ? ' is-on' : ''}`}
-        aria-pressed={pinned}
-        aria-label={pinned ? `取消收藏 ${item.title}` : `收藏 ${item.title}`}
-        title={pinned ? '取消收藏' : '收藏'}
-        onClick={(event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          onPin(item)
-        }}
-      >
-        <StarIcon {...chromeIcon} />
-      </button>
-    </div>
+    <SidebarRow
+      active={active}
+      pinned={pinned}
+      main={main}
+      onDelete={() => onDelete(item)}
+      deleteLabel={`Delete session ${item.title}`}
+      deleteIcon={<TrashGlyph {...chromeIcon} />}
+      onStar={() => onPin(item)}
+      starOn={pinned}
+      starLabel={pinned ? `取消收藏 ${item.title}` : `收藏 ${item.title}`}
+      starIcon={<StarIcon {...chromeIcon} />}
+      attrs={{
+        'data-biu-kind': 'session',
+        'data-biu-id': item.id,
+        'data-biu-label': item.title,
+        'data-dock-tip': item.title,
+        'data-dock-tip-at': 'e',
+      }}
+    />
   )
 })
 
@@ -166,95 +143,59 @@ const WindowedSessionList = memo(function WindowedSessionList({
   onOpen?: (item: SessionListItem) => void
 }) {
   const hostRef = useRef<HTMLDivElement>(null)
-  const count = sessions.length
-  const [slice, setSlice] = useState(() => sessionWindowHidden(count))
-  const countRef = useRef(count)
-  countRef.current = count
-  const lastScroll = useRef({ top: Number.NaN, height: Number.NaN })
-
-  const applySlice = useCallback((next: SessionWindowSlice) => {
-    setSlice((prev) =>
-      prev.start === next.start && prev.end === next.end && prev.padTop === next.padTop && prev.padBottom === next.padBottom
-        ? prev
-        : next,
-    )
+  const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null)
+  const bindHost = useCallback((node: HTMLDivElement | null) => {
+    hostRef.current = node
+    setScrollEl(node?.closest('[data-chat-scroll]') as HTMLElement | null)
   }, [])
-
-  const measure = useCallback(() => {
-    const host = hostRef.current
-    const scroller = host ? chatScrollRoot(host) : null
-    const n = countRef.current
-    if (!host || !scroller) {
-      lastScroll.current = { top: Number.NaN, height: Number.NaN }
-      applySlice(sessionWindowHidden(n))
-      return
-    }
-    const metrics = sessionHostScroll(host, scroller)
-    if (metrics.hidden) {
-      lastScroll.current = { top: metrics.top, height: metrics.height }
-      applySlice(sessionWindowHidden(n))
-      return
-    }
-    if (
-      Number.isFinite(lastScroll.current.top) &&
-      sessionWindowUnchanged(n, lastScroll.current, metrics)
-    ) {
-      return
-    }
-    lastScroll.current = { top: metrics.top, height: metrics.height }
-    applySlice(sessionWindowSlice(n, metrics.top, metrics.height))
-  }, [applySlice])
-
-  useLayoutEffect(() => {
-    lastScroll.current = { top: Number.NaN, height: Number.NaN }
-    measure()
-  }, [measure, count])
-
-  useEffect(() => {
-    const host = hostRef.current
-    const scroller = host ? chatScrollRoot(host) : null
-    if (!host || !scroller) return
-    let raf = 0
-    const onScroll = () => {
-      if (raf) return
-      raf = requestAnimationFrame(() => {
-        raf = 0
-        measure()
-      })
-    }
-    scroller.addEventListener('scroll', onScroll, { passive: true })
-    const ro = new ResizeObserver(onScroll)
-    ro.observe(scroller)
-    ro.observe(host)
-    return () => {
-      cancelAnimationFrame(raf)
-      scroller.removeEventListener('scroll', onScroll)
-      ro.disconnect()
-    }
-  }, [measure])
+  const count = sessions.length
+  const virtualizer = useVirtualizer({
+    count,
+    getScrollElement: () => scrollEl,
+    estimateSize: () => SESSION_ROW_PX,
+    overscan: SESSION_WINDOW_OVERSCAN,
+    scrollMargin: hostRef.current?.offsetTop ?? 0,
+  })
+  const items = virtualizer.getVirtualItems()
+  const start = items[0]?.index ?? 0
+  const end = items.length ? (items[items.length - 1]?.index ?? 0) + 1 : 0
 
   return (
     <div
-      ref={hostRef}
+      ref={bindHost}
       className="sidebar-session-window"
       data-session-window=""
-      data-session-window-start={slice.start}
-      data-session-window-end={slice.end}
+      data-session-window-start={start}
+      data-session-window-end={end}
       data-session-window-count={count}
-      style={{ paddingTop: slice.padTop, paddingBottom: slice.padBottom }}
+      style={{ height: virtualizer.getTotalSize(), position: 'relative' }}
     >
-      {sessions.slice(slice.start, slice.end).map((item) => (
-        <SessionRow
-          key={`${rowKey}:${item.id}`}
-          item={item}
-          active={item.id === highlightId}
-          busy={Boolean(busySessions[item.id])}
-          dancing={dancing}
-          onDelete={onDelete}
-          onPin={onPin}
-          onOpen={onOpen}
-        />
-      ))}
+      {items.map((row) => {
+        const item = sessions[row.index]
+        if (!item) return null
+        return (
+          <div
+            key={`${rowKey}:${item.id}`}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              transform: `translateY(${row.start - virtualizer.options.scrollMargin}px)`,
+            }}
+          >
+            <SessionRow
+              item={item}
+              active={item.id === highlightId}
+              busy={Boolean(busySessions[item.id])}
+              dancing={dancing}
+              onDelete={onDelete}
+              onPin={onPin}
+              onOpen={onOpen}
+            />
+          </div>
+        )
+      })}
     </div>
   )
 })
@@ -298,11 +239,9 @@ export const ChatSidebar = memo(function ChatSidebar({
   const toggleProjectGroup = useSidebarCollapseStore((state) => state.toggle)
   const expandProjectGroup = useSidebarCollapseStore((state) => state.expand)
   const sections = useMemo(() => buildSidebarSections(sessions), [sessions])
-  // 板块级收缩（点击标题可展开/收缩，不显示收缩按钮，层级靠 kind 图标表达）
-  const [collapsedSections, setCollapsedSections] = useState<Partial<Record<SidebarSectionKind, boolean>>>({})
   const toggleSection = useCallback((kind: SidebarSectionKind) => {
-    setCollapsedSections((prev) => ({ ...prev, [kind]: !prev[kind] }))
-  }, [])
+    toggleProjectGroup(`chat.section.${kind}`)
+  }, [toggleProjectGroup])
   const dancing = useSyncExternalStore(
     subscribeMascotDance,
     () => isMascotDancing(),
@@ -388,7 +327,7 @@ export const ChatSidebar = memo(function ChatSidebar({
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3" data-chat-scroll="">
       <div className="mt-2 space-y-1.5">
         {sections.map((section) => {
-          const sectionCollapsed = Boolean(collapsedSections[section.kind])
+          const sectionCollapsed = Boolean(collapsedProjects[`chat.section.${section.kind}`])
           const count =
             section.sessions?.length ?? section.groups?.reduce((sum, group) => sum + group.sessions.length, 0) ?? 0
           return (

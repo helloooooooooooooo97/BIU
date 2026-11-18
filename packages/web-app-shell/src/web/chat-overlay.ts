@@ -1,3 +1,5 @@
+import { getSidebarPersist, SIDEBAR_PERSIST } from '@biu/web-session-view'
+
 /** 聊天列窄于此时自动弹出覆盖对话框（px）。不自动收回。 */
 export const CHAT_OVERLAY_ENTER = 420
 export const SIDEBAR_MAX = 360
@@ -461,12 +463,8 @@ export function inspectorTabFromEvent(event: Event): string | undefined {
 export function toggleChatOverlay() {
   if (overlay) {
     let inspectorWidth = 320
-    try {
-      const n = Number(localStorage.getItem('cordis.inspector.width'))
-      if (Number.isFinite(n) && n >= 240) inspectorWidth = n
-    } catch {
-      /* ignore */
-    }
+    const n = Number(getSidebarPersist(SIDEBAR_PERSIST.inspectorWidth))
+    if (Number.isFinite(n) && n >= 240) inspectorWidth = n
     const shell = document.querySelector('[data-testid="app-shell"]')
     const col = shell ? Number.parseFloat(getComputedStyle(shell).getPropertyValue('--sidebar-col')) : NaN
     const sidebarCollapsed = !Number.isFinite(col) || col < SIDEBAR_MIN

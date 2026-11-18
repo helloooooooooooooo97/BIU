@@ -60,6 +60,7 @@ export {
   type SidebarSectionKind,
 } from './session-groups.ts'
 export { useSidebarCollapseStore } from './sidebar-collapse-store.ts'
+export { getSidebarPersist, setSidebarPersist, useSidebarPersistedState, SIDEBAR_PERSIST } from './sidebar-persist.ts'
 export {
   subscribeChatOutline,
   getChatOutlineOpen,

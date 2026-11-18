@@ -25,7 +25,7 @@ import {
 import type { CollectionActionInfo, CollectionInfo, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
 import { emitFsdbChange, normalizeSchemaValue, parseFsdbChange } from '@biu/type-file-system'
 import type { CollectionChrome, CollectionRowViewType, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
-import { parseAppPath } from '@biu/web-session-view'
+import { getSidebarPersist, parseAppPath, setSidebarPersist, SIDEBAR_PERSIST } from '@biu/web-session-view'
 import { BoolBox } from '@biu/biu-ui/bool-box'
 import { ChatCount } from '@biu/biu-ui/chat-count'
 import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
@@ -151,7 +151,7 @@ import { paintCollectionViews } from './collection-nav.ts'
 import { TABLE_WINDOW_OVERSCAN, medianPaintedRowPx, rememberedTableWrap, settlePaintedRowPx, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tablePinColClass, tablePinCount, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
 import { bindTableDragScroll, tableVertScroller } from './table-drag-scroll.ts'
 import { forgetPreviewTotalsForPath, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady } from './sidebar-preview.ts'
-import { DataSidebarShell } from './data-sidebar-shell.tsx'
+import { publishDataSidebar, type DataSidebarLive } from './data-sidebar-host.ts'
 import { builtinAllViewId, catalogLockFilters, collectionNoun, displayNameForView, isBuiltinAllViewId, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stampRecordId, stampRowOpenTarget, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, moveInspectorRecordsToTrash, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
@@ -189,12 +189,15 @@ const LazyShareButton = lazy(() => import('./share-popover.tsx').then((m) => ({ 
 const LazySharePanel = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.SharePanel })))
 const LazyShareRoleDetail = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareRoleDetail })))
 const LazyShareScopeDetail = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareScopeDetail })))
-const DataSidebar = lazy(() => import('./data-sidebar.tsx').then((m) => ({ default: m.DataSidebar })))
 const LayoutPrefsMenu = lazy(() => import('./layout-prefs-menu.tsx').then((m) => ({ default: m.LayoutPrefsMenu })))
 const CollectionRowsShell = lazy(() => import('./rows-view.tsx').then((m) => ({ default: m.CollectionRowsShell })))
 
-function IdleDataSidebar(props: ComponentProps<typeof DataSidebar>) {
-  return <DataSidebar {...props} />
+function DataSidebarPublisher(props: DataSidebarLive) {
+  useLayoutEffect(() => {
+    publishDataSidebar(props)
+  })
+  useLayoutEffect(() => () => publishDataSidebar(null), [])
+  return null
 }
 
 function ShareButton(props: ComponentProps<typeof LazyShareButton>) {
@@ -1878,15 +1881,9 @@ export function CollectionBrowser({
     showRecordInInspector(collectionPath, row.id, fromData ? undefined : activeViewId, nested ? { newTab: true } : undefined)
   }
   const [hydrated, setHydrated] = useState(false)
-  const [viewsOpen, setViewsOpen] = useState(true)
+  const [viewsOpen, setViewsOpen] = useState(() => getSidebarPersist(SIDEBAR_PERSIST.viewsOpen(moduleId || collectionPath)) !== '0')
   const [sidebarGone, setSidebarGone] = useState(false)
-  const [inspectorOpen, setInspectorOpen] = useState(() => {
-    try {
-      return localStorage.getItem('cordis.inspector.open') === '1'
-    } catch {
-      return false
-    }
-  })
+  const [inspectorOpen, setInspectorOpen] = useState(() => getSidebarPersist(SIDEBAR_PERSIST.inspectorOpen) === '1')
   const [viewMenuOpen, setViewMenuOpen] = useState(false)
   const [modeMenuOpen, setModeMenuOpen] = useState(false)
   const [sortMenuOpen, setSortMenuOpen] = useState(false)
@@ -2182,17 +2179,13 @@ export function CollectionBrowser({
   useStickyToolbar(toolbarRef)
 
   function toggleViewsOpen() {
-    if (typeof document !== 'undefined' && document.getElementById('shell-module-sidebar')) {
+    if (!nested) {
       window.dispatchEvent(new Event('biu:toggle-shell-sidebar'))
       return
     }
     setViewsOpen((prev) => {
       const next = !prev
-      try {
-        localStorage.setItem(`fsdb.viewsOpen:${moduleId || collectionPath}`, next ? '1' : '0')
-      } catch {
-        /* ignore */
-      }
+      setSidebarPersist(SIDEBAR_PERSIST.viewsOpen(moduleId || collectionPath), next ? '1' : '0')
       return next
     })
   }
@@ -2241,17 +2234,6 @@ export function CollectionBrowser({
       window.removeEventListener('biu:inspector-close', onClose)
     }
   }, [nested])
-
-  useEffect(() => {
-    if (nested) return
-    function onToggle(event: Event) {
-      const id = (event as CustomEvent<{ id?: string }>).detail?.id
-      if (!id || (moduleId && id !== moduleId)) return
-      toggleViewsOpen()
-    }
-    window.addEventListener('biu:toggle-module-sidebar', onToggle)
-    return () => window.removeEventListener('biu:toggle-module-sidebar', onToggle)
-  }, [collectionPath, nested, moduleId])
 
   useEffect(() => {
     if (searchOpen) searchInputRef.current?.focus({ preventScroll: true })
@@ -6933,13 +6915,13 @@ export function CollectionBrowser({
             {activeViewId && !selected ? (
               <button
                 type="button"
-                className={`chat-view-header-expand${viewStarred ? ' is-active' : ''}`}
+                className={`chat-view-header-expand${viewStarred ? ' is-starred' : ''}`}
                 title={viewStarred ? '取消收藏视图' : '收藏视图'}
                 aria-label={viewStarred ? '取消收藏视图' : '收藏视图'}
                 aria-pressed={viewStarred}
                 onClick={() => persistStarredViews(toggleStarredView(getStarredViews(), collectionPath, activeViewId, activeView?.name))}
               >
-                <UiGlyph icon="star" className={viewStarred ? 'text-[#f5b700]' : undefined} />
+                <UiGlyph icon="star" />
               </button>
             ) : null}
             {isSystemCollection(collectionPath) || isIndexCollection(collectionPath) || (collectionPath === '/plugins' && detailRow?.builtin === true) ? null : (
@@ -7047,8 +7029,7 @@ export function CollectionBrowser({
       data-testid={embed ? 'inspector-database' : sheet ? 'fsdb-collect-sheet' : undefined}
     >
       {!nested ? (
-        <Suspense fallback={<DataSidebarShell tables={tables} collectionPath={collectionPath} title={title} />}>
-        <IdleDataSidebar
+        <DataSidebarPublisher
           tables={tables}
           collectionPath={collectionPath}
           title={title}
@@ -7077,7 +7058,6 @@ export function CollectionBrowser({
           onExpandedViewKeyChange={onExpandedViewKeyChange}
           onCollapse={toggleViewsOpen}
         />
-        </Suspense>
       ) : null}
       <div className="fsdb-right">
         {listHeader}

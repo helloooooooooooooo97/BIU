@@ -37,6 +37,7 @@ import { builtinAllViewId, stampRowOpenTarget } from '../catalog-views.ts'
 import { normalizeCollectionPath } from '../paths.ts'
 import { ensureFsdbStyle } from './fsdb-style.ts'
 import { listenOpenTag } from './tag-catalog.ts'
+import { DataSidebarSlot } from './data-sidebar-slot.tsx'
 
 const ShareRoot = lazy(() => import('./share-page.tsx').then((m) => ({ default: m.ShareRoot })))
 const CollectionBrowser = lazy(() => import('./browser.tsx').then((m) => ({ default: m.CollectionBrowser })))
@@ -364,6 +365,7 @@ export function apply(ctx: Context) {
     }
   })
   const slots = ctx.get('slots') as SlotsService
+  slots.place('module-sidebar', DataSidebarSlot, { key: 'fsdb-data-sidebar' })
   const appModules = ctx.get('appModules') as AppModulesService
   const mounted = new Map<string, () => void>()
   const inspectorOffers = new Map<string, () => void>()

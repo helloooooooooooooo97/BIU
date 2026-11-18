@@ -1,11 +1,12 @@
 @import "tailwindcss";
+@import "./sidebar.css";
 @source "../packages/biu-ui/src/**/*.{ts,tsx}";
 
 /*
  * BIU design tokens. Groups: color / space / font / radius / shadow / stroke.
  * --biu-color-* are colors. --biu-stroke-width is a length. No aliases.
  * Popovers use --biu-color-bg-popover / --biu-color-bg-popover-hover / --biu-color-border-popover / --biu-radius-popover / --biu-shadow-popover.
- * Sidebar row hover uses --biu-color-bg-sidebar-hover.
+ * Nav row hover uses a dedicated token.
  * --biu-color-emphasis is view/highlight only, never body ink.
  */
 :root {
@@ -24,7 +25,6 @@
   --biu-color-bg-hover-weak: #f4f4f4;
   --biu-color-bg-hover-strong: #e0e0e0;
   --biu-color-bg-hover-subtle: var(--biu-color-bg-hover);
-  --biu-color-bg-sidebar-hover: #ececec;
   --biu-color-text: #2c2c2b;
   --biu-color-text-muted: color-mix(in srgb, var(--biu-color-text) 72%, var(--biu-color-bg-subtle));
   --biu-color-text-subtle: color-mix(in srgb, var(--biu-color-text) 45%, transparent);
@@ -177,8 +177,6 @@
   --biu-chat-reply-pad-x: var(--biu-space-3);
   --biu-chat-max-width: 768px;
   --biu-center-min: 512px;
-  --biu-sidebar-min: 160px;
-  --biu-sidebar-max: 360px;
   --biu-inspector-min: 240px;
 }
 
@@ -192,7 +190,6 @@ html.dark {
   --biu-color-bg-hover-weak: color-mix(in srgb, #fff 4%, var(--biu-color-bg));
   --biu-color-bg-hover-strong: color-mix(in srgb, #fff 12%, var(--biu-color-bg));
   --biu-color-bg-hover-subtle: color-mix(in srgb, #fff 9%, var(--biu-color-bg-subtle));
-  --biu-color-bg-sidebar-hover: #2D2D2D;
   --biu-color-text: #d4d4d4;
   --biu-color-bg-code: #1e1e1e;
   --biu-color-icon: #bab9b5;
@@ -241,6 +238,8 @@ html.dark {
   --biu-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
   --biu-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.45);
   --biu-shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --biu-color-emphasis: var(--biu-color-ink-blue);
+  --biu-color-on-emphasis: #ffffff;
 }
 
 /* inline: do not re-emit --font-* (that overwrote :root with var(--font-sans)). */
@@ -265,7 +264,6 @@ html.dark {
   --color-biu-ok: var(--biu-color-ok);
   --color-biu-warning: var(--biu-color-warning);
   --color-biu-surface: var(--biu-color-surface);
-  --color-biu-sidebar: var(--biu-color-bg-subtle);
   --color-biu-ink: var(--biu-color-ink);
   --color-biu-ink-gray: var(--biu-color-ink-gray);
   --color-biu-ink-brown: var(--biu-color-ink-brown);
@@ -384,7 +382,7 @@ body {
   background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.05), transparent 70%);
 }
 
-/* App shell — sidebar + main */
+/* App shell — columns + main */
 .app-shell {
   display: grid;
   height: 100vh;
@@ -571,14 +569,6 @@ body {
 
 .app-side-actions-item .shell-notify-badge {
   position: relative;
-}
-
-.app-side-bar.is-narrow .app-side-actions-item .shell-notify-badge {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  left: auto;
-  margin-left: 0;
 }
 
 .shell-side-places .app-side-actions-item {
@@ -1542,10 +1532,6 @@ body {
   line-height: 1;
 }
 
-.shell-search-hit-icon .sidebar-mascot {
-  display: block;
-}
-
 .shell-search-hint {
   margin: 8px;
   color: var(--biu-color-text-subtle);
@@ -1714,33 +1700,6 @@ body {
   background: var(--biu-color-bg-hover);
   overflow: visible;
   text-overflow: clip;
-}
-
-.app-side-bar-head {
-  display: flex;
-  height: 44px;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0 12px;
-  overflow: visible;
-  position: relative;
-  z-index: 3;
-}
-
-.app-side-bar-head-brand {
-  justify-content: flex-start;
-  padding-left: 8px;
-  padding-right: 8px;
-}
-
-.sidebar-brand-lockup {
-  display: inline-flex;
-  min-width: 0;
-  max-width: calc(100% - 36px);
-  align-items: center;
-  gap: 8px;
 }
 
 .shell-workspace-head {
@@ -2204,31 +2163,6 @@ html.dark .shell-workspace-menu-action svg {
   .shell-workspace-create-card-icon {
     margin-bottom: 18px;
   }
-}
-
-.sidebar-brand-mascot,
-.sidebar-brand-avatar {
-  flex-shrink: 0;
-  display: block;
-  overflow: hidden;
-}
-
-.sidebar-brand-avatar {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  object-fit: cover;
-  background: var(--biu-color-bg-hover);
-}
-
-.sidebar-brand-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--biu-color-text);
-  font-size: var(--biu-font-size-4);
-  font-weight: var(--biu-font-weight-semibold);
 }
 
 .settings-account {
@@ -2758,15 +2692,6 @@ select.settings-account-input {
   width: min(140px, 28vw);
 }
 
-.sidebar-brand-mascot {
-  overflow: visible;
-}
-
-.app-side-bar-head-brand .chat-view-header-expand {
-  position: absolute;
-  right: 8px;
-}
-
 .brand-corner-cluster {
   position: fixed;
   right: 16px;
@@ -2859,23 +2784,6 @@ select.settings-account-input {
   background: var(--biu-color-bg-popover);
   padding: 4px;
   box-shadow: var(--biu-shadow-popover);
-}
-
-.chat-sidebar-popover {
-  display: flex;
-  flex-direction: column;
-  right: auto;
-  left: 0;
-  max-height: min(72vh, 560px);
-  overflow: hidden;
-  padding: 4px 0 0;
-  color: var(--biu-color-text-muted);
-}
-
-/* 毛玻璃上的实心 --biu-color-bg-hover 会发闷；悬浮侧栏用更浅的选中膜 */
-.chat-sidebar-popover .chat-session-row:hover:not(.is-active)::before,
-.chat-sidebar-popover .chat-session-row.is-active::before {
-  background: rgba(0, 0, 0, 0.05);
 }
 
 /* 右侧检查器 tab：选中态与顶栏收起检查器按钮相同，无底边指示条 */
@@ -3390,10 +3298,6 @@ select.settings-account-input {
   border-bottom: var(--biu-stroke-width) solid var(--biu-color-border);
 }
 
-.inspector-add-owner .sidebar-mascot {
-  flex: none;
-}
-
 .inspector-add-head {
   font-size: var(--biu-font-size-4);
   font-weight: var(--biu-font-weight-semibold);
@@ -3560,94 +3464,9 @@ select.settings-account-input {
   .app-shell-module,
   .inspector-stage-pane,
   .app-stage-pane,
-  .app-pane-in,
-  .chat-session-row::before,
-  .chat-session-row.is-active {
+  .app-pane-in {
     transition: none;
     animation: none;
-  }
-}
-
-.app-side-bar.is-closed,
-.session-inspector.is-closed {
-  min-width: 0;
-  max-width: none;
-  overflow: hidden;
-  border-color: transparent;
-  pointer-events: none;
-}
-
-.sidebar-flyout-host {
-  display: contents;
-}
-
-.sidebar-flyout-host.is-collapsed {
-  display: block;
-  position: relative;
-  width: 0;
-  min-width: 0;
-  max-width: 0;
-  overflow: visible;
-  z-index: var(--biu-z-float);
-  pointer-events: none;
-}
-
-.sidebar-edge-hot {
-  pointer-events: auto;
-  position: fixed;
-  left: 0;
-  top: 22vh;
-  bottom: auto;
-  height: 20vh;
-  width: 20px;
-  z-index: var(--biu-z-float);
-}
-
-.sidebar-flyout-host.is-collapsed .app-side-bar.is-closed {
-  position: fixed;
-  left: 0;
-  top: 60px;
-  bottom: 60px;
-  width: var(--sidebar-flyout-width, 240px);
-  min-width: 0;
-  max-width: none;
-  overflow: hidden;
-  border: var(--biu-stroke-width) solid var(--biu-color-border);
-  border-left: 0;
-  border-radius: 0 12px 12px 0;
-  background: var(--biu-color-bg-subtle);
-  box-shadow: var(--biu-shadow-md);
-  contain: none;
-  transform: translateX(calc(-100% - 8px));
-  opacity: 0;
-  pointer-events: none;
-  /* 贴窗口左缘时 :hover 会闪断；坐标锁定打开后，收起连 pointer-events 一起延迟 */
-  transition: transform 0s linear 240ms, opacity 0s linear 240ms, pointer-events 0s linear 240ms;
-  z-index: 81;
-}
-
-.sidebar-flyout-host.is-collapsed:hover,
-.sidebar-flyout-host.is-collapsed.is-flyout-open {
-  pointer-events: auto;
-}
-
-/* 唤醒后把热区铺满栏宽、垫在栏下面，避免指针刚离开 12px 条就丢 :hover */
-.sidebar-flyout-host.is-collapsed:hover .sidebar-edge-hot,
-.sidebar-flyout-host.is-collapsed.is-flyout-open .sidebar-edge-hot {
-  width: var(--sidebar-flyout-width, 240px);
-}
-
-.sidebar-flyout-host.is-collapsed:hover .app-side-bar.is-closed,
-.sidebar-flyout-host.is-collapsed.is-flyout-open .app-side-bar.is-closed {
-  transform: none;
-  opacity: 1;
-  pointer-events: auto;
-  transition: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sidebar-flyout-host.is-collapsed .app-side-bar.is-closed {
-    transition: none;
   }
 }
 
@@ -3662,10 +3481,6 @@ select.settings-account-input {
   --biu-color-ok: var(--biu-color-ink-green);
   --biu-color-danger: var(--biu-color-ink-red);
   --biu-color-danger-muted: color-mix(in srgb, var(--biu-color-ink-red) 22%, transparent);
-}
-
-.session-inspector .app-side-bar-head {
-  background: var(--biu-color-bg);
 }
 
 .app-shell-agent.is-chat-overlay .session-inspector {
@@ -4214,25 +4029,9 @@ html.dark .composer-model-flyout {
   width: min(var(--biu-chat-width), calc(100vw - var(--inspector-width, 320px) - 40px));
 }
 
-.app-side-bar-module-slot {
-  min-height: 0;
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.app-shell-agent>.sidebar-flyout-host,
-.app-shell-agent>.app-side-bar,
 .app-shell-agent>.session-inspector {
   min-width: 0;
   max-width: none;
-}
-
-.app-shell-agent>.sidebar-flyout-host,
-.app-shell-agent>.app-side-bar {
-  grid-column: 1;
 }
 
 .app-shell-agent.is-inspector-open [data-testid="agent-center"] .chat-stage,
@@ -4285,171 +4084,6 @@ html.dark .composer-model-flyout {
 
 [data-radix-popper-content-wrapper]:has(.pick-chip-data) {
   z-index: var(--biu-z-pick) !important;
-}
-
-/* 侧栏独立合成层：右侧 Markdown 重绘时少拖累左侧 :hover */
-.app-side-bar {
-  contain: layout paint style;
-  transform: translateZ(0);
-  backface-visibility: hidden;
-  color: var(--biu-color-text-muted);
-  position: relative;
-  min-width: 0;
-  width: 100%;
-  max-width: none;
-  --biu-color-bg-hover: var(--biu-color-bg-sidebar-hover);
-}
-
-.sidebar-resize {
-  position: absolute;
-  inset-block: 0;
-  right: -1px;
-  z-index: 10;
-  width: 0;
-  cursor: col-resize;
-  touch-action: none;
-}
-
-.sidebar-resize::after {
-  content: '';
-  position: absolute;
-  inset-block: 0;
-  right: -3px;
-  width: 7px;
-}
-
-.app-side-bar.is-narrow .sidebar-resize {
-  display: none;
-  pointer-events: none;
-  cursor: default;
-}
-
-.sidebar-label,
-.app-side-actions-label {
-  font-size: var(--biu-font-size-4);
-}
-
-.app-side-bar.is-narrow .sidebar-label,
-.app-side-bar.is-narrow .app-side-actions-label,
-.app-side-bar.is-narrow .sidebar-section-head,
-.app-side-bar.is-narrow .sidebar-group-head,
-.app-side-bar.is-narrow .sidebar-chat-count,
-.app-side-bar.is-narrow .chat-session-row-delete,
-.app-side-bar.is-narrow .chat-session-row-star,
-.app-side-bar.is-narrow .sidebar-trail-icon {
-  display: none;
-}
-
-.app-side-bar.is-narrow .app-side-actions {
-  gap: 4px;
-  margin: 4px 0 8px;
-}
-
-.app-side-bar.is-narrow .app-side-actions-item {
-  justify-content: center;
-  padding-inline: 0;
-}
-
-.app-side-bar.is-narrow .chat-session-row {
-  justify-content: center;
-  margin-bottom: 4px;
-  padding-inline: 0;
-}
-
-.app-side-bar.is-narrow .chat-session-row>a,
-.app-side-bar.is-narrow .chat-session-row>.chat-session-row-main {
-  justify-content: center;
-  padding-left: 0;
-}
-
-.app-side-bar.is-narrow .fsdb-views-full {
-  display: none;
-}
-
-.fsdb-icon-rail {
-  display: none;
-}
-
-.app-side-bar.is-narrow .fsdb-icon-rail {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  flex-direction: column;
-  align-items: stretch;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: 6px 8px 12px;
-  gap: 4px;
-}
-
-.fsdb-icon-rail-btn {
-  display: grid;
-  width: 100%;
-  height: 32px;
-  margin: 0;
-  padding: 0;
-  place-items: center;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--biu-color-icon);
-  cursor: pointer;
-}
-
-.fsdb-icon-rail-btn:hover,
-.fsdb-icon-rail-btn.is-active,
-.fsdb-icon-rail-btn:focus-visible {
-  background: var(--biu-color-bg-hover);
-  color: var(--biu-color-icon-active);
-}
-
-.shell-rail-head {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  height: 44px;
-  padding: 6px 8px;
-}
-
-.shell-rail-expand {
-  display: grid;
-  width: 100%;
-  height: 32px;
-  margin: 0;
-  padding: 0;
-  place-items: center;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--biu-color-icon);
-  cursor: pointer;
-}
-
-.shell-rail-expand:hover,
-.shell-rail-expand:focus-visible {
-  background: var(--biu-color-bg-hover);
-  color: var(--biu-color-icon-active);
-}
-
-.shell-rail-brand {
-  display: block;
-  width: 20px;
-  height: 20px;
-}
-
-.shell-rail-expand-chevron {
-  display: none;
-}
-
-.shell-rail-expand:hover .shell-rail-expand-mark,
-.shell-rail-expand:focus-visible .shell-rail-expand-mark {
-  display: none;
-}
-
-.shell-rail-expand:hover .shell-rail-expand-chevron,
-.shell-rail-expand:focus-visible .shell-rail-expand-chevron {
-  display: grid;
 }
 
 .app-side-actions {
@@ -4546,295 +4180,10 @@ html.dark .composer-model-flyout {
   color: var(--biu-color-icon-active);
 }
 
-/* Session 行：高亮画在 ::before，避免每次 hover 重绘头像 SVG */
-.chat-session-row {
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  width: 100%;
-  align-items: center;
-  margin-bottom: 1px;
-  padding: 0 8px;
-  border-radius: 6px;
-  contain: layout style;
-  transition: none;
-  color: var(--biu-color-text-muted);
-  -webkit-user-drag: none;
-}
-
-.chat-session-row a,
-.chat-session-row button,
-.chat-session-row img,
-.chat-session-row svg {
-  -webkit-user-drag: none;
-}
-
-.chat-session-row>button {
-  margin: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-
-.chat-session-row>.chat-session-row-delete,
-.chat-session-row>.chat-session-row-star,
-.chat-session-row>.sidebar-add {
-  color: var(--biu-color-icon-muted);
-}
-
-.chat-session-row::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background: transparent;
-  transition: background-color 180ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.chat-session-row>* {
-  position: relative;
-  z-index: 1;
-}
-
-.chat-session-row:hover:not(.is-active)::before {
-  transition: none;
-  background: var(--biu-color-bg-hover);
-}
-
-.app-side-bar .chat-session-row::before,
-.app-side-bar .chat-session-row.is-active,
-.app-side-bar .chat-session-row:focus-within {
-  transition: none;
-}
-
-.chat-session-row.is-active,
-.chat-session-row:focus-within {
-  color: var(--biu-color-text);
-  transition: color 180ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.chat-session-row.is-active::before,
-.chat-session-row:focus-within::before {
-  background: var(--biu-color-bg-hover);
-}
-
-/* 收藏/删除：默认宽度塌陷；展开为 24×24 圆角底，图标 16×16，对齐插件卡片操作按钮 */
-.chat-session-row-delete,
-.chat-session-row-star {
-  display: inline-grid;
-  flex-shrink: 0;
-  place-items: center;
-  width: 0;
-  height: 24px;
-  overflow: hidden;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--biu-color-icon-muted);
-  opacity: 0;
-  cursor: pointer;
-  line-height: 0;
-  transition: width 150ms ease, opacity 150ms ease, background-color 120ms ease, color 120ms ease;
-}
-
-.chat-session-row-delete svg,
-.chat-session-row-star svg {
-  display: block;
-  width: 16px;
-  height: 16px;
-  color: var(--biu-color-icon-muted);
-}
-
-.chat-session-row:hover .chat-session-row-delete,
-.chat-session-row-delete:focus,
-.chat-session-row:hover .chat-session-row-star,
-.chat-session-row-star:focus {
-  width: 24px;
-  opacity: 1;
-}
-
-.chat-session-row-star:hover {
-  background: var(--biu-color-bg-hover);
-  color: var(--biu-color-icon-muted);
-}
-
-.chat-session-row-delete:hover {
-  background: var(--biu-color-bg-hover);
-  color: var(--biu-color-danger);
-}
-
-/* 分组添加按钮(+)：默认宽度塌陷；展开为 24×24，与收藏/删除同一套圆角底 */
-.sidebar-add {
-  display: inline-grid;
-  flex-shrink: 0;
-  place-items: center;
-  width: 0;
-  min-width: 0;
-  height: 24px;
-  overflow: hidden;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--biu-color-icon-muted);
-  opacity: 0;
-  cursor: pointer;
-  line-height: 0;
-  transition: width 150ms ease, opacity 150ms ease, background-color 120ms ease, color 120ms ease;
-}
-
-.sidebar-add svg {
-  display: block;
-  width: 16px;
-  height: 16px;
-}
-
-.sidebar-group-head:hover .sidebar-add,
-.chat-session-row:hover .sidebar-add,
-.sidebar-section-head:hover .sidebar-add,
-.sidebar-add:focus {
-  width: 24px;
-  min-width: 24px;
-  opacity: 1;
-  color: var(--biu-color-icon-active);
-}
-
-.sidebar-add:hover {
-  background: var(--biu-color-bg-hover);
-  color: var(--biu-color-icon-active);
-}
-
-.sidebar-trail-icon {
-  display: inline-grid;
-  flex-shrink: 0;
-  place-items: center;
-  width: 0;
-  min-width: 0;
-  height: 24px;
-  overflow: hidden;
-  color: var(--biu-color-icon-muted);
-  opacity: 0;
-  line-height: 0;
-  transition: width 150ms ease, opacity 150ms ease;
-}
-
-.sidebar-trail-icon svg {
-  display: block;
-  width: 16px;
-  height: 16px;
-}
-
-.chat-session-row:hover .sidebar-trail-icon,
-.sidebar-trail-icon:focus-within,
-.fsdb-views .chat-session-row.is-pinned > .sidebar-trail-icon,
-.fsdb-views .chat-session-row.is-pinned > .chat-session-row-star.is-on {
-  width: 24px;
-  min-width: 24px;
-  opacity: 1;
-}
-
-.sidebar-rail-icon {
-  display: grid;
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-  place-items: center;
-  color: var(--biu-color-icon);
-}
-
-.app-side-bar .sidebar-rail-icon svg,
-.app-side-bar .fsdb-record-mark,
-.app-side-bar .fsdb-record-mark svg,
-.app-side-bar .chat-session-row-main>span>svg,
-.app-side-bar .chat-session-row>span svg {
-  color: var(--biu-color-icon);
-}
-
-.app-side-bar .chat-session-row-delete svg,
-.app-side-bar .chat-session-row-star svg {
-  color: var(--biu-color-icon-muted);
-}
-
-.chat-session-row-star.is-on,
-.chat-session-row-star.is-on:hover,
-.app-side-bar .chat-session-row-star.is-on svg,
-.app-side-bar .chat-session-row-star.is-on:hover svg {
-  color: var(--biu-color-warning-on-surface);
-}
-
-.chat-session-row:hover .sidebar-rail-icon,
-.chat-session-row.is-active .sidebar-rail-icon,
-.app-side-actions-item:hover .sidebar-rail-icon,
-.app-side-actions-item.is-active .sidebar-rail-icon,
-.chat-session-row:hover .chat-session-row-main>span>svg,
-.chat-session-row.is-active .chat-session-row-main>span>svg {
-  color: var(--biu-color-icon-active);
-}
-
-.sidebar-group-fold {
-  position: relative;
-}
-
-.sidebar-group-fold-face,
-.sidebar-group-fold-chevron {
-  display: grid;
-  width: 16px;
-  height: 16px;
-  place-items: center;
-}
-
-.sidebar-group-fold-chevron {
-  display: none;
-}
-
-.sidebar-group-fold:hover .sidebar-group-fold-face,
-.sidebar-group-fold:focus-within .sidebar-group-fold-face,
-.sidebar-group-head:focus-within .sidebar-group-fold:focus-within .sidebar-group-fold-face {
-  display: none;
-}
-
-.sidebar-group-fold:hover .sidebar-group-fold-chevron,
-.sidebar-group-fold:focus-within .sidebar-group-fold-chevron {
-  display: grid;
-}
-
-.chat-session-row .sidebar-group-fold:hover .sidebar-group-fold-face,
-.chat-session-row .sidebar-group-fold:focus-within .sidebar-group-fold-face {
-  display: none;
-}
-
-.chat-session-row .sidebar-group-fold:hover .sidebar-group-fold-chevron,
-.chat-session-row .sidebar-group-fold:focus-within .sidebar-group-fold-chevron {
-  display: grid;
-}
-
 .fsdb-view-preview {
   max-height: 256px;
   overflow-y: auto;
   overscroll-behavior: contain;
-}
-
-.fsdb-view-preview .chat-session-row>.chat-session-row-main {
-  padding-left: 11px;
-}
-
-.sidebar-session-list .fsdb-view-preview .chat-session-row>.chat-session-row-main {
-  padding-left: 22px;
-}
-
-.fsdb-view-preview .fsdb-view-preview-records .chat-session-row>.chat-session-row-main {
-  padding-left: 22px;
-}
-
-.sidebar-session-list .fsdb-view-preview .fsdb-view-preview-records .chat-session-row>.chat-session-row-main {
-  padding-left: 33px;
 }
 
 .fsdb-record-kids {
@@ -4852,11 +4201,6 @@ html.dark .composer-model-flyout {
   font-size: var(--biu-font-size-4);
   line-height: 1.25rem;
   text-align: left;
-}
-
-.sidebar-session-list .fsdb-view-preview-hint,
-.sidebar-session-list .fsdb-view-preview-more {
-  padding-left: 30px;
 }
 
 .fsdb-view-preview-more {
@@ -4999,205 +4343,6 @@ html.dark .composer-model-flyout {
   background: var(--biu-color-bg-hover);
 }
 
-/* 不推整行背景，只给会话内容加约 2/3 图标宽的左内边距 */
-.sidebar-session-list {
-  padding-left: 0;
-}
-
-.sidebar-fold {
-  display: grid;
-  grid-template-rows: 0fr;
-}
-
-.sidebar-fold.is-open {
-  grid-template-rows: 1fr;
-}
-
-.sidebar-fold.is-animating {
-  transition: grid-template-rows 220ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.sidebar-fold-inner {
-  min-height: 0;
-  overflow: hidden;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sidebar-fold.is-animating {
-    transition: none;
-  }
-}
-
-.sidebar-session-list .chat-session-row>a,
-.sidebar-session-list .chat-session-row>.chat-session-row-main {
-  padding-left: 11px;
-}
-
-.sidebar-group-head {
-  display: flex;
-  align-items: center;
-  min-height: 32px;
-  padding: 0 8px;
-  border-radius: 6px;
-}
-
-.sidebar-group-head:hover {
-  background: var(--biu-color-bg-hover);
-}
-
-.sidebar-group-head>[role='button'] {
-  padding: 0;
-  min-width: 0;
-}
-
-/* 顶部「收藏/项目」与数据页「分享/用户数据/系统数据」同一套：12px 粗体；行高与会话行一致 */
-.sidebar-section-head {
-  display: flex;
-  align-items: center;
-  height: 32px;
-  margin: 0 0 1px;
-  padding: 0 8px;
-  border-radius: 6px;
-  color: var(--biu-color-text-muted);
-  font-size: var(--biu-font-size-2);
-  font-weight: var(--biu-font-weight-bold);
-}
-
-.sidebar-section-head button {
-  font-size: var(--biu-font-size-2);
-  font-weight: var(--biu-font-weight-bold);
-}
-
-.sidebar-section-head .sidebar-label {
-  font-size: var(--biu-font-size-2);
-  font-weight: var(--biu-font-weight-bold);
-  letter-spacing: normal;
-}
-
-.sidebar-section-head:hover {
-  background: var(--biu-color-bg-hover);
-}
-
-.sidebar-chat-count {
-  display: inline-grid;
-  flex-shrink: 0;
-  place-items: center;
-  width: 0;
-  min-width: 0;
-  height: 24px;
-  overflow: hidden;
-  margin: 0;
-  padding: 0;
-  border-radius: 6px;
-  color: var(--biu-color-icon);
-  font-size: var(--biu-font-size-2);
-  font-weight: var(--biu-font-weight-medium);
-  line-height: 0;
-  opacity: 0;
-  transition: width 150ms ease, min-width 150ms ease, padding 150ms ease, opacity 150ms ease;
-}
-
-.sidebar-section-head:hover .sidebar-chat-count,
-.sidebar-group-head:hover .sidebar-chat-count,
-.chat-session-row:hover .sidebar-chat-count,
-.sidebar-chat-count:focus-within {
-  width: auto;
-  min-width: 24px;
-  padding: 0 4px;
-  opacity: 1;
-  color: var(--biu-color-text-muted);
-}
-
-.sidebar-chat-count-num {
-  display: block;
-  font-size: var(--biu-font-size-2);
-  font-weight: var(--biu-font-weight-medium);
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-  opacity: 1;
-}
-
-.sidebar-section-head .sidebar-chat-count,
-.sidebar-group-head .sidebar-chat-count,
-.chat-session-row .sidebar-chat-count {
-  font-size: var(--biu-font-size-2);
-  font-weight: var(--biu-font-weight-medium);
-  color: var(--biu-color-icon);
-}
-
-/* 顶层板块右侧分组切换：两个 24×24 按钮，图标 16×16；默认塌陷，悬浮展开 */
-.sidebar-view-switch {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  width: 0;
-  height: 24px;
-  overflow: hidden;
-  margin-left: 0;
-  opacity: 0;
-  transition: width 150ms ease, margin-left 150ms ease, opacity 150ms ease;
-}
-
-.sidebar-section-head:hover .sidebar-view-switch,
-.sidebar-view-switch:focus-within {
-  width: 48px;
-  margin-left: 4px;
-  opacity: 1;
-}
-
-.sidebar-view-switch-btn {
-  display: inline-grid;
-  width: 24px;
-  height: 24px;
-  flex-shrink: 0;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--biu-color-icon);
-  cursor: pointer;
-  line-height: 0;
-}
-
-.sidebar-view-switch-btn svg {
-  display: block;
-  width: 16px;
-  height: 16px;
-}
-
-.sidebar-view-switch-btn:hover {
-  background: var(--biu-color-bg-hover);
-  color: var(--biu-color-icon);
-}
-
-.sidebar-view-switch-btn.is-on {
-  background: var(--biu-color-bg-hover);
-  color: var(--biu-color-icon);
-}
-
-.sidebar-mascot {
-  position: relative;
-  flex-shrink: 0;
-  overflow: visible;
-  line-height: 0;
-  /* 侧栏行 hover 时不要跟着父级背景一起重绘 */
-  contain: layout paint;
-  -webkit-user-drag: none;
-}
-
-.sidebar-mascot-status {
-  position: absolute;
-  right: -1px;
-  bottom: -1px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--biu-color-ok);
-  border: 1.5px solid var(--biu-color-bg-subtle);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--biu-color-ok) 35%, transparent);
-  pointer-events: none;
-}
 
 .grok-bot-avatar svg,
 .session-mascot-mark svg {
@@ -5457,50 +4602,6 @@ html.dark .composer-model-flyout {
   top: 50%;
   transform: translateY(-50%);
   z-index: var(--biu-z-float);
-}
-
-.app-side-bar:not(.is-narrow) [data-dock-tip-at='e']::after,
-.app-side-bar.is-narrow [data-dock-tip]::after {
-  display: none;
-  content: none;
-}
-
-.shell-rail-tip {
-  position: fixed;
-  z-index: 240;
-  transform: translateY(-50%);
-  white-space: nowrap;
-  padding: 4px 8px;
-  border: var(--biu-stroke-width) solid var(--biu-color-border);
-  border-radius: 6px;
-  background: var(--biu-color-bg-elevated);
-  color: var(--biu-color-text);
-  font-size: 11px;
-  font-weight: var(--biu-font-weight-semibold);
-  line-height: 1.3;
-  pointer-events: none;
-  box-shadow: var(--biu-shadow-md);
-}
-
-.app-side-bar.is-narrow {
-  overflow: visible;
-  contain: none;
-  transform: none;
-  z-index: 20;
-}
-
-.app-side-bar.is-narrow [data-chat-scroll],
-.app-side-bar.is-narrow .fsdb-icon-rail {
-  overflow-x: hidden;
-  overflow-y: auto;
-  scrollbar-width: none;
-}
-
-.app-side-bar.is-narrow [data-chat-scroll]::-webkit-scrollbar,
-.app-side-bar.is-narrow .fsdb-icon-rail::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
 }
 
 
@@ -7487,10 +6588,11 @@ html[data-outline-pin="1"] .chat-outline-rail {
   white-space: nowrap;
 }
 
-/* 运行中：扫光只走文字，不铺背景 */
+/* 运行中：扫光只走文字。底色始终填满字形，扫到边上时字也不会空掉。 */
 .tool-call-head.is-running .tool-call-title,
 .tool-call-head.is-running .tool-call-summary {
-  color: transparent;
+  color: var(--biu-color-text-muted);
+  background-color: var(--biu-color-text-muted);
   background-image: linear-gradient(105deg,
       var(--biu-color-text-muted) 0%,
       var(--biu-color-text-muted) 38%,
@@ -7501,21 +6603,19 @@ html[data-outline-pin="1"] .chat-outline-rail {
   background-repeat: no-repeat;
   -webkit-background-clip: text;
   background-clip: text;
+  -webkit-text-fill-color: transparent;
   animation: tool-call-text-pulse 1.6s linear infinite;
 }
 
 .tool-call-head.is-running .tool-call-summary {
+  color: var(--biu-color-text-subtle);
+  background-color: var(--biu-color-text-subtle);
   background-image: linear-gradient(105deg,
       var(--biu-color-text-subtle) 0%,
       var(--biu-color-text-subtle) 38%,
       var(--biu-color-text-muted) 50%,
       var(--biu-color-text-subtle) 62%,
       var(--biu-color-text-subtle) 100%);
-}
-
-html:not(.dark) .tool-call-head.is-running .tool-call-title,
-html:not(.dark) .tool-call-head.is-running .tool-call-summary {
-  color: transparent;
 }
 
 @keyframes tool-call-text-pulse {
@@ -7534,6 +6634,8 @@ html:not(.dark) .tool-call-head.is-running .tool-call-summary {
     animation: none;
     color: var(--biu-color-text-muted);
     background-image: none;
+    background-color: transparent;
+    -webkit-text-fill-color: currentColor;
     -webkit-background-clip: border-box;
     background-clip: border-box;
   }
@@ -8978,6 +8080,12 @@ button.composer-tool-chip.is-pick {
 .chat-view-header-expand.is-active {
   background: var(--biu-color-bg-hover);
   color: var(--biu-color-icon-active);
+}
+
+.chat-view-header-expand.is-starred,
+.chat-view-header-expand.is-starred:hover {
+  background: transparent;
+  color: var(--biu-color-warning-on-surface);
 }
 
 /* ===== Mascot Dance Stage（彩蛋）===== */

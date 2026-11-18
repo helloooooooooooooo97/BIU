@@ -8,10 +8,12 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const root = resolve(import.meta.dirname, '../../../..')
+const cssBundle = () =>
+  readFileSync(resolve(root, 'web/style.css'), 'utf8') + readFileSync(resolve(root, 'web/sidebar.css'), 'utf8')
 
 describe('composer dock stacking above sticky user', () => {
   it('isolates chat-stage and keeps composer-dock above sticky user z-index', () => {
-    const css = readFileSync(resolve(root, 'web/style.css'), 'utf8')
+    const css = cssBundle()
     const shell = readFileSync(resolve(root, 'packages/web-app-shell/src/web/index.tsx'), 'utf8')
     const thread = readFileSync(resolve(root, 'packages/core-chat/src/web/thread.tsx'), 'utf8')
 
@@ -26,8 +28,8 @@ describe('composer dock stacking above sticky user', () => {
     expect(css).toMatch(/\.chat-select-bubble\s*\{[^}]*position:\s*fixed/s)
     expect(css).toMatch(/\.chat-composer-dock\s*\{[^}]*z-index:\s*20/s)
     expect(thread).toMatch(/sticky top-0 z-1 bg-transparent/)
-    expect(css).toMatch(/\.chat-pane \.chat-stage \.chat-turn\.is-live > \[data-chat-kind='user'\]\s*\{[^}]*position:\s*sticky/s)
-    expect(css).toMatch(/\.chat-pane \.chat-stage \.chat-turn\.is-live > \[data-chat-kind='user'\]\s*\{[^}]*background:\s*transparent/s)
+    expect(css).toMatch(/\.chat-pane \.chat-stage \.chat-turn\.is-live\s*>\s*\[data-chat-kind='user'\]\s*\{[^}]*position:\s*sticky/s)
+    expect(css).toMatch(/\.chat-pane \.chat-stage \.chat-turn\.is-live\s*>\s*\[data-chat-kind='user'\]\s*\{[^}]*background:\s*transparent/s)
     expect(css).not.toMatch(/\.chat-turn\.is-live > \[data-chat-kind='user'\][^{]*\{[^}]*background:\s*var\(--biu-color-bg\)/s)
     expect(css).not.toMatch(/\.chat-turn>\[data-chat-kind='user'\]\s*\{[^}]*padding-bottom:\s*var\(--biu-chat-gap\)/)
     expect(thread).toMatch(/user-turn-bar[\s\S]*bg-\(--biu-color-bg-subtle\)/)
@@ -46,7 +48,7 @@ describe('composer dock stacking above sticky user', () => {
   })
 
   it('compose-only overlay hides the reply thread until the expand control', () => {
-    const css = readFileSync(resolve(root, 'web/style.css'), 'utf8')
+    const css = cssBundle()
     const composer = readFileSync(resolve(root, 'packages/core-chat/src/web/composer.tsx'), 'utf8')
     const overlay = readFileSync(resolve(root, 'packages/web-app-shell/src/web/chat-overlay.ts'), 'utf8')
     const approvals = readFileSync(resolve(root, 'packages/core-chat/src/web/approvals.tsx'), 'utf8')
@@ -88,7 +90,7 @@ describe('composer dock stacking above sticky user', () => {
   })
 
   it('shows an interruptible Goal bar above the composer', () => {
-    const css = readFileSync(resolve(root, 'web/style.css'), 'utf8')
+    const css = cssBundle()
     const composer = readFileSync(resolve(root, 'packages/core-chat/src/web/composer.tsx'), 'utf8')
     expect(composer).toContain('composer-goal')
     expect(composer).toContain('PauseIcon')
@@ -106,7 +108,7 @@ describe('composer dock stacking above sticky user', () => {
   })
 
   it('queued inbox rows can be edited or deleted with icons', () => {
-    const css = readFileSync(resolve(root, 'web/style.css'), 'utf8')
+    const css = cssBundle()
     const composer = readFileSync(resolve(root, 'packages/core-chat/src/web/composer.tsx'), 'utf8')
     expect(composer).toContain('PencilSquareIcon')
     expect(composer).toContain('dropInboxItem')
@@ -123,7 +125,7 @@ describe('composer dock stacking above sticky user', () => {
   it('puts the session mascot after the header name, with the dock session picker', () => {
     const approvals = readFileSync(resolve(root, 'packages/core-chat/src/web/approvals.tsx'), 'utf8')
     const title = readFileSync(resolve(root, 'packages/web-app-shell/src/web/chat-session-title.tsx'), 'utf8')
-    const css = readFileSync(resolve(root, 'web/style.css'), 'utf8')
+    const css = cssBundle()
     const shell = readFileSync(resolve(root, 'packages/web-app-shell/src/web/index.tsx'), 'utf8')
     const overlayWin = readFileSync(resolve(root, 'packages/web-app-shell/src/web/overlay-window.tsx'), 'utf8')
     const composer = readFileSync(resolve(root, 'packages/core-chat/src/web/composer.tsx'), 'utf8')
@@ -134,7 +136,8 @@ describe('composer dock stacking above sticky user', () => {
     expect(approvals).toContain('BrandCornerMascot')
     expect(approvals).toContain('busy={sessionBusy}')
     expect(approvals).toMatch(/renderSlot\('header-tools'\)[\s\S]*BrandCornerMascot/)
-    expect(approvals).toContain('variant="popover"')
+    expect(approvals).toMatch(/menu=\{\(close\) => \(/)
+    expect(approvals).toContain('<ChatSidebar')
     expect(composer).not.toContain('CaretMascot')
     expect(composer).not.toContain('caret-mascot')
     expect(css).toMatch(/\.chat-dock-toolbar \.brand-corner-cluster\s*\{[^}]*position:\s*relative/s)
@@ -212,14 +215,14 @@ describe('composer dock stacking above sticky user', () => {
   })
 
   it('squares the composer when pick chips are present', () => {
-    const css = readFileSync(resolve(root, 'web/style.css'), 'utf8')
+    const css = cssBundle()
     const composer = readFileSync(resolve(root, 'packages/core-chat/src/web/composer.tsx'), 'utf8')
     expect(composer).toMatch(/has-chips/)
     expect(css).toMatch(/\.composer-pill\.has-chips[\s\S]*border-radius:\s*var\(--biu-radius-lg\)/)
   })
 
   it('uses facet tones for pick chips and dock controls, not the plus', () => {
-    const css = readFileSync(resolve(root, 'web/style.css'), 'utf8')
+    const css = cssBundle()
     const chip = readFileSync(resolve(root, 'packages/core-pick/src/web/chip.tsx'), 'utf8')
     const node = readFileSync(resolve(root, 'packages/core-chat/src/web/composer-pick-node.tsx'), 'utf8')
     const approvals = readFileSync(resolve(root, 'packages/core-chat/src/web/approvals.tsx'), 'utf8')
@@ -273,7 +276,7 @@ describe('composer dock stacking above sticky user', () => {
   })
 
   it('defines the chrome palette tokens and derives the pick highlight from them', () => {
-    const css = readFileSync(resolve(root, 'web/style.css'), 'utf8')
+    const css = cssBundle()
     // 只断言 token 存在并有值，具体色值由主题决定，锁死了换主题就整片变红。
     expect(css).toMatch(/--biu-color-bg:\s*[^;]+;/)
     expect(css).toMatch(/--biu-color-text-placeholder:\s*[^;]+;/)
@@ -291,7 +294,7 @@ describe('composer dock stacking above sticky user', () => {
   })
 
   it('keeps tool status colors independent of the removed clear-context chip', () => {
-    const css = readFileSync(resolve(root, 'web/style.css'), 'utf8')
+    const css = cssBundle()
     const approvals = readFileSync(resolve(root, 'packages/core-chat/src/web/approvals.tsx'), 'utf8')
     expect(css).not.toMatch(/\.project-chip-hist-bar/)
     expect(approvals).not.toMatch(/project-chip-hist-bar/)
@@ -341,7 +344,7 @@ describe('composer dock stacking above sticky user', () => {
     expect(css).toMatch(/\[data-stat\]:not\(\[data-stat='usage'\]\)/)
     expect(css).not.toMatch(/@media \(max-width: 720px\) \{\s*\n\s*\.chat-dock-toolbar-mid \[data-stat='step'\]/)
     expect(css).toMatch(
-      /\.app-shell-agent\.is-inspector-open \[data-testid="agent-center"\] \.chat-composer-dock\s*\{[^}]*padding-right:\s*16px/s,
+      /\.app-shell-agent\.is-inspector-open \[data-testid="agent-center"\] \.chat-composer-dock\s*\{[^}]*padding-right:\s*var\(--biu-pad-page\)/s,
     )
     expect(css).toMatch(
       /\.app-shell-agent\.is-inspector-open \[data-testid="agent-center"\] \.composer-pill\s*\{[^}]*min-width:\s*0/s,
@@ -355,7 +358,7 @@ describe('composer dock stacking above sticky user', () => {
   })
 
   it('paints inspector trajectory and usage on the same sidebar token as the left rail', () => {
-    const css = readFileSync(resolve(root, 'web/style.css'), 'utf8')
+    const css = cssBundle()
     expect(css).toMatch(/\.traj-root\s*\{[^}]*background:\s*var\(--biu-color-bg-subtle\)/s)
     expect(css).toMatch(/\[data-testid='session-inspector'\] \.usage-panel\s*\{[^}]*background:\s*var\(--biu-color-bg\)/s)
     expect(css).toMatch(/\.session-inspector\s*\{[^}]*background:\s*var\(--biu-color-bg\)/s)
@@ -364,13 +367,13 @@ describe('composer dock stacking above sticky user', () => {
   })
 
   it('keeps pick chips from inheriting the composer line-height', () => {
-    const css = readFileSync(resolve(root, 'web/style.css'), 'utf8')
+    const css = cssBundle()
     expect(css).toMatch(/\.composer-inline-chip\s*\{[^}]*align-items:\s*center/s)
     expect(css).toMatch(/\.composer-inline-chip\s*\{[^}]*vertical-align:\s*middle/s)
     expect(css).toMatch(/\.composer-inline-chip\s*\{[^}]*line-height:\s*1/s)
-    expect(css).toMatch(/\.composer-tool-chip\.is-pick,\s*\n\.user-pick-chip\s*\{[^}]*line-height:\s*20px/s)
-    expect(css).toMatch(/\.composer-tool-chip\.is-pick>span\.pick-chip-lines,\s*\n\.user-pick-chip>span\.pick-chip-lines\s*\{[^}]*flex:\s*none/s)
-    expect(css).toMatch(/\.composer-tool-chip\.is-pick>span\.pick-chip-lines,\s*\n\.user-pick-chip>span\.pick-chip-lines\s*\{[^}]*min-width:\s*max-content/s)
+    expect(css).toMatch(/\.composer-tool-chip\.is-pick,\s*\n\.user-pick-chip\s*\{[^}]*line-height:\s*var\(--biu-space-5\)/s)
+    expect(css).toMatch(/\.composer-tool-chip\.is-pick\s*>\s*span\.pick-chip-lines,\s*\n\.user-pick-chip\s*>\s*span\.pick-chip-lines\s*\{[^}]*flex:\s*none/s)
+    expect(css).toMatch(/\.composer-tool-chip\.is-pick\s*>\s*span\.pick-chip-lines,\s*\n\.user-pick-chip\s*>\s*span\.pick-chip-lines\s*\{[^}]*min-width:\s*max-content/s)
     expect(css).toMatch(/\.pick-kind-icon\s*\{[^}]*display:\s*block/s)
     expect(css).toMatch(
       /\.composer-pill\.has-chips \.composer-tiptap p,\s*\n\.composer-tiptap\.is-readonly p \{\s*line-height:\s*1\.45/,

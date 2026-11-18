@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
+const cssDir = resolve(import.meta.dirname, '../../../../web')
+const css = readFileSync(resolve(cssDir, 'style.css'), 'utf8') + readFileSync(resolve(cssDir, 'sidebar.css'), 'utf8')
 
 describe('sidebar text colors', () => {
   it('keeps a separate active token for the sidebar foreground', () => {
@@ -16,7 +17,7 @@ describe('sidebar text colors', () => {
     expect(css).toMatch(/--biu-color-bg-sidebar-hover:\s*#ececec/)
     expect(css).toMatch(/--biu-color-bg-sidebar-hover:\s*#2D2D2D/)
     expect(css).toMatch(/\.app-side-bar\s*\{[^}]*--biu-color-bg-hover:\s*var\(--biu-color-bg-sidebar-hover\)/s)
-    expect(css).toMatch(/\.chat-session-row\.is-active,\s*\.chat-session-row:focus-within\s*\{[^}]*color:\s*var\(--biu-color-text\)/s)
+    expect(css).toMatch(/\.chat-session-row\.is-active[\s\S]{0,180}\.chat-session-row:focus-within[\s\S]{0,80}\{[^}]*color:\s*var\(--biu-color-text\)/s)
     expect(css).toMatch(/\.chat-session-row\s*\{[^}]*-webkit-user-drag:\s*none/s)
   })
 
@@ -33,7 +34,7 @@ describe('sidebar text colors', () => {
   })
 
   it('hides labels until the chat sidebar is wide enough', () => {
-    expect(css).toMatch(/\.sidebar-label,\s*\.app-side-actions-label\s*\{[^}]*font-size:\s*var\(--biu-font-size-4\)/s)
+    expect(css).toMatch(/\.sidebar-label[\s\S]{0,120}\.app-side-actions-label\s*\{[^}]*font-size:\s*var\(--biu-font-size-4\)/s)
     expect(css).toMatch(/\.sidebar-chat-count-num\s*\{[^}]*font-size:\s*var\(--biu-font-size-2\)/s)
     expect(css).toMatch(/\.sidebar-section-head\s*\{[^}]*font-size:\s*var\(--biu-font-size-2\)/s)
     expect(css).toMatch(/\.sidebar-view-switch-btn\s*\{[^}]*color:\s*var\(--biu-color-icon\)/s)
@@ -71,7 +72,8 @@ describe('sidebar text colors', () => {
     expect(inspector).toMatch(/pointercancel/)
     const shell = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
     expect(shell).toMatch(/leftWidth: leftPane \? sidebarCol/)
-    expect(shell).toMatch(/id="shell-module-sidebar"/)
+    expect(shell).toMatch(/renderSlot\('module-sidebar'\)/)
+    expect(shell).not.toMatch(/id="shell-module-sidebar"/)
     expect(shell).toMatch(/ShellSidebarFrame/)
     expect(shell).toMatch(/data-testid="header-sidebar-expand"/)
     expect(shell).toMatch(/leftHidden \? \(/)
@@ -80,5 +82,7 @@ describe('sidebar text colors', () => {
     expect(overlay).toMatch(/SIDEBAR_MIN = 160/)
     expect(css).toMatch(/--biu-sidebar-min:\s*160px/)
     expect(css).toMatch(/\.app-side-bar\s*\{[^}]*min-width:\s*0/s)
+    const styleOnly = readFileSync(resolve(cssDir, 'style.css'), 'utf8')
+    expect([...styleOnly.matchAll(/sidebar/g)].length).toBeLessThanOrEqual(5)
   })
 })

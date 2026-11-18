@@ -56,6 +56,13 @@ describe('顶栏三级标题', () => {
     expect(style).not.toContain('.fsdb-crumb-expand{position:absolute')
     expect(browser).toContain('<CrumbTrail')
     expect(browser.indexOf('收藏视图')).toBeLessThan(browser.indexOf('<ShareButton'))
+    expect(browser).toContain("viewStarred ? ' is-starred' : ''")
+    expect(browser).not.toContain("viewStarred ? ' is-active'")
+    expect(browser).not.toContain('text-[#f5b700]')
+    const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
+    expect(css).toMatch(/\.chat-view-header-expand\.is-starred,\s*\n\.chat-view-header-expand\.is-starred:hover\s*\{[^}]*background:\s*transparent/s)
+    expect(css).toMatch(/\.chat-view-header-expand\.is-starred,\s*\n\.chat-view-header-expand\.is-starred:hover\s*\{[^}]*color:\s*var\(--biu-color-warning-on-surface\)/s)
+    expect(style).toMatch(/\.fsdb-detail-more-item svg\.is-starred\{color:var\(--biu-color-warning-on-surface\)\}/)
   })
 
   it('中间顶栏面包屑字重和颜色与侧栏标题对齐', () => {

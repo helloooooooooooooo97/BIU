@@ -1,5 +1,8 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware'
+import { getSidebarPersist, setSidebarPersist, takeLegacyFavCollapsed } from './sidebar-persist.ts'
+
+const DATA_SECTION_FAV = 'fsdb.section.fav'
 
 export const SIDEBAR_PROJECT_COLLAPSE_KEY = 'cordis.sidebar.projectCollapsed'
 
@@ -26,7 +29,39 @@ export function parseSidebarCollapsePersisted(raw: string | null): string | null
   return null
 }
 
-export function createSidebarCollapseStorage(base: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>): StateStorage {
+function mergeFavLegacy(raw: string | null, collapsedFav: boolean | null): string | null {
+  if (collapsedFav == null) return raw
+  let envelope: { state: { collapsed: Record<string, boolean> }; version: number }
+  if (raw) {
+    try {
+      envelope = JSON.parse(raw) as { state: { collapsed: Record<string, boolean> }; version: number }
+    } catch {
+      envelope = { state: { collapsed: {} }, version: 0 }
+    }
+  } else {
+    envelope = { state: { collapsed: {} }, version: 0 }
+  }
+  if (typeof envelope.state?.collapsed !== 'object' || !envelope.state.collapsed) {
+    envelope = { state: { collapsed: {} }, version: 0 }
+  }
+  if (envelope.state.collapsed[DATA_SECTION_FAV] === undefined) {
+    envelope.state.collapsed[DATA_SECTION_FAV] = collapsedFav
+  }
+  return JSON.stringify(envelope)
+}
+
+export function createSidebarCollapseStorage(base?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>): StateStorage {
+  if (!base) {
+    return {
+      getItem: (name) => {
+        const next = mergeFavLegacy(parseSidebarCollapsePersisted(getSidebarPersist(name)), takeLegacyFavCollapsed())
+        if (next && next !== getSidebarPersist(name)) setSidebarPersist(name, next)
+        return next
+      },
+      setItem: (name, value) => setSidebarPersist(name, value),
+      removeItem: () => undefined,
+    }
+  }
   let timer: ReturnType<typeof setTimeout> | null = null
   let pending: { name: string; value: string } | null = null
   return {
@@ -34,7 +69,6 @@ export function createSidebarCollapseStorage(base: Pick<Storage, 'getItem' | 'se
     setItem: (name, value) => {
       pending = { name, value }
       if (timer) clearTimeout(timer)
-      // 折叠点得很快时合并写盘，避免同步 localStorage 顶掉点击帧
       timer = setTimeout(() => {
         timer = null
         if (!pending) return
@@ -69,7 +103,7 @@ export const useSidebarCollapseStore = create<SidebarCollapseState>()(
     }),
     {
       name: SIDEBAR_PROJECT_COLLAPSE_KEY,
-      storage: createJSONStorage(() => createSidebarCollapseStorage(localStorage)),
+      storage: createJSONStorage(() => createSidebarCollapseStorage()),
       partialize: (state) => ({ collapsed: state.collapsed }),
     },
   ),

@@ -1,0 +1,878 @@
+/* Left-column chrome. Loaded via style.css @import. */
+
+:root {
+  --biu-color-bg-sidebar-hover: #ececec;
+  --biu-sidebar-min: 160px;
+  --biu-sidebar-max: 360px;
+  --color-biu-sidebar: var(--biu-color-bg-subtle);
+}
+
+html.dark .app-side-bar,
+html.dark .chat-sidebar-popover,
+html.dark .fsdb-views {
+  --biu-color-bg-sidebar-hover: #2D2D2D;
+}
+
+.app-side-bar.is-narrow .app-side-actions-item .shell-notify-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  left: auto;
+  margin-left: 0;
+}.shell-search-hit-icon .sidebar-mascot {
+  display: block;
+}
+
+.app-side-bar-head {
+  display: flex;
+  height: 44px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 12px;
+  overflow: visible;
+  position: relative;
+  z-index: 3;
+}
+
+.app-side-bar-head-brand {
+  justify-content: flex-start;
+  padding-left: 8px;
+  padding-right: 8px;
+}.sidebar-brand-lockup {
+  display: inline-flex;
+  min-width: 0;
+  max-width: calc(100% - 36px);
+  align-items: center;
+  gap: 8px;
+}.sidebar-brand-mascot,
+.sidebar-brand-avatar {
+  flex-shrink: 0;
+  display: block;
+  overflow: hidden;
+}.sidebar-brand-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--biu-color-bg-hover);
+}.sidebar-brand-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--biu-color-text);
+  font-size: var(--biu-font-size-4);
+  font-weight: var(--biu-font-weight-semibold);
+}.sidebar-brand-mascot {
+  overflow: visible;
+}
+
+.app-side-bar-head-brand .chat-view-header-expand {
+  position: absolute;
+  right: 8px;
+}
+
+.chat-sidebar-popover {
+  display: flex;
+  flex-direction: column;
+  right: auto;
+  left: 0;
+  max-height: min(72vh, 560px);
+  overflow: hidden;
+  padding: 4px 0 0;
+  color: var(--biu-color-text-muted);
+}
+
+/* 毛玻璃上的实心 --biu-color-bg-hover 会发闷；悬浮侧栏用更浅的选中膜 */
+.chat-sidebar-popover .chat-session-row:hover:not(.is-active)::before,
+.chat-sidebar-popover .chat-session-row.is-active::before {
+  background: rgba(0, 0, 0, 0.05);
+}.inspector-add-owner .sidebar-mascot {
+  flex: none;
+}
+
+.app-side-bar.is-closed,
+.session-inspector.is-closed {
+  min-width: 0;
+  max-width: none;
+  overflow: hidden;
+  border-color: transparent;
+  pointer-events: none;
+}.sidebar-flyout-host {
+  display: contents;
+}.sidebar-flyout-host.is-collapsed {
+  display: block;
+  position: relative;
+  width: 0;
+  min-width: 0;
+  max-width: 0;
+  overflow: visible;
+  z-index: var(--biu-z-float);
+  pointer-events: none;
+}.sidebar-edge-hot {
+  pointer-events: auto;
+  position: fixed;
+  left: 0;
+  top: 22vh;
+  bottom: auto;
+  height: 20vh;
+  width: 20px;
+  z-index: var(--biu-z-float);
+}
+
+.sidebar-flyout-host.is-collapsed .app-side-bar.is-closed {
+  position: fixed;
+  left: 0;
+  top: 60px;
+  bottom: 60px;
+  width: var(--sidebar-flyout-width, 240px);
+  min-width: 0;
+  max-width: none;
+  overflow: hidden;
+  border: var(--biu-stroke-width) solid var(--biu-color-border);
+  border-left: 0;
+  border-radius: 0 12px 12px 0;
+  background: var(--biu-color-bg-subtle);
+  box-shadow: var(--biu-shadow-md);
+  contain: none;
+  transform: translateX(calc(-100% - 8px));
+  opacity: 0;
+  pointer-events: none;
+  /* 贴窗口左缘时 :hover 会闪断；坐标锁定打开后，收起连 pointer-events 一起延迟 */
+  transition: transform 0s linear 240ms, opacity 0s linear 240ms, pointer-events 0s linear 240ms;
+  z-index: 81;
+}.sidebar-flyout-host.is-collapsed:hover,
+.sidebar-flyout-host.is-collapsed.is-flyout-open {
+  pointer-events: auto;
+}/* 唤醒后把热区铺满栏宽、垫在栏下面，避免指针刚离开 12px 条就丢 :hover */
+.sidebar-flyout-host.is-collapsed:hover .sidebar-edge-hot,
+.sidebar-flyout-host.is-collapsed.is-flyout-open .sidebar-edge-hot {
+  width: var(--sidebar-flyout-width, 240px);
+}
+
+.sidebar-flyout-host.is-collapsed:hover .app-side-bar.is-closed,
+.sidebar-flyout-host.is-collapsed.is-flyout-open .app-side-bar.is-closed {
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
+  transition: none;
+}
+
+.session-inspector .app-side-bar-head {
+  background: var(--biu-color-bg);
+}
+
+.app-side-bar-module-slot {
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 侧栏独立合成层：右侧 Markdown 重绘时少拖累左侧 :hover */
+.app-side-bar {
+  contain: layout paint style;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  color: var(--biu-color-text-muted);
+  position: relative;
+  min-width: 0;
+  width: 100%;
+  max-width: none;
+  --biu-color-bg-hover: var(--biu-color-bg-sidebar-hover);
+}.sidebar-resize {
+  position: absolute;
+  inset-block: 0;
+  right: -1px;
+  z-index: 10;
+  width: 0;
+  cursor: col-resize;
+  touch-action: none;
+}.sidebar-resize::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  right: -3px;
+  width: 7px;
+}
+
+.app-side-bar.is-narrow .sidebar-resize {
+  display: none;
+  pointer-events: none;
+  cursor: default;
+}.app-side-bar .sidebar-label,
+.chat-sidebar-popover .sidebar-label,
+.fsdb-views .sidebar-label,
+.app-side-actions-label {
+  font-size: var(--biu-font-size-4);
+}
+
+.app-side-bar.is-narrow .sidebar-label,
+.app-side-bar.is-narrow .app-side-actions-label,
+.app-side-bar.is-narrow .sidebar-section-head,
+.app-side-bar.is-narrow .sidebar-group-head,
+.app-side-bar.is-narrow .sidebar-chat-count,
+.app-side-bar.is-narrow .chat-session-row-delete,
+.app-side-bar.is-narrow .chat-session-row-star,
+.app-side-bar.is-narrow .sidebar-trail-icon {
+  display: none;
+}
+
+.app-side-bar.is-narrow .app-side-actions {
+  gap: 4px;
+  margin: 4px 0 8px;
+}
+
+.app-side-bar.is-narrow .app-side-actions-item {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.app-side-bar.is-narrow .chat-session-row {
+  justify-content: center;
+  margin-bottom: 4px;
+  padding-inline: 0;
+}
+
+.app-side-bar.is-narrow .chat-session-row>a,
+.app-side-bar.is-narrow .chat-session-row>.chat-session-row-main {
+  justify-content: center;
+  padding-left: 0;
+}
+
+.app-side-bar.is-narrow .fsdb-views-full {
+  display: none;
+}.fsdb-icon-rail {
+  display: none;
+}
+
+.app-side-bar.is-narrow .fsdb-icon-rail {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  align-items: stretch;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 6px 8px 12px;
+  gap: 4px;
+}.fsdb-icon-rail-btn {
+  display: grid;
+  width: 100%;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--biu-color-icon);
+  cursor: pointer;
+}.fsdb-icon-rail-btn:hover,
+.fsdb-icon-rail-btn.is-active,
+.fsdb-icon-rail-btn:focus-visible {
+  background: var(--biu-color-bg-hover);
+  color: var(--biu-color-icon-active);
+}.shell-rail-head {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 6px 8px;
+}.shell-rail-expand {
+  display: grid;
+  width: 100%;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--biu-color-icon);
+  cursor: pointer;
+}.shell-rail-expand:hover,
+.shell-rail-expand:focus-visible {
+  background: var(--biu-color-bg-hover);
+  color: var(--biu-color-icon-active);
+}.shell-rail-brand {
+  display: block;
+  width: 20px;
+  height: 20px;
+}.shell-rail-expand-chevron {
+  display: none;
+}.shell-rail-expand:hover .shell-rail-expand-mark,
+.shell-rail-expand:focus-visible .shell-rail-expand-mark {
+  display: none;
+}.shell-rail-expand:hover .shell-rail-expand-chevron,
+.shell-rail-expand:focus-visible .shell-rail-expand-chevron {
+  display: grid;
+}.app-side-bar /* Session 行：高亮画在 ::before，避免每次 hover 重绘头像 SVG */
+.chat-session-row,
+.chat-sidebar-popover /* Session 行：高亮画在 ::before，避免每次 hover 重绘头像 SVG */
+.chat-session-row,
+.fsdb-views /* Session 行：高亮画在 ::before，避免每次 hover 重绘头像 SVG */
+.chat-session-row {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  margin-bottom: 1px;
+  padding: 0 8px;
+  border-radius: 6px;
+  contain: layout style;
+  transition: none;
+  color: var(--biu-color-text-muted);
+  -webkit-user-drag: none;
+}
+.app-side-bar .chat-session-row button,
+.chat-sidebar-popover .chat-session-row button,
+.fsdb-views .chat-session-row button,
+.app-side-bar .chat-session-row img,
+.chat-sidebar-popover .chat-session-row img,
+.fsdb-views .chat-session-row img,
+.app-side-bar .chat-session-row svg,
+.chat-sidebar-popover .chat-session-row svg,
+.fsdb-views .chat-session-row svg {
+  -webkit-user-drag: none;
+}.app-side-bar .chat-session-row>button,
+.chat-sidebar-popover .chat-session-row>button,
+.fsdb-views .chat-session-row>button {
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}.fsdb-views .chat-session-row>.chat-session-row-delete,
+.app-side-bar .chat-session-row>.chat-session-row-star,
+.chat-sidebar-popover .chat-session-row>.chat-session-row-star,
+.fsdb-views .chat-session-row>.chat-session-row-star,
+.app-side-bar .chat-session-row>.sidebar-add,
+.chat-sidebar-popover .chat-session-row>.sidebar-add,
+.fsdb-views .chat-session-row>.sidebar-add {
+  color: var(--biu-color-icon-muted);
+}.app-side-bar .chat-session-row::before,
+.chat-sidebar-popover .chat-session-row::before,
+.fsdb-views .chat-session-row::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: transparent;
+  transition: background-color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}.app-side-bar .chat-session-row>*,
+.chat-sidebar-popover .chat-session-row>*,
+.fsdb-views .chat-session-row>* {
+  position: relative;
+  z-index: 1;
+}.app-side-bar .chat-session-row:hover:not(.is-active)::before,
+.chat-sidebar-popover .chat-session-row:hover:not(.is-active)::before,
+.fsdb-views .chat-session-row:hover:not(.is-active)::before {
+  transition: none;
+  background: var(--biu-color-bg-hover);
+}
+
+.app-side-bar .chat-session-row::before,
+.app-side-bar .chat-session-row.is-active,
+.app-side-bar .chat-session-row:focus-within {
+  transition: none;
+}.chat-sidebar-popover .chat-session-row.is-active,
+.fsdb-views .chat-session-row.is-active,
+.app-side-bar .chat-session-row:focus-within,
+.chat-sidebar-popover .chat-session-row:focus-within,
+.fsdb-views .chat-session-row:focus-within {
+  color: var(--biu-color-text);
+  transition: color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}.chat-sidebar-popover .chat-session-row.is-active::before,
+.fsdb-views .chat-session-row.is-active::before,
+.app-side-bar .chat-session-row:focus-within::before,
+.chat-sidebar-popover .chat-session-row:focus-within::before,
+.fsdb-views .chat-session-row:focus-within::before {
+  background: var(--biu-color-bg-hover);
+}
+
+.app-side-bar .chat-session-row-delete,
+.chat-sidebar-popover .chat-session-row-delete,
+.fsdb-views .chat-session-row-delete,
+.app-side-bar .chat-session-row-star,
+.chat-sidebar-popover .chat-session-row-star,
+.fsdb-views .chat-session-row-star {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 0;
+  height: 24px;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--biu-color-icon-muted);
+  opacity: 0;
+  cursor: pointer;
+  line-height: 0;
+  transition: width 150ms ease, opacity 150ms ease, background-color 120ms ease, color 120ms ease;
+}.chat-sidebar-popover .chat-session-row-delete svg,
+.fsdb-views .chat-session-row-delete svg,
+.app-side-bar .chat-session-row-star svg,
+.chat-sidebar-popover .chat-session-row-star svg,
+.fsdb-views .chat-session-row-star svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+  color: var(--biu-color-icon-muted);
+}
+.app-side-bar .chat-session-row-delete:focus,
+.chat-sidebar-popover .chat-session-row-delete:focus,
+.fsdb-views .chat-session-row-delete:focus,
+.app-side-bar .chat-session-row:hover .chat-session-row-star,
+.chat-sidebar-popover .chat-session-row:hover .chat-session-row-star,
+.fsdb-views .chat-session-row:hover .chat-session-row-star,
+.app-side-bar .chat-session-row-star:focus,
+.chat-sidebar-popover .chat-session-row-star:focus,
+.fsdb-views .chat-session-row-star:focus {
+  width: 24px;
+  opacity: 1;
+}.app-side-bar .chat-session-row-star:hover,
+.chat-sidebar-popover .chat-session-row-star:hover,
+.fsdb-views .chat-session-row-star:hover {
+  background: var(--biu-color-bg-hover);
+  color: var(--biu-color-icon-muted);
+}.app-side-bar .chat-session-row-delete:hover,
+.chat-sidebar-popover .chat-session-row-delete:hover,
+.fsdb-views .chat-session-row-delete:hover {
+  background: var(--biu-color-bg-hover);
+  color: var(--biu-color-danger);
+}.app-side-bar /* 分组添加按钮(+)：默认宽度塌陷；展开为 24×24，与收藏/删除同一套圆角底 */
+.sidebar-add,
+.chat-sidebar-popover /* 分组添加按钮(+)：默认宽度塌陷；展开为 24×24，与收藏/删除同一套圆角底 */
+.sidebar-add,
+.fsdb-views /* 分组添加按钮(+)：默认宽度塌陷；展开为 24×24，与收藏/删除同一套圆角底 */
+.sidebar-add {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 0;
+  min-width: 0;
+  height: 24px;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--biu-color-icon-muted);
+  opacity: 0;
+  cursor: pointer;
+  line-height: 0;
+  transition: width 150ms ease, opacity 150ms ease, background-color 120ms ease, color 120ms ease;
+}.app-side-bar .sidebar-add svg,
+.chat-sidebar-popover .sidebar-add svg,
+.fsdb-views .sidebar-add svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+.app-side-bar .chat-session-row:hover .sidebar-add,
+.chat-sidebar-popover .chat-session-row:hover .sidebar-add,
+.fsdb-views .chat-session-row:hover .sidebar-add,
+.app-side-bar .sidebar-section-head:hover .sidebar-add,
+.chat-sidebar-popover .sidebar-section-head:hover .sidebar-add,
+.fsdb-views .sidebar-section-head:hover .sidebar-add,
+.app-side-bar .sidebar-add:focus,
+.chat-sidebar-popover .sidebar-add:focus,
+.fsdb-views .sidebar-add:focus {
+  width: 24px;
+  min-width: 24px;
+  opacity: 1;
+  color: var(--biu-color-icon-active);
+}.app-side-bar .sidebar-add:hover,
+.chat-sidebar-popover .sidebar-add:hover,
+.fsdb-views .sidebar-add:hover {
+  background: var(--biu-color-bg-hover);
+  color: var(--biu-color-icon-active);
+}.app-side-bar .sidebar-trail-icon,
+.chat-sidebar-popover .sidebar-trail-icon,
+.fsdb-views .sidebar-trail-icon {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 0;
+  min-width: 0;
+  height: 24px;
+  overflow: hidden;
+  color: var(--biu-color-icon-muted);
+  opacity: 0;
+  line-height: 0;
+  transition: width 150ms ease, opacity 150ms ease;
+}.app-side-bar .sidebar-trail-icon svg,
+.chat-sidebar-popover .sidebar-trail-icon svg,
+.fsdb-views .sidebar-trail-icon svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+.app-side-bar .chat-session-row:hover .sidebar-trail-icon,
+.chat-sidebar-popover .chat-session-row:hover .sidebar-trail-icon,
+.fsdb-views .chat-session-row:hover .sidebar-trail-icon,
+.app-side-bar .sidebar-trail-icon:focus-within,
+.chat-sidebar-popover .sidebar-trail-icon:focus-within,
+.fsdb-views .sidebar-trail-icon:focus-within,
+.fsdb-views .chat-session-row.is-pinned > .sidebar-trail-icon,
+.fsdb-views .chat-session-row.is-pinned > .chat-session-row-star.is-on {
+  width: 24px;
+  min-width: 24px;
+  opacity: 1;
+}.app-side-bar .sidebar-rail-icon,
+.chat-sidebar-popover .sidebar-rail-icon,
+.fsdb-views .sidebar-rail-icon {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  place-items: center;
+  color: var(--biu-color-icon);
+}
+
+.app-side-bar .sidebar-rail-icon svg,
+.app-side-bar .fsdb-record-mark,
+.app-side-bar .fsdb-record-mark svg,
+.app-side-bar .chat-session-row-main>span>svg,
+.app-side-bar .chat-session-row>span svg {
+  color: var(--biu-color-icon);
+}
+
+.app-side-bar .chat-session-row-delete svg,
+.app-side-bar .chat-session-row-star svg {
+  color: var(--biu-color-icon-muted);
+}
+.app-side-bar .chat-session-row-star.is-on svg,
+.app-side-bar .chat-session-row-star.is-on:hover svg {
+  color: var(--biu-color-warning-on-surface);
+}.chat-sidebar-popover .chat-session-row.is-active .sidebar-rail-icon,
+.fsdb-views .chat-session-row.is-active .sidebar-rail-icon,
+.app-side-actions-item:hover .sidebar-rail-icon,
+.app-side-bar .app-side-actions-item:hover .sidebar-rail-icon,
+.chat-sidebar-popover .app-side-actions-item:hover .sidebar-rail-icon,
+.fsdb-views .app-side-actions-item:hover .sidebar-rail-icon,
+.app-side-actions-item.is-active .sidebar-rail-icon,
+.app-side-bar .app-side-actions-item.is-active .sidebar-rail-icon,
+.chat-sidebar-popover .app-side-actions-item.is-active .sidebar-rail-icon,
+.fsdb-views .app-side-actions-item.is-active .sidebar-rail-icon,
+.app-side-bar .chat-session-row:hover .chat-session-row-main>span>svg,
+.chat-sidebar-popover .chat-session-row:hover .chat-session-row-main>span>svg,
+.fsdb-views .chat-session-row:hover .chat-session-row-main>span>svg,
+.app-side-bar .chat-session-row.is-active .chat-session-row-main>span>svg,
+.chat-sidebar-popover .chat-session-row.is-active .chat-session-row-main>span>svg,
+.fsdb-views .chat-session-row.is-active .chat-session-row-main>span>svg {
+  color: var(--biu-color-icon-active);
+}.sidebar-group-fold {
+  position: relative;
+}.sidebar-group-fold-face,
+.sidebar-group-fold-chevron {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+}.sidebar-group-fold-chevron {
+  display: none;
+}.sidebar-group-fold:focus-within .sidebar-group-fold-face,
+.app-side-bar .sidebar-group-head:focus-within .sidebar-group-fold:focus-within .sidebar-group-fold-face,
+.chat-sidebar-popover .sidebar-group-head:focus-within .sidebar-group-fold:focus-within .sidebar-group-fold-face,
+.fsdb-views .sidebar-group-head:focus-within .sidebar-group-fold:focus-within .sidebar-group-fold-face {
+  display: none;
+}.sidebar-group-fold:hover .sidebar-group-fold-chevron,
+.sidebar-group-fold:focus-within .sidebar-group-fold-chevron {
+  display: grid;
+}.chat-sidebar-popover .chat-session-row .sidebar-group-fold:hover .sidebar-group-fold-face,
+.fsdb-views .chat-session-row .sidebar-group-fold:hover .sidebar-group-fold-face,
+.app-side-bar .chat-session-row .sidebar-group-fold:focus-within .sidebar-group-fold-face,
+.chat-sidebar-popover .chat-session-row .sidebar-group-fold:focus-within .sidebar-group-fold-face,
+.fsdb-views .chat-session-row .sidebar-group-fold:focus-within .sidebar-group-fold-face {
+  display: none;
+}.chat-sidebar-popover .chat-session-row .sidebar-group-fold:hover .sidebar-group-fold-chevron,
+.fsdb-views .chat-session-row .sidebar-group-fold:hover .sidebar-group-fold-chevron,
+.app-side-bar .chat-session-row .sidebar-group-fold:focus-within .sidebar-group-fold-chevron,
+.chat-sidebar-popover .chat-session-row .sidebar-group-fold:focus-within .sidebar-group-fold-chevron,
+.fsdb-views .chat-session-row .sidebar-group-fold:focus-within .sidebar-group-fold-chevron {
+  display: grid;
+}.app-side-bar .fsdb-view-preview .chat-session-row>.chat-session-row-main,
+.chat-sidebar-popover .fsdb-view-preview .chat-session-row>.chat-session-row-main,
+.fsdb-views .fsdb-view-preview .chat-session-row>.chat-session-row-main {
+  padding-left: 11px;
+}.app-side-bar .sidebar-session-list .fsdb-view-preview .chat-session-row>.chat-session-row-main,
+.chat-sidebar-popover .sidebar-session-list .fsdb-view-preview .chat-session-row>.chat-session-row-main,
+.fsdb-views .sidebar-session-list .fsdb-view-preview .chat-session-row>.chat-session-row-main {
+  padding-left: 22px;
+}.app-side-bar .fsdb-view-preview .fsdb-view-preview-records .chat-session-row>.chat-session-row-main,
+.chat-sidebar-popover .fsdb-view-preview .fsdb-view-preview-records .chat-session-row>.chat-session-row-main,
+.fsdb-views .fsdb-view-preview .fsdb-view-preview-records .chat-session-row>.chat-session-row-main {
+  padding-left: 22px;
+}.app-side-bar .sidebar-session-list .fsdb-view-preview .fsdb-view-preview-records .chat-session-row>.chat-session-row-main,
+.chat-sidebar-popover .sidebar-session-list .fsdb-view-preview .fsdb-view-preview-records .chat-session-row>.chat-session-row-main,
+.fsdb-views .sidebar-session-list .fsdb-view-preview .fsdb-view-preview-records .chat-session-row>.chat-session-row-main {
+  padding-left: 33px;
+}.sidebar-session-list .fsdb-view-preview-hint,
+.sidebar-session-list .fsdb-view-preview-more {
+  padding-left: 30px;
+}/* 不推整行背景，只给会话内容加约 2/3 图标宽的左内边距 */
+.sidebar-session-list {
+  padding-left: 0;
+}.app-side-bar .sidebar-fold,
+.chat-sidebar-popover .sidebar-fold,
+.fsdb-views .sidebar-fold {
+  display: grid;
+  grid-template-rows: 0fr;
+}.app-side-bar .sidebar-fold.is-open,
+.chat-sidebar-popover .sidebar-fold.is-open,
+.fsdb-views .sidebar-fold.is-open {
+  grid-template-rows: 1fr;
+}.app-side-bar .sidebar-fold.is-animating,
+.chat-sidebar-popover .sidebar-fold.is-animating,
+.fsdb-views .sidebar-fold.is-animating {
+  transition: grid-template-rows 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}.app-side-bar .sidebar-fold-inner,
+.chat-sidebar-popover .sidebar-fold-inner,
+.fsdb-views .sidebar-fold-inner {
+  min-height: 0;
+  overflow: hidden;
+}.chat-sidebar-popover .sidebar-session-list .chat-session-row>a,
+.fsdb-views .sidebar-session-list .chat-session-row>a,
+.sidebar-session-list .chat-session-row>.chat-session-row-main,
+.app-side-bar .sidebar-session-list .chat-session-row>.chat-session-row-main,
+.chat-sidebar-popover .sidebar-session-list .chat-session-row>.chat-session-row-main,
+.fsdb-views .sidebar-session-list .chat-session-row>.chat-session-row-main {
+  padding-left: 11px;
+}.app-side-bar .sidebar-group-head,
+.chat-sidebar-popover .sidebar-group-head,
+.fsdb-views .sidebar-group-head {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: 6px;
+}.app-side-bar .sidebar-group-head:hover,
+.chat-sidebar-popover .sidebar-group-head:hover,
+.fsdb-views .sidebar-group-head:hover {
+  background: var(--biu-color-bg-hover);
+}.app-side-bar .sidebar-group-head>[role='button'],
+.chat-sidebar-popover .sidebar-group-head>[role='button'],
+.fsdb-views .sidebar-group-head>[role='button'] {
+  padding: 0;
+  min-width: 0;
+}.app-side-bar /* 顶部「收藏/项目」与数据页「分享/用户数据/系统数据」同一套：12px 粗体；行高与会话行一致 */
+.sidebar-section-head,
+.chat-sidebar-popover /* 顶部「收藏/项目」与数据页「分享/用户数据/系统数据」同一套：12px 粗体；行高与会话行一致 */
+.sidebar-section-head,
+.fsdb-views /* 顶部「收藏/项目」与数据页「分享/用户数据/系统数据」同一套：12px 粗体；行高与会话行一致 */
+.sidebar-section-head {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  margin: 0 0 1px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--biu-color-text-muted);
+  font-size: var(--biu-font-size-2);
+  font-weight: var(--biu-font-weight-bold);
+}.app-side-bar .sidebar-section-head button,
+.chat-sidebar-popover .sidebar-section-head button,
+.fsdb-views .sidebar-section-head button {
+  font-size: var(--biu-font-size-2);
+  font-weight: var(--biu-font-weight-bold);
+}.app-side-bar .sidebar-section-head .sidebar-label,
+.chat-sidebar-popover .sidebar-section-head .sidebar-label,
+.fsdb-views .sidebar-section-head .sidebar-label {
+  font-size: var(--biu-font-size-2);
+  font-weight: var(--biu-font-weight-bold);
+  letter-spacing: normal;
+}.app-side-bar .sidebar-section-head:hover,
+.chat-sidebar-popover .sidebar-section-head:hover,
+.fsdb-views .sidebar-section-head:hover {
+  background: var(--biu-color-bg-hover);
+}.app-side-bar .sidebar-chat-count,
+.chat-sidebar-popover .sidebar-chat-count,
+.fsdb-views .sidebar-chat-count {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 0;
+  min-width: 0;
+  height: 24px;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  border-radius: 6px;
+  color: var(--biu-color-icon);
+  font-size: var(--biu-font-size-2);
+  font-weight: var(--biu-font-weight-medium);
+  line-height: 0;
+  opacity: 0;
+  transition: width 150ms ease, min-width 150ms ease, padding 150ms ease, opacity 150ms ease;
+}.app-side-bar .sidebar-section-head:hover .sidebar-chat-count,
+.chat-sidebar-popover .sidebar-section-head:hover .sidebar-chat-count,
+.fsdb-views .sidebar-section-head:hover .sidebar-chat-count,
+.app-side-bar .sidebar-group-head:hover .sidebar-chat-count,
+.chat-sidebar-popover .sidebar-group-head:hover .sidebar-chat-count,
+.fsdb-views .sidebar-group-head:hover .sidebar-chat-count,
+.app-side-bar .chat-session-row:hover .sidebar-chat-count,
+.chat-sidebar-popover .chat-session-row:hover .sidebar-chat-count,
+.fsdb-views .chat-session-row:hover .sidebar-chat-count{
+  width: auto;
+  min-width: 24px;
+  padding: 0 4px;
+  opacity: 1;
+  color: var(--biu-color-text-muted);
+}.app-side-bar .sidebar-chat-count-num,
+.chat-sidebar-popover .sidebar-chat-count-num,
+.fsdb-views .sidebar-chat-count-num {
+  display: block;
+  font-size: var(--biu-font-size-2);
+  font-weight: var(--biu-font-weight-medium);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  opacity: 1;
+}.fsdb-views .sidebar-section-head .sidebar-chat-count,
+.app-side-bar .sidebar-group-head .sidebar-chat-count,
+.chat-sidebar-popover .sidebar-group-head .sidebar-chat-count,
+.fsdb-views .sidebar-group-head .sidebar-chat-count,
+.app-side-bar .chat-session-row .sidebar-chat-count,
+.chat-sidebar-popover .chat-session-row .sidebar-chat-count,
+.fsdb-views .chat-session-row .sidebar-chat-count {
+  font-size: var(--biu-font-size-2);
+  font-weight: var(--biu-font-weight-medium);
+  color: var(--biu-color-icon);
+}/* 顶层板块右侧分组切换：两个 24×24 按钮，图标 16×16；默认塌陷，悬浮展开 */
+.sidebar-view-switch {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  width: 0;
+  height: 24px;
+  overflow: hidden;
+  margin-left: 0;
+  opacity: 0;
+  transition: width 150ms ease, margin-left 150ms ease, opacity 150ms ease;
+}.app-side-bar .sidebar-section-head:hover .sidebar-view-switch,
+.chat-sidebar-popover .sidebar-section-head:hover .sidebar-view-switch,
+.fsdb-views .sidebar-section-head:hover .sidebar-view-switch,
+.sidebar-view-switch:focus-within {
+  width: 48px;
+  margin-left: 4px;
+  opacity: 1;
+}.sidebar-view-switch-btn {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--biu-color-icon);
+  cursor: pointer;
+  line-height: 0;
+}.sidebar-view-switch-btn svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}.sidebar-view-switch-btn:hover {
+  background: var(--biu-color-bg-hover);
+  color: var(--biu-color-icon);
+}.sidebar-view-switch-btn.is-on {
+  background: var(--biu-color-bg-hover);
+  color: var(--biu-color-icon);
+}.sidebar-mascot {
+  position: relative;
+  flex-shrink: 0;
+  overflow: visible;
+  line-height: 0;
+  /* 侧栏行 hover 时不要跟着父级背景一起重绘 */
+  contain: layout paint;
+  -webkit-user-drag: none;
+}.sidebar-mascot-status {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--biu-color-ok);
+  border: 1.5px solid var(--biu-color-bg-subtle);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--biu-color-ok) 35%, transparent);
+  pointer-events: none;
+}
+
+.app-side-bar:not(.is-narrow) [data-dock-tip-at='e']::after,
+.app-side-bar.is-narrow [data-dock-tip]::after {
+  display: none;
+  content: none;
+}.shell-rail-tip {
+  position: fixed;
+  z-index: 240;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  padding: 4px 8px;
+  border: var(--biu-stroke-width) solid var(--biu-color-border);
+  border-radius: 6px;
+  background: var(--biu-color-bg-elevated);
+  color: var(--biu-color-text);
+  font-size: 11px;
+  font-weight: var(--biu-font-weight-semibold);
+  line-height: 1.3;
+  pointer-events: none;
+  box-shadow: var(--biu-shadow-md);
+}
+
+.app-side-bar.is-narrow {
+  overflow: visible;
+  contain: none;
+  transform: none;
+  z-index: 20;
+}
+
+.app-side-bar.is-narrow [data-chat-scroll],
+.app-side-bar.is-narrow .fsdb-icon-rail {
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.app-side-bar.is-narrow [data-chat-scroll]::-webkit-scrollbar,
+.app-side-bar.is-narrow .fsdb-icon-rail::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.app-shell-agent>.sidebar-flyout-host,
+.app-shell-agent>.app-side-bar,
+.app-shell-agent>.session-inspector {
+  min-width: 0;
+  max-width: none;
+}
+
+.app-shell-agent>.sidebar-flyout-host,
+.app-shell-agent>.app-side-bar {
+  grid-column: 1;
+}@media (prefers-reduced-motion: reduce) {
+  .chat-session-row::before,
+  .chat-session-row.is-active,
+  .sidebar-fold.is-animating,
+  .sidebar-flyout-host.is-collapsed .app-side-bar.is-closed {
+    transition: none;
+    animation: none;
+  }
+}
+

@@ -9,5 +9,5 @@ test('user data section only folds and does not open a home route', () => {
   assert.doesNotMatch(page, /home=user/)
   assert.doesNotMatch(page, /scopeHome/)
   assert.doesNotMatch(sidebar, /onOpenScopeHome/)
-  assert.match(sidebar, /setUserOpen\(\(prev\) => !prev\)/)
+  assert.match(sidebar, /toggleSection\(DATA_SECTION_USER\)/)
 })

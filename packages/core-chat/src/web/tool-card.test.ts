@@ -47,7 +47,11 @@ test('tool panels match the step bar: sidebar fill, no border', () => {
   assert.match(css, /\.tool-call-copy,\s*\.chat-code-copy\s*\{[^}]*width:\s*24px[^}]*height:\s*24px/s)
   assert.match(css, /\.chat-code-copy\s*\{[^}]*right:\s*8px[^}]*bottom:\s*8px/s)
   assert.match(css, /\.chat-reply-block:hover \.chat-code-copy/)
-  assert.match(css, /\.tool-call-head\.is-running \.tool-call-title[\s\S]{0,400}color:\s*transparent/)
+  assert.match(css, /\.tool-call-head\.is-running \.tool-call-title[\s\S]{0,500}background-color:\s*var\(--biu-color-text-muted\)/)
+  assert.doesNotMatch(
+    css,
+    /\.tool-call-head\.is-running \.tool-call-title,\s*\n\.tool-call-head\.is-running \.tool-call-summary\s*\{[^}]*color:\s*transparent/s,
+  )
   assert.match(source, /toolOutputChars/)
   assert.match(source, /parsed\.kind === 'insert'/)
   assert.match(source, /parsed\.kind === 'str_replace'/)
