@@ -90,6 +90,27 @@ test('listCollection fresh skips the brief hold so a write can refetch', async (
   }
 })
 
+test('invalidateListReads for another table keeps this list cached', async () => {
+  let calls = 0
+  const original = globalThis.fetch
+  globalThis.fetch = (async () => {
+    calls += 1
+    return new Response(JSON.stringify({ items: [{ id: `n${calls}` }], total: 1 }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  }) as typeof fetch
+  try {
+    await listCollection({ path: '/notes', limit: 20, query: 'keep-b' })
+    invalidateListReads('/tasks')
+    const again = await listCollection({ path: '/notes', limit: 20, query: 'keep-b' })
+    assert.equal(calls, 1)
+    assert.equal(again.items[0]?.id, 'n1')
+  } finally {
+    globalThis.fetch = original
+  }
+})
+
 test('invalidateListReads drops the brief list hold so a write can refetch', async () => {
   let calls = 0
   const original = globalThis.fetch
