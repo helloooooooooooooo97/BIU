@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { allocateRecordSandbox, defaultRecordLayout, listedRecordLayouts, parseRecordLayoutDefaultName, parseRecordLayouts, parseRecordSandboxes, recordSandboxSource, seedRecordSandbox, uniqueViewName } from './record-views.ts'
+import { allocateRecordSandbox, defaultRecordLayout, listedRecordLayouts, parseRecordLayoutDefaultName, parseRecordLayouts, parseRecordSandboxes, recordSandboxFileNames, recordSandboxSource, seedRecordSandbox, uniqueViewName } from './record-views.ts'
 
 test('record layouts keep a builtin 默认视图 for every file', () => {
   assert.equal(defaultRecordLayout().name, '默认视图')
@@ -24,18 +24,24 @@ test('listed record layouts keep a renamed builtin default', () => {
   assert.equal(parseRecordLayoutDefaultName([{ id: 'builtin-default', name: '工作台' }]), '工作台')
 })
 
-test('record layouts can be a code sandbox', () => {
+test('record layouts ignore leftover sandbox fields', () => {
   const parsed = parseRecordLayouts([
     { id: 'wide', name: '宽页', kind: 'sandbox', file: 'layout-wide.jsx', dataFile: 'layout-data-wide.json' },
   ])
-  assert.equal(parsed[0]?.kind, 'sandbox')
-  assert.equal(parsed[0]?.file, 'layout-wide.jsx')
+  assert.equal(parsed[0]?.id, 'wide')
+  assert.equal(parsed[0]?.name, '宽页')
   assert.equal(parsed[0]?.contentViewId, 'doc')
+  assert.equal('kind' in (parsed[0] ?? {}), false)
+  assert.equal('file' in (parsed[0] ?? {}), false)
 })
 
 test('sandbox catalogs share one parser', () => {
   const views = parseRecordSandboxes([{ id: 'a', name: '', file: 'a.jsx' }])
   assert.equal(views[0]?.name, '新视图')
+  assert.deepEqual(
+    recordSandboxFileNames({ views, propViews: [{ id: 'p', file: 'prop-view-x.jsx', dataFile: 'prop-view-data-x.json' }] }),
+    ['a.jsx', 'view-data-a.json', 'prop-view-x.jsx', 'prop-view-data-x.json'],
+  )
 })
 
 test('copy names use 副本 then 副本 2', () => {

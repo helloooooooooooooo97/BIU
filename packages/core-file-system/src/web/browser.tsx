@@ -23,7 +23,7 @@ import {
   TrashIcon,
 } from '@heroicons/react/16/solid'
 import type { CollectionActionInfo, CollectionInfo, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
-import { normalizeSchemaValue } from '@biu/type-file-system'
+import { emitFsdbChange, normalizeSchemaValue, parseFsdbChange } from '@biu/type-file-system'
 import type { CollectionChrome, CollectionRowViewType, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
 import { parseAppPath } from '@biu/web-session-view'
 import { BoolBox } from '@biu/biu-ui/bool-box'
@@ -2773,9 +2773,15 @@ export function CollectionBrowser({
     let pendingTags = false
     let pendingData = false
     const onChange = (event: Event) => {
-      const detail = (event as CustomEvent<{ views?: boolean; tags?: boolean }>).detail
-      if (detail?.views) pendingViews = true
-      else if (detail?.tags) pendingTags = true
+      const change = parseFsdbChange(event)
+      if (change.scope === 'content') {
+        const path = String(change.path ?? '')
+        const id = detailIdRef.current
+        if (id && path.endsWith(`/${id}`)) pullDetailBody()
+        return
+      }
+      if (change.scope === 'views') pendingViews = true
+      else if (change.scope === 'tags') pendingTags = true
       else pendingData = true
       window.clearTimeout(debounce)
       debounce = window.setTimeout(() => {
@@ -3588,7 +3594,7 @@ export function CollectionBrowser({
       viewsRef.current = merged
       setViews(merged)
     }
-    window.dispatchEvent(new Event('fsdb:change'))
+    emitFsdbChange({ scope: 'views' })
     window.dispatchEvent(new Event('fsdb:crumb-labels'))
   }
 
@@ -3652,7 +3658,7 @@ export function CollectionBrowser({
         viewsRef.current = listedNow
         setViews(listedNow)
       }
-      window.dispatchEvent(new Event('fsdb:change'))
+      emitFsdbChange({ scope: 'views' })
       window.dispatchEvent(new Event('fsdb:crumb-labels'))
     }
     setViewsSaveError(false)
@@ -3930,7 +3936,7 @@ export function CollectionBrowser({
       viewsRef.current = painted
       setViews(painted)
     }
-    window.dispatchEvent(new Event('fsdb:change'))
+    emitFsdbChange({ scope: 'views' })
     void persistViewsFor(target, [...listed.filter((item) => item.id !== view.id), view], {
       upsert: [view],
       baseline: stored,
@@ -3942,7 +3948,7 @@ export function CollectionBrowser({
           viewsRef.current = painted
           setViews(painted)
         }
-        window.dispatchEvent(new Event('fsdb:change'))
+        emitFsdbChange({ scope: 'views' })
         return
       }
       if (target === collectionPath) {
@@ -4182,7 +4188,7 @@ export function CollectionBrowser({
     pendingPathQueryRef.current = null
     if (!keepCache) forgetListCache(dataPath)
     invalidateListReads()
-    window.dispatchEvent(new Event('fsdb:change'))
+    emitFsdbChange()
   }
 
   useEffect(() => {

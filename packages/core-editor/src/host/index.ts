@@ -16,10 +16,7 @@ export {
   defaultPageBlockTitle,
 } from '../page-block-fence.ts'
 export type { PageBlockAttrsPatch, PageBlockFence } from '../page-block-fence.ts'
-export { parsePageViews, viewsAssetName } from '../page-views.ts'
-export type { PageSandboxView } from '../page-views.ts'
-export { parsePagePropViews, propViewsAssetName, defaultPropSandboxSource } from '../page-prop-views.ts'
-export { parsePageLayouts, layoutsAssetName, defaultPageLayout, PAGE_DEFAULT_LAYOUT_ID } from '../page-layouts.ts'
+export { defaultPropSandboxSource } from '@biu/type-file-system/record-views'
 
 const SANDBOX_FENCE_HINT =
   '沙箱是内置块：围栏 :::editorBlock {kind=sandbox plugin=page-sandbox}，体只写 {"file":"assets/sandbox-….jsx","dataFile":"assets/sandbox-data-….json"}，不要把 React 源码或运行时数据写进围栏。'

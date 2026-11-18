@@ -1,7 +1,7 @@
 import { unlink } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { assetNamesFromHtml, assetNamesFromMarkdown } from '../../../type-file-system/src/asset-ref.ts'
+import { assetNamesFromHtml, assetNamesFromMarkdown, collectAssetNames } from '../../../type-file-system/src/asset-ref.ts'
 import { listCasAssetFiles, listDocAssetFiles } from './adopt-cas-assets.ts'
 import { hasEditorContent } from './editor-content.ts'
 import { tableNames } from './biu-schema.ts'
@@ -73,6 +73,14 @@ function scanBodies(db: DatabaseSync, live: Set<string>) {
   if (tables.has('attachments')) {
     for (const row of db.prepare(`SELECT name FROM attachments WHERE kind = 'core'`).all() as Array<{ name: string }>) {
       live.add(row.name)
+    }
+  }
+  if (tables.has('record_views')) {
+    for (const row of db.prepare('SELECT views_json, prop_views_json FROM record_views').all() as Array<{
+      views_json?: string
+      prop_views_json?: string
+    }>) {
+      for (const name of collectAssetNames({ views: row.views_json, propViews: row.prop_views_json })) live.add(name)
     }
   }
 }

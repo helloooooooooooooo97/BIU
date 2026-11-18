@@ -7,7 +7,7 @@ export function HostField({
   schema,
   spec: given,
   writable,
-  collectionPath = '/pages',
+  collectionPath = '',
   onSet,
 }: {
   name: string

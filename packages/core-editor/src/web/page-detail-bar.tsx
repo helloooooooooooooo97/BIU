@@ -16,62 +16,31 @@ import {
   TableCellsIcon,
   AdjustmentsHorizontalIcon,
 } from '@heroicons/react/16/solid'
-import { usePagePresentMode } from './source-mode.ts'
-import { PAGE_PROP_HIDDEN_VIEW_ID, PAGE_PROP_SOURCE_VIEW_ID, PAGE_PROP_TABLE_VIEW_ID, usePagePropPresentMode } from './page-prop-present.ts'
-import {
-  copyPagePropSandboxView,
-  createPagePropSandboxView,
-  deletePagePropSandboxView,
-  loadPagePropViews,
-  renamePagePropSandboxView,
-  usePagePropViews,
-} from './page-prop-views.ts'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
-import { copyPageSandboxView, createPageSandboxView, deletePageSandboxView, loadPageViews, usePageViews } from './page-views.ts'
-import {
-  addPageLayout,
-  copyPageLayout,
-  deletePageLayout,
-  loadPageLayouts,
-  renamePageLayout,
-  selectPageLayout,
-  patchActivePageLayout,
-  useActivePageLayout,
-  usePageLayouts,
-} from './page-layouts.ts'
-import {
-  pageFilterActive,
-  usePageViewState,
-} from './page-view-state.ts'
 import { useStickyToolbar } from './sticky-toolbar.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
-import { HIDDEN_CONTENT_VIEW_ID, parseRecordSandboxes } from '@biu/type-file-system/record-views'
-import { getDatabaseUi } from '@biu/core-file-system/database-ui'
+import {
+  DEFAULT_RECORD_PROP_VIEW_ID,
+  HIDDEN_CONTENT_VIEW_ID,
+  SOURCE_RECORD_PROP_VIEW_ID,
+} from '@biu/type-file-system/record-views'
+import { getDatabaseUi, recordContentFallback } from '@biu/core-file-system/database-ui'
 import { EDITOR_CONTENT_VIEWS, EDITOR_DETAIL_TOOLS } from './editor-content-views.ts'
 import {
-  addRecordLayout,
-  copyRecordLayout,
-  deleteRecordLayout,
   loadRecordLayouts,
   patchActiveRecordLayout,
-  renameRecordLayout,
-  setActiveRecordLayoutId,
   useActiveRecordLayout,
   useRecordLayouts,
 } from '@biu/core-file-system/record-layouts'
-import { createRecordSandboxView, writeRecordViewCatalog } from '@biu/core-file-system/record-sandboxes'
-import { loadTagViews } from '@biu/core-file-system/tag-views'
+import { hydrateRecordViewCatalog, useRecordViewCatalog } from '@biu/core-file-system/record-view-catalog'
+import { copyViewCatalog, createViewCatalog, deleteViewCatalog, renameViewCatalog, selectViewCatalog, selectedViewCatalogId } from '@biu/core-file-system/view-catalog'
 
 const HIDDEN_MODE = { id: HIDDEN_CONTENT_VIEW_ID, label: '隐藏', Icon: EyeSlashIcon }
 
-function layoutKindIcon(kind?: string) {
-  return kind === 'sandbox' ? CodeBracketIcon : Squares2X2Icon
-}
-
 function propPresentIcon(propViewId: string) {
-  if (propViewId === PAGE_PROP_HIDDEN_VIEW_ID) return EyeSlashIcon
-  if (propViewId === PAGE_PROP_SOURCE_VIEW_ID) return CodeBracketIcon
-  if (propViewId === PAGE_PROP_TABLE_VIEW_ID) return TableCellsIcon
+  if (propViewId === HIDDEN_CONTENT_VIEW_ID) return EyeSlashIcon
+  if (propViewId === SOURCE_RECORD_PROP_VIEW_ID) return CodeBracketIcon
+  if (propViewId === DEFAULT_RECORD_PROP_VIEW_ID) return TableCellsIcon
   return SandboxKindIcon
 }
 
@@ -103,21 +72,13 @@ export function RecordDetailBar({
   onRetry,
   configMenu,
 }: FsDetailBarProps) {
-  const path = String(collectionPath ?? '').trim() || '/pages'
-  const pageRecord = path === '/pages'
-  const fallback = path === '/tags' ? 'table' : path === '/agents' ? 'chat' : 'doc'
-  const present = usePagePresentMode(record.id)
-  const pageViews = usePageViews(record.id)
-  const pageLayouts = usePageLayouts(record.id)
-  const pageActiveLayout = useActivePageLayout(record.id)
-  const fsLayouts = useRecordLayouts(path, record.id, fallback)
-  const fsActiveLayout = useActiveRecordLayout(path, record.id, fallback)
-  const layouts = pageRecord ? pageLayouts : fsLayouts
-  const activeLayout = pageRecord ? pageActiveLayout : fsActiveLayout
-  const propPresent = usePagePropPresentMode(record.id)
-  const pagePropViews = usePagePropViews(record.id)
-  const listedPropViews = pageRecord ? pagePropViews : parseRecordSandboxes(record.propViews)
-  const listedContentViews = pageRecord ? pageViews : parseRecordSandboxes(record.views)
+  const path = String(collectionPath ?? '').trim()
+  const fallback = recordContentFallback(path)
+  const layouts = useRecordLayouts(path, record.id, fallback)
+  const activeLayout = useActiveRecordLayout(path, record.id, fallback)
+  const catalog = useRecordViewCatalog(path, record.id)
+  const listedPropViews = catalog.propViews
+  const listedContentViews = catalog.views
   const ui = getDatabaseUi()
   useSyncExternalStore(
     (fn) => (ui ? ui.subscribe(fn) : () => undefined),
@@ -128,7 +89,6 @@ export function RecordDetailBar({
   )
   const registeredModes = ui?.contentViews(path) ?? EDITOR_CONTENT_VIEWS
   const detailTools = ui ? ui.detailTools(path) : EDITOR_DETAIL_TOOLS
-  const view = usePageViewState(record.id)
   const [open, setOpen] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const viewRef = useRef<HTMLDivElement>(null)
@@ -140,7 +100,7 @@ export function RecordDetailBar({
   const configRef = useRef<HTMLDivElement>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
   useStickyToolbar(toolbarRef)
-  const contentId = pageRecord ? present : fsActiveLayout.contentViewId
+  const contentId = selectedViewCatalogId(path, record, 'views')
   const builtinModes = [...registeredModes, HIDDEN_MODE]
   const contentMode = listedContentViews.find((item) => item.id === contentId)
     ? { id: contentId, label: listedContentViews.find((item) => item.id === contentId)!.name, Icon: SandboxKindIcon }
@@ -157,22 +117,16 @@ export function RecordDetailBar({
   const [createKind, setCreateKind] = useState<'prop' | 'content'>('prop')
   const [creatingAny, setCreatingAny] = useState(false)
   const createRef = useRef<HTMLDivElement>(null)
-  const propSandbox = listedPropViews.find((item) => item.id === (pageRecord ? propPresent : fsActiveLayout.propViewId))
-  const propViewId = pageRecord
-    ? propPresent === PAGE_PROP_HIDDEN_VIEW_ID || propPresent === PAGE_PROP_SOURCE_VIEW_ID
-      ? propPresent
-      : propSandbox
-        ? propSandbox.id
-        : PAGE_PROP_TABLE_VIEW_ID
+  const livePropId = catalog.propViewId || activeLayout.propViewId
+  const propSandbox = listedPropViews.find((item) => item.id === livePropId)
+  const propViewId = livePropId === HIDDEN_CONTENT_VIEW_ID || livePropId === SOURCE_RECORD_PROP_VIEW_ID
+    ? livePropId
     : propSandbox
       ? propSandbox.id
-      : fsActiveLayout.propViewId === PAGE_PROP_HIDDEN_VIEW_ID || fsActiveLayout.propViewId === PAGE_PROP_SOURCE_VIEW_ID
-        ? fsActiveLayout.propViewId
-        : PAGE_PROP_TABLE_VIEW_ID
-  const LayoutIcon = layoutKindIcon(activeLayout.kind)
+      : DEFAULT_RECORD_PROP_VIEW_ID
   const PropIcon = propPresentIcon(propViewId)
-  const filterOn = pageRecord ? pageFilterActive(view) : activeLayout.filterKinds.length > 0
-  const rawSort = pageRecord ? view.sort : activeLayout.sort
+  const filterOn = activeLayout.filterKinds.length > 0
+  const rawSort = activeLayout.sort
   const defaultSortId = detailTools.sorts?.[0]?.id ?? 'doc'
   const currentSort = detailTools.sorts?.some((item) => item.id === rawSort) ? rawSort : defaultSortId
   const sortOn = currentSort !== defaultSortId
@@ -182,28 +136,17 @@ export function RecordDetailBar({
   const visibleKeys = visiblePropertyKeys ?? props.map((item) => item.key).filter((key) => !hiddenPropertyKeys.includes(key))
 
   async function setPropView(next: string) {
-    if (pageRecord) await patchActivePageLayout(record.id, { propViewId: next })
-    await patchActiveRecordLayout(path, record.id, { propViewId: next }, fallback)
+    selectViewCatalog(path, record, 'propViews', next)
   }
 
   async function patchLayout(patch: { contentViewId?: string; sort?: typeof activeLayout.sort; filterKinds?: string[] }) {
-    if (pageRecord) await patchActivePageLayout(record.id, patch)
-    else await patchActiveRecordLayout(path, record.id, patch, fallback)
+    await patchActiveRecordLayout(path, record.id, patch, fallback)
   }
 
   async function renamePropView(viewId: string, name: string) {
     const nextName = name.trim()
     if (!nextName) return
-    if (pageRecord) {
-      await renamePagePropSandboxView(record.id, viewId, nextName)
-      return
-    }
-    await writeRecordViewCatalog(
-      path,
-      record.id,
-      'propViews',
-      listedPropViews.map((item) => (item.id === viewId ? { ...item, name: nextName } : item)),
-    )
+    await Promise.resolve(renameViewCatalog(path, record, 'propViews', viewId, nextName))
   }
 
   async function createChosen(kind: 'prop' | 'content') {
@@ -212,31 +155,7 @@ export function RecordDetailBar({
     if (creatingAny) return
     setCreatingAny(true)
     try {
-      if (kind === 'prop') {
-        if (pageRecord) await createPagePropSandboxView(record.id, String(record.title ?? ''), '新视图')
-        else {
-          const view = await createRecordSandboxView({
-            collectionPath: path,
-            recordId: record.id,
-            fieldKey: 'propViews',
-            listed: listedPropViews,
-            name: '新视图',
-            title: String(record.title ?? ''),
-          })
-          await setPropView(view.id)
-        }
-      } else if (pageRecord) await createPageSandboxView(record.id, String(record.title ?? ''), '新视图')
-      else {
-        const view = await createRecordSandboxView({
-          collectionPath: path,
-          recordId: record.id,
-          fieldKey: 'views',
-          listed: listedContentViews,
-          name: '新视图',
-          title: String(record.title ?? ''),
-        })
-        await patchActiveRecordLayout(path, record.id, { contentViewId: view.id }, fallback)
-      }
+      await Promise.resolve(createViewCatalog(path, record, kind === 'prop' ? 'propViews' : 'views'))
     } catch {
       /* ignore */
     } finally {
@@ -246,14 +165,9 @@ export function RecordDetailBar({
 
   useEffect(() => {
     setOpen(null)
-    if (pageRecord) {
-      void loadPageViews(record.id, record.views)
-      void loadPagePropViews(record.id, record.propViews)
-      void loadPageLayouts(record.id, record.layouts)
-    }
+    hydrateRecordViewCatalog(path, record.id, record)
     void loadRecordLayouts(path, record.id, record.layouts, fallback)
-    if (path === '/tags') void loadTagViews(record.id, record.views)
-  }, [record.id, record.views, record.propViews, record.layouts, path, fallback, pageRecord])
+  }, [record.id, record.views, record.propViews, record.layouts, path, fallback, record])
 
   const toggle = (next: string) => setOpen((prev) => (prev === next ? null : next))
 
@@ -295,7 +209,7 @@ export function RecordDetailBar({
               data-testid="page-layout-tab"
               onClick={() => toggle('view')}
             >
-              <LayoutIcon aria-hidden className="size-[14px]" />
+              <Squares2X2Icon aria-hidden className="size-[14px]" />
               <span className="tasks-viewdd-name">{activeLayout.name}</span>
             </button>
           </div>
@@ -307,11 +221,7 @@ export function RecordDetailBar({
                     <div key={item.id} className={`tasks-viewdd-item${item.id === activeLayout.id ? ' is-active' : ''}`}>
                       {renamingView === item.id ? (
                         <div className="tasks-viewdd-item-main fsdb-tool-row">
-                          {item.kind === 'sandbox' ? (
-                            <CodeBracketIcon aria-hidden className="tasks-viewdd-item-ico" />
-                          ) : (
-                            <Squares2X2Icon aria-hidden className="tasks-viewdd-item-ico" />
-                          )}
+                          <Squares2X2Icon aria-hidden className="tasks-viewdd-item-ico" />
                           <input
                             className="tasks-viewdd-item-name"
                             aria-label={`视图名称 ${item.name}`}
@@ -321,13 +231,13 @@ export function RecordDetailBar({
                             onKeyDown={(event) => {
                               if (event.key === 'Enter') {
                                 event.preventDefault()
-                                void (pageRecord ? renamePageLayout(record.id, item.id, renameDraft) : renameRecordLayout(path, record.id, item.id, renameDraft)).catch(() => undefined)
+                                void Promise.resolve(renameViewCatalog(path, record, 'layouts', item.id, renameDraft)).catch(() => undefined)
                                 setRenamingView('')
                               }
                               if (event.key === 'Escape') setRenamingView('')
                             }}
                             onBlur={() => {
-                              void (pageRecord ? renamePageLayout(record.id, item.id, renameDraft) : renameRecordLayout(path, record.id, item.id, renameDraft)).catch(() => undefined)
+                              void Promise.resolve(renameViewCatalog(path, record, 'layouts', item.id, renameDraft)).catch(() => undefined)
                               setRenamingView('')
                             }}
                           />
@@ -340,16 +250,11 @@ export function RecordDetailBar({
                           className="tasks-viewdd-item-main fsdb-tool-row"
                           data-testid={`page-layout-${item.id}`}
                           onClick={() => {
-                            if (pageRecord) selectPageLayout(record.id, item)
-                            else setActiveRecordLayoutId(path, record.id, item.id)
+                            selectViewCatalog(path, record, 'layouts', item.id)
                             setOpen(null)
                           }}
                         >
-                          {item.kind === 'sandbox' ? (
-                            <CodeBracketIcon aria-hidden className="tasks-viewdd-item-ico" />
-                          ) : (
-                            <Squares2X2Icon aria-hidden className="tasks-viewdd-item-ico" />
-                          )}
+                          <Squares2X2Icon aria-hidden className="tasks-viewdd-item-ico" />
                           <span className="tasks-viewdd-item-name">{item.name}</span>
                         </button>
                       )}
@@ -362,7 +267,7 @@ export function RecordDetailBar({
                           onClick={(event) => {
                             event.preventDefault()
                             event.stopPropagation()
-                            void (pageRecord ? copyPageLayout(record.id, item) : copyRecordLayout(path, record.id, item, fallback)).catch(() => undefined)
+                            copyViewCatalog(path, record, 'layouts', item.id)
                           }}
                         >
                           <Square2StackIcon aria-hidden className="size-[14px]" />
@@ -393,7 +298,7 @@ export function RecordDetailBar({
                             onClick={(event) => {
                               event.preventDefault()
                               event.stopPropagation()
-                              void (pageRecord ? deletePageLayout(record.id, item.id) : deleteRecordLayout(path, record.id, item.id, fallback)).catch(() => undefined)
+                              deleteViewCatalog(path, record, 'layouts', item.id)
                             }}
                           >
                             <TrashGlyph aria-hidden className="size-[14px]" />
@@ -413,7 +318,7 @@ export function RecordDetailBar({
                     onClick={() => {
                       if (creatingLayout) return
                       setCreatingLayout(true)
-                      void (pageRecord ? addPageLayout(record.id) : addRecordLayout(path, record.id, fallback))
+                      void Promise.resolve(createViewCatalog(path, record, 'layouts'))
                         .catch(() => undefined)
                         .finally(() => {
                           setCreatingLayout(false)
@@ -435,7 +340,7 @@ export function RecordDetailBar({
         <div className="tasks-sort-wrap" ref={propRef}>
             <button
               type="button"
-              className={`tasks-sort-btn${open === 'props' || propViewId === PAGE_PROP_HIDDEN_VIEW_ID || propViewId !== PAGE_PROP_TABLE_VIEW_ID ? ' is-active' : ''}`}
+              className={`tasks-sort-btn${open === 'props' || propViewId === HIDDEN_CONTENT_VIEW_ID || propViewId !== DEFAULT_RECORD_PROP_VIEW_ID ? ' is-active' : ''}`}
               aria-label="属性展示"
               title="属性展示"
               data-testid="page-prop-view"
@@ -447,15 +352,15 @@ export function RecordDetailBar({
               <HeadlessDismiss onDismiss={() => setOpen(null)} insideRef={propRef}>
                 <div className="tasks-sort-menu fsdb-tool-flyout" role="menu">
                   <div className="tasks-sort-list">
-                    <div className={`tasks-viewdd-item${propViewId === PAGE_PROP_TABLE_VIEW_ID ? ' is-active' : ''}`}>
+                    <div className={`tasks-viewdd-item${propViewId === DEFAULT_RECORD_PROP_VIEW_ID ? ' is-active' : ''}`}>
                       <button
                         type="button"
                         role="menuitemradio"
-                        aria-checked={propViewId === PAGE_PROP_TABLE_VIEW_ID}
+                        aria-checked={propViewId === DEFAULT_RECORD_PROP_VIEW_ID}
                         className="tasks-viewdd-item-main fsdb-tool-row"
                         data-testid="page-prop-view-table"
                         onClick={() => {
-                          void setPropView(PAGE_PROP_TABLE_VIEW_ID)
+                          void setPropView(DEFAULT_RECORD_PROP_VIEW_ID)
                           setOpen(null)
                         }}
                       >
@@ -463,15 +368,15 @@ export function RecordDetailBar({
                         <span className="tasks-viewdd-item-name">表格</span>
                       </button>
                     </div>
-                    <div className={`tasks-viewdd-item${propViewId === PAGE_PROP_SOURCE_VIEW_ID ? ' is-active' : ''}`}>
+                    <div className={`tasks-viewdd-item${propViewId === SOURCE_RECORD_PROP_VIEW_ID ? ' is-active' : ''}`}>
                       <button
                         type="button"
                         role="menuitemradio"
-                        aria-checked={propViewId === PAGE_PROP_SOURCE_VIEW_ID}
+                        aria-checked={propViewId === SOURCE_RECORD_PROP_VIEW_ID}
                         className="tasks-viewdd-item-main fsdb-tool-row"
                         data-testid="page-prop-view-source"
                         onClick={() => {
-                          void setPropView(PAGE_PROP_SOURCE_VIEW_ID)
+                          void setPropView(SOURCE_RECORD_PROP_VIEW_ID)
                           setOpen(null)
                         }}
                       >
@@ -479,15 +384,15 @@ export function RecordDetailBar({
                         <span className="tasks-viewdd-item-name">源码</span>
                       </button>
                     </div>
-                    <div className={`tasks-viewdd-item${propViewId === PAGE_PROP_HIDDEN_VIEW_ID ? ' is-active' : ''}`}>
+                    <div className={`tasks-viewdd-item${propViewId === HIDDEN_CONTENT_VIEW_ID ? ' is-active' : ''}`}>
                       <button
                         type="button"
                         role="menuitemradio"
-                        aria-checked={propViewId === PAGE_PROP_HIDDEN_VIEW_ID}
+                        aria-checked={propViewId === HIDDEN_CONTENT_VIEW_ID}
                         className="tasks-viewdd-item-main fsdb-tool-row"
                         data-testid="page-prop-view-hidden"
                         onClick={() => {
-                          void setPropView(PAGE_PROP_HIDDEN_VIEW_ID)
+                          void setPropView(HIDDEN_CONTENT_VIEW_ID)
                           setOpen(null)
                         }}
                       >
@@ -545,22 +450,7 @@ export function RecordDetailBar({
                             onClick={(event) => {
                               event.preventDefault()
                               event.stopPropagation()
-                              void (pageRecord
-                                ? copyPagePropSandboxView(record.id, item.id, String(record.title ?? ''))
-                                : createRecordSandboxView({
-                                    collectionPath: path,
-                                    recordId: record.id,
-                                    fieldKey: 'propViews',
-                                    listed: listedPropViews,
-                                    name: `${item.name} 副本`,
-                                    title: String(record.title ?? ''),
-                                    source: item,
-                                  })
-                              )
-                                .then((view) => {
-                                  if (view) return setPropView(view.id)
-                                })
-                                .catch(() => undefined)
+                              copyViewCatalog(path, record, 'propViews', item.id)
                             }}
                           >
                             <Square2StackIcon aria-hidden className="size-[14px]" />
@@ -590,17 +480,7 @@ export function RecordDetailBar({
                             onClick={(event) => {
                               event.preventDefault()
                               event.stopPropagation()
-                              void (pageRecord
-                                ? deletePagePropSandboxView(record.id, item.id)
-                                : writeRecordViewCatalog(
-                                    path,
-                                    record.id,
-                                    'propViews',
-                                    listedPropViews.filter((view) => view.id !== item.id),
-                                  ).then(() => {
-                                    if (propViewId === item.id) return setPropView(PAGE_PROP_TABLE_VIEW_ID)
-                                  })
-                              ).catch(() => undefined)
+                              deleteViewCatalog(path, record, 'propViews', item.id)
                             }}
                           >
                             <TrashGlyph aria-hidden className="size-[14px]" />
@@ -619,20 +499,7 @@ export function RecordDetailBar({
                       onClick={() => {
                         if (creatingPropView) return
                         setCreatingPropView(true)
-                        void (pageRecord
-                          ? createPagePropSandboxView(record.id, String(record.title ?? ''), '新视图')
-                          : createRecordSandboxView({
-                              collectionPath: path,
-                              recordId: record.id,
-                              fieldKey: 'propViews',
-                              listed: listedPropViews,
-                              name: '新视图',
-                              title: String(record.title ?? ''),
-                            })
-                        )
-                          .then((view) => {
-                            if (view) return setPropView(view.id)
-                          })
+                        void Promise.resolve(createViewCatalog(path, record, 'propViews'))
                           .catch(() => undefined)
                           .finally(() => {
                             setCreatingPropView(false)
@@ -672,7 +539,7 @@ export function RecordDetailBar({
                     className={`tasks-viewdd-item-main fsdb-tool-row${item.id === contentId ? ' is-active' : ''}`}
                     data-testid={item.id === HIDDEN_CONTENT_VIEW_ID ? 'page-view-hidden' : undefined}
                     onClick={() => {
-                      void patchLayout({ contentViewId: item.id })
+                      selectViewCatalog(path, record, 'views', item.id)
                       setOpen(null)
                     }}
                   >
@@ -690,7 +557,7 @@ export function RecordDetailBar({
                       className="tasks-viewdd-item-main fsdb-tool-row"
                       data-testid={`page-view-${item.id}`}
                       onClick={() => {
-                        void patchLayout( { contentViewId: item.id })
+                        selectViewCatalog(path, record, 'views', item.id)
                         setOpen(null)
                       }}
                     >
@@ -706,9 +573,7 @@ export function RecordDetailBar({
                         onClick={(event) => {
                           event.preventDefault()
                           event.stopPropagation()
-                          void copyPageSandboxView(record.id, item.id, String(record.title ?? '')).then((view) => {
-                            if (view) return patchLayout({ contentViewId: view.id })
-                          }).catch(() => undefined)
+                          copyViewCatalog(path, record, 'views', item.id)
                         }}
                       >
                         <Square2StackIcon aria-hidden className="size-[14px]" />
@@ -723,7 +588,7 @@ export function RecordDetailBar({
                         onClick={(event) => {
                           event.preventDefault()
                           event.stopPropagation()
-                          void deletePageSandboxView(record.id, item.id).catch(() => undefined)
+                          deleteViewCatalog(path, record, 'views', item.id)
                         }}
                       >
                         <TrashGlyph aria-hidden className="size-[14px]" />
@@ -741,10 +606,7 @@ export function RecordDetailBar({
                     onClick={() => {
                       if (creatingView) return
                       setCreatingView(true)
-                      void createPageSandboxView(record.id, String(record.title ?? ''), '新视图')
-                        .then((view) => {
-                          if (view) return patchLayout({ contentViewId: view.id })
-                        })
+                      void Promise.resolve(createViewCatalog(path, record, 'views'))
                         .catch(() => undefined)
                         .finally(() => {
                           setCreatingView(false)
@@ -809,7 +671,7 @@ export function RecordDetailBar({
                   onToggle={() => void patchLayout({ filterKinds: [] })}
                 />
                 {detailTools.filters.map((item) => {
-                  const selected = pageRecord ? view.filterKinds : activeLayout.filterKinds
+                  const selected = activeLayout.filterKinds
                   return (
                   <Row
                     key={item.id}

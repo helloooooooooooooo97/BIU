@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { DbRecord } from '@biu/type-file-system'
+import { parseFsdbChange } from '@biu/type-file-system'
+import { hydrateRecordViewCatalog } from './record-view-catalog.ts'
 
 export async function readDbRecord(path: string): Promise<DbRecord | null> {
   const want = String(path ?? '').trim()
@@ -31,8 +33,23 @@ export function useLiveDbRecord(collectionPath: string, record: DbRecord) {
       })
     }
     const onChange = (event: Event) => {
-      const detail = (event as CustomEvent<{ views?: boolean }>).detail
-      if (detail?.views) return
+      const change = parseFsdbChange(event)
+      const want = `${collectionPath}/${recordId}`
+      if (change.scope === 'views') {
+        if (!change.path || change.path !== want) return
+        void readDbRecord(want).then((row) => {
+          if (gone || !row?.id || row.id !== recordId) return
+          hydrateRecordViewCatalog(collectionPath, recordId, row)
+          setLive((prev) => ({
+            ...prev,
+            views: row.views,
+            propViews: row.propViews,
+            layouts: row.layouts,
+          }))
+        })
+        return
+      }
+      if (change.scope === 'content' && change.path && change.path !== want) return
       pull()
     }
     window.addEventListener('fsdb:change', onChange)

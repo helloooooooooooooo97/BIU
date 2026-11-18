@@ -3294,7 +3294,15 @@ test('collection list preloads authorization scans and releases them', () => {
   assert.match(host, /this\.shareScopeLabel\(collection, id, row, stored\)/)
   assert.match(host, /notifyShareChange\(\)/)
   assert.match(host, /notifyTagCatalog\(\)/)
-  assert.match(host, /tags: true/)
+  assert.match(host, /notifyViewCatalog\(/)
+  assert.match(host, /notifyContent\(`\$\{spec\.path\}\/\$\{record\.id\}`\)/)
+  assert.match(host, /databaseChannelPayload\('tags'\)/)
+  assert.match(host, /databaseChannelPayload\('views'/)
+  assert.match(host, /databaseChannelPayload\('content'/)
+  assert.match(host, /databaseChannelPayload\('records'\)/)
+  assert.match(host, /databaseChannelPayload\('asset'/)
+  assert.match(host, /if \(viewOnly\) this\.notifyViewCatalog\(`\$\{spec\.path\}\/\$\{record\.id\}`\)/)
+  assert.match(host, /else this\.bump\(\)/)
   assert.doesNotMatch(host, /db\.bump\(\)\s*\n\s*route\.send\(200, \{ ok: true, tags: facets\.list\(\), filled:/)
   assert.match(host, /listRecords\(collection\)/)
   assert.match(host, /shareInflight/)
@@ -3393,34 +3401,29 @@ test('deleting a /views row is a hard delete and drops the stored view', async (
   )
 })
 
-test('db_doc view/write uses collection namedDocs for page sandbox files', async () => {
-  const files = new Map<string, { text: string; etag: string }>([
-    ['view-p194-8fdbc4f8.jsx', { text: 'export default function App(){return <p>你好</p>}\n', etag: 'e1' }],
-  ])
+test('db_doc view/write uses record sandbox files as assets', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
+  db.assets = new FileSystemAssets(await mkdtemp(join(tmpdir(), 'db-doc-sandbox-')))
+  const rows = new Map([['p194', { id: 'p194', title: '沙盒页' }]])
   db.register({
     id: 'pages',
     path: '/pages',
     schema: { labelField: 'title', fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
-    namedDocs: {
-      names: (record) => [`view-${record.id}-8fdbc4f8.jsx`, `page-views-${record.id}.json`],
-      read: (name) => {
-        const hit = files.get(name)
-        if (!hit) throw new Error('not found')
-        return { bytes: Buffer.from(hit.text), type: 'text/javascript; charset=utf-8', etag: hit.etag }
-      },
-      write: (name, content, opts) => {
-        const hit = files.get(name)
-        if (hit && opts?.etag && opts.etag !== hit.etag) throw new Error('etag conflict')
-        const text = typeof content === 'string' ? content : Buffer.from(content).toString('utf8')
-        const next = { text, etag: `e${files.size + 1}` }
-        files.set(name, next)
-        return { name, etag: next.etag, bytes: Buffer.byteLength(text) }
-      },
+    records: { update: true },
+    list: () => [...rows.values()],
+    get: (id) => rows.get(id) ?? null,
+    update: (id, patch) => {
+      const current = rows.get(id)
+      if (!current) throw new Error('missing')
+      const next = { ...current, ...patch }
+      rows.set(id, next)
+      return next
     },
-    list: () => [{ id: 'p194', title: '沙盒页' }],
-    get: (id) => (id === 'p194' ? { id: 'p194', title: '沙盒页', views: [{ id: '8fdbc4f8', file: 'view-p194-8fdbc4f8.jsx' }] } : null),
+  })
+  await db.assets.writeDoc('view-p194-8fdbc4f8.jsx', 'export default function App(){return <p>你好</p>}\n')
+  await db.update('/pages/p194', {
+    views: [{ id: '8fdbc4f8', name: '沙盒 1', kind: 'sandbox', file: 'view-p194-8fdbc4f8.jsx' }],
   })
   const listed = await db.editDoc('/pages/p194')
   assert.equal(listed.kind, 'doc')

@@ -104,6 +104,11 @@ export function getDatabaseUi() {
   return boundDatabaseUi
 }
 
+export function recordContentFallback(collectionPath: string) {
+  const id = getDatabaseUi()?.contentViews(collectionPath)[0]?.id
+  return String(id ?? '').trim() || 'doc'
+}
+
 export class DatabaseUiService extends Service implements DatabaseUi {
   private layers = new Map<string, CollectionChrome[]>()
   private viewLayers = new Map<string, CollectionViewType[]>()

@@ -6,7 +6,6 @@ import { RecordEditor } from './page-editor.tsx'
 import { BlockEditorService } from './service.ts'
 import { PAGE_EDITOR_STYLE } from './style.ts'
 import { RecordDetailBar } from './page-detail-bar.tsx'
-import { bindPageViewCatalogHost } from './page-view-catalog.ts'
 import { registerSandboxBlock } from './sandbox/block.tsx'
 import { EDITOR_CONTENT_VIEWS, EDITOR_DETAIL_TOOLS } from './editor-content-views.ts'
 
@@ -25,10 +24,6 @@ export { LayoutPicker, LayoutGlyph, type LayoutPreset } from './layout-picker.ts
 export { markdownLocusFromRange, markdownLocusFromSelection, markdownLocusFromElement } from './markdown-locus.ts'
 export { PageBlockStage } from './page-blocks-view.tsx'
 export { PageHostView } from './page-host-view.tsx'
-export { parsePageViews, viewsAssetName, createPageSandboxView, loadPageViews } from './page-views.ts'
-export { PageProperties } from './page-prop-host.tsx'
-export { parsePagePropViews, propViewsAssetName, createPagePropSandboxView, loadPagePropViews } from './page-prop-views.ts'
-export { parsePageLayouts, layoutsAssetName, PAGE_DEFAULT_LAYOUT_ID, loadPageLayouts } from './page-layouts.ts'
 
 export const name = 'core-editor-ui'
 export const inject = ['databaseUi']
@@ -49,7 +44,6 @@ export function apply(ctx: Context) {
       tools.dispose()
     }
   })
-  ctx.effect(() => bindPageViewCatalogHost())
 }
 
 if (typeof document !== 'undefined') {

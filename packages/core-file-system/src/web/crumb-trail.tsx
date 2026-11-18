@@ -6,6 +6,7 @@ import { overlayPortalRoot } from '@biu/biu-ui/overlay-portal'
 import { delayCrumbQuery, pullCrumbRecords, recordChoicesFromRows } from './crumb-records.ts'
 import { CrumbItemGlyph, TableGlyph } from './nav-glyphs.tsx'
 import { crumbButtonAction, type Crumb, type CrumbChoice, type CrumbTarget } from './sidebar-nav.ts'
+import { emitFsdbChange } from '@biu/type-file-system'
 import { pullSavedViews } from './view-storage.ts'
 
 function canOpenCrumbMenu(crumb: Crumb) {
@@ -62,7 +63,7 @@ function CrumbMenu({
       void pullSavedViews([viewCollection])
         .then(() => {
           if (!live) return
-          window.dispatchEvent(new CustomEvent('fsdb:change', { detail: { views: true } }))
+          emitFsdbChange({ scope: 'views' })
           window.dispatchEvent(new Event('fsdb:crumb-labels'))
         })
         .finally(() => {

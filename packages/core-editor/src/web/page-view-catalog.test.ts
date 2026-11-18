@@ -3,13 +3,22 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-test('page view catalog falls back to record JSON when the live store is empty', () => {
-  const src = readFileSync(resolve(import.meta.dirname, './page-view-catalog.ts'), 'utf8')
-  assert.match(src, /live\.length \? live : parsePageViews\(record\.views\)/)
-  assert.match(src, /parsePagePropViews\(record\.propViews\)/)
-  assert.match(src, /mergeListedLayouts\(record\.layouts\)/)
-  assert.match(src, /id: 'hidden', name: '隐藏'/)
-  assert.match(src, /PAGE_PROP_HIDDEN_VIEW_ID/)
-  assert.match(src, /PAGE_PROP_SOURCE_VIEW_ID/)
-  assert.match(src, /name: '源码'/)
+test('page and tag do not register a special view catalog host', () => {
+  const index = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
+  const bar = readFileSync(resolve(import.meta.dirname, './page-detail-bar.tsx'), 'utf8')
+  const editor = readFileSync(resolve(import.meta.dirname, './page-editor.tsx'), 'utf8')
+  assert.doesNotMatch(index, /bindPageViewCatalogHost/)
+  assert.doesNotMatch(index, /registerViewCatalogHost/)
+  assert.doesNotMatch(bar, /pageRecord/)
+  assert.doesNotMatch(bar, /tagRecord/)
+  assert.doesNotMatch(bar, /loadTagViews/)
+  assert.doesNotMatch(bar, /loadPageViews/)
+  assert.doesNotMatch(editor, /TagRecordSandbox/)
+  assert.doesNotMatch(editor, /useTagViews/)
+  assert.doesNotMatch(editor, /usePageViews/)
+  assert.doesNotMatch(editor, /getPagePresentMode/)
+  assert.doesNotMatch(bar, /getPagePresentMode/)
+  assert.doesNotMatch(bar, /getActivePageLayout/)
+  assert.doesNotMatch(index, /PageProperties/)
+  assert.doesNotMatch(index, /PagePropHostView/)
 })

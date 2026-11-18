@@ -9,14 +9,22 @@ import {
   withBuiltinFields,
   type CollectionSchema,
   type DbRecord,
+  emitFsdbChange,
 } from '@biu/type-file-system'
 import { defaultContentSandboxSource } from '@biu/type-file-system/record-views'
 import { listPageBlockFences, pageBlockData, pageBlockRecordId } from '../page-block-fence.ts'
 import { compileHostSource, loadHostComponent, SandboxPreview } from './page-host-compile.ts'
 import { PageBlockStage, writeBlockData } from './page-blocks-view.tsx'
 import { ExpandNavTitle } from './expand-nav-title.tsx'
-import { getPageViews, peekPageFile, readPageFile, renamePageSandboxView, usePageFileTick, usePageViews, writePageFile, type PageSandboxView } from './page-views.ts'
-import { getPageLayouts, usePageLayouts } from './page-layouts.ts'
+import { getRecordViewCatalog, useRecordViewCatalog } from '@biu/core-file-system/record-view-catalog'
+import {
+  peekRecordViewFile,
+  putRecordViewFile,
+  readRecordViewFile,
+  useRecordViewFileTick,
+  writeRecordViewCatalog,
+} from '@biu/core-file-system/record-sandboxes'
+import type { RecordSandboxView } from '@biu/type-file-system/record-views'
 import { capturePageScroll } from './page-scroll-pin.ts'
 import { getBlockEditor, useBlockEditorVersion } from './service.ts'
 import { RenderBoundary } from '@biu/biu-ui'
@@ -85,34 +93,35 @@ function layoutFields(record: DbRecord, schema?: CollectionSchema) {
   })
 }
 
-async function patchPageRecord(pageId: string, bag: Record<string, unknown>) {
+async function patchPageRecord(collectionPath: string, pageId: string, bag: Record<string, unknown>) {
+  const path = `${collectionPath}/${pageId}`
   const res = await fetch('/api/db/update', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ path: `/pages/${pageId}`, content: bag }),
+    body: JSON.stringify({ path, content: bag }),
   })
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string }
     throw new Error(data.error || res.statusText)
   }
-  window.dispatchEvent(new Event('fsdb:change'))
+  emitFsdbChange({ scope: 'content', path })
 }
 
-export async function writePageHostBlock(pageId: string, blockId: string, patch: Record<string, unknown>) {
+export async function writePageHostBlock(pageId: string, blockId: string, patch: Record<string, unknown>, collectionPath = '') {
   const id = String(blockId ?? '').trim()
   if (!id) return false
-  await writeBlockData(pageBlockRecordId('/pages', pageId, id), patch)
+  await writeBlockData(pageBlockRecordId(collectionPath, pageId, id), patch)
   return true
 }
 
-export function listPageHostBlocks(pageId: string, markdown = ''): HostBlockInfo[] {
+export function listPageHostBlocks(pageId: string, markdown = '', collectionPath = ''): HostBlockInfo[] {
   const out: HostBlockInfo[] = []
   for (const fence of listPageBlockFences(markdown)) {
     const blockId = String(fence.id ?? '').trim()
     if (!blockId) continue
     const data = asData(pageBlockData(fence))
     out.push({
-      id: pageBlockRecordId('/pages', pageId, blockId),
+      id: pageBlockRecordId(collectionPath, pageId, blockId),
       pageId,
       blockId,
       kind: fence.kind,
@@ -128,10 +137,12 @@ function HostBlock({
   id,
   blocks,
   writable,
+  collectionPath,
 }: {
   id: string
   blocks: HostBlockInfo[]
   writable: boolean
+  collectionPath: string
 }) {
   const hit = blocks.find((item) => item.blockId === id || item.id === id || item.id.endsWith(`::${id}`))
   if (!hit) {
@@ -155,29 +166,24 @@ function HostBlock({
       row={row}
       writable={writable}
       onChange={(next) => {
-        void writePageHostBlock(hit.pageId, hit.blockId, next).catch(() => undefined)
+        void writePageHostBlock(hit.pageId, hit.blockId, next, collectionPath).catch(() => undefined)
       }}
       key={hit.blockId}
     />
   )
 }
 
-function layoutSandboxOf(pageId: string, viewId: string) {
-  return getPageLayouts(pageId).find((item) => item.id === viewId && item.kind === 'sandbox' && item.file)
+function viewOf(collectionPath: string, pageId: string, viewId: string): RecordSandboxView | undefined {
+  return getRecordViewCatalog(collectionPath, pageId).views.find((item) => item.id === viewId)
 }
 
-function viewOf(pageId: string, viewId: string): PageSandboxView | undefined {
-  const content = getPageViews(pageId).find((item) => item.id === viewId)
-  if (content) return content
-  const layout = layoutSandboxOf(pageId, viewId)
-  if (!layout?.file) return
-  return {
-    id: layout.id,
-    name: layout.name,
-    kind: 'sandbox',
-    file: layout.file,
-    dataFile: layout.dataFile || `layout-data-${layout.id}.json`,
-  }
+async function renameSandboxView(collectionPath: string, pageId: string, viewId: string, name: string) {
+  const nextName = name.trim()
+  if (!nextName) return
+  const listed = getRecordViewCatalog(collectionPath, pageId).views.map((item) =>
+    item.id === viewId ? { ...item, name: nextName } : item,
+  )
+  await writeRecordViewCatalog(collectionPath, pageId, 'views', listed)
 }
 
 type HostTab = 'preview' | 'code' | 'split'
@@ -285,31 +291,32 @@ export function PageHostView({
   writable = true,
   markdown = '',
   schema,
+  collectionPath = '',
 }: {
   record: DbRecord
   viewId: string
   writable?: boolean
   markdown?: string
   schema?: CollectionSchema
+  collectionPath?: string
 }) {
   const editorVersion = useBlockEditorVersion()
-  const fileTick = usePageFileTick()
+  const fileTick = useRecordViewFileTick()
   const pageId = String(record.id)
-  usePageViews(pageId)
-  usePageLayouts(pageId)
-  const view = viewOf(pageId, viewId)
-  const layoutView = layoutSandboxOf(pageId, viewId)
+  const path = String(collectionPath ?? '').trim()
+  useRecordViewCatalog(path, pageId)
+  const view = viewOf(path, pageId, viewId)
   const fallback = defaultContentSandboxSource(String(record.title ?? ''))
-  const [source, setSource] = useState(() => peekPageFile(view?.file ?? '') || fallback)
+  const [source, setSource] = useState(() => peekRecordViewFile(path, pageId, view?.file ?? '') || fallback)
   const [tab, setTab] = useState<HostTab>('preview')
   const [expanded, setExpanded] = useState(false)
   const [previewWidth, setPreviewWidth] = useState(0)
-  const [live, setLive] = useLiveDbRecord('/pages', record)
+  const [live, setLive] = useLiveDbRecord(path, record)
   const showPreview = tab !== 'code'
   const showCode = tab !== 'preview'
   const hostRef = useRef<HTMLDivElement | null>(null)
   const previewRef = useRef<HTMLDivElement | null>(null)
-  const blocks = useMemo(() => listPageHostBlocks(pageId, markdown), [pageId, markdown])
+  const blocks = useMemo(() => listPageHostBlocks(pageId, markdown, path), [pageId, markdown, path])
   const [patchError, setPatchError] = useState('')
   const fields = useMemo(() => layoutFields(live, schema), [live, schema])
 
@@ -326,24 +333,24 @@ export function PageHostView({
       setSource(next)
       return
     }
-    const cached = peekPageFile(file)
+    const cached = peekRecordViewFile(path, pageId, file)
     if (cached != null) {
       setSource(cached)
       return
     }
-    void readPageFile(file, next).then((text) => {
+    void readRecordViewFile(path, pageId, file, next).then((text) => {
       if (!gone) setSource(text)
     })
     return () => {
       gone = true
     }
-  }, [pageId, view?.file, layoutView, record.title, fileTick])
+  }, [pageId, path, view?.file, record.title, fileTick])
 
   const writeRecord = useCallback(
     async (bag: Record<string, unknown>) => {
       try {
         const patch = sanitizeRecordPatch(hostSchema(schema), bag)
-        await patchPageRecord(pageId, patch)
+        await patchPageRecord(path, pageId, patch)
         setLive((cur) => ({ ...cur, ...patch }))
         setPatchError('')
       } catch (error) {
@@ -352,10 +359,10 @@ export function PageHostView({
         throw error
       }
     },
-    [pageId, schema],
+    [pageId, path, schema],
   )
 
-  const compiled = useMemo(() => compileHostSource(source, layoutView ? 'Layout' : 'Block'), [source, layoutView])
+  const compiled = useMemo(() => compileHostSource(source, 'Block'), [source])
   const biu = useMemo(
     () => ({
       page: () => ({ id: pageId, title: String(live.title ?? record.title ?? '').trim() }),
@@ -372,7 +379,7 @@ export function PageHostView({
       read: async () => {
         if (!view?.dataFile) return null
         try {
-          const text = await readPageFile(view.dataFile, 'null')
+          const text = await readRecordViewFile(path, pageId, view.dataFile, 'null')
           if (!text.trim() || text.trim() === 'null') return null
           return JSON.parse(text) as unknown
         } catch {
@@ -381,20 +388,20 @@ export function PageHostView({
       },
       write: async (value: unknown) => {
         if (!view?.dataFile) return
-        await writePageFile(view.dataFile, JSON.stringify(value ?? null, null, 2), 'application/json')
+        await putRecordViewFile(path, pageId, view.dataFile, JSON.stringify(value ?? null, null, 2), 'application/json')
       },
-      files: createSandboxFilesApi(() => `/pages/${pageId}`),
-      docs: createSandboxDocsApi(() => `/pages/${pageId}`),
-      update: (id: string, patch: Record<string, unknown>) => writePageHostBlock(pageId, id, patch),
+      files: createSandboxFilesApi(() => `${path}/${pageId}`),
+      docs: createSandboxDocsApi(() => `${path}/${pageId}`),
+      update: (id: string, patch: Record<string, unknown>) => writePageHostBlock(pageId, id, patch, path),
     }),
-    [blocks, editorVersion, fields, live, pageId, record.title, view?.dataFile, writeRecord],
+    [blocks, editorVersion, fields, live, pageId, path, record.title, view?.dataFile, writeRecord],
   )
 
   const Block = useCallback(
     (props: { id: string; writable?: boolean }) => (
-      <HostBlock id={String(props.id ?? '')} blocks={blocks} writable={props.writable ?? writable} />
+      <HostBlock id={String(props.id ?? '')} blocks={blocks} writable={props.writable ?? writable} collectionPath={path} />
     ),
-    [blocks, writable],
+    [blocks, writable, path],
   )
 
   const Field = useCallback(
@@ -430,7 +437,7 @@ export function PageHostView({
   useLayoutEffect(() => {
     if (!showPreview) return
     return bindSandboxPickPane(previewRef.current, pageHostPickKey(pageId, viewId), {
-      path: `/pages/${pageId}`,
+      path: `${path}/${pageId}`,
       ...(view?.file ? { name: view.file } : {}),
       ...(view?.name ? { title: view.name } : {}),
     })
@@ -451,7 +458,7 @@ export function PageHostView({
         onExpand={() => setExpanded((open) => !open)}
         title={view?.name?.trim() || '沙盒'}
         onTitle={(next) => {
-          if (view) void renamePageSandboxView(pageId, view.id, next)
+          if (view) void renameSandboxView(path, pageId, view.id, next)
         }}
       />
       <div className="page-host-stage">
@@ -462,8 +469,8 @@ export function PageHostView({
             style={splitPaneStyle(showCode ? previewWidth : 0)}
             data-testid="page-host-preview"
             data-sandbox=""
-            data-page-path={`/pages/${pageId}`}
-            data-biu-path={`/pages/${pageId}`}
+            data-page-path={`${path}/${pageId}`}
+            data-biu-path={`${path}/${pageId}`}
             data-biu-name={view?.file || undefined}
             data-biu-title={view?.name || undefined}
           >
@@ -520,7 +527,7 @@ export function PageHostView({
             data-biu-kind="sandbox"
             data-biu-id={`sandbox:${pageHostPickKey(pageId, viewId)}:source`}
             data-biu-label={view?.name || '沙盒'}
-            data-biu-path={`/pages/${pageId}`}
+            data-biu-path={`${path}/${pageId}`}
             data-biu-name={view?.file || undefined}
             data-biu-title={view?.name || undefined}
           >
@@ -529,13 +536,13 @@ export function PageHostView({
               language="javascript"
               writable={writable}
               pickHost={{
-                path: `/pages/${pageId}`,
+                path: `${path}/${pageId}`,
                 name: view?.file,
                 title: view?.name || String(record.title ?? '').trim(),
               }}
               onChange={(next) => {
                 setSource(next)
-                if (view?.file && writable) void writePageFile(view.file, next)
+                if (view?.file && writable) void putRecordViewFile(path, pageId, view.file, next)
               }}
             />
             <div

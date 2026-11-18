@@ -7429,7 +7429,7 @@ html[data-outline-pin="1"] .chat-outline-rail {
 
 .tool-call-head:hover::before,
 .tool-call-head.is-open::before {
-  background: var(--biu-color-bg-subtle);
+  background-color: var(--biu-color-bg-subtle);
 }
 
 .tool-call-toggle {
@@ -7487,23 +7487,35 @@ html[data-outline-pin="1"] .chat-outline-rail {
   white-space: nowrap;
 }
 
-/* 运行中：扫光铺满整条，盖过右侧图标占位 */
-.tool-call-head.is-running::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  border-radius: inherit;
-  pointer-events: none;
+/* 运行中：扫光只走文字，不铺背景 */
+.tool-call-head.is-running .tool-call-title,
+.tool-call-head.is-running .tool-call-summary {
+  color: transparent;
   background-image: linear-gradient(105deg,
-      transparent 0%,
-      transparent 38%,
-      color-mix(in srgb, var(--biu-color-text-muted) 28%, transparent) 50%,
-      transparent 62%,
-      transparent 100%);
+      var(--biu-color-text-muted) 0%,
+      var(--biu-color-text-muted) 38%,
+      var(--biu-color-text) 50%,
+      var(--biu-color-text-muted) 62%,
+      var(--biu-color-text-muted) 100%);
   background-size: 220% 100%;
   background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
   animation: tool-call-text-pulse 1.6s linear infinite;
+}
+
+.tool-call-head.is-running .tool-call-summary {
+  background-image: linear-gradient(105deg,
+      var(--biu-color-text-subtle) 0%,
+      var(--biu-color-text-subtle) 38%,
+      var(--biu-color-text-muted) 50%,
+      var(--biu-color-text-subtle) 62%,
+      var(--biu-color-text-subtle) 100%);
+}
+
+html:not(.dark) .tool-call-head.is-running .tool-call-title,
+html:not(.dark) .tool-call-head.is-running .tool-call-summary {
+  color: transparent;
 }
 
 @keyframes tool-call-text-pulse {
@@ -7517,9 +7529,17 @@ html[data-outline-pin="1"] .chat-outline-rail {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tool-call-head.is-running::after {
+  .tool-call-head.is-running .tool-call-title,
+  .tool-call-head.is-running .tool-call-summary {
     animation: none;
-    background: none;
+    color: var(--biu-color-text-muted);
+    background-image: none;
+    -webkit-background-clip: border-box;
+    background-clip: border-box;
+  }
+
+  .tool-call-head.is-running .tool-call-summary {
+    color: var(--biu-color-text-subtle);
   }
 }
 

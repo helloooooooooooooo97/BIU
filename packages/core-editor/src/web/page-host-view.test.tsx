@@ -4,14 +4,15 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { listPageHostBlocks, PageHostView } from './page-host-view.tsx'
-import { resetPageFileState, setPageViews } from './page-views.ts'
+import { resetRecordViewFileState } from '@biu/core-file-system/record-sandboxes'
+import { patchRecordViewCatalog } from '@biu/core-file-system/record-view-catalog'
 
 test('host view paints the default sandbox when the view file is missing', async () => {
-  resetPageFileState()
-  setPageViews('home', [
+  resetRecordViewFileState()
+  patchRecordViewCatalog('/pages', 'home', { views: [
     { id: 'site1', name: '官网', kind: 'sandbox', file: 'missing-view.jsx', dataFile: 'missing-data.json' },
-  ])
-  const { getByTestId, queryByTestId } = render(<PageHostView record={{ id: 'home', title: '演示页' }} viewId="site1" />)
+  ] })
+  const { getByTestId, queryByTestId } = render(<PageHostView record={{ id: 'home', title: '演示页' }} viewId="site1" collectionPath="/pages" />)
   await waitFor(() => {
     assert.ok(getByTestId('page-host-view-root'))
   })
@@ -39,27 +40,27 @@ test('host view paints the default sandbox when the view file is missing', async
 
 test('host view stays mounted when the page record object changes', async () => {
   cleanup()
-  resetPageFileState()
-  setPageViews('home', [
+  resetRecordViewFileState()
+  patchRecordViewCatalog('/pages', 'home', { views: [
     { id: 'site1', name: '官网', kind: 'sandbox', file: 'missing-view.jsx', dataFile: 'missing-data.json' },
-  ])
-  const { getByTestId, rerender } = render(<PageHostView record={{ id: 'home', title: '演示页' }} viewId="site1" />)
+  ] })
+  const { getByTestId, rerender } = render(<PageHostView record={{ id: 'home', title: '演示页' }} viewId="site1" collectionPath="/pages" />)
   await waitFor(() => {
     assert.ok(getByTestId('page-host-view-root'))
   })
   const root = getByTestId('page-host-view-root')
   root.dataset.stay = '1'
-  rerender(<PageHostView record={{ id: 'home', title: '演示页', touched: 1 }} viewId="site1" />)
+  rerender(<PageHostView record={{ id: 'home', title: '演示页', touched: 1 }} viewId="site1" collectionPath="/pages" />)
   assert.equal(getByTestId('page-host-view-root').dataset.stay, '1')
 })
 
 test('host view shares sandbox block preview, code, split, and expand chrome', async () => {
   cleanup()
-  resetPageFileState()
-  setPageViews('home', [
+  resetRecordViewFileState()
+  patchRecordViewCatalog('/pages', 'home', { views: [
     { id: 'site1', name: '官网', kind: 'sandbox', file: 'missing-view.jsx', dataFile: 'missing-data.json' },
-  ])
-  const { getByTestId, queryByTestId } = render(<PageHostView record={{ id: 'home', title: '演示页' }} viewId="site1" />)
+  ] })
+  const { getByTestId, queryByTestId } = render(<PageHostView record={{ id: 'home', title: '演示页' }} viewId="site1" collectionPath="/pages" />)
   await waitFor(() => {
     assert.ok(getByTestId('page-host-view-root'))
   })
@@ -89,6 +90,7 @@ test('host blocks come from page markdown and write back through the db api', ()
 {"title":"沙箱"}
 :::
 `,
+    '/pages',
   )
   assert.equal(blocks.length, 1)
   assert.equal(blocks[0]?.id, '/pages::home::ab12cd34')
@@ -132,7 +134,7 @@ test('host blocks come from page markdown and write back through the db api', ()
   assert.match(src, /page-host-expand-nav/)
   assert.match(src, /page-block-expand-nav/)
   assert.match(src, /page-host-title/)
-  assert.match(src, /renamePageSandboxView/)
+  assert.match(src, /renameSandboxView/)
   assert.match(src, /SandboxKindIcon/)
   assert.match(src, /language="javascript"/)
   assert.match(src, /HostSourceEditor/)
@@ -147,10 +149,10 @@ test('host blocks come from page markdown and write back through the db api', ()
   assert.doesNotMatch(src, /className="page-slide-bar"/)
   assert.match(css, /\.page-host-view \.page-block\{[^}]*line-height:var\(--fsdb-body-leading,1\.7\)/)
   assert.match(css, /\.page-editor \.tiptap table\{[^}]*margin:8px 0/)
-  assert.match(css, /\.page-tag-block \.tasks-table[^}]*margin:8px 0/)
-  assert.match(src, /void writePageHostBlock\(hit\.pageId, hit\.blockId, next\)/)
+  assert.doesNotMatch(css, /\.page-tag-block /)
+  assert.match(src, /void writePageHostBlock\(hit\.pageId, hit\.blockId, next, collectionPath\)/)
   assert.match(src, /key=\{hit\.blockId\}/)
-  assert.match(src, /usePageFileTick/)
+  assert.match(src, /useRecordViewFileTick/)
   assert.match(src, /bindSandboxPickPane/)
   assert.match(src, /data-sandbox=""/)
   assert.match(src, /pickHost=\{\{/)

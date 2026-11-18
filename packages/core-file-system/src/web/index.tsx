@@ -3,7 +3,15 @@ import type { Context } from 'cordis'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { CircleStackIcon } from '@heroicons/react/16/solid'
 import type { SlotProps } from '@biu/type-slots'
-import { DATABASE_CHANNEL, type CollectionInfo } from '@biu/type-file-system'
+import {
+  DATABASE_CHANNEL,
+  channelNeedsCollectionSync,
+  emitAssetChanged,
+  emitFsdbChange,
+  fsdbChangeDetail,
+  parseDatabaseChannel,
+  type CollectionInfo,
+} from '@biu/type-file-system'
 import { DEFAULT_CHROME_PATH, type CollectionChrome } from '@biu/type-file-system/ui'
 import { isLegacyDatabasePath, parseAppPath } from '@biu/web-session-view'
 import { pathForCenter, pathForCrumbTarget, type CrumbTarget } from './sidebar-nav.ts'
@@ -28,7 +36,6 @@ import { viewsForRegisteredCollection } from './collection-nav.ts'
 import { builtinAllViewId, stampRowOpenTarget } from '../catalog-views.ts'
 import { normalizeCollectionPath } from '../paths.ts'
 import { ensureFsdbStyle } from './fsdb-style.ts'
-import { TagBlockView } from './tag-block.tsx'
 import { listenOpenTag } from './tag-catalog.ts'
 
 const ShareRoot = lazy(() => import('./share-page.tsx').then((m) => ({ default: m.ShareRoot })))
@@ -338,29 +345,7 @@ export function apply(ctx: Context) {
     const editor = inner.get('blockEditor') as {
       subscribe: (fn: () => void) => () => void
       blocks: () => Array<{ kind: string }>
-      registerBlock: (spec: {
-        kind: string
-        plugin: string
-        label: string
-        blockType: string
-        hint: string
-        aliases: string[]
-        assets: unknown[]
-        defaults: Record<string, unknown>
-        View: typeof TagBlockView
-      }) => () => void
     }
-    const stopBlock = editor.registerBlock({
-      kind: 'tag',
-      plugin: 'page-tag',
-      label: '标签块',
-      blockType: 'basic',
-      hint: '选一个标签，在块里填写它的字段',
-      aliases: ['标签块', '标签', 'tag', 'tags'],
-      assets: [],
-      defaults: { tagId: '', values: {} },
-      View: TagBlockView,
-    })
     const stopOpen = listenOpenTag()
     let sig = ''
     const stop = editor.subscribe(() => {
@@ -376,7 +361,6 @@ export function apply(ctx: Context) {
     return () => {
       stop()
       stopOpen()
-      stopBlock()
     }
   })
   const slots = ctx.get('slots') as SlotsService
@@ -543,22 +527,16 @@ export function apply(ctx: Context) {
     const offSnap = snapshot.subscribe?.(fromSnap)
     let debounce = 0
     const off = snapshot.onMessage(DATABASE_CHANNEL, (payload) => {
-      const rec = payload && typeof payload === 'object' && !Array.isArray(payload) ? (payload as { asset?: { name?: string; etag?: string }; savedView?: unknown; reveal?: { collection?: unknown; viewId?: unknown }; tags?: boolean }) : null
-      const viewsTouched =
-        Boolean(rec?.savedView) ||
-        Boolean(rec?.reveal?.viewId) ||
-        String(rec?.reveal?.collection ?? '') === '/views'
-      const tagsTouched = Boolean(rec?.tags)
+      const parsed = parseDatabaseChannel(payload)
       const sessionId = (
         ctx.get('sessionView') as { get?: () => { sessionId?: string | null } } | undefined
       )?.get?.()?.sessionId
       applyDatabaseChannelPayload(payload, sessionId)
-      window.dispatchEvent(
-        new CustomEvent('fsdb:change', { detail: viewsTouched ? { views: true } : tagsTouched ? { tags: true } : undefined }),
-      )
-      if (rec?.asset?.name) {
-        window.dispatchEvent(new CustomEvent('biu:asset-changed', { detail: rec.asset }))
-      }
+      if (parsed?.asset) emitAssetChanged(parsed.asset)
+      if (!parsed) return
+      const change = fsdbChangeDetail(parsed)
+      if (change) emitFsdbChange(change)
+      if (!channelNeedsCollectionSync(parsed)) return
       window.clearTimeout(debounce)
       debounce = window.setTimeout(() => void sync(), 40)
     })

@@ -75,3 +75,13 @@ test('collectAssetNames walks record properties and tag field attachments', () =
   assert.equal(names.has(propertyFile), true)
   assert.equal(names.has(tagFile), true)
 })
+
+test('collectAssetNames includes record sandbox files', () => {
+  const names = collectAssetNames({
+    views: [{ id: 'a', file: 'view-p1-a.jsx', dataFile: 'view-data-p1-a.json' }],
+    propViews: [{ id: 'b', file: 'prop-view-p1-b.jsx', dataFile: 'prop-view-data-p1-b.json' }],
+  })
+  assert.equal(names.has('view-p1-a.jsx'), true)
+  assert.equal(names.has('view-data-p1-a.json'), true)
+  assert.equal(names.has('prop-view-p1-b.jsx'), true)
+})

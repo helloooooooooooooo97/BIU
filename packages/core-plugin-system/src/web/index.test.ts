@@ -486,24 +486,13 @@ test('page-browser is both a page block and the inspector browser', async () => 
   assert.match(open, /biuBrowser\.navigate/)
 })
 
-test('page-tag store entry is headless metadata; View lives in core-file-system', async () => {
-  const { readFile } = await import('node:fs/promises')
+test('page-tag page block is gone', async () => {
+  const { existsSync } = await import('node:fs')
   const { resolve } = await import('node:path')
-  const web = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-tag/web/index.tsx'), 'utf8')
-  const manifest = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-tag/manifest.json'), 'utf8')
-  const readme = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-tag/README.md'), 'utf8')
-  const core = await readFile(resolve(import.meta.dirname, '../../../core-file-system/src/web/tag-block.tsx'), 'utf8')
-  const page = await readFile(resolve(import.meta.dirname, '../../../core-file-system/src/web/index.tsx'), 'utf8')
-  assert.match(manifest, /"id": "page-tag"/)
-  assert.match(manifest, /"name": "标签块"/)
-  assert.match(manifest, /"headless": true/)
-  assert.match(web, /export const name = 'page-tag'/)
-  assert.doesNotMatch(web, /registerBlock\s*\(/)
-  assert.match(readme, /默认表格/)
-  assert.match(page, /kind: 'tag'/)
-  assert.match(page, /plugin: 'page-tag'/)
-  assert.match(page, /View: TagBlockView/)
-  assert.match(core, /data-testid="page-tag-block"/)
-  assert.match(core, /page-tag-block-table/)
-  assert.match(core, /属性值/)
+  const page = await import('node:fs/promises').then((fs) =>
+    fs.readFile(resolve(import.meta.dirname, '../../../core-file-system/src/web/index.tsx'), 'utf8'),
+  )
+  assert.equal(existsSync(resolve(import.meta.dirname, '../../../../.plugin-dev/page-tag')), false)
+  assert.doesNotMatch(page, /TagBlockView/)
+  assert.doesNotMatch(page, /plugin: 'page-tag'/)
 })

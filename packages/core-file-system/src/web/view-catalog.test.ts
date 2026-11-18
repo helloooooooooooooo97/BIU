@@ -1,16 +1,19 @@
-import { test } from 'vitest'
+import { afterEach, test } from 'vitest'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { Context } from 'cordis'
 import {
   canCopyViewCatalogItem,
+  deleteViewCatalog,
   isViewCatalogField,
   listViewCatalogOptions,
+  registerViewCatalogHost,
   selectedViewCatalogOption,
   selectViewCatalog,
   selectedViewCatalogId,
 } from './view-catalog.ts'
+import { getRecordViewCatalog, patchRecordViewCatalog } from './record-view-catalog.ts'
 import { DEFAULT_RECORD_LAYOUT_ID, DEFAULT_RECORD_PROP_VIEW_ID } from './record-layouts.ts'
 import { DatabaseUiService } from './database-ui.ts'
 
@@ -29,7 +32,7 @@ test('prop view catalog is a single current option plus a switcher list', () => 
   const options = listViewCatalogOptions('/tasks', record, 'propViews')
   assert.deepEqual(
     options.map((item) => item.id),
-    [DEFAULT_RECORD_PROP_VIEW_ID, 'source', 'wide'],
+    [DEFAULT_RECORD_PROP_VIEW_ID, 'source', 'hidden', 'wide'],
   )
   const current = selectedViewCatalogOption('/tasks', record, 'propViews')
   assert.equal(current?.id, DEFAULT_RECORD_PROP_VIEW_ID)
@@ -141,3 +144,69 @@ test('only custom content and property views can be copied', () => {
   assert.match(css, /\.fsdb-viewcat-pick-main\{[^}]*flex-direction:row/)
   assert.match(css, /\.fsdb-fileview:empty\{display:none\}/)
 })
+
+test('registered hosts win over the default adapter', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './view-catalog.ts'), 'utf8')
+  assert.doesNotMatch(src, /TAGS_COLLECTION_PATH/)
+  assert.doesNotMatch(src, /PAGES_COLLECTION_PATH/)
+  assert.doesNotMatch(src, /AGENTS_COLLECTION_PATH/)
+  assert.doesNotMatch(src, /copyTagSandboxView/)
+  const off = registerViewCatalogHost('/tasks', {
+    options: () => [{ id: 'hosted', name: '托管' }],
+    selectedId: () => 'hosted',
+    select: () => undefined,
+  })
+  const record = { id: 't1', propViews: [] }
+  assert.equal(listViewCatalogOptions('/tasks', record, 'propViews')[0]?.id, 'hosted')
+  off()
+  assert.equal(listViewCatalogOptions('/tasks', record, 'propViews')[0]?.id, DEFAULT_RECORD_PROP_VIEW_ID)
+})
+
+test('mcp page tag skill and task share the same builtin catalog ids', () => {
+  const record = { id: 'same-1' }
+  const content = ['doc', 'outline', 'table', 'source', 'hidden']
+  const props = [DEFAULT_RECORD_PROP_VIEW_ID, 'source', 'hidden']
+  for (const path of ['/mcp', '/pages', '/tags', '/skills', '/tasks'] as const) {
+    assert.deepEqual(
+      listViewCatalogOptions(path, record, 'views').filter((item) => item.builtin).map((item) => item.id),
+      content,
+    )
+    assert.deepEqual(
+      listViewCatalogOptions(path, record, 'propViews').filter((item) => item.builtin).map((item) => item.id),
+      props,
+    )
+    assert.equal(listViewCatalogOptions(path, record, 'layouts')[0]?.id, DEFAULT_RECORD_LAYOUT_ID)
+    selectViewCatalog(path, record, 'views', 'outline')
+    assert.equal(selectedViewCatalogId(path, record, 'views'), 'outline')
+    selectViewCatalog(path, record, 'propViews', 'source')
+    assert.equal(selectedViewCatalogId(path, record, 'propViews'), 'source')
+  }
+})
+
+afterEach(() => {
+  Reflect.deleteProperty(globalThis, 'fetch')
+})
+
+test('deleting one live property view does not persist an empty stale record list', async () => {
+  const bodies: string[] = []
+  globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    bodies.push(String(init?.body ?? ''))
+    return new Response('{}', { status: 200 })
+  }) as typeof fetch
+  const a = { id: 'a', name: '新视图', kind: 'sandbox' as const, file: 'prop-view-a.jsx', dataFile: 'prop-view-data-a.json' }
+  const b = { id: 'b', name: '新视图 2', kind: 'sandbox' as const, file: 'prop-view-b.jsx', dataFile: 'prop-view-data-b.json' }
+  patchRecordViewCatalog('/tags', 'need', { propViews: [a, b] })
+  const record = { id: 'need', propViews: [] }
+  deleteViewCatalog('/tags', record, 'propViews', 'b')
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  assert.deepEqual(
+    getRecordViewCatalog('/tags', 'need').propViews.map((item) => item.id),
+    ['a'],
+  )
+  const sent = JSON.parse(bodies[0] ?? '{}') as { content?: { propViews?: string } }
+  assert.deepEqual(
+    JSON.parse(sent.content?.propViews ?? '[]').map((item: { id: string }) => item.id),
+    ['a'],
+  )
+})
+

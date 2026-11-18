@@ -22,6 +22,7 @@ import { forwardCloud } from '@biu/host-account/mirror'
 import { Service, type Context } from 'cordis'
 import {
   DATABASE_CHANNEL,
+  databaseChannelPayload,
   asAttachmentList,
   asPerson,
   asPersonList,
@@ -1659,7 +1660,18 @@ export class DatabaseService extends Service implements Database {
   notifyTagCatalog() {
     this.ctx.emit('database/change')
     const http = this.ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
-    http?.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), tags: true })
+    http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('tags'))
+  }
+
+  notifyViewCatalog(path?: string) {
+    const http = this.ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
+    const recPath = String(path ?? '').trim()
+    http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('views', recPath ? { path: recPath } : {}))
+  }
+
+  notifyContent(path: string) {
+    const http = this.ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
+    http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('content', { path }))
   }
 
   bump() {
@@ -1676,7 +1688,7 @@ export class DatabaseService extends Service implements Database {
     queueMicrotask(() => {
       this.bumpQueued = false
       const http = this.ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
-      http?.broadcast?.(DATABASE_CHANNEL, { ts: Date.now() })
+      http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('records'))
     })
   }
 
@@ -2126,17 +2138,19 @@ export class DatabaseService extends Service implements Database {
     return next
   }
 
-  private refreshContentRefs(spec: CollectionSpec, record: DbRecord) {
+  private refreshContentRefs(spec: CollectionSpec, record: DbRecord, refreshBody = true) {
     const banner = this.tags.recordBanner(spec.path, record.id)
-    const body = readEditorContent(this.tags.ensure(), spec.path, record.id)
     const properties = this.decorateRecord(spec, record)
     const tag = this.tags.recordTag(spec.path, record.id) ?? properties.tag
-    this.tags.replaceContentRefs(
-      spec.path,
-      record.id,
-      assetNamesFromMarkdown(body),
-      assetNamesFromHtml(String(banner?.html ?? '')),
-    )
+    if (refreshBody) {
+      const body = readEditorContent(this.tags.ensure(), spec.path, record.id)
+      this.tags.replaceContentRefs(
+        spec.path,
+        record.id,
+        assetNamesFromMarkdown(body),
+        assetNamesFromHtml(String(banner?.html ?? '')),
+      )
+    }
     this.tags.replaceAssetRefs(spec.path, record.id, collectAssetNames(properties, tag))
   }
 
@@ -2430,7 +2444,9 @@ export class DatabaseService extends Service implements Database {
     if (moving && resource) authorization!.validateMove(actor!, resource, parent)
     let record = Object.keys(patch).length ? await spec.update(parts[1]!, patch) : current
     if (moving && resource) authorization!.move(actor!, resource, parent)
-    await this.stampActor(spec.path, record.id)
+    const viewOnly = !bannerPatch.present && Object.keys(patch).length > 0 &&
+      Object.keys(patch).every((key) => ['views', 'propViews', 'layouts'].includes(key))
+    if (!viewOnly) await this.stampActor(spec.path, record.id)
     if ('emoji' in patch) {
       const meta = this.tags.writeRecordMeta(spec.path, record.id, {
         emoji: String(patch.emoji ?? ''),
@@ -2446,9 +2462,10 @@ export class DatabaseService extends Service implements Database {
     if (bannerPatch.present) {
       this.tags.writeRecordBanner(spec.path, record.id, bannerPatch.value)
     }
-    this.indexTagRecord(spec, this.decorateRecord(spec, record))
-    this.refreshContentRefs(spec, this.withBanner(spec, record))
-    this.bump()
+    if (!viewOnly) this.indexTagRecord(spec, this.decorateRecord(spec, record))
+    this.refreshContentRefs(spec, this.withBanner(spec, record), !viewOnly)
+    if (viewOnly) this.notifyViewCatalog(`${spec.path}/${record.id}`)
+    else this.bump()
     const beforeSnap: Record<string, unknown> = {}
     const afterSnap: Record<string, unknown> = {}
     for (const key of Object.keys(patch)) {
@@ -2456,7 +2473,7 @@ export class DatabaseService extends Service implements Database {
       afterSnap[key] = record[key] ?? null
     }
     const title = String(record.title ?? record.name ?? record.id).trim() || record.id
-    if (Object.keys(patch).length) {
+    if (!viewOnly && Object.keys(patch).length) {
       await this.ctx.get('contentTurns')?.recordUpdate(`${spec.path}/${record.id}`, title, beforeSnap, afterSnap)
     }
     return { kind: 'record' as const, path: `${spec.path}/${record.id}`, value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))) }
@@ -2826,7 +2843,7 @@ export class DatabaseService extends Service implements Database {
     const record = await spec.update(parts[1]!, patch)
     await this.stampActor(spec.path, record.id)
     this.refreshContentRefs(spec, this.withBanner(spec, record))
-    this.bump()
+    this.notifyContent(`${spec.path}/${record.id}`)
     const editorContent = isEditorContentSpec(spec)
       ? readEditorContentRecord(this.tags.ensure(), spec.path, record.id)
       : null
@@ -3019,28 +3036,16 @@ export class DatabaseService extends Service implements Database {
     if (!record) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
     const command = resolveContentCommand(args)
     this.assertLiveRecord(spec, record.id, command === 'view' ? 'resource:read' : 'resource:update', record)
-    const ownedDocs = new Set(
-      [...(spec.namedDocs?.names(record) ?? [])].map((name) =>
-        String(name)
-          .trim()
-          .replace(/^assets\//, '')
-          .replace(/^.*[/\\]/, ''),
-      ).filter(Boolean),
-    )
     const names = new Set([
       ...collectAssetNames(record, this.tags.recordBanner(spec.path, record.id)?.html),
       ...this.tags.listedAttachmentNames(spec.path, record.id),
-      ...ownedDocs,
     ])
     const file = String(args.name ?? '')
       .trim()
       .replace(/^assets\//, '')
       .replace(/^.*[/\\]/, '')
     const recPath = `${spec.path}/${record.id}`
-    const readOwnedOrAsset = async (name: string) => {
-      if (ownedDocs.has(name) && spec.namedDocs) return spec.namedDocs.read(name)
-      return this.assets.readAny(name)
-    }
+    const readOwnedOrAsset = async (name: string) => this.assets.readAny(name)
     if (command === 'view' && !file) {
       const assets = []
       for (const name of [...names].sort()) {
@@ -3060,10 +3065,7 @@ export class DatabaseService extends Service implements Database {
     }
     if (!isAssetFileName(file)) throw new Error('invalid asset')
     if (!names.has(file)) throw new Error(`doc not referenced: ${file}`)
-    const readDoc = async () => {
-      if (ownedDocs.has(file) && spec.namedDocs) return spec.namedDocs.read(file)
-      return this.assets.readDoc(file)
-    }
+    const readDoc = async () => this.assets.readDoc(file)
     let current: { text: string; etag: string; type: string } | null = null
     try {
       const read = await readDoc()
@@ -3110,10 +3112,7 @@ export class DatabaseService extends Service implements Database {
     if (typeof next === 'object') replaced = next.replaced
     const nextText = typeof next === 'object' ? next.text : next
     const matchEtag = String(args.etag ?? current?.etag ?? '')
-    const written =
-      ownedDocs.has(file) && spec.namedDocs
-        ? await spec.namedDocs.write(file, nextText, { etag: matchEtag })
-        : await this.assets.writeDoc(file, nextText, { etag: matchEtag })
+    const written = await this.assets.writeDoc(file, nextText, { etag: matchEtag })
     const kind = String(args.kind ?? '') === 'core' ? 'core' : 'asset'
     const blockId = String(args.block_id ?? args.blockId ?? '').trim()
     const source = String(args.source ?? (blockId ? `block:${blockId}` : 'doc')).trim() || 'doc'
@@ -3143,7 +3142,7 @@ export class DatabaseService extends Service implements Database {
 
   private broadcastAsset(path: string, name: string, etag: string) {
     const http = this.ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
-    http?.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), asset: { name, etag, path } })
+    http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('asset', { asset: { name, etag, path } }))
   }
 }
 
@@ -3301,14 +3300,17 @@ function broadcastInspectorReveal(
   if (!reveal) return
   const http = ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
   const contentJump = phase === 'done' ? parseContentJump(result) : null
-  http?.broadcast?.(DATABASE_CHANNEL, {
-    ts: Date.now(),
-    reveal,
-    phase,
-    sessionId: currentSessionId(),
-    ...(savedViewFromToolResult(result) ? { savedView: savedViewFromToolResult(result) } : {}),
-    ...(contentJump ? { contentJump } : {}),
-  })
+  const savedView = savedViewFromToolResult(result)
+  http?.broadcast?.(
+    DATABASE_CHANNEL,
+    databaseChannelPayload(savedView ? 'views' : 'records', {
+      reveal,
+      phase,
+      sessionId: currentSessionId(),
+      ...(savedView ? { savedView } : {}),
+      ...(contentJump ? { contentJump } : {}),
+    }),
+  )
 }
 
 function rowFromToolResult(result: unknown): Record<string, unknown> | undefined {
@@ -3369,7 +3371,7 @@ export function apply(ctx: Context) {
   const assets = db.assets
   const savedViews = new SavedViewsStore()
   savedViews.open(process.env.VITEST ? ':memory:' : biuSqlitePath())
-  db.recordViews.open(process.env.VITEST ? ':memory:' : biuSqlitePath())
+  db.recordViews.open(biuSqlitePath())
   const account = ctx.get('account') as {
     authorization?: AuthorizationService
     workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
@@ -4491,45 +4493,6 @@ export function apply(ctx: Context) {
   }
   ctx.http.route('POST', '/api/tag/sandbox/patch', patchTagSandboxRoute)
   ctx.http.route('POST', '/api/page/sandbox/patch', patchTagSandboxRoute)
-  ctx.http.route('GET', '/api/tag/file/:name', async (route) => {
-    try {
-      const name = route.params.name ?? ''
-      const path = route.query.get('path') || String(route.req.headers['x-biu-resource-path'] ?? '')
-      if (path) await db.requirePath(path, 'resource:read')
-      else db.requireAsset(name, 'resource:read')
-      const { bytes, type, etag } = facets.readNamedDoc(name)
-      route.res.writeHead(200, {
-        'content-type': type,
-        'cache-control': 'no-store',
-        etag: `"${etag}"`,
-      })
-      route.res.end(bytes)
-    } catch {
-      route.send(404, { error: 'not found' })
-    }
-  })
-  ctx.http.route('PUT', '/api/tag/file/:name', async (route) => {
-    try {
-      const name = route.params.name ?? ''
-      const path = route.query.get('path') || String(route.req.headers['x-biu-resource-path'] ?? '')
-      if (path) await db.requirePath(path, 'resource:update')
-      else db.requireAsset(name, 'resource:update')
-      const written = facets.writeNamedDoc(name, await route.bytes(), { etag: parseIfMatch(route.req.headers['if-match']) })
-      ctx.http.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), asset: { name: written.name, etag: written.etag } })
-      route.res.writeHead(200, {
-        'content-type': 'application/json; charset=utf-8',
-        'cache-control': 'no-store',
-        etag: `"${written.etag}"`,
-      })
-      route.res.end(JSON.stringify({ ok: true, ...written }))
-    } catch (error) {
-      if (error instanceof AssetConflictError) {
-        route.send(409, { error: 'etag conflict', etag: error.etag })
-        return
-      }
-      route.send(400, { error: String(error) })
-    }
-  })
   ctx.http.route('GET', '/api/db/tags', async (route) => {
     try {
       await db.requirePath('/tags', 'resource:read')
@@ -4605,7 +4568,7 @@ export function apply(ctx: Context) {
         storage: written.storage,
       })
       linkUploadedAsset(db, path, written.name)
-      ctx.http.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), asset: { name: written.name, etag: written.etag } })
+      ctx.http.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('asset', { asset: { name: written.name, etag: written.etag } }))
       route.send(200, { ok: true, ...written })
     } catch (error) {
       if (error instanceof AssetConflictError) {
@@ -4635,7 +4598,7 @@ export function apply(ctx: Context) {
         storage: written.storage,
       })
       linkUploadedAsset(db, path, written.name)
-      ctx.http.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), asset: { name: written.name, etag: written.etag } })
+      ctx.http.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('asset', { asset: { name: written.name, etag: written.etag } }))
       route.send(200, { ok: true, ...written })
     } catch (error) {
       route.send(400, { error: String(error) })

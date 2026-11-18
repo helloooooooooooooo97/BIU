@@ -3,14 +3,25 @@ import { Plugin, PluginKey, type Transaction } from '@tiptap/pm/state'
 import type { Node } from '@tiptap/pm/model'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { nodeBlockId } from './block-id.ts'
-import { getPagePresentMode, pageOutlineFolded, togglePageOutlineFold } from './source-mode.ts'
+import { pageOutlineFolded, togglePageOutlineFold } from './source-mode.ts'
 import { PAGE_VIEW_EVENT } from './page-view-state.ts'
+import { getRecordViewCatalog, subscribeRecordViewCatalog } from '@biu/core-file-system/record-view-catalog'
 
 const key = new PluginKey('page-outline')
 
-function recordIdFromDom(view: { dom?: HTMLElement } | null | undefined) {
+function hostFromDom(view: { dom?: HTMLElement } | null | undefined) {
   const host = view?.dom?.closest('[data-page-record]')
-  return host instanceof HTMLElement ? host.dataset.pageRecord ?? '' : ''
+  if (!(host instanceof HTMLElement)) return { id: '', collection: '' }
+  const raw = String(host.dataset.pagePath ?? '')
+  const rest = raw.replace(/^\/+/, '').replace(/\/+$/, '')
+  const slash = rest.indexOf('/')
+  const name = slash < 0 ? rest : rest.slice(0, slash)
+  return { id: host.dataset.pageRecord ?? '', collection: name ? `/${name}` : '' }
+}
+
+function presentOf(collection: string, recordId: string) {
+  if (!recordId) return 'doc'
+  return getRecordViewCatalog(collection, recordId).contentViewId || 'doc'
 }
 
 export function listOutlineBlocks(doc: Node) {
@@ -94,8 +105,8 @@ function mapFolded(folded: Set<number>, tr: Transaction, doc: Node) {
 
 type PluginState = { decos: DecorationSet; folded: Set<number> }
 
-function decorations(doc: Node, recordId: string, folded: Set<number>): PluginState {
-  const mode = recordId ? getPagePresentMode(recordId) : 'doc'
+function decorations(doc: Node, collection: string, recordId: string, folded: Set<number>): PluginState {
+  const mode = presentOf(collection, recordId)
   const decos: Decoration[] = []
   if (mode === 'outline') {
     const shut = pageOutlineFolded(recordId)
@@ -143,7 +154,11 @@ export const pageOutline = Extension.create({
       editor.view.dispatch(editor.state.tr.setMeta(key, true))
     }
     window.addEventListener(PAGE_VIEW_EVENT, onView)
-    this.storage.stop = () => window.removeEventListener(PAGE_VIEW_EVENT, onView)
+    const offCatalog = subscribeRecordViewCatalog(onView)
+    this.storage.stop = () => {
+      window.removeEventListener(PAGE_VIEW_EVENT, onView)
+      offCatalog()
+    }
   },
   onDestroy() {
     this.storage.stop?.()
@@ -154,9 +169,9 @@ export const pageOutline = Extension.create({
       new Plugin({
         key,
         state: {
-          init: (_: unknown, state): PluginState => decorations(state.doc, '', new Set()),
+          init: (_: unknown, state): PluginState => decorations(state.doc, '', '', new Set()),
           apply(tr, old, _oldState, state) {
-            const id = recordIdFromDom(editor.view)
+            const host = hostFromDom(editor.view)
             const meta = tr.getMeta(key)
             let folded = old.folded
             if (tr.docChanged) folded = mapFolded(folded, tr, state.doc)
@@ -165,7 +180,7 @@ export const pageOutline = Extension.create({
               if (folded.has(meta.listFold)) folded.delete(meta.listFold)
               else folded.add(meta.listFold)
             }
-            return decorations(state.doc, id, folded)
+            return decorations(state.doc, host.collection, host.id, folded)
           },
         },
         props: {
@@ -174,7 +189,8 @@ export const pageOutline = Extension.create({
           },
           handleDOMEvents: {
             mousedown(view, event) {
-              const recordId = recordIdFromDom(view)
+              const host = hostFromDom(view)
+              const recordId = host.id
               const target = event.target
               if (!(target instanceof Element)) return false
               const li = target.closest<HTMLElement>('li.has-fold')
@@ -185,7 +201,7 @@ export const pageOutline = Extension.create({
                 view.dispatch(view.state.tr.setMeta(key, { listFold: listPos }))
                 return true
               }
-              if (!recordId || getPagePresentMode(recordId) !== 'outline') return false
+              if (!recordId || presentOf(host.collection, recordId) !== 'outline') return false
               const heading = target.closest<HTMLElement>('.page-outline-heading.has-fold')
               const id = heading?.dataset.outlineId
               if (!heading || !id || !outlineFoldGutterHit(heading, event)) return false

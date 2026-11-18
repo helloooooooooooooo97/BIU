@@ -193,7 +193,7 @@ export class PagesStore {
     }
   }
 
-  private upsert(row: PageRow) {
+  private upsert(row: PageRow, writeNotes = true) {
     if (!this.db) return
     this.db.prepare(`
       INSERT INTO pages (
@@ -205,12 +205,11 @@ export class PagesStore {
         parent_id=excluded.parent_id, depends_on_json=excluded.depends_on_json, emoji=excluded.emoji,
         updated_at=excluded.updated_at
     `).run(row.id, row.title, row.parentId, JSON.stringify(row.dependsOn), row.emoji, row.createdAt, row.updatedAt)
-    writeEditorContent(this.db, '/pages', row.id, row.notes, { transaction: false })
+    if (writeNotes) writeEditorContent(this.db, '/pages', row.id, row.notes, { transaction: false })
   }
 
   async list(ids?: string[]): Promise<PageRow[]> {
     const db = await this.openDb()
-    await this.migrateMarkdown()
     if (ids) {
       const rows: PageRow[] = []
       for (const id of ids) {
@@ -231,7 +230,6 @@ export class PagesStore {
   async get(id: string): Promise<PageRow | null> {
     if (!ID_RE.test(id)) return null
     const db = await this.openDb()
-    await this.migrateMarkdown()
     const hit = db.prepare(`
       SELECT id, title, parent_id,
         depends_on_json, emoji, created_at, updated_at
@@ -247,7 +245,8 @@ export class PagesStore {
     const current = await this.get(id)
     if (!current) throw new Error(`unknown page: ${id}`)
     const next = applyPatch(current, patch)
-    await this.write(next)
+    await this.openDb()
+    this.upsert(next, 'notes' in patch)
     return (await this.get(id))!
   }
 

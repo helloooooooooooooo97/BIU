@@ -11,12 +11,12 @@ import {
   type CollectionSchema,
   type DbRecord,
   type FieldSpec,
+  emitFsdbChange,
 } from '@biu/type-file-system'
 import {
   DEFAULT_RECORD_PROP_VIEW_ID,
   SOURCE_RECORD_PROP_VIEW_ID,
   defaultPropSandboxSource,
-  parseRecordLayouts,
   parseRecordSandboxes,
   type RecordSandboxView,
 } from '@biu/type-file-system/record-views'
@@ -35,7 +35,8 @@ import {
   writeRecordViewCatalog,
 } from './record-sandboxes.ts'
 import { loadRecordLayouts, useActiveRecordLayout } from './record-layouts.ts'
-import { TAGS_COLLECTION_PATH } from './database-path.ts'
+import { getRecordViewCatalog, hydrateRecordViewCatalog, useRecordViewCatalog } from './record-view-catalog.ts'
+import { recordContentFallback } from './database-ui.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 import { SplitResize, splitPaneStyle } from './split-resize.tsx'
 import { HostSourceEditor } from './host-source-editor.tsx'
@@ -271,7 +272,7 @@ export function RecordPropHostView({
         }
         setLive((prev) => ({ ...prev, ...patch }))
         setPatchError('')
-        window.dispatchEvent(new Event('fsdb:change'))
+        emitFsdbChange({ scope: 'content', path: `${collectionPath}/${recordId}` })
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         setPatchError(message)
@@ -384,10 +385,14 @@ export function RecordPropHostView({
           onBlur={(event) => {
             const next = event.currentTarget.value.trim()
             if (!next || next === view.name) return
-            const listed = parseRecordSandboxes((live as { propViews?: unknown }).propViews).map((item) =>
-              item.id === view.id ? { ...item, name: next } : item,
+            const listed = parseRecordSandboxes(getRecordViewCatalog(collectionPath, recordId).propViews)
+            const base = listed.length ? listed : parseRecordSandboxes((live as { propViews?: unknown }).propViews)
+            void writeRecordViewCatalog(
+              collectionPath,
+              recordId,
+              'propViews',
+              base.map((item) => (item.id === view.id ? { ...item, name: next } : item)),
             )
-            void writeRecordViewCatalog(collectionPath, recordId, 'propViews', listed)
           }}
         />
         <div className="page-block-expand-nav-tools">
@@ -488,19 +493,19 @@ export function RecordProperties({ record, schema, collectionPath, writable, chi
   const path = String(collectionPath ?? '').trim()
   const [liveRecord] = useLiveDbRecord(path, record)
   const id = String(record.id ?? '').trim()
-  const fallback = path === TAGS_COLLECTION_PATH ? 'table' : path === '/agents' ? 'chat' : 'doc'
+  const fallback = recordContentFallback(path)
   const layout = useActiveRecordLayout(path, id, fallback)
-  const listed = parseRecordSandboxes(liveRecord.propViews)
-  const stored = parseRecordLayouts(liveRecord.layouts, fallback)
-  const storedLayout = stored.find((item) => item.id === layout.id) ?? stored[0]
-  const rawProp = [layout.propViewId, storedLayout?.propViewId].find((item) => item && item !== DEFAULT_RECORD_PROP_VIEW_ID)
-  const sandbox = listed.find((item) => item.id === rawProp)
+  const catalog = useRecordViewCatalog(path, id)
+  const listed = catalog.propViews.length ? catalog.propViews : parseRecordSandboxes(liveRecord.propViews)
+  const present = catalog.propViewId.trim() || layout.propViewId || DEFAULT_RECORD_PROP_VIEW_ID
+  const sandbox = listed.find((item) => item.id === present)
   useEffect(() => {
     if (!path || !id) return
+    hydrateRecordViewCatalog(path, id, liveRecord)
     void loadRecordLayouts(path, id, liveRecord.layouts, fallback)
-  }, [path, id, liveRecord.layouts, fallback])
-  if (rawProp === 'hidden') return null
-  if (rawProp === SOURCE_RECORD_PROP_VIEW_ID) {
+  }, [path, id, liveRecord, fallback])
+  if (present === 'hidden') return null
+  if (present === SOURCE_RECORD_PROP_VIEW_ID) {
     return <HostSourceEditor value={recordPropSourceText(liveRecord, schema)} language="json" writable={false} testId="record-prop-source" />
   }
   if (!path || !sandbox) return children

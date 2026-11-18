@@ -9,6 +9,7 @@ import React, { useMemo, useState } from 'react'
 import { RenderBoundary } from '@biu/biu-ui'
 import { RecordPropHostView, RecordProperties, recordPropSourceText } from './record-prop-host.tsx'
 import { rememberRecordViewFile } from './record-sandboxes.ts'
+import { patchRecordViewCatalog } from './record-view-catalog.ts'
 import { compileHostSource, loadHostComponent, SandboxPreview } from './tag-host-compile.ts'
 
 beforeEach(() => {
@@ -92,6 +93,7 @@ test('property sandbox code pane uses the shared host CodeMirror', () => {
 })
 
 test('builtin source property view is read-only JSON', () => {
+  patchRecordViewCatalog('/pages', 'home', { propViewId: 'source' })
   render(
     <RecordProperties
       record={{

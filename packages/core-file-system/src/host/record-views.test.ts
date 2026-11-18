@@ -28,5 +28,7 @@ test('record view catalogs persist for any collection', async () => {
     layouts: [{ id: 'need', name: '需求', contentViewId: 'doc', propViewId: 'table' }],
   })
   const got = await spec.get('n1')
-  assert.equal((got?.layouts as Array<{ name: string }>)[0]?.name, '需求')
+  assert.equal((got?.layouts as Array<{ id: string }>)[0]?.id, 'builtin-default')
+  assert.equal((got?.layouts as Array<{ name: string }>)[1]?.name, '需求')
+  assert.equal('layouts' in (rows.get('n1') ?? {}), false)
 })

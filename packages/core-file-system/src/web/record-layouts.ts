@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { emitViewCatalogChange, getRecordViewCatalog, patchRecordViewCatalog, subscribeRecordViewCatalog } from './record-view-catalog.ts'
 import {
   DEFAULT_RECORD_LAYOUT_ID,
   DEFAULT_RECORD_PROP_VIEW_ID,
@@ -13,11 +14,8 @@ import {
 export type { RecordLayoutView }
 export { DEFAULT_RECORD_LAYOUT_ID, DEFAULT_RECORD_PROP_VIEW_ID, defaultRecordLayout, parseRecordLayouts, uniqueViewName }
 
-const ACTIVE_KEY = 'biu.record.layout'
 const DISPLAY_KEY = 'biu.record.layout.display'
 
-const custom = new Map<string, RecordLayoutView[]>()
-const active = new Map<string, string>()
 const display = new Map<string, Partial<RecordLayoutView>>()
 let seq = 0
 const listeners = new Set<() => void>()
@@ -28,8 +26,12 @@ function bump() {
 }
 
 export function subscribeRecordLayouts(fn: () => void) {
+  const offCatalog = subscribeRecordViewCatalog(fn)
   listeners.add(fn)
-  return () => listeners.delete(fn)
+  return () => {
+    listeners.delete(fn)
+    offCatalog()
+  }
 }
 
 export function recordViewKey(collectionPath: string, recordId: string) {
@@ -74,31 +76,25 @@ function withDisplay(key: string, layout: RecordLayoutView): RecordLayoutView {
   return { ...layout, ...overlay, id: layout.id, name: name || layout.name, builtin: layout.builtin }
 }
 
+/** 记录里真实存的布局数组（用于写回服务端）。不含内置默认布局、不含本机 overlay。 */
 export function getRecordLayouts(collectionPath: string, recordId: string): RecordLayoutView[] {
-  return custom.get(recordViewKey(collectionPath, recordId)) ?? []
+  return getRecordViewCatalog(collectionPath, recordId).layouts
 }
 
 export function setRecordLayouts(collectionPath: string, recordId: string, views: RecordLayoutView[]) {
-  const key = recordViewKey(collectionPath, recordId)
-  if (!key.endsWith('::') && key.includes('::')) custom.set(key, parseRecordLayouts(views))
+  const next = parseRecordLayouts(views)
+  patchRecordViewCatalog(collectionPath, recordId, { layouts: next })
   bump()
 }
 
+/** 菜单展示用的布局列表：内置默认布局 + 记录里的 + 本机 overlay 改名。 */
 export function listedRecordLayouts(collectionPath: string, recordId: string, fallbackContent = 'doc'): RecordLayoutView[] {
   const key = recordViewKey(collectionPath, recordId)
   return mergeListed(getRecordLayouts(collectionPath, recordId), fallbackContent).map((item) => withDisplay(key, item))
 }
 
 export function getActiveRecordLayoutId(collectionPath: string, recordId: string) {
-  const key = recordViewKey(collectionPath, recordId)
-  const live = active.get(key)
-  if (live) return live
-  const stored = readJson(ACTIVE_KEY)[key]
-  if (typeof stored === 'string' && stored.trim()) {
-    active.set(key, stored)
-    return stored
-  }
-  return DEFAULT_RECORD_LAYOUT_ID
+  return getRecordViewCatalog(collectionPath, recordId).activeLayoutId.trim() || DEFAULT_RECORD_LAYOUT_ID
 }
 
 export function getActiveRecordLayout(collectionPath: string, recordId: string, fallbackContent = 'doc'): RecordLayoutView {
@@ -108,24 +104,13 @@ export function getActiveRecordLayout(collectionPath: string, recordId: string, 
 }
 
 export function setActiveRecordLayoutId(collectionPath: string, recordId: string, layoutId: string) {
-  const key = recordViewKey(collectionPath, recordId)
   const next = String(layoutId ?? '').trim() || DEFAULT_RECORD_LAYOUT_ID
-  active.set(key, next)
-  const all = readJson(ACTIVE_KEY)
-  if (next === DEFAULT_RECORD_LAYOUT_ID) delete all[key]
-  else all[key] = next
-  writeJson(ACTIVE_KEY, all)
+  patchRecordViewCatalog(collectionPath, recordId, { activeLayoutId: next })
   bump()
 }
 
 export function useRecordLayouts(collectionPath: string, recordId: string, fallbackContent = 'doc') {
-  useSyncExternalStore(
-    (fn) => {
-      listeners.add(fn)
-      return () => listeners.delete(fn)
-    },
-    () => seq,
-  )
+  useSyncExternalStore(subscribeRecordLayouts, () => seq)
   return listedRecordLayouts(collectionPath, recordId, fallbackContent)
 }
 
@@ -165,7 +150,8 @@ export async function saveRecordLayouts(collectionPath: string, recordId: string
     body: JSON.stringify({ path: `${path}/${id}`, content: { layouts: JSON.stringify(payload) } }),
   })
   if (!res.ok) return false
-  window.dispatchEvent(new Event('fsdb:change'))
+  patchRecordViewCatalog(path, id, { layouts: next })
+  emitViewCatalogChange(path, id)
   return true
 }
 
@@ -176,6 +162,15 @@ function persistDisplay(key: string, layoutId: string, patch: Partial<RecordLayo
   all[slot] = display.get(slot)
   writeJson(DISPLAY_KEY, all)
   bump()
+}
+
+export function persistRecordLayoutDisplay(
+  collectionPath: string,
+  recordId: string,
+  layoutId: string,
+  patch: Partial<RecordLayoutView>,
+) {
+  persistDisplay(recordViewKey(collectionPath, recordId), layoutId, patch)
 }
 
 export async function patchActiveRecordLayout(
@@ -189,6 +184,12 @@ export async function patchActiveRecordLayout(
   if (!path || !id) return
   const key = recordViewKey(path, id)
   const current = getActiveRecordLayout(path, id, fallbackContent)
+  if (patch.contentViewId || patch.propViewId) {
+    patchRecordViewCatalog(path, id, {
+      ...(patch.contentViewId ? { contentViewId: patch.contentViewId } : {}),
+      ...(patch.propViewId ? { propViewId: patch.propViewId } : {}),
+    })
+  }
   if (current.builtin) {
     persistDisplay(key, current.id, patch)
     return
@@ -231,6 +232,7 @@ export async function copyRecordLayout(collectionPath: string, recordId: string,
     propViewId: from.propViewId,
     sort: from.sort,
     filterKinds: [...from.filterKinds],
+    ...(from.group ? { group: from.group } : {}),
   }
   const ok = await saveRecordLayouts(path, id, [...getRecordLayouts(path, id), view])
   if (!ok) return
@@ -274,8 +276,7 @@ export async function deleteRecordLayout(collectionPath: string, recordId: strin
 
 export function resetRecordLayoutState(collectionPath: string, recordId: string) {
   const key = recordViewKey(collectionPath, recordId)
-  custom.delete(key)
-  active.delete(key)
+  patchRecordViewCatalog(collectionPath, recordId, { layouts: [], activeLayoutId: '' })
   for (const slot of [...display.keys()]) {
     if (slot.startsWith(`${key}::`)) display.delete(slot)
   }

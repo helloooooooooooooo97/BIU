@@ -12,11 +12,12 @@ afterEach(() => {
   applyRecordViewAssetChanged({ name: 'prop-view-note-a.jsx', etag: 'other' })
 })
 
-test('sandbox files always use /api/db/file', () => {
+test('sandbox files use the shared db file route', () => {
   const src = readFileSync(resolve(import.meta.dirname, './record-sandboxes.ts'), 'utf8')
   assert.match(src, /\/api\/db\/file/)
-  assert.doesNotMatch(src, /\/api\/page\/file/)
   assert.doesNotMatch(src, /\/api\/tag\/file/)
+  assert.doesNotMatch(src, /\/api\/page\/file/)
+  assert.doesNotMatch(src, /TAGS_COLLECTION_PATH/)
   assert.doesNotMatch(src, /PAGES_COLLECTION_PATH/)
 })
 

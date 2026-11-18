@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { openAndMigrateBiu } from '@biu/host-plugin-loader/data-dir'
 import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
-import { parseRecordLayouts, parseRecordSandboxes } from '@biu/type-file-system/record-views'
+import { listedRecordLayouts, parseRecordLayouts, parseRecordSandboxes } from '@biu/type-file-system/record-views'
 import { normalizeCollectionPath } from '../paths.ts'
 
 type DatabaseSync = import('node:sqlite').DatabaseSync
@@ -13,22 +13,14 @@ export type RecordViewCatalog = {
   layouts: unknown[]
 }
 
+const CATALOG_KEYS = ['views', 'propViews', 'layouts'] as const
+
 export class RecordViewsStore {
   private db: DatabaseSync | null = null
 
   open(path = ':memory:') {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true })
     this.db = openAndMigrateBiu(path)
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS record_views (
-        collection TEXT NOT NULL,
-        record_id TEXT NOT NULL,
-        views_json TEXT NOT NULL DEFAULT '[]',
-        prop_views_json TEXT NOT NULL DEFAULT '[]',
-        layouts_json TEXT NOT NULL DEFAULT '[]',
-        PRIMARY KEY (collection, record_id)
-      )
-    `)
     return this
   }
 
@@ -76,33 +68,33 @@ export class RecordViewsStore {
   }
 }
 
-function asList(value: unknown) {
-  if (Array.isArray(value)) return value
-  if (typeof value === 'string' && value.trim()) {
-    try {
-      const parsed = JSON.parse(value) as unknown
-      return Array.isArray(parsed) ? parsed : []
-    } catch {
-      return []
+function withoutCatalog(patch: Record<string, unknown>) {
+  const next = { ...patch }
+  for (const key of CATALOG_KEYS) delete next[key]
+  return next
+}
+
+function catalogPatch(raw: Record<string, unknown>): Partial<RecordViewCatalog> | null {
+  const patch: Partial<RecordViewCatalog> = {}
+  let hit = false
+  for (const key of CATALOG_KEYS) {
+    if (key in raw) {
+      patch[key] = raw[key] as unknown[]
+      hit = true
     }
   }
-  return []
+  return hit ? patch : null
 }
 
 export function attachRecordViews(store: RecordViewsStore, collectionPath: string, row: DbRecord | null | undefined) {
   if (!row) return row
   const extra = store.read(collectionPath, row.id)
-  const next: DbRecord = { ...row }
-  const views = asList(row.views)
-  const propViews = asList(row.propViews)
-  const layouts = asList(row.layouts)
-  if (views.length) next.views = row.views
-  else if (extra.views.length) next.views = extra.views
-  if (propViews.length) next.propViews = row.propViews
-  else if (extra.propViews.length) next.propViews = extra.propViews
-  if (layouts.length) next.layouts = row.layouts
-  else if (extra.layouts.length) next.layouts = extra.layouts
-  return next
+  return {
+    ...row,
+    views: extra.views,
+    propViews: extra.propViews,
+    layouts: listedRecordLayouts(extra.layouts),
+  }
 }
 
 export function wrapCollectionRecordViews(spec: CollectionSpec, store: RecordViewsStore): CollectionSpec {
@@ -120,29 +112,19 @@ export function wrapCollectionRecordViews(spec: CollectionSpec, store: RecordVie
     },
     update: update
       ? async (id, patch) => {
-          if ('views' in patch || 'propViews' in patch || 'layouts' in patch) {
-            store.write(path, id, {
-              views: patch.views as unknown[] | undefined,
-              propViews: patch.propViews as unknown[] | undefined,
-              layouts: patch.layouts as unknown[] | undefined,
-            })
-          }
-          const row = await update(id, patch)
+          const catalog = catalogPatch(patch)
+          if (catalog) store.write(path, id, catalog)
+          const rest = withoutCatalog(patch)
+          const row = Object.keys(rest).length ? await update(id, rest) : await get(id)
           return attachRecordViews(store, path, row) as DbRecord
         }
       : spec.update,
     create: create
       ? async (rows) => {
-          const created = await create(rows)
+          const created = await create(rows.map((row) => withoutCatalog(row)))
           created.forEach((row, index) => {
-            const src = rows[index] ?? {}
-            if ('views' in src || 'propViews' in src || 'layouts' in src) {
-              store.write(path, row.id, {
-                views: src.views as unknown[] | undefined,
-                propViews: src.propViews as unknown[] | undefined,
-                layouts: src.layouts as unknown[] | undefined,
-              })
-            }
+            const catalog = catalogPatch(rows[index] ?? {})
+            if (catalog) store.write(path, row.id, catalog)
           })
           return created.map((row) => attachRecordViews(store, path, row) as DbRecord)
         }

@@ -795,24 +795,12 @@ export function hasCollectionDeleteQuery(query?: CollectionListQuery | null): bo
   return false
 }
 
-/** 表自己保管的可变命名文档，不走内容寻址 hash。 */
-export type CollectionNamedDocs = {
-  names: (record: DbRecord) => Iterable<string>
-  read: (name: string) => { bytes: Uint8Array; type: string; etag: string } | Promise<{ bytes: Uint8Array; type: string; etag: string }>
-  write: (
-    name: string,
-    content: string | Buffer | Uint8Array,
-    opts?: { etag?: string },
-  ) => { name: string; etag: string; bytes?: number } | Promise<{ name: string; etag: string; bytes?: number }>
-}
-
 export type CollectionSpec = {
   id: string
   path: string
   label?: string
   schema: CollectionSchema
   view?: CollectionView
-  namedDocs?: CollectionNamedDocs
   /**
    * 记录权限。list / get 始终可用。
    * update / create / delete 为 true 时必须提供对应实现；不写则不能改、不能新建、不能删。
@@ -836,7 +824,25 @@ export type CollectionInfo = {
   view: CollectionView | null
 }
 
-export const DATABASE_CHANNEL = 'database' as const
+export {
+  DATABASE_CHANNEL,
+  FSDB_CHANGE_EVENT,
+  BIU_ASSET_CHANGED_EVENT,
+  databaseChannelPayload,
+  parseDatabaseChannel,
+  fsdbChangeDetail,
+  channelNeedsCollectionSync,
+  emitFsdbChange,
+  parseFsdbChange,
+  emitAssetChanged,
+} from './database-channel.ts'
+export type {
+  DatabaseChannelScope,
+  DatabaseChannelAsset,
+  DatabaseChannelPayload,
+  ParsedDatabaseChannel,
+  FsdbChangeDetail,
+} from './database-channel.ts'
 export const CONTENT_JUMP_EVENT = 'biu:content-jump' as const
 
 export type ContentJump = {

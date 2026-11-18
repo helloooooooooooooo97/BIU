@@ -11,6 +11,7 @@ export const HIDDEN_CONTENT_VIEW_ID = 'hidden'
 export const HIDDEN_CONTENT_VIEW_LABEL = '隐藏'
 
 export type RecordLayoutSort = 'doc' | 'title-asc' | 'title-desc' | 'kind' | 'time-desc' | 'time-asc'
+export type RecordLayoutGroup = '' | 'kind' | 'heading'
 
 export type RecordSandboxView = {
   id: string
@@ -24,13 +25,11 @@ export type RecordLayoutView = {
   id: string
   name: string
   builtin?: boolean
-  kind?: 'sandbox'
-  file?: string
-  dataFile?: string
   contentViewId: string
   propViewId: string
   sort: RecordLayoutSort
   filterKinds: string[]
+  group?: RecordLayoutGroup
 }
 
 const SORTS = new Set<RecordLayoutSort>(['doc', 'title-asc', 'title-desc', 'kind', 'time-desc', 'time-asc'])
@@ -53,6 +52,7 @@ export function defaultRecordLayout(contentViewId = 'doc'): RecordLayoutView {
     propViewId: DEFAULT_RECORD_PROP_VIEW_ID,
     sort: contentViewId === 'chat' ? 'time-desc' : 'doc',
     filterKinds: [],
+    group: '',
   }
 }
 
@@ -128,8 +128,10 @@ export async function seedRecordSandbox(args: {
   )
   const jsx = args.source && args.readFile ? await args.readFile(args.source.file, fallback) : fallback
   const data = args.source && args.readFile ? await args.readFile(args.source.dataFile, 'null') : 'null'
-  await args.writeFile(view.file, jsx, 'text/plain; charset=utf-8')
-  await args.writeFile(view.dataFile, data, 'application/json')
+  await Promise.all([
+    args.writeFile(view.file, jsx, 'text/plain; charset=utf-8'),
+    args.writeFile(view.dataFile, data, 'application/json'),
+  ])
   return view
 }
 
@@ -155,16 +157,15 @@ export function parseRecordLayouts(raw: unknown, fallbackContent = 'doc'): Recor
     const filterKinds = Array.isArray(rec.filterKinds)
       ? rec.filterKinds.map((kind) => String(kind ?? '').trim()).filter(Boolean)
       : []
-    const file = String(rec.file ?? '').trim()
-    const sandbox = rec.kind === 'sandbox' && Boolean(file)
+    const group = rec.group === 'kind' || rec.group === 'heading' ? rec.group : ''
     out.push({
       id,
       name: String(rec.name ?? '').trim() || '新视图',
-      ...(sandbox ? { kind: 'sandbox' as const, file, dataFile: String(rec.dataFile ?? '').trim() || `layout-data-${id}.json` } : {}),
       contentViewId: String(rec.contentViewId ?? '').trim() || fallbackContent,
       propViewId: String(rec.propViewId ?? '').trim() || DEFAULT_RECORD_PROP_VIEW_ID,
       sort,
       filterKinds,
+      ...(group ? { group } : {}),
     })
   }
   return out
@@ -193,4 +194,22 @@ export function listedRecordLayouts(raw: unknown, fallbackContent = 'doc'): Reco
   const base = defaultRecordLayout(fallbackContent)
   const name = parseRecordLayoutDefaultName(raw)
   return [{ ...base, ...(name ? { name } : {}) }, ...parseRecordLayouts(raw, fallbackContent)]
+}
+
+function sandboxFileBaseName(raw: unknown) {
+  return String(raw ?? '')
+    .trim()
+    .replace(/^assets\//, '')
+    .replace(/^.*[/\\]/, '')
+}
+
+export function recordSandboxFileNames(record: { views?: unknown; propViews?: unknown }): string[] {
+  const out: string[] = []
+  for (const view of [...parseRecordSandboxes(record.views), ...parseRecordSandboxes(record.propViews)]) {
+    for (const raw of [view.file, view.dataFile]) {
+      const name = sandboxFileBaseName(raw)
+      if (name) out.push(name)
+    }
+  }
+  return out
 }

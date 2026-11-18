@@ -25,7 +25,8 @@ import { normalizeSchemaValue, retagSchemaValue, type SchemaFieldValue } from '@
 import { pageBlockRecordId, parsePageBlockRecordId } from '../page-block-fence.ts'
 import { kindLabel, nodeBlockId } from './block-id.ts'
 import { comparePageBlocks } from './page-filter-plugin.ts'
-import { usePageViewState } from './page-view-state.ts'
+import { useActiveRecordLayout } from '@biu/core-file-system/record-layouts'
+import { recordContentFallback } from '@biu/core-file-system/database-ui'
 import { getBlockEditor, useBlockEditorVersion } from './service.ts'
 import { rememberedPageBlocks, useSlashCatalogVersion } from './slash-memory.ts'
 
@@ -186,9 +187,9 @@ type FacetOption = { id: string; label: string }
 
 function collectionFromPath(path?: string) {
   const raw = String(path ?? '').trim()
-  if (!raw.startsWith('/')) return '/pages'
+  if (!raw.startsWith('/')) return ''
   const name = raw.split('/').filter(Boolean)[0]
-  return name ? `/${name}` : '/pages'
+  return name ? `/${name}` : ''
 }
 
 function useFacetCatalog() {
@@ -371,8 +372,9 @@ export function PageBlocksTable({
 }) {
   useBlockEditorVersion()
   useSlashCatalogVersion()
-  const view = usePageViewState(recordId)
   const collection = collectionFromPath(path)
+  const fallback = recordContentFallback(collection)
+  const view = useActiveRecordLayout(collection, recordId, fallback)
   const catalog = useFacetCatalog()
   const [openIds, setOpenIds] = useState<string[]>([])
   const openRef = useRef(openIds)

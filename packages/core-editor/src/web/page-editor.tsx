@@ -1,13 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { loadRecordLayouts, useActiveRecordLayout } from '@biu/core-file-system/record-layouts'
-import { TagRecordSandbox } from '@biu/core-file-system/tag-host-view'
-import { loadTagViews, useTagViews } from '@biu/core-file-system/tag-views'
+import { hydrateRecordViewCatalog, useRecordViewCatalog } from '@biu/core-file-system/record-view-catalog'
+import { recordContentFallback } from '@biu/core-file-system/database-ui'
 import { HeadlessPopover } from '@biu/biu-ui'
 import { SourceEditor, type SourceEditorHandle } from './source-editor.tsx'
 import { restorePageScroll } from './page-scroll-pin.ts'
-import { isPageCustomView, usePagePresentMode } from './source-mode.ts'
-import { usePageViews } from './page-views.ts'
-import { useActivePageLayout } from './page-layouts.ts'
 import { PageHostView } from './page-host-view.tsx'
 import { ArrowPathIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/16/solid'
 import { EditorContent, useEditor } from '@tiptap/react'
@@ -381,7 +378,7 @@ function PageHostShell({
       className="page-editor is-host"
       data-testid="page-editor-host"
       data-page-record={record.id}
-      data-page-path={path || `/pages/${record.id}`}
+      data-page-path={path || ''}
       tabIndex={-1}
     >
       <PageHostView
@@ -390,6 +387,7 @@ function PageHostShell({
         markdown={asMarkdown(value)}
         schema={schema}
         writable={writable !== false}
+        collectionPath={collectionOf(path)}
       />
     </div>
   )
@@ -397,36 +395,27 @@ function PageHostShell({
 
 function collectionOf(path?: string) {
   const raw = String(path ?? '').trim()
-  if (!raw) return '/pages'
+  if (!raw) return ''
   const rest = raw.replace(/^\/+/, '').replace(/\/+$/, '')
   const slash = rest.indexOf('/')
   const name = slash < 0 ? rest : rest.slice(0, slash)
-  return name ? `/${name}` : '/pages'
+  return name ? `/${name}` : ''
 }
 
 export function RecordEditor(props: FsContentProps) {
   const collection = collectionOf(props.path)
-  const fallback = collection === '/tags' ? 'table' : collection === '/agents' ? 'chat' : 'doc'
-  const pagePresent = usePagePresentMode(props.record.id)
+  const fallback = recordContentFallback(collection)
+  const catalog = useRecordViewCatalog(collection, props.record.id)
   const fsLayout = useActiveRecordLayout(collection, props.record.id, fallback)
-  const present = collection === '/pages' ? pagePresent : fsLayout.contentViewId
-  const views = usePageViews(props.record.id)
-  const tagViews = useTagViews(props.record.id)
-  const layout = useActivePageLayout(props.record.id)
+  const present = catalog.contentViewId || fsLayout.contentViewId || fallback
   useEffect(() => {
+    hydrateRecordViewCatalog(collection, props.record.id, props.record)
     void loadRecordLayouts(collection, props.record.id, props.record.layouts, fallback)
-    if (collection === '/tags') void loadTagViews(props.record.id, props.record.views)
-  }, [collection, fallback, props.record.id, props.record.layouts, props.record.views])
+  }, [collection, fallback, props.record, props.record.id, props.record.layouts])
   if (props.status === 'loading') return <RecordEditorLoading />
   if (props.status === 'failed') return <RecordEditorFailed onRetry={props.onRetry} />
   if (present === 'hidden') return null
-  if (collection === '/tags' && tagViews.some((item) => item.id === present)) {
-    return <TagRecordSandbox record={props.record} viewId={present} writable={props.writable !== false} />
-  }
-  if (layout.kind === 'sandbox' && layout.file) {
-    return <PageHostShell {...props} viewId={layout.id} />
-  }
-  if (isPageCustomView(present) && views.some((item) => item.id === present)) {
+  if (catalog.views.some((item) => item.id === present)) {
     return <PageHostShell {...props} viewId={present} />
   }
   return <PageDocEditor {...props} present={present} />
@@ -807,7 +796,7 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
       ref={hostRef}
       className={`page-editor${source ? ' is-source' : ''}${present === 'outline' ? ' is-outline' : ''}${present === 'table' ? ' is-table' : ''}`}
       data-page-record={record.id}
-      data-page-path={path || `/pages/${record.id}`}
+      data-page-path={path || ''}
       tabIndex={-1}
       onMouseDown={onEditorBlankMouseDown}
       onKeyDownCapture={onEditorHotkey}

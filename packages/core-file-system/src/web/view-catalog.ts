@@ -7,24 +7,25 @@ import {
   HIDDEN_CONTENT_VIEW_LABEL,
   SOURCE_RECORD_PROP_VIEW_ID,
   SOURCE_RECORD_PROP_VIEW_LABEL,
+  listedRecordLayouts as mergeRecordLayouts,
   parseRecordLayouts,
   parseRecordSandboxes,
 } from '@biu/type-file-system/record-views'
 import { getDatabaseUi } from './database-ui.ts'
-import { TAGS_COLLECTION_PATH, PAGES_COLLECTION_PATH } from './database-path.ts'
-import { AGENTS_COLLECTION_PATH, normalizeCollectionPath, splitResourcePath } from '../paths.ts'
+import { normalizeCollectionPath, splitResourcePath } from '../paths.ts'
 import {
+  addRecordLayout,
   copyRecordLayout,
   deleteRecordLayout,
   getActiveRecordLayout,
   listedRecordLayouts,
   patchActiveRecordLayout,
+  renameRecordLayout,
   setActiveRecordLayoutId,
   subscribeRecordLayouts,
 } from './record-layouts.ts'
-import { subscribeTagPresent, TAG_TABLE_VIEW_ID } from './tag-present.ts'
-import { copyTagSandboxView, createTagSandboxView, deleteTagSandboxView, getTagViews, subscribeTagViews } from './tag-views.ts'
-import { createRecordSandboxView } from './record-sandboxes.ts'
+import { getRecordViewCatalog, patchRecordViewCatalog, subscribeRecordViewCatalog } from './record-view-catalog.ts'
+import { createRecordSandboxView, writeRecordViewCatalog } from './record-sandboxes.ts'
 
 export const VIEW_CATALOG_HOSTS_KEY = '__biuViewCatalogHosts'
 
@@ -43,10 +44,13 @@ export type ViewCatalogOption = {
 
 export type ViewCatalogHost = {
   options: (record: DbRecord, fieldKey: ViewCatalogFieldKey) => ViewCatalogOption[]
+  /** 必须返回一个有效视图 id，调用方不再兜底。 */
   selectedId: (record: DbRecord, fieldKey: ViewCatalogFieldKey) => string
   select: (record: DbRecord, fieldKey: ViewCatalogFieldKey, id: string) => void
   copy?: (record: DbRecord, fieldKey: ViewCatalogFieldKey, id: string) => void | Promise<unknown>
   remove?: (record: DbRecord, fieldKey: ViewCatalogFieldKey, id: string) => void | Promise<unknown>
+  create?: (record: DbRecord, fieldKey: ViewCatalogFieldKey) => void | Promise<unknown>
+  rename?: (record: DbRecord, fieldKey: ViewCatalogFieldKey, id: string, name: string) => void | Promise<unknown>
   subscribe?: (fn: () => void) => () => void
 }
 
@@ -99,11 +103,6 @@ export function registerViewCatalogHost(path: string, host: ViewCatalogHost) {
   }
 }
 
-function hostFor(path: string) {
-  const key = normalizeCollectionPath(path)
-  return hosts.get(key) ?? windowHosts()[key]
-}
-
 function named(items: Array<Partial<ViewCatalogOption> & { id: string; name: string }>): ViewCatalogOption[] {
   const out: ViewCatalogOption[] = []
   const seen = new Set<string>()
@@ -152,64 +151,66 @@ function registeredContent(path: string): ViewCatalogOption[] {
       builtin: true,
     }))
   }
-  if (path === AGENTS_COLLECTION_PATH) {
-    return [{ id: 'chat', name: '聊天', builtin: true }]
-  }
   return EDITOR_CONTENT_FALLBACK
+}
+
+export function fallbackContent(path: string) {
+  return registeredContent(path)[0]?.id ?? 'doc'
+}
+
+function listedSandboxes(collectionPath: string, record: DbRecord, fieldKey: 'views' | 'propViews') {
+  const path = collectionOf(collectionPath)
+  const live = parseRecordSandboxes(getRecordViewCatalog(path, String(record.id ?? '').trim())[fieldKey])
+  return live.length ? live : parseRecordSandboxes(record[fieldKey])
 }
 
 function defaultOptions(collectionPath: string, record: DbRecord, fieldKey: ViewCatalogFieldKey): ViewCatalogOption[] {
   const path = collectionOf(collectionPath)
   if (fieldKey === 'layouts') {
-    return withBuiltin(
-      { id: DEFAULT_RECORD_LAYOUT_ID, name: '默认视图', icon: 'layout', builtin: true },
-      parseRecordLayouts(record.layouts).map((item) => ({
-        id: item.id,
-        name: item.name,
-        icon: item.kind === 'sandbox' ? ('sandbox' as const) : ('layout' as const),
-      })),
-    )
-  }
-  if (fieldKey === 'propViews') {
-    const listed = parseRecordSandboxes(record.propViews).map((item) => ({
+    const id = String(record.id ?? '').trim()
+    const live = getRecordViewCatalog(path, id).layouts
+    const listed = live.length
+      ? listedRecordLayouts(path, id, fallbackContent(path))
+      : mergeRecordLayouts(record.layouts, fallbackContent(path))
+    return listed.map((item) => ({
       id: item.id,
       name: item.name,
-      icon: 'sandbox' as const,
+      icon: 'layout' as const,
+      builtin: Boolean(item.builtin) || item.id === DEFAULT_RECORD_LAYOUT_ID,
     }))
-    if (path === PAGES_COLLECTION_PATH) {
-      return named([
-        { id: DEFAULT_RECORD_PROP_VIEW_ID, name: '表格', icon: 'table', builtin: true },
-        { id: SOURCE_RECORD_PROP_VIEW_ID, name: SOURCE_RECORD_PROP_VIEW_LABEL, icon: 'source', builtin: true },
-        { id: 'hidden', name: '隐藏', icon: 'hidden', builtin: true },
-        ...listed,
-      ])
-    }
+  }
+  if (fieldKey === 'propViews') {
     return named([
       { id: DEFAULT_RECORD_PROP_VIEW_ID, name: '表格', icon: 'table', builtin: true },
       { id: SOURCE_RECORD_PROP_VIEW_ID, name: SOURCE_RECORD_PROP_VIEW_LABEL, icon: 'source', builtin: true },
-      ...listed,
+      { id: HIDDEN_CONTENT_VIEW_ID, name: HIDDEN_CONTENT_VIEW_LABEL, icon: 'hidden', builtin: true },
+      ...listedSandboxes(path, record, 'propViews').map((item) => ({
+        id: item.id,
+        name: item.name,
+        icon: 'sandbox' as const,
+      })),
     ])
   }
-  const liveTag = path === TAGS_COLLECTION_PATH ? getTagViews(String(record.id ?? '')) : []
-  const sandboxes = (liveTag.length ? liveTag : parseRecordSandboxes(record.views)).map((item) => ({
-    id: item.id,
-    name: item.name,
-    icon: 'sandbox' as const,
-  }))
   return named([
     ...registeredContent(path),
     { id: HIDDEN_CONTENT_VIEW_ID, name: HIDDEN_CONTENT_VIEW_LABEL, icon: 'hidden', builtin: true },
-    ...sandboxes,
+    ...listedSandboxes(path, record, 'views').map((item) => ({
+      id: item.id,
+      name: item.name,
+      icon: 'sandbox' as const,
+    })),
   ])
 }
 
 function defaultSelected(collectionPath: string, record: DbRecord, fieldKey: ViewCatalogFieldKey) {
   const path = collectionOf(collectionPath)
   const id = String(record.id ?? '').trim()
-  const layout = getActiveRecordLayout(path, id, fallbackContent(path))
-  if (fieldKey === 'layouts') return layout.id
-  if (fieldKey === 'propViews') return layout.propViewId || DEFAULT_RECORD_PROP_VIEW_ID
-  return layout.contentViewId
+  const catalog = getRecordViewCatalog(path, id)
+  if (fieldKey === 'layouts') return catalog.activeLayoutId || getActiveRecordLayout(path, id, fallbackContent(path)).id
+  if (fieldKey === 'propViews') {
+    return catalog.propViewId || getActiveRecordLayout(path, id, fallbackContent(path)).propViewId || DEFAULT_RECORD_PROP_VIEW_ID
+  }
+  return catalog.contentViewId || getActiveRecordLayout(path, id, fallbackContent(path)).contentViewId
 }
 
 function defaultSelect(collectionPath: string, record: DbRecord, fieldKey: ViewCatalogFieldKey, viewId: string) {
@@ -218,69 +219,23 @@ function defaultSelect(collectionPath: string, record: DbRecord, fieldKey: ViewC
   const next = String(viewId ?? '').trim()
   if (!path || !id || !next) return
   if (fieldKey === 'layouts') {
+    const layout = listedRecordLayouts(path, id, fallbackContent(path)).find((item) => item.id === next)
+    patchRecordViewCatalog(path, id, {
+      activeLayoutId: next,
+      ...(layout
+        ? { contentViewId: layout.contentViewId, propViewId: layout.propViewId }
+        : {}),
+    })
     setActiveRecordLayoutId(path, id, next)
     return
   }
   if (fieldKey === 'propViews') {
+    patchRecordViewCatalog(path, id, { propViewId: next })
     void patchActiveRecordLayout(path, id, { propViewId: next }, fallbackContent(path))
     return
   }
+  patchRecordViewCatalog(path, id, { contentViewId: next })
   void patchActiveRecordLayout(path, id, { contentViewId: next }, fallbackContent(path))
-}
-
-export function listViewCatalogOptions(collectionPath: string, record: DbRecord, fieldKey: string): ViewCatalogOption[] {
-  if (!isViewCatalogField(fieldKey)) return []
-  const host = hostFor(collectionOf(collectionPath))
-  const fromHost = host ? named(host.options(record, fieldKey) ?? []) : []
-  if (fromHost.length) return fromHost
-  return defaultOptions(collectionPath, record, fieldKey)
-}
-
-export function selectedViewCatalogId(collectionPath: string, record: DbRecord, fieldKey: string) {
-  if (!isViewCatalogField(fieldKey)) return ''
-  const host = hostFor(collectionOf(collectionPath))
-  const id = host ? host.selectedId(record, fieldKey) : defaultSelected(collectionPath, record, fieldKey)
-  return String(id ?? '').trim()
-}
-
-export function selectedViewCatalogOption(collectionPath: string, record: DbRecord, fieldKey: string) {
-  const options = listViewCatalogOptions(collectionPath, record, fieldKey)
-  const id = selectedViewCatalogId(collectionPath, record, fieldKey)
-  return (
-    options.find((item) => item.id === id) ??
-    options[0] ??
-    (id ? { id, name: catalogName(id), icon: contentIcon(id), builtin: Boolean(BUILTIN_CONTENT_NAMES[id]) } : null)
-  )
-}
-
-export function selectViewCatalog(collectionPath: string, record: DbRecord, fieldKey: string, viewId: string) {
-  if (!isViewCatalogField(fieldKey)) return
-  const host = hostFor(collectionOf(collectionPath))
-  if (host) {
-    host.select(record, fieldKey, viewId)
-    return
-  }
-  defaultSelect(collectionPath, record, fieldKey, viewId)
-}
-
-function fallbackContent(path: string) {
-  return path === TAGS_COLLECTION_PATH ? 'table' : path === '/agents' ? 'chat' : 'doc'
-}
-
-async function writeRecordCatalog(
-  collectionPath: string,
-  recordId: string,
-  fieldKey: 'views' | 'propViews' | 'layouts',
-  value: unknown,
-) {
-  const res = await fetch('/api/db/update', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ path: `${collectionPath}/${recordId}`, content: { [fieldKey]: JSON.stringify(value) } }),
-  })
-  if (!res.ok) return false
-  window.dispatchEvent(new Event('fsdb:change'))
-  return true
 }
 
 async function defaultCopy(collectionPath: string, record: DbRecord, fieldKey: ViewCatalogFieldKey, viewId: string) {
@@ -294,19 +249,13 @@ async function defaultCopy(collectionPath: string, record: DbRecord, fieldKey: V
     await copyRecordLayout(path, id, source, fallbackContent(path))
     return
   }
-  if (path === TAGS_COLLECTION_PATH && fieldKey === 'views') {
-    if (target === TAG_TABLE_VIEW_ID) await createTagSandboxView(id, String(record.title ?? ''), '表格 副本')
-    else await copyTagSandboxView(id, target, String(record.title ?? ''))
-    return
-  }
   const key = fieldKey === 'propViews' ? 'propViews' : 'views'
-  const listed = parseRecordSandboxes(record[key])
+  const listed = listedSandboxes(path, record, key)
   const source = listed.find((item) => item.id === target)
   const view = await createRecordSandboxView({
     collectionPath: path,
     recordId: id,
     fieldKey: key,
-    listed,
     name: `${source?.name || (fieldKey === 'propViews' ? '表格' : '新视图')} 副本`,
     title: String(record.title ?? ''),
     source,
@@ -325,17 +274,107 @@ async function defaultRemove(collectionPath: string, record: DbRecord, fieldKey:
     await deleteRecordLayout(path, id, target, fallbackContent(path))
     return
   }
-  if (path === TAGS_COLLECTION_PATH && fieldKey === 'views') {
-    await deleteTagSandboxView(id, target)
-    return
-  }
   const key = fieldKey === 'propViews' ? 'propViews' : 'views'
-  const listed = parseRecordSandboxes(record[key]).filter((item) => item.id !== target)
-  const ok = await writeRecordCatalog(path, id, key, listed)
+  const remaining = listedSandboxes(path, record, key).filter((item) => item.id !== target)
+  const ok = await writeRecordViewCatalog(path, id, key, remaining)
   if (!ok) return
   if (selectedViewCatalogId(path, record, fieldKey) === target) {
-    defaultSelect(path, record, fieldKey, fieldKey === 'propViews' ? DEFAULT_RECORD_PROP_VIEW_ID : listed[0]?.id ?? 'doc')
+    defaultSelect(
+      path,
+      record,
+      fieldKey,
+      fieldKey === 'propViews' ? DEFAULT_RECORD_PROP_VIEW_ID : remaining[0]?.id ?? fallbackContent(path),
+    )
   }
+}
+
+async function defaultCreate(collectionPath: string, record: DbRecord, fieldKey: ViewCatalogFieldKey) {
+  const path = normalizeCollectionPath(collectionPath)
+  const id = String(record.id ?? '').trim()
+  if (!path || !id) return
+  if (fieldKey === 'layouts') return addRecordLayout(path, id, fallbackContent(path))
+  const key = fieldKey === 'propViews' ? 'propViews' : 'views'
+  const view = await createRecordSandboxView({
+    collectionPath: path,
+    recordId: id,
+    fieldKey: key,
+    name: '新视图',
+    title: String(record.title ?? ''),
+  })
+  defaultSelect(path, record, fieldKey, view.id)
+  return view
+}
+
+async function defaultRename(collectionPath: string, record: DbRecord, fieldKey: ViewCatalogFieldKey, viewId: string, name: string) {
+  const path = normalizeCollectionPath(collectionPath)
+  const id = String(record.id ?? '').trim()
+  const target = String(viewId ?? '').trim()
+  const nextName = name.trim()
+  if (!path || !id || !target || !nextName) return
+  if (fieldKey === 'layouts') return renameRecordLayout(path, id, target, nextName)
+  const key = fieldKey === 'propViews' ? 'propViews' : 'views'
+  await writeRecordViewCatalog(
+    path,
+    id,
+    key,
+    listedSandboxes(path, record, key).map((item) => (item.id === target ? { ...item, name: nextName } : item)),
+  )
+}
+
+function defaultSubscribe(fn: () => void) {
+  const offLayouts = subscribeRecordLayouts(fn)
+  const offCatalog = subscribeRecordViewCatalog(fn)
+  return () => {
+    offLayouts()
+    offCatalog()
+  }
+}
+
+const defaultHosts = new Map<string, ViewCatalogHost>()
+
+function bindHost(collectionPath: string): ViewCatalogHost {
+  const path = collectionOf(collectionPath)
+  const registered = hosts.get(path) ?? windowHosts()[path]
+  if (registered) return registered
+  const cached = defaultHosts.get(path)
+  if (cached) return cached
+  const host: ViewCatalogHost = {
+    options: (record, fieldKey) => defaultOptions(path, record, fieldKey),
+    selectedId: (record, fieldKey) => defaultSelected(path, record, fieldKey),
+    select: (record, fieldKey, id) => defaultSelect(path, record, fieldKey, id),
+    copy: (record, fieldKey, id) => defaultCopy(path, record, fieldKey, id),
+    remove: (record, fieldKey, id) => defaultRemove(path, record, fieldKey, id),
+    create: (record, fieldKey) => defaultCreate(path, record, fieldKey),
+    rename: (record, fieldKey, id, name) => defaultRename(path, record, fieldKey, id, name),
+    subscribe: defaultSubscribe,
+  }
+  defaultHosts.set(path, host)
+  return host
+}
+
+export function listViewCatalogOptions(collectionPath: string, record: DbRecord, fieldKey: string): ViewCatalogOption[] {
+  if (!isViewCatalogField(fieldKey)) return []
+  return named(bindHost(collectionPath).options(record, fieldKey) ?? [])
+}
+
+export function selectedViewCatalogId(collectionPath: string, record: DbRecord, fieldKey: string) {
+  if (!isViewCatalogField(fieldKey)) return ''
+  return String(bindHost(collectionPath).selectedId(record, fieldKey) ?? '').trim()
+}
+
+export function selectedViewCatalogOption(collectionPath: string, record: DbRecord, fieldKey: string) {
+  const options = listViewCatalogOptions(collectionPath, record, fieldKey)
+  const id = selectedViewCatalogId(collectionPath, record, fieldKey)
+  return (
+    options.find((item) => item.id === id) ??
+    options[0] ??
+    (id ? { id, name: catalogName(id), icon: contentIcon(id), builtin: Boolean(BUILTIN_CONTENT_NAMES[id]) } : null)
+  )
+}
+
+export function selectViewCatalog(collectionPath: string, record: DbRecord, fieldKey: string, viewId: string) {
+  if (!isViewCatalogField(fieldKey)) return
+  bindHost(collectionPath).select(record, fieldKey, viewId)
 }
 
 const CONTENT_BUILTIN_IDS = new Set(['doc', 'outline', 'table', 'source', 'hidden', 'chat'])
@@ -345,50 +384,40 @@ export function canCopyViewCatalogItem(fieldKey: string, item: { id?: string; bu
   const id = String(item.id ?? '').trim()
   if (!id) return false
   if (item.builtin) return false
-  if (fieldKey === 'views' && (CONTENT_BUILTIN_IDS.has(id) || id === TAG_TABLE_VIEW_ID)) return false
+  if (fieldKey === 'views' && CONTENT_BUILTIN_IDS.has(id)) return false
   if (fieldKey === 'propViews' && (id === DEFAULT_RECORD_PROP_VIEW_ID || id === 'table' || id === SOURCE_RECORD_PROP_VIEW_ID || id === 'hidden')) return false
   return true
 }
 
 export function copyViewCatalog(collectionPath: string, record: DbRecord, fieldKey: string, viewId: string) {
   if (!isViewCatalogField(fieldKey)) return
-  const option = listViewCatalogOptions(collectionPath, record, fieldKey).find((item) => item.id === viewId)
-  if (!option || !canCopyViewCatalogItem(fieldKey, option)) return
-  const host = hostFor(collectionOf(collectionPath))
-  if (host?.copy) {
-    void host.copy(record, fieldKey, viewId)
-    return
+  if (fieldKey !== 'layouts') {
+    const option = listViewCatalogOptions(collectionPath, record, fieldKey).find((item) => item.id === viewId)
+    if (!option || !canCopyViewCatalogItem(fieldKey, option)) return
   }
-  void defaultCopy(collectionPath, record, fieldKey, viewId)
+  void bindHost(collectionPath).copy?.(record, fieldKey, viewId)
 }
 
 export function deleteViewCatalog(collectionPath: string, record: DbRecord, fieldKey: string, viewId: string) {
   if (!isViewCatalogField(fieldKey)) return
-  const host = hostFor(collectionOf(collectionPath))
-  if (host?.remove) {
-    void host.remove(record, fieldKey, viewId)
-    return
-  }
-  void defaultRemove(collectionPath, record, fieldKey, viewId)
+  void bindHost(collectionPath).remove?.(record, fieldKey, viewId)
+}
+
+export function createViewCatalog(collectionPath: string, record: DbRecord, fieldKey: string) {
+  if (!isViewCatalogField(fieldKey)) return
+  return bindHost(collectionPath).create?.(record, fieldKey)
+}
+
+export function renameViewCatalog(collectionPath: string, record: DbRecord, fieldKey: string, viewId: string, name: string) {
+  if (!isViewCatalogField(fieldKey)) return
+  return bindHost(collectionPath).rename?.(record, fieldKey, viewId, name)
 }
 
 export function subscribeViewCatalog(collectionPath: string, fn: () => void) {
-  const host = hostFor(collectionOf(collectionPath))
   const offUi = getDatabaseUi()?.subscribe(fn)
-  if (host?.subscribe) {
-    const offHost = host.subscribe(fn)
-    return () => {
-      offHost()
-      offUi?.()
-    }
-  }
-  const offLayouts = subscribeRecordLayouts(fn)
-  const offPresent = subscribeTagPresent(fn)
-  const offViews = subscribeTagViews(fn)
+  const offHost = bindHost(collectionPath).subscribe?.(fn)
   return () => {
-    offLayouts()
-    offPresent()
-    offViews()
+    offHost?.()
     offUi?.()
   }
 }

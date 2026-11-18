@@ -82,6 +82,6 @@ test('core-editor paints Content as the default for every file body', async () =
   assert.equal(ctx.blockEditor.block('sandbox')?.plugin, 'page-sandbox')
   assert.equal(ctx.blockEditor.block('sandbox')?.label, '沙箱')
   const src = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
-  assert.match(src, /bindPageViewCatalogHost/)
+  assert.doesNotMatch(src, /bindPageViewCatalogHost/)
   assert.match(src, /registerSandboxBlock/)
 })

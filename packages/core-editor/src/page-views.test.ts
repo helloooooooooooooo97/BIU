@@ -1,11 +1,10 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { defaultContentSandboxSource } from '@biu/type-file-system/record-views'
-import { parsePageViews, viewsAssetName } from './page-views.ts'
+import { defaultContentSandboxSource, parseRecordSandboxes } from '@biu/type-file-system/record-views'
 
-test('parsePageViews keeps sandbox views bound to files', () => {
+test('parseRecordSandboxes keeps sandbox views bound to files', () => {
   assert.deepEqual(
-    parsePageViews([
+    parseRecordSandboxes([
       { id: 'site1', name: '官网', kind: 'sandbox', file: 'view-p1-site1.jsx', dataFile: 'view-data-p1-site1.json' },
       { id: '', file: 'skip.jsx' },
       { id: 'site1', file: 'dup.jsx' },
@@ -20,8 +19,7 @@ test('parsePageViews keeps sandbox views bound to files', () => {
       },
     ],
   )
-  assert.deepEqual(parsePageViews('not-json'), [])
-  assert.equal(viewsAssetName('p003'), 'page-views-p003.json')
+  assert.deepEqual(parseRecordSandboxes('not-json'), [])
 })
 
 test('default sandbox source is a host component that uses Block', async () => {

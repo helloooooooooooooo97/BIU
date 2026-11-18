@@ -911,6 +911,31 @@ export const BIU_MIGRATIONS: Migration[] = [
   { version: 46, module: 'host-account', name: 'drop.resource-ownership', up: (db) => {
     dropColumn(db, 'resource_policies', 'ownership')
   } },
+  { version: 47, module: 'core-page', name: 'page.views', up: (db) => {
+    addColumn(db, 'pages', 'views_json', `views_json TEXT NOT NULL DEFAULT '[]'`)
+    addColumn(db, 'pages', 'prop_views_json', `prop_views_json TEXT NOT NULL DEFAULT '[]'`)
+    addColumn(db, 'pages', 'layouts_json', `layouts_json TEXT NOT NULL DEFAULT '[]'`)
+  } },
+  { version: 48, module: 'core-file-system', name: 'record.views', up: (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS record_views (
+        collection TEXT NOT NULL,
+        record_id TEXT NOT NULL,
+        views_json TEXT NOT NULL DEFAULT '[]',
+        prop_views_json TEXT NOT NULL DEFAULT '[]',
+        layouts_json TEXT NOT NULL DEFAULT '[]',
+        PRIMARY KEY (collection, record_id)
+      )
+    `)
+    dropColumn(db, 'pages', 'views_json')
+    dropColumn(db, 'pages', 'prop_views_json')
+    dropColumn(db, 'pages', 'layouts_json')
+    dropColumn(db, 'tags', 'views_json')
+    dropColumn(db, 'tags', 'prop_views_json')
+  } },
+  { version: 49, module: 'core-file-system', name: 'drop.tag-docs', up: (db) => {
+    if (hasTable(db, 'tag_docs')) db.exec('DROP TABLE tag_docs')
+  } },
 ]
 
 export function assertBiuMigrationLog(rows: Array<{ version: number }> = BIU_MIGRATIONS) {

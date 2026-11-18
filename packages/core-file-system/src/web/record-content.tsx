@@ -2,9 +2,9 @@ import { useEffect, useSyncExternalStore, type ComponentType } from 'react'
 import type { CollectionChrome, FsContentProps } from '@biu/type-file-system/ui'
 import type { DbRecord } from '@biu/type-file-system'
 import { HIDDEN_CONTENT_VIEW_ID } from '@biu/type-file-system/record-views'
-import { TAGS_COLLECTION_PATH } from './database-path.ts'
-import { getDatabaseUi } from './database-ui.ts'
+import { getDatabaseUi, recordContentFallback } from './database-ui.ts'
 import { loadRecordLayouts, useActiveRecordLayout } from './record-layouts.ts'
+import { useRecordViewCatalog } from './record-view-catalog.ts'
 
 const EDITOR_PLUGIN = 'core-editor'
 
@@ -30,8 +30,10 @@ export function useRecordContentBody(
 ) {
   const path = String(collectionPath ?? '').trim()
   const id = String(record.id ?? '').trim()
-  const fallback = path === TAGS_COLLECTION_PATH ? 'table' : path === '/agents' ? 'chat' : 'doc'
+  const fallback = recordContentFallback(path)
+  const catalog = useRecordViewCatalog(path, id)
   const layout = useActiveRecordLayout(path, id, fallback)
+  const contentViewId = catalog.contentViewId || layout.contentViewId
   useSyncExternalStore(
     (fn) => getDatabaseUi()?.subscribe(fn) ?? (() => undefined),
     () =>
@@ -43,9 +45,9 @@ export function useRecordContentBody(
     if (!path || !id) return
     void loadRecordLayouts(path, id, record.layouts, fallback)
   }, [path, id, record.layouts, fallback])
-  const hidden = layout.contentViewId === HIDDEN_CONTENT_VIEW_ID
+  const hidden = contentViewId === HIDDEN_CONTENT_VIEW_ID
   return {
     hidden,
-    Body: hidden ? undefined : contentBodyOf(path, layout.contentViewId, chrome),
+    Body: hidden ? undefined : contentBodyOf(path, contentViewId, chrome),
   }
 }

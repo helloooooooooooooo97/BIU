@@ -1,9 +1,8 @@
 import { assetsRootPath, dataHome, migrateLegacyPageDir } from '@biu/host-plugin-loader/data-dir'
 import type { Context } from 'cordis'
-import type { CollectionNamedDocs, CollectionSpec, DbRecord } from '@biu/type-file-system'
-import { DATABASE_CHANNEL, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
+import type { CollectionSpec } from '@biu/type-file-system'
+import { DATABASE_CHANNEL, REQUIRED_RECORD_FIELDS, databaseChannelPayload } from '@biu/type-file-system'
 import { PagesStore, PageAssetConflictError, type WorkspaceFs } from './store.ts'
-import { parsePageViews, parsePagePropViews, parsePageLayouts, layoutsAssetName, propViewsAssetName, viewsAssetName } from '@biu/core-editor/host'
 import { pageBlocksCollection } from './page-blocks-collection.ts'
 import { PAGE_BLOCK_TICK_MS, PageBlocksIndex } from './page-blocks-index.ts'
 
@@ -11,118 +10,10 @@ export { PAGE_ROOT, PAGE_ASSETS, ASSET_GC_GRACE_MS, PagesStore } from './store.t
 export { pageBlocksCollection } from './page-blocks-collection.ts'
 export { PageBlocksIndex, PAGE_BLOCK_TICK_MS } from './page-blocks-index.ts'
 
-async function readPageViews(store: PagesStore, pageId: string) {
-  try {
-    const { bytes } = await store.readAsset(viewsAssetName(pageId))
-    return parsePageViews(bytes.toString('utf8'))
-  } catch {
-    return []
-  }
-}
-
-async function writePageViews(store: PagesStore, pageId: string, raw: unknown) {
-  const views = parsePageViews(raw)
-  const name = viewsAssetName(pageId)
-  let etag = ''
-  try {
-    etag = (await store.readAsset(name)).etag
-  } catch {
-    etag = ''
-  }
-  await store.writeAsset(name, `${JSON.stringify(views, null, 2)}\n`, etag ? { etag } : undefined)
-  return views
-}
-
-async function readPagePropViews(store: PagesStore, pageId: string) {
-  try {
-    const { bytes } = await store.readAsset(propViewsAssetName(pageId))
-    return parsePagePropViews(bytes.toString('utf8'))
-  } catch {
-    return []
-  }
-}
-
-async function writePagePropViews(store: PagesStore, pageId: string, raw: unknown) {
-  const views = parsePagePropViews(raw)
-  const name = propViewsAssetName(pageId)
-  let etag = ''
-  try {
-    etag = (await store.readAsset(name)).etag
-  } catch {
-    etag = ''
-  }
-  await store.writeAsset(name, `${JSON.stringify(views, null, 2)}\n`, etag ? { etag } : undefined)
-  return views
-}
-
-async function readPageLayouts(store: PagesStore, pageId: string) {
-  try {
-    const { bytes } = await store.readAsset(layoutsAssetName(pageId))
-    return parsePageLayouts(bytes.toString('utf8'))
-  } catch {
-    return []
-  }
-}
-
-async function writePageLayouts(store: PagesStore, pageId: string, raw: unknown) {
-  const views = parsePageLayouts(raw)
-  const name = layoutsAssetName(pageId)
-  let etag = ''
-  try {
-    etag = (await store.readAsset(name)).etag
-  } catch {
-    etag = ''
-  }
-  await store.writeAsset(name, `${JSON.stringify(views, null, 2)}\n`, etag ? { etag } : undefined)
-  return views
-}
-
-async function withPageViews(store: PagesStore, row: Awaited<ReturnType<PagesStore['get']>>) {
-  if (!row) return row
-  return {
-    ...row,
-    views: await readPageViews(store, row.id),
-    propViews: await readPagePropViews(store, row.id),
-    layouts: await readPageLayouts(store, row.id),
-  }
-}
-
-export function pageViewFileNames(record: { id?: unknown; views?: unknown; propViews?: unknown; layouts?: unknown }): string[] {
-  const id = String(record.id ?? '').trim()
-  const out: string[] = []
-  if (id) {
-    out.push(viewsAssetName(id))
-    out.push(propViewsAssetName(id))
-    out.push(layoutsAssetName(id))
-  }
-  for (const view of [...parsePageViews(record.views), ...parsePagePropViews(record.propViews)]) {
-    for (const raw of [view.file, view.dataFile]) {
-      const name = String(raw ?? '')
-        .trim()
-        .replace(/^assets\//, '')
-        .replace(/^.*[/\\]/, '')
-      if (name) out.push(name)
-    }
-  }
-  return out
-}
-
-export function pageNamedDocs(store: PagesStore): CollectionNamedDocs {
-  return {
-    names: (record: DbRecord) => pageViewFileNames(record),
-    read: (name) => store.readAsset(name),
-    write: async (name, content, opts) => {
-      const written = await store.writeAsset(name, content, opts)
-      return { name: written.name, etag: written.etag }
-    },
-  }
-}
-
 export function pagesCollection(store: PagesStore, index: PageBlocksIndex): CollectionSpec {
   return {
     id: 'pages',
     path: '/pages',
-    namedDocs: pageNamedDocs(store),
     label: '页面',
     view: {
       moduleId: 'page',
@@ -145,36 +36,15 @@ export function pagesCollection(store: PagesStore, index: PageBlocksIndex): Coll
         notes: { type: 'file', label: '正文', writable: true },
         parentId: { type: 'ref', label: '父级', writable: true },
         dependsOn: { type: 'multi-ref', label: '依赖', writable: true },
-        views: {
-          type: 'string',
-          label: '内容视图',
-          writable: true,
-          description: '本页正文沙盒视图。JSON 数组：id、name、kind=sandbox、file、dataFile。改视图源码用 db_file path=/pages/<id> name=<file>。文档/大纲/表格/源码是内置正文视图，不写在这里。',
-        },
-        propViews: {
-          type: 'string',
-          label: '属性视图',
-          writable: true,
-          description: '本页属性沙盒视图，与正文视图独立。JSON 数组：id、name、kind=sandbox、file、dataFile。内置默认是属性表。',
-        },
-        layouts: {
-          type: 'string',
-          label: '全局视图',
-          writable: true,
-          description: '本页保存的全局视图：组合内容展示、属性展示、筛选和排序。内置「默认视图」不写在这里。同时画属性和正文用内容沙盒。',
-        },
       },
     },
     records: { update: true, create: true, delete: true, allocateId: true },
     list: (query) => store.list(query?.ids),
-    get: async (id) => withPageViews(store, await store.get(id)),
+    get: (id) => store.get(id),
     update: async (id, patch) => {
-      if ('views' in patch) await writePageViews(store, id, patch.views)
-      if ('propViews' in patch) await writePagePropViews(store, id, patch.propViews)
-      if ('layouts' in patch) await writePageLayouts(store, id, patch.layouts)
       const row = await store.update(id, patch)
       if ('notes' in patch) await index.reindexPage(row)
-      return withPageViews(store, row)
+      return row
     },
     create: async (rows) => {
       const out = []
@@ -250,7 +120,7 @@ function servePageFile(ctx: Context, store: PagesStore) {
         const written = await store.writeAsset(name, await route.bytes(), {
           etag: ifMatch && ifMatch !== '*' ? ifMatch : '',
         })
-        inner.http.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), asset: { name: written.name, etag: written.etag } })
+        inner.http.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('asset', { asset: { name: written.name, etag: written.etag } }))
         route.res.writeHead(200, {
           'content-type': 'application/json; charset=utf-8',
           'cache-control': 'no-store',

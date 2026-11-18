@@ -43,12 +43,8 @@ export const BIU_TABLES: Record<string, TableSpec> = {
     indexes: ['tasks_status_sort'],
   },
   tags: {
-    columns: ['id', 'label', 'fields_json', 'views_json', 'created_at', 'updated_at'],
+    columns: ['id', 'label', 'fields_json', 'created_at', 'updated_at'],
     indexes: ['tags_label'],
-  },
-  tag_docs: {
-    columns: ['name', 'tag_id', 'body', 'etag', 'mime'],
-    indexes: ['tag_docs_tag'],
   },
   tag_stamps: {
     columns: ['tag_id', 'collection', 'record_id', 'title'],
@@ -104,6 +100,10 @@ export const BIU_TABLES: Record<string, TableSpec> = {
   },
   saved_views: {
     columns: ['collection', 'view_id', 'payload_json', 'updated_at'],
+    indexes: [],
+  },
+  record_views: {
+    columns: ['collection', 'record_id', 'views_json', 'prop_views_json', 'layouts_json'],
     indexes: [],
   },
   saved_view_tombstones: {
@@ -301,7 +301,7 @@ export const BIU_TABLES: Record<string, TableSpec> = {
   },
 }
 
-export const LATEST_BIU_SCHEMA = 46
+export const LATEST_BIU_SCHEMA = 49
 
 export const CREATE_CORE_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -349,20 +349,11 @@ CREATE TABLE IF NOT EXISTS tags (
   id TEXT PRIMARY KEY,
   label TEXT NOT NULL,
   fields_json TEXT NOT NULL DEFAULT '[]',
-  views_json TEXT NOT NULL DEFAULT '[]',
   notes TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL DEFAULT 0,
   updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS tags_label ON tags(label);
-CREATE TABLE IF NOT EXISTS tag_docs (
-  name TEXT PRIMARY KEY,
-  tag_id TEXT NOT NULL,
-  body TEXT NOT NULL,
-  etag TEXT NOT NULL,
-  mime TEXT NOT NULL DEFAULT 'text/plain; charset=utf-8'
-);
-CREATE INDEX IF NOT EXISTS tag_docs_tag ON tag_docs(tag_id);
 CREATE TABLE IF NOT EXISTS tag_stamps (
   tag_id TEXT NOT NULL,
   collection TEXT NOT NULL,
@@ -451,6 +442,14 @@ CREATE TABLE IF NOT EXISTS saved_views (
   payload_json TEXT NOT NULL,
   updated_at INTEGER NOT NULL,
   PRIMARY KEY (collection, view_id)
+);
+CREATE TABLE IF NOT EXISTS record_views (
+  collection TEXT NOT NULL,
+  record_id TEXT NOT NULL,
+  views_json TEXT NOT NULL DEFAULT '[]',
+  prop_views_json TEXT NOT NULL DEFAULT '[]',
+  layouts_json TEXT NOT NULL DEFAULT '[]',
+  PRIMARY KEY (collection, record_id)
 );
 -- 已删视图的墓碑：别的窗口拿着旧快照推 upsert 时不能把删掉的视图复活
 CREATE TABLE IF NOT EXISTS saved_view_tombstones (

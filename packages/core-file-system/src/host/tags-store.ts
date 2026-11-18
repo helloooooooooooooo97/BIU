@@ -21,17 +21,8 @@ import {
 } from '@biu/type-file-system'
 import { parseTagFlatColumnKey } from '../query-logic.ts'
 import { strategyForField } from '../web/group-strategies.ts'
-import { createHash } from 'node:crypto'
 import { parsePageBanner, type PageBanner, type PageBannerKind } from '../page-banner.ts'
 import { bannerGalleryId, isBannerPreset } from '../banner-presets.ts'
-import { AssetConflictError, mimeOfAsset } from './assets-store.ts'
-import {
-  isTagViewDocName,
-  parseTagViews,
-  tagIdFromViewDocName,
-  tagViewsAssetName,
-  type TagSandboxView,
-} from '../tag-views.ts'
 
 type DatabaseSync = import('node:sqlite').DatabaseSync
 
@@ -46,7 +37,6 @@ type TagRow = {
   id: string
   label: string
   fields_json: string
-  views_json?: string
   notes?: string
   created_at?: number
   updated_at?: number
@@ -57,7 +47,6 @@ export type TagEntry = {
   notes: string
   createdAt: number
   updatedAt: number
-  views: TagSandboxView[]
 }
 type StampRow = { tag_id: string; collection: string; record_id: string; title: string }
 
@@ -101,15 +90,10 @@ function entryFromRow(db: DatabaseSync, row: TagRow): TagEntry | null {
     notes: readEditorContent(db, '/tags', row.id),
     createdAt,
     updatedAt,
-    views: parseTagViews(row.views_json),
   }
 }
 
-const FACET_ROW_SQL = 'id, label, fields_json, views_json, created_at, updated_at'
-
-function docEtag(body: string) {
-  return createHash('sha256').update(body).digest('hex').slice(0, 32)
-}
+const FACET_ROW_SQL = 'id, label, fields_json, created_at, updated_at'
 
 /** 分面目录由 File System 用 SQLite 管：目录 + 跨表倒排，查询不扫全表。 */
 export class TagStore {
@@ -119,8 +103,6 @@ export class TagStore {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true })
     this.db = openAndMigrateBiu(path)
     this.ensureCreatedAtColumn()
-    this.ensureViewsColumn()
-    this.ensureTagDocsTable()
     this.ensureGroupIndexTables()
     this.ensurePersonMetaColumns()
     this.ensureDeletedAtColumn()
@@ -187,27 +169,6 @@ export class TagStore {
     const filled = db.prepare(`SELECT COUNT(DISTINCT v.record_id) AS n FROM json_each(?) a
       CROSS JOIN tag_group_values v ON a.value = v.record_id WHERE v.collection = ? AND v.field = ?`).get(ids, collection, field) as { n: number }
     return [...groups.map(row => ({ key: row.key, total: Number(row.total) })), { key: '', total: new Set(visibleIds).size - filled.n }]
-  }
-
-  private ensureViewsColumn() {
-    const db = this.db!
-    const cols = db.prepare('PRAGMA table_info(tags)').all() as Array<{ name: string }>
-    if (!cols.some((col) => col.name === 'views_json')) {
-      db.exec(`ALTER TABLE tags ADD COLUMN views_json TEXT NOT NULL DEFAULT '[]'`)
-    }
-  }
-
-  private ensureTagDocsTable() {
-    this.db!.exec(`
-      CREATE TABLE IF NOT EXISTS tag_docs (
-        name TEXT PRIMARY KEY,
-        tag_id TEXT NOT NULL,
-        body TEXT NOT NULL,
-        etag TEXT NOT NULL,
-        mime TEXT NOT NULL DEFAULT 'text/plain; charset=utf-8'
-      );
-      CREATE INDEX IF NOT EXISTS tag_docs_tag ON tag_docs(tag_id);
-    `)
   }
 
   private ensureCreatedAtColumn() {
@@ -285,8 +246,8 @@ export class TagStore {
     const prev = this.get(pack.id)
     const prevNotes = notes !== undefined && prev ? this.notes(pack.id) : ''
     db.prepare(
-        `INSERT INTO tags (id, label, fields_json, views_json, created_at, updated_at)
-         VALUES (?, ?, ?, '[]', ?, ?)
+        `INSERT INTO tags (id, label, fields_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            label = excluded.label,
            fields_json = excluded.fields_json,
@@ -470,7 +431,6 @@ export class TagStore {
       for (const row of existing) {
         if (keep.has(row.id)) continue
         db.prepare('DELETE FROM tag_stamps WHERE tag_id = ?').run(row.id)
-        db.prepare('DELETE FROM tag_docs WHERE tag_id = ?').run(row.id)
         db.prepare('DELETE FROM tags WHERE id = ?').run(row.id)
         this.dropTagGroupIndexes(row.id)
       }
@@ -491,78 +451,6 @@ export class TagStore {
     return pack
   }
 
-  views(id: string): TagSandboxView[] {
-    return this.entry(id)?.views ?? []
-  }
-
-  writeViews(id: string, raw: unknown): TagSandboxView[] {
-    const want = String(id ?? '').trim()
-    const views = parseTagViews(raw)
-    if (!want || !this.get(want)) return views
-    this.ensure()
-      .prepare('UPDATE tags SET views_json = ?, updated_at = ? WHERE id = ?')
-      .run(JSON.stringify(views), Date.now(), want)
-    return views
-  }
-
-  readNamedDoc(name: string): { bytes: Buffer; type: string; etag: string } {
-    const file = String(name ?? '')
-      .trim()
-      .replace(/^assets\//, '')
-      .replace(/^.*[/\\]/, '')
-    if (!file) throw new Error('not found')
-    const catalogId = /^tag-views-(.+)\.json$/i.exec(file)?.[1]
-    if (catalogId) {
-      const views = this.views(catalogId)
-      const body = `${JSON.stringify(views, null, 2)}\n`
-      return { bytes: Buffer.from(body), type: 'application/json; charset=utf-8', etag: docEtag(body) }
-    }
-    const row = this.ensure()
-      .prepare('SELECT body, etag, mime FROM tag_docs WHERE name = ?')
-      .get(file) as { body: string; etag: string; mime: string } | undefined
-    if (!row) throw new Error('not found')
-    return { bytes: Buffer.from(row.body), type: row.mime || mimeOfAsset(file), etag: row.etag }
-  }
-
-  writeNamedDoc(name: string, content: string | Buffer | Uint8Array, opts?: { etag?: string }) {
-    const file = String(name ?? '')
-      .trim()
-      .replace(/^assets\//, '')
-      .replace(/^.*[/\\]/, '')
-    if (!file || !isTagViewDocName(file)) throw new Error('invalid tag view file')
-    const text = typeof content === 'string' ? content : Buffer.from(content).toString('utf8')
-    const catalogId = /^tag-views-(.+)\.json$/i.exec(file)?.[1]
-    if (catalogId) {
-      const views = this.writeViews(catalogId, text)
-      const body = `${JSON.stringify(views, null, 2)}\n`
-      return { name: file, etag: docEtag(body), bytes: Buffer.byteLength(body) }
-    }
-    const tagId = tagIdFromViewDocName(file)
-    if (!tagId) throw new Error('invalid tag view file')
-    const db = this.ensure()
-    const prev = db.prepare('SELECT etag FROM tag_docs WHERE name = ?').get(file) as { etag: string } | undefined
-    const match = String(opts?.etag ?? '').trim()
-    if (prev && match && match !== prev.etag) throw new AssetConflictError(prev.etag)
-    const etag = docEtag(text)
-    db.prepare(
-      `INSERT INTO tag_docs (name, tag_id, body, etag, mime)
-       VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(name) DO UPDATE SET tag_id = excluded.tag_id, body = excluded.body, etag = excluded.etag, mime = excluded.mime`,
-    ).run(file, tagId, text, etag, mimeOfAsset(file))
-    return { name: file, etag, bytes: Buffer.byteLength(text) }
-  }
-
-  ownsNamedDoc(name: string) {
-    const file = String(name ?? '')
-      .trim()
-      .replace(/^assets\//, '')
-      .replace(/^.*[/\\]/, '')
-    if (!file) return false
-    if (file.startsWith('tag-views-') && file.endsWith('.json')) return true
-    const row = this.ensure().prepare('SELECT 1 FROM tag_docs WHERE name = ?').get(file)
-    return Boolean(row)
-  }
-
   removeFacet(id: string): boolean {
     const db = this.ensure()
     const want = String(id ?? '').trim()
@@ -570,7 +458,6 @@ export class TagStore {
     db.exec('BEGIN IMMEDIATE')
     try {
       db.prepare('DELETE FROM tag_stamps WHERE tag_id = ?').run(want)
-      db.prepare('DELETE FROM tag_docs WHERE tag_id = ?').run(want)
       const result = db.prepare('DELETE FROM tags WHERE id = ?').run(want)
       this.dropTagGroupIndexes(want)
       db.exec('COMMIT')

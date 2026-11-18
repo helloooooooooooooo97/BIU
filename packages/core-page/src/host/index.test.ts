@@ -16,6 +16,7 @@ import { hashedAssetName, hashedAssetRel, writeEditorContent } from '@biu/host-p
 import { assetNamesFromBlock, collectAssetNames } from '@biu/type-file-system'
 import { ASSET_GC_GRACE_MS, PAGE_DB, PAGE_ROOT, PageAssetConflictError, PagesStore } from './store.ts'
 import { PageBlocksIndex } from './page-blocks-index.ts'
+import { RecordViewsStore, wrapCollectionRecordViews } from '../../../core-file-system/src/host/record-views.ts'
 
 test('markdown frontmatter roundtrips YAML properties and body', () => {
   const raw = dumpMarkdown({ title: '首页', tags: ['red', 'prod'] }, '正文第一段\n')
@@ -454,8 +455,14 @@ test('PagesStore reads existing markdown files from .biu/page', async () => {
   const onlyHome = await store.list(['home'])
   assert.equal(onlyHome.length, 1)
   assert.equal(onlyHome[0]?.id, 'home')
-  const all = await store.list()
-  assert.equal(all.map((row) => row.id).sort().join(','), 'home,other')
+  assert.equal((await store.list()).map((row) => row.id).join(','), 'home')
+  const imported = new PagesStore({
+    resolve: (rel) => inner.resolve(rel),
+    read: (rel) => inner.read(rel),
+    write: (rel, content) => inner.write(rel, content),
+    list: (rel) => inner.list(rel),
+  })
+  assert.equal((await imported.list()).map((row) => row.id).sort().join(','), 'home,other')
   assert.equal(existsSync(join(root, PAGE_ROOT, 'home.md')), false)
 })
 
@@ -547,7 +554,7 @@ test('PagesStore migrates leftover .page into .biu', async () => {
   assert.equal(existsSync(join(root, '.biu/assets/page')), false)
 })
 
-test('page namedDocs exposes sandbox view jsx for db_doc', async () => {
+test('page sandbox catalog lives on record_views and exposes files as assets', async () => {
   const ctx = new Context()
   const registered: CollectionSpec[] = []
   class FakeDb extends Service {
@@ -563,25 +570,37 @@ test('page namedDocs exposes sandbox view jsx for db_doc', async () => {
   const root = await mkdtemp(join(tmpdir(), 'page-named-docs-'))
   await ctx.plugin(fsPlugin, { root })
   await ctx.plugin(page)
-  const spec = registered[0]!
-  assert.ok(spec.namedDocs)
+  const spec = wrapCollectionRecordViews(registered[0]!, new RecordViewsStore().open())
   const created = await spec.create!([{ title: '沙盒页' }])
   const id = created[0]!.id
   const viewId = '8fdbc4f8'
   const file = `view-${id}-${viewId}.jsx`
   const dataFile = `view-data-${id}-${viewId}.json`
   await spec.update!(id, { views: [{ id: viewId, name: '沙盒 1', kind: 'sandbox', file, dataFile }] })
-  const assetsDir = join(root, '.biu/assets')
-  const store = new page.PagesStore(ctx.fs.workspace as never, assetsDir)
-  await store.writeAsset(file, 'export default function App(){return <p>你好</p>}\n')
   const row = await spec.get!(id)
-  const names = [...spec.namedDocs!.names(row!)]
-  assert.ok(names.includes(file))
-  assert.ok(names.includes(dataFile))
-  assert.ok(names.includes(`page-views-${id}.json`))
-  assert.ok(names.includes(`page-prop-views-${id}.json`))
-  assert.ok(names.includes(`page-layouts-${id}.json`))
-  const read = await spec.namedDocs!.read(file)
-  assert.match(Buffer.from(read.bytes).toString('utf8'), /你好/)
-  assert.match(read.type, /javascript/)
+  const names = collectAssetNames(row)
+  assert.equal(names.has(file), true)
+  assert.equal(names.has(dataFile), true)
+})
+
+test('adding and deleting page and property views preserves editor content without rewriting it', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'page-view-write-'))
+  const ctx = new Context()
+  await ctx.plugin(tools)
+  await ctx.plugin(fsPlugin, { root })
+  const store = new PagesStore(ctx.fs.workspace as never, join(root, '.biu/assets'))
+  const index = new PageBlocksIndex(store, { hotWindowMs: 60_000, hotLimit: 0, warmLimit: 0 })
+  const spec = wrapCollectionRecordViews((await import('./index.ts')).pagesCollection(store, index), new RecordViewsStore().open())
+  const row = await store.create({ title: '视图', notes: '# 正文\n保留内容' })
+  const db = await store.sqlite()
+  db.exec(`CREATE TRIGGER reject_body_rewrite BEFORE UPDATE ON editor_content
+    BEGIN SELECT RAISE(ABORT, 'view edits must not rewrite content'); END`)
+  for (const field of ['views', 'propViews']) {
+    const view = { id: 'custom', name: '测试视图', kind: 'sandbox', file: 'custom.jsx', dataFile: 'custom.json' }
+    const added = await spec.update!(row.id, { [field]: [view] })
+    assert.equal((added[field] as unknown[]).length, 1)
+    const removed = await spec.update!(row.id, { [field]: [] })
+    assert.deepEqual(removed[field], [])
+    assert.equal(removed.notes, '# 正文\n保留内容')
+  }
 })

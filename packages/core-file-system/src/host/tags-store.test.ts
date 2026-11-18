@@ -82,23 +82,6 @@ test('sqlite file round-trips facet catalog and stamp index', async () => {
   assert.equal(again.list().length, 0)
 })
 
-test('TagStore persists sandbox views and named docs', () => {
-  const store = new TagStore()
-  store.upsert({ id: 'need', label: '需求', fields: [{ key: 'owner', type: 'string' }] })
-  const views = store.writeViews('need', [
-    { id: '8fdbc4f8', name: '卡', kind: 'sandbox', file: 'tag-view-need-8fdbc4f8.jsx', dataFile: 'tag-view-data-need-8fdbc4f8.json' },
-  ])
-  assert.equal(views[0]?.name, '卡')
-  store.writeNamedDoc('view-need-8fdbc4f8.jsx', 'export default function App(){return <p>ok</p>}')
-  const read = store.readNamedDoc('view-need-8fdbc4f8.jsx')
-  assert.match(read.bytes.toString('utf8'), /ok/)
-  const catalog = store.readNamedDoc('tag-views-need.json')
-  assert.match(catalog.bytes.toString('utf8'), /8fdbc4f8/)
-  store.writeNamedDoc('view-tag-9-0ae784c0.jsx', 'export default function App(){return <p>tag-9</p>}')
-  assert.match(store.readNamedDoc('view-tag-9-0ae784c0.jsx').bytes.toString('utf8'), /tag-9/)
-  store.removeFacet('need')
-  assert.throws(() => store.readNamedDoc('view-need-8fdbc4f8.jsx'))
-})
 
 test('sqlite stores facet overlay for records that cannot update', async () => {
   const store = new TagStore()

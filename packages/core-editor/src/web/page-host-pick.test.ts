@@ -9,7 +9,7 @@ test('stamps page-host preview surfaces without overwriting nested blocks', () =
     <div data-testid="page-host-view-root">
       <h1>本页沙盒</h1>
       <button type="button" data-testid="page-host-chip-ab">表格</button>
-      <div class="page-block" data-page-block="tag" data-biu-kind="plugin" data-biu-id="page-tag:tag:ab">
+      <div class="page-block" data-page-block="html" data-biu-kind="plugin" data-biu-id="page-html:html:ab">
         <span data-testid="nested-block-cell">优先级</span>
       </div>
     </div>

@@ -1,11 +1,10 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { defaultPropSandboxSource, parsePagePropViews, propViewsAssetName } from './page-prop-views.ts'
+import { defaultPropSandboxSource, parseRecordSandboxes } from '@biu/type-file-system/record-views'
 
-test('parse page property views keeps sandbox files bound to the page', () => {
-  assert.equal(propViewsAssetName('p003'), 'page-prop-views-p003.json')
+test('parse record property views keeps sandbox files bound to the record', () => {
   assert.deepEqual(
-    parsePagePropViews([
+    parseRecordSandboxes([
       { id: 'card1', name: '卡片', kind: 'sandbox', file: 'prop-view-p1-card1.jsx', dataFile: 'prop-view-data-p1-card1.json' },
       { id: '', file: 'skip.jsx' },
     ]),
