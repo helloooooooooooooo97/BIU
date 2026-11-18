@@ -5,7 +5,7 @@ import { normalizeCollectionPath } from '../paths.ts'
 
 const TAG_FIELDS_EXAMPLE = '[{"key":"类别","type":"string"}]'
 const TAG_FIELDS_DESCRIPTION =
-  '属性定义。db_update / db_create 可传数组或 JSON 字符串，两种形状等价。例 [{"key":"类别","type":"string"}]。同一标签下属性名不能重复。type 必须是 string|number|boolean|select|multi-select|datetime|url|image|attachment|document|action|facet|person|ref|multi-ref（没有 text，也没有 file：file 是记录正文，用 db_content。document 是可覆盖的命名文档）。其它表读该属性的列 key 为 tag::<本标签id>::<字段key>，例如 tag::tag::类别。'
+  '属性定义。db_update / db_create 可传数组或 JSON 字符串，两种形状等价。例 [{"key":"类别","type":"string"}]。同一标签下属性名不能重复。type 必须是 string|number|boolean|select|multi-select|datetime|url|image|attachment|document|action|tag|person|ref|multi-ref（没有 text，也没有 file：file 是记录正文，用 db_content。document 是可覆盖的命名文档）。其它表读该属性的列 key 为 tag::<本标签id>::<字段key>，例如 tag::tag::类别。'
 
 export function stampRecordId(collection: string, recordId: string) {
   const table = normalizeCollectionPath(collection).replace(/^\//, '')
@@ -93,12 +93,12 @@ export function tagsCollection(
   }
 
   return {
-    id: 'facets',
+    id: 'tags',
     path: '/tags',
     label: '标签',
     view: {
       moduleId: 'tags-db',
-      route: '/db-facets',
+      route: '/db-tags',
       title: '标签',
       inspector: true,
       blurb: '工作区全局标签定义，可贴到任意表的记录。列表 db_list /tags；某标签已贴过哪些记录用 filter.tagId。新建 db_create /tags records=[{title}]（id 由标题 slug）。改名或属性 db_update /tags/<id>，fields 传数组或 JSON 字符串均可，例 [{"key":"类别","type":"string"}]；同一标签下属性名不能重复；type 必须是白名单（string 不是 text）。三视图走记录 catalog，源码 db_file path=/tags/<id> name=<file>。其它表 db_list 读属性列用 tag::<标签id>::<字段key>。正文 notes 用 db_content。把标签贴到记录并填属性：db_update 那条记录的 tag。本表没有 db_action。',

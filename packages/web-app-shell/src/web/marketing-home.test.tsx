@@ -312,15 +312,15 @@ test('对比页：六个分类 13 个对手都在，且 BIU 列如实标注弱�
   cleanup()
 })
 
-test('对比页：Notion 页的落点是 facet —— 属性在记录之外，不用改表', () => {
+test('对比页：Notion 页的落点是 tag —— 属性在记录之外，不用改表', () => {
   renderSite('/compare/vs-notion')
   const body = document.body.textContent ?? ''
 
-  // facet 的语义：属性挂在记录外面，原表不动（合并后一句话讲完）
-  assert.match(body, /facet/, '要出现 facet 这个概念')
+  // tag 的语义：属性挂在记录外面，原表不动（合并后一句话讲完）
+  assert.match(body, /tag/, '要出现 tag 这个概念')
   assert.match(body, /property lives outside the record, leaves the source table unchanged/, '要点出「不改表」')
   assert.match(body, /any record can use one/, '要点出「对任何数据都能加」')
-  assert.match(body, /record can carry multiple facets/, '要点出一条记录可以挂多个')
+  assert.match(body, /record can carry multiple tags/, '要点出一条记录可以挂多个')
   assert.match(body, /span different tables/, '要点出跨表')
 
   // 对照：Notion 那边是改 schema
