@@ -2299,12 +2299,9 @@ export function CollectionBrowser({
     }
     try {
       const heldStat = switching ? null : statHoldRef.current
-      const nextStatPromise = heldStat?.schema
-        ? Promise.resolve(heldStat)
-        : readJson<StatResult>(`/api/db/stat?path=${encodeURIComponent(dataPath)}`, undefined, { fresh: Boolean(opts?.force) })
-      let reqParentKey = parentFieldKey(schemaRef.current)
+      let reqParentKey = parentFieldKey(schemaRef.current ?? heldStat?.schema)
       if (reqTree && !reqParentKey) {
-        reqParentKey = parentFieldKey((await nextStatPromise).schema)
+        reqParentKey = parentFieldKey(peekListCache(dataPath, reqViewId)?.stat?.schema)
       }
       const listPage = (input: {
         path: string
@@ -2390,42 +2387,25 @@ export function CollectionBrowser({
               list: (next) => listCollection({ ...next, fresh: Boolean(opts?.force) }),
             }),
         })
-      let nextStat: StatResult
       let listed: { items: Array<DbRecord & { path?: string }>; total: number; schema?: CollectionSchema }
       let buckets: GroupBucket[] = []
       const loadUngrouped = () => listPage({ ...listOpts, limit: reqPageSize, offset: switching ? 0 : page * reqPageSize })
       if (reqGroupBy) {
-        const cachedSchema = switching ? undefined : schemaRef.current
-        const cachedKeys = groupListKeys(cachedSchema, reqGroupBy, extraGroupValues(cachedSchema), tagCatalog)
-        if (cachedKeys.length) {
-          const [statResult, grouped] = await Promise.all([nextStatPromise, loadGroups(cachedSchema)])
-          nextStat = statResult
-          if (staleFetch()) return true
-          if (grouped) {
-            listed = grouped
-            buckets = grouped.buckets
-          } else {
-            listed = await loadUngrouped()
-          }
+        const cachedSchema = switching ? undefined : schemaRef.current ?? heldStat?.schema
+        const grouped = await loadGroups(cachedSchema)
+        if (staleFetch()) return true
+        if (grouped) {
+          listed = grouped
+          buckets = grouped.buckets
         } else {
-          nextStat = await nextStatPromise
-          if (staleFetch()) return true
-          const grouped = await loadGroups(nextStat.schema)
-          if (staleFetch()) return true
-          if (grouped) {
-            listed = grouped
-            buckets = grouped.buckets
-          } else {
-            listed = await loadUngrouped()
-          }
+          listed = await loadUngrouped()
         }
       } else {
-        const [statResult, ungrouped] = await Promise.all([nextStatPromise, loadUngrouped()])
-        nextStat = statResult
-        listed = ungrouped
+        listed = await loadUngrouped()
       }
       if (staleFetch()) return true
-      const nextSchema = listed.schema ?? nextStat.schema
+      const nextSchema = listed.schema ?? heldStat?.schema
+      const nextStat: StatResult = { ...heldStat, schema: nextSchema }
       const pendingView = pendingPathQueryRef.current
       pendingPathQueryRef.current = null
       tableHoldRef.current = null
