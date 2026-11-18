@@ -1189,6 +1189,8 @@ test('detail body uses an explicit loading phase instead of a blank editor', () 
   assert.match(loading, /width=\{22\}/)
   assert.match(loading, /height=\{22\}/)
   assert.doesNotMatch(browser, /setDetailBody\(null\)\s*\n\s*\}\s*\n\s*\}, \[dataPath\]\)/)
+  assert.match(browser, /detailBodyCache/)
+  assert.doesNotMatch(browser, /setDetailBody\(null\)\s*\n\s*setDetailBodyStatus\('loading'\)/)
 })
 
 test('opening a record fetches content without waiting for detailRow', () => {
@@ -1197,7 +1199,7 @@ test('opening a record fetches content without waiting for detailRow', () => {
     browser.indexOf('function adoptPersistedViews'),
   )
   assert.match(effect, /pullDetail\(\)/)
-  assert.doesNotMatch(effect, /detailRow/)
+  assert.doesNotMatch(effect, /detailRow[^R]/)
   assert.match(browser, /\[collectionPath, dataPath, detailId, pullDetail\]/)
   assert.match(browser, /sourceRecordPath\(detailRowRef\.current, id\)/)
   assert.match(browser, /\/api\/db\/detail\?path=/)
