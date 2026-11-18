@@ -78,3 +78,28 @@ test('tagsCollection lists facets with stamp counts and supports create/update/d
   assert.equal(collected[0]?.tagId, 'dp')
   assert.deepEqual((collected[0]?.tag as { values?: { dp?: { complexity?: string } } })?.values?.dp, { complexity: 'O(n)' })
 })
+
+test('tagsCollection get stamp uses one SQLite lookup', async () => {
+  const store = new TagStore()
+  store.replace([
+    { id: 'dp', label: '动态规划', fields: [{ key: 'complexity', type: 'string' }] },
+    { id: 'io', label: 'IO', fields: [] },
+  ])
+  store.writeRecordTag('/pages', 'home', { tags: ['dp', 'io'], values: { dp: { complexity: 'O(n)' } } }, '首页')
+  const spec = tagsCollection(store, () => [{ id: 'pages', path: '/pages', label: '页面' }])
+  const db = store.ensure()
+  const orig = db.prepare.bind(db)
+  let stampLookups = 0
+  db.prepare = ((sql: string) => {
+    if (/FROM tag_stamps WHERE collection/.test(sql)) stampLookups += 1
+    return orig(sql)
+  }) as typeof db.prepare
+  const row = await spec.get!('pages::home')
+  assert.equal(stampLookups, 1)
+  assert.equal(row?.id, 'pages::home')
+  assert.equal(row?.table, '页面')
+  assert.equal(row?.tablePath, '/pages')
+  assert.equal(row?.sourceId, 'home')
+  assert.equal(row?.tagId, 'io')
+  assert.deepEqual((row?.tag as { values?: { dp?: { complexity?: string } } })?.values?.dp, { complexity: 'O(n)' })
+})

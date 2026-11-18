@@ -860,6 +860,24 @@ export class TagStore {
     return new Set(rows.map((row) => row.record_id))
   }
 
+  stampsForRecord(collection: string, recordId: string, tagId?: string): StampRow[] {
+    const path = String(collection ?? '').trim()
+    const id = String(recordId ?? '').trim()
+    if (!path || !id) return []
+    const wantTag = String(tagId ?? '').trim()
+    const db = this.ensure()
+    if (wantTag) {
+      return db
+        .prepare(
+          'SELECT tag_id, collection, record_id, title FROM tag_stamps WHERE collection = ? AND record_id = ? AND tag_id = ?',
+        )
+        .all(path, id, wantTag) as StampRow[]
+    }
+    return db
+      .prepare('SELECT tag_id, collection, record_id, title FROM tag_stamps WHERE collection = ? AND record_id = ?')
+      .all(path, id) as StampRow[]
+  }
+
   collect(idOrLabel: string): { tag: CollectionSchemaPack | null; items: TagStamp[] } {
     const tag = this.get(idOrLabel)
     const tagId = tag?.id ?? String(idOrLabel ?? '').trim()
