@@ -11,7 +11,7 @@ export type DataSidebarLive = {
   activeViewId: string | null
   onOpenTable?: (path: string, viewId?: string) => void
   onApplyView: (view: SavedView) => void
-  onDeleteView: (view: SavedView) => void
+  onDeleteView: (view: SavedView, path?: string) => void
   onAddView: (path?: string, scope?: DataScope) => void
   onOpenRecord?: (path: string, view: SavedView, recordId: string, row?: DbRecord) => void
   expandedViewKey?: string | null

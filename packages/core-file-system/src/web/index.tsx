@@ -329,10 +329,7 @@ export function apply(ctx: Context) {
     const tagsUi = ui.decorate(TAGS_COLLECTION_PATH, tagsChrome)
     const blocksUi = ui.decorate(
       PAGE_BLOCKS_COLLECTION_PATH,
-      pageBlocksChrome(() => {
-        const editor = ctx.get('blockEditor') as { blocks?: () => Array<{ kind: string; label: string }> } | undefined
-        return editor?.blocks?.() ?? []
-      }),
+      pageBlocksChrome(),
     )
     return () => {
       defaults.dispose()

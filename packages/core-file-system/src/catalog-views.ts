@@ -207,7 +207,8 @@ export function builtinAllGroupBy(collectionPath: string) {
   const path = normalizeCollectionPath(collectionPath)
   if (path === '/workspace-members') return 'membershipKind'
   if (path === '/views') return 'table'
-  if (path === '/editor-blocks' || path === '/tags') return ''
+  if (path === '/editor-blocks') return 'blockKind'
+  if (path === '/tags') return ''
   return 'shareScope'
 }
 
@@ -285,13 +286,21 @@ export function overlayListedViews(
   return out
 }
 
+function withoutRetiredBuiltinViews(user: SavedView[], retired: (id: string) => boolean) {
+  return user.filter((view) => !retired(String(view.id ?? '').trim()))
+}
+
 export function mergeCatalogViews(tables: CollectionInfo[], user: SavedView[], skipIds: Iterable<string> = []): SavedView[] {
   const viewsTable = tables.find((table) => normalizeCollectionPath(table.path) === '/views') ?? {
     path: '/views',
     label: '视图',
     view: { title: '视图' },
   }
-  return overlayListedViews([builtinAllView(viewsTable), ...builtinCatalogViews(tables)], user, skipIds)
+  return overlayListedViews(
+    [builtinAllView(viewsTable)],
+    withoutRetiredBuiltinViews(user, isBuiltinCatalogViewId),
+    skipIds,
+  )
 }
 
 export function mergeTableViews(table: TableRef | undefined, user: SavedView[], skipIds: Iterable<string> = []): SavedView[] {
@@ -362,24 +371,20 @@ export function catalogLockFilters(
   return stub ? { ...(stub.filters ?? {}) } : {}
 }
 
-/** /editor-blocks：全部组件 + 每种已登记块一条种子视图。 */
+/** /editor-blocks：只内置「全部组件」。 */
 export function mergePageBlockViews(
   table: TableRef | undefined,
-  kinds: BlockKindRef[],
   user: SavedView[],
   skipIds: Iterable<string> = [],
 ): SavedView[] {
-  const unique = new Map<string, BlockKindRef>()
-  for (const item of kinds) {
-    const kind = String(item.kind ?? '').trim()
-    if (!kind || unique.has(kind)) continue
-    unique.set(kind, { kind, label: String(item.label ?? '').trim() || kind })
+  if (!table?.path || table.path === '/') {
+    return overlayListedViews([], withoutRetiredBuiltinViews(user, isBuiltinBlockKindViewId), skipIds)
   }
-  const kindViews = [...unique.values()]
-    .sort((a, b) => a.kind.localeCompare(b.kind) || a.label.localeCompare(b.label))
-    .map(builtinBlockKindView)
-  const seeds = !table?.path || table.path === '/' ? kindViews : [builtinAllView(table), ...kindViews]
-  return overlayListedViews(seeds, user, skipIds)
+  return overlayListedViews(
+    [builtinAllView(table)],
+    withoutRetiredBuiltinViews(user, isBuiltinBlockKindViewId),
+    skipIds,
+  )
 }
 
 export type TagRef = { id: string; label: string }

@@ -160,14 +160,9 @@ test('全站：页面级区块容器都走同一宽度（自动扫描，防新�
 
 test('窄屏：所有区块统一收到 20px', () => {
   const narrow = medias.filter((m) => /max-width:\s*800px/.test(m.cond))
-  const declared = new Set()
-  for (const m of narrow) {
-    for (const sel of SECTIONS) {
-      if (gutters(sel, m.seg).length) declared.add(sel)
-    }
-  }
-  const missing = SECTIONS.filter((s) => !declared.has(s))
-  assert.deepEqual(missing, [], `这些区块没有窄屏留白覆盖，会和邻居错位：${missing.join(', ')}`)
+  const gutter = narrow.some((m) => /\.site\s*\{[^}]*--site-gutter:\s*20px/.test(m.seg.replace(/\s+/g, ' ')))
+    || narrow.some((m) => /--site-gutter:\s*20px/.test(m.seg))
+  assert.equal(gutter, true, '窄屏应把 --site-gutter 收到 20px，区块共用同一留白')
 })
 
 test('长图文件名跟路径走', async () => {
@@ -264,7 +259,7 @@ test('键盘焦点可见：官网有统一的 focus-visible 样式', () => {
 })
 
 test('卡片圆角统一 20px，hover 不再跳到 #2a2a2a', () => {
-  const cards = ['.site-context-item > div', '.site-ecosystem-grid article', '.site-permission-points article',
+  const cards = ['.site-context-item>div', '.site-ecosystem-grid article', '.site-permission-points article',
     '.site-compare-when article', '.site-usecase-how-grid article', '.site-brand-grid article',
     '.site-home-compare-card', '.site-idea-post', '.site-idea-brand']
   const bad: string[] = []

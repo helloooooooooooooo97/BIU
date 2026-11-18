@@ -58,7 +58,7 @@ test('patchPageBlockMarkdown can replace data and change plugin', () => {
 })
 
 test('patchPageBlockMarkdown rejects missing or duplicate ids', () => {
-  assert.throws(() => patchPageBlockMarkdown(doc, 'nope', { data: {} }), /unknown pageBlock/)
+  assert.throws(() => patchPageBlockMarkdown(doc, 'nope', { data: {} }), /unknown editorBlock/)
   const dup = `:::editorBlock {kind=html id=ab12cd34}\na\n:::\n\n:::editorBlock {kind=html id=ab12cd34}\nb\n:::\n`
   assert.throws(() => patchPageBlockMarkdown(dup, 'ab12cd34', { data: { html: 'x' } }), /not unique/)
 })

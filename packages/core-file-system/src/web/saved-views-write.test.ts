@@ -112,7 +112,7 @@ test('delete waits for persist ok before switching view', () => {
   const body = browser.slice(start, browser.indexOf('function renderVisibleColumnsFlyout', start))
   assert.match(
     body,
-    /persistViewsWith\(collectionPath, remaining, \{ remove: \[removedId\] \}\)\.then\(\(ok\) => \{/,
+    /persistViewsWith\(path, remaining, \{ remove: \[removedId\] \}\)\.then\(\(ok\) => \{/,
   )
   assert.match(body, /if \(!ok\) return/)
   assert.ok(body.indexOf('if (!ok) return') < body.indexOf('selectView(next)'))

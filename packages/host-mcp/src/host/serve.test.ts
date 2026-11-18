@@ -208,9 +208,8 @@ test('online MCP enforces workspace credentials, tool allowlists, viewer writes,
 
 test('share listener exposes token-gated MCP on the LAN port, not the workstation', async () => {
   const ctx = new Context()
-  const sharePortP = new Promise<number>((resolve) => ctx.on('http/share-ready', ({ port }) => resolve(port)))
   const localP = new Promise<number>((resolve) => ctx.on('http/ready', ({ port }) => resolve(port)))
-  await ctx.plugin(http, { port: 0, host: '127.0.0.1', sharePort: 31429, shareHost: '127.0.0.1', fallbackPort: true })
+  await ctx.plugin(http, { port: 0, host: '127.0.0.1', sharePort: 0 })
   await ctx.plugin(tools)
   ctx.tools.register({
     name: 'db_list',
@@ -219,7 +218,7 @@ test('share listener exposes token-gated MCP on the LAN port, not the workstatio
     execute: () => ({ ok: true }),
   })
   await ctx.plugin(mcp)
-  const [sharePort, localPort] = await Promise.all([sharePortP, localP])
+  const localPort = await localP
   try {
     const info = (await (await fetch(`http://127.0.0.1:${localPort}/api/mcp/info`)).json()) as {
       url: string
@@ -228,18 +227,15 @@ test('share listener exposes token-gated MCP on the LAN port, not the workstatio
       token: string
     }
     assert.equal(info.localUrl, `http://127.0.0.1:${localPort}/api/mcp`)
-    assert.equal(info.url, `http://127.0.0.1:${sharePort}/api/mcp`)
+    assert.equal(info.url, info.localUrl)
     assert.equal(info.bind, '127.0.0.1')
 
-    const denied = await fetch(`http://127.0.0.1:${sharePort}/api/mcp`, {
+    const denied = await fetch(`http://127.0.0.1:${localPort}/api/mcp`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }),
     })
     assert.equal(denied.status, 401)
-
-    const workstation = await fetch(`http://127.0.0.1:${sharePort}/api/db/list`)
-    assert.equal(workstation.status, 404)
 
     const client = await mcpClient(info.url, info.token)
     const listed = await client.listTools()

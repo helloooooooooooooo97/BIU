@@ -167,9 +167,18 @@ export function beginHandleDrag(
   const { view } = editor
   const node = view.state.doc.nodeAt(pos)
   if (!node) return false
-  const selection = NodeSelection.create(view.state.doc, pos)
-  view.dispatch(view.state.tr.setSelection(selection))
-  view.dragging = { slice: selection.content(), move: true }
+  if (!editor.chain().setNodeSelection(pos).run()) {
+    try {
+      view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, pos)))
+    } catch {
+      return false
+    }
+  }
+  const selection = editor.state.selection
+  view.dragging = {
+    slice: selection instanceof NodeSelection ? selection.content() : node.slice(0),
+    move: true,
+  }
   if (dataTransfer) {
     dataTransfer.effectAllowed = 'move'
     dataTransfer.setData('text/plain', '\u00a0')

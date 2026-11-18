@@ -20,7 +20,7 @@ function closeLooksOuter(lines: string[], closeAt: number) {
   let i = closeAt + 1
   while (i < lines.length && !String(lines[i] ?? '').trim()) i += 1
   if (i >= lines.length) return true
-  return /^(:::((pageBlock|cell|slide|table|row|th|td|code)\b|$)|`{3,}|#{1,6}\s)/.test(String(lines[i] ?? ''))
+  return /^(:::((editorBlock|pageBlock|cell|slide|table|row|th|td|code)\b|$)|`{3,}|#{1,6}\s)/.test(String(lines[i] ?? ''))
 }
 
 export function takeCodeFence(src: string): CodeFence | null {

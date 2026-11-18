@@ -1,6 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { Editor } from '@tiptap/core'
 import { recordEditorExtensions } from './kit.ts'
 import { listPageTableBlocks, pageBlockFacetPath, replaceBlockPlainText, writeBackTableBlock } from './page-blocks-table.tsx'
@@ -40,13 +41,14 @@ test('replaceBlockPlainText writes the first textblock back', () => {
 })
 
 test('table mode hides the document and keeps the content peek', () => {
-  assert.match(PAGE_EDITOR_STYLE, /\.page-editor\.is-table \.page-editor-doc\{display:none/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-editor\.is-table \.page-editor-doc/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-editor-doc\{display:none/)
   assert.match(PAGE_EDITOR_STYLE, /\.page-editor\.is-table \.page-blocks-table-preview \.tiptap\{display:block/)
   assert.match(PAGE_EDITOR_STYLE, /tr:hover \.page-blocks-table-kind-expand/)
 })
 
 test('table view has a facet column for block ids', () => {
-  const src = readFileSync(new URL('./page-blocks-table.tsx', import.meta.url), 'utf8')
+  const src = readFileSync(resolve(import.meta.dirname, './page-blocks-table.tsx'), 'utf8')
   assert.match(src, /标签/)
   assert.match(src, /pageBlockFacetPath/)
   assert.match(src, /BlockFacetCell/)

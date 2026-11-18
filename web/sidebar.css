@@ -222,6 +222,10 @@ html.dark .fsdb-views {
   display: none;
 }
 
+.app-side-bar.is-narrow [data-chat-scroll] {
+  padding-inline: 0;
+}
+
 .app-side-bar.is-narrow .app-side-actions {
   gap: 4px;
   margin: 4px 0 8px;
@@ -234,14 +238,23 @@ html.dark .fsdb-views {
 
 .app-side-bar.is-narrow .chat-session-row {
   justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-inline: auto;
   margin-bottom: 4px;
-  padding-inline: 0;
+  padding: 0;
+  border-radius: 8px;
 }
 
 .app-side-bar.is-narrow .chat-session-row>a,
 .app-side-bar.is-narrow .chat-session-row>.chat-session-row-main {
   justify-content: center;
-  padding-left: 0;
+  align-items: center;
+  flex: none;
+  width: 100%;
+  height: 100%;
+  gap: 0;
+  padding: 0;
 }
 
 .app-side-bar.is-narrow .fsdb-views-full {
@@ -350,7 +363,9 @@ html.dark .fsdb-views {
   color: inherit;
   font: inherit;
   cursor: pointer;
-}.fsdb-views .chat-session-row>.chat-session-row-delete,
+}.app-side-bar .chat-session-row>.chat-session-row-delete,
+.chat-sidebar-popover .chat-session-row>.chat-session-row-delete,
+.fsdb-views .chat-session-row>.chat-session-row-delete,
 .app-side-bar .chat-session-row>.chat-session-row-star,
 .chat-sidebar-popover .chat-session-row>.chat-session-row-star,
 .fsdb-views .chat-session-row>.chat-session-row-star,
@@ -432,6 +447,9 @@ html.dark .fsdb-views {
   height: 16px;
   color: var(--biu-color-icon-muted);
 }
+.app-side-bar .chat-session-row:hover .chat-session-row-delete,
+.chat-sidebar-popover .chat-session-row:hover .chat-session-row-delete,
+.fsdb-views .chat-session-row:hover .chat-session-row-delete,
 .app-side-bar .chat-session-row-delete:focus,
 .chat-sidebar-popover .chat-session-row-delete:focus,
 .fsdb-views .chat-session-row-delete:focus,
@@ -489,6 +507,9 @@ html.dark .fsdb-views {
 .app-side-bar .sidebar-section-head:hover .sidebar-add,
 .chat-sidebar-popover .sidebar-section-head:hover .sidebar-add,
 .fsdb-views .sidebar-section-head:hover .sidebar-add,
+.app-side-bar .sidebar-group-head:hover .sidebar-add,
+.chat-sidebar-popover .sidebar-group-head:hover .sidebar-add,
+.fsdb-views .sidebar-group-head:hover .sidebar-add,
 .app-side-bar .sidebar-add:focus,
 .chat-sidebar-popover .sidebar-add:focus,
 .fsdb-views .sidebar-add:focus {
@@ -653,6 +674,11 @@ html.dark .fsdb-views {
 .chat-sidebar-popover .sidebar-session-list .chat-session-row>.chat-session-row-main,
 .fsdb-views .sidebar-session-list .chat-session-row>.chat-session-row-main {
   padding-left: 11px;
+}
+
+.app-side-bar.is-narrow .sidebar-session-list .chat-session-row>a,
+.app-side-bar.is-narrow .sidebar-session-list .chat-session-row>.chat-session-row-main {
+  padding-left: 0;
 }.app-side-bar .sidebar-group-head,
 .chat-sidebar-popover .sidebar-group-head,
 .fsdb-views .sidebar-group-head {
@@ -722,9 +748,6 @@ html.dark .fsdb-views {
 }.app-side-bar .sidebar-section-head:hover .sidebar-chat-count,
 .chat-sidebar-popover .sidebar-section-head:hover .sidebar-chat-count,
 .fsdb-views .sidebar-section-head:hover .sidebar-chat-count,
-.app-side-bar .sidebar-group-head:hover .sidebar-chat-count,
-.chat-sidebar-popover .sidebar-group-head:hover .sidebar-chat-count,
-.fsdb-views .sidebar-group-head:hover .sidebar-chat-count,
 .app-side-bar .chat-session-row:hover .sidebar-chat-count,
 .chat-sidebar-popover .chat-session-row:hover .sidebar-chat-count,
 .fsdb-views .chat-session-row:hover .sidebar-chat-count{

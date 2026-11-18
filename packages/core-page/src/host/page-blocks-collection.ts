@@ -71,8 +71,8 @@ export function pageBlocksCollection(store: PagesStore, index: PageBlocksIndex):
         collection: { type: 'string', label: '集合' },
         pageId: { type: 'ref', label: '记录', collection: '/pages' },
         blockId: { type: 'string', label: '块 id' },
-        blockKind: { type: 'string', label: '类型' },
-        plugin: { type: 'string', label: '插件', writable: true },
+        blockKind: { type: 'select', label: '类型' },
+        plugin: { type: 'select', label: '插件', writable: true },
         data: {
           type: 'string',
           label: '属性',

@@ -4,7 +4,10 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 
 const inspector = readFileSync(resolve(import.meta.dirname, './session-inspector.tsx'), 'utf8')
-const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
+const css = [
+  readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8'),
+  readFileSync(resolve(import.meta.dirname, '../../../../web/sidebar.css'), 'utf8'),
+].join('\n')
 
 test('data collection captions use the stack glyph, not the table glyph', () => {
   assert.match(inspector, /name === 'circle-stack' \|\| name === 'data' \|\| name === 'database'/)
@@ -115,10 +118,10 @@ test('inspector header tabs sit on the same vertical center as the main header',
   assert.match(css, /\.inspector-tab\s*\{[^}]*padding:\s*0 8px/s)
   assert.doesNotMatch(css, /\.inspector-crumb-tab\s*\{[^}]*padding-right:\s*4px/s)
   assert.match(css, /\.inspector-stage-pane\.is-active[\s\S]*?opacity:\s*1/)
-  assert.match(css, /\.app-shell-agent > main\s*\{[^}]*z-index:\s*0/s)
-  assert.match(css, /\.app-shell-agent > \.session-inspector\s*\{[^}]*z-index:\s*1/s)
+  assert.match(css, /\.app-shell-agent>main\s*\{[^}]*z-index:\s*0/s)
+  assert.match(css, /\.app-shell-agent>\.session-inspector\s*\{[^}]*z-index:\s*1/s)
   assert.match(css, /\.session-inspector:has\(\.fsdb-query-menu\)[\s\S]*?z-index:\s*120/)
-  assert.match(css, /\.app-shell-agent > main:has\(\.fsdb-query-menu\)/)
+  assert.match(css, /\.app-shell-agent>main:has\(\.fsdb-query-menu\)/)
   assert.match(css, /\.session-inspector:has\(\.fsdb-query-menu\) \.inspector-stage/)
   assert.doesNotMatch(css, /\.inspector-stage-pane,\s*\.app-stage-pane\s*\{[^}]*transition:\s*[\s\S]*opacity 220ms/s)
   assert.doesNotMatch(css, /\.inspector-stage-pane\s*\{[^}]*content-visibility:\s*hidden/s)
@@ -129,10 +132,10 @@ test('inspector header tabs sit on the same vertical center as the main header',
 
 test('opened rows in the inspector add menu use the icon gray for every glyph', () => {
   // 上方已打开的项目行：左侧图标 + 右侧关闭叉号，两种主题都要是 #bab9b5
-  assert.match(css, /^\.inspector-add-row > svg,\s*\n\.inspector-add-row \.size-4,[\s\S]*?color:\s*var\(--biu-color-icon-fixed\)/m, )
-  const block = css.slice(css.indexOf('.inspector-add-row > svg,'))
+  assert.match(css, /^\.inspector-add-row>svg,\s*\n\.inspector-add-row \.size-4,[\s\S]*?color:\s*var\(--biu-color-icon-fixed\)/m)
+  const block = css.slice(css.indexOf('.inspector-add-row>svg,'))
   const rule = block.slice(0, block.indexOf('}'))
-  for (const selector of ['.inspector-add-close', '.inspector-add-close svg', '.inspector-add-row-main > svg']) {
+  for (const selector of ['.inspector-add-close', '.inspector-add-close svg', '.inspector-add-row-main>svg']) {
     assert.equal(rule.includes(selector), true, selector)
   }
   // 行本身仍然可以继承文本色（那是给文字的），但图标有独立规则覆盖

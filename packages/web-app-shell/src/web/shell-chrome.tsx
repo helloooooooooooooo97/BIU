@@ -614,7 +614,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
   if (token && !joining) return children
   if (!token && !guestInvite) {
     return (
-      <Suspense fallback={null}>
+      <Suspense fallback={
+        <div className="auth-gate" data-testid="auth-gate">
+          <p className="auth-status">登录</p>
+        </div>
+      }>
         <MarketingSite
           onLogin={() => goAuth('login')}
           onStart={() => goAuth('register')}

@@ -13,7 +13,7 @@ import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { SidebarRow, SidebarRowMain } from '@biu/web-session-view/sidebar-row'
 import type { CollectionInfo, CollectionSchema, DbRecord } from '@biu/type-file-system'
 import { groupField, groupRecords, parentFieldKey, treeChildren } from './fields.ts'
-import { builtinAllViewId, type DataScope } from '../catalog-views.ts'
+import { builtinAllViewId, isReadOnlyViewId, type DataScope } from '../catalog-views.ts'
 import { dataSidebarKind, isRecordTreeCollection, isSystemCollection, sortDataCollections } from './database-path.ts'
 import { rememberInspectorWorkingView } from './inspector-db-route.ts'
 import { readJson } from './db-client.ts'
@@ -601,7 +601,7 @@ export const DataSidebar = memo(function DataSidebar({
   activeViewId: string | null
   onOpenTable?: (path: string, viewId?: string) => void
   onApplyView: (view: SavedView) => void
-  onDeleteView: (view: SavedView) => void
+  onDeleteView: (view: SavedView, path?: string) => void
   onAddView: (path?: string, scope?: DataScope) => void
   onOpenRecord?: (path: string, view: SavedView, recordId: string, row?: DbRecord) => void
   expandedViewKey?: string | null
@@ -816,6 +816,11 @@ export const DataSidebar = memo(function DataSidebar({
     onOpenTable?.(path, viewId)
   }
 
+  function viewRowDelete(path: string, view: SavedView, listed: SavedView[]) {
+    if (isReadOnlyViewId(view.id) || !canRemoveCollectionView(listed)) return undefined
+    return () => onDeleteView(view, path)
+  }
+
   function renderTableRows(rows: CollectionInfo[], group: 'user' | 'index' | 'system' = 'system') {
     return rows.map((table) => {
       const name = table.view?.title ?? table.label
@@ -883,7 +888,7 @@ export const DataSidebar = memo(function DataSidebar({
                         </button>
                       </SidebarRowMain>
                     }
-                    onDelete={table.path === collectionPath && canRemoveCollectionView(listed) ? () => onDeleteView(view) : undefined}
+                    onDelete={viewRowDelete(table.path, view, listed)}
                     deleteLabel={`删除 ${view.name}`}
                     deleteIcon={<TrashGlyph className="size-4 shrink-0" />}
                     onStar={() => toggleStar(table.path, view.id)}
@@ -1064,6 +1069,9 @@ export const DataSidebar = memo(function DataSidebar({
                               <TableGlyph icon={table.view?.icon} />
                             </span>
                           }
+                          onDelete={viewRowDelete(table.path, view, viewsFor(table.path))}
+                          deleteLabel={`删除 ${view.name}`}
+                          deleteIcon={<TrashGlyph className="size-4 shrink-0" />}
                           onStar={() => toggleStar(table.path, view.id)}
                           starOn
                           starLabel={`取消收藏 ${view.name}`}

@@ -2857,7 +2857,7 @@ export function CollectionBrowser({
       skipColumnReload.current = false
       if (!needsLoad) return
     }
-    if (routeRecordId && loadedIdentityRef.current === listIdentityKey) return
+    if (routeRecordId) return
     if (!routeViewReadyRef.current && !pendingPathQueryRef.current && !tableHoldRef.current) return
     void reloadRef.current({ force: needsLoad })
   }, [listIdentityKey, reloadKey, routeRecordId, routeViewReady])
@@ -3839,9 +3839,9 @@ export function CollectionBrowser({
   }, [collectionPath, routeViewId])
 
   useEffect(() => {
-    if (sheet) return
+    if (sheet || routeRecordId) return
     void syncViewsRef.current()
-  }, [collectionPath, sheet])
+  }, [collectionPath, sheet, routeRecordId])
 
   useEffect(() => {
     if (!viewMenuOpen) return
@@ -3978,6 +3978,14 @@ export function CollectionBrowser({
     viewsRef.current = listed
     setViews(listed)
     rememberViews(collectionPath, listed)
+    persistViewDisplay(collectionPath, viewId, { name: nextName })
+    const stars = getStarredViews()
+    if (isViewStarred(stars, collectionPath, viewId)) {
+      persistStarredViews(stars.map((item) => (item.path === collectionPath && item.viewId === viewId ? { ...item, name: nextName } : item)))
+    }
+    emitFsdbChange({ scope: 'views' })
+    window.dispatchEvent(new Event('fsdb:crumb-labels'))
+    if (isReadOnlyViewId(viewId)) return
     void persistViewsWith(collectionPath, listed, { upsert: [updated], baseline: current }).then((ok) => {
       if (ok) return
       const live = viewsRef.current
@@ -3991,7 +3999,6 @@ export function CollectionBrowser({
 
   function renameView(view: SavedView) {
     setViewMenuOpen(false)
-    if (isReadOnlyViewId(view.id)) return
     if (view.id !== activeViewId) selectView(view)
     window.requestAnimationFrame(() => {
       const el = pageRef.current?.querySelector<HTMLTextAreaElement>('.fsdb-main > .fsdb-detail-title-row .fsdb-detail-title-input')
@@ -4000,18 +4007,18 @@ export function CollectionBrowser({
     })
   }
 
-  function deleteView(view: SavedView) {
+  function deleteView(view: SavedView, path = collectionPath) {
     setViewMenuOpen(false)
     if (isReadOnlyViewId(view.id)) return
-    const current = viewsRef.current
+    const current = path === collectionPath ? viewsRef.current : loadViews(path)
     if (!canRemoveCollectionView(current)) return
     const removedId = view.id
     // 删除要立刻发出去：这条可能刚建、本地列表里还没有，
     // 只靠 diffSavedViews 会漏掉它，删除就丢了。
     const remaining = current.filter((item) => item.id !== removedId)
-    void persistViewsWith(collectionPath, remaining, { remove: [removedId] }).then((ok) => {
+    void persistViewsWith(path, remaining, { remove: [removedId] }).then((ok) => {
       if (!ok) return
-      if (activeViewIdRef.current === removedId) {
+      if (path === collectionPath && activeViewIdRef.current === removedId) {
         const next = viewsRef.current[0]
         if (next) selectView(next)
       }
@@ -6185,7 +6192,7 @@ export function CollectionBrowser({
         </div>
         <div className="fsdb-detail-title-row">
           <div className="fsdb-detail-title-block">
-          {activeView && !isReadOnlyViewId(activeView.id) ? (
+          {activeView ? (
             <h1 className="fsdb-detail-title">
               <LocalText
                 as="textarea"
@@ -6203,7 +6210,7 @@ export function CollectionBrowser({
               />
             </h1>
           ) : (
-            <h1 className="fsdb-detail-title">{activeView?.name ?? title}</h1>
+            <h1 className="fsdb-detail-title">{title}</h1>
           )}
           </div>
         </div>

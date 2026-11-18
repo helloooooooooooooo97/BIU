@@ -10,11 +10,13 @@ import { stressInteractSource } from './page-perf/interact.mjs'
 
 const dir = join(dirname(fileURLToPath(import.meta.url)), 'page-perf')
 const names = [
+  'all-page-plugins.mjs',
   'cdp.mjs',
   'console-errors.mjs',
   'discover-routes.mjs',
   'inspector-open-ready.mjs',
   'interact.mjs',
+  'measure-all-plugins-page.mjs',
   'measure-inspector-page.mjs',
   'measure-page.mjs',
   'measure-routes.mjs',

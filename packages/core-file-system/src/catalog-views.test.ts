@@ -82,7 +82,7 @@ test('member directory exposes builtin audience views', () => {
   assert.deepEqual(builtinMemberViews().map((view) => view.filters.membershipKind), ['member', 'external', 'guest'])
 })
 
-test('each registered table gets a builtin catalog view', () => {
+test('views collection only seeds 全部视图', () => {
   const tables = [
     { id: 'views', path: '/views', kind: 'collection' as const, label: '视图', view: { moduleId: 'views-db', route: '/db-views', title: '视图' } },
     { id: 'pages', path: '/pages', kind: 'collection' as const, label: '页面', view: { moduleId: 'page', route: '/pages', title: '页面' } },
@@ -91,12 +91,6 @@ test('each registered table gets a builtin catalog view', () => {
   const listed = builtinCatalogViews(tables)
   assert.equal(listed.length, 3)
   assert.equal(listed[1]?.id, builtinCatalogViewId('/pages'))
-  assert.equal(listed[1]?.name, '页面')
-  assert.deepEqual(listed[1]?.filters, { tablePath: '/pages' })
-  assert.equal(listed[1]?.builtin, true)
-  assert.equal(listed[1]?.sortField, 'updatedAt')
-  assert.equal(listed[1]?.sortDir, 'desc')
-  assert.equal(listed[1]?.tree, false)
   const merged = mergeCatalogViews(tables, [
     { id: builtinCatalogViewId('/pages'), name: '旧的', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
     { id: 'user-1', name: '周报', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
@@ -104,9 +98,9 @@ test('each registered table gets a builtin catalog view', () => {
   assert.equal(merged[0]?.id, builtinAllViewId('/views'))
   assert.equal(merged[0]?.name, '全部视图')
   assert.equal(merged[0]?.groupBy, 'table')
-  assert.equal(merged.find((view) => view.id === builtinCatalogViewId('/pages'))?.name, '旧的')
+  assert.deepEqual(merged.filter((view) => view.builtin).map((view) => view.id), [builtinAllViewId('/views')])
   assert.equal(merged.some((view) => view.id === 'user-1'), true)
-  assert.equal(merged.filter((view) => view.id === builtinCatalogViewId('/pages')).length, 1)
+  assert.equal(merged.some((view) => view.id === builtinCatalogViewId('/pages')), false)
 })
 
 test('stub builtin catalog view from route id', () => {
@@ -203,30 +197,17 @@ test('data collection noun is 数据, not the path segment', () => {
   )
 })
 
-test('each registered page block kind gets a builtin view', () => {
+test('page blocks collection only seeds 全部组件', () => {
   const table = { path: '/editor-blocks', label: '组件', view: { title: '组件' } }
-  const merged = mergePageBlockViews(
-    table,
-    [
-      { kind: 'excalidraw', label: '画板' },
-      { kind: 'html', label: 'HTML' },
-      { kind: 'html', label: '重复' },
-      { kind: '', label: '空' },
-    ],
-    [
-      { id: builtinBlockKindViewId('html'), name: '旧的', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
-      { id: 'mine', name: '置顶', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
-    ],
-  )
+  const merged = mergePageBlockViews(table, [
+    { id: builtinBlockKindViewId('html'), name: '旧的', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
+    { id: 'mine', name: '置顶', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
+  ])
   assert.equal(merged[0]?.id, builtinAllViewId('/editor-blocks'))
   assert.equal(merged[0]?.name, '全部组件')
-  assert.equal(merged[1]?.id, builtinBlockKindViewId('excalidraw'))
-  assert.equal(merged[1]?.name, '画板')
-  assert.deepEqual(merged[1]?.filters, { blockKind: 'excalidraw' })
-  assert.equal(merged[1]?.builtin, true)
-  assert.equal(merged[2]?.id, builtinBlockKindViewId('html'))
-  assert.equal(merged[2]?.name, '旧的')
-  assert.equal(merged.filter((view) => view.id === builtinBlockKindViewId('html')).length, 1)
+  assert.deepEqual(merged.filter((view) => view.builtin).map((view) => view.id), [builtinAllViewId('/editor-blocks')])
+  assert.equal(merged.some((view) => view.id === builtinBlockKindViewId('excalidraw')), false)
+  assert.equal(merged.some((view) => view.id === builtinBlockKindViewId('html')), false)
   assert.equal(merged.some((view) => view.id === 'mine'), true)
   assert.equal(isReadOnlyViewId(builtinBlockKindViewId('html')), true)
   assert.equal(isBuiltinCatalogViewId(builtinBlockKindViewId('html')), false)

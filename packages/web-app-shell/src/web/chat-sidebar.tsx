@@ -34,6 +34,7 @@ import {
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 const SESSION_ROW_PX = 29
+const SESSION_RAIL_ROW_PX = 36
 const SESSION_WINDOW_OVERSCAN = 4
 
 const sessionRowMainClass = SIDEBAR_ROW_MAIN_CLASS
@@ -132,6 +133,7 @@ const WindowedSessionList = memo(function WindowedSessionList({
   onDelete,
   onPin,
   onOpen,
+  iconRail,
 }: {
   sessions: SessionListItem[]
   rowKey: string
@@ -141,6 +143,7 @@ const WindowedSessionList = memo(function WindowedSessionList({
   onDelete: (item: SessionListItem) => void
   onPin: (item: SessionListItem) => void
   onOpen?: (item: SessionListItem) => void
+  iconRail?: boolean
 }) {
   const hostRef = useRef<HTMLDivElement>(null)
   const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null)
@@ -152,7 +155,7 @@ const WindowedSessionList = memo(function WindowedSessionList({
   const virtualizer = useVirtualizer({
     count,
     getScrollElement: () => scrollEl,
-    estimateSize: () => SESSION_ROW_PX,
+    estimateSize: () => (iconRail ? SESSION_RAIL_ROW_PX : SESSION_ROW_PX),
     overscan: SESSION_WINDOW_OVERSCAN,
     scrollMargin: hostRef.current?.offsetTop ?? 0,
   })
@@ -206,6 +209,7 @@ export type ChatSidebarProps = {
   sessionView: SessionViewService
   /** 弹层（小人菜单）里使用时：会话行变成按钮并关闭弹层，不再做页面跳转。 */
   popoverClose?: () => void
+  iconRail?: boolean
 }
 
 /**
@@ -217,6 +221,7 @@ export const ChatSidebar = memo(function ChatSidebar({
   useSessionView,
   sessionView,
   popoverClose,
+  iconRail = false,
 }: ChatSidebarProps) {
   const navigate = useNavigate()
   const sessions = useSessionView((state) => state.sessions)
@@ -320,6 +325,7 @@ export const ChatSidebar = memo(function ChatSidebar({
       onDelete={deleteChat}
       onPin={pinChat}
       onOpen={popover ? openSession : undefined}
+      iconRail={iconRail}
     />
   )
 

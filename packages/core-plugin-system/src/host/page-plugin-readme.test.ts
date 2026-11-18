@@ -11,7 +11,8 @@ test('sandbox is a core page block, not a store plugin', () => {
   assert.match(src, /export const name = 'page-sandbox'/)
   assert.match(src, /label: '沙箱'/)
   assert.match(src, /function registerSandboxBlock/)
-  assert.equal(existsSync(join(sandbox, 'page-sandbox')), false)
+  assert.match(src, /packages\/core-editor|registerSandboxBlock/)
+  assert.equal(existsSync(join(root, 'packages/core-editor/src/web/sandbox/block.tsx')), true)
 })
 
 test('page-tag page block is not registered', () => {

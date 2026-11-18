@@ -901,6 +901,7 @@ function Shell(props: SlotProps) {
                     routeSessionId={routeSessionId}
                     useSessionView={useSessionView}
                     sessionView={sessionView}
+                    iconRail={sidebarNarrow}
                   />
                 </Suspense>
               ) : null}

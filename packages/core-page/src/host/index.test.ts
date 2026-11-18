@@ -85,6 +85,8 @@ test('page plugin stores pages in SQLite under .biu', async () => {
   assert.equal(registered[1]?.schema.contentField, 'data')
   assert.equal(registered[1]?.schema.fields.title?.writable, true)
   assert.deepEqual(registered[1]?.schema.columns, ['title', 'blockKind', 'plugin', 'pageId'])
+  assert.equal(registered[1]?.schema.fields.blockKind?.type, 'select')
+  assert.equal(registered[1]?.schema.fields.plugin?.type, 'select')
 
   const spec = registered[0]!
   assert.equal((await spec.list()).length, 0)

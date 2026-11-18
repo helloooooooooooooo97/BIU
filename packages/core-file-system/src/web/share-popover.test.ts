@@ -38,7 +38,7 @@ test('share panel uses a compact settings section and custom toggles', () => {
   assert.match(src, /公开链接设置/)
   assert.match(src, /fsdb-share-toggle/)
   assert.match(css, /\.fsdb-share-panel\{[^}]*width:min\(380px/)
-  assert.match(css, /\.fsdb-share-panel\{[^}]*background:var\(--biu-color-bg-subtle\)/)
+  assert.match(css, /\.fsdb-share-panel\{[^}]*background:var\(--biu-color-bg-popover\)/)
   assert.doesNotMatch(css, /\.fsdb-share-panel\{[^}]*background:var\(--biu-color-surface/)
   assert.match(css, /\.fsdb-share-panel\.is-embedded\{position:static\}/)
   assert.match(css, /\.fsdb-share-toggle\.is-on/)
@@ -49,7 +49,7 @@ test('share panel uses a compact settings section and custom toggles', () => {
 test('open share panel sits above the table toolbar', () => {
   const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
   assert.match(css, /\.fsdb-page \.tasks-toolbar\{[^}]*z-index:50/)
-  assert.match(css, /\.fsdb-right \.chat-view-header:has\(\.fsdb-share-panel\)\{[^}]*z-index:var\(--biu-z-dropdown\)/)
+  assert.match(css, /\.fsdb-right \.chat-view-header:has\(\.fsdb-share-panel\)[\s\S]{0,80}\{[^}]*z-index:var\(--biu-z-dropdown\)/)
 })
 
 test('permission column opens the same kind of chain as data scope', () => {
@@ -102,7 +102,7 @@ test('share panel separates public sharing from internal and external collaborat
   assert.match(readFileSync(resolve(import.meta.dirname, './share-scope-label.tsx'), 'utf8'), /GlobeAltIcon/)
   assert.doesNotMatch(readFileSync(resolve(import.meta.dirname, './share-scope-label.tsx'), 'utf8'), /ShareIcon/)
   assert.match(src, /export function ShareScopeDetail/)
-  assert.match(src, /数据归属链路/)
+  assert.match(src, /数据归属/)
   assert.match(src, /fsdb-scope-chain/)
   assert.match(src, /effectiveDataScope/)
   assert.match(src, /<ScopeMark scope=\{chip\} \/>/)
@@ -202,7 +202,7 @@ test('list share column uses the same capsule and loads the chain on click', () 
   assert.match(css, /\.fsdb-scope-tag\{[^}]*height:var\(--biu-space-5\)/)
   assert.match(
     css,
-    /\.fsdb-scope-tag\.is-workspace,\.fsdb-scope-pill\.is-workspace,\.fsdb-scope-tag\.is-personal,\.fsdb-scope-pill\.is-personal\{background:var\(--biu-color-bg-hover\);color:var\(--biu-color-text-muted\)\}/,
+    /\.fsdb-scope-tag\.is-workspace,\.fsdb-scope-pill\.is-workspace,\.fsdb-scope-tag\.is-personal,\.fsdb-scope-pill\.is-personal,\.fsdb-scope-tag\.is-manage,\.fsdb-scope-pill\.is-manage,\.fsdb-scope-tag\.is-read,\.fsdb-scope-pill\.is-read\{--biu-tag:var\(--biu-color-ink-gray\)\}/,
   )
   assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-workspace\{[^}]*--biu-color-text/)
   assert.match(browser, /fallback=\{<ShareScopeLabel label=\{props\.label\} \/>\}/)

@@ -50,7 +50,7 @@ test('tool panels match the step bar: sidebar fill, no border', () => {
   assert.match(css, /\.tool-call-head\.is-running \.tool-call-title[\s\S]{0,500}background-color:\s*var\(--biu-color-text-muted\)/)
   assert.doesNotMatch(
     css,
-    /\.tool-call-head\.is-running \.tool-call-title,\s*\n\.tool-call-head\.is-running \.tool-call-summary\s*\{[^}]*color:\s*transparent/s,
+    /\.tool-call-head\.is-running \.tool-call-title,\s*\n\.tool-call-head\.is-running \.tool-call-summary\s*\{[^}]*[^a-z-]color:\s*transparent/s,
   )
   assert.match(source, /toolOutputChars/)
   assert.match(source, /parsed\.kind === 'insert'/)
@@ -81,7 +81,7 @@ test('any tool result can be zoomed: shared float chrome, no height caps inside'
   assert.match(css, /\.tool-zoom\s*\{[^}]*width:\s*100%[^}]*height:\s*100%/s)
   assert.match(css, /\.tool-zoom-overlay\s*\{[^}]*padding:\s*0/s)
   // 全屏下关闭按钮不能被内容挤走
-  assert.match(css, /\.tool-zoom > \.biu-float-head\s*\{[^}]*flex:\s*none/s)
+  assert.match(css, /\.tool-zoom>\.biu-float-head\s*\{[^}]*flex:\s*none/s)
   assert.match(source, /biu-float-overlay tool-zoom-overlay/)
   assert.match(css, /\.tool-call-chars\s*\{[^}]*tabular-nums/s)
 })

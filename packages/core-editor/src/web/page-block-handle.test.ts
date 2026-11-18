@@ -126,14 +126,17 @@ test('handleBlockFromDom maps a nested iframe back to the pageBlock atom', () =>
 })
 
 test('beginHandleDrag selects a table as a node and marks move', () => {
-  const editor = editorOf('| 甲 | 乙 |\n| --- | --- |\n| 1 | 2 |\n')
-  let tablePos = -1
+  const editor = editorOf(`:::editorBlock {kind=sandbox plugin=page-sandbox id=ab12cd34}
+{"file":"assets/a.isx"}
+:::
+`)
+  let blockPos = -1
   editor.state.doc.descendants((node, pos) => {
-    if (tablePos < 0 && node.type.name === 'table') tablePos = pos
+    if (blockPos < 0 && node.type.name === 'editorBlock') blockPos = pos
   })
-  assert.ok(tablePos >= 0)
+  assert.ok(blockPos >= 0)
   const transfer = { effectAllowed: 'copy', setData() {} }
-  assert.equal(beginHandleDrag(editor, tablePos, transfer), true)
+  assert.equal(beginHandleDrag(editor, blockPos, transfer), true)
   assert.equal(editor.state.selection.constructor.name, 'NodeSelection')
   assert.equal(editor.view.dragging?.move, true)
   assert.equal(transfer.effectAllowed, 'move')

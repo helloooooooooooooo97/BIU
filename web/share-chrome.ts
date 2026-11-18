@@ -1,6 +1,6 @@
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { DEFAULT_CHROME_PATH } from '@biu/type-file-system/ui'
-import { RecordEditor, getBlockEditor } from '@biu/core-editor/web'
+import { RecordEditor } from '@biu/core-editor/web'
 import { PageBlockContent } from '@biu/core-page/web'
 import { sessionsChrome } from '../packages/core-chat/src/web/sessions-chrome.tsx'
 import { skillsChrome } from '@biu/host-skills/web'
@@ -20,7 +20,7 @@ export function installShareCollectionChrome(ctx: Context) {
   if (!ui) return
   ui.decorate(DEFAULT_CHROME_PATH, { Content: RecordEditor })
   ui.decorate(PAGE_BLOCKS_COLLECTION_PATH, {
-    ...pageBlocksChrome(() => getBlockEditor()?.blocks() ?? []),
+    ...pageBlocksChrome(),
     Content: PageBlockContent,
   })
   ui.decorate('/agents', sessionsChrome())

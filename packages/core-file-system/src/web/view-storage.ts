@@ -763,6 +763,7 @@ export function starredRecordEmoji(item: StarredRecord) {
 }
 
 const DISPLAY_KEYS = [
+  'name',
   'mode',
   'sortField',
   'sortDir',
@@ -860,26 +861,32 @@ export function persistViewDisplay(collectionPath: string, viewId: string, patch
 /** 内置「全部 xx」不能当用户视图存整份，显示项（换行等）单独记。索引表没有分享；成员全部按成员类型分组。 */
 export function withViewDisplay(collectionPath: string, view: SavedView): SavedView {
   const overlay = loadViewDisplay(collectionPath, view.id)
+  const overlayName = typeof overlay.name === 'string' ? overlay.name.trim() : ''
   const painted = Object.keys(overlay).length
     ? {
         ...view,
         ...overlay,
         id: view.id,
-        name: view.name,
+        name: overlayName || view.name,
         builtin: view.builtin,
         filters: view.filters,
         filterTree: overlay.filterTree ?? view.filterTree,
         rank: Number.isFinite(Number(overlay.rank)) ? overlay.rank : view.rank,
       }
     : view
+  const path = normalizeCollectionPath(collectionPath)
   const forcedGroup =
     isIndexCollection(collectionPath) && isBuiltinAllViewId(view.id)
-      ? ''
-      : normalizeCollectionPath(collectionPath) === WORKSPACE_MEMBERS_COLLECTION_PATH &&
+      ? path === '/editor-blocks'
+        ? !painted.groupBy || painted.groupBy === 'shareScope'
+          ? builtinAllGroupBy(collectionPath)
+          : undefined
+        : ''
+      : path === WORKSPACE_MEMBERS_COLLECTION_PATH &&
           isBuiltinAllViewId(view.id) &&
           (!painted.groupBy || painted.groupBy === 'shareScope')
         ? builtinAllGroupBy(collectionPath)
-        : normalizeCollectionPath(collectionPath) === VIEWS_COLLECTION_PATH &&
+        : path === VIEWS_COLLECTION_PATH &&
             isBuiltinAllViewId(view.id) &&
             painted.groupBy === 'shareScope'
           ? builtinAllGroupBy(collectionPath)

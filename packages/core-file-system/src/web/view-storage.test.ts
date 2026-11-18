@@ -58,8 +58,9 @@ test('authoritative empty saved views hide stale local workspace data', () => {
 
 test('index all views do not group by share', () => {
   const all = builtinAllView({ path: '/editor-blocks', label: '组件' })
-  assert.equal(all.groupBy, '')
-  assert.equal(withViewDisplay('/editor-blocks', { ...all, groupBy: 'shareScope' }).groupBy, '')
+  assert.equal(all.groupBy, 'blockKind')
+  assert.equal(withViewDisplay('/editor-blocks', { ...all, groupBy: 'shareScope' }).groupBy, 'blockKind')
+  assert.equal(withViewDisplay('/editor-blocks', { ...all, groupBy: '' }).groupBy, 'blockKind')
   assert.equal(builtinAllView({ path: '/tasks', label: '任务' }).groupBy, 'shareScope')
   assert.equal(builtinAllView({ path: '/workspace-members', label: '成员' }).groupBy, 'membershipKind')
   assert.equal(withViewDisplay('/workspace-members', { ...builtinAllView({ path: '/workspace-members' }), groupBy: 'shareScope' }).groupBy, 'membershipKind')

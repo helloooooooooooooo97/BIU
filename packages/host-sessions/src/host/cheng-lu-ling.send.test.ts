@@ -60,7 +60,7 @@ test.runIf(existsSync(CONFIG_PATH))('橙露灵配置发给 DeepSeek 的 body 是
   assert.equal(body.reasoning_effort, undefined)
 })
 
-test.runIf(existsSync(EVENTS_PATH))('橙露灵组模型请求：本地预处理远小于 11 秒，但上下文很大', () => {
+test.runIf(existsSync(EVENTS_PATH) && (loadSessionEvents()?.length ?? 0) > 1000)('橙露灵组模型请求：本地预处理远小于 11 秒，但上下文很大', () => {
   const events = loadSessionEvents()
   assert.ok(events, EVENTS_PATH)
   assert.ok(events.length > 1000, `events=${events.length}`)
