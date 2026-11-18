@@ -2535,6 +2535,7 @@ export function CollectionBrowser({
   detailRowRef.current = detailRow
   const contentGen = useRef(0)
   const contentVersions = useRef(new Map<string, number>())
+  const detailBodyCache = useRef(new Map<string, { value: unknown; version?: number }>())
   const contentWriteGens = useRef(new Map<string, number>())
   const contentWriteQueues = useRef(new Map<string, Promise<void>>())
   const contentWritePending = useRef(new Map<string, number>())
@@ -2553,7 +2554,7 @@ export function CollectionBrowser({
     return { path: dataPath, id: String(row?.id ?? '') }
   }
 
-  const pullDetail = useCallback(() => {
+  const pullDetail = useCallback((opts?: { fresh?: boolean }) => {
     const id = detailIdRef.current
     if (!id) {
       setDetailBody(null)
@@ -2567,7 +2568,7 @@ export function CollectionBrowser({
     void readJson<{
       value?: DbRecord
       content?: { value?: unknown; version?: number }
-    }>(`/api/db/detail?path=${encodeURIComponent(path)}`, undefined, { fresh: true })
+    }>(`/api/db/detail?path=${encodeURIComponent(path)}`, undefined, { fresh: opts?.fresh !== false })
       .then((data) => {
         if (bodyGen !== contentGen.current || recGen !== recordGen.current) return
         const row = data.value
@@ -2580,9 +2581,18 @@ export function CollectionBrowser({
           patchListCacheRecords(dataPath, (item) => (item.id === row.id ? overlayListedRow(item, row) : item))
         }
         if ((contentWritePending.current.get(path) ?? 0) > 0) return
-        if (Number.isInteger(data.content?.version)) contentVersions.current.set(path, data.content!.version!)
+        const value = data.content?.value ?? null
+        const version = data.content?.version
+        if (Number.isInteger(version)) contentVersions.current.set(path, version!)
         else contentVersions.current.delete(path)
-        setDetailBody(data.content?.value ?? null)
+        const cached = detailBodyCache.current.get(path)
+        if (cached && cached.version === version && cached.value === value) {
+          setDetailBodyStatus('ready')
+          setDetailBodyError('')
+          return
+        }
+        detailBodyCache.current.set(path, { value, version })
+        setDetailBody(value)
         setDetailBodyStatus('ready')
         setDetailBodyError('')
       })
@@ -3541,7 +3551,15 @@ export function CollectionBrowser({
       setDetailBodyError('')
       return
     }
-    setDetailBody(null)
+    const path = sourceRecordPath(detailRowRef.current, detailId)
+    const cached = detailBodyCache.current.get(path)
+    if (cached) {
+      setDetailBody(cached.value)
+      setDetailBodyStatus('ready')
+      setDetailBodyError('')
+      pullDetail({ fresh: true })
+      return
+    }
     setDetailBodyStatus('loading')
     setDetailBodyError('')
     pullDetail()
@@ -4258,6 +4276,7 @@ export function CollectionBrowser({
             }),
           })
           if (Number.isInteger(data.version)) contentVersions.current.set(path, data.version!)
+          detailBodyCache.current.set(path, { value: data.value ?? value, version: data.version })
           if (detailIdRef.current === row.id && gen === contentWriteGens.current.get(path)) {
             setDetailBody(data.value ?? value)
             setDetailBodyStatus('ready')
