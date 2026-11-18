@@ -63,6 +63,7 @@ import {
   type GroupBucket,
   type ViewMode,
 } from './fields.ts'
+import { createdRowGroupKey, placeCreatedRow } from './group-insert.ts'
 import { seedGroupRecord } from './group-create.ts'
 import { listAttributeGroups, listGroupedCollection } from './group-list.ts'
 import { TREE_HAS_KIDS, listTreeChildren, listTreeCollection, treeRootFilter } from './tree-list.ts'
@@ -856,69 +857,6 @@ function collectionFromAppUrl(url: string): { collection: string; viewId: string
       ? parsed.viewId
       : defaultViewId(parsed.collection, parsed.viewId),
   }
-}
-
-const SHARE_SCOPE_ORDER = ['私人', '空间', '共享']
-
-function createdRowGroupKey(
-  row: DbRecord,
-  groupBy: string,
-  schema?: CollectionSchema,
-  packs: CollectionSchemaPack[] = [],
-) {
-  if (!groupBy) return ''
-  return groupRowBucketKeys(row, groupBy, schema, packs)[0] ?? ''
-}
-
-function placeCreatedRow(
-  groups: GroupBucket[],
-  row: DbRecord,
-  groupBy: string,
-  schema?: CollectionSchema,
-  packs: CollectionSchemaPack[] = [],
-  parentId = '',
-) {
-  if (!groups.length) return groups
-  if (groups.some((group) => group.rows.some((item) => item.id === row.id))) return groups
-  const parentKey = String(parentId ?? '').trim()
-  if (parentKey) {
-    const parentIndex = groups.findIndex((group) =>
-      group.rows.some((item) => String(item.id) === parentKey || String(item.sourceId ?? '') === parentKey),
-    )
-    if (parentIndex >= 0) {
-      return groups.map((group, i) =>
-        i !== parentIndex
-          ? group
-          : {
-              ...group,
-              rows: [row, ...group.rows],
-              total: group.total != null ? group.total + 1 : group.rows.length + 1,
-            },
-      )
-    }
-  }
-  const key = createdRowGroupKey(row, groupBy, schema, packs)
-  const index = groups.findIndex((group) => group.key === key || group.label === key)
-  if (index >= 0) {
-    return groups.map((group, i) =>
-      i !== index
-        ? group
-        : {
-            ...group,
-            rows: [row, ...group.rows],
-            total: group.total != null ? group.total + 1 : group.rows.length + 1,
-          },
-    )
-  }
-  if (!groupBy) return groups
-  const bucket: GroupBucket = { key, label: key || '未填', rows: [row], total: 1 }
-  if (groupBy === 'shareScope') {
-    const order = SHARE_SCOPE_ORDER.indexOf(key)
-    const insertAt = order < 0 ? groups.length : groups.findIndex((group) => SHARE_SCOPE_ORDER.indexOf(group.key) > order)
-    const at = insertAt < 0 ? groups.length : insertAt
-    return [...groups.slice(0, at), bucket, ...groups.slice(at)]
-  }
-  return [bucket, ...groups]
 }
 
 /** 分组字段改了就把行挪到新桶，不要等整表 reload。 */
@@ -2043,6 +1981,8 @@ export function CollectionBrowser({
   groupPagesRef.current = groupPages
   const groupBucketsRef = useRef(groupBuckets)
   groupBucketsRef.current = groupBuckets
+  const tagCatalogRef = useRef(tagCatalog)
+  tagCatalogRef.current = tagCatalog
   const groupByRef = useRef(groupBy)
   groupByRef.current = groupBy
   const loadedIdentityRef = useRef('')
@@ -2238,7 +2178,7 @@ export function CollectionBrowser({
     releaseHoldOnPaintRef.current = false
     tableHoldRef.current = null
   }
-  const reload = useCallback(async (opts?: { force?: boolean }) => {
+  const reload = useCallback(async (opts?: { force?: boolean; reuseGroups?: boolean }) => {
     const waitingHold = Boolean(pendingPathQueryRef.current || tableHoldRef.current)
     if (!opts?.force && !waitingHold && !routeViewReadyRef.current) return true
     if (!opts?.force && Date.now() < quietUntil.current) return true
@@ -2338,6 +2278,7 @@ export function CollectionBrowser({
           groupPages: switching || opts?.force ? {} : groupPagesRef.current,
           wrap: reqWrap,
           fillKeys: switching || opts?.force ? [] : groupFillKeys,
+          reuseUnchanged: Boolean(opts?.reuseGroups && !opts?.force && !switching && loadedIdentityRef.current === listIdentityKey),
           previous:
             !opts?.force && !switching && loadedIdentityRef.current === listIdentityKey
               ? groupBucketsRef.current
@@ -2830,7 +2771,7 @@ export function CollectionBrowser({
     }
     if (routeRecordId) return
     if (!routeViewReadyRef.current && !pendingPathQueryRef.current && !tableHoldRef.current) return
-    void reloadRef.current({ force: needsLoad })
+    void reloadRef.current({ force: needsLoad, reuseGroups: !needsLoad })
   }, [listIdentityKey, reloadKey, routeRecordId, routeViewReady])
 
   useLayoutEffect(() => {
@@ -4124,7 +4065,7 @@ export function CollectionBrowser({
       return same ? prev : next
     })
     setGroupBuckets((prev) => {
-      const next = remapGroupedRecords(prev, map, groupByRef.current, schemaRef.current, tagCatalog)
+      const next = remapGroupedRecords(prev, map, groupByRef.current, schemaRef.current, tagCatalogRef.current)
       groupBucketsRef.current = next
       return next
     })
@@ -4186,9 +4127,12 @@ export function CollectionBrowser({
         return
       }
       confirmedCreates.current.add(String(row.id))
-      setItems((prev) => [row, ...prev.filter((item) => item.id !== row.id)])
-      setTotal((count) => count + 1)
-      setGroupBuckets((prev) => placeCreatedRow(prev, row, detail.groupBy || groupByRef.current))
+      const nextItems = [row, ...itemsRef.current.filter((item) => item.id !== row.id)]
+      itemsRef.current = nextItems
+      setItems(nextItems)
+      totalRef.current += 1
+      setTotal(totalRef.current)
+      setGroupBuckets((prev) => placeCreatedRow(prev, row, groupByRef.current, schemaRef.current, tagCatalogRef.current))
     }
     window.addEventListener(LISTED_MUTATION_EVENT, onMut)
     return () => window.removeEventListener(LISTED_MUTATION_EVENT, onMut)
@@ -4441,11 +4385,10 @@ export function CollectionBrowser({
           : stamped
       const id = value.id
       confirmedCreates.current.add(id)
-      setItems((prev) => {
-        const next = [value, ...prev.filter((item) => item.id !== id)]
-        itemsRef.current = next
-        return next
-      })
+      // The synchronous mutation event below must see this row immediately.
+      const nextItems = [value, ...itemsRef.current.filter((item) => item.id !== id)]
+      itemsRef.current = nextItems
+      setItems(nextItems)
       totalRef.current += 1
       setTotal(totalRef.current)
       setGroupBuckets((prev) => placeCreatedRow(prev, value, groupBy, schemaRef.current, tagCatalog, parentId))
@@ -4468,12 +4411,9 @@ export function CollectionBrowser({
       announceListChange()
       quietUntil.current = Date.now() + 2000
       if (isDataOverview) setViaDataCrumbs(true, activeViewId)
-      const openCreatedInInspector = targetPath !== PAGES_COLLECTION_PATH
-      if (openCreatedInInspector && activeViewId && !isDataOverview) rememberInspectorWorkingView(targetPath, activeViewId)
+      if (activeViewId && !isDataOverview) rememberInspectorWorkingView(targetPath, activeViewId)
       window.setTimeout(() => {
-        if (openCreatedInInspector) {
-          showRecordInInspector(targetPath, sourceId, isDataOverview ? undefined : activeViewId)
-        }
+        showRecordInInspector(targetPath, sourceId, isDataOverview ? undefined : activeViewId)
         landCreatedTitleCell(String(id))
       }, 0)
       return value

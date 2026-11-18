@@ -30,6 +30,8 @@ export async function listGroupedCollection(opts: {
   filters?: Record<string, unknown>
   columns?: string[]
   groupValues?: () => Promise<Array<{ key: string; total: number }> | null>
+  /** Only a group page change may reuse unchanged buckets; data refreshes must refetch. */
+  reuseUnchanged?: boolean
   previous?: GroupBucket[]
   previousPages?: Record<string, number>
   list: (input: {
@@ -56,7 +58,7 @@ export async function listGroupedCollection(opts: {
   const kind = group ? strategyForField(group.field)?.kind : undefined
   if (!indexed && group && !group.field.enum?.length &&
       ['select', 'multi-select', 'tag', 'person', 'ref', 'multi-ref'].includes(kind ?? '') &&
-      !['shareScope', 'table', 'tablePath'].includes(group.key) && !opts.previous) {
+      !['shareScope', 'table', 'tablePath'].includes(group.key) && !(opts.reuseUnchanged && opts.previous?.length)) {
     const limit = 200
     for (let offset = 0; ; offset += limit) {
       const page = await opts.list({
@@ -128,7 +130,7 @@ export async function listGroupedCollection(opts: {
       }
       const prev = prevByKey.get(groupKey)
       const samePage = pageIndex === (prevPages[groupKey] ?? 0)
-      if (previous && samePage && (prev || !indexed)) {
+      if (opts.reuseUnchanged && previous?.length && samePage && (prev || !indexed)) {
         return { ...item, rows: prev?.rows ?? [], total: prev?.total ?? prev?.rows.length ?? 0, schema: undefined as CollectionSchema | undefined, filters, pageIndex }
       }
       const listed = await fetchGroup(filters, pageIndex)

@@ -220,6 +220,7 @@ test('grouped pager reuses buckets whose page did not change', async () => {
     groupPages: { todo: 1 },
     previous,
     previousPages: { todo: 0, doing: 0, done: 0 },
+    reuseUnchanged: true,
     list: async (input) => {
       calls.push({ status: input.filters?.status, offset: input.offset ?? 0 })
       return { items: [{ id: 't2', title: 'next', status: 'todo' }], total: 40, schema }
@@ -298,6 +299,7 @@ test('indexed custom groups bypass value discovery and fetch newly discovered gr
     path: '/pages', groupBy: key, schema, pageSize: 20,
     packs: [{ id: 'security', label: '安全项目', fields: [{ key: 'lane', type: 'multi-select' }] }],
     previous: [{ key: '', label: '未填', rows: [], total: 0 }],
+    reuseUnchanged: true,
     groupValues: async () => [{ key: 'compute', total: 1 }, { key: '', total: 0 }],
     list: async input => {
       assert.equal(input.columns, undefined)
@@ -308,4 +310,41 @@ test('indexed custom groups bypass value discovery and fetch newly discovered gr
   assert.deepEqual(calls, ['compute'])
   assert.equal(page?.buckets[0].key, 'compute')
   assert.equal(page?.total, 1)
+})
+
+test('refresh discovers first and subsequent open-ended groups from an initially empty list', async () => {
+  const openSchema: CollectionSchema = { labelField: 'title', fields: {
+    ...REQUIRED_RECORD_FIELDS, lane: { type: 'multi-select' },
+  } }
+  let rows: Array<{ id: string; lane: string[] }> = []
+  let previous: NonNullable<Awaited<ReturnType<typeof listGroupedCollection>>>['buckets'] = []
+  const refresh = async () => {
+    const page = await listGroupedCollection({
+      path: '/tasks', groupBy: 'lane', schema: openSchema, pageSize: 20, previous,
+      list: async input => {
+        if (input.columns?.includes('lane')) return { items: rows, total: rows.length }
+        const items = rows.filter(row => input.filters?.lane ? row.lane.includes(String(input.filters.lane)) : !row.lane.length)
+        return { items, total: items.length }
+      },
+    })
+    previous = page!.buckets
+    return page!
+  }
+  assert.equal((await refresh()).total, 0)
+  rows = [{ id: '1', lane: ['first'] }]
+  assert.deepEqual((await refresh()).items.map(row => row.id), ['1'])
+  rows.push({ id: '2', lane: ['second'] }, { id: '3', lane: ['first'] })
+  assert.deepEqual((await refresh()).items.map(row => row.id).sort(), ['1', '2', '3'])
+  rows = [{ id: '2', lane: ['renamed'] }]
+  assert.deepEqual((await refresh()).buckets.filter(group => group.total).map(group => group.key), ['renamed'])
+})
+
+test('data refresh reloads known enum groups even when their page did not change', async () => {
+  const page = await listGroupedCollection({
+    path: '/tasks', groupBy: 'status', schema, pageSize: 20,
+    previous: [{ key: 'todo', label: 'todo', rows: [{ id: 'old', status: 'todo' }], total: 1 }],
+    list: async input => ({ items: input.filters?.status === 'todo' ? [{ id: 'new', status: 'todo' }] : [],
+      total: input.filters?.status === 'todo' ? 1 : 0 }),
+  })
+  assert.deepEqual(page!.items.map(row => row.id), ['new'])
 })
