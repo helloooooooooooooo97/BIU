@@ -159,6 +159,38 @@ export function tableColumnUnchanged(
   return a.start === b.start && a.end === b.end && a.padLeft === b.padLeft && a.padRight === b.padRight && a.pin === b.pin
 }
 
+export const TABLE_CHECK_MEASURE_MAX = 8
+
+export type TableCheckSlot = { kind: 'head' | 'row' | 'gap'; id?: string; top: number; h: number }
+
+type CheckSlotNode = { kind: string; row?: { id?: unknown } | null }
+
+/** Checkbox rail from the virtual window — no per-row offsetTop on scroll. */
+export function tableCheckSlots(
+  nodes: CheckSlotNode[],
+  window: TableWindowSlice,
+  rowPx: number,
+  headPx = TABLE_ROW_PX,
+): TableCheckSlot[] {
+  const h = Math.max(1, Math.round(rowPx))
+  const headH = Math.max(1, Math.round(headPx))
+  const slots: TableCheckSlot[] = [{ kind: 'head', top: 0, h: headH }]
+  let y = headH
+  if (window.padTop > 0) {
+    slots.push({ kind: 'gap', top: y, h: window.padTop })
+    y += window.padTop
+  }
+  for (let i = window.start; i < window.end; i += 1) {
+    const node = nodes[i]
+    const id = node?.kind === 'row' ? String(node.row?.id ?? '').trim() : ''
+    if (id) slots.push({ kind: 'row', id, top: y, h })
+    else slots.push({ kind: 'gap', top: y, h })
+    y += h
+  }
+  if (window.padBottom > 0) slots.push({ kind: 'gap', top: y, h: window.padBottom })
+  return slots
+}
+
 /** 标签等分组超过 8 个时也要首屏按页大小拉齐，不能只探第一条。 */
 export const GROUPED_FULL_FETCH_ALL_MAX = 8
 

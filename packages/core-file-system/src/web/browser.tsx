@@ -148,7 +148,7 @@ import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage, locateViewRecord, pageOfIndex, type ViewNeighborQuery } from './view-adjacent.ts'
 import { setViaDataCrumbs, viaDataViewId } from './data-chrome.ts'
 import { paintCollectionViews } from './collection-nav.ts'
-import { TABLE_WINDOW_OVERSCAN, medianPaintedRowPx, rememberedTableWrap, settlePaintedRowPx, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tablePinColClass, tablePinCount, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
+import { TABLE_CHECK_MEASURE_MAX, TABLE_WINDOW_OVERSCAN, medianPaintedRowPx, rememberedTableWrap, settlePaintedRowPx, tableCheckSlots, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tablePinColClass, tablePinCount, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableCheckSlot, type TableColumnSlice } from './table-window.ts'
 import { bindTableDragScroll, tableVertScroller } from './table-drag-scroll.ts'
 import { forgetPreviewTotalsForPath, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady } from './sidebar-preview.ts'
 import { publishDataSidebar, type DataSidebarLive } from './data-sidebar-host.ts'
@@ -576,78 +576,33 @@ function askNewPlugin(scope: 'personal' | 'workspace' | 'shared' | 'local' = 'pe
   })
 }
 
-type CheckSlot = { kind: 'head' | 'gap' | 'row'; id?: string; top: number; h: number }
-
 function TableCheckRail({
-  tableRef,
+  slots,
   stackRef,
-  stageRef,
   hoverRef,
-  layoutKey,
-  forceLive,
   paintCheckHover,
   renderHead,
   renderRow,
 }: {
-  tableRef: RefObject<HTMLTableElement | null>
+  slots: TableCheckSlot[]
   stackRef: RefObject<HTMLDivElement | null>
-  stageRef: RefObject<HTMLDivElement | null>
   hoverRef: RefObject<string | 'head' | null>
-  layoutKey: string
-  forceLive: boolean
   paintCheckHover: (next: string | 'head' | null, force?: boolean) => void
   renderHead: () => ReactNode
   renderRow: (id: string) => ReactNode
 }) {
-  const [live, setLive] = useState(false)
-  const [checkSlots, setCheckSlots] = useState<CheckSlot[]>([])
-  const active = live || forceLive
+  useLayoutEffect(() => {
+    paintCheckHover(hoverRef.current, true)
+  }, [hoverRef, paintCheckHover, slots])
 
   useEffect(() => {
-    const stage = stageRef.current
-    if (!stage || live) return
-    const arm = () => setLive(true)
-    stage.addEventListener('mouseenter', arm)
-    return () => stage.removeEventListener('mouseenter', arm)
-  }, [live, stageRef])
-
-  useEffect(() => {
-    if (!active) {
-      setCheckSlots((prev) => (prev.length ? [] : prev))
-      return
-    }
-    const table = tableRef.current
-    if (!table) {
-      setCheckSlots((prev) => (prev.length ? [] : prev))
-      return
-    }
+    const stack = stackRef.current
+    if (!stack) return
+    const onEnter = () => paintCheckHover(hoverRef.current, true)
+    stack.addEventListener('mouseenter', onEnter)
     let raf = 0
     const measure = () => {
-      if (!table.offsetHeight) return
-      const next: CheckSlot[] = []
-      const head = table.tHead?.rows[0]
-      if (head) next.push({ kind: 'head', top: head.offsetTop, h: head.offsetHeight })
-      for (const tr of Array.from(table.tBodies[0]?.rows ?? [])) {
-        const top = tr.offsetTop
-        const h = tr.offsetHeight
-        if (tr.classList.contains('fsdb-group-row') || !tr.dataset.recordId) next.push({ kind: 'gap', top, h })
-        else next.push({ kind: 'row', id: tr.dataset.recordId, top, h })
-      }
-      setCheckSlots((prev) => {
-        if (
-          prev.length === next.length &&
-          prev.every(
-            (slot, i) =>
-              slot.kind === next[i]!.kind &&
-              slot.id === next[i]!.id &&
-              slot.top === next[i]!.top &&
-              slot.h === next[i]!.h,
-          )
-        ) {
-          return prev
-        }
-        return next
-      })
+      paintCheckHover(hoverRef.current, true)
     }
     const schedule = () => {
       if (raf) return
@@ -658,21 +613,18 @@ function TableCheckRail({
     }
     measure()
     const ro = new ResizeObserver(schedule)
-    ro.observe(table)
+    ro.observe(stack)
     return () => {
+      stack.removeEventListener('mouseenter', onEnter)
       cancelAnimationFrame(raf)
       ro.disconnect()
     }
-  }, [active, layoutKey, tableRef])
-
-  useLayoutEffect(() => {
-    paintCheckHover(hoverRef.current, true)
-  }, [checkSlots, hoverRef, paintCheckHover])
+  }, [hoverRef, paintCheckHover, stackRef])
 
   return (
     <div className="fsdb-check-rail" data-testid="fsdb-check-rail">
       <div className="fsdb-check-stack" ref={stackRef}>
-        {checkSlots.map((slot, index) => (
+        {slots.map((slot, index) => (
           <div
             key={slot.kind === 'row' ? `${slot.id}-${index}` : `${slot.kind}-${index}`}
             className={`fsdb-check-slot${slot.kind === 'head' ? ' is-head' : ''}`}
@@ -1387,7 +1339,7 @@ const WindowedTable = memo(function WindowedTable({
   error,
   pickMode,
   resetKey,
-  forceLiveChecks,
+  forceLiveChecks: _forceLiveChecks,
   checkLayoutExtra,
   paintRef,
   chromeRef,
@@ -1452,22 +1404,29 @@ const WindowedTable = memo(function WindowedTable({
     setRowPx(next)
   }, [wrapCells])
 
+  const checkSlots = useMemo(
+    () => tableCheckSlots(nodes, tableWindow, rowPx),
+    [nodes, rowPx, tableWindow],
+  )
+
   useLayoutEffect(() => {
     const table = tableRef.current
     if (!table) return
     const heights: number[] = []
+    let n = 0
     for (const tr of Array.from(table.tBodies[0]?.rows ?? [])) {
       if (tr.classList.contains('fsdb-table-pad')) continue
       if (tr.classList.contains('fsdb-group-row') || tr.classList.contains('fsdb-group-pager')) continue
-      const h = tr.offsetHeight
+      const h = tr.getBoundingClientRect().height
       if (h > 0) heights.push(h)
+      n += 1
+      if (n >= TABLE_CHECK_MEASURE_MAX) break
     }
-    // 不能依赖 tableWindow.start/end：setRowPx 会改窗口，窗口再测高再 setState，滚动时会打穿 React #185。
     const next = settlePaintedRowPx(medianPaintedRowPx(heights, rowPxRef.current), rowPxRef.current)
     if (next === rowPxRef.current) return
     rowPxRef.current = next
     setRowPx(next)
-  }, [nodes.length, tableRef, tableScroll.height, tableScroll.top, wrapCells])
+  }, [nodes.length, tableRef, tableScroll.height, wrapCells])
 
   useEffect(() => {
     onVisibleRange?.(tableWindow.start, tableWindow.end)
@@ -1514,26 +1473,15 @@ const WindowedTable = memo(function WindowedTable({
     }
   }, [wrapRef])
 
-  const checkLayoutKey = [
-    tableWindow.start, tableWindow.end, tableWindow.padTop, tableWindow.padBottom,
-    colWindow.start, colWindow.end, colWindow.padLeft, colWindow.padRight,
-    wrapCells ? 1 : 0,
-    truncateCells ? 1 : 0,
-    columns.length,
-    checkLayoutExtra,
-  ].join('\0')
   const chrome = chromeRef.current
   const paintedColStyle = (index: number) => colWidthStyle(columnPx[index]) ?? padColBox(columnPx[index] || 72)
 
   return (
     <div className="tasks-table-stage" ref={stageRef} onMouseLeave={() => paintCheckHover(null)}>
       <TableCheckRail
-        tableRef={tableRef}
+        slots={checkSlots}
         stackRef={checkStackRef}
-        stageRef={stageRef}
         hoverRef={checkHoverRef}
-        layoutKey={checkLayoutKey}
-        forceLive={forceLiveChecks}
         paintCheckHover={paintCheckHover}
         renderHead={renderCheckHead}
         renderRow={renderCheckRow}
