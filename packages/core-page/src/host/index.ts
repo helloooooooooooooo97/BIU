@@ -1,4 +1,4 @@
-import { assetsRootPath, dataHome, migrateLegacyPageDir } from '@biu/host-plugin-loader/data-dir'
+import { assetsRootPath, dataHome, isHashedAssetName, migrateLegacyPageDir, parseIfMatch } from '@biu/host-plugin-loader/data-dir'
 import type { Context } from 'cordis'
 import type { CollectionSpec } from '@biu/type-file-system'
 import { DATABASE_CHANNEL, REQUIRED_RECORD_FIELDS, databaseChannelPayload } from '@biu/type-file-system'
@@ -91,6 +91,10 @@ export function pagesCollection(store: PagesStore, index: PageBlocksIndex): Coll
   }
 }
 
+export function pageFileCacheControl(name: string) {
+  return isHashedAssetName(name) ? 'public, max-age=31536000, immutable' : 'no-cache'
+}
+
 function servePageFile(ctx: Context, store: PagesStore) {
   ctx.inject(['http'], (inner) => {
     inner.http.route('GET', '/api/page/file/:name', async (route) => {
@@ -99,10 +103,22 @@ function servePageFile(ctx: Context, store: PagesStore) {
         const path = route.query.get('path') || String(route.req.headers['x-biu-resource-path'] ?? '')
         if (path) await inner.database.requirePath(path, 'resource:read')
         else inner.database.requireAsset(name, 'resource:read')
+        const noneMatch = parseIfMatch(route.req.headers['if-none-match'])
+        if (noneMatch) {
+          const etag = await store.assetEtag(name)
+          if (noneMatch === etag) {
+            route.res.writeHead(304, {
+              etag: `"${etag}"`,
+              'cache-control': pageFileCacheControl(name),
+            })
+            route.res.end()
+            return
+          }
+        }
         const { bytes, type, etag } = await store.readAsset(name)
         route.res.writeHead(200, {
           'content-type': type,
-          'cache-control': 'no-store',
+          'cache-control': pageFileCacheControl(name),
           etag: `"${etag}"`,
         })
         route.res.end(bytes)
