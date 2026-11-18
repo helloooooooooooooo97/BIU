@@ -67,6 +67,14 @@ test('data sidebar view rows paint SVG view icons', () => {
   assert.match(viewMode, /ShareIcon/)
 })
 
+test('data sidebar paints the clicked view before the route catches up', () => {
+  const sidebar = readFileSync(resolve(import.meta.dirname, './data-sidebar.tsx'), 'utf8')
+  assert.match(sidebar, /setPendingPick\(\{ path, viewId \}\)/)
+  assert.match(sidebar, /const litPath = pendingPick\?\.path \?\? collectionPath/)
+  assert.match(sidebar, /<SidebarFold open=\{open\} animate=\{false\}/)
+  assert.match(sidebar, /useLayoutEffect\(\(\) => \{\s*const group = dataSidebarKind\(collectionPath\)/)
+})
+
 test('data sidebar does not fetch view record totals for hover counts', () => {
   const sidebar = readFileSync(resolve(import.meta.dirname, './data-sidebar.tsx'), 'utf8')
   assert.doesNotMatch(sidebar, /fetchViewTotal/)
@@ -262,6 +270,7 @@ test('pages and tasks sidebar records nest by parentId; other tables stay flat',
 
 test('starred pages and tasks also list in the sidebar favorites section', () => {
   const sidebar = readFileSync(resolve(import.meta.dirname, './data-sidebar.tsx'), 'utf8')
+  const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
   assert.match(sidebar, /const favCount = starredRows\.length \+ starredRecordRows\.length/)
   assert.match(sidebar, /\{favCount \?/)
   assert.match(sidebar, /starredRecordRows\.map/)
@@ -272,8 +281,10 @@ test('starred pages and tasks also list in the sidebar favorites section', () =>
   assert.match(sidebar, /title=\{expanded \? '收起子记录' : '展开子记录'\}/)
   assert.doesNotMatch(sidebar, /\{starredRows\.length \?/)
   const favViews = sidebar.slice(sidebar.indexOf('{starredRows.map'), sidebar.indexOf('核心数据'))
+  assert.match(favViews, /<ViewModeGlyph mode=\{view\.mode\} \/>/)
   assert.match(favViews, /<TableGlyph icon=\{table\.view\?\.icon\} \/>/)
-  assert.doesNotMatch(favViews, /<ViewModeGlyph mode=\{view\.mode\} \/>/)
+  assert.match(css, /\.fsdb-views \.chat-session-row\.is-pinned > \.sidebar-trail-icon/)
+  assert.match(css, /\.fsdb-views \.chat-session-row\.is-pinned > \.chat-session-row-star\.is-on/)
   assert.match(sidebar, /pullSavedViews\(starredPaths, \{ force: true \}\)/)
   assert.match(sidebar, /item\.name \?\? ''/)
 })
@@ -1095,7 +1106,8 @@ test('database extras sit after the record detail, not in the inspector', () => 
   assert.match(style, /\.fsdb-banner-story\{/)
   assert.match(style, /\.fsdb-banner-fly\{/)
   assert.match(style, /\.fsdb-banner-remix\{/)
-  assert.match(browser, /data-icon=\{idleTableIconKind\(currentTable\?\.view\?\.icon\)\}/)
+  assert.match(browser, /<ViewModeGlyph mode=\{activeView\?\.mode\}/)
+  assert.doesNotMatch(browser, /fsdb-detail-title-icon[\s\S]*idleTableIconKind\(currentTable\?\.view\?\.icon\)/)
   assert.doesNotMatch(browser, /<TableGlyph icon=\{currentTable\?\.view\?\.icon\}/)
   assert.match(style, /\.fsdb-detail-title-icon\{[^}]*display:inline-flex/)
   assert.match(style, /\.fsdb-detail-title-icon\{[^}]*align-items:center/)

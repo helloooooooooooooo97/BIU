@@ -542,10 +542,17 @@ export const DataSidebar = memo(function DataSidebar({
       [`${group}:${collectionPath}`]: true,
     }
   })
-  useEffect(() => {
+  useLayoutEffect(() => {
     const group = dataSidebarKind(collectionPath)
     setOpenTables({ [`${group}:${collectionPath}`]: true })
   }, [collectionPath])
+  const [pendingPick, setPendingPick] = useState<{ path: string; viewId: string } | null>(null)
+  useEffect(() => {
+    if (!pendingPick) return
+    if (pendingPick.path === collectionPath && pendingPick.viewId === activeViewId) setPendingPick(null)
+  }, [activeViewId, collectionPath, pendingPick])
+  const litPath = pendingPick?.path ?? collectionPath
+  const litViewId = pendingPick?.viewId ?? activeViewId
   useSyncExternalStore(subscribeStarredViews, getStarredViewsVersion, () => 0)
   useSyncExternalStore(subscribeStarredRecords, getStarredRecordsVersion, () => 0)
   const starredViews = getStarredViews()
@@ -572,8 +579,16 @@ export const DataSidebar = memo(function DataSidebar({
     const bump = () => {
       if (live) setViewsTick((n) => n + 1)
     }
-    if (starredPaths.length) void pullSavedViews(starredPaths, { force: true }).then(bump, bump)
-    if (paths.length) void pullSavedViews(paths, { idle: true }).then(bump, bump)
+    if (starredPaths.length) {
+      void pullSavedViews(starredPaths, { force: true }).then((changed) => {
+        if (live && changed) bump()
+      }, bump)
+    }
+    if (paths.length) {
+      void pullSavedViews(paths, { idle: true }).then((changed) => {
+        if (live && changed) bump()
+      }, bump)
+    }
     return () => {
       live = false
     }
@@ -696,6 +711,8 @@ export const DataSidebar = memo(function DataSidebar({
   }
 
   function openView(path: string, viewId: string) {
+    setPendingPick({ path, viewId })
+    setOpenTables({ [`${dataSidebarKind(path)}:${path}`]: true })
     try {
       localStorage.setItem(activeViewStorageKey(path), viewId)
     } catch {
@@ -766,10 +783,10 @@ export const DataSidebar = memo(function DataSidebar({
                 <PlusIcon className="size-4 shrink-0" />
               </button>
           </div>
-          <SidebarFold open={open} className="sidebar-session-list min-w-0">
+          <SidebarFold open={open} animate={false} className="sidebar-session-list min-w-0">
             {listed.map((view) => {
               const starred = isViewStarred(starredViews, table.path, view.id)
-              const active = table.path === collectionPath && view.id === activeViewId
+              const active = table.path === litPath && view.id === litViewId
               return (
                 <div key={view.id} className="min-w-0">
                   <div
@@ -984,7 +1001,7 @@ export const DataSidebar = memo(function DataSidebar({
                   })}
                   {starredRows.map(({ table, view }) => {
                     const tableName = table.view?.title ?? table.label
-                    const active = table.path === collectionPath && view.id === activeViewId
+                    const active = table.path === litPath && view.id === litViewId
                     const previewKey = `star:${table.path}:${view.id}`
                     return (
                       <div key={previewKey} className="min-w-0">
@@ -995,7 +1012,7 @@ export const DataSidebar = memo(function DataSidebar({
                         >
                           <div className="chat-session-row-main flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5">
                             <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
-                              <TableGlyph icon={table.view?.icon} />
+                              <ViewModeGlyph mode={view.mode} />
                             </span>
                             <button
                               type="button"

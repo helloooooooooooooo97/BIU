@@ -4605,6 +4605,12 @@ html.dark .composer-model-flyout {
   background: var(--biu-color-bg-hover);
 }
 
+.app-side-bar .chat-session-row::before,
+.app-side-bar .chat-session-row.is-active,
+.app-side-bar .chat-session-row:focus-within {
+  transition: none;
+}
+
 .chat-session-row.is-active,
 .chat-session-row:focus-within {
   color: var(--biu-color-text);
@@ -4726,7 +4732,9 @@ html.dark .composer-model-flyout {
 }
 
 .chat-session-row:hover .sidebar-trail-icon,
-.sidebar-trail-icon:focus-within {
+.sidebar-trail-icon:focus-within,
+.fsdb-views .chat-session-row.is-pinned > .sidebar-trail-icon,
+.fsdb-views .chat-session-row.is-pinned > .chat-session-row-star.is-on {
   width: 24px;
   min-width: 24px;
   opacity: 1;

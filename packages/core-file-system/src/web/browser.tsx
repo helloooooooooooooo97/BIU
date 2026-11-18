@@ -6165,7 +6165,7 @@ export function CollectionBrowser({
     tagCatalog.map((pack) => pack.id).join(','),
     viewBanner == null ? '' : JSON.stringify(viewBanner),
     activeView?.name ?? title,
-    idleTableIconKind(currentTable?.view?.icon),
+    activeView?.mode ?? '',
     pickedIds.join('\n'),
     Number(bulkMenuOpen),
     `${bulkMenuBox.top},${bulkMenuBox.left}`,
@@ -6198,7 +6198,7 @@ export function CollectionBrowser({
         />
         <div className="fsdb-detail-icon-slot">
           <span className="fsdb-detail-title-icon" aria-hidden>
-            <span className="fsdb-record-mark is-lg" data-icon={idleTableIconKind(currentTable?.view?.icon)} />
+            <ViewModeGlyph mode={activeView?.mode} className="" />
           </span>
         </div>
         <div className="fsdb-detail-title-row">

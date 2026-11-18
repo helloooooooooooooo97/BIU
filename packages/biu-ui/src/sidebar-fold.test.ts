@@ -8,4 +8,6 @@ test('biu-ui fold uses grid 0fr to 1fr', () => {
   assert.match(src, /function SidebarFold/)
   assert.match(src, /className=\{\`sidebar-fold\$\{open \? ' is-open' : ''\}/)
   assert.match(src, /is-animating/)
+  assert.match(src, /animate = true/)
+  assert.match(src, /setAnimating\(animate\)/)
 })
