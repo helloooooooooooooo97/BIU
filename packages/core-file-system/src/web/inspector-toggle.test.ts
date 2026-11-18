@@ -1469,8 +1469,10 @@ test('tag field glyph matches the tag icon', () => {
 })
 
 test('row actions reload even when updatedAt is unchanged', () => {
-  assert.match(browser, /function recordsFingerprint\(rows/)
-  assert.match(browser, /return JSON.stringify\(rows\)/)
+  assert.match(browser, /function sameListedRows\(/)
+  assert.doesNotMatch(browser, /function recordsFingerprint\(rows/)
+  assert.doesNotMatch(browser, /JSON\.stringify\(rows\)/)
+  assert.match(browser, /mapped !== item/)
   assert.match(browser, /function schemaFingerprint/)
   assert.match(browser, /schemaFingerprint\(prev\.schema\) === schemaFingerprint\(nextSchema\)/)
   assert.match(browser, /schema\.actions/)

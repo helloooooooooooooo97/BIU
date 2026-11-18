@@ -745,8 +745,19 @@ function retainSavedColumn(key: string, schema: CollectionSchema | undefined, al
 
 const QUERY_NEST_IGNORE = `${HEADLESS_DISMISS_IGNORE}, .db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`
 
-function recordsFingerprint(rows: Array<DbRecord & { path?: string }>) {
-  return JSON.stringify(rows)
+function sameListedRows(a: Array<DbRecord & { path?: string }>, b: Array<DbRecord & { path?: string }>) {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i += 1) {
+    const x = a[i]
+    const y = b[i]
+    if (x === y) continue
+    if (!x || !y) return false
+    if (x.id !== y.id) return false
+    if (x.updatedAt !== y.updatedAt) return false
+    if (x.title !== y.title) return false
+  }
+  return true
 }
 
 function schemaFingerprint(schema?: CollectionSchema) {
@@ -2482,7 +2493,7 @@ export function CollectionBrowser({
         for (const row of listed.items) confirmedCreates.current.delete(String(row.id))
         const next = kept.length ? [...kept, ...listed.items] : listed.items
         setTotal(listed.total + kept.length)
-        return recordsFingerprint(prev) === recordsFingerprint(next) ? prev : next
+        return sameListedRows(prev, next) ? prev : next
       })
       const openId = detailIdRef.current
       if (openId) {
@@ -4141,10 +4152,15 @@ export function CollectionBrowser({
 
   function mapListedRecords(map: (row: DbRecord) => DbRecord) {
     setItems((prev) => {
-      const next = prev.map((item) => map(item) as typeof item)
-      const same = recordsFingerprint(prev) === recordsFingerprint(next)
-      if (!same) itemsRef.current = next
-      return same ? prev : next
+      let changed = false
+      const next = prev.map((item) => {
+        const mapped = map(item) as typeof item
+        if (mapped !== item) changed = true
+        return mapped
+      })
+      if (!changed) return prev
+      itemsRef.current = next
+      return next
     })
     setGroupBuckets((prev) => {
       const next = remapGroupedRecords(prev, map, groupByRef.current, schemaRef.current, tagCatalog)
