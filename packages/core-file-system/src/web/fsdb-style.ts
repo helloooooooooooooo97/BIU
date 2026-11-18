@@ -632,10 +632,11 @@ const CSS = `
 .fsdb-page.is-sheet .tasks-main{padding:0;gap:8px;max-width:none}
 .fsdb-page.is-sheet .fsdb-right-body{overflow:hidden}
 .fsdb-page.is-sheet .tasks-table-wrap{width:100%;margin-left:0;padding-left:0}
-.fsdb-detail-aside{display:flex;flex-direction:column;gap:0;padding:0 0 12px}
-.fsdb-detail-aside .tasks-table{width:100%;min-width:100%;max-width:100%}
-.fsdb-page .fsdb-detail-aside .tasks-table.is-wrap th,.fsdb-page .fsdb-detail-aside .tasks-table.is-wrap td{vertical-align:middle;max-width:none}
-.fsdb-detail-aside .tasks-table th:first-child,.fsdb-detail-aside .tasks-table td:first-child{width:12rem;min-width:12rem;white-space:nowrap}
+.fsdb-detail-aside{display:flex;flex-direction:column;gap:0;min-width:0;padding:0 0 12px;overflow-x:hidden}
+.fsdb-page .fsdb-detail-aside .tasks-table{box-sizing:border-box;table-layout:fixed;width:100%;min-width:0;max-width:100%;border-right:0}
+.fsdb-page .fsdb-detail-aside .tasks-table.is-wrap th,.fsdb-page .fsdb-detail-aside .tasks-table.is-wrap td{vertical-align:middle}
+.fsdb-detail-aside .tasks-table th:first-child,.fsdb-detail-aside .tasks-table td:first-child{width:12rem;min-width:0;max-width:12rem;white-space:nowrap}
+.fsdb-page .fsdb-detail-aside .tasks-table th:last-child,.fsdb-page .fsdb-detail-aside .tasks-table td:last-child{min-width:0;overflow:hidden;border-right:0}
 .fsdb-page .fsdb-detail-aside .tasks-table.is-wrap .fsdb-prop-tr.is-tag-fold:not(.is-open) td{vertical-align:middle}
 .fsdb-page .fsdb-detail-aside .tasks-table.is-wrap .fsdb-prop-tr.is-tag-fold.is-open:has(.fsdb-schema-pack) td{vertical-align:top}
 .fsdb-page .tasks-table .fsdb-prop-tr td{box-sizing:border-box;height:32px}
@@ -823,7 +824,7 @@ button.fsdb-detail-title-icon:hover{background:color-mix(in srgb,var(--biu-color
 .fsdb-main > .tasks-toolbar.is-stuck::after,.fsdb-detail-main > .tasks-toolbar.is-stuck::after{left:12px;right:12px}
 @media (prefers-reduced-motion:reduce){.fsdb-main > .tasks-toolbar,.fsdb-detail-main > .tasks-toolbar,.fsdb-main > .tasks-toolbar::after,.fsdb-detail-main > .tasks-toolbar::after{transition:none}}
 .fsdb-detail-main > .fsdb-detail-aside{padding-top:0}
-.fsdb-detail-aside .tasks-table{border-top:0}
+.fsdb-detail-aside .tasks-table{border-top:0;border-right:0}
 .fsdb-detail-extras{display:flex;flex-direction:column;gap:20px;margin-top:8px;padding-top:16px;border-top:var(--biu-stroke-width) solid var(--biu-color-border)}
 .fsdb-prop-tr:not(.is-open):has(.fsdb-prop-val.is-pane) td{vertical-align:middle;height:32px}
 .fsdb-prop-tr:not(.is-open) .fsdb-prop-val.is-pane{display:flex;align-items:center;min-width:0;height:22px;overflow:hidden;white-space:nowrap}

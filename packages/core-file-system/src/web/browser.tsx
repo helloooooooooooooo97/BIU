@@ -1531,7 +1531,9 @@ const WindowedTable = memo(function WindowedTable({
         tabIndex={0}
         className={`tasks-table${wrapCells ? ' is-wrap' : ''} is-cols-fixed${truncateCells ? ' is-truncate' : ''}${resizingCol ? ' is-col-resize' : ''}`}
         style={{
-          minWidth: `${paintedTablePx}px`,
+          // Include the viewport minimum here because inline styles override the stage's CSS minimum.
+          width: `max(${paintedTablePx}px, calc(100cqw - var(--fsdb-check-gutter)))`,
+          minWidth: `max(${paintedTablePx}px, calc(100cqw - var(--fsdb-check-gutter)))`,
           outline: 'none',
           ['--fsdb-pin-title' as string]: `${columnPx[0] || 240}px`,
         }}
