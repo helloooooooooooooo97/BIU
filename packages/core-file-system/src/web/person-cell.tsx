@@ -158,21 +158,6 @@ export function PersonFace({ value, empty = '' }: { value: unknown; empty?: stri
             {label ? <span className="fsdb-person-name">{label}</span> : null}
           </>
         )
-        if (person.url) {
-          return (
-            <a
-              key={personKey(person) || person.name}
-              className="fsdb-person is-link"
-              href={person.url}
-              title={label || undefined}
-              target="_blank"
-              rel="noreferrer"
-              onClick={(event) => event.stopPropagation()}
-            >
-              {body}
-            </a>
-          )
-        }
         const inspect = personInspectTarget(person)
         if (inspect) {
           return (
@@ -189,6 +174,21 @@ export function PersonFace({ value, empty = '' }: { value: unknown; empty?: stri
             >
               {body}
             </button>
+          )
+        }
+        if (person.url) {
+          return (
+            <a
+              key={personKey(person) || person.name}
+              className="fsdb-person is-link"
+              href={person.url}
+              title={label || undefined}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(event) => event.stopPropagation()}
+            >
+              {body}
+            </a>
           )
         }
         return (

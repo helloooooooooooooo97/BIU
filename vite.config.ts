@@ -8,6 +8,7 @@ import { cordisPluginsVite, linkConfiguredPackages } from './packages/host-plugi
 const root = dirname(fileURLToPath(import.meta.url))
 linkConfiguredPackages(root)
 const isVitest = Boolean(process.env.VITEST)
+const webPort = Number(process.env.BIU_WEB_PORT || 5173)
 
 // Vite 自己的 SIGTERM 会等浏览器把连接关完。页面开着时 make restart 就会卡在这里。
 // 先拆掉现有连接，后面的关闭才能马上结束。
@@ -59,7 +60,10 @@ export default defineConfig({
     extensions: ['.ts', '.tsx', '.mts', '.mjs', '.js', '.jsx', '.json'],
   },
   server: {
-    port: Number(process.env.BIU_WEB_PORT || 5173),
+    port: webPort,
+    // Pages may be served through the API host (3141/3151), which only upgrades
+    // application /ws connections. HMR must connect directly to Vite's port.
+    hmr: { clientPort: webPort },
     strictPort: true,
     host: true,
     watch: {

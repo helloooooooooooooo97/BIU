@@ -135,3 +135,69 @@ test('readJson shares identical in-flight GET requests', async () => {
     globalThis.fetch = original
   }
 })
+
+test('view reads recover once from empty or truncated JSON without sharing a failed response', async () => {
+  const original = globalThis.fetch
+  const options: Array<RequestInit | undefined> = []
+  globalThis.fetch = (async (_path, init) => {
+    options.push(init)
+    return new Response(options.length === 1 ? '' : JSON.stringify({ items: [{ id: 'recovered' }], total: 1 }), { status: 200 })
+  }) as typeof fetch
+  try {
+    invalidateListReads()
+    const [a, b] = await Promise.all([
+      listCollection({ path: '/pages', limit: 20, query: 'empty-response-retry' }),
+      listCollection({ path: '/pages', limit: 20, query: 'empty-response-retry' }),
+    ])
+    assert.equal(options.length, 2)
+    assert.equal(options[1]?.cache, 'no-store')
+    assert.equal(a.items[0].id, 'recovered')
+    assert.equal(b.items[0].id, 'recovered')
+  } finally { globalThis.fetch = original; invalidateListReads() }
+})
+
+test('persistent malformed JSON reports the endpoint and status after one read retry', async () => {
+  const original = globalThis.fetch
+  let calls = 0
+  globalThis.fetch = (async () => { calls++; return new Response('{"items":', { status: 200 }) }) as typeof fetch
+  try {
+    await assert.rejects(readJson('/api/db/list?path=/pages', undefined, { fresh: true }), error => {
+      assert.ok(error instanceof Error)
+      assert.match(error.message, /\/api\/db\/list/)
+      assert.match(error.message, /HTTP 200/)
+      assert.equal((error as { body?: { code?: string } }).body?.code, 'INVALID_JSON_RESPONSE')
+      return true
+    })
+    assert.equal(calls, 2)
+  } finally { globalThis.fetch = original }
+})
+
+test('invalid write responses and HTTP errors are never retried automatically', async () => {
+  const original = globalThis.fetch
+  let calls = 0
+  globalThis.fetch = (async () => { calls++; return new Response('', { status: 200 }) }) as typeof fetch
+  try {
+    await assert.rejects(readJson('/api/db/update', { method: 'POST', body: '{}' }))
+    assert.equal(calls, 1)
+    globalThis.fetch = (async () => { calls++; return new Response('upstream unavailable', { status: 503 }) }) as typeof fetch
+    await assert.rejects(readJson('/api/db/list', undefined, { fresh: true }), error => {
+      assert.equal((error as { status?: number }).status, 503)
+      return true
+    })
+    assert.equal(calls, 2)
+  } finally { globalThis.fetch = original }
+})
+
+test('431 responses identify an oversized request instead of a JSON parsing failure', async () => {
+  const original = globalThis.fetch
+  let calls = 0
+  globalThis.fetch = (async () => { calls++; return new Response('', { status: 431 }) }) as typeof fetch
+  try {
+    await assert.rejects(readJson('/api/db/list?path=/pages', undefined, { fresh: true }), error => {
+      assert.match((error as Error).message, /请求头或查询地址过大/)
+      assert.equal((error as { body?: { code?: string } }).body?.code, 'REQUEST_HEADERS_TOO_LARGE')
+      return true
+    })
+    assert.equal(calls, 1)
+  } finally { globalThis.fetch = original }
+})

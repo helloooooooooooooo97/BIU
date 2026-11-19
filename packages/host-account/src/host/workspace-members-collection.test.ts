@@ -25,6 +25,7 @@ test('workspace members collection lists and manages only the active workspace',
   store.setActive(ada.id, workspace.id)
   store.setActive(bob.id, workspace.id)
   const collection = workspaceMembersCollection(store)
+  assert.equal(collection.view?.inspector, true)
   assert.equal(collection.records?.update, true)
   assert.equal(typeof collection.update, 'function')
   assert.deepEqual(collection.schema.fields.role.enumLabels, {

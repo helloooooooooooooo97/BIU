@@ -19,6 +19,8 @@ type ListFn = (input: TreeListInput) => Promise<ListPage>
 
 const CHILD_PAGE = 200
 const HAS_KIDS_CAP = 500
+const HAS_KIDS_BATCH = 20
+const HAS_KIDS_CONCURRENCY = 4
 
 export function treeRootFilter(parentKey: string): Record<string, unknown> {
   return {
@@ -59,20 +61,33 @@ async function markDirectHasKids(
   list: ListFn,
   opts: { path: string; parentKey: string; items: ListPage['items'] },
 ): Promise<ListPage['items']> {
-  const ids = opts.items.map((row) => String(row.id ?? '')).filter(Boolean)
+  const ids = [...new Set(opts.items.map((row) => String(row.id ?? '')).filter(Boolean))]
   if (!ids.length) return opts.items
   const wanted = new Set(ids)
-  const listed = await list({
-    path: opts.path,
-    limit: Math.min(HAS_KIDS_CAP, Math.max(ids.length * 8, 1)),
-    columns: [opts.parentKey],
-    filters: parentInFilter(opts.parentKey, ids),
-  })
-  const hasKids = new Set<string>()
-  for (const row of listed.items) {
-    const parent = String(row[opts.parentKey] ?? '')
-    if (wanted.has(parent)) hasKids.add(parent)
+  const batches: string[][] = []
+  for (let offset = 0; offset < ids.length; offset += HAS_KIDS_BATCH) {
+    batches.push(ids.slice(offset, offset + HAS_KIDS_BATCH))
   }
+  const hasKids = new Set<string>()
+  const probeLimit = Math.min(HAS_KIDS_CAP, Math.max(ids.length * 8, 1))
+  let nextBatch = 0
+  // A 100-row OR filter approaches Node's 16KB header limit once URL-encoded.
+  // Keep requests small and bound concurrency instead of enlarging server limits.
+  await Promise.all(Array.from({ length: Math.min(HAS_KIDS_CONCURRENCY, batches.length) }, async () => {
+    while (nextBatch < batches.length) {
+      const parents = batches[nextBatch++]!
+      const listed = await list({
+        path: opts.path,
+        limit: probeLimit,
+        columns: [opts.parentKey],
+        filters: parentInFilter(opts.parentKey, parents),
+      })
+      for (const row of listed.items) {
+        const parent = String(row[opts.parentKey] ?? '')
+        if (wanted.has(parent)) hasKids.add(parent)
+      }
+    }
+  }))
   return opts.items.map((row) => {
     const next = hasKids.has(String(row.id ?? ''))
     if (row[TREE_HAS_KIDS] === next) return row

@@ -15,10 +15,33 @@ const GET_INFLIGHT_HOLD_MS = 400
 const getInflight = new Map<string, Promise<unknown>>()
 let readEpoch = 0
 
-async function readJsonNow<T>(path: string, init?: RequestInit): Promise<T> {
+async function readJsonNow<T>(path: string, init?: RequestInit, retry = true): Promise<T> {
   const res = await fetch(path, init)
-  const body = (await res.json()) as T & { error?: string; code?: string }
-  if (!res.ok) throw new HttpError(body.error || res.statusText, res.status, body)
+  if (res.status === 431) {
+    throw new HttpError(
+      `接口 ${path.split('?')[0]} 的请求头或查询地址过大（HTTP 431）`,
+      res.status,
+      { code: 'REQUEST_HEADERS_TOO_LARGE' },
+    )
+  }
+  let body: T & { error?: string; code?: string }
+  try {
+    body = await res.json()
+  } catch (error) {
+    if (init?.signal?.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+    const method = String(init?.method ?? 'GET').toUpperCase()
+    // A view load can receive an empty/truncated response during a reconnect.
+    // Retry reads once without cache; never replay a write whose outcome is unknown.
+    if (retry && res.ok && method === 'GET' && !init?.body && error instanceof SyntaxError) {
+      return readJsonNow<T>(path, { ...init, cache: 'no-store' }, false)
+    }
+    throw new HttpError(
+      `接口 ${path.split('?')[0]} 返回空或无效的 JSON（HTTP ${res.status}），请重试`,
+      res.status,
+      { code: 'INVALID_JSON_RESPONSE' },
+    )
+  }
+  if (!res.ok) throw new HttpError(body?.error || res.statusText, res.status, body ?? {})
   return body
 }
 

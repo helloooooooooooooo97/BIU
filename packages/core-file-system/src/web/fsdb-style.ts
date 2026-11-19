@@ -1001,6 +1001,10 @@ a.fsdb-person.is-link:hover .fsdb-person-name,button.fsdb-person.is-link:hover .
 .fsdb-page .tasks-table:not(.is-wrap) .fsdb-ref-chips,.fsdb-page .tasks-table:not(.is-wrap) .biu-tags,.fsdb-page .tasks-table:not(.is-wrap) .fsdb-person-list,.fsdb-page .tasks-table:not(.is-wrap) .fsdb-files{display:flex;flex-wrap:nowrap;width:100%;min-width:0;max-width:100%}
 .fsdb-page .tasks-table:not(.is-wrap) .fsdb-ref-chip,.fsdb-page .tasks-table:not(.is-wrap) .biu-tag,.fsdb-page .tasks-table:not(.is-wrap) .fsdb-person{flex:0 1 auto;min-width:0;max-width:100%;overflow:hidden}
 .fsdb-page .tasks-table:not(.is-wrap) .fsdb-person-name,.fsdb-page .tasks-table:not(.is-wrap) .fsdb-ref-chip-title{overflow:hidden;text-overflow:clip}
+.fsdb-page .tasks-table:not(.is-wrap) .fsdb-person-list{flex:none;width:max-content;max-width:none}
+.fsdb-page .tasks-table:not(.is-wrap) .fsdb-person{flex:none;max-width:none;overflow:visible}
+.fsdb-page .tasks-table:not(.is-wrap) .fsdb-person-name{flex:none;overflow:visible;text-overflow:clip}
+
 .fsdb-page .tasks-table.is-wrap .fsdb-ref-chips{display:inline-flex;flex-direction:row;flex-wrap:wrap;width:auto;max-width:100%;overflow-wrap:normal;word-break:normal;white-space:normal}
 .fsdb-ref-chip{display:inline-flex;flex-direction:row;align-items:center;gap:4px;flex:0 0 auto;width:auto;max-width:100%;margin:0;border:0;border-radius:4px;padding:1px 6px 1px 7px;background:var(--biu-color-bg-hover);color:var(--biu-color-text);font:inherit;font-size:var(--biu-chat-chip-font-size);line-height:var(--biu-space-5);cursor:pointer;text-align:left;white-space:nowrap;overflow-wrap:normal;word-break:keep-all}
 .fsdb-ref-chip-title{min-width:0;overflow:visible;text-overflow:clip;white-space:nowrap}

@@ -2,7 +2,10 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { personInspectTarget } from './person-cell.tsx'
+import { act, createElement } from 'react'
+import { createRoot } from 'react-dom/client'
+import { getInspectorDbPath, resetInspectorDbPathMemory } from './inspector-db-route.ts'
+import { PersonFace, personInspectTarget } from './person-cell.tsx'
 
 test('person inspect target opens agents on sessions and users on members', () => {
   assert.deepEqual(personInspectTarget({ kind: 'agent', name: '甲', sessionId: 'sess-a' }), {
@@ -54,4 +57,34 @@ test('table person cells render stamped name and mascot without fetching session
   assert.match(personFace, /openPersonInInspector/)
   assert.match(personFace, /在右侧打开/)
   assert.match(src, /showRecordInInspector/)
+})
+
+
+test('clicking a member opens its record in the right inspector before any external profile link', async () => {
+  localStorage.clear()
+  resetInspectorDbPathMemory()
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  let bubbled = 0, opened = 0
+  const open = () => { opened++ }
+  window.addEventListener('biu:inspector-open', open)
+  try {
+    await act(async () => {
+      root.render(createElement('div', { onClick: () => { bubbled++ } }, createElement(PersonFace, { value: { kind: 'user', name: '成员', accountId: 'member-account', url: 'https://example.com/profile' } })))
+    })
+    const button = container.querySelector<HTMLButtonElement>('button.fsdb-person')
+    assert.ok(button, 'known workspace members are inspector buttons')
+    assert.equal(container.querySelector('a'), null)
+    await act(async () => { button.click() })
+    assert.match(getInspectorDbPath('database:/workspace-members'), /\/workspace-members\/(?:view\/[^/]+\/)?record\/member-account$/)
+    assert.equal(opened, 1)
+    assert.equal(bubbled, 0, 'member clicks do not open the surrounding cell editor')
+  } finally {
+    await act(async () => root.unmount())
+    container.remove()
+    window.removeEventListener('biu:inspector-open', open)
+    localStorage.clear()
+    resetInspectorDbPathMemory()
+  }
 })

@@ -65,6 +65,7 @@ import {
 } from './fields.ts'
 import { createdRowGroupKey, placeCreatedRow } from './group-insert.ts'
 import { seedGroupRecord } from './group-create.ts'
+import { TableEditHistory, tableEditHistoryKey } from './table-edit-history.ts'
 import { collectionListCachePath } from './list-cache-scope.ts'
 import { listAttributeGroups, listGroupedCollection } from './group-list.ts'
 import { TREE_HAS_KIDS, listTreeChildren, listTreeCollection, treeRootFilter } from './tree-list.ts'
@@ -1583,6 +1584,9 @@ export function CollectionBrowser({
   }
   const dataPath = collectionPath
   const cachePath = collectionListCachePath(dataPath, sheet, lockedFilters)
+  const tableEditHistory = useMemo(() => new TableEditHistory(), [cachePath])
+  const tableEditHistoryRef = useRef(tableEditHistory)
+  tableEditHistoryRef.current = tableEditHistory
   const peekBrowserCache: typeof peekListCache = (path, viewId, minLimit) =>
     peekListCache(collectionListCachePath(path, sheet, lockedFilters), viewId, minLimit)
   const [stat, setStat] = useState<StatResult | null>(() => peekBrowserCache(dataPath, routeViewId)?.stat ?? null)
@@ -4081,7 +4085,10 @@ export function CollectionBrowser({
   function dropListedRecords(ids: string[]) {
     const gone = new Set(ids.filter(Boolean).map(String))
     if (!gone.size) return
-    for (const id of gone) confirmedCreates.current.delete(id)
+    for (const id of gone) {
+      confirmedCreates.current.delete(id)
+      void tableEditHistoryRef.current.forget(`${collectionPathRef.current}/${id}`)
+    }
     const prev = itemsRef.current
     const next = prev.filter((item) => !gone.has(String(item.id)))
     const removed = prev.length - next.length
@@ -4242,24 +4249,36 @@ export function CollectionBrowser({
         }
         return
       }
-      const data = await readJson<{ value?: DbRecord }>('/api/db/update', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ path: `${dataPath}/${row.id}`, content }),
+      const path = `${dataPath}/${row.id}`
+      await tableEditHistory.edit(path, content, async () => {
+        const current = await readJson<{ value?: DbRecord }>(`/api/db/read?path=${encodeURIComponent(path)}`, undefined, { fresh: true })
+        if (!current.value) throw new Error('记录不存在，无法保存编辑')
+        return current.value
+      }, async (patch) => {
+        const data = await readJson<{ value?: DbRecord }>('/api/db/update', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ path, content: patch }),
+        })
+        const next = data.value
+        if (!next) throw new Error('保存失败：服务端没有返回记录')
+        // A pending save may finish after navigation. Keep its response out of the new table.
+        if (dataPathRef.current === dataPath) {
+          const displayed = next.id === row.id ? next : { ...row, ...next, id: row.id }
+          const merge = (item: DbRecord) => (item.id === row.id ? overlayListedRow(item, displayed) : item)
+          mapListedRecords(merge)
+          setDetailRow((prev) => (prev?.id === row.id ? overlayListedRow(prev, displayed) : prev))
+          publishListedMutation({ path: dataPath, op: 'patch', row: displayed, groupBy: groupByRef.current })
+          announceListChange(true)
+          quietUntil.current = Date.now() + 800
+        } else {
+          forgetListCache(dataPath)
+          invalidateListReads()
+        }
+        return next
       })
-      const next = data.value
-      if (next) {
-        const merge = (item: DbRecord) => (item.id === next.id ? overlayListedRow(item, next) : item)
-        mapListedRecords(merge)
-        setDetailRow((prev) => (prev?.id === next.id ? overlayListedRow(prev, next) : prev))
-        publishListedMutation({ path: dataPath, op: 'patch', row: next, groupBy })
-        announceListChange(true)
-        quietUntil.current = Date.now() + 800
-        return
-      }
-      quietUntil.current = 0
-      await reload({ force: true })
     } catch (err) {
+      if (dataPathRef.current !== dataPath) return
       quietUntil.current = 0
       const denied =
         (err instanceof HttpError && err.status === 403) ||
@@ -5552,6 +5571,16 @@ export function CollectionBrowser({
       return
     }
     if (tableKeyFromEditingTarget(event.target)) return
+    const historyAction = tableEditHistoryKey(event)
+    if (historyAction) {
+      const hit = event.target instanceof Element ? event.target : null
+      if (!hit || hit.closest('.fsdb-page') !== pageRef.current || !hit.closest('.tasks-table')) return
+      if (hit.closest('dialog, [role="dialog"], [role="menu"], [role="listbox"]')) return
+      // Claim the key even when the stack is empty, so an outer table cannot consume it.
+      event.preventDefault()
+      void tableEditHistory[historyAction]().catch((err) => setError(String(err)))
+      return
+    }
     const titleCursor = cellPickRef.current
     const titleOpen = titleCursor
       ? tableTitleOpenWhere({

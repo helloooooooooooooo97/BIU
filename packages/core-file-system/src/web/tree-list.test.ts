@@ -86,3 +86,30 @@ test('tree off is a plain list', async () => {
   })
   assert.deepEqual(page.items.map((row) => row.id), ['x'])
 })
+
+test('100-row tree probes keep request URLs small and bound concurrent requests', async () => {
+  const roots = Array.from({ length: 100 }, (_, i) => ({ id: `root${String(i).padStart(8, '0')}`, parentId: '' }))
+  const probed = new Set<string>()
+  let inFlight = 0, peak = 0, probes = 0
+  const page = await listTreeCollection({
+    path: '/pages', tree: true, parentKey: 'parentId', limit: 100,
+    list: async input => {
+      const filter = input.filters as { $tree?: { id?: string; children: Array<{ value: string }> } }
+      if (filter?.$tree?.id === 'tree-roots') return { items: roots, total: 100 }
+      const ids = filter.$tree!.children.map(rule => rule.value)
+      for (const id of ids) probed.add(id)
+      const query = new URLSearchParams({ path: input.path, limit: String(input.limit), filter: JSON.stringify(filter), columns: input.columns!.join(',') })
+      assert.ok(query.toString().length < 4000, 'probe URL leaves space for authorization headers')
+      probes++; inFlight++; peak = Math.max(peak, inFlight)
+      await new Promise(resolve => setTimeout(resolve, 5))
+      inFlight--
+      const items = ids.filter(id => Number(id.slice(4)) % 2 === 0).map(id => ({ id: `child-${id}`, parentId: id }))
+      return { items, total: items.length }
+    },
+  })
+  assert.equal(probes, 5)
+  assert.equal(probed.size, 100)
+  assert.ok(peak <= 4)
+  assert.equal(page.total, 100)
+  assert.deepEqual(page.items.map(row => row[TREE_HAS_KIDS]), roots.map((_, i) => i % 2 === 0))
+})
