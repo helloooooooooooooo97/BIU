@@ -10,7 +10,6 @@ export function useTableColumnViewport(options: {
   const [viewport, setViewport] = useState(() => ({ left: 0, width: typeof window === 'undefined' ? TABLE_COL_VIEWPORT_FALLBACK : window.innerWidth }))
   const actualViewport = useRef(viewport)
   const [interacted, setInteracted] = useState<string | null>(null)
-  const visited = useMemo(() => new Set<string>(), [options.resetKey])
   const offsets = useMemo(() => {
     const values = [0]
     for (const width of options.widths) values.push(values[values.length - 1]! + width)
@@ -56,16 +55,11 @@ export function useTableColumnViewport(options: {
   const slice = useMemo(() => {
     // Auto-height wrapped rows need every column to determine their full natural height.
     if (options.wrapCells) {
-      if (options.preserveMounted) for (const key of options.keys) visited.add(key)
       return { pin: options.pinCount, start: options.pinCount, end: options.keys.length, padLeft: 0, padRight: 0 }
     }
     const actual = actualViewport.current
     const next = tableColumnSlice(options.keys.length, options.pinCount, actual.left, actual.width, options.widths)
-    const retained = [options.retainedKey, options.resizingKey, interacted]
-    if (options.preserveMounted) {
-      for (let i = next.start; i < next.end; i += 1) visited.add(options.keys[i]!)
-      retained.push(...visited)
-    }
+    const retained = [options.retainedKey, options.resizingKey, options.preserveMounted ? interacted : null]
     for (const key of retained) {
       const index = key ? options.keys.indexOf(key) : -1
       if (index < next.pin) continue
@@ -75,7 +69,7 @@ export function useTableColumnViewport(options: {
     next.padLeft = offsets[next.start]! - offsets[next.pin]!
     next.padRight = offsets[options.keys.length]! - offsets[next.end]!
     return next
-  }, [options.keys, options.widths, options.pinCount, options.wrapCells, options.retainedKey, options.resizingKey, options.preserveMounted, interacted, visited, offsets, viewport])
+  }, [options.keys, options.widths, options.pinCount, options.wrapCells, options.retainedKey, options.resizingKey, options.preserveMounted, interacted, offsets, viewport])
   const revealColumn = useCallback((key: string) => {
     const model = current.current, wrap = model.wrapRef.current
     const index = model.keys.indexOf(key)

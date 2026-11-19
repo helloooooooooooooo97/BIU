@@ -18,6 +18,8 @@ export function tableCursorFromCell(cell: HTMLElement): TableCellCursor | null {
 
 /** Gesture callbacks can outlive a render. Always resolve their range against the current view. */
 export class LiveTableCellSelection {
+  private readonly dirtyTables = new WeakSet<HTMLTableElement>()
+
   constructor(private readonly getModel: () => TableSelectionModel, private readonly state: TableSelectionState) {}
 
   apply(anchor: TableCellCursor, focus: TableCellCursor, table: HTMLTableElement | null) {
@@ -43,8 +45,17 @@ export class LiveTableCellSelection {
 
   paint(table: HTMLTableElement | null) {
     if (!table) return
-    const { writable } = this.getModel()
     const focus = this.state.focus.current, selected = this.state.members.current
+    if (!focus && selected.size === 0) {
+      if (!this.dirtyTables.has(table)) return
+      for (const cell of Array.from(table.querySelectorAll('.is-cell-on, .is-cell-range, .is-cell-ro'))) {
+        cell.classList.remove('is-cell-on', 'is-cell-range', 'is-cell-ro')
+      }
+      this.dirtyTables.delete(table)
+      return
+    }
+    this.dirtyTables.add(table)
+    const { writable } = this.getModel()
     for (const row of Array.from(table.tBodies[0]?.rows ?? [])) {
       const id = row.dataset.recordId
       if (!id) continue

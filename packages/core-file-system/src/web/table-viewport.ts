@@ -13,7 +13,7 @@ export function useTableViewport(options: {
   const [scroller, setScroller] = useState<HTMLElement | null>(null)
   const [geometry, setGeometry] = useState({ margin: 0, padding: 40 })
   const [interactedRow, setInteractedRow] = useState<string | null>(null)
-  const visited = useMemo(() => new Set<string>(), [options.resetKey])
+  const interactedHistory = useMemo(() => new Set<string>(), [options.resetKey])
   const keyIndices = useMemo(() => new Map(nodes.map((node, index) => [node.key, index])), [nodes])
   const rowIndices = useMemo(() => {
     const first = new Map<string, number>()
@@ -72,11 +72,22 @@ export function useTableViewport(options: {
       if (index != null) indices.add(index)
     }
     if (options.preserveMountedRows) {
-      for (const index of indices) visited.add(nodes[index]!.key)
-      for (const key of visited) { const index = keyIndices.get(key); if (index != null) indices.add(index) }
+      if (interactedRow) {
+        interactedHistory.delete(interactedRow)
+        interactedHistory.add(interactedRow)
+        while (interactedHistory.size > 8) {
+          const oldest = interactedHistory.values().next().value
+          if (oldest !== undefined) interactedHistory.delete(oldest)
+          else break
+        }
+      }
+      for (const key of interactedHistory) {
+        const index = keyIndices.get(key) ?? rowIndices.get(key)
+        if (index != null) indices.add(index)
+      }
     }
     return [...indices].sort((a, b) => a - b)
-  }, [nodes, options.retainedRowId, options.retainedRowKey, options.preserveMountedRows, interactedRow, rowIndices, keyIndices, tableRef, visited])
+  }, [nodes, options.retainedRowId, options.retainedRowKey, options.preserveMountedRows, interactedRow, rowIndices, keyIndices, tableRef, interactedHistory])
   const getScrollElement = useCallback(() => scroller, [scroller])
   const getItemKey = useCallback((index: number) => `${options.resetKey}\0${nodes[index]!.key}`, [nodes, options.resetKey])
   const estimateSize = useCallback((index: number) => nodes[index]?.kind === 'group-head' ? 36 : nodes[index]?.kind === 'group-pager' ? 46 : tableRowFallbackPx(options.wrapCells), [nodes, options.wrapCells])

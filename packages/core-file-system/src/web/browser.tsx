@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement, type ReactElement, createContext, lazy, memo, Suspense, type ComponentProps, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { lazy, memo, Suspense, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import {
@@ -24,7 +24,6 @@ import {
 } from '@heroicons/react/16/solid'
 import type { CollectionActionInfo, CollectionInfo, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
 import { emitFsdbChange, fsdbRecordChangeReloadsList, normalizeSchemaValue, parseFsdbChange } from '@biu/type-file-system'
-import { evictCellCache, reuseRowStamp, type RowStampEntry } from './table-paint-cache.ts'
 import { inspectorPaneAcceptsKeys } from './inspector-pane-cost.ts'
 import { subscribeHistoryNavigation } from './history-nav.ts'
 import type { CollectionChrome, CollectionRowViewType, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
@@ -79,12 +78,19 @@ import { CrumbTrail } from './crumb-trail.tsx'
 import { fieldPickAttrs, fieldPickId, pickDomAttrs, recordPickKind, recordSourcePath } from './pick-dom.ts'
 import { normalizeRecordEmoji, recordPreviewEmoji, crumbRecordLabel } from './sidebar-preview.ts'
 import { recordPreviewMascot, RecordMark } from './record-mark.tsx'
-import { COL_WIDTH_MAX, COL_WIDTH_MIN, canRemoveCollectionView, colWidthStyle, normalizeColumnWidths, normalizeSavedView, normalizePageSize, rankListedViews, viewIsFresher, viewStateKey, type SavedView } from './saved-view.ts'
-import { usePinnedTableHead } from './pinned-table-head.ts'
+import { COL_WIDTH_MAX, COL_WIDTH_MIN, canRemoveCollectionView, normalizeColumnWidths, normalizeSavedView, normalizePageSize, rankListedViews, viewIsFresher, viewStateKey, type SavedView } from './saved-view.ts'
 import { LiveTableCellSelection, tableCursorFromCell, type TableSelectionModel } from './table-cell-selection.ts'
-import { useTableColumnViewport } from './table-column-viewport.ts'
-import { useTableViewport } from './table-viewport.ts'
-import type { VirtualItem } from '@tanstack/react-virtual'
+import { startTableColumnResize } from './table-col-resize.ts'
+import {
+  WindowedTable,
+  padColBox,
+  windowedColumnsOf,
+  type TableCheckStore,
+  type TableChromeBag,
+  type TablePaintBag,
+  type TablePaintNode,
+} from './windowed-table.tsx'
+export { WindowedTable } from './windowed-table.tsx'
 import { useStickyToolbar } from './sticky-toolbar.ts'
 import { useToolbarOverflow } from './toolbar-overflow.ts'
 import { PagerSizeControl } from './pager-size.tsx'
@@ -589,124 +595,6 @@ function askNewPlugin(scope: 'personal' | 'workspace' | 'shared' | 'local' = 'pe
   })
 }
 
-type CheckSlot = { kind: 'head' | 'gap' | 'row'; id?: string; top: number; h: number }
-
-function TableCheckRail({
-  tableRef,
-  stackRef,
-  stageRef,
-  hoverRef,
-  layoutKey,
-  forceLive,
-  paintCheckHover,
-  renderHead,
-  renderRow,
-}: {
-  tableRef: RefObject<HTMLTableElement | null>
-  stackRef: RefObject<HTMLDivElement | null>
-  stageRef: RefObject<HTMLDivElement | null>
-  hoverRef: RefObject<string | 'head' | null>
-  layoutKey: string
-  forceLive: boolean
-  paintCheckHover: (next: string | 'head' | null, force?: boolean) => void
-  renderHead: () => ReactNode
-  renderRow: (id: string) => ReactNode
-}) {
-  const [live, setLive] = useState(false)
-  const [checkSlots, setCheckSlots] = useState<CheckSlot[]>([])
-  const active = live || forceLive
-
-  useEffect(() => {
-    const stage = stageRef.current
-    if (!stage || live) return
-    const arm = () => setLive(true)
-    stage.addEventListener('mouseenter', arm)
-    return () => stage.removeEventListener('mouseenter', arm)
-  }, [live, stageRef])
-
-  useEffect(() => {
-    if (!active) {
-      setCheckSlots((prev) => (prev.length ? [] : prev))
-      return
-    }
-    const table = tableRef.current
-    if (!table) {
-      setCheckSlots((prev) => (prev.length ? [] : prev))
-      return
-    }
-    let raf = 0
-    const measure = () => {
-      if (!table.offsetHeight) return
-      const next: CheckSlot[] = []
-      const tableTop = table.getBoundingClientRect().top
-      const head = table.tHead?.rows[0]
-      if (head) next.push({ kind: 'head', top: 0, h: head.getBoundingClientRect().height })
-      for (const tr of Array.from(table.tBodies[0]?.rows ?? [])) {
-        const rect = tr.getBoundingClientRect()
-        const top = rect.top - tableTop
-        const h = rect.height
-        if (tr.classList.contains('fsdb-group-row') || !tr.dataset.recordId) next.push({ kind: 'gap', top, h })
-        else next.push({ kind: 'row', id: tr.dataset.recordId, top, h })
-      }
-      setCheckSlots((prev) => {
-        if (
-          prev.length === next.length &&
-          prev.every(
-            (slot, i) =>
-              slot.kind === next[i]!.kind &&
-              slot.id === next[i]!.id &&
-              slot.top === next[i]!.top &&
-              slot.h === next[i]!.h,
-          )
-        ) {
-          return prev
-        }
-        return next
-      })
-    }
-    const schedule = () => {
-      if (raf) return
-      raf = requestAnimationFrame(() => {
-        raf = 0
-        measure()
-      })
-    }
-    measure()
-    const ro = new ResizeObserver(schedule)
-    ro.observe(table)
-    return () => {
-      cancelAnimationFrame(raf)
-      ro.disconnect()
-    }
-  }, [active, layoutKey, tableRef])
-
-  useLayoutEffect(() => {
-    paintCheckHover(hoverRef.current, true)
-  }, [checkSlots, hoverRef, paintCheckHover])
-
-  return (
-    <div className="fsdb-check-rail" data-testid="fsdb-check-rail">
-      <div className="fsdb-check-stack" ref={stackRef}>
-        {checkSlots.map((slot, index) => (
-          <div
-            key={slot.kind === 'row' ? `${slot.id}-${index}` : `${slot.kind}-${index}`}
-            className={`fsdb-check-slot${slot.kind === 'head' ? ' is-head' : ''}`}
-            data-check={slot.kind === 'head' ? 'head' : slot.id}
-            style={slot.kind === 'head' ? { height: slot.h } : { top: slot.top, height: slot.h }}
-            onMouseEnter={() => {
-              if (slot.kind === 'head') paintCheckHover('head')
-              else if (slot.id) paintCheckHover(slot.id)
-            }}
-          >
-            {slot.kind === 'head' ? renderHead() : null}
-            {slot.kind === 'row' && slot.id ? renderRow(slot.id) : null}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 type StatResult = { schema?: CollectionSchema }
 
 let cachedLocalData: boolean | null = null
@@ -840,12 +728,6 @@ const CELL_POP_IGNORE =
   '.fsdb-row-check, .fsdb-col-resizer, .tasks-row-tools, .tasks-title-open, .fsdb-action-btn, .tasks-row-actions, .fsdb-boolbtn, .fsdb-thumb-btn, .fsdb-thumb, .biu-image, .fsdb-file-tools, .fsdb-ref-chip, .biu-tag-wrap, .db-datetime, .biu-calendar, .fsdb-scope-detail, .fsdb-source-table'
 const CELL_RANGE_IGNORE =
   '.fsdb-row-check, .fsdb-col-resizer, .tasks-row-tools, .tasks-title-open, .fsdb-action-btn, .tasks-row-actions, .fsdb-file-tools, .fsdb-scope-detail'
-
-type TablePaintNode =
-  | { kind: 'empty'; key: string }
-  | { kind: 'group-head'; key: string; groupKey: string; label: string; count: number }
-  | { kind: 'row'; key: string; keyPrefix: string; row: DbRecord; depth: number; hasKids: boolean; kidCount: number; fold?: boolean }
-  | { kind: 'group-pager'; key: string; groupKey: string; count: number; pageIndex: number }
 
 const EMPTY_HOLD_NODES: TablePaintNode[] = [{ kind: 'empty', key: 'empty' }]
 
@@ -1183,175 +1065,7 @@ function listHoldFromCache(cached: ListCacheSnap, view: SavedView | null, path: 
   }
 }
 
-type TablePaintBag = {
-  colSpan: number
-  error: string
-  renderNode: (node: TablePaintNode) => ReactNode
-  /** 行壳。单元格由 renderCell 按列缓存，横滚只补新列。 */
-  renderRow?: (node: TablePaintNode, cells: ReactNode) => ReactNode
-  renderCell?: (node: TablePaintNode, colKey: string) => ReactNode
-  revealRow?: (id: string, rowKey?: string) => void
-  revealColumn?: (key: string) => void
-  paintSelection?: () => void
-}
-
-const TABLE_PAINT_REF: RefObject<TablePaintBag> = {
-  current: { colSpan: 1, error: '', renderNode: () => null },
-}
-
-const TablePaintCtx = createContext<RefObject<TablePaintBag>>(TABLE_PAINT_REF)
-
-type TableBodyProps = {
-  nodes: TablePaintNode[]
-  items: VirtualItem[]
-  margin: number
-  totalSize: number
-  measureRow: (row: HTMLTableRowElement | null) => void
-  colSpan: number
-  colKeys: string
-  error: string
-  pickMode: boolean
-  activeRowId: string | null
-}
-
-function rowPaintStamp(node: TablePaintNode, stamps: Map<string, RowStampEntry>) {
-  if (node.kind !== 'row') {
-    const label = node.kind === 'group-head' ? node.label : ''
-    const count = node.kind === 'group-head' || node.kind === 'group-pager' ? node.count : ''
-    const page = node.kind === 'group-pager' ? node.pageIndex : ''
-    return `${node.kind}\0${node.key}\0${label}\0${count}\0${page}`
-  }
-  const body = node.row && typeof node.row === 'object'
-    ? reuseRowStamp(stamps, node.key, node.row as Record<string, unknown>).body
-    : JSON.stringify(node.row)
-  return `${node.key}\0${node.depth}\0${node.hasKids ? 1 : 0}\0${node.kidCount}\0${node.fold ? 1 : 0}\0${body}`
-}
-
-function columnLayout(colKeys: string) {
-  const split = colKeys.split('\0')
-  const meta = split[0]?.split(':') ?? []
-  if (meta.length !== 3) return null
-  const pin = Number(meta[0])
-  const padLeft = Number(meta[1])
-  const padRight = Number(meta[2])
-  if (![pin, padLeft, padRight].every(Number.isFinite)) return null
-  return { pin, padLeft, padRight, keys: split.slice(1).filter(Boolean) }
-}
-
-const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, measureRow, colSpan, colKeys, activeRowId }: TableBodyProps) {
-  const paintRef = useContext(TablePaintCtx)
-  const bag = paintRef.current
-  // 同一行数据保持同一份元素。列表刷新会换成新对象，但内容没变就不再画。
-  // 单元格另按列缓存，横滚只创建新进入窗口的列。
-  const rowCache = useRef(new Map<string, { node: TablePaintNode; stamp: string; colKeys: string; activeRowId: string | null; element: ReactNode }>())
-  const cellCache = useRef(new Map<string, { stamp: string; element: ReactNode }>())
-  const stampCache = useRef(new Map<string, RowStampEntry>())
-  const paintedWindow = useRef('')
-  const keptCols = useRef<[Set<string>, Set<string>]>([new Set(), new Set()])
-  const layout = columnLayout(colKeys)
-  const liveRows = new Set<string>()
-  for (const item of items) {
-    const key = nodes[item.index]?.key
-    if (key) liveRows.add(key)
-  }
-  if (rowCache.current.size > liveRows.size + 8) {
-    for (const key of rowCache.current.keys()) if (!liveRows.has(key)) rowCache.current.delete(key)
-    for (const key of stampCache.current.keys()) if (!liveRows.has(key)) stampCache.current.delete(key)
-  }
-  if (layout && layout.keys.length) {
-    const [older, prev] = keptCols.current
-    const cols = new Set(older)
-    for (const key of prev) cols.add(key)
-    for (const key of layout.keys) cols.add(key)
-    evictCellCache(cellCache.current, liveRows, cols)
-    keptCols.current = [prev, new Set(layout.keys)]
-  }
-  const windowKey = `${colKeys}\0${[...liveRows].join('\0')}`
-  useLayoutEffect(() => {
-    if (paintedWindow.current === windowKey) return
-    paintedWindow.current = windowKey
-    paintRef.current.paintSelection?.()
-  }, [paintRef, windowKey])
-  const padRow = items.find((item) => item.size > 1)?.size ?? 37
-  const pad = (height: number, key: string) => height <= 0.25 ? null : (
-    <tr key={key} className="fsdb-table-pad" aria-hidden><td colSpan={colSpan} style={{ height }}><div style={{ height, ['--fsdb-pad-row' as string]: `${padRow}px` }} /></td></tr>
-  )
-  const layoutNow = layout
-  const children: ReactNode[] = []
-  let end = 0
-  for (const item of items) {
-    const node = nodes[item.index]
-    if (!node) continue
-    const top = item.start - margin
-    children.push(pad(top - end, `pad:${node.key}`))
-    const stamp = rowPaintStamp(node, stampCache.current)
-    const hit = rowCache.current.get(node.key)
-    let element: ReactNode
-    if (hit && hit.stamp === stamp && hit.colKeys === colKeys && hit.activeRowId === activeRowId) {
-      element = hit.element
-    } else if (node.kind === 'row' && bag.renderCell && bag.renderRow && layoutNow) {
-      const cells: ReactNode[] = []
-      const paint = (key: string) => {
-        const id = `${node.key}\0${key}`
-        const cached = cellCache.current.get(id)
-        if (cached && cached.stamp === stamp) return cached.element
-        const next = bag.renderCell!(node, key)
-        cellCache.current.set(id, { stamp, element: next })
-        return next
-      }
-      for (let i = 0; i < layoutNow.pin && i < layoutNow.keys.length; i += 1) cells.push(paint(layoutNow.keys[i]!))
-      if (layoutNow.padLeft > 0) cells.push(<td key="pad-left" className="fsdb-col-pad" aria-hidden style={padColBox(layoutNow.padLeft)} />)
-      for (let i = layoutNow.pin; i < layoutNow.keys.length; i += 1) cells.push(paint(layoutNow.keys[i]!))
-      if (layoutNow.padRight > 0) cells.push(<td key="pad-right" className="fsdb-col-pad" aria-hidden style={padColBox(layoutNow.padRight)} />)
-      cells.push(<td key="fill" className="fsdb-col-fill" aria-hidden />)
-      element = bag.renderRow(node, cells)
-    } else {
-      element = bag.renderNode(node)
-    }
-    rowCache.current.set(node.key, { node, stamp, colKeys, activeRowId, element })
-    children.push(isValidElement(element) ? cloneElement(element as ReactElement<ComponentProps<'tr'>>, {
-      key: node.key, 'data-index': item.index, ref: measureRow,
-    } as ComponentProps<'tr'>) : element)
-    end = top + item.size
-  }
-  children.push(pad(totalSize - end, 'pad:end'))
-  return <tbody>{children}</tbody>
-})
-
-function windowedColumnsOf<T>(columns: T[], colWindow: TableColumnSlice) {
-  const next = columns.slice(0, colWindow.pin)
-  for (let i = colWindow.start; i < colWindow.end; i += 1) next.push(columns[i]!)
-  return next
-}
-
-function padColBox(px: number) {
-  const v = `${Math.max(0, Math.round(px))}px`
-  return { width: v, minWidth: v, maxWidth: v }
-}
-
-/** 1px rules at each column edge, so a fast scroll shows the grid instead of a blank slab. */
-function padColumnRules(widths: number[]) {
-  let edge = 0
-  const layers: string[] = []
-  for (const width of widths) {
-    edge += Math.max(0, Math.round(width))
-    if (edge <= 0) continue
-    layers.push(`linear-gradient(to right,transparent ${edge - 1}px,var(--fsdb-pad-line) ${edge - 1}px,var(--fsdb-pad-line) ${edge}px,transparent ${edge}px)`)
-  }
-  return layers.join(',')
-}
-
 const EMPTY_COL_WINDOW: TableColumnSlice = { pin: 0, start: 0, end: 0, padLeft: 0, padRight: 0 }
-
-type TableChromeBag = {
-  paintHeadTh: (col: { key: string }) => ReactNode
-  onPointerDown: ComponentProps<'table'>['onPointerDown']
-  onPointerMove: ComponentProps<'table'>['onPointerMove']
-  onClick: (event: { target: EventTarget | null; currentTarget: EventTarget; clientX: number; clientY: number }) => void
-  onKeyDown?: (event: ReactKeyboardEvent<HTMLTableElement>) => void
-  onMouseOver: ComponentProps<'table'>['onMouseOver']
-  onContextMenu?: ComponentProps<'table'>['onContextMenu']
-}
 
 type TableHoldSnap = {
   columns: { key: string; kind?: string; field?: FieldSpec }[]
@@ -1380,215 +1094,6 @@ type PendingPathQuery = {
   listColumns: string[] | undefined
   activeViewId: string
 }
-
-type WindowedTableProps = {
-  columns: { key: string }[]
-  columnWidths: Record<string, number>
-  columnPinCount: number
-  wrapCells: boolean
-  truncateCells: boolean
-  resizingCol: string | null
-  nodes: TablePaintNode[]
-  error: string
-  pickMode: boolean
-  resetKey: string
-  forceLiveChecks: boolean
-  checkLayoutExtra: string
-  paintRef: RefObject<TablePaintBag>
-  chromeRef: RefObject<TableChromeBag>
-  colWindowRef: RefObject<TableColumnSlice>
-  tableRef: RefObject<HTMLTableElement | null>
-  wrapRef: RefObject<HTMLDivElement | null>
-  stageRef: RefObject<HTMLDivElement | null>
-  checkStackRef: RefObject<HTMLDivElement | null>
-  checkHoverRef: RefObject<string | 'head' | null>
-  paintCheckHover: (next: string | 'head' | null, force?: boolean) => void
-  renderCheckHead: () => ReactNode
-  renderCheckRow: (id: string) => ReactNode
-  onVisibleRange?: (start: number, end: number) => void
-  activeRowId: string | null
-  frozen?: boolean
-  retainedRowId?: string | null
-  retainedRowKey?: string | null
-  retainedColumnKey?: string | null
-  preserveMountedRows?: boolean
-}
-
-export const WindowedTable = memo(function WindowedTable({
-  columns,
-  columnWidths,
-  columnPinCount,
-  wrapCells,
-  truncateCells,
-  resizingCol,
-  nodes,
-  error,
-  pickMode,
-  resetKey,
-  forceLiveChecks,
-  checkLayoutExtra,
-  paintRef,
-  chromeRef,
-  colWindowRef,
-  tableRef,
-  wrapRef,
-  stageRef,
-  checkStackRef,
-  checkHoverRef,
-  paintCheckHover,
-  renderCheckHead,
-  renderCheckRow,
-  onVisibleRange,
-  activeRowId,
-  frozen: _frozen = false,
-  retainedRowId,
-  retainedRowKey,
-  retainedColumnKey,
-  preserveMountedRows,
-}: WindowedTableProps) {
-  const pinnedHead = usePinnedTableHead(tableRef, wrapRef)
-  const dockedViewportRef = useRef<HTMLDivElement>(null)
-  useLayoutEffect(() => {
-    if (dockedViewportRef.current && wrapRef.current) dockedViewportRef.current.scrollLeft = wrapRef.current.scrollLeft
-  }, [pinnedHead, wrapRef])
-  const { virtualizer, items, margin, revealRow } = useTableViewport({
-    nodes, wrapCells, resetKey, layoutKey: JSON.stringify([columns.map((col) => col.key), resizingCol ? null : columnWidths, wrapCells, truncateCells]),
-    tableRef, wrapRef, retainedRowId, retainedRowKey, preserveMountedRows,
-  })
-  paintRef.current.revealRow = revealRow
-  const columnPx = useMemo(
-    () => columns.map((col, index) => tableColumnWidth(col.key, columnWidths[col.key], index < columnPinCount)),
-    [columnPinCount, columnWidths, columns],
-  )
-  const columnKeys = useMemo(() => columns.map((col) => col.key), [columns])
-  const { slice: colWindow, revealColumn } = useTableColumnViewport({
-    keys: columnKeys, widths: columnPx, pinCount: columnPinCount, resetKey, wrapCells,
-    tableRef, wrapRef, retainedKey: retainedColumnKey, resizingKey: resizingCol, preserveMounted: preserveMountedRows,
-  })
-  paintRef.current.revealColumn = revealColumn
-  colWindowRef.current = colWindow
-  const windowedColumns = useMemo(() => windowedColumnsOf(columns, colWindow), [colWindow, columns])
-  const tableColSpan = Math.max(
-    windowedColumns.length + (colWindow.padLeft > 0 ? 1 : 0) + (colWindow.padRight > 0 ? 1 : 0) + 1,
-    1,
-  )
-  const paintedTablePx = useMemo(() => {
-    let sum = Math.max(0, colWindow.padLeft) + Math.max(0, colWindow.padRight)
-    for (let i = 0; i < colWindow.pin; i += 1) sum += columnPx[i] || 0
-    for (let i = colWindow.start; i < colWindow.end; i += 1) sum += columnPx[i] || 0
-    return Math.max(sum, 1)
-  }, [colWindow.end, colWindow.padLeft, colWindow.padRight, colWindow.pin, colWindow.start, columnPx])
-  const padCols = useMemo(() => {
-    const widths: number[] = []
-    for (let i = 0; i < colWindow.pin; i += 1) widths.push(columnPx[i] || 0)
-    if (colWindow.padLeft > 0) widths.push(colWindow.padLeft)
-    for (let i = colWindow.start; i < colWindow.end; i += 1) widths.push(columnPx[i] || 0)
-    if (colWindow.padRight > 0) widths.push(colWindow.padRight)
-    return padColumnRules(widths)
-  }, [colWindow.end, colWindow.padLeft, colWindow.padRight, colWindow.pin, colWindow.start, columnPx])
-  paintRef.current.colSpan = tableColSpan
-  const rangeStart = virtualizer.range?.startIndex ?? 0
-  const rangeEnd = virtualizer.range ? Math.min(nodes.length, virtualizer.range.endIndex + TABLE_WINDOW_OVERSCAN + 1) : 0
-  useEffect(() => { onVisibleRange?.(rangeStart, rangeEnd) }, [onVisibleRange, rangeStart, rangeEnd])
-  const measureRow = useCallback((node: HTMLTableRowElement | null) => virtualizer.measureElement(node), [virtualizer])
-  const checkLayoutKey = [items.map((item) => `${item.index}:${item.start}:${item.size}`).join(','), checkLayoutExtra].join('\0')
-  const chrome = chromeRef.current
-  const paintedColStyle = (index: number) => colWidthStyle(columnPx[index]) ?? padColBox(columnPx[index] || 72)
-
-  return (
-    <div className="tasks-table-stage" ref={stageRef} onMouseLeave={() => paintCheckHover(null)}>
-      {pinnedHead ? createPortal(
-        <div className="fsdb-pinned-head-viewport" ref={dockedViewportRef} style={{ width: pinnedHead.width }}
-          onScroll={(event) => { if (wrapRef.current) wrapRef.current.scrollLeft = event.currentTarget.scrollLeft }}
-          onWheel={(event) => { if (event.deltaX && wrapRef.current) wrapRef.current.scrollLeft += event.deltaX }}>
-          <div className="fsdb-pinned-head-stage" style={{ width: `calc(${pinnedHead.tableWidth}px + var(--fsdb-check-gutter))` }}>
-            <div className="fsdb-pinned-head-check">{renderCheckHead()}</div>
-            <table className="tasks-table is-cols-fixed fsdb-pinned-head-table" style={{ width: pinnedHead.tableWidth, ['--fsdb-pin-title' as string]: `${columnPx[0] || 240}px` }}>
-              <colgroup>
-                {columns.slice(0, colWindow.pin).map((col, index) => <col key={col.key} style={paintedColStyle(index)} />)}
-                {colWindow.padLeft > 0 ? <col key="pad-left" style={padColBox(colWindow.padLeft)} /> : null}
-                {columns.slice(colWindow.start, colWindow.end).map((col, index) => <col key={col.key} style={paintedColStyle(colWindow.start + index)} />)}
-                {colWindow.padRight > 0 ? <col key="pad-right" style={padColBox(colWindow.padRight)} /> : null}
-                <col key="fill" className="fsdb-col-fill" />
-              </colgroup>
-              <thead><tr>
-                {columns.slice(0, colWindow.pin).map((col) => chrome.paintHeadTh(col))}
-                {colWindow.padLeft > 0 ? <th key="pad-left" className="fsdb-col-pad" aria-hidden style={padColBox(colWindow.padLeft)} /> : null}
-                {columns.slice(colWindow.start, colWindow.end).map((col) => chrome.paintHeadTh(col))}
-                {colWindow.padRight > 0 ? <th key="pad-right" className="fsdb-col-pad" aria-hidden style={padColBox(colWindow.padRight)} /> : null}
-                <th key="fill" className="fsdb-col-fill" aria-hidden />
-              </tr></thead>
-            </table>
-          </div>
-        </div>, pinnedHead.host,
-      ) : null}
-      <TableCheckRail
-        tableRef={tableRef}
-        stackRef={checkStackRef}
-        stageRef={stageRef}
-        hoverRef={checkHoverRef}
-        layoutKey={checkLayoutKey}
-        forceLive={forceLiveChecks}
-        paintCheckHover={paintCheckHover}
-        renderHead={renderCheckHead}
-        renderRow={renderCheckRow}
-      />
-      <table
-        ref={tableRef}
-        tabIndex={0}
-        className={`tasks-table${wrapCells ? ' is-wrap' : ''} is-cols-fixed${truncateCells ? ' is-truncate' : ''}${resizingCol ? ' is-col-resize' : ''}`}
-        style={{
-          minWidth: `${paintedTablePx}px`,
-          outline: 'none',
-          ['--fsdb-table-px' as string]: `${paintedTablePx}px`,
-          ['--fsdb-pin-title' as string]: `${columnPx[0] || 240}px`,
-          ...(padCols ? { ['--fsdb-pad-cols' as string]: padCols } : {}),
-        }}
-        onPointerDown={(event) => chromeRef.current.onPointerDown?.(event)}
-        onPointerMove={(event) => chromeRef.current.onPointerMove?.(event)}
-        onClick={(event) => chromeRef.current.onClick?.(event)}
-        onKeyDown={(event) => chromeRef.current.onKeyDown?.(event)}
-        onMouseOver={chrome.onMouseOver}
-        onContextMenu={(event) => chromeRef.current.onContextMenu?.(event)}
-      >
-        <colgroup>
-          {columns.slice(0, colWindow.pin).map((col, index) => (
-            <col key={col.key} style={paintedColStyle(index)} />
-          ))}
-          {colWindow.padLeft > 0 ? <col key="pad-left" style={padColBox(colWindow.padLeft)} /> : null}
-          {columns.slice(colWindow.start, colWindow.end).map((col, index) => (
-            <col key={col.key} style={paintedColStyle(colWindow.start + index)} />
-          ))}
-          {colWindow.padRight > 0 ? <col key="pad-right" style={padColBox(colWindow.padRight)} /> : null}
-          <col key="fill" className="fsdb-col-fill" />
-        </colgroup>
-        <thead>
-          <tr>
-            {columns.slice(0, colWindow.pin).map((col) => chrome.paintHeadTh(col))}
-            {colWindow.padLeft > 0 ? <th key="pad-left" className="fsdb-col-pad" aria-hidden style={padColBox(colWindow.padLeft)} /> : null}
-            {columns.slice(colWindow.start, colWindow.end).map((col) => chrome.paintHeadTh(col))}
-            {colWindow.padRight > 0 ? <th key="pad-right" className="fsdb-col-pad" aria-hidden style={padColBox(colWindow.padRight)} /> : null}
-            <th key="fill" className="fsdb-col-fill" aria-hidden />
-          </tr>
-        </thead>
-        <TablePaintCtx.Provider value={paintRef}>
-          <TableBody
-            nodes={nodes}
-            items={items}
-            margin={margin}
-            totalSize={virtualizer.getTotalSize()}
-            measureRow={measureRow}
-            colSpan={tableColSpan}
-            colKeys={`${colWindow.pin}:${colWindow.padLeft}:${colWindow.padRight}\0${windowedColumns.map((col) => col.key).join('\0')}`}
-            error={error}
-            pickMode={pickMode}
-            activeRowId={activeRowId}
-          />
-        </TablePaintCtx.Provider>
-      </table>
-    </div>
-  )
-})
 
 function overviewStampOf(collectionPath: string, row?: DbRecord | null, id?: string | null) {
   const table = String(row?.tablePath ?? collectionPath).trim()
@@ -3035,23 +2540,22 @@ export function CollectionBrowser({
     for (const col of columns) {
       if (snapshot[col.key] == null) snapshot[col.key] = tableColumnWidth(col.key, columnWidths[col.key], col.key === schema?.labelField)
     }
-    const origin = snapshot[colKey] ?? COL_WIDTH_MIN
-    handle.setPointerCapture(event.pointerId)
-    setResizingCol(colKey)
-    setColumnWidths(snapshot)
-    const onMove = (ev: PointerEvent) => {
-      const next = { ...snapshot, [colKey]: Math.round(Math.min(COL_WIDTH_MAX, Math.max(COL_WIDTH_MIN, origin + ev.clientX - startX))) }
-      setColumnWidths(next)
-    }
-    const onUp = () => {
-      handle.removeEventListener('pointermove', onMove)
-      handle.removeEventListener('pointerup', onUp)
-      handle.removeEventListener('pointercancel', onUp)
-      setResizingCol(null)
-    }
-    handle.addEventListener('pointermove', onMove)
-    handle.addEventListener('pointerup', onUp)
-    handle.addEventListener('pointercancel', onUp)
+    startTableColumnResize({
+      handle,
+      table,
+      colKey,
+      startX,
+      pointerId: event.pointerId,
+      snapshot,
+      isPinnedFirst: colKey === schema?.labelField,
+      minWidth: COL_WIDTH_MIN,
+      maxWidth: COL_WIDTH_MAX,
+      onStart: () => setResizingCol(colKey),
+      onCommit: (nextWidths) => {
+        setColumnWidths(nextWidths)
+        setResizingCol(null)
+      },
+    })
   }
   const groupFields = useMemo(() => groupableFields(schema, tagCatalog), [tagCatalog, schema])
   const activeGroup = groupField(schema, groupBy, tagCatalog)
@@ -3338,8 +2842,35 @@ export function CollectionBrowser({
     checkHoverRef.current = next
   }, [])
 
-  const renderCheckHead = useCallback(() => <RowCheck ids={pickableIds} />, [pickableIds, pickedIds])
-  const renderCheckRow = useCallback((id: string) => <RowCheck id={id} />, [pickedIds])
+  const checkDrawRef = useRef({
+    renderHead: () => <RowCheck ids={pickableIds} />,
+    renderRow: (id: string) => <RowCheck id={id} />,
+    hasPicked: () => pickedIds.length > 0,
+  })
+  checkDrawRef.current.renderHead = () => <RowCheck ids={pickableIds} />
+  checkDrawRef.current.renderRow = (id: string) => <RowCheck id={id} />
+  checkDrawRef.current.hasPicked = () => pickedIds.length > 0
+
+  const checkListenersRef = useRef(new Set<() => void>())
+  const checkVersionRef = useRef(0)
+  const checkStore = useMemo<TableCheckStore>(() => ({
+    subscribe: (listener) => {
+      checkListenersRef.current.add(listener)
+      return () => { checkListenersRef.current.delete(listener) }
+    },
+    getVersion: () => checkVersionRef.current,
+    hasPicked: () => checkDrawRef.current.hasPicked(),
+    renderHead: () => checkDrawRef.current.renderHead(),
+    renderRow: (id: string) => checkDrawRef.current.renderRow(id),
+  }), [])
+
+  useLayoutEffect(() => {
+    checkVersionRef.current += 1
+    for (const listener of checkListenersRef.current) listener()
+  }, [pickableIds, pickedIds])
+
+  const renderCheckHead = useCallback(() => checkDrawRef.current.renderHead(), [])
+  const renderCheckRow = useCallback((id: string) => checkDrawRef.current.renderRow(id), [])
 
   const listedSelected = detailId ? items.find((item) => item.id === detailId) : undefined
   const selected = useMemo(() => {
@@ -6029,11 +5560,19 @@ export function CollectionBrowser({
     )
   }
 
+  const columnsByKey = useMemo(() => new Map(columns.map((item) => [item.key, item])), [columns])
+  const compositeCellKeys = useMemo(() => {
+    const keys = new Set<string>()
+    if (chrome?.cells) for (const key of Object.keys(chrome.cells)) keys.add(key)
+    return keys
+  }, [chrome?.cells])
+
   function renderPaintCell(node: TablePaintNode, colKey: string) {
     if (node.kind !== 'row') return null
     const held = tableHoldRef.current
-    const paintColumns = (held && held.nodes !== EMPTY_HOLD_NODES && held.columns.length ? held.columns : columns) as typeof columns
-    const col = paintColumns.find((item) => item.key === colKey)
+    const col = held && held.nodes !== EMPTY_HOLD_NODES && held.columns.length
+      ? (held.columns as typeof columns).find((item) => item.key === colKey)
+      : columnsByKey.get(colKey)
     if (!col) return null
     return paintLiveCell(node.row, col, node.depth, node.hasKids, node.kidCount, node.key)
   }
@@ -7145,6 +6684,7 @@ export function CollectionBrowser({
       renderNode: renderPaintNode,
       renderCell: renderPaintCell,
       renderRow: renderPaintRow,
+      compositeCells: compositeCellKeys,
       paintSelection: paintCellRangeClasses,
     }
   }
@@ -7272,6 +6812,7 @@ export function CollectionBrowser({
                   paintCheckHover={paintCheckHover}
                   renderCheckHead={renderCheckHead}
                   renderCheckRow={renderCheckRow}
+                  checkStore={checkStore}
                   onVisibleRange={onVisibleRange}
                   frozen={Boolean(held)}
                   activeRowId={detailId}

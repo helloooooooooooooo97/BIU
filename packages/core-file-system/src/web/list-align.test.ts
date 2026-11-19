@@ -379,7 +379,10 @@ test('table stage does not take width 100% beside the check rail', () => {
   assert.match(css, /\.fsdb-page \.tasks-table-stage > \.tasks-table\{[^}]*width:auto/)
   assert.match(css, /\.fsdb-page \.tasks-table-stage > \.tasks-table\.is-cols-fixed\{[^}]*table-layout:fixed/)
   assert.match(css, /\.fsdb-page \.tasks-table-stage > \.tasks-table\.is-cols-fixed\{[^}]*width:max\(var\(--fsdb-table-px,0px\),calc\(100cqw - var\(--fsdb-check-gutter\)\)\)/)
-  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  const browser = [
+    readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8'),
+    readFileSync(resolve(import.meta.dirname, './windowed-table.tsx'), 'utf8'),
+  ].join('\n')
   assert.doesNotMatch(browser, /style=\{\{\s*width: '100%',\s*minWidth: `\$\{paintedTablePx\}px`/)
   assert.match(browser, /minWidth: `\$\{paintedTablePx\}px`/)
   assert.match(browser, /'--fsdb-table-px' as string\]: `\$\{paintedTablePx\}px`/)
@@ -387,7 +390,10 @@ test('table stage does not take width 100% beside the check rail', () => {
 })
 
 test('table columns resize with a Super Tag blue highlight on the divider', () => {
-  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  const browser = [
+    readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8'),
+    readFileSync(resolve(import.meta.dirname, './windowed-table.tsx'), 'utf8'),
+  ].join('\n')
   assert.match(browser, /data-testid="fsdb-col-resizer"/)
   assert.match(browser, /startColResize/)
   assert.match(browser, /columnWidths/)

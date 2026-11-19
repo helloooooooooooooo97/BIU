@@ -41,11 +41,10 @@ export function usePinnedTableHead(tableRef: RefObject<HTMLTableElement | null>,
     }
     const observer = new ResizeObserver(schedule)
     for (const node of [page, wrap, table, toolbar, table.tHead, page.querySelector(':scope > .app-pane-in')]) if (node) observer.observe(node)
-    const mutation = new MutationObserver(schedule); mutation.observe(table, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] })
     page.addEventListener('scroll', update, { passive: true }); page.addEventListener('animationend', schedule)
     wrap.addEventListener('scroll', syncX, { passive: true }); measure()
     return () => {
-      cancelAnimationFrame(frame); observer.disconnect(); mutation.disconnect()
+      cancelAnimationFrame(frame); observer.disconnect()
       page.removeEventListener('scroll', update); page.removeEventListener('animationend', schedule); wrap.removeEventListener('scroll', syncX)
       wrap.classList.remove('has-docked-head'); table.tHead?.removeAttribute('aria-hidden'); host.remove()
     }
