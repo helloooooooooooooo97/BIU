@@ -130,13 +130,34 @@ function stampChunk(chunk: string, id: string) {
   return `${first} <!-- biu:${id} -->${rest}`
 }
 
-export function markdownWithBlockIds(editor: Editor) {
+const chunkCache = new WeakMap<PmNode, string>()
+
+export function cachedBlockChunks<T extends object>(
+  nodes: readonly T[],
+  cache: WeakMap<T, string>,
+  serialize: (node: T) => string,
+) {
+  let fresh = 0
   const parts: string[] = []
-  editor.state.doc.forEach((node) => {
+  for (const node of nodes) {
+    let chunk = cache.get(node)
+    if (chunk == null) {
+      chunk = serialize(node)
+      cache.set(node, chunk)
+      fresh += 1
+    }
+    if (chunk) parts.push(chunk)
+  }
+  return { markdown: parts.join('\n\n'), fresh }
+}
+
+export function markdownWithBlockIds(editor: Editor) {
+  const nodes: PmNode[] = []
+  editor.state.doc.forEach((node) => nodes.push(node))
+  return cachedBlockChunks(nodes, chunkCache, (node) => {
     const id = nodeBlockId(node) || createPageBlockId()
-    parts.push(stampChunk(serializeChild(editor, node), id))
-  })
-  return parts.filter(Boolean).join('\n\n')
+    return stampChunk(serializeChild(editor, node), id)
+  }).markdown
 }
 
 export function focusBlockById(editor: Editor, id: string) {

@@ -113,6 +113,14 @@ export function fieldDraftValue(field: FieldSpec, value: unknown): string {
   return catalog
 }
 
+export function sameStringDraft(prev: Record<string, string>, next: Record<string, string>) {
+  const prevKeys = Object.keys(prev)
+  const nextKeys = Object.keys(next)
+  if (prevKeys.length !== nextKeys.length) return false
+  for (const key of prevKeys) if (prev[key] !== next[key]) return false
+  return true
+}
+
 export function draftFromRecord(schema: CollectionSchema, row: DbRecord, bodyKey: string | null | undefined, detailBody: unknown) {
   const next: Record<string, string> = {}
   for (const [key, field] of Object.entries(schema.fields)) {

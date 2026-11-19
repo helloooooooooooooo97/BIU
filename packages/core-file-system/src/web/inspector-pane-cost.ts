@@ -1,6 +1,6 @@
-/** 检查器里的表是 embed，不跑 20 秒整表轮询。主区列表仍是 20 秒。 */
-export function listReloadInterval(nested: boolean) {
-  return nested ? 0 : 20_000
+/** 列表不再定时整表刷新。检查器里的表和主区表都是 0。 */
+export function listReloadInterval(_nested = false) {
+  return 0
 }
 
 /** 藏在检查器里的页不接键盘。主区表始终接。 */

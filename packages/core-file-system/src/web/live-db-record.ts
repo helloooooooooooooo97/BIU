@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { DbRecord } from '@biu/type-file-system'
-import { parseFsdbChange } from '@biu/type-file-system'
+import { parseFsdbChange, type FsdbChangeDetail } from '@biu/type-file-system'
 import { hydrateRecordViewCatalog } from './record-view-catalog.ts'
 
 export async function readDbRecord(path: string): Promise<DbRecord | null> {
@@ -17,6 +17,13 @@ export async function readDbRecord(path: string): Promise<DbRecord | null> {
 }
 
 /** Agent / 其它页改完记录后，属性沙箱自己再拉一次，不指望父组件把 record 换掉。 */
+export function liveRecordShouldPull(change: FsdbChangeDetail, collectionPath: string, recordId: string) {
+  const want = `${collectionPath}/${recordId}`
+  if (change.scope === 'views') return Boolean(change.path) && change.path === want
+  if (change.scope !== 'records' && change.scope !== 'content') return false
+  return change.path === want
+}
+
 export function useLiveDbRecord(collectionPath: string, record: DbRecord) {
   const recordId = String(record.id ?? '').trim()
   const [live, setLive] = useState(record)
@@ -50,6 +57,7 @@ export function useLiveDbRecord(collectionPath: string, record: DbRecord) {
         return
       }
       if (change.scope === 'content' && change.path && change.path !== want) return
+      if (!liveRecordShouldPull(change, collectionPath, recordId)) return
       pull()
     }
     window.addEventListener('fsdb:change', onChange)

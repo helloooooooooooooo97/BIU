@@ -25,7 +25,7 @@ import {
 import type { CollectionActionInfo, CollectionInfo, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
 import { emitFsdbChange, fsdbRecordChangeReloadsList, normalizeSchemaValue, parseFsdbChange } from '@biu/type-file-system'
 import { subscribeHistoryNavigation } from './history-nav.ts'
-import { inspectorPaneAcceptsKeys, listReloadInterval } from './inspector-pane-cost.ts'
+import { inspectorPaneAcceptsKeys } from './inspector-pane-cost.ts'
 import type { CollectionChrome, CollectionRowViewType, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
 import { getSidebarPersist, parseAppPath, setSidebarPersist, SIDEBAR_PERSIST } from '@biu/web-session-view'
 import { BoolBox } from '@biu/biu-ui/bool-box'
@@ -92,6 +92,7 @@ import {
   BoolCell,
   DefaultCell,
   draftFromRecord,
+  sameStringDraft,
   fieldActionId,
   FieldGlyph,
   FilePreview,
@@ -2767,16 +2768,8 @@ export function CollectionBrowser({
     }
     window.addEventListener('fsdb:change', onChange)
     window.addEventListener('fsdb:shares-change', onChange)
-    const pollEvery = listReloadInterval(nested)
-    const timer = pollEvery
-      ? window.setInterval(() => {
-          if (detailIdRef.current) return
-          void reloadRef.current()
-        }, pollEvery)
-      : 0
     return () => {
       window.clearTimeout(debounce)
-      window.clearInterval(timer)
       window.removeEventListener('fsdb:change', onChange)
       window.removeEventListener('fsdb:shares-change', onChange)
     }
@@ -3529,7 +3522,7 @@ export function CollectionBrowser({
     if (!detailId || !schema) return
     if (detailRow?.id !== detailId) return
     const next = draftFromRecord(schema, detailRow, bodyKey, detailBody)
-    setDraft((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next))
+    setDraft((prev) => (sameStringDraft(prev, next) ? prev : next))
     hydratedDetail.current = detailId
   }, [bodyKey, detailBody, detailId, detailRow, schema])
 
@@ -4310,9 +4303,9 @@ export function CollectionBrowser({
       }
       const path = `${dataPath}/${row.id}`
       await tableEditHistory.edit(path, content, async () => {
-        const current = await readJson<{ value?: DbRecord }>(`/api/db/read?path=${encodeURIComponent(path)}`, undefined, { fresh: true })
-        if (!current.value) throw new Error('记录不存在，无法保存编辑')
-        return current.value
+        const listed = itemsRef.current.find((item) => item.id === row.id)
+        const open = detailRowRef.current?.id === row.id ? detailRowRef.current : null
+        return listed ?? open ?? row
       }, async (patch) => {
         const data = await readJson<{ value?: DbRecord }>('/api/db/update', {
           method: 'POST',
