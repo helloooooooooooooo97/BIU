@@ -65,7 +65,7 @@ import {
 } from './fields.ts'
 import { createdRowGroupKey, placeCreatedRow } from './group-insert.ts'
 import { seedGroupRecord } from './group-create.ts'
-import { TableEditHistory, tableEditHistoryKey } from './table-edit-history.ts'
+import { TableEditHistory, tableEditHistoryKey, tableEditHistoryOwned, tableNativeUndoModifier } from './table-edit-history.ts'
 import { collectionListCachePath } from './list-cache-scope.ts'
 import { listAttributeGroups, listGroupedCollection } from './group-list.ts'
 import { TREE_HAS_KIDS, listTreeChildren, listTreeCollection, treeRootFilter } from './tree-list.ts'
@@ -5570,17 +5570,33 @@ export function CollectionBrowser({
       if (sendTableSelectionToChat()) event.preventDefault()
       return
     }
-    if (tableKeyFromEditingTarget(event.target)) return
     const historyAction = tableEditHistoryKey(event)
     if (historyAction) {
       const hit = event.target instanceof Element ? event.target : null
-      if (!hit || hit.closest('.fsdb-page') !== pageRef.current || !hit.closest('.tasks-table')) return
-      if (hit.closest('dialog, [role="dialog"], [role="menu"], [role="listbox"]')) return
-      // Claim the key even when the stack is empty, so an outer table cannot consume it.
-      event.preventDefault()
-      void tableEditHistory[historyAction]().catch((err) => setError(String(err)))
-      return
+      const page = hit?.closest('.fsdb-page') ?? null
+      const field = event.target instanceof HTMLElement ? event.target : null
+      const apple = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent)
+      const owned = tableEditHistoryOwned({
+        inCellPop: Boolean(hit?.closest('.fsdb-cell-pop')),
+        cellPopOpen: Boolean(cellPop),
+        inThisTable: Boolean(hit && page === pageRef.current && hit.closest('.tasks-table')),
+        foreignPage: Boolean(page && page !== pageRef.current),
+        foreignEditor: Boolean(hit?.closest('.page-editor, .composer, .chat-composer-dock, .app-side-bar, .tasks-search-wrap')),
+        inDialog: Boolean(hit?.closest('dialog, [role="dialog"], [role="menu"], [role="listbox"]')),
+        nativeField: Boolean(field && (field.tagName === 'INPUT' || field.tagName === 'TEXTAREA' || field.tagName === 'SELECT' || field.isContentEditable)),
+        nativeUndoModifier: tableNativeUndoModifier(event, apple),
+        hasCell: Boolean(cellPickRef.current || cellRangeRef.current),
+      })
+      if (!owned) {
+        if (tableKeyFromEditingTarget(event.target)) return
+      } else {
+        // Claim the key even when the stack is empty, so an outer table cannot consume it.
+        event.preventDefault()
+        void tableEditHistory[historyAction]().catch((err) => setError(String(err)))
+        return
+      }
     }
+    if (tableKeyFromEditingTarget(event.target)) return
     const titleCursor = cellPickRef.current
     const titleOpen = titleCursor
       ? tableTitleOpenWhere({

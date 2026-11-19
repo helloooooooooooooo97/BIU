@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { TableEditHistory, tableEditHistoryKey, type TableEditPatch } from './table-edit-history.ts'
+import { TableEditHistory, tableEditHistoryKey, tableEditHistoryOwned, tableNativeUndoModifier, type TableEditPatch } from './table-edit-history.ts'
 
 function fixture(limit = 100) {
   const history = new TableEditHistory(limit)
@@ -137,4 +137,15 @@ test('keyboard mapping supports Ctrl/Cmd Z, Y and Shift Z without intercepting c
   assert.equal(tableEditHistoryKey({ ...event, ctrlKey: false }), null)
   assert.equal(tableEditHistoryKey({ ...event, altKey: true }), null)
   assert.equal(tableEditHistoryKey({ ...event, isComposing: true }), null)
+  assert.equal(tableNativeUndoModifier(event, true), false)
+  assert.equal(tableNativeUndoModifier({ ...event, ctrlKey: false, metaKey: true }, true), true)
+  assert.equal(tableNativeUndoModifier(event, false), true)
+  const idle = { inCellPop: false, cellPopOpen: false, inThisTable: false, foreignPage: false, foreignEditor: false, inDialog: false, nativeField: false, nativeUndoModifier: false, hasCell: false }
+  assert.equal(tableEditHistoryOwned({ ...idle, inCellPop: true, cellPopOpen: true, inDialog: true }), true)
+  assert.equal(tableEditHistoryOwned({ ...idle, inCellPop: true, cellPopOpen: true, nativeField: true, nativeUndoModifier: true }), false)
+  assert.equal(tableEditHistoryOwned({ ...idle, inCellPop: true, cellPopOpen: true, nativeField: true, nativeUndoModifier: false }), true)
+  assert.equal(tableEditHistoryOwned({ ...idle, hasCell: true }), true)
+  assert.equal(tableEditHistoryOwned({ ...idle, hasCell: true, nativeField: true }), false)
+  assert.equal(tableEditHistoryOwned({ ...idle, inThisTable: true }), true)
+  assert.equal(tableEditHistoryOwned({ ...idle, inThisTable: false, foreignPage: true, hasCell: true }), false)
 })

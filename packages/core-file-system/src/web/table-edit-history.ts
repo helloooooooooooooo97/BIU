@@ -86,3 +86,32 @@ export function tableEditHistoryKey(event: {
   if (key === 'y' && !event.shiftKey) return 'redo'
   return null
 }
+
+/** Mac 用 ⌘，其它系统用 Ctrl。文本框里这个组合留给浏览器自己撤销输入。 */
+export function tableNativeUndoModifier(event: { ctrlKey: boolean; metaKey: boolean }, apple: boolean) {
+  return apple ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
+}
+
+/**
+ * 单元格浮层挂在表格外，而且带 dialog 角色。
+ * 编辑中、关掉浮层后焦点回到页面空白处，都仍算这张表的撤销。
+ * 其它输入框（例如页面外的文本框）不抢走系统撤销。
+ */
+export function tableEditHistoryOwned(input: {
+  inCellPop: boolean
+  cellPopOpen: boolean
+  inThisTable: boolean
+  foreignPage: boolean
+  foreignEditor: boolean
+  inDialog: boolean
+  nativeField: boolean
+  nativeUndoModifier: boolean
+  hasCell: boolean
+}) {
+  if (input.nativeField && input.nativeUndoModifier) return false
+  if (input.inCellPop) return input.cellPopOpen
+  if (input.inDialog) return false
+  if (input.inThisTable) return true
+  if (input.foreignPage || input.foreignEditor || input.nativeField) return false
+  return input.hasCell
+}
