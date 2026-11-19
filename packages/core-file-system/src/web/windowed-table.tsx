@@ -87,6 +87,53 @@ const ZERO_VERSION = () => 0
 
 type CheckSlot = { kind: 'head' | 'gap' | 'row'; id?: string; top: number; h: number }
 
+function rowTopInTable(table: HTMLTableElement, tr: HTMLTableRowElement) {
+  let top = tr.offsetTop
+  let parent = tr.offsetParent
+  while (parent instanceof HTMLElement && parent !== table && table.contains(parent)) {
+    top += parent.offsetTop + parent.clientTop
+    parent = parent.offsetParent
+  }
+  return top + table.clientTop
+}
+
+export function measureTableCheckSlots(table: HTMLTableElement): CheckSlot[] | null {
+  if (!table.offsetHeight) return null
+  const next: CheckSlot[] = []
+  const head = table.tHead?.rows[0]
+  if (head && head.offsetHeight > 0) next.push({ kind: 'head', top: 0, h: head.offsetHeight })
+  const rows = table.tBodies[0]?.rows
+  if (rows) {
+    for (let i = 0; i < rows.length; i += 1) {
+      const tr = rows[i]!
+      if (
+        tr.classList.contains('fsdb-table-pad') ||
+        tr.classList.contains('fsdb-group-row') ||
+        tr.classList.contains('fsdb-group-pager')
+      ) {
+        continue
+      }
+      const id = tr.dataset.recordId
+      if (!id) continue
+      const h = tr.offsetHeight
+      if (h <= 0) continue
+      next.push({ kind: 'row', id, top: rowTopInTable(table, tr), h })
+    }
+  }
+  return next
+}
+
+function sameCheckSlots(a: CheckSlot[] | null, b: CheckSlot[] | null) {
+  if (a === b) return true
+  if (!a || !b || a.length !== b.length) return false
+  for (let i = 0; i < a.length; i += 1) {
+    const x = a[i]!
+    const y = b[i]!
+    if (x.kind !== y.kind || x.id !== y.id || x.top !== y.top || x.h !== y.h) return false
+  }
+  return true
+}
+
 export const TableCheckRail = memo(function TableCheckRail({
   tableRef,
   stackRef,
@@ -116,6 +163,7 @@ export const TableCheckRail = memo(function TableCheckRail({
 }) {
   const [live, setLive] = useState(false)
   const [headHeight, setHeadHeight] = useState(37)
+  const [domSlots, setDomSlots] = useState<CheckSlot[] | null>(null)
   // Subscribe to pick store locally so checkbox toggles never force WindowedTable to re-render.
   useSyncExternalStore(
     checkStore ? checkStore.subscribe : NOOP_SUBSCRIBE,
@@ -132,35 +180,61 @@ export const TableCheckRail = memo(function TableCheckRail({
     return () => stage.removeEventListener('mouseenter', arm)
   }, [live, stageRef])
 
-  // Only measure thead height once (and on thead resize), never loop getBoundingClientRect over tbody rows on scroll.
-  useEffect(() => {
-    if (!active) return
-    const head = tableRef.current?.tHead
-    if (!head) return
-    const readHead = () => {
-      const h = head.offsetHeight
-      if (h > 0) setHeadHeight((prev) => (prev === h ? prev : h))
+  const syncDomSlots = useCallback(() => {
+    const table = tableRef.current
+    if (!table || !active) {
+      setDomSlots((prev) => (prev ? null : prev))
+      return
     }
-    readHead()
-    const ro = new ResizeObserver(readHead)
-    ro.observe(head)
-    return () => ro.disconnect()
+    const head = table.tHead?.offsetHeight ?? 0
+    if (head > 0) setHeadHeight((prev) => (prev === head ? prev : head))
+    const measured = measureTableCheckSlots(table)
+    if (!measured) return
+    setDomSlots((prev) => (sameCheckSlots(prev, measured) ? prev : measured))
   }, [active, tableRef])
 
-  // Derive row slot coordinates directly from TanStack virtual items — zero DOM reads during scroll.
-  const checkSlots = useMemo<CheckSlot[]>(() => {
+  // Sync directly from actual tr.offsetTop / tr.offsetHeight after commit so grouped headers,
+  // pagers, borders, and wrapped rows never drift from the left checkbox rail (zero getBoundingClientRect).
+  useLayoutEffect(() => {
+    syncDomSlots()
+  }, [syncDomSlots, items, nodes, margin])
+
+  // Observe table size changes once without rebinding on scroll.
+  useEffect(() => {
+    if (!active) return
+    const table = tableRef.current
+    if (!table) return
+    let raf = 0
+    const schedule = () => {
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        syncDomSlots()
+      })
+    }
+    const ro = new ResizeObserver(schedule)
+    ro.observe(table)
+    return () => {
+      cancelAnimationFrame(raf)
+      ro.disconnect()
+    }
+  }, [active, syncDomSlots, tableRef])
+
+  // Fallback coordinates from TanStack virtual items when DOM layout height is unavailable (e.g. JSDOM).
+  const virtualSlots = useMemo<CheckSlot[]>(() => {
     if (!active) return []
     const slots: CheckSlot[] = [{ kind: 'head', top: 0, h: headHeight }]
     for (const item of items) {
       const node = nodes[item.index]
-      if (!node) continue
+      if (!node || node.kind !== 'row') continue
       const top = headHeight + (item.start - margin)
       const h = item.size
-      if (node.kind === 'row') slots.push({ kind: 'row', id: String(node.row.id), top, h })
-      else slots.push({ kind: 'gap', top, h })
+      slots.push({ kind: 'row', id: String(node.row.id), top, h })
     }
     return slots
   }, [active, headHeight, items, margin, nodes])
+
+  const checkSlots = active ? (domSlots ?? virtualSlots) : []
 
   useLayoutEffect(() => {
     paintCheckHover(hoverRef.current, true)

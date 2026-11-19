@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore, type MouseEvent } from 'react'
+import { lazy, memo, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import { ChatCount } from '@biu/biu-ui/chat-count'
 import { SidebarFold } from '@biu/biu-ui/sidebar-fold'
 import {
@@ -11,7 +11,7 @@ import {
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { SidebarRow, SidebarRowMain } from '@biu/web-session-view/sidebar-row'
-import type { CollectionInfo, CollectionSchema, DbRecord } from '@biu/type-file-system'
+import { parseFsdbChange, type CollectionInfo, type CollectionSchema, type DbRecord } from '@biu/type-file-system'
 import { groupField, groupRecords, parentFieldKey, treeChildren } from './fields.ts'
 import { builtinAllViewId, isReadOnlyViewId, type DataScope } from '../catalog-views.ts'
 import { dataSidebarKind, isRecordTreeCollection, isSystemCollection, sortDataCollections } from './database-path.ts'
@@ -670,22 +670,50 @@ export const DataSidebar = memo(function DataSidebar({
   }, [starredPathsKey, tablePathsKey])
   useEffect(() => {
     const onChange = (event: Event) => {
-      const detail = (event as CustomEvent<{ views?: boolean; tags?: boolean }>).detail
-      if (detail?.tags) return
-      setViewsTick((n) => n + 1)
-      if (detail?.views) return
-      previewCache.clear()
+      const change = parseFsdbChange(event)
+      if (change.scope === 'tags') return
+      if (change.scope === 'views') {
+        setViewsTick((n) => n + 1)
+        return
+      }
+      const changedPath = 'path' in change ? (change.path ?? '') : ''
+      if (!changedPath) {
+        previewCache.clear()
+      } else {
+        for (const key of [...previewCache.keys()]) {
+          const tablePath = key.split('\0')[0] ?? ''
+          if (!tablePath || changedPath === tablePath || changedPath.startsWith(`${tablePath}/`)) {
+            previewCache.delete(key)
+          }
+        }
+      }
     }
     window.addEventListener('fsdb:change', onChange)
     return () => window.removeEventListener('fsdb:change', onChange)
   }, [])
 
-  function viewsFor(path: string) {
+  const viewsByPath = useMemo(() => {
     void viewsTick
+    const map = new Map<string, SavedView[]>()
+    for (const table of listedTables) {
+      const path = table.path
+      const stored = loadViews(path)
+      const user = path === collectionPath && views.length ? mergeSavedViewLists(stored, views) : stored
+      map.set(path, paintCollectionViews(path, tables, user))
+    }
+    return map
+  }, [collectionPath, listedTables, tables, views, viewsTick])
+
+  function viewsFor(path: string) {
+    const hit = viewsByPath.get(path)
+    if (hit) return hit
     const stored = loadViews(path)
     const user = path === collectionPath && views.length ? mergeSavedViewLists(stored, views) : stored
     return paintCollectionViews(path, tables, user)
   }
+
+  const viewsForRef = useRef(viewsFor)
+  viewsForRef.current = viewsFor
 
   const starredRows = starredViews.flatMap((item) => {
     const table = listedTables.find((row) => row.path === item.path)
@@ -771,7 +799,8 @@ export const DataSidebar = memo(function DataSidebar({
       if (cancelled) return
       void Promise.all(
         paths.map((path) => {
-          const view = viewsFor(path).find((row) => row.id === builtinAllViewId(path)) ?? viewsFor(path)[0]
+          const listed = viewsForRef.current(path)
+          const view = listed.find((row) => row.id === builtinAllViewId(path)) ?? listed[0]
           if (!view) return Promise.resolve()
           const key = previewCacheKey(path, view)
           if (previewCache.get(key)?.items.length) return Promise.resolve()
@@ -790,7 +819,7 @@ export const DataSidebar = memo(function DataSidebar({
       cancelled = true
       stop()
     }
-  }, [favOpen, starredTreePreviewKey, tables, views, collectionPath])
+  }, [favOpen, starredTreePreviewKey])
 
   function toggleStar(path: string, viewId: string) {
     const view = viewsFor(path).find((item) => item.id === viewId)

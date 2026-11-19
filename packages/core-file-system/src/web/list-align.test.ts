@@ -518,3 +518,114 @@ test('share page portals sit above the share overlay', () => {
   assert.match(css, /\.fsdb-share-page \.fsdb-right-body:has\(\.tasks-main \.fsdb-workspace\)\{overflow:auto\}/)
   assert.doesNotMatch(css, /\.fsdb-share-page \.tasks-table\{width/)
 })
+
+test('measureTableCheckSlots aligns grouped rows directly from tr.offsetTop and skips group headers/pagers', async () => {
+  const { measureTableCheckSlots } = await import('./windowed-table.tsx')
+  const table = document.createElement('table')
+  const thead = document.createElement('thead')
+  const headTr = document.createElement('tr')
+  thead.appendChild(headTr)
+  const tbody = document.createElement('tbody')
+  const padTr = document.createElement('tr')
+  padTr.className = 'fsdb-table-pad'
+  const groupHead = document.createElement('tr')
+  groupHead.className = 'fsdb-group-row'
+  const row1 = document.createElement('tr')
+  row1.dataset.recordId = 'r-1'
+  const groupPager = document.createElement('tr')
+  groupPager.className = 'fsdb-group-pager'
+  const row2 = document.createElement('tr')
+  row2.dataset.recordId = 'r-2'
+  tbody.append(padTr, groupHead, row1, groupPager, row2)
+  table.append(thead, tbody)
+
+  const defineBox = (el: HTMLElement, top: number, height: number, parent?: HTMLElement | null) => {
+    Object.defineProperty(el, 'offsetTop', { configurable: true, value: top })
+    Object.defineProperty(el, 'offsetHeight', { configurable: true, value: height })
+    if (parent !== undefined) Object.defineProperty(el, 'offsetParent', { configurable: true, value: parent })
+  }
+  Object.defineProperty(table, 'clientTop', { configurable: true, value: 1 })
+  defineBox(table, 0, 260)
+  defineBox(headTr, 0, 36, table)
+  defineBox(padTr, 36, 40, table)
+  defineBox(groupHead, 76, 33, table)
+  defineBox(row1, 109, 37, table)
+  defineBox(groupPager, 146, 41, table)
+  defineBox(row2, 187, 39, table)
+
+  assert.deepEqual(measureTableCheckSlots(table), [
+    { kind: 'head', top: 0, h: 36 },
+    { kind: 'row', id: 'r-1', top: 110, h: 37 },
+    { kind: 'row', id: 'r-2', top: 188, h: 39 },
+  ])
+})
+
+test('dragging a pinned header resize handle updates both pinned header and main table columns immediately', async () => {
+  const { startTableColumnResize } = await import('./table-col-resize.ts')
+  const mainTable = document.createElement('table')
+  mainTable.style.setProperty('--fsdb-table-px', '360px')
+  const mainColGroup = document.createElement('colgroup')
+  const mainCol = document.createElement('col')
+  mainCol.dataset.colKey = 'title'
+  mainCol.style.width = '240px'
+  mainColGroup.appendChild(mainCol)
+  mainTable.appendChild(mainColGroup)
+
+  const pinnedStage = document.createElement('div')
+  pinnedStage.className = 'fsdb-pinned-head-stage'
+  const pinnedTable = document.createElement('table')
+  pinnedTable.className = 'fsdb-pinned-head-table'
+  const pinnedColGroup = document.createElement('colgroup')
+  const pinnedCol = document.createElement('col')
+  pinnedCol.dataset.colKey = 'title'
+  pinnedCol.style.width = '240px'
+  pinnedColGroup.appendChild(pinnedCol)
+  const handle = document.createElement('span')
+  pinnedTable.append(pinnedColGroup, handle)
+  pinnedStage.appendChild(pinnedTable)
+
+  const queued: FrameRequestCallback[] = []
+  const prevRaf = globalThis.requestAnimationFrame
+  const prevCancel = globalThis.cancelAnimationFrame
+  globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {
+    queued.push(cb)
+    return queued.length
+  }
+  globalThis.cancelAnimationFrame = () => {}
+
+  let committed: Record<string, number> | null = null
+  try {
+    startTableColumnResize({
+      handle,
+      table: mainTable,
+      pinnedTable,
+      colKey: 'title',
+      startX: 100,
+      pointerId: 1,
+      snapshot: { title: 240 },
+      isPinnedFirst: true,
+      onCommit: (next) => {
+        committed = next
+      },
+    })
+    const move = new Event('pointermove') as PointerEvent
+    Object.defineProperty(move, 'clientX', { value: 160 })
+    handle.dispatchEvent(move)
+    while (queued.length) queued.shift()!(0)
+
+    // Before pointerup, BOTH main table and pinned header columns update immediately
+    assert.equal(mainCol.style.width, '300px')
+    assert.equal(mainTable.style.minWidth, '420px')
+    assert.equal(mainTable.style.getPropertyValue('--fsdb-pin-title'), '300px')
+    assert.equal(pinnedCol.style.width, '300px')
+    assert.equal(pinnedTable.style.width, '420px')
+    assert.equal(pinnedTable.style.getPropertyValue('--fsdb-pin-title'), '300px')
+    assert.equal(committed, null)
+
+    handle.dispatchEvent(new Event('pointerup'))
+    assert.deepEqual(committed, { title: 300 })
+  } finally {
+    globalThis.requestAnimationFrame = prevRaf
+    globalThis.cancelAnimationFrame = prevCancel
+  }
+})

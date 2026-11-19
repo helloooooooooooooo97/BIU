@@ -3,6 +3,7 @@ import { COL_WIDTH_MAX, COL_WIDTH_MIN } from './saved-view.ts'
 export type ColumnResizeOptions = {
   handle: HTMLElement
   table: HTMLTableElement
+  pinnedTable?: HTMLTableElement | null
   colKey: string
   startX: number
   pointerId: number
@@ -27,6 +28,7 @@ function escapeAttr(value: string) {
 export function startTableColumnResize({
   handle,
   table,
+  pinnedTable: pinnedTableProp,
   colKey,
   startX,
   pointerId,
@@ -59,7 +61,12 @@ export function startTableColumnResize({
     table.style.setProperty('--fsdb-table-px', `${nextTablePx}px`)
     if (isPinnedFirst) table.style.setProperty('--fsdb-pin-title', px)
 
-    const pinnedTable = toolbar?.querySelector<HTMLTableElement>('.fsdb-pinned-head-table') ?? null
+    const pinnedCandidate =
+      pinnedTableProp ??
+      handle.closest<HTMLTableElement>('.fsdb-pinned-head-table') ??
+      toolbar?.querySelector<HTMLTableElement>('.fsdb-pinned-head-table') ??
+      null
+    const pinnedTable = pinnedCandidate && pinnedCandidate !== table ? pinnedCandidate : null
     if (pinnedTable) {
       const pinnedCol = pinnedTable.querySelector<HTMLTableColElement>(colSelector)
       if (pinnedCol) {

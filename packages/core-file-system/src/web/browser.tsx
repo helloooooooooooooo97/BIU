@@ -171,7 +171,7 @@ import { paintCollectionViews } from './collection-nav.ts'
 import { TABLE_WINDOW_OVERSCAN, tableColumnWidth, tablePinColClass, tablePinCount, type TableColumnSlice } from './table-window.ts'
 import { bindTableDragScroll, tableVertScroller } from './table-drag-scroll.ts'
 import { forgetPreviewTotalsForPath, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady } from './sidebar-preview.ts'
-import { publishDataSidebar, type DataSidebarLive } from './data-sidebar-host.ts'
+import { publishDataSidebar, releaseDataSidebar, type DataSidebarLive } from './data-sidebar-host.ts'
 import { builtinAllViewId, catalogLockFilters, collectionNoun, displayNameForView, isBuiltinAllViewId, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stampRecordId, stampRowOpenTarget, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, moveInspectorRecordsToTrash, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
@@ -217,7 +217,7 @@ function DataSidebarPublisher(props: DataSidebarLive) {
   useLayoutEffect(() => {
     publishDataSidebar(props)
   })
-  useLayoutEffect(() => () => publishDataSidebar(null), [])
+  useLayoutEffect(() => () => releaseDataSidebar(), [])
   return null
 }
 
@@ -2539,9 +2539,10 @@ export function CollectionBrowser({
     event.preventDefault()
     event.stopPropagation()
     const handle = event.currentTarget
-    const table = handle.closest('table')
-    if (!table) return
-    const heads = Array.from(table.querySelectorAll('thead th:not(.fsdb-col-pad)'))
+    const sourceTable = handle.closest('table')
+    const mainTable = tableRef.current ?? sourceTable
+    if (!mainTable) return
+    const heads = Array.from((sourceTable ?? mainTable).querySelectorAll('thead th:not(.fsdb-col-pad)'))
     const startX = event.clientX
     const snapshot: Record<string, number> = {}
     const windowed = windowedColumnsOf(columns, colWindowRef.current)
@@ -2555,7 +2556,8 @@ export function CollectionBrowser({
     }
     startTableColumnResize({
       handle,
-      table,
+      table: mainTable,
+      pinnedTable: sourceTable && sourceTable !== mainTable ? sourceTable : null,
       colKey,
       startX,
       pointerId: event.pointerId,
