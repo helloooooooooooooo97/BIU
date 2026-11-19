@@ -1632,20 +1632,26 @@ export class SessionViewService extends Service {
             ...imagePayload,
           }
 
-    if (busy) this.enqueueLocalInbox(effectiveKind, content || '（图片）')
+    const localId = busy ? this.enqueueLocalInbox(effectiveKind, content || '（图片）') : null
 
     if (effectiveKind === 'inject') {
-      const res = await fetch(`/api/agents/${sessionId}/messages`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const data = (await res.json()) as { error?: string; inbox?: InboxQueueItem[] }
-      if (!res.ok) {
-        this.replace({ error: data.error || `注入失败：${res.status}` })
-        throw new Error(data.error || `注入失败：${res.status}`)
+      try {
+        const res = await fetch(`/api/agents/${sessionId}/messages`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        const data = (await res.json()) as { error?: string; inbox?: InboxQueueItem[] }
+        if (localId) this.removeLocalInbox(localId)
+        if (!res.ok) {
+          this.replace({ error: data.error || `注入失败：${res.status}` })
+          throw new Error(data.error || `注入失败：${res.status}`)
+        }
+        if (Array.isArray(data.inbox)) this.setInbox(data.inbox, sessionId)
+      } catch (error) {
+        if (localId) this.removeLocalInbox(localId)
+        throw error
       }
-      if (Array.isArray(data.inbox)) this.setInbox(data.inbox, sessionId)
       return
     }
 
@@ -1666,6 +1672,7 @@ export class SessionViewService extends Service {
         queued?: boolean
         inbox?: InboxQueueItem[]
       }
+      if (localId) this.removeLocalInbox(localId)
       if (!res.ok) throw new Error(data.error || `发送失败：${res.status}`)
       if (Array.isArray(data.inbox)) this.setInbox(data.inbox, data.sessionId ?? sessionId)
       // wait:false：HTTP 立刻返回，token / 状态走 WS。不要 GET 整页，会和首包 chunk 抢，看起来像先卡再整段弹出。
@@ -1673,6 +1680,7 @@ export class SessionViewService extends Service {
         this.replace({ error: data.text })
       }
     } catch (error) {
+      if (localId) this.removeLocalInbox(localId)
       try {
         await this.load(sessionId, { view: this.value.view, wait: true })
       } catch {
@@ -1686,12 +1694,15 @@ export class SessionViewService extends Service {
   }
 
   private enqueueLocalInbox(kind: 'wake' | 'inject', text: string) {
-    const item = {
-      id: `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-      kind,
-      text,
-    }
+    const id = `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+    const item = { id, kind, text }
     this.replace({ inbox: [...this.value.inbox, item] })
+    return id
+  }
+
+  private removeLocalInbox(localId: string) {
+    if (!this.value.inbox.some((item) => item.id === localId)) return
+    this.replace({ inbox: this.value.inbox.filter((item) => item.id !== localId) })
   }
 
   private paintOutgoingUser(
@@ -1722,7 +1733,8 @@ export class SessionViewService extends Service {
     const used = new Set<string>()
     const locals = this.value.inbox.filter((item) => item.id.startsWith('local-'))
     const keep = locals.filter((local) => {
-      const hit = server.find((item) => item.kind === local.kind && item.text === local.text && !used.has(item.id))
+      // Match by text even if server promoted/demoted kind between wake and inject.
+      const hit = server.find((item) => item.text === local.text && !used.has(item.id))
       if (hit) {
         used.add(hit.id)
         return false
@@ -1737,6 +1749,10 @@ export class SessionViewService extends Service {
   async dropInboxItem(itemId: string) {
     const sessionId = this.value.sessionId
     if (!sessionId || !itemId) return false
+    if (itemId.startsWith('local-')) {
+      this.removeLocalInbox(itemId)
+      return true
+    }
     try {
       const res = await fetch(`/api/agents/${sessionId}/inbox/drop`, {
         method: 'POST',
@@ -1745,6 +1761,16 @@ export class SessionViewService extends Service {
       })
       const data = (await res.json().catch(() => ({}))) as { error?: string; inbox?: InboxQueueItem[] }
       if (!res.ok) {
+        // 404 (unknown inbox item): item was already claimed or dropped on the server — resync silently.
+        if (res.status === 404 || data.error === 'unknown inbox item') {
+          if (Array.isArray(data.inbox)) this.setInbox(data.inbox, sessionId)
+          else {
+            this.replace({ inbox: this.value.inbox.filter((item) => item.id !== itemId) })
+            void this.refreshInbox(sessionId)
+          }
+          if (this.value.error === 'unknown inbox item') this.replace({ error: undefined })
+          return false
+        }
         this.replace({ error: data.error || `删除排队失败：${res.status}` })
         return false
       }
@@ -1759,6 +1785,14 @@ export class SessionViewService extends Service {
   async patchInboxItem(itemId: string, text: string) {
     const sessionId = this.value.sessionId
     if (!sessionId || !itemId) return false
+    if (itemId.startsWith('local-')) {
+      const trimmed = text.trim()
+      if (!trimmed) return false
+      this.replace({
+        inbox: this.value.inbox.map((item) => (item.id === itemId ? { ...item, text: trimmed } : item)),
+      })
+      return true
+    }
     try {
       const res = await fetch(`/api/agents/${sessionId}/inbox/patch`, {
         method: 'POST',
@@ -1767,6 +1801,12 @@ export class SessionViewService extends Service {
       })
       const data = (await res.json().catch(() => ({}))) as { error?: string; inbox?: InboxQueueItem[] }
       if (!res.ok) {
+        if (res.status === 404 || data.error === 'unknown inbox item') {
+          if (Array.isArray(data.inbox)) this.setInbox(data.inbox, sessionId)
+          else void this.refreshInbox(sessionId)
+          if (this.value.error === 'unknown inbox item') this.replace({ error: undefined })
+          return false
+        }
         this.replace({ error: data.error || `修改排队失败：${res.status}` })
         return false
       }

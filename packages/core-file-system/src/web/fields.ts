@@ -308,10 +308,14 @@ export function tagColumnTitle(col: {
   packLabel?: string
   field?: { label?: string }
 }) {
-  const fieldLabel = String(col.field?.label ?? '').trim()
-  if (fieldLabel) return fieldLabel
   const parsed = parseTagFlatColumnKey(col.key)
-  if (parsed?.fieldKey) return parsed.fieldKey
+  const fieldLabel = String(col.field?.label ?? '').trim() || (parsed?.fieldKey ?? '')
+  const packLabel = String(col.packLabel ?? '').trim()
+  if (parsed && packLabel && fieldLabel) {
+    const prefix = `${packLabel}·`
+    return fieldLabel.startsWith(prefix) ? fieldLabel : `${prefix}${fieldLabel}`
+  }
+  if (fieldLabel) return fieldLabel
   return String(col.key).trim() || col.key
 }
 
@@ -549,7 +553,13 @@ export function groupableFields(schema: CollectionSchema | undefined, packs: Col
   const fromSchema = fieldEntries(schema).filter((item) => isGroupableKind(item.kind) && item.key !== schema?.labelField)
   const fromPacks = flattenTagColumns(packs)
     .filter((item) => isGroupableKind(item.kind))
-    .map((item) => ({ key: item.key, field: item.field, kind: item.kind }))
+    .map((item) => ({
+      key: item.key,
+      field: { ...item.field, label: tagColumnTitle(item) },
+      kind: item.kind,
+      packId: item.packId,
+      packLabel: item.packLabel,
+    }))
   return [...fromSchema, ...fromPacks]
 }
 

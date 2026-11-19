@@ -215,8 +215,17 @@ test('default columns omit flattened type properties', () => {
   ])
   assert.equal(cols.length, 1)
   assert.equal(cols[0]?.key, nested)
-  assert.equal(tagColumnTitle(cols[0]!), '的的')
+  assert.equal(tagColumnTitle(cols[0]!), '好好哈·的的')
   assert.equal(tagColumnTitle({ key: 'title', field: { label: '标题' } }), '标题')
+  const grouped = groupableFields(schema, [
+    {
+      id: 'tag-10',
+      label: '需求',
+      fields: [{ key: '状态', type: 'select', label: '状态' }],
+    },
+  ])
+  const tagGroup = grouped.find((item) => item.key === tagFlatColumnKey('tag-10', '状态'))
+  assert.equal(tagGroup?.field.label, '需求·状态')
   const row = { id: '1', tag: { tags: ['haohao'], values: { haohao: { dede: 'v' } } } }
   assert.equal(readTagFlatValue(row, nested), 'v')
   assert.deepEqual(uniqueValues([row], nested, { type: 'string', label: '的的' }), ['v'])

@@ -1832,7 +1832,7 @@ export function apply(ctx: Context) {
     const payload = ((await route.json().catch(() => null)) ?? {}) as { id?: string }
     const itemId = typeof payload.id === 'string' ? payload.id : ''
     if (!ctx.agents.dropInbox(id, itemId)) {
-      return route.send(404, { error: 'unknown inbox item' })
+      return route.send(404, { error: 'unknown inbox item', sessionId: id, inbox: ctx.agents.listInbox(id) })
     }
     route.send(200, { ok: true, sessionId: id, inbox: ctx.agents.listInbox(id) })
   })
@@ -1844,7 +1844,7 @@ export function apply(ctx: Context) {
     const itemId = typeof payload.id === 'string' ? payload.id : ''
     const text = typeof payload.text === 'string' ? payload.text : ''
     if (!ctx.agents.patchInbox(id, itemId, text)) {
-      return route.send(404, { error: 'unknown inbox item' })
+      return route.send(404, { error: 'unknown inbox item', sessionId: id, inbox: ctx.agents.listInbox(id) })
     }
     route.send(200, { ok: true, sessionId: id, inbox: ctx.agents.listInbox(id) })
   })

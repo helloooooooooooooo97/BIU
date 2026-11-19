@@ -21,7 +21,7 @@ import { moveList } from '../query-logic.ts'
 import { CheckRow } from './controls.tsx'
 import { DndGrip } from './dnd-grip.tsx'
 import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search.tsx'
-import { tagFlatColumnKey, parseTagFlatColumnKey, resolveFieldType } from './fields.ts'
+import { tagFlatColumnKey, parseTagFlatColumnKey, resolveFieldType, tagColumnTitle } from './fields.ts'
 import { FieldGlyph } from './fsdb-cells.tsx'
 import { tagChipIcon } from './schema-field.tsx'
 import { pullTags, subscribeTagChrome, tagCatalogRevision, tagFieldFilled } from './tag-catalog.ts'
@@ -102,13 +102,24 @@ function TagColumnPackRow({
   )
 }
 
+function columnMenuLabel(
+  col: { key: string; packLabel?: string; field: FieldSpec },
+  tagCatalog: CollectionSchemaPack[],
+) {
+  const flat = parseTagFlatColumnKey(col.key)
+  const packLabel = col.packLabel ?? (flat ? tagCatalog.find((entry) => entry.id === flat.packId)?.label : undefined)
+  return tagColumnTitle({ key: col.key, packLabel, field: col.field })
+}
+
 function ColumnMenuCheck({
   col,
+  label,
   on,
   locked,
   onToggle,
 }: {
-  col: { key: string; kind: FieldType; field: FieldSpec }
+  col: { key: string; kind: FieldType; field: FieldSpec; packLabel?: string }
+  label?: string
   on: boolean
   locked?: boolean
   onToggle: () => void
@@ -116,7 +127,7 @@ function ColumnMenuCheck({
   return (
     <CheckRow
       icon={<FieldGlyph kind={col.kind} />}
-      label={col.field.label ?? col.key}
+      label={label ?? col.field.label ?? col.key}
       on={on}
       locked={locked}
       onToggle={onToggle}
@@ -147,10 +158,12 @@ function ColumnRowShell({
 
 function ColumnDragRow({
   col,
+  label,
   on,
   onToggle,
 }: {
-  col: { key: string; kind: FieldType; field: FieldSpec }
+  col: { key: string; kind: FieldType; field: FieldSpec; packLabel?: string }
+  label: string
   on: boolean
   onToggle: () => void
 }) {
@@ -166,7 +179,7 @@ function ColumnDragRow({
         </button>
       }
     >
-      <ColumnMenuCheck col={col} on={on} onToggle={onToggle} />
+      <ColumnMenuCheck col={col} label={label} on={on} onToggle={onToggle} />
     </ColumnRowShell>
   )
 }
@@ -180,8 +193,8 @@ export function ColumnOrderMenu({
   onToggle,
   onReorder,
 }: {
-  columns: Array<{ key: string; kind: FieldType; field: FieldSpec }>
-  allColumns: Array<{ key: string; kind: FieldType; field: FieldSpec }>
+  columns: Array<{ key: string; kind: FieldType; field: FieldSpec; packLabel?: string }>
+  allColumns: Array<{ key: string; kind: FieldType; field: FieldSpec; packLabel?: string }>
   labelField?: string
   tagCatalog: CollectionSchemaPack[]
   query?: string
@@ -198,7 +211,7 @@ export function ColumnOrderMenu({
     ...columns.filter((item) => item.key !== labelField),
     ...hidden,
   ].filter((item) => {
-    if (!flyoutQueryMatch(item.field.label ?? item.key, queryText)) return false
+    if (!flyoutQueryMatch(columnMenuLabel(item, tagCatalog), queryText)) return false
     const flat = parseTagFlatColumnKey(item.key)
     if (!flat || !queryText.trim()) return true
     const pack = tagCatalog.find((entry) => entry.id === flat.packId)
@@ -226,6 +239,7 @@ export function ColumnOrderMenu({
           <ColumnMenuCheck
             key={item.key}
             col={item}
+            label={columnMenuLabel(item, tagCatalog)}
             on={visibleKeys.has(item.key) || locked.has(item.key)}
             locked={locked.has(item.key)}
             onToggle={() => onToggle(item.key)}
@@ -270,7 +284,7 @@ export function ColumnOrderMenu({
                 </span>
               }
             >
-              <ColumnMenuCheck col={item} on locked onToggle={() => onToggle(item.key)} />
+              <ColumnMenuCheck col={item} label={columnMenuLabel(item, tagCatalog)} on locked onToggle={() => onToggle(item.key)} />
             </ColumnRowShell>
           ))}
         <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
@@ -280,6 +294,7 @@ export function ColumnOrderMenu({
               <ColumnDragRow
                 key={item.key}
                 col={item}
+                label={columnMenuLabel(item, tagCatalog)}
                 on={visibleKeys.has(item.key)}
                 onToggle={() => onToggle(item.key)}
               />
@@ -292,7 +307,7 @@ export function ColumnOrderMenu({
                 <button type="button" className="fsdb-query-grip" tabIndex={-1}>
                   <DndGrip />
                 </button>
-                <ColumnMenuCheck col={active} on={visibleKeys.has(active.key)} onToggle={() => {}} />
+                <ColumnMenuCheck col={active} label={columnMenuLabel(active, tagCatalog)} on={visibleKeys.has(active.key)} onToggle={() => {}} />
               </div>
             </div>
           ) : null}

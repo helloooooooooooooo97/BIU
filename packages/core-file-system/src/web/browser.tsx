@@ -2504,12 +2504,13 @@ export function CollectionBrowser({
         if (key === 'shareRole') return { key, kind: 'select' as const, field: { type: 'select' as const, label: '权限' } }
         const tag = parseTagFlatColumnKey(key)
         if (tag) {
-          return { key, kind: 'select' as const, field: { type: 'select' as const, label: tag.fieldKey }, packId: tag.packId }
+          const pack = tagCatalog.find((entry) => entry.id === tag.packId)
+          return { key, kind: 'select' as const, field: { type: 'select' as const, label: tag.fieldKey }, packId: tag.packId, packLabel: pack?.label }
         }
         return null
       })
       .filter(Boolean) as typeof allColumns
-  }, [allColumnKeys, allColumns, columnKeys, rowActionColumn, schema, schemaDefaultKeys, sheet, sheetPack])
+  }, [allColumnKeys, allColumns, columnKeys, rowActionColumn, schema, schemaDefaultKeys, sheet, sheetPack, tagCatalog])
 
   const colWindowRef = useRef<TableColumnSlice>(EMPTY_COL_WINDOW)
   const tableChromeRef = useRef<TableChromeBag>({

@@ -950,10 +950,12 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
         <div className="composer-inbox" aria-label="排队中">
           <div className="composer-inbox-head">排队中 · {inbox.length}</div>
           <ul className="composer-inbox-list">
-            {inbox.map((item) => (
+            {inbox.map((item) => {
+              const kind = item.kind === 'wake' || item.kind === 'inject' ? item.kind : 'queued'
+              return (
               <li key={item.id} className="composer-inbox-item">
-                <span className={`composer-inbox-kind composer-inbox-kind-${item.kind}`}>
-                  {item.kind}
+                <span className={`composer-inbox-kind composer-inbox-kind-${kind}`}>
+                  {kind}
                 </span>
                 <span className="composer-inbox-text" title={item.text}>
                   {item.text}
@@ -989,7 +991,8 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
                   </button>
                 </div>
               </li>
-            ))}
+              )
+            })}
           </ul>
         </div>
       ) : null}
