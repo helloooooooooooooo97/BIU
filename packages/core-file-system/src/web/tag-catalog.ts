@@ -89,6 +89,17 @@ export function subscribeTags(_collectionPath: string | undefined, fn: () => voi
   }
 }
 
+let tagsByIdCache: { source: CollectionSchemaPack[]; map: Map<string, CollectionSchemaPack> } | null = null
+
+/** Same Map until the catalog array is replaced. Cell paint must not rebuild it per tag. */
+export function tagsById() {
+  const source = loadTags()
+  if (tagsByIdCache?.source === source) return tagsByIdCache.map
+  const map = new Map(source.map((tag) => [tag.id, tag]))
+  tagsByIdCache = { source, map }
+  return map
+}
+
 export function loadTags(_collectionPath?: string): CollectionSchemaPack[] {
   if (memory) return memory
   try {

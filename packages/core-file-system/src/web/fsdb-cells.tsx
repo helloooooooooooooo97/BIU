@@ -42,7 +42,7 @@ import { AttachmentFile, UrlHref } from './cell-media.tsx'
 import { PersonFace } from './person-cell.tsx'
 import { RecordLinkChips } from './record-link-cell.tsx'
 import { tagChipIcon, tagChipLabel } from './schema-field.tsx'
-import { jumpTag, loadTags } from './tag-catalog.ts'
+import { jumpTag, loadTags, tagsById } from './tag-catalog.ts'
 
 export function actionIcon(id: string, opts?: { fallback?: boolean; className?: string }) {
   const cls = opts?.className ?? 'size-[14px]'
@@ -386,7 +386,7 @@ export function DefaultCell({
   if (kind === 'tag') {
     const parsed = normalizeSchemaValue(value)
     if (!parsed.tags.length) return null
-    const byId = new Map(loadTags().map((tag) => [tag.id, tag]))
+    const byId = tagsById()
     return (
       <TagChips>
         {parsed.tags.map((id) => (

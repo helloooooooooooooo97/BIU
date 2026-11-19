@@ -1204,12 +1204,19 @@ type TableBodyProps = {
   error: string
   pickMode: boolean
   activeRowId: string | null
-  cellPaintKey: number
 }
 
-const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, measureRow, colSpan }: TableBodyProps) {
+const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, measureRow, colSpan, colKeys, activeRowId }: TableBodyProps) {
   const paintRef = useContext(TablePaintCtx)
   const bag = paintRef.current
+  // Rows stay mounted only while the window asks for them. Reuse the element built for this
+  // node until the row data, the column window, or the active record changes. Scrolling then
+  // builds only the rows that entered the window. Selection classes are painted on the DOM.
+  const rowCache = useRef(new Map<string, { node: TablePaintNode; colKeys: string; activeRowId: string | null; element: ReactNode }>())
+  if (rowCache.current.size > nodes.length + 8) {
+    const live = new Set(nodes.map((node) => node.key))
+    for (const key of rowCache.current.keys()) if (!live.has(key)) rowCache.current.delete(key)
+  }
   // React can reuse cells whose selection classes were painted during a gesture.
   // Restore the authoritative live selection after every virtual-window commit.
   useLayoutEffect(() => { paintRef.current.paintSelection?.() })
@@ -1223,7 +1230,13 @@ const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, mea
     if (!node) continue
     const top = item.start - margin
     children.push(pad(top - end, `pad:${node.key}`))
-    const element = bag.renderNode(node)
+    const hit = rowCache.current.get(node.key)
+    const element = hit && hit.node === node && hit.colKeys === colKeys && hit.activeRowId === activeRowId
+      ? hit.element
+      : bag.renderNode(node)
+    if (!hit || hit.node !== node || hit.colKeys !== colKeys || hit.activeRowId !== activeRowId) {
+      rowCache.current.set(node.key, { node, colKeys, activeRowId, element })
+    }
     children.push(isValidElement(element) ? cloneElement(element as ReactElement<ComponentProps<'tr'>>, {
       key: node.key, 'data-index': item.index, ref: measureRow,
     } as ComponentProps<'tr'>) : element)
@@ -1311,7 +1324,6 @@ type WindowedTableProps = {
   onVisibleRange?: (start: number, end: number) => void
   activeRowId: string | null
   frozen?: boolean
-  cellPaintKey?: number
   retainedRowId?: string | null
   retainedRowKey?: string | null
   retainedColumnKey?: string | null
@@ -1345,7 +1357,6 @@ export const WindowedTable = memo(function WindowedTable({
   onVisibleRange,
   activeRowId,
   frozen: _frozen = false,
-  cellPaintKey = 0,
   retainedRowId,
   retainedRowKey,
   retainedColumnKey,
@@ -1479,7 +1490,6 @@ export const WindowedTable = memo(function WindowedTable({
             error={error}
             pickMode={pickMode}
             activeRowId={activeRowId}
-            cellPaintKey={cellPaintKey}
           />
         </TablePaintCtx.Provider>
       </table>
@@ -7140,7 +7150,6 @@ export function CollectionBrowser({
                   onVisibleRange={onVisibleRange}
                   frozen={Boolean(held)}
                   activeRowId={detailId}
-                  cellPaintKey={cellPickEpoch * 2 + Number(Boolean(creatingGroup))}
                   retainedRowId={cellPop?.id}
                   retainedRowKey={cellPop?.rowKey}
                   retainedColumnKey={cellPop?.key}
