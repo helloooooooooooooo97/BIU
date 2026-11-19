@@ -450,6 +450,7 @@ const CSS = `
 .fsdb-page .tasks-th svg,.fsdb-page .tasks-th .fsdb-field-glyph{color:var(--biu-color-icon)}
 .fsdb-page .tasks-th.is-on svg{color:var(--biu-color-icon-active)}
 .fsdb-page .tasks-table tr{cursor:default}
+.fsdb-page .tasks-table tbody tr[data-record-id]{height:37px}
 .fsdb-page .tasks-table tr.is-active td{background:color-mix(in srgb,var(--biu-color-text) 8%,var(--biu-color-surface))}
 .fsdb-page .tasks-table tr.fsdb-group-row td{padding:6px 0 4px;background:transparent;border-right:0;cursor:default}
 .fsdb-page .tasks-table tr.fsdb-group-row:hover td{background:transparent}
