@@ -24,8 +24,9 @@ import {
 } from '@heroicons/react/16/solid'
 import type { CollectionActionInfo, CollectionInfo, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
 import { emitFsdbChange, fsdbRecordChangeReloadsList, normalizeSchemaValue, parseFsdbChange } from '@biu/type-file-system'
-import { subscribeHistoryNavigation } from './history-nav.ts'
+import { evictCellCache, reuseRowStamp, type RowStampEntry } from './table-paint-cache.ts'
 import { inspectorPaneAcceptsKeys } from './inspector-pane-cost.ts'
+import { subscribeHistoryNavigation } from './history-nav.ts'
 import type { CollectionChrome, CollectionRowViewType, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
 import { getSidebarPersist, parseAppPath, setSidebarPersist, SIDEBAR_PERSIST } from '@biu/web-session-view'
 import { BoolBox } from '@biu/biu-ui/bool-box'
@@ -1212,28 +1213,17 @@ type TableBodyProps = {
   activeRowId: string | null
 }
 
-const rowJsonCache = new WeakMap<object, string>()
-
-function rowPaintStamp(node: TablePaintNode) {
+function rowPaintStamp(node: TablePaintNode, stamps: Map<string, RowStampEntry>) {
   if (node.kind !== 'row') {
     const label = node.kind === 'group-head' ? node.label : ''
     const count = node.kind === 'group-head' || node.kind === 'group-pager' ? node.count : ''
     const page = node.kind === 'group-pager' ? node.pageIndex : ''
     return `${node.kind}\0${node.key}\0${label}\0${count}\0${page}`
   }
-  let rowStr = ''
-  if (node.row && typeof node.row === 'object') {
-    const cached = rowJsonCache.get(node.row)
-    if (cached !== undefined) {
-      rowStr = cached
-    } else {
-      rowStr = JSON.stringify(node.row)
-      rowJsonCache.set(node.row, rowStr)
-    }
-  } else {
-    rowStr = JSON.stringify(node.row)
-  }
-  return `${node.key}\0${node.depth}\0${node.hasKids ? 1 : 0}\0${node.kidCount}\0${node.fold ? 1 : 0}\0${rowStr}`
+  const body = node.row && typeof node.row === 'object'
+    ? reuseRowStamp(stamps, node.key, node.row as Record<string, unknown>).body
+    : JSON.stringify(node.row)
+  return `${node.key}\0${node.depth}\0${node.hasKids ? 1 : 0}\0${node.kidCount}\0${node.fold ? 1 : 0}\0${body}`
 }
 
 function columnLayout(colKeys: string) {
@@ -1254,22 +1244,37 @@ const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, mea
   // 单元格另按列缓存，横滚只创建新进入窗口的列。
   const rowCache = useRef(new Map<string, { node: TablePaintNode; stamp: string; colKeys: string; activeRowId: string | null; element: ReactNode }>())
   const cellCache = useRef(new Map<string, { stamp: string; element: ReactNode }>())
-  if (rowCache.current.size > nodes.length + 8) {
-    const live = new Set(nodes.map((node) => node.key))
-    for (const key of rowCache.current.keys()) if (!live.has(key)) rowCache.current.delete(key)
-    for (const cellKey of cellCache.current.keys()) {
-      const sep = cellKey.indexOf('\0')
-      const rowKey = sep === -1 ? cellKey : cellKey.slice(0, sep)
-      if (!live.has(rowKey)) cellCache.current.delete(cellKey)
-    }
+  const stampCache = useRef(new Map<string, RowStampEntry>())
+  const paintedWindow = useRef('')
+  const keptCols = useRef<[Set<string>, Set<string>]>([new Set(), new Set()])
+  const layout = columnLayout(colKeys)
+  const liveRows = new Set<string>()
+  for (const item of items) {
+    const key = nodes[item.index]?.key
+    if (key) liveRows.add(key)
   }
-  // React can reuse cells whose selection classes were painted during a gesture.
-  // Restore the authoritative live selection after every virtual-window commit.
-  useLayoutEffect(() => { paintRef.current.paintSelection?.() })
+  if (rowCache.current.size > liveRows.size + 8) {
+    for (const key of rowCache.current.keys()) if (!liveRows.has(key)) rowCache.current.delete(key)
+    for (const key of stampCache.current.keys()) if (!liveRows.has(key)) stampCache.current.delete(key)
+  }
+  if (layout && layout.keys.length) {
+    const [older, prev] = keptCols.current
+    const cols = new Set(older)
+    for (const key of prev) cols.add(key)
+    for (const key of layout.keys) cols.add(key)
+    evictCellCache(cellCache.current, liveRows, cols)
+    keptCols.current = [prev, new Set(layout.keys)]
+  }
+  const windowKey = `${colKeys}\0${[...liveRows].join('\0')}`
+  useLayoutEffect(() => {
+    if (paintedWindow.current === windowKey) return
+    paintedWindow.current = windowKey
+    paintRef.current.paintSelection?.()
+  }, [paintRef, windowKey])
   const pad = (height: number, key: string) => height <= 0.25 ? null : (
     <tr key={key} className="fsdb-table-pad" aria-hidden><td colSpan={colSpan} style={{ height }}><div style={{ height }} /></td></tr>
   )
-  const layout = columnLayout(colKeys)
+  const layoutNow = layout
   const children: ReactNode[] = []
   let end = 0
   for (const item of items) {
@@ -1277,12 +1282,12 @@ const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, mea
     if (!node) continue
     const top = item.start - margin
     children.push(pad(top - end, `pad:${node.key}`))
-    const stamp = rowPaintStamp(node)
+    const stamp = rowPaintStamp(node, stampCache.current)
     const hit = rowCache.current.get(node.key)
     let element: ReactNode
     if (hit && hit.stamp === stamp && hit.colKeys === colKeys && hit.activeRowId === activeRowId) {
       element = hit.element
-    } else if (node.kind === 'row' && bag.renderCell && bag.renderRow && layout) {
+    } else if (node.kind === 'row' && bag.renderCell && bag.renderRow && layoutNow) {
       const cells: ReactNode[] = []
       const paint = (key: string) => {
         const id = `${node.key}\0${key}`
@@ -1292,10 +1297,10 @@ const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, mea
         cellCache.current.set(id, { stamp, element: next })
         return next
       }
-      for (let i = 0; i < layout.pin && i < layout.keys.length; i += 1) cells.push(paint(layout.keys[i]!))
-      if (layout.padLeft > 0) cells.push(<td key="pad-left" className="fsdb-col-pad" aria-hidden style={padColBox(layout.padLeft)} />)
-      for (let i = layout.pin; i < layout.keys.length; i += 1) cells.push(paint(layout.keys[i]!))
-      if (layout.padRight > 0) cells.push(<td key="pad-right" className="fsdb-col-pad" aria-hidden style={padColBox(layout.padRight)} />)
+      for (let i = 0; i < layoutNow.pin && i < layoutNow.keys.length; i += 1) cells.push(paint(layoutNow.keys[i]!))
+      if (layoutNow.padLeft > 0) cells.push(<td key="pad-left" className="fsdb-col-pad" aria-hidden style={padColBox(layoutNow.padLeft)} />)
+      for (let i = layoutNow.pin; i < layoutNow.keys.length; i += 1) cells.push(paint(layoutNow.keys[i]!))
+      if (layoutNow.padRight > 0) cells.push(<td key="pad-right" className="fsdb-col-pad" aria-hidden style={padColBox(layoutNow.padRight)} />)
       cells.push(<td key="fill" className="fsdb-col-fill" aria-hidden />)
       element = bag.renderRow(node, cells)
     } else {
