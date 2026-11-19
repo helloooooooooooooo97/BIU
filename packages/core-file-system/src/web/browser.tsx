@@ -23,7 +23,9 @@ import {
   TrashIcon,
 } from '@heroicons/react/16/solid'
 import type { CollectionActionInfo, CollectionInfo, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
-import { emitFsdbChange, normalizeSchemaValue, parseFsdbChange } from '@biu/type-file-system'
+import { emitFsdbChange, fsdbRecordChangeReloadsList, normalizeSchemaValue, parseFsdbChange } from '@biu/type-file-system'
+import { subscribeHistoryNavigation } from './history-nav.ts'
+import { inspectorPaneAcceptsKeys, listReloadInterval } from './inspector-pane-cost.ts'
 import type { CollectionChrome, CollectionRowViewType, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
 import { getSidebarPersist, parseAppPath, setSidebarPersist, SIDEBAR_PERSIST } from '@biu/web-session-view'
 import { BoolBox } from '@biu/biu-ui/bool-box'
@@ -1740,9 +1742,19 @@ export function CollectionBrowser({
   const tableCellClaimLiveRef = useRef<(event: Event) => void>(() => {})
   const tablePaneFocusInLiveRef = useRef<(event: FocusEvent) => void>(() => {})
   useEffect(() => {
-    const onTableNavKey = (event: KeyboardEvent) => tableNavLiveRef.current(event)
-    const onPaneHotkey = (event: KeyboardEvent) => tablePaneHotkeyLiveRef.current(event)
-    const onCrumbBack = (event: KeyboardEvent) => crumbBackLiveRef.current(event)
+    const keysLive = () => inspectorPaneAcceptsKeys(embed, pageRef.current)
+    const onTableNavKey = (event: KeyboardEvent) => {
+      if (!keysLive()) return
+      tableNavLiveRef.current(event)
+    }
+    const onPaneHotkey = (event: KeyboardEvent) => {
+      if (!keysLive()) return
+      tablePaneHotkeyLiveRef.current(event)
+    }
+    const onCrumbBack = (event: KeyboardEvent) => {
+      if (!keysLive()) return
+      crumbBackLiveRef.current(event)
+    }
     const onFocusTable = (event: Event) => tablePaneFocusLiveRef.current(event)
     const onCellClaim = (event: Event) => tableCellClaimLiveRef.current(event)
     const onFocusIn = (event: FocusEvent) => tablePaneFocusInLiveRef.current(event)
@@ -2724,6 +2736,7 @@ export function CollectionBrowser({
         if (id && path.endsWith(`/${id}`)) pullDetailBody()
         return
       }
+      if (change.scope === 'records' && !fsdbRecordChangeReloadsList(change, dataPathRef.current)) return
       if (change.scope === 'views') pendingViews = true
       else if (change.scope === 'tags') pendingTags = true
       else pendingData = true
@@ -2754,12 +2767,13 @@ export function CollectionBrowser({
     }
     window.addEventListener('fsdb:change', onChange)
     window.addEventListener('fsdb:shares-change', onChange)
-    const timer = nested
-      ? 0
-      : window.setInterval(() => {
+    const pollEvery = listReloadInterval(nested)
+    const timer = pollEvery
+      ? window.setInterval(() => {
           if (detailIdRef.current) return
           void reloadRef.current()
-        }, 20000)
+        }, pollEvery)
+      : 0
     return () => {
       window.clearTimeout(debounce)
       window.clearInterval(timer)
@@ -2775,23 +2789,13 @@ export function CollectionBrowser({
 
   useEffect(() => {
     if (nested) return
-    const origPush = history.pushState
-    const origReplace = history.replaceState
-    const intercept = (orig: typeof history.pushState): History['pushState'] =>
-      (data, unused, url) => {
-        orig.call(history, data, unused, url)
-        const next = collectionFromAppUrl(url != null ? String(url) : window.location.pathname)
-        if (!next) return
-        const before = tableHoldRef.current
-        holdNavRef.current(next.collection, next.viewId)
-        if (tableHoldRef.current !== before) setHoldNav((n) => n + 1)
-      }
-    history.pushState = intercept(origPush)
-    history.replaceState = intercept(origReplace)
-    return () => {
-      history.pushState = origPush
-      history.replaceState = origReplace
-    }
+    return subscribeHistoryNavigation((url) => {
+      const next = collectionFromAppUrl(url != null ? String(url) : window.location.pathname)
+      if (!next) return
+      const before = tableHoldRef.current
+      holdNavRef.current(next.collection, next.viewId)
+      if (tableHoldRef.current !== before) setHoldNav((n) => n + 1)
+    })
   }, [nested])
 
   useEffect(() => subscribeTags(undefined, () => setTagCatalog(loadTags())), [])
@@ -4169,12 +4173,12 @@ export function CollectionBrowser({
     )
   }
 
-  function announceListChange(keepCache = false) {
+  function announceListChange(keepCache = false, noticePath = dataPathRef.current) {
     tableHoldRef.current = null
     pendingPathQueryRef.current = null
     if (!keepCache) forgetListCache(dataPath)
     invalidateListReads()
-    emitFsdbChange()
+    emitFsdbChange({ scope: 'records', path: noticePath })
   }
 
   useEffect(() => {
@@ -4277,7 +4281,7 @@ export function CollectionBrowser({
           mapListedRecords(mergeTime)
           setDetailRow((prev) => (prev?.id === row.id ? mergeTime(prev) : prev))
           publishListedMutation({ path: dataPath, op: 'patch', row: { id: row.id, updatedAt: stamp }, groupBy })
-          announceListChange()
+          announceListChange(true, path)
         }).catch(async (error) => {
           if (!(error instanceof HttpError) || error.status !== 409) throw error
           const latest = await readJson<{ value?: unknown; version?: number }>(`/api/db/content?path=${encodeURIComponent(path)}`)
@@ -4324,7 +4328,7 @@ export function CollectionBrowser({
           mapListedRecords(merge)
           setDetailRow((prev) => (prev?.id === row.id ? overlayListedRow(prev, displayed) : prev))
           publishListedMutation({ path: dataPath, op: 'patch', row: displayed, groupBy: groupByRef.current })
-          announceListChange(true)
+          announceListChange(true, path)
           quietUntil.current = Date.now() + 800
         } else {
           forgetListCache(dataPath)

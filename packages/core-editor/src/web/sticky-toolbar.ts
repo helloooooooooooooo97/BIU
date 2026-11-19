@@ -1,10 +1,5 @@
 import { useLayoutEffect, type RefObject } from 'react'
-
-function readProgress(scroller: Element, el: HTMLElement) {
-  const max = scroller.scrollHeight - scroller.clientHeight
-  const p = max <= 0 ? 0 : Math.min(1, Math.max(0, scroller.scrollTop / max))
-  el.style.setProperty('--page-read', String(p))
-}
+import { bindPageRead } from '@biu/core-file-system/page-read'
 
 export function useStickyToolbar(ref: RefObject<HTMLElement | null>) {
   useLayoutEffect(() => {
@@ -24,9 +19,8 @@ export function useStickyToolbar(ref: RefObject<HTMLElement | null>) {
       { root: scroller, threshold: 0 },
     )
     io.observe(mark)
-    const onScroll = () => {
-      if (scroller) readProgress(scroller, el)
-    }
+    const read = scroller ? bindPageRead(scroller, el, requestAnimationFrame, cancelAnimationFrame) : null
+    const onScroll = () => read?.poke()
     onScroll()
     scroller?.addEventListener('scroll', onScroll, { passive: true })
     const ro = typeof ResizeObserver === 'undefined' || !scroller ? null : new ResizeObserver(onScroll)
@@ -36,6 +30,7 @@ export function useStickyToolbar(ref: RefObject<HTMLElement | null>) {
     return () => {
       io.disconnect()
       ro?.disconnect()
+      read?.stop()
       scroller?.removeEventListener('scroll', onScroll)
       mark.remove()
       el.classList.remove('is-stuck')

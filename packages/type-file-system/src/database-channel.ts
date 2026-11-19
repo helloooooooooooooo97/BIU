@@ -31,7 +31,7 @@ export type ParsedDatabaseChannel = {
 }
 
 export type FsdbChangeDetail =
-  | { scope: 'records' }
+  | { scope: 'records'; path?: string }
   | { scope: 'views'; path?: string }
   | { scope: 'tags' }
   | { scope: 'content'; path?: string }
@@ -90,7 +90,32 @@ export function fsdbChangeDetail(parsed: ParsedDatabaseChannel): FsdbChangeDetai
   if (parsed.scope === 'content') return { scope: 'content', path: parsed.path }
   if (parsed.scope === 'views') return { scope: 'views', ...(parsed.path ? { path: parsed.path } : {}) }
   if (parsed.scope === 'tags') return { scope: 'tags' }
-  return { scope: 'records' }
+  return { scope: 'records', ...(parsed.path ? { path: parsed.path } : {}) }
+}
+
+/** 带 path 的记录/正文变更只属于这一张表。没有 path 的旧广播仍然叫醒所有表。 */
+export function fsdbChangeHitsCollection(change: FsdbChangeDetail, collectionPath: string) {
+  const path = 'path' in change ? change.path : undefined
+  if (!path || !collectionPath) return true
+  if (change.scope !== 'records' && change.scope !== 'content') return true
+  return path === collectionPath || path.startsWith(`${collectionPath}/`)
+}
+
+/** 整表重载只接受「这张表」或没有 path 的广播。某条记录的 path 不重载同表的其他页。 */
+export function fsdbRecordChangeReloadsList(change: FsdbChangeDetail, dataPath: string) {
+  if (change.scope !== 'records') return true
+  const path = change.path ?? ''
+  if (!path || !dataPath) return true
+  return path === dataPath
+}
+
+/** 表级广播更新这张表的每个已打开页；记录级广播只更新正在看这条记录的页。 */
+export function fsdbChangeHitsPane(change: FsdbChangeDetail, collectionPath: string, recordId = '') {
+  if (change.scope !== 'records' && change.scope !== 'content') return true
+  const path = 'path' in change ? (change.path ?? '') : ''
+  if (!path || !collectionPath) return true
+  if (path === collectionPath) return true
+  return Boolean(recordId) && (path === `${collectionPath}/${recordId}` || path.endsWith(`/${recordId}`))
 }
 
 export function channelNeedsCollectionSync(parsed: ParsedDatabaseChannel) {
@@ -106,7 +131,7 @@ export function emitFsdbChange(detail: FsdbChangeDetail = { scope: 'records' }) 
         ? { scope: 'views' as const, views: true, ...(detail.path ? { path: detail.path } : {}) }
         : detail.scope === 'tags'
           ? { scope: 'tags' as const, tags: true }
-          : { scope: 'records' as const }
+          : { scope: 'records' as const, ...(detail.path ? { path: detail.path } : {}) }
   window.dispatchEvent(new CustomEvent(FSDB_CHANGE_EVENT, { detail: payload }))
 }
 
@@ -119,7 +144,8 @@ export function parseFsdbChange(event: Event): FsdbChangeDetail {
   }
   if (d.scope === 'tags' || d.tags) return { scope: 'tags' }
   if (d.scope === 'content' || d.content) return { scope: 'content', path: String(d.path ?? '').trim() || undefined }
-  return { scope: 'records' }
+  const path = String(d.path ?? '').trim()
+  return { scope: 'records', ...(path ? { path } : {}) }
 }
 
 export function emitAssetChanged(asset: { name?: string; etag?: string; path?: string }) {

@@ -90,6 +90,27 @@ function PaneLeafIcon({
   return <Squares2X2Icon {...chromeIcon} />
 }
 
+export const InspectorStagePane = memo(function InspectorStagePane({
+  paneId,
+  active,
+  paintRef,
+}: {
+  paneId: string
+  active: boolean
+  paintRef: { current: (paneId: string) => ReactNode }
+}) {
+  return (
+    <div
+      className={`inspector-stage-pane${active ? ' is-active' : ''}`}
+      data-testid={`inspector-${paneId}`}
+      aria-hidden={!active}
+      inert={!active || undefined}
+    >
+      {paintRef.current(paneId)}
+    </div>
+  )
+}, (prev, next) => prev.paneId === next.paneId && prev.active === next.active && prev.paintRef === next.paintRef)
+
 export type SessionInspectorProps = {
   open: boolean
   width: number
@@ -298,9 +319,13 @@ export const SessionInspector = memo(function SessionInspector({
   }, [persistOpened, setTab])
 
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      sessionView.releaseTrajectory()
+      return
+    }
     const current = extraTabs.find((item) => item.id === tab)
     if (current?.ensureTrajectory) void sessionView.ensureTrajectory()
+    else sessionView.releaseTrajectory()
   }, [open, tab, sessionId, sessionView, extraTabs])
 
   useLayoutEffect(() => {
@@ -371,6 +396,19 @@ export const SessionInspector = memo(function SessionInspector({
     return [{ ...item, id: openedId }]
   })
   const extraActive = headerTabs.find((item) => item.id === tab)
+  const paintPaneRef = useRef<(paneId: string) => ReactNode>(() => null)
+  paintPaneRef.current = (paneId) => {
+    const item = headerTabs.find((tabItem) => tabItem.id === paneId)
+    const Pane = item?.entry.Component
+    if (!item || !Pane) return null
+    return (
+      <Pane
+        {...inspectorViewProps((item.entry.props?.() ?? {}) as Record<string, unknown>)}
+        paneId={item.id}
+        renderSlot={renderSlot}
+      />
+    )
+  }
 
   function pickOffer(item: (typeof extraTabs)[number]) {
     if (item.action) {
@@ -624,22 +662,11 @@ export const SessionInspector = memo(function SessionInspector({
       </div>
 
       <div className="inspector-stage">
-        {headerTabs.map((item) => {
-          const Pane = item.entry.Component
-          if (!Pane) return null
-          const active = item.id === tab
-          return (
-            <div
-              key={item.id}
-              className={`inspector-stage-pane${active ? ' is-active' : ''}`}
-              data-testid={`inspector-${item.id}`}
-              aria-hidden={!active}
-              inert={!active || undefined}
-            >
-              <Pane {...inspectorViewProps((item.entry.props?.() ?? {}) as Record<string, unknown>)} paneId={item.id} renderSlot={renderSlot} />
-            </div>
-          )
-        })}
+        {headerTabs.map((item) => (
+          item.entry.Component
+            ? <InspectorStagePane key={item.id} paneId={item.id} active={item.id === tab} paintRef={paintPaneRef} />
+            : null
+        ))}
         <div
           className={`inspector-stage-pane inspector-empty${extraActive ? '' : ' is-active'}`}
           data-testid="inspector-catalog"

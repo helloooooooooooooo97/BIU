@@ -1213,7 +1213,7 @@ test('open detail still reloads body when the collection changes', () => {
   assert.match(onChange, /else \{\s*void reloadRef\.current\(\{ force: true \}\)/)
   assert.doesNotMatch(onChange, /void reloadRef\.current\(\{ force: true \}\)\s*\n\s*if \(detailIdRef\.current\)/)
   assert.match(browser, /banner: row\.banner \?\? null/)
-  assert.match(browser, /emitFsdbChange\(\)/)
+  assert.match(browser, /emitFsdbChange\(\{ scope: 'records', path: dataPathRef\.current \}\)/)
   assert.match(browser, /onRetryBody=\{refreshOpenDetail\}/)
   assert.match(browser, /invalidateListReads\(\)/)
   assert.match(browser, /fsdb:detail-refresh/)

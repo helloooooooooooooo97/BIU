@@ -1,14 +1,9 @@
 import { useLayoutEffect, type RefObject } from 'react'
+import { bindPageRead } from './page-read.ts'
 
 export function stickyHeadOffset(desired: number, tableTop: number, tableH: number, headH: number) {
   const max = Math.max(0, tableH - headH)
   return Math.round(Math.min(Math.max(0, desired - tableTop), max))
-}
-
-function readProgress(scroller: Element, el: HTMLElement) {
-  const max = scroller.scrollHeight - scroller.clientHeight
-  const p = max <= 0 ? 0 : Math.min(1, Math.max(0, scroller.scrollTop / max))
-  el.style.setProperty('--page-read', String(p))
 }
 
 export function useStickyToolbar(ref: RefObject<HTMLElement | null>) {
@@ -29,14 +24,8 @@ export function useStickyToolbar(ref: RefObject<HTMLElement | null>) {
       { root: scroller, threshold: 0 },
     )
     io.observe(mark)
-    let raf = 0
-    const onScroll = () => {
-      if (raf) return
-      raf = requestAnimationFrame(() => {
-        raf = 0
-        if (scroller) readProgress(scroller, el)
-      })
-    }
+    const read = scroller ? bindPageRead(scroller, el, requestAnimationFrame, cancelAnimationFrame) : null
+    const onScroll = () => read?.poke()
     onScroll()
     scroller?.addEventListener('scroll', onScroll, { passive: true })
     const ro = typeof ResizeObserver === 'undefined' || !scroller ? null : new ResizeObserver(onScroll)
@@ -50,7 +39,7 @@ export function useStickyToolbar(ref: RefObject<HTMLElement | null>) {
       io.disconnect()
       ro?.disconnect()
       mo?.disconnect()
-      if (raf) cancelAnimationFrame(raf)
+      read?.stop()
       scroller?.removeEventListener('scroll', onScroll)
       mark.remove()
       el.classList.remove('is-stuck')

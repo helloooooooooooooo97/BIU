@@ -323,6 +323,7 @@ export class SessionViewService extends Service {
   private trajectoryLive = false
   private trajGen = 0
   private trajFetchSessionId: string | null = null
+  private trajRefresh: Promise<void> | null = null
   private dispatchedPoll: ReturnType<typeof setInterval> | null = null
   private dispatchedAbort: AbortController | null = null
   private busyHoldUntil = 0
@@ -1291,22 +1292,44 @@ export class SessionViewService extends Service {
     }
   }
 
+  /** 离开轨迹页后停止跟着每条事件刷新。debug 路由仍由 view 决定。 */
+  releaseTrajectory() {
+    if (!this.trajectoryLive) return
+    this.trajectoryLive = false
+    this.trajGen += 1
+  }
+
   async refreshTrajectoryIndex() {
     const sessionId = this.value.sessionId
     if (!sessionId || !this.wantsTrajectory()) return
+    if (this.trajRefresh) return this.trajRefresh
+    const run = this.pullTrajectoryIndex(sessionId)
+    this.trajRefresh = run
+    try {
+      await run
+    } finally {
+      if (this.trajRefresh === run) this.trajRefresh = null
+    }
+  }
+
+  private async pullTrajectoryIndex(sessionId: string) {
     const gen = this.trajGen
     try {
       const res = await fetch(
         `/api/agents/${sessionId}/trajectory?turns=${TRAJECTORY_TAIL_TURNS}`,
       )
-      if (gen !== this.trajGen || this.value.sessionId !== sessionId) return
+      if (gen !== this.trajGen || this.value.sessionId !== sessionId || !this.wantsTrajectory()) return
       if (!res.ok) return
       const body = (await res.json()) as TrajectoryPayload
-      this.replace({
-        trajectory: Array.isArray(body.rows) ? body.rows : [],
-        trajectoryHasMore: Boolean(body.hasMore),
-        totalTurns: typeof body.totalTurns === 'number' ? body.totalTurns : this.value.totalTurns,
-      })
+      const trajectory = Array.isArray(body.rows) ? body.rows : []
+      const trajectoryHasMore = Boolean(body.hasMore)
+      const totalTurns = typeof body.totalTurns === 'number' ? body.totalTurns : this.value.totalTurns
+      const prev = this.value.trajectory
+      const sameRows =
+        prev.length === trajectory.length &&
+        prev.every((row, index) => row.seq === trajectory[index]?.seq && row.type === trajectory[index]?.type)
+      if (sameRows && this.value.trajectoryHasMore === trajectoryHasMore && this.value.totalTurns === totalTurns) return
+      this.replace({ trajectory, trajectoryHasMore, totalTurns })
     } catch {
       /* ignore */
     }

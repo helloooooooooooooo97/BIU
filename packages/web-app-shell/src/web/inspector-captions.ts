@@ -25,13 +25,25 @@ function onCaption(event: Event) {
     emit()
     return
   }
-  captions.set(id, {
+  const next = {
     label,
     kind: typeof detail?.kind === 'string' ? detail.kind : undefined,
     mode: typeof detail?.mode === 'string' ? detail.mode : undefined,
     icon: typeof detail?.icon === 'string' ? detail.icon : undefined,
     emoji: typeof detail?.emoji === 'string' ? detail.emoji : undefined,
-  })
+  }
+  const prev = captions.get(id)
+  if (
+    prev &&
+    prev.label === next.label &&
+    prev.kind === next.kind &&
+    prev.mode === next.mode &&
+    prev.icon === next.icon &&
+    prev.emoji === next.emoji
+  ) {
+    return
+  }
+  captions.set(id, next)
   emit()
 }
 

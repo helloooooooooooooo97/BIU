@@ -1482,3 +1482,72 @@ test('未登录不请求会话和审批，登录后再拉', async () => {
   assert.equal(calls.some((call) => call.url.includes('/api/approvals')), true)
   localStorage.removeItem('biu.account.token')
 })
+
+test('trajectory refresh collapses a burst and skips an unchanged index', async () => {
+  const row = { id: 'tr-1', seq: 1, turn: 0, step: null, depth: 0, type: 'user/message', summary: 'hi' }
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  let held = false
+  let trajHits = 0
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.includes('/trajectory')) {
+      trajHits += 1
+      if (held) await gate
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 's-new', rows: [row], hasMore: false, totalTurns: 1 }),
+      } as Response
+    }
+    if (url.includes('/api/agents/s-new?turns=')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: 's-new',
+          events: [{ type: 'session/open', version: 1, seq: 0, ts: 1 }],
+          hasMore: false,
+          totalTurns: 0,
+        }),
+      } as Response
+    }
+    if (url.includes('/api/agents')) {
+      return { ok: true, status: 200, json: async () => ({ sessions: [] }) } as Response
+    }
+    if (url.includes('/api/approvals')) {
+      return { ok: true, status: 200, json: async () => ({ mode: 'auto', pending: [] }) } as Response
+    }
+    return { ok: false, status: 404, json: async () => ({}) } as Response
+  }) as typeof fetch
+
+  const ctx = new Context()
+  await ctx.plugin(sessionView)
+  const view = ctx.sessionView as SessionViewService
+  view.ingest('s-new', { type: 'session/open', version: 1, seq: 0, ts: 1 })
+  await view.ensureTrajectory()
+  trajHits = 0
+  held = true
+  const burst = Promise.all(Array.from({ length: 8 }, () => view.refreshTrajectoryIndex()))
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  assert.equal(trajHits, 1)
+  release()
+  await burst
+  assert.equal(trajHits, 1)
+  assert.equal(view.get().trajectory.length, 1)
+
+  let notes = 0
+  const stop = view.subscribe(() => {
+    notes += 1
+  })
+  await view.refreshTrajectoryIndex()
+  assert.equal(trajHits, 2)
+  assert.equal(notes, 0)
+  stop()
+
+  view.releaseTrajectory()
+  await view.refreshTrajectoryIndex()
+  assert.equal(trajHits, 2)
+})

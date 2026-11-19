@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useSyncExternalStore, type ComponentType } from 'react'
 import { CircleStackIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import type { SlotProps } from '@biu/type-slots'
-import type { CollectionInfo } from '@biu/type-file-system'
+import { fsdbChangeHitsPane, parseFsdbChange, type CollectionInfo } from '@biu/type-file-system'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { parseAppPath } from '@biu/web-session-view'
 import { buildCrumbs, crumbHotkeyPane, crumbParentHotkey, parentCrumbTarget, pathForCrumbTarget, type Crumb, type CrumbTarget } from './sidebar-nav.ts'
@@ -74,10 +74,14 @@ function tableLabel(table: CollectionInfo) {
   return table.view?.title ?? table.label ?? table.path.replace(/^\//, '')
 }
 
-function useViewTick() {
+function useViewTick(collectionPath = '', recordId = '') {
   return useSyncExternalStore(
     (fn) => {
-      const bump = () => {
+      const bump = (event?: Event) => {
+        if (event && event.type === 'fsdb:change') {
+          const change = parseFsdbChange(event)
+          if (!fsdbChangeHitsPane(change, collectionPath, recordId)) return
+        }
         viewTick += 1
         fn()
       }
@@ -234,11 +238,11 @@ export function DatabaseInspectorTab({
   )
   const inspectorPath = useBindInspectorDbPath(id, tables, seedCollection)
   const viaData = useSyncExternalStore(subscribeViaDataCrumbs, viaDataCrumbsOn, () => false)
-  const { collection: tabCollection } = crumbsForRoute(inspectorPath, tables, viaData)
+  const { collection: tabCollection, recordId: tabRecordId } = crumbsForRoute(inspectorPath, tables, viaData)
   const agentWorking = useInspectorAgentWorking(tabCollection || seedCollection || '')
   const crumbRef = useRef<HTMLElement>(null)
   const tabRef = useRef<HTMLDivElement>(null)
-  useViewTick()
+  useViewTick(tabCollection, tabRecordId ?? '')
   const { crumbs } = crumbsForRoute(inspectorPath, tables, viaData)
   const leaf = crumbs.at(-1)
   const leafChoice = leaf?.choices.find((item) => item.id === leaf.id)
@@ -337,11 +341,11 @@ export function DatabaseInspectorBrowse(props: SlotProps) {
   )
   const inspectorPath = useBindInspectorDbPath(id, tables, seedOf(extra))
   const agentWorking = useInspectorAgentWorking(seedOf(extra) || '')
-  useViewTick()
   const { pathname, search } = splitHref(inspectorPath)
   const viaData = useSyncExternalStore(subscribeViaDataCrumbs, viaDataCrumbsOn, () => false)
   const { collection, viewId, recordId } = crumbsForRoute(pathname, tables, viaData)
   const currentPath = collection
+  useViewTick(currentPath, recordId ?? '')
   const chrome = useSyncExternalStore(
     (fn) => (ui ? ui.subscribe(fn) : () => undefined),
     () => (currentPath ? ui?.chrome(currentPath) ?? EMPTY_CHROME : EMPTY_CHROME),

@@ -14,6 +14,7 @@
     "./inspector-db-route": "./src/web/inspector-db-route.ts",
     "./inspector-pane-menu": "./src/web/inspector-pane-menu.tsx",
     "./page-width": "./src/web/page-width.ts",
+    "./page-read": "./src/web/page-read.ts",
     "./layout-prefs-menu": "./src/web/layout-prefs-menu.tsx",
     "./field-value": "./src/web/field-value-pop.tsx",
     "./record-layouts": "./src/web/record-layouts.ts",

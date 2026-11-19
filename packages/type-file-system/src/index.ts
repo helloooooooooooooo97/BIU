@@ -831,6 +831,9 @@ export {
   fsdbChangeDetail,
   channelNeedsCollectionSync,
   emitFsdbChange,
+  fsdbChangeHitsCollection,
+  fsdbRecordChangeReloadsList,
+  fsdbChangeHitsPane,
   parseFsdbChange,
   emitAssetChanged,
 } from './database-channel.ts'
