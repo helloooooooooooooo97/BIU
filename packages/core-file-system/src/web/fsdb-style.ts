@@ -75,10 +75,13 @@ const CSS = `
 .fsdb-page .tasks-toolbar{position:relative;z-index:50;display:flex;gap:12px;align-items:center;justify-content:space-between;min-width:0;flex:none;flex-wrap:nowrap;height:var(--biu-size-control-md);min-height:var(--biu-size-control-md)}
 .fsdb-page .fsdb-main > .tasks-toolbar,.fsdb-page .fsdb-detail-main > .tasks-toolbar{box-sizing:border-box;height:calc(var(--biu-size-control-md) + 10px);min-height:calc(var(--biu-size-control-md) + 10px);padding-top:10px}
 .fsdb-page .tasks-toolbar:has(.fsdb-query-menu),.fsdb-page .tasks-toolbar:has(.tasks-sort-menu),.fsdb-page .tasks-toolbar:has(.tasks-filter-menu),.fsdb-page .tasks-toolbar:has(.tasks-viewdd-menu){z-index:var(--biu-z-dropdown)}
-.fsdb-page .tasks-toolbar-left{position:relative;z-index:2;display:flex;align-items:center;gap:6px;flex:1 1 auto;min-width:0}
+.fsdb-page .tasks-toolbar-left{position:relative;z-index:2;display:flex;align-items:center;gap:6px;flex:0 0 auto;min-width:0}
 .fsdb-page .tasks-toolbar:has(.fsdb-query-menu) .tasks-toolbar-left,.fsdb-page .tasks-toolbar:has(.tasks-sort-menu) .tasks-toolbar-left,.fsdb-page .tasks-toolbar:has(.tasks-filter-menu) .tasks-toolbar-left{z-index:0}
 .fsdb-locked-filter{display:inline-flex;align-items:center;height:var(--biu-size-control-md);padding:0 8px;border-radius:8px;background:color-mix(in srgb,var(--biu-color-text) 12%,transparent);color:var(--biu-color-text);font-size:var(--biu-font-size-3);font-weight:var(--biu-font-weight-semibold);cursor:default}
-.fsdb-page .tasks-toolbar-right{position:relative;z-index:1;display:flex;align-items:center;gap:2px;flex:none;flex-wrap:nowrap;margin-left:auto;height:var(--biu-size-control-md)}
+.fsdb-page .tasks-toolbar-right{position:relative;z-index:1;display:flex;align-items:center;gap:2px;flex:0 1 auto;min-width:0;flex-wrap:nowrap;margin-left:auto;height:var(--biu-size-control-md)}
+.fsdb-page .tasks-toolbar-right > *{flex-shrink:0}
+.fsdb-page .tasks-toolbar-right > [data-toolbar-hidden]{display:none}
+.fsdb-page .tasks-toolbar-left .tasks-viewdd-wrap,.fsdb-page .tasks-toolbar-left .tasks-viewtabs,.fsdb-page .tasks-toolbar-left .tasks-viewdd-btn{min-width:0;max-width:100%}
 .fsdb-views-error{display:inline-flex;align-items:center;gap:8px;max-width:min(420px,46vw);margin-right:6px;padding:4px 8px;border-radius:8px;background:color-mix(in srgb,var(--biu-color-danger) 12%,transparent);color:var(--biu-color-danger);font-size:var(--biu-font-size-2);font-weight:var(--biu-font-weight-semibold);line-height:1.35}
 .fsdb-views-error button{flex:none;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;text-decoration:underline}
 .fsdb-page .tasks-toolbar-right:has(.fsdb-query-menu),.fsdb-page .tasks-toolbar-right:has(.tasks-sort-menu),.fsdb-page .tasks-toolbar-right:has(.tasks-filter-menu){z-index:var(--biu-z-float)}

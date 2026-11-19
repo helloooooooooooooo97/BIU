@@ -86,6 +86,7 @@ import { useTableColumnViewport } from './table-column-viewport.ts'
 import { useTableViewport } from './table-viewport.ts'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import { useStickyToolbar } from './sticky-toolbar.ts'
+import { useToolbarOverflow } from './toolbar-overflow.ts'
 import { PagerSizeControl } from './pager-size.tsx'
 import {
   actionIcon,
@@ -2164,6 +2165,7 @@ export function CollectionBrowser({
   const crumbRef = useRef<HTMLElement>(null)
   const viewRef = useRef<HTMLDivElement>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
+  const bindToolbar = useToolbarOverflow(toolbarRef)
   const toolbarRightRef = useRef<HTMLDivElement>(null)
   const modeRef = useRef<HTMLDivElement>(null)
   const sortRef = useRef<HTMLDivElement>(null)
@@ -6332,7 +6334,7 @@ export function CollectionBrowser({
 
         <div
           className="tasks-toolbar"
-          ref={toolbarRef}
+          ref={bindToolbar}
           data-biu-ignore
           onMouseDown={(event) => {
             const target = event.target as HTMLElement

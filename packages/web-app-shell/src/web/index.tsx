@@ -21,6 +21,7 @@ import {
   SIDEBAR_LABEL_AT,
   SIDEBAR_MAX,
   SIDEBAR_MIN,
+  INSPECTOR_MIN,
   SIDEBAR_RAIL,
   sidebarColumnWidth,
 } from './chat-overlay.ts'
@@ -406,8 +407,8 @@ function Shell(props: SlotProps) {
   const [inspectorOpen, setInspectorOpen] = useState(() => getSidebarPersist(SIDEBAR_PERSIST.inspectorOpen) === '1')
   const [inspectorWidth, setInspectorWidth] = useState(() => {
     const n = Number(getSidebarPersist(SIDEBAR_PERSIST.inspectorWidth))
-    if (Number.isFinite(n) && n >= 240 && n <= 1000) return n
-    return 320
+    if (Number.isFinite(n) && n >= INSPECTOR_MIN && n <= 1000) return n
+    return INSPECTOR_MIN
   })
   const layoutSnap = useRef({
     leftPane: true,
@@ -437,7 +438,7 @@ function Shell(props: SlotProps) {
     if (!next) requestInspectorClose()
   }, [applyInspector])
   const persistInspectorWidth = useCallback((width: number) => {
-    const next = Math.min(1000, Math.max(240, Math.round(width)))
+    const next = Math.min(1000, Math.max(INSPECTOR_MIN, Math.round(width)))
     holdCenterRef.current = null
     layoutSnap.current = commitShellLayoutSnap(layoutSnap.current, { inspectorWidth: next })
     setInspectorWidth(next)

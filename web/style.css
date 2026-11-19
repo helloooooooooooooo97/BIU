@@ -176,8 +176,8 @@
   --biu-chat-pad-y: var(--biu-space-2);
   --biu-chat-reply-pad-x: var(--biu-space-3);
   --biu-chat-max-width: 768px;
-  --biu-center-min: 512px;
-  --biu-inspector-min: 240px;
+  --biu-center-min: 500px;
+  --biu-inspector-min: 500px;
 }
 
 html.dark {
@@ -389,6 +389,11 @@ body {
   overflow: hidden;
   background: var(--biu-color-bg);
   color: var(--biu-color-text);
+}
+
+.app-shell.is-inspector-open {
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .chat-view-header {
@@ -3450,7 +3455,7 @@ select.settings-account-input {
   grid-template-columns: var(--sidebar-col, 0px) minmax(0, 1fr) var(--inspector-width, 0px);
 }
 .app-shell-agent.is-inspector-open {
-  grid-template-columns: var(--sidebar-col, 0px) minmax(0, var(--center-col, 1fr)) minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-col, 0px) minmax(var(--biu-center-min), var(--center-col, 1fr)) minmax(var(--biu-inspector-min), 1fr);
 }
 
 .app-shell-agent.is-resizing,
@@ -4016,7 +4021,7 @@ html.dark .composer-model-flyout {
   grid-template-columns: minmax(0, 1fr) var(--inspector-width, 0px);
 }
 .app-shell-module.is-inspector-open {
-  grid-template-columns: minmax(0, var(--center-col, 1fr)) minmax(0, 1fr);
+  grid-template-columns: minmax(var(--biu-center-min), var(--center-col, 1fr)) minmax(var(--biu-inspector-min), 1fr);
 }
 
 .app-shell-module.is-resizing,

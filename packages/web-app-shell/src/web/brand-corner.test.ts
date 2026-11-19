@@ -126,11 +126,11 @@ test('shell columns stay three tracks without animating on window resize', () =>
   )
   assert.match(
     css,
-    /\.app-shell-agent\.is-inspector-open\s*\{[^}]*grid-template-columns:\s*var\(--sidebar-col, 0px\) minmax\(0, var\(--center-col, 1fr\)\) minmax\(0, 1fr\)/s,
+    /\.app-shell-agent\.is-inspector-open\s*\{[^}]*grid-template-columns:\s*var\(--sidebar-col, 0px\) minmax\(var\(--biu-center-min\), var\(--center-col, 1fr\)\) minmax\(var\(--biu-inspector-min\), 1fr\)/s,
   )
   assert.match(
     css,
-    /\.app-shell-module\.is-inspector-open\s*\{[^}]*grid-template-columns:\s*minmax\(0, var\(--center-col, 1fr\)\) minmax\(0, 1fr\)/s,
+    /\.app-shell-module\.is-inspector-open\s*\{[^}]*grid-template-columns:\s*minmax\(var\(--biu-center-min\), var\(--center-col, 1fr\)\) minmax\(var\(--biu-inspector-min\), 1fr\)/s,
   )
   assert.match(css, /\.app-shell-agent\.is-window-resizing\s*\{[^}]*transition:\s*none/s)
   assert.match(css, /\.app-shell-module\.is-window-resizing\s*\{[^}]*transition:\s*none/s)

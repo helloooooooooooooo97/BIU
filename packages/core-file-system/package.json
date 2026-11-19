@@ -15,6 +15,7 @@
     "./inspector-pane-menu": "./src/web/inspector-pane-menu.tsx",
     "./page-width": "./src/web/page-width.ts",
     "./page-read": "./src/web/page-read.ts",
+    "./toolbar-overflow": "./src/web/toolbar-overflow.ts",
     "./layout-prefs-menu": "./src/web/layout-prefs-menu.tsx",
     "./field-value": "./src/web/field-value-pop.tsx",
     "./record-layouts": "./src/web/record-layouts.ts",

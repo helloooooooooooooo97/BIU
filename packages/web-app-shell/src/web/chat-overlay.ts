@@ -11,9 +11,9 @@ export const SIDEBAR_RAIL = 48
 export const SIDEBAR_MIN = 160
 /** 到这个宽度就显示文字标签（会话名、「添加聊天」等）。 */
 export const SIDEBAR_LABEL_AT = SIDEBAR_MIN
-/** 中间列希望至少这么宽；不够时先压检查器，不够再压左侧，不要一窄就把侧栏关掉。 */
-export const CENTER_MIN = 512
-export const INSPECTOR_MIN = 240
+/** 分栏时主内容区的最小宽度；与右侧检查器一起保留，窄窗口横向滚动。 */
+export const CENTER_MIN = 500
+export const INSPECTOR_MIN = 500
 const RAIL = 0
 const SIDEBAR = SIDEBAR_MAX
 
@@ -29,7 +29,7 @@ export function sidebarColumnWidth(collapsed: boolean, width: number) {
   return collapsed ? SIDEBAR_RAIL : width
 }
 
-/** 窄屏先压检查器，尽量保住中间列宽度；不够再压左侧。`holdCenter` 时中间列锁死，窗口缩放只挤右边。 */
+/** Keep both content panes usable; narrow windows scroll instead of squeezing either pane. */
 export function allocateShellColumns(opts: {
   viewportWidth: number
   railWidth?: number
@@ -41,35 +41,17 @@ export function allocateShellColumns(opts: {
 }) {
   const rail = opts.railWidth ?? RAIL
   const available = Math.max(0, opts.viewportWidth - rail)
-  let left = opts.leftPane ? clampSidebarWidth(opts.leftWidth ?? SIDEBAR_MAX) : 0
-  if (opts.inspectorOpen && opts.holdCenter != null && opts.holdCenter > 0) {
-    const center = Math.min(opts.holdCenter, Math.max(0, available - left))
-    const inspector = Math.max(0, available - left - center)
-    return { left, inspector, center }
+  const left = opts.leftPane ? clampSidebarWidth(opts.leftWidth ?? SIDEBAR_MAX) : 0
+  if (opts.inspectorOpen) {
+    const total = Math.max(available, left + CENTER_MIN + INSPECTOR_MIN)
+    if (opts.holdCenter != null && opts.holdCenter > 0) {
+      const center = Math.max(CENTER_MIN, Math.min(opts.holdCenter, total - left - INSPECTOR_MIN))
+      return { left, center, inspector: total - left - center }
+    }
+    const inspector = Math.min(total - left - CENTER_MIN, Math.max(INSPECTOR_MIN, opts.inspectorWidth))
+    return { left, inspector, center: total - left - inspector }
   }
-  let inspector = opts.inspectorOpen ? Math.max(INSPECTOR_MIN, opts.inspectorWidth) : 0
-  let center = available - left - inspector
-  if (center < CENTER_MIN && inspector > 0) {
-    const take = Math.min(inspector, CENTER_MIN - center)
-    inspector -= take
-    center += take
-  }
-  if (center < 0 && left > SIDEBAR_MIN) {
-    const take = Math.min(left - SIDEBAR_MIN, -center)
-    left -= take
-    center += take
-  }
-  if (center < 0 && left > 0) {
-    center += left
-    left = 0
-  }
-  if (center < 0 && inspector > 0) {
-    const take = Math.min(inspector, -center)
-    inspector -= take
-    center += take
-  }
-  center = Math.max(0, available - left - inspector)
-  return { left, inspector, center }
+  return { left, inspector: 0, center: Math.max(0, available - left) }
 }
 
 export function applyShellColumnCssVars(el: HTMLElement | null, cols: { left: number; inspector: number; center?: number }) {
@@ -462,9 +444,9 @@ export function inspectorTabFromEvent(event: Event): string | undefined {
 
 export function toggleChatOverlay() {
   if (overlay) {
-    let inspectorWidth = 320
+    let inspectorWidth = INSPECTOR_MIN
     const n = Number(getSidebarPersist(SIDEBAR_PERSIST.inspectorWidth))
-    if (Number.isFinite(n) && n >= 240) inspectorWidth = n
+    if (Number.isFinite(n) && n >= INSPECTOR_MIN) inspectorWidth = n
     const shell = document.querySelector('[data-testid="app-shell"]')
     const col = shell ? Number.parseFloat(getComputedStyle(shell).getPropertyValue('--sidebar-col')) : NaN
     const sidebarCollapsed = !Number.isFinite(col) || col < SIDEBAR_MIN

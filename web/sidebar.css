@@ -932,7 +932,14 @@ html.dark .fsdb-views {
 .app-shell-agent>.sidebar-flyout-host,
 .app-shell-agent>.app-side-bar {
   grid-column: 1;
-}@media (prefers-reduced-motion: reduce) {
+}
+
+.app-shell-agent.is-inspector-open>.session-inspector,
+.app-shell-module.is-inspector-open>.session-inspector {
+  min-width: min(var(--biu-inspector-min), 100vw);
+}
+
+@media (prefers-reduced-motion: reduce) {
   .chat-session-row::before,
   .chat-session-row.is-active,
   .sidebar-fold.is-animating,

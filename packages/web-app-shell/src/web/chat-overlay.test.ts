@@ -58,7 +58,7 @@ test('collapsed sidebar keeps a VS Code-style icon rail', () => {
   assert.equal(SIDEBAR_RAIL, 48)
   assert.equal(
     chatColumnWidth({ viewportWidth: 1600, inspectorOpen: true, inspectorWidth: 320, sidebarCollapsed: true }),
-    1600 - 320 - SIDEBAR_RAIL,
+    1600 - INSPECTOR_MIN - SIDEBAR_RAIL,
   )
 })
 
@@ -153,7 +153,7 @@ test('publishShellLayout reports painted column widths', () => {
   assert.deepEqual(seen, [{ left: 0, inspector: 320 }])
 })
 
-test('narrow viewport shrinks center and inspector first; left hides last', () => {
+test('narrow viewport preserves both content pane minimums', () => {
   const wide = allocateShellColumns({
     viewportWidth: 1600,
     leftPane: true,
@@ -161,8 +161,8 @@ test('narrow viewport shrinks center and inspector first; left hides last', () =
     inspectorWidth: 320,
   })
   assert.equal(wide.left, SIDEBAR_MAX)
-  assert.equal(wide.inspector, 320)
-  assert.equal(wide.center, 1600 - SIDEBAR_MAX - 320)
+  assert.equal(wide.inspector, INSPECTOR_MIN)
+  assert.equal(wide.center, 1600 - SIDEBAR_MAX - INSPECTOR_MIN)
 
   const keepLeft = allocateShellColumns({
     viewportWidth: SIDEBAR_MAX + CENTER_MIN + 320 - 100,
@@ -171,7 +171,7 @@ test('narrow viewport shrinks center and inspector first; left hides last', () =
     inspectorWidth: 320,
   })
   assert.equal(keepLeft.left, SIDEBAR_MAX)
-  assert.equal(keepLeft.inspector, 220)
+  assert.equal(keepLeft.inspector, INSPECTOR_MIN)
   assert.equal(keepLeft.center, CENTER_MIN)
 
   const squeezeInspector = allocateShellColumns({
@@ -181,8 +181,8 @@ test('narrow viewport shrinks center and inspector first; left hides last', () =
     inspectorWidth: 320,
   })
   assert.equal(squeezeInspector.left, SIDEBAR_MAX)
-  assert.equal(squeezeInspector.inspector, 0)
-  assert.equal(squeezeInspector.center, 200 + INSPECTOR_MIN)
+  assert.equal(squeezeInspector.inspector, INSPECTOR_MIN)
+  assert.equal(squeezeInspector.center, CENTER_MIN)
 
   const hideLeft = allocateShellColumns({
     viewportWidth: SIDEBAR_MIN + INSPECTOR_MIN - 1,
@@ -191,11 +191,11 @@ test('narrow viewport shrinks center and inspector first; left hides last', () =
     inspectorWidth: 320,
   })
   assert.equal(hideLeft.left, SIDEBAR_MAX)
-  assert.equal(hideLeft.inspector, 0)
-  assert.equal(hideLeft.center, SIDEBAR_MIN + INSPECTOR_MIN - 1 - SIDEBAR_MAX)
+  assert.equal(hideLeft.inspector, INSPECTOR_MIN)
+  assert.equal(hideLeft.center, CENTER_MIN)
 })
 
-test('holdCenter keeps the middle column and only squeezes the inspector', () => {
+test('holdCenter yields when the inspector reaches its minimum', () => {
   const wide = allocateShellColumns({
     viewportWidth: 1600,
     leftPane: true,
@@ -204,8 +204,8 @@ test('holdCenter keeps the middle column and only squeezes the inspector', () =>
     holdCenter: 800,
   })
   assert.equal(wide.left, SIDEBAR_MAX)
-  assert.equal(wide.center, 800)
-  assert.equal(wide.inspector, 1600 - SIDEBAR_MAX - 800)
+  assert.equal(wide.center, 1600 - SIDEBAR_MAX - INSPECTOR_MIN)
+  assert.equal(wide.inspector, INSPECTOR_MIN)
 
   const squeezed = allocateShellColumns({
     viewportWidth: SIDEBAR_MAX + 800 + 80,
@@ -215,20 +215,34 @@ test('holdCenter keeps the middle column and only squeezes the inspector', () =>
     holdCenter: 800,
   })
   assert.equal(squeezed.left, SIDEBAR_MAX)
-  assert.equal(squeezed.center, 800)
-  assert.equal(squeezed.inspector, 80)
+  assert.equal(squeezed.center, CENTER_MIN)
+  assert.equal(squeezed.inspector, INSPECTOR_MIN)
 })
 
-test('center min is two thirds of the old 768; inspector shrinks before the left pane', () => {
-  assert.equal(CENTER_MIN, 512)
+test('both content panes keep minimum widths while narrow windows overflow', () => {
+  for (const viewportWidth of [200, 320, 480, 800, 1200]) {
+    for (const inspectorWidth of [0, 80, 320, 1000]) {
+      for (const holdCenter of [null, 800]) {
+        const cols = allocateShellColumns({ viewportWidth, leftPane: true, inspectorOpen: true, inspectorWidth, holdCenter })
+        assert.ok(cols.inspector >= INSPECTOR_MIN)
+        assert.ok(cols.center >= CENTER_MIN)
+        assert.equal(cols.left + cols.center + cols.inspector, Math.max(viewportWidth, cols.left + CENTER_MIN + INSPECTOR_MIN))
+      }
+    }
+  }
+})
+
+test('both content pane minimums are 500px', () => {
+  assert.equal(CENTER_MIN, 500)
+  assert.equal(INSPECTOR_MIN, 500)
   const keepBoth = allocateShellColumns({
-    viewportWidth: SIDEBAR_MAX + 600 + 320,
+    viewportWidth: SIDEBAR_MAX + 600 + INSPECTOR_MIN,
     leftPane: true,
     inspectorOpen: true,
     inspectorWidth: 320,
   })
   assert.equal(keepBoth.left, SIDEBAR_MAX)
-  assert.equal(keepBoth.inspector, 320)
+  assert.equal(keepBoth.inspector, INSPECTOR_MIN)
   assert.equal(keepBoth.center, 600)
 })
 

@@ -19,6 +19,7 @@ import {
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { usePageFind } from './page-view-state.ts'
 import { useStickyToolbar } from './sticky-toolbar.ts'
+import { useToolbarOverflow } from '@biu/core-file-system/toolbar-overflow'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 import {
   DEFAULT_RECORD_PROP_VIEW_ID,
@@ -101,6 +102,7 @@ export function RecordDetailBar({
   const columnRef = useRef<HTMLDivElement>(null)
   const configRef = useRef<HTMLDivElement>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
+  const bindToolbar = useToolbarOverflow(toolbarRef)
   useStickyToolbar(toolbarRef)
   const contentId = selectedViewCatalogId(path, record, 'views')
   const builtinModes = [...registeredModes, HIDDEN_MODE]
@@ -189,7 +191,7 @@ export function RecordDetailBar({
   return (
     <div
       className="tasks-toolbar"
-      ref={toolbarRef}
+      ref={bindToolbar}
       data-testid="fsdb-page-detail-bar"
       data-biu-ignore
       onMouseDown={(event) => {

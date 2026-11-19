@@ -131,9 +131,15 @@ test('column window uses variable widths and handles empty, fully frozen and end
 test('unsaved columns use fixed defaults; saved widths stay as-is', () => {
   assert.equal(tableColumnWidth('title', undefined, true), TABLE_COL_PIN_PX)
   assert.equal(tableColumnWidth('actions', undefined, true), TABLE_COL_ACTIONS_PX)
-  assert.equal(tablePinCount(['title', 'actions', 'status'], 'title'), 2)
+  assert.equal(tablePinCount(['title', 'actions', 'status'], 'title'), 1)
   assert.equal(tablePinCount(['title', 'status'], 'title'), 1)
-  assert.equal(tablePinColClass('actions', 'title'), 'is-pin-col')
+  assert.equal(tablePinColClass('actions', 'title'), '')
+  assert.equal(tablePinColClass('title', 'title'), 'is-pin-col')
+  assert.equal(tablePinCount(['actions', 'status'], 'title'), 0)
+  const keys = ['title', 'actions', ...Array.from({ length: 18 }, (_, i) => `field-${i}`)]
+  const slice = tableColumnSlice(keys.length, tablePinCount(keys, 'title'), 900, 500, [240, 72, ...Array(18).fill(120)])
+  assert.equal(slice.pin, 1)
+  assert.ok(slice.start > keys.indexOf('actions'))
   assert.equal(tableColumnWidth('updatedBy', undefined), TABLE_COL_PX)
   assert.equal(tableColumnWidth('status', undefined), TABLE_COL_PX)
   assert.equal(tableColumnWidth('createdBy', 180), 180)
