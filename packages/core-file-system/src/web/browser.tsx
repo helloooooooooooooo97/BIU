@@ -186,6 +186,7 @@ import {
   encodeListFilter,
   filterEditorStateKey,
   filterTreeStateKey,
+  matchListFilterRecord,
   seedRecordFromViewFilters,
   moveList,
   normalizeSorts,
@@ -1358,6 +1359,8 @@ export function CollectionBrowser({
     [catalogLocks, filterTree],
   )
   const queryFiltersKey = JSON.stringify(queryFilters)
+  const queryFiltersRef = useRef(queryFilters)
+  queryFiltersRef.current = queryFilters
   const lockedFilterKeys = Object.keys(catalogLocks)
   const lockedSource = catalogLocks.tablePath ?? ''
   const lockedKind = String(catalogLocks.blockKind ?? '').trim()
@@ -3714,12 +3717,12 @@ export function CollectionBrowser({
     })
   }
 
-  function dropListedRecords(ids: string[]) {
+  function dropListedRecords(ids: string[], opts?: { keepHistory?: boolean }) {
     const gone = new Set(ids.filter(Boolean).map(String))
     if (!gone.size) return
     for (const id of gone) {
       confirmedCreates.current.delete(id)
-      void tableEditHistoryRef.current.forget(`${collectionPathRef.current}/${id}`)
+      if (!opts?.keepHistory) void tableEditHistoryRef.current.forget(`${collectionPathRef.current}/${id}`)
     }
     const prev = itemsRef.current
     const next = prev.filter((item) => !gone.has(String(item.id)))
@@ -3759,7 +3762,13 @@ export function CollectionBrowser({
       const detail = (event as CustomEvent<ListedMutation>).detail
       if (!detail || detail.path !== collectionPathRef.current) return
       if (detail.op === 'patch') {
-        mapListedRecords((item) => (item.id === detail.row.id ? overlayListedRow(item, detail.row) : item))
+        const existing = itemsRef.current.find((item) => item.id === detail.row.id)
+        const merged = existing ? overlayListedRow(existing, detail.row) : detail.row
+        if (existing && !matchListFilterRecord(merged, queryFiltersRef.current, schemaRef.current, tagCatalogRef.current)) {
+          dropListedRecords([detail.row.id], { keepHistory: true })
+        } else {
+          mapListedRecords((item) => (item.id === detail.row.id ? overlayListedRow(item, detail.row) : item))
+        }
         setDetailRow((prev) => (prev?.id === detail.row.id ? overlayListedRow(prev, detail.row) : prev))
         return
       }
@@ -3898,10 +3907,16 @@ export function CollectionBrowser({
         if (dataPathRef.current === dataPath) {
           const displayed = next.id === row.id ? next : { ...row, ...next, id: row.id }
           const merge = (item: DbRecord) => (item.id === row.id ? overlayListedRow(item, displayed) : item)
-          mapListedRecords(merge)
+          const merged = overlayListedRow(itemsRef.current.find((item) => item.id === row.id) ?? row, displayed)
+          const stillMatches = matchListFilterRecord(merged, queryFiltersRef.current, schemaRef.current, tagCatalogRef.current)
+          if (stillMatches) {
+            mapListedRecords(merge)
+          } else {
+            dropListedRecords([row.id], { keepHistory: true })
+          }
           setDetailRow((prev) => (prev?.id === row.id ? overlayListedRow(prev, displayed) : prev))
           publishListedMutation({ path: dataPath, op: 'patch', row: displayed, groupBy: groupByRef.current })
-          announceListChange(true, path)
+          announceListChange(stillMatches, path)
           quietUntil.current = Date.now() + 800
         } else {
           forgetListCache(dataPath)

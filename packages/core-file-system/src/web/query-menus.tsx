@@ -224,7 +224,7 @@ export function SortQueryMenu({
               )
             })}
           </SortableContext>
-          <DragOverlay zIndex={overlayZ(280)}>
+          <DragOverlay zIndex={overlayZ(340)}>
             {active ? (
               <div className="fsdb-query-drag-overlay" data-fsdb-sort-overlay>
                 <div className="fsdb-query-row">

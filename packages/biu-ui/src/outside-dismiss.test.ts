@@ -22,7 +22,7 @@ test('headless dismiss uses radix dismissable layer', () => {
   assert.match(pop, /zIndex = 300/)
   assert.doesNotMatch(pop, /Popover\.Content[\s\S]*asChild/)
   assert.match(menu, /HeadlessDismiss/)
-  assert.match(menu, /zIndex = 240/)
+  assert.match(menu, /zIndex = 340/)
   assert.match(menu, /minWidth = 220/)
   assert.match(menu, /overlayZ/)
   assert.match(menu, /overlayPortalRoot/)
