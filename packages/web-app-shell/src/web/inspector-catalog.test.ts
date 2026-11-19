@@ -147,3 +147,9 @@ test('opened rows in the inspector add menu use the icon gray for every glyph', 
   // 亮色主题同样钉成图标灰
   assert.match(css, /html:not\(\.dark\) \.inspector-add-close svg,[\s\S]*?color:\s*var\(--biu-color-icon-fixed\)/)
 })
+
+test('sidebar create-agent button is hidden when expanded and only shown when collapsed', () => {
+  const sidebarCss = readFileSync(resolve(import.meta.dirname, '../../../../web/sidebar.css'), 'utf8')
+  assert.match(sidebarCss, /\.sidebar-create-agent-head\s*\{[^}]*display:\s*none/s)
+  assert.match(sidebarCss, /\.app-side-bar\.is-narrow \.sidebar-create-agent-head\s*\{[^}]*display:\s*block/s)
+})

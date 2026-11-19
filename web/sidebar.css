@@ -866,6 +866,7 @@ html.dark .fsdb-views {
 }
 
 .sidebar-create-agent-head {
+  display: none;
   flex-shrink: 0;
   padding: 8px;
 }
@@ -901,6 +902,7 @@ html.dark .fsdb-views {
 }
 
 .app-side-bar.is-narrow .sidebar-create-agent-head {
+  display: block;
   padding: 0 0 4px;
 }
 
