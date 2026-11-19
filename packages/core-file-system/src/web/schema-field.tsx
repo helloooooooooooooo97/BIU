@@ -74,6 +74,38 @@ export function SchemaChip({
   return <TagChip id={id} label={label} icon={icon ?? tagChipIcon(id)} onRemove={onRemove} onClick={onClick} active={active} />
 }
 
+/** 标签「属性」列：和详情里一样，一个字段一枚带类型图标的标签。 */
+export function TagFieldChips({ value }: { value: unknown }) {
+  let listed: unknown = value
+  if (typeof value === 'string') {
+    const text = value.trim()
+    if (!text) return null
+    try {
+      listed = JSON.parse(text)
+    } catch {
+      return null
+    }
+  }
+  if (!Array.isArray(listed)) return null
+  const fields = listed.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return []
+    const row = item as Record<string, unknown>
+    if (row.deleted === true) return []
+    const label = String(row.label ?? row.key ?? '').trim()
+    if (!label) return []
+    const type = String(row.type ?? 'string') as FieldType
+    return [{ key: String(row.key ?? label), type, label }]
+  })
+  if (!fields.length) return null
+  return (
+    <TagChips>
+      {fields.map((field) => (
+        <SchemaChip key={field.key} id={field.key} label={field.label} icon={<FieldGlyph kind={field.type} />} />
+      ))}
+    </TagChips>
+  )
+}
+
 export function SchemaChips({
   value,
   tags,

@@ -18,6 +18,8 @@ import { PersonPickPanel } from './person-cell.tsx'
 import { RecordPickPanel } from './record-link-cell.tsx'
 import { asStringList, enumDisplayLabel, isRecordLinkField, isSingleRefField, parseTagFlatColumnKey, resolveFieldType } from './fields.ts'
 import { isViewCatalogField } from './view-catalog.ts'
+import { HostSourceEditor } from './host-source-editor.tsx'
+import { TAGS_COLLECTION_PATH } from './database-path.ts'
 import { ViewCatalogPickPanel } from './view-catalog-pick.tsx'
 
 type TagOption = { value: string; label: string; icon?: ReactNode }
@@ -361,6 +363,28 @@ export function CellPopDraft({
             event.preventDefault()
             onClose()
           }
+        }}
+      />
+    )
+  }
+
+  if (fieldKey === 'fields' && collectionPath === TAGS_COLLECTION_PATH) {
+    const pretty = (() => {
+      try {
+        return JSON.stringify(JSON.parse(text || '[]'), null, 2)
+      } catch {
+        return text
+      }
+    })()
+    return (
+      <HostSourceEditor
+        value={pretty}
+        language="json"
+        writable={field.writable !== false}
+        testId="fsdb-tag-fields-json"
+        onChange={(next) => {
+          rawRef.current = next
+          setText(next)
         }}
       />
     )

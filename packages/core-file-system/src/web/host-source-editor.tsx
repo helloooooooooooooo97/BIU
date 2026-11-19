@@ -143,7 +143,11 @@ export function HostSourceEditor({
     })
     viewRef.current = view
     return () => {
-      if (timer.current) clearTimeout(timer.current)
+      if (timer.current) {
+        clearTimeout(timer.current)
+        timer.current = null
+        onChangeRef.current?.(view.state.doc.toString())
+      }
       view.destroy()
       viewRef.current = null
     }

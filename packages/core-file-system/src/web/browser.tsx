@@ -33,7 +33,7 @@ import { BoolBox } from '@biu/biu-ui/bool-box'
 import { ChatCount } from '@biu/biu-ui/chat-count'
 import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
 import { TagChip, TagChips, tagTextColor, tagTone as schemaTagTone } from '@biu/biu-ui/tag-chip'
-import { tagChipIcon, tagChipLabel } from './schema-field.tsx'
+import { tagChipIcon, tagChipLabel, TagFieldChips } from './schema-field.tsx'
 import {
   contentFieldKey,
   defaultColumnKeys,
@@ -110,7 +110,7 @@ import { workspaceColumnsForLocation } from './workspace-columns.ts'
 import { PageBanner } from './page-banner.tsx'
 import { TableGlyph, UiGlyph, ViewModeGlyph, idleTableIconKind } from './nav-glyphs.tsx'
 import { SourceTableCell } from './source-table-cell.tsx'
-import { DATA_COLLECTION_PATH, DATA_MODULE, PAGES_COLLECTION_PATH, isIndexCollection, isSystemCollection } from './database-path.ts'
+import { DATA_COLLECTION_PATH, DATA_MODULE, PAGES_COLLECTION_PATH, TAGS_COLLECTION_PATH, isIndexCollection, isSystemCollection } from './database-path.ts'
 import { ViewOrderMenu } from './view-order-menu.tsx'
 import { getDatabaseUi } from './database-ui.ts'
 import {
@@ -5071,7 +5071,7 @@ export function CollectionBrowser({
       <CellPop
         key={`${cellPop.id}:${cellPop.key}`}
         open
-        className={`is-${resolveFieldType(field)}${isRecordLinkField(field, key) ? ' is-record-link' : ''}`}
+        className={`is-${resolveFieldType(field)}${key === 'fields' && collectionPath === TAGS_COLLECTION_PATH ? ' is-json' : ''}${isRecordLinkField(field, key) ? ' is-record-link' : ''}`}
         anchor={cellAnchorRef.current}
         onClose={() => setCellPop(null)}
       >
@@ -5968,6 +5968,9 @@ export function CollectionBrowser({
     ) {
       if (key === 'usage' && !(Number(row[key]) > 0)) return <span className="traj-usage-empty">—</span>
       return renderCell(row, key, field, 'table')
+    }
+    if (key === 'fields' && collectionPath === TAGS_COLLECTION_PATH) {
+      return <TagFieldChips value={row[key]} />
     }
     const text = cellValueText(row, key, field)
     return text ? <span>{text}</span> : null
