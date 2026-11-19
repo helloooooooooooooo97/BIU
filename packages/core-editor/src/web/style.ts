@@ -150,7 +150,6 @@ export const PAGE_EDITOR_STYLE = `
 .page-editor .page-block[data-page-block=toc]{overflow:visible;box-shadow:none;outline:none}
 .page-editor .page-block[data-page-block=browser]{overflow:hidden;box-shadow:none;outline:none}
 .page-editor .page-block[data-page-block=toc].ProseMirror-selectednode{outline:none;box-shadow:none;background:transparent}
-.page-tag-host-source{flex:1;min-height:0;width:100%;resize:none;border:0;padding:12px;background:transparent;color:var(--biu-color-text);font-family:var(--font-mono);font-size:var(--biu-font-size-4);line-height:1.5;outline:none}
 .page-editor .page-block-idle{min-height:200px}
 .page-editor .page-block iframe{pointer-events:none;border:0;outline:none}
 .page-editor .page-block.ProseMirror-selectednode iframe,.page-editor .ProseMirror[contenteditable=false] .page-block iframe,.page-host-view .page-block iframe{pointer-events:auto}

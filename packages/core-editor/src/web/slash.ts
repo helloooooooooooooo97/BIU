@@ -336,6 +336,7 @@ export function slashCatalog(): SlashItem[] {
   if (!extras.length && !blocks.length && !remembered.length && !installed.length) return SLASH_ITEMS
   const map = new Map(SLASH_ITEMS.map((item) => [item.id, item]))
   for (const extra of extras) {
+    if (extra.id === 'tag' || extra.id === 'page-tag') continue
     const prev = map.get(extra.id)
     map.set(extra.id, {
       id: extra.id,
@@ -353,7 +354,7 @@ export function slashCatalog(): SlashItem[] {
   for (const block of blocks) {
     const blockType = block.blockType ?? block.kind
     covered.add(block.plugin)
-    if (block.slash === false) continue
+    if (block.slash === false || block.plugin === 'page-tag' || block.kind === 'tag') continue
     map.set(block.kind, {
       id: block.kind,
       label: block.label,
@@ -369,7 +370,7 @@ export function slashCatalog(): SlashItem[] {
   }
   for (const block of remembered) {
     covered.add(block.plugin)
-    if (map.has(block.kind)) continue
+    if (map.has(block.kind) || block.plugin === 'page-tag' || block.kind === 'tag') continue
     map.set(block.kind, {
       id: block.kind,
       label: block.label,
@@ -384,7 +385,7 @@ export function slashCatalog(): SlashItem[] {
     })
   }
   for (const plugin of installed) {
-    if (covered.has(plugin.id)) continue
+    if (covered.has(plugin.id) || plugin.id === 'page-tag' || plugin.id === 'tag') continue
     covered.add(plugin.id)
     map.set(plugin.id, {
       id: plugin.id,

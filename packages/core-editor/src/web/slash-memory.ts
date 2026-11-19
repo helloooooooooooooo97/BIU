@@ -72,7 +72,7 @@ function asBlock(raw: unknown): RememberedPageBlock | null {
   const row = raw as Record<string, unknown>
   const kind = String(row.kind ?? '').trim()
   const plugin = String(row.plugin ?? '').trim()
-  if (!kind || !plugin) return null
+  if (!kind || !plugin || plugin === 'page-tag' || kind === 'tag') return null
   const blockType = String(row.blockType ?? kind).trim() || kind
   const label = String(row.label ?? '').trim() || kind
   return {
@@ -196,7 +196,7 @@ export function installedPageBlocksFromRows(rows: unknown[]): InstalledPageBlock
     if (!flag(row.installed) || !flag(row.hasWeb) || !flag(row.headless)) continue
     if (!rowTags(row).includes('page')) continue
     const id = String(row.id ?? '').trim()
-    if (!id) continue
+    if (!id || id === 'page-tag' || id === 'tag') continue
     const label = String(row.title ?? row.name ?? '').trim() || id
     out.push({ id, label, hint: String(row.blurb ?? '').trim() })
   }
