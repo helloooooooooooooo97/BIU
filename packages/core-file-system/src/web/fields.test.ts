@@ -226,6 +226,16 @@ test('default columns omit flattened type properties', () => {
   ])
   const tagGroup = grouped.find((item) => item.key === tagFlatColumnKey('tag-10', '状态'))
   assert.equal(tagGroup?.field.label, '需求·状态')
+  const projected = {
+    id: 'p1',
+    tag: { tags: ['tag-10'], values: { 'tag-10': { 优先级: '中' } } },
+    [tagFlatColumnKey('tag-10', '优先级')]: '中',
+  }
+  const updated = overlayListed(projected, {
+    id: 'p1',
+    tag: { tags: ['tag-10'], values: { 'tag-10': { 优先级: '高' } } },
+  })
+  assert.equal(readTagFlatValue(updated, tagFlatColumnKey('tag-10', '优先级')), '高')
   const row = { id: '1', tag: { tags: ['haohao'], values: { haohao: { dede: 'v' } } } }
   assert.equal(readTagFlatValue(row, nested), 'v')
   assert.deepEqual(uniqueValues([row], nested, { type: 'string', label: '的的' }), ['v'])

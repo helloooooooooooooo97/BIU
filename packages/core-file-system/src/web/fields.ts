@@ -760,6 +760,14 @@ export function overlayListed(base: DbRecord, listed: DbRecord, projected?: stri
       changed = true
     }
   }
+  if ('tag' in listed) {
+    for (const key of Object.keys(next)) {
+      if (parseTagFlatColumnKey(key) && !Object.prototype.hasOwnProperty.call(listed, key)) {
+        delete next[key]
+        changed = true
+      }
+    }
+  }
   const keys = projected?.length ? projected : Object.keys(base)
   for (const key of keys) {
     if (key === 'id') continue

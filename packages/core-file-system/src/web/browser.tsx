@@ -803,7 +803,15 @@ type ListedMutation =
   | { path: string; op: 'remove'; ids: string[]; viewId?: string | null; total?: number }
 
 function overlayListedRow(row: DbRecord, next: DbRecord): DbRecord {
-  return { ...row, ...next, banner: next.banner ?? row.banner ?? null }
+  const merged: DbRecord = { ...row, ...next, banner: next.banner ?? row.banner ?? null }
+  if ('tag' in next) {
+    for (const key of Object.keys(merged)) {
+      if (parseTagFlatColumnKey(key) && !Object.prototype.hasOwnProperty.call(next, key)) {
+        delete merged[key]
+      }
+    }
+  }
+  return merged
 }
 
 function appendTreeKids(rows: DbRecord[], kids: DbRecord[]) {
@@ -3907,7 +3915,7 @@ export function CollectionBrowser({
         if (!next) throw new Error('保存失败：服务端没有返回记录')
         // A pending save may finish after navigation. Keep its response out of the new table.
         if (dataPathRef.current === dataPath) {
-          const displayed = next.id === row.id ? next : { ...row, ...next, id: row.id }
+          const displayed = next.id === row.id ? next : overlayListedRow(row, { ...next, id: row.id })
           const merge = (item: DbRecord) => (item.id === row.id ? overlayListedRow(item, displayed) : item)
           const merged = overlayListedRow(itemsRef.current.find((item) => item.id === row.id) ?? row, displayed)
           const stillMatches = matchListFilterRecord(merged, queryFiltersRef.current, schemaRef.current, tagCatalogRef.current)
