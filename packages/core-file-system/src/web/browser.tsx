@@ -839,7 +839,7 @@ const CELL_RANGE_IGNORE =
 type TablePaintNode =
   | { kind: 'empty'; key: string }
   | { kind: 'group-head'; key: string; groupKey: string; label: string; count: number }
-  | { kind: 'row'; key: string; keyPrefix: string; row: DbRecord; depth: number; hasKids: boolean; kidCount: number }
+  | { kind: 'row'; key: string; keyPrefix: string; row: DbRecord; depth: number; hasKids: boolean; kidCount: number; fold?: boolean }
   | { kind: 'group-pager'; key: string; groupKey: string; count: number; pageIndex: number }
 
 const EMPTY_HOLD_NODES: TablePaintNode[] = [{ kind: 'empty', key: 'empty' }]
@@ -1182,6 +1182,9 @@ type TablePaintBag = {
   colSpan: number
   error: string
   renderNode: (node: TablePaintNode) => ReactNode
+  /** 行壳。单元格由 renderCell 按列缓存，横滚只补新列。 */
+  renderRow?: (node: TablePaintNode, cells: ReactNode) => ReactNode
+  renderCell?: (node: TablePaintNode, colKey: string) => ReactNode
   revealRow?: (id: string, rowKey?: string) => void
   revealColumn?: (key: string) => void
   paintSelection?: () => void
@@ -1206,13 +1209,34 @@ type TableBodyProps = {
   activeRowId: string | null
 }
 
+function rowPaintStamp(node: TablePaintNode) {
+  if (node.kind !== 'row') {
+    const label = node.kind === 'group-head' ? node.label : ''
+    const count = node.kind === 'group-head' || node.kind === 'group-pager' ? node.count : ''
+    const page = node.kind === 'group-pager' ? node.pageIndex : ''
+    return `${node.kind}\0${node.key}\0${label}\0${count}\0${page}`
+  }
+  return `${node.key}\0${node.depth}\0${node.hasKids ? 1 : 0}\0${node.kidCount}\0${node.fold ? 1 : 0}\0${JSON.stringify(node.row)}`
+}
+
+function columnLayout(colKeys: string) {
+  const split = colKeys.split('\0')
+  const meta = split[0]?.split(':') ?? []
+  if (meta.length !== 3) return null
+  const pin = Number(meta[0])
+  const padLeft = Number(meta[1])
+  const padRight = Number(meta[2])
+  if (![pin, padLeft, padRight].every(Number.isFinite)) return null
+  return { pin, padLeft, padRight, keys: split.slice(1).filter(Boolean) }
+}
+
 const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, measureRow, colSpan, colKeys, activeRowId }: TableBodyProps) {
   const paintRef = useContext(TablePaintCtx)
   const bag = paintRef.current
-  // Rows stay mounted only while the window asks for them. Reuse the element built for this
-  // node until the row data, the column window, or the active record changes. Scrolling then
-  // builds only the rows that entered the window. Selection classes are painted on the DOM.
-  const rowCache = useRef(new Map<string, { node: TablePaintNode; colKeys: string; activeRowId: string | null; element: ReactNode }>())
+  // 同一行数据保持同一份元素。列表刷新会换成新对象，但内容没变就不再画。
+  // 单元格另按列缓存，横滚只创建新进入窗口的列。
+  const rowCache = useRef(new Map<string, { node: TablePaintNode; stamp: string; colKeys: string; activeRowId: string | null; element: ReactNode }>())
+  const cellCache = useRef(new Map<string, { stamp: string; element: ReactNode }>())
   if (rowCache.current.size > nodes.length + 8) {
     const live = new Set(nodes.map((node) => node.key))
     for (const key of rowCache.current.keys()) if (!live.has(key)) rowCache.current.delete(key)
@@ -1223,6 +1247,7 @@ const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, mea
   const pad = (height: number, key: string) => height <= 0.25 ? null : (
     <tr key={key} className="fsdb-table-pad" aria-hidden><td colSpan={colSpan} style={{ height }}><div style={{ height }} /></td></tr>
   )
+  const layout = columnLayout(colKeys)
   const children: ReactNode[] = []
   let end = 0
   for (const item of items) {
@@ -1230,13 +1255,31 @@ const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, mea
     if (!node) continue
     const top = item.start - margin
     children.push(pad(top - end, `pad:${node.key}`))
+    const stamp = rowPaintStamp(node)
     const hit = rowCache.current.get(node.key)
-    const element = hit && hit.node === node && hit.colKeys === colKeys && hit.activeRowId === activeRowId
-      ? hit.element
-      : bag.renderNode(node)
-    if (!hit || hit.node !== node || hit.colKeys !== colKeys || hit.activeRowId !== activeRowId) {
-      rowCache.current.set(node.key, { node, colKeys, activeRowId, element })
+    let element: ReactNode
+    if (hit && hit.stamp === stamp && hit.colKeys === colKeys && hit.activeRowId === activeRowId) {
+      element = hit.element
+    } else if (node.kind === 'row' && bag.renderCell && bag.renderRow && layout) {
+      const cells: ReactNode[] = []
+      const paint = (key: string) => {
+        const id = `${node.key}\0${key}`
+        const cached = cellCache.current.get(id)
+        if (cached && cached.stamp === stamp) return cached.element
+        const next = bag.renderCell!(node, key)
+        cellCache.current.set(id, { stamp, element: next })
+        return next
+      }
+      for (let i = 0; i < layout.pin && i < layout.keys.length; i += 1) cells.push(paint(layout.keys[i]!))
+      if (layout.padLeft > 0) cells.push(<td key="pad-left" className="fsdb-col-pad" aria-hidden style={padColBox(layout.padLeft)} />)
+      for (let i = layout.pin; i < layout.keys.length; i += 1) cells.push(paint(layout.keys[i]!))
+      if (layout.padRight > 0) cells.push(<td key="pad-right" className="fsdb-col-pad" aria-hidden style={padColBox(layout.padRight)} />)
+      cells.push(<td key="fill" className="fsdb-col-fill" aria-hidden />)
+      element = bag.renderRow(node, cells)
+    } else {
+      element = bag.renderNode(node)
     }
+    rowCache.current.set(node.key, { node, stamp, colKeys, activeRowId, element })
     children.push(isValidElement(element) ? cloneElement(element as ReactElement<ComponentProps<'tr'>>, {
       key: node.key, 'data-index': item.index, ref: measureRow,
     } as ComponentProps<'tr'>) : element)
@@ -1486,7 +1529,7 @@ export const WindowedTable = memo(function WindowedTable({
             totalSize={virtualizer.getTotalSize()}
             measureRow={measureRow}
             colSpan={tableColSpan}
-            colKeys={`${windowedColumns.map((col) => col.key).join('\0')}\0${colWindow.padLeft}:${colWindow.padRight}`}
+            colKeys={`${colWindow.pin}:${colWindow.padLeft}:${colWindow.padRight}\0${windowedColumns.map((col) => col.key).join('\0')}`}
             error={error}
             pickMode={pickMode}
             activeRowId={activeRowId}
@@ -3141,6 +3184,7 @@ export function CollectionBrowser({
             depth: item.depth,
             hasKids: item.hasKids,
             kidCount: item.kidCount,
+            fold: collapsed[item.row.id] !== false,
           })
         }
         nodes.push({
@@ -3167,10 +3211,11 @@ export function CollectionBrowser({
         depth: item.depth,
         hasKids: item.hasKids,
         kidCount: item.kidCount,
+        fold: collapsed[item.row.id] !== false,
       })
     }
     return nodes
-  }, [collapsedGroups, flattenRows, groupPages, grouped, grouping, pageSize, visible])
+  }, [collapsed, collapsedGroups, flattenRows, groupPages, grouped, grouping, pageSize, visible])
   const selectionModel = useMemo<TableSelectionModel>(() => ({
     rowIds: tablePaintNodes.flatMap((node) => node.kind === 'row' && node.row.id ? [node.row.id] : []),
     rowKeys: tablePaintNodes.flatMap((node) => node.kind === 'row' && node.row.id ? [node.key] : []),
@@ -5883,16 +5928,12 @@ export function CollectionBrowser({
     return text ? <span>{text}</span> : null
   }
 
-  function tableLiveRow(row: DbRecord, depth: number, hasKids: boolean, kidCount: number, rowKey: string, toolsArmed = true) {
+  function paintLiveCell(row: DbRecord, col: (typeof columns)[number], depth: number, hasKids: boolean, kidCount: number, rowKey: string, toolsArmed = true) {
     const cellPick = cellPickRef.current
     const rangeSet = cellRangeSetRef.current
-    const colWindow = colWindowRef.current
     const held = tableHoldRef.current
     const paintSchema = held?.schema ?? schema
-    const paintColumns = (
-      held && held.nodes !== EMPTY_HOLD_NODES && held.columns.length ? held.columns : columns
-    ) as typeof columns
-    const paintLiveTd = (col: (typeof columns)[number]) => (
+    return (
       <td
         key={col.key}
         data-col-key={col.key}
@@ -5938,6 +5979,40 @@ export function CollectionBrowser({
         )}
       </td>
     )
+  }
+
+  function renderPaintCell(node: TablePaintNode, colKey: string) {
+    if (node.kind !== 'row') return null
+    const held = tableHoldRef.current
+    const paintColumns = (held && held.nodes !== EMPTY_HOLD_NODES && held.columns.length ? held.columns : columns) as typeof columns
+    const col = paintColumns.find((item) => item.key === colKey)
+    if (!col) return null
+    return paintLiveCell(node.row, col, node.depth, node.hasKids, node.kidCount, node.key)
+  }
+
+  function renderPaintRow(node: TablePaintNode, cells: ReactNode) {
+    if (node.kind !== 'row') return renderPaintNode(node)
+    const row = node.row
+    return (
+      <tr
+        key={node.key}
+        data-record-id={row.id}
+        data-row-key={node.key}
+        className={row.id === detailId ? 'is-active' : undefined}
+        {...recordPick(row)}
+      >
+        {cells}
+      </tr>
+    )
+  }
+
+  function tableLiveRow(row: DbRecord, depth: number, hasKids: boolean, kidCount: number, rowKey: string, toolsArmed = true) {
+    const colWindow = colWindowRef.current
+    const held = tableHoldRef.current
+    const paintColumns = (
+      held && held.nodes !== EMPTY_HOLD_NODES && held.columns.length ? held.columns : columns
+    ) as typeof columns
+    const paintLiveTd = (col: (typeof columns)[number]) => paintLiveCell(row, col, depth, hasKids, kidCount, rowKey, toolsArmed)
     return (
       <tr
         key={rowKey}
@@ -7020,6 +7095,8 @@ export function CollectionBrowser({
       colSpan: tablePaintRef.current.colSpan,
       error: tableHoldRef.current ? '' : error,
       renderNode: renderPaintNode,
+      renderCell: renderPaintCell,
+      renderRow: renderPaintRow,
       paintSelection: paintCellRangeClasses,
     }
   }

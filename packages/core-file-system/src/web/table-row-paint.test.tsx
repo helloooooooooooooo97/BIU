@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
-import { useMemo, useRef, type ReactNode, type RefObject } from 'react'
+import { useRef, type ReactNode, type RefObject } from 'react'
 import { WindowedTable } from './browser.tsx'
 import { resetRememberedTableWrap, TABLE_ROW_PX } from './table-window.ts'
 
@@ -15,7 +15,21 @@ const nodes = Array.from({ length: ROW_COUNT }, (_, index) => ({
   kidCount: 0,
 }))
 
-function Harness({ paints }: { paints: string[] }) {
+function Harness({
+  paints,
+  cells,
+  nodes: input = nodes,
+  columns: cols = columns,
+  columnWidths = {},
+  pin = 0,
+}: {
+  paints: string[]
+  cells?: string[]
+  nodes?: typeof nodes
+  columns?: { key: string }[]
+  columnWidths?: Record<string, number>
+  pin?: number
+}) {
   const paintRef = useRef({ colSpan: 1, error: '', renderNode: (_node: { key: string }) => null as ReactNode })
   const chromeRef = useRef({ paintHeadTh: () => null, onPointerDown: undefined, onPointerMove: undefined, onClick: () => {}, onMouseOver: () => {}, onContextMenu: undefined })
   const colWindowRef = useRef({ pin: 0, start: 0, end: 1, padLeft: 0, padRight: 0 })
@@ -28,18 +42,26 @@ function Harness({ paints }: { paints: string[] }) {
     paints.push(node.key)
     return <tr key={node.key} data-record-id={node.key}><td>{node.key}</td></tr>
   }
-  const stableNodes = useMemo(() => nodes, [])
+  paintRef.current.renderCell = cells
+    ? (node, colKey) => {
+        cells.push(`${node.key}:${colKey}`)
+        return <td key={colKey} data-col-key={colKey} />
+      }
+    : undefined
+  paintRef.current.renderRow = cells
+    ? (node, kids) => <tr key={node.key} data-record-id={node.key}>{kids}</tr>
+    : undefined
   return (
     <div className="fsdb-right-body">
       <div className="tasks-table-wrap" ref={wrapRef}>
         <WindowedTable
-          columns={columns}
-          columnWidths={{}}
-          columnPinCount={0}
+          columns={cols}
+          columnWidths={columnWidths}
+          columnPinCount={pin}
           wrapCells={false}
           truncateCells={false}
           resizingCol={null}
-          nodes={stableNodes}
+          nodes={input}
           error=""
           pickMode={false}
           resetKey="paint"
@@ -104,4 +126,46 @@ test('scroll rebuilds only new rows, and a parent rerender does not rebuild the 
   view.rerender(<Harness paints={paints} />)
   const selected = paints.splice(0, paints.length)
   expect(selected.length).toBeLessThan(before.selectCalls)
+})
+
+test('replacing one row repaints that row, and copying unchanged rows does not', () => {
+  const paints: string[] = []
+  const view = render(<Harness paints={paints} nodes={nodes} />)
+  const page = view.container.querySelector<HTMLElement>('.fsdb-right-body')!
+  act(() => { page.dispatchEvent(new Event('scroll')) })
+  paints.splice(0, paints.length)
+
+  const one = nodes.map((node, index) => index === 0 ? { ...node, row: { ...node.row, title: 'changed' } } : node)
+  view.rerender(<Harness paints={paints} nodes={one} />)
+  expect(paints).toEqual(['row-0'])
+
+  paints.splice(0, paints.length)
+  const all = one.map((node) => ({ ...node, row: { ...node.row } }))
+  view.rerender(<Harness paints={paints} nodes={all} />)
+  expect(paints.splice(0, paints.length)).toEqual([])
+})
+
+test('a column window move builds only the columns that entered', () => {
+  const wide = Array.from({ length: 40 }, (_, index) => ({ key: `c${index}` }))
+  const widths = Object.fromEntries(wide.map((col) => [col.key, 120]))
+  const paints: string[] = []
+  const cells: string[] = []
+  const view = render(<Harness paints={paints} cells={cells} columns={wide} columnWidths={widths} />)
+  const wrap = view.container.querySelector<HTMLElement>('.tasks-table-wrap')!
+  let left = 0
+  Object.defineProperty(wrap, 'scrollLeft', { configurable: true, get: () => left, set: (value) => { left = Number(value) || 0 } })
+  act(() => { wrap.dispatchEvent(new Event('scroll')) })
+  const first = cells.splice(0, cells.length)
+  const perRow = first.length / new Set(first.map((item) => item.split(':')[0])).size
+  expect(perRow).toBeGreaterThan(2)
+
+  act(() => {
+    wrap.scrollLeft = 480
+    wrap.dispatchEvent(new Event('scroll'))
+  })
+  const next = cells.splice(0, cells.length)
+  const rows = new Set(next.map((item) => item.split(':')[0])).size
+  expect(next.length).toBeGreaterThan(0)
+  expect(next.length / rows).toBeLessThan(perRow)
+  expect(next.every((item) => !first.includes(item))).toBe(true)
 })
