@@ -41,7 +41,7 @@ import {
 export type TablePaintNode =
   | { kind: 'empty'; key: string }
   | { kind: 'group-head'; key: string; groupKey: string; label: string; count: number }
-  | { kind: 'row'; key: string; keyPrefix: string; row: DbRecord; depth: number; hasKids: boolean; kidCount: number; fold?: boolean }
+  | { kind: 'row'; key: string; keyPrefix: string; row: DbRecord; depth: number; hasKids: boolean; kidCount: number; fold?: boolean; treeOn?: boolean }
   | { kind: 'group-pager'; key: string; groupKey: string; count: number; pageIndex: number }
 
 export type TablePaintBag = {
@@ -207,7 +207,7 @@ type TableBodyProps = {
 
 function rowMetaStamp(node: Extract<TablePaintNode, { kind: 'row' }>) {
   const row = node.row as Record<string, unknown>
-  return `${node.depth}\0${node.hasKids ? 1 : 0}\0${node.kidCount}\0${node.fold ? 1 : 0}\0${String(row.emoji ?? '')}\0${String(row.icon ?? '')}\0${String(row.mascot ?? '')}`
+  return `${node.depth}\0${node.hasKids ? 1 : 0}\0${node.kidCount}\0${node.fold ? 1 : 0}\0${node.treeOn ? 1 : 0}\0${String(row.emoji ?? '')}\0${String(row.icon ?? '')}\0${String(row.mascot ?? '')}`
 }
 
 export function rowPaintStamp(node: TablePaintNode, stamps: Map<string, RowStampEntry>) {
@@ -220,7 +220,7 @@ export function rowPaintStamp(node: TablePaintNode, stamps: Map<string, RowStamp
   const body = node.row && typeof node.row === 'object'
     ? reuseRowStamp(stamps, node.key, node.row as Record<string, unknown>).body
     : JSON.stringify(node.row)
-  return `${node.key}\0${node.depth}\0${node.hasKids ? 1 : 0}\0${node.kidCount}\0${node.fold ? 1 : 0}\0${body}`
+  return `${node.key}\0${node.depth}\0${node.hasKids ? 1 : 0}\0${node.kidCount}\0${node.fold ? 1 : 0}\0${node.treeOn ? 1 : 0}\0${body}`
 }
 
 export function columnLayout(colKeys: string) {
@@ -315,7 +315,7 @@ const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, mea
       const meta = rowMetaStamp(node)
       const paint = (key: string) => {
         const id = `${node.key}\0${key}`
-        const composite = key === 'actions' || key.startsWith('tag:') || Boolean(compositeCells?.has(key))
+        const composite = key === 'actions' || key === 'tag' || key.startsWith('tag:') || Boolean(compositeCells?.has(key)) || !(key in rowObj)
         const cached = cellCache.current.get(id)
         if (isCellStampSame(cached, rowObj, key, meta, stamp, composite)) return cached!.element
         const next = bag.renderCell!(node, key)

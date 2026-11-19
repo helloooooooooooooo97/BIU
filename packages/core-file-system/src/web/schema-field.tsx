@@ -417,9 +417,7 @@ export function SchemaFieldEditor({
 }) {
   const parsed = normalizeSchemaValue(value)
   const liveRef = useRef(parsed)
-  useEffect(() => {
-    liveRef.current = normalizeSchemaValue(value)
-  }, [record.id])
+  liveRef.current = parsed
   const [catalog, setCatalog] = useState(() => loadTags())
   const [, setTagMarks] = useState(0)
 

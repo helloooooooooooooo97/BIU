@@ -790,7 +790,7 @@ function remapGroupedRecords(
       total: group.total != null ? Math.max(0, group.total - dropped) : undefined,
     }
   })
-  let buckets = next.filter((group) => group.rows.length > 0 || (group.total ?? 0) > 0)
+  let buckets = next.filter((group) => group.rows.length > 0 || (group.total ?? 0) > 0 || group.key === '')
   for (const row of relocated) buckets = placeCreatedRow(buckets, row, groupBy, schema, packs)
   return buckets
 }
@@ -2738,6 +2738,7 @@ export function CollectionBrowser({
             hasKids: item.hasKids,
             kidCount: item.kidCount,
             fold: collapsed[item.row.id] !== false,
+            treeOn,
           })
         }
         nodes.push({
@@ -2765,10 +2766,11 @@ export function CollectionBrowser({
         hasKids: item.hasKids,
         kidCount: item.kidCount,
         fold: collapsed[item.row.id] !== false,
+        treeOn,
       })
     }
     return nodes
-  }, [collapsed, collapsedGroups, flattenRows, groupPages, grouped, grouping, pageSize, visible])
+  }, [collapsed, collapsedGroups, flattenRows, groupPages, grouped, grouping, pageSize, treeOn, visible])
   const selectionModel = useMemo<TableSelectionModel>(() => ({
     rowIds: tablePaintNodes.flatMap((node) => node.kind === 'row' && node.row.id ? [node.row.id] : []),
     rowKeys: tablePaintNodes.flatMap((node) => node.kind === 'row' && node.row.id ? [node.key] : []),
@@ -3745,7 +3747,7 @@ export function CollectionBrowser({
             total: group.total != null ? Math.max(0, group.total - dropped) : undefined,
           }
         })
-        .filter((group) => group.rows.length > 0 || (group.total ?? 0) > 0),
+        .filter((group) => group.rows.length > 0 || (group.total ?? 0) > 0 || group.key === ''),
     )
   }
 
