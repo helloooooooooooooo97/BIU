@@ -1,5 +1,4 @@
-import { useLayoutEffect, useState, type ReactNode, type RefObject } from 'react'
-import { createPortal } from 'react-dom'
+import { useState, type ReactNode, type RefObject } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -17,8 +16,9 @@ import { PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { FieldSpec, FieldType } from '@biu/type-file-system'
 import { CellSelect } from '@biu/database-ui'
-import { HEADLESS_DISMISS_IGNORE, HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
-import { overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
+import { HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
+import { HeadlessPopover } from '@biu/biu-ui/headless-popover'
+import { overlayZ } from '@biu/biu-ui/overlay-portal'
 import { DndGrip } from './dnd-grip.tsx'
 import { FieldGlyph } from './fsdb-cells.tsx'
 
@@ -140,32 +140,16 @@ export function QueryFlyout({
   align?: 'start' | 'end'
   children: ReactNode
 }) {
-  const [box, setBox] = useState({ top: 0, right: 8, left: 8 })
-  useLayoutEffect(() => {
-    const el = anchorRef.current
-    if (!el) return
-    const place = () => {
-      const rect = el.getBoundingClientRect()
-      setBox({
-        top: rect.bottom + 6,
-        right: Math.max(8, Math.round(window.innerWidth - rect.right)),
-        left: Math.max(8, Math.round(rect.left)),
-      })
-    }
-    place()
-    window.addEventListener('resize', place)
-    window.addEventListener('scroll', place, true)
-    return () => {
-      window.removeEventListener('resize', place)
-      window.removeEventListener('scroll', place, true)
-    }
-  }, [anchorRef])
-  if (typeof document === 'undefined') return null
   const ignore = ignoreSelector ? `${QUERY_FLYOUT_IGNORE}, ${ignoreSelector}` : QUERY_FLYOUT_IGNORE
   const start = align === 'start'
-  return createPortal(
-    <HeadlessDismiss
-      onDismiss={onClose}
+  return (
+    <HeadlessPopover
+      open
+      anchorRef={anchorRef}
+      onOpenChange={(open) => { if (!open) onClose() }}
+      align={align}
+      sideOffset={6}
+      zIndex={200}
       ignoreSelector={ignore}
       inside={(node) =>
         Boolean(
@@ -178,16 +162,10 @@ export function QueryFlyout({
       <div
         className={`fsdb-page fsdb-query-flyout${start ? ' is-start' : ''}`}
         data-testid="fsdb-query-flyout"
-        style={{
-          top: box.top,
-          ...(start ? { left: box.left, right: 'auto' } : { right: box.right }),
-          zIndex: overlayZ(200),
-        }}
       >
         {children}
       </div>
-    </HeadlessDismiss>,
-    overlayPortalRoot() ?? document.body,
+    </HeadlessPopover>
   )
 }
 

@@ -1,13 +1,15 @@
 import * as Popover from '@radix-ui/react-popover'
-import type { ReactElement } from 'react'
+import type { ReactElement, RefObject } from 'react'
 import { HEADLESS_DISMISS_IGNORE } from './headless-dismiss.tsx'
 import { overlayPortalRoot, overlayZ } from './overlay-portal.ts'
 
-function shouldIgnoreOutside(event: { target: EventTarget | null; detail?: { originalEvent?: Event } }, ignoreSelector: string) {
-  if (!ignoreSelector) return false
+function shouldIgnoreOutside(event: { target: EventTarget | null; detail?: { originalEvent?: Event } }, ignoreSelector: string, inside?: (node: Node) => boolean) {
   const orig = event.detail?.originalEvent
   const path = orig && typeof orig.composedPath === 'function' ? orig.composedPath() : []
-  return [...path, event.target].some((target) => target instanceof Element && target.closest(ignoreSelector))
+  return [...path, event.target].some((target) =>
+    (target instanceof Node && inside?.(target)) ||
+    (target instanceof Element && ignoreSelector && target.closest(ignoreSelector)),
+  )
 }
 
 /** 无头 Popover：Radix 定位 / Portal / 点外关闭 / Esc。不带视觉样式。 */
@@ -16,6 +18,7 @@ export function HeadlessPopover({
   defaultOpen,
   onOpenChange,
   trigger,
+  anchorRef,
   children,
   side = 'bottom',
   align = 'start',
@@ -25,13 +28,15 @@ export function HeadlessPopover({
   modal = false,
   autoFocus = false,
   ignoreSelector = HEADLESS_DISMISS_IGNORE,
+  inside,
   container,
   zIndex = 300,
 }: {
   open?: boolean
   defaultOpen?: boolean
   onOpenChange?: (open: boolean) => void
-  trigger: ReactElement
+  trigger?: ReactElement
+  anchorRef?: RefObject<HTMLElement | null>
   children: ReactElement
   side?: 'top' | 'right' | 'bottom' | 'left'
   align?: 'start' | 'center' | 'end'
@@ -41,12 +46,14 @@ export function HeadlessPopover({
   modal?: boolean
   autoFocus?: boolean
   ignoreSelector?: string
+  inside?: (node: Node) => boolean
   container?: HTMLElement | null
   zIndex?: number
 }) {
   return (
     <Popover.Root open={open} defaultOpen={defaultOpen} onOpenChange={onOpenChange} modal={modal}>
-      <Popover.Trigger asChild>{trigger}</Popover.Trigger>
+      {anchorRef ? <Popover.Anchor virtualRef={anchorRef as RefObject<HTMLElement>} /> : null}
+      {trigger ? <Popover.Trigger asChild>{trigger}</Popover.Trigger> : null}
       <Popover.Portal container={container ?? overlayPortalRoot() ?? undefined}>
         <Popover.Content
           className="biu-headless-pop"
@@ -62,10 +69,10 @@ export function HeadlessPopover({
           }}
           onCloseAutoFocus={(event) => event.preventDefault()}
           onPointerDownOutside={(event) => {
-            if (shouldIgnoreOutside(event, ignoreSelector)) event.preventDefault()
+            if (shouldIgnoreOutside(event, ignoreSelector, inside)) event.preventDefault()
           }}
           onFocusOutside={(event) => {
-            if (shouldIgnoreOutside(event, ignoreSelector)) event.preventDefault()
+            if (shouldIgnoreOutside(event, ignoreSelector, inside)) event.preventDefault()
           }}
         >
           {children}

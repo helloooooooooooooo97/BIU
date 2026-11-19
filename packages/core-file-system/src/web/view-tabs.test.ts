@@ -53,7 +53,7 @@ test('toolbar shows only the current view, not a switcher strip', () => {
   assert.match(css, /\.fsdb-page \.tasks-toolbar:has\(\.fsdb-query-menu\),\.fsdb-page \.tasks-toolbar:has\(\.tasks-sort-menu\),\.fsdb-page \.tasks-toolbar:has\(\.tasks-filter-menu\),\.fsdb-page \.tasks-toolbar:has\(\.tasks-viewdd-menu\)\{[^}]*z-index:var\(--biu-z-dropdown\)/)
   assert.match(css, /\.fsdb-page \.fsdb-query-menu,\.fsdb-page \.tasks-sort-menu,\.fsdb-page \.tasks-filter-menu,\.fsdb-page \.tasks-viewdd-menu\{[^}]*z-index:120/)
   assert.match(css, /\.fsdb-page:has\(\.tasks-viewdd-menu\) \.fsdb-workspace\{[^}]*overflow:hidden/)
-  assert.match(css, /\.fsdb-query-flyout\.fsdb-page\{[^}]*position:fixed/)
+  assert.match(css, /\.fsdb-query-flyout\.fsdb-page\{[^}]*position:relative/)
   assert.doesNotMatch(css, /\.fsdb-query-flyout\.fsdb-page\{[^}]*pointer-events:none/)
   assert.match(css, /\.fsdb-page:has\(\.fsdb-query-menu\)/)
   assert.match(css, /\.fsdb-page \.tasks-filter-btn-wrap:has\(\.fsdb-query-menu\)/)
