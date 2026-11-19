@@ -1272,8 +1272,9 @@ const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, mea
     paintedWindow.current = windowKey
     paintRef.current.paintSelection?.()
   }, [paintRef, windowKey])
+  const padRow = items.find((item) => item.size > 1)?.size ?? 37
   const pad = (height: number, key: string) => height <= 0.25 ? null : (
-    <tr key={key} className="fsdb-table-pad" aria-hidden><td colSpan={colSpan} style={{ height }}><div style={{ height }} /></td></tr>
+    <tr key={key} className="fsdb-table-pad" aria-hidden><td colSpan={colSpan} style={{ height }}><div style={{ height, ['--fsdb-pad-row' as string]: `${padRow}px` }} /></td></tr>
   )
   const layoutNow = layout
   const children: ReactNode[] = []
@@ -1326,6 +1327,18 @@ function windowedColumnsOf<T>(columns: T[], colWindow: TableColumnSlice) {
 function padColBox(px: number) {
   const v = `${Math.max(0, Math.round(px))}px`
   return { width: v, minWidth: v, maxWidth: v }
+}
+
+/** 1px rules at each column edge, so a fast scroll shows the grid instead of a blank slab. */
+function padColumnRules(widths: number[]) {
+  let edge = 0
+  const layers: string[] = []
+  for (const width of widths) {
+    edge += Math.max(0, Math.round(width))
+    if (edge <= 0) continue
+    layers.push(`linear-gradient(to right,transparent ${edge - 1}px,var(--fsdb-pad-line) ${edge - 1}px,var(--fsdb-pad-line) ${edge}px,transparent ${edge}px)`)
+  }
+  return layers.join(',')
 }
 
 const EMPTY_COL_WINDOW: TableColumnSlice = { pin: 0, start: 0, end: 0, padLeft: 0, padRight: 0 }
@@ -1465,6 +1478,14 @@ export const WindowedTable = memo(function WindowedTable({
     for (let i = colWindow.start; i < colWindow.end; i += 1) sum += columnPx[i] || 0
     return Math.max(sum, 1)
   }, [colWindow.end, colWindow.padLeft, colWindow.padRight, colWindow.pin, colWindow.start, columnPx])
+  const padCols = useMemo(() => {
+    const widths: number[] = []
+    for (let i = 0; i < colWindow.pin; i += 1) widths.push(columnPx[i] || 0)
+    if (colWindow.padLeft > 0) widths.push(colWindow.padLeft)
+    for (let i = colWindow.start; i < colWindow.end; i += 1) widths.push(columnPx[i] || 0)
+    if (colWindow.padRight > 0) widths.push(colWindow.padRight)
+    return padColumnRules(widths)
+  }, [colWindow.end, colWindow.padLeft, colWindow.padRight, colWindow.pin, colWindow.start, columnPx])
   paintRef.current.colSpan = tableColSpan
   const rangeStart = virtualizer.range?.startIndex ?? 0
   const rangeEnd = virtualizer.range ? Math.min(nodes.length, virtualizer.range.endIndex + TABLE_WINDOW_OVERSCAN + 1) : 0
@@ -1521,6 +1542,7 @@ export const WindowedTable = memo(function WindowedTable({
           outline: 'none',
           ['--fsdb-table-px' as string]: `${paintedTablePx}px`,
           ['--fsdb-pin-title' as string]: `${columnPx[0] || 240}px`,
+          ...(padCols ? { ['--fsdb-pad-cols' as string]: padCols } : {}),
         }}
         onPointerDown={(event) => chromeRef.current.onPointerDown?.(event)}
         onPointerMove={(event) => chromeRef.current.onPointerMove?.(event)}
