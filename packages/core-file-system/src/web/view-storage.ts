@@ -499,7 +499,15 @@ export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mo
 const viewsPullByKey = new Map<string, Promise<boolean>>()
 const viewsPulledAtByKey = new Map<string, number>()
 const viewsWriteEpoch = new Map<string, number>()
+const pulledViewPaths = new Set<string>()
+let pulledAllViews = false
 let viewsIdle = 0
+
+export function hasPulledSavedViews(collectionPath: string) {
+  const path = String(collectionPath ?? '').trim()
+  if (!path) return false
+  return pulledAllViews || pulledViewPaths.has(path)
+}
 let viewsIdleResolve: ((changed: boolean) => void) | null = null
 let viewsIdlePaths: readonly string[] = []
 const VIEWS_PULL_TTL_MS = 2500
@@ -646,6 +654,7 @@ async function pullSavedViewsNow(
     let changed = false
     for (const path of paths) {
       if (viewWriteStale(path, started)) continue
+      pulledViewPaths.add(path)
       const views = byPath.get(path) ?? []
       const previous = memoryViews.get(path) ?? loadViews(path)
       const ranked = rankListedViews(
@@ -660,6 +669,9 @@ async function pullSavedViewsNow(
       const next = JSON.stringify(ranked)
       if (prev !== next) changed = true
       rememberViews(path, ranked)
+    }
+    if (!fetchPaths.length && ![...viewsWriteEpoch.keys()].some((path) => viewWriteStale(path, started))) {
+      pulledAllViews = true
     }
     return changed
   } catch {
@@ -684,6 +696,16 @@ export function toggleStarredView(items: StarredView[], path: string, viewId: st
   if (isViewStarred(items, path, viewId)) return items.filter((item) => item.path !== path || item.viewId !== viewId)
   const label = String(name ?? '').trim()
   return [...items, { path, viewId, ...(label ? { name: label } : {}) }]
+}
+
+export function removeStarredViews(path: string, viewIds: Iterable<string>) {
+  const drop = new Set([...viewIds].map((id) => String(id ?? '').trim()).filter(Boolean))
+  if (!drop.size) return false
+  const current = getStarredViews()
+  const next = current.filter((item) => item.path !== path || !drop.has(item.viewId))
+  if (next.length === current.length) return false
+  persistStarredViews(next)
+  return true
 }
 
 export type StarredRecord = { path: string; recordId: string; label?: string; emoji?: string }

@@ -133,6 +133,87 @@ export function tableSendChatHotkey(event: {
   return event.key === 'l' || event.key === 'L'
 }
 
+/** ⌘C / Ctrl+C：复制当前选中的单元格或矩形选区。 */
+export function tableCopyHotkey(event: {
+  key: string
+  metaKey: boolean
+  ctrlKey: boolean
+  altKey: boolean
+  shiftKey: boolean
+  isComposing?: boolean
+}) {
+  if (event.isComposing) return false
+  if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return false
+  return event.key === 'c' || event.key === 'C'
+}
+
+function escapeTsvCell(value: string) {
+  if (!/[\t\r\n"]/.test(value)) return value
+  return `"${value.replace(/"/g, '""')}"`
+}
+
+/** 把选中的表格单元格序列化为剪贴板文本：单格原样输出，多格输出 TSV（行间 \n、列间 \t），跳过 actions 列。 */
+export function formatTableCellsForClipboard(
+  cursors: TableCellCursor[],
+  readText: (cursor: TableCellCursor) => string | null | undefined,
+): string | null {
+  const rows: Array<{ key: string; cells: string[] }> = []
+  const byRow = new Map<string, string[]>()
+  let count = 0
+  let singleText = ''
+  for (const cursor of cursors) {
+    if (!cursor.key || cursor.key === 'actions') continue
+    const text = readText(cursor)
+    if (text === null || text === undefined) continue
+    const rowId = cursor.rowKey || cursor.id
+    let bucket = byRow.get(rowId)
+    if (!bucket) {
+      bucket = []
+      byRow.set(rowId, bucket)
+      rows.push({ key: rowId, cells: bucket })
+    }
+    bucket.push(text)
+    count += 1
+    singleText = text
+  }
+  if (count === 0) return null
+  if (count === 1) return singleText
+  return rows.map((row) => row.cells.map(escapeTsvCell).join('\t')).join('\n')
+}
+
+function copyTextFallback(text: string) {
+  if (typeof document === 'undefined' || !document.body) return false
+  const prev = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  const area = document.createElement('textarea')
+  area.value = text
+  area.readOnly = true
+  area.style.position = 'fixed'
+  area.style.opacity = '0'
+  area.style.pointerEvents = 'none'
+  area.style.left = '-9999px'
+  document.body.appendChild(area)
+  try {
+    area.focus({ preventScroll: true })
+    area.select()
+    return typeof document.execCommand === 'function' ? document.execCommand('copy') : false
+  } catch {
+    return false
+  } finally {
+    area.remove()
+    if (prev && prev.isConnected) prev.focus({ preventScroll: true })
+  }
+}
+
+export function writeClipboardText(text: string) {
+  if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+    void navigator.clipboard.writeText(text).catch(() => {
+      copyTextFallback(text)
+    })
+    return true
+  }
+  return copyTextFallback(text)
+}
+
 /** ⌘\\ 在主栏和检查器之间来回切。 */
 export function tablePaneHotkey(event: {
   key: string

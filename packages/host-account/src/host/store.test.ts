@@ -756,3 +756,44 @@ test('LAN visitors reuse the same localStorage device code as a guest member', (
   assert.equal(listed.some((row) => row.id === first?.id && row.member_kind === 'guest'), true)
   assert.equal(listed.some((row) => row.id === ada.id), true)
 })
+
+test('activeLocalActor tracks the latest logged-in account and workspacePerson respects request workspace', () => {
+  const collab = store()
+  const ada = collab.register('Ada', 1000, 'secret1', 'local-ada@example.com')
+  const adaWs = collab.createWorkspace(ada.id, 'Ada空间', 1001)
+  const sharedWs = collab.createWorkspace(ada.id, '协作空间', 1002)
+  const bob = collab.register('Bob', 1003, 'secret1', 'local-bob@example.com')
+  const bobWs = collab.createWorkspace(bob.id, 'Bob空间', 1004)
+  collab.setActive(ada.id, adaWs.id)
+  collab.setActive(bob.id, bobWs.id)
+  collab.addMember(ada.id, sharedWs.id, bob.id, 'editor')
+  runWithAccount(bob.id, () =>
+    runWithRequestWorkspace(sharedWs.id, () => {
+      collab.saveWorkspaceProfile(bob.id, { name: 'Bob(协作)' })
+    }),
+  )
+
+  // Before any login, falls back to the active workspace owner
+  assert.equal(collab.activeLocalActor()?.accountId, bob.id)
+
+  // Login as Ada -> activeLocalActor resolves Ada
+  const adaLogin = collab.login('local-ada@example.com', 'secret1')
+  assert.equal(collab.activeLocalActor()?.accountId, ada.id)
+
+  // Switch to Bob via login -> activeLocalActor resolves Bob
+  const bobLogin = collab.login('local-bob@example.com', 'secret1')
+  assert.equal(collab.activeLocalActor()?.accountId, bob.id)
+  assert.equal(collab.activeLocalActor()?.workspaceId, bobWs.id)
+  assert.equal(collab.activeLocalActor(sharedWs.id)?.workspaceId, sharedWs.id)
+
+  // workspacePerson respects currentRequestWorkspaceId when actor is a member
+  const inShared = runWithAccount(bob.id, () =>
+    runWithRequestWorkspace(sharedWs.id, () => collab.workspacePerson(bob.id)),
+  )
+  assert.deepEqual(inShared, { accountId: bob.id, workspaceId: sharedWs.id, name: 'Bob(协作)' })
+
+  // Revoking Bob's session falls back to Ada's live session
+  collab.revokeSession(bobLogin.token)
+  assert.equal(collab.activeLocalActor()?.accountId, ada.id)
+  collab.revokeSession(adaLogin.token)
+})

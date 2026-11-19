@@ -11,6 +11,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { bearerToken, generateMcpToken, tokensMatch } from './host-token.ts'
 import { isLoopbackAddress } from './serve.ts'
+import { currentAccountId, currentRequestWorkspaceId } from '@biu/host-plugin-loader/data-dir'
+import WebSocket from 'ws'
 
 let dir = ''
 let prevHost = ''
@@ -242,6 +244,102 @@ test('share listener exposes token-gated MCP on the LAN port, not the workstatio
     assert.deepEqual(listed.tools.map((tool) => tool.name), ['db_list'])
     await client.close()
   } finally {
+    await ctx.fiber.dispose()
+  }
+}, 20000)
+
+test('local host-token MCP runs under active local account, updates on account switch, and broadcasts writes to same-workspace WS clients only', async () => {
+  const ctx = new Context()
+  let activeActor = { accountId: 'acc-ada', workspaceId: 'ws-a' }
+  const seenActors: Array<{ accountId: string; workspaceId: string }> = []
+  class FakeAccount extends Service {
+    store = {
+      accountByToken: (token: string) =>
+        token === 'ada-web' ? { id: 'acc-ada' } : token === 'bob-web' ? { id: 'acc-bob' } : null,
+      activeWorkspaceId: () => (currentAccountId() === 'acc-bob' ? 'ws-b' : 'ws-a'),
+      isMember: (accountId: string, workspaceId: string) =>
+        (accountId === 'acc-ada' && workspaceId === 'ws-a') ||
+        (accountId === 'acc-bob' && workspaceId === 'ws-b'),
+      activeLocalActor: () => activeActor,
+    }
+    constructor(inner: Context) {
+      super(inner, 'account')
+    }
+  }
+  const ready = new Promise<number>((resolve) => ctx.on('http/ready', ({ port }) => resolve(port)))
+  await ctx.plugin(FakeAccount)
+  await ctx.plugin(http, { port: 0, host: '127.0.0.1', sharePort: 0 })
+  await ctx.plugin(tools)
+  ctx.tools.register({
+    name: 'db_create',
+    description: 'create',
+    parameters: { type: 'object', properties: { fail: { type: 'boolean' } } },
+    execute: (args) => {
+      const actor = { accountId: currentAccountId(), workspaceId: currentRequestWorkspaceId() }
+      seenActors.push(actor)
+      if (args.fail) throw new Error('write failed')
+      ctx.http.broadcast('database', { scope: 'records', ts: Date.now() })
+      return { ok: true, actor }
+    },
+  })
+  await ctx.plugin(mcp)
+  const port = await ready
+
+  const connectWs = (token: string, wsId: string) =>
+    new Promise<{ ws: WebSocket; msgs: Array<{ type: string; payload?: Record<string, unknown> }> }>((resolve, reject) => {
+      const msgs: Array<{ type: string; payload?: Record<string, unknown> }> = []
+      const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, {
+        headers: { Cookie: `biu_account=${token}`, 'X-Biu-Workspace-Id': wsId },
+      })
+      ws.on('message', (raw) => {
+        try {
+          msgs.push(JSON.parse(String(raw)) as { type: string; payload?: Record<string, unknown> })
+        } catch {
+          /* ignore */
+        }
+      })
+      ws.once('open', () => resolve({ ws, msgs }))
+      ws.once('error', reject)
+    })
+
+  const adaSocket = await connectWs('ada-web', 'ws-a')
+  const bobSocket = await connectWs('bob-web', 'ws-b')
+  try {
+    const info = (await (await fetch(`http://127.0.0.1:${port}/api/mcp/info`)).json()) as { url: string; token: string }
+    const client = await mcpClient(info.url, info.token)
+
+    // 1. Write as Ada (ws-a) -> attributed to acc-ada/ws-a, broadcast hits Ada's WS only, no reveal
+    const res1 = await client.callTool({ name: 'db_create', arguments: {} })
+    assert.equal(res1.isError, undefined)
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    assert.deepEqual(seenActors[0], { accountId: 'acc-ada', workspaceId: 'ws-a' })
+    const adaDb1 = adaSocket.msgs.filter((m) => m.type === 'database')
+    const bobDb1 = bobSocket.msgs.filter((m) => m.type === 'database')
+    assert.equal(adaDb1.length, 1)
+    assert.equal(adaDb1[0]?.payload?.scope, 'records')
+    assert.equal(adaDb1[0]?.payload?.reveal, undefined)
+    assert.equal(bobDb1.length, 0)
+
+    // 2. Failed write -> no broadcast
+    const resFail = await client.callTool({ name: 'db_create', arguments: { fail: true } })
+    assert.equal(resFail.isError, true)
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    assert.equal(adaSocket.msgs.filter((m) => m.type === 'database').length, 1)
+    assert.equal(bobSocket.msgs.filter((m) => m.type === 'database').length, 0)
+
+    // 3. Switch active account to Bob (ws-b) -> next MCP call runs as acc-bob/ws-b and broadcasts to Bob only
+    activeActor = { accountId: 'acc-bob', workspaceId: 'ws-b' }
+    const res2 = await client.callTool({ name: 'db_create', arguments: {} })
+    assert.equal(res2.isError, undefined)
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    assert.deepEqual(seenActors[2], { accountId: 'acc-bob', workspaceId: 'ws-b' })
+    assert.equal(adaSocket.msgs.filter((m) => m.type === 'database').length, 1)
+    assert.equal(bobSocket.msgs.filter((m) => m.type === 'database').length, 1)
+
+    await client.close()
+  } finally {
+    adaSocket.ws.close()
+    bobSocket.ws.close()
     await ctx.fiber.dispose()
   }
 }, 20000)

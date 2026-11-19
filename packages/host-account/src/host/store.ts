@@ -124,6 +124,7 @@ function verifyPassword(password: string, stored: string) {
 
 export class CollabStore {
   readonly authorization: AuthorizationService
+  private lastActiveAccount: { accountId: string; at: number } | null = null
 
   constructor(private db: DatabaseSync) {
     this.authorization = new AuthorizationService(db, (accountId) => {
@@ -229,6 +230,7 @@ export class CollabStore {
       throw new CollabError('密码不正确', 401)
     }
     const session = this.openSession(row.id, deviceName.slice(0, 120))
+    this.noteActiveAccount(row.id)
     this.rememberPassword(row.id, password)
     return {
       id: row.id,
@@ -363,7 +365,14 @@ export class CollabStore {
 
   revokeSession(token: string, now = Date.now()) {
     if (!token) return
-    this.db.prepare('UPDATE auth_sessions SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL').run(now, this.digestToken(token))
+    const hash = this.digestToken(token)
+    const owner = this.db
+      .prepare('SELECT account_id FROM auth_sessions WHERE token_hash = ? AND revoked_at IS NULL')
+      .get(hash) as { account_id?: string } | undefined
+    this.db.prepare('UPDATE auth_sessions SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL').run(now, hash)
+    if (owner?.account_id && this.lastActiveAccount?.accountId === owner.account_id) {
+      this.lastActiveAccount = null
+    }
   }
 
   listSessions(accountId: string) {
@@ -1248,18 +1257,86 @@ export class CollabStore {
     return { workspaceId, email: row.login_email ?? '', name: row.display_name.trim(), avatar: row.avatar }
   }
 
-  workspacePerson(actorId: string) {
-    const workspaceId = this.accountActiveWorkspace(actorId)
-    if (!workspaceId) return null
-    const row = this.db
+  noteActiveAccount(accountId: string, now = Date.now()) {
+    const id = String(accountId ?? '').trim()
+    if (!id) return
+    this.lastActiveAccount = { accountId: id, at: now }
+  }
+
+  /** 本机模式下解析当前登录账号与空间（给本机 host MCP token 使用）。 */
+  activeLocalActor(requestedWorkspaceId = '', now = Date.now()): { accountId: string; workspaceId: string } | null {
+    const requested = String(requestedWorkspaceId ?? '').trim()
+    const sessionRow = this.db
       .prepare(
-        `SELECT COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), NULLIF(a.email, ''), '用户') AS name
-         FROM workspace_members m
-         JOIN accounts a ON a.id = m.account_id
-         WHERE m.workspace_id = ? AND m.account_id = ?`,
+        `SELECT s.account_id, COALESCE(s.last_seen_at, s.created_at, 0) AS seen_at
+         FROM auth_sessions s
+         JOIN accounts a ON a.id = s.account_id
+         WHERE s.revoked_at IS NULL AND (s.expires_at IS NULL OR s.expires_at > ?)
+         ORDER BY COALESCE(s.last_seen_at, s.created_at, 0) DESC, s.created_at DESC
+         LIMIT 1`,
       )
-      .get(workspaceId, actorId) as { name: string } | undefined
-    return row ? { accountId: actorId, workspaceId, name: row.name } : null
+      .get(now) as { account_id: string; seen_at: number } | undefined
+
+    let accountId = ''
+    if (this.lastActiveAccount) {
+      const exists = this.db
+        .prepare('SELECT id FROM accounts WHERE id = ?')
+        .get(this.lastActiveAccount.accountId) as { id?: string } | undefined
+      if (!exists?.id) {
+        this.lastActiveAccount = null
+      } else if (!sessionRow || this.lastActiveAccount.at >= sessionRow.seen_at) {
+        accountId = exists.id
+      }
+    }
+    if (!accountId && sessionRow?.account_id) accountId = sessionRow.account_id
+    if (!accountId) {
+      const preferredWs = this.activeWorkspaceId() || this.homeWorkspaceId()
+      const ownerRow = (
+        preferredWs
+          ? this.db
+              .prepare('SELECT owner_id FROM workspaces WHERE id = ? LIMIT 1')
+              .get(preferredWs)
+          : undefined
+      ) as { owner_id?: string } | undefined
+      const fallbackRow = (
+        ownerRow?.owner_id
+          ? ownerRow
+          : this.db.prepare('SELECT owner_id FROM workspaces ORDER BY created_at LIMIT 1').get()
+      ) as { owner_id?: string } | undefined
+      accountId = String(fallbackRow?.owner_id ?? '').trim()
+    }
+    if (!accountId) return null
+    const workspaceId =
+      requested && this.isMember(accountId, requested)
+        ? requested
+        : this.accountActiveWorkspace(accountId) ?? ''
+    return { accountId, workspaceId }
+  }
+
+  workspacePerson(actorId: string) {
+    const requested = currentRequestWorkspaceId()
+    const workspaceId =
+      requested && this.isMember(actorId, requested)
+        ? requested
+        : this.accountActiveWorkspace(actorId)
+    if (workspaceId) {
+      const row = this.db
+        .prepare(
+          `SELECT COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), NULLIF(a.email, ''), '用户') AS name
+           FROM workspace_members m
+           JOIN accounts a ON a.id = m.account_id
+           WHERE m.workspace_id = ? AND m.account_id = ?`,
+        )
+        .get(workspaceId, actorId) as { name: string } | undefined
+      if (row) return { accountId: actorId, workspaceId, name: row.name }
+    }
+    const account = this.db
+      .prepare(
+        `SELECT COALESCE(NULLIF(name, ''), NULLIF(email, ''), '用户') AS name
+         FROM accounts WHERE id = ?`,
+      )
+      .get(actorId) as { name: string } | undefined
+    return account ? { accountId: actorId, workspaceId: workspaceId ?? '', name: account.name } : null
   }
 
   saveWorkspaceProfile(actorId: string, patch: { name?: string; avatar?: string }) {

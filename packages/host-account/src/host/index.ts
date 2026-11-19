@@ -47,6 +47,12 @@ export class AccountService extends Service {
       PRIMARY KEY (collection, record_id)
     )`)
     const origin = process.env.BIU_REMOTE_ORIGIN
+    ctx.on('account/request', (event) => {
+      const localAccountId = String((event as { accountId?: string }).accountId ?? '')
+      if (!localAccountId) return
+      this.store.noteActiveAccount(localAccountId)
+      if (this.replica) this.syncReplicaCredential(localAccountId)
+    })
     if (!isOnlineRuntime() && origin) {
       this.replica = new RecordReplica(db, httpRemote(origin))
       const timer = setInterval(() => {
@@ -59,11 +65,6 @@ export class AccountService extends Service {
         })
       }, 3000)
       ctx.on('dispose', () => clearInterval(timer))
-      ctx.on('account/request', (event) => {
-        const localAccountId = String((event as { accountId?: string }).accountId ?? '')
-        if (!localAccountId) return
-        this.syncReplicaCredential(localAccountId)
-      })
       const saved = this.db.prepare('SELECT local_account_id FROM cloud_connections WHERE active = 1').all() as Array<{ local_account_id: string }>
       for (const row of saved) this.syncReplicaCredential(row.local_account_id)
     }

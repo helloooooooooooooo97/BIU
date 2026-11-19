@@ -255,10 +255,37 @@ export function applyHostServer(ctx: Context) {
     route.send(200, payload())
   })
 
+  function localActor(route: RouteContext) {
+    const headerWorkspace = String(route.req.headers['x-biu-workspace-id'] ?? '').trim()
+    const store = (
+      ctx.get('account') as {
+        store?: {
+          activeLocalActor?(requestedWorkspaceId?: string): { accountId: string; workspaceId: string } | null
+          isMember?(accountId: string, workspaceId: string): boolean
+          accountActiveWorkspace?(accountId: string): string | null
+          activeWorkspaceId?(): string | null
+        }
+      } | undefined
+    )?.store
+    const existingAccount = currentAccountId()
+    if (existingAccount) {
+      const workspaceId =
+        headerWorkspace && store?.isMember?.(existingAccount, headerWorkspace)
+          ? headerWorkspace
+          : currentRequestWorkspaceId() ||
+            store?.accountActiveWorkspace?.(existingAccount) ||
+            store?.activeWorkspaceId?.() ||
+            ''
+      return { accountId: existingAccount, workspaceId }
+    }
+    return store?.activeLocalActor?.(headerWorkspace) ?? null
+  }
+
   const handle = async (route: RouteContext) => {
     applyCors(route)
     const tenant = mcpTenant(route)
     if (tenant === false) return
+    const actor = tenant ? null : localActor(route)
     const server = createBiuMcpServer(ctx)
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
@@ -271,6 +298,7 @@ export function applyHostServer(ctx: Context) {
     try {
       const run = () => transport.handleRequest(route.req, route.res, parsed)
       if (tenant) await runWithMcpTenant(tenant, run)
+      else if (actor) await runWithAccount(actor.accountId, () => runWithRequestWorkspace(actor.workspaceId, run))
       else await run()
     } finally {
       await transport.close().catch(() => undefined)

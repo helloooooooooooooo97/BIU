@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE, claimTableCellPick, consumePendingTablePane, firstTableTitleCell, moveTableCell, readTablePaneRest, rememberTablePaneRest, requestTablePaneFocus, tableActionArrowLeave, tableActionButtonStep, tableCellRange, tableCellRangeKey, tableCellRangeRowIds, tableClearKey, tableClearedValue, tableCreateKey, tableKeyDir, tableNavKeys, tablePaneFromEvent, tablePaneHotkey, tablePaneOther, tableSendChatHotkey, tableTitleOpenWhere, tableTreeArrowAction, tableTypeToEditChar } from './table-keys.ts'
+import { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE, claimTableCellPick, consumePendingTablePane, firstTableTitleCell, formatTableCellsForClipboard, moveTableCell, readTablePaneRest, rememberTablePaneRest, requestTablePaneFocus, tableActionArrowLeave, tableActionButtonStep, tableCellRange, tableCellRangeKey, tableCellRangeRowIds, tableClearKey, tableClearedValue, tableCopyHotkey, tableCreateKey, tableKeyDir, tableNavKeys, tablePaneFromEvent, tablePaneHotkey, tablePaneOther, tableSendChatHotkey, tableTitleOpenWhere, tableTreeArrowAction, tableTypeToEditChar, writeClipboardText } from './table-keys.ts'
 
 test('first table cell is the title of the first row', () => {
   assert.deepEqual(firstTableTitleCell(['a', 'b'], ['status', 'title', 'actions'], 'title'), { id: 'a', key: 'title' })
@@ -193,4 +193,77 @@ test('grouped ranges and keyboard movement use the displayed occurrence, not the
   assert.deepEqual(tableCellRange(ids, ['title'], anchor, focus, rows).map((cell) => cell.id), ['003', '004', '008', '009', '101', '102', '107'])
   assert.deepEqual(moveTableCell(ids, ['title'], focus, 'up', rows), { id: '102', key: 'title', rowKey: 'Python:102' })
   assert.deepEqual(tableCellRangeRowIds(tableCellRange(ids, ['title'], { id: '107', key: 'title', rowKey: 'React:107' }, focus, rows)), ['107', '190', '003', '004', '008', '009', '101', '102'])
+})
+
+test('tableCopyHotkey matches Ctrl/Cmd+C only without extra modifiers or IME composition', () => {
+  const base = { key: 'c', metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, isComposing: false }
+  assert.equal(tableCopyHotkey({ ...base, ctrlKey: true }), true)
+  assert.equal(tableCopyHotkey({ ...base, metaKey: true, key: 'C' }), true)
+  assert.equal(tableCopyHotkey(base), false)
+  assert.equal(tableCopyHotkey({ ...base, ctrlKey: true, shiftKey: true }), false)
+  assert.equal(tableCopyHotkey({ ...base, metaKey: true, altKey: true }), false)
+  assert.equal(tableCopyHotkey({ ...base, ctrlKey: true, isComposing: true }), false)
+  assert.equal(tableCopyHotkey({ ...base, ctrlKey: true, key: 'v' }), false)
+})
+
+test('formatTableCellsForClipboard copies single cell as-is, multi-cell as TSV, and skips actions', () => {
+  const data: Record<string, Record<string, string>> = {
+    r1: { title: '第一行', status: '进行中', note: '含\t制表符和"引号"' },
+    r2: { title: '第二行', status: '已完成', note: '多行\n文本' },
+  }
+  const read = (cursor: { id: string; key: string }) => data[cursor.id]?.[cursor.key] ?? ''
+  // Single cell keeps raw text (no extra quoting)
+  assert.equal(formatTableCellsForClipboard([{ id: 'r1', key: 'note' }], read), '含\t制表符和"引号"')
+  // Empty selection or actions-only returns null
+  assert.equal(formatTableCellsForClipboard([], read), null)
+  assert.equal(formatTableCellsForClipboard([{ id: 'r1', key: 'actions' }], read), null)
+  // Multi-cell rectangular range outputs TSV and skips actions column
+  const range = tableCellRange(['r1', 'r2'], ['title', 'actions', 'status', 'note'], { id: 'r1', key: 'title' }, { id: 'r2', key: 'note' })
+  assert.equal(
+    formatTableCellsForClipboard(range, read),
+    '第一行\t进行中\t"含\t制表符和""引号"""\n第二行\t已完成\t"多行\n文本"',
+  )
+})
+
+test('writeClipboardText uses navigator.clipboard and falls back to execCommand on failure', async () => {
+  const writes: string[] = []
+  const origClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+  const origExec = (document as unknown as { execCommand?: (cmd: string) => boolean }).execCommand
+  try {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: async (text: string) => { writes.push(text) } },
+    })
+    assert.equal(writeClipboardText('hello'), true)
+    assert.deepEqual(writes, ['hello'])
+
+    let fallbackCopied = 0
+    ;(document as unknown as { execCommand: (cmd: string) => boolean }).execCommand = (cmd: string) => {
+      if (cmd === 'copy') fallbackCopied += 1
+      return true
+    }
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: () => Promise.reject(new Error('denied')) },
+    })
+    assert.equal(writeClipboardText('fallback-text'), true)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    assert.equal(fallbackCopied, 1)
+  } finally {
+    if (origClipboard) Object.defineProperty(navigator, 'clipboard', origClipboard)
+    else delete (navigator as unknown as { clipboard?: unknown }).clipboard
+    if (origExec) (document as unknown as { execCommand?: (cmd: string) => boolean }).execCommand = origExec
+  }
+})
+
+test('browser table copy respects editing targets and native text selection', () => {
+  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  const fnStart = browser.indexOf('function onTableKeyDown')
+  const fnBody = browser.slice(fnStart, fnStart + 2500)
+  assert.ok(fnBody.indexOf('if (tableKeyFromEditingTarget(event.target)) return') < fnBody.indexOf('if (tableCopyHotkey(event))'))
+  const copyStart = browser.indexOf('function copySelectedTableCells')
+  const copyBody = browser.slice(copyStart, fnStart)
+  assert.match(copyBody, /window\.getSelection\(\)/)
+  assert.match(copyBody, /!sel\.isCollapsed/)
+  assert.match(copyBody, /formatTableCellsForClipboard/)
 })

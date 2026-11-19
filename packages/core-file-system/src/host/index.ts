@@ -915,6 +915,7 @@ export class DatabaseService extends Service implements Database {
   recycleAssets?: () => void
 
   private bumpQueued = false
+  private pendingBumpTenants = new Map<string, { workspaceId: string; accountId: string }>()
 
   constructor(ctx: Context) {
     super(ctx, 'database')
@@ -1687,12 +1688,26 @@ export class DatabaseService extends Service implements Database {
     this.inflightVisible.clear()
     this.visibleCache.clear()
     this.ctx.emit('database/change')
+    const workspaceId = currentRequestWorkspaceId() || this.collabStore()?.activeWorkspaceId?.() || ''
+    const accountId = currentAccountId()
+    this.pendingBumpTenants.set(`${workspaceId}\0${accountId}`, { workspaceId, accountId })
     if (this.bumpQueued) return
     this.bumpQueued = true
     queueMicrotask(() => {
       this.bumpQueued = false
-      const http = this.ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
-      http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('records'))
+      const tenants = [...this.pendingBumpTenants.values()]
+      this.pendingBumpTenants.clear()
+      const http = this.ctx.get('http') as
+        | { broadcast?: (type: string, payload: unknown, workspaceId?: string, accountId?: string) => void }
+        | undefined
+      for (const tenant of tenants) {
+        http?.broadcast?.(
+          DATABASE_CHANNEL,
+          databaseChannelPayload('records'),
+          tenant.workspaceId || undefined,
+          tenant.accountId || undefined,
+        )
+      }
     })
   }
 
@@ -3362,6 +3377,16 @@ async function withInspectorReveal<T>(
   op: () => T | Promise<T>,
   dropRecord = false,
 ) {
+  const sessionId = currentSessionId()?.trim()
+  if (!sessionId) {
+    const result = await op()
+    const savedView = savedViewFromToolResult(result)
+    if (savedView) {
+      const http = ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
+      http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('views', { savedView }))
+    }
+    return result
+  }
   broadcastInspectorReveal(ctx, path, undefined, dropRecord, 'working')
   try {
     const result = await op()

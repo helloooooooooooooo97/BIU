@@ -134,6 +134,7 @@ import {
   applyListedCrumbMutation,
   rememberRecords,
   rememberViews,
+  removeStarredViews,
   reviveSavedViewIds,
   persistStarredViews,
   persistCollapsedGroups,
@@ -174,7 +175,7 @@ import { publishDataSidebar, type DataSidebarLive } from './data-sidebar-host.ts
 import { builtinAllViewId, catalogLockFilters, collectionNoun, displayNameForView, isBuiltinAllViewId, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stampRecordId, stampRowOpenTarget, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, moveInspectorRecordsToTrash, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
-import { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE, claimTableCellPick, consumePendingTablePane, firstTableTitleCell, peekPendingTablePane, moveTableCell, readTablePaneRest, rememberTablePaneRest, requestTablePaneFocus, tableActionArrowLeave, tableActionButtons, tableActionButtonStep, tableCellRange, tableCellRangeKey, tableCellRangeRowIds, tableClearKey, tableClearedValue, tableCreateKey, tableKeyDir, tableKeyFromEditingTarget, tableNavKeys, tablePaneFromEvent, tablePaneHotkey, tablePaneOther, tableSendChatHotkey, tableTitleOpenWhere, tableTreeArrowAction, tableTypeToEditChar, type TableCellCursor } from './table-keys.ts'
+import { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE, claimTableCellPick, consumePendingTablePane, firstTableTitleCell, formatTableCellsForClipboard, peekPendingTablePane, moveTableCell, readTablePaneRest, rememberTablePaneRest, requestTablePaneFocus, tableActionArrowLeave, tableActionButtons, tableActionButtonStep, tableCellRange, tableCellRangeKey, tableCellRangeRowIds, tableClearKey, tableClearedValue, tableCopyHotkey, tableCreateKey, tableKeyDir, tableKeyFromEditingTarget, tableNavKeys, tablePaneFromEvent, tablePaneHotkey, tablePaneOther, tableSendChatHotkey, tableTitleOpenWhere, tableTreeArrowAction, tableTypeToEditChar, writeClipboardText, type TableCellCursor } from './table-keys.ts'
 import { focusRecordTitleNear } from './title-content-nav.ts'
 import { isViewCatalogField, selectedViewCatalogOption } from './view-catalog.ts'
 import { jumpTag, loadTags, pullTags, subscribeTags } from './tag-catalog.ts'
@@ -3197,6 +3198,7 @@ export function CollectionBrowser({
     }
     if (gen !== viewsWriteGenRef.current) return false
     if (result === 'skipped') return true
+    if (extra?.remove?.length) removeStarredViews(path, extra.remove)
     noteLocalSavedViewsWrite(path)
     const pulled = await pullSavedViews([path], { force: true })
     if (gen !== viewsWriteGenRef.current) return false
@@ -5221,6 +5223,38 @@ export function CollectionBrowser({
     return sendSelectedCellToChat()
   }
 
+  function copySelectedTableCells(target: EventTarget | null) {
+    if (detailId || cellPop) return false
+    const hit = target instanceof Element ? target : null
+    const page = hit?.closest('.fsdb-page') ?? null
+    if (page && page !== pageRef.current) return false
+    const live = typeof document !== 'undefined' ? document.activeElement : null
+    if (
+      live instanceof Element &&
+      live.closest('.page-editor, .composer, .chat-composer-dock, .app-side-bar, .tasks-search-wrap')
+    ) {
+      return false
+    }
+    const sel = typeof window !== 'undefined' ? window.getSelection() : null
+    if (sel && !sel.isCollapsed && sel.toString().length > 0) return false
+    const range = cellRangeRef.current
+    const cursors = range
+      ? tableCellRange(tableNavRowIds(), tableNavKeys(columns), range.anchor, range.focus, selectionModelRef.current.rowKeys)
+      : cellPickRef.current
+        ? [cellPickRef.current]
+        : []
+    if (!cursors.length) return false
+    const text = formatTableCellsForClipboard(cursors, (cursor) => {
+      const row = findPaintedRow(cursor.id)
+      const col = columns.find((item) => item.key === cursor.key)
+      if (!row || !col) return null
+      return cellValueText(row, cursor.key, col.field)
+    })
+    if (text === null) return false
+    writeClipboardText(text)
+    return true
+  }
+
   function onTableKeyDown(event: { key: string; shiftKey: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean; defaultPrevented: boolean; target: EventTarget | null; preventDefault: () => void; isComposing?: boolean }) {
     if (event.defaultPrevented) return
     if (tableSendChatHotkey(event)) {
@@ -5254,6 +5288,10 @@ export function CollectionBrowser({
       }
     }
     if (tableKeyFromEditingTarget(event.target)) return
+    if (tableCopyHotkey(event)) {
+      if (copySelectedTableCells(event.target)) event.preventDefault()
+      return
+    }
     const titleCursor = cellPickRef.current
     const titleOpen = titleCursor
       ? tableTitleOpenWhere({

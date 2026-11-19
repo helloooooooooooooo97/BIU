@@ -644,3 +644,39 @@ test('clearing a filter overwrites the persisted display tree after a refresh', 
   persistViewDisplay('/pages', view.id, { wrap: true })
   assert.equal(withViewDisplay('/pages', view).filterTree, undefined)
 })
+
+test('removeStarredViews drops deleted views from starredViews without touching other tables', async () => {
+  const mod = await import('./view-storage.ts')
+  const prev = mod.getStarredViews()
+  const mem: Record<string, string> = {}
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => mem[key] ?? null,
+      setItem: (key: string, value: string) => { mem[key] = value },
+      removeItem: (key: string) => { delete mem[key] },
+    },
+  })
+  let notified = 0
+  const off = mod.subscribeStarredViews(() => { notified += 1 })
+  try {
+    mod.persistStarredViews([
+      { path: '/pages', viewId: 'v-keep', name: '保留视图' },
+      { path: '/pages', viewId: 'v-del-1', name: '待删视图1' },
+      { path: '/pages', viewId: 'v-del-2', name: '待删视图2' },
+      { path: '/tasks', viewId: 'v-del-1', name: '别表同名视图' },
+    ])
+    notified = 0
+    assert.equal(mod.removeStarredViews('/pages', ['v-del-1', 'v-del-2']), true)
+    assert.equal(notified, 1)
+    assert.deepEqual(mod.getStarredViews(), [
+      { path: '/pages', viewId: 'v-keep', name: '保留视图' },
+      { path: '/tasks', viewId: 'v-del-1', name: '别表同名视图' },
+    ])
+    assert.equal(mod.removeStarredViews('/pages', ['v-missing']), false)
+    assert.equal(notified, 1)
+  } finally {
+    off()
+    mod.persistStarredViews(prev)
+  }
+})

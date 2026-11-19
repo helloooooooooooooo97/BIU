@@ -39,6 +39,8 @@ import {
   getStarredRecordsVersion,
   getStarredViews,
   getStarredViewsVersion,
+  hasPulledSavedViews,
+  isOmittedViewId,
   isRecordStarred,
   isViewStarred,
   getCrumbsVersion,
@@ -655,9 +657,7 @@ export const DataSidebar = memo(function DataSidebar({
       if (live) setViewsTick((n) => n + 1)
     }
     if (starredPaths.length) {
-      void pullSavedViews(starredPaths, { force: true }).then((changed) => {
-        if (live && changed) bump()
-      }, bump)
+      void pullSavedViews(starredPaths, { force: true }).then(bump, bump)
     }
     if (paths.length) {
       void pullSavedViews(paths, { idle: true }).then((changed) => {
@@ -690,9 +690,10 @@ export const DataSidebar = memo(function DataSidebar({
   const starredRows = starredViews.flatMap((item) => {
     const table = listedTables.find((row) => row.path === item.path)
     if (!table) return []
+    if (isOmittedViewId(item.path, item.viewId)) return []
     const listedView = viewsFor(item.path).find((row) => row.id === item.viewId)
     const storedName = String(item.name ?? '').trim()
-    if (!listedView && !storedName) return []
+    if (!listedView && (hasPulledSavedViews(item.path) || !storedName)) return []
     const view = listedView ?? normalizeSavedView({
       id: item.viewId,
       name: storedName,
@@ -704,6 +705,17 @@ export const DataSidebar = memo(function DataSidebar({
     })
     return [{ table, view }]
   })
+  useEffect(() => {
+    const current = getStarredViews()
+    if (!current.length) return
+    const next = current.filter((item) => {
+      if (isOmittedViewId(item.path, item.viewId)) return false
+      if (!hasPulledSavedViews(item.path)) return true
+      if (!listedTables.some((row) => row.path === item.path)) return true
+      return viewsFor(item.path).some((row) => row.id === item.viewId)
+    })
+    if (next.length !== current.length) persistStarredViews(next)
+  }, [listedTables, starredPathsKey, views, viewsTick])
   const starredRecordRows = starredRecords.flatMap((item) => {
     const table = listedTables.find((row) => row.path === item.path)
     if (!table) return []
