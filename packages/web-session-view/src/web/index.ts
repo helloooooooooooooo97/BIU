@@ -323,7 +323,7 @@ export class SessionViewService extends Service {
   private trajectoryLive = false
   private trajGen = 0
   private trajFetchSessionId: string | null = null
-  private trajRefresh: Promise<void> | null = null
+  private trajInflight: Promise<void> | null = null
   private dispatchedPoll: ReturnType<typeof setInterval> | null = null
   private dispatchedAbort: AbortController | null = null
   private busyHoldUntil = 0
@@ -1302,13 +1302,13 @@ export class SessionViewService extends Service {
   async refreshTrajectoryIndex() {
     const sessionId = this.value.sessionId
     if (!sessionId || !this.wantsTrajectory()) return
-    if (this.trajRefresh) return this.trajRefresh
+    if (this.trajInflight) return this.trajInflight
     const run = this.pullTrajectoryIndex(sessionId)
-    this.trajRefresh = run
+    this.trajInflight = run
     try {
       await run
     } finally {
-      if (this.trajRefresh === run) this.trajRefresh = null
+      if (this.trajInflight === run) this.trajInflight = null
     }
   }
 

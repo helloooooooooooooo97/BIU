@@ -1212,6 +1212,8 @@ type TableBodyProps = {
   activeRowId: string | null
 }
 
+const rowJsonCache = new WeakMap<object, string>()
+
 function rowPaintStamp(node: TablePaintNode) {
   if (node.kind !== 'row') {
     const label = node.kind === 'group-head' ? node.label : ''
@@ -1219,7 +1221,19 @@ function rowPaintStamp(node: TablePaintNode) {
     const page = node.kind === 'group-pager' ? node.pageIndex : ''
     return `${node.kind}\0${node.key}\0${label}\0${count}\0${page}`
   }
-  return `${node.key}\0${node.depth}\0${node.hasKids ? 1 : 0}\0${node.kidCount}\0${node.fold ? 1 : 0}\0${JSON.stringify(node.row)}`
+  let rowStr = ''
+  if (node.row && typeof node.row === 'object') {
+    const cached = rowJsonCache.get(node.row)
+    if (cached !== undefined) {
+      rowStr = cached
+    } else {
+      rowStr = JSON.stringify(node.row)
+      rowJsonCache.set(node.row, rowStr)
+    }
+  } else {
+    rowStr = JSON.stringify(node.row)
+  }
+  return `${node.key}\0${node.depth}\0${node.hasKids ? 1 : 0}\0${node.kidCount}\0${node.fold ? 1 : 0}\0${rowStr}`
 }
 
 function columnLayout(colKeys: string) {
@@ -1243,6 +1257,11 @@ const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, mea
   if (rowCache.current.size > nodes.length + 8) {
     const live = new Set(nodes.map((node) => node.key))
     for (const key of rowCache.current.keys()) if (!live.has(key)) rowCache.current.delete(key)
+    for (const cellKey of cellCache.current.keys()) {
+      const sep = cellKey.indexOf('\0')
+      const rowKey = sep === -1 ? cellKey : cellKey.slice(0, sep)
+      if (!live.has(rowKey)) cellCache.current.delete(cellKey)
+    }
   }
   // React can reuse cells whose selection classes were painted during a gesture.
   // Restore the authoritative live selection after every virtual-window commit.

@@ -37,12 +37,18 @@ const INSPECTOR_VIEW_OMIT = new Set([
   'repeatable',
 ])
 
+const inspectorViewPropsCache = new WeakMap<object, Record<string, unknown>>()
+
 export function inspectorViewProps(raw: Record<string, unknown>) {
+  if (!raw || typeof raw !== 'object') return raw
+  const cached = inspectorViewPropsCache.get(raw)
+  if (cached) return cached
   const next: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(raw)) {
     if (INSPECTOR_VIEW_OMIT.has(key)) continue
     next[key] = value
   }
+  inspectorViewPropsCache.set(raw, next)
   return next
 }
 export function slotTabId(openedId: string) {
