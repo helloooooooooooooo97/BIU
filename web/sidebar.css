@@ -228,7 +228,7 @@ html.dark .fsdb-views {
 
 .app-side-bar.is-narrow .app-side-actions {
   gap: 4px;
-  margin: 4px 0 8px;
+  margin: 4px 0 4px;
 }
 
 .app-side-bar.is-narrow .app-side-actions-item {
@@ -863,6 +863,49 @@ html.dark .fsdb-views {
   contain: none;
   transform: none;
   z-index: 20;
+}
+
+.sidebar-create-agent-head {
+  flex-shrink: 0;
+  padding: 8px;
+}
+
+.sidebar-create-agent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--biu-color-icon);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.sidebar-create-agent:hover,
+.sidebar-create-agent:focus-visible {
+  background: var(--biu-color-bg-hover);
+  color: var(--biu-color-text);
+}
+
+.app-side-bar.is-narrow .sidebar-create-agent {
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-inline: auto;
+  padding: 0;
+  border-radius: 8px;
+}
+
+.app-side-bar.is-narrow .sidebar-create-agent-head {
+  padding: 0 0 4px;
+}
+
+.app-side-bar.is-narrow .sidebar-section-rows {
+  padding-top: 0;
 }
 
 .app-side-bar.is-narrow [data-chat-scroll],

@@ -330,76 +330,91 @@ export const ChatSidebar = memo(function ChatSidebar({
   )
 
   const body = (
-    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3" data-chat-scroll="">
-      <div className="mt-2 space-y-1.5">
-        {sections.map((section) => {
-          const sectionCollapsed = Boolean(collapsedProjects[`chat.section.${section.kind}`])
-          const count =
-            section.sessions?.length ?? section.groups?.reduce((sum, group) => sum + group.sessions.length, 0) ?? 0
-          return (
-            <section key={section.kind} className="min-w-0">
-              <div className="sidebar-section-head min-w-0">
-                <button
-                  type="button"
-                  className="flex h-full min-h-8 min-w-0 flex-1 items-center gap-2 text-left text-[12px] font-bold tracking-wider"
-                  aria-expanded={!sectionCollapsed}
-                  onClick={() => toggleSection(section.kind)}
-                >
-                  <span className="min-w-0 flex-1 truncate tracking-normal">{section.label}</span>
-                </button>
-                <ChatCount count={count} />
-              </div>
-
-              <SidebarFold open={!sectionCollapsed}>
-                <div className="flex min-w-0 flex-col gap-px pt-0.5">
-                  {section.sessions ? list(section, 'pinned', section.sessions) : null}
-                  {section.groups?.map((group) => {
-                    const collapsed = Boolean(collapsedProjects[group.key])
-                    const addLabel = group.kind === 'ungrouped' ? '在未分组下添加会话' : `在 ${group.label} 下添加会话`
-                    return (
-                      <div key={group.key} className="min-w-0">
-                        <div className="sidebar-group-head">
-                          <div
-                            role="button"
-                            tabIndex={0}
-                            className="flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md text-left text-[14px] font-medium tracking-normal text-inherit outline-none hover:text-(--biu-color-text) focus-visible:ring-1 focus-visible:ring-(--biu-color-border)"
-                            title={group.path ?? group.label}
-                            aria-expanded={!collapsed}
-                            onClick={() => toggleProjectGroup(group.key)}
-                            onKeyDown={(event) => {
-                              if (event.key !== 'Enter' && event.key !== ' ') return
-                              event.preventDefault()
-                              toggleProjectGroup(group.key)
-                            }}
-                          >
-                            <GroupFoldGlyph group={group} collapsed={collapsed} />
-                            <span className="sidebar-label min-w-0 flex-1 truncate">{group.label}</span>
-                          </div>
-                          <ChatCount count={group.sessions.length} />
-                          <button
-                            type="button"
-                            className="sidebar-add"
-                            title={addLabel}
-                            aria-label={addLabel}
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              createChat(group.path ? { projectPath: group.path } : {})
-                            }}
-                          >
-                            <PlusIcon {...chromeIcon} />
-                          </button>
-                        </div>
-                        <SidebarFold open={!collapsed} className="sidebar-session-list min-w-0">
-                          {list(section, group.key, group.sessions)}
-                        </SidebarFold>
-                      </div>
-                    )
-                  })}
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="sidebar-create-agent-head">
+        <button
+          type="button"
+          className="sidebar-create-agent"
+          aria-label="添加 Agent"
+          data-dock-tip="添加 Agent"
+          data-dock-tip-at="e"
+          onClick={() => createChat()}
+        >
+          <PlusIcon {...chromeIcon} />
+          <span className="sidebar-label">添加 Agent</span>
+        </button>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3" data-chat-scroll="">
+        <div className="space-y-1.5">
+          {sections.map((section) => {
+            const sectionCollapsed = Boolean(collapsedProjects[`chat.section.${section.kind}`])
+            const count =
+              section.sessions?.length ?? section.groups?.reduce((sum, group) => sum + group.sessions.length, 0) ?? 0
+            return (
+              <section key={section.kind} className="min-w-0">
+                <div className="sidebar-section-head min-w-0">
+                  <button
+                    type="button"
+                    className="flex h-full min-h-8 min-w-0 flex-1 items-center gap-2 text-left text-[12px] font-bold tracking-wider"
+                    aria-expanded={!sectionCollapsed}
+                    onClick={() => toggleSection(section.kind)}
+                  >
+                    <span className="min-w-0 flex-1 truncate tracking-normal">{section.label}</span>
+                  </button>
+                  <ChatCount count={count} />
                 </div>
-              </SidebarFold>
-            </section>
-          )
-        })}
+
+                <SidebarFold open={!sectionCollapsed}>
+                  <div className="sidebar-section-rows flex min-w-0 flex-col gap-px pt-0.5">
+                    {section.sessions ? list(section, 'pinned', section.sessions) : null}
+                    {section.groups?.map((group) => {
+                      const collapsed = Boolean(collapsedProjects[group.key])
+                      const addLabel = group.kind === 'ungrouped' ? '在未分组下添加会话' : `在 ${group.label} 下添加会话`
+                      return (
+                        <div key={group.key} className="min-w-0">
+                          <div className="sidebar-group-head">
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              className="flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md text-left text-[14px] font-medium tracking-normal text-inherit outline-none hover:text-(--biu-color-text) focus-visible:ring-1 focus-visible:ring-(--biu-color-border)"
+                              title={group.path ?? group.label}
+                              aria-expanded={!collapsed}
+                              onClick={() => toggleProjectGroup(group.key)}
+                              onKeyDown={(event) => {
+                                if (event.key !== 'Enter' && event.key !== ' ') return
+                                event.preventDefault()
+                                toggleProjectGroup(group.key)
+                              }}
+                            >
+                              <GroupFoldGlyph group={group} collapsed={collapsed} />
+                              <span className="sidebar-label min-w-0 flex-1 truncate">{group.label}</span>
+                            </div>
+                            <ChatCount count={group.sessions.length} />
+                            <button
+                              type="button"
+                              className="sidebar-add"
+                              title={addLabel}
+                              aria-label={addLabel}
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                createChat(group.path ? { projectPath: group.path } : {})
+                              }}
+                            >
+                              <PlusIcon {...chromeIcon} />
+                            </button>
+                          </div>
+                          <SidebarFold open={!collapsed} className="sidebar-session-list min-w-0">
+                            {list(section, group.key, group.sessions)}
+                          </SidebarFold>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </SidebarFold>
+              </section>
+            )
+          })}
+        </div>
       </div>
     </div>
   )
