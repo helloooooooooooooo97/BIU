@@ -431,6 +431,55 @@ export class TagStore {
     }
   }
 
+  /** 统计某个标签下各 select / multi-select 字段在历史记录中出现过的值，供 Agent / MCP 自动发现候选枚举。 */
+  observedFieldOptions(tagId: string, limit = 20): Record<string, string[]> {
+    const want = String(tagId ?? '').trim()
+    if (!want) return {}
+    const pack = this.get(want)
+    if (!pack) return {}
+    const selectKeys = new Set(
+      pack.fields
+        .filter((f) => !f.deleted && (f.type === 'select' || f.type === 'multi-select') && !f.enum?.length)
+        .map((f) => f.key),
+    )
+    if (!selectKeys.size) return {}
+    const counts = new Map<string, Map<string, number>>()
+    const rows = this.ensure().prepare('SELECT tag_json FROM tag_record_values').all() as Array<{ tag_json: string }>
+    for (const row of rows) {
+      let parsed: ReturnType<typeof normalizeSchemaValue>
+      try {
+        parsed = normalizeSchemaValue(JSON.parse(row.tag_json || '{}'))
+      } catch {
+        continue
+      }
+      const bag = parsed.values[want]
+      if (!bag || typeof bag !== 'object' || Array.isArray(bag)) continue
+      for (const key of selectKeys) {
+        const raw = bag[key]
+        const vals = Array.isArray(raw) ? raw : raw != null ? [raw] : []
+        for (const item of vals) {
+          const text = String(item ?? '').trim()
+          if (!text) continue
+          let map = counts.get(key)
+          if (!map) {
+            map = new Map()
+            counts.set(key, map)
+          }
+          map.set(text, (map.get(text) ?? 0) + 1)
+        }
+      }
+    }
+    const out: Record<string, string[]> = {}
+    for (const [key, map] of counts) {
+      const sorted = [...map.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .slice(0, limit)
+        .map(([val]) => val)
+      if (sorted.length) out[key] = sorted
+    }
+    return out
+  }
+
   filledFieldCounts(): Record<string, Record<string, number>> {
     const live = new Map(
       this.list().map((pack) => [

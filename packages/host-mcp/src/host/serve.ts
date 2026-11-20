@@ -34,10 +34,23 @@ const MCP_WRITE_TOOLS = new Set([
   'db_content',
   'db_file',
   'db_media',
-  'db_content',
   'db_doc',
   'db_asset',
 ])
+
+export function isMcpWriteCall(name: string, args: Record<string, unknown> = {}): boolean {
+  if (!MCP_WRITE_TOOLS.has(name)) return false
+  if (name === 'db_content') {
+    const cmd = String(args.command ?? '').trim().toLowerCase()
+    if (cmd === 'view') return false
+    if (!cmd && args.value === undefined && args.from === undefined && args.new_str === undefined) return false
+  }
+  if (name === 'db_file' || name === 'db_media' || name === 'db_doc' || name === 'db_asset') {
+    const cmd = String(args.command ?? '').trim().toLowerCase()
+    if (cmd === 'view' || cmd === 'read' || cmd === 'list') return false
+  }
+  return true
+}
 
 const MCP_CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -96,8 +109,10 @@ export function createBiuMcpServer(ctx: Context) {
   const server = new Server(SERVER_INFO, {
     capabilities: { tools: {} },
     instructions:
-      'Biu 工作台的 MCP 入口。协议对各客户端一样；Cursor / Claude / ChatGPT 只是各自的接入向导不同。' +
-      '默认只开放文件系统 db_* 工具（文件模式）。请求必须带 Authorization: Bearer <token>。',
+      'Biu 工作台的 MCP 入口。默认只开放文件系统 db_* 工具（文件模式）。请求必须带 Authorization: Bearer <token>。' +
+      '常用约定：db_list path="/" 列出所有表；db_stat 查表结构；db_read 读单条记录（工具名为 db_read 而非 db_get）；' +
+      'db_create 支持 records 数组或单条 record 对象（记录内可直接带 content 一步写正文）；' +
+      'db_update 支持 content / fields / patch 对象；db_content 读写长正文（command=view 为只读）。',
   })
 
   server.setRequestHandler(ListToolsRequestSchema, async () =>
@@ -131,12 +146,18 @@ export function createBiuMcpServer(ctx: Context) {
     }
     try {
       if (tenant && !tenant.allowedTools.includes(name)) {
-        throw new Error('这个 MCP 凭证不允许使用该工具')
+        throw new Error(`这个 MCP 凭证不允许使用该工具: ${name}。可用工具: ${tenant.allowedTools.join(', ')}`)
       }
-      if (tenant?.role === 'viewer' && MCP_WRITE_TOOLS.has(name)) {
+      if (tenant?.role === 'viewer' && isMcpWriteCall(name, args)) {
         throw new Error('查看者不能写入')
       }
-      const invoke = () => runWithToolPolicy({ mode: 'file' }, () => ctx.tools.invoke(name, args))
+      const invoke = () => runWithToolPolicy({ mode: 'file' }, () => {
+        const available = ctx.tools.schemas().map((item) => item.function.name)
+        if (!available.includes(name)) {
+          throw new Error(`unknown tool: ${name}. Available tools: ${available.join(', ')}`)
+        }
+        return ctx.tools.invoke(name, args)
+      })
       const result = tenant
         ? await runWithAccount(tenant.accountId, () => runWithRequestWorkspace(tenant.workspaceId, invoke))
         : await invoke()

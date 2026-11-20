@@ -343,3 +343,15 @@ test('local host-token MCP runs under active local account, updates on account s
     await ctx.fiber.dispose()
   }
 }, 20000)
+
+test('isMcpWriteCall allows viewer read-only db_content view while blocking writes', async () => {
+  const { isMcpWriteCall } = await import('./serve.ts')
+  assert.equal(isMcpWriteCall('db_list', {}), false)
+  assert.equal(isMcpWriteCall('db_read', {}), false)
+  assert.equal(isMcpWriteCall('db_content', { path: '/pages/p1', command: 'view' }), false)
+  assert.equal(isMcpWriteCall('db_content', { path: '/pages/p1' }), false)
+  assert.equal(isMcpWriteCall('db_content', { path: '/pages/p1', command: 'write', value: '# hi' }), true)
+  assert.equal(isMcpWriteCall('db_content', { path: '/pages/p1', value: '# hi' }), true)
+  assert.equal(isMcpWriteCall('db_content', { path: '/pages/p1', command: 'str_replace', old_str: 'a', new_str: 'b' }), true)
+  assert.equal(isMcpWriteCall('db_update', { path: '/pages/p1' }), true)
+})

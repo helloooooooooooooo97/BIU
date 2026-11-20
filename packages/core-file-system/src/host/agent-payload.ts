@@ -38,7 +38,8 @@ export class AgentDbCompact {
     if (kind === 'root') return { kind: 'root', items: this.rootTables(rec.items ?? rec.collections) }
     if (kind === 'collection') return this.collection(rec)
     if (kind === 'record') {
-      const next: Record<string, unknown> = { kind: 'record', path: rec.path, value: this.recordValue(rec.value) }
+      const recPath = String(rec.path ?? '')
+      const next: Record<string, unknown> = { kind: 'record', path: rec.path, value: this.recordValue(rec.value, recPath) }
       if (rec.result !== undefined) next.result = rec.result
       return next
     }
@@ -75,7 +76,7 @@ export class AgentDbCompact {
       if (typeof rec.total === 'number') next.total = rec.total
       if (typeof rec.offset === 'number' && rec.offset) next.offset = rec.offset
       if (typeof rec.limit === 'number') next.limit = rec.limit
-      const table = this.columnar(rec.items)
+      const table = this.columnar(rec.items, path)
       next.columns = table.columns
       next.rows = table.rows
       return next
@@ -135,7 +136,19 @@ export class AgentDbCompact {
     return next
   }
 
-  private columnar(items: unknown[]) {
+  private unpackTagFields(cell: unknown) {
+    if (typeof cell !== 'string') return cell
+    const trimmed = cell.trim()
+    if (!trimmed.startsWith('[')) return cell
+    try {
+      const parsed = JSON.parse(trimmed) as unknown
+      return Array.isArray(parsed) ? parsed : cell
+    } catch {
+      return cell
+    }
+  }
+
+  private columnar(items: unknown[], path = '') {
     const rowsIn = items.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
     const keepMeta = !this.hasNonMetaFields(rowsIn)
     const order: string[] = []
@@ -150,7 +163,13 @@ export class AgentDbCompact {
     const columns = order.filter(
       (key) => key === 'id' || key.startsWith('tag::') || rowsIn.some((row) => !this.empty(row[key])),
     )
-    const rows = rowsIn.map((row) => columns.map((key) => (this.empty(row[key]) ? null : row[key])))
+    const isTags = path === '/tags'
+    const rows = rowsIn.map((row) =>
+      columns.map((key) => {
+        if (this.empty(row[key])) return null
+        return isTags && key === 'fields' ? this.unpackTagFields(row[key]) : row[key]
+      }),
+    )
     return { columns, rows }
   }
 
@@ -179,12 +198,13 @@ export class AgentDbCompact {
     return blurb
   }
 
-  private recordValue(value: unknown) {
+  private recordValue(value: unknown, path = '') {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return value
+    const isTagRecord = path.startsWith('/tags/')
     const next: Record<string, unknown> = {}
     for (const [key, cell] of Object.entries(value as Record<string, unknown>)) {
       if (this.empty(cell)) continue
-      next[key] = cell
+      next[key] = isTagRecord && key === 'fields' ? this.unpackTagFields(cell) : cell
     }
     return next
   }

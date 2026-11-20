@@ -388,3 +388,21 @@ test('renaming a tag field label or migrating its key preserves all existing rec
   assert.equal(store.recordTag('/pages', 'p1')?.values.req['紧急度'], 'P1')
   assert.equal(store.recordTag('/pages', 'p1')?.values.req['9988776'], undefined)
 })
+
+test('observedFieldOptions aggregates select values sorted by frequency', () => {
+  const store = new TagStore()
+  store.upsert({
+    id: 'req',
+    label: '需求',
+    fields: [
+      { key: 'type', label: '类型', type: 'select' },
+      { key: 'fixed', label: '固定', type: 'select', enum: ['A', 'B'] },
+      { key: 'title_extra', label: '备注', type: 'string' },
+    ],
+  })
+  store.writeRecordTag('/pages', 'p1', { tags: ['req'], values: { req: { type: 'feature' } } }, '一')
+  store.writeRecordTag('/pages', 'p2', { tags: ['req'], values: { req: { type: 'bug' } } }, '二')
+  store.writeRecordTag('/pages', 'p3', { tags: ['req'], values: { req: { type: 'feature' } } }, '三')
+  const observed = store.observedFieldOptions('req')
+  assert.deepEqual(observed, { type: ['feature', 'bug'] })
+})

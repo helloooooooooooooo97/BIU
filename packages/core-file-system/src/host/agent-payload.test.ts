@@ -262,3 +262,22 @@ test('compact write drops full record; create keeps ids', () => {
   }) as Record<string, unknown>
   assert.deepEqual(created, { ok: true, path: '/notes', ids: ['n3'] })
 })
+
+test('AgentDbCompact unpacks /tags fields JSON string into structured arrays', () => {
+  const pack = new AgentDbCompact()
+  const listed = pack.query({
+    kind: 'collection',
+    path: '/tags',
+    items: [{ id: 'tag-10', title: '需求', fields: '[{"key":"k1","label":"优先级","type":"select"}]' }],
+  }) as { columns: string[]; rows: unknown[][] }
+  const fieldIdx = listed.columns.indexOf('fields')
+  assert.ok(fieldIdx >= 0)
+  assert.deepEqual(listed.rows[0]?.[fieldIdx], [{ key: 'k1', label: '优先级', type: 'select' }])
+
+  const read = pack.query({
+    kind: 'record',
+    path: '/tags/tag-10',
+    value: { id: 'tag-10', title: '需求', fields: '[{"key":"k1","label":"优先级","type":"select","observedOptions":["P1","P2"]}]' },
+  }) as { value: Record<string, unknown> }
+  assert.deepEqual(read.value.fields, [{ key: 'k1', label: '优先级', type: 'select', observedOptions: ['P1', 'P2'] }])
+})

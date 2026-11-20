@@ -52,10 +52,15 @@ export function tagsCollection(
   const fromEntry = (id: string, stampCount: number) => {
     const item = store.entry(id)
     if (!item) return asTag(id, id, [], stampCount)
+    const observed = store.observedFieldOptions(item.pack.id)
+    const enrichedFields = item.pack.fields.map((field) => {
+      const opts = observed[field.key]
+      return opts?.length ? { ...field, observedOptions: opts } : field
+    })
     return asTag(
       item.pack.id,
       item.pack.label,
-      item.pack.fields,
+      enrichedFields,
       stampCount,
       item.notes,
       item.createdAt,

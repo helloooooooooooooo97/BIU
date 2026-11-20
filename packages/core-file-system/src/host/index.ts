@@ -2553,14 +2553,29 @@ export class DatabaseService extends Service implements Database {
       })
     }
     const schema = schemaFor(spec)
+    const bodyKey = spec.schema.contentField
     const rows = parseRecords(content)
     const records: Record<string, unknown>[] = []
     const banners: Array<PageBanner | null | undefined> = []
     const requestedIds: string[] = []
+    const initialBodies: Array<string | undefined> = []
     for (const row of rows) {
       const bannerPatch = takeBannerPatch(row)
       banners.push(bannerPatch.present ? bannerPatch.value : undefined)
       requestedIds.push(takeRequestedRecordId(row))
+      const rawBody =
+        bodyKey && spec.path !== '/tags'
+          ? typeof row[bodyKey] === 'string'
+            ? (row[bodyKey] as string)
+            : bodyKey !== 'content' && typeof row.content === 'string'
+              ? (row.content as string)
+              : undefined
+          : undefined
+      initialBodies.push(rawBody)
+      if (rawBody !== undefined) {
+        if (bodyKey && bodyKey in row && schema.fields[bodyKey]?.type === 'file') delete row[bodyKey]
+        if (bodyKey !== 'content' && 'content' in row && !schema.fields.content) delete row.content
+      }
       if ('tag' in row && schema.fields.tag) {
         row.tag = coerceTagPatch(row.tag, emptySchemaValue(), (id) => this.tags.get(id))
       }
@@ -2570,7 +2585,7 @@ export class DatabaseService extends Service implements Database {
     }
     const meaningful = records
       .map((record, index) => ({ record, index }))
-      .filter((item) => Object.keys(item.record).length > 0)
+      .filter((item) => Object.keys(item.record).length > 0 || initialBodies[item.index] !== undefined)
     const selected = meaningful.length ? meaningful : records.slice(0, 1).map((record, index) => ({ record, index }))
     const payloads: Record<string, unknown>[] = []
     for (const item of selected) {
@@ -2591,6 +2606,10 @@ export class DatabaseService extends Service implements Database {
       }
       if (schema.fields.tag) {
         this.persistRecordTag(spec, record.id, input.tag ?? record.tag, record)
+      }
+      const initialBody = initialBodies[sourceIndex]
+      if (initialBody !== undefined && bodyKey) {
+        await this.writeContent(`${spec.path}/${record.id}`, initialBody)
       }
       this.indexTagRecord(spec, this.decorateRecord(spec, record))
       this.refreshContentRefs(spec, this.withBanner(spec, record))
@@ -3223,21 +3242,36 @@ function resolveFindReplace(text: string, args: Record<string, unknown>) {
   })
 }
 
+const UPDATE_CONTENT_EXAMPLE = 'Example: { "path": "/pages/<id>", "content": { "title": "...", "tag": { "values": { ... } } } }'
+const CREATE_RECORDS_EXAMPLE = 'Example: { "path": "/pages", "records": [{ "title": "...", "content": "..." }] }'
+
 function parseContent(content: unknown): Record<string, unknown> {
   if (typeof content === 'string') {
     const trimmed = content.trim()
     if (!trimmed) return {}
     const parsed = JSON.parse(trimmed) as unknown
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('content must be an object')
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error(`content must be an object. ${UPDATE_CONTENT_EXAMPLE}`)
+    }
     return parsed as Record<string, unknown>
   }
-  if (!content || typeof content !== 'object' || Array.isArray(content)) throw new Error('content must be an object')
+  if (!content || typeof content !== 'object' || Array.isArray(content)) {
+    throw new Error(`content must be an object. ${UPDATE_CONTENT_EXAMPLE}`)
+  }
   return content as Record<string, unknown>
 }
 
 function parseRecords(content: unknown): Record<string, unknown>[] {
   const raw = typeof content === 'string' ? JSON.parse(content.trim() || 'null') : content
-  if (!Array.isArray(raw) || !raw.length) throw new Error('records must be a non-empty array')
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    if (!Object.keys(raw as Record<string, unknown>).length) {
+      throw new Error(`records must be a non-empty array. ${CREATE_RECORDS_EXAMPLE}`)
+    }
+    return [raw as Record<string, unknown>]
+  }
+  if (!Array.isArray(raw) || !raw.length) {
+    throw new Error(`records must be a non-empty array. ${CREATE_RECORDS_EXAMPLE}`)
+  }
   return raw.map((item, index) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error(`records[${index}] must be an object`)
     return item as Record<string, unknown>
@@ -3315,13 +3349,24 @@ function asDeleteQuery(args: Record<string, unknown>): CollectionListQuery {
 }
 
 function asCreateRecords(args: Record<string, unknown>) {
-  const value = args.records !== undefined ? args.records : args.content
+  const value =
+    args.records !== undefined
+      ? args.records
+      : args.record !== undefined
+        ? args.record
+        : args.content
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    if (!Object.keys(value as Record<string, unknown>).length) {
+      throw new Error(`records must include at least one non-empty object. ${CREATE_RECORDS_EXAMPLE}`)
+    }
+    return [value]
+  }
   if (!Array.isArray(value)) return value
   const records = value.filter((item) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return true
     return Object.keys(item).length > 0
   })
-  if (!records.length) throw new Error('records must include at least one non-empty object')
+  if (!records.length) throw new Error(`records must include at least one non-empty object. ${CREATE_RECORDS_EXAMPLE}`)
   return records
 }
 
@@ -3533,7 +3578,7 @@ export function apply(ctx: Context) {
   })
   ctx.tools.register({
     name: 'db_list',
-    description: '列出 File System 路径：/ 为已登记表（path、中文名、view.blurb 说明书），/<表> 为列式记录（不含 content、默认不含 createdAt/updatedAt/createdBy/updatedBy）。默认每页 20，最多 200。columns 参数只取需要的列。表结构用 db_stat。',
+    description: '列出 File System 路径：/ 为已登记表（path、中文名、view.blurb 说明书），/<表> 返回列式 JSON { columns: string[], rows: unknown[][], total }（不含 content、默认不含 createdAt/updatedAt/createdBy/updatedBy）。默认每页 20，最多 200。columns 参数只取需要的列。表结构用 db_stat。',
     parameters: {
       type: 'object',
       properties: {
@@ -3579,26 +3624,37 @@ export function apply(ctx: Context) {
   })
   ctx.tools.register({
     name: 'db_update',
-    description: '按表结构 schema 的可写字段更新一条已有记录，路径为 /<表>/<id>。成功只返回 {ok, path}，不回整行。未知字段会列出该表可写字段。标签 tag：可同时贴多个。一个标签用扁平 values，如 {tags:["tag-2"],values:{导演:"查泽雷"}}；多个标签必须按标签分子对象，如 {tags:["tag-2","awards"],values:{"tag-2":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 则改当前已贴标签的属性（合并，不撕掉别的标签）。改标签定义用 db_update /tags/<id> fields（数组或 JSON 字符串均可）。新建用 db_create，正文用 db_content。',
+    description: '按表结构 schema 的可写字段更新一条已有记录，路径为 /<表>/<id>。成功只返回 {ok, path}，不回整行。未知字段会列出该表可写字段。标签 tag：推荐始终按标签 id 分组写 values（与读取结构一致），如 {tags:["tag-2"],values:{"tag-2":{导演:"查泽雷"}}}；单标签也兼容扁平 values。省略 tags 则合并更新当前已贴标签的属性，不撕掉其它标签。改标签定义用 db_update /tags/<id> fields（数组或 JSON 字符串均可）。新建用 db_create，长正文用 db_content。',
     parameters: {
       type: 'object',
       properties: {
         path: { type: 'string' },
         content: {
+          type: 'object',
           description:
-            '要更新的字段（对象或 JSON 字符串）。标签写 tag：一个标签 values 扁平，如 {tag:{tags:["tag-2"],values:{导演:"查泽雷"}}}；多个标签 values 按标签 id 分子对象。省略 tags 只改属性，不撕掉其它标签。',
+            '要更新的字段对象（也兼容 fields / patch 参数名或 JSON 字符串）。标签写 tag：{tag:{tags:["tag-2"],values:{"tag-2":{导演:"查泽雷"}}}}（单标签也支持扁平 values）。省略 tags 只改属性，不撕掉其它标签。',
+        },
+        fields: {
+          type: 'object',
+          description: 'content 的别名：要更新的字段对象。',
+        },
+        patch: {
+          type: 'object',
+          description: 'content 的别名：要更新的字段对象。',
         },
       },
-      required: ['path', 'content'],
+      required: ['path'],
     },
-    execute: (args) =>
-      withInspectorReveal(ctx, String(args.path), () => db.update(String(args.path), args.content)).then(
+    execute: (args) => {
+      const payload = args.content !== undefined ? args.content : args.fields !== undefined ? args.fields : args.patch
+      return withInspectorReveal(ctx, String(args.path), () => db.update(String(args.path), payload)).then(
         (body) => agentDbCompact.write(body),
-      ),
+      )
+    },
   })
   ctx.tools.register({
     name: 'db_create',
-    description: '在已登记且允许新建的表中批量新增记录。路径为 /<表>，records 为对象数组。成功返回 {ok, path, ids}，不回整行。能否新建看 db_stat 的 caps。新建标签用 db_create path=/tags records=[{title}]。',
+    description: '在已登记且允许新建的表中新增记录。路径为 /<表>，传 records 数组或单条 record 对象（记录内可直接带 content 字符串一步写入正文）。成功返回 {ok, path, ids}，不回整行。能否新建看 db_stat 的 caps。新建标签用 db_create path=/tags records=[{title}]。',
     parameters: {
       type: 'object',
       properties: {
@@ -3606,7 +3662,11 @@ export function apply(ctx: Context) {
         records: {
           type: 'array',
           items: { type: 'object' },
-          description: '要创建的记录（非空对象数组），按 schema 可写字段给初值；不要附加空对象',
+          description: '要创建的记录（非空对象数组），按 schema 可写字段给初值；可附带 content 直接写入正文',
+        },
+        record: {
+          type: 'object',
+          description: '创建单条记录时的简写对象（等价于 records=[record]）；可附带 content 直接写入正文',
         },
         scope: {
           type: 'string',
@@ -3614,7 +3674,7 @@ export function apply(ctx: Context) {
           description: '根记录归属：personal 私人（默认，仅自己可见）；workspace 空间（成员可编辑）；shared 公开链接，所有人可查看；local 存在本机，仍属于当前账号和空间。子记录始终继承父记录。',
         },
       },
-      required: ['path', 'records'],
+      required: ['path'],
     },
     execute: (args) =>
       withInspectorReveal(ctx, String(args.path), () =>
