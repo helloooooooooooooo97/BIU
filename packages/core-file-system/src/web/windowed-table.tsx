@@ -386,7 +386,7 @@ const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, mea
     } else if (node.kind === 'row' && bag.renderCell && bag.renderRow && layoutNow) {
       const cells: ReactNode[] = []
       const rowObj = (node.row && typeof node.row === 'object' ? node.row : {}) as Record<string, unknown>
-      const meta = rowMetaStamp(node, pickMode)
+      const meta = `${rowMetaStamp(node, pickMode)}\0pin:${layoutNow.pin}`
       const paint = (key: string) => {
         const id = `${node.key}\0${key}`
         const composite = key === 'actions' || key === 'tag' || key.startsWith('tag:') || Boolean(compositeCells?.has(key)) || !(key in rowObj)
