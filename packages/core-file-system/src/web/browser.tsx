@@ -589,9 +589,6 @@ export function CollectionBrowser({
     if (!peekPendingTablePane(pane)) return
     tablePaneFocusLiveRef.current()
   })
-  useEffect(() => {
-    tableAutoLandLiveRef.current()
-  })
   const [tagCatalog, setTagCatalog] = useState(() => loadTags())
   const tablePathsKey = tables
     .map((table) => table.path)
@@ -3578,6 +3575,10 @@ export function CollectionBrowser({
     tableAutoLandedRef.current = ''
   }, [collectionPath, dataPath, activeViewId])
 
+  useLayoutEffect(() => {
+    tableAutoLandLiveRef.current()
+  })
+
   function claimThisTableCell() {
     if (sheet) return
     claimTableCellPick(embed ? 'inspector' : 'main')
@@ -4187,6 +4188,12 @@ export function CollectionBrowser({
     claimThisTableCell()
     tablePaintRef.current.revealRow?.(next.id, next.rowKey ?? cellPickRef.current?.rowKey)
     tablePaintRef.current.revealColumn?.(next.key)
+    const immediate = findPaintedCellTd(next.id, next.key, next.rowKey)
+    if (immediate) {
+      const col = columns.find((item) => item.key === next.key)
+      cellAnchorRef.current = immediate
+      if (!extend && cellRangeSetRef.current.size <= 1) markCellOn(immediate, col ? cellFieldWritable(col.field) : false)
+    }
     let attempts = 0
     const apply = () => {
       if (cellPickRef.current?.id !== next.id || cellPickRef.current.key !== next.key || (next.rowKey && cellPickRef.current.rowKey !== next.rowKey)) return
@@ -4210,7 +4217,8 @@ export function CollectionBrowser({
         else if (rect.right > viewport.right) wrap.scrollLeft += rect.right - viewport.right
       }
     }
-    requestAnimationFrame(apply)
+    if (immediate) apply()
+    else requestAnimationFrame(apply)
   }
 
   function enterTableCell(cursor: TableCellCursor, seed?: string, attempt = 0) {
