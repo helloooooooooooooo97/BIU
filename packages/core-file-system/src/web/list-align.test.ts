@@ -356,9 +356,10 @@ test('visible column menu scrolls inside a max height', () => {
   assert.match(columns, /className="fsdb-col-menu-list"/)
   assert.match(browser, /<VisibleColumnsFlyout/)
   assert.match(browser, /columnMenu=\{renderVisibleColumnsFlyout\(\)\}/)
-  assert.match(css, /\.fsdb-page \.fsdb-col-menu\{[^}]*max-height:min\(42vh,280px\)/)
-  assert.match(css, /\.fsdb-tool-flyout\.fsdb-col-menu\{[^}]*max-height:min\(42vh,280px\)/)
-  assert.match(css, /\.fsdb-tool-flyout\.tasks-sort-menu\{[^}]*max-height:min\(42vh,280px\)/)
+  assert.match(css, /\.fsdb-page \.fsdb-col-menu\{[^}]*max-height:min\(72vh,520px/)
+  assert.match(css, /\.fsdb-tool-flyout\.fsdb-col-menu\{[^}]*max-height:min\(72vh,520px/)
+  assert.match(css, /\.fsdb-tool-flyout\.tasks-sort-menu\{[^}]*max-height:min\(72vh,520px/)
+  assert.match(css, /\.fsdb-page \.fsdb-query-menu\.is-sort\{[^}]*width:min\(92vw,380px\)/)
   assert.match(css, /\.fsdb-page \.fsdb-col-menu-list\{[^}]*overflow:auto/)
 })
 

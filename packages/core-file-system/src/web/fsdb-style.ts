@@ -172,6 +172,7 @@ const CSS = `
 .fsdb-page .tasks-viewdd-menu{left:0;min-width:320px;overflow:hidden}
 .fsdb-page .tasks-sort-menu,.fsdb-page .tasks-filter-menu,.fsdb-page .fsdb-query-menu{right:0}
 .fsdb-page .fsdb-query-menu{box-sizing:border-box;overflow-x:hidden;overflow-y:auto;width:min(92vw,280px);min-width:min(92vw,240px);max-width:min(92vw,calc(100vw - 24px));max-height:min(70vh,520px)}
+.fsdb-page .fsdb-query-menu.is-sort{width:min(92vw,380px);min-width:min(92vw,320px)}
 .fsdb-page .fsdb-query-menu.is-filter{width:min(92vw,560px);min-width:min(92vw,360px)}
 .fsdb-page .fsdb-query-row,.fsdb-page .fsdb-query-rule{display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;gap:4px;min-width:0;max-width:100%;width:100%}
 .fsdb-page .fsdb-query-row.is-drag{opacity:0}
@@ -179,6 +180,8 @@ const CSS = `
 .fsdb-page .fsdb-query-grip:active{cursor:grabbing}
 .fsdb-query-drag-overlay{min-width:320px;padding:8px;background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);border-radius:var(--biu-radius-popover);box-shadow:var(--biu-shadow-popover);pointer-events:none}
 .fsdb-page .fsdb-query-row .fsdb-cellselect,.fsdb-page .fsdb-query-rule .fsdb-cellselect{flex:0 1 108px;min-width:0;max-width:32%}
+.fsdb-page .fsdb-query-menu.is-sort .fsdb-query-row .fsdb-cellselect.is-field{flex:1 1 160px;max-width:none}
+.fsdb-page .fsdb-query-menu.is-sort .fsdb-query-row .fsdb-cellselect:not(.is-field){flex:0 0 88px;max-width:none}
 .fsdb-page .fsdb-query-rule > .fsdb-cellselect:nth-last-child(2),.fsdb-page .fsdb-query-rule > .fsdb-query-input{flex:1 1 140px;min-width:0;max-width:none}
 .fsdb-page .fsdb-query-rule .fsdb-cellselect.is-field .fsdb-cellselect-trigger{min-width:0;max-width:100%;overflow:hidden}
 .fsdb-page .fsdb-query-stack,.fsdb-page .fsdb-query-group{display:flex;flex-direction:column;gap:4px;min-width:0;max-width:100%}
@@ -209,7 +212,7 @@ const CSS = `
 .fsdb-page .fsdb-col-menu .fsdb-checkrow:has(.fsdb-col-tag-ico):hover,.fsdb-page .fsdb-col-menu .fsdb-checkrow.is-on:has(.fsdb-col-tag-ico){background:color-mix(in srgb,var(--biu-tag) 22%,transparent)}
 .fsdb-page .fsdb-col-drag-row.is-tag .fsdb-checkrow:hover,.fsdb-page .fsdb-col-drag-row.is-tag .fsdb-checkrow.is-on{background:transparent}
 .fsdb-page .fsdb-query-grip.is-locked{cursor:default}
-.fsdb-page .fsdb-col-menu{max-height:min(42vh,280px);overflow:hidden}
+.fsdb-page .fsdb-col-menu{max-height:min(72vh,520px,var(--radix-popover-content-available-height,520px));overflow:hidden}
 .fsdb-page .fsdb-col-menu-list{min-height:0;overflow:auto;display:flex;flex-direction:column;gap:4px}
 .fsdb-page .tasks-viewdd-head,.fsdb-page .tasks-sort-head{font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);color:var(--biu-color-text-muted)}
 .fsdb-page .tasks-sort-search,.fsdb-tool-flyout .tasks-sort-search{box-sizing:border-box;width:100%;min-width:0;min-height:var(--biu-size-control-lg);height:auto;border:0;border-radius:7px;padding:6px 8px;background:transparent;color:var(--biu-color-text);font:inherit;font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);line-height:1.4;outline:none}
@@ -282,8 +285,8 @@ const CSS = `
   font-weight:var(--biu-font-weight-medium,500);
 }
 .fsdb-page .tasks-viewdd-menu{left:0;right:auto;min-width:320px;overflow:auto}
-.fsdb-page .fsdb-col-menu,.fsdb-tool-flyout.fsdb-col-menu{min-width:260px;max-height:min(42vh,280px);overflow:hidden;display:flex;flex-direction:column}
-.fsdb-page .tasks-sort-menu,.fsdb-tool-flyout.tasks-sort-menu{max-height:min(42vh,280px);overflow:hidden;display:flex;flex-direction:column}
+.fsdb-page .fsdb-col-menu,.fsdb-tool-flyout.fsdb-col-menu{min-width:260px;max-height:min(72vh,520px,var(--radix-popover-content-available-height,520px));overflow:hidden;display:flex;flex-direction:column}
+.fsdb-page .tasks-sort-menu,.fsdb-tool-flyout.tasks-sort-menu{max-height:min(72vh,520px,var(--radix-popover-content-available-height,520px));overflow:hidden;display:flex;flex-direction:column}
 .fsdb-page .tasks-sort-menu,.fsdb-page .tasks-filter-menu,.fsdb-page .fsdb-query-menu,.fsdb-bulk-menu,.fsdb-layout-menu{right:0;left:auto}
 .fsdb-tool-flyout .tasks-sort-list,.fsdb-tool-flyout .fsdb-col-menu-list,.fsdb-page .fsdb-col-menu-list{min-height:0;overflow:auto;display:flex;flex-direction:column;gap:var(--biu-gap-flyout)}
 .fsdb-tool-flyout.fsdb-query-menu,.fsdb-page .fsdb-query-menu.fsdb-tool-flyout{overflow:auto}
