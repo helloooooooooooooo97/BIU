@@ -108,7 +108,7 @@ test('normalizeSchemaPack keeps nested tag fields and action', () => {
   assert.equal(pack?.id, 'dp')
   assert.deepEqual(pack?.fields.map((field) => field.key), ['complexity', 'nested', 'run'])
   assert.equal(pack?.fields.find((field) => field.key === 'nested')?.type, 'tag')
-  assert.equal(pack?.fields[0]?.label, undefined)
+  assert.equal(pack?.fields[0]?.label, 'complexity')
 })
 
 test('schema field keeps a stable key and a separate label', () => {
@@ -125,19 +125,23 @@ test('schema field keeps a stable key and a separate label', () => {
   assert.deepEqual(
     pack?.fields.map((field) => ({ key: field.key, label: field.label })),
     [
-      { key: '导演', label: undefined },
+      { key: '导演', label: '导演' },
       { key: '4829103', label: '复杂度' },
-      { key: '年份', label: undefined },
+      { key: '年份', label: '年份' },
     ],
   )
   const parsed = parseAtomicFields([{ key: '4829103', type: 'string', label: '导演' }, { type: 'number', label: '票房' }])
-  assert.deepEqual(
-    parsed.map((field) => ({ key: field.key, label: field.label })),
-    [
-      { key: '4829103', label: '导演' },
-      { key: '票房', label: undefined },
-    ],
+  assert.equal(parsed[0]?.key, '4829103')
+  assert.equal(parsed[0]?.label, '导演')
+  assert.equal(parsed[1]?.label, '票房')
+  assert.match(parsed[1]!.key, /^\d+$/)
+  assert.notEqual(parsed[1]?.key, '票房')
+  const reused = parseAtomicFields(
+    [{ type: 'number', label: '票房' }],
+    { existingFields: parsed },
   )
+  assert.equal(reused[0]?.key, parsed[1]?.key)
+  assert.equal(reused[0]?.label, '票房')
   assert.throws(
     () => parseAtomicFields([{ key: '1', type: 'string', label: '导演' }, { key: '2', type: 'number', label: '导演' }]),
     /duplicate field name/,

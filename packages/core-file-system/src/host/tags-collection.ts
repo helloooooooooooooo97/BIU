@@ -169,7 +169,7 @@ export function tagsCollection(
       const current = store.get(id)
       if (!current) throw new Error(`unknown 标签: ${id}`)
       const label = patch.title != null ? String(patch.title).trim() || current.label : current.label
-      const fields = patch.fields != null ? parseAtomicFields(patch.fields) : current.fields
+      const fields = patch.fields != null ? parseAtomicFields(patch.fields, { existingFields: current.fields }) : current.fields
       const notes = patch.notes != null ? String(patch.notes) : store.notes(current.id)
       const pack = store.upsert({ id: current.id, label, fields }, notes)
       return fromEntry(pack.id, store.stampCounts()[pack.id] ?? 0)

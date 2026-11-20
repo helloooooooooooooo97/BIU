@@ -410,13 +410,25 @@ export function isAtomicFieldType(type: unknown): type is AtomicFieldType {
   return typeof type === 'string' && ((ATOMIC_FIELD_TYPES as readonly string[]).includes(type) || type === 'tag')
 }
 
+function generateStableSchemaFieldKey(used: Set<string>): string {
+  for (let i = 0; i < 64; i += 1) {
+    const key = String(((Math.random() * 0x7fffffff) | 0) || 1)
+    if (isSchemaFieldKey(key) && !used.has(key) && !isReservedSchemaFieldKey(key)) return key
+  }
+  let n = Date.now()
+  while (used.has(String(n)) || !isSchemaFieldKey(String(n)) || isReservedSchemaFieldKey(String(n))) {
+    n += 1
+  }
+  return String(n)
+}
+
 function atomicSchemaField(key: string, row: Record<string, unknown>, fieldLabel: string): SchemaPackField {
   const field: SchemaPackField = {
     key,
+    label: fieldLabel,
     type: isTagFieldType(row.type) ? 'tag' : (row.type as AtomicFieldType),
     writable: row.writable !== false,
   }
-  if (fieldLabel !== key) field.label = fieldLabel
   if (row.deleted === true) field.deleted = true
   if (Array.isArray(row.enum)) field.enum = row.enum.map((option) => String(option)).filter(Boolean)
   if (row.enumLabels && typeof row.enumLabels === 'object' && !Array.isArray(row.enumLabels)) {
@@ -429,37 +441,56 @@ function atomicSchemaField(key: string, row: Record<string, unknown>, fieldLabel
   return field
 }
 
-/** 写入标签属性定义：数组或 JSON 字符串均可；类型不在白名单时直接报错。 */
-export function parseAtomicFields(raw: unknown): SchemaPackField[] {
+/** 写入标签属性定义：数组或 JSON 字符串均可；显式区分稳定 key 与展示 label，省略 key 时自动复用或分配稳定 ID。 */
+export function parseAtomicFields(
+  raw: unknown,
+  options: { existingFields?: SchemaPackField[] } = {},
+): SchemaPackField[] {
   if (raw == null || raw === '') return []
   let listed: unknown = raw
   if (typeof raw === 'string') {
     try {
       listed = JSON.parse(raw)
     } catch {
-      throw new Error('fields 应为 JSON 数组，例如 [{"key":"category","type":"string"}]')
+      throw new Error('fields 应为 JSON 数组，例如 [{"key":"category","label":"分类","type":"string"}]')
     }
   }
-  if (!Array.isArray(listed)) throw new Error('fields 应为数组或 JSON 字符串，例如 [{"key":"category","type":"string"}]')
+  if (!Array.isArray(listed)) throw new Error('fields 应为数组或 JSON 字符串，例如 [{"key":"category","label":"分类","type":"string"}]')
+  const existing = options.existingFields ?? []
+  const existingByLabel = new Map<string, string>()
+  const reservedKeys = new Set<string>()
+  for (const prev of existing) {
+    reservedKeys.add(prev.key)
+    const prevLabel = String(prev.label ?? prev.key).trim().toLowerCase()
+    if (prevLabel && !existingByLabel.has(prevLabel)) existingByLabel.set(prevLabel, prev.key)
+  }
   const fields: SchemaPackField[] = []
   const seen = new Set<string>()
   const seenLabels = new Set<string>()
   for (const item of listed) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) {
-      throw new Error('fields 每一项应为 {key,type,label?} 对象')
+      throw new Error('fields 每一项应为 {key?,label,type} 对象')
     }
     const row = item as Record<string, unknown>
-    const key = String(row.key ?? row.label ?? '').trim()
-    if (!isSchemaFieldKey(key)) throw new Error(`invalid field key: ${key || '(empty)'}`)
-    if (seen.has(key)) throw new Error(`duplicate field key: ${key}`)
-    if (isReservedSchemaFieldKey(key)) throw new Error(`reserved field key: ${key}`)
+    const rawKey = String(row.key ?? '').trim()
+    const rawLabel = String(row.label ?? '').trim()
+    const fieldLabel = rawLabel || rawKey
+    if (!fieldLabel) throw new Error('invalid field key: (empty)')
+    if (isReservedSchemaFieldLabel(fieldLabel)) throw new Error(`reserved field name: ${fieldLabel}`)
+    if (seenLabels.has(fieldLabel.toLowerCase())) throw new Error(`duplicate field name: ${fieldLabel}`)
     if (!isAtomicFieldType(row.type)) {
       throw new Error(`unknown field type: ${String(row.type ?? '')}. allowed: ${ATOMIC_FIELD_TYPES.join(', ')}`)
     }
-    const fieldLabel = String(row.label ?? key).trim() || key
-    if (isReservedSchemaFieldLabel(fieldLabel)) throw new Error(`reserved field name: ${fieldLabel}`)
-    if (seenLabels.has(fieldLabel.toLowerCase())) throw new Error(`duplicate field name: ${fieldLabel}`)
+    let key = rawKey
+    if (!key) {
+      const reused = existingByLabel.get(fieldLabel.toLowerCase())
+      key = reused && !seen.has(reused) ? reused : generateStableSchemaFieldKey(new Set([...seen, ...reservedKeys]))
+    }
+    if (!isSchemaFieldKey(key)) throw new Error(`invalid field key: ${key || '(empty)'}`)
+    if (seen.has(key)) throw new Error(`duplicate field key: ${key}`)
+    if (isReservedSchemaFieldKey(key)) throw new Error(`reserved field key: ${key}`)
     seen.add(key)
+    reservedKeys.add(key)
     seenLabels.add(fieldLabel.toLowerCase())
     fields.push(atomicSchemaField(key, row, fieldLabel))
   }

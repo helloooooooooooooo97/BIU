@@ -334,3 +334,57 @@ test('opening a store repairs recursively indexed collected rows without changin
   assert.equal(repaired.ensure().prepare("SELECT COUNT(*) AS n FROM tag_group_values WHERE collection = '/tags'").get()?.n, 0)
   assert.deepEqual(new TagStore().open(path).stampCounts(), { stress: 1 })
 })
+
+test('renaming a tag field label or migrating its key preserves all existing record values', () => {
+  const store = new TagStore()
+  store.upsert({
+    id: 'req',
+    label: '需求',
+    fields: [
+      { key: '优先级', type: 'select', label: '优先级' },
+      { key: '4829103', type: 'string', label: '负责人' },
+    ],
+  })
+  store.writeRecordTag(
+    '/pages',
+    'p1',
+    { tags: ['req'], values: { req: { '优先级': 'P1', '4829103': 'Alice' } } },
+    '需求一',
+  )
+
+  // 1. Renaming label while keeping key keeps values intact
+  store.upsert({
+    id: 'req',
+    label: '需求',
+    fields: [
+      { key: '优先级', type: 'select', label: '优先级' },
+      { key: '4829103', type: 'string', label: 'Owner' },
+    ],
+  })
+  assert.equal(store.recordTag('/pages', 'p1')?.values.req['4829103'], 'Alice')
+  assert.equal(store.get('req')?.fields[1]?.label, 'Owner')
+
+  // 2. Migrating legacy key to a stable numeric key (same label & type) migrates record values automatically
+  store.upsert({
+    id: 'req',
+    label: '需求',
+    fields: [
+      { key: '9988776', type: 'select', label: '优先级' },
+      { key: '4829103', type: 'string', label: 'Owner' },
+    ],
+  })
+  assert.equal(store.recordTag('/pages', 'p1')?.values.req['9988776'], 'P1')
+  assert.equal(store.recordTag('/pages', 'p1')?.values.req['优先级'], undefined)
+
+  // 3. Even 1-to-1 key rename at same slot & type migrates values instead of losing them
+  store.upsert({
+    id: 'req',
+    label: '需求',
+    fields: [
+      { key: '紧急度', type: 'select', label: '紧急度' },
+      { key: '4829103', type: 'string', label: 'Owner' },
+    ],
+  })
+  assert.equal(store.recordTag('/pages', 'p1')?.values.req['紧急度'], 'P1')
+  assert.equal(store.recordTag('/pages', 'p1')?.values.req['9988776'], undefined)
+})

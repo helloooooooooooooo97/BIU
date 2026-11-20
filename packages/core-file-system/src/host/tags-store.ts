@@ -278,10 +278,90 @@ export class TagStore {
       writeEditorContent(db, '/tags', pack.id, notes ?? '', { transaction: false })
     }
     if (!prev) return
+    const renames = this.detectFieldKeyRenames(prev.fields, pack.fields)
+    if (renames.size > 0) this.migrateRecordBagKeys(pack.id, renames)
     const liveNext = new Map(pack.fields.filter((field) => !field.deleted).map((field) => [field.key, field]))
     for (const field of prev.fields.filter((item) => !item.deleted)) {
       const next = liveNext.get(field.key)
       if (!next || JSON.stringify(next) !== JSON.stringify(field)) this.dropTagGroupIndexes(pack.id, field.key)
+    }
+  }
+
+  private detectFieldKeyRenames(
+    prevFields: CollectionSchemaPack['fields'],
+    nextFields: CollectionSchemaPack['fields'],
+  ): Map<string, string> {
+    const prevLive = prevFields.filter((f) => !f.deleted)
+    const nextLive = nextFields.filter((f) => !f.deleted)
+    const prevKeys = new Set(prevLive.map((f) => f.key))
+    const nextKeys = new Set(nextLive.map((f) => f.key))
+    const removed = prevLive.filter((f) => !nextKeys.has(f.key))
+    const added = nextLive.filter((f) => !prevKeys.has(f.key))
+    const renames = new Map<string, string>()
+    if (!removed.length || !added.length) return renames
+
+    const usedNew = new Set<string>()
+    // 1. 优先按相同 label 迁移（例如把旧的中文 key 迁到稳定数字 key）
+    for (const oldF of removed) {
+      const oldLabel = String(oldF.label ?? oldF.key).trim().toLowerCase()
+      const hit = added.find(
+        (newF) =>
+          !usedNew.has(newF.key) &&
+          newF.type === oldF.type &&
+          String(newF.label ?? newF.key).trim().toLowerCase() === oldLabel,
+      )
+      if (hit) {
+        renames.set(oldF.key, hit.key)
+        usedNew.add(hit.key)
+      }
+    }
+    // 2. 同长度、同位置、同类型的 1-to-1 改名迁移（例如通过 MCP/JSON 直接把旧 key 改成新名字）
+    if (prevLive.length === nextLive.length) {
+      for (let i = 0; i < prevLive.length; i += 1) {
+        const oldF = prevLive[i]!
+        const newF = nextLive[i]!
+        if (oldF.key === newF.key) continue
+        if (nextKeys.has(oldF.key) || prevKeys.has(newF.key)) continue
+        if (renames.has(oldF.key) || usedNew.has(newF.key)) continue
+        if (oldF.type !== newF.type) continue
+        renames.set(oldF.key, newF.key)
+        usedNew.add(newF.key)
+      }
+    }
+    return renames
+  }
+
+  private migrateRecordBagKeys(tagId: string, renames: Map<string, string>) {
+    const want = String(tagId ?? '').trim()
+    if (!want || renames.size === 0) return
+    const db = this.ensure()
+    const rows = db.prepare('SELECT collection, record_id, tag_json FROM tag_record_values').all() as Array<{
+      collection: string
+      record_id: string
+      tag_json: string
+    }>
+    for (const row of rows) {
+      let parsed: ReturnType<typeof normalizeSchemaValue>
+      try {
+        parsed = normalizeSchemaValue(JSON.parse(row.tag_json || '{}'))
+      } catch {
+        continue
+      }
+      const bag = parsed.values[want]
+      if (!bag) continue
+      let changed = false
+      const nextBag: Record<string, unknown> = { ...bag }
+      for (const [oldKey, newKey] of renames) {
+        if (!Object.prototype.hasOwnProperty.call(nextBag, oldKey)) continue
+        if (!Object.prototype.hasOwnProperty.call(nextBag, newKey) || nextBag[newKey] == null || nextBag[newKey] === '') {
+          nextBag[newKey] = nextBag[oldKey]
+        }
+        delete nextBag[oldKey]
+        changed = true
+      }
+      if (!changed) continue
+      const values = { ...parsed.values, [want]: nextBag }
+      this.writeRecordTag(row.collection, row.record_id, { tags: parsed.tags, values }, row.record_id)
     }
   }
 

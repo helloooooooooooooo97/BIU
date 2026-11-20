@@ -12,7 +12,7 @@ import { PickOption, PickPanel } from '@biu/database-ui/search'
 import { fieldDraftValue, parseFieldValue } from './fsdb-cells.tsx'
 import { FieldEditor } from './field-editor.tsx'
 import { createTag, jumpTag, loadTags, subscribeTags } from './tag-catalog.ts'
-import { tagChipIcon, tagChipLabel } from './schema-field.tsx'
+import { tagChipIcon, tagChipLabel, TagPackEditor } from './schema-field.tsx'
 import { subscribeCrumbs } from './view-storage.ts'
 import { PersonPickPanel } from './person-cell.tsx'
 import { RecordPickPanel } from './record-link-cell.tsx'
@@ -369,6 +369,10 @@ export function CellPopDraft({
   }
 
   if (fieldKey === 'fields' && collectionPath === TAGS_COLLECTION_PATH) {
+    const tagId = String(record.id ?? '').trim()
+    if (tagId) {
+      return <TagPackEditor tagId={tagId} />
+    }
     const pretty = (() => {
       try {
         return JSON.stringify(JSON.parse(text || '[]'), null, 2)

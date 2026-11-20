@@ -350,9 +350,7 @@ export function TagPackEditor({ tagId }: { tagId: string }) {
       ...pack,
       fields: pack.fields.map((row) => {
         if (row.key !== from) return row
-        const next = { ...row, label }
-        if (label === row.key) delete next.label
-        return next
+        return { ...row, label }
       }),
     })
     return true
@@ -494,9 +492,7 @@ export function SchemaFieldEditor({
       ...tag,
       fields: tag.fields.map((row) => {
         if (row.key !== from) return row
-        const next = { ...row, label }
-        if (label === row.key) delete next.label
-        return next
+        return { ...row, label }
       }),
     })
     return true
