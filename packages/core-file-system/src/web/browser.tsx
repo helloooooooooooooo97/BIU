@@ -38,6 +38,8 @@ import {
   defaultColumnKeys,
   tagSourceKey,
   flattenTagColumns,
+  tagColumnHeadLabel,
+  tagColumnTagTip,
   tagColumnTitle,
   fieldEntries,
   flattenTree,
@@ -5516,17 +5518,21 @@ export function CollectionBrowser({
   function paintHeadTh(col: (typeof columns)[number]) {
     const flat = parseTagFlatColumnKey(col.key)
     const tone = flat ? schemaTagTone(flat.packId) : undefined
+    const tagTip = tagColumnTagTip(col)
     return (
       <th
         key={col.key}
         className={[tablePinColClass(col.key, schema?.labelField), tone ? 'is-tag-col' : ''].filter(Boolean).join(' ') || undefined}
         style={tone ? { ['--biu-tag' as string]: tone } : undefined}
       >
-        <span className={`tasks-th${queryFields.has(col.key) ? ' is-on' : ''}`}>
+        <span
+          className={`tasks-th${queryFields.has(col.key) ? ' is-on' : ''}`}
+          data-dock-tip={tagTip || undefined}
+        >
           <span className="tasks-th-ico">
             <FieldGlyph kind={col.kind} />
           </span>
-          {tagColumnTitle(col)}
+          {tagColumnHeadLabel(col)}
         </span>
         <span
           className={`fsdb-col-resizer${resizingCol === col.key ? ' is-active' : ''}`}

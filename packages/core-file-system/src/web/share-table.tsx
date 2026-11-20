@@ -12,7 +12,8 @@ import {
   flattenTagColumns,
   groupRecords,
   parseTagFlatColumnKey,
-  tagColumnTitle,
+  tagColumnHeadLabel,
+  tagColumnTagTip,
 } from './fields.ts'
 import { DefaultCell, FieldGlyph } from './fsdb-cells.tsx'
 import { SchemaChips } from './schema-field.tsx'
@@ -158,15 +159,19 @@ export function ShareListTable({
             {listed.map((col) => {
               const flat = parseTagFlatColumnKey(col.key)
               const tone = flat ? schemaTagTone(flat.packId) : undefined
+              const tagTip = tagColumnTagTip(col)
               return (
                 <th
                   key={col.key}
                   className={tone ? 'is-tag-col' : undefined}
                   style={tone ? { ['--biu-tag' as string]: tone } : undefined}
                 >
-                  <span className={`tasks-th${queryFields?.has(col.key) ? ' is-on' : ''}`}>
+                  <span
+                    className={`tasks-th${queryFields?.has(col.key) ? ' is-on' : ''}`}
+                    title={tagTip || undefined}
+                  >
                     <FieldGlyph kind={col.kind} />
-                    {tagColumnTitle(col)}
+                    {tagColumnHeadLabel(col)}
                   </span>
                 </th>
               )

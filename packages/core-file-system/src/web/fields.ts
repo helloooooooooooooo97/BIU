@@ -319,6 +319,37 @@ export function tagColumnTitle(col: {
   return String(col.key).trim() || col.key
 }
 
+/** 表头只展示属性名本身，不带「标签·」前缀；所属标签改由悬浮 tooltip 提示。 */
+export function tagColumnHeadLabel(col: {
+  key: string
+  packLabel?: string
+  field?: { label?: string }
+}) {
+  const parsed = parseTagFlatColumnKey(col.key)
+  const rawFieldLabel = String(col.field?.label ?? '').trim() || (parsed?.fieldKey ?? '')
+  const packLabel = String(col.packLabel ?? '').trim()
+  if (parsed && packLabel && rawFieldLabel) {
+    const prefix = `${packLabel}·`
+    if (rawFieldLabel.startsWith(prefix)) {
+      const stripped = rawFieldLabel.slice(prefix.length).trim()
+      if (stripped) return stripped
+    }
+  }
+  if (rawFieldLabel) return rawFieldLabel
+  return String(col.key).trim() || col.key
+}
+
+/** 标签属性列的表头悬浮提示：展示所属标签名；非标签列返回空串。 */
+export function tagColumnTagTip(col: {
+  key: string
+  packLabel?: string
+}) {
+  const parsed = parseTagFlatColumnKey(col.key)
+  if (!parsed) return ''
+  const packLabel = String(col.packLabel ?? '').trim()
+  return packLabel ? `标签：${packLabel}` : ''
+}
+
 export function readTagFlatValue(row: DbRecord, columnKey: string, sourceKey = 'tag') {
   if (!parseTagFlatColumnKey(columnKey)) return undefined
   return readTagFieldValue(row, columnKey, sourceKey)

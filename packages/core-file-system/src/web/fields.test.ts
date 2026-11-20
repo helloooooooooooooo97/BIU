@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import type { CollectionSchema } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS, normalizeSchemaValue } from '@biu/type-file-system'
-import { actionWhenKeys, defaultColumnKeys, tagFlatColumnKey, flattenTagColumns, tagColumnTitle, inferPackFieldType, listProjectionKeys, parseTagFlatColumnKey, patchTagFlatValue, pinActionColumn, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, fieldValueOptions, filterFieldValueOptions, GROUP_STRATEGIES, groupField, groupListFilter, groupListKeys, groupRecords, groupableFields, hasTreeLinks, treeChildren, isGroupableKind, isViewModeId, matchActionWhen, mergeListFilters, overlayListed, previewActionRecord, parentFieldKey, readTagFlatValue, recordGroupLabels, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
+import { actionWhenKeys, defaultColumnKeys, tagFlatColumnKey, flattenTagColumns, tagColumnHeadLabel, tagColumnTagTip, tagColumnTitle, inferPackFieldType, listProjectionKeys, parseTagFlatColumnKey, patchTagFlatValue, pinActionColumn, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, fieldValueOptions, filterFieldValueOptions, GROUP_STRATEGIES, groupField, groupListFilter, groupListKeys, groupRecords, groupableFields, hasTreeLinks, treeChildren, isGroupableKind, isViewModeId, matchActionWhen, mergeListFilters, overlayListed, previewActionRecord, parentFieldKey, readTagFlatValue, recordGroupLabels, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
 import { placedActions, visibleActions } from './fsdb-cells.tsx'
 
 test('isViewModeId accepts builtin and custom slugs', () => {
@@ -217,6 +217,11 @@ test('default columns omit flattened type properties', () => {
   assert.equal(cols[0]?.key, nested)
   assert.equal(tagColumnTitle(cols[0]!), '好好哈·的的')
   assert.equal(tagColumnTitle({ key: 'title', field: { label: '标题' } }), '标题')
+  assert.equal(tagColumnHeadLabel(cols[0]!), '的的')
+  assert.equal(tagColumnHeadLabel({ key: nested, packLabel: '好好哈', field: { label: '好好哈·的的' } }), '的的')
+  assert.equal(tagColumnHeadLabel({ key: 'title', field: { label: '标题' } }), '标题')
+  assert.equal(tagColumnTagTip(cols[0]!), '标签：好好哈')
+  assert.equal(tagColumnTagTip({ key: 'title' }), '')
   const grouped = groupableFields(schema, [
     {
       id: 'tag-10',
