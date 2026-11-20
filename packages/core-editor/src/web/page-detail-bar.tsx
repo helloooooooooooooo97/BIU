@@ -20,7 +20,7 @@ import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { usePageFind } from './page-view-state.ts'
 import { useStickyToolbar } from './sticky-toolbar.ts'
 import { useToolbarOverflow } from '@biu/core-file-system/toolbar-overflow'
-import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
+import { SandboxKindIcon } from '@biu/core-file-system/sandbox-kind-icon'
 import {
   DEFAULT_RECORD_PROP_VIEW_ID,
   HIDDEN_CONTENT_VIEW_ID,

@@ -15,9 +15,20 @@ function assetEtag(raw: string) {
   return raw.replace(/^W\//, '').replaceAll('"', '')
 }
 
+const MAX_FILE_CACHE_ENTRIES = 200
 const fileCache = new Map<string, { text: string; etag: string }>()
 let fileSeq = 0
 const fileListeners = new Set<() => void>()
+
+export class RecordViewFileConflictError extends Error {
+  readonly status = 409
+  readonly etag: string
+  constructor(message: string, etag = '') {
+    super(message)
+    this.name = 'RecordViewFileConflictError'
+    this.etag = etag
+  }
+}
 
 function cacheKey(collectionPath: string, recordId: string, name: string) {
   return `${normalizeCollectionPath(collectionPath)}\0${recordId}\0${name}`
@@ -28,12 +39,26 @@ function bumpFile() {
   for (const fn of fileListeners) fn()
 }
 
+function touchCache(key: string, entry: { text: string; etag: string }) {
+  if (fileCache.has(key)) fileCache.delete(key)
+  fileCache.set(key, entry)
+  while (fileCache.size > MAX_FILE_CACHE_ENTRIES) {
+    const oldest = fileCache.keys().next().value
+    if (oldest === undefined) break
+    fileCache.delete(oldest)
+  }
+}
+
 export function rememberRecordViewFile(collectionPath: string, recordId: string, name: string, text: string, etag = '') {
-  fileCache.set(cacheKey(collectionPath, recordId, name), { text, etag: assetEtag(etag) })
+  touchCache(cacheKey(collectionPath, recordId, name), { text, etag: assetEtag(etag) })
 }
 
 export function peekRecordViewFile(collectionPath: string, recordId: string, name: string) {
-  return fileCache.get(cacheKey(collectionPath, recordId, name))?.text
+  const key = cacheKey(collectionPath, recordId, name)
+  const hit = fileCache.get(key)
+  if (!hit) return undefined
+  touchCache(key, hit)
+  return hit.text
 }
 
 export function forgetRecordViewFile(collectionPath: string, recordId: string, name: string) {
@@ -43,14 +68,15 @@ export function forgetRecordViewFile(collectionPath: string, recordId: string, n
   bumpFile()
 }
 
+export function subscribeRecordViewFileTick(fn: () => void) {
+  fileListeners.add(fn)
+  return () => {
+    fileListeners.delete(fn)
+  }
+}
+
 export function useRecordViewFileTick() {
-  return useSyncExternalStore(
-    (fn) => {
-      fileListeners.add(fn)
-      return () => fileListeners.delete(fn)
-    },
-    () => fileSeq,
-  )
+  return useSyncExternalStore(subscribeRecordViewFileTick, () => fileSeq)
 }
 
 /** 远端改了沙盒 jsx：丢掉内存缓存。etag 相同则是本机刚写过，不刷。 */
@@ -82,7 +108,8 @@ export async function putRecordViewFile(
   recordId: string,
   name: string,
   body: string,
-  type: string,
+  type = 'text/plain; charset=utf-8',
+  opts?: { onConflict?: 'overwrite' | 'throw' },
 ) {
   const path = `${normalizeCollectionPath(collectionPath)}/${recordId}`
   const key = String(name ?? '').trim()
@@ -93,6 +120,10 @@ export async function putRecordViewFile(
   let res = await fetch(url, { method: 'PUT', headers, body })
   if (res.status === 409) {
     const next = assetEtag(String(res.headers.get('etag') ?? ''))
+    if (opts?.onConflict === 'throw') {
+      fileCache.delete(cacheKey(collectionPath, recordId, key))
+      throw new RecordViewFileConflictError('file changed on server', next)
+    }
     if (next) {
       headers['if-match'] = `"${next}"`
       res = await fetch(url, { method: 'PUT', headers, body })
@@ -110,10 +141,16 @@ export async function readRecordViewFile(
   recordId: string,
   name: string,
   fallback: string,
+  opts?: { fresh?: boolean },
 ) {
   const key = String(name ?? '').trim()
-  const hit = fileCache.get(cacheKey(collectionPath, recordId, key))
-  if (hit) return hit.text
+  if (!opts?.fresh) {
+    const hit = fileCache.get(cacheKey(collectionPath, recordId, key))
+    if (hit) {
+      touchCache(cacheKey(collectionPath, recordId, key), hit)
+      return hit.text
+    }
+  }
   const path = `${normalizeCollectionPath(collectionPath)}/${recordId}`
   const url = recordViewFileUrl(collectionPath, recordId, key)
   try {

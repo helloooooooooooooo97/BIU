@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { compileHostSource } from './web/tag-host-compile.ts'
+import { compileHostSource } from './web/sandbox-compile.ts'
 import { defaultContentSandboxSource, parseRecordSandboxes, recordSandboxFileNames } from '@biu/type-file-system/record-views'
 
 test('tag sandboxes use the shared record catalog parser', () => {

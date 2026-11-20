@@ -23,7 +23,7 @@ test('parseRecordSandboxes keeps sandbox views bound to files', () => {
 })
 
 test('default sandbox source is a host component that uses Block', async () => {
-  const { compileHostSource } = await import('./web/page-host-compile.ts')
+  const { compileHostSource } = await import('@biu/core-file-system/sandbox-compile')
   const src = defaultContentSandboxSource('演示页')
   assert.match(src, /export default function App/)
   assert.match(src, /组件 API/)

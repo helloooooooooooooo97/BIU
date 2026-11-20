@@ -1,10 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowsPointingInIcon, ArrowsPointingOutIcon, CodeBracketIcon, EyeIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
 import {
   fieldIsWritable,
-  matchSchemaField,
-  resolveSchemaFieldKey,
   sanitizeRecordPatch,
   withBuiltinFields,
   type CollectionSchema,
@@ -12,29 +9,29 @@ import {
   emitFsdbChange,
 } from '@biu/type-file-system'
 import { defaultContentSandboxSource } from '@biu/type-file-system/record-views'
-import { listPageBlockFences, pageBlockData, pageBlockRecordId } from '../page-block-fence.ts'
-import { compileHostSource, loadHostComponent, SandboxPreview } from './page-host-compile.ts'
-import { PageBlockStage, writeBlockData } from './page-blocks-view.tsx'
-import { ExpandNavTitle } from './expand-nav-title.tsx'
-import { getRecordViewCatalog, useRecordViewCatalog } from '@biu/core-file-system/record-view-catalog'
-import {
-  peekRecordViewFile,
-  putRecordViewFile,
-  readRecordViewFile,
-  useRecordViewFileTick,
-  writeRecordViewCatalog,
-} from '@biu/core-file-system/record-sandboxes'
 import type { RecordSandboxView } from '@biu/type-file-system/record-views'
-import { capturePageScroll } from './page-scroll-pin.ts'
-import { getBlockEditor, useBlockEditorVersion } from './service.ts'
 import { RenderBoundary } from '@biu/biu-ui'
 import { HostSourceEditor } from '@biu/core-file-system/host-source-editor'
-import { useLiveDbRecord } from '@biu/core-file-system/record-prop-host'
-import { createSandboxDocsApi, createSandboxFilesApi } from '@biu/core-file-system/sandbox-files'
+import { getRecordViewCatalog, useRecordViewCatalog } from '@biu/core-file-system/record-view-catalog'
+import { writeRecordViewCatalog } from '@biu/core-file-system/record-sandboxes'
+import { SandboxHostField, useLiveDbRecord } from '@biu/core-file-system/record-prop-host'
+import { compileHostSource, loadSandboxComponent, SandboxPreview } from '@biu/core-file-system/sandbox-compile'
+import { createBiuProxy, createRecordSandboxBiu } from '@biu/core-file-system/sandbox-biu'
+import {
+  SandboxHostBar,
+  SandboxSplitResize,
+  SandboxToastBanner,
+  splitPaneStyle,
+  useDebouncedSandboxSource,
+  useSandboxEscapeExpand,
+  useSandboxToast,
+  type HostTab,
+} from '@biu/core-file-system/sandbox-host-shell'
+import { listPageBlockFences, pageBlockData, pageBlockRecordId } from '../page-block-fence.ts'
+import { PageBlockStage, writeBlockData } from './page-blocks-view.tsx'
+import { capturePageScroll } from './page-scroll-pin.ts'
+import { getBlockEditor, useBlockEditorVersion } from './service.ts'
 import { bindSandboxPickPane, pageHostPickKey } from './page-host-pick.ts'
-import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
-import { HostField } from './host-field.tsx'
-import { SplitResize, splitPaneStyle } from './sandbox/split-resize.tsx'
 
 export type HostBlockInfo = {
   id: string
@@ -186,105 +183,6 @@ async function renameSandboxView(collectionPath: string, pageId: string, viewId:
   await writeRecordViewCatalog(collectionPath, pageId, 'views', listed)
 }
 
-type HostTab = 'preview' | 'code' | 'split'
-
-function hold(event: { preventDefault: () => void }) {
-  event.preventDefault()
-}
-
-function HostTools({
-  tab,
-  onTab,
-  ro,
-  expanded,
-  onExpand,
-}: {
-  tab: HostTab
-  onTab: (next: HostTab) => void
-  ro: boolean
-  expanded: boolean
-  onExpand: () => void
-}) {
-  const coding = tab === 'code'
-  return (
-    <>
-      {ro ? null : (
-        <>
-          <button
-            type="button"
-            className={`page-slide-icon${coding ? ' is-on' : ''}`}
-            title={coding ? '预览' : '编辑'}
-            aria-label={coding ? '预览' : '编辑'}
-            aria-pressed={coding}
-            data-testid="page-host-edit"
-            onMouseDown={hold}
-            onClick={() => onTab(coding ? 'preview' : 'code')}
-          >
-            {coding ? <EyeIcon aria-hidden className="page-slide-ico" /> : <CodeBracketIcon aria-hidden className="page-slide-ico" />}
-          </button>
-          <button
-            type="button"
-            className={`page-slide-icon${tab === 'split' ? ' is-on' : ''}`}
-            data-testid="page-host-split"
-            title={tab === 'split' ? '取消分栏' : '分栏：左预览，右代码'}
-            aria-label={tab === 'split' ? '取消分栏' : '分栏'}
-            aria-pressed={tab === 'split'}
-            onMouseDown={hold}
-            onClick={() => onTab(tab === 'split' ? 'preview' : 'split')}
-          >
-            <ViewColumnsIcon aria-hidden className="page-slide-ico" />
-          </button>
-        </>
-      )}
-      <button
-        type="button"
-        className="page-slide-icon"
-        data-page-block-expand=""
-        data-testid="page-host-expand"
-        title={expanded ? '缩小' : '放大'}
-        aria-label={expanded ? '缩小' : '放大'}
-        onMouseDown={hold}
-        onClick={onExpand}
-      >
-        {expanded ? <ArrowsPointingInIcon aria-hidden className="page-slide-ico" /> : <ArrowsPointingOutIcon aria-hidden className="page-slide-ico" />}
-      </button>
-    </>
-  )
-}
-
-function HostBar({
-  tab,
-  onTab,
-  ro,
-  expanded,
-  onExpand,
-  title,
-  onTitle,
-}: {
-  tab: HostTab
-  onTab: (next: HostTab) => void
-  ro: boolean
-  expanded: boolean
-  onExpand: () => void
-  title: string
-  onTitle: (next: string) => void
-}) {
-  const tools = <HostTools tab={tab} onTab={onTab} ro={ro} expanded={expanded} onExpand={onExpand} />
-  return (
-    <div
-      className="page-block-expand-nav"
-      data-testid={expanded ? 'page-host-expand-nav' : 'page-host-side-bar'}
-      data-biu-ignore
-    >
-      <div className="page-block-expand-nav-type" data-testid="page-host-type-icon" title="沙箱" aria-label="沙箱">
-        <SandboxKindIcon />
-      </div>
-      <ExpandNavTitle value={title} readOnly={ro} testId="page-host-title" onCommit={onTitle} />
-      <div className="page-block-expand-nav-tools">{tools}</div>
-    </div>
-  )
-}
-
 export function PageHostView({
   record,
   viewId,
@@ -301,13 +199,18 @@ export function PageHostView({
   collectionPath?: string
 }) {
   const editorVersion = useBlockEditorVersion()
-  const fileTick = useRecordViewFileTick()
   const pageId = String(record.id)
   const path = String(collectionPath ?? '').trim()
   useRecordViewCatalog(path, pageId)
   const view = viewOf(path, pageId, viewId)
-  const fallback = defaultContentSandboxSource(String(record.title ?? ''))
-  const [source, setSource] = useState(() => peekRecordViewFile(path, pageId, view?.file ?? '') || fallback)
+  const fallback = useMemo(() => defaultContentSandboxSource(String(record.title ?? '')), [record.title])
+  const { source, compiledSource, onSourceChange } = useDebouncedSandboxSource({
+    collectionPath: path,
+    recordId: pageId,
+    file: view?.file ?? '',
+    fallback,
+    writable,
+  })
   const [tab, setTab] = useState<HostTab>('preview')
   const [expanded, setExpanded] = useState(false)
   const [previewWidth, setPreviewWidth] = useState(0)
@@ -318,33 +221,27 @@ export function PageHostView({
   const previewRef = useRef<HTMLDivElement | null>(null)
   const blocks = useMemo(() => listPageHostBlocks(pageId, markdown, path), [pageId, markdown, path])
   const [patchError, setPatchError] = useState('')
+  const { toast, showToast } = useSandboxToast()
   const fields = useMemo(() => layoutFields(live, schema), [live, schema])
+
+  const liveRef = useRef(live)
+  const recordListenersRef = useRef(new Set<() => void>())
+  liveRef.current = live
+  useEffect(() => {
+    for (const fn of recordListenersRef.current) fn()
+  }, [live])
+  const subscribeRecord = useCallback((fn: () => void) => {
+    recordListenersRef.current.add(fn)
+    return () => {
+      recordListenersRef.current.delete(fn)
+    }
+  }, [])
+  const getLiveRecord = useCallback(() => liveRef.current, [])
 
   const setHostTab = useCallback((next: HostTab) => {
     capturePageScroll(hostRef.current)
     setTab(next)
   }, [])
-
-  useEffect(() => {
-    let gone = false
-    const file = view?.file
-    const next = defaultContentSandboxSource(String(record.title ?? ''))
-    if (!file) {
-      setSource(next)
-      return
-    }
-    const cached = peekRecordViewFile(path, pageId, file)
-    if (cached != null) {
-      setSource(cached)
-      return
-    }
-    void readRecordViewFile(path, pageId, file, next).then((text) => {
-      if (!gone) setSource(text)
-    })
-    return () => {
-      gone = true
-    }
-  }, [pageId, path, view?.file, record.title, fileTick])
 
   const writeRecord = useCallback(
     async (bag: Record<string, unknown>) => {
@@ -359,46 +256,34 @@ export function PageHostView({
         throw error
       }
     },
-    [pageId, path, schema],
+    [pageId, path, schema, setLive],
   )
 
-  const compiled = useMemo(() => compileHostSource(source, 'Block'), [source])
+  const compiled = useMemo(() => compileHostSource(compiledSource, 'Block'), [compiledSource])
   const biu = useMemo(
-    () => ({
-      page: () => ({ id: pageId, title: String(live.title ?? record.title ?? '').trim() }),
-      record: () => ({ ...live }),
-      fields: () => fields.map((item) => ({ ...item })),
-      values: () => Object.fromEntries(fields.map((item) => [item.key, live[item.key]])),
-      findFieldByName: (name: string) => matchSchemaField(fields, name),
-      fieldKey: (name: string) => matchSchemaField(fields, name)?.key ?? '',
-      get: (key: string) => live[resolveSchemaFieldKey(fields, key)],
-      set: (key: string, value: unknown) => writeRecord({ [resolveSchemaFieldKey(fields, key)]: value }),
-      patch: (bag: unknown) => writeRecord(bag as Record<string, unknown>),
-      blocks: () => blocks.map((item) => ({ ...item })),
-      kinds: () => getBlockEditor()?.blocks().map((item) => ({ kind: item.kind, plugin: item.plugin, label: item.label })) ?? [],
-      read: async () => {
-        if (!view?.dataFile) return null
-        try {
-          const text = await readRecordViewFile(path, pageId, view.dataFile, 'null')
-          if (!text.trim() || text.trim() === 'null') return null
-          return JSON.parse(text) as unknown
-        } catch {
-          return null
-        }
-      },
-      write: async (value: unknown) => {
-        if (!view?.dataFile) return
-        await putRecordViewFile(path, pageId, view.dataFile, JSON.stringify(value ?? null, null, 2), 'application/json')
-      },
-      files: createSandboxFilesApi(() => `${path}/${pageId}`),
-      docs: createSandboxDocsApi(() => `${path}/${pageId}`),
-      update: (id: string, patch: Record<string, unknown>) => writePageHostBlock(pageId, id, patch, path),
-    }),
-    [blocks, editorVersion, fields, live, pageId, path, record.title, view?.dataFile, writeRecord],
+    () =>
+      createRecordSandboxBiu({
+        collectionPath: path,
+        recordId: pageId,
+        live,
+        fields,
+        dataFile: view?.dataFile,
+        writeRecord,
+        subscribeRecord,
+        getLiveRecord,
+        onToast: showToast,
+        extra: {
+          page: () => ({ id: pageId, title: String(liveRef.current.title ?? record.title ?? '').trim() }),
+          blocks: () => blocks.map((item) => ({ ...item })),
+          kinds: () => getBlockEditor()?.blocks().map((item) => ({ kind: item.kind, plugin: item.plugin, label: item.label })) ?? [],
+          update: (id: string, patch: Record<string, unknown>) => writePageHostBlock(pageId, id, patch, path),
+        },
+      }),
+    [blocks, editorVersion, fields, getLiveRecord, live, pageId, path, record.title, showToast, subscribeRecord, view?.dataFile, writeRecord],
   )
 
   const Block = useCallback(
-    (props: { id: string; writable?: boolean }) => (
+    (props: { id?: string; writable?: boolean }) => (
       <HostBlock id={String(props.id ?? '')} blocks={blocks} writable={props.writable ?? writable} collectionPath={path} />
     ),
     [blocks, writable, path],
@@ -406,30 +291,22 @@ export function PageHostView({
 
   const Field = useCallback(
     (props: { name?: string }) => (
-      <HostField
+      <SandboxHostField
         name={String(props.name ?? '')}
         record={live}
         schema={hostSchema(schema)}
         writable={writable}
+        collectionPath={path}
+        missingTestId="page-host-missing"
         onSet={(key, value) => {
           void writeRecord({ [key]: value })
         }}
       />
     ),
-    [live, schema, writable, writeRecord],
+    [live, path, schema, writable, writeRecord],
   )
 
-  useEffect(() => {
-    if (!expanded) return
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      event.preventDefault()
-      event.stopPropagation()
-      setExpanded(false)
-    }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [expanded])
+  useSandboxEscapeExpand(expanded, setExpanded)
 
   const envRef = useRef({ Block, Field, biu })
   envRef.current = { Block, Field, biu }
@@ -441,7 +318,7 @@ export function PageHostView({
       ...(view?.file ? { name: view.file } : {}),
       ...(view?.name ? { title: view.name } : {}),
     })
-  }, [showPreview, pageId, viewId, view?.file, view?.name, compiled, expanded])
+  }, [showPreview, pageId, path, viewId, view?.file, view?.name, compiled, expanded])
 
   const card = (
     <div
@@ -450,7 +327,7 @@ export function PageHostView({
       data-testid="page-host-view"
       data-page-host-expanded={expanded ? '1' : undefined}
     >
-      <HostBar
+      <SandboxHostBar
         tab={tab}
         onTab={setHostTab}
         ro={!writable}
@@ -460,7 +337,10 @@ export function PageHostView({
         onTitle={(next) => {
           if (view) void renameSandboxView(path, pageId, view.id, next)
         }}
+        testIdPrefix="page-host"
+        kindLabel="沙盒"
       />
+      <SandboxToastBanner toast={toast} testId="page-host-toast" />
       <div className="page-host-stage">
         {showPreview ? (
           <div
@@ -484,25 +364,13 @@ export function PageHostView({
                     load={() => {
                       const BlockProxy = (props: { id?: string; writable?: boolean }) => envRef.current.Block(props)
                       const FieldProxy = (props: { name?: string }) => envRef.current.Field(props)
-                      const biuProxy = {
-                        page: () => envRef.current.biu.page(),
-                        record: () => envRef.current.biu.record(),
-                        fields: () => envRef.current.biu.fields(),
-                        values: () => envRef.current.biu.values(),
-                        findFieldByName: (name: string) => envRef.current.biu.findFieldByName(name),
-                        fieldKey: (name: string) => envRef.current.biu.fieldKey(name),
-                        get: (key: string) => envRef.current.biu.get(key),
-                        set: (key: string, value: unknown) => envRef.current.biu.set(key, value),
-                        patch: (bag: unknown) => envRef.current.biu.patch(bag),
-                        blocks: () => envRef.current.biu.blocks(),
-                        kinds: () => envRef.current.biu.kinds(),
-                        read: () => envRef.current.biu.read(),
-                        write: (value: unknown) => envRef.current.biu.write(value),
-                        files: envRef.current.biu.files,
-                        docs: envRef.current.biu.docs,
-                        update: (id: string, patch: Record<string, unknown>) => envRef.current.biu.update(id, patch),
-                      }
-                      return loadHostComponent(compiled.code, React, BlockProxy, FieldProxy, biuProxy) as ComponentType
+                      const biuProxy = createBiuProxy(envRef)
+                      return loadSandboxComponent(compiled.code, {
+                        React,
+                        Block: BlockProxy,
+                        Field: FieldProxy,
+                        biu: biuProxy,
+                      }) as ComponentType
                     }}
                   />
                 </RenderBoundary>
@@ -517,7 +385,7 @@ export function PageHostView({
                 {compiled.error || '无法渲染'}
               </div>
             )}
-            {showCode ? <SplitResize paneRef={previewRef} onWidth={setPreviewWidth} testId="page-host-split-resize" /> : null}
+            {showCode ? <SandboxSplitResize paneRef={previewRef} onWidth={setPreviewWidth} testId="page-host-split-resize" /> : null}
           </div>
         ) : null}
         {showCode ? (
@@ -540,10 +408,7 @@ export function PageHostView({
                 name: view?.file,
                 title: view?.name || String(record.title ?? '').trim(),
               }}
-              onChange={(next) => {
-                setSource(next)
-                if (view?.file && writable) void putRecordViewFile(path, pageId, view.file, next)
-              }}
+              onChange={onSourceChange}
             />
             <div
               className="page-host-compile"

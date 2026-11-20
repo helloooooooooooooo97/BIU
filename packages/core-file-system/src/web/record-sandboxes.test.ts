@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { afterEach, test } from 'vitest'
+import { afterEach, test, vi } from 'vitest'
 import {
   applyRecordViewAssetChanged,
   peekRecordViewFile,
+  putRecordViewFile,
+  RecordViewFileConflictError,
   rememberRecordViewFile,
+  resetRecordViewFileState,
 } from './record-sandboxes.ts'
 
 afterEach(() => {
@@ -38,4 +41,29 @@ test('same etag from local put does not drop the cache', () => {
     false,
   )
   assert.equal(peekRecordViewFile('/notes', 'n1', 'prop-view-note-a.jsx'), 'local')
+})
+
+test('file cache evicts oldest entries beyond LRU limit', () => {
+  resetRecordViewFileState()
+  for (let i = 0; i < 205; i += 1) {
+    rememberRecordViewFile('/notes', `n${i}`, `view-${i}.jsx`, `code-${i}`)
+  }
+  assert.equal(peekRecordViewFile('/notes', 'n0', 'view-0.jsx'), undefined)
+  assert.equal(peekRecordViewFile('/notes', 'n204', 'view-204.jsx'), 'code-204')
+  resetRecordViewFileState()
+})
+
+test('putRecordViewFile throws RecordViewFileConflictError when onConflict is throw', async () => {
+  resetRecordViewFileState()
+  rememberRecordViewFile('/notes', 'n1', 'data.json', '{"a":1}', 'etag-old')
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response('conflict', { status: 409, headers: { etag: '"etag-new"' } })),
+  )
+  await assert.rejects(
+    () => putRecordViewFile('/notes', 'n1', 'data.json', '{"a":2}', 'application/json', { onConflict: 'throw' }),
+    (err: unknown) => err instanceof RecordViewFileConflictError && err.status === 409 && err.etag === 'etag-new',
+  )
+  vi.unstubAllGlobals()
+  resetRecordViewFileState()
 })

@@ -3,7 +3,7 @@ import { flushSync } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
 import { compileJsxSource, compileSandboxSource, looksLikeJsx, transpileJsx } from './compile.ts'
 import { sandboxGlobals } from './gate.ts'
-import { sandboxUi } from '../sandbox-ui.ts'
+import { sandboxUi } from '@biu/core-file-system/sandbox-ui'
 import { bindSandboxPickRelay } from '@biu/core-pick/web'
 const roots = new WeakMap<ShadowRoot, Root>()
 const relays = new WeakMap<ShadowRoot, () => void>()

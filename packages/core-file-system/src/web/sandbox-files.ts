@@ -16,17 +16,30 @@ export function sandboxAssetName(hrefOrName: string) {
   return ''
 }
 
+async function readDbAsset(
+  hrefOrName: string,
+  resourcePath: () => string,
+  as: 'text' | 'bytes',
+  emptyError: string,
+) {
+  const name = sandboxAssetName(hrefOrName)
+  if (!name) throw new Error(emptyError)
+  const path = String(resourcePath() ?? '').trim()
+  const url = path
+    ? `/api/db/file/${encodeURIComponent(name)}?path=${encodeURIComponent(path)}`
+    : `/api/db/file/${encodeURIComponent(name)}`
+  const init: RequestInit | undefined = path ? { headers: { 'x-biu-resource-path': path } } : undefined
+  const res = await fetch(url, init)
+  if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error || res.statusText)
+  if (as === 'bytes') return new Uint8Array(await res.arrayBuffer())
+  return res.text()
+}
+
 export function createSandboxFilesApi(resourcePath: () => string) {
   return {
     list: asAttachmentList,
-    read: async (hrefOrName: string, as: 'text' | 'bytes' = 'text') => {
-      const name = sandboxAssetName(hrefOrName)
-      if (!name) throw new Error('attachment href required')
-      const res = await fetch(`/api/db/file/${encodeURIComponent(name)}`)
-      if (!res.ok) throw new Error((await res.json().catch(() => ({})) as { error?: string }).error || res.statusText)
-      if (as === 'bytes') return new Uint8Array(await res.arrayBuffer())
-      return res.text()
-    },
+    read: (hrefOrName: string, as: 'text' | 'bytes' = 'text') =>
+      readDbAsset(hrefOrName, resourcePath, as, 'attachment href required'),
     upload: async (file: File): Promise<AttachmentValue> => {
       const written = await uploadDbAsset(file, resourcePath())
       return {
@@ -41,14 +54,8 @@ export function createSandboxFilesApi(resourcePath: () => string) {
 export function createSandboxDocsApi(resourcePath: () => string) {
   return {
     list: asAttachmentList,
-    read: async (hrefOrName: string, as: 'text' | 'bytes' = 'text') => {
-      const name = sandboxAssetName(hrefOrName)
-      if (!name) throw new Error('document href required')
-      const res = await fetch(`/api/db/file/${encodeURIComponent(name)}`)
-      if (!res.ok) throw new Error((await res.json().catch(() => ({})) as { error?: string }).error || res.statusText)
-      if (as === 'bytes') return new Uint8Array(await res.arrayBuffer())
-      return res.text()
-    },
+    read: (hrefOrName: string, as: 'text' | 'bytes' = 'text') =>
+      readDbAsset(hrefOrName, resourcePath, as, 'document href required'),
     write: async (hrefOrName: string, content: string | Blob) => {
       const name = sandboxAssetName(hrefOrName)
       if (!name) throw new Error('document href required')

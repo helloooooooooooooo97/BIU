@@ -1,10 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowsPointingInIcon, ArrowsPointingOutIcon, CodeBracketIcon, EyeIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
 import {
   fieldIsWritable,
-  matchSchemaField,
-  normalizeSchemaValue,
   pruneSchemaValue,
   resolveSchemaFieldKey,
   sanitizeRecordPatch,
@@ -26,35 +23,31 @@ import { FieldValuePop } from './field-value-pop.tsx'
 import { loadTags } from './tag-catalog.ts'
 import { recordResourcePath } from './cell-media.tsx'
 import { bindSandboxPickPane, recordPropHostPickKey } from './sandbox-pick-pane.ts'
-import { compileHostSource, loadHostComponent, SandboxPreview } from './tag-host-compile.ts'
+import { compileHostSource, loadSandboxComponent, SandboxPreview } from './sandbox-compile.ts'
+import { createBiuProxy, createRecordSandboxBiu } from './sandbox-biu.ts'
 import {
-  peekRecordViewFile,
-  putRecordViewFile,
-  readRecordViewFile,
-  useRecordViewFileTick,
-  writeRecordViewCatalog,
-} from './record-sandboxes.ts'
+  SandboxHostBar,
+  SandboxSplitResize,
+  SandboxToastBanner,
+  splitPaneStyle,
+  useDebouncedSandboxSource,
+  useSandboxEscapeExpand,
+  useSandboxToast,
+  type HostTab,
+} from './sandbox-host-shell.tsx'
+import { writeRecordViewCatalog } from './record-sandboxes.ts'
 import { loadRecordLayouts, useActiveRecordLayout } from './record-layouts.ts'
 import { getRecordViewCatalog, hydrateRecordViewCatalog, useRecordViewCatalog } from './record-view-catalog.ts'
 import { recordContentFallback } from './database-ui.ts'
-import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
-import { SplitResize, splitPaneStyle } from './split-resize.tsx'
 import { HostSourceEditor } from './host-source-editor.tsx'
-import { createSandboxDocsApi, createSandboxFilesApi } from './sandbox-files.ts'
 import { useLiveDbRecord } from './live-db-record.ts'
 
 export { useLiveDbRecord, readDbRecord } from './live-db-record.ts'
-
-type HostTab = 'preview' | 'code' | 'split'
 
 const PROP_FIELD_SKIP = new Set(['emoji', 'views', 'propViews', 'layouts', 'file', 'tablePath', 'sourceId'])
 const SOURCE_FIELD_SKIP = new Set(['emoji', 'file', 'tablePath', 'sourceId'])
 const SOURCE_VIEW_KEYS = ['views', 'propViews', 'layouts'] as const
 const SOURCE_VIEW_KEY_SET = new Set<string>(SOURCE_VIEW_KEYS)
-
-function hold(event: { preventDefault: () => void }) {
-  event.preventDefault()
-}
 
 /** 库里有的列是 JSON 字符串（如标签 fields），源码里展开成对象，避免二次转义。 */
 export function reviveJsonValue(value: unknown): unknown {
@@ -105,7 +98,7 @@ function sourceFields(schema?: CollectionSchema) {
     }))
 }
 
-function propFields(schema?: CollectionSchema) {
+export function recordSandboxFields(schema?: CollectionSchema) {
   return Object.entries(schema?.fields ?? {})
     .filter(([key, field]) => !PROP_FIELD_SKIP.has(key) && key !== schema?.contentField && field.type !== 'file')
     .map(([key, field]) => ({
@@ -117,13 +110,14 @@ function propFields(schema?: CollectionSchema) {
     }))
 }
 
-function HostField({
+export function SandboxHostField({
   name,
   record,
   schema,
   writable,
   collectionPath,
   onSet,
+  missingTestId = 'record-prop-host-missing',
 }: {
   name: string
   record: DbRecord
@@ -131,12 +125,13 @@ function HostField({
   writable: boolean
   collectionPath: string
   onSet: (key: string, value: unknown) => void
+  missingTestId?: string
 }) {
   const key = resolveSchemaFieldKey(schema, name)
   const field = schema?.fields?.[key] as FieldSpec | undefined
   if (!field) {
     return (
-      <div className="page-host-missing" data-testid="record-prop-host-missing">
+      <div className="page-host-missing" data-testid={missingTestId}>
         找不到属性 {key}
       </div>
     )
@@ -150,65 +145,6 @@ function HostField({
       collectionPath={collectionPath}
       onSubmit={(next) => onSet(key, next)}
     />
-  )
-}
-
-function HostTools({
-  tab,
-  onTab,
-  ro,
-  expanded,
-  onExpand,
-}: {
-  tab: HostTab
-  onTab: (next: HostTab) => void
-  ro: boolean
-  expanded: boolean
-  onExpand: () => void
-}) {
-  const coding = tab === 'code'
-  return (
-    <>
-      {ro ? null : (
-        <>
-          <button
-            type="button"
-            className={`page-slide-icon${coding ? ' is-on' : ''}`}
-            title={coding ? '预览' : '编辑'}
-            aria-label={coding ? '预览' : '编辑'}
-            aria-pressed={coding}
-            data-testid="record-prop-host-edit"
-            onMouseDown={hold}
-            onClick={() => onTab(coding ? 'preview' : 'code')}
-          >
-            {coding ? <EyeIcon aria-hidden className="page-slide-ico" /> : <CodeBracketIcon aria-hidden className="page-slide-ico" />}
-          </button>
-          <button
-            type="button"
-            className={`page-slide-icon${tab === 'split' ? ' is-on' : ''}`}
-            data-testid="record-prop-host-split"
-            title={tab === 'split' ? '取消分栏' : '分栏：左预览，右代码'}
-            aria-label={tab === 'split' ? '取消分栏' : '分栏'}
-            aria-pressed={tab === 'split'}
-            onMouseDown={hold}
-            onClick={() => onTab(tab === 'split' ? 'preview' : 'split')}
-          >
-            <ViewColumnsIcon aria-hidden className="page-slide-ico" />
-          </button>
-        </>
-      )}
-      <button
-        type="button"
-        className="page-slide-icon"
-        data-testid="record-prop-host-expand"
-        title={expanded ? '缩小' : '放大'}
-        aria-label={expanded ? '缩小' : '放大'}
-        onMouseDown={hold}
-        onClick={onExpand}
-      >
-        {expanded ? <ArrowsPointingInIcon aria-hidden className="page-slide-ico" /> : <ArrowsPointingOutIcon aria-hidden className="page-slide-ico" />}
-      </button>
-    </>
   )
 }
 
@@ -227,34 +163,39 @@ export function RecordPropHostView({
 }) {
   const recordId = String(record.id ?? '').trim()
   const recordPath = recordResourcePath(collectionPath, recordId)
-  const fileTick = useRecordViewFileTick()
-  const fallback = defaultPropSandboxSource(String(record.title ?? ''))
-  const [source, setSource] = useState(() => peekRecordViewFile(collectionPath, recordId, view.file) || fallback)
+  const fallback = useMemo(() => defaultPropSandboxSource(String(record.title ?? '')), [record.title])
+  const { source, compiledSource, onSourceChange } = useDebouncedSandboxSource({
+    collectionPath,
+    recordId,
+    file: view.file,
+    fallback,
+    writable,
+  })
   const [tab, setTab] = useState<HostTab>('preview')
   const [expanded, setExpanded] = useState(false)
   const [previewWidth, setPreviewWidth] = useState(0)
   const [live, setLive] = useLiveDbRecord(collectionPath, record)
   const [patchError, setPatchError] = useState('')
+  const { toast, showToast } = useSandboxToast()
   const showPreview = tab !== 'code'
   const showCode = tab !== 'preview'
   const hostRef = useRef<HTMLDivElement | null>(null)
   const previewRef = useRef<HTMLDivElement | null>(null)
-  const fields = propFields(schema)
+  const fields = useMemo(() => recordSandboxFields(schema), [schema])
 
+  const liveRef = useRef(live)
+  const recordListenersRef = useRef(new Set<() => void>())
+  liveRef.current = live
   useEffect(() => {
-    let gone = false
-    const cached = peekRecordViewFile(collectionPath, recordId, view.file)
-    if (cached != null) {
-      setSource(cached)
-      return
-    }
-    void readRecordViewFile(collectionPath, recordId, view.file, fallback).then((text) => {
-      if (!gone) setSource(text)
-    })
+    for (const fn of recordListenersRef.current) fn()
+  }, [live])
+  const subscribeRecord = useCallback((fn: () => void) => {
+    recordListenersRef.current.add(fn)
     return () => {
-      gone = true
+      recordListenersRef.current.delete(fn)
     }
-  }, [collectionPath, recordId, view.file, fallback, fileTick])
+  }, [])
+  const getLiveRecord = useCallback(() => liveRef.current, [])
 
   const writeRecord = useCallback(
     async (bag: Record<string, unknown>) => {
@@ -279,55 +220,29 @@ export function RecordPropHostView({
         throw error
       }
     },
-    [collectionPath, recordId, schema],
+    [collectionPath, recordId, schema, setLive],
   )
 
-  const compiled = useMemo(() => compileHostSource(source), [source])
+  const compiled = useMemo(() => compileHostSource(compiledSource, 'Field'), [compiledSource])
   const biu = useMemo(
-    () => ({
-      record: () => ({ id: live.id, title: live.title, path: `${collectionPath}/${live.id}` }),
-      fields: () => fields.map(({ spec: _spec, ...item }) => item),
-      values: () => Object.fromEntries(fields.map((item) => [item.key, live[item.key]])),
-      findFieldByName: (name: string) => {
-        const hit = matchSchemaField(fields, name)
-        if (!hit) return undefined
-        const { spec: _spec, ...info } = hit
-        return info
-      },
-      fieldKey: (name: string) => matchSchemaField(fields, name)?.key ?? '',
-      get: (key: string) => live[resolveSchemaFieldKey(fields, key)],
-      set: (key: string, value: unknown) => {
-        const nextKey = resolveSchemaFieldKey(fields, key)
-        if (!nextKey) return
-        void writeRecord({ [nextKey]: value })
-      },
-      patch: async (bag: unknown) => {
-        if (!bag || typeof bag !== 'object' || Array.isArray(bag)) throw new Error('patch values must be an object')
-        await writeRecord(bag as Record<string, unknown>)
-      },
-      read: async () => {
-        if (!view.dataFile) return null
-        try {
-          const text = await readRecordViewFile(collectionPath, recordId, view.dataFile, 'null')
-          if (!text.trim() || text.trim() === 'null') return null
-          return JSON.parse(text) as unknown
-        } catch {
-          return null
-        }
-      },
-      write: async (value: unknown) => {
-        if (!view.dataFile) return
-        await putRecordViewFile(collectionPath, recordId, view.dataFile, JSON.stringify(value ?? null, null, 2), 'application/json')
-      },
-      files: createSandboxFilesApi(() => `${collectionPath}/${recordId}`),
-      docs: createSandboxDocsApi(() => `${collectionPath}/${recordId}`),
-    }),
-    [collectionPath, fields, live, recordId, view.dataFile, writeRecord],
+    () =>
+      createRecordSandboxBiu({
+        collectionPath,
+        recordId,
+        live,
+        fields,
+        dataFile: view.dataFile,
+        writeRecord,
+        subscribeRecord,
+        getLiveRecord,
+        onToast: showToast,
+      }),
+    [collectionPath, fields, getLiveRecord, live, recordId, showToast, subscribeRecord, view.dataFile, writeRecord],
   )
 
   const Field = useCallback(
     (props: { name?: string }) => (
-      <HostField
+      <SandboxHostField
         name={String(props.name ?? '')}
         record={live}
         schema={schema}
@@ -341,17 +256,7 @@ export function RecordPropHostView({
     [collectionPath, live, schema, writable, writeRecord],
   )
 
-  useEffect(() => {
-    if (!expanded) return
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      event.preventDefault()
-      event.stopPropagation()
-      setExpanded(false)
-    }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [expanded])
+  useSandboxEscapeExpand(expanded, setExpanded)
 
   const envRef = useRef({ Field, biu })
   envRef.current = { Field, biu }
@@ -361,9 +266,21 @@ export function RecordPropHostView({
     return bindSandboxPickPane(previewRef.current, recordPropHostPickKey(collectionPath, recordId, view.id), {
       path: recordPath,
       name: view.file,
-      title: view.title,
+      title: view.name || '属性沙盒',
     })
-  }, [showPreview, collectionPath, recordId, view.id, view.file, view.title, compiled, expanded])
+  }, [showPreview, collectionPath, recordId, recordPath, view.id, view.file, view.name, compiled, expanded])
+
+  const renameView = useCallback(
+    (next: string) => {
+      const nextName = next.trim()
+      if (!nextName || nextName === view.name) return
+      const listed = getRecordViewCatalog(collectionPath, recordId).propViews.map((item) =>
+        item.id === view.id ? { ...item, name: nextName } : item,
+      )
+      void writeRecordViewCatalog(collectionPath, recordId, 'propViews', listed)
+    },
+    [collectionPath, recordId, view.id, view.name],
+  )
 
   const card = (
     <div
@@ -372,33 +289,18 @@ export function RecordPropHostView({
       data-testid="record-prop-host"
       data-page-host-expanded={expanded ? '1' : undefined}
     >
-      <div className="page-block-expand-nav" data-testid={expanded ? 'record-prop-host-expand-nav' : 'record-prop-host-side-bar'} data-biu-ignore>
-        <div className="page-block-expand-nav-type" title="属性沙盒" aria-label="属性沙盒">
-          <SandboxKindIcon className="size-[14px]" />
-        </div>
-        <input
-          className="page-block-expand-nav-title"
-          data-testid="record-prop-host-title"
-          readOnly={!writable}
-          defaultValue={view.name?.trim() || '属性沙盒'}
-          key={view.id}
-          onBlur={(event) => {
-            const next = event.currentTarget.value.trim()
-            if (!next || next === view.name) return
-            const listed = parseRecordSandboxes(getRecordViewCatalog(collectionPath, recordId).propViews)
-            const base = listed.length ? listed : parseRecordSandboxes((live as { propViews?: unknown }).propViews)
-            void writeRecordViewCatalog(
-              collectionPath,
-              recordId,
-              'propViews',
-              base.map((item) => (item.id === view.id ? { ...item, name: next } : item)),
-            )
-          }}
-        />
-        <div className="page-block-expand-nav-tools">
-          <HostTools tab={tab} onTab={setTab} ro={!writable} expanded={expanded} onExpand={() => setExpanded((open) => !open)} />
-        </div>
-      </div>
+      <SandboxHostBar
+        tab={tab}
+        onTab={setTab}
+        ro={!writable}
+        expanded={expanded}
+        onExpand={() => setExpanded((open) => !open)}
+        title={view.name || '属性沙盒'}
+        onTitle={renameView}
+        testIdPrefix="record-prop-host"
+        kindLabel="属性沙盒"
+      />
+      <SandboxToastBanner toast={toast} testId="record-prop-host-toast" />
       <div className="page-host-stage">
         {showPreview ? (
           <div
@@ -407,9 +309,10 @@ export function RecordPropHostView({
             style={splitPaneStyle(showCode ? previewWidth : 0)}
             data-testid="record-prop-host-preview"
             data-sandbox=""
+            data-page-path={recordPath}
             data-biu-path={recordPath}
             data-biu-name={view.file}
-            data-biu-title={view.title}
+            data-biu-title={view.name || '属性沙盒'}
           >
             {compiled.ok ? (
               <>
@@ -420,21 +323,12 @@ export function RecordPropHostView({
                     errorTestId="record-prop-host-error"
                     load={() => {
                       const FieldProxy = (props: { name?: string }) => envRef.current.Field(props)
-                      const biuProxy = {
-                        record: () => envRef.current.biu.record(),
-                        fields: () => envRef.current.biu.fields(),
-                        values: () => envRef.current.biu.values(),
-                        findFieldByName: (name: string) => envRef.current.biu.findFieldByName(name),
-                        fieldKey: (name: string) => envRef.current.biu.fieldKey(name),
-                        get: (key: string) => envRef.current.biu.get(key),
-                        set: (key: string, value: unknown) => envRef.current.biu.set(key, value),
-                        patch: (bag: unknown) => envRef.current.biu.patch(bag),
-                        read: () => envRef.current.biu.read(),
-                        write: (value: unknown) => envRef.current.biu.write(value),
-                        files: envRef.current.biu.files,
-                        docs: envRef.current.biu.docs,
-                      }
-                      return loadHostComponent(compiled.code, React, FieldProxy, biuProxy) as ComponentType
+                      const biuProxy = createBiuProxy(envRef)
+                      return loadSandboxComponent(compiled.code, {
+                        React,
+                        Field: FieldProxy,
+                        biu: biuProxy,
+                      }) as ComponentType
                     }}
                   />
                 </RenderBoundary>
@@ -449,7 +343,7 @@ export function RecordPropHostView({
                 {compiled.error || '无法渲染'}
               </div>
             )}
-            {showCode ? <SplitResize paneRef={previewRef} onWidth={setPreviewWidth} testId="record-prop-host-split-resize" /> : null}
+            {showCode ? <SandboxSplitResize paneRef={previewRef} onWidth={setPreviewWidth} testId="record-prop-host-split-resize" /> : null}
           </div>
         ) : null}
         {showCode ? (
@@ -460,8 +354,8 @@ export function RecordPropHostView({
             data-biu-id={`sandbox:${recordPropHostPickKey(collectionPath, recordId, view.id)}:code`}
             data-biu-path={recordPath}
             data-biu-name={view.file}
-            data-biu-title={view.title}
-            data-biu-label={view.title}
+            data-biu-title={view.name || '属性沙盒'}
+            data-biu-label={view.name || '属性沙盒'}
           >
             <HostSourceEditor
               value={source}
@@ -470,12 +364,9 @@ export function RecordPropHostView({
               pickHost={{
                 path: recordPath,
                 name: view.file,
-                title: view.title,
+                title: view.name || '属性沙盒',
               }}
-              onChange={(next) => {
-                setSource(next)
-                if (writable) void putRecordViewFile(collectionPath, recordId, view.file, next, 'text/plain; charset=utf-8')
-              }}
+              onChange={onSourceChange}
             />
             <div className="page-host-compile" data-testid="record-prop-host-compile" data-ok={compiled.ok && !patchError ? '1' : '0'}>
               {compiled.ok ? (patchError ? `写入失败 · ${patchError}` : '编译通过') : `编译失败 · ${compiled.error}`}

@@ -1,10 +1,12 @@
-import { transform } from 'sucrase'
+import {
+  hasForbiddenModuleSyntax,
+  stripReactImports,
+  transpileSandboxJsx,
+} from '@biu/core-file-system/sandbox-compile'
 
 export type SandboxCompileResult =
   | { ok: true; mode: 'jsx' }
   | { ok: false; error: string; mode?: 'jsx' }
-
-const FORBIDDEN = /\bimport\s*\(|\brequire\s*\(/
 
 export function sandboxModuleFile(file: string) {
   return /\.(jsx|tsx)$/i.test(String(file ?? '').trim())
@@ -24,7 +26,9 @@ export function looksLikeJsx(source: string) {
 function checkJs(source: string): SandboxCompileResult {
   const text = source.trim()
   if (!text) return { ok: true, mode: 'jsx' }
-  if (FORBIDDEN.test(text)) return { ok: false, error: 'source cannot import or require modules', mode: 'jsx' }
+  if (hasForbiddenModuleSyntax(text, false)) {
+    return { ok: false, error: 'source cannot import or require modules', mode: 'jsx' }
+  }
   try {
     // eslint-disable-next-line @typescript-eslint/no-implied-eval
     new Function(text)
@@ -35,30 +39,20 @@ function checkJs(source: string): SandboxCompileResult {
 }
 
 export function transpileJsx(source: string) {
-  return transform(source, {
-    transforms: ['jsx', 'typescript'],
-    jsxRuntime: 'classic',
-    production: true,
-    filePath: 'sandbox.tsx',
-  }).code
-}
-
-function stripReactImports(source: string) {
-  return source
-    .replace(/^\s*import\s+[\s\S]*?from\s+['"]react['"]\s*;?\s*$/gim, '')
-    .replace(/^\s*import\s+React\s*;?\s*$/gim, '')
-    .replace(/^\s*import\s+\*\s+as\s+React\s+from\s+['"]react['"]\s*;?\s*$/gim, '')
+  return transpileSandboxJsx(source, 'sandbox.tsx')
 }
 
 export function compileJsxSource(source: string): SandboxCompileResult {
   const text = String(source ?? '').trim()
   if (!text) return { ok: false, error: 'empty source', mode: 'jsx' }
-  if (FORBIDDEN.test(text)) return { ok: false, error: 'source cannot import or require modules', mode: 'jsx' }
+  if (hasForbiddenModuleSyntax(text, false)) {
+    return { ok: false, error: 'source cannot import or require modules', mode: 'jsx' }
+  }
   try {
     const stripped = stripReactImports(text)
       .replace(/export\s+default\s+function\s+/g, 'function ')
       .replace(/export\s+default\s+/g, 'const __Component = ')
-    if (FORBIDDEN.test(stripped) || /^\s*import\b/m.test(stripped)) {
+    if (hasForbiddenModuleSyntax(stripped, true)) {
       return { ok: false, error: 'source cannot import or require modules', mode: 'jsx' }
     }
     return checkJs(transpileJsx(stripped))

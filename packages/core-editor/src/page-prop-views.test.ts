@@ -21,7 +21,7 @@ test('parse record property views keeps sandbox files bound to the record', () =
 })
 
 test('default property sandbox source uses Field and record APIs', async () => {
-  const { compileHostSource } = await import('./web/page-host-compile.ts')
+  const { compileHostSource } = await import('@biu/core-file-system/sandbox-compile')
   const src = defaultPropSandboxSource('演示页')
   assert.match(src, /export default function App/)
   assert.match(src, /组件 API/)

@@ -30,6 +30,7 @@ test('sandbox files read and write go through db file APIs', async () => {
   )
   const files = createSandboxFilesApi(() => '/pages/p1')
   assert.equal(await files.read('/api/db/file/hash.md'), 'hello md')
+  assert.match(calls[0]?.url ?? '', /\/api\/db\/file\/hash\.md\?path=%2Fpages%2Fp1/)
   const written = await files.upload(new File(['# hi'], '规划.md', { type: 'text/markdown' }))
   assert.equal(written.name, '规划.md')
   assert.equal(written.href, '/api/db/file/hash.md')
