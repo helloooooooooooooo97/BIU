@@ -954,7 +954,7 @@ test('create record sits at the right of the toolbar with a blue label', () => {
   assert.doesNotMatch(browser, /<SchemaFieldEditor[\s\S]{0,240}autoOpen/)
   assert.match(readFileSync(resolve(import.meta.dirname, './cell-pop-draft.tsx'), 'utf8'), /autoOpen/)
   assert.match(browser, /schemaTagTone\(flat\.packId\)/)
-  assert.match(browser, /tablePinColClass\(col\.key, schema\?\.labelField\)/)
+  assert.match(browser, /tablePinColClass\(col\.key, schema\?\.labelField,/)
   assert.match(css, /\.tasks-table th\.is-tag-col\{[^}]*color:var\(--biu-color-text-muted\)/)
   assert.match(css, /\.tasks-table th\.is-tag-col\{[^}]*background:var\(--biu-color-surface\)/)
   assert.match(css, /\.tasks-table th\.is-tag-col\{[^}]*box-shadow:inset 0 -2px 0 color-mix\(in srgb,var\(--biu-tag\) 72%,transparent\)/)

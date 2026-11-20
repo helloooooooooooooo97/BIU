@@ -492,7 +492,7 @@ test('title column stays pinned when the table scrolls sideways', () => {
   assert.match(css, /\.fsdb-page \.tasks-table th\.is-pin-col,\.fsdb-page \.tasks-table td\.is-pin-col\{[^}]*position:sticky/)
   assert.match(css, /\.fsdb-page \.tasks-table th\.is-pin-col,\.fsdb-page \.tasks-table td\.is-pin-col\{[^}]*left:var\(--fsdb-check-gutter\)/)
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
-  assert.match(browser, /tablePinColClass\(col\.key, schema\?\.labelField\)/)
+  assert.match(browser, /tablePinColClass\(col\.key, schema\?\.labelField,/)
   assert.match(browser, /tablePinCount\(/)
   assert.match(css, /\.fsdb-page \.tasks-table th\.is-pin-col\+\.is-pin-col,\.fsdb-page \.tasks-table td\.is-pin-col\+\.is-pin-col\{[^}]*--fsdb-pin-title/)
   assert.doesNotMatch(css, /\.fsdb-page \.tasks-table tr:hover td\{[^}]*background/)

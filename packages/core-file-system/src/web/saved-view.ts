@@ -15,6 +15,7 @@ export type SavedView = {
   tree?: boolean
   wrap?: boolean
   truncate?: boolean
+  freezeTitle?: boolean
   query?: string
   pageSize?: number
   /** 表格列宽（px），按字段 key。 */
@@ -98,9 +99,10 @@ export function normalizeSavedView(view: SavedView): SavedView {
     })(),
     columns: parseViewColumns(view.columns),
     groupBy: view.groupBy ?? '',
-    tree: view.tree !== false,
+    tree: !!view.tree,
     wrap: !!view.wrap,
     truncate: view.truncate !== false,
+    freezeTitle: !!view.freezeTitle,
     query: view.query ?? '',
     pageSize: normalizePageSize(view.pageSize),
     columnWidths: normalizeColumnWidths(view.columnWidths),
@@ -161,9 +163,10 @@ export function viewStateKey(
     filterTree: filterTreeStateKey(view.filterTree),
     columns: view.columns,
     groupBy: view.groupBy ?? '',
-    tree: view.tree !== false,
+    tree: !!view.tree,
     wrap: !!view.wrap,
     truncate: view.truncate !== false,
+    freezeTitle: !!view.freezeTitle,
     query: view.query ?? '',
     pageSize: normalizePageSize(view.pageSize),
     columnWidths: normalizeColumnWidths(view.columnWidths),

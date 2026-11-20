@@ -111,13 +111,13 @@ export type TableColumnSlice = {
   padRight: number
 }
 
-/** 仅冻结最左侧的标题列，动作列参与正常横向滚动。 */
-export function tablePinCount(keys: string[], labelField?: string | null) {
-  return labelField && keys[0] === labelField ? 1 : 0
+/** 仅当开启冻结标题列时，冻结最左侧的标题列，动作列参与正常横向滚动。 */
+export function tablePinCount(keys: string[], labelField?: string | null, freezeTitle = false) {
+  return freezeTitle && labelField && keys[0] === labelField ? 1 : 0
 }
 
-export function tablePinColClass(key: string, labelField?: string | null) {
-  return key === labelField ? 'is-pin-col' : ''
+export function tablePinColClass(key: string, labelField?: string | null, freezeTitle = false) {
+  return freezeTitle && key === labelField ? 'is-pin-col' : ''
 }
 
 /** 有手动值用手动值；否则钉住列 / 操作列 / 其余列各一个固定默认宽，不随视口缩放。 */

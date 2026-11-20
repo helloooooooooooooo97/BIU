@@ -471,7 +471,7 @@ function parseViewFilters(value: unknown): Record<string, string> {
   return {}
 }
 
-export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mode?: unknown; sortField?: unknown; sortDir?: unknown; sorts?: unknown; query?: unknown; groupBy?: unknown; columns?: unknown; filters?: unknown; filterTree?: unknown; tree?: unknown; wrap?: unknown; truncate?: unknown; pageSize?: unknown; columnWidths?: unknown; rank?: unknown; updatedAt?: unknown }): SavedView | null {
+export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mode?: unknown; sortField?: unknown; sortDir?: unknown; sorts?: unknown; query?: unknown; groupBy?: unknown; columns?: unknown; filters?: unknown; filterTree?: unknown; tree?: unknown; wrap?: unknown; truncate?: unknown; freezeTitle?: unknown; pageSize?: unknown; columnWidths?: unknown; rank?: unknown; updatedAt?: unknown }): SavedView | null {
   const id = String(row.viewId ?? '').trim()
   if (!id) return null
   const sortDir = row.sortDir === 'desc' ? 'desc' : 'asc'
@@ -490,9 +490,10 @@ export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mo
     columns: parseViewColumns(row.columns),
     filters,
     filterTree,
-    tree: row.tree !== false,
+    tree: Boolean(row.tree),
     wrap: Boolean(row.wrap),
     truncate: row.truncate !== false,
+    freezeTitle: Boolean(row.freezeTitle),
     pageSize: normalizePageSize(row.pageSize),
     columnWidths: row.columnWidths,
     builtin: false,
@@ -800,6 +801,7 @@ const DISPLAY_KEYS = [
   'tree',
   'wrap',
   'truncate',
+  'freezeTitle',
   'query',
   'pageSize',
   'columnWidths',

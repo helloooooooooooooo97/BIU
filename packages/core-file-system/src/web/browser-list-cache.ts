@@ -435,6 +435,7 @@ export type TableHoldSnap = {
   columnPinCount: number
   wrapCells: boolean
   truncateCells: boolean
+  freezeTitle: boolean
   nodes: TablePaintNode[]
   resetKey: string
   checkLayoutExtra: string
@@ -445,9 +446,10 @@ export function emptyListHold(prev: TableHoldSnap | null, view: SavedView | null
   return {
     columns: prev?.columns ?? [{ key: 'title' }],
     columnWidths: prev?.columnWidths ?? {},
-    columnPinCount: prev?.columnPinCount ?? 1,
+    columnPinCount: prev?.columnPinCount ?? 0,
     wrapCells: !!view?.wrap,
     truncateCells: view ? view.truncate !== false : true,
+    freezeTitle: !!view?.freezeTitle,
     nodes: EMPTY_HOLD_NODES,
     resetKey: listHoldResetKey(view, path),
     checkLayoutExtra: '',
@@ -508,9 +510,10 @@ export function listHoldFromCache(cached: ListCacheSnap, view: SavedView | null,
       }
     }),
     columnWidths: normalizeColumnWidths(view?.columnWidths),
-    columnPinCount: tablePinCount(keys, label),
+    columnPinCount: tablePinCount(keys, label, Boolean(view?.freezeTitle)),
     wrapCells: !!view?.wrap,
     truncateCells: view ? view.truncate !== false : true,
+    freezeTitle: !!view?.freezeTitle,
     nodes,
     resetKey: listHoldResetKey(view, path),
     checkLayoutExtra: '',

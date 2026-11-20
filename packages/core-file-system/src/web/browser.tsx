@@ -13,6 +13,7 @@ import {
   ChevronRightIcon,
   EllipsisHorizontalIcon,
   HashtagIcon,
+  LockClosedIcon,
   PlusIcon,
   TagIcon,
   ArrowDownTrayIcon,
@@ -693,8 +694,9 @@ export function CollectionBrowser({
   }, [bulkMenuOpen])
   const [wrapCells, setWrapCells] = useState(!!initialView?.wrap)
   const [truncateCells, setTruncateCells] = useState(initialView?.truncate !== false)
+  const [freezeTitle, setFreezeTitle] = useState(Boolean(initialView?.freezeTitle))
   const [groupBy, setGroupBy] = useState(initialView?.groupBy ?? '')
-  const [showTree, setShowTree] = useState(initialView?.tree !== false)
+  const [showTree, setShowTree] = useState(Boolean(initialView?.tree))
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [treeKidsByParent, setTreeKidsByParent] = useState<Record<string, DbRecord[]>>({})
   const treeKidsByParentRef = useRef(treeKidsByParent)
@@ -846,7 +848,7 @@ export function CollectionBrowser({
             groupBy: next.groupBy ?? '',
             pageSize: normalizePageSize(next.pageSize),
             wrapCells: !!next.wrap,
-            tree: next.tree !== false,
+            tree: Boolean(next.tree),
             listColumns: listProjectionKeys({
               schema: undefined,
               columns: next.columns.length ? next.columns : LIST_SEED_COLUMNS,
@@ -1220,9 +1222,10 @@ export function CollectionBrowser({
         )
         setColumnWidths(normalizeColumnWidths(view.columnWidths))
         setGroupBy(pendingView.groupBy)
-        setShowTree(view.tree !== false)
+        setShowTree(Boolean(view.tree))
         setWrapCells(pendingView.wrapCells)
         setTruncateCells(view.truncate !== false)
+        setFreezeTitle(Boolean(view.freezeTitle))
         setQuery(pendingView.fetchQuery)
         setFetchQuery(pendingView.fetchQuery)
         setPageSize(pendingView.pageSize)
@@ -2034,7 +2037,7 @@ export function CollectionBrowser({
   const tableStageRef = useRef<HTMLDivElement>(null)
   const checkStackRef = useRef<HTMLDivElement>(null)
   const checkHoverRef = useRef<string | 'head' | null>(null)
-  const columnPinCount = tablePinCount(columns.map((col) => col.key), schema?.labelField)
+  const columnPinCount = tablePinCount(columns.map((col) => col.key), schema?.labelField, freezeTitle)
   const tableResetKey = `${activeViewId ?? ''}\0${collectionPath}\0${groupBy}\0${page}\0${pageSize}\0${query}`
   const checkLayoutExtra = [
     grouping ? 1 : 0,
@@ -2545,9 +2548,10 @@ export function CollectionBrowser({
       sortField === next.sortField &&
       sortDir === next.sortDir &&
       groupBy === nextGroup &&
-      showTree === (next.tree !== false) &&
+      showTree === Boolean(next.tree) &&
       wrapCells === !!next.wrap &&
       truncateCells === (next.truncate !== false) &&
+      freezeTitle === Boolean(next.freezeTitle) &&
       query === nextQuery &&
       pageSize === nextPageSize &&
       sortsStateKey(sorts) === sortsStateKey(next.sorts) &&
@@ -2568,9 +2572,10 @@ export function CollectionBrowser({
     setColumnKeys(nextColumns)
     setColumnWidths(normalizeColumnWidths(next.columnWidths))
     setGroupBy(nextGroup)
-    setShowTree(next.tree !== false)
+    setShowTree(Boolean(next.tree))
     setWrapCells(!!next.wrap)
     setTruncateCells(next.truncate !== false)
+    setFreezeTitle(Boolean(next.freezeTitle))
     setQuery(nextQuery)
     setFetchQuery(nextQuery)
     setPageSize(nextPageSize)
@@ -2731,7 +2736,8 @@ export function CollectionBrowser({
       filters: { ...catalogLocks, ...(effectiveScope ? { $scope: effectiveScope } : {}) },
       columns: target === collectionPath ? [...schemaDefaultKeys] : [],
       groupBy: '',
-      tree: true,
+      tree: false,
+      freezeTitle: false,
       wrap: false,
       truncate: true,
       query: '',
@@ -2790,6 +2796,7 @@ export function CollectionBrowser({
             tree: showTree,
             wrap: wrapCells,
             truncate: truncateCells,
+            freezeTitle,
             query,
             columnWidths,
           },
@@ -2922,6 +2929,11 @@ export function CollectionBrowser({
   function setTree(next: boolean) {
     setShowTree(next)
     patchActiveView({ tree: next })
+  }
+
+  function setFreezeTitleCol(next: boolean) {
+    setFreezeTitle(next)
+    patchActiveView({ freezeTitle: next })
   }
 
   async function runAction(row: DbRecord, action: CollectionActionInfo) {
@@ -4776,7 +4788,7 @@ export function CollectionBrowser({
     return (
       <th
         key={col.key}
-        className={[tablePinColClass(col.key, schema?.labelField), tone ? 'is-tag-col' : ''].filter(Boolean).join(' ') || undefined}
+        className={[tablePinColClass(col.key, schema?.labelField, tableHoldRef.current?.freezeTitle ?? freezeTitle), tone ? 'is-tag-col' : ''].filter(Boolean).join(' ') || undefined}
         style={tone ? { ['--biu-tag' as string]: tone } : undefined}
       >
         <span
@@ -4853,7 +4865,7 @@ export function CollectionBrowser({
         data-col-key={col.key}
         {...cellPickOf(row, col.key, col.field)}
         className={[
-          tablePinColClass(col.key, paintSchema?.labelField),
+          tablePinColClass(col.key, paintSchema?.labelField, held?.freezeTitle ?? freezeTitle),
           Boolean(cellPick && (cellPick.rowKey ? cellPick.rowKey === rowKey : cellPick.id === row.id) && cellPick.key === col.key)
             ? col.field && cellFieldWritable(col.field)
               ? 'is-cell-on'
@@ -5051,6 +5063,7 @@ export function CollectionBrowser({
       tree: showTree,
       wrap: wrapCells,
       truncate: truncateCells,
+      freezeTitle,
       query,
       pageSize,
       columnWidths,
@@ -5118,6 +5131,7 @@ export function CollectionBrowser({
     sorts,
     truncateCells,
     wrapCells,
+    freezeTitle,
     sheet,
   ])
 
@@ -5161,6 +5175,7 @@ export function CollectionBrowser({
     Number(wrapCells),
     Number(truncateCells),
     Number(showTree),
+    Number(freezeTitle),
     columns.map((col) => col.key).join(','),
     allColumnKeys.join(','),
     schemaFingerprint(schema),
@@ -5692,6 +5707,7 @@ export function CollectionBrowser({
                   {(q) => {
                     const wrap = flyoutQueryMatch('单元格换行', q)
                     const trunc = flyoutQueryMatch('文本缩略', q)
+                    const freeze = Boolean(schema?.labelField) && flyoutQueryMatch('冻结标题列', q)
                     const tree = parentKey && flyoutQueryMatch('树形展示', q)
                     return (
                       <>
@@ -5711,6 +5727,14 @@ export function CollectionBrowser({
                     onToggle={() => setTruncate(!truncateCells)}
                   />
                   ) : null}
+                  {freeze ? (
+                  <CheckRow
+                    icon={<LockClosedIcon aria-hidden className="size-[14px]" />}
+                    label="冻结标题列"
+                    on={freezeTitle}
+                    onToggle={() => setFreezeTitleCol(!freezeTitle)}
+                  />
+                  ) : null}
                   {tree ? (
                     <CheckRow
                       icon={<ChevronRightIcon aria-hidden className="size-[14px]" />}
@@ -5719,7 +5743,7 @@ export function CollectionBrowser({
                       onToggle={() => setTree(!showTree)}
                     />
                   ) : null}
-                  {q.trim() && !wrap && !trunc && !tree ? <FlyoutEmpty /> : null}
+                  {q.trim() && !wrap && !trunc && !freeze && !tree ? <FlyoutEmpty /> : null}
                       </>
                     )
                   }}
@@ -6045,6 +6069,7 @@ export function CollectionBrowser({
       columnPinCount,
       wrapCells,
       truncateCells,
+      freezeTitle,
       nodes: tablePaintNodes,
       resetKey: tableResetKey,
       checkLayoutExtra,
