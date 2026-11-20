@@ -1,3 +1,4 @@
+import type { CollectionUpdateOptions } from '@biu/type-file-system'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join, posix, resolve, sep } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -345,7 +346,7 @@ export class SkillsStore {
     return loaded
   }
 
-  put(record: SkillRecord) {
+  put(record: SkillRecord, options?: CollectionUpdateOptions) {
     this.invalidateList()
     const next = {
       ...record,
@@ -360,12 +361,17 @@ export class SkillsStore {
       createdAt: record.createdAt || Date.now(),
     }
     writeFileSync(skillFile(this.ensureRoot(), next.id), dumpSkill(next))
-    try {
-      const db = openAndMigrateBiu(biuSqlitePath())
-      writeEditorContent(db, '/skills', next.id, next.notes)
-      db.close()
-    } catch {
-      /* sqlite unavailable */
+    if (options?.persistContent !== false) {
+      try {
+        const db = openAndMigrateBiu(biuSqlitePath())
+        try {
+          writeEditorContent(db, '/skills', next.id, next.notes)
+        } finally {
+          db.close()
+        }
+      } catch {
+        /* sqlite unavailable */
+      }
     }
     return next
   }
@@ -445,7 +451,7 @@ export class SkillsStore {
     })
   }
 
-  patch(id: string, patch: { name?: unknown; description?: unknown; source?: unknown; enabled?: unknown; notes?: unknown; tags?: unknown; emoji?: unknown }) {
+  patch(id: string, patch: { name?: unknown; description?: unknown; source?: unknown; enabled?: unknown; notes?: unknown; tags?: unknown; emoji?: unknown }, options?: CollectionUpdateOptions) {
     const current = this.get(id)
     if (!current) throw new Error(`unknown skill: ${id}`)
     return this.put({
@@ -457,7 +463,7 @@ export class SkillsStore {
       ...(patch.notes !== undefined ? { notes: String(patch.notes ?? '') } : {}),
       ...(patch.tags !== undefined ? { tags: asStringList(patch.tags) } : {}),
       ...(patch.emoji !== undefined ? { emoji: String(patch.emoji ?? '').trim() } : {}),
-    })
+    }, options)
   }
 
   remove(id: string) {

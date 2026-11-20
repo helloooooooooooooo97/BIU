@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useRef, type MouseEvent } from 'react'
 import type { NodeViewProps } from '@tiptap/react'
 import { NodeViewWrapper } from '@tiptap/react'
+import { pageFileUrl, pageResourcePath } from './sandbox/page-file.ts'
 import { blockDataUnchanged } from './page-block-meta.ts'
 import { PagePluginSurface, pagePluginHostAttrs, useBindPagePlugin, usePagePluginResolve } from './page-plugin-host.tsx'
 
@@ -13,7 +14,8 @@ function assetName(file: string) {
 async function copyPageAsset(from: string, to: string) {
   const src = assetName(from)
   const dest = assetName(to)
-  const res = await fetch(`/api/page/file/${encodeURIComponent(src)}`)
+  const path = pageResourcePath()
+  const res = await fetch(pageFileUrl(src, { path }))
   const text = res.ok ? await res.text() : ''
   const jsonName = /\.json$/i.test(dest)
   let body = text
@@ -32,9 +34,9 @@ async function copyPageAsset(from: string, to: string) {
   } else if (/\.html?$/i.test(dest)) {
     type = 'text/html; charset=utf-8'
   }
-  await fetch(`/api/page/file/${encodeURIComponent(dest)}`, {
+  await fetch(pageFileUrl(dest, { path }), {
     method: 'PUT',
-    headers: { 'Content-Type': type },
+    headers: { 'Content-Type': type, ...(path ? { 'x-biu-resource-path': path } : {}) },
     body,
   })
 }

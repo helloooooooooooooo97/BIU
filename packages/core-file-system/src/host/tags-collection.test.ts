@@ -1,3 +1,4 @@
+import { withBuiltinFields } from '@biu/type-file-system'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { collectAssetNames } from '@biu/type-file-system'
@@ -38,15 +39,15 @@ test('tagsCollection lists tags with stamp counts and supports create/update/del
   assert.ok(Number(updated.updatedAt) >= Number(created[0]?.updatedAt))
   assert.equal(updated.fieldCount, 1)
   assert.equal(store.get('io')?.fields[0]?.key, 'format')
-  assert.equal(spec.schema.fields.fields?.writable, true)
+  assert.equal(withBuiltinFields(spec.schema.fields).fields?.writable, true)
   assert.match(String(updated.fields), /format/)
-  assert.equal(spec.schema.fields.views?.writable, true)
+  assert.equal(withBuiltinFields(spec.schema.fields).views?.writable, true)
   const withViews = await spec.update!(created[0]!.id, {
     views: [{ id: '8fdbc4f8', name: '属性卡', kind: 'sandbox', file: 'tag-view-io-8fdbc4f8.jsx', dataFile: 'tag-view-data-io-8fdbc4f8.json' }],
   })
   assert.equal((withViews.views as Array<{ id: string }>)[0]?.id, '8fdbc4f8')
   assert.equal(store.get('io')?.fields[0]?.key, 'format')
-  assert.equal(spec.schema.fields.propViews?.writable, true)
+  assert.equal(withBuiltinFields(spec.schema.fields).propViews?.writable, true)
   const withPropViews = await spec.update!(created[0]!.id, {
     propViews: [{ id: 'card1', name: '卡片', kind: 'sandbox', file: 'prop-view-io-card1.jsx', dataFile: 'prop-view-data-io-card1.json' }],
   })

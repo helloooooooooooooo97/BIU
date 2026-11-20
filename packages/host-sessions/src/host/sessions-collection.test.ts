@@ -99,7 +99,7 @@ test('progress is idle when the agent is not busy even if turn/end is missing', 
     }),
   })
   const progress = spec.actions?.find((item) => item.id === 'progress')
-  const got = await progress?.run('s1', { id: 's1' }, {})
+  const got = await progress?.run!('s1', { id: 's1' }, {})
   assert.equal(got.status, 'idle')
   assert.equal(got.turn, 1)
   assert.equal(got.assistantText, 'done talking')
@@ -121,10 +121,10 @@ test('query reads one session timeline', async () => {
     }),
   })
   const query = spec.actions?.find((item) => item.id === 'query')
-  const found = await query?.run('s1', { id: 's1' }, { query: 'db_list' })
+  const found = await query?.run!('s1', { id: 's1' }, { query: 'db_list' })
   assert.equal(found.hits, 2)
   assert.equal(found.results[0]?.type, 'tool/call')
-  const typed = await query?.run('s1', { id: 's1' }, { type: 'user/message' })
+  const typed = await query?.run!('s1', { id: 's1' }, { type: 'user/message' })
   assert.equal(typed.hits, 1)
   assert.match(String(typed.results[0]?.summary), /查一下页面/)
 })
@@ -167,7 +167,7 @@ test('rename action titles from the last 100 user messages with timestamps', asy
   assert.doesNotMatch(payload, /助手/)
   assert.equal(sanitizeGeneratedTitle('「页面排查」\nextra'), '页面排查')
   const rename = spec.actions?.find((item) => item.id === 'rename')
-  const got = await rename?.run('s1', { id: 's1' }, {})
+  const got = await rename?.run!('s1', { id: 's1' }, {})
   assert.equal(got.ok, true)
   assert.equal(got.title, '页面排查')
   assert.deepEqual(calls[0], ['suggest', 's1', messages])
@@ -187,6 +187,6 @@ test('rename action fails without user messages', async () => {
     suggestTitle: async () => '不该调用',
   })
   const rename = spec.actions?.find((item) => item.id === 'rename')
-  await assert.rejects(() => rename?.run('s1', { id: 's1' }, {}), /没有用户消息/)
+  await assert.rejects(() => rename?.run!('s1', { id: 's1' }, {}), /没有用户消息/)
 })
 

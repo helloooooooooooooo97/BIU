@@ -1,5 +1,5 @@
 import type { CollectionAction, CollectionListQuery, CollectionSpec, DbRecord } from '@biu/type-file-system'
-import { REQUIRED_RECORD_FIELDS, recordBuiltinValues } from '@biu/type-file-system'
+import { recordBuiltinValues } from '@biu/type-file-system'
 import { TRASH_COLLECTION_PATH } from '../paths.ts'
 import type { AssetGcHooks } from './asset-gc-run.ts'
 import { listWorkspaceGcCandidates, previewWorkspaceAssetGc, runWorkspaceAssetGc } from './asset-gc-run.ts'
@@ -92,10 +92,8 @@ export function trashCollection(store: TrashStore, hooks?: () => AssetGcHooks): 
     },
     records: { update: false, create: false, delete: false },
     schema: {
-      labelField: 'title',
       columns: ['title', 'table', 'deletedAt'],
       fields: {
-        ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '标题' },
         table: { type: 'string', label: '来源', computed: true },
         tablePath: { type: 'string', label: '表路径', computed: true },

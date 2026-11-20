@@ -1,5 +1,5 @@
-import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
-import { asPerson, recordBuiltinValues, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
+import type { CollectionSpec, CollectionUpdateOptions, DbRecord } from '@biu/type-file-system'
+import { asPerson, recordBuiltinValues } from '@biu/type-file-system'
 
 type Actor = {
   name?: string
@@ -37,7 +37,7 @@ type TaskRow = DbRecord & {
 export type TasksLike = {
   list: (filter?: { q?: string; status?: string }) => TaskRow[]
   get: (id: string) => TaskRow | undefined
-  update: (id: string, patch: Record<string, unknown>) => DbRecord
+  update: (id: string, patch: Record<string, unknown>, options?: CollectionUpdateOptions) => DbRecord
   create: (input: Record<string, unknown> & { title: string; creator: Actor }) => TaskRow
   delete: (id: string) => boolean
 }
@@ -227,13 +227,11 @@ export function tasksCollection(tasks: TasksLike, recordActions?: TaskRecordActi
       icon: 'check-circle',
     },
     schema: {
-      labelField: 'title',
       contentField: 'description',
       contentBackend: 'editorContent',
       parentField: 'parentId',
       columns: ['title', 'status', 'priority', 'difficulty', 'usage', 'createdBy', 'assignee', 'project', 'tag', 'dueAt'],
       fields: {
-        ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '标题', writable: true },
         status: { type: 'select', label: '状态', writable: true, enum: ['todo', 'doing', 'done', 'failed'] },
         priority: { type: 'select', label: '优先级', writable: true, enum: ['low', 'med', 'high'] },
@@ -260,7 +258,7 @@ export function tasksCollection(tasks: TasksLike, recordActions?: TaskRecordActi
       const row = tasks.get(id)
       return row ? taskRecord(row, (pid) => tasks.get(pid), ownUsage(row), false) : null
     },
-    update: async (id, patch) => {
+    update: async (id, patch, options) => {
       const nextPatch = { ...patch }
       const assignee = await resolvedAssignee(people, patch)
       if (assignee !== undefined) {
@@ -275,7 +273,7 @@ export function tasksCollection(tasks: TasksLike, recordActions?: TaskRecordActi
         nextPatch.creator = creator ?? { kind: 'user', name: '用户' }
         delete nextPatch.creatorSessionId
       }
-      const next = tasks.update(id, nextPatch) as TaskRow
+      const next = tasks.update(id, nextPatch, options) as TaskRow
       return taskRecord({ ...next, id }, (pid) => tasks.get(pid), ownUsage(next), false)
     },
     create: async (rows) =>

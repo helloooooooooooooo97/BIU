@@ -1,3 +1,4 @@
+import type { CollectionUpdateOptions } from '@biu/type-file-system'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { biuSqlitePath, openAndMigrateBiu, readEditorContent, writeEditorContent } from '@biu/host-plugin-loader/data-dir'
@@ -1223,7 +1224,7 @@ export class TasksService extends Service {
     return this.get(id)!
   }
 
-  update(id: string, patch: TaskUpdateInput & { assignee?: TaskActor | null; assignedAt?: number | null }): TaskRow {
+  update(id: string, patch: TaskUpdateInput & { assignee?: TaskActor | null; assignedAt?: number | null }, options?: CollectionUpdateOptions): TaskRow {
     const current = this.get(id)
     if (!current) throw new Error('unknown task')
     const title = patch.title != null ? String(patch.title).trim() : current.title
@@ -1353,7 +1354,9 @@ export class TasksService extends Service {
         emoji,
         id,
       )
-    writeEditorContent(this.db, '/tasks', id, description)
+    if (options?.persistContent !== false && patch.description !== undefined) {
+      writeEditorContent(this.db, '/tasks', id, description)
+    }
     this.emitChange()
     return this.get(id)!
   }

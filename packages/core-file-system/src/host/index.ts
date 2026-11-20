@@ -133,7 +133,6 @@ import {
   AGENTS_COLLECTION_PATH,
   DATA_COLLECTION_PATH,
   EDITOR_BLOCKS_COLLECTION_PATH,
-  EVENTS_COLLECTION_PATH,
   PAGES_COLLECTION_PATH,
   PLUGINS_COLLECTION_PATH,
   TAGS_COLLECTION_PATH,
@@ -165,7 +164,6 @@ const STAMP_FIELD_BLOCKLIST = new Set([
   'tag',
   'fieldCount',
   'stampCount',
-  'tagId',
   'content',
   'emoji',
   'createdAt',
@@ -252,6 +250,10 @@ function schemaFor(spec: CollectionSpec): CollectionSchema {
 }
 
 function assertRecordCaps(spec: CollectionSpec) {
+  for (const action of spec.actions ?? []) {
+    const builtinDelete = spec.path !== TRASH_COLLECTION_PATH && (action.id === 'delete' || action.id === 'trash')
+    if (!builtinDelete && !action.run) throw new Error(`action has no handler: ${action.id}`)
+  }
   if (spec.records?.update && !spec.update) throw new Error(`collection ${spec.id}: records.update 为 true 时必须提供 update`)
   if (spec.records?.create && !spec.create) throw new Error(`collection ${spec.id}: records.create 为 true 时必须提供 create`)
   if (spec.records?.delete && !spec.remove) throw new Error(`collection ${spec.id}: records.delete 为 true 时必须提供 remove`)
@@ -509,7 +511,6 @@ function sortRecords(rows: DbRecord[], field: string, dir: 'asc' | 'desc', sorts
 export const DEFAULT_PAGE_SIZE = 20
 export const MAX_PAGE_SIZE = 200
 const HARD_DELETE_PATHS = new Set([
-  EVENTS_COLLECTION_PATH,
   TRASH_COLLECTION_PATH,
   WORKSPACE_MEMBERS_COLLECTION_PATH,
   VIEWS_COLLECTION_PATH,
@@ -638,15 +639,8 @@ export class DatabaseService extends Service implements Database {
     return [...this.collections.values()].sort((a, b) => a.path.localeCompare(b.path))
   }
 
-  /** 成员表在本地和云端都出现：本机用户自己是成员，局域网访客按设备码列入。 */
-  membersInSystemData() {
-    return true
-  }
-
   publishCollection(item: CollectionSpec): CollectionInfo {
-    const info = publicCollection(item)
-    if (item.path === WORKSPACE_MEMBERS_COLLECTION_PATH && !this.membersInSystemData()) return { ...info, view: null }
-    return info
+    return publicCollection(item)
   }
 
   private async loadCollectionRows(spec: CollectionSpec, query: CollectionListQuery) {
@@ -931,7 +925,6 @@ export class DatabaseService extends Service implements Database {
   private listRemapsRecords(path: string) {
     return (
       path === TRASH_COLLECTION_PATH ||
-      path === EVENTS_COLLECTION_PATH ||
       path === TAGS_COLLECTION_PATH ||
       path === EDITOR_BLOCKS_COLLECTION_PATH
     )
@@ -2039,6 +2032,7 @@ export class DatabaseService extends Service implements Database {
     if ((actionId === 'delete' || actionId === 'trash') && spec.path !== TRASH_COLLECTION_PATH) {
       return this.remove(spec.path, { ids: [parts[1]!] })
     }
+    if (!action.run) throw new Error(`action has no handler: ${actionId}`)
     const result = await action.run(parts[1]!, record, args)
     if (spec.path === PLUGINS_COLLECTION_PATH && actionId === 'sandbox' && !builtinPlugin && !this.access.recordOwner(spec.path, parts[1]!)) {
       this.stampPluginCreateScope(parts[1]!, args)
@@ -2109,7 +2103,7 @@ export class DatabaseService extends Service implements Database {
     const patch = this.collectionCanUpdate(spec)
       ? pickWritablePatch(schema, { [field]: persisted })
       : { [field]: persisted }
-    const record = await spec.update(parts[1]!, patch)
+    const record = await spec.update(parts[1]!, patch, isEditorContentSpec(spec) ? { persistContent: false } : undefined)
     await this.stampActor(spec.path, record.id)
     this.refreshContentRefs(spec, this.withBanner(spec, record))
     this.notifyContent(`${spec.path}/${record.id}`)

@@ -813,15 +813,16 @@ export function registerDatabaseHttpRoutes(
       route.send(404, { error: 'not found' })
     }
   }
-  const putDbFile: Parameters<typeof ctx.http.route>[2] = async (route) => {
+  const putDbFile = async (route: Parameters<Parameters<typeof ctx.http.route>[2]>[0], legacyAssetOnly = false) => {
     try {
       const name = route.params.name ?? ''
       const path = route.query.get('path') || String(route.req.headers['x-biu-resource-path'] ?? '')
-      if (!path) {
+      if (path) await db.requirePath(path, 'resource:update')
+      else if (legacyAssetOnly) db.requireAsset(name, 'resource:update')
+      else {
         route.send(400, { error: 'resource path required' })
         return
       }
-      await db.requirePath(path, 'resource:update')
       const bytes = await route.bytes()
       const written = isHashedAssetName(name)
         ? await assets.write(name, bytes)
@@ -834,7 +835,7 @@ export function registerDatabaseHttpRoutes(
         kind: 'asset',
         storage: written.storage,
       })
-      linkUploadedAsset(db, path, written.name)
+      if (path) linkUploadedAsset(db, path, written.name)
       ctx.http.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('asset', { asset: { name: written.name, etag: written.etag } }))
       route.send(200, { ok: true, ...written })
     } catch (error) {
@@ -874,6 +875,9 @@ export function registerDatabaseHttpRoutes(
   ctx.http.route('PUT', '/api/db/file/hash/:name', putHashFile)
   ctx.http.route('GET', '/api/db/file/:name', serveDbFile)
   ctx.http.route('PUT', '/api/db/file/:name', putDbFile)
+  // Compatibility aliases share authorization, ETag handling and attachment tracking.
+  ctx.http.route('GET', '/api/page/file/:name', serveDbFile)
+  ctx.http.route('PUT', '/api/page/file/:name', (route) => putDbFile(route, true))
   ctx.http.route('GET', '/api/doc/file/:name', serveDbFile)
   ctx.http.route('PUT', '/api/doc/file/:name', putDbFile)
   ctx.http.route('POST', '/api/db/action', async (route) => {

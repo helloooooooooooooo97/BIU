@@ -66,6 +66,30 @@ function notesCollection(): CollectionSpec {
   }
 }
 
+test('registration supplies public fields and builtin delete without placeholder handlers', async () => {
+  const db = new DatabaseService(new Context())
+  let removed = false
+  db.register({
+    id: 'minimal', path: '/minimal', schema: { fields: { title: { type: 'string', writable: true } } },
+    records: { delete: true },
+    list: () => [{ id: 'one', title: 'One' }],
+    get: (id) => id === 'one' ? { id, title: 'One' } : null,
+    remove: () => { removed = true },
+    actions: [{ id: 'delete', label: '删除', requiredAction: 'resource:delete' }],
+  })
+  const stat = await db.stat('/minimal')
+  if (stat.kind !== 'collection') throw new Error('expected collection')
+  assert.equal(stat.schema.labelField, 'title')
+  for (const key of Object.keys(REQUIRED_RECORD_FIELDS)) assert.ok(stat.schema.fields[key], key)
+  await db.action('/minimal/one', 'delete')
+  assert.equal((await db.listTrash()).items.length, 1)
+  assert.equal(removed, false, 'builtin deletion must use the trash instead of hard deletion')
+  assert.throws(() => db.register({
+    id: 'invalid', path: '/invalid', schema: { fields: {} }, list: () => [], get: () => null,
+    actions: [{ id: 'custom', label: 'Custom' }],
+  } as unknown as CollectionSpec), /action has no handler: custom/)
+})
+
 test('database HTTP failures distinguish missing resources from bad requests', () => {
   assert.deepEqual(databaseHttpFailure(new Error('unknown record: /pages/p008')), {
     status: 404,
@@ -1357,8 +1381,9 @@ test('agent db_stat omits builtin fields; service stat and list still include th
   // On a writable-content collection (/docs): db_update body + db_read include_content + db_content outline & grep
   const docRow: DbRecord = { id: 'd1', title: '优化页', content: '' }
   db.register({
+    id: 'docs',
     path: '/docs',
-    title: '文档',
+    label: '文档',
     schema: {
       contentField: 'content',
       fields: {

@@ -1,5 +1,5 @@
 import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
-import { REQUIRED_RECORD_FIELDS, recordBuiltinValues } from '@biu/type-file-system'
+import { recordBuiltinValues } from '@biu/type-file-system'
 import { parsePageBlockRecordId, patchPageBlockMarkdown } from '@biu/core-editor/host'
 import { readEditorContent, writeEditorContent } from '@biu/host-plugin-loader/data-dir'
 import type { PagesStore } from './store.ts'
@@ -62,11 +62,9 @@ export function pageBlocksCollection(store: PagesStore, index: PageBlocksIndex):
       icon: 'rectangle-group',
     },
     schema: {
-      labelField: 'title',
       contentField: 'data',
       columns: ['title', 'blockKind', 'plugin', 'pageId'],
       fields: {
-        ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '标题', writable: true },
         collection: { type: 'string', label: '集合' },
         pageId: { type: 'ref', label: '记录', collection: '/pages' },

@@ -1,3 +1,4 @@
+import { withBuiltinFields } from '@biu/type-file-system'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
@@ -55,7 +56,7 @@ test('page plugin stores pages in SQLite under .biu', async () => {
   assert.equal(registered[0]?.view?.route, '/pages')
   assert.equal(registered[0]?.view?.moduleId, 'page')
   assert.equal(registered[0]?.view?.icon, 'document')
-  const fields = registered[0]!.schema.fields
+  const fields = withBuiltinFields(registered[0]!.schema.fields)
   assert.equal(fields.blurb, undefined)
   assert.equal(fields.count, undefined)
   assert.equal(fields.enabled, undefined)
@@ -303,7 +304,7 @@ test('pagesCollection can add a child page', async () => {
   assert.equal(trash?.tone, 'danger')
   assert.deepEqual(trash?.placement, ['row', 'detail'])
   const [parent] = await pages.create!([{ title: '父页' }])
-  const child = (await addChild!.run(parent.id, parent)) as { parentId?: string }
+  const child = (await addChild!.run!(parent.id, parent)) as { parentId?: string }
   assert.equal(child.parentId, parent.id)
 })
 
@@ -402,7 +403,7 @@ test('pages sqlite keeps notes as the body, not markdown files', async () => {
   db.prepare(`
     INSERT INTO pages (id, title, tags_json, notes, parent_id, depends_on_json, facet_json, emoji, created_at, updated_at)
     VALUES (?, ?, '[]', ?, NULL, '[]', '{}', '', 1, 2)
-  `).run('legacy', '旧页', '只在 sqlite 里的正文\n')
+  `).run!('legacy', '旧页', '只在 sqlite 里的正文\n')
   db.close()
   const store = new PagesStore(ctx.fs.workspace as never, join(root, '.biu/assets/page'))
   const listed = await store.list()
@@ -466,14 +467,6 @@ test('PagesStore reads existing markdown files from .biu/page', async () => {
   })
   assert.equal((await imported.list()).map((row) => row.id).sort().join(','), 'home,other')
   assert.equal(existsSync(join(root, PAGE_ROOT, 'home.md')), false)
-})
-
-test('page file GET authorizes through the open page path like PUT', async () => {
-  const src = await readFile(join(import.meta.dirname, 'index.ts'), 'utf8')
-  assert.match(src, /route\('GET', '\/api\/page\/file\/:name'/)
-  assert.match(src, /x-biu-resource-path/)
-  assert.match(src, /requirePath\(path, 'resource:read'\)/)
-  assert.match(src, /requirePath\(path, 'resource:update'\)/)
 })
 
 test('markdown and declared block fields pick asset pointers', () => {
