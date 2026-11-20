@@ -513,13 +513,13 @@ export function parseToolCall(name: string, argumentsJson: string): ParsedToolCa
     }
   }
 
-  if (name === 'db_file' || name === 'db_doc' || name === 'db_media' || name === 'db_asset') {
+  if (name === 'db_file' || name === 'db_media') {
     const path = [field('path'), field('name')].filter(Boolean).join('/') || 'unknown'
     const command = field('command') ?? (field('value') != null || field('from') != null ? 'write' : 'view')
     if (command === 'write') {
       return { kind: 'create', path, fileText: field('value') ?? '' }
     }
-    if ((name === 'db_file' || name === 'db_doc') && (command === 'str_replace' || command === 'find_replace')) {
+    if (name === 'db_file' && (command === 'str_replace' || command === 'find_replace')) {
       return {
         kind: 'str_replace',
         path,
@@ -527,7 +527,7 @@ export function parseToolCall(name: string, argumentsJson: string): ParsedToolCa
         newStr: field('new_str') ?? '',
       }
     }
-    if ((name === 'db_file' || name === 'db_doc') && (command === 'insert' || command === 'replace_lines')) {
+    if (name === 'db_file' && (command === 'insert' || command === 'replace_lines')) {
       return {
         kind: 'insert',
         path,

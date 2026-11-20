@@ -64,8 +64,6 @@ export const FILE_TOOL_NAMES = [
   'db_content',
   'db_file',
   'db_media',
-  'db_doc',
-  'db_asset',
 ] as const
 
 /** 本回合 slash 选中的额外工具（极简模式下临时放开）。 */
@@ -110,7 +108,8 @@ export class ToolsService extends Service {
   private tools = new Map<string, ToolSpec>()
   private origins = new Map<string, ToolOrigin>()
   private pluginIds = new Map<string, string>()
-  private aliases = new Map<string, string>()
+  /** 仅用于非 ASCII 工具名到 OpenAI API 安全名的内部映射，不对外提供工具别名。 */
+  private sanitizedNames = new Map<string, string>()
   private notes = new Map<string, string[]>()
   private guards: ToolGuard[] = []
   private mode: AgentToolMode = 'standard'
@@ -183,8 +182,8 @@ export class ToolsService extends Service {
 
   private resolveName(name: string) {
     const raw = String(name ?? '').trim()
-    const aliased = this.aliases.get(raw)
-    if (aliased) return aliased
+    const mapped = this.sanitizedNames.get(raw)
+    if (mapped) return mapped
     if (this.tools.has(raw)) return raw
     const stripped = stripToolApiName(raw)
     if (stripped && this.tools.has(stripped)) return stripped
@@ -210,34 +209,9 @@ export class ToolsService extends Service {
     }, `tools.annotate ${key}`)
   }
 
-  /** 给已注册工具挂旧名：模型目录只显示正式名，invoke / annotate 仍认别名。 */
-  alias(canonical: string, names: readonly string[]) {
-    const target = this.resolveName(canonical)
-    if (!this.tools.has(target)) throw new Error(`unknown tool: ${canonical}`)
-    const added: string[] = []
-    for (const raw of names) {
-      const name = String(raw ?? '').trim()
-      if (!name || name === target) continue
-      this.aliases.set(name, target)
-      added.push(name)
-    }
-    return this.ctx.effect(() => {
-      this.ctx.emit('hub/change')
-      return () => {
-        for (const name of added) {
-          if (this.aliases.get(name) === target) this.aliases.delete(name)
-        }
-        this.ctx.emit('hub/change')
-      }
-    }, `tools.alias ${target}`)
-  }
-
   private noteTexts(name: string) {
     const canonical = this.resolveName(name)
     const keys = new Set<string>([canonical, name])
-    for (const [alias, target] of this.aliases) {
-      if (target === canonical) keys.add(alias)
-    }
     return [...keys].flatMap((key) => this.notes.get(key) ?? [])
   }
 
@@ -251,21 +225,19 @@ export class ToolsService extends Service {
     const original = String(spec.name ?? '').trim()
     const name = toolNameForApi(original, new Set(this.tools.keys()))
     const pluginId = currentPluginId()
-    const next = { ...spec, name }
+    const next = { ...spec, name, parameters: normalizeToolParameters(spec.parameters) }
     return this.ctx.effect(() => {
       if (this.tools.has(name)) throw new Error(`tool already registered: ${name}`)
       this.tools.set(name, next)
       this.origins.set(name, toolOriginStorage.getStore() ?? 'core')
       if (pluginId) this.pluginIds.set(name, pluginId)
-      this.aliases.set(name, name)
-      if (original && original !== name) this.aliases.set(original, name)
+      if (original && original !== name) this.sanitizedNames.set(original, name)
       this.ctx.emit('hub/change')
       return () => {
         this.tools.delete(name)
         this.origins.delete(name)
         this.pluginIds.delete(name)
-        this.aliases.delete(name)
-        if (original && original !== name) this.aliases.delete(original)
+        if (original && original !== name) this.sanitizedNames.delete(original)
         this.ctx.emit('hub/change')
       }
     }, `tools.register ${name}`)
@@ -331,6 +303,9 @@ export class ToolsService extends Service {
       const mode = toolPolicyStorage.getStore()?.mode ?? this.mode
       throw new Error(`tool not available in ${mode} mode: ${resolved}`)
     }
+    if (!isPlainObject(args)) {
+      throw new Error(`invalid arguments for ${resolved}: expected JSON object`)
+    }
     let req: ToolRequest = { name: resolved, args }
     for (const guard of this.guards) req = await raceAbort(signal, Promise.resolve(guard(req)))
     req = this.ctx.waterfall('tools/pre-execute', req, () => req)
@@ -341,12 +316,93 @@ export class ToolsService extends Service {
     const tool = this.tools.get(resolved)
     if (!tool) throw new Error(`unknown tool: ${resolved}`)
     try {
+      validateToolArgs(resolved, tool.parameters, req.args)
       const result = await raceAbort(signal, Promise.resolve(tool.execute(req.args, signal)))
       this.ctx.emit('tools/post-execute', { name: resolved, ok: true, detail: stringify(result) })
       return result
     } catch (error) {
       this.ctx.emit('tools/post-execute', { name: resolved, ok: false, detail: String(error) })
       throw error
+    }
+  }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+export function normalizeToolParameters(parameters: Record<string, unknown>): Record<string, unknown> {
+  if (!isPlainObject(parameters)) return { type: 'object', properties: {}, additionalProperties: false }
+  if (parameters.type === 'object' && isPlainObject(parameters.properties) && parameters.additionalProperties === undefined) {
+    return { ...parameters, additionalProperties: false }
+  }
+  return parameters
+}
+
+function matchesSchemaType(expected: string, value: unknown): boolean {
+  if (expected === 'string') return typeof value === 'string'
+  if (expected === 'number') return typeof value === 'number' && Number.isFinite(value)
+  if (expected === 'integer') return typeof value === 'number' && Number.isInteger(value)
+  if (expected === 'boolean') return typeof value === 'boolean'
+  if (expected === 'array') return Array.isArray(value)
+  if (expected === 'object') return isPlainObject(value)
+  if (expected === 'null') return value === null
+  return true
+}
+
+export function validateToolArgs(
+  toolName: string,
+  parameters: Record<string, unknown>,
+  args: Record<string, unknown>,
+): void {
+  if (!isPlainObject(args)) {
+    throw new Error(`invalid arguments for ${toolName}: expected JSON object`)
+  }
+  if (!isPlainObject(parameters)) return
+  const props = isPlainObject(parameters.properties)
+    ? (parameters.properties as Record<string, Record<string, unknown>>)
+    : null
+  const required = Array.isArray(parameters.required)
+    ? parameters.required.filter((item): item is string => typeof item === 'string')
+    : []
+
+  for (const key of required) {
+    if (args[key] === undefined) {
+      throw new Error(`missing required argument "${key}" for ${toolName}`)
+    }
+  }
+
+  if (props && parameters.additionalProperties === false) {
+    const allowed = Object.keys(props)
+    const unknown = Object.keys(args).filter((key) => args[key] !== undefined && !(key in props))
+    if (unknown.length) {
+      throw new Error(
+        `unknown argument(s) for ${toolName}: ${unknown.join(', ')}. Allowed: ${allowed.join(', ') || '(none)'}`,
+      )
+    }
+  }
+
+  if (!props) return
+  for (const [key, spec] of Object.entries(props)) {
+    const value = args[key]
+    if (value === undefined) continue
+    if (!isPlainObject(spec)) continue
+    if (value === null && !required.includes(key)) {
+      const types = Array.isArray(spec.type) ? spec.type : spec.type ? [spec.type] : []
+      if (!types.length || types.includes('null')) continue
+    }
+    const types = Array.isArray(spec.type)
+      ? spec.type.filter((item): item is string => typeof item === 'string')
+      : typeof spec.type === 'string'
+        ? [spec.type]
+        : []
+    if (types.length && !types.some((t) => matchesSchemaType(t, value))) {
+      throw new Error(`invalid argument "${key}" for ${toolName}: expected ${types.join(' | ')}`)
+    }
+    if (Array.isArray(spec.enum) && spec.enum.length && !spec.enum.includes(value)) {
+      throw new Error(
+        `invalid argument "${key}" for ${toolName}: got ${JSON.stringify(value)}, expected one of ${spec.enum.map((v) => JSON.stringify(v)).join(', ')}`,
+      )
     }
   }
 }

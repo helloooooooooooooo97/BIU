@@ -20,7 +20,7 @@ import {
 import { parsePageBanner, type PageBanner } from '../page-banner.ts'
 
 export const UPDATE_CONTENT_EXAMPLE =
-  'Example: { "path": "/pages/<id>", "content": { "title": "...", "tag": { "values": { ... } } } }'
+  'Example: { "path": "/pages/<id>", "fields": { "title": "...", "tag": { "values": { ... } } } }'
 export const CREATE_RECORDS_EXAMPLE =
   'Example: { "path": "/pages", "records": [{ "title": "...", "content": "..." }] }'
 
@@ -548,19 +548,10 @@ export function asDeleteQuery(args: Record<string, unknown>): CollectionListQuer
 }
 
 export function asCreateRecords(args: Record<string, unknown>) {
-  const value =
-    args.records !== undefined
-      ? args.records
-      : args.record !== undefined
-        ? args.record
-        : args.content
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    if (!Object.keys(value as Record<string, unknown>).length) {
-      throw new Error(`records must include at least one non-empty object. ${CREATE_RECORDS_EXAMPLE}`)
-    }
-    return [value]
+  const value = args.records
+  if (!Array.isArray(value)) {
+    throw new Error(`records must be a non-empty array of objects. ${CREATE_RECORDS_EXAMPLE}`)
   }
-  if (!Array.isArray(value)) return value
   const records = value.filter((item) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return true
     return Object.keys(item).length > 0

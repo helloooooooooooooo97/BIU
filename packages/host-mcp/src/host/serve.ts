@@ -2,7 +2,7 @@ import { networkInterfaces } from 'node:os'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
-import { FILE_TOOL_NAMES, runWithToolPolicy } from '@biu/host-tools'
+import { FILE_TOOL_NAMES, runWithToolPolicy, type ToolExecutionMode } from '@biu/host-tools'
 import {
   currentAccountId,
   currentMcpTenant,
@@ -25,31 +25,14 @@ import {
 } from './host-token.ts'
 
 const SERVER_INFO = { name: 'biu', version: '0.1.0' } as const
-const MCP_WRITE_TOOLS = new Set([
-  'db_update',
-  'db_create',
-  'db_delete',
-  'db_restore',
-  'db_action',
-  'db_content',
-  'db_file',
-  'db_media',
-  'db_doc',
-  'db_asset',
-])
 
-export function isMcpWriteCall(name: string, args: Record<string, unknown> = {}): boolean {
-  if (!MCP_WRITE_TOOLS.has(name)) return false
-  if (name === 'db_content') {
-    const cmd = String(args.command ?? '').trim().toLowerCase()
-    if (cmd === 'view') return false
-    if (!cmd && args.value === undefined && args.from === undefined && args.new_str === undefined) return false
-  }
-  if (name === 'db_file' || name === 'db_media' || name === 'db_doc' || name === 'db_asset') {
-    const cmd = String(args.command ?? '').trim().toLowerCase()
-    if (cmd === 'view' || cmd === 'read' || cmd === 'list') return false
-  }
-  return true
+/** 复用工具自身的 executionMode：parallel 为只读查询，exclusive 为写入或变更。 */
+export function isMcpWriteCall(
+  tools: { executionMode(name: string, args?: Record<string, unknown>): ToolExecutionMode },
+  name: string,
+  args: Record<string, unknown> = {},
+): boolean {
+  return tools.executionMode(name, args) !== 'parallel'
 }
 
 const MCP_CORS = {
@@ -110,9 +93,9 @@ export function createBiuMcpServer(ctx: Context) {
     capabilities: { tools: {} },
     instructions:
       'Biu 工作台的 MCP 入口。默认只开放文件系统 db_* 工具（文件模式）。请求必须带 Authorization: Bearer <token>。' +
-      '常用约定：db_list path="/" 列出所有表；db_stat 查表结构；db_read 读单条记录（工具名为 db_read 而非 db_get）；' +
-      'db_create 支持 records 数组或单条 record 对象（记录内可直接带 content 一步写正文）；' +
-      'db_update 支持 content / fields / patch 对象；db_content 读写长正文（command=view 为只读）。',
+      '统一命名约定：db_list path="/" 列出所有表；db_stat 查表结构；db_read 读单条记录；' +
+      'db_create 用 records 非空数组新建；db_update 用 fields 对象更新属性；' +
+      'db_content / db_file / db_media 统一用 command + value / from 读写正文与附件（command=view 为只读）。',
   })
 
   server.setRequestHandler(ListToolsRequestSchema, async () =>
@@ -133,7 +116,14 @@ export function createBiuMcpServer(ctx: Context) {
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const name = String(request.params.name ?? '')
-    const args = (request.params.arguments as Record<string, unknown> | undefined) ?? {}
+    const rawArgs = request.params.arguments
+    if (rawArgs !== undefined && (!rawArgs || typeof rawArgs !== 'object' || Array.isArray(rawArgs))) {
+      return {
+        content: [{ type: 'text' as const, text: `invalid arguments for ${name}: expected JSON object` }],
+        isError: true,
+      }
+    }
+    const args = (rawArgs as Record<string, unknown> | undefined) ?? {}
     const tenant = currentMcpTenant()
     const audit = (success: boolean) => {
       if (!tenant) return
@@ -148,7 +138,7 @@ export function createBiuMcpServer(ctx: Context) {
       if (tenant && !tenant.allowedTools.includes(name)) {
         throw new Error(`这个 MCP 凭证不允许使用该工具: ${name}。可用工具: ${tenant.allowedTools.join(', ')}`)
       }
-      if (tenant?.role === 'viewer' && isMcpWriteCall(name, args)) {
+      if (tenant?.role === 'viewer' && isMcpWriteCall(ctx.tools, name, args)) {
         throw new Error('查看者不能写入')
       }
       const invoke = () => runWithToolPolicy({ mode: 'file' }, () => {

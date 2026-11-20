@@ -245,21 +245,45 @@ test('annotate appends to catalog and schemas and unregisters', async () => {
   assert.equal(ctx.tools.schemas().find((item) => item.function.name === 'db_doc')?.function.description, '文档')
 })
 
-test('alias keeps old names invokable and merges annotate notes', async () => {
+test('invoke strictly validates required, unknown, enum, and primitive argument types', async () => {
   const ctx = new Context()
   await ctx.plugin(tools)
   ctx.tools.register({
-    name: 'db_file',
-    description: '可变文件',
-    parameters: { type: 'object', properties: {} },
-    execute: () => 'ok',
+    name: 'db_update',
+    description: '更新属性',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string' },
+        fields: { type: 'object' },
+        scope: { type: 'string', enum: ['personal', 'workspace'] },
+        limit: { type: 'number' },
+      },
+      required: ['path', 'fields'],
+    },
+    execute: (args) => args,
   })
-  ctx.tools.alias('db_file', ['db_doc'])
-  ctx.tools.annotate('db_doc', '沙盒源码走这里')
-  assert.equal(ctx.tools.catalog().some((item) => item.name === 'db_doc'), false)
-  assert.equal(ctx.tools.catalog().find((item) => item.name === 'db_file')?.description, '可变文件 沙盒源码走这里')
-  assert.equal(await ctx.tools.invoke('db_doc'), 'ok')
-  assert.equal(ctx.tools.executionMode('db_doc'), 'exclusive')
+  const schema = ctx.tools.schemas().find((item) => item.function.name === 'db_update')?.function.parameters as Record<string, unknown>
+  assert.equal(schema?.additionalProperties, false)
+
+  await assert.rejects(
+    () => ctx.tools.invoke('db_update', { path: '/pages/p1' }),
+    /missing required argument "fields"/,
+  )
+  await assert.rejects(
+    () => ctx.tools.invoke('db_update', { path: '/pages/p1', fields: { title: 'a' }, markdown: '# body' }),
+    /unknown argument\(s\) for db_update: markdown/,
+  )
+  await assert.rejects(
+    () => ctx.tools.invoke('db_update', { path: '/pages/p1', fields: { title: 'a' }, scope: 'public' }),
+    /invalid argument "scope"/,
+  )
+  await assert.rejects(
+    () => ctx.tools.invoke('db_update', { path: '/pages/p1', fields: { title: 'a' }, limit: 'ten' as unknown as number }),
+    /invalid argument "limit"/,
+  )
+  const ok = await ctx.tools.invoke('db_update', { path: '/pages/p1', fields: { title: 'a' }, scope: 'workspace', limit: 10 })
+  assert.deepEqual(ok, { path: '/pages/p1', fields: { title: 'a' }, scope: 'workspace', limit: 10 })
 })
 
 test('Chinese tool names are sanitized for OpenAI-style APIs', async () => {

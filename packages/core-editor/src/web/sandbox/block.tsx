@@ -815,7 +815,7 @@ export function registerSandboxBlock(blockEditor: BlockEditorService) {
     label: '沙箱',
     blockType: BASIC_BLOCK_TYPE,
     blockTypeLabel: '基础模块',
-    hint: '沙箱跑 React。围栏只写 {"file":"assets/sandbox-….jsx","dataFile":"assets/sandbox-data-….json"}。源码用 db_doc 写 .jsx；要记住的数据用 biu.write 写到 dataFile 的 .json，不要写进源码或围栏',
+    hint: '沙箱跑 React。围栏只写 {"file":"assets/sandbox-….jsx","dataFile":"assets/sandbox-data-….json"}。源码用 db_file 写 .jsx；要记住的数据用 biu.write 写到 dataFile 的 .json，不要写进源码或围栏',
     aliases: ['sandbox', '沙箱', 'Sandbox'],
     assets: ['file', 'dataFile'],
     defaults: () => ({ ...newSandboxFiles(), title: '沙箱', height: SANDBOX_DEFAULT_HEIGHT }),

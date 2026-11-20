@@ -23,6 +23,15 @@ export function resolveContentCommand(args: Record<string, unknown>): ContentCom
     }
     throw new Error(`unsupported command: ${raw}`)
   }
+  if (
+    args.old_str !== undefined ||
+    args.new_str !== undefined ||
+    args.insert_line !== undefined ||
+    args.start_line !== undefined ||
+    args.end_line !== undefined
+  ) {
+    throw new Error('command is required when using old_str, new_str, insert_line, start_line, or end_line')
+  }
   return args.value !== undefined || args.from !== undefined ? 'write' : 'view'
 }
 

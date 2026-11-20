@@ -87,9 +87,9 @@ test('parseToolCall db_content str_replace streams new_str', () => {
   assert.equal(parsed.newStr, 'bar baz')
 })
 
-test('parseToolCall db_doc str_replace looks like content edit', () => {
+test('parseToolCall db_file str_replace looks like content edit', () => {
   const parsed = parseToolCall(
-    'db_doc',
+    'db_file',
     '{"path":"/pages/p194","name":"view-p194-x.jsx","command":"str_replace","old_str":"你好","new_str":"hello"}',
   )
   assert.equal(parsed.kind, 'str_replace')
@@ -99,9 +99,9 @@ test('parseToolCall db_doc str_replace looks like content edit', () => {
   assert.equal(parsed.newStr, 'hello')
 })
 
-test('parseToolCall db_doc write streams value', () => {
+test('parseToolCall db_file write streams value', () => {
   const parsed = parseToolCall(
-    'db_doc',
+    'db_file',
     '{"path":"/pages/p","name":"board.json","command":"write","value":"{\\"nodes\\":[',
   )
   assert.equal(parsed.kind, 'create')

@@ -27,7 +27,7 @@ const SANDBOX_DOC_HINT =
 /** 编辑器在 Web；Host 提供沙箱编译闸门。 */
 export function apply(ctx: Context) {
   ctx.tools.annotate('db_content', SANDBOX_FENCE_HINT)
-  ctx.tools.annotate('db_doc', SANDBOX_DOC_HINT)
+  ctx.tools.annotate('db_file', SANDBOX_DOC_HINT)
   ctx.http.route('POST', '/api/page-sandbox/compile', async (route) => {
     const body = await route.json<{ source?: string }>()
     const source = typeof body.source === 'string' ? body.source : ''
@@ -42,7 +42,7 @@ export function apply(ctx: Context) {
   ctx.tools.register({
     name: 'sandbox_compile',
     description:
-      '只校验沙箱的 React/JSX，不落盘。源码在 db_doc 的 .jsx 附件里，围栏只留 file/dataFile。不要 import/require。运行时数据用 biu.write 写到 dataFile 的 .json，不要写进源码。返回 ok + mode，或 error。',
+      '只校验沙箱的 React/JSX，不落盘。源码在 db_file 的 .jsx 附件里，围栏只留 file/dataFile。不要 import/require。运行时数据用 biu.write 写到 dataFile 的 .json，不要写进源码。返回 ok + mode，或 error。',
     parameters: {
       type: 'object',
       properties: {

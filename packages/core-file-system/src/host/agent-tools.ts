@@ -166,29 +166,24 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
   })
   ctx.tools.register({
     name: 'db_update',
-    description: '按表结构 schema 的可写字段更新一条已有记录，路径为 /<表>/<id>。成功只返回 {ok, path}，不回整行。未知字段会列出该表可写字段。标签 tag：推荐始终按标签 id 分组写 values（与读取结构一致），如 {tags:["tag-2"],values:{"tag-2":{导演:"查泽雷"}}}；单标签也兼容扁平 values。省略 tags 则合并更新当前已贴标签的属性，不撕掉其它标签。改标签定义用 db_update /tags/<id> fields（数组或 JSON 字符串均可）。新建用 db_create，长正文用 db_content。',
+    description: '按表结构 schema 的可写字段更新一条已有记录，路径为 /<表>/<id>，属性对象传在 fields 中。成功只返回 {ok, path}，不回整行。未知字段会列出该表可写字段。标签 tag：推荐始终按标签 id 分组写 values（与读取结构一致），如 {tags:["tag-2"],values:{"tag-2":{导演:"查泽雷"}}}；单标签也兼容扁平 values。省略 tags 则合并更新当前已贴标签的属性，不撕掉其它标签。新建用 db_create，读写正文用 db_content。',
     parameters: {
       type: 'object',
       properties: {
         path: { type: 'string' },
-        content: {
-          type: 'object',
-          description:
-            '要更新的字段对象（也兼容 fields / patch 参数名或 JSON 字符串）。标签写 tag：{tag:{tags:["tag-2"],values:{"tag-2":{导演:"查泽雷"}}}}（单标签也支持扁平 values）。省略 tags 只改属性，不撕掉其它标签。',
-        },
         fields: {
           type: 'object',
-          description: 'content 的别名：要更新的字段对象。',
-        },
-        patch: {
-          type: 'object',
-          description: 'content 的别名：要更新的字段对象。',
+          description:
+            '要更新的字段对象（至少包含一个字段）。标签写 tag：{tag:{tags:["tag-2"],values:{"tag-2":{导演:"查泽雷"}}}}。省略 tags 只改属性，不撕掉其它标签。',
         },
       },
-      required: ['path'],
+      required: ['path', 'fields'],
     },
     execute: (args) => {
-      const payload = args.content !== undefined ? args.content : args.fields !== undefined ? args.fields : args.patch
+      const payload = args.fields as Record<string, unknown>
+      if (!Object.keys(payload).length) {
+        throw new Error('fields must include at least one field to update')
+      }
       return withInspectorReveal(ctx, String(args.path), () => db.update(String(args.path), payload)).then(
         (body) => agentDbCompact.write(body),
       )
@@ -196,7 +191,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
   })
   ctx.tools.register({
     name: 'db_create',
-    description: '在已登记且允许新建的表中新增记录。路径为 /<表>，传 records 数组或单条 record 对象（记录内可直接带 content 字符串一步写入正文）。成功返回 {ok, path, ids}，不回整行。能否新建看 db_stat 的 caps。新建标签用 db_create path=/tags records=[{title}]。',
+    description: '在已登记且允许新建的表中新增记录。路径为 /<表>，传 records 非空对象数组（记录内可附带正文或按需后续用 db_content 写正文）。成功返回 {ok, path, ids}，不回整行。能否新建看 db_stat 的 caps。新建标签用 db_create path=/tags records=[{title}]。',
     parameters: {
       type: 'object',
       properties: {
@@ -204,11 +199,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
         records: {
           type: 'array',
           items: { type: 'object' },
-          description: '要创建的记录（非空对象数组），按 schema 可写字段给初值；可附带 content 直接写入正文',
-        },
-        record: {
-          type: 'object',
-          description: '创建单条记录时的简写对象（等价于 records=[record]）；可附带 content 直接写入正文',
+          description: '要创建的记录（非空对象数组），按 schema 可写字段给初值',
         },
         scope: {
           type: 'string',
@@ -216,13 +207,12 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
           description: '根记录归属：personal 私人（默认，仅自己可见）；workspace 空间（成员可编辑）；shared 公开链接，所有人可查看；local 存在本机，仍属于当前账号和空间。子记录始终继承父记录。',
         },
       },
-      required: ['path'],
+      required: ['path', 'records'],
     },
     execute: (args) =>
       withInspectorReveal(ctx, String(args.path), () =>
         db.create(String(args.path), asCreateRecords(args), {
-          scope:
-            args.scope === 'workspace' ? 'workspace' : args.scope === 'shared' ? 'shared' : args.scope === 'local' ? 'local' : 'personal',
+          scope: (args.scope as 'personal' | 'workspace' | 'shared' | 'local' | undefined) ?? 'personal',
         }),
       ).then(
         (body) => agentDbCompact.write(body),
@@ -353,7 +343,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
   ctx.tools.register({
     name: 'db_media',
     description: [
-      '读写一条记录的不可变附件（图片、音频、导入文件）。旧名 db_asset 仍可用。可变文件（画板、沙盒 jsx）用 db_file。正文用 db_content。',
+      '读写一条记录的不可变附件（图片、音频、导入文件）。可变文件（画板、沙盒 jsx）用 db_file。正文用 db_content。',
       'path 为 /<表>/<id>。write 落盘 .biu/assets/hash/<2>/<2>/<哈希>.<ext>，返回 name=<哈希.ext>。引用写成 /api/db/file/<哈希.ext>。',
       'command=view：列出已引用附件；带 name 读该文件。missing=true 合法。',
       'command=write：内容寻址，只增不改。可带 block_id / source / kind=core|asset；refs 为该块当前引用完整列表。',
@@ -387,10 +377,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
       },
       required: ['path'],
     },
-    execution: (args) => {
-      const command = String(args.command ?? (args.value != null || args.from ? 'write' : 'view'))
-      return command === 'view' ? 'parallel' : 'exclusive'
-    },
+    execution: (args) => (resolveContentCommand(args) === 'view' ? 'parallel' : 'exclusive'),
     execute: (args) =>
       withInspectorReveal(ctx, String(args.path), () =>
         db.editAsset(String(args.path), args).then((body) => agentDbCompact.query(body)),
@@ -399,7 +386,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
   ctx.tools.register({
     name: 'db_file',
     description: [
-      '读写一条记录上的可变文件（画板、视频脚本、htmlframe、页面沙盒 jsx）。旧名 db_doc 仍可用。不可变附件用 db_media。正文用 db_content。',
+      '读写一条记录上的可变文件（画板、视频脚本、htmlframe、页面沙盒 jsx）。不可变附件用 db_media。正文用 db_content。',
       'path 为 /<表>/<id>，name 为稳定逻辑名。页面沙盒用 path=/pages/<id> name=view-<id>-<viewId>.jsx。',
       '命令与 db_content 相同：view / str_replace / find_replace / replace_lines / insert / write。局部改写会先读当前文件再覆盖，不必先 view 再带 etag；并发冲突仍返回 etag conflict。write 整篇覆盖。',
       'command=view：不带 name 列出引用；带 name 按行号读（可用 view_range）。',
@@ -450,6 +437,4 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
         db.editDoc(String(args.path), args).then((body) => agentDbCompact.query(body)),
       ),
   })
-  ctx.tools.alias('db_file', ['db_doc'])
-  ctx.tools.alias('db_media', ['db_asset'])
 }

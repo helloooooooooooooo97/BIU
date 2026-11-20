@@ -165,6 +165,7 @@ test('online MCP enforces workspace credentials, tool allowlists, viewer writes,
     name: 'db_list',
     description: 'list',
     parameters: { type: 'object', properties: {} },
+    execution: 'parallel',
     execute: () => ({ ok: true }),
   })
   ctx.tools.register({
@@ -217,6 +218,7 @@ test('share listener exposes token-gated MCP on the LAN port, not the workstatio
     name: 'db_list',
     description: 'list',
     parameters: { type: 'object', properties: {} },
+    execution: 'parallel',
     execute: () => ({ ok: true }),
   })
   await ctx.plugin(mcp)
@@ -344,14 +346,26 @@ test('local host-token MCP runs under active local account, updates on account s
   }
 }, 20000)
 
-test('isMcpWriteCall allows viewer read-only db_content view while blocking writes', async () => {
+test('isMcpWriteCall delegates to tools.executionMode for read-only vs write classification', async () => {
   const { isMcpWriteCall } = await import('./serve.ts')
-  assert.equal(isMcpWriteCall('db_list', {}), false)
-  assert.equal(isMcpWriteCall('db_read', {}), false)
-  assert.equal(isMcpWriteCall('db_content', { path: '/pages/p1', command: 'view' }), false)
-  assert.equal(isMcpWriteCall('db_content', { path: '/pages/p1' }), false)
-  assert.equal(isMcpWriteCall('db_content', { path: '/pages/p1', command: 'write', value: '# hi' }), true)
-  assert.equal(isMcpWriteCall('db_content', { path: '/pages/p1', value: '# hi' }), true)
-  assert.equal(isMcpWriteCall('db_content', { path: '/pages/p1', command: 'str_replace', old_str: 'a', new_str: 'b' }), true)
-  assert.equal(isMcpWriteCall('db_update', { path: '/pages/p1' }), true)
+  const ctx = new Context()
+  await ctx.plugin(tools)
+  ctx.tools.register({ name: 'db_list', description: 'list', parameters: { type: 'object', properties: {} }, execution: 'parallel', execute: () => ({}) })
+  ctx.tools.register({ name: 'db_read', description: 'read', parameters: { type: 'object', properties: {} }, execution: 'parallel', execute: () => ({}) })
+  ctx.tools.register({ name: 'db_update', description: 'update', parameters: { type: 'object', properties: {} }, execute: () => ({}) })
+  ctx.tools.register({
+    name: 'db_content',
+    description: 'content',
+    parameters: { type: 'object', properties: { path: { type: 'string' }, command: { type: 'string' }, value: { type: 'string' } } },
+    execution: (args) => (String(args.command ?? (args.value !== undefined ? 'write' : 'view')) === 'view' ? 'parallel' : 'exclusive'),
+    execute: () => ({}),
+  })
+  assert.equal(isMcpWriteCall(ctx.tools, 'db_list', {}), false)
+  assert.equal(isMcpWriteCall(ctx.tools, 'db_read', {}), false)
+  assert.equal(isMcpWriteCall(ctx.tools, 'db_content', { path: '/pages/p1', command: 'view' }), false)
+  assert.equal(isMcpWriteCall(ctx.tools, 'db_content', { path: '/pages/p1' }), false)
+  assert.equal(isMcpWriteCall(ctx.tools, 'db_content', { path: '/pages/p1', command: 'write', value: '# hi' }), true)
+  assert.equal(isMcpWriteCall(ctx.tools, 'db_content', { path: '/pages/p1', value: '# hi' }), true)
+  assert.equal(isMcpWriteCall(ctx.tools, 'db_content', { path: '/pages/p1', command: 'str_replace', old_str: 'a', new_str: 'b' }), true)
+  assert.equal(isMcpWriteCall(ctx.tools, 'db_update', { path: '/pages/p1' }), true)
 })

@@ -1334,12 +1334,46 @@ test('agent db_stat omits builtin fields; service stat and list still include th
   assert.ok(agentList.columns?.includes('title'))
   assert.equal(agentList.columns?.includes('path'), false)
   assert.ok((agentList.rows?.length ?? 0) >= 1)
-  const updated = (await ctx.tools.invoke('db_update', { path: '/notes/n1', content: { status: 'done' } })) as {
+  const updated = (await ctx.tools.invoke('db_update', { path: '/notes/n1', fields: { status: 'done' } })) as {
     ok?: boolean
     path?: string
     value?: unknown
   }
   assert.deepEqual(updated, { ok: true, path: '/notes/n1' })
+
+  // Strict schema & unified naming checks: no aliases, no unknown args, no silent fallback
+  await assert.rejects(
+    () => ctx.tools.invoke('db_update', { path: '/notes/n1', content: { status: 'done' } }),
+    /missing required argument "fields"/,
+  )
+  await assert.rejects(
+    () => ctx.tools.invoke('db_update', { path: '/notes/n1', fields: { status: 'done' }, markdown: '# hi' }),
+    /unknown argument\(s\) for db_update: markdown/,
+  )
+  await assert.rejects(
+    () => ctx.tools.invoke('db_update', { path: '/notes/n1', fields: {} }),
+    /fields must include at least one field to update/,
+  )
+  await assert.rejects(
+    () => ctx.tools.invoke('db_content', { path: '/notes/n1', mode: 'write', content: '# hi' }),
+    /unknown argument\(s\) for db_content: mode, content/,
+  )
+  await assert.rejects(
+    () => ctx.tools.invoke('db_content', { path: '/notes/n1', old_str: 'a', new_str: 'b' }),
+    /command is required/,
+  )
+  await assert.rejects(
+    () => ctx.tools.invoke('db_list', { path: '/notes', sortDir: 'DESC' }),
+    /invalid argument "sortDir"/,
+  )
+  await assert.rejects(
+    () => ctx.tools.invoke('db_doc', { path: '/notes/n1' }),
+    /unknown tool: db_doc/,
+  )
+  await assert.rejects(
+    () => ctx.tools.invoke('db_asset', { path: '/notes/n1' }),
+    /unknown tool: db_asset/,
+  )
 })
 
 

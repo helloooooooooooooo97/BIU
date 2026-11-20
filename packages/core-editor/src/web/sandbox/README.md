@@ -8,7 +8,7 @@
 - 围栏体**只写两个附件指针**，不要写 React 源码，不要写运行时数据：
   - `file`：源码，`assets/sandbox-….jsx`
   - `dataFile`：组件要记住的数据，`assets/sandbox-data-….json`
-- 源码用 `db_doc`（或 `PUT /api/page/file/<名>`）写到 `file`。可以覆盖。**不要用 `db_asset`**（内容寻址，不能改）。
+- 源码用 `db_file`（或 `PUT /api/db/file/<名>`）写到 `file`。可以覆盖。**不要用 `db_media`**（内容寻址，不能改）。
 - 运行时数据不要写进 `.jsx`，也不要写进围栏。组件里调用 `biu.write(value)`，宿主把它存进 `dataFile`。`biu.read()` 读回上次写入的 JSON；还没有文件时是 `null`。
 - 优先 `export default function App()`。不要 `import react` / `import` / `require`，用宿主注入的 `React`、`biu` 和 `ui`（`ui.icons` 是 `@heroicons/react/16/solid`）。
 - 颜色、字号、描边走 `--biu-*`，不要写死色值。
@@ -60,7 +60,7 @@ export default function App() {
 }
 ```
 
-写入页面用 `db_content` 对应 page 的 markdown，围栏按上面只贴 `file` / `dataFile`。源码单独 `db_doc` 写到 `file`。用户操作产生的数据由 `biu.write` 写入 `dataFile`，agent 不要把这些数据改写进源码。
+写入页面用 `db_content` 对应 page 的 markdown，围栏按上面只贴 `file` / `dataFile`。源码单独 `db_file` 写到 `file`。用户操作产生的数据由 `biu.write` 写入 `dataFile`，agent 不要把这些数据改写进源码。
 
 ## 编译校验
 
