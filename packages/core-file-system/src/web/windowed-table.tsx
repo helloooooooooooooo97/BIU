@@ -487,8 +487,16 @@ export const WindowedTable = memo(function WindowedTable({
     if (dockedViewportRef.current && wrapRef.current) dockedViewportRef.current.scrollLeft = wrapRef.current.scrollLeft
   }, [pinnedHead, wrapRef])
   const { virtualizer, items, margin, revealRow } = useTableViewport({
-    nodes, wrapCells, resetKey, layoutKey: JSON.stringify([columns.map((col) => col.key), resizingCol ? null : columnWidths, wrapCells, truncateCells]),
-    tableRef, wrapRef, retainedRowId, retainedRowKey, preserveMountedRows,
+    nodes,
+    wrapCells,
+    resetKey,
+    layoutKey: JSON.stringify([columns.map((col) => col.key), wrapCells, truncateCells]),
+    measureKey: wrapCells && !resizingCol ? JSON.stringify(columnWidths) : '',
+    tableRef,
+    wrapRef,
+    retainedRowId,
+    retainedRowKey,
+    preserveMountedRows,
   })
   paintRef.current.revealRow = revealRow
   const columnPx = useMemo(

@@ -5,7 +5,7 @@ import { TABLE_WINDOW_OVERSCAN, tableRowFallbackPx } from './table-window.ts'
 
 type Node = { key: string; kind: string; row?: { id: string } }
 export function useTableViewport(options: {
-  nodes: Node[]; wrapCells: boolean; resetKey: string; layoutKey: string
+  nodes: Node[]; wrapCells: boolean; resetKey: string; layoutKey: string; measureKey?: string
   tableRef: RefObject<HTMLTableElement | null>; wrapRef: RefObject<HTMLDivElement | null>
   retainedRowId?: string | null; retainedRowKey?: string | null; preserveMountedRows?: boolean
 }) {
@@ -103,6 +103,14 @@ export function useTableViewport(options: {
     current.current.measure()
     tableRef.current?.querySelectorAll<HTMLTableRowElement>('tbody tr[data-index]').forEach(current.current.measureElement)
   }, [options.layoutKey, tableRef])
+  const previousMeasure = useRef(options.measureKey ?? '')
+  useLayoutEffect(() => {
+    const next = options.measureKey ?? ''
+    if (previousMeasure.current === next) return
+    previousMeasure.current = next
+    if (!next) return
+    tableRef.current?.querySelectorAll<HTMLTableRowElement>('tbody tr[data-index]').forEach(current.current.measureElement)
+  }, [options.measureKey, tableRef])
   useEffect(() => { setInteractedRow(null) }, [options.resetKey])
   const revealRow = useCallback((id: string, rowKey?: string) => {
     const index = rowKey ? keyIndices.get(rowKey) : rowIndices.get(id)
