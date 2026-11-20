@@ -5,6 +5,7 @@ import {
   findReplaceText,
   insertText,
   mutationLocus,
+  outlineContent,
   replaceLinesText,
   resolveContentCommand,
   strReplaceText,
@@ -106,4 +107,26 @@ test('mutationLocus reports 1-based lines in the new text', () => {
     end_line: 5,
     text: '标题\n第一段全文\n第二段也在',
   })
+})
+
+test('outlineContent extracts numbered markdown headings and viewContent grep filters lines', () => {
+  const doc = ['# 总览', '正文1', '## 架构设计', '关键词 foo 在这里', '### 细节', '另一行 FOO'].join('\n')
+  const outline = outlineContent(doc)
+  assert.equal(outline.total, 6)
+  assert.deepEqual(outline.headings, [
+    { line: 1, level: 1, title: '总览' },
+    { line: 3, level: 2, title: '架构设计' },
+    { line: 5, level: 3, title: '细节' },
+  ])
+  assert.match(outline.text, /3\t## 架构设计/)
+
+  const grepped = viewContent(doc, undefined, 'foo')
+  assert.equal(grepped.matched, 2)
+  assert.match(grepped.text, /4\t关键词 foo 在这里/)
+  assert.match(grepped.text, /6\t另一行 FOO/)
+})
+
+test('strReplaceText includes nearest line hint when old_str is not found', () => {
+  const doc = 'alpha\nbeta target line\ngamma'
+  assert.throws(() => strReplaceText(doc, 'beta target line\nwrong next', 'x'), /nearest line\(s\): 2/)
 })

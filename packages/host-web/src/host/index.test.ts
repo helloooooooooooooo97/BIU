@@ -87,7 +87,7 @@ test('web_search / web_fetch match Claude/DSH: query in, sources + fetch text ou
   await ctx.plugin(systemPrompt)
   await ctx.plugin(web)
   try {
-    const searched = (await ctx.tools.invoke('web_search', { query: 'typescript handbook' })) as {
+    const searched = (await ctx.tools.invoke('web_search', { queries: ['typescript handbook'] })) as {
       sources: Array<{ title: string; url: string }>
     }
     assert.ok(searched.sources.length >= 2)
@@ -124,7 +124,18 @@ test('web_search / web_fetch match Claude/DSH: query in, sources + fetch text ou
     assert.equal(missing.status, 404)
 
     await assert.rejects(() => ctx.tools.invoke('web_fetch', { url: 'http://127.0.0.1/' }), /WEB_BLOCKED_URL|private/)
-    await assert.rejects(() => ctx.tools.invoke('web_search', { query: '   ' }), /required/)
+    await assert.rejects(() => ctx.tools.invoke('web_search', { queries: ['   '] }), /at least one non-empty/)
+    const imagesOnly = (await ctx.tools.invoke('web_fetch', { url: 'https://example.com/docs', extract: 'images' })) as {
+      text?: string
+      images?: string[]
+    }
+    assert.equal(imagesOnly.text, undefined)
+    const truncatedFetch = (await ctx.tools.invoke('web_fetch', { url: 'https://example.com/docs', max_chars: 3 })) as {
+      text?: string
+      truncated?: boolean
+    }
+    assert.equal(truncatedFetch.truncated, true)
+    assert.match(truncatedFetch.text ?? '', /\[truncated/)
 
     const progress: string[] = []
     await runWithToolProgress((detail) => progress.push(detail), () =>

@@ -108,9 +108,46 @@ export function apply(ctx: Context, config: { root?: string } = {}) {
   void mkdir(root, { recursive: true })
   ctx.tools.register({
     name: 'fs_read',
-    description: '读取工作区内文件（若 Session 已绑定项目路径，则为该目录）',
-    parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] },
-    execute: (args) => fs.read(String(args.path)),
+    description: '读取工作区内文件（若 Session 已绑定项目路径，则为该目录）。大文件建议传 view_range=[start, end]（1-based，end=-1 到末尾）或 max_bytes 限制返回体积。',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string' },
+        view_range: {
+          type: 'array',
+          items: { type: 'integer' },
+          description: '可选：1-based 行区间 [start, end]（end=-1 表示到末尾），返回带行号的片段',
+        },
+        max_bytes: {
+          type: 'integer',
+          description: '可选：最大返回字符/字节数，超出部分自动截断并提示',
+        },
+      },
+      required: ['path'],
+    },
+    execution: 'parallel',
+    execute: async (args) => {
+      const text = await fs.read(String(args.path))
+      let output = text
+      if (Array.isArray(args.view_range) && args.view_range.length > 0) {
+        const lines = text.split('\n')
+        const start = Number(args.view_range[0])
+        const endRaw = args.view_range.length > 1 ? Number(args.view_range[1]) : start
+        if (!Number.isInteger(start) || start < 1) throw new Error('view_range start must be a positive integer')
+        const end = endRaw === -1 ? lines.length : endRaw
+        if (!Number.isInteger(end) || end < start) throw new Error('invalid view_range')
+        const width = String(Math.max(lines.length, 1)).length
+        output = lines
+          .slice(start - 1, Math.min(end, lines.length))
+          .map((line, i) => `${String(start + i).padStart(width)}\t${line}`)
+          .join('\n')
+      }
+      if (typeof args.max_bytes === 'number' && args.max_bytes > 0 && output.length > args.max_bytes) {
+        const omitted = output.length - args.max_bytes
+        output = `${output.slice(0, args.max_bytes)}\n... [truncated ${omitted} chars; pass view_range to read specific lines]`
+      }
+      return output
+    },
   })
   ctx.tools.register({
     name: 'fs_write',
@@ -126,6 +163,7 @@ export function apply(ctx: Context, config: { root?: string } = {}) {
     name: 'fs_list',
     description: '列出工作区目录（若 Session 已绑定项目路径，则为该目录）',
     parameters: { type: 'object', properties: { path: { type: 'string' } } },
+    execution: 'parallel',
     execute: (args) => fs.list(String(args.path || '.')),
   })
   ctx.tools.register({

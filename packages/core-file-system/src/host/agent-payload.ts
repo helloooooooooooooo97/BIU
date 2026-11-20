@@ -90,6 +90,9 @@ export class AgentDbCompact {
   }
 
   private content(rec: Record<string, unknown>) {
+    if (rec.command === 'outline') {
+      return { path: rec.path, total: rec.total, headings: rec.headings, text: rec.text }
+    }
     if (rec.ok === true || (typeof rec.command === 'string' && rec.command !== 'view')) {
       const next: Record<string, unknown> = { ok: true, path: rec.path }
       if (typeof rec.command === 'string' && rec.command !== 'write') next.command = rec.command
@@ -102,12 +105,16 @@ export class AgentDbCompact {
     if (typeof rec.start === 'number') next.start = rec.start
     if (typeof rec.end === 'number') next.end = rec.end
     if (typeof rec.total === 'number') next.total = rec.total
+    if (typeof rec.matched === 'number') next.matched = rec.matched
     if (rec.truncated) next.truncated = true
     return next
   }
 
   private doc(rec: Record<string, unknown>) {
     if (Array.isArray(rec.assets)) return { path: rec.path, assets: rec.assets }
+    if (rec.command === 'outline') {
+      return { path: rec.path, name: rec.name, etag: rec.etag, total: rec.total, headings: rec.headings, text: rec.text }
+    }
     if (rec.ok === true || (typeof rec.command === 'string' && rec.command !== 'view')) {
       const next: Record<string, unknown> = { ok: true, path: rec.path, name: rec.name, etag: rec.etag }
       if (typeof rec.command === 'string' && rec.command !== 'write') next.command = rec.command
@@ -118,6 +125,7 @@ export class AgentDbCompact {
       return next
     }
     const next: Record<string, unknown> = { path: rec.path, name: rec.name, etag: rec.etag, text: rec.text }
+    if (typeof rec.matched === 'number') next.matched = rec.matched
     if (typeof rec.start === 'number') next.start = rec.start
     if (typeof rec.end === 'number') next.end = rec.end
     if (typeof rec.total === 'number') next.total = rec.total

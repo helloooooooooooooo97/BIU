@@ -13,22 +13,22 @@ export function registerWebTools(ctx: Context) {
   ctx.tools.register({
     name: 'web_search',
     description:
-      '在网上搜索当前信息。不知道 URL 时用这个：返回标题、链接和摘要。需要读正文再对链接调用 web_fetch。',
+      '在网上搜索当前信息。不知道 URL 时用这个：传 queries 数组（可单条或多条批量搜），返回去重后的标题、链接和摘要。需要读正文再对链接调用 web_fetch。',
     parameters: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: '一条搜索词' },
         queries: {
           type: 'array',
           items: { type: 'string' },
-          description: '多条搜索词（对齐 DSH）；有 query 时优先用 query',
+          description: '搜索词数组（至少一条非空字符串）',
         },
       },
+      required: ['queries'],
     },
     execution: 'parallel',
     execute: async (args, signal) => {
-      const queries = collectQueries(args)
-      if (!queries.length) throw new Error('query is required')
+      const queries = collectQueries(args.queries)
+      if (!queries.length) throw new Error('queries must include at least one non-empty string')
       const maxResults = ctx.web.searchMaxResults()
       const batches: WebSearchResult[] = []
       for (const query of queries) {
@@ -42,29 +42,56 @@ export function registerWebTools(ctx: Context) {
   ctx.tools.register({
     name: 'web_fetch',
     description:
-      '抓取一个已知的公开 http(s) URL。网页：抽出可读正文，并尽量带上 images（页面里的图片链接）。图片 URL（png/jpg/gif/webp 等）：下载到本地，返回 file.path / file.mime / file.bytes，不要当正文读。插图：web_fetch 图片 → db_media write from=file.path → db_content 写 ![说明](/api/db/file/<name>)。搜资料请用 web_search。',
+      '抓取一个已知的公开 http(s) URL。网页：抽出可读正文，并尽量带上 images（页面里的图片链接）；可传 extract=images 只取图片链接或 max_chars 限制正文长度省 token。图片 URL（png/jpg/gif/webp 等）：下载到本地，返回 file.path / file.mime / file.bytes，不要当正文读。插图：web_fetch 图片 → db_media write from=file.path → db_content 写 ![说明](/api/db/file/<name>)。搜资料请用 web_search。',
     parameters: {
       type: 'object',
       properties: {
         url: { type: 'string', description: 'https 链接' },
+        extract: {
+          type: 'string',
+          enum: ['all', 'text', 'images'],
+          description: '可选：all（默认，正文+图片）| text（仅正文）| images（仅图片链接，省正文 token）',
+        },
+        max_chars: {
+          type: 'integer',
+          description: '可选：正文最大返回字符数，超出截断',
+        },
       },
       required: ['url'],
     },
     execution: 'parallel',
-    execute: async (args, signal) => presentFetch(await ctx.web.fetch({ url: String(args.url ?? '') }, signal)),
+    execute: async (args, signal) => {
+      const presented = presentFetch(await ctx.web.fetch({ url: String(args.url ?? '') }, signal))
+      const extract = typeof args.extract === 'string' ? args.extract : 'all'
+      const maxChars = typeof args.max_chars === 'number' && args.max_chars > 0 ? args.max_chars : 0
+      const text =
+        extract === 'images'
+          ? ''
+          : maxChars && presented.text.length > maxChars
+            ? `${presented.text.slice(0, maxChars)}\n... [truncated ${presented.text.length - maxChars} chars]`
+            : presented.text
+      return {
+        url: presented.url,
+        status: presented.status,
+        title: presented.title,
+        ...(extract !== 'images' ? { text } : {}),
+        ...(presented.file ? { file: presented.file } : {}),
+        ...(extract !== 'text' && presented.images?.length ? { images: presented.images } : {}),
+        truncated: presented.truncated || Boolean(maxChars && presented.text.length > maxChars),
+      }
+    },
   })
 }
 
-function collectQueries(args: Record<string, unknown>) {
+function collectQueries(raw: unknown) {
   const out: string[] = []
   const seen = new Set<string>()
-  const push = (value: unknown) => {
+  if (!Array.isArray(raw)) return out
+  for (const value of raw) {
     const text = String(value ?? '').trim()
-    if (!text || seen.has(text)) return
+    if (!text || seen.has(text)) continue
     seen.add(text)
     out.push(text)
   }
-  push(args.query)
-  if (Array.isArray(args.queries)) args.queries.forEach(push)
   return out
 }

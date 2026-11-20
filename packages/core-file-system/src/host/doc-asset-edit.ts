@@ -32,6 +32,7 @@ import {
   findReplaceText,
   insertText,
   mutationLocus,
+  outlineContent,
   replaceLinesText,
   resolveContentCommand,
   strReplaceText,
@@ -138,8 +139,20 @@ export async function executeEditContent(
   const command = resolveContentCommand(args)
   const current = await host.content(path)
   const text = stripMentionLabels(asContentText(current.value))
+  if (command === 'outline') {
+    const out = outlineContent(text)
+    return {
+      kind: 'content' as const,
+      path: current.path,
+      field: current.field,
+      command,
+      total: out.total,
+      headings: out.headings,
+      text: out.text,
+    }
+  }
   if (command === 'view') {
-    const viewed = viewContent(text, args.view_range)
+    const viewed = viewContent(text, args.view_range, args.grep)
     const titles = await resolveMentionTitles(host, viewed.text)
     return {
       kind: 'content' as const,
@@ -149,6 +162,7 @@ export async function executeEditContent(
       start: viewed.start,
       end: viewed.end,
       total: viewed.total,
+      ...(viewed.matched !== undefined ? { matched: viewed.matched } : {}),
       truncated: viewed.truncated,
       text: projectMentionLabels(viewed.text, titles),
     }
@@ -336,11 +350,28 @@ export async function executeEditDoc(
   } catch {
     current = null
   }
+  if (command === 'outline') {
+    if (!current) {
+      return { kind: 'doc' as const, path: recPath, command: 'outline' as const, name: file, missing: true, etag: '' }
+    }
+    const out = outlineContent(current.text)
+    return {
+      kind: 'doc' as const,
+      path: recPath,
+      command: 'outline' as const,
+      name: file,
+      etag: current.etag,
+      type: current.type,
+      total: out.total,
+      headings: out.headings,
+      text: out.text,
+    }
+  }
   if (command === 'view') {
     if (!current) {
       return { kind: 'doc' as const, path: recPath, command: 'view' as const, name: file, missing: true, etag: '' }
     }
-    const viewed = viewContent(current.text, args.view_range)
+    const viewed = viewContent(current.text, args.view_range, args.grep)
     return {
       kind: 'doc' as const,
       path: recPath,
@@ -351,6 +382,7 @@ export async function executeEditDoc(
       start: viewed.start,
       end: viewed.end,
       total: viewed.total,
+      ...(viewed.matched !== undefined ? { matched: viewed.matched } : {}),
       truncated: viewed.truncated,
       text: viewed.text,
     }

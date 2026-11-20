@@ -1,6 +1,6 @@
 export const DEFAULT_VIEW_WINDOW = 80
 
-export type ContentCommand = 'view' | 'str_replace' | 'replace_lines' | 'insert' | 'write' | 'find_replace'
+export type ContentCommand = 'view' | 'outline' | 'str_replace' | 'replace_lines' | 'insert' | 'write' | 'find_replace'
 
 export function asContentText(value: unknown) {
   if (value == null) return ''
@@ -13,6 +13,7 @@ export function resolveContentCommand(args: Record<string, unknown>): ContentCom
   if (raw) {
     if (
       raw === 'view' ||
+      raw === 'outline' ||
       raw === 'str_replace' ||
       raw === 'replace_lines' ||
       raw === 'insert' ||
@@ -41,10 +42,45 @@ export function numberLines(text: string) {
   return lines.map((line, index) => `${String(index + 1).padStart(width)}\t${line}`)
 }
 
-export function viewContent(text: string, viewRange: unknown) {
+export function outlineContent(text: string) {
+  const lines = text.split('\n')
+  const total = lines.length
+  const width = String(Math.max(total, 1)).length
+  const headings: Array<{ line: number; level: number; title: string }> = []
+  const formatted: string[] = []
+  for (let i = 0; i < lines.length; i += 1) {
+    const m = /^(#{1,6})\s+(.+?)\s*#*$/.exec(lines[i] ?? '')
+    if (!m) continue
+    const line = i + 1
+    headings.push({ line, level: m[1]!.length, title: m[2]!.trim() })
+    formatted.push(`${String(line).padStart(width)}\t${lines[i]}`)
+  }
+  return {
+    total,
+    headings,
+    text: formatted.join('\n'),
+  }
+}
+
+export function viewContent(text: string, viewRange: unknown, grep?: unknown) {
   const lines = text.split('\n')
   const total = lines.length
   const numbered = numberLines(text)
+  const query = typeof grep === 'string' ? grep.trim() : ''
+  if (query) {
+    const needle = query.toLowerCase()
+    const hits = numbered.filter((_, index) => (lines[index] ?? '').toLowerCase().includes(needle))
+    const range = parseViewRange(viewRange, Math.max(hits.length, 1))
+    const sliced = hits.slice(range.start - 1, range.end)
+    return {
+      start: range.start,
+      end: Math.min(range.end, hits.length),
+      total,
+      matched: hits.length,
+      truncated: range.start > 1 || range.end < hits.length,
+      text: sliced.join('\n'),
+    }
+  }
   const range = parseViewRange(viewRange, total)
   const truncated = range.start > 1 || range.end < total
   return {
@@ -150,11 +186,26 @@ export function mutationLocus(
   return null
 }
 
+function nearestLineHint(text: string, oldStr: string) {
+  const anchor = oldStr
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line.length >= 3)
+  if (!anchor) return ''
+  const needle = anchor.toLowerCase()
+  const hits: number[] = []
+  const lines = text.split('\n')
+  for (let i = 0; i < lines.length && hits.length < 5; i += 1) {
+    if ((lines[i] ?? '').toLowerCase().includes(needle)) hits.push(i + 1)
+  }
+  return hits.length ? ` (nearest line(s): ${hits.join(', ')})` : ''
+}
+
 export function strReplaceText(text: string, oldStr: unknown, newStr: unknown) {
   if (typeof oldStr !== 'string' || !oldStr) throw new Error('old_str is required for str_replace')
   const nextNew = typeof newStr === 'string' ? newStr : ''
   const occurrences = countOccurrences(text, oldStr)
-  if (occurrences === 0) throw new Error('old_str not found')
+  if (occurrences === 0) throw new Error(`old_str not found${nearestLineHint(text, oldStr)}`)
   if (occurrences > 1) throw new Error(`old_str is not unique (${occurrences} matches)`)
   return text.replace(oldStr, nextNew)
 }

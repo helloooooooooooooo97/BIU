@@ -1341,6 +1341,62 @@ test('agent db_stat omits builtin fields; service stat and list still include th
   }
   assert.deepEqual(updated, { ok: true, path: '/notes/n1' })
 
+  // Token-saving options: db_list count_only, db_read paths, db_stat include_tags
+  const counted = (await ctx.tools.invoke('db_list', { path: '/notes', count_only: true })) as { path: string; total: number }
+  assert.equal(counted.path, '/notes')
+  assert.ok(counted.total >= 1)
+
+  const batchRead = (await ctx.tools.invoke('db_read', { paths: ['/notes/n1'] })) as { items?: unknown[] }
+  assert.equal(batchRead.items?.length, 1)
+
+  const statWithTags = (await ctx.tools.invoke('db_stat', { path: '/notes', include_tags: true })) as {
+    tags?: unknown[]
+  }
+  assert.ok(Array.isArray(statWithTags.tags))
+
+  // On a writable-content collection (/docs): db_update body + db_read include_content + db_content outline & grep
+  const docRow: DbRecord = { id: 'd1', title: '优化页', content: '' }
+  db.register({
+    path: '/docs',
+    title: '文档',
+    schema: {
+      contentField: 'content',
+      fields: {
+        title: { type: 'string', label: '标题', writable: true },
+        content: { type: 'file', label: '正文', writable: true },
+      },
+    },
+    records: { update: true },
+    list: () => [docRow],
+    get: (id) => (id === 'd1' ? docRow : undefined),
+    update: (_id, patch) => {
+      Object.assign(docRow, patch)
+      return docRow
+    },
+  })
+  await ctx.tools.invoke('db_update', {
+    path: '/docs/d1',
+    fields: { title: '优化页2' },
+    body: '# 标题\n\n正文 foo\n\n## 第二节\n\n内容',
+  })
+  const readWithContent = (await ctx.tools.invoke('db_read', { path: '/docs/d1', include_content: true })) as {
+    content?: { text?: string }
+  }
+  assert.match(readWithContent.content?.text ?? '', /正文 foo/)
+
+  const outline = (await ctx.tools.invoke('db_content', { path: '/docs/d1', command: 'outline' })) as {
+    headings?: Array<{ line: number; title: string }>
+  }
+  assert.equal(outline.headings?.length, 2)
+  assert.equal(outline.headings?.[1]?.title, '第二节')
+
+  const grepped = (await ctx.tools.invoke('db_content', { path: '/docs/d1', command: 'view', grep: 'foo' })) as {
+    matched?: number
+    text?: string
+  }
+  assert.equal(grepped.matched, 1)
+  assert.match(grepped.text ?? '', /正文 foo/)
+
   // Strict schema & unified naming checks: no aliases, no unknown args, no silent fallback
   await assert.rejects(
     () => ctx.tools.invoke('db_update', { path: '/notes/n1', content: { status: 'done' } }),

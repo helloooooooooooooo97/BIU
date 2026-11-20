@@ -422,15 +422,33 @@ export function apply(ctx: Context) {
   ctx.tools.register({
     name: 'mcp_list',
     description:
-      '列出 MCP 工具（已按各服务器的工具选择过滤）。不传 server 就列全部。拿到 server + name + inputSchema 后用 mcp_call 调用。',
+      '列出 MCP 工具（已按各服务器的工具选择过滤）。不传 server 就列全部；可传 query 按名称/简介过滤，或 include_schema=false 仅看名称和简介以大幅节省 token。',
     parameters: {
       type: 'object',
-      properties: { server: { type: 'string', description: '只列这台服务器的工具' } },
+      properties: {
+        server: { type: 'string', description: '只列这台服务器的工具' },
+        query: { type: 'string', description: '可选：按工具名或描述子串（不区分大小写）过滤' },
+        include_schema: {
+          type: 'boolean',
+          description: '是否包含完整 inputSchema（默认 true；传 false 仅返回 server/name/description 省 token）',
+        },
+      },
     },
     execution: 'parallel',
     execute: (args) => {
       const server = String(args.server ?? '').trim()
-      return mcp.listTools(server || undefined)
+      const query = typeof args.query === 'string' ? args.query.trim().toLowerCase() : ''
+      const includeSchema = args.include_schema !== false
+      const listed = mcp.listTools(server || undefined)
+      const filtered = query
+        ? listed.filter(
+            (item) =>
+              item.name.toLowerCase().includes(query) ||
+              String(item.description ?? '').toLowerCase().includes(query),
+          )
+        : listed
+      if (includeSchema) return filtered
+      return filtered.map(({ inputSchema: _schema, ...rest }) => rest)
     },
   })
   ctx.tools.register({

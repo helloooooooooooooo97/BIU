@@ -120,7 +120,7 @@ async function withInspectorReveal<T>(
 export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
   ctx.tools.register({
     name: 'db_list',
-    description: '列出 File System 路径：/ 为已登记表（path、中文名、view.blurb 说明书），/<表> 返回列式 JSON { columns: string[], rows: unknown[][], total }（不含 content、默认不含 createdAt/updatedAt/createdBy/updatedBy）。默认每页 20，最多 200。columns 参数只取需要的列。表结构用 db_stat。',
+    description: '列出 File System 路径：/ 为已登记表（path、中文名、view.blurb 说明书），/<表> 返回列式 JSON { columns: string[], rows: unknown[][], total }（不含 content、默认不含 createdAt/updatedAt/createdBy/updatedBy）。默认每页 20，最多 200。columns 参数只取需要的列；count_only=true 只返回 { path, total } 省 token。表结构用 db_stat。',
     parameters: {
       type: 'object',
       properties: {
@@ -136,37 +136,99 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
           items: { type: 'string' },
           description: '可选，只返回这些列。始终带 id。label 等于标题列（默认 title）。不传则除 content 外全返回。标签属性列写成 tag::<标签id>::<字段key>，例如 tag::tag::category。',
         },
+        count_only: {
+          type: 'boolean',
+          description: 'true 时仅返回 { path, total }，不返回任何行数据，适合统计数量',
+        },
       },
       required: ['path'],
     },
     execution: 'parallel',
     execute: (args) => {
       const path = String(args.path)
+      const countOnly = args.count_only === true
       return withInspectorReveal(ctx, path, () =>
         db
           .list(path, asFilter(args.filter), {
             q: args.q != null ? String(args.q) : '',
             sortField: args.sortField != null ? String(args.sortField) : '',
             sortDir: args.sortDir === 'desc' ? 'desc' : 'asc',
-            limit: args.limit != null ? Number(args.limit) : undefined,
-            offset: args.offset != null ? Number(args.offset) : undefined,
-            columns: asColumnKeys(args.columns),
+            limit: countOnly ? 1 : args.limit != null ? Number(args.limit) : undefined,
+            offset: countOnly ? 0 : args.offset != null ? Number(args.offset) : undefined,
+            columns: countOnly ? ['id'] : asColumnKeys(args.columns),
           })
-          .then((body) => agentDbCompact.query(body)),
+          .then((body) => {
+            if (countOnly) {
+              const total =
+                body && typeof body === 'object' && typeof (body as { total?: unknown }).total === 'number'
+                  ? (body as { total: number }).total
+                  : Array.isArray((body as { items?: unknown[] })?.items)
+                    ? (body as { items: unknown[] }).items.length
+                    : 0
+              return { path, total }
+            }
+            return agentDbCompact.query(body)
+          }),
       )
     },
   })
   ctx.tools.register({
     name: 'db_read',
-    description: '读取 File System 路径：表返回列式列表 columns/rows（不含 schema，结构用 db_stat），记录返回该行 JSON（空字段省略，不含 content 正文，正文用 db_content）。',
-    parameters: PATH_PARAM,
+    description: '读取单条或多条记录（path 或 paths）：返回记录 JSON（空字段省略）。默认不含正文；传 include_content=true 可在同一次调用里附带前 content_lines（默认 80）行正文预览，省去再调 db_content。查表列表请用 db_list。',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: '单条记录路径，如 /pages/<id>' },
+        paths: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '批量读取多条记录路径（与 path 二选一），一次返回 { items } 减少轮次',
+        },
+        include_content: {
+          type: 'boolean',
+          description: 'true 时同时返回正文预览（前 content_lines 行），避免再调一次 db_content',
+        },
+        content_lines: {
+          type: 'integer',
+          description: 'include_content=true 时返回的最大正文行数，默认 80',
+        },
+      },
+    },
     execution: 'parallel',
-    execute: (args) =>
-      withInspectorReveal(ctx, String(args.path), () => db.read(String(args.path)).then((body) => agentDbCompact.query(body))),
+    execute: async (args) => {
+      const includeContent = args.include_content === true
+      const contentLines = typeof args.content_lines === 'number' && args.content_lines > 0 ? args.content_lines : 80
+      const readOne = async (targetPath: string) => {
+        const row = agentDbCompact.query(await db.read(targetPath))
+        if (!includeContent) return row
+        try {
+          const content = agentDbCompact.query(
+            await db.editContent(targetPath, { command: 'view', view_range: [1, contentLines] }),
+          )
+          if (row && typeof row === 'object' && !Array.isArray(row)) {
+            return { ...(row as Record<string, unknown>), content }
+          }
+        } catch {
+          /* collection without content field */
+        }
+        return row
+      }
+      if (Array.isArray(args.paths) && args.paths.length > 0) {
+        const list = args.paths.map((item) => String(item).trim()).filter(Boolean)
+        if (!list.length) throw new Error('paths must contain at least one path')
+        const items = await Promise.all(list.map((p) => readOne(p)))
+        return { items }
+      }
+      if (typeof args.path !== 'string' || !args.path.trim()) {
+        throw new Error('path or paths is required for db_read')
+      }
+      const target = String(args.path)
+      return withInspectorReveal(ctx, target, () => readOne(target))
+    },
   })
   ctx.tools.register({
     name: 'db_update',
-    description: '按表结构 schema 的可写字段更新一条已有记录，路径为 /<表>/<id>，属性对象传在 fields 中。成功只返回 {ok, path}，不回整行。未知字段会列出该表可写字段。标签 tag：推荐始终按标签 id 分组写 values（与读取结构一致），如 {tags:["tag-2"],values:{"tag-2":{导演:"查泽雷"}}}；单标签也兼容扁平 values。省略 tags 则合并更新当前已贴标签的属性，不撕掉其它标签。新建用 db_create，读写正文用 db_content。',
+    description: '按表结构 schema 的可写字段更新一条已有记录，路径为 /<表>/<id>，属性对象传在 fields 中；可选传 body 在同一次调用里整篇覆写正文（避免再调一次 db_content）。成功只返回 {ok, path}，不回整行。未知字段会列出该表可写字段。标签 tag：推荐始终按标签 id 分组写 values（与读取结构一致），如 {tags:["tag-2"],values:{"tag-2":{导演:"查泽雷"}}}；单标签也兼容扁平 values。省略 tags 则合并更新当前已贴标签的属性，不撕掉其它标签。新建用 db_create，局部改正文用 db_content。',
     parameters: {
       type: 'object',
       properties: {
@@ -176,6 +238,10 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
           description:
             '要更新的字段对象（至少包含一个字段）。标签写 tag：{tag:{tags:["tag-2"],values:{"tag-2":{导演:"查泽雷"}}}}。省略 tags 只改属性，不撕掉其它标签。',
         },
+        body: {
+          type: 'string',
+          description: '可选：同时整篇覆写该记录的 Markdown 正文，省去再调一次 db_content',
+        },
       },
       required: ['path', 'fields'],
     },
@@ -184,9 +250,14 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
       if (!Object.keys(payload).length) {
         throw new Error('fields must include at least one field to update')
       }
-      return withInspectorReveal(ctx, String(args.path), () => db.update(String(args.path), payload)).then(
-        (body) => agentDbCompact.write(body),
-      )
+      const target = String(args.path)
+      return withInspectorReveal(ctx, target, async () => {
+        const updated = await db.update(target, payload)
+        if (typeof args.body === 'string') {
+          await db.editContent(target, { command: 'write', value: args.body })
+        }
+        return updated
+      }).then((body) => agentDbCompact.write(body))
     },
   })
   ctx.tools.register({
@@ -281,16 +352,58 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
   })
   ctx.tools.register({
     name: 'db_stat',
-    description: agentDbCompact.statBlurb,
-    parameters: PATH_PARAM,
+    description: `${agentDbCompact.statBlurb} 传 include_tags=true 可一次附带工作区标签定义摘要（id、名称、属性名与类型），写标签属性前无需再额外查 /tags。`,
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string' },
+        include_tags: {
+          type: 'boolean',
+          description: 'true 时附带工作区标签定义摘要（id、title、fields），省去再查 /tags',
+        },
+      },
+      required: ['path'],
+    },
     execution: 'parallel',
-    execute: (args) => Promise.resolve(db.stat(String(args.path))).then((body) => agentDbCompact.query(body)),
+    execute: async (args) => {
+      const stat = agentDbCompact.query(await db.stat(String(args.path)))
+      if (args.include_tags !== true || !stat || typeof stat !== 'object' || Array.isArray(stat)) return stat
+      try {
+        const listed = (await db.list('/tags', undefined, { limit: 200 })) as {
+          items?: Array<Record<string, unknown>>
+        }
+        const tags = (listed.items ?? []).map((item) => {
+          let fields: unknown = item.fields
+          if (typeof fields === 'string') {
+            try {
+              fields = JSON.parse(fields)
+            } catch {
+              fields = []
+            }
+          }
+          const summary = Array.isArray(fields)
+            ? fields
+                .filter((f): f is Record<string, unknown> => Boolean(f && typeof f === 'object'))
+                .map((f) => ({
+                  key: String(f.key ?? ''),
+                  type: String(f.type ?? 'string'),
+                  ...(f.example !== undefined ? { example: f.example } : {}),
+                }))
+            : []
+          return { id: String(item.id ?? ''), title: String(item.title ?? ''), fields: summary }
+        })
+        return { ...(stat as Record<string, unknown>), tags }
+      } catch {
+        return stat
+      }
+    },
   })
   ctx.tools.register({
     name: 'db_content',
     description: [
       '读写一条记录的正文（一篇，只要 path）。list/read 不含正文。path 为 /<表>/<id>。',
-      'command=view：带行号读一段正文，默认前 80 行，可用 view_range=[start,end]（1-based，end=-1 到末尾）；truncated 表示还有未读行。引用形如 [@ id="page/<id>"]，view 会补当前 label；落盘只留 id，写回时不要依赖 label。',
+      'command=view：带行号读一段正文，默认前 80 行，可用 view_range=[start,end]（1-based，end=-1 到末尾）或 grep 关键字过滤定位行号；truncated 表示还有未读行。引用形如 [@ id="page/<id>"]，view 会补当前 label；落盘只留 id，写回时不要依赖 label。',
+      'command=outline：只返回 Markdown 标题目录与行号，长文档快速定位章节，省去翻页。',
       'command=str_replace：old_str 必须在正文里唯一，替换为 new_str（短文本）或 from 文件内容（长文本）。',
       'command=replace_lines：按 1-based 闭区间 start_line..end_line 换成 new_str（短）或 from 文件内容（长）。',
       'command=insert：在 insert_line 之后插入。短文本用 new_str；长文本用 from=<本地文件>。',
@@ -305,9 +418,9 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
         path: { type: 'string' },
         command: {
           type: 'string',
-          enum: ['view', 'str_replace', 'find_replace', 'replace_lines', 'insert', 'write'],
+          enum: ['view', 'outline', 'str_replace', 'find_replace', 'replace_lines', 'insert', 'write'],
           description:
-            'view | str_replace | find_replace | replace_lines | insert | write。省略时：有 value 或 from 则 write，否则 view。',
+            'view | outline | str_replace | find_replace | replace_lines | insert | write。省略时：有 value 或 from 则 write，否则 view。',
         },
         value: { type: 'string', description: 'command=write 的全文内容（必填 value 或 from，示例：{"path":"/pages/<id>","command":"write","value":"# 标题\\n正文"}）。' },
         from: {
@@ -331,10 +444,17 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
           items: { type: 'integer' },
           description: 'view 的行区间，如 [11, 20] 或 [80, -1]',
         },
+        grep: {
+          type: 'string',
+          description: 'view 时按子串（不区分大小写）过滤匹配行并返回行号，长文档精准定位用',
+        },
       },
       required: ['path'],
     },
-    execution: (args) => (resolveContentCommand(args) === 'view' ? 'parallel' : 'exclusive'),
+    execution: (args) => {
+      const cmd = resolveContentCommand(args)
+      return cmd === 'view' || cmd === 'outline' ? 'parallel' : 'exclusive'
+    },
     execute: (args) =>
       withInspectorReveal(ctx, String(args.path), () =>
         db.editContent(String(args.path), args).then((body) => agentDbCompact.query(body)),
@@ -365,7 +485,6 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
           type: 'string',
           description: 'write 时读这个本地文件作为内容，代替 value。相对工作区根，或绝对路径。',
         },
-        etag: { type: 'string', description: '资源路径不用 etag；可变文件请用 db_file' },
         block_id: { type: 'string', description: '块级归属，写入 block_refs' },
         source: { type: 'string', description: '引用子键，如 block:<id>:bgm' },
         kind: { type: 'string', description: 'core（永不自动回收）或 asset' },
@@ -398,9 +517,9 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
         name: { type: 'string', description: '稳定逻辑名，如 view-p194-8fdbc4f8.jsx' },
         command: {
           type: 'string',
-          enum: ['view', 'str_replace', 'find_replace', 'replace_lines', 'insert', 'write'],
+          enum: ['view', 'outline', 'str_replace', 'find_replace', 'replace_lines', 'insert', 'write'],
           description:
-            'view | str_replace | find_replace | replace_lines | insert | write。省略时：有 value 或 from 则 write，否则 view。',
+            'view | outline | str_replace | find_replace | replace_lines | insert | write。省略时：有 value 或 from 则 write，否则 view。',
         },
         value: { type: 'string', description: 'command=write 的全文内容（必填 value 或 from，示例：{"path":"/pages/<id>","command":"write","value":"# 标题\\n正文"}）。' },
         from: {
@@ -424,6 +543,10 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
           items: { type: 'integer' },
           description: 'view 的行区间，如 [11, 20] 或 [80, -1]',
         },
+        grep: {
+          type: 'string',
+          description: 'view 时按子串（不区分大小写）过滤匹配行并返回行号',
+        },
         etag: { type: 'string', description: '可选 If-Match；省略则用刚读到的当前 etag' },
         block_id: { type: 'string' },
         source: { type: 'string' },
@@ -431,7 +554,10 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
       },
       required: ['path'],
     },
-    execution: (args) => (resolveContentCommand(args) === 'view' ? 'parallel' : 'exclusive'),
+    execution: (args) => {
+      const cmd = resolveContentCommand(args)
+      return cmd === 'view' || cmd === 'outline' ? 'parallel' : 'exclusive'
+    },
     execute: (args) =>
       withInspectorReveal(ctx, String(args.path), () =>
         db.editDoc(String(args.path), args).then((body) => agentDbCompact.query(body)),
