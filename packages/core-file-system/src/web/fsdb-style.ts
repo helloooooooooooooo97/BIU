@@ -397,6 +397,7 @@ const CSS = `
 .fsdb-page .tasks-title-zoom{position:relative;display:grid;place-items:center}
 .fsdb-page .tasks-title-zoom .tasks-tree-count,.fsdb-page .tasks-title-zoom .tasks-title-open{grid-area:1/1}
 .fsdb-page .tasks-title-open{flex:none;color:var(--biu-color-icon);opacity:0;z-index:1;pointer-events:none}
+.fsdb-page .tasks-table td:has(.tasks-row-tools-slot):not(.is-pin-col){position:relative}
 .fsdb-page .tasks-row-tools-slot{position:absolute;top:50%;right:8px;z-index:2;display:inline-flex;align-items:center;gap:2px;width:auto;transform:translateY(-50%);overflow:visible;pointer-events:none}
 .fsdb-page .tasks-table td:has(.fsdb-title-host) .tasks-row-tools,.fsdb-page .tasks-table td:has(.fsdb-title-host) .tasks-row-actions{opacity:0;pointer-events:none}
 .fsdb-page .tasks-table tr:hover td:has(.fsdb-title-host) .tasks-title-open,.fsdb-page .tasks-title-open:focus-visible,.fsdb-page .tasks-table tr:hover td:has(.fsdb-title-host) .tasks-row-actions,.fsdb-page .tasks-table tr:hover td:has(.fsdb-title-host) .tasks-row-tools{opacity:1;pointer-events:auto}
