@@ -458,7 +458,7 @@ const CSS = `
 .fsdb-page .tasks-table tr.is-active td{background:color-mix(in srgb,var(--biu-color-text) 8%,var(--biu-color-surface))}
 .fsdb-page .tasks-table tr.fsdb-group-row td{padding:6px 0 4px;background:transparent;border-right:0;cursor:default}
 .fsdb-page .tasks-table tr.fsdb-group-row:hover td{background:transparent}
-.fsdb-page .tasks-table tr.fsdb-group-row .tasks-queue-ghead{padding:0 6px;gap:5px}
+.fsdb-page .tasks-table tr.fsdb-group-row .tasks-queue-ghead{min-height:20px;padding:0 6px;gap:5px}
 .fsdb-page .tasks-table tr.fsdb-group-pager td{padding:2px 0 8px;background:transparent;border-right:0}
 .fsdb-page .tasks-table tr.fsdb-group-pager:hover td{background:transparent}
 .fsdb-page .tasks-table tr.fsdb-group-pager .fsdb-pager{margin-top:0;padding:4px 6px 0;color:var(--biu-color-text)}

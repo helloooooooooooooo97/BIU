@@ -631,3 +631,7 @@ test('dragging a pinned header resize handle updates both pinned header and main
     globalThis.cancelAnimationFrame = prevCancel
   }
 })
+
+test('table group headers keep a consistent 20px min-height even in non-creatable tables like /plugins', () => {
+  assert.match(css, /\.fsdb-page \.tasks-table tr\.fsdb-group-row \.tasks-queue-ghead\{min-height:20px;padding:0 6px;gap:5px\}/)
+})
