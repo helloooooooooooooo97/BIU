@@ -8,6 +8,10 @@ import {
 } from '@biu/type-file-system'
 import { peekRecord, subscribeCrumbs } from './view-storage.ts'
 import { showRecordInInspector } from './inspector-db-route.ts'
+import { OPEN_TAG_EVENT } from './fsdb-events.ts'
+import { TAGS_COLLECTION_PATH } from './database-path.ts'
+
+export { OPEN_TAG_EVENT }
 
 export const TAGS_KEY = 'fsdb.tags'
 
@@ -29,8 +33,6 @@ export function tagFieldFilled(tagId: string, fieldKey: string) {
   return filledMemory[tagId]?.[fieldKey] ?? 0
 }
 
-export const OPEN_TAG_EVENT = 'biu:open-tag'
-
 export function listenOpenTag() {
   if (typeof window === 'undefined') return () => undefined
   const onOpen = (event: Event) => {
@@ -46,26 +48,26 @@ export function jumpTag(id: string, onOpen?: (id: string) => void) {
   if (!key) return
   const resolved =
     loadTags().find((tag) => tag.id === key || tag.label === key)?.id ||
-    String(peekRecord('/tags', key)?.id ?? '').trim() ||
+    String(peekRecord(TAGS_COLLECTION_PATH, key)?.id ?? '').trim() ||
     key
   if (onOpen) {
     onOpen(resolved)
     return
   }
-  showRecordInInspector('/tags', resolved)
+  showRecordInInspector(TAGS_COLLECTION_PATH, resolved)
 }
 
 export function tagLabel(id: string) {
   const key = id.trim()
   return (
     loadTags().find((tag) => tag.id === key)?.label?.trim() ||
-    String(peekRecord('/tags', key)?.title ?? '').trim() ||
+    String(peekRecord(TAGS_COLLECTION_PATH, key)?.title ?? '').trim() ||
     key
   )
 }
 
 export function tagEmoji(id: string) {
-  return peekRecord('/tags', id)?.emoji?.trim() ?? ''
+  return peekRecord(TAGS_COLLECTION_PATH, id)?.emoji?.trim() ?? ''
 }
 
 export function subscribeTagChrome(fn: () => void) {
@@ -158,7 +160,7 @@ export async function createTag(title: string): Promise<CollectionSchemaPack> {
   const res = await fetch('/api/db/create', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ path: '/tags', records: [{ title: name }] }),
+    body: JSON.stringify({ path: TAGS_COLLECTION_PATH, records: [{ title: name }] }),
   })
   const body = (await res.json().catch(() => ({}))) as {
     items?: Array<{ value?: { id?: string; title?: string; fields?: unknown } }>

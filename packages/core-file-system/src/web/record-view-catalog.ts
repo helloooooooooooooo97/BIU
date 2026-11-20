@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { emitFsdbChange, parseFsdbChange } from '@biu/type-file-system'
+import { FSDB_CHANGE_EVENT, emitFsdbChange, parseFsdbChange } from '@biu/type-file-system'
 import {
   parseRecordLayouts,
   parseRecordSandboxes,
@@ -204,7 +204,7 @@ async function pullRecordCatalog(path: string) {
 }
 
 if (typeof window !== 'undefined') {
-  window.addEventListener('fsdb:change', (event) => {
+  window.addEventListener(FSDB_CHANGE_EVENT, (event) => {
     const change = parseFsdbChange(event)
     if (change.scope !== 'views' || !change.path) return
     void pullRecordCatalog(change.path)

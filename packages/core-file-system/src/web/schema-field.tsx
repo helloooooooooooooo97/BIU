@@ -13,6 +13,7 @@ import {
 } from '@biu/type-file-system'
 import { ArrowUturnLeftIcon, ChevronDownIcon, PlusIcon, TagIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { TagChip, TagChips, tagTone, HeadlessPopover } from '@biu/biu-ui'
+import { TAGS_COLLECTION_PATH } from './database-path.ts'
 import { DefaultCell, FieldGlyph } from './fsdb-cells.tsx'
 import { FieldValuePop } from './field-value-pop.tsx'
 import { inferPackFieldType, orphanPackEntries } from './fields.ts'
@@ -41,7 +42,7 @@ const TYPE_LABEL: Partial<Record<FieldType, string>> = {
 export const schemaTagTone = tagTone
 
 export function tagChipIcon(id: string) {
-  const emoji = peekRecord('/tags', id)?.emoji?.trim()
+  const emoji = peekRecord(TAGS_COLLECTION_PATH, id)?.emoji?.trim()
   if (emoji) return <span className="fsdb-record-emoji">{emoji}</span>
   return <TagIcon aria-hidden className="size-3.5" />
 }

@@ -149,7 +149,7 @@ test('share panel separates public sharing from internal and external collaborat
   assert.match(src, /外部协作者/)
   assert.match(src, /collaboratorKind/)
   assert.match(src, /data-testid="fsdb-share-member-search"/)
-  assert.match(src, /path: '\/workspace-members'/)
+  assert.match(src, /path: WORKSPACE_MEMBERS_COLLECTION_PATH/)
   assert.match(src, /role="combobox"/)
   assert.match(src, /method: 'DELETE'/)
   assert.match(accountHost, /DELETE', '\/api\/account\/access'/)
@@ -232,7 +232,7 @@ test('builtin plugins keep shared ownership in the scope chain', () => {
   assert.match(detail, /shared = recordShare \|\| viewHits.length > 0 \|\| shown === 'shared'/)
   assert.match(detail, /title: '内置插件'/)
   assert.match(detail, /result: '共享'/)
-  assert.match(browser, /builtin=\{collectionPath === '\/plugins' && row\.builtin === true\}/)
+  assert.match(browser, /builtin=\{collectionPath === PLUGINS_COLLECTION_PATH && row\.builtin === true\}/)
 })
 
 test('list share column uses the same capsule and loads the chain on click', () => {

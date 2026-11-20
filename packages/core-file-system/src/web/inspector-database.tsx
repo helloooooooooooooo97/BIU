@@ -1,7 +1,8 @@
 import { lazy, memo, Suspense, useEffect, useMemo, useRef, useSyncExternalStore, type ComponentType } from 'react'
 import { CircleStackIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import type { SlotProps } from '@biu/type-slots'
-import { fsdbChangeHitsPane, parseFsdbChange, type CollectionInfo } from '@biu/type-file-system'
+import { FSDB_CHANGE_EVENT, fsdbChangeHitsPane, parseFsdbChange, type CollectionInfo } from '@biu/type-file-system'
+import { FSDB_CRUMB_LABELS_EVENT, INSPECTOR_CAPTION_EVENT } from './fsdb-events.ts'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { parseAppPath } from '@biu/web-session-view'
 import { buildCrumbs, crumbHotkeyPane, crumbParentHotkey, parentCrumbTarget, pathForCrumbTarget, type Crumb, type CrumbTarget } from './sidebar-nav.ts'
@@ -80,7 +81,7 @@ const viewTickSubs = new Set<ViewTickSub>()
 let uninstallViewTickHub: (() => void) | null = null
 
 function dispatchViewTick(event?: Event) {
-  const change = event && event.type === 'fsdb:change' ? parseFsdbChange(event) : null
+  const change = event && event.type === FSDB_CHANGE_EVENT ? parseFsdbChange(event) : null
   let bumped = false
   for (const sub of viewTickSubs) {
     if (change && !fsdbChangeHitsPane(change, sub.collectionPath, sub.recordId)) continue
@@ -96,13 +97,13 @@ function ensureViewTickHub() {
   if (uninstallViewTickHub || typeof window === 'undefined') return
   const onEvent = (event: Event) => dispatchViewTick(event)
   const onCrumb = () => dispatchViewTick()
-  window.addEventListener('fsdb:change', onEvent)
-  window.addEventListener('fsdb:crumb-labels', onEvent)
+  window.addEventListener(FSDB_CHANGE_EVENT, onEvent)
+  window.addEventListener(FSDB_CRUMB_LABELS_EVENT, onEvent)
   window.addEventListener('storage', onEvent)
   const stopCrumbs = subscribeCrumbs(onCrumb)
   uninstallViewTickHub = () => {
-    window.removeEventListener('fsdb:change', onEvent)
-    window.removeEventListener('fsdb:crumb-labels', onEvent)
+    window.removeEventListener(FSDB_CHANGE_EVENT, onEvent)
+    window.removeEventListener(FSDB_CRUMB_LABELS_EVENT, onEvent)
     window.removeEventListener('storage', onEvent)
     stopCrumbs()
     uninstallViewTickHub = null
@@ -341,7 +342,7 @@ export const DatabaseInspectorTab = memo(function DatabaseInspectorTab({
   }, [active, id, onActivate])
   useEffect(() => {
     window.dispatchEvent(
-      new CustomEvent('biu:inspector-caption', {
+      new CustomEvent(INSPECTOR_CAPTION_EVENT, {
         detail: {
           id,
           label: leaf?.label ?? '数据',

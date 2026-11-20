@@ -5,7 +5,16 @@ import type { CollectionSchema, CollectionSchemaPack, CollectionSpec, DbRecord }
 import { builtinAllView, builtinAllViewId, builtinMemberViews } from '../catalog-views.ts'
 import { recordMatchesSharedView, resolveSharedView, type SharedViewDef } from '../share-view-match.ts'
 import { effectiveDataScope, highestViewRole, recordMatchesGrantedView, type DataScopeName, type ViewGrantRole } from '../view-access.ts'
-import { DATA_COLLECTION_PATH } from '../web/database-path.ts'
+import {
+  AGENTS_COLLECTION_PATH,
+  DATA_COLLECTION_PATH,
+  EDITOR_BLOCKS_COLLECTION_PATH,
+  EVENTS_COLLECTION_PATH,
+  PLUGINS_COLLECTION_PATH,
+  TAGS_COLLECTION_PATH,
+  TRASH_COLLECTION_PATH,
+  WORKSPACE_MEMBERS_COLLECTION_PATH,
+} from '../paths.ts'
 import type { SharesStore } from './shares-store.ts'
 import { parseStampRecordId } from './tags-collection.ts'
 import type { TagStore } from './tags-store.ts'
@@ -87,23 +96,23 @@ export function resolveScopeTarget(
   id: string,
   row?: { pageId?: unknown; collection?: unknown; sessionId?: unknown; sourceId?: unknown; tablePath?: unknown },
 ) {
-  if (collection === '/trash' || collection === DATA_COLLECTION_PATH) {
+  if (collection === TRASH_COLLECTION_PATH || collection === DATA_COLLECTION_PATH) {
     const tablePath = String(row?.tablePath ?? '')
     const sourceId = String(row?.sourceId ?? '')
     if (tablePath && sourceId) return { collection: tablePath, id: sourceId }
     const parsed = parseStampRecordId(id)
     if (parsed) return { collection: parsed.collection, id: parsed.recordId }
   }
-  if (collection === '/events') {
+  if (collection === EVENTS_COLLECTION_PATH) {
     const sessionId = String(row?.sessionId ?? (id.lastIndexOf(':') > 0 ? id.slice(0, id.lastIndexOf(':')) : ''))
-    if (sessionId) return { collection: '/agents', id: sessionId }
+    if (sessionId) return { collection: AGENTS_COLLECTION_PATH, id: sessionId }
   }
-  if (collection === '/tags') {
+  if (collection === TAGS_COLLECTION_PATH) {
     const tablePath = String(row?.tablePath ?? '')
     const sourceId = String(row?.sourceId ?? '')
     if (tablePath && sourceId) return { collection: tablePath, id: sourceId }
   }
-  if (collection === '/editor-blocks') {
+  if (collection === EDITOR_BLOCKS_COLLECTION_PATH) {
     const pageId = String(row?.pageId ?? '')
     const parent = String(row?.collection ?? '')
     if (pageId && parent) return { collection: parent, id: pageId }
@@ -125,7 +134,7 @@ export function isRecordInWorkspace(membership: WorkspaceMembership, collection:
 }
 
 export function isBuiltinPluginRecord(spec: CollectionSpec, id: string, record?: { builtin?: unknown }) {
-  if (spec.path !== '/plugins') return false
+  if (spec.path !== PLUGINS_COLLECTION_PATH) return false
   return record?.builtin === true || isRegisteredBuiltinPlugin(id)
 }
 
@@ -253,10 +262,10 @@ export class DatabaseAccessPolicy {
     const found = this.host.tags.collect(id)
     for (const item of found.items) {
       if (this.host.tags.isDeleted(item.collection, item.id)) continue
-      if (item.collection === '/tags') continue
+      if (item.collection === TAGS_COLLECTION_PATH) continue
       if (this.visibleRecords(item.collection, [{ id: item.id }]).length > 0) return true
     }
-    const createdBy = this.host.tags.recordMeta('/tags', id)?.createdBy?.accountId
+    const createdBy = this.host.tags.recordMeta(TAGS_COLLECTION_PATH, id)?.createdBy?.accountId
     if (createdBy) return createdBy === accountId
     return Boolean(this.host.tags.get(id))
   }
@@ -270,7 +279,7 @@ export class DatabaseAccessPolicy {
     const actor = authorization?.currentActor()
     if (authorization && actor) {
       return rows.filter((row) => {
-        if (collection === '/plugins' && (row as { builtin?: unknown }).builtin === true) {
+        if (collection === PLUGINS_COLLECTION_PATH && (row as { builtin?: unknown }).builtin === true) {
           return action === 'resource:read' || action === 'resource:list'
         }
         const target = resolveScopeTarget(collection, String(row.id ?? ''), row)
@@ -280,7 +289,7 @@ export class DatabaseAccessPolicy {
           collection: target.collection,
           recordId: target.id,
         }
-        if (collection === '/tags' && !String(row.sourceId ?? '') && !String(row.tablePath ?? '')) {
+        if (collection === TAGS_COLLECTION_PATH && !String(row.sourceId ?? '') && !String(row.tablePath ?? '')) {
           return this.indexTagVisible(String(row.id ?? ''), actor.accountId)
         }
         if (authorization.authorize(actor, action, resource).allowed) return true
@@ -294,7 +303,7 @@ export class DatabaseAccessPolicy {
     const workspaceId = store?.activeWorkspaceId() ?? ''
     const grants = new Map<string, Map<string, Set<string>>>()
     return rows.filter((row) => {
-      if (collection === '/plugins' && (row as { builtin?: unknown }).builtin === true) {
+      if (collection === PLUGINS_COLLECTION_PATH && (row as { builtin?: unknown }).builtin === true) {
         return action === 'resource:read' || action === 'resource:list'
       }
       const target = resolveScopeTarget(collection, String(row.id ?? ''), row)
@@ -321,7 +330,7 @@ export class DatabaseAccessPolicy {
     const actor = authorization?.currentActor()
     if (!authorization || !actor) return rows
     return rows.filter((row) => {
-      if (collection === '/plugins' && (row as { builtin?: unknown }).builtin === true) return scope === 'shared'
+      if (collection === PLUGINS_COLLECTION_PATH && (row as { builtin?: unknown }).builtin === true) return scope === 'shared'
       const target = resolveScopeTarget(collection, String(row.id ?? ''), row)
       return authorization.scopeCurrent({
         type: 'record',
@@ -364,7 +373,7 @@ export class DatabaseAccessPolicy {
     const actorId = currentAccountId()
     if (!store?.grantMemberView || !actorId) return
     try {
-      store.grantMemberView(actorId, collection, recordId, builtinAllViewId('/workspace-members'), 'editor')
+      store.grantMemberView(actorId, collection, recordId, builtinAllViewId(WORKSPACE_MEMBERS_COLLECTION_PATH), 'editor')
       this.ownerCache = null
       this.ownershipCache = null
     } catch {
@@ -421,7 +430,7 @@ export class DatabaseAccessPolicy {
       })
       if (!decision.allowed) {
         if (
-          spec.path === '/tags' &&
+          spec.path === TAGS_COLLECTION_PATH &&
           (action === 'resource:read' || action === 'resource:list') &&
           this.indexTagVisible(id, actor.accountId)
         ) {
@@ -508,9 +517,9 @@ export class DatabaseAccessPolicy {
       this.viewAudienceCache = { key, rows: grantRows }
     }
     const memberViews = [
-      builtinAllView({ path: '/workspace-members' }),
+      builtinAllView({ path: WORKSPACE_MEMBERS_COLLECTION_PATH }),
       ...builtinMemberViews(),
-      ...(this.host.viewCatalog?.viewsFor('/workspace-members') ?? []),
+      ...(this.host.viewCatalog?.viewsFor(WORKSPACE_MEMBERS_COLLECTION_PATH) ?? []),
     ]
     const dataViews = [
       builtinAllView({ path: collection }),

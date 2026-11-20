@@ -76,7 +76,7 @@ describe('顶栏三级标题', () => {
 
   it('改视图名会先写入缓存再通知面包屑', () => {
     expect(browser).toMatch(/rememberViews\(path, listedNow\)[\s\S]*emitFsdbChange\(\{ scope: 'views' \}\)/)
-    expect(browser).toContain("window.dispatchEvent(new Event('fsdb:crumb-labels'))")
+    expect(browser).toContain('window.dispatchEvent(new Event(FSDB_CRUMB_LABELS_EVENT))')
     expect(browser).toContain('rememberRecords')
     expect(browser).toContain('routeViewId ?? activeViewId')
     expect(browser).toContain('crumbRecordLabel')

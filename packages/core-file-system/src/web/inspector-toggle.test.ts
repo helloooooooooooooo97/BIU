@@ -14,8 +14,13 @@ const browser =
   '\n' +
   readFileSync(resolve(import.meta.dirname, './history-nav.ts'), 'utf8') +
   '\n' +
+  readFileSync(resolve(import.meta.dirname, './fsdb-events.ts'), 'utf8') +
+  '\n' +
   readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
-const detail = readFileSync(resolve(import.meta.dirname, './record-detail.tsx'), 'utf8')
+const detail =
+  readFileSync(resolve(import.meta.dirname, './record-detail.tsx'), 'utf8') +
+  '\n' +
+  readFileSync(resolve(import.meta.dirname, './fsdb-events.ts'), 'utf8')
 const style = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
 
 test('embedded record details can share their explicit record target', () => {
@@ -25,7 +30,7 @@ test('embedded record details can share their explicit record target', () => {
   assert.match(browser, /recordId: detailId/)
   assert.match(detail, /share\?: ReactNode/)
   assert.match(detail, /share=\{share\}/)
-  assert.match(detail, /shareLabel=\{collectionPath === '\/pages' \? '分享页面' : '分享记录'\}/)
+  assert.match(detail, /shareLabel=\{collectionPath === PAGES_COLLECTION_PATH \? '分享页面' : '分享记录'\}/)
   assert.match(detail, /data-testid="fsdb-detail-share"/)
   assert.match(detail, /placement="left"/)
   assert.doesNotMatch(detail, /data-testid="fsdb-detail-more"/)
@@ -42,7 +47,7 @@ test('embedded record details can share their explicit record target', () => {
   assert.match(style, /\.fsdb-detail-more-menu\.has-share/)
   assert.match(style, /\.fsdb-detail-more-caret/)
   assert.doesNotMatch(browser, /\{nested \? null : \(\s*<ShareButton/)
-  assert.match(browser, /isSystemCollection\(collectionPath\) \|\| isIndexCollection\(collectionPath\) \|\| \(collectionPath === '\/plugins' && detailRow\?\.builtin === true\) \? null : \(\s*<ShareButton/)
+  assert.match(browser, /isSystemCollection\(collectionPath\) \|\| isIndexCollection\(collectionPath\) \|\| \(collectionPath === PLUGINS_COLLECTION_PATH && detailRow\?\.builtin === true\) \? null : \(\s*<ShareButton/)
   assert.doesNotMatch(browser, /buttonClassName="fsdb-detail-float-btn"/)
 })
 
@@ -267,7 +272,10 @@ test('pages and tasks sidebar records nest by parentId; other tables stay flat',
   const sidebar = readFileSync(resolve(import.meta.dirname, './data-sidebar.tsx'), 'utf8')
   const cssDir = resolve(import.meta.dirname, '../../../../web')
   const css = readFileSync(resolve(cssDir, 'style.css'), 'utf8') + readFileSync(resolve(cssDir, 'sidebar.css'), 'utf8')
-  const path = readFileSync(resolve(import.meta.dirname, './database-path.ts'), 'utf8')
+  const path =
+    readFileSync(resolve(import.meta.dirname, '../paths.ts'), 'utf8') +
+    '\n' +
+    readFileSync(resolve(import.meta.dirname, './database-path.ts'), 'utf8')
   assert.match(path, /PAGES_COLLECTION_PATH = '\/pages'/)
   assert.match(path, /TASKS_COLLECTION_PATH = '\/tasks'/)
   assert.match(path, /function isRecordTreeCollection/)
@@ -372,7 +380,7 @@ test('leaving a plugin record does not keep a permission error on the plugin lis
   assert.match(patchFn, /if \(denied && contentOnly\) return/)
   assert.match(
     browser,
-    /collectionPath === '\/plugins' && selected\.builtin === true/,
+    /collectionPath === PLUGINS_COLLECTION_PATH && selected\.builtin === true/,
   )
 })
 
@@ -381,7 +389,7 @@ test('title cell row tools skip the overflow action menu', () => {
   assert.match(browser, /placedActions\(paintSchema, 'row'\)/)
   assert.match(browser, /<Actions actions=\{placed\} record=\{row\}/)
   assert.doesNotMatch(browser, /place="detail"/)
-  assert.match(browser, /onDelete=\{canDelete && !\(collectionPath === '\/plugins' && selected\.builtin === true\) \? \(\) => setDlg\(\{ kind: 'delete-record', row: selected \}\) : undefined\}/)
+  assert.match(browser, /onDelete=\{canDelete && !\(collectionPath === PLUGINS_COLLECTION_PATH && selected\.builtin === true\) \? \(\) => setDlg\(\{ kind: 'delete-record', row: selected \}\) : undefined\}/)
   assert.doesNotMatch(browser, /fsdb-detail-more-item/)
   const detail = readFileSync(resolve(import.meta.dirname, './record-detail.tsx'), 'utf8')
   assert.doesNotMatch(detail, /actions=\{toolbar\}/)
@@ -399,7 +407,7 @@ test('title cell row tools skip the overflow action menu', () => {
   assert.match(detail, /删除页面/)
   const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
   assert.match(css, /\.fsdb-detail-more-item\.is-danger\{/)
-  assert.match(browser, /collectionPath === '\/plugins' \? ' is-plugins'/)
+  assert.match(browser, /collectionPath === PLUGINS_COLLECTION_PATH \? ' is-plugins'/)
   assert.doesNotMatch(browser, /fsdb-detail-more-item/)
   assert.match(browser, /listedSelected/)
   assert.match(browser, /overlayListed/)
@@ -488,9 +496,9 @@ test('deletable tables can pick rows and bulk-act over the table header', () => 
   assert.doesNotMatch(cells, /<RecordPickPanel/)
   const people = readFileSync(resolve(import.meta.dirname, './person-cell.tsx'), 'utf8')
   assert.match(people, /asPersonList/)
-  assert.match(people, /path: '\/workspace-members'/)
+  assert.match(people, /path: WORKSPACE_MEMBERS_COLLECTION_PATH/)
   assert.match(people, /listCollection/)
-  assert.match(people, /path: '\/agents'/)
+  assert.match(people, /path: AGENTS_COLLECTION_PATH/)
   const personFace = people.slice(people.indexOf('export function PersonFace'), people.indexOf('export function PersonPickPanel'))
   assert.doesNotMatch(personFace, /loadAgents|listCollection/)
   assert.doesNotMatch(people, /\/api\/agents/)
@@ -1221,7 +1229,7 @@ test('opening a record fetches content without waiting for detailRow', () => {
 })
 
 test('open detail still reloads body when the collection changes', () => {
-  const onChange = browser.slice(browser.indexOf('const onChange = (event: Event)'), browser.indexOf("window.addEventListener('fsdb:change', onChange)"))
+  const onChange = browser.slice(browser.indexOf('const onChange = (event: Event)'), browser.indexOf('window.addEventListener(FSDB_CHANGE_EVENT, onChange)'))
   assert.match(onChange, /if \(detailIdRef\.current\) \{/)
   assert.match(onChange, /refreshOpenDetail\(\)/)
   assert.match(onChange, /else \{\s*void reloadRef\.current\(\{ force: true \}\)/)
@@ -1638,7 +1646,7 @@ test('writes and view switches reload the list without a full page refresh', () 
   assert.match(patchFn, /publishListedMutation\(\{ path: dataPath, op: 'patch', row: \{ id: row.id, updatedAt: stamp \}/)
   const runActionFn = browser.slice(browser.indexOf('async function runAction'), browser.indexOf('function mapListedRecords'))
   assert.match(runActionFn, /action\.id === 'chat'/)
-  assert.match(runActionFn, /biu:open-session/)
+  assert.match(runActionFn, /OPEN_SESSION_EVENT/)
   const actionFn = browser.slice(browser.indexOf('async function executeAction'), browser.indexOf('async function writePatch'))
   assert.doesNotMatch(actionFn, /previewActionRecord/)
   assert.doesNotMatch(actionFn, /if \(preview !== row\)/)

@@ -1,6 +1,7 @@
 import { TagIcon } from '@heroicons/react/16/solid'
 import type { CollectionActionInfo, DbRecord, FieldSpec } from '@biu/type-file-system'
 import { AppDialog, CheckRow } from './controls.tsx'
+import { TRASH_COLLECTION_PATH } from './database-path.ts'
 import { tagChipLabel } from './schema-field.tsx'
 import { loadTags } from './tag-catalog.ts'
 
@@ -79,7 +80,7 @@ export function BrowserDialogs({
         }}
         body={
           <p>
-            {collectionPath === '/trash'
+            {collectionPath === TRASH_COLLECTION_PATH
               ? `确定彻底删除选中的 ${dlg.ids.length} 条？不可恢复。`
               : `确定删除选中的 ${dlg.ids.length} 条记录？会放进回收站，可随时恢复。`}
           </p>

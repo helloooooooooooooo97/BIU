@@ -4,7 +4,22 @@ import { CONTENT_JUMP_EVENT, parseContentJump } from '@biu/type-file-system'
 import { parseAppPath } from '@biu/web-session-view'
 import { normalizeCollectionPath } from '../paths.ts'
 import { builtinAllViewId } from '../catalog-views.ts'
-import { DATA_MODULE, DATA_MODULE_PATH, databaseAllViewPath, databaseRecordPath, databaseViewPath } from './database-path.ts'
+import {
+  DATA_MODULE,
+  DATA_MODULE_PATH,
+  TRASH_COLLECTION_PATH,
+  VIEWS_COLLECTION_PATH,
+  databaseAllViewPath,
+  databaseRecordPath,
+  databaseViewPath,
+} from './database-path.ts'
+import {
+  INSPECTOR_OPEN_EVENT,
+  INSPECTOR_PANE_CLOSED_EVENT,
+  INSPECTOR_REVEAL_EVENT,
+  INSPECTOR_TAB_EVENT,
+  SAVED_VIEW_EVENT,
+} from './fsdb-events.ts'
 import { activeViewStorageKey, upsertSavedView, savedViewFromRecord } from './view-storage.ts'
 import { type SavedView } from './saved-view.ts'
 
@@ -278,7 +293,7 @@ function pickCanonicalPane(ids: string[], prefer?: string) {
 
 function emitInspectorPanesClosed(ids: string[]) {
   for (const id of ids) {
-    window.dispatchEvent(new CustomEvent('biu:inspector-pane-closed', { detail: id }))
+    window.dispatchEvent(new CustomEvent(INSPECTOR_PANE_CLOSED_EVENT, { detail: id }))
   }
 }
 
@@ -333,8 +348,8 @@ export function reuseInspectorOfferPane(tabId: string, opened: string[]) {
 function revealInspectorPane(paneId: string, href: string) {
   setInspectorDbPath(paneId, href)
   const live = paneWithPageKey(href) ?? paneId
-  window.dispatchEvent(new Event('biu:inspector-open'))
-  window.dispatchEvent(new CustomEvent('biu:inspector-tab', { detail: live }))
+  window.dispatchEvent(new Event(INSPECTOR_OPEN_EVENT))
+  window.dispatchEvent(new CustomEvent(INSPECTOR_TAB_EVENT, { detail: live }))
 }
 
 function nextInspectorPaneId(tabId: string) {
@@ -383,15 +398,15 @@ export function showInInspector(collection: string, href: string, opts?: { uniqu
 /** 已打开这条记录的检查器栏切到回收站里的同一行，主界面不动。 */
 export function moveInspectorRecordsToTrash(collection: string, recordIds: string[]) {
   const table = normalizeCollectionPath(collection)
-  if (!table || table === '/' || table === '/trash') return
-  const viewId = builtinAllViewId('/trash')
+  if (!table || table === '/' || table === TRASH_COLLECTION_PATH) return
+  const viewId = builtinAllViewId(TRASH_COLLECTION_PATH)
   for (const raw of recordIds) {
     const recordId = String(raw ?? '').trim()
     if (!recordId) continue
     const pane = paneWithPageKey(databaseRecordPath(table, recordId))
     if (!pane) continue
     const trashId = `${table.replace(/^\//, '')}::${recordId}`
-    setInspectorDbPath(pane, databaseRecordPath('/trash', trashId, viewId))
+    setInspectorDbPath(pane, databaseRecordPath(TRASH_COLLECTION_PATH, trashId, viewId))
   }
 }
 
@@ -487,15 +502,17 @@ function savedViewTablePath(raw: unknown, revealCollection: string) {
     raw && typeof raw === 'object' && !Array.isArray(raw)
       ? normalizeCollectionPath(String((raw as { tablePath?: unknown }).tablePath ?? ''))
       : '/'
-  const fromReveal = revealCollection === '/views' ? '/' : revealCollection
-  const path = fromRow && fromRow !== '/' && fromRow !== '/views' ? fromRow : fromReveal
-  if (!path || path === '/' || path === '/views') return ''
+  const fromReveal = revealCollection === VIEWS_COLLECTION_PATH ? '/' : revealCollection
+  const path = fromRow && fromRow !== '/' && fromRow !== VIEWS_COLLECTION_PATH ? fromRow : fromReveal
+  if (!path || path === '/' || path === VIEWS_COLLECTION_PATH) return ''
   return path
 }
 
-export const SAVED_VIEW_EVENT = 'fsdb:saved-view'
-export const INSPECTOR_REVEAL_EVENT = 'biu:inspector-reveal'
-export const INSPECTOR_PANE_CLOSED_EVENT = 'biu:inspector-pane-closed'
+export {
+  INSPECTOR_PANE_CLOSED_EVENT,
+  INSPECTOR_REVEAL_EVENT,
+  SAVED_VIEW_EVENT,
+}
 
 function onInspectorReveal(event: Event) {
   applyDatabaseReveal((event as CustomEvent).detail)

@@ -34,7 +34,7 @@ test('person pick panel searches members and sessions', () => {
   const pick = src.slice(src.indexOf('export function PersonPickPanel'))
   assert.match(src, /AGENTS_TTL_MS = 8000/)
   assert.match(src, /MEMBERS_TTL_MS = 8000/)
-  assert.match(src, /path: '\/workspace-members'/)
+  assert.match(src, /path: WORKSPACE_MEMBERS_COLLECTION_PATH/)
   assert.match(src, /if \(agentsListed && Date\.now\(\) - agentsListedAt < AGENTS_TTL_MS\) return agentsListed/)
   assert.match(pick, /loadMembers\(\)/)
   assert.match(pick, /loadAgents\(\)/)

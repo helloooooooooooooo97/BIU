@@ -11,7 +11,8 @@ import { FieldGlyph, FilePreview } from './fsdb-cells.tsx'
 import { PropertyRow } from './property-row.tsx'
 import { TagPackEditor } from './schema-field.tsx'
 import { idleTableIconKind } from './nav-glyphs.tsx'
-import { TAGS_COLLECTION_PATH } from './database-path.ts'
+import { DATA_COLLECTION_PATH, PAGES_COLLECTION_PATH, TAGS_COLLECTION_PATH } from './database-path.ts'
+import { FSDB_CHANGE_EVENT, PAGE_OUTLINE_EVENT } from './fsdb-events.ts'
 import { normalizeRecordEmoji, recordPreviewEmoji } from './sidebar-preview.ts'
 import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, shouldLeaveContentForTitle, shouldLeaveTitleForContent, focusRecordTitleNear, scheduleFocusRecordTitle } from './title-content-nav.ts'
 import { HeadingOutline } from './heading-outline.tsx'
@@ -357,9 +358,9 @@ export function RecordDetail({
       record={selected}
       Tools={readOnly ? undefined : chrome?.DetailTools}
       onDelete={!readOnly && onDelete ? onDelete : undefined}
-      deleteLabel={collectionPath === '/pages' ? '删除页面' : '删除记录'}
+      deleteLabel={collectionPath === PAGES_COLLECTION_PATH ? '删除页面' : '删除记录'}
       share={share}
-      shareLabel={collectionPath === '/pages' ? '分享页面' : '分享记录'}
+      shareLabel={collectionPath === PAGES_COLLECTION_PATH ? '分享页面' : '分享记录'}
     />
   )
 
@@ -377,8 +378,8 @@ export function RecordDetail({
   }, [selected.id, headingOutline, visibleColumnsKey])
   useEffect(() => {
     const onOutline = () => setOutlineOn((prev) => !prev)
-    window.addEventListener('biu:page-outline', onOutline)
-    return () => window.removeEventListener('biu:page-outline', onOutline)
+    window.addEventListener(PAGE_OUTLINE_EVENT, onOutline)
+    return () => window.removeEventListener(PAGE_OUTLINE_EVENT, onOutline)
   }, [])
 
   const propertyEntries = Object.entries(schema.fields)
@@ -417,7 +418,7 @@ export function RecordDetail({
                   title={labelOf(selected)}
                   onChange={(next) => {
                     void Promise.resolve(writePatch(selected, { banner: next })).then(() => {
-                      window.dispatchEvent(new Event('fsdb:change'))
+                      window.dispatchEvent(new Event(FSDB_CHANGE_EVENT))
                     })
                   }}
                 />
@@ -610,7 +611,7 @@ export function RecordDetail({
                           value={detailBody}
                           writable={Boolean(spec.writable) && !readOnly && detailBodyStatus === 'ready'}
                           path={
-                            collectionPath === '/data' && selected.tablePath && selected.sourceId
+                            collectionPath === DATA_COLLECTION_PATH && selected.tablePath && selected.sourceId
                               ? `${String(selected.tablePath)}/${String(selected.sourceId)}`
                               : collectionPath
                                 ? `${collectionPath}/${selected.id}`

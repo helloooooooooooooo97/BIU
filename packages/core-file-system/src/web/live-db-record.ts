@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { DbRecord } from '@biu/type-file-system'
-import { parseFsdbChange, type FsdbChangeDetail } from '@biu/type-file-system'
+import { FSDB_CHANGE_EVENT, parseFsdbChange, type FsdbChangeDetail } from '@biu/type-file-system'
 import { hydrateRecordViewCatalog } from './record-view-catalog.ts'
 
 export async function readDbRecord(path: string): Promise<DbRecord | null> {
@@ -60,10 +60,10 @@ export function useLiveDbRecord(collectionPath: string, record: DbRecord) {
       if (!liveRecordShouldPull(change, collectionPath, recordId)) return
       pull()
     }
-    window.addEventListener('fsdb:change', onChange)
+    window.addEventListener(FSDB_CHANGE_EVENT, onChange)
     return () => {
       gone = true
-      window.removeEventListener('fsdb:change', onChange)
+      window.removeEventListener(FSDB_CHANGE_EVENT, onChange)
     }
   }, [collectionPath, recordId])
   return [live, setLive] as const

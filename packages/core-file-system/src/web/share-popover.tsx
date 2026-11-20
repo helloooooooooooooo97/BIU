@@ -4,7 +4,9 @@ import { ArrowPathIcon, CheckIcon, LinkIcon, ShareIcon, XMarkIcon } from '@heroi
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { useFloatingPosition } from '@biu/biu-ui/floating-position'
 import { OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
+import { VIEWS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH } from './database-path.ts'
 import { listCollection, readJson } from './db-client.ts'
+import { FSDB_SHARES_CHANGE_EVENT } from './fsdb-events.ts'
 
 export { ShareScopeLabel, ShareRoleLabel } from './share-scope-label.tsx'
 export { ShareScopeDetail, ShareRoleDetail } from './share-chain-detail.tsx'
@@ -212,9 +214,9 @@ function WorkspaceAccess({
   useEffect(() => {
     void load().catch(() => setPeople([]))
     void listCollection({
-      path: '/views',
+      path: VIEWS_COLLECTION_PATH,
       limit: 200,
-      filters: { tablePath: '/workspace-members' },
+      filters: { tablePath: WORKSPACE_MEMBERS_COLLECTION_PATH },
       columns: ['title', 'tablePath', 'viewId', 'filters'],
     })
       .then((page) => {
@@ -239,7 +241,7 @@ function WorkspaceAccess({
       })
       .catch(() => setAvailableMemberViews([]))
     void listCollection({
-      path: '/workspace-members',
+      path: WORKSPACE_MEMBERS_COLLECTION_PATH,
       limit: 200,
       columns: ['title', 'name', 'email', 'role', 'membershipKind'],
     })
@@ -266,7 +268,7 @@ function WorkspaceAccess({
       .then((page) => setRecord(page.items[0] ?? null))
       .catch(() => setRecord(null))
     void listCollection({
-      path: '/views',
+      path: VIEWS_COLLECTION_PATH,
       limit: 200,
       filters: { tablePath: collection },
       columns: ['title', 'table', 'viewId', 'filters'],
@@ -308,7 +310,7 @@ function WorkspaceAccess({
         setMemberQuery('')
         setSelectedMemberId('')
         setMemberPickerOpen(false)
-        window.dispatchEvent(new Event('fsdb:shares-change'))
+        window.dispatchEvent(new Event(FSDB_SHARES_CHANGE_EVENT))
         return load()
       })
       .catch((err) => setError(err instanceof Error ? err.message : '无法授权'))
@@ -322,7 +324,7 @@ function WorkspaceAccess({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ collection, ...(viewId ? { viewId } : { recordId }), subjectType, subjectId }),
       })
-      window.dispatchEvent(new Event('fsdb:shares-change'))
+      window.dispatchEvent(new Event(FSDB_SHARES_CHANGE_EVENT))
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : '无法移除协作者')
@@ -346,7 +348,7 @@ function WorkspaceAccess({
       setGuestUrl(url)
       await navigator.clipboard.writeText(url)
       setGuestCopied(true)
-      window.dispatchEvent(new Event('fsdb:shares-change'))
+      window.dispatchEvent(new Event(FSDB_SHARES_CHANGE_EVENT))
       window.setTimeout(() => setGuestCopied(false), 1600)
     } catch (err) {
       setError(err instanceof Error ? err.message : '无法生成临时访客链接')
@@ -354,7 +356,7 @@ function WorkspaceAccess({
   }
 
   const memberViewFilters = [
-    { id: builtinAllView({ path: '/workspace-members' }).id, filters: builtinAllView({ path: '/workspace-members' }).filters },
+    { id: builtinAllView({ path: WORKSPACE_MEMBERS_COLLECTION_PATH }).id, filters: builtinAllView({ path: WORKSPACE_MEMBERS_COLLECTION_PATH }).filters },
     ...builtinMemberViews().map((view) => ({ id: view.id, filters: view.filters })),
     ...availableMemberViews,
   ]
@@ -642,7 +644,7 @@ export function SharePanel({
       })
       applyPayload(data, opts.pin, opts.flagsOnly)
       if (patch.enabled === false && data.share == null && share) rememberPin(share.token, '')
-      window.dispatchEvent(new Event('fsdb:shares-change'))
+      window.dispatchEvent(new Event(FSDB_SHARES_CHANGE_EVENT))
       return data.share
     } catch (err) {
       setError(String(err instanceof Error ? err.message : err))

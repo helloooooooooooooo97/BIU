@@ -8,6 +8,7 @@ import {
   type DbRecord,
   type PersonValue,
 } from '@biu/type-file-system'
+import { AGENTS_COLLECTION_PATH, PLUGINS_COLLECTION_PATH } from '../paths.ts'
 import type { TagStore } from './tags-store.ts'
 
 export function sessionTitleFromRow(row: unknown): string {
@@ -59,7 +60,7 @@ export type ActorOverlayHost = {
  * 再 require() 把整条 events 读出来，表格每渲染一格就被卡一次。
  */
 export function peekSessionRow(host: ActorOverlayHost, sessionId: string): unknown {
-  const sessions = host.collection('/agents') as
+  const sessions = host.collection(AGENTS_COLLECTION_PATH) as
     | { peek?: (id: string) => unknown; get?: (id: string) => unknown }
     | undefined
   const peeked = sessions?.peek?.(sessionId)
@@ -79,7 +80,7 @@ export async function querySessionPerson(
   if (peeked.name || peeked.mascot) return peeked
   // 只有 peek 完全落空才回落到真正的读取；正常热路径不会走到这里，
   // 也就不会为了写一个 createdBy 把整条会话的 events 拉进内存。
-  const sessions = host.collection('/agents')
+  const sessions = host.collection(AGENTS_COLLECTION_PATH)
   if (sessions?.get) {
     const fromCollection = sessionPersonFromRow(await sessions.get(sessionId))
     if (fromCollection.name || fromCollection.mascot) return fromCollection
@@ -147,7 +148,7 @@ export function applyRecordPersonOverlay(
   spec: CollectionSpec,
   row: DbRecord,
 ): DbRecord {
-  if (spec.path === '/plugins' && row.builtin === true) {
+  if (spec.path === PLUGINS_COLLECTION_PATH && row.builtin === true) {
     const official = { kind: 'user' as const, name: 'BIU官方', url: 'https://github.com/helloooooooooooooo97/biu' }
     return { ...row, createdBy: official, updatedBy: [official] }
   }

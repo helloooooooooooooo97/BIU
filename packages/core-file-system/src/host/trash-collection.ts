@@ -1,5 +1,6 @@
 import type { CollectionAction, CollectionListQuery, CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS, recordBuiltinValues } from '@biu/type-file-system'
+import { TRASH_COLLECTION_PATH } from '../paths.ts'
 import type { AssetGcHooks } from './asset-gc-run.ts'
 import { listWorkspaceGcCandidates, previewWorkspaceAssetGc, runWorkspaceAssetGc } from './asset-gc-run.ts'
 import { parseStampRecordId, stampRecordId } from './tags-collection.ts'
@@ -77,7 +78,7 @@ function assetGcActions(hooks: () => AssetGcHooks): CollectionAction[] {
 export function trashCollection(store: TrashStore, hooks?: () => AssetGcHooks): CollectionSpec {
   return {
     id: 'trash',
-    path: '/trash',
+    path: TRASH_COLLECTION_PATH,
     label: '回收站',
     view: {
       moduleId: 'trash',

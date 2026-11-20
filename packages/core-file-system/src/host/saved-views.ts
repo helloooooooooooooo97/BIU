@@ -6,8 +6,8 @@ import { normalizeSchemaValue, recordBuiltinValues, REQUIRED_RECORD_FIELDS } fro
 import { builtinAllView, builtinAllViewId, isReadOnlyViewId } from '../catalog-views.ts'
 import { normalizeColumnWidths, normalizePageSize, parseViewColumns, type SavedView } from '../web/saved-view.ts'
 import { isViewModeId } from '../web/fields.ts'
-import { normalizeCollectionPath } from '../paths.ts'
-import { DATA_COLLECTION_PATH, isIndexCollection } from '../web/database-path.ts'
+import { DATA_COLLECTION_PATH, VIEWS_COLLECTION_PATH, normalizeCollectionPath } from '../paths.ts'
+import { isIndexCollection } from '../web/database-path.ts'
 import {
   countFilterRules,
   flatFiltersToTree,
@@ -81,7 +81,7 @@ export class SavedViewsStore {
     const rows = this.db.prepare('SELECT collection, payload_json FROM saved_views').all() as ViewRow[]
     for (const row of rows) {
       const collection = normalizeCollectionPath(row.collection)
-      if (!collection || collection === '/' || collection === '/views') continue
+      if (!collection || collection === '/' || collection === VIEWS_COLLECTION_PATH) continue
       let parsed: StoredView | null = null
       try {
         parsed = JSON.parse(row.payload_json) as StoredView
@@ -277,7 +277,7 @@ export class SavedViewsStore {
 
   create(fields: Record<string, unknown>, tables: CollectionInfo[], accountId = ''): DbRecord {
     const tablePath = tablePathOf(fields)
-    if (!tablePath || tablePath === '/' || tablePath === '/views') throw new Error('tablePath required')
+    if (!tablePath || tablePath === '/' || tablePath === VIEWS_COLLECTION_PATH) throw new Error('tablePath required')
     if (
       tablePath !== DATA_COLLECTION_PATH &&
       !tables.some((item) => normalizeCollectionPath(item.path) === tablePath)
@@ -537,7 +537,7 @@ export function viewsCollection(
   const list = () => store.rows(tables(), accountId())
   return {
     id: 'views',
-    path: '/views',
+    path: VIEWS_COLLECTION_PATH,
     label: '视图',
     view: {
       moduleId: 'views-db',

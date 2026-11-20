@@ -1,3 +1,6 @@
+import { PAGES_COLLECTION_PATH } from './database-path.ts'
+import { FSDB_CHANGE_EVENT } from './fsdb-events.ts'
+
 export function openHostRecordPath() {
   if (typeof document === 'undefined') return ''
   const host = document.querySelector('.page-editor')
@@ -5,7 +8,7 @@ export function openHostRecordPath() {
   const stamped = String(host.dataset.livePath || host.dataset.pagePath || '').trim()
   if (stamped) return stamped
   const rec = String(host.dataset.pageRecord || '').trim()
-  return rec ? `/pages/${rec}` : ''
+  return rec ? `${PAGES_COLLECTION_PATH}/${rec}` : ''
 }
 
 export async function patchTagSandbox(path: string, tagId: string, values: Record<string, unknown>) {
@@ -20,6 +23,6 @@ export async function patchTagSandbox(path: string, tagId: string, values: Recor
   })
   const data = (await res.json().catch(() => ({}))) as { error?: string; value?: unknown }
   if (!res.ok) throw new Error(data.error || res.statusText)
-  window.dispatchEvent(new Event('fsdb:change'))
+  window.dispatchEvent(new Event(FSDB_CHANGE_EVENT))
   return data
 }

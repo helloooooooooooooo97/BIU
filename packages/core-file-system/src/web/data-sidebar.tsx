@@ -11,7 +11,7 @@ import {
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { SidebarRow, SidebarRowMain } from '@biu/web-session-view/sidebar-row'
-import { parseFsdbChange, type CollectionInfo, type CollectionSchema, type DbRecord } from '@biu/type-file-system'
+import { FSDB_CHANGE_EVENT, parseFsdbChange, type CollectionInfo, type CollectionSchema, type DbRecord } from '@biu/type-file-system'
 import { groupField, groupRecords, parentFieldKey, treeChildren } from './fields.ts'
 import { builtinAllViewId, isReadOnlyViewId, type DataScope } from '../catalog-views.ts'
 import { dataSidebarKind, isRecordTreeCollection, isSystemCollection, sortDataCollections } from './database-path.ts'
@@ -304,7 +304,7 @@ function ViewRecordPreview({
       setState((prev) => ({ ...prev, items }))
       setPickerId(null)
       setPickerAnchor(null)
-      window.dispatchEvent(new Event('fsdb:change'))
+      window.dispatchEvent(new Event(FSDB_CHANGE_EVENT))
     } catch (err) {
       setState((prev) => ({ ...prev, error: String(err) }))
     }
@@ -345,7 +345,7 @@ function ViewRecordPreview({
       rememberPreviewTotal(key, total)
       setState((prev) => ({ ...prev, items, total }))
       setOpenKids((prev) => ({ ...prev, [row.id]: true }))
-      window.dispatchEvent(new Event('fsdb:change'))
+      window.dispatchEvent(new Event(FSDB_CHANGE_EVENT))
       if (created?.id) onOpenRecord?.(created.id, created)
     } catch (err) {
       setState((prev) => ({ ...prev, error: String(err) }))
@@ -688,8 +688,8 @@ export const DataSidebar = memo(function DataSidebar({
         }
       }
     }
-    window.addEventListener('fsdb:change', onChange)
-    return () => window.removeEventListener('fsdb:change', onChange)
+    window.addEventListener(FSDB_CHANGE_EVENT, onChange)
+    return () => window.removeEventListener(FSDB_CHANGE_EVENT, onChange)
   }, [])
 
   const viewsByPath = useMemo(() => {
@@ -1044,7 +1044,7 @@ export const DataSidebar = memo(function DataSidebar({
                                         for (const key of [...previewCache.keys()]) {
                                           if (key.startsWith(`${table.path}\0`)) previewCache.delete(key)
                                         }
-                                        window.dispatchEvent(new Event('fsdb:change'))
+                                        window.dispatchEvent(new Event(FSDB_CHANGE_EVENT))
                                         if (expandedViewKey !== previewKey) toggleViewPreview(previewKey)
                                         const created = data.items?.[0]?.value
                                         if (created?.id && view) openRecord(table.path, view, created.id, created)

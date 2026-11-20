@@ -170,7 +170,33 @@ import { workspaceColumnsForLocation } from './workspace-columns.ts'
 import { PageBanner } from './page-banner.tsx'
 import { TableGlyph, UiGlyph, ViewModeGlyph, idleTableIconKind } from './nav-glyphs.tsx'
 import { SourceTableCell } from './source-table-cell.tsx'
-import { DATA_COLLECTION_PATH, DATA_MODULE, PAGES_COLLECTION_PATH, TAGS_COLLECTION_PATH, isIndexCollection, isSystemCollection } from './database-path.ts'
+import {
+  DATA_COLLECTION_PATH,
+  DATA_MODULE,
+  PAGES_COLLECTION_PATH,
+  PLUGINS_COLLECTION_PATH,
+  TAGS_COLLECTION_PATH,
+  TRASH_COLLECTION_PATH,
+  isIndexCollection,
+  isSystemCollection,
+} from './database-path.ts'
+import {
+  ENABLE_PAGE_BLOCK_PLUGIN_EVENT,
+  EXPAND_SHELL_SIDEBAR_EVENT,
+  FSDB_CHANGE_EVENT,
+  FSDB_CRUMB_LABELS_EVENT,
+  FSDB_DETAIL_REFRESH_EVENT,
+  FSDB_LIST_READY_EVENT,
+  FSDB_SHARES_CHANGE_EVENT,
+  INSPECTOR_CLOSE_EVENT,
+  INSPECTOR_OPEN_EVENT,
+  INSPECTOR_TOGGLE_EVENT,
+  OPEN_SESSION_EVENT,
+  PICK_MODE_EVENT,
+  SHELL_LAYOUT_EVENT,
+  SHELL_SIDEBAR_WIDTH_EVENT,
+  TOGGLE_SHELL_SIDEBAR_EVENT,
+} from './fsdb-events.ts'
 import { ViewOrderMenu } from './view-order-menu.tsx'
 import { getDatabaseUi } from './database-ui.ts'
 import {
@@ -934,7 +960,7 @@ export function CollectionBrowser({
 
   function toggleViewsOpen() {
     if (!nested) {
-      window.dispatchEvent(new Event('biu:toggle-shell-sidebar'))
+      window.dispatchEvent(new Event(TOGGLE_SHELL_SIDEBAR_EVENT))
       return
     }
     setViewsOpen((prev) => {
@@ -970,10 +996,10 @@ export function CollectionBrowser({
     function onClose() {
       setInspectorOpen(false)
     }
-    window.addEventListener('biu:shell-layout', onLayout)
-    window.addEventListener('biu:shell-sidebar-width', onWidth)
-    window.addEventListener('biu:inspector-open', onOpen)
-    window.addEventListener('biu:inspector-close', onClose)
+    window.addEventListener(SHELL_LAYOUT_EVENT, onLayout)
+    window.addEventListener(SHELL_SIDEBAR_WIDTH_EVENT, onWidth)
+    window.addEventListener(INSPECTOR_OPEN_EVENT, onOpen)
+    window.addEventListener(INSPECTOR_CLOSE_EVENT, onClose)
     const shell = document.querySelector('[data-testid="app-shell"]')
     if (shell instanceof HTMLElement) {
       const styles = getComputedStyle(shell)
@@ -982,10 +1008,10 @@ export function CollectionBrowser({
       if (Number.isFinite(left) && Number.isFinite(inspector)) applyLayout(left, inspector)
     }
     return () => {
-      window.removeEventListener('biu:shell-layout', onLayout)
-      window.removeEventListener('biu:shell-sidebar-width', onWidth)
-      window.removeEventListener('biu:inspector-open', onOpen)
-      window.removeEventListener('biu:inspector-close', onClose)
+      window.removeEventListener(SHELL_LAYOUT_EVENT, onLayout)
+      window.removeEventListener(SHELL_SIDEBAR_WIDTH_EVENT, onWidth)
+      window.removeEventListener(INSPECTOR_OPEN_EVENT, onOpen)
+      window.removeEventListener(INSPECTOR_CLOSE_EVENT, onClose)
     }
   }, [nested])
 
@@ -1359,7 +1385,7 @@ export function CollectionBrowser({
     const id = detailIdRef.current
     if (id) {
       window.dispatchEvent(
-        new CustomEvent('fsdb:detail-refresh', { detail: { path: dataPath, id } }),
+        new CustomEvent(FSDB_DETAIL_REFRESH_EVENT, { detail: { path: dataPath, id } }),
       )
     }
   }, [dataPath, pullDetailBody, pullDetailRecord])
@@ -1497,7 +1523,7 @@ export function CollectionBrowser({
     if (!page || page.getAttribute('data-list-ready') === '1') return
     page.setAttribute('data-list-ready', '1')
     markPaintedListReady()
-    window.dispatchEvent(new Event('fsdb:list-ready'))
+    window.dispatchEvent(new Event(FSDB_LIST_READY_EVENT))
   })
 
   useEffect(() => {
@@ -1542,12 +1568,12 @@ export function CollectionBrowser({
         if (viewsTouched) void syncViewsRef.current()
       }, 120)
     }
-    window.addEventListener('fsdb:change', onChange)
-    window.addEventListener('fsdb:shares-change', onChange)
+    window.addEventListener(FSDB_CHANGE_EVENT, onChange)
+    window.addEventListener(FSDB_SHARES_CHANGE_EVENT, onChange)
     return () => {
       window.clearTimeout(debounce)
-      window.removeEventListener('fsdb:change', onChange)
-      window.removeEventListener('fsdb:shares-change', onChange)
+      window.removeEventListener(FSDB_CHANGE_EVENT, onChange)
+      window.removeEventListener(FSDB_SHARES_CHANGE_EVENT, onChange)
     }
   }, [collectionPath, dataPath, nested, pullDetailBody, pullDetailRecord, refreshOpenDetail])
 
@@ -1573,8 +1599,8 @@ export function CollectionBrowser({
     const onMode = (event: Event) => {
       setPickMode(Boolean((event as CustomEvent<{ picking?: boolean }>).detail?.picking))
     }
-    window.addEventListener('biu:pick-mode', onMode)
-    return () => window.removeEventListener('biu:pick-mode', onMode)
+    window.addEventListener(PICK_MODE_EVENT, onMode)
+    return () => window.removeEventListener(PICK_MODE_EVENT, onMode)
   }, [])
 
   useEffect(() => {
@@ -1657,13 +1683,13 @@ export function CollectionBrowser({
   )
   const canCreate =
     (isDataOverview ? overviewCreateTables.length > 0 : Boolean(schema?.records?.create)) && !subsetLocked
-  const canAskNewPlugin = collectionPath === '/plugins' && !subsetLocked
+  const canAskNewPlugin = collectionPath === PLUGINS_COLLECTION_PATH && !subsetLocked
   const createTypeTable =
     overviewCreateTables.find((table) => table.path === createTypePath) ??
     overviewCreateTables.find((table) => table.path === PAGES_COLLECTION_PATH) ??
     overviewCreateTables[0]
   const canDelete = (Boolean(schema?.records?.delete) || isDataOverview) && !subsetLocked
-  const inTrash = collectionPath === '/trash'
+  const inTrash = collectionPath === TRASH_COLLECTION_PATH
   const canBulkDelete = (canDelete || inTrash) && !subsetLocked
   const canTag = Boolean(schema?.fields.tag?.writable) && !subsetLocked
   const bulkFields = useMemo(
@@ -2238,7 +2264,7 @@ export function CollectionBrowser({
       })
     }
     rememberRecords(collectionPath, rows, routeViewId ?? activeViewId ?? undefined)
-    window.dispatchEvent(new Event('fsdb:crumb-labels'))
+    window.dispatchEvent(new Event(FSDB_CRUMB_LABELS_EVENT))
   }, [activeViewId, collectionPath, items, routeViewId, schema?.labelField, selected, sheet])
   const filterActive = countFilterRules(filterTree) > 0
   const activeView = views.find((view) => view.id === activeViewId)
@@ -2279,10 +2305,10 @@ export function CollectionBrowser({
       if (change.scope !== 'content' || (change.path && change.path !== path)) return
       load(false)
     }
-    window.addEventListener('fsdb:change', onChange)
+    window.addEventListener(FSDB_CHANGE_EVENT, onChange)
     return () => {
       cancelled = true
-      window.removeEventListener('fsdb:change', onChange)
+      window.removeEventListener(FSDB_CHANGE_EVENT, onChange)
     }
   }, [sheet, collectionPath, activeViewId])
   useSyncExternalStore(subscribeStarredViews, getStarredViewsVersion, () => 0)
@@ -2365,7 +2391,7 @@ export function CollectionBrowser({
       setViews(merged)
     }
     emitFsdbChange({ scope: 'views' })
-    window.dispatchEvent(new Event('fsdb:crumb-labels'))
+    window.dispatchEvent(new Event(FSDB_CRUMB_LABELS_EVENT))
   }
 
   async function persistViewsFor(
@@ -2434,7 +2460,7 @@ export function CollectionBrowser({
         setViews(listedNow)
       }
       emitFsdbChange({ scope: 'views' })
-      window.dispatchEvent(new Event('fsdb:crumb-labels'))
+      window.dispatchEvent(new Event(FSDB_CRUMB_LABELS_EVENT))
     }
     setViewsSaveError(false)
     return true
@@ -2789,7 +2815,7 @@ export function CollectionBrowser({
       persistStarredViews(stars.map((item) => (item.path === collectionPath && item.viewId === viewId ? { ...item, name: nextName } : item)))
     }
     emitFsdbChange({ scope: 'views' })
-    window.dispatchEvent(new Event('fsdb:crumb-labels'))
+    window.dispatchEvent(new Event(FSDB_CRUMB_LABELS_EVENT))
     if (isReadOnlyViewId(viewId)) return
     void persistViewsWith(collectionPath, listed, { upsert: [updated], baseline: current }).then((ok) => {
       if (ok) return
@@ -2898,14 +2924,14 @@ export function CollectionBrowser({
       return
     }
     if (action.id === 'delete' || action.id === 'trash' || action.id === 'remove') {
-      if (collectionPath === '/plugins' && row.builtin === true) return
+      if (collectionPath === PLUGINS_COLLECTION_PATH && row.builtin === true) return
       setDlg({ kind: 'delete-record', row })
       return
     }
     if (action.id === 'chat') {
       const sessionId = String(row.sourceId ?? row.id ?? '').trim()
       if (sessionId) {
-        window.dispatchEvent(new CustomEvent('biu:open-session', { detail: { sessionId } }))
+        window.dispatchEvent(new CustomEvent(OPEN_SESSION_EVENT, { detail: { sessionId } }))
       }
       return
     }
@@ -3039,7 +3065,7 @@ export function CollectionBrowser({
         }),
       })
       if (action.id === 'start') {
-        window.dispatchEvent(new CustomEvent('biu:enable-page-block-plugin', { detail: { plugin: sourceId || String(row.id) } }))
+        window.dispatchEvent(new CustomEvent(ENABLE_PAGE_BLOCK_PLUGIN_EVENT, { detail: { plugin: sourceId || String(row.id) } }))
       }
       announceListChange()
       quietUntil.current = 0
@@ -3348,7 +3374,7 @@ export function CollectionBrowser({
 
   async function executeDeleteRecords(ids: string[]) {
     try {
-      if (dataPath === '/trash') {
+      if (dataPath === TRASH_COLLECTION_PATH) {
         await Promise.all(
           ids.map((id) =>
             readJson('/api/db/action', {
@@ -3389,7 +3415,7 @@ export function CollectionBrowser({
         viewId: activeViewIdRef.current,
         total: totalRef.current,
       })
-      if (dataPath !== '/trash') {
+      if (dataPath !== TRASH_COLLECTION_PATH) {
         const byTable = new Map<string, DbRecord[]>()
         for (const row of deletedRows) {
           const target = sourceDeleteTarget(row)
@@ -3641,7 +3667,7 @@ export function CollectionBrowser({
           recordId={row.id}
           label={label}
           tableLabel={currentTable?.label}
-          builtin={collectionPath === '/plugins' && row.builtin === true}
+          builtin={collectionPath === PLUGINS_COLLECTION_PATH && row.builtin === true}
           localOnly={localKnown ? localData : null}
         />
       )
@@ -3653,7 +3679,7 @@ export function CollectionBrowser({
           recordId={row.id}
           label={String(row[key] ?? '')}
           tableLabel={currentTable?.label}
-          builtin={collectionPath === '/plugins' && row.builtin === true}
+          builtin={collectionPath === PLUGINS_COLLECTION_PATH && row.builtin === true}
           localOnly={localKnown ? localData : null}
         />
       )
@@ -5258,7 +5284,7 @@ export function CollectionBrowser({
                     >
                       <ChatBubbleLeftRightIcon aria-hidden className="size-[14px]" />
                     </button>
-                    {canBulkDelete && pickedIds.some((id) => !(collectionPath === '/plugins' && items.find((row) => row.id === id)?.builtin === true)) ? (
+                    {canBulkDelete && pickedIds.some((id) => !(collectionPath === PLUGINS_COLLECTION_PATH && items.find((row) => row.id === id)?.builtin === true)) ? (
                       <button
                         type="button"
                         className="tasks-icon-btn is-danger"
@@ -5267,7 +5293,7 @@ export function CollectionBrowser({
                         title={`${inTrash ? '彻底删除' : '删除'}选中的 ${pickedIds.length} 条`}
                         onClick={() => setDlg({
                           kind: 'delete-records',
-                          ids: pickedIds.filter((id) => !(collectionPath === '/plugins' && items.find((row) => row.id === id)?.builtin === true)),
+                          ids: pickedIds.filter((id) => !(collectionPath === PLUGINS_COLLECTION_PATH && items.find((row) => row.id === id)?.builtin === true)),
                         })}
                       >
                         <TrashIcon aria-hidden className="size-[14px]" />
@@ -5858,7 +5884,7 @@ export function CollectionBrowser({
                 title="展开左侧边栏"
                 aria-label="展开左侧边栏"
                 data-testid="header-sidebar-expand"
-                onClick={() => window.dispatchEvent(new Event('biu:expand-shell-sidebar'))}
+                onClick={() => window.dispatchEvent(new Event(EXPAND_SHELL_SIDEBAR_EVENT))}
               >
                 <UiGlyph icon="chevron-double-right" />
               </button>
@@ -5895,7 +5921,7 @@ export function CollectionBrowser({
                 <UiGlyph icon="star" />
               </button>
             ) : null}
-            {isSystemCollection(collectionPath) || isIndexCollection(collectionPath) || (collectionPath === '/plugins' && detailRow?.builtin === true) ? null : (
+            {isSystemCollection(collectionPath) || isIndexCollection(collectionPath) || (collectionPath === PLUGINS_COLLECTION_PATH && detailRow?.builtin === true) ? null : (
             <ShareButton
               localOnly={localData}
               target={
@@ -5946,7 +5972,7 @@ export function CollectionBrowser({
               aria-label={inspectorOpen ? '收起检查器' : '打开检查器'}
               aria-pressed={inspectorOpen}
               data-testid="fsdb-inspector-toggle"
-              onClick={() => window.dispatchEvent(new Event('biu:inspector-toggle'))}
+              onClick={() => window.dispatchEvent(new Event(INSPECTOR_TOGGLE_EVENT))}
             >
               <UiGlyph icon={inspectorOpen ? 'chevron-double-right' : 'chevron-double-left'} />
             </button>
@@ -6001,7 +6027,7 @@ export function CollectionBrowser({
   return (
     <div
       ref={pageRef}
-      className={`fsdb-page tasks-root${nested ? ' inspector-database-page' : ''}${sheet ? ' is-sheet' : ''}${!sheet && pageWidth === 'full' ? ' is-full-width' : ''}${collectionPath === '/plugins' ? ' is-plugins' : ''}`}
+      className={`fsdb-page tasks-root${nested ? ' inspector-database-page' : ''}${sheet ? ' is-sheet' : ''}${!sheet && pageWidth === 'full' ? ' is-full-width' : ''}${collectionPath === PLUGINS_COLLECTION_PATH ? ' is-plugins' : ''}`}
       data-testid={embed ? 'inspector-database' : sheet ? 'fsdb-collect-sheet' : undefined}
     >
       {!nested ? (
@@ -6165,7 +6191,7 @@ export function CollectionBrowser({
           writePatch={writePatch}
           tableIcon={currentTable?.view?.icon}
           readOnly={
-            (collectionPath === '/plugins' && selected.builtin === true && selected.canManagePackage !== true) ||
+            (collectionPath === PLUGINS_COLLECTION_PATH && selected.builtin === true && selected.canManagePackage !== true) ||
             (selected.shareRole === '阅读' && !localData && selected.canManagePackage !== true)
           }
           actionProperty={rowActionColumn ? <RecordActions row={selected} /> : null}
@@ -6184,7 +6210,7 @@ export function CollectionBrowser({
               />
             ) : undefined
           }
-          onDelete={canDelete && !(collectionPath === '/plugins' && selected.builtin === true) ? () => setDlg({ kind: 'delete-record', row: selected }) : undefined}
+          onDelete={canDelete && !(collectionPath === PLUGINS_COLLECTION_PATH && selected.builtin === true) ? () => setDlg({ kind: 'delete-record', row: selected }) : undefined}
           onOpenRecord={(recordId, collection) => onOpenRecord?.(recordId, activeViewId, collection)}
           onPrev={() => void stepViewRecord(-1)}
           onNext={() => void stepViewRecord(1)}

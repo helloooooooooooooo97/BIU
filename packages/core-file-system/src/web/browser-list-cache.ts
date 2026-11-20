@@ -225,7 +225,10 @@ export function remapGroupedRecords(
   return buckets
 }
 
-export const LISTED_MUTATION_EVENT = 'fsdb:list-mutation'
+import { LISTED_MUTATION_EVENT } from './fsdb-events.ts'
+import { TRASH_COLLECTION_PATH } from './database-path.ts'
+
+export { LISTED_MUTATION_EVENT }
 
 export type ListedMutation =
   | { path: string; op: 'patch'; row: DbRecord; groupBy?: string }
@@ -362,12 +365,12 @@ export function toTrashListRow(collectionPath: string, row: DbRecord, tableLabel
 }
 
 export function publishDeletedRowsToTrash(collectionPath: string, rows: DbRecord[], tableLabel: string) {
-  if (collectionPath === '/trash') return
-  const viewId = builtinAllViewId('/trash')
+  if (collectionPath === TRASH_COLLECTION_PATH) return
+  const viewId = builtinAllViewId(TRASH_COLLECTION_PATH)
   for (const row of rows) {
     if (!row?.id) continue
     publishListedMutation({
-      path: '/trash',
+      path: TRASH_COLLECTION_PATH,
       op: 'create',
       row: toTrashListRow(collectionPath, row, tableLabel),
       viewId,

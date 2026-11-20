@@ -1,6 +1,41 @@
 import { buildAppPath, type AppRoute } from '@biu/web-session-view'
 import { builtinAllViewId } from '../catalog-views.ts'
-import { AGENTS_COLLECTION_PATH, normalizeCollectionPath } from '../paths.ts'
+import {
+  AGENTS_COLLECTION_PATH,
+  DATA_COLLECTION_PATH,
+  EDITOR_BLOCKS_COLLECTION_PATH,
+  EVENTS_COLLECTION_PATH,
+  MCP_COLLECTION_PATH,
+  NOTICES_COLLECTION_PATH,
+  PAGE_BLOCKS_COLLECTION_PATH,
+  PAGES_COLLECTION_PATH,
+  PLUGINS_COLLECTION_PATH,
+  SKILLS_COLLECTION_PATH,
+  TAGS_COLLECTION_PATH,
+  TASKS_COLLECTION_PATH,
+  TRASH_COLLECTION_PATH,
+  VIEWS_COLLECTION_PATH,
+  WORKSPACE_MEMBERS_COLLECTION_PATH,
+  normalizeCollectionPath,
+} from '../paths.ts'
+
+export {
+  AGENTS_COLLECTION_PATH,
+  DATA_COLLECTION_PATH,
+  EDITOR_BLOCKS_COLLECTION_PATH,
+  EVENTS_COLLECTION_PATH,
+  MCP_COLLECTION_PATH,
+  NOTICES_COLLECTION_PATH,
+  PAGE_BLOCKS_COLLECTION_PATH,
+  PAGES_COLLECTION_PATH,
+  PLUGINS_COLLECTION_PATH,
+  SKILLS_COLLECTION_PATH,
+  TAGS_COLLECTION_PATH,
+  TASKS_COLLECTION_PATH,
+  TRASH_COLLECTION_PATH,
+  VIEWS_COLLECTION_PATH,
+  WORKSPACE_MEMBERS_COLLECTION_PATH,
+}
 
 export const DATA_MODULE_ID = 'database'
 export const DATA_MODULE_PATH = '/database'
@@ -31,20 +66,6 @@ export function databaseRecordPath(collection: string, recordId: string, viewId?
     ...(viewId ? { viewId } : {}),
   } satisfies AppRoute)
 }
-
-export const DATA_COLLECTION_PATH = '/data'
-export const VIEWS_COLLECTION_PATH = '/views'
-export const TAGS_COLLECTION_PATH = '/tags'
-export const NOTICES_COLLECTION_PATH = '/notices'
-export const EDITOR_BLOCKS_COLLECTION_PATH = '/editor-blocks'
-export const PAGE_BLOCKS_COLLECTION_PATH = EDITOR_BLOCKS_COLLECTION_PATH
-export const PAGES_COLLECTION_PATH = '/pages'
-export const TASKS_COLLECTION_PATH = '/tasks'
-export const MCP_COLLECTION_PATH = '/mcp'
-export const SKILLS_COLLECTION_PATH = '/skills'
-export const PLUGINS_COLLECTION_PATH = '/plugins'
-export const TRASH_COLLECTION_PATH = '/trash'
-export const WORKSPACE_MEMBERS_COLLECTION_PATH = '/workspace-members'
 
 /** 数据侧栏记录行按 parentId 嵌套：只有页面和任务。 */
 export function isRecordTreeCollection(path: string) {

@@ -1,5 +1,10 @@
 import { builtinAllGroupBy, builtinAllViewId, stubBuiltinAllView, stubBuiltinBlockKindView, stubBuiltinCatalogView, stubBuiltinTagView, stubBuiltinScopeView, stubBuiltinMemberView, isBuiltinAllViewForCollection, isBuiltinAllViewId } from '../catalog-views.ts'
-import { isIndexCollection, VIEWS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH } from './database-path.ts'
+import {
+  EDITOR_BLOCKS_COLLECTION_PATH,
+  VIEWS_COLLECTION_PATH,
+  WORKSPACE_MEMBERS_COLLECTION_PATH,
+  isIndexCollection,
+} from './database-path.ts'
 import { normalizeCollectionPath } from '../paths.ts'
 import { invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
@@ -616,7 +621,7 @@ async function listAllSavedViewRows(tablePath?: string) {
   let offset = 0
   for (;;) {
     const page = await listCollection({
-      path: '/views',
+      path: VIEWS_COLLECTION_PATH,
       limit: VIEWS_PULL_LIMIT,
       offset,
       fresh: true,
@@ -899,7 +904,7 @@ export function withViewDisplay(collectionPath: string, view: SavedView): SavedV
   const path = normalizeCollectionPath(collectionPath)
   const forcedGroup =
     isIndexCollection(collectionPath) && isBuiltinAllViewId(view.id)
-      ? path === '/editor-blocks'
+      ? path === EDITOR_BLOCKS_COLLECTION_PATH
         ? !painted.groupBy || painted.groupBy === 'shareScope'
           ? builtinAllGroupBy(collectionPath)
           : undefined

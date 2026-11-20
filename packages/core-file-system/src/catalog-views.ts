@@ -1,5 +1,12 @@
 import type { CollectionInfo } from '@biu/type-file-system'
-import { normalizeCollectionPath } from './paths.ts'
+import {
+  DATA_COLLECTION_PATH,
+  EDITOR_BLOCKS_COLLECTION_PATH,
+  TAGS_COLLECTION_PATH,
+  VIEWS_COLLECTION_PATH,
+  WORKSPACE_MEMBERS_COLLECTION_PATH,
+  normalizeCollectionPath,
+} from './paths.ts'
 import { normalizeSavedView, type SavedView } from './web/saved-view.ts'
 
 const ALL_PREFIX = 'builtin-all:'
@@ -178,7 +185,7 @@ export function stubBuiltinScopeView(id: string, listed: SavedView[] = []): Save
 export function collectionNoun(table: TableRef) {
   const path = normalizeCollectionPath(table.path)
   const named = String(table.view?.title ?? table.label ?? '').trim()
-  if (path === '/data') return named && named !== 'data' ? named : '数据'
+  if (path === DATA_COLLECTION_PATH) return named && named !== 'data' ? named : '数据'
   return named || path.replace(/^\//, '') || '记录'
 }
 
@@ -205,10 +212,10 @@ export function displayNameForView(viewId: string, table: TableRef, storedName?:
 
 export function builtinAllGroupBy(collectionPath: string) {
   const path = normalizeCollectionPath(collectionPath)
-  if (path === '/workspace-members') return 'membershipKind'
-  if (path === '/views') return 'table'
-  if (path === '/editor-blocks') return 'blockKind'
-  if (path === '/tags') return ''
+  if (path === WORKSPACE_MEMBERS_COLLECTION_PATH) return 'membershipKind'
+  if (path === VIEWS_COLLECTION_PATH) return 'table'
+  if (path === EDITOR_BLOCKS_COLLECTION_PATH) return 'blockKind'
+  if (path === TAGS_COLLECTION_PATH) return ''
   return 'shareScope'
 }
 
@@ -237,7 +244,7 @@ export function stubBuiltinAllView(id: string): SavedView | null {
 
 export function builtinCatalogViews(tables: CollectionInfo[]): SavedView[] {
   return tables
-    .filter((table) => table.path && table.path !== '/' && table.path !== '/data')
+    .filter((table) => table.path && table.path !== '/' && table.path !== DATA_COLLECTION_PATH)
     .map((table) => {
       const path = normalizeCollectionPath(table.path)
       return normalizeSavedView({
@@ -291,8 +298,8 @@ function withoutRetiredBuiltinViews(user: SavedView[], retired: (id: string) => 
 }
 
 export function mergeCatalogViews(tables: CollectionInfo[], user: SavedView[], skipIds: Iterable<string> = []): SavedView[] {
-  const viewsTable = tables.find((table) => normalizeCollectionPath(table.path) === '/views') ?? {
-    path: '/views',
+  const viewsTable = tables.find((table) => normalizeCollectionPath(table.path) === VIEWS_COLLECTION_PATH) ?? {
+    path: VIEWS_COLLECTION_PATH,
     label: '视图',
     view: { title: '视图' },
   }
@@ -305,7 +312,7 @@ export function mergeCatalogViews(tables: CollectionInfo[], user: SavedView[], s
 
 export function mergeTableViews(table: TableRef | undefined, user: SavedView[], skipIds: Iterable<string> = []): SavedView[] {
   if (!table?.path || table.path === '/') return overlayListedViews([], user, skipIds)
-  const seeds = normalizeCollectionPath(table.path) === '/workspace-members'
+  const seeds = normalizeCollectionPath(table.path) === WORKSPACE_MEMBERS_COLLECTION_PATH
     ? [builtinAllView(table), ...builtinMemberViews()]
     : [builtinAllView(table)]
   return overlayListedViews(seeds, user, skipIds)

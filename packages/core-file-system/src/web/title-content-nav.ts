@@ -1,5 +1,6 @@
-export const FOCUS_RECORD_TITLE = 'biu:focus-record-title'
-export const FOCUS_RECORD_CONTENT = 'biu:focus-record-content'
+import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE } from './fsdb-events.ts'
+
+export { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE }
 
 export function shouldLeaveTitleForContent(key: string, shiftKey: boolean, value: string, selectionEnd: number) {
   if (shiftKey) return false

@@ -4,6 +4,7 @@ import {
   type CollectionSchema,
   type FieldSpec,
 } from '@biu/type-file-system'
+import { TAGS_COLLECTION_PATH } from '../paths.ts'
 
 const LIST_META_KEYS = new Set(['createdAt', 'updatedAt', 'createdBy', 'updatedBy'])
 
@@ -163,7 +164,7 @@ export class AgentDbCompact {
     const columns = order.filter(
       (key) => key === 'id' || key.startsWith('tag::') || rowsIn.some((row) => !this.empty(row[key])),
     )
-    const isTags = path === '/tags'
+    const isTags = path === TAGS_COLLECTION_PATH
     const rows = rowsIn.map((row) =>
       columns.map((key) => {
         if (this.empty(row[key])) return null

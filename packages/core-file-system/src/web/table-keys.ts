@@ -112,8 +112,9 @@ export function tableKeyFromEditingTarget(target: EventTarget | null): boolean {
   return Boolean(el.closest('.fsdb-cell-pop, [role="menu"], [role="listbox"], .fsdb-headless-pop, dialog'))
 }
 
-export const FOCUS_SHELL_TABLE = 'biu:focus-shell-table'
-export const CLEAR_SHELL_TABLE_CELL = 'biu:clear-shell-table-cell'
+import { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE, INSPECTOR_OPEN_EVENT } from './fsdb-events.ts'
+
+export { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE }
 
 export type TablePane = 'main' | 'inspector'
 
@@ -264,7 +265,7 @@ export function tablePaneFromEvent(event: Event): TablePane | null {
 export function requestTablePaneFocus(pane: TablePane) {
   pendingTablePane = { pane, at: Date.now() }
   if (typeof window === 'undefined') return
-  if (pane === 'inspector') window.dispatchEvent(new Event('biu:inspector-open'))
+  if (pane === 'inspector') window.dispatchEvent(new Event(INSPECTOR_OPEN_EVENT))
   window.dispatchEvent(new CustomEvent(FOCUS_SHELL_TABLE, { detail: { pane } }))
 }
 

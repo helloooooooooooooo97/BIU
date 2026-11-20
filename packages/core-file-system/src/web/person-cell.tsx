@@ -3,6 +3,7 @@ import { ArrowPathIcon, CpuChipIcon, UserIcon } from '@heroicons/react/16/solid'
 import { resolveSessionMascot, SidebarMascot } from '@biu/public-mascot'
 import { asPerson, asPersonList, personKey, type PersonValue } from '@biu/type-file-system'
 import { PickOption, PickPanel } from '@biu/database-ui/search'
+import { AGENTS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH } from './database-path.ts'
 import { listCollection } from './db-client.ts'
 import { showRecordInInspector } from './inspector-db-route.ts'
 import { useWorkspaceProfile } from '@biu/biu-ui/use-workspace-profile'
@@ -33,11 +34,11 @@ const MEMBERS_TTL_MS = 8000
 export function personInspectTarget(person: PersonValue): { collection: string; recordId: string } | null {
   if (person.kind === 'agent') {
     const recordId = String(person.sessionId ?? '').trim()
-    return recordId ? { collection: '/agents', recordId } : null
+    return recordId ? { collection: AGENTS_COLLECTION_PATH, recordId } : null
   }
   if (person.kind === 'user') {
     const recordId = String(person.accountId ?? '').trim()
-    return recordId ? { collection: '/workspace-members', recordId } : null
+    return recordId ? { collection: WORKSPACE_MEMBERS_COLLECTION_PATH, recordId } : null
   }
   return null
 }
@@ -52,7 +53,7 @@ export async function loadAgents(): Promise<ChatPerson[]> {
   if (agentsListed && Date.now() - agentsListedAt < AGENTS_TTL_MS) return agentsListed
   if (agentsInflight) return agentsInflight
   const request = listCollection({
-    path: '/agents',
+    path: AGENTS_COLLECTION_PATH,
     limit: 500,
     sortField: 'updatedAt',
     sortDir: 'desc',
@@ -88,7 +89,7 @@ export async function loadMembers(): Promise<MemberPerson[]> {
   if (membersListed && Date.now() - membersListedAt < MEMBERS_TTL_MS) return membersListed
   if (membersInflight) return membersInflight
   const request = listCollection({
-    path: '/workspace-members',
+    path: WORKSPACE_MEMBERS_COLLECTION_PATH,
     limit: 500,
     sortField: 'title',
     sortDir: 'asc',

@@ -16,6 +16,7 @@ import {
   type CollectionSchemaPack,
 } from '@biu/type-file-system'
 import { isReadOnlyViewId } from '../catalog-views.ts'
+import { PAGES_COLLECTION_PATH, TAGS_COLLECTION_PATH } from '../paths.ts'
 import { isSharePluginId } from '../share-resources.ts'
 import {
   AssetConflictError,
@@ -137,13 +138,13 @@ export function registerDatabaseHttpRoutes(
   ctx.http.route('GET', '/api/db/read', (route) => send(route, () => db.read(route.query.get('path') || '/')))
   ctx.http.route('GET', '/api/db/banner-gallery', (route) =>
     send(route, async () => {
-      await db.requirePath('/pages', 'resource:read')
+      await db.requirePath(PAGES_COLLECTION_PATH, 'resource:read')
       return { items: db.tags.listBannerGallery() }
     }),
   )
   ctx.http.route('POST', '/api/db/banner-gallery', async (route) => {
     try {
-      await db.requirePath('/pages', 'resource:update')
+      await db.requirePath(PAGES_COLLECTION_PATH, 'resource:update')
       const body = (await route.json()) as { id?: string }
       const id = String(body?.id ?? '').trim()
       if (!id) {
@@ -761,7 +762,7 @@ export function registerDatabaseHttpRoutes(
   ctx.http.route('POST', '/api/page/sandbox/patch', patchTagSandboxRoute)
   ctx.http.route('GET', '/api/db/tags', async (route) => {
     try {
-      await db.requirePath('/tags', 'resource:read')
+      await db.requirePath(TAGS_COLLECTION_PATH, 'resource:read')
       const collect = route.query.get('collect') || ''
       if (collect) {
         route.send(200, await db.collectTag(collect))
@@ -779,7 +780,7 @@ export function registerDatabaseHttpRoutes(
   })
   ctx.http.route('POST', '/api/db/tags', async (route) => {
     try {
-      await db.requirePath('/tags', 'resource:update')
+      await db.requirePath(TAGS_COLLECTION_PATH, 'resource:update')
       const body = (await route.json()) as { tags?: unknown[] }
       const listed = Array.isArray(body.tags) ? body.tags : []
       for (const item of listed) {

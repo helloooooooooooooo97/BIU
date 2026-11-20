@@ -15,6 +15,7 @@ import {
   type SchemaFieldValue,
 } from '@biu/type-file-system'
 import { parseTagFlatColumnKey } from '../query-logic.ts'
+import { TAGS_COLLECTION_PATH } from '../paths.ts'
 import { strategyForField } from '../web/group-strategies.ts'
 import type { PageBanner, PageBannerKind } from '../page-banner.ts'
 import { RecordMetaStore } from './record-meta-store.ts'
@@ -82,7 +83,7 @@ function entryFromRow(db: DatabaseSync, row: TagRow): TagEntry | null {
   const updatedAt = updated > 0 ? updated : createdAt
   return {
     pack,
-    notes: readEditorContent(db, '/tags', row.id),
+    notes: readEditorContent(db, TAGS_COLLECTION_PATH, row.id),
     createdAt,
     updatedAt,
   }
@@ -197,7 +198,7 @@ export class TagStore {
   notes(id: string) {
     const want = String(id ?? '').trim()
     if (!want) return ''
-    return readEditorContent(this.ensure(), '/tags', want)
+    return readEditorContent(this.ensure(), TAGS_COLLECTION_PATH, want)
   }
 
   private dropTagGroupIndexes(tagId: string, fieldKey?: string) {
@@ -227,7 +228,7 @@ export class TagStore {
       )
       .run(pack.id, pack.label, JSON.stringify(pack.fields), now, now)
     if (!prev || (notes !== undefined && notes !== prevNotes)) {
-      writeEditorContent(db, '/tags', pack.id, notes ?? '', { transaction: false })
+      writeEditorContent(db, TAGS_COLLECTION_PATH, pack.id, notes ?? '', { transaction: false })
     }
     if (!prev) return
     const renames = this.detectFieldKeyRenames(prev.fields, pack.fields)
@@ -498,7 +499,7 @@ export class TagStore {
     )
     return rows
       .map((row) => entryFromRow(db, row))
-      .filter((item): item is TagEntry => Boolean(item) && !this.isDeleted('/tags', item.pack.id))
+      .filter((item): item is TagEntry => Boolean(item) && !this.isDeleted(TAGS_COLLECTION_PATH, item.pack.id))
   }
 
   get(idOrLabel: string): CollectionSchemaPack | null {
@@ -547,7 +548,7 @@ export class TagStore {
     const pack = normalizeSchemaPack(raw)
     if (!pack) throw new Error('invalid 标签')
     const nextNotes = notes !== undefined ? String(notes) : undefined
-    if (this.isDeleted('/tags', pack.id)) this.restoreDeleted('/tags', pack.id)
+    if (this.isDeleted(TAGS_COLLECTION_PATH, pack.id)) this.restoreDeleted(TAGS_COLLECTION_PATH, pack.id)
     this.savePack(pack, nextNotes)
     return pack
   }

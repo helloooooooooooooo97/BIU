@@ -1,7 +1,7 @@
 import type { CollectionInfo, CollectionListQuery, CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { parseAtomicFields, recordBuiltinValues, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 import { TagStore, slugTagId } from './tags-store.ts'
-import { normalizeCollectionPath } from '../paths.ts'
+import { TAGS_COLLECTION_PATH, normalizeCollectionPath } from '../paths.ts'
 
 const TAG_FIELDS_EXAMPLE = '[{"key":"类别","type":"string"}]'
 const TAG_FIELDS_DESCRIPTION =
@@ -99,7 +99,7 @@ export function tagsCollection(
 
   return {
     id: 'tags',
-    path: '/tags',
+    path: TAGS_COLLECTION_PATH,
     label: '标签',
     view: {
       moduleId: 'tags-db',
@@ -158,13 +158,13 @@ export function tagsCollection(
         return null
       }
       const pack = store.get(id)
-      if (!pack || store.isDeleted('/tags', pack.id)) return null
+      if (!pack || store.isDeleted(TAGS_COLLECTION_PATH, pack.id)) return null
       return fromEntry(pack.id, store.stampCounts()[pack.id] ?? 0)
     },
     create: (rows) =>
       rows.map((fields = {}) => {
         const title = String(fields.title ?? '').trim() || '未命名标签'
-        const used = new Set([...store.list().map((tag) => tag.id), ...store.deletedIds('/tags')])
+        const used = new Set([...store.list().map((tag) => tag.id), ...store.deletedIds(TAGS_COLLECTION_PATH)])
         const id = slugTagId(title, used)
         const pack = store.upsert({ id, label: title, fields: parseAtomicFields(fields.fields) }, fields.notes != null ? String(fields.notes) : '')
         return fromEntry(pack.id, 0)

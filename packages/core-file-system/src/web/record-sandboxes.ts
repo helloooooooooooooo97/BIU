@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { BIU_ASSET_CHANGED_EVENT } from '@biu/type-file-system'
 import type { RecordSandboxView } from '@biu/type-file-system/record-views'
 import { parseRecordLayouts, parseRecordSandboxes, seedRecordSandbox } from '@biu/type-file-system/record-views'
 import { normalizeCollectionPath } from '../paths.ts'
@@ -201,7 +202,7 @@ export async function createRecordSandboxView(opts: {
 }
 
 if (typeof window !== 'undefined') {
-  window.addEventListener('biu:asset-changed', (event) => {
+  window.addEventListener(BIU_ASSET_CHANGED_EVENT, (event) => {
     applyRecordViewAssetChanged((event as CustomEvent<{ name?: string; etag?: string }>).detail)
   })
 }

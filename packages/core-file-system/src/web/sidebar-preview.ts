@@ -2,6 +2,7 @@ import type { CollectionSchema, DbRecord } from '@biu/type-file-system'
 import { isBuiltinBlockKindViewId, isBuiltinTagViewId } from '../catalog-views.ts'
 import type { SavedView } from './saved-view.ts'
 import { listCollection, readJson } from './db-client.ts'
+import { FSDB_LIST_READY_EVENT } from './fsdb-events.ts'
 import { viewForPath } from './view-storage.ts'
 
 export const SIDEBAR_PREVIEW_PAGE = 20
@@ -44,14 +45,14 @@ export function whenListIdle(fn: () => void, idleMs = VIEW_PREVIEW_IDLE_MS) {
     }
   }
   const onReady = () => {
-    window.removeEventListener('fsdb:list-ready', onReady)
+    window.removeEventListener(FSDB_LIST_READY_EVENT, onReady)
     timer = window.setTimeout(run, idleMs)
   }
-  window.addEventListener('fsdb:list-ready', onReady)
+  window.addEventListener(FSDB_LIST_READY_EVENT, onReady)
   return () => {
     cancelled = true
     window.clearTimeout(timer)
-    window.removeEventListener('fsdb:list-ready', onReady)
+    window.removeEventListener(FSDB_LIST_READY_EVENT, onReady)
   }
 }
 

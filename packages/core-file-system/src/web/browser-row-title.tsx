@@ -11,6 +11,7 @@ import { computeFloatingPosition } from '@biu/biu-ui/floating-position'
 import { TOOLTIP_OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import type { DbRecord } from '@biu/type-file-system'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
+import { AGENTS_COLLECTION_PATH, PLUGINS_COLLECTION_PATH } from './database-path.ts'
 import { idleTableIconKind } from './nav-glyphs.tsx'
 import {
   RecordMark,
@@ -258,7 +259,7 @@ export function RecordTitle({
   const typeIcon = typeof row.tableIcon === 'string' && row.tableIcon.trim() ? row.tableIcon : tableIcon
   if (!toolsLive && !tree) {
     const emoji = recordPreviewEmoji(row)
-    const mascotRow = Boolean(recordPreviewMascot(row)) || row.tablePath === '/agents'
+    const mascotRow = Boolean(recordPreviewMascot(row)) || row.tablePath === AGENTS_COLLECTION_PATH
     return (
       <span className="fsdb-title-host" onMouseEnter={armTools}>
         {!mascotRow && emoji ? (
@@ -378,7 +379,7 @@ export function askNewPlugin(scope: 'personal' | 'workspace' | 'shared' | 'local
           kind: 'collection',
           id: 'plugins',
           action: 'plugin',
-          path: '/plugins',
+          path: PLUGINS_COLLECTION_PATH,
           label: '插件',
           title: '插件',
           route: typeof window === 'undefined' ? '' : window.location.pathname,

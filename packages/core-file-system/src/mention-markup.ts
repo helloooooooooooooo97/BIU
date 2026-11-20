@@ -1,10 +1,16 @@
 /** 正文引用只存 id。label 是展示/agent 读路径上的投影，不落盘。 */
+import {
+  AGENTS_COLLECTION_PATH,
+  PAGES_COLLECTION_PATH,
+  TAGS_COLLECTION_PATH,
+  TASKS_COLLECTION_PATH,
+} from './paths.ts'
 
 export const MENTION_KIND_PATH = {
-  page: '/pages',
-  task: '/tasks',
-  tag: '/tags',
-  session: '/agents',
+  page: PAGES_COLLECTION_PATH,
+  task: TASKS_COLLECTION_PATH,
+  tag: TAGS_COLLECTION_PATH,
+  session: AGENTS_COLLECTION_PATH,
 } as const
 
 export type MentionKind = keyof typeof MENTION_KIND_PATH

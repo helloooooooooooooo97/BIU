@@ -12,7 +12,7 @@ test('data overview title is writable and writes through the source record', () 
     readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8') +
     readFileSync(resolve(import.meta.dirname, '../host/access-policy.ts'), 'utf8') +
     readFileSync(resolve(import.meta.dirname, '../host/http-routes.ts'), 'utf8')
-  assert.match(host, /collection === '\/trash' \|\| collection === DATA_COLLECTION_PATH/)
+  assert.match(host, /collection === TRASH_COLLECTION_PATH \|\| collection === DATA_COLLECTION_PATH/)
   assert.match(host, /parts\[0\] === 'data'/)
   assert.match(host, /overviewRecord\(source, written\.value/)
 })

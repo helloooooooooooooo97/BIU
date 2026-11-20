@@ -1,4 +1,18 @@
 export const AGENTS_COLLECTION_PATH = '/agents'
+export const DATA_COLLECTION_PATH = '/data'
+export const VIEWS_COLLECTION_PATH = '/views'
+export const TAGS_COLLECTION_PATH = '/tags'
+export const NOTICES_COLLECTION_PATH = '/notices'
+export const EDITOR_BLOCKS_COLLECTION_PATH = '/editor-blocks'
+export const PAGE_BLOCKS_COLLECTION_PATH = EDITOR_BLOCKS_COLLECTION_PATH
+export const PAGES_COLLECTION_PATH = '/pages'
+export const TASKS_COLLECTION_PATH = '/tasks'
+export const MCP_COLLECTION_PATH = '/mcp'
+export const SKILLS_COLLECTION_PATH = '/skills'
+export const PLUGINS_COLLECTION_PATH = '/plugins'
+export const TRASH_COLLECTION_PATH = '/trash'
+export const WORKSPACE_MEMBERS_COLLECTION_PATH = '/workspace-members'
+export const EVENTS_COLLECTION_PATH = '/events'
 export const LEGACY_SESSIONS_COLLECTION_PATH = '/' + 'sessions'
 
 /** 集合路径：补前导斜杠、去掉尾斜杠。host 与 web 共用。旧 /sessions 表迁到 /agents。 */
@@ -84,7 +98,7 @@ function revealFromSavedViewRow(result: unknown): DatabaseReveal | null {
   if (!row) return null
   const collection = normalizeCollectionPath(String(row.tablePath ?? ''))
   const viewId = String(row.viewId ?? '').trim()
-  if (!collection || collection === '/' || collection === '/views' || !viewId) return null
+  if (!collection || collection === '/' || collection === VIEWS_COLLECTION_PATH || !viewId) return null
   return { collection, viewId }
 }
 

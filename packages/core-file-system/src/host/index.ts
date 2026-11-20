@@ -98,7 +98,7 @@ import { isSharePluginId } from '../share-resources.ts'
 import { TagStore } from './tags-store.ts'
 import { SharesStore, dropSharesForRemovedViews } from './shares-store.ts'
 import { builtinAllView, builtinAllViewId, builtinMemberViews, displayNameForView, isReadOnlyViewId, stubBuiltinAllView, stubBuiltinMemberView } from '../catalog-views.ts'
-import { DATA_COLLECTION_PATH, isIndexCollection, isSystemCollection } from '../web/database-path.ts'
+import { isIndexCollection, isSystemCollection } from '../web/database-path.ts'
 import { dataCollection, isDataOverviewSource, overviewRecord } from './data-collection.ts'
 import { effectiveDataScope, highestViewRole, recordMatchesGrantedView, type DataScopeName, type ViewGrantRole } from '../view-access.ts'
 import { recordMatchesSharedView, resolveSharedView, type SharedViewDef } from '../share-view-match.ts'
@@ -129,7 +129,20 @@ import {
   type DocAssetEditHost,
 } from './doc-asset-edit.ts'
 import { stripMentionLabels } from '../mention-markup.ts'
-import { normalizeCollectionPath, splitResourcePath } from '../paths.ts'
+import {
+  AGENTS_COLLECTION_PATH,
+  DATA_COLLECTION_PATH,
+  EDITOR_BLOCKS_COLLECTION_PATH,
+  EVENTS_COLLECTION_PATH,
+  PAGES_COLLECTION_PATH,
+  PLUGINS_COLLECTION_PATH,
+  TAGS_COLLECTION_PATH,
+  TRASH_COLLECTION_PATH,
+  VIEWS_COLLECTION_PATH,
+  WORKSPACE_MEMBERS_COLLECTION_PATH,
+  normalizeCollectionPath,
+  splitResourcePath,
+} from '../paths.ts'
 import { matchListFilterRecord, normalizeSorts, parseTagFlatColumnKey, readTagFieldValue, sortRecordsBy } from '../query-logic.ts'
 import { actionWhenKeys } from '../web/fields.ts'
 import { AgentDbCompact } from './agent-payload.ts'
@@ -390,7 +403,7 @@ function assertViewAvailable(entry: CollectionSpec, others: CollectionSpec[]) {
   if (!view) return
   const route = navPath(view.route || '')
   if (!view.route?.trim()) throw new Error('view.route 必填：导航路由由登记方自己选定')
-  if (route === '/' || route === '/s' || route === '/agents') throw new Error(`view.route 与内置路由冲突：${view.route}`)
+  if (route === '/' || route === '/s' || route === AGENTS_COLLECTION_PATH) throw new Error(`view.route 与内置路由冲突：${view.route}`)
   const title = navTitle(entry)
   if (!title) throw new Error('view.title / label 不能为空')
   for (const other of others) {
@@ -495,7 +508,12 @@ function sortRecords(rows: DbRecord[], field: string, dir: 'asc' | 'desc', sorts
 
 export const DEFAULT_PAGE_SIZE = 20
 export const MAX_PAGE_SIZE = 200
-const HARD_DELETE_PATHS = new Set(['/events', '/trash', '/workspace-members', '/views'])
+const HARD_DELETE_PATHS = new Set([
+  EVENTS_COLLECTION_PATH,
+  TRASH_COLLECTION_PATH,
+  WORKSPACE_MEMBERS_COLLECTION_PATH,
+  VIEWS_COLLECTION_PATH,
+])
 
 type VisibleSortedPack = {
   rows: DbRecord[]
@@ -627,7 +645,7 @@ export class DatabaseService extends Service implements Database {
 
   publishCollection(item: CollectionSpec): CollectionInfo {
     const info = publicCollection(item)
-    if (item.path === '/workspace-members' && !this.membersInSystemData()) return { ...info, view: null }
+    if (item.path === WORKSPACE_MEMBERS_COLLECTION_PATH && !this.membersInSystemData()) return { ...info, view: null }
     return info
   }
 
@@ -635,7 +653,7 @@ export class DatabaseService extends Service implements Database {
     const rows = await spec.list(query)
     const listed = !query.ids?.length ? rows : rows.filter((row) => query.ids!.includes(row.id))
     const hidden = this.tags.deletedIds(spec.path)
-    const builtinPlugin = (row: { builtin?: unknown }) => spec.path === '/plugins' && row.builtin === true
+    const builtinPlugin = (row: { builtin?: unknown }) => spec.path === PLUGINS_COLLECTION_PATH && row.builtin === true
     return query.trash
       ? listed.filter((row) => hidden.has(row.id) && !builtinPlugin(row))
       : listed.filter((row) => !hidden.has(row.id) || builtinPlugin(row))
@@ -814,9 +832,9 @@ export class DatabaseService extends Service implements Database {
 
   private stampPluginCreateScope(recordId: string, args?: Record<string, unknown>) {
     const scope = this.pluginCreateScope(args)
-    this.rememberScope('/plugins', recordId, scope)
+    this.rememberScope(PLUGINS_COLLECTION_PATH, recordId, scope)
     const raw = String(args?.scope ?? '').trim()
-    if ((raw === 'local' || this.deviceWorkspace()) && scope !== 'shared') this.markDeviceRecord('/plugins', recordId)
+    if ((raw === 'local' || this.deviceWorkspace()) && scope !== 'shared') this.markDeviceRecord(PLUGINS_COLLECTION_PATH, recordId)
   }
 
   rememberScope(collection: string, recordId: string, scope: 'personal' | 'workspace' | 'shared') {
@@ -886,7 +904,7 @@ export class DatabaseService extends Service implements Database {
       authorization.requireCurrent('resource:create', {
         type: 'collection',
         workspaceId: actor.workspaceId,
-        collection: '/pages',
+        collection: PAGES_COLLECTION_PATH,
       })
       return
     }
@@ -911,7 +929,12 @@ export class DatabaseService extends Service implements Database {
   }
 
   private listRemapsRecords(path: string) {
-    return path === '/trash' || path === '/events' || path === '/tags' || path === '/editor-blocks'
+    return (
+      path === TRASH_COLLECTION_PATH ||
+      path === EVENTS_COLLECTION_PATH ||
+      path === TAGS_COLLECTION_PATH ||
+      path === EDITOR_BLOCKS_COLLECTION_PATH
+    )
   }
 
   private preloadRelatedCollections(
@@ -969,7 +992,7 @@ export class DatabaseService extends Service implements Database {
     sorts: Array<{ field: string; dir: 'asc' | 'desc' }> | undefined,
     overlay: boolean,
   ) {
-    const tagFilter = spec.path === '/tags' ? String(query.filter?.tagId ?? '').trim() : ''
+    const tagFilter = spec.path === TAGS_COLLECTION_PATH ? String(query.filter?.tagId ?? '').trim() : ''
     const rows = await this.scanCollectionRows(spec, query, Boolean(tagFilter || overlay))
     if (tagFilter) await this.hydrateTagStamps(rows, this.tags.get(tagFilter))
     const auth = this.authorization()
@@ -997,7 +1020,7 @@ export class DatabaseService extends Service implements Database {
     const workspace: DbRecord[] = []
     const shared: DbRecord[] = []
     for (const row of rows) {
-      if (collection === '/plugins' && (row as { builtin?: unknown }).builtin === true) {
+      if (collection === PLUGINS_COLLECTION_PATH && (row as { builtin?: unknown }).builtin === true) {
         shared.push(row)
         continue
       }
@@ -1026,7 +1049,7 @@ export class DatabaseService extends Service implements Database {
   ) {
     let schema = schemaFor(spec)
     const packs = this.tags.list()
-    const tagFilter = spec.path === '/tags' ? String(filter?.tagId ?? '').trim() : ''
+    const tagFilter = spec.path === TAGS_COLLECTION_PATH ? String(filter?.tagId ?? '').trim() : ''
     const tagPack = tagFilter ? this.tags.get(tagFilter) : null
     const rows = await this.scanCollectionRows(spec, query, Boolean(tagFilter || overlay))
     if (tagFilter) {
@@ -1314,7 +1337,7 @@ export class DatabaseService extends Service implements Database {
     }
     const query: CollectionListQuery = { q, filter: liveFilter, trash }
     if (idFilter?.length) query.ids = idFilter
-    if (schemaFilter && schema.fields.tag && spec.path !== '/tags') {
+    if (schemaFilter && schema.fields.tag && spec.path !== TAGS_COLLECTION_PATH) {
       const stamped = this.tags.stampedIds(spec.path, schemaFilter)
       if (!stamped.size) {
         return {
@@ -1339,7 +1362,7 @@ export class DatabaseService extends Service implements Database {
       const overlay = listNeedsMatchOverlay(liveFilter, q, sortField, page?.sorts)
       const pack = await this.visibleSortedCollectionRows(spec, query, sortField, sortDir, page?.sorts, overlay)
       const visible = scopeFilter ? pack[scopeFilter] : pack.rows
-      const tagFilter = spec.path === '/tags' ? String(filter?.tagId ?? '').trim() : ''
+      const tagFilter = spec.path === TAGS_COLLECTION_PATH ? String(filter?.tagId ?? '').trim() : ''
       if (tagFilter) schema = schemaWithTagPack(schema, this.tags.get(tagFilter))
       const packs = this.tags.list()
       const sorted = visible.filter((row) => matchListFilter(row, liveFilter, schema, packs) && matchQuery(row, q, packs))
@@ -1392,7 +1415,7 @@ export class DatabaseService extends Service implements Database {
     const withPeople = !need || need.people ? this.applyPersonOverlay(spec, withTag) : withTag
     const withMeta = !need || need.meta ? this.applyMetaOverlay(spec, withPeople) : withPeople
     if (isSystemCollection(spec.path) || isIndexCollection(spec.path)) return withMeta
-    if (spec.path === '/plugins' && row.builtin === true) {
+    if (spec.path === PLUGINS_COLLECTION_PATH && row.builtin === true) {
       return {
         ...withMeta,
         ...(!need || need.shareScope ? { shareScope: '共享' } : {}),
@@ -1505,7 +1528,7 @@ export class DatabaseService extends Service implements Database {
     if (!schemaFor(spec).fields.tag) return row
     // Collected rows are projections, not records owned by /tags. Never write
     // them back to /tags: that would collect the projection again on each read.
-    const stamp = spec.path === '/tags' ? parseStampRecordId(row.id) : null
+    const stamp = spec.path === TAGS_COLLECTION_PATH ? parseStampRecordId(row.id) : null
     let overlay = this.tags.recordTag(stamp?.collection ?? spec.path, stamp?.recordId ?? row.id)
     if (!overlay && row.tag != null) {
       const value = normalizeSchemaValue(row.tag)
@@ -1516,7 +1539,7 @@ export class DatabaseService extends Service implements Database {
   }
 
   private applyMetaOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
-    const stamp = spec.path === '/tags' ? parseStampRecordId(row.id) : null
+    const stamp = spec.path === TAGS_COLLECTION_PATH ? parseStampRecordId(row.id) : null
     const meta = this.tags.recordMeta(stamp?.collection ?? spec.path, stamp?.recordId ?? row.id)
     if (!meta) return row
     return {
@@ -1700,7 +1723,7 @@ export class DatabaseService extends Service implements Database {
     const spec = this.collection(`/${parts[0]}`)
     if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
     await this.requirePath(`${spec.path}/${parts[1]}`, 'resource:update')
-    if (spec.path === '/tags') throw new Error('tag catalog has no instance property values')
+    if (spec.path === TAGS_COLLECTION_PATH) throw new Error('tag catalog has no instance property values')
     const schema = schemaFor(spec)
     if (!schema.fields.tag) throw new Error('record has no tag field')
     const current = await spec.get(parts[1]!)
@@ -1755,7 +1778,7 @@ export class DatabaseService extends Service implements Database {
       banners.push(bannerPatch.present ? bannerPatch.value : undefined)
       requestedIds.push(takeRequestedRecordId(row))
       const rawBody =
-        bodyKey && spec.path !== '/tags'
+        bodyKey && spec.path !== TAGS_COLLECTION_PATH
           ? typeof row[bodyKey] === 'string'
             ? (row[bodyKey] as string)
             : bodyKey !== 'content' && typeof row.content === 'string'
@@ -1800,7 +1823,7 @@ export class DatabaseService extends Service implements Database {
       }
       const parentField = spec.schema.parentField
       const parentRecordId = parentField ? String(record[parentField] ?? '').trim() : ''
-      if (spec.path !== '/workspace-members') {
+      if (spec.path !== WORKSPACE_MEMBERS_COLLECTION_PATH) {
         const device = this.deviceWorkspace()
         const workspaceOwned = options.scope === 'workspace' && !device
         const shared = options.scope === 'shared' && !parentRecordId
@@ -1863,7 +1886,7 @@ export class DatabaseService extends Service implements Database {
     const schemaFilter = typeof filter?.tag === 'string' && filter.tag !== ''
       ? filter.tag
       : ''
-    if (schemaFilter && schema.fields.tag && spec.path !== '/tags') {
+    if (schemaFilter && schema.fields.tag && spec.path !== TAGS_COLLECTION_PATH) {
       const stamped = this.tags.stampedIds(spec.path, schemaFilter)
       if (!stamped.size) return { kind: 'deleted' as const, path: spec.path, ids: [] as string[] }
       listQuery.ids = query.ids?.length ? query.ids.filter((id) => stamped.has(id)) : [...stamped]
@@ -1878,7 +1901,7 @@ export class DatabaseService extends Service implements Database {
     const ids = [...new Set(matched.map((row) => row.id))]
     if (!ids.length) return { kind: 'deleted' as const, path: spec.path, ids }
     const hard = Boolean(query.purge) || HARD_DELETE_PATHS.has(spec.path)
-    if (spec.path === '/agents') this.disposeSessionAgents(ids)
+    if (spec.path === AGENTS_COLLECTION_PATH) this.disposeSessionAgents(ids)
     for (const row of matched) {
       const rec = withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, row)))
       const title = String(rec.title ?? rec.name ?? row.id).trim() || row.id
@@ -1890,7 +1913,7 @@ export class DatabaseService extends Service implements Database {
         this.tags.markDeleted(spec.path, id, at)
         this.shares.revokeRecord(spec.path, id)
       }
-      if (spec.path === '/views') {
+      if (spec.path === VIEWS_COLLECTION_PATH) {
         for (const row of matched) {
           const collection = normalizeCollectionPath(String(row.tablePath ?? ''))
           const viewId = String(row.viewId ?? '').trim()
@@ -1903,7 +1926,7 @@ export class DatabaseService extends Service implements Database {
     await spec.remove({ ids })
     // 视图是硬删除：/views 只是 savedViews 现生成的一层行，删行必须连视图本体一起删，
     // 否则下一次列表/侧边栏拉取会把它原样吐回来（表现为「删掉的视图自己弹出来」）。
-    if (spec.path === '/views') {
+    if (spec.path === VIEWS_COLLECTION_PATH) {
       for (const key of viewRowKeys(matched)) {
         try {
           savedViews.remove(rowIdOfView(key.collection, key.viewId), currentAccountId())
@@ -1916,7 +1939,7 @@ export class DatabaseService extends Service implements Database {
       this.tags.removeRecord(spec.path, id)
       this.shares.revokeRecord(spec.path, id)
     }
-    if (spec.path === '/views') {
+    if (spec.path === VIEWS_COLLECTION_PATH) {
       for (const key of viewRowKeys(matched)) {
         this.shares.revokeView(key.collection, key.viewId)
       }
@@ -1955,11 +1978,11 @@ export class DatabaseService extends Service implements Database {
       if (!spec) continue
       const record = await spec.get(row.record_id)
       if (!record) continue
-      if (row.collection === '/plugins' && (record as { builtin?: unknown }).builtin === true) continue
+      if (row.collection === PLUGINS_COLLECTION_PATH && (record as { builtin?: unknown }).builtin === true) continue
       const authorization = this.authorization()
       const actor = authorization?.currentActor()
       if (authorization && actor) {
-        const pluginTrash = row.collection === '/plugins'
+        const pluginTrash = row.collection === PLUGINS_COLLECTION_PATH
           && Boolean(this.collabStore()?.isMember?.(actor.accountId, actor.workspaceId))
         if (!pluginTrash && !authorization.authorize(actor, 'resource:read', {
           type: 'record',
@@ -1997,8 +2020,8 @@ export class DatabaseService extends Service implements Database {
     const loaded = await spec.get(parts[1]!)
     const record = loaded ?? (action.allowMissing ? { id: parts[1]! } : null)
     if (!record) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
-    const personalLoad = spec.path === '/plugins' && (actionId === 'start' || actionId === 'stop')
-    const pluginAuthor = spec.path === '/plugins' && (actionId === 'sandbox' || actionId === 'pack')
+    const personalLoad = spec.path === PLUGINS_COLLECTION_PATH && (actionId === 'start' || actionId === 'stop')
+    const pluginAuthor = spec.path === PLUGINS_COLLECTION_PATH && (actionId === 'sandbox' || actionId === 'pack')
     const builtinPlugin = this.builtinPlugin(spec, parts[1]!, record)
     if (pluginAuthor) {
       await this.requirePath(spec.path, 'resource:read')
@@ -2013,14 +2036,14 @@ export class DatabaseService extends Service implements Database {
       await this.requirePath(spec.path, (action.requiredAction ?? 'resource:update') as PermissionAction)
     }
     if (!matchActionWhen(record, action.when)) throw new Error(`action not available: ${actionId}`)
-    if ((actionId === 'delete' || actionId === 'trash') && spec.path !== '/trash') {
+    if ((actionId === 'delete' || actionId === 'trash') && spec.path !== TRASH_COLLECTION_PATH) {
       return this.remove(spec.path, { ids: [parts[1]!] })
     }
     const result = await action.run(parts[1]!, record, args)
-    if (spec.path === '/plugins' && actionId === 'sandbox' && !builtinPlugin && !this.access.recordOwner(spec.path, parts[1]!)) {
+    if (spec.path === PLUGINS_COLLECTION_PATH && actionId === 'sandbox' && !builtinPlugin && !this.access.recordOwner(spec.path, parts[1]!)) {
       this.stampPluginCreateScope(parts[1]!, args)
     }
-    if (spec.path === '/plugins' && !builtinPlugin && (actionId === 'sandbox' || actionId === 'pack')) {
+    if (spec.path === PLUGINS_COLLECTION_PATH && !builtinPlugin && (actionId === 'sandbox' || actionId === 'pack')) {
       await this.stampActor(spec.path, parts[1]!)
     }
     const next = (await spec.get(parts[1]!)) ?? record
@@ -2189,10 +2212,10 @@ export function apply(ctx: Context) {
   }
   db.viewCatalog = savedViews
   ctx.inject(['sessions'], (inner) => {
-    inner.sessions.viewAccess = (id, record) => db.allowsViaView('/agents', { ...record, id })
+    inner.sessions.viewAccess = (id, record) => db.allowsViaView(AGENTS_COLLECTION_PATH, { ...record, id })
   })
   account?.authorization?.setMemberViewMatcher((workspaceId, viewId, accountId) => {
-    const view = savedViews.viewsFor('/workspace-members').find((item) => item.id === viewId)
+    const view = savedViews.viewsFor(WORKSPACE_MEMBERS_COLLECTION_PATH).find((item) => item.id === viewId)
       ?? stubBuiltinMemberView(viewId)
       ?? stubBuiltinAllView(viewId)
     if (!view || !account.store) return false

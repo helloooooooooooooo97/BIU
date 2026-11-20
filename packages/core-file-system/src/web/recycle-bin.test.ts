@@ -8,7 +8,10 @@ test('recycle bin is a registered /trash table with restore and delete actions',
   const sidebar = readFileSync(resolve(import.meta.dirname, './data-sidebar.tsx'), 'utf8')
   const host = readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8')
   const spec = readFileSync(resolve(import.meta.dirname, '../host/trash-collection.ts'), 'utf8')
-  const paths = readFileSync(resolve(import.meta.dirname, './database-path.ts'), 'utf8')
+  const paths =
+    readFileSync(resolve(import.meta.dirname, '../paths.ts'), 'utf8') +
+    '\n' +
+    readFileSync(resolve(import.meta.dirname, './database-path.ts'), 'utf8')
   assert.doesNotMatch(sidebar, /sidebar-recycle-bin/)
   assert.doesNotMatch(sidebar, /RECYCLE_BIN_PATH/)
   assert.doesNotMatch(page, /isRecycleBinPath/)
@@ -18,7 +21,7 @@ test('recycle bin is a registered /trash table with restore and delete actions',
   assert.match(paths, /TRASH_COLLECTION_PATH = '\/trash'/)
   assert.doesNotMatch(paths, /CORE_COLLECTION_ORDER = \[[^\]]*TRASH_COLLECTION_PATH/)
   assert.match(paths, /SYSTEM_COLLECTION_ORDER = \[[^\]]*TRASH_COLLECTION_PATH/)
-  assert.match(spec, /path: '\/trash'/)
+  assert.match(spec, /path: TRASH_COLLECTION_PATH/)
   assert.match(spec, /id: 'restore'/)
   assert.match(spec, /id: 'delete'/)
   assert.match(spec, /purge: true/)
@@ -28,10 +31,10 @@ test('recycle bin is a registered /trash table with restore and delete actions',
     readFileSync(resolve(import.meta.dirname, './browser-list-cache.ts'), 'utf8') +
     '\n' +
     readFileSync(resolve(import.meta.dirname, './browser-dialogs.tsx'), 'utf8')
-  assert.match(browser, /const inTrash = collectionPath === '\/trash'/)
+  assert.match(browser, /const inTrash = collectionPath === TRASH_COLLECTION_PATH/)
   assert.match(browser, /canBulkDelete/)
-  assert.match(browser, /dataPath === '\/trash'/)
+  assert.match(browser, /dataPath === TRASH_COLLECTION_PATH/)
   assert.match(browser, /action: 'delete'/)
   assert.match(browser, /确定彻底删除选中的/)
-  assert.match(browser, /if \(dataPath !== '\/trash'\) \{[\s\S]*?publishDeletedRowsToTrash/)
+  assert.match(browser, /if \(dataPath !== TRASH_COLLECTION_PATH\) \{[\s\S]*?publishDeletedRowsToTrash/)
 })

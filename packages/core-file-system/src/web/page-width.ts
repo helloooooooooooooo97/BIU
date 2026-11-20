@@ -1,3 +1,5 @@
+import { PAGE_PREFS_EVENT } from './fsdb-events.ts'
+
 export type PageWidth = 'max' | 'full'
 export type BodyScale = 'sm' | 'md' | 'lg'
 
@@ -131,7 +133,7 @@ function commit(next: PagePrefs) {
   prefs = next
   writeCachedPagePrefs(next)
   applyPagePrefs(next)
-  if (typeof window !== 'undefined') window.dispatchEvent(new Event('biu:page-prefs'))
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(PAGE_PREFS_EVENT))
   emit()
 }
 

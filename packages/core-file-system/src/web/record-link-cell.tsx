@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ArrowPathIcon } from '@heroicons/react/16/solid'
 import { PickOption, PickPanel } from '@biu/database-ui/search'
 import type { DbRecord, FieldSpec } from '@biu/type-file-system'
+import { PAGES_COLLECTION_PATH } from './database-path.ts'
 import { listCollection, readJson } from './db-client.ts'
 import { getDatabaseUi } from './database-ui.ts'
 import { showRecordInInspector } from './inspector-db-route.ts'
@@ -61,7 +62,7 @@ function linkCollection(field: FieldSpec | undefined, fallback?: string) {
 }
 
 function collectionMarkIcon(path: string) {
-  return path.replace(/\/+$/, '') === '/pages' ? 'document' : undefined
+  return path.replace(/\/+$/, '') === PAGES_COLLECTION_PATH ? 'document' : undefined
 }
 
 function PeerMark({ id, emoji, collectionPath }: { id: string; emoji?: string; collectionPath: string }) {

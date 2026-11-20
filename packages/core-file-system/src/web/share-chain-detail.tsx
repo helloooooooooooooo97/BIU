@@ -14,6 +14,7 @@ import {
 import type { FilterGroup } from '../query-logic.ts'
 import { recordMatchesSharedView, resolveSharedView } from '../share-view-match.ts'
 import { effectiveDataScope, recordMatchesGrantedView } from '../view-access.ts'
+import { VIEWS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH } from './database-path.ts'
 import { listCollection, readJson } from './db-client.ts'
 import { AccessMark, accessText, accessTone, ScopeMark, scopeText, scopeTone } from './share-scope-label.tsx'
 
@@ -118,7 +119,7 @@ export function ShareScopeDetail({
           readJson<{ shares?: Array<{ kind?: string; collection?: string; viewId?: string; recordId?: string; title?: string }> }>('/api/db/shares'),
           listCollection({ path: collection, limit: 1, filters: { id: recordId } }),
           listCollection({
-            path: '/views',
+            path: VIEWS_COLLECTION_PATH,
             limit: 200,
             filters: { tablePath: collection },
             columns: ['title', 'tablePath', 'viewId', 'filters', 'filterTree'],
@@ -200,14 +201,14 @@ export function ShareScopeDetail({
           }>
         }>(`/api/account/access?collection=${encodeURIComponent(collection)}&recordId=${encodeURIComponent(recordId)}`),
         listCollection({ path: collection, limit: 1, filters: { id: recordId } }),
-        listCollection({ path: '/views', limit: 200, filters: { tablePath: collection }, columns: ['title', 'tablePath', 'viewId', 'filters'] }),
-        listCollection({ path: '/views', limit: 200, filters: { tablePath: '/workspace-members' }, columns: ['title', 'tablePath', 'viewId', 'filters'] }),
+        listCollection({ path: VIEWS_COLLECTION_PATH, limit: 200, filters: { tablePath: collection }, columns: ['title', 'tablePath', 'viewId', 'filters'] }),
+        listCollection({ path: VIEWS_COLLECTION_PATH, limit: 200, filters: { tablePath: WORKSPACE_MEMBERS_COLLECTION_PATH }, columns: ['title', 'tablePath', 'viewId', 'filters'] }),
       ])
       if (cancelled) return
       const record = recordPage.items[0] ?? null
       const dataViews = collectionDataViews(collection, viewPage.items)
       const memberViews = [
-        { ...builtinAllView({ path: '/workspace-members' }), name: builtinAllView({ path: '/workspace-members' }).name },
+        { ...builtinAllView({ path: WORKSPACE_MEMBERS_COLLECTION_PATH }), name: builtinAllView({ path: WORKSPACE_MEMBERS_COLLECTION_PATH }).name },
         ...builtinMemberViews().map((view) => ({ id: view.id, name: view.name, filters: view.filters })),
         ...viewRows(memberViewPage.items),
       ]
@@ -446,14 +447,14 @@ export function ShareRoleDetail({
           }>
         }>(`/api/account/access?collection=${encodeURIComponent(collection)}&recordId=${encodeURIComponent(recordId)}`),
         listCollection({ path: collection, limit: 1, filters: { id: recordId } }),
-        listCollection({ path: '/views', limit: 200, filters: { tablePath: collection }, columns: ['title', 'tablePath', 'viewId', 'filters'] }),
-        listCollection({ path: '/views', limit: 200, filters: { tablePath: '/workspace-members' }, columns: ['title', 'tablePath', 'viewId', 'filters'] }),
+        listCollection({ path: VIEWS_COLLECTION_PATH, limit: 200, filters: { tablePath: collection }, columns: ['title', 'tablePath', 'viewId', 'filters'] }),
+        listCollection({ path: VIEWS_COLLECTION_PATH, limit: 200, filters: { tablePath: WORKSPACE_MEMBERS_COLLECTION_PATH }, columns: ['title', 'tablePath', 'viewId', 'filters'] }),
       ])
       if (cancelled) return
       const record = recordPage.items[0] ?? null
       const dataViews = collectionDataViews(collection, viewPage.items)
       const memberViews = [
-        { ...builtinAllView({ path: '/workspace-members' }), name: builtinAllView({ path: '/workspace-members' }).name },
+        { ...builtinAllView({ path: WORKSPACE_MEMBERS_COLLECTION_PATH }), name: builtinAllView({ path: WORKSPACE_MEMBERS_COLLECTION_PATH }).name },
         ...builtinMemberViews().map((view) => ({ id: view.id, name: view.name, filters: view.filters })),
         ...viewRows(memberViewPage.items),
       ]
