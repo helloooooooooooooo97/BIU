@@ -439,7 +439,12 @@ export function DefaultCell({
   }
   if (kind === 'datetime') {
     const text = formatField(field, value)
-    if (!text) return null
+    if (!text) {
+      if (value != null && value !== '' && value !== 0 && value !== '0' && (typeof value !== 'string' || value.trim())) {
+        return <span className="fsdb-datetime-text" title={String(value)}>⚠️ 无法解析</span>
+      }
+      return null
+    }
     return <span className="fsdb-datetime-text">{text}</span>
   }
   if (kind === 'url' || kind === 'image' || kind === 'attachment' || kind === 'document' || kind === 'file') {

@@ -3593,3 +3593,115 @@ test('tag detail refreshes after emoji edits never re-index collected pages as t
   }
   assert.equal(sourceReads, 0, 'indexed tag attributes do not load every page before pagination')
 })
+
+test('db_update and db_create validate tag attribute types and /tags enriches non-string field examples', async () => {
+  const db = new DatabaseService(new Context())
+  const pages = new Map<string, DbRecord>([['p1', { id: 'p1', title: '测试页' }]])
+  db.register({
+    id: 'pages',
+    path: '/pages',
+    schema: {
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string', writable: true },
+        tag: { type: 'tag', writable: true },
+      },
+    },
+    records: { create: true, update: true },
+    list: () => [...pages.values()],
+    get: (id) => pages.get(id) ?? null,
+    create: (rows) =>
+      rows.map((row) => {
+        const rec = { ...row, id: String(row.id) }
+        pages.set(rec.id, rec)
+        return rec
+      }),
+    update: (id, patch) => {
+      const next = { ...pages.get(id), ...patch, id }
+      pages.set(id, next)
+      return next
+    },
+  })
+  db.register(tagsCollection(db.tags))
+  db.tags.upsert({
+    id: 'tag-10',
+    label: '需求',
+    fields: [
+      { key: '提交时间', label: '提交时间', type: 'datetime', writable: true },
+      { key: '完成', label: '完成', type: 'boolean', writable: true },
+      { key: '+', label: '+', type: 'number', writable: true },
+      { key: '状态', label: '状态', type: 'select', enum: ['待处理', '已完成'], writable: true },
+      { key: '标签组', label: '标签组', type: 'multi-select', enum: ['A', 'B'], writable: true },
+      { key: 'pr', label: 'pr', type: 'url', writable: true },
+    ],
+  })
+
+  await assert.rejects(
+    () =>
+      db.update('/pages/p1', {
+        tag: { tags: ['tag-10'], values: { 提交时间: '2026-11-20 10:57:14' } },
+      }),
+    /提交时间 期望 datetime（Unix 毫秒数，如 1795142384000），收到 string "2026-11-20 10:57:14"/,
+  )
+  await assert.rejects(
+    () =>
+      db.create('/pages', [
+        { title: '新页', tag: { tags: ['tag-10'], values: { 提交时间: '2026-11-20 10:57:14' } } },
+      ]),
+    /提交时间 期望 datetime（Unix 毫秒数，如 1795142384000），收到 string "2026-11-20 10:57:14"/,
+  )
+  await assert.rejects(
+    () => db.update('/pages/p1', { tag: { tags: ['tag-10'], values: { 完成: 'yes' } } }),
+    /完成 期望 boolean（true 或 false），收到 string "yes"/,
+  )
+  await assert.rejects(
+    () => db.update('/pages/p1', { tag: { tags: ['tag-10'], values: { '+': 'abc' } } }),
+    /\+ 期望 number（数字，如 1），收到 string "abc"/,
+  )
+  await assert.rejects(
+    () => db.update('/pages/p1', { tag: { tags: ['tag-10'], values: { 状态: '未知' } } }),
+    /状态 期望 select（可选值: 待处理, 已完成），收到 string "未知"/,
+  )
+  await assert.rejects(
+    () => db.update('/pages/p1', { tag: { tags: ['tag-10'], values: { 标签组: ['C'] } } }),
+    /标签组 期望 multi-select（可选值: A, B），收到 array \["C"\]/,
+  )
+  await assert.rejects(
+    () => db.update('/pages/p1', { tag: { tags: ['tag-10'], values: { pr: 'javascript:alert(1)' } } }),
+    /pr 期望 url（如 "https:\/\/example\.com"），收到 string "javascript:alert\(1\)"/,
+  )
+
+  const ok = await db.update('/pages/p1', {
+    tag: {
+      tags: ['tag-10'],
+      values: {
+        提交时间: 1795142384000,
+        完成: true,
+        '+': 42,
+        状态: '已完成',
+        标签组: ['A'],
+        pr: 'https://github.com/example/repo/commit/123',
+      },
+    },
+  })
+  assert.deepEqual((ok.value.tag as { values: Record<string, unknown> }).values['tag-10'], {
+    提交时间: 1795142384000,
+    完成: true,
+    '+': 42,
+    状态: '已完成',
+    标签组: ['A'],
+    pr: 'https://github.com/example/repo/commit/123',
+  })
+
+  const tagRecord = await db.stat('/tags/tag-10')
+  assert.equal(tagRecord.kind, 'record')
+  if (tagRecord.kind !== 'record') return
+  const fields = JSON.parse(String(tagRecord.value.fields)) as Array<{ key: string; example?: unknown }>
+  const byKey = new Map(fields.map((item) => [item.key, item.example]))
+  assert.equal(byKey.get('提交时间'), 1795142384000)
+  assert.equal(byKey.get('完成'), true)
+  assert.equal(byKey.get('+'), 1)
+  assert.equal(byKey.get('状态'), '待处理')
+  assert.deepEqual(byKey.get('标签组'), ['A'])
+  assert.equal(byKey.get('pr'), 'https://example.com')
+})

@@ -281,3 +281,24 @@ test('AgentDbCompact unpacks /tags fields JSON string into structured arrays', (
   }) as { value: Record<string, unknown> }
   assert.deepEqual(read.value.fields, [{ key: 'k1', label: '优先级', type: 'select', observedOptions: ['P1', 'P2'] }])
 })
+
+test('AgentDbCompact adds default examples for writable non-string schema fields', () => {
+  const fields = withBuiltinFields({
+    ...REQUIRED_RECORD_FIELDS,
+    dueAt: { type: 'datetime', label: '截止时间', writable: true },
+    score: { type: 'number', label: '分数', writable: true },
+    done: { type: 'boolean', label: '完成', writable: true },
+    lane: { type: 'select', label: '状态', enum: ['待办', '完成'], writable: true },
+    link: { type: 'url', label: '链接', writable: true },
+  })
+  const compact = pack.schema({
+    labelField: 'title',
+    contentField: 'content',
+    fields,
+  }) as { fields: Record<string, { example?: unknown }> }
+  assert.equal(compact.fields.dueAt?.example, 1795142384000)
+  assert.equal(compact.fields.score?.example, 1)
+  assert.equal(compact.fields.done?.example, true)
+  assert.equal(compact.fields.lane?.example, '待办')
+  assert.equal(compact.fields.link?.example, 'https://example.com')
+})

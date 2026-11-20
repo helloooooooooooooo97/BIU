@@ -15,6 +15,7 @@ import {
   type CollectionSpec,
   type FieldSpec,
   type SchemaFieldValue,
+  type SchemaPackField,
 } from '@biu/type-file-system'
 import { parsePageBanner, type PageBanner } from '../page-banner.ts'
 
@@ -134,6 +135,19 @@ export function isPlainObject(value: unknown): value is Record<string, unknown> 
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
+export function findPackField(
+  pack: CollectionSchemaPack | null | undefined,
+  name: string,
+): SchemaPackField | undefined {
+  const want = String(name ?? '').trim()
+  if (!pack || !want) return undefined
+  for (const field of pack.fields) {
+    if (field.deleted) continue
+    if (field.key === want || field.label === want) return field
+  }
+  return undefined
+}
+
 export function packFieldKey(pack: CollectionSchemaPack | null | undefined, name: string) {
   const want = String(name ?? '').trim()
   if (!pack || !want) return want
@@ -147,12 +161,132 @@ export function tagBagValueEmpty(value: unknown) {
   return value == null || (typeof value === 'string' && !value.trim())
 }
 
+function describeReceivedValue(value: unknown): string {
+  if (value === null) return 'null'
+  if (value === undefined) return 'undefined'
+  if (typeof value === 'number' && !Number.isFinite(value)) return `number ${String(value)}`
+  if (Array.isArray(value)) return `array ${JSON.stringify(value)}`
+  return `${typeof value} ${JSON.stringify(value)}`
+}
+
+export function coerceTagFieldValue(field: SchemaPackField, value: unknown): unknown {
+  const label = String(field.label ?? field.key).trim() || field.key
+  const kind = field.type
+  if (kind === 'datetime') {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+      throw new Error(`${label} 期望 datetime（Unix 毫秒数，如 1795142384000），收到 ${describeReceivedValue(value)}`)
+    }
+    return value
+  }
+  if (kind === 'number') {
+    if (typeof value === 'boolean' || (typeof value !== 'number' && typeof value !== 'string')) {
+      throw new Error(`${label} 期望 number（数字，如 1），收到 ${describeReceivedValue(value)}`)
+    }
+    const n = Number(value)
+    if (!Number.isFinite(n)) {
+      throw new Error(`${label} 期望 number（数字，如 1），收到 ${describeReceivedValue(value)}`)
+    }
+    return n
+  }
+  if (kind === 'boolean') {
+    if (value === true || value === 'true') return true
+    if (value === false || value === 'false') return false
+    throw new Error(`${label} 期望 boolean（true 或 false），收到 ${describeReceivedValue(value)}`)
+  }
+  if (kind === 'select') {
+    if (typeof value !== 'string' && typeof value !== 'number') {
+      throw new Error(
+        `${label} 期望 select（${field.enum?.length ? `可选值: ${field.enum.join(', ')}` : '字符串'}），收到 ${describeReceivedValue(value)}`,
+      )
+    }
+    const selected = String(value).trim()
+    if (selected && field.enum?.length && !field.enum.includes(selected)) {
+      const byLabel = field.enumLabels
+        ? Object.entries(field.enumLabels).find(([, text]) => text === selected)?.[0]
+        : undefined
+      if (byLabel) return byLabel
+      throw new Error(`${label} 期望 select（可选值: ${field.enum.join(', ')}），收到 ${describeReceivedValue(value)}`)
+    }
+    return selected
+  }
+  if (kind === 'multi-select') {
+    let list: string[]
+    try {
+      list = coerceList(value)
+    } catch {
+      throw new Error(`${label} 期望 multi-select（字符串数组），收到 ${describeReceivedValue(value)}`)
+    }
+    if (field.enum?.length) {
+      const normalized = list.map((item) => {
+        if (field.enum!.includes(item)) return item
+        const byLabel = field.enumLabels
+          ? Object.entries(field.enumLabels).find(([, text]) => text === item)?.[0]
+          : undefined
+        if (byLabel) return byLabel
+        throw new Error(`${label} 期望 multi-select（可选值: ${field.enum!.join(', ')}），收到 ${describeReceivedValue(value)}`)
+      })
+      return normalized
+    }
+    return list
+  }
+  if (kind === 'url') {
+    if (typeof value !== 'string') {
+      throw new Error(`${label} 期望 url（如 "https://example.com"），收到 ${describeReceivedValue(value)}`)
+    }
+    try {
+      return coerceUrl(value)
+    } catch {
+      throw new Error(`${label} 期望 url（如 "https://example.com"），收到 ${describeReceivedValue(value)}`)
+    }
+  }
+  if (kind === 'person') {
+    const person = asPerson(value)
+    if (!person) throw new Error(`${label} 期望 person，收到 ${describeReceivedValue(value)}`)
+    return person
+  }
+  if (kind === 'ref') {
+    if (Array.isArray(value)) return String(value[0] ?? '').trim()
+    if (typeof value === 'string' || typeof value === 'number') return String(value).trim()
+    throw new Error(`${label} 期望 ref（记录 id 字符串），收到 ${describeReceivedValue(value)}`)
+  }
+  if (kind === 'multi-ref') {
+    let list: string[]
+    try {
+      list = coerceList(value)
+    } catch {
+      throw new Error(`${label} 期望 multi-ref（记录 id 数组），收到 ${describeReceivedValue(value)}`)
+    }
+    return [...new Set(list.map((item) => item.trim()).filter(Boolean))]
+  }
+  if (kind === 'image') {
+    const list = asImageSrcList(value)
+    if (!list.length) throw new Error(`${label} 期望 image，收到 ${describeReceivedValue(value)}`)
+    return list.length === 1 ? list[0] : list
+  }
+  if (kind === 'attachment' || kind === 'document') {
+    const list = asAttachmentList(value)
+    if (!list.length) throw new Error(`${label} 期望 ${kind}，收到 ${describeReceivedValue(value)}`)
+    return list.length === 1 ? list[0] : list
+  }
+  if (isTagFieldType(kind)) return normalizeSchemaValue(value)
+  if (kind === 'action') return value == null ? '' : value
+  if (typeof value === 'object') {
+    throw new Error(`${label} 期望 string，收到 ${describeReceivedValue(value)}`)
+  }
+  return String(value ?? '')
+}
+
 export function remapTagBag(pack: CollectionSchemaPack | null | undefined, bag: Record<string, unknown>) {
   const out: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(bag)) {
     const field = packFieldKey(pack, key)
     if (!field) continue
-    out[field] = tagBagValueEmpty(value) ? '' : value
+    if (tagBagValueEmpty(value)) {
+      out[field] = ''
+      continue
+    }
+    const spec = findPackField(pack, key)
+    out[field] = spec ? coerceTagFieldValue(spec, value) : value
   }
   return out
 }

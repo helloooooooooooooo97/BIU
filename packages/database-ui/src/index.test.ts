@@ -67,4 +67,5 @@ test('datetime cell uses biu-ui Calendar, not datetime-local or antd', () => {
   assert.match(menu, /\.db-datetime-trigger:focus-visible\{[^}]*outline:none/)
   assert.match(picker, /type="time"/)
   assert.doesNotMatch(picker, /CalendarDaysIcon/)
+  assert.match(picker, /⚠️ 无法解析/)
 })

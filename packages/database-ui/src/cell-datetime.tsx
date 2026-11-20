@@ -47,10 +47,11 @@ export function CellDateTime({
 }) {
   ensureDbSearchStyle()
   const stamp = asStamp(value)
+  const invalid = !stamp && value != null && value !== '' && value !== 0 && value !== '0' && (typeof value !== 'string' || Boolean(value.trim()))
   const [open, setOpen] = useState(false)
   const [time, setTime] = useState(() => timeValue(stamp))
   const selected = stamp ? new Date(stamp) : null
-  const label = formatDateTimeLabel(stamp) || empty
+  const label = formatDateTimeLabel(stamp) || (invalid ? '⚠️ 无法解析' : empty)
 
   if (!writable) {
     return (

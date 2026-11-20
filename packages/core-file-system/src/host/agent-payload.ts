@@ -226,6 +226,26 @@ export class AgentDbCompact {
     return ids
   }
 
+  private defaultExample(field: FieldSpec): unknown {
+    if (!field.writable || field.computed) return undefined
+    switch (field.type) {
+      case 'datetime':
+        return 1795142384000
+      case 'number':
+        return 1
+      case 'boolean':
+        return true
+      case 'select':
+        return field.enum?.[0] ?? '选项A'
+      case 'multi-select':
+        return field.enum?.length ? [field.enum[0]!] : ['选项A']
+      case 'url':
+        return 'https://example.com'
+      default:
+        return undefined
+    }
+  }
+
   private field(key: string, field: FieldSpec) {
     const out: Record<string, unknown> = { type: field.type }
     if (field.label && field.label !== key) out.label = field.label
@@ -234,7 +254,8 @@ export class AgentDbCompact {
     if (field.format) out.format = field.format
     if (field.enum?.length) out.enum = field.enum
     if (field.description) out.description = field.description
-    if (field.example !== undefined) out.example = field.example
+    const example = field.example !== undefined ? field.example : this.defaultExample(field)
+    if (example !== undefined) out.example = example
     if (field.action) out.action = field.action
     if (field.computed) out.computed = true
     if (field.collection) out.collection = field.collection

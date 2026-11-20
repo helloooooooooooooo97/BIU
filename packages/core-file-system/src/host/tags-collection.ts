@@ -1,11 +1,36 @@
-import type { CollectionInfo, CollectionListQuery, CollectionSpec, DbRecord } from '@biu/type-file-system'
+import type { CollectionInfo, CollectionListQuery, CollectionSpec, DbRecord, SchemaPackField } from '@biu/type-file-system'
 import { parseAtomicFields, recordBuiltinValues, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 import { TagStore, slugTagId } from './tags-store.ts'
 import { TAGS_COLLECTION_PATH, normalizeCollectionPath } from '../paths.ts'
 
 const TAG_FIELDS_EXAMPLE = '[{"key":"类别","type":"string"}]'
+const TAG_FIELD_EXAMPLE_DATETIME = 1795142384000
 const TAG_FIELDS_DESCRIPTION =
   '属性定义。db_update / db_create 可传数组或 JSON 字符串，两种形状等价。例 [{"key":"类别","type":"string"}]。同一标签下属性名不能重复。type 必须是 string|number|boolean|select|multi-select|datetime|url|image|attachment|document|action|tag|person|ref|multi-ref（没有 text，也没有 file：file 是记录正文，用 db_content。document 是可覆盖的命名文档）。其它表读该属性的列 key 为 tag::<本标签id>::<字段key>，例如 tag::tag::类别。'
+
+export function tagFieldDefaultExample(
+  field: { type?: string; enum?: string[]; example?: unknown },
+  observedOptions?: string[],
+): unknown {
+  if (field.example !== undefined) return field.example
+  const options = field.enum?.length ? field.enum : observedOptions
+  switch (field.type) {
+    case 'datetime':
+      return TAG_FIELD_EXAMPLE_DATETIME
+    case 'number':
+      return 1
+    case 'boolean':
+      return true
+    case 'select':
+      return options?.[0] ?? '选项A'
+    case 'multi-select':
+      return options?.length ? [options[0]!] : ['选项A']
+    case 'url':
+      return 'https://example.com'
+    default:
+      return undefined
+  }
+}
 
 export function stampRecordId(collection: string, recordId: string) {
   const table = normalizeCollectionPath(collection).replace(/^\//, '')
@@ -49,18 +74,26 @@ export function tagsCollection(
     return hit?.label ?? hit?.id ?? path
   }
 
+  const enrichTagFields = (tagId: string, fields: SchemaPackField[]) => {
+    const observed = store.observedFieldOptions(tagId)
+    return fields.map((field) => {
+      const opts = observed[field.key]
+      const example = tagFieldDefaultExample(field, opts)
+      return {
+        ...field,
+        ...(opts?.length ? { observedOptions: opts } : {}),
+        ...(example !== undefined ? { example } : {}),
+      }
+    })
+  }
+
   const fromEntry = (id: string, stampCount: number) => {
     const item = store.entry(id)
     if (!item) return asTag(id, id, [], stampCount)
-    const observed = store.observedFieldOptions(item.pack.id)
-    const enrichedFields = item.pack.fields.map((field) => {
-      const opts = observed[field.key]
-      return opts?.length ? { ...field, observedOptions: opts } : field
-    })
     return asTag(
       item.pack.id,
       item.pack.label,
-      enrichedFields,
+      enrichTagFields(item.pack.id, item.pack.fields),
       stampCount,
       item.notes,
       item.createdAt,
@@ -74,7 +107,7 @@ export function tagsCollection(
       asTag(
         item.pack.id,
         item.pack.label,
-        item.pack.fields,
+        enrichTagFields(item.pack.id, item.pack.fields),
         counts[item.pack.id] ?? 0,
         item.notes,
         item.createdAt,
