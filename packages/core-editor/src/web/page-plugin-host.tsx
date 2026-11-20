@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, type ComponentType, type ReactNode } from 'react'
 import { PlayIcon } from '@heroicons/react/16/solid'
 import { RenderBoundary } from '@biu/biu-ui'
-import { getBlockEditor, useBlockEditorVersion, type PageBlockViewProps } from './service.ts'
+import { useBlockEditorSpec, type PageBlockViewProps } from './service.ts'
 import {
   ENABLE_PAGE_BLOCK_PLUGIN,
   requestEnablePageBlockPlugin,
@@ -9,7 +9,6 @@ import {
   type PageBlockPluginPhase,
 } from './page-block-meta.ts'
 import { bindPageBlockPlugin } from './page-block-plugin-host.ts'
-import { SourceEditor } from './source-editor.tsx'
 
 export function pagePluginPickId(plugin: string, kind: string, blockId = '') {
   const id = blockId.trim()
@@ -42,8 +41,7 @@ export function pagePluginHostAttrs(opts: {
 }
 
 export function usePagePluginResolve(kind: string, plugin: string) {
-  useBlockEditorVersion()
-  const spec = getBlockEditor()?.block(kind)
+  const spec = useBlockEditorSpec(kind)
   const View = spec?.View
   const phase = usePageBlockPluginPhase(plugin)
   const retriedReady = useRef(false)
@@ -113,7 +111,7 @@ export function PageBlockMissing({
       </div>
       {loading ? null : (
         <div className="page-block-missing-source">
-          <SourceEditor value={source} language="json" writable={false} compact />
+          <pre className="page-block-missing-pre" data-testid="page-source-editor"><code>{source}</code></pre>
         </div>
       )}
     </div>

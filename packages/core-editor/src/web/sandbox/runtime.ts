@@ -8,14 +8,24 @@ import { bindSandboxPickRelay } from '@biu/core-pick/web'
 const roots = new WeakMap<ShadowRoot, Root>()
 const relays = new WeakMap<ShadowRoot, () => void>()
 
+let cachedThemeKey = ''
+let cachedThemeCss = ''
+let cachedStyleCount = -1
+let cachedAdoptedSheets: CSSStyleSheet[] = []
+
 export function hostThemeCss() {
   if (typeof document === 'undefined') return ''
-  const style = getComputedStyle(document.documentElement)
+  const rootEl = document.documentElement
+  const key = `${rootEl.className}\0${rootEl.getAttribute('style') ?? ''}`
+  if (key === cachedThemeKey && cachedThemeCss) return cachedThemeCss
+  const style = getComputedStyle(rootEl)
   const vars: string[] = []
   for (const name of style) {
     if (name.startsWith('--')) vars.push(`${name}:${style.getPropertyValue(name).trim()}`)
   }
-  return `:host,:root,html,body{${vars.join(';')};color:inherit;font:inherit;box-sizing:border-box}*,*::before,*::after{box-sizing:inherit}${SANDBOX_PICK_MODE_CSS}`
+  cachedThemeKey = key
+  cachedThemeCss = `:host,:root,html,body{${vars.join(';')};color:inherit;font:inherit;box-sizing:border-box}*,*::before,*::after{box-sizing:inherit}${SANDBOX_PICK_MODE_CSS}`
+  return cachedThemeCss
 }
 
 /** Light-DOM `html.pick-mode *` does not pierce this shadow. Force the pick cursor inside. */
@@ -25,17 +35,22 @@ export const SANDBOX_PICK_MODE_CSS =
 
 export function adoptDocumentStyles(shadow: ShadowRoot) {
   if (typeof document === 'undefined' || typeof CSSStyleSheet === 'undefined') return
-  const sheets: CSSStyleSheet[] = []
-  for (const sheet of document.styleSheets) {
-    try {
-      const copy = new CSSStyleSheet()
-      copy.replaceSync([...sheet.cssRules].map((rule) => rule.cssText).join('\n'))
-      sheets.push(copy)
-    } catch {
-      /* opaque / cross-origin */
+  const count = document.styleSheets.length
+  if (count !== cachedStyleCount) {
+    const sheets: CSSStyleSheet[] = []
+    for (const sheet of document.styleSheets) {
+      try {
+        const copy = new CSSStyleSheet()
+        copy.replaceSync([...sheet.cssRules].map((rule) => rule.cssText).join('\n'))
+        sheets.push(copy)
+      } catch {
+        /* opaque / cross-origin */
+      }
     }
+    cachedStyleCount = count
+    cachedAdoptedSheets = sheets
   }
-  shadow.adoptedStyleSheets = sheets
+  shadow.adoptedStyleSheets = cachedAdoptedSheets
 }
 
 function prepareJsx(source: string) {

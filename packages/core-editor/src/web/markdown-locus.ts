@@ -10,10 +10,15 @@ export type MarkdownLocus = {
   insert?: number
 }
 
+const docMarkdownCache = new WeakMap<PmNode, string>()
+
 function serialize(editor: Editor, doc: PmNode) {
+  const cached = docMarkdownCache.get(doc)
+  if (cached !== undefined) return cached
   const manager = editor.storage.markdown?.manager as { serialize?: (json: unknown) => string } | undefined
-  if (typeof manager?.serialize === 'function') return manager.serialize(doc.toJSON())
-  return editor.getMarkdown()
+  const out = typeof manager?.serialize === 'function' ? manager.serialize(doc.toJSON()) : editor.getMarkdown()
+  docMarkdownCache.set(doc, out)
+  return out
 }
 
 function lineAtEnd(md: string) {

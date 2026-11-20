@@ -426,6 +426,8 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
   const saved = useRef(asMarkdown(value))
   const sourceMode = useRef(source)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const locusTimer = useRef<number | undefined>(undefined)
+  useEffect(() => () => { if (locusTimer.current) window.clearTimeout(locusTimer.current) }, [])
   const remoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const typedAt = useRef(0)
   const valueRef = useRef(value)
@@ -479,15 +481,28 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
       },
       onSelectionUpdate: ({ editor: current }) => {
         const host = current.view.dom.closest('.page-editor')
-        if (host instanceof HTMLElement) {
+        if (!(host instanceof HTMLElement)) return
+        // Stamp path/title/timestamp synchronously (O(1)); defer full markdown locus to idle
+        // so cursor movement and typing never serialize 1000-block docs synchronously.
+        if (pathRef.current) host.dataset.livePath = pathRef.current
+        else delete host.dataset.livePath
+        if (titleRef.current) host.dataset.liveTitle = titleRef.current
+        else delete host.dataset.liveTitle
+        host.dataset.liveAt = String(Date.now())
+        if (locusTimer.current) window.clearTimeout(locusTimer.current)
+        locusTimer.current = window.setTimeout(() => {
+          locusTimer.current = undefined
+          if (current.isDestroyed) return
+          const liveHost = current.view.dom.closest('.page-editor')
+          if (!(liveHost instanceof HTMLElement)) return
           const locus = markdownLocusFromSelection(current)
-          stampLiveEditor(host, {
+          stampLiveEditor(liveHost, {
             path: pathRef.current,
             title: titleRef.current,
             line: locus?.start_line,
             insert: locus?.insert,
           })
-        }
+        }, 150)
       },
       onUpdate: ({ editor: current }) => {
         if (hydratedId.current !== record.id) return

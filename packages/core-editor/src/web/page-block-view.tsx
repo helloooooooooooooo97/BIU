@@ -45,7 +45,8 @@ function samePageBlockProps(prev: NodeViewProps, next: NodeViewProps) {
     prev.node.attrs.kind === next.node.attrs.kind &&
     prev.node.attrs.plugin === next.node.attrs.plugin &&
     prev.node.attrs.id === next.node.attrs.id &&
-    JSON.stringify(prev.node.attrs.data) === JSON.stringify(next.node.attrs.data) &&
+    (prev.node.attrs.data === next.node.attrs.data ||
+      JSON.stringify(prev.node.attrs.data) === JSON.stringify(next.node.attrs.data)) &&
     prev.editor.isEditable === next.editor.isEditable
   )
 }

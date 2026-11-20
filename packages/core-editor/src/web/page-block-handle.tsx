@@ -72,6 +72,28 @@ export function PageBlockHandle({ editor }: { editor: Editor }) {
       }, HIDE_DELAY_MS)
     }
 
+    let raf = 0
+    let lastClientX = 0
+    let lastClientY = 0
+    const flushMove = () => {
+      raf = 0
+      const next = readTarget(editor, wrap, lastClientX, lastClientY)
+      if (!next) {
+        delayHide()
+        return
+      }
+      cancelHide()
+      setTarget((prev) =>
+        prev &&
+        prev.pos === next.pos &&
+        prev.top === next.top &&
+        prev.left === next.left &&
+        prev.height === next.height
+          ? prev
+          : next,
+      )
+    }
+
     const onMove = (event: MouseEvent) => {
       if (menuOpen) return
       if (!editor.isEditable) {
@@ -82,19 +104,19 @@ export function PageBlockHandle({ editor }: { editor: Editor }) {
         cancelHide()
         return
       }
-      const next = readTarget(editor, wrap, event.clientX, event.clientY)
-      if (!next) {
-        delayHide()
-        return
-      }
-      cancelHide()
-      setTarget(next)
+      lastClientX = event.clientX
+      lastClientY = event.clientY
+      if (!raf) raf = window.requestAnimationFrame(flushMove)
     }
 
     const onLeave = (event: MouseEvent) => {
       if (menuOpen) return
       const to = event.relatedTarget
       if (to instanceof Node && wrap.contains(to)) return
+      if (raf) {
+        window.cancelAnimationFrame(raf)
+        raf = 0
+      }
       delayHide()
     }
 
@@ -102,6 +124,7 @@ export function PageBlockHandle({ editor }: { editor: Editor }) {
     wrap.addEventListener('mouseleave', onLeave)
     return () => {
       cancelHide()
+      if (raf) window.cancelAnimationFrame(raf)
       wrap.removeEventListener('mousemove', onMove)
       wrap.removeEventListener('mouseleave', onLeave)
     }

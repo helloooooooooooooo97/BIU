@@ -38,34 +38,31 @@ function surfaceLabel(el: HTMLElement) {
   )
 }
 
-/** Page Block 宿主把登记插件 id 打进整棵子树；已有 kind 的内部节点只补 plugin。 */
+/** Page Block 宿主把登记插件 id 打进整棵子树；已有 kind 的内部节点只补 plugin。单次后序遍历 O(M)，避免每节点 querySelector 的 O(M²)。 */
 export function injectPageBlockPlugin(host: HTMLElement, plugin: string) {
   const id = plugin.trim()
   if (!id) return
   host.setAttribute(PLUGIN_ATTR, id)
   host.setAttribute('data-page-block-plugin', id)
-  const walk = (el: Element, path: string) => {
-    if (!(el instanceof HTMLElement) || SKIP.has(el.tagName)) return
-    if (
-      el.hasAttribute('data-sandbox') ||
-      el.hasAttribute('data-sandbox-pick') ||
-      el.hasAttribute('data-html-sandbox') ||
-      el.hasAttribute('data-html-pick')
-    ) return
+  const walk = (el: Element, path: string): boolean => {
+    if (!(el instanceof HTMLElement) || SKIP.has(el.tagName)) return false
+    if (el.hasAttribute('data-sandbox') || el.hasAttribute('data-html-sandbox')) return true
+    if (el.hasAttribute('data-sandbox-pick') || el.hasAttribute('data-html-pick')) return false
+    let wrapsSandbox = false
+    let i = 0
+    for (const child of el.children) {
+      if (walk(child, `${path}/${i}`)) wrapsSandbox = true
+      i += 1
+    }
     if (el !== host) {
       el.setAttribute(PLUGIN_ATTR, id)
-      const wrapsSandbox = Boolean(el.querySelector('[data-sandbox], [data-html-sandbox]'))
       if (!el.getAttribute(KIND_ATTR) && SURFACE.has(el.tagName) && !wrapsSandbox) {
         el.setAttribute(KIND_ATTR, 'plugin')
         el.setAttribute(ID_ATTR, `${id}:${path}`)
         if (!el.getAttribute(LABEL_ATTR)) el.setAttribute(LABEL_ATTR, surfaceLabel(el))
       }
     }
-    let i = 0
-    for (const child of el.children) {
-      walk(child, `${path}/${i}`)
-      i += 1
-    }
+    return wrapsSandbox
   }
   walk(host, '0')
 }

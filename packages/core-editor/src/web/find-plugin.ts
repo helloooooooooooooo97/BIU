@@ -10,8 +10,7 @@ export const FIND_PLUGIN = new PluginKey('page-find')
 
 type FindMeta = { query: string; index: number }
 
-function findDecorations(doc: Node, query: string, index: number) {
-  const hits = findInPmDoc(doc, query)
+function decorationsFromHits(doc: Node, hits: ReturnType<typeof findInPmDoc>, index: number) {
   if (!hits.length) return DecorationSet.empty
   const current = wrapFindIndex(index, hits.length)
   return DecorationSet.create(
@@ -36,9 +35,13 @@ export const pageFind = Extension.create({
             const meta = tr.getMeta(FIND_PLUGIN) as FindMeta | undefined
             if (!meta && !tr.docChanged) return prev
             const query = meta?.query ?? prev.query
+            if (!query.trim()) {
+              if (!prev.query && prev.set === DecorationSet.empty) return prev
+              return { query: '', index: 0, set: DecorationSet.empty }
+            }
             const hits = findInPmDoc(tr.doc, query)
             const index = wrapFindIndex(meta?.index ?? prev.index, hits.length)
-            return { query, index, set: findDecorations(tr.doc, query, index) }
+            return { query, index, set: decorationsFromHits(tr.doc, hits, index) }
           },
         },
         props: {

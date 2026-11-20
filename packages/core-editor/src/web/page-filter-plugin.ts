@@ -38,6 +38,7 @@ function decorations(doc: Node, collection: string, recordId: string) {
   const view = getActiveRecordLayout(collection, recordId)
   const kinds = view.filterKinds
   const allow = kinds.length ? new Set(kinds) : null
+  if (!allow && view.sort === 'doc') return DecorationSet.empty
   const decos: Decoration[] = []
   const ranked: { pos: number; size: number; kind: string; label: string; id: string }[] = []
   doc.forEach((node, pos) => {

@@ -208,6 +208,23 @@ export function useBlockEditorVersion(editor?: BlockEditorService) {
   )
 }
 
+/** 按 kind 细粒度订阅块 spec：仅在该 kind 注册/卸载时触发对应节点重渲染。 */
+export function useBlockEditorSpec(kind: string, editor?: BlockEditorService): EditorBlockSpec | undefined {
+  return useSyncExternalStore(
+    (fn) => {
+      const svc = editor ?? getBlockEditor()
+      const off = svc ? svc.subscribe(fn) : () => undefined
+      if (!editor) waiters.add(fn)
+      return () => {
+        off()
+        waiters.delete(fn)
+      }
+    },
+    () => (editor ?? getBlockEditor())?.block(kind),
+    () => undefined,
+  )
+}
+
 declare module 'cordis' {
   interface Context {
     blockEditor: BlockEditorService

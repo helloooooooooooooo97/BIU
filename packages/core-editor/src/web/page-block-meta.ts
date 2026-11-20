@@ -16,12 +16,15 @@ function pendingPageBlockEnables() {
 export type PageBlockPluginPhase = 'idle' | 'loading' | 'failed' | 'missing' | 'ready' | 'deferred'
 
 const phases = new Map<string, PageBlockPluginPhase>()
-let phaseVersion = 0
 const phaseListeners = new Set<() => void>()
+const phaseListenersByPlugin = new Map<string, Set<() => void>>()
 
-function emitPhase() {
-  phaseVersion += 1
+function emitPhase(plugin?: string) {
   for (const fn of phaseListeners) fn()
+  if (plugin) {
+    const scoped = phaseListenersByPlugin.get(plugin)
+    if (scoped) for (const fn of scoped) fn()
+  }
 }
 
 export function pageBlockPluginPhase(plugin: string): PageBlockPluginPhase {
@@ -32,9 +35,10 @@ export function setPageBlockPluginPhase(plugin: string, phase: PageBlockPluginPh
   const id = plugin.trim()
   if (!id) return
   if (phase === 'ready' || phase === 'failed' || phase === 'missing') pendingPageBlockEnables().delete(id)
+  const prev = phases.get(id) ?? 'idle'
   if (phase === 'idle') phases.delete(id)
   else phases.set(id, phase)
-  emitPhase()
+  if (prev !== phase) emitPhase(id)
 }
 
 export function subscribePageBlockPluginPhase(fn: () => void) {
@@ -43,15 +47,24 @@ export function subscribePageBlockPluginPhase(fn: () => void) {
 }
 
 export function usePageBlockPluginPhase(plugin: string) {
-  useSyncExternalStore(
+  const id = plugin.trim()
+  return useSyncExternalStore(
     (fn) => {
-      phaseListeners.add(fn)
-      return () => phaseListeners.delete(fn)
+      if (!id) return () => undefined
+      let set = phaseListenersByPlugin.get(id)
+      if (!set) {
+        set = new Set()
+        phaseListenersByPlugin.set(id, set)
+      }
+      set.add(fn)
+      return () => {
+        set!.delete(fn)
+        if (!set!.size) phaseListenersByPlugin.delete(id)
+      }
     },
-    () => phaseVersion,
-    () => 0,
+    () => pageBlockPluginPhase(id),
+    () => 'idle' as PageBlockPluginPhase,
   )
-  return pageBlockPluginPhase(plugin)
 }
 
 if (typeof window !== 'undefined') {
@@ -208,29 +221,60 @@ export function formatPageBlockFence(kind: string, plugin: string, data: Record<
 
 const PAGE_BLOCK_OPEN = /^:::(?:editorBlock|pageBlock)(?:\s+\{([^}]*)\})?\s*(?:<!--.*?-->\s*)?$/
 const FENCE_CLOSE = /^:::\s*(?:<!--.*?-->\s*)?$/
+const OUTER_NEXT_LINE = /^(:::((editorBlock|pageBlock|cell|slide|table|row|th|td|code)\b|$)|`{3,}|#{1,6}\s)/
 
-function pageBlockCloseLooksOuter(lines: string[], closeAt: number) {
-  let i = closeAt + 1
-  while (i < lines.length && !String(lines[i] ?? '').trim()) i += 1
-  if (i >= lines.length) return true
-  return /^(:::((editorBlock|pageBlock|cell|slide|table|row|th|td|code)\b|$)|`{3,}|#{1,6}\s)/.test(String(lines[i] ?? ''))
+function nextNonBlankLineLooksOuter(src: string, afterClosePos: number) {
+  let pos = afterClosePos
+  const len = src.length
+  while (pos < len) {
+    const nl = src.indexOf('\n', pos)
+    const end = nl < 0 ? len : nl
+    const line = src.slice(pos, end)
+    if (line.trim()) return OUTER_NEXT_LINE.test(line)
+    if (nl < 0) return true
+    pos = nl + 1
+  }
+  return true
 }
 
-/** 内置块正文是不透明的：正文里的 ::: 不算结束，只认后面接着外层围栏 / 代码围栏 / 文末的 :::。 */
+/** 内置块正文是不透明的：正文里的 ::: 不算结束，只认后面接着外层围栏 / 代码围栏 / 文末的 :::。O(块长度) 扫描，避免对剩余文档做 split('\n')。 */
 export function takePageBlockFence(src: string) {
-  const lines = src.split('\n')
-  const head = PAGE_BLOCK_OPEN.exec(lines[0] ?? '')
-  if (!head) return null
-  const closes: number[] = []
-  for (let i = 1; i < lines.length; i += 1) {
-    if (FENCE_CLOSE.test(lines[i] ?? '')) closes.push(i)
+  const len = src.length
+  const firstNl = src.indexOf('\n')
+  const firstLine = firstNl < 0 ? src : src.slice(0, firstNl)
+  const head = PAGE_BLOCK_OPEN.exec(firstLine)
+  if (!head || firstNl < 0) return null
+
+  const bodyStart = firstNl + 1
+  let pos = bodyStart
+  let fallbackCloseStart = -1
+  let fallbackCloseEnd = -1
+
+  while (pos <= len) {
+    const nl = src.indexOf('\n', pos)
+    const lineEnd = nl < 0 ? len : nl
+    const line = src.slice(pos, lineEnd)
+    if (FENCE_CLOSE.test(line)) {
+      const afterPos = nl < 0 ? len : nl + 1
+      if (nextNonBlankLineLooksOuter(src, afterPos)) {
+        return {
+          raw: src.slice(0, lineEnd),
+          header: head[1] ?? '',
+          body: pos > bodyStart ? src.slice(bodyStart, pos - 1) : '',
+        }
+      }
+      fallbackCloseStart = pos
+      fallbackCloseEnd = lineEnd
+    }
+    if (nl < 0) break
+    pos = nl + 1
   }
-  if (!closes.length) return null
-  const end = closes.find((index) => pageBlockCloseLooksOuter(lines, index)) ?? closes[closes.length - 1]
+
+  if (fallbackCloseStart < 0) return null
   return {
-    raw: lines.slice(0, end + 1).join('\n'),
+    raw: src.slice(0, fallbackCloseEnd),
     header: head[1] ?? '',
-    body: lines.slice(1, end).join('\n'),
+    body: fallbackCloseStart > bodyStart ? src.slice(bodyStart, fallbackCloseStart - 1) : '',
   }
 }
 

@@ -55,13 +55,20 @@ export function collapsedOutlineIndices(
   folded: Set<string>,
 ) {
   const hide = new Set<number>()
+  if (!folded.size) return hide
+  let hideLevel = 0
   for (let i = 0; i < blocks.length; i += 1) {
-    const item = blocks[i]
-    if (!item.heading || !item.id || !folded.has(item.id)) continue
-    for (let j = i + 1; j < blocks.length; j += 1) {
-      const next = blocks[j]
-      if (next.heading && next.level <= item.level) break
-      hide.add(j)
+    const item = blocks[i]!
+    if (hideLevel > 0) {
+      if (item.heading && item.level <= hideLevel) {
+        hideLevel = 0
+      } else {
+        hide.add(i)
+        continue
+      }
+    }
+    if (item.heading && item.id && folded.has(item.id)) {
+      hideLevel = item.level
     }
   }
   return hide
@@ -103,9 +110,10 @@ function mapFolded(folded: Set<number>, tr: Transaction, doc: Node) {
   return next
 }
 
-type PluginState = { decos: DecorationSet; folded: Set<number> }
+type PluginState = { decos: DecorationSet; folded: Set<number>; hostKey: string }
 
 function decorations(doc: Node, collection: string, recordId: string, folded: Set<number>): PluginState {
+  const hostKey = `${collection}\0${recordId}`
   const mode = presentOf(collection, recordId)
   const decos: Decoration[] = []
   if (mode === 'outline') {
@@ -139,7 +147,7 @@ function decorations(doc: Node, collection: string, recordId: string, folded: Se
       )
     }
   }
-  return { decos: DecorationSet.create(doc, decos), folded }
+  return { decos: DecorationSet.create(doc, decos), folded, hostKey }
 }
 
 export const pageOutline = Extension.create({
@@ -172,7 +180,9 @@ export const pageOutline = Extension.create({
           init: (_: unknown, state): PluginState => decorations(state.doc, '', '', new Set()),
           apply(tr, old, _oldState, state) {
             const host = hostFromDom(editor.view)
+            const hostKey = `${host.collection}\0${host.id}`
             const meta = tr.getMeta(key)
+            if (!tr.docChanged && !meta && old.hostKey === hostKey) return old
             let folded = old.folded
             if (tr.docChanged) folded = mapFolded(folded, tr, state.doc)
             if (meta && typeof meta === 'object' && typeof meta.listFold === 'number') {
