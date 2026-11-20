@@ -2963,7 +2963,13 @@ async function resolveIncomingText(command: ContentCommand, args: Record<string,
     const bytes = await readLocalWriteFile(rawFrom)
     return bytes.toString('utf8')
   }
-  if (command === 'write') return asContentText(args.value ?? args.new_str)
+  if (command === 'write') {
+    const body = args.value ?? args.content ?? args.text ?? args.new_str
+    if (body === undefined) {
+      throw new Error('db_content write needs "value" (or "content" / "from") parameter')
+    }
+    return asContentText(body)
+  }
   if (command === 'insert' || command === 'replace_lines') {
     if (typeof args.new_str !== 'string') throw new Error(`${command} needs new_str or from`)
     return args.new_str

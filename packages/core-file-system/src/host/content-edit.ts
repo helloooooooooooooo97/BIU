@@ -23,7 +23,7 @@ export function resolveContentCommand(args: Record<string, unknown>): ContentCom
     }
     throw new Error(`unsupported command: ${raw}`)
   }
-  return args.value !== undefined || args.from !== undefined ? 'write' : 'view'
+  return args.value !== undefined || args.content !== undefined || args.text !== undefined || args.from !== undefined ? 'write' : 'view'
 }
 
 export function numberLines(text: string) {
