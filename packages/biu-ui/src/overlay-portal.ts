@@ -66,3 +66,46 @@ export function overlayZ(base = 200, anchor?: Element | null): number {
   }
   return z
 }
+
+export type OverlayMutexEntry = {
+  id: symbol
+  group: string
+  close: () => void
+  contentEl: () => HTMLElement | null
+}
+
+const activeOverlays = new Set<OverlayMutexEntry>()
+
+/**
+ * 统一的浮窗互斥协调器：
+ * - 同组内打开新浮窗时，自动关闭其他已打开的同级浮窗（即使触发器对 pointerdown 做了 stopPropagation）；
+ * - 若新浮窗的触发锚点位于已有浮窗的内容 DOM 内部（嵌套子菜单/子浮窗），保留父浮窗不关闭。
+ */
+export function claimOverlayOpen(entry: OverlayMutexEntry, triggerEl?: Element | null) {
+  for (const other of [...activeOverlays]) {
+    if (other.id === entry.id) continue
+    if (other.group !== entry.group) continue
+    const otherContent = other.contentEl()
+    if (triggerEl && otherContent && otherContent.contains(triggerEl)) continue
+    activeOverlays.delete(other)
+    other.close()
+  }
+  activeOverlays.add(entry)
+}
+
+export function releaseOverlayOpen(id: symbol) {
+  for (const entry of activeOverlays) {
+    if (entry.id === id) {
+      activeOverlays.delete(entry)
+      break
+    }
+  }
+}
+
+export function closeAllOverlays(group?: string) {
+  for (const entry of [...activeOverlays]) {
+    if (group && entry.group !== group) continue
+    activeOverlays.delete(entry)
+    entry.close()
+  }
+}

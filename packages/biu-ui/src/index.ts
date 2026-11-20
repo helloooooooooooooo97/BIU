@@ -39,6 +39,9 @@ export {
   CHAT_OVERLAY_Z,
   TOOLTIP_OVERLAY_Z,
   clampChatOverlayZ,
+  claimOverlayOpen,
+  releaseOverlayOpen,
+  closeAllOverlays,
   overlayPortalRoot,
   overlayZ,
 } from './overlay-portal.ts'

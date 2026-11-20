@@ -1,7 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { computeFloatingPosition } from './floating-position.ts'
-import { CHAT_OVERLAY_Z, EXPAND_OVERLAY_Z, OVERLAY_Z, clampChatOverlayZ, overlayPortalRoot, overlayZ } from './overlay-portal.ts'
+import { CHAT_OVERLAY_Z, EXPAND_OVERLAY_Z, OVERLAY_Z, claimOverlayOpen, clampChatOverlayZ, closeAllOverlays, overlayPortalRoot, overlayZ, releaseOverlayOpen } from './overlay-portal.ts'
 
 test('computeFloatingPosition flips bottom-start to top-start near viewport bottom', () => {
   const pos = computeFloatingPosition({
@@ -100,4 +100,42 @@ test('overlayPortalRoot escapes expanded isolation host when anchor is inside ch
   }
   assert.equal(overlayZ(180), 180)
   assert.equal(EXPAND_OVERLAY_Z, 360)
+})
+
+test('claimOverlayOpen enforces single open sibling while keeping nested parent open', () => {
+  closeAllOverlays()
+  let closedA = 0
+  let closedB = 0
+  let closedChild = 0
+
+  const contentA = document.createElement('div')
+  const childTrigger = document.createElement('button')
+  contentA.append(childTrigger)
+  const triggerB = document.createElement('button')
+  document.body.append(contentA, triggerB)
+
+  const idA = Symbol('A')
+  const idChild = Symbol('child')
+  const idB = Symbol('B')
+
+  try {
+    // Open A
+    claimOverlayOpen({ id: idA, group: 'popover', close: () => { closedA += 1 }, contentEl: () => contentA }, null)
+    // Open child whose trigger is inside A's content -> A must stay open
+    claimOverlayOpen({ id: idChild, group: 'popover', close: () => { closedChild += 1 }, contentEl: () => null }, childTrigger)
+    assert.equal(closedA, 0)
+    assert.equal(closedChild, 0)
+
+    // Open sibling B whose trigger is outside A -> both A and child must close
+    claimOverlayOpen({ id: idB, group: 'popover', close: () => { closedB += 1 }, contentEl: () => null }, triggerB)
+    assert.equal(closedA, 1)
+    assert.equal(closedChild, 1)
+    assert.equal(closedB, 0)
+  } finally {
+    releaseOverlayOpen(idA)
+    releaseOverlayOpen(idChild)
+    releaseOverlayOpen(idB)
+    contentA.remove()
+    triggerB.remove()
+  }
 })

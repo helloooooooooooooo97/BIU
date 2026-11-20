@@ -1,8 +1,8 @@
-import { useRef, type HTMLAttributes, type ReactNode } from 'react'
+import { useEffect, useRef, type HTMLAttributes, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useFloatingPosition, type FloatingPlacement } from './floating-position.ts'
 import { HeadlessDismiss } from './headless-dismiss.tsx'
-import { overlayPortalRoot, overlayZ } from './overlay-portal.ts'
+import { claimOverlayOpen, overlayPortalRoot, overlayZ, releaseOverlayOpen } from './overlay-portal.ts'
 
 export function AnchorMenu({
   anchor,
@@ -14,6 +14,7 @@ export function AnchorMenu({
   minWidth = 220,
   placement = 'bottom',
   inside,
+  exclusiveGroup = 'popover',
   style,
   ...rest
 }: {
@@ -26,8 +27,31 @@ export function AnchorMenu({
   minWidth?: number
   placement?: 'bottom' | 'right' | 'left'
   inside?: (node: Node) => boolean
+  exclusiveGroup?: string | false
 } & Omit<HTMLAttributes<HTMLDivElement>, 'role' | 'className' | 'children'>) {
   const menuRef = useRef<HTMLDivElement>(null)
+  const idRef = useRef<symbol | null>(null)
+  if (!idRef.current) idRef.current = Symbol('anchor-menu')
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
+  useEffect(() => {
+    const id = idRef.current!
+    if (!anchor || exclusiveGroup === false) {
+      releaseOverlayOpen(id)
+      return
+    }
+    claimOverlayOpen(
+      {
+        id,
+        group: exclusiveGroup,
+        close: () => onCloseRef.current(),
+        contentEl: () => menuRef.current,
+      },
+      anchor,
+    )
+    return () => releaseOverlayOpen(id)
+  }, [anchor, exclusiveGroup])
   const resolvedPlacement: FloatingPlacement =
     placement === 'right' ? 'right-start' : placement === 'left' ? 'left-start' : 'bottom-start'
 
