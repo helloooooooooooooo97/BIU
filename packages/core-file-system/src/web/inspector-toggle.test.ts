@@ -212,6 +212,7 @@ test('table and view rows only expand from the fold column', () => {
   assert.match(sidebar, /function revealTable/)
   assert.doesNotMatch(sidebar, /展开视图/)
   assert.doesNotMatch(sidebar, /收起视图/)
+  assert.match(css, /\.sidebar-group-fold:hover \.sidebar-group-fold-face/)
   assert.match(css, /\.sidebar-group-fold:hover \.sidebar-group-fold-chevron/)
   assert.doesNotMatch(css, /\.chat-session-row:hover \.sidebar-group-fold-chevron/)
 })

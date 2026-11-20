@@ -603,13 +603,15 @@ html.dark .fsdb-views {
   position: relative;
 }.sidebar-group-fold-face,
 .sidebar-group-fold-chevron {
+  grid-area: 1 / 1;
   display: grid;
   width: 16px;
   height: 16px;
   place-items: center;
 }.sidebar-group-fold-chevron {
   display: none;
-}.sidebar-group-fold:focus-within .sidebar-group-fold-face,
+}.sidebar-group-fold:hover .sidebar-group-fold-face,
+.sidebar-group-fold:focus-within .sidebar-group-fold-face,
 .app-side-bar .sidebar-group-head:focus-within .sidebar-group-fold:focus-within .sidebar-group-fold-face,
 .chat-sidebar-popover .sidebar-group-head:focus-within .sidebar-group-fold:focus-within .sidebar-group-fold-face,
 .fsdb-views .sidebar-group-head:focus-within .sidebar-group-fold:focus-within .sidebar-group-fold-face {
