@@ -1,6 +1,15 @@
 import { isViewModeId, type ViewMode } from './fields.ts'
 import { countFilterRules, filterTreeStateKey, normalizeSorts, resolveViewFilterTree, sortsStateKey, type FilterGroup, type SortRule } from '../query-logic.ts'
 
+export type GroupSortMode = 'manual' | 'asc' | 'desc'
+
+export type GroupConfig = {
+  sort?: GroupSortMode
+  hideEmpty?: boolean
+  hidden?: string[]
+  order?: string[]
+}
+
 export type SavedView = {
   id: string
   name: string
@@ -12,6 +21,7 @@ export type SavedView = {
   filterTree?: FilterGroup
   columns: string[]
   groupBy?: string
+  groupConfig?: GroupConfig
   tree?: boolean
   wrap?: boolean
   truncate?: boolean
@@ -84,6 +94,90 @@ export function tableWidthStyle(widths: Record<string, number>, keys: string[]):
   return { width: v, minWidth: v, maxWidth: v }
 }
 
+export function normalizeGroupConfig(value: unknown): GroupConfig | undefined {
+  let raw = value
+  if (typeof raw === 'string') {
+    const text = raw.trim()
+    if (!text) return undefined
+    try {
+      raw = JSON.parse(text) as unknown
+    } catch {
+      return undefined
+    }
+  }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const obj = raw as Record<string, unknown>
+  const sort: GroupSortMode | undefined =
+    obj.sort === 'asc' || obj.sort === 'desc' || obj.sort === 'manual' ? obj.sort : undefined
+  const hideEmpty = typeof obj.hideEmpty === 'boolean' ? obj.hideEmpty : undefined
+  const hidden = Array.isArray(obj.hidden)
+    ? [...new Set(obj.hidden.map((item) => String(item ?? '')))]
+    : undefined
+  const order = Array.isArray(obj.order)
+    ? [...new Set(obj.order.map((item) => String(item ?? '')))]
+    : undefined
+  const out: GroupConfig = {}
+  if (sort && sort !== 'manual') out.sort = sort
+  if (hideEmpty === false) out.hideEmpty = false
+  if (hidden?.length) out.hidden = hidden
+  if (order?.length) out.order = order
+  return Object.keys(out).length ? out : undefined
+}
+
+export function groupConfigStateKey(config?: GroupConfig | null) {
+  const norm = normalizeGroupConfig(config)
+  if (!norm) return ''
+  return JSON.stringify({
+    sort: norm.sort ?? 'manual',
+    hideEmpty: norm.hideEmpty !== false,
+    hidden: norm.hidden ?? [],
+    order: norm.order ?? [],
+  })
+}
+
+export function orderGroupBuckets<T extends { key: string; label: string }>(
+  buckets: T[],
+  config?: GroupConfig,
+): T[] {
+  if (buckets.length <= 1) return buckets
+  const sort = config?.sort ?? 'manual'
+  if (sort === 'asc' || sort === 'desc') {
+    const dir = sort === 'desc' ? -1 : 1
+    return [...buckets].sort((a, b) => {
+      const aEmpty = a.key === ''
+      const bEmpty = b.key === ''
+      if (aEmpty !== bEmpty) return aEmpty ? 1 : -1
+      const aVal = a.key || a.label
+      const bVal = b.key || b.label
+      return aVal.localeCompare(bVal, 'zh-Hans-CN', { numeric: true }) * dir
+    })
+  }
+  const order = config?.order
+  if (!order?.length) return buckets
+  const rank = new Map<string, number>()
+  order.forEach((key, idx) => rank.set(key, idx))
+  return [...buckets].sort((a, b) => {
+    const ra = rank.has(a.key) ? rank.get(a.key)! : Number.MAX_SAFE_INTEGER
+    const rb = rank.has(b.key) ? rank.get(b.key)! : Number.MAX_SAFE_INTEGER
+    return ra - rb
+  })
+}
+
+export function applyGroupConfig<T extends { key: string; label: string; rows: unknown[]; total?: number }>(
+  buckets: T[],
+  config?: GroupConfig,
+  options?: { includeHidden?: boolean },
+): T[] {
+  const hideEmpty = config?.hideEmpty !== false
+  const hiddenSet = !options?.includeHidden && config?.hidden?.length ? new Set(config.hidden) : null
+  const filtered = buckets.filter((item) => {
+    if (hideEmpty && (item.total ?? item.rows.length) === 0) return false
+    if (hiddenSet && hiddenSet.has(item.key)) return false
+    return true
+  })
+  return orderGroupBuckets(filtered, config)
+}
+
 export function normalizeSavedView(view: SavedView): SavedView {
   const sorts = normalizeSorts(view.sorts, view.sortField || 'title', view.sortDir === 'desc' ? 'desc' : 'asc')
   return {
@@ -99,6 +193,7 @@ export function normalizeSavedView(view: SavedView): SavedView {
     })(),
     columns: parseViewColumns(view.columns),
     groupBy: view.groupBy ?? '',
+    groupConfig: normalizeGroupConfig(view.groupConfig),
     tree: !!view.tree,
     wrap: !!view.wrap,
     truncate: view.truncate !== false,
@@ -152,7 +247,7 @@ export function normalizePageSize(value: unknown) {
 }
 
 export function viewStateKey(
-  view: Pick<SavedView, 'mode' | 'sortField' | 'sortDir' | 'sorts' | 'filters' | 'filterTree' | 'columns' | 'groupBy' | 'tree' | 'wrap' | 'truncate' | 'query' | 'pageSize' | 'columnWidths'>,
+  view: Pick<SavedView, 'mode' | 'sortField' | 'sortDir' | 'sorts' | 'filters' | 'filterTree' | 'columns' | 'groupBy' | 'groupConfig' | 'tree' | 'wrap' | 'truncate' | 'freezeTitle' | 'query' | 'pageSize' | 'columnWidths'>,
 ) {
   return JSON.stringify({
     mode: view.mode,
@@ -163,6 +258,7 @@ export function viewStateKey(
     filterTree: filterTreeStateKey(view.filterTree),
     columns: view.columns,
     groupBy: view.groupBy ?? '',
+    groupConfig: groupConfigStateKey(view.groupConfig),
     tree: !!view.tree,
     wrap: !!view.wrap,
     truncate: view.truncate !== false,

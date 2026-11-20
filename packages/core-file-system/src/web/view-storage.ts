@@ -9,7 +9,7 @@ import { normalizeCollectionPath } from '../paths.ts'
 import { invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { emptyFilterGroup, looksLikeFilterTree, normalizeFilterGroup, parseSortsInput, resolveViewFilterTree } from '../query-logic.ts'
-import { normalizePageSize, normalizeSavedView, parseViewColumns, rankListedViews, viewIsFresher, type SavedView } from './saved-view.ts'
+import { normalizeGroupConfig, normalizePageSize, normalizeSavedView, parseViewColumns, rankListedViews, viewIsFresher, type SavedView } from './saved-view.ts'
 
 export function viewsKey(collectionPath: string) {
   return `fsdb.views:${collectionPath}`
@@ -471,7 +471,7 @@ function parseViewFilters(value: unknown): Record<string, string> {
   return {}
 }
 
-export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mode?: unknown; sortField?: unknown; sortDir?: unknown; sorts?: unknown; query?: unknown; groupBy?: unknown; columns?: unknown; filters?: unknown; filterTree?: unknown; tree?: unknown; wrap?: unknown; truncate?: unknown; freezeTitle?: unknown; pageSize?: unknown; columnWidths?: unknown; rank?: unknown; updatedAt?: unknown }): SavedView | null {
+export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mode?: unknown; sortField?: unknown; sortDir?: unknown; sorts?: unknown; query?: unknown; groupBy?: unknown; groupConfig?: unknown; columns?: unknown; filters?: unknown; filterTree?: unknown; tree?: unknown; wrap?: unknown; truncate?: unknown; freezeTitle?: unknown; pageSize?: unknown; columnWidths?: unknown; rank?: unknown; updatedAt?: unknown }): SavedView | null {
   const id = String(row.viewId ?? '').trim()
   if (!id) return null
   const sortDir = row.sortDir === 'desc' ? 'desc' : 'asc'
@@ -487,6 +487,7 @@ export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mo
     sorts: parseSortsInput(row.sorts, sortField, sortDir),
     query: String(row.query ?? ''),
     groupBy: String(row.groupBy ?? ''),
+    groupConfig: normalizeGroupConfig(row.groupConfig),
     columns: parseViewColumns(row.columns),
     filters,
     filterTree,
@@ -798,6 +799,7 @@ const DISPLAY_KEYS = [
   'sorts',
   'columns',
   'groupBy',
+  'groupConfig',
   'tree',
   'wrap',
   'truncate',

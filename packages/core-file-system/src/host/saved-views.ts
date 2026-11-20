@@ -4,7 +4,7 @@ import { openAndMigrateBiu } from '@biu/host-plugin-loader/data-dir'
 import type { CollectionInfo, CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { normalizeSchemaValue, recordBuiltinValues, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 import { builtinAllView, builtinAllViewId, isReadOnlyViewId } from '../catalog-views.ts'
-import { normalizeColumnWidths, normalizePageSize, parseViewColumns, type SavedView } from '../web/saved-view.ts'
+import { normalizeColumnWidths, normalizeGroupConfig, normalizePageSize, parseViewColumns, type SavedView } from '../web/saved-view.ts'
 import { isViewModeId } from '../web/fields.ts'
 import { DATA_COLLECTION_PATH, VIEWS_COLLECTION_PATH, normalizeCollectionPath } from '../paths.ts'
 import { isIndexCollection } from '../web/database-path.ts'
@@ -298,6 +298,7 @@ export class SavedViewsStore {
       sortDir: fields.sortDir === 'desc' ? 'desc' : 'asc',
       query: typeof fields.query === 'string' ? fields.query : '',
       groupBy: typeof fields.groupBy === 'string' ? fields.groupBy : '',
+      groupConfig: normalizeGroupConfig(fields.groupConfig),
       columns: parseViewColumns(fields.columns),
       ...filtersFromPatch(fields.filters),
       ...sortsFromPatch(fields.sorts, fields.sortField, fields.sortDir),
@@ -364,6 +365,7 @@ export class SavedViewsStore {
         ...(patch.sortDir === 'asc' || patch.sortDir === 'desc' ? { sortDir: patch.sortDir } : {}),
         ...(typeof patch.query === 'string' ? { query: patch.query } : {}),
         ...(typeof patch.groupBy === 'string' ? { groupBy: patch.groupBy } : {}),
+        ...('groupConfig' in patch ? { groupConfig: normalizeGroupConfig(patch.groupConfig) } : {}),
         ...('filters' in patch ? filtersFromPatch(patch.filters) : {}),
         ...('filterTree' in patch ? { filterTree: normalizeFilterGroup(parseJsonValue(patch.filterTree)) } : {}),
         ...('sorts' in patch ? sortsFromPatch(patch.sorts, patch.sortField ?? cur.sortField, patch.sortDir ?? cur.sortDir) : {}),
@@ -485,6 +487,7 @@ function asRecord(path: string, tableName: string, view: StoredView, tableIcon?:
     sortDir: sorts[0]?.dir ?? (view.sortDir === 'desc' ? 'desc' : 'asc'),
     query: view.query ?? '',
     groupBy: view.groupBy ?? '',
+    groupConfig: view.groupConfig ? JSON.stringify(view.groupConfig) : '',
     tree: Boolean(view.tree),
     wrap: Boolean(view.wrap),
     truncate: view.truncate !== false,
@@ -519,6 +522,7 @@ export function clientViewFromDbRow(row: Record<string, unknown> | undefined) {
     sorts: sortsPatch.sorts,
     query: String(row.query ?? ''),
     groupBy: String(row.groupBy ?? ''),
+    groupConfig: normalizeGroupConfig(row.groupConfig),
     columns: parseViewColumns(row.columns),
     filters: parsedFilters.filters,
     filterTree: countFilterRules(tree) ? tree : undefined,
@@ -568,6 +572,7 @@ export function viewsCollection(
         sorts: { type: 'string', label: '排序', writable: true, description: VIEW_SORTS_DESCRIPTION },
         query: { type: 'string', label: '搜索', writable: true },
         groupBy: { type: 'string', label: '分组', writable: true },
+        groupConfig: { type: 'string', label: '分组配置', writable: true },
         tree: { type: 'boolean', label: '树形' },
         wrap: { type: 'boolean', label: '换行' },
         truncate: { type: 'boolean', label: '截断' },

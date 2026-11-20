@@ -12,7 +12,7 @@ import {
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { ChevronRightIcon, PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
+import { ChevronRightIcon, EyeIcon, EyeSlashIcon, PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { FieldSpec, FieldType } from '@biu/type-file-system'
 import { CellSelect } from '@biu/database-ui'
@@ -22,6 +22,7 @@ import { overlayZ } from '@biu/biu-ui/overlay-portal'
 import { DndGrip } from './dnd-grip.tsx'
 import { FieldGlyph } from './fsdb-cells.tsx'
 import { parseGroupByKey, type GroupGrain } from './group-strategies.ts'
+import { normalizeGroupConfig, type GroupConfig, type GroupSortMode } from './saved-view.ts'
 import { UiGlyph } from './nav-glyphs.tsx'
 
 import {
@@ -453,18 +454,79 @@ export function groupGrainLabel(grain?: GroupGrain) {
   return GROUP_GRAIN_OPTIONS.find((item) => item.value === grain)?.label ?? ''
 }
 
+export type GroupMenuBucket = { key: string; label: string; count: number }
+
+const GROUP_SORT_OPTIONS: Array<{ value: GroupSortMode; label: string }> = [
+  { value: 'manual', label: '手动排序' },
+  { value: 'asc', label: '升序' },
+  { value: 'desc', label: '降序' },
+]
+
+function SortableGroupRow({
+  item,
+  onHide,
+}: {
+  item: GroupMenuBucket
+  onHide: (key: string) => void
+}) {
+  const dragId = `g:${item.key}`
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: dragId })
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+  }
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`fsdb-group-panel-item${isDragging ? ' is-dragging' : ''}`}
+      data-testid="fsdb-group-visible-item"
+      data-group-key={item.key}
+    >
+      <button
+        type="button"
+        className="fsdb-group-panel-grip"
+        aria-label={`拖动排序 ${item.label}`}
+        {...attributes}
+        {...listeners}
+      >
+        <DndGrip />
+      </button>
+      <span className="fsdb-group-panel-item-label" title={item.label}>
+        {item.label}
+      </span>
+      <button
+        type="button"
+        className="fsdb-group-panel-eye"
+        aria-label={`隐藏分组 ${item.label}`}
+        title="隐藏分组"
+        onClick={() => onHide(item.key)}
+      >
+        <EyeSlashIcon aria-hidden className="size-[14px]" />
+      </button>
+    </div>
+  )
+}
+
 export function GroupQueryMenu({
   groupBy,
+  groupConfig,
+  groups = [],
   fields,
   onChange,
+  onChangeConfig,
   onClose,
 }: {
   groupBy: string
+  groupConfig?: GroupConfig
+  groups?: GroupMenuBucket[]
   fields: QueryField[]
   onChange: (next: string) => void
+  onChangeConfig?: (next: GroupConfig | undefined) => void
   onClose?: () => void
 }) {
   const [search, setSearch] = useState('')
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
   const parsed = parseGroupByKey(groupBy)
   const activeField = fields.find((item) => item.key === parsed.fieldKey) ?? null
   const activeGrain: GroupGrain = parsed.grain ?? 'month'
@@ -493,6 +555,57 @@ export function GroupQueryMenu({
         icon: <FieldGlyph kind={item.kind} />,
       })),
     ]
+    const sortMode: GroupSortMode = groupConfig?.sort ?? 'manual'
+    const hideEmpty = groupConfig?.hideEmpty !== false
+    const hiddenSet = new Set(groupConfig?.hidden ?? [])
+    const visibleGroups = groups.filter((item) => !hiddenSet.has(item.key))
+    const hiddenGroups = groups.filter((item) => hiddenSet.has(item.key))
+
+    const patchConfig = (patch: Partial<GroupConfig>) => {
+      if (!onChangeConfig) return
+      const next = normalizeGroupConfig({
+        sort: sortMode,
+        hideEmpty,
+        hidden: [...hiddenSet],
+        order: groupConfig?.order,
+        ...patch,
+      })
+      onChangeConfig(next)
+    }
+
+    const hideOne = (key: string) => {
+      const next = new Set(hiddenSet)
+      next.add(key)
+      patchConfig({ hidden: [...next] })
+    }
+
+    const showOne = (key: string) => {
+      const next = new Set(hiddenSet)
+      next.delete(key)
+      patchConfig({ hidden: [...next] })
+    }
+
+    const hideAll = () => {
+      patchConfig({ hidden: groups.map((item) => item.key) })
+    }
+
+    const showAll = () => {
+      patchConfig({ hidden: [] })
+    }
+
+    const onDragEnd = (event: DragEndEvent) => {
+      const { active, over } = event
+      if (!over || active.id === over.id) return
+      const activeKey = String(active.id).slice(2)
+      const overKey = String(over.id).slice(2)
+      const from = visibleGroups.findIndex((item) => item.key === activeKey)
+      const to = visibleGroups.findIndex((item) => item.key === overKey)
+      if (from < 0 || to < 0) return
+      const movedVisible = moveList(visibleGroups, from, to).map((item) => item.key)
+      const restHidden = hiddenGroups.map((item) => item.key)
+      patchConfig({ sort: 'manual', order: [...movedVisible, ...restHidden] })
+    }
+
     return (
       <div className="fsdb-tool-flyout fsdb-query-menu is-group" role="menu" data-testid="fsdb-group-panel">
         <div className="fsdb-group-panel-head">
@@ -521,6 +634,106 @@ export function GroupQueryMenu({
               }}
             />
           </div>
+        ) : null}
+        {onChangeConfig ? (
+          <>
+            <div className="fsdb-group-panel-row" data-testid="fsdb-group-sort-row">
+              <span className="fsdb-group-panel-label">排序</span>
+              <CellSelect
+                value={sortMode}
+                options={GROUP_SORT_OPTIONS}
+                variant="field"
+                onSelect={(next) => {
+                  if (next === 'manual' || next === 'asc' || next === 'desc') {
+                    patchConfig({ sort: next })
+                  }
+                }}
+              />
+            </div>
+            <div className="fsdb-group-panel-row" data-testid="fsdb-group-hide-empty-row">
+              <span className="fsdb-group-panel-label">隐藏无记录分组</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={hideEmpty}
+                aria-label="隐藏无记录分组"
+                className={`fsdb-group-switch${hideEmpty ? ' is-on' : ''}`}
+                onClick={() => patchConfig({ hideEmpty: !hideEmpty })}
+              >
+                <span className="fsdb-group-switch-thumb" />
+              </button>
+            </div>
+            {groups.length > 0 ? (
+              <div className="fsdb-group-panel-section">
+                <div className="fsdb-group-panel-sec-head">
+                  <span>可见分组</span>
+                  {visibleGroups.length > 0 ? (
+                    <button type="button" className="fsdb-group-panel-link" onClick={hideAll}>
+                      全部隐藏
+                    </button>
+                  ) : hiddenGroups.length > 0 ? (
+                    <button type="button" className="fsdb-group-panel-link" onClick={showAll}>
+                      全部显示
+                    </button>
+                  ) : null}
+                </div>
+                {visibleGroups.length > 0 ? (
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    modifiers={[restrictToVerticalAxis]}
+                    onDragEnd={onDragEnd}
+                  >
+                    <SortableContext
+                      items={visibleGroups.map((item) => `g:${item.key}`)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <div className="fsdb-group-panel-list">
+                        {visibleGroups.map((item) => (
+                          <SortableGroupRow key={item.key} item={item} onHide={hideOne} />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                ) : (
+                  <div className="fsdb-group-panel-empty">已全部隐藏</div>
+                )}
+              </div>
+            ) : null}
+            {hiddenGroups.length > 0 ? (
+              <div className="fsdb-group-panel-section" data-testid="fsdb-group-hidden-section">
+                <div className="fsdb-group-panel-sec-head">
+                  <span>已隐藏分组</span>
+                  <button type="button" className="fsdb-group-panel-link" onClick={showAll}>
+                    全部显示
+                  </button>
+                </div>
+                <div className="fsdb-group-panel-list">
+                  {hiddenGroups.map((item) => (
+                    <div
+                      key={item.key}
+                      className="fsdb-group-panel-item is-hidden"
+                      data-testid="fsdb-group-hidden-item"
+                      data-group-key={item.key}
+                    >
+                      <span className="fsdb-group-panel-item-label" title={item.label}>
+                        {item.label}
+                      </span>
+                      <button
+                        type="button"
+                        className="fsdb-group-panel-eye"
+                        aria-label={`显示分组 ${item.label}`}
+                        title="显示分组"
+                        onClick={() => showOne(item.key)}
+                      >
+                        <EyeIcon aria-hidden className="size-[14px]" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </>
         ) : null}
         <button
           type="button"

@@ -82,7 +82,7 @@ import { CrumbTrail } from './crumb-trail.tsx'
 import { fieldPickAttrs, fieldPickId, pickDomAttrs, recordPickKind, recordSourcePath } from './pick-dom.ts'
 import { normalizeRecordEmoji, recordPreviewEmoji, crumbRecordLabel } from './sidebar-preview.ts'
 import { recordPreviewMascot, RecordMark } from './record-mark.tsx'
-import { COL_WIDTH_MAX, COL_WIDTH_MIN, canRemoveCollectionView, normalizeColumnWidths, normalizeSavedView, normalizePageSize, rankListedViews, viewIsFresher, viewStateKey, type SavedView } from './saved-view.ts'
+import { COL_WIDTH_MAX, COL_WIDTH_MIN, applyGroupConfig, canRemoveCollectionView, groupConfigStateKey, normalizeColumnWidths, normalizeGroupConfig, normalizePageSize, normalizeSavedView, rankListedViews, viewIsFresher, viewStateKey, type GroupConfig, type SavedView } from './saved-view.ts'
 import { LiveTableCellSelection, tableCursorFromCell, type TableSelectionModel } from './table-cell-selection.ts'
 import { startTableColumnResize } from './table-col-resize.ts'
 import {
@@ -697,6 +697,7 @@ export function CollectionBrowser({
   const [truncateCells, setTruncateCells] = useState(initialView?.truncate !== false)
   const [freezeTitle, setFreezeTitle] = useState(Boolean(initialView?.freezeTitle))
   const [groupBy, setGroupBy] = useState(initialView?.groupBy ?? '')
+  const [groupConfig, setGroupConfig] = useState<GroupConfig | undefined>(() => normalizeGroupConfig(initialView?.groupConfig))
   const [showTree, setShowTree] = useState(Boolean(initialView?.tree))
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [treeKidsByParent, setTreeKidsByParent] = useState<Record<string, DbRecord[]>>({})
@@ -802,6 +803,7 @@ export function CollectionBrowser({
       )
       setColumnWidths(normalizeColumnWidths(view.columnWidths))
       setGroupBy(view.groupBy ?? '')
+      setGroupConfig(normalizeGroupConfig(view.groupConfig))
       setShowTree(view.tree !== false)
       setWrapCells(!!view.wrap)
       setTruncateCells(view.truncate !== false)
@@ -831,6 +833,7 @@ export function CollectionBrowser({
       // 上一张表的 shareScope 组（私人/空间）不能顶到新表 URL 上，否则看起来像同一张表在重分组。
       // 成员表没有分享列：若 groupBy 还留着 shareScope，会走空组桶，主区只剩表头。
       setGroupBy(next?.groupBy ?? '')
+      setGroupConfig(normalizeGroupConfig(next?.groupConfig))
       setGroupBuckets([])
       releaseHoldOnPaintRef.current = false
       tableHoldRef.current = emptyListHold(tablePaintSnapshotRef.current, next, dataPath)
@@ -1223,6 +1226,7 @@ export function CollectionBrowser({
         )
         setColumnWidths(normalizeColumnWidths(view.columnWidths))
         setGroupBy(pendingView.groupBy)
+        setGroupConfig(normalizeGroupConfig(view.groupConfig))
         setShowTree(Boolean(view.tree))
         setWrapCells(pendingView.wrapCells)
         setTruncateCells(view.truncate !== false)
@@ -1501,6 +1505,7 @@ export function CollectionBrowser({
         )
         setColumnWidths(normalizeColumnWidths(next.columnWidths))
         setGroupBy(next.groupBy ?? '')
+        setGroupConfig(normalizeGroupConfig(next.groupConfig))
         setShowTree(next.tree !== false)
         setWrapCells(!!next.wrap)
         setTruncateCells(next.truncate !== false)
@@ -1889,13 +1894,21 @@ export function CollectionBrowser({
 
   const visible = items
 
-  const grouped = useMemo(() => {
+  const rawGrouped = useMemo(() => {
     if (!grouping) return groupRecords(visible, schema, groupBy, tagCatalog)
-    if (groupBuckets.length) return groupBuckets.filter((item) => (item.total ?? item.rows.length) > 0 || item.key === '')
+    if (groupBuckets.length) return groupBuckets
     // 分享列是计算属性。用行上的 shareScope 再分组，会把「分享出去的私人记录」先画进共享，等 $scope 组桶到了再跳。
     if (groupBy === 'shareScope') return []
-    return groupRecords(visible, schema, groupBy, tagCatalog).filter((item) => item.rows.length || item.key === '')
+    return groupRecords(visible, schema, groupBy, tagCatalog)
   }, [tagCatalog, groupBuckets, groupBy, grouping, schema, visible])
+  const panelGroups = useMemo(
+    () => (grouping ? applyGroupConfig(rawGrouped, groupConfig, { includeHidden: true }) : []),
+    [groupConfig, grouping, rawGrouped],
+  )
+  const grouped = useMemo(
+    () => (grouping ? applyGroupConfig(rawGrouped, groupConfig) : rawGrouped),
+    [groupConfig, grouping, rawGrouped],
+  )
   const parentKey = useMemo(() => parentFieldKey(schema, items), [items, schema])
   const treeOn = Boolean(parentKey) && showTree && dataPath !== DATA_COLLECTION_PATH
   const flattenRows = useCallback(
@@ -2551,6 +2564,7 @@ export function CollectionBrowser({
       sortField === next.sortField &&
       sortDir === next.sortDir &&
       groupBy === nextGroup &&
+      groupConfigStateKey(groupConfig) === groupConfigStateKey(next.groupConfig) &&
       showTree === Boolean(next.tree) &&
       wrapCells === !!next.wrap &&
       truncateCells === (next.truncate !== false) &&
@@ -2575,6 +2589,7 @@ export function CollectionBrowser({
     setColumnKeys(nextColumns)
     setColumnWidths(normalizeColumnWidths(next.columnWidths))
     setGroupBy(nextGroup)
+    setGroupConfig(normalizeGroupConfig(next.groupConfig))
     setShowTree(Boolean(next.tree))
     setWrapCells(!!next.wrap)
     setTruncateCells(next.truncate !== false)
@@ -2796,6 +2811,7 @@ export function CollectionBrowser({
             filterTree,
             columns: columnKeys,
             groupBy,
+            groupConfig,
             tree: showTree,
             wrap: wrapCells,
             truncate: truncateCells,
@@ -2926,7 +2942,18 @@ export function CollectionBrowser({
 
   function setGroupKey(next: string) {
     setGroupBy(next)
-    patchActiveView({ groupBy: next })
+    if (next !== groupBy) {
+      setGroupConfig(undefined)
+      patchActiveView({ groupBy: next, groupConfig: undefined })
+    } else {
+      patchActiveView({ groupBy: next })
+    }
+  }
+
+  function setGroupSettings(next: GroupConfig | undefined) {
+    const norm = normalizeGroupConfig(next)
+    setGroupConfig(norm)
+    patchActiveView({ groupConfig: norm })
   }
 
   function setTree(next: boolean) {
@@ -5063,6 +5090,7 @@ export function CollectionBrowser({
       filterTree: liveTree,
       columns: columnKeys.length ? pinActionColumn(schema, columnKeys, rowActionColumn) : current.columns,
       groupBy,
+      groupConfig,
       tree: showTree,
       wrap: wrapCells,
       truncate: truncateCells,
@@ -5123,6 +5151,7 @@ export function CollectionBrowser({
     filters,
     filterTree,
     groupBy,
+    groupConfig,
     hydrated,
     mode,
     query,
@@ -5175,6 +5204,8 @@ export function CollectionBrowser({
     filterEditorStateKey(filterTree),
     Number(grouping),
     groupBy,
+    groupConfigStateKey(groupConfig),
+    panelGroups.map((g) => `${g.key}:${g.label}:${g.total ?? g.rows.length}`).join('\0'),
     Number(wrapCells),
     Number(truncateCells),
     Number(showTree),
@@ -5628,8 +5659,15 @@ export function CollectionBrowser({
                   <QueryFlyout anchorRef={groupRef} onClose={() => setGroupOpen(false)}>
                     <GroupQueryMenu
                       groupBy={groupBy}
+                      groupConfig={groupConfig}
+                      groups={panelGroups.map((item) => ({
+                        key: item.key,
+                        label: item.label,
+                        count: item.total ?? item.rows.length,
+                      }))}
                       fields={groupFields}
                       onChange={setGroupKey}
+                      onChangeConfig={setGroupSettings}
                       onClose={() => setGroupOpen(false)}
                     />
                   </QueryFlyout>
