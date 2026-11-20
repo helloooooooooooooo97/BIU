@@ -3,7 +3,16 @@ import { resolve } from 'node:path'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 
-const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+const browser =
+  readFileSync(resolve(import.meta.dirname, './browser-list-cache.ts'), 'utf8') +
+  '\n' +
+  readFileSync(resolve(import.meta.dirname, './browser-row-title.tsx'), 'utf8') +
+  '\n' +
+  readFileSync(resolve(import.meta.dirname, './windowed-table.tsx'), 'utf8') +
+  '\n' +
+  readFileSync(resolve(import.meta.dirname, './history-nav.ts'), 'utf8') +
+  '\n' +
+  readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
 const detail = readFileSync(resolve(import.meta.dirname, './record-detail.tsx'), 'utf8')
 const style = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
 
@@ -1527,7 +1536,16 @@ test('inspector crumb view menus use ranked collection views', () => {
 test('inspector crumbs lock the first level to an icon', () => {
   const tab = readFileSync(resolve(import.meta.dirname, './inspector-database.tsx'), 'utf8')
   const trail = readFileSync(resolve(import.meta.dirname, './crumb-trail.tsx'), 'utf8')
-  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  const browser =
+  readFileSync(resolve(import.meta.dirname, './browser-list-cache.ts'), 'utf8') +
+  '\n' +
+  readFileSync(resolve(import.meta.dirname, './browser-row-title.tsx'), 'utf8') +
+  '\n' +
+  readFileSync(resolve(import.meta.dirname, './windowed-table.tsx'), 'utf8') +
+  '\n' +
+  readFileSync(resolve(import.meta.dirname, './history-nav.ts'), 'utf8') +
+  '\n' +
+  readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   assert.match(tab, /loadRecords\(collection, activeViewId\)/)
   assert.match(tab, /href.split\('\?'\)/)
   assert.match(tab, /peekRecord/)

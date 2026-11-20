@@ -4,9 +4,15 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 
 test('table list and previews pass view columns to /api/db/list', () => {
-  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  const browser =
+    readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8') +
+    '\n' +
+    readFileSync(resolve(import.meta.dirname, './browser-list-cache.ts'), 'utf8')
   const client = readFileSync(resolve(import.meta.dirname, './db-client.ts'), 'utf8')
-  const host = readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8')
+  const host =
+    readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8') +
+    '\n' +
+    readFileSync(resolve(import.meta.dirname, '../host/http-routes.ts'), 'utf8')
   const fields = readFileSync(resolve(import.meta.dirname, './fields.ts'), 'utf8')
   const preview = readFileSync(resolve(import.meta.dirname, './sidebar-preview.ts'), 'utf8')
   const people = readFileSync(resolve(import.meta.dirname, './person-cell.tsx'), 'utf8')

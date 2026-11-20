@@ -24,7 +24,10 @@ test('share visitors keep a stable random id in localStorage', () => {
 
 test('share requests send the LAN member header', () => {
   const src = readFileSync(resolve(import.meta.dirname, './share-page.tsx'), 'utf8')
-  const host = readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8')
+  const host =
+    readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8') +
+    '\n' +
+    readFileSync(resolve(import.meta.dirname, '../host/http-routes.ts'), 'utf8')
   assert.match(src, /x-lan-member/)
   assert.match(host, /rememberShareLan/)
   assert.match(host, /rememberLanMember/)

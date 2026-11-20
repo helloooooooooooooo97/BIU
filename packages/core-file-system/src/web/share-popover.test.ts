@@ -5,7 +5,10 @@ import assert from 'node:assert/strict'
 
 test('share panel does not load or show resource counts', () => {
   const src = readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8')
-  const host = readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8')
+  const host =
+    readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8') +
+    '\n' +
+    readFileSync(resolve(import.meta.dirname, '../host/http-routes.ts'), 'utf8')
   const getShares = host.slice(host.indexOf("GET', '/api/db/shares'"), host.indexOf("POST', '/api/db/shares'"))
   assert.doesNotMatch(src, /shareStatsLine|fsdb-share-resources|ShareResourceStats/)
   assert.doesNotMatch(getShares, /sharePreviewOf|buildShareSnapshot|resources/)
@@ -25,7 +28,10 @@ test('share panel copies link and password together, without a separate pin copy
 
 test('share setting patches stay quiet and do not emit a database reload', () => {
   const src = readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8')
-  const host = readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8')
+  const host =
+    readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8') +
+    '\n' +
+    readFileSync(resolve(import.meta.dirname, '../host/http-routes.ts'), 'utf8')
   assert.match(src, /quiet: true/)
   assert.match(src, /flagsOnly: true/)
   const sharesPost = host.slice(host.indexOf("POST', '/api/db/shares'"), host.indexOf("GET', '/api/share/:token'"))
@@ -92,7 +98,10 @@ test('share panel no longer offers member-group grants', () => {
 test('share panel separates public sharing from internal and external collaboration', () => {
   const src = readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8')
   const accountHost = readFileSync(resolve(import.meta.dirname, '../../../host-account/src/host/index.ts'), 'utf8')
-  const databaseHost = readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8')
+  const databaseHost =
+    readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8') +
+    '\n' +
+    readFileSync(resolve(import.meta.dirname, '../host/http-routes.ts'), 'utf8')
   assert.match(src, /公开分享/)
   assert.match(src, /邀请协作/)
   assert.match(src, /target\.kind === 'view' && target\.viewId/)
@@ -122,7 +131,10 @@ test('share panel separates public sharing from internal and external collaborat
 
 test('table titles do not show a cloud mark', () => {
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
-  const databaseHost = readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8')
+  const databaseHost =
+    readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8') +
+    '\n' +
+    readFileSync(resolve(import.meta.dirname, '../host/http-routes.ts'), 'utf8')
   assert.doesNotMatch(browser, /aria-label="云端"/)
   assert.doesNotMatch(browser, /row\.remote === true/)
   assert.doesNotMatch(databaseHost, /remote: true/)
@@ -131,7 +143,10 @@ test('table titles do not show a cloud mark', () => {
 test('device workspace keeps LAN links but hides collaboration and cloud publishing', () => {
   const src = readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8')
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
-  const databaseHost = readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8')
+  const databaseHost =
+    readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8') +
+    '\n' +
+    readFileSync(resolve(import.meta.dirname, '../host/http-routes.ts'), 'utf8')
   const sharesPost = databaseHost.slice(databaseHost.indexOf("POST', '/api/db/shares'"), databaseHost.indexOf("GET', '/api/share/:token'"))
   assert.match(src, /localOnly \? '局域网分享' : '公开分享'/)
   assert.match(src, /!localOnly && \(\(target\.kind === 'record'/)
@@ -211,7 +226,10 @@ test('list share column uses the same capsule and loads the chain on click', () 
 
 test('device share scope detail lists matching lan view links instead of echoing the chip', () => {
   const src = readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8')
-  const host = readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8')
+  const host =
+    readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8') +
+    '\n' +
+    readFileSync(resolve(import.meta.dirname, '../host/http-routes.ts'), 'utf8')
   const detail = src.slice(src.indexOf('export function ShareScopeDetail'), src.indexOf('export function ShareRoleDetail'))
   const localBlock = detail.slice(detail.indexOf('if (localOnly)'), detail.indexOf('const [access, recordPage'))
   assert.match(localBlock, /\/api\/db\/shares/)

@@ -13,7 +13,10 @@ test('share list keeps the shared view grouping', () => {
 
 test('share page loads a record body only after that row is opened', () => {
   const src = readFileSync(resolve(import.meta.dirname, './share-page.tsx'), 'utf8')
-  const host = readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8')
+  const host =
+    readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8') +
+    '\n' +
+    readFileSync(resolve(import.meta.dirname, '../host/http-routes.ts'), 'utf8')
   assert.match(src, /\/content\/\$\{encodeURIComponent\(recordId\)\}/)
   assert.match(src, /contents: 'all'/)
   assert.match(host, /GET', '\/api\/share\/:token\/content\/:recordId'/)

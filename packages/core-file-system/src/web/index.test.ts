@@ -74,7 +74,12 @@ test('collection browser stays off plugin apply until a data route paints', () =
 
 test('saved views catalog waits until the view menu is open and only pulls the open table', () => {
   const page = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
-  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  const browser =
+    readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8') +
+    '\n' +
+    readFileSync(resolve(import.meta.dirname, './browser-list-cache.ts'), 'utf8') +
+    '\n' +
+    readFileSync(resolve(import.meta.dirname, './browser-row-title.tsx'), 'utf8')
   const views = readFileSync(resolve(import.meta.dirname, './view-storage.ts'), 'utf8')
   assert.doesNotMatch(page, /pullSavedViews/)
   assert.doesNotMatch(page, /setTimeout\(pull, 8000\)/)
@@ -109,7 +114,12 @@ test('database page no longer registers collection shortcuts on the dock', () =>
 })
 
 test('collection browser renders extra views registered for that path', () => {
-  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  const browser =
+    readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8') +
+    '\n' +
+    readFileSync(resolve(import.meta.dirname, './browser-list-cache.ts'), 'utf8') +
+    '\n' +
+    readFileSync(resolve(import.meta.dirname, './browser-row-title.tsx'), 'utf8')
   const ui = readFileSync(resolve(import.meta.dirname, './database-ui.ts'), 'utf8')
   assert.match(ui, /registerView\(path: string, view: CollectionViewType\)/)
   assert.match(ui, /registerRowView\(path: string, view: CollectionRowViewType\)/)
@@ -160,7 +170,12 @@ test('collection browser renders extra views registered for that path', () => {
 test('tag collect table lives on the record board, not as sidebar views', () => {
   const chrome = readFileSync(resolve(import.meta.dirname, './tag-chrome.tsx'), 'utf8')
   const collect = readFileSync(resolve(import.meta.dirname, './tag-collect.tsx'), 'utf8')
-  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  const browser =
+    readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8') +
+    '\n' +
+    readFileSync(resolve(import.meta.dirname, './browser-list-cache.ts'), 'utf8') +
+    '\n' +
+    readFileSync(resolve(import.meta.dirname, './browser-row-title.tsx'), 'utf8')
   const views = readFileSync(resolve(import.meta.dirname, '../catalog-views.ts'), 'utf8')
   const detail = readFileSync(resolve(import.meta.dirname, './record-detail.tsx'), 'utf8')
   assert.match(chrome, /Board: TagCollectBoard/)

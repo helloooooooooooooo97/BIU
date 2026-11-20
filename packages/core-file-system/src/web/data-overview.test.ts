@@ -8,7 +8,9 @@ test('data overview title is writable and writes through the source record', () 
   assert.match(data, /title: \{ type: 'string', label: '标题', writable: true \}/)
   assert.match(data, /records: \{ update: true \}/)
   assert.match(data, /spec\.update\(stamp\.recordId, patch\)/)
-  const host = readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8')
+  const host =
+    readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8') +
+    readFileSync(resolve(import.meta.dirname, '../host/http-routes.ts'), 'utf8')
   assert.match(host, /collection === '\/trash' \|\| collection === DATA_COLLECTION_PATH/)
   assert.match(host, /parts\[0\] === 'data'/)
   assert.match(host, /overviewRecord\(source, written\.value/)
@@ -38,8 +40,13 @@ test('data overview reuses CollectionBrowser and opens source records', () => {
   assert.match(sourceCell, /collectionNoun/)
   assert.match(sourceCell, /onOpenTable\(path, viewId\)/)
   assert.match(sourceCell, /builtinAllViewId\(path\)/)
-  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
-  const host = readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8')
+  const browser =
+    readFileSync(resolve(import.meta.dirname, './browser-row-title.tsx'), 'utf8') +
+    '\n' +
+    readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  const host =
+    readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8') +
+    readFileSync(resolve(import.meta.dirname, '../host/http-routes.ts'), 'utf8')
   assert.match(browser, /key === 'table'/)
   assert.match(browser, /<SourceTableCell record=\{row\} tables=\{tables\} onOpenTable=\{onOpenTable\} \/>/)
   assert.match(browser, /row\.tableIcon/)

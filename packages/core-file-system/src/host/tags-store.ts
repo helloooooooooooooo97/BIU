@@ -1,16 +1,11 @@
 import {
   openAndMigrateBiu,
-  upsertAttachmentRow,
   writeEditorContent,
   readEditorContent,
-  replaceContentRefs as replaceContentRefsRows,
 } from '@biu/host-plugin-loader/data-dir'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import {
-  asPerson,
-  asPersonList,
-  collectAssetNames,
   isEmptySchemaValue,
   normalizeSchemaPack,
   normalizeSchemaValue,
@@ -21,8 +16,8 @@ import {
 } from '@biu/type-file-system'
 import { parseTagFlatColumnKey } from '../query-logic.ts'
 import { strategyForField } from '../web/group-strategies.ts'
-import { parsePageBanner, type PageBanner, type PageBannerKind } from '../page-banner.ts'
-import { bannerGalleryId, isBannerPreset } from '../banner-presets.ts'
+import type { PageBanner, PageBannerKind } from '../page-banner.ts'
+import { RecordMetaStore } from './record-meta-store.ts'
 
 type DatabaseSync = import('node:sqlite').DatabaseSync
 
@@ -98,15 +93,14 @@ const TAG_ROW_SQL = 'id, label, fields_json, created_at, updated_at'
 /** 分面目录由 File System 用 SQLite 管：目录 + 跨表倒排，查询不扫全表。 */
 export class TagStore {
   private db: DatabaseSync | null = null
+  readonly metaStore = new RecordMetaStore(() => this.ensure())
 
   open(path = ':memory:') {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true })
     this.db = openAndMigrateBiu(path)
     this.ensureCreatedAtColumn()
     this.ensureGroupIndexTables()
-    this.ensurePersonMetaColumns()
-    this.ensureDeletedAtColumn()
-    this.ensureBannerTable()
+    this.metaStore.ensureTables()
     this.removeCollectedRowIndexes()
     return this
   }
@@ -198,48 +192,6 @@ export class TagStore {
       db.exec(`ALTER TABLE tags ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0`)
     }
     db.exec(`UPDATE tags SET created_at = updated_at WHERE created_at = 0 AND updated_at > 0`)
-  }
-
-  private ensurePersonMetaColumns() {
-    const db = this.db!
-    const cols = db.prepare('PRAGMA table_info(record_meta)').all() as Array<{ name: string }>
-    const names = new Set(cols.map((col) => col.name))
-    if (!names.has('created_by_json')) db.exec(`ALTER TABLE record_meta ADD COLUMN created_by_json TEXT`)
-    if (!names.has('updated_by_json')) db.exec(`ALTER TABLE record_meta ADD COLUMN updated_by_json TEXT`)
-    if (!names.has('deleted_at')) db.exec(`ALTER TABLE record_meta ADD COLUMN deleted_at INTEGER`)
-  }
-
-  private ensureDeletedAtColumn() {
-    const db = this.db!
-    const cols = db.prepare('PRAGMA table_info(record_meta)').all() as Array<{ name: string }>
-    if (!cols.some((col) => col.name === 'deleted_at')) {
-      db.exec(`ALTER TABLE record_meta ADD COLUMN deleted_at INTEGER`)
-    }
-    db.exec('CREATE INDEX IF NOT EXISTS record_meta_deleted ON record_meta(collection, deleted_at)')
-  }
-
-  private ensureBannerTable() {
-    const db = this.db!
-    const cols = db.prepare('PRAGMA table_info(record_meta)').all() as Array<{ name: string }>
-    if (!cols.some((col) => col.name === 'banner_json')) return
-    const rows = db
-      .prepare('SELECT collection, record_id, banner_json FROM record_meta WHERE banner_json IS NOT NULL AND banner_json != \'\'')
-      .all() as Array<{ collection: string; record_id: string; banner_json: string }>
-    const put = db.prepare(
-      `INSERT INTO record_banners (collection, record_id, kind, html)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT(collection, record_id) DO UPDATE SET kind = excluded.kind, html = excluded.html`,
-    )
-    for (const row of rows) {
-      let parsed: PageBanner | null = null
-      try {
-        parsed = parsePageBanner(JSON.parse(row.banner_json))
-      } catch {
-        parsed = parsePageBanner(row.banner_json)
-      }
-      if (!parsed) continue
-      put.run(row.collection, row.record_id, parsed.kind, parsed.html)
-    }
   }
 
   notes(id: string) {
@@ -684,112 +636,28 @@ export class TagStore {
     for (const { field } of fields) this.indexGroupRecord(collection, field, recordId, tag)
   }
 
-  recordMeta(collection: string, recordId: string): {
-    emoji: string | null
-    tags: string[] | null
-    createdBy: PersonValue | null
-    updatedBy: PersonValue[]
-    deletedAt: number | null
-  } | null {
-    const row = this.ensure()
-      .prepare('SELECT emoji, tags_json, created_by_json, updated_by_json, deleted_at FROM record_meta WHERE collection = ? AND record_id = ?')
-      .get(collection, recordId) as {
-        emoji: string | null
-        tags_json: string | null
-        created_by_json?: string | null
-        updated_by_json?: string | null
-        deleted_at?: number | null
-      } | undefined
-    if (!row) return null
-    let tags: string[] | null = null
-    if (row.tags_json != null) {
-      try {
-        const parsed = JSON.parse(row.tags_json) as unknown
-        tags = Array.isArray(parsed)
-          ? [...new Set(parsed.map((item) => String(item).trim()).filter(Boolean))]
-          : []
-      } catch {
-        tags = []
-      }
-    }
-    const parsePerson = (raw: string | null | undefined) => {
-      if (raw == null || raw === '') return null
-      try {
-        return asPerson(JSON.parse(raw))
-      } catch {
-        return asPerson(raw)
-      }
-    }
-    const parsePeople = (raw: string | null | undefined) => {
-      if (raw == null || raw === '') return []
-      try {
-        return asPersonList(JSON.parse(raw))
-      } catch {
-        return asPersonList(raw)
-      }
-    }
-    return {
-      emoji: row.emoji != null ? String(row.emoji) : null,
-      tags,
-      createdBy: parsePerson(row.created_by_json),
-      updatedBy: parsePeople(row.updated_by_json),
-      deletedAt: Number(row.deleted_at) > 0 ? Number(row.deleted_at) : null,
-    }
+  recordMeta(collection: string, recordId: string) {
+    return this.metaStore.recordMeta(collection, recordId)
   }
 
   recordBanner(collection: string, recordId: string): PageBanner | null {
-    const row = this.ensure()
-      .prepare('SELECT kind, html FROM record_banners WHERE collection = ? AND record_id = ?')
-      .get(collection, recordId) as { kind?: string; html?: string } | undefined
-    if (!row || typeof row.html !== 'string' || !row.html.trim()) return null
-    return parsePageBanner({ kind: row.kind, html: row.html })
+    return this.metaStore.recordBanner(collection, recordId)
   }
 
   writeRecordBanner(collection: string, recordId: string, banner: PageBanner | null) {
-    const db = this.ensure()
-    if (!banner) {
-      db.prepare('DELETE FROM record_banners WHERE collection = ? AND record_id = ?').run(collection, recordId)
-      return null
-    }
-    db.prepare(
-      `INSERT INTO record_banners (collection, record_id, kind, html)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT(collection, record_id) DO UPDATE SET kind = excluded.kind, html = excluded.html`,
-    ).run(collection, recordId, banner.kind, banner.html)
-    if (!isBannerPreset(banner)) this.rememberBannerGallery(banner)
-    return this.recordBanner(collection, recordId)
+    return this.metaStore.writeRecordBanner(collection, recordId, banner)
   }
 
   rememberBannerGallery(banner: PageBanner, title = '自定义') {
-    if (isBannerPreset(banner)) return
-    const html = banner.html.trim()
-    if (!html) return
-    const id = bannerGalleryId(banner.kind, html)
-    this.ensure()
-      .prepare(
-        `INSERT INTO banner_gallery (id, kind, style, title, html, created_at)
-         VALUES (?, ?, 'mine', ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, html = excluded.html`,
-      )
-      .run(id, banner.kind, title, html, Date.now())
+    this.metaStore.rememberBannerGallery(banner, title)
   }
 
   listBannerGallery(): Array<{ id: string; kind: PageBannerKind; style: string; title: string; html: string }> {
-    const rows = this.ensure()
-      .prepare('SELECT id, kind, style, title, html FROM banner_gallery ORDER BY created_at DESC')
-      .all() as Array<{ id: string; kind: string; style: string; title: string; html: string }>
-    return rows.flatMap((row) => {
-      const parsed = parsePageBanner({ kind: row.kind, html: row.html })
-      if (!parsed || isBannerPreset(parsed)) return []
-      return [{ id: row.id, kind: parsed.kind, style: row.style || 'mine', title: row.title || '自定义', html: parsed.html }]
-    })
+    return this.metaStore.listBannerGallery()
   }
 
   forgetBannerGallery(id: string) {
-    const key = id.trim()
-    if (!key) return false
-    const result = this.ensure().prepare('DELETE FROM banner_gallery WHERE id = ?').run(key)
-    return Number(result.changes) > 0
+    return this.metaStore.forgetBannerGallery(id)
   }
 
   writeRecordMeta(
@@ -801,68 +669,28 @@ export class TagStore {
       createdBy?: PersonValue | null
       updatedBy?: PersonValue[] | PersonValue | null
     },
-  ): { emoji: string | null; tags: string[] | null; createdBy: PersonValue | null; updatedBy: PersonValue[] } {
-    this.ensure()
-      .prepare(
-        `INSERT INTO record_meta (collection, record_id, emoji, tags_json, created_by_json, updated_by_json)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT(collection, record_id) DO UPDATE SET
-           emoji = COALESCE(excluded.emoji, record_meta.emoji),
-           tags_json = COALESCE(excluded.tags_json, record_meta.tags_json),
-           created_by_json = COALESCE(excluded.created_by_json, record_meta.created_by_json),
-           updated_by_json = COALESCE(excluded.updated_by_json, record_meta.updated_by_json)`,
-      )
-      .run(
-        collection,
-        recordId,
-        patch.emoji !== undefined ? String(patch.emoji ?? '') : null,
-        patch.tags !== undefined
-          ? JSON.stringify([...new Set(patch.tags.map((item) => String(item).trim()).filter(Boolean))])
-          : null,
-        patch.createdBy !== undefined ? JSON.stringify(patch.createdBy) : null,
-        patch.updatedBy !== undefined ? JSON.stringify(asPersonList(patch.updatedBy)) : null,
-      )
-    return this.recordMeta(collection, recordId) ?? { emoji: null, tags: null, createdBy: null, updatedBy: [], deletedAt: null }
+  ) {
+    return this.metaStore.writeRecordMeta(collection, recordId, patch)
   }
 
   deletedIds(collection: string) {
-    const rows = this.ensure()
-      .prepare('SELECT record_id FROM record_meta WHERE collection = ? AND deleted_at IS NOT NULL AND deleted_at > 0')
-      .all(collection) as Array<{ record_id: string }>
-    return new Set(rows.map((row) => row.record_id))
+    return this.metaStore.deletedIds(collection)
   }
 
   isDeleted(collection: string, recordId: string) {
-    const row = this.ensure()
-      .prepare('SELECT deleted_at FROM record_meta WHERE collection = ? AND record_id = ?')
-      .get(collection, recordId) as { deleted_at?: number | null } | undefined
-    return Number(row?.deleted_at) > 0
+    return this.metaStore.isDeleted(collection, recordId)
   }
 
   markDeleted(collection: string, recordId: string, at = Date.now()) {
-    this.ensure()
-      .prepare(
-        `INSERT INTO record_meta (collection, record_id, deleted_at)
-         VALUES (?, ?, ?)
-         ON CONFLICT(collection, record_id) DO UPDATE SET deleted_at = excluded.deleted_at`,
-      )
-      .run(collection, recordId, at)
+    this.metaStore.markDeleted(collection, recordId, at)
   }
 
   restoreDeleted(collection: string, recordId: string) {
-    this.ensure()
-      .prepare('UPDATE record_meta SET deleted_at = NULL WHERE collection = ? AND record_id = ?')
-      .run(collection, recordId)
+    this.metaStore.restoreDeleted(collection, recordId)
   }
 
   listDeleted() {
-    return this.ensure()
-      .prepare(
-        `SELECT collection, record_id, deleted_at FROM record_meta
-         WHERE deleted_at IS NOT NULL AND deleted_at > 0
-         ORDER BY deleted_at DESC`,
-      )
-      .all() as Array<{ collection: string; record_id: string; deleted_at: number }>
+    return this.metaStore.listDeleted()
   }
 
   removeRecord(collection: string, recordId: string) {
@@ -870,67 +698,27 @@ export class TagStore {
     db.prepare('DELETE FROM tag_stamps WHERE collection = ? AND record_id = ?').run(collection, recordId)
     db.prepare('DELETE FROM tag_record_values WHERE collection = ? AND record_id = ?').run(collection, recordId)
     db.prepare('DELETE FROM tag_group_values WHERE collection = ? AND record_id = ?').run(collection, recordId)
-    db.prepare('DELETE FROM record_meta WHERE collection = ? AND record_id = ?').run(collection, recordId)
-    db.prepare('DELETE FROM record_banners WHERE collection = ? AND record_id = ?').run(collection, recordId)
-    db.prepare('DELETE FROM content_refs WHERE collection = ? AND record_id = ?').run(collection, recordId)
-    db.prepare('DELETE FROM block_refs WHERE collection = ? AND record_id = ?').run(collection, recordId)
+    this.metaStore.removeRecordMetaRows(collection, recordId)
   }
 
   putAttachment(row: { name: string; etag: string; mime: string; bytes: number; kind?: string; storage?: string }) {
-    upsertAttachmentRow(this.ensure(), row)
+    this.metaStore.putAttachment(row)
   }
 
   linkContentRef(collection: string, recordId: string, name: string, source = 'content') {
-    const file = String(name ?? '').trim()
-    if (!file || !collection || !recordId) return
-    this.ensure()
-      .prepare('INSERT OR IGNORE INTO content_refs (collection, record_id, name, source) VALUES (?, ?, ?, ?)')
-      .run(collection, recordId, file, source)
+    this.metaStore.linkContentRef(collection, recordId, name, source)
   }
 
   replaceContentRefs(collection: string, recordId: string, content: Iterable<string>, banner: Iterable<string> = []) {
-    const db = this.ensure()
-    db.exec('BEGIN IMMEDIATE')
-    try {
-      replaceContentRefsRows(db, collection, recordId, content, banner)
-      db.exec('COMMIT')
-    } catch (error) {
-      db.exec('ROLLBACK')
-      throw error
-    }
+    this.metaStore.replaceContentRefs(collection, recordId, content, banner)
   }
 
   replaceAssetRefs(collection: string, recordId: string, names: Iterable<string>) {
-    const db = this.ensure()
-    db.exec('BEGIN IMMEDIATE')
-    try {
-      db.prepare('DELETE FROM content_refs WHERE collection = ? AND record_id = ? AND source = ?').run(
-        collection,
-        recordId,
-        'asset',
-      )
-      const insert = db.prepare(
-        'INSERT OR IGNORE INTO content_refs (collection, record_id, name, source) VALUES (?, ?, ?, ?)',
-      )
-      for (const name of names) {
-        const file = String(name ?? '').trim()
-        if (file) insert.run(collection, recordId, file, 'asset')
-      }
-      db.exec('COMMIT')
-    } catch (error) {
-      db.exec('ROLLBACK')
-      throw error
-    }
+    this.metaStore.replaceAssetRefs(collection, recordId, names)
   }
 
   upsertBlockRef(collection: string, recordId: string, blockId: string, name: string, source: string) {
-    this.ensure()
-      .prepare(
-        `INSERT INTO block_refs (collection, record_id, block_id, name, source)
-         VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(collection, record_id, block_id, name, source) DO NOTHING`,
-      )
-      .run(collection, recordId, blockId, name, source)
+    this.metaStore.upsertBlockRef(collection, recordId, blockId, name, source)
   }
 
   replaceBlockRefs(
@@ -939,65 +727,19 @@ export class TagStore {
     blockId: string,
     refs: Array<{ name: string; source: string }>,
   ) {
-    const db = this.ensure()
-    db.exec('BEGIN IMMEDIATE')
-    try {
-      db.prepare('DELETE FROM block_refs WHERE collection = ? AND record_id = ? AND block_id = ?').run(
-        collection,
-        recordId,
-        blockId,
-      )
-      const insert = db.prepare(
-        'INSERT INTO block_refs (collection, record_id, block_id, name, source) VALUES (?, ?, ?, ?, ?)',
-      )
-      for (const ref of refs) insert.run(collection, recordId, blockId, ref.name, ref.source)
-      db.exec('COMMIT')
-    } catch (error) {
-      db.exec('ROLLBACK')
-      throw error
-    }
+    this.metaStore.replaceBlockRefs(collection, recordId, blockId, refs)
   }
 
   dropBlockRefs(collection: string, recordId: string, blockId?: string) {
-    if (blockId) {
-      this.ensure()
-        .prepare('DELETE FROM block_refs WHERE collection = ? AND record_id = ? AND block_id = ?')
-        .run(collection, recordId, blockId)
-      return
-    }
-    this.ensure().prepare('DELETE FROM block_refs WHERE collection = ? AND record_id = ?').run(collection, recordId)
+    this.metaStore.dropBlockRefs(collection, recordId, blockId)
   }
 
   listedAttachmentNames(collection: string, recordId: string): string[] {
-    const db = this.ensure()
-    const names = new Set<string>()
-    for (const row of db
-      .prepare('SELECT name FROM content_refs WHERE collection = ? AND record_id = ?')
-      .all(collection, recordId) as Array<{ name: string }>) {
-      names.add(row.name)
-    }
-    for (const row of db
-      .prepare('SELECT name FROM block_refs WHERE collection = ? AND record_id = ?')
-      .all(collection, recordId) as Array<{ name: string }>) {
-      names.add(row.name)
-    }
-    return [...names].sort()
+    return this.metaStore.listedAttachmentNames(collection, recordId)
   }
 
   recordsReferencingAsset(name: string) {
-    const file = String(name ?? '').trim()
-    const linked = this.ensure()
-      .prepare(
-        `SELECT collection, record_id FROM content_refs WHERE name = ?
-         UNION
-         SELECT collection, record_id FROM block_refs WHERE name = ?`,
-      )
-      .all(file, file) as Array<{ collection: string; record_id: string }>
-    if (linked.length || !file) return linked
-    const rows = this.ensure()
-      .prepare('SELECT collection, record_id, tag_json FROM tag_record_values')
-      .all() as Array<{ collection: string; record_id: string; tag_json?: string }>
-    return rows.filter((row) => collectAssetNames(row.tag_json).has(file))
+    return this.metaStore.recordsReferencingAsset(name)
   }
 
   stampedIds(collection: string, tagIdOrLabel: string): Set<string> {

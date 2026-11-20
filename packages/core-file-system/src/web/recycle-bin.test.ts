@@ -22,11 +22,14 @@ test('recycle bin is a registered /trash table with restore and delete actions',
   assert.match(spec, /id: 'restore'/)
   assert.match(spec, /id: 'delete'/)
   assert.match(spec, /purge: true/)
-  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  const browser =
+    readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8') +
+    '\n' +
+    readFileSync(resolve(import.meta.dirname, './browser-list-cache.ts'), 'utf8')
   assert.match(browser, /const inTrash = collectionPath === '\/trash'/)
   assert.match(browser, /canBulkDelete/)
   assert.match(browser, /dataPath === '\/trash'/)
   assert.match(browser, /action: 'delete'/)
   assert.match(browser, /确定彻底删除选中的/)
-  assert.match(browser, /if \(dataPath !== '\/trash'\) publishDeletedRowsToTrash/)
+  assert.match(browser, /if \(dataPath !== '\/trash'\) \{[\s\S]*?publishDeletedRowsToTrash/)
 })
