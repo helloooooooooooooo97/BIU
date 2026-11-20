@@ -1965,14 +1965,16 @@ export function CollectionBrowser({
       for (const group of grouped) {
         const groupKey = group.key || 'unset'
         const count = group.total ?? group.rows.length
+        const folded = Boolean(collapsedGroups[groupKey])
         nodes.push({
           kind: 'group-head',
           key: `gh:${groupKey}`,
           groupKey,
           label: group.label,
           count,
+          folded,
         })
-        if (collapsedGroups[groupKey]) continue
+        if (folded) continue
         const pages = Math.max(1, Math.ceil(count / pageSize))
         const pageIndex = Math.min(groupPages[groupKey] ?? 0, pages - 1)
         const paged = group.total != null ? group.rows : group.rows.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize)

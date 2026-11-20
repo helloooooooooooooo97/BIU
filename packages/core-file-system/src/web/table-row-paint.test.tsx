@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { useRef, type ReactNode, type RefObject } from 'react'
 import { WindowedTable } from './browser.tsx'
+import { rowPaintStamp } from './windowed-table.tsx'
 import { resetRememberedTableWrap, TABLE_ROW_PX } from './table-window.ts'
 
 const ROW_COUNT = 80
@@ -168,4 +169,11 @@ test('a column window move builds only the columns that entered', () => {
   expect(next.length).toBeGreaterThan(0)
   expect(next.length / rows).toBeLessThan(perRow)
   expect(next.every((item) => !first.includes(item))).toBe(true)
+})
+
+test('group-head paint stamp changes when folded toggles', () => {
+  const stamps = new Map()
+  const open = rowPaintStamp({ kind: 'group-head', key: 'gh:2026-11-19', groupKey: '2026-11-19', label: '2026/11/19', count: 5, folded: false }, stamps)
+  const folded = rowPaintStamp({ kind: 'group-head', key: 'gh:2026-11-19', groupKey: '2026-11-19', label: '2026/11/19', count: 5, folded: true }, stamps)
+  expect(open).not.toBe(folded)
 })

@@ -40,7 +40,7 @@ import {
 
 export type TablePaintNode =
   | { kind: 'empty'; key: string }
-  | { kind: 'group-head'; key: string; groupKey: string; label: string; count: number }
+  | { kind: 'group-head'; key: string; groupKey: string; label: string; count: number; folded?: boolean }
   | { kind: 'row'; key: string; keyPrefix: string; row: DbRecord; depth: number; hasKids: boolean; kidCount: number; fold?: boolean; treeOn?: boolean }
   | { kind: 'group-pager'; key: string; groupKey: string; count: number; pageIndex: number }
 
@@ -289,7 +289,8 @@ export function rowPaintStamp(node: TablePaintNode, stamps: Map<string, RowStamp
     const label = node.kind === 'group-head' ? node.label : ''
     const count = node.kind === 'group-head' || node.kind === 'group-pager' ? node.count : ''
     const page = node.kind === 'group-pager' ? node.pageIndex : ''
-    return `${node.kind}\0${node.key}\0${label}\0${count}\0${page}`
+    const folded = node.kind === 'group-head' && node.folded ? 1 : 0
+    return `${node.kind}\0${node.key}\0${label}\0${count}\0${page}\0${folded}`
   }
   const body = node.row && typeof node.row === 'object'
     ? reuseRowStamp(stamps, node.key, node.row as Record<string, unknown>).body
