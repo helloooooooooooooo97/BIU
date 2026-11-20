@@ -12,14 +12,14 @@ afterEach(() => {
 
 test('skeleton has bars and no live section titles', () => {
   const result = render(<DataSidebarShell />)
-  assert.ok(result.container.querySelectorAll('.h-7').length >= 4)
+  assert.ok(result.container.querySelectorAll('.h-8').length >= 4)
   assert.equal(result.queryByText('核心数据'), null)
   assert.equal(result.queryByText('收藏'), null)
 })
 
 test('publish swaps the slot from skeleton to the live list', async () => {
   const result = render(<DataSidebarSlot />)
-  assert.ok(result.container.querySelectorAll('.h-7').length >= 4)
+  assert.ok(result.container.querySelectorAll('.h-8').length >= 4)
   assert.equal(result.queryByText('核心数据'), null)
 
   await act(async () => {
@@ -37,7 +37,7 @@ test('publish swaps the slot from skeleton to the live list', async () => {
 
   await waitFor(() => {
     assert.ok(result.queryByText('核心数据'))
-    assert.equal(result.container.querySelectorAll('.h-7.rounded-md').length, 0)
+    assert.equal(result.container.querySelectorAll('.h-8.rounded-md').length, 0)
   })
 })
 

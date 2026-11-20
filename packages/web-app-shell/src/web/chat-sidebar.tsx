@@ -33,7 +33,8 @@ import {
   StarIcon,
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
-const SESSION_ROW_PX = 29
+/** 与 web/sidebar.css 中 --biu-sidebar-row-height (32px) + margin-bottom (1px) 对齐 */
+const SESSION_ROW_PX = 33
 const SESSION_RAIL_ROW_PX = 36
 const SESSION_WINDOW_OVERSCAN = 4
 
@@ -345,7 +346,7 @@ export const ChatSidebar = memo(function ChatSidebar({
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3" data-chat-scroll="">
-        <div className="space-y-1.5">
+        <div className="mt-2 space-y-1.5">
           {sections.map((section) => {
             const sectionCollapsed = Boolean(collapsedProjects[`chat.section.${section.kind}`])
             const count =
@@ -365,7 +366,7 @@ export const ChatSidebar = memo(function ChatSidebar({
                 </div>
 
                 <SidebarFold open={!sectionCollapsed}>
-                  <div className="sidebar-section-rows flex min-w-0 flex-col gap-px pt-0.5">
+                  <div className="sidebar-section-rows flex min-w-0 flex-col pt-0.5">
                     {section.sessions ? list(section, 'pinned', section.sessions) : null}
                     {section.groups?.map((group) => {
                       const collapsed = Boolean(collapsedProjects[group.key])

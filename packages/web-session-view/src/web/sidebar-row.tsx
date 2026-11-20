@@ -1,7 +1,7 @@
 import type { HTMLAttributes, MouseEvent, ReactNode } from 'react'
 
 export const SIDEBAR_ROW_MAIN_CLASS =
-  'chat-session-row-main flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5'
+  'chat-session-row-main flex h-full min-w-0 flex-1 items-center gap-1.5 py-0 text-left text-[14px] leading-5'
 
 export function SidebarRowMain({ className, children, ...rest }: HTMLAttributes<HTMLDivElement>) {
   return (

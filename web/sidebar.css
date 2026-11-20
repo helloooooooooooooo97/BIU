@@ -335,6 +335,8 @@ html.dark .fsdb-views {
   isolation: isolate;
   display: flex;
   width: 100%;
+  height: var(--biu-sidebar-row-height, 32px);
+  box-sizing: border-box;
   align-items: center;
   margin-bottom: 1px;
   padding: 0 8px;
