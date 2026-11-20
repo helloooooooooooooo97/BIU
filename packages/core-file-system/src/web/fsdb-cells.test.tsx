@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { render } from '@testing-library/react'
-import { actionIcon, DefaultCell } from './fsdb-cells.tsx'
+import { actionIcon, DefaultCell, fieldDraftValue } from './fsdb-cells.tsx'
 
 test('Skill sync actions use distinct directional icons', () => {
   const pull = render(actionIcon('sync-from-directory'))
@@ -182,4 +182,10 @@ test('table image cells skip antd; editors still use Image preview', () => {
   assert.match(thumbs, /chat-image-preview/)
   assert.doesNotMatch(tools, /from 'antd'/)
   assert.doesNotMatch(tools, /Image\.PreviewGroup/)
+})
+
+test('fieldDraftValue preserves Unix ms timestamp for datetime fields so CellDateTime parses it', () => {
+  assert.equal(fieldDraftValue({ type: 'datetime' }, 1795156084000), '1795156084000')
+  assert.equal(fieldDraftValue({ type: 'datetime' }, null), '')
+  assert.equal(fieldDraftValue({ type: 'datetime' }, '2026-11-20 10:57:14'), '2026-11-20 10:57:14')
 })

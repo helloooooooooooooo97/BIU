@@ -86,6 +86,10 @@ export function fieldDraftValue(field: FieldSpec, value: unknown): string {
   const kind = resolveFieldType(field)
   if (kind === 'multi-select') return asStringList(value).join(', ')
   if (kind === 'boolean') return value === true || value === 'true' ? 'true' : 'false'
+  if (kind === 'datetime') {
+    const n = Number(value)
+    return Number.isFinite(n) && n > 0 ? String(n) : value == null ? '' : String(value)
+  }
   if (kind === 'url') return asHttpHref(value)
   if (kind === 'image') {
     const list = asImageSrcList(value)
