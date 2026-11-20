@@ -6,7 +6,7 @@ import { REQUIRED_RECORD_FIELDS, type CollectionInfo, type CollectionSchema } fr
 import { builtinAllViewId } from '../catalog-views.ts'
 import { invalidateListReads } from './db-client.ts'
 import { CollectionBrowser } from './browser.tsx'
-import { getStarredViews, omitSavedViewIds, persistStarredViews, persistViewDisplay, upsertSavedView } from './view-storage.ts'
+import { activeViewStorageKey, getStarredViews, omitSavedViewIds, persistStarredViews, persistViewDisplay, upsertSavedView } from './view-storage.ts'
 import { DataSidebar } from './data-sidebar.tsx'
 import { DataSidebarSlot } from './data-sidebar-slot.tsx'
 import { normalizeSavedView } from './saved-view.ts'
@@ -156,6 +156,25 @@ test('sidebar collection navigation follows the displayed view order', () => {
   assert.deepEqual(onOpenTable.mock.calls, [[path, first.id], [path, first.id]])
 })
 
+test('sidebar collection navigation remembers the last active view for each collection', () => {
+  const path = '/selection-remembered-view'
+  const first = normalizeSavedView({ id: 'view-first', name: '需求列表', rank: 0 })
+  const second = normalizeSavedView({ id: 'view-second', name: '新视图', rank: 1 })
+  upsertSavedView(path, first)
+  upsertSavedView(path, second)
+  localStorage.setItem(activeViewStorageKey(path), second.id)
+  const onOpenTable = vi.fn()
+  const result = render(<DataSidebar collectionPath="/selection-other" title="其他表"
+    tables={[{ path, kind: 'collection', label: '页面' }]}
+    views={[]} activeViewId={null} onOpenTable={onOpenTable}
+    onApplyView={vi.fn()} onDeleteView={vi.fn()} onAddView={vi.fn()} />)
+  const heading = result.getAllByRole('button', { name: '页面', exact: true })
+    .find((button) => button.closest('.sidebar-group-head'))!
+  fireEvent.click(heading)
+  fireEvent.click(within(result.getByTestId('data-icon-rail')).getByRole('button', { name: '页面' }))
+  assert.deepEqual(onOpenTable.mock.calls, [[path, second.id], [path, second.id]])
+})
+
 test('highlighted sidebar row backgrounds activate the title action without hijacking controls', () => {
   const path = '/selection-hit-area'
   const target = normalizeSavedView({
@@ -200,7 +219,7 @@ test('highlighted sidebar row backgrounds activate the title action without hija
     const head = result.getAllByRole('button', { name: '点击区域表', exact: true })
       .find((button) => button.closest('.sidebar-group-head'))!.closest('.sidebar-group-head')!
     fireEvent.click(head)
-    assert.deepEqual(onOpenTable.mock.calls, [[path, builtinAllViewId(path)]])
+    assert.deepEqual(onOpenTable.mock.calls, [[path, target.id]])
     onOpenTable.mockClear()
     fireEvent.click(result.getByTestId(`sidebar-add-view-${path}`))
     assert.equal(onOpenTable.mock.calls.length, 0)

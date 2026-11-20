@@ -2516,6 +2516,15 @@ export function CollectionBrowser({
     }
   }
 
+  useEffect(() => {
+    if (nested || sheet || !collectionPath || !activeViewId) return
+    try {
+      localStorage.setItem(activeViewStorageKey(collectionPath), activeViewId)
+    } catch {
+      /* ignore */
+    }
+  }, [activeViewId, collectionPath, nested, sheet])
+
   function applyView(view: SavedView) {
     const current = viewsRef.current.find((item) => item.id === view.id)
     if (current && view.id === activeViewIdRef.current && !viewIsFresher(view, current)) return

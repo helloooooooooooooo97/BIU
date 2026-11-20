@@ -44,6 +44,7 @@ import {
   isRecordStarred,
   isViewStarred,
   getCrumbsVersion,
+  loadActiveViewId,
   loadRecords,
   loadViews,
   peekRecord,
@@ -141,7 +142,10 @@ export function DataIconRail({
             data-dock-tip={name}
             data-dock-tip-at="e"
             aria-current={active ? 'page' : undefined}
-            onClick={() => onOpenTable?.(table.path, paintCollectionViews(table.path, tables)[0]?.id)}
+            onClick={() => {
+              const listed = paintCollectionViews(table.path, tables)
+              onOpenTable?.(table.path, loadActiveViewId(table.path, listed) ?? listed[0]?.id)
+            }}
           >
             <TableGlyph icon={table.view?.icon} />
           </button>
@@ -883,7 +887,7 @@ export const DataSidebar = memo(function DataSidebar({
               <button
                 type="button"
                 className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit outline-none hover:text-(--biu-color-text) focus-visible:ring-1 focus-visible:ring-(--biu-color-border)"
-                onClick={() => revealTable(tableStateKey, table.path, listed[0]?.id)}
+                onClick={() => revealTable(tableStateKey, table.path, loadActiveViewId(table.path, listed) ?? listed[0]?.id)}
               >
                 {name}
               </button>
