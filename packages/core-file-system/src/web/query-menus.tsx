@@ -743,6 +743,7 @@ export function GroupQueryMenu({
             onClose?.()
           }}
         >
+          <TrashGlyph aria-hidden className="size-[14px]" />
           取消分组
         </button>
       </div>
