@@ -3517,6 +3517,7 @@ export function CollectionBrowser({
   }
 
   function paintCellRangeClasses() {
+    if (tableHoldRef.current) return
     liveSelectionRef.current!.paint(tableRef.current)
   }
 
@@ -3527,6 +3528,7 @@ export function CollectionBrowser({
 
   // Loading, grouping, sorting and column changes can happen during an active gesture.
   useLayoutEffect(() => {
+    if (tableHoldRef.current) return
     liveSelectionRef.current!.reconcile(tableRef.current)
   }, [selectionModel])
 
@@ -4832,10 +4834,19 @@ export function CollectionBrowser({
   }
 
   function paintLiveCell(row: DbRecord, col: (typeof columns)[number], depth: number, hasKids: boolean, kidCount: number, rowKey: string, toolsArmed = true) {
-    const cellPick = cellPickRef.current
-    const rangeSet = cellRangeSetRef.current
     const held = tableHoldRef.current
     const paintSchema = held?.schema ?? schema
+    let cellPick = cellPickRef.current
+    const rangeSet = held ? null : cellRangeSetRef.current
+    if (held && held.nodes !== EMPTY_HOLD_NODES && !sheet && !embed && mode === 'table' && !detailId) {
+      const firstRow = held.nodes.find((item): item is Extract<TablePaintNode, { kind: 'row' }> => item.kind === 'row')
+      const heldKeys = tableNavKeys(held.columns as typeof columns)
+      const labelKey = paintSchema?.labelField
+      const targetKey = labelKey && heldKeys.includes(labelKey) ? labelKey : heldKeys[0]
+      cellPick = firstRow && targetKey ? { id: String(firstRow.row.id), key: targetKey, rowKey: firstRow.key } : null
+    } else if (held) {
+      cellPick = null
+    }
     return (
       <td
         key={col.key}
@@ -4847,7 +4858,7 @@ export function CollectionBrowser({
             ? col.field && cellFieldWritable(col.field)
               ? 'is-cell-on'
               : 'is-cell-on is-cell-ro'
-            : rangeSet.has(tableCellRangeKey(row.id, col.key))
+            : rangeSet?.has(tableCellRangeKey(row.id, col.key))
               ? 'is-cell-range'
               : '',
         ].filter(Boolean).join(' ') || undefined}
