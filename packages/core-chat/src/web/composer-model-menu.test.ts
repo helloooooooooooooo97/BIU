@@ -37,7 +37,7 @@ test('composer model menu renders knobs from catalog, not hardcoded vendor rows'
   assert.match(catalog, /label: '上下文'/)
   assert.match(menu, /createPortal/)
   assert.match(menu, /overlayPortalRoot/)
-  assert.match(menu, /overlayZ\(FLYOUT_Z\)/)
+  assert.match(menu, /overlayZ\(FLYOUT_Z/)
   assert.match(menu, /FLYOUT_Z = 260/)
   assert.match(menu, /placeComposerModelFlyout/)
   assert.match(composer, /composer-model-flyout/)

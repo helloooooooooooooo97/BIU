@@ -15,7 +15,7 @@ test('math pop opens below the formula and commits on Enter, not via window.prom
   assert.match(kit, /handleDOMEvents/)
   const css = await readFile(resolve(import.meta.dirname, './style.ts'), 'utf8')
   assert.match(css, /\.page-math-pop\{[^}]*position:fixed/)
-  assert.match(css, /\.page-math-pop\{[^}]*z-index:10000/)
+  assert.match(css, /\.page-math-pop\{[^}]*z-index:var\(--biu-z-toast\)/)
 
   const anchor = document.createElement('span')
   document.body.appendChild(anchor)

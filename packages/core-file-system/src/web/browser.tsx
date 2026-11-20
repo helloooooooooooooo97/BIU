@@ -1,6 +1,7 @@
 import { lazy, memo, Suspense, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
+import { TOOLTIP_OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
+import { computeFloatingPosition } from '@biu/biu-ui/floating-position'
 import {
   ArrowsPointingOutIcon,
   Bars3BottomLeftIcon,
@@ -245,7 +246,10 @@ function ShareScopeDetail(props: ComponentProps<typeof LazyShareScopeDetail>) {
 }
 
 function DockHoverTip() {
-  const [tip, setTip] = useState<{ text: string; x: number; y: number; below: boolean } | null>(null)
+  const [tip, setTip] = useState<{ text: string; anchor: HTMLElement } | null>(null)
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+  const tipRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     const read = (node: EventTarget | null) => {
       if (!(node instanceof Element)) return null
@@ -253,15 +257,7 @@ function DockHoverTip() {
       if (!(el instanceof HTMLElement) || !el.closest('.fsdb-page')) return null
       const text = el.getAttribute('data-dock-tip')?.trim()
       if (!text) return null
-      const box = el.getBoundingClientRect()
-      const gap = 8
-      const below = box.top < 36
-      return {
-        text,
-        x: Math.round(Math.min(window.innerWidth - 12, Math.max(12, box.left + box.width / 2))),
-        y: Math.round(below ? box.bottom + gap : box.top - gap),
-        below,
-      }
+      return { text, anchor: el }
     }
     const onOver = (event: PointerEvent) => setTip(read(event.target))
     const onOut = (event: PointerEvent) => setTip(read(event.relatedTarget))
@@ -273,29 +269,49 @@ function DockHoverTip() {
     document.addEventListener('focusin', onFocusIn)
     document.addEventListener('focusout', onFocusOut)
     window.addEventListener('scroll', clear, true)
+    window.addEventListener('pointerdown', clear, true)
     return () => {
       document.removeEventListener('pointerover', onOver)
       document.removeEventListener('pointerout', onOut)
       document.removeEventListener('focusin', onFocusIn)
       document.removeEventListener('focusout', onFocusOut)
       window.removeEventListener('scroll', clear, true)
+      window.removeEventListener('pointerdown', clear, true)
     }
   }, [])
+
+  useLayoutEffect(() => {
+    if (!tip || !tip.anchor.isConnected) {
+      setPos(null)
+      return
+    }
+    const rect = tip.anchor.getBoundingClientRect()
+    const el = tipRef.current
+    const placed = computeFloatingPosition({
+      anchor: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, width: rect.width, height: rect.height },
+      floating: { width: el?.offsetWidth || 80, height: el?.offsetHeight || 24 },
+      placement: 'top',
+      offset: 8,
+      padding: 8,
+    })
+    setPos({ left: placed.left, top: placed.top })
+  }, [tip])
+
   if (!tip) return null
   return createPortal(
     <div
+      ref={tipRef}
       className="fsdb-dock-tip"
       role="tooltip"
       style={{
-        left: tip.x,
-        top: tip.y,
-        transform: tip.below ? 'translate(-50%, 0)' : 'translate(-50%, -100%)',
-        zIndex: overlayZ(240),
+        left: pos?.left ?? -9999,
+        top: pos?.top ?? -9999,
+        zIndex: overlayZ(TOOLTIP_OVERLAY_Z, tip.anchor),
       }}
     >
       {tip.text}
     </div>,
-    overlayPortalRoot() ?? document.body,
+    overlayPortalRoot(tip.anchor) ?? document.body,
   )
 }
 

@@ -50,20 +50,23 @@ export function HeadlessPopover({
   container?: HTMLElement | null
   zIndex?: number
 }) {
+  const resolvedZ = overlayZ(zIndex, anchorRef?.current)
+  const liftTier = resolvedZ >= 500 ? '500' : resolvedZ >= 360 ? '360' : undefined
   return (
     <Popover.Root open={open} defaultOpen={defaultOpen} onOpenChange={onOpenChange} modal={modal}>
       {anchorRef ? <Popover.Anchor virtualRef={anchorRef as RefObject<HTMLElement>} /> : null}
       {trigger ? <Popover.Trigger asChild>{trigger}</Popover.Trigger> : null}
-      <Popover.Portal container={container ?? overlayPortalRoot() ?? undefined}>
+      <Popover.Portal container={container ?? overlayPortalRoot(anchorRef?.current) ?? undefined}>
         <Popover.Content
           className="biu-headless-pop"
+          data-overlay-z={liftTier}
           side={side}
           align={align}
           sideOffset={sideOffset}
           alignOffset={alignOffset}
           avoidCollisions={avoidCollisions}
           collisionPadding={8}
-          style={{ zIndex: overlayZ(zIndex) }}
+          style={{ zIndex: resolvedZ }}
           onOpenAutoFocus={(event) => {
             if (!autoFocus) event.preventDefault()
           }}

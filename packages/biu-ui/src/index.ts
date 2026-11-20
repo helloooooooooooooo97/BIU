@@ -32,7 +32,25 @@ export { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from './headless-dismiss.tsx
 export { HeadlessPopover } from './headless-popover.tsx'
 export { AnchorMenu } from './anchor-menu.tsx'
 export { ConfirmDialog } from './confirm-dialog.tsx'
-export { overlayPortalRoot, overlayZ, SHARE_OVERLAY_Z } from './overlay-portal.ts'
+export {
+  OVERLAY_Z,
+  SHARE_OVERLAY_Z,
+  EXPAND_OVERLAY_Z,
+  CHAT_OVERLAY_Z,
+  TOOLTIP_OVERLAY_Z,
+  clampChatOverlayZ,
+  overlayPortalRoot,
+  overlayZ,
+} from './overlay-portal.ts'
+export {
+  computeFloatingPosition,
+  useFloatingPosition,
+  type FloatingPlacement,
+  type FloatingPosition,
+  type FloatingRect,
+  type ComputeFloatingOptions,
+  type UseFloatingPositionOptions,
+} from './floating-position.ts'
 export { RecordEmojiBoard } from './emoji-board.tsx'
 export {
   TagChip,

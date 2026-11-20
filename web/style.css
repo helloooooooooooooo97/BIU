@@ -4108,6 +4108,14 @@ html.dark .composer-model-flyout {
   z-index: var(--biu-z-toast) !important;
 }
 
+[data-radix-popper-content-wrapper]:has(.biu-headless-pop[data-overlay-z="360"]) {
+  z-index: 360 !important;
+}
+
+[data-radix-popper-content-wrapper]:has(.biu-headless-pop[data-overlay-z="500"]) {
+  z-index: 500 !important;
+}
+
 [data-radix-popper-content-wrapper]:has(.pick-chip-data) {
   z-index: var(--biu-z-pick) !important;
 }

@@ -23,6 +23,7 @@
     "./headless-dismiss": "./src/headless-dismiss.tsx",
     "./headless-popover": "./src/headless-popover.tsx",
     "./overlay-portal": "./src/overlay-portal.ts",
+    "./floating-position": "./src/floating-position.ts",
     "./sidebar-fold": "./src/sidebar-fold.tsx",
     "./tag-chip": "./src/tag-chip.tsx",
     "./use-workspace-profile": "./src/use-workspace-profile.ts",

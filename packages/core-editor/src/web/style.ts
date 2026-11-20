@@ -247,7 +247,7 @@ export const PAGE_EDITOR_STYLE = `
 .page-editor .tiptap .is-empty::before{content:attr(data-placeholder);float:left;height:0;pointer-events:none;color:var(--biu-color-text-placeholder)}
 .page-bubble{z-index:var(--biu-z-float);background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);box-shadow:var(--biu-shadow-popover);border-radius:var(--biu-radius-popover);overflow:hidden}
 html:not(.dark) .page-bubble{box-shadow:none}
-.page-slash{position:fixed;z-index:10000;width:240px;max-height:min(52vh,280px);padding:4px;display:flex;flex-direction:column;gap:0;overflow:hidden;background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);box-shadow:var(--biu-shadow-popover);border-radius:var(--biu-radius-popover)}
+.page-slash{position:fixed;z-index:var(--biu-z-toast);width:240px;max-height:min(52vh,280px);padding:4px;display:flex;flex-direction:column;gap:0;overflow:hidden;background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);box-shadow:var(--biu-shadow-popover);border-radius:var(--biu-radius-popover)}
 .page-slash-head,.page-slash-empty{padding:6px 8px 4px;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-1);font-weight:var(--biu-font-weight-semibold)}
 .page-slash-head{flex:none;padding:6px 8px 2px}
 .page-slash-list{min-height:0;flex:1;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:1px}
@@ -305,7 +305,7 @@ html:not(.dark) .page-bubble{box-shadow:none}
 .page-color-grid button.is-on,.page-color-recent button.is-on{box-shadow:0 0 0 2px var(--biu-color-bg-elevated),0 0 0 3.5px var(--biu-color-text-subtle)}
 .page-color-none::after{content:"";position:absolute;inset:50% auto auto 50%;width:1px;height:18px;background:var(--biu-color-text-subtle);transform:translate(-50%,-50%) rotate(-45deg)}
 .page-color-wash{border-color:transparent}
-.page-math-pop{position:fixed;z-index:10000;min-width:220px;max-width:min(360px,calc(100vw - 16px));padding:6px 8px;background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);border-radius:var(--biu-radius-popover);box-shadow:var(--biu-shadow-popover)}
+.page-math-pop{position:fixed;z-index:var(--biu-z-toast);min-width:220px;max-width:min(360px,calc(100vw - 16px));padding:6px 8px;background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);border-radius:var(--biu-radius-popover);box-shadow:var(--biu-shadow-popover)}
 .page-math-pop-input{display:block;width:100%;margin:0;border:0;padding:2px 0;background:transparent;color:var(--biu-color-text);font-family:var(--font-mono);font-size:var(--biu-font-size-3);line-height:1.45;outline:none;resize:none}
 .page-editor .tiptap mark{border-radius:2px;padding:0 .08em}
 .page-blocks-view{min-width:0;min-height:0;flex:1;overflow:auto;padding:8px 12px 32px;display:flex;flex-direction:column;gap:20px}

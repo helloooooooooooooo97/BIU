@@ -1,3 +1,6 @@
+import { computeFloatingPosition } from '@biu/biu-ui/floating-position'
+import { OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
+
 type Open = {
   panel: HTMLElement
   onDoc: (event: Event) => void
@@ -21,19 +24,17 @@ function mathVisual(anchor: Element) {
 
 function placeBelow(panel: HTMLElement, anchor: Element) {
   const r = mathVisual(anchor).getBoundingClientRect()
-  const gap = 6
-  const pad = 8
-  panel.style.top = `${r.bottom + gap}px`
   const box = panel.getBoundingClientRect()
-  const width = box.width || panel.offsetWidth
-  const mid = r.left + r.width / 2
-  const maxLeft = Math.max(pad, window.innerWidth - pad - width)
-  const left = Math.min(maxLeft, Math.max(pad, mid - width / 2))
-  panel.style.left = `${left}px`
-  const placed = panel.getBoundingClientRect()
-  if (placed.bottom > window.innerHeight - pad) {
-    panel.style.top = `${Math.max(pad, r.top - (placed.height || box.height) - gap)}px`
-  }
+  const placed = computeFloatingPosition({
+    anchor: { top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width, height: r.height },
+    floating: { width: box.width || panel.offsetWidth, height: box.height || panel.offsetHeight },
+    placement: 'bottom',
+    offset: 6,
+    padding: 8,
+  })
+  panel.style.top = `${placed.top}px`
+  panel.style.left = `${placed.left}px`
+  panel.style.maxHeight = `${placed.maxHeight}px`
 }
 
 /** 点公式后在下方弹出 LaTeX 输入，不用浏览器 prompt。 */
@@ -49,7 +50,8 @@ export function openMathPop(args: { anchor: Element; latex: string; onCommit: (n
   input.setAttribute('aria-label', 'LaTeX')
   input.spellcheck = false
   panel.appendChild(input)
-  document.body.appendChild(panel)
+  panel.style.zIndex = String(overlayZ(OVERLAY_Z.expandLift, args.anchor))
+  ;(overlayPortalRoot(args.anchor) ?? document.body).appendChild(panel)
   const onScroll = () => {
     if (args.anchor.isConnected) placeBelow(panel, args.anchor)
     else closeMathPop()

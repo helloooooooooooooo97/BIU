@@ -1,5 +1,7 @@
-import { memo, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
+import { computeFloatingPosition } from '@biu/biu-ui/floating-position'
+import { TOOLTIP_OVERLAY_Z, overlayZ } from '@biu/biu-ui/overlay-portal'
 import { ChevronDoubleLeftIcon, ChevronDoubleRightIcon, CloudIcon, ComputerDesktopIcon } from '@heroicons/react/16/solid'
 import { chromeIcon } from './chrome-icon.ts'
 import { ShellSidePlaces, ShellWorkspaceSwitcher, useActiveWorkspaceLocation } from './shell-chrome.tsx'
@@ -210,7 +212,10 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
 })
 
 function RailHoverTip({ hostRef }: { hostRef: RefObject<HTMLDivElement | null> }) {
-  const [tip, setTip] = useState<{ text: string; x: number; y: number } | null>(null)
+  const [tip, setTip] = useState<{ text: string; anchor: HTMLElement } | null>(null)
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+  const tipRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     const host = hostRef.current
     if (!host) return
@@ -220,21 +225,54 @@ function RailHoverTip({ hostRef }: { hostRef: RefObject<HTMLDivElement | null> }
       if (!(el instanceof HTMLElement) || !host.contains(el) || el.closest('.shell-rail-expand')) return null
       const text = el.getAttribute('data-dock-tip')?.trim()
       if (!text) return null
-      const box = el.getBoundingClientRect()
-      return { text, x: Math.round(box.right + 8), y: Math.round(box.top + box.height / 2) }
+      return { text, anchor: el }
     }
     const onOver = (event: PointerEvent) => setTip(read(event.target))
     const onOut = (event: PointerEvent) => setTip(read(event.relatedTarget))
+    const clear = () => setTip(null)
     host.addEventListener('pointerover', onOver)
     host.addEventListener('pointerout', onOut)
+    window.addEventListener('scroll', clear, true)
+    window.addEventListener('pointerdown', clear, true)
     return () => {
       host.removeEventListener('pointerover', onOver)
       host.removeEventListener('pointerout', onOut)
+      window.removeEventListener('scroll', clear, true)
+      window.removeEventListener('pointerdown', clear, true)
     }
   }, [hostRef])
+
+  useLayoutEffect(() => {
+    if (!tip || !tip.anchor.isConnected) {
+      setPos(null)
+      return
+    }
+    const rect = tip.anchor.getBoundingClientRect()
+    const el = tipRef.current
+    const placed = computeFloatingPosition({
+      anchor: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, width: rect.width, height: rect.height },
+      floating: { width: el?.offsetWidth || 96, height: el?.offsetHeight || 26 },
+      placement: 'right',
+      offset: 8,
+      padding: 8,
+    })
+    setPos({ left: placed.left, top: placed.top })
+  }, [tip])
+
   if (!tip) return null
   return createPortal(
-    <div className="shell-rail-tip" role="tooltip" data-testid="shell-rail-tip" style={{ left: tip.x, top: tip.y }}>
+    <div
+      ref={tipRef}
+      className="shell-rail-tip"
+      role="tooltip"
+      data-testid="shell-rail-tip"
+      style={{
+        left: pos?.left ?? -9999,
+        top: pos?.top ?? -9999,
+        transform: 'none',
+        zIndex: overlayZ(TOOLTIP_OVERLAY_Z, tip.anchor),
+      }}
+    >
       {tip.text}
     </div>,
     document.body,

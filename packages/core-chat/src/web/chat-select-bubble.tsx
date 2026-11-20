@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ChatBubbleLeftRightIcon } from '@heroicons/react/16/solid'
+import { computeFloatingPosition } from '@biu/biu-ui/floating-position'
+import { OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import { getPick, textPickFromPlain } from '@biu/core-pick/web'
 
 function chatTextRange(): Range | null {
@@ -46,10 +48,16 @@ export function ChatSelectBubble() {
         setBox(null)
         return
       }
-      const center = rect.left + rect.width / 2
+      const placed = computeFloatingPosition({
+        anchor: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, width: rect.width, height: rect.height },
+        floating: { width: 72, height: 32 },
+        placement: 'top',
+        offset: 8,
+        padding: 8,
+      })
       setBox({
-        top: Math.max(8, rect.top - 40),
-        left: Math.min(window.innerWidth - 36, Math.max(36, center)),
+        top: placed.top,
+        left: placed.left,
       })
     }
     const onKey = (event: KeyboardEvent) => {
@@ -81,7 +89,7 @@ export function ChatSelectBubble() {
       title="加入会话"
       aria-label="加入会话"
       data-testid="chat-select-bubble"
-      style={{ top: box.top, left: box.left }}
+      style={{ top: box.top, left: box.left, transform: 'none', zIndex: overlayZ(OVERLAY_Z.menu) }}
       onMouseDown={(event) => event.preventDefault()}
       onClick={() => {
         sendChatSelection()
@@ -91,6 +99,6 @@ export function ChatSelectBubble() {
       <ChatBubbleLeftRightIcon className="chat-select-bubble-icon" aria-hidden />
       <span className="chat-select-bubble-key">⌘L</span>
     </button>,
-    document.body,
+    overlayPortalRoot() ?? document.body,
   )
 }

@@ -31,7 +31,7 @@ test('slash list keeps overflow-y auto', () => {
   })
   assert.equal(getComputedStyle(list).overflowY, 'auto')
   assert.equal(getComputedStyle(container.querySelector('.page-slash') as HTMLDivElement).position, 'fixed')
-  assert.equal(getComputedStyle(container.querySelector('.page-slash') as HTMLDivElement).zIndex, '10000')
+  assert.equal(getComputedStyle(container.querySelector('.page-slash') as HTMLDivElement).zIndex, 'var(--biu-z-toast)')
   assert.equal(getComputedStyle(container.querySelector('.page-slash-icon') as HTMLElement).width, '18px')
   assert.match(container.innerHTML, /关闭菜单/)
   assert.match(container.innerHTML, /基础模块/)

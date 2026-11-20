@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowPathIcon, CheckIcon, LinkIcon, ShareIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
+import { useFloatingPosition } from '@biu/biu-ui/floating-position'
+import { OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import { listCollection, readJson } from './db-client.ts'
 import { AccessMark, accessText, accessTone, ScopeMark, scopeText, scopeTone } from './share-scope-label.tsx'
 
@@ -612,7 +614,15 @@ export function ShareScopeDetail({
   const wrapRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
-  const [box, setBox] = useState<{ top: number; left: number } | null>(null)
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
+  const panelPos = useFloatingPosition(anchorEl, panelRef, {
+    placement: 'bottom-start',
+    offset: 6,
+    padding: 8,
+    fallbackWidth: 300,
+    fallbackHeight: 220,
+    enabled: open,
+  })
   const shown = scopeTone(label)
   const [scope, setScope] = useState(shown)
   const chip = scope === 'shared' || shown === 'shared' ? 'shared' : scope === 'workspace' || shown === 'workspace' ? 'workspace' : shown
@@ -815,19 +825,30 @@ export function ShareScopeDetail({
         onPointerDown={(event) => event.stopPropagation()}
         onClick={(event) => {
           event.stopPropagation()
-          const rect = event.currentTarget.getBoundingClientRect()
-          setBox({ top: rect.bottom + 6, left: Math.min(rect.left, window.innerWidth - 336) })
+          setAnchorEl(event.currentTarget)
           setOpen((prev) => !prev)
         }}
       >
         <ScopeMark scope={chip} />
       </button>
-      {open && box ? createPortal(
+      {open ? createPortal(
         <HeadlessDismiss
           onDismiss={() => setOpen(false)}
           inside={(node) => Boolean(wrapRef.current?.contains(node) || panelRef.current?.contains(node))}
         >
-          <div ref={panelRef} className="fsdb-scope-panel" role="dialog" aria-label={localOnly ? '分享' : '数据归属'} style={{ top: box.top, left: box.left }}>
+          <div
+            ref={panelRef}
+            className="fsdb-scope-panel"
+            role="dialog"
+            aria-label={localOnly ? '分享' : '数据归属'}
+            style={{
+              top: panelPos.top,
+              left: panelPos.left,
+              maxHeight: panelPos.maxHeight,
+              overflowY: 'auto',
+              zIndex: overlayZ(OVERLAY_Z.menu, anchorEl),
+            }}
+          >
             <header className="fsdb-scope-head">
               <div>
                 <strong>{localOnly ? '分享' : '数据归属'}</strong>
@@ -858,7 +879,7 @@ export function ShareScopeDetail({
             ) : null}
           </div>
         </HeadlessDismiss>,
-        document.body,
+        overlayPortalRoot(anchorEl) ?? document.body,
       ) : null}
     </div>
   )
@@ -884,7 +905,15 @@ export function ShareRoleDetail({
   const wrapRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
-  const [box, setBox] = useState<{ top: number; left: number } | null>(null)
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
+  const panelPos = useFloatingPosition(anchorEl, panelRef, {
+    placement: 'bottom-start',
+    offset: 6,
+    padding: 8,
+    fallbackWidth: 300,
+    fallbackHeight: 220,
+    enabled: open,
+  })
   const [chain, setChain] = useState<Array<{ id: string; title: string; detail: string; result: string }>>([])
   const [error, setError] = useState('')
 
@@ -1019,19 +1048,30 @@ export function ShareRoleDetail({
         onPointerDown={(event) => event.stopPropagation()}
         onClick={(event) => {
           event.stopPropagation()
-          const rect = event.currentTarget.getBoundingClientRect()
-          setBox({ top: rect.bottom + 6, left: Math.min(rect.left, window.innerWidth - 336) })
+          setAnchorEl(event.currentTarget)
           setOpen((prev) => !prev)
         }}
       >
         <AccessMark role={label} />
       </button>
-      {open && box ? createPortal(
+      {open ? createPortal(
         <HeadlessDismiss
           onDismiss={() => setOpen(false)}
           inside={(node) => Boolean(wrapRef.current?.contains(node) || panelRef.current?.contains(node))}
         >
-          <div ref={panelRef} className="fsdb-scope-panel" role="dialog" aria-label="权限链路" style={{ top: box.top, left: box.left }}>
+          <div
+            ref={panelRef}
+            className="fsdb-scope-panel"
+            role="dialog"
+            aria-label="权限链路"
+            style={{
+              top: panelPos.top,
+              left: panelPos.left,
+              maxHeight: panelPos.maxHeight,
+              overflowY: 'auto',
+              zIndex: overlayZ(OVERLAY_Z.menu, anchorEl),
+            }}
+          >
             <header className="fsdb-scope-head">
               <div>
                 <strong>权限</strong>
@@ -1052,7 +1092,7 @@ export function ShareRoleDetail({
             </ol>
           </div>
         </HeadlessDismiss>,
-        document.body,
+        overlayPortalRoot(anchorEl) ?? document.body,
       ) : null}
     </div>
   )

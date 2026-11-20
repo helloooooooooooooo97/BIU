@@ -120,7 +120,7 @@ export function ComposerModelMenu(props: {
     }
   }, [flyoutOpen, pane])
 
-  const flyoutStyle = { left: flyBox.left, bottom: flyBox.bottom, zIndex: overlayZ(FLYOUT_Z) }
+  const flyoutStyle = { left: flyBox.left, bottom: flyBox.bottom, zIndex: overlayZ(FLYOUT_Z, panelRef.current) }
   const flyout =
     pane === 'model' ? (
       <div
@@ -205,7 +205,7 @@ export function ComposerModelMenu(props: {
   return (
     <div className="composer-model-pop" data-testid="composer-model-menu">
       {flyout && typeof document !== 'undefined'
-        ? createPortal(flyout, overlayPortalRoot() ?? document.body)
+        ? createPortal(flyout, overlayPortalRoot(panelRef.current) ?? document.body)
         : flyout}
       <div className="composer-model-panel" ref={panelRef} data-testid="composer-model-panel">
         {knobs.map((knob) => {

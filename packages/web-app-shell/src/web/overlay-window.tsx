@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { ChatPane } from '@biu/biu-ui/chat-pane'
+import { OVERLAY_Z, clampChatOverlayZ } from '@biu/biu-ui/overlay-portal'
 import {
   closeChatOverlay,
   getOverlayThread,
@@ -13,7 +14,7 @@ import {
 
 type ResizeEdge = { north?: boolean; south?: boolean; east?: boolean; west?: boolean }
 
-let overlayZ = 400
+let overlayZ = OVERLAY_Z.chatOverlayMin
 
 export function OverlayChatWindow({
   header,
@@ -35,7 +36,7 @@ export function OverlayChatWindow({
   geomRef.current = geom
 
   const bringFront = useCallback(() => {
-    overlayZ += 1
+    overlayZ = clampChatOverlayZ(overlayZ + 1)
     setZ(overlayZ)
   }, [])
 

@@ -1,4 +1,5 @@
 import { mergeAttributes } from '@tiptap/core'
+import { OVERLAY_Z, overlayZ } from '@biu/biu-ui/overlay-portal'
 import type { Editor } from '@tiptap/core'
 import Mention from '@tiptap/extension-mention'
 import { ReactNodeViewRenderer, ReactRenderer } from '@tiptap/react'
@@ -116,7 +117,7 @@ function renderMentionMenu() {
           editor: pending.editor,
         })
         const el = component.element as HTMLElement
-        el.style.zIndex = '10000'
+        el.style.zIndex = String(overlayZ(OVERLAY_Z.expandLift, pending.editor.view?.dom))
         el.style.maxHeight = `${Math.min(280, Math.max(120, window.innerHeight - 16))}px`
         unmount = pending.mount(el)
       })
