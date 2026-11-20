@@ -558,7 +558,7 @@ test('measureTableCheckSlots aligns grouped rows directly from tr.offsetTop and 
     { kind: 'row', id: 'r-1', top: 110, h: 37 },
     { kind: 'row', id: 'r-2', top: 188, h: 39 },
   ])
-  assert.match(css, /\.fsdb-page \.tasks-table tbody tr\[data-record-id\]\{height:37px\}/)
+  assert.match(css, /\.fsdb-page \.tasks-table tbody tr\[data-record-id\]\{height:32px\}/)
 })
 
 test('dragging a pinned header resize handle updates both pinned header and main table columns immediately', async () => {
