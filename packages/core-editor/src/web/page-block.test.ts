@@ -398,6 +398,29 @@ test('text style bubble stays closed when the cursor is on a pageBlock', () => {
   editor.destroy()
 })
 
+test('text style bubble opens for text selected inside a table cell while table bar yields', async () => {
+  const { pageTableBarOpen } = await import('./page-table-bar.tsx')
+  const editor = new Editor({
+    extensions: recordEditorExtensions(),
+    content: '| A | B |\n| --- | --- |\n| hello | world |\n',
+    contentType: 'markdown',
+  })
+  let helloPos = -1
+  editor.state.doc.descendants((node, pos) => {
+    if (node.isText && node.text === 'hello') helloPos = pos
+  })
+  assert.ok(helloPos > 0)
+  // Caret in cell -> table bar opens, text bubble stays closed
+  editor.commands.setTextSelection(helloPos + 1)
+  assert.equal(pageTextBubbleOpen(editor, helloPos + 1, helloPos + 1), false)
+  assert.equal(pageTableBarOpen(editor, helloPos + 1, helloPos + 1), true)
+  // Text selected in cell -> text bubble opens (bold/color/highlight), table bar hides
+  editor.commands.setTextSelection({ from: helloPos, to: helloPos + 5 })
+  assert.equal(pageTextBubbleOpen(editor, helloPos, helloPos + 5), true)
+  assert.equal(pageTableBarOpen(editor, helloPos, helloPos + 5), false)
+  editor.destroy()
+})
+
 test('registerBlock requires plugin id', () => {
   const ctx = new Context()
   new BlockEditorService(ctx)

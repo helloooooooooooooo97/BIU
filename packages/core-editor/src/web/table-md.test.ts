@@ -116,3 +116,44 @@ test('inserting a pageBlock into a table writes a fence, not a one-line GFM cell
   assert.equal(names.has('table'), true)
   editor.destroy()
 })
+
+test('table cells preserve bold, text color, highlight, align, and background across markdown roundtrip', () => {
+  const editor = editorOf('| A | B |\n| --- | --- |\n| hello | world |\n')
+  let helloPos = -1
+  editor.state.doc.descendants((node, pos) => {
+    if (node.isText && node.text === 'hello') helloPos = pos
+  })
+  assert.ok(helloPos > 0)
+  editor
+    .chain()
+    .setTextSelection({ from: helloPos, to: helloPos + 5 })
+    .toggleBold()
+    .setColor('var(--biu-color-ink-red)')
+    .setHighlight({ color: 'var(--biu-color-wash-yellow)' })
+    .setCellAttribute('align', 'center')
+    .setCellAttribute('background', 'var(--biu-color-wash-sky)')
+    .run()
+
+  const md = editor.getMarkdown()
+  assert.match(md, /:::table/)
+  assert.match(md, /align=center/)
+  assert.match(md, /bg="var\(--biu-color-wash-sky\)"/)
+
+  editor.commands.setContent(md, { contentType: 'markdown' })
+  let restoredCell: Record<string, unknown> | null = null
+  const marks = new Set<string>()
+  editor.state.doc.descendants((node) => {
+    if (node.type.name === 'tableCell' && node.textContent === 'hello') {
+      restoredCell = node.attrs as Record<string, unknown>
+    }
+    if (node.isText && node.text === 'hello') {
+      for (const m of node.marks) marks.add(m.type.name)
+    }
+  })
+  assert.equal(restoredCell?.align, 'center')
+  assert.equal(restoredCell?.background, 'var(--biu-color-wash-sky)')
+  assert.equal(marks.has('bold'), true)
+  assert.equal(marks.has('textStyle'), true)
+  assert.equal(marks.has('highlight'), true)
+  editor.destroy()
+})

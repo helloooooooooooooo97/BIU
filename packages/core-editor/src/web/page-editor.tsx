@@ -14,6 +14,7 @@ import { NodeSelection, Selection } from '@tiptap/pm/state'
 import type { FsContentProps } from '@biu/type-file-system/ui'
 import { recordEditorExtensions } from './kit.ts'
 import { PageBlockHandle } from './page-block-handle.tsx'
+import { PageTableBar } from './page-table-bar.tsx'
 import { editorHostIsLive } from './editor-live.ts'
 import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, handleContentTitleNav, shouldLeaveContentForTitle, focusRecordTitleNear, isDocStartSelection, atFirstVisibleLine } from './title-content-nav.ts'
 import { tryContentJump, contentJumpForRecord } from './content-jump.ts'
@@ -254,10 +255,12 @@ function ColorMenus({
   )
 }
 
-/** 节点选中（sandbox 等 pageBlock）不是文字选区，不要出加粗/斜体条。 */
+/** 节点选中（sandbox 等 pageBlock）或多格 CellSelection 不是文字选区，不要出加粗/斜体条；表格单元格内选中文字正常弹出。 */
 export function pageTextBubbleOpen(editor: Editor, from: number, to: number, colorOpen = false) {
-  if (editor.isActive('table') || editor.isActive('editorBlock')) return false
+  if (editor.isActive('editorBlock')) return false
   if (editor.state.selection instanceof NodeSelection) return false
+  const sel = editor.state.selection as unknown as { $anchorCell?: unknown; $headCell?: unknown }
+  if (sel && sel.$anchorCell && sel.$headCell) return false
   if (colorOpen) return true
   return from !== to
 }
@@ -270,6 +273,7 @@ function Bubble({
   onSendChat: () => void
 }) {
   const [colorOpen, setColorOpen] = useState<'text' | 'mark' | null>(null)
+  const inTable = editor.isActive('table')
   const btn = (label: string, on: boolean, run: () => void) => (
     <button
       type="button"
@@ -294,8 +298,8 @@ function Bubble({
       {btn('I', editor.isActive('italic'), () => editor.chain().focus().toggleItalic().run())}
       {btn('S', editor.isActive('strike'), () => editor.chain().focus().toggleStrike().run())}
       {btn('</>', editor.isActive('code'), () => editor.chain().focus().toggleCode().run())}
-      {btn('H1', editor.isActive('heading', { level: 1 }), () => editor.chain().focus().toggleHeading({ level: 1 }).run())}
-      {btn('H2', editor.isActive('heading', { level: 2 }), () => editor.chain().focus().toggleHeading({ level: 2 }).run())}
+      {!inTable ? btn('H1', editor.isActive('heading', { level: 1 }), () => editor.chain().focus().toggleHeading({ level: 1 }).run()) : null}
+      {!inTable ? btn('H2', editor.isActive('heading', { level: 2 }), () => editor.chain().focus().toggleHeading({ level: 2 }).run()) : null}
       <ColorMenus editor={editor} open={colorOpen} onOpen={setColorOpen} />
       <button
         type="button"
@@ -315,32 +319,7 @@ function Bubble({
 }
 
 function TableBar({ editor }: { editor: Editor }) {
-  const btn = (label: string, run: () => void) => (
-    <button
-      type="button"
-      onMouseDown={(event: MouseEvent) => {
-        event.preventDefault()
-        run()
-      }}
-    >
-      {label}
-    </button>
-  )
-  return (
-    <BubbleMenu
-      editor={editor}
-      pluginKey="page-table-bar"
-      className="page-bubble"
-      aria-label="表格"
-      shouldShow={({ editor: current }) => current.isActive('table')}
-    >
-      {btn('+列', () => editor.chain().focus().addColumnAfter().run())}
-      {btn('+行', () => editor.chain().focus().addRowAfter().run())}
-      {btn('删列', () => editor.chain().focus().deleteColumn().run())}
-      {btn('删行', () => editor.chain().focus().deleteRow().run())}
-      {btn('删表', () => editor.chain().focus().deleteTable().run())}
-    </BubbleMenu>
-  )
+  return <PageTableBar editor={editor} />
 }
 
 function RecordEditorLoading() {

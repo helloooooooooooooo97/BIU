@@ -6,7 +6,7 @@ import { pageImage } from './page-image.ts'
 import { BlockMath, InlineMath, Mathematics } from '@tiptap/extension-mathematics'
 import Placeholder from '@tiptap/extension-placeholder'
 import { TableKit } from '@tiptap/extension-table'
-import { pageTable } from './page-table.ts'
+import { pageTable, pageTableCell, pageTableHeader } from './page-table.ts'
 import StarterKit from '@tiptap/starter-kit'
 import { Paragraph } from '@tiptap/extension-paragraph'
 import { pageLowlight } from './page-lowlight.ts'
@@ -258,10 +258,12 @@ export function recordEditorExtensions() {
     pageImage,
     TableKit.configure({
       table: false,
-      tableCell: {},
-      tableHeader: {},
+      tableCell: false,
+      tableHeader: false,
       tableRow: {},
     }),
+    pageTableCell,
+    pageTableHeader,
     pageTable.configure({ resizable: true, allowTableNodeSelection: true }),
     pageMathematics,
     Placeholder.configure({
