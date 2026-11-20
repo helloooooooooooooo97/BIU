@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useSyncExternalStore, type ComponentType } from 'react'
+import { lazy, memo, Suspense, useEffect, useMemo, useRef, useSyncExternalStore, type ComponentType } from 'react'
 import { CircleStackIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import type { SlotProps } from '@biu/type-slots'
 import { fsdbChangeHitsPane, parseFsdbChange, type CollectionInfo } from '@biu/type-file-system'
@@ -70,6 +70,45 @@ function useInspectorCollections() {
 
 let viewTick = 0
 
+type ViewTickSub = {
+  collectionPath: string
+  recordId: string
+  notify: () => void
+}
+
+const viewTickSubs = new Set<ViewTickSub>()
+let uninstallViewTickHub: (() => void) | null = null
+
+function dispatchViewTick(event?: Event) {
+  const change = event && event.type === 'fsdb:change' ? parseFsdbChange(event) : null
+  let bumped = false
+  for (const sub of viewTickSubs) {
+    if (change && !fsdbChangeHitsPane(change, sub.collectionPath, sub.recordId)) continue
+    if (!bumped) {
+      viewTick += 1
+      bumped = true
+    }
+    sub.notify()
+  }
+}
+
+function ensureViewTickHub() {
+  if (uninstallViewTickHub || typeof window === 'undefined') return
+  const onEvent = (event: Event) => dispatchViewTick(event)
+  const onCrumb = () => dispatchViewTick()
+  window.addEventListener('fsdb:change', onEvent)
+  window.addEventListener('fsdb:crumb-labels', onEvent)
+  window.addEventListener('storage', onEvent)
+  const stopCrumbs = subscribeCrumbs(onCrumb)
+  uninstallViewTickHub = () => {
+    window.removeEventListener('fsdb:change', onEvent)
+    window.removeEventListener('fsdb:crumb-labels', onEvent)
+    window.removeEventListener('storage', onEvent)
+    stopCrumbs()
+    uninstallViewTickHub = null
+  }
+}
+
 function tableLabel(table: CollectionInfo) {
   return table.view?.title ?? table.label ?? table.path.replace(/^\//, '')
 }
@@ -77,23 +116,12 @@ function tableLabel(table: CollectionInfo) {
 function useViewTick(collectionPath = '', recordId = '') {
   return useSyncExternalStore(
     (fn) => {
-      const bump = (event?: Event) => {
-        if (event && event.type === 'fsdb:change') {
-          const change = parseFsdbChange(event)
-          if (!fsdbChangeHitsPane(change, collectionPath, recordId)) return
-        }
-        viewTick += 1
-        fn()
-      }
-      window.addEventListener('fsdb:change', bump)
-      window.addEventListener('fsdb:crumb-labels', bump)
-      window.addEventListener('storage', bump)
-      const stopCrumbs = subscribeCrumbs(bump)
+      const sub: ViewTickSub = { collectionPath, recordId, notify: fn }
+      viewTickSubs.add(sub)
+      ensureViewTickHub()
       return () => {
-        window.removeEventListener('fsdb:change', bump)
-        window.removeEventListener('fsdb:crumb-labels', bump)
-        window.removeEventListener('storage', bump)
-        stopCrumbs()
+        viewTickSubs.delete(sub)
+        if (!viewTickSubs.size) uninstallViewTickHub?.()
       }
     },
     () => viewTick,
@@ -162,18 +190,56 @@ function crumbsForRoute(
   href: string,
   tables: CollectionInfo[],
   viaData = false,
+  lightweight = false,
 ): { crumbs: Crumb[]; collection: string; viewId?: string; recordId?: string } {
   const pathname = href.split('?')[0] || href
   const parsed = parseAppPath(pathname, [DATA_MODULE])
   const collection = parsed.kind === 'collection-view' || parsed.kind === 'record' ? parsed.collection : ''
   const table = tables.find((item) => item.path === collection)
-  const stored = collection ? loadViews(collection) : []
-  const views = collection ? paintCollectionViews(collection, tables, stored) : []
   const urlViewId =
     parsed.kind === 'collection-view' || parsed.kind === 'record' ? parsed.viewId : undefined
   const recordId = parsed.kind === 'record' ? parsed.recordId : undefined
   const resolvedView = collection ? viewForPath(collection, urlViewId) : null
   const activeViewId = resolvedView?.id ?? urlViewId
+  if (lightweight) {
+    const recordHit = recordId
+      ? peekRecord(collection, recordId) ?? loadRecords(collection, activeViewId).find((row) => row.id === recordId)
+      : undefined
+    const crumbs = buildCrumbs({
+      collection: viaData && collection && collection !== DATA_COLLECTION_PATH && recordId ? DATA_COLLECTION_PATH : collection,
+      collectionLabel:
+        viaData && collection && collection !== DATA_COLLECTION_PATH && recordId
+          ? '数据'
+          : table
+            ? tableLabel(table)
+            : collection,
+      tables: table ? [{ path: table.path, label: tableLabel(table), icon: table.view?.icon }] : [],
+      viewId:
+        viaData && collection && collection !== DATA_COLLECTION_PATH && recordId
+          ? viaDataViewId()
+          : collection
+            ? activeViewId
+            : undefined,
+      viewName:
+        viaData && collection && collection !== DATA_COLLECTION_PATH && recordId
+          ? displayNameForView(
+              viaDataViewId(),
+              { path: DATA_COLLECTION_PATH, label: '数据', view: { title: '数据' } },
+              isBuiltinAllViewId(viaDataViewId()) ? undefined : viewForPath(DATA_COLLECTION_PATH, viaDataViewId())?.name,
+            )
+          : resolvedView?.name,
+      views: resolvedView ? [{ id: resolvedView.id, name: resolvedView.name, mode: resolvedView.mode }] : [],
+      recordId:
+        viaData && collection && collection !== DATA_COLLECTION_PATH && recordId
+          ? stampRecordId(collection, recordId)
+          : recordId,
+      recordLabel: recordHit?.label,
+      records: recordHit ? [recordHit] : [],
+    })
+    return { crumbs, collection, viewId: activeViewId, recordId }
+  }
+  const stored = collection ? loadViews(collection) : []
+  const views = collection ? paintCollectionViews(collection, tables, stored) : []
   const listed = collection ? loadRecords(collection, activeViewId) : []
   const recordHit =
     recordId ? listed.find((row) => row.id === recordId) ?? peekRecord(collection, recordId) : undefined
@@ -217,7 +283,7 @@ function goInspector(paneId: string, target: CrumbTarget) {
   setInspectorDbPath(paneId, hrefForInspectorCrumb(target))
 }
 
-export function DatabaseInspectorTab({
+export const DatabaseInspectorTab = memo(function DatabaseInspectorTab({
   active,
   onActivate,
   onClose,
@@ -238,12 +304,22 @@ export function DatabaseInspectorTab({
   )
   const inspectorPath = useBindInspectorDbPath(id, tables, seedCollection)
   const viaData = useSyncExternalStore(subscribeViaDataCrumbs, viaDataCrumbsOn, () => false)
-  const { collection: tabCollection, recordId: tabRecordId } = crumbsForRoute(inspectorPath, tables, viaData)
-  const agentWorking = useInspectorAgentWorking(tabCollection || seedCollection || '')
+  const parsedRoute = useMemo(() => {
+    const pathname = inspectorPath.split('?')[0] || inspectorPath
+    const parsed = parseAppPath(pathname, [DATA_MODULE])
+    return {
+      collection: parsed.kind === 'collection-view' || parsed.kind === 'record' ? parsed.collection : '',
+      recordId: parsed.kind === 'record' ? parsed.recordId : '',
+    }
+  }, [inspectorPath])
+  const agentWorking = useInspectorAgentWorking(parsedRoute.collection || seedCollection || '')
   const crumbRef = useRef<HTMLElement>(null)
   const tabRef = useRef<HTMLDivElement>(null)
-  useViewTick(tabCollection, tabRecordId ?? '')
-  const { crumbs } = crumbsForRoute(inspectorPath, tables, viaData)
+  const tick = useViewTick(parsedRoute.collection, parsedRoute.recordId)
+  const { crumbs } = useMemo(() => {
+    void tick
+    return crumbsForRoute(inspectorPath, tables, viaData, !active)
+  }, [active, inspectorPath, tables, tick, viaData])
   const leaf = crumbs.at(-1)
   const leafChoice = leaf?.choices.find((item) => item.id === leaf.id)
   const crumbsRef = useRef(crumbs)
@@ -328,7 +404,7 @@ export function DatabaseInspectorTab({
       </span>
     </div>
   )
-}
+})
 
 export function DatabaseInspectorBrowse(props: SlotProps) {
   const extra = props as SlotProps & { paneId?: unknown; seedCollection?: unknown }

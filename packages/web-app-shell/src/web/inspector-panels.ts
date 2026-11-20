@@ -122,3 +122,20 @@ export function rememberedInspectorTab(opened: string[], cached?: string, stored
   }
   return hint
 }
+
+/** 右侧检查器最多常驻保活的面板数量（LRU）。超出后自动卸载最久未访问的非激活面板。 */
+export const INSPECTOR_KEEP_ALIVE_LIMIT = 5
+
+/** 维护最近访问的检查器面板 LRU 列表：仅懒挂载访问过的面板，且最多保活 limit 个。 */
+export function touchInspectorMountedPanes(
+  current: readonly string[],
+  activeId: string,
+  openedIds: readonly string[],
+  limit = INSPECTOR_KEEP_ALIVE_LIMIT,
+): string[] {
+  const openSet = new Set(openedIds)
+  const kept = current.filter((id) => openSet.has(id) && id !== activeId)
+  if (activeId && openSet.has(activeId)) kept.push(activeId)
+  const max = Math.max(1, limit)
+  return kept.length > max ? kept.slice(kept.length - max) : kept
+}

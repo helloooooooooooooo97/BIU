@@ -62,7 +62,7 @@ test('plus menu can add another database tab', () => {
   assert.doesNotMatch(inspector, /displayTabs.find\(\(item\) => item.id === tab\)/)
   assert.match(inspector, /inspector-add-close/)
   assert.match(inspector, /XMarkIcon/)
-  assert.match(inspector, /onClose=\{\(\) => closeOpenedTab\(item.id\)\}/)
+  assert.match(inspector, /onClose=\{handlers\.onClose\}/)
   assert.match(inspector, /queueMicrotask/)
   assert.match(inspector, /biu:inspector-pane-closed/)
   assert.match(inspector, /slotTabId\(id\) === focusTabId\) sessionView.clearInspectCall/)

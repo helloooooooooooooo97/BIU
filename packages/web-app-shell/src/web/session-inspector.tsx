@@ -27,7 +27,7 @@ import { useSlotEntries } from '@biu/web-slots'
 import type { SlotsService } from '@biu/web-slots'
 import { inspectorTabFromEvent, requestInspectorAction, shellColumnStartWidth } from './chat-overlay.ts'
 import { getInspectorCaption, getInspectorCaptionVersion, subscribeInspectorCaptions } from './inspector-captions.ts'
-import { inspectorHomeRank, inspectorPanelMatches, inspectorPlusPinRank, inspectorViewProps, isInspectorHomeOffer, nextRepeatableTabId, pruneOpenedForCollections, resolveInspectorTab, slotTabId } from './inspector-panels.ts'
+import { inspectorHomeRank, inspectorPanelMatches, inspectorPlusPinRank, inspectorViewProps, isInspectorHomeOffer, nextRepeatableTabId, pruneOpenedForCollections, resolveInspectorTab, slotTabId, touchInspectorMountedPanes } from './inspector-panels.ts'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import {
@@ -390,12 +390,39 @@ export const SessionInspector = memo(function SessionInspector({
     activeTab?.scrollIntoView({ inline: 'nearest', block: 'nearest' })
   }, [tab])
 
-  const headerTabs = opened.flatMap((openedId) => {
-    const item = displayTabs.find((tabItem) => tabItem.id === slotTabId(openedId))
-    if (!item) return []
-    return [{ ...item, id: openedId }]
-  })
+  const headerTabs = useMemo(
+    () =>
+      opened.flatMap((openedId) => {
+        const item = displayTabs.find((tabItem) => tabItem.id === slotTabId(openedId))
+        if (!item) return []
+        return [{ ...item, id: openedId }]
+      }),
+    [displayTabs, opened],
+  )
+  const mountedRef = useRef<string[]>([])
+  const mountedPanes = useMemo(() => {
+    const next = touchInspectorMountedPanes(mountedRef.current, open ? tab : '', opened)
+    mountedRef.current = next
+    return next
+  }, [open, tab, opened])
+  const mountedSet = useMemo(() => new Set(mountedPanes), [mountedPanes])
   const extraActive = headerTabs.find((item) => item.id === tab)
+  const tabActionsRef = useRef<{ setTab: (id: string) => void; close: (id: string) => void }>({
+    setTab: () => undefined,
+    close: () => undefined,
+  })
+  const tabHandlersRef = useRef(new Map<string, { onActivate: () => void; onClose: () => void }>())
+  const getTabHandlers = (id: string) => {
+    let hit = tabHandlersRef.current.get(id)
+    if (!hit) {
+      hit = {
+        onActivate: () => tabActionsRef.current.setTab(id),
+        onClose: () => tabActionsRef.current.close(id),
+      }
+      tabHandlersRef.current.set(id, hit)
+    }
+    return hit
+  }
   const paintPaneRef = useRef<(paneId: string) => ReactNode>(() => null)
   paintPaneRef.current = (paneId) => {
     const item = headerTabs.find((tabItem) => tabItem.id === paneId)
@@ -436,10 +463,13 @@ export const SessionInspector = memo(function SessionInspector({
     const next = opened.filter((item) => item !== id)
     persistOpened(next)
     if (tab === id) setTab(next.at(-1) ?? '')
+    tabHandlersRef.current.delete(id)
     queueMicrotask(() => {
       window.dispatchEvent(new CustomEvent('biu:inspector-pane-closed', { detail: id }))
     })
   }
+  tabActionsRef.current.setTab = setTab
+  tabActionsRef.current.close = closeOpenedTab
 
   return (
     <aside
@@ -470,13 +500,14 @@ export const SessionInspector = memo(function SessionInspector({
             const Tab = item.Tab
             if (Tab) {
               const raw = (item.entry.props?.() ?? {}) as Record<string, unknown>
+              const handlers = getTabHandlers(item.id)
               return (
                 <Tab
                   key={item.id}
                   {...inspectorViewProps(raw)}
                   active={active}
-                  onActivate={() => setTab(item.id)}
-                  onClose={() => closeOpenedTab(item.id)}
+                  onActivate={handlers.onActivate}
+                  onClose={handlers.onClose}
                   paneId={item.id}
                 />
               )
@@ -663,7 +694,7 @@ export const SessionInspector = memo(function SessionInspector({
 
       <div className="inspector-stage">
         {headerTabs.map((item) => (
-          item.entry.Component
+          item.entry.Component && mountedSet.has(item.id)
             ? <InspectorStagePane key={item.id} paneId={item.id} active={item.id === tab} paintRef={paintPaneRef} />
             : null
         ))}

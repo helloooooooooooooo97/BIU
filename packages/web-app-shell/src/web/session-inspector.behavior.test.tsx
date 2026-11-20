@@ -90,13 +90,19 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-test('opened inspector pages stay mounted, and only the active one is shown', () => {
+test('opened inspector pages lazy-mount on activation and keep recently visited panes mounted', () => {
   const { view, pages, tags } = harness()
+  // Initially only the active pane is mounted (lazy mount avoids 100-tab request storms)
   expect(view.getByTestId(`inspector-${pages}`).querySelector('[data-pane]')?.getAttribute('data-pane')).toBe(pages)
-  expect(view.getByTestId(`inspector-${tags}`).querySelector('[data-pane]')?.getAttribute('data-pane')).toBe(tags)
+  expect(view.queryByTestId(`inspector-${tags}`)).toBeNull()
   expect(view.getByTestId(`inspector-${pages}`).className).toContain('is-active')
-  expect(view.getByTestId(`inspector-${tags}`).getAttribute('aria-hidden')).toBe('true')
   expect(view.getByTestId('inspector-catalog').getAttribute('aria-hidden')).toBe('true')
+
+  // Switching to tags mounts tags and keeps pages mounted in the LRU pool (hidden)
+  fireEvent.click(view.getByTestId(`inspector-tab-${tags}`).querySelector('button')!)
+  expect(view.getByTestId(`inspector-${tags}`).querySelector('[data-pane]')?.getAttribute('data-pane')).toBe(tags)
+  expect(view.getByTestId(`inspector-${tags}`).className).toContain('is-active')
+  expect(view.getByTestId(`inspector-${pages}`).getAttribute('aria-hidden')).toBe('true')
 })
 
 test('switching, closing, and resizing the inspector', () => {
@@ -125,7 +131,8 @@ test('the add menu reuses a page that is already open', () => {
   fireEvent.click(view.getByTestId('inspector-add'))
   expect(view.getByTestId('inspector-add-menu')).toBeTruthy()
   fireEvent.click(view.getByTestId('inspector-offer-add-database:/pages'))
-  expect(view.container.querySelectorAll('[data-pane]').length).toBe(2)
+  expect(view.container.querySelectorAll('[role="tab"]').length).toBe(2)
+  expect(view.container.querySelectorAll('[data-pane]').length).toBe(1)
   expect(view.getByTestId(`inspector-${pages}`).className).toContain('is-active')
 })
 
