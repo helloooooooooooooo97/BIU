@@ -209,6 +209,42 @@ export function useSandboxEscapeExpand(expanded: boolean, setExpanded: (next: bo
   }, [expanded, setExpanded])
 }
 
+function scopeStyleElement(style: HTMLStyleElement) {
+  if (style.dataset.biuScoped === '1') return
+  const raw = style.textContent ?? ''
+  const trimmed = raw.trim()
+  if (!trimmed) {
+    style.dataset.biuScoped = '1'
+    return
+  }
+  if (!trimmed.startsWith('@scope')) {
+    style.textContent = `@scope {\n${raw}\n}`
+  }
+  style.dataset.biuScoped = '1'
+}
+
+/**
+ * Wraps any <style> injected by user sandbox JSX inside CSS `@scope { ... }`
+ * so Light DOM sandbox styles never leak out and pollute the host shell.
+ */
+export function useScopedSandboxStyles(previewRef: RefObject<HTMLElement | null>, active: boolean) {
+  useEffect(() => {
+    if (!active) return
+    const root = previewRef.current
+    if (!root) return
+    const scan = () => {
+      for (const el of root.querySelectorAll('style')) {
+        if (el instanceof HTMLStyleElement) scopeStyleElement(el)
+      }
+    }
+    scan()
+    if (typeof MutationObserver === 'undefined') return
+    const observer = new MutationObserver(() => scan())
+    observer.observe(root, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [previewRef, active])
+}
+
 export function useSandboxToast() {
   const [toast, setToast] = useState<{ message: string; tone: SandboxToastTone } | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)

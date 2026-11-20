@@ -25,6 +25,7 @@ import {
   useDebouncedSandboxSource,
   useSandboxEscapeExpand,
   useSandboxToast,
+  useScopedSandboxStyles,
   type HostTab,
 } from '@biu/core-file-system/sandbox-host-shell'
 import { listPageBlockFences, pageBlockData, pageBlockRecordId } from '../page-block-fence.ts'
@@ -307,6 +308,7 @@ export function PageHostView({
   )
 
   useSandboxEscapeExpand(expanded, setExpanded)
+  useScopedSandboxStyles(previewRef, showPreview)
 
   const envRef = useRef({ Block, Field, biu })
   envRef.current = { Block, Field, biu }
@@ -365,11 +367,12 @@ export function PageHostView({
                       const BlockProxy = (props: { id?: string; writable?: boolean }) => envRef.current.Block(props)
                       const FieldProxy = (props: { name?: string }) => envRef.current.Field(props)
                       const biuProxy = createBiuProxy(envRef)
-                      return loadSandboxComponent(compiled.code, {
+                      return loadSandboxComponent(compiled, {
                         React,
                         Block: BlockProxy,
                         Field: FieldProxy,
                         biu: biuProxy,
+                        getPreview: () => previewRef.current,
                       }) as ComponentType
                     }}
                   />

@@ -15,13 +15,14 @@ test('sandbox compile accepts Field slot for property views', () => {
   assert.equal(ok.ok, true)
 })
 
-test('sandbox compile injects ui.icons without import', () => {
+test('sandbox compile injects ui.icons without import and returns single-pass factory', () => {
   const ok = compileHostSource(
     'export default function App() { const Star = ui.icons.StarIcon; return <Star style={{ width: 16 }} /> }',
   )
   assert.equal(ok.ok, true)
   if (!ok.ok) return
-  const App = loadSandboxComponent(ok.code, { React, Block: () => null, Field: () => null, biu: {} })
+  assert.equal(typeof ok.factory, 'function')
+  const App = loadSandboxComponent(ok, { React, Block: () => null, Field: () => null, biu: {} })
   const node = App() as { type?: unknown }
   assert.ok(node?.type)
 })

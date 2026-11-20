@@ -33,6 +33,7 @@ import {
   useDebouncedSandboxSource,
   useSandboxEscapeExpand,
   useSandboxToast,
+  useScopedSandboxStyles,
   type HostTab,
 } from './sandbox-host-shell.tsx'
 import { writeRecordViewCatalog } from './record-sandboxes.ts'
@@ -257,6 +258,7 @@ export function RecordPropHostView({
   )
 
   useSandboxEscapeExpand(expanded, setExpanded)
+  useScopedSandboxStyles(previewRef, showPreview)
 
   const envRef = useRef({ Field, biu })
   envRef.current = { Field, biu }
@@ -324,10 +326,11 @@ export function RecordPropHostView({
                     load={() => {
                       const FieldProxy = (props: { name?: string }) => envRef.current.Field(props)
                       const biuProxy = createBiuProxy(envRef)
-                      return loadSandboxComponent(compiled.code, {
+                      return loadSandboxComponent(compiled, {
                         React,
                         Field: FieldProxy,
                         biu: biuProxy,
+                        getPreview: () => previewRef.current,
                       }) as ComponentType
                     }}
                   />

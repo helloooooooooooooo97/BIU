@@ -89,3 +89,57 @@ test('biu.useData loads, reloads on remote asset-changed, and retries 409 via up
   screen.getByTestId('show-toast').click()
   await vi.waitFor(() => assert.equal(screen.getByTestId('record-prop-host-toast').textContent, '已保存'))
 })
+
+test('sandbox scopes <style> tags with @scope and gates window keydown outside preview', async () => {
+  rememberRecordViewFile(
+    '/pages',
+    'p2',
+    'isolated-view.jsx',
+    `export default function App() {
+      const [hits, setHits] = React.useState(0)
+      React.useEffect(() => {
+        const onKey = () => setHits((n) => n + 1)
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+      }, [])
+      return (
+        <div>
+          <style data-testid="sandbox-inline-style">{'button { color: red; }'}</style>
+          <span data-testid="key-hits">{hits}</span>
+          <button type="button" data-testid="inside-btn">inside</button>
+        </div>
+      )
+    }`,
+  )
+
+  render(
+    <div>
+      <button type="button" data-testid="outside-btn">outside</button>
+      <RecordPropHostView
+        record={{ id: 'p2', title: '隔离测试' }}
+        view={{ id: 'v2', name: '隔离测试', kind: 'sandbox', file: 'isolated-view.jsx' }}
+        schema={{ fields: { title: { type: 'string', label: '标题', writable: true } } }}
+        collectionPath="/pages"
+      />
+    </div>,
+  )
+
+  // <style> should be automatically wrapped in @scope
+  await vi.waitFor(() => {
+    const style = screen.getByTestId('sandbox-inline-style')
+    assert.equal(style.dataset.biuScoped, '1')
+    assert.match(style.textContent ?? '', /^@scope \{/)
+  })
+
+  // Keydown dispatched from outside the sandbox preview MUST be gated
+  const outside = screen.getByTestId('outside-btn')
+  outside.focus()
+  outside.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', bubbles: true }))
+  assert.equal(screen.getByTestId('key-hits').textContent, '0')
+
+  // Keydown dispatched from inside the sandbox preview MUST reach the sandbox listener
+  const inside = screen.getByTestId('inside-btn')
+  inside.focus()
+  inside.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', bubbles: true }))
+  await vi.waitFor(() => assert.equal(screen.getByTestId('key-hits').textContent, '1'))
+})

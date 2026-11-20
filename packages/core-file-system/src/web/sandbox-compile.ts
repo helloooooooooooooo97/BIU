@@ -3,9 +3,22 @@ import { transform } from 'sucrase'
 import { sandboxUi, type SandboxUi } from './sandbox-ui.ts'
 
 const FORBIDDEN = /\bimport\s*\(|\brequire\s*\(/
+const KEY_EVENT = /^(keydown|keyup|keypress)$/i
+
+export type SandboxComponentFactory = (
+  React: unknown,
+  Block: unknown,
+  Field: unknown,
+  biu: unknown,
+  ui: unknown,
+  win: unknown,
+  doc: unknown,
+  gThis: unknown,
+  selfRef: unknown,
+) => unknown
 
 export type HostCompileResult =
-  | { ok: true; code: string }
+  | { ok: true; code: string; factory: SandboxComponentFactory }
   | { ok: false; error: string }
 
 export type HostSlot = 'Block' | 'Field' | 'Layout'
@@ -21,13 +34,11 @@ export function stripCommentsAndStrings(source: string): string {
   while (i < len) {
     const ch = source[i]
     const next = source[i + 1]
-    // Single-line comment
     if (ch === '/' && next === '/') {
       i += 2
       while (i < len && source[i] !== '\n') i += 1
       continue
     }
-    // Block comment
     if (ch === '/' && next === '*') {
       i += 2
       while (i < len && !(source[i] === '*' && source[i + 1] === '/')) {
@@ -38,7 +49,6 @@ export function stripCommentsAndStrings(source: string): string {
       out += ' '
       continue
     }
-    // Single or double quoted string
     if (ch === "'" || ch === '"') {
       const quote = ch
       i += 1
@@ -54,7 +64,6 @@ export function stripCommentsAndStrings(source: string): string {
       i += 1
       continue
     }
-    // Template literal (strip literal chunks, keep ${...} expressions)
     if (ch === '`') {
       i += 1
       out += ' '
@@ -117,6 +126,24 @@ export function transpileSandboxJsx(source: string, filePath = 'sandbox.tsx'): s
   }).code
 }
 
+function buildSandboxFactory(code: string): SandboxComponentFactory {
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval
+  return new Function(
+    'React',
+    'Block',
+    'Field',
+    'biu',
+    'ui',
+    'window',
+    'document',
+    'globalThis',
+    'self',
+    `"use strict";
+     ${code}
+     return (typeof __Component === "function" && __Component) || (typeof App === "function" && App);`,
+  ) as SandboxComponentFactory
+}
+
 function slotFilePath(slot: HostSlot) {
   if (slot === 'Field') return 'record-prop-view.tsx'
   if (slot === 'Layout') return 'record-layout-view.tsx'
@@ -135,42 +162,115 @@ export function compileHostSource(source: string, slot: HostSlot = 'Block'): Hos
   }
   try {
     const code = transpileSandboxJsx(stripped, slotFilePath(slot))
-    // Syntax-validate the compiled body once during compilation.
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
-    new Function('React', 'Block', 'Field', 'biu', 'ui', code)
-    return { ok: true, code }
+    // Single-pass factory compilation: validates syntax AND produces the executable factory.
+    const factory = buildSandboxFactory(code)
+    return { ok: true, code, factory }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) }
   }
 }
 
+function isPreviewInteractive(preview: HTMLElement | null, event: Event): boolean {
+  if (!preview || !preview.isConnected) return false
+  const target = event.target
+  if (target instanceof Node && preview.contains(target)) return true
+  const active = document.activeElement
+  if (active && preview.contains(active)) return true
+  try {
+    if (preview.matches(':hover')) return true
+  } catch {
+    /* ignore */
+  }
+  return false
+}
+
+function gateEventTarget<T extends object>(
+  real: T,
+  getPreview: () => HTMLElement | null,
+): T {
+  const add = (real as EventTarget).addEventListener?.bind(real)
+  const remove = (real as EventTarget).removeEventListener?.bind(real)
+  const store = new WeakMap<EventListenerOrEventListenerObject, EventListener>()
+  return new Proxy(real, {
+    get(target, prop, receiver) {
+      if (prop === 'addEventListener' && add) {
+        return (type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | AddEventListenerOptions) => {
+          if (!listener || !KEY_EVENT.test(type)) return add(type, listener as EventListener, options)
+          let gated = store.get(listener)
+          if (!gated) {
+            gated = (event: Event) => {
+              const preview = getPreview()
+              if (preview && !isPreviewInteractive(preview, event)) return
+              if (typeof listener === 'function') return listener.call(real, event)
+              return listener.handleEvent(event)
+            }
+            store.set(listener, gated)
+          }
+          return add(type, gated, options)
+        }
+      }
+      if (prop === 'removeEventListener' && remove) {
+        return (type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | AddEventListenerOptions) => {
+          if (!listener) return remove(type, listener as EventListener, options)
+          return remove(type, store.get(listener) ?? listener, options)
+        }
+      }
+      const value = Reflect.get(target, prop, receiver)
+      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value
+    },
+  })
+}
+
+export function createSandboxGlobals(getPreview?: () => HTMLElement | null) {
+  if (typeof window === 'undefined' || typeof document === 'undefined' || !getPreview) {
+    return {
+      window: typeof window !== 'undefined' ? window : undefined,
+      document: typeof document !== 'undefined' ? document : undefined,
+      globalThis: typeof globalThis !== 'undefined' ? globalThis : undefined,
+      self: typeof self !== 'undefined' ? self : undefined,
+    }
+  }
+  const documentView = gateEventTarget(document, getPreview)
+  const windowView = gateEventTarget(window, getPreview)
+  const windowWithDoc = new Proxy(windowView, {
+    get(target, prop, receiver) {
+      if (prop === 'document') return documentView
+      if (prop === 'window' || prop === 'self' || prop === 'globalThis') return receiver
+      return Reflect.get(target, prop, receiver)
+    },
+  })
+  return {
+    window: windowWithDoc,
+    document: documentView,
+    globalThis: windowWithDoc,
+    self: windowWithDoc,
+  }
+}
+
 export function loadSandboxComponent(
-  code: string,
+  compiledOrCode: string | { code: string; factory: SandboxComponentFactory },
   env: {
     React: unknown
     Block?: unknown
     Field?: unknown
     biu: unknown
     ui?: SandboxUi | Record<string, unknown>
+    getPreview?: () => HTMLElement | null
   },
 ) {
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
-  const factory = new Function(
-    'React',
-    'Block',
-    'Field',
-    'biu',
-    'ui',
-    `"use strict";
-     ${code}
-     return (typeof __Component === "function" && __Component) || (typeof App === "function" && App);`,
-  )
+  const factory =
+    typeof compiledOrCode === 'string' ? buildSandboxFactory(compiledOrCode) : compiledOrCode.factory
+  const globals = createSandboxGlobals(env.getPreview)
   const Component = factory(
     env.React,
     env.Block ?? (() => null),
     env.Field ?? (() => null),
     env.biu,
     env.ui ?? sandboxUi,
+    globals.window,
+    globals.document,
+    globals.globalThis,
+    globals.self,
   )
   if (typeof Component !== 'function') throw new Error('sandbox view must export a React component')
   return Component as (...args: unknown[]) => unknown

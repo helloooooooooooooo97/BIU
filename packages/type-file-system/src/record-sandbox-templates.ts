@@ -321,19 +321,23 @@ export function defaultContentSandboxSource(_title = '') {
         <>
           <Section title="组件 API">
             <Api name="React" use="React.useState / useEffect / JSX" note="宿主注入，不要 import react。" />
+            <Api name="ui.icons" use="const Star = ui.icons.StarIcon" note="宿主注入 @heroicons/react/16/solid，无需 import。" />
             <Api name="<Block id={…} />" use="<Block id={blockId} writable />" note="渲染真实块。id 用 biu.blocks()[].blockId；writable 默认跟随页面。" />
             <Api name="<Field name={…} />" use="<Field name={field.key} />" note="按表格单元格同一套控件渲染。" />
           </Section>
           <Section title="数据 API">
             <Api name="biu.page()" use="返回 { id, title }" note="当前页面。" />
-            <Api name="biu.record() / fields() / values()" use="整条记录、字段定义、当前值" note="values 是 { 字段 key: 当前值 }。" />
+            <Api name="biu.record() / fields() / values()" use="整条记录（含 path）、字段定义、当前值" note="values 是 { 字段 key: 当前值 }。" />
             <Api name="biu.findFieldByName(name)" use="const f = biu.findFieldByName('文档')" note="用显示名或 key 找字段。自定义属性的 key 是内部 id，label 才是名称。" />
             <Api name="biu.fieldKey(name)" use="biu.fieldKey('文档')" note="显示名 → 存储 key；找不到返回空字符串。" />
-            <Api name="biu.get / set / patch" use="await biu.patch({ 文档: list })" note="key 或显示名都可以。未知 / 只读 / 类型不对会抛错。" />
+            <Api name="biu.get / set / patch" use="await biu.set('标题', '新标题')" note="返回 Promise；支持 key、显示名与 tag.<tagId>.<key>。未知 / 只读 / 类型不对会抛错。" />
+            <Api name="biu.tags / getTagValue / setTagValue" use="await biu.setTagValue('tag-10', '状态', '已完成')" note="原子读写标签属性，不误覆盖同记录其他标签。" />
+            <Api name="biu.useRecord / useField / useData" use="const [data, setData] = biu.useData({})" note="响应式 Hooks；useData 自动订阅远端 dataFile 变更并在并发冲突时乐观重试。" />
             <Api name="biu.blocks()" use="返回 { id, pageId, blockId, kind, plugin, title, data }[]" note="正文里的块；改 data 用 biu.update。" />
             <Api name="biu.update(id, patch)" use="await biu.update(blockId, { title: '新标题' })" note="把 patch 写进那一块的 data。" />
             <Api name="biu.kinds()" use="返回 { kind, plugin, label }[]" note="编辑器里已注册、可插入的块类型。" />
-            <Api name="biu.read() / biu.write(v)" use="本视图自己的 JSON 文件" note="和页面正文分开，适合记这个沙盒的 UI 状态。" />
+            <Api name="biu.read() / write(v) / updateData(fn)" use="await biu.updateData((cur) => ({ ...cur, n: 1 }))" note="本视图自己的 JSON 文件；updateData 支持 409 冲突自动重读重试。" />
+            <Api name="biu.open / toast / children" use="biu.open(id) · biu.toast('已保存', 'ok') · await biu.children()" note="右侧打开关联记录、轻提示与查询当前记录的子记录。" />
             <Api name="biu.files" use="list / read / upload" note="附件不可改内容。read 读已上传的文件；upload(File) 再挂一份新附件，用 biu.set 写回列表。不要改已有 href 里的字节。" />
             <Api name="biu.docs" use="list / read / write / upload" note="文档可覆盖。write(href, text) 原地改命名文件；upload(File) 再 biu.set 写回文档字段。" />
           </Section>
@@ -848,13 +852,18 @@ export function defaultPropSandboxSource(_title = '') {
               note="宿主注入，不要 import react。"
             />
             <Api
+              name="ui.icons"
+              use="const Star = ui.icons.StarIcon"
+              note="宿主注入 @heroicons/react/16/solid，无需 import。"
+            />
+            <Api
               name="<Field name={…} />"
               use="<Field name={field.key} />"
               note="按表格单元格同一套控件渲染；name 可以是显示名或 key。只读字段不能改。"
             />
           </Section>
           <Section title="数据 API">
-            <Api name="biu.record()" use="返回 { id, title, path }" note="当前这条记录。" />
+            <Api name="biu.record()" use="返回完整记录（含 path）" note="当前这条记录。" />
             <Api
               name="biu.fields()"
               use="返回 { key, type, label, writable }[]"
@@ -871,11 +880,11 @@ export function defaultPropSandboxSource(_title = '') {
               note="用显示名或 key 找 { key, type, label, writable }。自定义属性的 key 常是数字 id。"
             />
             <Api name="biu.fieldKey(name)" use="biu.fieldKey('文档')" note="显示名 → 存储 key。" />
-            <Api name="biu.get(key)" use="biu.get('文档')" note="读一个字段；key 或显示名都可以。" />
+            <Api name="biu.get(key)" use="biu.get('文档') / biu.get('tag.tag-10.状态')" note="读一个字段或标签属性；key 或显示名都可以。" />
             <Api
               name="biu.set(key, value)"
-              use="biu.set('标题', '新标题')"
-              note="写一个字段并保存；未知 / 只读 / 类型不对会抛错。"
+              use="await biu.set('标题', '新标题')"
+              note="返回 Promise；写一个字段或 tag.<tagId>.<key> 并保存；未知 / 只读 / 类型不对会抛错。"
             />
             <Api
               name="biu.patch(bag)"
@@ -883,9 +892,24 @@ export function defaultPropSandboxSource(_title = '') {
               note="一次写多个字段，对象的键可以是显示名。"
             />
             <Api
-              name="biu.read() / biu.write(v)"
-              use="本视图自己的 JSON 文件"
-              note="和记录字段分开，适合记这个沙盒的 UI 状态。"
+              name="biu.tags / getTagValue / setTagValue"
+              use="await biu.setTagValue('tag-10', '状态', '已完成')"
+              note="原子读写标签属性，不误覆盖同记录其他标签。"
+            />
+            <Api
+              name="biu.useRecord / useField / useData"
+              use="const [data, setData] = biu.useData({})"
+              note="响应式 Hooks；useData 自动订阅远端 dataFile 变更并在并发冲突时乐观重试。"
+            />
+            <Api
+              name="biu.read() / write(v) / updateData(fn)"
+              use="await biu.updateData((cur) => ({ ...cur, n: 1 }))"
+              note="本视图自己的 JSON 文件；updateData 支持 409 冲突自动重读重试。"
+            />
+            <Api
+              name="biu.open / toast / children"
+              use="biu.open(id) · biu.toast('已保存', 'ok') · await biu.children()"
+              note="右侧打开关联记录、轻提示与查询当前记录的子记录。"
             />
             <Api
               name="biu.files"
