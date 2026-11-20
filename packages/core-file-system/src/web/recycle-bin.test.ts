@@ -25,7 +25,9 @@ test('recycle bin is a registered /trash table with restore and delete actions',
   const browser =
     readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8') +
     '\n' +
-    readFileSync(resolve(import.meta.dirname, './browser-list-cache.ts'), 'utf8')
+    readFileSync(resolve(import.meta.dirname, './browser-list-cache.ts'), 'utf8') +
+    '\n' +
+    readFileSync(resolve(import.meta.dirname, './browser-dialogs.tsx'), 'utf8')
   assert.match(browser, /const inTrash = collectionPath === '\/trash'/)
   assert.match(browser, /canBulkDelete/)
   assert.match(browser, /dataPath === '\/trash'/)

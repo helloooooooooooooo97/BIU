@@ -143,6 +143,7 @@ import {
   askNewPlugin,
   askNewPresentation,
 } from './browser-row-title.tsx'
+import { BrowserDialogs, type BrowserDialogState } from './browser-dialogs.tsx'
 export { WindowedTable } from './windowed-table.tsx'
 import { useStickyToolbar } from './sticky-toolbar.ts'
 import { useToolbarOverflow } from './toolbar-overflow.ts'
@@ -261,8 +262,8 @@ const VisibleColumnsFlyout = lazy(() => import('./column-order-menu.tsx').then((
 const RecordEmojiBoard = lazy(() => import('@biu/biu-ui/emoji-board').then((m) => ({ default: m.RecordEmojiBoard })))
 const LazyShareButton = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareButton })))
 const LazySharePanel = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.SharePanel })))
-const LazyShareRoleDetail = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareRoleDetail })))
-const LazyShareScopeDetail = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareScopeDetail })))
+const LazyShareRoleDetail = lazy(() => import('./share-chain-detail.tsx').then((m) => ({ default: m.ShareRoleDetail })))
+const LazyShareScopeDetail = lazy(() => import('./share-chain-detail.tsx').then((m) => ({ default: m.ShareScopeDetail })))
 const LayoutPrefsMenu = lazy(() => import('./layout-prefs-menu.tsx').then((m) => ({ default: m.LayoutPrefsMenu })))
 const CollectionRowsShell = lazy(() => import('./rows-view.tsx').then((m) => ({ default: m.CollectionRowsShell })))
 
@@ -907,15 +908,7 @@ export function CollectionBrowser({
   const syncViewsRef = useRef<() => Promise<void>>(async () => {})
   const adoptViewRef = useRef<(view: SavedView) => void>(() => undefined)
   const hydratedDetail = useRef('')
-  const [dlg, setDlg] = useState<
-    | { kind: 'action'; row: DbRecord; action: CollectionActionInfo }
-    | { kind: 'alert'; title: string; body: string }
-    | { kind: 'delete-record'; row: DbRecord }
-    | { kind: 'delete-records'; ids: string[] }
-    | { kind: 'bulk-edit'; ids: string[] }
-    | { kind: 'bulk-tag'; ids: string[] }
-    | null
-  >(null)
+  const [dlg, setDlg] = useState<BrowserDialogState>(null)
   const [bulkEditKey, setBulkEditKey] = useState('')
   const [bulkEditRaw, setBulkEditRaw] = useState('')
   const [bulkTagIds, setBulkTagIds] = useState<string[]>([])
@@ -6209,138 +6202,24 @@ export function CollectionBrowser({
         </div>
         </div>
       </div>
-      {dlg?.kind === 'delete-record' ? (
-        <AppDialog
-          title="删除记录"
-          confirm="删除"
-          danger
-          onCancel={() => setDlg(null)}
-          onConfirm={() => {
-            const { row } = dlg
-            setDlg(null)
-            void executeDeleteRecord(row)
-          }}
-          body={<p>确定删除「{labelOf(dlg.row)}」？会放进回收站，可随时恢复。</p>}
-        />
-      ) : null}
-      {dlg?.kind === 'delete-records' ? (
-        <AppDialog
-          title="删除记录"
-          confirm="删除"
-          danger
-          onCancel={() => setDlg(null)}
-          onConfirm={() => {
-            const { ids } = dlg
-            setDlg(null)
-            void executeDeleteRecords(ids)
-          }}
-          body={
-            <p>
-              {collectionPath === '/trash'
-                ? `确定彻底删除选中的 ${dlg.ids.length} 条？不可恢复。`
-                : `确定删除选中的 ${dlg.ids.length} 条记录？会放进回收站，可随时恢复。`}
-            </p>
-          }
-        />
-      ) : null}
-      {dlg?.kind === 'bulk-edit' ? (
-        <AppDialog
-          title={`编辑 ${dlg.ids.length} 条`}
-          confirm="写入"
-          disabled={!bulkEditKey}
-          onCancel={() => setDlg(null)}
-          onConfirm={() => {
-            const { ids } = dlg
-            const key = bulkEditKey
-            const raw = bulkEditRaw
-            setDlg(null)
-            void executeBulkEdit(ids, key, raw)
-          }}
-          body={
-            <div className="fsdb-bulk-form">
-              <label className="fsdb-bulk-label">
-                字段
-                <select className="fsdb-dlg-input" value={bulkEditKey} onChange={(event) => setBulkEditKey(event.target.value)}>
-                  {bulkFields.map((item) => (
-                    <option key={item.key} value={item.key}>
-                      {item.field.label || item.key}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="fsdb-bulk-label">
-                值
-                <input
-                  className="fsdb-dlg-input"
-                  value={bulkEditRaw}
-                  placeholder="写入到选中记录"
-                  onChange={(event) => setBulkEditRaw(event.target.value)}
-                />
-              </label>
-            </div>
-          }
-        />
-      ) : null}
-      {dlg?.kind === 'bulk-tag' ? (
-        <AppDialog
-          title={`标签 · ${dlg.ids.length} 条`}
-          confirm="贴上"
-          disabled={!bulkTagIds.length}
-          onCancel={() => setDlg(null)}
-          onConfirm={() => {
-            const { ids } = dlg
-            const tags = bulkTagIds
-            setDlg(null)
-            void executeBulkTag(ids, tags)
-          }}
-          body={
-            loadTags().length ? (
-              <div className="fsdb-bulk-form">
-                {loadTags().map((pack) => {
-                  const on = bulkTagIds.includes(pack.id)
-                  return (
-                    <CheckRow
-                      key={pack.id}
-                      label={tagChipLabel(pack)}
-                      icon={<TagIcon aria-hidden className="size-[14px]" />}
-                      on={on}
-                      onToggle={() =>
-                        setBulkTagIds((prev) => (on ? prev.filter((id) => id !== pack.id) : [...prev, pack.id]))
-                      }
-                    />
-                  )
-                })}
-              </div>
-            ) : (
-              <p>还没有标签。先到标签库里建一个，再回来贴。</p>
-            )
-          }
-        />
-      ) : null}
-      {dlg?.kind === 'action' ? (
-        <AppDialog
-          title={dlg.action.label}
-          confirm={dlg.action.label}
-          danger={dlg.action.tone === 'danger'}
-          onCancel={() => setDlg(null)}
-          onConfirm={() => {
-            const { row, action } = dlg
-            setDlg(null)
-            void executeAction(row, action)
-          }}
-          body={<p>{dlg.action.confirm}</p>}
-        />
-      ) : null}
-      {dlg?.kind === 'alert' ? (
-        <AppDialog
-          title={dlg.title}
-          confirm="知道了"
-          hideCancel
-          onCancel={() => setDlg(null)}
-          onConfirm={() => setDlg(null)}
-          body={<p>{dlg.body}</p>}
-        />
-      ) : null}
+      <BrowserDialogs
+        dlg={dlg}
+        setDlg={setDlg}
+        collectionPath={collectionPath}
+        labelOf={labelOf}
+        bulkFields={bulkFields}
+        bulkEditKey={bulkEditKey}
+        setBulkEditKey={setBulkEditKey}
+        bulkEditRaw={bulkEditRaw}
+        setBulkEditRaw={setBulkEditRaw}
+        bulkTagIds={bulkTagIds}
+        setBulkTagIds={setBulkTagIds}
+        onDeleteRecord={(row) => void executeDeleteRecord(row)}
+        onDeleteRecords={(ids) => void executeDeleteRecords(ids)}
+        onBulkEdit={(ids, key, raw) => void executeBulkEdit(ids, key, raw)}
+        onBulkTag={(ids, tags) => void executeBulkTag(ids, tags)}
+        onExecuteAction={(row, action) => void executeAction(row, action)}
+      />
       {renderCellPop()}
       <DockHoverTip />
     </div>

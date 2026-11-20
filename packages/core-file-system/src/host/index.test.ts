@@ -3322,7 +3322,12 @@ test('db_content points agents at plugin intros for pageBlock fences', () => {
 })
 
 test('collection list preloads authorization scans and releases them', () => {
-  const host = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
+  const host =
+    readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8') +
+    '\n' +
+    readFileSync(resolve(import.meta.dirname, './access-policy.ts'), 'utf8') +
+    '\n' +
+    readFileSync(resolve(import.meta.dirname, './doc-asset-edit.ts'), 'utf8')
   assert.match(host, /auth\.preloadCollection\(actor\.workspaceId, spec\.path, actor\.accountId\)/)
   assert.match(host, /private inflightMatches/)
   assert.match(host, /private inflightScans/)
@@ -3331,7 +3336,7 @@ test('collection list preloads authorization scans and releases them', () => {
   assert.match(host, /auth\.onInvalidate\(\(\) => this\.bump\(\)\)/)
   assert.match(host, /visibleSortedCollectionRows/)
   assert.match(host, /partitionVisibleRows/)
-  assert.match(host, /this\.shareScopeLabel\(collection, id, row, stored\)/)
+  assert.match(host, /shareScopeLabel\(collection, id, row, stored\)/)
   assert.match(host, /notifyShareChange\(\)/)
   assert.match(host, /notifyTagCatalog\(\)/)
   assert.match(host, /notifyViewCatalog\(/)

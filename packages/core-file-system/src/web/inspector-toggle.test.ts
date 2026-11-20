@@ -8,6 +8,8 @@ const browser =
   '\n' +
   readFileSync(resolve(import.meta.dirname, './browser-row-title.tsx'), 'utf8') +
   '\n' +
+  readFileSync(resolve(import.meta.dirname, './browser-dialogs.tsx'), 'utf8') +
+  '\n' +
   readFileSync(resolve(import.meta.dirname, './windowed-table.tsx'), 'utf8') +
   '\n' +
   readFileSync(resolve(import.meta.dirname, './history-nav.ts'), 'utf8') +
@@ -1540,6 +1542,8 @@ test('inspector crumbs lock the first level to an icon', () => {
   readFileSync(resolve(import.meta.dirname, './browser-list-cache.ts'), 'utf8') +
   '\n' +
   readFileSync(resolve(import.meta.dirname, './browser-row-title.tsx'), 'utf8') +
+  '\n' +
+  readFileSync(resolve(import.meta.dirname, './browser-dialogs.tsx'), 'utf8') +
   '\n' +
   readFileSync(resolve(import.meta.dirname, './windowed-table.tsx'), 'utf8') +
   '\n' +

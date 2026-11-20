@@ -1,6 +1,4 @@
-import { readFile } from 'node:fs/promises'
 import type { IncomingMessage } from 'node:http'
-import { isAbsolute, resolve } from 'node:path'
 import {
   biuSqlitePath,
   dataHome,
@@ -15,7 +13,7 @@ import {
   isDesktopRuntime,
   isOnlineRuntime,
 } from '@biu/host-plugin-loader/data-dir'
-import { asPublicProfile, readWorkspaceProfile, writeWorkspaceProfile } from '@biu/host-workspace'
+import { asPublicProfile, writeWorkspaceProfile } from '@biu/host-workspace'
 import { roleCoversAction, type Action as PermissionAction, type AuthorizationService } from '@biu/host-account/authorization'
 import { isRegisteredBuiltinPlugin } from '@biu/host-account/store'
 import { forwardCloud } from '@biu/host-account/mirror'
@@ -111,26 +109,27 @@ import { trashCollection } from './trash-collection.ts'
 import { runWorkspaceAssetGc } from './asset-gc-run.ts'
 import { ContentTurnService } from './content-turn-service.ts'
 import {
-  asContentText,
-  findReplaceText,
-  insertText,
-  replaceLinesText,
-  resolveContentCommand,
-  strReplaceText,
-  viewContent,
-  writeContentText,
-  mutationLocus,
-  type ContentCommand,
-} from './content-edit.ts'
+  DatabaseAccessPolicy,
+  isBuiltinPluginRecord,
+  isRecordInWorkspace,
+  resolveScopeTarget,
+  type WorkspaceFiles,
+} from './access-policy.ts'
 import {
-  MENTION_KIND_PATH,
-  listMentionRefs,
-  mentionRefsByCollection,
-  projectMentionLabels,
-  stripMentionLabels,
-} from '../mention-markup.ts'
-import { currentSessionId } from '@biu/host-sessions/scope'
-import { databaseRevealForTool, normalizeCollectionPath, splitResourcePath } from '../paths.ts'
+  applyRecordPersonOverlay,
+  resolveNamedPerson,
+  stampRecordActor,
+  touchRecordActor,
+  type ActorOverlayHost,
+} from './actor-overlay.ts'
+import {
+  executeEditAsset,
+  executeEditContent,
+  executeEditDoc,
+  type DocAssetEditHost,
+} from './doc-asset-edit.ts'
+import { stripMentionLabels } from '../mention-markup.ts'
+import { normalizeCollectionPath, splitResourcePath } from '../paths.ts'
 import { matchListFilterRecord, normalizeSorts, parseTagFlatColumnKey, readTagFieldValue, sortRecordsBy } from '../query-logic.ts'
 import { actionWhenKeys } from '../web/fields.ts'
 import { AgentDbCompact } from './agent-payload.ts'
@@ -193,27 +192,6 @@ function columnAfter(columns: string[] | undefined, key: string, after: string) 
   const index = columns.indexOf(after)
   if (index < 0) return [...columns, key]
   return [...columns.slice(0, index + 1), key, ...columns.slice(index + 1)]
-}
-
-const SHARE_SCOPE_LABEL = {
-  personal: '私人',
-  workspace: '空间',
-  shared: '共享',
-} as const
-
-const ACCESS_RANK = { viewer: 1, editor: 2, manager: 3, owner: 4 } as const
-
-function accessLabel(role: keyof typeof ACCESS_RANK | null | undefined) {
-  if (role === 'editor') return '编辑'
-  if (role === 'viewer') return '阅读'
-  if (role === 'manager' || role === 'owner') return '管理'
-  return '阅读'
-}
-
-function higherAccess(left: keyof typeof ACCESS_RANK | null, right: keyof typeof ACCESS_RANK | null) {
-  if (!left) return right
-  if (!right) return left
-  return ACCESS_RANK[left] >= ACCESS_RANK[right] ? left : right
 }
 
 function schemaFor(spec: CollectionSpec): CollectionSchema {
@@ -399,37 +377,6 @@ function linkUploadedAsset(db: { tags: { linkContentRef: (collection: string, re
   db.tags.linkContentRef(`/${parts[0]}`, parts.slice(1).join('/'), name, 'asset')
 }
 
-function sessionTitleFromRow(row: unknown): string {
-  if (!row || typeof row !== 'object' || Array.isArray(row)) return ''
-  const rec = row as Record<string, unknown>
-  const title = String(rec.title ?? rec.name ?? '').trim()
-  if (title) return title
-  const config = rec.config
-  if (config && typeof config === 'object' && !Array.isArray(config)) {
-    return String((config as { title?: unknown }).title ?? '').trim()
-  }
-  return ''
-}
-
-function sessionMascotFromRow(row: unknown): PersonValue['mascot'] {
-  if (!row || typeof row !== 'object' || Array.isArray(row)) return undefined
-  const raw = (row as { mascot?: unknown }).mascot
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
-  const rec = raw as { shape?: unknown; color?: unknown; eye?: unknown }
-  if (typeof rec.shape !== 'string' || typeof rec.color !== 'string') return undefined
-  return {
-    shape: rec.shape,
-    color: rec.color,
-    ...(typeof rec.eye === 'number' ? { eye: rec.eye } : {}),
-  }
-}
-
-function sessionPersonFromRow(row: unknown): { name: string; mascot?: PersonValue['mascot'] } {
-  const name = sessionTitleFromRow(row)
-  const mascot = sessionMascotFromRow(row)
-  return mascot ? { name, mascot } : { name }
-}
-
 function navPath(path: string) {
   return normalizeCollectionPath(path)
 }
@@ -557,57 +504,6 @@ type VisibleSortedPack = {
   shared: DbRecord[]
 }
 
-type WorkspaceMembership = {
-  active: string | null
-  home: string | null
-  mine: Set<string>
-  any: Set<string>
-  strict?: boolean
-}
-
-type WorkspaceFiles = {
-  activeWorkspaceId(): string | null
-  workspacePerson?(accountId: string): { accountId: string; workspaceId: string; name: string } | null
-  membership(): WorkspaceMembership
-  attach(
-    workspaceId: string,
-    collection: string,
-    recordId: string,
-    now?: number,
-    policy?: {
-      accessMode?: 'inherit' | 'private' | 'members' | 'restricted'
-      memberDefaultRole?: 'viewer' | 'editor'
-      parentCollection?: string
-      parentRecordId?: string
-    },
-  ): void
-  grantMap?(workspaceId: string, collection: string): Map<string, Set<string>>
-  collectionOwnership?(workspaceId: string, collection: string): Map<string, 'personal' | 'workspace' | 'shared'>
-  viewGrantAudiences?(
-    workspaceId: string,
-    collection: string,
-  ): Array<{
-    view_id: string
-    subject_type: 'account' | 'member_view'
-    subject_id: string
-    granted_by?: string
-    member_kind: string
-  }>
-  viewGrantsFor?(
-    workspaceId: string,
-    collection: string,
-  ): Array<{
-    view_id: string
-    subject_type: 'account' | 'member_view'
-    subject_id: string
-    role: ViewGrantRole
-    granted_by?: string
-  }>
-  collectionRecordOwners?(workspaceId: string, collection: string): Map<string, string>
-  isMember?(accountId: string, workspaceId: string): boolean
-  isSuperAdmin?(accountId?: string | null): boolean
-}
-
 export function clampPage(limit?: number, offset?: number) {
   const size = Math.min(MAX_PAGE_SIZE, Math.max(1, Number.isFinite(Number(limit)) ? Number(limit) : DEFAULT_PAGE_SIZE))
   const start = Math.max(0, Number.isFinite(Number(offset)) ? Math.floor(Number(offset)) : 0)
@@ -639,14 +535,7 @@ export class DatabaseService extends Service implements Database {
   assets = new FileSystemAssets()
   viewCatalog?: { viewsFor(collectionPath: string): SharedViewDef[] }
   recordViews = new RecordViewsStore()
-  private ownershipCache: { key: string; map: Map<string, 'personal' | 'workspace' | 'shared'> } | null = null
-  private ownerCache: { key: string; map: Map<string, string> } | null = null
-  private viewAudienceCache: {
-    key: string
-    rows: Array<{ view_id: string; subject_type: 'account' | 'member_view'; subject_id: string; granted_by?: string; member_kind: string }>
-  } | null = null
-  private viewShareCache: { key: string; views: SharedViewDef[] } | null = null
-  private recordShareCache: { key: string; ids: Set<string> } | null = null
+  private readonly access: DatabaseAccessPolicy
   private inflightMatches = new Map<string, Promise<DbRecord[]>>()
   private inflightScans = new Map<string, Promise<DbRecord[]>>()
   private inflightVisible = new Map<string, Promise<VisibleSortedPack>>()
@@ -661,6 +550,21 @@ export class DatabaseService extends Service implements Database {
 
   constructor(ctx: Context) {
     super(ctx, 'database')
+    const self = this
+    this.access = new DatabaseAccessPolicy({
+      tags: this.tags,
+      shares: this.shares,
+      get viewCatalog() {
+        return self.viewCatalog
+      },
+      collabStore: () => this.collabStore(),
+      authorization: () => this.authorization(),
+      deviceWorkspace: () => this.deviceWorkspace(),
+      markDeviceRecord: (collection, id) => this.markDeviceRecord(collection, id),
+      collection: (pathOrId) => this.collection(pathOrId),
+      schemaFor: (spec) => schemaFor(spec),
+      applyTagOverlay: (spec, row) => this.applyTagOverlay(spec, row),
+    })
   }
 
   private async serializeContentWrite<T>(path: string, run: () => Promise<T>): Promise<T> {
@@ -738,20 +642,12 @@ export class DatabaseService extends Service implements Database {
   }
 
   private decorateSlice(spec: CollectionSpec, rows: DbRecord[], wanted?: string[] | null) {
-    this.ownershipCache = null
-    this.ownerCache = null
-    this.viewAudienceCache = null
-    this.viewShareCache = null
-    this.recordShareCache = null
+    this.access.clearCaches()
     try {
       const need = listDecorateNeed(wanted)
       return rows.map((row) => this.decorateRecord(spec, row, need))
     } finally {
-      this.ownershipCache = null
-      this.ownerCache = null
-      this.viewAudienceCache = null
-      this.viewShareCache = null
-      this.recordShareCache = null
+      this.access.clearCaches()
     }
   }
 
@@ -871,111 +767,12 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
-  private workspaceMembership() {
-    const store = this.collabStore()
-    if (!store?.activeWorkspaceId()) return null
-    return store.membership()
-  }
-
-  private scopeTarget(collection: string, id: string, row?: { pageId?: unknown; collection?: unknown; sessionId?: unknown; sourceId?: unknown; tablePath?: unknown }) {
-    if (collection === '/trash' || collection === DATA_COLLECTION_PATH) {
-      const tablePath = String(row?.tablePath ?? '')
-      const sourceId = String(row?.sourceId ?? '')
-      if (tablePath && sourceId) return { collection: tablePath, id: sourceId }
-      const parsed = parseStampRecordId(id)
-      if (parsed) return { collection: parsed.collection, id: parsed.recordId }
-    }
-    if (collection === '/events') {
-      const sessionId = String(row?.sessionId ?? (id.lastIndexOf(':') > 0 ? id.slice(0, id.lastIndexOf(':')) : ''))
-      if (sessionId) return { collection: '/agents', id: sessionId }
-    }
-    if (collection === '/tags') {
-      const tablePath = String(row?.tablePath ?? '')
-      const sourceId = String(row?.sourceId ?? '')
-      if (tablePath && sourceId) return { collection: tablePath, id: sourceId }
-    }
-    if (collection === '/editor-blocks') {
-      const pageId = String(row?.pageId ?? '')
-      const parent = String(row?.collection ?? '')
-      if (pageId && parent) return { collection: parent, id: pageId }
-      const parts = id.split('::')
-      if (parts.length >= 3) {
-        const parent = parts[0]!.startsWith('/') ? parts[0]! : `/${parts[0]}`
-        return { collection: parent, id: parts[1]! }
-      }
-    }
-    return { collection, id }
-  }
-
-  private inWorkspace(membership: WorkspaceMembership, collection: string, id: string) {
-    const key = `${collection}\t${id}`
-    if (membership.mine.has(key)) return true
-    if (membership.any.has(key)) return false
-    if (membership.strict) return false
-    return membership.active === membership.home
-  }
-
   private visibleRecords<T extends { id?: unknown; pageId?: unknown; collection?: unknown; sessionId?: unknown; sourceId?: unknown; tablePath?: unknown }>(
     collection: string,
     rows: T[],
     action: PermissionAction = 'resource:read',
   ) {
-    const authorization = this.authorization()
-    const actor = authorization?.currentActor()
-    if (authorization && actor) {
-      return rows.filter((row) => {
-        if (collection === '/plugins' && (row as { builtin?: unknown }).builtin === true) {
-          return action === 'resource:read' || action === 'resource:list'
-        }
-        const target = this.scopeTarget(collection, String(row.id ?? ''), row)
-        const resource = {
-          type: 'record' as const,
-          workspaceId: actor.workspaceId,
-          collection: target.collection,
-          recordId: target.id,
-        }
-        if (collection === '/tags' && !String(row.sourceId ?? '') && !String(row.tablePath ?? '')) {
-          return this.indexTagVisible(String(row.id ?? ''), actor.accountId)
-        }
-        if (authorization.authorize(actor, action, resource).allowed) return true
-        const viaView = this.viewGrantRole(actor.workspaceId, collection, row, actor.accountId)
-        return Boolean(viaView && roleCoversAction(viaView, action))
-      })
-    }
-    const membership = this.workspaceMembership()
-    if (!membership) return rows
-    const store = this.collabStore()
-    const workspaceId = store?.activeWorkspaceId() ?? ''
-    const grants = new Map<string, Map<string, Set<string>>>()
-    return rows.filter((row) => {
-      if (collection === '/plugins' && (row as { builtin?: unknown }).builtin === true) {
-        return action === 'resource:read' || action === 'resource:list'
-      }
-      const target = this.scopeTarget(collection, String(row.id ?? ''), row)
-      if (!this.inWorkspace(membership, target.collection, target.id)) return false
-      if (!membership.strict || !store?.grantMap || !workspaceId) return true
-      let map = grants.get(target.collection)
-      if (!map) {
-        map = store.grantMap(workspaceId, target.collection)
-        grants.set(target.collection, map)
-      }
-      const people = map.get(target.id)
-      if (!people || people.size === 0) return true
-      return people.has(currentAccountId())
-    })
-  }
-
-  /** 标签目录只留下当前用户能读到的源记录上贴过的标签；还没贴到公开数据上的，只留给创建人。 */
-  private indexTagVisible(id: string, accountId: string) {
-    const found = this.tags.collect(id)
-    for (const item of found.items) {
-      if (this.tags.isDeleted(item.collection, item.id)) continue
-      if (item.collection === '/tags') continue
-      if (this.visibleRecords(item.collection, [{ id: item.id }]).length > 0) return true
-    }
-    const createdBy = this.tags.recordMeta('/tags', id)?.createdBy?.accountId
-    if (createdBy) return createdBy === accountId
-    return Boolean(this.tags.get(id))
+    return this.access.visibleRecords(collection, rows, action)
   }
 
   private recordsInScope<T extends { id?: unknown; pageId?: unknown; collection?: unknown; sessionId?: unknown; sourceId?: unknown; tablePath?: unknown }>(
@@ -983,67 +780,11 @@ export class DatabaseService extends Service implements Database {
     rows: T[],
     scope: 'personal' | 'workspace' | 'shared' | '',
   ) {
-    if (!scope) return rows
-    const authorization = this.authorization()
-    const actor = authorization?.currentActor()
-    if (!authorization || !actor) return rows
-    return rows.filter((row) => {
-      if (collection === '/plugins' && (row as { builtin?: unknown }).builtin === true) return scope === 'shared'
-      const target = this.scopeTarget(collection, String(row.id ?? ''), row)
-      return authorization.scopeCurrent({
-        type: 'record',
-        workspaceId: actor.workspaceId,
-        collection: target.collection,
-        recordId: target.id,
-      }) === scope
-    })
+    return this.access.recordsInScope(collection, rows, scope)
   }
 
   allowsViaView(collection: string, record: { id?: unknown }, action: PermissionAction = 'resource:read') {
-    const authorization = this.authorization()
-    const actor = authorization?.currentActor()
-    if (!authorization || !actor) return false
-    const role = this.viewGrantRole(actor.workspaceId, collection, record, actor.accountId)
-    return Boolean(role && roleCoversAction(role, action))
-  }
-
-  private viewGrantRole(
-    workspaceId: string,
-    collection: string,
-    record: { id?: unknown },
-    accountId: string,
-  ): ViewGrantRole | null {
-    const store = this.collabStore()
-    const authorization = this.authorization()
-    if (!store?.viewGrantsFor || !authorization) return null
-    const saved = [builtinAllView({ path: collection }), ...(this.viewCatalog?.viewsFor(collection) ?? [])]
-    const roles: ViewGrantRole[] = []
-    for (const grant of store.viewGrantsFor(workspaceId, collection)) {
-      const subjectMatches = grant.subject_type === 'account'
-        ? grant.subject_id === accountId
-        : authorization.matchesMemberView(workspaceId, grant.subject_id, accountId)
-      if (!subjectMatches) continue
-      const target = this.scopeTarget(collection, String(record.id ?? ''), record)
-      const scope = authorization.scopeCurrent({
-        type: 'record',
-        workspaceId,
-        collection: target.collection,
-        recordId: target.id,
-      })
-      const ownerId = this.recordOwner(target.collection, target.id)
-      if (recordMatchesGrantedView(record as never, grant.view_id, saved, scope, { grantedBy: grant.granted_by, recordOwnerId: ownerId })) roles.push(grant.role)
-    }
-    return highestViewRole(roles)
-  }
-
-  private grantAllows(collection: string, id: string) {
-    const membership = this.workspaceMembership()
-    const store = this.collabStore()
-    const workspaceId = store?.activeWorkspaceId()
-    if (!membership?.strict || !store?.grantMap || !workspaceId) return true
-    const people = store.grantMap(workspaceId, collection).get(id)
-    if (!people || people.size === 0) return true
-    return people.has(currentAccountId())
+    return this.access.allowsViaView(collection, record, action)
   }
 
   private attachWorkspaceRecord(
@@ -1056,34 +797,11 @@ export class DatabaseService extends Service implements Database {
       parentRecordId?: string
     },
   ) {
-    const store = this.collabStore()
-    const workspaceId = store?.activeWorkspaceId()
-    if (!store || !workspaceId) return
-    store.attach(workspaceId, collection, recordId, Date.now(), policy)
-    this.ownerCache = null
-    this.ownershipCache = null
+    this.access.attachWorkspaceRecord(collection, recordId, policy)
   }
 
-  /** 分享里的「按成员视图批量授权」：全部成员可编辑。 */
   private grantAllMembersEditable(collection: string, recordId: string) {
-    const store = this.collabStore() as {
-      grantMemberView?: (
-        actorId: string,
-        collection: string,
-        recordId: string,
-        viewId: string,
-        role: 'editor',
-      ) => void
-    } | undefined
-    const actorId = currentAccountId()
-    if (!store?.grantMemberView || !actorId) return
-    try {
-      store.grantMemberView(actorId, collection, recordId, builtinAllViewId('/workspace-members'), 'editor')
-      this.ownerCache = null
-      this.ownershipCache = null
-    } catch {
-      /* 还没挂上工作区时，记录仍按空间归属保留 */
-    }
+    this.access.grantAllMembersEditable(collection, recordId)
   }
 
   private pluginCreateScope(args?: Record<string, unknown>): 'personal' | 'workspace' | 'shared' {
@@ -1102,34 +820,15 @@ export class DatabaseService extends Service implements Database {
   }
 
   rememberScope(collection: string, recordId: string, scope: 'personal' | 'workspace' | 'shared') {
-    if (scope === 'shared') {
-      const device = this.deviceWorkspace()
-      this.attachWorkspaceRecord(collection, recordId, {
-        accessMode: device ? 'private' : 'members',
-        ...(!device ? { memberDefaultRole: 'viewer' as const } : {}),
-      })
-      this.markPublicView(collection, recordId)
-      return
-    }
-    this.attachWorkspaceRecord(collection, recordId, {
-      accessMode: scope === 'workspace' ? 'members' : 'private',
-      ...(scope === 'workspace' ? { memberDefaultRole: 'editor' as const } : {}),
-    })
-    if (scope === 'workspace') this.grantAllMembersEditable(collection, recordId)
+    this.access.rememberScope(collection, recordId, scope)
   }
 
-  /** 开启公开/局域网链接。不改协作者归属，关掉链接后仍按创建者和协作者计算。 */
   markPublicView(collection: string, recordId: string) {
-    try {
-      this.shares.upsert({ kind: 'record', collection, recordId, password: null, allowCopy: false })
-    } catch {
-      /* 分享库还没打开时，列表仍按协作者计算 */
-    }
+    this.access.markPublicView(collection, recordId)
   }
 
   private builtinPlugin(spec: CollectionSpec, id: string, record?: { builtin?: unknown }) {
-    if (spec.path !== '/plugins') return false
-    return record?.builtin === true || isRegisteredBuiltinPlugin(id)
+    return isBuiltinPluginRecord(spec, id, record)
   }
 
   private assertLiveRecord(
@@ -1138,45 +837,7 @@ export class DatabaseService extends Service implements Database {
     action: PermissionAction = 'resource:read',
     record?: { id?: unknown },
   ) {
-    if (this.builtinPlugin(spec, id, record)) {
-      if (action === 'resource:read' || action === 'resource:list') return
-      if (this.collabStore()?.isSuperAdmin?.(currentAccountId())) return
-      throw new Error('permission denied: INSUFFICIENT_PERMISSION')
-    }
-    if (this.tags.isDeleted(spec.path, id)) throw new Error(`unknown record: ${spec.path}/${id}`)
-    const authorization = this.authorization()
-    const actor = authorization?.currentActor()
-    if (authorization && actor) {
-      const target = this.scopeTarget(spec.path, id, record)
-      const decision = authorization.authorize(actor, action, {
-        type: 'record',
-        workspaceId: actor.workspaceId,
-        collection: target.collection,
-        recordId: target.id,
-      })
-      if (!decision.allowed) {
-        if (
-          spec.path === '/tags' &&
-          (action === 'resource:read' || action === 'resource:list') &&
-          this.indexTagVisible(id, actor.accountId)
-        ) {
-          return
-        }
-        const viaView = record
-          ? this.viewGrantRole(actor.workspaceId, spec.path, record, actor.accountId)
-          : null
-        if (!viaView || !roleCoversAction(viaView, action)) {
-          throw new Error(`unknown record: ${spec.path}/${id}`)
-        }
-      }
-      return
-    }
-    const membership = this.workspaceMembership()
-    if (!membership) return
-    const target = this.scopeTarget(spec.path, id)
-    if (!this.inWorkspace(membership, target.collection, target.id) || !this.grantAllows(target.collection, target.id)) {
-      throw new Error(`unknown record: ${spec.path}/${id}`)
-    }
+    this.access.assertLiveRecord(spec, id, action, record)
   }
 
   async requirePath(path: string, action: PermissionAction) {
@@ -1265,7 +926,7 @@ export class DatabaseService extends Service implements Database {
     if (!workspaceId || !this.listRemapsRecords(specPath)) return extraScans
     const seen = new Set([specPath])
     for (const row of rows) {
-      const target = this.scopeTarget(specPath, String(row.id ?? ''), row)
+      const target = resolveScopeTarget(specPath, String(row.id ?? ''), row)
       if (!target.collection || seen.has(target.collection)) continue
       seen.add(target.collection)
       extraScans.push(target.collection)
@@ -1341,8 +1002,8 @@ export class DatabaseService extends Service implements Database {
         continue
       }
       const id = String(row.id ?? '')
-      const stored = this.ownershipOf(collection, id)
-      const label = this.shareScopeLabel(collection, id, row, stored)
+      const stored = this.access.ownershipOf(collection, id)
+      const label = this.access.shareScopeLabel(collection, id, row, stored)
       if (label === '共享') shared.push(row)
       else if (label === '空间') workspace.push(row)
       else personal.push(row)
@@ -1399,8 +1060,7 @@ export class DatabaseService extends Service implements Database {
   }
 
   notifyShareChange() {
-    this.viewShareCache = null
-    this.recordShareCache = null
+    this.access.clearShareCaches()
     this.bump()
   }
 
@@ -1423,8 +1083,7 @@ export class DatabaseService extends Service implements Database {
 
   bump() {
     this.visibleGen += 1
-    this.viewShareCache = null
-    this.recordShareCache = null
+    this.access.clearShareCaches()
     this.inflightMatches.clear()
     this.inflightScans.clear()
     this.inflightVisible.clear()
@@ -1742,151 +1401,12 @@ export class DatabaseService extends Service implements Database {
     }
     const wantScope = !need || need.shareScope
     const wantRole = !need || need.shareRole
-    const stored = wantScope ? this.ownershipOf(spec.path, String(row.id ?? '')) : 'personal'
+    const stored = wantScope ? this.access.ownershipOf(spec.path, String(row.id ?? '')) : 'personal'
     return {
       ...withMeta,
-      ...(wantScope ? { shareScope: this.shareScopeLabel(spec.path, String(row.id ?? ''), withMeta, stored) } : {}),
-      ...(wantRole ? { shareRole: this.shareRoleLabel(spec, withMeta) } : {}),
+      ...(wantScope ? { shareScope: this.access.shareScopeLabel(spec.path, String(row.id ?? ''), withMeta, stored) } : {}),
+      ...(wantRole ? { shareRole: this.access.shareRoleLabel(spec, withMeta) } : {}),
     }
-  }
-
-  private shareScopeLabel(collection: string, id: string, record: DbRecord, stored: 'personal' | 'workspace' | 'shared') {
-    if (this.hasPublicShare(collection, id, record, stored)) return '共享'
-    if (this.deviceWorkspace()) return '私人'
-    const scope = this.effectiveScope(collection, record, stored)
-    if (scope === 'workspace') return '空间'
-    if (scope === 'personal') return '私人'
-    return SHARE_SCOPE_LABEL[scope]
-  }
-
-  private recordShareIds(collection: string) {
-    if (this.recordShareCache?.key === collection) return this.recordShareCache.ids
-    const ids = new Set<string>()
-    try {
-      for (const share of this.shares.listRecords(collection)) {
-        const recordId = String(share.recordId ?? '').trim()
-        if (recordId) ids.add(recordId)
-      }
-    } catch {
-      /* 分享库还没打开时，仍按视图链接现算 */
-    }
-    this.recordShareCache = { key: collection, ids }
-    return ids
-  }
-
-  private hasPublicShare(collection: string, id: string, record?: DbRecord, stored?: DataScopeName) {
-    if (this.recordShareIds(collection).has(id)) return true
-    if (!record || !stored) return false
-    const spec = this.collections.get(collection)
-    const tagged = spec ? this.applyTagOverlay(spec, record) : record
-    const schema = spec ? schemaFor(spec) : undefined
-    const packs = this.tags.list()
-    return this.sharedViewsFor(collection).some((view) => recordMatchesSharedView(tagged, view, stored, schema, packs))
-  }
-
-  private sharedViewsFor(collection: string): SharedViewDef[] {
-    if (this.viewShareCache?.key === collection) return this.viewShareCache.views
-    let shares: Array<{ viewId: string }> = []
-    try {
-      shares = this.shares.listViews(collection)
-    } catch {
-      shares = []
-    }
-    const saved = [
-      builtinAllView({ path: collection }),
-      ...(this.viewCatalog?.viewsFor(collection) ?? []),
-    ]
-    const views: SharedViewDef[] = []
-    for (const share of shares) {
-      const view = resolveSharedView(share.viewId, saved)
-      if (view) views.push(view)
-    }
-    this.viewShareCache = { key: collection, views }
-    return views
-  }
-
-  /**
-   * 当前用户对这一条的权限。记录上的角色和视图授权取较高的一级。
-   * 局域网链接只让访客在分享页上是阅读，不改创建者自己在本机列表里的角色。
-   */
-  private shareRoleLabel(spec: CollectionSpec, record: DbRecord) {
-    const authorization = this.authorization()
-    const actor = authorization?.currentActor()
-    if (!authorization || !actor) return '管理'
-    const target = this.scopeTarget(spec.path, String(record.id ?? ''), record)
-    const decision = authorization.authorize(actor, 'resource:read', {
-      type: 'record',
-      workspaceId: actor.workspaceId,
-      collection: target.collection,
-      recordId: target.id,
-    })
-    const direct = decision.allowed ? decision.effectiveRole : null
-    const via = this.viewGrantRole(actor.workspaceId, spec.path, record, actor.accountId)
-    return accessLabel(higherAccess(direct, via))
-  }
-
-  private effectiveScope(collection: string, record: DbRecord, stored: DataScopeName): DataScopeName {
-    const store = this.collabStore()
-    const workspaceId = store?.activeWorkspaceId?.() || currentRequestWorkspaceId() || ''
-    if (!workspaceId) return stored
-    const key = `${workspaceId}\t${collection}`
-    const grantRows = store.viewGrantAudiences?.(workspaceId, collection)
-      ?? store.viewGrantsFor?.(workspaceId, collection)?.map((row) => ({
-        view_id: row.view_id,
-        subject_type: row.subject_type,
-        subject_id: row.subject_id,
-        granted_by: row.granted_by,
-        member_kind: '',
-      }))
-      ?? []
-    if (!this.viewAudienceCache || this.viewAudienceCache.key !== key) {
-      this.viewAudienceCache = { key, rows: grantRows }
-    }
-    const memberViews = [
-      builtinAllView({ path: '/workspace-members' }),
-      ...builtinMemberViews(),
-      ...(this.viewCatalog?.viewsFor('/workspace-members') ?? []),
-    ]
-    const dataViews = [
-      builtinAllView({ path: collection }),
-      ...(this.viewCatalog?.viewsFor(collection) ?? []),
-    ]
-    return effectiveDataScope(
-      stored,
-      record,
-      this.viewAudienceCache.rows.map((row) => ({
-        viewId: row.view_id,
-        subjectType: row.subject_type,
-        subjectId: row.subject_id,
-        memberKind: row.member_kind,
-        grantedBy: row.granted_by,
-      })),
-      dataViews,
-      memberViews,
-      this.recordOwner(collection, String(record.id ?? '')),
-    )
-  }
-
-  private ownershipOf(collection: string, id: string): 'personal' | 'workspace' | 'shared' {
-    const store = this.collabStore()
-    const workspaceId = store?.activeWorkspaceId?.() ?? ''
-    if (!store?.collectionOwnership || !workspaceId) return 'personal'
-    const key = `${workspaceId}\t${collection}`
-    if (!this.ownershipCache || this.ownershipCache.key !== key) {
-      this.ownershipCache = { key, map: store.collectionOwnership(workspaceId, collection) }
-    }
-    return this.ownershipCache.map.get(id) ?? 'personal'
-  }
-
-  private recordOwner(collection: string, id: string) {
-    const store = this.collabStore()
-    const workspaceId = store?.activeWorkspaceId?.() ?? ''
-    if (!store?.collectionRecordOwners || !workspaceId) return ''
-    const key = `${workspaceId}\t${collection}`
-    if (!this.ownerCache || this.ownerCache.key !== key) {
-      this.ownerCache = { key, map: store.collectionRecordOwners(workspaceId, collection) }
-    }
-    return this.ownerCache.map.get(id) ?? ''
   }
 
   private withBanner(spec: CollectionSpec, row: DbRecord): DbRecord {
@@ -1913,19 +1433,34 @@ export class DatabaseService extends Service implements Database {
     this.tags.replaceAssetRefs(spec.path, record.id, collectAssetNames(properties, tag))
   }
 
-  private applyPersonOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
-    if (spec.path === '/plugins' && row.builtin === true) {
-      const official = { kind: 'user' as const, name: 'BIU官方', url: 'https://github.com/helloooooooooooooo97/biu' }
-      return { ...row, createdBy: official, updatedBy: [official] }
-    }
-    const meta = this.tags.recordMeta(spec.path, row.id)
-    if (!meta) return row
-    const editors = asPersonList(meta.updatedBy).map((item) => this.namedPerson(item))
+  private actorHost(): ActorOverlayHost {
     return {
-      ...row,
-      ...(meta.createdBy ? { createdBy: this.namedPerson(meta.createdBy) } : {}),
-      ...(editors.length ? { updatedBy: editors } : {}),
+      tags: this.tags,
+      collection: (pathOrId) => this.collection(pathOrId),
+      workspacePerson: (accountId) => this.collabStore()?.workspacePerson?.(accountId),
+      sessionsService: () => {
+        try {
+          return this.ctx.get('sessions') as { peek?: (id: string) => unknown; get?: (id: string) => Promise<unknown> }
+        } catch {
+          return undefined
+        }
+      },
+      accountService: () => {
+        try {
+          return this.ctx.get('account') as {
+            markLocal?: (collection: string, id: string) => void
+            workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
+            store?: { activeWorkspaceId?: () => string | null }
+          }
+        } catch {
+          return undefined
+        }
+      },
     }
+  }
+
+  private applyPersonOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
+    return applyRecordPersonOverlay(this.actorHost(), spec, row)
   }
 
   /** 本机空间：私人与共享都留在这台设备。 */
@@ -1955,101 +1490,15 @@ export class DatabaseService extends Service implements Database {
 
   /** 侧栏「添加聊天」走 sessions.create，不经过表格的 create，这里补创建人和本地归属。 */
   async touchActor(collection: string, recordId: string) {
-    await this.stampActor(collection, recordId)
-    if (isOnlineRuntime()) return
-    try {
-      const account = this.ctx.get('account') as {
-        markLocal?: (collection: string, id: string) => void
-        workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
-        store?: { activeWorkspaceId?: () => string | null }
-      } | undefined
-      const workspaceId = account?.store?.activeWorkspaceId?.() ?? ''
-      if (!workspaceId || account?.workspaceLocation?.(workspaceId) !== 'cloud') {
-        account?.markLocal?.(collection, recordId)
-      }
-    } catch {
-      /* 没有账号服务时只记录创建人 */
-    }
+    await touchRecordActor(this.actorHost(), collection, recordId)
   }
 
   private async stampActor(collection: string, recordId: string) {
-    const actor = await this.currentPerson()
-    const existing = this.tags.recordMeta(collection, recordId)
-    this.tags.writeRecordMeta(collection, recordId, {
-      ...(existing?.createdBy ? {} : { createdBy: actor }),
-      updatedBy: appendPerson(existing?.updatedBy, actor),
-    })
-  }
-
-  private async currentPerson(): Promise<PersonValue> {
-    const sid = currentSessionId()?.trim()
-    if (!sid) {
-      const accountId = currentAccountId()
-      const member = accountId ? this.collabStore()?.workspacePerson?.(accountId) : null
-      if (member?.name) return { kind: 'user', name: member.name, accountId }
-      const name = readWorkspaceProfile().name.trim() || '用户'
-      return { kind: 'user', name }
-    }
-    const peeked = await this.querySessionPerson(sid)
-    return {
-      kind: 'agent',
-      name: peeked.name || sid.slice(0, 8),
-      sessionId: sid,
-      ...(peeked.mascot ? { mascot: peeked.mascot } : {}),
-    }
+    await stampRecordActor(this.actorHost(), collection, recordId)
   }
 
   private namedPerson(person: PersonValue): PersonValue {
-    if (person.kind === 'user' && person.accountId) {
-      const member = this.collabStore()?.workspacePerson?.(person.accountId)
-      return member?.name ? { ...person, name: member.name } : person
-    }
-    if (person.kind !== 'agent' || !person.sessionId) return person
-    const peeked = this.peekSessionPerson(person.sessionId)
-    return {
-      ...person,
-      ...(peeked.name ? { name: peeked.name } : {}),
-      ...(peeked.mascot ? { mascot: peeked.mascot } : {}),
-    }
-  }
-
-  /**
-   * 同步读会话行，给创建人/编辑人列用。
-   * 只走内存缓存，绝不调用集合 get()：那是 async，会 await list() 全表重列，
-   * 再 require() 把整条 events 读出来，表格每渲染一格就被卡一次。
-   */
-  private peekSessionRow(sessionId: string): unknown {
-    const sessions = this.collection('/agents') as
-      | { peek?: (id: string) => unknown; get?: (id: string) => unknown }
-      | undefined
-    const peeked = sessions?.peek?.(sessionId)
-    if (peeked) return peeked
-    return this.sessionsService()?.peek?.(sessionId)
-  }
-
-  private peekSessionPerson(sessionId: string) {
-    return sessionPersonFromRow(this.peekSessionRow(sessionId))
-  }
-
-  private sessionsService(): { peek?: (id: string) => unknown; get?: (id: string) => Promise<unknown> } | undefined {
-    try {
-      return this.ctx.get('sessions') as { peek?: (id: string) => unknown; get?: (id: string) => Promise<unknown> }
-    } catch {
-      return undefined
-    }
-  }
-
-  private async querySessionPerson(sessionId: string): Promise<{ name: string; mascot?: PersonValue['mascot'] }> {
-    const peeked = this.peekSessionPerson(sessionId)
-    if (peeked.name || peeked.mascot) return peeked
-    // 只有 peek 完全落空才回落到真正的读取；正常热路径不会走到这里，
-    // 也就不会为了写一个 createdBy 把整条会话的 events 拉进内存。
-    const sessions = this.collection('/agents')
-    if (sessions?.get) {
-      const fromCollection = sessionPersonFromRow(await sessions.get(sessionId))
-      if (fromCollection.name || fromCollection.mascot) return fromCollection
-    }
-    return sessionPersonFromRow(await this.sessionsService()?.get?.(sessionId))
+    return resolveNamedPerson(this.actorHost(), person)
   }
 
   private applyTagOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
@@ -2349,12 +1798,6 @@ export class DatabaseService extends Service implements Database {
       if (schema.fields.tag) {
         this.persistRecordTag(spec, record.id, input.tag ?? record.tag, record)
       }
-      const initialBody = initialBodies[sourceIndex]
-      if (initialBody !== undefined && bodyKey) {
-        await this.writeContent(`${spec.path}/${record.id}`, initialBody)
-      }
-      this.indexTagRecord(spec, this.decorateRecord(spec, record))
-      this.refreshContentRefs(spec, this.withBanner(spec, record))
       const parentField = spec.schema.parentField
       const parentRecordId = parentField ? String(record[parentField] ?? '').trim() : ''
       if (spec.path !== '/workspace-members') {
@@ -2371,6 +1814,12 @@ export class DatabaseService extends Service implements Database {
         if (workspaceOwned && !parentRecordId) this.grantAllMembersEditable(spec.path, record.id)
         if (local || device) this.markDeviceRecord(spec.path, record.id)
       }
+      const initialBody = initialBodies[sourceIndex]
+      if (initialBody !== undefined && bodyKey) {
+        await this.writeContent(`${spec.path}/${record.id}`, initialBody)
+      }
+      this.indexTagRecord(spec, this.decorateRecord(spec, record))
+      this.refreshContentRefs(spec, this.withBanner(spec, record))
     }
     this.bump()
     const items = created.map((record) => ({
@@ -2519,8 +1968,8 @@ export class DatabaseService extends Service implements Database {
           recordId: row.record_id,
         }).allowed) continue
       } else {
-        const membership = this.workspaceMembership()
-        if (membership && !this.inWorkspace(membership, row.collection, row.record_id)) continue
+        const membership = this.access.workspaceMembership()
+        if (membership && !isRecordInWorkspace(membership, row.collection, row.record_id)) continue
       }
       const decorated = this.decorateRecord(spec, record)
       const title = String(decorated.title ?? decorated.name ?? record.id).trim() || record.id
@@ -2554,7 +2003,7 @@ export class DatabaseService extends Service implements Database {
     if (pluginAuthor) {
       await this.requirePath(spec.path, 'resource:read')
       if (loaded && !builtinPlugin) {
-        const owner = this.recordOwner(spec.path, record.id)
+        const owner = this.access.recordOwner(spec.path, record.id)
         if (!owner) this.stampPluginCreateScope(record.id, args)
         else this.assertLiveRecord(spec, record.id, 'resource:read', record)
       }
@@ -2568,7 +2017,7 @@ export class DatabaseService extends Service implements Database {
       return this.remove(spec.path, { ids: [parts[1]!] })
     }
     const result = await action.run(parts[1]!, record, args)
-    if (spec.path === '/plugins' && actionId === 'sandbox' && !builtinPlugin && !this.recordOwner(spec.path, parts[1]!)) {
+    if (spec.path === '/plugins' && actionId === 'sandbox' && !builtinPlugin && !this.access.recordOwner(spec.path, parts[1]!)) {
       this.stampPluginCreateScope(parts[1]!, args)
     }
     if (spec.path === '/plugins' && !builtinPlugin && (actionId === 'sandbox' || actionId === 'pack')) {
@@ -2663,327 +2112,36 @@ export class DatabaseService extends Service implements Database {
     return title || parts[1] || path
   }
 
-  private async mentionTitles(markdown: string) {
-    const groups = mentionRefsByCollection(listMentionRefs(markdown))
-    const titles: Record<string, string> = {}
-    for (const [path, ids] of groups) {
-      const spec = this.collection(path)
-      if (!spec) continue
-      const rows = await spec.list({ ids })
-      const kind = (Object.entries(MENTION_KIND_PATH).find(([, item]) => item === path)?.[0] ?? 'page') as keyof typeof MENTION_KIND_PATH
-      for (const row of rows) {
-        const id = String(row.id ?? '').trim()
-        if (!id || !ids.includes(id)) continue
-        const title = String(row.title ?? row.name ?? '').trim()
-        if (title) titles[`${kind}/${id}`] = title
-      }
+  private docAssetHost(): DocAssetEditHost {
+    return {
+      collection: (pathOrId) => this.collection(pathOrId),
+      content: (path) => this.content(path),
+      writeContent: (path, value, expectedVersion) => this.writeContent(path, value, expectedVersion),
+      contentTitle: (path) => this.contentTitle(path),
+      assertLiveRecord: (spec, id, action, record) => this.assertLiveRecord(spec, id, action, record),
+      tags: this.tags,
+      assets: this.assets,
+      recordContentEdit: async (path, before, after, title) => {
+        await this.ctx.get('contentTurns')?.recordEdit(path, before, after, title)
+      },
+      broadcast: (type, payload) => {
+        const http = this.ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
+        http?.broadcast?.(type, payload)
+      },
     }
-    return titles
   }
 
   async editContent(path: string, args: Record<string, unknown> = {}) {
-    const command = resolveContentCommand(args)
-    const current = await this.content(path)
-    const text = stripMentionLabels(asContentText(current.value))
-    if (command === 'view') {
-      const viewed = viewContent(text, args.view_range)
-      const titles = await this.mentionTitles(viewed.text)
-      return {
-        kind: 'content' as const,
-        path: current.path,
-        field: current.field,
-        command,
-        start: viewed.start,
-        end: viewed.end,
-        total: viewed.total,
-        truncated: viewed.truncated,
-        text: projectMentionLabels(viewed.text, titles),
-      }
-    }
-    let replaced: number | undefined
-    const incoming = stripMentionLabels(await resolveIncomingText(command, args))
-    const oldStr = args.old_str != null ? stripMentionLabels(String(args.old_str)) : args.old_str
-    const patch = { ...args, old_str: oldStr, new_str: incoming, ...(command === 'write' ? { value: incoming } : {}) }
-    const next =
-      command === 'write'
-        ? writeContentText(incoming)
-        : command === 'str_replace'
-          ? strReplaceText(text, oldStr, incoming)
-          : command === 'find_replace'
-            ? resolveFindReplace(text, { ...args, old_str: oldStr, new_str: incoming })
-            : command === 'insert'
-              ? insertText(text, args.insert_line, incoming)
-              : replaceLinesText(text, args.start_line, args.end_line, incoming)
-    if (typeof next === 'object') {
-      replaced = next.replaced
-    }
-    const nextText = typeof next === 'object' ? next.text : next
-    await this.writeContent(path, nextText, current.version)
-    const locus = mutationLocus(command === 'find_replace' ? 'str_replace' : command, text, nextText, patch)
-    const written = await this.content(current.path)
-    const after = asContentText(written.value)
-    const title = await this.contentTitle(current.path)
-    await this.ctx.get('contentTurns')?.recordEdit(current.path, text, after, title)
-    return {
-      kind: 'content' as const,
-      path: current.path,
-      field: current.field,
-      command,
-      ok: true as const,
-      ...(replaced != null ? { replaced } : {}),
-      ...(locus ? { start_line: locus.start_line, end_line: locus.end_line, ...(locus.text ? { text: locus.text } : {}) } : {}),
-    }
+    return executeEditContent(this.docAssetHost(), path, args)
   }
 
   async editAsset(path: string, args: Record<string, unknown> = {}) {
-    const parts = splitPath(path)
-    if (parts.length !== 2) throw new Error(`cannot asset: ${normalizeCollectionPath(path)}`)
-    const spec = this.collection(`/${parts[0]}`)
-    if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
-    const record = await spec.get(parts[1]!)
-    if (!record) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
-    const from = String(args.from ?? '').trim()
-    const command = String(args.command ?? (args.value != null || from ? 'write' : 'view'))
-    this.assertLiveRecord(spec, record.id, command === 'view' ? 'resource:read' : 'resource:update', record)
-    const names = new Set([
-      ...collectAssetNames(record, this.tags.recordBanner(spec.path, record.id)?.html),
-      ...this.tags.listedAttachmentNames(spec.path, record.id),
-    ])
-    const file = String(args.name ?? '')
-      .trim()
-      .replace(/^assets\//, '')
-      .replace(/^.*[/\\]/, '')
-    const recPath = `${spec.path}/${record.id}`
-    if (command === 'view' && !file) {
-      const assets = []
-      for (const name of [...names].sort()) {
-        try {
-          const read = await this.assets.readAny(name)
-          assets.push({ name, etag: read.etag, type: read.type })
-        } catch {
-          assets.push({ name, missing: true })
-        }
-      }
-      return { kind: 'asset' as const, path: recPath, command: 'view' as const, assets }
-    }
-    if (!isAssetFileName(file)) throw new Error('invalid asset')
-    if (command === 'view') {
-      if (!names.has(file)) throw new Error(`asset not referenced: ${file}`)
-      try {
-        const read = await this.assets.readAny(file)
-        const text =
-          read.type.startsWith('text/') || read.type.includes('json') ? read.bytes.toString('utf8') : undefined
-        return {
-          kind: 'asset' as const,
-          path: recPath,
-          command: 'view' as const,
-          name: file,
-          etag: read.etag,
-          type: read.type,
-          ...(text != null ? { text } : {}),
-        }
-      } catch {
-        return {
-          kind: 'asset' as const,
-          path: recPath,
-          command: 'view' as const,
-          name: file,
-          missing: true,
-          etag: '',
-        }
-      }
-    }
-    if (command !== 'write') throw new Error(`unknown asset command: ${command}`)
-    const body = from ? await readLocalWriteFile(from) : String(args.value ?? '')
-    if (!from && args.value == null) throw new Error('write needs value or from')
-    const written = await this.assets.write(file, body)
-    const kind = String(args.kind ?? '') === 'core' ? 'core' : 'asset'
-    const blockId = String(args.block_id ?? args.blockId ?? '').trim()
-    const source = String(args.source ?? (blockId ? `block:${blockId}` : 'asset')).trim() || 'asset'
-    this.tags.putAttachment({
-      name: written.name,
-      etag: written.etag,
-      mime: mimeOfAsset(written.name),
-      bytes: written.bytes,
-      kind,
-      storage: 'hash',
-    })
-    if (Array.isArray(args.refs)) {
-      const refs = args.refs.flatMap((item) => {
-        if (!item || typeof item !== 'object' || Array.isArray(item)) return []
-        const rec = item as Record<string, unknown>
-        const name = String(rec.name ?? '').trim()
-        if (!isAssetFileName(name)) return []
-        return [{ name, source: String(rec.source ?? source) }]
-      })
-      if (blockId) this.tags.replaceBlockRefs(spec.path, record.id, blockId, refs.length ? refs : [{ name: written.name, source }])
-    } else if (blockId) {
-      this.tags.upsertBlockRef(spec.path, record.id, blockId, written.name, source)
-    }
-    this.broadcastAsset(recPath, written.name, written.etag)
-    return { kind: 'asset' as const, ok: true as const, path: recPath, name: written.name, etag: written.etag, storage: 'hash' as const }
+    return executeEditAsset(this.docAssetHost(), path, args)
   }
 
   async editDoc(path: string, args: Record<string, unknown> = {}) {
-    const parts = splitPath(path)
-    if (parts.length !== 2) throw new Error(`cannot doc: ${normalizeCollectionPath(path)}`)
-    const spec = this.collection(`/${parts[0]}`)
-    if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
-    const record = await spec.get(parts[1]!)
-    if (!record) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
-    const command = resolveContentCommand(args)
-    this.assertLiveRecord(spec, record.id, command === 'view' ? 'resource:read' : 'resource:update', record)
-    const names = new Set([
-      ...collectAssetNames(record, this.tags.recordBanner(spec.path, record.id)?.html),
-      ...this.tags.listedAttachmentNames(spec.path, record.id),
-    ])
-    const file = String(args.name ?? '')
-      .trim()
-      .replace(/^assets\//, '')
-      .replace(/^.*[/\\]/, '')
-    const recPath = `${spec.path}/${record.id}`
-    const readOwnedOrAsset = async (name: string) => this.assets.readAny(name)
-    if (command === 'view' && !file) {
-      const assets = []
-      for (const name of [...names].sort()) {
-        try {
-          const read = await readOwnedOrAsset(name)
-          assets.push({
-            name,
-            etag: read.etag,
-            type: read.type,
-            ...('storage' in read ? { storage: (read as { storage?: string }).storage } : {}),
-          })
-        } catch {
-          assets.push({ name, missing: true })
-        }
-      }
-      return { kind: 'doc' as const, path: recPath, command: 'view' as const, assets }
-    }
-    if (!isAssetFileName(file)) throw new Error('invalid asset')
-    if (!names.has(file)) throw new Error(`doc not referenced: ${file}`)
-    const readDoc = async () => this.assets.readDoc(file)
-    let current: { text: string; etag: string; type: string } | null = null
-    try {
-      const read = await readDoc()
-      const raw = Buffer.from(read.bytes).toString('utf8')
-      current = { text: raw, etag: read.etag, type: read.type }
-    } catch {
-      current = null
-    }
-    if (command === 'view') {
-      if (!current) {
-        return { kind: 'doc' as const, path: recPath, command: 'view' as const, name: file, missing: true, etag: '' }
-      }
-      const viewed = viewContent(current.text, args.view_range)
-      return {
-        kind: 'doc' as const,
-        path: recPath,
-        command: 'view' as const,
-        name: file,
-        etag: current.etag,
-        type: current.type,
-        start: viewed.start,
-        end: viewed.end,
-        total: viewed.total,
-        truncated: viewed.truncated,
-        text: viewed.text,
-      }
-    }
-    if (command !== 'write' && !current) throw new Error(`doc missing: ${file}`)
-    if (command !== 'write' && current && !isTextDoc(file, current.type)) throw new Error(`doc is not text: ${file}`)
-    let replaced: number | undefined
-    const incoming = await resolveIncomingText(command, args)
-    const base = current?.text ?? ''
-    const patch = { ...args, new_str: incoming, ...(command === 'write' ? { value: incoming } : {}) }
-    const next =
-      command === 'write'
-        ? writeContentText(incoming)
-        : command === 'str_replace'
-          ? strReplaceText(base, args.old_str, incoming)
-          : command === 'find_replace'
-            ? resolveFindReplace(base, { ...args, new_str: incoming })
-            : command === 'insert'
-              ? insertText(base, args.insert_line, incoming)
-              : replaceLinesText(base, args.start_line, args.end_line, incoming)
-    if (typeof next === 'object') replaced = next.replaced
-    const nextText = typeof next === 'object' ? next.text : next
-    const matchEtag = String(args.etag ?? current?.etag ?? '')
-    const written = await this.assets.writeDoc(file, nextText, { etag: matchEtag })
-    const kind = String(args.kind ?? '') === 'core' ? 'core' : 'asset'
-    const blockId = String(args.block_id ?? args.blockId ?? '').trim()
-    const source = String(args.source ?? (blockId ? `block:${blockId}` : 'doc')).trim() || 'doc'
-    this.tags.putAttachment({
-      name: written.name,
-      etag: written.etag,
-      mime: mimeOfAsset(written.name),
-      bytes: written.bytes ?? Buffer.byteLength(nextText),
-      kind,
-      storage: 'name',
-    })
-    if (blockId) this.tags.upsertBlockRef(spec.path, record.id, blockId, written.name, source)
-    this.broadcastAsset(recPath, written.name, written.etag)
-    const locus = mutationLocus(command === 'find_replace' ? 'str_replace' : command, base, nextText, patch)
-    return {
-      kind: 'doc' as const,
-      ok: true as const,
-      path: recPath,
-      name: written.name,
-      etag: written.etag,
-      storage: 'name' as const,
-      command,
-      ...(replaced != null ? { replaced } : {}),
-      ...(locus ? { start_line: locus.start_line, end_line: locus.end_line, ...(locus.text ? { text: locus.text } : {}) } : {}),
-    }
+    return executeEditDoc(this.docAssetHost(), path, args)
   }
-
-  private broadcastAsset(path: string, name: string, etag: string) {
-    const http = this.ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
-    http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('asset', { asset: { name, etag, path } }))
-  }
-}
-
-async function readLocalWriteFile(raw: string) {
-  const file = isAbsolute(raw) ? raw : resolve(process.cwd(), raw)
-  try {
-    return await readFile(file)
-  } catch {
-    throw new Error(`cannot read from: ${raw}`)
-  }
-}
-
-/**
- * 写入侧正文：短文本用 value/new_str 内联；长文本用 from 读本地文件（工作区或 /tmp）。
- * 两者都可出现在参数里；给了 from 就用文件内容。write 只用 value；
- * insert / str_replace / find_replace / replace_lines 只用 new_str。
- */
-async function resolveIncomingText(command: ContentCommand, args: Record<string, unknown>): Promise<string> {
-  const rawFrom = String(args.from ?? '').trim()
-  if (rawFrom) {
-    const bytes = await readLocalWriteFile(rawFrom)
-    return bytes.toString('utf8')
-  }
-  if (command === 'write') {
-    if (args.value === undefined) {
-      throw new Error(
-        'write needs string "value" or "from" (example: {"path":"/pages/<id>","command":"write","value":"# 标题\\n正文"})',
-      )
-    }
-    return asContentText(args.value)
-  }
-  if (command === 'insert' || command === 'replace_lines') {
-    if (typeof args.new_str !== 'string') throw new Error(`${command} needs new_str or from`)
-    return args.new_str
-  }
-  return typeof args.new_str === 'string' ? args.new_str : String(args.new_str ?? '')
-}
-
-function resolveFindReplace(text: string, args: Record<string, unknown>) {
-  return findReplaceText(text, args.old_str, args.new_str, {
-    regex: args.regex,
-    all: args.all,
-    count: args.count,
-  })
 }
 
 export const name = 'core-file-system'

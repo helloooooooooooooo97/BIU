@@ -10,6 +10,7 @@ test('data overview title is writable and writes through the source record', () 
   assert.match(data, /spec\.update\(stamp\.recordId, patch\)/)
   const host =
     readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8') +
+    readFileSync(resolve(import.meta.dirname, '../host/access-policy.ts'), 'utf8') +
     readFileSync(resolve(import.meta.dirname, '../host/http-routes.ts'), 'utf8')
   assert.match(host, /collection === '\/trash' \|\| collection === DATA_COLLECTION_PATH/)
   assert.match(host, /parts\[0\] === 'data'/)
@@ -46,6 +47,7 @@ test('data overview reuses CollectionBrowser and opens source records', () => {
     readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   const host =
     readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8') +
+    readFileSync(resolve(import.meta.dirname, '../host/access-policy.ts'), 'utf8') +
     readFileSync(resolve(import.meta.dirname, '../host/http-routes.ts'), 'utf8')
   assert.match(browser, /key === 'table'/)
   assert.match(browser, /<SourceTableCell record=\{row\} tables=\{tables\} onOpenTable=\{onOpenTable\} \/>/)
