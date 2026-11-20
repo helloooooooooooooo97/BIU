@@ -2954,8 +2954,8 @@ async function readLocalWriteFile(raw: string) {
 
 /**
  * 写入侧正文：短文本用 value/new_str 内联；长文本用 from 读本地文件（工作区或 /tmp）。
- * 两者都可出现在参数里；给了 from 就用文件内容。write 用 value（可用 new_str 别名）；
- * insert / str_replace / find_replace / replace_lines 用 new_str。
+ * 两者都可出现在参数里；给了 from 就用文件内容。write 只用 value；
+ * insert / str_replace / find_replace / replace_lines 只用 new_str。
  */
 async function resolveIncomingText(command: ContentCommand, args: Record<string, unknown>): Promise<string> {
   const rawFrom = String(args.from ?? '').trim()
@@ -2964,11 +2964,12 @@ async function resolveIncomingText(command: ContentCommand, args: Record<string,
     return bytes.toString('utf8')
   }
   if (command === 'write') {
-    const body = args.value ?? args.content ?? args.text ?? args.new_str
-    if (body === undefined) {
-      throw new Error('db_content write needs "value" (or "content" / "from") parameter')
+    if (args.value === undefined) {
+      throw new Error(
+        'write needs string "value" or "from" (example: {"path":"/pages/<id>","command":"write","value":"# 标题\\n正文"})',
+      )
     }
-    return asContentText(body)
+    return asContentText(args.value)
   }
   if (command === 'insert' || command === 'replace_lines') {
     if (typeof args.new_str !== 'string') throw new Error(`${command} needs new_str or from`)

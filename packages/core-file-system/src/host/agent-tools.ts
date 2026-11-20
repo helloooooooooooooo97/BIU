@@ -319,8 +319,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
           description:
             'view | str_replace | find_replace | replace_lines | insert | write。省略时：有 value 或 from 则 write，否则 view。',
         },
-        value: { type: 'string', description: 'write 的短全文（兼容 content / text 别名）。长文本用 from。' },
-        content: { type: 'string', description: 'value 的别名：write 的全文。' },
+        value: { type: 'string', description: 'command=write 的全文内容（必填 value 或 from，示例：{"path":"/pages/<id>","command":"write","value":"# 标题\\n正文"}）。' },
         from: {
           type: 'string',
           description:
@@ -416,8 +415,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
           description:
             'view | str_replace | find_replace | replace_lines | insert | write。省略时：有 value 或 from 则 write，否则 view。',
         },
-        value: { type: 'string', description: 'write 的短全文（兼容 content / text 别名）。长文本用 from。' },
-        content: { type: 'string', description: 'value 的别名：write 的全文。' },
+        value: { type: 'string', description: 'command=write 的全文内容（必填 value 或 from，示例：{"path":"/pages/<id>","command":"write","value":"# 标题\\n正文"}）。' },
         from: {
           type: 'string',
           description:
