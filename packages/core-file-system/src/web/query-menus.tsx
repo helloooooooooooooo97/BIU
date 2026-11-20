@@ -12,7 +12,7 @@ import {
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
+import { ChevronRightIcon, PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { FieldSpec, FieldType } from '@biu/type-file-system'
 import { CellSelect } from '@biu/database-ui'
@@ -21,6 +21,8 @@ import { HeadlessPopover } from '@biu/biu-ui/headless-popover'
 import { overlayZ } from '@biu/biu-ui/overlay-portal'
 import { DndGrip } from './dnd-grip.tsx'
 import { FieldGlyph } from './fsdb-cells.tsx'
+import { parseGroupByKey, type GroupGrain } from './group-strategies.ts'
+import { UiGlyph } from './nav-glyphs.tsx'
 
 import {
   countFilterRules,
@@ -434,6 +436,159 @@ function FilterRuleRow({
       <button type="button" className="fsdb-query-x" aria-label="删除这条筛选" onClick={onRemove}>
         <XMarkIcon aria-hidden className="size-[14px]" />
       </button>
+    </div>
+  )
+}
+
+export const GROUP_GRAIN_OPTIONS: ReadonlyArray<{ value: GroupGrain; label: string }> = [
+  { value: 'day', label: '按天' },
+  { value: 'week', label: '按周' },
+  { value: 'month', label: '按月' },
+  { value: 'quarter', label: '按季度' },
+  { value: 'year', label: '按年' },
+  { value: 'relative', label: '相对时间' },
+]
+
+export function groupGrainLabel(grain?: GroupGrain) {
+  return GROUP_GRAIN_OPTIONS.find((item) => item.value === grain)?.label ?? ''
+}
+
+export function GroupQueryMenu({
+  groupBy,
+  fields,
+  onChange,
+  onClose,
+}: {
+  groupBy: string
+  fields: QueryField[]
+  onChange: (next: string) => void
+  onClose?: () => void
+}) {
+  const [search, setSearch] = useState('')
+  const parsed = parseGroupByKey(groupBy)
+  const activeField = fields.find((item) => item.key === parsed.fieldKey) ?? null
+  const activeGrain: GroupGrain = parsed.grain ?? 'month'
+
+  const selectField = (fieldKey: string) => {
+    if (!fieldKey) {
+      onChange('')
+      onClose?.()
+      return
+    }
+    const target = fields.find((item) => item.key === fieldKey)
+    if (target?.kind === 'datetime') {
+      const nextGrain = activeField?.kind === 'datetime' ? activeGrain : 'day'
+      onChange(`${fieldKey}::${nextGrain}`)
+      return
+    }
+    onChange(fieldKey)
+  }
+
+  if (activeField) {
+    const fieldOptions = [
+      { value: '', label: '不分组' },
+      ...fields.map((item) => ({
+        value: item.key,
+        label: item.field.label ?? item.key,
+        icon: <FieldGlyph kind={item.kind} />,
+      })),
+    ]
+    return (
+      <div className="fsdb-tool-flyout fsdb-query-menu is-group" role="menu" data-testid="fsdb-group-panel">
+        <div className="fsdb-group-panel-head">
+          <UiGlyph icon="stack" />
+          <span>分组设置</span>
+        </div>
+        <div className="fsdb-group-panel-row">
+          <span className="fsdb-group-panel-label">分组条件</span>
+          <CellSelect
+            value={activeField.key}
+            options={fieldOptions}
+            variant="field"
+            onSelect={selectField}
+          />
+        </div>
+        {activeField.kind === 'datetime' ? (
+          <div className="fsdb-group-panel-row" data-testid="fsdb-group-grain-row">
+            <span className="fsdb-group-panel-label">分组方式</span>
+            <CellSelect
+              value={activeGrain}
+              options={GROUP_GRAIN_OPTIONS.map((item) => ({ value: item.value, label: item.label }))}
+              variant="field"
+              onSelect={(next) => {
+                if (!next) return
+                onChange(`${activeField.key}::${next}`)
+              }}
+            />
+          </div>
+        ) : null}
+        <button
+          type="button"
+          className="fsdb-group-panel-clear"
+          onClick={() => {
+            onChange('')
+            onClose?.()
+          }}
+        >
+          取消分组
+        </button>
+      </div>
+    )
+  }
+
+  const q = search.trim().toLowerCase()
+  const showNone = !q || '不分组'.includes(q)
+  const hits = fields.filter((item) => {
+    if (!q) return true
+    const label = String(item.field.label ?? item.key).toLowerCase()
+    return label.includes(q) || item.key.toLowerCase().includes(q)
+  })
+
+  return (
+    <div className="fsdb-tool-flyout fsdb-query-menu is-group-pick" role="menu" data-testid="fsdb-group-pick">
+      <div className="tasks-sort-search">
+        <input
+          className="tasks-sort-search-input"
+          value={search}
+          placeholder="搜索..."
+          aria-label="搜索分组字段"
+          onChange={(event) => setSearch(event.target.value)}
+        />
+      </div>
+      {showNone ? (
+        <button
+          type="button"
+          role="menuitemradio"
+          aria-checked={!groupBy}
+          className={`tasks-sort-item${!groupBy ? ' is-on' : ''}`}
+          onClick={() => {
+            onChange('')
+            onClose?.()
+          }}
+        >
+          <span className="tasks-sort-label">不分组</span>
+        </button>
+      ) : null}
+      {hits.map((item) => (
+        <button
+          key={item.key}
+          type="button"
+          role="menuitemradio"
+          aria-checked={parsed.fieldKey === item.key}
+          className={`tasks-sort-item${parsed.fieldKey === item.key ? ' is-on' : ''}`}
+          onClick={() => selectField(item.key)}
+        >
+          <span className="tasks-sort-ico">
+            <FieldGlyph kind={item.kind} />
+          </span>
+          <span className="tasks-sort-label">{item.field.label ?? item.key}</span>
+          {item.kind === 'datetime' ? (
+            <ChevronRightIcon aria-hidden className="size-[13px] opacity-60 shrink-0" />
+          ) : null}
+        </button>
+      ))}
+      {!q && !fields.length ? <div className="tasks-viewdd-empty">没有可分组字段</div> : null}
+      {q && !showNone && !hits.length ? <div className="tasks-viewdd-empty">无匹配项</div> : null}
     </div>
   )
 }

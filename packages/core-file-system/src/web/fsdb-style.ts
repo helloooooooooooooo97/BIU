@@ -174,6 +174,14 @@ const CSS = `
 .fsdb-page .fsdb-query-menu{box-sizing:border-box;overflow-x:hidden;overflow-y:auto;width:min(92vw,280px);min-width:min(92vw,240px);max-width:min(92vw,calc(100vw - 24px));max-height:min(70vh,520px)}
 .fsdb-page .fsdb-query-menu.is-sort{width:min(92vw,380px);min-width:min(92vw,320px)}
 .fsdb-page .fsdb-query-menu.is-filter{width:min(92vw,560px);min-width:min(92vw,360px)}
+.fsdb-page .fsdb-query-menu.is-group{width:min(92vw,288px);min-width:260px;padding:10px;gap:8px}
+.fsdb-page .fsdb-query-menu.is-group-pick{width:min(92vw,240px);min-width:200px}
+.fsdb-page .fsdb-group-panel-head{display:flex;align-items:center;gap:6px;padding:2px 4px 6px;font-size:13px;font-weight:var(--biu-font-weight-semibold);color:var(--biu-color-text);border-bottom:var(--biu-stroke-width) solid var(--biu-color-border-subtle)}
+.fsdb-page .fsdb-group-panel-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:2px 4px}
+.fsdb-page .fsdb-group-panel-label{flex:none;font-size:13px;color:var(--biu-color-text)}
+.fsdb-page .fsdb-group-panel-row .fsdb-cellselect.is-field{flex:0 1 168px;min-width:110px}
+.fsdb-page .fsdb-group-panel-clear{align-self:flex-start;margin-top:2px;padding:4px 6px;border:0;border-radius:6px;background:transparent;color:var(--biu-color-text-muted);font:inherit;font-size:12px;cursor:pointer}
+.fsdb-page .fsdb-group-panel-clear:hover{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
 .fsdb-page .fsdb-query-row,.fsdb-page .fsdb-query-rule{display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;gap:4px;min-width:0;max-width:100%;width:100%}
 .fsdb-page .fsdb-query-row.is-drag{opacity:0}
 .fsdb-page .fsdb-query-grip{display:inline-flex;align-items:center;justify-content:center;width:18px;height:22px;flex:none;padding:0;border:0;border-radius:6px;background:transparent;color:var(--biu-color-icon);cursor:grab;touch-action:none}

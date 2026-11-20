@@ -281,6 +281,7 @@ import {
 const SchemaFieldEditor = lazy(() => import('./schema-field.tsx').then((m) => ({ default: m.SchemaFieldEditor })))
 const SortQueryMenu = lazy(() => import('./query-menus.tsx').then((m) => ({ default: m.SortQueryMenu })))
 const FilterQueryMenu = lazy(() => import('./query-menus.tsx').then((m) => ({ default: m.FilterQueryMenu })))
+const GroupQueryMenu = lazy(() => import('./query-menus.tsx').then((m) => ({ default: m.GroupQueryMenu })))
 const QueryFlyout = lazy(() => import('./query-menus.tsx').then((m) => ({ default: m.QueryFlyout })))
 const FieldValuePop = lazy(() => import('./field-value-pop.tsx').then((m) => ({ default: m.FieldValuePop })))
 const CellPopDraft = lazy(() => import('./cell-pop-draft.tsx').then((m) => ({ default: m.CellPopDraft })))
@@ -5621,45 +5622,16 @@ export function CollectionBrowser({
                 {grouping ? <span className="tasks-sort-dot" aria-hidden /> : null}
               </button>
               {groupOpen ? (
-                <HeadlessDismiss onDismiss={() => setGroupOpen(false)} insideRef={groupRef}>
-                <SearchableFlyout className="tasks-sort-menu">
-                  {(q) => {
-                    const none = flyoutQueryMatch('不分组', q)
-                    const hits = groupFields.filter((item) => flyoutQueryMatch(item.field.label ?? item.key, q))
-                    return (
-                      <>
-                  {none ? (
-                  <CheckRow
-                    icon={<Bars3BottomLeftIcon aria-hidden className="size-[14px]" />}
-                    label="不分组"
-                    on={!groupBy}
-                    onToggle={() => {
-                      setGroupKey('')
-                      setGroupOpen(false)
-                    }}
-                  />
-                  ) : null}
-                  {hits.map((item) => (
-                      <CheckRow
-                        key={item.key}
-                        icon={<FieldGlyph kind={item.kind} />}
-                        label={item.field.label ?? item.key}
-                        on={groupBy === item.key}
-                        onToggle={() => {
-                          setGroupKey(item.key)
-                          setGroupOpen(false)
-                        }}
-                      />
-                    ))}
-                  {!q.trim() && !groupFields.length ? (
-                    <div className="tasks-viewdd-empty">没有可分组字段</div>
-                  ) : null}
-                  {q.trim() && !none && !hits.length ? <FlyoutEmpty /> : null}
-                      </>
-                    )
-                  }}
-                </SearchableFlyout>
-                </HeadlessDismiss>
+                <Suspense fallback={null}>
+                  <QueryFlyout anchorRef={groupRef} onClose={() => setGroupOpen(false)}>
+                    <GroupQueryMenu
+                      groupBy={groupBy}
+                      fields={groupFields}
+                      onChange={setGroupKey}
+                      onClose={() => setGroupOpen(false)}
+                    />
+                  </QueryFlyout>
+                </Suspense>
               ) : null}
             </div>
             <div className="tasks-sort-wrap" ref={columnRef}>
