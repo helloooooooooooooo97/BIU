@@ -87,7 +87,7 @@ test('data sidebar paints the clicked view before the route catches up', () => {
   const sidebar = readFileSync(resolve(import.meta.dirname, './data-sidebar.tsx'), 'utf8')
   assert.match(sidebar, /setPendingPick\(\{ path, viewId \}\)/)
   assert.match(sidebar, /const litPath = pendingPick\?\.path \?\? collectionPath/)
-  assert.match(sidebar, /<SidebarFold open=\{open\} animate=\{false\}/)
+  assert.match(sidebar, /<SidebarFold open=\{open\} className="sidebar-session-list min-w-0">/)
   assert.match(sidebar, /useLayoutEffect\(\(\) => \{\s*const group = dataSidebarKind\(collectionPath\)/)
 })
 

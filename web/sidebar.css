@@ -140,8 +140,8 @@ html.dark .fsdb-views {
   transform: translateX(calc(-100% - 8px));
   opacity: 0;
   pointer-events: none;
-  /* 贴窗口左缘时 :hover 会闪断；坐标锁定打开后，收起连 pointer-events 一起延迟 */
-  transition: transform 0s linear 240ms, opacity 0s linear 240ms, pointer-events 0s linear 240ms;
+  /* 贴窗口左缘时 :hover 会闪断；坐标锁定打开后，收起保留防抖延迟并以纯合成层滑出 */
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1) 180ms, opacity 120ms ease 180ms, pointer-events 0s linear 180ms;
   z-index: 81;
 }.sidebar-flyout-host.is-collapsed:hover,
 .sidebar-flyout-host.is-collapsed.is-flyout-open {
@@ -157,7 +157,22 @@ html.dark .fsdb-views {
   transform: none;
   opacity: 1;
   pointer-events: auto;
-  transition: none;
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), opacity 140ms ease;
+}
+
+@keyframes sidebar-expand-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateZ(0);
+  }
+}
+
+.app-side-bar.is-entering:not(.is-closed) {
+  animation: sidebar-expand-in 160ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .session-inspector .app-side-bar-head {
@@ -670,12 +685,25 @@ html.dark .fsdb-views {
 }.app-side-bar .sidebar-fold.is-animating,
 .chat-sidebar-popover .sidebar-fold.is-animating,
 .fsdb-views .sidebar-fold.is-animating {
-  transition: grid-template-rows 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: grid-template-rows 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }.app-side-bar .sidebar-fold-inner,
 .chat-sidebar-popover .sidebar-fold-inner,
 .fsdb-views .sidebar-fold-inner {
   min-height: 0;
   overflow: hidden;
+  opacity: 0;
+}.app-side-bar .sidebar-fold.is-open > .sidebar-fold-inner,
+.chat-sidebar-popover .sidebar-fold.is-open > .sidebar-fold-inner,
+.fsdb-views .sidebar-fold.is-open > .sidebar-fold-inner {
+  opacity: 1;
+}.app-side-bar .sidebar-fold.is-animating > .sidebar-fold-inner,
+.chat-sidebar-popover .sidebar-fold.is-animating > .sidebar-fold-inner,
+.fsdb-views .sidebar-fold.is-animating > .sidebar-fold-inner {
+  transition: opacity 140ms ease;
+}.sidebar-chevron {
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}.sidebar-chevron.is-open {
+  transform: rotate(90deg);
 }.chat-sidebar-popover .sidebar-session-list .chat-session-row>a,
 .fsdb-views .sidebar-session-list .chat-session-row>a,
 .sidebar-session-list .chat-session-row>.chat-session-row-main,
@@ -954,6 +982,9 @@ html.dark .fsdb-views {
   .chat-session-row::before,
   .chat-session-row.is-active,
   .sidebar-fold.is-animating,
+  .sidebar-fold.is-animating > .sidebar-fold-inner,
+  .sidebar-chevron,
+  .app-side-bar.is-entering:not(.is-closed),
   .sidebar-flyout-host.is-collapsed .app-side-bar.is-closed {
     transition: none;
     animation: none;

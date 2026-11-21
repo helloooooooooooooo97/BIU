@@ -155,9 +155,12 @@ test('shell columns stay three tracks without animating on window resize', () =>
   assert.match(css, /\.sidebar-flyout-host\.is-collapsed \.app-side-bar\.is-closed\s*\{[^}]*z-index:\s*81/s)
   assert.match(
     css,
-    /\.sidebar-flyout-host\.is-collapsed \.app-side-bar\.is-closed\s*\{[^}]*transition:\s*transform 0s linear 240ms, opacity 0s linear 240ms, pointer-events 0s linear 240ms/s,
+    /\.sidebar-flyout-host\.is-collapsed \.app-side-bar\.is-closed\s*\{[^}]*transition:\s*transform 160ms cubic-bezier\(0\.22, 1, 0\.36, 1\) 180ms, opacity 120ms ease 180ms, pointer-events 0s linear 180ms/s,
   )
-  assert.match(css, /\.sidebar-flyout-host\.is-collapsed\.is-flyout-open \.app-side-bar\.is-closed\s*\{[^}]*transition:\s*none/s)
+  assert.match(
+    css,
+    /\.sidebar-flyout-host\.is-collapsed\.is-flyout-open \.app-side-bar\.is-closed\s*\{[^}]*transition:\s*transform 180ms cubic-bezier\(0\.22, 1, 0\.36, 1\), opacity 140ms ease/s,
+  )
   assert.doesNotMatch(css, /\.sidebar-flyout-host\.is-collapsed:focus-within/)
   assert.doesNotMatch(css, /\.sidebar-flyout-host\.is-collapsed:hover\s*\{[^}]*width:\s*var\(--sidebar-flyout-width/)
   assert.match(css, /\.app-side-bar\s*\{[^}]*min-width:\s*0/s)

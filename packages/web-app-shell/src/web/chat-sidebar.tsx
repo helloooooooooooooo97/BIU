@@ -26,7 +26,6 @@ import { SIDEBAR_ROW_MAIN_CLASS, SidebarRow } from '@biu/web-session-view/sideba
 import { chromeIcon, chromeIconClass } from './chrome-icon.ts'
 import { isChatPagePath, openOverlayComposer } from './chat-overlay.ts'
 import {
-  ChevronDownIcon,
   ChevronRightIcon,
   FolderMinusIcon,
   PlusIcon,
@@ -482,10 +481,10 @@ const GroupFoldGlyph = memo(function GroupFoldGlyph({
   group: SessionSidebarGroup
   collapsed: boolean
 }) {
-  const chevron = collapsed ? (
-    <ChevronRightIcon className={chromeIconClass('opacity-80')} />
-  ) : (
-    <ChevronDownIcon className={chromeIconClass('opacity-80')} />
+  const chevron = (
+    <ChevronRightIcon
+      className={chromeIconClass(`opacity-80 sidebar-chevron${collapsed ? '' : ' is-open'}`)}
+    />
   )
   return (
     <span className="sidebar-rail-icon sidebar-group-fold" aria-hidden>
