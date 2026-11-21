@@ -1,13 +1,15 @@
 import { resolve } from 'node:path'
 import type { Context } from 'cordis'
 import { compileSandboxSource, formatCompileReport } from '../web/sandbox/compile.ts'
-import { CommentsStore, normalizeCommentAnchor, normalizeCommentStatus } from './comments-store.ts'
+import { CommentsStore } from './comments-store.ts'
+import { commentsCollection } from './comments-collection.ts'
 
 export const name = 'core-editor'
 export const inject = ['http', 'tools']
 
 export { CommentsStore, commentToRecord, normalizeCommentAnchor, normalizeCommentStatus } from './comments-store.ts'
 export type { CommentAnchor, CommentInput, CommentRow, CommentStatus } from './comments-store.ts'
+export { COMMENTS_COLLECTION_PATH, commentsCollection } from './comments-collection.ts'
 
 export {
   createPageBlockId,
@@ -33,75 +35,12 @@ const SANDBOX_DOC_HINT =
 export function apply(ctx: Context) {
   ctx.tools.annotate('db_content', SANDBOX_FENCE_HINT)
   ctx.tools.annotate('db_file', SANDBOX_DOC_HINT)
-  const fsSvc = ctx.get('fs') as { workspace?: { resolve?: (rel: string) => string } } | undefined
-  const commentsFile =
-    fsSvc?.workspace?.resolve?.('.biu/editor-comments.json') ?? resolve(process.cwd(), '.biu/editor-comments.json')
-  const commentsStore = new CommentsStore().open(commentsFile)
-
-  ctx.http.route('GET', '/api/editor/comments', (route) => {
-    const targetPath = route.query.get('targetPath')?.trim() || undefined
-    route.send(200, { ok: true, items: commentsStore.list(targetPath) })
-  })
-  ctx.http.route('POST', '/api/editor/comments', async (route) => {
-    try {
-      const body = (await route.json()) as {
-        body?: unknown
-        targetPath?: unknown
-        threadId?: unknown
-        parentId?: unknown
-        status?: unknown
-        anchor?: unknown
-        author?: unknown
-      }
-      const item = commentsStore.create({
-        body: String(body?.body ?? ''),
-        targetPath: String(body?.targetPath ?? ''),
-        threadId: typeof body?.threadId === 'string' ? body.threadId : undefined,
-        parentId: typeof body?.parentId === 'string' ? body.parentId : undefined,
-        status: body?.status !== undefined ? normalizeCommentStatus(body.status) : 'open',
-        anchor: body?.anchor !== undefined ? normalizeCommentAnchor(body.anchor) : null,
-        author: typeof body?.author === 'string' ? body.author : undefined,
-      })
-      route.send(200, { ok: true, item })
-    } catch (error) {
-      route.send(400, { ok: false, error: String(error) })
-    }
-  })
-  ctx.http.route('POST', '/api/editor/comments/update', async (route) => {
-    try {
-      const body = (await route.json()) as {
-        id?: unknown
-        body?: unknown
-        status?: unknown
-        anchor?: unknown
-      }
-      const id = String(body?.id ?? '').trim()
-      if (!id) {
-        route.send(400, { ok: false, error: 'missing comment id' })
-        return
-      }
-      const item = commentsStore.update(id, {
-        ...(body?.body !== undefined ? { body: String(body.body) } : {}),
-        ...(body?.status !== undefined ? { status: normalizeCommentStatus(body.status) } : {}),
-        ...(body?.anchor !== undefined ? { anchor: normalizeCommentAnchor(body.anchor) } : {}),
-      })
-      route.send(200, { ok: true, item })
-    } catch (error) {
-      route.send(400, { ok: false, error: String(error) })
-    }
-  })
-  ctx.http.route('POST', '/api/editor/comments/delete', async (route) => {
-    try {
-      const body = (await route.json()) as { id?: unknown }
-      const id = String(body?.id ?? '').trim()
-      if (!id) {
-        route.send(400, { ok: false, error: 'missing comment id' })
-        return
-      }
-      route.send(200, { ok: true, removed: commentsStore.remove(id) })
-    } catch (error) {
-      route.send(400, { ok: false, error: String(error) })
-    }
+  ctx.inject(['database'], (inner) => {
+    const fsSvc = inner.get('fs') as { workspace?: { resolve?: (rel: string) => string } } | undefined
+    const file =
+      fsSvc?.workspace?.resolve?.('.biu/editor-comments.json') ?? resolve(process.cwd(), '.biu/editor-comments.json')
+    const store = new CommentsStore().open(file)
+    inner.database.register(commentsCollection(store))
   })
   ctx.http.route('POST', '/api/page-sandbox/compile', async (route) => {
     const body = await route.json<{ source?: string }>()

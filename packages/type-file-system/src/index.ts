@@ -803,6 +803,8 @@ export type CollectionView = {
   icon?: string
   /** 登记后出现在 Session 检查器加号里，用 title 作为「添加××」。 */
   inspector?: boolean
+  /** 是否在左侧边栏展示，默认 true；设为 false 时仍注册到文件系统但不出现在左侧边栏。 */
+  sidebar?: boolean
 }
 
 export type CollectionListQuery = {

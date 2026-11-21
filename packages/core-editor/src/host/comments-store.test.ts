@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { CommentsStore } from './comments-store.ts'
+import { commentsCollection } from './comments-collection.ts'
 
 test('CommentsStore persists threads, replies, status updates, and cascades root delete', () => {
   const dir = mkdtempSync(join(tmpdir(), 'biu-comments-'))
@@ -52,11 +53,16 @@ test('CommentsStore persists threads, replies, status updates, and cascades root
   }
 })
 
-test('CommentsStore filters by targetPath cleanly', () => {
+test('commentsCollection hides from sidebar by default and filters by targetPath', async () => {
   const store = new CommentsStore()
-  store.create({ body: '批注 A', targetPath: '/pages/a' })
-  store.create({ body: '批注 B', targetPath: '/pages/b' })
-  const listA = store.list('/pages/a')
+  const col = commentsCollection(store)
+  assert.equal(col.view?.sidebar, false)
+  const created = await col.create!([
+    { body: '批注 A', targetPath: '/pages/a', anchor: JSON.stringify({ blockId: 'b1', quote: 'A', prefix: '', suffix: '', offset: 0 }) },
+    { body: '批注 B', targetPath: '/pages/b' },
+  ])
+  assert.equal(created.length, 2)
+  const listA = await col.list!({ filters: { targetPath: '/pages/a' } })
   assert.equal(listA.length, 1)
   assert.equal(listA[0]!.body, '批注 A')
 })

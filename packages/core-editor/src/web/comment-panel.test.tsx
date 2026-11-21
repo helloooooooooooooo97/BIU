@@ -121,7 +121,7 @@ test('CommentPanel creates thread, replies, switches tabs, shows detached tag, a
   assert.ok(screen.getByText('已修复的旧批注'))
 })
 
-test('apiUpdateComment posts status update to /api/editor/comments/update', async () => {
+test('apiUpdateComment posts status update under content payload to /api/db/update', async () => {
   const original = globalThis.fetch
   const calls: Array<{ url: string; body: unknown }> = []
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -133,8 +133,8 @@ test('apiUpdateComment posts status update to /api/editor/comments/update', asyn
     assert.equal(ok, true)
     assert.deepEqual(calls, [
       {
-        url: '/api/editor/comments/update',
-        body: { id: 'cmt_1', status: 'resolved' },
+        url: '/api/db/update',
+        body: { path: '/comments/cmt_1', content: { status: 'resolved' } },
       },
     ])
   } finally {
