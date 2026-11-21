@@ -1144,6 +1144,14 @@ export class DatabaseService extends Service implements Database {
               tenant.workspaceId || undefined,
               tenant.accountId || undefined,
             )
+            if (targetPath === TAGS_COLLECTION_PATH || targetPath.startsWith(`${TAGS_COLLECTION_PATH}/`)) {
+              http?.broadcast?.(
+                DATABASE_CHANNEL,
+                databaseChannelPayload('tags'),
+                tenant.workspaceId || undefined,
+                tenant.accountId || undefined,
+              )
+            }
           }
         }
       }

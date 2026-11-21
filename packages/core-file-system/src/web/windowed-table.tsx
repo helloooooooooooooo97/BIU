@@ -37,6 +37,9 @@ import {
   tableColumnWidth,
   type TableColumnSlice,
 } from './table-window.ts'
+import { subscribeTags, tagCatalogRevision } from './tag-catalog.ts'
+
+const subscribeTagCatalog = (fn: () => void) => subscribeTags(undefined, fn)
 
 export type TablePaintNode =
   | { kind: 'empty'; key: string }
@@ -335,9 +338,10 @@ export function padColumnRules(widths: number[]) {
 const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, measureRow, colSpan, colKeys, pickMode, activeRowId }: TableBodyProps) {
   const paintRef = useContext(TablePaintCtx)
   const bag = paintRef.current
+  const tagRev = useSyncExternalStore(subscribeTagCatalog, tagCatalogRevision, tagCatalogRevision)
   // 同一行数据保持同一份元素。列表刷新会换成新对象，但内容没变就不再画。
   // 单元格按字段值粒度缓存：改一个单元格只重画该格，横滚只创建新进入窗口的列。
-  const rowCache = useRef(new Map<string, { node: TablePaintNode; stamp: string; colKeys: string; pickMode: boolean; activeRowId: string | null; element: ReactNode }>())
+  const rowCache = useRef(new Map<string, { node: TablePaintNode; stamp: string; colKeys: string; pickMode: boolean; activeRowId: string | null; tagRev: number; element: ReactNode }>())
   const cellCache = useRef(new Map<string, CellStampEntry<ReactNode>>())
   const stampCache = useRef(new Map<string, RowStampEntry>())
   const paintedWindow = useRef('')
@@ -382,7 +386,7 @@ const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, mea
     const stamp = rowPaintStamp(node, stampCache.current)
     const hit = rowCache.current.get(node.key)
     let element: ReactNode
-    if (hit && hit.stamp === stamp && hit.colKeys === colKeys && hit.pickMode === pickMode && hit.activeRowId === activeRowId) {
+    if (hit && hit.stamp === stamp && hit.colKeys === colKeys && hit.pickMode === pickMode && hit.activeRowId === activeRowId && hit.tagRev === tagRev) {
       element = hit.element
     } else if (node.kind === 'row' && bag.renderCell && bag.renderRow && layoutNow) {
       const cells: ReactNode[] = []
@@ -390,11 +394,13 @@ const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, mea
       const meta = `${rowMetaStamp(node, pickMode)}\0pin:${layoutNow.pin}`
       const paint = (key: string) => {
         const id = `${node.key}\0${key}`
-        const composite = key === 'actions' || key === 'tag' || key.startsWith('tag:') || Boolean(compositeCells?.has(key)) || !(key in rowObj)
+        const isTagCol = key === 'tag' || key === 'tags' || key.startsWith('tag:')
+        const composite = key === 'actions' || isTagCol || Boolean(compositeCells?.has(key)) || !(key in rowObj)
+        const cellMeta = isTagCol ? `${meta}\0tag:${tagRev}` : meta
         const cached = cellCache.current.get(id)
-        if (isCellStampSame(cached, rowObj, key, meta, stamp, composite)) return cached!.element
+        if (isCellStampSame(cached, rowObj, key, cellMeta, stamp, composite)) return cached!.element
         const next = bag.renderCell!(node, key)
-        cellCache.current.set(id, makeCellStampEntry(rowObj, key, meta, stamp, composite, next))
+        cellCache.current.set(id, makeCellStampEntry(rowObj, key, cellMeta, stamp, composite, next))
         return next
       }
       for (let i = 0; i < layoutNow.pin && i < layoutNow.keys.length; i += 1) cells.push(paint(layoutNow.keys[i]!))
@@ -406,7 +412,7 @@ const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, mea
     } else {
       element = bag.renderNode(node)
     }
-    rowCache.current.set(node.key, { node, stamp, colKeys, pickMode, activeRowId, element })
+    rowCache.current.set(node.key, { node, stamp, colKeys, pickMode, activeRowId, tagRev, element })
     children.push(isValidElement(element) ? cloneElement(element as ReactElement<ComponentProps<'tr'>>, {
       key: node.key, 'data-index': item.index, ref: measureRow,
     } as ComponentProps<'tr'>) : element)
