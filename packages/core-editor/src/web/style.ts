@@ -384,8 +384,8 @@ html:not(.dark) .page-bubble-chat-icon{color:var(--biu-color-icon)}
 .page-editor .editor-comment-text{font-size:13px;line-height:1.55;color:var(--biu-color-text);white-space:pre-wrap;word-break:break-word}
 .page-editor .editor-comment-replies{display:flex;flex-direction:column;gap:6px;margin-top:2px;padding-top:6px;border-top:var(--biu-stroke-width) solid var(--biu-color-border-subtle)}
 .page-editor .editor-comment-reply{display:flex;flex-direction:column;gap:3px;padding-left:8px;border-left:2px solid var(--biu-color-border-subtle)}
-.page-editor .editor-comment-input,.page-editor .editor-comment-reply-input{width:100%;box-sizing:border-box;border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:7px;padding:6px 8px;background:var(--biu-color-bg-input);color:var(--biu-color-text);font:inherit;font-size:12.5px;resize:vertical;outline:none}
-.page-editor .editor-comment-input:focus,.page-editor .editor-comment-reply-input:focus{border-color:var(--biu-color-emphasis)}
+.page-editor .editor-comment-input,.page-editor .editor-comment-reply-input{width:100%;box-sizing:border-box;border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:7px;padding:6px 8px;background:var(--biu-color-bg-input);color:var(--biu-color-text);font:inherit;font-size:12.5px;resize:none;outline:none}
+.page-editor .editor-comment-input:focus,.page-editor .editor-comment-reply-input:focus{border-color:var(--biu-color-border-strong)}
 .page-editor .editor-comment-reply-box{margin-top:2px}
 .page-editor .editor-comment-composer-actions{display:flex;justify-content:flex-end;gap:6px}
 .page-editor .editor-comment-btn{border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:6px;padding:4px 10px;background:transparent;color:var(--biu-color-text-muted);font:inherit;font-size:12px;cursor:pointer}

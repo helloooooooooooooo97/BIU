@@ -190,11 +190,12 @@ export function CommentPanel({
               ref={draftInputRef}
               className="editor-comment-input"
               rows={3}
-              placeholder="输入批注内容… (⌘+Enter 发送)"
+              placeholder="输入批注内容… (Enter 发送，Shift+Enter 换行)"
               value={draftBody}
               onChange={(e) => setDraftBody(e.target.value)}
               onKeyDown={(e) => {
-                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                if (e.nativeEvent.isComposing) return
+                if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault()
                   void submitDraft()
                 } else if (e.key === 'Escape') {
@@ -324,6 +325,7 @@ export function CommentPanel({
                   value={replyDrafts[root.id] ?? ''}
                   onChange={(e) => setReplyDrafts((prev) => ({ ...prev, [root.id]: e.target.value }))}
                   onKeyDown={(e) => {
+                    if (e.nativeEvent.isComposing) return
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault()
                       void submitReply(root.id)

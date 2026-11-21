@@ -97,11 +97,15 @@ test('CommentPanel creates thread, replies, respects filter prop, shows detached
   // Detached tag is shown when thread is in detachedIds
   assert.ok(screen.getByText('原文已变更或删除'))
 
-  // Create new comment from draft composer
+  // Create new comment from draft composer: Shift+Enter keeps editing, Enter submits directly
   const textarea = screen.getByPlaceholderText(/输入批注内容/)
   fireEvent.change(textarea, { target: { value: '新增一条批注' } })
   await act(async () => {
-    fireEvent.click(screen.getByText('发送'))
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true })
+  })
+  assert.deepEqual(created, [])
+  await act(async () => {
+    fireEvent.keyDown(textarea, { key: 'Enter' })
   })
   assert.deepEqual(created, ['新增一条批注'])
 
