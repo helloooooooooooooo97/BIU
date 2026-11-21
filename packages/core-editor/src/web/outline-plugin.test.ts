@@ -110,3 +110,15 @@ test('fold gutter is left of the heading box', () => {
   assert.equal(outlineFoldGutterHit(heading, { clientX: 48, clientY: 16 }), false)
   heading.remove()
 })
+
+test('editor motion styles keep compositor-only transitions and reduced-motion guard', () => {
+  const css = readFileSync(resolve(import.meta.dirname, './style.ts'), 'utf8')
+  const handleSrc = readFileSync(resolve(import.meta.dirname, './page-block-handle.tsx'), 'utf8')
+  assert.match(css, /padding:6px 0 max\(120px,24vh\)/)
+  assert.match(css, /@keyframes page-placeholder-in/)
+  assert.match(css, /animation:page-placeholder-in 120ms ease 40ms both/)
+  assert.match(css, /\.page-block-handle\{[^}]*transition:transform 110ms/)
+  assert.match(css, /@media \(prefers-reduced-motion:reduce\)/)
+  assert.match(handleSrc, /transform:\s*`translate3d\(\$\{target\.left\}px, \$\{target\.top\}px, 0\)`/)
+  assert.doesNotMatch(css, /\.page-editor \.tiptap p\{[^}]*transition:/)
+})

@@ -161,7 +161,7 @@ export function PageBlockHandle({ editor }: { editor: Editor }) {
   return (
     <div
       className="page-block-handle"
-      style={{ top: target.top, left: target.left, height: target.height }}
+      style={{ transform: `translate3d(${target.left}px, ${target.top}px, 0)`, height: target.height }}
       data-testid="page-block-handle"
     >
       <button
