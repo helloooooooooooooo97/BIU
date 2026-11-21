@@ -359,7 +359,10 @@ export function RecordDetail({
         }
         const place = () => focusRecordTitleNear(mainRef.current, joinPos)
         place()
-        requestAnimationFrame(place)
+        requestAnimationFrame(() => {
+          place()
+          requestAnimationFrame(place)
+        })
         return
       }
       const go = () => focusRecordTitleNear(mainRef.current)

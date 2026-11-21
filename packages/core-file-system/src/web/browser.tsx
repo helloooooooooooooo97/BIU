@@ -2373,7 +2373,7 @@ export function CollectionBrowser({
     const next = draftFromRecord(schema, detailRow, bodyKey, detailBody)
     setDraft((prev) => (sameStringDraft(prev, next) ? prev : next))
     hydratedDetail.current = detailId
-  }, [bodyKey, detailBody, detailId, detailRow, schema])
+  }, [bodyKey, detailId, detailRow, schema])
 
   useEffect(() => {
     if (!bodyKey || !detailId || !schema) return
@@ -3195,6 +3195,9 @@ export function CollectionBrowser({
         const open = detailRowRef.current?.id === row.id ? detailRowRef.current : null
         return listed ?? open ?? row
       }, async (patch) => {
+        if (dataPathRef.current === dataPath) {
+          setDetailRow((prev) => (prev?.id === row.id ? overlayListedRow(prev, { ...prev, ...patch }) : prev))
+        }
         const data = await readJson<{ value?: DbRecord }>('/api/db/update', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
