@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { emitFsdbChange, FSDB_CHANGE_EVENT, type DbRecord } from '@biu/type-file-system'
 import type { CommentAnchor } from './comment-anchor.ts'
 
@@ -268,9 +268,11 @@ export function useRecordComments(targetPath: string) {
     [reload],
   )
 
+  const threads = useMemo(() => groupCommentThreads(items), [items])
+
   return {
     items,
-    threads: groupCommentThreads(items),
+    threads,
     loaded,
     reload,
     createThread,

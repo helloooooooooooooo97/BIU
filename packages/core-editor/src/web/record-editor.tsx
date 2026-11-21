@@ -745,11 +745,12 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
   }
 
   useEffect(() => {
+    if (!comments.loaded) return
     const openCount = comments.threads.filter((t) => t.root.status === 'open').length
     if (commentsUi.openCount !== openCount) {
       patchEditorCommentsUi(record.id, { openCount })
     }
-  }, [comments.threads, commentsUi.openCount, record.id])
+  }, [comments.loaded, comments.threads, commentsUi.openCount, record.id])
 
   useEffect(() => {
     if (!editor || editor.isDestroyed || source) return

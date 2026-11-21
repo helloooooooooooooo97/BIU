@@ -97,6 +97,14 @@ export function patchEditorCommentsUi(recordId: string, patch: Partial<EditorCom
     openCount: patch.openCount ?? prev.openCount,
     draftAnchor: patch.draftAnchor !== undefined ? patch.draftAnchor : prev.draftAnchor,
   }
+  if (
+    next.open === prev.open &&
+    next.activeId === prev.activeId &&
+    next.openCount === prev.openCount &&
+    next.draftAnchor === prev.draftAnchor
+  ) {
+    return
+  }
   commentsUiStore.set(id, next)
   bumpCommentsUi()
 }
