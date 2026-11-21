@@ -91,24 +91,29 @@ export function captureCommentAnchor(doc: PmNode, rawFrom: number, rawTo: number
   const to = Math.min(doc.content.size, Math.max(rawFrom, rawTo))
   if (to <= from) return null
   const blocks = indexDocBlocks(doc)
-  const block = blocks.find((item) => from >= item.pos && from < item.end)
-  if (!block) return null
-  const clampedTo = Math.min(to, block.end - 1)
-  const range = charRangeFromDocRange(block, from, clampedTo)
-  if (!range) return null
-  const quote = block.text.slice(range.start, range.end).replace(/\ufffc/g, '').trim()
-  if (!quote) return null
-  const exactQuote = block.text.slice(range.start, range.end)
-  const prefix = block.text.slice(Math.max(0, range.start - CONTEXT_LEN), range.start)
-  const suffix = block.text.slice(range.end, Math.min(block.text.length, range.end + CONTEXT_LEN))
-  return {
-    blockId: block.blockId,
-    quote: exactQuote,
-    originalQuote: exactQuote,
-    prefix,
-    suffix,
-    offset: range.start,
+  // 跨块选区可能从上一个列表/段落末尾边界或空行起拖，首块内没有选中字符时应继续向后查找首个包含选中文字的块。
+  for (const block of blocks) {
+    if (block.end <= from) continue
+    if (block.pos >= to) break
+    const blockFrom = Math.max(from, block.pos)
+    const blockTo = Math.min(to, block.end)
+    const range = charRangeFromDocRange(block, blockFrom, blockTo)
+    if (!range) continue
+    const quote = block.text.slice(range.start, range.end).replace(/\ufffc/g, '').trim()
+    if (!quote) continue
+    const exactQuote = block.text.slice(range.start, range.end)
+    const prefix = block.text.slice(Math.max(0, range.start - CONTEXT_LEN), range.start)
+    const suffix = block.text.slice(range.end, Math.min(block.text.length, range.end + CONTEXT_LEN))
+    return {
+      blockId: block.blockId,
+      quote: exactQuote,
+      originalQuote: exactQuote,
+      prefix,
+      suffix,
+      offset: range.start,
+    }
   }
+  return null
 }
 
 function commonSuffixLen(a: string, b: string) {
