@@ -1,4 +1,4 @@
-import { recordBuiltinValues, REQUIRED_RECORD_FIELDS, type CollectionSpec, type DbRecord } from '@biu/type-file-system'
+import { recordBuiltinValues, type CollectionSpec, type DbRecord } from '@biu/type-file-system'
 import { envToList, headersToList, listToEnv, listToHeaders, type McpServerConfig } from './config.ts'
 import type { McpServerRow, McpService } from './index.ts'
 
@@ -125,10 +125,8 @@ export function mcpCollection(mcp: McpService): CollectionSpec {
     },
     records: { update: true, create: true, delete: true, allocateId: false },
     schema: {
-      labelField: 'title',
       columns: ['title', 'transport', 'status', 'enabled', 'command', 'args', 'url', 'toolCount', 'totalToolCount', 'allow', 'deny', 'error'],
       fields: {
-        ...REQUIRED_RECORD_FIELDS,
         title: {
           type: 'string',
           label: '服务器',

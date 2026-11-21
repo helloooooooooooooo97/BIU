@@ -1,3 +1,4 @@
+import type { Editor } from '@tiptap/core'
 import { Selection } from '@tiptap/pm/state'
 import type { ResolvedPos } from '@tiptap/pm/model'
 import type { EditorView } from '@tiptap/pm/view'
@@ -5,11 +6,22 @@ import type { EditorView } from '@tiptap/pm/view'
 export const FOCUS_RECORD_TITLE = 'biu:focus-record-title'
 export const FOCUS_RECORD_CONTENT = 'biu:focus-record-content'
 
+export type FocusRecordContentDetail = {
+  recordId?: string
+  mode?: 'move' | 'enter'
+  insertText?: string
+}
+
+export type FocusRecordTitleDetail = {
+  recordId?: string
+  appendText?: string
+}
+
 export function isDocStartSelection(from: number, empty: boolean, docStart: number) {
   return empty && from === docStart
 }
 
-/** 正文最开头空选区：上方向键或退格（Mac 上的 Delete）回到标题末尾。回车只换行，不跳标题。嵌套块（空列表等）退格先拆块，不跳标题。 */
+/** 正文最开头空选区：上方向键或 Backspace 回到标题末尾。Delete 保留正常向后删字；嵌套块/标题块退格先降级，不直接跳标题。 */
 export function shouldLeaveContentForTitle(
   key: string,
   flags: { shiftKey: boolean; altKey?: boolean; metaKey?: boolean; ctrlKey?: boolean; isComposing?: boolean },
@@ -20,9 +32,38 @@ export function shouldLeaveContentForTitle(
 ) {
   if (flags.isComposing) return false
   if (flags.shiftKey || flags.altKey || flags.metaKey || flags.ctrlKey) return false
-  if (key !== 'ArrowUp' && key !== 'Backspace' && key !== 'Delete') return false
-  if (nested && (key === 'Backspace' || key === 'Delete')) return false
+  if (key !== 'ArrowUp' && key !== 'Backspace') return false
+  if (nested && key === 'Backspace') return false
   return isDocStartSelection(from, empty, docStart)
+}
+
+/** 从标题进入正文：ArrowDown 纯移光标；Enter 在首行非空时头部插空段，或在标题中间回车时把后半段拆成新首段。 */
+export function enterContentFromTitle(editor: Editor, detail?: FocusRecordContentDetail) {
+  if (editor.isDestroyed) return
+  if (detail?.mode === 'enter') {
+    const paragraphType = editor.state.schema.nodes.paragraph
+    const first = editor.state.doc.firstChild
+    if (paragraphType) {
+      if (detail.insertText) {
+        const node = paragraphType.create(null, editor.state.schema.text(detail.insertText))
+        const tr = editor.state.tr.insert(0, node)
+        tr.setSelection(Selection.near(tr.doc.resolve(1)))
+        editor.view.dispatch(tr)
+        editor.commands.focus(undefined, { scrollIntoView: false })
+        return
+      }
+      const firstIsEmptyParagraph = first?.type.name === 'paragraph' && first.content.size === 0
+      if (!firstIsEmptyParagraph) {
+        const node = paragraphType.create()
+        const tr = editor.state.tr.insert(0, node)
+        tr.setSelection(Selection.near(tr.doc.resolve(1)))
+        editor.view.dispatch(tr)
+        editor.commands.focus(undefined, { scrollIntoView: false })
+        return
+      }
+    }
+  }
+  editor.commands.focus('start', { scrollIntoView: false })
 }
 
 function hasHiddenClass(el: Element | null) {
@@ -83,7 +124,7 @@ export function handleContentTitleNav(view: EditorView, event: KeyboardEvent) {
   if (event.isComposing) return false
   const sel = view.state.selection
   const start = Selection.atStart(view.state.doc).from
-  const nested = sel.$from.depth > 1
+  const nested = sel.$from.depth > 1 || sel.$from.parent.type.name === 'heading'
   const leave =
     shouldLeaveContentForTitle(event.key, event, sel.from, sel.empty, start, nested) ||
     (event.key === 'ArrowUp' &&
@@ -94,8 +135,33 @@ export function handleContentTitleNav(view: EditorView, event: KeyboardEvent) {
       atFirstVisibleLine(view))
   if (!leave) return false
   event.preventDefault()
+  const recordId = view.dom.closest('[data-page-record]')?.getAttribute('data-page-record') || undefined
+  // 首行是普通段落按 Backspace：
+  // - 若首行非空：把首行文字并回标题末尾（光标停在拼接处），并移除/清空该首行；
+  // - 若首行为空且后面还有其他块：顺手删掉该空行并回到标题末尾。
+  if (event.key === 'Backspace' && sel.$from.depth === 1 && sel.$from.parent.type.name === 'paragraph') {
+    const parent = sel.$from.parent
+    const tailText = parent.textContent
+    if (tailText.length > 0) {
+      if (view.state.doc.childCount > 1) {
+        view.dispatch(view.state.tr.delete(0, parent.nodeSize))
+      } else {
+        view.dispatch(view.state.tr.delete(1, parent.nodeSize - 1))
+      }
+      const detail: FocusRecordTitleDetail = {
+        ...(recordId ? { recordId } : {}),
+        appendText: tailText,
+      }
+      window.dispatchEvent(new CustomEvent(FOCUS_RECORD_TITLE, { detail }))
+      return true
+    }
+    if (view.state.doc.childCount > 1) {
+      view.dispatch(view.state.tr.delete(0, parent.nodeSize))
+    }
+  }
   if (!focusRecordTitleNear(view.dom)) {
-    window.dispatchEvent(new Event(FOCUS_RECORD_TITLE))
+    const detail: FocusRecordTitleDetail = recordId ? { recordId } : {}
+    window.dispatchEvent(new CustomEvent(FOCUS_RECORD_TITLE, { detail }))
   }
   return true
 }
@@ -110,7 +176,12 @@ function titleInputNear(from: Element | null | undefined) {
 
 function placeTitleCaret(el: HTMLTextAreaElement | HTMLInputElement) {
   if (!el.isConnected) return
-  el.focus()
+  el.focus({ preventScroll: true })
+  try {
+    el.scrollIntoView?.({ block: 'nearest' })
+  } catch {
+    /* ignore */
+  }
   const n = el.value.length
   try {
     el.setSelectionRange(n, n)

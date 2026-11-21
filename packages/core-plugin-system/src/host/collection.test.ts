@@ -1,3 +1,4 @@
+import { withBuiltinFields } from '@biu/type-file-system'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import type { DbRecord } from '@biu/type-file-system'
@@ -101,17 +102,17 @@ test('pluginsCollection lists installed plugins and sandboxes in one table', asy
     spec.actions?.map((item) => item.id),
     ['sandbox', 'start', 'stop', 'pack', 'uninstall'],
   )
-  await spec.actions!.find((item) => item.id === 'start')!.run('demo', demo!)
-  await spec.actions!.find((item) => item.id === 'pack')!.run('draft-hello', draft!)
+  await spec.actions!.find((item) => item.id === 'start')!.run!('demo', demo!)
+  await spec.actions!.find((item) => item.id === 'pack')!.run!('draft-hello', draft!)
   assert.deepEqual(calls, ['open:demo', 'pack:draft-hello'])
   assert.equal(typeof spec.update, 'function')
   assert.equal(spec.schema.contentField, 'readme')
   assert.match(String(spec.view?.blurb ?? ''), /示例写法/)
   assert.match(String(spec.view?.blurb ?? ''), /:::editorBlock/)
-  assert.equal(spec.schema.labelField, 'title')
-  assert.ok(spec.schema.fields.title)
-  assert.equal(spec.schema.fields.builtin?.type, 'boolean')
-  assert.equal(spec.schema.fields.name, undefined)
+  assert.equal(spec.schema.labelField ?? 'title', 'title')
+  assert.ok(withBuiltinFields(spec.schema.fields).title)
+  assert.equal(withBuiltinFields(spec.schema.fields).builtin?.type, 'boolean')
+  assert.equal(withBuiltinFields(spec.schema.fields).name, undefined)
   assert.equal(spec.schema.columns?.[0], 'title')
   assert.deepEqual(spec.records, { update: false, create: false, delete: true })
   assert.equal(typeof spec.remove, 'function')
@@ -121,9 +122,9 @@ test('pluginsCollection lists installed plugins and sandboxes in one table', asy
   assert.ok(spec.schema.columns?.includes('installed'))
   assert.equal(spec.schema.columns?.includes('tags'), false)
   assert.ok(spec.schema.columns?.includes('codeVersion'))
-  assert.equal(spec.schema.fields.codeVersion?.label, '代码版本')
-  assert.equal(spec.schema.fields.tags, undefined)
-  assert.equal(spec.schema.fields.emoji?.writable, true)
+  assert.equal(withBuiltinFields(spec.schema.fields).codeVersion?.label, '代码版本')
+  assert.equal(withBuiltinFields(spec.schema.fields).tags, undefined)
+  assert.equal(withBuiltinFields(spec.schema.fields).emoji?.writable, true)
   assert.deepEqual(spec.actions?.find((item) => item.id === 'start')?.when, { installed: true, running: false })
   assert.deepEqual(spec.actions?.find((item) => item.id === 'pack')?.when, {
     sandbox: true,
@@ -340,7 +341,7 @@ test('builtin plugins list BIU官方 and the GitHub link', async () => {
   assert.deepEqual(row?.updatedBy, [{ kind: 'user', name: BIU_OFFICIAL_NAME, url: BIU_GITHUB }])
   assert.equal(spec.schema.columns?.includes('createdBy'), true)
   assert.equal(spec.schema.columns?.includes('updatedBy'), true)
-  assert.equal(spec.schema.fields.author, undefined)
-  assert.equal(spec.schema.fields.authorUrl, undefined)
+  assert.equal(withBuiltinFields(spec.schema.fields).author, undefined)
+  assert.equal(withBuiltinFields(spec.schema.fields).authorUrl, undefined)
   assert.equal(spec.schema.columns?.includes('author'), false)
 })

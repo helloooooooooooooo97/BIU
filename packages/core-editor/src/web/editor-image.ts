@@ -2,8 +2,8 @@ import type { Editor } from '@tiptap/core'
 import Image from '@tiptap/extension-image'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { ReactNodeViewRenderer } from '@tiptap/react'
-import { imageCaptionFromFile, pageImageAlign, pageImageMarkdown } from './page-image-attrs.ts'
-import { PageImageView } from './page-image-view.tsx'
+import { imageCaptionFromFile, pageImageAlign, pageImageMarkdown } from './editor-image-attrs.ts'
+import { PageImageView } from './editor-image-view.tsx'
 
 export {
   clampImageWidth,
@@ -11,7 +11,7 @@ export {
   pageImageAlign,
   pageImageMarkdown,
   type PageImageAlign,
-} from './page-image-attrs.ts'
+} from './editor-image-attrs.ts'
 
 const IMAGE_MIMES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
 

@@ -4,9 +4,9 @@ import { hydrateRecordViewCatalog, useRecordViewCatalog } from '@biu/core-file-s
 import { recordContentFallback } from '@biu/core-file-system/database-ui'
 import { HeadlessPopover } from '@biu/biu-ui'
 import { SourceEditor, type SourceEditorHandle } from './source-editor.tsx'
-import { restorePageScroll } from './page-scroll-pin.ts'
+import { restorePageScroll } from './editor-scroll-pin.ts'
 import { PageHostView } from './page-host-view.tsx'
-import { ArrowPathIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/16/solid'
+import { ArrowPathIcon, ChatBubbleBottomCenterTextIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/16/solid'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import type { Editor } from '@tiptap/core'
@@ -14,18 +14,22 @@ import { NodeSelection, Selection } from '@tiptap/pm/state'
 import type { FsContentProps } from '@biu/type-file-system/ui'
 import { recordEditorExtensions } from './kit.ts'
 import { PageBlockHandle } from './page-block-handle.tsx'
-import { PageTableBar } from './page-table-bar.tsx'
+import { PageTableBar } from './editor-table-bar.tsx'
 import { editorHostIsLive } from './editor-live.ts'
-import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, handleContentTitleNav, shouldLeaveContentForTitle, focusRecordTitleNear, isDocStartSelection, atFirstVisibleLine } from './title-content-nav.ts'
+import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, enterContentFromTitle, handleContentTitleNav, shouldLeaveContentForTitle, focusRecordTitleNear, isDocStartSelection, atFirstVisibleLine, type FocusRecordContentDetail } from './title-content-nav.ts'
 import { tryContentJump, contentJumpForRecord } from './content-jump.ts'
 import { CONTENT_JUMP_EVENT } from '@biu/type-file-system'
-import { bindEditorTextHost, getPick } from '@biu/core-pick/web'
-import { markdownLocusFromElement, markdownLocusFromSelection } from './markdown-locus.ts'
+import { bindEditorTextHost, getPick, pickIdFromText, pickPreview, withPickLocus } from '@biu/core-pick/web'
+import { markdownLocusFromElement, markdownLocusFromRange, markdownLocusFromSelection } from './markdown-locus.ts'
 import { isFindHotkey } from './find-bar.tsx'
 import { applyEditorFind } from './find-plugin.ts'
-import { applyStoredBlockIds, markdownWithBlockIds, stripBlockIdStamps } from './block-id.ts'
-import { getLivePageEditor, setLivePageEditor, setLivePagePersist } from './page-live-editor.ts'
-import { PAGE_FIND_OPEN_EVENT, getPageFind, patchPageFind, usePageFind } from './page-view-state.ts'
+import { applyStoredBlockIds, encodeBlankParagraphsForParse, markdownWithBlockIds, restoreBlankParagraphs, stripBlockIdStamps } from './block-id.ts'
+import { getLivePageEditor, setLivePageEditor, setLivePagePersist } from './editor-live-instance.ts'
+import { PAGE_FIND_OPEN_EVENT, getPageFind, patchEditorCommentsUi, patchPageFind, useEditorCommentsUi, usePageFind } from './editor-view-state.ts'
+import { captureCommentAnchor, resolveCommentAnchor } from './comment-anchor.ts'
+import { collectDriftedCommentAnchors, getCommentRange, setActiveEditorComment, setEditorComments } from './comment-plugin.ts'
+import { sortCommentThreadsByPosition, useRecordComments, type CommentThread } from './comment-store.ts'
+import { CommentPanel } from './comment-panel.tsx'
 import { PageBlocksTable } from './page-blocks-table.tsx'
 import {
   INK_TONES,
@@ -71,7 +75,8 @@ function persistEditorMarkdown(editor: Editor) {
 
 function hydrateEditorMarkdown(editor: Editor, raw: string) {
   const { text, ids } = stripBlockIdStamps(raw)
-  editor.commands.setContent(text, { contentType: 'markdown', emitUpdate: false })
+  editor.commands.setContent(encodeBlankParagraphsForParse(text), { contentType: 'markdown', emitUpdate: false })
+  restoreBlankParagraphs(editor)
   applyStoredBlockIds(editor, ids)
 }
 
@@ -268,9 +273,11 @@ export function pageTextBubbleOpen(editor: Editor, from: number, to: number, col
 function Bubble({
   editor,
   onSendChat,
+  onAddComment,
 }: {
   editor: Editor
   onSendChat: () => void
+  onAddComment?: () => void
 }) {
   const [colorOpen, setColorOpen] = useState<'text' | 'mark' | null>(null)
   const inTable = editor.isActive('table')
@@ -301,6 +308,21 @@ function Bubble({
       {!inTable ? btn('H1', editor.isActive('heading', { level: 1 }), () => editor.chain().focus().toggleHeading({ level: 1 }).run()) : null}
       {!inTable ? btn('H2', editor.isActive('heading', { level: 2 }), () => editor.chain().focus().toggleHeading({ level: 2 }).run()) : null}
       <ColorMenus editor={editor} open={colorOpen} onOpen={setColorOpen} />
+      {onAddComment ? (
+        <button
+          type="button"
+          className="page-bubble-chat"
+          title="添加批注 (⌘⌥M)"
+          aria-label="添加批注"
+          onMouseDown={(event: MouseEvent) => {
+            event.preventDefault()
+            onAddComment()
+          }}
+        >
+          <ChatBubbleBottomCenterTextIcon className="page-bubble-chat-icon" aria-hidden />
+          批注
+        </button>
+      ) : null}
       <button
         type="button"
         className="page-bubble-chat"
@@ -422,6 +444,12 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
   const titleRef = useRef(recordTitle(record))
   titleRef.current = recordTitle(record)
   const find = usePageFind(record.id)
+  const commentsUi = useEditorCommentsUi(record.id)
+  const comments = useRecordComments(path || '')
+  const commentThreadsRef = useRef(comments.threads)
+  commentThreadsRef.current = comments.threads
+  const updateAnchorRef = useRef(comments.updateThreadAnchor)
+  updateAnchorRef.current = comments.updateThreadAnchor
 
   const editor = useEditor(
     {
@@ -495,6 +523,13 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
             if (next === saved.current) return
             saved.current = next
             onChange?.(next)
+            const drifted = collectDriftedCommentAnchors(
+              current,
+              commentThreadsRef.current.map((t) => ({ id: t.root.id, status: t.root.status, anchor: t.root.anchor })),
+            )
+            for (const item of drifted) {
+              void updateAnchorRef.current(item.id, item.anchor)
+            }
           })
         }, 400)
       },
@@ -654,14 +689,16 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return
-    const onFocus = () => {
+    const onFocus = (event: Event) => {
       if (editor.isDestroyed || !editorHostIsLive(editor)) return
       if (status === 'loading' || status === 'failed') return
-      editor.commands.focus('start')
+      const detail = (event as CustomEvent<FocusRecordContentDetail | undefined>).detail
+      if (detail?.recordId && detail.recordId !== record.id) return
+      enterContentFromTitle(editor, detail)
     }
     window.addEventListener(FOCUS_RECORD_CONTENT, onFocus)
     return () => window.removeEventListener(FOCUS_RECORD_CONTENT, onFocus)
-  }, [editor, status])
+  }, [editor, record.id, status])
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return
@@ -709,6 +746,169 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
     if (ref) getPick()?.attach([ref])
   }
 
+  useEffect(() => {
+    if (!comments.loaded) return
+    const openCount = comments.threads.filter((t) => t.root.status === 'open').length
+    const resolvedCount = comments.threads.length - openCount
+    if (commentsUi.openCount !== openCount || commentsUi.resolvedCount !== resolvedCount) {
+      patchEditorCommentsUi(record.id, { openCount, resolvedCount })
+    }
+  }, [comments.loaded, comments.threads, commentsUi.openCount, commentsUi.resolvedCount, record.id])
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed || source) return
+    const payload = comments.threads.map((t) => ({
+      id: t.root.id,
+      status: t.root.status,
+      anchor: t.root.anchor,
+    }))
+    setEditorComments(editor, payload, commentsUi.activeId)
+  }, [editor, source, comments.threads, commentsUi.activeId, value])
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed || source) return
+    setActiveEditorComment(editor, commentsUi.activeId)
+  }, [editor, source, commentsUi.activeId])
+
+  const startCommentFromSelection = () => {
+    if (source || !editor || editor.isDestroyed || !path) return
+    const { from, to } = editor.state.selection
+    const anchor = from !== to ? captureCommentAnchor(editor.state.doc, from, to) : null
+    patchEditorCommentsUi(record.id, {
+      open: true,
+      ...(commentsUi.filter === 'resolved' ? { filter: 'open' } : {}),
+      draftAnchor: anchor,
+    })
+  }
+
+  const selectCommentThread = (threadId: string) => {
+    patchEditorCommentsUi(record.id, { open: true, activeId: threadId })
+    if (!editor || editor.isDestroyed || source) return
+    const range = getCommentRange(editor, threadId)
+    if (!range) return
+    try {
+      const hit = editor.view.domAtPos(range.from)
+      const el = hit.node instanceof Element ? hit.node : hit.node.parentElement
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    } catch {
+      /* ignore scroll failure */
+    }
+  }
+
+  const askAiForComment = (thread: CommentThread) => {
+    const quote = thread.root.anchor?.quote || thread.root.anchor?.originalQuote || ''
+    const lines = [
+      quote ? `批注原文：「${quote}」` : '',
+      `批注内容：${thread.root.body}`,
+      ...thread.replies.map((r) => `回复（${r.author}）：${r.body}`),
+    ].filter(Boolean)
+    const fullText = lines.join('\n')
+    const label = pickPreview(`批注：${thread.root.body}`, 80) || '批注'
+    const route = typeof window === 'undefined' ? '' : window.location.pathname
+    const baseRef = {
+      kind: 'text' as const,
+      id: pickIdFromText(`comment:${thread.root.id}:${fullText}`),
+      label,
+      selection: fullText,
+      text: fullText,
+      route,
+      ...(path ? { path } : {}),
+      ...(recordTitle(record) ? { title: recordTitle(record) } : {}),
+    }
+    const range = editor && !editor.isDestroyed && !source ? getCommentRange(editor, thread.root.id) : null
+    const locus = range && editor ? markdownLocusFromRange(editor, range.from, range.to) : null
+    const ref = locus
+      ? withPickLocus(baseRef, { ...locus, selection: fullText, text: fullText })
+      : baseRef
+    getPick()?.attach([ref])
+  }
+
+  const commentPositions = new Map<string, { from: number; to: number }>()
+  const detachedCommentIds = new Set<string>()
+  if (editor && !editor.isDestroyed && !source) {
+    for (const thread of comments.threads) {
+      if (!thread.root.anchor) continue
+      const live = thread.root.status === 'open' ? getCommentRange(editor, thread.root.id) : null
+      const hit = live ?? resolveCommentAnchor(editor.state.doc, thread.root.anchor)
+      if (hit && hit.to > hit.from) {
+        commentPositions.set(thread.root.id, { from: hit.from, to: hit.to })
+      } else if (thread.root.status === 'open') {
+        detachedCommentIds.add(thread.root.id)
+      }
+    }
+  }
+  const orderedCommentThreads = sortCommentThreadsByPosition(comments.threads, commentPositions)
+  const [commentAnchorTops, setCommentAnchorTops] = useState<Map<string, number>>(() => new Map())
+  const [draftCommentTop, setDraftCommentTop] = useState<number | null>(null)
+  const commentsOpen = Boolean(commentsUi.open && path)
+
+  useLayoutEffect(() => {
+    if (!commentsOpen || !editor || editor.isDestroyed || source || !hostRef.current) {
+      setCommentAnchorTops((prev) => (prev.size ? new Map() : prev))
+      setDraftCommentTop(null)
+      return
+    }
+    const measure = () => {
+      const host = hostRef.current
+      if (!host || editor.isDestroyed) return
+      const rail = host.querySelector<HTMLElement>('.editor-comment-rail')
+      const baseTop = (rail ?? host).getBoundingClientRect().top
+      const next = new Map<string, number>()
+      for (const thread of comments.threads) {
+        if (!thread.root.anchor) continue
+        const live = thread.root.status === 'open' ? getCommentRange(editor, thread.root.id) : null
+        const hit = live ?? resolveCommentAnchor(editor.state.doc, thread.root.anchor)
+        if (!hit || hit.to <= hit.from) continue
+        try {
+          const coords = editor.view.coordsAtPos(hit.from)
+          if (Number.isFinite(coords.top)) {
+            next.set(thread.root.id, Math.max(0, Math.round(coords.top - baseTop)))
+          }
+        } catch {
+          /* ignore unmeasured pos */
+        }
+      }
+      setCommentAnchorTops((prev) => {
+        if (prev.size === next.size) {
+          let same = true
+          for (const [k, v] of next) {
+            if (prev.get(k) !== v) {
+              same = false
+              break
+            }
+          }
+          if (same) return prev
+        }
+        return next
+      })
+      if (commentsUi.draftAnchor) {
+        const hit = resolveCommentAnchor(editor.state.doc, commentsUi.draftAnchor)
+        if (hit) {
+          try {
+            const coords = editor.view.coordsAtPos(hit.from)
+            setDraftCommentTop(Number.isFinite(coords.top) ? Math.max(0, Math.round(coords.top - baseTop)) : null)
+          } catch {
+            setDraftCommentTop(null)
+          }
+        } else {
+          setDraftCommentTop(null)
+        }
+      } else {
+        setDraftCommentTop(null)
+      }
+    }
+    measure()
+    const raf = requestAnimationFrame(measure)
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
+    if (ro && hostRef.current) ro.observe(hostRef.current)
+    window.addEventListener('resize', measure)
+    return () => {
+      cancelAnimationFrame(raf)
+      ro?.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [commentsOpen, commentsUi.filter, editor, source, comments.threads, commentsUi.draftAnchor, value])
+
   const onEditorHotkey = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === ' ' && event.target === event.currentTarget) {
       event.preventDefault()
@@ -729,6 +929,12 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
       event.preventDefault()
       event.stopPropagation()
       sendToChat()
+      return
+    }
+    if ((event.metaKey || event.ctrlKey) && event.altKey && event.key.toLowerCase() === 'm') {
+      event.preventDefault()
+      event.stopPropagation()
+      startCommentFromSelection()
       return
     }
     if (isLastColorHotkey(event) && !source && editor && !editor.isDestroyed) {
@@ -788,38 +994,84 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
   return (
     <div
       ref={hostRef}
-      className={`page-editor${source ? ' is-source' : ''}${present === 'outline' ? ' is-outline' : ''}${present === 'table' ? ' is-table' : ''}`}
+      className={`page-editor${source ? ' is-source' : ''}${present === 'outline' ? ' is-outline' : ''}${present === 'table' ? ' is-table' : ''}${commentsOpen ? ' has-comments' : ''}`}
       data-page-record={record.id}
       data-page-path={path || ''}
       tabIndex={-1}
       onMouseDown={onEditorBlankMouseDown}
       onKeyDownCapture={onEditorHotkey}
     >
-      <div hidden={!source}>
-        {source ? (
-          <SourceEditor
-            ref={sourceFind}
-            value={asMarkdown(value)}
-            writable={writable !== false && status === 'ready'}
-            onChange={(next) => {
-              if (next === saved.current) return
-              saved.current = next
-              onChange?.(next)
-            }}
-          />
-        ) : null}
-      </div>
-      <div hidden={source}>
-        {present === 'table' ? (
-          <PageBlocksTable editor={editor} recordId={record.id} path={path} writable={writable !== false && status === 'ready'} />
-        ) : null}
-        <div className="page-editor-doc" hidden={present === 'table'}>
-          <EditorContent editor={editor} />
+      <div className="page-editor-main">
+        <div hidden={!source}>
+          {source ? (
+            <SourceEditor
+              ref={sourceFind}
+              value={asMarkdown(value)}
+              writable={writable !== false && status === 'ready'}
+              onChange={(next) => {
+                if (next === saved.current) return
+                saved.current = next
+                onChange?.(next)
+              }}
+            />
+          ) : null}
         </div>
-        {present !== 'table' && writable !== false ? <PageBlockHandle editor={editor} /> : null}
-        {present !== 'table' && writable !== false ? <Bubble editor={editor} onSendChat={sendToChat} /> : null}
-        {present !== 'table' && writable !== false ? <TableBar editor={editor} /> : null}
+        <div hidden={source}>
+          {present === 'table' ? (
+            <PageBlocksTable editor={editor} recordId={record.id} path={path} writable={writable !== false && status === 'ready'} />
+          ) : null}
+          <div
+            className="page-editor-doc"
+            hidden={present === 'table'}
+            onClick={(event) => {
+              const target = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-comment-id]') : null
+              const commentId = target?.getAttribute('data-comment-id')
+              if (commentId) {
+                patchEditorCommentsUi(record.id, { open: true, activeId: commentId })
+              }
+            }}
+          >
+            <EditorContent editor={editor} />
+          </div>
+          {present !== 'table' && writable !== false ? <PageBlockHandle editor={editor} /> : null}
+          {present !== 'table' && writable !== false ? (
+            <Bubble
+              editor={editor}
+              onSendChat={sendToChat}
+              onAddComment={path ? startCommentFromSelection : undefined}
+            />
+          ) : null}
+          {present !== 'table' && writable !== false ? <TableBar editor={editor} /> : null}
+        </div>
       </div>
+      {commentsOpen ? (
+        <CommentPanel
+          threads={orderedCommentThreads}
+          filter={commentsUi.filter}
+          activeId={commentsUi.activeId}
+          detachedIds={detachedCommentIds}
+          anchorTops={commentAnchorTops}
+          draftAnchor={commentsUi.draftAnchor}
+          draftTop={draftCommentTop}
+          onCancelDraft={() => patchEditorCommentsUi(record.id, { draftAnchor: null })}
+          onCreateThread={async (body, anchor) => {
+            const created = await comments.createThread(body, anchor)
+            if (created) patchEditorCommentsUi(record.id, { activeId: created.id })
+          }}
+          onReplyThread={async (threadId, body) => {
+            await comments.replyThread(threadId, body)
+          }}
+          onSetStatus={async (threadId, nextStatus) => {
+            await comments.setThreadStatus(threadId, nextStatus)
+          }}
+          onDelete={async (id) => {
+            await comments.deleteComment(id)
+            if (commentsUi.activeId === id) patchEditorCommentsUi(record.id, { activeId: '' })
+          }}
+          onSelectThread={selectCommentThread}
+          onAskAi={askAiForComment}
+        />
+      ) : null}
     </div>
   )
 }

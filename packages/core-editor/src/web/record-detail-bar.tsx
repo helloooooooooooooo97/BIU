@@ -4,6 +4,7 @@ import { HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
 import type { FsDetailBarProps } from '@biu/type-file-system/ui'
 import {
   ArrowPathIcon,
+  ChatBubbleBottomCenterTextIcon,
   ChevronDownIcon,
   CodeBracketIcon,
   EyeIcon,
@@ -17,7 +18,7 @@ import {
   AdjustmentsHorizontalIcon,
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
-import { usePageFind } from './page-view-state.ts'
+import { patchEditorCommentsUi, useEditorCommentsUi, usePageFind } from './editor-view-state.ts'
 import { useStickyToolbar } from './sticky-toolbar.ts'
 import { useToolbarOverflow } from '@biu/core-file-system/toolbar-overflow'
 import { SandboxKindIcon } from '@biu/core-file-system/sandbox-kind-icon'
@@ -75,6 +76,7 @@ export function RecordDetailBar({
   configMenu,
 }: FsDetailBarProps) {
   const find = usePageFind(record.id)
+  const commentsUi = useEditorCommentsUi(record.id)
   const path = String(collectionPath ?? '').trim()
   const fallback = recordContentFallback(path)
   const layouts = useRecordLayouts(path, record.id, fallback)
@@ -101,6 +103,7 @@ export function RecordDetailBar({
   const filterRef = useRef<HTMLDivElement>(null)
   const columnRef = useRef<HTMLDivElement>(null)
   const configRef = useRef<HTMLDivElement>(null)
+  const commentRef = useRef<HTMLDivElement>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
   const bindToolbar = useToolbarOverflow(toolbarRef)
   useStickyToolbar(toolbarRef)
@@ -762,6 +765,66 @@ export function RecordDetailBar({
             >
               <div className="tasks-filter-menu fsdb-tool-flyout" role="menu">
                 {configMenu}
+              </div>
+            </HeadlessDismiss>
+          ) : null}
+        </div>
+        <div className="tasks-filter-btn-wrap" ref={commentRef}>
+          <button
+            type="button"
+            className={`tasks-refresh tasks-rbar-btn editor-comment-trigger${open === 'comments' || commentsUi.open ? ' is-active' : ''}`}
+            aria-label="批注"
+            aria-haspopup="menu"
+            aria-expanded={open === 'comments'}
+            title={commentsUi.openCount ? `批注 (${commentsUi.openCount})` : '批注'}
+            onClick={() => toggle('comments')}
+          >
+            <ChatBubbleBottomCenterTextIcon aria-hidden className="size-[14px]" />
+            {commentsUi.openCount > 0 ? (
+              <span className="editor-comment-badge" data-testid="editor-comment-badge">
+                {commentsUi.openCount}
+              </span>
+            ) : null}
+          </button>
+          {open === 'comments' ? (
+            <HeadlessDismiss onDismiss={() => setOpen(null)} insideRef={commentRef}>
+              <div className="tasks-filter-menu fsdb-tool-flyout" role="menu" data-testid="editor-comment-menu">
+                <Row
+                  label={commentsUi.openCount ? `未解决 (${commentsUi.openCount})` : '未解决'}
+                  on={commentsUi.open && commentsUi.filter === 'open'}
+                  onToggle={() => {
+                    patchEditorCommentsUi(record.id, { open: true, filter: 'open' })
+                    setOpen(null)
+                  }}
+                />
+                <Row
+                  label={commentsUi.resolvedCount ? `已解决 (${commentsUi.resolvedCount})` : '已解决'}
+                  on={commentsUi.open && commentsUi.filter === 'resolved'}
+                  onToggle={() => {
+                    patchEditorCommentsUi(record.id, { open: true, filter: 'resolved' })
+                    setOpen(null)
+                  }}
+                />
+                <Row
+                  label={
+                    commentsUi.openCount + commentsUi.resolvedCount > 0
+                      ? `全部 (${commentsUi.openCount + commentsUi.resolvedCount})`
+                      : '全部'
+                  }
+                  on={commentsUi.open && commentsUi.filter === 'all'}
+                  onToggle={() => {
+                    patchEditorCommentsUi(record.id, { open: true, filter: 'all' })
+                    setOpen(null)
+                  }}
+                />
+                <Row
+                  label="隐藏批注"
+                  on={!commentsUi.open}
+                  onToggle={() => {
+                    patchEditorCommentsUi(record.id, { open: false, draftAnchor: null })
+                    setOpen(null)
+                  }}
+                />
               </div>
             </HeadlessDismiss>
           ) : null}

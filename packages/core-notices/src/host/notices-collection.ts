@@ -1,5 +1,4 @@
 import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
-import { REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 import { noticeToRecord, type NoticesStore } from './notices-store.ts'
 
 export function noticesCollection(store: NoticesStore): CollectionSpec {
@@ -22,10 +21,8 @@ export function noticesCollection(store: NoticesStore): CollectionSpec {
     },
     records: { update: true, create: false, delete: true },
     schema: {
-      labelField: 'title',
       columns: ['title', 'kind', 'read', 'body', 'href', 'createdAt'],
       fields: {
-        ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '标题' },
         body: { type: 'string', label: '摘要' },
         kind: { type: 'select', label: '类型', enum: ['approval', 'task', 'session'] },

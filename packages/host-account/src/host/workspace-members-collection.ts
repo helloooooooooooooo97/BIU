@@ -1,7 +1,6 @@
 import { currentAccountId } from '@biu/host-plugin-loader/data-dir'
 import {
   recordBuiltinValues,
-  REQUIRED_RECORD_FIELDS,
   type CollectionListQuery,
   type CollectionSpec,
   type DbRecord,
@@ -77,10 +76,8 @@ export function workspaceMembersCollection(
     } } : {}),
     records: { update: true, create: true, delete: true, allocateId: false },
     schema: {
-      labelField: 'title',
       columns: ['title', 'email', 'role', 'membershipKind', 'joinedAt'],
       fields: {
-        ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '账号名' },
         name: { type: 'string', label: '空间昵称' },
         email: { type: 'string', label: '登录邮箱' },

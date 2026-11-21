@@ -5,13 +5,20 @@ import { resolve } from 'node:path'
 import hljs from 'highlight.js'
 import { Editor } from '@tiptap/core'
 import { recordEditorExtensions } from './kit.ts'
+import {
+  applyStoredBlockIds,
+  encodeBlankParagraphsForParse,
+  markdownWithBlockIds,
+  restoreBlankParagraphs,
+  stripBlockIdStamps,
+} from './block-id.ts'
 import { filterSlashItems, SLASH_ITEMS } from './slash.ts'
 
 test('slash filter matches chinese labels and aliases', () => {
   assert.ok(filterSlashItems('标题').some((item) => item.id === 'h1'))
   assert.ok(filterSlashItems('code').some((item) => item.id === 'code'))
   assert.ok(filterSlashItems('图片').some((item) => item.id === 'image'))
-  const slashSrc = readFileSync(resolve(import.meta.dirname, './page-image.ts'), 'utf8')
+  const slashSrc = readFileSync(resolve(import.meta.dirname, './editor-image.ts'), 'utf8')
   assert.match(slashSrc, /\/api\/db\/file\/hash\//)
   assert.doesNotMatch(slashSrc, /readAsDataURL/)
   assert.ok(filterSlashItems('表格').some((item) => item.id === 'table'))
@@ -111,6 +118,48 @@ test('empty paragraphs serialize as blank lines, not &nbsp;', () => {
   assert.match(loaded.getHTML(), /<p>a<\/p>/)
   assert.match(loaded.getHTML(), /<p>b<\/p>/)
   loaded.destroy()
+})
+
+test('empty paragraphs and leading spaces survive markdownWithBlockIds reload without becoming code blocks', () => {
+  const editor = new Editor({
+    extensions: recordEditorExtensions(),
+    content: {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: '第一段' }] },
+        { type: 'paragraph' },
+        { type: 'paragraph' },
+        { type: 'paragraph', content: [{ type: 'text', text: '    滕王高阁临江渚，佩玉鸣鸾罢歌舞。' }] },
+        { type: 'paragraph' },
+        { type: 'paragraph', content: [{ type: 'text', text: '  两空格缩进' }] },
+      ],
+    },
+  })
+  const saved = markdownWithBlockIds(editor)
+  assert.doesNotMatch(saved, /&nbsp;/)
+  editor.destroy()
+
+  const reloaded = new Editor({
+    extensions: recordEditorExtensions(),
+    content: '',
+    contentType: 'markdown',
+  })
+  const { text, ids } = stripBlockIdStamps(saved)
+  reloaded.commands.setContent(encodeBlankParagraphsForParse(text), { contentType: 'markdown', emitUpdate: false })
+  restoreBlankParagraphs(reloaded)
+  applyStoredBlockIds(reloaded, ids)
+
+  const nodes: Array<{ type: string; text: string }> = []
+  reloaded.state.doc.forEach((n) => nodes.push({ type: n.type.name, text: n.textContent }))
+  assert.deepEqual(nodes, [
+    { type: 'paragraph', text: '第一段' },
+    { type: 'paragraph', text: '' },
+    { type: 'paragraph', text: '' },
+    { type: 'paragraph', text: '    滕王高阁临江渚，佩玉鸣鸾罢歌舞。' },
+    { type: 'paragraph', text: '' },
+    { type: 'paragraph', text: '  两空格缩进' },
+  ])
+  reloaded.destroy()
 })
 
 test('slash suggestion uses a fixed high stacking context', async () => {

@@ -11,7 +11,7 @@ import { tags } from '@lezer/highlight'
 import { CONTENT_JUMP_EVENT, parseContentJump } from '@biu/type-file-system'
 import { bindEditorTextHost } from '@biu/core-pick/web'
 import { peekContentJump } from './content-jump.ts'
-import { restorePageScroll } from './page-scroll-pin.ts'
+import { restorePageScroll } from './editor-scroll-pin.ts'
 import { findRanges, wrapFindIndex } from './find-ranges.ts'
 
 const findEffect = StateEffect.define<{ query: string; index: number }>()

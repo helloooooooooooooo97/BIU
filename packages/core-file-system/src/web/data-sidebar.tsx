@@ -127,9 +127,10 @@ export function DataIconRail({
   collectionPath: string
   onOpenTable?: (path: string, viewId?: string) => void
 }) {
+  const visible = tables.filter((table) => table.view?.sidebar !== false)
   return (
     <nav className="fsdb-icon-rail" aria-label="数据" data-testid="data-icon-rail">
-      {tables.map((table) => {
+      {visible.map((table) => {
         const name = table.view?.title ?? table.label
         const active = table.path === collectionPath
         return (
@@ -616,7 +617,8 @@ export const DataSidebar = memo(function DataSidebar({
   framed?: boolean
 }) {
   const listedTables = useMemo(() => {
-    const raw = tables.length ? tables : ([{ path: collectionPath, label: title, view: { title } }] as CollectionInfo[])
+    const visible = tables.filter((table) => table.view?.sidebar !== false)
+    const raw = visible.length ? visible : ([{ path: collectionPath, label: title, view: { title } }] as CollectionInfo[])
     const { user, index, system } = sortDataCollections(raw)
     return [...user, ...index, ...system]
   }, [collectionPath, tables, title])

@@ -348,4 +348,48 @@ html:not(.dark) .page-slash-item:hover .page-slash-icon,
 html:not(.dark) .page-slash-item.is-active .page-slash-icon,
 html:not(.dark) .page-bubble button:not(.is-on) svg,
 html:not(.dark) .page-bubble-chat-icon{color:var(--biu-color-icon)}
+.page-editor .editor-comment-mark{background:rgba(245,158,11,.2);padding:.12em 0;border-radius:0;-webkit-box-decoration-break:clone;box-decoration-break:clone;box-shadow:inset 0 -2px 0 rgba(245,158,11,.65);cursor:pointer;transition:background .15s ease,box-shadow .15s ease}
+.page-editor .editor-comment-mark:hover,.page-editor .editor-comment-mark.is-overlap{background:rgba(245,158,11,.32)}
+.page-editor .editor-comment-mark.is-active{background:rgba(245,158,11,.42);box-shadow:inset 0 -2px 0 rgba(245,158,11,.95)}
+.page-editor .tiptap code:has(.editor-comment-mark){background:color-mix(in srgb,rgba(245,158,11,.26) 72%,var(--biu-color-bg-hover));border-radius:3px 3px 0 0;box-shadow:inset 0 -2px 0 rgba(245,158,11,.65);cursor:pointer}
+.page-editor .tiptap code:has(.editor-comment-mark.is-overlap){background:color-mix(in srgb,rgba(245,158,11,.36) 76%,var(--biu-color-bg-hover))}
+.page-editor .tiptap code:has(.editor-comment-mark.is-active){background:color-mix(in srgb,rgba(245,158,11,.46) 80%,var(--biu-color-bg-hover));box-shadow:inset 0 -2px 0 rgba(245,158,11,.95)}
+.page-editor .tiptap code .editor-comment-mark{background:transparent;padding:0;box-shadow:none}
+.page-editor .page-editor-main{min-width:0;width:100%}
+.page-editor.has-comments{display:flex;align-items:flex-start;gap:20px}
+.page-editor.has-comments .page-editor-main{flex:1 1 0;min-width:0;width:auto}
+.editor-comment-trigger{position:relative}
+.editor-comment-badge{position:absolute;top:1px;right:1px;min-width:13px;height:13px;padding:0 3px;border-radius:999px;background:var(--biu-color-emphasis);color:var(--biu-color-on-emphasis,#fff);font-size:9.5px;font-weight:var(--biu-font-weight-semibold);line-height:13px;text-align:center;pointer-events:none}
+.page-editor .editor-comment-rail{position:relative;flex:0 0 288px;width:288px;display:flex;flex-direction:column;gap:8px;background:transparent}
+.page-editor .editor-comment-list{display:flex;flex-direction:column;gap:10px}
+.page-editor .editor-comment-rail.is-anchored .editor-comment-list{display:block;position:static}
+.page-editor .editor-comment-rail.is-anchored .editor-comment-composer,.page-editor .editor-comment-rail.is-anchored .editor-comment-card{position:absolute;left:0;right:0;margin:0;transition:top .18s ease,border-color .15s ease,box-shadow .15s ease}
+.page-editor .editor-comment-empty{padding:16px 8px;text-align:center;font-size:12.5px;line-height:1.6;color:var(--biu-color-text-muted)}
+.page-editor .editor-comment-composer,.page-editor .editor-comment-card{display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:10px;background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);box-shadow:0 2px 8px rgba(0,0,0,.12);transition:border-color .15s ease,box-shadow .15s ease}
+.page-editor .editor-comment-card{cursor:pointer}
+.page-editor .editor-comment-card:hover{border-color:var(--biu-color-border)}
+.page-editor .editor-comment-card.is-resolved{opacity:.72}
+@media (max-width:760px){.page-editor.has-comments{flex-direction:column;gap:12px}.page-editor .editor-comment-rail{flex:none;width:100%;min-height:0!important}.page-editor .editor-comment-rail.is-anchored .editor-comment-list{display:flex;flex-direction:column;gap:10px}.page-editor .editor-comment-rail.is-anchored .editor-comment-composer,.page-editor .editor-comment-rail.is-anchored .editor-comment-card{position:static}}
+.page-editor .editor-comment-quote{display:flex;flex-direction:column;gap:3px;padding:3px 8px;border-left:2px solid rgba(245,158,11,.35);font-size:12px;line-height:1.45;color:var(--biu-color-text-muted);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;transition:border-left-color .15s ease}
+.page-editor .editor-comment-card.is-active .editor-comment-quote{border-left-color:rgba(245,158,11,.95)}
+.page-editor .editor-comment-quote.is-detached{border-left-color:var(--biu-color-border-strong);font-style:italic}
+.page-editor .editor-comment-detached-tag{display:inline-block;margin-left:6px;padding:0 5px;border-radius:4px;background:var(--biu-color-bg-hover);color:var(--biu-color-text-muted);font-style:normal;font-size:10.5px}
+.page-editor .editor-comment-meta{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--biu-color-text-muted)}
+.page-editor .editor-comment-author{font-weight:var(--biu-font-weight-semibold);color:var(--biu-color-text)}
+.page-editor .editor-comment-time{font-variant-numeric:tabular-nums}
+.page-editor .editor-comment-actions{margin-left:auto;display:inline-flex;align-items:center;gap:2px}
+.page-editor .editor-comment-icon-btn{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:0;border-radius:5px;background:transparent;color:var(--biu-color-text-muted);cursor:pointer}
+.page-editor .editor-comment-icon-btn:hover{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
+.page-editor .editor-comment-icon-btn.is-danger:hover{color:var(--biu-color-danger)}
+.page-editor .editor-comment-text{font-size:13px;line-height:1.55;color:var(--biu-color-text);white-space:pre-wrap;word-break:break-word}
+.page-editor .editor-comment-replies{display:flex;flex-direction:column;gap:6px;margin-top:2px;padding-top:6px;border-top:var(--biu-stroke-width) solid var(--biu-color-border-subtle)}
+.page-editor .editor-comment-reply{display:flex;flex-direction:column;gap:3px;padding-left:8px;border-left:2px solid var(--biu-color-border-subtle)}
+.page-editor .editor-comment-input,.page-editor .editor-comment-reply-input{width:100%;box-sizing:border-box;border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:7px;padding:6px 8px;background:var(--biu-color-bg-input);color:var(--biu-color-text);font:inherit;font-size:12.5px;resize:vertical;outline:none}
+.page-editor .editor-comment-input:focus,.page-editor .editor-comment-reply-input:focus{border-color:var(--biu-color-emphasis)}
+.page-editor .editor-comment-reply-box{margin-top:2px}
+.page-editor .editor-comment-composer-actions{display:flex;justify-content:flex-end;gap:6px}
+.page-editor .editor-comment-btn{border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:6px;padding:4px 10px;background:transparent;color:var(--biu-color-text-muted);font:inherit;font-size:12px;cursor:pointer}
+.page-editor .editor-comment-btn:hover{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
+.page-editor .editor-comment-btn.is-primary{border-color:transparent;background:var(--biu-color-emphasis);color:var(--biu-color-on-emphasis,#fff)}
+.page-editor .editor-comment-btn.is-primary:disabled{opacity:.45;cursor:default}
 `

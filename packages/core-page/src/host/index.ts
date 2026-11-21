@@ -1,8 +1,7 @@
 import { assetsRootPath, dataHome, migrateLegacyPageDir } from '@biu/host-plugin-loader/data-dir'
 import type { Context } from 'cordis'
 import type { CollectionSpec } from '@biu/type-file-system'
-import { DATABASE_CHANNEL, REQUIRED_RECORD_FIELDS, databaseChannelPayload } from '@biu/type-file-system'
-import { PagesStore, PageAssetConflictError, type WorkspaceFs } from './store.ts'
+import { PagesStore, type WorkspaceFs } from './store.ts'
 import { pageBlocksCollection } from './page-blocks-collection.ts'
 import { PAGE_BLOCK_TICK_MS, PageBlocksIndex } from './page-blocks-index.ts'
 
@@ -25,13 +24,11 @@ export function pagesCollection(store: PagesStore, index: PageBlocksIndex): Coll
       icon: 'document',
     },
     schema: {
-      labelField: 'title',
       contentField: 'notes',
       contentBackend: 'editorContent',
       parentField: 'parentId',
       columns: ['title', 'tag', 'createdBy', 'updatedBy'],
       fields: {
-        ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '标题', writable: true },
         notes: { type: 'file', label: '正文', writable: true },
         parentId: { type: 'ref', label: '父级', writable: true },
@@ -41,8 +38,8 @@ export function pagesCollection(store: PagesStore, index: PageBlocksIndex): Coll
     records: { update: true, create: true, delete: true, allocateId: true },
     list: (query) => store.list(query?.ids),
     get: (id) => store.get(id),
-    update: async (id, patch) => {
-      const row = await store.update(id, patch)
+    update: async (id, patch, options) => {
+      const row = await store.update(id, patch, options)
       if ('notes' in patch) await index.reindexPage(row)
       return row
     },
@@ -85,60 +82,9 @@ export function pagesCollection(store: PagesStore, index: PageBlocksIndex): Coll
         tone: 'danger',
         requiredAction: 'resource:delete',
         description: '软删除：把这一页放进回收站，列表不再显示。恢复走 /trash。彻底删除不要用这个动作。',
-        run: async (id) => ({ id, trash: true }),
       },
     ],
   }
-}
-
-function servePageFile(ctx: Context, store: PagesStore) {
-  ctx.inject(['http'], (inner) => {
-    inner.http.route('GET', '/api/page/file/:name', async (route) => {
-      try {
-        const name = route.params.name ?? ''
-        const path = route.query.get('path') || String(route.req.headers['x-biu-resource-path'] ?? '')
-        if (path) await inner.database.requirePath(path, 'resource:read')
-        else inner.database.requireAsset(name, 'resource:read')
-        const { bytes, type, etag } = await store.readAsset(name)
-        route.res.writeHead(200, {
-          'content-type': type,
-          'cache-control': 'no-store',
-          etag: `"${etag}"`,
-        })
-        route.res.end(bytes)
-      } catch {
-        route.send(404, { error: 'not found' })
-      }
-    })
-    inner.http.route('PUT', '/api/page/file/:name', async (route) => {
-      try {
-        const name = route.params.name ?? ''
-        const path = route.query.get('path') || String(route.req.headers['x-biu-resource-path'] ?? '')
-        if (path) await inner.database.requirePath(path, 'resource:update')
-        else inner.database.requireAsset(name, 'resource:update')
-        const ifMatch = String(route.req.headers['if-match'] ?? '').trim().replace(/^W\//, '').replaceAll('"', '')
-        const written = await store.writeAsset(name, await route.bytes(), {
-          etag: ifMatch && ifMatch !== '*' ? ifMatch : '',
-        })
-        inner.http.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('asset', { asset: { name: written.name, etag: written.etag } }))
-        route.res.writeHead(200, {
-          'content-type': 'application/json; charset=utf-8',
-          'cache-control': 'no-store',
-          etag: `"${written.etag}"`,
-        })
-        route.res.end(JSON.stringify({ ok: true, ...written }))
-      } catch (error) {
-        if (error instanceof PageAssetConflictError) {
-          const headers: Record<string, string> = { 'content-type': 'application/json; charset=utf-8' }
-          if (error.etag) headers.etag = `"${error.etag}"`
-          route.res.writeHead(409, headers)
-          route.res.end(JSON.stringify({ error: 'etag conflict', etag: error.etag }))
-          return
-        }
-        route.send(400, { error: String(error) })
-      }
-    })
-  })
 }
 
 export const name = 'page'
@@ -160,7 +106,6 @@ export function apply(ctx: Context) {
   const index = new PageBlocksIndex(store)
   ctx.database.register(pagesCollection(store, index))
   ctx.database.register(pageBlocksCollection(store, index))
-  servePageFile(ctx, store)
   const tick = setInterval(() => {
     void index.sync()
   }, PAGE_BLOCK_TICK_MS)

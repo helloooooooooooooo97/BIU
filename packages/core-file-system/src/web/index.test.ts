@@ -15,7 +15,7 @@ test('file-system web does not register a page tag block', () => {
   const chrome = readFileSync(resolve(import.meta.dirname, './tag-chrome.tsx'), 'utf8')
   assert.doesNotMatch(chrome, /DetailBar:/)
   assert.doesNotMatch(chrome, /Content:/)
-  const pageBar = readFileSync(resolve(import.meta.dirname, '../../../core-editor/src/web/page-detail-bar.tsx'), 'utf8')
+  const pageBar = readFileSync(resolve(import.meta.dirname, '../../../core-editor/src/web/record-detail-bar.tsx'), 'utf8')
   assert.match(pageBar, /data-testid="fsdb-page-detail-bar"/)
   assert.match(pageBar, /aria-label="新建"/)
   assert.match(pageBar, /aria-label="属性展示"/)
@@ -238,7 +238,7 @@ test('record detail hides registered body when the content view is 隐藏', () =
 
 test('hidden content view is a filesystem builtin, not a plugin registration', () => {
   const views = readFileSync(resolve(import.meta.dirname, '../../../type-file-system/src/record-views.ts'), 'utf8')
-  const bar = readFileSync(resolve(import.meta.dirname, '../../../core-editor/src/web/page-detail-bar.tsx'), 'utf8')
+  const bar = readFileSync(resolve(import.meta.dirname, '../../../core-editor/src/web/record-detail-bar.tsx'), 'utf8')
   const editor = readFileSync(resolve(import.meta.dirname, '../../../core-editor/src/web/editor-content-views.ts'), 'utf8')
   assert.match(views, /HIDDEN_CONTENT_VIEW_ID = 'hidden'/)
   assert.match(bar, /HIDDEN_MODE/)

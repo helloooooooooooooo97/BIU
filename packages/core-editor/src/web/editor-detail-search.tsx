@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { HeadlessDismiss } from '@biu/biu-ui'
 import { ChevronDownIcon, ChevronUpIcon, MagnifyingGlassIcon } from '@heroicons/react/16/solid'
 import type { FsDetailSearchProps } from '@biu/type-file-system/ui'
-import { patchPageFind, usePageFind } from './page-view-state.ts'
+import { patchPageFind, usePageFind } from './editor-view-state.ts'
 
 export function EditorDetailSearch({ record }: FsDetailSearchProps) {
   const find = usePageFind(record.id)

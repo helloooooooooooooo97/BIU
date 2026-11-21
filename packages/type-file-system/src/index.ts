@@ -308,7 +308,7 @@ export const BUILTIN_FIELDS = {
   },
 } as const satisfies Record<string, FieldSpec>
 
-/** 登记 CollectionSpec.schema.fields 必须声明的记录列。由登记方自己存；创建人/编辑人也可由 Core 叠一层。 */
+/** 规范化后的公共记录列。注册输入只需声明业务字段；Core 统一补齐。 */
 export const REQUIRED_RECORD_FIELD_KEYS = [
   'createdAt',
   'updatedAt',
@@ -759,7 +759,7 @@ export type CollectionSchema = {
   contentField?: string
   /** 正文后端：sqlite 旁表 / 文件 / 只读投影。 */
   contentBackend?: 'editorContent' | 'file' | 'computed'
-  /** 必须包含图标、创建/更新时间、分面、父级、依赖、创建人/编辑人；登记方自己持久化。 */
+  /** Core 补齐公共字段后的完整字段定义。 */
   fields: CollectionFields
   /** 表格默认可见列（须为 fields 的键）。不写则列出全部列表列。详情仍显示全部字段。 */
   columns?: string[]
@@ -784,9 +784,11 @@ export type CollectionRecordCaps = {
 
 export type DbRecord = { id: string } & Record<string, unknown>
 
-export type CollectionAction = CollectionActionInfo & {
-  run: (id: string, record: DbRecord, args?: Record<string, unknown>) => unknown | Promise<unknown>
-}
+/** delete / trash 可由宿主统一执行；其它动作必须提供处理函数。 */
+export type CollectionAction = CollectionActionInfo & (
+  | { run: (id: string, record: DbRecord, args?: Record<string, unknown>) => unknown | Promise<unknown> }
+  | { id: 'delete' | 'trash'; run?: never }
+)
 
 /** 登记方自己选定的前端导航：路由、图标、显示名。Core-File System 按此在 Dock 挂入口，不代为生成路由。 */
 export type CollectionView = {
@@ -801,6 +803,8 @@ export type CollectionView = {
   icon?: string
   /** 登记后出现在 Session 检查器加号里，用 title 作为「添加××」。 */
   inspector?: boolean
+  /** 是否在左侧边栏展示，默认 true；设为 false 时仍注册到文件系统但不出现在左侧边栏。 */
+  sidebar?: boolean
 }
 
 export type CollectionListQuery = {
@@ -824,11 +828,19 @@ export function hasCollectionDeleteQuery(query?: CollectionListQuery | null): bo
   return false
 }
 
+/** 集合只声明业务字段及公共字段的定制；宿主统一补齐公共字段。 */
+export type CollectionSchemaInput = Omit<CollectionSchema, 'fields'> & {
+  fields: Record<string, FieldSpec>
+}
+
+/** 宿主已持久化正文时，集合只同步业务副作用，避免再次写入 editor_content。 */
+export type CollectionUpdateOptions = { persistContent?: boolean }
+
 export type CollectionSpec = {
   id: string
   path: string
   label?: string
-  schema: CollectionSchema
+  schema: CollectionSchemaInput
   view?: CollectionView
   /**
    * 记录权限。list / get 始终可用。
@@ -839,7 +851,7 @@ export type CollectionSpec = {
   list: (query?: CollectionListQuery) => DbRecord[] | Promise<DbRecord[]>
   get: (id: string) => DbRecord | null | undefined | Promise<DbRecord | null | undefined>
   /** 更新已有记录的可写字段。不要叫 write。 */
-  update?: (id: string, patch: Record<string, unknown>) => DbRecord | Promise<DbRecord>
+  update?: (id: string, patch: Record<string, unknown>, options?: CollectionUpdateOptions) => DbRecord | Promise<DbRecord>
   create?: (rows: Record<string, unknown>[]) => DbRecord[] | Promise<DbRecord[]>
   remove?: (query: CollectionListQuery) => string[] | void | boolean | Promise<string[] | void | boolean>
   actions?: CollectionAction[]

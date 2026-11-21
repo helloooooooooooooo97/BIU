@@ -9,7 +9,6 @@ import {
   AGENTS_COLLECTION_PATH,
   DATA_COLLECTION_PATH,
   EDITOR_BLOCKS_COLLECTION_PATH,
-  EVENTS_COLLECTION_PATH,
   PLUGINS_COLLECTION_PATH,
   TAGS_COLLECTION_PATH,
   TRASH_COLLECTION_PATH,
@@ -102,10 +101,6 @@ export function resolveScopeTarget(
     if (tablePath && sourceId) return { collection: tablePath, id: sourceId }
     const parsed = parseStampRecordId(id)
     if (parsed) return { collection: parsed.collection, id: parsed.recordId }
-  }
-  if (collection === EVENTS_COLLECTION_PATH) {
-    const sessionId = String(row?.sessionId ?? (id.lastIndexOf(':') > 0 ? id.slice(0, id.lastIndexOf(':')) : ''))
-    if (sessionId) return { collection: AGENTS_COLLECTION_PATH, id: sessionId }
   }
   if (collection === TAGS_COLLECTION_PATH) {
     const tablePath = String(row?.tablePath ?? '')

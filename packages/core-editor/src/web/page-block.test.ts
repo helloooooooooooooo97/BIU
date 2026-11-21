@@ -6,7 +6,7 @@ import { recordEditorExtensions } from './kit.ts'
 import { filterSlashItems, slashGroups } from './slash.ts'
 import { BASIC_BLOCK_TYPE, BlockEditorService } from './service.ts'
 import { duplicateAssetPath } from './page-block.ts'
-import { pageTextBubbleOpen } from './page-editor.tsx'
+import { pageTextBubbleOpen } from './record-editor.tsx'
 
 test('registerBlock adds a slash item and inserts pageBlock', async () => {
   const ctx = new Context()
@@ -399,7 +399,7 @@ test('text style bubble stays closed when the cursor is on a pageBlock', () => {
 })
 
 test('text style bubble opens for text selected inside a table cell while table bar yields', async () => {
-  const { pageTableBarOpen } = await import('./page-table-bar.tsx')
+  const { pageTableBarOpen } = await import('./editor-table-bar.tsx')
   const editor = new Editor({
     extensions: recordEditorExtensions(),
     content: '| A | B |\n| --- | --- |\n| hello | world |\n',

@@ -1,4 +1,4 @@
-import { recordBuiltinValues, REQUIRED_RECORD_FIELDS, type CollectionSpec, type DbRecord } from '@biu/type-file-system'
+import { recordBuiltinValues, type CollectionSpec, type DbRecord } from '@biu/type-file-system'
 import type { SkillsService } from './index.ts'
 import type { SkillImportFile, SkillRecord } from './store.ts'
 
@@ -42,12 +42,10 @@ export function skillsCollection(skills: SkillsService): CollectionSpec {
     },
     records: { update: true, create: true, delete: true, allocateId: false },
     schema: {
-      labelField: 'title',
       contentField: 'notes',
       contentBackend: 'editorContent',
       columns: ['title', 'description', 'source', 'enabled'],
       fields: {
-        ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '名字', writable: true },
         description: {
           type: 'string',
@@ -115,7 +113,7 @@ export function skillsCollection(skills: SkillsService): CollectionSpec {
       }
       return out
     },
-    update: (id, patch) => {
+    update: (id, patch, options) => {
       const next = skills.patch(id, {
         ...(patch.title !== undefined ? { name: patch.title } : {}),
         ...(patch.description !== undefined ? { description: patch.description } : {}),
@@ -124,7 +122,7 @@ export function skillsCollection(skills: SkillsService): CollectionSpec {
         ...(patch.notes !== undefined ? { notes: patch.notes } : {}),
         ...(patch.tags !== undefined ? { tags: patch.tags } : {}),
         ...(patch.emoji !== undefined ? { emoji: patch.emoji } : {}),
-      })
+      }, options)
       return asRecord(next, true, skills.filesOf(next.id))
     },
     remove: (query) => {

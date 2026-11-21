@@ -133,7 +133,6 @@ import {
   AGENTS_COLLECTION_PATH,
   DATA_COLLECTION_PATH,
   EDITOR_BLOCKS_COLLECTION_PATH,
-  EVENTS_COLLECTION_PATH,
   PAGES_COLLECTION_PATH,
   PLUGINS_COLLECTION_PATH,
   TAGS_COLLECTION_PATH,
@@ -165,7 +164,6 @@ const STAMP_FIELD_BLOCKLIST = new Set([
   'tag',
   'fieldCount',
   'stampCount',
-  'tagId',
   'content',
   'emoji',
   'createdAt',
@@ -252,6 +250,10 @@ function schemaFor(spec: CollectionSpec): CollectionSchema {
 }
 
 function assertRecordCaps(spec: CollectionSpec) {
+  for (const action of spec.actions ?? []) {
+    const builtinDelete = spec.path !== TRASH_COLLECTION_PATH && (action.id === 'delete' || action.id === 'trash')
+    if (!builtinDelete && !action.run) throw new Error(`action has no handler: ${action.id}`)
+  }
   if (spec.records?.update && !spec.update) throw new Error(`collection ${spec.id}: records.update 为 true 时必须提供 update`)
   if (spec.records?.create && !spec.create) throw new Error(`collection ${spec.id}: records.create 为 true 时必须提供 create`)
   if (spec.records?.delete && !spec.remove) throw new Error(`collection ${spec.id}: records.delete 为 true 时必须提供 remove`)
@@ -509,7 +511,6 @@ function sortRecords(rows: DbRecord[], field: string, dir: 'asc' | 'desc', sorts
 export const DEFAULT_PAGE_SIZE = 20
 export const MAX_PAGE_SIZE = 200
 const HARD_DELETE_PATHS = new Set([
-  EVENTS_COLLECTION_PATH,
   TRASH_COLLECTION_PATH,
   WORKSPACE_MEMBERS_COLLECTION_PATH,
   VIEWS_COLLECTION_PATH,
@@ -564,7 +565,10 @@ export class DatabaseService extends Service implements Database {
   recycleAssets?: () => void
 
   private bumpQueued = false
-  private pendingBumpTenants = new Map<string, { workspaceId: string; accountId: string }>()
+  private pendingBumpTenants = new Map<
+    string,
+    { workspaceId: string; accountId: string; paths: Set<string>; all: boolean }
+  >()
 
   constructor(ctx: Context) {
     super(ctx, 'database')
@@ -638,15 +642,8 @@ export class DatabaseService extends Service implements Database {
     return [...this.collections.values()].sort((a, b) => a.path.localeCompare(b.path))
   }
 
-  /** 成员表在本地和云端都出现：本机用户自己是成员，局域网访客按设备码列入。 */
-  membersInSystemData() {
-    return true
-  }
-
   publishCollection(item: CollectionSpec): CollectionInfo {
-    const info = publicCollection(item)
-    if (item.path === WORKSPACE_MEMBERS_COLLECTION_PATH && !this.membersInSystemData()) return { ...info, view: null }
-    return info
+    return publicCollection(item)
   }
 
   private async loadCollectionRows(spec: CollectionSpec, query: CollectionListQuery) {
@@ -931,7 +928,6 @@ export class DatabaseService extends Service implements Database {
   private listRemapsRecords(path: string) {
     return (
       path === TRASH_COLLECTION_PATH ||
-      path === EVENTS_COLLECTION_PATH ||
       path === TAGS_COLLECTION_PATH ||
       path === EDITOR_BLOCKS_COLLECTION_PATH
     )
@@ -1104,7 +1100,7 @@ export class DatabaseService extends Service implements Database {
     http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('content', { path }))
   }
 
-  bump() {
+  bump(path?: string) {
     this.visibleGen += 1
     this.access.clearShareCaches()
     this.inflightMatches.clear()
@@ -1114,7 +1110,15 @@ export class DatabaseService extends Service implements Database {
     this.ctx.emit('database/change')
     const workspaceId = currentRequestWorkspaceId() || this.collabStore()?.activeWorkspaceId?.() || ''
     const accountId = currentAccountId()
-    this.pendingBumpTenants.set(`${workspaceId}\0${accountId}`, { workspaceId, accountId })
+    const key = `${workspaceId}\0${accountId}`
+    let entry = this.pendingBumpTenants.get(key)
+    if (!entry) {
+      entry = { workspaceId, accountId, paths: new Set(), all: false }
+      this.pendingBumpTenants.set(key, entry)
+    }
+    const cleanPath = String(path ?? '').trim()
+    if (cleanPath) entry.paths.add(cleanPath)
+    else entry.all = true
     if (this.bumpQueued) return
     this.bumpQueued = true
     queueMicrotask(() => {
@@ -1125,12 +1129,23 @@ export class DatabaseService extends Service implements Database {
         | { broadcast?: (type: string, payload: unknown, workspaceId?: string, accountId?: string) => void }
         | undefined
       for (const tenant of tenants) {
-        http?.broadcast?.(
-          DATABASE_CHANNEL,
-          databaseChannelPayload('records'),
-          tenant.workspaceId || undefined,
-          tenant.accountId || undefined,
-        )
+        if (tenant.all || tenant.paths.size === 0) {
+          http?.broadcast?.(
+            DATABASE_CHANNEL,
+            databaseChannelPayload('records'),
+            tenant.workspaceId || undefined,
+            tenant.accountId || undefined,
+          )
+        } else {
+          for (const targetPath of tenant.paths) {
+            http?.broadcast?.(
+              DATABASE_CHANNEL,
+              databaseChannelPayload('records', { path: targetPath }),
+              tenant.workspaceId || undefined,
+              tenant.accountId || undefined,
+            )
+          }
+        }
       }
     })
   }
@@ -1645,7 +1660,7 @@ export class DatabaseService extends Service implements Database {
       }
       this.refreshContentRefs(spec, next)
       await this.stampActor(spec.path, current.id)
-      this.bump()
+      this.bump(spec.path)
       const beforeRow = this.decorateRecord(spec, current)
       const beforeSnap: Record<string, unknown> = {}
       const afterSnap: Record<string, unknown> = {}
@@ -1701,7 +1716,7 @@ export class DatabaseService extends Service implements Database {
     if (!viewOnly) this.indexTagRecord(spec, this.decorateRecord(spec, record))
     this.refreshContentRefs(spec, this.withBanner(spec, record), !viewOnly)
     if (viewOnly) this.notifyViewCatalog(`${spec.path}/${record.id}`)
-    else this.bump()
+    else this.bump(spec.path)
     const beforeSnap: Record<string, unknown> = {}
     const afterSnap: Record<string, unknown> = {}
     for (const key of Object.keys(patch)) {
@@ -1844,7 +1859,7 @@ export class DatabaseService extends Service implements Database {
       this.indexTagRecord(spec, this.decorateRecord(spec, record))
       this.refreshContentRefs(spec, this.withBanner(spec, record))
     }
-    this.bump()
+    this.bump(spec.path)
     const items = created.map((record) => ({
       kind: 'record' as const,
       path: `${spec.path}/${record.id}`,
@@ -1920,7 +1935,7 @@ export class DatabaseService extends Service implements Database {
           if (collection && collection !== '/' && viewId) this.shares.revokeView(collection, viewId)
         }
       }
-      this.bump()
+      this.bump(spec.path)
       return { kind: 'deleted' as const, path: spec.path, ids, trash: true }
     }
     await spec.remove({ ids })
@@ -1944,7 +1959,7 @@ export class DatabaseService extends Service implements Database {
         this.shares.revokeView(key.collection, key.viewId)
       }
     }
-    this.bump()
+    this.bump(spec.path)
     this.recycleAssets?.()
     return { kind: 'deleted' as const, path: spec.path, ids }
   }
@@ -1967,7 +1982,7 @@ export class DatabaseService extends Service implements Database {
     )
     const ids = [...new Set(matched.map((row) => row.id))]
     for (const id of ids) this.tags.restoreDeleted(spec.path, id)
-    this.bump()
+    this.bump(spec.path)
     return { kind: 'restored' as const, path: spec.path, ids }
   }
 
@@ -2039,6 +2054,7 @@ export class DatabaseService extends Service implements Database {
     if ((actionId === 'delete' || actionId === 'trash') && spec.path !== TRASH_COLLECTION_PATH) {
       return this.remove(spec.path, { ids: [parts[1]!] })
     }
+    if (!action.run) throw new Error(`action has no handler: ${actionId}`)
     const result = await action.run(parts[1]!, record, args)
     if (spec.path === PLUGINS_COLLECTION_PATH && actionId === 'sandbox' && !builtinPlugin && !this.access.recordOwner(spec.path, parts[1]!)) {
       this.stampPluginCreateScope(parts[1]!, args)
@@ -2109,7 +2125,7 @@ export class DatabaseService extends Service implements Database {
     const patch = this.collectionCanUpdate(spec)
       ? pickWritablePatch(schema, { [field]: persisted })
       : { [field]: persisted }
-    const record = await spec.update(parts[1]!, patch)
+    const record = await spec.update(parts[1]!, patch, isEditorContentSpec(spec) ? { persistContent: false } : undefined)
     await this.stampActor(spec.path, record.id)
     this.refreshContentRefs(spec, this.withBanner(spec, record))
     this.notifyContent(`${spec.path}/${record.id}`)

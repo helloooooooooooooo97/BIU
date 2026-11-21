@@ -12,7 +12,6 @@ export const SKILLS_COLLECTION_PATH = '/skills'
 export const PLUGINS_COLLECTION_PATH = '/plugins'
 export const TRASH_COLLECTION_PATH = '/trash'
 export const WORKSPACE_MEMBERS_COLLECTION_PATH = '/workspace-members'
-export const EVENTS_COLLECTION_PATH = '/events'
 export const LEGACY_SESSIONS_COLLECTION_PATH = '/' + 'sessions'
 
 /** 集合路径：补前导斜杠、去掉尾斜杠。host 与 web 共用。旧 /sessions 表迁到 /agents。 */

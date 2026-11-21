@@ -12,7 +12,7 @@ import {
   type FsRecordContentView,
 } from '@biu/type-file-system/ui'
 import * as editorUi from './index.ts'
-import { RecordEditor } from './page-editor.tsx'
+import { RecordEditor } from './record-editor.tsx'
 
 class FakeDatabaseUi extends Service implements DatabaseUi {
   paths: string[] = []

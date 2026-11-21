@@ -1,5 +1,5 @@
 import type { CollectionSpec, CollectionInfo, DbRecord } from '@biu/type-file-system'
-import { actionVisibleToUser, REQUIRED_RECORD_FIELDS, recordBuiltinValues } from '@biu/type-file-system'
+import { actionVisibleToUser, recordBuiltinValues } from '@biu/type-file-system'
 import { parseStampRecordId, stampRecordId } from './tags-collection.ts'
 import { normalizeCollectionPath } from '../paths.ts'
 import { DATA_COLLECTION_PATH, DATA_MODULE_ID, TAGS_COLLECTION_PATH, isIndexCollection, isSystemCollection } from '../web/database-path.ts'
@@ -67,10 +67,8 @@ export function dataCollection(tables: () => CollectionSpec[]): CollectionSpec {
     },
     records: { update: true },
     schema: {
-      labelField: 'title',
       columns: ['title', 'actions', 'table'],
       fields: {
-        ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '标题', writable: true },
         table: { type: 'select', label: '来源表', computed: true },
         tablePath: { type: 'string', label: '表路径', computed: true },

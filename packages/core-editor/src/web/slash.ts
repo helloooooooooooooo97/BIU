@@ -9,7 +9,7 @@ import { slashMayOpen } from './editor-live.ts'
 import { createPageBlockId } from './page-block.ts'
 import { defaultPageBlockTitle } from '../page-block-fence.ts'
 import { BASIC_BLOCK_TYPE, getBlockEditor, type EditorBlockSpec, type SlashInsert } from './service.ts'
-import { pageResourcePath, uploadPageImage } from './page-image.ts'
+import { pageResourcePath, uploadPageImage } from './editor-image.ts'
 import { clientLog, clientLogErrorText } from '@biu/web-event-log/log'
 import {
   pageBlockPluginPhase,

@@ -1,3 +1,4 @@
+import type { CollectionUpdateOptions } from '@biu/type-file-system'
 import { existsSync, mkdirSync, readFileSync, renameSync, watch, writeFileSync, type FSWatcher } from 'node:fs'
 import { readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
@@ -788,16 +789,18 @@ export class PluginStoreService extends Service {
     return this.readDiskReadme(id)
   }
 
-  async writeReadme(id: string, markdown: string) {
+  async writeReadme(id: string, markdown: string, options?: CollectionUpdateOptions) {
     if (isOnlineRuntime()) this.requireBuiltinManager(id)
     const text = String(markdown ?? '')
-    const sqlitePath = this.contentSqlitePath()
-    mkdirSync(dirname(sqlitePath), { recursive: true })
-    const db = openAndMigrateBiu(sqlitePath)
-    try {
-      writeEditorContent(db, '/plugins', id, text)
-    } finally {
-      db.close()
+    if (options?.persistContent !== false) {
+      const sqlitePath = this.contentSqlitePath()
+      mkdirSync(dirname(sqlitePath), { recursive: true })
+      const db = openAndMigrateBiu(sqlitePath)
+      try {
+        writeEditorContent(db, '/plugins', id, text)
+      } finally {
+        db.close()
+      }
     }
     for (const dir of [this.sandboxPath(id), this.pluginPath(id)]) {
       if (!existsSync(join(dir, 'manifest.json'))) continue
