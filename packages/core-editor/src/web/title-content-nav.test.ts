@@ -6,6 +6,7 @@ import { recordEditorExtensions } from './kit.ts'
 import {
   FOCUS_RECORD_TITLE,
   atFirstVisibleLine,
+  enterContentFromTitle,
   focusRecordTitleNear,
   handleContentTitleNav,
   hasVisibleBlockBefore,
@@ -14,9 +15,9 @@ import {
 
 const none = { shiftKey: false }
 
-test('empty caret at doc start leaves for title on Backspace/Delete and ArrowUp', () => {
+test('empty caret at doc start leaves for title on Backspace and ArrowUp, not Delete', () => {
   assert.equal(shouldLeaveContentForTitle('Backspace', none, 1, true, 1), true)
-  assert.equal(shouldLeaveContentForTitle('Delete', none, 1, true, 1), true)
+  assert.equal(shouldLeaveContentForTitle('Delete', none, 1, true, 1), false)
   assert.equal(shouldLeaveContentForTitle('ArrowUp', none, 1, true, 1), true)
   assert.equal(shouldLeaveContentForTitle('Enter', none, 1, true, 1), false)
   assert.equal(shouldLeaveContentForTitle('Backspace', { shiftKey: true }, 1, true, 1), false)
@@ -84,15 +85,42 @@ test('Backspace at the start of TipTap focuses the title and does not delete the
   host.remove()
 })
 
-test('Delete at the start of TipTap also focuses the title', () => {
+test('Delete at the start of TipTap does not jump to title', () => {
   const { editor, host } = makeEditor('hello')
   editor.chain().focus().setTextSelection(Selection.atStart(editor.state.doc)).run()
   const title = listenTitle()
-  const before = editor.getMarkdown()
   press(editor, 'Delete')
   title.stop()
+  assert.equal(title.hits(), 0)
+  editor.destroy()
+  host.remove()
+})
+
+test('title Enter inserts leading paragraph and Backspace removes it symmetrically', () => {
+  const { editor, host } = makeEditor('正文首段')
+  enterContentFromTitle(editor, { mode: 'enter' })
+  assert.equal(editor.state.doc.childCount, 2)
+  assert.equal(editor.state.doc.firstChild?.textContent, '')
+  assert.equal(editor.state.doc.child(1).textContent, '正文首段')
+
+  // Calling Enter again when first paragraph is already empty does not add duplicate blank lines
+  enterContentFromTitle(editor, { mode: 'enter' })
+  assert.equal(editor.state.doc.childCount, 2)
+
+  // Backspace on that empty leading paragraph removes it and jumps back to title
+  editor.chain().focus().setTextSelection(Selection.atStart(editor.state.doc)).run()
+  const title = listenTitle()
+  press(editor, 'Backspace')
+  title.stop()
   assert.equal(title.hits(), 1)
-  assert.equal(editor.getMarkdown(), before)
+  assert.equal(editor.state.doc.childCount, 1)
+  assert.equal(editor.state.doc.firstChild?.textContent, '正文首段')
+
+  // Splitting in the middle of title inserts tail text as first paragraph
+  enterContentFromTitle(editor, { mode: 'enter', insertText: '后半段' })
+  assert.equal(editor.state.doc.childCount, 2)
+  assert.equal(editor.state.doc.firstChild?.textContent, '后半段')
+
   editor.destroy()
   host.remove()
 })
@@ -151,7 +179,7 @@ test('focusRecordTitleNear targets the title above properties in the same detail
   main.remove()
 })
 
-test('Delete at doc start focuses the title above properties', () => {
+test('Delete at doc start stays in editor instead of focusing title', () => {
   const main = document.createElement('div')
   main.className = 'fsdb-detail-main'
   const title = document.createElement('textarea')
@@ -170,9 +198,7 @@ test('Delete at doc start focuses the title above properties', () => {
   })
   editor.chain().focus().setTextSelection(Selection.atStart(editor.state.doc)).run()
   press(editor, 'Delete')
-  assert.equal(document.activeElement, title)
-  assert.equal(title.selectionStart, '页面标题'.length)
-  assert.match(editor.getHTML(), /hello/)
+  assert.notEqual(document.activeElement, title)
   editor.destroy()
   main.remove()
 })

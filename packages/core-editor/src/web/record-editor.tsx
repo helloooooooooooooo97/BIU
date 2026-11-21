@@ -16,7 +16,7 @@ import { recordEditorExtensions } from './kit.ts'
 import { PageBlockHandle } from './page-block-handle.tsx'
 import { PageTableBar } from './editor-table-bar.tsx'
 import { editorHostIsLive } from './editor-live.ts'
-import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, handleContentTitleNav, shouldLeaveContentForTitle, focusRecordTitleNear, isDocStartSelection, atFirstVisibleLine } from './title-content-nav.ts'
+import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, enterContentFromTitle, handleContentTitleNav, shouldLeaveContentForTitle, focusRecordTitleNear, isDocStartSelection, atFirstVisibleLine, type FocusRecordContentDetail } from './title-content-nav.ts'
 import { tryContentJump, contentJumpForRecord } from './content-jump.ts'
 import { CONTENT_JUMP_EVENT } from '@biu/type-file-system'
 import { bindEditorTextHost, getPick, pickIdFromText, pickPreview, withPickLocus } from '@biu/core-pick/web'
@@ -689,14 +689,16 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return
-    const onFocus = () => {
+    const onFocus = (event: Event) => {
       if (editor.isDestroyed || !editorHostIsLive(editor)) return
       if (status === 'loading' || status === 'failed') return
-      editor.commands.focus('start')
+      const detail = (event as CustomEvent<FocusRecordContentDetail | undefined>).detail
+      if (detail?.recordId && detail.recordId !== record.id) return
+      enterContentFromTitle(editor, detail)
     }
     window.addEventListener(FOCUS_RECORD_CONTENT, onFocus)
     return () => window.removeEventListener(FOCUS_RECORD_CONTENT, onFocus)
-  }, [editor, status])
+  }, [editor, record.id, status])
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return

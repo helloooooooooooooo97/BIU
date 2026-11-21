@@ -11,10 +11,10 @@ test('title Enter and last-line ArrowDown leave for content', () => {
   assert.equal(shouldLeaveTitleForContent('ArrowUp', false, 'hello', 0), false)
 })
 
-test('content start Backspace and ArrowUp leave for title', () => {
+test('content start Backspace and ArrowUp leave for title, Delete does not', () => {
   const none = { shiftKey: false }
   assert.equal(shouldLeaveContentForTitle('Backspace', none, 0, true, 0), true)
-  assert.equal(shouldLeaveContentForTitle('Delete', none, 0, true, 0), true)
+  assert.equal(shouldLeaveContentForTitle('Delete', none, 0, true, 0), false)
   assert.equal(shouldLeaveContentForTitle('ArrowUp', none, 0, true, 0), true)
   assert.equal(shouldLeaveContentForTitle('Enter', none, 0, true, 0), false)
   assert.equal(shouldLeaveContentForTitle('Backspace', { shiftKey: true }, 0, true, 0), false)
