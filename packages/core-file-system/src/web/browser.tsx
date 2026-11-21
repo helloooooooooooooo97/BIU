@@ -2153,9 +2153,12 @@ export function CollectionBrowser({
   const listedSelected = detailId ? items.find((item) => item.id === detailId) : undefined
   const selected = useMemo(() => {
     if (!detailId) return null
-    if (detailRow?.id === detailId) return listedSelected ? overlayListed(detailRow, listedSelected, listColumns) : detailRow
-    return listedSelected ?? { id: detailId }
-  }, [detailId, detailRow, listColumns, listedSelected])
+    if (detailRow?.id === detailId) {
+      const merged = listedSelected ? overlayListed(detailRow, listedSelected, listColumns) : detailRow
+      return applyPendingDetailPatches(merged)
+    }
+    return applyPendingDetailPatches(listedSelected ?? { id: detailId })
+  }, [applyPendingDetailPatches, detailId, detailRow, listColumns, listedSelected])
   const viewIndex = selected ? indexOnPage(selected.id, items, page, pageSize) : null
   const originStamp = crumbFromData ? overviewStampOf(collectionPath, selected, detailId) : ''
   const originIndex = crumbFromData
@@ -3216,6 +3219,20 @@ export function CollectionBrowser({
       if (dataPathRef.current === dataPath) {
         setDetailRow((prev) => (prev?.id === row.id ? overlayListedRow(prev, { ...prev, ...content }) : prev))
       }
+      let released = false
+      const releasePending = () => {
+        if (released) return
+        released = true
+        const bag = pendingFieldWritesRef.current.get(row.id)
+        if (!bag) return
+        for (const key of Object.keys(content)) {
+          const entry = bag.get(key)
+          if (!entry) continue
+          if (entry.count <= 1) bag.delete(key)
+          else bag.set(key, { ...entry, count: entry.count - 1 })
+        }
+        if (bag.size === 0) pendingFieldWritesRef.current.delete(row.id)
+      }
       try {
       await tableEditHistory.edit(path, content, async () => {
         const listed = itemsRef.current.find((item) => item.id === row.id)
@@ -3242,7 +3259,9 @@ export function CollectionBrowser({
           } else {
             dropListedRecords([row.id], { keepHistory: true })
           }
-          setDetailRow((prev) => (prev?.id === row.id ? overlayListedRow(prev, displayed) : prev))
+          releasePending()
+          const protectedDisplay = applyPendingDetailPatches(displayed)
+          setDetailRow((prev) => (prev?.id === row.id ? overlayListedRow(prev, protectedDisplay) : prev))
           publishListedMutation({ path: dataPath, op: 'patch', row: displayed, groupBy: groupByRef.current })
           announceListChange(stillMatches, path)
           quietUntil.current = Date.now() + 800
@@ -3253,16 +3272,7 @@ export function CollectionBrowser({
         return next
       })
       } finally {
-        const bag = pendingFieldWritesRef.current.get(row.id)
-        if (bag) {
-          for (const key of Object.keys(content)) {
-            const entry = bag.get(key)
-            if (!entry) continue
-            if (entry.count <= 1) bag.delete(key)
-            else bag.set(key, { ...entry, count: entry.count - 1 })
-          }
-          if (bag.size === 0) pendingFieldWritesRef.current.delete(row.id)
-        }
+        releasePending()
       }
     } catch (err) {
       if (dataPathRef.current !== dataPath) return

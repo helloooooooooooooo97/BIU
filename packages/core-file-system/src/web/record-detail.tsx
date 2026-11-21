@@ -354,7 +354,7 @@ export function RecordDetail({
         const nextTitle = `${cur}${appendText}`
         setDraft((prev) => ({ ...prev, [fieldKey]: nextTitle }))
         const trimmed = nextTitle.trim()
-        if (trimmed && trimmed !== String(selected[fieldKey] ?? '')) {
+        if (trimmed) {
           void writeOne(selected, fieldKey, schema.fields[fieldKey]!, trimmed)
         }
         const place = () => focusRecordTitleNear(mainRef.current, joinPos)
@@ -493,7 +493,7 @@ export function RecordDetail({
                           if (after.length > 0 && schema.labelField) {
                             const nextTitle = before.trim()
                             setDraft((prev) => ({ ...prev, [schema.labelField!]: before }))
-                            if (nextTitle !== String(selected[schema.labelField] ?? '')) {
+                            if (nextTitle) {
                               void writeOne(selected, schema.labelField, schema.fields[schema.labelField]!, nextTitle)
                             }
                           }
