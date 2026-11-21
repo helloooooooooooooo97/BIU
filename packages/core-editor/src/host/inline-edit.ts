@@ -48,6 +48,20 @@ export function sanitizeInlineEditOutput(raw: string, selection = '', instructio
   return trimmed
 }
 
+export function formatInlineEditSessionUserText(input: InlineEditInput) {
+  const title = String(input.title ?? '').trim()
+  const instruction = String(input.instruction ?? '').trim()
+  const selection = String(input.selection ?? '').trim()
+  const header = title ? `[原地修改 · ${title}] ${instruction}` : `[原地修改] ${instruction}`
+  if (!selection) return header
+  const preview = selection.length > 240 ? `${selection.slice(0, 240)}…` : selection
+  const quoted = preview
+    .split(/\r?\n/)
+    .map((line) => `> ${line}`)
+    .join('\n')
+  return `${header}\n\n${quoted}`
+}
+
 export async function runInlineEdit(ctx: Context, input: InlineEditInput) {
   const instruction = String(input.instruction ?? '').trim()
   if (!instruction) throw new Error('请输入修改指令')
@@ -75,13 +89,14 @@ export async function runInlineEdit(ctx: Context, input: InlineEditInput) {
           chat: (
             messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
             tools?: unknown[],
-          ) => Promise<{ content?: string | null }>
+          ) => Promise<{ content?: string | null; usage?: Record<string, unknown> }>
         }
       }
     | undefined
 
   if (!chat?.resolveLlm || !llm?.forConfig) throw new Error('模型未就绪')
-  const config = chat.resolveLlm(input.sessionId ?? null)
+  const sessionId = String(input.sessionId ?? '').trim() || undefined
+  const config = chat.resolveLlm(sessionId ?? null)
   if (!String(config.apiKey ?? '').trim()) throw new Error('未配置模型 API Key')
 
   const reply = await llm
@@ -102,5 +117,27 @@ export async function runInlineEdit(ctx: Context, input: InlineEditInput) {
 
   const text = sanitizeInlineEditOutput(String(reply.content ?? ''), input.selection, instruction)
   if (!text) throw new Error('模型没有返回修改结果')
+
+  if (sessionId) {
+    const sessions = ctx.get('sessions') as
+      | { append?: (id: string, body: Record<string, unknown>) => Promise<unknown> }
+      | undefined
+    if (sessions?.append) {
+      try {
+        await sessions.append(sessionId, {
+          type: 'user/message',
+          text: formatInlineEditSessionUserText(input),
+        })
+        await sessions.append(sessionId, {
+          type: 'assistant/message',
+          text,
+          ...(reply.usage ? { usage: reply.usage } : {}),
+        })
+      } catch {
+        /* 会话不存在或归档时不阻塞原地修改 */
+      }
+    }
+  }
+
   return text
 }

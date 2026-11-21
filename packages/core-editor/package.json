@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@biu/biu-ui": "0.1.0",
+    "@biu/public-mascot": "0.1.0",
     "@biu/reui": "0.1.0",
     "@biu/core-file-system": "0.1.0",
     "@biu/core-pick": "0.1.0",

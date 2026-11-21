@@ -8,6 +8,7 @@ import { PAGE_EDITOR_STYLE } from './style.ts'
 import { RecordDetailBar } from './record-detail-bar.tsx'
 import { registerSandboxBlock } from './sandbox/block.tsx'
 import { EDITOR_CONTENT_VIEWS, EDITOR_DETAIL_TOOLS } from './editor-content-views.ts'
+import { bindInlineEditSessionView } from './inline-edit-popover.tsx'
 
 export { RecordEditor } from './record-editor.tsx'
 export { RecordDetailBar } from './record-detail-bar.tsx'
@@ -29,6 +30,7 @@ export const name = 'core-editor-ui'
 export const inject = ['databaseUi']
 
 export function apply(ctx: Context) {
+  bindInlineEditSessionView(ctx)
   new BlockEditorService(ctx)
   registerSandboxBlock(ctx.blockEditor)
   const ui = ctx.get('databaseUi') as DatabaseUi
