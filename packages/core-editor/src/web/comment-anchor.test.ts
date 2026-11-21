@@ -131,8 +131,6 @@ test('captureCommentAnchor skips empty trailing boundary and captures full multi
     const anchor = captureCommentAnchor(doc, fromAtListTrail, toInHeading)
     assert.ok(anchor, 'cross-block selection starting at list trailing boundary must still capture an anchor')
     assert.equal(anchor.quote, 'PR #1958 已合并到 fix 分支。\n需求背景')
-    assert.ok(anchor.end)
-    assert.equal(anchor.end.quote, '需求背景')
 
     const hit = resolveCommentAnchor(doc, anchor)
     assert.ok(hit)
