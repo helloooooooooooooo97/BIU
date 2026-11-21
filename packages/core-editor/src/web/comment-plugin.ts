@@ -96,6 +96,13 @@ export function getCommentRange(editor: Editor, threadId: string): { from: numbe
   return hit ? { from: hit.from, to: hit.to } : null
 }
 
+export function getCommentIdsAtPos(editor: Editor, pos: number): string[] {
+  if (editor.isDestroyed) return []
+  const state = editorCommentsKey.getState(editor.state)
+  if (!state) return []
+  return state.ranges.filter((item) => pos >= item.from && pos <= item.to).map((item) => item.id)
+}
+
 /**
  * Inspect mapped comment ranges after local edits and return updated anchors
  * for any thread whose text, offset, or blockId has drifted.

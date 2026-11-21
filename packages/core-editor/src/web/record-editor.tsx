@@ -27,9 +27,9 @@ import { applyStoredBlockIds, encodeBlankParagraphsForParse, markdownWithBlockId
 import { getLivePageEditor, setLivePageEditor, setLivePagePersist } from './editor-live-instance.ts'
 import { PAGE_FIND_OPEN_EVENT, getPageFind, patchEditorCommentsUi, patchPageFind, useEditorCommentsUi, usePageFind } from './editor-view-state.ts'
 import { captureCommentAnchor, resolveCommentAnchor } from './comment-anchor.ts'
-import { collectDriftedCommentAnchors, getCommentRange, setActiveEditorComment, setEditorComments } from './comment-plugin.ts'
+import { collectDriftedCommentAnchors, getCommentIdsAtPos, getCommentRange, setActiveEditorComment, setEditorComments } from './comment-plugin.ts'
 import { sortCommentThreadsByPosition, useRecordComments, type CommentThread } from './comment-store.ts'
-import { CommentPanel } from './comment-panel.tsx'
+import { CommentInlinePopover, CommentPanel, type InlineCommentPopoverTarget } from './comment-panel.tsx'
 import { InlineEditPopover, isInlineEditHotkey, type InlineEditTarget } from './inline-edit-popover.tsx'
 import { PageBlocksTable } from './page-blocks-table.tsx'
 import {
@@ -44,6 +44,16 @@ import {
 import { isSendChatHotkey, pickFromEditor, pickFromLocus } from './editor-ask.ts'
 
 const LOCAL_EDIT_MS = 600
+
+export function isCommentHotkey(event: {
+  key: string
+  metaKey: boolean
+  ctrlKey: boolean
+  altKey: boolean
+  shiftKey: boolean
+}) {
+  return Boolean((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'm')
+}
 
 /** 本地刚打过字时不要用远端正文盖掉光标；只看聚焦会挡住 db_content 的实时套入。 */
 export function shouldApplyRemoteMarkdown(args: {
@@ -332,7 +342,7 @@ function Bubble({
         <button
           type="button"
           className="page-bubble-chat"
-          title="添加批注 (⌘⌥M)"
+          title="添加批注 (⌘M)"
           aria-label="添加批注"
           onMouseDown={(event: MouseEvent) => {
             event.preventDefault()
@@ -794,11 +804,22 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
     if (source || !editor || editor.isDestroyed || !path) return
     const { from, to } = editor.state.selection
     const anchor = from !== to ? captureCommentAnchor(editor.state.doc, from, to) : null
-    patchEditorCommentsUi(record.id, {
-      open: true,
-      ...(commentsUi.filter === 'resolved' ? { filter: 'open' } : {}),
-      draftAnchor: anchor,
-    })
+    if (!anchor) return
+    let rect = { top: 120, bottom: 144, left: 120, right: 240 }
+    try {
+      const startCoords = editor.view.coordsAtPos(from)
+      const endCoords = editor.view.coordsAtPos(to)
+      rect = {
+        top: Math.min(startCoords.top, endCoords.top),
+        bottom: Math.max(startCoords.bottom, endCoords.bottom),
+        left: startCoords.left,
+        right: Math.max(startCoords.right, endCoords.right),
+      }
+    } catch {
+      /* fallback coordinates */
+    }
+    setInlineEditTarget(null)
+    setInlineComment({ kind: 'compose', anchor, rect })
   }
 
   const selectCommentThread = (threadId: string) => {
@@ -861,6 +882,7 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
   const [commentAnchorTops, setCommentAnchorTops] = useState<Map<string, number>>(() => new Map())
   const [draftCommentTop, setDraftCommentTop] = useState<number | null>(null)
   const [inlineEditTarget, setInlineEditTarget] = useState<InlineEditTarget | null>(null)
+  const [inlineComment, setInlineComment] = useState<InlineCommentPopoverTarget | null>(null)
   const hasVisibleComments = Boolean(
     commentsUi.draftAnchor ||
       orderedCommentThreads.some((t) => commentsUi.filter === 'all' || t.root.status === commentsUi.filter),
@@ -869,7 +891,12 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
 
   useEffect(() => {
     setInlineEditTarget(null)
+    setInlineComment(null)
   }, [record.id])
+
+  useEffect(() => {
+    if (commentsUi.open) setInlineComment(null)
+  }, [commentsUi.open])
 
   const startInlineEditFromSelection = () => {
     if (source || writable === false || !editor || editor.isDestroyed) return
@@ -1008,7 +1035,7 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
       startInlineEditFromSelection()
       return
     }
-    if ((event.metaKey || event.ctrlKey) && event.altKey && event.key.toLowerCase() === 'm') {
+    if (isCommentHotkey(event)) {
       event.preventDefault()
       event.stopPropagation()
       startCommentFromSelection()
@@ -1104,9 +1131,29 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
             onClick={(event) => {
               const target = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-comment-id]') : null
               const commentId = target?.getAttribute('data-comment-id')
-              if (commentId) {
-                patchEditorCommentsUi(record.id, { open: true, activeId: commentId })
+              if (!commentId) return
+              if (commentsOpen) {
+                patchEditorCommentsUi(record.id, { activeId: commentId })
+                return
               }
+              const ids = [commentId]
+              if (editor && !editor.isDestroyed && target) {
+                try {
+                  const pos = editor.view.posAtDOM(target, 0)
+                  for (const id of getCommentIdsAtPos(editor, pos)) {
+                    if (!ids.includes(id)) ids.push(id)
+                  }
+                } catch {
+                  /* ignore pos lookup failure */
+                }
+              }
+              const box = target?.getBoundingClientRect()
+              const rect = box
+                ? { top: box.top, bottom: box.bottom, left: box.left, right: box.right }
+                : { top: event.clientY - 12, bottom: event.clientY + 12, left: event.clientX, right: event.clientX }
+              setInlineEditTarget(null)
+              setInlineComment({ kind: 'view', threadIds: ids, rect })
+              patchEditorCommentsUi(record.id, { activeId: commentId })
             }}
           >
             <EditorContent editor={editor} />
@@ -1118,7 +1165,41 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
               onSendChat={sendToChat}
               onAddComment={path ? startCommentFromSelection : undefined}
               onInlineEdit={startInlineEditFromSelection}
-              hidden={Boolean(inlineEditTarget)}
+              hidden={Boolean(inlineEditTarget || inlineComment)}
+            />
+          ) : null}
+          {inlineComment && present !== 'table' && path ? (
+            <CommentInlinePopover
+              target={inlineComment}
+              threads={orderedCommentThreads}
+              totalOpenCount={commentsUi.openCount}
+              detachedIds={detachedCommentIds}
+              onClose={() => {
+                setInlineComment(null)
+                if (!commentsUi.open) patchEditorCommentsUi(record.id, { activeId: '' })
+              }}
+              onOpenAll={(activeId) => {
+                setInlineComment(null)
+                patchEditorCommentsUi(record.id, {
+                  open: true,
+                  ...(commentsUi.filter === 'resolved' ? { filter: 'open' } : {}),
+                  ...(activeId ? { activeId } : {}),
+                })
+              }}
+              onCreateThread={async (body, anchor) => {
+                await comments.createThread(body, anchor)
+              }}
+              onReplyThread={async (threadId, body) => {
+                await comments.replyThread(threadId, body)
+              }}
+              onSetStatus={async (threadId, nextStatus) => {
+                await comments.setThreadStatus(threadId, nextStatus)
+              }}
+              onDelete={async (id) => {
+                await comments.deleteComment(id)
+                if (commentsUi.activeId === id) patchEditorCommentsUi(record.id, { activeId: '' })
+              }}
+              onAskAi={askAiForComment}
             />
           ) : null}
           {inlineEditTarget && present !== 'table' && writable !== false ? (

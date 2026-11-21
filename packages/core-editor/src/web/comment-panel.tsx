@@ -336,3 +336,324 @@ export function CommentPanel({
     </aside>
   )
 }
+
+export type InlineCommentAnchorRect = {
+  top: number
+  bottom: number
+  left: number
+  right: number
+}
+
+export type InlineCommentPopoverTarget =
+  | { kind: 'compose'; anchor: CommentAnchor; rect: InlineCommentAnchorRect }
+  | { kind: 'view'; threadIds: string[]; rect: InlineCommentAnchorRect }
+
+export function computeInlineCommentPopoverPos(
+  rect: InlineCommentAnchorRect,
+  boxSize: { width: number; height: number },
+  viewport: { width: number; height: number },
+): { top: number; left: number } {
+  const pad = 12
+  const gap = 8
+  const maxLeft = Math.max(pad, viewport.width - boxSize.width - pad)
+  const left = Math.max(pad, Math.min(Math.round(rect.left), maxLeft))
+  const spaceAbove = rect.top - pad - gap
+  const preferAbove = spaceAbove >= boxSize.height || spaceAbove >= viewport.height - rect.bottom - pad - gap
+  const rawTop = preferAbove ? rect.top - boxSize.height - gap : rect.bottom + gap
+  const maxTop = Math.max(pad, viewport.height - boxSize.height - pad)
+  const top = Math.max(pad, Math.min(Math.round(rawTop), maxTop))
+  return { top, left }
+}
+
+export function CommentInlinePopover({
+  target,
+  threads,
+  totalOpenCount,
+  detachedIds,
+  onClose,
+  onOpenAll,
+  onCreateThread,
+  onReplyThread,
+  onSetStatus,
+  onDelete,
+  onAskAi,
+}: {
+  target: InlineCommentPopoverTarget
+  threads: CommentThread[]
+  totalOpenCount: number
+  detachedIds: ReadonlySet<string>
+  onClose: () => void
+  onOpenAll: (activeId?: string) => void
+  onCreateThread: (body: string, anchor: CommentAnchor | null) => Promise<void> | void
+  onReplyThread: (threadId: string, body: string) => Promise<void> | void
+  onSetStatus: (threadId: string, status: 'open' | 'resolved') => Promise<void> | void
+  onDelete: (id: string) => Promise<void> | void
+  onAskAi?: (thread: CommentThread) => void
+}) {
+  const [draftBody, setDraftBody] = useState('')
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({})
+  const [submitting, setSubmitting] = useState(false)
+  const [pos, setPos] = useState<{ top: number; left: number }>(() =>
+    computeInlineCommentPopoverPos(
+      target.rect,
+      { width: 312, height: target.kind === 'compose' ? 168 : 200 },
+      {
+        width: typeof window === 'undefined' ? 1280 : window.innerWidth,
+        height: typeof window === 'undefined' ? 800 : window.innerHeight,
+      },
+    ),
+  )
+  const boxRef = useRef<HTMLDivElement>(null)
+  const draftInputRef = useRef<HTMLTextAreaElement>(null)
+
+  const viewedThreads =
+    target.kind === 'view'
+      ? target.threadIds
+          .map((id) => threads.find((t) => t.root.id === id))
+          .filter((t): t is CommentThread => Boolean(t))
+      : []
+
+  useEffect(() => {
+    if (target.kind === 'compose') {
+      requestAnimationFrame(() => draftInputRef.current?.focus({ preventScroll: true }))
+    }
+  }, [target])
+
+  useEffect(() => {
+    if (target.kind === 'view' && viewedThreads.length === 0) {
+      onClose()
+    }
+  }, [target.kind, viewedThreads.length, onClose])
+
+  useLayoutEffect(() => {
+    const el = boxRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const next = computeInlineCommentPopoverPos(
+      target.rect,
+      { width: rect.width || 312, height: rect.height || 180 },
+      { width: window.innerWidth, height: window.innerHeight },
+    )
+    setPos((prev) => (prev.top === next.top && prev.left === next.left ? prev : next))
+  }, [target, viewedThreads.length, replyDrafts])
+
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      const node = event.target as Node | null
+      if (node && boxRef.current?.contains(node)) return
+      if (!submitting) onClose()
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !submitting) {
+        event.preventDefault()
+        onClose()
+      }
+    }
+    window.addEventListener('pointerdown', onPointerDown, true)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown, true)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [submitting, onClose])
+
+  const submitDraft = async () => {
+    if (target.kind !== 'compose') return
+    const text = draftBody.trim()
+    if (!text || submitting) return
+    setSubmitting(true)
+    try {
+      await onCreateThread(text, target.anchor)
+      setDraftBody('')
+      onClose()
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const submitReply = async (threadId: string) => {
+    const text = (replyDrafts[threadId] ?? '').trim()
+    if (!text || submitting) return
+    setSubmitting(true)
+    try {
+      await onReplyThread(threadId, text)
+      setReplyDrafts((prev) => ({ ...prev, [threadId]: '' }))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div
+      ref={boxRef}
+      className="editor-comment-popover"
+      data-testid={target.kind === 'compose' ? 'editor-comment-popover-compose' : 'editor-comment-popover-view'}
+      role="dialog"
+      aria-label={target.kind === 'compose' ? '添加批注' : '查看批注'}
+      style={{ top: pos.top, left: pos.left }}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      {target.kind === 'compose' ? (
+        <div className="editor-comment-composer" data-testid="editor-comment-composer">
+          <div className="editor-comment-quote" title={target.anchor.quote}>
+            {target.anchor.quote}
+          </div>
+          <textarea
+            ref={draftInputRef}
+            className="editor-comment-input"
+            rows={3}
+            placeholder="输入批注内容… (Enter 发送，Shift+Enter 换行)"
+            value={draftBody}
+            onChange={(e) => setDraftBody(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                void submitDraft()
+              } else if (e.key === 'Escape') {
+                e.preventDefault()
+                onClose()
+              }
+            }}
+          />
+          <div className="editor-comment-composer-actions">
+            <button type="button" className="editor-comment-btn" onClick={onClose}>
+              取消
+            </button>
+            <button
+              type="button"
+              className="editor-comment-btn is-primary"
+              disabled={!draftBody.trim() || submitting}
+              onClick={() => void submitDraft()}
+            >
+              发送
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="editor-comment-popover-stack">
+          {viewedThreads.map((thread) => {
+            const { root, replies } = thread
+            const detached = root.status === 'open' && Boolean(root.anchor) && detachedIds.has(root.id)
+            const quoteText = root.anchor?.quote || root.anchor?.originalQuote || ''
+            return (
+              <div
+                key={root.id}
+                className={`editor-comment-card is-active${root.status === 'resolved' ? ' is-resolved' : ''}`}
+                data-testid="editor-comment-card"
+                data-comment-thread={root.id}
+              >
+                {quoteText ? (
+                  <div className={`editor-comment-quote${detached ? ' is-detached' : ''}`} title={quoteText}>
+                    <span>{quoteText}</span>
+                    {detached ? <em className="editor-comment-detached-tag">原文已变更或删除</em> : null}
+                  </div>
+                ) : null}
+
+                <div className="editor-comment-meta">
+                  <span className="editor-comment-author">{root.author}</span>
+                  <span className="editor-comment-time">{formatTime(root.createdAt)}</span>
+                  <div className="editor-comment-actions">
+                    {onAskAi ? (
+                      <button
+                        type="button"
+                        className="editor-comment-icon-btn"
+                        aria-label="交给 AI 处理"
+                        title="交给 AI 处理"
+                        onClick={() => onAskAi(thread)}
+                      >
+                        <ChatBubbleLeftRightIcon aria-hidden className="size-[13px]" />
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="editor-comment-icon-btn"
+                      aria-label={root.status === 'open' ? '解决批注' : '重新打开批注'}
+                      title={root.status === 'open' ? '解决' : '重新打开'}
+                      onClick={() => {
+                        void onSetStatus(root.id, root.status === 'open' ? 'resolved' : 'open')
+                        if (root.status === 'open' && viewedThreads.length <= 1) onClose()
+                      }}
+                    >
+                      {root.status === 'open' ? (
+                        <CheckIcon aria-hidden className="size-[13px]" />
+                      ) : (
+                        <ArrowUturnLeftIcon aria-hidden className="size-[13px]" />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      className="editor-comment-icon-btn is-danger"
+                      aria-label="删除批注"
+                      title="删除"
+                      onClick={() => {
+                        void onDelete(root.id)
+                        if (viewedThreads.length <= 1) onClose()
+                      }}
+                    >
+                      <TrashGlyph aria-hidden className="size-[13px]" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="editor-comment-text">{root.body}</div>
+
+                {replies.length > 0 ? (
+                  <div className="editor-comment-replies">
+                    {replies.map((reply) => (
+                      <div key={reply.id} className="editor-comment-reply">
+                        <div className="editor-comment-meta">
+                          <span className="editor-comment-author">{reply.author}</span>
+                          <span className="editor-comment-time">{formatTime(reply.createdAt)}</span>
+                          <div className="editor-comment-actions">
+                            <button
+                              type="button"
+                              className="editor-comment-icon-btn is-danger"
+                              aria-label="删除回复"
+                              title="删除回复"
+                              onClick={() => void onDelete(reply.id)}
+                            >
+                              <TrashGlyph aria-hidden className="size-[12px]" />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="editor-comment-text">{reply.body}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div className="editor-comment-reply-box">
+                  <input
+                    type="text"
+                    className="editor-comment-reply-input"
+                    placeholder="回复…"
+                    aria-label="回复批注"
+                    value={replyDrafts[root.id] ?? ''}
+                    onChange={(e) => setReplyDrafts((prev) => ({ ...prev, [root.id]: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.nativeEvent.isComposing) return
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        void submitReply(root.id)
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            )
+          })}
+          {totalOpenCount > 1 ? (
+            <button
+              type="button"
+              className="editor-comment-popover-all"
+              onClick={() => onOpenAll(viewedThreads[0]?.root.id)}
+            >
+              查看全部批注 ({totalOpenCount})
+            </button>
+          ) : null}
+        </div>
+      )}
+    </div>
+  )
+}

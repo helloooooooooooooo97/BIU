@@ -3,7 +3,8 @@ import { afterEach, test } from 'vitest'
 import assert from 'node:assert/strict'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { FSDB_CHANGE_EVENT, parseFsdbChange } from '@biu/type-file-system'
-import { CommentPanel, layoutRailCards } from './comment-panel.tsx'
+import { CommentInlinePopover, CommentPanel, computeInlineCommentPopoverPos, layoutRailCards } from './comment-panel.tsx'
+import { isCommentHotkey } from './record-editor.tsx'
 import { apiUpdateComment, sortCommentThreadsByPosition, type CommentThread } from './comment-store.ts'
 
 afterEach(() => {
@@ -205,4 +206,54 @@ test('layoutRailCards aligns cards to anchor lines and prevents vertical overlap
   assert.equal(tops.get('c3'), 500)
   assert.equal(tops.get('c4'), 600)
   assert.equal(totalHeight, 690)
+})
+
+test('isCommentHotkey matches Cmd+M / Ctrl+M without Alt/Shift', () => {
+  assert.equal(isCommentHotkey({ key: 'm', metaKey: true, ctrlKey: false, altKey: false, shiftKey: false }), true)
+  assert.equal(isCommentHotkey({ key: 'M', metaKey: false, ctrlKey: true, altKey: false, shiftKey: false }), true)
+  assert.equal(isCommentHotkey({ key: 'm', metaKey: true, ctrlKey: false, altKey: true, shiftKey: false }), false)
+  assert.equal(isCommentHotkey({ key: 'm', metaKey: true, ctrlKey: false, altKey: false, shiftKey: true }), false)
+  assert.equal(isCommentHotkey({ key: 'k', metaKey: true, ctrlKey: false, altKey: false, shiftKey: false }), false)
+})
+
+test('computeInlineCommentPopoverPos prefers placing popover above anchor and flips below near top', () => {
+  const above = computeInlineCommentPopoverPos(
+    { top: 360, bottom: 384, left: 220, right: 420 },
+    { width: 312, height: 180 },
+    { width: 1280, height: 800 },
+  )
+  assert.equal(above.top, 360 - 180 - 8)
+  assert.equal(above.left, 220)
+
+  const below = computeInlineCommentPopoverPos(
+    { top: 48, bottom: 72, left: 1100, right: 1200 },
+    { width: 312, height: 180 },
+    { width: 1280, height: 800 },
+  )
+  assert.equal(below.top, 72 + 8)
+  assert.equal(below.left, 1280 - 312 - 12)
+})
+
+test('CommentInlinePopover views a single clicked thread without rendering other threads and can open all', async () => {
+  let openedAll: string | undefined
+  let closed = false
+  render(
+    <CommentInlinePopover
+      target={{ kind: 'view', threadIds: ['cmt_1'], rect: { top: 300, bottom: 320, left: 200, right: 320 } }}
+      threads={THREADS}
+      totalOpenCount={3}
+      detachedIds={new Set()}
+      onClose={() => { closed = true }}
+      onOpenAll={(id) => { openedAll = id }}
+      onCreateThread={() => undefined}
+      onReplyThread={() => undefined}
+      onSetStatus={() => undefined}
+      onDelete={() => undefined}
+    />,
+  )
+  assert.ok(screen.getByText('这里建议改成升序默认'))
+  assert.equal(screen.queryByText('已修复的旧批注'), null)
+  fireEvent.click(screen.getByText('查看全部批注 (3)'))
+  assert.equal(openedAll, 'cmt_1')
+  assert.equal(closed, false)
 })
