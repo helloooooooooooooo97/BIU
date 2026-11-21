@@ -86,6 +86,24 @@ export function groupCommentThreads(items: CommentItem[]): CommentThread[] {
   return out
 }
 
+export function sortCommentThreadsByPosition(
+  threads: CommentThread[],
+  positions: ReadonlyMap<string, { from: number; to: number }>,
+): CommentThread[] {
+  return [...threads].sort((a, b) => {
+    const pa = positions.get(a.root.id)
+    const pb = positions.get(b.root.id)
+    if (pa && pb) {
+      if (pa.from !== pb.from) return pa.from - pb.from
+      if (pa.to !== pb.to) return pa.to - pb.to
+      return a.root.createdAt - b.root.createdAt
+    }
+    if (pa) return -1
+    if (pb) return 1
+    return a.root.createdAt - b.root.createdAt
+  })
+}
+
 export async function fetchComments(targetPath: string, signal?: AbortSignal): Promise<CommentItem[]> {
   if (!targetPath) return []
   const params = new URLSearchParams({

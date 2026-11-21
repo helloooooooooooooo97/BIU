@@ -28,7 +28,7 @@ import { getLivePageEditor, setLivePageEditor, setLivePagePersist } from './edit
 import { PAGE_FIND_OPEN_EVENT, getPageFind, patchEditorCommentsUi, patchPageFind, useEditorCommentsUi, usePageFind } from './editor-view-state.ts'
 import { captureCommentAnchor, resolveCommentAnchor } from './comment-anchor.ts'
 import { collectDriftedCommentAnchors, getCommentRange, setActiveEditorComment, setEditorComments } from './comment-plugin.ts'
-import { useRecordComments, type CommentThread } from './comment-store.ts'
+import { sortCommentThreadsByPosition, useRecordComments, type CommentThread } from './comment-store.ts'
 import { CommentPanel } from './comment-panel.tsx'
 import { PageBlocksTable } from './page-blocks-table.tsx'
 import {
@@ -814,17 +814,21 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
     getPick()?.attach([ref])
   }
 
-  const detachedCommentIds = (() => {
-    const set = new Set<string>()
-    if (!editor || editor.isDestroyed || source) return set
+  const commentPositions = new Map<string, { from: number; to: number }>()
+  const detachedCommentIds = new Set<string>()
+  if (editor && !editor.isDestroyed && !source) {
     for (const thread of comments.threads) {
-      if (thread.root.status !== 'open' || !thread.root.anchor) continue
-      if (!resolveCommentAnchor(editor.state.doc, thread.root.anchor)) {
-        set.add(thread.root.id)
+      if (!thread.root.anchor) continue
+      const live = thread.root.status === 'open' ? getCommentRange(editor, thread.root.id) : null
+      const hit = live ?? resolveCommentAnchor(editor.state.doc, thread.root.anchor)
+      if (hit && hit.to > hit.from) {
+        commentPositions.set(thread.root.id, { from: hit.from, to: hit.to })
+      } else if (thread.root.status === 'open') {
+        detachedCommentIds.add(thread.root.id)
       }
     }
-    return set
-  })()
+  }
+  const orderedCommentThreads = sortCommentThreadsByPosition(comments.threads, commentPositions)
 
   const onEditorHotkey = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === ' ' && event.target === event.currentTarget) {
@@ -965,7 +969,7 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
       </div>
       {commentsOpen ? (
         <CommentPanel
-          threads={comments.threads}
+          threads={orderedCommentThreads}
           activeId={commentsUi.activeId}
           detachedIds={detachedCommentIds}
           draftAnchor={commentsUi.draftAnchor}

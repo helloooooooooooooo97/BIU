@@ -3,7 +3,7 @@ import { afterEach, test } from 'vitest'
 import assert from 'node:assert/strict'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { CommentPanel } from './comment-panel.tsx'
-import { apiUpdateComment, type CommentThread } from './comment-store.ts'
+import { apiUpdateComment, sortCommentThreadsByPosition, type CommentThread } from './comment-store.ts'
 
 afterEach(() => {
   cleanup()
@@ -140,4 +140,33 @@ test('apiUpdateComment posts status update under content payload', async () => {
   } finally {
     globalThis.fetch = original
   }
+})
+
+test('sortCommentThreadsByPosition orders threads by document start pos, detached last', () => {
+  const mk = (id: string, createdAt: number): CommentThread => ({
+    root: {
+      id,
+      body: id,
+      targetPath: '/pages/p1',
+      threadId: id,
+      parentId: '',
+      status: 'open',
+      anchor: null,
+      author: 'Alice',
+      createdAt,
+      updatedAt: createdAt,
+    },
+    replies: [],
+  })
+  const threads = [mk('later_in_doc', 100), mk('detached', 50), mk('earlier_in_doc', 300), mk('same_start_longer', 200)]
+  const positions = new Map([
+    ['later_in_doc', { from: 40, to: 50 }],
+    ['earlier_in_doc', { from: 10, to: 15 }],
+    ['same_start_longer', { from: 10, to: 25 }],
+  ])
+  const sorted = sortCommentThreadsByPosition(threads, positions)
+  assert.deepEqual(
+    sorted.map((t) => t.root.id),
+    ['earlier_in_doc', 'same_start_longer', 'later_in_doc', 'detached'],
+  )
 })
