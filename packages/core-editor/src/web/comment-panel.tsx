@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   ChatBubbleLeftRightIcon,
   CheckIcon,
@@ -11,6 +11,23 @@ import type { CommentThread } from './comment-store.ts'
 
 export type CommentFilter = 'open' | 'resolved' | 'all'
 
+export function layoutRailCards(
+  items: ReadonlyArray<{ id: string; desiredTop: number | null; height: number }>,
+  minTop: number,
+  gap = 10,
+): { tops: Map<string, number>; totalHeight: number } {
+  const tops = new Map<string, number>()
+  let cursor = minTop
+  for (const item of items) {
+    const h = Math.max(48, item.height)
+    const target = item.desiredTop != null ? Math.max(minTop, item.desiredTop) : cursor
+    const y = Math.max(target, cursor)
+    tops.set(item.id, y)
+    cursor = y + h + gap
+  }
+  return { tops, totalHeight: Math.max(minTop, cursor) }
+}
+
 function formatTime(ms: number) {
   if (!ms) return ''
   const d = new Date(ms)
@@ -18,11 +35,16 @@ function formatTime(ms: number) {
   return `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+const RAIL_HEADER_H = 34
+const DRAFT_KEY = '__draft__'
+
 export function CommentPanel({
   threads,
   activeId,
   detachedIds,
+  anchorTops,
   draftAnchor,
+  draftTop,
   onCancelDraft,
   onCreateThread,
   onReplyThread,
@@ -35,7 +57,9 @@ export function CommentPanel({
   threads: CommentThread[]
   activeId: string
   detachedIds: ReadonlySet<string>
+  anchorTops?: ReadonlyMap<string, number>
   draftAnchor: CommentAnchor | null
+  draftTop?: number | null
   onCancelDraft: () => void
   onCreateThread: (body: string, anchor: CommentAnchor | null) => Promise<void> | void
   onReplyThread: (threadId: string, body: string) => Promise<void> | void
@@ -49,7 +73,9 @@ export function CommentPanel({
   const [draftBody, setDraftBody] = useState('')
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
+  const [heights, setHeights] = useState<Record<string, number>>({})
   const draftInputRef = useRef<HTMLTextAreaElement>(null)
+  const cardRefs = useRef(new Map<string, HTMLElement>())
 
   useEffect(() => {
     if (draftAnchor) {
@@ -61,6 +87,66 @@ export function CommentPanel({
   const openCount = threads.filter((t) => t.root.status === 'open').length
   const resolvedCount = threads.length - openCount
   const visible = threads.filter((t) => (filter === 'all' ? true : t.root.status === filter))
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const next: Record<string, number> = {}
+      let changed = false
+      for (const [id, el] of cardRefs.current) {
+        const h = Math.round(el.getBoundingClientRect().height)
+        if (h > 0) next[id] = h
+      }
+      setHeights((prev) => {
+        const keys = new Set([...Object.keys(prev), ...Object.keys(next)])
+        for (const k of keys) {
+          if (prev[k] !== next[k]) {
+            changed = true
+            break
+          }
+        }
+        return changed ? next : prev
+      })
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    for (const el of cardRefs.current.values()) ro.observe(el)
+    return () => ro.disconnect()
+  }, [visible, draftAnchor, replyDrafts])
+
+  const usePositionedRail = Boolean(anchorTops && (anchorTops.size > 0 || draftTop != null))
+
+  const railEntries: Array<{ id: string; desiredTop: number | null; height: number }> = []
+  if (draftAnchor) {
+    railEntries.push({
+      id: DRAFT_KEY,
+      desiredTop: draftTop ?? RAIL_HEADER_H,
+      height: heights[DRAFT_KEY] ?? 148,
+    })
+  }
+  for (const thread of visible) {
+    const rawTop = anchorTops?.get(thread.root.id)
+    railEntries.push({
+      id: thread.root.id,
+      desiredTop: rawTop != null ? rawTop : null,
+      height: heights[thread.root.id] ?? 128,
+    })
+  }
+  if (usePositionedRail && draftAnchor && draftTop != null) {
+    // Keep draft card sorted in visual order with existing cards
+    railEntries.sort((a, b) => {
+      if (a.desiredTop != null && b.desiredTop != null) return a.desiredTop - b.desiredTop
+      if (a.desiredTop != null) return -1
+      if (b.desiredTop != null) return 1
+      return 0
+    })
+  }
+  const layout = usePositionedRail ? layoutRailCards(railEntries, RAIL_HEADER_H, 10) : null
+
+  const bindCardRef = (id: string) => (el: HTMLDivElement | null) => {
+    if (el) cardRefs.current.set(id, el)
+    else cardRefs.current.delete(id)
+  }
 
   const submitDraft = async () => {
     const text = draftBody.trim()
@@ -88,9 +174,13 @@ export function CommentPanel({
   }
 
   return (
-    <aside className="editor-comment-panel" data-testid="editor-comment-panel" aria-label="文档批注">
-      <div className="editor-comment-head">
-        <span className="editor-comment-title">批注</span>
+    <aside
+      className={`editor-comment-rail${usePositionedRail ? ' is-anchored' : ''}`}
+      data-testid="editor-comment-panel"
+      aria-label="文档批注"
+      style={layout ? { minHeight: layout.totalHeight } : undefined}
+    >
+      <div className="editor-comment-rail-bar">
         <div className="editor-comment-tabs" role="tablist">
           <button
             type="button"
@@ -131,9 +221,14 @@ export function CommentPanel({
         </button>
       </div>
 
-      <div className="editor-comment-body">
+      <div className="editor-comment-list">
         {draftAnchor ? (
-          <div className="editor-comment-composer" data-testid="editor-comment-composer">
+          <div
+            ref={bindCardRef(DRAFT_KEY)}
+            className="editor-comment-composer"
+            data-testid="editor-comment-composer"
+            style={layout ? { top: layout.tops.get(DRAFT_KEY) ?? RAIL_HEADER_H } : undefined}
+          >
             <div className="editor-comment-quote" title={draftAnchor.quote}>
               {draftAnchor.quote}
             </div>
@@ -181,12 +276,15 @@ export function CommentPanel({
           const isActive = activeId === root.id
           const detached = root.status === 'open' && Boolean(root.anchor) && detachedIds.has(root.id)
           const quoteText = root.anchor?.quote || root.anchor?.originalQuote || ''
+          const top = layout?.tops.get(root.id)
           return (
             <div
               key={root.id}
+              ref={bindCardRef(root.id)}
               className={`editor-comment-card${isActive ? ' is-active' : ''}${root.status === 'resolved' ? ' is-resolved' : ''}`}
               data-testid="editor-comment-card"
               data-comment-thread={root.id}
+              style={top != null ? { top } : undefined}
               onClick={() => onSelectThread(root.id)}
             >
               {quoteText ? (

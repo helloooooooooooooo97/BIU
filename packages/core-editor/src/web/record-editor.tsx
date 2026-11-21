@@ -833,6 +833,75 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
     }
   }
   const orderedCommentThreads = sortCommentThreadsByPosition(comments.threads, commentPositions)
+  const [commentAnchorTops, setCommentAnchorTops] = useState<Map<string, number>>(() => new Map())
+  const [draftCommentTop, setDraftCommentTop] = useState<number | null>(null)
+  const commentsOpen = Boolean(commentsUi.open && path)
+
+  useLayoutEffect(() => {
+    if (!commentsOpen || !editor || editor.isDestroyed || source || !hostRef.current) {
+      setCommentAnchorTops((prev) => (prev.size ? new Map() : prev))
+      setDraftCommentTop(null)
+      return
+    }
+    const measure = () => {
+      const host = hostRef.current
+      if (!host || editor.isDestroyed) return
+      const hostTop = host.getBoundingClientRect().top
+      const next = new Map<string, number>()
+      for (const thread of comments.threads) {
+        if (!thread.root.anchor) continue
+        const live = thread.root.status === 'open' ? getCommentRange(editor, thread.root.id) : null
+        const hit = live ?? resolveCommentAnchor(editor.state.doc, thread.root.anchor)
+        if (!hit || hit.to <= hit.from) continue
+        try {
+          const coords = editor.view.coordsAtPos(hit.from)
+          if (Number.isFinite(coords.top)) {
+            next.set(thread.root.id, Math.max(0, Math.round(coords.top - hostTop)))
+          }
+        } catch {
+          /* ignore unmeasured pos */
+        }
+      }
+      setCommentAnchorTops((prev) => {
+        if (prev.size === next.size) {
+          let same = true
+          for (const [k, v] of next) {
+            if (prev.get(k) !== v) {
+              same = false
+              break
+            }
+          }
+          if (same) return prev
+        }
+        return next
+      })
+      if (commentsUi.draftAnchor) {
+        const hit = resolveCommentAnchor(editor.state.doc, commentsUi.draftAnchor)
+        if (hit) {
+          try {
+            const coords = editor.view.coordsAtPos(hit.from)
+            setDraftCommentTop(Number.isFinite(coords.top) ? Math.max(0, Math.round(coords.top - hostTop)) : null)
+          } catch {
+            setDraftCommentTop(null)
+          }
+        } else {
+          setDraftCommentTop(null)
+        }
+      } else {
+        setDraftCommentTop(null)
+      }
+    }
+    measure()
+    const raf = requestAnimationFrame(measure)
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
+    if (ro && hostRef.current) ro.observe(hostRef.current)
+    window.addEventListener('resize', measure)
+    return () => {
+      cancelAnimationFrame(raf)
+      ro?.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [commentsOpen, editor, source, comments.threads, commentsUi.draftAnchor, value])
 
   const onEditorHotkey = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === ' ' && event.target === event.currentTarget) {
@@ -916,8 +985,6 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
   if (status === 'failed') return <RecordEditorFailed onRetry={onRetry} />
   if (!editor) return <div className="page-editor" data-testid="page-editor-pending" />
 
-  const commentsOpen = Boolean(commentsUi.open && path)
-
   return (
     <div
       ref={hostRef}
@@ -976,7 +1043,9 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
           threads={orderedCommentThreads}
           activeId={commentsUi.activeId}
           detachedIds={detachedCommentIds}
+          anchorTops={commentAnchorTops}
           draftAnchor={commentsUi.draftAnchor}
+          draftTop={draftCommentTop}
           onCancelDraft={() => patchEditorCommentsUi(record.id, { draftAnchor: null })}
           onCreateThread={async (body, anchor) => {
             const created = await comments.createThread(body, anchor)

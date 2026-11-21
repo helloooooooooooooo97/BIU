@@ -2,7 +2,7 @@
 import { afterEach, test } from 'vitest'
 import assert from 'node:assert/strict'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { CommentPanel } from './comment-panel.tsx'
+import { CommentPanel, layoutRailCards } from './comment-panel.tsx'
 import { apiUpdateComment, sortCommentThreadsByPosition, type CommentThread } from './comment-store.ts'
 
 afterEach(() => {
@@ -169,4 +169,22 @@ test('sortCommentThreadsByPosition orders threads by document start pos, detache
     sorted.map((t) => t.root.id),
     ['earlier_in_doc', 'same_start_longer', 'later_in_doc', 'detached'],
   )
+})
+
+test('layoutRailCards aligns cards to anchor lines and prevents vertical overlap', () => {
+  const { tops, totalHeight } = layoutRailCards(
+    [
+      { id: 'c1', desiredTop: 100, height: 120 },
+      { id: 'c2', desiredTop: 150, height: 100 }, // collides with c1 (ends at 220) -> pushed to 230
+      { id: 'c3', desiredTop: 500, height: 90 }, // far below -> stays at 500
+      { id: 'c4', desiredTop: null, height: 80 }, // detached -> stacks after c3 at 600
+    ],
+    34,
+    10,
+  )
+  assert.equal(tops.get('c1'), 100)
+  assert.equal(tops.get('c2'), 230)
+  assert.equal(tops.get('c3'), 500)
+  assert.equal(tops.get('c4'), 600)
+  assert.equal(totalHeight, 690)
 })

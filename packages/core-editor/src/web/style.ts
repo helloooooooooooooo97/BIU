@@ -360,20 +360,21 @@ html:not(.dark) .page-bubble-chat-icon{color:var(--biu-color-icon)}
 .page-editor.has-comments .page-editor-main{flex:1 1 0;min-width:0;width:auto}
 .editor-comment-trigger{position:relative}
 .editor-comment-badge{position:absolute;top:1px;right:1px;min-width:13px;height:13px;padding:0 3px;border-radius:999px;background:var(--biu-color-emphasis);color:var(--biu-color-on-emphasis,#fff);font-size:9.5px;font-weight:var(--biu-font-weight-semibold);line-height:13px;text-align:center;pointer-events:none}
-.page-editor .editor-comment-panel{position:sticky;top:calc(var(--biu-size-control-md,32px) + 34px);flex:0 0 300px;width:300px;max-height:calc(100vh - var(--biu-size-control-md,32px) - 98px);z-index:2;display:flex;flex-direction:column;background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);border-radius:12px;box-shadow:var(--biu-shadow-popover);overflow:hidden}
-@media (max-width:760px){.page-editor.has-comments{flex-direction:column;gap:12px}.page-editor .editor-comment-panel{position:static;flex:none;width:100%;max-height:420px}}
-.page-editor .editor-comment-head{display:flex;align-items:center;gap:6px;padding:10px 10px 8px 12px;border-bottom:var(--biu-stroke-width) solid var(--biu-color-border-subtle)}
-.page-editor .editor-comment-title{font-size:13px;font-weight:var(--biu-font-weight-semibold);color:var(--biu-color-text);margin-right:auto}
+.page-editor .editor-comment-rail{position:relative;flex:0 0 288px;width:288px;display:flex;flex-direction:column;gap:8px;background:transparent}
+.page-editor .editor-comment-rail-bar{display:flex;align-items:center;justify-content:space-between;gap:6px;height:28px}
 .page-editor .editor-comment-tabs{display:inline-flex;align-items:center;gap:2px;padding:2px;border-radius:7px;background:var(--biu-color-bg-subtle)}
 .page-editor .editor-comment-tab{border:0;border-radius:5px;padding:2px 7px;background:transparent;color:var(--biu-color-text-muted);font:inherit;font-size:11.5px;cursor:pointer}
 .page-editor .editor-comment-tab.is-on{background:var(--biu-color-bg);color:var(--biu-color-text);font-weight:var(--biu-font-weight-medium);box-shadow:0 1px 2px rgba(0,0,0,.08)}
-.page-editor .editor-comment-body{flex:1;min-height:0;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px}
-.page-editor .editor-comment-empty{padding:24px 12px;text-align:center;font-size:12.5px;line-height:1.6;color:var(--biu-color-text-muted)}
-.page-editor .editor-comment-composer,.page-editor .editor-comment-card{display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:9px;background:var(--biu-color-bg-subtle);border:var(--biu-stroke-width) solid var(--biu-color-border-subtle);transition:border-color .15s ease,background .15s ease}
+.page-editor .editor-comment-list{display:flex;flex-direction:column;gap:10px}
+.page-editor .editor-comment-rail.is-anchored .editor-comment-list{display:block;position:static}
+.page-editor .editor-comment-rail.is-anchored .editor-comment-composer,.page-editor .editor-comment-rail.is-anchored .editor-comment-card{position:absolute;left:0;right:0;margin:0;transition:top .18s ease,transform .15s ease,border-color .15s ease,box-shadow .15s ease}
+.page-editor .editor-comment-empty{padding:16px 8px;text-align:center;font-size:12.5px;line-height:1.6;color:var(--biu-color-text-muted)}
+.page-editor .editor-comment-composer,.page-editor .editor-comment-card{display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:10px;background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);box-shadow:0 2px 8px rgba(0,0,0,.12);transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease}
 .page-editor .editor-comment-card{cursor:pointer}
 .page-editor .editor-comment-card:hover{border-color:var(--biu-color-border)}
-.page-editor .editor-comment-card.is-active{border-color:rgba(245,158,11,.75);background:color-mix(in srgb,rgba(245,158,11,.12) 55%,var(--biu-color-bg-subtle))}
+.page-editor .editor-comment-card.is-active{transform:translateX(-6px);border-color:rgba(245,158,11,.8);box-shadow:0 4px 14px rgba(0,0,0,.22)}
 .page-editor .editor-comment-card.is-resolved{opacity:.72}
+@media (max-width:760px){.page-editor.has-comments{flex-direction:column;gap:12px}.page-editor .editor-comment-rail{flex:none;width:100%;min-height:0!important}.page-editor .editor-comment-rail.is-anchored .editor-comment-list{display:flex;flex-direction:column;gap:10px}.page-editor .editor-comment-rail.is-anchored .editor-comment-composer,.page-editor .editor-comment-rail.is-anchored .editor-comment-card{position:static;transform:none}}
 .page-editor .editor-comment-quote{display:flex;flex-direction:column;gap:3px;padding:3px 8px;border-left:2px solid rgba(245,158,11,.75);font-size:12px;line-height:1.45;color:var(--biu-color-text-muted);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .page-editor .editor-comment-quote.is-detached{border-left-color:var(--biu-color-border-strong);font-style:italic}
 .page-editor .editor-comment-detached-tag{display:inline-block;margin-left:6px;padding:0 5px;border-radius:4px;background:var(--biu-color-bg-hover);color:var(--biu-color-text-muted);font-style:normal;font-size:10.5px}
