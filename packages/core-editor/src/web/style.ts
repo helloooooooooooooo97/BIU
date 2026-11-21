@@ -255,6 +255,7 @@ html.dark .page-editor .editor-pending-selection{background:color-mix(in srgb,va
 .page-editor .tiptap .is-empty::before{content:attr(data-placeholder);float:left;height:0;pointer-events:none;color:var(--biu-color-text-placeholder);animation:page-placeholder-in 120ms ease 40ms both}
 @keyframes page-placeholder-in{from{opacity:0}to{opacity:1}}
 .page-bubble{z-index:var(--biu-z-float);background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);box-shadow:var(--biu-shadow-popover);border-radius:var(--biu-radius-popover);overflow:hidden;animation:page-menu-in 120ms cubic-bezier(.22,1,.36,1)}
+.page-bubble.is-hidden{display:none!important}
 html:not(.dark) .page-bubble{box-shadow:none}
 .page-slash{position:fixed;z-index:var(--biu-z-toast);width:240px;max-height:min(52vh,280px);padding:4px;display:flex;flex-direction:column;gap:0;overflow:hidden;background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);box-shadow:var(--biu-shadow-popover);border-radius:var(--biu-radius-popover);animation:page-menu-in 120ms cubic-bezier(.22,1,.36,1)}
 .page-slash-head,.page-slash-empty{padding:6px 8px 4px;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-1);font-weight:var(--biu-font-weight-semibold)}

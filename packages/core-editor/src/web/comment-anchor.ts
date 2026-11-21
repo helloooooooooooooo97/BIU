@@ -1,13 +1,23 @@
 import type { Node as PmNode } from '@tiptap/pm/model'
 import { nodeBlockId } from './block-id.ts'
 
+export type CommentAnchorEndpoint = {
+  blockId: string
+  quote: string
+  prefix: string
+  suffix: string
+  offset: number
+}
+
 export type CommentAnchor = {
   blockId: string
   quote: string
+  startQuote?: string
   originalQuote?: string
   prefix: string
   suffix: string
   offset: number
+  end?: CommentAnchorEndpoint
 }
 
 export type ResolvedCommentAnchor = {
@@ -91,7 +101,15 @@ export function captureCommentAnchor(doc: PmNode, rawFrom: number, rawTo: number
   const to = Math.min(doc.content.size, Math.max(rawFrom, rawTo))
   if (to <= from) return null
   const blocks = indexDocBlocks(doc)
-  // 跨块选区可能从上一个列表/段落末尾边界或空行起拖，首块内没有选中字符时应继续向后查找首个包含选中文字的块。
+  // 收集所有包含非空选中文字的相交顶层块：单块保持原格式，跨多块时同时记录起止端点，避免截断后续段落/标题。
+  const hits: Array<{
+    block: IndexedBlock
+    start: number
+    end: number
+    exactQuote: string
+    prefix: string
+    suffix: string
+  }> = []
   for (const block of blocks) {
     if (block.end <= from) continue
     if (block.pos >= to) break
@@ -104,16 +122,38 @@ export function captureCommentAnchor(doc: PmNode, rawFrom: number, rawTo: number
     const exactQuote = block.text.slice(range.start, range.end)
     const prefix = block.text.slice(Math.max(0, range.start - CONTEXT_LEN), range.start)
     const suffix = block.text.slice(range.end, Math.min(block.text.length, range.end + CONTEXT_LEN))
+    hits.push({ block, start: range.start, end: range.end, exactQuote, prefix, suffix })
+  }
+  if (!hits.length) return null
+  const first = hits[0]!
+  if (hits.length === 1) {
     return {
-      blockId: block.blockId,
-      quote: exactQuote,
-      originalQuote: exactQuote,
-      prefix,
-      suffix,
-      offset: range.start,
+      blockId: first.block.blockId,
+      quote: first.exactQuote,
+      originalQuote: first.exactQuote,
+      prefix: first.prefix,
+      suffix: first.suffix,
+      offset: first.start,
     }
   }
-  return null
+  const last = hits[hits.length - 1]!
+  const fullQuote = hits.map((h) => h.exactQuote).join('\n')
+  return {
+    blockId: first.block.blockId,
+    quote: fullQuote,
+    startQuote: first.exactQuote,
+    originalQuote: fullQuote,
+    prefix: first.prefix,
+    suffix: first.suffix,
+    offset: first.start,
+    end: {
+      blockId: last.block.blockId,
+      quote: last.exactQuote,
+      prefix: last.prefix,
+      suffix: last.suffix,
+      offset: last.start,
+    },
+  }
 }
 
 function commonSuffixLen(a: string, b: string) {
@@ -249,11 +289,11 @@ function buildUpdatedAnchor(block: IndexedBlock, start: number, end: number, pre
   }
 }
 
-export function resolveCommentAnchor(doc: PmNode, anchor: CommentAnchor | null | undefined): ResolvedCommentAnchor | null {
-  if (!anchor || !anchor.quote) return null
-  const blocks = indexDocBlocks(doc)
-  if (!blocks.length) return null
-
+function resolveSingleBlockAnchor(
+  blocks: IndexedBlock[],
+  anchor: CommentAnchor,
+): ResolvedCommentAnchor | null {
+  if (!anchor.quote) return null
   const targetBlock = anchor.blockId ? blocks.find((b) => b.blockId === anchor.blockId) : undefined
 
   // Tier 1: exact blockId + exact offset + exact quote
@@ -347,4 +387,35 @@ export function resolveCommentAnchor(doc: PmNode, anchor: CommentAnchor | null |
 
   // Tier 4: detached / orphaned
   return null
+}
+
+export function resolveCommentAnchor(doc: PmNode, anchor: CommentAnchor | null | undefined): ResolvedCommentAnchor | null {
+  if (!anchor || !anchor.quote) return null
+  const blocks = indexDocBlocks(doc)
+  if (!blocks.length) return null
+
+  if (anchor.end) {
+    const startHit = resolveSingleBlockAnchor(blocks, {
+      ...anchor,
+      quote: anchor.startQuote || anchor.quote.split('\n')[0] || anchor.quote,
+    })
+    const endHit = resolveSingleBlockAnchor(blocks, {
+      blockId: anchor.end.blockId,
+      quote: anchor.end.quote,
+      prefix: anchor.end.prefix,
+      suffix: anchor.end.suffix,
+      offset: anchor.end.offset,
+    })
+    if (startHit && endHit && endHit.to > startHit.from) {
+      return {
+        from: startHit.from,
+        to: endHit.to,
+        blockId: startHit.blockId,
+        confidence: startHit.confidence,
+      }
+    }
+    return startHit ?? endHit
+  }
+
+  return resolveSingleBlockAnchor(blocks, anchor)
 }

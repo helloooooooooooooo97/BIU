@@ -120,21 +120,23 @@ test('editorComments plugin maps ranges live on edit and collects drifted anchor
   }
 })
 
-test('captureCommentAnchor skips empty trailing boundary of previous list/paragraph on multi-block selection', () => {
+test('captureCommentAnchor skips empty trailing boundary and captures full multi-block selection', () => {
   const editor = createTestEditor('- 尚未进行浏览器视觉复核。\n\nPR #1958 已合并到 fix 分支。\n\n## 需求背景')
   try {
     const doc = editor.state.doc
     const listEnd = doc.child(0).nodeSize
-    // 模拟从列表最后一行末尾边界（from 落在 bulletList 尾部，无选中文字）向下拖选到后续段落与标题
+    // 模拟从列表最后一行末尾边界向下跨块拖选到后续段落与标题
     const fromAtListTrail = listEnd - 2
     const toInHeading = doc.content.size - 1
     const anchor = captureCommentAnchor(doc, fromAtListTrail, toInHeading)
     assert.ok(anchor, 'cross-block selection starting at list trailing boundary must still capture an anchor')
-    assert.equal(anchor.quote, 'PR #1958 已合并到 fix 分支。')
+    assert.equal(anchor.quote, 'PR #1958 已合并到 fix 分支。\n需求背景')
+    assert.ok(anchor.end)
+    assert.equal(anchor.end.quote, '需求背景')
 
     const hit = resolveCommentAnchor(doc, anchor)
     assert.ok(hit)
-    assert.equal(doc.textBetween(hit.from, hit.to), 'PR #1958 已合并到 fix 分支。')
+    assert.equal(doc.textBetween(hit.from, hit.to, '\n'), 'PR #1958 已合并到 fix 分支。\n需求背景')
   } finally {
     editor.destroy()
   }

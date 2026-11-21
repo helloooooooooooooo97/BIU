@@ -5,13 +5,23 @@ import { recordBuiltinValues, type DbRecord } from '@biu/type-file-system'
 
 export type CommentStatus = 'open' | 'resolved'
 
+export type CommentAnchorEndpoint = {
+  blockId: string
+  quote: string
+  prefix: string
+  suffix: string
+  offset: number
+}
+
 export type CommentAnchor = {
   blockId: string
   quote: string
+  startQuote?: string
   originalQuote?: string
   prefix: string
   suffix: string
   offset: number
+  end?: CommentAnchorEndpoint
 }
 
 export type CommentRow = {
@@ -38,6 +48,21 @@ export type CommentInput = {
   author?: string
 }
 
+function normalizeEndpoint(raw: unknown): CommentAnchorEndpoint | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const obj = raw as Record<string, unknown>
+  const quote = String(obj.quote ?? '')
+  const blockId = String(obj.blockId ?? '').trim()
+  if (!quote && !blockId) return undefined
+  return {
+    blockId,
+    quote,
+    prefix: String(obj.prefix ?? ''),
+    suffix: String(obj.suffix ?? ''),
+    offset: Number.isFinite(Number(obj.offset)) ? Math.max(0, Math.round(Number(obj.offset))) : 0,
+  }
+}
+
 export function normalizeCommentAnchor(value: unknown): CommentAnchor | null {
   let raw = value
   if (typeof raw === 'string') {
@@ -52,19 +77,23 @@ export function normalizeCommentAnchor(value: unknown): CommentAnchor | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
   const obj = raw as Record<string, unknown>
   const quote = String(obj.quote ?? '')
+  const startQuote = typeof obj.startQuote === 'string' && obj.startQuote ? obj.startQuote : undefined
   const originalQuote = typeof obj.originalQuote === 'string' && obj.originalQuote ? obj.originalQuote : undefined
   const blockId = String(obj.blockId ?? '').trim()
   const prefix = String(obj.prefix ?? '')
   const suffix = String(obj.suffix ?? '')
   const offset = Number.isFinite(Number(obj.offset)) ? Math.max(0, Math.round(Number(obj.offset))) : 0
+  const end = normalizeEndpoint(obj.end)
   if (!quote && !blockId) return null
   return {
     blockId,
     quote,
+    ...(startQuote ? { startQuote } : {}),
     ...(originalQuote ? { originalQuote } : {}),
     prefix,
     suffix,
     offset,
+    ...(end ? { end } : {}),
   }
 }
 

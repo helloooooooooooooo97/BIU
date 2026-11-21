@@ -312,7 +312,7 @@ function Bubble({
   return (
     <BubbleMenu
       editor={editor}
-      className="page-bubble"
+      className={hidden ? 'page-bubble is-hidden' : 'page-bubble'}
       aria-label="文字样式"
       shouldShow={({ editor: current, from, to }) => !hidden && pageTextBubbleOpen(current, from, to, Boolean(colorOpen))}
     >

@@ -161,7 +161,10 @@ export function collectDriftedCommentAnchors(
       fresh.offset !== prev.offset ||
       fresh.quote !== prev.quote ||
       fresh.prefix !== prev.prefix ||
-      fresh.suffix !== prev.suffix
+      fresh.suffix !== prev.suffix ||
+      fresh.end?.blockId !== prev.end?.blockId ||
+      fresh.end?.offset !== prev.end?.offset ||
+      fresh.end?.quote !== prev.end?.quote
     if (drifted) {
       updates.push({
         id: thread.id,
