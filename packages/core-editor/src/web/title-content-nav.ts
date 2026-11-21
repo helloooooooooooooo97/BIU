@@ -12,6 +12,11 @@ export type FocusRecordContentDetail = {
   insertText?: string
 }
 
+export type FocusRecordTitleDetail = {
+  recordId?: string
+  appendText?: string
+}
+
 export function isDocStartSelection(from: number, empty: boolean, docStart: number) {
   return empty && from === docStart
 }
@@ -130,18 +135,33 @@ export function handleContentTitleNav(view: EditorView, event: KeyboardEvent) {
       atFirstVisibleLine(view))
   if (!leave) return false
   event.preventDefault()
-  // 首行是空段落且后面还有其他块时，Backspace 顺手删掉空段落再回标题，与标题 Enter 严格互逆。
-  if (
-    event.key === 'Backspace' &&
-    sel.$from.depth === 1 &&
-    sel.$from.parent.type.name === 'paragraph' &&
-    sel.$from.parent.content.size === 0 &&
-    view.state.doc.childCount > 1
-  ) {
-    view.dispatch(view.state.tr.delete(0, sel.$from.parent.nodeSize))
+  const recordId = view.dom.closest('[data-page-record]')?.getAttribute('data-page-record') || undefined
+  // 首行是普通段落按 Backspace：
+  // - 若首行非空：把首行文字并回标题末尾（光标停在拼接处），并移除/清空该首行；
+  // - 若首行为空且后面还有其他块：顺手删掉该空行并回到标题末尾。
+  if (event.key === 'Backspace' && sel.$from.depth === 1 && sel.$from.parent.type.name === 'paragraph') {
+    const parent = sel.$from.parent
+    const tailText = parent.textContent
+    if (tailText.length > 0) {
+      if (view.state.doc.childCount > 1) {
+        view.dispatch(view.state.tr.delete(0, parent.nodeSize))
+      } else {
+        view.dispatch(view.state.tr.delete(1, parent.nodeSize - 1))
+      }
+      const detail: FocusRecordTitleDetail = {
+        ...(recordId ? { recordId } : {}),
+        appendText: tailText,
+      }
+      window.dispatchEvent(new CustomEvent(FOCUS_RECORD_TITLE, { detail }))
+      return true
+    }
+    if (view.state.doc.childCount > 1) {
+      view.dispatch(view.state.tr.delete(0, parent.nodeSize))
+    }
   }
   if (!focusRecordTitleNear(view.dom)) {
-    window.dispatchEvent(new Event(FOCUS_RECORD_TITLE))
+    const detail: FocusRecordTitleDetail = recordId ? { recordId } : {}
+    window.dispatchEvent(new CustomEvent(FOCUS_RECORD_TITLE, { detail }))
   }
   return true
 }

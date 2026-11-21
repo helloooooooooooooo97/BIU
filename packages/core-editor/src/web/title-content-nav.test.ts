@@ -70,17 +70,20 @@ function listenTitle() {
   }
 }
 
-test('Backspace at the start of TipTap focuses the title and does not delete the first character', () => {
+test('Backspace at the start of TipTap merges first paragraph text onto the title', () => {
   const { editor, host } = makeEditor('hello')
   editor.chain().focus().setTextSelection(Selection.atStart(editor.state.doc)).run()
-  const title = listenTitle()
-  const before = editor.getMarkdown()
+  const details: Array<{ appendText?: string }> = []
+  const onTitle = (e: Event) => {
+    details.push((e as CustomEvent<{ appendText?: string }>).detail ?? {})
+  }
+  window.addEventListener(FOCUS_RECORD_TITLE, onTitle)
   const event = press(editor, 'Backspace')
-  title.stop()
+  window.removeEventListener(FOCUS_RECORD_TITLE, onTitle)
   assert.equal(event.defaultPrevented, true)
-  assert.equal(title.hits(), 1)
-  assert.equal(editor.getMarkdown(), before)
-  assert.match(editor.getHTML(), /hello/)
+  assert.equal(details.length, 1)
+  assert.equal(details[0]?.appendText, 'hello')
+  assert.equal(editor.state.doc.textContent, '')
   editor.destroy()
   host.remove()
 })
@@ -203,7 +206,7 @@ test('Delete at doc start stays in editor instead of focusing title', () => {
   main.remove()
 })
 
-test('Backspace at doc start focuses the title above properties', () => {
+test('Backspace at doc start on empty paragraph focuses the title above properties', () => {
   const main = document.createElement('div')
   main.className = 'fsdb-detail-main'
   const title = document.createElement('textarea')
@@ -216,7 +219,7 @@ test('Backspace at doc start focuses the title above properties', () => {
   const editor = new Editor({
     element: host,
     extensions: recordEditorExtensions(),
-    content: 'hello',
+    content: '',
     contentType: 'markdown',
     editorProps: { handleKeyDown: handleContentTitleNav },
   })
@@ -224,7 +227,6 @@ test('Backspace at doc start focuses the title above properties', () => {
   press(editor, 'Backspace')
   assert.equal(document.activeElement, title)
   assert.equal(title.selectionStart, '页面标题'.length)
-  assert.match(editor.getHTML(), /hello/)
   editor.destroy()
   main.remove()
 })

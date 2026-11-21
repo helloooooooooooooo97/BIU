@@ -14,7 +14,7 @@ import { idleTableIconKind } from './nav-glyphs.tsx'
 import { DATA_COLLECTION_PATH, PAGES_COLLECTION_PATH, TAGS_COLLECTION_PATH } from './database-path.ts'
 import { FSDB_CHANGE_EVENT, PAGE_OUTLINE_EVENT } from './fsdb-events.ts'
 import { normalizeRecordEmoji, recordPreviewEmoji } from './sidebar-preview.ts'
-import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, isTextareaAtLastVisualLine, shouldLeaveContentForTitle, shouldLeaveTitleForContent, focusRecordTitleNear, scheduleFocusRecordTitle, type FocusRecordContentDetail } from './title-content-nav.ts'
+import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, isTextareaAtLastVisualLine, shouldLeaveContentForTitle, shouldLeaveTitleForContent, focusRecordTitleNear, scheduleFocusRecordTitle, type FocusRecordContentDetail, type FocusRecordTitleDetail } from './title-content-nav.ts'
 import { HeadingOutline } from './heading-outline.tsx'
 import { PageBanner } from './page-banner.tsx'
 import { fieldPickAttrs, recordSourcePath } from './pick-dom.ts'
@@ -339,8 +339,29 @@ export function RecordDetail({
       type: field?.type,
     })
   const mainRef = useRef<HTMLDivElement>(null)
+  const draftRef = useRef(draft)
+  draftRef.current = draft
   useEffect(() => {
-    const onTitle = () => {
+    const onTitle = (event: Event) => {
+      const detail = (event as CustomEvent<FocusRecordTitleDetail | undefined>).detail
+      if (detail?.recordId && detail.recordId !== selected.id) return
+      const appendText = detail?.appendText ?? ''
+      if (appendText && schema.labelField && schema.fields[schema.labelField]?.writable && !readOnly) {
+        const fieldKey = schema.labelField
+        const el = mainRef.current?.querySelector<HTMLTextAreaElement | HTMLInputElement>('.fsdb-detail-title-input')
+        const cur = el ? el.value : String(draftRef.current[fieldKey] ?? selected[fieldKey] ?? '')
+        const joinPos = cur.length
+        const nextTitle = `${cur}${appendText}`
+        setDraft((prev) => ({ ...prev, [fieldKey]: nextTitle }))
+        const trimmed = nextTitle.trim()
+        if (trimmed && trimmed !== String(selected[fieldKey] ?? '')) {
+          void writeOne(selected, fieldKey, schema.fields[fieldKey]!, trimmed)
+        }
+        const place = () => focusRecordTitleNear(mainRef.current, joinPos)
+        place()
+        requestAnimationFrame(place)
+        return
+      }
       const go = () => focusRecordTitleNear(mainRef.current)
       go()
       requestAnimationFrame(go)
@@ -351,7 +372,7 @@ export function RecordDetail({
       window.removeEventListener(FOCUS_RECORD_TITLE, onTitle)
       stop?.()
     }
-  }, [inspectorPaneId, selected.id])
+  }, [inspectorPaneId, readOnly, schema, selected])
 
   const paneMenu = (
     <RecordPaneMenu

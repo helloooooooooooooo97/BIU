@@ -8,6 +8,11 @@ export type FocusRecordContentDetail = {
   insertText?: string
 }
 
+export type FocusRecordTitleDetail = {
+  recordId?: string
+  appendText?: string
+}
+
 export function shouldLeaveTitleForContent(key: string, shiftKey: boolean, value: string, selectionEnd: number) {
   if (shiftKey) return false
   if (key === 'Enter') return true
@@ -85,7 +90,7 @@ function titleInputNear(from: Element | null | undefined) {
   return root?.querySelector<HTMLTextAreaElement | HTMLInputElement>('.fsdb-detail-title-input')
 }
 
-function placeTitleCaret(el: HTMLTextAreaElement | HTMLInputElement) {
+function placeTitleCaret(el: HTMLTextAreaElement | HTMLInputElement, caretPos?: number) {
   if (!el.isConnected) return
   el.focus({ preventScroll: true })
   try {
@@ -93,7 +98,7 @@ function placeTitleCaret(el: HTMLTextAreaElement | HTMLInputElement) {
   } catch {
     /* ignore */
   }
-  const n = el.value.length
+  const n = caretPos != null ? Math.max(0, Math.min(caretPos, el.value.length)) : el.value.length
   try {
     el.setSelectionRange(n, n)
   } catch {
@@ -101,14 +106,14 @@ function placeTitleCaret(el: HTMLTextAreaElement | HTMLInputElement) {
   }
 }
 
-/** 标题在属性上方：同一个详情主栏里的 `.fsdb-detail-title-input`，光标放到末尾。 */
-export function focusRecordTitleNear(from: Element | null | undefined) {
+/** 标题在属性上方：同一个详情主栏里的 `.fsdb-detail-title-input`，光标放到末尾或指定拼接位。 */
+export function focusRecordTitleNear(from: Element | null | undefined, caretPos?: number) {
   const el = titleInputNear(from)
   if (!el) return false
-  placeTitleCaret(el)
+  placeTitleCaret(el, caretPos)
   if (document.activeElement !== el) {
-    requestAnimationFrame(() => placeTitleCaret(el))
-    setTimeout(() => placeTitleCaret(el), 0)
+    requestAnimationFrame(() => placeTitleCaret(el, caretPos))
+    setTimeout(() => placeTitleCaret(el, caretPos), 0)
   }
   return true
 }
