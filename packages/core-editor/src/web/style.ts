@@ -358,15 +358,15 @@ html:not(.dark) .page-slash-item:hover .page-slash-icon,
 html:not(.dark) .page-slash-item.is-active .page-slash-icon,
 html:not(.dark) .page-bubble button:not(.is-on) svg,
 html:not(.dark) .page-bubble-chat-icon{color:var(--biu-color-icon)}
-.page-editor .editor-comment-mark{background:rgba(245,158,11,.2);padding:0;border-radius:0;-webkit-box-decoration-break:clone;box-decoration-break:clone;box-shadow:inset 0 -2px 0 rgba(245,158,11,.65);cursor:pointer;transition:background .15s ease,box-shadow .15s ease}
-.page-editor .editor-comment-mark:hover,.page-editor .editor-comment-mark.is-overlap{background:rgba(245,158,11,.32)}
-.page-editor .editor-comment-mark.is-active{background:rgba(245,158,11,.42);box-shadow:inset 0 -2px 0 rgba(245,158,11,.95)}
-.page-editor .tiptap code:has(.editor-comment-mark){background:rgba(245,158,11,.2);padding-top:.06em;padding-bottom:.05em;border-radius:0;-webkit-box-decoration-break:clone;box-decoration-break:clone;box-shadow:inset 0 -2px 0 rgba(245,158,11,.65);cursor:pointer;transition:background .15s ease,box-shadow .15s ease}
-.page-editor .tiptap code:has(.editor-comment-mark:hover),.page-editor .tiptap code:has(.editor-comment-mark.is-overlap){background:rgba(245,158,11,.32)}
-.page-editor .tiptap code:has(.editor-comment-mark.is-active){background:rgba(245,158,11,.42);box-shadow:inset 0 -2px 0 rgba(245,158,11,.95)}
-.page-editor .tiptap code .editor-comment-mark{background:transparent;padding:0;box-shadow:none}
-.page-editor .tiptap code:has(.editor-pending-selection){background:color-mix(in srgb,var(--biu-color-emphasis) 28%,transparent);border-radius:0}
-html.dark .page-editor .tiptap code:has(.editor-pending-selection){background:color-mix(in srgb,var(--biu-color-emphasis) 36%,transparent)}
+.page-editor .editor-comment-mark{background:rgba(245,158,11,.16);padding:1px 0;border-radius:0;-webkit-box-decoration-break:clone;box-decoration-break:clone;text-decoration-line:underline;text-decoration-style:solid;text-decoration-thickness:2px;text-underline-offset:4px;text-decoration-skip-ink:none;text-decoration-color:rgba(245,158,11,.72);cursor:pointer;transition:background .15s ease,text-decoration-color .15s ease}
+.page-editor .editor-comment-mark:hover,.page-editor .editor-comment-mark.is-overlap{background:rgba(245,158,11,.26);text-decoration-color:rgba(245,158,11,.85)}
+.page-editor .editor-comment-mark.is-active{background:rgba(245,158,11,.34);text-decoration-color:rgba(245,158,11,.98)}
+.page-editor .tiptap code:has(.editor-comment-mark){background:color-mix(in srgb,rgba(245,158,11,.18) 55%,var(--biu-color-bg-hover));cursor:pointer;transition:background .15s ease}
+.page-editor .tiptap code:has(.editor-comment-mark:hover),.page-editor .tiptap code:has(.editor-comment-mark.is-overlap){background:color-mix(in srgb,rgba(245,158,11,.28) 65%,var(--biu-color-bg-hover))}
+.page-editor .tiptap code:has(.editor-comment-mark.is-active){background:color-mix(in srgb,rgba(245,158,11,.36) 72%,var(--biu-color-bg-hover))}
+.page-editor .tiptap code .editor-comment-mark{background:transparent;padding:0}
+.page-editor .tiptap code:has(.editor-pending-selection){background:color-mix(in srgb,var(--biu-color-emphasis) 28%,var(--biu-color-bg-hover))}
+html.dark .page-editor .tiptap code:has(.editor-pending-selection){background:color-mix(in srgb,var(--biu-color-emphasis) 36%,var(--biu-color-bg-hover))}
 .page-editor .tiptap code .editor-pending-selection{background:transparent}
 .page-editor .page-editor-main{min-width:0;width:100%}
 .page-editor.has-comments{display:flex;align-items:flex-start;gap:20px}
