@@ -710,7 +710,7 @@ const CSS = `
 .fsdb-page .tasks-table .fsdb-prop-tr.is-tag-fold td:first-child{vertical-align:top;padding-top:4px}
 .fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-proprow-k{display:flex;align-items:center;min-height:22px;padding-top:0}
 .fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-proprow-v,.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-prop-val.is-schema{display:flex;flex-direction:column;align-items:stretch;min-height:22px;padding-top:0}
-.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-schema>:first-child,.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-prop-val.is-schema>.fsdb-pop-host,.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-schema>.fsdb-pop-host{flex:none;display:flex;align-items:center;align-content:center;box-sizing:border-box;min-height:calc(32px - var(--biu-stroke-width));padding:4px 6px;margin:0}
+.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-schema>:first-child,.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-prop-val.is-schema>.fsdb-pop-host,.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-schema>.fsdb-pop-host,.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-prop-val.is-schema>:not(.fsdb-schema){flex:none;display:flex;align-items:center;align-content:center;box-sizing:border-box;min-height:calc(32px - var(--biu-stroke-width));padding:4px 6px;margin:0}
 .fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-schema{gap:0}
 .fsdb-detail-aside .fsdb-prop-tr.is-tag-fold.is-open .fsdb-schema-pack{padding-top:0}
 .fsdb-detail-aside .fsdb-prop-tr.is-tag-fold.is-open:has(.fsdb-schema-pack) .fsdb-schema>:first-child,
