@@ -359,9 +359,11 @@ export function computeInlineCommentPopoverPos(
   const gap = 8
   const maxLeft = Math.max(pad, viewport.width - boxSize.width - pad)
   const left = Math.max(pad, Math.min(Math.round(rect.left), maxLeft))
+  const spaceBelow = viewport.height - rect.bottom - pad - gap
   const spaceAbove = rect.top - pad - gap
-  const preferAbove = spaceAbove >= boxSize.height || spaceAbove >= viewport.height - rect.bottom - pad - gap
-  const rawTop = preferAbove ? rect.top - boxSize.height - gap : rect.bottom + gap
+  // 与 ⌘K 原地修改对齐：默认出现在选区/高亮下方 8px，仅当下方空间不足且上方更宽敞时翻转到上方。
+  const preferBelow = spaceBelow >= boxSize.height || spaceBelow >= spaceAbove
+  const rawTop = preferBelow ? rect.bottom + gap : rect.top - boxSize.height - gap
   const maxTop = Math.max(pad, viewport.height - boxSize.height - pad)
   const top = Math.max(pad, Math.min(Math.round(rawTop), maxTop))
   return { top, left }

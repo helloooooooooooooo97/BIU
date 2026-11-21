@@ -216,22 +216,22 @@ test('isCommentHotkey matches Cmd+M / Ctrl+M without Alt/Shift', () => {
   assert.equal(isCommentHotkey({ key: 'k', metaKey: true, ctrlKey: false, altKey: false, shiftKey: false }), false)
 })
 
-test('computeInlineCommentPopoverPos prefers placing popover above anchor and flips below near top', () => {
-  const above = computeInlineCommentPopoverPos(
+test('computeInlineCommentPopoverPos prefers placing popover below anchor like Cmd+K and flips above near bottom', () => {
+  const below = computeInlineCommentPopoverPos(
     { top: 360, bottom: 384, left: 220, right: 420 },
     { width: 312, height: 180 },
     { width: 1280, height: 800 },
   )
-  assert.equal(above.top, 360 - 180 - 8)
-  assert.equal(above.left, 220)
+  assert.equal(below.top, 384 + 8)
+  assert.equal(below.left, 220)
 
-  const below = computeInlineCommentPopoverPos(
-    { top: 48, bottom: 72, left: 1100, right: 1200 },
+  const above = computeInlineCommentPopoverPos(
+    { top: 700, bottom: 724, left: 1100, right: 1200 },
     { width: 312, height: 180 },
     { width: 1280, height: 800 },
   )
-  assert.equal(below.top, 72 + 8)
-  assert.equal(below.left, 1280 - 312 - 12)
+  assert.equal(above.top, 700 - 180 - 8)
+  assert.equal(above.left, 1280 - 312 - 12)
 })
 
 test('CommentInlinePopover views a single clicked thread without rendering other threads and can open all', async () => {
