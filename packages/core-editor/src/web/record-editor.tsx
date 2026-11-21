@@ -947,6 +947,7 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
       }
       return
     }
+    if (event.defaultPrevented) return
     if (!source && editor && !editor.isDestroyed && handleContentTitleNav(editor.view, event.nativeEvent)) {
       event.stopPropagation()
       return

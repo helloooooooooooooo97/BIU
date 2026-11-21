@@ -130,3 +130,30 @@ test('LocalText autoSize grows height to scrollHeight instead of a fixed row cap
   fireEvent.change(box, { target: { value: `${box.value} extra` } })
   assert.equal(box.style.height, '96px')
 })
+
+test('LocalText syncs external value prop immediately without committing stale draft on blur', () => {
+  const commits: string[] = []
+  const view = render(
+    <LocalText
+      as="textarea"
+      autoSize
+      className="fsdb-detail-title-input"
+      value="原标题"
+      onCommit={(next) => commits.push(next)}
+    />,
+  )
+  const box = document.querySelector('.fsdb-detail-title-input') as HTMLTextAreaElement
+  assert.equal(box.value, '原标题')
+  view.rerender(
+    <LocalText
+      as="textarea"
+      autoSize
+      className="fsdb-detail-title-input"
+      value="原标题1232131321"
+      onCommit={(next) => commits.push(next)}
+    />,
+  )
+  assert.equal(box.value, '原标题1232131321')
+  fireEvent.blur(box)
+  assert.deepEqual(commits, [])
+})

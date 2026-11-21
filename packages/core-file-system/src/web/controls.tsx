@@ -170,12 +170,14 @@ export function LocalText({
   onKeyDown?: (event: ReactKeyboardEvent<HTMLTextAreaElement | HTMLInputElement>) => void
 }) {
   const [draft, setDraft] = useState(value)
-  const draftRef = useRef(draft)
-  draftRef.current = draft
-  const boxRef = useRef<HTMLTextAreaElement>(null)
-  useEffect(() => {
+  const [prevValue, setPrevValue] = useState(value)
+  if (prevValue !== value) {
+    setPrevValue(value)
     setDraft(value)
-  }, [value])
+  }
+  const draftRef = useRef(draft)
+  draftRef.current = prevValue !== value ? value : draft
+  const boxRef = useRef<HTMLTextAreaElement>(null)
   const valueRef = useRef(value)
   valueRef.current = value
   const onCommitRef = useRef(onCommit)

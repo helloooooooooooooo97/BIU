@@ -1273,7 +1273,7 @@ export function CollectionBrowser({
       const openId = detailIdRef.current
       if (openId) {
         const hit = listed.items.find((item) => item.id === openId)
-        if (hit) setDetailRow((prev) => (prev?.id === openId ? overlayListed(prev, hit, listColumns) : prev))
+        if (hit) setDetailRow((prev) => (prev?.id === openId ? applyPendingDetailPatches(overlayListed(prev, hit, listColumns)) : prev))
       }
       rememberListCache(
         cachePath,
@@ -1319,6 +1319,14 @@ export function CollectionBrowser({
   detailIdRef.current = detailId
   const detailRowRef = useRef(detailRow)
   detailRowRef.current = detailRow
+  const pendingFieldWritesRef = useRef(new Map<string, Map<string, { value: unknown; count: number }>>())
+  const applyPendingDetailPatches = useCallback((row: DbRecord): DbRecord => {
+    const bag = pendingFieldWritesRef.current.get(row.id)
+    if (!bag || bag.size === 0) return row
+    const patch: Record<string, unknown> = {}
+    for (const [key, entry] of bag) patch[key] = entry.value
+    return overlayListedRow(row, { ...row, ...patch })
+  }, [])
   const contentGen = useRef(0)
   const contentVersions = useRef(new Map<string, number>())
   const contentWriteGens = useRef(new Map<string, number>())
@@ -1375,7 +1383,7 @@ export function CollectionBrowser({
         if (gen !== recordGen.current || !row?.id) return
         setDetailRow((prev) => {
           if (prev?.id && prev.id !== row.id) return prev
-          return { ...prev, ...row, banner: row.banner ?? null }
+          return applyPendingDetailPatches({ ...prev, ...row, banner: row.banner ?? null })
         })
         mapListedRecords((item) => (item.id === row.id ? overlayListedRow(item, row) : item))
         patchListCacheRecords(dataPath, (item) => (item.id === row.id ? overlayListedRow(item, row) : item))
@@ -1658,7 +1666,7 @@ export function CollectionBrowser({
       .then((data) => {
         const row = data.value
         if (cancelled || !row?.id) return
-        setDetailRow(row)
+        setDetailRow(applyPendingDetailPatches(row))
       })
       .catch((error) => {
         if (cancelled || !(error instanceof HttpError) || error.status !== 404) return
@@ -3190,10 +3198,28 @@ export function CollectionBrowser({
         return
       }
       const path = `${dataPath}/${row.id}`
+      const beforeRow =
+        itemsRef.current.find((item) => item.id === row.id) ??
+        (detailRowRef.current?.id === row.id ? detailRowRef.current : null) ??
+        row
+      const recordBag =
+        pendingFieldWritesRef.current.get(row.id) ??
+        (() => {
+          const map = new Map<string, { value: unknown; count: number }>()
+          pendingFieldWritesRef.current.set(row.id, map)
+          return map
+        })()
+      for (const [key, value] of Object.entries(content)) {
+        const prevEntry = recordBag.get(key)
+        recordBag.set(key, { value, count: (prevEntry?.count ?? 0) + 1 })
+      }
+      if (dataPathRef.current === dataPath) {
+        setDetailRow((prev) => (prev?.id === row.id ? overlayListedRow(prev, { ...prev, ...content }) : prev))
+      }
+      try {
       await tableEditHistory.edit(path, content, async () => {
         const listed = itemsRef.current.find((item) => item.id === row.id)
-        const open = detailRowRef.current?.id === row.id ? detailRowRef.current : null
-        return listed ?? open ?? row
+        return listed ?? beforeRow
       }, async (patch) => {
         if (dataPathRef.current === dataPath) {
           setDetailRow((prev) => (prev?.id === row.id ? overlayListedRow(prev, { ...prev, ...patch }) : prev))
@@ -3226,6 +3252,18 @@ export function CollectionBrowser({
         }
         return next
       })
+      } finally {
+        const bag = pendingFieldWritesRef.current.get(row.id)
+        if (bag) {
+          for (const key of Object.keys(content)) {
+            const entry = bag.get(key)
+            if (!entry) continue
+            if (entry.count <= 1) bag.delete(key)
+            else bag.set(key, { ...entry, count: entry.count - 1 })
+          }
+          if (bag.size === 0) pendingFieldWritesRef.current.delete(row.id)
+        }
+      }
     } catch (err) {
       if (dataPathRef.current !== dataPath) return
       quietUntil.current = 0
