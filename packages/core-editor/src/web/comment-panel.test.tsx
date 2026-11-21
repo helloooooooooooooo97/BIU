@@ -123,6 +123,10 @@ test('CommentPanel creates thread, replies, respects filter prop, shows detached
   fireEvent.click(screen.getByLabelText('解决批注'))
   assert.deepEqual(statuses, [{ id: 'cmt_1', status: 'resolved' }])
 
+  // Empty state (no visible threads and no draftAnchor) renders nothing
+  rerender(<CommentPanel {...props} threads={[]} draftAnchor={null} filter="open" />)
+  assert.equal(screen.queryByTestId('editor-comment-panel'), null)
+
   // Controlled filter prop shows resolved thread
   rerender(<CommentPanel {...props} filter="resolved" draftAnchor={null} />)
   assert.ok(screen.getByText('已修复的旧批注'))

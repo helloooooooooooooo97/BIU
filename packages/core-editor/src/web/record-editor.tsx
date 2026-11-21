@@ -861,7 +861,11 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
   const [commentAnchorTops, setCommentAnchorTops] = useState<Map<string, number>>(() => new Map())
   const [draftCommentTop, setDraftCommentTop] = useState<number | null>(null)
   const [inlineEditTarget, setInlineEditTarget] = useState<InlineEditTarget | null>(null)
-  const commentsOpen = Boolean(commentsUi.open && path)
+  const hasVisibleComments = Boolean(
+    commentsUi.draftAnchor ||
+      orderedCommentThreads.some((t) => commentsUi.filter === 'all' || t.root.status === commentsUi.filter),
+  )
+  const commentsOpen = Boolean(commentsUi.open && path && hasVisibleComments)
 
   useEffect(() => {
     setInlineEditTarget(null)

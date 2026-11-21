@@ -168,6 +168,8 @@ export function CommentPanel({
     }
   }
 
+  if (visible.length === 0 && !draftAnchor) return null
+
   return (
     <aside
       className={`editor-comment-rail${usePositionedRail ? ' is-anchored' : ''}`}
@@ -217,12 +219,6 @@ export function CommentPanel({
                 发送
               </button>
             </div>
-          </div>
-        ) : null}
-
-        {visible.length === 0 && !draftAnchor ? (
-          <div className="editor-comment-empty">
-            {filter === 'open' ? '暂无未解决批注。选中正文后可点击「批注」或按 ⌘⌥M 添加。' : '暂无批注'}
           </div>
         ) : null}
 
