@@ -897,58 +897,62 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
   if (status === 'failed') return <RecordEditorFailed onRetry={onRetry} />
   if (!editor) return <div className="page-editor" data-testid="page-editor-pending" />
 
+  const commentsOpen = Boolean(commentsUi.open && path)
+
   return (
     <div
       ref={hostRef}
-      className={`page-editor${source ? ' is-source' : ''}${present === 'outline' ? ' is-outline' : ''}${present === 'table' ? ' is-table' : ''}`}
+      className={`page-editor${source ? ' is-source' : ''}${present === 'outline' ? ' is-outline' : ''}${present === 'table' ? ' is-table' : ''}${commentsOpen ? ' has-comments' : ''}`}
       data-page-record={record.id}
       data-page-path={path || ''}
       tabIndex={-1}
       onMouseDown={onEditorBlankMouseDown}
       onKeyDownCapture={onEditorHotkey}
     >
-      <div hidden={!source}>
-        {source ? (
-          <SourceEditor
-            ref={sourceFind}
-            value={asMarkdown(value)}
-            writable={writable !== false && status === 'ready'}
-            onChange={(next) => {
-              if (next === saved.current) return
-              saved.current = next
-              onChange?.(next)
-            }}
-          />
-        ) : null}
-      </div>
-      <div hidden={source}>
-        {present === 'table' ? (
-          <PageBlocksTable editor={editor} recordId={record.id} path={path} writable={writable !== false && status === 'ready'} />
-        ) : null}
-        <div
-          className="page-editor-doc"
-          hidden={present === 'table'}
-          onClick={(event) => {
-            const target = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-comment-id]') : null
-            const commentId = target?.getAttribute('data-comment-id')
-            if (commentId) {
-              patchEditorCommentsUi(record.id, { open: true, activeId: commentId })
-            }
-          }}
-        >
-          <EditorContent editor={editor} />
+      <div className="page-editor-main">
+        <div hidden={!source}>
+          {source ? (
+            <SourceEditor
+              ref={sourceFind}
+              value={asMarkdown(value)}
+              writable={writable !== false && status === 'ready'}
+              onChange={(next) => {
+                if (next === saved.current) return
+                saved.current = next
+                onChange?.(next)
+              }}
+            />
+          ) : null}
         </div>
-        {present !== 'table' && writable !== false ? <PageBlockHandle editor={editor} /> : null}
-        {present !== 'table' && writable !== false ? (
-          <Bubble
-            editor={editor}
-            onSendChat={sendToChat}
-            onAddComment={path ? startCommentFromSelection : undefined}
-          />
-        ) : null}
-        {present !== 'table' && writable !== false ? <TableBar editor={editor} /> : null}
+        <div hidden={source}>
+          {present === 'table' ? (
+            <PageBlocksTable editor={editor} recordId={record.id} path={path} writable={writable !== false && status === 'ready'} />
+          ) : null}
+          <div
+            className="page-editor-doc"
+            hidden={present === 'table'}
+            onClick={(event) => {
+              const target = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-comment-id]') : null
+              const commentId = target?.getAttribute('data-comment-id')
+              if (commentId) {
+                patchEditorCommentsUi(record.id, { open: true, activeId: commentId })
+              }
+            }}
+          >
+            <EditorContent editor={editor} />
+          </div>
+          {present !== 'table' && writable !== false ? <PageBlockHandle editor={editor} /> : null}
+          {present !== 'table' && writable !== false ? (
+            <Bubble
+              editor={editor}
+              onSendChat={sendToChat}
+              onAddComment={path ? startCommentFromSelection : undefined}
+            />
+          ) : null}
+          {present !== 'table' && writable !== false ? <TableBar editor={editor} /> : null}
+        </div>
       </div>
-      {commentsUi.open && path ? (
+      {commentsOpen ? (
         <CommentPanel
           threads={comments.threads}
           activeId={commentsUi.activeId}

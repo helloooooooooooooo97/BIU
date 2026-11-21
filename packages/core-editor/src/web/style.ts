@@ -348,12 +348,20 @@ html:not(.dark) .page-slash-item:hover .page-slash-icon,
 html:not(.dark) .page-slash-item.is-active .page-slash-icon,
 html:not(.dark) .page-bubble button:not(.is-on) svg,
 html:not(.dark) .page-bubble-chat-icon{color:var(--biu-color-icon)}
-.page-editor .editor-comment-mark{background:rgba(245,158,11,.18);border-bottom:2px solid rgba(245,158,11,.55);border-radius:2px;cursor:pointer;transition:background .15s ease,border-color .15s ease}
-.page-editor .editor-comment-mark:hover,.page-editor .editor-comment-mark.is-overlap{background:rgba(245,158,11,.3)}
-.page-editor .editor-comment-mark.is-active{background:rgba(245,158,11,.42);border-bottom-color:rgba(245,158,11,.95)}
+.page-editor .editor-comment-mark{background:rgba(245,158,11,.2);padding:.12em 0;border-radius:0;-webkit-box-decoration-break:clone;box-decoration-break:clone;box-shadow:inset 0 -2px 0 rgba(245,158,11,.65);cursor:pointer;transition:background .15s ease,box-shadow .15s ease}
+.page-editor .editor-comment-mark:hover,.page-editor .editor-comment-mark.is-overlap{background:rgba(245,158,11,.32)}
+.page-editor .editor-comment-mark.is-active{background:rgba(245,158,11,.42);box-shadow:inset 0 -2px 0 rgba(245,158,11,.95)}
+.page-editor .tiptap code:has(.editor-comment-mark){background:color-mix(in srgb,rgba(245,158,11,.26) 72%,var(--biu-color-bg-hover));border-radius:3px 3px 0 0;box-shadow:inset 0 -2px 0 rgba(245,158,11,.65);cursor:pointer}
+.page-editor .tiptap code:has(.editor-comment-mark.is-overlap){background:color-mix(in srgb,rgba(245,158,11,.36) 76%,var(--biu-color-bg-hover))}
+.page-editor .tiptap code:has(.editor-comment-mark.is-active){background:color-mix(in srgb,rgba(245,158,11,.46) 80%,var(--biu-color-bg-hover));box-shadow:inset 0 -2px 0 rgba(245,158,11,.95)}
+.page-editor .tiptap code .editor-comment-mark{background:transparent;padding:0;box-shadow:none}
+.page-editor .page-editor-main{min-width:0;width:100%}
+.page-editor.has-comments{display:flex;align-items:flex-start;gap:20px}
+.page-editor.has-comments .page-editor-main{flex:1 1 0;min-width:0;width:auto}
 .editor-comment-trigger{position:relative}
 .editor-comment-badge{position:absolute;top:1px;right:1px;min-width:13px;height:13px;padding:0 3px;border-radius:999px;background:var(--biu-color-emphasis);color:var(--biu-color-on-emphasis,#fff);font-size:9.5px;font-weight:var(--biu-font-weight-semibold);line-height:13px;text-align:center;pointer-events:none}
-.page-editor .editor-comment-panel{position:fixed;top:52px;right:16px;bottom:16px;z-index:45;width:min(320px,calc(100vw - 32px));display:flex;flex-direction:column;background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);border-radius:12px;box-shadow:var(--biu-shadow-popover);overflow:hidden}
+.page-editor .editor-comment-panel{position:sticky;top:56px;flex:0 0 300px;width:300px;max-height:calc(100vh - 88px);z-index:2;display:flex;flex-direction:column;background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);border-radius:12px;box-shadow:var(--biu-shadow-popover);overflow:hidden}
+@media (max-width:760px){.page-editor.has-comments{flex-direction:column;gap:12px}.page-editor .editor-comment-panel{position:static;flex:none;width:100%;max-height:420px}}
 .page-editor .editor-comment-head{display:flex;align-items:center;gap:6px;padding:10px 10px 8px 12px;border-bottom:var(--biu-stroke-width) solid var(--biu-color-border-subtle)}
 .page-editor .editor-comment-title{font-size:13px;font-weight:var(--biu-font-weight-semibold);color:var(--biu-color-text);margin-right:auto}
 .page-editor .editor-comment-tabs{display:inline-flex;align-items:center;gap:2px;padding:2px;border-radius:7px;background:var(--biu-color-bg-subtle)}
