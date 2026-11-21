@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
-import { emitFsdbChange, FSDB_CHANGE_EVENT, type DbRecord } from '@biu/type-file-system'
 import type { CommentAnchor } from './comment-anchor.ts'
+
+export const EDITOR_COMMENTS_CHANGE_EVENT = 'biu:editor-comments-change'
+
+function emitCommentsChange(targetPath = '') {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(EDITOR_COMMENTS_CHANGE_EVENT, { detail: { targetPath } }))
+  }
+}
 
 export type CommentItem = {
   id: string
@@ -46,7 +53,7 @@ function parseAnchor(raw: unknown): CommentAnchor | null {
   }
 }
 
-export function commentItemFromRecord(row: DbRecord): CommentItem | null {
+export function commentItemFromRecord(row: Record<string, unknown>): CommentItem | null {
   const id = String(row.id ?? '').trim()
   if (!id) return null
   const parentId = String(row.parentId ?? '').trim()
@@ -106,14 +113,10 @@ export function sortCommentThreadsByPosition(
 
 export async function fetchComments(targetPath: string, signal?: AbortSignal): Promise<CommentItem[]> {
   if (!targetPath) return []
-  const params = new URLSearchParams({
-    path: '/comments',
-    limit: '500',
-    filter: JSON.stringify({ targetPath }),
-  })
-  const res = await fetch(`/api/db/list?${params.toString()}`, { signal })
+  const params = new URLSearchParams({ targetPath })
+  const res = await fetch(`/api/editor/comments?${params.toString()}`, { signal })
   if (!res.ok) return []
-  const data = (await res.json()) as { items?: DbRecord[] }
+  const data = (await res.json()) as { items?: Record<string, unknown>[] }
   const items = Array.isArray(data?.items) ? data.items : []
   return items
     .map(commentItemFromRecord)
@@ -127,56 +130,50 @@ export async function apiCreateComment(input: {
   parentId?: string
   anchor?: CommentAnchor | null
 }): Promise<CommentItem | null> {
-  const res = await fetch('/api/db/create', {
+  const res = await fetch('/api/editor/comments', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      path: '/comments',
-      records: [
-        {
-          body: input.body,
-          targetPath: input.targetPath,
-          ...(input.threadId ? { threadId: input.threadId } : {}),
-          ...(input.parentId ? { parentId: input.parentId } : {}),
-          status: 'open',
-          anchor: input.anchor ? JSON.stringify(input.anchor) : '',
-        },
-      ],
+      body: input.body,
+      targetPath: input.targetPath,
+      ...(input.threadId ? { threadId: input.threadId } : {}),
+      ...(input.parentId ? { parentId: input.parentId } : {}),
+      status: 'open',
+      anchor: input.anchor ?? null,
     }),
   })
   if (!res.ok) return null
-  emitFsdbChange('/comments')
-  const data = (await res.json()) as { items?: DbRecord[]; ids?: string[]; records?: DbRecord[] }
-  const first = data?.items?.[0] ?? data?.records?.[0]
-  return first ? commentItemFromRecord(first) : null
+  emitCommentsChange(input.targetPath)
+  const data = (await res.json()) as { item?: Record<string, unknown> }
+  return data?.item ? commentItemFromRecord(data.item) : null
 }
 
 export async function apiUpdateComment(
   id: string,
   patch: { body?: string; status?: 'open' | 'resolved'; anchor?: CommentAnchor | null },
 ): Promise<boolean> {
-  const content: Record<string, unknown> = {}
-  if (patch.body !== undefined) content.body = patch.body
-  if (patch.status !== undefined) content.status = patch.status
-  if (patch.anchor !== undefined) content.anchor = patch.anchor ? JSON.stringify(patch.anchor) : ''
-  const res = await fetch('/api/db/update', {
+  const body: Record<string, unknown> = { id }
+  if (patch.body !== undefined) body.body = patch.body
+  if (patch.status !== undefined) body.status = patch.status
+  if (patch.anchor !== undefined) body.anchor = patch.anchor ?? null
+  const res = await fetch('/api/editor/comments/update', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path: `/comments/${id}`, content }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) return false
-  emitFsdbChange('/comments')
+  emitCommentsChange()
   return true
 }
 
 export async function apiDeleteComment(id: string): Promise<boolean> {
-  const res = await fetch('/api/db/delete', {
+  const res = await fetch('/api/editor/comments/delete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path: '/comments', ids: [id] }),
+    body: JSON.stringify({ id }),
   })
   if (!res.ok) return false
-  emitFsdbChange('/comments')
+  emitCommentsChange()
   return true
 }
 
@@ -210,14 +207,14 @@ export function useRecordComments(targetPath: string) {
   useEffect(() => {
     if (!targetPath || typeof window === 'undefined') return
     const onChange = (event: Event) => {
-      const detail = (event as CustomEvent<{ path?: string }>).detail
-      const changed = String(detail?.path ?? '')
-      if (!changed || changed === '/comments' || changed.startsWith('/comments/')) {
+      const detail = (event as CustomEvent<{ targetPath?: string }>).detail
+      const changed = String(detail?.targetPath ?? '')
+      if (!changed || changed === targetPath) {
         void reload()
       }
     }
-    window.addEventListener(FSDB_CHANGE_EVENT, onChange)
-    return () => window.removeEventListener(FSDB_CHANGE_EVENT, onChange)
+    window.addEventListener(EDITOR_COMMENTS_CHANGE_EVENT, onChange)
+    return () => window.removeEventListener(EDITOR_COMMENTS_CHANGE_EVENT, onChange)
   }, [reload, targetPath])
 
   const createThread = useCallback(
