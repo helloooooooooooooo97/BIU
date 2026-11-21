@@ -89,7 +89,8 @@ export const PAGE_EDITOR_STYLE = `
 .page-block-handle-grip:hover,.page-block-handle-grip:focus-visible{background:var(--biu-color-bg-hover);color:var(--biu-color-icon-active)}
 .page-block-handle-grip:active{cursor:grabbing}
 .page-block-handle-dots{display:block;width:10px;height:16px;background-image:radial-gradient(circle,currentColor 1.35px,transparent 1.45px);background-size:5px 5.2px;background-position:0 0}
-.page-block-handle-menu{position:absolute;left:26px;top:0;z-index:40;min-width:132px;padding:4px;display:flex;flex-direction:column;gap:1px;background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);border-radius:var(--biu-radius-popover);box-shadow:var(--biu-shadow-popover)}
+.page-block-handle-menu{position:absolute;left:26px;top:0;z-index:40;min-width:132px;padding:4px;display:flex;flex-direction:column;gap:1px;background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);border-radius:var(--biu-radius-popover);box-shadow:var(--biu-shadow-popover);animation:page-menu-in 120ms cubic-bezier(.22,1,.36,1)}
+@keyframes page-menu-in{from{opacity:0;transform:scale(.97) translateY(3px)}to{opacity:1;transform:none}}
 .page-block-handle-menu button{display:flex;align-items:center;gap:8px;width:100%;margin:0;border:0;border-radius:6px;padding:6px 8px;background:transparent;color:var(--biu-color-text-muted);font:inherit;font-size:var(--biu-font-size-3);font-weight:var(--biu-font-weight-semibold);text-align:left;cursor:pointer}
 .page-block-handle-menu button svg{flex:none;color:var(--biu-color-icon)}
 .page-block-handle-menu button:hover{background:var(--biu-color-bg-hover);color:var(--biu-color-text-muted)}
@@ -249,9 +250,9 @@ export const PAGE_EDITOR_STYLE = `
 .page-editor .tiptap p.is-editor-empty:first-child::before,
 .page-editor .tiptap .is-empty::before{content:attr(data-placeholder);float:left;height:0;pointer-events:none;color:var(--biu-color-text-placeholder);animation:page-placeholder-in 120ms ease 40ms both}
 @keyframes page-placeholder-in{from{opacity:0}to{opacity:1}}
-.page-bubble{z-index:var(--biu-z-float);background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);box-shadow:var(--biu-shadow-popover);border-radius:var(--biu-radius-popover);overflow:hidden}
+.page-bubble{z-index:var(--biu-z-float);background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);box-shadow:var(--biu-shadow-popover);border-radius:var(--biu-radius-popover);overflow:hidden;animation:page-menu-in 120ms cubic-bezier(.22,1,.36,1)}
 html:not(.dark) .page-bubble{box-shadow:none}
-.page-slash{position:fixed;z-index:var(--biu-z-toast);width:240px;max-height:min(52vh,280px);padding:4px;display:flex;flex-direction:column;gap:0;overflow:hidden;background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);box-shadow:var(--biu-shadow-popover);border-radius:var(--biu-radius-popover)}
+.page-slash{position:fixed;z-index:var(--biu-z-toast);width:240px;max-height:min(52vh,280px);padding:4px;display:flex;flex-direction:column;gap:0;overflow:hidden;background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);box-shadow:var(--biu-shadow-popover);border-radius:var(--biu-radius-popover);animation:page-menu-in 120ms cubic-bezier(.22,1,.36,1)}
 .page-slash-head,.page-slash-empty{padding:6px 8px 4px;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-1);font-weight:var(--biu-font-weight-semibold)}
 .page-slash-head{flex:none;padding:6px 8px 2px}
 .page-slash-list{min-height:0;flex:1;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:1px}
@@ -406,5 +407,5 @@ html:not(.dark) .page-bubble-chat-icon{color:var(--biu-color-icon)}
 .editor-inline-edit-submit:disabled{opacity:.35;cursor:default}
 .editor-inline-edit-spin{width:13px;height:13px;animation:page-editor-spin .8s linear infinite}
 .editor-inline-edit-error{font-size:11.5px;line-height:1.4;color:var(--biu-color-danger);padding:0 4px 2px 36px}
-@media (prefers-reduced-motion:reduce){.page-block-handle,.page-slide-bar,.page-editor .page-slide-bar,.page-editor .tiptap .page-image-resize,.page-editor.is-outline .tiptap>.page-outline-heading.has-fold::after,.page-editor .tiptap li.has-fold::after,.page-editor .tiptap ol>li.has-fold::after,.page-editor .tiptap p.is-editor-empty:first-child::before,.page-editor .tiptap .is-empty::before,.page-image-lightbox,.page-image-lightbox img{transition:none;animation:none}}
+@media (prefers-reduced-motion:reduce){.page-block-handle,.page-block-handle-menu,.page-bubble,.page-slash,.page-slide-bar,.page-editor .page-slide-bar,.page-editor .tiptap .page-image-resize,.page-editor.is-outline .tiptap>.page-outline-heading.has-fold::after,.page-editor .tiptap li.has-fold::after,.page-editor .tiptap ol>li.has-fold::after,.page-editor .tiptap p.is-editor-empty:first-child::before,.page-editor .tiptap .is-empty::before,.page-image-lightbox,.page-image-lightbox img{transition:none;animation:none}}
 `

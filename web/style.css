@@ -3509,6 +3509,21 @@ select.settings-account-input {
   --biu-color-danger-muted: color-mix(in srgb, var(--biu-color-ink-red) 22%, transparent);
 }
 
+.session-inspector:not(.is-closed) {
+  animation: biu-inspector-in 150ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes biu-inspector-in {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 .app-shell-agent.is-chat-overlay .session-inspector {
   border-left: none;
 }
@@ -4118,6 +4133,29 @@ html.dark .composer-model-flyout {
 
 [data-radix-popper-content-wrapper]:has(.pick-chip-data) {
   z-index: var(--biu-z-pick) !important;
+}
+
+@keyframes biu-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.biu-headless-pop[data-state="open"] {
+  animation: biu-pop-in 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: var(--radix-popover-content-transform-origin, top center);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .biu-headless-pop[data-state="open"],
+  .session-inspector:not(.is-closed) {
+    animation: none;
+  }
 }
 
 .app-side-actions {

@@ -36,6 +36,8 @@ test('headless dismiss uses radix dismissable layer', () => {
   assert.match(style, /z-index: var\(--biu-z-toast\) !important/)
   assert.match(style, /z-index: var\(--biu-z-pick\) !important/)
   assert.match(style, /--biu-z-pick: 500/)
+  assert.match(style, /\.biu-headless-pop\[data-state="open"\]\s*\{[^}]*animation:\s*biu-pop-in 120ms/s)
+  assert.match(style, /\.session-inspector:not\(\.is-closed\)\s*\{[^}]*animation:\s*biu-inspector-in 150ms/s)
 })
 
 test('share overlay portal helper lifts z-index', () => {
