@@ -180,6 +180,8 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
   const pendingRef = useRef(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const activeDraftSessionRef = useRef<string | null>(null)
+  const restoringDraftRef = useRef(false)
   const canSubmitRef = useRef(false)
   const [canSubmit, setCanSubmit] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -420,11 +422,14 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
   }
 
   function schedulePersistDraft(text: string) {
-    if (!sessionId) return
+    if (restoringDraftRef.current) return
+    const targetId = activeDraftSessionRef.current ?? live.current.sessionView.get().sessionId
+    if (!targetId) return
     if (draftTimerRef.current != null) clearTimeout(draftTimerRef.current)
     draftTimerRef.current = setTimeout(() => {
       draftTimerRef.current = null
-      writeDraft(sessionId, text)
+      if (text.trim()) writeDraft(targetId, text)
+      else clearDraft(targetId)
     }, DRAFT_DEBOUNCE_MS)
   }
 
@@ -627,20 +632,44 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
   )
 
   useEffect(() => {
-    if (!composerEditorReady(editor) || !sessionId) return
-    const draft = readDraftMap()[sessionId]
-    const keep = pick?.refs.slice() ?? []
-    if (!pick?.picking) pick?.clear()
-    pickKeysRef.current = new Set()
-    if (typeof draft === 'string' && draft) {
-      runComposerCommands(editor, (ed) => ed.commands.setContent(jsonFromDraft(draft)))
-      const { refs } = serializeComposer(editor)
-      if (refs.length) pick?.addMany(refs)
-    } else {
-      runComposerCommands(editor, (ed) => ed.commands.clearContent())
+    if (!composerEditorReady(editor)) return
+    const prevId = activeDraftSessionRef.current
+    const switching = Boolean(prevId && prevId !== sessionId)
+    flushDraftTimer()
+    if (switching && prevId) {
+      const prevPacked = serializeComposer(editor)
+      if (prevPacked.text.trim()) writeDraft(prevId, prevPacked.text)
+      else clearDraft(prevId)
     }
-    if (keep.length && !pick?.picking) pick?.addMany(keep)
-    pickKeysRef.current = collectPickKeys(editor)
+    activeDraftSessionRef.current = sessionId
+    if (!sessionId) return
+
+    const draft = readDraftMap()[sessionId]
+    // 仅在输入框首次挂载（从其他页面带入 ⌘L 引用）时保留 pick.refs；切换 Agent 时严禁把上一个 Agent 的引用带入新 Agent。
+    const keep = !switching ? (pick?.refs.slice() ?? []) : []
+    restoringDraftRef.current = true
+    try {
+      if (!pick?.picking) pick?.clear()
+      pickKeysRef.current = new Set()
+      if (switching) {
+        setPicked([])
+        setPendingImages((prev) => {
+          for (const item of prev) URL.revokeObjectURL(item.previewUrl)
+          return []
+        })
+      }
+      if (typeof draft === 'string' && draft) {
+        runComposerCommands(editor, (ed) => ed.commands.setContent(jsonFromDraft(draft)))
+        const { refs } = serializeComposer(editor)
+        if (refs.length) pick?.addMany(refs)
+      } else {
+        runComposerCommands(editor, (ed) => ed.commands.clearContent())
+      }
+      if (keep.length && !pick?.picking) pick?.addMany(keep)
+      pickKeysRef.current = collectPickKeys(editor)
+    } finally {
+      restoringDraftRef.current = false
+    }
     if (isComposerFocusPending()) focusComposerEditor(editor)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, editor])

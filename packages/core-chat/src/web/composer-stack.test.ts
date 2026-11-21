@@ -406,4 +406,13 @@ describe('composer dock stacking above sticky user', () => {
     expect(node).toMatch(/plugin: \{ default: null \}/)
     expect(node).toMatch(/element: \{ default: null \}/)
   })
+
+  it('isolates per-session drafts and never carries previous agent picks into another agent', () => {
+    const composer = readFileSync(resolve(root, 'packages/core-chat/src/web/composer.tsx'), 'utf8')
+    expect(composer).toMatch(/const activeDraftSessionRef = useRef<string \| null>\(null\)/)
+    expect(composer).toMatch(/const restoringDraftRef = useRef\(false\)/)
+    expect(composer).toMatch(/const switching = Boolean\(prevId && prevId !== sessionId\)/)
+    expect(composer).toMatch(/const keep = !switching \? \(pick\?\.refs\.slice\(\) \?\? \[\]\) : \[\]/)
+    expect(composer).toMatch(/const targetId = activeDraftSessionRef\.current \?\? live\.current\.sessionView\.get\(\)\.sessionId/)
+  })
 })
