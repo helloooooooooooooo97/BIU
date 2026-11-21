@@ -9,7 +9,7 @@ import {
   pageImageMarkdown,
   stripPastedDataImages,
   uploadPageImage,
-} from './page-image.ts'
+} from './editor-image.ts'
 import { recordEditorExtensions } from './kit.ts'
 
 test('uploadPageImage PUTs to hash storage and returns the asset href', async () => {
@@ -100,7 +100,7 @@ test('image size and align persist through markdown', () => {
 })
 
 test('image chrome uses the same top slide bar as html and slide', () => {
-  const view = readFileSync(resolve(import.meta.dirname, './page-image-view.tsx'), 'utf8')
+  const view = readFileSync(resolve(import.meta.dirname, './editor-image-view.tsx'), 'utf8')
   const css = readFileSync(resolve(import.meta.dirname, './style.ts'), 'utf8')
   assert.match(view, /className="page-slide-bar"/)
   assert.match(view, /ArrowsPointingOutIcon/)

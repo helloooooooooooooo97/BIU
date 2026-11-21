@@ -4,7 +4,7 @@ import { Editor } from '@tiptap/core'
 import { recordEditorExtensions } from './kit.ts'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { collapsedOutlineIndices, listFoldableItems, listOutlineBlocks, outlineFoldGutterHit } from './page-outline-plugin.ts'
+import { collapsedOutlineIndices, listFoldableItems, listOutlineBlocks, outlineFoldGutterHit } from './outline-plugin.ts'
 
 test('outline indents h2/h3 and body under the last heading', () => {
   const editor = new Editor({
@@ -89,7 +89,7 @@ test('nested list items can fold', () => {
 })
 
 test('outline fold lives on the heading node, not an inline widget', () => {
-  const src = readFileSync(resolve(import.meta.dirname, './page-outline-plugin.ts'), 'utf8')
+  const src = readFileSync(resolve(import.meta.dirname, './outline-plugin.ts'), 'utf8')
   assert.doesNotMatch(src, /Decoration\.widget/)
   assert.match(src, /data-outline-id/)
   assert.match(src, /outlineFoldGutterHit/)

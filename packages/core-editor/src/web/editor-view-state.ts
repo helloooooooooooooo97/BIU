@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { RecordLayoutSort } from '@biu/type-file-system/record-views'
+import type { CommentAnchor } from './comment-anchor.ts'
 
 export type PageSort = RecordLayoutSort
 export type PageGroup = '' | 'kind' | 'heading'
@@ -58,4 +59,55 @@ export function usePageFind(recordId: string) {
 
 export function notifyPageView() {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(PAGE_VIEW_EVENT))
+}
+
+export type EditorCommentsUiState = {
+  open: boolean
+  activeId: string
+  openCount: number
+  draftAnchor: CommentAnchor | null
+}
+
+const emptyCommentsUi: EditorCommentsUiState = {
+  open: false,
+  activeId: '',
+  openCount: 0,
+  draftAnchor: null,
+}
+const commentsUiStore = new Map<string, EditorCommentsUiState>()
+let commentsUiSeq = 0
+const commentsUiListeners = new Set<() => void>()
+
+function bumpCommentsUi() {
+  commentsUiSeq += 1
+  for (const fn of commentsUiListeners) fn()
+}
+
+export function getEditorCommentsUi(recordId: string): EditorCommentsUiState {
+  return commentsUiStore.get(String(recordId ?? '')) ?? emptyCommentsUi
+}
+
+export function patchEditorCommentsUi(recordId: string, patch: Partial<EditorCommentsUiState>) {
+  const id = String(recordId ?? '').trim()
+  if (!id) return
+  const prev = getEditorCommentsUi(id)
+  const next: EditorCommentsUiState = {
+    open: patch.open ?? prev.open,
+    activeId: patch.activeId ?? prev.activeId,
+    openCount: patch.openCount ?? prev.openCount,
+    draftAnchor: patch.draftAnchor !== undefined ? patch.draftAnchor : prev.draftAnchor,
+  }
+  commentsUiStore.set(id, next)
+  bumpCommentsUi()
+}
+
+export function useEditorCommentsUi(recordId: string) {
+  useSyncExternalStore(
+    (fn) => {
+      commentsUiListeners.add(fn)
+      return () => commentsUiListeners.delete(fn)
+    },
+    () => commentsUiSeq,
+  )
+  return getEditorCommentsUi(recordId)
 }

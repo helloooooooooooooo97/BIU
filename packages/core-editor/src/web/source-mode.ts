@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { PAGE_VIEW_EVENT } from './page-view-state.ts'
+import { PAGE_VIEW_EVENT } from './editor-view-state.ts'
 
 export const PAGE_BUILTIN_MODES = ['doc', 'outline', 'table', 'source', 'hidden'] as const
 export type PageBuiltinMode = (typeof PAGE_BUILTIN_MODES)[number]

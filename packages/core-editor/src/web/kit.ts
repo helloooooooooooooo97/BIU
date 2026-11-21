@@ -2,22 +2,23 @@ import { InputRule, mergeAttributes, type Editor } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Markdown } from '@tiptap/markdown'
 import { CodeBlockLowlight } from '@tiptap/extension-code-block-lowlight'
-import { pageImage } from './page-image.ts'
+import { pageImage } from './editor-image.ts'
 import { BlockMath, InlineMath, Mathematics } from '@tiptap/extension-mathematics'
 import Placeholder from '@tiptap/extension-placeholder'
 import { TableKit } from '@tiptap/extension-table'
-import { pageTable, pageTableCell, pageTableHeader } from './page-table.ts'
+import { pageTable, pageTableCell, pageTableHeader } from './editor-table.ts'
 import StarterKit from '@tiptap/starter-kit'
 import { Paragraph } from '@tiptap/extension-paragraph'
-import { pageLowlight } from './page-lowlight.ts'
+import { pageLowlight } from './editor-lowlight.ts'
 import { pageTextStyle, pageHighlight, Color } from './color-marks.ts'
 import { headingSkin } from './heading-skin.ts'
 import { pageBlock } from './page-block.ts'
 import { slideExtensions } from './slide.ts'
 import { pageFind } from './find-plugin.ts'
+import { editorComments } from './comment-plugin.ts'
 import { pageBlockIds } from './block-id.ts'
-import { pageFilter } from './page-filter-plugin.ts'
-import { pageOutline } from './page-outline-plugin.ts'
+import { pageFilter } from './filter-plugin.ts'
+import { pageOutline } from './outline-plugin.ts'
 import { pageAgentEdit } from './agent-edit-plugin.ts'
 import { slashCommand } from './slash.ts'
 import { pageMention } from './mention.ts'
@@ -282,13 +283,14 @@ export function recordEditorExtensions() {
     pageFilter,
     pageOutline,
     pageFind,
+    editorComments,
     pageAgentEdit,
     slashCommand,
     pageMention,
   ]
 }
 
-const EMBED_SKIP = new Set(['pageBlockIds', 'pageFilter', 'pageOutline', 'pageFind', 'pageAgentEdit'])
+const EMBED_SKIP = new Set(['pageBlockIds', 'pageFilter', 'pageOutline', 'pageFind', 'editorComments', 'pageAgentEdit'])
 
 export function pageEmbedExtensions() {
   return recordEditorExtensions().filter((ext) => !EMBED_SKIP.has(ext.name))

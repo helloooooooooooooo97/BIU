@@ -4,6 +4,7 @@ import { HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
 import type { FsDetailBarProps } from '@biu/type-file-system/ui'
 import {
   ArrowPathIcon,
+  ChatBubbleBottomCenterTextIcon,
   ChevronDownIcon,
   CodeBracketIcon,
   EyeIcon,
@@ -17,7 +18,7 @@ import {
   AdjustmentsHorizontalIcon,
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
-import { usePageFind } from './page-view-state.ts'
+import { patchEditorCommentsUi, useEditorCommentsUi, usePageFind } from './editor-view-state.ts'
 import { useStickyToolbar } from './sticky-toolbar.ts'
 import { useToolbarOverflow } from '@biu/core-file-system/toolbar-overflow'
 import { SandboxKindIcon } from '@biu/core-file-system/sandbox-kind-icon'
@@ -75,6 +76,7 @@ export function RecordDetailBar({
   configMenu,
 }: FsDetailBarProps) {
   const find = usePageFind(record.id)
+  const commentsUi = useEditorCommentsUi(record.id)
   const path = String(collectionPath ?? '').trim()
   const fallback = recordContentFallback(path)
   const layouts = useRecordLayouts(path, record.id, fallback)
@@ -766,6 +768,21 @@ export function RecordDetailBar({
             </HeadlessDismiss>
           ) : null}
         </div>
+        <button
+          type="button"
+          className={`tasks-refresh tasks-rbar-btn editor-comment-trigger${commentsUi.open ? ' is-active' : ''}`}
+          aria-label="批注"
+          aria-pressed={commentsUi.open}
+          title={commentsUi.openCount ? `批注 (${commentsUi.openCount})` : '批注'}
+          onClick={() => patchEditorCommentsUi(record.id, { open: !commentsUi.open })}
+        >
+          <ChatBubbleBottomCenterTextIcon aria-hidden className="size-[14px]" />
+          {commentsUi.openCount > 0 ? (
+            <span className="editor-comment-badge" data-testid="editor-comment-badge">
+              {commentsUi.openCount}
+            </span>
+          ) : null}
+        </button>
         <button
           type="button"
           className={`tasks-refresh${refreshing ? ' is-spinning' : ''}`}

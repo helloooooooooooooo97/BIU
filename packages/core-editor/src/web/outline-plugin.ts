@@ -4,7 +4,7 @@ import type { Node } from '@tiptap/pm/model'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { nodeBlockId } from './block-id.ts'
 import { pageOutlineFolded, togglePageOutlineFold } from './source-mode.ts'
-import { PAGE_VIEW_EVENT } from './page-view-state.ts'
+import { PAGE_VIEW_EVENT } from './editor-view-state.ts'
 import { getRecordViewCatalog, subscribeRecordViewCatalog } from '@biu/core-file-system/record-view-catalog'
 
 const key = new PluginKey('page-outline')

@@ -348,4 +348,43 @@ html:not(.dark) .page-slash-item:hover .page-slash-icon,
 html:not(.dark) .page-slash-item.is-active .page-slash-icon,
 html:not(.dark) .page-bubble button:not(.is-on) svg,
 html:not(.dark) .page-bubble-chat-icon{color:var(--biu-color-icon)}
+.page-editor .editor-comment-mark{background:rgba(245,158,11,.18);border-bottom:2px solid rgba(245,158,11,.55);border-radius:2px;cursor:pointer;transition:background .15s ease,border-color .15s ease}
+.page-editor .editor-comment-mark:hover,.page-editor .editor-comment-mark.is-overlap{background:rgba(245,158,11,.3)}
+.page-editor .editor-comment-mark.is-active{background:rgba(245,158,11,.42);border-bottom-color:rgba(245,158,11,.95)}
+.editor-comment-trigger{position:relative}
+.editor-comment-badge{position:absolute;top:1px;right:1px;min-width:13px;height:13px;padding:0 3px;border-radius:999px;background:var(--biu-color-emphasis);color:var(--biu-color-on-emphasis,#fff);font-size:9.5px;font-weight:var(--biu-font-weight-semibold);line-height:13px;text-align:center;pointer-events:none}
+.page-editor .editor-comment-panel{position:fixed;top:52px;right:16px;bottom:16px;z-index:45;width:min(320px,calc(100vw - 32px));display:flex;flex-direction:column;background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);border-radius:12px;box-shadow:var(--biu-shadow-popover);overflow:hidden}
+.page-editor .editor-comment-head{display:flex;align-items:center;gap:6px;padding:10px 10px 8px 12px;border-bottom:var(--biu-stroke-width) solid var(--biu-color-border-subtle)}
+.page-editor .editor-comment-title{font-size:13px;font-weight:var(--biu-font-weight-semibold);color:var(--biu-color-text);margin-right:auto}
+.page-editor .editor-comment-tabs{display:inline-flex;align-items:center;gap:2px;padding:2px;border-radius:7px;background:var(--biu-color-bg-subtle)}
+.page-editor .editor-comment-tab{border:0;border-radius:5px;padding:2px 7px;background:transparent;color:var(--biu-color-text-muted);font:inherit;font-size:11.5px;cursor:pointer}
+.page-editor .editor-comment-tab.is-on{background:var(--biu-color-bg);color:var(--biu-color-text);font-weight:var(--biu-font-weight-medium);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.page-editor .editor-comment-body{flex:1;min-height:0;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px}
+.page-editor .editor-comment-empty{padding:24px 12px;text-align:center;font-size:12.5px;line-height:1.6;color:var(--biu-color-text-muted)}
+.page-editor .editor-comment-composer,.page-editor .editor-comment-card{display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:9px;background:var(--biu-color-bg-subtle);border:var(--biu-stroke-width) solid var(--biu-color-border-subtle);transition:border-color .15s ease,background .15s ease}
+.page-editor .editor-comment-card{cursor:pointer}
+.page-editor .editor-comment-card:hover{border-color:var(--biu-color-border)}
+.page-editor .editor-comment-card.is-active{border-color:rgba(245,158,11,.75);background:color-mix(in srgb,rgba(245,158,11,.12) 55%,var(--biu-color-bg-subtle))}
+.page-editor .editor-comment-card.is-resolved{opacity:.72}
+.page-editor .editor-comment-quote{display:flex;flex-direction:column;gap:3px;padding:3px 8px;border-left:2px solid rgba(245,158,11,.75);font-size:12px;line-height:1.45;color:var(--biu-color-text-muted);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.page-editor .editor-comment-quote.is-detached{border-left-color:var(--biu-color-border-strong);font-style:italic}
+.page-editor .editor-comment-detached-tag{display:inline-block;margin-left:6px;padding:0 5px;border-radius:4px;background:var(--biu-color-bg-hover);color:var(--biu-color-text-muted);font-style:normal;font-size:10.5px}
+.page-editor .editor-comment-meta{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--biu-color-text-muted)}
+.page-editor .editor-comment-author{font-weight:var(--biu-font-weight-semibold);color:var(--biu-color-text)}
+.page-editor .editor-comment-time{font-variant-numeric:tabular-nums}
+.page-editor .editor-comment-actions{margin-left:auto;display:inline-flex;align-items:center;gap:2px}
+.page-editor .editor-comment-icon-btn{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:0;border-radius:5px;background:transparent;color:var(--biu-color-text-muted);cursor:pointer}
+.page-editor .editor-comment-icon-btn:hover{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
+.page-editor .editor-comment-icon-btn.is-danger:hover{color:var(--biu-color-danger)}
+.page-editor .editor-comment-text{font-size:13px;line-height:1.55;color:var(--biu-color-text);white-space:pre-wrap;word-break:break-word}
+.page-editor .editor-comment-replies{display:flex;flex-direction:column;gap:6px;margin-top:2px;padding-top:6px;border-top:var(--biu-stroke-width) solid var(--biu-color-border-subtle)}
+.page-editor .editor-comment-reply{display:flex;flex-direction:column;gap:3px;padding-left:8px;border-left:2px solid var(--biu-color-border-subtle)}
+.page-editor .editor-comment-input,.page-editor .editor-comment-reply-input{width:100%;box-sizing:border-box;border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:7px;padding:6px 8px;background:var(--biu-color-bg-input);color:var(--biu-color-text);font:inherit;font-size:12.5px;resize:vertical;outline:none}
+.page-editor .editor-comment-input:focus,.page-editor .editor-comment-reply-input:focus{border-color:var(--biu-color-emphasis)}
+.page-editor .editor-comment-reply-box{margin-top:2px}
+.page-editor .editor-comment-composer-actions{display:flex;justify-content:flex-end;gap:6px}
+.page-editor .editor-comment-btn{border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:6px;padding:4px 10px;background:transparent;color:var(--biu-color-text-muted);font:inherit;font-size:12px;cursor:pointer}
+.page-editor .editor-comment-btn:hover{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
+.page-editor .editor-comment-btn.is-primary{border-color:transparent;background:var(--biu-color-emphasis);color:var(--biu-color-on-emphasis,#fff)}
+.page-editor .editor-comment-btn.is-primary:disabled{opacity:.45;cursor:default}
 `

@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
 import { recordEditorExtensions } from './kit.ts'
-import { recentlyLocalEdit, shouldApplyRemoteMarkdown } from './page-editor.tsx'
+import { recentlyLocalEdit, shouldApplyRemoteMarkdown } from './record-editor.tsx'
 
 function insertAfter(text: string, insertLine: number, newStr: string) {
   const lines = text.split('\n')
