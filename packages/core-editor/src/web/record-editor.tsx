@@ -23,7 +23,7 @@ import { bindEditorTextHost, getPick, pickIdFromText, pickPreview, withPickLocus
 import { markdownLocusFromElement, markdownLocusFromRange, markdownLocusFromSelection } from './markdown-locus.ts'
 import { isFindHotkey } from './find-bar.tsx'
 import { applyEditorFind } from './find-plugin.ts'
-import { applyStoredBlockIds, markdownWithBlockIds, stripBlockIdStamps } from './block-id.ts'
+import { applyStoredBlockIds, encodeBlankParagraphsForParse, markdownWithBlockIds, restoreBlankParagraphs, stripBlockIdStamps } from './block-id.ts'
 import { getLivePageEditor, setLivePageEditor, setLivePagePersist } from './editor-live-instance.ts'
 import { PAGE_FIND_OPEN_EVENT, getPageFind, patchEditorCommentsUi, patchPageFind, useEditorCommentsUi, usePageFind } from './editor-view-state.ts'
 import { captureCommentAnchor, resolveCommentAnchor } from './comment-anchor.ts'
@@ -75,7 +75,8 @@ function persistEditorMarkdown(editor: Editor) {
 
 function hydrateEditorMarkdown(editor: Editor, raw: string) {
   const { text, ids } = stripBlockIdStamps(raw)
-  editor.commands.setContent(text, { contentType: 'markdown', emitUpdate: false })
+  editor.commands.setContent(encodeBlankParagraphsForParse(text), { contentType: 'markdown', emitUpdate: false })
+  restoreBlankParagraphs(editor)
   applyStoredBlockIds(editor, ids)
 }
 

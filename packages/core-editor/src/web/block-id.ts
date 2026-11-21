@@ -92,6 +92,7 @@ export function applyStoredBlockIds(editor: Editor, ids: string[]) {
   let i = 0
   let dirty = false
   editor.state.doc.forEach((node, pos) => {
+    if (node.type.name === 'paragraph' && !node.textContent.trim() && node.childCount === 0) return
     const want = ids[i++]
     if (!want || nodeBlockId(node) === want) return
     const attrs = { ...node.attrs, blockId: want }
@@ -100,6 +101,132 @@ export function applyStoredBlockIds(editor: Editor, ids: string[]) {
     dirty = true
   })
   if (dirty) editor.view.dispatch(tr.setMeta(assignKey, true))
+}
+
+const BLANK_P_SENTINEL = '\u200BBIU_BLANK_PARAGRAPH\u200B'
+const LEAD_SPACE_PREFIX = '\u200BBIU_LS:'
+const LIST_LINE_RE = /^\s*(?:[-*+]|\d+[.)])\s/
+
+/**
+ * CommonMark collapses consecutive blank lines, strips 1-3 leading spaces on paragraphs,
+ * and turns 4+ leading spaces into indented code blocks.
+ * Encode extra blank-line runs and paragraph leading spaces outside fenced blocks / lists
+ * into temporary sentinels so they survive Markdown roundtrip cleanly without &nbsp;.
+ */
+export function encodeBlankParagraphsForParse(raw: string): string {
+  const norm = String(raw ?? '').replace(/\r\n/g, '\n')
+  if (!norm) return ''
+  const lines = norm.split('\n')
+  const out: string[] = []
+  let fence: { char: string; len: number } | null = null
+  let inList = false
+  let i = 0
+
+  while (i < lines.length) {
+    const line = lines[i]!
+    const trimmed = line.trimStart()
+
+    if (!fence) {
+      const openFence = trimmed.match(/^(`{3,}|~{3,}|:{3,})/)
+      if (openFence) {
+        fence = { char: openFence[1]![0]!, len: openFence[1]!.length }
+        inList = false
+        out.push(line)
+        i += 1
+        continue
+      }
+    } else {
+      const closeFence = trimmed.match(/^(`{3,}|~{3,}|:{3,})\s*$/)
+      if (closeFence && closeFence[1]![0] === fence.char && closeFence[1]!.length >= fence.len) {
+        fence = null
+      }
+      out.push(line)
+      i += 1
+      continue
+    }
+
+    if (line.trim() !== '') {
+      if (LIST_LINE_RE.test(line)) {
+        inList = true
+        out.push(line)
+      } else if (!inList && /^ +/.test(line)) {
+        const spaces = line.match(/^ +/)![0]!.length
+        out.push(`${LEAD_SPACE_PREFIX}${spaces}\u200B${line.slice(spaces)}`)
+      } else {
+        if (!/^ +/.test(line)) inList = false
+        out.push(line)
+      }
+      i += 1
+      continue
+    }
+
+    // Count consecutive blank lines outside fences
+    inList = false
+    const start = i
+    while (i < lines.length && lines[i]!.trim() === '') i += 1
+    const blankCount = i - start
+    const atStart = start === 0
+    const atEnd = i === lines.length
+
+    if (atStart && atEnd) {
+      const emptyCount = Math.floor((blankCount + 1) / 2)
+      if (emptyCount > 1) {
+        for (let k = 0; k < emptyCount; k += 1) {
+          if (k > 0) out.push('')
+          out.push(BLANK_P_SENTINEL)
+        }
+      }
+      continue
+    }
+
+    const emptyCount = atStart || atEnd ? Math.floor(blankCount / 2) : Math.floor((blankCount - 1) / 2)
+    if (emptyCount <= 0) {
+      for (let k = 0; k < blankCount; k += 1) out.push('')
+      continue
+    }
+
+    if (!atStart) out.push('')
+    for (let k = 0; k < emptyCount; k += 1) {
+      if (k > 0) out.push('')
+      out.push(BLANK_P_SENTINEL)
+    }
+    if (!atEnd) out.push('')
+  }
+
+  return out.join('\n')
+}
+
+export function restoreBlankParagraphs(editor: Editor) {
+  if (editor.isDestroyed) return
+  let tr = editor.state.tr
+  let dirty = false
+  const ops: Array<{ from: number; to: number; text?: string }> = []
+  editor.state.doc.forEach((node, pos) => {
+    if (node.type.name !== 'paragraph') return
+    if (node.textContent === BLANK_P_SENTINEL) {
+      ops.push({ from: pos + 1, to: pos + node.nodeSize - 1 })
+      return
+    }
+    const first = node.firstChild
+    if (first?.isText && first.text?.startsWith(LEAD_SPACE_PREFIX)) {
+      const m = first.text.match(/^\u200BBIU_LS:(\d+)\u200B/)
+      if (m) {
+        const count = Number(m[1]) || 0
+        ops.push({
+          from: pos + 1,
+          to: pos + 1 + m[0].length,
+          text: ' '.repeat(count),
+        })
+      }
+    }
+  })
+  for (let i = ops.length - 1; i >= 0; i -= 1) {
+    const op = ops[i]!
+    if (op.text) tr = tr.insertText(op.text, op.from, op.to)
+    else tr = tr.delete(op.from, op.to)
+    dirty = true
+  }
+  if (dirty) editor.view.dispatch(tr.setMeta('addToHistory', false))
 }
 
 export function stripBlockIdStamps(raw: string) {
@@ -146,7 +273,7 @@ export function cachedBlockChunks<T extends object>(
       cache.set(node, chunk)
       fresh += 1
     }
-    if (chunk) parts.push(chunk)
+    parts.push(chunk)
   }
   return { markdown: parts.join('\n\n'), fresh }
 }
