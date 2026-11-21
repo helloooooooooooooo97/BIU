@@ -1,5 +1,6 @@
 import {
   AcademicCapIcon,
+  ChatBubbleBottomCenterTextIcon,
   CheckCircleIcon,
   CircleStackIcon,
   CursorArrowRaysIcon,
@@ -18,6 +19,8 @@ import {
 
 export function idleTableIconKind(icon?: string) {
   const name = (icon ?? '').trim().toLowerCase()
+  if (name === 'puzzle-piece' || name === 'puzzle') return 'puzzle'
+  if (name === 'chat' || name === 'comment' || name === 'comments') return 'comment'
   if (name === 'check-circle' || name === 'check' || name === 'clipboard-document-list' || name === 'clipboard') return 'check'
   if (name === 'cursor' || name === 'cursor-arrow-rays' || name === 'chat-bubble' || name === 'chat-bubble-left-right') return 'cursor'
   if (name === 'academic-cap' || name === 'skill' || name === 'skills') return 'skill'
@@ -31,6 +34,9 @@ export function idleTableIconKind(icon?: string) {
 export function TableGlyph({ icon, className = 'size-4' }: { icon?: string; className?: string }) {
   const name = (icon ?? '').trim().toLowerCase()
   if (name === 'puzzle-piece' || name === 'puzzle') return <PuzzlePieceIcon aria-hidden className={className} />
+  if (name === 'chat' || name === 'comment' || name === 'comments') {
+    return <ChatBubbleBottomCenterTextIcon aria-hidden className={className} />
+  }
   if (name === 'check-circle' || name === 'check' || name === 'clipboard-document-list' || name === 'clipboard') {
     return <CheckCircleIcon aria-hidden className={className} />
   }

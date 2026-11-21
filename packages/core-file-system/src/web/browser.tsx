@@ -4067,16 +4067,15 @@ export function CollectionBrowser({
                   className={label === '共享' ? 'tasks-queue-gshare' : undefined}
                 />
               ) : groupBy === 'table' || groupBy === 'tablePath' ? (
-                <span
-                  className="fsdb-record-mark is-sm"
-                  data-icon={idleTableIconKind(
+                <TableGlyph
+                  icon={
                     tables.find((table) =>
                       groupBy === 'tablePath'
                         ? table.path === groupKey
                         : (table.view?.title ?? table.label) === groupKey || table.path === groupKey,
-                    )?.view?.icon,
-                  )}
-                  aria-hidden
+                    )?.view?.icon
+                  }
+                  className="size-4"
                 />
               ) : (
                 <UiGlyph icon="stack" />
