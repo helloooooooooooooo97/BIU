@@ -565,7 +565,10 @@ export class DatabaseService extends Service implements Database {
   recycleAssets?: () => void
 
   private bumpQueued = false
-  private pendingBumpTenants = new Map<string, { workspaceId: string; accountId: string }>()
+  private pendingBumpTenants = new Map<
+    string,
+    { workspaceId: string; accountId: string; paths: Set<string>; all: boolean }
+  >()
 
   constructor(ctx: Context) {
     super(ctx, 'database')
@@ -1097,7 +1100,7 @@ export class DatabaseService extends Service implements Database {
     http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('content', { path }))
   }
 
-  bump() {
+  bump(path?: string) {
     this.visibleGen += 1
     this.access.clearShareCaches()
     this.inflightMatches.clear()
@@ -1107,7 +1110,15 @@ export class DatabaseService extends Service implements Database {
     this.ctx.emit('database/change')
     const workspaceId = currentRequestWorkspaceId() || this.collabStore()?.activeWorkspaceId?.() || ''
     const accountId = currentAccountId()
-    this.pendingBumpTenants.set(`${workspaceId}\0${accountId}`, { workspaceId, accountId })
+    const key = `${workspaceId}\0${accountId}`
+    let entry = this.pendingBumpTenants.get(key)
+    if (!entry) {
+      entry = { workspaceId, accountId, paths: new Set(), all: false }
+      this.pendingBumpTenants.set(key, entry)
+    }
+    const cleanPath = String(path ?? '').trim()
+    if (cleanPath) entry.paths.add(cleanPath)
+    else entry.all = true
     if (this.bumpQueued) return
     this.bumpQueued = true
     queueMicrotask(() => {
@@ -1118,12 +1129,23 @@ export class DatabaseService extends Service implements Database {
         | { broadcast?: (type: string, payload: unknown, workspaceId?: string, accountId?: string) => void }
         | undefined
       for (const tenant of tenants) {
-        http?.broadcast?.(
-          DATABASE_CHANNEL,
-          databaseChannelPayload('records'),
-          tenant.workspaceId || undefined,
-          tenant.accountId || undefined,
-        )
+        if (tenant.all || tenant.paths.size === 0) {
+          http?.broadcast?.(
+            DATABASE_CHANNEL,
+            databaseChannelPayload('records'),
+            tenant.workspaceId || undefined,
+            tenant.accountId || undefined,
+          )
+        } else {
+          for (const targetPath of tenant.paths) {
+            http?.broadcast?.(
+              DATABASE_CHANNEL,
+              databaseChannelPayload('records', { path: targetPath }),
+              tenant.workspaceId || undefined,
+              tenant.accountId || undefined,
+            )
+          }
+        }
       }
     })
   }
@@ -1638,7 +1660,7 @@ export class DatabaseService extends Service implements Database {
       }
       this.refreshContentRefs(spec, next)
       await this.stampActor(spec.path, current.id)
-      this.bump()
+      this.bump(spec.path)
       const beforeRow = this.decorateRecord(spec, current)
       const beforeSnap: Record<string, unknown> = {}
       const afterSnap: Record<string, unknown> = {}
@@ -1694,7 +1716,7 @@ export class DatabaseService extends Service implements Database {
     if (!viewOnly) this.indexTagRecord(spec, this.decorateRecord(spec, record))
     this.refreshContentRefs(spec, this.withBanner(spec, record), !viewOnly)
     if (viewOnly) this.notifyViewCatalog(`${spec.path}/${record.id}`)
-    else this.bump()
+    else this.bump(spec.path)
     const beforeSnap: Record<string, unknown> = {}
     const afterSnap: Record<string, unknown> = {}
     for (const key of Object.keys(patch)) {
@@ -1837,7 +1859,7 @@ export class DatabaseService extends Service implements Database {
       this.indexTagRecord(spec, this.decorateRecord(spec, record))
       this.refreshContentRefs(spec, this.withBanner(spec, record))
     }
-    this.bump()
+    this.bump(spec.path)
     const items = created.map((record) => ({
       kind: 'record' as const,
       path: `${spec.path}/${record.id}`,
@@ -1913,7 +1935,7 @@ export class DatabaseService extends Service implements Database {
           if (collection && collection !== '/' && viewId) this.shares.revokeView(collection, viewId)
         }
       }
-      this.bump()
+      this.bump(spec.path)
       return { kind: 'deleted' as const, path: spec.path, ids, trash: true }
     }
     await spec.remove({ ids })
@@ -1937,7 +1959,7 @@ export class DatabaseService extends Service implements Database {
         this.shares.revokeView(key.collection, key.viewId)
       }
     }
-    this.bump()
+    this.bump(spec.path)
     this.recycleAssets?.()
     return { kind: 'deleted' as const, path: spec.path, ids }
   }
@@ -1960,7 +1982,7 @@ export class DatabaseService extends Service implements Database {
     )
     const ids = [...new Set(matched.map((row) => row.id))]
     for (const id of ids) this.tags.restoreDeleted(spec.path, id)
-    this.bump()
+    this.bump(spec.path)
     return { kind: 'restored' as const, path: spec.path, ids }
   }
 

@@ -145,7 +145,7 @@ export async function apiCreateComment(input: {
     }),
   })
   if (!res.ok) return null
-  emitFsdbChange('/comments')
+  emitFsdbChange({ scope: 'records', path: '/comments' })
   const data = (await res.json()) as { items?: DbRecord[]; ids?: string[]; records?: DbRecord[] }
   const first = data?.items?.[0] ?? data?.records?.[0]
   return first ? commentItemFromRecord(first) : null
@@ -165,7 +165,7 @@ export async function apiUpdateComment(
     body: JSON.stringify({ path: `/comments/${id}`, content }),
   })
   if (!res.ok) return false
-  emitFsdbChange('/comments')
+  emitFsdbChange({ scope: 'records', path: '/comments' })
   return true
 }
 
@@ -176,7 +176,7 @@ export async function apiDeleteComment(id: string): Promise<boolean> {
     body: JSON.stringify({ path: '/comments', ids: [id] }),
   })
   if (!res.ok) return false
-  emitFsdbChange('/comments')
+  emitFsdbChange({ scope: 'records', path: '/comments' })
   return true
 }
 

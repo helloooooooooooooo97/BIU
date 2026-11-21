@@ -367,12 +367,17 @@ export function RecordDetail({
       requestAnimationFrame(go)
     }
     window.addEventListener(FOCUS_RECORD_TITLE, onTitle)
-    const stop = inspectorPaneId ? undefined : scheduleFocusRecordTitle(() => mainRef.current)
     return () => {
       window.removeEventListener(FOCUS_RECORD_TITLE, onTitle)
+    }
+  }, [readOnly, schema, selected, setDraft, writeOne])
+
+  useEffect(() => {
+    const stop = inspectorPaneId ? undefined : scheduleFocusRecordTitle(() => mainRef.current)
+    return () => {
       stop?.()
     }
-  }, [inspectorPaneId, readOnly, schema, selected])
+  }, [inspectorPaneId, selected.id])
 
   const paneMenu = (
     <RecordPaneMenu

@@ -361,10 +361,6 @@ html:not(.dark) .page-bubble-chat-icon{color:var(--biu-color-icon)}
 .editor-comment-trigger{position:relative}
 .editor-comment-badge{position:absolute;top:1px;right:1px;min-width:13px;height:13px;padding:0 3px;border-radius:999px;background:var(--biu-color-emphasis);color:var(--biu-color-on-emphasis,#fff);font-size:9.5px;font-weight:var(--biu-font-weight-semibold);line-height:13px;text-align:center;pointer-events:none}
 .page-editor .editor-comment-rail{position:relative;flex:0 0 288px;width:288px;display:flex;flex-direction:column;gap:8px;background:transparent}
-.page-editor .editor-comment-rail-bar{display:flex;align-items:center;justify-content:space-between;gap:6px;height:28px}
-.page-editor .editor-comment-tabs{display:inline-flex;align-items:center;gap:2px;padding:2px;border-radius:7px;background:var(--biu-color-bg-subtle)}
-.page-editor .editor-comment-tab{border:0;border-radius:5px;padding:2px 7px;background:transparent;color:var(--biu-color-text-muted);font:inherit;font-size:11.5px;cursor:pointer}
-.page-editor .editor-comment-tab.is-on{background:var(--biu-color-bg);color:var(--biu-color-text);font-weight:var(--biu-font-weight-medium);box-shadow:0 1px 2px rgba(0,0,0,.08)}
 .page-editor .editor-comment-list{display:flex;flex-direction:column;gap:10px}
 .page-editor .editor-comment-rail.is-anchored .editor-comment-list{display:block;position:static}
 .page-editor .editor-comment-rail.is-anchored .editor-comment-composer,.page-editor .editor-comment-rail.is-anchored .editor-comment-card{position:absolute;left:0;right:0;margin:0;transition:top .18s ease,transform .15s ease,border-color .15s ease,box-shadow .15s ease}

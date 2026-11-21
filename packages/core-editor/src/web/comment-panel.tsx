@@ -3,13 +3,13 @@ import {
   ChatBubbleLeftRightIcon,
   CheckIcon,
   ArrowUturnLeftIcon,
-  XMarkIcon,
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { CommentAnchor } from './comment-anchor.ts'
 import type { CommentThread } from './comment-store.ts'
+import type { CommentFilter } from './editor-view-state.ts'
 
-export type CommentFilter = 'open' | 'resolved' | 'all'
+export type { CommentFilter }
 
 export function layoutRailCards(
   items: ReadonlyArray<{ id: string; desiredTop: number | null; height: number }>,
@@ -35,11 +35,11 @@ function formatTime(ms: number) {
   return `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-const RAIL_HEADER_H = 34
 const DRAFT_KEY = '__draft__'
 
 export function CommentPanel({
   threads,
+  filter = 'open',
   activeId,
   detachedIds,
   anchorTops,
@@ -52,9 +52,9 @@ export function CommentPanel({
   onDelete,
   onSelectThread,
   onAskAi,
-  onClose,
 }: {
   threads: CommentThread[]
+  filter?: CommentFilter
   activeId: string
   detachedIds: ReadonlySet<string>
   anchorTops?: ReadonlyMap<string, number>
@@ -67,9 +67,7 @@ export function CommentPanel({
   onDelete: (id: string) => Promise<void> | void
   onSelectThread: (threadId: string) => void
   onAskAi?: (thread: CommentThread) => void
-  onClose: () => void
 }) {
-  const [filter, setFilter] = useState<CommentFilter>('open')
   const [draftBody, setDraftBody] = useState('')
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
@@ -79,13 +77,10 @@ export function CommentPanel({
 
   useEffect(() => {
     if (draftAnchor) {
-      setFilter('open')
-      requestAnimationFrame(() => draftInputRef.current?.focus())
+      requestAnimationFrame(() => draftInputRef.current?.focus({ preventScroll: true }))
     }
   }, [draftAnchor])
 
-  const openCount = threads.filter((t) => t.root.status === 'open').length
-  const resolvedCount = threads.length - openCount
   const visible = threads.filter((t) => (filter === 'all' ? true : t.root.status === filter))
 
   useLayoutEffect(() => {
@@ -120,7 +115,7 @@ export function CommentPanel({
   if (draftAnchor) {
     railEntries.push({
       id: DRAFT_KEY,
-      desiredTop: draftTop ?? RAIL_HEADER_H,
+      desiredTop: draftTop ?? 0,
       height: heights[DRAFT_KEY] ?? 148,
     })
   }
@@ -141,7 +136,7 @@ export function CommentPanel({
       return 0
     })
   }
-  const layout = usePositionedRail ? layoutRailCards(railEntries, RAIL_HEADER_H, 10) : null
+  const layout = usePositionedRail ? layoutRailCards(railEntries, 0, 10) : null
 
   const bindCardRef = (id: string) => (el: HTMLDivElement | null) => {
     if (el) cardRefs.current.set(id, el)
@@ -180,54 +175,13 @@ export function CommentPanel({
       aria-label="文档批注"
       style={layout ? { minHeight: layout.totalHeight } : undefined}
     >
-      <div className="editor-comment-rail-bar">
-        <div className="editor-comment-tabs" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={filter === 'open'}
-            className={`editor-comment-tab${filter === 'open' ? ' is-on' : ''}`}
-            onClick={() => setFilter('open')}
-          >
-            未解决{openCount ? ` ${openCount}` : ''}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={filter === 'resolved'}
-            className={`editor-comment-tab${filter === 'resolved' ? ' is-on' : ''}`}
-            onClick={() => setFilter('resolved')}
-          >
-            已解决{resolvedCount ? ` ${resolvedCount}` : ''}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={filter === 'all'}
-            className={`editor-comment-tab${filter === 'all' ? ' is-on' : ''}`}
-            onClick={() => setFilter('all')}
-          >
-            全部
-          </button>
-        </div>
-        <button
-          type="button"
-          className="editor-comment-icon-btn"
-          aria-label="关闭批注面板"
-          title="关闭"
-          onClick={onClose}
-        >
-          <XMarkIcon aria-hidden className="size-[14px]" />
-        </button>
-      </div>
-
       <div className="editor-comment-list">
         {draftAnchor ? (
           <div
             ref={bindCardRef(DRAFT_KEY)}
             className="editor-comment-composer"
             data-testid="editor-comment-composer"
-            style={layout ? { top: layout.tops.get(DRAFT_KEY) ?? RAIL_HEADER_H } : undefined}
+            style={layout ? { top: layout.tops.get(DRAFT_KEY) ?? 0 } : undefined}
           >
             <div className="editor-comment-quote" title={draftAnchor.quote}>
               {draftAnchor.quote}

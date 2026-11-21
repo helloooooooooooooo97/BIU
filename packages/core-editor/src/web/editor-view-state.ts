@@ -61,17 +61,23 @@ export function notifyPageView() {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(PAGE_VIEW_EVENT))
 }
 
+export type CommentFilter = 'open' | 'resolved' | 'all'
+
 export type EditorCommentsUiState = {
   open: boolean
+  filter: CommentFilter
   activeId: string
   openCount: number
+  resolvedCount: number
   draftAnchor: CommentAnchor | null
 }
 
 const emptyCommentsUi: EditorCommentsUiState = {
   open: false,
+  filter: 'open',
   activeId: '',
   openCount: 0,
+  resolvedCount: 0,
   draftAnchor: null,
 }
 const commentsUiStore = new Map<string, EditorCommentsUiState>()
@@ -93,14 +99,18 @@ export function patchEditorCommentsUi(recordId: string, patch: Partial<EditorCom
   const prev = getEditorCommentsUi(id)
   const next: EditorCommentsUiState = {
     open: patch.open ?? prev.open,
+    filter: patch.filter ?? prev.filter,
     activeId: patch.activeId ?? prev.activeId,
     openCount: patch.openCount ?? prev.openCount,
+    resolvedCount: patch.resolvedCount ?? prev.resolvedCount,
     draftAnchor: patch.draftAnchor !== undefined ? patch.draftAnchor : prev.draftAnchor,
   }
   if (
     next.open === prev.open &&
+    next.filter === prev.filter &&
     next.activeId === prev.activeId &&
     next.openCount === prev.openCount &&
+    next.resolvedCount === prev.resolvedCount &&
     next.draftAnchor === prev.draftAnchor
   ) {
     return

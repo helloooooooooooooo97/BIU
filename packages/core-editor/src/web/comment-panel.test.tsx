@@ -2,6 +2,7 @@
 import { afterEach, test } from 'vitest'
 import assert from 'node:assert/strict'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { FSDB_CHANGE_EVENT, parseFsdbChange } from '@biu/type-file-system'
 import { CommentPanel, layoutRailCards } from './comment-panel.tsx'
 import { apiUpdateComment, sortCommentThreadsByPosition, type CommentThread } from './comment-store.ts'
 
@@ -68,28 +69,30 @@ const THREADS: CommentThread[] = [
   },
 ]
 
-test('CommentPanel creates thread, replies, switches tabs, shows detached tag, and resolves', async () => {
+test('CommentPanel creates thread, replies, respects filter prop, shows detached tag, and resolves', async () => {
   const created: string[] = []
   const replied: Array<{ id: string; body: string }> = []
   const statuses: Array<{ id: string; status: string }> = []
   const asked: string[] = []
 
-  render(
-    <CommentPanel
-      threads={THREADS}
-      activeId="cmt_1"
-      detachedIds={new Set(['cmt_1'])}
-      draftAnchor={{ blockId: 'blk1', quote: '选中原文', prefix: '', suffix: '', offset: 0 }}
-      onCancelDraft={() => undefined}
-      onCreateThread={(body) => { created.push(body) }}
-      onReplyThread={(id, body) => { replied.push({ id, body }) }}
-      onSetStatus={(id, status) => { statuses.push({ id, status }) }}
-      onDelete={() => undefined}
-      onSelectThread={() => undefined}
-      onAskAi={(thread) => { asked.push(thread.root.id) }}
-      onClose={() => undefined}
-    />,
-  )
+  const props = {
+    threads: THREADS,
+    activeId: 'cmt_1',
+    detachedIds: new Set(['cmt_1']),
+    draftAnchor: { blockId: 'blk1', quote: '选中原文', prefix: '', suffix: '', offset: 0 },
+    onCancelDraft: () => undefined,
+    onCreateThread: (body: string) => { created.push(body) },
+    onReplyThread: (id: string, body: string) => { replied.push({ id, body }) },
+    onSetStatus: (id: string, status: 'open' | 'resolved') => { statuses.push({ id, status }) },
+    onDelete: () => undefined,
+    onSelectThread: () => undefined,
+    onAskAi: (thread: CommentThread) => { asked.push(thread.root.id) },
+  }
+
+  const { rerender } = render(<CommentPanel {...props} filter="open" />)
+
+  // No header/tab bar inside the rail
+  assert.equal(screen.queryByRole('tablist'), null)
 
   // Detached tag is shown when thread is in detachedIds
   assert.ok(screen.getByText('原文已变更或删除'))
@@ -116,14 +119,19 @@ test('CommentPanel creates thread, replies, switches tabs, shows detached tag, a
   fireEvent.click(screen.getByLabelText('解决批注'))
   assert.deepEqual(statuses, [{ id: 'cmt_1', status: 'resolved' }])
 
-  // Switch to 已解决 tab
-  fireEvent.click(screen.getByRole('tab', { name: /已解决/ }))
+  // Controlled filter prop shows resolved thread
+  rerender(<CommentPanel {...props} filter="resolved" draftAnchor={null} />)
   assert.ok(screen.getByText('已修复的旧批注'))
 })
 
-test('apiUpdateComment posts status update under content payload to /api/db/update', async () => {
+test('apiUpdateComment posts status update under content payload and emits scoped /comments change', async () => {
   const original = globalThis.fetch
   const calls: Array<{ url: string; body: unknown }> = []
+  const changes: Array<ReturnType<typeof parseFsdbChange>> = []
+  const onChange = (event: Event) => {
+    changes.push(parseFsdbChange(event))
+  }
+  window.addEventListener(FSDB_CHANGE_EVENT, onChange)
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     calls.push({ url: String(input), body: init?.body ? JSON.parse(String(init.body)) : null })
     return new Response(JSON.stringify({ ok: true }), { status: 200 })
@@ -137,7 +145,9 @@ test('apiUpdateComment posts status update under content payload to /api/db/upda
         body: { path: '/comments/cmt_1', content: { status: 'resolved' } },
       },
     ])
+    assert.deepEqual(changes, [{ scope: 'records', path: '/comments' }])
   } finally {
+    window.removeEventListener(FSDB_CHANGE_EVENT, onChange)
     globalThis.fetch = original
   }
 })

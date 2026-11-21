@@ -749,10 +749,11 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
   useEffect(() => {
     if (!comments.loaded) return
     const openCount = comments.threads.filter((t) => t.root.status === 'open').length
-    if (commentsUi.openCount !== openCount) {
-      patchEditorCommentsUi(record.id, { openCount })
+    const resolvedCount = comments.threads.length - openCount
+    if (commentsUi.openCount !== openCount || commentsUi.resolvedCount !== resolvedCount) {
+      patchEditorCommentsUi(record.id, { openCount, resolvedCount })
     }
-  }, [comments.loaded, comments.threads, commentsUi.openCount, record.id])
+  }, [comments.loaded, comments.threads, commentsUi.openCount, commentsUi.resolvedCount, record.id])
 
   useEffect(() => {
     if (!editor || editor.isDestroyed || source) return
@@ -773,7 +774,11 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
     if (source || !editor || editor.isDestroyed || !path) return
     const { from, to } = editor.state.selection
     const anchor = from !== to ? captureCommentAnchor(editor.state.doc, from, to) : null
-    patchEditorCommentsUi(record.id, { open: true, draftAnchor: anchor })
+    patchEditorCommentsUi(record.id, {
+      open: true,
+      ...(commentsUi.filter === 'resolved' ? { filter: 'open' } : {}),
+      draftAnchor: anchor,
+    })
   }
 
   const selectCommentThread = (threadId: string) => {
@@ -846,7 +851,8 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
     const measure = () => {
       const host = hostRef.current
       if (!host || editor.isDestroyed) return
-      const hostTop = host.getBoundingClientRect().top
+      const rail = host.querySelector<HTMLElement>('.editor-comment-rail')
+      const baseTop = (rail ?? host).getBoundingClientRect().top
       const next = new Map<string, number>()
       for (const thread of comments.threads) {
         if (!thread.root.anchor) continue
@@ -856,7 +862,7 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
         try {
           const coords = editor.view.coordsAtPos(hit.from)
           if (Number.isFinite(coords.top)) {
-            next.set(thread.root.id, Math.max(0, Math.round(coords.top - hostTop)))
+            next.set(thread.root.id, Math.max(0, Math.round(coords.top - baseTop)))
           }
         } catch {
           /* ignore unmeasured pos */
@@ -880,7 +886,7 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
         if (hit) {
           try {
             const coords = editor.view.coordsAtPos(hit.from)
-            setDraftCommentTop(Number.isFinite(coords.top) ? Math.max(0, Math.round(coords.top - hostTop)) : null)
+            setDraftCommentTop(Number.isFinite(coords.top) ? Math.max(0, Math.round(coords.top - baseTop)) : null)
           } catch {
             setDraftCommentTop(null)
           }
@@ -901,7 +907,7 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
       ro?.disconnect()
       window.removeEventListener('resize', measure)
     }
-  }, [commentsOpen, editor, source, comments.threads, commentsUi.draftAnchor, value])
+  }, [commentsOpen, commentsUi.filter, editor, source, comments.threads, commentsUi.draftAnchor, value])
 
   const onEditorHotkey = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === ' ' && event.target === event.currentTarget) {
@@ -1041,6 +1047,7 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
       {commentsOpen ? (
         <CommentPanel
           threads={orderedCommentThreads}
+          filter={commentsUi.filter}
           activeId={commentsUi.activeId}
           detachedIds={detachedCommentIds}
           anchorTops={commentAnchorTops}
@@ -1063,7 +1070,6 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
           }}
           onSelectThread={selectCommentThread}
           onAskAi={askAiForComment}
-          onClose={() => patchEditorCommentsUi(record.id, { open: false, draftAnchor: null })}
         />
       ) : null}
     </div>
