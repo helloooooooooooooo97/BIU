@@ -856,16 +856,29 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
       const next = new Map<string, number>()
       for (const thread of comments.threads) {
         if (!thread.root.anchor) continue
-        const live = thread.root.status === 'open' ? getCommentRange(editor, thread.root.id) : null
-        const hit = live ?? resolveCommentAnchor(editor.state.doc, thread.root.anchor)
-        if (!hit || hit.to <= hit.from) continue
-        try {
-          const coords = editor.view.coordsAtPos(hit.from)
-          if (Number.isFinite(coords.top)) {
-            next.set(thread.root.id, Math.max(0, Math.round(coords.top - baseTop)))
+        let measuredTop: number | null = null
+        if (thread.root.status === 'open') {
+          const escId = typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(thread.root.id) : thread.root.id.replace(/["\\]/g, '\\$&')
+          const markEl = host.querySelector<HTMLElement>(`.editor-comment-mark[data-comment-id="${escId}"]`)
+          const visualEl = markEl?.closest('code') ?? markEl
+          const firstRect = visualEl?.getClientRects?.()[0] ?? visualEl?.getBoundingClientRect?.()
+          if (firstRect && firstRect.height > 0 && Number.isFinite(firstRect.top)) {
+            measuredTop = firstRect.top
           }
-        } catch {
-          /* ignore unmeasured pos */
+        }
+        if (measuredTop == null) {
+          const live = thread.root.status === 'open' ? getCommentRange(editor, thread.root.id) : null
+          const hit = live ?? resolveCommentAnchor(editor.state.doc, thread.root.anchor)
+          if (!hit || hit.to <= hit.from) continue
+          try {
+            const coords = editor.view.coordsAtPos(hit.from)
+            if (Number.isFinite(coords.top)) measuredTop = coords.top
+          } catch {
+            /* ignore unmeasured pos */
+          }
+        }
+        if (measuredTop != null) {
+          next.set(thread.root.id, Math.max(0, Math.round(measuredTop - baseTop)))
         }
       }
       setCommentAnchorTops((prev) => {
