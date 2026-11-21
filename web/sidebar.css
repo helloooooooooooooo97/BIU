@@ -553,6 +553,8 @@ html.dark .fsdb-views {
 .chat-sidebar-popover .sidebar-trail-icon:focus-within,
 .fsdb-views .sidebar-trail-icon:focus-within,
 .fsdb-views .chat-session-row.is-pinned > .sidebar-trail-icon,
+.app-side-bar .chat-session-row.is-pinned > .chat-session-row-star.is-on,
+.chat-sidebar-popover .chat-session-row.is-pinned > .chat-session-row-star.is-on,
 .fsdb-views .chat-session-row.is-pinned > .chat-session-row-star.is-on {
   width: 24px;
   min-width: 24px;
@@ -581,7 +583,9 @@ html.dark .fsdb-views {
   color: var(--biu-color-icon-muted);
 }
 .app-side-bar .chat-session-row-star.is-on svg,
-.app-side-bar .chat-session-row-star.is-on:hover svg {
+.app-side-bar .chat-session-row-star.is-on:hover svg,
+.chat-sidebar-popover .chat-session-row-star.is-on svg,
+.chat-sidebar-popover .chat-session-row-star.is-on:hover svg {
   color: var(--biu-color-warning-on-surface);
 }.chat-sidebar-popover .chat-session-row.is-active .sidebar-rail-icon,
 .fsdb-views .chat-session-row.is-active .sidebar-rail-icon,
