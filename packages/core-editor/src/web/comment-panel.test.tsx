@@ -3,7 +3,7 @@ import { afterEach, test } from 'vitest'
 import assert from 'node:assert/strict'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { CommentPanel } from './comment-panel.tsx'
-import type { CommentThread } from './comment-store.ts'
+import { apiUpdateComment, type CommentThread } from './comment-store.ts'
 
 afterEach(() => {
   cleanup()
@@ -119,4 +119,25 @@ test('CommentPanel creates thread, replies, switches tabs, shows detached tag, a
   // Switch to 已解决 tab
   fireEvent.click(screen.getByRole('tab', { name: /已解决/ }))
   assert.ok(screen.getByText('已修复的旧批注'))
+})
+
+test('apiUpdateComment posts status update under content payload', async () => {
+  const original = globalThis.fetch
+  const calls: Array<{ url: string; body: unknown }> = []
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    calls.push({ url: String(input), body: init?.body ? JSON.parse(String(init.body)) : null })
+    return new Response(JSON.stringify({ ok: true }), { status: 200 })
+  }) as typeof fetch
+  try {
+    const ok = await apiUpdateComment('cmt_1', { status: 'resolved' })
+    assert.equal(ok, true)
+    assert.deepEqual(calls, [
+      {
+        url: '/api/db/update',
+        body: { path: '/comments/cmt_1', content: { status: 'resolved' } },
+      },
+    ])
+  } finally {
+    globalThis.fetch = original
+  }
 })

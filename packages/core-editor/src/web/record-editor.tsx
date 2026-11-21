@@ -19,8 +19,8 @@ import { editorHostIsLive } from './editor-live.ts'
 import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, handleContentTitleNav, shouldLeaveContentForTitle, focusRecordTitleNear, isDocStartSelection, atFirstVisibleLine } from './title-content-nav.ts'
 import { tryContentJump, contentJumpForRecord } from './content-jump.ts'
 import { CONTENT_JUMP_EVENT } from '@biu/type-file-system'
-import { bindEditorTextHost, getPick } from '@biu/core-pick/web'
-import { markdownLocusFromElement, markdownLocusFromSelection } from './markdown-locus.ts'
+import { bindEditorTextHost, getPick, pickIdFromText, pickPreview, withPickLocus } from '@biu/core-pick/web'
+import { markdownLocusFromElement, markdownLocusFromRange, markdownLocusFromSelection } from './markdown-locus.ts'
 import { isFindHotkey } from './find-bar.tsx'
 import { applyEditorFind } from './find-plugin.ts'
 import { applyStoredBlockIds, markdownWithBlockIds, stripBlockIdStamps } from './block-id.ts'
@@ -793,14 +793,25 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
       `批注内容：${thread.root.body}`,
       ...thread.replies.map((r) => `回复（${r.author}）：${r.body}`),
     ].filter(Boolean)
-    getPick()?.attach([
-      {
-        kind: 'text',
-        path: path || undefined,
-        title: recordTitle(record) || '文档批注',
-        text: lines.join('\n'),
-      },
-    ])
+    const fullText = lines.join('\n')
+    const label = pickPreview(`批注：${thread.root.body}`, 80) || '批注'
+    const route = typeof window === 'undefined' ? '' : window.location.pathname
+    const baseRef = {
+      kind: 'text' as const,
+      id: pickIdFromText(`comment:${thread.root.id}:${fullText}`),
+      label,
+      selection: fullText,
+      text: fullText,
+      route,
+      ...(path ? { path } : {}),
+      ...(recordTitle(record) ? { title: recordTitle(record) } : {}),
+    }
+    const range = editor && !editor.isDestroyed && !source ? getCommentRange(editor, thread.root.id) : null
+    const locus = range && editor ? markdownLocusFromRange(editor, range.from, range.to) : null
+    const ref = locus
+      ? withPickLocus(baseRef, { ...locus, selection: fullText, text: fullText })
+      : baseRef
+    getPick()?.attach([ref])
   }
 
   const detachedCommentIds = (() => {

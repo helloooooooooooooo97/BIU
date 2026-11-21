@@ -137,14 +137,14 @@ export async function apiUpdateComment(
   id: string,
   patch: { body?: string; status?: 'open' | 'resolved'; anchor?: CommentAnchor | null },
 ): Promise<boolean> {
-  const fields: Record<string, unknown> = {}
-  if (patch.body !== undefined) fields.body = patch.body
-  if (patch.status !== undefined) fields.status = patch.status
-  if (patch.anchor !== undefined) fields.anchor = patch.anchor ? JSON.stringify(patch.anchor) : ''
+  const content: Record<string, unknown> = {}
+  if (patch.body !== undefined) content.body = patch.body
+  if (patch.status !== undefined) content.status = patch.status
+  if (patch.anchor !== undefined) content.anchor = patch.anchor ? JSON.stringify(patch.anchor) : ''
   const res = await fetch('/api/db/update', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path: `/comments/${id}`, fields }),
+    body: JSON.stringify({ path: `/comments/${id}`, content }),
   })
   if (!res.ok) return false
   emitFsdbChange('/comments')
