@@ -6,7 +6,7 @@ import { HeadlessPopover } from '@biu/biu-ui'
 import { SourceEditor, type SourceEditorHandle } from './source-editor.tsx'
 import { restorePageScroll } from './editor-scroll-pin.ts'
 import { PageHostView } from './page-host-view.tsx'
-import { ArrowPathIcon, ChatBubbleBottomCenterTextIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/16/solid'
+import { ArrowPathIcon, ChatBubbleBottomCenterTextIcon, ChatBubbleLeftRightIcon, SparklesIcon } from '@heroicons/react/16/solid'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import type { Editor } from '@tiptap/core'
@@ -30,6 +30,7 @@ import { captureCommentAnchor, resolveCommentAnchor } from './comment-anchor.ts'
 import { collectDriftedCommentAnchors, getCommentRange, setActiveEditorComment, setEditorComments } from './comment-plugin.ts'
 import { sortCommentThreadsByPosition, useRecordComments, type CommentThread } from './comment-store.ts'
 import { CommentPanel } from './comment-panel.tsx'
+import { InlineEditPopover, isInlineEditHotkey, type InlineEditTarget } from './inline-edit-popover.tsx'
 import { PageBlocksTable } from './page-blocks-table.tsx'
 import {
   INK_TONES,
@@ -274,10 +275,14 @@ function Bubble({
   editor,
   onSendChat,
   onAddComment,
+  onInlineEdit,
+  hidden = false,
 }: {
   editor: Editor
   onSendChat: () => void
   onAddComment?: () => void
+  onInlineEdit?: () => void
+  hidden?: boolean
 }) {
   const [colorOpen, setColorOpen] = useState<'text' | 'mark' | null>(null)
   const inTable = editor.isActive('table')
@@ -299,7 +304,7 @@ function Bubble({
       editor={editor}
       className="page-bubble"
       aria-label="文字样式"
-      shouldShow={({ editor: current, from, to }) => pageTextBubbleOpen(current, from, to, Boolean(colorOpen))}
+      shouldShow={({ editor: current, from, to }) => !hidden && pageTextBubbleOpen(current, from, to, Boolean(colorOpen))}
     >
       {btn('B', editor.isActive('bold'), () => editor.chain().focus().toggleBold().run())}
       {btn('I', editor.isActive('italic'), () => editor.chain().focus().toggleItalic().run())}
@@ -308,6 +313,21 @@ function Bubble({
       {!inTable ? btn('H1', editor.isActive('heading', { level: 1 }), () => editor.chain().focus().toggleHeading({ level: 1 }).run()) : null}
       {!inTable ? btn('H2', editor.isActive('heading', { level: 2 }), () => editor.chain().focus().toggleHeading({ level: 2 }).run()) : null}
       <ColorMenus editor={editor} open={colorOpen} onOpen={setColorOpen} />
+      {onInlineEdit ? (
+        <button
+          type="button"
+          className="page-bubble-chat"
+          title="原地修改 (⌘K)"
+          aria-label="原地修改"
+          onMouseDown={(event: MouseEvent) => {
+            event.preventDefault()
+            onInlineEdit()
+          }}
+        >
+          <SparklesIcon className="page-bubble-chat-icon" aria-hidden />
+          ⌘K
+        </button>
+      ) : null}
       {onAddComment ? (
         <button
           type="button"
@@ -840,7 +860,41 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
   const orderedCommentThreads = sortCommentThreadsByPosition(comments.threads, commentPositions)
   const [commentAnchorTops, setCommentAnchorTops] = useState<Map<string, number>>(() => new Map())
   const [draftCommentTop, setDraftCommentTop] = useState<number | null>(null)
+  const [inlineEditTarget, setInlineEditTarget] = useState<InlineEditTarget | null>(null)
   const commentsOpen = Boolean(commentsUi.open && path)
+
+  useEffect(() => {
+    setInlineEditTarget(null)
+  }, [record.id])
+
+  const startInlineEditFromSelection = () => {
+    if (source || writable === false || !editor || editor.isDestroyed) return
+    const { from, to } = editor.state.selection
+    const doc = editor.state.doc
+    const selection = to > from ? doc.textBetween(from, to, '\n') : ''
+    const before = doc.textBetween(Math.max(0, from - 400), from, '\n')
+    const after = doc.textBetween(to, Math.min(doc.content.size, to + 400), '\n')
+    let top = 120
+    let left = 120
+    try {
+      const startCoords = editor.view.coordsAtPos(from)
+      const endCoords = to > from ? editor.view.coordsAtPos(to) : startCoords
+      top = Math.round(Math.max(startCoords.bottom, endCoords.bottom) + 8)
+      left = Math.round(startCoords.left)
+    } catch {
+      /* fallback coordinates */
+    }
+    setInlineEditTarget({ from, to, selection, before, after, top, left })
+  }
+
+  const applyInlineEdit = (text: string, target: InlineEditTarget) => {
+    setInlineEditTarget(null)
+    if (!editor || editor.isDestroyed) return
+    const maxPos = editor.state.doc.content.size
+    const from = Math.max(0, Math.min(target.from, maxPos))
+    const to = Math.max(from, Math.min(target.to, maxPos))
+    editor.chain().focus().insertContentAt({ from, to }, text).run()
+  }
 
   useLayoutEffect(() => {
     if (!commentsOpen || !editor || editor.isDestroyed || source || !hostRef.current) {
@@ -942,6 +996,12 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
       event.preventDefault()
       event.stopPropagation()
       sendToChat()
+      return
+    }
+    if (isInlineEditHotkey(event) && !source && writable !== false && editor && !editor.isDestroyed) {
+      event.preventDefault()
+      event.stopPropagation()
+      startInlineEditFromSelection()
       return
     }
     if ((event.metaKey || event.ctrlKey) && event.altKey && event.key.toLowerCase() === 'm') {
@@ -1053,6 +1113,19 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
               editor={editor}
               onSendChat={sendToChat}
               onAddComment={path ? startCommentFromSelection : undefined}
+              onInlineEdit={startInlineEditFromSelection}
+              hidden={Boolean(inlineEditTarget)}
+            />
+          ) : null}
+          {inlineEditTarget && present !== 'table' && writable !== false ? (
+            <InlineEditPopover
+              target={inlineEditTarget}
+              title={titleRef.current}
+              onApply={applyInlineEdit}
+              onClose={() => {
+                setInlineEditTarget(null)
+                if (editor && !editor.isDestroyed) editor.commands.focus()
+              }}
             />
           ) : null}
           {present !== 'table' && writable !== false ? <TableBar editor={editor} /> : null}
