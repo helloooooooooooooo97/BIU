@@ -16,9 +16,15 @@ type MappedRange = {
   to: number
 }
 
+type PendingSelection = {
+  from: number
+  to: number
+} | null
+
 type CommentPluginState = {
   threads: CommentHighlightThread[]
   activeId: string
+  pendingSelection: PendingSelection
   ranges: MappedRange[]
   decorations: DecorationSet
 }
@@ -26,12 +32,17 @@ type CommentPluginState = {
 type CommentPluginMeta = {
   threads?: CommentHighlightThread[]
   activeId?: string
+  pendingSelection?: PendingSelection
 }
 
 export const editorCommentsKey = new PluginKey<CommentPluginState>('editor-comments')
 
-function buildDecorations(doc: PmNode, ranges: MappedRange[], activeId: string): DecorationSet {
-  if (!ranges.length) return DecorationSet.empty
+function buildDecorations(
+  doc: PmNode,
+  ranges: MappedRange[],
+  activeId: string,
+  pendingSelection: PendingSelection = null,
+): DecorationSet {
   const decos: Decoration[] = []
   for (let i = 0; i < ranges.length; i += 1) {
     const item = ranges[i]!
@@ -55,6 +66,19 @@ function buildDecorations(doc: PmNode, ranges: MappedRange[], activeId: string):
       }),
     )
   }
+  if (
+    pendingSelection &&
+    pendingSelection.to > pendingSelection.from &&
+    pendingSelection.from >= 0 &&
+    pendingSelection.to <= doc.content.size
+  ) {
+    decos.push(
+      Decoration.inline(pendingSelection.from, pendingSelection.to, {
+        class: 'editor-pending-selection',
+      }),
+    )
+  }
+  if (!decos.length) return DecorationSet.empty
   return DecorationSet.create(doc, decos)
 }
 
@@ -85,6 +109,15 @@ export function setActiveEditorComment(editor: Editor, activeId: string) {
   editor.view.dispatch(
     editor.state.tr.setMeta(editorCommentsKey, {
       activeId,
+    } satisfies CommentPluginMeta),
+  )
+}
+
+export function setEditorPendingSelection(editor: Editor, pendingSelection: PendingSelection) {
+  if (editor.isDestroyed) return
+  editor.view.dispatch(
+    editor.state.tr.setMeta(editorCommentsKey, {
+      pendingSelection,
     } satisfies CommentPluginMeta),
   )
 }
@@ -152,6 +185,7 @@ export const editorComments = Extension.create({
           init: () => ({
             threads: [],
             activeId: '',
+            pendingSelection: null,
             ranges: [],
             decorations: DecorationSet.empty,
           }),
@@ -159,13 +193,21 @@ export const editorComments = Extension.create({
             const meta = tr.getMeta(editorCommentsKey) as CommentPluginMeta | undefined
             const threads = meta?.threads ?? prev.threads
             const activeId = meta?.activeId !== undefined ? meta.activeId : prev.activeId
+            let pendingSelection =
+              meta?.pendingSelection !== undefined ? meta.pendingSelection : prev.pendingSelection
+            if (tr.docChanged && pendingSelection) {
+              const from = tr.mapping.map(pendingSelection.from, 1)
+              const to = tr.mapping.map(pendingSelection.to, -1)
+              pendingSelection = to > from && from >= 0 && to <= tr.doc.content.size ? { from, to } : null
+            }
             if (meta?.threads) {
               const ranges = resolveOpenRanges(tr.doc, threads)
               return {
                 threads,
                 activeId,
+                pendingSelection,
                 ranges,
-                decorations: buildDecorations(tr.doc, ranges, activeId),
+                decorations: buildDecorations(tr.doc, ranges, activeId, pendingSelection),
               }
             }
             if (tr.docChanged) {
@@ -180,15 +222,22 @@ export const editorComments = Extension.create({
               return {
                 threads,
                 activeId,
+                pendingSelection,
                 ranges: mapped,
-                decorations: buildDecorations(tr.doc, mapped, activeId),
+                decorations: buildDecorations(tr.doc, mapped, activeId, pendingSelection),
               }
             }
-            if (meta?.activeId !== undefined && meta.activeId !== prev.activeId) {
+            const activeChanged = meta?.activeId !== undefined && meta.activeId !== prev.activeId
+            const pendingChanged =
+              meta?.pendingSelection !== undefined &&
+              (pendingSelection?.from !== prev.pendingSelection?.from ||
+                pendingSelection?.to !== prev.pendingSelection?.to)
+            if (activeChanged || pendingChanged) {
               return {
                 ...prev,
                 activeId,
-                decorations: buildDecorations(tr.doc, prev.ranges, activeId),
+                pendingSelection,
+                decorations: buildDecorations(tr.doc, prev.ranges, activeId, pendingSelection),
               }
             }
             return prev

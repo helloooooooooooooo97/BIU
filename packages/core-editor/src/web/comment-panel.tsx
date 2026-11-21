@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
+  ArrowUpIcon,
+  ChatBubbleBottomCenterTextIcon,
   ChatBubbleLeftRightIcon,
   CheckIcon,
   ArrowUturnLeftIcon,
@@ -345,7 +347,7 @@ export type InlineCommentAnchorRect = {
 }
 
 export type InlineCommentPopoverTarget =
-  | { kind: 'compose'; anchor: CommentAnchor; rect: InlineCommentAnchorRect }
+  | { kind: 'compose'; from: number; to: number; anchor: CommentAnchor; rect: InlineCommentAnchorRect }
   | { kind: 'view'; threadIds: string[]; rect: InlineCommentAnchorRect }
 
 export function computeInlineCommentPopoverPos(
@@ -396,7 +398,7 @@ export function CommentInlinePopover({
   const [pos, setPos] = useState<{ top: number; left: number }>(() =>
     computeInlineCommentPopoverPos(
       target.rect,
-      { width: 312, height: target.kind === 'compose' ? 168 : 200 },
+      { width: target.kind === 'compose' ? 360 : 312, height: target.kind === 'compose' ? 48 : 200 },
       {
         width: typeof window === 'undefined' ? 1280 : window.innerWidth,
         height: typeof window === 'undefined' ? 800 : window.innerHeight,
@@ -404,7 +406,7 @@ export function CommentInlinePopover({
     ),
   )
   const boxRef = useRef<HTMLDivElement>(null)
-  const draftInputRef = useRef<HTMLTextAreaElement>(null)
+  const draftInputRef = useRef<HTMLInputElement>(null)
 
   const viewedThreads =
     target.kind === 'view'
@@ -486,7 +488,7 @@ export function CommentInlinePopover({
   return (
     <div
       ref={boxRef}
-      className="editor-comment-popover"
+      className={target.kind === 'compose' ? 'editor-inline-edit editor-comment-compose-pill' : 'editor-comment-popover'}
       data-testid={target.kind === 'compose' ? 'editor-comment-popover-compose' : 'editor-comment-popover-view'}
       role="dialog"
       aria-label={target.kind === 'compose' ? '添加批注' : '查看批注'}
@@ -494,16 +496,18 @@ export function CommentInlinePopover({
       onMouseDown={(e) => e.stopPropagation()}
     >
       {target.kind === 'compose' ? (
-        <div className="editor-comment-composer" data-testid="editor-comment-composer">
-          <div className="editor-comment-quote" title={target.anchor.quote}>
-            {target.anchor.quote}
-          </div>
-          <textarea
+        <div className="editor-inline-edit-row" data-testid="editor-comment-composer">
+          <span className="editor-inline-edit-avatar" aria-hidden>
+            <ChatBubbleBottomCenterTextIcon className="editor-inline-edit-icon" />
+          </span>
+          <input
             ref={draftInputRef}
-            className="editor-comment-input"
-            rows={3}
-            placeholder="输入批注内容… (Enter 发送，Shift+Enter 换行)"
+            type="text"
+            className="editor-inline-edit-input"
+            placeholder="添加批注…"
+            aria-label="输入批注内容"
             value={draftBody}
+            disabled={submitting}
             onChange={(e) => setDraftBody(e.target.value)}
             onKeyDown={(e) => {
               if (e.nativeEvent.isComposing) return
@@ -516,19 +520,15 @@ export function CommentInlinePopover({
               }
             }}
           />
-          <div className="editor-comment-composer-actions">
-            <button type="button" className="editor-comment-btn" onClick={onClose}>
-              取消
-            </button>
-            <button
-              type="button"
-              className="editor-comment-btn is-primary"
-              disabled={!draftBody.trim() || submitting}
-              onClick={() => void submitDraft()}
-            >
-              发送
-            </button>
-          </div>
+          <button
+            type="button"
+            className="editor-inline-edit-submit"
+            aria-label="发送批注"
+            disabled={!draftBody.trim() || submitting}
+            onClick={() => void submitDraft()}
+          >
+            <ArrowUpIcon className="size-[14px]" aria-hidden />
+          </button>
         </div>
       ) : (
         <div className="editor-comment-popover-stack">

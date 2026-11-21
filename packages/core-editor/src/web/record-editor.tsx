@@ -27,7 +27,7 @@ import { applyStoredBlockIds, encodeBlankParagraphsForParse, markdownWithBlockId
 import { getLivePageEditor, setLivePageEditor, setLivePagePersist } from './editor-live-instance.ts'
 import { PAGE_FIND_OPEN_EVENT, getPageFind, patchEditorCommentsUi, patchPageFind, useEditorCommentsUi, usePageFind } from './editor-view-state.ts'
 import { captureCommentAnchor, resolveCommentAnchor } from './comment-anchor.ts'
-import { collectDriftedCommentAnchors, getCommentIdsAtPos, getCommentRange, setActiveEditorComment, setEditorComments } from './comment-plugin.ts'
+import { collectDriftedCommentAnchors, getCommentIdsAtPos, getCommentRange, setActiveEditorComment, setEditorComments, setEditorPendingSelection } from './comment-plugin.ts'
 import { sortCommentThreadsByPosition, useRecordComments, type CommentThread } from './comment-store.ts'
 import { CommentInlinePopover, CommentPanel, type InlineCommentPopoverTarget } from './comment-panel.tsx'
 import { InlineEditPopover, isInlineEditHotkey, type InlineEditTarget } from './inline-edit-popover.tsx'
@@ -323,21 +323,6 @@ function Bubble({
       {!inTable ? btn('H1', editor.isActive('heading', { level: 1 }), () => editor.chain().focus().toggleHeading({ level: 1 }).run()) : null}
       {!inTable ? btn('H2', editor.isActive('heading', { level: 2 }), () => editor.chain().focus().toggleHeading({ level: 2 }).run()) : null}
       <ColorMenus editor={editor} open={colorOpen} onOpen={setColorOpen} />
-      {onInlineEdit ? (
-        <button
-          type="button"
-          className="page-bubble-chat"
-          title="原地修改 (⌘K)"
-          aria-label="原地修改"
-          onMouseDown={(event: MouseEvent) => {
-            event.preventDefault()
-            onInlineEdit()
-          }}
-        >
-          <SparklesIcon className="page-bubble-chat-icon" aria-hidden />
-          ⌘K
-        </button>
-      ) : null}
       {onAddComment ? (
         <button
           type="button"
@@ -351,6 +336,21 @@ function Bubble({
         >
           <ChatBubbleBottomCenterTextIcon className="page-bubble-chat-icon" aria-hidden />
           批注
+        </button>
+      ) : null}
+      {onInlineEdit ? (
+        <button
+          type="button"
+          className="page-bubble-chat"
+          title="原地修改 (⌘K)"
+          aria-label="原地修改"
+          onMouseDown={(event: MouseEvent) => {
+            event.preventDefault()
+            onInlineEdit()
+          }}
+        >
+          <SparklesIcon className="page-bubble-chat-icon" aria-hidden />
+          ⌘K
         </button>
       ) : null}
       <button
@@ -819,7 +819,7 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
       /* fallback coordinates */
     }
     setInlineEditTarget(null)
-    setInlineComment({ kind: 'compose', anchor, rect })
+    setInlineComment({ kind: 'compose', from, to, anchor, rect })
   }
 
   const selectCommentThread = (threadId: string) => {
@@ -897,6 +897,20 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
   useEffect(() => {
     if (commentsUi.open) setInlineComment(null)
   }, [commentsUi.open])
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed || source) return
+    const range =
+      inlineEditTarget && inlineEditTarget.to > inlineEditTarget.from
+        ? { from: inlineEditTarget.from, to: inlineEditTarget.to }
+        : inlineComment?.kind === 'compose' && inlineComment.to > inlineComment.from
+          ? { from: inlineComment.from, to: inlineComment.to }
+          : null
+    setEditorPendingSelection(editor, range)
+    return () => {
+      if (!editor.isDestroyed) setEditorPendingSelection(editor, null)
+    }
+  }, [editor, source, inlineEditTarget, inlineComment])
 
   const startInlineEditFromSelection = () => {
     if (source || writable === false || !editor || editor.isDestroyed) return

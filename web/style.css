@@ -34,6 +34,17 @@
   --biu-color-bg-faint: var(--biu-color-text-soft);
   --biu-color-overlay: color-mix(in srgb, var(--biu-color-bg) 72%, transparent);
   --biu-color-bg-code: #f7f7f5;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--biu-color-emphasis) 28%, transparent);
+}
+
+html.dark ::selection {
+  background: color-mix(in srgb, var(--biu-color-emphasis) 36%, transparent);
+}
+
+:root {
 
   --biu-color-icon: #91918e;
   --biu-color-icon-active: var(--biu-color-icon);
