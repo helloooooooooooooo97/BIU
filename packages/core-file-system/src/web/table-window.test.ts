@@ -1,6 +1,8 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_PX, TABLE_COL_PIN_PX, TABLE_COL_ACTIONS_PX, TABLE_COL_VIEWPORT_FALLBACK, GROUPED_FULL_FETCH_ALL_MAX, groupedFullFetchCount, medianPaintedRowPx, rememberedTableWrap, rememberTableWrap, resetRememberedTableWrap, settlePaintedRowPx, tableColumnUnchanged, tableColumnSlice, tableColumnWidth, tablePinColClass, tablePinCount, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll } from './table-window.ts'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_VIEWPORT_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_PX, TABLE_COL_PIN_PX, TABLE_COL_ACTIONS_PX, TABLE_COL_VIEWPORT_FALLBACK, GROUPED_FULL_FETCH_ALL_MAX, groupedFullFetchCount, medianPaintedRowPx, rememberedTableWrap, rememberTableWrap, resetRememberedTableWrap, settlePaintedRowPx, tableColumnUnchanged, tableColumnSlice, tableColumnWidth, tablePinColClass, tablePinCount, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll } from './table-window.ts'
 
 test('table window keeps overscan around the viewport', () => {
   const slice = tableWindowSlice(200, 0, TABLE_ROW_PX * 10)
@@ -181,4 +183,18 @@ test('unmeasured wide tables start with a bounded horizontal window', () => {
   assert.ok(unmeasured.end < 17)
   assert.ok(unmeasured.padRight > 0)
   resetRememberedTableWrap()
+})
+
+test('virtual table anti-flicker guards stay intact', () => {
+  assert.ok(TABLE_VIEWPORT_OVERSCAN >= 8)
+  const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
+  const tableSrc = readFileSync(resolve(import.meta.dirname, './windowed-table.tsx'), 'utf8')
+  const viewportSrc = readFileSync(resolve(import.meta.dirname, './table-viewport.ts'), 'utf8')
+  assert.match(css, /\.fsdb-right-body:has\(\.tasks-table-wrap\)\{overflow-anchor:none\}/)
+  assert.match(css, /\.fsdb-page \.tasks-table tr\.fsdb-table-pad\{[^}]*pointer-events:none/)
+  assert.match(css, /\.fsdb-page \.tasks-table tr\.fsdb-table-pad td > div\{[^}]*contain:layout paint style/)
+  assert.match(tableSrc, /idx === 0 \? 'pad:start'/)
+  assert.match(tableSrc, /if \(isScrolling\) return/)
+  assert.match(viewportSrc, /overscan: TABLE_VIEWPORT_OVERSCAN/)
+  assert.match(viewportSrc, /shouldAdjustScrollPositionOnItemSizeChange/)
 })

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { defaultRangeExtractor, useVirtualizer, type Range } from '@tanstack/react-virtual'
 import { tableVertScroller } from './table-drag-scroll.ts'
-import { TABLE_WINDOW_OVERSCAN, tableRowFallbackPx } from './table-window.ts'
+import { TABLE_VIEWPORT_OVERSCAN, tableRowFallbackPx } from './table-window.ts'
 
 type Node = { key: string; kind: string; row?: { id: string } }
 export function useTableViewport(options: {
@@ -92,9 +92,14 @@ export function useTableViewport(options: {
   const getItemKey = useCallback((index: number) => `${options.resetKey}\0${nodes[index]!.key}`, [nodes, options.resetKey])
   const estimateSize = useCallback((index: number) => nodes[index]?.kind === 'group-head' ? 36 : nodes[index]?.kind === 'group-pager' ? 46 : tableRowFallbackPx(options.wrapCells), [nodes, options.wrapCells])
   const virtualizer = useVirtualizer({ count: nodes.length, getScrollElement, getItemKey, estimateSize, rangeExtractor,
-    overscan: TABLE_WINDOW_OVERSCAN, scrollMargin: geometry.margin, scrollPaddingStart: geometry.padding,
+    overscan: TABLE_VIEWPORT_OVERSCAN, scrollMargin: geometry.margin, scrollPaddingStart: geometry.padding,
     initialRect: { width: 624, height: 560 },
   })
+  // 屏蔽 <2px 的亚像素/边框行高抖动回写 scrollTop，避免快速上滑时视口微跳闪烁。
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, delta, instance) => {
+    if (!options.wrapCells && Math.abs(delta) < 2) return false
+    return item.start < (instance.scrollOffset ?? 0) + instance.options.scrollMargin
+  }
   const current = useRef(virtualizer); current.current = virtualizer
   const previousLayout = useRef(options.layoutKey)
   useLayoutEffect(() => {
@@ -116,5 +121,5 @@ export function useTableViewport(options: {
     const index = rowKey ? keyIndices.get(rowKey) : rowIndices.get(id)
     if (index != null) current.current.scrollToIndex(index, { align: 'auto', behavior: 'auto' })
   }, [rowIndices, keyIndices])
-  return { virtualizer, items: virtualizer.getVirtualItems(), margin: geometry.margin, revealRow }
+  return { virtualizer, items: virtualizer.getVirtualItems(), margin: geometry.margin, isScrolling: virtualizer.isScrolling, revealRow }
 }

@@ -1,6 +1,8 @@
 export const TABLE_ROW_PX = 37
 export const TABLE_WRAP_ROW_PX = 96
 export const TABLE_WINDOW_OVERSCAN = 4
+/** 虚拟表格实际视口上下预渲染行数：在保证单屏挂载 <=30 行 / <=300 格预算的前提下，将缓冲带从 4 行提升至 8 行（上下各 ~296px）。 */
+export const TABLE_VIEWPORT_OVERSCAN = 8
 export const TABLE_WINDOW_VIEWPORT_FALLBACK = 560
 export const TABLE_COL_PX = 120
 export const TABLE_COL_PIN_PX = 240

@@ -33,7 +33,7 @@ import {
   type RowStampEntry,
 } from './table-paint-cache.ts'
 import {
-  TABLE_WINDOW_OVERSCAN,
+  TABLE_VIEWPORT_OVERSCAN,
   tableColumnWidth,
   type TableColumnSlice,
 } from './table-window.ts'
@@ -145,6 +145,7 @@ export const TableCheckRail = memo(function TableCheckRail({
   items,
   nodes,
   margin,
+  isScrolling = false,
   forceLive,
   paintCheckHover,
   renderHead,
@@ -158,6 +159,7 @@ export const TableCheckRail = memo(function TableCheckRail({
   items: VirtualItem[]
   nodes: TablePaintNode[]
   margin: number
+  isScrolling?: boolean
   forceLive: boolean
   paintCheckHover: (next: string | 'head' | null, force?: boolean) => void
   renderHead: () => ReactNode
@@ -198,9 +200,11 @@ export const TableCheckRail = memo(function TableCheckRail({
 
   // Sync directly from actual tr.offsetTop / tr.offsetHeight after commit so grouped headers,
   // pagers, borders, and wrapped rows never drift from the left checkbox rail (zero getBoundingClientRect).
+  // 滚动期间跳过每帧同步 DOM 测量，直接走 virtualSlots，避免强制回流 + 同帧二次渲染导致快滑闪烁；停滚后立即校准。
   useLayoutEffect(() => {
+    if (isScrolling) return
     syncDomSlots()
-  }, [syncDomSlots, items, nodes, margin])
+  }, [isScrolling, syncDomSlots, items, nodes, margin])
 
   // Observe table size changes once without rebinding on scroll.
   useEffect(() => {
@@ -237,7 +241,7 @@ export const TableCheckRail = memo(function TableCheckRail({
     return slots
   }, [active, headHeight, items, margin, nodes])
 
-  const checkSlots = active ? (domSlots ?? virtualSlots) : []
+  const checkSlots = active ? (isScrolling ? virtualSlots : (domSlots ?? virtualSlots)) : []
 
   useLayoutEffect(() => {
     paintCheckHover(hoverRef.current, true)
@@ -378,11 +382,13 @@ const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, mea
   const compositeCells = bag.compositeCells
   const children: ReactNode[] = []
   let end = 0
-  for (const item of items) {
+  for (let idx = 0; idx < items.length; idx += 1) {
+    const item = items[idx]!
     const node = nodes[item.index]
     if (!node) continue
     const top = item.start - margin
-    children.push(pad(top - end, `pad:${node.key}`))
+    // 顶部占位行使用固定 key，滚动跨行时仅原地改 height，避免每行销毁重建 <tr> 造成闪烁。
+    children.push(pad(top - end, idx === 0 ? 'pad:start' : `pad:${node.key}`))
     const stamp = rowPaintStamp(node, stampCache.current)
     const hit = rowCache.current.get(node.key)
     let element: ReactNode
@@ -493,7 +499,7 @@ export const WindowedTable = memo(function WindowedTable({
   useLayoutEffect(() => {
     if (dockedViewportRef.current && wrapRef.current) dockedViewportRef.current.scrollLeft = wrapRef.current.scrollLeft
   }, [pinnedHead, wrapRef])
-  const { virtualizer, items, margin, revealRow } = useTableViewport({
+  const { virtualizer, items, margin, isScrolling, revealRow } = useTableViewport({
     nodes,
     wrapCells,
     resetKey,
@@ -538,7 +544,7 @@ export const WindowedTable = memo(function WindowedTable({
   }, [colWindow.end, colWindow.padLeft, colWindow.padRight, colWindow.pin, colWindow.start, columnPx])
   paintRef.current.colSpan = tableColSpan
   const rangeStart = virtualizer.range?.startIndex ?? 0
-  const rangeEnd = virtualizer.range ? Math.min(nodes.length, virtualizer.range.endIndex + TABLE_WINDOW_OVERSCAN + 1) : 0
+  const rangeEnd = virtualizer.range ? Math.min(nodes.length, virtualizer.range.endIndex + TABLE_VIEWPORT_OVERSCAN + 1) : 0
   useEffect(() => { onVisibleRange?.(rangeStart, rangeEnd) }, [onVisibleRange, rangeStart, rangeEnd])
   const measureRow = useCallback((node: HTMLTableRowElement | null) => virtualizer.measureElement(node), [virtualizer])
   const chrome = chromeRef.current
@@ -579,6 +585,7 @@ export const WindowedTable = memo(function WindowedTable({
         items={items}
         nodes={nodes}
         margin={margin}
+        isScrolling={isScrolling}
         forceLive={forceLiveChecks}
         paintCheckHover={paintCheckHover}
         renderHead={renderCheckHead}
