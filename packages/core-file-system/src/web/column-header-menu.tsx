@@ -1,5 +1,4 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowsUpDownIcon,
   CalculatorIcon,
@@ -16,8 +15,8 @@ import {
   Squares2X2Icon,
   TrashIcon,
 } from '@heroicons/react/16/solid'
-import { computeFloatingPosition } from '@biu/biu-ui/floating-position'
-import { overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
+import { HeadlessPopover } from '@biu/biu-ui/headless-popover'
+import { OVERLAY_Z } from '@biu/biu-ui/overlay-portal'
 import type { CollectionSchemaPack, FieldSpec, FieldType } from '@biu/type-file-system'
 import {
   summaryOpLabel,
@@ -104,7 +103,7 @@ export function ColumnHeaderMenu({
   onToggleFreeze,
   onHide,
 }: ColumnHeaderMenuProps) {
-  const { col, rect, mode } = target
+  const { col, mode } = target
   const flat = parseTagFlatColumnKey(col.key)
   const tagPack = flat ? tagCatalog.find((pack) => pack.id === flat.packId) : undefined
   const tagField = flat && tagPack ? tagPack.fields.find((item) => item.key === flat.fieldKey) : undefined
@@ -120,13 +119,10 @@ export function ColumnHeaderMenu({
   const [sub, setSub] = useState<'sort' | 'calculate' | 'views' | null>(mode === 'summary' ? 'calculate' : null)
   const [editingSandboxId, setEditingSandboxId] = useState<string | null>(null)
   const [codeDraft, setCodeDraft] = useState('')
+  const [liveAnchor, setLiveAnchor] = useState<HTMLElement | null>(() => target.anchorEl ?? null)
 
-  const popRef = useRef<HTMLDivElement>(null)
   const descInputRef = useRef<HTMLInputElement>(null)
-  const [pos, setPos] = useState<{ left: number; top: number }>({
-    left: rect.left,
-    top: rect.bottom + 4,
-  })
+  const anchorRef = useMemo(() => ({ current: liveAnchor }), [liveAnchor])
 
   useEffect(() => {
     setNameDraft(initialName)
@@ -136,18 +132,39 @@ export function ColumnHeaderMenu({
     setSub(mode === 'summary' ? 'calculate' : null)
   }, [col.key, initialDesc, initialName, mode])
 
-  useLayoutEffect(() => {
-    const el = popRef.current
-    if (!el) return
-    const next = computeFloatingPosition({
-      anchor: rect,
-      floating: { width: el.offsetWidth || 236, height: el.offsetHeight || 260 },
-      placement: mode === 'summary' ? 'top-start' : 'bottom-start',
-      offset: 4,
-      padding: 8,
-    })
-    setPos({ left: next.left, top: next.top })
-  }, [descOpen, mode, rect, sub])
+  useEffect(() => {
+    setLiveAnchor(target.anchorEl ?? null)
+  }, [target.anchorEl])
+
+  // 滚动吸顶表头与原始 thead 切换时，同步把浮窗锚点切到当前可见的 th，避免锚点卸载或藏在工具栏后
+  useEffect(() => {
+    if (mode !== 'header') return
+    const mainEl = target.anchorEl?.closest('.fsdb-main')
+    if (!mainEl) return
+    const findColTh = (root: ParentNode | null | undefined): HTMLElement | null => {
+      if (!root) return null
+      for (const th of root.querySelectorAll<HTMLElement>('th[data-col-key]')) {
+        if (th.dataset.colKey === col.key) return th
+      }
+      return null
+    }
+    const syncHeaderAnchor = () => {
+      const pinnedTh = findColTh(mainEl.querySelector('.fsdb-pinned-head-host'))
+      if (pinnedTh) {
+        setLiveAnchor((prev) => (prev === pinnedTh ? prev : pinnedTh))
+        return
+      }
+      const normalTh = findColTh(mainEl.querySelector('.tasks-table thead'))
+      if (normalTh) {
+        setLiveAnchor((prev) => (prev === normalTh ? prev : normalTh))
+      }
+    }
+    const pinnedHost = mainEl.querySelector('.fsdb-pinned-head-host')
+    if (!pinnedHost || typeof MutationObserver === 'undefined') return
+    const observer = new MutationObserver(syncHeaderAnchor)
+    observer.observe(pinnedHost, { childList: true })
+    return () => observer.disconnect()
+  }, [col.key, mode, target.anchorEl])
 
   function commitTagMeta() {
     if (!tagPack || !tagField) return
@@ -184,28 +201,6 @@ export function ColumnHeaderMenu({
     commitTagMeta()
     onClose()
   }
-
-  useEffect(() => {
-    const onPointerDown = (event: PointerEvent) => {
-      const hit = event.target instanceof Node ? event.target : null
-      if (!hit) return
-      if (popRef.current?.contains(hit)) return
-      if (target.anchorEl?.contains(hit)) return
-      dismissRef.current()
-    }
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.isComposing || event.keyCode === 229) return
-      if (event.key !== 'Escape') return
-      event.preventDefault()
-      dismissRef.current()
-    }
-    document.addEventListener('pointerdown', onPointerDown, true)
-    document.addEventListener('keydown', onKeyDown, true)
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown, true)
-      document.removeEventListener('keydown', onKeyDown, true)
-    }
-  }, [target.anchorEl])
 
   const summaryOptions = summaryOpsForKind(col.kind)
   const showInfoButton = editableTagField || Boolean(initialDesc)
@@ -291,13 +286,25 @@ export function ColumnHeaderMenu({
     })
   }
 
-  const menu = (
+  if (!liveAnchor) return null
+
+  return (
+    <HeadlessPopover
+      open
+      anchorRef={anchorRef}
+      onOpenChange={(open) => {
+        if (!open) dismissRef.current()
+      }}
+      side={mode === 'summary' ? 'top' : 'bottom'}
+      align="start"
+      sideOffset={4}
+      avoidCollisions
+      zIndex={OVERLAY_Z.popover}
+      inside={(node) => Boolean(liveAnchor.contains(node) || target.anchorEl?.contains(node))}
+    >
       <div
-        ref={popRef}
         className={`fsdb-col-menu${editingSandbox ? ' is-wide' : ''}`}
         data-testid="fsdb-col-header-menu"
-        style={{ position: 'fixed', left: pos.left, top: pos.top, zIndex: overlayZ(1) }}
-        onPointerDown={(event) => event.stopPropagation()}
         onClick={(event) => event.stopPropagation()}
       >
         {mode === 'summary' ? (
@@ -729,8 +736,6 @@ export function ColumnHeaderMenu({
           </>
         )}
       </div>
+    </HeadlessPopover>
   )
-
-  const portal = overlayPortalRoot()
-  return portal ? createPortal(menu, portal) : null
 }
