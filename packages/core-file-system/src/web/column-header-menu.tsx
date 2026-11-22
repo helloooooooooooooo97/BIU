@@ -165,6 +165,7 @@ export function ColumnHeaderMenu({
       dismissRef.current()
     }
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.isComposing || event.keyCode === 229) return
       if (event.key !== 'Escape') return
       event.preventDefault()
       dismissRef.current()
@@ -230,6 +231,7 @@ export function ColumnHeaderMenu({
                     }}
                     onBlur={commitTagMeta}
                     onKeyDown={(event) => {
+                      if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
                       if (event.key === 'Enter') {
                         event.preventDefault()
                         commitTagMeta()
@@ -276,6 +278,7 @@ export function ColumnHeaderMenu({
                     onChange={(event) => setDescDraft(event.target.value)}
                     onBlur={commitTagMeta}
                     onKeyDown={(event) => {
+                      if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
                       if (event.key === 'Enter') {
                         event.preventDefault()
                         commitTagMeta()

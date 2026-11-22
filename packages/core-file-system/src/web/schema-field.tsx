@@ -272,6 +272,7 @@ function SchemaPropName({
           aria-label={`重命名 ${name}`}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
             if (event.key === 'Enter') {
               event.preventDefault()
               commit()
@@ -309,6 +310,7 @@ function SchemaPropName({
           aria-label={`${name} 属性说明`}
           onChange={(event) => setDescDraft(event.target.value)}
           onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
             if (event.key === 'Enter') {
               event.preventDefault()
               commit()
