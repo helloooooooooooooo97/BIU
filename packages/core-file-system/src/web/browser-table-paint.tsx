@@ -24,7 +24,7 @@ import { FieldGlyph } from './fsdb-cells.tsx'
 import { TableGlyph, UiGlyph } from './nav-glyphs.tsx'
 import { TAGS_COLLECTION_PATH } from './database-path.ts'
 import { persistCollapsedGroups } from './view-storage.ts'
-import { tablePinColClass, type TableColumnSlice } from './table-window.ts'
+import { tablePinColOffsets, type PinnedColOffset, type TableColumnSlice } from './table-window.ts'
 import { tableCellRangeKey, tableNavKeys, type TableCellCursor } from './table-keys.ts'
 import { isViewCatalogField } from './view-catalog.ts'
 
@@ -77,6 +77,7 @@ export type BrowserTablePaintDeps = {
   canCreate: boolean
   creatingGroup: string | null
   freezeTitle: boolean
+  pinOffsets: ReadonlyMap<string, PinnedColOffset>
   queryFields: ReadonlySet<string>
   resizingCol: string | null
   columnSummaries: Record<string, ColumnSummaryOp>
@@ -134,6 +135,7 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
     canCreate,
     creatingGroup,
     freezeTitle,
+    pinOffsets,
     queryFields,
     resizingCol,
     columnSummaries,
@@ -185,6 +187,30 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
     }
     return cachedHoldPick
   }
+
+  let cachedHoldPinSnap: TableHoldSnap | null = null
+  let cachedHoldPinMap: ReadonlyMap<string, PinnedColOffset> = pinOffsets
+  function resolvePinOf(colKey: string): PinnedColOffset | undefined {
+    const held = tableHoldRef.current
+    if (!held || held.nodes === EMPTY_HOLD_NODES) return pinOffsets.get(colKey)
+    if (held !== cachedHoldPinSnap) {
+      cachedHoldPinSnap = held
+      cachedHoldPinMap = tablePinColOffsets(
+        (held.columns as BrowserTableColumn[]).map((c) => c.key),
+        held.columnWidths ?? {},
+        held.columnPinCount ?? 0,
+        (held.schema ?? schema)?.labelField,
+      )
+    }
+    return cachedHoldPinMap.get(colKey)
+  }
+
+  function pinClassFor(pin: PinnedColOffset | undefined) {
+    if (!pin) return ''
+    return pin.isEdge ? 'is-pin-col is-pin-edge' : 'is-pin-col'
+  }
+
+  void freezeTitle
 
   function renderGroupHead(groupKey: string, label: string) {
     const folded = Boolean(collapsedGroups[groupKey])
@@ -255,16 +281,24 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
     const headTip = columnHeadTip(col)
     const interactive = Boolean(onOpenColMenu && !sheet && col.key !== 'actions')
     const menuOpen = interactive && openColMenuKey === col.key
+    const pin = resolvePinOf(col.key)
+    const thStyle: Record<string, string> | undefined =
+      tone || pin
+        ? {
+            ...(tone ? { '--biu-tag': tone } : {}),
+            ...(pin ? { '--fsdb-pin-left': `${pin.left}px` } : {}),
+          }
+        : undefined
     return (
       <th
         key={col.key}
         className={[
-          tablePinColClass(col.key, schema?.labelField, tableHoldRef.current?.freezeTitle ?? freezeTitle),
+          pinClassFor(pin),
           tone ? 'is-tag-col' : '',
           interactive ? 'is-col-clickable' : '',
           menuOpen ? 'is-col-menu-open' : '',
         ].filter(Boolean).join(' ') || undefined}
-        style={tone ? { ['--biu-tag' as string]: tone } : undefined}
+        style={thStyle}
         onClick={
           interactive
             ? (event) => {
@@ -354,13 +388,15 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
     const paintSchema = held?.schema ?? schema
     const cellPick = held ? resolveHeldCellPick(held) : cellPickRef.current
     const rangeSet = held ? null : cellRangeSetRef.current
+    const pin = resolvePinOf(col.key)
     return (
       <td
         key={col.key}
         data-col-key={col.key}
         {...cellPickOf(row, col.key, col.field)}
+        style={pin ? ({ ['--fsdb-pin-left' as string]: `${pin.left}px` }) : undefined}
         className={[
-          tablePinColClass(col.key, paintSchema?.labelField, held?.freezeTitle ?? freezeTitle),
+          pinClassFor(pin),
           Boolean(cellPick && (cellPick.rowKey ? cellPick.rowKey === rowKey : cellPick.id === row.id) && cellPick.key === col.key)
             ? col.field && cellFieldWritable(col.field)
               ? 'is-cell-on'
@@ -483,9 +519,11 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
       const paintSchema = held?.schema ?? schema
       const hasAnySummary = Object.keys(columnSummaries).length > 0
       const paintSummaryTd = (col: BrowserTableColumn) => {
-        const pinCls = tablePinColClass(col.key, paintSchema?.labelField, held?.freezeTitle ?? freezeTitle)
+        const pin = resolvePinOf(col.key)
+        const pinCls = pinClassFor(pin)
+        const pinStyle = pin ? ({ ['--fsdb-pin-left' as string]: `${pin.left}px` }) : undefined
         if (col.key === 'actions') {
-          return <td key={col.key} className={[pinCls, 'fsdb-summary-td'].filter(Boolean).join(' ')} />
+          return <td key={col.key} style={pinStyle} className={[pinCls, 'fsdb-summary-td'].filter(Boolean).join(' ')} />
         }
         const op = columnSummaries[col.key] ?? 'none'
         const result = computeColumnSummary(node.rows, col.key, col.field, op)
@@ -495,7 +533,7 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
             : `${result.label} · 点击切换`
           : '点击配置统计方式'
         return (
-          <td key={col.key} data-col-key={col.key} className={[pinCls, 'fsdb-summary-td'].filter(Boolean).join(' ')}>
+          <td key={col.key} data-col-key={col.key} style={pinStyle} className={[pinCls, 'fsdb-summary-td'].filter(Boolean).join(' ')}>
             <button
               type="button"
               className={`fsdb-summary-btn${result ? ' is-set' : ''}`}

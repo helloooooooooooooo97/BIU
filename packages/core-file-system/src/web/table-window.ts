@@ -113,13 +113,44 @@ export type TableColumnSlice = {
   padRight: number
 }
 
-/** 仅当开启冻结标题列时，冻结最左侧的标题列，动作列参与正常横向滚动。 */
-export function tablePinCount(keys: string[], labelField?: string | null, freezeTitle = false) {
-  return freezeTitle && labelField && keys[0] === labelField ? 1 : 0
+/** 冻结最左侧连续列：支持冻结标题列或冻结至任意指定列（freezeUntil）。 */
+export function tablePinCount(
+  keys: string[],
+  labelField?: string | null,
+  freezeTitle = false,
+  freezeUntil?: string | null,
+) {
+  const target = String(freezeUntil ?? '').trim() || (freezeTitle ? String(labelField ?? '').trim() : '')
+  if (!target) return 0
+  const idx = keys.indexOf(target)
+  return idx >= 0 ? idx + 1 : 0
 }
 
 export function tablePinColClass(key: string, labelField?: string | null, freezeTitle = false) {
   return freezeTitle && key === labelField ? 'is-pin-col' : ''
+}
+
+export type PinnedColOffset = {
+  left: number
+  isEdge: boolean
+}
+
+export function tablePinColOffsets(
+  keys: string[],
+  columnWidths: Record<string, number>,
+  pinCount: number,
+  labelField?: string | null,
+): Map<string, PinnedColOffset> {
+  const map = new Map<string, PinnedColOffset>()
+  if (pinCount <= 0) return map
+  let left = 0
+  const limit = Math.min(pinCount, keys.length)
+  for (let i = 0; i < limit; i += 1) {
+    const key = keys[i]!
+    map.set(key, { left, isEdge: i === limit - 1 })
+    left += tableColumnWidth(key, columnWidths[key], key === labelField)
+  }
+  return map
 }
 
 /** 有手动值用手动值；否则钉住列 / 操作列 / 其余列各一个固定默认宽，不随视口缩放。 */

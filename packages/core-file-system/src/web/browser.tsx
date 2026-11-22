@@ -266,7 +266,7 @@ import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage, locateViewRecord, pageOfIndex, type ViewNeighborQuery } from './view-adjacent.ts'
 import { setViaDataCrumbs, viaDataViewId } from './data-chrome.ts'
 import { paintCollectionViews } from './collection-nav.ts'
-import { TABLE_WINDOW_OVERSCAN, tableColumnWidth, tablePinColClass, tablePinCount, type TableColumnSlice } from './table-window.ts'
+import { TABLE_WINDOW_OVERSCAN, tableColumnWidth, tablePinColClass, tablePinColOffsets, tablePinCount, type TableColumnSlice } from './table-window.ts'
 import { bindTableDragScroll, tableVertScroller } from './table-drag-scroll.ts'
 import { forgetPreviewTotalsForPath, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady } from './sidebar-preview.ts'
 import { publishDataSidebar, releaseDataSidebar, type DataSidebarLive } from './data-sidebar-host.ts'
@@ -713,6 +713,7 @@ export function CollectionBrowser({
   const [wrapCells, setWrapCells] = useState(!!initialView?.wrap)
   const [truncateCells, setTruncateCells] = useState(initialView?.truncate !== false)
   const [freezeTitle, setFreezeTitle] = useState(Boolean(initialView?.freezeTitle))
+  const [freezeUntil, setFreezeUntil] = useState(initialView?.freezeUntil ?? '')
   const [groupBy, setGroupBy] = useState(initialView?.groupBy ?? '')
   const [groupConfig, setGroupConfig] = useState<GroupConfig | undefined>(() => normalizeGroupConfig(initialView?.groupConfig))
   const [showTree, setShowTree] = useState(Boolean(initialView?.tree))
@@ -1270,6 +1271,7 @@ export function CollectionBrowser({
         setWrapCells(pendingView.wrapCells)
         setTruncateCells(view.truncate !== false)
         setFreezeTitle(Boolean(view.freezeTitle))
+        setFreezeUntil(view.freezeUntil ?? '')
         setQuery(pendingView.fetchQuery)
         setFetchQuery(pendingView.fetchQuery)
         setPageSize(pendingView.pageSize)
@@ -2130,9 +2132,18 @@ export function CollectionBrowser({
   const tableStageRef = useRef<HTMLDivElement>(null)
   const checkStackRef = useRef<HTMLDivElement>(null)
   const checkHoverRef = useRef<string | 'head' | null>(null)
-  const columnPinCount = tablePinCount(columns.map((col) => col.key), schema?.labelField, freezeTitle)
+  const effectiveFreezeUntil = freezeUntil || (freezeTitle ? (schema?.labelField ?? 'title') : '')
+  const columnPinCount = tablePinCount(columns.map((col) => col.key), schema?.labelField, freezeTitle, freezeUntil)
+  const pinOffsets = useMemo(
+    () => tablePinColOffsets(columns.map((col) => col.key), columnWidths, columnPinCount, schema?.labelField),
+    [columnPinCount, columnWidths, columns, schema?.labelField],
+  )
+  const pinStamp = useMemo(
+    () => [...pinOffsets.entries()].map(([k, v]) => `${k}:${v.left}:${v.isEdge ? 1 : 0}`).join(','),
+    [pinOffsets],
+  )
   const tableResetKey = `${activeViewId ?? ''}\0${collectionPath}\0${groupBy}\0${page}\0${pageSize}\0${query}`
-  const columnViewsStamp = useMemo(() => JSON.stringify(columnViews), [columnViews])
+  const columnViewsStamp = useMemo(() => `${JSON.stringify(columnViews)}\0${pinStamp}`, [columnViews, pinStamp])
   const checkLayoutExtra = [
     grouping ? 1 : 0,
     page,
@@ -2550,6 +2561,7 @@ export function CollectionBrowser({
       wrapCells === !!next.wrap &&
       truncateCells === (next.truncate !== false) &&
       freezeTitle === Boolean(next.freezeTitle) &&
+      freezeUntil === (next.freezeUntil ?? '') &&
       query === nextQuery &&
       pageSize === nextPageSize &&
       sortsStateKey(sorts) === sortsStateKey(next.sorts) &&
@@ -2577,6 +2589,7 @@ export function CollectionBrowser({
     setWrapCells(!!next.wrap)
     setTruncateCells(next.truncate !== false)
     setFreezeTitle(Boolean(next.freezeTitle))
+    setFreezeUntil(next.freezeUntil ?? '')
     setQuery(nextQuery)
     setFetchQuery(nextQuery)
     setPageSize(nextPageSize)
@@ -2816,8 +2829,17 @@ export function CollectionBrowser({
   }
 
   function setFreezeTitleCol(next: boolean) {
+    const until = next ? (schema?.labelField ?? 'title') : ''
     setFreezeTitle(next)
-    patchActiveView({ freezeTitle: next })
+    setFreezeUntil(until)
+    patchActiveView({ freezeTitle: next, freezeUntil: until || undefined })
+  }
+
+  function setFreezeUntilCol(colKey: string) {
+    const next = colKey.trim()
+    setFreezeUntil(next)
+    setFreezeTitle(Boolean(next))
+    patchActiveView({ freezeUntil: next || undefined, freezeTitle: Boolean(next) })
   }
 
   async function runAction(row: DbRecord, action: CollectionActionInfo) {
@@ -3447,6 +3469,7 @@ export function CollectionBrowser({
     canCreate,
     creatingGroup,
     freezeTitle,
+    pinOffsets,
     queryFields,
     resizingCol,
     columnSummaries,
@@ -3521,6 +3544,7 @@ export function CollectionBrowser({
       wrap: wrapCells,
       truncate: truncateCells,
       freezeTitle,
+      freezeUntil: freezeUntil || undefined,
       query,
       pageSize,
       columnWidths,
@@ -3594,6 +3618,7 @@ export function CollectionBrowser({
     truncateCells,
     wrapCells,
     freezeTitle,
+    freezeUntil,
     sheet,
   ])
 
@@ -3840,7 +3865,10 @@ export function CollectionBrowser({
       compositeCells: compositeCellKeys,
       columnViewStamp: (colKey) => {
         const active = activeColumnSandboxItem(columnViews[colKey])
-        return active ? `${active.id}\0${active.code}` : ''
+        const pin = pinOffsets.get(colKey)
+        const pinPart = pin ? `${pin.left}:${pin.isEdge ? 1 : 0}` : ''
+        const viewPart = active ? `${active.id}\0${active.code}` : ''
+        return pinPart || viewPart ? `${viewPart}\0${pinPart}` : ''
       },
       paintSelection: paintCellRangeClasses,
     }
@@ -4032,7 +4060,7 @@ export function CollectionBrowser({
           canGroup={groupFields.some((item) => item.key === colHeaderMenu.col.key)}
           activeSortDir={sorts.find((rule) => rule.field === colHeaderMenu.col.key)?.dir ?? null}
           activeGrouped={groupBy === colHeaderMenu.col.key}
-          freezeTitle={freezeTitle}
+          isFrozenEdge={effectiveFreezeUntil === colHeaderMenu.col.key}
           summaryOp={columnSummaries[colHeaderMenu.col.key] ?? 'none'}
           columnView={columnViews[colHeaderMenu.col.key]}
           onClose={() => setColHeaderMenu(null)}
@@ -4078,7 +4106,9 @@ export function CollectionBrowser({
               return next
             })
           }}
-          onToggleFreeze={() => setFreezeTitleCol(!freezeTitle)}
+          onToggleFreeze={() =>
+            setFreezeUntilCol(effectiveFreezeUntil === colHeaderMenu.col.key ? '' : colHeaderMenu.col.key)
+          }
           onHide={(colKey) => toggleColumn(colKey)}
         />
       ) : null}

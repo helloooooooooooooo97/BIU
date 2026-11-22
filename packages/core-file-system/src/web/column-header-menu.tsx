@@ -65,7 +65,7 @@ export type ColumnHeaderMenuProps = {
   canGroup: boolean
   activeSortDir: 'asc' | 'desc' | null
   activeGrouped: boolean
-  freezeTitle: boolean
+  isFrozenEdge: boolean
   summaryOp: ColumnSummaryOp
   columnView?: ColumnViewConfig
   onClose: () => void
@@ -91,7 +91,7 @@ export function ColumnHeaderMenu({
   canGroup,
   activeSortDir,
   activeGrouped,
-  freezeTitle,
+  isFrozenEdge,
   summaryOp,
   columnView,
   onClose,
@@ -647,22 +647,22 @@ export function ColumnHeaderMenu({
                 </>
               ) : null}
 
-              {isTitle ? (
-                <button
-                  type="button"
-                  role="menuitemcheckbox"
-                  aria-checked={freezeTitle}
-                  className={`fsdb-col-menu-item${freezeTitle ? ' is-on' : ''}`}
-                  onClick={() => {
-                    onToggleFreeze()
-                    onClose()
-                  }}
-                >
-                  <LockClosedIcon aria-hidden className="size-3.5 fsdb-col-menu-ico" />
-                  <span className="fsdb-col-menu-item-label">{freezeTitle ? '取消冻结列' : '冻结此列'}</span>
-                  {freezeTitle ? <CheckIcon aria-hidden className="size-3.5 fsdb-col-menu-check" /> : null}
-                </button>
-              ) : null}
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={isFrozenEdge}
+                className={`fsdb-col-menu-item${isFrozenEdge ? ' is-on' : ''}`}
+                onClick={() => {
+                  onToggleFreeze()
+                  onClose()
+                }}
+              >
+                <LockClosedIcon aria-hidden className="size-3.5 fsdb-col-menu-ico" />
+                <span className="fsdb-col-menu-item-label">
+                  {isFrozenEdge ? '取消冻结' : isTitle ? '冻结此列' : '冻结至此列'}
+                </span>
+                {isFrozenEdge ? <CheckIcon aria-hidden className="size-3.5 fsdb-col-menu-check" /> : null}
+              </button>
 
               {canHide ? (
                 <>
