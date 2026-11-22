@@ -78,7 +78,7 @@ test('unmeasured viewport still paints a first screen', () => {
 
 test('unmeasured first screen stays well under a 100-row page', () => {
   const slice = tableWindowSlice(100, 0, 0)
-  assert.ok(slice.end <= 24)
+  assert.ok(slice.end <= 26)
   assert.ok(slice.padBottom > 0)
 })
 

@@ -90,14 +90,23 @@ export function useTableViewport(options: {
   }, [nodes, options.retainedRowId, options.retainedRowKey, options.preserveMountedRows, interactedRow, rowIndices, keyIndices, tableRef, interactedHistory])
   const getScrollElement = useCallback(() => scroller, [scroller])
   const getItemKey = useCallback((index: number) => `${options.resetKey}\0${nodes[index]!.key}`, [nodes, options.resetKey])
-  const estimateSize = useCallback((index: number) => nodes[index]?.kind === 'group-head' ? 36 : nodes[index]?.kind === 'group-pager' ? 46 : tableRowFallbackPx(options.wrapCells), [nodes, options.wrapCells])
+  const estimateSize = useCallback(
+    (index: number) =>
+      nodes[index]?.kind === 'group-head'
+        ? 33
+        : nodes[index]?.kind === 'group-pager' || nodes[index]?.kind === 'summary'
+          ? 32
+          : tableRowFallbackPx(options.wrapCells),
+    [nodes, options.wrapCells],
+  )
   const virtualizer = useVirtualizer({ count: nodes.length, getScrollElement, getItemKey, estimateSize, rangeExtractor,
     overscan: TABLE_VIEWPORT_OVERSCAN, scrollMargin: geometry.margin, scrollPaddingStart: geometry.padding,
     initialRect: { width: 624, height: 560 },
   })
-  // 屏蔽 <2px 的亚像素/边框行高抖动回写 scrollTop，避免快速上滑时视口微跳闪烁。
+  // 非换行模式下所有行高固定（32px），禁用 scrollTop 反向修正，避免上滑进入未测量行时整表微跳闪烁；换行模式仍屏蔽 <2px 抖动。
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, delta, instance) => {
-    if (!options.wrapCells && Math.abs(delta) < 2) return false
+    if (!options.wrapCells) return false
+    if (Math.abs(delta) < 2) return false
     return item.start < (instance.scrollOffset ?? 0) + instance.options.scrollMargin
   }
   const current = useRef(virtualizer); current.current = virtualizer

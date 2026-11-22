@@ -33,6 +33,7 @@ import {
   type RowStampEntry,
 } from './table-paint-cache.ts'
 import {
+  TABLE_ROW_PX,
   TABLE_VIEWPORT_OVERSCAN,
   tableColumnWidth,
   type TableColumnSlice,
@@ -382,7 +383,7 @@ const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, mea
     paintedWindow.current = windowKey
     paintRef.current.paintSelection?.()
   }, [paintRef, windowKey])
-  const padRow = items.find((item) => item.size > 1)?.size ?? 37
+  const padRow = items.find((item) => item.size > 1)?.size ?? TABLE_ROW_PX
   const pad = (height: number, key: string) => height <= 0.25 ? null : (
     <tr key={key} className="fsdb-table-pad" aria-hidden><td colSpan={colSpan} style={{ height }}><div style={{ height, ['--fsdb-pad-row' as string]: `${padRow}px` }} /></td></tr>
   )
