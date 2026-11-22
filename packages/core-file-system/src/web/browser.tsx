@@ -145,6 +145,7 @@ import {
   askNewPresentation,
 } from './browser-row-title.tsx'
 import { RecordActions, RowCheck } from './browser-row-controls.tsx'
+import { KeyedSerialQueue, PendingFieldPatchTracker } from './record-write-queue.ts'
 import { BrowserDialogs, type BrowserDialogState } from './browser-dialogs.tsx'
 export { WindowedTable } from './windowed-table.tsx'
 import { useStickyToolbar } from './sticky-toolbar.ts'
@@ -1367,20 +1368,18 @@ export function CollectionBrowser({
   detailIdRef.current = detailId
   const detailRowRef = useRef(detailRow)
   detailRowRef.current = detailRow
-  const pendingFieldWritesRef = useRef(new Map<string, Map<string, { value: unknown; count: number }>>())
-  const applyPendingDetailPatches = useCallback((row: DbRecord): DbRecord => {
-    const bag = pendingFieldWritesRef.current.get(row.id)
-    if (!bag || bag.size === 0) return row
-    const patch: Record<string, unknown> = {}
-    for (const [key, entry] of bag) patch[key] = entry.value
-    return overlayListedRow(row, { ...row, ...patch })
-  }, [])
+  const pendingFieldTrackerRef = useRef<PendingFieldPatchTracker | null>(null)
+  if (!pendingFieldTrackerRef.current) pendingFieldTrackerRef.current = new PendingFieldPatchTracker()
+  const applyPendingDetailPatches = useCallback(
+    (row: DbRecord): DbRecord => pendingFieldTrackerRef.current!.overlay(row, overlayListedRow),
+    [],
+  )
   const contentGen = useRef(0)
   const contentVersions = useRef(new Map<string, number>())
-  const contentWriteGens = useRef(new Map<string, number>())
-  const contentWriteQueues = useRef(new Map<string, Promise<void>>())
-  const fieldWriteQueues = useRef(new Map<string, Promise<void>>())
-  const contentWritePending = useRef(new Map<string, number>())
+  const contentWriteQueueRef = useRef<KeyedSerialQueue | null>(null)
+  if (!contentWriteQueueRef.current) contentWriteQueueRef.current = new KeyedSerialQueue()
+  const fieldWriteQueueRef = useRef<KeyedSerialQueue | null>(null)
+  if (!fieldWriteQueueRef.current) fieldWriteQueueRef.current = new KeyedSerialQueue()
   const recordGen = useRef(0)
   const sourceRecordPath = (row?: DbRecord | null, id = '') => {
     const table = String(row?.tablePath ?? '').trim()
@@ -1408,7 +1407,7 @@ export function CollectionBrowser({
     const gen = ++contentGen.current
     void readJson<{ value?: unknown; version?: number }>(`/api/db/content?path=${encodeURIComponent(path)}`, undefined, { fresh: true })
       .then((data) => {
-        if (gen !== contentGen.current || (contentWritePending.current.get(path) ?? 0) > 0) return
+        if (gen !== contentGen.current || contentWriteQueueRef.current!.hasPending(path)) return
         if (Number.isInteger(data.version)) contentVersions.current.set(path, data.version!)
         else contentVersions.current.delete(path)
         setDetailBody(data.value ?? null)
@@ -3220,51 +3219,43 @@ export function CollectionBrowser({
       if (bodyKey && keys.length === 1 && keys[0] === bodyKey && schema?.fields[bodyKey]?.type === 'file') {
         const path = sourceRecordPath(row, row.id)
         const value = content[bodyKey]
-        const gen = (contentWriteGens.current.get(path) ?? 0) + 1
-        contentWriteGens.current.set(path, gen)
         contentGen.current += 1
-        contentWritePending.current.set(path, (contentWritePending.current.get(path) ?? 0) + 1)
-        const previous = contentWriteQueues.current.get(path) ?? Promise.resolve()
-        const run = previous.catch(() => undefined).then(async () => {
-          const data = await readJson<{ value?: unknown; version?: number; updatedAt?: number }>('/api/db/content', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              path,
-              value,
-              version: contentVersions.current.get(path),
-            }),
-          })
-          if (Number.isInteger(data.version)) contentVersions.current.set(path, data.version!)
-          if (detailIdRef.current === row.id && gen === contentWriteGens.current.get(path)) {
-            setDetailBody(data.value ?? value)
-            setDetailBodyStatus('ready')
-            setDetailBodyError('')
+        const queue = contentWriteQueueRef.current!
+        await queue.enqueue(path, async (gen) => {
+          try {
+            const data = await readJson<{ value?: unknown; version?: number; updatedAt?: number }>('/api/db/content', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                path,
+                value,
+                version: contentVersions.current.get(path),
+              }),
+            })
+            if (Number.isInteger(data.version)) contentVersions.current.set(path, data.version!)
+            if (detailIdRef.current === row.id && queue.isLatest(path, gen)) {
+              setDetailBody(data.value ?? value)
+              setDetailBodyStatus('ready')
+              setDetailBodyError('')
+            }
+            const touched = Number(data.updatedAt)
+            const stamp = Number.isFinite(touched) && touched > 0 ? touched : Date.now()
+            const mergeTime = (item: DbRecord) => (item.id === row.id ? { ...item, updatedAt: stamp } : item)
+            mapListedRecords(mergeTime)
+            setDetailRow((prev) => (prev?.id === row.id ? mergeTime(prev) : prev))
+            publishListedMutation({ path: dataPath, op: 'patch', row: { id: row.id, updatedAt: stamp }, groupBy })
+            announceListChange(true, path)
+          } catch (error) {
+            if (!(error instanceof HttpError) || error.status !== 409) throw error
+            const latest = await readJson<{ value?: unknown; version?: number }>(`/api/db/content?path=${encodeURIComponent(path)}`)
+            if (Number.isInteger(latest.version)) contentVersions.current.set(path, latest.version!)
+            if (detailIdRef.current === row.id) {
+              setDetailBody(latest.value ?? null)
+              setDetailBodyStatus('ready')
+              setDetailBodyError('')
+            }
           }
-          const touched = Number(data.updatedAt)
-          const stamp = Number.isFinite(touched) && touched > 0 ? touched : Date.now()
-          const mergeTime = (item: DbRecord) => (item.id === row.id ? { ...item, updatedAt: stamp } : item)
-          mapListedRecords(mergeTime)
-          setDetailRow((prev) => (prev?.id === row.id ? mergeTime(prev) : prev))
-          publishListedMutation({ path: dataPath, op: 'patch', row: { id: row.id, updatedAt: stamp }, groupBy })
-          announceListChange(true, path)
-        }).catch(async (error) => {
-          if (!(error instanceof HttpError) || error.status !== 409) throw error
-          const latest = await readJson<{ value?: unknown; version?: number }>(`/api/db/content?path=${encodeURIComponent(path)}`)
-          if (Number.isInteger(latest.version)) contentVersions.current.set(path, latest.version!)
-          if (detailIdRef.current === row.id) {
-            setDetailBody(latest.value ?? null)
-            setDetailBodyStatus('ready')
-            setDetailBodyError('')
-          }
-        }).finally(() => {
-          const pending = Math.max(0, (contentWritePending.current.get(path) ?? 1) - 1)
-          if (pending) contentWritePending.current.set(path, pending)
-          else contentWritePending.current.delete(path)
-          if (contentWriteQueues.current.get(path) === run) contentWriteQueues.current.delete(path)
         })
-        contentWriteQueues.current.set(path, run)
-        await run
         const field = schema?.fields[bodyKey]
         if (field && field.type !== 'file') {
           const stored = value && typeof value === 'object' ? JSON.stringify(value) : value
@@ -3279,37 +3270,12 @@ export function CollectionBrowser({
         itemsRef.current.find((item) => item.id === row.id) ??
         (detailRowRef.current?.id === row.id ? detailRowRef.current : null) ??
         row
-      const recordBag =
-        pendingFieldWritesRef.current.get(row.id) ??
-        (() => {
-          const map = new Map<string, { value: unknown; count: number }>()
-          pendingFieldWritesRef.current.set(row.id, map)
-          return map
-        })()
-      for (const [key, value] of Object.entries(content)) {
-        const prevEntry = recordBag.get(key)
-        recordBag.set(key, { value, count: (prevEntry?.count ?? 0) + 1 })
-      }
+      const releasePending = pendingFieldTrackerRef.current!.track(row.id, content)
       if (dataPathRef.current === dataPath) {
         setDetailRow((prev) => (prev?.id === row.id ? overlayListedRow(prev, { ...prev, ...content }) : prev))
       }
-      let released = false
-      const releasePending = () => {
-        if (released) return
-        released = true
-        const bag = pendingFieldWritesRef.current.get(row.id)
-        if (!bag) return
-        for (const key of Object.keys(content)) {
-          const entry = bag.get(key)
-          if (!entry) continue
-          if (entry.count <= 1) bag.delete(key)
-          else bag.set(key, { ...entry, count: entry.count - 1 })
-        }
-        if (bag.size === 0) pendingFieldWritesRef.current.delete(row.id)
-      }
       try {
-      const prevFieldRun = fieldWriteQueues.current.get(path) ?? Promise.resolve()
-      const fieldRun = prevFieldRun.catch(() => undefined).then(async () => {
+      await fieldWriteQueueRef.current!.enqueue(path, async () => {
       await tableEditHistory.edit(path, content, async () => {
         const listed = itemsRef.current.find((item) => item.id === row.id)
         return listed ?? beforeRow
@@ -3347,11 +3313,7 @@ export function CollectionBrowser({
         }
         return next
       })
-      }).finally(() => {
-        if (fieldWriteQueues.current.get(path) === fieldRun) fieldWriteQueues.current.delete(path)
       })
-      fieldWriteQueues.current.set(path, fieldRun)
-      await fieldRun
       } finally {
         releasePending()
       }
