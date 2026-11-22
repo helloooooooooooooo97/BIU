@@ -24,11 +24,8 @@ const NAV_PRIMARY = [
   { label: '产品', to: '/product' },
   { label: '场景', to: '/use-cases' },
   { label: '对比', to: '/compare' },
-  { label: '安全', to: '/security' },
   { label: '博客', to: '/blog' },
-  { label: '品牌', to: '/brand' },
   { label: '定价', to: '/pricing' },
-  { label: '投资', to: '/invest' },
 ] as const
 
 export const GITHUB_URL = 'https://github.com/helloooooooooooooo97/biu'

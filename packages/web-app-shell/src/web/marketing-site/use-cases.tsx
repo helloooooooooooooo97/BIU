@@ -1,159 +1,737 @@
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { SiteChrome, SiteFaq, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
+import { ScenePageDemo, type DemoPageSpec, type SceneDemoLabels } from './scene-page-demo.tsx'
+
+export type CustomPlugin = {
+  name: string
+  body: string
+}
+
+export type RoleWorkflow = {
+  id: string
+  role: string
+  pageTitle: string
+  summary: string
+  deliverTo: string
+  blocks: string[]
+  customPlugins: CustomPlugin[]
+  demo: DemoPageSpec
+}
 
 export type UseCase = {
   slug: string
   index: string
   title: string
-  /** 首页卡片上的一句话 */
   summary: string
-  /** 交付物（首页卡片显示，也是子页的产出清单） */
+  roleLabels: string[]
   output: string
-  /** 子页：真实痛点 */
+  roles: RoleWorkflow[]
   pain: string[]
-  /** 子页：BIU 怎么做 */
   how: { title: string; body: string }[]
-  /** 子页：常见问题 */
   faq: [string, string][]
-  /** 这一页里组合了哪些块（插件或内置的表格、任务） */
   blocks: string[]
-  /** 如实说明的限制，例如官方云端还没上线 */
-  note?: string
+}
+
+const DEMO_LABELS_EN: SceneDemoLabels = {
+  demoBadge: 'Interactive BIU Page Preview',
+  shareLabel: 'Shareable page link',
+  customBadge: 'AI custom plugin',
+  builtInBadge: 'Built-in plugin',
+  totalLabel: 'Live total',
+  aiLabel: 'AI Collaborator',
 }
 
 export const USE_CASES: UseCase[] = [
   {
-    slug: 'research',
+    slug: 'tech',
     index: '01',
-    title: 'Research & Analysis',
-    summary: 'Gather sources, connect the dots, build comparison tables, and keep findings in a research space you can continue exploring.',
-    output: 'Research report · Database · Comparison matrix',
+    title: 'Tech & Software',
+    summary: 'Unify specifications, clickable prototypes, diagnostic terminals, and multi-agent task boards inside role-specific pages—eliminating constant context switching.',
+    roleLabels: ['Product Manager', 'Software Engineer', 'Product Designer', 'Indie Developer'],
+    output: 'Live PRD & prototype · Executable runbook · Multi-agent board',
+    blocks: ['HTML', 'Excalidraw whiteboard', 'Page terminal', 'Code runner', 'Tasks'],
+    roles: [
+      {
+        id: 'pm',
+        role: 'Product Manager',
+        pageTitle: 'v2.4 Checkout Redesign · PRD & Prototype Review',
+        summary: 'Keep requirements, flowcharts, clickable HTML prototypes, and stakeholder sign-off on one page—present full-screen and break down tasks in place.',
+        deliverTo: 'Share with engineering and stakeholders: review the clickable prototype in the meeting, then turn decisions directly into tasks.',
+        blocks: ['HTML', 'Excalidraw whiteboard', 'Table', 'Tasks'],
+        customPlugins: [
+          { name: 'Option Voting & Review Card', body: 'Compare two UX directions side by side and record stakeholder votes directly on the spec.' },
+          { name: 'Launch & Telemetry Checklist', body: 'Generate a verifiable QA and analytics checklist tied directly to the page requirements.' },
+        ],
+        demo: {
+          title: 'v2.4 Checkout Redesign · PRD & Prototype Review',
+          badge: 'Tech & Software / Product Manager',
+          props: [
+            ['Owner', 'Lin Lan (PM)'],
+            ['Review Status', 'Ready for Eng Sign-off'],
+            ['Target KPI', 'Conversion +4.5%'],
+          ],
+          intro: 'Consolidate the two-step checkout into a single-page express flow. Review the target metrics and launch checklist below before breaking out engineering tasks.',
+          blocks: [
+            {
+              kind: 'metrics',
+              plugin: 'Goal Metrics Card',
+              custom: true,
+              title: 'Before vs. Target Metrics',
+              items: [
+                { label: 'Checkout Drop-off', value: '38% → 24%', hint: '-14pp target' },
+                { label: 'Median Completion', value: '62s → 19s', hint: '2 fewer page loads' },
+                { label: 'Order Value Lift', value: '+3.2%', hint: 'Express add-on slot' },
+              ],
+            },
+            {
+              kind: 'checklist',
+              plugin: 'Launch Checklist',
+              custom: true,
+              title: 'Review Decisions & Pre-flight Checks (interactive)',
+              items: [
+                { label: 'Pre-select last payment method to remove extra modal', meta: 'Option A · 5 votes', done: true },
+                { label: 'Auto-apply highest eligible coupon with manual override', meta: 'Web + API', done: true },
+                { label: 'Preserve form state on payment failure for one-click retry', meta: 'Telemetry pending', done: false },
+                { label: 'Roll out to 10% traffic for 24h before full release', meta: 'Owner: Zhou', done: false },
+              ],
+            },
+          ],
+          aiPrompt: 'Reviewed @CheckoutDropoffFeedback: moving invoice details to post-purchase removes two required fields. Would you like me to create the corresponding tasks on the board?',
+        },
+      },
+      {
+        id: 'engineer',
+        role: 'Software Engineer',
+        pageTitle: 'Order Timeout Triage · Executable Runbook',
+        summary: 'Combine architecture diagrams, diagnostic scripts, a live terminal, and rollback checklists so on-call engineers run checks straight from the doc.',
+        deliverTo: 'Built for on-call rotations and teammates: replace stale static wikis with a runbook that executes directly.',
+        blocks: ['Page terminal', 'Code runner', 'Browser', 'Tasks'],
+        customPlugins: [
+          { name: 'API Health & Probe Card', body: 'Keep key diagnostic endpoints and live responses inside the runbook for one-click checks.' },
+          { name: 'Release & Rollback Checklist', body: 'Group migrations, feature flags, and rollback commands into one executable list.' },
+        ],
+        demo: {
+          title: 'Order Timeout Triage · Executable Runbook',
+          badge: 'Tech & Software / Software Engineer',
+          props: [
+            ['Service', 'order-gateway'],
+            ['Last Drill', '2026-11-18'],
+            ['Channel', '#oncall-core'],
+          ],
+          intro: 'When P99 latency exceeds 800ms or payment callbacks back up, run the diagnostic command below and verify each mitigation step.',
+          blocks: [
+            {
+              kind: 'code',
+              plugin: 'Code Runner',
+              title: 'Step 1: Inspect queue lag and P99 latency',
+              lang: 'bash · runs directly on page',
+              code: 'curl -s https://api.internal/health/queue | jq "{lag: .pending, p99_ms: .latency_p99}"',
+              output: '{ "lag": 142, "p99_ms": 918 }  # ⚠ lag > 100 — proceed to Step 2 worker scale-up',
+            },
+            {
+              kind: 'checklist',
+              plugin: 'Mitigation Checklist',
+              custom: true,
+              title: 'Incident Mitigation Steps (interactive)',
+              items: [
+                { label: 'Scale payment-worker concurrency from 8 to 16', meta: 'Verified safe on DB locks', done: true },
+                { label: 'Pause non-critical loyalty sync to prioritize primary orders', meta: 'Flag: sync_points=off', done: false },
+                { label: 'Send last 10m slow SQL logs to @DBA-Agent for index review', meta: 'Dispatched', done: false },
+              ],
+            },
+          ],
+          aiPrompt: 'Cross-checked recent commits: slow query #3 stems from an unindexed column added in commit 8f21a. Migration SQL is drafted and awaiting your confirmation.',
+        },
+      },
+    ],
     pain: [
-      'Sources are scattered across dozens of tabs and documents, so every new question means searching all over again.',
-      'AI research ends up buried in chat history, forcing you to ask again when you need it later.',
-      'Comparison tables live in temporary documents and fall apart as soon as the data changes.',
+      'Specs, mockups, issue trackers, and diagnostic scripts live in separate tools, fragmenting context across every release.',
+      'Conventional docs only hold static text and links—prototypes cannot run, commands cannot execute, and wikis quickly go stale.',
+      'Individual AI chats keep solutions trapped in private threads instead of building shared engineering assets.',
     ],
     how: [
-      { title: 'Bring every source in', body: 'Collect web pages, documents, and notes in one space, where pages and tables share the same addressing system.' },
-      { title: 'Keep the findings', body: 'Agent output becomes pages, databases, and comparison matrices—not answers that disappear in a chat.' },
-      { title: 'Keep comparisons current', body: 'A comparison table is a real table. Add a dimension without changing code or rebuilding it.' },
+      { title: 'Docs, prototypes, and terminals in one page', body: 'Embed clickable HTML prototypes, runnable code blocks, and live terminals directly beside documentation.' },
+      { title: 'Coordinate people and agents on one board', body: 'Break work into task cards with owners and dependencies so agents work directly from the page context.' },
+      { title: 'Generate custom internal tools on demand', body: 'Have an agent build voting cards, QA checklists, or API testers directly into the page without maintaining separate apps.' },
     ],
-    blocks: ['Browser', 'Table', 'Option comparison block', 'Excalidraw canvas'],
     faq: [
-      ['Source capacity', 'Sources are stored in the selected space, local or cloud. Capacity depends on that space’s storage configuration.'],
-      ['How agents access sources', 'Agents can read pages and data in the space and call external services through MCP.'],
+      ['Can BIU work alongside GitHub and Jira?', 'Yes. Connect external repositories and trackers via MCP so agents can read and synchronize context across systems.'],
+      ['Can engineering runbooks stay strictly local?', 'Yes. Local spaces store all pages and scripts on your own computer and remain available offline.'],
     ],
   },
   {
-    slug: 'product',
+    slug: 'education',
     index: '02',
-    title: 'Product & Projects',
-    summary: 'Turn user feedback and project materials into requirements, tasks, decisions, and release plans.',
-    output: 'PRD · Project plan · Task database',
+    title: 'Education & Coaching',
+    summary: 'Whether running technical interview coaching, interactive courses, or corporate training, combine notes, whiteboards, live code, and quizzes in one shareable page.',
+    roleLabels: ['Tech & Career Mentor', 'University & K12 Teacher', 'Course Creator', 'Corporate Trainer'],
+    output: 'Coaching workspace · Interactive lesson · Practice & review',
+    blocks: ['Excalidraw whiteboard', 'Coding challenge', 'Code runner', 'HTML', 'Table'],
+    roles: [
+      {
+        id: 'mentor',
+        role: 'Tech & Career Mentor',
+        pageTitle: 'Week 4 · Trees & Dynamic Programming Coaching',
+        summary: 'Combine whiteboard explanations, coding challenges, a live code runner, and an offer comparison matrix in one page delivered to students.',
+        deliverTo: 'Send one link to your student: sketch ideas, write code, and run test cases directly in the browser with zero setup.',
+        blocks: ['Excalidraw whiteboard', 'Coding challenge', 'Code runner', 'Table'],
+        customPlugins: [
+          { name: 'Topic Mastery Tracker', body: 'Summarizes pass rates by algorithm category so weak areas stand out immediately.' },
+          { name: 'Mock Interview Scorecard', body: '45-minute timer with rubric scoring saved right alongside the code written in session.' },
+        ],
+        demo: {
+          title: 'Week 4 · Trees & Dynamic Programming Coaching',
+          badge: 'Education & Coaching / Tech Mentor',
+          props: [
+            ['Student', 'Alex Chen (Backend)'],
+            ['Target Role', 'Infrastructure Engineer'],
+            ['Next Onsite', '12 days'],
+          ],
+          intro: 'This week focuses on tree path recursion and knapsack state compression. Review the state diagram above, then complete and verify the exercise below.',
+          blocks: [
+            {
+              kind: 'code',
+              plugin: 'Coding Challenge + Code Runner',
+              title: 'Exercise: Binary Tree Maximum Path Sum',
+              lang: 'Python 3 · 3/3 test cases passed (42ms)',
+              code: 'def max_path_sum(root):\n    best = -10**9\n    def dfs(node):\n        nonlocal best\n        if not node: return 0\n        l, r = max(0, dfs(node.left)), max(0, dfs(node.right))\n        best = max(best, node.val + l + r)\n        return node.val + max(l, r)\n    dfs(root)\n    return best',
+              output: 'PASS [1,2,3] => 6  |  PASS [-10,9,20,null,null,15,7] => 42  |  PASS [-3] => -3',
+            },
+            {
+              kind: 'table',
+              plugin: 'Offer Comparison Table',
+              title: 'Interview Pipeline & Offer Matrix',
+              columns: ['Company & Team', 'Stage', 'Est. Comp', 'Key Focus Areas'],
+              rows: [
+                ['Company A · Cloud Native', 'Offer Received', '$185k', 'Concurrency & Graphs'],
+                ['Company B · Storage Engine', 'Round 2', '$195k', 'Tree DP & Systems'],
+                ['Company C · AI Infra', 'Round 1 Passed', '$210k', 'Scheduling & Coding'],
+              ],
+            },
+          ],
+          aiPrompt: 'Graded against your rubric: O(N) time complexity is optimal. Remind the student to call out empty-tree and all-negative edge cases upfront during interviews.',
+        },
+      },
+      {
+        id: 'teacher',
+        role: 'Teacher & Instructor',
+        pageTitle: 'Lecture 3 · Compounding & Discounted Cash Flow',
+        summary: 'Embed interactive visualizations and self-check quizzes directly inside lesson notes so students grasp abstract principles hands-on.',
+        deliverTo: 'Share one link per lecture: students explore interactive models and review checkpoints without an expensive LMS.',
+        blocks: ['HTML', 'Excalidraw whiteboard', 'Table of contents'],
+        customPlugins: [
+          { name: 'Self-Grading Quiz Card', body: 'Provides instant scores and explanations while flagging missed concepts for review.' },
+          { name: 'Concept Flashcards', body: 'Turns core definitions and formulas into flip cards for quick pre-exam study.' },
+        ],
+        demo: {
+          title: 'Lecture 3 · Compounding & Discounted Cash Flow',
+          badge: 'Education & Coaching / Instructor',
+          props: [
+            ['Course', 'Intro to Financial Engineering'],
+            ['Session', 'Lecture 3 of 12'],
+            ['Due Date', 'Friday 22:00'],
+          ],
+          intro: 'Compare 10-year outcomes across annual return rates below to build intuition for compounding, then complete the core checkpoints.',
+          blocks: [
+            {
+              kind: 'metrics',
+              plugin: 'Interactive Concept Block',
+              custom: true,
+              title: '10-Year Value of $10,000 by Annual Return Rate',
+              items: [
+                { label: '3% Annual (CD)', value: '$13,439', hint: '+34.4% total gain' },
+                { label: '7% Annual (Index)', value: '$19,672', hint: '+96.7% total gain' },
+                { label: '12% Annual (Growth)', value: '$31,058', hint: '+210.6% total gain' },
+              ],
+            },
+            {
+              kind: 'checklist',
+              plugin: 'Mastery Checkpoints',
+              custom: true,
+              title: 'Key Learning Objectives (interactive)',
+              items: [
+                { label: 'Distinguish nominal interest rate from effective annual yield', meta: 'Concept', done: true },
+                { label: 'Apply the Rule of 72 to estimate doubling time', meta: 'Mental math', done: true },
+                { label: 'Complete the two discount-rate sensitivity exercises below', meta: 'Homework', done: false },
+              ],
+            },
+          ],
+          aiPrompt: 'Need a fresh problem set for next semester? I can generate five new exercises with worked solutions while preserving the same learning objectives.',
+        },
+      },
+    ],
     pain: [
-      'Feedback, requirements, and tasks live in three different tools—and never quite stay in sync.',
-      'Decisions get discussed, but a month later no one remembers why they were made.',
-      'Release plans rely on manual updates, and every change means notifying everyone.',
+      'Static PDFs and handouts keep learning passive—coding, diagramming, and quizzes all force students onto separate platforms.',
+      'Dedicated LMS platforms are costly and rigid, making custom teaching tools out of reach for independent instructors.',
+      'Notes, whiteboard sketches, assignments, and feedback scatter across chat groups and shared folders.',
     ],
     how: [
-      { title: 'Requirements are records, not document fragments', body: 'Every piece of feedback, requirement, and task is an addressable record that can reference the others.' },
-      { title: 'Preserve the decision trail', body: 'Actions are written to an append-only event stream, so both the current state and how it got there remain visible.' },
-      { title: 'Agents are collaborators', body: 'Task cards include assignee and dependsOn fields, so multiple agents coordinate through the board instead of group chat.' },
+      { title: 'Lessons and interactive practice live together', body: 'Whiteboards, code runners, visual demos, and quizzes sit right inside the reading flow.' },
+      { title: 'One link delivers the entire session', body: 'Students open your shared link and start practicing immediately with no account friction.' },
+      { title: 'Custom teaching blocks without coding', body: 'Describe the visualization or quiz format you need and let an agent generate the plugin for your lesson.' },
     ],
-    blocks: ['Table', 'Tasks', 'Option comparison block', 'API debugger block'],
     faq: [
-      ['Team collaboration', 'Cloud spaces provide membership and permissions with viewer, editor, manager, and owner roles.'],
-      ['How it works with existing project tools', 'Use them side by side. BIU keeps requirements, tasks, decisions, and context together, eliminating synchronization across multiple systems.'],
+      ['Do students need to install a desktop app?', 'No. Shared pages bundle content, attachments, and plugins so everything runs directly in the browser.'],
+      ['Who owns my course materials?', 'You do. Local spaces store everything on your own computer, and BIU is open source with no platform lock-in.'],
     ],
   },
   {
-    slug: 'content',
+    slug: 'media',
     index: '03',
-    title: 'Content & Creation',
-    summary: 'Keep source material, drafts, feedback, and published versions in one shared creative context.',
-    output: 'Articles · Scripts · Publishing plan',
+    title: 'Media & Marketing',
+    summary: 'From video production rooms to launch campaign hubs, keep scripts, timeline previews, thumbnail tests, and budget calculators synchronized on one page.',
+    roleLabels: ['Video Creator & Producer', 'Content Ops', 'Brand Marketing', 'Growth Team'],
+    output: 'Video production room · Campaign hub · Channel budget sheet',
+    blocks: ['Video editor', 'Excalidraw whiteboard', 'HTML', 'Table'],
+    roles: [
+      {
+        id: 'creator',
+        role: 'Video Creator & Producer',
+        pageTitle: 'EP.18 Deep Review · Script to Rough Cut Room',
+        summary: 'Keep ideas, storyboards, voiceover scripts, timeline rough cuts, and multi-platform title comparisons aligned on one page.',
+        deliverTo: 'Share with editors or sponsors: review script, storyboard, and timeline rough cut in one link.',
+        blocks: ['Video editor', 'Excalidraw whiteboard', 'HTML', 'Table'],
+        customPlugins: [
+          { name: 'Voiceover Pacing Estimator', body: 'Estimates segment runtime from speaking speed and highlights sections that run over budget.' },
+          { name: 'Thumbnail & Title Preview Card', body: 'Previews candidate titles and thumbnails inside realistic YouTube and social feed layouts.' },
+        ],
+        demo: {
+          title: 'EP.18 Deep Review · Script to Rough Cut Room',
+          badge: 'Media & Marketing / Video Producer',
+          props: [
+            ['Target Length', '8m 30s'],
+            ['Channels', 'YouTube · Bilibili · Social'],
+            ['Stage', 'Rough Cut Review'],
+          ],
+          intro: 'Open with the side-by-side result in the first 30 seconds to hold retention, then walk through three real workflows. Timeline tracks are synced below.',
+          blocks: [
+            {
+              kind: 'timeline',
+              plugin: 'Video Editor Block',
+              title: 'Live Timeline Script Preview (08:24 total)',
+              tracks: [
+                {
+                  name: 'Visuals',
+                  segments: [
+                    { label: '00:00 Hook', span: 2 },
+                    { label: '00:45 Problem', span: 3 },
+                    { label: '02:30 Live Demo', span: 5 },
+                    { label: '06:50 Wrap-up', span: 2 },
+                  ],
+                },
+                {
+                  name: 'Voiceover',
+                  segments: [
+                    { label: 'Thesis (120w)', span: 2 },
+                    { label: '3 Case Studies (480w)', span: 4 },
+                    { label: 'Screen Walkthrough (620w)', span: 4 },
+                    { label: 'Closing CTA', span: 2 },
+                  ],
+                },
+              ],
+            },
+            {
+              kind: 'table',
+              plugin: 'Multi-Platform Title Matrix',
+              custom: true,
+              title: 'Candidate Titles & Visual Direction',
+              columns: ['Platform', 'Proposed Title', 'Thumbnail Focus', 'Status'],
+              rows: [
+                ['YouTube', 'One Page Replaced 5 Apps in My Daily Workflow', 'Dark UI + split comparison', 'Approved'],
+                ['Bilibili', '告别多工具切换：用一个页面组合整套工作流', 'High-contrast headline + UI', 'Final'],
+                ['Social', 'How I consolidated my entire creative stack into one page', 'Clean card preview', 'Drafting'],
+              ],
+            },
+          ],
+          aiPrompt: 'At your 150 wpm pace, Section 2 runs ~22 seconds long. I trimmed two transitional sentences—apply directly to the script?',
+        },
+      },
+      {
+        id: 'marketing',
+        role: 'Brand & Campaign Manager',
+        pageTitle: 'Spring Launch · Campaign Hub & Budget Planner',
+        summary: 'Combine launch timelines, live channel budget calculators, asset checklists, and landing previews on one page.',
+        deliverTo: 'Share with leadership and agency partners: inspect budget allocation and asset milestones without hunting through spreadsheets.',
+        blocks: ['Table', 'HTML', 'Excalidraw whiteboard'],
+        customPlugins: [
+          { name: 'Channel Budget Calculator', body: 'Toggle campaigns and sponsorships to see live total spend and projected acquisition cost.' },
+          { name: 'Asset Delivery Tracker', body: 'Assigns owners and due dates for visuals, videos, and press releases with automatic delay flags.' },
+        ],
+        demo: {
+          title: 'Spring Launch · Campaign Hub & Budget Planner',
+          badge: 'Media & Marketing / Campaign Manager',
+          props: [
+            ['Launch Date', '2026-12-10'],
+            ['Budget Cap', '$40,000'],
+            ['Target Leads', '3,000+ signups'],
+          ],
+          intro: 'Toggle channel options below to verify total campaign spend stays within the $40k ceiling.',
+          blocks: [
+            {
+              kind: 'calculator',
+              plugin: 'Channel Budget Calculator',
+              custom: true,
+              title: 'Channel Mix Planner (interactive)',
+              currency: '$',
+              unit: '',
+              items: [
+                { id: 'kol', label: 'Creator Deep-Dive Reviews (6 partners)', price: 15000, note: 'Est. 450k views', defaultOn: true },
+                { id: 'live', label: 'Launch Livestream Production', price: 8500, note: 'Multi-platform broadcast', defaultOn: true },
+                { id: 'ads', label: 'Retargeting Paid Social Campaign', price: 11000, note: 'Recent site visitors', defaultOn: true },
+                { id: 'event', label: 'Pop-up Community Showcase', price: 12000, note: 'Optional add-on', defaultOn: false },
+              ],
+            },
+          ],
+          aiPrompt: 'Current selection totals $34,500, leaving $5,500 in contingency. Shall I sync the six creator deadlines to the schedule table below?',
+        },
+      },
+    ],
     pain: [
-      'Source material is on one drive, drafts in another tool, and feedback in chat history.',
-      'Versions of the same piece are scattered everywhere, making it unclear which one is current.',
-      'The publishing schedule lives in your head.',
+      'Ideas, storyboards, drafts, raw assets, and feedback live in separate apps, making version tracking error-prone.',
+      'Standard docs cannot preview video timelines, simulate campaign budgets, or compare social cards.',
+      'Collaborating with external editors and agencies requires repeatedly zipping and resending files.',
     ],
     how: [
-      { title: 'Source material and drafts stay together', body: 'Source material enters the space as attachments, while drafts are pages. Both use the same addressing system.' },
-      { title: 'A complete toolkit on one page', body: 'Copy, mood boards, editing tools, and schedules are plugin blocks on the same page—no switching between apps.' },
-      { title: 'Share a working unit', body: 'When you share a page, its content, attachments, and referenced plugin source travel together. The recipient gets something that runs.' },
+      { title: 'Creative, preview, and schedule stay united', body: 'Storyboards, timeline previews, and publishing tables sit on the same page so edits reflect immediately.' },
+      { title: 'Manage every episode in one Component table', body: 'All video editor blocks across pages automatically roll up into a single filterable table.' },
+      { title: 'One-link review for clients and editors', body: 'External collaborators open one link to review scripts, timelines, and checklists with zero file wrangling.' },
     ],
-    blocks: ['Video editor', 'HTML', 'Excalidraw canvas', 'Page directory'],
     faq: [
-      ['Supported content formats', 'Pages use Markdown. Images, audio, video, and files are attachments. Plugin blocks render complex content.'],
-      ['Publishing to external platforms', 'Connect external services through MCP to push content to your target platforms.'],
+      ['Does the video editor preview changes in real time?', 'Yes. Timeline scripts compose clips, captions, and pacing with live preview right inside the page.'],
+      ['How are large media files handled?', 'Media files are stored as space attachments—on your local disk in local spaces—keeping editing responsive.'],
     ],
   },
   {
-    slug: 'team-knowledge',
+    slug: 'consulting',
     index: '04',
-    title: 'Team Knowledge',
-    summary: 'Turn documents, processes, and discussions into knowledge your team can search, maintain, and use.',
-    output: 'Team Wiki · Process library · Decision log',
+    title: 'Consulting & Professional Services',
+    summary: 'For consultants, agencies, and legal teams—upgrade static PDF proposals into interactive client portals with live pricing calculators and sign-off checklists.',
+    roleLabels: ['Management Consultant', 'Design & Dev Agency', 'Legal Counsel', 'Independent Advisor'],
+    output: 'Client delivery portal · Interactive quote · Contract review sheet',
+    blocks: ['Table', 'HTML', 'Table of contents', 'Browser'],
+    roles: [
+      {
+        id: 'consultant',
+        role: 'Consultant & Agency Lead',
+        pageTitle: 'Digital Transformation · Client Proposal & Quote Portal',
+        summary: 'Combine proposal scope, an interactive pricing calculator, milestones, and onboarding checklists on one page—delivering like custom software.',
+        deliverTo: 'Send one link to your client: explore scope options with live pricing and track onboarding items in one place.',
+        blocks: ['Table', 'HTML', 'Table of contents'],
+        customPlugins: [
+          { name: 'Interactive Quote & ROI Calculator', body: 'Clients toggle deliverables and timelines to see live totals and payback estimates.' },
+          { name: 'Milestone & Asset Checklist', body: 'Lists deliverables, owners, and pending client inputs in one transparent view.' },
+        ],
+        demo: {
+          title: 'Digital Transformation · Client Proposal & Quote Portal',
+          badge: 'Professional Services / Consultant',
+          props: [
+            ['Client', 'Nova Manufacturing'],
+            ['Lead Advisor', 'Ming Gu'],
+            ['Valid Through', '2026-12-31'],
+          ],
+          intro: 'Following last week’s discovery sessions, we structured the engagement into four modules below. Toggle items to explore budget options and review kick-off prerequisites.',
+          blocks: [
+            {
+              kind: 'calculator',
+              plugin: 'Interactive Quote Calculator',
+              custom: true,
+              title: 'Select Engagement Modules (interactive)',
+              currency: '$',
+              unit: 'USD',
+              items: [
+                { id: 'audit', label: 'Workflow Audit & Bottleneck Report', price: 8500, note: '2 weeks · stakeholder interviews', defaultOn: true },
+                { id: 'proto', label: 'Core Operations Workspace Build', price: 18000, note: '4 weeks · 5 custom plugins', defaultOn: true },
+                { id: 'train', label: 'Team Onboarding & Playbook', price: 4000, note: '2 live workshops', defaultOn: true },
+                { id: 'retainer', label: 'Quarterly Advisory Retainer', price: 6500, note: 'Optional ongoing support', defaultOn: false },
+              ],
+            },
+            {
+              kind: 'checklist',
+              plugin: 'Onboarding Checklist',
+              custom: true,
+              title: 'Kick-off Prerequisites (interactive)',
+              items: [
+                { label: 'Share 90-day anonymized order and return sample table', meta: 'Client Ops', done: true },
+                { label: 'Confirm interview schedule with 3 department leads', meta: 'Scheduled Thu PM', done: true },
+                { label: 'Approve final module selection and sign statement of work', meta: 'Pending client', done: false },
+              ],
+            },
+          ],
+          aiPrompt: 'Drafted a matching 6-week milestone schedule and SOW summary for the 3 selected modules—insert at the bottom of the page?',
+        },
+      },
+      {
+        id: 'legal',
+        role: 'Legal Counsel',
+        pageTitle: 'Series A SPA · Clause Risk Review & Redline Log',
+        summary: 'Turn dense legal redlines into structured risk tiers and negotiation summaries on one secure page.',
+        deliverTo: 'Share with founders or executives: highlight high-risk clauses and recommended counter-language clearly.',
+        blocks: ['Table', 'Table of contents', 'HTML'],
+        customPlugins: [
+          { name: 'Clause Risk Matrix', body: 'Categorizes redlines by risk level with side-by-side counterparty asks and recommended language.' },
+          { name: 'Closing Conditions Tracker', body: 'Tracks board consents, filings, and signature pages through closing.' },
+        ],
+        demo: {
+          title: 'Series A SPA · Clause Risk Review & Redline Log',
+          badge: 'Professional Services / Legal Counsel',
+          props: [
+            ['Client', 'Apex AI Inc.'],
+            ['Draft Version', 'SPA v3 (Investor Redline)'],
+            ['High-Risk Items', '2 clauses to negotiate'],
+          ],
+          intro: 'Completed clause-by-clause review of investor v3 markup. Key issues center on redemption liability and anti-dilution mechanics.',
+          blocks: [
+            {
+              kind: 'table',
+              plugin: 'Clause Risk Matrix',
+              custom: true,
+              title: 'Summary of Material Redlines',
+              columns: ['Section', 'Risk', 'Counterparty Revision', 'Recommended Response'],
+              rows: [
+                ['§8.2 Redemption', 'High', 'Adds personal founder liability', 'Cap liability strictly to founder equity'],
+                ['§6.1 Anti-Dilution', 'Medium', 'Switches to full ratchet', 'Maintain broad-based weighted average'],
+                ['§11.4 Info Rights', 'Low', 'Adds monthly cash summary', 'Accept with 15-day quarterly window'],
+              ],
+            },
+          ],
+          aiPrompt: 'Comparison completed strictly inside your local space (no cloud upload). Draft redline wording for sections §8.2 and §6.1?',
+        },
+      },
+    ],
     pain: [
-      'The Wiki gets created but not maintained, and is outdated six months later.',
-      'Answers to new hires’ questions are buried in someone else’s chat history.',
-      'Documented processes no longer match how work actually gets done.',
+      'Static PDFs and slide decks cannot calculate options—every scope tweak forces manual spreadsheet edits and re-emailing.',
+      'Off-the-shelf client portals are rigid, while commissioning custom portals is prohibitively expensive.',
+      'Confidential client agreements and advisory work cannot be casually uploaded to third-party cloud AI tools.',
     ],
     how: [
-      { title: 'Knowledge and execution in one place', body: 'Documents, tasks, and conversations share one space context instead of evolving in separate systems.' },
-      { title: 'Accessible to agents', body: 'Agents and people share the same address space and knowledge, so every answer can be traced to its source.' },
-      { title: 'Low maintenance overhead', body: 'Adding a dimension or record is simply writing data—no code changes or migrations required.' },
+      { title: 'Upgrade static proposals into live tools', body: 'Embed interactive pricing calculators, risk matrices, and sign-off checklists right inside the narrative.' },
+      { title: 'One isolated page per client', body: 'Reuse the same plugin template across every engagement while keeping each client’s data completely separate.' },
+      { title: 'Keep confidential drafts local', body: 'Store sensitive source documents in a local space and share only the polished client-facing page.' },
     ],
-    blocks: ['Page directory', 'Code runner block', 'Page terminal', 'Table'],
     faq: [
-      ['How it differs from an existing Wiki', 'Knowledge in BIU is not static text: agents can read it, tasks can reference it, and it can evolve across dimensions.'],
-      ['How permissions work', 'Cloud spaces grant access by member role and view. Data in local spaces remains on the user’s computer.'],
+      ['Can a client see other clients’ pages?', 'No. Sharing packages only that single page and its plugins; everything else in your workspace remains private.'],
+      ['Can non-technical advisors build quote calculators?', 'Yes. Specify the line items and calculation rules, and let an agent build and verify the plugin on the page.'],
     ],
   },
   {
-    slug: 'personal',
+    slug: 'ecommerce',
     index: '05',
-    title: 'Personal Work',
-    summary: 'Keep personal information and workflows on your own computer, available offline with clear data boundaries.',
-    output: 'Local pages · Private data · Offline space',
+    title: 'E-Commerce & Retail',
+    summary: 'Bring SKU margin calculators, competitor price tracking, and creator campaign briefs onto one page—replacing tangled spreadsheets during peak seasons.',
+    roleLabels: ['Merchandising Lead', 'Influencer Manager', 'Campaign PM', 'Brand Founder'],
+    output: 'SKU margin planner · Creator brief portal · Peak-season hub',
+    blocks: ['Table', 'HTML', 'Excalidraw whiteboard', 'Browser'],
+    roles: [
+      {
+        id: 'merchandising',
+        role: 'Merchandising & Product Ops',
+        pageTitle: 'Winter Launch · SKU Scoring & Margin Planner',
+        summary: 'Place unit economics, break-even ROAS, and competitor review analysis on one page to finalize pricing during product reviews.',
+        deliverTo: 'Share with founders and sourcing: inspect net margin sensitivity live without fragile spreadsheet formulas.',
+        blocks: ['Table', 'HTML', 'Browser'],
+        customPlugins: [
+          { name: 'Unit Economics & Break-Even ROAS Block', body: 'Calculates gross margin, break-even ROAS, and net profit per order from COGS, fees, and return rate.' },
+          { name: 'Competitor Review Miner', body: 'Surfaces recurring negative reviews so teams position new SKUs around real customer pain.' },
+        ],
+        demo: {
+          title: 'Winter Launch · SKU Scoring & Margin Planner',
+          badge: 'E-Commerce & Retail / Merchandising',
+          props: [
+            ['Category', 'Compact Home Appliances'],
+            ['Target MSRP', '$69'],
+            ['Target Net Margin', '≥ 22%'],
+          ],
+          intro: 'Evaluated three factory prototypes with full landed cost and 8% return allowance to verify profitability above 2.5x paid ROAS.',
+          blocks: [
+            {
+              kind: 'metrics',
+              plugin: 'SKU Margin Calculator',
+              custom: true,
+              title: 'Hero SKU A ($69 MSRP) Unit Economics',
+              items: [
+                { label: 'Landed COGS', value: '$19.50', hint: '28.3% of MSRP' },
+                { label: 'Fees & Returns', value: '$8.40', hint: 'Includes 8% return buffer' },
+                { label: 'Gross Margin / BE ROAS', value: '59.6% / 1.68x', hint: '$13.50 net profit at 2.5x ROAS' },
+              ],
+            },
+            {
+              kind: 'table',
+              plugin: 'Competitor Benchmark',
+              title: 'Top 3 Category Competitors',
+              columns: ['Competitor', 'Retail Price', 'Est. Monthly Units', 'Top Customer Complaints'],
+              rows: [
+                ['Brand X', '$59', '18,000', 'Loud fan noise, plastic odor'],
+                ['Brand Y', '$79', '9,200', 'Bulky desktop footprint'],
+                ['Our Hero SKU A', '$69', 'Launch test', '32dB quiet + auto tip-over shutoff'],
+              ],
+            },
+          ],
+          aiPrompt: 'Analyzed 200 competitor reviews: 41% cite initial odor on first use. Recommend highlighting material safety certification above the fold.',
+        },
+      },
+      {
+        id: 'influencer',
+        role: 'Influencer & Partnerships',
+        pageTitle: 'Holiday Campaign · One-Page Creator Brief',
+        summary: 'Package key selling points, required shots, compliance rules, and shipping confirmation into one clean link for creators.',
+        deliverTo: 'Send one link to creators or agencies: eliminate long chat threads and missed talking points.',
+        blocks: ['HTML', 'Excalidraw whiteboard', 'Table'],
+        customPlugins: [
+          { name: 'Shot List & Compliance Checklist', body: 'Highlights mandatory claims and restricted phrases to prevent costly reshoots.' },
+          { name: 'Sample & Schedule Sign-off', body: 'Confirms sample specs and publish window right on the brief.' },
+        ],
+        demo: {
+          title: 'Holiday Campaign · One-Page Creator Brief',
+          badge: 'E-Commerce & Retail / Partnerships',
+          props: [
+            ['Creator', '@HomeWithMia'],
+            ['Publish Date', 'Dec 6 · 19:00'],
+            ['Featured SKU', 'Hero SKU A Gift Edition'],
+          ],
+          intro: 'Everything needed for filming and compliance is consolidated below. Leave any script questions directly on this page.',
+          blocks: [
+            {
+              kind: 'checklist',
+              plugin: 'Filming & Compliance Checklist',
+              custom: true,
+              title: 'Pre-Submission Checks (interactive)',
+              items: [
+                { label: 'Show decibel meter reading (32dB quiet test) within first 5 seconds', meta: 'Hero claim', done: true },
+                { label: 'Mention holiday bundle offer ($15 off + spare filter)', meta: 'Promo code', done: true },
+                { label: 'Avoid restricted absolute claims ("100% silent / zero energy")', meta: 'Compliance', done: false },
+              ],
+            },
+          ],
+          aiPrompt: 'Generated three opening hook variations matched to the creator’s recent top-performing videos—ready to append below.',
+        },
+      },
+    ],
     pain: [
-      'Personal notes and work files are mixed in one cloud account with unclear boundaries.',
-      'Nothing works without an internet connection.',
-      'You do not want to entrust private information to a third-party host.',
+      'SKU sheets, margin formulas, competitor screenshots, and creator schedules scatter across dozens of files during peak sales.',
+      'Sending campaign briefs via bulky documents or fragmented chat messages leads to missed claims and reshoots.',
+      'Unit-economics spreadsheets break easily when copied and edited across teams.',
     ],
     how: [
-      { title: 'Local spaces', body: 'Data stays on your computer and works offline—it is not uploaded first and then synced back down.' },
-      { title: 'Transparent by design', body: 'Read and write through the API or access files directly. Abstraction is a convenience, not a cage.' },
-      { title: 'Use your own model', body: 'Agents use the model credentials you configure. Only the content needed for the current turn is sent to the model service; everything else in the space stays put.' },
+      { title: 'Run unit economics beside market research', body: 'Combine margin calculators, competitor tables, and positioning notes on one page for faster pricing calls.' },
+      { title: 'Standardize creator briefs in one link', body: 'Duplicate a proven template to deliver crisp, interactive briefs to every partner.' },
+      { title: 'Turn customer reviews into positioning', body: 'Reference competitor review tables so agents extract pain points and draft PDP copy directly.' },
     ],
-    blocks: ['Table', 'Excalidraw canvas', 'Code runner block', 'Coding exercise card'],
     faq: [
-      ['Network requirements for local spaces', 'Everyday use works offline. Model calls require a connection, and only content relevant to the current turn is sent to the configured model service. All other data remains local.'],
-      ['Using local and cloud spaces together', 'Both can coexist. Keep private information local and collaborative content in the cloud.'],
+      ['Do creators need an account to view a brief?', 'No. Shared pages open directly in the browser with all checklists and assets intact.'],
+      ['Can I roll up all SKU pages into one overview?', 'Yes. Workspace tables connect seamlessly with pages so you can filter every SKU by margin or launch status.'],
     ],
   },
   {
-    slug: 'collaboration',
+    slug: 'finance',
     index: '06',
-    title: 'Team Collaboration',
-    summary: 'Give every member shared access to pages, data, conversations, and agents in one cloud space.',
-    output: 'Member permissions · Collaborative space · Shared context',
+    title: 'Finance & Investment Research',
+    summary: 'Keep research filings, valuation sensitivity matrices, diligence checklists, and committee trails in one local-first workspace where findings compound over time.',
+    roleLabels: ['Equity & Industry Analyst', 'Investment Manager', 'FP&A Lead'],
+    output: 'Diligence workspace · Valuation matrix · Quarterly review',
+    blocks: ['Browser', 'Table', 'Excalidraw whiteboard', 'HTML'],
+    roles: [
+      {
+        id: 'investor',
+        role: 'Investment Manager & Analyst',
+        pageTitle: 'AI Infrastructure · Deal Diligence & Valuation Memo',
+        summary: 'Combine financial metrics, exit sensitivity scenarios, competitive benchmarks, and source citations on one auditable page.',
+        deliverTo: 'Share with investment committee partners: inspect assumptions, scenarios, and source transcripts in one place.',
+        blocks: ['Table', 'Browser', 'HTML', 'Excalidraw whiteboard'],
+        customPlugins: [
+          { name: 'Valuation Sensitivity Matrix', body: 'Compare exit multiples and ARR growth scenarios with live MOIC estimates.' },
+          { name: 'Diligence Evidence Tracker', body: 'Links customer calls, financial audits, and legal checks to primary source files.' },
+        ],
+        demo: {
+          title: 'AI Infrastructure · Deal Diligence & Valuation Memo',
+          badge: 'Finance & Research / Investment Manager',
+          props: [
+            ['Target', 'Project Nova (Series B)'],
+            ['Deal Lead', 'Yue Shen'],
+            ['IC Status', 'Deep Diligence'],
+          ],
+          intro: 'ARR grew 3.1x YoY with 128% NDR. Core metrics and 2028 exit scenarios are summarized below, with primary call transcripts linked in this space.',
+          blocks: [
+            {
+              kind: 'metrics',
+              plugin: 'Financial Metrics Card',
+              custom: true,
+              title: 'Key Operating & Retention Metrics',
+              items: [
+                { label: 'Current ARR', value: '$14.2M', hint: '+210% YoY' },
+                { label: 'Net Dollar Retention', value: '128%', hint: 'Strong enterprise expansion' },
+                { label: 'Gross Margin / Payback', value: '79% / 11 mo', hint: 'Top-quartile efficiency' },
+              ],
+            },
+            {
+              kind: 'table',
+              plugin: 'Valuation Scenario Matrix',
+              custom: true,
+              title: '2028 Exit Valuation Sensitivity (ARR × Multiple)',
+              columns: ['Case', '2028E ARR', 'Exit Multiple', 'Implied Value', 'Est. MOIC'],
+              rows: [
+                ['Bear Case', '$45M', '10x', '$450M', '2.5x'],
+                ['Base Case', '$68M', '12x', '$816M', '4.5x'],
+                ['Bull Case', '$95M', '15x', '$1.42B', '7.9x'],
+              ],
+            },
+          ],
+          aiPrompt: 'Cross-referenced 4 customer call transcripts in this space: 3 enterprise accounts cited deployment dropping from 3 weeks to 2 days as the primary expansion driver.',
+        },
+      },
+      {
+        id: 'fpna',
+        role: 'FP&A & Finance Lead',
+        pageTitle: 'Q4 Operating Review & Next-Quarter Budget Simulator',
+        summary: 'Combine revenue breakdowns, variance notes, and an interactive hiring and spend simulator for executive reviews.',
+        deliverTo: 'Share with executives and department heads: evaluate budget trade-offs live instead of flipping through static decks.',
+        blocks: ['Table', 'HTML', 'Table of contents'],
+        customPlugins: [
+          { name: 'Hiring & Runway Simulator', body: 'Toggle headcount and infrastructure plans to see live quarterly burn and runway impact.' },
+          { name: 'Variance Attribution Table', body: 'Flags line items over 10% variance alongside department commentary.' },
+        ],
+        demo: {
+          title: 'Q4 Operating Review & Next-Quarter Budget Simulator',
+          badge: 'Finance & Research / FP&A Lead',
+          props: [
+            ['Period', '2026 Q4'],
+            ['Current Runway', '26 months'],
+            ['Audience', 'Executive Review'],
+          ],
+          intro: 'Toggle proposed next-quarter investments below to evaluate incremental burn and runway impact.',
+          blocks: [
+            {
+              kind: 'calculator',
+              plugin: 'Quarterly Budget Simulator',
+              custom: true,
+              title: 'Proposed Incremental Spend (interactive)',
+              currency: '$',
+              unit: '/ quarter',
+              items: [
+                { id: 'rd', label: '3 Senior Systems Engineers', price: 115000, note: 'Accelerate Cloud GA', defaultOn: true },
+                { id: 'gpu', label: 'Inference & QA Compute Expansion', price: 38000, note: 'Support 5x DAU', defaultOn: true },
+                { id: 'mkt', label: 'Developer Conference Sponsorships', price: 45000, note: 'Optional growth spend', defaultOn: false },
+              ],
+            },
+          ],
+          aiPrompt: 'Selected investments total $153,000/quarter, adjusting runway from 26.0 to 23.8 months—well within target guardrails.',
+        },
+      },
+    ],
     pain: [
-      'Everyone uses a separate AI assistant, and the output never reaches the team knowledge base.',
-      'Discussion happens in one tool and output in another, forcing context to move back and forth.',
-      'New team members spend too long reconstructing the full story.',
+      'Filings, interview notes, models, and comparison tables scatter across dozens of browser tabs and local folders.',
+      'Confidential diligence and financial data cannot be uploaded freely to third-party cloud AI platforms.',
+      'Research conducted in standalone chat apps vanishes into threads instead of compounding into a reusable memo.',
     ],
     how: [
-      { title: 'Shared context', body: 'Pages, data, conversations, and agents all live in one cloud space, so members work from the same data.' },
-      { title: 'Members and permissions', body: 'Viewer, editor, manager, and owner roles combine with view-based authorization. Sensitive actions enter a pending-confirmation state.' },
-      { title: 'Fully traceable', body: 'An append-only event stream records every action, and the interface is its projection—making both state and provenance clear.' },
+      { title: 'Sources, models, and memos stay connected', body: 'Keep primary filings, call notes, and matrices in one workspace so every AI synthesis cites exact sources.' },
+      { title: 'Local-first privacy by design', body: 'Store sensitive diligence data on your own computer with offline access; only selected snippets go to your model provider.' },
+      { title: 'Evolve assumptions without rebuilding', body: 'Add comparison dimensions or custom sensitivity blocks directly on live tables.' },
     ],
-    blocks: ['Tasks', 'Table', 'Option comparison block', 'Page directory'],
-    note: 'Cloud spaces can currently be deployed on your own server; the official cloud service is coming soon.',
     faq: [
-      ['How it differs from standard collaborative documents', 'Members share more than text: they share the complete context of pages, data, conversations, and agents.'],
-      ['Auditing', 'Every action is written to an append-only event log and can be traced individually afterward.'],
+      ['Can diligence files stay strictly on my machine?', 'Yes. Local spaces store pages, tables, and PDF attachments directly on your computer without cloud upload.'],
+      ['How do I keep AI grounded in primary sources?', 'Mention specific transcripts and tables with @ so the agent draws only from the documents you selected.'],
     ],
   },
 ]
@@ -162,34 +740,34 @@ export const USE_CASE_CATEGORIES = USE_CASES
 
 function BlockChips({ blocks }: { blocks: string[] }) {
   return (
-    <ul className="site-block-chips" aria-label="Combined blocks">
+    <ul className="site-block-chips" aria-label="Common plugins">
       {blocks.map((name) => <li key={name}>{name}</li>)}
     </ul>
   )
 }
 
-/** 用例总览页 */
+/** Industry & Use Case Overview */
 export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
     title: 'Use Cases',
-    description: 'See how BIU works across six real-world use cases: research, product and projects, content creation, team knowledge, personal work, and collaboration.',
+    description: 'Tech, education, media, consulting, e-commerce, and finance—explore how roles across industries combine built-in and AI-built plugins in BIU.',
     path: '/use-cases',
   })
 
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <section className="site-page-hero" data-reveal>
-        <p className="site-section-label">Use Cases</p>
-        <h1>Built for real work</h1>
+        <p className="site-section-label">Industries & Use Cases</p>
+        <h1>Tailored working pages for every industry and role</h1>
         <p className="site-page-lead">
-          Every deliverable is a page that combines the software the job requires, ready for you, your team, or your clients to use. Choose a use case to see how it works.
+          BIU is not limited to a handful of fixed templates. Explore any industry to see how different roles combine built-in and AI-customized plugins—and try an interactive page preview for each role.
         </p>
       </section>
 
       <section className="site-usecase-grid" aria-label="Use cases">
         {USE_CASES.map((useCase) => (
           <Link key={useCase.slug} to={`/use-cases/${useCase.slug}`} className="site-usecase-card">
-            <span className="site-solution-index">{useCase.index}</span>
+            <span className="site-solution-index">{useCase.index} · {useCase.roleLabels.join(' · ')}</span>
             <h2>{useCase.title}</h2>
             <p>{useCase.summary}</p>
             <div className="site-usecase-card-blocks">
@@ -199,19 +777,35 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
         ))}
       </section>
 
-      <SiteFinalCta title="Start with your use case" />
+      <section className="site-usecase-open" data-reveal>
+        <div>
+          <p className="site-section-label">Beyond six industries</p>
+          <h2>Don’t see your industry or role?</h2>
+          <p>
+            Plugins in BIU are not limited to what ships out of the box. Healthcare, manufacturing, HR, or personal research—describe your workflow and let an agent craft the exact blocks your team needs.
+          </p>
+        </div>
+        <Link className="site-cta-secondary" to="/product#plugins">See how plugin customization works →</Link>
+      </section>
+
+      <SiteFinalCta title="Start with your industry and role" />
     </SiteChrome>
   )
 }
 
-/** 用例子页 */
+/** Industry Detail Page with Role Switcher + Interactive BIU Demo Page */
 export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   const { slug } = useParams<{ slug: string }>()
   const useCase = USE_CASES.find((item) => item.slug === slug)
+  const [activeRoleIdx, setActiveRoleIdx] = useState(0)
+
+  useEffect(() => {
+    setActiveRoleIdx(0)
+  }, [slug])
 
   usePageMeta({
-    title: useCase ? useCase.title : 'Use Cases',
-    description: useCase ? useCase.summary : 'Real-world ways to work with BIU.',
+    title: useCase ? `${useCase.title} · Use Cases` : 'Use Cases',
+    description: useCase ? useCase.summary : 'Industry and role workflows built on BIU.',
     path: `/use-cases/${slug ?? ''}`,
   })
 
@@ -227,21 +821,56 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
     )
   }
 
+  const activeRole = useCase.roles[activeRoleIdx] ?? useCase.roles[0]!
   const others = USE_CASES.filter((item) => item.slug !== useCase.slug)
 
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <section className="site-page-hero" data-reveal>
-        <p className="site-section-label">Use Case · {useCase.index}</p>
+        <p className="site-section-label">Industry · {useCase.index}</p>
         <h1>{useCase.title}</h1>
         <p className="site-page-lead">{useCase.summary}</p>
-        <p className="site-usecase-output">Deliverables: {useCase.output}</p>
-        {useCase.note ? <p className="site-usecase-note">{useCase.note}</p> : null}
+        <p className="site-usecase-output">Key deliverables: {useCase.output}</p>
+        <p className="site-usecase-note">Roles: {useCase.roleLabels.join(' · ')}</p>
+      </section>
+
+      <section className="site-usecase-demo-section" aria-label="Interactive page preview" data-reveal>
+        <div className="site-usecase-demo-head">
+          <p className="site-section-label">Interactive Page Preview</p>
+          <h2>Pick a role to preview its working page</h2>
+          <div className="site-demo-tabs" role="tablist" aria-label="Choose a role">
+            {useCase.roles.map((role, index) => (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeRoleIdx === index}
+                className={activeRoleIdx === index ? 'is-active' : ''}
+                key={role.id}
+                onClick={() => setActiveRoleIdx(index)}
+              >
+                {role.role}
+              </button>
+            ))}
+          </div>
+          <p className="site-usecase-role-lead">{activeRole.summary}</p>
+          <p className="site-usecase-note">Delivery: {activeRole.deliverTo}</p>
+        </div>
+
+        <ScenePageDemo key={`${useCase.slug}-${activeRole.id}`} spec={activeRole.demo} labels={DEMO_LABELS_EN} />
       </section>
 
       <section className="site-usecase-blocks" data-reveal>
-        <h2>Blocks combined on this page</h2>
-        <BlockChips blocks={useCase.blocks} />
+        <h2>Plugins on the {activeRole.role} page</h2>
+        <BlockChips blocks={activeRole.blocks} />
+        <h3 className="site-usecase-custom-heading">Custom plugins an agent can build for this role</h3>
+        <div className="site-usecase-custom-grid">
+          {activeRole.customPlugins.map((plugin) => (
+            <article key={plugin.name}>
+              <strong>{plugin.name}</strong>
+              <p>{plugin.body}</p>
+            </article>
+          ))}
+        </div>
       </section>
 
       <section className="site-usecase-pain" data-reveal>
@@ -274,7 +903,7 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
         </div>
       </section>
 
-      <SiteFinalCta title="Try it with your own workflow" />
+      <SiteFinalCta title="Build a working page for your industry" />
     </SiteChrome>
   )
 }

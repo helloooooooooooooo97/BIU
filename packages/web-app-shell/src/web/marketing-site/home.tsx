@@ -7,11 +7,9 @@ import { USE_CASES } from './use-cases.tsx'
 import { COMPARE_FEATURED, COMPARE_PAGES } from './compare.tsx'
 import { BLOG_POSTS, readingMinutes } from './blog-posts.ts'
 import { BrandMark, useBrandConfig } from './brand-mark.tsx'
-import { INVEST_MAIL, VisionTable } from './invest.tsx'
 
 /**
- * 真实界面：BIU 的截图 / 录屏（public/site/），按 2–3 倍像素拍摄，2 倍屏上也清楚。
- * 不嵌 iframe —— 每个 iframe 都会完整加载一次 web 应用，首屏会被拖死。
+ * Real interface captures (public/site/), shot at 2-3x resolution.
  */
 const PRODUCT_SURFACES = [
   {
@@ -28,7 +26,7 @@ const PRODUCT_SURFACES = [
     label: 'Plugins',
     image: '/site/shot-plugins.webp',
     size: [3840, 2400],
-    lead: 'Every block on a page comes from a plugin. Install a plugin to add a new block type—or ask an agent to build the one you need.',
+    lead: 'Install a plugin to add a new working tool to your page. Turn on ready-made blocks—or describe the missing one in plain English and let an agent build it for you.',
     alt: 'BIU plugin table with one-click installation and activation for Excalidraw whiteboards, coding challenge cards, code runners, and more',
   },
   {
@@ -36,7 +34,7 @@ const PRODUCT_SURFACES = [
     label: 'Share',
     image: '/site/shot-share.webp',
     size: [3840, 2400],
-    lead: 'Plugins travel with the page. When you share, the content, attachments, and plugins are bundled together, so whiteboards and coding challenges still work for anyone who opens the link.',
+    lead: 'Plugins travel with the page. When you share a link, the text, attachments, and plugins are bundled together—so whiteboards and coding challenges work right away with zero setup.',
     alt: 'A shared BIU page where whiteboards and coding challenge cards remain fully interactive',
   },
   {
@@ -44,7 +42,7 @@ const PRODUCT_SURFACES = [
     label: 'Components',
     image: '/site/demo-component.webp',
     size: [3840, 2160],
-    lead: 'As pages multiply, instances of the same plugin spread across your workspace. Components bring them back together in structured tables, where each one can be opened and edited independently.',
+    lead: 'As pages grow, instances of the same tool spread across your workspace. Components bring them back together in structured tables where each one can be filtered and edited on its own.',
     alt: 'BIU components collecting video editing blocks from multiple pages into a table, with one component open in its dedicated editor',
   },
   {
@@ -52,7 +50,7 @@ const PRODUCT_SURFACES = [
     label: 'Data',
     image: '/site/demo-file-system.webp',
     size: [3840, 2160],
-    lead: 'It goes beyond components. Conversations, pages, tasks, and plugins are all tables, with shared filters, views, and URLs—and you can open them side by side.',
+    lead: 'Pages, conversations, tasks, and plugins all live in the same workspace with shared filters and views—and you can open them side by side.',
     alt: 'BIU data with conversation and page tables open side by side in the same workspace',
   },
   {
@@ -60,22 +58,9 @@ const PRODUCT_SURFACES = [
     label: 'References',
     image: '/site/demo-context.webp',
     size: [3840, 2160],
-    lead: 'Structured data can be referenced directly. Add pages, conversations, or components to the prompt, and the agent reads exactly what you selected—nothing more, nothing less.',
+    lead: 'Stop copying and pasting context into chat. Drop pages, conversations, or plugins straight into the prompt as tags, and the agent reads exactly what you picked.',
     alt: 'BIU references with pages, conversations, and plugins added to a prompt as removable tags for an agent',
   },
-] as const
-
-/** 工作区里现成的插件，每张卡一句话说清它在页面里做什么。 */
-const PLUGIN_WALL = [
-  { glyph: '✎', name: 'Excalidraw Whiteboard', body: 'A hand-drawn whiteboard. Zoom in and start drawing; the source file stays with the page.' },
-  { glyph: '{}', name: 'Coding Challenge', body: 'The prompt on the left, code on the right—a LeetCode-style practice block.' },
-  { glyph: '▶', name: 'Code Runner', body: 'Run Python, Go, Java, and more than a dozen other languages right on the page.' },
-  { glyph: '◧', name: 'Video Editor', body: 'Edit with timeline scripts and preview the composition in real time.' },
-  { glyph: '</>', name: 'HTML', body: 'Build a static card or a scriptable mini app, then present it full-screen in one click.' },
-  { glyph: '$_', name: 'Page Terminal', body: 'A real interactive terminal, with an independent session for every block.' },
-  { glyph: '◎', name: 'Browser', body: 'A web card that opens into a real browser in the sidebar.' },
-  { glyph: '≡', name: 'Table of Contents', body: 'List every heading on the page and jump to any section.' },
-  { glyph: '✦', name: 'Gunfire', body: 'A 2D mini game—because even a game can be a plugin.' },
 ] as const
 
 function usePrefersReducedMotion() {
@@ -91,48 +76,43 @@ function usePrefersReducedMotion() {
   return reduced
 }
 
-/** All in One 的三层意思，每条指向产品页对应锚点。 */
 const PILLARS = [
   {
-    title: 'Blocks are software',
-    body: 'Every block on a page is fully functional software: a table, whiteboard, coding exercise, video editor, and more. Blocks come from installable plugins, not a fixed set of platform-defined formats.',
+    title: 'Every block is real software',
+    body: 'Whiteboards, tables, code runners, video editors—not a fixed list of document formats. Install the plugins you need, or let an agent write a new one.',
     to: '/product#plugins',
   },
   {
-    title: 'Pages compose software',
-    body: 'Combine plugins on a page to create a complete service. They read and write the same data, while page properties provide their shared runtime environment.',
+    title: 'Pages turn tools into a service',
+    body: 'Put the tools a job requires on one page. They share the same underlying data, so updating one place keeps the whole page in sync.',
     to: '/product#pages',
   },
   {
-    title: 'Share working software',
-    body: 'When you share a page, its content, attachments, and plugin source code are bundled together. Recipients can use it immediately—not just view a screenshot or follow another link.',
+    title: 'Share working software in one link',
+    body: 'Sharing bundles content, files, and plugins together. Send a link to a client, student, or teammate—they open it and start using it immediately.',
     to: '/product#share',
   },
 ] as const
 
 const AGENT_POINTS = [
   {
-    title: 'Understands your pages',
-    body: 'Agents work with the same data you do, so there is no need to copy and paste context.',
+    title: 'Reads your pages directly',
+    body: 'Mention any page or table with @ so the agent works from the exact same data you see—no copy-pasting.',
   },
   {
-    title: 'Turns output into pages',
-    body: 'Results become pages, tables, or tasks instead of disappearing into chat history, ready for the next step.',
+    title: 'Turns output into lasting pages',
+    body: 'Results land as editable pages, tables, or task cards instead of disappearing into chat history.',
   },
   {
-    title: 'Builds its own plugins',
-    body: 'Missing a tool? Ask an agent to build a plugin and add it to the page. Extensibility is no longer just for developers.',
+    title: 'Builds custom plugins on demand',
+    body: 'Need a pricing calculator, progress tracker, or quiz card? Describe it in plain English and drop it into the page.',
   },
 ] as const
 
-/**
- * 首页只放三个最常被拿来问的对手。一句话是给卡片的，
- * 长对照表留在对比页 —— Notion 的 biuWhen 太长，不能直接贴上来。
- */
 const HOME_COMPARE_LINE = {
-  'vs-notion': 'Plugins define your block types, so one page can contain multiple kinds of software.',
-  'vs-obsidian': 'Keep your data local while plugin blocks read and write structured data.',
-  'vs-chatgpt': 'Results become reusable pages instead of getting buried in chat history.',
+  'vs-notion': 'Plugins define your block types—combine real mini-apps on one page and share them working.',
+  'vs-obsidian': 'Also stays local and works offline, while adding structured tables and built-in agents.',
+  'vs-chatgpt': 'Outputs become reusable pages, tables, and custom tools instead of getting buried in chat.',
 } as const
 
 const HOME_COMPARES = COMPARE_FEATURED.flatMap((slug) => {
@@ -142,14 +122,14 @@ const HOME_COMPARES = COMPARE_FEATURED.flatMap((slug) => {
 })
 
 const HERO_VERBS = [
-  ['build', 'build-software'],
-  ['store', 'store-software'],
-  ['compose', 'compose-software'],
-  ['distribute', 'distribute-software'],
-  ['derive', 'derive-software'],
+  { word: 'build', slug: 'build-software', plain: 'Missing a tool? Ask an agent to write a plugin right inside your page.' },
+  { word: 'store', slug: 'store-software', plain: 'Docs, tables, and tool data live together so agents read them directly.' },
+  { word: 'compose', slug: 'compose-software', plain: 'Combine whiteboards, code, and video tools on one page tailored to your role.' },
+  { word: 'distribute', slug: 'distribute-software', plain: 'Share one link and anyone can use the page immediately—no installs or setup.' },
+  { word: 'derive', slug: 'derive-software', plain: 'Fork an existing page or plugin and adapt it into your own tool.' },
 ] as const
 
-/** 日期相同则保持稿序，取最前面两篇作为首页入口。 */
+/** Keep declaration order on ties; surface the top two essays on the homepage. */
 const HOME_POSTS = BLOG_POSTS
   .map((post, index) => ({ post, index }))
   .sort((a, b) => (a.post.date < b.post.date ? 1 : a.post.date > b.post.date ? -1 : a.index - b.index))
@@ -157,20 +137,24 @@ const HOME_POSTS = BLOG_POSTS
   .map(({ post }) => post)
 
 const HOME_FAQ = [
-  ['What is BIU?', 'BIU is a desktop app that combines software into complete services using pages. Agents and users work in the same workspace, and entire pages can be shared as ready-to-use experiences.'],
-  ['How much does BIU cost?', 'BIU is open source and free. The desktop app and self-hosted edition have no license fee. Agents use model services that you configure, and those providers bill you directly.'],
-  ['Where is my data stored?', 'You choose when creating a space. Local spaces stay on your computer; cloud spaces live on a server you deploy.'],
-  ['Do I need to know how to code?', 'No. You can work with pages, tables, and ready-made plugins. When you need a new block, an agent can build it for you.'],
+  ['What is BIU?', 'BIU is an open-source, free desktop workspace where you combine notes, tables, whiteboards, code runners, video editors, and AI-built mini tools on one page—then share one link anyone can use.'],
+  ['How much does it cost?', 'BIU is open source and free for desktop and self-hosting. Agents use your own model API key, billed directly by your chosen provider.'],
+  ['Where is my data stored?', 'You choose per workspace: Local Spaces keep everything on your own computer and work offline; Cloud Spaces support multi-device sync and team permissions (self-host today, official cloud coming soon).'],
+  ['Do I need to know how to code?', 'No. Use built-in pages, tables, and ready-made plugins every day. When you need a custom tool like a quote calculator or quiz card, describe it to an agent.'],
 ] as const
 
 export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
     title: 'BIU · Compose All Your Software on One Page',
-    description: 'Transform how the world builds, stores, composes, distributes, and derives software. The next medium for human–AI collaboration.',
+    description: 'Put whiteboards, tables, code, video editing—even mini tools an agent writes on the spot—on one page. Share one link and anyone can use it right away.',
     path: '/',
   })
   const [activeSurface, setActiveSurface] = useState(0)
+  const [activeVerb, setActiveVerb] = useState(0)
+  const [activeRole, setActiveRole] = useState(0)
   const surface = PRODUCT_SURFACES[activeSurface]!
+  const verb = HERO_VERBS[activeVerb]!
+  const roleScene = USE_CASES[activeRole]!
   const reducedMotion = usePrefersReducedMotion()
   const brand = useBrandConfig()
 
@@ -178,16 +162,18 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
     <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-hero">
           <div className="site-hero-copy site-container" data-reveal>
-            <p className="site-hero-epigraph">
-              <span>The medium is the message</span>
-              <cite>Marshall McLuhan</cite>
-            </p>
             <h1 aria-label="Transform how the world builds, stores, composes, distributes, and derives software">
               <span>Transform how the world</span>
               <span className="site-hero-verbs">
-                {HERO_VERBS.map(([word, slug], index) => (
-                  <Link key={slug} to={`/blog/${slug}`}>
-                    {word}
+                {HERO_VERBS.map((item, index) => (
+                  <Link
+                    key={item.slug}
+                    to={`/blog/${item.slug}`}
+                    className={activeVerb === index ? 'is-current' : ''}
+                    onMouseEnter={() => setActiveVerb(index)}
+                    onFocus={() => setActiveVerb(index)}
+                  >
+                    {item.word}
                     <sup aria-hidden>{String(index + 1).padStart(2, '0')}</sup>
                   </Link>
                 ))}
@@ -195,12 +181,20 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
               <span>software</span>
             </h1>
             <p className="site-hero-sub">The next medium for human–AI collaboration</p>
+            <p className="site-hero-verb-note" aria-live="polite">
+              <span>{String(activeVerb + 1).padStart(2, '0')} {verb.word}</span>
+              {verb.plain}
+              <Link to={`/blog/${verb.slug}`}>Read essay →</Link>
+            </p>
           </div>
           <div className="site-hero-band site-container" data-reveal>
             <div className="site-hero-band-inner">
               <div>
                 <p className="site-eyebrow">Open Source · Free · All in One</p>
                 <h2>Compose all your software on one page</h2>
+                <p className="site-hero-band-desc">
+                  Put whiteboards, tables, code, video editing—even mini tools an agent writes on the spot—on one page. Share one link and anyone can use it right away.
+                </p>
               </div>
               <div className="site-cta-actions">
                 <Link className="site-cta-primary" to="/download"><DownloadIcon />Download</Link>
@@ -221,8 +215,8 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
 
         <section className="site-product-demo" data-reveal>
           <div className="site-demo-heading">
-            <p className="site-section-label">See It in Action</p>
-            <h2>One page. One complete service.</h2>
+            <p className="site-section-label">Real Interface</p>
+            <h2>One page, one working toolkit</h2>
             <div className="site-demo-tabs" role="tablist" aria-label="Product demo">
               {PRODUCT_SURFACES.map((item, index) => (
                 <button
@@ -275,10 +269,72 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
           </div>
         </section>
 
+        <section className="site-role-showcase" aria-label="Role-based plugins">
+          <div className="site-role-showcase-heading" data-reveal>
+            <p className="site-section-label">Industries, Roles & Custom Plugins</p>
+            <h2>Different industries and roles, tailored plugins on one page</h2>
+            <p>
+              Start with built-in plugins like Excalidraw, code runners, video editing, terminals, and HTML—then let an agent craft the specialized blocks each role needs. Choose an industry to explore its role pages:
+            </p>
+            <div className="site-demo-tabs" role="tablist" aria-label="Choose an industry">
+              {USE_CASES.map((item, index) => (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeRole === index}
+                  className={activeRole === index ? 'is-active' : ''}
+                  key={item.slug}
+                  onClick={() => setActiveRole(index)}
+                >
+                  {item.title}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="site-role-panel" role="tabpanel" aria-live="polite" data-reveal>
+            <div className="site-role-panel-main">
+              <span className="site-solution-index">{roleScene.index} · {roleScene.roleLabels.join(' · ')}</span>
+              <h3>{roleScene.title}</h3>
+              <p className="site-role-panel-summary">{roleScene.summary}</p>
+              <div className="site-role-plugin-group">
+                <small>Common built-in plugins</small>
+                <ul className="site-block-chips" aria-label="Built-in plugins">
+                  {roleScene.blocks.map((block) => <li key={block}>{block}</li>)}
+                </ul>
+              </div>
+              <Link className="site-role-panel-link" to={`/use-cases/${roleScene.slug}`}>
+                Explore interactive role page previews →
+              </Link>
+            </div>
+            <div className="site-role-panel-plugins">
+              <div className="site-role-plugin-group">
+                <small>Example roles and custom pages in this industry</small>
+                <div className="site-role-custom-list">
+                  {roleScene.roles.map((role) => (
+                    <article key={role.id}>
+                      <strong>{role.role} · {role.pageTitle}</strong>
+                      <p>{role.summary}</p>
+                      <small className="site-role-custom-tags">
+                        Custom plugins: {role.customPlugins.map((p) => p.name).join(' · ')}
+                      </small>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p className="site-plugin-wall-note" data-reveal>
+            Even a 2D mini-game can live on a page as a plugin.
+            <Link to="/product#plugins">See how plugins work →</Link>
+          </p>
+        </section>
+
         <section className="site-capabilities" aria-label="All in One">
           <div className="site-capabilities-heading" data-reveal>
-            <p className="site-section-label">All in One</p>
-            <h2>More than bundled features.<br />Pages that run software.</h2>
+            <p className="site-section-label">Why One Page</p>
+            <h2>Not features piled into an app—<br />software composed on a page</h2>
           </div>
           <div className="site-capability-grid">
             {PILLARS.map((item) => (
@@ -290,35 +346,15 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
             ))}
           </div>
           <p className="site-capabilities-note" data-reveal>
-            Most document tools offer a fixed set of blocks, and embedded web pages cannot access your data. BIU blocks come from plugins anyone can build, and every plugin can work with the other blocks on the page.
-            <Link to="/compare/vs-notion">Compare BIU with Notion →</Link>
-          </p>
-        </section>
-
-        <section className="site-plugin-wall" aria-label="Plugins">
-          <div className="site-plugin-wall-heading" data-reveal>
-            <p className="site-section-label">Plugins</p>
-            <h2>Software you can add today</h2>
-            <p>These plugins are ready for your workspace. Install one to add a new block type, or ask an agent to build what is missing.</p>
-          </div>
-          <div className="site-plugin-grid">
-            {PLUGIN_WALL.map((item) => (
-              <article key={item.name} data-reveal>
-                <span className="site-plugin-glyph" aria-hidden>{item.glyph}</span>
-                <h3>{item.name}</h3>
-                <p>{item.body}</p>
-              </article>
-            ))}
-          </div>
-          <p className="site-plugin-wall-note" data-reveal>
-            <Link to="/product#plugins">Build and install plugins →</Link>
+            Most document tools lock you into fixed block types, and embedded web pages cannot read your data. In BIU, blocks come from plugins anyone can write and compose together.
+            <Link to="/compare/vs-notion">Compare with Notion →</Link>
           </p>
         </section>
 
         <section className="site-agent" aria-label="Agents">
           <div className="site-agent-heading" data-reveal>
-            <p className="site-section-label">Agents</p>
-            <h2>Agents live on the page, too</h2>
+            <p className="site-section-label">AI Collaboration</p>
+            <h2>Agents live right inside your pages</h2>
           </div>
           <div className="site-agent-grid">
             {AGENT_POINTS.map((item) => (
@@ -333,21 +369,21 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
         <section className="site-space-section" id="spaces">
           <div className="site-space-inner site-container">
             <div className="site-space-heading" data-reveal>
-              <p className="site-section-label">Data Control</p>
-              <h2>Your data lives<br />where you choose</h2>
+              <p className="site-section-label">Data Ownership</p>
+              <h2>Local or cloud,<br />you decide</h2>
             </div>
             <div className="site-space-options">
               <article data-reveal>
                 <span className="site-space-index">01</span>
                 <h3>Local Space</h3>
-                <p>Pages, tables, and attachments stay on your computer and work offline. Relevant content is sent to your configured model service only when you invoke a model.</p>
-                <small>Local storage · Offline access · Bring your own model key</small>
+                <p>Pages, tables, and attachments stay directly on your computer and work offline. Only the content you pick for a prompt is sent to your configured model provider.</p>
+                <small>Saved locally · Works offline · Bring your own API key</small>
               </article>
               <article data-reveal>
                 <span className="site-space-index">02</span>
                 <h3>Cloud Space</h3>
-                <p>Use a cloud space for access across devices and team collaboration. Manage members, permissions, and real-time work in one place. BIU Cloud is coming soon; self-hosting is available now.</p>
-                <small>Multiple devices · Member permissions · Online collaboration · Coming soon</small>
+                <p>Built for multi-device sync and team collaboration with member permissions. Official cloud hosting is coming soon—you can self-host today.</p>
+                <small>Multi-device · Permissions · Online collaboration · Coming soon</small>
               </article>
             </div>
           </div>
@@ -355,9 +391,9 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
 
         <section className="site-home-entry" aria-label="Use cases">
           <div className="site-home-entry-heading" data-reveal>
-            <p className="site-section-label">Use Cases</p>
-            <h2>Bring the whole workflow onto one page</h2>
-            <p>Choose what you are working on. Each page covers the deliverables, challenges, and workflow in detail.</p>
+            <p className="site-section-label">Industries & Workflows</p>
+            <h2>Real workflows across industries</h2>
+            <p>Each industry includes interactive page previews for multiple roles along with custom plugin setups.</p>
           </div>
           <div className="site-scene-grid">
             {USE_CASES.map((useCase) => (
@@ -369,21 +405,21 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
                     <span aria-hidden>→</span>
                   </span>
                   <p>{useCase.summary}</p>
-                  <small>{useCase.output}</small>
+                  <small>{useCase.roleLabels.join(' · ')}</small>
                 </span>
               </Link>
             ))}
           </div>
           <p className="site-home-entry-more" data-reveal>
-            <Link to="/use-cases">View all use cases →</Link>
+            <Link to="/use-cases">All industries & use cases →</Link>
           </p>
         </section>
 
         <section className="site-home-entry" aria-label="Comparisons">
           <div className="site-home-entry-heading" data-reveal>
-            <p className="site-section-label">Compare</p>
-            <h2>See how BIU compares</h2>
-            <p>Explore our three most requested comparisons. Full breakdowns—including where BIU falls short—are available on each comparison page.</p>
+            <p className="site-section-label">Comparisons</p>
+            <h2>How it compares to tools you already use</h2>
+            <p>The three tools people ask about most. Full breakdowns—including where BIU falls short—live on the compare page.</p>
           </div>
           <div className="site-home-compare-grid">
             {HOME_COMPARES.map(({ page, line }) => (
@@ -391,20 +427,20 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
                 <small>{page.category}</small>
                 <h3>{page.columns[0]}</h3>
                 <p>{line}</p>
-                <span>View comparison →</span>
+                <span>Compare →</span>
               </Link>
             ))}
           </div>
           <p className="site-home-entry-more" data-reveal>
-            <Link to="/compare">View all comparisons →</Link>
+            <Link to="/compare">All comparisons →</Link>
           </p>
         </section>
 
         <section className="site-home-entry" aria-label="Ideas">
           <div className="site-home-entry-heading" data-reveal>
-            <p className="site-section-label">Ideas</p>
-            <h2>Why BIU works this way</h2>
-            <p>The product page explains how BIU works. These articles explain why—and the mark tells a story of its own.</p>
+            <p className="site-section-label">Blog & Ideas</p>
+            <h2>Why BIU is built this way</h2>
+            <p>This page focuses on what you can do today. For the deeper thinking behind the five verbs, from SaaS to PaaS, and our architecture, read the blog.</p>
           </div>
           <div className="site-idea-posts">
             {HOME_POSTS.map((post) => (
@@ -435,43 +471,19 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
               />
               <span className="site-idea-brand-copy">
                 <h3>One circle, two lines, three blocks</h3>
-                <p>The mark spells the name: two blocks in the upper right form the B, the diagonal line forms the I, and the semicircle in the lower left forms the U. Together, the three letters complete the circle.</p>
-                <span className="site-idea-go">Explore the brand →</span>
+                <p>The mark spells the name: two small blocks on the upper right form B, the diagonal line is I, and the lower-left semicircle is U.</p>
+                <span className="site-idea-go">Explore brand →</span>
               </span>
             </Link>
           </div>
           <p className="site-home-entry-more" data-reveal>
-            <Link to="/blog">View all articles →</Link>
-          </p>
-        </section>
-
-        <section className="site-home-entry site-vision" aria-label="Vision">
-          <div className="site-home-entry-heading" data-reveal>
-            <p className="site-section-label">Vision</p>
-            <h2>Five verbs. Five trillion-dollar markets.</h2>
-            <p>
-              Building, storing, composing, distributing, and deriving software each represent a trillion-dollar market. Agents are reshaping all five, and BIU brings them together on one page. We are looking for investors who share this conviction.
-            </p>
-          </div>
-          <VisionTable />
-          <div className="site-vision-invest" data-reveal>
-            <div>
-              <h3>Invest in the next trillion-dollar AI company</h3>
-              <p>Contact us to discuss our product roadmap and fundraising plans. Please include your organization and areas of interest.</p>
-              <p className="site-vision-note">Table data is sourced from Gartner, IDC, McKinsey, Harvard Business School, and other institutions. Full references appear at the end of each article.</p>
-            </div>
-            <a className="site-cta-primary" href={INVEST_MAIL}>
-              Contact us
-            </a>
-          </div>
-          <p className="site-home-entry-more" data-reveal>
-            <Link to="/invest">Read the full investment thesis →</Link>
+            <Link to="/blog">All essays →</Link>
           </p>
         </section>
 
         <SiteFaq title="About BIU" items={HOME_FAQ} />
 
-        <SiteFinalCta title={<>Open source. Free.<br />Ready today.</>} />
+        <SiteFinalCta title={<>Open source, free,<br />ready today</>} />
     </SiteChrome>
   )
 }

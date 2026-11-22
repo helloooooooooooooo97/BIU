@@ -24,11 +24,8 @@ const NAV_PRIMARY = [
   { label: 'Product', to: '/product' },
   { label: 'Use Cases', to: '/use-cases' },
   { label: 'Compare', to: '/compare' },
-  { label: 'Security', to: '/security' },
   { label: 'Blog', to: '/blog' },
-  { label: 'Brand', to: '/brand' },
   { label: 'Pricing', to: '/pricing' },
-  { label: 'Invest', to: '/invest' },
 ] as const
 
 export const GITHUB_URL = 'https://github.com/helloooooooooooooo97/biu'

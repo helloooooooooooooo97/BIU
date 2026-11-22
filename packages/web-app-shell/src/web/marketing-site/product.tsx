@@ -94,10 +94,10 @@ const BLOCKS: Block[] = [
 ]
 
 const PAGE_FLOW = [
-  { step: '01', title: 'Write content', body: 'Context, instructions, and resources' },
-  { step: '02', title: 'Add plugin blocks', body: 'Tables, whiteboards, exercises, and clips' },
-  { step: '03', title: 'Set page properties', body: 'A shared runtime for plugins' },
-  { step: '04', title: 'Share', body: 'Deliver a ready-to-use page' },
+  { step: '01', title: 'Write context', body: 'Notes, background, and files' },
+  { step: '02', title: 'Add plugins', body: 'Whiteboards, tables, code, video' },
+  { step: '03', title: 'Fill gaps with AI', body: 'Generate custom blocks on demand' },
+  { step: '04', title: 'Share one link', body: 'Recipients open and use it right away' },
 ] as const
 
 /** 三种补法：缺口是什么、怎么补，加一段真实写法当例子。 */

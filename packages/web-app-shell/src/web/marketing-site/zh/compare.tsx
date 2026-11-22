@@ -321,11 +321,11 @@ export const COMPARE_PAGES: ComparePage[] = [
 export const COMPARE_FEATURED = ['vs-notion', 'vs-obsidian', 'vs-chatgpt'] as const
 
 export const COMPARE_CATEGORIES = [
-  { name: '基础设施', slugs: ['vs-linux', 'vs-k8s'] },
-  { name: '文档管理', slugs: ['vs-office', 'vs-obsidian', 'vs-notion'] },
-  { name: '应用搭建', slugs: ['vs-airtable', 'vs-retool', 'vs-supabase'] },
-  { name: '编码 Harness', slugs: ['vs-cursor', 'vs-dsh', 'vs-pi'] },
-  { name: '通用助手', slugs: ['vs-chatgpt', 'vs-claude'] },
+  { name: '文档与知识库', slugs: ['vs-notion', 'vs-obsidian', 'vs-office'] },
+  { name: 'AI 通用助手', slugs: ['vs-chatgpt', 'vs-claude'] },
+  { name: '应用搭建工具', slugs: ['vs-airtable', 'vs-retool', 'vs-supabase'] },
+  { name: 'AI 编码工具', slugs: ['vs-cursor', 'vs-dsh', 'vs-pi'] },
+  { name: '架构理念类比（给开发者）', slugs: ['vs-linux', 'vs-k8s'] },
 ] as const
 
 const MARKS = [

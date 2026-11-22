@@ -321,11 +321,11 @@ export const COMPARE_PAGES: ComparePage[] = [
 export const COMPARE_FEATURED = ['vs-notion', 'vs-obsidian', 'vs-chatgpt'] as const
 
 export const COMPARE_CATEGORIES = [
-  { name: 'Infrastructure', slugs: ['vs-linux', 'vs-k8s'] },
-  { name: 'Document Management', slugs: ['vs-office', 'vs-obsidian', 'vs-notion'] },
+  { name: 'Document Management', slugs: ['vs-notion', 'vs-obsidian', 'vs-office'] },
+  { name: 'General Assistants', slugs: ['vs-chatgpt', 'vs-claude'] },
   { name: 'App Building', slugs: ['vs-airtable', 'vs-retool', 'vs-supabase'] },
   { name: 'Coding Harness', slugs: ['vs-cursor', 'vs-dsh', 'vs-pi'] },
-  { name: 'General Assistants', slugs: ['vs-chatgpt', 'vs-claude'] },
+  { name: 'Architecture Analogies', slugs: ['vs-linux', 'vs-k8s'] },
 ] as const
 
 const MARKS = [

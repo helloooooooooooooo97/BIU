@@ -21,7 +21,7 @@ test('用例总览：六个场景全部渲染，且不再是占位页', () => {
   // 占位页曾是「正在开发中」，这里必须已经不出现
   assert.equal(document.body.textContent?.includes('Subpage under development'), false, '不再是占位页')
 
-  assert.ok(screen.getByText('Built for real work'), '总览标题存在')
+  assert.ok(screen.getByText('Tailored working pages for every industry and role'), '总览标题存在')
   for (const useCase of USE_CASES) {
     assert.ok(screen.getByText(useCase.title), `缺少场景 ${useCase.title}`)
     assert.ok(screen.getByText(useCase.summary), `缺少场景简介 ${useCase.title}`)

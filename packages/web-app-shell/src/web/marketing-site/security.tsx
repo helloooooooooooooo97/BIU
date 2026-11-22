@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { SiteChrome, SiteFaq, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
@@ -143,8 +144,8 @@ export function MarketingSecurity({ onLogin, onStart }: { onLogin: SiteAction; o
             </tbody>
           </table>
           <p className="site-permission-note">
-            This is not a separate permission layer. Views are data, and members are data, which makes conditions
-            viable access targets. The permission model is a projection of the File System.
+            Curious how rule-based permissions work under the hood? Read the full essay on the blog:{' '}
+            <Link to="/blog/distribute-software">Distribute: One page is a release →</Link>
           </p>
         </section>
 
