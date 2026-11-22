@@ -1424,12 +1424,12 @@ body.is-col-reordering,body.is-col-reordering *{cursor:grabbing!important;user-s
 .tasks-table tr.fsdb-summary-row td{padding:0;height:32px;background:transparent}
 .tasks-table tr.fsdb-summary-row:hover td{background:transparent}
 .fsdb-summary-td{vertical-align:middle}
-.fsdb-summary-btn{display:flex;align-items:center;justify-content:flex-end;gap:6px;width:100%;height:32px;padding:0 10px;border:0;background:transparent;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-2);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fsdb-summary-btn{display:flex;align-items:center;justify-content:flex-end;gap:6px;width:100%;height:32px;padding:0 10px;border:0;background:transparent;color:var(--biu-color-text-muted);font:inherit;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fsdb-summary-btn:hover{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
 .fsdb-summary-hint{opacity:0;transition:opacity 120ms ease}
 .fsdb-summary-td:hover .fsdb-summary-hint,.fsdb-summary-btn:focus-visible .fsdb-summary-hint{opacity:1}
-.fsdb-summary-label{color:var(--biu-color-text-subtle);font-size:11px;font-weight:400}
-.fsdb-summary-val{color:var(--biu-color-text);font-size:var(--biu-font-size-3);font-weight:var(--biu-font-weight-medium);font-variant-numeric:tabular-nums}
+.fsdb-summary-label{color:var(--biu-color-text-muted);font:inherit}
+.fsdb-summary-val{color:var(--biu-color-text);font:inherit;font-variant-numeric:tabular-nums}
 .fsdb-col-view-sub{max-height:320px}
 .fsdb-col-view-entry{display:flex;flex-direction:column;gap:4px}
 .fsdb-col-view-row{display:flex;align-items:center;gap:2px;min-height:28px;border-radius:6px}
