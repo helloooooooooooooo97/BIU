@@ -32,7 +32,7 @@ export function DockHoverTip() {
     const read = (node: EventTarget | null) => {
       if (!(node instanceof Element)) return null
       const el = node.closest('[data-dock-tip]')
-      if (!(el instanceof HTMLElement) || !el.closest('.fsdb-page')) return null
+      if (!(el instanceof HTMLElement) || !el.closest('.fsdb-page, .fsdb-col-menu')) return null
       const text = el.getAttribute('data-dock-tip')?.trim()
       if (!text) return null
       return { text, anchor: el }

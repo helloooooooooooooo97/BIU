@@ -16,6 +16,7 @@ describe('ColumnHeaderMenu', () => {
     expect(css).toMatch(
       /\.fsdb-col-menu\{[^}]*--biu-color-bg-hover:var\(--biu-color-bg-popover-hover\)[^}]*border:var\(--biu-stroke-width\) solid var\(--biu-color-border-popover\)[^}]*border-radius:var\(--biu-radius-popover\)[^}]*background:var\(--biu-color-bg-popover\)[^}]*box-shadow:var\(--biu-shadow-popover\)/,
     )
+    expect(css).toContain('.fsdb-col-menu [data-dock-tip]::after{content:none;display:none}')
   })
 
   it('mounts inside HeadlessPopover (.biu-headless-pop) and hands off anchor to pinned header when docked', async () => {

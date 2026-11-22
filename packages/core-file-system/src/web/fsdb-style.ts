@@ -518,6 +518,8 @@ const CSS = `
 .fsdb-page .tasks-table.is-grid tbody.fsdb-grid-body.is-empty{background-image:none}
 .fsdb-page .tasks-table.is-grid tbody.fsdb-grid-body > tr{position:absolute;top:0;left:0;width:100%;display:flex;align-items:stretch;box-sizing:border-box;background:var(--biu-color-surface);contain:layout style}
 .fsdb-page .tasks-table.is-grid tbody.fsdb-grid-body.is-empty > tr{position:static;transform:none}
+.fsdb-page .tasks-table.is-grid tbody.fsdb-grid-overlay{display:block;position:relative;width:100%;height:0;margin-top:calc(-1 * var(--fsdb-body-h,0px));overflow:visible;pointer-events:none}
+.fsdb-page .tasks-table.is-grid tbody.fsdb-grid-overlay > tr{position:absolute;top:0;left:0;width:100%;display:flex;align-items:stretch;box-sizing:border-box;pointer-events:auto;contain:layout style}
 .fsdb-page .tasks-table.is-grid.is-wrap tbody.fsdb-grid-body > tr[data-record-id]{height:auto;min-height:32px}
 .fsdb-page .tasks-table.is-grid th,.fsdb-page .tasks-table.is-grid td{display:flex;align-items:center;flex:0 0 auto;box-sizing:border-box;min-width:0}
 .fsdb-page .tasks-table.is-grid.is-wrap td{align-items:flex-start}
@@ -1400,6 +1402,7 @@ body.is-col-reordering,body.is-col-reordering *{cursor:grabbing!important;user-s
 .fsdb-col-drag-ghost .tasks-th svg{width:14px;height:14px;flex:none;color:var(--biu-color-icon)}
 .fsdb-col-menu{--biu-color-bg-hover:var(--biu-color-bg-popover-hover);width:236px;max-width:calc(100vw - 16px);max-height:min(76vh,620px);overflow-y:auto;padding:var(--biu-pad-flyout,6px);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);border-radius:var(--biu-radius-popover);background:var(--biu-color-bg-popover);box-shadow:var(--biu-shadow-popover);color:var(--biu-color-text);font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);user-select:none;transition:width 180ms cubic-bezier(.22,1,.36,1)}
 .fsdb-col-menu.is-wide{width:420px}
+.fsdb-col-menu [data-dock-tip]::after{content:none;display:none}
 .fsdb-col-menu-head{display:flex;flex-direction:column;gap:6px;padding:2px 2px 4px}
 .fsdb-col-menu-namebox{display:flex;align-items:center;gap:6px;min-width:0;min-height:30px;padding:2px 6px;border:1px solid var(--biu-color-border);border-radius:6px;background:var(--biu-color-bg)}
 .fsdb-col-menu-namebox:focus-within{background:var(--biu-color-bg-hover)}
