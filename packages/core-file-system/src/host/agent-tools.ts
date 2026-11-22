@@ -127,6 +127,8 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
         path: { type: 'string' },
         filter: { type: 'object', description: '可选，按列等值过滤' },
         q: { type: 'string', description: '可选，全文搜索' },
+        sort_field: { type: 'string', description: '排序字段名（与 sortField 等价）' },
+        sort_dir: { type: 'string', enum: ['asc', 'desc'], description: '排序方向（与 sortDir 等价）' },
         sortField: { type: 'string' },
         sortDir: { type: 'string', enum: ['asc', 'desc'] },
         limit: { type: 'number', description: '每页条数，默认 20，最大 200' },
@@ -144,15 +146,18 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
       required: ['path'],
     },
     execution: 'parallel',
+    annotations: { readOnly: true, idempotent: true },
     execute: (args) => {
       const path = String(args.path)
       const countOnly = args.count_only === true
+      const rawSortField = args.sort_field ?? args.sortField
+      const rawSortDir = args.sort_dir ?? args.sortDir
       return withInspectorReveal(ctx, path, () =>
         db
           .list(path, asFilter(args.filter), {
             q: args.q != null ? String(args.q) : '',
-            sortField: args.sortField != null ? String(args.sortField) : '',
-            sortDir: args.sortDir === 'desc' ? 'desc' : 'asc',
+            sortField: rawSortField != null ? String(rawSortField) : '',
+            sortDir: rawSortDir === 'desc' ? 'desc' : 'asc',
             limit: countOnly ? 1 : args.limit != null ? Number(args.limit) : undefined,
             offset: countOnly ? 0 : args.offset != null ? Number(args.offset) : undefined,
             columns: countOnly ? ['id'] : asColumnKeys(args.columns),
@@ -195,10 +200,12 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
       },
     },
     execution: 'parallel',
-    execute: async (args) => {
+    annotations: { readOnly: true, idempotent: true },
+    execute: async (args, signal) => {
       const includeContent = args.include_content === true
       const contentLines = typeof args.content_lines === 'number' && args.content_lines > 0 ? args.content_lines : 80
       const readOne = async (targetPath: string) => {
+        if (signal.aborted) throw new Error('cancelled')
         const row = agentDbCompact.query(await db.read(targetPath))
         if (!includeContent) return row
         try {
@@ -208,15 +215,22 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
           if (row && typeof row === 'object' && !Array.isArray(row)) {
             return { ...(row as Record<string, unknown>), content }
           }
-        } catch {
-          /* collection without content field */
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error)
+          if (row && typeof row === 'object' && !Array.isArray(row) && !/no content field/i.test(msg)) {
+            return { ...(row as Record<string, unknown>), contentError: msg }
+          }
         }
         return row
       }
       if (Array.isArray(args.paths) && args.paths.length > 0) {
         const list = args.paths.map((item) => String(item).trim()).filter(Boolean)
         if (!list.length) throw new Error('paths must contain at least one path')
-        const items = await Promise.all(list.map((p) => readOne(p)))
+        const items = []
+        for (const p of list) {
+          if (signal.aborted) throw new Error('cancelled')
+          items.push(await readOne(p))
+        }
         return { items }
       }
       if (typeof args.path !== 'string' || !args.path.trim()) {
@@ -245,6 +259,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
       },
       required: ['path', 'fields'],
     },
+    annotations: { readOnly: false, idempotent: true },
     execute: (args) => {
       const payload = args.fields as Record<string, unknown>
       if (!Object.keys(payload).length) {
@@ -280,6 +295,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
       },
       required: ['path', 'records'],
     },
+    annotations: { readOnly: false },
     execute: (args) =>
       withInspectorReveal(ctx, String(args.path), () =>
         db.create(String(args.path), asCreateRecords(args), {
@@ -303,6 +319,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
       },
       required: ['path'],
     },
+    annotations: { readOnly: false, destructive: true },
     execute: (args) =>
       withInspectorReveal(ctx, String(args.path), () => db.remove(String(args.path), asDeleteQuery(args)), true).then(
         (body) => agentDbCompact.write(body),
@@ -321,6 +338,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
       },
       required: ['path'],
     },
+    annotations: { readOnly: false, idempotent: true },
     execute: (args) =>
       withInspectorReveal(ctx, String(args.path), () => db.restore(String(args.path), asDeleteQuery(args))).then(
         (body) => agentDbCompact.write(body),
@@ -339,6 +357,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
       },
       required: ['path', 'action'],
     },
+    annotations: { readOnly: false },
     execute: (args) =>
       withInspectorReveal(ctx, String(args.path), () =>
         db.action(
@@ -365,6 +384,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
       required: ['path'],
     },
     execution: 'parallel',
+    annotations: { readOnly: true, idempotent: true },
     execute: async (args) => {
       const stat = agentDbCompact.query(await db.stat(String(args.path)))
       if (args.include_tags !== true || !stat || typeof stat !== 'object' || Array.isArray(stat)) return stat
@@ -393,8 +413,11 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
           return { id: String(item.id ?? ''), title: String(item.title ?? ''), fields: summary }
         })
         return { ...(stat as Record<string, unknown>), tags }
-      } catch {
-        return stat
+      } catch (error) {
+        return {
+          ...(stat as Record<string, unknown>),
+          tagsError: error instanceof Error ? error.message : String(error),
+        }
       }
     },
   })
@@ -455,6 +478,11 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
       const cmd = resolveContentCommand(args)
       return cmd === 'view' || cmd === 'outline' ? 'parallel' : 'exclusive'
     },
+    annotations: (args) => {
+      const cmd = resolveContentCommand(args)
+      const ro = cmd === 'view' || cmd === 'outline'
+      return { readOnly: ro, ...(ro ? { idempotent: true } : cmd === 'write' ? { destructive: true } : {}) }
+    },
     execute: (args) =>
       withInspectorReveal(ctx, String(args.path), () =>
         db.editContent(String(args.path), args).then((body) => agentDbCompact.query(body)),
@@ -497,6 +525,10 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
       required: ['path'],
     },
     execution: (args) => (resolveContentCommand(args) === 'view' ? 'parallel' : 'exclusive'),
+    annotations: (args) => {
+      const ro = resolveContentCommand(args) === 'view'
+      return { readOnly: ro, ...(ro ? { idempotent: true } : {}) }
+    },
     execute: (args) =>
       withInspectorReveal(ctx, String(args.path), () =>
         db.editAsset(String(args.path), args).then((body) => agentDbCompact.query(body)),
@@ -557,6 +589,11 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
     execution: (args) => {
       const cmd = resolveContentCommand(args)
       return cmd === 'view' || cmd === 'outline' ? 'parallel' : 'exclusive'
+    },
+    annotations: (args) => {
+      const cmd = resolveContentCommand(args)
+      const ro = cmd === 'view' || cmd === 'outline'
+      return { readOnly: ro, ...(ro ? { idempotent: true } : cmd === 'write' ? { destructive: true } : {}) }
     },
     execute: (args) =>
       withInspectorReveal(ctx, String(args.path), () =>

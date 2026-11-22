@@ -5,6 +5,15 @@ import { currentAccountId, currentPluginId, currentRequestWorkspaceId } from '@b
 
 export { toolNameForApi, stripToolApiName, TOOL_API_NAME } from './tool-name.ts'
 
+export interface ToolAnnotations {
+  /** 是否只读（不产生写入或状态变更副作用）。用于权限拦截与 MCP ToolAnnotations，独立于并发调度 executionMode。 */
+  readOnly?: boolean
+  /** 是否属于破坏性操作（如删除、覆盖）。 */
+  destructive?: boolean
+  /** 重复调用是否幂等。 */
+  idempotent?: boolean
+}
+
 export interface ToolSpec {
   name: string
   description: string
@@ -14,6 +23,8 @@ export interface ToolSpec {
    * exclusive / 缺省：作为屏障独占执行，保持既有工具的串行语义。
    */
   execution?: ToolExecutionMode | ((args: Record<string, unknown>) => ToolExecutionMode)
+  /** 显式工具安全/语义标注（与 execution 并发调度解耦）。 */
+  annotations?: ToolAnnotations | ((args: Record<string, unknown>) => ToolAnnotations)
   execute: (args: Record<string, unknown>, signal: AbortSignal) => unknown | Promise<unknown>
 }
 
@@ -291,6 +302,25 @@ export class ToolsService extends Service {
     }
   }
 
+  annotationsOf(name: string, args: Record<string, unknown> = {}): ToolAnnotations {
+    const raw = this.tools.get(this.resolveName(name))?.annotations
+    if (!raw) return {}
+    if (typeof raw !== 'function') return raw
+    try {
+      return raw(args) ?? {}
+    } catch {
+      // 标注求值失败时保守按非只读处理
+      return { readOnly: false }
+    }
+  }
+
+  /** 显式只读判定：优先读 annotations.readOnly，未显式标注时回退到 executionMode === 'parallel'。 */
+  isReadOnly(name: string, args: Record<string, unknown> = {}): boolean {
+    const ann = this.annotationsOf(name, args)
+    if (typeof ann.readOnly === 'boolean') return ann.readOnly
+    return this.executionMode(name, args) === 'parallel'
+  }
+
   /** 工具执行中把当前结果推到 UI；无 listener 时为空操作。 */
   report(detail: unknown) {
     toolProgressStorage.getStore()?.(stringify(detail))
@@ -350,6 +380,61 @@ function matchesSchemaType(expected: string, value: unknown): boolean {
   return true
 }
 
+function validateSchemaValue(
+  toolName: string,
+  fieldPath: string,
+  spec: Record<string, unknown>,
+  value: unknown,
+  requiredField: boolean,
+): void {
+  if (value === null && !requiredField) {
+    const types = Array.isArray(spec.type) ? spec.type : spec.type ? [spec.type] : []
+    if (!types.length || types.includes('null')) return
+  }
+  const types = Array.isArray(spec.type)
+    ? spec.type.filter((item): item is string => typeof item === 'string')
+    : typeof spec.type === 'string'
+      ? [spec.type]
+      : []
+  if (types.length && !types.some((t) => matchesSchemaType(t, value))) {
+    throw new Error(`invalid argument "${fieldPath}" for ${toolName}: expected ${types.join(' | ')}`)
+  }
+  if (Array.isArray(spec.enum) && spec.enum.length && !spec.enum.includes(value)) {
+    throw new Error(
+      `invalid argument "${fieldPath}" for ${toolName}: got ${JSON.stringify(value)}, expected one of ${spec.enum.map((v) => JSON.stringify(v)).join(', ')}`,
+    )
+  }
+  if (Array.isArray(value) && isPlainObject(spec.items)) {
+    for (let i = 0; i < value.length; i += 1) {
+      validateSchemaValue(toolName, `${fieldPath}[${i}]`, spec.items, value[i], true)
+    }
+  }
+  if (isPlainObject(value) && isPlainObject(spec.properties)) {
+    const nestedProps = spec.properties as Record<string, Record<string, unknown>>
+    const nestedRequired = Array.isArray(spec.required)
+      ? spec.required.filter((item): item is string => typeof item === 'string')
+      : []
+    for (const reqKey of nestedRequired) {
+      if (value[reqKey] === undefined) {
+        throw new Error(`missing required argument "${fieldPath}.${reqKey}" for ${toolName}`)
+      }
+    }
+    if (spec.additionalProperties === false) {
+      const allowed = Object.keys(nestedProps)
+      const unknown = Object.keys(value).filter((k) => value[k] !== undefined && !(k in nestedProps))
+      if (unknown.length) {
+        throw new Error(
+          `unknown argument(s) at "${fieldPath}" for ${toolName}: ${unknown.join(', ')}. Allowed: ${allowed.join(', ') || '(none)'}`,
+        )
+      }
+    }
+    for (const [k, childSpec] of Object.entries(nestedProps)) {
+      if (value[k] === undefined || !isPlainObject(childSpec)) continue
+      validateSchemaValue(toolName, `${fieldPath}.${k}`, childSpec, value[k], nestedRequired.includes(k))
+    }
+  }
+}
+
 export function validateToolArgs(
   toolName: string,
   parameters: Record<string, unknown>,
@@ -387,23 +472,7 @@ export function validateToolArgs(
     const value = args[key]
     if (value === undefined) continue
     if (!isPlainObject(spec)) continue
-    if (value === null && !required.includes(key)) {
-      const types = Array.isArray(spec.type) ? spec.type : spec.type ? [spec.type] : []
-      if (!types.length || types.includes('null')) continue
-    }
-    const types = Array.isArray(spec.type)
-      ? spec.type.filter((item): item is string => typeof item === 'string')
-      : typeof spec.type === 'string'
-        ? [spec.type]
-        : []
-    if (types.length && !types.some((t) => matchesSchemaType(t, value))) {
-      throw new Error(`invalid argument "${key}" for ${toolName}: expected ${types.join(' | ')}`)
-    }
-    if (Array.isArray(spec.enum) && spec.enum.length && !spec.enum.includes(value)) {
-      throw new Error(
-        `invalid argument "${key}" for ${toolName}: got ${JSON.stringify(value)}, expected one of ${spec.enum.map((v) => JSON.stringify(v)).join(', ')}`,
-      )
-    }
+    validateSchemaValue(toolName, key, spec, value, required.includes(key))
   }
 }
 

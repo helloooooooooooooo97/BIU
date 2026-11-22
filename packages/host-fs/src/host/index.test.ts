@@ -50,3 +50,29 @@ test('bound session project path becomes tool cwd', async () => {
 
   assert.equal(await (await import('node:fs/promises')).readFile(join(projectRoot, 'app.txt'), 'utf8'), 'edited-by-tool')
 })
+
+test('fs_read and fs_list guard context window with default truncation limits', async () => {
+  const ctx = new Context()
+  await ctx.plugin(tools)
+  await ctx.plugin(sessionStore, { driver: 'memory' })
+  await ctx.plugin(sessions)
+  await ctx.plugin(systemPrompt)
+  const root = await mkdtemp(join(tmpdir(), 'cordis-fs-guard-'))
+  await ctx.plugin(fs, { root })
+
+  const huge = 'a'.repeat(40 * 1024)
+  await ctx.fs.write('huge.txt', huge)
+  const read = (await ctx.tools.invoke('fs_read', { path: 'huge.txt' })) as string
+  assert.ok(read.length < huge.length)
+  assert.match(read, /truncated \d+ chars/)
+
+  for (let i = 0; i < 6; i += 1) await ctx.fs.write(`f${i}.txt`, 'x')
+  const listed = (await ctx.tools.invoke('fs_list', { path: '.', limit: 3 })) as {
+    items: string[]
+    total: number
+    truncated: boolean
+  }
+  assert.equal(listed.truncated, true)
+  assert.equal(listed.items.length, 3)
+  assert.ok(listed.total >= 6)
+})
