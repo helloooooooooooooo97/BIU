@@ -1,30 +1,30 @@
-import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { useVirtualizer, type Range } from '@tanstack/react-virtual'
 import { tableVertScroller } from './table-drag-scroll.ts'
 import { TABLE_VIEWPORT_OVERSCAN, tableRowFallbackPx } from './table-window.ts'
 
 export type ViewportScrollDirection = 'idle' | 'forward' | 'backward'
-export type ViewportBufferStage = 'urgent' | 'full'
 
-export const VIEWPORT_IDLE_OVERSCAN = 6
-export const VIEWPORT_TRAIL_OVERSCAN = 3
-export const VIEWPORT_LEAD_URGENT = 4
-export const VIEWPORT_LEAD_FULL = 15
+export const VIEWPORT_IDLE_OVERSCAN = 12
+export const VIEWPORT_TRAIL_OVERSCAN = 8
+export const VIEWPORT_LEAD_OVERSCAN = 20
 
-/** AG Grid 风格方向感知非对称缓冲：滚帧优先同步画视口与紧邻 4 行，下一帧再补齐前进方向 15 行（480px）深缓冲。 */
+/**
+ * 参考 AG Grid rowBuffer 机制：永不在快滑中缩窄缓冲或用 rAF/startTransition 延后补行；
+ * 静止时保持上下各 12 行（384px），滚动时在同一次同步渲染中将前进方向扩展到 20 行（640px）、反方向保留 8 行（256px）。
+ */
 export function extractDirectionalRange(
   range: Pick<Range, 'startIndex' | 'endIndex' | 'count'>,
   direction: ViewportScrollDirection,
-  stage: ViewportBufferStage,
 ): number[] {
   if (range.count <= 0) return []
   let before = VIEWPORT_IDLE_OVERSCAN
   let after = VIEWPORT_IDLE_OVERSCAN
   if (direction === 'forward') {
     before = VIEWPORT_TRAIL_OVERSCAN
-    after = stage === 'urgent' ? VIEWPORT_LEAD_URGENT : VIEWPORT_LEAD_FULL
+    after = VIEWPORT_LEAD_OVERSCAN
   } else if (direction === 'backward') {
-    before = stage === 'urgent' ? VIEWPORT_LEAD_URGENT : VIEWPORT_LEAD_FULL
+    before = VIEWPORT_LEAD_OVERSCAN
     after = VIEWPORT_TRAIL_OVERSCAN
   }
   const start = Math.max(0, range.startIndex - before)
@@ -44,11 +44,8 @@ export function useTableViewport(options: {
   const [scroller, setScroller] = useState<HTMLElement | null>(null)
   const [geometry, setGeometry] = useState({ margin: 0, padding: 40 })
   const [interactedRow, setInteractedRow] = useState<string | null>(null)
-  const [bufferTick, setBufferTick] = useState(0)
   const scrollDirRef = useRef<ViewportScrollDirection>('idle')
-  const bufferStageRef = useRef<ViewportBufferStage>('full')
   const lastStartRef = useRef(0)
-  const bufferRafRef = useRef(0)
   const interactedHistory = useMemo(() => new Set<string>(), [options.resetKey])
   const keyIndices = useMemo(() => new Map(nodes.map((node, index) => [node.key, index])), [nodes])
   const rowIndices = useMemo(() => {
@@ -95,31 +92,13 @@ export function useTableViewport(options: {
       wrap.removeEventListener('scroll', lockInnerY); page.removeEventListener('animationend', schedule)
     }
   }, [tableRef, wrapRef])
-  const scheduleFullBuffer = useCallback(() => {
-    if (bufferRafRef.current || typeof requestAnimationFrame !== 'function') return
-    bufferRafRef.current = requestAnimationFrame(() => {
-      bufferRafRef.current = 0
-      if (bufferStageRef.current !== 'full') {
-        bufferStageRef.current = 'full'
-        startTransition(() => setBufferTick((tick) => tick + 1))
-      }
-    })
-  }, [])
-  useEffect(() => () => {
-    if (bufferRafRef.current) cancelAnimationFrame(bufferRafRef.current)
-  }, [])
   const rangeExtractor = useCallback((range: Range) => {
-    void bufferTick
     const delta = range.startIndex - lastStartRef.current
     if (delta !== 0) {
       scrollDirRef.current = delta > 0 ? 'forward' : 'backward'
       lastStartRef.current = range.startIndex
-      if (Math.abs(delta) >= 2) {
-        bufferStageRef.current = 'urgent'
-        scheduleFullBuffer()
-      }
     }
-    const indices = new Set(extractDirectionalRange(range, scrollDirRef.current, bufferStageRef.current))
+    const indices = new Set(extractDirectionalRange(range, scrollDirRef.current))
     const retained = options.retainedRowKey ? keyIndices.get(options.retainedRowKey) : options.retainedRowId ? rowIndices.get(options.retainedRowId) : undefined
     if (retained != null) indices.add(retained)
     const interacted = interactedRow ? keyIndices.get(interactedRow) ?? rowIndices.get(interactedRow) : undefined
@@ -146,7 +125,7 @@ export function useTableViewport(options: {
       }
     }
     return [...indices].sort((a, b) => a - b)
-  }, [bufferTick, nodes, options.retainedRowId, options.retainedRowKey, options.preserveMountedRows, interactedRow, rowIndices, keyIndices, tableRef, interactedHistory, scheduleFullBuffer])
+  }, [nodes, options.retainedRowId, options.retainedRowKey, options.preserveMountedRows, interactedRow, rowIndices, keyIndices, tableRef, interactedHistory])
   const getScrollElement = useCallback(() => scroller, [scroller])
   const getItemKey = useCallback((index: number) => `${options.resetKey}\0${nodes[index]!.key}`, [nodes, options.resetKey])
   const estimateSize = useCallback(
@@ -189,17 +168,8 @@ export function useTableViewport(options: {
   useEffect(() => {
     setInteractedRow(null)
     scrollDirRef.current = 'idle'
-    bufferStageRef.current = 'full'
     lastStartRef.current = 0
   }, [options.resetKey])
-  useEffect(() => {
-    if (virtualizer.isScrolling) return
-    if (scrollDirRef.current !== 'idle' || bufferStageRef.current !== 'full') {
-      scrollDirRef.current = 'idle'
-      bufferStageRef.current = 'full'
-      startTransition(() => setBufferTick((tick) => tick + 1))
-    }
-  }, [virtualizer.isScrolling])
   const revealRow = useCallback((id: string, rowKey?: string) => {
     const index = rowKey ? keyIndices.get(rowKey) : rowIndices.get(id)
     if (index != null) current.current.scrollToIndex(index, { align: 'auto', behavior: 'auto' })

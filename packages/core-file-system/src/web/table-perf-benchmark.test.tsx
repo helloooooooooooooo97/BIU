@@ -626,9 +626,9 @@ test('table performance benchmark suite', async () => {
   console.log('=== BENCHMARK RESULTS ===\n' + JSON.stringify(results, null, 2))
 
   // Regression guards for all 6 performance optimizations
-  // 32px row height fits ~2 more visible rows in a 560px viewport than legacy 37px (18 + 8*2 = 34 max).
-  expect((results.p0_1_preserveMounted as any).mountedRows).toBeLessThanOrEqual(34)
-  expect((results.p0_1_preserveMounted as any).mountedCells).toBeLessThanOrEqual(300)
+  // AG Grid-style synchronous directional rowBuffer (20 lead + 8 trail = 640px forward runway) caps mounted rows at <= 48 even on 500-row tables.
+  expect((results.p0_1_preserveMounted as any).mountedRows).toBeLessThanOrEqual(48)
+  expect((results.p0_1_preserveMounted as any).mountedCells).toBeLessThanOrEqual(450)
   expect((results.p0_2_pinnedHeadScroll as any).layoutReads).toBe(0)
   expect((results.p0_3_columnResize as any).headPaints).toBeLessThanOrEqual(10)
   expect((results.p0_3_columnResize as any).finalColWidth).toBe('240px')

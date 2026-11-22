@@ -7,8 +7,7 @@ import { TABLE_ROW_PX, TABLE_VIEWPORT_OVERSCAN } from './table-window.ts'
 import {
   extractDirectionalRange,
   VIEWPORT_IDLE_OVERSCAN,
-  VIEWPORT_LEAD_FULL,
-  VIEWPORT_LEAD_URGENT,
+  VIEWPORT_LEAD_OVERSCAN,
   VIEWPORT_TRAIL_OVERSCAN,
 } from './table-viewport.ts'
 
@@ -217,46 +216,43 @@ describe('vertical scroll flicker before/after benchmark', () => {
     expect(after.maxRowDriftPx).toBe(0)
   })
 
-  it('compares AG Grid-style directional buffer & zero-measure fast scroll before/after', () => {
+  it('compares AG Grid-style synchronous directional rowBuffer & zero-measure scroll before/after', () => {
     const count = 200
     const visibleStart = 60
     const visibleEnd = 77 // 18 visible rows in 560px viewport at 32px
 
-    // Before: symmetric 8+8 overscan, every new row triggers measureElement + ResizeObserver on scroll
-    const beforeIdleRows = (visibleEnd - visibleStart + 1) + TABLE_VIEWPORT_OVERSCAN * 2
-    const beforeLeadRunwayPx = TABLE_VIEWPORT_OVERSCAN * TABLE_ROW_PX
-    const beforeUrgentFrameRows = (visibleEnd - visibleStart + 1) + TABLE_VIEWPORT_OVERSCAN * 2
+    // Before: 8+8 symmetric overscan (256px runway), plus per-row measureElement + ResizeObserver on scroll
+    const beforeLeadRunwayPx = 8 * TABLE_ROW_PX
+    const beforeTrailRunwayPx = 8 * TABLE_ROW_PX
 
-    // After: directional asymmetric overscan (idle 6+6, urgent scroll 3+4, deferred rAF 3+15), 0 measureElement in non-wrap
-    const afterIdle = extractDirectionalRange({ startIndex: visibleStart, endIndex: visibleEnd, count }, 'idle', 'full')
-    const afterUrgent = extractDirectionalRange({ startIndex: visibleStart, endIndex: visibleEnd, count }, 'forward', 'urgent')
-    const afterFull = extractDirectionalRange({ startIndex: visibleStart, endIndex: visibleEnd, count }, 'forward', 'full')
-    const afterBackwardFull = extractDirectionalRange({ startIndex: visibleStart, endIndex: visibleEnd, count }, 'backward', 'full')
+    // After: AG Grid-style synchronous directional rowBuffer (idle 12+12 = 384px, scroll 20 lead = 640px + 8 trail = 256px)
+    const afterIdle = extractDirectionalRange({ startIndex: visibleStart, endIndex: visibleEnd, count }, 'idle')
+    const afterForward = extractDirectionalRange({ startIndex: visibleStart, endIndex: visibleEnd, count }, 'forward')
+    const afterBackward = extractDirectionalRange({ startIndex: visibleStart, endIndex: visibleEnd, count }, 'backward')
 
     const comparison = {
       before: {
-        idleMountedRows: beforeIdleRows,
-        urgentScrollFrameRows: beforeUrgentFrameRows,
         leadRunwayPx: beforeLeadRunwayPx,
+        trailRunwayPx: beforeTrailRunwayPx,
+        syncScrollBufferShrink: false,
         nonWrapMeasurePerRowOnScroll: 1,
       },
       after: {
         idleMountedRows: afterIdle.length,
-        urgentScrollFrameRows: afterUrgent.length,
-        fullForwardRows: afterFull.length,
-        leadRunwayPx: VIEWPORT_LEAD_FULL * TABLE_ROW_PX,
+        scrollMountedRows: afterForward.length,
+        leadRunwayPx: VIEWPORT_LEAD_OVERSCAN * TABLE_ROW_PX,
+        trailRunwayPx: VIEWPORT_TRAIL_OVERSCAN * TABLE_ROW_PX,
+        syncScrollBufferShrink: false,
         nonWrapMeasurePerRowOnScroll: 0,
       },
     }
-    console.log('=== AG-GRID DIRECTIONAL BUFFER BENCHMARK ===')
+    console.log('=== AG-GRID SYNC ROWBUFFER BENCHMARK ===')
     console.log(JSON.stringify(comparison, null, 2))
 
     expect(afterIdle.length).toBe((visibleEnd - visibleStart + 1) + VIEWPORT_IDLE_OVERSCAN * 2)
-    expect(afterUrgent.length).toBe((visibleEnd - visibleStart + 1) + VIEWPORT_TRAIL_OVERSCAN + VIEWPORT_LEAD_URGENT)
-    expect(afterFull[afterFull.length - 1]).toBe(visibleEnd + VIEWPORT_LEAD_FULL)
-    expect(afterBackwardFull[0]).toBe(visibleStart - VIEWPORT_LEAD_FULL)
-    expect(comparison.after.idleMountedRows).toBeLessThan(comparison.before.idleMountedRows)
-    expect(comparison.after.urgentScrollFrameRows).toBeLessThan(comparison.before.urgentScrollFrameRows)
-    expect(comparison.after.leadRunwayPx).toBeGreaterThan(comparison.before.leadRunwayPx)
+    expect(afterForward[afterForward.length - 1]).toBe(visibleEnd + VIEWPORT_LEAD_OVERSCAN)
+    expect(afterBackward[0]).toBe(visibleStart - VIEWPORT_LEAD_OVERSCAN)
+    expect(comparison.after.leadRunwayPx).toBe(640)
+    expect(comparison.after.leadRunwayPx).toBeGreaterThan(comparison.before.leadRunwayPx * 2)
   })
 })

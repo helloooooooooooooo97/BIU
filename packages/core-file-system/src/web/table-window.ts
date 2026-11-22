@@ -1,8 +1,8 @@
 export const TABLE_ROW_PX = 32
 export const TABLE_WRAP_ROW_PX = 96
 export const TABLE_WINDOW_OVERSCAN = 4
-/** 虚拟表格实际视口上下预渲染行数：在保证单屏挂载 <=30 行 / <=300 格预算的前提下，将缓冲带从 4 行提升至 8 行（上下各 ~256px）。 */
-export const TABLE_VIEWPORT_OVERSCAN = 8
+/** 虚拟表格实际视口上下预渲染行数：参考 AG Grid rowBuffer（>=10），32px 行高下采用 12 行（384px）基线缓冲，快滑方向同步扩展至 20 行（640px）。 */
+export const TABLE_VIEWPORT_OVERSCAN = 12
 export const TABLE_WINDOW_VIEWPORT_FALLBACK = 560
 export const TABLE_COL_PX = 120
 export const TABLE_COL_PIN_PX = 240
