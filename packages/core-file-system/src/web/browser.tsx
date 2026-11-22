@@ -147,6 +147,7 @@ import {
 import { RecordActions, RowCheck } from './browser-row-controls.tsx'
 import { BrowserCellPopOverlay, renderBrowserCell } from './browser-cell-renderer.tsx'
 import { BrowserHeader } from './browser-header.tsx'
+import { BrowserListChrome } from './browser-toolbar.tsx'
 import { KeyedSerialQueue, PendingFieldPatchTracker } from './record-write-queue.ts'
 import { ViewSyncController } from './view-sync-controller.ts'
 import { captureTableFoldSnapshot as captureFoldSnapshot, playTableFoldFlip } from './table-fold-flip.ts'
@@ -5038,694 +5039,122 @@ export function CollectionBrowser({
   ].join('\0')
   const listChrome = useMemo(
     () => (
-      <>
-        {sheet ? null : (
-        <>
-        <PageBanner
-          value={viewBanner}
-          writable={Boolean(activeViewId)}
-          path={activeViewId ? savedViewRecordPath(collectionPath, activeViewId) : undefined}
-          title={activeView?.name ?? title}
-          onChange={(next) => {
-            if (!activeViewId) return
-            const path = savedViewRecordPath(collectionPath, activeViewId)
-            if (!path) return
-            const prev = viewBanner
-            void readJson<{ value?: { banner?: unknown } }>('/api/db/update', {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ path, content: { banner: next } }),
-            }).then((data) => {
-              setViewBanner(data.value?.banner ?? next)
-              emitFsdbChange({ scope: 'content', path })
-            }).catch(() => {
-              setViewBanner(prev)
-            })
-          }}
-        />
-        <div className="fsdb-detail-icon-slot">
-          <span className="fsdb-detail-title-icon" aria-hidden>
-            <ViewModeGlyph mode={activeView?.mode} className="" />
-          </span>
-        </div>
-        <div className="fsdb-detail-title-row">
-          <div className="fsdb-detail-title-block">
-          {activeView ? (
-            <h1 className="fsdb-detail-title">
-              <LocalText
-                as="textarea"
-                className="fsdb-detail-title-input"
-                value={activeView.name}
-                autoSize
-                aria-label="视图名称"
-                onKeyDown={(event) => {
-                  if (event.nativeEvent.isComposing) return
-                  if (event.key !== 'Enter' || event.shiftKey) return
-                  event.preventDefault()
-                  event.currentTarget.blur()
-                }}
-                onCommit={(raw) => commitViewName(activeView.id, raw)}
-              />
-            </h1>
-          ) : (
-            <h1 className="fsdb-detail-title">{title}</h1>
-          )}
-          </div>
-        </div>
-        </>
-        )}
-
-        <div
-          className="tasks-toolbar"
-          ref={bindToolbar}
-          data-biu-ignore
-          onMouseDown={(event) => {
-            const target = event.target as HTMLElement
-            if (target.closest('input,textarea,select,[contenteditable="true"]')) return
-            if (target.closest('button,[role="menuitem"],[role="menuitemcheckbox"],[role="menuitemradio"]')) {
-              event.preventDefault()
-            }
-          }}
-        >
-          <div className="tasks-toolbar-left">
-            {sheet ? null : (
-            <div className="tasks-viewdd-wrap" ref={viewRef}>
-              <div className="tasks-viewtabs">
-                <button
-                  type="button"
-                  className={`tasks-viewdd-btn tasks-viewtab is-active${viewMenuOpen ? ' is-menu' : ''}`}
-                  data-testid="fsdb-view-tab"
-                  aria-haspopup="menu"
-                  aria-expanded={viewMenuOpen}
-                  onClick={() => toggleMenu('view')}
-                >
-                  {activeView ? <ViewModeGlyph mode={activeView.mode} /> : <UiGlyph icon="squares" />}
-                  <span className="tasks-viewdd-name">{activeView?.name ?? '未保存'}</span>
-                </button>
-              </div>
-              {viewMenuOpen ? (
-                <Suspense fallback={null}>
-                <QueryFlyout
-                  anchorRef={viewRef}
-                  onClose={() => setViewMenuOpen(false)}
-                  ignoreSelector={QUERY_NEST_IGNORE}
-                  align="start"
-                >
-                <ViewOrderMenu
-                  views={views}
-                  activeViewId={activeViewId}
-                  onSelect={(view) => {
-                    selectView(view)
-                    setViewMenuOpen(false)
-                  }}
-                  onCopy={copyView}
-                  onDelete={deleteView}
-                  onReorder={persistViewOrder}
-                  onAdd={() => addEmptyView()}
-                />
-                </QueryFlyout>
-                </Suspense>
-              ) : null}
-            </div>
-            )}
-            {pickedIds.length ? (
-                  <div className="fsdb-bulk-slot">
-                  <div className="fsdb-bulk" data-testid="fsdb-bulk-bar">
-                    <span
-                      className="fsdb-bulk-count"
-                      role="button"
-                      tabIndex={0}
-                      title="取消选择"
-                      onClick={() => setPickedIds([])}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault()
-                          setPickedIds([])
-                        }
-                      }}
-                    >
-                      {pickedIds.length} 已选
-                    </span>
-                    <button
-                      type="button"
-                      className="tasks-icon-btn"
-                      data-testid="fsdb-bulk-chat"
-                      aria-label="送到会话"
-                      title="送到会话 ⌘L"
-                      onClick={() => sendPickedRowsToChat()}
-                    >
-                      <ChatBubbleLeftRightIcon aria-hidden className="size-[14px]" />
-                    </button>
-                    {canBulkDelete && pickedIds.some((id) => !(collectionPath === PLUGINS_COLLECTION_PATH && items.find((row) => row.id === id)?.builtin === true)) ? (
-                      <button
-                        type="button"
-                        className="tasks-icon-btn is-danger"
-                        data-testid="fsdb-bulk-delete"
-                        aria-label={inTrash ? '彻底删除选中' : '删除选中'}
-                        title={`${inTrash ? '彻底删除' : '删除'}选中的 ${pickedIds.length} 条`}
-                        onClick={() => setDlg({
-                          kind: 'delete-records',
-                          ids: pickedIds.filter((id) => !(collectionPath === PLUGINS_COLLECTION_PATH && items.find((row) => row.id === id)?.builtin === true)),
-                        })}
-                      >
-                        <TrashIcon aria-hidden className="size-[14px]" />
-                      </button>
-                    ) : null}
-                    <div className="fsdb-bulk-more" ref={bulkRef}>
-                      <button
-                        type="button"
-                        className={`tasks-icon-btn${bulkMenuOpen ? ' is-active' : ''}`}
-                        data-testid="fsdb-bulk-more"
-                        aria-label="更多操作"
-                        aria-expanded={bulkMenuOpen}
-                        title="更多"
-                        onClick={() => setBulkMenuOpen((open) => !open)}
-                      >
-                        <EllipsisHorizontalIcon aria-hidden className="size-[14px]" />
-                      </button>
-                      {bulkMenuOpen
-                        ? createPortal(
-                        <HeadlessDismiss
-                          onDismiss={() => setBulkMenuOpen(false)}
-                          inside={(node) =>
-                            Boolean(
-                              node instanceof Node &&
-                                (bulkRef.current?.contains(node) || bulkMenuRef.current?.contains(node)),
-                            )
-                          }
-                        >
-                          <div
-                            ref={bulkMenuRef}
-                            className="fsdb-tool-flyout fsdb-bulk-menu is-fixed"
-                            role="menu"
-                            style={{ top: bulkMenuBox.top, left: bulkMenuBox.left, zIndex: overlayZ(200) }}
-                          >
-                            {canTag ? (
-                              <button
-                                type="button"
-                                className="tasks-sort-item fsdb-tool-row"
-                                data-testid="fsdb-bulk-tag"
-                                onClick={() => {
-                                  setBulkTagIds([])
-                                  setDlg({ kind: 'bulk-tag', ids: pickedIds })
-                                  setBulkMenuOpen(false)
-                                }}
-                              >
-                                <span className="tasks-sort-item-label">
-                                  <TagIcon aria-hidden className="size-[14px]" />
-                                  标签
-                                </span>
-                              </button>
-                            ) : null}
-                            <button
-                              type="button"
-                              className="tasks-sort-item fsdb-tool-row"
-                              data-testid="fsdb-bulk-export"
-                              onClick={() => {
-                                void exportPicked()
-                                setBulkMenuOpen(false)
-                              }}
-                            >
-                              <span className="tasks-sort-item-label">
-                                <ArrowDownTrayIcon aria-hidden className="size-[14px]" />
-                                导出
-                              </span>
-                            </button>
-                          </div>
-                        </HeadlessDismiss>,
-                        overlayPortalRoot() ?? document.body,
-                      )
-                        : null}
-                    </div>
-                  </div>
-                  </div>
-                ) : null}
-            {lockedKind ? (
-              <span className="fsdb-locked-filter" data-testid="fsdb-locked-kind" title="按组件类型筛选，不可更改">
-                {lockedKindLabel}
-              </span>
-            ) : null}
-          </div>
-          <div className={`tasks-toolbar-right${searchExpanded ? ' is-searching' : ''}`} ref={toolbarRightRef}>
-            {viewsSaveError ? (
-              <div className="fsdb-views-error" role="alert">
-                <span>视图没有保存到数据库，本地仍是上一次成功保存的状态。请重试。</span>
-                <button type="button" onClick={() => setViewsSaveError(false)}>
-                  知道了
-                </button>
-              </div>
-            ) : null}
-            <HeadlessDismiss
-              enabled={searchExpanded}
-              onDismiss={() => {
-                if (!query) setSearchOpen(false)
-              }}
-              onEscapeKeyDown={(event) => {
-                if (query) event.preventDefault()
-              }}
-            >
-            <div className={`tasks-search-wrap${searchExpanded ? ' is-open' : ''}`} ref={searchRef}>
-              <button
-                type="button"
-                className={`tasks-sort-btn${searchExpanded ? ' is-active' : ''}`}
-                aria-label="搜索"
-                aria-expanded={searchExpanded}
-                title="搜索"
-                onClick={() => {
-                  if (query) {
-                    searchInputRef.current?.focus({ preventScroll: true })
-                    return
-                  }
-                  setSearchOpen((open) => !open)
-                }}
-              >
-                <UiGlyph icon="search" />
-              </button>
-              {searchExpanded ? (
-                <input
-                  ref={searchInputRef}
-                  className="tasks-search"
-                  value={query}
-                  placeholder="搜索"
-                  aria-label="搜索"
-                  onChange={(e) => setQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key !== 'Escape') return
-                    if (!query) setSearchOpen(false)
-                    else e.currentTarget.blur()
-                  }}
-                />
-              ) : null}
-            </div>
-            </HeadlessDismiss>
-            {!searchExpanded ? (
-            <>
-            <div className="tasks-sort-wrap" ref={modeRef}>
-              <button
-                type="button"
-                className={`tasks-sort-btn${modeMenuOpen ? ' is-active' : ''}`}
-                aria-label="查看模式"
-                title={`模式：${
-                  VIEW_MODES.find((item) => item.id === mode)?.label ??
-                  extraRows.find((item) => item.id === mode)?.label ??
-                  extraViews.find((item) => item.id === mode)?.label ??
-                  mode
-                }`}
-                onClick={() => toggleMenu('mode')}
-              >
-                <ModeGlyph id={mode} extra={extraViews} rows={extraRows} />
-              </button>
-              {modeMenuOpen ? (
-                <HeadlessDismiss onDismiss={() => setModeMenuOpen(false)} insideRef={modeRef}>
-                <SearchableFlyout className="tasks-sort-menu">
-                  {(q) => {
-                    const modes = VIEW_MODES.filter((opt) => flyoutQueryMatch(opt.label, q))
-                    const views = extraViews.filter((opt) => flyoutQueryMatch(opt.label, q))
-                    const rows = extraRows.filter((opt) => flyoutQueryMatch(opt.label, q))
-                    return (
-                      <>
-                  {modes.map((opt) => (
-                    <CheckRow
-                      key={opt.id}
-                      icon={<ModeGlyph id={opt.id} extra={extraViews} rows={extraRows} />}
-                      label={opt.label}
-                      on={mode === opt.id}
-                      onToggle={() => {
-                        setMode(opt.id)
-                        patchActiveView({ mode: opt.id })
-                        setModeMenuOpen(false)
-                      }}
-                    />
-                  ))}
-                  {views.map((opt) => (
-                    <CheckRow
-                      key={opt.id}
-                      icon={<ModeGlyph id={opt.id} extra={extraViews} rows={extraRows} />}
-                      label={opt.label}
-                      on={mode === opt.id}
-                      onToggle={() => {
-                        setMode(opt.id)
-                        patchActiveView({ mode: opt.id })
-                        setModeMenuOpen(false)
-                      }}
-                    />
-                  ))}
-                  {rows.map((opt) => (
-                    <CheckRow
-                      key={opt.id}
-                      icon={<ModeGlyph id={opt.id} extra={extraViews} rows={extraRows} />}
-                      label={opt.label}
-                      on={mode === opt.id}
-                      onToggle={() => {
-                        setMode(opt.id)
-                        patchActiveView({ mode: opt.id })
-                        setModeMenuOpen(false)
-                      }}
-                    />
-                  ))}
-                  {q.trim() && !modes.length && !views.length && !rows.length ? <FlyoutEmpty /> : null}
-                  <button
-                    type="button"
-                    className="fsdb-mode-plus"
-                    data-testid="fsdb-mode-plus"
-                    aria-label="添加呈现方式"
-                    title="添加呈现方式"
-                    onClick={() => {
-                      setModeMenuOpen(false)
-                      askNewPresentation({ path: collectionPath, title })
-                    }}
-                  >
-                    <PlusIcon aria-hidden className="size-[14px]" />
-                    添加呈现方式
-                  </button>
-                      </>
-                    )
-                  }}
-                </SearchableFlyout>
-                </HeadlessDismiss>
-              ) : null}
-            </div>
-            <div className="tasks-sort-wrap" ref={sortRef}>
-              <button
-                type="button"
-                className={`tasks-sort-btn${sortMenuOpen ? ' is-active' : ''}${sortCustom ? ' is-custom' : ''}`}
-                aria-label="排序"
-                title={sortCustom ? `${sorts.length} 个排序` : '排序'}
-                onClick={() => toggleMenu('sort')}
-              >
-                <UiGlyph icon="sort" />
-                {sortCustom ? <span className="tasks-sort-dot" aria-hidden /> : null}
-              </button>
-              {sortMenuOpen ? (
-                <Suspense fallback={null}>
-                <QueryFlyout
-                  anchorRef={sortRef}
-                  onClose={() => setSortMenuOpen(false)}
-                  ignoreSelector={QUERY_NEST_IGNORE}
-                  inside={(node) => node instanceof Element && Boolean(node.closest('.db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]'))}
-                >
-                <SortQueryMenu sorts={sorts} fields={sortFields} onChange={applySorts} />
-                </QueryFlyout>
-                </Suspense>
-              ) : null}
-            </div>
-            <div className="tasks-filter-btn-wrap" ref={filterRef}>
-              <button
-                type="button"
-                className={`tasks-refresh tasks-rbar-btn${filterOpen || filterActive ? ' is-active' : ''}`}
-                aria-label="筛选"
-                title={filterActive ? `${countFilterRules(filterTree)} 条筛选` : '筛选'}
-                onClick={() => toggleMenu('filter')}
-              >
-                <UiGlyph icon="filter" />
-                {filterActive ? <span className="tasks-filter-dot" aria-hidden /> : null}
-              </button>
-              {filterOpen ? (
-                <Suspense fallback={null}>
-                <QueryFlyout
-                  anchorRef={filterRef}
-                  onClose={() => setFilterOpen(false)}
-                  ignoreSelector={QUERY_NEST_IGNORE}
-                  inside={(node) => node instanceof Element && Boolean(node.closest('.db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]'))}
-                >
-                <FilterQueryMenu
-                  tree={filterTree}
-                  fields={filterFields}
-                  valueOptions={filterValueOptions}
-                  onChange={applyFilterTree}
-                />
-                </QueryFlyout>
-                </Suspense>
-              ) : null}
-            </div>
-            <div className="tasks-sort-wrap" ref={groupRef}>
-              <button
-                type="button"
-                className={`tasks-sort-btn${groupOpen ? ' is-active' : ''}${grouping ? ' is-custom' : ''}`}
-                aria-label="分组"
-                title={activeGroup ? `分组：${activeGroup.field.label ?? activeGroup.key}` : '分组'}
-                onClick={() => toggleMenu('group')}
-              >
-                <UiGlyph icon="stack" />
-                {grouping ? <span className="tasks-sort-dot" aria-hidden /> : null}
-              </button>
-              {groupOpen ? (
-                <Suspense fallback={null}>
-                  <QueryFlyout anchorRef={groupRef} onClose={() => setGroupOpen(false)}>
-                    <GroupQueryMenu
-                      groupBy={groupBy}
-                      groupConfig={groupConfig}
-                      groups={panelGroups.map((item) => ({
-                        key: item.key,
-                        label: item.label,
-                        count: item.total ?? item.rows.length,
-                      }))}
-                      fields={groupFields}
-                      onChange={setGroupKey}
-                      onChangeConfig={setGroupSettings}
-                      onClose={() => setGroupOpen(false)}
-                    />
-                  </QueryFlyout>
-                </Suspense>
-              ) : null}
-            </div>
-            <div className="tasks-sort-wrap" ref={columnRef}>
-              <button
-                type="button"
-                className={`tasks-sort-btn${columnMenuOpen ? ' is-active' : ''}`}
-                aria-label="可见列"
-                title="可见列"
-                onClick={() => toggleMenu('columns')}
-              >
-                <UiGlyph icon="eye" />
-              </button>
-              {columnMenuOpen ? (
-                <HeadlessDismiss
-                  onDismiss={() => setColumnMenuOpen(false)}
-                  insideRef={columnRef}
-                  ignoreSelector={`${HEADLESS_DISMISS_IGNORE}, [data-fsdb-col-flyout], [data-fsdb-col-tag-trigger], .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`}
-                  inside={(node) =>
-                    node instanceof Element &&
-                    Boolean(
-                      node.closest(
-                        '[data-fsdb-col-flyout], [data-fsdb-col-tag-trigger], .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]',
-                      ),
-                    )
-                  }
-                >
-                {renderVisibleColumnsFlyout()}
-                </HeadlessDismiss>
-              ) : null}
-            </div>
-            {mode === 'table' ? (
-            <div className="tasks-filter-btn-wrap" ref={configRef}>
-              <button
-                type="button"
-                className={`tasks-refresh tasks-rbar-btn${configOpen ? ' is-active' : ''}`}
-                aria-label="表格配置"
-                title="表格配置"
-                onClick={() => toggleMenu('config')}
-              >
-                <UiGlyph icon="sliders" />
-              </button>
-              {configOpen ? (
-                <HeadlessDismiss onDismiss={() => setConfigOpen(false)} insideRef={configRef}>
-                <SearchableFlyout className="tasks-filter-menu">
-                  {(q) => {
-                    const wrap = flyoutQueryMatch('单元格换行', q)
-                    const trunc = flyoutQueryMatch('文本缩略', q)
-                    const freeze = Boolean(schema?.labelField) && flyoutQueryMatch('冻结标题列', q)
-                    const tree = parentKey && flyoutQueryMatch('树形展示', q)
-                    return (
-                      <>
-                  {wrap ? (
-                  <CheckRow
-                    icon={<Bars3BottomLeftIcon aria-hidden className="size-[14px]" />}
-                    label="单元格换行"
-                    on={wrapCells}
-                    onToggle={() => setWrap(!wrapCells)}
-                  />
-                  ) : null}
-                  {trunc ? (
-                  <CheckRow
-                    icon={<EllipsisHorizontalIcon aria-hidden className="size-[14px]" />}
-                    label="文本缩略"
-                    on={truncateCells}
-                    onToggle={() => setTruncate(!truncateCells)}
-                  />
-                  ) : null}
-                  {freeze ? (
-                  <CheckRow
-                    icon={<LockClosedIcon aria-hidden className="size-[14px]" />}
-                    label="冻结标题列"
-                    on={freezeTitle}
-                    onToggle={() => setFreezeTitleCol(!freezeTitle)}
-                  />
-                  ) : null}
-                  {tree ? (
-                    <CheckRow
-                      icon={<ChevronRightIcon aria-hidden className="size-[14px]" />}
-                      label="树形展示"
-                      on={showTree}
-                      onToggle={() => setTree(!showTree)}
-                    />
-                  ) : null}
-                  {q.trim() && !wrap && !trunc && !freeze && !tree ? <FlyoutEmpty /> : null}
-                      </>
-                    )
-                  }}
-                </SearchableFlyout>
-                </HeadlessDismiss>
-              ) : null}
-            </div>
-            ) : null}
-            <div className="fsdb-refresh-wrap">
-              <button
-                type="button"
-                className={`tasks-refresh${refreshing ? ' is-spinning' : ''}`}
-                aria-label="刷新"
-                title="刷新"
-                disabled={refreshing}
-                onClick={() => void refreshNow()}
-              >
-                <UiGlyph icon="refresh" className={refreshing ? 'fsdb-spin' : undefined} />
-              </button>
-              {notice ? (
-                <span className="fsdb-refresh-toast" role="status">
-                  <CheckCircleIcon aria-hidden className="size-[14px]" />
-                  {notice}
-                </span>
-              ) : null}
-            </div>
-            {(canCreate || canAskNewPlugin) && !sheet ? (
-              <div className="fsdb-create-group">
-                <button
-                  type="button"
-                  className="fsdb-create-btn"
-                  aria-label={canAskNewPlugin ? '新建插件' : '新建记录'}
-                  title="新建"
-                  data-testid={canAskNewPlugin ? 'fsdb-ask-new-plugin' : undefined}
-                  onClick={() => {
-                    if (canAskNewPlugin) askNewPlugin(createScope)
-                    else void createRecord()
-                  }}
-                >
-                  新建
-                </button>
-                {isDataOverview ? (
-                <HeadlessDismiss enabled={createTypeOpen} onDismiss={() => setCreateTypeOpen(false)}>
-                  <div className="fsdb-create-scope-wrap">
-                  <button
-                    type="button"
-                    className="fsdb-create-scope"
-                    aria-label="新建类型"
-                    aria-expanded={createTypeOpen}
-                    title={`新建${collectionNoun({
-                      path: createTypeTable?.path ?? PAGES_COLLECTION_PATH,
-                      label: createTypeTable?.label,
-                      view: createTypeTable?.view,
-                    })}`}
-                    onClick={() => setCreateTypeOpen((open) => !open)}
-                  >
-                    <TableGlyph icon={createTypeTable?.view?.icon} />
-                  </button>
-                  {createTypeOpen ? (
-                    <div className="fsdb-create-scope-menu" role="menu">
-                      {overviewCreateTables.map((table) => (
-                        <button
-                          key={table.path}
-                          type="button"
-                          role="menuitem"
-                          className={table.path === (createTypeTable?.path ?? createTypePath) ? 'is-on' : ''}
-                          onClick={() => {
-                            setCreateTypePath(table.path)
-                            setCreateTypeOpen(false)
-                          }}
-                        >
-                          <TableGlyph icon={table.view?.icon} />
-                          {collectionNoun(table)}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                  </div>
-                </HeadlessDismiss>
-                ) : (
-                <HeadlessDismiss enabled={createScopeOpen} onDismiss={() => setCreateScopeOpen(false)}>
-                  <div className="fsdb-create-scope-wrap">
-                  <button
-                    type="button"
-                    className="fsdb-create-scope"
-                    aria-label="新建归属"
-                    aria-expanded={createScopeOpen}
-                    title={
-                      createScope === 'workspace'
-                        ? '空间内容，全部成员可编辑'
-                        : createScope === 'shared'
-                          ? localData
-                            ? '共享到局域网，数据仍留在本机'
-                            : '公开链接，所有人可查看'
-                          : localData
-                            ? '私人内容，仅自己可处理，数据留在本机'
-                            : '私人内容，仅自己可处理'
-                    }
-                    onClick={() => setCreateScopeOpen((open) => !open)}
-                  >
-                    <UiGlyph icon={createScope === 'workspace' ? 'users' : createScope === 'shared' ? 'globe' : 'user'} />
-                  </button>
-                  {createScopeOpen ? (
-                    <div className="fsdb-create-scope-menu" role="menu">
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className={createScope === 'personal' ? 'is-on' : ''}
-                        onClick={() => {
-                          setCreateScope('personal')
-                          setCreateScopeOpen(false)
-                        }}
-                      >
-                        <UserIcon aria-hidden className="size-[14px]" />
-                        私人
-                      </button>
-                      {localData ? null : (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className={createScope === 'workspace' ? 'is-on' : ''}
-                          onClick={() => {
-                            setCreateScope('workspace')
-                            setCreateScopeOpen(false)
-                          }}
-                        >
-                          <UsersIcon aria-hidden className="size-[14px]" />
-                          空间
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className={createScope === 'shared' ? 'is-on' : ''}
-                        onClick={() => {
-                          setCreateScope('shared')
-                          setCreateScopeOpen(false)
-                        }}
-                      >
-                        <GlobeAltIcon aria-hidden className="size-[14px]" />
-                        共享
-                      </button>
-                    </div>
-                  ) : null}
-                  </div>
-                </HeadlessDismiss>
-                )}
-              </div>
-            ) : null}
-            </>
-            ) : null}
-          </div>
-        </div>
-
-      </>
+      <BrowserListChrome
+        sheet={sheet}
+        collectionPath={collectionPath}
+        title={title}
+        activeViewId={activeViewId}
+        activeView={activeView}
+        views={views}
+        viewBanner={viewBanner}
+        setViewBanner={setViewBanner}
+        commitViewName={commitViewName}
+        bindToolbar={bindToolbar}
+        viewRef={viewRef}
+        viewMenuOpen={viewMenuOpen}
+        setViewMenuOpen={setViewMenuOpen}
+        toggleMenu={toggleMenu}
+        selectView={selectView}
+        copyView={copyView}
+        deleteView={deleteView}
+        persistViewOrder={persistViewOrder}
+        addEmptyView={() => addEmptyView()}
+        pickedIds={pickedIds}
+        setPickedIds={setPickedIds}
+        sendPickedRowsToChat={sendPickedRowsToChat}
+        canBulkDelete={canBulkDelete}
+        inTrash={inTrash}
+        items={items}
+        setDlg={setDlg}
+        bulkRef={bulkRef}
+        bulkMenuRef={bulkMenuRef}
+        bulkMenuOpen={bulkMenuOpen}
+        setBulkMenuOpen={setBulkMenuOpen}
+        bulkMenuBox={bulkMenuBox}
+        canTag={canTag}
+        setBulkTagIds={setBulkTagIds}
+        exportPicked={exportPicked}
+        lockedKind={lockedKind}
+        lockedKindLabel={lockedKindLabel}
+        toolbarRightRef={toolbarRightRef}
+        searchExpanded={searchExpanded}
+        viewsSaveError={viewsSaveError}
+        setViewsSaveError={setViewsSaveError}
+        query={query}
+        setQuery={setQuery}
+        setSearchOpen={setSearchOpen}
+        searchRef={searchRef}
+        searchInputRef={searchInputRef}
+        modeRef={modeRef}
+        modeMenuOpen={modeMenuOpen}
+        setModeMenuOpen={setModeMenuOpen}
+        mode={mode}
+        setMode={setMode}
+        extraViews={extraViews}
+        extraRows={extraRows}
+        patchActiveView={patchActiveView}
+        sortRef={sortRef}
+        sortMenuOpen={sortMenuOpen}
+        setSortMenuOpen={setSortMenuOpen}
+        sortCustom={sortCustom}
+        sorts={sorts}
+        sortFields={sortFields}
+        applySorts={applySorts}
+        filterRef={filterRef}
+        filterOpen={filterOpen}
+        setFilterOpen={setFilterOpen}
+        filterActive={filterActive}
+        filterTree={filterTree}
+        filterFields={filterFields}
+        filterValueOptions={filterValueOptions}
+        applyFilterTree={applyFilterTree}
+        groupRef={groupRef}
+        groupOpen={groupOpen}
+        setGroupOpen={setGroupOpen}
+        grouping={grouping}
+        activeGroup={activeGroup}
+        groupBy={groupBy}
+        groupConfig={groupConfig}
+        panelGroups={panelGroups}
+        groupFields={groupFields}
+        setGroupKey={setGroupKey}
+        setGroupSettings={setGroupSettings}
+        columnRef={columnRef}
+        columnMenuOpen={columnMenuOpen}
+        setColumnMenuOpen={setColumnMenuOpen}
+        renderVisibleColumnsFlyout={renderVisibleColumnsFlyout}
+        configRef={configRef}
+        configOpen={configOpen}
+        setConfigOpen={setConfigOpen}
+        schema={schema}
+        parentKey={parentKey}
+        wrapCells={wrapCells}
+        setWrap={setWrap}
+        truncateCells={truncateCells}
+        setTruncate={setTruncate}
+        freezeTitle={freezeTitle}
+        setFreezeTitleCol={setFreezeTitleCol}
+        showTree={showTree}
+        setTree={setTree}
+        refreshing={refreshing}
+        refreshNow={refreshNow}
+        notice={notice}
+        canCreate={canCreate}
+        canAskNewPlugin={canAskNewPlugin}
+        createRecord={createRecord}
+        isDataOverview={isDataOverview}
+        createTypeOpen={createTypeOpen}
+        setCreateTypeOpen={setCreateTypeOpen}
+        createTypeTable={createTypeTable}
+        createTypePath={createTypePath}
+        setCreateTypePath={setCreateTypePath}
+        overviewCreateTables={overviewCreateTables}
+        createScopeOpen={createScopeOpen}
+        setCreateScopeOpen={setCreateScopeOpen}
+        createScope={createScope}
+        setCreateScope={setCreateScope}
+        localData={localData}
+      />
     ),
     [listChromeLock],
   )
