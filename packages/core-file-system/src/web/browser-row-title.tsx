@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type Reac
 import { createPortal } from 'react-dom'
 import {
   ArrowsPointingOutIcon,
-  ChevronDownIcon,
   ChevronRightIcon,
   ViewColumnsIcon,
 } from '@heroicons/react/16/solid'
@@ -287,11 +286,7 @@ export function RecordTitle({
                 onToggleCollapsed()
               }}
             >
-              {collapsed ? (
-                <ChevronRightIcon aria-hidden className="size-[14px]" />
-              ) : (
-                <ChevronDownIcon aria-hidden className="size-[14px]" />
-              )}
+              <ChevronRightIcon aria-hidden className={`size-[14px] sidebar-chevron${collapsed ? '' : ' is-open'}`} />
             </button>
           ) : (
             <span className="tasks-tree-toggle is-empty" aria-hidden>

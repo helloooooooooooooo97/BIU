@@ -708,6 +708,49 @@ export function CollectionBrowser({
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() =>
     loadCollapsedGroups(collectionPath, initialView?.id ?? routeViewId ?? '', initialView?.groupBy ?? ''),
   )
+  const tableFoldFlipRef = useRef<Map<string, number> | null>(null)
+  function captureTableFoldSnapshot() {
+    if (typeof window === 'undefined' || window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return
+    const tbody = tableRef.current?.tBodies[0]
+    if (!tbody) return
+    const snap = new Map<string, number>()
+    for (const tr of tbody.rows) {
+      const key = tr.dataset.rowKey ?? (tr.dataset.groupKey ? `gh:${tr.dataset.groupKey}` : tr.dataset.groupPager ? `gp:${tr.dataset.groupPager}` : '')
+      if (key) snap.set(key, tr.getBoundingClientRect().top)
+    }
+    if (snap.size) tableFoldFlipRef.current = snap
+  }
+  useLayoutEffect(() => {
+    const prev = tableFoldFlipRef.current
+    if (!prev) return
+    tableFoldFlipRef.current = null
+    const tbody = tableRef.current?.tBodies[0]
+    if (!tbody) return
+    const easing = 'cubic-bezier(0.22, 1, 0.36, 1)'
+    for (const tr of tbody.rows) {
+      if (typeof tr.animate !== 'function') break
+      const key = tr.dataset.rowKey ?? (tr.dataset.groupKey ? `gh:${tr.dataset.groupKey}` : tr.dataset.groupPager ? `gp:${tr.dataset.groupPager}` : '')
+      if (!key) continue
+      const oldTop = prev.get(key)
+      if (oldTop != null) {
+        const deltaY = oldTop - tr.getBoundingClientRect().top
+        if (Math.abs(deltaY) >= 1 && Math.abs(deltaY) < 2400) {
+          tr.animate(
+            [{ transform: `translate3d(0, ${deltaY}px, 0)` }, { transform: 'translate3d(0, 0, 0)' }],
+            { duration: 180, easing },
+          )
+        }
+      } else {
+        tr.animate(
+          [
+            { opacity: 0, transform: 'translate3d(0, -6px, 0)' },
+            { opacity: 1, transform: 'translate3d(0, 0, 0)' },
+          ],
+          { duration: 180, easing },
+        )
+      }
+    }
+  }, [collapsedGroups, collapsed])
   useEffect(() => {
     setCollapsedGroups(loadCollapsedGroups(collectionPath, activeViewId ?? routeViewId ?? '', groupBy))
   }, [activeViewId, collectionPath, groupBy, routeViewId])
@@ -4071,11 +4114,14 @@ export function CollectionBrowser({
           aria-expanded={!folded}
           aria-label={folded ? '展开分组' : '收起分组'}
           title={folded ? '展开分组' : '收起分组'}
-          onClick={() => setCollapsedGroups((prev) => {
-            const next = { ...prev, [groupKey]: !prev[groupKey] }
-            persistCollapsedGroups(collectionPath, activeViewId ?? routeViewId ?? '', groupBy, next)
-            return next
-          })}
+          onClick={() => {
+            captureTableFoldSnapshot()
+            setCollapsedGroups((prev) => {
+              const next = { ...prev, [groupKey]: !prev[groupKey] }
+              persistCollapsedGroups(collectionPath, activeViewId ?? routeViewId ?? '', groupBy, next)
+              return next
+            })
+          }}
         >
           <span className="sidebar-rail-icon sidebar-group-fold" aria-hidden>
             <span className="sidebar-group-fold-face">
@@ -4100,7 +4146,7 @@ export function CollectionBrowser({
               )}
             </span>
             <span className="sidebar-group-fold-chevron">
-              <UiGlyph icon={folded ? 'chevron-right' : 'chevron-down'} />
+              <UiGlyph icon="chevron-right" className={`sidebar-chevron${folded ? '' : ' is-open'}`} />
             </span>
           </span>
         </button>
@@ -4740,9 +4786,11 @@ export function CollectionBrowser({
           collapsed: collapsed[cursor.id] !== false,
         })
         if (fold === 'expand') {
+          captureTableFoldSnapshot()
           setCollapsed((prev) => ({ ...prev, [cursor.id]: false }))
           void loadTreeKids(String(cursor.id))
         } else if (fold === 'collapse') {
+          captureTableFoldSnapshot()
           setCollapsed((prev) => ({ ...prev, [cursor.id]: true }))
         }
         table?.focus({ preventScroll: true })
@@ -4985,6 +5033,7 @@ export function CollectionBrowser({
             collapsed={collapsed[row.id] !== false}
             onToggleCollapsed={() => {
               const expanding = collapsed[row.id] !== false
+              captureTableFoldSnapshot()
               setCollapsed((prev) => ({ ...prev, [row.id]: prev[row.id] === false }))
               if (expanding) void loadTreeKids(String(row.id))
             }}
@@ -5085,7 +5134,7 @@ export function CollectionBrowser({
     if (node.kind === 'row') return tableRecordRow(node.row, node.depth, node.hasKids, node.kidCount, node.key)
     if (node.kind === 'group-head') {
       return (
-        <tr key={node.key} className="fsdb-group-row">
+        <tr key={node.key} className="fsdb-group-row" data-group-key={node.groupKey}>
           <td colSpan={tablePaintRef.current.colSpan}>
             <GroupHead groupKey={node.groupKey} label={node.label} />
           </td>
@@ -5095,7 +5144,7 @@ export function CollectionBrowser({
     const pages = Math.max(1, Math.ceil(node.count / pageSize))
     const pageIndex = Math.min(node.pageIndex, pages - 1)
     return (
-      <tr key={node.key} className="fsdb-group-pager">
+      <tr key={node.key} className="fsdb-group-pager" data-group-pager={node.groupKey}>
         <td colSpan={tablePaintRef.current.colSpan}>
           <div className="fsdb-pager">
             <span className="fsdb-pager-meta">{node.count}</span>

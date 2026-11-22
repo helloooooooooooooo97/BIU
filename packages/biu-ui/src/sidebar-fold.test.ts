@@ -16,3 +16,21 @@ test('biu-ui fold uses grid 0fr to 1fr', () => {
   assert.match(css, /@keyframes sidebar-expand-in/)
   assert.match(css, /transition:\s*transform 180ms cubic-bezier\(0\.22, 1, 0\.36, 1\), opacity 140ms ease/)
 })
+
+test('table groups and detail tags/properties share the sidebar fold transition curves', () => {
+  const sidebarCss = readFileSync(resolve(import.meta.dirname, '../../../web/sidebar.css'), 'utf8')
+  const fsdbCss = readFileSync(resolve(import.meta.dirname, '../../core-file-system/src/web/fsdb-style.ts'), 'utf8')
+  const propRow = readFileSync(resolve(import.meta.dirname, '../../core-file-system/src/web/property-row.tsx'), 'utf8')
+  const propHost = readFileSync(resolve(import.meta.dirname, '../../core-file-system/src/web/record-prop-host.tsx'), 'utf8')
+  const rowTitle = readFileSync(resolve(import.meta.dirname, '../../core-file-system/src/web/browser-row-title.tsx'), 'utf8')
+  const browser = readFileSync(resolve(import.meta.dirname, '../../core-file-system/src/web/browser.tsx'), 'utf8')
+
+  assert.match(sidebarCss, /(?:^|\})\.sidebar-fold\s*\{\s*display:\s*grid;\s*grid-template-rows:\s*0fr;/)
+  assert.match(propRow, /sidebar-chevron\$\{expanded \? ' is-open' : ''\}/)
+  assert.match(propHost, /<SidebarFold open=\{!hidden\}>/)
+  assert.match(rowTitle, /sidebar-chevron\$\{collapsed \? '' : ' is-open'\}/)
+  assert.match(browser, /sidebar-chevron\$\{folded \? '' : ' is-open'\}/)
+  assert.match(browser, /function captureTableFoldSnapshot\(\)/)
+  assert.match(fsdbCss, /\.fsdb-prop-tr\.is-tag-fold \.fsdb-schema-pack\{display:grid;grid-template-rows:0fr;transition:grid-template-rows 180ms cubic-bezier\(\.22,1,\.36,1\)\}/)
+  assert.doesNotMatch(fsdbCss, /\.fsdb-prop-tr\.is-tag-fold:not\(\.is-open\) \.fsdb-schema-pack\{display:none\}/)
+})

@@ -378,21 +378,23 @@ export function TagPackEditor({ tagId }: { tagId: string }) {
         <span className="fsdb-muted">添加属性</span>
       )}
       <div className="fsdb-schema-pack">
-      {live.map((field) => (
-        <div key={field.key} className="fsdb-schema-prop">
-          <SchemaPropName name={field.label ?? field.key} kind={field.type} onRename={(next) => renameField(field.key, next)} />
-          <div className="fsdb-schema-prop-v">
-            <span className="fsdb-schema-prop-type">
-              <FieldGlyph kind={field.type} />
-              <span className="fsdb-muted">{TYPE_LABEL[field.type]}</span>
-            </span>
-            <button type="button" className="fsdb-schema-prop-del" aria-label={`删除 ${field.label ?? field.key}`} onClick={() => removeField(field.key)}>
-              <XMarkIcon aria-hidden className="size-3" />
-            </button>
-          </div>
+        <div className="fsdb-schema-pack-inner">
+          {live.map((field) => (
+            <div key={field.key} className="fsdb-schema-prop">
+              <SchemaPropName name={field.label ?? field.key} kind={field.type} onRename={(next) => renameField(field.key, next)} />
+              <div className="fsdb-schema-prop-v">
+                <span className="fsdb-schema-prop-type">
+                  <FieldGlyph kind={field.type} />
+                  <span className="fsdb-muted">{TYPE_LABEL[field.type]}</span>
+                </span>
+                <button type="button" className="fsdb-schema-prop-del" aria-label={`删除 ${field.label ?? field.key}`} onClick={() => removeField(field.key)}>
+                  <XMarkIcon aria-hidden className="size-3" />
+                </button>
+              </div>
+            </div>
+          ))}
+          <AddProperty onAdd={addField} />
         </div>
-      ))}
-      <AddProperty onAdd={addField} />
       </div>
     </div>
   )
@@ -551,6 +553,7 @@ export function SchemaFieldEditor({
         const orphans = orphanPackEntries(tag.fields, bag)
         return (
           <div key={tag.id} className="fsdb-schema-pack">
+            <div className="fsdb-schema-pack-inner">
             <div className="fsdb-schema-pack-head">
               <SchemaChip
                 id={tag.id}
@@ -607,6 +610,7 @@ export function SchemaFieldEditor({
               </div>
             ))}
             <AddProperty onAdd={(name, type) => addField(tag, name, type)} />
+            </div>
           </div>
         )
       })}
