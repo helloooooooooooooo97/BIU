@@ -155,7 +155,7 @@ import { createBrowserMutations } from './use-browser-mutations.ts'
 import { buildTableIconLookup, createBrowserTablePaint } from './browser-table-paint.tsx'
 import { BrowserRecordStage } from './browser-record-stage.tsx'
 import { normalizeColumnSummaries, type ColumnSummaryOp } from './column-summary.ts'
-import { activeColumnSandboxItem, normalizeColumnViews, type ColumnViewConfig } from './column-sandbox-model.ts'
+import { activeColumnSandboxItem, normalizeColumnViews, resolveColumnSandboxItems, type ColumnViewConfig } from './column-sandbox-model.ts'
 import { ColumnHeaderMenu, type ColumnHeaderMenuTarget } from './column-header-menu.tsx'
 import { KeyedSerialQueue, PendingFieldPatchTracker } from './record-write-queue.ts'
 import { ViewSyncController } from './view-sync-controller.ts'
@@ -2159,7 +2159,21 @@ export function CollectionBrowser({
     [pinOffsets],
   )
   const tableResetKey = `${activeViewId ?? ''}\0${collectionPath}\0${groupBy}\0${page}\0${pageSize}\0${query}`
-  const columnViewsStamp = useMemo(() => `${JSON.stringify(columnViews)}\0${pinStamp}`, [columnViews, pinStamp])
+  const tagViewsStamp = useMemo(
+    () =>
+      tagCatalog
+        .flatMap((pack) =>
+          pack.fields.flatMap((field) =>
+            field.views?.length ? [`${pack.id}:${field.key}:${JSON.stringify(field.views)}`] : [],
+          ),
+        )
+        .join('\0'),
+    [tagCatalog],
+  )
+  const columnViewsStamp = useMemo(
+    () => `${JSON.stringify(columnViews)}\0${tagViewsStamp}\0${pinStamp}`,
+    [columnViews, tagViewsStamp, pinStamp],
+  )
   const checkLayoutExtra = [
     grouping ? 1 : 0,
     page,
@@ -3881,7 +3895,10 @@ export function CollectionBrowser({
       renderRow: renderPaintRow,
       compositeCells: compositeCellKeys,
       columnViewStamp: (colKey) => {
-        const active = activeColumnSandboxItem(columnViews[colKey])
+        const active = activeColumnSandboxItem(
+          columnViews[colKey],
+          resolveColumnSandboxItems(colKey, columnViews[colKey], tagCatalogRef.current),
+        )
         const pin = pinOffsets?.get(colKey)
         const pinPart = pin ? `${pin.left}:${pin.isEdge ? 1 : 0}` : ''
         const viewPart = active ? `${active.id}\0${active.code}` : ''

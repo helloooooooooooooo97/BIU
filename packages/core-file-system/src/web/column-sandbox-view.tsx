@@ -6,6 +6,7 @@ import {
   activeColumnSandboxItem,
   defaultColumnSandboxCode,
   normalizeColumnViews,
+  resolveColumnSandboxItems,
   type ColumnSandboxItem,
   type ColumnSandboxProps,
   type ColumnViewConfig,
@@ -15,6 +16,7 @@ export {
   activeColumnSandboxItem,
   defaultColumnSandboxCode,
   normalizeColumnViews,
+  resolveColumnSandboxItems,
   type ColumnSandboxItem,
   type ColumnSandboxProps,
   type ColumnViewConfig,
@@ -132,19 +134,24 @@ export function askAgentEditColumnSandbox(opts: {
   columnLabel: string
   kind: FieldType
   sandbox: ColumnSandboxItem
+  tagPackId?: string
+  tagFieldKey?: string
 }) {
+  const tagPath = opts.tagPackId ? `/tags/${opts.tagPackId}` : ''
   const viewPath = opts.viewId ? savedViewRecordPath(opts.collectionPath, opts.viewId) : ''
-  const targetHint = viewPath
-    ? `请先 db_read path="${viewPath}" 读取当前视图的 columnViews，然后用 db_update path="${viewPath}" 只更新 columnViews["${opts.columnKey}"] 里 id="${opts.sandbox.id}"（${opts.sandbox.name}）的 code 字段（保留其他列与视图配置不变）。`
-    : `请帮我修改列「${opts.columnLabel}」（key: ${opts.columnKey}）的属性沙箱视图「${opts.sandbox.name}」的 JSX 代码。`
+  const targetHint = tagPath && opts.tagFieldKey
+    ? `请先 db_read path="${tagPath}" 读取标签定义，然后用 db_update path="${tagPath}" 只更新 fields 中 key="${opts.tagFieldKey}" 的 views 数组里 id="${opts.sandbox.id}"（${opts.sandbox.name}）的 code 字段（保留其他字段和视图不变）。`
+    : viewPath
+      ? `请先 db_read path="${viewPath}" 读取当前视图的 columnViews，然后用 db_update path="${viewPath}" 只更新 columnViews["${opts.columnKey}"] 里 id="${opts.sandbox.id}"（${opts.sandbox.name}）的 code 字段（保留其他列与视图配置不变）。`
+      : `请帮我修改列「${opts.columnLabel}」（key: ${opts.columnKey}）的属性沙箱视图「${opts.sandbox.name}」的 JSX 代码。`
   const draft = `请帮我优化表格列「${opts.columnLabel}」（类型：${opts.kind}）的属性沙箱视图「${opts.sandbox.name}」的展示样式。先听我描述想要的展示效果。\n${targetHint}\n组件签名：export default function Cell({ value, row, columnKey, label, kind })，不需要 import（React Hooks 可直接使用）。当前代码：\n\`\`\`jsx\n${opts.sandbox.code}\n\`\`\``
   void import('@biu/core-pick/web').then((mod) => {
     mod.getPick()?.attach(
       [
         {
           kind: 'record',
-          id: opts.viewId ?? opts.columnKey,
-          path: viewPath || opts.collectionPath,
+          id: opts.tagPackId ?? opts.viewId ?? opts.columnKey,
+          path: tagPath || viewPath || opts.collectionPath,
           label: `${opts.columnLabel} · ${opts.sandbox.name}`,
           title: opts.viewName ? `${opts.viewName} / ${opts.columnLabel}` : opts.columnLabel,
           route: typeof window === 'undefined' ? '' : window.location.pathname,

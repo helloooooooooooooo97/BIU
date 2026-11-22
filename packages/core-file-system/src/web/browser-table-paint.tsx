@@ -5,7 +5,8 @@ import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { tagTone as schemaTagTone } from '@biu/biu-ui/tag-chip'
 import { TagFieldChips } from './schema-field.tsx'
 import { computeColumnSummary, type ColumnSummaryOp } from './column-summary.ts'
-import { activeColumnSandboxItem, ColumnSandboxCell, type ColumnViewConfig } from './column-sandbox-view.tsx'
+import { activeColumnSandboxItem, ColumnSandboxCell, resolveColumnSandboxItems, type ColumnViewConfig } from './column-sandbox-view.tsx'
+import { loadTags } from './tag-catalog.ts'
 import type { ColumnHeaderMenuTarget } from './column-header-menu.tsx'
 import {
   columnHeadTip,
@@ -350,7 +351,10 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
   }
 
   function paintTableCell(row: DbRecord, key: string, field: FieldSpec) {
-    const activeSandbox = activeColumnSandboxItem(columnViews[key])
+    const activeSandbox = activeColumnSandboxItem(
+      columnViews[key],
+      resolveColumnSandboxItems(key, columnViews[key], loadTags()),
+    )
     if (activeSandbox) {
       const rawValue = parseTagFlatColumnKey(key) ? readTagFlatValue(row, key) : row[key]
       return (

@@ -422,6 +422,23 @@ function generateStableSchemaFieldKey(used: Set<string>): string {
   return String(n)
 }
 
+function normalizeSchemaFieldViews(raw: unknown): SchemaFieldView[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const out: SchemaFieldView[] = []
+  const seen = new Set<string>()
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue
+    const item = entry as Record<string, unknown>
+    const id = String(item.id ?? '').trim()
+    if (!id || id === 'default' || seen.has(id)) continue
+    seen.add(id)
+    const name = String(item.name ?? '').trim() || `沙箱视图 ${out.length + 1}`
+    const code = typeof item.code === 'string' ? item.code : ''
+    out.push({ id, name, code })
+  }
+  return out.length ? out : undefined
+}
+
 function atomicSchemaField(key: string, row: Record<string, unknown>, fieldLabel: string): SchemaPackField {
   const field: SchemaPackField = {
     key,
@@ -440,6 +457,8 @@ function atomicSchemaField(key: string, row: Record<string, unknown>, fieldLabel
         .filter(([value, text]) => Boolean(value && text && field.enum?.includes(value))),
     )
   }
+  const views = normalizeSchemaFieldViews(row.views)
+  if (views) field.views = views
   return field
 }
 
@@ -499,10 +518,18 @@ export function parseAtomicFields(
   return fields
 }
 
+export type SchemaFieldView = {
+  id: string
+  name: string
+  code: string
+}
+
 export type SchemaPackField = FieldSpec & {
   key: string
   type: AtomicFieldType
   deleted?: boolean
+  /** 该标签属性可复用的自定义沙箱视图代码列表；表格视图仅通过 columnViews[colKey].activeId 记录当前选择。 */
+  views?: SchemaFieldView[]
 }
 
 export function liveSchemaPackFields(fields: SchemaPackField[] | undefined) {

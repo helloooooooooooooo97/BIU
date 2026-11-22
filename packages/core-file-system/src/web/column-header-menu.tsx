@@ -28,6 +28,7 @@ import {
   askAgentEditColumnSandbox,
   compileColumnSandbox,
   defaultColumnSandboxCode,
+  resolveColumnSandboxItems,
   type ColumnSandboxItem,
   type ColumnViewConfig,
 } from './column-sandbox-view.tsx'
@@ -209,13 +210,34 @@ export function ColumnHeaderMenu({
   const summaryOptions = summaryOpsForKind(col.kind)
   const showInfoButton = editableTagField || Boolean(initialDesc)
 
-  const viewItems = columnView?.items ?? []
+  const isTagOwnedViews = Boolean(tagPack && tagField)
+  const viewItems = resolveColumnSandboxItems(col.key, columnView, tagCatalog)
   const activeViewKey = columnView?.activeId ?? 'default'
   const activeSandbox = activeViewKey !== 'default' ? viewItems.find((item) => item.id === activeViewKey) ?? null : null
   const editingSandbox = editingSandboxId ? viewItems.find((item) => item.id === editingSandboxId) ?? null : null
   const compileCheck = editingSandbox ? compileColumnSandbox(codeDraft) : null
 
+  function persistTagFieldViews(nextViews: ColumnSandboxItem[]) {
+    if (!tagPack || !tagField) return
+    void persistTags([
+      {
+        ...tagPack,
+        fields: tagPack.fields.map((row) => {
+          if (row.key !== tagField.key) return row
+          const updated = { ...row }
+          if (nextViews.length) updated.views = nextViews
+          else delete updated.views
+          return updated
+        }),
+      },
+    ])
+  }
+
   function selectSandboxView(nextId: string) {
+    if (isTagOwnedViews) {
+      onChangeColumnView(col.key, nextId === 'default' ? undefined : { activeId: nextId })
+      return
+    }
     if (!viewItems.length) {
       onChangeColumnView(col.key, undefined)
       return
@@ -228,24 +250,44 @@ export function ColumnHeaderMenu({
     const name = `沙箱视图 ${viewItems.length + 1}`
     const code = defaultColumnSandboxCode({ key: col.key, label: initialName, kind: col.kind })
     const created: ColumnSandboxItem = { id, name, code }
-    onChangeColumnView(col.key, { activeId: id, items: [...viewItems, created] })
+    const nextItems = [...viewItems, created]
+    if (isTagOwnedViews) {
+      persistTagFieldViews(nextItems)
+      onChangeColumnView(col.key, { activeId: id })
+      return
+    }
+    onChangeColumnView(col.key, { activeId: id, items: nextItems })
   }
 
   function removeSandboxView(id: string) {
     const rest = viewItems.filter((item) => item.id !== id)
     if (editingSandboxId === id) setEditingSandboxId(null)
+    const nextActive = activeViewKey === id ? 'default' : activeViewKey
+    if (isTagOwnedViews) {
+      persistTagFieldViews(rest)
+      onChangeColumnView(col.key, nextActive === 'default' ? undefined : { activeId: nextActive })
+      return
+    }
     if (!rest.length) {
       onChangeColumnView(col.key, undefined)
       return
     }
-    const nextActive = activeViewKey === id ? 'default' : activeViewKey
     onChangeColumnView(col.key, { activeId: nextActive, items: rest })
   }
 
   function saveSandboxCode(id: string, nextCode: string) {
+    const nextItems = viewItems.map((item) => (item.id === id ? { ...item, code: nextCode } : item))
+    if (isTagOwnedViews) {
+      persistTagFieldViews(nextItems)
+      // 若之前是旧视图内联 items，顺手清理成轻量 activeId 指针
+      if (columnView?.items?.length) {
+        onChangeColumnView(col.key, activeViewKey === 'default' ? undefined : { activeId: activeViewKey })
+      }
+      return
+    }
     onChangeColumnView(col.key, {
       activeId: activeViewKey,
-      items: viewItems.map((item) => (item.id === id ? { ...item, code: nextCode } : item)),
+      items: nextItems,
     })
   }
 
@@ -567,6 +609,8 @@ export function ColumnHeaderMenu({
                                         columnLabel: initialName,
                                         kind: col.kind,
                                         sandbox: item,
+                                        tagPackId: tagPack?.id,
+                                        tagFieldKey: tagField?.key,
                                       })
                                       onClose()
                                     }}

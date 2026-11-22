@@ -1,4 +1,5 @@
-import type { DbRecord, FieldType } from '@biu/type-file-system'
+import type { CollectionSchemaPack, DbRecord, FieldType } from '@biu/type-file-system'
+import { parseTagFlatColumnKey } from './fields.ts'
 
 export type ColumnSandboxItem = {
   id: string
@@ -8,7 +9,8 @@ export type ColumnSandboxItem = {
 
 export type ColumnViewConfig = {
   activeId: string
-  items: ColumnSandboxItem[]
+  /** 仅原生非标签列或历史视图兜底时内联保存；标签属性列的定义由标签字段 fields[*].views 持有。 */
+  items?: ColumnSandboxItem[]
 }
 
 export type ColumnSandboxProps = {
@@ -49,19 +51,47 @@ export function normalizeColumnViews(raw: unknown): Record<string, ColumnViewCon
       const code = typeof item.code === 'string' ? item.code : ''
       items.push({ id, name, code })
     }
-    if (!items.length) continue
-    const rawActive = String(rec.activeId ?? 'default').trim()
-    const activeId = rawActive !== 'default' && seen.has(rawActive) ? rawActive : 'default'
+    const rawActive = String(rec.activeId ?? 'default').trim() || 'default'
+    // 如果没有内联 items：仅当 activeId 指向外部（标签字段）沙箱视图时保留轻量指针
+    if (!items.length) {
+      if (rawActive !== 'default') out[colKey] = { activeId: rawActive }
+      continue
+    }
+    // 有内联 items 时：标签列允许 activeId 指向标签侧视图，原生列则限制在自身 items 内
+    const isTagCol = Boolean(parseTagFlatColumnKey(colKey))
+    const activeId = rawActive !== 'default' && (isTagCol || seen.has(rawActive)) ? rawActive : 'default'
     out[colKey] = { activeId, items }
   }
   return Object.keys(out).length ? out : undefined
 }
 
+/** 合并该列可用的沙箱视图列表：标签列以标签字段的 views 为权威，兼容合并视图里遗留的旧 items。 */
+export function resolveColumnSandboxItems(
+  colKey: string,
+  config: ColumnViewConfig | undefined,
+  tags?: CollectionSchemaPack[],
+): ColumnSandboxItem[] {
+  const flat = parseTagFlatColumnKey(colKey)
+  const tagViews = flat && tags
+    ? (tags.find((pack) => pack.id === flat.packId)?.fields.find((field) => field.key === flat.fieldKey)?.views ?? [])
+    : []
+  const legacyItems = config?.items ?? []
+  if (!tagViews.length) return legacyItems
+  if (!legacyItems.length) return tagViews
+  const seen = new Set(tagViews.map((item) => item.id))
+  return [...tagViews, ...legacyItems.filter((item) => !seen.has(item.id))]
+}
+
 export function activeColumnSandboxItem(
   config: ColumnViewConfig | undefined,
+  externalItems?: ColumnSandboxItem[],
 ): ColumnSandboxItem | null {
   if (!config || !config.activeId || config.activeId === 'default') return null
-  return config.items.find((item) => item.id === config.activeId) ?? null
+  if (externalItems?.length) {
+    const hit = externalItems.find((item) => item.id === config.activeId)
+    if (hit) return hit
+  }
+  return config.items?.find((item) => item.id === config.activeId) ?? null
 }
 
 export function defaultColumnSandboxCode(col: {

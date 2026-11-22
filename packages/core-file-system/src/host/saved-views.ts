@@ -602,7 +602,7 @@ export function viewsCollection(
         filters: { type: 'string', label: '筛选', writable: true, description: VIEW_FILTERS_DESCRIPTION },
         filterTree: { type: 'string', label: '筛选树', writable: true, description: VIEW_FILTER_TREE_DESCRIPTION },
         columnSummaries: { type: 'string', label: '列统计', writable: true, description: '每列底部统计方式，JSON 对象：{ "<columnKey>": "sum"|"avg"|"count"|... }' },
-        columnViews: { type: 'string', label: '属性视图', writable: true, description: '每列的属性沙箱视图，JSON 对象：{ "<columnKey>": { activeId, items: [{ id, name, code }] } }，code 为 export default function Cell({ value, row, columnKey, label, kind }) 的 JSX 代码。' },
+        columnViews: { type: 'string', label: '属性视图', writable: true, description: '每列的属性沙箱视图选择，JSON 对象：标签属性列仅存 { activeId }（代码由标签字段 fields[*].views 持有），原生非标签列可内联 { activeId, items: [{ id, name, code }] }。' },
       },
     },
     list,
