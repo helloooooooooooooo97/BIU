@@ -3185,6 +3185,8 @@ export function CollectionBrowser({
   }
 
   const {
+    tableNavRowIds,
+    findPaintedCellTd,
     onTablePointerDown,
     onTablePointerMove,
     onTableClick,
