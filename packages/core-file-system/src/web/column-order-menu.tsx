@@ -176,11 +176,13 @@ function ColumnDragRow({
   col,
   label,
   on,
+  locked,
   onToggle,
 }: {
   col: { key: string; kind: FieldType; field: FieldSpec; packLabel?: string }
   label: string
   on: boolean
+  locked?: boolean
   onToggle: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: col.key })
@@ -195,7 +197,7 @@ function ColumnDragRow({
         </button>
       }
     >
-      <ColumnMenuCheck col={col} label={label} on={on} onToggle={onToggle} />
+      <ColumnMenuCheck col={col} label={label} on={on} locked={locked} onToggle={onToggle} />
     </ColumnRowShell>
   )
 }
@@ -222,11 +224,7 @@ export function ColumnOrderMenu({
   const visibleKeys = new Set(columns.map((item) => item.key))
   const hidden = allColumns.filter((item) => !parseTagFlatColumnKey(item.key) && !visibleKeys.has(item.key))
   const queryText = query ?? ''
-  const menuCols = [
-    ...columns.filter((item) => item.key === labelField),
-    ...columns.filter((item) => item.key !== labelField),
-    ...hidden,
-  ].filter((item) => {
+  const menuCols = [...columns, ...hidden].filter((item) => {
     if (!flyoutQueryMatch(columnMenuLabel(item, tagCatalog), queryText)) return false
     const flat = parseTagFlatColumnKey(item.key)
     if (!flat || !queryText.trim()) return true
@@ -243,7 +241,7 @@ export function ColumnOrderMenu({
     )
   })
   const locked = new Set([labelField, 'actions'].filter(Boolean))
-  const sortableIds = menuCols.filter((item) => !locked.has(item.key)).map((item) => item.key)
+  const sortableIds = menuCols.map((item) => item.key)
   const active = menuCols.find((item) => item.key === activeId)
   const searching = Boolean(query.trim())
 
@@ -290,37 +288,21 @@ export function ColumnOrderMenu({
           const to = sortableIds.indexOf(String(overId))
           if (from < 0 || to < 0) return
           const next = moveList(sortableIds, from, to)
-          const visible = next.filter((key) => visibleKeys.has(key) && key !== labelField && key !== 'actions')
-          const head = [labelField, visibleKeys.has('actions') ? 'actions' : ''].filter(Boolean) as string[]
-          onReorder([...head, ...visible])
+          const visible = next.filter((key) => visibleKeys.has(key))
+          onReorder(visible)
         }}
       >
-        {menuCols
-          .filter((item) => item.key === labelField || item.key === 'actions')
-          .map((item) => (
-            <ColumnRowShell
-              key={item.key}
-              grip={
-                <span className="fsdb-query-grip is-locked" aria-hidden>
-                  <DndGrip />
-                </span>
-              }
-            >
-              <ColumnMenuCheck col={item} label={columnMenuLabel(item, tagCatalog)} on locked onToggle={() => onToggle(item.key)} />
-            </ColumnRowShell>
-          ))}
         <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-          {menuCols
-            .filter((item) => item.key !== labelField && item.key !== 'actions')
-            .map((item) => (
-              <ColumnDragRow
-                key={item.key}
-                col={item}
-                label={columnMenuLabel(item, tagCatalog)}
-                on={visibleKeys.has(item.key)}
-                onToggle={() => onToggle(item.key)}
-              />
-            ))}
+          {menuCols.map((item) => (
+            <ColumnDragRow
+              key={item.key}
+              col={item}
+              label={columnMenuLabel(item, tagCatalog)}
+              on={visibleKeys.has(item.key) || locked.has(item.key)}
+              locked={locked.has(item.key)}
+              onToggle={() => onToggle(item.key)}
+            />
+          ))}
         </SortableContext>
         <DragOverlay zIndex={280}>
           {active ? (
@@ -329,7 +311,13 @@ export function ColumnOrderMenu({
                 <button type="button" className="fsdb-query-grip" tabIndex={-1}>
                   <DndGrip />
                 </button>
-                <ColumnMenuCheck col={active} label={columnMenuLabel(active, tagCatalog)} on={visibleKeys.has(active.key)} onToggle={() => {}} />
+                <ColumnMenuCheck
+                  col={active}
+                  label={columnMenuLabel(active, tagCatalog)}
+                  on={visibleKeys.has(active.key) || locked.has(active.key)}
+                  locked={locked.has(active.key)}
+                  onToggle={() => {}}
+                />
               </div>
             </div>
           ) : null}

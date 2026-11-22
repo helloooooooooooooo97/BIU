@@ -25,6 +25,7 @@ import { TableGlyph, UiGlyph } from './nav-glyphs.tsx'
 import { TAGS_COLLECTION_PATH } from './database-path.ts'
 import { persistCollapsedGroups } from './view-storage.ts'
 import { tablePinColOffsets, type PinnedColOffset, type TableColumnSlice } from './table-window.ts'
+import { startTableColumnDrag } from './table-col-reorder.ts'
 import { tableCellRangeKey, tableNavKeys, type TableCellCursor } from './table-keys.ts'
 import { isViewCatalogField } from './view-catalog.ts'
 
@@ -84,6 +85,7 @@ export type BrowserTablePaintDeps = {
   columnViews: Record<string, ColumnViewConfig>
   openColMenuKey: string | null
   onOpenColMenu?: (target: ColumnHeaderMenuTarget) => void
+  onReorderColumns?: (next: string[]) => void
   pageSize: number
   error: string
   setGroupPages: Dispatch<SetStateAction<Record<string, number>>>
@@ -142,6 +144,7 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
     columnViews,
     openColMenuKey,
     onOpenColMenu,
+    onReorderColumns,
     pageSize,
     error,
     setGroupPages,
@@ -280,6 +283,7 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
     const tone = flat ? schemaTagTone(flat.packId) : undefined
     const headTip = columnHeadTip(col)
     const interactive = Boolean(onOpenColMenu && !sheet && col.key !== 'actions')
+    const draggableCol = Boolean(onReorderColumns && !sheet)
     const menuOpen = interactive && openColMenuKey === col.key
     const pin = resolvePinOf(col.key)
     const thStyle: Record<string, string> | undefined =
@@ -292,13 +296,25 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
     return (
       <th
         key={col.key}
+        data-col-key={col.key}
         className={[
           pinClassFor(pin),
           tone ? 'is-tag-col' : '',
           interactive ? 'is-col-clickable' : '',
+          draggableCol ? 'is-col-draggable' : '',
           menuOpen ? 'is-col-menu-open' : '',
         ].filter(Boolean).join(' ') || undefined}
         style={thStyle}
+        onPointerDown={
+          draggableCol
+            ? (event) =>
+                startTableColumnDrag(event, {
+                  colKey: col.key,
+                  getColumnKeys: () => columns.map((item) => item.key),
+                  onReorder: onReorderColumns!,
+                })
+            : undefined
+        }
         onClick={
           interactive
             ? (event) => {

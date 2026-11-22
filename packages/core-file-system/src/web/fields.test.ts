@@ -192,9 +192,10 @@ test('default columns skip id and timestamps unless schema.columns lists them; t
   const keys = ['id', 'title', 'status', 'createdAt', 'updatedAt', 'content']
   assert.deepEqual(defaultColumnKeys(schema, keys), ['title', 'status'])
   assert.deepEqual(defaultColumnKeys({ ...schema, columns: ['status', 'createdAt'] }, keys), ['title', 'status', 'createdAt'])
-  assert.deepEqual(pinLabelColumn(schema, ['status', 'title']), ['title', 'status'])
-  assert.deepEqual(pinActionColumn(schema, ['status', 'title', 'actions'], true), ['title', 'actions', 'status'])
-  assert.deepEqual(pinActionColumn(schema, ['status', 'title'], true), ['title', 'actions', 'status'])
+  assert.deepEqual(pinLabelColumn(schema, ['status']), ['title', 'status'])
+  assert.deepEqual(pinLabelColumn(schema, ['status', 'title']), ['status', 'title'])
+  assert.deepEqual(pinActionColumn(schema, ['status', 'title', 'actions'], true), ['status', 'title', 'actions'])
+  assert.deepEqual(pinActionColumn(schema, ['status', 'title'], true), ['status', 'title', 'actions'])
   assert.deepEqual(pinActionColumn(schema, ['title', 'actions', 'status'], false), ['title', 'status'])
 })
 

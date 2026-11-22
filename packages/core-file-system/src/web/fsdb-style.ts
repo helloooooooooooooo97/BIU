@@ -1367,6 +1367,15 @@ html:not(.dark) .fsdb-checkrow>svg,
 html:not(.dark) .fsdb-cellselect-menu svg{color:var(--biu-color-icon)}
 .tasks-table th.is-col-clickable{cursor:pointer;transition:background 120ms ease}
 .tasks-table th.is-col-clickable:hover,.tasks-table th.is-col-menu-open{background:var(--biu-color-bg-hover)}
+.tasks-table th.is-col-draggable:not(.is-col-clickable){cursor:grab;transition:background 120ms ease}
+.tasks-table th.is-col-draggable:not(.is-col-clickable):hover{background:var(--biu-color-bg-hover)}
+.tasks-table th.is-col-dragging{opacity:.42}
+.tasks-table th.is-col-drop-before{box-shadow:inset 2px 0 0 0 var(--biu-color-emphasis,var(--biu-color-ink-blue,#3b82f6))}
+.tasks-table th.is-col-drop-after{box-shadow:inset -2px 0 0 0 var(--biu-color-emphasis,var(--biu-color-ink-blue,#3b82f6))}
+body.is-col-reordering,body.is-col-reordering *{cursor:grabbing!important;user-select:none!important}
+.fsdb-col-drag-ghost{position:fixed;z-index:9999;pointer-events:none;display:flex;align-items:center;padding:0 10px;border:1px solid color-mix(in srgb,var(--biu-color-border) 90%,transparent);border-radius:4px;background:color-mix(in srgb,var(--biu-color-bg-elevated,var(--biu-color-bg)) 94%,transparent);box-shadow:0 6px 20px rgba(0,0,0,.22),0 1px 4px rgba(0,0,0,.1);color:var(--biu-color-text);font-size:var(--biu-font-size-3);font-weight:var(--biu-font-weight-medium);overflow:hidden;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.fsdb-col-drag-ghost .tasks-th{display:inline-flex;align-items:center;gap:5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fsdb-col-drag-ghost .tasks-th svg{width:14px;height:14px;flex:none;color:var(--biu-color-icon)}
 .fsdb-col-menu{width:236px;max-width:calc(100vw - 16px);padding:6px;border:1px solid var(--biu-color-border);border-radius:10px;background:var(--biu-color-bg-elevated,var(--biu-color-bg));box-shadow:var(--biu-shadow-popover,0 8px 28px rgba(0,0,0,.22));color:var(--biu-color-text);font-size:var(--biu-font-size-4);user-select:none;transition:width 180ms cubic-bezier(.22,1,.36,1)}
 .fsdb-col-menu.is-wide{width:420px}
 .fsdb-col-menu-head{display:flex;flex-direction:column;gap:6px;padding:2px 2px 4px}

@@ -198,20 +198,25 @@ export function flattenTree(rows: DbRecord[], parentKey: string, collapsed: Reco
 }
 
 /** 表格默认列：schema.columns 与现有列求交；没有声明则展开业务列（不含 id、内置时间列与父级字段）。标题列始终排在最前。 */
+/** 确保标题列存在（若已存在于自定义顺序中则保留其当前位置）。 */
 export function pinLabelColumn(schema: CollectionSchema | undefined, keys: string[]): string[] {
   const label = schema?.labelField
   if (!label) return keys
-  return [label, ...keys.filter((key) => key !== label)]
+  if (keys.includes(label)) return keys
+  return [label, ...keys]
 }
 
-/** 有动作列时固定在标题右侧，且始终展示。 */
+/** 有动作列时确保动作列存在；若用户已调整过标题列或动作列顺序，则保留自定义顺序。 */
 export function pinActionColumn(schema: CollectionSchema | undefined, keys: string[], enabled: boolean): string[] {
-  const without = keys.filter((key) => key !== 'actions')
-  const pinned = pinLabelColumn(schema, without)
-  if (!enabled) return pinned
+  if (!enabled) return pinLabelColumn(schema, keys.filter((key) => key !== 'actions'))
+  const withLabel = pinLabelColumn(schema, keys)
+  if (withLabel.includes('actions')) return withLabel
   const label = schema?.labelField
-  if (label && pinned[0] === label) return [label, 'actions', ...pinned.slice(1)]
-  return ['actions', ...pinned]
+  const labelIdx = label ? withLabel.indexOf(label) : -1
+  if (labelIdx >= 0) {
+    return [...withLabel.slice(0, labelIdx + 1), 'actions', ...withLabel.slice(labelIdx + 1)]
+  }
+  return ['actions', ...withLabel]
 }
 
 export function defaultColumnKeys(schema: CollectionSchema | undefined, allKeys: string[]): string[] {

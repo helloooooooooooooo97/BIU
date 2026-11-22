@@ -3480,6 +3480,7 @@ export function CollectionBrowser({
         prev && prev.col.key === target.col.key && prev.mode === target.mode ? null : target,
       )
     },
+    onReorderColumns: setVisibleColumns,
     pageSize,
     error,
     setGroupPages,
