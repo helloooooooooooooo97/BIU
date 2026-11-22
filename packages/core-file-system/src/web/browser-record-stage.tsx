@@ -45,6 +45,7 @@ export type BrowserRecordStageProps = {
   tablePaintNodes: TablePaintNode[]
   pickMode: boolean
   tableResetKey: string
+  cellViewStamp?: string
   pickedCount: number
   checkLayoutExtra: string
   tablePaintRef: RefObject<TablePaintBag>
@@ -124,6 +125,7 @@ export const BrowserRecordStage = memo(function BrowserRecordStage(props: Browse
     tablePaintNodes,
     pickMode,
     tableResetKey,
+    cellViewStamp,
     pickedCount,
     checkLayoutExtra,
     tablePaintRef,
@@ -238,6 +240,7 @@ export const BrowserRecordStage = memo(function BrowserRecordStage(props: Browse
                   onVisibleRange={onVisibleRange}
                   frozen={Boolean(held)}
                   activeRowId={detailId}
+                  cellViewStamp={cellViewStamp}
                   retainedRowId={retainedCell?.id}
                   retainedRowKey={retainedCell?.rowKey}
                   retainedColumnKey={retainedCell?.key}

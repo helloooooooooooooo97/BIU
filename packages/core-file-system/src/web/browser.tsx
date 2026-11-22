@@ -155,7 +155,7 @@ import { createBrowserMutations } from './use-browser-mutations.ts'
 import { buildTableIconLookup, createBrowserTablePaint } from './browser-table-paint.tsx'
 import { BrowserRecordStage } from './browser-record-stage.tsx'
 import { normalizeColumnSummaries, type ColumnSummaryOp } from './column-summary.ts'
-import { normalizeColumnViews, type ColumnViewConfig } from './column-sandbox-model.ts'
+import { activeColumnSandboxItem, normalizeColumnViews, type ColumnViewConfig } from './column-sandbox-model.ts'
 import { ColumnHeaderMenu, type ColumnHeaderMenuTarget } from './column-header-menu.tsx'
 import { KeyedSerialQueue, PendingFieldPatchTracker } from './record-write-queue.ts'
 import { ViewSyncController } from './view-sync-controller.ts'
@@ -2131,7 +2131,8 @@ export function CollectionBrowser({
   const checkStackRef = useRef<HTMLDivElement>(null)
   const checkHoverRef = useRef<string | 'head' | null>(null)
   const columnPinCount = tablePinCount(columns.map((col) => col.key), schema?.labelField, freezeTitle)
-  const tableResetKey = `${activeViewId ?? ''}\0${collectionPath}\0${groupBy}\0${page}\0${pageSize}\0${query}\0${JSON.stringify(columnViews)}`
+  const tableResetKey = `${activeViewId ?? ''}\0${collectionPath}\0${groupBy}\0${page}\0${pageSize}\0${query}`
+  const columnViewsStamp = useMemo(() => JSON.stringify(columnViews), [columnViews])
   const checkLayoutExtra = [
     grouping ? 1 : 0,
     page,
@@ -3837,6 +3838,10 @@ export function CollectionBrowser({
       renderCell: renderPaintCell,
       renderRow: renderPaintRow,
       compositeCells: compositeCellKeys,
+      columnViewStamp: (colKey) => {
+        const active = activeColumnSandboxItem(columnViews[colKey])
+        return active ? `${active.id}\0${active.code}` : ''
+      },
       paintSelection: paintCellRangeClasses,
     }
   }
@@ -3934,6 +3939,7 @@ export function CollectionBrowser({
           tablePaintNodes={tablePaintNodes}
           pickMode={pickMode}
           tableResetKey={tableResetKey}
+          cellViewStamp={columnViewsStamp}
           pickedCount={pickedIds.length}
           checkLayoutExtra={checkLayoutExtra}
           tablePaintRef={tablePaintRef}

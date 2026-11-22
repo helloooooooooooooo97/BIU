@@ -57,6 +57,8 @@ export type TablePaintBag = {
   renderCell?: (node: TablePaintNode, colKey: string) => ReactNode
   /** 需要按整行 stamp 失效的复合列（如 actions、tag:*、自定义 chrome.cells） */
   compositeCells?: ReadonlySet<string>
+  /** 每列属性沙箱视图版本戳，变化时仅重绘对应列单元格。 */
+  columnViewStamp?: (colKey: string) => string
   revealRow?: (id: string, rowKey?: string) => void
   revealColumn?: (key: string) => void
   paintSelection?: () => void
@@ -286,6 +288,7 @@ type TableBodyProps = {
   error: string
   pickMode: boolean
   activeRowId: string | null
+  cellViewStamp?: string
 }
 
 function rowMetaStamp(node: Extract<TablePaintNode, { kind: 'row' }>, pickMode: boolean) {
@@ -344,13 +347,13 @@ export function padColumnRules(widths: number[]) {
   return layers.join(',')
 }
 
-const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, measureRow, colSpan, colKeys, pickMode, activeRowId }: TableBodyProps) {
+const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, measureRow, colSpan, colKeys, pickMode, activeRowId, cellViewStamp = '' }: TableBodyProps) {
   const paintRef = useContext(TablePaintCtx)
   const bag = paintRef.current
   const tagRev = useSyncExternalStore(subscribeTagCatalog, tagCatalogRevision, tagCatalogRevision)
   // 同一行数据保持同一份元素。列表刷新会换成新对象，但内容没变就不再画。
   // 单元格按字段值粒度缓存：改一个单元格只重画该格，横滚只创建新进入窗口的列。
-  const rowCache = useRef(new Map<string, { node: TablePaintNode; stamp: string; colKeys: string; pickMode: boolean; activeRowId: string | null; tagRev: number; element: ReactNode }>())
+  const rowCache = useRef(new Map<string, { node: TablePaintNode; stamp: string; colKeys: string; pickMode: boolean; activeRowId: string | null; tagRev: number; cellViewStamp: string; element: ReactNode }>())
   const cellCache = useRef(new Map<string, CellStampEntry<ReactNode>>())
   const stampCache = useRef(new Map<string, RowStampEntry>())
   const paintedWindow = useRef('')
@@ -397,7 +400,7 @@ const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, mea
     const stamp = rowPaintStamp(node, stampCache.current)
     const hit = rowCache.current.get(node.key)
     let element: ReactNode
-    if (hit && hit.stamp === stamp && hit.colKeys === colKeys && hit.pickMode === pickMode && hit.activeRowId === activeRowId && hit.tagRev === tagRev) {
+    if (hit && hit.stamp === stamp && hit.colKeys === colKeys && hit.pickMode === pickMode && hit.activeRowId === activeRowId && hit.tagRev === tagRev && hit.cellViewStamp === cellViewStamp) {
       element = hit.element
     } else if (node.kind === 'row' && bag.renderCell && bag.renderRow && layoutNow) {
       const cells: ReactNode[] = []
@@ -407,7 +410,8 @@ const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, mea
         const id = `${node.key}\0${key}`
         const isTagCol = key === 'tag' || key === 'tags' || key.startsWith('tag:')
         const composite = key === 'actions' || isTagCol || Boolean(compositeCells?.has(key)) || !(key in rowObj)
-        const cellMeta = isTagCol ? `${meta}\0tag:${tagRev}` : meta
+        const viewStamp = bag.columnViewStamp?.(key) ?? ''
+        const cellMeta = `${meta}${isTagCol ? `\0tag:${tagRev}` : ''}${viewStamp ? `\0view:${viewStamp}` : ''}`
         const cached = cellCache.current.get(id)
         if (isCellStampSame(cached, rowObj, key, cellMeta, stamp, composite)) return cached!.element
         const next = bag.renderCell!(node, key)
@@ -423,7 +427,7 @@ const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, mea
     } else {
       element = bag.renderNode(node)
     }
-    rowCache.current.set(node.key, { node, stamp, colKeys, pickMode, activeRowId, tagRev, element })
+    rowCache.current.set(node.key, { node, stamp, colKeys, pickMode, activeRowId, tagRev, cellViewStamp, element })
     children.push(isValidElement(element) ? cloneElement(element as ReactElement<ComponentProps<'tr'>>, {
       key: node.key, 'data-index': item.index, ref: measureRow,
     } as ComponentProps<'tr'>) : element)
@@ -460,6 +464,7 @@ export type WindowedTableProps = {
   checkStore?: TableCheckStore
   onVisibleRange?: (start: number, end: number) => void
   activeRowId: string | null
+  cellViewStamp?: string
   frozen?: boolean
   retainedRowId?: string | null
   retainedRowKey?: string | null
@@ -493,6 +498,7 @@ export const WindowedTable = memo(function WindowedTable({
   checkStore,
   onVisibleRange,
   activeRowId,
+  cellViewStamp,
   frozen: _frozen = false,
   retainedRowId,
   retainedRowKey,
@@ -647,6 +653,7 @@ export const WindowedTable = memo(function WindowedTable({
             error={error}
             pickMode={pickMode}
             activeRowId={activeRowId}
+            cellViewStamp={cellViewStamp}
           />
         </TablePaintCtx.Provider>
       </table>
