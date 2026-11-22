@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { TABLE_ROW_PX, TABLE_VIEWPORT_OVERSCAN } from './table-window.ts'
 import {
+  directionalRowDelayMs,
   extractDirectionalRange,
   VIEWPORT_IDLE_OVERSCAN,
   VIEWPORT_LEAD_OVERSCAN,
@@ -254,5 +255,15 @@ describe('vertical scroll flicker before/after benchmark', () => {
     expect(afterBackward[0]).toBe(visibleStart - VIEWPORT_LEAD_OVERSCAN)
     expect(comparison.after.leadRunwayPx).toBe(640)
     expect(comparison.after.leadRunwayPx).toBeGreaterThan(comparison.before.leadRunwayPx * 2)
+  })
+
+  it('staggers entering row fade-in top-to-bottom on scroll down and bottom-to-top on scroll up', () => {
+    const forward = [0, 1, 2, 3].map((i) => directionalRowDelayMs(i, 4, 'forward'))
+    const backward = [0, 1, 2, 3].map((i) => directionalRowDelayMs(i, 4, 'backward'))
+    const idle = [0, 1, 2, 3].map((i) => directionalRowDelayMs(i, 4, 'idle'))
+    expect(forward).toEqual([0, 14, 28, 42])
+    expect(backward).toEqual([42, 28, 14, 0])
+    expect(idle).toEqual([0, 0, 0, 0])
+    expect(directionalRowDelayMs(20, 25, 'forward')).toBe(84)
   })
 })

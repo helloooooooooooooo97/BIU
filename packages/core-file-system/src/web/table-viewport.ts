@@ -9,6 +9,20 @@ export const VIEWPORT_IDLE_OVERSCAN = 12
 export const VIEWPORT_TRAIL_OVERSCAN = 8
 export const VIEWPORT_LEAD_OVERSCAN = 20
 
+const ROW_STAGGER_STEP_MS = 14
+const ROW_STAGGER_MAX_MS = 84
+
+/** 顺着滚动方向为本帧新挂载行分配极短错峰延迟：下滑自上而下，上滑自下而上，首屏静止 0ms。 */
+export function directionalRowDelayMs(
+  orderIndex: number,
+  batchSize: number,
+  direction: ViewportScrollDirection,
+): number {
+  if (direction === 'idle' || batchSize <= 1) return 0
+  const rank = direction === 'backward' ? Math.max(0, batchSize - 1 - orderIndex) : Math.max(0, orderIndex)
+  return Math.min(rank * ROW_STAGGER_STEP_MS, ROW_STAGGER_MAX_MS)
+}
+
 /**
  * 参考 AG Grid rowBuffer 机制：永不在快滑中缩窄缓冲或用 rAF/startTransition 延后补行；
  * 静止时保持上下各 12 行（384px），滚动时在同一次同步渲染中将前进方向扩展到 20 行（640px）、反方向保留 8 行（256px）。
@@ -174,5 +188,12 @@ export function useTableViewport(options: {
     const index = rowKey ? keyIndices.get(rowKey) : rowIndices.get(id)
     if (index != null) current.current.scrollToIndex(index, { align: 'auto', behavior: 'auto' })
   }, [rowIndices, keyIndices])
-  return { virtualizer, items: virtualizer.getVirtualItems(), margin: geometry.margin, isScrolling: virtualizer.isScrolling, revealRow }
+  return {
+    virtualizer,
+    items: virtualizer.getVirtualItems(),
+    margin: geometry.margin,
+    isScrolling: virtualizer.isScrolling,
+    scrollDirection: scrollDirRef.current,
+    revealRow,
+  }
 }

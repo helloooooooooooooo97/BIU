@@ -23,7 +23,7 @@ import type { DbRecord } from '@biu/type-file-system'
 import { colWidthStyle } from './saved-view.ts'
 import { usePinnedTableHead } from './pinned-table-head.ts'
 import { useTableColumnViewport } from './table-column-viewport.ts'
-import { useTableViewport } from './table-viewport.ts'
+import { directionalRowDelayMs, useTableViewport, type ViewportScrollDirection } from './table-viewport.ts'
 import {
   evictCellCache,
   isCellStampSame,
@@ -290,6 +290,7 @@ type TableBodyProps = {
   pickMode: boolean
   activeRowId: string | null
   cellViewStamp?: string
+  scrollDirection?: ViewportScrollDirection
 }
 
 function rowMetaStamp(node: Extract<TablePaintNode, { kind: 'row' }>, pickMode: boolean) {
@@ -348,7 +349,7 @@ export function padColumnRules(widths: number[]) {
   return layers.join(',')
 }
 
-const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, measureRow, colSpan, colKeys, pickMode, activeRowId, cellViewStamp = '' }: TableBodyProps) {
+const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, measureRow, colSpan, colKeys, pickMode, activeRowId, cellViewStamp = '', scrollDirection = 'idle' }: TableBodyProps) {
   const paintRef = useContext(TablePaintCtx)
   const bag = paintRef.current
   const tagRev = useSyncExternalStore(subscribeTagCatalog, tagCatalogRevision, tagCatalogRevision)
@@ -357,14 +358,30 @@ const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, mea
   const rowCache = useRef(new Map<string, { node: TablePaintNode; stamp: string; colKeys: string; pickMode: boolean; activeRowId: string | null; tagRev: number; cellViewStamp: string; element: ReactNode }>())
   const cellCache = useRef(new Map<string, CellStampEntry<ReactNode>>())
   const stampCache = useRef(new Map<string, RowStampEntry>())
+  const mountedRowKeys = useRef(new Set<string>())
   const paintedWindow = useRef('')
   const keptCols = useRef<[Set<string>, Set<string>]>([new Set(), new Set()])
   const layout = columnLayout(colKeys)
   const liveRows = new Set<string>()
+  const enteringRows: string[] = []
+  const hadMounted = mountedRowKeys.current.size > 0
   for (const item of items) {
-    const key = nodes[item.index]?.key
-    if (key) liveRows.add(key)
+    const node = nodes[item.index]
+    const key = node?.key
+    if (!key) continue
+    liveRows.add(key)
+    if (hadMounted && node.kind === 'row' && !mountedRowKeys.current.has(key)) {
+      enteringRows.push(key)
+    }
   }
+  const enterDelay = new Map<string, number>()
+  if (enteringRows.length > 1 && scrollDirection !== 'idle') {
+    for (let i = 0; i < enteringRows.length; i += 1) {
+      const ms = directionalRowDelayMs(i, enteringRows.length, scrollDirection)
+      if (ms > 0) enterDelay.set(enteringRows[i]!, ms)
+    }
+  }
+  mountedRowKeys.current = liveRows
   if (rowCache.current.size > liveRows.size + 8) {
     for (const key of rowCache.current.keys()) if (!liveRows.has(key)) rowCache.current.delete(key)
     for (const key of stampCache.current.keys()) if (!liveRows.has(key)) stampCache.current.delete(key)
@@ -429,8 +446,19 @@ const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, mea
       element = bag.renderNode(node)
     }
     rowCache.current.set(node.key, { node, stamp, colKeys, pickMode, activeRowId, tagRev, cellViewStamp, element })
+    const delayMs = enterDelay.get(node.key) ?? 0
     children.push(isValidElement(element) ? cloneElement(element as ReactElement<ComponentProps<'tr'>>, {
-      key: node.key, 'data-index': item.index, ...(measureRow ? { ref: measureRow } : {}),
+      key: node.key,
+      'data-index': item.index,
+      ...(measureRow ? { ref: measureRow } : {}),
+      ...(delayMs > 0
+        ? {
+            style: {
+              ...(element.props as ComponentProps<'tr'>).style,
+              ['--fsdb-row-delay' as string]: `${delayMs}ms`,
+            },
+          }
+        : {}),
     } as ComponentProps<'tr'>) : element)
     end = top + item.size
   }
@@ -511,7 +539,7 @@ export const WindowedTable = memo(function WindowedTable({
   useLayoutEffect(() => {
     if (dockedViewportRef.current && wrapRef.current) dockedViewportRef.current.scrollLeft = wrapRef.current.scrollLeft
   }, [pinnedHead, wrapRef])
-  const { virtualizer, items, margin, isScrolling, revealRow } = useTableViewport({
+  const { virtualizer, items, margin, isScrolling, scrollDirection, revealRow } = useTableViewport({
     nodes,
     wrapCells,
     resetKey,
@@ -655,6 +683,7 @@ export const WindowedTable = memo(function WindowedTable({
             pickMode={pickMode}
             activeRowId={activeRowId}
             cellViewStamp={cellViewStamp}
+            scrollDirection={scrollDirection}
           />
         </TablePaintCtx.Provider>
       </table>
