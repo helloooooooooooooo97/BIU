@@ -192,10 +192,10 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
   }
 
   let cachedHoldPinSnap: TableHoldSnap | null = null
-  let cachedHoldPinMap: ReadonlyMap<string, PinnedColOffset> = pinOffsets
+  let cachedHoldPinMap: ReadonlyMap<string, PinnedColOffset> | undefined = pinOffsets
   function resolvePinOf(colKey: string): PinnedColOffset | undefined {
     const held = tableHoldRef.current
-    if (!held || held.nodes === EMPTY_HOLD_NODES) return pinOffsets.get(colKey)
+    if (!held || held.nodes === EMPTY_HOLD_NODES) return pinOffsets?.get(colKey)
     if (held !== cachedHoldPinSnap) {
       cachedHoldPinSnap = held
       cachedHoldPinMap = tablePinColOffsets(
@@ -205,7 +205,7 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
         (held.schema ?? schema)?.labelField,
       )
     }
-    return cachedHoldPinMap.get(colKey)
+    return cachedHoldPinMap?.get(colKey)
   }
 
   function pinClassFor(pin: PinnedColOffset | undefined) {
@@ -219,8 +219,8 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
     const folded = Boolean(collapsedGroups[groupKey])
     const tableIcon =
       groupBy === 'tablePath'
-        ? tableIcons.byPath.get(groupKey)
-        : (tableIcons.byLabel.get(groupKey) ?? tableIcons.byPath.get(groupKey))
+        ? tableIcons?.byPath?.get(groupKey)
+        : (tableIcons?.byLabel?.get(groupKey) ?? tableIcons?.byPath?.get(groupKey))
     return (
       <header className="tasks-queue-ghead">
         <button
@@ -460,7 +460,7 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
     const held = tableHoldRef.current
     const col = held && held.nodes !== EMPTY_HOLD_NODES && held.columns.length
       ? (held.columns as BrowserTableColumn[]).find((item) => item.key === colKey)
-      : columnsByKey.get(colKey)
+      : columnsByKey?.get(colKey)
     if (!col) return null
     return paintLiveCell(node.row, col, node.depth, node.hasKids, node.kidCount, node.key)
   }

@@ -2139,7 +2139,7 @@ export function CollectionBrowser({
     [columnPinCount, columnWidths, columns, schema?.labelField],
   )
   const pinStamp = useMemo(
-    () => [...pinOffsets.entries()].map(([k, v]) => `${k}:${v.left}:${v.isEdge ? 1 : 0}`).join(','),
+    () => [...(pinOffsets?.entries() ?? [])].map(([k, v]) => `${k}:${v.left}:${v.isEdge ? 1 : 0}`).join(','),
     [pinOffsets],
   )
   const tableResetKey = `${activeViewId ?? ''}\0${collectionPath}\0${groupBy}\0${page}\0${pageSize}\0${query}`
@@ -3866,7 +3866,7 @@ export function CollectionBrowser({
       compositeCells: compositeCellKeys,
       columnViewStamp: (colKey) => {
         const active = activeColumnSandboxItem(columnViews[colKey])
-        const pin = pinOffsets.get(colKey)
+        const pin = pinOffsets?.get(colKey)
         const pinPart = pin ? `${pin.left}:${pin.isEdge ? 1 : 0}` : ''
         const viewPart = active ? `${active.id}\0${active.code}` : ''
         return pinPart || viewPart ? `${viewPart}\0${pinPart}` : ''
