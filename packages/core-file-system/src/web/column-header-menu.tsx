@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ArrowsUpDownIcon,
@@ -34,6 +34,10 @@ import {
 import { parseTagFlatColumnKey, tagColumnHeadLabel } from './fields.ts'
 import { FieldGlyph } from './fsdb-cells.tsx'
 import { persistTags, tagFieldLabelOk } from './tag-catalog.ts'
+
+const HostSourceEditor = lazy(() =>
+  import('./host-source-editor.tsx').then((m) => ({ default: m.HostSourceEditor })),
+)
 
 export type ColumnHeaderMenuTarget = {
   col: {
@@ -598,18 +602,21 @@ export function ColumnHeaderMenu({
                               </div>
                               {editing ? (
                                 <div className="fsdb-col-view-editor">
-                                  <textarea
-                                    className="fsdb-col-view-code"
-                                    value={codeDraft}
-                                    spellCheck={false}
-                                    rows={8}
-                                    aria-label={`${item.name} 代码`}
-                                    onChange={(event) => {
-                                      const nextCode = event.target.value
-                                      setCodeDraft(nextCode)
-                                      saveSandboxCode(item.id, nextCode)
-                                    }}
-                                  />
+                                  <div className="fsdb-col-view-cm">
+                                    <Suspense fallback={<div className="fsdb-col-view-loading">加载编辑器…</div>}>
+                                      <HostSourceEditor
+                                        key={item.id}
+                                        value={codeDraft}
+                                        writable
+                                        language="javascript"
+                                        testId="fsdb-col-sandbox-editor"
+                                        onChange={(nextCode) => {
+                                          setCodeDraft(nextCode)
+                                          saveSandboxCode(item.id, nextCode)
+                                        }}
+                                      />
+                                    </Suspense>
+                                  </div>
                                   <div className="fsdb-col-view-status">
                                     {compileCheck?.ok ? (
                                       <span className="fsdb-col-view-ok">编译正常 · 已实时应用</span>

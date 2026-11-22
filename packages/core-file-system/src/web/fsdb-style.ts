@@ -1368,7 +1368,7 @@ html:not(.dark) .fsdb-cellselect-menu svg{color:var(--biu-color-icon)}
 .tasks-table th.is-col-clickable{cursor:pointer;transition:background 120ms ease}
 .tasks-table th.is-col-clickable:hover,.tasks-table th.is-col-menu-open{background:var(--biu-color-bg-hover)}
 .fsdb-col-menu{width:236px;max-width:calc(100vw - 16px);padding:6px;border:1px solid var(--biu-color-border);border-radius:10px;background:var(--biu-color-bg-elevated,var(--biu-color-bg));box-shadow:var(--biu-shadow-popover,0 8px 28px rgba(0,0,0,.22));color:var(--biu-color-text);font-size:var(--biu-font-size-4);user-select:none;transition:width 180ms cubic-bezier(.22,1,.36,1)}
-.fsdb-col-menu.is-wide{width:340px}
+.fsdb-col-menu.is-wide{width:420px}
 .fsdb-col-menu-head{display:flex;flex-direction:column;gap:6px;padding:2px 2px 4px}
 .fsdb-col-menu-namebox{display:flex;align-items:center;gap:6px;min-width:0;min-height:30px;padding:2px 6px;border:1px solid var(--biu-color-border);border-radius:6px;background:var(--biu-color-bg)}
 .fsdb-col-menu-namebox:focus-within{background:var(--biu-color-bg-hover)}
@@ -1430,8 +1430,11 @@ html:not(.dark) .fsdb-cellselect-menu svg{color:var(--biu-color-icon)}
 .fsdb-col-view-add{color:var(--biu-color-text-subtle)}
 .fsdb-col-view-add:hover{color:var(--biu-color-text)}
 .fsdb-col-view-editor{display:flex;flex-direction:column;gap:4px;padding:2px 4px 6px}
-.fsdb-col-view-code{width:100%;box-sizing:border-box;border:1px solid var(--biu-color-border);border-radius:6px;padding:6px 8px;background:var(--biu-color-bg);color:var(--biu-color-text);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:11.5px;line-height:1.45;resize:vertical;outline:none;user-select:text}
-.fsdb-col-view-code:focus{background:var(--biu-color-bg-hover)}
+.fsdb-col-view-cm{width:100%;box-sizing:border-box;border:1px solid var(--biu-color-border);border-radius:6px;padding:6px 4px;background:var(--biu-color-bg);max-height:220px;overflow:auto;user-select:text}
+.fsdb-col-view-cm .page-source,.fsdb-col-view-cm .cm-editor{height:auto;min-height:140px;font-size:12px;outline:none}
+.fsdb-col-view-cm .cm-editor.cm-focused{outline:none}
+.fsdb-col-view-cm .cm-scroller{line-height:1.5}
+.fsdb-col-view-loading{padding:10px;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-2)}
 .fsdb-col-view-status{display:flex;align-items:center;font-size:11px;padding:0 2px}
 .fsdb-col-view-ok{color:var(--biu-color-text-subtle)}
 .fsdb-col-view-fail{color:var(--biu-color-danger);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
