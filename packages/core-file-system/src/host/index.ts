@@ -684,6 +684,38 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
+  private logMemberActivity(input: {
+    action: string
+    collection: string
+    recordId?: string
+    recordTitle?: string
+    detail?: string
+  }) {
+    if (isSystemCollection(input.collection) || isIndexCollection(input.collection)) return
+    try {
+      const store = this.collabStore() as {
+        recordActivity?: (row: {
+          category: 'data' | 'access' | 'member' | 'session' | 'automation'
+          action: string
+          collection?: string
+          recordId?: string
+          recordTitle?: string
+          detail?: string
+        }) => void
+      } | undefined
+      store?.recordActivity?.({
+        category: 'data',
+        action: input.action,
+        collection: input.collection,
+        recordId: input.recordId,
+        recordTitle: input.recordTitle,
+        detail: input.detail,
+      })
+    } catch {
+      /* 活动日志失败不影响主写入流程 */
+    }
+  }
+
   private authorization() {
     try {
       const auth = (this.ctx.get('account') as { authorization?: AuthorizationService } | undefined)?.authorization
@@ -1744,6 +1776,12 @@ export class DatabaseService extends Service implements Database {
     const title = String(record.title ?? record.name ?? record.id).trim() || record.id
     if (!viewOnly && Object.keys(patch).length) {
       await this.ctx.get('contentTurns')?.recordUpdate(`${spec.path}/${record.id}`, title, beforeSnap, afterSnap)
+      this.logMemberActivity({
+        action: 'record.update',
+        collection: spec.path,
+        recordId: record.id,
+        recordTitle: title,
+      })
     }
     return { kind: 'record' as const, path: `${spec.path}/${record.id}`, value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))) }
   }
@@ -1886,6 +1924,12 @@ export class DatabaseService extends Service implements Database {
     for (const item of items) {
       const title = String(item.value.title ?? item.value.name ?? '').trim() || item.path
       await this.ctx.get('contentTurns')?.recordCreate(item.path, title, item.value)
+      this.logMemberActivity({
+        action: 'record.create',
+        collection: spec.path,
+        recordId: String(item.value.id ?? ''),
+        recordTitle: title,
+      })
     }
     return {
       kind: 'created' as const,
@@ -1954,6 +1998,16 @@ export class DatabaseService extends Service implements Database {
         }
       }
       this.bump(spec.path)
+      for (const row of matched) {
+        const title = String(row.title ?? row.name ?? row.id ?? '').trim()
+        this.logMemberActivity({
+          action: 'record.delete',
+          collection: spec.path,
+          recordId: String(row.id ?? ''),
+          recordTitle: title,
+          detail: '移入回收站',
+        })
+      }
       return { kind: 'deleted' as const, path: spec.path, ids, trash: true }
     }
     await spec.remove({ ids })

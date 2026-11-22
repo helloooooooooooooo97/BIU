@@ -24,6 +24,7 @@ test('workspace members collection lists and manages only the active workspace',
   store.addMemberByEmail(ada.id, workspace.id, bob.email)
   store.setActive(ada.id, workspace.id)
   store.setActive(bob.id, workspace.id)
+  store.setActive(bob.id, workspace.id)
   const collection = workspaceMembersCollection(store)
   assert.equal(collection.view?.inspector, true)
   assert.equal(collection.records?.update, true)
@@ -86,4 +87,95 @@ test('a device-only workspace lists the owner and LAN visitors, but not email in
   const withLan = await runWithAccount(ada.id, () => collection.list())
   assert.equal(withLan.length, 2)
   assert.ok(withLan.some((row) => row.id === guest?.id))
+})
+
+test('member activity aggregates heatmap, coalesces rapid updates, and is transparent to workspace members', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'biu-member-activity-'))
+  dirs.push(dir)
+  const store = new CollabStore(openAndMigrateBiu(join(dir, 'biu.sqlite')))
+  const now = Date.now()
+  const dayMs = 24 * 60 * 60 * 1000
+  const ada = store.register('Ada', now - 10 * dayMs, 'secret1', 'ada-act@example.com')
+  const bob = store.register('Bob', now - 10 * dayMs, 'secret2', 'bob-act@example.com')
+  const workspace = store.createWorkspace(ada.id, 'Team', now - 10 * dayMs)
+  store.addMemberByEmail(ada.id, workspace.id, bob.email)
+  store.setActive(ada.id, workspace.id)
+  store.setActive(bob.id, workspace.id)
+
+  // 昨天 1 次创建
+  store.recordActivity({
+    workspaceId: workspace.id,
+    actorId: ada.id,
+    category: 'data',
+    action: 'record.create',
+    collection: '/pages',
+    recordId: 'p1',
+    recordTitle: '周报',
+    now: now - dayMs,
+  })
+  // 今天 5 分钟内连续编辑同一记录 3 次 -> 自动合并为 1 条（count = 3）
+  store.recordActivity({
+    workspaceId: workspace.id,
+    actorId: ada.id,
+    category: 'data',
+    action: 'record.update',
+    collection: '/pages',
+    recordId: 'p1',
+    recordTitle: '周报',
+    now: now - 60_000,
+  })
+  store.recordActivity({
+    workspaceId: workspace.id,
+    actorId: ada.id,
+    category: 'data',
+    action: 'record.update',
+    collection: '/pages',
+    recordId: 'p1',
+    recordTitle: '周报 v2',
+    now: now - 30_000,
+  })
+  store.recordActivity({
+    workspaceId: workspace.id,
+    actorId: ada.id,
+    category: 'data',
+    action: 'record.update',
+    collection: '/pages',
+    recordId: 'p1',
+    recordTitle: '周报 v3',
+    now: now - 10_000,
+  })
+  // 今天 1 次 MCP 工具调用
+  store.recordActivity({
+    workspaceId: workspace.id,
+    actorId: ada.id,
+    via: 'mcp',
+    category: 'automation',
+    action: 'mcp.call',
+    detail: '调用 MCP 工具 db_create',
+    now,
+  })
+
+  // Bob 作为普通空间成员可以透明查看 Ada 的活动统计与热力图
+  const summary = store.memberActivity(bob.id, ada.id, { days: 14, now })
+  assert.equal(summary.member.status, 'online')
+  assert.equal(summary.stats.totalEvents, 5)
+  assert.equal(summary.stats.activeDays, 2)
+  assert.equal(summary.stats.currentStreak, 2)
+  assert.equal(summary.stats.byCategory.data, 4)
+  assert.equal(summary.stats.byCategory.automation, 1)
+  assert.equal(summary.stats.byVia.mcp, 1)
+  assert.equal(summary.heatmap.length, 14)
+  assert.equal(summary.heatmap[summary.heatmap.length - 1]?.count, 4)
+  assert.equal(summary.heatmap[summary.heatmap.length - 2]?.count, 1)
+  // 连续编辑已合并，recent 共 3 条（MCP + 合并后的编辑 + 昨天的创建）
+  assert.equal(summary.recent.length, 3)
+  assert.equal(summary.recent[1]?.count, 3)
+  assert.equal(summary.recent[1]?.recordTitle, '周报 v3')
+
+  // 成员列表带上 status 和 lastActiveAt
+  const collection = workspaceMembersCollection(store)
+  const listed = await runWithAccount(bob.id, () => collection.list())
+  const adaRow = listed.find((row) => row.id === ada.id)
+  assert.equal(adaRow?.status, 'online')
+  assert.ok(Number(adaRow?.lastActiveAt) >= now - 1000)
 })

@@ -1141,6 +1141,31 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     }
   })
 
+  ctx.http.route('GET', '/api/account/member-activity', async (route) => {
+    try {
+      const me = actor(route)
+      const activeWorkspace = account.store.activeWorkspaceId()
+      if (
+        activeWorkspace &&
+        (await relayCloudWorkspace(
+          route,
+          me.id,
+          activeWorkspace,
+          `/api/account/member-activity${route.query.toString() ? `?${route.query.toString()}` : ''}`,
+        ))
+      ) return
+      const memberId = String(route.query.get('memberId') ?? '').trim() || me.id
+      const days = Number(route.query.get('days') ?? 182)
+      const limit = Number(route.query.get('limit') ?? 80)
+      route.send(200, account.store.memberActivity(me.id, memberId, {
+        days: Number.isFinite(days) ? days : 182,
+        limit: Number.isFinite(limit) ? limit : 80,
+      }))
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
   ctx.http.route('GET', '/api/account/access', async (route) => {
     try {
       const me = actor(route)

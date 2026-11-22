@@ -133,6 +133,29 @@ export class CollabStore {
       return this.accountActiveWorkspace(accountId)
     })
     this.ensureBuiltInRoot()
+    this.ensureActivityTable()
+  }
+
+  private ensureActivityTable() {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS workspace_activity_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        workspace_id TEXT NOT NULL,
+        actor_id TEXT NOT NULL,
+        via TEXT NOT NULL DEFAULT 'user',
+        category TEXT NOT NULL,
+        action TEXT NOT NULL,
+        collection TEXT NOT NULL DEFAULT '',
+        record_id TEXT NOT NULL DEFAULT '',
+        record_title TEXT NOT NULL DEFAULT '',
+        detail TEXT NOT NULL DEFAULT '',
+        count INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_activity_actor
+        ON workspace_activity_log(workspace_id, actor_id, updated_at DESC);
+    `)
   }
 
   isSuperAdmin(accountId?: string | null) {
@@ -533,6 +556,226 @@ export class CollabStore {
          VALUES (?, ?, ?, ?, ?, ?)`,
       )
       .run(tenant.credentialId, tenant.accountId, tenant.workspaceId, toolName, success ? 1 : 0, now)
+    this.recordActivity({
+      workspaceId: tenant.workspaceId,
+      actorId: tenant.accountId,
+      via: 'mcp',
+      category: 'automation',
+      action: 'mcp.call',
+      detail: `调用 MCP 工具 ${toolName}${success ? '' : '（失败）'}`,
+      now,
+    })
+  }
+
+  recordActivity(input: {
+    workspaceId?: string
+    actorId?: string
+    via?: 'user' | 'agent' | 'mcp'
+    category: 'data' | 'access' | 'member' | 'session' | 'automation'
+    action: string
+    collection?: string
+    recordId?: string
+    recordTitle?: string
+    detail?: string
+    now?: number
+  }) {
+    const workspaceId = input.workspaceId || this.activeWorkspaceId() || ''
+    const actorId = input.actorId || currentAccountId() || ''
+    if (!workspaceId || !actorId) return
+    const now = input.now ?? Date.now()
+    const via = input.via ?? 'user'
+    const collection = input.collection ?? ''
+    const recordId = input.recordId ?? ''
+    const recordTitle = (input.recordTitle ?? '').slice(0, 120)
+    const detail = (input.detail ?? '').slice(0, 240)
+    // 同一成员 5 分钟内连续编辑同一条记录，自动合并计数防止刷屏
+    if (input.action === 'record.update' && collection && recordId) {
+      const recent = this.db
+        .prepare(
+          `SELECT id, updated_at FROM workspace_activity_log
+           WHERE workspace_id = ? AND actor_id = ? AND via = ? AND action = 'record.update'
+             AND collection = ? AND record_id = ?
+           ORDER BY updated_at DESC LIMIT 1`,
+        )
+        .get(workspaceId, actorId, via, collection, recordId) as { id: number; updated_at: number } | undefined
+      if (recent && now - recent.updated_at <= 5 * 60 * 1000) {
+        this.db
+          .prepare(
+            `UPDATE workspace_activity_log
+             SET count = count + 1, updated_at = ?,
+                 record_title = CASE WHEN ? != '' THEN ? ELSE record_title END,
+                 detail = CASE WHEN ? != '' THEN ? ELSE detail END
+             WHERE id = ?`,
+          )
+          .run(now, recordTitle, recordTitle, detail, detail, recent.id)
+        return
+      }
+    }
+    this.db
+      .prepare(
+        `INSERT INTO workspace_activity_log
+         (workspace_id, actor_id, via, category, action, collection, record_id, record_title, detail, count, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+      )
+      .run(workspaceId, actorId, via, input.category, input.action, collection, recordId, recordTitle, detail, now, now)
+  }
+
+  memberActivity(actorId: string, memberId: string, options: { days?: number; limit?: number; now?: number } = {}) {
+    const workspaceId = this.activeWorkspaceId()
+    if (!workspaceId) throw new CollabError('没有工作区', 400)
+    this.requireMember(actorId, workspaceId)
+    const now = options.now ?? Date.now()
+    const days = Math.max(7, Math.min(365, Math.floor(options.days ?? 182)))
+    const limit = Math.max(10, Math.min(200, Math.floor(options.limit ?? 80)))
+    const members = this.members(actorId, workspaceId, now)
+    const target = members.find((item) => item.id === memberId)
+    if (!target) throw new CollabError('成员不存在', 404)
+
+    const dayMs = 24 * 60 * 60 * 1000
+    const startDate = new Date(now - (days - 1) * dayMs)
+    startDate.setHours(0, 0, 0, 0)
+    const since = startDate.getTime()
+
+    const rows = this.db
+      .prepare(
+        `SELECT id, via, category, action, collection, record_id, record_title, detail, count, created_at, updated_at
+         FROM workspace_activity_log
+         WHERE workspace_id = ? AND actor_id = ? AND updated_at >= ?
+         ORDER BY updated_at DESC`,
+      )
+      .all(workspaceId, memberId, since) as Array<{
+        id: number
+        via: 'user' | 'agent' | 'mcp'
+        category: 'data' | 'access' | 'member' | 'session' | 'automation'
+        action: string
+        collection: string
+        record_id: string
+        record_title: string
+        detail: string
+        count: number
+        created_at: number
+        updated_at: number
+      }>
+
+    const formatDay = (ts: number) => {
+      const d = new Date(ts)
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${y}-${m}-${day}`
+    }
+
+    const dailyCounts = new Map<string, number>()
+    const byCategory = { data: 0, access: 0, member: 0, session: 0, automation: 0 }
+    const byVia = { user: 0, agent: 0, mcp: 0 }
+    let totalEvents = 0
+    let last30Days = 0
+    const since30 = now - 30 * dayMs
+
+    for (const row of rows) {
+      const weight = Math.max(1, Number(row.count) || 1)
+      totalEvents += weight
+      if (row.updated_at >= since30) last30Days += weight
+      if (row.category in byCategory) byCategory[row.category] += weight
+      if (row.via in byVia) byVia[row.via] += weight
+      const key = formatDay(row.updated_at)
+      dailyCounts.set(key, (dailyCounts.get(key) ?? 0) + weight)
+    }
+
+    const levelOf = (count: number): 0 | 1 | 2 | 3 | 4 => {
+      if (count <= 0) return 0
+      if (count <= 2) return 1
+      if (count <= 5) return 2
+      if (count <= 10) return 3
+      return 4
+    }
+
+    const heatmap: Array<{ date: string; count: number; level: 0 | 1 | 2 | 3 | 4 }> = []
+    for (let i = 0; i < days; i += 1) {
+      const key = formatDay(since + i * dayMs)
+      const count = dailyCounts.get(key) ?? 0
+      heatmap.push({ date: key, count, level: levelOf(count) })
+    }
+
+    const activeDays = heatmap.filter((cell) => cell.count > 0).length
+    let currentStreak = 0
+    for (let i = heatmap.length - 1; i >= 0; i -= 1) {
+      const cell = heatmap[i]!
+      if (cell.count > 0) {
+        currentStreak += 1
+      } else if (i === heatmap.length - 1) {
+        // 今天还没操作不算断签，允许从昨天起算连续天数
+        continue
+      } else {
+        break
+      }
+    }
+
+    const recordGrants = this.db
+      .prepare(
+        `SELECT collection, record_id, role
+         FROM record_grants
+         WHERE workspace_id = ? AND subject_type = 'account' AND subject_id = ?
+         ORDER BY created_at DESC LIMIT 50`,
+      )
+      .all(workspaceId, memberId) as Array<{ collection: string; record_id: string; role: string }>
+
+    const viewGrants = this.db
+      .prepare(
+        `SELECT collection, view_id, role
+         FROM view_grants
+         WHERE workspace_id = ? AND subject_type = 'account' AND subject_id = ?
+         ORDER BY created_at DESC LIMIT 50`,
+      )
+      .all(workspaceId, memberId) as Array<{ collection: string; view_id: string; role: string }>
+
+    return {
+      member: {
+        id: target.id,
+        name: target.name,
+        displayName: target.display_name,
+        email: target.email,
+        role: target.role,
+        memberKind: target.member_kind,
+        status: target.status,
+        joinedAt: target.created_at,
+        lastActiveAt: target.last_active_at,
+      },
+      stats: {
+        totalEvents,
+        activeDays,
+        currentStreak,
+        last30Days,
+        byCategory,
+        byVia,
+      },
+      heatmap,
+      recent: rows.slice(0, limit).map((row) => ({
+        id: row.id,
+        via: row.via,
+        category: row.category,
+        action: row.action,
+        collection: row.collection,
+        recordId: row.record_id,
+        recordTitle: row.record_title,
+        detail: row.detail,
+        count: row.count,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      })),
+      grants: {
+        records: recordGrants.map((row) => ({
+          collection: row.collection,
+          recordId: row.record_id,
+          role: row.role,
+        })),
+        views: viewGrants.map((row) => ({
+          collection: row.collection,
+          viewId: row.view_id,
+          role: row.role,
+        })),
+      },
+    }
   }
 
   listMcpAudit(accountId: string, workspaceId: string, limit = 100) {
@@ -973,14 +1216,34 @@ export class CollabStore {
     }
   }
 
-  members(actorId: string, workspaceId: string) {
+  members(actorId: string, workspaceId: string, now = Date.now()) {
     this.requireMember(actorId, workspaceId)
-    return this.db
+    const rows = this.db
       .prepare(
         `SELECT a.id,
                 COALESCE(NULLIF(a.name, ''), NULLIF(a.email, ''), '未设置') AS name,
                 COALESCE(m.display_name, '') AS display_name,
-                COALESCE(a.email, '') AS email, m.role, m.member_kind, m.created_at
+                COALESCE(a.email, '') AS email, m.role, m.member_kind, m.created_at,
+                COALESCE((
+                  SELECT MAX(COALESCE(s.last_seen_at, s.created_at, 0))
+                  FROM auth_sessions s
+                  WHERE s.account_id = a.id AND s.revoked_at IS NULL
+                ), 0) AS auth_seen_at,
+                COALESCE((
+                  SELECT MAX(COALESCE(g.last_seen_at, g.created_at, 0))
+                  FROM guest_sessions g
+                  WHERE g.account_id = a.id AND g.workspace_id = m.workspace_id
+                ), 0) AS guest_seen_at,
+                COALESCE((
+                  SELECT MAX(g.expires_at)
+                  FROM guest_sessions g
+                  WHERE g.account_id = a.id AND g.workspace_id = m.workspace_id AND g.revoked_at IS NULL
+                ), 0) AS guest_expires_at,
+                COALESCE((
+                  SELECT MAX(l.updated_at)
+                  FROM workspace_activity_log l
+                  WHERE l.workspace_id = m.workspace_id AND l.actor_id = a.id
+                ), 0) AS activity_at
          FROM workspace_members m
          JOIN accounts a ON a.id = m.account_id
          WHERE m.workspace_id = ?
@@ -994,7 +1257,22 @@ export class CollabStore {
         role: string
         member_kind: 'member' | 'external' | 'guest'
         created_at: number
+        auth_seen_at: number
+        guest_seen_at: number
+        guest_expires_at: number
+        activity_at: number
       }>
+    const ONLINE_WINDOW_MS = 5 * 60 * 1000
+    return rows.map(({ auth_seen_at, guest_seen_at, guest_expires_at, activity_at, ...row }) => {
+      const last_active_at = Math.max(auth_seen_at, guest_seen_at, activity_at, row.created_at)
+      const status: 'online' | 'active' | 'expired' =
+        row.member_kind === 'guest' && guest_expires_at > 0 && guest_expires_at < now
+          ? 'expired'
+          : last_active_at > row.created_at && now - last_active_at <= ONLINE_WINDOW_MS
+            ? 'online'
+            : 'active'
+      return { ...row, last_active_at, status }
+    })
   }
 
   currentMembers() {
@@ -2151,6 +2429,15 @@ export class CollabStore {
       throw new CollabError(message, 400)
     }
     if (mode === 'custom') this.reconcileRecordScope(workspaceId, collection, recordId)
+    this.recordActivity({
+      workspaceId,
+      actorId,
+      category: 'access',
+      action: 'access.inherit',
+      collection,
+      recordId,
+      detail: mode === 'inherit' ? '开启继承上级权限' : '断开上级继承，改为独立权限',
+    })
     return this.recordAccess(actorId, collection, recordId)
   }
 
@@ -2278,6 +2565,16 @@ export class CollabStore {
     }
     this.authorization.grant(actorId, resource, 'account', account.id, role, now)
     this.reconcileRecordScope(workspaceId, collection, recordId)
+    this.recordActivity({
+      workspaceId,
+      actorId,
+      category: 'access',
+      action: 'access.grant',
+      collection,
+      recordId,
+      detail: `授权给 ${normalized}（${role}）`,
+      now,
+    })
     return this.accessRows(workspaceId, collection, recordId)
   }
 
@@ -2317,6 +2614,15 @@ export class CollabStore {
     if (subjectType === 'account') this.cleanupExternalMembership(workspaceId, subjectId)
     this.authorization.invalidate(workspaceId, collection)
     this.reconcileRecordScope(workspaceId, collection, recordId)
+    this.recordActivity({
+      workspaceId,
+      actorId,
+      category: 'access',
+      action: 'access.revoke',
+      collection,
+      recordId,
+      detail: `移除了协作者权限（${subjectType}）`,
+    })
     return this.accessRows(workspaceId, collection, recordId)
   }
 
@@ -2347,6 +2653,15 @@ export class CollabStore {
     if (!account) throw new CollabError('没有这个邮箱，对方需要先注册', 404)
     this.ensureCollaboratorMembership(workspaceId, account.id, collaboratorKind, now)
     this.writeViewGrant(workspaceId, collection, normalizedView, 'account', account.id, role, actorId, now)
+    this.recordActivity({
+      workspaceId,
+      actorId,
+      category: 'access',
+      action: 'access.view_grant',
+      collection,
+      detail: `将视图授权给 ${normalized}（${role}）`,
+      now,
+    })
     return this.viewAccessRows(workspaceId, collection, normalizedView)
   }
 
@@ -2365,6 +2680,15 @@ export class CollabStore {
     if (!normalizedView || !normalizedMemberView) throw new CollabError('成员视图不能为空', 400)
     this.requireViewSharer(actorId, workspaceId, collection, normalizedView)
     this.writeViewGrant(workspaceId, collection, normalizedView, 'member_view', normalizedMemberView, role, actorId, now)
+    this.recordActivity({
+      workspaceId,
+      actorId,
+      category: 'access',
+      action: 'access.view_grant',
+      collection,
+      detail: `按成员视图授权视图（${role}）`,
+      now,
+    })
     return this.viewAccessRows(workspaceId, collection, normalizedView)
   }
 
@@ -2388,6 +2712,14 @@ export class CollabStore {
     if (!removed.changes) throw new CollabError('协作者不存在', 404)
     if (subjectType === 'account') this.cleanupExternalMembership(workspaceId, subjectId)
     this.authorization.invalidate(workspaceId, collection)
+    this.recordActivity({
+      workspaceId,
+      actorId,
+      category: 'access',
+      action: 'access.view_revoke',
+      collection,
+      detail: `移除了视图授权（${subjectType}）`,
+    })
     return this.viewAccessRows(workspaceId, collection, viewId)
   }
 
