@@ -179,6 +179,13 @@ test('group-head paint stamp changes when folded toggles', () => {
   expect(open).not.toBe(folded)
 })
 
+test('group-pager paint stamp changes when pageSize changes', () => {
+  const stamps = new Map()
+  const p50 = rowPaintStamp({ kind: 'group-pager', key: 'gp:done', groupKey: 'done', count: 86, pageIndex: 0, pageSize: 50 }, stamps)
+  const p100 = rowPaintStamp({ kind: 'group-pager', key: 'gp:done', groupKey: 'done', count: 86, pageIndex: 0, pageSize: 100 }, stamps)
+  expect(p50).not.toBe(p100)
+})
+
 test('repeated tag catalog renames repaint tag cells while keeping non-tag cells cached', async () => {
   const tagNodes = [
     {

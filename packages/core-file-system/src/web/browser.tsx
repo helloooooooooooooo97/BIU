@@ -2088,6 +2088,7 @@ export function CollectionBrowser({
           groupKey,
           count,
           pageIndex,
+          pageSize,
         })
       }
       return nodes
