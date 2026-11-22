@@ -361,7 +361,7 @@ const CSS = `
 .fsdb-page .tasks-table th:last-child,.fsdb-page .tasks-table td:last-child{border-right:0}
 .fsdb-page .tasks-table col.fsdb-col-fill{width:auto}
 .fsdb-page .tasks-table th.fsdb-col-fill,.fsdb-page .tasks-table td.fsdb-col-fill{padding:0;border:0;border-bottom:var(--biu-stroke-width) solid color-mix(in srgb,var(--biu-color-border) 80%,transparent);min-width:0}
-.fsdb-page .tasks-table tbody tr:last-child:not(.fsdb-table-pad) td,.fsdb-page .tasks-table tbody tr:last-child:not(.fsdb-table-pad) th{border-bottom:0}
+.fsdb-page .tasks-table:not(.is-grid) tbody tr:last-child:not(.fsdb-table-pad) td,.fsdb-page .tasks-table:not(.is-grid) tbody tr:last-child:not(.fsdb-table-pad) th{border-bottom:0}
 .fsdb-page .tasks-table:not(.is-wrap) td{white-space:nowrap}
 .fsdb-page .tasks-table.is-wrap{width:100%;max-width:100%;white-space:normal}
 .fsdb-page .tasks-table.is-wrap td{white-space:normal;vertical-align:top;max-width:none}
