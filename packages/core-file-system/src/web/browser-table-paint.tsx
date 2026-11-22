@@ -269,6 +269,7 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
                 onOpenColMenu?.({
                   col,
                   rect: event.currentTarget.getBoundingClientRect(),
+                  anchorEl: event.currentTarget,
                   mode: 'header',
                 })
               }
@@ -486,6 +487,7 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
                 onOpenColMenu?.({
                   col,
                   rect: event.currentTarget.getBoundingClientRect(),
+                  anchorEl: event.currentTarget,
                   mode: 'summary',
                 })
               }}

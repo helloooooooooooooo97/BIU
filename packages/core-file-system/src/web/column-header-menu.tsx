@@ -12,7 +12,6 @@ import {
   Squares2X2Icon,
 } from '@heroicons/react/16/solid'
 import { computeFloatingPosition } from '@biu/biu-ui/floating-position'
-import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import type { CollectionSchemaPack, FieldSpec, FieldType } from '@biu/type-file-system'
 import {
@@ -33,6 +32,7 @@ export type ColumnHeaderMenuTarget = {
     packLabel?: string
   }
   rect: DOMRect
+  anchorEl?: HTMLElement | null
   mode: 'header' | 'summary'
 }
 
@@ -150,17 +150,37 @@ export function ColumnHeaderMenu({
     ])
   }
 
+  const dismissRef = useRef<() => void>(() => undefined)
+  dismissRef.current = () => {
+    commitTagMeta()
+    onClose()
+  }
+
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      const hit = event.target instanceof Node ? event.target : null
+      if (!hit) return
+      if (popRef.current?.contains(hit)) return
+      if (target.anchorEl?.contains(hit)) return
+      dismissRef.current()
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      dismissRef.current()
+    }
+    document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('keydown', onKeyDown, true)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      document.removeEventListener('keydown', onKeyDown, true)
+    }
+  }, [target.anchorEl])
+
   const summaryOptions = summaryOpsForKind(col.kind)
   const showInfoButton = editableTagField || Boolean(initialDesc)
 
   const menu = (
-    <HeadlessDismiss
-      onDismiss={() => {
-        commitTagMeta()
-        onClose()
-      }}
-      insideRef={popRef}
-    >
       <div
         ref={popRef}
         className="fsdb-col-menu"
@@ -449,7 +469,6 @@ export function ColumnHeaderMenu({
           </>
         )}
       </div>
-    </HeadlessDismiss>
   )
 
   const portal = overlayPortalRoot()
