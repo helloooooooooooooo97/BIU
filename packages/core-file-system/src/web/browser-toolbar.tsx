@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ReactNode, type RefObject } from 'react'
+import { lazy, memo, Suspense, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ArrowDownTrayIcon,
@@ -159,7 +159,7 @@ export type BrowserListChromeProps = {
   localData: boolean
 }
 
-export function BrowserListChrome(props: BrowserListChromeProps) {
+export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserListChromeProps) {
   const {
     sheet,
     collectionPath,
@@ -976,4 +976,4 @@ export function BrowserListChrome(props: BrowserListChromeProps) {
       </div>
     </>
   )
-}
+})

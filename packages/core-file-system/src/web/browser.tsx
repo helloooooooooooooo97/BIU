@@ -152,6 +152,7 @@ import { createBrowserTableNav } from './use-browser-table-nav.ts'
 import { createBrowserViewCrud } from './use-browser-view-crud.ts'
 import { createBrowserMutations } from './use-browser-mutations.ts'
 import { buildTableIconLookup, createBrowserTablePaint } from './browser-table-paint.tsx'
+import { BrowserRecordStage } from './browser-record-stage.tsx'
 import { KeyedSerialQueue, PendingFieldPatchTracker } from './record-write-queue.ts'
 import { ViewSyncController } from './view-sync-controller.ts'
 import { captureTableFoldSnapshot as captureFoldSnapshot, playTableFoldFlip } from './table-fold-flip.ts'
@@ -291,21 +292,11 @@ import {
 } from '../query-logic.ts'
 
 const SchemaFieldEditor = lazy(() => import('./schema-field.tsx').then((m) => ({ default: m.SchemaFieldEditor })))
-const SortQueryMenu = lazy(() => import('./query-menus.tsx').then((m) => ({ default: m.SortQueryMenu })))
-const FilterQueryMenu = lazy(() => import('./query-menus.tsx').then((m) => ({ default: m.FilterQueryMenu })))
-const GroupQueryMenu = lazy(() => import('./query-menus.tsx').then((m) => ({ default: m.GroupQueryMenu })))
-const QueryFlyout = lazy(() => import('./query-menus.tsx').then((m) => ({ default: m.QueryFlyout })))
-const FieldValuePop = lazy(() => import('./field-value-pop.tsx').then((m) => ({ default: m.FieldValuePop })))
-const CellPopDraft = lazy(() => import('./cell-pop-draft.tsx').then((m) => ({ default: m.CellPopDraft })))
-const RecordDetail = lazy(() => import('./record-detail.tsx').then((m) => ({ default: m.RecordDetail })))
 const VisibleColumnsFlyout = lazy(() => import('./column-order-menu.tsx').then((m) => ({ default: m.VisibleColumnsFlyout })))
-const RecordEmojiBoard = lazy(() => import('@biu/biu-ui/emoji-board').then((m) => ({ default: m.RecordEmojiBoard })))
 const LazyShareButton = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareButton })))
 const LazySharePanel = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.SharePanel })))
 const LazyShareRoleDetail = lazy(() => import('./share-chain-detail.tsx').then((m) => ({ default: m.ShareRoleDetail })))
 const LazyShareScopeDetail = lazy(() => import('./share-chain-detail.tsx').then((m) => ({ default: m.ShareScopeDetail })))
-const LayoutPrefsMenu = lazy(() => import('./layout-prefs-menu.tsx').then((m) => ({ default: m.LayoutPrefsMenu })))
-const CollectionRowsShell = lazy(() => import('./rows-view.tsx').then((m) => ({ default: m.CollectionRowsShell })))
 
 function DataSidebarPublisher(props: DataSidebarLive) {
   useLayoutEffect(() => {
@@ -3850,163 +3841,83 @@ export function CollectionBrowser({
           key={nested ? 'embed' : detailId ?? 'list'}
           className="app-pane-in"
         >
-        {!detailId ? (
-        <div className="tasks-main fsdb-main">
-        {listChrome}
-        {error ? <p className="tasks-error">{error}</p> : null}
-
-        <div className="fsdb-workspace">
-          <div className="fsdb-stage">
-            {customView ? (
-              <PluginSurface plugin={customView.plugin} label={customView.label}>
-                <customView.View path={dataPath} rows={items} schema={schema} onOpen={openRow} />
-              </PluginSurface>
-            ) : null}
-            {rowView ? (
-              <PluginSurface plugin={rowView.plugin} label={rowView.label}>
-                <Suspense fallback={null}>
-                <CollectionRowsShell
-                  rows={items}
-                  schema={schema}
-                  columns={columns.map((item) => item.key)}
-                  onOpen={openRow}
-                  Row={rowView.Row}
-                />
-                </Suspense>
-              </PluginSurface>
-            ) : null}
-            {!customView && !rowView ? (
-              <div className="tasks-table-wrap" ref={tableWrapRef}>
-                <WindowedTable
-                  columns={held?.columns ?? columns}
-                  columnWidths={held?.columnWidths ?? columnWidths}
-                  columnPinCount={held?.columnPinCount ?? columnPinCount}
-                  wrapCells={held?.wrapCells ?? wrapCells}
-                  truncateCells={held?.truncateCells ?? truncateCells}
-                  resizingCol={held ? null : resizingCol}
-                  nodes={held?.nodes ?? tablePaintNodes}
-                  error={held ? '' : error}
-                  pickMode={pickMode}
-                  resetKey={held?.resetKey ?? tableResetKey}
-                  forceLiveChecks={!held && pickedIds.length > 0}
-                  checkLayoutExtra={held?.checkLayoutExtra ?? checkLayoutExtra}
-                  paintRef={tablePaintRef}
-                  chromeRef={tableChromeRef}
-                  colWindowRef={colWindowRef}
-                  tableRef={tableRef}
-                  wrapRef={tableWrapRef}
-                  stageRef={tableStageRef}
-                  checkStackRef={checkStackRef}
-                  checkHoverRef={checkHoverRef}
-                  paintCheckHover={paintCheckHover}
-                  renderCheckHead={renderCheckHead}
-                  renderCheckRow={renderCheckRow}
-                  checkStore={checkStore}
-                  onVisibleRange={onVisibleRange}
-                  frozen={Boolean(held)}
-                  activeRowId={detailId}
-                  retainedRowId={cellPop?.id}
-                  retainedRowKey={cellPop?.rowKey}
-                  retainedColumnKey={cellPop?.key}
-                  preserveMountedRows={columns.some((col) => Boolean(chrome?.cells?.[col.key]))}
-                />
-        </div>
-            ) : null}
-          </div>
-          {grouping ? null : (
-          <div className="fsdb-pager" data-biu-ignore>
-            <span className="fsdb-pager-meta" title={total ? `共 ${total} 条` : '暂无记录'}>
-              <HashtagIcon aria-hidden className="size-[14px]" />
-              <span>{total}</span>
-            </span>
-            <div className="fsdb-pager-nav">
-              <PagerSizeControl pageSize={pageSize} onChange={changePageSize} />
-              <button
-                type="button"
-                className="tasks-icon-btn"
-                aria-label="上一页"
-                disabled={page <= 0}
-                onClick={() => setPage((prev) => Math.max(0, prev - 1))}
-              >
-                <UiGlyph icon="chevron-left" />
-              </button>
-              <button
-                type="button"
-                className="tasks-icon-btn"
-                aria-label="下一页"
-                disabled={total <= 0 || (page + 1) * pageSize >= total}
-                onClick={() => setPage((prev) => prev + 1)}
-              >
-                <UiGlyph icon="chevron-right" />
-              </button>
-            </div>
-          </div>
-          )}
-        </div>
-      </div>
-        ) : selected && schema ? (
-        <Suspense fallback={<PageContentLoading />}>
-        <RecordDetail
+        <BrowserRecordStage
+          detailId={detailId}
           selected={selected}
           schema={schema}
-          chrome={
-            isDataOverview
-              ? {
-                  ...chrome,
-                  ...getDatabaseUi()?.chrome(String(selected.tablePath ?? '')),
-                  openRow: chrome.openRow,
-                  listViews: chrome.listViews,
-                  cells: chrome.cells,
-                  Actions: chrome.Actions,
-                }
-              : chrome
-          }
+          listChrome={listChrome}
+          error={error}
+          customView={customView}
+          rowView={rowView}
+          dataPath={dataPath}
+          items={items}
+          columns={columns}
+          columnWidths={columnWidths}
+          columnPinCount={columnPinCount}
+          wrapCells={wrapCells}
+          truncateCells={truncateCells}
+          resizingCol={resizingCol}
+          held={held}
+          tablePaintNodes={tablePaintNodes}
+          pickMode={pickMode}
+          tableResetKey={tableResetKey}
+          pickedCount={pickedIds.length}
+          checkLayoutExtra={checkLayoutExtra}
+          tablePaintRef={tablePaintRef}
+          tableChromeRef={tableChromeRef}
+          colWindowRef={colWindowRef}
+          tableRef={tableRef}
+          tableWrapRef={tableWrapRef}
+          tableStageRef={tableStageRef}
+          checkStackRef={checkStackRef}
+          checkHoverRef={checkHoverRef}
+          paintCheckHover={paintCheckHover}
+          renderCheckHead={renderCheckHead}
+          renderCheckRow={renderCheckRow}
+          checkStore={checkStore}
+          onVisibleRange={onVisibleRange}
+          retainedCell={cellPop ? { id: cellPop.id, key: cellPop.key, rowKey: cellPop.rowKey } : null}
+          preserveMountedRows={compositeCellKeys.size > 0 && columns.some((col) => compositeCellKeys.has(col.key))}
+          grouping={grouping}
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          setPage={setPage}
+          changePageSize={changePageSize}
+          openRow={openRow}
+          isDataOverview={isDataOverview}
+          chrome={chrome}
           draft={draft}
           detailBody={detailBody}
           detailBodyStatus={detailBodyStatus}
           detailBodyError={detailBodyError}
-          onRetryBody={refreshOpenDetail}
+          refreshOpenDetail={refreshOpenDetail}
           labelOf={labelOf}
           renderCell={renderCell}
           setDraft={setDraft}
           writeOne={writeOne}
           writePatch={writePatch}
-          tableIcon={currentTable?.view?.icon}
-          readOnly={
-            (collectionPath === PLUGINS_COLLECTION_PATH && selected.builtin === true && selected.canManagePackage !== true) ||
-            (selected.shareRole === '阅读' && !localData && selected.canManagePackage !== true)
-          }
-          actionProperty={rowActionColumn ? renderRecordActions(selected) : null}
-          share={
-            nested && detailId ? (
-              <SharePanel
-                embedded
-                localOnly={localData}
-                target={{
-                  kind: 'record',
-                  collection: collectionPath,
-                  viewId: activeViewId ?? undefined,
-                  recordId: detailId,
-                  title: String(detailRow?.title ?? title),
-                }}
-              />
-            ) : undefined
-          }
-          onDelete={canDelete && !(collectionPath === PLUGINS_COLLECTION_PATH && selected.builtin === true) ? () => setDlg({ kind: 'delete-record', row: selected }) : undefined}
-          onOpenRecord={(recordId, collection) => onOpenRecord?.(recordId, activeViewId, collection)}
-          onPrev={() => void stepViewRecord(-1)}
-          onNext={() => void stepViewRecord(1)}
-          canPrev={canStepPrev}
-          canNext={canStepNext}
+          currentTable={currentTable}
           collectionPath={collectionPath}
+          localData={localData}
+          rowActionColumn={rowActionColumn}
+          renderRecordActions={renderRecordActions}
+          nested={nested}
+          activeViewId={activeViewId}
+          detailRow={detailRow}
+          title={title}
+          canDelete={canDelete}
+          onRequestDeleteRecord={(row) => setDlg({ kind: 'delete-record', row })}
+          onOpenRecord={onOpenRecord}
+          stepViewRecord={stepViewRecord}
+          canStepPrev={canStepPrev}
+          canStepNext={canStepNext}
           recordKind={recordKind}
           inspectorPaneId={inspectorPaneId}
           visibleColumns={columnKeys.length ? columnKeys : schemaDefaultKeys}
-          onVisibleColumns={setVisibleColumns}
-          columnMenu={renderVisibleColumnsFlyout()}
+          setVisibleColumns={setVisibleColumns}
+          renderVisibleColumnsFlyout={renderVisibleColumnsFlyout}
         />
-        </Suspense>
-      ) : null}
         </div>
         </div>
       </div>
