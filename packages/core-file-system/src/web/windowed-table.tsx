@@ -39,6 +39,13 @@ import {
   tableColumnWidth,
   type TableColumnSlice,
 } from './table-window.ts'
+import {
+  NativeRowPool,
+  type NativeCellDescribe,
+  type NativePoolFrame,
+  type NativePoolRowInput,
+  type PortalCellMount,
+} from './table-native-pool.ts'
 import { subscribeTags, tagCatalogRevision } from './tag-catalog.ts'
 
 const subscribeTagCatalog = (fn: () => void) => subscribeTags(undefined, fn)
@@ -57,6 +64,16 @@ export type TablePaintBag = {
   /** 行壳。单元格由 renderCell 按列缓存，横滚只补新列。 */
   renderRow?: (node: TablePaintNode, cells: ReactNode) => ReactNode
   renderCell?: (node: TablePaintNode, colKey: string) => ReactNode
+  /** AG Grid 风格原生 DOM 行池：描述单元格是否走原生直绘或 React Portal。 */
+  describeNativeCell?: (node: Extract<TablePaintNode, { kind: 'row' }>, colKey: string) => NativeCellDescribe | null
+  /** Portal 单元格内部 React 内容（直接挂载到原生行池复用的 <td> 内）。 */
+  renderPortalCellContent?: (node: Extract<TablePaintNode, { kind: 'row' }>, colKey: string) => ReactNode
+  /** 写入原生 <tr> 的附加 data-* 属性（如 recordPick）。 */
+  recordPickAttrs?: (row: DbRecord) => Record<string, string>
+  /** 原生可写布尔单元格点击切换回调。 */
+  onNativeBoolToggle?: (rowId: string, colKey: string) => void
+  /** 调试/压测钩子：暴露当前 NativeRowPool 实例以读取复用统计。 */
+  onPoolReady?: (pool: NativeRowPool | null) => void
   /** 需要按整行 stamp 失效的复合列（如 actions、tag:*、自定义 chrome.cells） */
   compositeCells?: ReadonlySet<string>
   /** 每列属性沙箱视图版本戳，变化时仅重绘对应列单元格。 */
@@ -469,6 +486,228 @@ const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, mea
   )
 })
 
+function nativeSpecStamp(describe: NativeCellDescribe): string {
+  const spec = describe.spec
+  if (spec.kind === 'text') return `t\0${spec.text}`
+  if (spec.kind === 'bool') return `b\0${spec.on ? 1 : 0}${spec.writable ? 1 : 0}`
+  if (spec.kind === 'tags') {
+    if (!spec.items.length) return 'g\0'
+    let out = 'g'
+    for (let i = 0; i < spec.items.length; i += 1) {
+      const it = spec.items[i]!
+      out += `\x01${it.id}\0${it.label}\0${it.tone}`
+    }
+    return out
+  }
+  return 'p'
+}
+
+function samePortalMounts(a: PortalCellMount[], b: PortalCellMount[]): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i]!.id !== b[i]!.id || a[i]!.td !== b[i]!.td) return false
+  }
+  return true
+}
+
+const NativeTableBody = memo(function NativeTableBody({
+  nodes,
+  items,
+  margin,
+  totalSize,
+  colKeys,
+  pickMode,
+  activeRowId,
+  cellViewStamp = '',
+  scrollDirection = 'idle',
+}: TableBodyProps) {
+  const paintRef = useContext(TablePaintCtx)
+  const bag = paintRef.current
+  const tagRev = useSyncExternalStore(subscribeTagCatalog, tagCatalogRevision, tagCatalogRevision)
+
+  const poolBodyRef = useRef<HTMLTableSectionElement | null>(null)
+  const poolRef = useRef<NativeRowPool | null>(null)
+  const stampCache = useRef(new Map<string, RowStampEntry>())
+  const portalCache = useRef(new Map<string, { stamp: string; element: ReactNode }>())
+  const mountedRowKeys = useRef(new Set<string>())
+  const paintedWindow = useRef('')
+  const prevPortalsRef = useRef<PortalCellMount[]>([])
+  const [portals, setPortals] = useState<PortalCellMount[]>([])
+
+  const layout = columnLayout(colKeys)
+  const liveRows = new Set<string>()
+  const enteringRows: string[] = []
+  const hadMounted = mountedRowKeys.current.size > 0
+  const rowNodesByKey = new Map<string, Extract<TablePaintNode, { kind: 'row' }>>()
+  const structuralRows: ReactNode[] = []
+
+  for (const item of items) {
+    const node = nodes[item.index]
+    if (!node) continue
+    liveRows.add(node.key)
+    if (node.kind === 'row') {
+      rowNodesByKey.set(node.key, node)
+      if (hadMounted && !mountedRowKeys.current.has(node.key)) {
+        enteringRows.push(node.key)
+      }
+    } else {
+      const top = Math.max(0, Math.round(item.start - margin))
+      const element = bag.renderNode(node)
+      if (isValidElement(element)) {
+        structuralRows.push(
+          cloneElement(element as ReactElement<ComponentProps<'tr'>>, {
+            key: node.key,
+            'data-index': item.index,
+            'data-row-top': String(top),
+            style: {
+              ...(element.props as ComponentProps<'tr'>).style,
+              transform: `translate3d(0, ${top}px, 0)`,
+            },
+          } as ComponentProps<'tr'>),
+        )
+      }
+    }
+  }
+
+  const enterDelay = new Map<string, number>()
+  if (enteringRows.length > 1 && scrollDirection !== 'idle') {
+    for (let i = 0; i < enteringRows.length; i += 1) {
+      const ms = directionalRowDelayMs(i, enteringRows.length, scrollDirection)
+      if (ms > 0) enterDelay.set(enteringRows[i]!, ms)
+    }
+  }
+  mountedRowKeys.current = liveRows
+  if (stampCache.current.size > liveRows.size + 16) {
+    for (const key of stampCache.current.keys()) if (!liveRows.has(key)) stampCache.current.delete(key)
+  }
+  if (portalCache.current.size > liveRows.size * 4 + 32) {
+    for (const cacheKey of portalCache.current.keys()) {
+      const sep = cacheKey.indexOf('\0')
+      const rowKey = sep >= 0 ? cacheKey.slice(0, sep) : cacheKey
+      if (!liveRows.has(rowKey)) portalCache.current.delete(cacheKey)
+    }
+  }
+
+  const frame: NativePoolFrame = {
+    rows: [],
+    pinCount: layout?.pin ?? 0,
+    padLeft: layout?.padLeft ?? 0,
+    padRight: layout?.padRight ?? 0,
+    visibleColKeys: layout?.keys ?? [],
+  }
+
+  if (layout && bag.describeNativeCell) {
+    for (let idx = 0; idx < items.length; idx += 1) {
+      const item = items[idx]!
+      const node = nodes[item.index]
+      if (!node || node.kind !== 'row') continue
+      const top = Math.max(0, Math.round(item.start - margin))
+      const rowId = String(node.row.id)
+      const cells: NativePoolRowInput['cells'] = []
+      for (let c = 0; c < layout.keys.length; c += 1) {
+        const colKey = layout.keys[c]!
+        const described = bag.describeNativeCell(node, colKey)
+        if (!described) continue
+        cells.push({
+          colKey,
+          stamp: nativeSpecStamp(described),
+          describe: described,
+        })
+      }
+      frame.rows.push({
+        key: node.key,
+        index: item.index,
+        top,
+        recordId: rowId,
+        active: activeRowId != null && rowId === activeRowId,
+        delayMs: enterDelay.get(node.key) ?? 0,
+        pickAttrs: bag.recordPickAttrs?.(node.row),
+        cells,
+      })
+    }
+  }
+
+  const windowKey = `${colKeys}\0${[...liveRows].join('\0')}`
+
+  useLayoutEffect(() => {
+    const tbody = poolBodyRef.current
+    if (!tbody) return
+    let pool = poolRef.current
+    if (!pool) {
+      pool = new NativeRowPool(tbody)
+      poolRef.current = pool
+      paintRef.current.onPoolReady?.(pool)
+    }
+    const nextPortals = pool.sync(frame)
+    if (!samePortalMounts(prevPortalsRef.current, nextPortals)) {
+      prevPortalsRef.current = nextPortals
+      setPortals(nextPortals)
+    }
+    if (paintedWindow.current !== windowKey) {
+      paintedWindow.current = windowKey
+      paintRef.current.paintSelection?.()
+    }
+  })
+
+  useEffect(() => {
+    return () => {
+      poolRef.current?.destroy()
+      poolRef.current = null
+      prevPortalsRef.current = []
+      paintRef.current.onPoolReady?.(null)
+    }
+  }, [paintRef])
+
+  const padRow = items.find((item) => item.size > 1)?.size ?? TABLE_ROW_PX
+  const totalPx = Math.max(0, Math.round(totalSize))
+  const renderPortal = bag.renderPortalCellContent
+
+  return (
+    <>
+      <tbody
+        ref={poolBodyRef}
+        className="fsdb-grid-body"
+        style={{ height: `${totalPx}px`, ['--fsdb-pad-row' as string]: `${padRow}px` }}
+        onClick={(event) => {
+          const btn = (event.target as Element | null)?.closest('button.fsdb-boolbtn[data-native-bool="1"]')
+          if (!btn) return
+          const td = btn.closest<HTMLTableCellElement>('td[data-col-key]')
+          const tr = btn.closest<HTMLTableRowElement>('tr[data-record-id]')
+          const rowId = tr?.dataset.recordId
+          const colKey = td?.dataset.colKey
+          if (!rowId || !colKey) return
+          event.stopPropagation()
+          paintRef.current.onNativeBoolToggle?.(rowId, colKey)
+        }}
+      />
+      <tbody
+        className="fsdb-grid-overlay"
+        style={{ ['--fsdb-body-h' as string]: `${totalPx}px` }}
+      >
+        {structuralRows}
+        {renderPortal
+          ? portals.map((mount) => {
+              const node = rowNodesByKey.get(mount.rowKey)
+              if (!node) return null
+              const rowStamp = rowPaintStamp(node, stampCache.current)
+              const viewStamp = bag.columnViewStamp?.(mount.colKey) ?? ''
+              const portalStamp = `${rowStamp}\0${rowMetaStamp(node, pickMode)}\0${activeRowId === String(node.row.id) ? 1 : 0}\0${tagRev}\0${cellViewStamp}\0${viewStamp}`
+              const hit = portalCache.current.get(mount.id)
+              let content: ReactNode
+              if (hit && hit.stamp === portalStamp) {
+                content = hit.element
+              } else {
+                content = renderPortal(node, mount.colKey)
+                portalCache.current.set(mount.id, { stamp: portalStamp, element: content })
+              }
+              return createPortal(content, mount.td, mount.id)
+            })
+          : null}
+      </tbody>
+    </>
+  )
+})
+
 export type WindowedTableProps = {
   columns: { key: string }[]
   columnWidths: Record<string, number>
@@ -685,20 +924,39 @@ export const WindowedTable = memo(function WindowedTable({
           </tr>
         </thead>
         <TablePaintCtx.Provider value={paintRef}>
-          <TableBody
-            nodes={nodes}
-            items={items}
-            margin={margin}
-            totalSize={virtualizer.getTotalSize()}
-            measureRow={wrapCells ? measureRow : undefined}
-            colSpan={tableColSpan}
-            colKeys={`${colWindow.pin}:${colWindow.padLeft}:${colWindow.padRight}\0${windowedColumns.map((col) => col.key).join('\0')}`}
-            error={error}
-            pickMode={pickMode}
-            activeRowId={activeRowId}
-            cellViewStamp={cellViewStamp}
-            scrollDirection={scrollDirection}
-          />
+          {paintRef.current.describeNativeCell &&
+          paintRef.current.renderPortalCellContent &&
+          !wrapCells &&
+          !(nodes.length === 1 && nodes[0]?.kind === 'empty') ? (
+            <NativeTableBody
+              nodes={nodes}
+              items={items}
+              margin={margin}
+              totalSize={virtualizer.getTotalSize()}
+              colSpan={tableColSpan}
+              colKeys={`${colWindow.pin}:${colWindow.padLeft}:${colWindow.padRight}\0${windowedColumns.map((col) => col.key).join('\0')}`}
+              error={error}
+              pickMode={pickMode}
+              activeRowId={activeRowId}
+              cellViewStamp={cellViewStamp}
+              scrollDirection={scrollDirection}
+            />
+          ) : (
+            <TableBody
+              nodes={nodes}
+              items={items}
+              margin={margin}
+              totalSize={virtualizer.getTotalSize()}
+              measureRow={wrapCells ? measureRow : undefined}
+              colSpan={tableColSpan}
+              colKeys={`${colWindow.pin}:${colWindow.padLeft}:${colWindow.padRight}\0${windowedColumns.map((col) => col.key).join('\0')}`}
+              error={error}
+              pickMode={pickMode}
+              activeRowId={activeRowId}
+              cellViewStamp={cellViewStamp}
+              scrollDirection={scrollDirection}
+            />
+          )}
         </TablePaintCtx.Provider>
       </table>
     </div>

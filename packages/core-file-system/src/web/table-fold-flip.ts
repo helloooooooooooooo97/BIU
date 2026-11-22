@@ -4,6 +4,7 @@ const MAX_FLIP_DELTA_PX = 2400
 
 export type TableFoldRowLike = {
   dataset: Record<string, string | undefined>
+  style?: { display?: string }
   getBoundingClientRect: () => { top: number }
   animate?: (keyframes: Keyframe[], options?: KeyframeAnimationOptions) => unknown
 }
@@ -23,7 +24,7 @@ export function captureTableFoldSnapshot(
   const snap = new Map<string, number>()
   for (let i = 0; i < rows.length; i += 1) {
     const tr = rows[i]
-    if (!tr) continue
+    if (!tr || tr.style?.display === 'none') continue
     const key = tableFoldRowKey(tr)
     if (key) snap.set(key, tr.getBoundingClientRect().top)
   }
@@ -37,7 +38,8 @@ export function playTableFoldFlip(
   if (!prev || !rows) return
   for (let i = 0; i < rows.length; i += 1) {
     const tr = rows[i]
-    if (!tr || typeof tr.animate !== 'function') break
+    if (!tr || tr.style?.display === 'none') continue
+    if (typeof tr.animate !== 'function') break
     const key = tableFoldRowKey(tr)
     if (!key) continue
     const oldTop = prev.get(key)

@@ -9,15 +9,20 @@ import { activeColumnSandboxItem, ColumnSandboxCell, resolveColumnSandboxItems, 
 import { loadTags } from './tag-catalog.ts'
 import type { ColumnHeaderMenuTarget } from './column-header-menu.tsx'
 import {
+  asStringList,
   columnHeadTip,
+  enumDisplayLabel,
+  formatField,
   isRecordLinkField,
   parseTagFlatColumnKey,
   readTagFlatValue,
   resolveFieldType,
   tagColumnHeadLabel,
+  tagSourceKey,
   type ViewMode,
 } from './fields.ts'
 import { padColBox, type TablePaintBag, type TablePaintNode } from './windowed-table.tsx'
+import type { NativeCellDescribe, NativeCellSpec } from './table-native-pool.ts'
 import { EMPTY_HOLD_NODES, type TableHoldSnap } from './browser-list-cache.ts'
 import { RecordTitle } from './browser-row-title.tsx'
 import { PagerSizeControl } from './pager-size.tsx'
@@ -110,6 +115,8 @@ export type BrowserTablePaintDeps = {
   openRow: (row: DbRecord) => void
   openRowSplit: (row: DbRecord) => void
   writePatch: (row: DbRecord, patch: Record<string, unknown>) => Promise<void>
+  writeCellValue?: (row: DbRecord, key: string, field: FieldSpec, value: unknown) => Promise<void> | void
+  items?: DbRecord[]
   loadTreeKids: (parentId: string) => Promise<void>
   flattenRows: (rows: DbRecord[]) => Array<{ row: DbRecord; depth: number; hasKids: boolean; kidCount: number }>
 }
@@ -169,6 +176,8 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
     openRow,
     openRowSplit,
     writePatch,
+    writeCellValue,
+    items,
     loadTreeKids,
     flattenRows,
   } = deps
@@ -466,12 +475,150 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
     )
   }
 
-  function renderPaintCell(node: TablePaintNode, colKey: string) {
-    if (node.kind !== 'row') return null
+  function resolvePaintColumn(colKey: string): BrowserTableColumn | undefined {
     const held = tableHoldRef.current
-    const col = held && held.nodes !== EMPTY_HOLD_NODES && held.columns.length
+    return held && held.nodes !== EMPTY_HOLD_NODES && held.columns.length
       ? (held.columns as BrowserTableColumn[]).find((item) => item.key === colKey)
       : columnsByKey?.get(colKey)
+  }
+
+  function resolveNativeCellSpec(row: DbRecord, col: BrowserTableColumn, paintSchema: CollectionSchema | null | undefined): NativeCellSpec {
+    const key = col.key
+    if (
+      key === paintSchema?.labelField ||
+      key === 'actions' ||
+      key === 'shareScope' ||
+      key === 'shareRole' ||
+      key === 'table' ||
+      (key === 'fields' && collectionPath === TAGS_COLLECTION_PATH) ||
+      Boolean(chrome?.cells?.[key]) ||
+      isRecordLinkField(col.field, key) ||
+      isViewCatalogField(key) ||
+      (key === 'usage' && !(Number(row[key]) > 0))
+    ) {
+      return { kind: 'portal' }
+    }
+    const activeSandbox = activeColumnSandboxItem(
+      columnViews[key],
+      resolveColumnSandboxItems(key, columnViews[key], loadTags()),
+    )
+    if (activeSandbox) return { kind: 'portal' }
+
+    const kind = resolveFieldType(col.field)
+    const flat = parseTagFlatColumnKey(key)
+    const tagSrc = flat ? tagSourceKey(paintSchema ?? undefined) : undefined
+
+    if (kind === 'boolean') {
+      const raw = flat ? readTagFlatValue(row, key, tagSrc) : row[key]
+      return { kind: 'bool', on: raw === true || raw === 'true', writable: Boolean(col.field.writable) }
+    }
+    if (kind === 'select' || kind === 'multi-select') {
+      const raw = flat ? readTagFlatValue(row, key, tagSrc) : row[key]
+      const tags = kind === 'multi-select' ? asStringList(raw) : String(raw ?? '') ? [String(raw)] : []
+      return {
+        kind: 'tags',
+        items: tags.map((tag) => ({
+          id: tag,
+          label: enumDisplayLabel(col.field, tag),
+          tone: schemaTagTone(tag),
+        })),
+      }
+    }
+    if (
+      kind === 'string' ||
+      kind === 'number' ||
+      (kind === 'datetime' && !(flat && col.field.writable))
+    ) {
+      const text = flat
+        ? formatField(col.field, readTagFlatValue(row, key, tagSrc))
+        : cellValueText(row, key, col.field)
+      return { kind: 'text', text }
+    }
+    return { kind: 'portal' }
+  }
+
+  function describeNativeCell(node: Extract<TablePaintNode, { kind: 'row' }>, colKey: string): NativeCellDescribe | null {
+    const col = resolvePaintColumn(colKey)
+    if (!col) return null
+    const row = node.row
+    const held = tableHoldRef.current
+    const paintSchema = held?.schema ?? schema
+    const cellPick = held ? resolveHeldCellPick(held) : cellPickRef.current
+    const rangeSet = held ? null : cellRangeSetRef.current
+    const pin = resolvePinOf(col.key)
+    const isSelected = Boolean(
+      cellPick && (cellPick.rowKey ? cellPick.rowKey === node.key : cellPick.id === row.id) && cellPick.key === col.key,
+    )
+    const cellClass = isSelected
+      ? col.field && cellFieldWritable(col.field)
+        ? 'is-cell-on'
+        : 'is-cell-on is-cell-ro'
+      : rangeSet?.has(tableCellRangeKey(row.id, col.key))
+        ? 'is-cell-range'
+        : ''
+    return {
+      spec: resolveNativeCellSpec(row, col, paintSchema),
+      pinLeft: pin?.left,
+      pinEdge: pin?.isEdge,
+      cellClass: cellClass || undefined,
+      pickAttrs: cellPickOf(row, col.key, col.field),
+    }
+  }
+
+  function renderPortalCellContent(node: Extract<TablePaintNode, { kind: 'row' }>, colKey: string): ReactNode {
+    const col = resolvePaintColumn(colKey)
+    if (!col) return null
+    const row = node.row
+    const held = tableHoldRef.current
+    const paintSchema = held?.schema ?? schema
+    if (col.key === paintSchema?.labelField) {
+      return (
+        <RecordTitle
+          row={row}
+          label={String(row[paintSchema?.labelField ?? 'title'] ?? '')}
+          Title={chrome?.Title}
+          depth={node.depth}
+          hasKids={node.hasKids}
+          kidCount={node.kidCount}
+          treeOn={treeOn}
+          collapsed={collapsed[row.id] !== false}
+          onToggleCollapsed={() => {
+            const expanding = collapsed[row.id] !== false
+            captureTableFoldSnapshot()
+            setCollapsed((prev) => ({ ...prev, [row.id]: prev[row.id] === false }))
+            if (expanding) void loadTreeKids(String(row.id))
+          }}
+          tableIcon={currentTable?.view?.icon}
+          Icon={chrome?.Icon}
+          pick={recordPick(row)}
+          onOpenSplit={() => openRowSplit(row)}
+          onOpenRow={() => openRow(row)}
+          onWriteEmoji={(next) => void writePatch(row, { emoji: next })}
+          toolsArmed
+        />
+      )
+    }
+    if (col.key === 'actions') {
+      return renderRecordActions(row)
+    }
+    return <span className="fsdb-cell">{paintTableCell(row, col.key, col.field)}</span>
+  }
+
+  function onNativeBoolToggle(rowId: string, colKey: string) {
+    if (!writeCellValue || !items) return
+    const col = resolvePaintColumn(colKey)
+    if (!col || !col.field.writable) return
+    const row = items.find((item) => String(item.id) === rowId)
+    if (!row) return
+    const flat = parseTagFlatColumnKey(colKey)
+    const raw = flat ? readTagFlatValue(row, colKey, tagSourceKey(schema ?? undefined)) : row[colKey]
+    const on = raw === true || raw === 'true'
+    void writeCellValue(row, colKey, col.field, !on)
+  }
+
+  function renderPaintCell(node: TablePaintNode, colKey: string) {
+    if (node.kind !== 'row') return null
+    const col = resolvePaintColumn(colKey)
     if (!col) return null
     return paintLiveCell(node.row, col, node.depth, node.hasKids, node.kidCount, node.key)
   }
@@ -650,6 +797,9 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
     paintHeadTh,
     paintTableCell,
     paintLiveCell,
+    describeNativeCell,
+    renderPortalCellContent,
+    onNativeBoolToggle,
     renderPaintCell,
     renderPaintRow,
     tableLiveRow,

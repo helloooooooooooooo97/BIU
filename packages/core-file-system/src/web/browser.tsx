@@ -3474,6 +3474,9 @@ export function CollectionBrowser({
   const {
     renderGroupHead,
     paintHeadTh,
+    describeNativeCell,
+    renderPortalCellContent,
+    onNativeBoolToggle,
     renderPaintCell,
     renderPaintRow,
     renderPaintNode,
@@ -3535,6 +3538,8 @@ export function CollectionBrowser({
     openRow,
     openRowSplit,
     writePatch,
+    writeCellValue,
+    items,
     loadTreeKids,
     flattenRows,
   })
@@ -3894,6 +3899,10 @@ export function CollectionBrowser({
       renderNode: renderPaintNode,
       renderCell: renderPaintCell,
       renderRow: renderPaintRow,
+      describeNativeCell,
+      renderPortalCellContent,
+      recordPickAttrs: recordPick,
+      onNativeBoolToggle,
       compositeCells: compositeCellKeys,
       columnViewStamp: (colKey) => {
         const active = activeColumnSandboxItem(
