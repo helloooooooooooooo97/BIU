@@ -226,8 +226,8 @@ test('sidebar view rows apply the current collection view instead of only changi
   assert.match(open, /onOpenTable\?\.\(path, viewId\)/)
   assert.doesNotMatch(open, /onApplyView\(view\)\s*\n\s*return/)
   assert.match(browser, /onApplyView=\{\(view\) => \{\s*selectView\(view\)/)
-  assert.match(browser, /pendingSelectViewRef\.current = onOpenView && routeViewId !== view\.id \? \{ path: collectionPath, id: view\.id \} : null/)
-  assert.match(browser, /pickViewForRoute\(listed, targetPath, activeId \?\? routeViewIdRef\.current \?\? undefined\)/)
+  assert.match(browser, /viewSyncRef\.current!\.markSelect\(collectionPath, view\.id, routeViewId, Boolean\(onOpenView\)\)/)
+  assert.match(browser, /viewSyncRef\.current!\.resolveSyncedViewId\(targetPath, activeViewIdRef\.current, routeViewIdRef\.current\)/)
   assert.doesNotMatch(browser, /pickViewForRoute\(listed, collectionPath, routeViewId \?\? activeId \?\? undefined\)/)
 })
 
