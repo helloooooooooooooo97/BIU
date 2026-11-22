@@ -413,7 +413,7 @@ const CSS = `
 .fsdb-fileview-img .biu-image img{display:block;width:auto;max-width:100%;height:auto;max-height:none;object-fit:contain;border-radius:8px}
 .fsdb-page .tasks-table th.is-pin-col,.fsdb-page .tasks-table td.is-pin-col{position:sticky;left:calc(var(--fsdb-check-gutter) + var(--fsdb-pin-left,0px));z-index:7;background:var(--biu-color-surface)}
 .fsdb-page .tasks-table th.is-pin-col{z-index:12}
-.fsdb-page .tasks-table th.is-pin-edge,.fsdb-page .tasks-table td.is-pin-edge{box-shadow:2px 0 0 0 color-mix(in srgb,var(--biu-color-border) 90%,transparent)}
+.fsdb-page .tasks-table th.is-pin-edge,.fsdb-page .tasks-table td.is-pin-edge{box-shadow:inset -1px 0 0 0 color-mix(in srgb,var(--biu-color-border) 90%,transparent)}
 .fsdb-page .tasks-table tr.is-active td.is-pin-col{background:color-mix(in srgb,var(--biu-color-text) 8%,var(--biu-color-surface))}
 .fsdb-page .tasks-tree-toggle{width:20px;height:20px;flex:none;display:inline-flex;align-items:center;justify-content:center;align-self:center;border:0;background:transparent;color:var(--biu-color-text-subtle);border-radius:4px;cursor:pointer;padding:0;line-height:0}
 .fsdb-page .tasks-tree-toggle:hover{background:var(--biu-color-bg-hover)}
