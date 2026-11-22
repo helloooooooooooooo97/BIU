@@ -282,7 +282,7 @@ export const BUILTIN_FIELDS = {
     label: '标签',
     writable: true,
     description:
-      '贴标签并填属性。一个标签：{tags:["need"],values:{导演:"查泽雷"}}。多个标签 values 必须按 id 分组：{tags:["need","awards"],values:{"need":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 只合并属性，不撕掉其它标签。读属性列：db_list columns=["tag::<标签id>::<字段key>"]，例如 tag::need::category。',
+      '贴标签并填属性。统一按标签 id 分组写 values：{tags:["tag-2"],values:{"tag-2":{导演:"查泽雷"}}}（多标签同理，单标签兼容扁平 values，未知属性会直接报错）。省略 tags 只合并属性，不撕掉其它标签。读属性列：db_list columns=["tag::<标签id>::<字段key>"]，例如 tag::need::category。',
   },
   parentId: { type: 'ref', label: '父级', writable: true },
   dependsOn: { type: 'multi-ref', label: '依赖', writable: true },

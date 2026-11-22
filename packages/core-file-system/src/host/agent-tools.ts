@@ -228,7 +228,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
   })
   ctx.tools.register({
     name: 'db_update',
-    description: '按表结构 schema 的可写字段更新一条已有记录，路径为 /<表>/<id>，属性对象传在 fields 中；可选传 body 在同一次调用里整篇覆写正文（避免再调一次 db_content）。成功只返回 {ok, path}，不回整行。未知字段会列出该表可写字段。标签 tag：推荐始终按标签 id 分组写 values（与读取结构一致），如 {tags:["tag-2"],values:{"tag-2":{导演:"查泽雷"}}}；单标签也兼容扁平 values。省略 tags 则合并更新当前已贴标签的属性，不撕掉其它标签。新建用 db_create，局部改正文用 db_content。',
+    description: '按表结构 schema 的可写字段更新一条已有记录，路径为 /<表>/<id>，属性对象传在 fields 中；可选传 body 在同一次调用里整篇覆写正文（避免再调一次 db_content）。成功返回 {ok, path}（含标签时回显已落盘的 tag）。未知字段或未知标签属性会直接报错并列出可用字段。标签 tag 统一按标签 id 分组写 values：{tags:["tag-2"],values:{"tag-2":{导演:"查泽雷"}}}（单标签兼容扁平 values）；省略 tags 则合并更新当前已贴标签的属性，不撕掉其它标签。新建用 db_create，局部改正文用 db_content。',
     parameters: {
       type: 'object',
       properties: {

@@ -278,14 +278,23 @@ export function coerceTagFieldValue(field: SchemaPackField, value: unknown): unk
 
 export function remapTagBag(pack: CollectionSchemaPack | null | undefined, bag: Record<string, unknown>) {
   const out: Record<string, unknown> = {}
+  const liveFields = pack ? pack.fields.filter((field) => !field.deleted) : []
   for (const [key, value] of Object.entries(bag)) {
-    const field = packFieldKey(pack, key)
+    const trimmed = String(key ?? '').trim()
+    if (!trimmed) continue
+    const spec = findPackField(pack, trimmed)
+    if (pack && liveFields.length > 0 && !spec) {
+      const available = liveFields
+        .map((field) => (field.label && field.label !== field.key ? `${field.key}（${field.label}）` : field.key))
+        .join('、')
+      throw new Error(`标签「${pack.label || pack.id}」不存在属性「${trimmed}」。可用属性：${available}`)
+    }
+    const field = spec?.key ?? packFieldKey(pack, trimmed)
     if (!field) continue
     if (tagBagValueEmpty(value)) {
       out[field] = ''
       continue
     }
-    const spec = findPackField(pack, key)
     out[field] = spec ? coerceTagFieldValue(spec, value) : value
   }
   return out
@@ -309,7 +318,7 @@ export function pruneTagBags(
   return pruneSchemaValue(value, packs)
 }
 
-/** Agent 常写成扁平 values（中文属性名），权威形状是 values[标签id][字段key]。 */
+/** 统一校验并归整标签写入。标准形状：{ tags: [id], values: { [id]: { [field]: value } } }，兼容单标签扁平 values，绝不静默丢弃未知属性。 */
 export function coerceTagPatch(
   raw: unknown,
   current: SchemaFieldValue,
@@ -339,7 +348,12 @@ export function coerceTagPatch(
   for (const id of tags) bags[id] = { ...(current.values[id] ?? {}) }
   const applyBag = (packId: string, bag: Record<string, unknown>) => {
     const id = resolvePack(packId)?.id ?? packId
-    if (!tags.includes(id)) return
+    if (!tags.includes(id)) {
+      if (Object.keys(bag).length > 0) {
+        throw new Error(`tag.values 中的标签「${packId}」不在当前标签列表 [${tags.join(', ')}] 中，无法写入属性`)
+      }
+      return
+    }
     bags[id] = applyTagBagPatch(resolvePack(id), bags[id] ?? {}, bag)
   }
   if (isPlainObject(rec.values)) {
@@ -353,23 +367,35 @@ export function coerceTagPatch(
     }
     for (const [id, bag] of nested) applyBag(id, bag)
     if (Object.keys(flat).length) {
+      if (tags.length === 0) {
+        throw new Error(`未指定任何标签，无法写入标签属性：${Object.keys(flat).join('、')}`)
+      }
       if (tags.length === 1) applyBag(tags[0]!, flat)
       else {
         for (const [key, value] of Object.entries(flat)) {
           const hit = tags
             .map((id) => resolvePack(id))
-            .find((pack) => pack?.fields.some((field) => field.key === key || field.label === key))
-          if (hit) applyBag(hit.id, { [key]: value })
+            .find((pack) => pack?.fields.some((field) => !field.deleted && (field.key === key || field.label === key)))
+          if (!hit) {
+            throw new Error(`无法确定属性「${key}」属于哪个标签，请按标签 id 分组传入 values: { "<标签id>": { "${key}": ... } }`)
+          }
+          applyBag(hit.id, { [key]: value })
         }
       }
     }
   }
   for (const [key, value] of Object.entries(rec)) {
     if (key === 'tags' || key === 'values') continue
+    if (tags.length === 0) {
+      throw new Error(`未指定任何标签，无法写入标签属性：${key}`)
+    }
     if (tags.length === 1) applyBag(tags[0]!, { [key]: value })
     else {
-      const hit = tags.map((id) => resolvePack(id)).find((pack) => pack?.fields.some((field) => field.key === key || field.label === key))
-      if (hit) applyBag(hit.id, { [key]: value })
+      const hit = tags.map((id) => resolvePack(id)).find((pack) => pack?.fields.some((field) => !field.deleted && (field.key === key || field.label === key)))
+      if (!hit) {
+        throw new Error(`无法确定属性「${key}」属于哪个标签，请按标签 id 分组传入 values: { "<标签id>": { "${key}": ... } }`)
+      }
+      applyBag(hit.id, { [key]: value })
     }
   }
   return pruneTagBags(bindSchemaValue(tags, bags), resolvePack)

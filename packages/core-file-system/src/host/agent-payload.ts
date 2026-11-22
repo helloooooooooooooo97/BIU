@@ -57,11 +57,30 @@ export class AgentDbCompact {
     if (rec.kind === 'record') {
       const next: Record<string, unknown> = { ok: true, path: rec.path }
       if (rec.result !== undefined) next.result = rec.result
+      const tag = this.nonEmptyTag(rec.value)
+      if (tag) next.tag = tag
       return next
     }
-    if (rec.kind === 'created') return { ok: true, path: rec.path, ids: this.createdIds(rec.items) }
+    if (rec.kind === 'created') {
+      const next: Record<string, unknown> = { ok: true, path: rec.path, ids: this.createdIds(rec.items) }
+      if (Array.isArray(rec.items) && rec.items.length === 1) {
+        const first = rec.items[0] as { value?: unknown } | undefined
+        const tag = this.nonEmptyTag(first?.value)
+        if (tag) next.tag = tag
+      }
+      return next
+    }
     if (rec.kind === 'deleted') return { ok: true, path: rec.path, ids: rec.ids ?? [] }
     return result
+  }
+
+  private nonEmptyTag(value: unknown) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+    const tag = (value as { tag?: unknown }).tag
+    if (!tag || typeof tag !== 'object' || Array.isArray(tag)) return null
+    const tags = (tag as { tags?: unknown }).tags
+    if (!Array.isArray(tags) || !tags.length) return null
+    return tag
   }
 
   private collection(rec: Record<string, unknown>) {
