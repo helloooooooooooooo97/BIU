@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - biu-online
+      - main
     paths:
       - 'packages/web-app-shell/src/web/marketing-site/**'
       - 'web/site-main.tsx'
