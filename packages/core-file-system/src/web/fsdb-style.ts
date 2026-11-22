@@ -510,6 +510,23 @@ const CSS = `
 .fsdb-page .tasks-table tr.fsdb-table-pad{box-sizing:border-box;font-size:0;line-height:0;overflow:hidden;pointer-events:none}
 .fsdb-page .tasks-table tr.fsdb-table-pad td,.fsdb-page .tasks-table tr.fsdb-table-pad:hover td{padding:0;border:0;background:transparent;line-height:0;font-size:0;height:inherit;box-sizing:border-box;overflow:hidden;vertical-align:top}
 .fsdb-page .tasks-table tr.fsdb-table-pad td > div{--fsdb-pad-line:color-mix(in srgb,var(--biu-color-border) 80%,transparent);display:block;box-sizing:border-box;overflow:hidden;contain:layout paint style;line-height:0;font-size:0;background-image:linear-gradient(to bottom,transparent calc(100% - var(--biu-stroke-width)),var(--fsdb-pad-line) 0),var(--fsdb-pad-cols,none);background-size:100% var(--fsdb-pad-row,32px),auto;background-repeat:repeat-y,no-repeat}
+.fsdb-page .tasks-table.is-grid{display:block;width:max-content;min-width:100%}
+.fsdb-page .tasks-table.is-grid colgroup{display:none}
+.fsdb-page .tasks-table.is-grid thead{display:block;width:100%}
+.fsdb-page .tasks-table.is-grid thead tr{display:flex;align-items:stretch;width:100%}
+.fsdb-page .tasks-table.is-grid tbody.fsdb-grid-body{display:block;position:relative;width:100%;min-height:1px;--fsdb-pad-line:color-mix(in srgb,var(--biu-color-border) 80%,transparent);background-image:linear-gradient(to bottom,transparent calc(100% - var(--biu-stroke-width)),var(--fsdb-pad-line) 0),var(--fsdb-pad-cols,none);background-size:100% var(--fsdb-pad-row,32px),auto;background-repeat:repeat-y,no-repeat;contain:layout style}
+.fsdb-page .tasks-table.is-grid tbody.fsdb-grid-body.is-empty{background-image:none}
+.fsdb-page .tasks-table.is-grid tbody.fsdb-grid-body > tr{position:absolute;top:0;left:0;width:100%;display:flex;align-items:stretch;box-sizing:border-box;background:var(--biu-color-surface);contain:layout style}
+.fsdb-page .tasks-table.is-grid tbody.fsdb-grid-body.is-empty > tr{position:static;transform:none}
+.fsdb-page .tasks-table.is-grid.is-wrap tbody.fsdb-grid-body > tr[data-record-id]{height:auto;min-height:32px}
+.fsdb-page .tasks-table.is-grid th,.fsdb-page .tasks-table.is-grid td{display:flex;align-items:center;flex:0 0 auto;box-sizing:border-box;min-width:0}
+.fsdb-page .tasks-table.is-grid.is-wrap td{align-items:flex-start}
+.fsdb-page .tasks-table.is-grid th.fsdb-col-fill,.fsdb-page .tasks-table.is-grid td.fsdb-col-fill{flex:1 1 0;width:auto!important;min-width:0;max-width:none;border-right:0}
+.fsdb-page .tasks-table.is-grid th.fsdb-col-pad,.fsdb-page .tasks-table.is-grid td.fsdb-col-pad{flex:0 0 auto;border:0;padding:0}
+.fsdb-page .tasks-table.is-grid tbody tr.fsdb-group-row,.fsdb-page .tasks-table.is-grid tbody tr.fsdb-group-pager{background:var(--biu-color-bg)}
+.fsdb-page .tasks-table.is-grid tbody tr.fsdb-group-row td,.fsdb-page .tasks-table.is-grid tbody tr.fsdb-group-pager td,.fsdb-page .tasks-table.is-grid tbody tr > td.fsdb-empty{flex:1 1 100%;width:100%;max-width:none}
+.fsdb-page .tasks-table.is-grid tbody tr.fsdb-summary-row{height:32px;background:var(--biu-color-surface)}
+.fsdb-page .tasks-table.is-grid tbody tr.fsdb-summary-row td{height:32px;padding:0}
 .fsdb-page .tasks-minicard{display:flex;flex-direction:column;gap:8px;position:relative;width:100%;min-width:0;height:auto;min-height:min-content;margin:0;overflow:visible;text-align:left;border:0;border-radius:8px;padding:10px 11px;background:var(--biu-color-bg-subtle);color:var(--biu-color-text);font:inherit;box-shadow:none;transition:background .12s ease}
 .fsdb-page .tasks-minicard-open{display:flex;min-width:0;flex:1;overflow:hidden;border:0;padding:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:default}
 .fsdb-page .tasks-minicard:hover{background:var(--biu-color-bg-hover)}

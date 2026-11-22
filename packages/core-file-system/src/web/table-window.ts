@@ -153,6 +153,21 @@ export function tablePinColOffsets(
   return map
 }
 
+/** 将任意列 key 编码为安全的 ASCII CSS 自定义属性名，用于 AG Grid 风格弹性列宽 60fps 零重绘缩放。 */
+export function tableColWidthVar(key: string) {
+  let out = '--fsdb-cw-'
+  for (let i = 0; i < key.length; i += 1) {
+    const ch = key[i]!
+    const code = ch.charCodeAt(0)
+    if ((code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code === 45 || code === 95) {
+      out += ch
+    } else {
+      out += `_${code.toString(16)}_`
+    }
+  }
+  return out
+}
+
 /** 有手动值用手动值；否则钉住列 / 操作列 / 其余列各一个固定默认宽，不随视口缩放。 */
 export function tableColumnWidth(key: string, saved: unknown, pin = false) {
   const n = typeof saved === 'number' ? saved : Number(saved)

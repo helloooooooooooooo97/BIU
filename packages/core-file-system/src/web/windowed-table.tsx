@@ -35,6 +35,7 @@ import {
 import {
   TABLE_ROW_PX,
   TABLE_VIEWPORT_OVERSCAN,
+  tableColWidthVar,
   tableColumnWidth,
   type TableColumnSlice,
 } from './table-window.ts'
@@ -95,6 +96,10 @@ const ZERO_VERSION = () => 0
 type CheckSlot = { kind: 'head' | 'gap' | 'row'; id?: string; top: number; h: number }
 
 function rowTopInTable(table: HTMLTableElement, tr: HTMLTableRowElement) {
+  if (tr.dataset.rowTop != null) {
+    const y = Number(tr.dataset.rowTop)
+    if (Number.isFinite(y)) return (table.tHead?.offsetHeight ?? 0) + y + table.clientTop
+  }
   let top = tr.offsetTop
   let parent = tr.offsetParent
   while (parent instanceof HTMLElement && parent !== table && table.contains(parent)) {
@@ -401,20 +406,15 @@ const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, mea
     paintRef.current.paintSelection?.()
   }, [paintRef, windowKey])
   const padRow = items.find((item) => item.size > 1)?.size ?? TABLE_ROW_PX
-  const pad = (height: number, key: string) => height <= 0.25 ? null : (
-    <tr key={key} className="fsdb-table-pad" aria-hidden><td colSpan={colSpan} style={{ height }}><div style={{ height, ['--fsdb-pad-row' as string]: `${padRow}px` }} /></td></tr>
-  )
+  const emptyOnly = nodes.length === 1 && nodes[0]?.kind === 'empty'
   const layoutNow = layout
   const compositeCells = bag.compositeCells
   const children: ReactNode[] = []
-  let end = 0
   for (let idx = 0; idx < items.length; idx += 1) {
     const item = items[idx]!
     const node = nodes[item.index]
     if (!node) continue
-    const top = item.start - margin
-    // 顶部占位行使用固定 key，滚动跨行时仅原地改 height，避免每行销毁重建 <tr> 造成闪烁。
-    children.push(pad(top - end, idx === 0 ? 'pad:start' : `pad:${node.key}`))
+    const top = Math.max(0, Math.round(item.start - margin))
     const stamp = rowPaintStamp(node, stampCache.current)
     const hit = rowCache.current.get(node.key)
     let element: ReactNode
@@ -450,20 +450,23 @@ const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, mea
     children.push(isValidElement(element) ? cloneElement(element as ReactElement<ComponentProps<'tr'>>, {
       key: node.key,
       'data-index': item.index,
+      ...(emptyOnly ? {} : { 'data-row-top': String(top) }),
       ...(measureRow ? { ref: measureRow } : {}),
-      ...(delayMs > 0
-        ? {
-            style: {
-              ...(element.props as ComponentProps<'tr'>).style,
-              ['--fsdb-row-delay' as string]: `${delayMs}ms`,
-            },
-          }
-        : {}),
+      style: {
+        ...(element.props as ComponentProps<'tr'>).style,
+        ...(emptyOnly ? {} : { transform: `translate3d(0, ${top}px, 0)` }),
+        ...(delayMs > 0 ? { ['--fsdb-row-delay' as string]: `${delayMs}ms` } : {}),
+      },
     } as ComponentProps<'tr'>) : element)
-    end = top + item.size
   }
-  children.push(pad(totalSize - end, 'pad:end'))
-  return <tbody>{children}</tbody>
+  return (
+    <tbody
+      className={`fsdb-grid-body${emptyOnly ? ' is-empty' : ''}`}
+      style={emptyOnly ? undefined : { height: `${Math.max(0, Math.round(totalSize))}px`, ['--fsdb-pad-row' as string]: `${padRow}px` }}
+    >
+      {children}
+    </tbody>
+  )
 })
 
 export type WindowedTableProps = {
@@ -589,6 +592,13 @@ export const WindowedTable = memo(function WindowedTable({
   const measureRow = useCallback((node: HTMLTableRowElement | null) => virtualizer.measureElement(node), [virtualizer])
   const chrome = chromeRef.current
   const paintedColStyle = (index: number) => colWidthStyle(columnPx[index]) ?? padColBox(columnPx[index] || 72)
+  const colWidthVars = useMemo(() => {
+    const vars: Record<string, string> = {}
+    for (let i = 0; i < columns.length; i += 1) {
+      vars[tableColWidthVar(columns[i]!.key)] = `${columnPx[i] || 72}px`
+    }
+    return vars
+  }, [columnPx, columns])
 
   return (
     <div className="tasks-table-stage" ref={stageRef} onMouseLeave={() => paintCheckHover(null)}>
@@ -598,7 +608,10 @@ export const WindowedTable = memo(function WindowedTable({
           onWheel={(event) => { if (event.deltaX && wrapRef.current) wrapRef.current.scrollLeft += event.deltaX }}>
           <div className="fsdb-pinned-head-stage" style={{ width: `calc(${pinnedHead.tableWidth}px + var(--fsdb-check-gutter))` }}>
             <div className="fsdb-pinned-head-check">{checkStore ? checkStore.renderHead() : renderCheckHead()}</div>
-            <table className="tasks-table is-cols-fixed fsdb-pinned-head-table" style={{ width: pinnedHead.tableWidth, ['--fsdb-pin-title' as string]: `${columnPx[0] || 240}px` }}>
+            <table
+              className="tasks-table is-cols-fixed is-grid fsdb-pinned-head-table"
+              style={{ ...colWidthVars, width: pinnedHead.tableWidth, ['--fsdb-pin-title' as string]: `${columnPx[0] || 240}px` }}
+            >
               <colgroup>
                 {columns.slice(0, colWindow.pin).map((col, index) => <col key={col.key} data-col-key={col.key} style={paintedColStyle(index)} />)}
                 {colWindow.padLeft > 0 ? <col key="pad-left" style={padColBox(colWindow.padLeft)} /> : null}
@@ -635,8 +648,9 @@ export const WindowedTable = memo(function WindowedTable({
       <table
         ref={tableRef}
         tabIndex={0}
-        className={`tasks-table${wrapCells ? ' is-wrap' : ''} is-cols-fixed${truncateCells ? ' is-truncate' : ''}${resizingCol ? ' is-col-resize' : ''}`}
+        className={`tasks-table${wrapCells ? ' is-wrap' : ''} is-cols-fixed is-grid${truncateCells ? ' is-truncate' : ''}${resizingCol ? ' is-col-resize' : ''}`}
         style={{
+          ...colWidthVars,
           minWidth: `${paintedTablePx}px`,
           outline: 'none',
           ['--fsdb-table-px' as string]: `${paintedTablePx}px`,

@@ -25,7 +25,7 @@ import { FieldGlyph } from './fsdb-cells.tsx'
 import { TableGlyph, UiGlyph } from './nav-glyphs.tsx'
 import { TAGS_COLLECTION_PATH } from './database-path.ts'
 import { persistCollapsedGroups } from './view-storage.ts'
-import { tablePinColOffsets, type PinnedColOffset, type TableColumnSlice } from './table-window.ts'
+import { tableColWidthVar, tablePinColOffsets, type PinnedColOffset, type TableColumnSlice } from './table-window.ts'
 import { startTableColumnDrag } from './table-col-reorder.ts'
 import { tableCellRangeKey, tableNavKeys, type TableCellCursor } from './table-keys.ts'
 import { isViewCatalogField } from './view-catalog.ts'
@@ -279,6 +279,16 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
     return <td key={`pad-${side}`} className="fsdb-col-pad" aria-hidden style={padColBox(px)} />
   }
 
+  function colCellBox(colKey: string, extra?: Record<string, string>): Record<string, string> {
+    const w = `var(${tableColWidthVar(colKey)})`
+    return {
+      width: w,
+      minWidth: w,
+      maxWidth: w,
+      ...extra,
+    }
+  }
+
   function paintHeadTh(col: BrowserTableColumn) {
     const flat = parseTagFlatColumnKey(col.key)
     const tone = flat ? schemaTagTone(flat.packId) : undefined
@@ -287,13 +297,10 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
     const draggableCol = Boolean(onReorderColumns && !sheet)
     const menuOpen = interactive && openColMenuKey === col.key
     const pin = resolvePinOf(col.key)
-    const thStyle: Record<string, string> | undefined =
-      tone || pin
-        ? {
-            ...(tone ? { '--biu-tag': tone } : {}),
-            ...(pin ? { '--fsdb-pin-left': `${pin.left}px` } : {}),
-          }
-        : undefined
+    const thStyle = colCellBox(col.key, {
+      ...(tone ? { '--biu-tag': tone } : {}),
+      ...(pin ? { '--fsdb-pin-left': `${pin.left}px` } : {}),
+    })
     return (
       <th
         key={col.key}
@@ -414,7 +421,7 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
         key={col.key}
         data-col-key={col.key}
         {...cellPickOf(row, col.key, col.field)}
-        style={pin ? ({ ['--fsdb-pin-left' as string]: `${pin.left}px` }) : undefined}
+        style={colCellBox(col.key, pin ? { '--fsdb-pin-left': `${pin.left}px` } : undefined)}
         className={[
           pinClassFor(pin),
           Boolean(cellPick && (cellPick.rowKey ? cellPick.rowKey === rowKey : cellPick.id === row.id) && cellPick.key === col.key)
@@ -541,9 +548,9 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
       const paintSummaryTd = (col: BrowserTableColumn) => {
         const pin = resolvePinOf(col.key)
         const pinCls = pinClassFor(pin)
-        const pinStyle = pin ? ({ ['--fsdb-pin-left' as string]: `${pin.left}px` }) : undefined
+        const pinStyle = colCellBox(col.key, pin ? { '--fsdb-pin-left': `${pin.left}px` } : undefined)
         if (col.key === 'actions') {
-          return <td key={col.key} style={pinStyle} className={[pinCls, 'fsdb-summary-td'].filter(Boolean).join(' ')} />
+          return <td key={col.key} data-col-key={col.key} style={pinStyle} className={[pinCls, 'fsdb-summary-td'].filter(Boolean).join(' ')} />
         }
         const op = columnSummaries[col.key] ?? 'none'
         const result = computeColumnSummary(node.rows, col.key, col.field, op)

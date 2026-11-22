@@ -41,19 +41,25 @@ export function playTableFoldFlip(
     const key = tableFoldRowKey(tr)
     if (!key) continue
     const oldTop = prev.get(key)
+    const rawBase = tr.dataset.rowTop != null ? Number(tr.dataset.rowTop) : 0
+    const baseY = Number.isFinite(rawBase) ? rawBase : 0
+    const baseT = baseY === 0 ? 'translate3d(0, 0, 0)' : `translate3d(0, ${baseY}px, 0)`
     if (oldTop != null) {
       const deltaY = oldTop - tr.getBoundingClientRect().top
       if (Math.abs(deltaY) >= 1 && Math.abs(deltaY) < MAX_FLIP_DELTA_PX) {
         tr.animate(
-          [{ transform: `translate3d(0, ${deltaY}px, 0)` }, { transform: 'translate3d(0, 0, 0)' }],
+          [
+            { transform: `translate3d(0, ${baseY + deltaY}px, 0)` },
+            { transform: baseT },
+          ],
           { duration: FOLD_DURATION_MS, easing: FOLD_EASING },
         )
       }
     } else {
       tr.animate(
         [
-          { opacity: 0, transform: 'translate3d(0, -6px, 0)' },
-          { opacity: 1, transform: 'translate3d(0, 0, 0)' },
+          { opacity: 0, transform: `translate3d(0, ${baseY - 6}px, 0)` },
+          { opacity: 1, transform: baseT },
         ],
         { duration: FOLD_DURATION_MS, easing: FOLD_EASING },
       )
