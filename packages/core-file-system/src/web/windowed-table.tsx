@@ -46,6 +46,7 @@ export type TablePaintNode =
   | { kind: 'group-head'; key: string; groupKey: string; label: string; count: number; folded?: boolean }
   | { kind: 'row'; key: string; keyPrefix: string; row: DbRecord; depth: number; hasKids: boolean; kidCount: number; fold?: boolean; treeOn?: boolean }
   | { kind: 'group-pager'; key: string; groupKey: string; count: number; pageIndex: number }
+  | { kind: 'summary'; key: string; rows: DbRecord[]; stamp: string; partial?: boolean }
 
 export type TablePaintBag = {
   colSpan: number
@@ -112,7 +113,8 @@ export function measureTableCheckSlots(table: HTMLTableElement): CheckSlot[] | n
       if (
         tr.classList.contains('fsdb-table-pad') ||
         tr.classList.contains('fsdb-group-row') ||
-        tr.classList.contains('fsdb-group-pager')
+        tr.classList.contains('fsdb-group-pager') ||
+        tr.classList.contains('fsdb-summary-row')
       ) {
         continue
       }
@@ -292,6 +294,9 @@ function rowMetaStamp(node: Extract<TablePaintNode, { kind: 'row' }>, pickMode: 
 }
 
 export function rowPaintStamp(node: TablePaintNode, stamps: Map<string, RowStampEntry>) {
+  if (node.kind === 'summary') {
+    return `summary\0${node.key}\0${node.stamp}`
+  }
   if (node.kind !== 'row') {
     const label = node.kind === 'group-head' ? node.label : ''
     const count = node.kind === 'group-head' || node.kind === 'group-pager' ? node.count : ''

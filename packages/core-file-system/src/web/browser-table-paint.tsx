@@ -4,6 +4,8 @@ import type { CollectionInfo, CollectionSchema, DbRecord, FieldSpec, FieldType }
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { tagTone as schemaTagTone } from '@biu/biu-ui/tag-chip'
 import { TagFieldChips } from './schema-field.tsx'
+import { computeColumnSummary, type ColumnSummaryOp } from './column-summary.ts'
+import type { ColumnHeaderMenuTarget } from './column-header-menu.tsx'
 import {
   columnHeadTip,
   isRecordLinkField,
@@ -75,6 +77,9 @@ export type BrowserTablePaintDeps = {
   freezeTitle: boolean
   queryFields: ReadonlySet<string>
   resizingCol: string | null
+  columnSummaries: Record<string, ColumnSummaryOp>
+  openColMenuKey: string | null
+  onOpenColMenu?: (target: ColumnHeaderMenuTarget) => void
   pageSize: number
   error: string
   setGroupPages: Dispatch<SetStateAction<Record<string, number>>>
@@ -128,6 +133,9 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
     freezeTitle,
     queryFields,
     resizingCol,
+    columnSummaries,
+    openColMenuKey,
+    onOpenColMenu,
     pageSize,
     error,
     setGroupPages,
@@ -241,11 +249,31 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
     const flat = parseTagFlatColumnKey(col.key)
     const tone = flat ? schemaTagTone(flat.packId) : undefined
     const headTip = columnHeadTip(col)
+    const interactive = Boolean(onOpenColMenu && !sheet && col.key !== 'actions')
+    const menuOpen = interactive && openColMenuKey === col.key
     return (
       <th
         key={col.key}
-        className={[tablePinColClass(col.key, schema?.labelField, tableHoldRef.current?.freezeTitle ?? freezeTitle), tone ? 'is-tag-col' : ''].filter(Boolean).join(' ') || undefined}
+        className={[
+          tablePinColClass(col.key, schema?.labelField, tableHoldRef.current?.freezeTitle ?? freezeTitle),
+          tone ? 'is-tag-col' : '',
+          interactive ? 'is-col-clickable' : '',
+          menuOpen ? 'is-col-menu-open' : '',
+        ].filter(Boolean).join(' ') || undefined}
         style={tone ? { ['--biu-tag' as string]: tone } : undefined}
+        onClick={
+          interactive
+            ? (event) => {
+                if ((event.target as Element | null)?.closest('.fsdb-col-resizer')) return
+                event.stopPropagation()
+                onOpenColMenu?.({
+                  col,
+                  rect: event.currentTarget.getBoundingClientRect(),
+                  mode: 'header',
+                })
+              }
+            : undefined
+        }
       >
         <span
           className={`tasks-th${queryFields.has(col.key) ? ' is-on' : ''}`}
@@ -260,6 +288,7 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
           className={`fsdb-col-resizer${resizingCol === col.key ? ' is-active' : ''}`}
           data-testid="fsdb-col-resizer"
           onPointerDown={(event) => startColResize(event, col.key)}
+          onClick={(event) => event.stopPropagation()}
         />
       </th>
     )
@@ -426,6 +455,67 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
   function renderPaintNode(node: TablePaintNode) {
     if (node.kind === 'empty') return tableBodyRows([])
     if (node.kind === 'row') return tableRecordRow(node.row, node.depth, node.hasKids, node.kidCount, node.key)
+    if (node.kind === 'summary') {
+      const colWindow = colWindowRef.current
+      const held = tableHoldRef.current
+      const paintColumns = (
+        held && held.nodes !== EMPTY_HOLD_NODES && held.columns.length ? held.columns : columns
+      ) as BrowserTableColumn[]
+      const paintSchema = held?.schema ?? schema
+      const hasAnySummary = Object.keys(columnSummaries).length > 0
+      const paintSummaryTd = (col: BrowserTableColumn) => {
+        const pinCls = tablePinColClass(col.key, paintSchema?.labelField, held?.freezeTitle ?? freezeTitle)
+        if (col.key === 'actions') {
+          return <td key={col.key} className={[pinCls, 'fsdb-summary-td'].filter(Boolean).join(' ')} />
+        }
+        const op = columnSummaries[col.key] ?? 'none'
+        const result = computeColumnSummary(node.rows, col.key, col.field, op)
+        const tip = result
+          ? node.partial
+            ? `${result.label}（当前页 ${node.rows.length} 条）· 点击切换`
+            : `${result.label} · 点击切换`
+          : '点击配置统计方式'
+        return (
+          <td key={col.key} data-col-key={col.key} className={[pinCls, 'fsdb-summary-td'].filter(Boolean).join(' ')}>
+            <button
+              type="button"
+              className={`fsdb-summary-btn${result ? ' is-set' : ''}`}
+              data-dock-tip={tip}
+              onClick={(event) => {
+                event.stopPropagation()
+                onOpenColMenu?.({
+                  col,
+                  rect: event.currentTarget.getBoundingClientRect(),
+                  mode: 'summary',
+                })
+              }}
+            >
+              {result ? (
+                <>
+                  <span className="fsdb-summary-label">{result.label}</span>
+                  <span className="fsdb-summary-val">{result.value}</span>
+                </>
+              ) : (
+                <span className="fsdb-summary-hint">统计</span>
+              )}
+            </button>
+          </td>
+        )
+      }
+      return (
+        <tr
+          key={node.key}
+          className={`fsdb-summary-row${hasAnySummary ? ' has-values' : ''}`}
+          data-testid="fsdb-summary-row"
+        >
+          {paintColumns.slice(0, colWindow.pin).map(paintSummaryTd)}
+          {paintColPad(colWindow.padLeft, 'left')}
+          {paintColumns.slice(colWindow.start, colWindow.end).map(paintSummaryTd)}
+          {paintColPad(colWindow.padRight, 'right')}
+          <td className="fsdb-col-fill" aria-hidden />
+        </tr>
+      )
+    }
     if (node.kind === 'group-head') {
       return (
         <tr key={node.key} className="fsdb-group-row" data-group-key={node.groupKey}>

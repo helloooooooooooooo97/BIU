@@ -154,6 +154,8 @@ import { createBrowserViewCrud } from './use-browser-view-crud.ts'
 import { createBrowserMutations } from './use-browser-mutations.ts'
 import { buildTableIconLookup, createBrowserTablePaint } from './browser-table-paint.tsx'
 import { BrowserRecordStage } from './browser-record-stage.tsx'
+import { normalizeColumnSummaries, type ColumnSummaryOp } from './column-summary.ts'
+import { ColumnHeaderMenu, type ColumnHeaderMenuTarget } from './column-header-menu.tsx'
 import { KeyedSerialQueue, PendingFieldPatchTracker } from './record-write-queue.ts'
 import { ViewSyncController } from './view-sync-controller.ts'
 import { captureTableFoldSnapshot as captureFoldSnapshot, playTableFoldFlip } from './table-fold-flip.ts'
@@ -278,7 +280,10 @@ import {
   collectQueryFields,
   isCustomSorts,
   countFilterRules,
+  defaultOpForKind,
   emptyFilterGroup,
+  emptyFilterRule,
+  emptySortRule,
   encodeListFilter,
   filterEditorStateKey,
   filterTreeStateKey,
@@ -536,6 +541,10 @@ export function CollectionBrowser({
       : initialView?.columns ?? [],
   )
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => normalizeColumnWidths(initialView?.columnWidths))
+  const [columnSummaries, setColumnSummaries] = useState<Record<string, ColumnSummaryOp>>(
+    () => normalizeColumnSummaries(initialView?.columnSummaries) ?? {},
+  )
+  const [colHeaderMenu, setColHeaderMenu] = useState<ColumnHeaderMenuTarget | null>(null)
   const [resizingCol, setResizingCol] = useState<string | null>(null)
   const [cellPop, setCellPop] = useState<(TableCellCursor & { seed?: string }) | null>(null)
   const [cellPickEpoch, setCellPickEpoch] = useState(0)
@@ -816,6 +825,7 @@ export function CollectionBrowser({
         pinActionColumn(schema, view.columns, placedActions(schema, 'row').length > 0),
       )
       setColumnWidths(normalizeColumnWidths(view.columnWidths))
+      setColumnSummaries(normalizeColumnSummaries(view.columnSummaries) ?? {})
       setGroupBy(view.groupBy ?? '')
       setGroupConfig(normalizeGroupConfig(view.groupConfig))
       setShowTree(view.tree !== false)
@@ -1247,6 +1257,7 @@ export function CollectionBrowser({
           pinActionColumn(nextSchema, view.columns, placedActions(nextSchema, 'row').length > 0),
         )
         setColumnWidths(normalizeColumnWidths(view.columnWidths))
+      setColumnSummaries(normalizeColumnSummaries(view.columnSummaries) ?? {})
         setGroupBy(pendingView.groupBy)
         setGroupConfig(normalizeGroupConfig(view.groupConfig))
         setShowTree(Boolean(view.tree))
@@ -1538,6 +1549,7 @@ export function CollectionBrowser({
           ),
         )
         setColumnWidths(normalizeColumnWidths(next.columnWidths))
+        setColumnSummaries(normalizeColumnSummaries(next.columnSummaries) ?? {})
         setGroupBy(next.groupBy ?? '')
         setGroupConfig(normalizeGroupConfig(next.groupConfig))
         setShowTree(next.tree !== false)
@@ -2043,6 +2055,16 @@ export function CollectionBrowser({
             treeOn,
           })
         }
+        if (!sheet && listed.length) {
+          const groupRows = listed.map((item) => item.row)
+          nodes.push({
+            kind: 'summary',
+            key: `gs:${groupKey}`,
+            rows: groupRows,
+            stamp: `${JSON.stringify(columnSummaries)}\0${recordsFingerprint(groupRows)}\0${count}`,
+            partial: count > paged.length,
+          })
+        }
         nodes.push({
           kind: 'group-pager',
           key: `gp:${groupKey}`,
@@ -2071,8 +2093,18 @@ export function CollectionBrowser({
         treeOn,
       })
     }
+    if (!sheet && listed.length) {
+      const allRows = listed.map((item) => item.row)
+      nodes.push({
+        kind: 'summary',
+        key: 'summary:all',
+        rows: allRows,
+        stamp: `${JSON.stringify(columnSummaries)}\0${recordsFingerprint(allRows)}\0${total}`,
+        partial: total > visible.length,
+      })
+    }
     return nodes
-  }, [collapsed, collapsedGroups, flattenRows, groupPages, grouped, grouping, pageSize, treeOn, visible])
+  }, [collapsed, collapsedGroups, columnSummaries, flattenRows, groupPages, grouped, grouping, pageSize, sheet, total, treeOn, visible])
   const selectionModel = useMemo<TableSelectionModel>(() => ({
     rowIds: tablePaintNodes.flatMap((node) => node.kind === 'row' && node.row.id ? [node.row.id] : []),
     rowKeys: tablePaintNodes.flatMap((node) => node.kind === 'row' && node.row.id ? [node.key] : []),
@@ -2529,6 +2561,7 @@ export function CollectionBrowser({
     setFilterTree(resolveViewFilterTree(next))
     setColumnKeys(nextColumns)
     setColumnWidths(normalizeColumnWidths(next.columnWidths))
+        setColumnSummaries(normalizeColumnSummaries(next.columnSummaries) ?? {})
     setGroupBy(nextGroup)
     setGroupConfig(normalizeGroupConfig(next.groupConfig))
     setShowTree(Boolean(next.tree))
@@ -3407,6 +3440,13 @@ export function CollectionBrowser({
     freezeTitle,
     queryFields,
     resizingCol,
+    columnSummaries,
+    openColMenuKey: colHeaderMenu?.col.key ?? null,
+    onOpenColMenu: (target) => {
+      setColHeaderMenu((prev) =>
+        prev && prev.col.key === target.col.key && prev.mode === target.mode ? null : target,
+      )
+    },
     pageSize,
     error,
     setGroupPages,
@@ -3474,6 +3514,7 @@ export function CollectionBrowser({
       query,
       pageSize,
       columnWidths,
+      columnSummaries,
     })
     if (viewStateKey(current) === viewStateKey(next)) return
     persistViewDisplay(collectionPath, next.id, next)
@@ -3524,6 +3565,7 @@ export function CollectionBrowser({
     collectionPath,
     columnKeys,
     columnWidths,
+    columnSummaries,
     filters,
     filterTree,
     groupBy,
@@ -3959,6 +4001,57 @@ export function CollectionBrowser({
         onBulkTag={(ids, tags) => void executeBulkTag(ids, tags)}
         onExecuteAction={(row, action) => void executeAction(row, action)}
       />
+      {colHeaderMenu ? (
+        <ColumnHeaderMenu
+          target={colHeaderMenu}
+          tagCatalog={tagCatalog}
+          isTitle={colHeaderMenu.col.key === (schema?.labelField ?? 'title')}
+          canHide={colHeaderMenu.col.key !== (schema?.labelField ?? 'title') && colHeaderMenu.col.key !== 'actions'}
+          canSort={sortFields.some((item) => item.key === colHeaderMenu.col.key)}
+          canFilter={filterFields.some((item) => item.key === colHeaderMenu.col.key)}
+          canGroup={groupFields.some((item) => item.key === colHeaderMenu.col.key)}
+          activeSortDir={sorts.find((rule) => rule.field === colHeaderMenu.col.key)?.dir ?? null}
+          activeGrouped={groupBy === colHeaderMenu.col.key}
+          freezeTitle={freezeTitle}
+          summaryOp={columnSummaries[colHeaderMenu.col.key] ?? 'none'}
+          onClose={() => setColHeaderMenu(null)}
+          onFilter={(colKey) => {
+            const targetField = filterFields.find((item) => item.key === colKey)
+            if (targetField) {
+              const hasRule = filterTree.children.some((item) => item.kind === 'rule' && item.field === colKey)
+              if (!hasRule) {
+                applyFilterTree({
+                  ...filterTree,
+                  children: [...filterTree.children, { ...emptyFilterRule(colKey), op: defaultOpForKind(targetField.kind) }],
+                })
+              }
+            }
+            setFilterOpen(true)
+          }}
+          onSort={(colKey, dir) => {
+            if (!dir) {
+              applySorts(sorts.filter((rule) => rule.field !== colKey))
+              return
+            }
+            const rest = sorts.filter((rule) => rule.field !== colKey)
+            applySorts([{ ...emptySortRule(colKey), dir }, ...rest])
+          }}
+          onGroup={(colKey) => {
+            setGroupKey(groupBy === colKey ? '' : colKey)
+          }}
+          onSummary={(colKey, op) => {
+            setColumnSummaries((prev) => {
+              const next = { ...prev }
+              if (op === 'none') delete next[colKey]
+              else next[colKey] = op
+              if (!sheet && activeViewId) patchActiveView({ columnSummaries: normalizeColumnSummaries(next) })
+              return next
+            })
+          }}
+          onToggleFreeze={() => setFreezeTitleCol(!freezeTitle)}
+          onHide={(colKey) => toggleColumn(colKey)}
+        />
+      ) : null}
       {renderCellPop()}
       <DockHoverTip />
     </div>
