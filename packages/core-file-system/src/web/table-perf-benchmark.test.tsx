@@ -626,7 +626,8 @@ test('table performance benchmark suite', async () => {
   console.log('=== BENCHMARK RESULTS ===\n' + JSON.stringify(results, null, 2))
 
   // Regression guards for all 6 performance optimizations
-  expect((results.p0_1_preserveMounted as any).mountedRows).toBeLessThanOrEqual(30)
+  // 32px row height fits ~2 more visible rows in a 560px viewport than legacy 37px (18 + 8*2 = 34 max).
+  expect((results.p0_1_preserveMounted as any).mountedRows).toBeLessThanOrEqual(34)
   expect((results.p0_1_preserveMounted as any).mountedCells).toBeLessThanOrEqual(300)
   expect((results.p0_2_pinnedHeadScroll as any).layoutReads).toBe(0)
   expect((results.p0_3_columnResize as any).headPaints).toBeLessThanOrEqual(10)
