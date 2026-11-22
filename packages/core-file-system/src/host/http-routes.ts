@@ -230,6 +230,40 @@ export function registerDatabaseHttpRoutes(
       route.send(400, { error: String(error) })
     }
   })
+  ctx.http.route('POST', '/api/db/batch-update', async (route) => {
+    try {
+      const body = (await route.json()) as {
+        path?: string
+        ids?: string[]
+        viewId?: string
+        view_id?: string
+        filter?: Record<string, unknown>
+        q?: string
+        fields?: Record<string, unknown>
+        updates?: Array<{ id: string; fields: Record<string, unknown> }>
+        dryRun?: boolean
+        dry_run?: boolean
+        maxRecords?: number
+        max_records?: number
+      }
+      const path = String(body?.path ?? '')
+      route.send(
+        200,
+        await db.batchUpdate(path, {
+          ids: body?.ids,
+          viewId: body?.viewId ?? body?.view_id,
+          filter: body?.filter,
+          q: body?.q,
+          fields: body?.fields,
+          updates: body?.updates,
+          dryRun: body?.dryRun ?? body?.dry_run,
+          maxRecords: body?.maxRecords ?? body?.max_records,
+        }),
+      )
+    } catch (error) {
+      route.send(400, { error: String(error) })
+    }
+  })
   ctx.http.route('POST', '/api/db/create', async (route) => {
     try {
       const body = (await route.json()) as {

@@ -27,6 +27,30 @@ export type DatabaseToolsTarget = {
   ): Promise<unknown>
   read(path: string): Promise<unknown>
   update(path: string, content: unknown): Promise<unknown>
+  resolveViewFilter?(
+    collectionPath: string,
+    viewId: string,
+  ): {
+    viewId: string
+    viewName: string
+    filter: Record<string, unknown>
+    q?: string
+    sortField?: string
+    sortDir?: 'asc' | 'desc'
+  }
+  batchUpdate?(
+    collectionPath: string,
+    options: {
+      ids?: string[]
+      viewId?: string
+      filter?: Record<string, unknown>
+      q?: string
+      fields?: Record<string, unknown>
+      updates?: Array<{ id: string; fields: Record<string, unknown> }>
+      dryRun?: boolean
+      maxRecords?: number
+    },
+  ): Promise<unknown>
   create(
     path: string,
     content?: unknown,
@@ -120,11 +144,13 @@ async function withInspectorReveal<T>(
 export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
   ctx.tools.register({
     name: 'db_list',
-    description: '列出 File System 路径：/ 为已登记表（path、中文名、view.blurb 说明书），/<表> 返回列式 JSON { columns: string[], rows: unknown[][], total }（不含 content、默认不含 createdAt/updatedAt/createdBy/updatedBy）。默认每页 20，最多 200。columns 参数只取需要的列；count_only=true 只返回 { path, total } 省 token。表结构用 db_stat。',
+    description: '列出 File System 路径：/ 为已登记表（path、中文名、view.blurb 说明书），/<表> 返回列式 JSON { columns: string[], rows: unknown[][], total }（不含 content、默认不含 createdAt/updatedAt/createdBy/updatedBy）。默认每页 20，最多 200。可传 view_id（视图 id 或名称）直接按已保存视图的筛选/排序条件查询；columns 参数只取需要的列；count_only=true 只返回 { path, total } 省 token。表结构用 db_stat。',
     parameters: {
       type: 'object',
       properties: {
         path: { type: 'string' },
+        view_id: { type: 'string', description: '可选，按已保存视图的 id 或名称复用其筛选与排序条件（与 viewId 等价）' },
+        viewId: { type: 'string' },
         filter: { type: 'object', description: '可选，按列等值过滤' },
         q: { type: 'string', description: '可选，全文搜索' },
         sort_field: { type: 'string', description: '排序字段名（与 sortField 等价）' },
@@ -150,12 +176,23 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
     execute: (args) => {
       const path = String(args.path)
       const countOnly = args.count_only === true
-      const rawSortField = args.sort_field ?? args.sortField
-      const rawSortDir = args.sort_dir ?? args.sortDir
+      const rawViewId = args.view_id ?? args.viewId
+      const viewResolved =
+        typeof rawViewId === 'string' && rawViewId.trim() && db.resolveViewFilter
+          ? db.resolveViewFilter(path, rawViewId.trim())
+          : null
+      const explicitFilter = asFilter(args.filter)
+      const mergedFilter =
+        viewResolved || explicitFilter
+          ? { ...(viewResolved?.filter ?? {}), ...(explicitFilter ?? {}) }
+          : undefined
+      const rawSortField = args.sort_field ?? args.sortField ?? viewResolved?.sortField
+      const rawSortDir = args.sort_dir ?? args.sortDir ?? viewResolved?.sortDir
+      const q = args.q != null ? String(args.q) : (viewResolved?.q ?? '')
       return withInspectorReveal(ctx, path, () =>
         db
-          .list(path, asFilter(args.filter), {
-            q: args.q != null ? String(args.q) : '',
+          .list(path, mergedFilter && Object.keys(mergedFilter).length ? mergedFilter : undefined, {
+            q,
             sortField: rawSortField != null ? String(rawSortField) : '',
             sortDir: rawSortDir === 'desc' ? 'desc' : 'asc',
             limit: countOnly ? 1 : args.limit != null ? Number(args.limit) : undefined,
@@ -242,11 +279,11 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
   })
   ctx.tools.register({
     name: 'db_update',
-    description: '按表结构 schema 的可写字段更新一条已有记录，路径为 /<表>/<id>，属性对象传在 fields 中；可选传 body 在同一次调用里整篇覆写正文（避免再调一次 db_content）。成功返回 {ok, path}（含标签时回显已落盘的 tag）。未知字段或未知标签属性会直接报错并列出可用字段。标签 tag 统一按标签 id 分组写 values：{tags:["tag-2"],values:{"tag-2":{导演:"查泽雷"}}}（单标签兼容扁平 values）；省略 tags 则合并更新当前已贴标签的属性，不撕掉其它标签。新建用 db_create，局部改正文用 db_content。',
+    description: '按表结构 schema 的可写字段更新已有记录，支持单条与批量两种模式：1）单条更新：path 为 /<表>/<id>，属性对象传在 fields 中，可选传 body 整篇覆写正文；2）批量更新：path 为表路径 /<表>（如 /pages），传 view_id（视图 id 或名称）、ids、filter、q 之一配合 fields 统一打补丁，或传 updates=[{id, fields}] 逐条异构更新；可先传 dry_run=true 预览命中条数。标签 tag 统一按标签 id 分组写 values：{tags:["tag-2"],values:{"tag-2":{导演:"查泽雷"}}}；省略 tags 则合并更新当前已贴标签的属性，不撕掉其它标签。新建用 db_create，局部改正文用 db_content。',
     parameters: {
       type: 'object',
       properties: {
-        path: { type: 'string' },
+        path: { type: 'string', description: '单条路径 /<表>/<id>，或批量模式表路径 /<表>' },
         fields: {
           type: 'object',
           description:
@@ -254,18 +291,92 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
         },
         body: {
           type: 'string',
-          description: '可选：同时整篇覆写该记录的 Markdown 正文，省去再调一次 db_content',
+          description: '可选（单条模式）：同时整篇覆写该记录的 Markdown 正文，省去再调一次 db_content',
         },
+        view_id: {
+          type: 'string',
+          description: '可选（批量模式）：按已保存视图的 id 或名称命中全部记录（与 viewId 等价）',
+        },
+        viewId: { type: 'string' },
+        ids: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '可选（批量模式）：显式要更新的记录 id 列表',
+        },
+        filter: {
+          type: 'object',
+          description: '可选（批量模式）：按列等值过滤命中记录',
+        },
+        q: {
+          type: 'string',
+          description: '可选（批量模式）：全文搜索条件',
+        },
+        updates: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              fields: { type: 'object' },
+            },
+            required: ['id', 'fields'],
+          },
+          description: '可选（批量模式）：每条记录写不同值的异构更新数组',
+        },
+        dry_run: {
+          type: 'boolean',
+          description: '可选（批量模式）：true 时仅预览命中条数与样本 ID，不落库（与 dryRun 等价）',
+        },
+        dryRun: { type: 'boolean' },
+        max_records: {
+          type: 'number',
+          description: '可选（批量模式）：单次最大更新条数，默认 200，上限 500（与 maxRecords 等价）',
+        },
+        maxRecords: { type: 'number' },
       },
-      required: ['path', 'fields'],
+      required: ['path'],
     },
     annotations: { readOnly: false, idempotent: true },
     execute: (args) => {
-      const payload = args.fields as Record<string, unknown>
+      const target = String(args.path)
+      const segments = target.split('/').filter(Boolean)
+      const isBatch =
+        segments.length === 1 ||
+        args.view_id != null ||
+        args.viewId != null ||
+        Array.isArray(args.ids) ||
+        Array.isArray(args.updates) ||
+        args.dry_run === true ||
+        args.dryRun === true
+      if (isBatch) {
+        if (!db.batchUpdate) throw new Error('batch update is not supported by this database target')
+        const rawViewId = args.view_id ?? args.viewId
+        const rawDryRun = args.dry_run ?? args.dryRun
+        const rawMax = args.max_records ?? args.maxRecords
+        return withInspectorReveal(ctx, target, () =>
+          db.batchUpdate!(target, {
+            ids: Array.isArray(args.ids) ? args.ids.map((item) => String(item)) : undefined,
+            viewId: typeof rawViewId === 'string' ? rawViewId : undefined,
+            filter: asFilter(args.filter),
+            q: typeof args.q === 'string' ? args.q : undefined,
+            fields:
+              args.fields && typeof args.fields === 'object' && !Array.isArray(args.fields)
+                ? (args.fields as Record<string, unknown>)
+                : undefined,
+            updates: Array.isArray(args.updates)
+              ? (args.updates as Array<{ id: string; fields: Record<string, unknown> }>)
+              : undefined,
+            dryRun: rawDryRun === true,
+            maxRecords: rawMax != null ? Number(rawMax) : undefined,
+          }),
+        ).then((body) => agentDbCompact.write(body))
+      }
+      const payload = (args.fields && typeof args.fields === 'object' && !Array.isArray(args.fields)
+        ? args.fields
+        : {}) as Record<string, unknown>
       if (!Object.keys(payload).length) {
         throw new Error('fields must include at least one field to update')
       }
-      const target = String(args.path)
       return withInspectorReveal(ctx, target, async () => {
         const updated = await db.update(target, payload)
         if (typeof args.body === 'string') {

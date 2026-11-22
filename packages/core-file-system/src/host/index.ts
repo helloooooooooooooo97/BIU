@@ -1648,6 +1648,151 @@ export class DatabaseService extends Service implements Database {
     return { kind: 'record' as const, path: `${spec.path}/${record.id}`, schema: this.schemaForCurrent(spec), value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))) }
   }
 
+  resolveViewFilter(collectionPath: string, viewId: string): {
+    viewId: string
+    viewName: string
+    filter: Record<string, unknown>
+    q?: string
+    sortField?: string
+    sortDir?: 'asc' | 'desc'
+  } {
+    const colPath = normalizeCollectionPath(collectionPath)
+    const rawId = viewId.trim()
+    if (!rawId) throw new Error('view_id must be a non-empty string')
+    const saved = [
+      builtinAllView({ path: colPath }),
+      ...(this.viewCatalog?.viewsFor(colPath) ?? []),
+    ] as Array<SharedViewDef & { query?: string; sortField?: string; sortDir?: 'asc' | 'desc' }>
+    const hit = saved.find((item) => item.id === rawId || (item.name && item.name === rawId))
+    if (!hit) {
+      const choices = saved.map((item) => `${item.id}${item.name ? `(${item.name})` : ''}`).join(', ')
+      throw new Error(`unknown view: ${rawId} in ${colPath}${choices ? ` (available: ${choices})` : ''}`)
+    }
+    const filter: Record<string, unknown> = {
+      ...(hit.filters && typeof hit.filters === 'object' ? hit.filters : {}),
+      ...(hit.filterTree ? { $tree: hit.filterTree } : {}),
+    }
+    return {
+      viewId: hit.id,
+      viewName: hit.name ?? hit.id,
+      filter,
+      ...(typeof hit.query === 'string' && hit.query ? { q: hit.query } : {}),
+      ...(typeof hit.sortField === 'string' && hit.sortField ? { sortField: hit.sortField } : {}),
+      ...(hit.sortDir === 'desc' || hit.sortDir === 'asc' ? { sortDir: hit.sortDir } : {}),
+    }
+  }
+
+  async batchUpdate(
+    collectionPath: string,
+    options: {
+      ids?: string[]
+      viewId?: string
+      filter?: Record<string, unknown>
+      q?: string
+      fields?: Record<string, unknown>
+      updates?: Array<{ id: string; fields: Record<string, unknown> }>
+      dryRun?: boolean
+      maxRecords?: number
+    },
+  ) {
+    const parts = splitPath(collectionPath)
+    if (parts.length !== 1) throw new Error(`batchUpdate requires a collection path like /pages, got: ${collectionPath}`)
+    const colPath = `/${parts[0]}`
+    const spec = this.collection(colPath)
+    if (!spec) throw new Error(`unknown collection: ${colPath}`)
+
+    const maxRecords = Math.max(1, Math.min(500, Math.floor(Number(options.maxRecords) || 200)))
+    const dryRun = options.dryRun === true
+
+    const hasUpdates = Array.isArray(options.updates) && options.updates.length > 0
+    const hasFields = Boolean(options.fields && typeof options.fields === 'object' && !Array.isArray(options.fields) && Object.keys(options.fields).length > 0)
+    if (!hasUpdates && !hasFields) {
+      throw new Error('batchUpdate requires non-empty fields or updates')
+    }
+
+    let targets: Array<{ id: string; fields: Record<string, unknown> }> = []
+    let matched = 0
+
+    if (hasUpdates) {
+      const list = options.updates!.slice(0, maxRecords)
+      matched = options.updates!.length
+      for (const item of list) {
+        const id = String(item?.id ?? '').trim()
+        if (!id) throw new Error('each item in updates must include a non-empty id')
+        if (!item.fields || typeof item.fields !== 'object' || Array.isArray(item.fields) || !Object.keys(item.fields).length) {
+          throw new Error(`updates item ${id} must include non-empty fields`)
+        }
+        targets.push({ id, fields: item.fields })
+      }
+    } else {
+      const explicitIds = Array.isArray(options.ids)
+        ? [...new Set(options.ids.map((item) => String(item ?? '').trim()).filter(Boolean))]
+        : []
+      const hasView = typeof options.viewId === 'string' && options.viewId.trim().length > 0
+      const hasFilter = Boolean(options.filter && Object.keys(options.filter).length > 0)
+      const hasQ = typeof options.q === 'string' && options.q.trim().length > 0
+
+      if (!explicitIds.length && !hasView && !hasFilter && !hasQ) {
+        throw new Error('batchUpdate requires at least one selector: view_id, ids, filter, or q')
+      }
+
+      if (explicitIds.length) {
+        matched = explicitIds.length
+        targets = explicitIds.slice(0, maxRecords).map((id) => ({ id, fields: options.fields! }))
+      } else {
+        const viewResolved = hasView ? this.resolveViewFilter(colPath, options.viewId!) : null
+        const mergedFilter: Record<string, unknown> = {
+          ...(viewResolved?.filter ?? {}),
+          ...(options.filter ?? {}),
+        }
+        const q = hasQ ? options.q!.trim() : (viewResolved?.q ?? '')
+        const listed = (await this.list(
+          colPath,
+          Object.keys(mergedFilter).length ? mergedFilter : undefined,
+          { q, limit: maxRecords, offset: 0, columns: ['id'] },
+        )) as { total?: number; items?: Array<{ id?: unknown }> }
+        const foundIds = (listed.items ?? []).map((item) => String(item?.id ?? '').trim()).filter(Boolean)
+        matched = typeof listed.total === 'number' ? listed.total : foundIds.length
+        targets = foundIds.map((id) => ({ id, fields: options.fields! }))
+      }
+    }
+
+    if (dryRun) {
+      return {
+        ok: true,
+        kind: 'batch_updated' as const,
+        path: colPath,
+        dryRun: true,
+        matched,
+        targetCount: targets.length,
+        truncated: matched > targets.length,
+        sampleIds: targets.slice(0, 10).map((item) => item.id),
+      }
+    }
+
+    const updatedIds: string[] = []
+    const failed: Array<{ id: string; error: string }> = []
+    for (const target of targets) {
+      try {
+        await this.update(`${colPath}/${target.id}`, structuredClone(target.fields))
+        updatedIds.push(target.id)
+      } catch (error) {
+        failed.push({ id: target.id, error: error instanceof Error ? error.message : String(error) })
+      }
+    }
+
+    return {
+      ok: failed.length === 0,
+      kind: 'batch_updated' as const,
+      path: colPath,
+      matched,
+      updated: updatedIds.length,
+      truncated: matched > targets.length,
+      ids: updatedIds,
+      ...(failed.length ? { failed } : {}),
+    }
+  }
+
   async update(path: string, content: unknown) {
     const parts = splitPath(path)
     if (parts.length === 2 && parts[0] === 'data') {

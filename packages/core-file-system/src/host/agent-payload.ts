@@ -71,6 +71,24 @@ export class AgentDbCompact {
       return next
     }
     if (rec.kind === 'deleted') return { ok: true, path: rec.path, ids: rec.ids ?? [] }
+    if (rec.kind === 'batch_updated') {
+      const next: Record<string, unknown> = {
+        ok: rec.ok !== false,
+        path: rec.path,
+        matched: rec.matched ?? 0,
+      }
+      if (rec.dryRun) {
+        next.dryRun = true
+        next.targetCount = rec.targetCount ?? 0
+        next.sampleIds = rec.sampleIds ?? []
+      } else {
+        next.updated = rec.updated ?? 0
+        next.ids = rec.ids ?? []
+      }
+      if (rec.truncated) next.truncated = true
+      if (Array.isArray(rec.failed) && rec.failed.length) next.failed = rec.failed
+      return next
+    }
     return result
   }
 
