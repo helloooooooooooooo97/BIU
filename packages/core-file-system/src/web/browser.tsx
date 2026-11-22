@@ -978,6 +978,9 @@ export function CollectionBrowser({
   const viewsWriteGenRef = useRef(0)
   const persistActiveViewRef = useRef<() => void>(() => {})
   const activeViewIdRef = useRef<string | null>(null)
+  const routeViewIdRef = useRef<string | undefined>(routeViewId)
+  routeViewIdRef.current = routeViewId
+  const pendingSelectViewRef = useRef<{ path: string; id: string } | null>(null)
   const syncViewsRef = useRef<() => Promise<void>>(async () => {})
   const adoptViewRef = useRef<(view: SavedView) => void>(() => undefined)
   const hydratedDetail = useRef('')
@@ -1500,9 +1503,18 @@ export function CollectionBrowser({
       setSorts(normalizeSorts(undefined, 'title', 'asc'))
     }
     if (!pathChanged && !pathHandled) {
+      const pendingSelect = pendingSelectViewRef.current
+      if (pendingSelect && pendingSelect.path === collectionPath) {
+        if (routeViewId === pendingSelect.id) {
+          pendingSelectViewRef.current = null
+        } else {
+          return
+        }
+      }
       adoptRoutedView()
       return
     }
+    pendingSelectViewRef.current = null
     hydratePath.current = ''
     loadedIdentityRef.current = ''
     loadedPagesRef.current = {}
@@ -2591,6 +2603,7 @@ export function CollectionBrowser({
   }
 
   function rememberActiveView(id: string) {
+    activeViewIdRef.current = id
     setActiveViewId(id)
     if (nested) return
     try {
@@ -2690,15 +2703,18 @@ export function CollectionBrowser({
   }
   syncViewsRef.current = async () => {
     if (sheet) return
-    await pullSavedViews([collectionPath], { force: true })
-    const listed = rankListedViews(paintListedViews(collectionPath), viewsRef.current)
+    const targetPath = collectionPath
+    await pullSavedViews([targetPath], { force: true })
+    if (dataPathRef.current !== dataPath) return
+    const listed = rankListedViews(paintListedViews(targetPath), viewsRef.current)
     const prev = viewsRef.current
-    const activeId = activeViewIdRef.current
-    rememberViews(collectionPath, listed)
+    const pendingSelect = pendingSelectViewRef.current
+    const activeId = (pendingSelect?.path === targetPath ? pendingSelect.id : null) ?? activeViewIdRef.current
+    rememberViews(targetPath, listed)
     viewsRef.current = listed
     setViews(listed)
     const nextView =
-      pickViewForRoute(listed, collectionPath, routeViewId ?? activeId ?? undefined) ?? listed[0]
+      pickViewForRoute(listed, targetPath, activeId ?? routeViewIdRef.current ?? undefined) ?? listed[0]
     const prevView = activeId ? prev.find((item) => item.id === activeId) : undefined
     if (!nextView) return
     if (prevView && viewStateKey(normalizeSavedView(prevView)) === viewStateKey(normalizeSavedView(nextView))) return
@@ -2707,8 +2723,11 @@ export function CollectionBrowser({
   }
 
   function selectView(view: SavedView) {
+    pendingSelectViewRef.current = onOpenView && routeViewId !== view.id ? { path: collectionPath, id: view.id } : null
     persistActiveViewRef.current()
     if (view.id !== activeViewIdRef.current) {
+      pendingPathQueryRef.current = null
+      reloadGen.current += 1
       adoptListCacheForViewRef.current(dataPath, view)
       applyView(view)
     } else {
