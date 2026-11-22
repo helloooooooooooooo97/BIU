@@ -370,12 +370,21 @@ export function matchActionWhen(record: DbRecord, when?: Record<string, unknown>
 }
 
 function publicCollection(item: CollectionSpec): CollectionInfo {
+  const create = Boolean(item.records?.create && item.create)
+  const update = Boolean(item.records?.update && item.update)
+  const del = Boolean(item.records?.delete && item.remove)
   return {
     id: item.id,
     path: item.path,
     kind: 'collection',
     label: item.label ?? item.id,
     view: item.view ?? null,
+    caps: {
+      create,
+      update,
+      delete: del,
+      overviewCreate: create && item.view?.sidebar !== false,
+    },
   }
 }
 

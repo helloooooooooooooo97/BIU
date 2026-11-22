@@ -1744,7 +1744,7 @@ export function CollectionBrowser({
   const subsetLocked = lockedFilterKeys.length > 0
   const isDataOverview = dataPath === DATA_COLLECTION_PATH
   const overviewCreateTables = useMemo(
-    () => tables.filter((table) => isOverviewCreatableCollection(table.path)),
+    () => tables.filter((table) => isOverviewCreatableCollection(table)),
     [tables],
   )
   const canCreate =

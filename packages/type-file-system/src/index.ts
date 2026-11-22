@@ -857,12 +857,21 @@ export type CollectionSpec = {
   actions?: CollectionAction[]
 }
 
+export type CollectionCaps = {
+  create?: boolean
+  update?: boolean
+  delete?: boolean
+  /** 是否允许在「全部数据」总览的「新建」菜单中直接新建（缺省跟随 create && view?.sidebar !== false）。 */
+  overviewCreate?: boolean
+}
+
 export type CollectionInfo = {
   id: string
   path: string
   kind: 'collection'
   label: string
   view: CollectionView | null
+  caps?: CollectionCaps
 }
 
 export {

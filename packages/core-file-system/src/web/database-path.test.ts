@@ -121,4 +121,7 @@ test('data overview create menu excludes plugins, comments, system and index col
   assert.equal(isOverviewCreatableCollection('/tasks'), true)
   assert.equal(isOverviewCreatableCollection('/mcp'), true)
   assert.equal(isOverviewCreatableCollection('/skills'), true)
+  assert.equal(isOverviewCreatableCollection({ path: '/custom-readonly', caps: { create: false, overviewCreate: false } }), false)
+  assert.equal(isOverviewCreatableCollection({ path: '/custom-hidden', caps: { create: true }, view: { sidebar: false } }), false)
+  assert.equal(isOverviewCreatableCollection({ path: '/custom-creatable', caps: { create: true, overviewCreate: true } }), true)
 })
