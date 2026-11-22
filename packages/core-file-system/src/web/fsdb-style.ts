@@ -538,8 +538,8 @@ const CSS = `
 .fsdb-page .tasks-group-fold .sidebar-group-fold{position:relative;display:grid;width:16px;height:16px;place-items:center}
 .fsdb-page .tasks-group-fold .sidebar-group-fold-face,.fsdb-page .tasks-group-fold .sidebar-group-fold-chevron{position:absolute;inset:0;display:grid;place-items:center;width:16px;height:16px;transition:opacity 140ms ease}
 .fsdb-page .tasks-group-fold .sidebar-group-fold-chevron{opacity:0;pointer-events:none}
-.fsdb-page .tasks-group-fold .sidebar-group-fold:hover .sidebar-group-fold-face,.fsdb-page .tasks-group-fold .sidebar-group-fold:focus-within .sidebar-group-fold-face{opacity:0}
-.fsdb-page .tasks-group-fold .sidebar-group-fold:hover .sidebar-group-fold-chevron,.fsdb-page .tasks-group-fold .sidebar-group-fold:focus-within .sidebar-group-fold-chevron{opacity:1}
+.fsdb-page .tasks-group-fold:hover .sidebar-group-fold-face,.fsdb-page .tasks-group-fold:focus-visible .sidebar-group-fold-face{opacity:0}
+.fsdb-page .tasks-group-fold:hover .sidebar-group-fold-chevron,.fsdb-page .tasks-group-fold:focus-visible .sidebar-group-fold-chevron{opacity:1}
 .fsdb-page .tasks-queue-glabel{font-weight:var(--biu-font-weight-medium);line-height:20px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fsdb-page .tasks-group-create{margin-left:auto;flex:none}
 .fsdb-page .tasks-queue-gshare{color:var(--biu-color-icon-fixed)}

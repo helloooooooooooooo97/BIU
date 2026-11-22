@@ -4123,7 +4123,7 @@ export function CollectionBrowser({
     )
   }
 
-  function GroupHead({ groupKey, label }: { groupKey: string; label: string }) {
+  function renderGroupHead(groupKey: string, label: string) {
     const folded = Boolean(collapsedGroups[groupKey])
     return (
       <header className="tasks-queue-ghead">
@@ -5155,7 +5155,7 @@ export function CollectionBrowser({
       return (
         <tr key={node.key} className="fsdb-group-row" data-group-key={node.groupKey}>
           <td colSpan={tablePaintRef.current.colSpan}>
-            <GroupHead groupKey={node.groupKey} label={node.label} />
+            {renderGroupHead(node.groupKey, node.label)}
           </td>
         </tr>
       )
