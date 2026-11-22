@@ -2,11 +2,13 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ArrowsUpDownIcon,
+  CalculatorIcon,
   CheckIcon,
   ChevronRightIcon,
   EyeSlashIcon,
   FunnelIcon,
   InformationCircleIcon,
+  LockClosedIcon,
   Squares2X2Icon,
 } from '@heroicons/react/16/solid'
 import { computeFloatingPosition } from '@biu/biu-ui/floating-position'
@@ -375,7 +377,7 @@ export function ColumnHeaderMenu({
                 className={`fsdb-col-menu-item${sub === 'calculate' || summaryOp !== 'none' ? ' is-on' : ''}`}
                 onClick={() => setSub((prev) => (prev === 'calculate' ? null : 'calculate'))}
               >
-                <span className="fsdb-col-menu-sigma" aria-hidden>Σ</span>
+                <CalculatorIcon aria-hidden className="size-3.5 fsdb-col-menu-ico" />
                 <span className="fsdb-col-menu-item-label">统计</span>
                 {summaryOp !== 'none' ? (
                   <span className="fsdb-col-menu-meta">{summaryOpLabel(summaryOp)}</span>
@@ -420,7 +422,7 @@ export function ColumnHeaderMenu({
                     onClose()
                   }}
                 >
-                  <span className="fsdb-col-menu-pin" aria-hidden>📌</span>
+                  <LockClosedIcon aria-hidden className="size-3.5 fsdb-col-menu-ico" />
                   <span className="fsdb-col-menu-item-label">{freezeTitle ? '取消冻结列' : '冻结此列'}</span>
                   {freezeTitle ? <CheckIcon aria-hidden className="size-3.5 fsdb-col-menu-check" /> : null}
                 </button>

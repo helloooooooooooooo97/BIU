@@ -1388,7 +1388,6 @@ html:not(.dark) .fsdb-cellselect-menu svg{color:var(--biu-color-icon)}
 .fsdb-col-menu-item.is-on{color:var(--biu-color-text);font-weight:var(--biu-font-weight-medium)}
 .fsdb-col-menu-item-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fsdb-col-menu-ico,.fsdb-col-menu-chev{flex:none;color:var(--biu-color-icon)}
-.fsdb-col-menu-sigma,.fsdb-col-menu-pin{display:inline-flex;align-items:center;justify-content:center;flex:none;width:14px;font-size:13px;line-height:1;color:var(--biu-color-icon)}
 .fsdb-col-menu-meta{flex:none;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-2);font-weight:400}
 .fsdb-col-menu-check{flex:none;color:var(--biu-color-accent)}
 .fsdb-col-menu-sub{display:flex;flex-direction:column;gap:1px;margin:2px 0 4px 12px;padding-left:8px;border-left:1px solid var(--biu-color-border);max-height:200px;overflow-y:auto}
