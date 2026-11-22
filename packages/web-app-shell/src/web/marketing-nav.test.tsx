@@ -25,8 +25,8 @@ test('导航项高度一致：各项都是裸链接，没有包装层', () => {
   const items = navItems()
   assert.deepEqual(
     items.map((item) => item.textContent),
-    ['Product', 'Use Cases', 'Compare', 'Blog', 'Pricing'],
-    '精简为五个核心用户入口：产品 → 场景 → 对比 → 博客 → 定价',
+    ['Product', 'Use Cases', 'Why BIU', 'Philosophy', 'Pricing'],
+    '精简为五个核心用户入口：产品 → 场景 → 差异 → 理念 → 定价',
   )
 
   // 「产品」不再有二级菜单，所以也不需要 wrapper —— 五项是同一种节点。

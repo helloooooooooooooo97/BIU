@@ -198,7 +198,7 @@ test('home 收窄后：深度内容下沉，导航指向独立页', () => {
   assert.match(brandMark?.querySelector('rect')?.getAttribute('fill') ?? '', /#ffffff/i, '左上角标记保留白色圆角底')
   assert.match(nav.textContent ?? '', /Product/)
   assert.match(nav.textContent ?? '', /Pricing/)
-  assert.match(nav.textContent ?? '', /Compare/)
+  assert.match(nav.textContent ?? '', /Why BIU/)
   // 首页主张：All in One —— 页面组合软件
   assert.match(screen.getByRole('heading', { level: 1 }).getAttribute('aria-label') ?? '', /builds, stores, composes, distributes, and derives/)
   assert.equal(document.querySelector('.site-hero-band h2')?.textContent, 'Compose all your software on one page')
@@ -238,8 +238,8 @@ test('首页三扇门通向场景、对比和想法，深度留在内页', () =>
   assert.equal(screen.queryByText('Everything is a file'), null)
 
   const ideaLinks = within(ideas).getAllByRole('link')
-  assert.equal(ideaLinks[0]?.getAttribute('href'), '/blog/all-in-one')
-  assert.equal(ideaLinks[1]?.getAttribute('href'), '/blog/saas-to-paas')
+  assert.equal(ideaLinks[0]?.getAttribute('href'), '/blog/ai-native-software')
+  assert.equal(ideaLinks[1]?.getAttribute('href'), '/blog/all-in-one')
   assert.match(ideaLinks[0]?.textContent ?? '', /min read/)
   assert.equal(ideaLinks[2]?.getAttribute('href'), '/brand')
   assert.match(ideaLinks[2]?.textContent ?? '', /One circle, two lines, three blocks/)

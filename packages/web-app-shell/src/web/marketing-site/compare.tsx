@@ -391,8 +391,8 @@ const COMPARE_FAQ = [
 
 export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
-    title: 'Compare',
-    description: 'Compare BIU with leading products across each category: Linux, Kubernetes, Office, Notion, Airtable, Retool, Supabase, Cursor, DeepSeek Harness, Pi, ChatGPT, Claude, and Obsidian.',
+    title: 'Why BIU',
+    description: 'How BIU differs from leading products across each category: Notion, Obsidian, ChatGPT, Claude, Airtable, Cursor, Linux, Kubernetes, and more.',
     path: '/compare',
   })
   const bySlug = new Map(COMPARE_PAGES.map((page) => [page.slug, page]))
@@ -400,8 +400,8 @@ export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteActio
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-page-hero" data-reveal>
-          <p className="site-section-label">Compare</p>
-          <h1>Compare BIU with the best in every category</h1>
+          <p className="site-section-label">Why BIU</p>
+          <h1>How BIU differs from existing tools</h1>
           <p className="site-page-lead">
             Each of these products excels in one area—structure, collaboration, conversation, local-first work, or coding.
             BIU brings those strengths onto one page, where documents, tables, applications, and agents share the same data.

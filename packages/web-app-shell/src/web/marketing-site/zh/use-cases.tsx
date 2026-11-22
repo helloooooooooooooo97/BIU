@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { SiteChrome, SiteFaq, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
-import { ScenePageDemo, type DemoPageSpec, type SceneDemoLabels } from '../scene-page-demo.tsx'
+import { IndustryInteractiveDemo } from '../industry-demos.tsx'
+import type { DemoPageSpec } from '../scene-page-demo.tsx'
 
 export type CustomPlugin = {
   name: string
@@ -845,33 +846,33 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
 
       <section className="site-usecase-demo-section" aria-label="场景页面示例" data-reveal>
         <div className="site-usecase-demo-head">
-          <p className="site-section-label">仿真页面示例</p>
-          <h2>切换角色，预览对应的工作页面</h2>
-          <div className="site-demo-tabs" role="tablist" aria-label="切换行业角色">
-            {useCase.roles.map((role, index) => (
-              <button
-                type="button"
-                role="tab"
-                aria-selected={activeRoleIdx === index}
-                className={activeRoleIdx === index ? 'is-active' : ''}
-                key={role.id}
-                onClick={() => setActiveRoleIdx(index)}
-              >
-                {role.role}
-              </button>
-            ))}
-          </div>
-          <p className="site-usecase-role-lead">{activeRole.summary}</p>
-          <p className="site-usecase-note">交付方式：{activeRole.deliverTo}</p>
+          <p className="site-section-label">跨品类插件联动演示</p>
+          <h2>多个原本独立的软件，在同一页共享数据并实时联动</h2>
         </div>
 
-        <ScenePageDemo key={`${useCase.slug}-${activeRole.id}`} spec={activeRole.demo} labels={DEMO_LABELS_ZH} />
+        <IndustryInteractiveDemo key={useCase.slug} slug={useCase.slug} locale="zh" />
       </section>
 
       <section className="site-usecase-blocks" data-reveal>
-        <h2>「{activeRole.role}」页面所组合的插件</h2>
+        <h2>该行业下不同角色的插件组合</h2>
+        <div className="site-demo-tabs" role="tablist" aria-label="切换行业角色">
+          {useCase.roles.map((role, index) => (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeRoleIdx === index}
+              className={activeRoleIdx === index ? 'is-active' : ''}
+              key={role.id}
+              onClick={() => setActiveRoleIdx(index)}
+            >
+              {role.role}
+            </button>
+          ))}
+        </div>
+        <p className="site-usecase-role-lead">{activeRole.summary}</p>
+        <p className="site-usecase-note">交付方式：{activeRole.deliverTo}</p>
         <BlockChips blocks={activeRole.blocks} />
-        <h3 className="site-usecase-custom-heading">可由 AI 为该角色按需定制的专属插件</h3>
+        <h3 className="site-usecase-custom-heading">可由 AI 为「{activeRole.role}」按需定制的专属插件</h3>
         <div className="site-usecase-custom-grid">
           {activeRole.customPlugins.map((plugin) => (
             <article key={plugin.name}>

@@ -136,7 +136,7 @@ export function MarketingSecurity({ onLogin, onStart }: { onLogin: SiteAction; o
             </tbody>
           </table>
           <p className="site-permission-note">
-            想了解这套按规则计算的权限底层是怎么设计的？可以阅读博客里的深度文章：
+            想了解这套按规则计算的权限底层设计？可阅读「理念」专栏深度文章：
             <Link to="/blog/distribute-software">分发：一个页面，就是一次发布 →</Link>
           </p>
         </section>

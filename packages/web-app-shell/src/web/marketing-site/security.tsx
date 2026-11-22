@@ -144,7 +144,7 @@ export function MarketingSecurity({ onLogin, onStart }: { onLogin: SiteAction; o
             </tbody>
           </table>
           <p className="site-permission-note">
-            Curious how rule-based permissions work under the hood? Read the full essay on the blog:{' '}
+            Curious how rule-based permissions work under the hood? Read our philosophy essay:{' '}
             <Link to="/blog/distribute-software">Distribute: One page is a release →</Link>
           </p>
         </section>

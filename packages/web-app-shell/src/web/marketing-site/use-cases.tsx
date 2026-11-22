@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { SiteChrome, SiteFaq, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
-import { ScenePageDemo, type DemoPageSpec, type SceneDemoLabels } from './scene-page-demo.tsx'
+import { IndustryInteractiveDemo } from './industry-demos.tsx'
+import type { DemoPageSpec } from './scene-page-demo.tsx'
 
 export type CustomPlugin = {
   name: string
@@ -836,33 +837,33 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
 
       <section className="site-usecase-demo-section" aria-label="Interactive page preview" data-reveal>
         <div className="site-usecase-demo-head">
-          <p className="site-section-label">Interactive Page Preview</p>
-          <h2>Pick a role to preview its working page</h2>
-          <div className="site-demo-tabs" role="tablist" aria-label="Choose a role">
-            {useCase.roles.map((role, index) => (
-              <button
-                type="button"
-                role="tab"
-                aria-selected={activeRoleIdx === index}
-                className={activeRoleIdx === index ? 'is-active' : ''}
-                key={role.id}
-                onClick={() => setActiveRoleIdx(index)}
-              >
-                {role.role}
-              </button>
-            ))}
-          </div>
-          <p className="site-usecase-role-lead">{activeRole.summary}</p>
-          <p className="site-usecase-note">Delivery: {activeRole.deliverTo}</p>
+          <p className="site-section-label">Cross-Plugin Reactive Demo</p>
+          <h2>Distinct tools sharing live state on one page</h2>
         </div>
 
-        <ScenePageDemo key={`${useCase.slug}-${activeRole.id}`} spec={activeRole.demo} labels={DEMO_LABELS_EN} />
+        <IndustryInteractiveDemo key={useCase.slug} slug={useCase.slug} locale="en" />
       </section>
 
       <section className="site-usecase-blocks" data-reveal>
-        <h2>Plugins on the {activeRole.role} page</h2>
+        <h2>Plugin setups by role in this industry</h2>
+        <div className="site-demo-tabs" role="tablist" aria-label="Choose a role">
+          {useCase.roles.map((role, index) => (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeRoleIdx === index}
+              className={activeRoleIdx === index ? 'is-active' : ''}
+              key={role.id}
+              onClick={() => setActiveRoleIdx(index)}
+            >
+              {role.role}
+            </button>
+          ))}
+        </div>
+        <p className="site-usecase-role-lead">{activeRole.summary}</p>
+        <p className="site-usecase-note">Delivery: {activeRole.deliverTo}</p>
         <BlockChips blocks={activeRole.blocks} />
-        <h3 className="site-usecase-custom-heading">Custom plugins an agent can build for this role</h3>
+        <h3 className="site-usecase-custom-heading">Custom plugins an agent can build for {activeRole.role}</h3>
         <div className="site-usecase-custom-grid">
           {activeRole.customPlugins.map((plugin) => (
             <article key={plugin.name}>

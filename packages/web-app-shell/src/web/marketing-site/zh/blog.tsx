@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router-dom'
 import { SiteChrome, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
-import { BLOG_AUTHOR, BLOG_POSTS, readingMinutes, type Paragraph } from './blog-posts.ts'
+import { BLOG_AUTHOR, BLOG_POSTS, BLOG_SERIES, readingMinutes, type Paragraph } from './blog-posts.ts'
 import { asset } from './site-base.ts'
 
 export { BLOG_AUTHOR, BLOG_POSTS, readingMinutes }
@@ -81,32 +81,50 @@ function ArticleParagraph({ paragraph }: { paragraph: Paragraph }) {
 /** 博客总览 */
 export function MarketingBlog({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
-    title: '博客',
+    title: '理念',
     description: 'BIU 的设计理念：用页面组合软件、页面即边界、更少的原子、让工作留下来、开源与透明。',
     path: '/blog',
   })
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <section className="site-page-hero" data-reveal>
-        <p className="site-section-label">博客</p>
-        <h1>BIU 是怎么想的</h1>
-        <p className="site-page-lead">关于 All in One、页面与插件、智能体和开源的几篇长文。先读第一篇，就知道 BIU 为什么长成现在这样。</p>
+        <p className="site-section-label">理念</p>
+        <h1>关于下一代软件媒介的思考</h1>
+        <p className="site-hero-epigraph">
+          <span>媒介即讯息</span>
+          <cite>马歇尔·麦克卢汉</cite>
+        </p>
+        <p className="site-page-lead">从 All in One、页面边界，到软件的构建、存储、组合、分发与衍生，系统阐述 BIU 背后的产品判断与架构演进。</p>
       </section>
 
       <section className="site-blog-list" aria-label="文章">
-        {BLOG_POSTS.map((post, index) => (
-          <Link key={post.slug} to={`/blog/${post.slug}`} className="site-blog-item" data-reveal>
-            <span className="site-blog-index">{String(index + 1).padStart(2, '0')}</span>
-            <div>
-              <h2>{post.title}</h2>
-              <p>{post.summary}</p>
+        {BLOG_SERIES.map((series) => {
+          const items = BLOG_POSTS.filter((post) => post.series === series.id)
+          return (
+            <div key={series.id} className="site-blog-group" data-reveal>
+              <div className="site-blog-group-head">
+                <h2>{series.title}</h2>
+                <p>{series.lead}</p>
+              </div>
+              {items.map((post, index) => (
+                <Link key={post.slug} to={`/blog/${post.slug}`} className="site-blog-item">
+                  <span className="site-blog-index">{String(index + 1).padStart(2, '0')}</span>
+                  <div>
+                    <h3>{post.title}</h3>
+                    <p>{post.summary}</p>
+                  </div>
+                  <span className="site-blog-meta">
+                    <PostDate date={post.date} />
+                    <small>约 {readingMinutes(post)} 分钟</small>
+                  </span>
+                </Link>
+              ))}
             </div>
-            <PostDate date={post.date} />
-          </Link>
-        ))}
+          )
+        })}
       </section>
 
-      <SiteFinalCta title="读完了，亲手试一页" />
+      <SiteFinalCta title="体验完整的 BIU 工作区" />
     </SiteChrome>
   )
 }
@@ -117,7 +135,7 @@ export function MarketingBlogPost({ onLogin, onStart }: { onLogin: SiteAction; o
   const index = BLOG_POSTS.findIndex((item) => item.slug === slug)
   const post = BLOG_POSTS[index]
   usePageMeta({
-    title: post?.title ?? '博客',
+    title: post?.title ?? '理念',
     description: post?.summary ?? 'BIU 的设计理念。',
     path: `/blog/${slug ?? ''}`,
   })
@@ -126,9 +144,9 @@ export function MarketingBlogPost({ onLogin, onStart }: { onLogin: SiteAction; o
     return (
       <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-page-hero">
-          <p className="site-section-label">博客</p>
+          <p className="site-section-label">理念</p>
           <h1>没有这篇文章</h1>
-          <p className="site-page-lead"><Link to="/blog">返回博客</Link></p>
+          <p className="site-page-lead"><Link to="/blog">返回理念总览</Link></p>
         </section>
       </SiteChrome>
     )
@@ -140,7 +158,7 @@ export function MarketingBlogPost({ onLogin, onStart }: { onLogin: SiteAction; o
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <article className="site-article">
         <header className="site-article-head" data-reveal>
-          <p className="site-section-label"><Link to="/blog">博客</Link> · <PostDate date={post.date} /></p>
+          <p className="site-section-label"><Link to="/blog">理念</Link> · <PostDate date={post.date} /></p>
           <h1>{post.title}</h1>
           <p className="site-page-lead">{post.summary}</p>
           <p className="site-article-byline">
@@ -181,7 +199,7 @@ export function MarketingBlogPost({ onLogin, onStart }: { onLogin: SiteAction; o
         </nav>
       </article>
 
-      <SiteFinalCta title="读完了，亲手试一页" />
+      <SiteFinalCta title="体验完整的 BIU 工作区" />
     </SiteChrome>
   )
 }

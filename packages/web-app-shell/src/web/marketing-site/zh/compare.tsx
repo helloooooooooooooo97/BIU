@@ -391,8 +391,8 @@ const COMPARE_FAQ = [
 
 export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
-    title: '对比',
-    description: '和每个领域最好的产品比：Linux、Kubernetes、Office、Notion、Airtable、Retool、Supabase、Cursor、DeepSeek Harness、Pi、ChatGPT、Claude、Obsidian。',
+    title: '差异',
+    description: '与各领域代表产品的核心差异：Notion、Obsidian、ChatGPT、Claude、Airtable、Cursor、Linux、Kubernetes 等。',
     path: '/compare',
   })
   const bySlug = new Map(COMPARE_PAGES.map((page) => [page.slug, page]))
@@ -400,8 +400,8 @@ export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteActio
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-page-hero" data-reveal>
-          <p className="site-section-label">对比</p>
-          <h1>和每个领域最好的产品比</h1>
+          <p className="site-section-label">差异</p>
+          <h1>与现有工具的本质差异</h1>
           <p className="site-page-lead">
             这些产品各自在一个面上做到了最好 —— 结构、协作、对话、本地、编码。
             BIU 想做的是把这些面装进同一个页面：文档、表格、应用和智能体共用一份数据。

@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router-dom'
 import { SiteChrome, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
-import { BLOG_AUTHOR, BLOG_POSTS, readingMinutes, type Paragraph } from './blog-posts.ts'
+import { BLOG_AUTHOR, BLOG_POSTS, BLOG_SERIES, readingMinutes, type Paragraph } from './blog-posts.ts'
 import { asset } from './site-base.ts'
 
 export { BLOG_AUTHOR, BLOG_POSTS, readingMinutes }
@@ -81,32 +81,50 @@ function ArticleParagraph({ paragraph }: { paragraph: Paragraph }) {
 /** 博客总览 */
 export function MarketingBlog({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
-    title: 'Blog',
+    title: 'Philosophy',
     description: 'How BIU thinks about composing software with pages, page boundaries, fewer primitives, durable work, open source, and transparency.',
     path: '/blog',
   })
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <section className="site-page-hero" data-reveal>
-        <p className="site-section-label">Blog</p>
-        <h1>How BIU thinks</h1>
-        <p className="site-page-lead">Long-form essays on All in One, pages and plugins, agents, and open source. Start with the first to understand why BIU took its present shape.</p>
+        <p className="site-section-label">Philosophy</p>
+        <h1>On the next medium for software</h1>
+        <p className="site-hero-epigraph">
+          <span>The medium is the message</span>
+          <cite>Marshall McLuhan</cite>
+        </p>
+        <p className="site-page-lead">From All in One and page boundaries to how software is built, stored, composed, distributed, and derived—long-form essays on BIU’s product and architectural principles.</p>
       </section>
 
       <section className="site-blog-list" aria-label="Articles">
-        {BLOG_POSTS.map((post, index) => (
-          <Link key={post.slug} to={`/blog/${post.slug}`} className="site-blog-item" data-reveal>
-            <span className="site-blog-index">{String(index + 1).padStart(2, '0')}</span>
-            <div>
-              <h2>{post.title}</h2>
-              <p>{post.summary}</p>
+        {BLOG_SERIES.map((series) => {
+          const items = BLOG_POSTS.filter((post) => post.series === series.id)
+          return (
+            <div key={series.id} className="site-blog-group" data-reveal>
+              <div className="site-blog-group-head">
+                <h2>{series.title}</h2>
+                <p>{series.lead}</p>
+              </div>
+              {items.map((post, index) => (
+                <Link key={post.slug} to={`/blog/${post.slug}`} className="site-blog-item">
+                  <span className="site-blog-index">{String(index + 1).padStart(2, '0')}</span>
+                  <div>
+                    <h3>{post.title}</h3>
+                    <p>{post.summary}</p>
+                  </div>
+                  <span className="site-blog-meta">
+                    <PostDate date={post.date} />
+                    <small>{readingMinutes(post)} min read</small>
+                  </span>
+                </Link>
+              ))}
             </div>
-            <PostDate date={post.date} />
-          </Link>
-        ))}
+          )
+        })}
       </section>
 
-      <SiteFinalCta title="Finished reading? Try a page yourself" />
+      <SiteFinalCta title="Explore the BIU workspace" />
     </SiteChrome>
   )
 }
@@ -117,7 +135,7 @@ export function MarketingBlogPost({ onLogin, onStart }: { onLogin: SiteAction; o
   const index = BLOG_POSTS.findIndex((item) => item.slug === slug)
   const post = BLOG_POSTS[index]
   usePageMeta({
-    title: post?.title ?? 'Blog',
+    title: post?.title ?? 'Philosophy',
     description: post?.summary ?? 'The design philosophy behind BIU.',
     path: `/blog/${slug ?? ''}`,
   })
@@ -126,9 +144,9 @@ export function MarketingBlogPost({ onLogin, onStart }: { onLogin: SiteAction; o
     return (
       <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-page-hero">
-          <p className="site-section-label">Blog</p>
+          <p className="site-section-label">Philosophy</p>
           <h1>Article not found</h1>
-          <p className="site-page-lead"><Link to="/blog">Back to the blog</Link></p>
+          <p className="site-page-lead"><Link to="/blog">Back to philosophy</Link></p>
         </section>
       </SiteChrome>
     )
@@ -140,7 +158,7 @@ export function MarketingBlogPost({ onLogin, onStart }: { onLogin: SiteAction; o
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <article className="site-article">
         <header className="site-article-head" data-reveal>
-          <p className="site-section-label"><Link to="/blog">Blog</Link> · <PostDate date={post.date} /></p>
+          <p className="site-section-label"><Link to="/blog">Philosophy</Link> · <PostDate date={post.date} /></p>
           <h1>{post.title}</h1>
           <p className="site-page-lead">{post.summary}</p>
           <p className="site-article-byline">
@@ -181,7 +199,7 @@ export function MarketingBlogPost({ onLogin, onStart }: { onLogin: SiteAction; o
         </nav>
       </article>
 
-      <SiteFinalCta title="Finished reading? Try a page yourself" />
+      <SiteFinalCta title="Explore the BIU workspace" />
     </SiteChrome>
   )
 }

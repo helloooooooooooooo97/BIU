@@ -76,37 +76,38 @@ function usePrefersReducedMotion() {
   return reduced
 }
 
-/** 三个核心特点，清晰克制的书面语 */
+/** 第一层：为什么 All in One 以页面为单位（数据互通 → 结构融合 → 单链发布） */
 const PILLARS = [
   {
-    title: '每个模块皆为可用软件',
-    body: '画板、表格、代码运行、视频剪辑均由可安装插件提供，不再受限于平台预设的固定格式；缺少的工具可交由智能体按需定制。',
-    to: '/product#plugins',
-  },
-  {
-    title: '以页面组合完整服务',
-    body: '将完成一项工作所需的多个工具置于同一页面。它们共享同一份底层数据，一处更新，全页同步生效。',
+    title: '跨软件同源联动，而非孤立嵌入',
+    body: '同一页面内的画板、表格、代码与时间线读写同一份页面数据，一处变动全页响应，消除多应用切换与胶水集成。',
     to: '/product#pages',
   },
   {
-    title: '交付可交互的完整页面',
-    body: '分享时将正文、附件与所用插件一并打包。接收方打开链接即可直接使用，而非仅收到静态截图或只读文档。',
+    title: '自由正文与结构化数据融合',
+    body: '正文保留自由书写的表达力，插件块与页面属性保持严格结构化。人阅读的是完整页面，系统看到的是可随时索引与汇总的数据。',
+    to: '/blog/store-software',
+  },
+  {
+    title: '一页即独立环境，单链即完成发布',
+    body: '同一份插件置于不同页面自动隔离各自的数据与属性；分享一个链接即打包正文、附件与插件，接收方打开即可直接使用。',
     to: '/product#share',
   },
 ] as const
 
+/** 第二层：正因所有软件都在同一结构化页面内，它们天然是 AI 原生的（操作 → 生长 → 衍生） */
 const AGENT_POINTS = [
   {
-    title: '直接读取工作区页面',
-    body: '智能体与您身处同一工作区，通过 @ 选中页面或表格即可直接读取上下文，无需反复复制粘贴。',
+    title: '直接读取与操作页面内的每一款软件',
+    body: '传统软件对 AI 而言是孤立黑盒。在 BIU 中，页面、表格与插件共享统一结构，智能体通过 @ 精确引用即可直接读写并操作每款软件，无需截图猜测或人工转述。',
   },
   {
-    title: '产出直接沉淀为页面',
-    body: '智能体生成的方案可直接落盘为可编辑的页面、表格或任务卡，便于后续持续复用，而非沉没于聊天记录中。',
+    title: '面向真实数据，边服务边生长',
+    body: '无需先耗时开发再投入使用。从第一行数据即可开始交付服务；业务推进中出现新需求，智能体可直接基于页面里的真实数据构建新插件并即时生效。',
   },
   {
-    title: '按需构建专属插件',
-    body: '需要报价计算器、进度统计或随堂测验？清晰描述业务规则，即可由智能体编写插件并嵌入页面。',
+    title: '基于已有软件持续衍生与沉淀',
+    body: '智能体不必每次从零重写代码，可引用已有插件、复用页面乃至引入开源项目做增量叠加；每一轮产出都直接沉淀为页面、表格与技能。',
   },
 ] as const
 
@@ -354,8 +355,8 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
 
         <section className="site-agent" aria-label="智能体">
           <div className="site-agent-heading" data-reveal>
-            <p className="site-section-label">AI 协作</p>
-            <h2>AI 就住在你的页面里</h2>
+            <p className="site-section-label">天然 AI 原生</p>
+            <h2>当软件都在同一页里，<br />它们天然就是 AI 原生的</h2>
           </div>
           <div className="site-agent-grid">
             {AGENT_POINTS.map((item) => (
@@ -416,11 +417,11 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
           </p>
         </section>
 
-        <section className="site-home-entry" aria-label="对比">
+        <section className="site-home-entry" aria-label="差异">
           <div className="site-home-entry-heading" data-reveal>
-            <p className="site-section-label">对比</p>
-            <h2>和你已经在用的工具比</h2>
-            <p>三个最常被问到的对手。完整对照表（包括我们现在做不到的地方）都在对比页。</p>
+            <p className="site-section-label">差异</p>
+            <h2>与现有工具的本质差异</h2>
+            <p>三个最常被问到的参照对象。完整差异对照（包括我们尚未做到的部分）均列于差异页。</p>
           </div>
           <div className="site-home-compare-grid">
             {HOME_COMPARES.map(({ page, line }) => (
@@ -428,20 +429,20 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
                 <small>{page.category}</small>
                 <h3>{page.columns[0]}</h3>
                 <p>{line}</p>
-                <span>看对比 →</span>
+                <span>查看差异 →</span>
               </Link>
             ))}
           </div>
           <p className="site-home-entry-more" data-reveal>
-            <Link to="/compare">全部对比 →</Link>
+            <Link to="/compare">全部差异 →</Link>
           </p>
         </section>
 
         <section className="site-home-entry" aria-label="想法">
           <div className="site-home-entry-heading" data-reveal>
-            <p className="site-section-label">博客与思考</p>
-            <h2>BIU 为什么长成这样</h2>
-            <p>首页只讲怎么用。如果你想深入了解“五个动词”、从 SaaS 到 PaaS、以及背后的底层架构设计，这些长文都在博客里。</p>
+            <p className="site-section-label">理念</p>
+            <h2>理念与深度写作</h2>
+            <p>关于软件的构建、存储、组合、分发与衍生，以及从 SaaS 到 PaaS 的完整架构思考，均收录于「理念」专栏。</p>
           </div>
           <div className="site-idea-posts">
             {HOME_POSTS.map((post) => (

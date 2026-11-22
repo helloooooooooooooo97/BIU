@@ -78,34 +78,34 @@ function usePrefersReducedMotion() {
 
 const PILLARS = [
   {
-    title: 'Every block is real software',
-    body: 'Whiteboards, tables, code runners, video editors—not a fixed list of document formats. Install the plugins you need, or let an agent write a new one.',
-    to: '/product#plugins',
-  },
-  {
-    title: 'Pages turn tools into a service',
-    body: 'Put the tools a job requires on one page. They share the same underlying data, so updating one place keeps the whole page in sync.',
+    title: 'Shared state, not isolated embeds',
+    body: 'Whiteboards, tables, code sandboxes, and timelines on the same page read and write shared page data—one change updates the entire page without glue integrations.',
     to: '/product#pages',
   },
   {
-    title: 'Share working software in one link',
-    body: 'Sharing bundles content, files, and plugins together. Send a link to a client, student, or teammate—they open it and start using it immediately.',
+    title: 'Freeform prose meets structured data',
+    body: 'Write freely in prose while plugin blocks and page properties stay structured. People read a cohesive page; the system indexes every record for instant filtering and rollups.',
+    to: '/blog/store-software',
+  },
+  {
+    title: 'One page is an isolated release',
+    body: 'The same plugin placed on different pages automatically isolates each page’s data and properties. Share one link to bundle text, files, and plugins ready to run.',
     to: '/product#share',
   },
 ] as const
 
 const AGENT_POINTS = [
   {
-    title: 'Reads your pages directly',
-    body: 'Mention any page or table with @ so the agent works from the exact same data you see—no copy-pasting.',
+    title: 'Agents operate every tool on the page directly',
+    body: 'Conventional apps are black boxes to AI. In BIU, pages, tables, and plugins share one structured layer—reference items with @ so agents read and act on every tool without screenshots or copy-pasting.',
   },
   {
-    title: 'Turns output into lasting pages',
-    body: 'Results land as editable pages, tables, or task cards instead of disappearing into chat history.',
+    title: 'Software grows alongside real data',
+    body: 'Start delivering from the first line of data instead of waiting months to ship. When new needs emerge mid-workflow, agents build new plugins directly against live page data.',
   },
   {
-    title: 'Builds custom plugins on demand',
-    body: 'Need a pricing calculator, progress tracker, or quiz card? Describe it in plain English and drop it into the page.',
+    title: 'Derive from existing software and compound work',
+    body: 'Agents do not rewrite from scratch each time: they extend existing plugins, adapt pages, or pull in open-source repositories, persisting every result as durable pages, tables, and skills.',
   },
 ] as const
 
@@ -353,8 +353,8 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
 
         <section className="site-agent" aria-label="Agents">
           <div className="site-agent-heading" data-reveal>
-            <p className="site-section-label">AI Collaboration</p>
-            <h2>Agents live right inside your pages</h2>
+            <p className="site-section-label">AI-Native by Design</p>
+            <h2>When software lives on one page,<br />it is AI-native from the start</h2>
           </div>
           <div className="site-agent-grid">
             {AGENT_POINTS.map((item) => (
@@ -417,9 +417,9 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
 
         <section className="site-home-entry" aria-label="Comparisons">
           <div className="site-home-entry-heading" data-reveal>
-            <p className="site-section-label">Comparisons</p>
-            <h2>How it compares to tools you already use</h2>
-            <p>The three tools people ask about most. Full breakdowns—including where BIU falls short—live on the compare page.</p>
+            <p className="site-section-label">Why BIU</p>
+            <h2>How BIU differs from tools you already use</h2>
+            <p>The three tools people ask about most. Full breakdowns—including where BIU falls short—live on the differences page.</p>
           </div>
           <div className="site-home-compare-grid">
             {HOME_COMPARES.map(({ page, line }) => (
@@ -427,20 +427,20 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
                 <small>{page.category}</small>
                 <h3>{page.columns[0]}</h3>
                 <p>{line}</p>
-                <span>Compare →</span>
+                <span>See differences →</span>
               </Link>
             ))}
           </div>
           <p className="site-home-entry-more" data-reveal>
-            <Link to="/compare">All comparisons →</Link>
+            <Link to="/compare">All differences →</Link>
           </p>
         </section>
 
         <section className="site-home-entry" aria-label="Ideas">
           <div className="site-home-entry-heading" data-reveal>
-            <p className="site-section-label">Blog & Ideas</p>
-            <h2>Why BIU is built this way</h2>
-            <p>This page focuses on what you can do today. For the deeper thinking behind the five verbs, from SaaS to PaaS, and our architecture, read the blog.</p>
+            <p className="site-section-label">Philosophy</p>
+            <h2>Ideas & long-form writing</h2>
+            <p>Read the complete essays on how software is built, stored, composed, distributed, and derived—and the architecture behind BIU.</p>
           </div>
           <div className="site-idea-posts">
             {HOME_POSTS.map((post) => (
