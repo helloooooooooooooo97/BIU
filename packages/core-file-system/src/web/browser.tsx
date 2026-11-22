@@ -148,6 +148,7 @@ import { RecordActions, RowCheck } from './browser-row-controls.tsx'
 import { BrowserCellPopOverlay, renderBrowserCell } from './browser-cell-renderer.tsx'
 import { BrowserHeader } from './browser-header.tsx'
 import { BrowserListChrome } from './browser-toolbar.tsx'
+import { createBrowserTableNav } from './use-browser-table-nav.ts'
 import { KeyedSerialQueue, PendingFieldPatchTracker } from './record-write-queue.ts'
 import { ViewSyncController } from './view-sync-controller.ts'
 import { captureTableFoldSnapshot as captureFoldSnapshot, playTableFoldFlip } from './table-fold-flip.ts'
@@ -3902,630 +3903,75 @@ export function CollectionBrowser({
     })
   }
 
-  function tableCellFromEvent(
-    event: { target: EventTarget | null; currentTarget: EventTarget },
-    ignore = CELL_POP_IGNORE,
-  ) {
-    const hit = event.target as HTMLElement | null
-    if (hit?.closest(ignore)) return null
-    const table = event.currentTarget as HTMLElement
-    const td = hit?.closest('td')
-    if (!td || !table.contains(td)) return null
-    const id = td.closest('tr')?.dataset.recordId
-    const key = td.dataset.colKey
-    if (!id || !key) return null
-    const cursor = tableCursorFromCell(td)
-    return cursor ? { td, ...cursor } : null
-  }
-
-  function onTablePointerDown(event: ReactPointerEvent<HTMLTableElement>) {
-    if (event.button !== 0) return
-    if (typeof document !== 'undefined' && document.documentElement.classList.contains('pick-mode')) return
-    const cell = tableCellFromEvent(event, CELL_RANGE_IGNORE)
-    if (!cell) return
-    const focus = { id: cell.id, key: cell.key, rowKey: cell.rowKey }
-    const shifting = event.shiftKey && Boolean(cellRangeRef.current || cellPickRef.current)
-    const anchor = shifting ? (cellRangeRef.current?.anchor ?? cellPickRef.current ?? focus) : focus
-    cellAnchorRef.current = cell.td
-    cellRepickRef.current = !shifting && cellPickRef.current?.id === cell.id && cellPickRef.current?.key === cell.key && cellPickRef.current?.rowKey === cell.rowKey
-    applyCellRange(anchor, focus)
-    claimThisTableCell()
-    tableRef.current?.focus({ preventScroll: true })
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId)
-    } catch {
-      /* 捕获失败时仍用 window pointermove */
-    }
-    cellPopPtrRef.current = { x: event.clientX, y: event.clientY, dragged: false }
-    tableRef.current?.classList.remove('is-cell-drag')
-    tableDragScrollStopRef.current?.()
-    tableDragScrollStopRef.current = bindTableDragScroll({
-      scroller: () => tableVertScroller(tableWrapRef.current),
-      headBottom: () => (tableVertScroller(tableWrapRef.current)?.querySelector<HTMLElement>('.fsdb-pinned-head-viewport') ?? tableRef.current?.tHead)?.getBoundingClientRect().bottom,
-      overlayTop: () => {
-        const overlay = document.querySelector('[data-testid="chat-overlay-panel"]')
-        return overlay instanceof HTMLElement ? overlay.getBoundingClientRect().top : undefined
-      },
-      origin: { x: event.clientX, y: event.clientY },
-      dragPx: CELL_POP_DRAG_PX,
-      selectText: false,
-      onArmed: () => {
-        if (cellPopPtrRef.current) cellPopPtrRef.current.dragged = true
-        tableRef.current?.classList.add('is-cell-drag')
-        setCellPop(null)
-      },
-      onDrag: (ptr) => {
-        const hit = tableCellFromPoint(ptr.x, ptr.y)
-        if (!hit) return
-        const cur = cellRangeRef.current
-        if (cur?.focus.id === hit.id && cur.focus.key === hit.key && cur.focus.rowKey === hit.rowKey) return
-        applyCellRange(cur?.anchor ?? focus, { id: hit.id, key: hit.key, rowKey: hit.rowKey }, false)
-      },
-      onEnd: () => {
-        tableRef.current?.classList.remove('is-cell-drag')
-        const cur = cellRangeRef.current
-        if (cur) applyCellRange(cur.anchor, cur.focus)
-      },
-    })
-  }
-
-  function onTablePointerMove(event: ReactPointerEvent<HTMLTableElement>) {
-    const start = cellPopPtrRef.current
-    if (!start || start.dragged) return
-    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) < CELL_POP_DRAG_PX) return
-    start.dragged = true
-    setCellPop(null)
-  }
-
-  function onTableClick(event: { target: EventTarget | null; currentTarget: EventTarget; clientX: number; clientY: number }) {
-    const cell = tableCellFromEvent(event)
-    const start = cellPopPtrRef.current
-    cellPopPtrRef.current = null
-    if (!cell || start?.dragged) return
-    if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) >= CELL_POP_DRAG_PX) return
-    const col = columns.find((item) => item.key === cell.key)
-    if (!col) return
-    const kind = resolveFieldType(col.field)
-    if (kind === 'tag') {
-      const tagId = (event.target as HTMLElement | null)?.closest('[data-tag-id]')?.getAttribute('data-tag-id')?.trim()
-      if (tagId) {
-        jumpTag(tagId)
-        return
-      }
-    }
-    if (!cellRepickRef.current) {
-      setCellPop(null)
-      return
-    }
-    setCellPop(cellUsesPop(kind, col.field.writable) ? { id: cell.id, key: cell.key, rowKey: cell.rowKey } : null)
-  }
-
-  function onTableContextMenu(event: ReactMouseEvent<HTMLTableElement>) {
-    if (typeof document !== 'undefined' && document.documentElement.classList.contains('pick-mode')) return
-    const range = cellRangeRef.current
-    if (!range) return
-    const cells = tableCellRange(tableNavRowIds(), tableNavKeys(columns), range.anchor, range.focus, selectionModelRef.current.rowKeys)
-    if (cells.length < 2) return
-    const ids = tableCellRangeRowIds(cells)
-    if (!ids.length) return
-    event.preventDefault()
-    event.stopPropagation()
-    setPickedIds(ids)
-    setCellPop(null)
-  }
-
-  function tableNavRowIds() {
-    return selectionModelRef.current.rowIds
-  }
-
-  function findPaintedRow(id: string) {
-    const node = tablePaintNodes.find((item) => item.kind === 'row' && item.row.id === id)
-    if (node?.kind === 'row') return node.row
-    const listed = items.find((item) => item.id === id) ?? itemsRef.current.find((item) => item.id === id)
-    if (listed) return listed
-    for (const kids of Object.values(treeKidsByParentRef.current)) {
-      const hit = kids.find((item) => item.id === id)
-      if (hit) return hit
-    }
-    return undefined
-  }
-
-  function findPaintedCellTd(id: string, key: string, rowKey?: string) {
-    const table = tableRef.current
-    if (!table) return null
-    const row = rowKey ? `tr[data-row-key="${CSS.escape(rowKey)}"]` : `tr[data-record-id="${CSS.escape(id)}"]`
-    return table.querySelector(`${row} td[data-col-key="${CSS.escape(key)}"]`) as HTMLElement | null
-  }
-
-  function hoverActionCell(td: HTMLElement | null, index = 0) {
-    const btns = tableActionButtons(td)
-    if (!btns.length) return
-    const i = Math.max(0, Math.min(index, btns.length - 1))
-    actionHoverIndexRef.current = i
-    btns[i]?.focus()
-  }
-
-  function revealTableCell(next: TableCellCursor, extend = false) {
-    if (extend && (cellRangeRef.current || cellPickRef.current)) {
-      applyCellRange(cellRangeRef.current?.anchor ?? cellPickRef.current ?? next, next)
-    } else {
-      applyCellRange(next, next)
-    }
-    claimThisTableCell()
-    tablePaintRef.current.revealRow?.(next.id, next.rowKey ?? cellPickRef.current?.rowKey)
-    tablePaintRef.current.revealColumn?.(next.key)
-    const immediate = findPaintedCellTd(next.id, next.key, next.rowKey)
-    if (immediate) {
-      const col = columns.find((item) => item.key === next.key)
-      cellAnchorRef.current = immediate
-      if (!extend && cellRangeSetRef.current.size <= 1) markCellOn(immediate, col ? cellFieldWritable(col.field) : false)
-    }
-    let attempts = 0
-    const apply = () => {
-      if (cellPickRef.current?.id !== next.id || cellPickRef.current.key !== next.key || (next.rowKey && cellPickRef.current.rowKey !== next.rowKey)) return
-      const td = findPaintedCellTd(next.id, next.key, next.rowKey)
-      if (!td) { if (attempts++ < 12) requestAnimationFrame(apply); return }
-      const col = columns.find((item) => item.key === next.key)
-      cellAnchorRef.current = td
-      if (!extend && cellRangeSetRef.current.size <= 1) markCellOn(td, col ? cellFieldWritable(col.field) : false)
-      const wrap = tableWrapRef.current, page = tableVertScroller(wrap)
-      if (!wrap || !page) return
-      const rect = td.getBoundingClientRect(), bounds = page.getBoundingClientRect()
-      const docked = page.querySelector<HTMLElement>('.fsdb-pinned-head-viewport')
-      const top = Math.max(bounds.top, (docked ?? tableRef.current?.tHead)?.getBoundingClientRect().bottom ?? bounds.top)
-      if (rect.top < top) page.scrollTop += rect.top - top
-      else if (rect.bottom > bounds.bottom) page.scrollTop += rect.bottom - bounds.bottom
-      if (!td.classList.contains('is-pin-col')) {
-        const viewport = wrap.getBoundingClientRect()
-        const pinned = Array.from(tableRef.current?.querySelectorAll<HTMLElement>('thead th.is-pin-col') ?? [])
-        const left = Math.max(viewport.left, ...pinned.map((head) => head.getBoundingClientRect().right))
-        if (rect.left < left) wrap.scrollLeft += rect.left - left
-        else if (rect.right > viewport.right) wrap.scrollLeft += rect.right - viewport.right
-      }
-    }
-    if (immediate) apply()
-    else requestAnimationFrame(apply)
-  }
-
-  function enterTableCell(cursor: TableCellCursor, seed?: string, attempt = 0) {
-    const col = columns.find((item) => item.key === cursor.key)
-    if (!col) return
-    const kind = resolveFieldType(col.field)
-    const td = findPaintedCellTd(cursor.id, cursor.key, cursor.rowKey)
-    if (!td) {
-      if (attempt < 12) {
-        tablePaintRef.current.revealRow?.(cursor.id, cursor.rowKey)
-        tablePaintRef.current.revealColumn?.(cursor.key)
-        requestAnimationFrame(() => {
-          if (cellPickRef.current?.id === cursor.id && cellPickRef.current.key === cursor.key && (!cursor.rowKey || cellPickRef.current.rowKey === cursor.rowKey)) enterTableCell(cursor, seed, attempt + 1)
-        })
-      }
-      return
-    }
-    cellAnchorRef.current = td
-    if (kind === 'boolean' && col.field.writable) {
-      const btn = td?.querySelector('button') as HTMLElement | null
-      btn?.click()
-      return
-    }
-    if (cursor.key === 'actions' || kind === 'action') {
-      hoverActionCell(td, 0)
-      return
-    }
-    if (cellUsesPop(kind, col.field.writable)) {
-      setCellPop({ id: cursor.id, key: cursor.key, rowKey: cursor.rowKey, ...(seed ? { seed } : {}) })
-    }
-  }
-
-  function landTableCell(next: TableCellCursor, extend = false) {
-    revealTableCell(next, extend)
-    if (next.key === 'actions') {
-      requestAnimationFrame(() => enterTableCell(next))
-      return
-    }
-    tableRef.current?.focus({ preventScroll: true })
-  }
-
-  function tablePaneOwnsFocus(pane: ReturnType<typeof tablePaneFromEvent>) {
-    if (sheet || !pane) return false
-    if (pane === 'inspector') return Boolean(embed)
-    return !embed
-  }
-
-  function inspectorTableIsActive() {
-    const root = tableRef.current ?? pageRef.current
-    if (!root) return false
-    const host = root.closest('.session-inspector')
-    if (host instanceof HTMLElement && (host.classList.contains('is-closed') || host.hasAttribute('inert'))) return false
-    const stage = root.closest('.inspector-stage-pane')
-    if (stage instanceof HTMLElement && !stage.classList.contains('is-active')) return false
-    return true
-  }
-
-  function panePlace() {
-    return { path: collectionPath, viewId: activeViewId ?? '', detailId: detailId ?? '' }
-  }
-
-  function rememberThisPaneRest() {
-    if (sheet) return
-    const pane = embed ? 'inspector' : 'main'
-    const place = panePlace()
-    const pick = cellPickRef.current
-    if (pick && !detailId) {
-      rememberTablePaneRest(pane, { kind: 'cell', path: place.path, viewId: place.viewId, id: pick.id, key: pick.key })
-      return
-    }
-    const active = typeof document !== 'undefined' ? document.activeElement : null
-    if (active instanceof HTMLTextAreaElement || active instanceof HTMLInputElement) {
-      if (pageRef.current?.contains(active) && active.classList.contains('fsdb-detail-title-input')) {
-        rememberTablePaneRest(pane, {
-          kind: 'title',
-          path: place.path,
-          viewId: place.viewId,
-          detailId: place.detailId,
-          start: active.selectionStart ?? active.value.length,
-          end: active.selectionEnd ?? active.value.length,
-        })
-        return
-      }
-    }
-    if (active instanceof HTMLElement && pageRef.current?.contains(active) && active.closest('.tiptap, .page-editor, [data-testid="page-editor"]')) {
-      rememberTablePaneRest(pane, { kind: 'content', path: place.path, viewId: place.viewId, detailId: place.detailId })
-    }
-  }
-
-  function landPaneSurface() {
-    const pane = embed ? 'inspector' : 'main'
-    if (!tablePaneOwnsFocus(pane)) return false
-    if (embed && !inspectorTableIsActive()) return false
-    claimThisTableCell()
-    const rest = readTablePaneRest(pane, panePlace())
-    if (rest?.kind === 'cell' && !detailId) {
-      const keys = tableNavKeys(columns)
-      const ids = tableNavRowIds()
-      if (ids.includes(rest.id) && keys.includes(rest.key)) {
-        landTableCell({ id: rest.id, key: rest.key })
-        return true
-      }
-    }
-    if (rest?.kind === 'title' && focusRecordTitleNear(pageRef.current)) {
-      const el = pageRef.current?.querySelector<HTMLTextAreaElement | HTMLInputElement>('.fsdb-detail-title-input')
-      if (el) {
-        const n = el.value.length
-        try {
-          el.setSelectionRange(Math.min(rest.start, n), Math.min(rest.end, n))
-        } catch {
-          /* ignore */
-        }
-      }
-      return true
-    }
-    if (rest?.kind === 'content') {
-      const editor = pageRef.current?.querySelector<HTMLElement>('.tiptap, [data-testid="page-editor"]')
-      if (editor) {
-        editor.focus()
-        return true
-      }
-    }
-    if (!detailId && landFirstTableCell(false)) return true
-    if (focusRecordTitleNear(pageRef.current)) return true
-    const editor = pageRef.current?.querySelector<HTMLElement>('.tiptap, [data-testid="page-editor"]')
-    if (editor) {
-      editor.focus()
-      return true
-    }
-    if (landFirstTableCell(false)) return true
-    pageRef.current?.focus?.({ preventScroll: true } as FocusOptions)
-    return Boolean(pageRef.current)
-  }
-
-  function landCreatedTitleCell(rowId: string) {
-    const keys = tableNavKeys(columns)
-    const label = schemaRef.current?.labelField
-    const key = label && keys.includes(label) ? label : keys[0]
-    if (!key) return
-    const cursor = { id: rowId, key }
-    cellPickRef.current = cursor
-    setCellPickEpoch((n) => n + 1)
-    const go = () => {
-      landTableCell(cursor)
-    }
-    requestAnimationFrame(go)
-  }
-
-  function landFirstTableCell(editTitle = false) {
-    const pane = embed ? 'inspector' : 'main'
-    if (!tablePaneOwnsFocus(pane)) return false
-    if (embed && !inspectorTableIsActive()) return false
-    const keys = tableNavKeys(columns)
-    const ids = tableNavRowIds()
-    const next = firstTableTitleCell(ids, keys, schema?.labelField, selectionModelRef.current.rowKeys)
-    if (!next) {
-      tableRef.current?.focus({ preventScroll: true })
-      return Boolean(tableRef.current)
-    }
-    landTableCell(next)
-    if (editTitle) requestAnimationFrame(() => enterTableCell(next))
-    return true
-  }
-
-  function sendSelectedCellToChat() {
-    const live = typeof document !== 'undefined' ? document.activeElement : null
-    if (
-      live instanceof Element &&
-      live.closest('.page-editor, .composer, .chat-composer-dock, .app-side-bar, .tasks-search-wrap')
-    ) {
-      return false
-    }
-    const range = cellRangeRef.current
-    const cursors = range
-      ? tableCellRange(tableNavRowIds(), tableNavKeys(columns), range.anchor, range.focus, selectionModelRef.current.rowKeys)
-      : cellPop || cellPickRef.current
-        ? [cellPop ?? cellPickRef.current!]
-        : []
-    const picks = cursors.flatMap((cursor) => {
-      if (cursor.key === 'actions') return []
-      const row = findPaintedRow(cursor.id)
-      const col = columns.find((item) => item.key === cursor.key)
-      if (!row || !col) return []
-      const stored = cellValueText(row, cursor.key, col.field)
-      const isFocus = cellPickRef.current?.id === cursor.id && cellPickRef.current.key === cursor.key && (!cursor.rowKey || cellPickRef.current.rowKey === cursor.rowKey)
-      const draft =
-        isFocus && (live instanceof HTMLInputElement || live instanceof HTMLTextAreaElement)
-          ? live.value
-          : isFocus && live instanceof HTMLElement && live.isContentEditable
-            ? live.innerText
-            : ''
-      const sel = typeof window !== 'undefined' ? window.getSelection() : null
-      const selected = isFocus && sel && !sel.isCollapsed ? sel.toString().trim() : ''
-      const inCell = Boolean(
-        live instanceof Element && live.closest('.fsdb-cell-pop, td.is-cell-on, .tasks-table'),
-      )
-      const text = (isFocus && inCell ? draft.trim() : '') || stored
-      const path = recordPathOf(row)
-      const title = labelOf(row)
-      const label = col.field.label ?? cursor.key
-      return [
-        {
-          kind: recordKind,
-          id: fieldPickId(row.id, cursor.key),
-          label,
-          route: typeof window === 'undefined' ? '' : window.location.pathname,
-          ...(path ? { path } : {}),
-          ...(title ? { title } : {}),
-          field: cursor.key,
-          type: resolveFieldType(col.field),
-          ...(text ? { text } : {}),
-          ...(inCell && selected ? { selection: selected } : {}),
-        },
-      ]
-    })
-    if (!picks.length) return false
-    void import('@biu/core-pick/web').then((mod) => {
-      mod.getPick()?.attach(picks)
-    })
-    return true
-  }
-
-  function sendPickedRowsToChat() {
-    const picks = pickedIds.flatMap((id) => {
-      const row = findPaintedRow(id)
-      if (!row) return []
-      const path = recordPathOf(row)
-      const title = labelOf(row)
-      return [
-        {
-          kind: recordKind,
-          id: row.id,
-          label: title || recordKind,
-          route: typeof window === 'undefined' ? '' : window.location.pathname,
-          ...(path ? { path } : {}),
-          ...(title ? { title } : {}),
-        },
-      ]
-    })
-    if (!picks.length) return false
-    void import('@biu/core-pick/web').then((mod) => {
-      mod.getPick()?.attach(picks)
-    })
-    return true
-  }
-
-  function sendTableSelectionToChat() {
-    if (pickedIds.length) return sendPickedRowsToChat()
-    return sendSelectedCellToChat()
-  }
-
-  function copySelectedTableCells(target: EventTarget | null) {
-    if (detailId || cellPop) return false
-    const hit = target instanceof Element ? target : null
-    const page = hit?.closest('.fsdb-page') ?? null
-    if (page && page !== pageRef.current) return false
-    const live = typeof document !== 'undefined' ? document.activeElement : null
-    if (
-      live instanceof Element &&
-      live.closest('.page-editor, .composer, .chat-composer-dock, .app-side-bar, .tasks-search-wrap')
-    ) {
-      return false
-    }
-    const sel = typeof window !== 'undefined' ? window.getSelection() : null
-    if (sel && !sel.isCollapsed && sel.toString().length > 0) return false
-    const range = cellRangeRef.current
-    const cursors = range
-      ? tableCellRange(tableNavRowIds(), tableNavKeys(columns), range.anchor, range.focus, selectionModelRef.current.rowKeys)
-      : cellPickRef.current
-        ? [cellPickRef.current]
-        : []
-    if (!cursors.length) return false
-    const text = formatTableCellsForClipboard(cursors, (cursor) => {
-      const row = findPaintedRow(cursor.id)
-      const col = columns.find((item) => item.key === cursor.key)
-      if (!row || !col) return null
-      return cellValueText(row, cursor.key, col.field)
-    })
-    if (text === null) return false
-    writeClipboardText(text)
-    return true
-  }
-
-  function onTableKeyDown(event: { key: string; shiftKey: boolean; metaKey: boolean; ctrlKey: boolean; altKey: boolean; defaultPrevented: boolean; target: EventTarget | null; preventDefault: () => void; isComposing?: boolean }) {
-    if (event.defaultPrevented) return
-    if (tableSendChatHotkey(event)) {
-      if (sendTableSelectionToChat()) event.preventDefault()
-      return
-    }
-    const historyAction = tableEditHistoryKey(event)
-    if (historyAction) {
-      const hit = event.target instanceof Element ? event.target : null
-      const page = hit?.closest('.fsdb-page') ?? null
-      const field = event.target instanceof HTMLElement ? event.target : null
-      const apple = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent)
-      const owned = tableEditHistoryOwned({
-        inCellPop: Boolean(hit?.closest('.fsdb-cell-pop')),
-        cellPopOpen: Boolean(cellPop),
-        inThisTable: Boolean(hit && page === pageRef.current && hit.closest('.tasks-table')),
-        foreignPage: Boolean(page && page !== pageRef.current),
-        foreignEditor: Boolean(hit?.closest('.page-editor, .composer, .chat-composer-dock, .app-side-bar, .tasks-search-wrap')),
-        inDialog: Boolean(hit?.closest('dialog, [role="dialog"], [role="menu"], [role="listbox"]')),
-        nativeField: Boolean(field && (field.tagName === 'INPUT' || field.tagName === 'TEXTAREA' || field.tagName === 'SELECT' || field.isContentEditable)),
-        nativeUndoModifier: tableNativeUndoModifier(event, apple),
-        hasCell: Boolean(cellPickRef.current || cellRangeRef.current),
-      })
-      if (!owned) {
-        if (tableKeyFromEditingTarget(event.target)) return
-      } else {
-        // Claim the key even when the stack is empty, so an outer table cannot consume it.
-        event.preventDefault()
-        void tableEditHistory[historyAction]().catch((err) => setError(String(err)))
-        return
-      }
-    }
-    if (tableKeyFromEditingTarget(event.target)) return
-    if (tableCopyHotkey(event)) {
-      if (copySelectedTableCells(event.target)) event.preventDefault()
-      return
-    }
-    const titleCursor = cellPickRef.current
-    const titleOpen = titleCursor
-      ? tableTitleOpenWhere({
-          key: event.key,
-          shift: event.shiftKey,
-          meta: event.metaKey,
-          ctrl: event.ctrlKey,
-          alt: event.altKey,
-          labelKey: schema?.labelField,
-          cellKey: titleCursor.key,
-        })
-      : null
-    if (titleOpen && titleCursor) {
-      event.preventDefault()
-      const row = findPaintedRow(titleCursor.id)
-      if (row) {
-        if (titleOpen === 'inspector') openRowSplit(row)
-        else openRow(row)
-      }
-      return
-    }
-    if (event.metaKey || event.ctrlKey || event.altKey) return
-    if (!cellPickRef.current) return
-    const table = tableRef.current
-    const hit = event.target instanceof Element ? event.target : null
-    if (hit && table && !table.contains(hit) && hit !== table) {
-      if (tableKeyFromEditingTarget(hit)) return
-      if (hit.closest('input, textarea, select, [contenteditable="true"], [role="textbox"], .composer, .page-editor, .app-side-bar')) return
-    }
-    const actionBtn = hit instanceof Element ? hit.closest('td[data-col-key="actions"] button, td[data-col-key="actions"] [role="button"]') : null
-    if (event.key === 'Escape') {
-      if (cellPop) {
-        event.preventDefault()
-        setCellPop(null)
-        table?.focus({ preventScroll: true })
-      } else if (actionBtn instanceof HTMLElement) {
-        event.preventDefault()
-        table?.focus({ preventScroll: true })
-      }
-      return
-    }
-    if (tableCreateKey({ key: event.key, shift: event.shiftKey, meta: event.metaKey, ctrl: event.ctrlKey, alt: event.altKey })) {
-      if (!canCreate) return
-      event.preventDefault()
-      void createRecord()
-      return
-    }
-    if (actionBtn instanceof HTMLElement && table?.contains(actionBtn) && (event.key === 'Enter' || event.key === ' ')) return
-    if (cellPop || (hit && tableKeyFromEditingTarget(hit) && hit !== table && !table?.contains(hit))) return
-    if (hit && table?.contains(hit) && tableKeyFromEditingTarget(hit)) return
-    const dir = tableKeyDir(event.key, event.shiftKey)
-    if (
-      actionBtn instanceof HTMLElement &&
-      table?.contains(actionBtn) &&
-      !event.shiftKey &&
-      (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
-    ) {
-      const td = actionBtn.closest('td')
-      const btns = tableActionButtons(td)
-      const index = btns.indexOf(actionBtn)
-      if (!tableActionArrowLeave(btns.length, Math.max(0, index), dir === 'left' ? 'left' : 'right')) {
-        event.preventDefault()
-        hoverActionCell(td, tableActionButtonStep(btns.length, Math.max(0, index), dir === 'left' ? 'left' : 'right'))
-        return
-      }
-    }
-    if (dir) {
-      event.preventDefault()
-      const cursor = cellPickRef.current
-      if (cursor && event.shiftKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
-        const node = tablePaintNodes.find((item) => item.kind === 'row' && item.row.id === cursor.id)
-        const fold = tableTreeArrowAction(dir, {
-          shift: true,
-          treeOn,
-          labelKey: schema?.labelField,
-          cellKey: cursor.key,
-          hasKids: node?.kind === 'row' ? node.hasKids : false,
-          collapsed: collapsed[cursor.id] !== false,
-        })
-        if (fold === 'expand') {
-          captureTableFoldSnapshot()
-          setCollapsed((prev) => ({ ...prev, [cursor.id]: false }))
-          void loadTreeKids(String(cursor.id))
-        } else if (fold === 'collapse') {
-          captureTableFoldSnapshot()
-          setCollapsed((prev) => ({ ...prev, [cursor.id]: true }))
-        }
-        table?.focus({ preventScroll: true })
-        return
-      }
-      const keys = tableNavKeys(columns)
-      const next = moveTableCell(tableNavRowIds(), keys, cursor, dir, selectionModelRef.current.rowKeys)
-      if (next) landTableCell(next, event.shiftKey)
-      else table?.focus({ preventScroll: true })
-      return
-    }
-    const cursor = cellPickRef.current
-    if (!cursor) return
-    if (event.key === 'Enter') {
-      event.preventDefault()
-      enterTableCell(cursor)
-      return
-    }
-    const col = columns.find((item) => item.key === cursor.key)
-    if (!col || !cellFieldWritable(col.field)) return
-    if (tableClearKey(event.key)) {
-      const kind = resolveFieldType(col.field)
-      const empty = tableClearedValue(kind)
-      if (empty === undefined || cursor.key === 'actions' || cursor.key === 'shareScope' || cursor.key === 'shareRole') return
-      if (isViewCatalogField(cursor.key)) return
-      const row = findPaintedRow(cursor.id)
-      if (!row) return
-      event.preventDefault()
-      writeCellValue(row, cursor.key, col.field, empty)
-      return
-    }
-    const typed = tableTypeToEditChar(event.key, resolveFieldType(col.field))
-    if (!typed) return
-    event.preventDefault()
-    enterTableCell(cursor, typed)
-  }
+  const {
+    onTablePointerDown,
+    onTablePointerMove,
+    onTableClick,
+    onTableContextMenu,
+    findPaintedRow,
+    tablePaneOwnsFocus,
+    rememberThisPaneRest,
+    landPaneSurface,
+    landCreatedTitleCell,
+    landFirstTableCell,
+    sendPickedRowsToChat,
+    sendTableSelectionToChat,
+    copySelectedTableCells,
+    onTableKeyDown,
+  } = createBrowserTableNav({
+    sheet,
+    embed,
+    collectionPath,
+    activeViewId,
+    detailId,
+    schema,
+    schemaRef,
+    columns,
+    items,
+    itemsRef,
+    tablePaintNodes,
+    treeKidsByParentRef,
+    selectionModelRef,
+    tableRef,
+    tableWrapRef,
+    pageRef,
+    tablePaintRef,
+    cellAnchorRef,
+    cellPickRef,
+    cellRangeRef,
+    cellRangeSetRef,
+    cellRepickRef,
+    cellPopPtrRef,
+    tableDragScrollStopRef,
+    actionHoverIndexRef,
+    cellPop,
+    setCellPop,
+    setCellPickEpoch,
+    pickedIds,
+    setPickedIds,
+    canCreate,
+    treeOn,
+    collapsed,
+    setCollapsed,
+    recordKind,
+    tableEditHistory,
+    setError,
+    cellFieldWritable,
+    markCellOn,
+    applyCellRange,
+    tableCellFromPoint,
+    claimThisTableCell,
+    jumpTag,
+    cellValueText,
+    recordPathOf,
+    labelOf,
+    openRow,
+    openRowSplit,
+    createRecord,
+    captureTableFoldSnapshot,
+    loadTreeKids,
+    writeCellValue,
+  })
   function pickCrumbTarget(target: CrumbTarget) {
     if (target.kind === 'view' && target.collection === collectionPath) {
       const view = views.find((item) => item.id === target.viewId)
