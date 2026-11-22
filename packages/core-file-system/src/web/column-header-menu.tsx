@@ -327,49 +327,51 @@ export function ColumnHeaderMenu({
                       className={`size-3.5 fsdb-col-menu-chev sidebar-chevron${sub === 'sort' ? ' is-open' : ''}`}
                     />
                   </button>
-                  {sub === 'sort' ? (
-                    <div className="fsdb-col-menu-sub">
-                      <button
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={activeSortDir === 'asc'}
-                        className={`fsdb-col-menu-item${activeSortDir === 'asc' ? ' is-on' : ''}`}
-                        onClick={() => {
-                          onSort(col.key, 'asc')
-                          onClose()
-                        }}
-                      >
-                        <span className="fsdb-col-menu-item-label">升序</span>
-                        {activeSortDir === 'asc' ? <CheckIcon aria-hidden className="size-3.5 fsdb-col-menu-check" /> : null}
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={activeSortDir === 'desc'}
-                        className={`fsdb-col-menu-item${activeSortDir === 'desc' ? ' is-on' : ''}`}
-                        onClick={() => {
-                          onSort(col.key, 'desc')
-                          onClose()
-                        }}
-                      >
-                        <span className="fsdb-col-menu-item-label">降序</span>
-                        {activeSortDir === 'desc' ? <CheckIcon aria-hidden className="size-3.5 fsdb-col-menu-check" /> : null}
-                      </button>
-                      {activeSortDir ? (
+                  <div className={`fsdb-inline-fold${sub === 'sort' ? ' is-open' : ''}`} aria-hidden={sub !== 'sort'}>
+                    <div className="fsdb-inline-fold-inner">
+                      <div className="fsdb-col-menu-sub">
                         <button
                           type="button"
-                          role="menuitem"
-                          className="fsdb-col-menu-item"
+                          role="menuitemradio"
+                          aria-checked={activeSortDir === 'asc'}
+                          className={`fsdb-col-menu-item${activeSortDir === 'asc' ? ' is-on' : ''}`}
                           onClick={() => {
-                            onSort(col.key, null)
+                            onSort(col.key, 'asc')
                             onClose()
                           }}
                         >
-                          <span className="fsdb-col-menu-item-label">清除排序</span>
+                          <span className="fsdb-col-menu-item-label">升序</span>
+                          {activeSortDir === 'asc' ? <CheckIcon aria-hidden className="size-3.5 fsdb-col-menu-check" /> : null}
                         </button>
-                      ) : null}
+                        <button
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={activeSortDir === 'desc'}
+                          className={`fsdb-col-menu-item${activeSortDir === 'desc' ? ' is-on' : ''}`}
+                          onClick={() => {
+                            onSort(col.key, 'desc')
+                            onClose()
+                          }}
+                        >
+                          <span className="fsdb-col-menu-item-label">降序</span>
+                          {activeSortDir === 'desc' ? <CheckIcon aria-hidden className="size-3.5 fsdb-col-menu-check" /> : null}
+                        </button>
+                        {activeSortDir ? (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="fsdb-col-menu-item"
+                            onClick={() => {
+                              onSort(col.key, null)
+                              onClose()
+                            }}
+                          >
+                            <span className="fsdb-col-menu-item-label">清除排序</span>
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
-                  ) : null}
+                  </div>
                 </>
               ) : null}
 
@@ -407,29 +409,31 @@ export function ColumnHeaderMenu({
                   className={`size-3.5 fsdb-col-menu-chev sidebar-chevron${sub === 'calculate' ? ' is-open' : ''}`}
                 />
               </button>
-              {sub === 'calculate' ? (
-                <div className="fsdb-col-menu-sub">
-                  {summaryOptions.map((item) => {
-                    const active = summaryOp === item.op
-                    return (
-                      <button
-                        key={item.op}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={active}
-                        className={`fsdb-col-menu-item${active ? ' is-on' : ''}`}
-                        onClick={() => {
-                          onSummary(col.key, item.op)
-                          onClose()
-                        }}
-                      >
-                        <span className="fsdb-col-menu-item-label">{item.label}</span>
-                        {active ? <CheckIcon aria-hidden className="size-3.5 fsdb-col-menu-check" /> : null}
-                      </button>
-                    )
-                  })}
+              <div className={`fsdb-inline-fold${sub === 'calculate' ? ' is-open' : ''}`} aria-hidden={sub !== 'calculate'}>
+                <div className="fsdb-inline-fold-inner">
+                  <div className="fsdb-col-menu-sub">
+                    {summaryOptions.map((item) => {
+                      const active = summaryOp === item.op
+                      return (
+                        <button
+                          key={item.op}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={active}
+                          className={`fsdb-col-menu-item${active ? ' is-on' : ''}`}
+                          onClick={() => {
+                            onSummary(col.key, item.op)
+                            onClose()
+                          }}
+                        >
+                          <span className="fsdb-col-menu-item-label">{item.label}</span>
+                          {active ? <CheckIcon aria-hidden className="size-3.5 fsdb-col-menu-check" /> : null}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
-              ) : null}
+              </div>
 
               {isTitle ? (
                 <button
