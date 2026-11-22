@@ -1,6 +1,6 @@
 import type { Editor } from '@tiptap/core'
 import { Selection } from '@tiptap/pm/state'
-import type { ResolvedPos } from '@tiptap/pm/model'
+import type { Node as PmNode, ResolvedPos } from '@tiptap/pm/model'
 import type { EditorView } from '@tiptap/pm/view'
 
 export const FOCUS_RECORD_TITLE = 'biu:focus-record-title'
@@ -15,6 +15,7 @@ export type FocusRecordContentDetail = {
 export type FocusRecordTitleDetail = {
   recordId?: string
   appendText?: string
+  rejected?: boolean
 }
 
 export function isDocStartSelection(from: number, empty: boolean, docStart: number) {
@@ -120,6 +121,53 @@ export function atFirstVisibleLine(view: EditorView) {
   return !hasVisibleBlockBefore(view, $from)
 }
 
+/**
+ * 提取首段可无损并入纯文本标题的「第一行」：
+ * - 遇到 hardBreak (<br>) 只切出第一行及该 <br>，保留 <br> 后面的行在首段内，绝不误删后续行；
+ * - 遇到 mention / inlineMath / image 等非纯文本行内原子节点时返回 null，退化为纯移动光标到标题末尾，绝不吞掉富内容。
+ */
+export function extractMergeableFirstLine(parent: PmNode): {
+  text: string
+  deleteFrom: number
+  deleteTo: number
+  wholeParagraph: boolean
+} | null {
+  let text = ''
+  let hitHardBreak = false
+  let breakEndOffset = 0
+  let hasNonTextAtom = false
+
+  parent.forEach((child, offset) => {
+    if (hitHardBreak || hasNonTextAtom) return
+    if (child.isText) {
+      text += child.text ?? ''
+      return
+    }
+    if (child.type.name === 'hardBreak') {
+      hitHardBreak = true
+      breakEndOffset = offset + child.nodeSize
+      return
+    }
+    hasNonTextAtom = true
+  })
+
+  if (hasNonTextAtom) return null
+  if (hitHardBreak) {
+    return {
+      text,
+      deleteFrom: 1,
+      deleteTo: 1 + breakEndOffset,
+      wholeParagraph: false,
+    }
+  }
+  return {
+    text,
+    deleteFrom: 0,
+    deleteTo: parent.nodeSize,
+    wholeParagraph: true,
+  }
+}
+
 export function handleContentTitleNav(view: EditorView, event: KeyboardEvent) {
   if (event.isComposing) return false
   const sel = view.state.selection
@@ -136,27 +184,41 @@ export function handleContentTitleNav(view: EditorView, event: KeyboardEvent) {
   if (!leave) return false
   event.preventDefault()
   const recordId = view.dom.closest('[data-page-record]')?.getAttribute('data-page-record') || undefined
-  // 首行是普通段落按 Backspace：
-  // - 若首行非空：把首行文字并回标题末尾（光标停在拼接处），并移除/清空该首行；
-  // - 若首行为空且后面还有其他块：顺手删掉该空行并回到标题末尾。
+  // 首行是普通段落按 Backspace（参考 Notion / Outline 的两阶段原子握手）：
+  // 1. 先提取可无损并回标题的首行文本（含 hardBreak 时只取第一行，含富原子节点则仅移焦点不删正文）；
+  // 2. 先派发 FOCUS_RECORD_TITLE 让标题同步接收，仅当未被拒绝（!detail.rejected）时才从编辑器删除对应区间。
   if (event.key === 'Backspace' && sel.$from.depth === 1 && sel.$from.parent.type.name === 'paragraph') {
     const parent = sel.$from.parent
-    const tailText = parent.textContent
-    if (tailText.length > 0) {
+    if (parent.content.size === 0) {
       if (view.state.doc.childCount > 1) {
         view.dispatch(view.state.tr.delete(0, parent.nodeSize))
-      } else {
-        view.dispatch(view.state.tr.delete(1, parent.nodeSize - 1))
       }
-      const detail: FocusRecordTitleDetail = {
-        ...(recordId ? { recordId } : {}),
-        appendText: tailText,
+    } else {
+      const slice = extractMergeableFirstLine(parent)
+      if (slice) {
+        if (slice.text.length > 0) {
+          const detail: FocusRecordTitleDetail = {
+            ...(recordId ? { recordId } : {}),
+            appendText: slice.text,
+            rejected: false,
+          }
+          window.dispatchEvent(new CustomEvent(FOCUS_RECORD_TITLE, { detail }))
+          if (!detail.rejected) {
+            if (!slice.wholeParagraph) {
+              view.dispatch(view.state.tr.delete(slice.deleteFrom, slice.deleteTo))
+            } else if (view.state.doc.childCount > 1) {
+              view.dispatch(view.state.tr.delete(0, parent.nodeSize))
+            } else {
+              view.dispatch(view.state.tr.delete(1, parent.nodeSize - 1))
+            }
+          }
+          return true
+        }
+        // hardBreak 首行为空（<p><br>后面的内容</p>）：仅删掉开头的空 <br> 并回标题，保留后面的内容！
+        if (!slice.wholeParagraph) {
+          view.dispatch(view.state.tr.delete(slice.deleteFrom, slice.deleteTo))
+        }
       }
-      window.dispatchEvent(new CustomEvent(FOCUS_RECORD_TITLE, { detail }))
-      return true
-    }
-    if (view.state.doc.childCount > 1) {
-      view.dispatch(view.state.tr.delete(0, parent.nodeSize))
     }
   }
   if (!focusRecordTitleNear(view.dom)) {

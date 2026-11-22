@@ -128,6 +128,38 @@ test('title Enter inserts leading paragraph and Backspace removes it symmetrical
   host.remove()
 })
 
+test('Backspace at start of paragraph with hardBreak only merges the first visual line and keeps trailing lines', () => {
+  const { editor, host } = makeEditor('第一行文字  \n第二行保留内容')
+  editor.chain().focus().setTextSelection(Selection.atStart(editor.state.doc)).run()
+  const details: Array<{ appendText?: string }> = []
+  const onTitle = (e: Event) => {
+    details.push((e as CustomEvent<{ appendText?: string }>).detail ?? {})
+  }
+  window.addEventListener(FOCUS_RECORD_TITLE, onTitle)
+  press(editor, 'Backspace')
+  window.removeEventListener(FOCUS_RECORD_TITLE, onTitle)
+  assert.equal(details.length, 1)
+  assert.equal(details[0]?.appendText, '第一行文字')
+  assert.equal(editor.state.doc.firstChild?.textContent, '第二行保留内容')
+  editor.destroy()
+  host.remove()
+})
+
+test('Backspace at doc start keeps paragraph intact when title rejects the merge (e.g. readOnly)', () => {
+  const { editor, host } = makeEditor('绝不能丢的正文')
+  editor.chain().focus().setTextSelection(Selection.atStart(editor.state.doc)).run()
+  const onTitle = (e: Event) => {
+    const detail = (e as CustomEvent<{ rejected?: boolean }>).detail
+    if (detail) detail.rejected = true
+  }
+  window.addEventListener(FOCUS_RECORD_TITLE, onTitle)
+  press(editor, 'Backspace')
+  window.removeEventListener(FOCUS_RECORD_TITLE, onTitle)
+  assert.equal(editor.state.doc.textContent, '绝不能丢的正文')
+  editor.destroy()
+  host.remove()
+})
+
 test('select-all then Backspace deletes the document instead of jumping to the title', () => {
   const { editor, host } = makeEditor('hello')
   editor.chain().focus().selectAll().run()

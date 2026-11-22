@@ -1331,6 +1331,7 @@ export function CollectionBrowser({
   const contentVersions = useRef(new Map<string, number>())
   const contentWriteGens = useRef(new Map<string, number>())
   const contentWriteQueues = useRef(new Map<string, Promise<void>>())
+  const fieldWriteQueues = useRef(new Map<string, Promise<void>>())
   const contentWritePending = useRef(new Map<string, number>())
   const recordGen = useRef(0)
   const sourceRecordPath = (row?: DbRecord | null, id = '') => {
@@ -2381,10 +2382,25 @@ export function CollectionBrowser({
   useEffect(() => {
     if (!detailId || !schema) return
     if (detailRow?.id !== detailId) return
-    const next = draftFromRecord(schema, detailRow, bodyKey, detailBody)
-    setDraft((prev) => (sameStringDraft(prev, next) ? prev : next))
+    const protectedRow = applyPendingDetailPatches(detailRow)
+    const next = draftFromRecord(schema, protectedRow, bodyKey, detailBody)
+    setDraft((prev) => {
+      const labelKey = schema.labelField
+      if (labelKey && typeof document !== 'undefined') {
+        const active = document.activeElement
+        if (
+          active instanceof HTMLElement &&
+          active.classList.contains('fsdb-detail-title-input') &&
+          pageRef.current?.contains(active) &&
+          prev[labelKey] !== undefined
+        ) {
+          next[labelKey] = prev[labelKey]!
+        }
+      }
+      return sameStringDraft(prev, next) ? prev : next
+    })
     hydratedDetail.current = detailId
-  }, [bodyKey, detailId, detailRow, schema])
+  }, [applyPendingDetailPatches, bodyKey, detailId, detailRow, schema])
 
   useEffect(() => {
     if (!bodyKey || !detailId || !schema) return
@@ -3234,6 +3250,8 @@ export function CollectionBrowser({
         if (bag.size === 0) pendingFieldWritesRef.current.delete(row.id)
       }
       try {
+      const prevFieldRun = fieldWriteQueues.current.get(path) ?? Promise.resolve()
+      const fieldRun = prevFieldRun.catch(() => undefined).then(async () => {
       await tableEditHistory.edit(path, content, async () => {
         const listed = itemsRef.current.find((item) => item.id === row.id)
         return listed ?? beforeRow
@@ -3271,6 +3289,11 @@ export function CollectionBrowser({
         }
         return next
       })
+      }).finally(() => {
+        if (fieldWriteQueues.current.get(path) === fieldRun) fieldWriteQueues.current.delete(path)
+      })
+      fieldWriteQueues.current.set(path, fieldRun)
+      await fieldRun
       } finally {
         releasePending()
       }

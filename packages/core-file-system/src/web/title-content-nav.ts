@@ -11,6 +11,7 @@ export type FocusRecordContentDetail = {
 export type FocusRecordTitleDetail = {
   recordId?: string
   appendText?: string
+  rejected?: boolean
 }
 
 export function shouldLeaveTitleForContent(key: string, shiftKey: boolean, value: string, selectionEnd: number) {

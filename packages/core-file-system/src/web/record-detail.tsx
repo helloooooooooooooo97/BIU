@@ -6,7 +6,7 @@ import { ChevronDownIcon, ChevronLeftIcon, ChevronUpIcon, HashtagIcon, ShareIcon
 import { AnchorMenu, RecordEmojiBoard } from '@biu/biu-ui'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { contentFieldKey, fieldHasValue, formatField, resolveFieldType } from './fields.ts'
-import { LocalText } from './controls.tsx'
+import { LocalText, type LocalTextHandle } from './controls.tsx'
 import { FieldGlyph, FilePreview } from './fsdb-cells.tsx'
 import { PropertyRow } from './property-row.tsx'
 import { TagPackEditor } from './schema-field.tsx'
@@ -339,6 +339,7 @@ export function RecordDetail({
       type: field?.type,
     })
   const mainRef = useRef<HTMLDivElement>(null)
+  const titleControlRef = useRef<LocalTextHandle | null>(null)
   const draftRef = useRef(draft)
   draftRef.current = draft
   useEffect(() => {
@@ -346,23 +347,28 @@ export function RecordDetail({
       const detail = (event as CustomEvent<FocusRecordTitleDetail | undefined>).detail
       if (detail?.recordId && detail.recordId !== selected.id) return
       const appendText = detail?.appendText ?? ''
-      if (appendText && schema.labelField && schema.fields[schema.labelField]?.writable && !readOnly) {
+      if (appendText) {
+        if (!schema.labelField || !schema.fields[schema.labelField]?.writable || readOnly) {
+          if (detail) detail.rejected = true
+          return
+        }
         const fieldKey = schema.labelField
         const el = mainRef.current?.querySelector<HTMLTextAreaElement | HTMLInputElement>('.fsdb-detail-title-input')
         const cur = el ? el.value : String(draftRef.current[fieldKey] ?? selected[fieldKey] ?? '')
         const joinPos = cur.length
         const nextTitle = `${cur}${appendText}`
+        // 0ms 同步写入标题输入框 DOM 与 LocalText 内部状态，保证连按退格不漏字、失焦不回滚。
+        titleControlRef.current?.syncValue(nextTitle, joinPos)
         setDraft((prev) => ({ ...prev, [fieldKey]: nextTitle }))
         const trimmed = nextTitle.trim()
         if (trimmed) {
           void writeOne(selected, fieldKey, schema.fields[fieldKey]!, trimmed)
         }
-        const place = () => focusRecordTitleNear(mainRef.current, joinPos)
-        place()
-        requestAnimationFrame(() => {
-          place()
-          requestAnimationFrame(place)
-        })
+        if (el && document.activeElement !== el) {
+          requestAnimationFrame(() => {
+            if (document.activeElement !== el) focusRecordTitleNear(mainRef.current, joinPos)
+          })
+        }
         return
       }
       const go = () => focusRecordTitleNear(mainRef.current)
@@ -476,6 +482,7 @@ export function RecordDetail({
                     <LocalText
                       as="textarea"
                       className="fsdb-detail-title-input"
+                      controlRef={titleControlRef}
                       value={draft[schema.labelField] ?? ''}
                       autoSize
                       onKeyDown={(event) => {
@@ -492,6 +499,8 @@ export function RecordDetail({
                           const after = el.value.slice(end)
                           if (after.length > 0 && schema.labelField) {
                             const nextTitle = before.trim()
+                            // 在聚焦切到正文编辑器触发 blur 之前，先同步锁死 LocalText 为拆分后的前半段，防止 onBlur 把旧完整标题写回。
+                            titleControlRef.current?.syncValue(before)
                             setDraft((prev) => ({ ...prev, [schema.labelField!]: before }))
                             if (nextTitle) {
                               void writeOne(selected, schema.labelField, schema.fields[schema.labelField]!, nextTitle)
