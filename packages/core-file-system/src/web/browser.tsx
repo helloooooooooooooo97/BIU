@@ -2064,7 +2064,15 @@ export function CollectionBrowser({
             treeOn,
           })
         }
-        if (!sheet && listed.length) {
+        if (
+          !sheet &&
+          listed.length &&
+          columns.some((col) => {
+            if (col.key === 'actions') return false
+            const op = columnSummaries[col.key]
+            return Boolean(op && op !== 'none')
+          })
+        ) {
           const groupRows = listed.map((item) => item.row)
           nodes.push({
             kind: 'summary',
@@ -2102,7 +2110,15 @@ export function CollectionBrowser({
         treeOn,
       })
     }
-    if (!sheet && listed.length) {
+    if (
+      !sheet &&
+      listed.length &&
+      columns.some((col) => {
+        if (col.key === 'actions') return false
+        const op = columnSummaries[col.key]
+        return Boolean(op && op !== 'none')
+      })
+    ) {
       const allRows = listed.map((item) => item.row)
       nodes.push({
         kind: 'summary',
@@ -2113,7 +2129,7 @@ export function CollectionBrowser({
       })
     }
     return nodes
-  }, [collapsed, collapsedGroups, columnSummaries, flattenRows, groupPages, grouped, grouping, pageSize, sheet, total, treeOn, visible])
+  }, [collapsed, collapsedGroups, columnSummaries, columns, flattenRows, groupPages, grouped, grouping, pageSize, sheet, total, treeOn, visible])
   const selectionModel = useMemo<TableSelectionModel>(() => ({
     rowIds: tablePaintNodes.flatMap((node) => node.kind === 'row' && node.row.id ? [node.row.id] : []),
     rowKeys: tablePaintNodes.flatMap((node) => node.kind === 'row' && node.row.id ? [node.key] : []),
