@@ -761,8 +761,15 @@ const CSS = `
 .fsdb-schema-prop-k.is-rename{margin:0;border:0;padding:0;background:transparent;color:var(--biu-color-text);font:inherit;cursor:text;text-align:left}
 .fsdb-schema-prop-k .fsdb-field-glyph,.fsdb-schema-prop-k .fsdb-field-hero{color:var(--biu-color-icon)}
 .fsdb-page .tasks-table .fsdb-schema-prop-k svg,.fsdb-page .tasks-table .fsdb-schema-prop-k .fsdb-field-glyph,.fsdb-page .tasks-table .fsdb-schema-prop-k .fsdb-field-hero,.fsdb-page .tasks-table .fsdb-schema-prop-type svg,.fsdb-page .tasks-table .fsdb-schema-prop-type .fsdb-field-glyph,.fsdb-page .tasks-table .fsdb-schema-prop-type .fsdb-field-hero{color:var(--biu-color-icon)}
-.fsdb-schema-prop-k.is-editing{flex-wrap:wrap;overflow:visible;white-space:normal}
+.fsdb-schema-prop-k.is-editing{flex-direction:column;align-items:stretch;gap:4px;overflow:visible;white-space:normal}
+.fsdb-schema-prop-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fsdb-schema-prop-info{flex:none;width:13px;height:13px;color:var(--biu-color-text-subtle);opacity:.65}
+.fsdb-schema-prop-edit-row{display:inline-flex;align-items:center;gap:4px;min-width:0;width:100%}
 .fsdb-schema-prop-rename{flex:1;min-width:0;border:0;border-radius:4px;padding:2px 4px;background:var(--biu-color-bg-hover);color:var(--biu-color-text);font:inherit;font-size:inherit;outline:none}
+.fsdb-schema-prop-info-btn{display:grid;place-items:center;flex:none;width:20px;height:20px;border:0;border-radius:4px;padding:0;background:transparent;color:var(--biu-color-text-subtle);cursor:pointer}
+.fsdb-schema-prop-info-btn:hover,.fsdb-schema-prop-info-btn.is-on{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
+.fsdb-schema-prop-desc{width:100%;box-sizing:border-box;border:1px solid var(--biu-color-border);border-radius:4px;padding:3px 6px;background:var(--biu-color-bg);color:var(--biu-color-text);font-size:var(--biu-font-size-3);font-weight:400;outline:none}
+.fsdb-schema-prop-desc:focus{border-color:var(--biu-color-accent)}
 .fsdb-schema-prop-v{display:flex;align-items:center;gap:4px;min-width:0;width:100%;color:var(--biu-color-text-subtle)}
 .fsdb-schema-prop-type{display:inline-flex;align-items:center;gap:6px;min-width:0;color:var(--biu-color-text)}
 .fsdb-schema-prop-type .fsdb-field-glyph,.fsdb-schema-prop-type .fsdb-field-hero{color:var(--biu-color-icon)}

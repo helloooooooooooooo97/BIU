@@ -27,8 +27,9 @@ export function PropertyRow({
 }) {
   const kind = resolveFieldType(field)
   const label = field.label ?? fieldKey ?? ''
+  const desc = String(field.description ?? '').trim()
   const name = (
-    <span className="fsdb-proprow-k" title={label}>
+    <span className="fsdb-proprow-k" title={desc || label} data-dock-tip={desc || undefined}>
       {collapsible ? (
         <button
           type="button"

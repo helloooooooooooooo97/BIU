@@ -5,11 +5,11 @@ import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { tagTone as schemaTagTone } from '@biu/biu-ui/tag-chip'
 import { TagFieldChips } from './schema-field.tsx'
 import {
+  columnHeadTip,
   isRecordLinkField,
   parseTagFlatColumnKey,
   resolveFieldType,
   tagColumnHeadLabel,
-  tagColumnTagTip,
   type ViewMode,
 } from './fields.ts'
 import { padColBox, type TablePaintBag, type TablePaintNode } from './windowed-table.tsx'
@@ -240,7 +240,7 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
   function paintHeadTh(col: BrowserTableColumn) {
     const flat = parseTagFlatColumnKey(col.key)
     const tone = flat ? schemaTagTone(flat.packId) : undefined
-    const tagTip = tagColumnTagTip(col)
+    const headTip = columnHeadTip(col)
     return (
       <th
         key={col.key}
@@ -249,7 +249,7 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
       >
         <span
           className={`tasks-th${queryFields.has(col.key) ? ' is-on' : ''}`}
-          data-dock-tip={tagTip || undefined}
+          data-dock-tip={headTip || undefined}
         >
           <span className="tasks-th-ico">
             <FieldGlyph kind={col.kind} />

@@ -360,6 +360,17 @@ export function tagColumnTagTip(col: {
   return packLabel ? `标签：${packLabel}` : ''
 }
 
+export function columnHeadTip(col: {
+  key: string
+  packLabel?: string
+  field?: { description?: string }
+}) {
+  const tagTip = tagColumnTagTip(col)
+  const desc = String(col.field?.description ?? '').trim()
+  if (tagTip && desc) return `${tagTip} · ${desc}`
+  return desc || tagTip
+}
+
 export function readTagFlatValue(row: DbRecord, columnKey: string, sourceKey = 'tag') {
   if (!parseTagFlatColumnKey(columnKey)) return undefined
   return readTagFieldValue(row, columnKey, sourceKey)

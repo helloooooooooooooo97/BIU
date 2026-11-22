@@ -11,7 +11,7 @@ import {
   type SchemaFieldValue,
   type SchemaPackField,
 } from '@biu/type-file-system'
-import { ArrowUturnLeftIcon, ChevronDownIcon, PlusIcon, TagIcon, XMarkIcon } from '@heroicons/react/16/solid'
+import { ArrowUturnLeftIcon, ChevronDownIcon, InformationCircleIcon, PlusIcon, TagIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { TagChip, TagChips, tagTone, HeadlessPopover } from '@biu/biu-ui'
 import { TAGS_COLLECTION_PATH } from './database-path.ts'
 import { DefaultCell, FieldGlyph } from './fsdb-cells.tsx'
@@ -167,83 +167,159 @@ function TypeMenu({ value, onChange }: { value: AtomicFieldType; onChange: (next
 function SchemaPropName({
   name,
   kind,
+  description,
   onRename,
+  onDescribe,
 }: {
   name: string
   kind: FieldType
+  description?: string
   onRename?: (next: string) => boolean | void
+  onDescribe?: (next: string) => void
 }) {
+  const desc = String(description ?? '').trim()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(name)
+  const [descDraft, setDescDraft] = useState(desc)
+  const [showDesc, setShowDesc] = useState(Boolean(desc))
   const [error, setError] = useState('')
+  const wrapRef = useRef<HTMLSpanElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const descInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setDraft(name)
   }, [name])
 
   useEffect(() => {
+    setDescDraft(desc)
+    if (desc) setShowDesc(true)
+  }, [desc])
+
+  useEffect(() => {
     if (editing) inputRef.current?.focus()
   }, [editing])
 
-  function finish(next = name) {
+  function finish(next = name, nextDesc = desc) {
     setEditing(false)
     setDraft(next)
+    setDescDraft(nextDesc)
+    setShowDesc(Boolean(nextDesc))
     setError('')
   }
 
   function commit() {
     const next = draft.trim()
-    if (!next || next === name) {
-      finish()
-      return
+    const nextDesc = descDraft.trim()
+    let finalName = name
+    if (next && next !== name) {
+      if (onRename?.(next) === false) {
+        setError('不能与系统字段或已有属性重名')
+        return
+      }
+      finalName = next
     }
-    if (onRename?.(next) === false) {
-      setError('不能与系统字段或已有属性重名')
-      return
+    if (onDescribe && nextDesc !== desc) {
+      onDescribe(nextDesc)
     }
-    finish(next)
+    finish(finalName, nextDesc)
   }
 
   if (!onRename) {
     return (
-      <span className="fsdb-schema-prop-k" title={name}>
+      <span className="fsdb-schema-prop-k" title={desc ? `${name}：${desc}` : name} data-dock-tip={desc || undefined}>
         <FieldGlyph kind={kind} />
-        {name}
+        <span className="fsdb-schema-prop-name">{name}</span>
+        {desc ? <InformationCircleIcon aria-hidden className="fsdb-schema-prop-info" /> : null}
       </span>
     )
   }
 
   if (!editing) {
     return (
-      <button type="button" className="fsdb-schema-prop-k is-rename" title={`重命名 ${name}`} onClick={() => setEditing(true)}>
+      <button
+        type="button"
+        className="fsdb-schema-prop-k is-rename"
+        title={desc ? `${name}：${desc}` : `编辑 ${name}`}
+        data-dock-tip={desc || undefined}
+        onClick={() => {
+          setShowDesc(Boolean(desc))
+          setEditing(true)
+        }}
+      >
         <FieldGlyph kind={kind} />
-        {name}
+        <span className="fsdb-schema-prop-name">{name}</span>
+        {desc ? <InformationCircleIcon aria-hidden className="fsdb-schema-prop-info" /> : null}
       </button>
     )
   }
 
   return (
-    <span className="fsdb-schema-prop-k is-editing">
-      <FieldGlyph kind={kind} />
-      <input
-        ref={inputRef}
-        className="fsdb-schema-prop-rename"
-        value={draft}
-        aria-label={`重命名 ${name}`}
-        onChange={(event) => setDraft(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            event.preventDefault()
-            commit()
-          }
-          if (event.key === 'Escape') {
-            event.preventDefault()
-            finish()
-          }
-        }}
-        onBlur={() => commit()}
-      />
+    <span
+      ref={wrapRef}
+      className="fsdb-schema-prop-k is-editing"
+      onBlur={(event) => {
+        if (event.relatedTarget && wrapRef.current?.contains(event.relatedTarget as Node)) return
+        commit()
+      }}
+    >
+      <span className="fsdb-schema-prop-edit-row">
+        <FieldGlyph kind={kind} />
+        <input
+          ref={inputRef}
+          className="fsdb-schema-prop-rename"
+          value={draft}
+          aria-label={`重命名 ${name}`}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              commit()
+            }
+            if (event.key === 'Escape') {
+              event.preventDefault()
+              finish()
+            }
+          }}
+        />
+        {onDescribe ? (
+          <button
+            type="button"
+            className={`fsdb-schema-prop-info-btn${showDesc ? ' is-on' : ''}`}
+            aria-label={showDesc ? '收起属性说明' : '编辑属性说明'}
+            aria-pressed={showDesc}
+            data-dock-tip="属性说明"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              const nextOpen = !showDesc
+              setShowDesc(nextOpen)
+              if (nextOpen) requestAnimationFrame(() => descInputRef.current?.focus())
+            }}
+          >
+            <InformationCircleIcon aria-hidden className="size-3.5" />
+          </button>
+        ) : null}
+      </span>
+      {onDescribe && showDesc ? (
+        <input
+          ref={descInputRef}
+          className="fsdb-schema-prop-desc"
+          value={descDraft}
+          placeholder="添加属性说明..."
+          aria-label={`${name} 属性说明`}
+          onChange={(event) => setDescDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              commit()
+            }
+            if (event.key === 'Escape') {
+              event.preventDefault()
+              finish()
+            }
+          }}
+        />
+      ) : null}
       {error ? <span className="fsdb-schema-addprop-err">{error}</span> : null}
     </span>
   )
@@ -357,6 +433,20 @@ export function TagPackEditor({ tagId }: { tagId: string }) {
     return true
   }
 
+  function describeField(key: string, next: string) {
+    const desc = next.trim()
+    persistPack({
+      ...pack,
+      fields: pack.fields.map((row) => {
+        if (row.key !== key) return row
+        const updated = { ...row }
+        if (desc) updated.description = desc
+        else delete updated.description
+        return updated
+      }),
+    })
+  }
+
   function removeField(key: string) {
     persistPack({ ...pack, fields: pack.fields.filter((row) => row.key !== key) })
   }
@@ -381,7 +471,13 @@ export function TagPackEditor({ tagId }: { tagId: string }) {
         <div className="fsdb-schema-pack-inner">
           {live.map((field) => (
             <div key={field.key} className="fsdb-schema-prop">
-              <SchemaPropName name={field.label ?? field.key} kind={field.type} onRename={(next) => renameField(field.key, next)} />
+              <SchemaPropName
+                name={field.label ?? field.key}
+                kind={field.type}
+                description={field.description}
+                onRename={(next) => renameField(field.key, next)}
+                onDescribe={(next) => describeField(field.key, next)}
+              />
               <div className="fsdb-schema-prop-v">
                 <span className="fsdb-schema-prop-type">
                   <FieldGlyph kind={field.type} />
@@ -501,6 +597,20 @@ export function SchemaFieldEditor({
     return true
   }
 
+  function describeField(tag: CollectionSchemaPack, key: string, next: string) {
+    const desc = next.trim()
+    persistPack({
+      ...tag,
+      fields: tag.fields.map((row) => {
+        if (row.key !== key) return row
+        const updated = { ...row }
+        if (desc) updated.description = desc
+        else delete updated.description
+        return updated
+      }),
+    })
+  }
+
   function removeField(tag: CollectionSchemaPack, key: string) {
     persistPack({ ...tag, fields: tag.fields.filter((item) => item.key !== key) })
   }
@@ -564,7 +674,13 @@ export function SchemaFieldEditor({
             </div>
             {tag.fields.filter((field) => !field.deleted).map((field) => (
               <div key={field.key} className="fsdb-schema-prop">
-                <SchemaPropName name={field.label ?? field.key} kind={field.type} onRename={(next) => renameField(tag, field.key, next)} />
+                <SchemaPropName
+                  name={field.label ?? field.key}
+                  kind={field.type}
+                  description={field.description}
+                  onRename={(next) => renameField(tag, field.key, next)}
+                  onDescribe={(next) => describeField(tag, field.key, next)}
+                />
                 <div className="fsdb-schema-prop-v">
                   <FieldValuePop
                     record={record}

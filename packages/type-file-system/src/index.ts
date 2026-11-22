@@ -430,6 +430,8 @@ function atomicSchemaField(key: string, row: Record<string, unknown>, fieldLabel
     writable: row.writable !== false,
   }
   if (row.deleted === true) field.deleted = true
+  const desc = String(row.description ?? '').trim()
+  if (desc) field.description = desc
   if (Array.isArray(row.enum)) field.enum = row.enum.map((option) => String(option)).filter(Boolean)
   if (row.enumLabels && typeof row.enumLabels === 'object' && !Array.isArray(row.enumLabels)) {
     field.enumLabels = Object.fromEntries(

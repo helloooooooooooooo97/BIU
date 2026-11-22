@@ -1,8 +1,8 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import type { CollectionSchema } from '@biu/type-file-system'
-import { REQUIRED_RECORD_FIELDS, normalizeSchemaValue } from '@biu/type-file-system'
-import { actionWhenKeys, defaultColumnKeys, tagFlatColumnKey, flattenTagColumns, tagColumnHeadLabel, tagColumnTagTip, tagColumnTitle, inferPackFieldType, hasMissingProjectedColumns, listProjectionKeys, parseTagFlatColumnKey, patchTagFlatValue, pinActionColumn, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, fieldValueOptions, filterFieldValueOptions, GROUP_STRATEGIES, groupField, groupListFilter, groupListKeys, groupRecords, groupableFields, hasTreeLinks, treeChildren, isGroupableKind, isViewModeId, matchActionWhen, mergeListFilters, overlayListed, previewActionRecord, parentFieldKey, readTagFlatValue, recordGroupLabels, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
+import { REQUIRED_RECORD_FIELDS, normalizeSchemaPack, normalizeSchemaValue, parseAtomicFields } from '@biu/type-file-system'
+import { actionWhenKeys, columnHeadTip, defaultColumnKeys, tagFlatColumnKey, flattenTagColumns, tagColumnHeadLabel, tagColumnTagTip, tagColumnTitle, inferPackFieldType, hasMissingProjectedColumns, listProjectionKeys, parseTagFlatColumnKey, patchTagFlatValue, pinActionColumn, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, fieldValueOptions, filterFieldValueOptions, GROUP_STRATEGIES, groupField, groupListFilter, groupListKeys, groupRecords, groupableFields, hasTreeLinks, treeChildren, isGroupableKind, isViewModeId, matchActionWhen, mergeListFilters, overlayListed, previewActionRecord, parentFieldKey, readTagFlatValue, recordGroupLabels, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
 import { placedActions, visibleActions } from './fsdb-cells.tsx'
 
 test('isViewModeId accepts builtin and custom slugs', () => {
@@ -276,6 +276,21 @@ test('hasMissingProjectedColumns detects newly added columns without reloading o
   assert.equal(hasMissingProjectedColumns(loaded, ['title', 'id', 'status']), false)
   assert.equal(hasMissingProjectedColumns(loaded, ['id', 'title']), false)
   assert.equal(hasMissingProjectedColumns(loaded, ['id', 'title', 'status', 'dueAt']), true)
+})
+
+test('tag schema fields preserve description and columnHeadTip combines tag label with description', () => {
+  const parsed = parseAtomicFields([
+    { key: '+', label: '+', type: 'number', description: '  本次提交新增行数  ' },
+    { key: '-', label: '-', type: 'number', description: '   ' },
+  ])
+  assert.equal(parsed[0]?.description, '本次提交新增行数')
+  assert.equal(parsed[1]?.description, undefined)
+  const pack = normalizeSchemaPack({ id: 'tag-10', label: '代码提交', fields: parsed })
+  assert.equal(pack?.fields[0]?.description, '本次提交新增行数')
+  const key = tagFlatColumnKey('tag-10', '+')
+  assert.equal(columnHeadTip({ key, packLabel: '代码提交', field: { description: '本次提交新增行数' } }), '标签：代码提交 · 本次提交新增行数')
+  assert.equal(columnHeadTip({ key, packLabel: '代码提交', field: {} }), '标签：代码提交')
+  assert.equal(columnHeadTip({ key: 'title', field: { description: '记录主标题' } }), '记录主标题')
 })
 
 const pluginActions: CollectionSchema = {
