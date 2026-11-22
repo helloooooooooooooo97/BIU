@@ -230,8 +230,8 @@ function schemaFor(spec: CollectionSpec): CollectionSchema {
       computed: true,
       writable: false,
       sortable: true,
-      enum: ['管理', '编辑', '阅读'],
-      description: '计算属性。当前用户对这一条的权限：管理、编辑或阅读。记录授权和视图授权里取较高的一级。',
+      enum: ['管理', '编辑', '查看'],
+      description: '计算属性。当前用户对这一条的权限：管理、编辑或查看。',
     }
     columns = columnAfter(ensureColumn(columns, 'shareScope'), 'shareRole', 'shareScope')
   }
@@ -1452,7 +1452,7 @@ export class DatabaseService extends Service implements Database {
       return {
         ...withMeta,
         ...(!need || need.shareScope ? { shareScope: '共享' } : {}),
-        ...(!need || need.shareRole ? { shareRole: '阅读' } : {}),
+        ...(!need || need.shareRole ? { shareRole: '查看' } : {}),
       }
     }
     const wantScope = !need || need.shareScope

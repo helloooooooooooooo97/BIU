@@ -386,7 +386,8 @@ function WorkspaceAccess({
         subjectType: grant.subjectType,
         subjectId: grant.subjectId,
         memberKind: grant.memberKind,
-      })), dataViews, memberViewFilters)
+        grantedBy: grant.grantedBy,
+      })), dataViews, memberViewFilters, ownerId)
     : scope
   const grantedAccountIds = new Set(people.map((row) => row.id))
   const normalizedMemberQuery = memberQuery.trim().toLowerCase()
@@ -408,7 +409,7 @@ function WorkspaceAccess({
     <div className="fsdb-share-link-section" data-testid="fsdb-share-members">
       {viewId ? null : (
         <div className="fsdb-share-collab-summary">
-          <span>数据归属</span>
+          <span>可见范围</span>
           <strong className={`fsdb-share-scope is-${shownScope}`} data-testid="fsdb-share-scope"><ScopeMark scope={shownScope} /></strong>
         </div>
       )}
@@ -445,7 +446,7 @@ function WorkspaceAccess({
           ))}
           {inheritedInternal.map((row) => (
             <li key={`inherited:${row.viewId}:${row.subjectType}:${row.subjectId}`}>
-              <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong><em>继承自{row.source}</em></span>
+              <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong><em>来自视图「{row.source}」</em></span>
               <span className="fsdb-share-collaborator-role">{roleLabel(row.role)}</span>
             </li>
           ))}
@@ -527,7 +528,7 @@ function WorkspaceAccess({
           ))}
           {inheritedExternal.map((row) => (
             <li key={`inherited:${row.viewId}:${row.subjectType}:${row.subjectId}`}>
-              <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong><em>继承自{row.source}</em></span>
+              <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong><em>来自视图「{row.source}」</em></span>
               <span className="fsdb-share-collaborator-role">{roleLabel(row.role)}</span>
             </li>
           ))}

@@ -79,9 +79,9 @@ export const ACCESS_RANK = { viewer: 1, editor: 2, manager: 3, owner: 4 } as con
 
 export function accessLabel(role: keyof typeof ACCESS_RANK | null | undefined) {
   if (role === 'editor') return '编辑'
-  if (role === 'viewer') return '阅读'
+  if (role === 'viewer') return '查看'
   if (role === 'manager' || role === 'owner') return '管理'
-  return '阅读'
+  return '查看'
 }
 
 export function higherAccess(left: keyof typeof ACCESS_RANK | null, right: keyof typeof ACCESS_RANK | null) {

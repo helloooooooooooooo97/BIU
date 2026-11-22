@@ -2108,15 +2108,26 @@ export class CollabStore {
     if (!workspaceId) throw new CollabError('没有工作区', 400)
     this.requireMember(actorId, workspaceId)
     if (!this.canReadRecord(collection, recordId)) throw new CollabError('没有权限', 403)
+    const resource = { type: 'record' as const, workspaceId, collection, recordId }
+    const inheritance = this.authorization.inheritanceInfo(resource)
+    const viewGrants = this.viewGrantShares(workspaceId, collection).map((grant) => ({
+      ...grant,
+      matchesActor: grant.subjectType === 'account'
+        ? grant.subjectId === actorId
+        : this.authorization.matchesMemberView(workspaceId, grant.subjectId, actorId),
+    }))
     return {
       ...this.accessRows(workspaceId, collection, recordId),
-      viewGrants: this.viewGrantShares(workspaceId, collection),
-      roleChain: this.authorization.roleChain(actorId, {
-        type: 'record',
-        workspaceId,
-        collection,
-        recordId,
-      }),
+      currentAccountId: actorId,
+      viewGrants,
+      roleChain: this.authorization.roleChain(actorId, resource),
+      inheritance: {
+        mode: inheritance.mode,
+        ancestors: inheritance.ancestors.map((ancestor) => ({
+          ...ancestor,
+          ...this.accessRows(workspaceId, ancestor.collection, ancestor.recordId),
+        })),
+      },
     }
   }
 

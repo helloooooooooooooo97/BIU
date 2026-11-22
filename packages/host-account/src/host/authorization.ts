@@ -481,6 +481,44 @@ export class AuthorizationService {
     }
   }
 
+  /** 返回记录的父子继承配置与祖先链（从最顶层祖先到直接父级）。 */
+  inheritanceInfo(resource: Extract<ResourceRef, { type: 'record' }>): {
+    mode: 'inherit' | 'custom'
+    ancestors: Array<{ collection: string; recordId: string }>
+  } {
+    const first = this.policy(resource)
+    const mode: 'inherit' | 'custom' = first?.access_mode === 'inherit' && first.parent_record_id ? 'inherit' : 'custom'
+    if (mode !== 'inherit') return { mode, ancestors: [] }
+    const ancestors: Array<{ collection: string; recordId: string }> = []
+    const visited = new Set<string>([`${resource.workspaceId}\t${resource.collection}\t${resource.recordId}`])
+    let cursor: Extract<ResourceRef, { type: 'record' }> | null = {
+      type: 'record',
+      workspaceId: resource.workspaceId,
+      collection: first!.parent_collection || resource.collection,
+      recordId: first!.parent_record_id,
+    }
+    let depth = 0
+    while (cursor && depth < 64) {
+      const key = `${cursor.workspaceId}\t${cursor.collection}\t${cursor.recordId}`
+      if (visited.has(key)) break
+      visited.add(key)
+      ancestors.unshift({ collection: cursor.collection, recordId: cursor.recordId })
+      const policy = this.policy(cursor)
+      if (policy?.access_mode === 'inherit' && policy.parent_record_id) {
+        cursor = {
+          type: 'record',
+          workspaceId: cursor.workspaceId,
+          collection: policy.parent_collection || cursor.collection,
+          recordId: policy.parent_record_id,
+        }
+      } else {
+        cursor = null
+      }
+      depth += 1
+    }
+    return { mode, ancestors }
+  }
+
   /** 当前用户在这条记录上的权限是怎么来的。继承会逐级展开，视图授权由调用方另算。 */
   roleChain(accountId: string, resource: Extract<ResourceRef, { type: 'record' }>) {
     return this.collectRoleChain(accountId, resource, new Set(), 0, true)
@@ -492,20 +530,29 @@ export class AuthorizationService {
     visited: Set<string>,
     depth: number,
     top: boolean,
-  ): Array<{ id: string; title: string; detail: string; role: ResourceRole }> {
+  ): Array<{
+    id: string
+    collection: string
+    recordId: string
+    title: string
+    detail: string
+    role: ResourceRole
+    source: 'ownership' | 'direct-grant' | 'group-grant' | 'view-grant' | 'workspace-default' | 'inherited' | 'legacy'
+  }> {
     const key = `${resource.workspaceId}\t${resource.collection}\t${resource.recordId}`
     if (visited.has(key) || depth > 64) return []
     visited.add(key)
     const title = top ? '这条内容' : '上一级内容'
+    const base = { id: key, collection: resource.collection, recordId: resource.recordId, title }
     const policy = this.policy(resource)
     if (!policy) {
       const ownerId = this.legacyOwnerId(resource)
       if (!ownerId) return []
-      if (ownerId === accountId) return [{ id: key, title, detail: '你是创建者', role: 'owner' }]
+      if (ownerId === accountId) return [{ ...base, detail: '你是创建者', role: 'owner', source: 'ownership' }]
       const role: ResourceRole = this.membership(accountId, resource.workspaceId) === 'viewer' ? 'viewer' : 'editor'
-      return [{ id: key, title, detail: '沿用空间里的旧记录', role }]
+      return [{ ...base, detail: '沿用空间里的旧记录', role, source: 'legacy' }]
     }
-    if (policy.owner_account_id === accountId) return [{ id: key, title, detail: '你是创建者', role: 'owner' }]
+    if (policy.owner_account_id === accountId) return [{ ...base, detail: '你是创建者', role: 'owner', source: 'ownership' }]
     const direct = this.directRole(accountId, resource)
     if (direct) {
       const detail = direct.source === 'group-grant'
@@ -515,13 +562,13 @@ export class AuthorizationService {
           : direct.source === 'direct-grant'
             ? '直接授权给你'
             : '按空间角色授权'
-      return [{ id: key, title, detail, role: direct.effectiveRole }]
+      return [{ ...base, detail, role: direct.effectiveRole, source: direct.source }]
     }
     if (policy.access_mode === 'members' && this.membershipKind(accountId, resource.workspaceId) === 'member') {
       const membership = this.membership(accountId, resource.workspaceId)
       const role = memberAccessRole(policy, membership)
-      const detail = role === 'manager' ? '空间管理者默认可管理' : role === 'viewer' ? '查看者只能阅读' : '空间成员默认可编辑'
-      return [{ id: key, title, detail, role }]
+      const detail = role === 'manager' ? '空间管理员默认可管理' : role === 'viewer' ? '查看者默认可查看' : '空间成员默认可编辑'
+      return [{ ...base, detail, role, source: 'workspace-default' }]
     }
     if (policy.access_mode === 'inherit' && policy.parent_record_id) {
       const parent = this.collectRoleChain(
@@ -538,7 +585,7 @@ export class AuthorizationService {
       )
       if (!parent.length) return []
       const concrete = parent[parent.length - 1]!
-      return [{ id: key, title, detail: '权限继承自上一级', role: concrete.role }, ...parent]
+      return [{ ...base, detail: '继承上级权限', role: concrete.role, source: 'inherited' }, ...parent]
     }
     return []
   }

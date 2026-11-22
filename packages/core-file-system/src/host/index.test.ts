@@ -2648,7 +2648,7 @@ test('granting the all-members view lets the other member read the owner private
   assert.equal(adaList.items.find((row) => row.title === 'A私人')?.shareScope, '空间')
   assert.equal(adaList.items.find((row) => row.title === 'A私人')?.shareRole, '管理')
   assert.equal(adaList.schema.fields.shareRole?.label, '权限')
-  assert.equal(adaList.schema.fields.shareRole?.enum?.join(','), '管理,编辑,阅读')
+  assert.equal(adaList.schema.fields.shareRole?.enum?.join(','), '管理,编辑,查看')
   const spaceId = String(bobList.items.find((row) => row.title === 'A空间')?.id ?? '')
   const privateId = String(bobList.items.find((row) => row.title === 'A私人')?.id ?? '')
   const spaceChain = runWithAccount(bob.id, () => collab.recordAccess(bob.id, '/tasks', spaceId)).roleChain
@@ -2910,7 +2910,7 @@ test('builtin plugins stay visible in the workspace plugin list', async () => {
     const bobList = await runWithAccount(bob.id, () => db.list('/plugins'))
     assert.deepEqual(bobList.items.map((row) => row.id), ['api-playground'])
     assert.equal(bobList.items[0]?.shareScope, '共享')
-    assert.equal(bobList.items[0]?.shareRole, '阅读')
+    assert.equal(bobList.items[0]?.shareRole, '查看')
     assert.equal(bobList.items[0]?.createdBy && (bobList.items[0].createdBy as { name?: string }).name, 'BIU官方')
     assert.equal((bobList.items[0]?.createdBy as { url?: string }).url, 'https://github.com/helloooooooooooooo97/biu')
     assert.equal((bobList.items[0]?.updatedBy as Array<{ url?: string }>)[0]?.url, 'https://github.com/helloooooooooooooo97/biu')

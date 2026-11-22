@@ -42,7 +42,7 @@ function asContentRead(raw: unknown) {
 
 /** 分享页上的人只能看。不要把创建者自己的「管理」带出去。 */
 function audienceRecord(record: DbRecord): DbRecord {
-  return { ...record, shareRole: '阅读' }
+  return { ...record, shareRole: '查看' }
 }
 
 function withResources(
