@@ -1,0 +1,485 @@
+import type { Dispatch, PointerEvent as ReactPointerEvent, ReactNode, RefObject, SetStateAction } from 'react'
+import { PlusIcon } from '@heroicons/react/16/solid'
+import type { CollectionInfo, CollectionSchema, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
+import type { CollectionChrome } from '@biu/type-file-system/ui'
+import { tagTone as schemaTagTone } from '@biu/biu-ui/tag-chip'
+import { TagFieldChips } from './schema-field.tsx'
+import {
+  isRecordLinkField,
+  parseTagFlatColumnKey,
+  resolveFieldType,
+  tagColumnHeadLabel,
+  tagColumnTagTip,
+  type ViewMode,
+} from './fields.ts'
+import { padColBox, type TablePaintBag, type TablePaintNode } from './windowed-table.tsx'
+import { EMPTY_HOLD_NODES, type TableHoldSnap } from './browser-list-cache.ts'
+import { RecordTitle } from './browser-row-title.tsx'
+import { PagerSizeControl } from './pager-size.tsx'
+import { FieldGlyph } from './fsdb-cells.tsx'
+import { TableGlyph, UiGlyph } from './nav-glyphs.tsx'
+import { TAGS_COLLECTION_PATH } from './database-path.ts'
+import { persistCollapsedGroups } from './view-storage.ts'
+import { tablePinColClass, type TableColumnSlice } from './table-window.ts'
+import { tableCellRangeKey, tableNavKeys, type TableCellCursor } from './table-keys.ts'
+import { isViewCatalogField } from './view-catalog.ts'
+
+export type BrowserTableColumn = {
+  key: string
+  field: FieldSpec
+  label: string
+  kind: FieldType
+  tagPackId?: string
+  tagLabel?: string
+}
+
+export type BrowserTableIconLookup = {
+  byPath: ReadonlyMap<string, string | undefined>
+  byLabel: ReadonlyMap<string, string | undefined>
+}
+
+export function buildTableIconLookup(tables: CollectionInfo[]): BrowserTableIconLookup {
+  const byPath = new Map<string, string | undefined>()
+  const byLabel = new Map<string, string | undefined>()
+  for (const table of tables) {
+    const icon = table.view?.icon
+    byPath.set(table.path, icon)
+    const title = table.view?.title ?? table.label
+    if (title && !byLabel.has(title)) byLabel.set(title, icon)
+  }
+  return { byPath, byLabel }
+}
+
+export type BrowserTablePaintDeps = {
+  collectionPath: string
+  activeViewId: string | null
+  routeViewId?: string
+  detailId: string | null
+  mode: ViewMode
+  sheet: boolean
+  embed: boolean
+  schema: CollectionSchema | null
+  columns: BrowserTableColumn[]
+  columnsByKey: ReadonlyMap<string, BrowserTableColumn>
+  chrome?: CollectionChrome
+  currentTable?: CollectionInfo
+  tableIcons: BrowserTableIconLookup
+  groupBy: string
+  collapsedGroups: Record<string, boolean>
+  setCollapsedGroups: Dispatch<SetStateAction<Record<string, boolean>>>
+  collapsed: Record<string, boolean>
+  setCollapsed: Dispatch<SetStateAction<Record<string, boolean>>>
+  treeOn: boolean
+  canCreate: boolean
+  creatingGroup: string | null
+  freezeTitle: boolean
+  queryFields: ReadonlySet<string>
+  resizingCol: string | null
+  pageSize: number
+  error: string
+  setGroupPages: Dispatch<SetStateAction<Record<string, number>>>
+  changePageSize: (next: number) => void
+  tableHoldRef: RefObject<TableHoldSnap | null>
+  cellPickRef: RefObject<TableCellCursor | null>
+  cellRangeSetRef: RefObject<Set<string>>
+  colWindowRef: RefObject<TableColumnSlice>
+  tablePaintRef: RefObject<TablePaintBag>
+  listReadySent: RefObject<boolean>
+  captureTableFoldSnapshot: () => void
+  groupCreateSeed: (groupKey: string) => Record<string, unknown> | null
+  createInGroup: (groupKey: string) => Promise<void>
+  startColResize: (event: ReactPointerEvent<HTMLElement>, key: string) => void
+  renderCell: (row: DbRecord, key: string, field: FieldSpec, place: 'table' | 'detail' | 'card') => ReactNode
+  cellValueText: (row: DbRecord, key: string, field: FieldSpec) => string
+  cellPickOf: (row: DbRecord, key: string, field?: FieldSpec) => Record<string, string>
+  cellFieldWritable: (field?: FieldSpec) => boolean
+  recordPick: (row: DbRecord) => Record<string, string>
+  renderRecordActions: (row: DbRecord) => ReactNode
+  openRow: (row: DbRecord) => void
+  openRowSplit: (row: DbRecord) => void
+  writePatch: (row: DbRecord, patch: Record<string, unknown>) => Promise<void>
+  loadTreeKids: (parentId: string) => Promise<void>
+  flattenRows: (rows: DbRecord[]) => Array<{ row: DbRecord; depth: number; hasKids: boolean; kidCount: number }>
+}
+
+export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
+  const {
+    collectionPath,
+    activeViewId,
+    routeViewId,
+    detailId,
+    mode,
+    sheet,
+    embed,
+    schema,
+    columns,
+    columnsByKey,
+    chrome,
+    currentTable,
+    tableIcons,
+    groupBy,
+    collapsedGroups,
+    setCollapsedGroups,
+    collapsed,
+    setCollapsed,
+    treeOn,
+    canCreate,
+    creatingGroup,
+    freezeTitle,
+    queryFields,
+    resizingCol,
+    pageSize,
+    error,
+    setGroupPages,
+    changePageSize,
+    tableHoldRef,
+    cellPickRef,
+    cellRangeSetRef,
+    colWindowRef,
+    tablePaintRef,
+    listReadySent,
+    captureTableFoldSnapshot,
+    groupCreateSeed,
+    createInGroup,
+    startColResize,
+    renderCell,
+    cellValueText,
+    cellPickOf,
+    cellFieldWritable,
+    recordPick,
+    renderRecordActions,
+    openRow,
+    openRowSplit,
+    writePatch,
+    loadTreeKids,
+    flattenRows,
+  } = deps
+
+  // Precompute held-view cursor once per render instead of scanning nodes/columns on every cell.
+  let cachedHoldSnap: TableHoldSnap | null = null
+  let cachedHoldPick: TableCellCursor | null = null
+  function resolveHeldCellPick(held: TableHoldSnap): TableCellCursor | null {
+    if (held === cachedHoldSnap) return cachedHoldPick
+    cachedHoldSnap = held
+    if (held.nodes !== EMPTY_HOLD_NODES && !sheet && !embed && mode === 'table' && !detailId) {
+      const paintSchema = held.schema ?? schema
+      const firstRow = held.nodes.find((item): item is Extract<TablePaintNode, { kind: 'row' }> => item.kind === 'row')
+      const heldKeys = tableNavKeys(held.columns as BrowserTableColumn[])
+      const labelKey = paintSchema?.labelField
+      const targetKey = labelKey && heldKeys.includes(labelKey) ? labelKey : heldKeys[0]
+      cachedHoldPick = firstRow && targetKey ? { id: String(firstRow.row.id), key: targetKey, rowKey: firstRow.key } : null
+    } else {
+      cachedHoldPick = null
+    }
+    return cachedHoldPick
+  }
+
+  function renderGroupHead(groupKey: string, label: string) {
+    const folded = Boolean(collapsedGroups[groupKey])
+    const tableIcon =
+      groupBy === 'tablePath'
+        ? tableIcons.byPath.get(groupKey)
+        : (tableIcons.byLabel.get(groupKey) ?? tableIcons.byPath.get(groupKey))
+    return (
+      <header className="tasks-queue-ghead">
+        <button
+          type="button"
+          className="tasks-group-fold"
+          aria-expanded={!folded}
+          aria-label={folded ? '展开分组' : '收起分组'}
+          title={folded ? '展开分组' : '收起分组'}
+          onClick={() => {
+            captureTableFoldSnapshot()
+            setCollapsedGroups((prev) => {
+              const next = { ...prev, [groupKey]: !prev[groupKey] }
+              persistCollapsedGroups(collectionPath, activeViewId ?? routeViewId ?? '', groupBy, next)
+              return next
+            })
+          }}
+        >
+          <span className="sidebar-rail-icon sidebar-group-fold" aria-hidden>
+            <span className="sidebar-group-fold-face">
+              {groupBy === 'shareScope' ? (
+                <UiGlyph
+                  icon={label === '共享' ? 'globe' : label === '空间' ? 'users' : 'user'}
+                  className={label === '共享' ? 'tasks-queue-gshare' : undefined}
+                />
+              ) : groupBy === 'table' || groupBy === 'tablePath' ? (
+                <TableGlyph icon={tableIcon} className="size-4" />
+              ) : (
+                <UiGlyph icon="stack" />
+              )}
+            </span>
+            <span className="sidebar-group-fold-chevron">
+              <UiGlyph icon="chevron-right" className={`sidebar-chevron${folded ? '' : ' is-open'}`} />
+            </span>
+          </span>
+        </button>
+        <span className="tasks-queue-glabel">{label}</span>
+        {canCreate && !sheet ? (
+          <button
+            type="button"
+            className="tasks-icon-btn tasks-group-create"
+            aria-label={`在「${label}」分组中新增`}
+            title={groupCreateSeed(groupKey) ? `在「${label}」分组中新增` : '当前分组属性无法在新建时指定'}
+            disabled={Boolean(creatingGroup) || !groupCreateSeed(groupKey)}
+            onClick={() => void createInGroup(groupKey)}
+          >
+            <PlusIcon aria-hidden className="size-[14px]" />
+          </button>
+        ) : null}
+      </header>
+    )
+  }
+
+  function paintColPad(px: number, side: 'left' | 'right') {
+    if (px <= 0) return null
+    return <td key={`pad-${side}`} className="fsdb-col-pad" aria-hidden style={padColBox(px)} />
+  }
+
+  function paintHeadTh(col: BrowserTableColumn) {
+    const flat = parseTagFlatColumnKey(col.key)
+    const tone = flat ? schemaTagTone(flat.packId) : undefined
+    const tagTip = tagColumnTagTip(col)
+    return (
+      <th
+        key={col.key}
+        className={[tablePinColClass(col.key, schema?.labelField, tableHoldRef.current?.freezeTitle ?? freezeTitle), tone ? 'is-tag-col' : ''].filter(Boolean).join(' ') || undefined}
+        style={tone ? { ['--biu-tag' as string]: tone } : undefined}
+      >
+        <span
+          className={`tasks-th${queryFields.has(col.key) ? ' is-on' : ''}`}
+          data-dock-tip={tagTip || undefined}
+        >
+          <span className="tasks-th-ico">
+            <FieldGlyph kind={col.kind} />
+          </span>
+          {tagColumnHeadLabel(col)}
+        </span>
+        <span
+          className={`fsdb-col-resizer${resizingCol === col.key ? ' is-active' : ''}`}
+          data-testid="fsdb-col-resizer"
+          onPointerDown={(event) => startColResize(event, col.key)}
+        />
+      </th>
+    )
+  }
+
+  function paintTableCell(row: DbRecord, key: string, field: FieldSpec) {
+    if (key === 'shareScope' || key === 'shareRole') {
+      return renderCell(row, key, field, 'table')
+    }
+    const kind = resolveFieldType(field)
+    if (
+      kind === 'boolean' ||
+      kind === 'action' ||
+      kind === 'tag' ||
+      kind === 'select' ||
+      kind === 'multi-select' ||
+      kind === 'person' ||
+      kind === 'url' ||
+      kind === 'image' ||
+      kind === 'attachment' ||
+      kind === 'document' ||
+      kind === 'file'
+    ) {
+      return renderCell(row, key, field, 'table')
+    }
+    if (
+      parseTagFlatColumnKey(key) ||
+      isRecordLinkField(field, key) ||
+      isViewCatalogField(key) ||
+      chrome?.cells?.[key]
+    ) {
+      if (key === 'usage' && !(Number(row[key]) > 0)) return <span className="traj-usage-empty">—</span>
+      return renderCell(row, key, field, 'table')
+    }
+    if (key === 'fields' && collectionPath === TAGS_COLLECTION_PATH) {
+      return <TagFieldChips value={row[key]} />
+    }
+    const text = cellValueText(row, key, field)
+    return text ? <span>{text}</span> : null
+  }
+
+  function paintLiveCell(row: DbRecord, col: BrowserTableColumn, depth: number, hasKids: boolean, kidCount: number, rowKey: string, toolsArmed = true) {
+    const held = tableHoldRef.current
+    const paintSchema = held?.schema ?? schema
+    const cellPick = held ? resolveHeldCellPick(held) : cellPickRef.current
+    const rangeSet = held ? null : cellRangeSetRef.current
+    return (
+      <td
+        key={col.key}
+        data-col-key={col.key}
+        {...cellPickOf(row, col.key, col.field)}
+        className={[
+          tablePinColClass(col.key, paintSchema?.labelField, held?.freezeTitle ?? freezeTitle),
+          Boolean(cellPick && (cellPick.rowKey ? cellPick.rowKey === rowKey : cellPick.id === row.id) && cellPick.key === col.key)
+            ? col.field && cellFieldWritable(col.field)
+              ? 'is-cell-on'
+              : 'is-cell-on is-cell-ro'
+            : rangeSet?.has(tableCellRangeKey(row.id, col.key))
+              ? 'is-cell-range'
+              : '',
+        ].filter(Boolean).join(' ') || undefined}
+      >
+        {col.key === paintSchema?.labelField ? (
+          <RecordTitle
+            row={row}
+            label={String(row[paintSchema?.labelField ?? 'title'] ?? '')}
+            Title={chrome?.Title}
+            depth={depth}
+            hasKids={hasKids}
+            kidCount={kidCount}
+            treeOn={treeOn}
+            collapsed={collapsed[row.id] !== false}
+            onToggleCollapsed={() => {
+              const expanding = collapsed[row.id] !== false
+              captureTableFoldSnapshot()
+              setCollapsed((prev) => ({ ...prev, [row.id]: prev[row.id] === false }))
+              if (expanding) void loadTreeKids(String(row.id))
+            }}
+            tableIcon={currentTable?.view?.icon}
+            Icon={chrome?.Icon}
+            pick={recordPick(row)}
+            onOpenSplit={() => openRowSplit(row)}
+            onOpenRow={() => openRow(row)}
+            onWriteEmoji={(next) => void writePatch(row, { emoji: next })}
+            toolsArmed={toolsArmed}
+          />
+        ) : col.key === 'actions' ? (
+          renderRecordActions(row)
+        ) : (
+          <span className="fsdb-cell">{paintTableCell(row, col.key, col.field)}</span>
+        )}
+      </td>
+    )
+  }
+
+  function renderPaintCell(node: TablePaintNode, colKey: string) {
+    if (node.kind !== 'row') return null
+    const held = tableHoldRef.current
+    const col = held && held.nodes !== EMPTY_HOLD_NODES && held.columns.length
+      ? (held.columns as BrowserTableColumn[]).find((item) => item.key === colKey)
+      : columnsByKey.get(colKey)
+    if (!col) return null
+    return paintLiveCell(node.row, col, node.depth, node.hasKids, node.kidCount, node.key)
+  }
+
+  function renderPaintRow(node: TablePaintNode, cells: ReactNode) {
+    if (node.kind !== 'row') return renderPaintNode(node)
+    const row = node.row
+    return (
+      <tr
+        key={node.key}
+        data-record-id={row.id}
+        data-row-key={node.key}
+        className={row.id === detailId ? 'is-active' : undefined}
+        {...recordPick(row)}
+      >
+        {cells}
+      </tr>
+    )
+  }
+
+  function tableLiveRow(row: DbRecord, depth: number, hasKids: boolean, kidCount: number, rowKey: string, toolsArmed = true) {
+    const colWindow = colWindowRef.current
+    const held = tableHoldRef.current
+    const paintColumns = (
+      held && held.nodes !== EMPTY_HOLD_NODES && held.columns.length ? held.columns : columns
+    ) as BrowserTableColumn[]
+    const paintLiveTd = (col: BrowserTableColumn) => paintLiveCell(row, col, depth, hasKids, kidCount, rowKey, toolsArmed)
+    return (
+      <tr
+        key={rowKey}
+        data-record-id={row.id}
+        data-row-key={rowKey}
+        className={row.id === detailId ? 'is-active' : undefined}
+        {...recordPick(row)}
+      >
+        {paintColumns.slice(0, colWindow.pin).map(paintLiveTd)}
+        {paintColPad(colWindow.padLeft, 'left')}
+        {paintColumns.slice(colWindow.start, colWindow.end).map(paintLiveTd)}
+        {paintColPad(colWindow.padRight, 'right')}
+        <td className="fsdb-col-fill" aria-hidden />
+      </tr>
+    )
+  }
+
+  function tableRecordRow(row: DbRecord, depth: number, hasKids: boolean, kidCount: number, rowKey: string) {
+    return tableLiveRow(row, depth, hasKids, kidCount, rowKey, true)
+  }
+
+  function tableBodyRows(rows: DbRecord[], keyPrefix = '') {
+    const listed = flattenRows(rows)
+    if (!listed.length) {
+      return (
+        <tr key="empty">
+          <td colSpan={tablePaintRef.current.colSpan} className="fsdb-empty">
+            {error ? '加载失败' : tableHoldRef.current?.nodes === EMPTY_HOLD_NODES ? '' : listReadySent.current ? '暂无记录' : ''}
+          </td>
+        </tr>
+      )
+    }
+    return <>{listed.map((item) => tableRecordRow(item.row, item.depth, item.hasKids, item.kidCount, `${keyPrefix}${item.row.id}`))}</>
+  }
+
+  function renderPaintNode(node: TablePaintNode) {
+    if (node.kind === 'empty') return tableBodyRows([])
+    if (node.kind === 'row') return tableRecordRow(node.row, node.depth, node.hasKids, node.kidCount, node.key)
+    if (node.kind === 'group-head') {
+      return (
+        <tr key={node.key} className="fsdb-group-row" data-group-key={node.groupKey}>
+          <td colSpan={tablePaintRef.current.colSpan}>
+            {renderGroupHead(node.groupKey, node.label)}
+          </td>
+        </tr>
+      )
+    }
+    const pages = Math.max(1, Math.ceil(node.count / pageSize))
+    const pageIndex = Math.min(node.pageIndex, pages - 1)
+    return (
+      <tr key={node.key} className="fsdb-group-pager" data-group-pager={node.groupKey}>
+        <td colSpan={tablePaintRef.current.colSpan}>
+          <div className="fsdb-pager">
+            <span className="fsdb-pager-meta">{node.count}</span>
+            <div className="fsdb-pager-nav">
+              <PagerSizeControl pageSize={pageSize} onChange={changePageSize} />
+              <button
+                type="button"
+                className="tasks-icon-btn"
+                aria-label="上一页"
+                disabled={pageIndex <= 0}
+                onClick={() => setGroupPages((prev) => ({ ...prev, [node.groupKey]: Math.max(0, pageIndex - 1) }))}
+              >
+                <UiGlyph icon="chevron-left" />
+              </button>
+              <button
+                type="button"
+                className="tasks-icon-btn"
+                aria-label="下一页"
+                disabled={(pageIndex + 1) * pageSize >= node.count}
+                onClick={() => setGroupPages((prev) => ({ ...prev, [node.groupKey]: pageIndex + 1 }))}
+              >
+                <UiGlyph icon="chevron-right" />
+              </button>
+            </div>
+          </div>
+        </td>
+      </tr>
+    )
+  }
+
+  return {
+    renderGroupHead,
+    paintColPad,
+    paintHeadTh,
+    paintTableCell,
+    paintLiveCell,
+    renderPaintCell,
+    renderPaintRow,
+    tableLiveRow,
+    tableRecordRow,
+    tableBodyRows,
+    renderPaintNode,
+  }
+}

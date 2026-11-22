@@ -151,6 +151,7 @@ import { BrowserListChrome } from './browser-toolbar.tsx'
 import { createBrowserTableNav } from './use-browser-table-nav.ts'
 import { createBrowserViewCrud } from './use-browser-view-crud.ts'
 import { createBrowserMutations } from './use-browser-mutations.ts'
+import { buildTableIconLookup, createBrowserTablePaint } from './browser-table-paint.tsx'
 import { KeyedSerialQueue, PendingFieldPatchTracker } from './record-write-queue.ts'
 import { ViewSyncController } from './view-sync-controller.ts'
 import { captureTableFoldSnapshot as captureFoldSnapshot, playTableFoldFlip } from './table-fold-flip.ts'
@@ -2140,13 +2141,27 @@ export function CollectionBrowser({
     checkHoverRef.current = next
   }, [])
 
+  const pickedIdSet = useMemo(() => new Set(pickedIds), [pickedIds])
+  const tableIcons = useMemo(() => buildTableIconLookup(tables), [tables])
+  const togglePicked = useCallback((ids: string[], on: boolean) => {
+    setPickedIds((prev) => {
+      if (on) {
+        const next = new Set(prev)
+        for (const id of ids) next.add(id)
+        return [...next]
+      }
+      const drop = new Set(ids)
+      return prev.filter((id) => !drop.has(id))
+    })
+  }, [])
+
   const checkDrawRef = useRef({
-    renderHead: () => <RowCheck ids={pickableIds} pickedIds={pickedIds} onTogglePicked={togglePicked} />,
-    renderRow: (id: string) => <RowCheck id={id} pickedIds={pickedIds} onTogglePicked={togglePicked} />,
+    renderHead: () => <RowCheck ids={pickableIds} pickedIdSet={pickedIdSet} onTogglePicked={togglePicked} />,
+    renderRow: (id: string) => <RowCheck id={id} pickedIdSet={pickedIdSet} onTogglePicked={togglePicked} />,
     hasPicked: () => pickedIds.length > 0,
   })
-  checkDrawRef.current.renderHead = () => <RowCheck ids={pickableIds} pickedIds={pickedIds} onTogglePicked={togglePicked} />
-  checkDrawRef.current.renderRow = (id: string) => <RowCheck id={id} pickedIds={pickedIds} onTogglePicked={togglePicked} />
+  checkDrawRef.current.renderHead = () => <RowCheck ids={pickableIds} pickedIdSet={pickedIdSet} onTogglePicked={togglePicked} />
+  checkDrawRef.current.renderRow = (id: string) => <RowCheck id={id} pickedIdSet={pickedIdSet} onTogglePicked={togglePicked} />
   checkDrawRef.current.hasPicked = () => pickedIds.length > 0
 
   const checkListenersRef = useRef(new Set<() => void>())
@@ -3178,80 +3193,6 @@ export function CollectionBrowser({
     )
   }
 
-  function renderGroupHead(groupKey: string, label: string) {
-    const folded = Boolean(collapsedGroups[groupKey])
-    return (
-      <header className="tasks-queue-ghead">
-        <button
-          type="button"
-          className="tasks-group-fold"
-          aria-expanded={!folded}
-          aria-label={folded ? '展开分组' : '收起分组'}
-          title={folded ? '展开分组' : '收起分组'}
-          onClick={() => {
-            captureTableFoldSnapshot()
-            setCollapsedGroups((prev) => {
-              const next = { ...prev, [groupKey]: !prev[groupKey] }
-              persistCollapsedGroups(collectionPath, activeViewId ?? routeViewId ?? '', groupBy, next)
-              return next
-            })
-          }}
-        >
-          <span className="sidebar-rail-icon sidebar-group-fold" aria-hidden>
-            <span className="sidebar-group-fold-face">
-              {groupBy === 'shareScope' ? (
-                <UiGlyph
-                  icon={label === '共享' ? 'globe' : label === '空间' ? 'users' : 'user'}
-                  className={label === '共享' ? 'tasks-queue-gshare' : undefined}
-                />
-              ) : groupBy === 'table' || groupBy === 'tablePath' ? (
-                <TableGlyph
-                  icon={
-                    tables.find((table) =>
-                      groupBy === 'tablePath'
-                        ? table.path === groupKey
-                        : (table.view?.title ?? table.label) === groupKey || table.path === groupKey,
-                    )?.view?.icon
-                  }
-                  className="size-4"
-                />
-              ) : (
-                <UiGlyph icon="stack" />
-              )}
-            </span>
-            <span className="sidebar-group-fold-chevron">
-              <UiGlyph icon="chevron-right" className={`sidebar-chevron${folded ? '' : ' is-open'}`} />
-            </span>
-          </span>
-        </button>
-        <span className="tasks-queue-glabel">{label}</span>
-        {canCreate && !sheet ? (
-          <button
-            type="button"
-            className="tasks-icon-btn tasks-group-create"
-            aria-label={`在「${label}」分组中新增`}
-            title={groupCreateSeed(groupKey) ? `在「${label}」分组中新增` : '当前分组属性无法在新建时指定'}
-            disabled={Boolean(creatingGroup) || !groupCreateSeed(groupKey)}
-            onClick={() => void createInGroup(groupKey)}
-          >
-            <PlusIcon aria-hidden className="size-[14px]" />
-          </button>
-        ) : null}
-      </header>
-    )
-  }
-
-  function togglePicked(ids: string[], on: boolean) {
-    setPickedIds((prev) => {
-      if (on) {
-        const next = new Set(prev)
-        for (const id of ids) next.add(id)
-        return [...next]
-      }
-      return prev.filter((id) => !ids.includes(id))
-    })
-  }
-
   const {
     onTablePointerDown,
     onTablePointerMove,
@@ -3417,138 +3358,6 @@ export function CollectionBrowser({
     if (tablePaneOwnsFocus(pane) && landPaneSurface()) consumePendingTablePane(pane)
   }
 
-  function paintColPad(px: number, side: 'left' | 'right') {
-    if (px <= 0) return null
-    return <td key={`pad-${side}`} className="fsdb-col-pad" aria-hidden style={padColBox(px)} />
-  }
-
-  function paintHeadTh(col: (typeof columns)[number]) {
-    const flat = parseTagFlatColumnKey(col.key)
-    const tone = flat ? schemaTagTone(flat.packId) : undefined
-    const tagTip = tagColumnTagTip(col)
-    return (
-      <th
-        key={col.key}
-        className={[tablePinColClass(col.key, schema?.labelField, tableHoldRef.current?.freezeTitle ?? freezeTitle), tone ? 'is-tag-col' : ''].filter(Boolean).join(' ') || undefined}
-        style={tone ? { ['--biu-tag' as string]: tone } : undefined}
-      >
-        <span
-          className={`tasks-th${queryFields.has(col.key) ? ' is-on' : ''}`}
-          data-dock-tip={tagTip || undefined}
-        >
-          <span className="tasks-th-ico">
-            <FieldGlyph kind={col.kind} />
-          </span>
-          {tagColumnHeadLabel(col)}
-        </span>
-        <span
-          className={`fsdb-col-resizer${resizingCol === col.key ? ' is-active' : ''}`}
-          data-testid="fsdb-col-resizer"
-          onPointerDown={(event) => startColResize(event, col.key)}
-        />
-      </th>
-    )
-  }
-
-  function paintTableCell(row: DbRecord, key: string, field: FieldSpec) {
-    if (key === 'shareScope' || key === 'shareRole') {
-      return renderCell(row, key, field, 'table')
-    }
-    const kind = resolveFieldType(field)
-    if (
-      kind === 'boolean' ||
-      kind === 'action' ||
-      kind === 'tag' ||
-      kind === 'select' ||
-      kind === 'multi-select' ||
-      kind === 'person' ||
-      kind === 'url' ||
-      kind === 'image' ||
-      kind === 'attachment' ||
-      kind === 'document' ||
-      kind === 'file'
-    ) {
-      return renderCell(row, key, field, 'table')
-    }
-    if (
-      parseTagFlatColumnKey(key) ||
-      isRecordLinkField(field, key) ||
-      isViewCatalogField(key) ||
-      chrome?.cells?.[key]
-    ) {
-      if (key === 'usage' && !(Number(row[key]) > 0)) return <span className="traj-usage-empty">—</span>
-      return renderCell(row, key, field, 'table')
-    }
-    if (key === 'fields' && collectionPath === TAGS_COLLECTION_PATH) {
-      return <TagFieldChips value={row[key]} />
-    }
-    const text = cellValueText(row, key, field)
-    return text ? <span>{text}</span> : null
-  }
-
-  function paintLiveCell(row: DbRecord, col: (typeof columns)[number], depth: number, hasKids: boolean, kidCount: number, rowKey: string, toolsArmed = true) {
-    const held = tableHoldRef.current
-    const paintSchema = held?.schema ?? schema
-    let cellPick = cellPickRef.current
-    const rangeSet = held ? null : cellRangeSetRef.current
-    if (held && held.nodes !== EMPTY_HOLD_NODES && !sheet && !embed && mode === 'table' && !detailId) {
-      const firstRow = held.nodes.find((item): item is Extract<TablePaintNode, { kind: 'row' }> => item.kind === 'row')
-      const heldKeys = tableNavKeys(held.columns as typeof columns)
-      const labelKey = paintSchema?.labelField
-      const targetKey = labelKey && heldKeys.includes(labelKey) ? labelKey : heldKeys[0]
-      cellPick = firstRow && targetKey ? { id: String(firstRow.row.id), key: targetKey, rowKey: firstRow.key } : null
-    } else if (held) {
-      cellPick = null
-    }
-    return (
-      <td
-        key={col.key}
-        data-col-key={col.key}
-        {...cellPickOf(row, col.key, col.field)}
-        className={[
-          tablePinColClass(col.key, paintSchema?.labelField, held?.freezeTitle ?? freezeTitle),
-          Boolean(cellPick && (cellPick.rowKey ? cellPick.rowKey === rowKey : cellPick.id === row.id) && cellPick.key === col.key)
-            ? col.field && cellFieldWritable(col.field)
-              ? 'is-cell-on'
-              : 'is-cell-on is-cell-ro'
-            : rangeSet?.has(tableCellRangeKey(row.id, col.key))
-              ? 'is-cell-range'
-              : '',
-        ].filter(Boolean).join(' ') || undefined}
-      >
-        {col.key === paintSchema?.labelField ? (
-          <RecordTitle
-            row={row}
-            label={String(row[paintSchema?.labelField ?? 'title'] ?? '')}
-            Title={chrome?.Title}
-            depth={depth}
-            hasKids={hasKids}
-            kidCount={kidCount}
-            treeOn={treeOn}
-            collapsed={collapsed[row.id] !== false}
-            onToggleCollapsed={() => {
-              const expanding = collapsed[row.id] !== false
-              captureTableFoldSnapshot()
-              setCollapsed((prev) => ({ ...prev, [row.id]: prev[row.id] === false }))
-              if (expanding) void loadTreeKids(String(row.id))
-            }}
-            tableIcon={currentTable?.view?.icon}
-            Icon={chrome?.Icon}
-            pick={recordPick(row)}
-            onOpenSplit={() => openRowSplit(row)}
-            onOpenRow={() => openRow(row)}
-            onWriteEmoji={(next) => void writePatch(row, { emoji: next })}
-            toolsArmed={toolsArmed}
-          />
-        ) : col.key === 'actions' ? (
-          renderRecordActions(row)
-        ) : (
-          <span className="fsdb-cell">{paintTableCell(row, col.key, col.field)}</span>
-        )}
-      </td>
-    )
-  }
-
   const columnsByKey = useMemo(() => new Map(columns.map((item) => [item.key, item])), [columns])
   const compositeCellKeys = useMemo(() => {
     const keys = new Set<string>()
@@ -3556,119 +3365,63 @@ export function CollectionBrowser({
     return keys
   }, [chrome?.cells])
 
-  function renderPaintCell(node: TablePaintNode, colKey: string) {
-    if (node.kind !== 'row') return null
-    const held = tableHoldRef.current
-    const col = held && held.nodes !== EMPTY_HOLD_NODES && held.columns.length
-      ? (held.columns as typeof columns).find((item) => item.key === colKey)
-      : columnsByKey.get(colKey)
-    if (!col) return null
-    return paintLiveCell(node.row, col, node.depth, node.hasKids, node.kidCount, node.key)
-  }
-
-  function renderPaintRow(node: TablePaintNode, cells: ReactNode) {
-    if (node.kind !== 'row') return renderPaintNode(node)
-    const row = node.row
-    return (
-      <tr
-        key={node.key}
-        data-record-id={row.id}
-        data-row-key={node.key}
-        className={row.id === detailId ? 'is-active' : undefined}
-        {...recordPick(row)}
-      >
-        {cells}
-      </tr>
-    )
-  }
-
-  function tableLiveRow(row: DbRecord, depth: number, hasKids: boolean, kidCount: number, rowKey: string, toolsArmed = true) {
-    const colWindow = colWindowRef.current
-    const held = tableHoldRef.current
-    const paintColumns = (
-      held && held.nodes !== EMPTY_HOLD_NODES && held.columns.length ? held.columns : columns
-    ) as typeof columns
-    const paintLiveTd = (col: (typeof columns)[number]) => paintLiveCell(row, col, depth, hasKids, kidCount, rowKey, toolsArmed)
-    return (
-      <tr
-        key={rowKey}
-        data-record-id={row.id}
-        data-row-key={rowKey}
-        className={row.id === detailId ? 'is-active' : undefined}
-        {...recordPick(row)}
-      >
-        {paintColumns.slice(0, colWindow.pin).map(paintLiveTd)}
-        {paintColPad(colWindow.padLeft, 'left')}
-        {paintColumns.slice(colWindow.start, colWindow.end).map(paintLiveTd)}
-        {paintColPad(colWindow.padRight, 'right')}
-        <td className="fsdb-col-fill" aria-hidden />
-      </tr>
-    )
-  }
-
-  function tableRecordRow(row: DbRecord, depth: number, hasKids: boolean, kidCount: number, rowKey: string) {
-    return tableLiveRow(row, depth, hasKids, kidCount, rowKey, true)
-  }
-
-  function tableBodyRows(rows: DbRecord[], keyPrefix = '') {
-    const listed = flattenRows(rows)
-    if (!listed.length) {
-      return (
-        <tr key="empty">
-          <td colSpan={tablePaintRef.current.colSpan} className="fsdb-empty">
-            {error ? '加载失败' : tableHoldRef.current?.nodes === EMPTY_HOLD_NODES ? '' : listReadySent.current ? '暂无记录' : ''}
-          </td>
-        </tr>
-      )
-    }
-    return <>{listed.map((item) => tableRecordRow(item.row, item.depth, item.hasKids, item.kidCount, `${keyPrefix}${item.row.id}`))}</>
-  }
-
-  function renderPaintNode(node: TablePaintNode) {
-    if (node.kind === 'empty') return tableBodyRows([])
-    if (node.kind === 'row') return tableRecordRow(node.row, node.depth, node.hasKids, node.kidCount, node.key)
-    if (node.kind === 'group-head') {
-      return (
-        <tr key={node.key} className="fsdb-group-row" data-group-key={node.groupKey}>
-          <td colSpan={tablePaintRef.current.colSpan}>
-            {renderGroupHead(node.groupKey, node.label)}
-          </td>
-        </tr>
-      )
-    }
-    const pages = Math.max(1, Math.ceil(node.count / pageSize))
-    const pageIndex = Math.min(node.pageIndex, pages - 1)
-    return (
-      <tr key={node.key} className="fsdb-group-pager" data-group-pager={node.groupKey}>
-        <td colSpan={tablePaintRef.current.colSpan}>
-          <div className="fsdb-pager">
-            <span className="fsdb-pager-meta">{node.count}</span>
-            <div className="fsdb-pager-nav">
-              <PagerSizeControl pageSize={pageSize} onChange={changePageSize} />
-              <button
-                type="button"
-                className="tasks-icon-btn"
-                aria-label="上一页"
-                disabled={pageIndex <= 0}
-                onClick={() => setGroupPages((prev) => ({ ...prev, [node.groupKey]: Math.max(0, pageIndex - 1) }))}
-              >
-                <UiGlyph icon="chevron-left" />
-              </button>
-              <button
-                type="button"
-                className="tasks-icon-btn"
-                aria-label="下一页"
-                disabled={(pageIndex + 1) * pageSize >= node.count}
-                onClick={() => setGroupPages((prev) => ({ ...prev, [node.groupKey]: pageIndex + 1 }))}
-              >
-                <UiGlyph icon="chevron-right" />
-              </button>
-            </div>
-          </div>
-        </td>
-      </tr>
-    )
-  }
+  const {
+    renderGroupHead,
+    paintHeadTh,
+    renderPaintCell,
+    renderPaintRow,
+    renderPaintNode,
+  } = createBrowserTablePaint({
+    collectionPath,
+    activeViewId,
+    routeViewId,
+    detailId,
+    mode,
+    sheet,
+    embed,
+    schema,
+    columns,
+    columnsByKey,
+    chrome,
+    currentTable,
+    tableIcons,
+    groupBy,
+    collapsedGroups,
+    setCollapsedGroups,
+    collapsed,
+    setCollapsed,
+    treeOn,
+    canCreate,
+    creatingGroup,
+    freezeTitle,
+    queryFields,
+    resizingCol,
+    pageSize,
+    error,
+    setGroupPages,
+    changePageSize,
+    tableHoldRef,
+    cellPickRef,
+    cellRangeSetRef,
+    colWindowRef,
+    tablePaintRef,
+    listReadySent,
+    captureTableFoldSnapshot,
+    groupCreateSeed,
+    createInGroup,
+    startColResize,
+    renderCell,
+    cellValueText,
+    cellPickOf,
+    cellFieldWritable,
+    recordPick,
+    renderRecordActions,
+    openRow,
+    openRowSplit,
+    writePatch,
+    loadTreeKids,
+    flattenRows,
+  })
 
   function applySorts(next: SortRule[]) {
     setSorts(next)

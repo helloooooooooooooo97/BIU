@@ -8,17 +8,18 @@ import { actionIcon, placedActions, visibleActions } from './fsdb-cells.tsx'
 export const RowCheck = memo(function RowCheck({
   id,
   ids,
-  pickedIds,
+  pickedIdSet,
   onTogglePicked,
 }: {
   id?: string
   ids?: string[]
-  pickedIds: string[]
+  pickedIdSet: ReadonlySet<string>
   onTogglePicked: (ids: string[], on: boolean) => void
 }) {
-  const list = id ? [id] : (ids ?? [])
-  const some = list.some((item) => pickedIds.includes(item))
-  const on = list.length > 0 && list.every((item) => pickedIds.includes(item))
+  const on = id
+    ? pickedIdSet.has(id)
+    : Boolean(ids && ids.length > 0 && ids.every((item) => pickedIdSet.has(item)))
+  const some = id ? on : Boolean(ids && ids.some((item) => pickedIdSet.has(item)))
   const marked = id ? on : some
   const header = !id
   return (
@@ -31,7 +32,7 @@ export const RowCheck = memo(function RowCheck({
       title={id ? (on ? '取消选择' : '选择') : some ? '取消选择' : '全选'}
       onClick={(event) => {
         event.stopPropagation()
-        onTogglePicked(list, header ? !some : !on)
+        onTogglePicked(id ? [id] : (ids ?? []), header ? !some : !on)
       }}
       onPointerDown={(event) => event.stopPropagation()}
     >
