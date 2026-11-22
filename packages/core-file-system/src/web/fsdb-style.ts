@@ -1367,7 +1367,8 @@ html:not(.dark) .fsdb-checkrow>svg,
 html:not(.dark) .fsdb-cellselect-menu svg{color:var(--biu-color-icon)}
 .tasks-table th.is-col-clickable{cursor:pointer;transition:background 120ms ease}
 .tasks-table th.is-col-clickable:hover,.tasks-table th.is-col-menu-open{background:var(--biu-color-bg-hover)}
-.fsdb-col-menu{width:236px;max-width:calc(100vw - 16px);padding:6px;border:1px solid var(--biu-color-border);border-radius:10px;background:var(--biu-color-bg-elevated,var(--biu-color-bg));box-shadow:var(--biu-shadow-popover,0 8px 28px rgba(0,0,0,.22));color:var(--biu-color-text);font-size:var(--biu-font-size-4);user-select:none}
+.fsdb-col-menu{width:236px;max-width:calc(100vw - 16px);padding:6px;border:1px solid var(--biu-color-border);border-radius:10px;background:var(--biu-color-bg-elevated,var(--biu-color-bg));box-shadow:var(--biu-shadow-popover,0 8px 28px rgba(0,0,0,.22));color:var(--biu-color-text);font-size:var(--biu-font-size-4);user-select:none;transition:width 180ms cubic-bezier(.22,1,.36,1)}
+.fsdb-col-menu.is-wide{width:340px}
 .fsdb-col-menu-head{display:flex;flex-direction:column;gap:6px;padding:2px 2px 4px}
 .fsdb-col-menu-namebox{display:flex;align-items:center;gap:6px;min-width:0;min-height:30px;padding:2px 6px;border:1px solid var(--biu-color-border);border-radius:6px;background:var(--biu-color-bg)}
 .fsdb-col-menu-namebox:focus-within{background:var(--biu-color-bg-hover)}
@@ -1416,6 +1417,25 @@ html:not(.dark) .fsdb-cellselect-menu svg{color:var(--biu-color-icon)}
 .fsdb-summary-td:hover .fsdb-summary-hint,.fsdb-summary-btn:focus-visible .fsdb-summary-hint{opacity:1}
 .fsdb-summary-label{color:var(--biu-color-text-subtle);font-size:11px;font-weight:400}
 .fsdb-summary-val{color:var(--biu-color-text);font-size:var(--biu-font-size-3);font-weight:var(--biu-font-weight-medium);font-variant-numeric:tabular-nums}
+.fsdb-col-view-sub{max-height:320px}
+.fsdb-col-view-entry{display:flex;flex-direction:column;gap:4px}
+.fsdb-col-view-row{display:flex;align-items:center;gap:2px;min-height:28px;border-radius:6px}
+.fsdb-col-view-row:hover{background:var(--biu-color-bg-hover)}
+.fsdb-col-view-pick{display:flex;align-items:center;gap:6px;flex:1;min-width:0;min-height:28px;padding:4px 8px;border:0;background:transparent;color:var(--biu-color-text);font:inherit;text-align:left;cursor:pointer}
+.fsdb-col-view-row.is-on .fsdb-col-view-pick{font-weight:var(--biu-font-weight-medium)}
+.fsdb-col-view-acts{display:inline-flex;align-items:center;gap:1px;flex:none;padding-right:4px}
+.fsdb-col-view-act{display:grid;place-items:center;width:22px;height:22px;border:0;border-radius:5px;padding:0;background:transparent;color:var(--biu-color-text-subtle);cursor:pointer}
+.fsdb-col-view-act:hover,.fsdb-col-view-act.is-on{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
+.fsdb-col-view-act.is-danger:hover{color:var(--biu-color-danger)}
+.fsdb-col-view-add{color:var(--biu-color-text-subtle)}
+.fsdb-col-view-add:hover{color:var(--biu-color-text)}
+.fsdb-col-view-editor{display:flex;flex-direction:column;gap:4px;padding:2px 4px 6px}
+.fsdb-col-view-code{width:100%;box-sizing:border-box;border:1px solid var(--biu-color-border);border-radius:6px;padding:6px 8px;background:var(--biu-color-bg);color:var(--biu-color-text);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:11.5px;line-height:1.45;resize:vertical;outline:none;user-select:text}
+.fsdb-col-view-code:focus{background:var(--biu-color-bg-hover)}
+.fsdb-col-view-status{display:flex;align-items:center;font-size:11px;padding:0 2px}
+.fsdb-col-view-ok{color:var(--biu-color-text-subtle)}
+.fsdb-col-view-fail{color:var(--biu-color-danger);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fsdb-col-sandbox-err{display:inline-flex;align-items:center;padding:1px 6px;border-radius:4px;font-size:11px;color:var(--biu-color-danger);background:color-mix(in srgb,var(--biu-color-danger) 12%,transparent)}
 .fsdb-member-panel{display:flex;flex-direction:column;gap:16px;margin-top:8px}
 .fsdb-member-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 @media (max-width:640px){.fsdb-member-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}

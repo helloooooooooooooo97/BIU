@@ -1,5 +1,6 @@
 import { isViewModeId, type ViewMode } from './fields.ts'
 import { normalizeColumnSummaries, type ColumnSummaryOp } from './column-summary.ts'
+import { normalizeColumnViews, type ColumnViewConfig } from './column-sandbox-model.ts'
 import { countFilterRules, filterTreeStateKey, normalizeSorts, resolveViewFilterTree, sortsStateKey, type FilterGroup, type SortRule } from '../query-logic.ts'
 
 export type GroupSortMode = 'manual' | 'asc' | 'desc'
@@ -33,6 +34,8 @@ export type SavedView = {
   columnWidths?: Record<string, number>
   /** 表格列统计方式，按字段 key。 */
   columnSummaries?: Record<string, ColumnSummaryOp>
+  /** 表格列属性沙箱视图配置，按字段 key。 */
+  columnViews?: Record<string, ColumnViewConfig>
   /** 工作区创建时写入的种子视图。与后来保存的视图同一套改名 / 筛选 / 删除规则。 */
   builtin?: boolean
   /** 本地最后修改时间（ms）。多窗口下用来丢弃比库里更旧的快照。 */
@@ -205,6 +208,7 @@ export function normalizeSavedView(view: SavedView): SavedView {
     pageSize: normalizePageSize(view.pageSize),
     columnWidths: normalizeColumnWidths(view.columnWidths),
     columnSummaries: normalizeColumnSummaries(view.columnSummaries),
+    columnViews: normalizeColumnViews(view.columnViews),
     builtin: Boolean(view.builtin),
     updatedAt: Number(view.updatedAt) || 0,
     rank: Number.isFinite(Number(view.rank)) ? Math.round(Number(view.rank)) : undefined,
@@ -251,7 +255,7 @@ export function normalizePageSize(value: unknown) {
 }
 
 export function viewStateKey(
-  view: Pick<SavedView, 'mode' | 'sortField' | 'sortDir' | 'sorts' | 'filters' | 'filterTree' | 'columns' | 'groupBy' | 'groupConfig' | 'tree' | 'wrap' | 'truncate' | 'freezeTitle' | 'query' | 'pageSize' | 'columnWidths' | 'columnSummaries'>,
+  view: Pick<SavedView, 'mode' | 'sortField' | 'sortDir' | 'sorts' | 'filters' | 'filterTree' | 'columns' | 'groupBy' | 'groupConfig' | 'tree' | 'wrap' | 'truncate' | 'freezeTitle' | 'query' | 'pageSize' | 'columnWidths' | 'columnSummaries' | 'columnViews'>,
 ) {
   return JSON.stringify({
     mode: view.mode,
@@ -271,6 +275,7 @@ export function viewStateKey(
     pageSize: normalizePageSize(view.pageSize),
     columnWidths: normalizeColumnWidths(view.columnWidths),
     columnSummaries: normalizeColumnSummaries(view.columnSummaries),
+    columnViews: normalizeColumnViews(view.columnViews),
   })
 }
 

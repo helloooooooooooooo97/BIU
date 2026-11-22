@@ -5,11 +5,16 @@ import {
   CalculatorIcon,
   CheckIcon,
   ChevronRightIcon,
+  CodeBracketIcon,
+  CodeBracketSquareIcon,
   EyeSlashIcon,
   FunnelIcon,
   InformationCircleIcon,
   LockClosedIcon,
+  PlusIcon,
+  SparklesIcon,
   Squares2X2Icon,
+  TrashIcon,
 } from '@heroicons/react/16/solid'
 import { computeFloatingPosition } from '@biu/biu-ui/floating-position'
 import { overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
@@ -19,6 +24,13 @@ import {
   summaryOpsForKind,
   type ColumnSummaryOp,
 } from './column-summary.ts'
+import {
+  askAgentEditColumnSandbox,
+  compileColumnSandbox,
+  defaultColumnSandboxCode,
+  type ColumnSandboxItem,
+  type ColumnViewConfig,
+} from './column-sandbox-view.tsx'
 import { parseTagFlatColumnKey, tagColumnHeadLabel } from './fields.ts'
 import { FieldGlyph } from './fsdb-cells.tsx'
 import { persistTags, tagFieldLabelOk } from './tag-catalog.ts'
@@ -38,6 +50,9 @@ export type ColumnHeaderMenuTarget = {
 
 export type ColumnHeaderMenuProps = {
   target: ColumnHeaderMenuTarget
+  collectionPath: string
+  activeViewId: string | null
+  activeViewName?: string
   tagCatalog: CollectionSchemaPack[]
   isTitle: boolean
   canHide: boolean
@@ -48,17 +63,22 @@ export type ColumnHeaderMenuProps = {
   activeGrouped: boolean
   freezeTitle: boolean
   summaryOp: ColumnSummaryOp
+  columnView?: ColumnViewConfig
   onClose: () => void
   onFilter: (colKey: string) => void
   onSort: (colKey: string, dir: 'asc' | 'desc' | null) => void
   onGroup: (colKey: string) => void
   onSummary: (colKey: string, op: ColumnSummaryOp) => void
+  onChangeColumnView: (colKey: string, next: ColumnViewConfig | undefined) => void
   onToggleFreeze: () => void
   onHide: (colKey: string) => void
 }
 
 export function ColumnHeaderMenu({
   target,
+  collectionPath,
+  activeViewId,
+  activeViewName,
   tagCatalog,
   isTitle,
   canHide,
@@ -69,11 +89,13 @@ export function ColumnHeaderMenu({
   activeGrouped,
   freezeTitle,
   summaryOp,
+  columnView,
   onClose,
   onFilter,
   onSort,
   onGroup,
   onSummary,
+  onChangeColumnView,
   onToggleFreeze,
   onHide,
 }: ColumnHeaderMenuProps) {
@@ -90,7 +112,9 @@ export function ColumnHeaderMenu({
   const [nameError, setNameError] = useState('')
   const [descDraft, setDescDraft] = useState(initialDesc)
   const [descOpen, setDescOpen] = useState(Boolean(initialDesc))
-  const [sub, setSub] = useState<'sort' | 'calculate' | null>(mode === 'summary' ? 'calculate' : null)
+  const [sub, setSub] = useState<'sort' | 'calculate' | 'views' | null>(mode === 'summary' ? 'calculate' : null)
+  const [editingSandboxId, setEditingSandboxId] = useState<string | null>(null)
+  const [codeDraft, setCodeDraft] = useState('')
 
   const popRef = useRef<HTMLDivElement>(null)
   const descInputRef = useRef<HTMLInputElement>(null)
@@ -181,10 +205,50 @@ export function ColumnHeaderMenu({
   const summaryOptions = summaryOpsForKind(col.kind)
   const showInfoButton = editableTagField || Boolean(initialDesc)
 
+  const viewItems = columnView?.items ?? []
+  const activeViewKey = columnView?.activeId ?? 'default'
+  const activeSandbox = activeViewKey !== 'default' ? viewItems.find((item) => item.id === activeViewKey) ?? null : null
+  const editingSandbox = editingSandboxId ? viewItems.find((item) => item.id === editingSandboxId) ?? null : null
+  const compileCheck = editingSandbox ? compileColumnSandbox(codeDraft) : null
+
+  function selectSandboxView(nextId: string) {
+    if (!viewItems.length) {
+      onChangeColumnView(col.key, undefined)
+      return
+    }
+    onChangeColumnView(col.key, { activeId: nextId, items: viewItems })
+  }
+
+  function addSandboxView() {
+    const id = `sv-${Date.now().toString(36)}`
+    const name = `沙箱视图 ${viewItems.length + 1}`
+    const code = defaultColumnSandboxCode({ key: col.key, label: initialName, kind: col.kind })
+    const created: ColumnSandboxItem = { id, name, code }
+    onChangeColumnView(col.key, { activeId: id, items: [...viewItems, created] })
+  }
+
+  function removeSandboxView(id: string) {
+    const rest = viewItems.filter((item) => item.id !== id)
+    if (editingSandboxId === id) setEditingSandboxId(null)
+    if (!rest.length) {
+      onChangeColumnView(col.key, undefined)
+      return
+    }
+    const nextActive = activeViewKey === id ? 'default' : activeViewKey
+    onChangeColumnView(col.key, { activeId: nextActive, items: rest })
+  }
+
+  function saveSandboxCode(id: string, nextCode: string) {
+    onChangeColumnView(col.key, {
+      activeId: activeViewKey,
+      items: viewItems.map((item) => (item.id === id ? { ...item, code: nextCode } : item)),
+    })
+  }
+
   const menu = (
       <div
         ref={popRef}
-        className="fsdb-col-menu"
+        className={`fsdb-col-menu${editingSandbox ? ' is-wide' : ''}`}
         data-testid="fsdb-col-header-menu"
         style={{ position: 'fixed', left: pos.left, top: pos.top, zIndex: overlayZ(1) }}
         onPointerDown={(event) => event.stopPropagation()}
@@ -437,6 +501,144 @@ export function ColumnHeaderMenu({
                   </div>
                 </div>
               </div>
+
+              {!isTitle ? (
+                <>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    aria-expanded={sub === 'views'}
+                    className={`fsdb-col-menu-item${sub === 'views' || activeSandbox ? ' is-on' : ''}`}
+                    onClick={() => setSub((prev) => (prev === 'views' ? null : 'views'))}
+                  >
+                    <CodeBracketSquareIcon aria-hidden className="size-3.5 fsdb-col-menu-ico" />
+                    <span className="fsdb-col-menu-item-label">属性视图</span>
+                    <span className="fsdb-col-menu-meta">{activeSandbox ? activeSandbox.name : '默认视图'}</span>
+                    <ChevronRightIcon
+                      aria-hidden
+                      className={`size-3.5 fsdb-col-menu-chev sidebar-chevron${sub === 'views' ? ' is-open' : ''}`}
+                    />
+                  </button>
+                  <div className={`fsdb-inline-fold${sub === 'views' ? ' is-open' : ''}`} aria-hidden={sub !== 'views'}>
+                    <div className="fsdb-inline-fold-inner">
+                      <div className="fsdb-col-menu-sub fsdb-col-view-sub">
+                        <button
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={activeViewKey === 'default'}
+                          className={`fsdb-col-menu-item${activeViewKey === 'default' ? ' is-on' : ''}`}
+                          onClick={() => selectSandboxView('default')}
+                        >
+                          <span className="fsdb-col-menu-item-label">默认视图</span>
+                          {activeViewKey === 'default' ? <CheckIcon aria-hidden className="size-3.5 fsdb-col-menu-check" /> : null}
+                        </button>
+                        {viewItems.map((item) => {
+                          const active = activeViewKey === item.id
+                          const editing = editingSandboxId === item.id
+                          return (
+                            <div key={item.id} className="fsdb-col-view-entry">
+                              <div className={`fsdb-col-view-row${active ? ' is-on' : ''}`}>
+                                <button
+                                  type="button"
+                                  role="menuitemradio"
+                                  aria-checked={active}
+                                  className="fsdb-col-view-pick"
+                                  onClick={() => selectSandboxView(item.id)}
+                                >
+                                  <span className="fsdb-col-menu-item-label">{item.name}</span>
+                                  {active ? <CheckIcon aria-hidden className="size-3.5 fsdb-col-menu-check" /> : null}
+                                </button>
+                                <div className="fsdb-col-view-acts">
+                                  <button
+                                    type="button"
+                                    className="fsdb-col-view-act"
+                                    aria-label={`让 Agent 修改 ${item.name}`}
+                                    data-dock-tip="让 Agent 修改"
+                                    onClick={() => {
+                                      askAgentEditColumnSandbox({
+                                        collectionPath,
+                                        viewId: activeViewId,
+                                        viewName: activeViewName,
+                                        columnKey: col.key,
+                                        columnLabel: initialName,
+                                        kind: col.kind,
+                                        sandbox: item,
+                                      })
+                                      onClose()
+                                    }}
+                                  >
+                                    <SparklesIcon aria-hidden className="size-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`fsdb-col-view-act${editing ? ' is-on' : ''}`}
+                                    aria-label={`编辑 ${item.name} 代码`}
+                                    data-dock-tip={editing ? '收起代码' : '编辑代码'}
+                                    onClick={() => {
+                                      if (editing) {
+                                        setEditingSandboxId(null)
+                                      } else {
+                                        setEditingSandboxId(item.id)
+                                        setCodeDraft(item.code)
+                                      }
+                                    }}
+                                  >
+                                    <CodeBracketIcon aria-hidden className="size-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="fsdb-col-view-act is-danger"
+                                    aria-label={`删除 ${item.name}`}
+                                    data-dock-tip="删除"
+                                    onClick={() => removeSandboxView(item.id)}
+                                  >
+                                    <TrashIcon aria-hidden className="size-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                              {editing ? (
+                                <div className="fsdb-col-view-editor">
+                                  <textarea
+                                    className="fsdb-col-view-code"
+                                    value={codeDraft}
+                                    spellCheck={false}
+                                    rows={8}
+                                    aria-label={`${item.name} 代码`}
+                                    onChange={(event) => {
+                                      const nextCode = event.target.value
+                                      setCodeDraft(nextCode)
+                                      saveSandboxCode(item.id, nextCode)
+                                    }}
+                                  />
+                                  <div className="fsdb-col-view-status">
+                                    {compileCheck?.ok ? (
+                                      <span className="fsdb-col-view-ok">编译正常 · 已实时应用</span>
+                                    ) : (
+                                      <span className="fsdb-col-view-fail" title={compileCheck?.error}>
+                                        {compileCheck?.error || '编译失败'}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          )
+                        })}
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="fsdb-col-menu-item fsdb-col-view-add"
+                          data-testid="fsdb-col-sandbox-add"
+                          onClick={addSandboxView}
+                        >
+                          <PlusIcon aria-hidden className="size-3.5 fsdb-col-menu-ico" />
+                          <span className="fsdb-col-menu-item-label">添加沙箱视图</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : null}
 
               {isTitle ? (
                 <button

@@ -471,7 +471,7 @@ function parseViewFilters(value: unknown): Record<string, string> {
   return {}
 }
 
-export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mode?: unknown; sortField?: unknown; sortDir?: unknown; sorts?: unknown; query?: unknown; groupBy?: unknown; groupConfig?: unknown; columns?: unknown; filters?: unknown; filterTree?: unknown; tree?: unknown; wrap?: unknown; truncate?: unknown; freezeTitle?: unknown; pageSize?: unknown; columnWidths?: unknown; columnSummaries?: unknown; rank?: unknown; updatedAt?: unknown }): SavedView | null {
+export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mode?: unknown; sortField?: unknown; sortDir?: unknown; sorts?: unknown; query?: unknown; groupBy?: unknown; groupConfig?: unknown; columns?: unknown; filters?: unknown; filterTree?: unknown; tree?: unknown; wrap?: unknown; truncate?: unknown; freezeTitle?: unknown; pageSize?: unknown; columnWidths?: unknown; columnSummaries?: unknown; columnViews?: unknown; rank?: unknown; updatedAt?: unknown }): SavedView | null {
   const id = String(row.viewId ?? '').trim()
   if (!id) return null
   const sortDir = row.sortDir === 'desc' ? 'desc' : 'asc'
@@ -498,6 +498,7 @@ export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mo
     pageSize: normalizePageSize(row.pageSize),
     columnWidths: row.columnWidths as Record<string, number> | undefined,
     columnSummaries: row.columnSummaries as SavedView['columnSummaries'],
+    columnViews: row.columnViews as SavedView['columnViews'],
     builtin: false,
     rank: Number.isFinite(Number(row.rank)) ? Math.round(Number(row.rank)) : undefined,
     updatedAt: Number(row.updatedAt) || 0,
@@ -809,6 +810,7 @@ const DISPLAY_KEYS = [
   'pageSize',
   'columnWidths',
   'columnSummaries',
+  'columnViews',
   'filterTree',
   'rank',
 ] as const

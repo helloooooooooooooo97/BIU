@@ -155,6 +155,7 @@ import { createBrowserMutations } from './use-browser-mutations.ts'
 import { buildTableIconLookup, createBrowserTablePaint } from './browser-table-paint.tsx'
 import { BrowserRecordStage } from './browser-record-stage.tsx'
 import { normalizeColumnSummaries, type ColumnSummaryOp } from './column-summary.ts'
+import { normalizeColumnViews, type ColumnViewConfig } from './column-sandbox-model.ts'
 import { ColumnHeaderMenu, type ColumnHeaderMenuTarget } from './column-header-menu.tsx'
 import { KeyedSerialQueue, PendingFieldPatchTracker } from './record-write-queue.ts'
 import { ViewSyncController } from './view-sync-controller.ts'
@@ -544,6 +545,9 @@ export function CollectionBrowser({
   const [columnSummaries, setColumnSummaries] = useState<Record<string, ColumnSummaryOp>>(
     () => normalizeColumnSummaries(initialView?.columnSummaries) ?? {},
   )
+  const [columnViews, setColumnViews] = useState<Record<string, ColumnViewConfig>>(
+    () => normalizeColumnViews(initialView?.columnViews) ?? {},
+  )
   const [colHeaderMenu, setColHeaderMenu] = useState<ColumnHeaderMenuTarget | null>(null)
   const [resizingCol, setResizingCol] = useState<string | null>(null)
   const [cellPop, setCellPop] = useState<(TableCellCursor & { seed?: string }) | null>(null)
@@ -826,6 +830,7 @@ export function CollectionBrowser({
       )
       setColumnWidths(normalizeColumnWidths(view.columnWidths))
       setColumnSummaries(normalizeColumnSummaries(view.columnSummaries) ?? {})
+      setColumnViews(normalizeColumnViews(view.columnViews) ?? {})
       setGroupBy(view.groupBy ?? '')
       setGroupConfig(normalizeGroupConfig(view.groupConfig))
       setShowTree(view.tree !== false)
@@ -1258,6 +1263,7 @@ export function CollectionBrowser({
         )
         setColumnWidths(normalizeColumnWidths(view.columnWidths))
       setColumnSummaries(normalizeColumnSummaries(view.columnSummaries) ?? {})
+      setColumnViews(normalizeColumnViews(view.columnViews) ?? {})
         setGroupBy(pendingView.groupBy)
         setGroupConfig(normalizeGroupConfig(view.groupConfig))
         setShowTree(Boolean(view.tree))
@@ -1550,6 +1556,7 @@ export function CollectionBrowser({
         )
         setColumnWidths(normalizeColumnWidths(next.columnWidths))
         setColumnSummaries(normalizeColumnSummaries(next.columnSummaries) ?? {})
+        setColumnViews(normalizeColumnViews(next.columnViews) ?? {})
         setGroupBy(next.groupBy ?? '')
         setGroupConfig(normalizeGroupConfig(next.groupConfig))
         setShowTree(next.tree !== false)
@@ -2124,7 +2131,7 @@ export function CollectionBrowser({
   const checkStackRef = useRef<HTMLDivElement>(null)
   const checkHoverRef = useRef<string | 'head' | null>(null)
   const columnPinCount = tablePinCount(columns.map((col) => col.key), schema?.labelField, freezeTitle)
-  const tableResetKey = `${activeViewId ?? ''}\0${collectionPath}\0${groupBy}\0${page}\0${pageSize}\0${query}`
+  const tableResetKey = `${activeViewId ?? ''}\0${collectionPath}\0${groupBy}\0${page}\0${pageSize}\0${query}\0${JSON.stringify(columnViews)}`
   const checkLayoutExtra = [
     grouping ? 1 : 0,
     page,
@@ -2562,6 +2569,7 @@ export function CollectionBrowser({
     setColumnKeys(nextColumns)
     setColumnWidths(normalizeColumnWidths(next.columnWidths))
         setColumnSummaries(normalizeColumnSummaries(next.columnSummaries) ?? {})
+        setColumnViews(normalizeColumnViews(next.columnViews) ?? {})
     setGroupBy(nextGroup)
     setGroupConfig(normalizeGroupConfig(next.groupConfig))
     setShowTree(Boolean(next.tree))
@@ -3441,6 +3449,7 @@ export function CollectionBrowser({
     queryFields,
     resizingCol,
     columnSummaries,
+    columnViews,
     openColMenuKey: colHeaderMenu?.col.key ?? null,
     onOpenColMenu: (target) => {
       setColHeaderMenu((prev) =>
@@ -3515,6 +3524,7 @@ export function CollectionBrowser({
       pageSize,
       columnWidths,
       columnSummaries,
+      columnViews,
     })
     if (viewStateKey(current) === viewStateKey(next)) return
     persistViewDisplay(collectionPath, next.id, next)
@@ -3566,6 +3576,7 @@ export function CollectionBrowser({
     columnKeys,
     columnWidths,
     columnSummaries,
+    columnViews,
     filters,
     filterTree,
     groupBy,
@@ -4004,6 +4015,9 @@ export function CollectionBrowser({
       {colHeaderMenu ? (
         <ColumnHeaderMenu
           target={colHeaderMenu}
+          collectionPath={collectionPath}
+          activeViewId={activeViewId}
+          activeViewName={activeView?.name}
           tagCatalog={tagCatalog}
           isTitle={colHeaderMenu.col.key === (schema?.labelField ?? 'title')}
           canHide={colHeaderMenu.col.key !== (schema?.labelField ?? 'title') && colHeaderMenu.col.key !== 'actions'}
@@ -4014,7 +4028,17 @@ export function CollectionBrowser({
           activeGrouped={groupBy === colHeaderMenu.col.key}
           freezeTitle={freezeTitle}
           summaryOp={columnSummaries[colHeaderMenu.col.key] ?? 'none'}
+          columnView={columnViews[colHeaderMenu.col.key]}
           onClose={() => setColHeaderMenu(null)}
+          onChangeColumnView={(colKey, nextCfg) => {
+            setColumnViews((prev) => {
+              const next = { ...prev }
+              if (!nextCfg || !nextCfg.items.length) delete next[colKey]
+              else next[colKey] = nextCfg
+              if (!sheet && activeViewId) patchActiveView({ columnViews: normalizeColumnViews(next) })
+              return next
+            })
+          }}
           onFilter={(colKey) => {
             const targetField = filterFields.find((item) => item.key === colKey)
             if (targetField) {

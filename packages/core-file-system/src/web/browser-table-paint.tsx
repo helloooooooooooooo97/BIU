@@ -5,11 +5,13 @@ import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { tagTone as schemaTagTone } from '@biu/biu-ui/tag-chip'
 import { TagFieldChips } from './schema-field.tsx'
 import { computeColumnSummary, type ColumnSummaryOp } from './column-summary.ts'
+import { activeColumnSandboxItem, ColumnSandboxCell, type ColumnViewConfig } from './column-sandbox-view.tsx'
 import type { ColumnHeaderMenuTarget } from './column-header-menu.tsx'
 import {
   columnHeadTip,
   isRecordLinkField,
   parseTagFlatColumnKey,
+  readTagFlatValue,
   resolveFieldType,
   tagColumnHeadLabel,
   type ViewMode,
@@ -78,6 +80,7 @@ export type BrowserTablePaintDeps = {
   queryFields: ReadonlySet<string>
   resizingCol: string | null
   columnSummaries: Record<string, ColumnSummaryOp>
+  columnViews: Record<string, ColumnViewConfig>
   openColMenuKey: string | null
   onOpenColMenu?: (target: ColumnHeaderMenuTarget) => void
   pageSize: number
@@ -134,6 +137,7 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
     queryFields,
     resizingCol,
     columnSummaries,
+    columnViews,
     openColMenuKey,
     onOpenColMenu,
     pageSize,
@@ -296,6 +300,20 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
   }
 
   function paintTableCell(row: DbRecord, key: string, field: FieldSpec) {
+    const activeSandbox = activeColumnSandboxItem(columnViews[key])
+    if (activeSandbox) {
+      const rawValue = parseTagFlatColumnKey(key) ? readTagFlatValue(row, key) : row[key]
+      return (
+        <ColumnSandboxCell
+          code={activeSandbox.code}
+          value={rawValue}
+          row={row}
+          columnKey={key}
+          label={field.label ?? key}
+          kind={resolveFieldType(field)}
+        />
+      )
+    }
     if (key === 'shareScope' || key === 'shareRole') {
       return renderCell(row, key, field, 'table')
     }

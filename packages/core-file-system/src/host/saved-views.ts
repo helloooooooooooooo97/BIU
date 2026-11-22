@@ -5,6 +5,8 @@ import type { CollectionInfo, CollectionSpec, DbRecord } from '@biu/type-file-sy
 import { normalizeSchemaValue, recordBuiltinValues } from '@biu/type-file-system'
 import { builtinAllView, builtinAllViewId, isReadOnlyViewId } from '../catalog-views.ts'
 import { normalizeColumnWidths, normalizeGroupConfig, normalizePageSize, parseViewColumns, type SavedView } from '../web/saved-view.ts'
+import { normalizeColumnSummaries } from '../web/column-summary.ts'
+import { normalizeColumnViews } from '../web/column-sandbox-model.ts'
 import { isViewModeId } from '../web/fields.ts'
 import { DATA_COLLECTION_PATH, VIEWS_COLLECTION_PATH, normalizeCollectionPath } from '../paths.ts'
 import { isIndexCollection } from '../web/database-path.ts'
@@ -308,6 +310,8 @@ export class SavedViewsStore {
       freezeTitle: Boolean(fields.freezeTitle),
       pageSize: normalizePageSize(fields.pageSize),
       columnWidths: normalizeColumnWidths(fields.columnWidths),
+      columnSummaries: normalizeColumnSummaries(parseJsonValue(fields.columnSummaries) ?? fields.columnSummaries),
+      columnViews: normalizeColumnViews(fields.columnViews),
       rank: Number.isFinite(Number(fields.rank)) ? Math.round(Number(fields.rank)) : views.length,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -376,6 +380,8 @@ export class SavedViewsStore {
         ...(typeof patch.truncate === 'boolean' ? { truncate: patch.truncate } : {}),
         ...(typeof patch.freezeTitle === 'boolean' ? { freezeTitle: patch.freezeTitle } : {}),
         ...('columnWidths' in patch ? { columnWidths: normalizeColumnWidths(patch.columnWidths) } : {}),
+        ...('columnSummaries' in patch ? { columnSummaries: normalizeColumnSummaries(parseJsonValue(patch.columnSummaries) ?? patch.columnSummaries) } : {}),
+        ...('columnViews' in patch ? { columnViews: normalizeColumnViews(patch.columnViews) } : {}),
         ...(Number.isFinite(Number(patch.rank)) ? { rank: Math.round(Number(patch.rank)) } : {}),
         ...('emoji' in patch ? { emoji: String(patch.emoji ?? '') } : {}),
         ...('tag' in patch ? { tag: normalizeSchemaValue(patch.tag) } : {}),
@@ -495,6 +501,8 @@ function asRecord(path: string, tableName: string, view: StoredView, tableIcon?:
     pageSize: normalizePageSize(view.pageSize),
     columns: parseViewColumns(view.columns),
     columnWidths: view.columnWidths ?? {},
+    columnSummaries: view.columnSummaries ?? {},
+    columnViews: view.columnViews ?? {},
     rank: Number.isFinite(Number(view.rank)) ? Math.round(Number(view.rank)) : 0,
     filters: JSON.stringify(filters),
     sorts: JSON.stringify(sorts.map((item) => ({ field: item.field, dir: item.dir }))),
@@ -532,6 +540,8 @@ export function clientViewFromDbRow(row: Record<string, unknown> | undefined) {
     freezeTitle: Boolean(row.freezeTitle),
     pageSize: normalizePageSize(row.pageSize),
     columnWidths: row.columnWidths,
+    columnSummaries: normalizeColumnSummaries(parseJsonValue(row.columnSummaries) ?? row.columnSummaries),
+    columnViews: normalizeColumnViews(row.columnViews),
     builtin: false,
     rank: Number.isFinite(Number(row.rank)) ? Math.round(Number(row.rank)) : undefined,
   }
@@ -586,6 +596,8 @@ export function viewsCollection(
         },
         filters: { type: 'string', label: '筛选', writable: true, description: VIEW_FILTERS_DESCRIPTION },
         filterTree: { type: 'string', label: '筛选树', writable: true, description: VIEW_FILTER_TREE_DESCRIPTION },
+        columnSummaries: { type: 'string', label: '列统计', writable: true, description: '每列底部统计方式，JSON 对象：{ "<columnKey>": "sum"|"avg"|"count"|... }' },
+        columnViews: { type: 'string', label: '属性视图', writable: true, description: '每列的属性沙箱视图，JSON 对象：{ "<columnKey>": { activeId, items: [{ id, name, code }] } }，code 为 export default function Cell({ value, row, columnKey, label, kind }) 的 JSX 代码。' },
       },
     },
     list,
