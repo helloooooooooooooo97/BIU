@@ -309,3 +309,42 @@ test('setInheritanceMode toggles inherit vs custom while preserving parent link'
   assert.equal(auth.inheritanceInfo(page('child')).mode, 'inherit')
   assert.equal(auth.authorize(actor(bob.id), 'resource:update', page('child')).allowed, true)
 })
+
+test('preloadCollection caches memberViewMatcher and short-circuits unmatched actor view grants', () => {
+  const { store, auth, ada, bob, actor, page, workspace } = setup()
+  for (let i = 0; i < 30; i += 1) {
+    auth.attach(actor(ada.id), page(`doc-${i}`), { accessMode: 'private' })
+  }
+  store.grantViewMemberView(ada.id, '/pages', 'v-public', 'mv-team', 'editor')
+
+  let memberMatcherCalls = 0
+  let dataMatcherCalls = 0
+  auth.setMemberViewMatcher((_ws, viewId, accountId) => {
+    memberMatcherCalls += 1
+    return viewId === 'mv-team' && accountId === bob.id
+  })
+  auth.setDataViewMatcher((_ws, _col, viewId, _recordId, ctx) => {
+    dataMatcherCalls += 1
+    return viewId === 'v-public' && ctx.record?.tag === 'public'
+  })
+
+  // Bob 命中 mv-team：30 行扫描，memberViewMatcher 只算 1 次
+  auth.preloadCollection(workspace.id, '/pages', bob.id)
+  for (let i = 0; i < 30; i += 1) {
+    auth.authorize(actor(bob.id), 'resource:read', { ...page(`doc-${i}`), record: { tag: 'public' } })
+  }
+  auth.releaseCollection(workspace.id, '/pages', bob.id)
+  assert.equal(memberMatcherCalls, 1)
+  assert.equal(dataMatcherCalls, 30)
+
+  // Ada 不命中 mv-team：30 行扫描，dataViewMatcher 0 次调用（预过滤后 O(1) 短路）
+  memberMatcherCalls = 0
+  dataMatcherCalls = 0
+  auth.preloadCollection(workspace.id, '/pages', ada.id)
+  for (let i = 0; i < 30; i += 1) {
+    auth.authorize(actor(ada.id), 'resource:read', { ...page(`doc-${i}`), record: { tag: 'public' } })
+  }
+  auth.releaseCollection(workspace.id, '/pages', ada.id)
+  assert.equal(memberMatcherCalls, 1)
+  assert.equal(dataMatcherCalls, 0)
+})

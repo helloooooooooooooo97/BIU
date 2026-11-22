@@ -159,7 +159,9 @@ export class DatabaseAccessPolicy {
   private ownerCache: { key: string; map: Map<string, string> } | null = null
   private viewAudienceCache: {
     key: string
-    rows: Array<{ view_id: string; subject_type: 'account' | 'member_view'; subject_id: string; granted_by?: string; member_kind: string }>
+    grants: Array<{ viewId: string; subjectType: 'account' | 'member_view'; subjectId: string; memberKind?: string; grantedBy?: string }>
+    dataViews: Array<{ id: string; filters?: Record<string, unknown> }>
+    memberViews: Array<{ id: string; filters?: Record<string, unknown> }>
   } | null = null
   private viewShareCache: { key: string; views: SharedViewDef[] } | null = null
   private recordShareCache: { key: string; ids: Set<string> } | null = null
@@ -497,11 +499,13 @@ export class DatabaseAccessPolicy {
   hasPublicShare(collection: string, id: string, record?: DbRecord, stored?: DataScopeName) {
     if (this.recordShareIds(collection).has(id)) return true
     if (!record || !stored) return false
+    const views = this.sharedViewsFor(collection)
+    if (!views.length) return false
     const spec = this.host.collection(collection)
     const tagged = spec ? this.host.applyTagOverlay(spec, record) : record
     const schema = spec ? this.host.schemaFor(spec) : undefined
     const packs: CollectionSchemaPack[] = this.host.tags.list()
-    return this.sharedViewsFor(collection).some((view) => recordMatchesSharedView(tagged, view, stored, schema, packs))
+    return views.some((view) => recordMatchesSharedView(tagged, view, stored, schema, packs))
   }
 
   effectiveScope(collection: string, record: DbRecord, stored: DataScopeName): DataScopeName {
@@ -509,39 +513,45 @@ export class DatabaseAccessPolicy {
     const workspaceId = store?.activeWorkspaceId?.() || currentRequestWorkspaceId() || ''
     if (!workspaceId) return stored
     const key = `${workspaceId}\t${collection}`
-    const grantRows = store?.viewGrantAudiences?.(workspaceId, collection)
-      ?? store?.viewGrantsFor?.(workspaceId, collection)?.map((row) => ({
-        view_id: row.view_id,
-        subject_type: row.subject_type,
-        subject_id: row.subject_id,
-        granted_by: row.granted_by,
-        member_kind: '',
-      }))
-      ?? []
     if (!this.viewAudienceCache || this.viewAudienceCache.key !== key) {
-      this.viewAudienceCache = { key, rows: grantRows }
-    }
-    const memberViews = [
-      builtinAllView({ path: WORKSPACE_MEMBERS_COLLECTION_PATH }),
-      ...builtinMemberViews(),
-      ...(this.host.viewCatalog?.viewsFor(WORKSPACE_MEMBERS_COLLECTION_PATH) ?? []),
-    ]
-    const dataViews = [
-      builtinAllView({ path: collection }),
-      ...(this.host.viewCatalog?.viewsFor(collection) ?? []),
-    ]
-    return effectiveDataScope(
-      stored,
-      record,
-      this.viewAudienceCache.rows.map((row) => ({
+      const grantRows = store?.viewGrantAudiences?.(workspaceId, collection)
+        ?? store?.viewGrantsFor?.(workspaceId, collection)?.map((row) => ({
+          view_id: row.view_id,
+          subject_type: row.subject_type,
+          subject_id: row.subject_id,
+          granted_by: row.granted_by,
+          member_kind: '',
+        }))
+        ?? []
+      const grants = grantRows.map((row) => ({
         viewId: row.view_id,
         subjectType: row.subject_type,
         subjectId: row.subject_id,
         memberKind: row.member_kind,
         grantedBy: row.granted_by,
-      })),
-      dataViews,
-      memberViews,
+      }))
+      const memberViews = grants.length
+        ? [
+            builtinAllView({ path: WORKSPACE_MEMBERS_COLLECTION_PATH }),
+            ...builtinMemberViews(),
+            ...(this.host.viewCatalog?.viewsFor(WORKSPACE_MEMBERS_COLLECTION_PATH) ?? []),
+          ]
+        : []
+      const dataViews = grants.length
+        ? [
+            builtinAllView({ path: collection }),
+            ...(this.host.viewCatalog?.viewsFor(collection) ?? []),
+          ]
+        : []
+      this.viewAudienceCache = { key, grants, dataViews, memberViews }
+    }
+    if (!this.viewAudienceCache.grants.length) return stored
+    return effectiveDataScope(
+      stored,
+      record,
+      this.viewAudienceCache.grants,
+      this.viewAudienceCache.dataViews,
+      this.viewAudienceCache.memberViews,
       this.recordOwner(collection, String(record.id ?? '')),
     )
   }

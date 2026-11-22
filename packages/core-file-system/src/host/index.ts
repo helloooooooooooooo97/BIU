@@ -2271,9 +2271,23 @@ export function apply(ctx: Context) {
       },
     )
   })
+  const dataViewCache = new Map<string, ReturnType<typeof savedViews.viewsFor>>()
+  const clearDataViewCache = () => {
+    dataViewCache.clear()
+  }
+  account?.authorization?.onInvalidate?.(clearDataViewCache)
+  const origNotifyViewCatalog = db.notifyViewCatalog.bind(db)
+  db.notifyViewCatalog = (path?: string) => {
+    clearDataViewCache()
+    origNotifyViewCatalog(path)
+  }
   account?.authorization?.setDataViewMatcher((_workspaceId, collection, viewId, recordId, context) => {
     if (!context.record) return false
-    const saved = [builtinAllView({ path: collection }), ...savedViews.viewsFor(collection)]
+    let saved = dataViewCache.get(collection)
+    if (!saved) {
+      saved = [builtinAllView({ path: collection }), ...savedViews.viewsFor(collection)] as ReturnType<typeof savedViews.viewsFor>
+      dataViewCache.set(collection, saved)
+    }
     return recordMatchesGrantedView(
       { id: recordId, ...context.record } as DbRecord,
       viewId,

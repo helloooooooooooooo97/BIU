@@ -103,6 +103,8 @@ type CollectionScan = {
   owners: Map<string, string>
   grants: Map<string, ScanGrant[]>
   viewGrants: ScanViewGrant[]
+  actorViewGrants: ScanViewGrant[]
+  memberViewCache: Map<string, boolean>
   groups: Set<string>
   membership: WorkspaceRole | null
   membershipKind: 'member' | 'external' | 'guest'
@@ -258,6 +260,19 @@ export class AuthorizationService {
     } catch {
       viewGrants = []
     }
+    const memberViewCache = new Map<string, boolean>()
+    const matchMemberViewCached = (viewId: string) => {
+      const hit = memberViewCache.get(viewId)
+      if (hit !== undefined) return hit
+      const matched = Boolean(this.memberViewMatcher?.(workspaceId, viewId, accountId))
+      memberViewCache.set(viewId, matched)
+      return matched
+    }
+    const actorViewGrants = viewGrants.filter((grant) =>
+      grant.subject_type === 'account'
+        ? grant.subject_id === accountId
+        : matchMemberViewCached(grant.subject_id),
+    )
     this.scans.set(key, {
       refs: 1,
       workspaceId,
@@ -267,6 +282,8 @@ export class AuthorizationService {
       owners,
       grants,
       viewGrants,
+      actorViewGrants,
+      memberViewCache,
       groups,
       membership: this.readMembership(accountId, workspaceId),
       membershipKind: this.readMembershipKind(accountId, workspaceId),
@@ -283,6 +300,15 @@ export class AuthorizationService {
   }
 
   matchesMemberView(workspaceId: string, viewId: string, accountId: string) {
+    for (const scan of this.scans.values()) {
+      if (scan.workspaceId === workspaceId && scan.accountId === accountId) {
+        const hit = scan.memberViewCache.get(viewId)
+        if (hit !== undefined) return hit
+        const matched = Boolean(this.memberViewMatcher?.(workspaceId, viewId, accountId))
+        scan.memberViewCache.set(viewId, matched)
+        return matched
+      }
+    }
     return Boolean(this.memberViewMatcher?.(workspaceId, viewId, accountId))
   }
 
@@ -740,8 +766,10 @@ export class AuthorizationService {
     if (!this.dataViewMatcher) return null
     const scan = this.scans.get(collectionScanKey(resource.workspaceId, resource.collection, accountId))
     let rows: ScanViewGrant[]
+    let prefiltered = false
     if (scan) {
-      rows = scan.viewGrants
+      rows = scan.actorViewGrants
+      prefiltered = true
     } else {
       try {
         rows = this.db
@@ -762,10 +790,12 @@ export class AuthorizationService {
     const scope = this.resourceScope(resource, new Set(), 0)
     const roles: ResourceRole[] = []
     for (const grant of rows) {
-      const subjectMatches = grant.subject_type === 'account'
-        ? grant.subject_id === accountId
-        : this.matchesMemberView(resource.workspaceId, grant.subject_id, accountId)
-      if (!subjectMatches) continue
+      if (!prefiltered) {
+        const subjectMatches = grant.subject_type === 'account'
+          ? grant.subject_id === accountId
+          : this.matchesMemberView(resource.workspaceId, grant.subject_id, accountId)
+        if (!subjectMatches) continue
+      }
       const matched = this.dataViewMatcher(
         resource.workspaceId,
         resource.collection,
@@ -789,7 +819,7 @@ export class AuthorizationService {
     const rows = scan ? this.scanGrantsFor(scan, resource.recordId) : this.queryDirectGrants(accountId, resource)
     const matched = rows.filter((row) =>
       row.subject_type !== 'member_view'
-      || Boolean(this.memberViewMatcher?.(resource.workspaceId, row.subject_id, accountId)),
+      || this.matchesMemberView(resource.workspaceId, row.subject_id, accountId),
     )
     const role = maxRole(matched.map((row) => row.role))
     if (!role) return null
