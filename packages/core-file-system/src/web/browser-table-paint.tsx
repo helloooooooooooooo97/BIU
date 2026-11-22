@@ -27,8 +27,8 @@ import { isViewCatalogField } from './view-catalog.ts'
 export type BrowserTableColumn = {
   key: string
   field: FieldSpec
-  label: string
   kind: FieldType
+  label?: string
   tagPackId?: string
   tagLabel?: string
 }
@@ -58,7 +58,7 @@ export type BrowserTablePaintDeps = {
   mode: ViewMode
   sheet: boolean
   embed: boolean
-  schema: CollectionSchema | null
+  schema?: CollectionSchema | null
   columns: BrowserTableColumn[]
   columnsByKey: ReadonlyMap<string, BrowserTableColumn>
   chrome?: CollectionChrome
@@ -89,10 +89,10 @@ export type BrowserTablePaintDeps = {
   groupCreateSeed: (groupKey: string) => Record<string, unknown> | null
   createInGroup: (groupKey: string) => Promise<void>
   startColResize: (event: ReactPointerEvent<HTMLElement>, key: string) => void
-  renderCell: (row: DbRecord, key: string, field: FieldSpec, place: 'table' | 'detail' | 'card') => ReactNode
+  renderCell: (row: DbRecord, key: string, field: FieldSpec, surface?: 'table' | 'detail') => ReactNode
   cellValueText: (row: DbRecord, key: string, field: FieldSpec) => string
-  cellPickOf: (row: DbRecord, key: string, field?: FieldSpec) => Record<string, string>
-  cellFieldWritable: (field?: FieldSpec) => boolean
+  cellPickOf: (row: DbRecord, key: string, field: FieldSpec) => Record<string, string | undefined>
+  cellFieldWritable: (field: FieldSpec) => boolean
   recordPick: (row: DbRecord) => Record<string, string>
   renderRecordActions: (row: DbRecord) => ReactNode
   openRow: (row: DbRecord) => void

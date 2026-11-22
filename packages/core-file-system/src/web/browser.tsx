@@ -656,7 +656,7 @@ export function CollectionBrowser({
   const openRowSplit = (row: DbRecord) => {
     const jump = chrome?.openRow?.(row)
     const fromData = isDataOverview || crumbFromData
-    if (fromData) setViaDataCrumbs(true, isDataOverview ? activeViewId : viaDataViewId())
+    if (fromData) setViaDataCrumbs(true, isDataOverview ? (activeViewId ?? undefined) : viaDataViewId())
     if (jump && jump.kind === 'record') {
       showRecordInInspector(jump.collection ?? collectionPath, jump.recordId, fromData ? undefined : activeViewId, nested ? { newTab: true } : undefined)
       return
@@ -740,7 +740,7 @@ export function CollectionBrowser({
   adoptListCacheForViewRef.current = (path, view) => {
     const cached = view ? peekBrowserCache(path, view.id, normalizePageSize(view.pageSize)) : undefined
     if (cached) {
-      const snap = listHoldFromCache(cached, view, path)
+      const snap = listHoldFromCache(cached, view ?? null, path)
       tableHoldRef.current = snap
       releaseHoldOnPaintRef.current = snap.nodes !== EMPTY_HOLD_NODES
       pendingPathQueryRef.current = null
@@ -759,7 +759,7 @@ export function CollectionBrowser({
       releaseHoldOnPaintRef.current = false
       return
     }
-    tableHoldRef.current = tablePaintSnapshotRef.current ?? emptyListHold(tablePaintSnapshotRef.current, view, path)
+    tableHoldRef.current = tablePaintSnapshotRef.current ?? emptyListHold(tablePaintSnapshotRef.current, view ?? null, path)
     releaseHoldOnPaintRef.current = false
   }
   const holdNavRef = useRef<(path: string, viewId?: string) => void>(() => undefined)
@@ -835,7 +835,7 @@ export function CollectionBrowser({
       setGroupBuckets(cached.groupBuckets ?? [])
       setGroupPages({})
       setGroupFillKeys([])
-      setCollapsedGroups(loadCollapsedGroups(dataPath, next.id, next.groupBy ?? ''))
+      setCollapsedGroups(loadCollapsedGroups(dataPath, next?.id ?? '', next?.groupBy ?? ''))
       setCollapsed({})
       setTreeKidsByParent({})
       treeKidsInflight.current = new Set()
@@ -1792,7 +1792,7 @@ export function CollectionBrowser({
     paintHeadTh: () => null,
     onPointerDown: undefined,
     onPointerMove: undefined,
-    onClick: undefined,
+    onClick: () => undefined,
     onKeyDown: undefined,
     onMouseOver: undefined,
   })

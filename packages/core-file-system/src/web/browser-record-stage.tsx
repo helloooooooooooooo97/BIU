@@ -28,7 +28,7 @@ function SharePanel(props: ComponentProps<typeof LazySharePanel>) {
 export type BrowserRecordStageProps = {
   detailId: string | null
   selected: DbRecord | null
-  schema: CollectionSchema | null
+  schema?: CollectionSchema
   listChrome: ReactNode
   error: string
   customView?: CollectionViewType
@@ -46,7 +46,7 @@ export type BrowserRecordStageProps = {
   pickMode: boolean
   tableResetKey: string
   pickedCount: number
-  checkLayoutExtra: number
+  checkLayoutExtra: string
   tablePaintRef: RefObject<TablePaintBag>
   tableChromeRef: RefObject<TableChromeBag>
   colWindowRef: RefObject<TableColumnSlice>
@@ -60,7 +60,7 @@ export type BrowserRecordStageProps = {
   renderCheckRow: (id: string) => ReactNode
   checkStore: TableCheckStore
   onVisibleRange: (start: number, end: number) => void
-  retainedCell: { id: string; key: string; rowKey: string } | null
+  retainedCell: { id: string; key: string; rowKey?: string } | null
   preserveMountedRows: boolean
   grouping: boolean
   total: number
@@ -70,16 +70,16 @@ export type BrowserRecordStageProps = {
   changePageSize: (next: number) => void
   openRow: (row: DbRecord) => void
   isDataOverview: boolean
-  chrome: CollectionChrome
+  chrome?: CollectionChrome
   draft: Record<string, string>
-  detailBody: string
-  detailBodyStatus: 'idle' | 'loading' | 'ready' | 'error'
+  detailBody: unknown
+  detailBodyStatus: 'loading' | 'failed' | 'ready'
   detailBodyError: string
   refreshOpenDetail: () => void
   labelOf: (row: DbRecord) => string
-  renderCell: (row: DbRecord, key: string, field: FieldSpec, place: 'table' | 'detail' | 'card') => ReactNode
+  renderCell: (row: DbRecord, key: string, field: FieldSpec, surface?: 'table' | 'detail') => ReactNode
   setDraft: Dispatch<SetStateAction<Record<string, string>>>
-  writeOne: (row: DbRecord, key: string, value: unknown) => Promise<void>
+  writeOne: (row: DbRecord, key: string, field: FieldSpec, raw: string) => Promise<void>
   writePatch: (row: DbRecord, patch: Record<string, unknown>) => Promise<void>
   currentTable?: CollectionInfo
   collectionPath: string
@@ -292,10 +292,10 @@ export const BrowserRecordStage = memo(function BrowserRecordStage(props: Browse
             ? {
                 ...chrome,
                 ...getDatabaseUi()?.chrome(String(selected.tablePath ?? '')),
-                openRow: chrome.openRow,
-                listViews: chrome.listViews,
-                cells: chrome.cells,
-                Actions: chrome.Actions,
+                openRow: chrome?.openRow,
+                listViews: chrome?.listViews,
+                cells: chrome?.cells,
+                Actions: chrome?.Actions,
               }
             : chrome
         }
@@ -312,7 +312,7 @@ export const BrowserRecordStage = memo(function BrowserRecordStage(props: Browse
         tableIcon={currentTable?.view?.icon}
         readOnly={
           (collectionPath === PLUGINS_COLLECTION_PATH && selected.builtin === true && selected.canManagePackage !== true) ||
-          (selected.shareRole === '阅读' && !localData && selected.canManagePackage !== true)
+          ((selected.shareRole === '查看' || selected.shareRole === '阅读') && !localData && selected.canManagePackage !== true)
         }
         actionProperty={rowActionColumn ? renderRecordActions(selected) : null}
         share={

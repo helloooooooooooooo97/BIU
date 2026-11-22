@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, type ReactNode, type RefObject } from 'react'
+import { lazy, memo, Suspense, type ReactElement, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ArrowDownTrayIcon,
@@ -21,7 +21,7 @@ import { emitFsdbChange, type CollectionInfo, type CollectionSchema, type DbReco
 import type { CollectionRowViewType, CollectionViewType } from '@biu/type-file-system/ui'
 import { collectionNoun } from '../catalog-views.ts'
 import { savedViewRecordPath } from '../paths.ts'
-import { countFilterRules, type FilterGroup, type GroupConfig, type SortRule } from '../query-logic.ts'
+import { countFilterRules, type FilterGroup, type SortRule } from '../query-logic.ts'
 import type { BrowserDialogState } from './browser-dialogs.tsx'
 import { askNewPlugin, askNewPresentation } from './browser-row-title.tsx'
 import { CheckRow, LocalText } from './controls.tsx'
@@ -31,9 +31,10 @@ import type { GroupBucket, ViewMode } from './fields.ts'
 import { ModeGlyph, VIEW_MODES } from './fsdb-cells.tsx'
 import { TableGlyph, UiGlyph, ViewModeGlyph } from './nav-glyphs.tsx'
 import { PageBanner } from './page-banner.tsx'
+import type { QueryField } from './query-menus.tsx'
 import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search.tsx'
 import { ViewOrderMenu } from './view-order-menu.tsx'
-import type { SavedView } from './view-storage.ts'
+import type { GroupConfig, SavedView } from './saved-view.ts'
 
 const SortQueryMenu = lazy(() => import('./query-menus.tsx').then((m) => ({ default: m.SortQueryMenu })))
 const FilterQueryMenu = lazy(() => import('./query-menus.tsx').then((m) => ({ default: m.FilterQueryMenu })))
@@ -101,15 +102,15 @@ export type BrowserListChromeProps = {
   setSortMenuOpen: (open: boolean) => void
   sortCustom: boolean
   sorts: SortRule[]
-  sortFields: Array<{ key: string; field: FieldSpec }>
+  sortFields: QueryField[]
   applySorts: (next: SortRule[]) => void
   filterRef: RefObject<HTMLDivElement | null>
   filterOpen: boolean
   setFilterOpen: (open: boolean) => void
   filterActive: boolean
   filterTree: FilterGroup
-  filterFields: Array<{ key: string; field: FieldSpec }>
-  filterValueOptions: (key: string) => string[]
+  filterFields: QueryField[]
+  filterValueOptions: (field: QueryField) => { value: string; label: string }[]
   applyFilterTree: (next: FilterGroup) => void
   groupRef: RefObject<HTMLDivElement | null>
   groupOpen: boolean
@@ -119,18 +120,18 @@ export type BrowserListChromeProps = {
   groupBy: string
   groupConfig?: GroupConfig
   panelGroups: GroupBucket[]
-  groupFields: Array<{ key: string; field: FieldSpec }>
+  groupFields: QueryField[]
   setGroupKey: (next: string) => void
   setGroupSettings: (next: GroupConfig | undefined) => void
   columnRef: RefObject<HTMLDivElement | null>
   columnMenuOpen: boolean
   setColumnMenuOpen: (open: boolean) => void
-  renderVisibleColumnsFlyout: () => ReactNode
+  renderVisibleColumnsFlyout: () => ReactElement
   configRef: RefObject<HTMLDivElement | null>
   configOpen: boolean
   setConfigOpen: (open: boolean) => void
   schema?: CollectionSchema
-  parentKey?: string
+  parentKey?: string | null
   wrapCells: boolean
   setWrap: (next: boolean) => void
   truncateCells: boolean
@@ -154,8 +155,8 @@ export type BrowserListChromeProps = {
   overviewCreateTables: CollectionInfo[]
   createScopeOpen: boolean
   setCreateScopeOpen: (next: boolean | ((open: boolean) => boolean)) => void
-  createScope: 'personal' | 'workspace' | 'shared'
-  setCreateScope: (next: 'personal' | 'workspace' | 'shared') => void
+  createScope: 'personal' | 'workspace' | 'shared' | 'local'
+  setCreateScope: (next: 'personal' | 'workspace' | 'shared' | 'local') => void
   localData: boolean
 }
 

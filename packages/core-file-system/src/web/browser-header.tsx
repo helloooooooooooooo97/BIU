@@ -1,7 +1,9 @@
 import { lazy, memo, Suspense, type ComponentProps, type RefObject } from 'react'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import type { DbRecord } from '@biu/type-file-system'
-import { CrumbTrail, type CrumbItem, type CrumbTarget } from './crumb-trail.tsx'
+import { CrumbTrail } from './crumb-trail.tsx'
+import type { Crumb, CrumbTarget } from './sidebar-nav.ts'
+import type { SavedView } from './saved-view.ts'
 import {
   PLUGINS_COLLECTION_PATH,
   isIndexCollection,
@@ -14,7 +16,6 @@ import {
   getStarredViews,
   persistStarredViews,
   toggleStarredView,
-  type SavedView,
 } from './view-storage.ts'
 
 const LazyShareButton = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareButton })))
@@ -56,7 +57,7 @@ export const BrowserHeader = memo(function BrowserHeader({
   onCloseLayout,
 }: {
   sidebarGone: boolean
-  crumbs: CrumbItem[]
+  crumbs: Crumb[]
   canCreate: boolean
   collectionPath: string
   views: SavedView[]

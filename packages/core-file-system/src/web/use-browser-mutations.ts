@@ -4,6 +4,7 @@ import {
   type CollectionActionInfo,
   type CollectionInfo,
   type CollectionSchema,
+  type CollectionSchemaPack,
   type DbRecord,
   type FieldSpec,
 } from '@biu/type-file-system'
@@ -32,7 +33,6 @@ import { seedGroupRecord } from './group-create.ts'
 import { rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import type { KeyedSerialQueue, PendingFieldPatchTracker } from './record-write-queue.ts'
 import type { TableEditHistory } from './table-edit-history.ts'
-import type { TagPack } from './tag-catalog.ts'
 import { persistCollapsedGroups } from './view-storage.ts'
 
 export type BrowserMutationsOptions = {
@@ -56,7 +56,7 @@ export type BrowserMutationsOptions = {
   detailRowRef: MutableRefObject<DbRecord | null>
   setDetailRow: Dispatch<SetStateAction<DbRecord | null>>
   setDetailBody: Dispatch<SetStateAction<unknown>>
-  setDetailBodyStatus: Dispatch<SetStateAction<'idle' | 'loading' | 'ready' | 'error'>>
+  setDetailBodyStatus: Dispatch<SetStateAction<'loading' | 'failed' | 'ready'>>
   setDetailBodyError: Dispatch<SetStateAction<string>>
   activeViewId: string | null
   activeViewIdRef: MutableRefObject<string | null>
@@ -72,9 +72,9 @@ export type BrowserMutationsOptions = {
   catalogLocks: Record<string, string>
   filterTree: FilterGroup
   queryFiltersRef: MutableRefObject<Record<string, unknown>>
-  tagCatalog: TagPack[]
-  tagCatalogRef: MutableRefObject<TagPack[]>
-  createScope: 'personal' | 'workspace' | 'shared'
+  tagCatalog: CollectionSchemaPack[]
+  tagCatalogRef: MutableRefObject<CollectionSchemaPack[]>
+  createScope: 'personal' | 'workspace' | 'shared' | 'local'
   createTypeTable?: CollectionInfo
   overviewCreateTables: CollectionInfo[]
   pickedIds: string[]
@@ -398,7 +398,7 @@ export function createBrowserMutations(opts: BrowserMutationsOptions) {
       })
       announceListChange()
       quietUntil.current = Date.now() + 2000
-      if (isDataOverview) setViaDataCrumbs(true, activeViewId)
+      if (isDataOverview) setViaDataCrumbs(true, activeViewId ?? undefined)
       if (activeViewId && !isDataOverview) rememberInspectorWorkingView(targetPath, activeViewId)
       window.setTimeout(() => {
         showRecordInInspector(targetPath, sourceId, isDataOverview ? undefined : activeViewId)

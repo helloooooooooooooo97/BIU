@@ -1,10 +1,10 @@
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
 import { emitFsdbChange } from '@biu/type-file-system'
 import { isReadOnlyViewId, viewsForScope, type DataScope } from '../catalog-views.ts'
-import type { FilterGroup, GroupConfig, SortRule } from '../query-logic.ts'
+import type { FilterGroup, SortRule } from '../query-logic.ts'
 import type { ViewMode } from './fields.ts'
 import { FSDB_CRUMB_LABELS_EVENT } from './fsdb-events.ts'
-import { canRemoveCollectionView, type SavedView } from './saved-view.ts'
+import { canRemoveCollectionView, type GroupConfig, type SavedView } from './saved-view.ts'
 import {
   activeViewStorageKey,
   diffSavedViews,
