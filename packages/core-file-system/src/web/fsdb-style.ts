@@ -453,7 +453,8 @@ const CSS = `
 .fsdb-page .tasks-table td:has(.fsdb-title-host),.fsdb-page .tasks-table th{overflow:visible}
 .fsdb-page .tasks-table tbody tr:hover{position:relative;z-index:6}
 .fsdb-page [data-dock-tip]::after{content:none;display:none}
-.fsdb-dock-tip{position:fixed;white-space:nowrap;padding:4px 8px;border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:6px;background:var(--biu-color-bg-subtle);color:var(--biu-color-text);font-size:11px;font-weight:var(--biu-font-weight-semibold);line-height:1.3;pointer-events:none;box-shadow:var(--biu-shadow-md)}
+@keyframes fsdb-tip-in{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:none}}
+.fsdb-dock-tip{position:fixed;width:max-content;max-width:min(280px,calc(100vw - 24px));white-space:normal;overflow-wrap:anywhere;word-break:break-word;padding:5px 10px;border:var(--biu-stroke-width) solid color-mix(in srgb,var(--biu-color-border) 92%,transparent);border-radius:8px;background:color-mix(in srgb,var(--biu-color-bg-elevated,var(--biu-color-bg-subtle)) 96%,transparent);backdrop-filter:blur(8px);color:var(--biu-color-text);font-size:12px;font-weight:var(--biu-font-weight-medium,500);line-height:1.5;letter-spacing:.01em;pointer-events:none;box-shadow:0 6px 20px rgba(0,0,0,.24),0 1px 3px rgba(0,0,0,.14);animation:fsdb-tip-in 110ms cubic-bezier(.22,1,.36,1) both}
 .fsdb-page .tasks-table th{padding:6px 6px;color:var(--biu-color-text-muted);font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);position:sticky;top:0;background:var(--biu-color-surface);z-index:5;white-space:nowrap}
 .fsdb-main .tasks-table-wrap .tasks-table thead th{top:auto}
 .fsdb-main .tasks-table-wrap .tasks-table thead.is-pinned{position:relative;z-index:8}
