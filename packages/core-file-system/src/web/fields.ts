@@ -275,6 +275,16 @@ export function listProjectionKeys(opts: {
   return keys
 }
 
+export function hasMissingProjectedColumns(
+  loaded: ReadonlySet<string> | null | undefined,
+  requested?: string[],
+): boolean {
+  if (loaded === null) return false
+  if (!loaded) return true
+  if (!requested) return true
+  return requested.some((key) => !loaded.has(key))
+}
+
 export function tagFlatColumnKey(packId: string, fieldKey: string) {
   return `${TAG_FLAT_PREFIX}${packId}::${fieldKey}`
 }

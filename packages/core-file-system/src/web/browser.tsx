@@ -54,6 +54,7 @@ import {
   groupRecords,
   groupRowBucketKeys,
   groupableFields,
+  hasMissingProjectedColumns,
   isRecordLinkField,
   listProjectionKeys,
   overlayListed,
@@ -885,6 +886,9 @@ export function CollectionBrowser({
   const groupByRef = useRef(groupBy)
   groupByRef.current = groupBy
   const loadedIdentityRef = useRef('')
+  const loadedColumnsRef = useRef<Set<string> | null | undefined>(undefined)
+  const prevNonColumnReloadKeyRef = useRef('')
+  const loadTreeKidsRef = useRef<(parentId: string, force?: boolean) => Promise<void>>(async () => {})
   const loadedPagesRef = useRef<Record<string, number>>({})
   const sheetPackId = String(catalogLocks.tagId ?? '').trim()
   const sheetPack = useMemo(
@@ -1069,7 +1073,8 @@ export function CollectionBrowser({
   totalRef.current = total
   const treeParentKey = parentFieldKey(stat?.schema)
   const listIdentityKey = `${dataPath}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${customView ? 'full' : 'proj'}\0${groupBy}\0tree:${showTree && treeParentKey && dataPath !== DATA_COLLECTION_PATH ? treeParentKey : ''}`
-  const reloadKey = `${listIdentityKey}\0${groupBy ? JSON.stringify(groupPages) : page}\0${groupFillKeys.join('\0')}`
+  const nonColumnReloadKey = `${listIdentityKey}\0${groupBy ? JSON.stringify(groupPages) : page}\0${groupFillKeys.join('\0')}`
+  const reloadKey = `${nonColumnReloadKey}\0${listColumnsKey}`
   if (releaseHoldOnPaintRef.current && paintedPath === dataPath && tableHoldRef.current?.nodes !== EMPTY_HOLD_NODES) {
     releaseHoldOnPaintRef.current = false
     tableHoldRef.current = null
@@ -1308,6 +1313,7 @@ export function CollectionBrowser({
       loadedIdentityRef.current = pendingView
         ? `${dataPath}\0${reqPageSize}\0${pendingView.fetchQuery}\0${pendingView.sortField}\0${pendingView.sortDir}\0${sortsStateKey(pendingView.sorts)}\0${JSON.stringify(pendingView.queryFilters)}\0${pendingView.activeViewId}\0${customView ? 'full' : 'proj'}\0${pendingView.groupBy}`
         : listIdentityKey
+      loadedColumnsRef.current = reqColumns ? new Set(reqColumns) : null
       loadedPagesRef.current = { ...groupPagesRef.current }
       if (!listReadySent.current) listReadySent.current = true
       return true
@@ -1478,6 +1484,8 @@ export function CollectionBrowser({
     viewSyncRef.current!.clear()
     hydratePath.current = ''
     loadedIdentityRef.current = ''
+    loadedColumnsRef.current = undefined
+    prevNonColumnReloadKeyRef.current = ''
     loadedPagesRef.current = {}
     hydratedDetail.current = ''
     confirmedCreates.current = new Set()
@@ -1652,8 +1660,10 @@ export function CollectionBrowser({
   }, [routeRecordId])
 
   useEffect(() => {
+    const missingColumns = hasMissingProjectedColumns(loadedColumnsRef.current, listColumns)
     const needsLoad =
       loadedIdentityRef.current !== listIdentityKey ||
+      missingColumns ||
       Boolean(tableHoldRef.current) ||
       Boolean(pendingPathQueryRef.current) ||
       !listReadySent.current
@@ -1661,10 +1671,17 @@ export function CollectionBrowser({
       skipColumnReload.current = false
       if (!needsLoad) return
     }
+    if (!needsLoad && prevNonColumnReloadKeyRef.current === nonColumnReloadKey) return
     if (routeRecordId) return
     if (!routeViewReadyRef.current && !pendingPathQueryRef.current && !tableHoldRef.current) return
+    prevNonColumnReloadKeyRef.current = nonColumnReloadKey
     void reloadRef.current({ force: needsLoad, reuseGroups: !needsLoad })
-  }, [listIdentityKey, reloadKey, routeRecordId, routeViewReady])
+    if (missingColumns && showTree && treeParentKey && dataPath !== DATA_COLLECTION_PATH) {
+      for (const parentId of Object.keys(treeKidsByParentRef.current)) {
+        void loadTreeKidsRef.current(parentId, true)
+      }
+    }
+  }, [dataPath, listColumns, listColumnsKey, listIdentityKey, nonColumnReloadKey, routeRecordId, routeViewReady, showTree, treeParentKey])
 
   useLayoutEffect(() => {
     setOpenDetailId(routeRecordId)
@@ -1984,6 +2001,7 @@ export function CollectionBrowser({
     },
     [dataPath, listColumns, parentKey, sortDir, sortField, sorts, treeOn],
   )
+  loadTreeKidsRef.current = loadTreeKids
   const pickableIds = useMemo(() => {
     const rows = grouping ? grouped.flatMap((group) => group.rows) : visible
     return flattenRows(rows).map((item) => item.row.id)
