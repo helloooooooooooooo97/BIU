@@ -98,7 +98,7 @@ export function MemberActivityPane({
   openRecord,
 }: {
   record: DbRecord
-  openRecord?: (collection: string, recordId: string) => void
+  openRecord?: (recordId: string, collection?: string) => void
 }) {
   const [data, setData] = useState<MemberActivityPayload | null>(null)
   const [error, setError] = useState('')
@@ -325,7 +325,7 @@ export function MemberActivityPane({
                                 <button
                                   type="button"
                                   className="fsdb-member-record-link"
-                                  onClick={() => openRecord?.(item.collection, item.recordId)}
+                                  onClick={() => openRecord?.(item.recordId, item.collection)}
                                 >
                                   「{targetLabel}」
                                 </button>
@@ -368,7 +368,7 @@ export function MemberActivityPane({
                   <button
                     type="button"
                     className="fsdb-member-record-link"
-                    onClick={() => openRecord(grant.collection, grant.recordId)}
+                    onClick={() => openRecord(grant.recordId, grant.collection)}
                   >
                     {grant.collection}/{grant.recordId}
                   </button>

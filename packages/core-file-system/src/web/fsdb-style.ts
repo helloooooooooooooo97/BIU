@@ -1436,7 +1436,7 @@ html:not(.dark) .fsdb-cellselect-menu svg{color:var(--biu-color-icon)}
 .fsdb-col-view-ok{color:var(--biu-color-text-subtle)}
 .fsdb-col-view-fail{color:var(--biu-color-danger);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fsdb-col-sandbox-err{display:inline-flex;align-items:center;padding:1px 6px;border-radius:4px;font-size:11px;color:var(--biu-color-danger);background:color-mix(in srgb,var(--biu-color-danger) 12%,transparent)}
-.fsdb-member-panel{display:flex;flex-direction:column;gap:16px;margin-top:8px}
+.fsdb-member-panel{display:flex;flex-direction:column;gap:14px;margin-top:4px}
 .fsdb-member-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 @media (max-width:640px){.fsdb-member-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .fsdb-member-kpi{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:10px;background:color-mix(in srgb,var(--biu-color-bg-hover) 35%,transparent)}
