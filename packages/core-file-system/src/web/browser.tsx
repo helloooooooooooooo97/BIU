@@ -179,6 +179,7 @@ import {
   TAGS_COLLECTION_PATH,
   TRASH_COLLECTION_PATH,
   isIndexCollection,
+  isOverviewCreatableCollection,
   isSystemCollection,
 } from './database-path.ts'
 import {
@@ -1687,13 +1688,7 @@ export function CollectionBrowser({
   const subsetLocked = lockedFilterKeys.length > 0
   const isDataOverview = dataPath === DATA_COLLECTION_PATH
   const overviewCreateTables = useMemo(
-    () =>
-      tables.filter(
-        (table) =>
-          table.path !== DATA_COLLECTION_PATH &&
-          !isIndexCollection(table.path) &&
-          !isSystemCollection(table.path),
-      ),
+    () => tables.filter((table) => isOverviewCreatableCollection(table.path)),
     [tables],
   )
   const canCreate =

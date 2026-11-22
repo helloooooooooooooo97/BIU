@@ -1,7 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { parseAppPath } from '@biu/web-session-view'
-import { DATA_MODULE, databaseAllViewPath, databaseRecordPath, databaseViewPath, isIndexCollection, isRecordTreeCollection, isSystemCollection, sortDataCollections, viewsCatalogSource } from './database-path.ts'
+import { DATA_MODULE, databaseAllViewPath, databaseRecordPath, databaseViewPath, isIndexCollection, isOverviewCreatableCollection, isRecordTreeCollection, isSystemCollection, sortDataCollections, viewsCatalogSource } from './database-path.ts'
 
 const plugins = [DATA_MODULE]
 
@@ -108,4 +108,17 @@ test('members and views are system collections; blocks and tags are index data',
     system.map((item) => item.path),
     ['/workspace-members', '/notices', '/trash'],
   )
+})
+
+test('data overview create menu excludes plugins, comments, system and index collections', () => {
+  assert.equal(isOverviewCreatableCollection('/plugins'), false)
+  assert.equal(isOverviewCreatableCollection('/comments'), false)
+  assert.equal(isOverviewCreatableCollection('/data'), false)
+  assert.equal(isOverviewCreatableCollection('/tags'), false)
+  assert.equal(isOverviewCreatableCollection('/trash'), false)
+  assert.equal(isOverviewCreatableCollection('/pages'), true)
+  assert.equal(isOverviewCreatableCollection('/agents'), true)
+  assert.equal(isOverviewCreatableCollection('/tasks'), true)
+  assert.equal(isOverviewCreatableCollection('/mcp'), true)
+  assert.equal(isOverviewCreatableCollection('/skills'), true)
 })

@@ -2,6 +2,7 @@ import { buildAppPath, type AppRoute } from '@biu/web-session-view'
 import { builtinAllViewId } from '../catalog-views.ts'
 import {
   AGENTS_COLLECTION_PATH,
+  COMMENTS_COLLECTION_PATH,
   DATA_COLLECTION_PATH,
   EDITOR_BLOCKS_COLLECTION_PATH,
   MCP_COLLECTION_PATH,
@@ -20,6 +21,7 @@ import {
 
 export {
   AGENTS_COLLECTION_PATH,
+  COMMENTS_COLLECTION_PATH,
   DATA_COLLECTION_PATH,
   EDITOR_BLOCKS_COLLECTION_PATH,
   MCP_COLLECTION_PATH,
@@ -114,6 +116,18 @@ export function isSystemCollection(path: string) {
 export function isIndexCollection(path: string) {
   const normalized = normalizeCollectionPath(path)
   return (INDEX_COLLECTION_ORDER as readonly string[]).includes(normalized)
+}
+
+/** 全部数据「新建」菜单排除不可直接建行的表（插件需走 AI 创建，批注依附于文档正文）。 */
+export function isOverviewCreatableCollection(path: string) {
+  const normalized = normalizeCollectionPath(path)
+  return (
+    normalized !== DATA_COLLECTION_PATH &&
+    normalized !== PLUGINS_COLLECTION_PATH &&
+    normalized !== COMMENTS_COLLECTION_PATH &&
+    !isIndexCollection(normalized) &&
+    !isSystemCollection(normalized)
+  )
 }
 
 export function dataSidebarKind(path: string): 'user' | 'index' | 'system' {
