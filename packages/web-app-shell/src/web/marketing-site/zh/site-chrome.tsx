@@ -23,8 +23,9 @@ const NAV_BRAND_PX = 24
 const NAV_PRIMARY = [
   { label: '产品', to: '/product' },
   { label: '场景', to: '/use-cases' },
-  { label: '差异', to: '/compare' },
-  { label: '理念', to: '/blog' },
+  { label: '对比', to: '/compare' },
+  { label: '安全', to: '/security' },
+  { label: '博客', to: '/blog' },
   { label: '定价', to: '/pricing' },
 ] as const
 
@@ -83,10 +84,10 @@ const FOOTER_COLUMNS: ReadonlyArray<{ title: string; links: readonly FooterLink[
   {
     title: '了解',
     links: [
-      { label: '差异', to: '/compare' },
+      { label: '对比', to: '/compare' },
       { label: '安全', to: '/security' },
       { label: '文档', to: '/docs' },
-      { label: '理念', to: '/blog' },
+      { label: '博客', to: '/blog' },
       { label: '品牌', to: '/brand' },
       { label: '投资', to: '/invest' },
     ],

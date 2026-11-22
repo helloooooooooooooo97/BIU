@@ -23,8 +23,9 @@ const NAV_BRAND_PX = 24
 const NAV_PRIMARY = [
   { label: 'Product', to: '/product' },
   { label: 'Use Cases', to: '/use-cases' },
-  { label: 'Why BIU', to: '/compare' },
-  { label: 'Philosophy', to: '/blog' },
+  { label: 'Compare', to: '/compare' },
+  { label: 'Security', to: '/security' },
+  { label: 'Blog', to: '/blog' },
   { label: 'Pricing', to: '/pricing' },
 ] as const
 
@@ -83,10 +84,10 @@ const FOOTER_COLUMNS: ReadonlyArray<{ title: string; links: readonly FooterLink[
   {
     title: 'Resources',
     links: [
-      { label: 'Why BIU', to: '/compare' },
+      { label: 'Compare', to: '/compare' },
       { label: 'Security', to: '/security' },
       { label: 'Docs', to: '/docs' },
-      { label: 'Philosophy', to: '/blog' },
+      { label: 'Blog', to: '/blog' },
       { label: 'Brand', to: '/brand' },
       { label: 'Invest', to: '/invest' },
     ],
