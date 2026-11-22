@@ -1,9 +1,9 @@
 import { memo, type ReactNode } from 'react'
 import { CheckIcon } from '@heroicons/react/16/solid'
+import { BoolBox } from '@biu/biu-ui/bool-box'
 import type { CollectionActionInfo, CollectionSchema, DbRecord } from '@biu/type-file-system'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
-import { actionIcon, placedActions, visibleActions } from './actions.tsx'
-import { BoolBox } from './fsdb-cells.tsx'
+import { actionIcon, placedActions, visibleActions } from './fsdb-cells.tsx'
 
 export const RowCheck = memo(function RowCheck({
   id,

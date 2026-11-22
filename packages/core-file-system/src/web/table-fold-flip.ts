@@ -16,12 +16,14 @@ export function tableFoldRowKey(tr: Pick<TableFoldRowLike, 'dataset'>): string {
 }
 
 export function captureTableFoldSnapshot(
-  rows: Iterable<TableFoldRowLike> | null | undefined,
+  rows: ArrayLike<TableFoldRowLike> | null | undefined,
   reducedMotion = typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches),
 ): Map<string, number> | null {
   if (reducedMotion || !rows) return null
   const snap = new Map<string, number>()
-  for (const tr of rows) {
+  for (let i = 0; i < rows.length; i += 1) {
+    const tr = rows[i]
+    if (!tr) continue
     const key = tableFoldRowKey(tr)
     if (key) snap.set(key, tr.getBoundingClientRect().top)
   }
@@ -29,12 +31,13 @@ export function captureTableFoldSnapshot(
 }
 
 export function playTableFoldFlip(
-  rows: Iterable<TableFoldRowLike> | null | undefined,
+  rows: ArrayLike<TableFoldRowLike> | null | undefined,
   prev: Map<string, number> | null,
 ): void {
   if (!prev || !rows) return
-  for (const tr of rows) {
-    if (typeof tr.animate !== 'function') break
+  for (let i = 0; i < rows.length; i += 1) {
+    const tr = rows[i]
+    if (!tr || typeof tr.animate !== 'function') break
     const key = tableFoldRowKey(tr)
     if (!key) continue
     const oldTop = prev.get(key)
