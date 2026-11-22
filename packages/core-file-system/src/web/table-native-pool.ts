@@ -363,9 +363,11 @@ export class NativeRowPool {
   }
 
   private syncRowColumns(slot: PooledRowSlot, frame: NativePoolFrame) {
-    const sig = `${frame.pinCount}:${frame.padLeft > 0 ? 1 : 0}:${frame.padRight > 0 ? 1 : 0}\0${frame.visibleColKeys.join('\0')}`
-    if (frame.padLeft > 0) applyPadWidth(slot.padLeftTd, frame.padLeft)
-    if (frame.padRight > 0) applyPadWidth(slot.padRightTd, frame.padRight)
+    const sig = `${frame.pinCount}\0${frame.visibleColKeys.join('\0')}`
+    applyPadWidth(slot.padLeftTd, Math.max(0, frame.padLeft))
+    slot.padLeftTd.style.display = frame.padLeft > 0 ? '' : 'none'
+    applyPadWidth(slot.padRightTd, Math.max(0, frame.padRight))
+    slot.padRightTd.style.display = frame.padRight > 0 ? '' : 'none'
     if (slot.orderSig === sig) return
     slot.orderSig = sig
 
@@ -374,15 +376,24 @@ export class NativeRowPool {
     for (let i = 0; i < pinEnd; i += 1) {
       desired.push(this.getOrCreateCell(slot, frame.visibleColKeys[i]!).td)
     }
-    if (frame.padLeft > 0) desired.push(slot.padLeftTd)
+    desired.push(slot.padLeftTd)
     for (let i = pinEnd; i < frame.visibleColKeys.length; i += 1) {
       desired.push(this.getOrCreateCell(slot, frame.visibleColKeys[i]!).td)
     }
-    if (frame.padRight > 0) desired.push(slot.padRightTd)
+    desired.push(slot.padRightTd)
     desired.push(slot.fillTd)
 
     const tr = slot.tr
-    // Reorder/attach only when children differ
+    // Pass 1: detach only stale <td>s leaving the horizontal window so still-visible <td>s are NEVER moved.
+    const desiredSet = new Set<Element>(desired)
+    let child = tr.firstElementChild
+    while (child) {
+      const next = child.nextElementSibling
+      if (!desiredSet.has(child)) child.remove()
+      child = next
+    }
+
+    // Pass 2: insert only newly entering (or reordered) <td>s; all still-visible <td>s hit cursor === target.
     let cursor = tr.firstElementChild
     for (let i = 0; i < desired.length; i += 1) {
       const target = desired[i]!
@@ -391,11 +402,6 @@ export class NativeRowPool {
       } else {
         tr.insertBefore(target, cursor)
       }
-    }
-    while (cursor) {
-      const next = cursor.nextElementSibling
-      cursor.remove()
-      cursor = next
     }
   }
 
@@ -444,9 +450,10 @@ export class NativeRowPool {
       if (tr.dataset.rowTop !== topStr) tr.dataset.rowTop = topStr
       const transform = `translate3d(0, ${row.top}px, 0)`
       if (tr.style.transform !== transform) tr.style.transform = transform
-      const nextCls = row.active ? 'is-active' : ''
+      const isEnter = newlyActivated && row.delayMs > 0
+      const nextCls = [row.active ? 'is-active' : '', isEnter ? 'is-row-enter' : ''].filter(Boolean).join(' ')
       if (tr.className !== nextCls) tr.className = nextCls
-      if (newlyActivated && row.delayMs > 0) {
+      if (isEnter) {
         tr.style.setProperty('--fsdb-row-delay', `${row.delayMs}ms`)
       } else if (newlyActivated) {
         tr.style.removeProperty('--fsdb-row-delay')

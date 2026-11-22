@@ -208,6 +208,55 @@ describe('NativeRowPool unit tests', () => {
     table.remove()
   })
 
+  it('never moves still-visible <td> nodes when the horizontal column window shifts', () => {
+    const table = document.createElement('table')
+    const tbody = document.createElement('tbody')
+    table.appendChild(tbody)
+    document.body.appendChild(table)
+
+    const pool = new NativeRowPool(tbody)
+    const makeFrame = (cols: string[], padLeft: number, padRight: number): NativePoolFrame => ({
+      pinCount: 1,
+      padLeft,
+      padRight,
+      visibleColKeys: cols,
+      rows: [
+        {
+          key: 'r-0',
+          index: 0,
+          top: 0,
+          recordId: 'r-0',
+          active: false,
+          delayMs: 0,
+          cells: cols.map((colKey) => ({
+            colKey,
+            stamp: `t:${colKey}`,
+            describe: { spec: { kind: 'text', text: colKey } },
+          })),
+        },
+      ],
+    })
+
+    // Initial column slice: [A(pin), B, C, D, E]
+    pool.sync(makeFrame(['A', 'B', 'C', 'D', 'E'], 0, 200))
+    const tr = tbody.querySelector('tr')!
+    const movedNodes: Element[] = []
+    const origInsertBefore = tr.insertBefore.bind(tr)
+    vi.spyOn(tr, 'insertBefore').mockImplementation(((node: Node, child: Node | null) => {
+      if (node instanceof Element) movedNodes.push(node)
+      return origInsertBefore(node, child)
+    }) as typeof tr.insertBefore)
+
+    // Scroll right: B leaves, padLeft becomes 120, F enters; A, C, D, E stay visible!
+    pool.sync(makeFrame(['A', 'C', 'D', 'E', 'F'], 120, 100))
+
+    // Only the newly entering column F should be inserted; A, C, D, E must NEVER be moved!
+    expect(movedNodes.map((el) => el.getAttribute('data-col-key'))).toEqual(['F'])
+
+    pool.destroy()
+    table.remove()
+  })
+
   it('delegates writable native boolean clicks to onNativeBoolToggle without bubbling to table click', () => {
     const nodes = makeNodes(10)
     const toggled: Array<{ rowId: string; colKey: string }> = []

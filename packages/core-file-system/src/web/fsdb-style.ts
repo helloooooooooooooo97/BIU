@@ -368,8 +368,8 @@ const CSS = `
 .fsdb-page .tasks-table th,.fsdb-page .tasks-table.is-wrap th{white-space:nowrap}
 .fsdb-page .tasks-table td .fsdb-cell{width:100%;box-sizing:border-box}
 @keyframes fsdb-cell-in{from{opacity:.15}to{opacity:1}}
-.fsdb-page .tasks-table tbody tr[data-record-id] td > .fsdb-cell{animation:fsdb-cell-in 100ms ease-out var(--fsdb-row-delay,0ms) backwards}
-@media (prefers-reduced-motion:reduce){.fsdb-page .tasks-table tbody tr[data-record-id] td > .fsdb-cell{animation:none}}
+.fsdb-page .tasks-table tbody tr[data-record-id].is-row-enter td > .fsdb-cell{animation:fsdb-cell-in 100ms ease-out var(--fsdb-row-delay,0ms) backwards}
+@media (prefers-reduced-motion:reduce){.fsdb-page .tasks-table tbody tr[data-record-id].is-row-enter td > .fsdb-cell{animation:none}}
 .fsdb-page .tasks-table th.fsdb-col-pad,.fsdb-page .tasks-table td.fsdb-col-pad{padding:0;border:0;background:transparent}
 .fsdb-cell{display:flex;align-items:center;min-width:0;max-width:100%;min-height:18px;overflow:hidden;font-weight:var(--biu-font-weight-medium)}
 .fsdb-page .tasks-table:not(.is-wrap) .fsdb-cell > span:not(.fsdb-ref-chips):not(.biu-tags):not(.fsdb-person-list):not(.fsdb-files){min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
