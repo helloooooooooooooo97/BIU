@@ -48,6 +48,8 @@ test('data overview reuses CollectionBrowser and opens source records', () => {
     '\n' +
     readFileSync(resolve(import.meta.dirname, './browser-toolbar.tsx'), 'utf8') +
     '\n' +
+    readFileSync(resolve(import.meta.dirname, './use-browser-mutations.ts'), 'utf8') +
+    '\n' +
     readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   const host =
     readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8') +
