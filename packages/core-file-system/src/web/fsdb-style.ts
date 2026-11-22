@@ -769,7 +769,7 @@ const CSS = `
 .fsdb-schema-prop-info-btn{display:grid;place-items:center;flex:none;width:20px;height:20px;border:0;border-radius:4px;padding:0;background:transparent;color:var(--biu-color-text-subtle);cursor:pointer}
 .fsdb-schema-prop-info-btn:hover,.fsdb-schema-prop-info-btn.is-on{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
 .fsdb-schema-prop-desc{width:100%;box-sizing:border-box;border:1px solid var(--biu-color-border);border-radius:4px;padding:3px 6px;background:var(--biu-color-bg);color:var(--biu-color-text);font-size:var(--biu-font-size-3);font-weight:400;outline:none}
-.fsdb-schema-prop-desc:focus{border-color:var(--biu-color-accent)}
+.fsdb-schema-prop-desc:focus{background:var(--biu-color-bg-hover)}
 .fsdb-schema-prop-v{display:flex;align-items:center;gap:4px;min-width:0;width:100%;color:var(--biu-color-text-subtle)}
 .fsdb-schema-prop-type{display:inline-flex;align-items:center;gap:6px;min-width:0;color:var(--biu-color-text)}
 .fsdb-schema-prop-type .fsdb-field-glyph,.fsdb-schema-prop-type .fsdb-field-hero{color:var(--biu-color-icon)}
@@ -1370,14 +1370,14 @@ html:not(.dark) .fsdb-cellselect-menu svg{color:var(--biu-color-icon)}
 .fsdb-col-menu{width:236px;max-width:calc(100vw - 16px);padding:6px;border:1px solid var(--biu-color-border);border-radius:10px;background:var(--biu-color-bg-elevated,var(--biu-color-bg));box-shadow:var(--biu-shadow-popover,0 8px 28px rgba(0,0,0,.22));color:var(--biu-color-text);font-size:var(--biu-font-size-4);user-select:none}
 .fsdb-col-menu-head{display:flex;flex-direction:column;gap:6px;padding:2px 2px 4px}
 .fsdb-col-menu-namebox{display:flex;align-items:center;gap:6px;min-width:0;min-height:30px;padding:2px 6px;border:1px solid var(--biu-color-border);border-radius:6px;background:var(--biu-color-bg)}
-.fsdb-col-menu-namebox:focus-within{border-color:var(--biu-color-accent)}
+.fsdb-col-menu-namebox:focus-within{background:var(--biu-color-bg-hover)}
 .fsdb-col-menu-glyph{display:inline-flex;align-items:center;justify-content:center;flex:none;color:var(--biu-color-icon)}
 .fsdb-col-menu-nameinput{flex:1;min-width:0;border:0;padding:2px 0;background:transparent;color:var(--biu-color-text);font:inherit;font-weight:var(--biu-font-weight-medium);outline:none}
 .fsdb-col-menu-nametext{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:var(--biu-font-weight-medium);color:var(--biu-color-text)}
 .fsdb-col-menu-info{display:grid;place-items:center;flex:none;width:22px;height:22px;border:0;border-radius:5px;padding:0;background:transparent;color:var(--biu-color-text-subtle);cursor:pointer}
 .fsdb-col-menu-info:hover,.fsdb-col-menu-info.is-on{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
 .fsdb-col-menu-descinput{width:100%;box-sizing:border-box;border:1px solid var(--biu-color-border);border-radius:6px;padding:5px 7px;background:var(--biu-color-bg);color:var(--biu-color-text);font-size:var(--biu-font-size-3);outline:none}
-.fsdb-col-menu-descinput:focus{border-color:var(--biu-color-accent)}
+.fsdb-col-menu-descinput:focus{background:var(--biu-color-bg-hover)}
 .fsdb-col-menu-desctext{padding:4px 6px;border-radius:6px;background:var(--biu-color-bg-hover);color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-3);line-height:1.45;word-break:break-word}
 .fsdb-col-menu-err{padding:0 4px;color:var(--biu-color-danger);font-size:var(--biu-font-size-2)}
 .fsdb-col-menu-sep{height:1px;margin:4px 2px;background:var(--biu-color-border)}
