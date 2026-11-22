@@ -349,9 +349,10 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
 
   function patchActiveView(patch: Partial<SavedView>) {
     if (!activeViewId) return
-    const current = views.find((view) => view.id === activeViewId)
+    const latest = viewsRef.current
+    const current = latest.find((view) => view.id === activeViewId)
     if (!current) return
-    void persistViews(views.map((view) => (view.id === activeViewId ? { ...view, ...patch } : view)))
+    void persistViews(latest.map((view) => (view.id === activeViewId ? { ...view, ...patch } : view)))
   }
 
   function commitViewName(viewId: string, raw: string) {

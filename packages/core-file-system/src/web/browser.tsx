@@ -4101,9 +4101,11 @@ export function CollectionBrowser({
           onChangeColumnView={(colKey, nextCfg) => {
             setColumnViews((prev) => {
               const next = { ...prev }
-              if (!nextCfg || !nextCfg.items.length) delete next[colKey]
+              const hasActive = Boolean(nextCfg?.activeId && nextCfg.activeId !== 'default')
+              const hasItems = Boolean(nextCfg?.items?.length)
+              if (!nextCfg || (!hasActive && !hasItems)) delete next[colKey]
               else next[colKey] = nextCfg
-              if (!sheet && activeViewId) patchActiveView({ columnViews: normalizeColumnViews(next) })
+              if (!sheet && activeViewId) patchActiveView({ columnViews: normalizeColumnViews(next) ?? {} })
               return next
             })
           }}
@@ -4136,7 +4138,7 @@ export function CollectionBrowser({
               const next = { ...prev }
               if (op === 'none') delete next[colKey]
               else next[colKey] = op
-              if (!sheet && activeViewId) patchActiveView({ columnSummaries: normalizeColumnSummaries(next) })
+              if (!sheet && activeViewId) patchActiveView({ columnSummaries: normalizeColumnSummaries(next) ?? {} })
               return next
             })
           }}

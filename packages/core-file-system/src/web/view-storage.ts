@@ -867,9 +867,24 @@ function pickDisplay(patch: Partial<SavedView>): ViewDisplayPatch {
   for (const key of DISPLAY_KEYS) {
     if (patch[key] !== undefined) (next as Record<string, unknown>)[key] = patch[key]
   }
-  // An explicit clear must overwrite the previously stored tree.
+  // An explicit clear must overwrite the previously stored display value in localStorage.
   if (Object.prototype.hasOwnProperty.call(patch, 'filterTree') && patch.filterTree === undefined) {
     next.filterTree = emptyFilterGroup()
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'columnSummaries') && patch.columnSummaries === undefined) {
+    next.columnSummaries = {}
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'columnViews') && patch.columnViews === undefined) {
+    next.columnViews = {}
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'columnWidths') && patch.columnWidths === undefined) {
+    next.columnWidths = {}
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'groupConfig') && patch.groupConfig === undefined) {
+    next.groupConfig = {}
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'freezeUntil') && patch.freezeUntil === undefined) {
+    next.freezeUntil = ''
   }
   return next
 }

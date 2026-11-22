@@ -647,6 +647,34 @@ test('clearing a filter overwrites the persisted display tree after a refresh', 
   assert.equal(withViewDisplay('/pages', view).filterTree, undefined)
 })
 
+test('clearing columnSummaries and columnViews overwrites persisted display after a refresh', () => {
+  const mem: Record<string, string> = {}
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
+    getItem: (key: string) => mem[key] ?? null,
+    setItem: (key: string, value: string) => { mem[key] = value },
+  } })
+  const view = {
+    ...builtinAllView({ path: '/pages', label: '页面' }),
+    columnSummaries: { title: 'count' as const },
+    columnViews: { 'tag::tag-10::状态': { activeId: 'sv-1' } },
+  }
+  persistViewDisplay('/pages', view.id, {
+    columnSummaries: view.columnSummaries,
+    columnViews: view.columnViews,
+  })
+  assert.deepEqual(withViewDisplay('/pages', view).columnSummaries, { title: 'count' })
+  assert.deepEqual(withViewDisplay('/pages', view).columnViews, { 'tag::tag-10::状态': { activeId: 'sv-1' } })
+
+  // 显式清空（undefined 或 {}）必须覆盖掉 localStorage 旧缓存，刷新后不再复活
+  persistViewDisplay('/pages', view.id, { columnSummaries: undefined, columnViews: undefined })
+  assert.equal(withViewDisplay('/pages', view).columnSummaries, undefined)
+  assert.equal(withViewDisplay('/pages', view).columnViews, undefined)
+
+  persistViewDisplay('/pages', view.id, { columnSummaries: { title: 'count' } })
+  persistViewDisplay('/pages', view.id, { columnSummaries: {} })
+  assert.equal(withViewDisplay('/pages', view).columnSummaries, undefined)
+})
+
 test('removeStarredViews drops deleted views from starredViews without touching other tables', async () => {
   const mod = await import('./view-storage.ts')
   const prev = mod.getStarredViews()
