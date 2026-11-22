@@ -25,9 +25,10 @@ import {
   collectionNavKey,
 } from './nav-boot.ts'
 import { defaultViewId, isOmittedViewId } from './view-storage.ts'
-import { DATA_COLLECTION_PATH, DATA_MODULE, DATA_MODULE_ID, DATA_MODULE_PATH, TAGS_COLLECTION_PATH, PAGE_BLOCKS_COLLECTION_PATH, VIEWS_COLLECTION_PATH, sortDataCollections } from './database-path.ts'
+import { DATA_COLLECTION_PATH, DATA_MODULE, DATA_MODULE_ID, DATA_MODULE_PATH, TAGS_COLLECTION_PATH, PAGE_BLOCKS_COLLECTION_PATH, VIEWS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, sortDataCollections } from './database-path.ts'
 import { dataChrome, setViaDataCrumbs, subscribeViaDataCrumbs, viaDataCrumbsOn, viaDataViewId } from './data-chrome.ts'
 import { writeMainDataRoute } from './main-data-route.ts'
+import { memberChrome } from './member-chrome.tsx'
 import { tagsChrome } from './tag-chrome.tsx'
 import { RecordProperties } from './record-prop-host.tsx'
 import { viewsChrome } from './views-chrome.ts'
@@ -327,6 +328,7 @@ export function apply(ctx: Context) {
     const dataUi = ui.decorate(DATA_COLLECTION_PATH, dataChrome)
     const views = ui.decorate(VIEWS_COLLECTION_PATH, viewsChrome)
     const tagsUi = ui.decorate(TAGS_COLLECTION_PATH, tagsChrome)
+    const membersUi = ui.decorate(WORKSPACE_MEMBERS_COLLECTION_PATH, memberChrome)
     const blocksUi = ui.decorate(
       PAGE_BLOCKS_COLLECTION_PATH,
       pageBlocksChrome(),
@@ -336,6 +338,7 @@ export function apply(ctx: Context) {
       dataUi.dispose()
       views.dispose()
       tagsUi.dispose()
+      membersUi.dispose()
       blocksUi.dispose()
     }
   })

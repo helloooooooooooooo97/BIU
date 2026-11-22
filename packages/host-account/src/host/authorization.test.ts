@@ -273,3 +273,78 @@ test('an agent has exactly the delegating account permissions', () => {
   assert.equal(auth.authorize(agent, 'resource:update', page('agent-page')).allowed, true)
   assert.equal(auth.authorize(agent, 'resource:manage-permissions', page('agent-page')).allowed, false)
 })
+
+test('dataViewMatcher unifies view_grants inside AuthorizationService.authorize', () => {
+  const { store, auth, ada, bob, actor, page, workspace } = setup()
+  auth.attach(actor(ada.id), page('view-doc'), { accessMode: 'private' })
+  store.grantViewMemberView(ada.id, '/pages', 'v-public', 'mv-team', 'editor')
+  auth.setMemberViewMatcher((_ws, viewId, accountId) => viewId === 'mv-team' && accountId === bob.id)
+  auth.setDataViewMatcher((_ws, _col, viewId, _recordId, ctx) => viewId === 'v-public' && ctx.record?.tag === 'public')
+
+  const denied = auth.authorize(actor(bob.id), 'resource:read', { ...page('view-doc'), record: { tag: 'internal' } })
+  assert.equal(denied.allowed, false)
+
+  const allowed = auth.authorize(actor(bob.id), 'resource:update', { ...page('view-doc'), record: { tag: 'public' } })
+  assert.deepEqual(allowed, { allowed: true, effectiveRole: 'editor', source: 'data-view-grant' })
+})
+
+test('setInheritanceMode toggles inherit vs custom while preserving parent link', () => {
+  const { auth, ada, bob, actor, page } = setup()
+  auth.attach(actor(ada.id), page('parent'), { accessMode: 'private' })
+  auth.grant(ada.id, page('parent'), 'account', bob.id, 'editor')
+  auth.attach(actor(ada.id), page('child'), { parentRecordId: 'parent' })
+
+  assert.equal(auth.inheritanceInfo(page('child')).mode, 'inherit')
+  assert.equal(auth.inheritanceInfo(page('child')).hasParent, true)
+  assert.equal(auth.authorize(actor(bob.id), 'resource:update', page('child')).allowed, true)
+
+  // 断开继承后，Bob 失去访问权，但仍保留父级关系以便随时恢复
+  auth.setInheritanceMode(actor(ada.id), page('child'), 'custom')
+  assert.equal(auth.inheritanceInfo(page('child')).mode, 'custom')
+  assert.equal(auth.inheritanceInfo(page('child')).hasParent, true)
+  assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('child')).allowed, false)
+
+  // 重新开启继承后，Bob 恢复访问权
+  auth.setInheritanceMode(actor(ada.id), page('child'), 'inherit')
+  assert.equal(auth.inheritanceInfo(page('child')).mode, 'inherit')
+  assert.equal(auth.authorize(actor(bob.id), 'resource:update', page('child')).allowed, true)
+})
+
+test('preloadCollection caches memberViewMatcher and short-circuits unmatched actor view grants', () => {
+  const { store, auth, ada, bob, actor, page, workspace } = setup()
+  for (let i = 0; i < 30; i += 1) {
+    auth.attach(actor(ada.id), page(`doc-${i}`), { accessMode: 'private' })
+  }
+  store.grantViewMemberView(ada.id, '/pages', 'v-public', 'mv-team', 'editor')
+
+  let memberMatcherCalls = 0
+  let dataMatcherCalls = 0
+  auth.setMemberViewMatcher((_ws, viewId, accountId) => {
+    memberMatcherCalls += 1
+    return viewId === 'mv-team' && accountId === bob.id
+  })
+  auth.setDataViewMatcher((_ws, _col, viewId, _recordId, ctx) => {
+    dataMatcherCalls += 1
+    return viewId === 'v-public' && ctx.record?.tag === 'public'
+  })
+
+  // Bob 命中 mv-team：30 行扫描，memberViewMatcher 只算 1 次
+  auth.preloadCollection(workspace.id, '/pages', bob.id)
+  for (let i = 0; i < 30; i += 1) {
+    auth.authorize(actor(bob.id), 'resource:read', { ...page(`doc-${i}`), record: { tag: 'public' } })
+  }
+  auth.releaseCollection(workspace.id, '/pages', bob.id)
+  assert.equal(memberMatcherCalls, 1)
+  assert.equal(dataMatcherCalls, 30)
+
+  // Ada 不命中 mv-team：30 行扫描，dataViewMatcher 0 次调用（预过滤后 O(1) 短路）
+  memberMatcherCalls = 0
+  dataMatcherCalls = 0
+  auth.preloadCollection(workspace.id, '/pages', ada.id)
+  for (let i = 0; i < 30; i += 1) {
+    auth.authorize(actor(ada.id), 'resource:read', { ...page(`doc-${i}`), record: { tag: 'public' } })
+  }
+  auth.releaseCollection(workspace.id, '/pages', ada.id)
+  assert.equal(memberMatcherCalls, 1)
+  assert.equal(dataMatcherCalls, 0)
+})

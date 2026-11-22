@@ -26,12 +26,16 @@ import {
 
 const SERVER_INFO = { name: 'biu', version: '0.1.0' } as const
 
-/** 复用工具自身的 executionMode：parallel 为只读查询，exclusive 为写入或变更。 */
+/** 优先使用工具显式 annotations.readOnly 判定只读性，与并发调度 executionMode 解耦；未声明时回退到 executionMode。 */
 export function isMcpWriteCall(
-  tools: { executionMode(name: string, args?: Record<string, unknown>): ToolExecutionMode },
+  tools: {
+    executionMode(name: string, args?: Record<string, unknown>): ToolExecutionMode
+    isReadOnly?(name: string, args?: Record<string, unknown>): boolean
+  },
   name: string,
   args: Record<string, unknown> = {},
 ): boolean {
+  if (typeof tools.isReadOnly === 'function') return !tools.isReadOnly(name, args)
   return tools.executionMode(name, args) !== 'parallel'
 }
 
@@ -105,11 +109,19 @@ export function createBiuMcpServer(ctx: Context) {
         .schemas()
         .filter((item) => !tenant || tenant.allowedTools.includes(item.function.name))
       return {
-        tools: schemas.map((item) => ({
-          name: item.function.name,
-          description: item.function.description,
-          inputSchema: asInputSchema(item.function.parameters),
-        })),
+        tools: schemas.map((item) => {
+          const ann = ctx.tools.annotationsOf?.(item.function.name) ?? {}
+          const mcpAnnotations: Record<string, boolean> = {}
+          if (typeof ann.readOnly === 'boolean') mcpAnnotations.readOnlyHint = ann.readOnly
+          if (typeof ann.destructive === 'boolean') mcpAnnotations.destructiveHint = ann.destructive
+          if (typeof ann.idempotent === 'boolean') mcpAnnotations.idempotentHint = ann.idempotent
+          return {
+            name: item.function.name,
+            description: item.function.description,
+            inputSchema: asInputSchema(item.function.parameters),
+            ...(Object.keys(mcpAnnotations).length ? { annotations: mcpAnnotations } : {}),
+          }
+        }),
       }
     }),
   )

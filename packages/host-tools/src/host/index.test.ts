@@ -301,3 +301,57 @@ test('Chinese tool names are sanitized for OpenAI-style APIs', async () => {
   assert.equal(await ctx.tools.invoke('查天气'), 'ok')
   assert.equal(await ctx.tools.invoke(name!), 'ok')
 })
+
+test('isReadOnly decouples security annotations from executionMode and validateToolArgs checks nested items', async () => {
+  const ctx = new Context()
+  await ctx.plugin(tools)
+  ctx.tools.register({
+    name: 'slow_readonly',
+    description: 'serial read-only',
+    execution: 'exclusive',
+    annotations: { readOnly: true, idempotent: true },
+    parameters: {
+      type: 'object',
+      properties: {
+        range: { type: 'array', items: { type: 'integer' } },
+        nested: {
+          type: 'object',
+          properties: { id: { type: 'string' } },
+          required: ['id'],
+          additionalProperties: false,
+        },
+      },
+    },
+    execute: (args) => args,
+  })
+  ctx.tools.register({
+    name: 'fast_write',
+    description: 'parallel write',
+    execution: 'parallel',
+    annotations: { readOnly: false, destructive: true },
+    parameters: { type: 'object', properties: {} },
+    execute: () => 'ok',
+  })
+
+  assert.equal(ctx.tools.executionMode('slow_readonly'), 'exclusive')
+  assert.equal(ctx.tools.isReadOnly('slow_readonly'), true)
+  assert.equal(ctx.tools.executionMode('fast_write'), 'parallel')
+  assert.equal(ctx.tools.isReadOnly('fast_write'), false)
+
+  await assert.rejects(
+    () => ctx.tools.invoke('slow_readonly', { range: [1, 'two' as unknown as number] }),
+    /invalid argument "range\[1\]"/,
+  )
+  await assert.rejects(
+    () => ctx.tools.invoke('slow_readonly', { nested: {} }),
+    /missing required argument "nested\.id"/,
+  )
+  await assert.rejects(
+    () => ctx.tools.invoke('slow_readonly', { nested: { id: 'ok', extra: 1 } }),
+    /unknown argument\(s\) at "nested"/,
+  )
+  assert.deepEqual(await ctx.tools.invoke('slow_readonly', { range: [1, 10], nested: { id: 'ok' } }), {
+    range: [1, 10],
+    nested: { id: 'ok' },
+  })
+})

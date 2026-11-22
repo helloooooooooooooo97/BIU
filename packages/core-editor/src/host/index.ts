@@ -1,8 +1,23 @@
+import { resolve } from 'node:path'
 import type { Context } from 'cordis'
 import { compileSandboxSource, formatCompileReport } from '../web/sandbox/compile.ts'
+import { CommentsStore } from './comments-store.ts'
+import { commentsCollection } from './comments-collection.ts'
+import { runInlineEdit } from './inline-edit.ts'
 
 export const name = 'core-editor'
 export const inject = ['http', 'tools']
+
+export { CommentsStore, commentToRecord, normalizeCommentAnchor, normalizeCommentStatus } from './comments-store.ts'
+export type { CommentAnchor, CommentInput, CommentRow, CommentStatus } from './comments-store.ts'
+export { COMMENTS_COLLECTION_PATH, commentsCollection } from './comments-collection.ts'
+export {
+  INLINE_EDIT_SYSTEM_PROMPT,
+  buildInlineEditUserMessage,
+  runInlineEdit,
+  sanitizeInlineEditOutput,
+} from './inline-edit.ts'
+export type { InlineEditInput } from './inline-edit.ts'
 
 export {
   createPageBlockId,
@@ -28,6 +43,13 @@ const SANDBOX_DOC_HINT =
 export function apply(ctx: Context) {
   ctx.tools.annotate('db_content', SANDBOX_FENCE_HINT)
   ctx.tools.annotate('db_file', SANDBOX_DOC_HINT)
+  ctx.inject(['database'], (inner) => {
+    const fsSvc = inner.get('fs') as { workspace?: { resolve?: (rel: string) => string } } | undefined
+    const file =
+      fsSvc?.workspace?.resolve?.('.biu/editor-comments.json') ?? resolve(process.cwd(), '.biu/editor-comments.json')
+    const store = new CommentsStore().open(file)
+    inner.database.register(commentsCollection(store))
+  })
   ctx.http.route('POST', '/api/page-sandbox/compile', async (route) => {
     const body = await route.json<{ source?: string }>()
     const source = typeof body.source === 'string' ? body.source : ''
@@ -37,6 +59,30 @@ export function apply(ctx: Context) {
       return
     }
     route.send(200, { ok: true, mode: result.mode, report: formatCompileReport(result) })
+  })
+
+  ctx.http.route('POST', '/api/editor/inline-edit', async (route) => {
+    try {
+      const body = await route.json<{
+        instruction?: string
+        selection?: string
+        before?: string
+        after?: string
+        title?: string
+        sessionId?: string
+      }>()
+      const text = await runInlineEdit(ctx, {
+        instruction: String(body.instruction ?? ''),
+        selection: typeof body.selection === 'string' ? body.selection : '',
+        before: typeof body.before === 'string' ? body.before : '',
+        after: typeof body.after === 'string' ? body.after : '',
+        title: typeof body.title === 'string' ? body.title : '',
+        sessionId: typeof body.sessionId === 'string' ? body.sessionId : undefined,
+      })
+      route.send(200, { ok: true, text })
+    } catch (error) {
+      route.send(400, { ok: false, error: error instanceof Error ? error.message : String(error) })
+    }
   })
 
   ctx.tools.register({

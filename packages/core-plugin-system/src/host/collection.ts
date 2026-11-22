@@ -1,5 +1,5 @@
 import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
-import { recordBuiltinValues, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
+import { recordBuiltinValues } from '@biu/type-file-system'
 import {
   createArgs,
   PLUGIN_PACK_DESCRIPTION,
@@ -146,7 +146,6 @@ export function pluginsCollection(store: PluginStoreService): CollectionSpec {
     },
     records: { update: false, create: false, delete: true },
     schema: {
-      labelField: 'title',
       contentField: 'readme',
       contentBackend: 'editorContent',
       columns: [
@@ -169,7 +168,6 @@ export function pluginsCollection(store: PluginStoreService): CollectionSpec {
         'headless',
       ],
       fields: {
-        ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '标题' },
         blurb: { type: 'string', label: '简介' },
         builtin: { type: 'boolean', label: '内置' },
@@ -197,10 +195,10 @@ export function pluginsCollection(store: PluginStoreService): CollectionSpec {
     },
     list,
     get: find,
-    update: async (id, patch) => {
+    update: async (id, patch, options) => {
       const extra = Object.keys(patch).filter((key) => key !== 'readme')
       if (extra.length) throw new Error(`plugin fields not writable: ${extra.join(', ')}`)
-      if ('readme' in patch) await store.writeReadme(id, String(patch.readme ?? ''))
+      if ('readme' in patch) await store.writeReadme(id, String(patch.readme ?? ''), options)
       return (await find(id)) ?? (() => {
         throw new Error(`unknown plugin: ${id}`)
       })()

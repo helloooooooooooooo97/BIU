@@ -3,7 +3,6 @@ import { ChatCount } from '@biu/biu-ui/chat-count'
 import { SidebarFold } from '@biu/biu-ui/sidebar-fold'
 import {
   ChevronDoubleLeftIcon,
-  ChevronDownIcon,
   ChevronRightIcon,
   PlusIcon,
   RectangleStackIcon,
@@ -127,9 +126,10 @@ export function DataIconRail({
   collectionPath: string
   onOpenTable?: (path: string, viewId?: string) => void
 }) {
+  const visible = tables.filter((table) => table.view?.sidebar !== false)
   return (
     <nav className="fsdb-icon-rail" aria-label="数据" data-testid="data-icon-rail">
-      {tables.map((table) => {
+      {visible.map((table) => {
         const name = table.view?.title ?? table.label
         const active = table.path === collectionPath
         return (
@@ -459,11 +459,7 @@ function ViewRecordPreview({
                   <span className="sidebar-rail-icon sidebar-group-fold">
                     <span className="sidebar-group-fold-face">{recordFace(row)}</span>
                     <span className="sidebar-group-fold-chevron">
-                      {expanded ? (
-                        <ChevronDownIcon className="size-4 shrink-0 opacity-80" />
-                      ) : (
-                        <ChevronRightIcon className="size-4 shrink-0 opacity-80" />
-                      )}
+                      <ChevronRightIcon className={`size-4 shrink-0 opacity-80 sidebar-chevron${expanded ? ' is-open' : ''}`} />
                     </span>
                   </span>
                   {emojiBoard(row)}
@@ -541,11 +537,7 @@ function ViewRecordPreview({
                         <RectangleStackIcon aria-hidden className="size-[14px] shrink-0" />
                       </span>
                       <span className="sidebar-group-fold-chevron">
-                        {expanded ? (
-                          <ChevronDownIcon className="size-4 shrink-0 opacity-80" />
-                        ) : (
-                          <ChevronRightIcon className="size-4 shrink-0 opacity-80" />
-                        )}
+                        <ChevronRightIcon className={`size-4 shrink-0 opacity-80 sidebar-chevron${expanded ? ' is-open' : ''}`} />
                       </span>
                     </span>
                   </button>
@@ -616,7 +608,8 @@ export const DataSidebar = memo(function DataSidebar({
   framed?: boolean
 }) {
   const listedTables = useMemo(() => {
-    const raw = tables.length ? tables : ([{ path: collectionPath, label: title, view: { title } }] as CollectionInfo[])
+    const visible = tables.filter((table) => table.view?.sidebar !== false)
+    const raw = visible.length ? visible : ([{ path: collectionPath, label: title, view: { title } }] as CollectionInfo[])
     const { user, index, system } = sortDataCollections(raw)
     return [...user, ...index, ...system]
   }, [collectionPath, tables, title])
@@ -908,7 +901,7 @@ export const DataSidebar = memo(function DataSidebar({
                 <PlusIcon className="size-4 shrink-0" />
               </button>
           </div>
-          <SidebarFold open={open} animate={false} className="sidebar-session-list min-w-0">
+          <SidebarFold open={open} className="sidebar-session-list min-w-0">
             {listed.map((view) => {
               const starred = isViewStarred(starredViews, table.path, view.id)
               const active = table.path === litPath && view.id === litViewId
@@ -994,11 +987,7 @@ export const DataSidebar = memo(function DataSidebar({
                                   <span className="sidebar-rail-icon sidebar-group-fold">
                                     <span className="sidebar-group-fold-face">{face}</span>
                                     <span className="sidebar-group-fold-chevron">
-                                      {expanded ? (
-                                        <ChevronDownIcon className="size-4 shrink-0 opacity-80" />
-                                      ) : (
-                                        <ChevronRightIcon className="size-4 shrink-0 opacity-80" />
-                                      )}
+                                      <ChevronRightIcon className={`size-4 shrink-0 opacity-80 sidebar-chevron${expanded ? ' is-open' : ''}`} />
                                     </span>
                                   </span>
                                 </button>

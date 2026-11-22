@@ -10,7 +10,7 @@ import {
 } from '@heroicons/react/16/solid'
 import type { NodeViewProps } from '@tiptap/react'
 import { NodeViewWrapper } from '@tiptap/react'
-import { clampImageWidth, pageImageAlign, type PageImageAlign } from './page-image-attrs.ts'
+import { clampImageWidth, pageImageAlign, type PageImageAlign } from './editor-image-attrs.ts'
 
 function hold(event: MouseEvent) {
   event.preventDefault()

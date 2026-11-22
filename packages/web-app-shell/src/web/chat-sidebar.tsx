@@ -26,7 +26,6 @@ import { SIDEBAR_ROW_MAIN_CLASS, SidebarRow } from '@biu/web-session-view/sideba
 import { chromeIcon, chromeIconClass } from './chrome-icon.ts'
 import { isChatPagePath, openOverlayComposer } from './chat-overlay.ts'
 import {
-  ChevronDownIcon,
   ChevronRightIcon,
   FolderMinusIcon,
   PlusIcon,
@@ -245,6 +244,30 @@ export const ChatSidebar = memo(function ChatSidebar({
   const toggleProjectGroup = useSidebarCollapseStore((state) => state.toggle)
   const expandProjectGroup = useSidebarCollapseStore((state) => state.expand)
   const sections = useMemo(() => buildSidebarSections(sessions), [sessions])
+  const railSessions = useMemo(() => {
+    if (!iconRail) return []
+    const seen = new Set<string>()
+    const flat: SessionListItem[] = []
+    for (const section of sections) {
+      if (section.sessions) {
+        for (const item of section.sessions) {
+          if (seen.has(item.id)) continue
+          seen.add(item.id)
+          flat.push(item)
+        }
+      }
+      if (section.groups) {
+        for (const group of section.groups) {
+          for (const item of group.sessions) {
+            if (seen.has(item.id)) continue
+            seen.add(item.id)
+            flat.push(item)
+          }
+        }
+      }
+    }
+    return flat
+  }, [iconRail, sections])
   const toggleSection = useCallback((kind: SidebarSectionKind) => {
     toggleProjectGroup(`chat.section.${kind}`)
   }, [toggleProjectGroup])
@@ -346,6 +369,21 @@ export const ChatSidebar = memo(function ChatSidebar({
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3" data-chat-scroll="">
+        {iconRail ? (
+          <div className="min-w-0">
+            <WindowedSessionList
+              sessions={railSessions}
+              rowKey="rail"
+              highlightId={highlightId}
+              busySessions={busySessions}
+              dancing={dancing}
+              onDelete={deleteChat}
+              onPin={pinChat}
+              onOpen={popover ? openSession : undefined}
+              iconRail
+            />
+          </div>
+        ) : (
         <div className="mt-2 space-y-1.5">
           {sections.map((section) => {
             const sectionCollapsed = Boolean(collapsedProjects[`chat.section.${section.kind}`])
@@ -416,6 +454,7 @@ export const ChatSidebar = memo(function ChatSidebar({
             )
           })}
         </div>
+        )}
       </div>
     </div>
   )
@@ -442,10 +481,10 @@ const GroupFoldGlyph = memo(function GroupFoldGlyph({
   group: SessionSidebarGroup
   collapsed: boolean
 }) {
-  const chevron = collapsed ? (
-    <ChevronRightIcon className={chromeIconClass('opacity-80')} />
-  ) : (
-    <ChevronDownIcon className={chromeIconClass('opacity-80')} />
+  const chevron = (
+    <ChevronRightIcon
+      className={chromeIconClass(`opacity-80 sidebar-chevron${collapsed ? '' : ' is-open'}`)}
+    />
   )
   return (
     <span className="sidebar-rail-icon sidebar-group-fold" aria-hidden>

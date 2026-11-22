@@ -100,12 +100,13 @@ test('landing page embeds real empty product surfaces and opens account actions'
   )
   const band = document.querySelector('.site-hero-band')!
   assert.ok(band.closest('.site-hero'), '产品句和下载入口在首屏底部')
-  assert.equal(document.querySelector('.site-hero-epigraph span')?.textContent, 'The medium is the message')
-  assert.match(document.querySelector('.site-hero-epigraph cite')?.textContent ?? '', /Marshall McLuhan/)
+  assert.equal(document.querySelector('.site-hero-epigraph'), null, '首屏去掉引语以压紧高度')
   assert.equal(document.querySelector('.site-hero-sub')?.textContent, 'The next medium for human–AI collaboration')
+  assert.match(document.querySelector('.site-hero-verb-note')?.textContent ?? '', /01 build/, '动词下方有人话解读条')
   const productLine = document.querySelector('.site-hero-band h2')
   assert.equal(productLine?.textContent, 'Compose all your software on one page')
   assert.equal(document.querySelector('.site-hero-band .site-eyebrow')?.textContent, 'Open Source · Free · All in One')
+  assert.match(document.querySelector('.site-hero-band-desc')?.textContent ?? '', /whiteboards, tables, code/, '承接带有一句大白话翻译')
   assert.ok(h1.compareDocumentPosition(productLine!) & Node.DOCUMENT_POSITION_FOLLOWING, '产品句在主张下面')
   assert.equal(document.querySelector('.site-hero-lead'), null, '首屏不放长说明')
   assert.match(document.querySelector('.site-demo-lead')?.textContent ?? '', /^In BIU, every block is fully functional software.*technical interview coaching experience/, '说明并进真实界面「页面」的介绍')
@@ -152,9 +153,9 @@ test('landing page embeds real empty product surfaces and opens account actions'
   assert.doesNotMatch(finalGitHub.textContent ?? '', /View source/)
   assert.match(readFileSync(resolve(process.cwd(), 'web/style.css'), 'utf8'), /\.site-gh-star\s*\{\s*color:\s*#e3b341/, '星标用 GitHub 的黄色')
 
-  const wall = screen.getByRole('region', { name: 'Plugins' })
-  assert.ok(wall.querySelectorAll('article').length >= 8, '首页插件墙列出现成的插件')
-  assert.match(wall.textContent ?? '', /Excalidraw/)
+  const roleShowcase = screen.getByRole('region', { name: 'Role-based plugins' })
+  assert.equal(within(roleShowcase).getAllByRole('tab').length, 6, '首页角色展台展示六个角色')
+  assert.match(roleShowcase.textContent ?? '', /Excalidraw/)
 
   fireEvent.click(screen.getByTestId('site-login'))
   assert.equal(screen.getByTestId('site-start').getAttribute('href'), '/download')
@@ -197,7 +198,7 @@ test('home 收窄后：深度内容下沉，导航指向独立页', () => {
   assert.match(brandMark?.querySelector('rect')?.getAttribute('fill') ?? '', /#ffffff/i, '左上角标记保留白色圆角底')
   assert.match(nav.textContent ?? '', /Product/)
   assert.match(nav.textContent ?? '', /Pricing/)
-  assert.match(nav.textContent ?? '', /Compare/)
+  assert.match(nav.textContent ?? '', /Why BIU/)
   // 首页主张：All in One —— 页面组合软件
   assert.match(screen.getByRole('heading', { level: 1 }).getAttribute('aria-label') ?? '', /builds, stores, composes, distributes, and derives/)
   assert.equal(document.querySelector('.site-hero-band h2')?.textContent, 'Compose all your software on one page')
@@ -217,12 +218,12 @@ test('首页三扇门通向场景、对比和想法，深度留在内页', () =>
   const sceneLinks = within(scenes).getAllByRole('link')
   assert.deepEqual(
     sceneLinks.slice(0, 6).map((link) => link.getAttribute('href')),
-    ['/use-cases/research', '/use-cases/product', '/use-cases/content', '/use-cases/team-knowledge', '/use-cases/personal', '/use-cases/collaboration'],
+    ['/use-cases/tech', '/use-cases/education', '/use-cases/media', '/use-cases/consulting', '/use-cases/ecommerce', '/use-cases/finance'],
   )
-  assert.match(sceneLinks[0]?.textContent ?? '', /Research & Analysis/)
-  assert.match(sceneLinks[0]?.textContent ?? '', /Research report · Database · Comparison matrix/)
+  assert.match(sceneLinks[0]?.textContent ?? '', /Tech & Software/)
+  assert.match(sceneLinks[0]?.textContent ?? '', /Product Manager/)
   assert.equal(sceneLinks[6]?.getAttribute('href'), '/use-cases')
-  assert.equal(screen.queryByText(/Sources are scattered across dozens of tabs/), null, '痛点正文留在场景页')
+  assert.equal(screen.queryByText(/Conventional docs only hold static text/), null, '痛点正文留在场景页')
 
   const compareLinks = within(compare).getAllByRole('link')
   assert.deepEqual(
@@ -237,8 +238,8 @@ test('首页三扇门通向场景、对比和想法，深度留在内页', () =>
   assert.equal(screen.queryByText('Everything is a file'), null)
 
   const ideaLinks = within(ideas).getAllByRole('link')
-  assert.equal(ideaLinks[0]?.getAttribute('href'), '/blog/all-in-one')
-  assert.equal(ideaLinks[1]?.getAttribute('href'), '/blog/saas-to-paas')
+  assert.equal(ideaLinks[0]?.getAttribute('href'), '/blog/ai-native-software')
+  assert.equal(ideaLinks[1]?.getAttribute('href'), '/blog/all-in-one')
   assert.match(ideaLinks[0]?.textContent ?? '', /min read/)
   assert.equal(ideaLinks[2]?.getAttribute('href'), '/brand')
   assert.match(ideaLinks[2]?.textContent ?? '', /One circle, two lines, three blocks/)
@@ -438,19 +439,8 @@ test('博客：总览列出每篇文章，文章页能打开并链到下一篇',
   })
 
   renderSite('/')
-  const vision = screen.getByRole('region', { name: 'Vision' })
-  assert.deepEqual(
-    [...vision.querySelectorAll('[role="rowheader"] a')].map((a) => a.getAttribute('href')),
-    series.map((slug) => `/blog/${slug}`),
-    '愿景表的五个动词链到对应文章',
-  )
-  assert.match(vision.querySelector('a.site-cta-primary')?.getAttribute('href') ?? '', /^mailto:348876414@qq\.com\?subject=/)
-  assert.ok(vision.querySelector('a[href="/invest"]'), '愿景链到投资页')
-  assert.equal(
-    screen.getByRole('navigation', { name: 'Main navigation' }).querySelector('a[href="/invest"]')?.textContent,
-    'Invest',
-    '顶部导航有投资入口',
-  )
+  assert.equal(screen.queryByRole('region', { name: 'Vision' }), null, '首页不再放融资愿景表，收进投资页')
+  assert.ok(document.querySelector('footer a[href="/invest"]'), '页脚保留投资入口')
   cleanup()
 
   renderSite('/invest')
@@ -1019,11 +1009,10 @@ test('品牌页：预设按钮一次改三块颜色', () => {
   cleanup()
 })
 
-test('品牌页已接入路由与导航', () => {
+test('品牌页已接入路由与页脚', () => {
   renderSite('/')
-  const nav = screen.getAllByRole('navigation', { name: 'Main navigation' })[0]!
-  const brandLink = Array.from(nav.querySelectorAll('a')).find((a) => a.getAttribute('href') === '/brand')
-  assert.ok(brandLink, '导航应出现 /brand 入口')
+  const brandLink = document.querySelector('footer a[href="/brand"]')
+  assert.ok(brandLink, '页脚应出现 /brand 入口')
   assert.equal(brandLink!.textContent, 'Brand')
 })
 
@@ -1132,7 +1121,7 @@ test('常见问题：首页、产品、场景子页、对比、安全、定价�
   const expected: [string, string][] = [
     ['/', 'About BIU'],
     ['/product', 'About the product'],
-    ['/use-cases/research', 'About this use case'],
+    ['/use-cases/tech', 'About this use case'],
     ['/compare', 'About these comparisons'],
     ['/security', 'About your data'],
     ['/pricing', 'Pricing FAQ'],

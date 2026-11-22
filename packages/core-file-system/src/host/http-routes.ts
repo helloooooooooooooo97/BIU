@@ -15,8 +15,9 @@ import {
   normalizeSchemaPack,
   type CollectionSchemaPack,
 } from '@biu/type-file-system'
+import { buildAccessExplanation, type BuildAccessExplanationInput } from '../access-explanation.ts'
 import { isReadOnlyViewId } from '../catalog-views.ts'
-import { PAGES_COLLECTION_PATH, TAGS_COLLECTION_PATH } from '../paths.ts'
+import { PAGES_COLLECTION_PATH, TAGS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH } from '../paths.ts'
 import { isSharePluginId } from '../share-resources.ts'
 import {
   AssetConflictError,
@@ -229,6 +230,40 @@ export function registerDatabaseHttpRoutes(
       route.send(400, { error: String(error) })
     }
   })
+  ctx.http.route('POST', '/api/db/batch-update', async (route) => {
+    try {
+      const body = (await route.json()) as {
+        path?: string
+        ids?: string[]
+        viewId?: string
+        view_id?: string
+        filter?: Record<string, unknown>
+        q?: string
+        fields?: Record<string, unknown>
+        updates?: Array<{ id: string; fields: Record<string, unknown> }>
+        dryRun?: boolean
+        dry_run?: boolean
+        maxRecords?: number
+        max_records?: number
+      }
+      const path = String(body?.path ?? '')
+      route.send(
+        200,
+        await db.batchUpdate(path, {
+          ids: body?.ids,
+          viewId: body?.viewId ?? body?.view_id,
+          filter: body?.filter,
+          q: body?.q,
+          fields: body?.fields,
+          updates: body?.updates,
+          dryRun: body?.dryRun ?? body?.dry_run,
+          maxRecords: body?.maxRecords ?? body?.max_records,
+        }),
+      )
+    } catch (error) {
+      route.send(400, { error: String(error) })
+    }
+  })
   ctx.http.route('POST', '/api/db/create', async (route) => {
     try {
       const body = (await route.json()) as {
@@ -408,6 +443,146 @@ export function registerDatabaseHttpRoutes(
       /* 没有账号库时分享页仍可打开 */
     }
   }
+  ctx.http.route('GET', '/api/db/access-explain', async (route) => {
+    try {
+      const collection = String(route.query.get('collection') ?? '').trim()
+      const recordId = String(route.query.get('recordId') ?? '').trim()
+      const tableLabel = String(route.query.get('tableLabel') ?? '').trim()
+      const builtin = route.query.get('builtin') === '1'
+      const fallbackRoleParam = String(route.query.get('role') ?? '').trim()
+      if (!collection || !recordId) {
+        route.send(400, { error: 'collection and recordId are required' })
+        return
+      }
+      const location = activeDataLocation()
+      const localOnly = location !== 'cloud'
+      if (!localOnly && !isOnlineRuntime() && process.env.BIU_REMOTE_ORIGIN) {
+        const search = route.query.toString()
+        const forwarded = await forwardCloud(
+          ctx,
+          collection,
+          recordId,
+          `/api/db/access-explain${search ? `?${search}` : ''}`,
+          { method: 'GET' },
+        )
+        if (forwarded) {
+          route.send(forwarded.status, forwarded.body)
+          return
+        }
+        route.send(401, { error: '请先登录云端账号' })
+        return
+      }
+      if (builtin) {
+        route.send(200, buildAccessExplanation({ collection, recordId, tableLabel, builtin: true, localOnly }))
+        return
+      }
+      await db.requirePath(`${collection}/${recordId}`, 'resource:read')
+      const rawRecord = (await db.read(`${collection}/${recordId}`)) as {
+        value?: { id?: unknown; title?: unknown; name?: unknown; [key: string]: unknown }
+      }
+      const record = rawRecord.value ? { id: recordId, ...rawRecord.value } : { id: recordId }
+      const recordTitle = String(record.title ?? record.name ?? '').trim() || recordId
+      const dataViews = savedViews.viewsFor(collection).map((view) => ({
+        id: String(view.id ?? ''),
+        name: String(view.name ?? view.id ?? ''),
+        filters: view.filters && typeof view.filters === 'object' ? view.filters as Record<string, unknown> : undefined,
+        filterTree: view.filterTree ?? undefined,
+      }))
+      const memberViews = savedViews.viewsFor(WORKSPACE_MEMBERS_COLLECTION_PATH).map((view) => ({
+        id: String(view.id ?? ''),
+        name: String(view.name ?? view.id ?? ''),
+        filters: view.filters && typeof view.filters === 'object' ? view.filters as Record<string, unknown> : undefined,
+      }))
+      const publicShares: NonNullable<BuildAccessExplanationInput['publicShares']> = [
+        ...shares.listRecords(collection).map((share) => ({
+          kind: 'record' as const,
+          collection: share.collection,
+          recordId: share.recordId,
+        })),
+        ...shares.listViews(collection).map((share) => {
+          const named = dataViews.find((view) => view.id === share.viewId)
+          return {
+            kind: 'view' as const,
+            collection: share.collection,
+            viewId: share.viewId,
+            title: named?.name || share.viewId,
+          }
+        }),
+      ]
+      let access: BuildAccessExplanationInput['access']
+      const recordTitles: Record<string, string> = {
+        [`${collection}\t${recordId}`]: recordTitle,
+      }
+      if (!localOnly) {
+        let account: {
+          store?: {
+            recordAccess?: (actorId: string, collection: string, recordId: string) => NonNullable<BuildAccessExplanationInput['access']>
+          }
+        } | undefined
+        try {
+          account = ctx.get('account') as typeof account
+        } catch {
+          account = undefined
+        }
+        const actorId = currentAccountId()
+        if (actorId && account?.store?.recordAccess) {
+          access = account.store.recordAccess(actorId, collection, recordId)
+          const refs = new Map<string, { collection: string; recordId: string }>()
+          for (const anc of access.inheritance?.ancestors ?? []) {
+            refs.set(`${anc.collection}\t${anc.recordId}`, { collection: anc.collection, recordId: anc.recordId })
+          }
+          for (const step of access.roleChain ?? []) {
+            if (step.collection && step.recordId) {
+              refs.set(`${step.collection}\t${step.recordId}`, { collection: step.collection, recordId: step.recordId })
+            }
+          }
+          for (const [key, ref] of refs) {
+            if (recordTitles[key]) continue
+            try {
+              const got = (await db.read(`${ref.collection}/${ref.recordId}`)) as {
+                value?: { title?: unknown; name?: unknown }
+              }
+              const title = String(got.value?.title ?? got.value?.name ?? '').trim()
+              if (title) recordTitles[key] = title
+            } catch {
+              /* 祖先记录当前用户不可读时，保留 ID 兜底 */
+            }
+          }
+        }
+      }
+      const fallbackRole = fallbackRoleParam === '查看' || fallbackRoleParam === '阅读' || fallbackRoleParam === 'viewer'
+        ? 'viewer' as const
+        : fallbackRoleParam === '编辑' || fallbackRoleParam === 'editor'
+          ? 'editor' as const
+          : fallbackRoleParam === '管理' || fallbackRoleParam === 'manager'
+            ? 'manager' as const
+            : localOnly
+              ? 'owner' as const
+              : 'viewer' as const
+      const spec = db.collection(collection)
+      const schema = spec?.schema
+      const explanation = buildAccessExplanation({
+        collection,
+        recordId,
+        recordTitle,
+        tableLabel: tableLabel || spec?.label || '',
+        localOnly,
+        fallbackRole,
+        record: record as { id: string; [key: string]: unknown },
+        schema,
+        packs: tags.list(),
+        dataViews,
+        memberViews,
+        publicShares,
+        recordTitles,
+        access,
+      })
+      route.send(200, explanation)
+    } catch (error) {
+      const failure = databaseHttpFailure(error)
+      route.send(failure.status, failure.body)
+    }
+  })
   ctx.http.route('GET', '/api/db/shares', async (route) => {
     if (activeDataLocation() === 'cloud' && !isOnlineRuntime()) {
       const search = route.query.toString()
@@ -813,15 +988,16 @@ export function registerDatabaseHttpRoutes(
       route.send(404, { error: 'not found' })
     }
   }
-  const putDbFile: Parameters<typeof ctx.http.route>[2] = async (route) => {
+  const putDbFile = async (route: Parameters<Parameters<typeof ctx.http.route>[2]>[0], legacyAssetOnly = false) => {
     try {
       const name = route.params.name ?? ''
       const path = route.query.get('path') || String(route.req.headers['x-biu-resource-path'] ?? '')
-      if (!path) {
+      if (path) await db.requirePath(path, 'resource:update')
+      else if (legacyAssetOnly) db.requireAsset(name, 'resource:update')
+      else {
         route.send(400, { error: 'resource path required' })
         return
       }
-      await db.requirePath(path, 'resource:update')
       const bytes = await route.bytes()
       const written = isHashedAssetName(name)
         ? await assets.write(name, bytes)
@@ -834,7 +1010,7 @@ export function registerDatabaseHttpRoutes(
         kind: 'asset',
         storage: written.storage,
       })
-      linkUploadedAsset(db, path, written.name)
+      if (path) linkUploadedAsset(db, path, written.name)
       ctx.http.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('asset', { asset: { name: written.name, etag: written.etag } }))
       route.send(200, { ok: true, ...written })
     } catch (error) {
@@ -874,6 +1050,9 @@ export function registerDatabaseHttpRoutes(
   ctx.http.route('PUT', '/api/db/file/hash/:name', putHashFile)
   ctx.http.route('GET', '/api/db/file/:name', serveDbFile)
   ctx.http.route('PUT', '/api/db/file/:name', putDbFile)
+  // Compatibility aliases share authorization, ETag handling and attachment tracking.
+  ctx.http.route('GET', '/api/page/file/:name', serveDbFile)
+  ctx.http.route('PUT', '/api/page/file/:name', (route) => putDbFile(route, true))
   ctx.http.route('GET', '/api/doc/file/:name', serveDbFile)
   ctx.http.route('PUT', '/api/doc/file/:name', putDbFile)
   ctx.http.route('POST', '/api/db/action', async (route) => {

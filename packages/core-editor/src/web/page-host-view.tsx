@@ -30,7 +30,7 @@ import {
 } from '@biu/core-file-system/sandbox-host-shell'
 import { listPageBlockFences, pageBlockData, pageBlockRecordId } from '../page-block-fence.ts'
 import { PageBlockStage, writeBlockData } from './page-blocks-view.tsx'
-import { capturePageScroll } from './page-scroll-pin.ts'
+import { capturePageScroll } from './editor-scroll-pin.ts'
 import { getBlockEditor, useBlockEditorVersion } from './service.ts'
 import { bindSandboxPickPane, pageHostPickKey } from './page-host-pick.ts'
 

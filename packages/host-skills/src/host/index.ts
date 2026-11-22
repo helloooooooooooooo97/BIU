@@ -1,3 +1,4 @@
+import type { CollectionUpdateOptions } from '@biu/type-file-system'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Service, type Context } from 'cordis'
@@ -122,8 +123,8 @@ export class SkillsService extends Service {
     return migrated
   }
 
-  patch(id: string, patch: { name?: unknown; description?: unknown; source?: unknown; enabled?: unknown; notes?: unknown; tags?: unknown; emoji?: unknown }) {
-    const next = this.store.patch(id, patch)
+  patch(id: string, patch: { name?: unknown; description?: unknown; source?: unknown; enabled?: unknown; notes?: unknown; tags?: unknown; emoji?: unknown }, options?: CollectionUpdateOptions) {
+    const next = this.store.patch(id, patch, options)
     this.changed()
     return next
   }

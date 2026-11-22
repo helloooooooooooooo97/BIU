@@ -47,7 +47,7 @@ export function pageFileUrl(name: string, opts?: { bust?: boolean; path?: string
   const path = String(opts?.path ?? pageResourcePath()).trim()
   if (path) params.set('path', path)
   const q = params.toString()
-  return `/api/page/file/${encodeURIComponent(name)}${q ? `?${q}` : ''}`
+  return `/api/db/file/${encodeURIComponent(name)}${q ? `?${q}` : ''}`
 }
 
 function pageFileHeaders(headers: Record<string, string>, path: string) {

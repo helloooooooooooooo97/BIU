@@ -2,7 +2,7 @@ import { fireEvent, render, waitFor } from '@testing-library/react'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Context } from 'cordis'
-import { RecordEditor } from './page-editor.tsx'
+import { RecordEditor } from './record-editor.tsx'
 import { BlockEditorService } from './service.ts'
 import { resetRecordViewFileState } from '@biu/core-file-system/record-sandboxes'
 import { getRecordViewCatalog, patchRecordViewCatalog } from '@biu/core-file-system/record-view-catalog'
@@ -139,7 +139,7 @@ test('page editor hydrates markdown after content fetch', async () => {
 test('page editor does not persist markdown when the field is not writable', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
-  const src = await readFile(resolve(import.meta.dirname, './page-editor.tsx'), 'utf8')
+  const src = await readFile(resolve(import.meta.dirname, './record-editor.tsx'), 'utf8')
   assert.match(src, /writableRef\.current = writable/)
   assert.match(src, /if \(writableRef\.current === false\) return/)
   assert.match(src, /current\.isDestroyed \|\| writableRef\.current === false/)
@@ -148,7 +148,7 @@ test('page editor does not persist markdown when the field is not writable', asy
 test('page editor applies later value when it is not focused', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
-  const src = await readFile(resolve(import.meta.dirname, './page-editor.tsx'), 'utf8')
+  const src = await readFile(resolve(import.meta.dirname, './record-editor.tsx'), 'utf8')
   assert.match(src, /shouldApplyRemoteMarkdown/)
   assert.match(src, /recentlyLocal/)
   assert.match(src, /contentJumpForRecord/)

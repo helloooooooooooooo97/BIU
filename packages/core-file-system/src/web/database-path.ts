@@ -2,9 +2,9 @@ import { buildAppPath, type AppRoute } from '@biu/web-session-view'
 import { builtinAllViewId } from '../catalog-views.ts'
 import {
   AGENTS_COLLECTION_PATH,
+  COMMENTS_COLLECTION_PATH,
   DATA_COLLECTION_PATH,
   EDITOR_BLOCKS_COLLECTION_PATH,
-  EVENTS_COLLECTION_PATH,
   MCP_COLLECTION_PATH,
   NOTICES_COLLECTION_PATH,
   PAGE_BLOCKS_COLLECTION_PATH,
@@ -21,9 +21,9 @@ import {
 
 export {
   AGENTS_COLLECTION_PATH,
+  COMMENTS_COLLECTION_PATH,
   DATA_COLLECTION_PATH,
   EDITOR_BLOCKS_COLLECTION_PATH,
-  EVENTS_COLLECTION_PATH,
   MCP_COLLECTION_PATH,
   NOTICES_COLLECTION_PATH,
   PAGE_BLOCKS_COLLECTION_PATH,
@@ -116,6 +116,23 @@ export function isSystemCollection(path: string) {
 export function isIndexCollection(path: string) {
   const normalized = normalizeCollectionPath(path)
   return (INDEX_COLLECTION_ORDER as readonly string[]).includes(normalized)
+}
+
+/** 全部数据「新建」菜单优先遵循后端下发的集合能力声明（caps.overviewCreate / caps.create / view.sidebar），缺失时回退路径规则。 */
+export function isOverviewCreatableCollection(
+  target: string | { path: string; caps?: { create?: boolean; overviewCreate?: boolean }; view?: { sidebar?: boolean } | null },
+) {
+  const path = typeof target === 'string' ? target : target.path
+  const normalized = normalizeCollectionPath(path)
+  if (normalized === DATA_COLLECTION_PATH || isIndexCollection(normalized) || isSystemCollection(normalized)) {
+    return false
+  }
+  if (typeof target !== 'string') {
+    if (typeof target.caps?.overviewCreate === 'boolean') return target.caps.overviewCreate
+    if (target.caps?.create === false) return false
+    if (target.view?.sidebar === false) return false
+  }
+  return normalized !== PLUGINS_COLLECTION_PATH && normalized !== COMMENTS_COLLECTION_PATH
 }
 
 export function dataSidebarKind(path: string): 'user' | 'index' | 'system' {

@@ -4,6 +4,33 @@ import { Context } from 'cordis'
 import { DEFAULT_CHROME_PATH } from '@biu/type-file-system/ui'
 import { DatabaseUiService, normalizeCollectionPath } from './database-ui.ts'
 
+test('registrations own reused objects independently and disposal is idempotent', () => {
+  const ui = new DatabaseUiService(new Context())
+  const View = () => null
+  const view = { id: 'custom', label: 'Custom', plugin: 'test', View, Row: View, Body: View }
+  const tools = { filterAllLabel: '全部' }
+  const chrome = { Title: View }
+  const cases = [
+    { add: () => ui.decorate('/pages', chrome), read: () => ui.chrome('/pages').Title },
+    { add: () => ui.registerView('/pages', view), read: () => ui.views('/pages')[0] },
+    { add: () => ui.registerRowView('*', view), read: () => ui.rowViews('/pages')[0] },
+    { add: () => ui.registerContentView('/pages', view), read: () => ui.contentViews('/pages')[0] },
+    { add: () => ui.registerDetailTools('/pages', tools), read: () => ui.detailTools('/pages').filterAllLabel },
+  ]
+  for (const { add, read } of cases) {
+    const first = add()
+    const second = add()
+    const registered = read()
+    second.dispose()
+    assert.equal(read(), registered)
+    const snapshot = read()
+    second.dispose()
+    assert.equal(read(), snapshot)
+    first.dispose()
+    assert.equal(read(), undefined)
+  }
+})
+
 test('normalizeCollectionPath strips trailing slash', () => {
   assert.equal(normalizeCollectionPath('/plugins/'), '/plugins')
   assert.equal(normalizeCollectionPath('plugins'), '/plugins')

@@ -54,28 +54,10 @@ function mergeChrome(layers: CollectionChrome[]): CollectionChrome {
   return { cells, Action, Actions, DetailTools, DetailBar, Properties, Icon, Title, Board, Content, panes: panes.length ? panes : undefined, openRow, listViews, lockedFiltersFromSearch }
 }
 
-function mergeViews(layers: CollectionViewType[]): CollectionViewType[] {
-  const byId = new Map<string, CollectionViewType>()
+function mergeViews<T extends { id: string }>(layers: T[], excludedId?: string): T[] {
+  const byId = new Map<string, T>()
   for (const view of layers) {
-    if (!view.id) continue
-    byId.set(view.id, view)
-  }
-  return [...byId.values()]
-}
-
-function mergeRowViews(layers: CollectionRowViewType[]): CollectionRowViewType[] {
-  const byId = new Map<string, CollectionRowViewType>()
-  for (const view of layers) {
-    if (!view.id) continue
-    byId.set(view.id, view)
-  }
-  return [...byId.values()]
-}
-
-function mergeContentViews(layers: FsRecordContentView[]): FsRecordContentView[] {
-  const byId = new Map<string, FsRecordContentView>()
-  for (const view of layers) {
-    if (!view.id || view.id === 'hidden') continue
+    if (!view.id || view.id === excludedId) continue
     byId.set(view.id, view)
   }
   return [...byId.values()]
@@ -98,6 +80,27 @@ function rowViewScope(path: string) {
   return normalizeCollectionPath(raw)
 }
 
+class RegistrationLayers<T> {
+  private entries = new Map<string, Array<{ value: T }>>()
+
+  get(key: string) {
+    return this.entries.get(key)?.map((entry) => entry.value)
+  }
+
+  add(key: string, value: T) {
+    const entry = { value }
+    this.entries.set(key, [...(this.entries.get(key) ?? []), entry])
+    return () => {
+      const current = this.entries.get(key)
+      if (!current?.includes(entry)) return false
+      const next = current.filter((item) => item !== entry)
+      if (next.length) this.entries.set(key, next)
+      else this.entries.delete(key)
+      return true
+    }
+  }
+}
+
 let boundDatabaseUi: DatabaseUiService | undefined
 
 export function getDatabaseUi() {
@@ -110,11 +113,11 @@ export function recordContentFallback(collectionPath: string) {
 }
 
 export class DatabaseUiService extends Service implements DatabaseUi {
-  private layers = new Map<string, CollectionChrome[]>()
-  private viewLayers = new Map<string, CollectionViewType[]>()
-  private rowLayers = new Map<string, CollectionRowViewType[]>()
-  private contentLayers = new Map<string, FsRecordContentView[]>()
-  private toolLayers = new Map<string, FsDetailTools[]>()
+  private layers = new RegistrationLayers<CollectionChrome>()
+  private viewLayers = new RegistrationLayers<CollectionViewType>()
+  private rowLayers = new RegistrationLayers<CollectionRowViewType>()
+  private contentLayers = new RegistrationLayers<FsRecordContentView>()
+  private toolLayers = new RegistrationLayers<FsDetailTools>()
   private snapshot = new Map<string, CollectionChrome>()
   private viewSnapshot = new Map<string, CollectionViewType[]>()
   private rowSnapshot = new Map<string, CollectionRowViewType[]>()
@@ -127,84 +130,30 @@ export class DatabaseUiService extends Service implements DatabaseUi {
     boundDatabaseUi = this
   }
 
-  decorate(path: string, chrome: CollectionChrome) {
-    const key = normalizeCollectionPath(path)
-    const list = this.layers.get(key) ?? []
-    list.push(chrome)
-    this.layers.set(key, list)
+  private registerLayer<T>(layers: RegistrationLayers<T>, key: string, value: T) {
+    const remove = layers.add(key, value)
     this.emit()
-    return {
-      dispose: () => {
-        const next = (this.layers.get(key) ?? []).filter((item) => item !== chrome)
-        if (next.length) this.layers.set(key, next)
-        else this.layers.delete(key)
-        this.emit()
-      },
-    }
+    return { dispose: () => { if (remove()) this.emit() } }
+  }
+
+  decorate(path: string, chrome: CollectionChrome) {
+    return this.registerLayer(this.layers, normalizeCollectionPath(path), chrome)
   }
 
   registerView(path: string, view: CollectionViewType) {
-    const key = normalizeCollectionPath(path)
-    const list = this.viewLayers.get(key) ?? []
-    list.push(view)
-    this.viewLayers.set(key, list)
-    this.emit()
-    return {
-      dispose: () => {
-        const next = (this.viewLayers.get(key) ?? []).filter((item) => item !== view)
-        if (next.length) this.viewLayers.set(key, next)
-        else this.viewLayers.delete(key)
-        this.emit()
-      },
-    }
+    return this.registerLayer(this.viewLayers, normalizeCollectionPath(path), view)
   }
 
   registerRowView(path: string, view: CollectionRowViewType) {
-    const key = rowViewScope(path)
-    const list = this.rowLayers.get(key) ?? []
-    list.push(view)
-    this.rowLayers.set(key, list)
-    this.emit()
-    return {
-      dispose: () => {
-        const next = (this.rowLayers.get(key) ?? []).filter((item) => item !== view)
-        if (next.length) this.rowLayers.set(key, next)
-        else this.rowLayers.delete(key)
-        this.emit()
-      },
-    }
+    return this.registerLayer(this.rowLayers, rowViewScope(path), view)
   }
 
   registerContentView(path: string, view: FsRecordContentView) {
-    const key = normalizeCollectionPath(path)
-    const list = this.contentLayers.get(key) ?? []
-    list.push(view)
-    this.contentLayers.set(key, list)
-    this.emit()
-    return {
-      dispose: () => {
-        const next = (this.contentLayers.get(key) ?? []).filter((item) => item !== view)
-        if (next.length) this.contentLayers.set(key, next)
-        else this.contentLayers.delete(key)
-        this.emit()
-      },
-    }
+    return this.registerLayer(this.contentLayers, normalizeCollectionPath(path), view)
   }
 
   registerDetailTools(path: string, tools: FsDetailTools) {
-    const key = normalizeCollectionPath(path)
-    const list = this.toolLayers.get(key) ?? []
-    list.push(tools)
-    this.toolLayers.set(key, list)
-    this.emit()
-    return {
-      dispose: () => {
-        const next = (this.toolLayers.get(key) ?? []).filter((item) => item !== tools)
-        if (next.length) this.toolLayers.set(key, next)
-        else this.toolLayers.delete(key)
-        this.emit()
-      },
-    }
+    return this.registerLayer(this.toolLayers, normalizeCollectionPath(path), tools)
   }
 
   chrome(path: string): CollectionChrome {
@@ -230,7 +179,7 @@ export class DatabaseUiService extends Service implements DatabaseUi {
     const key = normalizeCollectionPath(path)
     const cached = this.rowSnapshot.get(key)
     if (cached) return cached
-    const merged = mergeRowViews([...(this.rowLayers.get(ALL_ROW_VIEWS_PATH) ?? []), ...(this.rowLayers.get(key) ?? [])])
+    const merged = mergeViews([...(this.rowLayers.get(ALL_ROW_VIEWS_PATH) ?? []), ...(this.rowLayers.get(key) ?? [])])
     this.rowSnapshot.set(key, merged)
     return merged
   }
@@ -241,7 +190,7 @@ export class DatabaseUiService extends Service implements DatabaseUi {
     if (cached) return cached
     const own = this.contentLayers.get(key)
     const layers = own?.length ? own : key === DEFAULT_CHROME_PATH ? [] : (this.contentLayers.get(DEFAULT_CHROME_PATH) ?? [])
-    const merged = mergeContentViews(layers)
+    const merged = mergeViews(layers, 'hidden')
     this.contentSnapshot.set(key, merged)
     return merged
   }

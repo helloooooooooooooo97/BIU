@@ -171,6 +171,8 @@ function WorkspaceAccess({
   const [tableLabel, setTableLabel] = useState('')
   const [guestUrl, setGuestUrl] = useState('')
   const [guestCopied, setGuestCopied] = useState(false)
+  const [inheritance, setInheritance] = useState<{ mode: 'inherit' | 'custom'; hasParent: boolean }>({ mode: 'custom', hasParent: false })
+  const [inheritanceBusy, setInheritanceBusy] = useState(false)
   const [error, setError] = useState('')
 
   async function load() {
@@ -195,6 +197,10 @@ function WorkspaceAccess({
         email: string
         memberKind: 'member' | 'external' | 'guest'
       }>
+      inheritance?: {
+        mode?: 'inherit' | 'custom'
+        hasParent?: boolean
+      }
     }>(
       viewId
         ? `/api/account/access?collection=${encodeURIComponent(collection)}&viewId=${encodeURIComponent(viewId)}`
@@ -209,6 +215,10 @@ function WorkspaceAccess({
       name: availableMemberViews.find((view) => view.id === item.id)?.name ?? item.id,
     })))
     setViewGrants(data.viewGrants ?? [])
+    setInheritance({
+      mode: data.inheritance?.mode === 'inherit' ? 'inherit' : 'custom',
+      hasParent: Boolean(data.inheritance?.hasParent),
+    })
   }
 
   useEffect(() => {
@@ -331,6 +341,29 @@ function WorkspaceAccess({
     }
   }
 
+  async function toggleInheritance(on: boolean) {
+    if (viewId || !recordId) return
+    setError('')
+    setInheritanceBusy(true)
+    try {
+      await readJson('/api/account/access', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          collection,
+          recordId,
+          inheritanceMode: on ? 'inherit' : 'custom',
+        }),
+      })
+      window.dispatchEvent(new Event(FSDB_SHARES_CHANGE_EVENT))
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '无法切换继承模式')
+    } finally {
+      setInheritanceBusy(false)
+    }
+  }
+
   async function createGuestLink() {
     setError('')
     try {
@@ -386,7 +419,8 @@ function WorkspaceAccess({
         subjectType: grant.subjectType,
         subjectId: grant.subjectId,
         memberKind: grant.memberKind,
-      })), dataViews, memberViewFilters)
+        grantedBy: grant.grantedBy,
+      })), dataViews, memberViewFilters, ownerId)
     : scope
   const grantedAccountIds = new Set(people.map((row) => row.id))
   const normalizedMemberQuery = memberQuery.trim().toLowerCase()
@@ -408,10 +442,25 @@ function WorkspaceAccess({
     <div className="fsdb-share-link-section" data-testid="fsdb-share-members">
       {viewId ? null : (
         <div className="fsdb-share-collab-summary">
-          <span>数据归属</span>
+          <span>可见范围</span>
           <strong className={`fsdb-share-scope is-${shownScope}`} data-testid="fsdb-share-scope"><ScopeMark scope={shownScope} /></strong>
         </div>
       )}
+      {!viewId && inheritance.hasParent ? (
+        <div className="fsdb-share-inherit-row" data-testid="fsdb-share-inherit">
+          <span>
+            <strong>继承上级权限</strong>
+            <em>{inheritance.mode === 'inherit' ? '自动沿用上级内容的协作者与权限' : '已断开继承，仅按本条设置与视图规则生效'}</em>
+          </span>
+          <ShareToggle
+            on={inheritance.mode === 'inherit'}
+            disabled={inheritanceBusy}
+            label="继承上级权限"
+            testId="fsdb-share-inherit-toggle"
+            onChange={(on) => void toggleInheritance(on)}
+          />
+        </div>
+      ) : null}
 
       <section className="fsdb-share-collab-section">
         <h3>内部协作者</h3>
@@ -445,7 +494,7 @@ function WorkspaceAccess({
           ))}
           {inheritedInternal.map((row) => (
             <li key={`inherited:${row.viewId}:${row.subjectType}:${row.subjectId}`}>
-              <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong><em>继承自{row.source}</em></span>
+              <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong><em>来自视图「{row.source}」</em></span>
               <span className="fsdb-share-collaborator-role">{roleLabel(row.role)}</span>
             </li>
           ))}
@@ -527,7 +576,7 @@ function WorkspaceAccess({
           ))}
           {inheritedExternal.map((row) => (
             <li key={`inherited:${row.viewId}:${row.subjectType}:${row.subjectId}`}>
-              <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong><em>继承自{row.source}</em></span>
+              <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong><em>来自视图「{row.source}」</em></span>
               <span className="fsdb-share-collaborator-role">{roleLabel(row.role)}</span>
             </li>
           ))}

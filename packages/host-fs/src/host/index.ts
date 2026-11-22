@@ -102,13 +102,16 @@ export type WorkspaceFs = {
 export const name = 'fs'
 export const inject = ['tools']
 
+const DEFAULT_FS_READ_MAX_BYTES = 32 * 1024
+const DEFAULT_FS_LIST_LIMIT = 200
+
 export function apply(ctx: Context, config: { root?: string } = {}) {
   const root = config.root ?? process.env.CORDIS_WORKSPACE ?? join(process.cwd(), '.workspace')
   const fs = new FsService(ctx, root)
   void mkdir(root, { recursive: true })
   ctx.tools.register({
     name: 'fs_read',
-    description: '读取工作区内文件（若 Session 已绑定项目路径，则为该目录）。大文件建议传 view_range=[start, end]（1-based，end=-1 到末尾）或 max_bytes 限制返回体积。',
+    description: '读取工作区内文件（若 Session 已绑定项目路径，则为该目录）。默认最多返回 32KB 防止上下文溢出；大文件建议传 view_range=[start, end]（1-based，end=-1 到末尾）或 max_bytes。',
     parameters: {
       type: 'object',
       properties: {
@@ -120,19 +123,21 @@ export function apply(ctx: Context, config: { root?: string } = {}) {
         },
         max_bytes: {
           type: 'integer',
-          description: '可选：最大返回字符/字节数，超出部分自动截断并提示',
+          description: '可选：最大返回字符/字节数（默认 32768），超出部分自动截断并提示',
         },
       },
       required: ['path'],
     },
     execution: 'parallel',
+    annotations: { readOnly: true, idempotent: true },
     execute: async (args) => {
       const text = await fs.read(String(args.path))
       let output = text
-      if (Array.isArray(args.view_range) && args.view_range.length > 0) {
+      const hasRange = Array.isArray(args.view_range) && args.view_range.length > 0
+      if (hasRange) {
         const lines = text.split('\n')
-        const start = Number(args.view_range[0])
-        const endRaw = args.view_range.length > 1 ? Number(args.view_range[1]) : start
+        const start = Number((args.view_range as unknown[])[0])
+        const endRaw = (args.view_range as unknown[]).length > 1 ? Number((args.view_range as unknown[])[1]) : start
         if (!Number.isInteger(start) || start < 1) throw new Error('view_range start must be a positive integer')
         const end = endRaw === -1 ? lines.length : endRaw
         if (!Number.isInteger(end) || end < start) throw new Error('invalid view_range')
@@ -142,9 +147,12 @@ export function apply(ctx: Context, config: { root?: string } = {}) {
           .map((line, i) => `${String(start + i).padStart(width)}\t${line}`)
           .join('\n')
       }
-      if (typeof args.max_bytes === 'number' && args.max_bytes > 0 && output.length > args.max_bytes) {
-        const omitted = output.length - args.max_bytes
-        output = `${output.slice(0, args.max_bytes)}\n... [truncated ${omitted} chars; pass view_range to read specific lines]`
+      const limit = typeof args.max_bytes === 'number' && args.max_bytes > 0
+        ? args.max_bytes
+        : DEFAULT_FS_READ_MAX_BYTES
+      if (output.length > limit) {
+        const omitted = output.length - limit
+        output = `${output.slice(0, limit)}\n... [truncated ${omitted} chars; pass view_range or max_bytes to read specific lines]`
       }
       return output
     },
@@ -157,19 +165,38 @@ export function apply(ctx: Context, config: { root?: string } = {}) {
       properties: { path: { type: 'string' }, content: { type: 'string' } },
       required: ['path', 'content'],
     },
+    annotations: { readOnly: false, destructive: true },
     execute: (args) => fs.write(String(args.path), String(args.content ?? '')),
   })
   ctx.tools.register({
     name: 'fs_list',
-    description: '列出工作区目录（若 Session 已绑定项目路径，则为该目录）',
-    parameters: { type: 'object', properties: { path: { type: 'string' } } },
+    description: '列出工作区目录（若 Session 已绑定项目路径，则为该目录）。默认最多返回 200 项，超出时截断提示。',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string' },
+        limit: { type: 'integer', description: '可选：最大返回条目数，默认 200' },
+      },
+    },
     execution: 'parallel',
-    execute: (args) => fs.list(String(args.path || '.')),
+    annotations: { readOnly: true, idempotent: true },
+    execute: async (args) => {
+      const items = await fs.list(String(args.path || '.'))
+      const limit = typeof args.limit === 'number' && args.limit > 0 ? Math.floor(args.limit) : DEFAULT_FS_LIST_LIMIT
+      if (items.length <= limit) return items
+      return {
+        items: items.slice(0, limit),
+        total: items.length,
+        truncated: true,
+        note: `showing first ${limit} of ${items.length} entries; pass limit or narrow path`,
+      }
+    },
   })
   ctx.tools.register({
     name: 'str_replace_editor',
     description: STR_REPLACE_EDITOR_DESCRIPTION,
     parameters: { ...STR_REPLACE_EDITOR_PARAMETERS },
+    annotations: (args) => ({ readOnly: args.command === 'view' }),
     execute: (args) => runStrReplaceEditor(fs, args),
   })
 

@@ -9,7 +9,6 @@ import {
   AGENTS_COLLECTION_PATH,
   DATA_COLLECTION_PATH,
   EDITOR_BLOCKS_COLLECTION_PATH,
-  EVENTS_COLLECTION_PATH,
   PLUGINS_COLLECTION_PATH,
   TAGS_COLLECTION_PATH,
   TRASH_COLLECTION_PATH,
@@ -80,9 +79,9 @@ export const ACCESS_RANK = { viewer: 1, editor: 2, manager: 3, owner: 4 } as con
 
 export function accessLabel(role: keyof typeof ACCESS_RANK | null | undefined) {
   if (role === 'editor') return '编辑'
-  if (role === 'viewer') return '阅读'
+  if (role === 'viewer') return '查看'
   if (role === 'manager' || role === 'owner') return '管理'
-  return '阅读'
+  return '查看'
 }
 
 export function higherAccess(left: keyof typeof ACCESS_RANK | null, right: keyof typeof ACCESS_RANK | null) {
@@ -102,10 +101,6 @@ export function resolveScopeTarget(
     if (tablePath && sourceId) return { collection: tablePath, id: sourceId }
     const parsed = parseStampRecordId(id)
     if (parsed) return { collection: parsed.collection, id: parsed.recordId }
-  }
-  if (collection === EVENTS_COLLECTION_PATH) {
-    const sessionId = String(row?.sessionId ?? (id.lastIndexOf(':') > 0 ? id.slice(0, id.lastIndexOf(':')) : ''))
-    if (sessionId) return { collection: AGENTS_COLLECTION_PATH, id: sessionId }
   }
   if (collection === TAGS_COLLECTION_PATH) {
     const tablePath = String(row?.tablePath ?? '')
@@ -131,6 +126,10 @@ export function isRecordInWorkspace(membership: WorkspaceMembership, collection:
   if (membership.any.has(key)) return false
   if (membership.strict) return false
   return membership.active === membership.home
+}
+
+export function isBuiltinPluginRow(collection: string, row?: { builtin?: unknown } | null): boolean {
+  return collection === PLUGINS_COLLECTION_PATH && row?.builtin === true
 }
 
 export function isBuiltinPluginRecord(spec: CollectionSpec, id: string, record?: { builtin?: unknown }) {
@@ -160,7 +159,9 @@ export class DatabaseAccessPolicy {
   private ownerCache: { key: string; map: Map<string, string> } | null = null
   private viewAudienceCache: {
     key: string
-    rows: Array<{ view_id: string; subject_type: 'account' | 'member_view'; subject_id: string; granted_by?: string; member_kind: string }>
+    grants: Array<{ viewId: string; subjectType: 'account' | 'member_view'; subjectId: string; memberKind?: string; grantedBy?: string }>
+    dataViews: Array<{ id: string; filters?: Record<string, unknown> }>
+    memberViews: Array<{ id: string; filters?: Record<string, unknown> }>
   } | null = null
   private viewShareCache: { key: string; views: SharedViewDef[] } | null = null
   private recordShareCache: { key: string; ids: Set<string> } | null = null
@@ -279,7 +280,7 @@ export class DatabaseAccessPolicy {
     const actor = authorization?.currentActor()
     if (authorization && actor) {
       return rows.filter((row) => {
-        if (collection === PLUGINS_COLLECTION_PATH && (row as { builtin?: unknown }).builtin === true) {
+        if (isBuiltinPluginRow(collection, row as { builtin?: unknown })) {
           return action === 'resource:read' || action === 'resource:list'
         }
         const target = resolveScopeTarget(collection, String(row.id ?? ''), row)
@@ -288,11 +289,13 @@ export class DatabaseAccessPolicy {
           workspaceId: actor.workspaceId,
           collection: target.collection,
           recordId: target.id,
+          record: row as Record<string, unknown>,
         }
         if (collection === TAGS_COLLECTION_PATH && !String(row.sourceId ?? '') && !String(row.tablePath ?? '')) {
           return this.indexTagVisible(String(row.id ?? ''), actor.accountId)
         }
         if (authorization.authorize(actor, action, resource).allowed) return true
+        if (authorization.hasDataViewMatcher()) return false
         const viaView = this.viewGrantRole(actor.workspaceId, collection, row, actor.accountId)
         return Boolean(viaView && roleCoversAction(viaView, action))
       })
@@ -303,7 +306,7 @@ export class DatabaseAccessPolicy {
     const workspaceId = store?.activeWorkspaceId() ?? ''
     const grants = new Map<string, Map<string, Set<string>>>()
     return rows.filter((row) => {
-      if (collection === PLUGINS_COLLECTION_PATH && (row as { builtin?: unknown }).builtin === true) {
+      if (isBuiltinPluginRow(collection, row as { builtin?: unknown })) {
         return action === 'resource:read' || action === 'resource:list'
       }
       const target = resolveScopeTarget(collection, String(row.id ?? ''), row)
@@ -330,7 +333,7 @@ export class DatabaseAccessPolicy {
     const actor = authorization?.currentActor()
     if (!authorization || !actor) return rows
     return rows.filter((row) => {
-      if (collection === PLUGINS_COLLECTION_PATH && (row as { builtin?: unknown }).builtin === true) return scope === 'shared'
+      if (isBuiltinPluginRow(collection, row as { builtin?: unknown })) return scope === 'shared'
       const target = resolveScopeTarget(collection, String(row.id ?? ''), row)
       return authorization.scopeCurrent({
         type: 'record',
@@ -427,6 +430,7 @@ export class DatabaseAccessPolicy {
         workspaceId: actor.workspaceId,
         collection: target.collection,
         recordId: target.id,
+        ...(record ? { record: record as Record<string, unknown> } : {}),
       })
       if (!decision.allowed) {
         if (
@@ -435,6 +439,9 @@ export class DatabaseAccessPolicy {
           this.indexTagVisible(id, actor.accountId)
         ) {
           return
+        }
+        if (authorization.hasDataViewMatcher()) {
+          throw new Error(`unknown record: ${spec.path}/${id}`)
         }
         const viaView = record
           ? this.viewGrantRole(actor.workspaceId, spec.path, record, actor.accountId)
@@ -492,11 +499,13 @@ export class DatabaseAccessPolicy {
   hasPublicShare(collection: string, id: string, record?: DbRecord, stored?: DataScopeName) {
     if (this.recordShareIds(collection).has(id)) return true
     if (!record || !stored) return false
+    const views = this.sharedViewsFor(collection)
+    if (!views.length) return false
     const spec = this.host.collection(collection)
     const tagged = spec ? this.host.applyTagOverlay(spec, record) : record
     const schema = spec ? this.host.schemaFor(spec) : undefined
     const packs: CollectionSchemaPack[] = this.host.tags.list()
-    return this.sharedViewsFor(collection).some((view) => recordMatchesSharedView(tagged, view, stored, schema, packs))
+    return views.some((view) => recordMatchesSharedView(tagged, view, stored, schema, packs))
   }
 
   effectiveScope(collection: string, record: DbRecord, stored: DataScopeName): DataScopeName {
@@ -504,39 +513,45 @@ export class DatabaseAccessPolicy {
     const workspaceId = store?.activeWorkspaceId?.() || currentRequestWorkspaceId() || ''
     if (!workspaceId) return stored
     const key = `${workspaceId}\t${collection}`
-    const grantRows = store?.viewGrantAudiences?.(workspaceId, collection)
-      ?? store?.viewGrantsFor?.(workspaceId, collection)?.map((row) => ({
-        view_id: row.view_id,
-        subject_type: row.subject_type,
-        subject_id: row.subject_id,
-        granted_by: row.granted_by,
-        member_kind: '',
-      }))
-      ?? []
     if (!this.viewAudienceCache || this.viewAudienceCache.key !== key) {
-      this.viewAudienceCache = { key, rows: grantRows }
-    }
-    const memberViews = [
-      builtinAllView({ path: WORKSPACE_MEMBERS_COLLECTION_PATH }),
-      ...builtinMemberViews(),
-      ...(this.host.viewCatalog?.viewsFor(WORKSPACE_MEMBERS_COLLECTION_PATH) ?? []),
-    ]
-    const dataViews = [
-      builtinAllView({ path: collection }),
-      ...(this.host.viewCatalog?.viewsFor(collection) ?? []),
-    ]
-    return effectiveDataScope(
-      stored,
-      record,
-      this.viewAudienceCache.rows.map((row) => ({
+      const grantRows = store?.viewGrantAudiences?.(workspaceId, collection)
+        ?? store?.viewGrantsFor?.(workspaceId, collection)?.map((row) => ({
+          view_id: row.view_id,
+          subject_type: row.subject_type,
+          subject_id: row.subject_id,
+          granted_by: row.granted_by,
+          member_kind: '',
+        }))
+        ?? []
+      const grants = grantRows.map((row) => ({
         viewId: row.view_id,
         subjectType: row.subject_type,
         subjectId: row.subject_id,
         memberKind: row.member_kind,
         grantedBy: row.granted_by,
-      })),
-      dataViews,
-      memberViews,
+      }))
+      const memberViews = grants.length
+        ? [
+            builtinAllView({ path: WORKSPACE_MEMBERS_COLLECTION_PATH }),
+            ...builtinMemberViews(),
+            ...(this.host.viewCatalog?.viewsFor(WORKSPACE_MEMBERS_COLLECTION_PATH) ?? []),
+          ]
+        : []
+      const dataViews = grants.length
+        ? [
+            builtinAllView({ path: collection }),
+            ...(this.host.viewCatalog?.viewsFor(collection) ?? []),
+          ]
+        : []
+      this.viewAudienceCache = { key, grants, dataViews, memberViews }
+    }
+    if (!this.viewAudienceCache.grants.length) return stored
+    return effectiveDataScope(
+      stored,
+      record,
+      this.viewAudienceCache.grants,
+      this.viewAudienceCache.dataViews,
+      this.viewAudienceCache.memberViews,
       this.recordOwner(collection, String(record.id ?? '')),
     )
   }
@@ -560,8 +575,10 @@ export class DatabaseAccessPolicy {
       workspaceId: actor.workspaceId,
       collection: target.collection,
       recordId: target.id,
+      record: record as Record<string, unknown>,
     })
     const direct = decision.allowed ? decision.effectiveRole : null
+    if (authorization.hasDataViewMatcher()) return accessLabel(direct)
     const via = this.viewGrantRole(actor.workspaceId, spec.path, record, actor.accountId)
     return accessLabel(higherAccess(direct, via))
   }

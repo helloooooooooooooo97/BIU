@@ -27,12 +27,15 @@ export const MarkdownBody = memo(function MarkdownBody({
       : (getCachedMarkdownHtml(text) ?? parseMarkdownSync(text))
     : ''
 
+  const hasPre = html.includes('<pre')
+
   useLayoutEffect(() => {
+    if (!hasPre) return
     const root = rootRef.current
     if (!root) return
     enhanceCodeCopy(root)
     return bindCodeCopyClicks(root)
-  }, [html])
+  }, [html, hasPre])
 
   if (!text) return null
 

@@ -111,11 +111,11 @@ export function wrapCollectionRecordViews(spec: CollectionSpec, store: RecordVie
       return rows.map((row) => attachRecordViews(store, path, row) as DbRecord)
     },
     update: update
-      ? async (id, patch) => {
+      ? async (id, patch, options) => {
           const catalog = catalogPatch(patch)
           if (catalog) store.write(path, id, catalog)
           const rest = withoutCatalog(patch)
-          const row = Object.keys(rest).length ? await update(id, rest) : await get(id)
+          const row = Object.keys(rest).length ? await update(id, rest, options) : await get(id)
           return attachRecordViews(store, path, row) as DbRecord
         }
       : spec.update,

@@ -6,7 +6,7 @@ import { ChevronDownIcon, ChevronLeftIcon, ChevronUpIcon, HashtagIcon, ShareIcon
 import { AnchorMenu, RecordEmojiBoard } from '@biu/biu-ui'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { contentFieldKey, fieldHasValue, formatField, resolveFieldType } from './fields.ts'
-import { LocalText } from './controls.tsx'
+import { LocalText, type LocalTextHandle } from './controls.tsx'
 import { FieldGlyph, FilePreview } from './fsdb-cells.tsx'
 import { PropertyRow } from './property-row.tsx'
 import { TagPackEditor } from './schema-field.tsx'
@@ -14,7 +14,7 @@ import { idleTableIconKind } from './nav-glyphs.tsx'
 import { DATA_COLLECTION_PATH, PAGES_COLLECTION_PATH, TAGS_COLLECTION_PATH } from './database-path.ts'
 import { FSDB_CHANGE_EVENT, PAGE_OUTLINE_EVENT } from './fsdb-events.ts'
 import { normalizeRecordEmoji, recordPreviewEmoji } from './sidebar-preview.ts'
-import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, shouldLeaveContentForTitle, shouldLeaveTitleForContent, focusRecordTitleNear, scheduleFocusRecordTitle } from './title-content-nav.ts'
+import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, isTextareaAtLastVisualLine, shouldLeaveContentForTitle, shouldLeaveTitleForContent, focusRecordTitleNear, scheduleFocusRecordTitle, type FocusRecordContentDetail, type FocusRecordTitleDetail } from './title-content-nav.ts'
 import { HeadingOutline } from './heading-outline.tsx'
 import { PageBanner } from './page-banner.tsx'
 import { fieldPickAttrs, recordSourcePath } from './pick-dom.ts'
@@ -339,16 +339,51 @@ export function RecordDetail({
       type: field?.type,
     })
   const mainRef = useRef<HTMLDivElement>(null)
+  const titleControlRef = useRef<LocalTextHandle | null>(null)
+  const draftRef = useRef(draft)
+  draftRef.current = draft
   useEffect(() => {
-    const onTitle = () => {
+    const onTitle = (event: Event) => {
+      const detail = (event as CustomEvent<FocusRecordTitleDetail | undefined>).detail
+      if (detail?.recordId && detail.recordId !== selected.id) return
+      const appendText = detail?.appendText ?? ''
+      if (appendText) {
+        if (!schema.labelField || !schema.fields[schema.labelField]?.writable || readOnly) {
+          if (detail) detail.rejected = true
+          return
+        }
+        const fieldKey = schema.labelField
+        const el = mainRef.current?.querySelector<HTMLTextAreaElement | HTMLInputElement>('.fsdb-detail-title-input')
+        const cur = el ? el.value : String(draftRef.current[fieldKey] ?? selected[fieldKey] ?? '')
+        const joinPos = cur.length
+        const nextTitle = `${cur}${appendText}`
+        // 0ms 同步写入标题输入框 DOM 与 LocalText 内部状态，保证连按退格不漏字、失焦不回滚。
+        titleControlRef.current?.syncValue(nextTitle, joinPos)
+        setDraft((prev) => ({ ...prev, [fieldKey]: nextTitle }))
+        const trimmed = nextTitle.trim()
+        if (trimmed) {
+          void writeOne(selected, fieldKey, schema.fields[fieldKey]!, trimmed)
+        }
+        if (el && document.activeElement !== el) {
+          requestAnimationFrame(() => {
+            if (document.activeElement !== el) focusRecordTitleNear(mainRef.current, joinPos)
+          })
+        }
+        return
+      }
       const go = () => focusRecordTitleNear(mainRef.current)
       go()
       requestAnimationFrame(go)
     }
     window.addEventListener(FOCUS_RECORD_TITLE, onTitle)
-    const stop = inspectorPaneId ? undefined : scheduleFocusRecordTitle(() => mainRef.current)
     return () => {
       window.removeEventListener(FOCUS_RECORD_TITLE, onTitle)
+    }
+  }, [readOnly, schema, selected, setDraft, writeOne])
+
+  useEffect(() => {
+    const stop = inspectorPaneId ? undefined : scheduleFocusRecordTitle(() => mainRef.current)
+    return () => {
       stop?.()
     }
   }, [inspectorPaneId, selected.id])
@@ -447,6 +482,7 @@ export function RecordDetail({
                     <LocalText
                       as="textarea"
                       className="fsdb-detail-title-input"
+                      controlRef={titleControlRef}
                       value={draft[schema.labelField] ?? ''}
                       autoSize
                       onKeyDown={(event) => {
@@ -454,8 +490,35 @@ export function RecordDetail({
                         if (!(el instanceof HTMLTextAreaElement)) return
                         if (event.nativeEvent.isComposing) return
                         if (!shouldLeaveTitleForContent(event.key, event.shiftKey, el.value, el.selectionEnd)) return
+                        if (event.key === 'ArrowDown' && !isTextareaAtLastVisualLine(el)) return
                         event.preventDefault()
-                        window.dispatchEvent(new Event(FOCUS_RECORD_CONTENT))
+                        if (event.key === 'Enter') {
+                          const start = el.selectionStart ?? el.value.length
+                          const end = el.selectionEnd ?? el.value.length
+                          const before = el.value.slice(0, start)
+                          const after = el.value.slice(end)
+                          if (after.length > 0 && schema.labelField) {
+                            const nextTitle = before.trim()
+                            // 在聚焦切到正文编辑器触发 blur 之前，先同步锁死 LocalText 为拆分后的前半段，防止 onBlur 把旧完整标题写回。
+                            titleControlRef.current?.syncValue(before)
+                            setDraft((prev) => ({ ...prev, [schema.labelField!]: before }))
+                            if (nextTitle) {
+                              void writeOne(selected, schema.labelField, schema.fields[schema.labelField]!, nextTitle)
+                            }
+                          }
+                          const detail: FocusRecordContentDetail = {
+                            recordId: selected.id,
+                            mode: 'enter',
+                            ...(after.length > 0 ? { insertText: after } : {}),
+                          }
+                          window.dispatchEvent(new CustomEvent(FOCUS_RECORD_CONTENT, { detail }))
+                          return
+                        }
+                        const detail: FocusRecordContentDetail = {
+                          recordId: selected.id,
+                          mode: 'move',
+                        }
+                        window.dispatchEvent(new CustomEvent(FOCUS_RECORD_CONTENT, { detail }))
                       }}
                       onCommit={(raw) => {
                         const next = raw.trim()

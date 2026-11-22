@@ -66,6 +66,30 @@ function notesCollection(): CollectionSpec {
   }
 }
 
+test('registration supplies public fields and builtin delete without placeholder handlers', async () => {
+  const db = new DatabaseService(new Context())
+  let removed = false
+  db.register({
+    id: 'minimal', path: '/minimal', schema: { fields: { title: { type: 'string', writable: true } } },
+    records: { delete: true },
+    list: () => [{ id: 'one', title: 'One' }],
+    get: (id) => id === 'one' ? { id, title: 'One' } : null,
+    remove: () => { removed = true },
+    actions: [{ id: 'delete', label: '删除', requiredAction: 'resource:delete' }],
+  })
+  const stat = await db.stat('/minimal')
+  if (stat.kind !== 'collection') throw new Error('expected collection')
+  assert.equal(stat.schema.labelField, 'title')
+  for (const key of Object.keys(REQUIRED_RECORD_FIELDS)) assert.ok(stat.schema.fields[key], key)
+  await db.action('/minimal/one', 'delete')
+  assert.equal((await db.listTrash()).items.length, 1)
+  assert.equal(removed, false, 'builtin deletion must use the trash instead of hard deletion')
+  assert.throws(() => db.register({
+    id: 'invalid', path: '/invalid', schema: { fields: {} }, list: () => [], get: () => null,
+    actions: [{ id: 'custom', label: 'Custom' }],
+  } as unknown as CollectionSpec), /action has no handler: custom/)
+})
+
 test('database HTTP failures distinguish missing resources from bad requests', () => {
   assert.deepEqual(databaseHttpFailure(new Error('unknown record: /pages/p008')), {
     status: 404,
@@ -1357,8 +1381,9 @@ test('agent db_stat omits builtin fields; service stat and list still include th
   // On a writable-content collection (/docs): db_update body + db_read include_content + db_content outline & grep
   const docRow: DbRecord = { id: 'd1', title: '优化页', content: '' }
   db.register({
+    id: 'docs',
     path: '/docs',
-    title: '文档',
+    label: '文档',
     schema: {
       contentField: 'content',
       fields: {
@@ -2623,7 +2648,7 @@ test('granting the all-members view lets the other member read the owner private
   assert.equal(adaList.items.find((row) => row.title === 'A私人')?.shareScope, '空间')
   assert.equal(adaList.items.find((row) => row.title === 'A私人')?.shareRole, '管理')
   assert.equal(adaList.schema.fields.shareRole?.label, '权限')
-  assert.equal(adaList.schema.fields.shareRole?.enum?.join(','), '管理,编辑,阅读')
+  assert.equal(adaList.schema.fields.shareRole?.enum?.join(','), '管理,编辑,查看')
   const spaceId = String(bobList.items.find((row) => row.title === 'A空间')?.id ?? '')
   const privateId = String(bobList.items.find((row) => row.title === 'A私人')?.id ?? '')
   const spaceChain = runWithAccount(bob.id, () => collab.recordAccess(bob.id, '/tasks', spaceId)).roleChain
@@ -2885,7 +2910,7 @@ test('builtin plugins stay visible in the workspace plugin list', async () => {
     const bobList = await runWithAccount(bob.id, () => db.list('/plugins'))
     assert.deepEqual(bobList.items.map((row) => row.id), ['api-playground'])
     assert.equal(bobList.items[0]?.shareScope, '共享')
-    assert.equal(bobList.items[0]?.shareRole, '阅读')
+    assert.equal(bobList.items[0]?.shareRole, '查看')
     assert.equal(bobList.items[0]?.createdBy && (bobList.items[0].createdBy as { name?: string }).name, 'BIU官方')
     assert.equal((bobList.items[0]?.createdBy as { url?: string }).url, 'https://github.com/helloooooooooooooo97/biu')
     assert.equal((bobList.items[0]?.updatedBy as Array<{ url?: string }>)[0]?.url, 'https://github.com/helloooooooooooooo97/biu')

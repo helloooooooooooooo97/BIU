@@ -6,6 +6,7 @@ import {
   compactSessionEvents,
   mergeDispatchedUsageIntoNodes,
   projectNodes,
+  reuseStableNodes,
   type ChatNode,
   type DerivedMessage,
   type SessionEvent,
@@ -34,6 +35,7 @@ export {
   compactSessionEvents,
   mergeDispatchedUsageIntoNodes,
   projectNodes,
+  reuseStableNodes,
   formatTokens,
   formatTrajectoryUsage,
   sumTrajectoryRowUsage,
@@ -364,7 +366,7 @@ export class SessionViewService extends Service {
   }
 
   private buildNodes(events: SessionEvent[], byTurn = this.value.dispatchedUsageByTurn) {
-    return mergeDispatchedUsageIntoNodes(projectNodes(events), byTurn)
+    return reuseStableNodes(this.value.nodes, mergeDispatchedUsageIntoNodes(projectNodes(events), byTurn))
   }
 
   private stopDispatchedPoll() {

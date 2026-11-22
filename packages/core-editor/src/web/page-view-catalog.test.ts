@@ -5,8 +5,8 @@ import { resolve } from 'node:path'
 
 test('page and tag do not register a special view catalog host', () => {
   const index = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
-  const bar = readFileSync(resolve(import.meta.dirname, './page-detail-bar.tsx'), 'utf8')
-  const editor = readFileSync(resolve(import.meta.dirname, './page-editor.tsx'), 'utf8')
+  const bar = readFileSync(resolve(import.meta.dirname, './record-detail-bar.tsx'), 'utf8')
+  const editor = readFileSync(resolve(import.meta.dirname, './record-editor.tsx'), 'utf8')
   assert.doesNotMatch(index, /bindPageViewCatalogHost/)
   assert.doesNotMatch(index, /registerViewCatalogHost/)
   assert.doesNotMatch(bar, /pageRecord/)

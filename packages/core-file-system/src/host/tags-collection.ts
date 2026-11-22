@@ -1,5 +1,5 @@
 import type { CollectionInfo, CollectionListQuery, CollectionSpec, DbRecord, SchemaPackField } from '@biu/type-file-system'
-import { parseAtomicFields, recordBuiltinValues, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
+import { parseAtomicFields, recordBuiltinValues } from '@biu/type-file-system'
 import { TagStore, slugTagId } from './tags-store.ts'
 import { TAGS_COLLECTION_PATH, normalizeCollectionPath } from '../paths.ts'
 
@@ -145,12 +145,10 @@ export function tagsCollection(
     },
     records: { update: true, create: true, delete: true, allocateId: false },
     schema: {
-      labelField: 'title',
       contentField: 'notes',
       contentBackend: 'editorContent',
       columns: ['title', 'fieldCount', 'stampCount'],
       fields: {
-        ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '标签', writable: true },
         fieldCount: { type: 'number', label: '字段', computed: true },
         stampCount: { type: 'number', label: '收集', computed: true, sortable: true },

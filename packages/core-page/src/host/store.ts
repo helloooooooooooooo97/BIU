@@ -1,6 +1,6 @@
 import { mkdir, unlink } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import type { DbRecord, SchemaFieldValue } from '@biu/type-file-system'
+import type { CollectionUpdateOptions, DbRecord, SchemaFieldValue } from '@biu/type-file-system'
 import { allocateRecordId, emptySchemaValue, isAssetFileName, isAssignableRecordId, normalizeSchemaValue } from '@biu/type-file-system'
 import {
   DATA_DIR_NAME,
@@ -241,12 +241,12 @@ export class PagesStore {
     return row
   }
 
-  async update(id: string, patch: Record<string, unknown>): Promise<PageRow> {
+  async update(id: string, patch: Record<string, unknown>, options?: CollectionUpdateOptions): Promise<PageRow> {
     const current = await this.get(id)
     if (!current) throw new Error(`unknown page: ${id}`)
     const next = applyPatch(current, patch)
     await this.openDb()
-    this.upsert(next, 'notes' in patch)
+    this.upsert(next, 'notes' in patch && options?.persistContent !== false)
     return (await this.get(id))!
   }
 

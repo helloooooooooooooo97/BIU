@@ -1,4 +1,6 @@
 import { isViewModeId, type ViewMode } from './fields.ts'
+import { normalizeColumnSummaries, type ColumnSummaryOp } from './column-summary.ts'
+import { normalizeColumnViews, type ColumnViewConfig } from './column-sandbox-model.ts'
 import { countFilterRules, filterTreeStateKey, normalizeSorts, resolveViewFilterTree, sortsStateKey, type FilterGroup, type SortRule } from '../query-logic.ts'
 
 export type GroupSortMode = 'manual' | 'asc' | 'desc'
@@ -26,10 +28,16 @@ export type SavedView = {
   wrap?: boolean
   truncate?: boolean
   freezeTitle?: boolean
+  /** 冻结至指定列 key（含该列及左侧所有列）。 */
+  freezeUntil?: string
   query?: string
   pageSize?: number
   /** 表格列宽（px），按字段 key。 */
   columnWidths?: Record<string, number>
+  /** 表格列统计方式，按字段 key。 */
+  columnSummaries?: Record<string, ColumnSummaryOp>
+  /** 表格列属性沙箱视图配置，按字段 key。 */
+  columnViews?: Record<string, ColumnViewConfig>
   /** 工作区创建时写入的种子视图。与后来保存的视图同一套改名 / 筛选 / 删除规则。 */
   builtin?: boolean
   /** 本地最后修改时间（ms）。多窗口下用来丢弃比库里更旧的快照。 */
@@ -198,9 +206,12 @@ export function normalizeSavedView(view: SavedView): SavedView {
     wrap: !!view.wrap,
     truncate: view.truncate !== false,
     freezeTitle: !!view.freezeTitle,
+    freezeUntil: typeof view.freezeUntil === 'string' && view.freezeUntil.trim() ? view.freezeUntil.trim() : undefined,
     query: view.query ?? '',
     pageSize: normalizePageSize(view.pageSize),
     columnWidths: normalizeColumnWidths(view.columnWidths),
+    columnSummaries: normalizeColumnSummaries(view.columnSummaries),
+    columnViews: normalizeColumnViews(view.columnViews),
     builtin: Boolean(view.builtin),
     updatedAt: Number(view.updatedAt) || 0,
     rank: Number.isFinite(Number(view.rank)) ? Math.round(Number(view.rank)) : undefined,
@@ -247,7 +258,7 @@ export function normalizePageSize(value: unknown) {
 }
 
 export function viewStateKey(
-  view: Pick<SavedView, 'mode' | 'sortField' | 'sortDir' | 'sorts' | 'filters' | 'filterTree' | 'columns' | 'groupBy' | 'groupConfig' | 'tree' | 'wrap' | 'truncate' | 'freezeTitle' | 'query' | 'pageSize' | 'columnWidths'>,
+  view: Pick<SavedView, 'mode' | 'sortField' | 'sortDir' | 'sorts' | 'filters' | 'filterTree' | 'columns' | 'groupBy' | 'groupConfig' | 'tree' | 'wrap' | 'truncate' | 'freezeTitle' | 'freezeUntil' | 'query' | 'pageSize' | 'columnWidths' | 'columnSummaries' | 'columnViews'>,
 ) {
   return JSON.stringify({
     mode: view.mode,
@@ -263,9 +274,12 @@ export function viewStateKey(
     wrap: !!view.wrap,
     truncate: view.truncate !== false,
     freezeTitle: !!view.freezeTitle,
+    freezeUntil: typeof view.freezeUntil === 'string' && view.freezeUntil.trim() ? view.freezeUntil.trim() : undefined,
     query: view.query ?? '',
     pageSize: normalizePageSize(view.pageSize),
     columnWidths: normalizeColumnWidths(view.columnWidths),
+    columnSummaries: normalizeColumnSummaries(view.columnSummaries),
+    columnViews: normalizeColumnViews(view.columnViews),
   })
 }
 

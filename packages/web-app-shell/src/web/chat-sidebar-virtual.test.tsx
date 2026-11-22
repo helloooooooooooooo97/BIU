@@ -91,3 +91,34 @@ test('1000 sessions only paint a window of rows', async () => {
   const start = Number(windowEl.getAttribute('data-session-window-start'))
   assert.ok(start > 0, 'scrolling down must move the virtual window')
 })
+
+test('iconRail flattens pinned and regular sessions into one deduplicated window without section gaps', () => {
+  const sessions: SessionListItem[] = [
+    { id: 'pin-1', title: '收藏一', eventCount: 1, updatedAt: 10, pinned: true },
+    { id: 'reg-1', title: '普通一', eventCount: 1, updatedAt: 9 },
+    { id: 'pin-2', title: '收藏二', eventCount: 1, updatedAt: 8, pinned: true },
+    { id: 'reg-2', title: '普通二', eventCount: 1, updatedAt: 7 },
+  ]
+  const state = { sessions, sessionId: 'pin-1', busySessions: {} as Record<string, true> }
+  const useSessionView = ((select: (s: typeof state) => unknown) => select(state)) as never
+  const sessionView = {
+    get: () => state,
+    newSession: async () => 'x',
+    load: async () => undefined,
+    deleteSession: async () => undefined,
+    setSessionPinned: async () => undefined,
+  } as unknown as SessionViewService
+
+  const result = render(
+    <MemoryRouter>
+      <ChatSidebar routeSessionId="pin-1" useSessionView={useSessionView} sessionView={sessionView} iconRail />
+    </MemoryRouter>,
+  )
+
+  const windows = result.container.querySelectorAll('[data-session-window]')
+  assert.equal(windows.length, 1)
+  assert.equal(windows[0]!.getAttribute('data-session-window-count'), '4')
+  assert.equal(result.container.querySelectorAll('section').length, 0)
+  const rows = result.container.querySelectorAll('.chat-session-row')
+  assert.equal(rows.length, 4)
+})

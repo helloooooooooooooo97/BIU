@@ -14,6 +14,7 @@ test('tag schema writes mark the pack and leave record bags for read-time prune'
   const host = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
   const routes = readFileSync(resolve(import.meta.dirname, './http-routes.ts'), 'utf8')
   assert.match(host, /notifyTagCatalog\(\)/)
+  assert.match(host, /targetPath === TAGS_COLLECTION_PATH[\s\S]*databaseChannelPayload\('tags'\)/)
   assert.match(routes, /if \(route\.query\.get\('filled'\)\)/)
   assert.doesNotMatch(routes, /db\.bump\(\)\s*\n\s*route\.send\(200, \{ ok: true, tags:/)
 })

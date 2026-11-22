@@ -1,7 +1,52 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import { defaultRangeExtractor, useVirtualizer, type Range } from '@tanstack/react-virtual'
+import { useVirtualizer, type Range } from '@tanstack/react-virtual'
 import { tableVertScroller } from './table-drag-scroll.ts'
-import { TABLE_WINDOW_OVERSCAN, tableRowFallbackPx } from './table-window.ts'
+import { TABLE_VIEWPORT_OVERSCAN, tableRowFallbackPx } from './table-window.ts'
+
+export type ViewportScrollDirection = 'idle' | 'forward' | 'backward'
+
+export const VIEWPORT_IDLE_OVERSCAN = 12
+export const VIEWPORT_TRAIL_OVERSCAN = 8
+export const VIEWPORT_LEAD_OVERSCAN = 20
+
+const ROW_STAGGER_STEP_MS = 14
+const ROW_STAGGER_MAX_MS = 84
+
+/** 顺着滚动方向为本帧新挂载行分配极短错峰延迟：下滑自上而下，上滑自下而上，首屏静止 0ms。 */
+export function directionalRowDelayMs(
+  orderIndex: number,
+  batchSize: number,
+  direction: ViewportScrollDirection,
+): number {
+  if (direction === 'idle' || batchSize <= 1) return 0
+  const rank = direction === 'backward' ? Math.max(0, batchSize - 1 - orderIndex) : Math.max(0, orderIndex)
+  return Math.min(rank * ROW_STAGGER_STEP_MS, ROW_STAGGER_MAX_MS)
+}
+
+/**
+ * 参考 AG Grid rowBuffer 机制：永不在快滑中缩窄缓冲或用 rAF/startTransition 延后补行；
+ * 静止时保持上下各 12 行（384px），滚动时在同一次同步渲染中将前进方向扩展到 20 行（640px）、反方向保留 8 行（256px）。
+ */
+export function extractDirectionalRange(
+  range: Pick<Range, 'startIndex' | 'endIndex' | 'count'>,
+  direction: ViewportScrollDirection,
+): number[] {
+  if (range.count <= 0) return []
+  let before = VIEWPORT_IDLE_OVERSCAN
+  let after = VIEWPORT_IDLE_OVERSCAN
+  if (direction === 'forward') {
+    before = VIEWPORT_TRAIL_OVERSCAN
+    after = VIEWPORT_LEAD_OVERSCAN
+  } else if (direction === 'backward') {
+    before = VIEWPORT_LEAD_OVERSCAN
+    after = VIEWPORT_TRAIL_OVERSCAN
+  }
+  const start = Math.max(0, range.startIndex - before)
+  const end = Math.min(range.count - 1, range.endIndex + after)
+  const arr: number[] = []
+  for (let i = start; i <= end; i += 1) arr.push(i)
+  return arr
+}
 
 type Node = { key: string; kind: string; row?: { id: string } }
 export function useTableViewport(options: {
@@ -13,6 +58,8 @@ export function useTableViewport(options: {
   const [scroller, setScroller] = useState<HTMLElement | null>(null)
   const [geometry, setGeometry] = useState({ margin: 0, padding: 40 })
   const [interactedRow, setInteractedRow] = useState<string | null>(null)
+  const scrollDirRef = useRef<ViewportScrollDirection>('idle')
+  const lastStartRef = useRef(0)
   const interactedHistory = useMemo(() => new Set<string>(), [options.resetKey])
   const keyIndices = useMemo(() => new Map(nodes.map((node, index) => [node.key, index])), [nodes])
   const rowIndices = useMemo(() => {
@@ -60,7 +107,12 @@ export function useTableViewport(options: {
     }
   }, [tableRef, wrapRef])
   const rangeExtractor = useCallback((range: Range) => {
-    const indices = new Set(defaultRangeExtractor(range))
+    const delta = range.startIndex - lastStartRef.current
+    if (delta !== 0) {
+      scrollDirRef.current = delta > 0 ? 'forward' : 'backward'
+      lastStartRef.current = range.startIndex
+    }
+    const indices = new Set(extractDirectionalRange(range, scrollDirRef.current))
     const retained = options.retainedRowKey ? keyIndices.get(options.retainedRowKey) : options.retainedRowId ? rowIndices.get(options.retainedRowId) : undefined
     if (retained != null) indices.add(retained)
     const interacted = interactedRow ? keyIndices.get(interactedRow) ?? rowIndices.get(interactedRow) : undefined
@@ -90,19 +142,35 @@ export function useTableViewport(options: {
   }, [nodes, options.retainedRowId, options.retainedRowKey, options.preserveMountedRows, interactedRow, rowIndices, keyIndices, tableRef, interactedHistory])
   const getScrollElement = useCallback(() => scroller, [scroller])
   const getItemKey = useCallback((index: number) => `${options.resetKey}\0${nodes[index]!.key}`, [nodes, options.resetKey])
-  const estimateSize = useCallback((index: number) => nodes[index]?.kind === 'group-head' ? 36 : nodes[index]?.kind === 'group-pager' ? 46 : tableRowFallbackPx(options.wrapCells), [nodes, options.wrapCells])
+  const estimateSize = useCallback(
+    (index: number) =>
+      nodes[index]?.kind === 'group-head'
+        ? 33
+        : nodes[index]?.kind === 'group-pager' || nodes[index]?.kind === 'summary'
+          ? 32
+          : tableRowFallbackPx(options.wrapCells),
+    [nodes, options.wrapCells],
+  )
   const virtualizer = useVirtualizer({ count: nodes.length, getScrollElement, getItemKey, estimateSize, rangeExtractor,
-    overscan: TABLE_WINDOW_OVERSCAN, scrollMargin: geometry.margin, scrollPaddingStart: geometry.padding,
+    overscan: TABLE_VIEWPORT_OVERSCAN, scrollMargin: geometry.margin, scrollPaddingStart: geometry.padding,
     initialRect: { width: 624, height: 560 },
   })
+  // 非换行模式下所有行高固定（32px），禁用 scrollTop 反向修正，避免上滑进入未测量行时整表微跳闪烁；换行模式仍屏蔽 <2px 抖动。
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, delta, instance) => {
+    if (!options.wrapCells) return false
+    if (Math.abs(delta) < 2) return false
+    return item.start < (instance.scrollOffset ?? 0) + instance.options.scrollMargin
+  }
   const current = useRef(virtualizer); current.current = virtualizer
   const previousLayout = useRef(options.layoutKey)
   useLayoutEffect(() => {
     if (previousLayout.current === options.layoutKey) return
     previousLayout.current = options.layoutKey
     current.current.measure()
-    tableRef.current?.querySelectorAll<HTMLTableRowElement>('tbody tr[data-index]').forEach(current.current.measureElement)
-  }, [options.layoutKey, tableRef])
+    if (options.wrapCells) {
+      tableRef.current?.querySelectorAll<HTMLTableRowElement>('tbody tr[data-index]').forEach(current.current.measureElement)
+    }
+  }, [options.layoutKey, options.wrapCells, tableRef])
   const previousMeasure = useRef(options.measureKey ?? '')
   useLayoutEffect(() => {
     const next = options.measureKey ?? ''
@@ -111,10 +179,21 @@ export function useTableViewport(options: {
     if (!next) return
     tableRef.current?.querySelectorAll<HTMLTableRowElement>('tbody tr[data-index]').forEach(current.current.measureElement)
   }, [options.measureKey, tableRef])
-  useEffect(() => { setInteractedRow(null) }, [options.resetKey])
+  useEffect(() => {
+    setInteractedRow(null)
+    scrollDirRef.current = 'idle'
+    lastStartRef.current = 0
+  }, [options.resetKey])
   const revealRow = useCallback((id: string, rowKey?: string) => {
     const index = rowKey ? keyIndices.get(rowKey) : rowIndices.get(id)
     if (index != null) current.current.scrollToIndex(index, { align: 'auto', behavior: 'auto' })
   }, [rowIndices, keyIndices])
-  return { virtualizer, items: virtualizer.getVirtualItems(), margin: geometry.margin, revealRow }
+  return {
+    virtualizer,
+    items: virtualizer.getVirtualItems(),
+    margin: geometry.margin,
+    isScrolling: virtualizer.isScrolling,
+    scrollDirection: scrollDirRef.current,
+    revealRow,
+  }
 }

@@ -50,6 +50,19 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
   const peekRef = useRef(false)
   const hideRef = useRef<number | null>(null)
   const [peek, setPeek] = useState(false)
+  const prevVisibleRef = useRef(visible)
+  const [entering, setEntering] = useState(false)
+
+  useLayoutEffect(() => {
+    const wasVisible = prevVisibleRef.current
+    prevVisibleRef.current = visible
+    if (!wasVisible && visible) {
+      setEntering(true)
+      const timer = window.setTimeout(() => setEntering(false), 220)
+      return () => window.clearTimeout(timer)
+    }
+    if (!visible) setEntering(false)
+  }, [visible])
 
   useEffect(() => {
     const onMove = (event: PointerEvent) => {
@@ -143,9 +156,10 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
       {visible ? null : <div className="sidebar-edge-hot" data-testid="sidebar-edge-hot" aria-hidden />}
       {narrow ? <RailHoverTip hostRef={hostRef} /> : null}
     <aside
-      className={`app-side-bar min-h-0 flex-col border-r border-(--biu-color-border) bg-(--biu-color-bg-subtle)${narrow ? ' is-narrow overflow-visible' : ' overflow-hidden'}${visible ? ' flex' : ' is-closed flex'}`}
+      className={`app-side-bar min-h-0 flex-col border-r border-(--biu-color-border) bg-(--biu-color-bg-subtle)${narrow ? ' is-narrow overflow-visible' : ' overflow-hidden'}${visible ? (entering ? ' flex is-entering' : ' flex') : ' is-closed flex'}`}
       aria-hidden={!visible}
       data-testid={testId}
+      onAnimationEnd={() => setEntering(false)}
     >
       {onWidthChange && !narrow ? (
         <div

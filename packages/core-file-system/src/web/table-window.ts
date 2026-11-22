@@ -1,6 +1,8 @@
-export const TABLE_ROW_PX = 37
+export const TABLE_ROW_PX = 32
 export const TABLE_WRAP_ROW_PX = 96
 export const TABLE_WINDOW_OVERSCAN = 4
+/** 虚拟表格实际视口上下预渲染行数：参考 AG Grid rowBuffer（>=10），32px 行高下采用 12 行（384px）基线缓冲，快滑方向同步扩展至 20 行（640px）。 */
+export const TABLE_VIEWPORT_OVERSCAN = 12
 export const TABLE_WINDOW_VIEWPORT_FALLBACK = 560
 export const TABLE_COL_PX = 120
 export const TABLE_COL_PIN_PX = 240
@@ -111,13 +113,59 @@ export type TableColumnSlice = {
   padRight: number
 }
 
-/** 仅当开启冻结标题列时，冻结最左侧的标题列，动作列参与正常横向滚动。 */
-export function tablePinCount(keys: string[], labelField?: string | null, freezeTitle = false) {
-  return freezeTitle && labelField && keys[0] === labelField ? 1 : 0
+/** 冻结最左侧连续列：支持冻结标题列或冻结至任意指定列（freezeUntil）。 */
+export function tablePinCount(
+  keys: string[],
+  labelField?: string | null,
+  freezeTitle = false,
+  freezeUntil?: string | null,
+) {
+  const target = String(freezeUntil ?? '').trim() || (freezeTitle ? String(labelField ?? '').trim() : '')
+  if (!target) return 0
+  const idx = keys.indexOf(target)
+  return idx >= 0 ? idx + 1 : 0
 }
 
 export function tablePinColClass(key: string, labelField?: string | null, freezeTitle = false) {
   return freezeTitle && key === labelField ? 'is-pin-col' : ''
+}
+
+export type PinnedColOffset = {
+  left: number
+  isEdge: boolean
+}
+
+export function tablePinColOffsets(
+  keys: string[],
+  columnWidths: Record<string, number>,
+  pinCount: number,
+  labelField?: string | null,
+): Map<string, PinnedColOffset> {
+  const map = new Map<string, PinnedColOffset>()
+  if (pinCount <= 0) return map
+  let left = 0
+  const limit = Math.min(pinCount, keys.length)
+  for (let i = 0; i < limit; i += 1) {
+    const key = keys[i]!
+    map.set(key, { left, isEdge: i === limit - 1 })
+    left += tableColumnWidth(key, columnWidths[key], key === labelField)
+  }
+  return map
+}
+
+/** 将任意列 key 编码为安全的 ASCII CSS 自定义属性名，用于 AG Grid 风格弹性列宽 60fps 零重绘缩放。 */
+export function tableColWidthVar(key: string) {
+  let out = '--fsdb-cw-'
+  for (let i = 0; i < key.length; i += 1) {
+    const ch = key[i]!
+    const code = ch.charCodeAt(0)
+    if ((code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code === 45 || code === 95) {
+      out += ch
+    } else {
+      out += `_${code.toString(16)}_`
+    }
+  }
+  return out
 }
 
 /** 有手动值用手动值；否则钉住列 / 操作列 / 其余列各一个固定默认宽，不随视口缩放。 */

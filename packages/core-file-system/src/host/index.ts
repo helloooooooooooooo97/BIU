@@ -111,6 +111,7 @@ import { ContentTurnService } from './content-turn-service.ts'
 import {
   DatabaseAccessPolicy,
   isBuiltinPluginRecord,
+  isBuiltinPluginRow,
   isRecordInWorkspace,
   resolveScopeTarget,
   type WorkspaceFiles,
@@ -133,7 +134,6 @@ import {
   AGENTS_COLLECTION_PATH,
   DATA_COLLECTION_PATH,
   EDITOR_BLOCKS_COLLECTION_PATH,
-  EVENTS_COLLECTION_PATH,
   PAGES_COLLECTION_PATH,
   PLUGINS_COLLECTION_PATH,
   TAGS_COLLECTION_PATH,
@@ -165,7 +165,6 @@ const STAMP_FIELD_BLOCKLIST = new Set([
   'tag',
   'fieldCount',
   'stampCount',
-  'tagId',
   'content',
   'emoji',
   'createdAt',
@@ -231,8 +230,8 @@ function schemaFor(spec: CollectionSpec): CollectionSchema {
       computed: true,
       writable: false,
       sortable: true,
-      enum: ['管理', '编辑', '阅读'],
-      description: '计算属性。当前用户对这一条的权限：管理、编辑或阅读。记录授权和视图授权里取较高的一级。',
+      enum: ['管理', '编辑', '查看'],
+      description: '计算属性。当前用户对这一条的权限：管理、编辑或查看。',
     }
     columns = columnAfter(ensureColumn(columns, 'shareScope'), 'shareRole', 'shareScope')
   }
@@ -252,6 +251,10 @@ function schemaFor(spec: CollectionSpec): CollectionSchema {
 }
 
 function assertRecordCaps(spec: CollectionSpec) {
+  for (const action of spec.actions ?? []) {
+    const builtinDelete = spec.path !== TRASH_COLLECTION_PATH && (action.id === 'delete' || action.id === 'trash')
+    if (!builtinDelete && !action.run) throw new Error(`action has no handler: ${action.id}`)
+  }
   if (spec.records?.update && !spec.update) throw new Error(`collection ${spec.id}: records.update 为 true 时必须提供 update`)
   if (spec.records?.create && !spec.create) throw new Error(`collection ${spec.id}: records.create 为 true 时必须提供 create`)
   if (spec.records?.delete && !spec.remove) throw new Error(`collection ${spec.id}: records.delete 为 true 时必须提供 remove`)
@@ -368,12 +371,21 @@ export function matchActionWhen(record: DbRecord, when?: Record<string, unknown>
 }
 
 function publicCollection(item: CollectionSpec): CollectionInfo {
+  const create = Boolean(item.records?.create && item.create)
+  const update = Boolean(item.records?.update && item.update)
+  const del = Boolean(item.records?.delete && item.remove)
   return {
     id: item.id,
     path: item.path,
     kind: 'collection',
     label: item.label ?? item.id,
     view: item.view ?? null,
+    caps: {
+      create,
+      update,
+      delete: del,
+      overviewCreate: create && item.view?.sidebar !== false,
+    },
   }
 }
 
@@ -509,7 +521,6 @@ function sortRecords(rows: DbRecord[], field: string, dir: 'asc' | 'desc', sorts
 export const DEFAULT_PAGE_SIZE = 20
 export const MAX_PAGE_SIZE = 200
 const HARD_DELETE_PATHS = new Set([
-  EVENTS_COLLECTION_PATH,
   TRASH_COLLECTION_PATH,
   WORKSPACE_MEMBERS_COLLECTION_PATH,
   VIEWS_COLLECTION_PATH,
@@ -564,7 +575,10 @@ export class DatabaseService extends Service implements Database {
   recycleAssets?: () => void
 
   private bumpQueued = false
-  private pendingBumpTenants = new Map<string, { workspaceId: string; accountId: string }>()
+  private pendingBumpTenants = new Map<
+    string,
+    { workspaceId: string; accountId: string; paths: Set<string>; all: boolean }
+  >()
 
   constructor(ctx: Context) {
     super(ctx, 'database')
@@ -638,22 +652,15 @@ export class DatabaseService extends Service implements Database {
     return [...this.collections.values()].sort((a, b) => a.path.localeCompare(b.path))
   }
 
-  /** 成员表在本地和云端都出现：本机用户自己是成员，局域网访客按设备码列入。 */
-  membersInSystemData() {
-    return true
-  }
-
   publishCollection(item: CollectionSpec): CollectionInfo {
-    const info = publicCollection(item)
-    if (item.path === WORKSPACE_MEMBERS_COLLECTION_PATH && !this.membersInSystemData()) return { ...info, view: null }
-    return info
+    return publicCollection(item)
   }
 
   private async loadCollectionRows(spec: CollectionSpec, query: CollectionListQuery) {
     const rows = await spec.list(query)
     const listed = !query.ids?.length ? rows : rows.filter((row) => query.ids!.includes(row.id))
     const hidden = this.tags.deletedIds(spec.path)
-    const builtinPlugin = (row: { builtin?: unknown }) => spec.path === PLUGINS_COLLECTION_PATH && row.builtin === true
+    const builtinPlugin = (row: { builtin?: unknown }) => isBuiltinPluginRow(spec.path, row)
     return query.trash
       ? listed.filter((row) => hidden.has(row.id) && !builtinPlugin(row))
       : listed.filter((row) => !hidden.has(row.id) || builtinPlugin(row))
@@ -674,6 +681,38 @@ export class DatabaseService extends Service implements Database {
       return (this.ctx.get('account') as { store?: WorkspaceFiles } | undefined)?.store
     } catch {
       return undefined
+    }
+  }
+
+  private logMemberActivity(input: {
+    action: string
+    collection: string
+    recordId?: string
+    recordTitle?: string
+    detail?: string
+  }) {
+    if (isSystemCollection(input.collection) || isIndexCollection(input.collection)) return
+    try {
+      const store = this.collabStore() as {
+        recordActivity?: (row: {
+          category: 'data' | 'access' | 'member' | 'session' | 'automation'
+          action: string
+          collection?: string
+          recordId?: string
+          recordTitle?: string
+          detail?: string
+        }) => void
+      } | undefined
+      store?.recordActivity?.({
+        category: 'data',
+        action: input.action,
+        collection: input.collection,
+        recordId: input.recordId,
+        recordTitle: input.recordTitle,
+        detail: input.detail,
+      })
+    } catch {
+      /* 活动日志失败不影响主写入流程 */
     }
   }
 
@@ -931,7 +970,6 @@ export class DatabaseService extends Service implements Database {
   private listRemapsRecords(path: string) {
     return (
       path === TRASH_COLLECTION_PATH ||
-      path === EVENTS_COLLECTION_PATH ||
       path === TAGS_COLLECTION_PATH ||
       path === EDITOR_BLOCKS_COLLECTION_PATH
     )
@@ -1020,7 +1058,7 @@ export class DatabaseService extends Service implements Database {
     const workspace: DbRecord[] = []
     const shared: DbRecord[] = []
     for (const row of rows) {
-      if (collection === PLUGINS_COLLECTION_PATH && (row as { builtin?: unknown }).builtin === true) {
+      if (isBuiltinPluginRow(collection, row as { builtin?: unknown })) {
         shared.push(row)
         continue
       }
@@ -1104,7 +1142,7 @@ export class DatabaseService extends Service implements Database {
     http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('content', { path }))
   }
 
-  bump() {
+  bump(path?: string) {
     this.visibleGen += 1
     this.access.clearShareCaches()
     this.inflightMatches.clear()
@@ -1114,7 +1152,15 @@ export class DatabaseService extends Service implements Database {
     this.ctx.emit('database/change')
     const workspaceId = currentRequestWorkspaceId() || this.collabStore()?.activeWorkspaceId?.() || ''
     const accountId = currentAccountId()
-    this.pendingBumpTenants.set(`${workspaceId}\0${accountId}`, { workspaceId, accountId })
+    const key = `${workspaceId}\0${accountId}`
+    let entry = this.pendingBumpTenants.get(key)
+    if (!entry) {
+      entry = { workspaceId, accountId, paths: new Set(), all: false }
+      this.pendingBumpTenants.set(key, entry)
+    }
+    const cleanPath = String(path ?? '').trim()
+    if (cleanPath) entry.paths.add(cleanPath)
+    else entry.all = true
     if (this.bumpQueued) return
     this.bumpQueued = true
     queueMicrotask(() => {
@@ -1125,12 +1171,31 @@ export class DatabaseService extends Service implements Database {
         | { broadcast?: (type: string, payload: unknown, workspaceId?: string, accountId?: string) => void }
         | undefined
       for (const tenant of tenants) {
-        http?.broadcast?.(
-          DATABASE_CHANNEL,
-          databaseChannelPayload('records'),
-          tenant.workspaceId || undefined,
-          tenant.accountId || undefined,
-        )
+        if (tenant.all || tenant.paths.size === 0) {
+          http?.broadcast?.(
+            DATABASE_CHANNEL,
+            databaseChannelPayload('records'),
+            tenant.workspaceId || undefined,
+            tenant.accountId || undefined,
+          )
+        } else {
+          for (const targetPath of tenant.paths) {
+            http?.broadcast?.(
+              DATABASE_CHANNEL,
+              databaseChannelPayload('records', { path: targetPath }),
+              tenant.workspaceId || undefined,
+              tenant.accountId || undefined,
+            )
+            if (targetPath === TAGS_COLLECTION_PATH || targetPath.startsWith(`${TAGS_COLLECTION_PATH}/`)) {
+              http?.broadcast?.(
+                DATABASE_CHANNEL,
+                databaseChannelPayload('tags'),
+                tenant.workspaceId || undefined,
+                tenant.accountId || undefined,
+              )
+            }
+          }
+        }
       }
     })
   }
@@ -1415,11 +1480,11 @@ export class DatabaseService extends Service implements Database {
     const withPeople = !need || need.people ? this.applyPersonOverlay(spec, withTag) : withTag
     const withMeta = !need || need.meta ? this.applyMetaOverlay(spec, withPeople) : withPeople
     if (isSystemCollection(spec.path) || isIndexCollection(spec.path)) return withMeta
-    if (spec.path === PLUGINS_COLLECTION_PATH && row.builtin === true) {
+    if (isBuiltinPluginRow(spec.path, row)) {
       return {
         ...withMeta,
         ...(!need || need.shareScope ? { shareScope: '共享' } : {}),
-        ...(!need || need.shareRole ? { shareRole: '阅读' } : {}),
+        ...(!need || need.shareRole ? { shareRole: '查看' } : {}),
       }
     }
     const wantScope = !need || need.shareScope
@@ -1583,6 +1648,151 @@ export class DatabaseService extends Service implements Database {
     return { kind: 'record' as const, path: `${spec.path}/${record.id}`, schema: this.schemaForCurrent(spec), value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))) }
   }
 
+  resolveViewFilter(collectionPath: string, viewId: string): {
+    viewId: string
+    viewName: string
+    filter: Record<string, unknown>
+    q?: string
+    sortField?: string
+    sortDir?: 'asc' | 'desc'
+  } {
+    const colPath = normalizeCollectionPath(collectionPath)
+    const rawId = viewId.trim()
+    if (!rawId) throw new Error('view_id must be a non-empty string')
+    const saved = [
+      builtinAllView({ path: colPath }),
+      ...(this.viewCatalog?.viewsFor(colPath) ?? []),
+    ] as Array<SharedViewDef & { query?: string; sortField?: string; sortDir?: 'asc' | 'desc' }>
+    const hit = saved.find((item) => item.id === rawId || (item.name && item.name === rawId))
+    if (!hit) {
+      const choices = saved.map((item) => `${item.id}${item.name ? `(${item.name})` : ''}`).join(', ')
+      throw new Error(`unknown view: ${rawId} in ${colPath}${choices ? ` (available: ${choices})` : ''}`)
+    }
+    const filter: Record<string, unknown> = {
+      ...(hit.filters && typeof hit.filters === 'object' ? hit.filters : {}),
+      ...(hit.filterTree ? { $tree: hit.filterTree } : {}),
+    }
+    return {
+      viewId: hit.id,
+      viewName: hit.name ?? hit.id,
+      filter,
+      ...(typeof hit.query === 'string' && hit.query ? { q: hit.query } : {}),
+      ...(typeof hit.sortField === 'string' && hit.sortField ? { sortField: hit.sortField } : {}),
+      ...(hit.sortDir === 'desc' || hit.sortDir === 'asc' ? { sortDir: hit.sortDir } : {}),
+    }
+  }
+
+  async batchUpdate(
+    collectionPath: string,
+    options: {
+      ids?: string[]
+      viewId?: string
+      filter?: Record<string, unknown>
+      q?: string
+      fields?: Record<string, unknown>
+      updates?: Array<{ id: string; fields: Record<string, unknown> }>
+      dryRun?: boolean
+      maxRecords?: number
+    },
+  ) {
+    const parts = splitPath(collectionPath)
+    if (parts.length !== 1) throw new Error(`batchUpdate requires a collection path like /pages, got: ${collectionPath}`)
+    const colPath = `/${parts[0]}`
+    const spec = this.collection(colPath)
+    if (!spec) throw new Error(`unknown collection: ${colPath}`)
+
+    const maxRecords = Math.max(1, Math.min(500, Math.floor(Number(options.maxRecords) || 200)))
+    const dryRun = options.dryRun === true
+
+    const hasUpdates = Array.isArray(options.updates) && options.updates.length > 0
+    const hasFields = Boolean(options.fields && typeof options.fields === 'object' && !Array.isArray(options.fields) && Object.keys(options.fields).length > 0)
+    if (!hasUpdates && !hasFields) {
+      throw new Error('batchUpdate requires non-empty fields or updates')
+    }
+
+    let targets: Array<{ id: string; fields: Record<string, unknown> }> = []
+    let matched = 0
+
+    if (hasUpdates) {
+      const list = options.updates!.slice(0, maxRecords)
+      matched = options.updates!.length
+      for (const item of list) {
+        const id = String(item?.id ?? '').trim()
+        if (!id) throw new Error('each item in updates must include a non-empty id')
+        if (!item.fields || typeof item.fields !== 'object' || Array.isArray(item.fields) || !Object.keys(item.fields).length) {
+          throw new Error(`updates item ${id} must include non-empty fields`)
+        }
+        targets.push({ id, fields: item.fields })
+      }
+    } else {
+      const explicitIds = Array.isArray(options.ids)
+        ? [...new Set(options.ids.map((item) => String(item ?? '').trim()).filter(Boolean))]
+        : []
+      const hasView = typeof options.viewId === 'string' && options.viewId.trim().length > 0
+      const hasFilter = Boolean(options.filter && Object.keys(options.filter).length > 0)
+      const hasQ = typeof options.q === 'string' && options.q.trim().length > 0
+
+      if (!explicitIds.length && !hasView && !hasFilter && !hasQ) {
+        throw new Error('batchUpdate requires at least one selector: view_id, ids, filter, or q')
+      }
+
+      if (explicitIds.length) {
+        matched = explicitIds.length
+        targets = explicitIds.slice(0, maxRecords).map((id) => ({ id, fields: options.fields! }))
+      } else {
+        const viewResolved = hasView ? this.resolveViewFilter(colPath, options.viewId!) : null
+        const mergedFilter: Record<string, unknown> = {
+          ...(viewResolved?.filter ?? {}),
+          ...(options.filter ?? {}),
+        }
+        const q = hasQ ? options.q!.trim() : (viewResolved?.q ?? '')
+        const listed = (await this.list(
+          colPath,
+          Object.keys(mergedFilter).length ? mergedFilter : undefined,
+          { q, limit: maxRecords, offset: 0, columns: ['id'] },
+        )) as { total?: number; items?: Array<{ id?: unknown }> }
+        const foundIds = (listed.items ?? []).map((item) => String(item?.id ?? '').trim()).filter(Boolean)
+        matched = typeof listed.total === 'number' ? listed.total : foundIds.length
+        targets = foundIds.map((id) => ({ id, fields: options.fields! }))
+      }
+    }
+
+    if (dryRun) {
+      return {
+        ok: true,
+        kind: 'batch_updated' as const,
+        path: colPath,
+        dryRun: true,
+        matched,
+        targetCount: targets.length,
+        truncated: matched > targets.length,
+        sampleIds: targets.slice(0, 10).map((item) => item.id),
+      }
+    }
+
+    const updatedIds: string[] = []
+    const failed: Array<{ id: string; error: string }> = []
+    for (const target of targets) {
+      try {
+        await this.update(`${colPath}/${target.id}`, structuredClone(target.fields))
+        updatedIds.push(target.id)
+      } catch (error) {
+        failed.push({ id: target.id, error: error instanceof Error ? error.message : String(error) })
+      }
+    }
+
+    return {
+      ok: failed.length === 0,
+      kind: 'batch_updated' as const,
+      path: colPath,
+      matched,
+      updated: updatedIds.length,
+      truncated: matched > targets.length,
+      ids: updatedIds,
+      ...(failed.length ? { failed } : {}),
+    }
+  }
+
   async update(path: string, content: unknown) {
     const parts = splitPath(path)
     if (parts.length === 2 && parts[0] === 'data') {
@@ -1645,7 +1855,7 @@ export class DatabaseService extends Service implements Database {
       }
       this.refreshContentRefs(spec, next)
       await this.stampActor(spec.path, current.id)
-      this.bump()
+      this.bump(spec.path)
       const beforeRow = this.decorateRecord(spec, current)
       const beforeSnap: Record<string, unknown> = {}
       const afterSnap: Record<string, unknown> = {}
@@ -1701,7 +1911,7 @@ export class DatabaseService extends Service implements Database {
     if (!viewOnly) this.indexTagRecord(spec, this.decorateRecord(spec, record))
     this.refreshContentRefs(spec, this.withBanner(spec, record), !viewOnly)
     if (viewOnly) this.notifyViewCatalog(`${spec.path}/${record.id}`)
-    else this.bump()
+    else this.bump(spec.path)
     const beforeSnap: Record<string, unknown> = {}
     const afterSnap: Record<string, unknown> = {}
     for (const key of Object.keys(patch)) {
@@ -1711,6 +1921,12 @@ export class DatabaseService extends Service implements Database {
     const title = String(record.title ?? record.name ?? record.id).trim() || record.id
     if (!viewOnly && Object.keys(patch).length) {
       await this.ctx.get('contentTurns')?.recordUpdate(`${spec.path}/${record.id}`, title, beforeSnap, afterSnap)
+      this.logMemberActivity({
+        action: 'record.update',
+        collection: spec.path,
+        recordId: record.id,
+        recordTitle: title,
+      })
     }
     return { kind: 'record' as const, path: `${spec.path}/${record.id}`, value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))) }
   }
@@ -1844,7 +2060,7 @@ export class DatabaseService extends Service implements Database {
       this.indexTagRecord(spec, this.decorateRecord(spec, record))
       this.refreshContentRefs(spec, this.withBanner(spec, record))
     }
-    this.bump()
+    this.bump(spec.path)
     const items = created.map((record) => ({
       kind: 'record' as const,
       path: `${spec.path}/${record.id}`,
@@ -1853,6 +2069,12 @@ export class DatabaseService extends Service implements Database {
     for (const item of items) {
       const title = String(item.value.title ?? item.value.name ?? '').trim() || item.path
       await this.ctx.get('contentTurns')?.recordCreate(item.path, title, item.value)
+      this.logMemberActivity({
+        action: 'record.create',
+        collection: spec.path,
+        recordId: String(item.value.id ?? ''),
+        recordTitle: title,
+      })
     }
     return {
       kind: 'created' as const,
@@ -1920,7 +2142,17 @@ export class DatabaseService extends Service implements Database {
           if (collection && collection !== '/' && viewId) this.shares.revokeView(collection, viewId)
         }
       }
-      this.bump()
+      this.bump(spec.path)
+      for (const row of matched) {
+        const title = String(row.title ?? row.name ?? row.id ?? '').trim()
+        this.logMemberActivity({
+          action: 'record.delete',
+          collection: spec.path,
+          recordId: String(row.id ?? ''),
+          recordTitle: title,
+          detail: '移入回收站',
+        })
+      }
       return { kind: 'deleted' as const, path: spec.path, ids, trash: true }
     }
     await spec.remove({ ids })
@@ -1944,7 +2176,7 @@ export class DatabaseService extends Service implements Database {
         this.shares.revokeView(key.collection, key.viewId)
       }
     }
-    this.bump()
+    this.bump(spec.path)
     this.recycleAssets?.()
     return { kind: 'deleted' as const, path: spec.path, ids }
   }
@@ -1967,7 +2199,7 @@ export class DatabaseService extends Service implements Database {
     )
     const ids = [...new Set(matched.map((row) => row.id))]
     for (const id of ids) this.tags.restoreDeleted(spec.path, id)
-    this.bump()
+    this.bump(spec.path)
     return { kind: 'restored' as const, path: spec.path, ids }
   }
 
@@ -1978,7 +2210,7 @@ export class DatabaseService extends Service implements Database {
       if (!spec) continue
       const record = await spec.get(row.record_id)
       if (!record) continue
-      if (row.collection === PLUGINS_COLLECTION_PATH && (record as { builtin?: unknown }).builtin === true) continue
+      if (isBuiltinPluginRow(row.collection, record as { builtin?: unknown })) continue
       const authorization = this.authorization()
       const actor = authorization?.currentActor()
       if (authorization && actor) {
@@ -2039,6 +2271,7 @@ export class DatabaseService extends Service implements Database {
     if ((actionId === 'delete' || actionId === 'trash') && spec.path !== TRASH_COLLECTION_PATH) {
       return this.remove(spec.path, { ids: [parts[1]!] })
     }
+    if (!action.run) throw new Error(`action has no handler: ${actionId}`)
     const result = await action.run(parts[1]!, record, args)
     if (spec.path === PLUGINS_COLLECTION_PATH && actionId === 'sandbox' && !builtinPlugin && !this.access.recordOwner(spec.path, parts[1]!)) {
       this.stampPluginCreateScope(parts[1]!, args)
@@ -2109,7 +2342,7 @@ export class DatabaseService extends Service implements Database {
     const patch = this.collectionCanUpdate(spec)
       ? pickWritablePatch(schema, { [field]: persisted })
       : { [field]: persisted }
-    const record = await spec.update(parts[1]!, patch)
+    const record = await spec.update(parts[1]!, patch, isEditorContentSpec(spec) ? { persistContent: false } : undefined)
     await this.stampActor(spec.path, record.id)
     this.refreshContentRefs(spec, this.withBanner(spec, record))
     this.notifyContent(`${spec.path}/${record.id}`)
@@ -2235,6 +2468,31 @@ export function apply(ctx: Context) {
         ...(view.filters ?? {}),
         ...(view.filterTree ? { $tree: view.filterTree } : {}),
       },
+    )
+  })
+  const dataViewCache = new Map<string, ReturnType<typeof savedViews.viewsFor>>()
+  const clearDataViewCache = () => {
+    dataViewCache.clear()
+  }
+  account?.authorization?.onInvalidate?.(clearDataViewCache)
+  const origNotifyViewCatalog = db.notifyViewCatalog.bind(db)
+  db.notifyViewCatalog = (path?: string) => {
+    clearDataViewCache()
+    origNotifyViewCatalog(path)
+  }
+  account?.authorization?.setDataViewMatcher((_workspaceId, collection, viewId, recordId, context) => {
+    if (!context.record) return false
+    let saved = dataViewCache.get(collection)
+    if (!saved) {
+      saved = [builtinAllView({ path: collection }), ...savedViews.viewsFor(collection)] as ReturnType<typeof savedViews.viewsFor>
+      dataViewCache.set(collection, saved)
+    }
+    return recordMatchesGrantedView(
+      { id: recordId, ...context.record } as DbRecord,
+      viewId,
+      saved,
+      context.scope,
+      { grantedBy: context.grantedBy, recordOwnerId: context.recordOwnerId },
     )
   })
   const shares = db.shares

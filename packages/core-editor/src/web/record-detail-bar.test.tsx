@@ -1,14 +1,15 @@
 import { afterEach, test } from 'vitest'
 import assert from 'node:assert/strict'
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
-import { RecordDetailBar } from './page-detail-bar.tsx'
+import { RecordDetailBar } from './record-detail-bar.tsx'
 import { DEFAULT_RECORD_LAYOUT_ID, DEFAULT_RECORD_PROP_VIEW_ID } from '@biu/type-file-system/record-views'
 import { getRecordViewCatalog, patchRecordViewCatalog } from '@biu/core-file-system/record-view-catalog'
-import { getPageFind, patchPageFind } from './page-view-state.ts'
+import { getPageFind, patchPageFind } from './editor-view-state.ts'
 import { getActiveRecordLayout, persistRecordLayoutDisplay } from '@biu/core-file-system/record-layouts'
 
 afterEach(() => {
   cleanup()
+  patchPageFind('p0133', { open: false, query: '', index: 0, total: 0 })
   persistRecordLayoutDisplay('/pages', 'p0133', DEFAULT_RECORD_LAYOUT_ID, { name: '默认视图' })
   patchRecordViewCatalog('/pages', 'p0133', {
     views: [],

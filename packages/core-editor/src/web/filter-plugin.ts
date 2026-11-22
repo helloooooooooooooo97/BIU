@@ -3,7 +3,7 @@ import { Plugin, PluginKey } from '@tiptap/pm/state'
 import type { Node } from '@tiptap/pm/model'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { nodeBlockId } from './block-id.ts'
-import { PAGE_VIEW_EVENT, type PageSort } from './page-view-state.ts'
+import { PAGE_VIEW_EVENT, type PageSort } from './editor-view-state.ts'
 import { getActiveRecordLayout } from '@biu/core-file-system/record-layouts'
 import { subscribeRecordViewCatalog } from '@biu/core-file-system/record-view-catalog'
 

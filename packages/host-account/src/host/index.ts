@@ -1141,6 +1141,98 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     }
   })
 
+  ctx.http.route('GET', '/api/account/member-activity', async (route) => {
+    try {
+      const me = actor(route)
+      const activeWorkspace = account.store.activeWorkspaceId()
+      if (
+        activeWorkspace &&
+        (await relayCloudWorkspace(
+          route,
+          me.id,
+          activeWorkspace,
+          `/api/account/member-activity${route.query.toString() ? `?${route.query.toString()}` : ''}`,
+        ))
+      ) return
+      const memberId = String(route.query.get('memberId') ?? '').trim() || me.id
+      const days = Number(route.query.get('days') ?? 182)
+      const limit = Number(route.query.get('limit') ?? 80)
+      const data = account.store.memberActivity(me.id, memberId, {
+        days: Number.isFinite(days) ? days : 182,
+        limit: Number.isFinite(limit) ? limit : 80,
+      })
+      type DatabaseLookup = {
+        collection?: (path: string) => { label?: string } | undefined
+        list?: (path: string, query?: { ids?: string[]; columns?: string[] }) => Promise<{ items?: Array<{ id?: unknown; title?: unknown; name?: unknown }> }>
+        viewCatalog?: { viewsFor(path: string): Array<{ id?: unknown; name?: unknown }> }
+      }
+      let db: DatabaseLookup | undefined
+      try {
+        db = ctx.get('database') as DatabaseLookup | undefined
+      } catch {
+        db = undefined
+      }
+      const titleMap = new Map<string, string>()
+      const collectionLabels = new Map<string, string>()
+      if (db?.list && data.grants.records.length) {
+        const byCollection = new Map<string, string[]>()
+        for (const grant of data.grants.records) {
+          const list = byCollection.get(grant.collection) ?? []
+          list.push(grant.recordId)
+          byCollection.set(grant.collection, list)
+        }
+        for (const [collection, ids] of byCollection) {
+          const label = db.collection?.(collection)?.label?.trim()
+          if (label) collectionLabels.set(collection, label)
+          try {
+            const listed = await db.list(collection, { ids, columns: ['title', 'name'] })
+            for (const row of listed?.items ?? []) {
+              const id = String(row.id ?? '')
+              const title = String(row.title ?? row.name ?? '').trim()
+              if (id && title) titleMap.set(`${collection}\t${id}`, title)
+            }
+          } catch {
+            /* 无法读取该集合时回退为 recordId */
+          }
+        }
+      }
+      const viewNameMap = new Map<string, string>()
+      if (db?.viewCatalog && data.grants.views.length) {
+        const collections = new Set(data.grants.views.map((item) => item.collection))
+        for (const collection of collections) {
+          const label = db.collection?.(collection)?.label?.trim()
+          if (label) collectionLabels.set(collection, label)
+          try {
+            for (const view of db.viewCatalog.viewsFor(collection)) {
+              const id = String(view.id ?? '')
+              const name = String(view.name ?? '').trim()
+              if (id && name) viewNameMap.set(`${collection}\t${id}`, name)
+            }
+          } catch {
+            /* 视图目录不可用时回退为 viewId */
+          }
+        }
+      }
+      route.send(200, {
+        ...data,
+        grants: {
+          records: data.grants.records.map((grant) => ({
+            ...grant,
+            title: titleMap.get(`${grant.collection}\t${grant.recordId}`) ?? '',
+            collectionLabel: collectionLabels.get(grant.collection) ?? '',
+          })),
+          views: data.grants.views.map((grant) => ({
+            ...grant,
+            viewName: viewNameMap.get(`${grant.collection}\t${grant.viewId}`) ?? '',
+            collectionLabel: collectionLabels.get(grant.collection) ?? '',
+          })),
+        },
+      })
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
   ctx.http.route('GET', '/api/account/access', async (route) => {
     try {
       const me = actor(route)
@@ -1214,6 +1306,30 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
           ? account.store.grantGroup(me.id, collection, recordId, String(body.groupId), role)
           : account.store.shareWithEmail(me.id, collection, recordId, String(body.email ?? ''), role, kind),
       )
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
+  ctx.http.route('PATCH', '/api/account/access', async (route) => {
+    try {
+      const me = actor(route)
+      const activeWorkspace = account.store.activeWorkspaceId()
+      if (activeWorkspace && (await relayCloudWorkspace(route, me.id, activeWorkspace, '/api/account/access'))) return
+      requireCollaborativeWorkspace(activeWorkspace ?? '')
+      const body = (await route.json()) as {
+        collection?: string
+        recordId?: string
+        inheritanceMode?: 'inherit' | 'custom'
+      }
+      const collection = String(body.collection ?? '').trim()
+      const recordId = String(body.recordId ?? '').trim()
+      const mode = body.inheritanceMode === 'inherit' ? 'inherit' : body.inheritanceMode === 'custom' ? 'custom' : null
+      if (!collection || !recordId || !mode) {
+        route.send(400, { error: '参数不完整' })
+        return
+      }
+      route.send(200, account.store.setRecordInheritance(me.id, collection, recordId, mode))
     } catch (error) {
       fail(route, error)
     }

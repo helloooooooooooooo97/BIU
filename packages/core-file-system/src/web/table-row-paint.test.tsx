@@ -4,6 +4,7 @@ import { useRef, type ReactNode, type RefObject } from 'react'
 import { WindowedTable } from './browser.tsx'
 import { rowPaintStamp } from './windowed-table.tsx'
 import { resetRememberedTableWrap, TABLE_ROW_PX } from './table-window.ts'
+import { loadTags, pullTags } from './tag-catalog.ts'
 
 const ROW_COUNT = 80
 const columns = [{ key: 'title' }]
@@ -176,4 +177,104 @@ test('group-head paint stamp changes when folded toggles', () => {
   const open = rowPaintStamp({ kind: 'group-head', key: 'gh:2026-11-19', groupKey: '2026-11-19', label: '2026/11/19', count: 5, folded: false }, stamps)
   const folded = rowPaintStamp({ kind: 'group-head', key: 'gh:2026-11-19', groupKey: '2026-11-19', label: '2026/11/19', count: 5, folded: true }, stamps)
   expect(open).not.toBe(folded)
+})
+
+test('group-pager paint stamp changes when pageSize changes', () => {
+  const stamps = new Map()
+  const p50 = rowPaintStamp({ kind: 'group-pager', key: 'gp:done', groupKey: 'done', count: 86, pageIndex: 0, pageSize: 50 }, stamps)
+  const p100 = rowPaintStamp({ kind: 'group-pager', key: 'gp:done', groupKey: 'done', count: 86, pageIndex: 0, pageSize: 100 }, stamps)
+  expect(p50).not.toBe(p100)
+})
+
+test('repeated tag catalog renames repaint tag cells while keeping non-tag cells cached', async () => {
+  const tagNodes = [
+    {
+      kind: 'row' as const,
+      key: 'row-0',
+      row: { id: 'row-0', title: 'Row 0', tag: { tags: ['tag-10'], values: {} } },
+      depth: 0,
+      hasKids: false,
+      kidCount: 0,
+    },
+  ]
+  const cols = [{ key: 'title' }, { key: 'tag' }]
+  const painted: string[] = []
+  let catalogTitle = '代码提交 1'
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+    tags: [{ id: 'tag-10', label: catalogTitle, fields: [] }],
+  }), { status: 200, headers: { 'content-type': 'application/json' } })))
+
+  await pullTags()
+
+  function TagHarness() {
+    const paintRef = useRef({
+      colSpan: 2,
+      error: '',
+      renderNode: () => null as ReactNode,
+      renderCell: (node: { key: string; row?: Record<string, unknown> }, colKey: string) => {
+        painted.push(`${node.key}:${colKey}`)
+        if (colKey === 'tag') {
+          const label = loadTags().find((t) => t.id === 'tag-10')?.label ?? 'tag-10'
+          return <td key={colKey} data-col-key={colKey}>{label}</td>
+        }
+        return <td key={colKey} data-col-key={colKey}>{String(node.row?.title ?? '')}</td>
+      },
+      renderRow: (node: { key: string }, kids: ReactNode[]) => <tr key={node.key} data-record-id={node.key}>{kids}</tr>,
+    })
+    const chromeRef = useRef({ paintHeadTh: () => null, onPointerDown: undefined, onPointerMove: undefined, onClick: () => {}, onMouseOver: () => {}, onContextMenu: undefined })
+    const colWindowRef = useRef({ pin: 0, start: 0, end: 2, padLeft: 0, padRight: 0 })
+    const tableRef = useRef<HTMLTableElement>(null)
+    const wrapRef = useRef<HTMLDivElement>(null)
+    const stageRef = useRef<HTMLDivElement>(null)
+    const checkStackRef = useRef<HTMLDivElement>(null)
+    const checkHoverRef = useRef<string | 'head' | null>(null)
+    return (
+      <div className="fsdb-right-body">
+        <div className="tasks-table-wrap" ref={wrapRef}>
+          <WindowedTable
+            columns={cols}
+            columnWidths={{ title: 200, tag: 200 }}
+            columnPinCount={0}
+            wrapCells={false}
+            truncateCells={false}
+            resizingCol={null}
+            nodes={tagNodes}
+            error=""
+            pickMode={false}
+            resetKey="tag-rename"
+            forceLiveChecks={false}
+            checkLayoutExtra=""
+            paintRef={paintRef}
+            chromeRef={chromeRef}
+            colWindowRef={colWindowRef}
+            tableRef={tableRef as RefObject<HTMLTableElement | null>}
+            wrapRef={wrapRef}
+            stageRef={stageRef}
+            checkStackRef={checkStackRef}
+            checkHoverRef={checkHoverRef}
+            paintCheckHover={() => {}}
+            renderCheckHead={() => null}
+            renderCheckRow={() => null}
+            activeRowId={null}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  const view = render(<TagHarness />)
+  const tagCell = () => view.container.querySelector('td[data-col-key="tag"]')?.textContent
+  expect(tagCell()).toBe('代码提交 1')
+
+  painted.length = 0
+  catalogTitle = '代码提交 2'
+  await act(async () => { await pullTags() })
+  expect(tagCell()).toBe('代码提交 2')
+  expect(painted).toEqual(['row-0:tag'])
+
+  painted.length = 0
+  catalogTitle = '代码提交 3'
+  await act(async () => { await pullTags() })
+  expect(tagCell()).toBe('代码提交 3')
+  expect(painted).toEqual(['row-0:tag'])
 })

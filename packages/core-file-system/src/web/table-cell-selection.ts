@@ -57,6 +57,7 @@ export class LiveTableCellSelection {
     this.dirtyTables.add(table)
     const { writable } = this.getModel()
     for (const row of Array.from(table.tBodies[0]?.rows ?? [])) {
+      if (row.style.display === 'none') continue
       const id = row.dataset.recordId
       if (!id) continue
       const rowKey = row.dataset.rowKey ?? id

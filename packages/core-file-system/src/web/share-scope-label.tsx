@@ -33,10 +33,11 @@ export function ShareScopeLabel({ label }: { label: string }) {
 }
 
 export function accessText(role: string) {
-  if (role === '管理' || role === '编辑' || role === '阅读') return role
+  if (role === '管理' || role === '编辑' || role === '查看') return role
+  if (role === '阅读') return '查看'
   if (role === 'owner' || role === 'manager') return '管理'
   if (role === 'editor') return '编辑'
-  return '阅读'
+  return '查看'
 }
 
 export function accessTone(text: string) {

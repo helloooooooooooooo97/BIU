@@ -2,15 +2,16 @@ import 'katex/dist/katex.min.css'
 import 'highlight.js/styles/github-dark.css'
 import type { Context } from 'cordis'
 import { DEFAULT_CHROME_PATH, type DatabaseUi } from '@biu/type-file-system/ui'
-import { RecordEditor } from './page-editor.tsx'
+import { RecordEditor } from './record-editor.tsx'
 import { BlockEditorService } from './service.ts'
 import { PAGE_EDITOR_STYLE } from './style.ts'
-import { RecordDetailBar } from './page-detail-bar.tsx'
+import { RecordDetailBar } from './record-detail-bar.tsx'
 import { registerSandboxBlock } from './sandbox/block.tsx'
 import { EDITOR_CONTENT_VIEWS, EDITOR_DETAIL_TOOLS } from './editor-content-views.ts'
+import { bindInlineEditSessionView } from './inline-edit-popover.tsx'
 
-export { RecordEditor } from './page-editor.tsx'
-export { RecordDetailBar } from './page-detail-bar.tsx'
+export { RecordEditor } from './record-editor.tsx'
+export { RecordDetailBar } from './record-detail-bar.tsx'
 export {
   BlockEditorService,
   BASIC_BLOCK_TYPE,
@@ -29,6 +30,7 @@ export const name = 'core-editor-ui'
 export const inject = ['databaseUi']
 
 export function apply(ctx: Context) {
+  bindInlineEditSessionView(ctx)
   new BlockEditorService(ctx)
   registerSandboxBlock(ctx.blockEditor)
   const ui = ctx.get('databaseUi') as DatabaseUi

@@ -1,4 +1,5 @@
 import { COL_WIDTH_MAX, COL_WIDTH_MIN } from './saved-view.ts'
+import { tableColWidthVar } from './table-window.ts'
 
 export type ColumnResizeOptions = {
   handle: HTMLElement
@@ -51,6 +52,7 @@ export function startTableColumnResize({
   const applyDomPreview = () => {
     raf = 0
     const px = `${latestPx}px`
+    const colVar = tableColWidthVar(colKey)
     if (mainCol) {
       mainCol.style.width = px
       mainCol.style.minWidth = px
@@ -59,6 +61,7 @@ export function startTableColumnResize({
     const nextTablePx = Math.max(1, Math.round(baseTablePx + (latestPx - origin)))
     table.style.minWidth = `${nextTablePx}px`
     table.style.setProperty('--fsdb-table-px', `${nextTablePx}px`)
+    table.style.setProperty(colVar, px)
     if (isPinnedFirst) table.style.setProperty('--fsdb-pin-title', px)
 
     const pinnedCandidate =
@@ -75,6 +78,7 @@ export function startTableColumnResize({
         pinnedCol.style.maxWidth = px
       }
       pinnedTable.style.width = `${nextTablePx}px`
+      pinnedTable.style.setProperty(colVar, px)
       if (isPinnedFirst) pinnedTable.style.setProperty('--fsdb-pin-title', px)
       const pinnedStage = pinnedTable.closest<HTMLElement>('.fsdb-pinned-head-stage')
       if (pinnedStage) pinnedStage.style.width = `calc(${nextTablePx}px + var(--fsdb-check-gutter))`

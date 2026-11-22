@@ -42,7 +42,7 @@ function mockFetch(handler: (url: string, init?: RequestInit) => { status: numbe
 }
 
 test('page file url stamps the open page path', () => {
-  assert.equal(pageFileUrl('sandbox-ab.jsx', { path: '/pages/p1' }), '/api/page/file/sandbox-ab.jsx?path=%2Fpages%2Fp1')
+  assert.equal(pageFileUrl('sandbox-ab.jsx', { path: '/pages/p1' }), '/api/db/file/sandbox-ab.jsx?path=%2Fpages%2Fp1')
 })
 
 test('fresh sandbox source is created with a PUT, not a GET', async () => {

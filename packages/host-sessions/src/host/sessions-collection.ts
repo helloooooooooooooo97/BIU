@@ -1,5 +1,5 @@
 import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
-import { recordBuiltinValues, REQUIRED_RECORD_FIELDS, normalizeSchemaValue } from '@biu/type-file-system'
+import { recordBuiltinValues, normalizeSchemaValue } from '@biu/type-file-system'
 import {
   isSessionCompactPoint,
   nameFromSessionMascot,
@@ -191,12 +191,10 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec {
     },
     records: { update: true, create: Boolean(sessions.create), delete: true, allocateId: false },
     schema: {
-      labelField: 'title',
       contentField: 'events',
       contentBackend: 'computed',
       columns: ['title', 'pinned', 'tag', 'eventCount', 'projectPath', 'updatedAt'],
       fields: {
-        ...REQUIRED_RECORD_FIELDS,
         events: { type: 'file', label: '会话', writable: false },
         title: { type: 'string', label: '标题', writable: true },
         pinned: { type: 'boolean', label: '置顶', writable: true },

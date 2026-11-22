@@ -104,7 +104,7 @@ function MetaItem({
   )
 }
 
-function StepBar({ stat, replyId }: { stat: ChatStepStat; replyId: string }) {
+const StepBar = memo(function StepBar({ stat, replyId }: { stat: ChatStepStat; replyId: string }) {
   const usage: TrajectoryUsage = {
     inputTokens: stat.inputTokens,
     outputTokens: stat.outputTokens,
@@ -142,7 +142,7 @@ function StepBar({ stat, replyId }: { stat: ChatStepStat; replyId: string }) {
       </div>
     </div>
   )
-}
+})
 
 function renderReplyPartList({
   parts,
@@ -222,7 +222,25 @@ function renderReplyPartList({
   return elements
 }
 
-function ReplyParts({
+const ReplyPartList = memo(function ReplyPartList({
+  parts,
+  stepMap,
+  onInspect,
+  showSteps,
+  replyId,
+  streaming,
+}: {
+  parts: ChatReplyPart[]
+  stepMap: Map<number, ChatStepStat>
+  onInspect: (callId: string) => void
+  showSteps: boolean
+  replyId: string
+  streaming: boolean
+}) {
+  return <>{renderReplyPartList({ parts, stepMap, onInspect, showSteps, replyId, streaming })}</>
+})
+
+const ReplyParts = memo(function ReplyParts({
   node,
   onInspect,
   expanded,
@@ -232,15 +250,16 @@ function ReplyParts({
   /** true：展示 Details；false：Details 仍挂载但 hidden，避免展开时重建 DOM */
   expanded: boolean
 }) {
-  const stepMap = new Map((node.steps ?? []).map((item) => [item.step, item]))
+  const stepMap = useMemo(() => new Map((node.steps ?? []).map((item) => [item.step, item])), [node.steps])
   const streaming = Boolean(node.streaming)
+  const split = useMemo(() => (streaming ? null : splitReplyForDisplay(node)), [node, streaming])
 
   // 流式中结构还在变，整段展开渲染
-  if (streaming) {
-    return <>{renderReplyPartList({ parts: node.parts, stepMap, onInspect, showSteps: true, replyId: node.id, streaming })}</>
+  if (streaming || !split) {
+    return <ReplyPartList parts={node.parts} stepMap={stepMap} onInspect={onInspect} showSteps replyId={node.id} streaming={streaming} />
   }
 
-  const { detailParts, finalParts, hasDetails } = splitReplyForDisplay(node)
+  const { detailParts, finalParts, hasDetails } = split
 
   return (
     <>
@@ -251,28 +270,28 @@ function ReplyParts({
           hidden={!expanded}
           aria-hidden={!expanded}
         >
-          {renderReplyPartList({
-            parts: detailParts,
-            stepMap,
-            onInspect,
-            showSteps: true,
-            replyId: node.id,
-            streaming,
-          })}
+          <ReplyPartList
+            parts={detailParts}
+            stepMap={stepMap}
+            onInspect={onInspect}
+            showSteps
+            replyId={node.id}
+            streaming={streaming}
+          />
         </div>
       ) : null}
       {/* 展开 Details 时也要带上最终 Message 所在 step 的统计条 */}
-      {renderReplyPartList({
-        parts: finalParts,
-        stepMap,
-        onInspect,
-        showSteps: expanded,
-        replyId: node.id,
-        streaming,
-      })}
+      <ReplyPartList
+        parts={finalParts}
+        stepMap={stepMap}
+        onInspect={onInspect}
+        showSteps={expanded}
+        replyId={node.id}
+        streaming={streaming}
+      />
     </>
   )
-}
+})
 
 function ReplyActions({
   text,
@@ -359,7 +378,8 @@ function UserTurnBar({
   canExpand,
   expanded,
   onToggleExpand,
-  sessions,
+  senderTitle,
+  senderMascot,
 }: {
   user: Extract<ChatNode, { kind: 'user' }>
   reply?: Extract<ChatNode, { kind: 'reply' }>
@@ -368,7 +388,8 @@ function UserTurnBar({
   canExpand?: boolean
   expanded?: boolean
   onToggleExpand?: () => void
-  sessions: SessionListItem[]
+  senderTitle?: string
+  senderMascot?: SessionListItem['mascot']
 }) {
   const streaming = Boolean(reply?.streaming)
   const { hasDetails } = reply && !streaming ? splitReplyForDisplay(reply) : { hasDetails: false }
@@ -411,7 +432,7 @@ function UserTurnBar({
             {expanded ? <ChevronUpIcon className="size-3.5" /> : <ChevronDownIcon className="size-3.5" />}
           </button>
         ) : null}
-        <UserSenderAvatar sender={user.sender} sessions={sessions} />
+        <UserSenderAvatar sender={user.sender} senderTitle={senderTitle} senderMascot={senderMascot} />
         {sentLabel ? (
           <span
             className="inline-flex shrink-0 items-center gap-1 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted) tabular-nums"
@@ -450,21 +471,22 @@ function UserTurnBar({
 
 function UserSenderAvatar({
   sender,
-  sessions,
+  senderTitle,
+  senderMascot,
 }: {
   sender?: Extract<ChatNode, { kind: 'user' }>['sender']
-  sessions: SessionListItem[]
+  senderTitle?: string
+  senderMascot?: SessionListItem['mascot']
 }) {
   if (sender?.type === 'session') {
-    const hit = sessions.find((item) => item.id === sender.sessionId)
-    const identity = resolveSessionMascot(sender.sessionId, hit?.mascot)
+    const identity = resolveSessionMascot(sender.sessionId, senderMascot)
     return (
       <span
         className="grid size-[18px] shrink-0 place-items-center text-(--biu-color-text-subtle)"
-        title={hit?.title || '代理'}
+        title={senderTitle || '代理'}
         data-testid="user-sender-mascot"
       >
-        <StaticMascotMark identity={identity} size={16} title={hit?.title || identity.shape} />
+        <StaticMascotMark identity={identity} size={16} title={senderTitle || identity.shape} />
       </span>
     )
   }
@@ -478,15 +500,6 @@ function UserSenderAvatar({
       <UserIcon className="size-3" />
     </span>
   )
-}
-
-function findReplyForUser(nodes: ChatNode[], userIndex: number): Extract<ChatNode, { kind: 'reply' }> | undefined {
-  for (let i = userIndex + 1; i < nodes.length; i += 1) {
-    const next = nodes[i]!
-    if (next.kind === 'user') return undefined
-    if (next.kind === 'reply') return next
-  }
-  return undefined
 }
 
 const noopToggleDetails = (_replyId: string) => undefined
@@ -505,7 +518,8 @@ function NodeView({
   onToggleDetails = noopToggleDetails,
   onInspect,
   onFork,
-  sessions = [],
+  senderTitle,
+  senderMascot,
   dispatchTasks,
   sessionId,
 }: {
@@ -516,7 +530,8 @@ function NodeView({
   onToggleDetails?: (replyId: string) => void
   onInspect: (callId: string) => void
   onFork: () => void | Promise<void>
-  sessions?: SessionListItem[]
+  senderTitle?: string
+  senderMascot?: SessionListItem['mascot']
   dispatchTasks?: import('@biu/web-session-view').DispatchedTaskRow[]
   sessionId?: string
 }) {
@@ -571,7 +586,8 @@ function NodeView({
           canExpand={canExpand}
           expanded={expanded}
           onToggleExpand={() => setExpanded((value) => !value)}
-          sessions={sessions}
+          senderTitle={senderTitle}
+          senderMascot={senderMascot}
         />
       </div>
     )
@@ -640,6 +656,27 @@ export const ChatNodeList = memo(function ChatNodeList({
   }, [])
 
   const grouped = useMemo(() => groupNodesIntoTurns(nodes), [nodes])
+  const replyForUserById = useMemo(() => {
+    const map = new Map<string, Extract<ChatNode, { kind: 'reply' }>>()
+    for (let i = 0; i < nodes.length; i += 1) {
+      const node = nodes[i]!
+      if (node.kind !== 'user') continue
+      for (let j = i + 1; j < nodes.length; j += 1) {
+        const next = nodes[j]!
+        if (next.kind === 'user') break
+        if (next.kind === 'reply') {
+          map.set(node.id, next)
+          break
+        }
+      }
+    }
+    return map
+  }, [nodes])
+  const sessionById = useMemo(() => {
+    const map = new Map<string, SessionListItem>()
+    for (let i = 0; i < sessions.length; i += 1) map.set(sessions[i]!.id, sessions[i]!)
+    return map
+  }, [sessions])
   const liveTurnId = grouped.at(-1)?.[0]?.id
   const turns = newestFirst ? [...grouped].reverse() : grouped
 
@@ -647,17 +684,19 @@ export const ChatNodeList = memo(function ChatNodeList({
     <div className="chat-node-list">
       {turns.map((turn) => {
         const anchor = turn[0]!
-        const startIndex = nodes.indexOf(anchor)
         return (
           <div key={anchor.id} className={`chat-turn${anchor.id === liveTurnId ? ' is-live' : ''}`} data-testid="chat-turn" data-turn-anchor={anchor.id} {...pickDomAttrs('turn', anchor.id, pickPreview(anchor.kind === 'user' ? anchor.text : anchor.id) || 'turn')}>
-            {turn.map((node, offset) => {
-              const index = startIndex + offset
-              const replyForUser = node.kind === 'user' ? findReplyForUser(nodes, index) : undefined
+            {turn.map((node) => {
+              const replyForUser = node.kind === 'user' ? replyForUserById.get(node.id) : undefined
               const replyIdForDetails = node.kind === 'reply' ? node.id : replyForUser?.id
               const detailsOpen = replyIdForDetails ? Boolean(detailsOpenByReply[replyIdForDetails]) : false
               const replyNode = node.kind === 'reply' ? node : replyForUser
               const dispatchTasks =
                 replyNode?.turn != null ? dispatchedTasksByTurn[String(replyNode.turn)] : undefined
+              const senderSession =
+                node.kind === 'user' && node.sender?.type === 'session'
+                  ? sessionById.get(node.sender.sessionId)
+                  : undefined
               const stickyUser =
                 node.kind === 'user'
                   ? 'sticky top-0 z-1 bg-transparent'
@@ -685,7 +724,8 @@ export const ChatNodeList = memo(function ChatNodeList({
                     onToggleDetails={onToggleDetails}
                     onInspect={onInspect}
                     onFork={onFork}
-                    sessions={sessions}
+                    senderTitle={senderSession?.title}
+                    senderMascot={senderSession?.mascot}
                     dispatchTasks={dispatchTasks}
                     sessionId={sessionId}
                   />
@@ -801,12 +841,13 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
   }, [mountedNodes, revealStart, outlineJump])
 
   useLayoutEffect(() => {
+    if (scrollRef.current && scrollRef.current.isConnected) return
     const parent = findScrollParent(rootRef.current)
     if (parent && parent !== scrollRef.current) {
       scrollRef.current = parent
       setScrollEpoch((value) => value + 1)
     }
-  })
+  }, [sessionId, nodes.length > 0])
 
   useLayoutEffect(() => {
     const mem = recalledChatScroll(sessionId)
@@ -918,14 +959,23 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
       if (nextY > lastTouchY + 0.5) releaseFollow()
       lastTouchY = nextY
     }
+    let rememberTimer: number | null = null
+    const flushRemember = () => {
+      if (rememberTimer != null) {
+        window.clearTimeout(rememberTimer)
+        rememberTimer = null
+      }
+      const id = sessionIdRef.current
+      if (id && restoredForRef.current === id) rememberChatScroll(id, captureChatScroll(parent))
+    }
     const onUserScroll = () => {
       onScroll()
       maxScrollRef.current = Math.max(maxScrollRef.current, parent.scrollTop)
       if (holdOlderRef.current && maxScrollRef.current > PREFETCH_OLDER_PX && parent.scrollTop <= PREFETCH_OLDER_PX) {
         holdOlderRef.current = false
       }
-      const id = sessionIdRef.current
-      if (id && restoredForRef.current === id) rememberChatScroll(id, captureChatScroll(parent))
+      if (rememberTimer != null) window.clearTimeout(rememberTimer)
+      rememberTimer = window.setTimeout(flushRemember, 120)
     }
     onScroll()
     parent.addEventListener('scroll', onUserScroll, { passive: true })
@@ -933,6 +983,7 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
     parent.addEventListener('touchstart', onTouchStart, { passive: true })
     parent.addEventListener('touchmove', onTouchMove, { passive: true })
     return () => {
+      if (rememberTimer != null) flushRemember()
       parent.removeEventListener('scroll', onUserScroll)
       parent.removeEventListener('wheel', onWheel)
       parent.removeEventListener('touchstart', onTouchStart)

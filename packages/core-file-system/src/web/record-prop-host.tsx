@@ -18,6 +18,7 @@ import {
   type RecordSandboxView,
 } from '@biu/type-file-system/record-views'
 import { RenderBoundary } from '@biu/biu-ui'
+import { SidebarFold } from '@biu/biu-ui/sidebar-fold'
 import type { FsPropertiesProps } from '@biu/type-file-system/ui'
 import { FieldValuePop } from './field-value-pop.tsx'
 import { loadTags } from './tag-catalog.ts'
@@ -398,20 +399,22 @@ export function RecordProperties({ record, schema, collectionPath, writable, chi
     hydrateRecordViewCatalog(path, id, liveRecord)
     void loadRecordLayouts(path, id, liveRecord.layouts, fallback)
   }, [path, id, liveRecord, fallback])
-  if (present === 'hidden') return null
-  if (present === SOURCE_RECORD_PROP_VIEW_ID) {
-    return <HostSourceEditor value={recordPropSourceText(liveRecord, schema)} language="json" writable={false} testId="record-prop-source" />
-  }
-  if (!path || !sandbox) return children
-  return (
-    <RenderBoundary label={sandbox.name || sandbox.file || '属性沙盒'}>
-      <RecordPropHostView
-        record={liveRecord}
-        view={sandbox}
-        schema={schema}
-        collectionPath={path}
-        writable={writable !== false}
-      />
-    </RenderBoundary>
-  )
+  const hidden = present === 'hidden'
+  const body =
+    present === SOURCE_RECORD_PROP_VIEW_ID ? (
+      <HostSourceEditor value={recordPropSourceText(liveRecord, schema)} language="json" writable={false} testId="record-prop-source" />
+    ) : !path || !sandbox ? (
+      children
+    ) : (
+      <RenderBoundary label={sandbox.name || sandbox.file || '属性沙盒'}>
+        <RecordPropHostView
+          record={liveRecord}
+          view={sandbox}
+          schema={schema}
+          collectionPath={path}
+          writable={writable !== false}
+        />
+      </RenderBoundary>
+    )
+  return <SidebarFold open={!hidden}>{body}</SidebarFold>
 }

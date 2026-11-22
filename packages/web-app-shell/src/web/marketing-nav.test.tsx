@@ -25,8 +25,8 @@ test('导航项高度一致：各项都是裸链接，没有包装层', () => {
   const items = navItems()
   assert.deepEqual(
     items.map((item) => item.textContent),
-    ['Product', 'Use Cases', 'Compare', 'Security', 'Blog', 'Brand', 'Pricing', 'Invest'],
-    '是什么 → 用在哪 → 和别人有什么不同 → 放心吗 → 延伸阅读 → 认识品牌 → 多少钱',
+    ['Product', 'Use Cases', 'Why BIU', 'Philosophy', 'Pricing'],
+    '精简为五个核心用户入口：产品 → 场景 → 差异 → 理念 → 定价',
   )
 
   // 「产品」不再有二级菜单，所以也不需要 wrapper —— 五项是同一种节点。
@@ -51,7 +51,7 @@ test('所有导航项指向真实路由', () => {
   const hrefs = Array.from(
     screen.getByRole('navigation', { name: 'Main navigation' }).querySelectorAll('a'),
   ).map((a) => a.getAttribute('href'))
-  for (const expected of ['/product', '/use-cases', '/pricing', '/security', '/compare', '/blog', '/brand']) {
+  for (const expected of ['/product', '/use-cases', '/compare', '/blog', '/pricing']) {
     assert.ok(hrefs.includes(expected), `导航缺 ${expected}`)
   }
 })

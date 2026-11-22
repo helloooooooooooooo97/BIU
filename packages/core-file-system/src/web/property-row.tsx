@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react'
 import type { FieldSpec } from '@biu/type-file-system'
-import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/16/solid'
+import { ChevronRightIcon } from '@heroicons/react/16/solid'
 import { resolveFieldType } from './fields.ts'
 import { FieldGlyph } from './fsdb-cells.tsx'
 
@@ -27,8 +27,9 @@ export function PropertyRow({
 }) {
   const kind = resolveFieldType(field)
   const label = field.label ?? fieldKey ?? ''
+  const desc = String(field.description ?? '').trim()
   const name = (
-    <span className="fsdb-proprow-k" title={label}>
+    <span className="fsdb-proprow-k" title={desc || label} data-dock-tip={desc || undefined}>
       {collapsible ? (
         <button
           type="button"
@@ -41,7 +42,7 @@ export function PropertyRow({
             <FieldGlyph kind={kind} />
           </span>
           <span className="fsdb-proprow-chevron" aria-hidden>
-            {expanded ? <ChevronDownIcon className="size-[14px]" /> : <ChevronRightIcon className="size-[14px]" />}
+            <ChevronRightIcon className={`size-[14px] sidebar-chevron${expanded ? ' is-open' : ''}`} />
           </span>
         </button>
       ) : (

@@ -25,17 +25,30 @@ export type Action =
 export type ResourceRef =
   | { type: 'workspace'; workspaceId: string }
   | { type: 'collection'; workspaceId: string; collection: string }
-  | { type: 'record'; workspaceId: string; collection: string; recordId: string }
+  | { type: 'record'; workspaceId: string; collection: string; recordId: string; record?: Record<string, unknown> }
 
 export type ResourceRole = 'viewer' | 'editor' | 'manager' | 'owner'
 export type AccessMode = 'inherit' | 'private' | 'members' | 'restricted'
 export type WorkspaceRole = 'viewer' | 'member' | 'admin' | 'owner'
 
+export type DataViewMatcher = (
+  workspaceId: string,
+  collection: string,
+  viewId: string,
+  recordId: string,
+  context: {
+    grantedBy?: string
+    recordOwnerId?: string
+    scope: 'personal' | 'workspace' | 'shared' | null
+    record?: Record<string, unknown>
+  },
+) => boolean
+
 export type Decision =
   | {
       allowed: true
       effectiveRole: ResourceRole
-      source: 'ownership' | 'direct-grant' | 'group-grant' | 'view-grant' | 'workspace-default' | 'inherited' | 'legacy'
+      source: 'ownership' | 'direct-grant' | 'group-grant' | 'view-grant' | 'data-view-grant' | 'workspace-default' | 'inherited' | 'legacy'
     }
   | {
       allowed: false
@@ -73,6 +86,14 @@ type ScanGrant = {
   role: ResourceRole
 }
 
+type ScanViewGrant = {
+  view_id: string
+  subject_type: 'account' | 'member_view'
+  subject_id: string
+  role: ResourceRole
+  granted_by: string
+}
+
 type CollectionScan = {
   refs: number
   workspaceId: string
@@ -81,6 +102,9 @@ type CollectionScan = {
   policies: Map<string, PolicyRow>
   owners: Map<string, string>
   grants: Map<string, ScanGrant[]>
+  viewGrants: ScanViewGrant[]
+  actorViewGrants: ScanViewGrant[]
+  memberViewCache: Map<string, boolean>
   groups: Set<string>
   membership: WorkspaceRole | null
   membershipKind: 'member' | 'external' | 'guest'
@@ -132,6 +156,7 @@ function requiredRole(action: Action): ResourceRole {
 
 export class AuthorizationService {
   private memberViewMatcher?: (workspaceId: string, viewId: string, accountId: string) => boolean
+  private dataViewMatcher?: DataViewMatcher
   private scans = new Map<string, CollectionScan>()
   private invalidators = new Set<() => void>()
 
@@ -166,6 +191,14 @@ export class AuthorizationService {
 
   setMemberViewMatcher(matcher: (workspaceId: string, viewId: string, accountId: string) => boolean) {
     this.memberViewMatcher = matcher
+  }
+
+  setDataViewMatcher(matcher: DataViewMatcher) {
+    this.dataViewMatcher = matcher
+  }
+
+  hasDataViewMatcher() {
+    return Boolean(this.dataViewMatcher)
   }
 
   /** 列表扫描前把这一张表的策略/授权一次读进内存，避免每行一次 SQLite。 */
@@ -214,6 +247,32 @@ export class AuthorizationService {
       .all(accountId, workspaceId) as Array<{ group_id: string }>) {
       groups.add(row.group_id)
     }
+    let viewGrants: ScanViewGrant[] = []
+    try {
+      viewGrants = this.db
+        .prepare(
+          `SELECT view_id, subject_type, subject_id, role, COALESCE(granted_by, '') AS granted_by
+           FROM view_grants
+           WHERE workspace_id = ? AND collection = ?
+           ORDER BY created_at`,
+        )
+        .all(workspaceId, collection) as ScanViewGrant[]
+    } catch {
+      viewGrants = []
+    }
+    const memberViewCache = new Map<string, boolean>()
+    const matchMemberViewCached = (viewId: string) => {
+      const hit = memberViewCache.get(viewId)
+      if (hit !== undefined) return hit
+      const matched = Boolean(this.memberViewMatcher?.(workspaceId, viewId, accountId))
+      memberViewCache.set(viewId, matched)
+      return matched
+    }
+    const actorViewGrants = viewGrants.filter((grant) =>
+      grant.subject_type === 'account'
+        ? grant.subject_id === accountId
+        : matchMemberViewCached(grant.subject_id),
+    )
     this.scans.set(key, {
       refs: 1,
       workspaceId,
@@ -222,6 +281,9 @@ export class AuthorizationService {
       policies,
       owners,
       grants,
+      viewGrants,
+      actorViewGrants,
+      memberViewCache,
       groups,
       membership: this.readMembership(accountId, workspaceId),
       membershipKind: this.readMembershipKind(accountId, workspaceId),
@@ -238,6 +300,15 @@ export class AuthorizationService {
   }
 
   matchesMemberView(workspaceId: string, viewId: string, accountId: string) {
+    for (const scan of this.scans.values()) {
+      if (scan.workspaceId === workspaceId && scan.accountId === accountId) {
+        const hit = scan.memberViewCache.get(viewId)
+        if (hit !== undefined) return hit
+        const matched = Boolean(this.memberViewMatcher?.(workspaceId, viewId, accountId))
+        scan.memberViewCache.set(viewId, matched)
+        return matched
+      }
+    }
     return Boolean(this.memberViewMatcher?.(workspaceId, viewId, accountId))
   }
 
@@ -298,11 +369,15 @@ export class AuthorizationService {
     }
 
     const resolved = this.effectiveRole(actor.accountId, resource, new Set(), 0)
-    if (!resolved) return { allowed: false, reason: 'PRIVATE_RESOURCE' }
-    if ('reason' in resolved) return resolved
+    if (resolved && 'reason' in resolved) return resolved
+    const viaView = this.dataViewRole(actor.accountId, resource)
+    const combined = resolved && viaView
+      ? (ROLE_RANK[resolved.effectiveRole] >= ROLE_RANK[viaView.effectiveRole] ? resolved : viaView)
+      : (resolved ?? viaView)
+    if (!combined) return { allowed: false, reason: 'PRIVATE_RESOURCE' }
     const effective = membership === 'viewer'
-      ? { effectiveRole: 'viewer' as const, source: resolved.source }
-      : resolved
+      ? { effectiveRole: 'viewer' as const, source: combined.source }
+      : combined
     if (ROLE_RANK[effective.effectiveRole] < ROLE_RANK[requiredRole(action)]) {
       return { allowed: false, reason: 'INSUFFICIENT_PERMISSION' }
     }
@@ -481,6 +556,87 @@ export class AuthorizationService {
     }
   }
 
+  /** 切换单条记录的父子继承模式（inherit 继承上级 / custom 独立设置，保留 parent_record_id 便于随时切回）。 */
+  setInheritanceMode(
+    actor: Actor,
+    resource: Extract<ResourceRef, { type: 'record' }>,
+    mode: 'inherit' | 'custom',
+  ) {
+    if (actor.type === 'public-link') throw new Error('permission denied: UNAUTHENTICATED')
+    const decision = this.authorize(actor, 'resource:manage-permissions', resource)
+    const policy = this.policy(resource)
+    if (!policy) throw new Error('unknown resource')
+    if (policy.owner_account_id !== actor.accountId && !decision.allowed) {
+      throw new Error('permission denied: INSUFFICIENT_PERMISSION')
+    }
+    if (mode === 'inherit') {
+      if (!policy.parent_record_id) throw new Error('这条内容没有上级记录')
+      this.db
+        .prepare(
+          `UPDATE resource_policies
+           SET access_mode = 'inherit'
+           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+        )
+        .run(resource.workspaceId, resource.collection, resource.recordId)
+    } else {
+      this.db
+        .prepare(
+          `UPDATE resource_policies
+           SET access_mode = CASE WHEN access_mode = 'inherit' THEN 'private' ELSE access_mode END
+           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+        )
+        .run(resource.workspaceId, resource.collection, resource.recordId)
+    }
+    this.dropScans(resource.workspaceId, resource.collection)
+  }
+
+  /** 返回记录的父子继承配置与祖先链（从最顶层祖先到直接父级）。 */
+  inheritanceInfo(resource: Extract<ResourceRef, { type: 'record' }>): {
+    mode: 'inherit' | 'custom'
+    hasParent: boolean
+    parent: { collection: string; recordId: string } | null
+    ancestors: Array<{ collection: string; recordId: string }>
+  } {
+    const first = this.policy(resource)
+    const hasParent = Boolean(first?.parent_record_id)
+    const parent = hasParent
+      ? {
+          collection: first!.parent_collection || resource.collection,
+          recordId: first!.parent_record_id,
+        }
+      : null
+    const mode: 'inherit' | 'custom' = first?.access_mode === 'inherit' && hasParent ? 'inherit' : 'custom'
+    if (mode !== 'inherit' || !parent) return { mode, hasParent, parent, ancestors: [] }
+    const ancestors: Array<{ collection: string; recordId: string }> = []
+    const visited = new Set<string>([`${resource.workspaceId}\t${resource.collection}\t${resource.recordId}`])
+    let cursor: Extract<ResourceRef, { type: 'record' }> | null = {
+      type: 'record',
+      workspaceId: resource.workspaceId,
+      collection: parent.collection,
+      recordId: parent.recordId,
+    }
+    let depth = 0
+    while (cursor && depth < 64) {
+      const key = `${cursor.workspaceId}\t${cursor.collection}\t${cursor.recordId}`
+      if (visited.has(key)) break
+      visited.add(key)
+      ancestors.unshift({ collection: cursor.collection, recordId: cursor.recordId })
+      const policy = this.policy(cursor)
+      if (policy?.access_mode === 'inherit' && policy.parent_record_id) {
+        cursor = {
+          type: 'record',
+          workspaceId: cursor.workspaceId,
+          collection: policy.parent_collection || cursor.collection,
+          recordId: policy.parent_record_id,
+        }
+      } else {
+        cursor = null
+      }
+      depth += 1
+    }
+    return { mode, hasParent, parent, ancestors }
+  }
+
   /** 当前用户在这条记录上的权限是怎么来的。继承会逐级展开，视图授权由调用方另算。 */
   roleChain(accountId: string, resource: Extract<ResourceRef, { type: 'record' }>) {
     return this.collectRoleChain(accountId, resource, new Set(), 0, true)
@@ -492,20 +648,29 @@ export class AuthorizationService {
     visited: Set<string>,
     depth: number,
     top: boolean,
-  ): Array<{ id: string; title: string; detail: string; role: ResourceRole }> {
+  ): Array<{
+    id: string
+    collection: string
+    recordId: string
+    title: string
+    detail: string
+    role: ResourceRole
+    source: 'ownership' | 'direct-grant' | 'group-grant' | 'view-grant' | 'workspace-default' | 'inherited' | 'legacy'
+  }> {
     const key = `${resource.workspaceId}\t${resource.collection}\t${resource.recordId}`
     if (visited.has(key) || depth > 64) return []
     visited.add(key)
     const title = top ? '这条内容' : '上一级内容'
+    const base = { id: key, collection: resource.collection, recordId: resource.recordId, title }
     const policy = this.policy(resource)
     if (!policy) {
       const ownerId = this.legacyOwnerId(resource)
       if (!ownerId) return []
-      if (ownerId === accountId) return [{ id: key, title, detail: '你是创建者', role: 'owner' }]
+      if (ownerId === accountId) return [{ ...base, detail: '你是创建者', role: 'owner', source: 'ownership' }]
       const role: ResourceRole = this.membership(accountId, resource.workspaceId) === 'viewer' ? 'viewer' : 'editor'
-      return [{ id: key, title, detail: '沿用空间里的旧记录', role }]
+      return [{ ...base, detail: '沿用空间里的旧记录', role, source: 'legacy' }]
     }
-    if (policy.owner_account_id === accountId) return [{ id: key, title, detail: '你是创建者', role: 'owner' }]
+    if (policy.owner_account_id === accountId) return [{ ...base, detail: '你是创建者', role: 'owner', source: 'ownership' }]
     const direct = this.directRole(accountId, resource)
     if (direct) {
       const detail = direct.source === 'group-grant'
@@ -515,13 +680,13 @@ export class AuthorizationService {
           : direct.source === 'direct-grant'
             ? '直接授权给你'
             : '按空间角色授权'
-      return [{ id: key, title, detail, role: direct.effectiveRole }]
+      return [{ ...base, detail, role: direct.effectiveRole, source: direct.source }]
     }
     if (policy.access_mode === 'members' && this.membershipKind(accountId, resource.workspaceId) === 'member') {
       const membership = this.membership(accountId, resource.workspaceId)
       const role = memberAccessRole(policy, membership)
-      const detail = role === 'manager' ? '空间管理者默认可管理' : role === 'viewer' ? '查看者只能阅读' : '空间成员默认可编辑'
-      return [{ id: key, title, detail, role }]
+      const detail = role === 'manager' ? '空间管理员默认可管理' : role === 'viewer' ? '查看者默认可查看' : '空间成员默认可编辑'
+      return [{ ...base, detail, role, source: 'workspace-default' }]
     }
     if (policy.access_mode === 'inherit' && policy.parent_record_id) {
       const parent = this.collectRoleChain(
@@ -538,7 +703,7 @@ export class AuthorizationService {
       )
       if (!parent.length) return []
       const concrete = parent[parent.length - 1]!
-      return [{ id: key, title, detail: '权限继承自上一级', role: concrete.role }, ...parent]
+      return [{ ...base, detail: '继承上级权限', role: concrete.role, source: 'inherited' }, ...parent]
     }
     return []
   }
@@ -594,12 +759,67 @@ export class AuthorizationService {
     return null
   }
 
+  private dataViewRole(
+    accountId: string,
+    resource: Extract<ResourceRef, { type: 'record' }>,
+  ): { effectiveRole: ResourceRole; source: 'data-view-grant' } | null {
+    if (!this.dataViewMatcher) return null
+    const scan = this.scans.get(collectionScanKey(resource.workspaceId, resource.collection, accountId))
+    let rows: ScanViewGrant[]
+    let prefiltered = false
+    if (scan) {
+      rows = scan.actorViewGrants
+      prefiltered = true
+    } else {
+      try {
+        rows = this.db
+          .prepare(
+            `SELECT view_id, subject_type, subject_id, role, COALESCE(granted_by, '') AS granted_by
+             FROM view_grants
+             WHERE workspace_id = ? AND collection = ?
+             ORDER BY created_at`,
+          )
+          .all(resource.workspaceId, resource.collection) as ScanViewGrant[]
+      } catch {
+        rows = []
+      }
+    }
+    if (!rows.length) return null
+    const policy = this.policy(resource)
+    const recordOwnerId = policy?.owner_account_id || this.legacyOwnerId(resource) || ''
+    const scope = this.resourceScope(resource, new Set(), 0)
+    const roles: ResourceRole[] = []
+    for (const grant of rows) {
+      if (!prefiltered) {
+        const subjectMatches = grant.subject_type === 'account'
+          ? grant.subject_id === accountId
+          : this.matchesMemberView(resource.workspaceId, grant.subject_id, accountId)
+        if (!subjectMatches) continue
+      }
+      const matched = this.dataViewMatcher(
+        resource.workspaceId,
+        resource.collection,
+        grant.view_id,
+        resource.recordId,
+        {
+          grantedBy: grant.granted_by,
+          recordOwnerId,
+          scope,
+          record: resource.record,
+        },
+      )
+      if (matched) roles.push(grant.role)
+    }
+    const best = maxRole(roles)
+    return best ? { effectiveRole: best, source: 'data-view-grant' } : null
+  }
+
   private directRole(accountId: string, resource: Extract<ResourceRef, { type: 'record' }>) {
     const scan = this.scans.get(collectionScanKey(resource.workspaceId, resource.collection, accountId))
     const rows = scan ? this.scanGrantsFor(scan, resource.recordId) : this.queryDirectGrants(accountId, resource)
     const matched = rows.filter((row) =>
       row.subject_type !== 'member_view'
-      || Boolean(this.memberViewMatcher?.(resource.workspaceId, row.subject_id, accountId)),
+      || this.matchesMemberView(resource.workspaceId, row.subject_id, accountId),
     )
     const role = maxRole(matched.map((row) => row.role))
     if (!role) return null

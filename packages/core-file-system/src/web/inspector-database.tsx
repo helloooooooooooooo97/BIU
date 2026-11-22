@@ -1,13 +1,14 @@
 import { lazy, memo, Suspense, useEffect, useMemo, useRef, useSyncExternalStore, type ComponentType } from 'react'
 import { CircleStackIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import type { SlotProps } from '@biu/type-slots'
-import { FSDB_CHANGE_EVENT, fsdbChangeHitsPane, parseFsdbChange, type CollectionInfo } from '@biu/type-file-system'
+import { FSDB_CHANGE_EVENT, fsdbChangeHitsPane, parseFsdbChange, type CollectionInfo, type DbRecord } from '@biu/type-file-system'
 import { FSDB_CRUMB_LABELS_EVENT, INSPECTOR_CAPTION_EVENT } from './fsdb-events.ts'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { parseAppPath } from '@biu/web-session-view'
 import { buildCrumbs, crumbHotkeyPane, crumbParentHotkey, parentCrumbTarget, pathForCrumbTarget, type Crumb, type CrumbTarget } from './sidebar-nav.ts'
 import { CrumbTrail } from './crumb-trail.tsx'
-import { defaultViewId, loadRecords, loadViews, peekRecord, subscribeCrumbs, viewForPath } from './view-storage.ts'
+import { defaultViewId, loadRecords, loadViews, peekRecord, rememberRecords, subscribeCrumbs, viewForPath } from './view-storage.ts'
+import { readJson } from './db-client.ts'
 import { builtinAllViewId, displayNameForView, isBuiltinAllViewId, stampRecordId, stampRowOpenTarget } from '../catalog-views.ts'
 import { DATA_COLLECTION_PATH, DATA_MODULE, DATA_MODULE_ID, databaseAllViewPath, databaseRecordPath, databaseViewPath } from './database-path.ts'
 import { subscribeViaDataCrumbs, viaDataCrumbsOn, viaDataViewId } from './data-chrome.ts'
@@ -30,6 +31,7 @@ const DataOverview = lazy(() => import('./data-overview.tsx').then((m) => ({ def
 if (typeof window !== 'undefined') ensureFsdbStyle()
 
 const tabIcons = new Map<string, ComponentType<{ className?: string }>>()
+const hydratedTabRecords = new Set<string>()
 
 export function collectionTabIcon(icon?: string) {
   const key = icon ?? ''
@@ -317,6 +319,33 @@ export const DatabaseInspectorTab = memo(function DatabaseInspectorTab({
   const crumbRef = useRef<HTMLElement>(null)
   const tabRef = useRef<HTMLDivElement>(null)
   const tick = useViewTick(parsedRoute.collection, parsedRoute.recordId)
+  // 未激活的 Inspector 标签页在点击前不会挂载正文编辑器；若其记录标题尚未进缓存，主动拉一次轻量元数据补齐面包屑名称。
+  useEffect(() => {
+    const col = parsedRoute.collection
+    const rid = parsedRoute.recordId
+    if (!col || !rid) return
+    if (peekRecord(col, rid)?.label) return
+    const key = `${col}/${rid}`
+    if (hydratedTabRecords.has(key)) return
+    hydratedTabRecords.add(key)
+    void readJson<{ value?: DbRecord }>(`/api/db/read?path=${encodeURIComponent(key)}`)
+      .then((data) => {
+        const row = data?.value
+        if (!row) {
+          hydratedTabRecords.delete(key)
+          return
+        }
+        const label = String(row.title ?? row.name ?? '').trim()
+        const emoji = typeof row.emoji === 'string' ? row.emoji : undefined
+        const mascot = row.mascot
+        if (label || emoji || mascot != null) {
+          rememberRecords(col, [{ id: rid, label, ...(emoji ? { emoji } : {}), ...(mascot != null ? { mascot } : {}) }])
+        }
+      })
+      .catch(() => {
+        hydratedTabRecords.delete(key)
+      })
+  }, [parsedRoute.collection, parsedRoute.recordId, tick])
   const { crumbs } = useMemo(() => {
     void tick
     return crumbsForRoute(inspectorPath, tables, viaData, !active)

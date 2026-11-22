@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
 import { recordEditorExtensions } from './kit.ts'
 import { applyStoredBlockIds, listDocBlocks, markdownWithBlockIds, stripBlockIdStamps } from './block-id.ts'
-import { comparePageBlocks } from './page-filter-plugin.ts'
+import { comparePageBlocks } from './filter-plugin.ts'
 
 function editorOf(markdown: string) {
   return new Editor({

@@ -34,7 +34,9 @@ test('toolbar flyouts share one fsdb-tool-flyout shell', () => {
   assert.match(block, /\.fsdb-tool-flyout \.tasks-sort-search/)
   assert.match(block, /background:transparent/)
 
-  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  const browser =
+    readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8') +
+    readFileSync(resolve(import.meta.dirname, './browser-toolbar.tsx'), 'utf8')
   const views = readFileSync(resolve(import.meta.dirname, './view-order-menu.tsx'), 'utf8')
   const menus = readFileSync(resolve(import.meta.dirname, './query-menus.tsx'), 'utf8')
   const columns = readFileSync(resolve(import.meta.dirname, './column-order-menu.tsx'), 'utf8')
@@ -55,7 +57,8 @@ test('toolbar flyouts share one fsdb-tool-flyout shell', () => {
   assert.match(views, /tasks-viewdd-saveas fsdb-tool-row font-medium/)
   assert.match(search, /tasks-sort-search font-medium/)
   assert.match(menus, /fsdb-tool-flyout fsdb-query-menu/)
-  assert.match(columns, /fsdb-col-tag-flyout fsdb-tool-flyout/)
+  assert.match(columns, /fsdb-col-pack-group/)
+  assert.match(columns, /fsdb-inline-sub/)
   assert.match(layout, /fsdb-tool-flyout fsdb-layout-menu/)
   assert.match(css, /\.fsdb-layout-menu\{[^}]*min-width:280px/)
   assert.match(css, /\.fsdb-layout-scale\{[^}]*font-size:var\(--biu-font-size-4\)/)

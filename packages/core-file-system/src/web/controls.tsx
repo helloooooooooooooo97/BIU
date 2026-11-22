@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type Ref } from 'react'
 import { createPortal } from 'react-dom'
 import { overlayPortalRoot } from '@biu/biu-ui/overlay-portal'
 
@@ -145,6 +145,11 @@ export function AppDialog({
   return createPortal(dialog, overlayPortalRoot() ?? document.body)
 }
 
+export type LocalTextHandle = {
+  /** 供标题 Enter 拆分 / 正文首行 Backspace 合并做 0ms 同步写入，消除失焦旧草稿回滚与连按退格漏字。 */
+  syncValue: (next: string, caretPos?: number) => void
+}
+
 /** 详情正文/文本列：输入只更新自己，失焦才回传，避免整张表跟着每个按键重绘。 */
 export function LocalText({
   as = 'input',
@@ -155,6 +160,7 @@ export function LocalText({
   placeholder,
   title,
   'aria-label': ariaLabel,
+  controlRef,
   onCommit,
   onKeyDown,
 }: {
@@ -166,20 +172,58 @@ export function LocalText({
   placeholder?: string
   title?: string
   'aria-label'?: string
+  controlRef?: Ref<LocalTextHandle | null>
   onCommit: (next: string) => void
   onKeyDown?: (event: ReactKeyboardEvent<HTMLTextAreaElement | HTMLInputElement>) => void
 }) {
   const [draft, setDraft] = useState(value)
+  const [prevValue, setPrevValue] = useState(value)
   const draftRef = useRef(draft)
-  draftRef.current = draft
   const boxRef = useRef<HTMLTextAreaElement>(null)
-  useEffect(() => {
-    setDraft(value)
-  }, [value])
+  const inputRef = useRef<HTMLInputElement>(null)
   const valueRef = useRef(value)
+  if (prevValue !== value) {
+    setPrevValue(value)
+    // 若用户正在输入框内连续打字/退格且本地已有未提交改动，不被后台慢请求回声覆盖；非聚焦态立即同步外部新值。
+    const activeEl = as === 'textarea' ? boxRef.current : inputRef.current
+    const activelyEditingDirty =
+      typeof document !== 'undefined' && activeEl != null && document.activeElement === activeEl && draftRef.current !== prevValue
+    if (!activelyEditingDirty) {
+      setDraft(value)
+      draftRef.current = value
+    }
+  }
   valueRef.current = value
   const onCommitRef = useRef(onCommit)
   onCommitRef.current = onCommit
+  useImperativeHandle(
+    controlRef,
+    () => ({
+      syncValue(next: string, caretPos?: number) {
+        draftRef.current = next
+        valueRef.current = next
+        setPrevValue(next)
+        setDraft(next)
+        const el = as === 'textarea' ? boxRef.current : inputRef.current
+        if (!el) return
+        el.value = next
+        if (autoSize && el instanceof HTMLTextAreaElement) {
+          el.style.height = 'auto'
+          el.style.height = `${el.scrollHeight}px`
+        }
+        if (caretPos != null && el.isConnected) {
+          el.focus({ preventScroll: true })
+          const clamped = Math.max(0, Math.min(caretPos, next.length))
+          try {
+            el.setSelectionRange(clamped, clamped)
+          } catch {
+            /* ignore */
+          }
+        }
+      },
+    }),
+    [as, autoSize],
+  )
   const commit = () => {
     if (draftRef.current !== valueRef.current) onCommitRef.current(draftRef.current)
   }
@@ -205,10 +249,13 @@ export function LocalText({
     title,
     placeholder,
     'aria-label': ariaLabel,
-    onChange: (event: { target: { value: string } }) => setDraft(event.target.value),
+    onChange: (event: { target: { value: string } }) => {
+      draftRef.current = event.target.value
+      setDraft(event.target.value)
+    },
     onBlur: commit,
     onKeyDown,
   }
   if (as === 'textarea') return <textarea ref={boxRef} {...shared} rows={autoSize ? 1 : rows} />
-  return <input {...shared} />
+  return <input ref={inputRef} {...shared} />
 }

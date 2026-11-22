@@ -12,7 +12,7 @@ import {
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { ChevronRightIcon, EyeIcon, EyeSlashIcon, PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
+import { CheckIcon, ChevronRightIcon, EyeIcon, EyeSlashIcon, PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { FieldSpec, FieldType } from '@biu/type-file-system'
 import { CellSelect } from '@biu/database-ui'
@@ -508,6 +508,68 @@ function SortableGroupRow({
   )
 }
 
+function GroupAccordionSelect({
+  label,
+  value,
+  options,
+  open,
+  testId,
+  onToggle,
+  onSelect,
+}: {
+  label: string
+  value: string
+  options: Array<{ value: string; label: string; icon?: ReactNode }>
+  open: boolean
+  testId?: string
+  onToggle: () => void
+  onSelect: (next: string) => void
+}) {
+  const current = options.find((item) => item.value === value)
+  return (
+    <div className="fsdb-group-acc-row" data-testid={testId}>
+      <button
+        type="button"
+        className={`fsdb-group-acc-btn${open ? ' is-open' : ''}`}
+        aria-expanded={open}
+        onClick={onToggle}
+      >
+        <span className="fsdb-group-panel-label">{label}</span>
+        <span className="fsdb-group-acc-val">
+          <span className="fsdb-group-acc-val-text">{current?.label ?? value}</span>
+          <ChevronRightIcon
+            aria-hidden
+            className={`size-3.5 fsdb-col-menu-chev sidebar-chevron${open ? ' is-open' : ''}`}
+          />
+        </span>
+      </button>
+      <div className={`fsdb-inline-fold${open ? ' is-open' : ''}`} aria-hidden={!open}>
+        <div className="fsdb-inline-fold-inner">
+          <div className="fsdb-inline-sub" role="menu">
+            {options.map((opt) => {
+              const active = opt.value === value
+              return (
+                <button
+                  key={opt.value || '__none__'}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={active}
+                  className={`fsdb-group-acc-opt${active ? ' is-on' : ''}`}
+                  onClick={() => onSelect(opt.value)}
+                >
+                  {opt.icon ? <span className="fsdb-col-menu-ico">{opt.icon}</span> : null}
+                  <span className="fsdb-group-acc-opt-label">{opt.label}</span>
+                  {active ? <CheckIcon aria-hidden className="size-3.5 fsdb-col-menu-check" /> : null}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function GroupQueryMenu({
   groupBy,
   groupConfig,
@@ -526,6 +588,7 @@ export function GroupQueryMenu({
   onClose?: () => void
 }) {
   const [search, setSearch] = useState('')
+  const [openAcc, setOpenAcc] = useState<'field' | 'grain' | 'sort' | null>(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
   const parsed = parseGroupByKey(groupBy)
   const activeField = fields.find((item) => item.key === parsed.fieldKey) ?? null
@@ -612,44 +675,48 @@ export function GroupQueryMenu({
           <UiGlyph icon="stack" />
           <span>分组设置</span>
         </div>
-        <div className="fsdb-group-panel-row">
-          <span className="fsdb-group-panel-label">分组条件</span>
-          <CellSelect
-            value={activeField.key}
-            options={fieldOptions}
-            variant="field"
-            onSelect={selectField}
-          />
-        </div>
+        <GroupAccordionSelect
+          label="分组条件"
+          value={activeField.key}
+          options={fieldOptions}
+          open={openAcc === 'field'}
+          onToggle={() => setOpenAcc((prev) => (prev === 'field' ? null : 'field'))}
+          onSelect={(next) => {
+            setOpenAcc(null)
+            selectField(next)
+          }}
+        />
         {activeField.kind === 'datetime' ? (
-          <div className="fsdb-group-panel-row" data-testid="fsdb-group-grain-row">
-            <span className="fsdb-group-panel-label">分组方式</span>
-            <CellSelect
-              value={activeGrain}
-              options={GROUP_GRAIN_OPTIONS.map((item) => ({ value: item.value, label: item.label }))}
-              variant="field"
-              onSelect={(next) => {
-                if (!next) return
-                onChange(`${activeField.key}::${next}`)
-              }}
-            />
-          </div>
+          <GroupAccordionSelect
+            testId="fsdb-group-grain-row"
+            label="分组方式"
+            value={activeGrain}
+            options={GROUP_GRAIN_OPTIONS.map((item) => ({ value: item.value, label: item.label }))}
+            open={openAcc === 'grain'}
+            onToggle={() => setOpenAcc((prev) => (prev === 'grain' ? null : 'grain'))}
+            onSelect={(next) => {
+              setOpenAcc(null)
+              if (!next) return
+              onChange(`${activeField.key}::${next}`)
+            }}
+          />
         ) : null}
         {onChangeConfig ? (
           <>
-            <div className="fsdb-group-panel-row" data-testid="fsdb-group-sort-row">
-              <span className="fsdb-group-panel-label">排序</span>
-              <CellSelect
-                value={sortMode}
-                options={GROUP_SORT_OPTIONS}
-                variant="field"
-                onSelect={(next) => {
-                  if (next === 'manual' || next === 'asc' || next === 'desc') {
-                    patchConfig({ sort: next })
-                  }
-                }}
-              />
-            </div>
+            <GroupAccordionSelect
+              testId="fsdb-group-sort-row"
+              label="排序"
+              value={sortMode}
+              options={GROUP_SORT_OPTIONS}
+              open={openAcc === 'sort'}
+              onToggle={() => setOpenAcc((prev) => (prev === 'sort' ? null : 'sort'))}
+              onSelect={(next) => {
+                setOpenAcc(null)
+                if (next === 'manual' || next === 'asc' || next === 'desc') {
+                  patchConfig({ sort: next })
+                }
+              }}
+            />
             <div className="fsdb-group-panel-row" data-testid="fsdb-group-hide-empty-row">
               <span className="fsdb-group-panel-label">隐藏无记录分组</span>
               <button

@@ -8,6 +8,7 @@ import { parseAppPath } from '@biu/web-session-view'
 import { builtinAllViewId, stampRecordId } from '../catalog-views.ts'
 import { DATA_MODULE } from './database-path.ts'
 import {
+  flattenTagColumns,
   groupRowBucketKeys,
   isTagFlatColumnKey,
   parseTagFlatColumnKey,
@@ -15,6 +16,7 @@ import {
   resolveFieldType,
   type GroupBucket,
 } from './fields.ts'
+import { loadTags } from './tag-catalog.ts'
 import { placedActions } from './fsdb-cells.tsx'
 import { createdRowGroupKey, placeCreatedRow } from './group-insert.ts'
 import { moveInspectorRecordsToTrash } from './inspector-db-route.ts'
@@ -430,7 +432,7 @@ export function listHoldResetKey(view: SavedView | null, path: string) {
 }
 
 export type TableHoldSnap = {
-  columns: { key: string; kind?: string; field?: FieldSpec }[]
+  columns: { key: string; kind?: string; field?: FieldSpec; packId?: string; packLabel?: string }[]
   columnWidths: Record<string, number>
   columnPinCount: number
   wrapCells: boolean
@@ -499,14 +501,31 @@ export function listHoldFromCache(cached: ListCacheSnap, view: SavedView | null,
     nodes = EMPTY_HOLD_NODES
   }
   const label = schema?.labelField ?? 'title'
+  const tags = loadTags()
+  const tagColsByKey = new Map(flattenTagColumns(tags).map((item) => [item.key, item]))
   return {
     columns: keys.map((key) => {
       if (key === 'actions') return { key, kind: 'action' as const, field: { type: 'action' as const, label: '动作' } }
+      if (key === 'shareScope') return { key, kind: 'select' as const, field: { type: 'select' as const, label: '分享' } }
+      if (key === 'shareRole') return { key, kind: 'select' as const, field: { type: 'select' as const, label: '权限' } }
+      const tagCol = tagColsByKey.get(key)
+      if (tagCol) return tagCol
+      const parsedTag = parseTagFlatColumnKey(key)
+      if (parsedTag) {
+        const pack = tags.find((entry) => entry.id === parsedTag.packId)
+        return {
+          key,
+          kind: 'select' as const,
+          field: { type: 'select' as const, label: parsedTag.fieldKey },
+          packId: parsedTag.packId,
+          packLabel: pack?.label,
+        }
+      }
       const field = schema?.fields?.[key]
       return {
         key,
-        kind: field ? resolveFieldType(field) : 'text',
-        field: field ?? { type: 'text' as const, label: key === label ? '标题' : key },
+        kind: field ? resolveFieldType(field) : 'string',
+        field: field ?? { type: 'string' as const, label: key === label ? '标题' : key },
       }
     }),
     columnWidths: normalizeColumnWidths(view?.columnWidths),

@@ -75,7 +75,7 @@ export function MarketingChangelog({ onLogin, onStart }: { onLogin: SiteAction; 
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <section className="site-page-hero" data-reveal>
         <p className="site-section-label">更新日志</p>
-        <h1>BIU 在变</h1>
+        <h1>版本演进与更新日志</h1>
         <p className="site-page-lead">每个版本的说明直接读自 GitHub Releases，和安装包同一处发布。</p>
       </section>
       <section className="site-changelog" aria-label="版本">

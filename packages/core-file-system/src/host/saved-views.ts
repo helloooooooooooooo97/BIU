@@ -2,9 +2,11 @@ import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { openAndMigrateBiu } from '@biu/host-plugin-loader/data-dir'
 import type { CollectionInfo, CollectionSpec, DbRecord } from '@biu/type-file-system'
-import { normalizeSchemaValue, recordBuiltinValues, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
+import { normalizeSchemaValue, recordBuiltinValues } from '@biu/type-file-system'
 import { builtinAllView, builtinAllViewId, isReadOnlyViewId } from '../catalog-views.ts'
 import { normalizeColumnWidths, normalizeGroupConfig, normalizePageSize, parseViewColumns, type SavedView } from '../web/saved-view.ts'
+import { normalizeColumnSummaries } from '../web/column-summary.ts'
+import { normalizeColumnViews } from '../web/column-sandbox-model.ts'
 import { isViewModeId } from '../web/fields.ts'
 import { DATA_COLLECTION_PATH, VIEWS_COLLECTION_PATH, normalizeCollectionPath } from '../paths.ts'
 import { isIndexCollection } from '../web/database-path.ts'
@@ -306,8 +308,11 @@ export class SavedViewsStore {
       wrap: Boolean(fields.wrap),
       truncate: fields.truncate !== false,
       freezeTitle: Boolean(fields.freezeTitle),
+      freezeUntil: typeof fields.freezeUntil === 'string' && fields.freezeUntil.trim() ? fields.freezeUntil.trim() : undefined,
       pageSize: normalizePageSize(fields.pageSize),
       columnWidths: normalizeColumnWidths(fields.columnWidths),
+      columnSummaries: normalizeColumnSummaries(parseJsonValue(fields.columnSummaries) ?? fields.columnSummaries),
+      columnViews: normalizeColumnViews(fields.columnViews),
       rank: Number.isFinite(Number(fields.rank)) ? Math.round(Number(fields.rank)) : views.length,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -375,7 +380,10 @@ export class SavedViewsStore {
         ...(typeof patch.wrap === 'boolean' ? { wrap: patch.wrap } : {}),
         ...(typeof patch.truncate === 'boolean' ? { truncate: patch.truncate } : {}),
         ...(typeof patch.freezeTitle === 'boolean' ? { freezeTitle: patch.freezeTitle } : {}),
+        ...('freezeUntil' in patch ? { freezeUntil: typeof patch.freezeUntil === 'string' && patch.freezeUntil.trim() ? patch.freezeUntil.trim() : undefined } : {}),
         ...('columnWidths' in patch ? { columnWidths: normalizeColumnWidths(patch.columnWidths) } : {}),
+        ...('columnSummaries' in patch ? { columnSummaries: normalizeColumnSummaries(parseJsonValue(patch.columnSummaries) ?? patch.columnSummaries) } : {}),
+        ...('columnViews' in patch ? { columnViews: normalizeColumnViews(patch.columnViews) } : {}),
         ...(Number.isFinite(Number(patch.rank)) ? { rank: Math.round(Number(patch.rank)) } : {}),
         ...('emoji' in patch ? { emoji: String(patch.emoji ?? '') } : {}),
         ...('tag' in patch ? { tag: normalizeSchemaValue(patch.tag) } : {}),
@@ -492,9 +500,12 @@ function asRecord(path: string, tableName: string, view: StoredView, tableIcon?:
     wrap: Boolean(view.wrap),
     truncate: view.truncate !== false,
     freezeTitle: Boolean(view.freezeTitle),
+    freezeUntil: view.freezeUntil ?? '',
     pageSize: normalizePageSize(view.pageSize),
     columns: parseViewColumns(view.columns),
     columnWidths: view.columnWidths ?? {},
+    columnSummaries: view.columnSummaries ?? {},
+    columnViews: view.columnViews ?? {},
     rank: Number.isFinite(Number(view.rank)) ? Math.round(Number(view.rank)) : 0,
     filters: JSON.stringify(filters),
     sorts: JSON.stringify(sorts.map((item) => ({ field: item.field, dir: item.dir }))),
@@ -530,8 +541,11 @@ export function clientViewFromDbRow(row: Record<string, unknown> | undefined) {
     wrap: Boolean(row.wrap),
     truncate: row.truncate !== false,
     freezeTitle: Boolean(row.freezeTitle),
+    freezeUntil: typeof row.freezeUntil === 'string' && row.freezeUntil.trim() ? row.freezeUntil.trim() : undefined,
     pageSize: normalizePageSize(row.pageSize),
     columnWidths: row.columnWidths,
+    columnSummaries: normalizeColumnSummaries(parseJsonValue(row.columnSummaries) ?? row.columnSummaries),
+    columnViews: normalizeColumnViews(row.columnViews),
     builtin: false,
     rank: Number.isFinite(Number(row.rank)) ? Math.round(Number(row.rank)) : undefined,
   }
@@ -558,10 +572,8 @@ export function viewsCollection(
     },
     records: { update: true, create: true, delete: true, allocateId: false },
     schema: {
-      labelField: 'title',
       columns: ['title', 'table', 'mode', 'sortField', 'sortDir', 'query', 'groupBy', 'pageSize'],
       fields: {
-        ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '视图', writable: true },
         table: { type: 'select', label: '来源表', computed: true },
         tablePath: { type: 'string', label: '表路径', writable: true },
@@ -577,6 +589,7 @@ export function viewsCollection(
         wrap: { type: 'boolean', label: '换行' },
         truncate: { type: 'boolean', label: '截断' },
         freezeTitle: { type: 'boolean', label: '冻结标题列' },
+        freezeUntil: { type: 'string', label: '冻结至此列', writable: true },
         pageSize: { type: 'number', label: '每页', writable: true },
         rank: { type: 'number', label: '顺序', writable: true },
         columns: {
@@ -588,6 +601,8 @@ export function viewsCollection(
         },
         filters: { type: 'string', label: '筛选', writable: true, description: VIEW_FILTERS_DESCRIPTION },
         filterTree: { type: 'string', label: '筛选树', writable: true, description: VIEW_FILTER_TREE_DESCRIPTION },
+        columnSummaries: { type: 'string', label: '列统计', writable: true, description: '每列底部统计方式，JSON 对象：{ "<columnKey>": "sum"|"avg"|"count"|... }' },
+        columnViews: { type: 'string', label: '属性视图', writable: true, description: '每列的属性沙箱视图选择，JSON 对象：标签属性列仅存 { activeId }（代码由标签字段 fields[*].views 持有），原生非标签列可内联 { activeId, items: [{ id, name, code }] }。' },
       },
     },
     list,
