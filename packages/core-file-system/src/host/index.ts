@@ -111,6 +111,7 @@ import { ContentTurnService } from './content-turn-service.ts'
 import {
   DatabaseAccessPolicy,
   isBuiltinPluginRecord,
+  isBuiltinPluginRow,
   isRecordInWorkspace,
   resolveScopeTarget,
   type WorkspaceFiles,
@@ -659,7 +660,7 @@ export class DatabaseService extends Service implements Database {
     const rows = await spec.list(query)
     const listed = !query.ids?.length ? rows : rows.filter((row) => query.ids!.includes(row.id))
     const hidden = this.tags.deletedIds(spec.path)
-    const builtinPlugin = (row: { builtin?: unknown }) => spec.path === PLUGINS_COLLECTION_PATH && row.builtin === true
+    const builtinPlugin = (row: { builtin?: unknown }) => isBuiltinPluginRow(spec.path, row)
     return query.trash
       ? listed.filter((row) => hidden.has(row.id) && !builtinPlugin(row))
       : listed.filter((row) => !hidden.has(row.id) || builtinPlugin(row))
@@ -1025,7 +1026,7 @@ export class DatabaseService extends Service implements Database {
     const workspace: DbRecord[] = []
     const shared: DbRecord[] = []
     for (const row of rows) {
-      if (collection === PLUGINS_COLLECTION_PATH && (row as { builtin?: unknown }).builtin === true) {
+      if (isBuiltinPluginRow(collection, row as { builtin?: unknown })) {
         shared.push(row)
         continue
       }
@@ -1447,7 +1448,7 @@ export class DatabaseService extends Service implements Database {
     const withPeople = !need || need.people ? this.applyPersonOverlay(spec, withTag) : withTag
     const withMeta = !need || need.meta ? this.applyMetaOverlay(spec, withPeople) : withPeople
     if (isSystemCollection(spec.path) || isIndexCollection(spec.path)) return withMeta
-    if (spec.path === PLUGINS_COLLECTION_PATH && row.builtin === true) {
+    if (isBuiltinPluginRow(spec.path, row)) {
       return {
         ...withMeta,
         ...(!need || need.shareScope ? { shareScope: '共享' } : {}),
@@ -2010,7 +2011,7 @@ export class DatabaseService extends Service implements Database {
       if (!spec) continue
       const record = await spec.get(row.record_id)
       if (!record) continue
-      if (row.collection === PLUGINS_COLLECTION_PATH && (record as { builtin?: unknown }).builtin === true) continue
+      if (isBuiltinPluginRow(row.collection, record as { builtin?: unknown })) continue
       const authorization = this.authorization()
       const actor = authorization?.currentActor()
       if (authorization && actor) {

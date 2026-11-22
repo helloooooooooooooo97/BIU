@@ -147,6 +147,7 @@ import {
 import { RecordActions, RowCheck } from './browser-row-controls.tsx'
 import { KeyedSerialQueue, PendingFieldPatchTracker } from './record-write-queue.ts'
 import { ViewSyncController } from './view-sync-controller.ts'
+import { captureTableFoldSnapshot as captureFoldSnapshot, playTableFoldFlip } from './table-fold-flip.ts'
 import { BrowserDialogs, type BrowserDialogState } from './browser-dialogs.tsx'
 export { WindowedTable } from './windowed-table.tsx'
 import { useStickyToolbar } from './sticky-toolbar.ts'
@@ -713,46 +714,13 @@ export function CollectionBrowser({
   )
   const tableFoldFlipRef = useRef<Map<string, number> | null>(null)
   function captureTableFoldSnapshot() {
-    if (typeof window === 'undefined' || window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return
-    const tbody = tableRef.current?.tBodies[0]
-    if (!tbody) return
-    const snap = new Map<string, number>()
-    for (const tr of tbody.rows) {
-      const key = tr.dataset.rowKey ?? (tr.dataset.groupKey ? `gh:${tr.dataset.groupKey}` : tr.dataset.groupPager ? `gp:${tr.dataset.groupPager}` : '')
-      if (key) snap.set(key, tr.getBoundingClientRect().top)
-    }
-    if (snap.size) tableFoldFlipRef.current = snap
+    tableFoldFlipRef.current = captureFoldSnapshot(tableRef.current?.tBodies[0]?.rows)
   }
   useLayoutEffect(() => {
     const prev = tableFoldFlipRef.current
     if (!prev) return
     tableFoldFlipRef.current = null
-    const tbody = tableRef.current?.tBodies[0]
-    if (!tbody) return
-    const easing = 'cubic-bezier(0.22, 1, 0.36, 1)'
-    for (const tr of tbody.rows) {
-      if (typeof tr.animate !== 'function') break
-      const key = tr.dataset.rowKey ?? (tr.dataset.groupKey ? `gh:${tr.dataset.groupKey}` : tr.dataset.groupPager ? `gp:${tr.dataset.groupPager}` : '')
-      if (!key) continue
-      const oldTop = prev.get(key)
-      if (oldTop != null) {
-        const deltaY = oldTop - tr.getBoundingClientRect().top
-        if (Math.abs(deltaY) >= 1 && Math.abs(deltaY) < 2400) {
-          tr.animate(
-            [{ transform: `translate3d(0, ${deltaY}px, 0)` }, { transform: 'translate3d(0, 0, 0)' }],
-            { duration: 180, easing },
-          )
-        }
-      } else {
-        tr.animate(
-          [
-            { opacity: 0, transform: 'translate3d(0, -6px, 0)' },
-            { opacity: 1, transform: 'translate3d(0, 0, 0)' },
-          ],
-          { duration: 180, easing },
-        )
-      }
-    }
+    playTableFoldFlip(tableRef.current?.tBodies[0]?.rows, prev)
   }, [collapsedGroups, collapsed])
   useEffect(() => {
     setCollapsedGroups(loadCollapsedGroups(collectionPath, activeViewId ?? routeViewId ?? '', groupBy))

@@ -128,6 +128,10 @@ export function isRecordInWorkspace(membership: WorkspaceMembership, collection:
   return membership.active === membership.home
 }
 
+export function isBuiltinPluginRow(collection: string, row?: { builtin?: unknown } | null): boolean {
+  return collection === PLUGINS_COLLECTION_PATH && row?.builtin === true
+}
+
 export function isBuiltinPluginRecord(spec: CollectionSpec, id: string, record?: { builtin?: unknown }) {
   if (spec.path !== PLUGINS_COLLECTION_PATH) return false
   return record?.builtin === true || isRegisteredBuiltinPlugin(id)
@@ -274,7 +278,7 @@ export class DatabaseAccessPolicy {
     const actor = authorization?.currentActor()
     if (authorization && actor) {
       return rows.filter((row) => {
-        if (collection === PLUGINS_COLLECTION_PATH && (row as { builtin?: unknown }).builtin === true) {
+        if (isBuiltinPluginRow(collection, row as { builtin?: unknown })) {
           return action === 'resource:read' || action === 'resource:list'
         }
         const target = resolveScopeTarget(collection, String(row.id ?? ''), row)
@@ -298,7 +302,7 @@ export class DatabaseAccessPolicy {
     const workspaceId = store?.activeWorkspaceId() ?? ''
     const grants = new Map<string, Map<string, Set<string>>>()
     return rows.filter((row) => {
-      if (collection === PLUGINS_COLLECTION_PATH && (row as { builtin?: unknown }).builtin === true) {
+      if (isBuiltinPluginRow(collection, row as { builtin?: unknown })) {
         return action === 'resource:read' || action === 'resource:list'
       }
       const target = resolveScopeTarget(collection, String(row.id ?? ''), row)
@@ -325,7 +329,7 @@ export class DatabaseAccessPolicy {
     const actor = authorization?.currentActor()
     if (!authorization || !actor) return rows
     return rows.filter((row) => {
-      if (collection === PLUGINS_COLLECTION_PATH && (row as { builtin?: unknown }).builtin === true) return scope === 'shared'
+      if (isBuiltinPluginRow(collection, row as { builtin?: unknown })) return scope === 'shared'
       const target = resolveScopeTarget(collection, String(row.id ?? ''), row)
       return authorization.scopeCurrent({
         type: 'record',

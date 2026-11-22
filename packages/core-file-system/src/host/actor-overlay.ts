@@ -8,7 +8,8 @@ import {
   type DbRecord,
   type PersonValue,
 } from '@biu/type-file-system'
-import { AGENTS_COLLECTION_PATH, PLUGINS_COLLECTION_PATH } from '../paths.ts'
+import { AGENTS_COLLECTION_PATH } from '../paths.ts'
+import { isBuiltinPluginRow } from './access-policy.ts'
 import type { TagStore } from './tags-store.ts'
 
 export function sessionTitleFromRow(row: unknown): string {
@@ -148,7 +149,7 @@ export function applyRecordPersonOverlay(
   spec: CollectionSpec,
   row: DbRecord,
 ): DbRecord {
-  if (spec.path === PLUGINS_COLLECTION_PATH && row.builtin === true) {
+  if (isBuiltinPluginRow(spec.path, row)) {
     const official = { kind: 'user' as const, name: 'BIU官方', url: 'https://github.com/helloooooooooooooo97/biu' }
     return { ...row, createdBy: official, updatedBy: [official] }
   }
