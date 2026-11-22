@@ -283,7 +283,7 @@ type TableBodyProps = {
   items: VirtualItem[]
   margin: number
   totalSize: number
-  measureRow: (row: HTMLTableRowElement | null) => void
+  measureRow?: (row: HTMLTableRowElement | null) => void
   colSpan: number
   colKeys: string
   error: string
@@ -430,7 +430,7 @@ const TableBody = memo(function TableBody({ nodes, items, margin, totalSize, mea
     }
     rowCache.current.set(node.key, { node, stamp, colKeys, pickMode, activeRowId, tagRev, cellViewStamp, element })
     children.push(isValidElement(element) ? cloneElement(element as ReactElement<ComponentProps<'tr'>>, {
-      key: node.key, 'data-index': item.index, ref: measureRow,
+      key: node.key, 'data-index': item.index, ...(measureRow ? { ref: measureRow } : {}),
     } as ComponentProps<'tr'>) : element)
     end = top + item.size
   }
@@ -648,7 +648,7 @@ export const WindowedTable = memo(function WindowedTable({
             items={items}
             margin={margin}
             totalSize={virtualizer.getTotalSize()}
-            measureRow={measureRow}
+            measureRow={wrapCells ? measureRow : undefined}
             colSpan={tableColSpan}
             colKeys={`${colWindow.pin}:${colWindow.padLeft}:${colWindow.padRight}\0${windowedColumns.map((col) => col.key).join('\0')}`}
             error={error}
