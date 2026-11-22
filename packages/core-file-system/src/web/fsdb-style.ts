@@ -495,9 +495,10 @@ const CSS = `
 .fsdb-page .tasks-table tr.fsdb-group-row td{padding:6px 0;vertical-align:middle;background:transparent;border-right:0;cursor:default}
 .fsdb-page .tasks-table tr.fsdb-group-row:hover td{background:transparent}
 .fsdb-page .tasks-table tr.fsdb-group-row .tasks-queue-ghead{min-height:20px;padding:0 6px;gap:6px;align-items:center}
-.fsdb-page .tasks-table tr.fsdb-group-pager td{padding:2px 0 8px;background:transparent;border-right:0}
+.fsdb-page .tasks-table tr.fsdb-group-pager{height:32px}
+.fsdb-page .tasks-table tr.fsdb-group-pager td{padding:0;height:32px;background:transparent;border-right:0;vertical-align:middle}
 .fsdb-page .tasks-table tr.fsdb-group-pager:hover td{background:transparent}
-.fsdb-page .tasks-table tr.fsdb-group-pager .fsdb-pager{margin-top:0;padding:4px 6px 0;color:var(--biu-color-text)}
+.fsdb-page .tasks-table tr.fsdb-group-pager .fsdb-pager{margin-top:0;height:32px;min-height:32px;padding:0 6px;color:var(--biu-color-text)}
 .fsdb-page .tasks-table tr.fsdb-group-pager .fsdb-pager-meta{color:var(--biu-color-text)}
 /* Group labels must use the horizontal table viewport, not an overflow-clipped colspan cell. */
 .fsdb-page .tasks-table.is-cols-fixed tr.fsdb-group-row td,.fsdb-page .tasks-table.is-cols-fixed tr.fsdb-group-pager td{overflow:visible}
@@ -569,7 +570,7 @@ const CSS = `
 .fsdb-page .fsdb-proplist .fsdb-proprow-v{min-width:0;overflow:hidden}
 .fsdb-page .fsdb-proplist .fsdb-proprow-v:has(.fsdb-boolbox){overflow:visible;flex:none}
 .fsdb-workspace{display:flex;flex-direction:column;min-width:0;min-height:min-content;flex:none;overflow:visible}
-.fsdb-pager{display:flex;align-items:center;gap:8px;flex:none;margin-top:auto;min-height:28px;padding:4px 0 0;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-3);font-weight:var(--biu-font-weight-medium)}
+.fsdb-pager{display:flex;align-items:center;gap:8px;flex:none;box-sizing:border-box;margin-top:auto;height:32px;min-height:32px;padding:0;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-3);font-weight:var(--biu-font-weight-medium)}
 .fsdb-page:not(.is-sheet) .fsdb-pager{padding-left:var(--fsdb-check-gutter)}
 /* 检查器底部分页与中间页、输入胶囊对齐。只加在工作区那一条上，分组里的分页器跟左侧一样贴着组走。 */
 .inspector-database-page .fsdb-workspace > .fsdb-pager{margin-bottom:calc(var(--fsdb-pager-lift) - var(--brand-corner-clearance,1.25rem))}
