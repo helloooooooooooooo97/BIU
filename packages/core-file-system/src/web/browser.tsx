@@ -144,6 +144,7 @@ import {
   askNewPlugin,
   askNewPresentation,
 } from './browser-row-title.tsx'
+import { RecordActions, RowCheck } from './browser-row-controls.tsx'
 import { BrowserDialogs, type BrowserDialogState } from './browser-dialogs.tsx'
 export { WindowedTable } from './windowed-table.tsx'
 import { useStickyToolbar } from './sticky-toolbar.ts'
@@ -2172,12 +2173,12 @@ export function CollectionBrowser({
   }, [])
 
   const checkDrawRef = useRef({
-    renderHead: () => <RowCheck ids={pickableIds} />,
-    renderRow: (id: string) => <RowCheck id={id} />,
+    renderHead: () => <RowCheck ids={pickableIds} pickedIds={pickedIds} onTogglePicked={togglePicked} />,
+    renderRow: (id: string) => <RowCheck id={id} pickedIds={pickedIds} onTogglePicked={togglePicked} />,
     hasPicked: () => pickedIds.length > 0,
   })
-  checkDrawRef.current.renderHead = () => <RowCheck ids={pickableIds} />
-  checkDrawRef.current.renderRow = (id: string) => <RowCheck id={id} />
+  checkDrawRef.current.renderHead = () => <RowCheck ids={pickableIds} pickedIds={pickedIds} onTogglePicked={togglePicked} />
+  checkDrawRef.current.renderRow = (id: string) => <RowCheck id={id} pickedIds={pickedIds} onTogglePicked={togglePicked} />
   checkDrawRef.current.hasPicked = () => pickedIds.length > 0
 
   const checkListenersRef = useRef(new Set<() => void>())
@@ -4077,49 +4078,21 @@ export function CollectionBrowser({
     )
   }
 
-  function RecordActions({ row }: { row: DbRecord }) {
+  function renderRecordActions(row: DbRecord) {
     const paintSchema = tableHoldRef.current?.schema ?? schema
-    const Actions = paintSchema === schema ? chrome?.Actions : undefined
-    const Action = paintSchema === schema ? chrome?.Action : undefined
-    const busy = acting
-    const placed = placedActions(paintSchema, 'row').filter(
-      (action) => !nested || (action.id !== 'open-split' && action.id !== 'open-page'),
-    )
-    const finish = (action: CollectionActionInfo) => {
-      void runAction(row, action)
-    }
-    const wrap = (body: ReactNode) => (
-      <div className="tasks-row-actions" data-biu-ignore onClick={(event) => event.stopPropagation()}>
-        {body}
-      </div>
-    )
-    if (Actions) {
-      if (!placed.length) return null
-      return wrap(<Actions actions={placed} record={row} busy={busy} place="row" run={finish} />)
-    }
-    const rowShown = visibleActions(paintSchema, row, 'row')
-      .filter((action) => !nested || (action.id !== 'open-split' && action.id !== 'open-page'))
-      .filter((action) => Action || actionIcon(action.id) || action.id === 'open-split' || action.id === 'open-page')
-    if (!rowShown.length) return null
-    return wrap(
-      rowShown.map((action) => {
-        const run = () => finish(action)
-        if (Action) return <Action key={action.id} action={action} record={row} busy={busy} run={run} />
-        const glyph = actionIcon(action.id)
-        return (
-          <button
-            key={action.id}
-            type="button"
-            className={`tasks-icon-btn${action.tone === 'danger' ? ' is-danger' : ''}`}
-            aria-label={`${action.label} ${labelOf(row)}`}
-            data-dock-tip={action.label}
-            disabled={busy}
-            onClick={run}
-          >
-            {glyph}
-          </button>
-        )
-      }),
+    return (
+      <RecordActions
+        row={row}
+        paintSchema={paintSchema}
+        chrome={chrome}
+        useChrome={paintSchema === schema}
+        busy={acting}
+        nested={nested}
+        labelOf={labelOf}
+        onRunAction={(target, action) => {
+          void runAction(target, action)
+        }}
+      />
     )
   }
 
@@ -4195,31 +4168,6 @@ export function CollectionBrowser({
       }
       return prev.filter((id) => !ids.includes(id))
     })
-  }
-
-  function RowCheck({ id, ids }: { id?: string; ids?: string[] }) {
-    const list = id ? [id] : (ids ?? [])
-    const some = list.some((item) => pickedIds.includes(item))
-    const on = list.length > 0 && list.every((item) => pickedIds.includes(item))
-    const marked = id ? on : some
-    const header = !id
-    return (
-      <button
-        type="button"
-        data-testid="fsdb-row-check"
-        className={`fsdb-boolbtn fsdb-row-check${marked ? ' is-on' : ''}`}
-        aria-pressed={marked}
-        aria-label={id ? (on ? '取消选择记录' : '选择记录') : some ? '取消选择' : '全选'}
-        title={id ? (on ? '取消选择' : '选择') : some ? '取消选择' : '全选'}
-        onClick={(event) => {
-          event.stopPropagation()
-          togglePicked(list, header ? !some : !on)
-        }}
-        onPointerDown={(event) => event.stopPropagation()}
-      >
-        <BoolBox on={marked}>{marked ? <CheckIcon aria-hidden className="size-3" /> : null}</BoolBox>
-      </button>
-    )
   }
 
   function tableCellFromEvent(
@@ -5065,7 +5013,7 @@ export function CollectionBrowser({
             toolsArmed={toolsArmed}
           />
         ) : col.key === 'actions' ? (
-          <RecordActions row={row} />
+          renderRecordActions(row)
         ) : (
           <span className="fsdb-cell">{paintTableCell(row, col.key, col.field)}</span>
         )}
@@ -6395,7 +6343,7 @@ export function CollectionBrowser({
             (collectionPath === PLUGINS_COLLECTION_PATH && selected.builtin === true && selected.canManagePackage !== true) ||
             (selected.shareRole === '阅读' && !localData && selected.canManagePackage !== true)
           }
-          actionProperty={rowActionColumn ? <RecordActions row={selected} /> : null}
+          actionProperty={rowActionColumn ? renderRecordActions(selected) : null}
           share={
             nested && detailId ? (
               <SharePanel

@@ -389,9 +389,11 @@ test('leaving a plugin record does not keep a permission error on the plugin lis
 })
 
 test('title cell row tools skip the overflow action menu', () => {
-  assert.match(browser, /paintSchema === schema \? chrome\?\.Actions/)
-  assert.match(browser, /placedActions\(paintSchema, 'row'\)/)
-  assert.match(browser, /<Actions actions=\{placed\} record=\{row\}/)
+  const rowControls = readFileSync(resolve(import.meta.dirname, './browser-row-controls.tsx'), 'utf8')
+  assert.match(browser, /useChrome=\{paintSchema === schema\}/)
+  assert.match(rowControls, /useChrome \? chrome\?\.Actions/)
+  assert.match(rowControls, /placedActions\(paintSchema, 'row'\)/)
+  assert.match(rowControls, /<Actions actions=\{placed\} record=\{row\}/)
   assert.doesNotMatch(browser, /place="detail"/)
   assert.match(browser, /onDelete=\{canDelete && !\(collectionPath === PLUGINS_COLLECTION_PATH && selected\.builtin === true\) \? \(\) => setDlg\(\{ kind: 'delete-record', row: selected \}\) : undefined\}/)
   assert.doesNotMatch(browser, /fsdb-detail-more-item/)
@@ -1322,7 +1324,8 @@ test('collection reload does not follow callback identity', () => {
   assert.match(browser, /const EMPTY_PICK/)
   assert.doesNotMatch(browser, /function HoverMount/)
   assert.doesNotMatch(browser, /<HoverMount>/)
-  assert.match(browser, /<RecordActions row=\{row\} \/>/)
+  assert.match(browser, /renderRecordActions\(row\)/)
+  assert.doesNotMatch(browser, /\n  function [A-Z]\w+\(/)
   assert.match(browser, /onMouseEnter=\{armTools\}/)
   assert.match(browser, /if \(query\) \{\s*\n\s*searchInputRef\.current\?\.focus\(\{ preventScroll: true \}\)/)
   assert.match(browser, /pickMode\s*\?\s*pickDomAttrs/)
@@ -1496,7 +1499,8 @@ test('row actions reload even when updatedAt is unchanged', () => {
 })
 
 test('action column buttons use the same icon button style and show a hover tip', () => {
-  const actions = browser.slice(browser.indexOf('function RecordActions'), browser.indexOf('function GroupHead'))
+  const rowControls = readFileSync(resolve(import.meta.dirname, './browser-row-controls.tsx'), 'utf8')
+  const actions = rowControls.slice(rowControls.indexOf('export const RecordActions'))
   assert.match(actions, /data-dock-tip=\{action\.label\}/)
   assert.match(actions, /className=\{`tasks-icon-btn/)
   assert.doesNotMatch(actions, /fsdb-action-tag-label/)
