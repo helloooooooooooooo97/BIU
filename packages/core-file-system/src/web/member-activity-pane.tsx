@@ -39,8 +39,8 @@ type MemberActivityPayload = {
     updatedAt: number
   }>
   grants: {
-    records: Array<{ collection: string; recordId: string; role: string }>
-    views: Array<{ collection: string; viewId: string; role: string }>
+    records: Array<{ collection: string; recordId: string; role: string; title?: string; collectionLabel?: string }>
+    views: Array<{ collection: string; viewId: string; role: string; viewName?: string; collectionLabel?: string }>
   }
 }
 
@@ -362,28 +362,42 @@ export function MemberActivityPane({
             </div>
           </header>
           <ul className="fsdb-member-grants">
-            {data.grants.records.slice(0, 12).map((grant) => (
-              <li key={`rec:${grant.collection}:${grant.recordId}`}>
-                {openRecord ? (
-                  <button
-                    type="button"
-                    className="fsdb-member-record-link"
-                    onClick={() => openRecord(grant.recordId, grant.collection)}
-                  >
-                    {grant.collection}/{grant.recordId}
-                  </button>
-                ) : (
-                  <span>{grant.collection}/{grant.recordId}</span>
-                )}
-                <em>{roleText(grant.role)}</em>
-              </li>
-            ))}
-            {data.grants.views.slice(0, 12).map((grant) => (
-              <li key={`view:${grant.collection}:${grant.viewId}`}>
-                <span>视图 {grant.collection} · {grant.viewId}</span>
-                <em>{roleText(grant.role)}</em>
-              </li>
-            ))}
+            {data.grants.records.slice(0, 12).map((grant) => {
+              const displayTitle = grant.title?.trim() || grant.recordId
+              const colLabel = grant.collectionLabel?.trim() || grant.collection.replace(/^\//, '')
+              return (
+                <li key={`rec:${grant.collection}:${grant.recordId}`}>
+                  <span className="fsdb-member-grant-main">
+                    {openRecord ? (
+                      <button
+                        type="button"
+                        className="fsdb-member-record-link"
+                        onClick={() => openRecord(grant.recordId, grant.collection)}
+                      >
+                        {displayTitle}
+                      </button>
+                    ) : (
+                      <span>{displayTitle}</span>
+                    )}
+                    {colLabel ? <span className="fsdb-member-grant-col">{colLabel}</span> : null}
+                  </span>
+                  <em>{roleText(grant.role)}</em>
+                </li>
+              )
+            })}
+            {data.grants.views.slice(0, 12).map((grant) => {
+              const displayView = grant.viewName?.trim() || grant.viewId
+              const colLabel = grant.collectionLabel?.trim() || grant.collection.replace(/^\//, '')
+              return (
+                <li key={`view:${grant.collection}:${grant.viewId}`}>
+                  <span className="fsdb-member-grant-main">
+                    <span>视图「{displayView}」</span>
+                    {colLabel ? <span className="fsdb-member-grant-col">{colLabel}</span> : null}
+                  </span>
+                  <em>{roleText(grant.role)}</em>
+                </li>
+              )
+            })}
           </ul>
         </section>
       ) : null}

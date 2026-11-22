@@ -1499,7 +1499,10 @@ html:not(.dark) .fsdb-cellselect-menu svg{color:var(--biu-color-icon)}
 .fsdb-member-day li time{color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-2);font-variant-numeric:tabular-nums}
 .fsdb-member-grants{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
 .fsdb-member-grants li{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:var(--biu-font-size-3)}
-.fsdb-member-grants li em{color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-2);font-style:normal}
+.fsdb-member-grant-main{display:inline-flex;align-items:center;gap:6px;min-width:0;overflow:hidden}
+.fsdb-member-grant-main .fsdb-member-record-link,.fsdb-member-grant-main>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fsdb-member-grant-col{flex:none;padding:0 5px;border-radius:4px;background:var(--biu-color-bg-hover);color:var(--biu-color-text-subtle);font-size:11px;line-height:18px}
+.fsdb-member-grants li em{flex:none;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-2);font-style:normal}
 `
 
 export function ensureFsdbStyle() {
