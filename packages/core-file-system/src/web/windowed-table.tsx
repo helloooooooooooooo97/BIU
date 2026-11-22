@@ -526,6 +526,7 @@ const NativeTableBody = memo(function NativeTableBody({
   const tagRev = useSyncExternalStore(subscribeTagCatalog, tagCatalogRevision, tagCatalogRevision)
 
   const poolBodyRef = useRef<HTMLTableSectionElement | null>(null)
+  const overlayBodyRef = useRef<HTMLTableSectionElement | null>(null)
   const poolRef = useRef<NativeRowPool | null>(null)
   const stampCache = useRef(new Map<string, RowStampEntry>())
   const portalCache = useRef(new Map<string, { stamp: string; element: ReactNode }>())
@@ -632,6 +633,11 @@ const NativeTableBody = memo(function NativeTableBody({
   useLayoutEffect(() => {
     const tbody = poolBodyRef.current
     if (!tbody) return
+    const overlay = overlayBodyRef.current
+    if (overlay) {
+      const topPx = `${tbody.offsetTop}px`
+      if (overlay.style.top !== topPx) overlay.style.top = topPx
+    }
     let pool = poolRef.current
     if (!pool) {
       pool = new NativeRowPool(tbody)
@@ -649,7 +655,7 @@ const NativeTableBody = memo(function NativeTableBody({
     }
   })
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     return () => {
       poolRef.current?.destroy()
       poolRef.current = null
@@ -681,8 +687,8 @@ const NativeTableBody = memo(function NativeTableBody({
         }}
       />
       <tbody
+        ref={overlayBodyRef}
         className="fsdb-grid-overlay"
-        style={{ ['--fsdb-body-h' as string]: `${totalPx}px` }}
       >
         {structuralRows}
         {renderPortal

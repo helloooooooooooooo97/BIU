@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { createRef } from 'react'
+import { StrictMode, createRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import type { DbRecord } from '@biu/type-file-system'
@@ -241,34 +241,36 @@ describe('NativeRowPool unit tests', () => {
     }
 
     const { container } = render(
-      <div ref={wrapRef} className="tasks-table-wrap" style={{ height: 480, overflow: 'auto' }}>
-        <WindowedTable
-          columns={COLUMNS}
-          columnWidths={COLUMN_WIDTHS}
-          columnPinCount={1}
-          wrapCells={false}
-          truncateCells={false}
-          resizingCol={null}
-          nodes={nodes}
-          error=""
-          pickMode={false}
-          resetKey="native-click"
-          forceLiveChecks={false}
-          checkLayoutExtra=""
-          paintRef={paintRef}
-          chromeRef={chromeRef}
-          colWindowRef={colWindowRef}
-          tableRef={tableRef}
-          wrapRef={wrapRef}
-          stageRef={stageRef}
-          checkStackRef={checkStackRef}
-          checkHoverRef={checkHoverRef}
-          paintCheckHover={() => {}}
-          renderCheckHead={() => null}
-          renderCheckRow={() => null}
-          activeRowId={null}
-        />
-      </div>,
+      <StrictMode>
+        <div ref={wrapRef} className="tasks-table-wrap" style={{ height: 480, overflow: 'auto' }}>
+          <WindowedTable
+            columns={COLUMNS}
+            columnWidths={COLUMN_WIDTHS}
+            columnPinCount={1}
+            wrapCells={false}
+            truncateCells={false}
+            resizingCol={null}
+            nodes={nodes}
+            error=""
+            pickMode={false}
+            resetKey="native-click"
+            forceLiveChecks={false}
+            checkLayoutExtra=""
+            paintRef={paintRef}
+            chromeRef={chromeRef}
+            colWindowRef={colWindowRef}
+            tableRef={tableRef}
+            wrapRef={wrapRef}
+            stageRef={stageRef}
+            checkStackRef={checkStackRef}
+            checkHoverRef={checkHoverRef}
+            paintCheckHover={() => {}}
+            renderCheckHead={() => null}
+            renderCheckRow={() => null}
+            activeRowId={null}
+          />
+        </div>
+      </StrictMode>,
     )
 
     // Verify portal cells mounted inside pooled <td>s

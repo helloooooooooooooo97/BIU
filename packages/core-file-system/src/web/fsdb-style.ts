@@ -510,7 +510,7 @@ const CSS = `
 .fsdb-page .tasks-table tr.fsdb-table-pad{box-sizing:border-box;font-size:0;line-height:0;overflow:hidden;pointer-events:none}
 .fsdb-page .tasks-table tr.fsdb-table-pad td,.fsdb-page .tasks-table tr.fsdb-table-pad:hover td{padding:0;border:0;background:transparent;line-height:0;font-size:0;height:inherit;box-sizing:border-box;overflow:hidden;vertical-align:top}
 .fsdb-page .tasks-table tr.fsdb-table-pad td > div{--fsdb-pad-line:color-mix(in srgb,var(--biu-color-border) 80%,transparent);display:block;box-sizing:border-box;overflow:hidden;contain:layout paint style;line-height:0;font-size:0;background-image:linear-gradient(to bottom,transparent calc(100% - var(--biu-stroke-width)),var(--fsdb-pad-line) 0),var(--fsdb-pad-cols,none);background-size:100% var(--fsdb-pad-row,32px),auto;background-repeat:repeat-y,no-repeat}
-.fsdb-page .tasks-table.is-grid{display:block;width:max-content;min-width:100%}
+.fsdb-page .tasks-table.is-grid{display:block;position:relative;width:max-content;min-width:100%}
 .fsdb-page .tasks-table.is-grid colgroup{display:none}
 .fsdb-page .tasks-table.is-grid thead{display:block;width:100%}
 .fsdb-page .tasks-table.is-grid thead tr{display:flex;align-items:stretch;width:100%}
@@ -518,7 +518,7 @@ const CSS = `
 .fsdb-page .tasks-table.is-grid tbody.fsdb-grid-body.is-empty{background-image:none}
 .fsdb-page .tasks-table.is-grid tbody.fsdb-grid-body > tr{position:absolute;top:0;left:0;width:100%;display:flex;align-items:stretch;box-sizing:border-box;background:var(--biu-color-surface);contain:layout style}
 .fsdb-page .tasks-table.is-grid tbody.fsdb-grid-body.is-empty > tr{position:static;transform:none}
-.fsdb-page .tasks-table.is-grid tbody.fsdb-grid-overlay{display:block;position:relative;width:100%;height:0;margin-top:calc(-1 * var(--fsdb-body-h,0px));overflow:visible;pointer-events:none}
+.fsdb-page .tasks-table.is-grid tbody.fsdb-grid-overlay{display:block;position:absolute;top:0;left:0;width:100%;height:0;overflow:visible;pointer-events:none}
 .fsdb-page .tasks-table.is-grid tbody.fsdb-grid-overlay > tr{position:absolute;top:0;left:0;width:100%;display:flex;align-items:stretch;box-sizing:border-box;pointer-events:auto;contain:layout style}
 .fsdb-page .tasks-table.is-grid.is-wrap tbody.fsdb-grid-body > tr[data-record-id]{height:auto;min-height:32px}
 .fsdb-page .tasks-table.is-grid th,.fsdb-page .tasks-table.is-grid td{display:flex;align-items:center;flex:0 0 auto;box-sizing:border-box;min-width:0}
