@@ -1367,6 +1367,7 @@ html:not(.dark) .fsdb-checkrow>svg,
 html:not(.dark) .fsdb-cellselect-menu svg{color:var(--biu-color-icon)}
 .tasks-table th.is-col-clickable{cursor:pointer;transition:background 120ms ease}
 .tasks-table th.is-col-clickable:hover,.tasks-table th.is-col-menu-open{background:var(--biu-color-bg-hover)}
+.tasks-table th.is-col-draggable{user-select:none}
 .tasks-table th.is-col-draggable:not(.is-col-clickable){cursor:grab;transition:background 120ms ease}
 .tasks-table th.is-col-draggable:not(.is-col-clickable):hover{background:var(--biu-color-bg-hover)}
 .tasks-table th.is-col-dragging{opacity:.42}
@@ -1393,9 +1394,10 @@ body.is-col-reordering,body.is-col-reordering *{cursor:grabbing!important;user-s
 .fsdb-col-menu-sep{height:1px;margin:4px 2px;background:var(--biu-color-border)}
 .fsdb-col-menu-list{display:flex;flex-direction:column;gap:1px}
 .fsdb-col-menu-subhead{padding:4px 8px 6px;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-2);font-weight:var(--biu-font-weight-medium)}
-.fsdb-col-menu-item{display:flex;align-items:center;gap:8px;width:100%;min-height:28px;padding:4px 8px;border:0;border-radius:6px;background:transparent;color:var(--biu-color-text);font:inherit;text-align:left;cursor:pointer}
-.fsdb-col-menu-item:hover{background:var(--biu-color-bg-hover)}
-.fsdb-col-menu-item.is-on{color:var(--biu-color-text);font-weight:var(--biu-font-weight-medium)}
+.fsdb-col-menu-item{display:flex;align-items:center;gap:8px;width:100%;min-height:28px;padding:4px 8px;border:0;border-radius:6px;background:transparent;color:var(--biu-color-text-muted);font:inherit;text-align:left;cursor:pointer;transition:color 120ms ease,background 120ms ease}
+.fsdb-col-menu-item:hover{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
+.fsdb-col-menu-item.is-on{color:var(--biu-color-text)}
+.fsdb-col-menu-item:hover .fsdb-col-menu-ico,.fsdb-col-menu-item:hover .fsdb-col-menu-chev,.fsdb-col-menu-item.is-on .fsdb-col-menu-ico,.fsdb-col-menu-item.is-on .fsdb-col-menu-chev{color:var(--biu-color-icon-active,var(--biu-color-text))}
 .fsdb-col-menu-item-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fsdb-col-menu-ico,.fsdb-col-menu-chev{flex:none;color:var(--biu-color-icon)}
 .fsdb-col-menu-meta{flex:none;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-2);font-weight:400}
@@ -1409,13 +1411,13 @@ body.is-col-reordering,body.is-col-reordering *{cursor:grabbing!important;user-s
 .fsdb-col-pack-group .fsdb-inline-sub{margin:2px 0 4px 26px}
 .fsdb-col-tag-right{display:inline-flex;align-items:center;gap:4px;flex:none;margin-left:auto}
 .fsdb-group-acc-row{display:flex;flex-direction:column;min-width:0}
-.fsdb-group-acc-btn{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:28px;padding:4px 8px;border:0;border-radius:6px;background:transparent;color:var(--biu-color-text);font:inherit;text-align:left;cursor:pointer}
-.fsdb-group-acc-btn:hover,.fsdb-group-acc-btn.is-open{background:var(--biu-color-bg-hover)}
+.fsdb-group-acc-btn{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:28px;padding:4px 8px;border:0;border-radius:6px;background:transparent;color:var(--biu-color-text-muted);font:inherit;text-align:left;cursor:pointer;transition:color 120ms ease,background 120ms ease}
+.fsdb-group-acc-btn:hover,.fsdb-group-acc-btn.is-open{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
 .fsdb-group-acc-val{display:inline-flex;align-items:center;gap:4px;min-width:0;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-3)}
 .fsdb-group-acc-val-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:128px}
-.fsdb-group-acc-opt{display:flex;align-items:center;gap:6px;width:100%;min-height:26px;padding:3px 8px;border:0;border-radius:6px;background:transparent;color:var(--biu-color-text);font:inherit;font-size:var(--biu-font-size-3);text-align:left;cursor:pointer}
-.fsdb-group-acc-opt:hover{background:var(--biu-color-bg-hover)}
-.fsdb-group-acc-opt.is-on{font-weight:var(--biu-font-weight-medium)}
+.fsdb-group-acc-opt{display:flex;align-items:center;gap:6px;width:100%;min-height:26px;padding:3px 8px;border:0;border-radius:6px;background:transparent;color:var(--biu-color-text-muted);font:inherit;font-size:var(--biu-font-size-3);text-align:left;cursor:pointer;transition:color 120ms ease,background 120ms ease}
+.fsdb-group-acc-opt:hover{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
+.fsdb-group-acc-opt.is-on{color:var(--biu-color-text)}
 .fsdb-group-acc-opt-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tasks-table tbody tr.fsdb-summary-row{height:32px}
 .tasks-table tr.fsdb-summary-row td{padding:0;height:32px;background:transparent}
@@ -1431,8 +1433,8 @@ body.is-col-reordering,body.is-col-reordering *{cursor:grabbing!important;user-s
 .fsdb-col-view-entry{display:flex;flex-direction:column;gap:4px}
 .fsdb-col-view-row{display:flex;align-items:center;gap:2px;min-height:28px;border-radius:6px}
 .fsdb-col-view-row:hover{background:var(--biu-color-bg-hover)}
-.fsdb-col-view-pick{display:flex;align-items:center;gap:6px;flex:1;min-width:0;min-height:28px;padding:4px 8px;border:0;background:transparent;color:var(--biu-color-text);font:inherit;text-align:left;cursor:pointer}
-.fsdb-col-view-row.is-on .fsdb-col-view-pick{font-weight:var(--biu-font-weight-medium)}
+.fsdb-col-view-pick{display:flex;align-items:center;gap:6px;flex:1;min-width:0;min-height:28px;padding:4px 8px;border:0;background:transparent;color:var(--biu-color-text-muted);font:inherit;text-align:left;cursor:pointer;transition:color 120ms ease}
+.fsdb-col-view-row:hover .fsdb-col-view-pick,.fsdb-col-view-row.is-on .fsdb-col-view-pick{color:var(--biu-color-text)}
 .fsdb-col-view-acts{display:inline-flex;align-items:center;gap:1px;flex:none;padding-right:4px}
 .fsdb-col-view-act{display:grid;place-items:center;width:22px;height:22px;border:0;border-radius:5px;padding:0;background:transparent;color:var(--biu-color-text-subtle);cursor:pointer}
 .fsdb-col-view-act:hover,.fsdb-col-view-act.is-on{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
