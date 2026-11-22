@@ -806,3 +806,171 @@ export function projectTrajectory(events: SessionEvent[]): TrajectoryRow[] {
   }
   return rows
 }
+
+function sameReplyPart(a: ChatReplyPart, b: ChatReplyPart): boolean {
+  if (a === b) return true
+  if (a.id !== b.id || a.kind !== b.kind || a.step !== b.step) return false
+  if (a.kind === 'tool' && b.kind === 'tool') {
+    if (a.callId !== b.callId || a.name !== b.name || a.arguments !== b.arguments) return false
+    const ar = a.result
+    const br = b.result
+    if (ar === br) return true
+    if (!ar || !br) return false
+    return ar.ok === br.ok && ar.detail === br.detail && ar.streaming === br.streaming
+  }
+  if (a.kind !== 'tool' && b.kind !== 'tool') {
+    return a.text === b.text && a.streaming === b.streaming
+  }
+  return false
+}
+
+function sameStepStat(a: ChatStepStat, b: ChatStepStat): boolean {
+  return (
+    a === b ||
+    (a.step === b.step &&
+      a.inputTokens === b.inputTokens &&
+      a.outputTokens === b.outputTokens &&
+      a.cacheReadTokens === b.cacheReadTokens &&
+      a.histPct === b.histPct &&
+      a.toolCount === b.toolCount &&
+      a.messageChars === b.messageChars &&
+      a.durationMs === b.durationMs)
+  )
+}
+
+function sameUsage(a?: TrajectoryUsage, b?: TrajectoryUsage): boolean {
+  if (a === b) return true
+  if (!a || !b) return false
+  return (
+    a.inputTokens === b.inputTokens &&
+    a.outputTokens === b.outputTokens &&
+    a.totalTokens === b.totalTokens &&
+    a.cacheReadTokens === b.cacheReadTokens &&
+    a.histPct === b.histPct
+  )
+}
+
+function sameChatNode(a: ChatNode, b: ChatNode): ChatNode | null {
+  if (a === b) return a
+  if (a.id !== b.id || a.kind !== b.kind) return null
+  if (a.kind === 'turn' && b.kind === 'turn') {
+    return a.text === b.text ? a : null
+  }
+  if (a.kind === 'user' && b.kind === 'user') {
+    if (a.text !== b.text || a.kindTag !== b.kindTag || a.ts !== b.ts) return null
+    const as = a.sender
+    const bs = b.sender
+    if (as !== bs) {
+      if (!as || !bs || as.type !== bs.type) return null
+      if (as.type === 'session' && bs.type === 'session' && as.sessionId !== bs.sessionId) return null
+    }
+    const ai = a.images
+    const bi = b.images
+    if ((ai?.length ?? 0) !== (bi?.length ?? 0)) return null
+    if (ai && bi) {
+      for (let i = 0; i < ai.length; i += 1) {
+        if (ai[i]!.url !== bi[i]!.url || ai[i]!.name !== bi[i]!.name || ai[i]!.mime !== bi[i]!.mime) return null
+      }
+    }
+    return a
+  }
+  if (a.kind === 'reply' && b.kind === 'reply') {
+    // 即使当前 reply 有增量更新，也尽量复用未变的子 part 引用，避免已完成 ToolCard 重渲染。
+    let allPartsSame = a.parts.length === b.parts.length
+    const prevPartsById = new Map<string, ChatReplyPart>()
+    for (let i = 0; i < a.parts.length; i += 1) prevPartsById.set(a.parts[i]!.id, a.parts[i]!)
+    let reusedAnyPart = false
+    const mergedParts: ChatReplyPart[] = new Array(b.parts.length)
+    for (let i = 0; i < b.parts.length; i += 1) {
+      const nextPart = b.parts[i]!
+      const prevPart = prevPartsById.get(nextPart.id)
+      if (prevPart && sameReplyPart(prevPart, nextPart)) {
+        mergedParts[i] = prevPart
+        reusedAnyPart = true
+        if (a.parts[i] !== prevPart) allPartsSame = false
+      } else {
+        mergedParts[i] = nextPart
+        allPartsSame = false
+      }
+    }
+
+    const aSteps = a.steps
+    const bSteps = b.steps
+    let stepsSame = (aSteps?.length ?? 0) === (bSteps?.length ?? 0)
+    if (stepsSame && aSteps && bSteps) {
+      for (let i = 0; i < aSteps.length; i += 1) {
+        if (!sameStepStat(aSteps[i]!, bSteps[i]!)) {
+          stepsSame = false
+          break
+        }
+      }
+    }
+
+    const aEdits = a.contentEdits
+    const bEdits = b.contentEdits
+    let editsSame = (aEdits?.length ?? 0) === (bEdits?.length ?? 0)
+    if (editsSame && aEdits && bEdits) {
+      for (let i = 0; i < aEdits.length; i += 1) {
+        const ae = aEdits[i]!
+        const be = bEdits[i]!
+        if (
+          ae.path !== be.path ||
+          ae.title !== be.title ||
+          ae.added !== be.added ||
+          ae.removed !== be.removed ||
+          ae.jump_line !== be.jump_line ||
+          ae.reverted !== be.reverted ||
+          ae.kind !== be.kind
+        ) {
+          editsSame = false
+          break
+        }
+      }
+    }
+
+    if (
+      allPartsSame &&
+      stepsSame &&
+      editsSame &&
+      a.copyText === b.copyText &&
+      a.turn === b.turn &&
+      a.stepCount === b.stepCount &&
+      a.durationMs === b.durationMs &&
+      a.startTs === b.startTs &&
+      a.streaming === b.streaming &&
+      a.finished === b.finished &&
+      a.endReason === b.endReason &&
+      sameUsage(a.usage, b.usage)
+    ) {
+      return a
+    }
+    if (reusedAnyPart || (stepsSame && aSteps) || (editsSame && aEdits)) {
+      return {
+        ...b,
+        parts: allPartsSame ? a.parts : mergedParts,
+        ...(stepsSame && aSteps ? { steps: aSteps } : {}),
+        ...(editsSame && aEdits ? { contentEdits: aEdits } : {}),
+      }
+    }
+    return null
+  }
+  return null
+}
+
+/** 结构共享：保留未变化的历史 ChatNode 与已完成 ChatReplyPart 引用，避免事件增量到达时击穿全部 memo。 */
+export function reuseStableNodes(prev: ChatNode[], next: ChatNode[]): ChatNode[] {
+  if (!prev.length || !next.length) return next
+  const prevById = new Map<string, ChatNode>()
+  for (let i = 0; i < prev.length; i += 1) prevById.set(prev[i]!.id, prev[i]!)
+  let allSame = prev.length === next.length
+  const out: ChatNode[] = new Array(next.length)
+  for (let i = 0; i < next.length; i += 1) {
+    const nextNode = next[i]!
+    const prevNode = prevById.get(nextNode.id)
+    const reused = prevNode ? sameChatNode(prevNode, nextNode) : null
+    const finalNode = reused ?? nextNode
+    out[i] = finalNode
+    if (prev[i] !== finalNode) allSame = false
+  }
+  return allSame ? prev : out
+}

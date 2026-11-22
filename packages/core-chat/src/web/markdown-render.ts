@@ -31,6 +31,9 @@ const CACHE_LIMIT = 1200
 /** text → 已消毒 HTML；虚表卸载再挂时同步命中，首帧即可贴 HTML */
 const htmlCache = new Map<string, string>()
 
+/** 流式前缀增量缓存：段落或代码块闭合后只解析新增 delta，把流式长文从 O(N²) 降到 O(N)。 */
+let streamFrozenCache: { prefix: string; html: string } = { prefix: '', html: '' }
+
 /** 同 text 并发只解析一次，避免虚表快速进出重复 marked */
 const inflight = new Map<string, Promise<string>>()
 
@@ -90,19 +93,20 @@ function lineEndAfter(text: string, index: number): number {
 }
 
 /**
- * 已闭合的围栏可以定稿（含 highlight.js）；
- * 最后一个未闭合 ``` 及之后只做轻量 parse，避免每帧高亮正在增长的代码。
+ * 已闭合的围栏和已闭合的段落（`\n\n`）都可以定稿复用；
+ * 最后一个未闭合 ``` 或最后一个正在增长的段落只做轻量 parse，避免每帧重解析整篇长文。
  */
 export function splitStreamingMarkdown(text: string): { frozen: string; live: string } {
   const starts = fenceStarts(text)
-  if (starts.length === 0) return { frozen: '', live: text }
   if (starts.length % 2 === 1) {
     const openAt = starts[starts.length - 1]!
     return { frozen: text.slice(0, openAt), live: text.slice(openAt) }
   }
-  const closeAt = starts[starts.length - 1]!
-  const end = lineEndAfter(text, closeAt)
-  return { frozen: text.slice(0, end), live: text.slice(end) }
+  const fenceEnd = starts.length > 0 ? lineEndAfter(text, starts[starts.length - 1]!) : 0
+  const paraEnd = text.lastIndexOf('\n\n')
+  const cut = paraEnd >= fenceEnd ? paraEnd + 2 : fenceEnd
+  if (cut <= 0) return { frozen: '', live: text }
+  return { frozen: text.slice(0, cut), live: text.slice(cut) }
 }
 
 /** 未闭合的 ``` 在流式里会把后面全吃进代码块，补一个结束围栏再 parse。 */
@@ -118,14 +122,36 @@ function parseLiveFragment(text: string): string {
   return sanitizeMarkdownHtml(dirty)
 }
 
+function resolveStreamFrozenHtml(frozen: string): string {
+  if (!frozen) return ''
+  const cached = getCachedMarkdownHtml(frozen)
+  if (cached != null) {
+    streamFrozenCache = { prefix: frozen, html: cached }
+    return cached
+  }
+  if (streamFrozenCache.prefix === frozen) return streamFrozenCache.html
+  if (streamFrozenCache.prefix && frozen.startsWith(streamFrozenCache.prefix)) {
+    const delta = frozen.slice(streamFrozenCache.prefix.length)
+    const dirty = marked.parse(delta, { async: false }) as string
+    const html = streamFrozenCache.html + sanitizeMarkdownHtml(dirty)
+    streamFrozenCache = { prefix: frozen, html }
+    if (frozen.includes('```')) touchCache(frozen, html)
+    return html
+  }
+  const dirty = marked.parse(frozen, { async: false }) as string
+  const html = sanitizeMarkdownHtml(dirty)
+  streamFrozenCache = { prefix: frozen, html }
+  if (frozen.includes('```')) touchCache(frozen, html)
+  return html
+}
+
 /**
- * 流式预览：闭合代码块走定稿高亮（frozen 前缀可进 LRU）；
- * 未闭合围栏与其后正文不高亮、不把整条 message 写入 LRU。
+ * 流式预览：闭合代码块与已定稿段落增量缓存；
+ * 仅对最后一个正在增长的段落/未闭合围栏做轻量 parse，不把整条未定稿 message 写入 LRU。
  */
 export function parseMarkdownLive(text: string): string {
   const { frozen, live } = splitStreamingMarkdown(text)
-  const frozenHtml = frozen ? (getCachedMarkdownHtml(frozen) ?? parseMarkdownSync(frozen)) : ''
-  return frozenHtml + parseLiveFragment(live)
+  return resolveStreamFrozenHtml(frozen) + parseLiveFragment(live)
 }
 
 function getWorker(): Worker | null {
@@ -210,6 +236,7 @@ export function renderMarkdownHtml(text: string): Promise<string> {
 /** 测试用：清空缓存与 Worker 状态 */
 export function resetMarkdownRenderForTests() {
   htmlCache.clear()
+  streamFrozenCache = { prefix: '', html: '' }
   inflight.clear()
   for (const [, entry] of pending) {
     entry.reject(new Error('reset'))

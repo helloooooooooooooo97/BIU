@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ImageLightbox } from './image-thumbs.tsx'
 import {
@@ -401,7 +401,7 @@ function ToolZoom({
   )
 }
 
-export function ToolCard({
+export const ToolCard = memo(function ToolCard({
   node,
   onInspect,
   live = false,
@@ -418,8 +418,11 @@ export function ToolCard({
   )
   const [open, setOpen] = useState(() => shouldAutoOpenTool(parsed, node.result?.detail))
   const [zoom, setZoom] = useState(false)
-  const summary = toolSummary(parsed, node.result?.detail || node.arguments || '…')
-  const title = toolTitle(parsed, node.name)
+  const summary = useMemo(
+    () => toolSummary(parsed, node.result?.detail || node.arguments || '…'),
+    [parsed, node.result?.detail, node.arguments],
+  )
+  const title = useMemo(() => toolTitle(parsed, node.name), [parsed, node.name])
   const previewLines = useMemo(() => {
     if (parsed.kind !== 'str_replace' || open) return null
     return lineDiff(parsed.oldStr, parsed.newStr).filter((line) => line.type !== 'equal').slice(0, 4)
@@ -527,4 +530,4 @@ export function ToolCard({
       ) : null}
     </div>
   )
-}
+})
