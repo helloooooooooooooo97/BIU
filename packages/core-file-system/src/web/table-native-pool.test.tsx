@@ -335,6 +335,90 @@ describe('NativeRowPool unit tests', () => {
     expect(toggled).toEqual([{ rowId: 'r-0', colKey: 'done' }])
     expect(tableClicks).not.toHaveBeenCalled()
   })
+
+  it('safely switches a cell from portal to native and back without removeChild NotFoundError', () => {
+    const nodes = makeNodes(5)
+    let statusAsPortal = true
+    const wrapRef = createRef<HTMLDivElement>()
+    const tableRef = createRef<HTMLTableElement>()
+    const stageRef = createRef<HTMLDivElement>()
+    const checkStackRef = createRef<HTMLDivElement>()
+    const checkHoverRef = { current: null as string | 'head' | null }
+    const colWindowRef = { current: { pin: 1, start: 1, end: COLUMNS.length, padLeft: 0, padRight: 0 } as TableColumnSlice }
+
+    const paintRef = {
+      current: {
+        colSpan: COLUMNS.length + 1,
+        error: '',
+        renderNode: () => null,
+        describeNativeCell: (node, colKey) =>
+          colKey === 'status' && statusAsPortal ? { spec: { kind: 'portal' } } : makeDescribe(node, colKey),
+        renderPortalCellContent: (node, colKey) =>
+          colKey === 'status' ? (
+            <span className="fsdb-cell sandbox-status">{String(node.row.status)}</span>
+          ) : colKey === 'title' ? (
+            <span className="portal-title">{String(node.row.title)}</span>
+          ) : (
+            <button type="button">Act</button>
+          ),
+      } as TablePaintBag,
+    }
+    const chromeRef = {
+      current: {
+        paintHeadTh: (col) => <th key={col.key}>{col.key}</th>,
+        onPointerDown: undefined,
+        onPointerMove: undefined,
+        onClick: () => {},
+        onMouseOver: undefined,
+      } as TableChromeBag,
+    }
+
+    const renderTree = (stamp: string) => (
+      <div ref={wrapRef} className="tasks-table-wrap" style={{ height: 480, overflow: 'auto' }}>
+        <WindowedTable
+          columns={COLUMNS}
+          columnWidths={COLUMN_WIDTHS}
+          columnPinCount={1}
+          wrapCells={false}
+          truncateCells={false}
+          resizingCol={null}
+          nodes={nodes}
+          error=""
+          pickMode={false}
+          resetKey="portal-native-switch"
+          forceLiveChecks={false}
+          checkLayoutExtra=""
+          paintRef={paintRef}
+          chromeRef={chromeRef}
+          colWindowRef={colWindowRef}
+          tableRef={tableRef}
+          wrapRef={wrapRef}
+          stageRef={stageRef}
+          checkStackRef={checkStackRef}
+          checkHoverRef={checkHoverRef}
+          paintCheckHover={() => {}}
+          renderCheckHead={() => null}
+          renderCheckRow={() => null}
+          activeRowId={null}
+          cellViewStamp={stamp}
+        />
+      </div>
+    )
+
+    const { container, rerender } = render(renderTree('v1'))
+    expect(container.querySelectorAll('.sandbox-status').length).toBeGreaterThan(0)
+
+    // Switch status column from portal -> native (previously threw NotFoundError: removeChild)
+    statusAsPortal = false
+    rerender(renderTree('v2'))
+    expect(container.querySelectorAll('.sandbox-status').length).toBe(0)
+    expect(container.querySelectorAll('td[data-col-key="status"] .biu-tags').length).toBeGreaterThan(0)
+
+    // Switch back native -> portal
+    statusAsPortal = true
+    rerender(renderTree('v3'))
+    expect(container.querySelectorAll('.sandbox-status').length).toBeGreaterThan(0)
+  })
 })
 
 describe('Before vs After benchmark: React TableBody vs NativeRowPool + Portal Hybrid', () => {

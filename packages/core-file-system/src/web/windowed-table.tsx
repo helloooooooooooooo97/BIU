@@ -505,7 +505,7 @@ function nativeSpecStamp(describe: NativeCellDescribe): string {
 function samePortalMounts(a: PortalCellMount[], b: PortalCellMount[]): boolean {
   if (a.length !== b.length) return false
   for (let i = 0; i < a.length; i += 1) {
-    if (a[i]!.id !== b[i]!.id || a[i]!.td !== b[i]!.td) return false
+    if (a[i]!.id !== b[i]!.id || a[i]!.host !== b[i]!.host) return false
   }
   return true
 }
@@ -706,7 +706,7 @@ const NativeTableBody = memo(function NativeTableBody({
                 content = renderPortal(node, mount.colKey)
                 portalCache.current.set(mount.id, { stamp: portalStamp, element: content })
               }
-              return createPortal(content, mount.td, mount.id)
+              return createPortal(content, mount.host, mount.id)
             })
           : null}
       </tbody>

@@ -48,6 +48,7 @@ export type PortalCellMount = {
   rowKey: string
   colKey: string
   td: HTMLTableCellElement
+  host: HTMLSpanElement
 }
 
 export type NativeRowPoolStats = {
@@ -83,6 +84,7 @@ type PooledCellSlot = {
   lastStamp: string
   lastMode: NativeCellSpec['kind'] | ''
   lastPickKeys: string[]
+  portalHost: HTMLSpanElement | null
   cellWrap: HTMLSpanElement | null
   textSpan: HTMLSpanElement | null
   boolHost: HTMLElement | null
@@ -143,9 +145,21 @@ function clearNativeChildren(slot: PooledCellSlot) {
   }
 }
 
+function ensurePortalHost(slot: PooledCellSlot): HTMLSpanElement {
+  if (!slot.portalHost) {
+    const host = document.createElement('span')
+    host.className = 'fsdb-portal-host'
+    host.style.display = 'contents'
+    slot.td.appendChild(host)
+    slot.portalHost = host
+  } else if (slot.portalHost.style.display !== 'contents') {
+    slot.portalHost.style.display = 'contents'
+  }
+  return slot.portalHost
+}
+
 function ensureCellWrap(slot: PooledCellSlot): HTMLSpanElement {
   if (!slot.cellWrap) {
-    slot.td.textContent = ''
     const wrap = document.createElement('span')
     wrap.className = 'fsdb-cell'
     slot.td.appendChild(wrap)
@@ -156,13 +170,8 @@ function ensureCellWrap(slot: PooledCellSlot): HTMLSpanElement {
 
 function paintNativeSpec(slot: PooledCellSlot, spec: Exclude<NativeCellSpec, { kind: 'portal' }>) {
   if (slot.lastMode === 'portal') {
-    slot.td.textContent = ''
-    slot.cellWrap = null
-    slot.textSpan = null
-    slot.boolHost = null
-    slot.boolBox = null
-    slot.boolCheck = null
-    slot.tagsWrap = null
+    // 绝不清空 portalHost 内部子节点，避免 React 卸载旧 Portal 时触发 removeChild NotFoundError。
+    if (slot.portalHost) slot.portalHost.style.display = 'none'
   } else if (slot.lastMode && slot.lastMode !== spec.kind) {
     clearNativeChildren(slot)
   }
@@ -350,6 +359,7 @@ export class NativeRowPool {
       lastStamp: '',
       lastMode: '',
       lastPickKeys: [],
+      portalHost: null,
       cellWrap: null,
       textSpan: null,
       boolHost: null,
@@ -484,6 +494,7 @@ export class NativeRowPool {
             clearNativeChildren(cellSlot)
             cellSlot.lastMode = 'portal'
           }
+          const host = ensurePortalHost(cellSlot)
           cellSlot.lastStamp = stamp
           this.stats.portalCellsMounted += 1
           portals.push({
@@ -491,6 +502,7 @@ export class NativeRowPool {
             rowKey: row.key,
             colKey: cellInput.colKey,
             td,
+            host,
           })
         } else {
           if (cellSlot.lastStamp !== stamp || cellSlot.lastMode !== describe.spec.kind) {
