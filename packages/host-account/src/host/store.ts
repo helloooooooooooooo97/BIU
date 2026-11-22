@@ -2123,12 +2123,35 @@ export class CollabStore {
       roleChain: this.authorization.roleChain(actorId, resource),
       inheritance: {
         mode: inheritance.mode,
+        hasParent: inheritance.hasParent,
+        parent: inheritance.parent,
         ancestors: inheritance.ancestors.map((ancestor) => ({
           ...ancestor,
           ...this.accessRows(workspaceId, ancestor.collection, ancestor.recordId),
         })),
       },
     }
+  }
+
+  setRecordInheritance(
+    actorId: string,
+    collection: string,
+    recordId: string,
+    mode: 'inherit' | 'custom',
+  ) {
+    const workspaceId = this.activeWorkspaceId()
+    if (!workspaceId) throw new CollabError('没有工作区', 400)
+    this.requireMember(actorId, workspaceId)
+    const resource = { type: 'record' as const, workspaceId, collection, recordId }
+    try {
+      this.authorization.setInheritanceMode({ type: 'account', accountId: actorId, workspaceId }, resource, mode)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (message.includes('permission denied')) throw new CollabError('没有权限', 403)
+      throw new CollabError(message, 400)
+    }
+    if (mode === 'custom') this.reconcileRecordScope(workspaceId, collection, recordId)
+    return this.recordAccess(actorId, collection, recordId)
   }
 
   viewGrantAudiences(workspaceId: string, collection: string) {

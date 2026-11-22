@@ -1162,6 +1162,10 @@ a.fsdb-person.is-link:hover .fsdb-person-name,button.fsdb-person.is-link:hover .
 .fsdb-scope-people li em{color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-2);font-style:normal}
 .fsdb-scope-people li span{margin-left:auto;color:var(--biu-color-text-muted);font-size:var(--biu-font-size-2)}
 .fsdb-share-collab-section h3{margin:0 0 6px;color:var(--biu-color-text);font-size:var(--biu-font-size-3);font-weight:var(--biu-font-weight-bold)}
+.fsdb-share-inherit-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px;padding:8px 10px;border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:8px}
+.fsdb-share-inherit-row>span{display:flex;min-width:0;flex-direction:column;gap:2px}
+.fsdb-share-inherit-row strong{color:var(--biu-color-text);font-size:var(--biu-font-size-2);font-weight:var(--biu-font-weight-semibold)}
+.fsdb-share-inherit-row em{color:var(--biu-color-text-subtle);font-size:11px;font-style:normal;line-height:1.35}
 .fsdb-share-collab-section.is-external{margin-top:16px;border-top:var(--biu-stroke-width) solid var(--biu-color-border);padding-top:14px}
 .fsdb-share-collaborators{display:flex;flex-direction:column;margin:0 0 10px;padding:0;list-style:none}
 .fsdb-share-collaborators li{display:grid;grid-template-columns:minmax(0,1fr) auto 24px;min-height:42px;align-items:center;gap:7px;border-bottom:var(--biu-stroke-width) solid color-mix(in srgb,var(--biu-color-border) 65%,transparent);font-size:var(--biu-font-size-2)}

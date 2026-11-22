@@ -15,6 +15,7 @@ import {
 } from './fields.ts'
 import { ActionCell, BoolCell, DefaultCell, fieldActionId } from './fsdb-cells.tsx'
 import { tagChipIcon, tagChipLabel } from './schema-field.tsx'
+import { ShareRoleLabel, ShareScopeLabel } from './share-scope-label.tsx'
 import { SourceTableCell } from './source-table-cell.tsx'
 import { loadTags } from './tag-catalog.ts'
 
@@ -26,7 +27,7 @@ const LazyShareScopeDetail = lazy(() => import('./share-chain-detail.tsx').then(
 
 function ShareRoleDetail(props: ComponentProps<typeof LazyShareRoleDetail>) {
   return (
-    <Suspense fallback={<span>{props.label}</span>}>
+    <Suspense fallback={<ShareRoleLabel label={props.label} />}>
       <LazyShareRoleDetail {...props} />
     </Suspense>
   )
@@ -34,7 +35,7 @@ function ShareRoleDetail(props: ComponentProps<typeof LazyShareRoleDetail>) {
 
 function ShareScopeDetail(props: ComponentProps<typeof LazyShareScopeDetail>) {
   return (
-    <Suspense fallback={<span>{props.label}</span>}>
+    <Suspense fallback={<ShareScopeLabel label={props.label} />}>
       <LazyShareScopeDetail {...props} />
     </Suspense>
   )

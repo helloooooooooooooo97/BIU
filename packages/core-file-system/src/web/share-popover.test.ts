@@ -323,3 +323,20 @@ test('collaborator sections are stacked without a redundant popover heading', ()
   assert.doesNotMatch(src, /<header className="fsdb-share-head">/)
   assert.doesNotMatch(src, /aria-label="协作者类型"/)
 })
+
+test('table share/role suspense fallbacks render capsule labels immediately without plain-text flash', () => {
+  const renderer = readFileSync(resolve(import.meta.dirname, './browser-cell-renderer.tsx'), 'utf8')
+  assert.match(renderer, /fallback=\{<ShareRoleLabel label=\{props\.label\} \/>\}/)
+  assert.match(renderer, /fallback=\{<ShareScopeLabel label=\{props\.label\} \/>\}/)
+  assert.doesNotMatch(renderer, /fallback=\{<span>\{props\.label\}<\/span>\}/)
+})
+
+test('share panel exposes inheritance toggle wired to PATCH /api/account/access', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8')
+  const accountHost = readFileSync(resolve(import.meta.dirname, '../../../host-account/src/host/index.ts'), 'utf8')
+  assert.match(src, /testId="fsdb-share-inherit-toggle"/)
+  assert.match(src, /继承上级权限/)
+  assert.match(src, /method: 'PATCH'/)
+  assert.match(src, /inheritanceMode/)
+  assert.match(accountHost, /PATCH', '\/api\/account\/access'/)
+})

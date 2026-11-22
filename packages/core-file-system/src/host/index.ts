@@ -2271,6 +2271,17 @@ export function apply(ctx: Context) {
       },
     )
   })
+  account?.authorization?.setDataViewMatcher((_workspaceId, collection, viewId, recordId, context) => {
+    if (!context.record) return false
+    const saved = [builtinAllView({ path: collection }), ...savedViews.viewsFor(collection)]
+    return recordMatchesGrantedView(
+      { id: recordId, ...context.record } as DbRecord,
+      viewId,
+      saved,
+      context.scope,
+      { grantedBy: context.grantedBy, recordOwnerId: context.recordOwnerId },
+    )
+  })
   const shares = db.shares
   shares.open(process.env.VITEST ? ':memory:' : biuSqlitePath())
   const tags = db.tags

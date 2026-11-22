@@ -1219,6 +1219,30 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     }
   })
 
+  ctx.http.route('PATCH', '/api/account/access', async (route) => {
+    try {
+      const me = actor(route)
+      const activeWorkspace = account.store.activeWorkspaceId()
+      if (activeWorkspace && (await relayCloudWorkspace(route, me.id, activeWorkspace, '/api/account/access'))) return
+      requireCollaborativeWorkspace(activeWorkspace ?? '')
+      const body = (await route.json()) as {
+        collection?: string
+        recordId?: string
+        inheritanceMode?: 'inherit' | 'custom'
+      }
+      const collection = String(body.collection ?? '').trim()
+      const recordId = String(body.recordId ?? '').trim()
+      const mode = body.inheritanceMode === 'inherit' ? 'inherit' : body.inheritanceMode === 'custom' ? 'custom' : null
+      if (!collection || !recordId || !mode) {
+        route.send(400, { error: '参数不完整' })
+        return
+      }
+      route.send(200, account.store.setRecordInheritance(me.id, collection, recordId, mode))
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
   ctx.http.route('DELETE', '/api/account/access', async (route) => {
     try {
       const me = actor(route)

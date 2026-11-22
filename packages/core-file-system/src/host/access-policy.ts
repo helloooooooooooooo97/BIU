@@ -287,11 +287,13 @@ export class DatabaseAccessPolicy {
           workspaceId: actor.workspaceId,
           collection: target.collection,
           recordId: target.id,
+          record: row as Record<string, unknown>,
         }
         if (collection === TAGS_COLLECTION_PATH && !String(row.sourceId ?? '') && !String(row.tablePath ?? '')) {
           return this.indexTagVisible(String(row.id ?? ''), actor.accountId)
         }
         if (authorization.authorize(actor, action, resource).allowed) return true
+        if (authorization.hasDataViewMatcher()) return false
         const viaView = this.viewGrantRole(actor.workspaceId, collection, row, actor.accountId)
         return Boolean(viaView && roleCoversAction(viaView, action))
       })
@@ -426,6 +428,7 @@ export class DatabaseAccessPolicy {
         workspaceId: actor.workspaceId,
         collection: target.collection,
         recordId: target.id,
+        ...(record ? { record: record as Record<string, unknown> } : {}),
       })
       if (!decision.allowed) {
         if (
@@ -434,6 +437,9 @@ export class DatabaseAccessPolicy {
           this.indexTagVisible(id, actor.accountId)
         ) {
           return
+        }
+        if (authorization.hasDataViewMatcher()) {
+          throw new Error(`unknown record: ${spec.path}/${id}`)
         }
         const viaView = record
           ? this.viewGrantRole(actor.workspaceId, spec.path, record, actor.accountId)
@@ -559,8 +565,10 @@ export class DatabaseAccessPolicy {
       workspaceId: actor.workspaceId,
       collection: target.collection,
       recordId: target.id,
+      record: record as Record<string, unknown>,
     })
     const direct = decision.allowed ? decision.effectiveRole : null
+    if (authorization.hasDataViewMatcher()) return accessLabel(direct)
     const via = this.viewGrantRole(actor.workspaceId, spec.path, record, actor.accountId)
     return accessLabel(higherAccess(direct, via))
   }
