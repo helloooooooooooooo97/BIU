@@ -4,7 +4,7 @@ import { DownloadIcon, GitHubButton, SiteChrome, SiteFaq, SiteFinalCta, type Sit
 import { usePageMeta } from './use-page-meta.ts'
 import { asset } from './site-base.ts'
 import { USE_CASES } from './use-cases.tsx'
-import { COMPARE_FEATURED, COMPARE_PAGES } from './compare.tsx'
+import { COMPARE_PAGES } from './compare.tsx'
 import { BLOG_POSTS, readingMinutes } from './blog-posts.ts'
 import { BrandMark, useBrandConfig } from './brand-mark.tsx'
 
@@ -109,16 +109,37 @@ const AGENT_POINTS = [
   },
 ] as const
 
-const HOME_COMPARE_LINE = {
-  'vs-notion': 'Blocks are never hardcoded by the vendor—compose full-stack plugins and external SaaS slices sharing live state, and ship via one link.',
-  'vs-obsidian': 'Also stays local in SQLite and works offline, while adding auto-indexed tables, full-stack plugins, and native agent operations.',
-  'vs-chatgpt': 'Outputs settle directly into structured pages, reusable plugins, and skills instead of getting buried in ephemeral chat history.',
-} as const
+const HOME_COMPARE_SPECS = [
+  {
+    verb: '01 Build',
+    slug: 'vs-cursor',
+    line: 'Cursor accelerates engineers inside code repos; BIU grows software alongside live business data—expanding builders from developers to a billion knowledge workers.',
+  },
+  {
+    verb: '02 Store',
+    slug: 'vs-supabase',
+    line: 'Supabase keeps data in a separate cloud backend; BIU unites prose, structured blocks, and run snapshots on one page with auto-indexed tables and local offline mode.',
+  },
+  {
+    verb: '03 Compose',
+    slug: 'vs-k8s',
+    line: 'Kubernetes orchestrates containers with YAML; BIU declaratively composes full-stack plugins and external SaaS slices on one page sharing live state—zero glue code.',
+  },
+  {
+    verb: '04 Distribute',
+    slug: 'vs-notion',
+    line: 'Notion shares static docs with manual ACLs; BIU bundles prose, assets, and runnable plugin source into one link governed by dynamic Data View × Member View permissions.',
+  },
+  {
+    verb: '05 Derive',
+    slug: 'vs-linux',
+    line: 'Linux extends hardware through kernel modules; BIU makes plugins structured workspace records so humans and agents layer new capabilities on working software and open source.',
+  },
+] as const
 
-const HOME_COMPARES = COMPARE_FEATURED.flatMap((slug) => {
-  const page = COMPARE_PAGES.find((item) => item.slug === slug)
-  const line = HOME_COMPARE_LINE[slug]
-  return page && line ? [{ page, line }] : []
+const HOME_COMPARES = HOME_COMPARE_SPECS.flatMap((spec) => {
+  const page = COMPARE_PAGES.find((item) => item.slug === spec.slug)
+  return page ? [{ page, verb: spec.verb, line: spec.line }] : []
 })
 
 const HERO_VERBS = [
@@ -409,21 +430,21 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
         <section className="site-home-entry" aria-label="Comparisons">
           <div className="site-home-entry-heading" data-reveal>
             <p className="site-section-label">Why BIU</p>
-            <h2>How BIU differs from tools you already use</h2>
-            <p>The three tools people ask about most. Full breakdowns—including where BIU falls short—live on the differences page.</p>
+            <h2>Five stages, five category-defining benchmarks</h2>
+            <p>Across building, storing, composing, distributing, and deriving software, see how BIU compares with the iconic tools at every layer—including where BIU falls short.</p>
           </div>
           <div className="site-home-compare-grid">
-            {HOME_COMPARES.map(({ page, line }) => (
+            {HOME_COMPARES.map(({ page, verb, line }) => (
               <Link key={page.slug} className="site-home-compare-card" to={`/compare/${page.slug}`} data-reveal>
-                <small>{page.category}</small>
-                <h3>{page.columns[0]}</h3>
+                <small>{verb} · {page.category}</small>
+                <h3>{page.title}</h3>
                 <p>{line}</p>
                 <span>See differences →</span>
               </Link>
             ))}
           </div>
           <p className="site-home-entry-more" data-reveal>
-            <Link to="/compare">All differences →</Link>
+            <Link to="/compare">All 13 comparisons →</Link>
           </p>
         </section>
 
