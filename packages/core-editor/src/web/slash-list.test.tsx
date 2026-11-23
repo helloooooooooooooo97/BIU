@@ -100,9 +100,9 @@ test('failed slash item shows a plugin log link that does not insert', () => {
   }
 })
 
-test('slash list uses svg icons for toc and playground blocks', () => {
+test('slash list uses svg icons for built-in and block items', () => {
   const src = readFileSync(resolve(import.meta.dirname, './slash-list.tsx'), 'utf8')
-  for (const id of ['toc', 'run', 'sandbox']) {
+  for (const id of ['bullet', 'ordered', 'quote', 'code', 'divider', 'image', 'slide', 'table', 'database', 'excalidraw', 'html', 'video', 'code-run', 'terminal', 'browser', 'toc', 'run', 'sandbox']) {
     assert.match(src, new RegExp(`id === '${id}'`), `slash icon for ${id}`)
   }
   assert.match(src, /viewBox="0 0 16 16"/)

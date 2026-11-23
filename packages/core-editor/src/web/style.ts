@@ -341,6 +341,7 @@ html[data-body-gap=lg] .page-editor .tiptap p,html[data-body-gap=lg] .page-edito
 html[data-body-gap=lg] .page-editor.is-outline .tiptap>.page-outline-block{margin-top:0;margin-bottom:0}
 html[data-body-gap=sm] .page-editor .tiptap p{min-height:1.45em}
 html[data-body-gap=lg] .page-editor .tiptap p{min-height:2em}
+html[data-body-gap=sm] .page-editor .tiptap li p,html[data-body-gap=lg] .page-editor .tiptap li p{min-height:0;margin:0}
 html:not(.dark) .page-block-handle-menu button,
 html:not(.dark) .page-block-handle-menu button:hover,
 html:not(.dark) .page-slash-item,

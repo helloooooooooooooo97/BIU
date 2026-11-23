@@ -1,4 +1,20 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
+import {
+  CircleStackIcon,
+  CodeBracketIcon,
+  CodeBracketSquareIcon,
+  CommandLineIcon,
+  FilmIcon,
+  GlobeAltIcon,
+  ListBulletIcon,
+  MinusIcon,
+  NumberedListIcon,
+  PaintBrushIcon,
+  PhotoIcon,
+  PlayIcon,
+  RectangleGroupIcon,
+  TableCellsIcon,
+} from '@heroicons/react/16/solid'
 import type { SlashItem } from './slash.ts'
 import { filterSlashItems, slashGroups } from './slash.ts'
 import { useBlockEditorVersion } from './service.ts'
@@ -17,17 +33,29 @@ function slashIcon(id: string) {
   if (id === 'h1') return 'H1'
   if (id === 'h2') return 'H2'
   if (id === 'h3') return 'H3'
-  if (id === 'bullet') return '•'
-  if (id === 'ordered') return '1.'
-  if (id === 'quote') return '“'
-  if (id === 'code') return '</>'
-  if (id === 'divider') return '—'
-  if (id === 'image') return '图'
-  if (id === 'table') return '表'
+  if (id === 'bullet') return <ListBulletIcon aria-hidden className="size-3.5" />
+  if (id === 'ordered') return <NumberedListIcon aria-hidden className="size-3.5" />
+  if (id === 'quote') {
+    return iconPath(
+      'M2.75 3a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5A.75.75 0 0 1 2.75 3ZM6 4.75a.75.75 0 0 1 .75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 6 4.75ZM6 8a.75.75 0 0 1 .75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 6 8ZM6 11.25a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75Z',
+    )
+  }
+  if (id === 'code') return <CodeBracketIcon aria-hidden className="size-3.5" />
+  if (id === 'divider') return <MinusIcon aria-hidden className="size-3.5" />
+  if (id === 'image') return <PhotoIcon aria-hidden className="size-3.5" />
+  if (id === 'slide') return <RectangleGroupIcon aria-hidden className="size-3.5" />
+  if (id === 'table') return <TableCellsIcon aria-hidden className="size-3.5" />
   if (id === 'math') return '∑'
   if (id === 'math-inline') return '𝑥'
-  if (id === 'algorithm') return 'LC'
-  if (id === 'toc') {
+  if (id === 'database') return <CircleStackIcon aria-hidden className="size-3.5" />
+  if (id === 'excalidraw' || id === 'page-excalidraw') return <PaintBrushIcon aria-hidden className="size-3.5" />
+  if (id === 'html' || id === 'htmlframe' || id === 'page-html-blocks') return <CodeBracketSquareIcon aria-hidden className="size-3.5" />
+  if (id === 'video' || id === 'page-video') return <FilmIcon aria-hidden className="size-3.5" />
+  if (id === 'code-run' || id === 'page-code-runner') return <PlayIcon aria-hidden className="size-3.5" />
+  if (id === 'terminal' || id === 'page-terminal') return <CommandLineIcon aria-hidden className="size-3.5" />
+  if (id === 'browser' || id === 'page-browser') return <GlobeAltIcon aria-hidden className="size-3.5" />
+  if (id === 'algorithm' || id === 'page-algorithm') return 'LC'
+  if (id === 'toc' || id === 'page-toc') {
     return iconPath(
       'M2 3.75A.75.75 0 0 1 2.75 3h10.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 3.75ZM2 8.25a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 8.25ZM2 12.75a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75Z',
     )
@@ -37,7 +65,7 @@ function slashIcon(id: string) {
       'M3 3.25a.75.75 0 0 1 1.14-.64l8.25 4.75a.75.75 0 0 1 0 1.28l-8.25 4.75A.75.75 0 0 1 3 12.75v-9.5Z',
     )
   }
-  if (id === 'sandbox') {
+  if (id === 'sandbox' || id === 'page-sandbox') {
     return (
       <svg viewBox="0 0 16 16" width="14" height="14" fill="var(--biu-color-ink-purple)" aria-hidden>
         <path

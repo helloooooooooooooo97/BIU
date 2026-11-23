@@ -1,5 +1,5 @@
 import { useLayoutEffect, type RefObject } from 'react'
-import { bindPageRead } from './page-read.ts'
+import { bindPageRead, supportsScrollDrivenProgress } from './page-read.ts'
 
 export function stickyHeadOffset(desired: number, tableTop: number, tableH: number, headH: number) {
   const max = Math.max(0, tableH - headH)
@@ -24,23 +24,28 @@ export function useStickyToolbar(ref: RefObject<HTMLElement | null>) {
       { root: scroller, threshold: 0 },
     )
     io.observe(mark)
-    const read = scroller ? bindPageRead(scroller, el, requestAnimationFrame, cancelAnimationFrame) : null
+    const nativeCss = supportsScrollDrivenProgress()
+    const read = !nativeCss && scroller ? bindPageRead(scroller, el, requestAnimationFrame, cancelAnimationFrame) : null
     const onScroll = () => read?.poke()
-    onScroll()
-    scroller?.addEventListener('scroll', onScroll, { passive: true })
-    const ro = typeof ResizeObserver === 'undefined' || !scroller ? null : new ResizeObserver(onScroll)
-    if (scroller) ro?.observe(scroller)
-    const inner = scroller?.firstElementChild
-    if (inner) ro?.observe(inner)
-    const wrap = el.parentElement?.querySelector('.tasks-table-wrap')
-    const mo = wrap ? new MutationObserver(onScroll) : null
-    if (wrap instanceof Element) mo?.observe(wrap, { childList: true })
+    let ro: ResizeObserver | null = null
+    let mo: MutationObserver | null = null
+    if (read && scroller) {
+      onScroll()
+      scroller.addEventListener('scroll', onScroll, { passive: true })
+      ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(onScroll)
+      ro?.observe(scroller)
+      const inner = scroller.firstElementChild
+      if (inner) ro?.observe(inner)
+      const wrap = el.parentElement?.querySelector('.tasks-table-wrap')
+      mo = wrap ? new MutationObserver(onScroll) : null
+      if (wrap instanceof Element) mo?.observe(wrap, { childList: true })
+    }
     return () => {
       io.disconnect()
       ro?.disconnect()
       mo?.disconnect()
       read?.stop()
-      scroller?.removeEventListener('scroll', onScroll)
+      if (read && scroller) scroller.removeEventListener('scroll', onScroll)
       mark.remove()
       el.classList.remove('is-stuck')
       el.style.removeProperty('--page-read')

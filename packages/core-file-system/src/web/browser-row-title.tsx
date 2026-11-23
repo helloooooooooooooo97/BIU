@@ -33,6 +33,7 @@ export function DockHoverTip() {
       if (!(node instanceof Element)) return null
       const el = node.closest('[data-dock-tip]')
       if (!(el instanceof HTMLElement) || !el.closest('.fsdb-page, .fsdb-col-menu')) return null
+      if (el.getAttribute('aria-expanded') === 'true') return null
       const text = el.getAttribute('data-dock-tip')?.trim()
       if (!text) return null
       return { text, anchor: el }
@@ -48,6 +49,7 @@ export function DockHoverTip() {
     document.addEventListener('focusout', onFocusOut)
     window.addEventListener('scroll', clear, true)
     window.addEventListener('pointerdown', clear, true)
+    window.addEventListener('click', clear, true)
     return () => {
       document.removeEventListener('pointerover', onOver)
       document.removeEventListener('pointerout', onOut)
@@ -55,8 +57,26 @@ export function DockHoverTip() {
       document.removeEventListener('focusout', onFocusOut)
       window.removeEventListener('scroll', clear, true)
       window.removeEventListener('pointerdown', clear, true)
+      window.removeEventListener('click', clear, true)
     }
   }, [])
+
+  useEffect(() => {
+    if (!tip) return
+    const { anchor } = tip
+    const sync = () => {
+      if (!anchor.isConnected || anchor.getAttribute('aria-expanded') === 'true') {
+        setTip(null)
+        return
+      }
+      const next = anchor.getAttribute('data-dock-tip')?.trim()
+      if (!next) setTip(null)
+      else if (next !== tip.text) setTip({ text: next, anchor })
+    }
+    const observer = new MutationObserver(sync)
+    observer.observe(anchor, { attributes: true, attributeFilter: ['data-dock-tip', 'aria-expanded'] })
+    return () => observer.disconnect()
+  }, [tip])
 
   useLayoutEffect(() => {
     if (!tip || !tip.anchor.isConnected) {

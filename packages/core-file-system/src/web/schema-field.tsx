@@ -16,6 +16,7 @@ import { TagChip, TagChips, tagTone, HeadlessPopover } from '@biu/biu-ui'
 import { TAGS_COLLECTION_PATH } from './database-path.ts'
 import { DefaultCell, FieldGlyph } from './fsdb-cells.tsx'
 import { FieldValuePop } from './field-value-pop.tsx'
+import { PropertyDescriptionPop } from './property-row.tsx'
 import { inferPackFieldType, orphanPackEntries } from './fields.ts'
 import { createTag, tagFieldLabelOk, tagLabel, jumpTag, loadTags, persistTags, registerTagFieldKey, subscribeTags } from './tag-catalog.ts'
 import { peekRecord, subscribeCrumbs } from './view-storage.ts'
@@ -227,30 +228,31 @@ function SchemaPropName({
 
   if (!onRename) {
     return (
-      <span className="fsdb-schema-prop-k" title={desc ? `${name}：${desc}` : name} data-dock-tip={desc || undefined}>
+      <span className="fsdb-schema-prop-k">
         <FieldGlyph kind={kind} />
-        <span className="fsdb-schema-prop-name">{name}</span>
-        {desc ? <InformationCircleIcon aria-hidden className="fsdb-schema-prop-info" /> : null}
+        <span className="fsdb-schema-prop-name" title={name}>{name}</span>
+        {desc ? <PropertyDescriptionPop label={name} description={desc} /> : null}
       </span>
     )
   }
 
   if (!editing) {
     return (
-      <button
-        type="button"
-        className="fsdb-schema-prop-k is-rename"
-        title={desc ? `${name}：${desc}` : `编辑 ${name}`}
-        data-dock-tip={desc || undefined}
-        onClick={() => {
-          setShowDesc(Boolean(desc))
-          setEditing(true)
-        }}
-      >
-        <FieldGlyph kind={kind} />
-        <span className="fsdb-schema-prop-name">{name}</span>
-        {desc ? <InformationCircleIcon aria-hidden className="fsdb-schema-prop-info" /> : null}
-      </button>
+      <span className="fsdb-schema-prop-k-row">
+        <button
+          type="button"
+          className="fsdb-schema-prop-k is-rename"
+          title={`编辑 ${name}`}
+          onClick={() => {
+            setShowDesc(Boolean(desc))
+            setEditing(true)
+          }}
+        >
+          <FieldGlyph kind={kind} />
+          <span className="fsdb-schema-prop-name">{name}</span>
+        </button>
+        {desc ? <PropertyDescriptionPop label={name} description={desc} /> : null}
+      </span>
     )
   }
 
