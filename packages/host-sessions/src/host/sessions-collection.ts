@@ -175,7 +175,7 @@ function sessionProgress(record: SessionRecordLike, opts: { afterSeq?: number; t
   }
 }
 
-export function sessionsCollection(sessions: SessionsLike): CollectionSpec {
+export function sessionsCollection(sessions: SessionsLike): CollectionSpec & { peek: (id: string) => DbRecord | undefined } {
   const list = async () => (await sessions.listSummaries()).map(asRecord)
   return {
     id: 'agents',
@@ -231,7 +231,7 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec {
       }
     },
     /** 同步 peek：只读摘要，不碰 events。页面表格的创建人列靠它，避免渲染时读会话日志。 */
-    peek: (id) => {
+    peek: (id: string) => {
       const peeked = sessions.peekSummary?.(id)
       return peeked ? asRecord(peeked) : undefined
     },

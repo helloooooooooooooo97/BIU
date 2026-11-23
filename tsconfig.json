@@ -25,5 +25,13 @@
     "web",
     "host",
     "packages"
+  ],
+  "exclude": [
+    ".plugin-dev",
+    ".plugin",
+    "node_modules",
+    "dist",
+    "pack-host",
+    "release"
   ]
 }

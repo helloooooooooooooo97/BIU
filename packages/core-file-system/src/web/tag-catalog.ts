@@ -63,7 +63,7 @@ export function tagLabel(id: string) {
   const key = id.trim()
   return (
     loadTags().find((tag) => tag.id === key)?.label?.trim() ||
-    String(peekRecord(TAGS_COLLECTION_PATH, key)?.title ?? '').trim() ||
+    String(peekRecord(TAGS_COLLECTION_PATH, key)?.label ?? '').trim() ||
     key
   )
 }

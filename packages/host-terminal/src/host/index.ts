@@ -40,6 +40,13 @@ export interface TerminalExitEvent {
   code: number | null
 }
 
+declare module 'cordis' {
+  interface Events {
+    'internal/terminal/output'(payload: TerminalOutputEvent): void
+    'internal/terminal/exit'(payload: TerminalExitEvent): void
+  }
+}
+
 function info(term: Term): TerminalInfo {
   return {
     id: term.id,

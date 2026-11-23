@@ -441,7 +441,11 @@ export function RecordEditor(props: FsContentProps) {
   const fsLayout = useActiveRecordLayout(collection, props.record.id, fallback)
   const present = catalog.contentViewId || fsLayout.contentViewId || fallback
   useEffect(() => {
-    hydrateRecordViewCatalog(collection, props.record.id, props.record)
+    hydrateRecordViewCatalog(collection, props.record.id, {
+      views: props.record.views,
+      propViews: props.record.propViews,
+      layouts: props.record.layouts,
+    })
     void loadRecordLayouts(collection, props.record.id, props.record.layouts, fallback)
   }, [collection, fallback, props.record, props.record.id, props.record.layouts])
   if (props.status === 'loading') return <RecordEditorLoading />

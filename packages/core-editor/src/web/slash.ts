@@ -2,7 +2,7 @@ import { Extension } from '@tiptap/core'
 import { OVERLAY_Z, overlayZ } from '@biu/biu-ui/overlay-portal'
 import type { Editor, Range } from '@tiptap/core'
 import { ReactRenderer } from '@tiptap/react'
-import Suggestion, { type SuggestionOptions } from '@tiptap/suggestion'
+import Suggestion, { type SuggestionOptions, type SuggestionProps } from '@tiptap/suggestion'
 import { SlashList } from './slash-list.tsx'
 import { placeSlashInWindow } from './slash-place.ts'
 import { slashMayOpen } from './editor-live.ts'
@@ -434,14 +434,18 @@ export function filterSlashItems(query: string) {
   })
 }
 
+type SlashRenderProps = SuggestionProps<SlashItem, SlashItem> & {
+  mount?: (el: HTMLElement) => () => void
+}
+
 function renderSlash() {
-  let component: ReactRenderer<unknown, Record<string, unknown>> | null = null
+  let component: ReactRenderer | null = null
   let unmount: (() => void) | undefined
   let cancelled = false
-  let pending: ({ editor: Editor; mount: (el: HTMLElement) => () => void } & Record<string, unknown>) | null = null
+  let pending: SlashRenderProps | null = null
 
   return {
-    onStart(props: { editor: Editor; mount: (el: HTMLElement) => () => void } & Record<string, unknown>) {
+    onStart(props: SlashRenderProps) {
       cancelled = false
       pending = props
       notifySlashCatalogOpen()
@@ -449,18 +453,19 @@ function renderSlash() {
       // TipTap 文档：事务是同步的，ReactRenderer 的 flushSync 不能落在 React effect 里。
       queueMicrotask(() => {
         if (cancelled || !pending) return
-        component = new ReactRenderer(SlashList, {
+        const renderer = new ReactRenderer(SlashList, {
           props: pending,
           editor: pending.editor,
         })
-        const el = component.element as HTMLElement
+        component = renderer
+        const el = renderer.element as HTMLElement
         el.style.zIndex = String(overlayZ(OVERLAY_Z.expandLift, pending.editor.view?.dom))
         el.style.maxHeight = `${Math.min(280, Math.max(120, window.innerHeight - 16))}px`
-        unmount = pending.mount(el)
+        unmount = pending.mount?.(el)
       })
     },
-    onUpdate(props: Record<string, unknown>) {
-      pending = { ...(pending ?? {}), ...props } as typeof pending
+    onUpdate(props: SlashRenderProps) {
+      pending = { ...(pending ?? {}), ...props }
       component?.updateProps(props)
     },
     onKeyDown(props: { event: KeyboardEvent }) {

@@ -554,7 +554,7 @@ export function TreeItemLabel({
   className,
   onToggle,
   ...rest
-}: Record<string, unknown> & { item?: TreeNodeItem; onToggle?: () => void }) {
+}: Record<string, unknown> & { item?: TreeNodeItem; children?: React.ReactNode; onToggle?: () => void }) {
   const { currentItem } = React.useContext(TreeCtx)
   const item = propItem || currentItem
   if (!item) return null

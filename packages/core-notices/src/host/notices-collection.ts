@@ -38,8 +38,10 @@ export function noticesCollection(store: NoticesStore): CollectionSpec {
         patch.read === undefined ? undefined : patch.read === true || patch.read === 'true' || patch.read === 1
       return noticeToRecord(store.update(id, read === undefined ? {} : { read }))
     },
-    remove: async (id) => {
-      store.remove(id)
+    remove: async (query) => {
+      const ids = query.ids ?? []
+      for (const id of ids) store.remove(id)
+      return ids
     },
   }
 }

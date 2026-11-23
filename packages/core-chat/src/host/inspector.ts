@@ -207,12 +207,12 @@ function decorateTask(
 
 /** 从 task 体系取出本 live（作为 creator）派发的任务；用量读 reports 里已经累加好的字段。 */
 export async function loadLiveDispatchTasks(
-  ctx: Context & {
+  ctx: {
     tasks?: {
       list(filter: { creatorSessionId?: string }): Array<{
         id: string
         title: string
-        status: 'todo' | 'doing' | 'done'
+        status: string
         createdAt: number
         assignee?: { sessionId?: string } | null
         reports?: Array<{
@@ -238,7 +238,7 @@ export async function loadLiveDispatchTasks(
         title: row.title,
         sessionId: row.assignee?.sessionId ?? '',
         createdAt: row.createdAt,
-        status: row.status,
+        status: row.status as TaskDispatchSource['status'],
         ...(usage ? { usage } : {}),
         ...(workerTurn != null ? { workerTurn } : {}),
       }

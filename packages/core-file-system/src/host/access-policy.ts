@@ -93,7 +93,7 @@ export function higherAccess(left: keyof typeof ACCESS_RANK | null, right: keyof
 export function resolveScopeTarget(
   collection: string,
   id: string,
-  row?: { pageId?: unknown; collection?: unknown; sessionId?: unknown; sourceId?: unknown; tablePath?: unknown },
+  row?: Record<string, unknown> | null,
 ) {
   if (collection === TRASH_COLLECTION_PATH || collection === DATA_COLLECTION_PATH) {
     const tablePath = String(row?.tablePath ?? '')
@@ -128,11 +128,11 @@ export function isRecordInWorkspace(membership: WorkspaceMembership, collection:
   return membership.active === membership.home
 }
 
-export function isBuiltinPluginRow(collection: string, row?: { builtin?: unknown } | null): boolean {
+export function isBuiltinPluginRow(collection: string, row?: Record<string, unknown> | null): boolean {
   return collection === PLUGINS_COLLECTION_PATH && row?.builtin === true
 }
 
-export function isBuiltinPluginRecord(spec: CollectionSpec, id: string, record?: { builtin?: unknown }) {
+export function isBuiltinPluginRecord(spec: CollectionSpec, id: string, record?: Record<string, unknown> | null) {
   if (spec.path !== PLUGINS_COLLECTION_PATH) return false
   return record?.builtin === true || isRegisteredBuiltinPlugin(id)
 }

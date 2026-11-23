@@ -23,9 +23,8 @@ export function isDataOverviewSource(path: string) {
 }
 
 export function overviewRecord(
-  spec: Pick<CollectionInfo, 'path' | 'label' | 'id'> & {
+  spec: Pick<CollectionSpec, 'path' | 'label' | 'id' | 'actions'> & {
     view?: { icon?: string; title?: string } | null
-    actions?: CollectionSpec['actions']
   },
   row: DbRecord,
 ): DbRecord {

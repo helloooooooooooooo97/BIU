@@ -1605,7 +1605,7 @@ export class CollabStore {
          WHERE m.account_id = ?
          ORDER BY w.created_at`,
       )
-      .all(accountId) as Array<{ id: string; name: string; owner_id: string; created_at: number; role: string }>
+      .all(accountId) as Array<{ id: string; name: string; owner_id: string; created_at: number; role: WorkspaceRole }>
     return rows.map((row) => ({
       id: row.id,
       name: row.name,

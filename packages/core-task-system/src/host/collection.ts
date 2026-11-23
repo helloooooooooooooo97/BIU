@@ -21,8 +21,17 @@ type TaskReport = {
   usage?: Usage
 }
 
-type TaskRow = DbRecord & {
+type TaskRow = {
+  id: string
   title?: string
+  status?: string
+  priority?: string
+  difficulty?: string
+  project?: string | null
+  tags?: string[]
+  dueAt?: number | null
+  description?: string
+  notes?: string
   creator?: Actor | null
   assignee?: Actor | null
   parentId?: string | null
@@ -32,14 +41,17 @@ type TaskRow = DbRecord & {
   usage?: Usage
   trigger?: unknown
   nextTriggerAt?: number | null
+  createdAt?: number
+  updatedAt?: number
+  [key: string]: unknown
 }
 
 export type TasksLike = {
-  list: (filter?: { q?: string; status?: string }) => TaskRow[]
-  get: (id: string) => TaskRow | undefined
-  update: (id: string, patch: Record<string, unknown>, options?: CollectionUpdateOptions) => DbRecord
-  create: (input: Record<string, unknown> & { title: string; creator: Actor }) => TaskRow
-  delete: (id: string) => boolean
+  list(filter?: { q?: string; status?: string }): TaskRow[]
+  get(id: string): TaskRow | undefined
+  update(id: string, patch: Record<string, unknown>, options?: CollectionUpdateOptions): TaskRow
+  create(input: Record<string, unknown> & { title: string; creator: Actor }): TaskRow
+  delete(id: string): boolean
 }
 
 export type TaskRecordActions = {
@@ -126,8 +138,6 @@ function taskRecord(row: TaskRow, lookup: (id: string) => TaskRow | undefined, u
     assignee: asPerson(row.assignee),
     assigneeSessionId: row.assignee?.sessionId ?? '',
     assigneeActor: row.assignee ?? null,
-    parentId: row.parentId ?? null,
-    dependsOn: Array.isArray(row.dependsOn) ? row.dependsOn.map(String).filter(Boolean) : [],
     blocked: Boolean(row.blocked),
     parentChain: parentChain(row, lookup),
     usage: usage.totalTokens,
@@ -135,8 +145,6 @@ function taskRecord(row: TaskRow, lookup: (id: string) => TaskRow | undefined, u
     reports: row.reports ?? [],
     trigger: row.trigger ?? null,
     nextTriggerAt: row.nextTriggerAt ?? null,
-    createdAt: row.createdAt ?? 0,
-    updatedAt: row.updatedAt ?? 0,
     ...recordBuiltinValues(row),
   }
 }

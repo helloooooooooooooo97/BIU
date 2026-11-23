@@ -582,7 +582,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
       },
     },
     onCreate: ({ editor: created }) => {
-      if (isComposerFocusPending()) focusComposerEditor(created)
+      if (isComposerFocusPending()) focusComposerEditor(created as unknown as Parameters<typeof focusComposerEditor>[0])
     },
     onUpdate: ({ editor: ed }) => {
       const packed = serializeComposer(ed)
@@ -614,7 +614,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
 
   useEffect(() => {
     const onFocus = () => {
-      focusComposerEditor(editorRef.current)
+      focusComposerEditor(editorRef.current as unknown as Parameters<typeof focusComposerEditor>[0])
     }
     window.addEventListener('biu:composer-focus', onFocus)
     return () => window.removeEventListener('biu:composer-focus', onFocus)
@@ -622,7 +622,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
 
   useEffect(() => {
     if (!composerEditorReady(editor)) return
-    if (isComposerFocusPending()) focusComposerEditor(editor)
+    if (isComposerFocusPending()) focusComposerEditor(editor as unknown as Parameters<typeof focusComposerEditor>[0])
   }, [editor])
 
   useEffect(
@@ -672,7 +672,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
     } finally {
       restoringDraftRef.current = false
     }
-    if (isComposerFocusPending()) focusComposerEditor(editor)
+    if (isComposerFocusPending()) focusComposerEditor(editor as unknown as Parameters<typeof focusComposerEditor>[0])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, editor])
 

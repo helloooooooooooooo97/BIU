@@ -322,7 +322,7 @@ export function FilePreview({
       </a>
     )
   }
-  if (kind === 'url' || kind === 'attachment' || kind === 'document' || kind === 'image') return null
+  if (kind === 'attachment' || kind === 'document') return null
   const text = typeof value === 'string' ? value : JSON.stringify(value, null, compact ? 0 : 2)
   if (compact) return <span className="fsdb-meta">{text.length > 80 ? `${text.slice(0, 80)}…` : text}</span>
   return text ? <pre className="fsdb-fileview-pre">{text}</pre> : null

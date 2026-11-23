@@ -86,10 +86,7 @@ export function pathForCrumbTarget(target: CrumbTarget) {
     return pathForCenter({ collection: target.collection, viewId: defaultViewId(target.collection) })
   }
   if (target.kind === 'view') return pathForCenter({ collection: target.collection, viewId: target.viewId })
-  if (target.kind === 'record') {
-    return pathForCenter({ collection: target.collection, viewId: target.viewId, recordId: target.recordId })
-  }
-  return pathForCenter({ collection: target.collection, recordId: target.recordId })
+  return pathForCenter({ collection: target.collection, viewId: target.viewId, recordId: target.recordId })
 }
 
 /** 面包屑上一级：最后一级的父级。 */

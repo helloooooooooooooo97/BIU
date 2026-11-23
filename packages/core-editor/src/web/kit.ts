@@ -119,10 +119,8 @@ const pageInlineMath = InlineMath.extend({
       }),
     ]
   },
-  parseMarkdown: (token: { latex?: unknown }) => ({
-    type: 'inlineMath',
-    attrs: { latex: latexFromMarkdown(token.latex) },
-  }),
+  parseMarkdown: (token, helpers) =>
+    helpers.createNode('inlineMath', { latex: latexFromMarkdown(token.latex) }),
 })
 
 const pageBlockMath = BlockMath.extend({
@@ -133,10 +131,8 @@ const pageBlockMath = BlockMath.extend({
       katexOptions: { throwOnError: false, displayMode: true },
     }
   },
-  parseMarkdown: (token: { latex?: unknown }) => ({
-    type: 'blockMath',
-    attrs: { latex: latexFromMarkdown(token.latex) },
-  }),
+  parseMarkdown: (token, helpers) =>
+    helpers.createNode('blockMath', { latex: latexFromMarkdown(token.latex) }),
 })
 
 const pageCodeBlock = CodeBlockLowlight.extend({
@@ -171,7 +167,7 @@ const pageCodeBlock = CodeBlockLowlight.extend({
   },
   renderMarkdown: (node, h) => {
     const language = String(node.attrs?.language ?? '').trim()
-    const id = isPageBlockId(node.attrs?.blockId) ? String(node.attrs.blockId).trim() : ''
+    const id = isPageBlockId(node.attrs?.blockId) ? String(node.attrs?.blockId).trim() : ''
     const body = node.content ? String(h.renderChildren(node.content) ?? '') : ''
     return formatCodeFence(language, id, body)
   },

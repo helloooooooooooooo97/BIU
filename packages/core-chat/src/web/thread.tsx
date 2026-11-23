@@ -1084,7 +1084,7 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
         onFork={onFork}
         sessions={sessions}
         dispatchedTasksByTurn={dispatchedTasksByTurn}
-        sessionId={sessionId}
+        sessionId={sessionId ?? undefined}
       />
       {error ? (
         <div className="mt-4 rounded-xl bg-(--biu-color-danger-muted) px-3 py-2 text-sm text-(--biu-color-danger)">{error}</div>

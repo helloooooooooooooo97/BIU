@@ -24,9 +24,11 @@ export function useStickyToolbar(ref: RefObject<HTMLElement | null>) {
     onScroll()
     scroller?.addEventListener('scroll', onScroll, { passive: true })
     const ro = typeof ResizeObserver === 'undefined' || !scroller ? null : new ResizeObserver(onScroll)
-    ro?.observe(scroller)
-    const inner = scroller.firstElementChild
-    if (inner) ro.observe(inner)
+    if (ro && scroller) {
+      ro.observe(scroller)
+      const inner = scroller.firstElementChild
+      if (inner) ro.observe(inner)
+    }
     return () => {
       io.disconnect()
       ro?.disconnect()

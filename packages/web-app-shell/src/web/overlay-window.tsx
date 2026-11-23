@@ -14,7 +14,7 @@ import {
 
 type ResizeEdge = { north?: boolean; south?: boolean; east?: boolean; west?: boolean }
 
-let overlayZ = OVERLAY_Z.chatOverlayMin
+let overlayZ: number = OVERLAY_Z.chatOverlayMin
 
 export function OverlayChatWindow({
   header,

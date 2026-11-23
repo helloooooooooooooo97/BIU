@@ -112,7 +112,7 @@ export function RecordDetailBar({
   const contentMode = listedContentViews.find((item) => item.id === contentId)
     ? { id: contentId, label: listedContentViews.find((item) => item.id === contentId)!.name, Icon: SandboxKindIcon }
     : (builtinModes.find((item) => item.id === contentId) ?? registeredModes[0] ?? HIDDEN_MODE)
-  const CurrentIcon = contentMode.Icon
+  const CurrentIcon = contentMode.Icon ?? EyeSlashIcon
   const [creatingView, setCreatingView] = useState(false)
   const [creatingLayout, setCreatingLayout] = useState(false)
   const [renamingView, setRenamingView] = useState('')
@@ -172,7 +172,11 @@ export function RecordDetailBar({
 
   useEffect(() => {
     setOpen(null)
-    hydrateRecordViewCatalog(path, record.id, record)
+    hydrateRecordViewCatalog(path, record.id, {
+      views: record.views,
+      propViews: record.propViews,
+      layouts: record.layouts,
+    })
     void loadRecordLayouts(path, record.id, record.layouts, fallback)
   }, [record.id, record.views, record.propViews, record.layouts, path, fallback, record])
 
@@ -737,27 +741,29 @@ export function RecordDetailBar({
                 )
               }
             >
-              {columnMenu ?? (
-                <div className="tasks-sort-menu fsdb-tool-flyout" role="menu">
-                  {props.length ? (
-                    props.map((item) => (
-                      <Row
-                        key={item.key}
-                        label={item.label}
-                        on={visibleKeys.includes(item.key)}
-                        onToggle={() => {
-                          const has = visibleKeys.includes(item.key)
-                          const next = has ? visibleKeys.filter((key) => key !== item.key) : [...visibleKeys, item.key]
-                          onVisiblePropertyKeys?.(next)
-                          onHiddenPropertyKeys?.(props.map((prop) => prop.key).filter((key) => !next.includes(key)))
-                        }}
-                      />
-                    ))
-                  ) : (
-                    <div className="tasks-viewdd-empty">没有可隐藏的属性</div>
-                  )}
-                </div>
-              )}
+              <>
+                {columnMenu ?? (
+                  <div className="tasks-sort-menu fsdb-tool-flyout" role="menu">
+                    {props.length ? (
+                      props.map((item) => (
+                        <Row
+                          key={item.key}
+                          label={item.label}
+                          on={visibleKeys.includes(item.key)}
+                          onToggle={() => {
+                            const has = visibleKeys.includes(item.key)
+                            const next = has ? visibleKeys.filter((key) => key !== item.key) : [...visibleKeys, item.key]
+                            onVisiblePropertyKeys?.(next)
+                            onHiddenPropertyKeys?.(props.map((prop) => prop.key).filter((key) => !next.includes(key)))
+                          }}
+                        />
+                      ))
+                    ) : (
+                      <div className="tasks-viewdd-empty">没有可隐藏的属性</div>
+                    )}
+                  </div>
+                )}
+              </>
             </HeadlessDismiss>
           ) : null}
         </div>

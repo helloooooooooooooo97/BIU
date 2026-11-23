@@ -6,7 +6,9 @@ import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { EditorSelection, EditorState } from '@codemirror/state'
 import { EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view'
 import { tags } from '@lezer/highlight'
-import { bindEditorTextHost, type EditorTextLocus } from '@biu/core-pick/web'
+import { bindEditorTextHost } from '@biu/core-pick/web'
+
+type EditorTextLocus = NonNullable<ReturnType<NonNullable<Parameters<typeof bindEditorTextHost>[1]>['locusFromSelection']>>
 
 export type HostSourceLanguage = 'json' | 'javascript'
 

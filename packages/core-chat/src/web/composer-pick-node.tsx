@@ -88,7 +88,7 @@ export const PickChipNode = Node.create({
           root = null
           queueMicrotask(() => current?.unmount())
         },
-        stopEvent({ event }) {
+        stopEvent(event) {
           const type = event.type
           return type === 'mousedown' || type === 'mouseup' || type === 'click' || type === 'pointerdown'
         },

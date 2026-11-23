@@ -283,7 +283,7 @@ export function normalizeSessionConfig(value: unknown): SessionConfig | undefine
 
 export function mergeSessionConfig(
   base: SessionConfig | undefined,
-  patch: SessionConfig & {
+  patch: Omit<SessionConfig, 'title' | 'systemPrompt' | 'inspector' | 'goal' | 'skipLlmImages'> & {
     title?: string | null
     systemPrompt?: string | null
     inspector?: SessionInspectorBind | null
@@ -305,8 +305,9 @@ export function mergeSessionConfig(
     if (patch.systemPrompt == null) delete next.systemPrompt
     else next.systemPrompt = String(patch.systemPrompt)
   }
-  if (patch.agentMode === 'minimal' || patch.agentMode === 'file') next.agentMode = patch.agentMode
-  if (patch.agentMode === 'standard' || patch.agentMode === 'create') next.agentMode = 'standard'
+  const rawMode: string | undefined = patch.agentMode
+  if (rawMode === 'minimal' || rawMode === 'file') next.agentMode = rawMode
+  if (rawMode === 'standard' || rawMode === 'create') next.agentMode = 'standard'
   if ('goal' in patch) {
     if (patch.goal == null) delete next.goal
     else {

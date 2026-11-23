@@ -330,9 +330,14 @@ export function CellPopDraft({
         multiple={kind === 'multi-select'}
         allowCreate={!field.enum?.length}
         onChange={(next) => {
-          const value = kind === 'multi-select' ? next : next[0] ?? ''
-          setText(kind === 'multi-select' ? next.join(', ') : value)
-          put(kind === 'multi-select' ? next : value)
+          if (kind === 'multi-select') {
+            setText(next.join(', '))
+            put(next)
+          } else {
+            const value = next[0] ?? ''
+            setText(value)
+            put(value)
+          }
         }}
         onPicked={kind === 'select' ? onClose : undefined}
       />

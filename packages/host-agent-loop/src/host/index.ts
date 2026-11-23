@@ -502,3 +502,9 @@ export function apply(ctx: Context) {
   new AgentLoopService(ctx)
   ctx.on('agent/post-step', (req, next) => autoCompactPostStep(next()))
 }
+
+declare module 'cordis' {
+  interface Events {
+    'session/finished'(payload: { sessionId: string; text: string }): void
+  }
+}

@@ -65,14 +65,14 @@ function toggleOn(knob: Extract<ModelKnob, { kind: 'toggle' }>, mode: ModelModeV
   return knobValue(knob, mode) === knob.on
 }
 
-export function ComposerModelMenu(props: {
-  models: ComposerModelOption[]
-  current: ComposerModelOption
+export function ComposerModelMenu<T extends ComposerModelOption = ComposerModelOption>(props: {
+  models: T[]
+  current: T
   endpointLabels: Record<string, string>
   mode: ModelModeValues
   capabilities: ModelCapabilities
   disabled?: boolean
-  onSelect: (option: ComposerModelOption) => void
+  onSelect: (option: T) => void
   onMode: (next: Partial<ModelModeValues>) => void
   onAddModels: () => void
 }) {
@@ -92,7 +92,7 @@ export function ComposerModelMenu(props: {
       return m.label.toLowerCase().includes(q) || m.model.toLowerCase().includes(q) || (m.note || '').toLowerCase().includes(q)
     })
     const order = ['deepseek', 'anthropic', 'openai']
-    const map = new Map<string, ComposerModelOption[]>()
+    const map = new Map<string, T[]>()
     for (const m of visible) {
       const key = m.endpointId || m.provider
       if (!map.has(key)) map.set(key, [])

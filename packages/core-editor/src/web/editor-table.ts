@@ -1,3 +1,4 @@
+import type { JSONContent, MarkdownParseHelpers, MarkdownParseResult, MarkdownToken } from '@tiptap/core'
 import { Table, TableCell, TableHeader, renderTableToMarkdown } from '@tiptap/extension-table'
 import { formatCellFenceAttrs, tableNeedsFence, takeTableFence, type TableFenceCellAttrs } from './table-md.ts'
 
@@ -39,10 +40,10 @@ function emptyPara() {
 }
 
 function parseGfmTable(
-  token: { header?: { tokens?: unknown; align?: unknown }[]; rows?: { tokens?: unknown; align?: unknown }[][]; align?: unknown[] },
-  h: { createNode: (type: string, attrs: Record<string, unknown> | undefined, content: unknown[]) => unknown; parseInline: (tokens: unknown) => unknown },
-) {
-  const rows: unknown[] = []
+  token: { header?: { tokens?: MarkdownToken[]; align?: unknown }[]; rows?: { tokens?: MarkdownToken[]; align?: unknown }[][]; align?: unknown[] },
+  h: MarkdownParseHelpers,
+): MarkdownParseResult {
+  const rows: JSONContent[] = []
   const alignments = Array.isArray(token.align) ? token.align : []
   if (token.header) {
     rows.push(
@@ -51,7 +52,7 @@ function parseGfmTable(
         {},
         token.header.map((cell, index) =>
           h.createNode('tableHeader', alignments[index] ? { align: alignments[index] } : {}, [
-            { type: 'paragraph', content: h.parseInline(cell.tokens) },
+            { type: 'paragraph', content: h.parseInline(cell.tokens ?? []) },
           ]),
         ),
       ),
@@ -64,7 +65,7 @@ function parseGfmTable(
         {},
         row.map((cell, index) =>
           h.createNode('tableCell', alignments[index] ? { align: alignments[index] } : {}, [
-            { type: 'paragraph', content: h.parseInline(cell.tokens) },
+            { type: 'paragraph', content: h.parseInline(cell.tokens ?? []) },
           ]),
         ),
       ),
@@ -75,7 +76,7 @@ function parseGfmTable(
 
 export const pageTable = Table.extend({
   parseMarkdown: (token, h) => {
-    const fenceRows = (token as { fenceRows?: { kind: 'th' | 'td'; tokens: unknown[]; attrs?: TableFenceCellAttrs }[][] }).fenceRows
+    const fenceRows = (token as { fenceRows?: { kind: 'th' | 'td'; tokens: MarkdownToken[]; attrs?: TableFenceCellAttrs }[][] }).fenceRows
     if (Array.isArray(fenceRows)) {
       const rows = fenceRows.map((row) =>
         h.createNode(
@@ -93,7 +94,10 @@ export const pageTable = Table.extend({
       )
       return h.createNode('table', undefined, rows.length ? rows : [h.createNode('tableRow', {}, [h.createNode('tableCell', {}, [emptyPara()])])])
     }
-    return parseGfmTable(token as never, h)
+    return parseGfmTable(
+      token as { header?: { tokens?: MarkdownToken[]; align?: unknown }[]; rows?: { tokens?: MarkdownToken[]; align?: unknown }[][]; align?: unknown[] },
+      h,
+    )
   },
   renderMarkdown: (node, h) => {
     if (!tableNeedsFence(node)) return renderTableToMarkdown(node, h)

@@ -1,5 +1,5 @@
 import { apiFetch } from '@biu/biu-ui/api-client'
-import { registerShellDataBridge } from '@biu/web-app-shell/data-bridge'
+import { registerShellDataBridge, type ShellDatabaseUi } from '@biu/web-app-shell/data-bridge'
 import { getPagePrefs, getWorkspaceProfile, hydratePagePrefs, resetWorkspaceProfileGet, subscribePageWidth } from './page-width.ts'
 import { overlayDataRoute } from './main-data-route.ts'
 import { loadTags } from './tag-catalog.ts'
@@ -48,13 +48,13 @@ registerShellDataBridge({
   getWorkspaceProfile,
   resetWorkspaceProfileGet,
   overlayDataRoute,
-  getDatabaseUi,
+  getDatabaseUi: () => (getDatabaseUi() as unknown as ShellDatabaseUi) ?? null,
   loadTags,
   LayoutPrefsMenu: LayoutPrefsMenu as unknown as ComponentType<Record<string, unknown>>,
   getInspectorDbPath,
   isInspectorPaneAbandoned,
   restoreInspectorDbPaths,
-  reuseInspectorOfferPane,
+  reuseInspectorOfferPane: (tabId, opened) => reuseInspectorOfferPane(tabId, opened) ?? null,
   snapshotInspectorDbPaths,
   subscribeInspectorDbPath,
   bindInspectorPaneMenuDismiss,

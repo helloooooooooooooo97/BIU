@@ -109,6 +109,10 @@ export function takeTableFence(src: string) {
     stack.push(kind)
   }
 
+  const pushCellLine = (line: string) => {
+    cell?.push(line)
+  }
+
   for (let i = 1; i < lines.length; i += 1) {
     const line = lines[i] ?? ''
     const glued = GLUED.exec(line)
@@ -137,7 +141,7 @@ export function takeTableFence(src: string) {
       if ((open[1] === 'editorBlock' || open[1] === 'pageBlock') && cell) {
         const taken = takePageBlockFence(lines.slice(i).join('\n'))
         if (taken) {
-          for (const part of taken.raw.split('\n')) cell.push(part)
+          for (const part of taken.raw.split('\n')) pushCellLine(part)
           i += taken.raw.split('\n').length - 1
           continue
         }
@@ -163,7 +167,7 @@ export function takeTableFence(src: string) {
         openCell(kind, open[2])
         continue
       }
-      if (cell) cell.push(line)
+      pushCellLine(line)
       continue
     }
     if (CLOSE.test(line)) {
@@ -181,10 +185,10 @@ export function takeTableFence(src: string) {
         end = i
         break
       }
-      if (cell) cell.push(line)
+      pushCellLine(line)
       continue
     }
-    if (cell) cell.push(line)
+    pushCellLine(line)
   }
   if (end < 0) return null
   return { raw: lines.slice(0, end + 1).join('\n'), rows: rows.filter((item) => item.cells.length) }

@@ -240,7 +240,7 @@ export async function createRecordSandboxView(opts: {
     collectionPath,
     recordId,
     opts.fieldKey,
-    (current) => [...parseRecordSandboxes(current), view],
+    (current: unknown) => [...parseRecordSandboxes(current), view],
     extra,
   )
   if (!ok) throw new Error('could not save view catalog')

@@ -79,7 +79,7 @@ export function lanIPv4() {
   const rest: string[] = []
   for (const addrs of Object.values(networkInterfaces())) {
     for (const item of addrs ?? []) {
-      const v4 = item.family === 'IPv4' || item.family === 4
+      const v4 = item.family === 'IPv4' || (item.family as string | number) === 4
       if (!v4 || item.internal) continue
       if (item.address.startsWith('169.254.')) continue
       if (item.address.startsWith('192.168.') || item.address.startsWith('10.') || item.address.startsWith('172.')) {

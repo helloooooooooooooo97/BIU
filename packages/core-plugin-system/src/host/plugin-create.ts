@@ -87,7 +87,7 @@ export function parseStoreManifest(raw: unknown): StoreManifestFields {
       authorUrl: data.authorUrl != null ? String(data.authorUrl) : data.author_url != null ? String(data.author_url) : undefined,
       builtin: data.builtin === true,
       headless: data.headless === true,
-      shell: data.shell,
+      shell: data.shell && typeof data.shell === 'object' && !Array.isArray(data.shell) ? (data.shell as Record<string, unknown>) : undefined,
     },
     { createdAt },
     listingCreatedAt(createdAt) || Date.now(),

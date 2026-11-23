@@ -13,7 +13,7 @@ export function catalogOf(record: DbRecord): McpCatalogItem[] {
   const raw = record.catalog
   if (!Array.isArray(raw)) return []
   return raw
-    .map((item) => {
+    .map((item): McpCatalogItem | null => {
       if (!item || typeof item !== 'object') return null
       const row = item as Record<string, unknown>
       const name = String(row.name ?? '').trim()

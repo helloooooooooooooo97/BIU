@@ -231,40 +231,41 @@ export function PageTableBar({ editor }: { editor: Editor }) {
       <HeadlessPopover
         open={bgOpen}
         onOpenChange={setBgOpen}
-        anchor={bgTriggerRef.current}
+        anchorRef={bgTriggerRef}
         side="bottom"
         align="start"
-        className="page-color-pop page-table-cell-bg-pop"
       >
-        <div className="page-color-grid" role="menu" aria-label="单元格背景色">
-          <button
-            type="button"
-            className={`page-color-swatch${!currentBg ? ' is-on' : ''}`}
-            title="无背景色"
-            aria-label="无背景色"
-            onMouseDown={(event) => {
-              event.preventDefault()
-              editor.chain().focus().setCellAttribute('background', null).run()
-              setBgOpen(false)
-            }}
-          >
-            ✕
-          </button>
-          {WASH_TONES.slice(0, 10).map((tone) => (
+        <div className="page-color-pop page-table-cell-bg-pop">
+          <div className="page-color-grid" role="menu" aria-label="单元格背景色">
             <button
-              key={tone.id}
               type="button"
-              className={`page-color-swatch${currentBg === tone.value ? ' is-on' : ''}`}
-              title={`背景：${tone.label}`}
-              aria-label={`背景：${tone.label}`}
-              style={{ background: tone.value }}
+              className={`page-color-swatch${!currentBg ? ' is-on' : ''}`}
+              title="无背景色"
+              aria-label="无背景色"
               onMouseDown={(event) => {
                 event.preventDefault()
-                editor.chain().focus().setCellAttribute('background', tone.value).run()
+                editor.chain().focus().setCellAttribute('background', null).run()
                 setBgOpen(false)
               }}
-            />
-          ))}
+            >
+              ✕
+            </button>
+            {WASH_TONES.slice(0, 10).map((tone) => (
+              <button
+                key={tone.id}
+                type="button"
+                className={`page-color-swatch${currentBg === tone.value ? ' is-on' : ''}`}
+                title={`背景：${tone.label}`}
+                aria-label={`背景：${tone.label}`}
+                style={{ background: tone.value }}
+                onMouseDown={(event) => {
+                  event.preventDefault()
+                  editor.chain().focus().setCellAttribute('background', tone.value).run()
+                  setBgOpen(false)
+                }}
+              />
+            ))}
+          </div>
         </div>
       </HeadlessPopover>
 

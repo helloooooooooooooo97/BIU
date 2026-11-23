@@ -79,7 +79,7 @@ export function assignTopLevelBlockIds(state: EditorState): Transaction | null {
     let next = createPageBlockId()
     while (seen.has(next)) next = createPageBlockId()
     seen.add(next)
-    const attrs = { ...node.attrs, blockId: next }
+    const attrs: Record<string, unknown> = { ...node.attrs, blockId: next }
     if (node.type.name === 'editorBlock' && !isPageBlockId(node.attrs.id)) attrs.id = next
     tr = tr.setNodeMarkup(pos, undefined, attrs)
   }
@@ -95,7 +95,7 @@ export function applyStoredBlockIds(editor: Editor, ids: string[]) {
     if (node.type.name === 'paragraph' && !node.textContent.trim() && node.childCount === 0) return
     const want = ids[i++]
     if (!want || nodeBlockId(node) === want) return
-    const attrs = { ...node.attrs, blockId: want }
+    const attrs: Record<string, unknown> = { ...node.attrs, blockId: want }
     if (node.type.name === 'editorBlock' && !isPageBlockId(node.attrs.id)) attrs.id = want
     tr = tr.setNodeMarkup(pos, undefined, attrs)
     dirty = true

@@ -150,7 +150,7 @@ export function patchRecordViewCatalog(
 export function hydrateRecordViewCatalog(
   collectionPath: string,
   recordId: string,
-  record: { views?: unknown; propViews?: unknown; layouts?: unknown } | null | undefined,
+  record: Record<string, unknown> | null | undefined,
 ) {
   if (!record) return getRecordViewCatalog(collectionPath, recordId)
   const current = getRecordViewCatalog(collectionPath, recordId)

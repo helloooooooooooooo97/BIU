@@ -562,7 +562,9 @@ export function registerDatabaseHttpRoutes(
               ? 'owner' as const
               : 'viewer' as const
       const spec = db.collection(collection)
-      const schema = spec ? db.publishCollection(spec).schema : undefined
+      const schema: BuildAccessExplanationInput['schema'] = spec
+        ? (db.publishCollection(spec) as { schema?: BuildAccessExplanationInput['schema'] }).schema
+        : undefined
       const explanation = buildAccessExplanation({
         collection,
         recordId,

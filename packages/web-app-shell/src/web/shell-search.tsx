@@ -323,7 +323,7 @@ function HitActions({ hit }: { hit: SearchHit }) {
   const [record, setRecord] = useState(hit.record ?? { id: hit.id })
   const [pendingAction, setPendingAction] = useState<SearchAction | null>(null)
   const acting = useRef(false)
-  const Actions = getDatabaseUi()?.chrome(searchCollection(hit.kind)).Actions
+  const Actions = getDatabaseUi()?.chrome(searchCollection(hit.kind))?.Actions
   const placed = placedRowActions(hit.actions)
   const actions = visibleRowActions(hit.actions, record).filter((action) => actionGlyph(action.id))
   useEffect(() => {
