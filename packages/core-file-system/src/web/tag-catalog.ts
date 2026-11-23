@@ -1,3 +1,4 @@
+import { readStorageString, writeStorageString } from '@biu/biu-ui/client-storage'
 import { apiFetch } from '@biu/biu-ui/api-client'
 import {
   BUILTIN_FIELDS,
@@ -106,7 +107,7 @@ export function tagsById() {
 export function loadTags(_collectionPath?: string): CollectionSchemaPack[] {
   if (memory) return memory
   try {
-    memory = parseTags(JSON.parse(localStorage.getItem(TAGS_KEY) ?? '[]'))
+    memory = parseTags(JSON.parse(readStorageString(TAGS_KEY) ?? '[]'))
     return memory
   } catch {
     memory = []
@@ -132,7 +133,7 @@ function adoptFilled(raw: unknown) {
 function adoptTags(next: CollectionSchemaPack[]) {
   memory = next
   try {
-    localStorage.setItem(TAGS_KEY, JSON.stringify(next))
+    writeStorageString(TAGS_KEY, JSON.stringify(next))
     try {
     } catch {
       /* ignore */

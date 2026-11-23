@@ -1,3 +1,4 @@
+import { readStorageString, writeStorageString } from '@biu/biu-ui/client-storage'
 import { parseAppPath } from '@biu/web-session-view'
 import { DATA_MODULE, DATA_MODULE_PATH } from './database-path.ts'
 
@@ -9,7 +10,7 @@ export function isMainDataRoute(pathname: string) {
 
 export function readMainDataRoute() {
   try {
-    const raw = localStorage.getItem(MAIN_DATA_ROUTE_KEY) ?? ''
+    const raw = readStorageString(MAIN_DATA_ROUTE_KEY) ?? ''
     return isMainDataRoute(raw) ? raw : ''
   } catch {
     return ''
@@ -24,7 +25,7 @@ export function overlayDataRoute() {
 export function writeMainDataRoute(pathname: string) {
   try {
     if (!isMainDataRoute(pathname)) return
-    localStorage.setItem(MAIN_DATA_ROUTE_KEY, pathname)
+    writeStorageString(MAIN_DATA_ROUTE_KEY, pathname)
   } catch {
     /* ignore */
   }

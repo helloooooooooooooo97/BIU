@@ -1,3 +1,4 @@
+import { readStorageString, writeStorageString } from '@biu/biu-ui/client-storage'
 import { apiFetch } from '@biu/biu-ui/api-client'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -179,7 +180,7 @@ function SharePage({
   const navigate = useNavigate()
   const [password, setPassword] = useState(() => {
     try {
-      return sessionStorage.getItem(passwordKey(token)) ?? ''
+      return readStorageString(passwordKey(token, 'session')) ?? ''
     } catch {
       return ''
     }
@@ -228,7 +229,7 @@ function SharePage({
       setSnapshot(next)
       if (password) {
         try {
-          sessionStorage.setItem(passwordKey(token), password)
+          writeStorageString(passwordKey(token), password, { area: 'session' })
         } catch {
           /* ignore */
         }

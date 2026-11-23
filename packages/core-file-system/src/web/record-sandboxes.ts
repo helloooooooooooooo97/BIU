@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { useSyncExternalStore } from 'react'
 import { BIU_ASSET_CHANGED_EVENT } from '@biu/type-file-system'
 import type { RecordSandboxView } from '@biu/type-file-system/record-views'
@@ -190,7 +191,7 @@ export async function writeRecordViewCatalog(
   const raw = typeof value === 'function' ? value(current) : value
   const parsed = fieldKey === 'layouts' ? parseRecordLayouts(raw) : parseRecordSandboxes(raw)
   patchRecordViewCatalog(path, id, { [fieldKey]: parsed, ...extra })
-  const res = await fetch('/api/db/update', {
+  const res = await apiFetch('/api/db/update', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({

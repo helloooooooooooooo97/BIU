@@ -1,3 +1,4 @@
+import { readStorageString } from '@biu/biu-ui/client-storage'
 import { apiFetch } from '@biu/biu-ui/api-client'
 import { useSyncExternalStore } from 'react'
 import { Service, type Context } from 'cordis'
@@ -286,7 +287,7 @@ export const BUSY_HOLD_MS = 1500
 function hasAccountToken() {
   if (typeof localStorage === 'undefined') return true
   try {
-    return Boolean(localStorage.getItem('biu.account.token'))
+    return Boolean(readStorageString('biu.account.token'))
   } catch {
     return true
   }

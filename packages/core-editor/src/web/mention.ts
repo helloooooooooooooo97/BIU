@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { mergeAttributes } from '@tiptap/core'
 import { OVERLAY_Z, overlayZ } from '@biu/biu-ui/overlay-portal'
 import type { Editor } from '@tiptap/core'
@@ -53,7 +54,7 @@ export async function fetchMentionItems(query: string, signal?: AbortSignal): Pr
         dir: 'desc',
         filter: '{}',
       })
-      const res = await fetch(`/api/db/list?${params}`, { signal })
+      const res = await apiFetch(`/api/db/list?${params}`, { signal })
       const body = (await res.json()) as { items?: Array<Record<string, unknown>> }
       const items = Array.isArray(body.items) ? body.items : []
       return items

@@ -1,3 +1,4 @@
+import { readStorageString } from './client-storage.ts'
 import { apiFetch } from './api-client.ts'
 export type WorkspaceProfile = {
   name: string
@@ -54,7 +55,7 @@ export function profileDisplayName(profile = readWorkspaceProfile()) {
 
 function accountToken() {
   if (typeof localStorage === 'undefined') return ''
-  return localStorage.getItem('biu.account.token') ?? ''
+  return readStorageString('biu.account.token') ?? ''
 }
 
 const PROFILE_GET_HOLD_MS = 400

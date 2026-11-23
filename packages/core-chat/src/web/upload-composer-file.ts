@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import type { PickRef } from '@biu/core-pick/web'
 import { filePickFromPath } from '@biu/core-pick/web'
 import { IMAGE_MIMES } from './clipboard-images.ts'
@@ -15,7 +16,7 @@ export async function uploadComposerFile(sessionId: string, file: File): Promise
   if (!sessionId) throw new Error('session required')
   if (file.size > MAX_COMPOSER_UPLOAD_BYTES) throw new Error('文件太大')
   const name = encodeURIComponent(file.name || 'file.bin')
-  const res = await fetch(`/api/agents/${encodeURIComponent(sessionId)}/artifacts?name=${name}`, {
+  const res = await apiFetch(`/api/agents/${encodeURIComponent(sessionId)}/artifacts?name=${name}`, {
     method: 'POST',
     headers: { 'content-type': file.type || 'application/octet-stream' },
     body: file,

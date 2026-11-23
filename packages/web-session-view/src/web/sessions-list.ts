@@ -1,4 +1,6 @@
 /** 打开会话只拉最近 100 轮。和 SESSION_TAIL_TURNS 同值，单独放这个文件是为了入口能早打 GET。 */
+import { readStorageString } from '@biu/biu-ui/client-storage'
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { mostRecentSessionId } from './session-groups.ts'
 
 export const SESSION_LOAD_TURNS = 100
@@ -22,7 +24,7 @@ export async function getSessionsList<T = Record<string, unknown>>(opts?: {
   if (sessionsListInflight) return sessionsListInflight as Promise<T[] | null>
   let request: Promise<unknown[] | null>
   request = (async () => {
-    const res = await fetch('/api/agents')
+    const res = await apiFetch('/api/agents')
     if (!res.ok) return null
     const body = (await res.json()) as { sessions?: unknown[] }
     return Array.isArray(body.sessions) ? body.sessions : []
@@ -56,7 +58,7 @@ export async function getSessionTurns<T = Record<string, unknown>>(
   if (pending) return pending as Promise<{ status: number; body: T } | null>
   let request: Promise<{ status: number; body: unknown } | null>
   request = (async () => {
-    const res = await fetch(`/api/agents/${sessionId}?turns=${SESSION_LOAD_TURNS}`)
+    const res = await apiFetch(`/api/agents/${sessionId}?turns=${SESSION_LOAD_TURNS}`)
     const body = (await res.json().catch(() => ({}))) as unknown
     return { status: res.status, body }
   })().then(
@@ -82,7 +84,7 @@ export async function getSessionTurns<T = Record<string, unknown>>(
 function hasAccountToken() {
   if (typeof localStorage === 'undefined') return true
   try {
-    return Boolean(localStorage.getItem('biu.account.token'))
+    return Boolean(readStorageString('biu.account.token'))
   } catch {
     return true
   }

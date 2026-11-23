@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { matchSchemaField, resolveSchemaFieldKey, type DbRecord } from '@biu/type-file-system'
 import { normalizeCollectionPath } from '../paths.ts'
@@ -207,7 +208,7 @@ export function createRecordSandboxBiu<TExtra extends Record<string, unknown> = 
 
   const children = async (): Promise<DbRecord[]> => {
     if (!collectionPath || !recordId) return []
-    const res = await fetch('/api/db/list', {
+    const res = await apiFetch('/api/db/list', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ path: collectionPath }),

@@ -1,3 +1,4 @@
+import { writeStorageString } from '@biu/biu-ui/client-storage'
 import { lazy, memo, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import { ChatCount } from '@biu/biu-ui/chat-count'
 import { SidebarFold } from '@biu/biu-ui/sidebar-fold'
@@ -832,7 +833,7 @@ export const DataSidebar = memo(function DataSidebar({
     setPendingPick({ path, viewId })
     setOpenTables({ [`${dataSidebarKind(path)}:${path}`]: true })
     try {
-      localStorage.setItem(activeViewStorageKey(path), viewId)
+      writeStorageString(activeViewStorageKey(path), viewId)
     } catch {
       /* ignore */
     }

@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DbRecord } from '@biu/type-file-system'
 import { blockDataUnchanged } from './page-block-meta.ts'
@@ -32,7 +33,7 @@ export function parsePageBlockRowData(raw: unknown): Record<string, unknown> {
 }
 
 export async function writeBlockData(id: string, data: Record<string, unknown>) {
-  const res = await fetch('/api/db/update', {
+  const res = await apiFetch('/api/db/update', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ path: `/editor-blocks/${id}`, content: { data } }),

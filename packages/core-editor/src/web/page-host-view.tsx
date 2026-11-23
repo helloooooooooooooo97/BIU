@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom'
 import {
@@ -93,7 +94,7 @@ function layoutFields(record: DbRecord, schema?: CollectionSchema) {
 
 async function patchPageRecord(collectionPath: string, pageId: string, bag: Record<string, unknown>) {
   const path = `${collectionPath}/${pageId}`
-  const res = await fetch('/api/db/update', {
+  const res = await apiFetch('/api/db/update', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ path, content: bag }),

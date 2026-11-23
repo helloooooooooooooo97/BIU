@@ -1,3 +1,4 @@
+import { writeStorageString } from '@biu/biu-ui/client-storage'
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
 import { emitFsdbChange } from '@biu/type-file-system'
 import { isReadOnlyViewId, viewsForScope, type DataScope } from '../catalog-views.ts'
@@ -327,7 +328,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
         return
       }
       try {
-        localStorage.setItem(activeViewStorageKey(target), view.id)
+        writeStorageString(activeViewStorageKey(target), view.id)
       } catch {
         /* ignore */
       }

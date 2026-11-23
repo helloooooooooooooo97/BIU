@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { PAGES_COLLECTION_PATH } from './database-path.ts'
 import { FSDB_CHANGE_EVENT } from './fsdb-events.ts'
 
@@ -16,7 +17,7 @@ export async function patchTagSandbox(path: string, tagId: string, values: Recor
   const id = String(tagId ?? '').trim()
   if (!recordPath) throw new Error('no current record')
   if (!id) throw new Error('missing tag')
-  const res = await fetch('/api/tag/sandbox/patch', {
+  const res = await apiFetch('/api/tag/sandbox/patch', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ path: recordPath, tagId: id, values }),
