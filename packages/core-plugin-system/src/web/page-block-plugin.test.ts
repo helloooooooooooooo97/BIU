@@ -216,14 +216,15 @@ test('running window plugins ask ui-hub for web.js, page blocks do not', () => {
   }), false)
   const src = readFileSync(resolve(import.meta.dirname, './page-block-plugin.ts'), 'utf8')
   const web = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
-  const browser = readFileSync(resolve(process.cwd(), 'packages/core-file-system/src/web/browser.tsx'), 'utf8')
+  const mutations = readFileSync(resolve(process.cwd(), 'packages/core-file-system/src/web/use-browser-mutations.ts'), 'utf8')
+  const fsdbEvents = readFileSync(resolve(process.cwd(), 'packages/core-file-system/src/web/fsdb-events.ts'), 'utf8')
   assert.match(src, /export function watchRunningWindowPlugins/)
   assert.match(src, /ENABLE_PAGE_BLOCK_PLUGIN/)
   assert.match(src, /fsdb:change/)
   assert.doesNotMatch(src, /setInterval\(tick/)
   assert.match(web, /watchRunningWindowPlugins\(\)/)
-  assert.match(browser, /action\.id === 'start'/)
-  assert.match(browser, /biu:enable-page-block-plugin/)
+  assert.match(mutations, /action\.id === 'start'/)
+  assert.match(fsdbEvents, /biu:enable-page-block-plugin/)
 })
 
 test('installed page-block watcher never starts plugins', () => {
