@@ -1510,23 +1510,44 @@ export class SessionViewService extends Service {
     void this.refreshSessions({ refresh: true })
   }
 
+  private inspectorPatchChain = new Map<string, Promise<void>>()
+
   async patchInspector(id: string, inspector: SessionInspectorBind) {
     const prev = this.value.sessions
-    const current = prev.find((item) => item.id === id)?.inspector
+    const prevSessionInspector = this.value.sessionInspector
+    const current =
+      (this.value.sessionId === id ? this.value.sessionInspector : undefined) ??
+      prev.find((item) => item.id === id)?.inspector
     const nextBind = mergeInspectorBind(current, inspector)
     this.replace({
       sessions: prev.map((item) => (item.id === id ? { ...item, inspector: nextBind } : item)),
+      ...(this.value.sessionId === id ? { sessionInspector: nextBind } : {}),
     })
-    try {
-      const res = await apiFetch(`/api/agents/${id}/config`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ inspector: nextBind ?? null }),
+    const prevChain = this.inspectorPatchChain.get(id) ?? Promise.resolve()
+    const run = prevChain
+      .catch(() => undefined)
+      .then(async () => {
+        const res = await apiFetch(`/api/agents/${id}/config`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ inspector: nextBind ?? null }),
+        })
+        if (!res.ok) throw new Error(`inspector bind failed HTTP ${res.status}`)
       })
-      if (!res.ok) throw new Error(`inspector bind failed HTTP ${res.status}`)
+    this.inspectorPatchChain.set(id, run)
+    try {
+      await run
     } catch (error) {
-      this.replace({ sessions: prev, error: String(error) })
+      if (this.inspectorPatchChain.get(id) === run) {
+        this.replace({
+          sessions: prev,
+          ...(this.value.sessionId === id ? { sessionInspector: prevSessionInspector } : {}),
+          error: String(error),
+        })
+      }
       throw error
+    } finally {
+      if (this.inspectorPatchChain.get(id) === run) this.inspectorPatchChain.delete(id)
     }
   }
 
