@@ -41,7 +41,7 @@ test('sessionsCollection maps summaries and writes title/pinned/tag', async () =
   assert.equal(spec.label, '代理')
   assert.equal(spec.view?.title, '代理')
   assert.equal(spec.view?.icon, 'cursor')
-  assert.deepEqual(spec.records, { update: true, create: false, delete: true, allocateId: false })
+  assert.deepEqual(spec.records, { update: true, create: false, delete: true, allocateId: true })
   const rows = await spec.list()
   assert.equal(rows[0]?.id, 's1')
   assert.equal(rows[0]?.title, 'hello')

@@ -1,10 +1,12 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { isAllocatedRecordId } from '@biu/type-file-system'
 import { NoticesStore } from './notices-store.ts'
 
 test('notices store dedupes unread source keys and marks read', () => {
   const store = new NoticesStore().open(':memory:')
   const first = store.push({ kind: 'task', title: '任务完成：A', sourceKey: 'task:a:done', href: '/database/tasks/record/a' })
+  assert.equal(isAllocatedRecordId(first!.id), true)
   const again = store.push({ kind: 'task', title: '任务完成：A（改）', sourceKey: 'task:a:done' })
   assert.equal(first?.id, again?.id)
   assert.equal(store.list().length, 1)

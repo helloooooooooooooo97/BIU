@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { recordBuiltinValues, type DbRecord } from '@biu/type-file-system'
+import { allocateRecordId, recordBuiltinValues, type DbRecord } from '@biu/type-file-system'
 
 export const NOTICE_KINDS = ['approval', 'task', 'session'] as const
 export type NoticeKind = (typeof NOTICE_KINDS)[number]
@@ -114,8 +114,11 @@ export class NoticesStore {
       return unread
     }
     const now = Date.now()
+    const existing = new Set(this.rows.map((item) => item.id))
+    let id = allocateRecordId()
+    while (existing.has(id)) id = allocateRecordId()
     const row: NoticeRow = {
-      id: `n_${crypto.randomUUID().slice(0, 10)}`,
+      id,
       title,
       body: input.body?.trim() || '',
       kind: input.kind,

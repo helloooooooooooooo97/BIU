@@ -11,6 +11,7 @@ import type { ChatProvider, LlmModelDef, LlmEndpointDef, ReasoningEffort, Thinki
 export type { ChatProvider, LlmModelDef, LlmEndpointDef, ReasoningEffort, ThinkingMode, ContextWindow, SpeedMode, ModelCapabilities } from './model-catalog.ts'
 export { LLM_ENDPOINT_PRESETS, LLM_MODEL_CATALOG } from './model-catalog.ts'
 import { currentSessionId } from '@biu/host-sessions/scope'
+import { allocateRecordId, isAssignableRecordId } from '@biu/type-file-system'
 import { isSessionCompactPoint, sanitizeLiveUiContext, type SessionConfig, type SessionEvent, type SessionRecord } from '@biu/type-session'
 import { DEFAULT_TAIL_TURNS, sliceBeforeTurns, sliceTailTurns } from '@biu/host-sessions/window'
 import {
@@ -1335,10 +1336,8 @@ export function apply(ctx: Context) {
       title?: string
       id?: string
     }
-    let sessionId =
-      typeof payload.id === 'string' && /^[0-9a-f-]{36}$/i.test(payload.id)
-        ? payload.id
-        : globalThis.crypto.randomUUID()
+    const requestedId = typeof payload.id === 'string' ? payload.id.trim() : ''
+    let sessionId = isAssignableRecordId(requestedId) ? requestedId : allocateRecordId()
     if (!isOnlineRuntime()) {
       const runtime = accountRuntime(ctx)
       const workspaceId = runtime?.store?.activeWorkspaceId() ?? ''

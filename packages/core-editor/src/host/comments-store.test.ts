@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { isAllocatedRecordId } from '@biu/type-file-system'
 import { CommentsStore } from './comments-store.ts'
 import { commentsCollection } from './comments-collection.ts'
 
@@ -24,6 +25,7 @@ test('CommentsStore persists threads, replies, status updates, and cascades root
       },
       author: 'Alice',
     })
+    assert.equal(isAllocatedRecordId(root.id), true)
     assert.equal(root.threadId, root.id)
     assert.equal(root.status, 'open')
     assert.equal(root.anchor?.quote, '按天分组')
