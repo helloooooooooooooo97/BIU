@@ -371,29 +371,29 @@ export const COMPARE_PAGES: ComparePage[] = [
 ]
 
 /** 五个动词各自对应的代表性参照对象。 */
-export const COMPARE_FEATURED = ['vs-cursor', 'vs-notion', 'vs-k8s', 'vs-app-stores', 'vs-github'] as const
+export const COMPARE_FEATURED = ['vs-cursor', 'vs-supabase', 'vs-k8s', 'vs-app-stores', 'vs-github'] as const
 
 export const COMPARE_CATEGORIES = [
   {
     id: 'build',
     name: '01 构建 · Build',
-    lead: '软件如何被生产出来：从面向开发者的代码库与低代码，到面向真实业务数据边服务边生长。',
+    lead: '软件如何被生产出来：从代码库 AI 编程与一次性对话生成，到面向真实业务数据边服务边生长。',
     blogSlug: 'build-software',
-    slugs: ['vs-cursor', 'vs-retool', 'vs-dsh', 'vs-pi'],
+    slugs: ['vs-cursor', 'vs-dsh', 'vs-pi', 'vs-chatgpt', 'vs-claude'],
   },
   {
     id: 'store',
     name: '02 存储 · Store',
-    lead: '数据如何被承载与检索：自由正文、结构化插件块与外部调用快照合一，自动跨页成表且本地离线可用。',
+    lead: '数据如何被承载与检索：告别 Office 离散无结构文件与割裂数据库，自由正文、结构化插件块与调用快照同存一页并自动成表。',
     blogSlug: 'store-software',
-    slugs: ['vs-notion', 'vs-supabase', 'vs-obsidian', 'vs-airtable'],
+    slugs: ['vs-office', 'vs-supabase', 'vs-obsidian', 'vs-airtable'],
   },
   {
     id: 'compose',
     name: '03 组合 · Compose',
-    lead: '多软件与智能体如何协同：在同一页共享实时状态与外部应用切片，取代多应用切换与胶水代码。',
+    lead: '多软件与模块如何协同：从容器编排、固定文档块与低代码拼装，到同页共享实时状态与外部应用切片。',
     blogSlug: 'compose-software',
-    slugs: ['vs-k8s', 'vs-office', 'vs-chatgpt', 'vs-claude'],
+    slugs: ['vs-k8s', 'vs-notion', 'vs-retool'],
   },
   {
     id: 'distribute',
