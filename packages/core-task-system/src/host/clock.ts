@@ -28,7 +28,6 @@ export function startTaskClock(ctx: Context) {
       const iso = new Date().toISOString()
       lastIso = iso
       ctx.emit('clock/tick', iso)
-      ctx.http.broadcast('clock', { iso })
     }
     tick()
     const timer = setInterval(tick, 1000)

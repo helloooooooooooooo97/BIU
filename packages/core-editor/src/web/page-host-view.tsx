@@ -1,5 +1,5 @@
 import { apiFetch } from '@biu/biu-ui/api-client'
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType } from 'react'
+import React, { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom'
 import {
   fieldIsWritable,
@@ -12,7 +12,9 @@ import {
 import { defaultContentSandboxSource } from '@biu/type-file-system/record-views'
 import type { RecordSandboxView } from '@biu/type-file-system/record-views'
 import { RenderBoundary } from '@biu/biu-ui'
-import { HostSourceEditor } from '@biu/core-file-system/host-source-editor'
+const HostSourceEditor = lazy(() =>
+  import('@biu/core-file-system/host-source-editor').then((m) => ({ default: m.HostSourceEditor })),
+)
 import { getRecordViewCatalog, useRecordViewCatalog } from '@biu/core-file-system/record-view-catalog'
 import { writeRecordViewCatalog } from '@biu/core-file-system/record-sandboxes'
 import { SandboxHostField, useLiveDbRecord } from '@biu/core-file-system/record-prop-host'
@@ -403,17 +405,19 @@ export function PageHostView({
             data-biu-name={view?.file || undefined}
             data-biu-title={view?.name || undefined}
           >
-            <HostSourceEditor
-              value={source}
-              language="javascript"
-              writable={writable}
-              pickHost={{
-                path: `${path}/${pageId}`,
-                name: view?.file,
-                title: view?.name || String(record.title ?? '').trim(),
-              }}
-              onChange={onSourceChange}
-            />
+            <Suspense fallback={null}>
+              <HostSourceEditor
+                value={source}
+                language="javascript"
+                writable={writable}
+                pickHost={{
+                  path: `${path}/${pageId}`,
+                  name: view?.file,
+                  title: view?.name || String(record.title ?? '').trim(),
+                }}
+                onChange={onSourceChange}
+              />
+            </Suspense>
             <div
               className="page-host-compile"
               data-testid="page-host-compile"

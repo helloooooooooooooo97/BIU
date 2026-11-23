@@ -211,11 +211,19 @@ export class PagesStore {
   async list(ids?: string[]): Promise<PageRow[]> {
     const db = await this.openDb()
     if (ids) {
+      const validIds = ids.filter((id) => ID_RE.test(id))
+      if (!validIds.length) return []
+      const placeholders = validIds.map(() => '?').join(', ')
+      const fetched = db.prepare(`
+        SELECT id, title, parent_id,
+          depends_on_json, emoji, created_at, updated_at
+        FROM pages WHERE id IN (${placeholders})
+      `).all(...validIds) as SqlPage[]
+      const byId = new Map(fetched.map((row) => [row.id, rowFromSql(row)]))
       const rows: PageRow[] = []
-      for (const id of ids) {
-        if (!ID_RE.test(id)) continue
-        const row = await this.get(id)
-        if (row) rows.push({ ...row, notes: '' })
+      for (const id of validIds) {
+        const hit = byId.get(id)
+        if (hit) rows.push(hit)
       }
       return rows
     }
