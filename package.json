@@ -37,6 +37,7 @@
     "start:desktop": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--preserve-symlinks\" BIU_ONLINE=0 PORT=3151 HTTP_HOST=0.0.0.0 BIU_HOME=.local-data BIU_REMOTE_ORIGIN=http://127.0.0.1:3141 tsx host/index.ts",
     "start:both": "concurrently -k -n online,desktop \"npm:start\" \"npm:start:desktop\"",
     "test": "vitest run",
+    "typecheck": "tsc --noEmit",
     "electron:dev": "node scripts/electron-dev.mjs",
     "electron:wait": "node scripts/electron-launch.mjs",
     "electron:build": "npm run build && env BIU_ELECTRON_DEV=0 node scripts/electron-launch.mjs",

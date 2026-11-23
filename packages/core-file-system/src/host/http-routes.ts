@@ -14,10 +14,12 @@ import {
   databaseChannelPayload,
   normalizeSchemaPack,
   type CollectionSchemaPack,
+  type DbRecord,
 } from '@biu/type-file-system'
 import { buildAccessExplanation, type BuildAccessExplanationInput } from '../access-explanation.ts'
-import { isReadOnlyViewId } from '../catalog-views.ts'
+import { displayNameForView, isReadOnlyViewId } from '../catalog-views.ts'
 import { PAGES_COLLECTION_PATH, TAGS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH } from '../paths.ts'
+import { isIndexCollection } from '../web/database-path.ts'
 import { isSharePluginId } from '../share-resources.ts'
 import {
   AssetConflictError,
@@ -560,7 +562,7 @@ export function registerDatabaseHttpRoutes(
               ? 'owner' as const
               : 'viewer' as const
       const spec = db.collection(collection)
-      const schema = spec?.schema
+      const schema = spec ? db.publishCollection(spec).schema : undefined
       const explanation = buildAccessExplanation({
         collection,
         recordId,
@@ -650,6 +652,16 @@ export function registerDatabaseHttpRoutes(
       }
       const accountId = currentAccountId()
       const workspaceId = currentRequestWorkspaceId()
+      const account = (ctx as Context & {
+        account?: {
+          store?: {
+            externallySharedRecords?: (
+              accountId: string,
+              workspaceId: string,
+            ) => Array<{ collection: string; record_id: string }>
+          }
+        }
+      }).account
       if (activeDataLocation() === 'cloud' && accountId && workspaceId && account?.store?.externallySharedRecords) {
         for (const record of account.store.externallySharedRecords(accountId, workspaceId)) {
           const key = `${record.collection}\t${record.record_id}`
