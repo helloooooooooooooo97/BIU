@@ -14076,6 +14076,47 @@ html:not(.has-js) .site [data-reveal] {
   color: var(--biu-color-on-emphasis);
 }
 
+.site-compare-group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--biu-space-4);
+  margin-bottom: var(--biu-space-5);
+}
+
+.site-compare-group-head h2 {
+  margin: 0;
+}
+
+.site-compare-group-head p {
+  margin: var(--biu-space-2) 0 0;
+  max-width: 44em;
+  font-size: var(--biu-font-size-4);
+  line-height: 1.65;
+  color: rgba(255, 255, 255, .62);
+}
+
+.site-compare-group-essay {
+  flex-shrink: 0;
+  font-size: var(--biu-font-size-3);
+  font-weight: var(--biu-font-weight-medium);
+  color: rgba(255, 255, 255, .78);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.site-compare-group-essay:hover {
+  color: var(--biu-color-on-emphasis);
+  text-decoration: underline;
+}
+
+@media (max-width: 640px) {
+  .site-compare-group-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
 @media (max-width: 960px) {
   .site-usecase-summary-strip,
   .site-usecase-cap-grid,
