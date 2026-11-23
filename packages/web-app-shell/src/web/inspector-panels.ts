@@ -84,7 +84,7 @@ export function isInspectorHomeOffer(tabId: string) {
 }
 
 export function pruneOpenedForCollections(opened: string[], collections: Array<{ path: string }> | undefined) {
-  if (!collections) return opened
+  if (!collections?.length) return opened
   const live = new Set(collections.map((item) => item.path))
   return opened.filter((id) => {
     const path = inspectorTabCollectionPath(id)

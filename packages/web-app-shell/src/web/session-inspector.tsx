@@ -203,6 +203,7 @@ export const SessionInspector = memo(function SessionInspector({
   const hydratingRef = useRef(false)
   const persistForRef = useRef<string | null>(sessionId)
   const persistReadyRef = useRef(false)
+  const pendingPushRef = useRef<{ sessionId: string | null; ready: boolean } | null>(null)
   const tabRef = useRef(tab)
   const openedRef = useRef(opened)
   tabRef.current = tab
@@ -214,15 +215,28 @@ export const SessionInspector = memo(function SessionInspector({
       dbPaths: snapshotInspectorDbPaths(),
     }
   }, [])
+  const flushPush = useCallback(() => {
+    const req = pendingPushRef.current
+    pendingPushRef.current = null
+    if (!req || hydratingRef.current) return
+    const next = captureBind()
+    writeLocalInspectorBind(next)
+    if (!req.sessionId || !req.ready) return
+    void sessionView.patchInspector(req.sessionId, next)
+  }, [captureBind, sessionView])
   const pushInspector = useCallback(
     (partial?: SessionInspectorBind) => {
       if (hydratingRef.current) return
+      if (partial?.tab !== undefined) tabRef.current = partial.tab
+      if (partial?.opened !== undefined) openedRef.current = partial.opened
       const next = mergeInspectorBind(captureBind(), partial ?? {}) ?? captureBind()
       writeLocalInspectorBind(next)
       if (!sessionId || !inspectorReady) return
-      void sessionView.patchInspector(sessionId, next)
+      const alreadyQueued = pendingPushRef.current !== null
+      pendingPushRef.current = { sessionId, ready: inspectorReady }
+      if (!alreadyQueued) queueMicrotask(flushPush)
     },
-    [captureBind, inspectorReady, sessionId, sessionView],
+    [captureBind, flushPush, inspectorReady, sessionId],
   )
   const setTab = useCallback(
     (next: string) => {
@@ -296,11 +310,14 @@ export const SessionInspector = memo(function SessionInspector({
   useEffect(() => {
     if (focusCallId && focusTabId) return
     setTabState((current) => {
+      if (current && (!collections || collections.length === 0) && slotTabId(current).startsWith('database:')) {
+        return current
+      }
       const next = resolveInspectorTab(current, allowedTabs, opened)
       if (next !== current) tabRef.current = next
       return next
     })
-  }, [sessionId, focusCallId, focusTabId, allowedTabs.join('|'), opened])
+  }, [sessionId, focusCallId, focusTabId, allowedTabs.join('|'), opened, collections])
 
   useEffect(() => {
     const onTab = (event: Event) => {
@@ -309,24 +326,34 @@ export const SessionInspector = memo(function SessionInspector({
       const allowed = allowedTabs.includes(next) || allowedTabs.includes(slotTabId(next))
       if (!allowed) return
       if (isInspectorPaneAbandoned(next)) return
-      persistOpened(opened.includes(next) ? opened : [...opened, next])
-      setTab(next)
+      const nextOpened = openedRef.current.includes(next) ? openedRef.current : [...openedRef.current, next]
+      openedRef.current = nextOpened
+      tabRef.current = next
+      setOpened(nextOpened)
+      setTabState(next)
+      window.dispatchEvent(new CustomEvent('biu:inspector-opened', { detail: { sessionId, opened: nextOpened } }))
+      pushInspector({ opened: nextOpened, tab: next })
     }
     window.addEventListener('biu:inspector-tab', onTab)
     return () => window.removeEventListener('biu:inspector-tab', onTab)
-  }, [allowedTabs.join('|'), opened, persistOpened, setTab])
+  }, [allowedTabs.join('|'), pushInspector, sessionId])
 
   useEffect(() => {
     const onClosed = (event: Event) => {
       const id = (event as CustomEvent).detail
       if (typeof id !== 'string' || !openedRef.current.includes(id)) return
-      const next = openedRef.current.filter((item) => item !== id)
-      persistOpened(next)
-      if (tabRef.current === id) setTab(next.at(-1) ?? '')
+      const nextOpened = openedRef.current.filter((item) => item !== id)
+      const nextTab = tabRef.current === id ? (nextOpened.at(-1) ?? '') : tabRef.current
+      openedRef.current = nextOpened
+      tabRef.current = nextTab
+      setOpened(nextOpened)
+      setTabState(nextTab)
+      window.dispatchEvent(new CustomEvent('biu:inspector-opened', { detail: { sessionId, opened: nextOpened } }))
+      pushInspector({ opened: nextOpened, tab: nextTab })
     }
     window.addEventListener('biu:inspector-pane-closed', onClosed)
     return () => window.removeEventListener('biu:inspector-pane-closed', onClosed)
-  }, [persistOpened, setTab])
+  }, [pushInspector, sessionId])
 
   useEffect(() => {
     if (!open) {
