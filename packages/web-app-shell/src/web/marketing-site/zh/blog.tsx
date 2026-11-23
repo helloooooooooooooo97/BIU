@@ -134,7 +134,7 @@ export function MarketingBlog({ onLogin, onStart }: { onLogin: SiteAction; onSta
         })}
       </section>
 
-      <SiteFinalCta title="体验 BIU 工作区" />
+      <SiteFinalCta title="开始使用 BIU" />
     </SiteChrome>
   )
 }
@@ -209,7 +209,7 @@ export function MarketingBlogPost({ onLogin, onStart }: { onLogin: SiteAction; o
         </nav>
       </article>
 
-      <SiteFinalCta title="体验 BIU 工作区" />
+      <SiteFinalCta title="开始使用 BIU" />
     </SiteChrome>
   )
 }
