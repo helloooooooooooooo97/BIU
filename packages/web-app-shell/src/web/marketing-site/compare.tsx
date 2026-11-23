@@ -316,10 +316,62 @@ export const COMPARE_PAGES: ComparePage[] = [
       { dimension: 'Traceability', them: '⚠️ Relies on Git or sync-service version history', biu: '✅ Append-only event stream' },
     ],
   },
+  {
+    slug: 'vs-app-stores',
+    title: 'BIU vs App Store / Google Play',
+    category: 'Software Distribution',
+    opening: 'The App Store and Google Play built a trillion-dollar distribution channel for mobile software, yet every release passes through developer certificates, installers, review queues, downloads, and up to a 30% commission. BIU shrinks the unit of release to a single page: share one link that bundles prose, assets, and plugin source—zero installs, zero store review, with dynamic condition-based permissions.',
+    useWhen: 'You are shipping consumer mobile apps to billions of phones, AAA 3D games, or apps relying on store discovery and low-level device APIs',
+    biuWhen: 'You are delivering tailored interactive software and professional services to clients, students, or teams—and want instant publishing, zero install friction, and no store tollbooth',
+    columns: ['App Store / Google Play', 'BIU'],
+    rows: [
+      { dimension: 'Unit of distribution', them: 'Binary installer (IPA / APK) requiring download, install, and separate sign-up', biu: '✅ One page link bundling prose, attachments, and referenced plugin source' },
+      { dimension: 'Publishing friction', them: '⚠️ Developer accounts, signing certs, manual store review queues, and release waits', biu: '✅ Finish a page and share the link immediately—zero store review' },
+      { dimension: 'Platform commission', them: '⚠️ Up to 30% on digital goods and services (15% for small developers)', biu: '✅ Zero app-store tax; service pricing stays entirely yours' },
+      { dimension: 'Context on arrival', them: '⚠️ Ships an empty UI shell separated from client docs and records', biu: '✅ Business narrative, structured records, page properties, and plugins arrive together' },
+      { dimension: 'Fine-grained permissions', them: '⚠️ Controls only who downloads the app; internal ACLs must be built from scratch', biu: '✅ Built-in dynamic Data View × Member View permissions constraining both humans and agents' },
+      { dimension: 'User derivation', them: '❌ Sealed binary black box; recipients cannot fork or adapt what they receive', biu: '✅ Recipients can clone pages or derive incremental layers on top of working plugins' },
+      { dimension: 'Consumer store reach & native hardware', them: '✅ Billion-device store discovery and deep native mobile hardware performance', biu: '❌ No consumer app-store discovery feed; not built for heavy native 3D games' },
+    ],
+  },
+  {
+    slug: 'vs-mini-programs',
+    title: 'BIU vs WeChat Mini Programs',
+    category: 'Software Distribution',
+    opening: 'Mini Programs proved the power of zero-install, scan-and-use software—but locked it inside a single super-app’s walled garden, complete with entity registration, release reviews, package caps, and closed runtimes inaccessible to external agents. BIU delivers the same instant link experience on the open web while letting docs, tables, full-stack plugins, and external slices compose on one page.',
+    useWhen: 'You rely heavily on WeChat’s social graph, offline QR ordering, WeChat Pay checkout, and billion-user consumer traffic',
+    biuWhen: 'You want open cross-platform link delivery, multiple tools and docs sharing live state on one page, full data ownership, and native agent operability',
+    columns: ['Mini Programs', 'BIU'],
+    rows: [
+      { dimension: 'Runtime host', them: '⚠️ Locked inside one proprietary super-app', biu: '✅ Open web browsers and open-source desktop app—no super-app lock-in' },
+      { dimension: 'Review & registration', them: '⚠️ Entity filing, category approvals, and review on every release', biu: '✅ No platform category gatekeeping; publish instantly via a link' },
+      { dimension: 'Cross-tool composition', them: '❌ Each mini program is an isolated silo; multiple tools cannot share live page state', biu: '✅ Full-stack plugins and external SaaS slices share one reactive state on one page' },
+      { dimension: 'Docs + structured data', them: '⚠️ Rigid form/card UIs with no freeform narrative or cross-page auto-indexing', biu: '✅ Prose, structured blocks, and run snapshots coexist and auto-index across pages' },
+      { dimension: 'Agent operability', them: '❌ Closed runtime opaque to external AI agents', biu: '✅ Humans and agents share the same structured records with @ referencing and on-demand plugin building' },
+      { dimension: 'Open source & data sovereignty', them: '❌ Proprietary platform protocols and mandatory cloud dependency', biu: '✅ Apache 2.0 open source, offline local SQLite or self-hosted cloud' },
+      { dimension: 'Social graph & QR payments', them: '✅ Native billion-user social sharing, offline QR entry, and integrated payments', biu: '❌ No built-in super-app social traffic feed or native consumer payment rail' },
+    ],
+  },
+  {
+    slug: 'vs-github',
+    title: 'BIU vs GitHub',
+    category: 'Software Derivation',
+    opening: 'GitHub hosts 630 million repositories—the largest code-reuse engine in history—yet reusing any of them still requires `git clone`, dependency setup, databases, and deployment, locking out 95% of knowledge workers. BIU stores plugins as addressable workspace records so agents can layer incremental capabilities onto working plugins, shared pages, and open-source repos for everyone.',
+    useWhen: 'Engineering teams need source-code version control, pull-request reviews, CI/CD pipelines, and large-scale open-source collaboration',
+    biuWhen: 'You want non-engineers and teams to reuse, adapt, and derive working software directly on live business pages without managing repos and deploys',
+    columns: ['GitHub', 'BIU'],
+    rows: [
+      { dimension: 'Unit of reuse', them: 'Source repositories requiring local setup, builds, and hosting before use', biu: '✅ Live, runnable pages and plugin records ready to adapt against real data' },
+      { dimension: 'Who can derive', them: '⚠️ 48.4 million developers fluent in Git, build toolchains, and deployment', biu: '✅ 1.14 billion knowledge workers: describe the delta and let an agent layer on verified plugins' },
+      { dimension: 'Cross-ecosystem reuse', them: '⚠️ Manual package wiring and glue code across repos', biu: '✅ Agents inspect open-source repos or VS Code extensions and wrap them as page blocks under their licenses' },
+      { dimension: 'Code & live data', them: '⚠️ Repos store static source code separated from production business data', biu: '✅ Plugin code and live workspace records live together—every change runs on real data immediately' },
+      { dimension: 'Large-scale engineering & CI/CD', them: '✅ Global gold standard: branches, PR reviews, Actions, Issues, and security scanning', biu: '❌ Does not replace Git hosting or enterprise software CI/CD' },
+    ],
+  },
 ]
 
 /** Representative benchmark per software-lifecycle verb. */
-export const COMPARE_FEATURED = ['vs-cursor', 'vs-supabase', 'vs-k8s', 'vs-notion', 'vs-linux'] as const
+export const COMPARE_FEATURED = ['vs-cursor', 'vs-notion', 'vs-k8s', 'vs-app-stores', 'vs-github'] as const
 
 export const COMPARE_CATEGORIES = [
   {
@@ -334,7 +386,7 @@ export const COMPARE_CATEGORIES = [
     name: '02 Store',
     lead: 'How data lives and gets queried: freeform prose, structured plugin blocks, and run snapshots unified with auto-indexed tables and local offline mode.',
     blogSlug: 'store-software',
-    slugs: ['vs-supabase', 'vs-obsidian', 'vs-airtable'],
+    slugs: ['vs-notion', 'vs-supabase', 'vs-obsidian', 'vs-airtable'],
   },
   {
     id: 'compose',
@@ -346,16 +398,16 @@ export const COMPARE_CATEGORIES = [
   {
     id: 'distribute',
     name: '04 Distribute',
-    lead: 'How services reach recipients: one page is a complete software release, governed by dynamic condition-based permissions.',
+    lead: 'How services reach recipients: beyond app-store reviews, 30% tolls, and walled super-apps—one page is a release with dynamic condition permissions.',
     blogSlug: 'distribute-software',
-    slugs: ['vs-notion'],
+    slugs: ['vs-app-stores', 'vs-mini-programs'],
   },
   {
     id: 'derive',
     name: '05 Derive',
-    lead: 'How capabilities compound: kernel-level uniform primitives and addressable plugins so humans and agents layer on working software.',
+    lead: 'How capabilities compound: unlocking open-source reuse from behind git clone so humans and agents layer on working software.',
     blogSlug: 'derive-software',
-    slugs: ['vs-linux'],
+    slugs: ['vs-github', 'vs-linux'],
   },
 ] as const
 

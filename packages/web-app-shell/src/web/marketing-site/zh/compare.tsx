@@ -316,10 +316,62 @@ export const COMPARE_PAGES: ComparePage[] = [
       { dimension: '可追溯', them: '⚠️ 靠 Git 或同步服务的版本历史', biu: '✅ 只追加事件流' },
     ],
   },
+  {
+    slug: 'vs-app-stores',
+    title: 'BIU vs App Store / Google Play',
+    category: '软件分发',
+    opening: 'App Store 与 Google Play 建起了移动时代万亿美元级的软件分发通道，但每一款软件都必须经历开发者证书、打包、审核队列、安装下载与最高 30% 的渠道抽成。BIU 把分发单位压缩成单个页面：分享一个链接，正文、附件与插件源码随页抵达，免安装、免审核，权限按条件动态计算。',
+    useWhen: '面向十亿级消费用户的原生移动应用、重度 3D 游戏，或依赖商店榜单曝光与系统级硬件权限',
+    biuWhen: '交付面向客户、学员或团队的定制交互软件与专业服务，希望写完即发布、零安装门槛、无渠道抽成与审核等待',
+    columns: ['App Store / Google Play', 'BIU'],
+    rows: [
+      { dimension: '分发单位', them: '完整安装包（IPA / APK），先下载安装再注册登录', biu: '✅ 单个页面链接，正文、附件与所用插件源码一并打包' },
+      { dimension: '发布门槛', them: '⚠️ 开发者账号、签名证书、应用商店人工审核与发版等待', biu: '✅ 写完页面即生成分享链接，无商店审核周期' },
+      { dimension: '渠道抽成', them: '⚠️ 数字商品与服务最高 30%（小微开发者 15%）', biu: '✅ 无应用商店抽成，服务与定价归交付方自己掌控' },
+      { dimension: '接收方上下文', them: '⚠️ 只分发空壳界面，业务资料与历史记录仍与软件分离', biu: '✅ 业务正文、结构化数据、页面属性与插件随链接一同抵达' },
+      { dimension: '细粒度权限', them: '⚠️ 仅控制谁能下载 App，内部权限需每个应用从零自建', biu: '✅ 内置「数据视图 × 成员视图」动态条件权限，同一套引擎约束人与智能体' },
+      { dimension: '二次衍生与定制', them: '❌ 封闭二进制黑盒，接收方无法基于收到的软件继续修改衍生', biu: '✅ 接收方可复制页面或引用插件，在已有软件之上增量衍生自己的版本' },
+      { dimension: '原生移动流量与硬件直通', them: '✅ 十亿级应用商店搜索分发与系统级原生性能', biu: '❌ 不提供消费级应用商店流量池，也不适合重度原生 3D 游戏' },
+    ],
+  },
+  {
+    slug: 'vs-mini-programs',
+    title: 'BIU vs 微信小程序 / Mini Programs',
+    category: '软件分发',
+    opening: '小程序证明了「免安装、扫码/点链即用」的巨大威力，但它依然把软件锁在单一超级 App 的封闭沙箱里：需要主体备案、版本审核、受限于主包体积，且数据沉在封闭生态中无法与外部工具或智能体自由互通。BIU 在开放浏览器里实现同样的一链即用，并让文档、数据表、全栈插件与外部切片在同一页自由组合。',
+    useWhen: '强依赖微信社交裂变、线下扫码点单、微信支付闭环与十亿级 C 端消费流量入口',
+    biuWhen: '需要跨平台开放链接交付、把多个工具与文档组合成完整专业服务、保持数据自主权并向任意模型与智能体原生开放',
+    columns: ['微信小程序', 'BIU'],
+    rows: [
+      { dimension: '运行载体', them: '⚠️ 锁定在微信等单一超级 App 内部', biu: '✅ 开放 Web 浏览器与开源桌面端，不绑定任何超级 App' },
+      { dimension: '审核与主体限制', them: '⚠️ 需企业/个人主体备案、类目资质审核与每次发版审核', biu: '✅ 无需平台类目审核，编辑完成即可生成链接交付' },
+      { dimension: '跨软件组合能力', them: '❌ 每个小程序是孤立孤岛，无法把多款小程序嵌进同一页共享状态', biu: '✅ 多款全栈插件与外部 SaaS 切片同页共享状态，一处变动全页收敛' },
+      { dimension: '文档与数据融合', them: '⚠️ 偏固定交互表单，缺乏自由叙事正文与跨页自动汇聚表', biu: '✅ 自由正文、结构化插件块与调用快照同存一页，自动跨页成表' },
+      { dimension: '智能体可操作性', them: '❌ 封闭运行时，外部 AI 智能体无法直接读写页面结构化状态', biu: '✅ 人与智能体读写同一份结构化数据，支持 @ 精确引用与现场定制插件' },
+      { dimension: '数据主权与开源', them: '❌ 私有平台协议与云端依赖，无法私有化审计全栈源码', biu: '✅ Apache 2.0 全栈开源，本机 SQLite 离线可用或私有自部署' },
+      { dimension: '社交裂变与线下支付生态', them: '✅ 微信十亿级社交关系链、扫一扫入口与原生微信支付', biu: '❌ 不具备超级 App 内置社交分发流量与原生支付体系' },
+    ],
+  },
+  {
+    slug: 'vs-github',
+    title: 'BIU vs GitHub',
+    category: '软件衍生',
+    opening: 'GitHub 汇聚了 6.3 亿个开源仓库，是人类历史上最庞大的代码复用基础设施，但复用的前提是 `git clone`、配环境、建库与部署——95% 的非工程师被挡在门外。BIU 让插件本身成为工作区里可读、可引用的结构化记录，智能体可以直接在已有插件、页面与开源仓库之上做增量叠加，让开源复用的红利溢出到每一个知识工作者。',
+    useWhen: '专业研发团队进行源码版本控制、Pull Request 代码评审、CI/CD 流水线与大规模开源协作',
+    biuWhen: '希望非程序员也能直接复用、改造和衍生可运行的软件能力，或在真实业务页面上基于已有插件与开源项目做增量叠加',
+    columns: ['GitHub', 'BIU'],
+    rows: [
+      { dimension: '复用对象', them: '源码仓库（需自行配置环境、构建与部署才能运行）', biu: '✅ 可直接运行的页面与插件记录，点开即可交互并基于真实数据衍生' },
+      { dimension: '谁能参与衍生', them: '⚠️ 4840 万熟悉 Git、构建链与部署的开发者', biu: '✅ 面向 11.4 亿知识工作者：用自然语言让智能体在已有插件上只写增量层' },
+      { dimension: '跨生态引入', them: '⚠️ 仓库之间靠手工引包与写胶水代码集成', biu: '✅ 智能体可读取开源仓库或 VS Code 扩展，在遵守开源协议下包装为页面块' },
+      { dimension: '运行数据与代码关系', them: '⚠️ 仓库只存静态代码，真实业务数据在外部生产库中', biu: '✅ 插件代码与真实业务数据同处一个工作区，改完即在真实数据上生效' },
+      { dimension: '大型工程协作与 CI/CD', them: '✅ 全球标杆：分支、PR 评审、Actions、Issue 与安全扫描', biu: '❌ 不替代专业 Git 托管平台与大型软件工程 CI/CD' },
+    ],
+  },
 ]
 
 /** 五个动词各自对应的代表性参照对象。 */
-export const COMPARE_FEATURED = ['vs-cursor', 'vs-supabase', 'vs-k8s', 'vs-notion', 'vs-linux'] as const
+export const COMPARE_FEATURED = ['vs-cursor', 'vs-notion', 'vs-k8s', 'vs-app-stores', 'vs-github'] as const
 
 export const COMPARE_CATEGORIES = [
   {
@@ -334,7 +386,7 @@ export const COMPARE_CATEGORIES = [
     name: '02 存储 · Store',
     lead: '数据如何被承载与检索：自由正文、结构化插件块与外部调用快照合一，自动跨页成表且本地离线可用。',
     blogSlug: 'store-software',
-    slugs: ['vs-supabase', 'vs-obsidian', 'vs-airtable'],
+    slugs: ['vs-notion', 'vs-supabase', 'vs-obsidian', 'vs-airtable'],
   },
   {
     id: 'compose',
@@ -346,16 +398,16 @@ export const COMPARE_CATEGORIES = [
   {
     id: 'distribute',
     name: '04 分发 · Distribute',
-    lead: '服务如何抵达对方手里：一页即一次软件发布，正文、附件与插件源码随链接同行，权限按条件动态计算。',
+    lead: '服务如何抵达对方手里：告别应用商店审核、30% 抽成与超级 App 封闭沙箱，一页即发布，权限按条件动态计算。',
     blogSlug: 'distribute-software',
-    slugs: ['vs-notion'],
+    slugs: ['vs-app-stores', 'vs-mini-programs'],
   },
   {
     id: 'derive',
     name: '05 衍生 · Derive',
-    lead: '能力如何持续复利：内核级统一抽象与可寻址插件记录，让人与智能体站在已有软件之上增量叠加。',
+    lead: '能力如何持续复利：把开源复用从命令行解放出来，让人与智能体站在已有软件之上增量叠加。',
     blogSlug: 'derive-software',
-    slugs: ['vs-linux'],
+    slugs: ['vs-github', 'vs-linux'],
   },
 ] as const
 
