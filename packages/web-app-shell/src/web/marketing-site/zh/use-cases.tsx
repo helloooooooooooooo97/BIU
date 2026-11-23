@@ -751,12 +751,16 @@ export const USE_CASE_CATEGORIES = USE_CASES
 type IndustryExtra = {
   replaces: string
   sharedState: string
+  oneLiner: string
+  signatureSlices: string[]
   workflow: readonly [step: string, detail: string][]
 }
 
 const INDUSTRY_EXTRA_ZH: Record<string, IndustryExtra> = {
   tech: {
-    replaces: '替代：文档工具 + 完整 Apifox/Postman + Sentry 面板 + 项目看板',
+    replaces: '替代：文档 + Apifox/Postman + Sentry + 项目看板',
+    oneLiner: '一页接入 Apifox 接口切片、Sentry 监控与慢 SQL 诊断，运行结果直接落盘为发布快照。',
+    signatureSlices: ['Apifox 接口切片', 'Sentry 错误率切片', '慢 SQL 诊断'],
     sharedState: '服务名、目标环境与故障节点写入同一页属性：切换 env 即同步切换 Apifox 接口测试切片与 Sentry 错误率切片；每次运行结果直接落盘为文档快照，多版本发布页自动汇总出接口稳定性趋势表。',
     workflow: [
       ['01 · 起一页并挂载外部切片', '在同一页放入发布单/排障正文、架构画板，以及 Apifox 单接口测试切片与 Sentry 监控切片，无需打开整套重型 SaaS。'],
@@ -766,7 +770,9 @@ const INDUSTRY_EXTRA_ZH: Record<string, IndustryExtra> = {
     ],
   },
   education: {
-    replaces: '替代：在线文档 + 外部白板 + 刷题网站 + Excel 进度表',
+    replaces: '替代：文档 + 白板 + 刷题网站 + Excel 进度表',
+    oneLiner: '讲义、隔离判题沙箱与掌握度统计共享状态，一链交付整班且每人只见自己的提交。',
+    signatureSlices: ['算法判题沙箱', '薄弱题型统计', 'Offer 对比矩阵'],
     sharedState: '学员代码沙箱运行结果与讲义属性实时互通：通过全部隐藏用例后，题型掌握度与目标 Offer 准备表当场收敛更新。',
     workflow: [
       ['01 · 一页备课与建档', '把讲义正文、Excalidraw 板书、算法题卡与进度表放进同一页，设好学员与目标岗位属性。'],
@@ -776,7 +782,9 @@ const INDUSTRY_EXTRA_ZH: Record<string, IndustryExtra> = {
     ],
   },
   media: {
-    replaces: '替代：脚本文档 + 剪辑时间线 + 素材网盘 + 排期表格',
+    replaces: '替代：脚本文档 + 剪辑时间线 + 网盘 + 排期表',
+    oneLiner: '脚本文案、语速时长估算与多轨时间线同源联动，改一段口播自动重算全片节奏。',
+    signatureSlices: ['多轨分镜时间线', '语速时长估算', '品牌合规审稿'],
     sharedState: '脚本文案、预估语速与多轨时间线共享同一份结构化分镜数据：删改一段口播，总时长与 B-roll 镜头卡同步重算。',
     workflow: [
       ['01 · 选题与脚本同页起草', '正文写分镜台词，页面属性记录目标时长、投放平台与品牌禁用词。'],
@@ -786,7 +794,9 @@ const INDUSTRY_EXTRA_ZH: Record<string, IndustryExtra> = {
     ],
   },
   consulting: {
-    replaces: '替代：Excel 报价表 + Word 合同 + 项目排期表 + 邮件附件',
+    replaces: '替代：Excel 报价 + Word 合同 + 排期表 + 邮件',
+    oneLiner: '调整席位或币种，报价总额、合同付款条款与交付里程碑毫秒级同步收敛。',
+    signatureSlices: ['动态报价引擎', '合同条款联动', 'SLA 里程碑排期'],
     sharedState: '客户席位、币种、SLA 与加急开关作为页面属性驱动整页：席位从 10 改到 18，报价总额、合同付款条款与交付里程碑毫秒级同步重写。',
     workflow: [
       ['01 · 首日即交付互动方案页', '不再发静态 PDF，第一天就把诊断结论、报价测算块与条款草案装进一页发给客户。'],
@@ -796,7 +806,9 @@ const INDUSTRY_EXTRA_ZH: Record<string, IndustryExtra> = {
     ],
   },
   ecommerce: {
-    replaces: '替代：选品 Excel + 竞品监控脚本 + 达人 Brief 文档 + 财务测算表',
+    replaces: '替代：选品表 + 采价脚本 + 达人 Brief + 财务表',
+    oneLiner: '定时采价、SKU 毛利沙盘与达人 Brief 共享定价数据，多页选品自动汇总全店利润表。',
+    signatureSlices: ['SKU 毛利沙盘', '定时竞品采价', '达人投放 Brief'],
     sharedState: 'SKU 售价、佣金率、投放 ROI 与成本结构共享同一份页面数据：调低活动价 10 元，净毛利沙盘、盈亏平衡单量与达人卖点 Brief 同步刷新。',
     workflow: [
       ['01 · 搭建 SKU 选品与毛利沙盘', '在一页内组合竞品参数表、定时采价插件与动态利润测算器。'],
@@ -806,7 +818,9 @@ const INDUSTRY_EXTRA_ZH: Record<string, IndustryExtra> = {
     ],
   },
   finance: {
-    replaces: '替代：本地 PDF 纪要 + Excel 估值模型 + 网页财报 + PPT 投委汇报',
+    replaces: '替代：本地 PDF + Excel 估值 + 财报 + 投委 PPT',
+    oneLiner: '机密尽调留在本机 SQLite，调整增速假设即重算 DCF 与 MOIC，跨项目自动汇总投委会总表。',
+    signatureSlices: ['DCF 估值模型', 'MOIC 敏感性', '本地尽调库'],
     sharedState: '收入增速、毛利率与折现率假设写入页面属性：调整敏感性参数，DCF 估值表、MOIC 回报卡与投委建议评级即时联动重算。',
     workflow: [
       ['01 · 本地建库，机密资料不出机', '本机空间直接存放访谈纪要、PDF 财报与估值模型，断网可查，无需上传第三方云端。'],
@@ -941,41 +955,23 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <section className="site-page-hero" data-reveal>
-        <p className="site-section-label">行业与用例</p>
-        <h1>一页替代四五款割裂软件的真实用例</h1>
+        <p className="site-section-label">用例</p>
+        <h1>一页替代多款割裂软件的真实用例</h1>
         <p className="site-page-lead">
-          BIU 不是只存文字的文档模板库。页面里的每一块都是共享数据的全栈软件：把原本分散在文档、白板、表格、终端、代码沙箱与业务系统里的工作收进同一页，人与智能体同步操作，发一个链接即可交付使用。
+          每一页都是围绕真实业务组装的全栈软件与外部系统切片——共享实时状态，向智能体原生开放，一链即可交付。
         </p>
-        <div className="site-usecase-summary-strip">
-          <div>
-            <strong>6 大核心行业 + 4 类扩展领域</strong>
-            <span>覆盖研发、教育、媒体、咨询、电商、投研及科研制造</span>
-          </div>
-          <div>
-            <strong>12+ 角色完整工作页</strong>
-            <span>每个角色配备内置插件组合、AI 定制插件与可交互演示</span>
-          </div>
-          <div>
-            <strong>6 项底层能力贯通</strong>
-            <span>全栈联动 · 应用切片 · 自动成表 · 智能体读写 · 一链交付 · 衍生复用</span>
-          </div>
-        </div>
         <nav className="site-usecase-jump" aria-label="页面快速导航">
-          <a href="#live-demo">01 在线交互体验</a>
-          <a href="#capabilities">02 六项核心能力</a>
-          <a href="#industries">03 六大核心行业</a>
-          <a href="#roles">04 12 套角色工作页</a>
-          <a href="#extended">05 更多扩展领域</a>
+          <a href="#live-demo">01 在线交互演示</a>
+          <a href="#industries">02 六大行业</a>
+          <a href="#roles">03 12 套角色工作页</a>
+          <a href="#extended">04 更多领域</a>
         </nav>
       </section>
 
       <section id="live-demo" className="site-usecase-demo-section" aria-label="在线交互用例体验" data-reveal>
         <div className="site-usecase-demo-head">
-          <p className="site-section-label">先亲手点一点 · 跨软件实时联动</p>
-          <h2>选一个行业，体验多款软件在同一页共享状态</h2>
-          <p className="site-usecase-lead-sub">
-            下面不是静态截图，而是真实可交互的联动演示：试着切换节点、修改席位、运行代码或拖动折扣，观察同一页内其他工具如何同步变化。
-          </p>
+          <p className="site-section-label">交互演示</p>
+          <h2>选一个行业，直接操作同页联动的真实软件</h2>
           <div className="site-demo-tabs" role="tablist" aria-label="切换行业交互演示">
             {USE_CASES.map((item) => (
               <button
@@ -994,49 +990,24 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
         <IndustryInteractiveDemo key={demoSlug} slug={demoSlug} locale="zh" />
       </section>
 
-      <section id="capabilities" className="site-usecase-section" aria-label="按核心能力看用例" data-reveal>
-        <div className="site-usecase-section-head">
-          <p className="site-section-label">功能全景 · BIU 凭什么能跑通这些用例</p>
-          <h2>六项核心能力，在真实业务里如何协同工作</h2>
-          <p>
-            普通协作工具只能做其中一两件事；BIU 把软件的构建、存储、组合、分发与衍生收束在同一页里，每一项能力都对应具体可落地的日常工作流。
-          </p>
-        </div>
-        <div className="site-usecase-cap-grid">
-          {CAPABILITY_USE_CASES_ZH.map((cap) => (
-            <article key={cap.index} className="site-usecase-cap-card">
-              <span className="site-solution-index">{cap.index} · {cap.tag}</span>
-              <h3>{cap.title}</h3>
-              <p>{cap.body}</p>
-              <p className="site-usecase-cap-example">{cap.example}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
       <section id="industries" className="site-usecase-section" aria-label="六大行业用例全景" data-reveal>
         <div className="site-usecase-section-head">
           <p className="site-section-label">六大核心行业</p>
-          <h2>进入具体行业，查看完整工具替代方案与角色演示</h2>
-          <p>
-            每一张卡片都标明了它替代的传统工具栈、页内共享状态如何联动以及最终交付物；点击进入可查看完整 4 步工作流与各角色专属仿真页。
-          </p>
+          <h2>不同行业，各自长出专属软件切片</h2>
         </div>
         <div className="site-usecase-grid" aria-label="用例">
           {USE_CASES.map((useCase) => {
             const extra = INDUSTRY_EXTRA_ZH[useCase.slug]
             return (
               <Link key={useCase.slug} to={`/use-cases/${useCase.slug}`} className="site-usecase-card">
-                <span className="site-solution-index">{useCase.index} · {useCase.roleLabels.join(' · ')}</span>
+                <span className="site-solution-index">{useCase.index} · {useCase.roleLabels.slice(0, 2).join(' · ')}</span>
                 <h2>{useCase.title}</h2>
                 {extra ? <p className="site-usecase-card-replaces">{extra.replaces}</p> : null}
-                <p>{useCase.summary}</p>
-                {extra ? <p className="site-usecase-card-sync">{extra.sharedState}</p> : null}
-                <p className="site-usecase-card-output">典型交付：{useCase.output}</p>
+                <p>{extra ? extra.oneLiner : useCase.summary}</p>
                 <div className="site-usecase-card-blocks">
-                  <BlockChips blocks={useCase.blocks} />
+                  <BlockChips blocks={extra ? extra.signatureSlices : useCase.blocks} />
                 </div>
-                <span className="site-usecase-card-go">查看完整用例与角色方案 →</span>
+                <span className="site-usecase-card-go">查看详情与角色演示 →</span>
               </Link>
             )
           })}
@@ -1045,11 +1016,8 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
 
       <section id="roles" className="site-usecase-section" aria-label="按角色查找用例" data-reveal>
         <div className="site-usecase-section-head">
-          <p className="site-section-label">按岗位直达 · 12 套角色工作页</p>
-          <h2>不同角色的一页工作台，具体装了哪些插件？</h2>
-          <p>
-            同一个行业里，不同岗位需要的工作页完全不同。按行业筛选下方角色卡片，直接查看每个岗位的典型页面、内置插件、AI 定制插件与对外交付方式。
-          </p>
+          <p className="site-section-label">按岗位直达</p>
+          <h2>12 套细分角色工作页</h2>
           <div className="site-demo-tabs" role="tablist" aria-label="按行业筛选角色用例">
             <button
               type="button"
@@ -1058,7 +1026,7 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
               className={roleFilter === 'all' ? 'is-active' : ''}
               onClick={() => setRoleFilter('all')}
             >
-              全部角色（{allRoleEntries.length}）
+              全部（{allRoleEntries.length}）
             </button>
             {USE_CASES.map((item) => (
               <button
@@ -1082,23 +1050,18 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
                 <h3>{role.pageTitle}</h3>
               </div>
               <p>{role.summary}</p>
-              <p className="site-usecase-role-deliver">
-                <strong>交付方式：</strong>{role.deliverTo}
-              </p>
               <div className="site-usecase-role-plugins">
-                <BlockChips blocks={role.blocks} />
                 <div className="site-usecase-role-customs">
                   {role.customPlugins.map((plugin) => (
                     <div key={plugin.name}>
-                      <span>AI 定制</span>
+                      <span>行业定制</span>
                       <strong>{plugin.name}</strong>
-                      <small>{plugin.body}</small>
                     </div>
                   ))}
                 </div>
               </div>
               <Link className="site-usecase-card-go" to={`/use-cases/${useCase.slug}`}>
-                体验「{useCase.title}」完整用例 →
+                体验「{useCase.title}」用例 →
               </Link>
             </article>
           ))}
@@ -1107,11 +1070,8 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
 
       <section id="extended" className="site-usecase-section" aria-label="更多行业与个人高频用例" data-reveal>
         <div className="site-usecase-section-head">
-          <p className="site-section-label">更多行业与个人用例</p>
-          <h2>只要你的工作涉及「文档 + 工具 + 数据 + 交付」，都能装进一页</h2>
-          <p>
-            除了六大核心行业，以下高频领域同样可以直接用内置插件叠加 AI 定制插件快速搭出专属工作页。
-          </p>
+          <p className="site-section-label">更多领域</p>
+          <h2>科研、制造、招聘与独立服务</h2>
         </div>
         <div className="site-usecase-ext-grid">
           {EXTENDED_USE_CASES_ZH.map((item) => (
@@ -1120,21 +1080,9 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
               <h3>{item.title}</h3>
               <p className="site-usecase-card-replaces">{item.replaces}</p>
               <p>{item.body}</p>
-              <BlockChips blocks={[...item.blocks]} />
             </article>
           ))}
         </div>
-      </section>
-
-      <section className="site-usecase-open" data-reveal>
-        <div>
-          <p className="site-section-label">按需生长 · 不受预设限制</p>
-          <h2>你的业务流程非常细分，榜单里没有现成模板？</h2>
-          <p>
-            BIU 的所有块都由插件驱动，而不是平台写死的功能模块。先用一张空白页写下真实业务数据，再让页面里的智能体对着数据现场写出你的专属插件——从第一天就开始交付，而不是等厂商排期。
-          </p>
-        </div>
-        <Link className="site-cta-secondary" to="/product#plugins">了解插件定制方式 →</Link>
       </section>
 
       <SiteFaq title="关于 BIU 用例" items={USE_CASES_OVERVIEW_FAQ_ZH} />

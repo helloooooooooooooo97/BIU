@@ -742,12 +742,16 @@ export const USE_CASE_CATEGORIES = USE_CASES
 type IndustryExtra = {
   replaces: string
   sharedState: string
+  oneLiner: string
+  signatureSlices: string[]
   workflow: readonly [step: string, detail: string][]
 }
 
 const INDUSTRY_EXTRA_EN: Record<string, IndustryExtra> = {
   tech: {
-    replaces: 'Replaces: Docs + Full Apifox/Postman + Sentry Console + Issue Tracker',
+    replaces: 'Replaces: Docs + Apifox/Postman + Sentry + Tracker',
+    oneLiner: 'Slice Apifox API runs, Sentry error rates, and slow-SQL triage onto one page with persisted release snapshots.',
+    signatureSlices: ['Apifox API Slice', 'Sentry Error Slice', 'Slow-SQL Triage'],
     sharedState: 'Service name, environment, and failing node live in shared page properties: switching env retargets both the Apifox API-testing slice and Sentry error slice; every run persists as an auditable snapshot and rolls up across releases.',
     workflow: [
       ['01 · Start one page with external slices', 'Combine release notes, architecture canvas, an Apifox single-endpoint slice, and a Sentry error-rate slice without opening three bloated SaaS apps.'],
@@ -757,7 +761,9 @@ const INDUSTRY_EXTRA_EN: Record<string, IndustryExtra> = {
     ],
   },
   education: {
-    replaces: 'Replaces: Doc App + External Whiteboard + Coding Site + Excel Tracker',
+    replaces: 'Replaces: Docs + Whiteboard + Coding Site + Excel',
+    oneLiner: 'Lessons, isolated code-judge sandboxes, and mastery rollups share state—one link for a 40-student cohort.',
+    signatureSlices: ['Code-Judge Sandbox', 'Mastery Rollup', 'Offer Matrix'],
     sharedState: 'Sandbox test results and lesson properties share one state: passing every hidden test case immediately updates topic mastery and target-offer readiness on the same page.',
     workflow: [
       ['01 · Author one interactive lesson page', 'Combine notes, Excalidraw diagrams, algorithm challenge cards, and mastery tables with student properties on one page.'],
@@ -767,7 +773,9 @@ const INDUSTRY_EXTRA_EN: Record<string, IndustryExtra> = {
     ],
   },
   media: {
-    replaces: 'Replaces: Script Doc + Timeline Tool + Cloud Drive + Production Sheet',
+    replaces: 'Replaces: Script Doc + Timeline + Drive + Sheet',
+    oneLiner: 'Scripts, pacing estimates, and multi-track timelines stay linked—trim a line and runtime updates instantly.',
+    signatureSlices: ['Multi-Track Timeline', 'Pacing Estimator', 'Brand Compliance'],
     sharedState: 'Narration copy, pacing estimates, and multi-track timelines share one structured scene list: trim a script beat and total runtime plus B-roll tracks recalculate instantly.',
     workflow: [
       ['01 · Draft script and metadata together', 'Write narration alongside target runtime, channel specs, and brand guardrails stored as structured page properties.'],
@@ -777,7 +785,9 @@ const INDUSTRY_EXTRA_EN: Record<string, IndustryExtra> = {
     ],
   },
   consulting: {
-    replaces: 'Replaces: Pricing Spreadsheet + Word Contract + Schedule + Email Attachments',
+    replaces: 'Replaces: Quote Excel + Word SOW + Schedule + Email',
+    oneLiner: 'Change seats or currency and quotes, contract payment clauses, and SLA milestones converge in milliseconds.',
+    signatureSlices: ['Live Quote Engine', 'Contract Clause Sync', 'SLA Milestones'],
     sharedState: 'Seats, currency, SLA, and rush toggles drive the entire page: change seats from 10 to 18 and the quote, contract payment clauses, and delivery milestones rewrite in milliseconds.',
     workflow: [
       ['01 · Deliver a live portal on day one', 'Skip static PDFs—share an interactive page containing diagnostic notes, a live pricing calculator, and draft SOW clauses.'],
@@ -787,7 +797,9 @@ const INDUSTRY_EXTRA_EN: Record<string, IndustryExtra> = {
     ],
   },
   ecommerce: {
-    replaces: 'Replaces: Margin Excel + Price Scraper + Creator Brief Doc + P&L Sheet',
+    replaces: 'Replaces: Margin Excel + Scraper + Brief Doc + P&L',
+    oneLiner: 'Scheduled price monitors, SKU margin sandboxes, and creator briefs share live pricing across every launch page.',
+    signatureSlices: ['SKU Margin Sandbox', 'Price Monitor', 'Creator Brief Sync'],
     sharedState: 'SKU price, commission rate, ad ROI, and unit costs share one live model: drop promo price by $10 and net margin, break-even volume, and creator briefs update together.',
     workflow: [
       ['01 · Build a live SKU margin sandbox', 'Combine competitor specs, scheduled price monitors, and an interactive unit-economics calculator on one page.'],
@@ -797,7 +809,9 @@ const INDUSTRY_EXTRA_EN: Record<string, IndustryExtra> = {
     ],
   },
   finance: {
-    replaces: 'Replaces: Local PDFs + Valuation Excel + Filings Browser + IC Slide Deck',
+    replaces: 'Replaces: Local PDFs + Valuation Excel + Filings + Deck',
+    oneLiner: 'Keep sensitive diligence in local SQLite; tweak growth assumptions to recalculate DCF & MOIC live.',
+    signatureSlices: ['DCF Valuation Model', 'MOIC Sensitivity', 'Local Diligence Vault'],
     sharedState: 'Growth, margin, and discount-rate assumptions live in page properties: tweak a sensitivity input and the DCF table, MOIC card, and IC verdict update on the spot.',
     workflow: [
       ['01 · Keep sensitive diligence strictly local', 'Store interview transcripts, PDF filings, and valuation models in a local SQLite workspace—offline-ready and never uploaded.'],
@@ -932,41 +946,23 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <section className="site-page-hero" data-reveal>
-        <p className="site-section-label">Industries & Use Cases</p>
-        <h1>Real use cases where one page replaces four disconnected apps</h1>
+        <p className="site-section-label">Use Cases</p>
+        <h1>Real use cases where one page replaces disconnected apps</h1>
         <p className="site-page-lead">
-          BIU is not a static template library. Every block on a page is full-stack software sharing live state—bringing docs, whiteboards, tables, terminals, sandboxes, and custom calculators into one workspace operated by both humans and agents, delivered in one link.
+          Each page composes domain-specific full-stack software and external system slices sharing live state—natively open to agents and delivered in one link.
         </p>
-        <div className="site-usecase-summary-strip">
-          <div>
-            <strong>6 Core Industries + 4 Extended Domains</strong>
-            <span>Engineering, education, media, consulting, e-commerce, finance, research, and hardware</span>
-          </div>
-          <div>
-            <strong>12+ Role-Specific Working Pages</strong>
-            <span>Built-in plugin stacks, AI-built custom blocks, and interactive previews for every role</span>
-          </div>
-          <div>
-            <strong>6 Unified Capabilities</strong>
-            <span>Reactive plugins · App slicing · Auto-indexed tables · Agent actions · One-link delivery · Derivation</span>
-          </div>
-        </div>
         <nav className="site-usecase-jump" aria-label="On this page">
-          <a href="#live-demo">01 Interactive Showcase</a>
-          <a href="#capabilities">02 Six Capabilities</a>
-          <a href="#industries">03 Six Industries</a>
-          <a href="#roles">04 12 Role Pages</a>
-          <a href="#extended">05 More Domains</a>
+          <a href="#live-demo">01 Interactive Demo</a>
+          <a href="#industries">02 Six Industries</a>
+          <a href="#roles">03 12 Role Pages</a>
+          <a href="#extended">04 More Domains</a>
         </nav>
       </section>
 
       <section id="live-demo" className="site-usecase-demo-section" aria-label="Interactive Use Case Showcase" data-reveal>
         <div className="site-usecase-demo-head">
-          <p className="site-section-label">Try It Live · Cross-Plugin Shared State</p>
-          <h2>Pick an industry and test multiple tools reacting on one page</h2>
-          <p className="site-usecase-lead-sub">
-            These are live interactive demos, not screenshots: select a failing node, raise seat count, run code, or slide a discount and watch every other block on the page update together.
-          </p>
+          <p className="site-section-label">Interactive Demo</p>
+          <h2>Pick an industry and test live cross-plugin state</h2>
           <div className="site-demo-tabs" role="tablist" aria-label="Switch industry interactive demo">
             {USE_CASES.map((item) => (
               <button
@@ -985,49 +981,24 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
         <IndustryInteractiveDemo key={demoSlug} slug={demoSlug} locale="en" />
       </section>
 
-      <section id="capabilities" className="site-usecase-section" aria-label="Use cases by core capability" data-reveal>
-        <div className="site-usecase-section-head">
-          <p className="site-section-label">Capabilities in Action · How BIU Powers Every Use Case</p>
-          <h2>Six core capabilities working together in real workflows</h2>
-          <p>
-            Point tools solve one slice and drop context at the boundary. BIU unifies building, storing, composing, distributing, and deriving software inside one page.
-          </p>
-        </div>
-        <div className="site-usecase-cap-grid">
-          {CAPABILITY_USE_CASES_EN.map((cap) => (
-            <article key={cap.index} className="site-usecase-cap-card">
-              <span className="site-solution-index">{cap.index} · {cap.tag}</span>
-              <h3>{cap.title}</h3>
-              <p>{cap.body}</p>
-              <p className="site-usecase-cap-example">{cap.example}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
       <section id="industries" className="site-usecase-section" aria-label="Six core industries" data-reveal>
         <div className="site-usecase-section-head">
           <p className="site-section-label">Six Core Industries</p>
-          <h2>Explore full stack replacements, workflows, and role demos</h2>
-          <p>
-            Every card shows which legacy tools one BIU page replaces, how plugins share live state, and what gets delivered—click through for the 4-step workflow and role previews.
-          </p>
+          <h2>Every industry grows its own domain software slices</h2>
         </div>
         <div className="site-usecase-grid" aria-label="Use cases">
           {USE_CASES.map((useCase) => {
             const extra = INDUSTRY_EXTRA_EN[useCase.slug]
             return (
               <Link key={useCase.slug} to={`/use-cases/${useCase.slug}`} className="site-usecase-card">
-                <span className="site-solution-index">{useCase.index} · {useCase.roleLabels.join(' · ')}</span>
+                <span className="site-solution-index">{useCase.index} · {useCase.roleLabels.slice(0, 2).join(' · ')}</span>
                 <h2>{useCase.title}</h2>
                 {extra ? <p className="site-usecase-card-replaces">{extra.replaces}</p> : null}
-                <p>{useCase.summary}</p>
-                {extra ? <p className="site-usecase-card-sync">{extra.sharedState}</p> : null}
-                <p className="site-usecase-card-output">Key deliverables: {useCase.output}</p>
+                <p>{extra ? extra.oneLiner : useCase.summary}</p>
                 <div className="site-usecase-card-blocks">
-                  <BlockChips blocks={useCase.blocks} />
+                  <BlockChips blocks={extra ? extra.signatureSlices : useCase.blocks} />
                 </div>
-                <span className="site-usecase-card-go">Explore full use case & roles →</span>
+                <span className="site-usecase-card-go">Explore workflows & role demos →</span>
               </Link>
             )
           })}
@@ -1036,11 +1007,8 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
 
       <section id="roles" className="site-usecase-section" aria-label="Browse by role" data-reveal>
         <div className="site-usecase-section-head">
-          <p className="site-section-label">By Role · 12 Complete Working Pages</p>
-          <h2>What goes inside each role’s working page?</h2>
-          <p>
-            Filter by industry to inspect the exact built-in plugins, AI-built custom blocks, and delivery flow for each role.
-          </p>
+          <p className="site-section-label">By Role</p>
+          <h2>12 role-specific working pages</h2>
           <div className="site-demo-tabs" role="tablist" aria-label="Filter role use cases by industry">
             <button
               type="button"
@@ -1049,7 +1017,7 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
               className={roleFilter === 'all' ? 'is-active' : ''}
               onClick={() => setRoleFilter('all')}
             >
-              All Roles ({allRoleEntries.length})
+              All ({allRoleEntries.length})
             </button>
             {USE_CASES.map((item) => (
               <button
@@ -1073,23 +1041,18 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
                 <h3>{role.pageTitle}</h3>
               </div>
               <p>{role.summary}</p>
-              <p className="site-usecase-role-deliver">
-                <strong>Delivery: </strong>{role.deliverTo}
-              </p>
               <div className="site-usecase-role-plugins">
-                <BlockChips blocks={role.blocks} />
                 <div className="site-usecase-role-customs">
                   {role.customPlugins.map((plugin) => (
                     <div key={plugin.name}>
-                      <span>AI-built</span>
+                      <span>Domain plugin</span>
                       <strong>{plugin.name}</strong>
-                      <small>{plugin.body}</small>
                     </div>
                   ))}
                 </div>
               </div>
               <Link className="site-usecase-card-go" to={`/use-cases/${useCase.slug}`}>
-                Open {useCase.title} use case →
+                Open {useCase.title} →
               </Link>
             </article>
           ))}
@@ -1098,11 +1061,8 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
 
       <section id="extended" className="site-usecase-section" aria-label="More industries and personal workflows" data-reveal>
         <div className="site-usecase-section-head">
-          <p className="site-section-label">Beyond Six Industries</p>
-          <h2>Any workflow combining docs, tools, data, and delivery fits on one page</h2>
-          <p>
-            Teams and solo practitioners also compose BIU pages across research, hardware, recruiting, and independent client services.
-          </p>
+          <p className="site-section-label">More Domains</p>
+          <h2>Research, hardware, recruiting, and independent services</h2>
         </div>
         <div className="site-usecase-ext-grid">
           {EXTENDED_USE_CASES_EN.map((item) => (
@@ -1111,21 +1071,9 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
               <h3>{item.title}</h3>
               <p className="site-usecase-card-replaces">{item.replaces}</p>
               <p>{item.body}</p>
-              <BlockChips blocks={[...item.blocks]} />
             </article>
           ))}
         </div>
-      </section>
-
-      <section className="site-usecase-open" data-reveal>
-        <div>
-          <p className="site-section-label">Grow on Demand · No Fixed Ceiling</p>
-          <h2>Have a niche workflow not listed above?</h2>
-          <p>
-            Every block in BIU is powered by a plugin rather than hardcoded by a vendor. Start with a page of real records, describe the missing tool to an agent, and ship from day one.
-          </p>
-        </div>
-        <Link className="site-cta-secondary" to="/product#plugins">See how plugin customization works →</Link>
       </section>
 
       <SiteFaq title="About BIU use cases" items={USE_CASES_OVERVIEW_FAQ_EN} />
