@@ -6,6 +6,7 @@ import {
   ApiHttpError,
   apiJson,
   invalidateApiInflight,
+  registerApiRequestInterceptor,
 } from './api-client.ts'
 
 test('apiJson deduplicates concurrent GET requests and throws ApiHttpError on non-2xx', async () => {
@@ -64,6 +65,35 @@ test('abortApiScope aborts active scoped apiFetch requests', async () => {
     await assert.rejects(() => p, /aborted/)
     assert.equal(sawAbort, true)
   } finally {
+    globalThis.fetch = original
+  }
+})
+
+test('registerApiRequestInterceptor injects headers without monkey-patching window.fetch', async () => {
+  const original = globalThis.fetch
+  let seenAuth = ''
+  let seenWs = ''
+  globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const h = new Headers(init?.headers)
+    seenAuth = h.get('authorization') ?? ''
+    seenWs = h.get('x-biu-workspace-id') ?? ''
+    return new Response(JSON.stringify({ ok: true }), { status: 200 })
+  }) as typeof fetch
+
+  const unregister = registerApiRequestInterceptor((_path, init) => {
+    const headers = new Headers(init.headers)
+    headers.set('authorization', 'Bearer tok-123')
+    headers.set('x-biu-workspace-id', 'ws-42')
+    return { ...init, headers }
+  })
+
+  try {
+    const res = await apiFetch('/api/ping')
+    assert.equal(res.ok, true)
+    assert.equal(seenAuth, 'Bearer tok-123')
+    assert.equal(seenWs, 'ws-42')
+  } finally {
+    unregister()
     globalThis.fetch = original
   }
 })

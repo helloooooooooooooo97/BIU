@@ -1,5 +1,5 @@
 import { readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
-import { apiFetch } from '@biu/biu-ui/api-client'
+import { apiFetch, registerApiRequestInterceptor } from '@biu/biu-ui/api-client'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode, type Ref } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -42,17 +42,16 @@ function isLandingPreview() {
 }
 
 if (typeof window !== 'undefined') {
-  const originalFetch = window.fetch.bind(window)
-  window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+  registerApiRequestInterceptor((_path, init) => {
     const preview = isLandingPreview()
     const token = preview ? '' : (readStorageString('biu.account.token') ?? '')
     const workspaceId = preview ? '' : readWorkspaceId()
-    if (!token && !workspaceId && !preview) return originalFetch(input, init)
-    const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
+    if (!token && !workspaceId && !preview) return init
+    const headers = new Headers(init.headers)
     if (token && !headers.has('authorization')) headers.set('authorization', `Bearer ${token}`)
     if (workspaceId && !headers.has('x-biu-workspace-id')) headers.set('x-biu-workspace-id', workspaceId)
-    return originalFetch(input, { ...init, credentials: preview ? 'omit' : init?.credentials, headers })
-  }
+    return { ...init, credentials: preview ? 'omit' : init.credentials, headers }
+  })
 }
 
 async function readAvatarFile(file: File) {
