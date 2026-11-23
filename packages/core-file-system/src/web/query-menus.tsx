@@ -23,7 +23,6 @@ import { DndGrip } from './dnd-grip.tsx'
 import { FieldGlyph } from './fsdb-cells.tsx'
 import { parseGroupByKey, type GroupGrain } from './group-strategies.ts'
 import { normalizeGroupConfig, type GroupConfig, type GroupSortMode } from './saved-view.ts'
-import { UiGlyph } from './nav-glyphs.tsx'
 
 import {
   countFilterRules,
@@ -675,23 +674,55 @@ export function GroupQueryMenu({
   onClose?: () => void
 }) {
   const [openAcc, setOpenAcc] = useState<'field' | 'grain' | 'sort' | null>(null)
+  const [savedGroupBy, setSavedGroupBy] = useState('')
+  const [savedGroupConfig, setSavedGroupConfig] = useState<GroupConfig | undefined>(undefined)
+  const [savedGroups, setSavedGroups] = useState<GroupMenuBucket[]>([])
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
-  const parsed = parseGroupByKey(groupBy)
+  const enabled = Boolean(groupBy)
+  const displayGroupBy = enabled ? groupBy : savedGroupBy
+  const displayGroupConfig = enabled ? groupConfig : savedGroupConfig
+  const displayGroups = enabled ? groups : savedGroups
+  const paused = !enabled && Boolean(displayGroupBy)
+  const parsed = parseGroupByKey(displayGroupBy)
   const activeField = fields.find((item) => item.key === parsed.fieldKey) ?? null
   const activeGrain: GroupGrain = parsed.grain ?? 'month'
 
+  const toggleEnabled = () => {
+    if (enabled) {
+      setSavedGroupBy(groupBy)
+      setSavedGroupConfig(groupConfig)
+      setSavedGroups(groups)
+      onChange('')
+      return
+    }
+    if (savedGroupBy) {
+      onChange(savedGroupBy)
+      if (savedGroupConfig && onChangeConfig) onChangeConfig(savedGroupConfig)
+      return
+    }
+    const first = fields[0]
+    if (first) {
+      const next = first.kind === 'datetime' ? `${first.key}::day` : first.key
+      setSavedGroupBy(next)
+      onChange(next)
+    }
+  }
+
   const selectField = (fieldKey: string) => {
     if (!fieldKey) {
+      setSavedGroupBy('')
+      setSavedGroupConfig(undefined)
+      setSavedGroups([])
       onChange('')
       return
     }
     const target = fields.find((item) => item.key === fieldKey)
-    if (target?.kind === 'datetime') {
-      const nextGrain = activeField?.kind === 'datetime' ? activeGrain : 'day'
-      onChange(`${fieldKey}::${nextGrain}`)
-      return
-    }
-    onChange(fieldKey)
+    const next =
+      target?.kind === 'datetime'
+        ? `${fieldKey}::${activeField?.kind === 'datetime' ? activeGrain : 'day'}`
+        : fieldKey
+    setSavedGroupBy(next)
+    onChange(next)
   }
 
   const fieldOptions = [
@@ -702,11 +733,11 @@ export function GroupQueryMenu({
       icon: <FieldGlyph kind={item.kind} />,
     })),
   ]
-  const sortMode: GroupSortMode = groupConfig?.sort ?? 'manual'
-  const hideEmpty = groupConfig?.hideEmpty !== false
-  const hiddenSet = new Set(groupConfig?.hidden ?? [])
-  const visibleGroups = groups.filter((item) => !hiddenSet.has(item.key))
-  const hiddenGroups = groups.filter((item) => hiddenSet.has(item.key))
+  const sortMode: GroupSortMode = displayGroupConfig?.sort ?? 'manual'
+  const hideEmpty = displayGroupConfig?.hideEmpty !== false
+  const hiddenSet = new Set(displayGroupConfig?.hidden ?? [])
+  const visibleGroups = displayGroups.filter((item) => !hiddenSet.has(item.key))
+  const hiddenGroups = displayGroups.filter((item) => hiddenSet.has(item.key))
 
   const patchConfig = (patch: Partial<GroupConfig>) => {
     if (!onChangeConfig) return
@@ -714,9 +745,11 @@ export function GroupQueryMenu({
       sort: sortMode,
       hideEmpty,
       hidden: [...hiddenSet],
-      order: groupConfig?.order,
+      order: displayGroupConfig?.order,
       ...patch,
     })
+    setSavedGroupConfig(next)
+    if (!enabled && displayGroupBy) onChange(displayGroupBy)
     onChangeConfig(next)
   }
 
@@ -733,7 +766,7 @@ export function GroupQueryMenu({
   }
 
   const hideAll = () => {
-    patchConfig({ hidden: groups.map((item) => item.key) })
+    patchConfig({ hidden: displayGroups.map((item) => item.key) })
   }
 
   const showAll = () => {
@@ -755,10 +788,23 @@ export function GroupQueryMenu({
 
   return (
     <div className="fsdb-tool-flyout fsdb-query-menu is-group" role="menu" data-testid="fsdb-group-panel">
-      <div className="fsdb-group-panel-head">
-        <UiGlyph icon="stack" />
-        <span>分组设置</span>
+      <div className="fsdb-query-head">
+        <span className="fsdb-query-head-title">分组设置</span>
+        <span className="fsdb-query-head-toggle">
+          <span className="fsdb-query-toggle-label">{enabled ? '已生效' : '未生效'}</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={enabled}
+            aria-label="启用分组"
+            className={`fsdb-group-switch${enabled ? ' is-on' : ''}`}
+            onClick={toggleEnabled}
+          >
+            <span className="fsdb-group-switch-thumb" />
+          </button>
+        </span>
       </div>
+      <div className={`fsdb-query-rules-body${paused ? ' is-paused' : ''}`}>
       <div className="fsdb-group-panel-row" data-testid="fsdb-group-field-row">
         <span className="fsdb-group-panel-label">分组条件</span>
         <CellSelect
@@ -785,7 +831,9 @@ export function GroupQueryMenu({
               onSelect={(next) => {
                 setOpenAcc(null)
                 if (!next) return
-                onChange(`${activeField.key}::${next}`)
+                const full = `${activeField.key}::${next}`
+                setSavedGroupBy(full)
+                onChange(full)
               }}
             />
           ) : null}
@@ -818,7 +866,7 @@ export function GroupQueryMenu({
                   <span className="fsdb-group-switch-thumb" />
                 </button>
               </div>
-              {groups.length > 0 ? (
+              {displayGroups.length > 0 ? (
                 <div className="fsdb-group-panel-section">
                   <div className="fsdb-group-panel-sec-head">
                     <span>可见分组</span>
@@ -894,6 +942,9 @@ export function GroupQueryMenu({
             type="button"
             className="fsdb-group-panel-clear"
             onClick={() => {
+              setSavedGroupBy('')
+              setSavedGroupConfig(undefined)
+              setSavedGroups([])
               onChange('')
               onClose?.()
             }}
@@ -903,6 +954,7 @@ export function GroupQueryMenu({
           </button>
         </>
       ) : null}
+      </div>
     </div>
   )
 }

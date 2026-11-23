@@ -15,8 +15,6 @@ import {
   type QueryField,
 } from './query-menus.tsx'
 import { PAGE_SIZES, type GroupConfig, type SavedView } from './saved-view.ts'
-import { LayoutPrefsMenu } from './layout-prefs-menu.tsx'
-import { getPagePrefs } from './page-width.ts'
 
 export type ViewSettingsTab = 'view' | 'columns' | 'filter' | 'sort' | 'group'
 
@@ -290,15 +288,6 @@ export function ViewSettingsMenu({
                 if (Number.isFinite(parsed) && parsed > 0) changePageSize(parsed)
               }}
             />
-
-            {!sheet ? (
-              <div className="fsdb-group-panel-section">
-                <div className="fsdb-group-panel-sec-head">
-                  <span>布局配置</span>
-                </div>
-                <LayoutPrefsMenu prefs={getPagePrefs()} className="is-inline" />
-              </div>
-            ) : null}
           </>
         ) : null}
 

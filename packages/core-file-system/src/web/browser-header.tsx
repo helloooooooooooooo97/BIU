@@ -1,4 +1,5 @@
 import { lazy, memo, Suspense, type ComponentProps, type RefObject } from 'react'
+import { EllipsisHorizontalIcon } from '@heroicons/react/16/solid'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import type { DbRecord } from '@biu/type-file-system'
 import { CrumbTrail } from './crumb-trail.tsx'
@@ -163,7 +164,7 @@ export const BrowserHeader = memo(function BrowserHeader({
             data-testid="fsdb-layout-toggle"
             onClick={onToggleLayout}
           >
-            <UiGlyph icon="sliders" />
+            <EllipsisHorizontalIcon aria-hidden className="size-4" />
           </button>
           {layoutOpen ? (
             <HeadlessDismiss onDismiss={onCloseLayout} insideRef={layoutRef}>

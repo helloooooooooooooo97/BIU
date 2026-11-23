@@ -28,6 +28,7 @@ import type { SlotsService } from '@biu/web-slots'
 import { inspectorTabFromEvent, requestInspectorAction, shellColumnStartWidth } from './chat-overlay.ts'
 import { getInspectorCaption, getInspectorCaptionVersion, subscribeInspectorCaptions } from './inspector-captions.ts'
 import { inspectorHomeRank, inspectorPanelMatches, inspectorPlusPinRank, inspectorViewProps, isInspectorHomeOffer, nextRepeatableTabId, pruneOpenedForCollections, resolveInspectorTab, slotTabId, touchInspectorMountedPanes } from './inspector-panels.ts'
+import { readStorageString, writeStorageString } from '@biu/biu-ui/client-storage'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import {
@@ -42,7 +43,27 @@ import {
   subscribeInspectorDbPath,
   subscribeInspectorPaneMenu,
 } from './data-bridge.ts'
-import { mergeInspectorBind, type SessionInspectorBind } from '@biu/type-session'
+import { mergeInspectorBind, normalizeInspectorBind, type SessionInspectorBind } from '@biu/type-session'
+
+const LOCAL_INSPECTOR_BIND_KEY = 'biu.inspector.bind'
+
+function readLocalInspectorBind(): SessionInspectorBind | undefined {
+  try {
+    const raw = readStorageString(LOCAL_INSPECTOR_BIND_KEY)
+    if (!raw) return undefined
+    return normalizeInspectorBind(JSON.parse(raw))
+  } catch {
+    return undefined
+  }
+}
+
+function writeLocalInspectorBind(bind: SessionInspectorBind) {
+  try {
+    writeStorageString(LOCAL_INSPECTOR_BIND_KEY, JSON.stringify(bind))
+  } catch {
+    /* ignore */
+  }
+}
 
 function captionTableIcon(icon?: string) {
   const name = (icon ?? '').trim().toLowerCase()
@@ -181,6 +202,7 @@ export const SessionInspector = memo(function SessionInspector({
   const tabsRef = useRef<HTMLDivElement>(null)
   const hydratingRef = useRef(false)
   const persistForRef = useRef<string | null>(sessionId)
+  const persistReadyRef = useRef(false)
   const tabRef = useRef(tab)
   const openedRef = useRef(opened)
   tabRef.current = tab
@@ -194,11 +216,13 @@ export const SessionInspector = memo(function SessionInspector({
   }, [])
   const pushInspector = useCallback(
     (partial?: SessionInspectorBind) => {
-      if (!sessionId || hydratingRef.current) return
+      if (hydratingRef.current) return
       const next = mergeInspectorBind(captureBind(), partial ?? {}) ?? captureBind()
+      writeLocalInspectorBind(next)
+      if (!sessionId || !inspectorReady) return
       void sessionView.patchInspector(sessionId, next)
     },
-    [captureBind, sessionId, sessionView],
+    [captureBind, inspectorReady, sessionId, sessionView],
   )
   const setTab = useCallback(
     (next: string) => {
@@ -227,26 +251,14 @@ export const SessionInspector = memo(function SessionInspector({
 
   useLayoutEffect(() => {
     const prev = persistForRef.current
-    if (prev && prev !== sessionId) {
+    if (prev && prev !== sessionId && persistReadyRef.current) {
       hydratingRef.current = false
       void sessionView.patchInspector(prev, captureBind())
     }
     persistForRef.current = sessionId
+    persistReadyRef.current = Boolean(sessionId && inspectorReady)
     hydratingRef.current = true
-    if (!sessionId) {
-      setOpened([])
-      setTabState('')
-      restoreInspectorDbPaths({})
-      hydratingRef.current = false
-      return
-    }
-    if (!inspectorReady) {
-      setOpened([])
-      setTabState('')
-      restoreInspectorDbPaths({})
-      return
-    }
-    const bind = sessionInspector
+    const bind = sessionId && inspectorReady ? sessionInspector : readLocalInspectorBind()
     const openedNext = bind?.opened ?? []
     const tabNext = bind?.tab && openedNext.includes(bind.tab) ? bind.tab : bind?.tab || openedNext[0] || ''
     openedRef.current = openedNext

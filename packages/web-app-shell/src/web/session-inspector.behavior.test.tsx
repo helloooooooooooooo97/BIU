@@ -172,3 +172,71 @@ test('a closed inspector is hidden', () => {
   expect(view.getByTestId('session-inspector').getAttribute('aria-hidden')).toBe('true')
   expect(view.getByTestId('session-inspector').className).toContain('is-closed')
 })
+
+test('persists and restores inspector tabs locally when session inspector is not ready (e.g. database route refresh)', () => {
+  window.localStorage.removeItem('biu.inspector.bind')
+  const state = {
+    sessionId: 's1',
+    sessions: [{ id: 's1', title: '会话', mascot: null }],
+    busySessions: {},
+    focusCallId: null,
+    inspectorReady: false,
+    sessionInspector: undefined,
+  }
+  const source = {
+    subscribe: () => () => {},
+    get: () => state,
+    patchInspector: async () => {},
+    clearInspectCall() {},
+    ensureTrajectory() {},
+    releaseTrajectory() {},
+  }
+  const slots = {
+    subscribe: () => () => {},
+    getVersion: () => 1,
+    list: () => [
+      {
+        id: 'database:/pages',
+        name: 'inspector-panels',
+        order: 0,
+        Component: Pane,
+        props: () => ({ tabId: 'database:/pages', tabLabel: '页面', requiresSession: false, centerKinds: ['session', 'database'], repeatable: true }),
+        children: [],
+      },
+    ],
+  }
+
+  const first = render(
+    <SessionInspector
+      open
+      width={360}
+      onWidthChange={() => {}}
+      useSessionView={bindSessionView(source as unknown as SessionViewService)}
+      sessionView={source as unknown as SessionViewService}
+      slots={slots as unknown as SlotsService}
+      renderSlot={() => null}
+    />,
+  )
+
+  fireEvent(window, new CustomEvent('biu:inspector-tab', { detail: 'database:/pages::rec1' }))
+  expect(first.getByTestId('inspector-database:/pages::rec1').className).toContain('is-active')
+  const saved = JSON.parse(window.localStorage.getItem('biu.inspector.bind') || '{}')
+  expect(saved.tab).toBe('database:/pages::rec1')
+  expect(saved.opened).toEqual(['database:/pages::rec1'])
+
+  first.unmount()
+
+  const second = render(
+    <SessionInspector
+      open
+      width={360}
+      onWidthChange={() => {}}
+      useSessionView={bindSessionView(source as unknown as SessionViewService)}
+      sessionView={source as unknown as SessionViewService}
+      slots={slots as unknown as SlotsService}
+      renderSlot={() => null}
+    />,
+  )
+  expect(second.getByTestId('inspector-database:/pages::rec1').className).toContain('is-active')
+  window.localStorage.removeItem('biu.inspector.bind')
+})
