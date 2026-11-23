@@ -1,6 +1,16 @@
 import { MENTION_KIND_PATH, parseMentionId } from '@biu/core-file-system/mention-markup'
 
+const MAX_MENTION_TITLES = 500
 const titles = new Map<string, string>()
+
+function putTitle(key: string, value: string) {
+  if (titles.has(key)) titles.delete(key)
+  else if (titles.size >= MAX_MENTION_TITLES) {
+    const oldest = titles.keys().next().value
+    if (oldest !== undefined) titles.delete(oldest)
+  }
+  titles.set(key, value)
+}
 const listeners = new Set<() => void>()
 const pending = new Set<string>()
 let inflight: Promise<void> | null = null
@@ -20,7 +30,7 @@ export function rememberMentionTitle(id: string, title: string) {
   const key = `${parsed.kind}/${parsed.recordId}`
   const next = title.trim()
   if (!next || titles.get(key) === next) return
-  titles.set(key, next)
+  putTitle(key, next)
   notify()
 }
 
@@ -90,7 +100,7 @@ async function flushMentionTitles() {
             const title = String(row.title ?? row.name ?? '').trim()
             if (!recordId || !title) continue
             const kind = (Object.entries(MENTION_KIND_PATH).find(([, item]) => item === path)?.[0] ?? 'page') as string
-            titles.set(`${kind}/${recordId}`, title)
+            putTitle(`${kind}/${recordId}`, title)
           }
         }),
       )

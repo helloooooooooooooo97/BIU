@@ -343,6 +343,30 @@ let cachedLocalData: boolean | null = null
 
 const QUERY_NEST_IGNORE = `${HEADLESS_DISMISS_IGNORE}, .db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`
 
+function sameGroupBuckets(a: GroupBucket[], b: GroupBucket[]): boolean {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i += 1) {
+    const x = a[i]!
+    const y = b[i]!
+    if (x.key !== y.key || x.label !== y.label || x.total !== y.total || x.rows.length !== y.rows.length) {
+      return false
+    }
+    if (recordsFingerprint(x.rows) !== recordsFingerprint(y.rows)) return false
+  }
+  return true
+}
+
+function flatMapKey(obj: Record<string, boolean | number | string | undefined>): string {
+  let out = ''
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      out += `${key}=${obj[key]}\x1f`
+    }
+  }
+  return out
+}
+
 const EMPTY_FILTERS: Record<string, string> = {}
 /** 与选区拖选同一阈值：位移超过这个距离只当拖，不当点击。 */
 const CELL_POP_DRAG_PX = 6
@@ -1295,7 +1319,7 @@ export function CollectionBrowser({
           nextBuckets = placeCreatedRow(nextBuckets, row, reqGroupBy, nextSchema, tagCatalog, parentId)
         }
       }
-      setGroupBuckets((prev) => (JSON.stringify(prev) === JSON.stringify(nextBuckets) ? prev : nextBuckets))
+      setGroupBuckets((prev) => (sameGroupBuckets(prev, nextBuckets) ? prev : nextBuckets))
       setItems((prev) => {
         if (pendingView) {
           confirmedCreates.current = new Set()
@@ -2160,18 +2184,22 @@ export function CollectionBrowser({
     () => `${JSON.stringify(columnViews)}\0${tagViewsStamp}\0${pinStamp}`,
     [columnViews, tagViewsStamp, pinStamp],
   )
-  const checkLayoutExtra = [
-    grouping ? 1 : 0,
-    page,
-    pageSize,
-    detailId ?? '',
-    pickedIds.join(','),
-    items.map((row) => row.id).join(','),
-    grouped.map((group) => `${group.key}:${group.rows.length}`).join(','),
-    JSON.stringify(collapsed),
-    JSON.stringify(collapsedGroups),
-    JSON.stringify(columnWidths),
-  ].join('\0')
+  const checkLayoutExtra = useMemo(
+    () =>
+      [
+        grouping ? 1 : 0,
+        page,
+        pageSize,
+        detailId ?? '',
+        pickedIds.join(','),
+        items.map((row) => row.id).join(','),
+        grouped.map((group) => `${group.key}:${group.rows.length}`).join(','),
+        flatMapKey(collapsed),
+        flatMapKey(collapsedGroups),
+        flatMapKey(columnWidths),
+      ].join('\0'),
+    [collapsed, collapsedGroups, columnWidths, detailId, grouped, grouping, items, page, pageSize, pickedIds],
+  )
 
   const onVisibleRange = useCallback((start: number, end: number) => {
     if (!grouping) return

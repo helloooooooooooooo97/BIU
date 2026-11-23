@@ -95,10 +95,20 @@ const TAG_ROW_SQL = 'id, label, fields_json, created_at, updated_at'
 export class TagStore {
   private db: DatabaseSync | null = null
   readonly metaStore = new RecordMetaStore(() => this.ensure())
+  private statsVersion = 0
+  private filledCountsCache: { version: number; data: Record<string, Record<string, number>> } | null = null
+  private observedOptionsCache = new Map<string, { version: number; data: Record<string, string[]> }>()
+
+  private invalidateStatsCache() {
+    this.statsVersion += 1
+    this.filledCountsCache = null
+    this.observedOptionsCache.clear()
+  }
 
   open(path = ':memory:') {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true })
     this.db = openAndMigrateBiu(path)
+    this.invalidateStatsCache()
     this.ensureCreatedAtColumn()
     this.ensureGroupIndexTables()
     this.metaStore.ensureTables()
@@ -388,6 +398,9 @@ export class TagStore {
   observedFieldOptions(tagId: string, limit = 20): Record<string, string[]> {
     const want = String(tagId ?? '').trim()
     if (!want) return {}
+    const cacheKey = `${want}\0${limit}`
+    const cached = this.observedOptionsCache.get(cacheKey)
+    if (cached && cached.version === this.statsVersion) return cached.data
     const pack = this.get(want)
     if (!pack) return {}
     const selectKeys = new Set(
@@ -397,7 +410,10 @@ export class TagStore {
     )
     if (!selectKeys.size) return {}
     const counts = new Map<string, Map<string, number>>()
-    const rows = this.ensure().prepare('SELECT tag_json FROM tag_record_values').all() as Array<{ tag_json: string }>
+    // 先在 SQLite 层用 instr 过滤包含目标 tagId 的行，避免无关记录进入 JS JSON.parse。
+    const rows = this.ensure()
+      .prepare('SELECT tag_json FROM tag_record_values WHERE instr(tag_json, ?) > 0')
+      .all(want) as Array<{ tag_json: string }>
     for (const row of rows) {
       let parsed: ReturnType<typeof normalizeSchemaValue>
       try {
@@ -430,10 +446,14 @@ export class TagStore {
         .map(([val]) => val)
       if (sorted.length) out[key] = sorted
     }
+    this.observedOptionsCache.set(cacheKey, { version: this.statsVersion, data: out })
     return out
   }
 
   filledFieldCounts(): Record<string, Record<string, number>> {
+    if (this.filledCountsCache && this.filledCountsCache.version === this.statsVersion) {
+      return this.filledCountsCache.data
+    }
     const live = new Map(
       this.list().map((pack) => [
         pack.id,
@@ -462,6 +482,7 @@ export class TagStore {
         if (!Object.keys(counts).length) delete out[tagId]
       }
     }
+    this.filledCountsCache = { version: this.statsVersion, data: out }
     return out
   }
 
@@ -537,6 +558,7 @@ export class TagStore {
         this.dropTagGroupIndexes(row.id)
       }
       db.exec('COMMIT')
+      this.invalidateStatsCache()
     } catch (error) {
       db.exec('ROLLBACK')
       throw error
@@ -550,6 +572,7 @@ export class TagStore {
     const nextNotes = notes !== undefined ? String(notes) : undefined
     if (this.isDeleted(TAGS_COLLECTION_PATH, pack.id)) this.restoreDeleted(TAGS_COLLECTION_PATH, pack.id)
     this.savePack(pack, nextNotes)
+    this.invalidateStatsCache()
     return pack
   }
 
@@ -563,6 +586,7 @@ export class TagStore {
       const result = db.prepare('DELETE FROM tags WHERE id = ?').run(want)
       this.dropTagGroupIndexes(want)
       db.exec('COMMIT')
+      this.invalidateStatsCache()
       return Number(result.changes) > 0
     } catch (error) {
       db.exec('ROLLBACK')
@@ -614,6 +638,7 @@ export class TagStore {
         db.prepare('DELETE FROM tag_record_values WHERE collection = ? AND record_id = ?').run(collection, recordId)
         this.indexRecord(collection, recordId, title, [])
         this.updateGroupRecord(collection, recordId, value)
+        this.invalidateStatsCache()
         return value
       }
       db.prepare(
@@ -623,6 +648,7 @@ export class TagStore {
       ).run(collection, recordId, JSON.stringify(value))
       this.indexRecord(collection, recordId, title, value.tags)
       this.updateGroupRecord(collection, recordId, value)
+      this.invalidateStatsCache()
       return value
     } catch (error) {
       db.exec('ROLLBACK TO tag_value_write')
@@ -700,6 +726,7 @@ export class TagStore {
     db.prepare('DELETE FROM tag_record_values WHERE collection = ? AND record_id = ?').run(collection, recordId)
     db.prepare('DELETE FROM tag_group_values WHERE collection = ? AND record_id = ?').run(collection, recordId)
     this.metaStore.removeRecordMetaRows(collection, recordId)
+    this.invalidateStatsCache()
   }
 
   putAttachment(row: { name: string; etag: string; mime: string; bytes: number; kind?: string; storage?: string }) {

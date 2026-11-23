@@ -47,9 +47,16 @@ export type ChatScrollMemory =
   | { kind: 'bottom' }
   | { kind: 'pin'; nodeId: string }
 
+const MAX_CHAT_SCROLL_SESSIONS = 200
 const chatScrollBySession = new Map<string, ChatScrollMemory>()
 
 export function rememberChatScroll(sessionId: string, memory: ChatScrollMemory) {
+  if (chatScrollBySession.has(sessionId)) {
+    chatScrollBySession.delete(sessionId)
+  } else if (chatScrollBySession.size >= MAX_CHAT_SCROLL_SESSIONS) {
+    const oldest = chatScrollBySession.keys().next().value
+    if (oldest !== undefined) chatScrollBySession.delete(oldest)
+  }
   chatScrollBySession.set(sessionId, memory)
 }
 

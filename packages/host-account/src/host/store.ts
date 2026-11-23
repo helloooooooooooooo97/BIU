@@ -125,9 +125,28 @@ function verifyPassword(password: string, stored: string) {
 export class CollabStore {
   readonly authorization: AuthorizationService
   private lastActiveAccount: { accountId: string; at: number } | null = null
+  private db: DatabaseSync
 
-  constructor(private db: DatabaseSync) {
-    this.authorization = new AuthorizationService(db, (accountId) => {
+  constructor(rawDb: DatabaseSync) {
+    // 复用高频 SQLite prepared statement，避免 200+ 处鉴权/成员查询每次重复编译 SQL。
+    const stmtCache = new Map<string, ReturnType<DatabaseSync['prepare']>>()
+    this.db = new Proxy(rawDb, {
+      get(target, prop, receiver) {
+        if (prop === 'prepare') {
+          return (sql: string) => {
+            let cached = stmtCache.get(sql)
+            if (!cached) {
+              cached = target.prepare(sql)
+              if (stmtCache.size < 256) stmtCache.set(sql, cached)
+            }
+            return cached
+          }
+        }
+        const value = Reflect.get(target, prop, receiver)
+        return typeof value === 'function' ? value.bind(target) : value
+      },
+    })
+    this.authorization = new AuthorizationService(this.db, (accountId) => {
       const requested = currentRequestWorkspaceId()
       if (requested && this.isMember(accountId, requested)) return requested
       return this.accountActiveWorkspace(accountId)

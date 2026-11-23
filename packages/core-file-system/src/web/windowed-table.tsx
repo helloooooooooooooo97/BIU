@@ -653,7 +653,8 @@ const NativeTableBody = memo(function NativeTableBody({
       paintedWindow.current = windowKey
       paintRef.current.paintSelection?.()
     }
-  })
+    // 明确列出帧输入依赖，避免 setPortals(nextPortals) 触发的二次 render 重复执行 pool.sync 与 tbody.offsetTop 回流。
+  }, [nodes, items, margin, colKeys, activeRowId, pickMode, cellViewStamp, tagRev, scrollDirection])
 
   useLayoutEffect(() => {
     return () => {

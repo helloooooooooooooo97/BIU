@@ -7,6 +7,7 @@ import {
   type RecordSandboxView,
 } from '@biu/type-file-system/record-views'
 import { normalizeCollectionPath } from '../paths.ts'
+import { BoundedMap } from './bounded-map.ts'
 
 export type RecordViewCatalog = {
   views: RecordSandboxView[]
@@ -26,7 +27,7 @@ const EMPTY: RecordViewCatalog = {
   propViewId: '',
 }
 const SELECTION_KEY = 'biu.record.view-selection'
-const store = new Map<string, RecordViewCatalog>()
+const store = new BoundedMap<string, RecordViewCatalog>(200)
 let seq = 0
 const listeners = new Set<() => void>()
 

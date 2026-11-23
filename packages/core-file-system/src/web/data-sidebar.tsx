@@ -11,6 +11,7 @@ import {
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { SidebarRow, SidebarRowMain } from '@biu/web-session-view/sidebar-row'
 import { FSDB_CHANGE_EVENT, parseFsdbChange, type CollectionInfo, type CollectionSchema, type DbRecord } from '@biu/type-file-system'
+import { BoundedMap } from './bounded-map.ts'
 import { groupField, groupRecords, parentFieldKey, treeChildren } from './fields.ts'
 import { builtinAllViewId, isReadOnlyViewId, type DataScope } from '../catalog-views.ts'
 import { dataSidebarKind, isRecordTreeCollection, isSystemCollection, sortDataCollections } from './database-path.ts'
@@ -173,7 +174,7 @@ type PreviewState = {
 
 type PreviewCache = { items: DbRecord[]; total: number; schema?: CollectionSchema }
 
-const previewCache = new Map<string, PreviewCache>()
+const previewCache = new BoundedMap<string, PreviewCache>(120)
 
 function crumbsToPreviewItems(path: string, viewId: string): DbRecord[] {
   return loadRecords(path, viewId).map((row) => ({
