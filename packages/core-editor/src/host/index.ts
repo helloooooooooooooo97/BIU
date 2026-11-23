@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import type { Context } from 'cordis'
-import { compileSandboxSource, formatCompileReport } from '../web/sandbox/compile.ts'
+import { compileSandboxSource, formatCompileReport } from '../shared/sandbox-compile.ts'
 import { CommentsStore } from './comments-store.ts'
 import { commentsCollection } from './comments-collection.ts'
 import { runInlineEdit } from './inline-edit.ts'

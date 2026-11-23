@@ -18,8 +18,7 @@ import {
 } from '@biu/type-file-system'
 import { buildAccessExplanation, type BuildAccessExplanationInput } from '../access-explanation.ts'
 import { displayNameForView, isReadOnlyViewId } from '../catalog-views.ts'
-import { PAGES_COLLECTION_PATH, TAGS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH } from '../paths.ts'
-import { isIndexCollection } from '../web/database-path.ts'
+import { PAGES_COLLECTION_PATH, TAGS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, isIndexCollection } from '../paths.ts'
 import { isSharePluginId } from '../share-resources.ts'
 import {
   AssetConflictError,

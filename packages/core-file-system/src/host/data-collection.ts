@@ -2,8 +2,8 @@ import type { CollectionSpec, CollectionInfo, DbRecord } from '@biu/type-file-sy
 import { actionVisibleToUser, recordBuiltinValues } from '@biu/type-file-system'
 import { parseStampRecordId, stampRecordId } from './tags-collection.ts'
 import { normalizeCollectionPath } from '../paths.ts'
-import { DATA_COLLECTION_PATH, DATA_MODULE_ID, TAGS_COLLECTION_PATH, isIndexCollection, isSystemCollection } from '../web/database-path.ts'
-import { matchActionWhen } from '../web/fields.ts'
+import { DATA_COLLECTION_PATH, DATA_MODULE_ID, TAGS_COLLECTION_PATH, isIndexCollection, isSystemCollection } from '../paths.ts'
+import { matchActionWhen } from '../shared/fields.ts'
 
 export function overviewActionIds(spec: Pick<CollectionSpec, 'actions'>, row: DbRecord): string[] {
   return (spec.actions ?? [])

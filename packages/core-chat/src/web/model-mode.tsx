@@ -7,7 +7,7 @@ import type {
   ReasoningEffort,
   SpeedMode,
   ThinkingMode,
-} from '../host/model-catalog.ts'
+} from '../shared/model-catalog.ts'
 
 const pillCls = (on: boolean) =>
   `rounded-md border px-2 py-[3px] text-[length:var(--biu-font-size-2)] leading-none transition-colors ${

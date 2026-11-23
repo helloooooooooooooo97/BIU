@@ -16,6 +16,9 @@ import {
   TRASH_COLLECTION_PATH,
   VIEWS_COLLECTION_PATH,
   WORKSPACE_MEMBERS_COLLECTION_PATH,
+  DATA_MODULE_ID,
+  isIndexCollection,
+  isSystemCollection,
   normalizeCollectionPath,
 } from '../paths.ts'
 
@@ -23,6 +26,7 @@ export {
   AGENTS_COLLECTION_PATH,
   COMMENTS_COLLECTION_PATH,
   DATA_COLLECTION_PATH,
+  DATA_MODULE_ID,
   EDITOR_BLOCKS_COLLECTION_PATH,
   MCP_COLLECTION_PATH,
   NOTICES_COLLECTION_PATH,
@@ -35,9 +39,10 @@ export {
   TRASH_COLLECTION_PATH,
   VIEWS_COLLECTION_PATH,
   WORKSPACE_MEMBERS_COLLECTION_PATH,
+  isIndexCollection,
+  isSystemCollection,
 }
 
-export const DATA_MODULE_ID = 'database'
 export const DATA_MODULE_PATH = '/database'
 export const DATA_MODULE = { id: DATA_MODULE_ID, label: '数据', path: DATA_MODULE_PATH }
 
@@ -103,20 +108,6 @@ const SYSTEM_SIDEBAR_ORDER = [
   NOTICES_COLLECTION_PATH,
   TRASH_COLLECTION_PATH,
 ] as const
-
-/** 组件和标签仍是反查索引（每人一份、没有分享）；侧栏分组另走 dataSidebarKind。 */
-const INDEX_COLLECTION_ORDER = [PAGE_BLOCKS_COLLECTION_PATH, TAGS_COLLECTION_PATH] as const
-
-/** 成员、视图、通知、回收站由系统维护。会话事件不进文件系统。 */
-export function isSystemCollection(path: string) {
-  const normalized = normalizeCollectionPath(path)
-  return (SYSTEM_COLLECTION_ORDER as readonly string[]).includes(normalized)
-}
-
-export function isIndexCollection(path: string) {
-  const normalized = normalizeCollectionPath(path)
-  return (INDEX_COLLECTION_ORDER as readonly string[]).includes(normalized)
-}
 
 /** 全部数据「新建」菜单优先遵循后端下发的集合能力声明（caps.overviewCreate / caps.create / view.sidebar），缺失时回退路径规则。 */
 export function isOverviewCreatableCollection(

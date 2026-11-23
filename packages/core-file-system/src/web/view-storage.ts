@@ -11,6 +11,7 @@ import { savedViewRecordPath } from '../paths.ts'
 import { emptyFilterGroup, looksLikeFilterTree, normalizeFilterGroup, parseSortsInput, resolveViewFilterTree } from '../query-logic.ts'
 import { normalizeGroupConfig, normalizePageSize, normalizeSavedView, parseViewColumns, rankListedViews, viewIsFresher, type SavedView } from './saved-view.ts'
 import { KeyedSerialQueue } from './record-write-queue.ts'
+import { registerWorkspaceCache } from './workspace-client-store.ts'
 
 /** 按 collectionPath 串行化视图写入，防止连点改属性时并发 POST 乱序覆盖。 */
 export const viewWriteQueue = new KeyedSerialQueue()
@@ -1004,3 +1005,13 @@ export function withViewDisplay(collectionPath: string, view: SavedView): SavedV
     ...(forcedGroup !== undefined ? { groupBy: forcedGroup } : {}),
   })
 }
+
+registerWorkspaceCache('view-storage', () => {
+  memoryViews.clear()
+  memoryRecords.clear()
+  memoryRecordMeta.clear()
+  viewsPullByKey.clear()
+  viewsPulledAtByKey.clear()
+  pulledViewPaths.clear()
+  pulledAllViews = false
+})

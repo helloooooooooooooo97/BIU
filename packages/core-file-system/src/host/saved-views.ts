@@ -4,12 +4,11 @@ import { openAndMigrateBiu } from '@biu/host-plugin-loader/data-dir'
 import type { CollectionInfo, CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { normalizeSchemaValue, recordBuiltinValues } from '@biu/type-file-system'
 import { builtinAllView, builtinAllViewId, isReadOnlyViewId } from '../catalog-views.ts'
-import { normalizeColumnWidths, normalizeGroupConfig, normalizePageSize, parseViewColumns, type SavedView } from '../web/saved-view.ts'
-import { normalizeColumnSummaries } from '../web/column-summary.ts'
-import { normalizeColumnViews } from '../web/column-sandbox-model.ts'
-import { isViewModeId } from '../web/fields.ts'
-import { DATA_COLLECTION_PATH, VIEWS_COLLECTION_PATH, normalizeCollectionPath } from '../paths.ts'
-import { isIndexCollection } from '../web/database-path.ts'
+import { normalizeColumnWidths, normalizeGroupConfig, normalizePageSize, parseViewColumns, type SavedView } from '../shared/saved-view.ts'
+import { normalizeColumnSummaries } from '../shared/column-summary.ts'
+import { normalizeColumnViews } from '../shared/column-sandbox-model.ts'
+import { isViewModeId } from '../shared/fields.ts'
+import { DATA_COLLECTION_PATH, VIEWS_COLLECTION_PATH, isIndexCollection, normalizeCollectionPath } from '../paths.ts'
 import {
   countFilterRules,
   flatFiltersToTree,

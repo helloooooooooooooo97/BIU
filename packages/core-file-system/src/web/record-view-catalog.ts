@@ -8,6 +8,7 @@ import {
 } from '@biu/type-file-system/record-views'
 import { normalizeCollectionPath } from '../paths.ts'
 import { BoundedMap } from './bounded-map.ts'
+import { registerWorkspaceCache } from './workspace-client-store.ts'
 
 export type RecordViewCatalog = {
   views: RecordSandboxView[]
@@ -28,6 +29,9 @@ const EMPTY: RecordViewCatalog = {
 }
 const SELECTION_KEY = 'biu.record.view-selection'
 const store = new BoundedMap<string, RecordViewCatalog>(200)
+registerWorkspaceCache('record-view-catalog', () => {
+  store.clear()
+})
 let seq = 0
 const listeners = new Set<() => void>()
 

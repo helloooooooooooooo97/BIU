@@ -1,0 +1,851 @@
+import type { AtomicFieldType, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType, SchemaFieldValue } from '@biu/type-file-system'
+import { asAttachment, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, asPersonList, BUILTIN_FIELD_KEYS, isTagFieldType, isRefFieldType, isReservedSchemaFieldKey, isSchemaFieldKey, normalizeSchemaValue, personKey } from '@biu/type-file-system'
+import { parseRecordLayouts, parseRecordSandboxes } from '@biu/type-file-system/record-views'
+import { TAG_FLAT_PREFIX, parseTagFlatColumnKey, readTagFieldValue } from '../query-logic.ts'
+import {
+  cellGroupValue,
+  GROUP_STRATEGIES,
+  isGroupableKind,
+  parseGroupByKey,
+  resolveGroupField,
+  strategyForField,
+  type GroupStrategyContext,
+} from './group-strategies.ts'
+
+export { GROUP_STRATEGIES, isGroupableKind, parseGroupByKey }
+
+export { TAG_FLAT_PREFIX, parseTagFlatColumnKey }
+
+export const BUILTIN_VIEW_MODES = ['table'] as const
+export type BuiltinViewMode = (typeof BUILTIN_VIEW_MODES)[number]
+/** 表格为文件系统默认；其它呈现由集合 registerView 注册。 */
+export type ViewMode = BuiltinViewMode | (string & {})
+
+export function isDroppedViewMode(mode: unknown) {
+  return mode === 'queue' || mode === 'cards' || mode === 'board'
+}
+
+export function isViewModeId(mode: unknown): mode is ViewMode {
+  return typeof mode === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(mode) && !isDroppedViewMode(mode)
+}
+
+export function resolveFieldType(field: FieldSpec): FieldType {
+  if (isTagFieldType(field.type)) return 'tag'
+  if (field.type === 'string[]') return 'multi-select'
+  if (field.type === 'string' && field.enum?.length) return 'select'
+  if (field.type === 'number' && field.format === 'datetime') return 'datetime'
+  if (field.type === 'string' && (field.format === 'url' || field.format === 'image' || field.format === 'attachment' || field.format === 'document' || field.format === 'file')) {
+    return field.format
+  }
+  return field.type
+}
+
+export function enumDisplayLabel(field: FieldSpec | undefined, value: unknown) {
+  const key = String(value ?? '')
+  return field?.enumLabels?.[key] || key
+}
+
+export function fieldValueOptions(rows: DbRecord[], key: string, field: FieldSpec) {
+  const values = field.enum?.length ? field.enum : uniqueValues(rows, key, field)
+  return values.map((value) => ({ value, label: enumDisplayLabel(field, value) }))
+}
+
+export function filterFieldValueOptions(
+  rows: DbRecord[],
+  key: string,
+  field: FieldSpec,
+  tags: Array<{ id: string; label?: string }> = [],
+): Array<{ value: string; label: string }> {
+  const kind = resolveFieldType(field)
+  if (kind === 'boolean') {
+    return [
+      { value: 'true', label: '是' },
+      { value: 'false', label: '否' },
+    ]
+  }
+  if (kind === 'tag') {
+    const seen = new Set<string>()
+    const out: Array<{ value: string; label: string }> = []
+    for (const tag of tags) {
+      const id = String(tag.id ?? '').trim()
+      if (!id || seen.has(id)) continue
+      seen.add(id)
+      out.push({ value: id, label: String(tag.label ?? '').trim() || id })
+    }
+    for (const id of uniqueValues(rows, key, field)) {
+      if (!id || seen.has(id)) continue
+      seen.add(id)
+      const hit = tags.find((tag) => tag.id === id)
+      out.push({ value: id, label: String(hit?.label ?? '').trim() || id })
+    }
+    return out
+  }
+  if ((kind === 'select' || kind === 'multi-select') && field.enum?.length) {
+    return field.enum.map((value) => ({ value, label: enumDisplayLabel(field, value) }))
+  }
+  return fieldValueOptions(rows, key, field)
+}
+
+export function fieldEntries(schema: CollectionSchema | undefined) {
+  if (!schema) return []
+  return Object.entries(schema.fields).map(([key, field]) => ({ key, field, kind: resolveFieldType(field) }))
+}
+
+function declaredParentField(schema: CollectionSchema | undefined) {
+  if (schema?.parentField && schema.fields[schema.parentField]) return schema.parentField
+  if (schema?.fields.parentId) return 'parentId'
+  if (schema?.fields.parent) return 'parent'
+  const firstRef = fieldEntries(schema).find((item) => item.kind === 'ref')
+  if (firstRef) return firstRef.key
+  return null
+}
+
+/** 推断父子字段：schema 声明优先，否则看数据里是否有指向其它记录 id 的 string 列。 */
+export function parentFieldKey(schema: CollectionSchema | undefined, rows: DbRecord[] = []): string | null {
+  const declared = declaredParentField(schema)
+  if (declared) return declared
+  const ids = new Set(rows.map((row) => row.id))
+  for (const item of fieldEntries(schema)) {
+    if (item.kind !== 'string' || item.key === schema?.labelField) continue
+    const linked = rows.some((row) => {
+      const value = String(row[item.key] ?? '')
+      return Boolean(value) && value !== row.id && ids.has(value)
+    })
+    if (linked) return item.key
+  }
+  return null
+}
+
+/** 当前列表里某条记录的直接子行（parent 不在列表里的当根）。 */
+export function treeChildren(rows: DbRecord[], parentKey: string, parentId: string): DbRecord[] {
+  const ids = new Set(rows.map((row) => row.id))
+  return rows.filter((row) => {
+    const raw = String(row[parentKey] ?? '')
+    const parent = raw && raw !== row.id && ids.has(raw) ? raw : ''
+    return parent === parentId
+  })
+}
+
+/** 当前数据里是否真有父子链接；没有则不当树形表。 */
+export function hasTreeLinks(rows: DbRecord[], parentKey: string | null): boolean {
+  if (!parentKey || !rows.length) return false
+  const ids = new Set(rows.map((row) => row.id))
+  return rows.some((row) => {
+    const raw = String(row[parentKey] ?? '')
+    return Boolean(raw) && raw !== row.id && ids.has(raw)
+  })
+}
+
+export type TreeRow = { row: DbRecord; depth: number; hasKids: boolean; kidCount: number }
+
+/** `collapsed[id] === false` 才展开；未标记的节点默认收起，表格只画这一页的顶层。 */
+export function treeNodeCollapsed(collapsed: Record<string, boolean>, id: string) {
+  return collapsed[id] !== false
+}
+
+export function flattenTree(rows: DbRecord[], parentKey: string, collapsed: Record<string, boolean> = {}): TreeRow[] {
+  const ids = new Set(rows.map((row) => row.id))
+  const children = new Map<string, DbRecord[]>()
+  const hasKids = new Set<string>()
+  for (const row of rows) {
+    const raw = String(row[parentKey] ?? '')
+    const linked = Boolean(raw) && raw !== row.id
+    if (linked && !ids.has(raw)) continue
+    const parent = linked ? raw : ''
+    if (parent) hasKids.add(parent)
+    const bucket = children.get(parent)
+    if (bucket) bucket.push(row)
+    else children.set(parent, [row])
+  }
+  const memo = new Map<string, number>()
+  const kidCountOf = (id: string): number => {
+    const hit = memo.get(id)
+    if (hit != null) return hit
+    memo.set(id, 0)
+    const kids = children.get(id) ?? []
+    const total = kids.reduce((sum, child) => sum + 1 + kidCountOf(child.id), 0)
+    memo.set(id, total)
+    return total
+  }
+  const out: TreeRow[] = []
+  const seen = new Set<string>()
+  const skip = (parent: string) => {
+    for (const row of children.get(parent) ?? []) {
+      if (seen.has(row.id)) continue
+      seen.add(row.id)
+      skip(row.id)
+    }
+  }
+  const visit = (parent: string, depth: number) => {
+    for (const row of children.get(parent) ?? []) {
+      if (seen.has(row.id)) continue
+      seen.add(row.id)
+      out.push({ row, depth, hasKids: hasKids.has(row.id), kidCount: kidCountOf(row.id) })
+      if (treeNodeCollapsed(collapsed, row.id)) skip(row.id)
+      else visit(row.id, depth + 1)
+    }
+  }
+  visit('', 0)
+  for (const row of rows) {
+    if (seen.has(row.id)) continue
+    const raw = String(row[parentKey] ?? '')
+    if (raw && raw !== row.id && !ids.has(raw)) continue
+    seen.add(row.id)
+    out.push({ row, depth: 0, hasKids: hasKids.has(row.id), kidCount: kidCountOf(row.id) })
+    if (!treeNodeCollapsed(collapsed, row.id)) visit(row.id, 1)
+  }
+  return out
+}
+
+/** 表格默认列：schema.columns 与现有列求交；没有声明则展开业务列（不含 id、内置时间列与父级字段）。标题列始终排在最前。 */
+/** 确保标题列存在（若已存在于自定义顺序中则保留其当前位置）。 */
+export function pinLabelColumn(schema: CollectionSchema | undefined, keys: string[]): string[] {
+  const label = schema?.labelField
+  if (!label) return keys
+  if (keys.includes(label)) return keys
+  return [label, ...keys]
+}
+
+/** 有动作列时确保动作列存在；若用户已调整过标题列或动作列顺序，则保留自定义顺序。 */
+export function pinActionColumn(schema: CollectionSchema | undefined, keys: string[], enabled: boolean): string[] {
+  if (!enabled) return pinLabelColumn(schema, keys.filter((key) => key !== 'actions'))
+  const withLabel = pinLabelColumn(schema, keys)
+  if (withLabel.includes('actions')) return withLabel
+  const label = schema?.labelField
+  const labelIdx = label ? withLabel.indexOf(label) : -1
+  if (labelIdx >= 0) {
+    return [...withLabel.slice(0, labelIdx + 1), 'actions', ...withLabel.slice(labelIdx + 1)]
+  }
+  return ['actions', ...withLabel]
+}
+
+export function defaultColumnKeys(schema: CollectionSchema | undefined, allKeys: string[]): string[] {
+  const listed = schema?.columns?.filter((key) => allKeys.includes(key)) ?? []
+  const parent = declaredParentField(schema)
+  const raw = listed.length
+    ? listed
+    : allKeys.filter((key) => !(BUILTIN_FIELD_KEYS as readonly string[]).includes(key) && key !== parent)
+  const keys = (raw.length ? raw : allKeys).filter((key) => !isTagFlatColumnKey(key))
+  return pinLabelColumn(schema, keys)
+}
+
+/** 动作 when 用到的字段。列表投影漏了会先画出运行/安装再跳到卸载。 */
+export function actionWhenKeys(schema?: Pick<CollectionSchema, 'actions'> | null): string[] {
+  const keys: string[] = []
+  const seen = new Set<string>()
+  for (const action of schema?.actions ?? []) {
+    const when = action.when
+    if (!when) continue
+    for (const key of Object.keys(when)) {
+      const next = key.trim()
+      if (!next || seen.has(next)) continue
+      seen.add(next)
+      keys.push(next)
+    }
+  }
+  return keys
+}
+
+/** 列表投影：可见列 + 标题/图标/树/分组/标签源字段 + 动作 when。不传则服务端仍返回除正文外全字段。 */
+export function listProjectionKeys(opts: {
+  schema?: CollectionSchema
+  columns: string[]
+  groupBy?: string
+}): string[] {
+  const keys: string[] = []
+  const seen = new Set<string>()
+  const add = (key?: string | null) => {
+    const next = String(key ?? '').trim()
+    if (!next || seen.has(next)) return
+    seen.add(next)
+    keys.push(next)
+  }
+  add('id')
+  add(opts.schema?.labelField ?? 'title')
+  add('emoji')
+  add('mascot')
+  add(declaredParentField(opts.schema))
+  add(parseGroupByKey(opts.groupBy).fieldKey)
+  add('parentChain')
+  add('blocked')
+  add('usageParts')
+  add('builtin')
+  let needTag = false
+  for (const key of opts.columns) {
+    add(key)
+    if (parseTagFlatColumnKey(key)) needTag = true
+  }
+  if (needTag) add(tagSourceKey(opts.schema))
+  for (const key of actionWhenKeys(opts.schema)) add(key)
+  return keys
+}
+
+export function hasMissingProjectedColumns(
+  loaded: ReadonlySet<string> | null | undefined,
+  requested?: string[],
+): boolean {
+  if (loaded === null) return false
+  if (!loaded) return true
+  if (!requested) return true
+  return requested.some((key) => !loaded.has(key))
+}
+
+export function tagFlatColumnKey(packId: string, fieldKey: string) {
+  return `${TAG_FLAT_PREFIX}${packId}::${fieldKey}`
+}
+
+export function isTagFlatColumnKey(key: string) {
+  return key.startsWith(TAG_FLAT_PREFIX)
+}
+
+export function tagSourceKey(schema: CollectionSchema | undefined) {
+  if (!schema) return 'tag'
+  const hit = Object.entries(schema.fields).find(([, field]) => resolveFieldType(field) === 'tag')
+  return hit?.[0] ?? 'tag'
+}
+
+export function flattenTagColumns(catalog: CollectionSchemaPack[]) {
+  return catalog.flatMap((pack) =>
+    pack.fields
+      .filter((field) => field.deleted !== true)
+      .map((field) => ({
+        key: tagFlatColumnKey(pack.id, field.key),
+        field: { ...field, label: field.label ?? field.key },
+        kind: resolveFieldType(field),
+        packId: pack.id,
+        packLabel: pack.label,
+      })),
+  )
+}
+
+export function tagColumnTitle(col: {
+  key: string
+  packLabel?: string
+  field?: { label?: string }
+}) {
+  const parsed = parseTagFlatColumnKey(col.key)
+  const fieldLabel = String(col.field?.label ?? '').trim() || (parsed?.fieldKey ?? '')
+  const packLabel = String(col.packLabel ?? '').trim()
+  if (parsed && packLabel && fieldLabel) {
+    const prefix = `${packLabel}·`
+    return fieldLabel.startsWith(prefix) ? fieldLabel : `${prefix}${fieldLabel}`
+  }
+  if (fieldLabel) return fieldLabel
+  return String(col.key).trim() || col.key
+}
+
+/** 表头只展示属性名本身，不带「标签·」前缀；所属标签改由悬浮 tooltip 提示。 */
+export function tagColumnHeadLabel(col: {
+  key: string
+  packLabel?: string
+  field?: { label?: string }
+}) {
+  const parsed = parseTagFlatColumnKey(col.key)
+  const rawFieldLabel = String(col.field?.label ?? '').trim() || (parsed?.fieldKey ?? '')
+  const packLabel = String(col.packLabel ?? '').trim()
+  if (parsed && packLabel && rawFieldLabel) {
+    const prefix = `${packLabel}·`
+    if (rawFieldLabel.startsWith(prefix)) {
+      const stripped = rawFieldLabel.slice(prefix.length).trim()
+      if (stripped) return stripped
+    }
+  }
+  if (rawFieldLabel) return rawFieldLabel
+  return String(col.key).trim() || col.key
+}
+
+/** 标签属性列的表头悬浮提示：展示所属标签名；非标签列返回空串。 */
+export function tagColumnTagTip(col: {
+  key: string
+  packLabel?: string
+}) {
+  const parsed = parseTagFlatColumnKey(col.key)
+  if (!parsed) return ''
+  const packLabel = String(col.packLabel ?? '').trim()
+  return packLabel ? `标签：${packLabel}` : ''
+}
+
+export function columnHeadTip(col: {
+  key: string
+  packLabel?: string
+  field?: { description?: string }
+}) {
+  const tagTip = tagColumnTagTip(col)
+  const desc = String(col.field?.description ?? '').trim()
+  if (tagTip && desc) return `${tagTip} · ${desc}`
+  return desc || tagTip
+}
+
+export function readTagFlatValue(row: DbRecord, columnKey: string, sourceKey = 'tag') {
+  if (!parseTagFlatColumnKey(columnKey)) return undefined
+  return readTagFieldValue(row, columnKey, sourceKey)
+}
+
+export function patchTagFlatValue(row: DbRecord, columnKey: string, next: unknown, sourceKey = 'tag'): SchemaFieldValue {
+  const parsed = parseTagFlatColumnKey(columnKey)
+  const current = normalizeSchemaValue(row[sourceKey])
+  if (!parsed) return current
+  const tags = current.tags.includes(parsed.packId) ? current.tags : [...current.tags, parsed.packId]
+  return {
+    tags,
+    values: {
+      ...current.values,
+      [parsed.packId]: { ...(current.values[parsed.packId] ?? {}), [parsed.fieldKey]: next },
+    },
+  }
+}
+
+export function inferPackFieldType(value: unknown): AtomicFieldType {
+  if (typeof value === 'boolean' || value === 'true' || value === 'false') return 'boolean'
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 1e11 ? 'datetime' : 'number'
+  }
+  if (Array.isArray(value)) {
+    if (asAttachmentList(value).length) return 'attachment'
+    return 'multi-select'
+  }
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const rec = value as Record<string, unknown>
+    if (Array.isArray(rec.tags)) return 'tag'
+    if (asPerson(value)) return 'person'
+    if (asAttachment(value)) return 'attachment'
+    if (asImageSrcList(value).length) return 'image'
+  }
+  if (asHttpHref(value) && typeof value === 'string') return 'url'
+  return 'string'
+}
+
+export function orphanPackEntries(
+  fields: Array<{ key: string; deleted?: boolean; type?: AtomicFieldType; label?: string }>,
+  bag: Record<string, unknown> | undefined,
+) {
+  const known = new Set(fields.filter((item) => item.deleted !== true).map((item) => item.key))
+  const retired = new Map(fields.map((item) => [item.key, item]))
+  const out: Array<{ key: string; value: unknown; type: AtomicFieldType; label: string }> = []
+  if (!bag) return out
+  for (const [key, value] of Object.entries(bag)) {
+    if (known.has(key) || isReservedSchemaFieldKey(key)) continue
+    if (!isSchemaFieldKey(key)) continue
+    const kept = retired.get(key)
+    const type = kept?.type && kept.deleted ? kept.type : inferPackFieldType(value)
+    if (!fieldHasValue({ type }, value)) continue
+    out.push({ key, value, type, label: kept?.label ?? key })
+  }
+  return out
+}
+
+export function asStringList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean)
+  if (typeof value === 'string' && value.trim()) {
+    return value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+  }
+  return []
+}
+
+export function asTime(value: unknown): number {
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+export function formatViewCatalog(value: unknown): string {
+  const sandboxes = parseRecordSandboxes(value)
+  if (sandboxes.length) return sandboxes.map((item) => item.name).filter(Boolean).join('、')
+  const layouts = parseRecordLayouts(value)
+  if (layouts.length) return layouts.map((item) => item.name).filter(Boolean).join('、')
+  return ''
+}
+
+export function formatField(field: FieldSpec | undefined, value: unknown): string {
+  if (value == null || value === '') return ''
+  const catalog = formatViewCatalog(value)
+  if (catalog && (!field || resolveFieldType(field) === 'string')) return catalog
+  if (!field) return String(value)
+  const kind = resolveFieldType(field)
+  if (kind === 'datetime') {
+    const n = asTime(value)
+    if (!n) return ''
+    const d = new Date(n)
+    const pad = (part: number) => String(part).padStart(2, '0')
+    return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+  if (kind === 'boolean') return value === true || value === 'true' ? '是' : '否'
+  if (kind === 'number') {
+    const n = Number(value)
+    if (!Number.isFinite(n) || n === 0) return ''
+    return String(n)
+  }
+  if (kind === 'url') return asHttpHref(value) || ''
+  if (kind === 'image') {
+    const list = asImageSrcList(value)
+    return list.length ? list.join(', ') : ''
+  }
+  if (kind === 'attachment' || kind === 'document') {
+    const list = asAttachmentList(value)
+    return list.length ? list.map((file) => file.name).join(', ') : ''
+  }
+  if (kind === 'file') {
+    if (value == null || value === '') return ''
+    const img = asImageSrc(value)
+    if (img) return img
+    const file = asAttachment(value)
+    if (file) return file.name
+    if (typeof value === 'string') return value
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return ''
+    }
+  }
+  if (kind === 'multi-select') {
+    const tags = asStringList(value)
+    return tags.length ? tags.map((tag) => enumDisplayLabel(field, tag)).join(', ') : ''
+  }
+  if (kind === 'select') return enumDisplayLabel(field, value)
+  if (kind === 'action') return field.label || '动作'
+  if (kind === 'tag') {
+    const parsed = normalizeSchemaValue(value)
+    return parsed.tags.length ? parsed.tags.join(', ') : ''
+  }
+  if (kind === 'person') {
+    return asPersonList(value)
+      .map((item) => item.name)
+      .filter(Boolean)
+      .join(' ')
+  }
+  if (kind === 'ref') {
+    const id = String(value ?? '').trim()
+    return id
+  }
+  if (kind === 'multi-ref') {
+    const tags = asStringList(value)
+    return tags.length ? tags.join(', ') : ''
+  }
+  return String(value)
+}
+
+/** 列表 / 卡片 / 看板：没有实际内容的属性不渲染（表格单元格仍可显示空位）。 */
+export function fieldHasValue(field: FieldSpec | undefined, value: unknown): boolean {
+  if (field && resolveFieldType(field) === 'action') return true
+  if (value == null) return false
+  if (typeof value === 'string' && !value.trim()) return false
+  if (field && resolveFieldType(field) === 'person') return asPersonList(value).length > 0
+  if (Array.isArray(value) && asStringList(value).length === 0) return false
+  if (!field) return true
+  const kind = resolveFieldType(field)
+  if (kind === 'boolean') return value === true || value === 'true'
+  if (kind === 'tag') return normalizeSchemaValue(value).tags.length > 0
+  return Boolean(formatField(field, value))
+}
+
+export function contentFieldKey(schema: CollectionSchema | undefined) {
+  if (!schema) return null
+  const preferred = schema.contentField ?? 'content'
+  if (preferred !== schema.labelField && schema.fields[preferred]) return preferred
+  const label = schema.labelField
+  for (const key of ['description', 'notes', 'body']) {
+    if (key === label) continue
+    const field = schema.fields[key]
+    if (field && (resolveFieldType(field) === 'string' || resolveFieldType(field) === 'file')) return key
+  }
+  return null
+}
+
+export function isParentLinkField(key: string) {
+  return key === 'parentId' || key === 'parent'
+}
+
+export function isDependsLinkField(key: string) {
+  return key === 'dependsOn'
+}
+
+export function isRecordLinkField(field: FieldSpec | undefined, key?: string) {
+  if (field && isRefFieldType(resolveFieldType(field))) return true
+  return Boolean(key && (isParentLinkField(key) || isDependsLinkField(key)))
+}
+
+export function isSingleRefField(field: FieldSpec | undefined, key?: string) {
+  if (field && resolveFieldType(field) === 'ref') return true
+  if (field && resolveFieldType(field) === 'multi-ref') return false
+  return Boolean(key && isParentLinkField(key))
+}
+
+export function recordLinkIds(field: FieldSpec | string | undefined, value: unknown, key?: string): string[] {
+  if (typeof field === 'string') {
+    return recordLinkIds(undefined, value, field)
+  }
+  if (isSingleRefField(field, key)) {
+    const id = String(value ?? '').trim()
+    return id ? [id] : []
+  }
+  if ((field && resolveFieldType(field) === 'multi-ref') || (key && isDependsLinkField(key))) return asStringList(value)
+  return []
+}
+
+export function uniqueValues(rows: DbRecord[], key: string, field: FieldSpec): string[] {
+  const set = new Set<string>()
+  const kind = resolveFieldType(field)
+  const cell = (row: DbRecord) => (parseTagFlatColumnKey(key) ? readTagFieldValue(row, key) : row[key])
+  for (const row of rows) {
+    const raw = cell(row)
+    if (kind === 'multi-select' || kind === 'multi-ref') {
+      for (const item of asStringList(raw)) set.add(item)
+    } else if (kind === 'tag') {
+      for (const item of normalizeSchemaValue(raw).tags) set.add(item)
+    } else if (kind === 'person') {
+      for (const item of asPersonList(raw)) {
+        const key = personKey(item)
+        if (key) set.add(key)
+      }
+    } else if (raw != null && raw !== '') {
+      set.add(String(raw))
+    }
+  }
+  return [...set].sort((a, b) => a.localeCompare(b, 'zh'))
+}
+
+export function groupableFields(schema: CollectionSchema | undefined, packs: CollectionSchemaPack[] = []) {
+  const fromSchema = fieldEntries(schema).filter((item) => isGroupableKind(item.kind) && item.key !== schema?.labelField)
+  const fromPacks = flattenTagColumns(packs)
+    .filter((item) => isGroupableKind(item.kind))
+    .map((item) => ({
+      key: item.key,
+      field: { ...item.field, label: tagColumnTitle(item) },
+      kind: item.kind,
+      packId: item.packId,
+      packLabel: item.packLabel,
+    }))
+  return [...fromSchema, ...fromPacks]
+}
+
+export function groupField(
+  schema: CollectionSchema | undefined,
+  preferred?: string,
+  packs: CollectionSchemaPack[] = [],
+): { key: string; field: FieldSpec } | null {
+  const match = resolveGroupField(schema, preferred, packs)
+  return match ? { key: match.key, field: match.field } : null
+}
+
+export function recordGroupLabels(rows: DbRecord[]): Record<string, string> {
+  const out: Record<string, string> = {}
+  const put = (id: unknown, title: unknown) => {
+    const key = String(id ?? '').trim()
+    const label = String(title ?? '').trim()
+    if (key && label) out[key] = label
+  }
+  for (const row of rows) {
+    put(row.id, row.title)
+    const chain = row.parentChain
+    if (!Array.isArray(chain)) continue
+    for (const node of chain) {
+      if (!node || typeof node !== 'object') continue
+      const item = node as { id?: unknown; title?: unknown }
+      put(item.id, item.title)
+    }
+  }
+  return out
+}
+
+function groupContext(
+  schema: CollectionSchema | undefined,
+  preferred: string | undefined,
+  extraValues: string[] = [],
+  packs: CollectionSchemaPack[] = [],
+  recordLabels?: Record<string, string>,
+): GroupStrategyContext | null {
+  const group = resolveGroupField(schema, preferred, packs)
+  if (!group) return null
+  return {
+    fieldKey: group.key,
+    groupBy: preferred ?? group.key,
+    field: group.field,
+    extraValues,
+    packs,
+    recordLabels,
+  }
+}
+
+export type GroupBucket = {
+  key: string
+  label: string
+  rows: DbRecord[]
+  total?: number
+}
+
+/** 分组表头的稳定 key：策略生成，而不是当前这一页里碰巧出现的值。 */
+export function groupListKeys(
+  schema: CollectionSchema | undefined,
+  preferred?: string,
+  extraValues: string[] = [],
+  packs: CollectionSchemaPack[] = [],
+  recordLabels?: Record<string, string>,
+): { key: string; label: string }[] {
+  const ctx = groupContext(schema, preferred, extraValues, packs, recordLabels)
+  const strategy = ctx ? strategyForField(ctx.field) : null
+  if (!ctx || !strategy) return []
+  const listed = strategy.keys(ctx)
+  if (!strategy.skipEmpty?.(ctx)) listed.push({ key: '', label: strategy.emptyLabel ?? '未填' })
+  if (!listed.length) return []
+  return listed
+}
+
+/** 每一组自己的列表过滤。分享列是计算属性，分组请求走 $scope；host 按展示用的 shareScope 切包（公开/局域网链接算共享）。 */
+export function groupListFilter(
+  groupBy: string,
+  groupKey: string,
+  schema?: CollectionSchema,
+  packs: CollectionSchemaPack[] = [],
+): Record<string, unknown> {
+  const ctx = groupContext(schema, groupBy, [], packs)
+  const strategy = ctx ? strategyForField(ctx.field) : null
+  if (strategy && ctx) return strategy.filter(groupKey, ctx)
+  if (groupBy === 'shareScope') {
+    const scope = { 私人: 'personal', 空间: 'workspace', 共享: 'shared' }[groupKey]
+    return scope ? { $scope: scope } : {}
+  }
+  if (!groupKey) {
+    const fieldKey = parseGroupByKey(groupBy).fieldKey || groupBy
+    return {
+      $tree: {
+        kind: 'group',
+        id: 'group-empty',
+        combinator: 'and',
+        children: [{ kind: 'rule', id: 'group-empty-rule', field: fieldKey, op: 'is_empty', value: '' }],
+      },
+    }
+  }
+  return { [parseGroupByKey(groupBy).fieldKey || groupBy]: groupKey }
+}
+
+/** 视图筛选和组筛选叠在一起。$scope 冲突表示这组在当前视图里不可能有行。 */
+export function mergeListFilters(
+  base: Record<string, unknown>,
+  extra: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const baseScope = typeof base.$scope === 'string' ? base.$scope : ''
+  const extraScope = typeof extra.$scope === 'string' ? extra.$scope : ''
+  if (baseScope && extraScope && baseScope !== extraScope) return null
+  const out: Record<string, unknown> = { ...base, ...extra }
+  const left = base.$tree
+  const right = extra.$tree
+  if (left && right && typeof left === 'object' && typeof right === 'object' && !Array.isArray(left) && !Array.isArray(right)) {
+    out.$tree = {
+      kind: 'group',
+      id: 'group-and',
+      combinator: 'and',
+      children: [left, right],
+    }
+  }
+  return out
+}
+
+export function groupRecords(
+  rows: DbRecord[],
+  schema: CollectionSchema | undefined,
+  preferred?: string,
+  packs: CollectionSchemaPack[] = [],
+): GroupBucket[] {
+  const group = resolveGroupField(schema, preferred, packs)
+  const extra = group ? uniqueValues(rows, group.key, group.field) : []
+  const ctx = groupContext(schema, preferred, extra, packs, recordGroupLabels(rows))
+  const strategy = ctx ? strategyForField(ctx.field) : null
+  if (!ctx || !strategy) return [{ key: '', label: '全部', rows }]
+  const labels = new Map(strategy.keys(ctx).map((item) => [item.key, item.label]))
+  const buckets = new Map<string, DbRecord[]>()
+  const unset: DbRecord[] = []
+  for (const row of rows) {
+    const keys = strategy.bucketOf(row, ctx)
+    if (!keys.length) {
+      unset.push(row)
+      continue
+    }
+    for (const key of keys) {
+      buckets.set(key, [...(buckets.get(key) ?? []), row])
+    }
+  }
+  const listed = [...buckets.entries()].map(([key, grouped]) => ({
+    key,
+    label: labels.get(key) ?? strategy.label?.(key, ctx) ?? key,
+    rows: grouped,
+  }))
+  if (unset.length) listed.push({ key: '', label: strategy.emptyLabel ?? '未填', rows: unset })
+  return listed
+}
+
+export function groupRowBucketKeys(
+  row: DbRecord,
+  groupBy: string,
+  schema?: CollectionSchema,
+  packs: CollectionSchemaPack[] = [],
+): string[] {
+  if (!groupBy) return ['']
+  const ctx = groupContext(schema, groupBy, [], packs)
+  const strategy = ctx ? strategyForField(ctx.field) : null
+  if (!strategy || !ctx) {
+    const raw = cellGroupValue(row, parseGroupByKey(groupBy).fieldKey || groupBy)
+    return raw == null || raw === '' ? [''] : [String(raw)]
+  }
+  const keys = strategy.bucketOf(row, ctx)
+  return keys.length ? keys : ['']
+}
+
+export function previewActionRecord(row: DbRecord, action: { id?: string; when?: Record<string, unknown> }): DbRecord {
+  if (action.id === 'uninstall' || action.id === 'delete' || action.id === 'remove') {
+    if (row.installed === false && row.running !== true && row.enabled !== true) return row
+    return { ...row, installed: false, running: false, enabled: false }
+  }
+  if (action.id === 'pack') {
+    if (row.installed === true) return row
+    return { ...row, installed: true }
+  }
+  const when = action.when
+  if (!when || !('running' in when) || typeof when.running !== 'boolean') return row
+  const running = when.running === false
+  if (Object.is(row.running, running)) return row
+  return { ...row, running }
+}
+
+export function overlayListed(base: DbRecord, listed: DbRecord, projected?: string[] | null): DbRecord {
+  let changed = false
+  const next: DbRecord = { ...base }
+  for (const [key, value] of Object.entries(listed)) {
+    if (!Object.is(next[key], value)) {
+      next[key] = value
+      changed = true
+    }
+  }
+  if ('tag' in listed) {
+    for (const key of Object.keys(next)) {
+      if (parseTagFlatColumnKey(key) && !Object.prototype.hasOwnProperty.call(listed, key)) {
+        delete next[key]
+        changed = true
+      }
+    }
+  }
+  const keys = projected?.length ? projected : Object.keys(base)
+  for (const key of keys) {
+    if (key === 'id') continue
+    if (Object.prototype.hasOwnProperty.call(listed, key)) continue
+    if (next[key] !== true) continue
+    next[key] = false
+    changed = true
+  }
+  return changed ? next : base
+}
+
+export function matchActionWhen(record: DbRecord, when?: Record<string, unknown>) {
+  if (!when) return true
+  for (const [key, expected] of Object.entries(when)) {
+    const actual = record[key]
+    if (expected === true || expected === false) {
+      const flag = actual === true || actual === 'true'
+      if (flag !== expected) return false
+      continue
+    }
+    if (String(actual ?? '') !== String(expected)) return false
+  }
+  return true
+}

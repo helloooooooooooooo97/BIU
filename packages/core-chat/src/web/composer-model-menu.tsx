@@ -7,7 +7,7 @@ import {
   type ModelCapabilities,
   type ModelKnob,
   type ModelModeValues,
-} from '../host/model-catalog.ts'
+} from '../shared/model-catalog.ts'
 import { choiceKnob, knobValue, modelKnobs, modelModeSuffix, patchKnob } from './model-mode.tsx'
 
 export type ComposerModelOption = {

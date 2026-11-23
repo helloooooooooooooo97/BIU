@@ -16,7 +16,7 @@ import {
 } from '@biu/type-file-system'
 import { parseTagFlatColumnKey } from '../query-logic.ts'
 import { TAGS_COLLECTION_PATH } from '../paths.ts'
-import { strategyForField } from '../web/group-strategies.ts'
+import { strategyForField } from '../shared/group-strategies.ts'
 import type { PageBanner, PageBannerKind } from '../page-banner.ts'
 import { RecordMetaStore } from './record-meta-store.ts'
 

@@ -14,6 +14,28 @@ export const COMMENTS_COLLECTION_PATH = '/comments'
 export const TRASH_COLLECTION_PATH = '/trash'
 export const WORKSPACE_MEMBERS_COLLECTION_PATH = '/workspace-members'
 export const LEGACY_SESSIONS_COLLECTION_PATH = '/' + 'sessions'
+export const DATA_MODULE_ID = 'database'
+
+const SYSTEM_COLLECTION_ORDER = [
+  WORKSPACE_MEMBERS_COLLECTION_PATH,
+  VIEWS_COLLECTION_PATH,
+  NOTICES_COLLECTION_PATH,
+  TRASH_COLLECTION_PATH,
+] as const
+
+/** 组件和标签仍是反查索引（每人一份、没有分享）。 */
+const INDEX_COLLECTION_ORDER = [PAGE_BLOCKS_COLLECTION_PATH, TAGS_COLLECTION_PATH] as const
+
+/** 成员、视图、通知、回收站由系统维护。会话事件不进文件系统。 */
+export function isSystemCollection(path: string) {
+  const normalized = normalizeCollectionPath(path)
+  return (SYSTEM_COLLECTION_ORDER as readonly string[]).includes(normalized)
+}
+
+export function isIndexCollection(path: string) {
+  const normalized = normalizeCollectionPath(path)
+  return (INDEX_COLLECTION_ORDER as readonly string[]).includes(normalized)
+}
 
 /** 集合路径：补前导斜杠、去掉尾斜杠。host 与 web 共用。旧 /sessions 表迁到 /agents。 */
 export function normalizeCollectionPath(path: string) {

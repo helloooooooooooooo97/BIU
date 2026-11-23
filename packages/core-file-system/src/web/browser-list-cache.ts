@@ -7,6 +7,8 @@ import type {
 import { parseAppPath } from '@biu/web-session-view'
 import { builtinAllViewId, stampRecordId } from '../catalog-views.ts'
 import { DATA_MODULE } from './database-path.ts'
+import { BoundedMap } from './bounded-map.ts'
+import { registerWorkspaceCache } from './workspace-client-store.ts'
 import {
   flattenTagColumns,
   groupRowBucketKeys,
@@ -116,7 +118,10 @@ export type ListCacheSnap = {
   groupBuckets?: GroupBucket[]
   listLimit?: number
 }
-export const listCache = new Map<string, ListCacheSnap>()
+export const listCache = new BoundedMap<string, ListCacheSnap>(80)
+registerWorkspaceCache('browser-list-cache', () => {
+  listCache.clear()
+})
 
 export function listCacheKey(path: string, viewId?: string | null) {
   return `${path}\0${viewId ?? ''}`

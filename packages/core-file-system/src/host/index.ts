@@ -98,7 +98,7 @@ import { isSharePluginId } from '../share-resources.ts'
 import { TagStore } from './tags-store.ts'
 import { SharesStore, dropSharesForRemovedViews } from './shares-store.ts'
 import { builtinAllView, builtinAllViewId, builtinMemberViews, displayNameForView, isReadOnlyViewId, stubBuiltinAllView, stubBuiltinMemberView } from '../catalog-views.ts'
-import { isIndexCollection, isSystemCollection } from '../web/database-path.ts'
+import { isIndexCollection, isSystemCollection } from '../paths.ts'
 import { dataCollection, isDataOverviewSource, overviewRecord } from './data-collection.ts'
 import { effectiveDataScope, highestViewRole, recordMatchesGrantedView, type DataScopeName, type ViewGrantRole } from '../view-access.ts'
 import { recordMatchesSharedView, resolveSharedView, type SharedViewDef } from '../share-view-match.ts'
@@ -144,7 +144,7 @@ import {
   splitResourcePath,
 } from '../paths.ts'
 import { matchListFilterRecord, normalizeSorts, parseTagFlatColumnKey, readTagFieldValue, sortRecordsBy } from '../query-logic.ts'
-import { actionWhenKeys } from '../web/fields.ts'
+import { actionWhenKeys } from '../shared/fields.ts'
 import { AgentDbCompact } from './agent-payload.ts'
 
 const agentDbCompact = new AgentDbCompact()
