@@ -1,9 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { loadRecordLayouts, useActiveRecordLayout } from '@biu/core-file-system/record-layouts'
 import { hydrateRecordViewCatalog, useRecordViewCatalog } from '@biu/core-file-system/record-view-catalog'
 import { recordContentFallback } from '@biu/core-file-system/database-ui'
 import { HeadlessPopover } from '@biu/biu-ui'
-import { SourceEditor, type SourceEditorHandle } from './source-editor.tsx'
+import type { SourceEditorHandle } from './source-editor.tsx'
+const SourceEditor = lazy(() => import('./source-editor.tsx').then((m) => ({ default: m.SourceEditor })))
 import { restorePageScroll } from './editor-scroll-pin.ts'
 import { PageHostView } from './page-host-view.tsx'
 import { ArrowPathIcon, ChatBubbleBottomCenterTextIcon, ChatBubbleLeftRightIcon, SparklesIcon } from '@heroicons/react/16/solid'
@@ -1123,16 +1124,18 @@ function PageDocEditor({ record, value, writable, onChange, path, status = 'read
       <div className="page-editor-main">
         <div hidden={!source}>
           {source ? (
-            <SourceEditor
-              ref={sourceFind}
-              value={asMarkdown(value)}
-              writable={writable !== false && status === 'ready'}
-              onChange={(next) => {
-                if (next === saved.current) return
-                saved.current = next
-                onChange?.(next)
-              }}
-            />
+            <Suspense fallback={null}>
+              <SourceEditor
+                ref={sourceFind}
+                value={asMarkdown(value)}
+                writable={writable !== false && status === 'ready'}
+                onChange={(next) => {
+                  if (next === saved.current) return
+                  saved.current = next
+                  onChange?.(next)
+                }}
+              />
+            </Suspense>
           ) : null}
         </div>
         <div hidden={source}>

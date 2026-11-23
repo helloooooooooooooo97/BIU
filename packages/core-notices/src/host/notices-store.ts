@@ -1,4 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { recordBuiltinValues, type DbRecord } from '@biu/type-file-system'
 
@@ -178,8 +179,22 @@ export class NoticesStore {
     return n
   }
 
+  private flushTimer: ReturnType<typeof setTimeout> | null = null
+
   private flush() {
     if (!this.file || this.file === ':memory:') return
-    writeFileSync(this.file, `${JSON.stringify(this.rows)}\n`)
+    if (process.env.VITEST) {
+      writeFileSync(this.file, `${JSON.stringify(this.rows)}\n`)
+      return
+    }
+    if (this.flushTimer) return
+    const target = this.file
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = null
+      void writeFile(target, `${JSON.stringify(this.rows)}\n`).catch((error) =>
+        console.warn('[notices-store] async flush failed', error),
+      )
+    }, 50)
+    this.flushTimer.unref?.()
   }
 }

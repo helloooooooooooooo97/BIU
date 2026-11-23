@@ -1,4 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { recordBuiltinValues, type DbRecord } from '@biu/type-file-system'
@@ -246,9 +247,34 @@ export class CommentsStore {
     }
   }
 
+  private flushTimer: ReturnType<typeof setTimeout> | null = null
+  private dirEnsured = false
+
   private persist() {
     if (!this.file) return
-    mkdirSync(dirname(this.file), { recursive: true })
-    writeFileSync(this.file, JSON.stringify(this.rows, null, 2), 'utf8')
+    const payload = JSON.stringify(this.rows)
+    if (process.env.VITEST) {
+      if (!this.dirEnsured) {
+        mkdirSync(dirname(this.file), { recursive: true })
+        this.dirEnsured = true
+      }
+      writeFileSync(this.file, payload, 'utf8')
+      return
+    }
+    if (this.flushTimer) return
+    const target = this.file
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = null
+      const latest = JSON.stringify(this.rows)
+      const ensure = this.dirEnsured
+        ? Promise.resolve()
+        : mkdir(dirname(target), { recursive: true }).then(() => {
+            this.dirEnsured = true
+          })
+      void ensure
+        .then(() => writeFile(target, latest, 'utf8'))
+        .catch((error) => console.warn('[comments-store] async persist failed', error))
+    }, 50)
+    this.flushTimer.unref?.()
   }
 }
