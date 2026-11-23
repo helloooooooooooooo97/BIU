@@ -222,7 +222,10 @@ function WorkspaceAccess({
   }
 
   useEffect(() => {
-    void load().catch(() => setPeople([]))
+    void load().catch((error) => {
+      console.warn('[share-popover] load grants failed', collection, error)
+      setPeople([])
+    })
     void listCollection({
       path: VIEWS_COLLECTION_PATH,
       limit: 200,
@@ -249,7 +252,10 @@ function WorkspaceAccess({
         })))
         setMemberViewId((current) => current || rows[0]?.id || '')
       })
-      .catch(() => setAvailableMemberViews([]))
+      .catch((error) => {
+        console.warn('[share-popover] load member views failed', error)
+        setAvailableMemberViews([])
+      })
     void listCollection({
       path: WORKSPACE_MEMBERS_COLLECTION_PATH,
       limit: 200,
@@ -268,7 +274,10 @@ function WorkspaceAccess({
           }]
         }))
       })
-      .catch(() => setWorkspaceMembers([]))
+      .catch((error) => {
+        console.warn('[share-popover] load workspace members failed', error)
+        setWorkspaceMembers([])
+      })
     if (viewId || !recordId) {
       setRecord(null)
       setDataViews([])
@@ -276,7 +285,10 @@ function WorkspaceAccess({
     }
     void listCollection({ path: collection, limit: 1, filters: { id: recordId } })
       .then((page) => setRecord(page.items[0] ?? null))
-      .catch(() => setRecord(null))
+      .catch((error) => {
+        console.warn('[share-popover] load record failed', collection, recordId, error)
+        setRecord(null)
+      })
     void listCollection({
       path: VIEWS_COLLECTION_PATH,
       limit: 200,
@@ -299,7 +311,10 @@ function WorkspaceAccess({
           return [{ id, name: String(row.title ?? id), filters }]
         }))
       })
-      .catch(() => setDataViews([]))
+      .catch((error) => {
+        console.warn('[share-popover] load data views failed', collection, error)
+        setDataViews([])
+      })
   }, [collection, recordId, viewId])
 
   function grant(input: { email?: string; memberViewId?: string }, collaboratorKind: 'internal' | 'external' = 'internal') {

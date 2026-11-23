@@ -238,13 +238,17 @@ export function RecordDetailBar({
                             onKeyDown={(event) => {
                               if (event.key === 'Enter') {
                                 event.preventDefault()
-                                void Promise.resolve(renameViewCatalog(path, record, 'layouts', item.id, renameDraft)).catch(() => undefined)
+                                void Promise.resolve(renameViewCatalog(path, record, 'layouts', item.id, renameDraft)).catch((error) => {
+                                  console.warn('[record-detail-bar] rename layout failed', item.id, error)
+                                })
                                 setRenamingView('')
                               }
                               if (event.key === 'Escape') setRenamingView('')
                             }}
                             onBlur={() => {
-                              void Promise.resolve(renameViewCatalog(path, record, 'layouts', item.id, renameDraft)).catch(() => undefined)
+                              void Promise.resolve(renameViewCatalog(path, record, 'layouts', item.id, renameDraft)).catch((error) => {
+                                console.warn('[record-detail-bar] rename layout failed', item.id, error)
+                              })
                               setRenamingView('')
                             }}
                           />
@@ -326,7 +330,9 @@ export function RecordDetailBar({
                       if (creatingLayout) return
                       setCreatingLayout(true)
                       void Promise.resolve(createViewCatalog(path, record, 'layouts'))
-                        .catch(() => undefined)
+                        .catch((error) => {
+                          console.warn('[record-detail-bar] create layout failed', path, error)
+                        })
                         .finally(() => {
                           setCreatingLayout(false)
                           setOpen(null)
@@ -423,13 +429,17 @@ export function RecordDetailBar({
                               onKeyDown={(event) => {
                                 if (event.key === 'Enter') {
                                   event.preventDefault()
-                                  void renamePropView(item.id, renamePropDraft).catch(() => undefined)
+                                  void renamePropView(item.id, renamePropDraft).catch((error) => {
+                                    console.warn('[record-detail-bar] rename prop view failed', item.id, error)
+                                  })
                                   setRenamingPropView('')
                                 }
                                 if (event.key === 'Escape') setRenamingPropView('')
                               }}
                               onBlur={() => {
-                                void renamePropView(item.id, renamePropDraft).catch(() => undefined)
+                                void renamePropView(item.id, renamePropDraft).catch((error) => {
+                                  console.warn('[record-detail-bar] rename prop view failed', item.id, error)
+                                })
                                 setRenamingPropView('')
                               }}
                             />
@@ -509,7 +519,9 @@ export function RecordDetailBar({
                         if (creatingPropView) return
                         setCreatingPropView(true)
                         void Promise.resolve(createViewCatalog(path, record, 'propViews'))
-                          .catch(() => undefined)
+                          .catch((error) => {
+                            console.warn('[record-detail-bar] create prop view failed', path, error)
+                          })
                           .finally(() => {
                             setCreatingPropView(false)
                             setOpen(null)
@@ -616,7 +628,9 @@ export function RecordDetailBar({
                       if (creatingView) return
                       setCreatingView(true)
                       void Promise.resolve(createViewCatalog(path, record, 'views'))
-                        .catch(() => undefined)
+                        .catch((error) => {
+                          console.warn('[record-detail-bar] create content view failed', path, error)
+                        })
                         .finally(() => {
                           setCreatingView(false)
                           setOpen(null)

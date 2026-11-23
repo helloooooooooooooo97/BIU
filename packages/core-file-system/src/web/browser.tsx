@@ -1433,7 +1433,9 @@ export function CollectionBrowser({
         mapListedRecords((item) => (item.id === row.id ? overlayListedRow(item, row) : item))
         patchListCacheRecords(dataPath, (item) => (item.id === row.id ? overlayListedRow(item, row) : item))
       })
-      .catch(() => undefined)
+      .catch((error) => {
+        console.warn('[fsdb] pullDetailRecord failed', dataPath, error)
+      })
   }, [dataPath])
   const refreshOpenDetail = useCallback(() => {
     invalidateListReads()
@@ -1674,7 +1676,9 @@ export function CollectionBrowser({
     void readJson<StatResult>(`/api/db/stat?path=${encodeURIComponent(dataPath)}`).then((nextStat) => {
       if (cancelled || !nextStat?.schema) return
       setStat((prev) => (prev?.schema ? prev : nextStat))
-    }).catch(() => undefined)
+    }).catch((error) => {
+      if (!cancelled) console.warn('[fsdb] stat prefetch failed', dataPath, error)
+    })
     return () => {
       cancelled = true
     }
