@@ -219,9 +219,9 @@ html.dark .page-editor .editor-pending-selection{background:color-mix(in srgb,va
 .page-editor .page-block[data-page-block=excalidraw] .welcome-screen-center,[data-testid=page-excalidraw] .welcome-screen-center{display:none}
 [data-testid=page-excalidraw] > div[style]{min-width:0}
 .page-editor .page-block[data-page-block=terminal] .pt-scroll-rail{position:absolute;top:4px;right:3px;bottom:4px;width:6px;z-index:12}
-.page-editor .tiptap table{width:100%;margin:8px 0;border-collapse:collapse;table-layout:fixed}
-.page-editor .tiptap th,.page-editor .tiptap td{border:var(--biu-stroke-width) solid var(--biu-color-border);padding:6px 8px;vertical-align:top}
-.page-editor .tiptap th{background:var(--biu-color-bg-hover);font-weight:var(--biu-font-weight-semibold);text-align:left}
+.page-editor .tiptap table:not(.page-block *){width:100%;margin:8px 0;border-collapse:collapse;table-layout:fixed}
+.page-editor .tiptap th:not(.page-block *),.page-editor .tiptap td:not(.page-block *){border:var(--biu-stroke-width) solid var(--biu-color-border);padding:6px 8px;vertical-align:top}
+.page-editor .tiptap th:not(.page-block *){background:var(--biu-color-bg-hover);font-weight:var(--biu-font-weight-semibold);text-align:left}
 .page-editor .tiptap .selectedCell{background:color-mix(in srgb,var(--biu-color-text) 14%,transparent)}
 .page-editor .tiptap div[data-type=block-math].tiptap-mathematics-render{margin:8px 0;overflow-x:auto}
 .page-editor .tiptap .tiptap-mathematics-render--editable{cursor:pointer}

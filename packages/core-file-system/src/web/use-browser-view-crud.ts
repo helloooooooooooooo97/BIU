@@ -66,6 +66,9 @@ export type BrowserViewCrudOptions = {
   rankListedViews: (listed: SavedView[], order?: SavedView[]) => SavedView[]
   selectView: (view: SavedView) => void
   onOpenTable?: (path: string, viewId?: string) => void
+  externalViews?: {
+    onChange?: (views: SavedView[], activeViewId: string) => void
+  }
 }
 
 export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
@@ -105,6 +108,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     rankListedViews,
     selectView,
     onOpenTable,
+    externalViews,
   } = opts
 
   function adoptPersistedViews(path: string, listed: SavedView[], removed?: string[]) {
@@ -211,9 +215,6 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
 
   function persistViewOrder(ids: string[]) {
     const current = viewsRef.current
-    // persistViewsFor 用 loadViews 当 baseline 算差异。先 rememberViews 的话
-    // baseline 已经是新顺序，patch 会 skipped，库里的 rank 永远不更新。
-    const baseline = loadViews(collectionPath)
     const byId = new Map(current.map((view) => [view.id, view]))
     const ranked: SavedView[] = []
     ids.forEach((id, rank) => {
@@ -226,6 +227,15 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       if (byId.has(view.id)) ranked.push(view)
     }
     const next = rankListedViews(ranked, ranked)
+    if (externalViews) {
+      viewsRef.current = next
+      setViews(next)
+      externalViews.onChange?.(next, activeViewIdRef.current ?? activeViewId ?? next[0]?.id ?? '')
+      return
+    }
+    // persistViewsFor 用 loadViews 当 baseline 算差异。先 rememberViews 的话
+    // baseline 已经是新顺序，patch 会 skipped，库里的 rank 永远不更新。
+    const baseline = loadViews(collectionPath)
     for (const view of next) persistViewDisplay(collectionPath, view.id, { rank: view.rank })
     viewsRef.current = next
     setViews(next)
@@ -255,6 +265,16 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
   }
 
   async function commitView(view: SavedView) {
+    if (externalViews) {
+      const current = viewsRef.current
+      const next = { ...view, rank: Number.isFinite(Number(view.rank)) ? view.rank : current.length }
+      const list = [...current.filter((item) => item.id !== next.id), next]
+      viewsRef.current = list
+      setViews(list)
+      selectView(next)
+      externalViews.onChange?.(list, next.id)
+      return
+    }
     const painted = paintListedViews(collectionPath)
     const next = { ...view, rank: Number.isFinite(Number(view.rank)) ? view.rank : painted.length }
     const ok = await persistViewsWith(
@@ -276,6 +296,31 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
   }
 
   function addEmptyView(path = collectionPath, scope?: DataScope) {
+    if (externalViews) {
+      const current = viewsRef.current
+      const view: SavedView = {
+        id: newSavedViewId(),
+        name: uniqueViewName('新视图', current),
+        mode: 'table',
+        sortField: 'title',
+        sortDir: 'asc',
+        filters: { ...catalogLocks },
+        columns: [...schemaDefaultKeys],
+        groupBy: '',
+        tree: false,
+        freezeTitle: false,
+        wrap: false,
+        truncate: true,
+        query: '',
+        rank: current.length,
+      }
+      const next = [...current, view]
+      viewsRef.current = next
+      setViews(next)
+      selectView(view)
+      externalViews.onChange?.(next, view.id)
+      return
+    }
     const target = path || collectionPath
     const effectiveScope = scope ?? (target === collectionPath ? routeScope ?? undefined : undefined)
     const stored = loadViews(target)
@@ -373,6 +418,10 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     // 立即同步更新 viewsRef 与内存缓存，保证连点改多个属性时后一次修改基于前一次最新状态。
     viewsRef.current = nextList
     setViews(nextList)
+    if (externalViews) {
+      externalViews.onChange?.(nextList, targetId)
+      return
+    }
     rememberViews(collectionPath, nextList)
     void persistViewsFor(collectionPath, nextList, { upsert: [updated], baseline: latest }).then((ok) => {
       if (ok || viewsRef.current !== nextList) return
@@ -393,6 +442,10 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     const listed = current.map((item) => (item.id === viewId ? updated : item))
     viewsRef.current = listed
     setViews(listed)
+    if (externalViews) {
+      externalViews.onChange?.(listed, activeViewIdRef.current ?? activeViewId ?? viewId)
+      return
+    }
     rememberViews(collectionPath, listed)
     persistViewDisplay(collectionPath, viewId, { name: nextName })
     const stars = getStarredViews()
@@ -425,6 +478,18 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
 
   function deleteView(view: SavedView, path = collectionPath) {
     setViewMenuOpen(false)
+    if (externalViews) {
+      const current = viewsRef.current
+      if (current.length <= 1) return
+      const remaining = current.filter((item) => item.id !== view.id)
+      viewsRef.current = remaining
+      setViews(remaining)
+      const nextActive =
+        activeViewIdRef.current === view.id ? remaining[0] : remaining.find((item) => item.id === activeViewIdRef.current) ?? remaining[0]
+      if (nextActive && activeViewIdRef.current === view.id) selectView(nextActive)
+      externalViews.onChange?.(remaining, nextActive?.id ?? '')
+      return
+    }
     if (isReadOnlyViewId(view.id)) return
     const current = path === collectionPath ? viewsRef.current : loadViews(path)
     if (!canRemoveCollectionView(current)) return

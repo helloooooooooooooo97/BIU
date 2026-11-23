@@ -85,6 +85,20 @@ import { DataSidebarSlot } from './data-sidebar-slot.tsx'
 const ShareRoot = lazy(() => import('./share-page.tsx').then((m) => ({ default: m.ShareRoot })))
 const CollectionBrowser = lazy(() => import('./browser.tsx').then((m) => ({ default: m.CollectionBrowser })))
 const DataOverview = lazy(() => import('./data-overview.tsx').then((m) => ({ default: m.DataOverview })))
+const LazyDatabaseBlockView = lazy(() => import('./database-block.tsx').then((m) => ({ default: m.DatabaseBlockView })))
+
+function DatabaseBlockSlot(props: {
+  data: Record<string, unknown>
+  update: (patch: Record<string, unknown>, opts?: { replace?: boolean }) => void
+  writable: boolean
+  selected?: boolean
+}) {
+  return (
+    <Suspense fallback={null}>
+      <LazyDatabaseBlockView {...props} />
+    </Suspense>
+  )
+}
 
 if (typeof window !== 'undefined' && /(?:^|\/)database(?:\/|$)/.test(window.location.pathname)) {
   void import('./browser.tsx')
@@ -385,10 +399,28 @@ export function apply(ctx: Context) {
     }
   })
   ctx.inject(['blockEditor'], (inner) => {
-    const editor = inner.get('blockEditor') as {
-      subscribe: (fn: () => void) => () => void
-      blocks: () => Array<{ kind: string }>
-    }
+    const editor = inner.get('blockEditor')
+    if (!editor) return () => undefined
+    const dbBlock = editor.registerBlock({
+      kind: 'database',
+      plugin: name,
+      label: '数据库',
+      blockType: 'basic',
+      hint: '嵌入数据表视图，视图配置保存在附件 JSON 中',
+      aliases: ['db', 'database', 'table', '数据', '数据库', '数据表'],
+      assets: ['file'],
+      defaults: () => {
+        const id =
+          typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID().slice(0, 8)
+            : Math.random().toString(36).slice(2, 10)
+        return {
+          collection: DATA_COLLECTION_PATH,
+          file: `assets/database-${id}.json`,
+        }
+      },
+      View: DatabaseBlockSlot,
+    })
     const stopOpen = listenOpenTag()
     let sig = ''
     const stop = editor.subscribe(() => {
@@ -402,6 +434,7 @@ export function apply(ctx: Context) {
       getDatabaseUi()?.refresh()
     })
     return () => {
+      void dbBlock?.()
       stop()
       stopOpen()
     }
