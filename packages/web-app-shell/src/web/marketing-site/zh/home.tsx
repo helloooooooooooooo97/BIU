@@ -119,8 +119,8 @@ const HOME_COMPARE_SPECS = [
   },
   {
     verb: '02 存储',
-    slug: 'vs-notion',
-    line: 'Notion 把文档与固定关系表留在云端；BIU 让自由正文、全栈插件块与外部调用快照同存一页，自动跨页成表且本地离线可用。',
+    slug: 'vs-supabase',
+    line: 'Supabase 把数据留在独立后端数据库，Office 则把内容拆成无结构离散文件；BIU 让正文、结构化插件块与调用快照同存一页，自动跨页成表。',
   },
   {
     verb: '03 组合',

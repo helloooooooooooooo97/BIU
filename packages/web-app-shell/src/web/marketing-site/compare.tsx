@@ -371,29 +371,29 @@ export const COMPARE_PAGES: ComparePage[] = [
 ]
 
 /** Representative benchmark per software-lifecycle verb. */
-export const COMPARE_FEATURED = ['vs-cursor', 'vs-notion', 'vs-k8s', 'vs-app-stores', 'vs-github'] as const
+export const COMPARE_FEATURED = ['vs-cursor', 'vs-supabase', 'vs-k8s', 'vs-app-stores', 'vs-github'] as const
 
 export const COMPARE_CATEGORIES = [
   {
     id: 'build',
     name: '01 Build',
-    lead: 'How software gets created: from code repositories and low-code builders to software growing alongside live business data.',
+    lead: 'How software gets created: from code-repo copilots and ephemeral chat generation to software growing alongside live business data.',
     blogSlug: 'build-software',
-    slugs: ['vs-cursor', 'vs-retool', 'vs-dsh', 'vs-pi'],
+    slugs: ['vs-cursor', 'vs-dsh', 'vs-pi', 'vs-chatgpt', 'vs-claude'],
   },
   {
     id: 'store',
     name: '02 Store',
-    lead: 'How data lives and gets queried: freeform prose, structured plugin blocks, and run snapshots unified with auto-indexed tables and local offline mode.',
+    lead: 'How data lives and gets queried: beyond unstructured Office files and separate cloud databases—prose, structured blocks, and run snapshots auto-index together.',
     blogSlug: 'store-software',
-    slugs: ['vs-notion', 'vs-supabase', 'vs-obsidian', 'vs-airtable'],
+    slugs: ['vs-office', 'vs-supabase', 'vs-obsidian', 'vs-airtable'],
   },
   {
     id: 'compose',
     name: '03 Compose',
-    lead: 'How tools and agents work together: shared live state and external application slices on one page, replacing app switching and glue code.',
+    lead: 'How software and modules work together: from container orchestration, fixed document blocks, and low-code wiring to shared page state and external application slices.',
     blogSlug: 'compose-software',
-    slugs: ['vs-k8s', 'vs-office', 'vs-chatgpt', 'vs-claude'],
+    slugs: ['vs-k8s', 'vs-notion', 'vs-retool'],
   },
   {
     id: 'distribute',

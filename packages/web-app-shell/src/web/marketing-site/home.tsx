@@ -117,8 +117,8 @@ const HOME_COMPARE_SPECS = [
   },
   {
     verb: '02 Store',
-    slug: 'vs-notion',
-    line: 'Notion keeps fixed blocks and tables in the cloud; BIU unites prose, full-stack plugin blocks, and run snapshots on one page with auto-indexed tables and local offline mode.',
+    slug: 'vs-supabase',
+    line: 'Supabase isolates data in a cloud database while Office scatters unstructured files; BIU unites prose, structured blocks, and run snapshots on one auto-indexed page.',
   },
   {
     verb: '03 Compose',
