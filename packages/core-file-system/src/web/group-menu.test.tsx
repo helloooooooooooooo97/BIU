@@ -171,3 +171,54 @@ test('applyGroupConfig sorts buckets asc/desc/manual, filters empty and hidden g
     ['2026-11-20', ''],
   )
 })
+
+test('GroupQueryMenu toggles grouping on and off while preserving saved field and config', () => {
+  const seenGroupBy: string[] = []
+  const seenConfigs: Array<GroupConfig | undefined> = []
+  const initialConfig: GroupConfig = { sort: 'desc', hideEmpty: false }
+  const groups = [
+    { key: 'a', label: 'A', total: 2 },
+    { key: 'b', label: 'B', total: 1 },
+  ]
+
+  function Harness() {
+    const [groupBy, setGroupBy] = useState('status')
+    const [cfg, setCfg] = useState<GroupConfig | undefined>(initialConfig)
+    return (
+      <GroupQueryMenu
+        groupBy={groupBy}
+        groupConfig={cfg}
+        groups={groupBy ? groups : []}
+        fields={FIELDS}
+        onChange={(next) => {
+          seenGroupBy.push(next)
+          setGroupBy(next)
+          if (next !== groupBy) setCfg(undefined)
+        }}
+        onChangeConfig={(next) => {
+          seenConfigs.push(next)
+          setCfg(next)
+        }}
+      />
+    )
+  }
+
+  render(<Harness />)
+  const toggle = screen.getByRole('switch', { name: '启用分组' })
+  assert.equal(toggle.getAttribute('aria-checked'), 'true')
+  assert.ok(screen.getByText('已生效'))
+
+  // Toggle OFF: clears active groupBy, keeps paused preview visible
+  fireEvent.click(toggle)
+  assert.equal(seenGroupBy.at(-1), '')
+  assert.equal(toggle.getAttribute('aria-checked'), 'false')
+  assert.ok(screen.getByText('未生效'))
+  assert.equal(screen.getAllByTestId('fsdb-group-visible-item').length, 2)
+
+  // Toggle ON: restores saved groupBy and groupConfig
+  fireEvent.click(toggle)
+  assert.equal(seenGroupBy.at(-1), 'status')
+  assert.deepEqual(seenConfigs.at(-1), initialConfig)
+  assert.equal(toggle.getAttribute('aria-checked'), 'true')
+  assert.ok(screen.getByText('已生效'))
+})

@@ -1,67 +1,19 @@
 import type { ComponentType, SVGProps } from 'react'
 import { useSyncExternalStore } from 'react'
 import {
-  ArrowsPointingOutIcon,
-  ArrowsUpDownIcon,
+  ArrowsRightLeftIcon,
   BookmarkIcon,
-  ChevronUpDownIcon,
-  LanguageIcon,
+  BookOpenIcon,
 } from '@heroicons/react/16/solid'
-import { getPagePrefs, getPageWidthVersion, persistPagePrefs, subscribePageWidth, type BodyScale, type PagePrefs } from './page-width.ts'
+import { getPagePrefs, getPageWidthVersion, persistPagePrefs, subscribePageWidth, type PagePrefs } from './page-width.ts'
 
 type Icon = ComponentType<SVGProps<SVGSVGElement>>
 
 const BOOLS: { key: keyof Pick<PagePrefs, 'wide' | 'outlinePin' | 'navPin'>; label: string; testId: string; icon: Icon }[] = [
-  { key: 'wide', label: '宽屏', testId: 'fsdb-layout-wide', icon: ArrowsPointingOutIcon },
+  { key: 'wide', label: '宽屏', testId: 'fsdb-layout-wide', icon: ArrowsRightLeftIcon },
   { key: 'outlinePin', label: '目录常驻', testId: 'fsdb-layout-outline-pin', icon: BookmarkIcon },
-  { key: 'navPin', label: '翻页常驻', testId: 'fsdb-layout-nav-pin', icon: ChevronUpDownIcon },
+  { key: 'navPin', label: '翻页常驻', testId: 'fsdb-layout-nav-pin', icon: BookOpenIcon },
 ]
-
-const SCALES: { value: BodyScale; label: string }[] = [
-  { value: 'sm', label: '小' },
-  { value: 'md', label: '中' },
-  { value: 'lg', label: '大' },
-]
-
-function ScaleRow({
-  icon: Icon,
-  label,
-  value,
-  testPrefix,
-  kind,
-  onPick,
-}: {
-  icon: Icon
-  label: string
-  value: BodyScale
-  testPrefix: string
-  kind: 'size' | 'gap'
-  onPick: (value: BodyScale) => void
-}) {
-  return (
-    <div className="fsdb-layout-scale">
-      <span className="fsdb-layout-label">
-        <Icon aria-hidden />
-        {label}
-      </span>
-      <div className="fsdb-layout-pills">
-        {SCALES.map((item) => (
-          <button
-            key={item.value}
-            type="button"
-            role="menuitemradio"
-            className={`fsdb-layout-opt${value === item.value ? ' is-active' : ''}`}
-            aria-checked={value === item.value}
-            data-testid={`${testPrefix}-${kind}-${item.value}`}
-            onClick={() => onPick(item.value)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
 
 export function LayoutPrefsMenu({
   prefs,
@@ -102,22 +54,6 @@ export function LayoutPrefsMenu({
           </button>
         )
       })}
-      <ScaleRow
-        icon={LanguageIcon}
-        label="文字"
-        value={live.bodySize}
-        testPrefix={testPrefix}
-        kind="size"
-        onPick={(bodySize) => apply({ bodySize })}
-      />
-      <ScaleRow
-        icon={ArrowsUpDownIcon}
-        label="间距"
-        value={live.bodyGap}
-        testPrefix={testPrefix}
-        kind="gap"
-        onPick={(bodyGap) => apply({ bodyGap })}
-      />
     </div>
   )
 }

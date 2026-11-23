@@ -1080,7 +1080,7 @@ body {
 .settings-page-prefs .fsdb-layout-row {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 8px;
   width: 100%;
   margin: 0;
@@ -1096,9 +1096,12 @@ body {
   text-align: left;
 }
 
-.settings-page-prefs .fsdb-layout-row:hover,
-.settings-page-prefs .fsdb-layout-row.is-on {
+.settings-page-prefs .fsdb-layout-row:hover {
   background: var(--biu-color-bg-hover);
+  color: var(--biu-color-text);
+}
+
+.settings-page-prefs .fsdb-layout-row.is-on {
   color: var(--biu-color-text);
 }
 
@@ -4321,6 +4324,7 @@ html.dark .composer-model-flyout {
 .fsdb-crumb-menu,
 .fsdb-bulk-menu,
 .fsdb-layout-menu,
+.fsdb-vset,
 .fsdb-col-tag-flyout,
 .fsdb-pager-size-menu,
 .fsdb-detail-more-menu,
