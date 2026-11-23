@@ -10,5 +10,11 @@
   },
   "peerDependencies": {
     "cordis": "4.0.0-rc.8"
+  },
+  "dependencies": {
+    "@biu/host-llm": "0.1.0",
+    "@biu/host-sessions": "0.1.0",
+    "@biu/type-agent-loop": "0.1.0",
+    "@biu/type-session": "0.1.0"
   }
 }

@@ -181,3 +181,34 @@ test('unified entrypoints: no raw localStorage/sessionStorage outside client-sto
     `Found raw localStorage/sessionStorage calls (use @biu/biu-ui/client-storage):\n${hits.join('\n')}`,
   )
 })
+
+test('dependency hygiene: every imported @biu/* package is declared in package.json (no phantom deps)', () => {
+  const { nameToDir, dirToName } = loadPackageNameMap()
+  const missing: string[] = []
+  for (const [dir, selfName] of dirToName) {
+    const pkg = JSON.parse(readFileSync(join(PACKAGES_DIR, dir, 'package.json'), 'utf8')) as {
+      dependencies?: Record<string, string>
+      peerDependencies?: Record<string, string>
+      optionalDependencies?: Record<string, string>
+    }
+    const declared = new Set([
+      ...Object.keys(pkg.dependencies ?? {}),
+      ...Object.keys(pkg.peerDependencies ?? {}),
+      ...Object.keys(pkg.optionalDependencies ?? {}),
+    ])
+    for (const file of walkTsFiles(join(PACKAGES_DIR, dir, 'src'))) {
+      const text = readFileSync(file, 'utf8')
+      let match: RegExpExecArray | null
+      IMPORT_SPEC_RE.lastIndex = 0
+      while ((match = IMPORT_SPEC_RE.exec(text))) {
+        const spec = match[1]
+        if (!spec.startsWith('@biu/')) continue
+        const targetPkg = spec.split('/').slice(0, 2).join('/')
+        if (targetPkg !== selfName && nameToDir.has(targetPkg) && !declared.has(targetPkg)) {
+          missing.push(`${dir} missing ${targetPkg} (imported in ${relative(REPO_ROOT, file)})`)
+        }
+      }
+    }
+  }
+  assert.deepEqual(missing, [], `Found undeclared phantom @biu/* dependencies:\n${missing.join('\n')}`)
+})

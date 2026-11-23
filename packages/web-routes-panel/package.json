@@ -11,5 +11,9 @@
   "peerDependencies": {
     "cordis": "4.0.0-rc.8",
     "react": "^19.1.1"
+  },
+  "dependencies": {
+    "@biu/web-slots": "0.1.0",
+    "@biu/web-snapshot": "0.1.0"
   }
 }
