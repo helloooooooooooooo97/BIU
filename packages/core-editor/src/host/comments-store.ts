@@ -1,8 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { randomBytes } from 'node:crypto'
-import { recordBuiltinValues, type DbRecord } from '@biu/type-file-system'
+import { allocateRecordId, isAssignableRecordId, recordBuiltinValues, type DbRecord } from '@biu/type-file-system'
 
 export type CommentStatus = 'open' | 'resolved'
 
@@ -40,6 +39,7 @@ export type CommentRow = {
 }
 
 export type CommentInput = {
+  id?: string
   body: string
   targetPath: string
   threadId?: string
@@ -107,8 +107,12 @@ function summarizeBody(body: string) {
   return line.length > 60 ? `${line.slice(0, 60)}…` : line || '批注'
 }
 
-function nextCommentId() {
-  return `cmt_${randomBytes(6).toString('hex')}`
+function nextCommentId(existing: Set<string>, requested?: string) {
+  const trimmed = typeof requested === 'string' ? requested.trim() : ''
+  if (trimmed && isAssignableRecordId(trimmed) && !existing.has(trimmed)) return trimmed
+  let id = allocateRecordId()
+  while (existing.has(id)) id = allocateRecordId()
+  return id
 }
 
 export function commentToRecord(row: CommentRow): DbRecord {
@@ -159,7 +163,8 @@ export class CommentsStore {
 
   create(input: CommentInput): CommentRow {
     const now = Date.now()
-    const id = nextCommentId()
+    const existing = new Set(this.rows.map((row) => row.id))
+    const id = nextCommentId(existing, input.id)
     const body = String(input.body ?? '').trim()
     const targetPath = String(input.targetPath ?? '').trim()
     const parentId = String(input.parentId ?? '').trim()

@@ -28,7 +28,7 @@ export function commentsCollection(store: CommentsStore): CollectionSpec {
         '编辑器文档批注与回复。按 targetPath（如 /pages/xxx）关联记录；threadId 标识同一批注串，parentId 非空表示回复。status=open|resolved。anchor 为 JSON（blockId/quote/prefix/suffix/offset）。',
       order: 19,
     },
-    records: { update: true, create: true, delete: true, allocateId: false },
+    records: { update: true, create: true, delete: true, allocateId: true },
     schema: {
       labelField: 'title',
       columns: ['title', 'targetPath', 'status', 'author', 'updatedAt'],
@@ -55,6 +55,7 @@ export function commentsCollection(store: CommentsStore): CollectionSpec {
       const out: DbRecord[] = []
       for (const fields of rows) {
         const created = store.create({
+          id: typeof fields.id === 'string' ? fields.id : undefined,
           body: String(fields.body ?? fields.title ?? ''),
           targetPath: String(fields.targetPath ?? ''),
           threadId: typeof fields.threadId === 'string' ? fields.threadId : undefined,

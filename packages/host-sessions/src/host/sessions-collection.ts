@@ -24,7 +24,7 @@ type SessionsLike = {
   rename: (id: string, title: string) => Promise<unknown>
   patchConfig: (id: string, patch: SessionConfig) => Promise<unknown>
   delete: (id: string) => Promise<boolean>
-  create?: (opts?: { title?: string; config?: SessionConfig }) => Promise<{ id: string }>
+  create?: (opts?: { id?: string; title?: string; config?: SessionConfig }) => Promise<{ id: string }>
   require?: (id: string) => Promise<SessionRecordLike>
   setProject?: (id: string, project: { path: string } | null) => Promise<unknown>
   isBusy?: (id: string) => boolean
@@ -190,7 +190,7 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec & { p
       order: 18,
       icon: 'cursor',
     },
-    records: { update: true, create: Boolean(sessions.create), delete: true, allocateId: false },
+    records: { update: true, create: Boolean(sessions.create), delete: true, allocateId: true },
     schema: {
       contentField: 'events',
       contentBackend: 'computed',
@@ -268,6 +268,7 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec & { p
           const out = []
           for (const fields of rows) {
             const rec = await sessions.create!({
+              ...(typeof fields.id === 'string' && fields.id.trim() ? { id: fields.id.trim() } : {}),
               ...(typeof fields.title === 'string' ? { title: fields.title } : {}),
             })
             const next = (await list()).find((row) => row.id === rec.id)

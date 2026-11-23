@@ -3,6 +3,7 @@ import { basename, isAbsolute, resolve } from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
 import { platform } from 'node:os'
 import { assistantContentForApi, isVisionImageUrl, stampMessageSeqs, type LlmMessage } from '@biu/host-llm'
+import { allocateRecordId } from '@biu/type-file-system'
 import type { AgentSendOptions, AgentHandle, AgentTurn } from '@biu/type-agent-loop'
 import {
   SESSION_FORMAT_VERSION,
@@ -359,7 +360,7 @@ export class SessionsService extends Service {
           rename: (id, title) => this.rename(id, title),
           patchConfig: (id, patch) => this.patchConfig(id, patch),
           delete: (id) => this.delete(id),
-          create: (opts) => this.create(undefined, opts),
+          create: (opts) => this.create(opts?.id, opts),
           require: (id) => this.require(id),
           setProject: (id, project) => this.setProject(id, project),
           isBusy: (id) => {
@@ -383,7 +384,7 @@ export class SessionsService extends Service {
   }
 
   async create(
-    id: string = crypto.randomUUID(),
+    id: string = allocateRecordId(),
     opts: { title?: string; config?: SessionConfig } = {},
   ) {
     const used = await this.collectUsedMascots()
@@ -715,7 +716,7 @@ export class SessionsService extends Service {
     return statInputComposition(record.events)
   }
 
-  async fork(sourceId: string, childId: string = crypto.randomUUID()) {
+  async fork(sourceId: string, childId: string = allocateRecordId()) {
     const source = await this.require(sourceId)
     const used = await this.collectUsedMascots()
     const mascot = pickSessionMascot(childId, used)
