@@ -2,7 +2,7 @@ import { lazy, memo, Suspense, useEffect, useMemo, useRef, useSyncExternalStore,
 import { CircleStackIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import type { SlotProps } from '@biu/type-slots'
 import { FSDB_CHANGE_EVENT, fsdbChangeHitsPane, parseFsdbChange, type CollectionInfo, type DbRecord } from '@biu/type-file-system'
-import { FSDB_CRUMB_LABELS_EVENT, INSPECTOR_CAPTION_EVENT } from './fsdb-events.ts'
+import { FSDB_CRUMB_LABELS_EVENT, INSPECTOR_CAPTION_EVENT, onFsdbEvent } from './fsdb-events.ts'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { parseAppPath } from '@biu/web-session-view'
 import { buildCrumbs, crumbHotkeyPane, crumbParentHotkey, parentCrumbTarget, pathForCrumbTarget, type Crumb, type CrumbTarget } from './sidebar-nav.ts'
@@ -100,12 +100,12 @@ function ensureViewTickHub() {
   const onEvent = (event: Event) => dispatchViewTick(event)
   const onCrumb = () => dispatchViewTick()
   window.addEventListener(FSDB_CHANGE_EVENT, onEvent)
-  window.addEventListener(FSDB_CRUMB_LABELS_EVENT, onEvent)
+  const stopCrumbEvent = onFsdbEvent(FSDB_CRUMB_LABELS_EVENT, (_detail, event) => dispatchViewTick(event))
   window.addEventListener('storage', onEvent)
   const stopCrumbs = subscribeCrumbs(onCrumb)
   uninstallViewTickHub = () => {
     window.removeEventListener(FSDB_CHANGE_EVENT, onEvent)
-    window.removeEventListener(FSDB_CRUMB_LABELS_EVENT, onEvent)
+    stopCrumbEvent()
     window.removeEventListener('storage', onEvent)
     stopCrumbs()
     uninstallViewTickHub = null

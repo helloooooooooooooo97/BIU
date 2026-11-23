@@ -5,7 +5,7 @@ import { recordPreviewMascot } from './record-mark.tsx'
 import { recordCrumbLabel, type Crumb, type CrumbChoice } from './sidebar-nav.ts'
 import { crumbRecordLabel, recordPreviewEmoji } from './sidebar-preview.ts'
 import { rememberRecords, viewForPath, type CrumbRecord } from './view-storage.ts'
-import { FSDB_CRUMB_LABELS_EVENT } from './fsdb-events.ts'
+import { FSDB_CRUMB_LABELS_EVENT, emitFsdbEvent } from './fsdb-events.ts'
 
 export const CRUMB_RECORD_LIMIT = 40
 export const CRUMB_QUERY_DEBOUNCE_MS = 180
@@ -61,7 +61,7 @@ export async function pullCrumbRecords(opts: {
   const rows = listed.items.map((row) => rowToCrumb(row, labelField))
   if (!query) {
     rememberRecords(collection, rows, opts.viewId)
-    window.dispatchEvent(new Event(FSDB_CRUMB_LABELS_EVENT))
+    emitFsdbEvent(FSDB_CRUMB_LABELS_EVENT)
   }
   return rows
 }

@@ -7,7 +7,7 @@ import { delayCrumbQuery, pullCrumbRecords, recordChoicesFromRows } from './crum
 import { CrumbItemGlyph, TableGlyph } from './nav-glyphs.tsx'
 import { crumbButtonAction, type Crumb, type CrumbChoice, type CrumbTarget } from './sidebar-nav.ts'
 import { emitFsdbChange } from '@biu/type-file-system'
-import { FSDB_CRUMB_LABELS_EVENT } from './fsdb-events.ts'
+import { FSDB_CRUMB_LABELS_EVENT, emitFsdbEvent } from './fsdb-events.ts'
 import { pullSavedViews } from './view-storage.ts'
 
 function canOpenCrumbMenu(crumb: Crumb) {
@@ -65,7 +65,7 @@ function CrumbMenu({
         .then(() => {
           if (!live) return
           emitFsdbChange({ scope: 'views' })
-          window.dispatchEvent(new Event(FSDB_CRUMB_LABELS_EVENT))
+          emitFsdbEvent(FSDB_CRUMB_LABELS_EVENT)
         })
         .finally(() => {
           if (live) setLoading(false)
