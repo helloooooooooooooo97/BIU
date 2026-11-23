@@ -337,11 +337,14 @@ export class SkillsStore {
     if (!loaded) return null
     try {
       const db = openAndMigrateBiu(biuSqlitePath())
-      const body = readEditorContent(db, '/skills', loaded.id)
-      db.close()
-      if (body) loaded.notes = body
-    } catch {
-      /* sqlite unavailable */
+      try {
+        const body = readEditorContent(db, '/skills', loaded.id)
+        if (body) loaded.notes = body
+      } finally {
+        db.close()
+      }
+    } catch (error) {
+      console.warn('[skills] failed to read editor content from sqlite', loaded.id, error)
     }
     return loaded
   }
@@ -369,19 +372,20 @@ export class SkillsStore {
         } finally {
           db.close()
         }
-      } catch {
-        /* sqlite unavailable */
+      } catch (error) {
+        console.warn('[skills] failed to persist editor content to sqlite', next.id, error)
       }
     }
     return next
   }
 
   private allocateId(base: string) {
+    const existingIds = new Set(this.list().map((item) => item.id))
     const root = trySkillId(base) || 'new-skill'
-    if (!this.get(root)) return root
+    if (!existingIds.has(root)) return root
     for (let n = 2; n < 1000; n++) {
       const id = `${root}-${n}`.slice(0, 64)
-      if (ID_PATTERN.test(id) && !this.get(id)) return id
+      if (ID_PATTERN.test(id) && !existingIds.has(id)) return id
     }
     throw new Error('could not allocate skill id')
   }
