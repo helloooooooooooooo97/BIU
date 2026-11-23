@@ -186,9 +186,6 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
               <div>
                 <p className="site-eyebrow">Open Source · Free · All in One</p>
                 <h2>Compose all your software on one page</h2>
-                <p className="site-hero-band-desc">
-                  Put whiteboards, tables, code, video editing—even mini tools an agent writes on the spot—on one page. Share one link and anyone can use it right away.
-                </p>
               </div>
               <div className="site-cta-actions">
                 <Link className="site-cta-primary" to="/download"><DownloadIcon />Download</Link>
