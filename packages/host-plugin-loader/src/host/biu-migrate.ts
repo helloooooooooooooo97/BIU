@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import {
   assertSqliteVersion,
   getSchemaVersion,
@@ -1024,10 +1024,134 @@ function vacuumIfNeeded(db: DatabaseSync, ctx: MigrateCtx, from: number, target:
   }
 }
 
+type SharedPoolEntry = {
+  key: string
+  resolvedPath: string
+  inode: number
+  raw: DatabaseSync
+  refCount: number
+  stmtCache: Map<string, ReturnType<DatabaseSync['prepare']>>
+}
+
+const MAX_SHARED_STMTS = 256
+const sharedBiuPool = new Map<string, SharedPoolEntry>()
+const migratedBiuInodes = new Map<string, number>()
+
+function fileInode(filePath: string): number {
+  try {
+    return statSync(filePath).ino
+  } catch {
+    return 0
+  }
+}
+
+function wrapSharedHandle(entry: SharedPoolEntry): DatabaseSync {
+  let closed = false
+  return new Proxy(entry.raw, {
+    get(target, prop, receiver) {
+      if (prop === 'prepare') {
+        return (sql: string) => {
+          let cached = entry.stmtCache.get(sql)
+          if (!cached) {
+            cached = target.prepare(sql)
+            if (entry.stmtCache.size < MAX_SHARED_STMTS) entry.stmtCache.set(sql, cached)
+          }
+          return cached
+        }
+      }
+      if (prop === 'close') {
+        return () => {
+          if (closed) return
+          closed = true
+          entry.refCount = Math.max(0, entry.refCount - 1)
+          if (entry.refCount === 0) {
+            if (sharedBiuPool.get(entry.key) === entry) sharedBiuPool.delete(entry.key)
+            entry.stmtCache.clear()
+            try {
+              target.close()
+            } catch {
+              /* already closed */
+            }
+            // 若该文件已无其他活跃连接，清除迁移缓存以便文件重建后重新检测
+            const stillOpen = [...sharedBiuPool.values()].some((item) => item.resolvedPath === entry.resolvedPath)
+            if (!stillOpen) migratedBiuInodes.delete(entry.resolvedPath)
+          }
+        }
+      }
+      const value = Reflect.get(target, prop, receiver)
+      return typeof value === 'function' ? value.bind(target) : value
+    },
+  })
+}
+
+export function sharedBiuPoolStats() {
+  let totalRefs = 0
+  for (const entry of sharedBiuPool.values()) totalRefs += entry.refCount
+  return { connections: sharedBiuPool.size, totalRefs }
+}
+
+export function closeAllSharedBiuConnections() {
+  for (const entry of sharedBiuPool.values()) {
+    entry.stmtCache.clear()
+    try {
+      entry.raw.close()
+    } catch {
+      /* ignore */
+    }
+  }
+  sharedBiuPool.clear()
+  migratedBiuInodes.clear()
+}
+
 export function openAndMigrateBiu(path: string, opts?: { foreignKeys?: boolean; checkpointOnOpen?: boolean } & MigrateCtx) {
-  const db = openSqlite(path, { ...opts, checkpointOnOpen: opts?.checkpointOnOpen !== false })
-  const dataDir = opts?.dataDir ?? (path !== ':memory:' && basename(path) === 'biu.sqlite' ? dirname(path) : undefined)
-  const workspace = opts?.workspace ?? (dataDir ? dirname(dataDir) : undefined)
-  migrateBiu(db, { sqlitePath: path, dataDir, workspace })
-  return db
+  if (!path || path === ':memory:') {
+    const db = openSqlite(path, { ...opts, checkpointOnOpen: opts?.checkpointOnOpen !== false })
+    migrateBiu(db, { sqlitePath: path, dataDir: opts?.dataDir, workspace: opts?.workspace })
+    return db
+  }
+
+  const resolvedPath = resolve(path)
+  const fk = opts?.foreignKeys !== false
+  const poolKey = `${resolvedPath}\0fk:${fk ? 1 : 0}`
+  const existing = sharedBiuPool.get(poolKey)
+  const currentIno = fileInode(resolvedPath)
+
+  if (existing && currentIno !== 0 && existing.inode === currentIno) {
+    existing.refCount += 1
+    return wrapSharedHandle(existing)
+  }
+
+  if (existing) {
+    sharedBiuPool.delete(poolKey)
+    existing.stmtCache.clear()
+    try {
+      existing.raw.close()
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const alreadyMigrated = currentIno !== 0 && migratedBiuInodes.get(resolvedPath) === currentIno
+  const raw = openSqlite(path, {
+    ...opts,
+    checkpointOnOpen: !alreadyMigrated && opts?.checkpointOnOpen !== false,
+  })
+  if (!alreadyMigrated) {
+    const dataDir = opts?.dataDir ?? (basename(path) === 'biu.sqlite' ? dirname(path) : undefined)
+    const workspace = opts?.workspace ?? (dataDir ? dirname(dataDir) : undefined)
+    migrateBiu(raw, { sqlitePath: path, dataDir, workspace })
+  }
+  const finalIno = fileInode(resolvedPath)
+  if (finalIno !== 0) migratedBiuInodes.set(resolvedPath, finalIno)
+
+  const entry: SharedPoolEntry = {
+    key: poolKey,
+    resolvedPath,
+    inode: finalIno,
+    raw,
+    refCount: 1,
+    stmtCache: new Map(),
+  }
+  sharedBiuPool.set(poolKey, entry)
+  return wrapSharedHandle(entry)
 }
