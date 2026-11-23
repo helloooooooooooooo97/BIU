@@ -21,8 +21,11 @@ import {
   pushSavedViewsPatch,
   rememberViews,
   removeStarredViews,
+  restoreViewDisplay,
   reviveSavedViewIds,
+  snapshotViewDisplay,
   stampSavedView,
+  viewWriteQueue,
   withViewDisplay,
 } from './view-storage.ts'
 
@@ -125,12 +128,14 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
   ) {
     if (sheet) return true
     const forced = extra?.upsert ?? []
-    if (extra?.remove?.length) omitSavedViewIds(path, extra.remove)
-    if (forced.length) reviveSavedViewIds(path, forced.map((view) => view.id))
     const incoming = [
       ...next.filter((view) => !forced.some((item) => item.id === view.id)),
       ...forced,
     ]
+    const prevDisplays = new Map<string, string | null>()
+    for (const view of incoming) prevDisplays.set(view.id, snapshotViewDisplay(path, view.id))
+    if (extra?.remove?.length) omitSavedViewIds(path, extra.remove)
+    if (forced.length) reviveSavedViewIds(path, forced.map((view) => view.id))
     for (const view of incoming) persistViewDisplay(path, view.id, view)
     const listed = rankListedViews(
       listedViews(path, incoming).map((view) => {
@@ -151,43 +156,52 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     )
     const stamped = (patch.upsert ?? []).map((view) => stampSavedView(view))
     const stampById = new Map(stamped.map((view) => [view.id, view]))
+    // 用同一个单调递增 updatedAt 回写 localStorage，保证本地缓存与 SQLite 时间戳一致。
+    for (const view of stamped) persistViewDisplay(path, view.id, view)
     const adopted = listed.map((view) => stampById.get(view.id) ?? view)
-    const gen = ++viewsWriteGenRef.current
-    const result = await pushSavedViewsPatch(path, { ...patch, upsert: stamped })
     const intended = Boolean(forced.length || extra?.remove?.length)
-    if (result === 'failed' || (result === 'skipped' && intended)) {
-      if (gen === viewsWriteGenRef.current) setViewsSaveError(true)
-      return false
-    }
-    if (gen !== viewsWriteGenRef.current) return false
-    if (result === 'skipped') return true
-    if (extra?.remove?.length) removeStarredViews(path, extra.remove)
-    noteLocalSavedViewsWrite(path)
-    const pulled = await pullSavedViews([path], { force: true })
-    if (gen !== viewsWriteGenRef.current) return false
-    if (pulled === false) adoptPersistedViews(path, adopted, extra?.remove)
-    else {
-      const listedNow = rankListedViews(
-        listedViews(
-          path,
-          mergeSavedViewLists(loadViews(path), adopted, extra?.remove),
-        ).map((view) => {
-          const painted = withViewDisplay(path, view)
-          const forcedView = stampById.get(view.id)
-          return forcedView ? { ...painted, name: forcedView.name, updatedAt: forcedView.updatedAt } : painted
-        }),
-        adopted,
-      )
-      rememberViews(path, listedNow)
-      if (path === collectionPath) {
-        viewsRef.current = listedNow
-        setViews(listedNow)
+    const gen = ++viewsWriteGenRef.current
+    return viewWriteQueue.enqueue(path, async (queueGen) => {
+      const result = await pushSavedViewsPatch(path, { ...patch, upsert: stamped })
+      if (result === 'failed' || (result === 'skipped' && intended)) {
+        if (viewWriteQueue.isLatest(path, queueGen)) {
+          for (const [viewId, raw] of prevDisplays) restoreViewDisplay(path, viewId, raw)
+          if (extra?.remove?.length) reviveSavedViewIds(path, extra.remove)
+          if (gen === viewsWriteGenRef.current) setViewsSaveError(true)
+        }
+        return false
       }
-      emitFsdbChange({ scope: 'views' })
-      window.dispatchEvent(new Event(FSDB_CRUMB_LABELS_EVENT))
-    }
-    setViewsSaveError(false)
-    return true
+      if (result === 'skipped') return true
+      if (extra?.remove?.length) removeStarredViews(path, extra.remove)
+      noteLocalSavedViewsWrite(path)
+      // 若后面已有更新的写操作排在队列里，跳过本次全量 pull，交给队尾写操作统一收口。
+      if (!viewWriteQueue.isLatest(path, queueGen)) return true
+      const pulled = await pullSavedViews([path], { force: true })
+      if (!viewWriteQueue.isLatest(path, queueGen)) return true
+      if (pulled === false) adoptPersistedViews(path, adopted, extra?.remove)
+      else {
+        const listedNow = rankListedViews(
+          listedViews(
+            path,
+            mergeSavedViewLists(loadViews(path), adopted, extra?.remove),
+          ).map((view) => {
+            const painted = withViewDisplay(path, view)
+            const forcedView = stampById.get(view.id)
+            return forcedView ? { ...painted, name: forcedView.name, updatedAt: forcedView.updatedAt } : painted
+          }),
+          adopted,
+        )
+        rememberViews(path, listedNow)
+        if (path === collectionPath) {
+          viewsRef.current = listedNow
+          setViews(listedNow)
+        }
+        emitFsdbChange({ scope: 'views' })
+        window.dispatchEvent(new Event(FSDB_CRUMB_LABELS_EVENT))
+      }
+      setViewsSaveError(false)
+      return true
+    })
   }
 
   function persistViews(next: SavedView[]) {
@@ -348,11 +362,23 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
   }
 
   function patchActiveView(patch: Partial<SavedView>) {
-    if (!activeViewId) return
+    const targetId = activeViewIdRef.current ?? activeViewId
+    if (!targetId) return
     const latest = viewsRef.current
-    const current = latest.find((view) => view.id === activeViewId)
+    const current = latest.find((view) => view.id === targetId)
     if (!current) return
-    void persistViews(latest.map((view) => (view.id === activeViewId ? { ...view, ...patch } : view)))
+    const updated = stampSavedView({ ...current, ...patch })
+    const nextList = latest.map((view) => (view.id === targetId ? updated : view))
+    // 立即同步更新 viewsRef 与内存缓存，保证连点改多个属性时后一次修改基于前一次最新状态。
+    viewsRef.current = nextList
+    setViews(nextList)
+    rememberViews(collectionPath, nextList)
+    void persistViewsFor(collectionPath, nextList, { upsert: [updated], baseline: latest }).then((ok) => {
+      if (ok || viewsRef.current !== nextList) return
+      viewsRef.current = latest
+      setViews(latest)
+      rememberViews(collectionPath, latest)
+    })
   }
 
   function commitViewName(viewId: string, raw: string) {

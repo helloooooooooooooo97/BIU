@@ -317,9 +317,9 @@ test('saved views pull shares one in-flight list and a short ttl', () => {
   assert.match(src, /if \(pending && !opts\?\.force\)/)
   assert.match(src, /opts\?: \{ idle\?: boolean; force\?: boolean \}/)
   assert.match(src, /export function noteLocalSavedViewsWrite/)
-  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
-  assert.match(browser, /noteLocalSavedViewsWrite\(path\)/)
-  assert.match(browser, /function deleteView/)
+  const crud = readFileSync(resolve(import.meta.dirname, './use-browser-view-crud.ts'), 'utf8')
+  assert.match(crud, /noteLocalSavedViewsWrite\(path\)/)
+  assert.match(crud, /function deleteView/)
 })
 
 test('saved views pull keeps a newly remembered view missing from a stale list', async () => {
@@ -708,5 +708,95 @@ test('removeStarredViews drops deleted views from starredViews without touching 
   } finally {
     off()
     mod.persistStarredViews(prev)
+  }
+})
+
+test('newer server view wins over stale localStorage display overlay and syncs local cache', async () => {
+  const path = '/pages-server-wins'
+  const mem: Record<string, string> = {}
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => mem[key] ?? null,
+      setItem: (key: string, value: string) => { mem[key] = value },
+      removeItem: (key: string) => { delete mem[key] },
+    },
+  })
+  // 本地 localStorage 存了旧时间戳的展示配置
+  persistViewDisplay(path, 'v1', { wrap: false, freezeUntil: 'title', updatedAt: 1000 })
+
+  // 服务端（如 Agent/其他窗口）更新了该视图，时间戳更新为 2000
+  const serverView = {
+    id: 'v1',
+    name: '服务端新名',
+    mode: 'table' as const,
+    sortField: 'title',
+    sortDir: 'asc' as const,
+    filters: {},
+    columns: ['title', 'status'],
+    wrap: true,
+    freezeUntil: undefined,
+    updatedAt: 2000,
+  }
+  const painted = withViewDisplay(path, serverView)
+  assert.equal(painted.wrap, true)
+  assert.equal(painted.freezeUntil, undefined)
+  assert.equal(painted.name, '服务端新名')
+
+  // pullSavedViews 拉回后也会把旧 localStorage 同步更新掉
+  const prevFetch = globalThis.fetch
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        items: [{ viewId: 'v1', title: '服务端新名', tablePath: path, wrap: true, freezeUntil: '', updatedAt: 2000 }],
+        total: 1,
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    )) as typeof fetch
+  try {
+    await pullSavedViews([path], { force: true })
+    const loaded = loadViews(path).find((v) => v.id === 'v1')
+    assert.equal(loaded?.wrap, true)
+    assert.equal(loaded?.freezeUntil, undefined)
+    // 冷启动 stub（updatedAt: 0）也会读到已同步的 localStorage 新值
+    const coldStub = withViewDisplay(path, { ...serverView, wrap: false, updatedAt: 0 })
+    assert.equal(coldStub.wrap, true)
+  } finally {
+    globalThis.fetch = prevFetch
+  }
+})
+
+test('stampSavedView is strictly monotonic and pushSavedViewsPatch serializes explicit nulls for cleared fields', async () => {
+  const { stampSavedView, pushSavedViewsPatch } = await import('./view-storage.ts')
+  const base = {
+    id: 'v-mono',
+    name: '单调视图',
+    mode: 'table' as const,
+    sortField: 'title',
+    sortDir: 'asc' as const,
+    filters: {},
+    columns: ['title'],
+  }
+  const s1 = stampSavedView(base)
+  const s2 = stampSavedView(s1)
+  assert.ok((s2.updatedAt ?? 0) > (s1.updatedAt ?? 0))
+
+  let sentBody = ''
+  const prevFetch = globalThis.fetch
+  globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    sentBody = String(init?.body ?? '')
+    return new Response('{"ok":true}', { status: 200 })
+  }) as typeof fetch
+  try {
+    const res = await pushSavedViewsPatch('/pages', { upsert: [s2] })
+    assert.equal(res, 'ok')
+    const parsed = JSON.parse(sentBody) as { upsert: Array<Record<string, unknown>> }
+    assert.equal(parsed.upsert[0]?.groupConfig, null)
+    assert.equal(parsed.upsert[0]?.freezeUntil, null)
+    assert.deepEqual(parsed.upsert[0]?.columnSummaries, {})
+    assert.deepEqual(parsed.upsert[0]?.columnViews, {})
+    assert.deepEqual(parsed.upsert[0]?.columnWidths, {})
+  } finally {
+    globalThis.fetch = prevFetch
   }
 })

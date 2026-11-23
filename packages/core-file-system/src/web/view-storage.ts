@@ -10,6 +10,10 @@ import { invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { emptyFilterGroup, looksLikeFilterTree, normalizeFilterGroup, parseSortsInput, resolveViewFilterTree } from '../query-logic.ts'
 import { normalizeGroupConfig, normalizePageSize, normalizeSavedView, parseViewColumns, rankListedViews, viewIsFresher, type SavedView } from './saved-view.ts'
+import { KeyedSerialQueue } from './record-write-queue.ts'
+
+/** 按 collectionPath 串行化视图写入，防止连点改属性时并发 POST 乱序覆盖。 */
+export const viewWriteQueue = new KeyedSerialQueue()
 
 export function viewsKey(collectionPath: string) {
   return `fsdb.views:${collectionPath}`
@@ -371,14 +375,29 @@ export function viewPatchKey(view: SavedView) {
   return JSON.stringify(normalizeSavedView(view))
 }
 
-/** 推给后端的载荷：带上本地修改时间，后端据此丢掉比库更旧的快照。 */
+/** 推给后端的载荷：带上本地修改时间，并显式序列化已清空的可选字段为 null / {}，后端据此清理旧值并丢弃旧快照。 */
 function viewWirePayload(view: SavedView) {
-  return { ...view, filterTree: resolveViewFilterTree(view), updatedAt: Number(view.updatedAt) || 0 }
+  const normalized = normalizeSavedView(view)
+  return {
+    ...normalized,
+    filterTree: resolveViewFilterTree(normalized),
+    groupConfig: normalized.groupConfig ?? null,
+    freezeUntil: normalized.freezeUntil ?? null,
+    columnWidths: normalized.columnWidths ?? {},
+    columnSummaries: normalized.columnSummaries ?? {},
+    columnViews: normalized.columnViews ?? {},
+    updatedAt: Number(normalized.updatedAt) || 0,
+  }
 }
 
-/** 本地改了哪些视图就打个时间戳，切窗口/切会话时旧快照不会盖掉刚做的修改。 */
+let lastViewStamp = 0
+
+/** 本地改了哪些视图就打个单调递增时间戳，同一毫秒内连续修改或切窗口时旧快照不会盖掉刚做的修改。 */
 export function stampSavedView(view: SavedView): SavedView {
-  return { ...view, updatedAt: Date.now() }
+  const now = Date.now()
+  const next = Math.max(now, lastViewStamp + 1, (Number(view.updatedAt) || 0) + 1)
+  lastViewStamp = next
+  return { ...view, updatedAt: next }
 }
 
 export type SavedViewsWriteResult = 'skipped' | 'ok' | 'failed'
@@ -666,6 +685,13 @@ async function pullSavedViewsNow(
       if (viewWriteStale(path, started)) continue
       pulledViewPaths.add(path)
       const views = byPath.get(path) ?? []
+      for (const view of views) {
+        const viewAt = Number(view.updatedAt) || 0
+        if (viewAt > 0) {
+          const overlayAt = Number(loadViewDisplay(path, view.id).updatedAt) || 0
+          if (viewAt > overlayAt) persistViewDisplay(path, view.id, view)
+        }
+      }
       const previous = memoryViews.get(path) ?? loadViews(path)
       const ranked = rankListedViews(
         mergeSavedViewLists(
@@ -817,7 +843,9 @@ const DISPLAY_KEYS = [
   'rank',
 ] as const
 
-export type ViewDisplayPatch = Partial<Pick<SavedView, (typeof DISPLAY_KEYS)[number]>>
+export type ViewDisplayPatch = Partial<Pick<SavedView, (typeof DISPLAY_KEYS)[number]>> & {
+  updatedAt?: number
+}
 
 export function viewDisplayKey(collectionPath: string, viewId: string) {
   return `fsdb.viewDisplay:${collectionPath}:${viewId}`
@@ -886,6 +914,8 @@ function pickDisplay(patch: Partial<SavedView>): ViewDisplayPatch {
   if (Object.prototype.hasOwnProperty.call(patch, 'freezeUntil') && patch.freezeUntil === undefined) {
     next.freezeUntil = ''
   }
+  const stamp = Number(patch.updatedAt) || 0
+  if (stamp > 0) next.updatedAt = stamp
   return next
 }
 
@@ -901,31 +931,57 @@ export function loadViewDisplay(collectionPath: string, viewId: string): ViewDis
   }
 }
 
+export function snapshotViewDisplay(collectionPath: string, viewId: string): string | null {
+  try {
+    return localStorage.getItem(viewDisplayKey(collectionPath, viewId))
+  } catch {
+    return null
+  }
+}
+
+export function restoreViewDisplay(collectionPath: string, viewId: string, raw: string | null) {
+  try {
+    const key = viewDisplayKey(collectionPath, viewId)
+    if (raw === null) localStorage.removeItem(key)
+    else localStorage.setItem(key, raw)
+  } catch {
+    /* ignore */
+  }
+}
+
 export function persistViewDisplay(collectionPath: string, viewId: string, patch: Partial<SavedView>) {
   try {
-    const next = { ...loadViewDisplay(collectionPath, viewId), ...pickDisplay(patch) }
+    const prev = loadViewDisplay(collectionPath, viewId)
+    const picked = pickDisplay(patch)
+    const updatedAt = picked.updatedAt && picked.updatedAt > 0 ? picked.updatedAt : Date.now()
+    const next = { ...prev, ...picked, updatedAt }
     localStorage.setItem(viewDisplayKey(collectionPath, viewId), JSON.stringify(next))
   } catch {
     /* ignore */
   }
 }
 
-/** 内置「全部 xx」不能当用户视图存整份，显示项（换行等）单独记。索引表没有分享；成员全部按成员类型分组。 */
+/** 内置「全部 xx」不能当用户视图存整份，显示项（换行等）单独记。服务端时间戳更新时以服务端为准，不再被旧 localStorage 覆盖。 */
 export function withViewDisplay(collectionPath: string, view: SavedView): SavedView {
   const overlay = loadViewDisplay(collectionPath, view.id)
+  const overlayAt = Number(overlay.updatedAt) || 0
+  const viewAt = Number(view.updatedAt) || 0
+  const serverIsNewer = viewAt > 0 && viewAt > overlayAt
   const overlayName = typeof overlay.name === 'string' ? overlay.name.trim() : ''
-  const painted = Object.keys(overlay).length
-    ? {
-        ...view,
-        ...overlay,
-        id: view.id,
-        name: overlayName || view.name,
-        builtin: view.builtin,
-        filters: view.filters,
-        filterTree: overlay.filterTree ?? view.filterTree,
-        rank: Number.isFinite(Number(overlay.rank)) ? overlay.rank : view.rank,
-      }
-    : view
+  const painted =
+    !serverIsNewer && Object.keys(overlay).length
+      ? {
+          ...view,
+          ...overlay,
+          id: view.id,
+          name: overlayName || view.name,
+          builtin: view.builtin,
+          filters: view.filters,
+          filterTree: overlay.filterTree ?? view.filterTree,
+          rank: Number.isFinite(Number(overlay.rank)) ? overlay.rank : view.rank,
+          updatedAt: Math.max(viewAt, overlayAt) || undefined,
+        }
+      : view
   const path = normalizeCollectionPath(collectionPath)
   const forcedGroup =
     isIndexCollection(collectionPath) && isBuiltinAllViewId(view.id)

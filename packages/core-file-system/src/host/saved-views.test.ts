@@ -265,3 +265,75 @@ test('tombstones survive a reopen and can be cleared by recreating the view', as
   assert.deepEqual(second.viewsFor('/tasks').map((view) => view.id), ['C'])
   assert.equal(second.isTombstoned('/tasks', 'C'), false)
 })
+
+test('applyPatch clears optional view fields when sent as null or empty and persists incrementally across reopen', async () => {
+  const file = join(mkdtempSync(join(tmpdir(), 'biu-views-clear-')), 'biu.sqlite')
+  const first = new SavedViewsStore()
+  first.open(file)
+  first.applyPatch('/tasks', {
+    upsert: [
+      {
+        id: 'A',
+        name: '视图 A',
+        freezeTitle: true,
+        freezeUntil: 'status',
+        groupBy: 'status',
+        groupConfig: { sort: 'desc', hideEmpty: true },
+        columnSummaries: { title: 'count' },
+        columnViews: { 'tag::t1::s': { activeId: 'sv-1' } },
+        columnWidths: { title: 240 },
+        filterTree: {
+          kind: 'group',
+          id: 'root',
+          combinator: 'and',
+          children: [{ kind: 'rule', id: 'r1', field: 'status', op: 'eq', value: 'open' }],
+        },
+        updatedAt: 1000,
+      },
+      {
+        id: 'B',
+        name: '兄弟视图 B',
+        wrap: true,
+        updatedAt: 1000,
+      },
+    ],
+  })
+
+  // 显式清空 A 的各项可选属性，不应影响兄弟视图 B
+  first.applyPatch('/tasks', {
+    upsert: [
+      {
+        id: 'A',
+        name: '视图 A',
+        freezeTitle: false,
+        freezeUntil: null as unknown as string,
+        groupBy: '',
+        groupConfig: null as unknown as Record<string, unknown>,
+        columnSummaries: {},
+        columnViews: {},
+        columnWidths: {},
+        filterTree: null as unknown as never,
+        updatedAt: 2000,
+      },
+    ],
+  })
+
+  const check = (store: SavedViewsStore) => {
+    const a = store.viewsFor('/tasks').find((v) => v.id === 'A')
+    const b = store.viewsFor('/tasks').find((v) => v.id === 'B')
+    assert.ok(a)
+    assert.equal(a.freezeTitle, false)
+    assert.equal(a.freezeUntil, undefined)
+    assert.equal(a.groupConfig, undefined)
+    assert.equal(a.columnSummaries, undefined)
+    assert.equal(a.columnViews, undefined)
+    assert.equal(a.columnWidths, undefined)
+    assert.equal(a.filterTree, undefined)
+    assert.equal(b?.wrap, true)
+  }
+  check(first)
+
+  const reopened = new SavedViewsStore()
+  reopened.open(file)
+  check(reopened)
+})
