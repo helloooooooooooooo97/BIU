@@ -100,6 +100,49 @@ export class SavedViewsStore {
     }
   }
 
+  /** 增量写盘：只 upsert/delete 本次变更的 view_id，不再整表 DELETE 重插。 */
+  private persistDelta(collectionPath: string, upserted: StoredView[], removedIds: string[]) {
+    if (!this.db) return
+    if (!upserted.length && !removedIds.length) return
+    const path = normalizeCollectionPath(collectionPath)
+    const now = Date.now()
+    const upsert = this.db.prepare(
+      `INSERT INTO saved_views (collection, view_id, payload_json, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(collection, view_id) DO UPDATE SET payload_json = excluded.payload_json, updated_at = excluded.updated_at`,
+    )
+    const delView = this.db.prepare('DELETE FROM saved_views WHERE collection = ? AND view_id = ?')
+    const tomb = this.db.prepare(
+      `INSERT INTO saved_view_tombstones (collection, view_id, deleted_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(collection, view_id) DO UPDATE SET deleted_at = excluded.deleted_at`,
+    )
+    const untomb = this.db.prepare('DELETE FROM saved_view_tombstones WHERE collection = ? AND view_id = ?')
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const marked = this.tombstones.get(path) ?? new Set<string>()
+      for (const view of upserted) {
+        const id = String(view.id ?? '').trim()
+        if (!id) continue
+        upsert.run(path, id, JSON.stringify(view), now)
+        marked.delete(id)
+        untomb.run(path, id)
+      }
+      for (const rawId of removedIds) {
+        const viewId = String(rawId ?? '').trim()
+        if (!viewId) continue
+        delView.run(path, viewId)
+        marked.add(viewId)
+        tomb.run(path, viewId, now)
+      }
+      this.tombstones.set(path, marked)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
   private persistPath(collectionPath: string) {
     if (!this.db) return
     const path = normalizeCollectionPath(collectionPath)
@@ -203,6 +246,7 @@ export class SavedViewsStore {
     })
     const foreign = new Set(kept.map((view) => String(view.id)))
     const next = kept.slice()
+    const upsertedViews: StoredView[] = []
     for (const incoming of patch.upsert ?? []) {
       const id = String(incoming.id ?? '').trim()
       if (!id) continue
@@ -215,28 +259,26 @@ export class SavedViewsStore {
       const incomingAt = Number((incoming as { updatedAt?: unknown }).updatedAt) || 0
       const storedAt = Number((prevView as { updatedAt?: unknown } | undefined)?.updatedAt) || 0
       if (prevView && incomingAt && storedAt && incomingAt < storedAt) continue
-      const view: StoredView = {
-        ...prevView,
-        ...incoming,
-        id,
-        name: String(incoming.name || prevView?.name || id),
-        ...(incomingAt ? {} : { updatedAt: Date.now() }),
-        ...(indexScoped ? { createdBy: accountId } : {}),
-      }
+      const view = mergeIncomingStoredView(prevView, incoming, id, incomingAt, indexScoped, accountId)
       const at = next.findIndex((item) => String(item.id) === id)
       if (at >= 0) next[at] = view
       else next.push(view)
+      upsertedViews.push(view)
     }
     // 显式删除立刻记墓碑（哪怕这条本来就不在这份列表里），
     // 别的窗口拿旧快照推 upsert 也不会把它带回来。
+    const removedIds = [...removed].filter((viewId) => {
+      const prevView = prev.find((view) => String(view.id) === viewId)
+      return !prevView || mine(prevView)
+    })
     const marked = new Set(this.tombstones.get(path) ?? [])
-    for (const viewId of removed) marked.add(viewId)
-    if (removed.size && this.visibleCount(path, next, marked) < 1) {
+    for (const viewId of removedIds) marked.add(viewId)
+    if (removedIds.length && this.visibleCount(path, next, marked) < 1) {
       throw new Error('至少保留一个视图')
     }
     this.tombstones.set(path, marked)
     this.byPath.set(path, next)
-    this.persistPath(path)
+    this.persistDelta(path, upsertedViews, removedIds)
   }
 
   rows(tables: CollectionInfo[], accountId = ''): DbRecord[] {
@@ -319,7 +361,7 @@ export class SavedViewsStore {
       ...(isIndexCollection(tablePath) ? { createdBy: accountId } : {}),
     }
     this.byPath.set(tablePath, [...views, view])
-    this.persistPath(tablePath)
+    this.persistDelta(tablePath, [view], [])
     return asRecord(tablePath, label, view, table?.view?.icon)
   }
 
@@ -341,7 +383,7 @@ export class SavedViewsStore {
       if (this.visibleCount(path, remaining, gone) < 1) throw new Error('至少保留一个视图')
       this.byPath.set(path, remaining)
       this.tombstones.set(path, gone)
-      this.persistPath(path)
+      this.persistDelta(path, [], [targetId])
       return true
     }
     throw new Error(`unknown view: ${id}`)
@@ -393,11 +435,62 @@ export class SavedViewsStore {
       if (idx >= 0) views[idx] = next
       else views.push(next)
       this.byPath.set(path, views)
-      this.persistPath(path)
+      this.persistDelta(path, [next], [])
       return asRecord(path, tableLabelOf(table, path), next, table?.view?.icon)
     }
     throw new Error(`unknown view: ${id}`)
   }
+}
+
+/** 合并 upsert 载荷并规范化可显式清空的字段（传 null / '' / {} / 空筛选树时彻底删除旧值）。 */
+function mergeIncomingStoredView(
+  prevView: StoredView | undefined,
+  incoming: StoredView,
+  id: string,
+  incomingAt: number,
+  indexScoped: boolean,
+  accountId: string,
+): StoredView {
+  const view: StoredView = {
+    ...prevView,
+    ...incoming,
+    id,
+    name: String(incoming.name || prevView?.name || id),
+    ...(incomingAt ? {} : { updatedAt: Date.now() }),
+    ...(indexScoped ? { createdBy: accountId } : {}),
+  }
+  const raw = incoming as Record<string, unknown>
+  if ('groupConfig' in raw) {
+    const gc = normalizeGroupConfig(raw.groupConfig)
+    if (gc) view.groupConfig = gc
+    else delete view.groupConfig
+  }
+  if ('freezeUntil' in raw) {
+    const fu = typeof raw.freezeUntil === 'string' && raw.freezeUntil.trim() ? raw.freezeUntil.trim() : undefined
+    if (fu) view.freezeUntil = fu
+    else delete view.freezeUntil
+  }
+  if ('columnSummaries' in raw) {
+    const cs = normalizeColumnSummaries(parseJsonValue(raw.columnSummaries) ?? raw.columnSummaries)
+    if (cs) view.columnSummaries = cs
+    else delete view.columnSummaries
+  }
+  if ('columnViews' in raw) {
+    const cv = normalizeColumnViews(raw.columnViews)
+    if (cv) view.columnViews = cv
+    else delete view.columnViews
+  }
+  if ('columnWidths' in raw) {
+    const cw = normalizeColumnWidths(raw.columnWidths)
+    if (Object.keys(cw).length) view.columnWidths = cw
+    else delete view.columnWidths
+  }
+  if ('filterTree' in raw) {
+    const parsedTree = raw.filterTree == null ? null : normalizeFilterGroup(parseJsonValue(raw.filterTree))
+    if (parsedTree && countFilterRules(parsedTree) > 0) view.filterTree = parsedTree
+    else delete view.filterTree
+  }
+  return view
 }
 
 /**

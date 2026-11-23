@@ -545,9 +545,13 @@ export function CollectionBrowser({
   const [columnSummaries, setColumnSummaries] = useState<Record<string, ColumnSummaryOp>>(
     () => normalizeColumnSummaries(initialView?.columnSummaries) ?? {},
   )
+  const columnSummariesRef = useRef(columnSummaries)
+  columnSummariesRef.current = columnSummaries
   const [columnViews, setColumnViews] = useState<Record<string, ColumnViewConfig>>(
     () => normalizeColumnViews(initialView?.columnViews) ?? {},
   )
+  const columnViewsRef = useRef(columnViews)
+  columnViewsRef.current = columnViews
   const [colHeaderMenu, setColHeaderMenu] = useState<ColumnHeaderMenuTarget | null>(null)
   const [resizingCol, setResizingCol] = useState<string | null>(null)
   const [cellPop, setCellPop] = useState<(TableCellCursor & { seed?: string }) | null>(null)
@@ -2806,9 +2810,7 @@ export function CollectionBrowser({
     if (!pinned.length) return
     setColumnKeys(pinned)
     if (sheet || !activeViewId) return
-    const current = views.find((view) => view.id === activeViewId)
-    if (!current) return
-    persistViews(views.map((view) => (view.id === activeViewId ? { ...view, columns: pinned } : view)))
+    patchActiveView({ columns: pinned })
   }
 
   function toggleColumn(key: string) {
@@ -3590,7 +3592,7 @@ export function CollectionBrowser({
     })
     if (viewStateKey(current) === viewStateKey(next)) return
     persistViewDisplay(collectionPath, next.id, next)
-    persistViews(viewsRef.current.map((view) => (view.id === activeViewId ? next : view)))
+    patchActiveView(next)
   }
   persistActiveViewRef.current = persistActiveViewNow
 
@@ -4109,15 +4111,14 @@ export function CollectionBrowser({
           columnView={columnViews[colHeaderMenu.col.key]}
           onClose={() => setColHeaderMenu(null)}
           onChangeColumnView={(colKey, nextCfg) => {
-            setColumnViews((prev) => {
-              const next = { ...prev }
-              const hasActive = Boolean(nextCfg?.activeId && nextCfg.activeId !== 'default')
-              const hasItems = Boolean(nextCfg?.items?.length)
-              if (!nextCfg || (!hasActive && !hasItems)) delete next[colKey]
-              else next[colKey] = nextCfg
-              if (!sheet && activeViewId) patchActiveView({ columnViews: normalizeColumnViews(next) ?? {} })
-              return next
-            })
+            const next = { ...columnViewsRef.current }
+            const hasActive = Boolean(nextCfg?.activeId && nextCfg.activeId !== 'default')
+            const hasItems = Boolean(nextCfg?.items?.length)
+            if (!nextCfg || (!hasActive && !hasItems)) delete next[colKey]
+            else next[colKey] = nextCfg
+            columnViewsRef.current = next
+            setColumnViews(next)
+            if (!sheet && activeViewId) patchActiveView({ columnViews: normalizeColumnViews(next) ?? {} })
           }}
           onFilter={(colKey) => {
             const targetField = filterFields.find((item) => item.key === colKey)
@@ -4144,13 +4145,12 @@ export function CollectionBrowser({
             setGroupKey(groupBy === colKey ? '' : colKey)
           }}
           onSummary={(colKey, op) => {
-            setColumnSummaries((prev) => {
-              const next = { ...prev }
-              if (op === 'none') delete next[colKey]
-              else next[colKey] = op
-              if (!sheet && activeViewId) patchActiveView({ columnSummaries: normalizeColumnSummaries(next) ?? {} })
-              return next
-            })
+            const next = { ...columnSummariesRef.current }
+            if (op === 'none') delete next[colKey]
+            else next[colKey] = op
+            columnSummariesRef.current = next
+            setColumnSummaries(next)
+            if (!sheet && activeViewId) patchActiveView({ columnSummaries: normalizeColumnSummaries(next) ?? {} })
           }}
           onToggleFreeze={() =>
             setFreezeUntilCol(effectiveFreezeUntil === colHeaderMenu.col.key ? '' : colHeaderMenu.col.key)
