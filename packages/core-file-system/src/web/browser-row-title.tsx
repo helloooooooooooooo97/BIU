@@ -281,6 +281,8 @@ export function RecordTitle({
               type="button"
               className="tasks-tree-toggle"
               aria-label={collapsed ? '展开子记录' : '收起子记录'}
+              aria-expanded={!collapsed}
+              onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => {
                 event.stopPropagation()
                 onToggleCollapsed()

@@ -257,10 +257,24 @@ export function appendTreeKids(rows: DbRecord[], kids: DbRecord[]) {
 }
 
 export function rowsWithTreeKids(rows: DbRecord[], kidsByParent: Record<string, DbRecord[]>) {
+  const entries = Object.entries(kidsByParent)
+  if (!entries.length) return rows
   let next = rows
-  for (const [parentId, kids] of Object.entries(kidsByParent)) {
-    if (!next.some((row) => String(row.id) === parentId || String(row.sourceId ?? '') === parentId)) continue
-    next = appendTreeKids(next, kids)
+  const attached = new Set<string>()
+  // 多级树（父 -> 子 -> 孙）可能按任意键序存在 kidsByParent 中，需迭代直到收敛。
+  for (;;) {
+    let added = false
+    for (const [parentId, kids] of entries) {
+      if (attached.has(parentId)) continue
+      if (!next.some((row) => String(row.id) === parentId || String(row.sourceId ?? '') === parentId)) continue
+      attached.add(parentId)
+      const merged = appendTreeKids(next, kids)
+      if (merged !== next) {
+        next = merged
+        added = true
+      }
+    }
+    if (!added) break
   }
   return next
 }
