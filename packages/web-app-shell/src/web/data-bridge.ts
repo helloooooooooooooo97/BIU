@@ -102,13 +102,59 @@ const bridge: ShellDataBridge = {
   subscribeInspectorPaneMenu: () => () => {},
 }
 
+let inspectorDbPathsBound = false
+let pendingInspectorDbPaths: Record<string, string> | null = null
+const dbPathSubs = new Map<() => void, (() => void) | null>()
+const paneMenuSubs = new Map<() => void, (() => void) | null>()
+const pageWidthSubs = new Map<() => void, (() => void) | null>()
+let dbPathSubBound = false
+let paneMenuSubBound = false
+let pageWidthSubBound = false
+
 export function registerShellDataBridge(partial: Partial<ShellDataBridge>) {
   Object.assign(bridge, partial)
+  if (partial.restoreInspectorDbPaths) {
+    inspectorDbPathsBound = true
+    if (pendingInspectorDbPaths !== null) {
+      const queued = pendingInspectorDbPaths
+      pendingInspectorDbPaths = null
+      bridge.restoreInspectorDbPaths(queued)
+    }
+  }
+  if (partial.subscribeInspectorDbPath) {
+    dbPathSubBound = true
+    for (const [fn, stop] of dbPathSubs) {
+      stop?.()
+      dbPathSubs.set(fn, bridge.subscribeInspectorDbPath(fn))
+    }
+  }
+  if (partial.subscribeInspectorPaneMenu) {
+    paneMenuSubBound = true
+    for (const [fn, stop] of paneMenuSubs) {
+      stop?.()
+      paneMenuSubs.set(fn, bridge.subscribeInspectorPaneMenu(fn))
+    }
+  }
+  if (partial.subscribePageWidth) {
+    pageWidthSubBound = true
+    for (const [fn, stop] of pageWidthSubs) {
+      stop?.()
+      pageWidthSubs.set(fn, bridge.subscribePageWidth(fn))
+    }
+  }
 }
 
 export const hydratePagePrefs: ShellDataBridge['hydratePagePrefs'] = () => bridge.hydratePagePrefs()
 export const getPagePrefs: ShellDataBridge['getPagePrefs'] = () => bridge.getPagePrefs()
-export const subscribePageWidth: ShellDataBridge['subscribePageWidth'] = (fn) => bridge.subscribePageWidth(fn)
+export const subscribePageWidth: ShellDataBridge['subscribePageWidth'] = (fn) => {
+  const stop = pageWidthSubBound ? bridge.subscribePageWidth(fn) : null
+  pageWidthSubs.set(fn, stop)
+  return () => {
+    const cur = pageWidthSubs.get(fn)
+    pageWidthSubs.delete(fn)
+    cur?.()
+  }
+}
 export const getWorkspaceProfile: ShellDataBridge['getWorkspaceProfile'] = () => bridge.getWorkspaceProfile()
 export const resetWorkspaceProfileGet: ShellDataBridge['resetWorkspaceProfileGet'] = () => bridge.resetWorkspaceProfileGet()
 export const overlayDataRoute: ShellDataBridge['overlayDataRoute'] = () => bridge.overlayDataRoute()
@@ -117,22 +163,42 @@ export const loadTags: ShellDataBridge['loadTags'] = (collectionPath) => bridge.
 export function LayoutPrefsMenu(props: Record<string, unknown>) {
   return createElement(bridge.LayoutPrefsMenu, props)
 }
-export const getInspectorDbPath: ShellDataBridge['getInspectorDbPath'] = (paneId) => bridge.getInspectorDbPath(paneId)
+export const getInspectorDbPath: ShellDataBridge['getInspectorDbPath'] = (paneId) =>
+  !inspectorDbPathsBound && pendingInspectorDbPaths ? pendingInspectorDbPaths[paneId] : bridge.getInspectorDbPath(paneId)
 export const isInspectorPaneAbandoned: ShellDataBridge['isInspectorPaneAbandoned'] = (paneId) =>
   bridge.isInspectorPaneAbandoned(paneId)
-export const restoreInspectorDbPaths: ShellDataBridge['restoreInspectorDbPaths'] = (paths) =>
+export const restoreInspectorDbPaths: ShellDataBridge['restoreInspectorDbPaths'] = (paths) => {
+  if (!inspectorDbPathsBound) {
+    pendingInspectorDbPaths = paths ? { ...paths } : {}
+    return
+  }
   bridge.restoreInspectorDbPaths(paths)
+}
 export const reuseInspectorOfferPane: ShellDataBridge['reuseInspectorOfferPane'] = (tabId, opened) =>
   bridge.reuseInspectorOfferPane(tabId, opened)
 export const snapshotInspectorDbPaths: ShellDataBridge['snapshotInspectorDbPaths'] = () =>
-  bridge.snapshotInspectorDbPaths()
-export const subscribeInspectorDbPath: ShellDataBridge['subscribeInspectorDbPath'] = (fn) =>
-  bridge.subscribeInspectorDbPath(fn)
+  !inspectorDbPathsBound && pendingInspectorDbPaths ? { ...pendingInspectorDbPaths } : bridge.snapshotInspectorDbPaths()
+export const subscribeInspectorDbPath: ShellDataBridge['subscribeInspectorDbPath'] = (fn) => {
+  const stop = dbPathSubBound ? bridge.subscribeInspectorDbPath(fn) : null
+  dbPathSubs.set(fn, stop)
+  return () => {
+    const cur = dbPathSubs.get(fn)
+    dbPathSubs.delete(fn)
+    cur?.()
+  }
+}
 export const bindInspectorPaneMenuDismiss: ShellDataBridge['bindInspectorPaneMenuDismiss'] = (fn) =>
   bridge.bindInspectorPaneMenuDismiss(fn)
 export const getInspectorPaneMenu: ShellDataBridge['getInspectorPaneMenu'] = (id) =>
   bridge.getInspectorPaneMenu(id)
 export const getInspectorPaneMenuVersion: ShellDataBridge['getInspectorPaneMenuVersion'] = () =>
   bridge.getInspectorPaneMenuVersion()
-export const subscribeInspectorPaneMenu: ShellDataBridge['subscribeInspectorPaneMenu'] = (fn) =>
-  bridge.subscribeInspectorPaneMenu(fn)
+export const subscribeInspectorPaneMenu: ShellDataBridge['subscribeInspectorPaneMenu'] = (fn) => {
+  const stop = paneMenuSubBound ? bridge.subscribeInspectorPaneMenu(fn) : null
+  paneMenuSubs.set(fn, stop)
+  return () => {
+    const cur = paneMenuSubs.get(fn)
+    paneMenuSubs.delete(fn)
+    cur?.()
+  }
+}
