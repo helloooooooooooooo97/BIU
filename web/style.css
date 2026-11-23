@@ -14033,6 +14033,29 @@ html:not(.has-js) .site [data-reveal] {
   margin: var(--biu-space-6) 0;
 }
 
+.site-usecase-jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--biu-space-2);
+  margin-top: var(--biu-space-5);
+}
+
+.site-usecase-jump a {
+  padding: 6px 12px;
+  border-radius: var(--biu-radius-full);
+  background: rgba(255, 255, 255, .04);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
+  font-size: var(--biu-font-size-3);
+  color: rgba(255, 255, 255, .74);
+  text-decoration: none;
+  transition: background .15s ease, color .15s ease;
+}
+
+.site-usecase-jump a:hover {
+  background: rgba(255, 255, 255, .1);
+  color: var(--biu-color-on-emphasis);
+}
+
 @media (max-width: 960px) {
   .site-usecase-summary-strip,
   .site-usecase-cap-grid,

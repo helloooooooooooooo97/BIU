@@ -17,11 +17,11 @@ const BLOCKS: Block[] = [
     id: 'pages',
     index: '01',
     title: 'Pages',
-    lead: 'Pages are containers for composing software.',
+    lead: 'One bounded unit unifying logic, state, environment, and delivery.',
     points: [
-      'Write content and add as many plugin blocks as you need—a table, whiteboard, coding exercise, or video clip, each handling its own part.',
-      'Page properties provide a shared runtime environment for these plugins. The same plugin on different pages reads each page’s own configuration and data.',
-      'Multiple blocks read and write the same data, forming one integrated service rather than a collection of unrelated embeds.',
+      'Freeform prose and structured plugin blocks coexist on one page—combining built-in software, external application slices, and agent-authored tools without isolated iframes.',
+      'Page properties form the shared runtime environment: one plugin codebase placed on different client pages isolates its state and adapts automatically to each page’s currency, SLA, and rules.',
+      'Every block subscribes to a reactive property bus over the same underlying data so a single write converges across the page in milliseconds.',
     ],
     image: '/site/shot-page.webp',
     alt: 'A page with a masthead, an Excalidraw whiteboard, and an algorithm exercise card, each powered by a plugin',
@@ -29,12 +29,12 @@ const BLOCKS: Block[] = [
   {
     id: 'plugins',
     index: '02',
-    title: 'Plugins',
-    lead: 'Every block on a page is software provided by a plugin.',
+    title: 'Plugins & Application Slices',
+    lead: 'Dual-mode backends: run in a local controlled sandbox, or slice external services.',
     points: [
-      'Block types are not hard-coded into the platform. Install a plugin to add a new type.',
-      'Build plugins in a sandbox, test them on a page, and package them when they are ready. Both people and agents can create them.',
-      'Every block is also a data record that you can query, copy, and reuse on other pages.',
+      'Block types are never hardcoded. Controlled host runtimes power isolated code sandboxes, real PTY terminals, and local file indexing—working fully offline on desktop.',
+      'A plugin’s backend never has to migrate into BIU: slice the 5% you need from Apifox, GitHub, internal APIs, or standalone microservices, and persist each run as a structured snapshot right inside the page.',
+      'Matching blocks across dozens of pages automatically aggregate into queryable cross-page tables with zero manual schema wiring.',
     ],
     image: '/site/shot-plugins.webp',
     alt: 'Plugin table with one plugin per row and controls to install, enable, or stop each one',
@@ -42,12 +42,12 @@ const BLOCKS: Block[] = [
   {
     id: 'share',
     index: '03',
-    title: 'Sharing',
-    lead: 'Share a working piece of software in a single page.',
+    title: 'Distribution & Condition Permissions',
+    lead: 'Sharing one link is a complete software release.',
     points: [
-      'When you share a page, its content, attachments, and plugin source code are packaged together.',
-      'Recipients can use it as soon as they open it, with no tools to install or environment to rebuild.',
-      'It is an easy way to deliver a complete service to clients, students, or colleagues.',
+      'Dependency closure resolves per page—bundling prose, attachments, and referenced plugin source into a self-contained link recipients run immediately in the browser.',
+      'Replace brittle static ACL lists with dynamic Data View × Member View evaluation that stays accurate as teams, cohorts, and records evolve.',
+      'The exact same permission engine constrains both humans and any agent acting on their behalf, with full traceability.',
     ],
     image: '/site/shot-share.webp',
     alt: 'A shared page where the whiteboard and algorithm exercise card work directly from the link',
@@ -55,12 +55,12 @@ const BLOCKS: Block[] = [
   {
     id: 'agent',
     index: '04',
-    title: 'Agents',
-    lead: 'Agents and people work in the same workspace.',
+    title: 'Agents & Context Engineering',
+    lead: 'Fewer tools, harder structure: humans and agents share the exact same truth.',
     points: [
-      'Agents read your pages and tables directly, so you do not need to copy and paste context.',
-      'Their output becomes pages, tables, and tasks that remain available for the next run.',
-      'When a tool is missing, an agent can build a plugin and add it to the page.',
+      'Five universal primitives (db_list, db_read, db_update, db_create, db_action) paired with self-describing table Blurbs keep the agent’s tool surface constant at O(1) as plugins grow.',
+      'Attach exact pages, tables, and skills with @ so agents act directly on structured records and persisted snapshots—never guessing coordinates from screenshots.',
+      'When a capability is missing, agents author new plugins against live page data or derive incremental layers from existing plugins and open-source repos.',
     ],
     image: '/site/shot-agent.webp',
     alt: 'Typing @ in the chat input adds pages and tasks directly to the agent context',
@@ -68,12 +68,12 @@ const BLOCKS: Block[] = [
   {
     id: 'tasks',
     index: '05',
-    title: 'Task Board',
-    lead: 'Multiple agents coordinate through a board, not a group chat.',
+    title: 'Task Graph & Approval Gates',
+    lead: 'Multi-agent coordination on a structured board, guarded by human sign-off.',
     points: [
-      'Every task card identifies its owner and dependencies, turning the workflow into a clear graph.',
-      'When an upstream task finishes, work passes downstream automatically, with execution traces shown beside each task.',
-      'People can take over, reassign, or review work at any time.',
+      'Every task card declares its owner, dependencies, and live context—handing work downstream automatically with execution traces beside each card.',
+      'Sensitive backend actions such as locking contracts, sending externally, or mutating production pause at an explicit approval gate.',
+      'Every key state transition appends chronologically to events.log for deterministic replay and audit.',
     ],
     image: '/site/shot-tasks.webp',
     alt: 'Task table with status, priority, difficulty, and agent assignment for each task',
@@ -82,11 +82,11 @@ const BLOCKS: Block[] = [
     id: 'spaces',
     index: '06',
     title: 'Local and Cloud',
-    lead: 'Choose the type of space when you create it.',
+    lead: 'Choose where your data lives when you create each space.',
     points: [
-      'Local spaces keep data on your computer, work offline, and use your own model API keys.',
-      'Cloud spaces support multi-device access, member permissions, and online collaboration. Self-hosting is available, with BIU Cloud coming soon.',
-      'Your data stays transparent: access it through APIs or find it directly on disk.',
+      'Local spaces persist pages, structured tables, and attachments in standard SQLite (.biu/biu.sqlite) and plain files on disk—offline-ready with direct calls to your own model provider.',
+      'Cloud spaces bring multi-device sync, team collaboration, and condition-based permissions—self-hostable today, with BIU Cloud coming soon.',
+      'Open source under Apache 2.0: inspect every line of code and export everything in open formats with zero lock-in.',
     ],
     image: '/site/shot-spaces.webp',
     alt: 'Space switcher for moving between spaces or creating a new one',
@@ -94,33 +94,33 @@ const BLOCKS: Block[] = [
 ]
 
 const PAGE_FLOW = [
-  { step: '01', title: 'Write context', body: 'Notes, background, and files' },
-  { step: '02', title: 'Add plugins', body: 'Whiteboards, tables, code, video' },
-  { step: '03', title: 'Fill gaps with AI', body: 'Generate custom blocks on demand' },
-  { step: '04', title: 'Share one link', body: 'Recipients open and use it right away' },
+  { step: '01', title: 'Start with live data', body: 'Records and page properties from day one' },
+  { step: '02', title: 'Compose slices', body: 'Built-in plugins and external service slices' },
+  { step: '03', title: 'Build with agents', body: 'Read state directly and grow missing blocks' },
+  { step: '04', title: 'Ship one link', body: 'Bundled runtime with cross-page aggregation' },
 ] as const
 
-/** 三种补法：缺口是什么、怎么补，加一段真实写法当例子。 */
+/** Three extension layers: capability blocks, workflow skills, external context. */
 const ECOSYSTEM = [
   {
     name: 'Plugins',
-    title: 'Your page needs a new block',
-    body: 'Build a plugin to add a new block type. Use it on any page and package it automatically when you share.',
-    file: 'Page content',
-    code: ':::editorBlock {kind=checkin plugin=page-checkin}\n{ "title": "Week 3 check-in" }\n:::',
+    title: 'Extend interactive UI and backends',
+    body: 'Build local sandbox plugins or thin frontend slices over external SaaS—reusable across pages and bundled automatically on share.',
+    file: 'Page block declaration',
+    code: ':::editorBlock {kind=api-slice plugin=apifox-runner}\n{ "endpoint": "POST /v2/orders/checkout", "env": "prod-canary" }\n:::',
   },
   {
     name: 'Skills',
-    title: 'Your agent needs your process',
-    body: 'Turn your standards and workflows into a skill, and the agent will follow them whenever it reaches that step.',
+    title: 'Codify standards and review playbooks',
+    body: 'Store checklists, compliance rules, and workflows as readable Markdown files on disk so agents follow them reliably every round.',
     file: 'SKILL.md',
-    code: '---\nname: grade-assignment\ndescription: Grade algorithm exercises using this rubric\n---\nReview the approach, then the code, and finally the edge cases.',
+    code: '---\nname: release-check\ndescription: Verify API snapshots and error rates before rollout\n---\nCheck checkout assertion snapshots first, then 10-minute error rates; halt on anomaly.',
   },
   {
     name: 'MCP',
-    title: 'Your data lives elsewhere',
-    body: 'Connect an MCP server so agents can look up information directly, without you copying it over.',
-    file: 'MCP server',
+    title: 'Connect external system context',
+    body: 'Attach standard MCP servers so agents query external repositories, trackers, and databases directly without manual copying.',
+    file: 'MCP config',
     code: '{\n  "name": "github",\n  "command": "npx",\n  "args": ["-y", "@modelcontextprotocol/server-github"]\n}',
   },
 ] as const
@@ -190,8 +190,8 @@ export function MarketingProduct({ onLogin, onStart }: { onLogin: SiteAction; on
 
         <section className="site-ecosystem" id="ecosystem">
           <div className="site-ecosystem-heading" data-reveal>
-            <p className="site-section-label">Extend</p>
-            <h2>Build whatever is missing</h2>
+            <p className="site-section-label">Extension Architecture</p>
+            <h2>Three open layers: Plugins, Skills, and MCP</h2>
           </div>
           <div className="site-ecosystem-grid">
             {ECOSYSTEM.map((item) => (

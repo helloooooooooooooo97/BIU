@@ -747,13 +747,13 @@ type IndustryExtra = {
 
 const INDUSTRY_EXTRA_EN: Record<string, IndustryExtra> = {
   tech: {
-    replaces: 'Replaces: Docs + Whiteboard + Terminal/Postman + Issue Tracker',
-    sharedState: 'Service name, failing node, and task status live in shared page properties: select an unhealthy node on the topology canvas, the backend probe retargets automatically, and postmortem tasks appear on the board.',
+    replaces: 'Replaces: Docs + Full Apifox/Postman + Sentry Console + Issue Tracker',
+    sharedState: 'Service name, environment, and failing node live in shared page properties: switching env retargets both the Apifox API-testing slice and Sentry error slice; every run persists as an auditable snapshot and rolls up across releases.',
     workflow: [
-      ['01 · Start one page with live context', 'Put the PRD or incident runbook, architecture canvas, and diagnostic blocks on one page bound to service metadata.'],
-      ['02 · Run tools together without switching', 'Demo interactive prototypes or execute real sandboxed commands in-page—no copy-pasting across terminal, Postman, and Jira.'],
-      ['03 · Let agents read and act directly', 'Mention slow-query logs and recent commits with @ so the agent pinpoints root causes, drafts migrations, and splits tasks.'],
-      ['04 · Accumulate reusable engineering assets', 'Save rollout checklists and health probes as reusable plugins so the next on-call shift duplicates and runs immediately.'],
+      ['01 · Start one page with external slices', 'Combine release notes, architecture canvas, an Apifox single-endpoint slice, and a Sentry error-rate slice without opening three bloated SaaS apps.'],
+      ['02 · Run slices and persist snapshots', 'Flip one page property env to retarget every slice; each execution writes status code and latency directly into the page block as a structured snapshot.'],
+      ['03 · Let agents read snapshots and act', 'Mention slow-query logs and API snapshots with @ so the agent pinpoints root causes, drafts migrations, and opens tickets behind an approval gate.'],
+      ['04 · Roll up reliability across releases', 'API slice blocks across thirty release pages aggregate automatically into a queryable latency and stability history table.'],
     ],
   },
   education: {
@@ -948,12 +948,19 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
           </div>
           <div>
             <strong>6 Unified Capabilities</strong>
-            <span>Reactive plugins · AI build · Auto-indexed tables · Agent actions · One-link delivery · Derivation</span>
+            <span>Reactive plugins · App slicing · Auto-indexed tables · Agent actions · One-link delivery · Derivation</span>
           </div>
         </div>
+        <nav className="site-usecase-jump" aria-label="On this page">
+          <a href="#live-demo">01 Interactive Showcase</a>
+          <a href="#capabilities">02 Six Capabilities</a>
+          <a href="#industries">03 Six Industries</a>
+          <a href="#roles">04 12 Role Pages</a>
+          <a href="#extended">05 More Domains</a>
+        </nav>
       </section>
 
-      <section className="site-usecase-demo-section" aria-label="Interactive Use Case Showcase" data-reveal>
+      <section id="live-demo" className="site-usecase-demo-section" aria-label="Interactive Use Case Showcase" data-reveal>
         <div className="site-usecase-demo-head">
           <p className="site-section-label">Try It Live · Cross-Plugin Shared State</p>
           <h2>Pick an industry and test multiple tools reacting on one page</h2>
@@ -978,7 +985,7 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
         <IndustryInteractiveDemo key={demoSlug} slug={demoSlug} locale="en" />
       </section>
 
-      <section className="site-usecase-section" aria-label="Use cases by core capability" data-reveal>
+      <section id="capabilities" className="site-usecase-section" aria-label="Use cases by core capability" data-reveal>
         <div className="site-usecase-section-head">
           <p className="site-section-label">Capabilities in Action · How BIU Powers Every Use Case</p>
           <h2>Six core capabilities working together in real workflows</h2>
@@ -998,7 +1005,7 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
         </div>
       </section>
 
-      <section className="site-usecase-section" aria-label="Six core industries" data-reveal>
+      <section id="industries" className="site-usecase-section" aria-label="Six core industries" data-reveal>
         <div className="site-usecase-section-head">
           <p className="site-section-label">Six Core Industries</p>
           <h2>Explore full stack replacements, workflows, and role demos</h2>
@@ -1027,7 +1034,7 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
         </div>
       </section>
 
-      <section className="site-usecase-section" aria-label="Browse by role" data-reveal>
+      <section id="roles" className="site-usecase-section" aria-label="Browse by role" data-reveal>
         <div className="site-usecase-section-head">
           <p className="site-section-label">By Role · 12 Complete Working Pages</p>
           <h2>What goes inside each role’s working page?</h2>
@@ -1089,7 +1096,7 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
         </div>
       </section>
 
-      <section className="site-usecase-section" aria-label="More industries and personal workflows" data-reveal>
+      <section id="extended" className="site-usecase-section" aria-label="More industries and personal workflows" data-reveal>
         <div className="site-usecase-section-head">
           <p className="site-section-label">Beyond Six Industries</p>
           <h2>Any workflow combining docs, tools, data, and delivery fits on one page</h2>

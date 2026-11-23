@@ -21,7 +21,17 @@ const SECTIONS = [
   {
     index: '04',
     title: 'Open and auditable',
-    body: 'All code is open source under Apache 2.0. You can inspect the source to verify where data is stored and where it is sent. Actions are recorded in an append-only event log for later review. To report a security issue, email 348876414@qq.com.',
+    body: 'All code is open source under Apache 2.0. You can inspect the source to verify where data is stored and where it is sent. Every key state transition appends chronologically to events.log for deterministic review. To report a security issue, email 348876414@qq.com.',
+  },
+  {
+    index: '05',
+    title: 'Plugin isolation & sandboxes',
+    body: 'Built-in and AI-authored plugins mount inside isolated Render Boundaries and a controlled host bridge—so a faulty block degrades on its own without crashing the page. Host actions stay bounded by workspace sandboxes, while external application slices keep credentials and heavy backends on your own services.',
+  },
+  {
+    index: '06',
+    title: 'Agents share the same permission engine',
+    body: 'Agents never bypass authorization. Any agent acting on behalf of a user is constrained by the exact same Data View × Member View evaluator, and sensitive actions (external delivery, locking contracts, production writes) pause at an explicit human approval gate.',
   },
 ] as const
 

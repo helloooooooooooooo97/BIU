@@ -18,7 +18,7 @@ const PRODUCT_SURFACES = [
     video: { webm: '/site/demo-allinone.webm', mp4: '/site/demo-allinone.mp4' },
     image: '/site/demo-allinone.webp',
     size: [3840, 2400],
-    lead: 'In BIU, every block is fully functional software—from tables and whiteboards to coding exercises and video editing—all powered by plugins. Combine them on one page to create a complete service for your customers. For example, a header, whiteboard, coding challenges, code runner, and offer comparison become an end-to-end technical interview coaching experience.',
+    lead: 'Every block on a BIU page is live, full-stack software—from built-in plugins and agent-authored tools to slices of external systems. All blocks share one underlying state, and sharing one link delivers the complete experience.',
     alt: 'A BIU page for technical interview coaching, with a header, Excalidraw whiteboard, coding challenge cards, a code runner, and an offer comparison matrix',
   },
   {
@@ -26,7 +26,7 @@ const PRODUCT_SURFACES = [
     label: 'Plugins',
     image: '/site/shot-plugins.webp',
     size: [3840, 2400],
-    lead: 'Install a plugin to add a new working tool to your page. Turn on ready-made blocks—or describe the missing one in plain English and let an agent build it for you.',
+    lead: 'Plugin backends can run inside a controlled local sandbox or stay in external services and existing SaaS—slicing only the task-specific frontend onto your page and persisting run snapshots. Missing capabilities can be built by an agent directly against live data.',
     alt: 'BIU plugin table with one-click installation and activation for Excalidraw whiteboards, coding challenge cards, code runners, and more',
   },
   {
@@ -78,18 +78,18 @@ function usePrefersReducedMotion() {
 
 const PILLARS = [
   {
-    title: 'Shared state, not isolated embeds',
-    body: 'Whiteboards, tables, code sandboxes, and timelines on the same page read and write shared page data—one change updates the entire page without glue integrations.',
-    to: '/product#pages',
+    title: 'Shared state and external application slices',
+    body: 'Built-in plugins and slices of external SaaS read and write the same page properties—one change converges across the page, and external call results persist directly as structured snapshots.',
+    to: '/blog/application-slicing',
   },
   {
-    title: 'Freeform prose meets structured data',
-    body: 'Write freely in prose while plugin blocks and page properties stay structured. People read a cohesive page; the system indexes every record for instant filtering and rollups.',
+    title: 'Freeform prose meets structured tables',
+    body: 'Write freely in prose while plugin blocks and page properties stay strictly typed. People read a cohesive page; the workspace automatically indexes matching blocks across pages.',
     to: '/blog/store-software',
   },
   {
-    title: 'One page is an isolated release',
-    body: 'The same plugin placed on different pages automatically isolates each page’s data and properties. Share one link to bundle text, files, and plugins ready to run.',
+    title: 'One page is an isolated boundary and release',
+    body: 'The same plugin placed on different pages automatically isolates each page’s data and runtime environment. Share one link to bundle prose, files, and plugin source with dynamic condition permissions.',
     to: '/product#share',
   },
 ] as const
@@ -110,9 +110,9 @@ const AGENT_POINTS = [
 ] as const
 
 const HOME_COMPARE_LINE = {
-  'vs-notion': 'Plugins define your block types—combine real mini-apps on one page and share them working.',
-  'vs-obsidian': 'Also stays local and works offline, while adding structured tables and built-in agents.',
-  'vs-chatgpt': 'Outputs become reusable pages, tables, and custom tools instead of getting buried in chat.',
+  'vs-notion': 'Blocks are never hardcoded by the vendor—compose full-stack plugins and external SaaS slices sharing live state, and ship via one link.',
+  'vs-obsidian': 'Also stays local in SQLite and works offline, while adding auto-indexed tables, full-stack plugins, and native agent operations.',
+  'vs-chatgpt': 'Outputs settle directly into structured pages, reusable plugins, and skills instead of getting buried in ephemeral chat history.',
 } as const
 
 const HOME_COMPARES = COMPARE_FEATURED.flatMap((slug) => {
@@ -137,16 +137,16 @@ const HOME_POSTS = BLOG_POSTS
   .map(({ post }) => post)
 
 const HOME_FAQ = [
-  ['What is BIU?', 'BIU is an open-source, free desktop workspace where you combine notes, tables, whiteboards, code runners, video editors, and AI-built mini tools on one page—then share one link anyone can use.'],
+  ['What is BIU?', 'BIU is an open-source, free software medium for human–agent collaboration. Every block on a page is a full-stack plugin sharing live state—running locally in sandboxes or slicing external services—delivered via a single link.'],
   ['How much does it cost?', 'BIU is open source and free for desktop and self-hosting. Agents use your own model API key, billed directly by your chosen provider.'],
-  ['Where is my data stored?', 'You choose per workspace: Local Spaces keep everything on your own computer and work offline; Cloud Spaces support multi-device sync and team permissions (self-host today, official cloud coming soon).'],
-  ['Do I need to know how to code?', 'No. Use built-in pages, tables, and ready-made plugins every day. When you need a custom tool like a quote calculator or quiz card, describe it to an agent.'],
+  ['Where is my data stored?', 'You choose per workspace: Local Spaces keep everything on your own computer in standard SQLite and files offline; Cloud Spaces support multi-device sync and team permissions (self-host today, official cloud coming soon).'],
+  ['Do I need to know how to code?', 'No. Use built-in pages, tables, and ready-made plugins every day. When you need a custom capability or an external API slice, describe the workflow to an agent on the page.'],
 ] as const
 
 export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
     title: 'BIU · Compose All Your Software on One Page',
-    description: 'Put whiteboards, tables, code, video editing—even mini tools an agent writes on the spot—on one page. Share one link and anyone can use it right away.',
+    description: 'The next software medium for humans and agents: compose full-stack plugins, structured data, and external application slices on one page, then ship with a single link.',
     path: '/',
   })
   const [activeSurface, setActiveSurface] = useState(0)

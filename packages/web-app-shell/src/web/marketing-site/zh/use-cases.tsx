@@ -756,13 +756,13 @@ type IndustryExtra = {
 
 const INDUSTRY_EXTRA_ZH: Record<string, IndustryExtra> = {
   tech: {
-    replaces: '替代：文档工具 + 架构白板 + 终端/Postman + 项目看板',
-    sharedState: '服务名、故障节点与任务状态写入同一页属性：在拓扑图选中异常节点，终端探针自动切换目标服务，止血后任务板自动生成复盘卡。',
+    replaces: '替代：文档工具 + 完整 Apifox/Postman + Sentry 面板 + 项目看板',
+    sharedState: '服务名、目标环境与故障节点写入同一页属性：切换 env 即同步切换 Apifox 接口测试切片与 Sentry 错误率切片；每次运行结果直接落盘为文档快照，多版本发布页自动汇总出接口稳定性趋势表。',
     workflow: [
-      ['01 · 起一页并载入上下文', '在同一页放入需求/排障正文、架构画板与接口诊断块，绑定服务与目标指标属性。'],
-      ['02 · 页内多软件实时联动', '前端直接演示可交互原型或执行沙箱命令，无需切去终端、Postman 与看板来回复制。'],
-      ['03 · 智能体读写与执行', '用 @ 引用慢 SQL 日志与提交记录，Agent 直接定位根因、起草迁移脚本并拆解任务卡。'],
-      ['04 · 沉淀与团队复用', '把排障清单与埋点验收卡沉淀为可复用插件，下一次值班复制页面即可直接执行。'],
+      ['01 · 起一页并挂载外部切片', '在同一页放入发布单/排障正文、架构画板，以及 Apifox 单接口测试切片与 Sentry 监控切片，无需打开整套重型 SaaS。'],
+      ['02 · 调参运行并生成快照', '改一次页面属性 env，所有切片同步切换目标环境；点击运行后，状态码与延迟直接写入页面块做可审计快照。'],
+      ['03 · 智能体读写快照与执行', '用 @ 引用慢 SQL 日志与接口快照，Agent 直接定位根因、起草迁移 SQL 并拆解缺陷任务卡，敏感变更走审批门。'],
+      ['04 · 跨版本自动汇聚趋势表', '30 份发布页里的接口切片块自动汇总为结构化表，随时回溯核心接口的延迟与稳定性演变。'],
     ],
   },
   education: {
@@ -957,12 +957,19 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
           </div>
           <div>
             <strong>6 项底层能力贯通</strong>
-            <span>全栈联动 · AI 构建 · 自动成表 · 智能体读写 · 一链交付 · 衍生复用</span>
+            <span>全栈联动 · 应用切片 · 自动成表 · 智能体读写 · 一链交付 · 衍生复用</span>
           </div>
         </div>
+        <nav className="site-usecase-jump" aria-label="页面快速导航">
+          <a href="#live-demo">01 在线交互体验</a>
+          <a href="#capabilities">02 六项核心能力</a>
+          <a href="#industries">03 六大核心行业</a>
+          <a href="#roles">04 12 套角色工作页</a>
+          <a href="#extended">05 更多扩展领域</a>
+        </nav>
       </section>
 
-      <section className="site-usecase-demo-section" aria-label="在线交互用例体验" data-reveal>
+      <section id="live-demo" className="site-usecase-demo-section" aria-label="在线交互用例体验" data-reveal>
         <div className="site-usecase-demo-head">
           <p className="site-section-label">先亲手点一点 · 跨软件实时联动</p>
           <h2>选一个行业，体验多款软件在同一页共享状态</h2>
@@ -987,7 +994,7 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
         <IndustryInteractiveDemo key={demoSlug} slug={demoSlug} locale="zh" />
       </section>
 
-      <section className="site-usecase-section" aria-label="按核心能力看用例" data-reveal>
+      <section id="capabilities" className="site-usecase-section" aria-label="按核心能力看用例" data-reveal>
         <div className="site-usecase-section-head">
           <p className="site-section-label">功能全景 · BIU 凭什么能跑通这些用例</p>
           <h2>六项核心能力，在真实业务里如何协同工作</h2>
@@ -1007,7 +1014,7 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
         </div>
       </section>
 
-      <section className="site-usecase-section" aria-label="六大行业用例全景" data-reveal>
+      <section id="industries" className="site-usecase-section" aria-label="六大行业用例全景" data-reveal>
         <div className="site-usecase-section-head">
           <p className="site-section-label">六大核心行业</p>
           <h2>进入具体行业，查看完整工具替代方案与角色演示</h2>
@@ -1036,7 +1043,7 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
         </div>
       </section>
 
-      <section className="site-usecase-section" aria-label="按角色查找用例" data-reveal>
+      <section id="roles" className="site-usecase-section" aria-label="按角色查找用例" data-reveal>
         <div className="site-usecase-section-head">
           <p className="site-section-label">按岗位直达 · 12 套角色工作页</p>
           <h2>不同角色的一页工作台，具体装了哪些插件？</h2>
@@ -1098,7 +1105,7 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
         </div>
       </section>
 
-      <section className="site-usecase-section" aria-label="更多行业与个人高频用例" data-reveal>
+      <section id="extended" className="site-usecase-section" aria-label="更多行业与个人高频用例" data-reveal>
         <div className="site-usecase-section-head">
           <p className="site-section-label">更多行业与个人用例</p>
           <h2>只要你的工作涉及「文档 + 工具 + 数据 + 交付」，都能装进一页</h2>
