@@ -1,38 +1,113 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { emptyFilterGroup } from '../query-logic.ts'
+import { rankListedViews, type SavedView } from './saved-view.ts'
+import { createBrowserViewCrud } from './use-browser-view-crud.ts'
+import { loadViews, rememberViews } from './view-storage.ts'
 
-test('view dropdown reuses the sort-menu grip and persists rank via patch', () => {
-  const menu = readFileSync(resolve(import.meta.dirname, './view-order-menu.tsx'), 'utf8')
-  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
-  const crud = readFileSync(resolve(import.meta.dirname, './use-browser-view-crud.ts'), 'utf8')
-  const saved = readFileSync(resolve(import.meta.dirname, './saved-view.ts'), 'utf8')
-  const storage = readFileSync(resolve(import.meta.dirname, './view-storage.ts'), 'utf8')
-  assert.match(menu, /DndGrip/)
-  assert.match(menu, /fsdb-query-grip/)
-  assert.match(menu, /activationConstraint: \{ distance: 4 \}/)
-  assert.match(menu, /restrictToVerticalAxis/)
-  assert.match(menu, /moveList/)
-  assert.match(browser, /persistViewOrder/)
-  assert.match(crud, /persistViewDisplay\(collectionPath, view\.id, \{ rank: view\.rank \}\)/)
-  const orderStart = crud.indexOf('function persistViewOrder')
-  const order = crud.slice(orderStart, crud.indexOf('function persistViewsWith', orderStart))
-  assert.match(order, /const baseline = loadViews\(collectionPath\)/)
-  assert.match(order, /setViews\(next\)/)
-  assert.match(order, /rememberViews\(collectionPath, next\)/)
-  assert.match(order, /noteLocalSavedViewsWrite\(collectionPath\)/)
-  assert.ok(order.indexOf('noteLocalSavedViewsWrite(collectionPath)') < order.indexOf('void persistViewsFor(collectionPath, next, { baseline })'))
-  assert.match(order, /persistViewsFor\(collectionPath, next, \{ baseline \}\)\.then\(\(ok\) => \{/)
-  assert.match(order, /if \(ok \|\| viewsRef\.current !== next\) return/)
-  assert.match(order, /setViews\(current\)/)
-  assert.ok(order.indexOf('const baseline = loadViews(collectionPath)') < order.indexOf('rememberViews(collectionPath, next)'))
-  assert.ok(order.indexOf('setViews(next)') < order.indexOf('void persistViewsFor(collectionPath, next, { baseline })'))
-  assert.ok(order.indexOf('void persistViewsFor(collectionPath, next, { baseline })') < order.indexOf('setViews(current)'))
-  assert.match(crud, /pushSavedViewsPatch/)
-  assert.match(saved, /rank\?: number/)
-  assert.match(saved, /export function sortViewsByRank/)
-  assert.match(saved, /export function rankListedViews/)
-  assert.match(browser, /rankListedViews/)
-  assert.match(storage, /'rank'/)
+test('persistViewOrder paints new rank order immediately, sends diff upsert, and rolls back on failure', async () => {
+  const path = '/pages-behavior-reorder'
+  const mem: Record<string, string> = {}
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => mem[key] ?? null,
+      setItem: (key: string, value: string) => { mem[key] = value },
+      removeItem: (key: string) => { delete mem[key] },
+    },
+  })
+  const prevWin = (globalThis as Record<string, unknown>).window
+  if (!prevWin) {
+    ;(globalThis as Record<string, unknown>).window = { dispatchEvent: () => true }
+  }
+
+  const v1: SavedView = { id: 'v1', name: '一', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: ['title'], rank: 0 }
+  const v2: SavedView = { id: 'v2', name: '二', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: ['title'], rank: 1 }
+
+  const makeCrud = () => {
+    rememberViews(path, [v1, v2])
+    const viewsRef = { current: [v1, v2] }
+    let latest = [v1, v2]
+    const crud = createBrowserViewCrud({
+      sheet: false,
+      collectionPath: path,
+      title: '页面',
+      routeScope: null,
+      catalogLocks: {},
+      schemaDefaultKeys: ['title'],
+      views: latest,
+      viewsRef,
+      setViews: (next) => { latest = typeof next === 'function' ? next(latest) : next },
+      activeViewId: 'v1',
+      activeView: v1,
+      activeViewIdRef: { current: 'v1' },
+      viewsWriteGenRef: { current: 0 },
+      setViewsSaveError: () => {},
+      setViewMenuOpen: () => {},
+      pageRef: { current: null },
+      mode: 'table',
+      sortField: 'title',
+      sortDir: 'asc',
+      sorts: [],
+      filterTree: emptyFilterGroup(),
+      columnKeys: ['title'],
+      columnWidths: {},
+      groupBy: '',
+      showTree: false,
+      wrapCells: false,
+      truncateCells: true,
+      freezeTitle: false,
+      query: '',
+      listedViews: (_p, user) => user,
+      paintListedViews: () => viewsRef.current,
+      rankListedViews,
+      selectView: () => {},
+    })
+    return { crud, viewsRef }
+  }
+
+  const prevFetch = globalThis.fetch
+  try {
+    // 1. Persisting new order sends upsert with updated ranks (not skipped)
+    const upserts: Array<Array<{ id: string; rank?: number }>> = []
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes('/api/db/saved-views')) {
+        const body = JSON.parse(String(init?.body ?? '{}')) as { upsert?: Array<{ id: string; rank?: number }> }
+        upserts.push(body.upsert ?? [])
+        return new Response('{"ok":true}', { status: 200 })
+      }
+      return new Response(
+        JSON.stringify({
+          items: [
+            { viewId: 'v2', title: '二', tablePath: path, rank: 0 },
+            { viewId: 'v1', title: '一', tablePath: path, rank: 1 },
+          ],
+          total: 2,
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    }) as typeof fetch
+
+    const ok = makeCrud()
+    ok.crud.persistViewOrder(['v2', 'v1'])
+    assert.deepEqual(ok.viewsRef.current.map((v) => v.id), ['v2', 'v1'])
+    await new Promise((r) => setTimeout(r, 25))
+    assert.equal(upserts.length, 1)
+    assert.deepEqual(
+      upserts[0]?.map((v) => [v.id, v.rank]).sort(),
+      [['v1', 1], ['v2', 0]],
+    )
+
+    // 2. Failure rolls back to original order
+    globalThis.fetch = (async () => new Response('err', { status: 500 })) as typeof fetch
+    const fail = makeCrud()
+    fail.crud.persistViewOrder(['v2', 'v1'])
+    assert.deepEqual(fail.viewsRef.current.map((v) => v.id), ['v2', 'v1'])
+    await new Promise((r) => setTimeout(r, 25))
+    assert.deepEqual(fail.viewsRef.current.map((v) => v.id), ['v1', 'v2'])
+    assert.deepEqual(loadViews(path).map((v) => v.id), ['v1', 'v2'])
+  } finally {
+    globalThis.fetch = prevFetch
+    if (!prevWin) delete (globalThis as Record<string, unknown>).window
+  }
 })
