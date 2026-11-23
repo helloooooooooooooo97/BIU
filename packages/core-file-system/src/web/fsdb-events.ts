@@ -41,3 +41,48 @@ export const FOCUS_RECORD_TITLE = 'biu:focus-record-title' as const
 export const FOCUS_RECORD_CONTENT = 'biu:focus-record-content' as const
 export const FOCUS_SHELL_TABLE = 'biu:focus-shell-table' as const
 export const CLEAR_SHELL_TABLE_CELL = 'biu:clear-shell-table-cell' as const
+
+export type FsdbEventMap = {
+  [FSDB_SHARES_CHANGE_EVENT]: void
+  [FSDB_CRUMB_LABELS_EVENT]: void
+  [FSDB_LIST_READY_EVENT]: { path?: string } | void
+  [FSDB_DETAIL_REFRESH_EVENT]: { path?: string; recordId?: string } | void
+  [INSPECTOR_PANE_CLOSED_EVENT]: void
+  [INSPECTOR_CLOSE_EVENT]: void
+  [INSPECTOR_TOGGLE_EVENT]: void
+  [SHELL_LAYOUT_EVENT]: void
+  [TOGGLE_SHELL_SIDEBAR_EVENT]: void
+  [EXPAND_SHELL_SIDEBAR_EVENT]: void
+  [FOCUS_RECORD_TITLE]: void
+  [FOCUS_RECORD_CONTENT]: void
+  [FOCUS_SHELL_TABLE]: void
+  [CLEAR_SHELL_TABLE_CELL]: void
+}
+
+/** 类型安全的事件派发：在无 window（如单测/SSR）环境下安全空操作，兼容原生 EventTarget 监听。 */
+export function emitFsdbEvent<K extends keyof FsdbEventMap>(
+  name: K,
+  ...args: FsdbEventMap[K] extends void ? [] : [detail: FsdbEventMap[K]]
+) {
+  if (typeof window === 'undefined') return
+  const detail = args[0]
+  window.dispatchEvent(
+    detail === undefined ? new Event(name) : new CustomEvent(name, { detail }),
+  )
+}
+
+/** 类型安全的事件订阅，返回清理函数以防漏掉 removeEventListener。 */
+export function onFsdbEvent<K extends keyof FsdbEventMap>(
+  name: K,
+  handler: (detail: FsdbEventMap[K], event: Event) => void,
+): () => void {
+  if (typeof window === 'undefined') return () => {}
+  const listener: EventListener = (event) => {
+    const detail = (event as CustomEvent<FsdbEventMap[K]>).detail
+    handler(detail, event)
+  }
+  window.addEventListener(name, listener)
+  return () => {
+    window.removeEventListener(name, listener)
+  }
+}

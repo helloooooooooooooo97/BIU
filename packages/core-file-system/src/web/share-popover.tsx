@@ -6,7 +6,7 @@ import { useFloatingPosition } from '@biu/biu-ui/floating-position'
 import { OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import { VIEWS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH } from './database-path.ts'
 import { listCollection, readJson } from './db-client.ts'
-import { FSDB_SHARES_CHANGE_EVENT } from './fsdb-events.ts'
+import { FSDB_SHARES_CHANGE_EVENT, emitFsdbEvent } from './fsdb-events.ts'
 
 export { ShareScopeLabel, ShareRoleLabel } from './share-scope-label.tsx'
 export { ShareScopeDetail, ShareRoleDetail } from './share-chain-detail.tsx'
@@ -335,7 +335,7 @@ function WorkspaceAccess({
         setMemberQuery('')
         setSelectedMemberId('')
         setMemberPickerOpen(false)
-        window.dispatchEvent(new Event(FSDB_SHARES_CHANGE_EVENT))
+        emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
         return load()
       })
       .catch((err) => setError(err instanceof Error ? err.message : '无法授权'))
@@ -349,7 +349,7 @@ function WorkspaceAccess({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ collection, ...(viewId ? { viewId } : { recordId }), subjectType, subjectId }),
       })
-      window.dispatchEvent(new Event(FSDB_SHARES_CHANGE_EVENT))
+      emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : '无法移除协作者')
@@ -370,7 +370,7 @@ function WorkspaceAccess({
           inheritanceMode: on ? 'inherit' : 'custom',
         }),
       })
-      window.dispatchEvent(new Event(FSDB_SHARES_CHANGE_EVENT))
+      emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : '无法切换继承模式')
@@ -396,7 +396,7 @@ function WorkspaceAccess({
       setGuestUrl(url)
       await navigator.clipboard.writeText(url)
       setGuestCopied(true)
-      window.dispatchEvent(new Event(FSDB_SHARES_CHANGE_EVENT))
+      emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
       window.setTimeout(() => setGuestCopied(false), 1600)
     } catch (err) {
       setError(err instanceof Error ? err.message : '无法生成临时访客链接')
@@ -708,7 +708,7 @@ export function SharePanel({
       })
       applyPayload(data, opts.pin, opts.flagsOnly)
       if (patch.enabled === false && data.share == null && share) rememberPin(share.token, '')
-      window.dispatchEvent(new Event(FSDB_SHARES_CHANGE_EVENT))
+      emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
       return data.share
     } catch (err) {
       setError(String(err instanceof Error ? err.message : err))
