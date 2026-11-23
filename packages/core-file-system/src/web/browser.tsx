@@ -1,4 +1,5 @@
 import { writeStorageString } from '@biu/biu-ui/client-storage'
+import { useBrowserPopovers } from './use-browser-popovers.ts'
 import { lazy, memo, Suspense, type ComponentProps, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { TOOLTIP_OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
@@ -527,9 +528,7 @@ export function CollectionBrowser({
   )
   const creatingGroupsRef = useRef(new Set<string>())
   const [creatingGroup, setCreatingGroup] = useState<string | null>(null)
-  const [createScopeOpen, setCreateScopeOpen] = useState(false)
   const [createTypePath, setCreateTypePath] = useState(PAGES_COLLECTION_PATH)
-  const [createTypeOpen, setCreateTypeOpen] = useState(false)
   useEffect(() => {
     let live = true
     void getWorkspaceProfile()
@@ -715,15 +714,31 @@ export function CollectionBrowser({
   const [viewsOpen, setViewsOpen] = useState(() => getSidebarPersist(SIDEBAR_PERSIST.viewsOpen(moduleId || collectionPath)) !== '0')
   const [sidebarGone, setSidebarGone] = useState(false)
   const [inspectorOpen, setInspectorOpen] = useState(() => getSidebarPersist(SIDEBAR_PERSIST.inspectorOpen) === '1')
-  const [viewMenuOpen, setViewMenuOpen] = useState(false)
-  const [modeMenuOpen, setModeMenuOpen] = useState(false)
-  const [sortMenuOpen, setSortMenuOpen] = useState(false)
-  const [columnMenuOpen, setColumnMenuOpen] = useState(false)
-  const [filterOpen, setFilterOpen] = useState(false)
-  const [configOpen, setConfigOpen] = useState(false)
-  const [groupOpen, setGroupOpen] = useState(false)
-  const [layoutOpen, setLayoutOpen] = useState(false)
-  const [bulkMenuOpen, setBulkMenuOpen] = useState(false)
+  const {
+    toggleMenu,
+    viewMenuOpen,
+    setViewMenuOpen,
+    modeMenuOpen,
+    setModeMenuOpen,
+    sortMenuOpen,
+    setSortMenuOpen,
+    columnMenuOpen,
+    setColumnMenuOpen,
+    filterOpen,
+    setFilterOpen,
+    configOpen,
+    setConfigOpen,
+    groupOpen,
+    setGroupOpen,
+    layoutOpen,
+    setLayoutOpen,
+    bulkMenuOpen,
+    setBulkMenuOpen,
+    createScopeOpen,
+    setCreateScopeOpen,
+    createTypeOpen,
+    setCreateTypeOpen,
+  } = useBrowserPopovers()
   useLayoutEffect(() => {
     if (!bulkMenuOpen) return
     const place = () => {
@@ -1094,19 +1109,7 @@ export function CollectionBrowser({
 
   useEffect(() => {
     if (!pickedIds.length) setBulkMenuOpen(false)
-  }, [pickedIds.length])
-
-  function toggleMenu(which: 'view' | 'mode' | 'sort' | 'columns' | 'filter' | 'config' | 'group' | 'layout') {
-    setViewMenuOpen(which === 'view' && !viewMenuOpen)
-    setModeMenuOpen(which === 'mode' && !modeMenuOpen)
-    setSortMenuOpen(which === 'sort' && !sortMenuOpen)
-    setColumnMenuOpen(which === 'columns' && !columnMenuOpen)
-    setFilterOpen(which === 'filter' && !filterOpen)
-    setConfigOpen(which === 'config' && !configOpen)
-    setGroupOpen(which === 'group' && !groupOpen)
-    setLayoutOpen(which === 'layout' && !layoutOpen)
-    setBulkMenuOpen(false)
-  }
+  }, [pickedIds.length, setBulkMenuOpen])
 
   const schemaRef = useRef(stat?.schema)
   schemaRef.current = stat?.schema
