@@ -249,14 +249,13 @@ export const BrowserRecordStage = memo(function BrowserRecordStage(props: Browse
               </div>
             ) : null}
           </div>
-          {grouping ? null : (
+          {grouping || total <= pageSize ? null : (
             <div className="fsdb-pager" data-biu-ignore>
-              <span className="fsdb-pager-meta" title={total ? `共 ${total} 条` : '暂无记录'}>
+              <span className="fsdb-pager-meta" title={`共 ${total} 条`}>
                 <HashtagIcon aria-hidden className="size-[14px]" />
                 <span>{total}</span>
               </span>
               <div className="fsdb-pager-nav">
-                <PagerSizeControl pageSize={pageSize} onChange={changePageSize} />
                 <button
                   type="button"
                   className="tasks-icon-btn"

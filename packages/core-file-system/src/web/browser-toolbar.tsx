@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, type ReactElement, type ReactNode, type RefObject } from 'react'
+import { lazy, memo, Suspense, useState, type ReactElement, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ArrowDownTrayIcon,
@@ -6,6 +6,7 @@ import {
   ChatBubbleLeftRightIcon,
   CheckCircleIcon,
   ChevronRightIcon,
+  Cog6ToothIcon,
   EllipsisHorizontalIcon,
   GlobeAltIcon,
   LockClosedIcon,
@@ -36,10 +37,9 @@ import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search
 import { ViewOrderMenu } from './view-order-menu.tsx'
 import type { GroupConfig, SavedView } from './saved-view.ts'
 
-const SortQueryMenu = lazy(() => import('./query-menus.tsx').then((m) => ({ default: m.SortQueryMenu })))
-const FilterQueryMenu = lazy(() => import('./query-menus.tsx').then((m) => ({ default: m.FilterQueryMenu })))
-const GroupQueryMenu = lazy(() => import('./query-menus.tsx').then((m) => ({ default: m.GroupQueryMenu })))
 const QueryFlyout = lazy(() => import('./query-menus.tsx').then((m) => ({ default: m.QueryFlyout })))
+const ViewSettingsMenu = lazy(() => import('./view-settings-menu.tsx').then((m) => ({ default: m.ViewSettingsMenu })))
+import type { ViewSettingsTab } from './view-settings-menu.tsx'
 
 const QUERY_NEST_IGNORE = `${HEADLESS_DISMISS_IGNORE}, .db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`
 
@@ -136,10 +136,14 @@ export type BrowserListChromeProps = {
   setWrap: (next: boolean) => void
   truncateCells: boolean
   setTruncate: (next: boolean) => void
+  showRowNumbers: boolean
+  setRowNumbers: (next: boolean) => void
   freezeTitle: boolean
   setFreezeTitleCol: (next: boolean) => void
   showTree: boolean
   setTree: (next: boolean) => void
+  pageSize: number
+  changePageSize: (next: number) => void
   refreshing: boolean
   refreshNow: () => Promise<void> | void
   notice: string
@@ -254,10 +258,14 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
     setWrap,
     truncateCells,
     setTruncate,
+    showRowNumbers,
+    setRowNumbers,
     freezeTitle,
     setFreezeTitleCol,
     showTree,
     setTree,
+    pageSize,
+    changePageSize,
     refreshing,
     refreshNow,
     notice,
@@ -277,6 +285,16 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
     setCreateScope,
     localData,
   } = props
+
+  const [settingsTab, setSettingsTab] = useState<ViewSettingsTab>('view')
+  const openSettingsTab = (tab: ViewSettingsTab) => {
+    if (configOpen && settingsTab === tab) {
+      setConfigOpen(false)
+      return
+    }
+    setSettingsTab(tab)
+    setConfigOpen(true)
+  }
 
   return (
     <>
@@ -572,262 +590,155 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
           </HeadlessDismiss>
           {!searchExpanded ? (
             <>
-              <div className="tasks-sort-wrap" ref={modeRef}>
+              {mode !== 'table' ? (
+                <div className="tasks-sort-wrap" ref={modeRef}>
+                  <button
+                    type="button"
+                    className={`tasks-sort-btn${configOpen && settingsTab === 'view' ? ' is-active' : ''}`}
+                    aria-label="查看模式"
+                    title={`模式：${
+                      VIEW_MODES.find((item) => item.id === mode)?.label ??
+                      extraRows.find((item) => item.id === mode)?.label ??
+                      extraViews.find((item) => item.id === mode)?.label ??
+                      mode
+                    }`}
+                    onClick={() => openSettingsTab('view')}
+                  >
+                    <ModeGlyph id={mode} extra={extraViews} rows={extraRows} />
+                  </button>
+                </div>
+              ) : null}
+              {sortCustom ? (
+                <div className="tasks-sort-wrap" ref={sortRef}>
+                  <button
+                    type="button"
+                    className={`tasks-sort-btn is-custom${configOpen && settingsTab === 'sort' ? ' is-active' : ''}`}
+                    aria-label="排序"
+                    title={`${sorts.length} 个排序`}
+                    onClick={() => openSettingsTab('sort')}
+                  >
+                    <UiGlyph icon="sort" />
+                    <span className="tasks-sort-dot" aria-hidden />
+                  </button>
+                </div>
+              ) : null}
+              {filterActive ? (
+                <div className="tasks-filter-btn-wrap" ref={filterRef}>
+                  <button
+                    type="button"
+                    className="tasks-refresh tasks-rbar-btn is-active"
+                    aria-label="筛选"
+                    title={`${countFilterRules(filterTree)} 条筛选`}
+                    onClick={() => openSettingsTab('filter')}
+                  >
+                    <UiGlyph icon="filter" />
+                    <span className="tasks-filter-dot" aria-hidden />
+                  </button>
+                </div>
+              ) : null}
+              {grouping ? (
+                <div className="tasks-sort-wrap" ref={groupRef}>
+                  <button
+                    type="button"
+                    className={`tasks-sort-btn is-custom${configOpen && settingsTab === 'group' ? ' is-active' : ''}`}
+                    aria-label="分组"
+                    title={activeGroup ? `分组：${activeGroup.field.label ?? activeGroup.key}` : '分组'}
+                    onClick={() => openSettingsTab('group')}
+                  >
+                    <UiGlyph icon="stack" />
+                    <span className="tasks-sort-dot" aria-hidden />
+                  </button>
+                </div>
+              ) : null}
+              <div className="tasks-filter-btn-wrap" ref={configRef}>
                 <button
                   type="button"
-                  className={`tasks-sort-btn${modeMenuOpen ? ' is-active' : ''}`}
-                  aria-label="查看模式"
-                  title={`模式：${
-                    VIEW_MODES.find((item) => item.id === mode)?.label ??
-                    extraRows.find((item) => item.id === mode)?.label ??
-                    extraViews.find((item) => item.id === mode)?.label ??
-                    mode
-                  }`}
-                  onClick={() => toggleMenu('mode')}
+                  className={`tasks-refresh tasks-rbar-btn${configOpen ? ' is-active' : ''}`}
+                  aria-label="视图设置"
+                  title="视图设置"
+                  data-testid="fsdb-view-settings-btn"
+                  onClick={() => {
+                    if (configOpen) {
+                      setConfigOpen(false)
+                    } else {
+                      setSettingsTab('view')
+                      setConfigOpen(true)
+                    }
+                  }}
                 >
-                  <ModeGlyph id={mode} extra={extraViews} rows={extraRows} />
+                  <Cog6ToothIcon aria-hidden className="size-[15px]" />
                 </button>
-                {modeMenuOpen ? (
-                  <HeadlessDismiss onDismiss={() => setModeMenuOpen(false)} insideRef={modeRef}>
-                    <SearchableFlyout className="tasks-sort-menu">
-                      {(q) => {
-                        const modes = VIEW_MODES.filter((opt) => flyoutQueryMatch(opt.label, q))
-                        const viewsList = extraViews.filter((opt) => flyoutQueryMatch(opt.label, q))
-                        const rowsList = extraRows.filter((opt) => flyoutQueryMatch(opt.label, q))
-                        return (
-                          <>
-                            {modes.map((opt) => (
-                              <CheckRow
-                                key={opt.id}
-                                icon={<ModeGlyph id={opt.id} extra={extraViews} rows={extraRows} />}
-                                label={opt.label}
-                                on={mode === opt.id}
-                                onToggle={() => {
-                                  setMode(opt.id)
-                                  patchActiveView({ mode: opt.id })
-                                  setModeMenuOpen(false)
-                                }}
-                              />
-                            ))}
-                            {viewsList.map((opt) => (
-                              <CheckRow
-                                key={opt.id}
-                                icon={<ModeGlyph id={opt.id} extra={extraViews} rows={extraRows} />}
-                                label={opt.label}
-                                on={mode === opt.id}
-                                onToggle={() => {
-                                  setMode(opt.id)
-                                  patchActiveView({ mode: opt.id })
-                                  setModeMenuOpen(false)
-                                }}
-                              />
-                            ))}
-                            {rowsList.map((opt) => (
-                              <CheckRow
-                                key={opt.id}
-                                icon={<ModeGlyph id={opt.id} extra={extraViews} rows={extraRows} />}
-                                label={opt.label}
-                                on={mode === opt.id}
-                                onToggle={() => {
-                                  setMode(opt.id)
-                                  patchActiveView({ mode: opt.id })
-                                  setModeMenuOpen(false)
-                                }}
-                              />
-                            ))}
-                            {q.trim() && !modes.length && !viewsList.length && !rowsList.length ? <FlyoutEmpty /> : null}
-                            <button
-                              type="button"
-                              className="fsdb-mode-plus"
-                              data-testid="fsdb-mode-plus"
-                              aria-label="添加呈现方式"
-                              title="添加呈现方式"
-                              onClick={() => {
-                                setModeMenuOpen(false)
-                                askNewPresentation({ path: collectionPath, title })
-                              }}
-                            >
-                              <PlusIcon aria-hidden className="size-[14px]" />
-                              添加呈现方式
-                            </button>
-                          </>
+                {configOpen ? (
+                  <Suspense fallback={null}>
+                    <QueryFlyout
+                      anchorRef={configRef}
+                      onClose={() => setConfigOpen(false)}
+                      ignoreSelector={`${QUERY_NEST_IGNORE}, [data-fsdb-col-flyout], [data-fsdb-col-tag-trigger]`}
+                      inside={(node) =>
+                        Boolean(
+                          (node instanceof Node &&
+                            (modeRef.current?.contains(node) ||
+                              sortRef.current?.contains(node) ||
+                              filterRef.current?.contains(node) ||
+                              groupRef.current?.contains(node))) ||
+                            (node instanceof Element &&
+                              node.closest(
+                                '.db-search-menu, .fsdb-cellselect-menu, [data-fsdb-col-flyout], [data-fsdb-col-tag-trigger], .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]',
+                              )),
                         )
-                      }}
-                    </SearchableFlyout>
-                  </HeadlessDismiss>
-                ) : null}
-              </div>
-              <div className="tasks-sort-wrap" ref={sortRef}>
-                <button
-                  type="button"
-                  className={`tasks-sort-btn${sortMenuOpen ? ' is-active' : ''}${sortCustom ? ' is-custom' : ''}`}
-                  aria-label="排序"
-                  title={sortCustom ? `${sorts.length} 个排序` : '排序'}
-                  onClick={() => toggleMenu('sort')}
-                >
-                  <UiGlyph icon="sort" />
-                  {sortCustom ? <span className="tasks-sort-dot" aria-hidden /> : null}
-                </button>
-                {sortMenuOpen ? (
-                  <Suspense fallback={null}>
-                    <QueryFlyout
-                      anchorRef={sortRef}
-                      onClose={() => setSortMenuOpen(false)}
-                      ignoreSelector={QUERY_NEST_IGNORE}
-                      inside={(node) =>
-                        node instanceof Element &&
-                        Boolean(node.closest('.db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]'))
                       }
                     >
-                      <SortQueryMenu sorts={sorts} fields={sortFields} onChange={applySorts} />
-                    </QueryFlyout>
-                  </Suspense>
-                ) : null}
-              </div>
-              <div className="tasks-filter-btn-wrap" ref={filterRef}>
-                <button
-                  type="button"
-                  className={`tasks-refresh tasks-rbar-btn${filterOpen || filterActive ? ' is-active' : ''}`}
-                  aria-label="筛选"
-                  title={filterActive ? `${countFilterRules(filterTree)} 条筛选` : '筛选'}
-                  onClick={() => toggleMenu('filter')}
-                >
-                  <UiGlyph icon="filter" />
-                  {filterActive ? <span className="tasks-filter-dot" aria-hidden /> : null}
-                </button>
-                {filterOpen ? (
-                  <Suspense fallback={null}>
-                    <QueryFlyout
-                      anchorRef={filterRef}
-                      onClose={() => setFilterOpen(false)}
-                      ignoreSelector={QUERY_NEST_IGNORE}
-                      inside={(node) =>
-                        node instanceof Element &&
-                        Boolean(node.closest('.db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]'))
-                      }
-                    >
-                      <FilterQueryMenu
-                        tree={filterTree}
-                        fields={filterFields}
-                        valueOptions={filterValueOptions}
-                        onChange={applyFilterTree}
-                      />
-                    </QueryFlyout>
-                  </Suspense>
-                ) : null}
-              </div>
-              <div className="tasks-sort-wrap" ref={groupRef}>
-                <button
-                  type="button"
-                  className={`tasks-sort-btn${groupOpen ? ' is-active' : ''}${grouping ? ' is-custom' : ''}`}
-                  aria-label="分组"
-                  title={activeGroup ? `分组：${activeGroup.field.label ?? activeGroup.key}` : '分组'}
-                  onClick={() => toggleMenu('group')}
-                >
-                  <UiGlyph icon="stack" />
-                  {grouping ? <span className="tasks-sort-dot" aria-hidden /> : null}
-                </button>
-                {groupOpen ? (
-                  <Suspense fallback={null}>
-                    <QueryFlyout anchorRef={groupRef} onClose={() => setGroupOpen(false)}>
-                      <GroupQueryMenu
+                      <ViewSettingsMenu
+                        tab={settingsTab}
+                        onTabChange={setSettingsTab}
+                        sheet={sheet}
+                        collectionPath={collectionPath}
+                        title={title}
+                        activeView={activeView}
+                        commitViewName={commitViewName}
+                        mode={mode}
+                        setMode={setMode}
+                        extraViews={extraViews}
+                        extraRows={extraRows}
+                        patchActiveView={patchActiveView}
+                        wrapCells={wrapCells}
+                        setWrap={setWrap}
+                        truncateCells={truncateCells}
+                        setTruncate={setTruncate}
+                        showRowNumbers={showRowNumbers}
+                        setRowNumbers={setRowNumbers}
+                        parentKey={parentKey}
+                        showTree={showTree}
+                        setTree={setTree}
+                        pageSize={pageSize}
+                        changePageSize={changePageSize}
+                        renderVisibleColumnsFlyout={renderVisibleColumnsFlyout}
+                        filterActive={filterActive}
+                        filterTree={filterTree}
+                        filterFields={filterFields}
+                        filterValueOptions={filterValueOptions}
+                        applyFilterTree={applyFilterTree}
+                        sortCustom={sortCustom}
+                        sorts={sorts}
+                        sortFields={sortFields}
+                        applySorts={applySorts}
+                        grouping={grouping}
                         groupBy={groupBy}
                         groupConfig={groupConfig}
-                        groups={panelGroups.map((item) => ({
+                        panelGroups={panelGroups.map((item) => ({
                           key: item.key,
                           label: item.label,
                           count: item.total ?? item.rows.length,
                         }))}
-                        fields={groupFields}
-                        onChange={setGroupKey}
-                        onChangeConfig={setGroupSettings}
-                        onClose={() => setGroupOpen(false)}
+                        groupFields={groupFields}
+                        setGroupKey={setGroupKey}
+                        setGroupSettings={setGroupSettings}
+                        onClose={() => setConfigOpen(false)}
                       />
                     </QueryFlyout>
                   </Suspense>
                 ) : null}
               </div>
-              <div className="tasks-sort-wrap" ref={columnRef}>
-                <button
-                  type="button"
-                  className={`tasks-sort-btn${columnMenuOpen ? ' is-active' : ''}`}
-                  aria-label="可见列"
-                  title="可见列"
-                  onClick={() => toggleMenu('columns')}
-                >
-                  <UiGlyph icon="eye" />
-                </button>
-                {columnMenuOpen ? (
-                  <HeadlessDismiss
-                    onDismiss={() => setColumnMenuOpen(false)}
-                    insideRef={columnRef}
-                    ignoreSelector={`${HEADLESS_DISMISS_IGNORE}, [data-fsdb-col-flyout], [data-fsdb-col-tag-trigger], .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`}
-                    inside={(node) =>
-                      node instanceof Element &&
-                      Boolean(
-                        node.closest(
-                          '[data-fsdb-col-flyout], [data-fsdb-col-tag-trigger], .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]',
-                        ),
-                      )
-                    }
-                  >
-                    {renderVisibleColumnsFlyout()}
-                  </HeadlessDismiss>
-                ) : null}
-              </div>
-              {mode === 'table' ? (
-                <div className="tasks-filter-btn-wrap" ref={configRef}>
-                  <button
-                    type="button"
-                    className={`tasks-refresh tasks-rbar-btn${configOpen ? ' is-active' : ''}`}
-                    aria-label="表格配置"
-                    title="表格配置"
-                    onClick={() => toggleMenu('config')}
-                  >
-                    <UiGlyph icon="sliders" />
-                  </button>
-                  {configOpen ? (
-                    <HeadlessDismiss onDismiss={() => setConfigOpen(false)} insideRef={configRef}>
-                      <SearchableFlyout className="tasks-filter-menu">
-                        {(q) => {
-                          const wrap = flyoutQueryMatch('单元格换行', q)
-                          const trunc = flyoutQueryMatch('文本缩略', q)
-                          const tree = parentKey && flyoutQueryMatch('树形展示', q)
-                          return (
-                            <>
-                              {wrap ? (
-                                <CheckRow
-                                  icon={<Bars3BottomLeftIcon aria-hidden className="size-[14px]" />}
-                                  label="单元格换行"
-                                  on={wrapCells}
-                                  onToggle={() => setWrap(!wrapCells)}
-                                />
-                              ) : null}
-                              {trunc ? (
-                                <CheckRow
-                                  icon={<EllipsisHorizontalIcon aria-hidden className="size-[14px]" />}
-                                  label="文本缩略"
-                                  on={truncateCells}
-                                  onToggle={() => setTruncate(!truncateCells)}
-                                />
-                              ) : null}
-                              {tree ? (
-                                <CheckRow
-                                  icon={<ChevronRightIcon aria-hidden className="size-[14px]" />}
-                                  label="树形展示"
-                                  on={showTree}
-                                  onToggle={() => setTree(!showTree)}
-                                />
-                              ) : null}
-                              {q.trim() && !wrap && !trunc && !tree ? <FlyoutEmpty /> : null}
-                            </>
-                          )
-                        }}
-                      </SearchableFlyout>
-                    </HeadlessDismiss>
-                  ) : null}
-                </div>
-              ) : null}
               <div className="fsdb-refresh-wrap">
                 <button
                   type="button"
@@ -846,7 +757,7 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                   </span>
                 ) : null}
               </div>
-              {(canCreate || canAskNewPlugin) && !sheet ? (
+              {(canCreate || canAskNewPlugin) && (!sheet || isDataOverview) ? (
                 <div className="fsdb-create-group">
                   <button
                     type="button"

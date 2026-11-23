@@ -1,21 +1,22 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { HeadlessDismiss } from '@biu/biu-ui'
 import { HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
+import { HeadlessPopover } from '@biu/biu-ui/headless-popover'
 import type { FsDetailBarProps } from '@biu/type-file-system/ui'
 import {
   ArrowPathIcon,
   ChatBubbleBottomCenterTextIcon,
   ChevronDownIcon,
   CodeBracketIcon,
-  EyeIcon,
+  Cog6ToothIcon,
   EyeSlashIcon,
   FunnelIcon,
   PencilSquareIcon,
   PlusIcon,
+  ShareIcon,
   Square2StackIcon,
   Squares2X2Icon,
   TableCellsIcon,
-  AdjustmentsHorizontalIcon,
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { patchEditorCommentsUi, useEditorCommentsUi, usePageFind } from './editor-view-state.ts'
@@ -51,17 +52,34 @@ function Row({
   label,
   on,
   onToggle,
+  switchControl = false,
 }: {
   label: string
   on: boolean
   onToggle: () => void
+  switchControl?: boolean
 }) {
   return (
-    <button type="button" role="menuitemcheckbox" aria-checked={on} className={`fsdb-checkrow fsdb-tool-row${on ? ' is-on' : ''}`} onClick={onToggle}>
+    <button
+      type="button"
+      role="menuitemcheckbox"
+      aria-checked={on}
+      className={`fsdb-checkrow fsdb-tool-row${on ? ' is-on' : ''}${switchControl ? ' is-switch' : ''}`}
+      onClick={onToggle}
+    >
       <span className="fsdb-checkrow-label">{label}</span>
+      {switchControl ? (
+        <span className="fsdb-checkrow-right">
+          <span className={`fsdb-group-switch${on ? ' is-on' : ''}`} aria-hidden>
+            <span className="fsdb-group-switch-thumb" />
+          </span>
+        </span>
+      ) : null}
     </button>
   )
 }
+
+type DetailSettingsTab = 'view' | 'columns' | 'filter' | 'sort'
 
 export function RecordDetailBar({
   record,
@@ -74,6 +92,8 @@ export function RecordDetailBar({
   columnMenu,
   onRetry,
   configMenu,
+  share,
+  shareLabel,
 }: FsDetailBarProps) {
   const find = usePageFind(record.id)
   const commentsUi = useEditorCommentsUi(record.id)
@@ -95,6 +115,7 @@ export function RecordDetailBar({
   const registeredModes = ui?.contentViews(path) ?? EDITOR_CONTENT_VIEWS
   const detailTools = ui ? ui.detailTools(path) : EDITOR_DETAIL_TOOLS
   const [open, setOpen] = useState<string | null>(null)
+  const [settingsTab, setSettingsTab] = useState<DetailSettingsTab>('view')
   const [refreshing, setRefreshing] = useState(false)
   const viewRef = useRef<HTMLDivElement>(null)
   const modeRef = useRef<HTMLDivElement>(null)
@@ -103,6 +124,7 @@ export function RecordDetailBar({
   const filterRef = useRef<HTMLDivElement>(null)
   const columnRef = useRef<HTMLDivElement>(null)
   const configRef = useRef<HTMLDivElement>(null)
+  const shareRef = useRef<HTMLDivElement>(null)
   const commentRef = useRef<HTMLDivElement>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
   const bindToolbar = useToolbarOverflow(toolbarRef)
@@ -181,6 +203,22 @@ export function RecordDetailBar({
   }, [record.id, record.views, record.propViews, record.layouts, path, fallback, record])
 
   const toggle = (next: string) => setOpen((prev) => (prev === next ? null : next))
+  const openSettingsTab = (tab: DetailSettingsTab) => {
+    if (open === 'settings' && settingsTab === tab) {
+      setOpen(null)
+      return
+    }
+    setSettingsTab(tab)
+    setOpen('settings')
+  }
+  const propCustom = propViewId !== DEFAULT_RECORD_PROP_VIEW_ID
+  const contentCustom = contentId !== (registeredModes[0]?.id ?? '')
+  const settingsTabs: Array<{ id: DetailSettingsTab; label: string; dot?: boolean }> = [
+    { id: 'view', label: '视图', dot: propCustom || contentCustom },
+    { id: 'columns', label: '属性' },
+    ...(detailTools.filters?.length ? [{ id: 'filter' as const, label: '筛选', dot: filterOn }] : []),
+    ...(detailTools.sorts?.length ? [{ id: 'sort' as const, label: '排序', dot: sortOn }] : []),
+  ]
 
   const refreshNow = async () => {
     if (refreshing) return
@@ -356,439 +394,514 @@ export function RecordDetailBar({
         {detailTools.Search ? <detailTools.Search record={record} collectionPath={path} /> : null}
         {!find.open ? (
         <>
-        <div className="tasks-sort-wrap" ref={propRef}>
+        {propCustom ? (
+          <div className="tasks-sort-wrap" ref={propRef}>
             <button
               type="button"
-              className={`tasks-sort-btn${open === 'props' || propViewId === HIDDEN_CONTENT_VIEW_ID || propViewId !== DEFAULT_RECORD_PROP_VIEW_ID ? ' is-active' : ''}`}
+              className={`tasks-sort-btn is-active${open === 'settings' && settingsTab === 'view' ? ' is-custom' : ''}`}
               aria-label="属性展示"
               title="属性展示"
               data-testid="page-prop-view"
-              onClick={() => toggle('props')}
+              onClick={() => openSettingsTab('view')}
             >
               <PropIcon aria-hidden className="size-[14px]" />
             </button>
-            {open === 'props' ? (
-              <HeadlessDismiss onDismiss={() => setOpen(null)} insideRef={propRef}>
-                <div className="tasks-sort-menu fsdb-tool-flyout" role="menu">
-                  <div className="tasks-sort-list">
-                    <div className={`tasks-viewdd-item${propViewId === DEFAULT_RECORD_PROP_VIEW_ID ? ' is-active' : ''}`}>
-                      <button
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={propViewId === DEFAULT_RECORD_PROP_VIEW_ID}
-                        className="tasks-viewdd-item-main fsdb-tool-row"
-                        data-testid="page-prop-view-table"
-                        onClick={() => {
-                          void setPropView(DEFAULT_RECORD_PROP_VIEW_ID)
-                          setOpen(null)
-                        }}
-                      >
-                        <TableCellsIcon aria-hidden className="tasks-viewdd-item-ico" />
-                        <span className="tasks-viewdd-item-name">表格</span>
-                      </button>
-                    </div>
-                    <div className={`tasks-viewdd-item${propViewId === SOURCE_RECORD_PROP_VIEW_ID ? ' is-active' : ''}`}>
-                      <button
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={propViewId === SOURCE_RECORD_PROP_VIEW_ID}
-                        className="tasks-viewdd-item-main fsdb-tool-row"
-                        data-testid="page-prop-view-source"
-                        onClick={() => {
-                          void setPropView(SOURCE_RECORD_PROP_VIEW_ID)
-                          setOpen(null)
-                        }}
-                      >
-                        <CodeBracketIcon aria-hidden className="tasks-viewdd-item-ico" />
-                        <span className="tasks-viewdd-item-name">源码</span>
-                      </button>
-                    </div>
-                    <div className={`tasks-viewdd-item${propViewId === HIDDEN_CONTENT_VIEW_ID ? ' is-active' : ''}`}>
-                      <button
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={propViewId === HIDDEN_CONTENT_VIEW_ID}
-                        className="tasks-viewdd-item-main fsdb-tool-row"
-                        data-testid="page-prop-view-hidden"
-                        onClick={() => {
-                          void setPropView(HIDDEN_CONTENT_VIEW_ID)
-                          setOpen(null)
-                        }}
-                      >
-                        <EyeSlashIcon aria-hidden className="tasks-viewdd-item-ico" />
-                        <span className="tasks-viewdd-item-name">隐藏</span>
-                      </button>
-                    </div>
-                    {listedPropViews.map((item) => (
-                      <div key={item.id} className={`tasks-viewdd-item${item.id === propViewId ? ' is-active' : ''}`}>
-                        {renamingPropView === item.id ? (
-                          <div className="tasks-viewdd-item-main fsdb-tool-row">
-                            <SandboxKindIcon className="tasks-viewdd-item-ico" />
-                            <input
-                              className="tasks-viewdd-item-name"
-                              aria-label={`属性视图名称 ${item.name}`}
-                              value={renamePropDraft}
-                              autoFocus
-                              onChange={(event) => setRenamePropDraft(event.target.value)}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter') {
-                                  event.preventDefault()
-                                  void renamePropView(item.id, renamePropDraft).catch((error) => {
-                                    console.warn('[record-detail-bar] rename prop view failed', item.id, error)
-                                  })
-                                  setRenamingPropView('')
-                                }
-                                if (event.key === 'Escape') setRenamingPropView('')
-                              }}
-                              onBlur={() => {
-                                void renamePropView(item.id, renamePropDraft).catch((error) => {
-                                  console.warn('[record-detail-bar] rename prop view failed', item.id, error)
-                                })
-                                setRenamingPropView('')
-                              }}
-                            />
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            role="menuitemradio"
-                            aria-checked={item.id === propViewId}
-                            className="tasks-viewdd-item-main fsdb-tool-row"
-                            data-testid={`page-prop-view-${item.id}`}
-                            onClick={() => {
-                              void setPropView(item.id)
-                              setOpen(null)
-                            }}
-                          >
-                            <SandboxKindIcon className="tasks-viewdd-item-ico" />
-                            <span className="tasks-viewdd-item-name">{item.name}</span>
-                          </button>
-                        )}
-                        <span className="tasks-viewdd-item-actions">
-                          <button
-                            type="button"
-                            className="tasks-viewdd-act"
-                            title="拷贝视图"
-                            onMouseDown={(event) => event.preventDefault()}
-                            onClick={(event) => {
-                              event.preventDefault()
-                              event.stopPropagation()
-                              copyViewCatalog(path, record, 'propViews', item.id)
-                            }}
-                          >
-                            <Square2StackIcon aria-hidden className="size-[14px]" />
-                          </button>
-                          <button
-                            type="button"
-                            className="tasks-viewdd-act"
-                            title="重命名"
-                            aria-label={`重命名 ${item.name}`}
-                            onMouseDown={(event) => event.preventDefault()}
-                            onClick={(event) => {
-                              event.preventDefault()
-                              event.stopPropagation()
-                              setRenamingPropView(item.id)
-                              setRenamePropDraft(item.name)
-                            }}
-                          >
-                            <PencilSquareIcon aria-hidden className="size-[14px]" />
-                          </button>
-                          <button
-                            type="button"
-                            className="tasks-viewdd-act is-danger"
-                            title="删除"
-                            aria-label={`删除 ${item.name}`}
-                            data-testid={`page-prop-view-delete-${item.id}`}
-                            onMouseDown={(event) => event.preventDefault()}
-                            onClick={(event) => {
-                              event.preventDefault()
-                              event.stopPropagation()
-                              deleteViewCatalog(path, record, 'propViews', item.id)
-                            }}
-                          >
-                            <TrashGlyph aria-hidden className="size-[14px]" />
-                          </button>
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="tasks-viewdd-foot">
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="tasks-viewdd-saveas fsdb-tool-row font-medium"
-                      data-testid="page-prop-view-create"
-                      disabled={creatingPropView}
-                      onClick={() => {
-                        if (creatingPropView) return
-                        setCreatingPropView(true)
-                        void Promise.resolve(createViewCatalog(path, record, 'propViews'))
-                          .catch((error) => {
-                            console.warn('[record-detail-bar] create prop view failed', path, error)
-                          })
-                          .finally(() => {
-                            setCreatingPropView(false)
-                            setOpen(null)
-                          })
-                      }}
-                    >
-                      <PlusIcon aria-hidden className="size-[14px]" />
-                      {creatingPropView ? '正在创建…' : '新建属性视图'}
-                    </button>
-                  </div>
-                </div>
-              </HeadlessDismiss>
-            ) : null}
           </div>
-        <div className="tasks-sort-wrap" ref={modeRef}>
-          <button
-            type="button"
-            className={`tasks-sort-btn${open === 'mode' || contentId === 'hidden' ? ' is-active' : ''}`}
-            aria-label="查看模式"
-            title="呈现方式"
-            onClick={() => toggle('mode')}
-          >
-            <CurrentIcon aria-hidden className="size-[14px]" />
-          </button>
-          {open === 'mode' ? (
-            <HeadlessDismiss onDismiss={() => setOpen(null)} insideRef={modeRef}>
-              <div className="tasks-sort-menu fsdb-tool-flyout" role="menu">
-                {builtinModes.map((item) => {
-                  const Icon = item.Icon ?? EyeSlashIcon
-                  return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={item.id === contentId}
-                    className={`tasks-viewdd-item-main fsdb-tool-row${item.id === contentId ? ' is-active' : ''}`}
-                    data-testid={item.id === HIDDEN_CONTENT_VIEW_ID ? 'page-view-hidden' : undefined}
-                    onClick={() => {
-                      selectViewCatalog(path, record, 'views', item.id)
-                      setOpen(null)
-                    }}
-                  >
-                    <Icon aria-hidden className="tasks-viewdd-item-ico" />
-                    <span className="tasks-viewdd-item-name">{item.label}</span>
-                  </button>
-                  )
-                })}
-                {listedContentViews.map((item) => (
-                  <div key={item.id} className={`tasks-viewdd-item${item.id === contentId ? ' is-active' : ''}`}>
-                    <button
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={item.id === contentId}
-                      className="tasks-viewdd-item-main fsdb-tool-row"
-                      data-testid={`page-view-${item.id}`}
-                      onClick={() => {
-                        selectViewCatalog(path, record, 'views', item.id)
-                        setOpen(null)
-                      }}
-                    >
-                      <SandboxKindIcon className="tasks-viewdd-item-ico" />
-                      <span className="tasks-viewdd-item-name">{item.name}</span>
-                    </button>
-                    <span className="tasks-viewdd-item-actions">
-                      <button
-                        type="button"
-                        className="tasks-viewdd-act"
-                        title="拷贝视图"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={(event) => {
-                          event.preventDefault()
-                          event.stopPropagation()
-                          copyViewCatalog(path, record, 'views', item.id)
-                        }}
-                      >
-                        <Square2StackIcon aria-hidden className="size-[14px]" />
-                      </button>
-                      <button
-                        type="button"
-                        className="tasks-viewdd-act is-danger"
-                        title="删除"
-                        aria-label={`删除 ${item.name}`}
-                        data-testid={`page-view-delete-${item.id}`}
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={(event) => {
-                          event.preventDefault()
-                          event.stopPropagation()
-                          deleteViewCatalog(path, record, 'views', item.id)
-                        }}
-                      >
-                        <TrashGlyph aria-hidden className="size-[14px]" />
-                      </button>
-                    </span>
-                  </div>
-                ))}
-                <div className="tasks-viewdd-foot">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="tasks-viewdd-saveas fsdb-tool-row font-medium"
-                    data-testid="page-view-create"
-                    disabled={creatingView}
-                    onClick={() => {
-                      if (creatingView) return
-                      setCreatingView(true)
-                      void Promise.resolve(createViewCatalog(path, record, 'views'))
-                        .catch((error) => {
-                          console.warn('[record-detail-bar] create content view failed', path, error)
-                        })
-                        .finally(() => {
-                          setCreatingView(false)
-                          setOpen(null)
-                        })
-                    }}
-                  >
-                    <PlusIcon aria-hidden className="size-[14px]" />
-                    {creatingView ? '正在创建…' : '新建内容视图'}
-                  </button>
-                </div>
-              </div>
-            </HeadlessDismiss>
-          ) : null}
-        </div>
-        {detailTools.sorts?.length ? (
-        <div className="tasks-sort-wrap" ref={sortRef}>
-          <button
-            type="button"
-            className={`tasks-sort-btn${open === 'sort' || sortOn ? ' is-active' : ''}${sortOn ? ' is-custom' : ''}`}
-            aria-label="排序"
-            title="排序"
-            onClick={() => toggle('sort')}
-          >
-            <span aria-hidden className="fsdb-ui-glyph" data-icon="sort" />
-            {sortOn ? <span className="tasks-sort-dot" aria-hidden /> : null}
-          </button>
-          {open === 'sort' ? (
-            <HeadlessDismiss onDismiss={() => setOpen(null)} insideRef={sortRef}>
-              <div className="tasks-sort-menu fsdb-tool-flyout" role="menu">
-                {detailTools.sorts.map((item) => (
-                  <Row
-                    key={item.id}
-                    label={item.label}
-                    on={currentSort === item.id}
-                    onToggle={() => void patchLayout({ sort: item.id as typeof activeLayout.sort })}
-                  />
-                ))}
-              </div>
-            </HeadlessDismiss>
-          ) : null}
-        </div>
         ) : null}
-        {detailTools.filters?.length ? (
-        <div className="tasks-filter-btn-wrap" ref={filterRef}>
-          <button
-            type="button"
-            className={`tasks-refresh tasks-rbar-btn${open === 'filter' || filterOn ? ' is-active' : ''}`}
-            aria-label="筛选"
-            title="筛选"
-            onClick={() => toggle('filter')}
-          >
-            <FunnelIcon aria-hidden className="size-[14px]" />
-            {filterOn ? <span className="tasks-filter-dot" aria-hidden /> : null}
-          </button>
-          {open === 'filter' ? (
-            <HeadlessDismiss onDismiss={() => setOpen(null)} insideRef={filterRef}>
-              <div className="tasks-filter-menu fsdb-tool-flyout" role="menu">
-                <Row
-                  label={detailTools.filterAllLabel || '全部'}
-                  on={!filterOn}
-                  onToggle={() => void patchLayout({ filterKinds: [] })}
-                />
-                {detailTools.filters.map((item) => {
-                  const selected = activeLayout.filterKinds
-                  return (
-                  <Row
-                    key={item.id}
-                    label={item.label}
-                    on={selected.includes(item.id)}
-                    onToggle={() => {
-                      const has = selected.includes(item.id)
-                      const next = has ? selected.filter((key) => key !== item.id) : [...selected, item.id]
-                      void patchLayout({ filterKinds: next })
-                    }}
-                  />
-                  )
-                })}
-              </div>
-            </HeadlessDismiss>
-          ) : null}
-        </div>
-        ) : null}
-        <div className="tasks-sort-wrap" ref={columnRef}>
-          <button
-            type="button"
-            className={`tasks-sort-btn${open === 'columns' ? ' is-active' : ''}`}
-            aria-label="可见列"
-            title="可见列"
-            onClick={() => toggle('columns')}
-          >
-            <EyeIcon aria-hidden className="size-[14px]" />
-          </button>
-          {open === 'columns' ? (
-            <HeadlessDismiss
-              onDismiss={() => setOpen(null)}
-              insideRef={columnRef}
-              ignoreSelector={`${HEADLESS_DISMISS_IGNORE}, [data-fsdb-col-flyout], [data-fsdb-col-tag-trigger], .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`}
-              inside={(node) =>
-                node instanceof Element &&
-                Boolean(
-                  node.closest(
-                    '[data-fsdb-col-flyout], [data-fsdb-col-tag-trigger], .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]',
-                  ),
-                )
-              }
+        {contentCustom ? (
+          <div className="tasks-sort-wrap" ref={modeRef}>
+            <button
+              type="button"
+              className={`tasks-sort-btn is-active${open === 'settings' && settingsTab === 'view' ? ' is-custom' : ''}`}
+              aria-label="查看模式"
+              title="呈现方式"
+              onClick={() => openSettingsTab('view')}
             >
-              <>
-                {columnMenu ?? (
-                  <div className="tasks-sort-menu fsdb-tool-flyout" role="menu">
-                    {props.length ? (
-                      props.map((item) => (
-                        <Row
-                          key={item.key}
-                          label={item.label}
-                          on={visibleKeys.includes(item.key)}
-                          onToggle={() => {
-                            const has = visibleKeys.includes(item.key)
-                            const next = has ? visibleKeys.filter((key) => key !== item.key) : [...visibleKeys, item.key]
-                            onVisiblePropertyKeys?.(next)
-                            onHiddenPropertyKeys?.(props.map((prop) => prop.key).filter((key) => !next.includes(key)))
-                          }}
-                        />
-                      ))
-                    ) : (
-                      <div className="tasks-viewdd-empty">没有可隐藏的属性</div>
-                    )}
-                  </div>
-                )}
-              </>
-            </HeadlessDismiss>
-          ) : null}
-        </div>
+              <CurrentIcon aria-hidden className="size-[14px]" />
+            </button>
+          </div>
+        ) : null}
+        {detailTools.sorts?.length && sortOn ? (
+          <div className="tasks-sort-wrap" ref={sortRef}>
+            <button
+              type="button"
+              className="tasks-sort-btn is-active is-custom"
+              aria-label="排序"
+              title="排序"
+              onClick={() => openSettingsTab('sort')}
+            >
+              <span aria-hidden className="fsdb-ui-glyph" data-icon="sort" />
+              <span className="tasks-sort-dot" aria-hidden />
+            </button>
+          </div>
+        ) : null}
+        {detailTools.filters?.length && filterOn ? (
+          <div className="tasks-filter-btn-wrap" ref={filterRef}>
+            <button
+              type="button"
+              className="tasks-refresh tasks-rbar-btn is-active"
+              aria-label="筛选"
+              title="筛选"
+              onClick={() => openSettingsTab('filter')}
+            >
+              <FunnelIcon aria-hidden className="size-[14px]" />
+              <span className="tasks-filter-dot" aria-hidden />
+            </button>
+          </div>
+        ) : null}
         <div className="tasks-filter-btn-wrap" ref={configRef}>
           <button
             type="button"
-            className={`tasks-refresh tasks-rbar-btn${open === 'config' ? ' is-active' : ''}`}
-            aria-label="表格配置"
-            title="配置"
-            onClick={() => toggle('config')}
+            className={`tasks-refresh tasks-rbar-btn${open === 'settings' ? ' is-active' : ''}`}
+            aria-label="视图设置"
+            title="视图设置"
+            data-testid="fsdb-detail-view-settings-btn"
+            onClick={() => {
+              if (open === 'settings') {
+                setOpen(null)
+              } else {
+                setSettingsTab('view')
+                setOpen('settings')
+              }
+            }}
           >
-            <AdjustmentsHorizontalIcon aria-hidden className="size-[14px]" />
+            <Cog6ToothIcon aria-hidden className="size-[15px]" />
           </button>
-          {open === 'config' ? (
-            <HeadlessDismiss
-              onDismiss={() => setOpen(null)}
-              insideRef={configRef}
-              inside={(node) => node instanceof Element && Boolean(node.closest('.fsdb-detail-more-menu'))}
+          {open === 'settings' ? (
+            <HeadlessPopover
+              open
+              anchorRef={configRef}
+              onOpenChange={(next) => {
+                if (!next) setOpen(null)
+              }}
+              align="end"
+              sideOffset={6}
+              zIndex={200}
+              ignoreSelector={`${HEADLESS_DISMISS_IGNORE}, [data-fsdb-col-flyout], [data-fsdb-col-tag-trigger], .fsdb-query-drag-overlay, [data-fsdb-sort-overlay], .fsdb-detail-more-menu`}
+              inside={(node) =>
+                Boolean(
+                  (node instanceof Node &&
+                    (configRef.current?.contains(node) ||
+                      propRef.current?.contains(node) ||
+                      modeRef.current?.contains(node) ||
+                      sortRef.current?.contains(node) ||
+                      filterRef.current?.contains(node))) ||
+                    (node instanceof Element &&
+                      node.closest(
+                        '[data-fsdb-col-flyout], [data-fsdb-col-tag-trigger], .fsdb-query-drag-overlay, [data-fsdb-sort-overlay], .fsdb-detail-more-menu',
+                      )),
+                )
+              }
             >
-              <div className="tasks-filter-menu fsdb-tool-flyout" role="menu">
-                {configMenu}
+              <div className="fsdb-page fsdb-query-flyout">
+                <div className="fsdb-vset" role="dialog" aria-label="视图设置" data-testid="fsdb-detail-view-settings">
+                  <div className="fsdb-vset-tabs" role="tablist">
+                    {settingsTabs.map((item) => {
+                      const active = settingsTab === item.id
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          role="tab"
+                          aria-selected={active}
+                          className={`fsdb-vset-tab${active ? ' is-active' : ''}`}
+                          onClick={() => setSettingsTab(item.id)}
+                        >
+                          <span>{item.label}</span>
+                          {item.dot ? <span className="fsdb-vset-tab-dot" aria-hidden /> : null}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <div className="fsdb-vset-body">
+                    {settingsTab === 'view' ? (
+                      <>
+                        <div className="fsdb-group-panel-sec-head">
+                          <span>属性视图</span>
+                        </div>
+                        <div className="tasks-sort-list">
+                          <div className={`tasks-viewdd-item${propViewId === DEFAULT_RECORD_PROP_VIEW_ID ? ' is-active' : ''}`}>
+                            <button
+                              type="button"
+                              role="menuitemradio"
+                              aria-checked={propViewId === DEFAULT_RECORD_PROP_VIEW_ID}
+                              className="tasks-viewdd-item-main fsdb-tool-row"
+                              data-testid="page-prop-view-table"
+                              onClick={() => void setPropView(DEFAULT_RECORD_PROP_VIEW_ID)}
+                            >
+                              <TableCellsIcon aria-hidden className="tasks-viewdd-item-ico" />
+                              <span className="tasks-viewdd-item-name">表格</span>
+                            </button>
+                          </div>
+                          <div className={`tasks-viewdd-item${propViewId === SOURCE_RECORD_PROP_VIEW_ID ? ' is-active' : ''}`}>
+                            <button
+                              type="button"
+                              role="menuitemradio"
+                              aria-checked={propViewId === SOURCE_RECORD_PROP_VIEW_ID}
+                              className="tasks-viewdd-item-main fsdb-tool-row"
+                              data-testid="page-prop-view-source"
+                              onClick={() => void setPropView(SOURCE_RECORD_PROP_VIEW_ID)}
+                            >
+                              <CodeBracketIcon aria-hidden className="tasks-viewdd-item-ico" />
+                              <span className="tasks-viewdd-item-name">源码</span>
+                            </button>
+                          </div>
+                          <div className={`tasks-viewdd-item${propViewId === HIDDEN_CONTENT_VIEW_ID ? ' is-active' : ''}`}>
+                            <button
+                              type="button"
+                              role="menuitemradio"
+                              aria-checked={propViewId === HIDDEN_CONTENT_VIEW_ID}
+                              className="tasks-viewdd-item-main fsdb-tool-row"
+                              data-testid="page-prop-view-hidden"
+                              onClick={() => void setPropView(HIDDEN_CONTENT_VIEW_ID)}
+                            >
+                              <EyeSlashIcon aria-hidden className="tasks-viewdd-item-ico" />
+                              <span className="tasks-viewdd-item-name">隐藏</span>
+                            </button>
+                          </div>
+                          {listedPropViews.map((item) => (
+                            <div key={item.id} className={`tasks-viewdd-item${item.id === propViewId ? ' is-active' : ''}`}>
+                              {renamingPropView === item.id ? (
+                                <div className="tasks-viewdd-item-main fsdb-tool-row">
+                                  <SandboxKindIcon className="tasks-viewdd-item-ico" />
+                                  <input
+                                    className="tasks-viewdd-item-name"
+                                    aria-label={`属性视图名称 ${item.name}`}
+                                    value={renamePropDraft}
+                                    autoFocus
+                                    onChange={(event) => setRenamePropDraft(event.target.value)}
+                                    onKeyDown={(event) => {
+                                      if (event.key === 'Enter') {
+                                        event.preventDefault()
+                                        void renamePropView(item.id, renamePropDraft).catch((error) => {
+                                          console.warn('[record-detail-bar] rename prop view failed', item.id, error)
+                                        })
+                                        setRenamingPropView('')
+                                      }
+                                      if (event.key === 'Escape') setRenamingPropView('')
+                                    }}
+                                    onBlur={() => {
+                                      void renamePropView(item.id, renamePropDraft).catch((error) => {
+                                        console.warn('[record-detail-bar] rename prop view failed', item.id, error)
+                                      })
+                                      setRenamingPropView('')
+                                    }}
+                                  />
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  role="menuitemradio"
+                                  aria-checked={item.id === propViewId}
+                                  className="tasks-viewdd-item-main fsdb-tool-row"
+                                  data-testid={`page-prop-view-${item.id}`}
+                                  onClick={() => void setPropView(item.id)}
+                                >
+                                  <SandboxKindIcon className="tasks-viewdd-item-ico" />
+                                  <span className="tasks-viewdd-item-name">{item.name}</span>
+                                </button>
+                              )}
+                              <span className="tasks-viewdd-item-actions">
+                                <button
+                                  type="button"
+                                  className="tasks-viewdd-act"
+                                  title="拷贝视图"
+                                  onMouseDown={(event) => event.preventDefault()}
+                                  onClick={(event) => {
+                                    event.preventDefault()
+                                    event.stopPropagation()
+                                    copyViewCatalog(path, record, 'propViews', item.id)
+                                  }}
+                                >
+                                  <Square2StackIcon aria-hidden className="size-[14px]" />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="tasks-viewdd-act"
+                                  title="重命名"
+                                  aria-label={`重命名 ${item.name}`}
+                                  onMouseDown={(event) => event.preventDefault()}
+                                  onClick={(event) => {
+                                    event.preventDefault()
+                                    event.stopPropagation()
+                                    setRenamingPropView(item.id)
+                                    setRenamePropDraft(item.name)
+                                  }}
+                                >
+                                  <PencilSquareIcon aria-hidden className="size-[14px]" />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="tasks-viewdd-act is-danger"
+                                  title="删除"
+                                  aria-label={`删除 ${item.name}`}
+                                  data-testid={`page-prop-view-delete-${item.id}`}
+                                  onMouseDown={(event) => event.preventDefault()}
+                                  onClick={(event) => {
+                                    event.preventDefault()
+                                    event.stopPropagation()
+                                    deleteViewCatalog(path, record, 'propViews', item.id)
+                                  }}
+                                >
+                                  <TrashGlyph aria-hidden className="size-[14px]" />
+                                </button>
+                              </span>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="fsdb-vset-mode-add"
+                            data-testid="page-prop-view-create"
+                            disabled={creatingPropView}
+                            onClick={() => {
+                              if (creatingPropView) return
+                              setCreatingPropView(true)
+                              void Promise.resolve(createViewCatalog(path, record, 'propViews'))
+                                .catch((error) => {
+                                  console.warn('[record-detail-bar] create prop view failed', path, error)
+                                })
+                                .finally(() => {
+                                  setCreatingPropView(false)
+                                  setOpen(null)
+                                })
+                            }}
+                          >
+                            <PlusIcon aria-hidden className="size-[14px]" />
+                            {creatingPropView ? '正在创建…' : '新建属性视图'}
+                          </button>
+                        </div>
+
+                        <div className="fsdb-group-panel-section">
+                          <div className="fsdb-group-panel-sec-head">
+                            <span>内容视图</span>
+                          </div>
+                          {builtinModes.map((item) => {
+                            const Icon = item.Icon ?? EyeSlashIcon
+                            return (
+                              <button
+                                key={item.id}
+                                type="button"
+                                role="menuitemradio"
+                                aria-checked={item.id === contentId}
+                                className={`tasks-viewdd-item-main fsdb-tool-row${item.id === contentId ? ' is-active' : ''}`}
+                                data-testid={item.id === HIDDEN_CONTENT_VIEW_ID ? 'page-view-hidden' : undefined}
+                                onClick={() => selectViewCatalog(path, record, 'views', item.id)}
+                              >
+                                <Icon aria-hidden className="tasks-viewdd-item-ico" />
+                                <span className="tasks-viewdd-item-name">{item.label}</span>
+                              </button>
+                            )
+                          })}
+                          {listedContentViews.map((item) => (
+                            <div key={item.id} className={`tasks-viewdd-item${item.id === contentId ? ' is-active' : ''}`}>
+                              <button
+                                type="button"
+                                role="menuitemradio"
+                                aria-checked={item.id === contentId}
+                                className="tasks-viewdd-item-main fsdb-tool-row"
+                                data-testid={`page-view-${item.id}`}
+                                onClick={() => selectViewCatalog(path, record, 'views', item.id)}
+                              >
+                                <SandboxKindIcon className="tasks-viewdd-item-ico" />
+                                <span className="tasks-viewdd-item-name">{item.name}</span>
+                              </button>
+                              <span className="tasks-viewdd-item-actions">
+                                <button
+                                  type="button"
+                                  className="tasks-viewdd-act"
+                                  title="拷贝视图"
+                                  onMouseDown={(event) => event.preventDefault()}
+                                  onClick={(event) => {
+                                    event.preventDefault()
+                                    event.stopPropagation()
+                                    copyViewCatalog(path, record, 'views', item.id)
+                                  }}
+                                >
+                                  <Square2StackIcon aria-hidden className="size-[14px]" />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="tasks-viewdd-act is-danger"
+                                  title="删除"
+                                  aria-label={`删除 ${item.name}`}
+                                  data-testid={`page-view-delete-${item.id}`}
+                                  onMouseDown={(event) => event.preventDefault()}
+                                  onClick={(event) => {
+                                    event.preventDefault()
+                                    event.stopPropagation()
+                                    deleteViewCatalog(path, record, 'views', item.id)
+                                  }}
+                                >
+                                  <TrashGlyph aria-hidden className="size-[14px]" />
+                                </button>
+                              </span>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="fsdb-vset-mode-add"
+                            data-testid="page-view-create"
+                            disabled={creatingView}
+                            onClick={() => {
+                              if (creatingView) return
+                              setCreatingView(true)
+                              void Promise.resolve(createViewCatalog(path, record, 'views'))
+                                .catch((error) => {
+                                  console.warn('[record-detail-bar] create content view failed', path, error)
+                                })
+                                .finally(() => {
+                                  setCreatingView(false)
+                                  setOpen(null)
+                                })
+                            }}
+                          >
+                            <PlusIcon aria-hidden className="size-[14px]" />
+                            {creatingView ? '正在创建…' : '新建内容视图'}
+                          </button>
+                        </div>
+
+                        {configMenu ? (
+                          <div className="fsdb-group-panel-section">
+                            <div className="fsdb-group-panel-sec-head">
+                              <span>布局配置</span>
+                            </div>
+                            {configMenu}
+                          </div>
+                        ) : null}
+                      </>
+                    ) : null}
+
+                    {settingsTab === 'columns' ? (
+                      columnMenu ?? (
+                        <div className="fsdb-col-menu-list">
+                          {props.length ? (
+                            props.map((item) => (
+                              <Row
+                                key={item.key}
+                                label={item.label}
+                                on={visibleKeys.includes(item.key)}
+                                switchControl
+                                onToggle={() => {
+                                  const has = visibleKeys.includes(item.key)
+                                  const next = has ? visibleKeys.filter((key) => key !== item.key) : [...visibleKeys, item.key]
+                                  onVisiblePropertyKeys?.(next)
+                                  onHiddenPropertyKeys?.(props.map((prop) => prop.key).filter((key) => !next.includes(key)))
+                                }}
+                              />
+                            ))
+                          ) : (
+                            <div className="tasks-viewdd-empty">没有可隐藏的属性</div>
+                          )}
+                        </div>
+                      )
+                    ) : null}
+
+                    {settingsTab === 'filter' && detailTools.filters?.length ? (
+                      <>
+                        <div className="fsdb-query-head">
+                          <span className="fsdb-query-head-title">筛选设置</span>
+                          <span className="fsdb-query-head-toggle">
+                            <span className="fsdb-query-toggle-label">{filterOn ? '已生效' : '未生效'}</span>
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={filterOn}
+                              aria-label="启用筛选"
+                              className={`fsdb-group-switch${filterOn ? ' is-on' : ''}`}
+                              onClick={() => {
+                                if (filterOn) {
+                                  void patchLayout({ filterKinds: [] })
+                                } else if (detailTools.filters?.[0]) {
+                                  void patchLayout({ filterKinds: [detailTools.filters[0].id] })
+                                }
+                              }}
+                            >
+                              <span className="fsdb-group-switch-thumb" />
+                            </button>
+                          </span>
+                        </div>
+                        <Row
+                          label={detailTools.filterAllLabel || '全部'}
+                          on={!filterOn}
+                          onToggle={() => void patchLayout({ filterKinds: [] })}
+                        />
+                        {detailTools.filters.map((item) => {
+                          const selected = activeLayout.filterKinds
+                          return (
+                            <Row
+                              key={item.id}
+                              label={item.label}
+                              on={selected.includes(item.id)}
+                              switchControl
+                              onToggle={() => {
+                                const has = selected.includes(item.id)
+                                const next = has ? selected.filter((key) => key !== item.id) : [...selected, item.id]
+                                void patchLayout({ filterKinds: next })
+                              }}
+                            />
+                          )
+                        })}
+                      </>
+                    ) : null}
+
+                    {settingsTab === 'sort' && detailTools.sorts?.length ? (
+                      <>
+                        <div className="fsdb-query-head">
+                          <span className="fsdb-query-head-title">排序设置</span>
+                        </div>
+                        {detailTools.sorts.map((item) => (
+                          <Row
+                            key={item.id}
+                            label={item.label}
+                            on={currentSort === item.id}
+                            onToggle={() => void patchLayout({ sort: item.id as typeof activeLayout.sort })}
+                          />
+                        ))}
+                      </>
+                    ) : null}
+                  </div>
+                </div>
               </div>
-            </HeadlessDismiss>
+            </HeadlessPopover>
           ) : null}
         </div>
+        {share ? (
+          <div className="tasks-filter-btn-wrap" ref={shareRef}>
+            <button
+              type="button"
+              className={`tasks-refresh tasks-rbar-btn${open === 'share' ? ' is-active' : ''}`}
+              aria-label={shareLabel || '分享'}
+              aria-haspopup="dialog"
+              aria-expanded={open === 'share'}
+              title={shareLabel || '分享'}
+              data-testid="fsdb-detail-share"
+              onClick={() => toggle('share')}
+            >
+              <ShareIcon aria-hidden className="size-[14px]" />
+            </button>
+            {open === 'share' ? (
+              <HeadlessPopover
+                open
+                anchorRef={shareRef}
+                onOpenChange={(next) => {
+                  if (!next) setOpen(null)
+                }}
+                align="end"
+                sideOffset={6}
+                zIndex={200}
+                inside={(node) => Boolean(node instanceof Node && shareRef.current?.contains(node))}
+              >
+                <div className="fsdb-page fsdb-query-flyout">
+                  <div className="fsdb-detail-more-menu has-share" role="dialog" style={{ minWidth: 360 }}>
+                    {share}
+                  </div>
+                </div>
+              </HeadlessPopover>
+            ) : null}
+          </div>
+        ) : null}
         <div className="tasks-filter-btn-wrap" ref={commentRef}>
           <button
             type="button"

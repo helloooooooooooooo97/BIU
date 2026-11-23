@@ -31,6 +31,7 @@ export interface BrowserViewConfigState {
   columnViews: Record<string, ColumnViewConfig>
   wrapCells: boolean
   truncateCells: boolean
+  showRowNumbers: boolean
   freezeTitle: boolean
   freezeUntil: string
   groupBy: string
@@ -91,6 +92,7 @@ export function createInitialViewConfig(
     columnViews: normalizeColumnViews(initialView?.columnViews) ?? {},
     wrapCells: !!initialView?.wrap,
     truncateCells: initialView?.truncate !== false,
+    showRowNumbers: Boolean(initialView?.rowNumbers),
     freezeTitle: Boolean(initialView?.freezeTitle),
     freezeUntil: initialView?.freezeUntil ?? '',
     groupBy: initialView?.groupBy ?? '',
@@ -145,6 +147,7 @@ export function useBrowserViewConfig(
   const setColumnViews = makeSetter('columnViews')
   const setWrapCells = makeSetter('wrapCells')
   const setTruncateCells = makeSetter('truncateCells')
+  const setShowRowNumbers = makeSetter('showRowNumbers')
   const setFreezeTitle = makeSetter('freezeTitle')
   const setFreezeUntil = makeSetter('freezeUntil')
   const setGroupBy = makeSetter('groupBy')
@@ -182,6 +185,8 @@ export function useBrowserViewConfig(
     setWrapCells,
     truncateCells: state.truncateCells,
     setTruncateCells,
+    showRowNumbers: state.showRowNumbers,
+    setShowRowNumbers,
     freezeTitle: state.freezeTitle,
     setFreezeTitle,
     freezeUntil: state.freezeUntil,

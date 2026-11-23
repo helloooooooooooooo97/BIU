@@ -53,7 +53,7 @@ const subscribeTagCatalog = (fn: () => void) => subscribeTags(undefined, fn)
 export type TablePaintNode =
   | { kind: 'empty'; key: string }
   | { kind: 'group-head'; key: string; groupKey: string; label: string; count: number; folded?: boolean }
-  | { kind: 'row'; key: string; keyPrefix: string; row: DbRecord; depth: number; hasKids: boolean; kidCount: number; fold?: boolean; treeOn?: boolean }
+  | { kind: 'row'; key: string; keyPrefix: string; row: DbRecord; depth: number; hasKids: boolean; kidCount: number; rowNumber?: number; fold?: boolean; treeOn?: boolean }
   | { kind: 'group-pager'; key: string; groupKey: string; count: number; pageIndex: number; pageSize?: number }
   | { kind: 'summary'; key: string; rows: DbRecord[]; stamp: string; partial?: boolean }
 

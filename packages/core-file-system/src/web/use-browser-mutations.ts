@@ -398,10 +398,10 @@ export function createBrowserMutations(opts: BrowserMutationsOptions) {
       })
       announceListChange()
       quietUntil.current = Date.now() + 2000
-      if (isDataOverview) setViaDataCrumbs(true, activeViewId ?? undefined)
+      if (isDataOverview && !embed) setViaDataCrumbs(true, activeViewId ?? undefined)
       if (activeViewId && !isDataOverview) rememberInspectorWorkingView(targetPath, activeViewId)
       window.setTimeout(() => {
-        showRecordInInspector(targetPath, sourceId, isDataOverview ? undefined : activeViewId)
+        if (!embed) showRecordInInspector(targetPath, sourceId, isDataOverview ? undefined : activeViewId)
         landCreatedTitleCell(String(id))
       }, 0)
       return value
@@ -424,7 +424,10 @@ export function createBrowserMutations(opts: BrowserMutationsOptions) {
         }
       : undefined
     const field = parentFieldKey(schema) || 'parentId'
-    const fields: Record<string, unknown> = { [field]: parentId }
+    const fields: Record<string, unknown> = {
+      ...seedRecordFromViewFilters(catalogLocks, undefined, schema),
+      [field]: parentId,
+    }
     const groupedBy = String(groupBy ?? '').trim()
     const groupedField = groupedBy ? schema?.fields?.[groupedBy] : undefined
     if (
@@ -501,11 +504,19 @@ export function createBrowserMutations(opts: BrowserMutationsOptions) {
   async function executeDeleteRecord(row: DbRecord) {
     try {
       const target = sourceDeleteTarget(row)
-      await readJson('/api/db/delete', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ path: target.path, ids: [target.id] }),
-      })
+      if (dataPath === TRASH_COLLECTION_PATH) {
+        await readJson('/api/db/action', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ path: `${dataPath}/${row.id}`, action: 'delete' }),
+        })
+      } else {
+        await readJson('/api/db/delete', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ path: target.path, ids: [target.id] }),
+        })
+      }
       if (!embed) onCloseRecord?.()
       dropListedRecords([String(row.id)])
       publishListedMutation({
@@ -515,7 +526,9 @@ export function createBrowserMutations(opts: BrowserMutationsOptions) {
         viewId: activeViewIdRef.current,
         total: totalRef.current,
       })
-      publishDeletedRowsToTrash(target.path, [{ ...row, id: target.id }], title)
+      if (dataPath !== TRASH_COLLECTION_PATH) {
+        publishDeletedRowsToTrash(target.path, [{ ...row, id: target.id }], title)
+      }
       announceListChange()
       quietUntil.current = 0
       await reload({ force: true })

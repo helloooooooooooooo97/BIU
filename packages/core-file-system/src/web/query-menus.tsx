@@ -181,79 +181,119 @@ export function SortQueryMenu({
   fields: QueryField[]
   onChange: (next: SortRule[]) => void
 }) {
+  const [savedSorts, setSavedSorts] = useState<SortRule[]>([])
+  const enabled = sorts.length > 0
+  const displaySorts = enabled ? sorts : savedSorts
   const options = fields.map((item) => ({
     value: item.key,
     label: item.field.label ?? item.key,
     icon: <FieldGlyph kind={item.kind} />,
   }))
-  const used = new Set(sorts.map((item) => item.field))
+  const used = new Set(displaySorts.map((item) => item.field))
   const leftover = fields.find((item) => !used.has(item.key))
   const [activeId, setActiveId] = useState<string | null>(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
-  const active = sorts.find((item) => item.id === activeId)
+  const active = displaySorts.find((item) => item.id === activeId)
   const activeKind = fields.find((item) => item.key === active?.field)?.kind ?? 'string'
+
+  const commitSorts = (next: SortRule[]) => {
+    setSavedSorts(next)
+    onChange(next)
+  }
+
+  const toggleEnabled = () => {
+    if (enabled) {
+      setSavedSorts(sorts)
+      onChange([])
+      return
+    }
+    if (savedSorts.length) {
+      onChange(savedSorts)
+      return
+    }
+    const first = fields[0]
+    if (first) {
+      const next = [emptySortRule(first.key)]
+      setSavedSorts(next)
+      onChange(next)
+    }
+  }
 
   return (
     <div className="fsdb-tool-flyout fsdb-query-menu is-sort" role="menu">
-      {sorts.length ? (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          modifiers={[restrictToVerticalAxis]}
-          onDragStart={(event: DragStartEvent) => setActiveId(String(event.active.id))}
-          onDragCancel={() => setActiveId(null)}
-          onDragEnd={(event: DragEndEvent) => {
-            const overId = event.over?.id
-            setActiveId(null)
-            if (overId == null || event.active.id === overId) return
-            const from = sorts.findIndex((item) => item.id === event.active.id)
-            const to = sorts.findIndex((item) => item.id === overId)
-            if (from < 0 || to < 0) return
-            onChange(moveList(sorts, from, to))
-          }}
-        >
-          <SortableContext items={sorts.map((item) => item.id)} strategy={verticalListSortingStrategy}>
-            {sorts.map((rule) => {
-              const kind = fields.find((item) => item.key === rule.field)?.kind ?? 'string'
-              return (
-                <SortableSortRow
-                  key={rule.id}
-                  rule={rule}
-                  kind={kind}
-                  options={options}
-                  sorts={sorts}
-                  onChange={onChange}
-                />
-              )
-            })}
-          </SortableContext>
-          <DragOverlay zIndex={overlayZ(340)}>
-            {active ? (
-              <div className="fsdb-query-drag-overlay" data-fsdb-sort-overlay>
-                <div className="fsdb-query-row">
-                  <button type="button" className="fsdb-query-grip" tabIndex={-1}>
-                    <DndGrip />
-                  </button>
-                  <SortRuleFields rule={active} kind={activeKind} options={options} sorts={sorts} onChange={() => {}} />
+      <div className="fsdb-query-head">
+        <span className="fsdb-query-head-title">排序设置</span>
+        <span className="fsdb-query-head-toggle">
+          <span className="fsdb-query-toggle-label">{enabled ? '已生效' : '未生效'}</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={enabled}
+            aria-label="启用排序"
+            className={`fsdb-group-switch${enabled ? ' is-on' : ''}`}
+            onClick={toggleEnabled}
+          >
+            <span className="fsdb-group-switch-thumb" />
+          </button>
+        </span>
+      </div>
+      <div className={`fsdb-query-rules-body${!enabled && displaySorts.length ? ' is-paused' : ''}`}>
+        {displaySorts.length ? (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            modifiers={[restrictToVerticalAxis]}
+            onDragStart={(event: DragStartEvent) => setActiveId(String(event.active.id))}
+            onDragCancel={() => setActiveId(null)}
+            onDragEnd={(event: DragEndEvent) => {
+              const overId = event.over?.id
+              setActiveId(null)
+              if (overId == null || event.active.id === overId) return
+              const from = displaySorts.findIndex((item) => item.id === event.active.id)
+              const to = displaySorts.findIndex((item) => item.id === overId)
+              if (from < 0 || to < 0) return
+              commitSorts(moveList(displaySorts, from, to))
+            }}
+          >
+            <SortableContext items={displaySorts.map((item) => item.id)} strategy={verticalListSortingStrategy}>
+              {displaySorts.map((rule) => {
+                const kind = fields.find((item) => item.key === rule.field)?.kind ?? 'string'
+                return (
+                  <SortableSortRow
+                    key={rule.id}
+                    rule={rule}
+                    kind={kind}
+                    options={options}
+                    sorts={displaySorts}
+                    onChange={commitSorts}
+                  />
+                )
+              })}
+            </SortableContext>
+            <DragOverlay zIndex={overlayZ(340)}>
+              {active ? (
+                <div className="fsdb-query-drag-overlay" data-fsdb-sort-overlay>
+                  <div className="fsdb-query-row">
+                    <button type="button" className="fsdb-query-grip" tabIndex={-1}>
+                      <DndGrip />
+                    </button>
+                    <SortRuleFields rule={active} kind={activeKind} options={options} sorts={displaySorts} onChange={() => {}} />
+                  </div>
                 </div>
-              </div>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
-      ) : (
-        <div className="tasks-viewdd-empty">还没有排序</div>
-      )}
+              ) : null}
+            </DragOverlay>
+          </DndContext>
+        ) : (
+          <div className="tasks-viewdd-empty">还没有排序</div>
+        )}
+      </div>
       {leftover ? (
-        <button type="button" className="fsdb-query-add" onClick={() => onChange([...sorts, emptySortRule(leftover.key)])}>
-          <PlusIcon aria-hidden className="size-[14px]" />
-          添加排序
-        </button>
-      ) : null}
-      {sorts.length ? (
-        <button type="button" className="fsdb-query-clear" onClick={() => onChange([])}>
-          <TrashGlyph aria-hidden className="size-[14px]" />
-          删除排序
-        </button>
+        <div className="fsdb-query-foot">
+          <button type="button" className="fsdb-query-add" onClick={() => commitSorts([...displaySorts, emptySortRule(leftover.key)])}>
+            <PlusIcon aria-hidden className="size-[14px]" />
+            添加排序
+          </button>
+        </div>
       ) : null}
     </div>
   )
@@ -270,21 +310,59 @@ export function FilterQueryMenu({
   valueOptions: (field: QueryField) => Array<{ value: string; label: string }>
   onChange: (next: FilterGroup) => void
 }) {
+  const [savedTree, setSavedTree] = useState<FilterGroup | null>(null)
+  const enabled = countFilterRules(tree) > 0
+  const displayTree = enabled ? tree : (savedTree && countFilterRules(savedTree) > 0 ? savedTree : tree)
+
+  const commitTree = (next: FilterGroup) => {
+    setSavedTree(countFilterRules(next) > 0 ? next : null)
+    onChange(next)
+  }
+
+  const toggleEnabled = () => {
+    if (enabled) {
+      setSavedTree(tree)
+      onChange(emptyFilterGroup())
+      return
+    }
+    if (savedTree && countFilterRules(savedTree) > 0) {
+      onChange(savedTree)
+      return
+    }
+    const first = fields[0]
+    if (first) {
+      const next: FilterGroup = { ...tree, children: [emptyFilterRule(first.key)] }
+      setSavedTree(next)
+      onChange(next)
+    }
+  }
+
   return (
     <div className="fsdb-tool-flyout fsdb-query-menu is-filter" role="menu">
+      <div className="fsdb-query-head">
+        <span className="fsdb-query-head-title">筛选设置</span>
+        <span className="fsdb-query-head-toggle">
+          <span className="fsdb-query-toggle-label">{enabled ? '已生效' : '未生效'}</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={enabled}
+            aria-label="启用筛选"
+            className={`fsdb-group-switch${enabled ? ' is-on' : ''}`}
+            onClick={toggleEnabled}
+          >
+            <span className="fsdb-group-switch-thumb" />
+          </button>
+        </span>
+      </div>
       <FilterGroupEditor
-        group={tree}
+        group={displayTree}
         fields={fields}
         valueOptions={valueOptions}
         root
-        onChange={onChange}
+        paused={!enabled && countFilterRules(displayTree) > 0}
+        onChange={commitTree}
       />
-      {countFilterRules(tree) ? (
-        <button type="button" className="fsdb-query-clear" onClick={() => onChange(emptyFilterGroup())}>
-          <TrashGlyph aria-hidden className="size-[14px]" />
-          删除筛选
-        </button>
-      ) : null}
     </div>
   )
 }
@@ -294,12 +372,14 @@ function FilterGroupEditor({
   fields,
   valueOptions,
   root,
+  paused,
   onChange,
 }: {
   group: FilterGroup
   fields: QueryField[]
   valueOptions: (field: QueryField) => Array<{ value: string; label: string }>
   root?: boolean
+  paused?: boolean
   onChange: (next: FilterGroup) => void
 }) {
   function patchChild(id: string, next: FilterNode) {
@@ -308,44 +388,8 @@ function FilterGroupEditor({
   function dropChild(id: string) {
     onChange({ ...group, children: group.children.filter((item) => item.id !== id) })
   }
-  return (
-    <div className={root ? 'fsdb-query-stack' : 'fsdb-query-group'}>
-      {group.children.map((child, index) => (
-        <div key={child.id} className="fsdb-query-line">
-          {index === 0 ? (
-            <span className="fsdb-query-join">{root ? '其中' : '其中'}</span>
-          ) : (
-            <button
-              type="button"
-              className="fsdb-query-join is-btn"
-              onClick={() => onChange({ ...group, combinator: group.combinator === 'and' ? 'or' : 'and' })}
-            >
-              {group.combinator === 'and' ? '且' : '或'}
-            </button>
-          )}
-          {child.kind === 'rule' ? (
-            <FilterRuleRow
-              rule={child}
-              fields={fields}
-              valueOptions={valueOptions}
-              onChange={(next) => patchChild(child.id, next)}
-              onRemove={() => dropChild(child.id)}
-            />
-          ) : (
-            <div className="fsdb-query-nested">
-              <FilterGroupEditor
-                group={child}
-                fields={fields}
-                valueOptions={valueOptions}
-                onChange={(next) => patchChild(child.id, next)}
-              />
-              <button type="button" className="fsdb-query-x is-group" aria-label="删除分组" onClick={() => dropChild(child.id)}>
-                <XMarkIcon aria-hidden className="size-[14px]" />
-              </button>
-            </div>
-          )}
-        </div>
-      ))}
+  const addButtons = (
+    <>
       <button
         type="button"
         className="fsdb-query-add"
@@ -362,6 +406,49 @@ function FilterGroupEditor({
         <PlusIcon aria-hidden className="size-[14px]" />
         添加筛选分组
       </button>
+    </>
+  )
+  return (
+    <div className={root ? 'fsdb-query-stack' : 'fsdb-query-group'}>
+      <div className={`fsdb-query-rules-body${paused ? ' is-paused' : ''}`}>
+        {group.children.map((child, index) => (
+          <div key={child.id} className="fsdb-query-line">
+            {index === 0 ? (
+              <span className="fsdb-query-join">{root ? '其中' : '其中'}</span>
+            ) : (
+              <button
+                type="button"
+                className="fsdb-query-join is-btn"
+                onClick={() => onChange({ ...group, combinator: group.combinator === 'and' ? 'or' : 'and' })}
+              >
+                {group.combinator === 'and' ? '且' : '或'}
+              </button>
+            )}
+            {child.kind === 'rule' ? (
+              <FilterRuleRow
+                rule={child}
+                fields={fields}
+                valueOptions={valueOptions}
+                onChange={(next) => patchChild(child.id, next)}
+                onRemove={() => dropChild(child.id)}
+              />
+            ) : (
+              <div className="fsdb-query-nested">
+                <FilterGroupEditor
+                  group={child}
+                  fields={fields}
+                  valueOptions={valueOptions}
+                  onChange={(next) => patchChild(child.id, next)}
+                />
+                <button type="button" className="fsdb-query-x is-group" aria-label="删除分组" onClick={() => dropChild(child.id)}>
+                  <XMarkIcon aria-hidden className="size-[14px]" />
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      {root ? <div className="fsdb-query-foot">{addButtons}</div> : addButtons}
     </div>
   )
 }
@@ -508,7 +595,7 @@ function SortableGroupRow({
   )
 }
 
-function GroupAccordionSelect({
+export function GroupAccordionSelect({
   label,
   value,
   options,
@@ -587,7 +674,6 @@ export function GroupQueryMenu({
   onChangeConfig?: (next: GroupConfig | undefined) => void
   onClose?: () => void
 }) {
-  const [search, setSearch] = useState('')
   const [openAcc, setOpenAcc] = useState<'field' | 'grain' | 'sort' | null>(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
   const parsed = parseGroupByKey(groupBy)
@@ -597,7 +683,6 @@ export function GroupQueryMenu({
   const selectField = (fieldKey: string) => {
     if (!fieldKey) {
       onChange('')
-      onClose?.()
       return
     }
     const target = fields.find((item) => item.key === fieldKey)
@@ -609,269 +694,215 @@ export function GroupQueryMenu({
     onChange(fieldKey)
   }
 
-  if (activeField) {
-    const fieldOptions = [
-      { value: '', label: '不分组' },
-      ...fields.map((item) => ({
-        value: item.key,
-        label: item.field.label ?? item.key,
-        icon: <FieldGlyph kind={item.kind} />,
-      })),
-    ]
-    const sortMode: GroupSortMode = groupConfig?.sort ?? 'manual'
-    const hideEmpty = groupConfig?.hideEmpty !== false
-    const hiddenSet = new Set(groupConfig?.hidden ?? [])
-    const visibleGroups = groups.filter((item) => !hiddenSet.has(item.key))
-    const hiddenGroups = groups.filter((item) => hiddenSet.has(item.key))
+  const fieldOptions = [
+    { value: '', label: '不分组' },
+    ...fields.map((item) => ({
+      value: item.key,
+      label: item.field.label ?? item.key,
+      icon: <FieldGlyph kind={item.kind} />,
+    })),
+  ]
+  const sortMode: GroupSortMode = groupConfig?.sort ?? 'manual'
+  const hideEmpty = groupConfig?.hideEmpty !== false
+  const hiddenSet = new Set(groupConfig?.hidden ?? [])
+  const visibleGroups = groups.filter((item) => !hiddenSet.has(item.key))
+  const hiddenGroups = groups.filter((item) => hiddenSet.has(item.key))
 
-    const patchConfig = (patch: Partial<GroupConfig>) => {
-      if (!onChangeConfig) return
-      const next = normalizeGroupConfig({
-        sort: sortMode,
-        hideEmpty,
-        hidden: [...hiddenSet],
-        order: groupConfig?.order,
-        ...patch,
-      })
-      onChangeConfig(next)
-    }
+  const patchConfig = (patch: Partial<GroupConfig>) => {
+    if (!onChangeConfig) return
+    const next = normalizeGroupConfig({
+      sort: sortMode,
+      hideEmpty,
+      hidden: [...hiddenSet],
+      order: groupConfig?.order,
+      ...patch,
+    })
+    onChangeConfig(next)
+  }
 
-    const hideOne = (key: string) => {
-      const next = new Set(hiddenSet)
-      next.add(key)
-      patchConfig({ hidden: [...next] })
-    }
+  const hideOne = (key: string) => {
+    const next = new Set(hiddenSet)
+    next.add(key)
+    patchConfig({ hidden: [...next] })
+  }
 
-    const showOne = (key: string) => {
-      const next = new Set(hiddenSet)
-      next.delete(key)
-      patchConfig({ hidden: [...next] })
-    }
+  const showOne = (key: string) => {
+    const next = new Set(hiddenSet)
+    next.delete(key)
+    patchConfig({ hidden: [...next] })
+  }
 
-    const hideAll = () => {
-      patchConfig({ hidden: groups.map((item) => item.key) })
-    }
+  const hideAll = () => {
+    patchConfig({ hidden: groups.map((item) => item.key) })
+  }
 
-    const showAll = () => {
-      patchConfig({ hidden: [] })
-    }
+  const showAll = () => {
+    patchConfig({ hidden: [] })
+  }
 
-    const onDragEnd = (event: DragEndEvent) => {
-      const { active, over } = event
-      if (!over || active.id === over.id) return
-      const activeKey = String(active.id).slice(2)
-      const overKey = String(over.id).slice(2)
-      const from = visibleGroups.findIndex((item) => item.key === activeKey)
-      const to = visibleGroups.findIndex((item) => item.key === overKey)
-      if (from < 0 || to < 0) return
-      const movedVisible = moveList(visibleGroups, from, to).map((item) => item.key)
-      const restHidden = hiddenGroups.map((item) => item.key)
-      patchConfig({ sort: 'manual', order: [...movedVisible, ...restHidden] })
-    }
+  const onDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const activeKey = String(active.id).slice(2)
+    const overKey = String(over.id).slice(2)
+    const from = visibleGroups.findIndex((item) => item.key === activeKey)
+    const to = visibleGroups.findIndex((item) => item.key === overKey)
+    if (from < 0 || to < 0) return
+    const movedVisible = moveList(visibleGroups, from, to).map((item) => item.key)
+    const restHidden = hiddenGroups.map((item) => item.key)
+    patchConfig({ sort: 'manual', order: [...movedVisible, ...restHidden] })
+  }
 
-    return (
-      <div className="fsdb-tool-flyout fsdb-query-menu is-group" role="menu" data-testid="fsdb-group-panel">
-        <div className="fsdb-group-panel-head">
-          <UiGlyph icon="stack" />
-          <span>分组设置</span>
-        </div>
-        <GroupAccordionSelect
-          label="分组条件"
-          value={activeField.key}
+  return (
+    <div className="fsdb-tool-flyout fsdb-query-menu is-group" role="menu" data-testid="fsdb-group-panel">
+      <div className="fsdb-group-panel-head">
+        <UiGlyph icon="stack" />
+        <span>分组设置</span>
+      </div>
+      <div className="fsdb-group-panel-row" data-testid="fsdb-group-field-row">
+        <span className="fsdb-group-panel-label">分组条件</span>
+        <CellSelect
+          value={activeField?.key ?? ''}
           options={fieldOptions}
-          open={openAcc === 'field'}
-          onToggle={() => setOpenAcc((prev) => (prev === 'field' ? null : 'field'))}
+          variant="field"
+          placeholder="不分组"
           onSelect={(next) => {
             setOpenAcc(null)
             selectField(next)
           }}
         />
-        {activeField.kind === 'datetime' ? (
-          <GroupAccordionSelect
-            testId="fsdb-group-grain-row"
-            label="分组方式"
-            value={activeGrain}
-            options={GROUP_GRAIN_OPTIONS.map((item) => ({ value: item.value, label: item.label }))}
-            open={openAcc === 'grain'}
-            onToggle={() => setOpenAcc((prev) => (prev === 'grain' ? null : 'grain'))}
-            onSelect={(next) => {
-              setOpenAcc(null)
-              if (!next) return
-              onChange(`${activeField.key}::${next}`)
-            }}
-          />
-        ) : null}
-        {onChangeConfig ? (
-          <>
+      </div>
+      {activeField ? (
+        <>
+          {activeField.kind === 'datetime' ? (
             <GroupAccordionSelect
-              testId="fsdb-group-sort-row"
-              label="排序"
-              value={sortMode}
-              options={GROUP_SORT_OPTIONS}
-              open={openAcc === 'sort'}
-              onToggle={() => setOpenAcc((prev) => (prev === 'sort' ? null : 'sort'))}
+              testId="fsdb-group-grain-row"
+              label="分组方式"
+              value={activeGrain}
+              options={GROUP_GRAIN_OPTIONS.map((item) => ({ value: item.value, label: item.label }))}
+              open={openAcc === 'grain'}
+              onToggle={() => setOpenAcc((prev) => (prev === 'grain' ? null : 'grain'))}
               onSelect={(next) => {
                 setOpenAcc(null)
-                if (next === 'manual' || next === 'asc' || next === 'desc') {
-                  patchConfig({ sort: next })
-                }
+                if (!next) return
+                onChange(`${activeField.key}::${next}`)
               }}
             />
-            <div className="fsdb-group-panel-row" data-testid="fsdb-group-hide-empty-row">
-              <span className="fsdb-group-panel-label">隐藏无记录分组</span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={hideEmpty}
-                aria-label="隐藏无记录分组"
-                className={`fsdb-group-switch${hideEmpty ? ' is-on' : ''}`}
-                onClick={() => patchConfig({ hideEmpty: !hideEmpty })}
-              >
-                <span className="fsdb-group-switch-thumb" />
-              </button>
-            </div>
-            {groups.length > 0 ? (
-              <div className="fsdb-group-panel-section">
-                <div className="fsdb-group-panel-sec-head">
-                  <span>可见分组</span>
+          ) : null}
+          {onChangeConfig ? (
+            <>
+              <GroupAccordionSelect
+                testId="fsdb-group-sort-row"
+                label="排序"
+                value={sortMode}
+                options={GROUP_SORT_OPTIONS}
+                open={openAcc === 'sort'}
+                onToggle={() => setOpenAcc((prev) => (prev === 'sort' ? null : 'sort'))}
+                onSelect={(next) => {
+                  setOpenAcc(null)
+                  if (next === 'manual' || next === 'asc' || next === 'desc') {
+                    patchConfig({ sort: next })
+                  }
+                }}
+              />
+              <div className="fsdb-group-panel-row" data-testid="fsdb-group-hide-empty-row">
+                <span className="fsdb-group-panel-label">隐藏无记录分组</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={hideEmpty}
+                  aria-label="隐藏无记录分组"
+                  className={`fsdb-group-switch${hideEmpty ? ' is-on' : ''}`}
+                  onClick={() => patchConfig({ hideEmpty: !hideEmpty })}
+                >
+                  <span className="fsdb-group-switch-thumb" />
+                </button>
+              </div>
+              {groups.length > 0 ? (
+                <div className="fsdb-group-panel-section">
+                  <div className="fsdb-group-panel-sec-head">
+                    <span>可见分组</span>
+                    {visibleGroups.length > 0 ? (
+                      <button type="button" className="fsdb-group-panel-link" onClick={hideAll}>
+                        全部隐藏
+                      </button>
+                    ) : hiddenGroups.length > 0 ? (
+                      <button type="button" className="fsdb-group-panel-link" onClick={showAll}>
+                        全部显示
+                      </button>
+                    ) : null}
+                  </div>
                   {visibleGroups.length > 0 ? (
-                    <button type="button" className="fsdb-group-panel-link" onClick={hideAll}>
-                      全部隐藏
-                    </button>
-                  ) : hiddenGroups.length > 0 ? (
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      modifiers={[restrictToVerticalAxis]}
+                      onDragEnd={onDragEnd}
+                    >
+                      <SortableContext
+                        items={visibleGroups.map((item) => `g:${item.key}`)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <div className="fsdb-group-panel-list">
+                          {visibleGroups.map((item) => (
+                            <SortableGroupRow key={item.key} item={item} onHide={hideOne} />
+                          ))}
+                        </div>
+                      </SortableContext>
+                    </DndContext>
+                  ) : (
+                    <div className="fsdb-group-panel-empty">已全部隐藏</div>
+                  )}
+                </div>
+              ) : null}
+              {hiddenGroups.length > 0 ? (
+                <div className="fsdb-group-panel-section" data-testid="fsdb-group-hidden-section">
+                  <div className="fsdb-group-panel-sec-head">
+                    <span>已隐藏分组</span>
                     <button type="button" className="fsdb-group-panel-link" onClick={showAll}>
                       全部显示
                     </button>
-                  ) : null}
-                </div>
-                {visibleGroups.length > 0 ? (
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    modifiers={[restrictToVerticalAxis]}
-                    onDragEnd={onDragEnd}
-                  >
-                    <SortableContext
-                      items={visibleGroups.map((item) => `g:${item.key}`)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      <div className="fsdb-group-panel-list">
-                        {visibleGroups.map((item) => (
-                          <SortableGroupRow key={item.key} item={item} onHide={hideOne} />
-                        ))}
-                      </div>
-                    </SortableContext>
-                  </DndContext>
-                ) : (
-                  <div className="fsdb-group-panel-empty">已全部隐藏</div>
-                )}
-              </div>
-            ) : null}
-            {hiddenGroups.length > 0 ? (
-              <div className="fsdb-group-panel-section" data-testid="fsdb-group-hidden-section">
-                <div className="fsdb-group-panel-sec-head">
-                  <span>已隐藏分组</span>
-                  <button type="button" className="fsdb-group-panel-link" onClick={showAll}>
-                    全部显示
-                  </button>
-                </div>
-                <div className="fsdb-group-panel-list">
-                  {hiddenGroups.map((item) => (
-                    <div
-                      key={item.key}
-                      className="fsdb-group-panel-item is-hidden"
-                      data-testid="fsdb-group-hidden-item"
-                      data-group-key={item.key}
-                    >
-                      <span className="fsdb-group-panel-item-label" title={item.label}>
-                        {item.label}
-                      </span>
-                      <button
-                        type="button"
-                        className="fsdb-group-panel-eye"
-                        aria-label={`显示分组 ${item.label}`}
-                        title="显示分组"
-                        onClick={() => showOne(item.key)}
+                  </div>
+                  <div className="fsdb-group-panel-list">
+                    {hiddenGroups.map((item) => (
+                      <div
+                        key={item.key}
+                        className="fsdb-group-panel-item is-hidden"
+                        data-testid="fsdb-group-hidden-item"
+                        data-group-key={item.key}
                       >
-                        <EyeIcon aria-hidden className="size-[14px]" />
-                      </button>
-                    </div>
-                  ))}
+                        <span className="fsdb-group-panel-item-label" title={item.label}>
+                          {item.label}
+                        </span>
+                        <button
+                          type="button"
+                          className="fsdb-group-panel-eye"
+                          aria-label={`显示分组 ${item.label}`}
+                          title="显示分组"
+                          onClick={() => showOne(item.key)}
+                        >
+                          <EyeIcon aria-hidden className="size-[14px]" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ) : null}
-          </>
-        ) : null}
-        <button
-          type="button"
-          className="fsdb-group-panel-clear"
-          onClick={() => {
-            onChange('')
-            onClose?.()
-          }}
-        >
-          <TrashGlyph aria-hidden className="size-[14px]" />
-          取消分组
-        </button>
-      </div>
-    )
-  }
-
-  const q = search.trim().toLowerCase()
-  const showNone = !q || '不分组'.includes(q)
-  const hits = fields.filter((item) => {
-    if (!q) return true
-    const label = String(item.field.label ?? item.key).toLowerCase()
-    return label.includes(q) || item.key.toLowerCase().includes(q)
-  })
-
-  return (
-    <div className="fsdb-tool-flyout fsdb-query-menu is-group-pick" role="menu" data-testid="fsdb-group-pick">
-      <div className="tasks-sort-search">
-        <input
-          className="tasks-sort-search-input"
-          value={search}
-          placeholder="搜索..."
-          aria-label="搜索分组字段"
-          onChange={(event) => setSearch(event.target.value)}
-        />
-      </div>
-      {showNone ? (
-        <button
-          type="button"
-          role="menuitemradio"
-          aria-checked={!groupBy}
-          className={`tasks-sort-item${!groupBy ? ' is-on' : ''}`}
-          onClick={() => {
-            onChange('')
-            onClose?.()
-          }}
-        >
-          <span className="tasks-sort-label">不分组</span>
-        </button>
-      ) : null}
-      {hits.map((item) => (
-        <button
-          key={item.key}
-          type="button"
-          role="menuitemradio"
-          aria-checked={parsed.fieldKey === item.key}
-          className={`tasks-sort-item${parsed.fieldKey === item.key ? ' is-on' : ''}`}
-          onClick={() => selectField(item.key)}
-        >
-          <span className="tasks-sort-item-label">
-            <span className="tasks-sort-ico">
-              <FieldGlyph kind={item.kind} />
-            </span>
-            <span className="tasks-sort-label">{item.field.label ?? item.key}</span>
-          </span>
-          {item.kind === 'datetime' ? (
-            <ChevronRightIcon aria-hidden className="size-[13px] opacity-60 shrink-0" />
+              ) : null}
+            </>
           ) : null}
-        </button>
-      ))}
-      {!q && !fields.length ? <div className="tasks-viewdd-empty">没有可分组字段</div> : null}
-      {q && !showNone && !hits.length ? <div className="tasks-viewdd-empty">无匹配项</div> : null}
+          <button
+            type="button"
+            className="fsdb-group-panel-clear"
+            onClick={() => {
+              onChange('')
+              onClose?.()
+            }}
+          >
+            <TrashGlyph aria-hidden className="size-[14px]" />
+            取消分组
+          </button>
+        </>
+      ) : null}
     </div>
   )
 }

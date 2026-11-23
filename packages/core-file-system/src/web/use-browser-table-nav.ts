@@ -199,12 +199,9 @@ export function createBrowserTableNav(opts: BrowserTableNavOptions) {
       cellPickRef.current?.rowKey === cell.rowKey
     applyCellRange(anchor, focus)
     claimThisTableCell()
+    const tableEl = event.currentTarget
+    const pointerId = event.pointerId
     tableRef.current?.focus({ preventScroll: true })
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId)
-    } catch {
-      /* 捕获失败时仍用 window pointermove */
-    }
     cellPopPtrRef.current = { x: event.clientX, y: event.clientY, dragged: false }
     tableRef.current?.classList.remove('is-cell-drag')
     tableDragScrollStopRef.current?.()
@@ -226,6 +223,11 @@ export function createBrowserTableNav(opts: BrowserTableNavOptions) {
         if (cellPopPtrRef.current) cellPopPtrRef.current.dragged = true
         tableRef.current?.classList.add('is-cell-drag')
         setCellPop(null)
+        try {
+          tableEl.setPointerCapture(pointerId)
+        } catch {
+          /* 捕获失败时仍用 window pointermove */
+        }
       },
       onDrag: (ptr) => {
         const hit = tableCellFromPoint(ptr.x, ptr.y)

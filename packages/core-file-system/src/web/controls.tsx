@@ -9,6 +9,7 @@ export function CheckRow({
   onToggle,
   locked,
   count,
+  switchControl = false,
 }: {
   label: ReactNode
   icon?: ReactNode
@@ -16,11 +17,12 @@ export function CheckRow({
   onToggle: () => void
   locked?: boolean
   count?: number
+  switchControl?: boolean
 }) {
   return (
     <button
       type="button"
-      className={`fsdb-checkrow fsdb-tool-row${on ? ' is-on' : ''}${locked ? ' is-locked' : ''}`}
+      className={`fsdb-checkrow fsdb-tool-row${on ? ' is-on' : ''}${locked ? ' is-locked' : ''}${switchControl ? ' is-switch' : ''}`}
       role="menuitemcheckbox"
       aria-checked={on}
       disabled={locked}
@@ -31,7 +33,16 @@ export function CheckRow({
         {icon ? <span className="fsdb-checkrow-icon">{icon}</span> : null}
         {label}
       </span>
-      {count != null ? <span className="fsdb-col-tag-count">{count}</span> : null}
+      {switchControl ? (
+        <span className="fsdb-checkrow-right">
+          {count != null ? <span className="fsdb-col-tag-count">{count}</span> : null}
+          <span className={`fsdb-group-switch${on ? ' is-on' : ''}${locked ? ' is-locked' : ''}`} aria-hidden>
+            <span className="fsdb-group-switch-thumb" />
+          </span>
+        </span>
+      ) : count != null ? (
+        <span className="fsdb-col-tag-count">{count}</span>
+      ) : null}
     </button>
   )
 }

@@ -27,6 +27,7 @@ export type SavedView = {
   tree?: boolean
   wrap?: boolean
   truncate?: boolean
+  rowNumbers?: boolean
   freezeTitle?: boolean
   /** 冻结至指定列 key（含该列及左侧所有列）。 */
   freezeUntil?: string
@@ -205,6 +206,7 @@ export function normalizeSavedView(view: SavedView): SavedView {
     tree: !!view.tree,
     wrap: !!view.wrap,
     truncate: view.truncate !== false,
+    rowNumbers: !!view.rowNumbers,
     freezeTitle: !!view.freezeTitle,
     freezeUntil: typeof view.freezeUntil === 'string' && view.freezeUntil.trim() ? view.freezeUntil.trim() : undefined,
     query: view.query ?? '',
@@ -258,7 +260,7 @@ export function normalizePageSize(value: unknown) {
 }
 
 export function viewStateKey(
-  view: Pick<SavedView, 'mode' | 'sortField' | 'sortDir' | 'sorts' | 'filters' | 'filterTree' | 'columns' | 'groupBy' | 'groupConfig' | 'tree' | 'wrap' | 'truncate' | 'freezeTitle' | 'freezeUntil' | 'query' | 'pageSize' | 'columnWidths' | 'columnSummaries' | 'columnViews'>,
+  view: Pick<SavedView, 'mode' | 'sortField' | 'sortDir' | 'sorts' | 'filters' | 'filterTree' | 'columns' | 'groupBy' | 'groupConfig' | 'tree' | 'wrap' | 'truncate' | 'rowNumbers' | 'freezeTitle' | 'freezeUntil' | 'query' | 'pageSize' | 'columnWidths' | 'columnSummaries' | 'columnViews'>,
 ) {
   return JSON.stringify({
     mode: view.mode,
@@ -273,6 +275,7 @@ export function viewStateKey(
     tree: !!view.tree,
     wrap: !!view.wrap,
     truncate: view.truncate !== false,
+    rowNumbers: !!view.rowNumbers,
     freezeTitle: !!view.freezeTitle,
     freezeUntil: typeof view.freezeUntil === 'string' && view.freezeUntil.trim() ? view.freezeUntil.trim() : undefined,
     query: view.query ?? '',

@@ -172,6 +172,7 @@ export function tableColWidthVar(key: string) {
 export function tableColumnWidth(key: string, saved: unknown, pin = false) {
   const n = typeof saved === 'number' ? saved : Number(saved)
   if (Number.isFinite(n) && n > 0) return Math.round(n)
+  if (key === '__rowNumber') return 44
   if (key === 'actions') return TABLE_COL_ACTIONS_PX
   if (pin) return TABLE_COL_PIN_PX
   return TABLE_COL_PX
