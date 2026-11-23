@@ -12,6 +12,9 @@ export const PAGE_BLOCK_TICK_MS = 15_000
 export const EDITOR_BLOCK_COLLECTIONS = ['/pages', '/tasks', '/tags', '/skills', '/plugins'] as const
 
 type Cover = { collection: string; page_id: string; page_updated_at: number }
+const PAGE_BLOCK_INDEX_COLUMNS =
+  'collection, page_id, block_id, kind, plugin, title, page_title, data_json, page_created_at, page_updated_at'
+
 type IndexRow = {
   collection: string
   page_id: string
@@ -274,7 +277,7 @@ export class PageBlocksIndex {
 
   async list() {
     const db = await this.db()
-    const rows = db.prepare('SELECT * FROM page_block_index ORDER BY collection, page_id, block_id').all() as IndexRow[]
+    const rows = db.prepare(`SELECT ${PAGE_BLOCK_INDEX_COLUMNS} FROM page_block_index ORDER BY collection, page_id, block_id`).all() as IndexRow[]
     return rows.map(toRecord)
   }
 
@@ -283,7 +286,7 @@ export class PageBlocksIndex {
     if (!parsed) return null
     const db = await this.db()
     const row = db
-      .prepare('SELECT * FROM page_block_index WHERE collection = ? AND page_id = ? AND block_id = ?')
+      .prepare(`SELECT ${PAGE_BLOCK_INDEX_COLUMNS} FROM page_block_index WHERE collection = ? AND page_id = ? AND block_id = ?`)
       .get(parsed.collection, parsed.pageId, parsed.blockId) as IndexRow | undefined
     return row ? toRecord(row) : null
   }

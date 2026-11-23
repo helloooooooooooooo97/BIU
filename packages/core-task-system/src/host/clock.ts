@@ -32,6 +32,7 @@ export function startTaskClock(ctx: Context) {
     }
     tick()
     const timer = setInterval(tick, 1000)
+    timer.unref?.()
     return () => clearInterval(timer)
   }, 'core-task-system.clock.interval')
 }

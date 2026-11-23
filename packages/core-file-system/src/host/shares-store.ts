@@ -9,6 +9,9 @@ export type { ShareKind, ShareRecord } from '../share-snapshot.ts'
 
 type DatabaseSync = import('node:sqlite').DatabaseSync
 
+const SHARE_PUBLIC_COLUMNS =
+  'token, kind, collection, view_id, record_id, password_hash, share_plugins, allow_copy, created_at, updated_at'
+
 type ShareRow = {
   token: string
   kind: string
@@ -75,13 +78,13 @@ export class SharesStore {
   }
 
   get(token: string): ShareRecord | null {
-    const row = this.conn().prepare('SELECT * FROM shares WHERE token = ?').get(token) as ShareRow | undefined
+    const row = this.conn().prepare(`SELECT ${SHARE_PUBLIC_COLUMNS} FROM shares WHERE token = ?`).get(token) as ShareRow | undefined
     return row ? publicShare(row) : null
   }
 
   find(kind: ShareKind, collection: string, viewId = '', recordId = ''): ShareRecord | null {
     const row = this.conn().prepare(
-      'SELECT * FROM shares WHERE kind = ? AND collection = ? AND view_id = ? AND record_id = ?',
+      `SELECT ${SHARE_PUBLIC_COLUMNS} FROM shares WHERE kind = ? AND collection = ? AND view_id = ? AND record_id = ?`,
     ).get(kind, normalizeCollectionPath(collection), viewId, recordId) as ShareRow | undefined
     return row ? publicShare(row) : null
   }
@@ -91,7 +94,7 @@ export class SharesStore {
     const id = String(recordId ?? '').trim()
     if (!id) return null
     const row = this.conn().prepare(
-      'SELECT * FROM shares WHERE kind = ? AND collection = ? AND record_id = ? ORDER BY updated_at DESC LIMIT 1',
+      `SELECT ${SHARE_PUBLIC_COLUMNS} FROM shares WHERE kind = ? AND collection = ? AND record_id = ? ORDER BY updated_at DESC LIMIT 1`,
     ).get('record', normalizeCollectionPath(collection), id) as ShareRow | undefined
     return row ? publicShare(row) : null
   }
@@ -201,20 +204,20 @@ export class SharesStore {
   }
 
   list(): ShareRecord[] {
-    const rows = this.conn().prepare('SELECT * FROM shares ORDER BY updated_at DESC, token DESC').all() as ShareRow[]
+    const rows = this.conn().prepare(`SELECT ${SHARE_PUBLIC_COLUMNS} FROM shares ORDER BY updated_at DESC, token DESC`).all() as ShareRow[]
     return rows.map(publicShare)
   }
 
   listViews(collection: string): ShareRecord[] {
     const rows = this.conn().prepare(
-      'SELECT * FROM shares WHERE kind = ? AND collection = ? ORDER BY updated_at DESC, token DESC',
+      `SELECT ${SHARE_PUBLIC_COLUMNS} FROM shares WHERE kind = ? AND collection = ? ORDER BY updated_at DESC, token DESC`,
     ).all('view', normalizeCollectionPath(collection)) as ShareRow[]
     return rows.map(publicShare)
   }
 
   listRecords(collection: string): ShareRecord[] {
     const rows = this.conn().prepare(
-      'SELECT * FROM shares WHERE kind = ? AND collection = ? ORDER BY updated_at DESC, token DESC',
+      `SELECT ${SHARE_PUBLIC_COLUMNS} FROM shares WHERE kind = ? AND collection = ? ORDER BY updated_at DESC, token DESC`,
     ).all('record', normalizeCollectionPath(collection)) as ShareRow[]
     return rows.map(publicShare)
   }

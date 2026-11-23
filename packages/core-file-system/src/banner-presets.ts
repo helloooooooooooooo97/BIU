@@ -439,7 +439,7 @@ export const BANNER_PRESETS: BannerPreset[] = [
     'us',
     '波普',
     '色版轮换。',
-    `<div id="b" style="height:100%;display:grid;grid-template-columns:1fr 1fr 1fr 1fr"><i></i><i></i><i></i><i></i></div><style>#b i{display:block}</style><script>(function(){var c=['#f2d64a','#e23b8a','#3aa0e8','#111'],n=0,els=document.querySelectorAll('#b i');function f(){n++;els.forEach(function(el,i){el.style.background=c[(i+n)%4]});}f();setInterval(f,700);})()</script>`,
+    `<div id="b" style="height:100%;display:grid;grid-template-columns:1fr 1fr 1fr 1fr"><i></i><i></i><i></i><i></i></div><style>#b i{display:block;animation:pop-cycle 2.8s steps(1) infinite}#b i:nth-child(2){animation-delay:-.7s}#b i:nth-child(3){animation-delay:-1.4s}#b i:nth-child(4){animation-delay:-2.1s}@keyframes pop-cycle{0%{background:#f2d64a}25%{background:#e23b8a}50%{background:#3aa0e8}75%{background:#111}}</style>`,
   ),
   live(
     'eu-live-swiss',
@@ -453,7 +453,7 @@ export const BANNER_PRESETS: BannerPreset[] = [
     'eu',
     '风格派',
     '原色换班。',
-    `<div id="b" style="height:100%;display:grid;grid-template-columns:2fr 18px 1fr 18px .8fr"><i></i><i></i><i></i><i></i><i></i></div><style>#b i{display:block;background:#111}#b i:nth-child(3){background:#c4122e}#b i:nth-child(5){background:#1c4a9e}</style><script>(function(){var n=0,els=document.querySelectorAll('#b i');setInterval(function(){n=(n+1)%3;var c=['#c4122e','#e8c84a','#1c4a9e'];els[2].style.background=c[n];els[4].style.background=c[(n+1)%3];},800);})()</script>`,
+    `<div id="b" style="height:100%;display:grid;grid-template-columns:2fr 18px 1fr 18px .8fr"><i></i><i></i><i></i><i></i><i></i></div><style>#b i{display:block;background:#111}#b i:nth-child(3){animation:stijl-cycle 2.4s steps(1) infinite}#b i:nth-child(5){animation:stijl-cycle 2.4s steps(1) -.8s infinite}@keyframes stijl-cycle{0%{background:#c4122e}33.33%{background:#e8c84a}66.67%{background:#1c4a9e}}</style>`,
   ),
   live(
     'eu-live-memphis',
