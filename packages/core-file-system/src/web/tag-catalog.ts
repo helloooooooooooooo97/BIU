@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import {
   BUILTIN_FIELDS,
   isReservedSchemaFieldKey,
@@ -144,7 +145,7 @@ function adoptTags(next: CollectionSchemaPack[]) {
 
 export async function persistTags(tags: CollectionSchemaPack[], _collectionPath?: string) {
   const incoming = parseTags(tags)
-  const res = await fetch('/api/db/tags', {
+  const res = await apiFetch('/api/db/tags', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ tags: incoming }),
@@ -157,7 +158,7 @@ export async function persistTags(tags: CollectionSchemaPack[], _collectionPath?
 
 export async function createTag(title: string): Promise<CollectionSchemaPack> {
   const name = title.trim() || '未命名标签'
-  const res = await fetch('/api/db/create', {
+  const res = await apiFetch('/api/db/create', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ path: TAGS_COLLECTION_PATH, records: [{ title: name }] }),

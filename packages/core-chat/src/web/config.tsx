@@ -6,6 +6,8 @@
  * 2. 右侧只编辑当前 Provider：Key / Base URL / 模型列表 / 设为默认
  * 3. 一处保存，不再拆成三块互相抢焦点
  */
+import { apiFetch } from '@biu/biu-ui/api-client'
+import { emitAppEvent } from '@biu/biu-ui/app-events'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CheckIcon, ChevronDownIcon, ArrowPathIcon, PlusIcon, MagnifyingGlassIcon, SignalSlashIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { HeadlessDismiss } from '@biu/biu-ui'
@@ -258,7 +260,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
     setKeyDraft('')
     seedChatConfig(data as unknown as Record<string, unknown>)
     // 通知 Composer 等刷新模型目录
-    window.dispatchEvent(new CustomEvent('biu:chat-config-changed'))
+    emitAppEvent('biu:chat-config-changed')
   }
 
   function selectProvider(id: string) {
@@ -319,7 +321,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
         }
       }
 
-      const res = await fetch('/api/chat/config', {
+      const res = await apiFetch('/api/chat/config', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
@@ -348,7 +350,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
       if (!isOfficial(activeId) && urlDraft.trim()) {
         body.setBaseUrl = { [activeId]: urlDraft.trim() }
       }
-      const res = await fetch('/api/chat/config', {
+      const res = await apiFetch('/api/chat/config', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
@@ -370,7 +372,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
     setTestHint('')
     setError('')
     try {
-      const res = await fetch('/api/chat/config/test', {
+      const res = await apiFetch('/api/chat/config/test', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -411,7 +413,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
       return
     }
     setError('')
-    const res = await fetch('/api/chat/config', {
+    const res = await apiFetch('/api/chat/config', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ addModel: { endpointId: activeId, model: name, label: name } }),
@@ -426,7 +428,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
   }
 
   async function onRemoveModel(id: string) {
-    const res = await fetch('/api/chat/config', {
+    const res = await apiFetch('/api/chat/config', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ removeCustomModel: id }),
@@ -458,7 +460,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
       }
       const first = modelCatalog.find((m) => m.endpointId === fromPreset.id)
       if (first) body.model = first.model
-      const res = await fetch('/api/chat/config', {
+      const res = await apiFetch('/api/chat/config', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
@@ -469,7 +471,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
       }
       applyPublic((await res.json()) as ChatPublicConfig, fromPreset.id)
     } else {
-      const res = await fetch('/api/chat/config', {
+      const res = await apiFetch('/api/chat/config', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -483,7 +485,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
       let data = (await res.json()) as ChatPublicConfig
       const newId = data.endpointId
       if (newKey.trim() && newId) {
-        const res2 = await fetch('/api/chat/config', {
+        const res2 = await apiFetch('/api/chat/config', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ setApiKey: { [newId]: newKey.trim() }, endpointId: newId }),
@@ -501,7 +503,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
   async function onRemoveConnection(id: string) {
     if (isOfficial(id)) return
     setError('')
-    const res = await fetch('/api/chat/config', {
+    const res = await apiFetch('/api/chat/config', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ removeCustomEndpoint: id }),

@@ -1,3 +1,4 @@
+import { readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowPathIcon, CheckIcon, LinkIcon, ShareIcon, XMarkIcon } from '@heroicons/react/16/solid'
@@ -44,7 +45,7 @@ function pinStorageKey(token: string) {
 function rememberedPin(token: string) {
   if (!token) return ''
   try {
-    return localStorage.getItem(pinStorageKey(token)) ?? ''
+    return readStorageString(pinStorageKey(token)) ?? ''
   } catch {
     return ''
   }
@@ -52,8 +53,8 @@ function rememberedPin(token: string) {
 
 function rememberPin(token: string, pin: string) {
   try {
-    if (pin) localStorage.setItem(pinStorageKey(token), pin)
-    else localStorage.removeItem(pinStorageKey(token))
+    if (pin) writeStorageString(pinStorageKey(token), pin)
+    else removeStorageKey(pinStorageKey(token))
   } catch {
     /* ignore */
   }

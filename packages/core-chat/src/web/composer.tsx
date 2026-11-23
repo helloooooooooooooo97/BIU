@@ -1,3 +1,5 @@
+import { readStorageString, writeStorageString } from '@biu/biu-ui/client-storage'
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from 'react'
 import { ArrowUpIcon, ChevronDownIcon, FlagIcon, PauseIcon, PencilSquareIcon, PlayIcon, PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -77,7 +79,7 @@ const DRAFT_DEBOUNCE_MS = 300
 
 function readDraftMap(): Record<string, string> {
   try {
-    const raw = localStorage.getItem(DRAFT_KEY)
+    const raw = readStorageString(DRAFT_KEY)
     if (!raw) return {}
     const parsed = JSON.parse(raw) as unknown
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
@@ -97,7 +99,7 @@ function writeDraft(sessionId: string, text: string) {
   try {
     const map = readDraftMap()
     map[sessionId] = text
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(map))
+    writeStorageString(DRAFT_KEY, JSON.stringify(map))
   } catch {
     /* 忽略：localStorage 不可用则静默降级，不影响输入 */
   }
@@ -108,7 +110,7 @@ function clearDraft(sessionId: string) {
     const map = readDraftMap()
     if (!(sessionId in map)) return
     delete map[sessionId]
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(map))
+    writeStorageString(DRAFT_KEY, JSON.stringify(map))
   } catch {
     /* ignore */
   }
@@ -813,7 +815,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
     if (modelBusy || option.id === modelOption.id) return
     setModelBusy(true)
     try {
-      const res = await fetch('/api/chat/config', {
+      const res = await apiFetch('/api/chat/config', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -847,7 +849,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
   async function patchModelMode(next: Partial<ModelModeValues>) {
     setModelBusy(true)
     try {
-      const res = await fetch('/api/chat/config', {
+      const res = await apiFetch('/api/chat/config', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({

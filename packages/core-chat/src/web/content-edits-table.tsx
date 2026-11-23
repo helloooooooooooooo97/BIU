@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { memo, useEffect, useState } from 'react'
 import { ChevronDownIcon, ChevronRightIcon, CircleStackIcon } from '@heroicons/react/16/solid'
 import { CONTENT_JUMP_EVENT } from '@biu/type-file-system'
@@ -83,7 +84,7 @@ export function revealContentEdit(
     return
   }
   const qs = new URLSearchParams({ session: sessionId, turn: String(turn), path })
-  void fetch(`/api/content-turns/file?${qs}`)
+  void apiFetch(`/api/content-turns/file?${qs}`)
     .then(async (res) => {
       if (!res.ok) {
         fire()
@@ -168,7 +169,7 @@ function FileDiffView({ sessionId, turn, path }: { sessionId: string; turn: numb
     const ac = new AbortController()
     setState('load')
     const qs = new URLSearchParams({ session: sessionId, turn: String(turn), path })
-    void fetch(`/api/content-turns/file?${qs}`, { signal: ac.signal })
+    void apiFetch(`/api/content-turns/file?${qs}`, { signal: ac.signal })
       .then(async (res) => {
         if (!res.ok) {
           setState('gone')

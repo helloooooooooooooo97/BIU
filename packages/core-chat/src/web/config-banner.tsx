@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { onAppEvent } from '@biu/biu-ui/app-events'
 import type { SlotProps } from '@biu/web-slots'
 import { getChatConfig } from './chat-config.ts'
 import { ModelConfigDialog } from './model-config-dialog.tsx'
@@ -19,10 +20,10 @@ export function ChatConfigBanner(_props: SlotProps) {
       }
     }
     void load()
-    window.addEventListener('biu:chat-config-changed', load)
+    const off = onAppEvent('biu:chat-config-changed', load)
     return () => {
       cancelled = true
-      window.removeEventListener('biu:chat-config-changed', load)
+      off()
     }
   }, [])
 

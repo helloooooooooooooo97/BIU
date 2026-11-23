@@ -1,3 +1,4 @@
+import { apiFetch } from './api-client.ts'
 export type WorkspaceProfile = {
   name: string
   avatar: string
@@ -70,7 +71,7 @@ export async function hydrateWorkspaceProfile() {
   let request: Promise<WorkspaceProfile>
   request = (async () => {
     try {
-      const res = await fetch('/api/account/workspace-profile', {
+      const res = await apiFetch('/api/account/workspace-profile', {
         headers: { authorization: `Bearer ${token}` },
       })
       if (!res.ok) return readWorkspaceProfile()
@@ -103,7 +104,7 @@ export async function persistWorkspaceProfile(next: WorkspaceProfile) {
   const token = accountToken()
   if (!token) return saved
   try {
-    await fetch('/api/account/workspace-profile', {
+    await apiFetch('/api/account/workspace-profile', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',

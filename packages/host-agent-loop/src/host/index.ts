@@ -1,4 +1,5 @@
 import { Service, type Context } from 'cordis'
+import { hostCtxBudget } from '@biu/host-plugin-loader/env'
 import type { AssistantReply, ChatOptions, LlmClient, LlmConfig, LlmMessage, LlmUsage } from '@biu/host-llm'
 import { classifyLlmError, messagesHaveImages, omitImageContent, omitRejectedImages } from '@biu/host-llm'
 import { runWithSession } from '@biu/host-sessions/scope'
@@ -98,7 +99,7 @@ export class AgentLoop implements AgentRunner {
       const healed = await session.healOpenLog(this.sessionId)
       if (!healed) return { kind: 'fail', detail: String(error) }
       const lifted = await liftToolImages(session.deriveMessages(this.sessionId), this.sessionId)
-      const budget = Number(process.env.CTX_BUDGET ?? 1000000)
+      const budget = hostCtxBudget()
       next = budget > 0 ? applyContextBudget(lifted, budget) : lifted
     } else {
       return { kind: 'fail', detail: String(error) }
@@ -286,7 +287,7 @@ export class AgentLoop implements AgentRunner {
           : undefined
       // 预算默认 100 万 token（约 1M），仅在显式超界时才考虑截断；不主动压缩/不偷跑窗口丢弃。
       // 压缩只应发生：你显式调用 compact_submit 写入压缩点。设 CTX_BUDGET=0 可完全禁用预算保护（原样发送）。
-      const budget = Number(process.env.CTX_BUDGET ?? 1000000)
+      const budget = hostCtxBudget()
       const messages = budget > 0 ? applyContextBudget(rawMessages, budget) : rawMessages
       let reply: AssistantReply
       const chatOptions: ChatOptions = {

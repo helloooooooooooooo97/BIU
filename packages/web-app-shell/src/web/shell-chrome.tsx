@@ -1,3 +1,5 @@
+import { readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode, type Ref } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -44,7 +46,7 @@ if (typeof window !== 'undefined') {
   const originalFetch = window.fetch.bind(window)
   window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
     const preview = isLandingPreview()
-    const token = preview ? '' : (localStorage.getItem('biu.account.token') ?? '')
+    const token = preview ? '' : (readStorageString('biu.account.token') ?? '')
     const workspaceId = preview ? '' : readWorkspaceId()
     if (!token && !workspaceId && !preview) return originalFetch(input, init)
     const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
@@ -440,7 +442,7 @@ const ACCOUNT_EVENT = 'biu:account-token'
 
 function bridgeLegacyAccountCookie() {
   if (typeof localStorage === 'undefined' || typeof document === 'undefined') return
-  const token = localStorage.getItem(ACCOUNT_KEY) ?? ''
+  const token = readStorageString(ACCOUNT_KEY) ?? ''
   if (token) document.cookie = `biu_legacy_account=${encodeURIComponent(token)}; Path=/; SameSite=Strict`
 }
 
@@ -449,18 +451,18 @@ bridgeLegacyAccountCookie()
 export function readAccountToken() {
   if (typeof localStorage === 'undefined') return ''
   if (isLandingPreview()) return ''
-  return localStorage.getItem(ACCOUNT_KEY) ?? ''
+  return readStorageString(ACCOUNT_KEY) ?? ''
 }
 
 export function writeAccountToken(next: string) {
   if (!next && typeof window !== 'undefined') {
-    void fetch('/api/account/logout', { method: 'POST' }).catch((error) => {
+    void apiFetch('/api/account/logout', { method: 'POST' }).catch((error) => {
       console.warn('[shell] logout request failed', error)
     })
   }
-  if (next) localStorage.setItem(ACCOUNT_KEY, next)
+  if (next) writeStorageString(ACCOUNT_KEY, next)
   else {
-    localStorage.removeItem(ACCOUNT_KEY)
+    removeStorageKey(ACCOUNT_KEY)
     clearWorkspaceId()
   }
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(ACCOUNT_EVENT))
@@ -1237,7 +1239,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
 }
 
 export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace' | 'members' }) {
-  const [token, setToken] = useState(() => localStorage.getItem(ACCOUNT_KEY) ?? '')
+  const [token, setToken] = useState(() => readStorageString(ACCOUNT_KEY) ?? '')
   const [workspaces, setWorkspaces] = useState<CollabWorkspace[]>([])
   const [workspaceId, setWorkspaceId] = useState('')
   const [workspaceName, setWorkspaceName] = useState('')
@@ -1835,7 +1837,7 @@ export function ShellSettingsUpdate() {
   const [hint, setHint] = useState<string | undefined>()
 
   useEffect(() => {
-    void fetch('/api/update')
+    void apiFetch('/api/update')
       .then((res) => res.json() as Promise<{ behind?: number }>)
       .then((data) => setBehind(Math.max(0, Number(data.behind) || 0)))
       .catch((error) => {
@@ -1852,7 +1854,7 @@ export function ShellSettingsUpdate() {
     setBusy(true)
     setHint(undefined)
     try {
-      const res = await fetch('/api/update', { method: 'POST' })
+      const res = await apiFetch('/api/update', { method: 'POST' })
       const data = (await res.json()) as { error?: string; restarting?: boolean }
       if (!res.ok) throw new Error(data.error || '更新失败')
       setBehind(0)
@@ -1940,7 +1942,7 @@ export function ShellSettingsMcp({ onLeave }: { onLeave?: () => void }) {
   }, [])
 
   const load = useCallback(() => {
-    void fetch('/api/mcp/info')
+    void apiFetch('/api/mcp/info')
       .then(async (res) => {
         const data = (await res.json()) as McpHostInfo & { error?: string }
         if (!res.ok) throw new Error(data.error || '无法读取 MCP 连接信息')
@@ -2003,7 +2005,7 @@ export function ShellSettingsMcp({ onLeave }: { onLeave?: () => void }) {
         setError('')
         return
       }
-      const res = await fetch('/api/mcp/rotate', {
+      const res = await apiFetch('/api/mcp/rotate', {
         method: 'POST',
         headers: { Authorization: `Bearer ${info.token}` },
       })
@@ -2322,7 +2324,7 @@ function NoticeBell({
   const looking = sessionIdFromPath(location.pathname)
 
   const load = useCallback(() => {
-    void fetch('/api/db/list?path=/notices&sort=createdAt&dir=desc&limit=40&columns=title,body,kind,read,href,createdAt')
+    void apiFetch('/api/db/list?path=/notices&sort=createdAt&dir=desc&limit=40&columns=title,body,kind,read,href,createdAt')
       .then((res) => res.json() as Promise<{ items?: Array<Record<string, unknown>> }>)
       .then((data) => {
         const items = Array.isArray(data.items) ? data.items : []
@@ -2373,7 +2375,7 @@ function NoticeBell({
 
   const clearAll = () => {
     setRows([])
-    void fetch('/api/db/notices/clear', { method: 'POST' })
+    void apiFetch('/api/db/notices/clear', { method: 'POST' })
       .then(() => load())
       .catch(() => load())
   }
@@ -2382,7 +2384,7 @@ function NoticeBell({
     if (!row.id) return
     setRows((prev) => prev.map((item) => (item.id === row.id ? { ...item, read: true } : item)))
     const href = applyNoticeClick(row)
-    void fetch('/api/db/update', {
+    void apiFetch('/api/db/update', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ path: `/notices/${row.id}`, content: { read: true } }),

@@ -1,5 +1,6 @@
 import type { IncomingMessage } from 'node:http'
 import type { Context } from 'cordis'
+import { hostRemoteOrigin } from '@biu/host-plugin-loader/env'
 import {
   EditorContentConflictError,
   currentAccountId,
@@ -457,7 +458,7 @@ export function registerDatabaseHttpRoutes(
       }
       const location = activeDataLocation()
       const localOnly = location !== 'cloud'
-      if (!localOnly && !isOnlineRuntime() && process.env.BIU_REMOTE_ORIGIN) {
+      if (!localOnly && !isOnlineRuntime() && hostRemoteOrigin()) {
         const search = route.query.toString()
         const forwarded = await forwardCloud(
           ctx,
@@ -598,7 +599,7 @@ export function registerDatabaseHttpRoutes(
         route.send(forwarded.status, forwarded.body)
         return
       }
-      if (process.env.BIU_REMOTE_ORIGIN) {
+      if (hostRemoteOrigin()) {
         route.send(401, { error: '请先登录云端账号' })
         return
       }
@@ -716,7 +717,7 @@ export function registerDatabaseHttpRoutes(
       const kind = body.kind === 'record' ? 'record' as const : 'view' as const
       const collection = String(body.collection ?? '')
       const recordId = String(body.recordId ?? '')
-      if (activeDataLocation() === 'cloud' && !isOnlineRuntime() && process.env.BIU_REMOTE_ORIGIN) {
+      if (activeDataLocation() === 'cloud' && !isOnlineRuntime() && hostRemoteOrigin()) {
         const forwarded = await forwardCloud(ctx, collection, recordId, '/api/db/shares', { body })
         if (forwarded) {
           route.send(forwarded.status, forwarded.body)

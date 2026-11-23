@@ -1,3 +1,4 @@
+import { readStorageString, writeStorageString } from '@biu/biu-ui/client-storage'
 import { getSidebarPersist, SIDEBAR_PERSIST } from '@biu/web-session-view'
 
 /** 聊天列窄于此时自动弹出覆盖对话框（px）。不自动收回。 */
@@ -163,7 +164,7 @@ let overlayThreadReady = false
 
 function readStoredOverlayThread() {
   try {
-    const raw = localStorage.getItem(OVERLAY_THREAD_KEY)
+    const raw = readStorageString(OVERLAY_THREAD_KEY)
     if (raw === '1') return true
     if (raw === '0') return false
   } catch {
@@ -174,7 +175,7 @@ function readStoredOverlayThread() {
 
 function rememberOverlayThread(next: boolean) {
   try {
-    localStorage.setItem(OVERLAY_THREAD_KEY, next ? '1' : '0')
+    writeStorageString(OVERLAY_THREAD_KEY, next ? '1' : '0')
   } catch {
     /* ignore */
   }
@@ -537,7 +538,7 @@ export function readOverlayWinState(): OverlayWinState {
   const vh = typeof window === 'undefined' ? 800 : window.innerHeight
   const fallback = { ...defaultOverlayWinGeom(vw, vh), layout: 'right' as const }
   try {
-    const raw = localStorage.getItem(OVERLAY_WIN_GEOM_KEY)
+    const raw = readStorageString(OVERLAY_WIN_GEOM_KEY)
     if (!raw) return fallback
     const parsed = JSON.parse(raw) as Partial<OverlayWinState>
     const layout = parseOverlayLayout(parsed.layout)
@@ -562,7 +563,7 @@ export function readOverlayWinGeom(): OverlayWinGeom {
 
 export function writeOverlayWinState(state: OverlayWinState): void {
   try {
-    localStorage.setItem(OVERLAY_WIN_GEOM_KEY, JSON.stringify(state))
+    writeStorageString(OVERLAY_WIN_GEOM_KEY, JSON.stringify(state))
   } catch {
     /* ignore */
   }

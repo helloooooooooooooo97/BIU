@@ -1,3 +1,4 @@
+import { readStorageString, writeStorageString } from '@biu/biu-ui/client-storage'
 import type { ChatNode } from './session-project.ts'
 
 export type ChatOutlineFilter = 'user' | 'all'
@@ -27,7 +28,7 @@ export function subscribeChatOutline(fn: () => void) {
 
 export function getChatOutlineOpen(): boolean {
   try {
-    return localStorage.getItem(OPEN_KEY) === '1'
+    return readStorageString(OPEN_KEY) === '1'
   } catch {
     return false
   }
@@ -35,7 +36,7 @@ export function getChatOutlineOpen(): boolean {
 
 export function setChatOutlineOpen(open: boolean) {
   try {
-    localStorage.setItem(OPEN_KEY, open ? '1' : '0')
+    writeStorageString(OPEN_KEY, open ? '1' : '0')
   } catch {
     /* ignore */
   }
@@ -44,7 +45,7 @@ export function setChatOutlineOpen(open: boolean) {
 
 export function getChatOutlineFilter(): ChatOutlineFilter {
   try {
-    return localStorage.getItem(FILTER_KEY) === 'all' ? 'all' : 'user'
+    return readStorageString(FILTER_KEY) === 'all' ? 'all' : 'user'
   } catch {
     return 'user'
   }
@@ -52,7 +53,7 @@ export function getChatOutlineFilter(): ChatOutlineFilter {
 
 export function setChatOutlineFilter(filter: ChatOutlineFilter) {
   try {
-    localStorage.setItem(FILTER_KEY, filter)
+    writeStorageString(FILTER_KEY, filter)
   } catch {
     /* ignore */
   }

@@ -1,4 +1,5 @@
 import type { CollectionUpdateOptions } from '@biu/type-file-system'
+import { hostPluginDevDir, hostPluginDir } from '@biu/host-plugin-loader/env'
 import { existsSync, mkdirSync, readFileSync, renameSync, watch, writeFileSync, type FSWatcher } from 'node:fs'
 import { readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
@@ -122,11 +123,11 @@ export function storeFileCacheControl(version?: string | null) {
 }
 
 export function defaultPluginDir() {
-  return process.env.BIU_PLUGIN_DIR || join(process.cwd(), '.plugin')
+  return hostPluginDir()
 }
 
 export function defaultSandboxDir() {
-  return process.env.BIU_PLUGIN_DEV_DIR || join(process.cwd(), '.plugin-dev')
+  return hostPluginDevDir()
 }
 
 export function defaultStatePath() {

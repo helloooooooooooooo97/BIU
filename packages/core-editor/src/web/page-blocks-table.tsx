@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { useEffect, useRef, useState, type ComponentType, type SVGProps } from 'react'
 import type { Editor } from '@tiptap/core'
 import type { Node } from '@tiptap/pm/model'
@@ -196,7 +197,7 @@ function useTagCatalog() {
   const [tags, setTags] = useState<TagOption[]>([])
   useEffect(() => {
     let gone = false
-    void fetch('/api/db/list?path=/tags&limit=200')
+    void apiFetch('/api/db/list?path=/tags&limit=200')
       .then((res) => res.json())
       .then((body) => {
         if (gone) return
@@ -241,7 +242,7 @@ function BlockTagCell({
   useEffect(() => {
     if (!recordPath) return
     let gone = false
-    void fetch(`/api/db/read?path=${encodeURIComponent(recordPath)}`)
+    void apiFetch(`/api/db/read?path=${encodeURIComponent(recordPath)}`)
       .then((res) => res.json())
       .then((body) => {
         if (!gone) setValue(normalizeSchemaValue(body?.value?.tag))
@@ -255,7 +256,7 @@ function BlockTagCell({
   const save = (nextIds: string[]) => {
     const next = retagSchemaValue(value, nextIds)
     setValue(next)
-    void fetch('/api/db/update', {
+    void apiFetch('/api/db/update', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ path: recordPath, content: { tag: next } }),

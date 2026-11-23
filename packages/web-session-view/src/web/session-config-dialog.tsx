@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { WrenchScrewdriverIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { CellMulti } from '@biu/database-ui'
@@ -87,7 +88,7 @@ function SessionTagPicker({
 
   useEffect(() => {
     let cancelled = false
-    void fetch('/api/db/tags')
+    void apiFetch('/api/db/tags')
       .then((res) => res.json())
       .then((body: { tags?: CollectionSchemaPack[] }) => {
         if (cancelled || !Array.isArray(body.tags)) return
@@ -128,7 +129,7 @@ function SessionTagPicker({
       onChange({ tags: resolved, values })
     }
     if (packs !== catalog) {
-      void fetch('/api/db/tags', {
+      void apiFetch('/api/db/tags', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ tags: packs }),
@@ -184,7 +185,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
   const refresh = useCallback(async () => {
     if (!sessionId || !open) return
     try {
-      const res = await fetch(`/api/agents/${sessionId}/inspector`)
+      const res = await apiFetch(`/api/agents/${sessionId}/inspector`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const body = (await res.json()) as InspectorPayload
       setData(body)
@@ -222,7 +223,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
     setBusy(true)
     setError('')
     try {
-      const res = await fetch(`/api/agents/${sessionId}/config`, {
+      const res = await apiFetch(`/api/agents/${sessionId}/config`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(patch),

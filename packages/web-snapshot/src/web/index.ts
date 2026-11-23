@@ -1,3 +1,5 @@
+import { readStorageString } from '@biu/biu-ui/client-storage'
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { useSyncExternalStore } from 'react'
 import { Service, type Context } from 'cordis'
 import { startMascotDance } from '@biu/public-mascot'
@@ -42,7 +44,7 @@ const empty: Snapshot = { seq: 0, plugins: [], pages: [], routes: [], events: []
 function hasAccountToken() {
   if (typeof localStorage === 'undefined') return true
   try {
-    return Boolean(localStorage.getItem('biu.account.token'))
+    return Boolean(readStorageString('biu.account.token'))
   } catch {
     return true
   }
@@ -58,9 +60,9 @@ function snapshotRequestHeaders(): HeadersInit {
   const headers: Record<string, string> = {}
   if (typeof window === 'undefined' || isLandingPreview()) return headers
   try {
-    const workspaceId = sessionStorage.getItem('biu.workspaceId') || localStorage.getItem('biu.workspaceId') || ''
+    const workspaceId = readStorageString('biu.workspaceId', 'session') || readStorageString('biu.workspaceId') || ''
     if (workspaceId) headers['x-biu-workspace-id'] = workspaceId
-    const token = localStorage.getItem('biu.account.token') || ''
+    const token = readStorageString('biu.account.token') || ''
     if (token) headers.authorization = `Bearer ${token}`
   } catch {
     /* ignore */
@@ -138,7 +140,7 @@ export class SnapshotService extends Service {
   }
 
   async setEnabled(id: string, enabled: boolean) {
-    const res = await fetch(`/api/plugins/${id}`, {
+    const res = await apiFetch(`/api/plugins/${id}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ enabled }),
@@ -155,7 +157,7 @@ export class SnapshotService extends Service {
   private async pull() {
     if (this.authStopped) return
     try {
-      const res = await fetch('/api/snapshot', { headers: snapshotRequestHeaders() })
+      const res = await apiFetch('/api/snapshot', { headers: snapshotRequestHeaders() })
       if (res.status === 401 || res.status === 403) {
         this.stopForAuth()
         return
@@ -175,7 +177,7 @@ export class SnapshotService extends Service {
   private async boot() {
     for (let i = 0; i < 30; i++) {
       try {
-        const res = await fetch('/api/snapshot', { headers: snapshotRequestHeaders() })
+        const res = await apiFetch('/api/snapshot', { headers: snapshotRequestHeaders() })
         if (res.status === 401 || res.status === 403) return
         if (res.ok) {
           this.replace(await res.json())
@@ -194,7 +196,7 @@ export class SnapshotService extends Service {
     try {
       const proto = location.protocol === 'https:' ? 'wss' : 'ws'
       const preview = new URLSearchParams(location.search).get('landingPreview') === '1'
-      const workspaceId = preview ? '' : (sessionStorage.getItem('biu.workspaceId') || localStorage.getItem('biu.workspaceId') || '')
+      const workspaceId = preview ? '' : (readStorageString('biu.workspaceId', 'session') || readStorageString('biu.workspaceId') || '')
       const query = preview ? '?landingPreview=1' : workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ''
       const ws = new WebSocket(`${proto}://${location.host}/ws${query}`)
       this.socket = ws

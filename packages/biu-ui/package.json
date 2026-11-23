@@ -31,7 +31,10 @@
     "./anchor-menu": "./src/anchor-menu.tsx",
     "./confirm-dialog": "./src/confirm-dialog.tsx",
     "./outline-nav": "./src/outline-nav.tsx",
-    "./render-boundary": "./src/render-boundary.tsx"
+    "./render-boundary": "./src/render-boundary.tsx",
+    "./api-client": "./src/api-client.ts",
+    "./app-events": "./src/app-events.ts",
+    "./client-storage": "./src/client-storage.ts"
   },
   "peerDependencies": {
     "react": "^19.1.1"

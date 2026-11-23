@@ -1,3 +1,5 @@
+import { readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { builtinAllGroupBy, builtinAllViewId, stubBuiltinAllView, stubBuiltinBlockKindView, stubBuiltinCatalogView, stubBuiltinTagView, stubBuiltinScopeView, stubBuiltinMemberView, isBuiltinAllViewForCollection, isBuiltinAllViewId } from '../catalog-views.ts'
 import {
   EDITOR_BLOCKS_COLLECTION_PATH,
@@ -26,7 +28,7 @@ export function omittedViewsKey(collectionPath: string) {
 
 export function loadOmittedViewIds(collectionPath: string): string[] {
   try {
-    const raw = localStorage.getItem(omittedViewsKey(collectionPath))
+    const raw = readStorageString(omittedViewsKey(collectionPath))
     const parsed = raw ? (JSON.parse(raw) as unknown) : []
     if (!Array.isArray(parsed)) return []
     return parsed.map((id) => String(id ?? '').trim()).filter(Boolean)
@@ -38,8 +40,8 @@ export function loadOmittedViewIds(collectionPath: string): string[] {
 function persistOmittedViewIds(collectionPath: string, ids: Iterable<string>) {
   const next = [...new Set([...ids].map((id) => String(id ?? '').trim()).filter(Boolean))]
   try {
-    if (next.length) localStorage.setItem(omittedViewsKey(collectionPath), JSON.stringify(next))
-    else localStorage.removeItem(omittedViewsKey(collectionPath))
+    if (next.length) writeStorageString(omittedViewsKey(collectionPath), JSON.stringify(next))
+    else removeStorageKey(omittedViewsKey(collectionPath))
   } catch {
     /* ignore */
   }
@@ -214,7 +216,7 @@ export function peekRecord(collectionPath: string, recordId: string): CrumbRecor
 
 export function loadActiveViewId(collectionPath: string, listed: SavedView[]) {
   try {
-    const id = localStorage.getItem(activeViewStorageKey(collectionPath))
+    const id = readStorageString(activeViewStorageKey(collectionPath))
     if (id && listed.some((view) => view.id === id)) return id
   } catch {
     /* ignore */
@@ -328,7 +330,7 @@ const STARRED_VIEWS_KEY = 'fsdb.starredViews'
 
 export function loadStarredViews(): StarredView[] {
   try {
-    const raw = localStorage.getItem(STARRED_VIEWS_KEY)
+    const raw = readStorageString(STARRED_VIEWS_KEY)
     const parsed = raw ? (JSON.parse(raw) as unknown) : []
     if (!Array.isArray(parsed)) return []
     return parsed.flatMap((item) => {
@@ -366,7 +368,7 @@ export function getStarredViewsVersion() {
 export function persistStarredViews(items: StarredView[]) {
   starredViews = items
   starredVersion += 1
-  localStorage.setItem(STARRED_VIEWS_KEY, JSON.stringify(items))
+  writeStorageString(STARRED_VIEWS_KEY, JSON.stringify(items))
   for (const fn of starredListeners) fn()
 }
 
@@ -409,7 +411,7 @@ export async function pushSavedViewsPatch(collectionPath: string, patch: SavedVi
   const remove = patch.remove ?? []
   if (!upsert.length && !remove.length) return 'skipped'
   try {
-    const res = await fetch('/api/db/saved-views', {
+    const res = await apiFetch('/api/db/saved-views', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ path: collectionPath, upsert: upsert.map(viewWirePayload), remove }),
@@ -422,7 +424,7 @@ export async function pushSavedViewsPatch(collectionPath: string, patch: SavedVi
 
 /** 整份覆盖。只有确知「本地就是权威」时才用，普通增删改请走 pushSavedViewsPatch。 */
 export function pushSavedViews(collectionPath: string, views: SavedView[]) {
-  return fetch('/api/db/saved-views', {
+  return apiFetch('/api/db/saved-views', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ path: collectionPath, views, replace: true }),
@@ -751,7 +753,7 @@ const STARRED_RECORDS_KEY = 'fsdb.starredRecords'
 
 export function loadStarredRecords(): StarredRecord[] {
   try {
-    const raw = localStorage.getItem(STARRED_RECORDS_KEY)
+    const raw = readStorageString(STARRED_RECORDS_KEY)
     const parsed = raw ? (JSON.parse(raw) as unknown) : []
     if (!Array.isArray(parsed)) return []
     return parsed.flatMap((item) => {
@@ -791,7 +793,7 @@ export function getStarredRecordsVersion() {
 export function persistStarredRecords(items: StarredRecord[]) {
   starredRecords = items
   starredRecordsVersion += 1
-  localStorage.setItem(STARRED_RECORDS_KEY, JSON.stringify(items))
+  writeStorageString(STARRED_RECORDS_KEY, JSON.stringify(items))
   for (const fn of starredRecordListeners) fn()
 }
 
@@ -858,7 +860,7 @@ export function collapsedGroupsKey(collectionPath: string, viewId: string, group
 
 export function loadCollapsedGroups(collectionPath: string, viewId: string, groupBy = ''): Record<string, boolean> {
   try {
-    const raw = localStorage.getItem(collapsedGroupsKey(collectionPath, viewId, groupBy))
+    const raw = readStorageString(collapsedGroupsKey(collectionPath, viewId, groupBy))
     if (!raw) return {}
     const parsed = JSON.parse(raw) as unknown
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
@@ -884,8 +886,8 @@ export function persistCollapsedGroups(
     for (const [id, folded] of Object.entries(next)) {
       if (folded) compact[id] = true
     }
-    if (Object.keys(compact).length) localStorage.setItem(key, JSON.stringify(compact))
-    else localStorage.removeItem(key)
+    if (Object.keys(compact).length) writeStorageString(key, JSON.stringify(compact))
+    else removeStorageKey(key)
   } catch {
     /* ignore */
   }
@@ -922,7 +924,7 @@ function pickDisplay(patch: Partial<SavedView>): ViewDisplayPatch {
 
 export function loadViewDisplay(collectionPath: string, viewId: string): ViewDisplayPatch {
   try {
-    const raw = localStorage.getItem(viewDisplayKey(collectionPath, viewId))
+    const raw = readStorageString(viewDisplayKey(collectionPath, viewId))
     if (!raw) return {}
     const parsed = JSON.parse(raw) as Record<string, unknown>
     if (!parsed || typeof parsed !== 'object') return {}
@@ -934,7 +936,7 @@ export function loadViewDisplay(collectionPath: string, viewId: string): ViewDis
 
 export function snapshotViewDisplay(collectionPath: string, viewId: string): string | null {
   try {
-    return localStorage.getItem(viewDisplayKey(collectionPath, viewId))
+    return readStorageString(viewDisplayKey(collectionPath, viewId))
   } catch {
     return null
   }
@@ -943,8 +945,8 @@ export function snapshotViewDisplay(collectionPath: string, viewId: string): str
 export function restoreViewDisplay(collectionPath: string, viewId: string, raw: string | null) {
   try {
     const key = viewDisplayKey(collectionPath, viewId)
-    if (raw === null) localStorage.removeItem(key)
-    else localStorage.setItem(key, raw)
+    if (raw === null) removeStorageKey(key)
+    else writeStorageString(key, raw)
   } catch {
     /* ignore */
   }
@@ -956,7 +958,7 @@ export function persistViewDisplay(collectionPath: string, viewId: string, patch
     const picked = pickDisplay(patch)
     const updatedAt = picked.updatedAt && picked.updatedAt > 0 ? picked.updatedAt : Date.now()
     const next = { ...prev, ...picked, updatedAt }
-    localStorage.setItem(viewDisplayKey(collectionPath, viewId), JSON.stringify(next))
+    writeStorageString(viewDisplayKey(collectionPath, viewId), JSON.stringify(next))
   } catch {
     /* ignore */
   }

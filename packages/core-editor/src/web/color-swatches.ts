@@ -1,3 +1,4 @@
+import { readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
 import { TAG_TONES, tagTextColor, tagWashColor } from '@biu/biu-ui'
 
 /** 与标签相同的色相；文字/涂亮直接用饱和色，不叠黑白墨。 */
@@ -71,7 +72,7 @@ export const HIGHLIGHT_COLORS = [
 export function readLastEditorColor(): LastEditorColor | null {
   if (typeof localStorage === 'undefined') return lastColorMemory
   try {
-    const raw = localStorage.getItem(LAST_COLOR_KEY)
+    const raw = readStorageString(LAST_COLOR_KEY)
     if (!raw) return lastColorMemory
     const parsed = JSON.parse(raw) as LastEditorColor
     if (parsed?.kind !== 'text' && parsed?.kind !== 'mark') return lastColorMemory
@@ -87,8 +88,8 @@ export function writeLastEditorColor(next: LastEditorColor | null) {
   lastColorMemory = next
   if (typeof localStorage === 'undefined') return
   try {
-    if (!next) localStorage.removeItem(LAST_COLOR_KEY)
-    else localStorage.setItem(LAST_COLOR_KEY, JSON.stringify(next))
+    if (!next) removeStorageKey(LAST_COLOR_KEY)
+    else writeStorageString(LAST_COLOR_KEY, JSON.stringify(next))
   } catch {
     /* ignore quota / private mode */
   }

@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
@@ -71,7 +72,7 @@ async function loadSnapshot(
         ? `?record=${encodeURIComponent(extra.recordId)}`
         : ''
   try {
-    const res = await fetch(`/api/share/${encodeURIComponent(token)}${query}`, {
+    const res = await apiFetch(`/api/share/${encodeURIComponent(token)}${query}`, {
       method: password ? 'POST' : 'GET',
       headers: shareHeaders(password),
       body: password ? JSON.stringify({ password }) : undefined,
@@ -95,7 +96,7 @@ async function loadShareContent(token: string, recordId: string, password = '') 
   const headers = shareHeaders(password)
   const query = password ? `?password=${encodeURIComponent(password)}` : ''
   try {
-    const res = await fetch(`/api/share/${encodeURIComponent(token)}/content/${encodeURIComponent(recordId)}${query}`, { headers })
+    const res = await apiFetch(`/api/share/${encodeURIComponent(token)}/content/${encodeURIComponent(recordId)}${query}`, { headers })
     if (!res.ok) return { id: recordId, content: null as unknown, pluginIds: [] as string[], assets: [] as string[] }
     return (await res.json()) as { id: string; content: unknown; pluginIds?: string[]; assets?: string[] }
   } catch {

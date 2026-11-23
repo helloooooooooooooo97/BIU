@@ -1,3 +1,4 @@
+import { readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
 import { useSyncExternalStore } from 'react'
 import { subscribePageBlockPluginPhase } from './page-block-meta.ts'
 
@@ -89,7 +90,7 @@ function asBlock(raw: unknown): RememberedPageBlock | null {
 function readStorage(): StoredSlashPageBlocks {
   if (typeof localStorage === 'undefined') return { plugins: [], blocks: [] }
   try {
-    const raw = localStorage.getItem(SLASH_PAGE_BLOCKS_KEY)
+    const raw = readStorageString(SLASH_PAGE_BLOCKS_KEY)
     if (!raw) return { plugins: [], blocks: [] }
     const parsed = JSON.parse(raw) as StoredSlashPageBlocks
     const plugins = Array.isArray(parsed.plugins) ? parsed.plugins.map((id) => String(id).trim()).filter(Boolean) : []
@@ -105,7 +106,7 @@ function readStorage(): StoredSlashPageBlocks {
 function persist() {
   if (typeof localStorage === 'undefined') return
   const plugins = confirmedPlugins ?? readStorage().plugins
-  localStorage.setItem(SLASH_PAGE_BLOCKS_KEY, JSON.stringify({ plugins, blocks: memoryBlocks }))
+  writeStorageString(SLASH_PAGE_BLOCKS_KEY, JSON.stringify({ plugins, blocks: memoryBlocks }))
 }
 
 function confirmedIds() {
@@ -172,7 +173,7 @@ export function resetSlashCatalog() {
   confirmedPlugins = []
   installed = []
   listedPluginIds = null
-  if (typeof localStorage !== 'undefined') localStorage.removeItem(SLASH_PAGE_BLOCKS_KEY)
+  if (typeof localStorage !== 'undefined') removeStorageKey(SLASH_PAGE_BLOCKS_KEY)
   bumpSlashCatalog()
 }
 

@@ -1,3 +1,5 @@
+import { onAppEvent } from '@biu/biu-ui/app-events'
+
 /**
  * Unified workspace-scoped client cache registry.
  * Registers all module-level frontend caches (`memoryViews`, `listCache`, `previewCache`,
@@ -60,8 +62,6 @@ export function subscribeWorkspaceScope(listener: (workspaceId: string) => void)
 
 // Auto-reset all registered workspace caches on account/workspace token changes
 // without introducing a reverse import from web-app-shell into core-file-system.
-if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-  window.addEventListener('biu:account-token', () => {
-    resetWorkspaceClientCaches()
-  })
-}
+onAppEvent('biu:account-token', () => {
+  resetWorkspaceClientCaches()
+})

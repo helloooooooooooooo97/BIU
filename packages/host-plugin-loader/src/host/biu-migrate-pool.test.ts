@@ -8,6 +8,7 @@ import {
   openAndMigrateBiu,
   sharedBiuPoolStats,
 } from './biu-migrate.ts'
+import { openAndMigrateEvents } from './events-migrate.ts'
 
 test('openAndMigrateBiu shares one pooled connection per file+fk, caches statements, and ref-counts close()', () => {
   closeAllSharedBiuConnections()
@@ -46,6 +47,17 @@ test('openAndMigrateBiu shares one pooled connection per file+fk, caches stateme
     assert.deepEqual(sharedBiuPoolStats(), { connections: 0, totalRefs: 0 })
     m1.close()
     m2.close()
+
+    // events.sqlite shares the same ref-counted pool
+    const eventsFile = join(dir, 'events.sqlite')
+    const e1 = openAndMigrateEvents(eventsFile)
+    const e2 = openAndMigrateEvents(eventsFile)
+    assert.deepEqual(sharedBiuPoolStats(), { connections: 1, totalRefs: 2 })
+    assert.equal(e1.prepare('SELECT 1 AS ok'), e2.prepare('SELECT 1 AS ok'))
+    e1.close()
+    assert.deepEqual(sharedBiuPoolStats(), { connections: 1, totalRefs: 1 })
+    e2.close()
+    assert.deepEqual(sharedBiuPoolStats(), { connections: 0, totalRefs: 0 })
   } finally {
     closeAllSharedBiuConnections()
     rmSync(dir, { recursive: true, force: true })

@@ -1,3 +1,4 @@
+import { readStorageString, removeStorageKey } from '@biu/biu-ui/client-storage'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { builtinAllView, builtinAllViewId, overlayListedViews, stampRowOpenTarget } from '../catalog-views.ts'
 import { DATA_COLLECTION_PATH } from './database-path.ts'
@@ -10,7 +11,7 @@ type ViaData = { viewId: string }
 
 function readViaData(): ViaData | null {
   try {
-    const raw = sessionStorage.getItem(VIA_DATA_KEY)
+    const raw = readStorageString(VIA_DATA_KEY, 'session')
     if (!raw) return null
     const parsed = JSON.parse(raw) as { viewId?: unknown }
     const viewId = String(parsed.viewId ?? '').trim()
@@ -26,7 +27,7 @@ const viaDataListeners = new Set<() => void>()
 function persistViaData(next: ViaData | null) {
   try {
     if (next) sessionStorage.setItem(VIA_DATA_KEY, JSON.stringify(next))
-    else sessionStorage.removeItem(VIA_DATA_KEY)
+    else removeStorageKey(VIA_DATA_KEY, 'session')
   } catch {
     /* ignore */
   }

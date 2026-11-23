@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { emitFsdbChange, FSDB_CHANGE_EVENT, type DbRecord } from '@biu/type-file-system'
 import type { CommentAnchor } from './comment-anchor.ts'
@@ -111,7 +112,7 @@ export async function fetchComments(targetPath: string, signal?: AbortSignal): P
     limit: '500',
     filter: JSON.stringify({ targetPath }),
   })
-  const res = await fetch(`/api/db/list?${params.toString()}`, { signal })
+  const res = await apiFetch(`/api/db/list?${params.toString()}`, { signal })
   if (!res.ok) return []
   const data = (await res.json()) as { items?: DbRecord[] }
   const items = Array.isArray(data?.items) ? data.items : []
@@ -127,7 +128,7 @@ export async function apiCreateComment(input: {
   parentId?: string
   anchor?: CommentAnchor | null
 }): Promise<CommentItem | null> {
-  const res = await fetch('/api/db/create', {
+  const res = await apiFetch('/api/db/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -159,7 +160,7 @@ export async function apiUpdateComment(
   if (patch.body !== undefined) content.body = patch.body
   if (patch.status !== undefined) content.status = patch.status
   if (patch.anchor !== undefined) content.anchor = patch.anchor ? JSON.stringify(patch.anchor) : ''
-  const res = await fetch('/api/db/update', {
+  const res = await apiFetch('/api/db/update', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ path: `/comments/${id}`, content }),
@@ -170,7 +171,7 @@ export async function apiUpdateComment(
 }
 
 export async function apiDeleteComment(id: string): Promise<boolean> {
-  const res = await fetch('/api/db/delete', {
+  const res = await apiFetch('/api/db/delete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ path: '/comments', ids: [id] }),

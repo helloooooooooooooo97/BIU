@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -276,7 +277,7 @@ async function listKind(path: string, query: string, signal: AbortSignal) {
     dir: 'desc',
     filter: '{}',
   })
-  const res = await fetch(`/api/db/list?${params}`, { signal })
+  const res = await apiFetch(`/api/db/list?${params}`, { signal })
   const body = (await res.json()) as {
     items?: Array<Record<string, unknown>>
     schema?: { actions?: unknown }
@@ -336,7 +337,7 @@ function HitActions({ hit }: { hit: SearchHit }) {
       const cornerSessionId = String(
         document.querySelector('[data-testid="brand-corner-mascot"]')?.getAttribute('data-session-id') ?? '',
       ).trim()
-      const res = await fetch('/api/db/action', {
+      const res = await apiFetch('/api/db/action', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({

@@ -1,5 +1,6 @@
 import { networkInterfaces } from 'node:os'
 import type { IncomingMessage } from 'node:http'
+import { hostPort, hostSharePort, hostShareProxyUi, hostSharePublicUrl } from '@biu/host-plugin-loader/env'
 
 export function firstLanIPv4() {
   for (const addrs of Object.values(networkInterfaces())) {
@@ -11,10 +12,10 @@ export function firstLanIPv4() {
 }
 
 export function resolvedSharePort() {
-  const raw = process.env.SHARE_PORT
+  const raw = hostSharePort()
   if (raw !== undefined && raw !== '') return Number(raw)
   if (process.env.VITEST) return 0
-  return Number(process.env.PORT ?? 3141)
+  return hostPort()
 }
 
 function browserOrigin(req?: IncomingMessage) {
@@ -56,9 +57,9 @@ function withLanHost(origin: string) {
 
 /** 分享走已经打开的页面端口：本机 UI 或云端 UI，不再另开分享端口。 */
 export function publicShareOrigin(req?: IncomingMessage) {
-  const env = process.env.SHARE_PUBLIC_URL?.replace(/\/$/, '')
+  const env = hostSharePublicUrl()
   if (env) return env
-  const ui = process.env.SHARE_PROXY_UI?.replace(/\/$/, '')
+  const ui = hostShareProxyUi()
   if (ui) return withLanHost(ui)
   const fromRequest = browserOrigin(req)
   if (fromRequest) return withLanHost(fromRequest)

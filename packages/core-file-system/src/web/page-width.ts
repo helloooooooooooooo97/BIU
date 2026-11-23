@@ -1,3 +1,5 @@
+import { readStorageString, writeStorageString } from '@biu/biu-ui/client-storage'
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { PAGE_PREFS_EVENT } from './fsdb-events.ts'
 
 export type PageWidth = 'max' | 'full'
@@ -58,9 +60,9 @@ export function parsePagePrefs(value: unknown, fallback: PagePrefs = DEFAULT_PRE
 
 function readCachedPagePrefs(): PagePrefs {
   try {
-    const raw = localStorage.getItem(KEY)
+    const raw = readStorageString(KEY)
     if (raw) return parsePagePrefs(JSON.parse(raw) as unknown)
-    return { ...DEFAULT_PREFS, wide: localStorage.getItem(LEGACY_WIDTH_KEY) === 'full' }
+    return { ...DEFAULT_PREFS, wide: readStorageString(LEGACY_WIDTH_KEY) === 'full' }
   } catch {
     return { ...DEFAULT_PREFS }
   }
@@ -68,8 +70,8 @@ function readCachedPagePrefs(): PagePrefs {
 
 function writeCachedPagePrefs(next: PagePrefs) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(next))
-    localStorage.setItem(LEGACY_WIDTH_KEY, next.wide ? 'full' : 'max')
+    writeStorageString(KEY, JSON.stringify(next))
+    writeStorageString(LEGACY_WIDTH_KEY, next.wide ? 'full' : 'max')
   } catch {
     /* ignore */
   }
@@ -83,7 +85,7 @@ export async function getWorkspaceProfile(): Promise<Record<string, unknown> | n
   if (profileInflight) return profileInflight
   let request: Promise<Record<string, unknown> | null>
   request = (async () => {
-    const res = await fetch('/api/profile')
+    const res = await apiFetch('/api/profile')
     if (!res.ok) return null
     const data = (await res.json()) as unknown
     return data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, unknown>) : null
@@ -109,7 +111,7 @@ export function resetWorkspaceProfileGet() {
 
 async function postPagePrefs(next: PagePrefs) {
   if (typeof fetch === 'undefined') return
-  const res = await fetch('/api/profile', {
+  const res = await apiFetch('/api/profile', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ pagePrefs: next }),

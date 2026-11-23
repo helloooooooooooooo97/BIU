@@ -1,4 +1,5 @@
 import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
+import { hostCtxBudget } from '@biu/host-plugin-loader/env'
 import { recordBuiltinValues, normalizeSchemaValue } from '@biu/type-file-system'
 import {
   isSessionCompactPoint,
@@ -508,7 +509,7 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec {
           const events = (await sessions.require(id)).events
           const usage = lastUsageBeforeCompact(events)
           const tokens = usage.inputTokens
-          const budget = Number(process.env.CTX_BUDGET ?? 1000000)
+          const budget = hostCtxBudget()
           const compacted = events.some((event) => isSessionCompactPoint(event))
           return {
             ok: true,

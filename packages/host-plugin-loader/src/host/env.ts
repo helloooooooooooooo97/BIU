@@ -54,3 +54,67 @@ export function superAdminPassword() {
 export function isSuperAdminEmail(email: string | null | undefined) {
   return String(email ?? '').trim().toLowerCase() === superAdminEmail()
 }
+
+// ── Unified typed host environment accessors ────────────────────────────────
+
+export function hostEnvString(key: string, fallback = ''): string {
+  const raw = process.env[key]
+  if (raw == null || raw === '') return fallback
+  return raw
+}
+
+export function hostEnvUrl(key: string): string {
+  const raw = process.env[key]?.trim()
+  return raw ? raw.replace(/\/+$/, '') : ''
+}
+
+export function hostEnvNumber(key: string, fallback: number): number {
+  const raw = process.env[key]
+  if (raw == null || raw === '') return fallback
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : fallback
+}
+
+export function hostEnvBool(key: string, fallback = false): boolean {
+  const raw = process.env[key]?.trim().toLowerCase()
+  if (!raw) return fallback
+  if (raw === '1' || raw === 'true' || raw === 'yes') return true
+  if (raw === '0' || raw === 'false' || raw === 'no') return false
+  return fallback
+}
+
+export function hostRemoteOrigin(): string {
+  return hostEnvUrl('BIU_REMOTE_ORIGIN')
+}
+
+export function hostPort(override?: number | string): number {
+  if (override !== undefined && override !== '') {
+    const n = Number(override)
+    if (Number.isFinite(n)) return n
+  }
+  return hostEnvNumber('PORT', 3141)
+}
+
+export function hostSharePort(): string | undefined {
+  return process.env.SHARE_PORT
+}
+
+export function hostShareProxyUi(): string {
+  return hostEnvUrl('SHARE_PROXY_UI')
+}
+
+export function hostSharePublicUrl(): string {
+  return hostEnvUrl('SHARE_PUBLIC_URL')
+}
+
+export function hostCtxBudget(): number {
+  return hostEnvNumber('CTX_BUDGET', 1_000_000)
+}
+
+export function hostPluginDir(cwd = process.cwd()): string {
+  return hostEnvString('BIU_PLUGIN_DIR', join(cwd, '.plugin'))
+}
+
+export function hostPluginDevDir(cwd = process.cwd()): string {
+  return hostEnvString('BIU_PLUGIN_DEV_DIR', join(cwd, '.plugin-dev'))
+}

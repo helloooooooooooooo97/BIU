@@ -6,6 +6,7 @@ import type { Duplex } from 'node:stream'
 import { Service, type Context } from 'cordis'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { HUB_CHANGE } from '@biu/type-http'
+import { hostPort, hostSharePort, hostShareProxyUi } from '@biu/host-plugin-loader/env'
 import type { Method, RouteContext, RouteHandler } from '@biu/type-http'
 import {
   currentAccountId,
@@ -103,7 +104,7 @@ export type HttpListenConfig = {
 }
 
 function defaultSharePort(port: number) {
-  const raw = process.env.SHARE_PORT
+  const raw = hostSharePort()
   if (raw !== undefined && raw !== '') return Number(raw)
   if (process.env.VITEST) return 0
   return port
@@ -140,7 +141,7 @@ function asHtml(data: Buffer) {
 }
 
 function resolveListenConfig(config?: HttpListenConfig) {
-  const port = Number(config?.port ?? process.env.PORT ?? 3141)
+  const port = hostPort(config?.port)
   const sharePortRaw = config?.sharePort ?? defaultSharePort(port)
   return {
     port,
@@ -600,7 +601,7 @@ export class HttpService extends Service {
   }
 
   private async proxyShareUi(pathname: string, res: ServerResponse) {
-    const base = process.env.SHARE_PROXY_UI?.replace(/\/$/, '')
+    const base = hostShareProxyUi()
     if (!base) return false
     try {
       const upstream = await fetch(`${base}${pathname}`)

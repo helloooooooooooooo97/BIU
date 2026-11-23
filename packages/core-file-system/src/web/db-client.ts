@@ -1,4 +1,5 @@
 import type { CollectionSchema, DbRecord } from '@biu/type-file-system'
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
 
 export class HttpError extends Error {
@@ -17,7 +18,7 @@ const getInflight = new Map<string, Promise<unknown>>()
 let readEpoch = 0
 
 async function readJsonNow<T>(path: string, init?: RequestInit, retry = true): Promise<T> {
-  const res = await fetch(path, init)
+  const res = await apiFetch(path, init)
   if (res.status === 431) {
     throw new HttpError(
       `接口 ${path.split('?')[0]} 的请求头或查询地址过大（HTTP 431）`,

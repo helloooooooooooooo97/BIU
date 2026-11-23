@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { Service, type Context } from 'cordis'
-import { biuSqlitePath, currentAccountId, eventsSqlitePath, isOnlineRuntime, openAndMigrateBiu, openSqlite } from '@biu/host-plugin-loader/data-dir'
+import { hostRemoteOrigin } from '@biu/host-plugin-loader/env'
+import { biuSqlitePath, currentAccountId, eventsSqlitePath, isOnlineRuntime, openAndMigrateBiu, openAndMigrateEvents } from '@biu/host-plugin-loader/data-dir'
 import type { RouteContext } from '@biu/type-http'
 import { CollabError, CollabStore } from './store.ts'
 import { httpRemote, RecordReplica } from './replica.ts'
@@ -46,7 +47,7 @@ export class AccountService extends Service {
       place TEXT NOT NULL,
       PRIMARY KEY (collection, record_id)
     )`)
-    const origin = process.env.BIU_REMOTE_ORIGIN
+    const origin = hostRemoteOrigin()
     ctx.on('account/request', (event) => {
       const localAccountId = String((event as { accountId?: string }).accountId ?? '')
       if (!localAccountId) return
@@ -298,7 +299,7 @@ function rememberLogin(route: RouteContext, token: string) {
 
 function configuredRemoteOrigin() {
   if (isOnlineRuntime()) return ''
-  return process.env.BIU_REMOTE_ORIGIN?.replace(/\/$/, '') || ''
+  return hostRemoteOrigin()
 }
 
 async function relayAccount(route: RouteContext, account: AccountService, localAccountId: string, path: string) {
@@ -350,7 +351,7 @@ function purgeSessionEvents(sessionIds: string[]) {
   if (!sessionIds.length) return
   const path = eventsSqlitePath()
   if (!existsSync(path)) return
-  const db = openSqlite(path, { foreignKeys: false })
+  const db = openAndMigrateEvents(path)
   try {
     const stmt = db.prepare('DELETE FROM events WHERE session_id = ?')
     for (const id of sessionIds) stmt.run(id)

@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { memo, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArrowUpIcon } from '@heroicons/react/16/solid'
 import type { SlotProps } from '@biu/web-slots'
@@ -17,14 +18,14 @@ import { pickDomAttrs, pickPreview } from '@biu/core-pick/web'
 type TagTone = 'user' | 'assistant' | 'tool' | 'system' | 'turn' | 'step'
 
 async function loadEventDetail(sessionId: string, seq: number): Promise<SessionEvent | null> {
-  const res = await fetch(`/api/agents/${sessionId}/events/${seq}`)
+  const res = await apiFetch(`/api/agents/${sessionId}/events/${seq}`)
   if (!res.ok) throw new Error(`加载事件失败：${res.status}`)
   const body = (await res.json()) as { event?: SessionEvent }
   return body.event ?? null
 }
 
 async function loadEventRequest(sessionId: string, seq: number): Promise<{ messages: DerivedMessage[]; toolsTokens: number }> {
-  const res = await fetch(`/api/agents/${sessionId}/events/${seq}/request`)
+  const res = await apiFetch(`/api/agents/${sessionId}/events/${seq}/request`)
   if (!res.ok) throw new Error(`加载 request 失败：${res.status}`)
   const body = (await res.json()) as { messages?: DerivedMessage[]; toolsTokens?: number }
   return {

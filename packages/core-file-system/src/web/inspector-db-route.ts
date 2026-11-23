@@ -1,5 +1,6 @@
 /** 检查器里每个数据库 Tab 有自己的路径，不改中间主界面。 */
 
+import { readStorageString, writeStorageString } from '@biu/biu-ui/client-storage'
 import { CONTENT_JUMP_EVENT, parseContentJump } from '@biu/type-file-system'
 import { parseAppPath } from '@biu/web-session-view'
 import { normalizeCollectionPath } from '../paths.ts'
@@ -43,7 +44,7 @@ function readFollow() {
   if (followLoaded) return follow
   followLoaded = true
   try {
-    follow = localStorage.getItem(FOLLOW_KEY) === '1'
+    follow = readStorageString(FOLLOW_KEY) === '1'
   } catch {
     follow = false
   }
@@ -67,7 +68,7 @@ export function setInspectorAgentFollow(next: boolean) {
   const value = Boolean(next)
   if (follow === value) {
     try {
-      localStorage.setItem(FOLLOW_KEY, follow ? '1' : '0')
+      writeStorageString(FOLLOW_KEY, follow ? '1' : '0')
     } catch {
       /* ignore */
     }
@@ -75,7 +76,7 @@ export function setInspectorAgentFollow(next: boolean) {
   }
   follow = value
   try {
-    localStorage.setItem(FOLLOW_KEY, follow ? '1' : '0')
+    writeStorageString(FOLLOW_KEY, follow ? '1' : '0')
   } catch {
     /* ignore */
   }
@@ -167,7 +168,7 @@ export function rememberInspectorWorkingView(collection: string, viewId: string)
 
 function storedActiveView(collection: string) {
   try {
-    return String(localStorage.getItem(activeViewStorageKey(collection)) ?? '').trim()
+    return String(readStorageString(activeViewStorageKey(collection)) ?? '').trim()
   } catch {
     return ''
   }

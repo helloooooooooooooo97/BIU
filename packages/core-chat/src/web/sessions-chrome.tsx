@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { lazy, Suspense, useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChatPane, ChatStage } from '@biu/biu-ui/chat-pane'
@@ -77,7 +78,7 @@ function nodesFromContent(value: unknown): ChatNode[] | null {
 }
 
 function loadSessionNodes(sessionId: string, signal?: AbortSignal) {
-  return fetch(`/api/agents/${sessionId}?turns=${TRAJECTORY_TAIL_TURNS}`, { signal, cache: 'no-store' }).then((res) =>
+  return apiFetch(`/api/agents/${sessionId}?turns=${TRAJECTORY_TAIL_TURNS}`, { signal, cache: 'no-store' }).then((res) =>
     res.ok ? res.json() : null,
   )
 }
@@ -131,7 +132,7 @@ export function SessionRecordChat({
     }
   }, [sessionId, value])
   const onFork = useCallback(async () => {
-    const res = await fetch(`/api/agents/${sessionId}/fork`, { method: 'POST' })
+    const res = await apiFetch(`/api/agents/${sessionId}/fork`, { method: 'POST' })
     const body = (await res.json().catch(() => ({}))) as { id?: string }
     const id = String(body.id ?? '').trim()
     if (!res.ok || !id) return

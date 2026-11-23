@@ -1,4 +1,5 @@
 import type { Context } from 'cordis'
+import { hostRemoteOrigin } from '@biu/host-plugin-loader/env'
 import { currentAccountId, currentRequestWorkspaceId, isOnlineRuntime, runWithAccount, runWithRequestWorkspace } from '@biu/host-plugin-loader/data-dir'
 import type { SessionRecord } from '@biu/type-session'
 
@@ -86,7 +87,7 @@ function rememberCloud(ctx: Context, collection: string, id: string) {
 
 function desktopCloudWorkspace(ctx: Context) {
   if (isOnlineRuntime()) return null
-  const origin = process.env.BIU_REMOTE_ORIGIN?.replace(/\/$/, '')
+  const origin = hostRemoteOrigin()
   if (!origin) return null
   const account = accountOf(ctx)
   const workspaceId = currentRequestWorkspaceId() || account?.store?.activeWorkspaceId() || ''

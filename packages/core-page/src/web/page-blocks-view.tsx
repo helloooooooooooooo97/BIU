@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { useEffect, useState } from 'react'
 import { ArrowsPointingOutIcon, RectangleGroupIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
 import type { DbRecord } from '@biu/type-file-system'
@@ -8,7 +9,7 @@ export const PAGE_BLOCKS_VIEW_ID = 'blocks'
 const PAGE_REVEAL_EVENT = 'biu:inspector-reveal'
 
 async function writeBlockTitle(id: string, title: string) {
-  const res = await fetch('/api/db/update', {
+  const res = await apiFetch('/api/db/update', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ path: `/editor-blocks/${id}`, content: { title } }),
@@ -56,7 +57,7 @@ export function pageLabelOf(row: DbRecord, resolved?: string) {
 }
 
 async function readPageName(pageId: string) {
-  const res = await fetch(`/api/db/read?path=${encodeURIComponent(`/pages/${pageId}`)}`)
+  const res = await apiFetch(`/api/db/read?path=${encodeURIComponent(`/pages/${pageId}`)}`)
   const body = (await res.json()) as { value?: DbRecord }
   return pageNameFromRecord(body.value, pageId)
 }

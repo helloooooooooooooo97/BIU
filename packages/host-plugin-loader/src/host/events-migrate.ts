@@ -1,4 +1,5 @@
-import { getSchemaVersion, isEmptyDatabase, openSqlite, setSchemaVersion } from './sqlite-open.ts'
+import { getSchemaVersion, isEmptyDatabase, setSchemaVersion } from './sqlite-open.ts'
+import { openPooledSqlite } from './sqlite-pool.ts'
 
 type DatabaseSync = import('node:sqlite').DatabaseSync
 
@@ -42,7 +43,7 @@ export function migrateEvents(db: DatabaseSync, opts?: { schema?: string; target
 }
 
 export function openAndMigrateEvents(path: string) {
-  const db = openSqlite(path, { foreignKeys: false, checkpointOnOpen: true })
-  migrateEvents(db)
-  return db
+  return openPooledSqlite(path, { foreignKeys: false, checkpointOnOpen: true }, (db) => {
+    migrateEvents(db)
+  })
 }

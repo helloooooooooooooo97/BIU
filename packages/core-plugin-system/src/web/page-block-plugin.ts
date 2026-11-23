@@ -1,3 +1,5 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
+import { emitAppEvent, onAppEvent } from '@biu/biu-ui/app-events'
 import { buildAppPath } from '@biu/web-session-view'
 import { clientLog, clientLogErrorText } from '@biu/web-event-log/log'
 import {
@@ -34,7 +36,7 @@ function flag(value: unknown) {
 }
 
 async function readPluginFlags(id: string): Promise<PluginFlags | null> {
-  const res = await fetch(`/api/db/read?path=${encodeURIComponent(`/plugins/${id}`)}`)
+  const res = await apiFetch(`/api/db/read?path=${encodeURIComponent(`/plugins/${id}`)}`)
   if (res.status === 404) return null
   const body = (await res.json().catch(() => ({}))) as { error?: string; value?: Record<string, unknown> }
   if (!res.ok) throw new Error(body.error || res.statusText)
@@ -43,7 +45,7 @@ async function readPluginFlags(id: string): Promise<PluginFlags | null> {
 }
 
 async function postPluginAction(id: string, action: 'pack' | 'start') {
-  const res = await fetch('/api/db/action', {
+  const res = await apiFetch('/api/db/action', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ path: `/plugins/${id}`, action }),
@@ -111,7 +113,7 @@ export function pageBlockPluginFromEvent(event: Event) {
 }
 
 function reportPhase(plugin: string, phase: 'ready' | 'failed' | 'missing' | 'loading') {
-  window.dispatchEvent(new CustomEvent(PAGE_BLOCK_PLUGIN_PHASE, { detail: { plugin, phase } }))
+  emitAppEvent(PAGE_BLOCK_PLUGIN_PHASE, { plugin, phase })
 }
 
 export function listenEnablePageBlockPlugin() {
@@ -120,15 +122,14 @@ export function listenEnablePageBlockPlugin() {
       .then(() => reportPhase(plugin, 'ready'))
       .catch((error) => reportPhase(plugin, isMissingPlugin(error) ? 'missing' : 'failed'))
   }
-  const onEnable = (event: Event) => {
+  const off = onAppEvent(ENABLE_PAGE_BLOCK_PLUGIN, (_detail, event) => {
     const plugin = pageBlockPluginFromEvent(event)
     if (!plugin) return
     run(plugin)
-  }
-  window.addEventListener(ENABLE_PAGE_BLOCK_PLUGIN, onEnable)
+  })
   // 页面块的 layout effect 往往比插件系统的 effect 更早，事件已经丢了。
   for (const plugin of pendingPageBlockEnableIds()) run(plugin)
-  return () => window.removeEventListener(ENABLE_PAGE_BLOCK_PLUGIN, onEnable)
+  return off
 }
 
 const PAGE_BLOCK_LIST_COLUMNS = 'id,title,blurb,tags,installed,hasWeb,headless'
@@ -146,7 +147,7 @@ export async function refreshInstalledPageBlocks() {
         offset: String(offset),
         columns: PAGE_BLOCK_LIST_COLUMNS,
       })
-      const res = await fetch(`/api/db/list?${params}`)
+      const res = await apiFetch(`/api/db/list?${params}`)
       const body = (await res.json().catch(() => ({}))) as {
         items?: Record<string, unknown>[]
         total?: number
@@ -189,7 +190,7 @@ export function watchRunningWindowPlugins() {
         limit: '200',
         columns: WINDOW_PLUGIN_LIST_COLUMNS,
       })
-      const res = await fetch(`/api/db/list?${params}`)
+      const res = await apiFetch(`/api/db/list?${params}`)
       const body = (await res.json().catch(() => ({}))) as { items?: Record<string, unknown>[] }
       if (cancelled) return
       const live = new Set<string>()
