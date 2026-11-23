@@ -26,6 +26,9 @@ function releaseDevServerOnStop() {
 }
 
 export default defineConfig({
+  // 5173（云端）与 5174（本机）两个 Vite dev server 并行运行，按端口隔离预构建缓存，
+  // 防止两边互相覆写 node_modules/.vite/deps 导致 504 (Outdated Optimize Dep)。
+  cacheDir: isVitest ? 'node_modules/.vite' : `node_modules/.vite-${webPort}`,
   plugins: [react(), tailwindcss(), releaseDevServerOnStop(), cordisPluginsVite(root)],
   appType: 'spa',
   build: {
