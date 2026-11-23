@@ -1,5 +1,6 @@
 import { writeStorageString } from '@biu/biu-ui/client-storage'
 import { useBrowserPopovers } from './use-browser-popovers.ts'
+import { useBrowserBulkUi } from './use-browser-bulk-ui.ts'
 import { lazy, memo, Suspense, type ComponentProps, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { TOOLTIP_OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
@@ -739,22 +740,26 @@ export function CollectionBrowser({
     createTypeOpen,
     setCreateTypeOpen,
   } = useBrowserPopovers()
-  useLayoutEffect(() => {
-    if (!bulkMenuOpen) return
-    const place = () => {
-      const el = bulkRef.current
-      if (!el) return
-      const rect = el.getBoundingClientRect()
-      setBulkMenuBox({ top: rect.bottom + 6, left: rect.left })
-    }
-    place()
-    window.addEventListener('resize', place)
-    window.addEventListener('scroll', place, true)
-    return () => {
-      window.removeEventListener('resize', place)
-      window.removeEventListener('scroll', place, true)
-    }
-  }, [bulkMenuOpen])
+  const bulkRef = useRef<HTMLDivElement>(null)
+  const {
+    searchOpen,
+    setSearchOpen,
+    notice,
+    setNotice,
+    pickedIds,
+    setPickedIds,
+    pickMode,
+    setPickMode,
+    dlg,
+    setDlg,
+    bulkEditKey,
+    setBulkEditKey,
+    bulkEditRaw,
+    setBulkEditRaw,
+    bulkTagIds,
+    setBulkTagIds,
+    bulkMenuBox,
+  } = useBrowserBulkUi(bulkMenuOpen, bulkRef)
   const [wrapCells, setWrapCells] = useState(!!initialView?.wrap)
   const [truncateCells, setTruncateCells] = useState(initialView?.truncate !== false)
   const [freezeTitle, setFreezeTitle] = useState(Boolean(initialView?.freezeTitle))
@@ -998,16 +1003,12 @@ export function CollectionBrowser({
   }, [chrome, columnKeys, customView, tagCatalog, filterTree, groupBy, sheet, sheetPack, sorts, stat])
   const listColumnsKey = listColumns?.join('\0') ?? ''
   const [refreshing, setRefreshing] = useState(false)
-  const [searchOpen, setSearchOpen] = useState(false)
-  const [notice, setNotice] = useState('')
-  const [pickedIds, setPickedIds] = useState<string[]>([])
   const noticeTimer = useRef<number>(0)
   const quietUntil = useRef(0)
   const reloadGen = useRef(0)
   const reloadInflightRef = useRef<{ key: string; promise: Promise<boolean> } | null>(null)
   const listReadySent = useRef(false)
   const pageRef = useRef<HTMLDivElement>(null)
-  const [pickMode, setPickMode] = useState(false)
   const confirmedCreates = useRef(new Set<string>())
   const hydratePath = useRef('')
   const viewsRef = useRef<SavedView[]>([])
@@ -1022,10 +1023,6 @@ export function CollectionBrowser({
   const syncViewsRef = useRef<() => Promise<void>>(async () => {})
   const adoptViewRef = useRef<(view: SavedView) => void>(() => undefined)
   const hydratedDetail = useRef('')
-  const [dlg, setDlg] = useState<BrowserDialogState>(null)
-  const [bulkEditKey, setBulkEditKey] = useState('')
-  const [bulkEditRaw, setBulkEditRaw] = useState('')
-  const [bulkTagIds, setBulkTagIds] = useState<string[]>([])
   const crumbRef = useRef<HTMLElement>(null)
   const viewRef = useRef<HTMLDivElement>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
@@ -1035,9 +1032,7 @@ export function CollectionBrowser({
   const sortRef = useRef<HTMLDivElement>(null)
   const columnRef = useRef<HTMLDivElement>(null)
   const filterRef = useRef<HTMLDivElement>(null)
-  const bulkRef = useRef<HTMLDivElement>(null)
   const bulkMenuRef = useRef<HTMLDivElement>(null)
-  const [bulkMenuBox, setBulkMenuBox] = useState({ top: 0, left: 0 })
   const configRef = useRef<HTMLDivElement>(null)
   const groupRef = useRef<HTMLDivElement>(null)
   const layoutRef = useRef<HTMLDivElement>(null)
