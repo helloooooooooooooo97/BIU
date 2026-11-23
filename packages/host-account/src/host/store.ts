@@ -1,125 +1,46 @@
-import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { currentAccountId, currentRequestWorkspaceId, isOnlineRuntime, superAdminEmail, superAdminPassword } from '@biu/host-plugin-loader/data-dir'
 import { AuthorizationService, type ResourcePolicyInput, type ResourceRole, type WorkspaceRole } from './authorization.ts'
+import {
+  CollabError,
+  DEFAULT_LOCK_MS,
+  DEFAULT_MCP_CREDENTIAL_MS,
+  DEFAULT_SESSION_MS,
+  PRESENCE_STALE_MS,
+  hashPassword,
+  id,
+  inviteToken,
+  isRegisteredBuiltinPlugin,
+  registerBuiltinPluginLookup,
+  tokenHash,
+  verifyPassword,
+  type Account,
+  type EditLock,
+  type PluginAssignmentSubject,
+  type PluginPackageInput,
+  type PresenceRow,
+  type RecordHead,
+  type SyncOp,
+  type Workspace,
+} from './store-types.ts'
 
-export const PRESENCE_STALE_MS = 30_000
-export const DEFAULT_LOCK_MS = 60_000
-export const DEFAULT_SESSION_MS = 30 * 24 * 60 * 60 * 1000
-export const DEFAULT_MCP_CREDENTIAL_MS = 90 * 24 * 60 * 60 * 1000
-
-const builtinPluginLookups = new Set<(pluginId: string) => boolean>()
-
-/** 内置插件由插件商店登记。成员不需要再在设置里授权。 */
-export function registerBuiltinPluginLookup(lookup: (pluginId: string) => boolean) {
-  builtinPluginLookups.add(lookup)
-  return () => {
-    builtinPluginLookups.delete(lookup)
-  }
-}
-
-export function isRegisteredBuiltinPlugin(pluginId: string) {
-  for (const lookup of builtinPluginLookups) {
-    if (lookup(pluginId)) return true
-  }
-  return false
-}
-
-export type PluginAssignmentSubject =
-  | { type: 'account'; id: string }
-  | { type: 'member_view'; id: string }
-
-export type PluginPackageInput = {
-  id: string
-  version: string
-  packageHash: string
-  packagePath: string
-  sourceKind: string
-  trustState: string
-  tenantMode: string
-  hasWeb: boolean
-  hasHost: boolean
-  manifest: unknown
-}
-
-export class CollabError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-  ) {
-    super(message)
-    this.name = 'CollabError'
-  }
-}
-
-export type Account = {
-  id: string
-  name: string
-  email: string
-  createdAt: number
-  mustChangePassword?: boolean
-}
-export type Workspace = { id: string; name: string; ownerId: string; role: WorkspaceRole; createdAt: number }
-export type RecordHead = {
-  workspaceId: string
-  collection: string
-  recordId: string
-  ownerId: string
-  version: number
-  updatedAt: number
-}
-export type SyncOp = {
-  id: number
-  workspaceId: string
-  collection: string
-  recordId: string
-  field: string
-  value: unknown
-  version: number
-  authorId: string
-  createdAt: number
-}
-export type EditLock = {
-  workspaceId: string
-  collection: string
-  recordId: string
-  accountId: string
-  expiresAt: number
-}
-export type PresenceRow = {
-  workspaceId: string
-  accountId: string
-  name: string
-  collection: string
-  recordId: string
-  seenAt: number
-}
-
-function id(prefix: string) {
-  return `${prefix}_${randomBytes(8).toString('hex')}`
-}
-
-function tokenHash(token: string) {
-  return createHash('sha256').update(token).digest('hex')
-}
-
-function inviteToken() {
-  return randomBytes(24).toString('base64url')
-}
-
-function hashPassword(password: string) {
-  const salt = randomBytes(16)
-  const hash = scryptSync(password, salt, 32)
-  return `scrypt:${salt.toString('hex')}:${hash.toString('hex')}`
-}
-
-function verifyPassword(password: string, stored: string) {
-  const [kind, saltHex, hashHex] = stored.split(':')
-  if (kind !== 'scrypt' || !saltHex || !hashHex) return false
-  const actual = scryptSync(password, Buffer.from(saltHex, 'hex'), 32)
-  const expected = Buffer.from(hashHex, 'hex')
-  if (actual.length !== expected.length) return false
-  return timingSafeEqual(actual, expected)
+export {
+  CollabError,
+  DEFAULT_LOCK_MS,
+  DEFAULT_MCP_CREDENTIAL_MS,
+  DEFAULT_SESSION_MS,
+  PRESENCE_STALE_MS,
+  isRegisteredBuiltinPlugin,
+  registerBuiltinPluginLookup,
+  type Account,
+  type EditLock,
+  type PluginAssignmentSubject,
+  type PluginPackageInput,
+  type PresenceRow,
+  type RecordHead,
+  type SyncOp,
+  type Workspace,
 }
 
 export class CollabStore {

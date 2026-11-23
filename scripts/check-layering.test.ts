@@ -231,3 +231,20 @@ test('unidirectional dependencies: L2 web-app-shell never imports L3 @biu/core-*
     `L2 web-app-shell must not import L3 @biu/core-* plugins (use data-bridge/slots instead):\n${violations.join('\n')}`,
   )
 })
+
+test('global singletons: no monkey-patching global window.fetch or globalThis.fetch', () => {
+  const hits: string[] = []
+  for (const dir of readdirSync(PACKAGES_DIR)) {
+    for (const file of walkTsFiles(join(PACKAGES_DIR, dir, 'src'))) {
+      const text = readFileSync(file, 'utf8')
+      if (/\b(?:window|globalThis)\.fetch\s*=/.test(text)) {
+        hits.push(relative(REPO_ROOT, file))
+      }
+    }
+  }
+  assert.deepEqual(
+    hits,
+    [],
+    `Found global fetch monkey-patching (use registerApiRequestInterceptor from @biu/biu-ui/api-client):\n${hits.join('\n')}`,
+  )
+})

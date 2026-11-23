@@ -22,6 +22,33 @@ const inflightGets = new Map<string, Promise<unknown>>()
 const activeControllers = new Set<AbortController>()
 const DEFAULT_INFLIGHT_HOLD_MS = 300
 
+export type ApiRequestInterceptor = (
+  path: string,
+  init: RequestInit,
+) => RequestInit | void
+
+const requestInterceptors = new Set<ApiRequestInterceptor>()
+
+/**
+ * Register a request interceptor (e.g. auth token / workspace header injection)
+ * without monkey-patching global `window.fetch`.
+ */
+export function registerApiRequestInterceptor(fn: ApiRequestInterceptor): () => void {
+  requestInterceptors.add(fn)
+  return () => {
+    requestInterceptors.delete(fn)
+  }
+}
+
+function applyInterceptors(path: string, init: RequestInit): RequestInit {
+  let next = init
+  for (const fn of requestInterceptors) {
+    const out = fn(path, next)
+    if (out) next = out
+  }
+  return next
+}
+
 function mergeSignals(a?: AbortSignal | null, b?: AbortSignal | null): AbortSignal | undefined {
   if (!a) return b ?? undefined
   if (!b) return a
@@ -74,13 +101,15 @@ export interface ApiFetchOptions extends RequestInit {
  */
 export async function apiFetch(path: string, init?: ApiFetchOptions): Promise<Response> {
   const { scoped, signal, ...rest } = init ?? {}
+  const prepared = applyInterceptors(path, rest)
   if (!scoped) {
-    return globalThis.fetch(path, signal ? { ...rest, signal } : rest)
+    const finalInit = signal ? { ...prepared, signal } : prepared
+    return Object.keys(finalInit).length > 0 ? globalThis.fetch(path, finalInit) : globalThis.fetch(path)
   }
   const ctrl = new AbortController()
   activeControllers.add(ctrl)
   try {
-    return await globalThis.fetch(path, { ...rest, signal: mergeSignals(signal, ctrl.signal) })
+    return await globalThis.fetch(path, { ...prepared, signal: mergeSignals(signal, ctrl.signal) })
   } finally {
     activeControllers.delete(ctrl)
   }
