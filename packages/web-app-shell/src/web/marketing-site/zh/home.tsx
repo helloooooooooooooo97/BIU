@@ -4,7 +4,7 @@ import { DownloadIcon, GitHubButton, SiteChrome, SiteFaq, SiteFinalCta, type Sit
 import { usePageMeta } from './use-page-meta.ts'
 import { asset } from './site-base.ts'
 import { USE_CASES } from './use-cases.tsx'
-import { COMPARE_FEATURED, COMPARE_PAGES } from './compare.tsx'
+import { COMPARE_PAGES } from './compare.tsx'
 import { BLOG_POSTS, readingMinutes } from './blog-posts.ts'
 import { BrandMark, useBrandConfig } from './brand-mark.tsx'
 
@@ -111,16 +111,37 @@ const AGENT_POINTS = [
   },
 ] as const
 
-const HOME_COMPARE_LINE = {
-  'vs-notion': '块不再由平台写死：页面可组合全栈插件与外部 SaaS 切片，共享实时状态，一链交付运行。',
-  'vs-obsidian': '同样支持本地 SQLite 与离线使用，同时原生提供跨页结构化表、全栈插件与智能体读写。',
-  'vs-chatgpt': '产出直接沉淀为结构化页面、可复用插件与技能规范，而非沉没在一次性对话历史中。',
-} as const
+const HOME_COMPARE_SPECS = [
+  {
+    verb: '01 构建',
+    slug: 'vs-cursor',
+    line: 'Cursor 加速开发者在代码库里写软件；BIU 让软件面向真实业务数据边服务边生长，把构建者扩展到十亿知识工作者。',
+  },
+  {
+    verb: '02 存储',
+    slug: 'vs-supabase',
+    line: 'Supabase 把数据留在独立后端数据库；BIU 让自由正文、结构化插件块与调用快照同存一页，自动跨页成表且本地离线可用。',
+  },
+  {
+    verb: '03 组合',
+    slug: 'vs-k8s',
+    line: 'k8s 用 YAML 编排机器与容器；BIU 在一页里声明式组合全栈插件与外部 SaaS 切片，共享实时状态，无需胶水代码。',
+  },
+  {
+    verb: '04 分发',
+    slug: 'vs-notion',
+    line: 'Notion 分享的是文档与静态名单权限；BIU 一链打包正文、附件与可运行插件，并以「数据视图 × 成员视图」动态计算权限。',
+  },
+  {
+    verb: '05 衍生',
+    slug: 'vs-linux',
+    line: 'Linux 用内核模块扩展硬件能力；BIU 让插件本身成为结构化数据，人与智能体可直接基于已有软件与开源项目增量衍生。',
+  },
+] as const
 
-const HOME_COMPARES = COMPARE_FEATURED.flatMap((slug) => {
-  const page = COMPARE_PAGES.find((item) => item.slug === slug)
-  const line = HOME_COMPARE_LINE[slug]
-  return page && line ? [{ page, line }] : []
+const HOME_COMPARES = HOME_COMPARE_SPECS.flatMap((spec) => {
+  const page = COMPARE_PAGES.find((item) => item.slug === spec.slug)
+  return page ? [{ page, verb: spec.verb, line: spec.line }] : []
 })
 
 const HERO_VERBS = [
@@ -411,21 +432,21 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
         <section className="site-home-entry" aria-label="差异">
           <div className="site-home-entry-heading" data-reveal>
             <p className="site-section-label">差异</p>
-            <h2>与现有工具的本质差异</h2>
-            <p>三个最常被问到的参照对象。完整差异对照（包括我们尚未做到的部分）均列于差异页。</p>
+            <h2>五个环节，五个坐标级的参照对象</h2>
+            <p>围绕软件的构建、存储、组合、分发与衍生，直面每一层最具代表性的工具与基础设施。完整对照（包括我们尚未做到的部分）均列于对比页。</p>
           </div>
           <div className="site-home-compare-grid">
-            {HOME_COMPARES.map(({ page, line }) => (
+            {HOME_COMPARES.map(({ page, verb, line }) => (
               <Link key={page.slug} className="site-home-compare-card" to={`/compare/${page.slug}`} data-reveal>
-                <small>{page.category}</small>
-                <h3>{page.columns[0]}</h3>
+                <small>{verb} · {page.category}</small>
+                <h3>{page.title}</h3>
                 <p>{line}</p>
                 <span>查看差异 →</span>
               </Link>
             ))}
           </div>
           <p className="site-home-entry-more" data-reveal>
-            <Link to="/compare">全部差异 →</Link>
+            <Link to="/compare">查看全部 13 项对比 →</Link>
           </p>
         </section>
 
