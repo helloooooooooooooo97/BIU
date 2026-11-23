@@ -34,6 +34,7 @@ import {
   rememberPreviewTotal,
   SIDEBAR_PREVIEW_MAX,
   subscribePreviewTotals,
+  writeRecordEmoji,
 } from './sidebar-preview.ts'
 import {
   activeViewStorageKey,

@@ -11,9 +11,11 @@ import { FSDB_SHARES_CHANGE_EVENT, emitFsdbEvent } from './fsdb-events.ts'
 
 export { ShareScopeLabel, ShareRoleLabel } from './share-scope-label.tsx'
 export { ShareScopeDetail, ShareRoleDetail } from './share-chain-detail.tsx'
+import { ScopeMark } from './share-scope-label.tsx'
+import { roleLabel } from './share-chain-detail.tsx'
 import { mintSharePin, shareClipboardText } from '../share-resources.ts'
-import { builtinAllView, builtinMemberViews } from '../catalog-views.ts'
-import { grantAudienceKind } from '../view-access.ts'
+import { builtinAllView, builtinMemberViews, isBuiltinAllViewId, parseBuiltinScopeViewId, scopedCollectionName } from '../catalog-views.ts'
+import { effectiveDataScope, grantAudienceKind, recordMatchesGrantedView } from '../view-access.ts'
 import type { DbRecord } from '@biu/type-file-system'
 
 export type ShareKind = 'view' | 'record'

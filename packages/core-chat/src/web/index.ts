@@ -11,10 +11,12 @@ import type { DatabaseUi } from '@biu/type-file-system/ui'
 export const name = 'chat-ui'
 export const inject = ['slots', 'sessionView', 'projectView']
 
-function lazySlot<P extends object>(load: () => Promise<{ default: ComponentType<P> }>): ComponentType<P> {
-  const Comp = lazy(load)
+function lazySlot<P extends object = SlotProps>(
+  load: () => Promise<{ default: ComponentType<P> }>,
+): ComponentType<P> {
+  const Comp = lazy(load as () => Promise<{ default: ComponentType<Record<string, unknown>> }>)
   return function LazySlot(props: P) {
-    return createElement(Suspense, { fallback: null }, createElement(Comp, props))
+    return createElement(Suspense, { fallback: null }, createElement(Comp, props as Record<string, unknown>))
   }
 }
 

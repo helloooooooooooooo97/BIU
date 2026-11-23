@@ -4,7 +4,7 @@ import { currentAccountId } from '@biu/host-plugin-loader/data-dir'
 export type Actor =
   | { type: 'account'; accountId: string; workspaceId: string }
   | { type: 'agent'; accountId: string; delegatedBy: string; workspaceId: string; sessionId?: string }
-  | { type: 'public-link'; shareTokenId: string; workspaceId?: string }
+  | { type: 'public-link'; shareTokenId: string; accountId?: string; workspaceId?: string }
 
 export type Action =
   | 'resource:list'
