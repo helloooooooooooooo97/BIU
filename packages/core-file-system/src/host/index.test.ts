@@ -1425,7 +1425,7 @@ test('agent db_stat omits builtin fields; service stat and list still include th
   await ctx.tools.invoke('db_update', {
     path: '/docs/d1',
     fields: { title: '优化页2' },
-    body: '# 标题\n\n正文 foo\n\n## 第二节\n\n内容',
+    content: '# 标题\n\n正文 foo\n\n## 第二节\n\n内容',
   })
   const readWithContent = (await ctx.tools.invoke('db_read', { path: '/docs/d1', include_content: true })) as {
     content?: { text?: string }
@@ -1448,7 +1448,7 @@ test('agent db_stat omits builtin fields; service stat and list still include th
   // Strict schema & unified naming checks: no aliases, no unknown args, no silent fallback
   await assert.rejects(
     () => ctx.tools.invoke('db_update', { path: '/notes/n1', content: { status: 'done' } }),
-    /missing required argument "fields"/,
+    /invalid argument "content"/,
   )
   await assert.rejects(
     () => ctx.tools.invoke('db_update', { path: '/notes/n1', fields: { status: 'done' }, markdown: '# hi' }),
