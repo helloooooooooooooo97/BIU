@@ -32,9 +32,13 @@ test('GroupQueryMenu picks datetime field with ::day default and switches grain 
   }
 
   render(<Harness />)
-  assert.ok(screen.getByTestId('fsdb-group-pick'))
+  assert.ok(screen.getByTestId('fsdb-group-panel'))
 
-  // Click datetime field -> defaults to ::day and opens 分组设置 panel
+  // Open 分组条件 dropdown and click datetime field -> defaults to ::day
+  const fieldRow = screen.getByTestId('fsdb-group-field-row')
+  const fieldTrigger = fieldRow.querySelector('button')
+  assert.ok(fieldTrigger)
+  fireEvent.click(fieldTrigger)
   fireEvent.click(screen.getByText('需求·提交时间'))
   assert.equal(seen.at(-1), 'tag::tag-10::提交时间::day')
   assert.ok(screen.getByTestId('fsdb-group-panel'))
@@ -53,10 +57,11 @@ test('GroupQueryMenu picks datetime field with ::day default and switches grain 
   fireEvent.click(screen.getByText('按年'))
   assert.equal(seen.at(-1), 'tag::tag-10::提交时间::year')
 
-  // Clear grouping
+  // Clear grouping -> stays in unified 分组设置 panel with 不分组
   fireEvent.click(screen.getByText('取消分组'))
   assert.equal(seen.at(-1), '')
-  assert.ok(screen.getByTestId('fsdb-group-pick'))
+  assert.ok(screen.getByTestId('fsdb-group-panel'))
+  assert.equal(screen.queryByTestId('fsdb-group-grain-row'), null)
 })
 
 test('GroupQueryMenu hides 分组方式 for non-datetime fields', () => {

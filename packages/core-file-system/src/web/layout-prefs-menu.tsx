@@ -96,6 +96,9 @@ export function LayoutPrefsMenu({
               <Icon aria-hidden />
               {item.label}
             </span>
+            <span className={`fsdb-group-switch${on ? ' is-on' : ''}`} aria-hidden>
+              <span className="fsdb-group-switch-thumb" />
+            </span>
           </button>
         )
       })}

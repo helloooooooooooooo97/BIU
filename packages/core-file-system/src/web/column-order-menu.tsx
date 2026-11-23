@@ -22,12 +22,13 @@ import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search
 import { tagFlatColumnKey, parseTagFlatColumnKey, resolveFieldType, tagColumnTitle } from './fields.ts'
 import { FieldGlyph } from './fsdb-cells.tsx'
 import { tagChipIcon } from './schema-field.tsx'
-import { pullTags, subscribeTagChrome, tagCatalogRevision, tagFieldFilled } from './tag-catalog.ts'
+import { pullTags, subscribeTagChrome, tagCatalogRevision } from './tag-catalog.ts'
 
 function TagColumnPackRow({
   pack,
   visibleKeys,
   onToggle,
+  onToggleMany,
   grip,
   defaultOpen = false,
   filterQuery = '',
@@ -35,6 +36,7 @@ function TagColumnPackRow({
   pack: CollectionSchemaPack
   visibleKeys: Set<string>
   onToggle: (key: string) => void
+  onToggleMany?: (keys: string[], show: boolean) => void
   grip?: ReactNode
   defaultOpen?: boolean
   filterQuery?: string
@@ -43,43 +45,71 @@ function TagColumnPackRow({
   useSyncExternalStore(subscribeTagChrome, tagCatalogRevision)
   const tone = schemaTagTone(pack.id)
   const allLive = pack.fields.filter((field) => !field.deleted)
+  const allKeys = allLive.map((field) => tagFlatColumnKey(pack.id, field.key))
   const q = filterQuery.trim()
   const fields = q && !flyoutQueryMatch(pack.label, q)
     ? allLive.filter((field) => flyoutQueryMatch(field.label ?? field.key, q))
     : allLive
   const expanded = Boolean(q) || open
-  const anyOn = allLive.some((field) => visibleKeys.has(tagFlatColumnKey(pack.id, field.key)))
+  const anyOn = allKeys.some((key) => visibleKeys.has(key))
+  const allOn = allKeys.length > 0 && allKeys.every((key) => visibleKeys.has(key))
+
+  const toggleAllPackFields = () => {
+    if (!allKeys.length) return
+    const nextShow = !allOn
+    if (onToggleMany) {
+      onToggleMany(allKeys, nextShow)
+      return
+    }
+    for (const key of allKeys) {
+      if (visibleKeys.has(key) !== nextShow) onToggle(key)
+    }
+  }
 
   const trigger = (
-    <button
-      type="button"
-      className={`fsdb-checkrow fsdb-tool-row${anyOn || expanded ? ' is-on' : ''}`}
-      style={{ ['--biu-tag' as string]: tone }}
-      data-fsdb-col-tag-trigger
-      aria-expanded={expanded}
-      aria-label={`${pack.label}属性`}
-      onClick={() => {
-        const next = !open
-        setOpen(next)
-        if (next) void pullTags(undefined, { filled: true })
-      }}
-    >
-      <span className="fsdb-checkrow-label">
-        <span className="fsdb-checkrow-icon fsdb-col-tag-ico" style={{ color: tone }}>
-          {tagChipIcon(pack.id)}
+    <div className="fsdb-col-pack-head" style={{ ['--biu-tag' as string]: tone }}>
+      <button
+        type="button"
+        className={`fsdb-checkrow fsdb-tool-row fsdb-col-pack-trigger${anyOn || expanded ? ' is-on' : ''}`}
+        style={{ ['--biu-tag' as string]: tone }}
+        data-fsdb-col-tag-trigger
+        aria-expanded={expanded}
+        aria-label={`${pack.label}属性`}
+        onClick={() => {
+          const next = !open
+          setOpen(next)
+          if (next) void pullTags(undefined, { filled: true })
+        }}
+      >
+        <span className="fsdb-checkrow-label">
+          <span className="fsdb-checkrow-icon fsdb-col-tag-ico" style={{ color: tone }}>
+            {tagChipIcon(pack.id)}
+          </span>
+          <span className="fsdb-col-tag-name">
+            {pack.label}
+          </span>
         </span>
-        <span className="fsdb-col-tag-name" style={{ color: tone }}>
-          {pack.label}
+        <span className="fsdb-col-tag-right">
+          <ChevronRightIcon
+            aria-hidden
+            className={`size-3.5 fsdb-col-menu-chev sidebar-chevron${expanded ? ' is-open' : ''}`}
+          />
         </span>
-      </span>
-      <span className="fsdb-col-tag-right">
-        <span className="fsdb-col-tag-count">{allLive.length}</span>
-        <ChevronRightIcon
-          aria-hidden
-          className={`size-3.5 fsdb-col-menu-chev sidebar-chevron${expanded ? ' is-open' : ''}`}
-        />
-      </span>
-    </button>
+      </button>
+      {allKeys.length > 0 ? (
+        <button
+          type="button"
+          role="switch"
+          aria-checked={allOn}
+          aria-label={allOn ? `隐藏${pack.label}全部属性` : `显示${pack.label}全部属性`}
+          title={allOn ? '隐藏全部属性' : '显示全部属性'}
+          className={`fsdb-group-switch fsdb-col-pack-switch${allOn ? ' is-on' : ''}`}
+          onClick={toggleAllPackFields}
+        >
+          <span className="fsdb-group-switch-thumb" />
+        </button>
+      ) : null}
+    </div>
   )
 
   return (
@@ -103,7 +133,7 @@ function TagColumnPackRow({
                     icon={<FieldGlyph kind={resolveFieldType(field)} />}
                     label={field.label ?? field.key}
                     on={visibleKeys.has(key)}
-                    count={tagFieldFilled(pack.id, field.key)}
+                    switchControl
                     onToggle={() => onToggle(key)}
                   />
                 )
@@ -146,6 +176,7 @@ function ColumnMenuCheck({
       label={label ?? col.field.label ?? col.key}
       on={on}
       locked={locked}
+      switchControl
       onToggle={onToggle}
     />
   )
@@ -209,6 +240,7 @@ export function ColumnOrderMenu({
   tagCatalog,
   query = '',
   onToggle,
+  onToggleMany,
   onReorder,
 }: {
   columns: Array<{ key: string; kind: FieldType; field: FieldSpec; packLabel?: string }>
@@ -217,6 +249,7 @@ export function ColumnOrderMenu({
   tagCatalog: CollectionSchemaPack[]
   query?: string
   onToggle: (key: string) => void
+  onToggleMany?: (keys: string[], show: boolean) => void
   onReorder: (next: string[]) => void
 }) {
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -266,6 +299,7 @@ export function ColumnOrderMenu({
             visibleKeys={visibleKeys}
             filterQuery={queryText}
             onToggle={onToggle}
+            onToggleMany={onToggleMany}
           />
         ))}
       </>
@@ -329,6 +363,7 @@ export function ColumnOrderMenu({
           pack={pack}
           visibleKeys={visibleKeys}
           onToggle={onToggle}
+          onToggleMany={onToggleMany}
           grip={
             <span className="fsdb-query-grip is-locked" aria-hidden>
               <DndGrip />
@@ -346,6 +381,7 @@ export function VisibleColumnsFlyout({
   labelField,
   tagCatalog,
   onToggle,
+  onToggleMany,
   onReorder,
 }: Omit<Parameters<typeof ColumnOrderMenu>[0], 'query'>) {
   return (
@@ -359,6 +395,7 @@ export function VisibleColumnsFlyout({
             tagCatalog={tagCatalog}
             query={q}
             onToggle={onToggle}
+            onToggleMany={onToggleMany}
             onReorder={onReorder}
           />
         </div>

@@ -92,6 +92,8 @@ export type FsDetailBarProps = {
   columnMenu?: ReactNode
   onRetry?: () => void
   configMenu?: ReactNode
+  share?: ReactNode
+  shareLabel?: string
   onPrev?: () => void
   onNext?: () => void
   canPrev?: boolean

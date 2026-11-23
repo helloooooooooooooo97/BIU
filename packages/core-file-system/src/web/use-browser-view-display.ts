@@ -26,6 +26,7 @@ export type ViewDisplaySnapshot = {
   showTree: boolean
   wrapCells: boolean
   truncateCells: boolean
+  showRowNumbers: boolean
   freezeTitle: boolean
   freezeUntil: string
   query: string
@@ -60,6 +61,7 @@ export function extractViewDisplayState(
     showTree: Boolean(view.tree),
     wrapCells: overrides?.wrapCells ?? Boolean(view.wrap),
     truncateCells: view.truncate !== false,
+    showRowNumbers: Boolean(view.rowNumbers),
     freezeTitle: Boolean(view.freezeTitle),
     freezeUntil: view.freezeUntil ?? '',
     query,
@@ -83,6 +85,7 @@ export type ViewDisplaySetters = {
   setShowTree: (v: boolean) => void
   setWrapCells: (v: boolean) => void
   setTruncateCells: (v: boolean) => void
+  setShowRowNumbers: (v: boolean) => void
   setFreezeTitle: (v: boolean) => void
   setFreezeUntil: (v: string) => void
   setQuery: (v: string) => void
@@ -113,6 +116,7 @@ export function useViewDisplayApplier(setters: ViewDisplaySetters) {
       setters.setShowTree(snap.showTree)
       setters.setWrapCells(snap.wrapCells)
       setters.setTruncateCells(snap.truncateCells)
+      setters.setShowRowNumbers(snap.showRowNumbers)
       setters.setFreezeTitle(snap.freezeTitle)
       setters.setFreezeUntil(snap.freezeUntil)
       setters.setQuery(snap.query)

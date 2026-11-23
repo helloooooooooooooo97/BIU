@@ -297,6 +297,21 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
   }
 
   function paintHeadTh(col: BrowserTableColumn) {
+    if (col.key === '__rowNumber') {
+      const pin = resolvePinOf(col.key)
+      const thStyle = colCellBox(col.key, pin ? { '--fsdb-pin-left': `${pin.left}px` } : undefined)
+      return (
+        <th
+          key={col.key}
+          data-col-key={col.key}
+          className={[pinClassFor(pin), 'fsdb-rownum-th'].filter(Boolean).join(' ')}
+          style={thStyle}
+          aria-label="序号"
+        >
+          <span className="fsdb-rownum-head">#</span>
+        </th>
+      )
+    }
     const flat = parseTagFlatColumnKey(col.key)
     const tone = flat ? schemaTagTone(flat.packId) : undefined
     const headTip = columnHeadTip(col)
@@ -538,6 +553,15 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
   function describeNativeCell(node: Extract<TablePaintNode, { kind: 'row' }>, colKey: string): NativeCellDescribe | null {
     const col = resolvePaintColumn(colKey)
     if (!col) return null
+    if (col.key === '__rowNumber') {
+      const pin = resolvePinOf(col.key)
+      return {
+        spec: { kind: 'text', text: node.rowNumber != null ? String(node.rowNumber) : '' },
+        pinLeft: pin?.left,
+        pinEdge: pin?.isEdge,
+        cellClass: 'fsdb-rownum-td',
+      }
+    }
     const row = node.row
     const held = tableHoldRef.current
     const paintSchema = held?.schema ?? schema
@@ -618,6 +642,20 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
     if (node.kind !== 'row') return null
     const col = resolvePaintColumn(colKey)
     if (!col) return null
+    if (col.key === '__rowNumber') {
+      const pin = resolvePinOf(col.key)
+      const tdStyle = colCellBox(col.key, pin ? { '--fsdb-pin-left': `${pin.left}px` } : undefined)
+      return (
+        <td
+          key={col.key}
+          data-col-key={col.key}
+          style={tdStyle}
+          className={[pinClassFor(pin), 'fsdb-rownum-td'].filter(Boolean).join(' ')}
+        >
+          <span className="fsdb-cell">{node.rowNumber != null ? String(node.rowNumber) : ''}</span>
+        </td>
+      )
+    }
     return paintLiveCell(node.row, col, node.depth, node.hasKids, node.kidCount, node.key)
   }
 
@@ -694,7 +732,7 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
         const pin = resolvePinOf(col.key)
         const pinCls = pinClassFor(pin)
         const pinStyle = colCellBox(col.key, pin ? { '--fsdb-pin-left': `${pin.left}px` } : undefined)
-        if (col.key === 'actions') {
+        if (col.key === 'actions' || col.key === '__rowNumber') {
           return <td key={col.key} data-col-key={col.key} style={pinStyle} className={[pinCls, 'fsdb-summary-td'].filter(Boolean).join(' ')} />
         }
         const op = columnSummaries[col.key] ?? 'none'
@@ -763,7 +801,6 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
           <div className="fsdb-pager">
             <span className="fsdb-pager-meta">{node.count}</span>
             <div className="fsdb-pager-nav">
-              <PagerSizeControl pageSize={pageSize} onChange={changePageSize} />
               <button
                 type="button"
                 className="tasks-icon-btn"

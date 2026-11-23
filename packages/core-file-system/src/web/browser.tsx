@@ -591,6 +591,8 @@ export function CollectionBrowser({
     setWrapCells,
     truncateCells,
     setTruncateCells,
+    showRowNumbers,
+    setShowRowNumbers,
     freezeTitle,
     setFreezeTitle,
     freezeUntil,
@@ -602,9 +604,13 @@ export function CollectionBrowser({
     showTree,
     setShowTree,
   } = useBrowserViewConfig(
-    initialView,
+    sheet && dataPath === DATA_COLLECTION_PATH
+      ? initialView
+        ? { ...initialView, groupBy: 'table' }
+        : ({ groupBy: 'table' } as SavedView)
+      : initialView,
     sheet
-      ? collectSheetColumns(loadTags().find((pack) => pack.id === String(lockedFilters.tagId ?? '').trim()))
+      ? collectSheetColumns(loadTags().find((pack) => pack.id === String(lockedFilters.tag ?? lockedFilters.tagId ?? '').trim()))
       : initialView?.columns ?? [],
   )
   const customView = extraViews.find((view) => view.id === mode)
@@ -699,7 +705,7 @@ export function CollectionBrowser({
   const lockedFilterKeys = Object.keys(catalogLocks)
   const lockedSource = catalogLocks.tablePath ?? ''
   const lockedKind = String(catalogLocks.blockKind ?? '').trim()
-  const sheetPackId = String(catalogLocks.tagId ?? '').trim()
+  const sheetPackId = String(catalogLocks.tag ?? catalogLocks.tagId ?? '').trim()
   const sheetPack = useMemo(
     () => (sheet && sheetPackId ? tagCatalog.find((pack) => pack.id === sheetPackId) : undefined),
     [sheet, sheetPackId, tagCatalog],
@@ -731,8 +737,10 @@ export function CollectionBrowser({
       return
     }
     if (jump && jump.kind === 'record') {
-      onOpenRecord?.(jump.recordId, activeViewId, jump.collection)
-      return
+      if (onOpenRecord) {
+        onOpenRecord(jump.recordId, activeViewId, jump.collection)
+        return
+      }
     }
     if (onOpenRow?.(row)) return
     setDetailId(row.id, row)
@@ -816,6 +824,7 @@ export function CollectionBrowser({
     setShowTree,
     setWrapCells,
     setTruncateCells,
+    setShowRowNumbers,
     setFreezeTitle,
     setFreezeUntil,
     setQuery,
@@ -910,7 +919,8 @@ export function CollectionBrowser({
     const stored = viewForPath(collectionPath, routeViewId)
     const listed = paintListedViews(collectionPath)
     rememberViews(collectionPath, listed)
-    const next = stored || listed[0] ? pickViewForRoute(listed, collectionPath, routeViewId) || stored || listed[0] : null
+    const rawNext = stored || listed[0] ? pickViewForRoute(listed, collectionPath, routeViewId) || stored || listed[0] : null
+    const next = sheet && dataPath === DATA_COLLECTION_PATH && rawNext ? { ...rawNext, groupBy: 'table' } : rawNext
     const cached = peekBrowserCache(dataPath, next?.id, normalizePageSize(next?.pageSize))
     const adoptView = (view: SavedView | null | undefined, schema?: CollectionSchema) => {
       if (!view) {
@@ -1784,8 +1794,8 @@ export function CollectionBrowser({
   useEffect(() => () => window.clearTimeout(noticeTimer.current), [])
 
   const schema = stat?.schema
-  const subsetLocked = lockedFilterKeys.length > 0
   const isDataOverview = dataPath === DATA_COLLECTION_PATH
+  const subsetLocked = lockedFilterKeys.length > 0 && !(sheet && isDataOverview)
   const overviewCreateTables = useMemo(
     () => tables.filter((table) => isOverviewCreatableCollection(table)),
     [tables],
@@ -1876,6 +1886,13 @@ export function CollectionBrowser({
       })
       .filter(Boolean) as typeof allColumns
   }, [allColumnKeys, allColumns, columnKeys, rowActionColumn, schema, schemaDefaultKeys, sheet, sheetAllColumns, sheetPack, tagCatalog])
+  const tableColumns = useMemo(
+    () =>
+      showRowNumbers
+        ? ([{ key: '__rowNumber', kind: 'number' as const, field: { type: 'number' as const, label: '#' } }, ...columns] as typeof columns)
+        : columns,
+    [columns, showRowNumbers],
+  )
 
   const colWindowRef = useRef<TableColumnSlice>(EMPTY_COL_WINDOW)
   const tableChromeRef = useRef<TableChromeBag>({
@@ -2103,7 +2120,8 @@ export function CollectionBrowser({
         const pageIndex = Math.min(groupPages[groupKey] ?? 0, pages - 1)
         const paged = group.total != null ? group.rows : group.rows.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize)
         const listed = flattenRows(paged)
-        for (const item of listed) {
+        for (let idx = 0; idx < listed.length; idx += 1) {
+          const item = listed[idx]!
           nodes.push({
             kind: 'row',
             key: `${groupKey}:${item.row.id}`,
@@ -2112,6 +2130,7 @@ export function CollectionBrowser({
             depth: item.depth,
             hasKids: item.hasKids,
             kidCount: item.kidCount,
+            rowNumber: pageIndex * pageSize + idx + 1,
             fold: collapsed[item.row.id] !== false,
             treeOn,
           })
@@ -2134,14 +2153,16 @@ export function CollectionBrowser({
             partial: count > paged.length,
           })
         }
-        nodes.push({
-          kind: 'group-pager',
-          key: `gp:${groupKey}`,
-          groupKey,
-          count,
-          pageIndex,
-          pageSize,
-        })
+        if (count > pageSize) {
+          nodes.push({
+            kind: 'group-pager',
+            key: `gp:${groupKey}`,
+            groupKey,
+            count,
+            pageIndex,
+            pageSize,
+          })
+        }
       }
       return nodes
     }
@@ -2150,7 +2171,8 @@ export function CollectionBrowser({
       nodes.push({ kind: 'empty', key: 'empty' })
       return nodes
     }
-    for (const item of listed) {
+    for (let idx = 0; idx < listed.length; idx += 1) {
+      const item = listed[idx]!
       nodes.push({
         kind: 'row',
         key: item.row.id,
@@ -2159,6 +2181,7 @@ export function CollectionBrowser({
         depth: item.depth,
         hasKids: item.hasKids,
         kidCount: item.kidCount,
+        rowNumber: page * pageSize + idx + 1,
         fold: collapsed[item.row.id] !== false,
         treeOn,
       })
@@ -2202,10 +2225,10 @@ export function CollectionBrowser({
   const checkStackRef = useRef<HTMLDivElement>(null)
   const checkHoverRef = useRef<string | 'head' | null>(null)
   const effectiveFreezeUntil = freezeUntil || (freezeTitle ? (schema?.labelField ?? 'title') : '')
-  const columnPinCount = tablePinCount(columns.map((col) => col.key), schema?.labelField, freezeTitle, freezeUntil)
+  const columnPinCount = tablePinCount(tableColumns.map((col) => col.key), schema?.labelField, freezeTitle, freezeUntil)
   const pinOffsets = useMemo(
-    () => tablePinColOffsets(columns.map((col) => col.key), columnWidths, columnPinCount, schema?.labelField),
-    [columnPinCount, columnWidths, columns, schema?.labelField],
+    () => tablePinColOffsets(tableColumns.map((col) => col.key), columnWidths, columnPinCount, schema?.labelField),
+    [columnPinCount, columnWidths, tableColumns, schema?.labelField],
   )
   const pinStamp = useMemo(
     () => [...(pinOffsets?.entries() ?? [])].map(([k, v]) => `${k}:${v.left}:${v.isEdge ? 1 : 0}`).join(','),
@@ -2647,6 +2670,7 @@ export function CollectionBrowser({
       showTree === Boolean(next.tree) &&
       wrapCells === !!next.wrap &&
       truncateCells === (next.truncate !== false) &&
+      showRowNumbers === Boolean(next.rowNumbers) &&
       freezeTitle === Boolean(next.freezeTitle) &&
       freezeUntil === (next.freezeUntil ?? '') &&
       query === nextQuery &&
@@ -2836,6 +2860,7 @@ export function CollectionBrowser({
           labelField={sheet ? 'title' : schema?.labelField}
           tagCatalog={sheetPack ? [sheetPack] : tagCatalog}
           onToggle={toggleColumn}
+          onToggleMany={toggleManyColumns}
           onReorder={setVisibleColumns}
         />
       </Suspense>
@@ -2858,6 +2883,19 @@ export function CollectionBrowser({
     setVisibleColumns(next)
   }
 
+  function toggleManyColumns(keys: string[], show: boolean) {
+    const lockedKey = sheet ? 'title' : schema?.labelField
+    const targets = keys.filter((key) => key !== lockedKey && key !== 'actions')
+    if (!targets.length) return
+    const current = columnKeys.length ? columnKeys : columns.map((col) => col.key)
+    const targetSet = new Set(targets)
+    const next = show
+      ? [...current, ...targets.filter((key) => !current.includes(key))]
+      : current.filter((key) => !targetSet.has(key))
+    if (!next.length) return
+    setVisibleColumns(next)
+  }
+
   function changePageSize(next: number) {
     const size = normalizePageSize(next)
     if (size === pageSize) return
@@ -2875,6 +2913,11 @@ export function CollectionBrowser({
   function setTruncate(next: boolean) {
     setTruncateCells(next)
     patchActiveView({ truncate: next })
+  }
+
+  function setRowNumbers(next: boolean) {
+    setShowRowNumbers(next)
+    patchActiveView({ rowNumbers: next })
   }
 
   function setGroupKey(next: string) {
@@ -3503,7 +3546,7 @@ export function CollectionBrowser({
     if (tablePaneOwnsFocus(pane) && landPaneSurface()) consumePendingTablePane(pane)
   }
 
-  const columnsByKey = useMemo(() => new Map(columns.map((item) => [item.key, item])), [columns])
+  const columnsByKey = useMemo(() => new Map(tableColumns.map((item) => [item.key, item])), [tableColumns])
   const compositeCellKeys = useMemo(() => {
     const keys = new Set<string>()
     if (chrome?.cells) for (const key of Object.keys(chrome.cells)) keys.add(key)
@@ -3528,7 +3571,7 @@ export function CollectionBrowser({
     sheet,
     embed,
     schema,
-    columns,
+    columns: tableColumns,
     columnsByKey,
     chrome,
     currentTable,
@@ -3619,6 +3662,7 @@ export function CollectionBrowser({
       tree: showTree,
       wrap: wrapCells,
       truncate: truncateCells,
+      rowNumbers: showRowNumbers,
       freezeTitle,
       freezeUntil: freezeUntil || undefined,
       query,
@@ -3739,8 +3783,10 @@ export function CollectionBrowser({
     panelGroups.map((g) => `${g.key}:${g.label}:${g.total ?? g.rows.length}`).join('\0'),
     Number(wrapCells),
     Number(truncateCells),
+    Number(showRowNumbers),
     Number(showTree),
     Number(freezeTitle),
+    pageSize,
     columns.map((col) => col.key).join(','),
     allColumnKeys.join(','),
     schemaFingerprint(schema),
@@ -3847,10 +3893,14 @@ export function CollectionBrowser({
         setWrap={setWrap}
         truncateCells={truncateCells}
         setTruncate={setTruncate}
+        showRowNumbers={showRowNumbers}
+        setRowNumbers={setRowNumbers}
         freezeTitle={freezeTitle}
         setFreezeTitleCol={setFreezeTitleCol}
         showTree={showTree}
         setTree={setTree}
+        pageSize={pageSize}
+        changePageSize={changePageSize}
         refreshing={refreshing}
         refreshNow={refreshNow}
         notice={notice}
@@ -3973,7 +4023,7 @@ export function CollectionBrowser({
       },
     }
     tablePaintSnapshotRef.current = {
-      columns,
+      columns: tableColumns,
       columnWidths,
       columnPinCount,
       wrapCells,
@@ -4040,7 +4090,7 @@ export function CollectionBrowser({
           rowView={rowView}
           dataPath={dataPath}
           items={items}
-          columns={columns}
+          columns={tableColumns}
           columnWidths={columnWidths}
           columnPinCount={columnPinCount}
           wrapCells={wrapCells}

@@ -20,6 +20,8 @@ import { PageBanner } from './page-banner.tsx'
 import { fieldPickAttrs, recordSourcePath } from './pick-dom.ts'
 import { dismissInspectorPaneMenu } from './inspector-pane-menu.tsx'
 import { PaneConfigMenuItem } from './pane-more-menu.tsx'
+import { LayoutPrefsMenu } from './layout-prefs-menu.tsx'
+import { getPagePrefs } from './page-width.ts'
 import { PageContentFailed, PageContentLoading } from './page-content-status.tsx'
 import { RecordProperties } from './record-prop-host.tsx'
 import { useRecordContentBody } from './record-content.tsx'
@@ -388,15 +390,39 @@ export function RecordDetail({
     }
   }, [inspectorPaneId, selected.id])
 
+  const shareLabel = collectionPath === PAGES_COLLECTION_PATH ? '分享页面' : '分享记录'
+  const deleteLabel = collectionPath === PAGES_COLLECTION_PATH ? '删除页面' : '删除记录'
   const paneMenu = (
     <RecordPaneMenu
       record={selected}
       Tools={readOnly ? undefined : chrome?.DetailTools}
       onDelete={!readOnly && onDelete ? onDelete : undefined}
-      deleteLabel={collectionPath === PAGES_COLLECTION_PATH ? '删除页面' : '删除记录'}
+      deleteLabel={deleteLabel}
       share={share}
-      shareLabel={collectionPath === PAGES_COLLECTION_PATH ? '分享页面' : '分享记录'}
+      shareLabel={shareLabel}
     />
+  )
+  const detailConfigMenu = (
+    <>
+      <LayoutPrefsMenu prefs={getPagePrefs()} className="is-inline" />
+      {(!readOnly && chrome?.DetailTools) || (!readOnly && onDelete) ? (
+        <div className="fsdb-group-panel-section">
+          {!readOnly && chrome?.DetailTools ? <chrome.DetailTools record={selected} onDone={() => undefined} /> : null}
+          {!readOnly && onDelete ? (
+            <button
+              type="button"
+              role="menuitem"
+              className="fsdb-detail-more-item is-danger"
+              data-testid="fsdb-detail-delete"
+              onClick={() => onDelete()}
+            >
+              <TrashGlyph aria-hidden className="size-4" />
+              {deleteLabel}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </>
   )
 
   const [openFolds, setOpenFolds] = useState<Record<string, boolean>>({})
@@ -546,7 +572,9 @@ export function RecordDetail({
                     }}
                     columnMenu={columnMenu}
                     onRetry={onRetryBody}
-                    configMenu={paneMenu}
+                    configMenu={detailConfigMenu}
+                    share={share}
+                    shareLabel={shareLabel}
                     onPrev={onPrev}
                     onNext={onNext}
                     canPrev={canPrev}
