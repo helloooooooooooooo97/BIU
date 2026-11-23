@@ -2,6 +2,7 @@ import { writeStorageString } from '@biu/biu-ui/client-storage'
 import { useBrowserPopovers } from './use-browser-popovers.ts'
 import { useBrowserBulkUi } from './use-browser-bulk-ui.ts'
 import { useBrowserViewConfig } from './use-browser-view-config.ts'
+import { useBrowserDetailState } from './use-browser-detail-state.ts'
 import { lazy, memo, Suspense, type ComponentProps, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { TOOLTIP_OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
@@ -496,14 +497,24 @@ export function CollectionBrowser({
   const [stat, setStat] = useState<StatResult | null>(() => peekBrowserCache(dataPath, routeViewId)?.stat ?? null)
   const [items, setItems] = useState<Array<DbRecord & { path?: string }>>(() => peekBrowserCache(dataPath, routeViewId)?.items ?? [])
   const [error, setError] = useState('')
-  const [openDetailId, setOpenDetailId] = useState<string | null>(routeRecordId)
-  const [detailRow, setDetailRow] = useState<DbRecord | null>(null)
-  const [originNav, setOriginNav] = useState<OriginViewNav | null>(null)
-  const [detailBody, setDetailBody] = useState<unknown>(null)
-  const [detailBodyStatus, setDetailBodyStatus] = useState<'loading' | 'ready' | 'failed'>('loading')
-  const [detailBodyError, setDetailBodyError] = useState('')
-  const [draft, setDraft] = useState<Record<string, string>>({})
-  const [acting, setActing] = useState(false)
+  const {
+    openDetailId,
+    setOpenDetailId,
+    detailRow,
+    setDetailRow,
+    originNav,
+    setOriginNav,
+    detailBody,
+    setDetailBody,
+    detailBodyStatus,
+    setDetailBodyStatus,
+    detailBodyError,
+    setDetailBodyError,
+    draft,
+    setDraft,
+    acting,
+    setActing,
+  } = useBrowserDetailState<OriginViewNav>(routeRecordId)
   const actingRef = useRef(false)
   const initialView = (() => {
     const stored = viewForPath(collectionPath, routeViewId)
