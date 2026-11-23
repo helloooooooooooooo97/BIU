@@ -1,5 +1,5 @@
 import { useLayoutEffect, type RefObject } from 'react'
-import { bindPageRead } from '@biu/core-file-system/page-read'
+import { bindPageRead, supportsScrollDrivenProgress } from '@biu/core-file-system/page-read'
 
 export function useStickyToolbar(ref: RefObject<HTMLElement | null>) {
   useLayoutEffect(() => {
@@ -19,21 +19,25 @@ export function useStickyToolbar(ref: RefObject<HTMLElement | null>) {
       { root: scroller, threshold: 0 },
     )
     io.observe(mark)
-    const read = scroller ? bindPageRead(scroller, el, requestAnimationFrame, cancelAnimationFrame) : null
+    const nativeCss = supportsScrollDrivenProgress()
+    const read = !nativeCss && scroller ? bindPageRead(scroller, el, requestAnimationFrame, cancelAnimationFrame) : null
     const onScroll = () => read?.poke()
-    onScroll()
-    scroller?.addEventListener('scroll', onScroll, { passive: true })
-    const ro = typeof ResizeObserver === 'undefined' || !scroller ? null : new ResizeObserver(onScroll)
-    if (ro && scroller) {
-      ro.observe(scroller)
-      const inner = scroller.firstElementChild
-      if (inner) ro.observe(inner)
+    let ro: ResizeObserver | null = null
+    if (read && scroller) {
+      onScroll()
+      scroller.addEventListener('scroll', onScroll, { passive: true })
+      ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(onScroll)
+      if (ro) {
+        ro.observe(scroller)
+        const inner = scroller.firstElementChild
+        if (inner) ro.observe(inner)
+      }
     }
     return () => {
       io.disconnect()
       ro?.disconnect()
       read?.stop()
-      scroller?.removeEventListener('scroll', onScroll)
+      if (read && scroller) scroller.removeEventListener('scroll', onScroll)
       mark.remove()
       el.classList.remove('is-stuck')
       el.style.removeProperty('--page-read')
