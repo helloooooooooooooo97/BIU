@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { useRef, type ReactNode, type RefObject } from 'react'
 import { WindowedTable } from './browser.tsx'
-import { rowPaintStamp } from './windowed-table.tsx'
+import { rowPaintStamp, type TablePaintBag } from './windowed-table.tsx'
 import { resetRememberedTableWrap, TABLE_ROW_PX } from './table-window.ts'
 import { loadTags, pullTags } from './tag-catalog.ts'
 
@@ -11,6 +11,7 @@ const columns = [{ key: 'title' }]
 const nodes = Array.from({ length: ROW_COUNT }, (_, index) => ({
   kind: 'row' as const,
   key: `row-${index}`,
+  keyPrefix: '',
   row: { id: `row-${index}`, title: `Row ${index}` },
   depth: 0,
   hasKids: false,
@@ -32,7 +33,7 @@ function Harness({
   columnWidths?: Record<string, number>
   pin?: number
 }) {
-  const paintRef = useRef({ colSpan: 1, error: '', renderNode: (_node: { key: string }) => null as ReactNode })
+  const paintRef = useRef<TablePaintBag>({ colSpan: 1, error: '', renderNode: (_node) => null as ReactNode })
   const chromeRef = useRef({ paintHeadTh: () => null, onPointerDown: undefined, onPointerMove: undefined, onClick: () => {}, onMouseOver: () => {}, onContextMenu: undefined })
   const colWindowRef = useRef({ pin: 0, start: 0, end: 1, padLeft: 0, padRight: 0 })
   const tableRef = useRef<HTMLTableElement>(null)
@@ -191,6 +192,7 @@ test('repeated tag catalog renames repaint tag cells while keeping non-tag cells
     {
       kind: 'row' as const,
       key: 'row-0',
+      keyPrefix: '',
       row: { id: 'row-0', title: 'Row 0', tag: { tags: ['tag-10'], values: {} } },
       depth: 0,
       hasKids: false,
@@ -207,19 +209,19 @@ test('repeated tag catalog renames repaint tag cells while keeping non-tag cells
   await pullTags()
 
   function TagHarness() {
-    const paintRef = useRef({
+    const paintRef = useRef<TablePaintBag>({
       colSpan: 2,
       error: '',
       renderNode: () => null as ReactNode,
-      renderCell: (node: { key: string; row?: Record<string, unknown> }, colKey: string) => {
+      renderCell: (node, colKey) => {
         painted.push(`${node.key}:${colKey}`)
         if (colKey === 'tag') {
           const label = loadTags().find((t) => t.id === 'tag-10')?.label ?? 'tag-10'
           return <td key={colKey} data-col-key={colKey}>{label}</td>
         }
-        return <td key={colKey} data-col-key={colKey}>{String(node.row?.title ?? '')}</td>
+        return <td key={colKey} data-col-key={colKey}>{node.kind === 'row' ? String(node.row.title ?? '') : ''}</td>
       },
-      renderRow: (node: { key: string }, kids: ReactNode[]) => <tr key={node.key} data-record-id={node.key}>{kids}</tr>,
+      renderRow: (node, kids) => <tr key={node.key} data-record-id={node.key}>{kids}</tr>,
     })
     const chromeRef = useRef({ paintHeadTh: () => null, onPointerDown: undefined, onPointerMove: undefined, onClick: () => {}, onMouseOver: () => {}, onContextMenu: undefined })
     const colWindowRef = useRef({ pin: 0, start: 0, end: 2, padLeft: 0, padRight: 0 })

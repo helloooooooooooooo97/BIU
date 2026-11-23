@@ -15,8 +15,9 @@ test('parallel recordEdit of five 你好 pages publishes every file', async () =
   }
   const ctx = new Context()
   const service = new ContentTurnService(ctx).open(':memory:')
-  const get = service.ctx.get.bind(service.ctx)
-  service.ctx.get = ((name: string) => (name === 'sessions' ? sessions : get(name))) as typeof service.ctx.get
+  const serviceCtx = (service as unknown as { ctx: Context }).ctx
+  const get = serviceCtx.get.bind(serviceCtx)
+  serviceCtx.get = ((name: string) => (name === 'sessions' ? sessions : get(name))) as typeof serviceCtx.get
   await runWithSession('sess-hello', async () => {
     await Promise.all([1, 2, 3, 4, 5].map((n) => service.recordEdit(`/pages/p${n}`, '', '你好', '你好')))
   })

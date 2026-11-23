@@ -43,6 +43,7 @@ class FakeDatabase extends Service implements Database {
   async read() { return null }
   async update() { return null }
   async remove() { return null }
+  async restore() { return null }
   async action() { return null }
   async stat() { return null }
 }

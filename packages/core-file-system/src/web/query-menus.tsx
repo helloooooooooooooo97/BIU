@@ -859,10 +859,12 @@ export function GroupQueryMenu({
           className={`tasks-sort-item${parsed.fieldKey === item.key ? ' is-on' : ''}`}
           onClick={() => selectField(item.key)}
         >
-          <span className="tasks-sort-ico">
-            <FieldGlyph kind={item.kind} />
+          <span className="tasks-sort-item-label">
+            <span className="tasks-sort-ico">
+              <FieldGlyph kind={item.kind} />
+            </span>
+            <span className="tasks-sort-label">{item.field.label ?? item.key}</span>
           </span>
-          <span className="tasks-sort-label">{item.field.label ?? item.key}</span>
           {item.kind === 'datetime' ? (
             <ChevronRightIcon aria-hidden className="size-[13px] opacity-60 shrink-0" />
           ) : null}

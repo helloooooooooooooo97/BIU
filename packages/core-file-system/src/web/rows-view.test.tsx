@@ -1,6 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { render } from '@testing-library/react'
+import { REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 import { bindRowFields, CollectionRowsShell } from './rows-view.tsx'
 
 test('bindRowFields keeps visible columns in order', () => {
@@ -9,6 +10,7 @@ test('bindRowFields keeps visible columns in order', () => {
     {
       labelField: 'title',
       fields: {
+        ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '标题' },
         status: { type: 'string', label: '状态' },
       },
@@ -28,7 +30,7 @@ test('rows shell paints one Row per record with bound fields', () => {
   const { container } = render(
     <CollectionRowsShell
       rows={[{ id: 'a', title: '甲' }, { id: 'b', title: '乙' }]}
-      schema={{ labelField: 'title', fields: { title: { type: 'string', label: '标题' } } }}
+      schema={{ labelField: 'title', fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', label: '标题' } } }}
       columns={['title']}
       onOpen={() => undefined}
       Row={({ fields, onOpen }) => (

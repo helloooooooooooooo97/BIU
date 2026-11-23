@@ -2,12 +2,12 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { bindSessionView, type SessionViewService } from '@biu/web-session-view'
 import type { SlotsService } from '@biu/web-slots'
-import type { SlotEntry } from '@biu/type-slots'
+import type { SlotEntry, SlotProps } from '@biu/type-slots'
 import { SessionInspector } from './session-inspector.tsx'
 
 const hits = new Map<string, number>()
 
-function Pane({ paneId }: { paneId?: string }) {
+function Pane({ paneId }: SlotProps) {
   const id = String(paneId ?? '')
   hits.set(id, (hits.get(id) ?? 0) + 1)
   return <article data-pane={id}>页面 {id}</article>
@@ -26,6 +26,7 @@ function entry(id: string, label: string, repeatable = false): SlotEntry {
       centerKinds: ['session'],
       repeatable,
     }),
+    children: [],
   }
 }
 

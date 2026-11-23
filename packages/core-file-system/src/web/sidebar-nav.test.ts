@@ -143,7 +143,7 @@ test('从记录返回回到上次视图，展开状态仍在', () => {
 test('deleted builtin all view keeps its breadcrumb name when opened from navigation', () => {
   const table = { path: '/pages', label: '页面' }
   const viewId = builtinAllViewId(table.path)
-  const views = mergeTableViews(table, [normalizeSavedView({ id: 'mine', name: '我的页面' })], [viewId])
+  const views = mergeTableViews(table, [normalizeSavedView({ id: 'mine', name: '我的页面' } as unknown as Parameters<typeof normalizeSavedView>[0])], [viewId])
   assert.ok(!views.some((view) => view.id === viewId))
   const crumbs = buildCrumbs({
     collection: table.path,

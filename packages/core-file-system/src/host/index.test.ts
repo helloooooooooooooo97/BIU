@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { DatabaseService, apply as applyFileSystem, databaseHttpFailure, listNeedsMatchOverlay, specListQuery } from './index.ts'
 import { FileSystemAssets } from './assets-store.ts'
-import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
+import type { CollectionSchema, CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { DATABASE_CHANNEL, isAllocatedRecordId, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 import { dataCollection, isDataOverviewSource } from './data-collection.ts'
 import { tagsCollection } from './tags-collection.ts'
@@ -22,6 +22,29 @@ import { builtinAllViewId, stubBuiltinAllView, stubBuiltinMemberView } from '../
 import { seedGroupRecord } from '../web/group-create.ts'
 import { matchListFilterRecord } from '../query-logic.ts'
 import { savedViewRecordPath } from '../paths.ts'
+
+type CollectionListResult = Extract<Awaited<ReturnType<DatabaseService['list']>>, { kind: 'collection' }>
+function asCollection(res: Awaited<ReturnType<DatabaseService['list']>>): CollectionListResult {
+  assert.equal(res.kind, 'collection')
+  return res as CollectionListResult
+}
+
+type ContentWriteResult = Extract<Awaited<ReturnType<DatabaseService['editContent']>>, { ok: true }>
+function asContentWrite(res: Awaited<ReturnType<DatabaseService['editContent']>>): ContentWriteResult {
+  assert.ok('ok' in res && res.ok)
+  return res as ContentWriteResult
+}
+
+type DocWriteResult = Extract<Awaited<ReturnType<DatabaseService['editDoc']>>, { ok: true }>
+function asDocWrite(res: Awaited<ReturnType<DatabaseService['editDoc']>>): DocWriteResult {
+  assert.ok('ok' in res && res.ok)
+  return res as DocWriteResult
+}
+
+type TagStamp = { tags: string[]; values: Record<string, Record<string, unknown>> }
+function tagOf(record: DbRecord): TagStamp {
+  return record.tag as TagStamp
+}
 
 function notesCollection(): CollectionSpec {
   const rows = new Map<string, { id: string; title: string; status: string; pinned: boolean }>()
@@ -461,7 +484,7 @@ test('stamps agent createdBy with the session title from /sessions', async () =>
   assert.deepEqual(written.value.createdBy, actor)
   assert.deepEqual(written.value.updatedBy, [actor])
   sessions.set('sess-agent-1', { id: 'sess-agent-1', title: '蓝团爱改名', mascot: { shape: 'cube', color: 'blue', eye: 2 } })
-  const listed = await db.list('/notes', undefined, { columns: ['title', 'createdBy', 'updatedBy'] })
+  const listed = asCollection(await db.list('/notes', undefined, { columns: ['title', 'createdBy', 'updatedBy'] }))
   assert.deepEqual(listed.items[0]?.createdBy, {
     kind: 'agent',
     name: '蓝团爱改名',
@@ -748,20 +771,20 @@ test('editContent view/str_replace/replace_lines/insert/write', async () => {
   assert.equal(viewed.truncated, true)
   assert.match(String(viewed.text), /2\ttwo/)
   assert.equal('value' in viewed, false)
-  const replaced = await db.editContent('/docs/n1', { command: 'str_replace', old_str: 'two', new_str: 'TWO' })
+  const replaced = asContentWrite(await db.editContent('/docs/n1', { command: 'str_replace', old_str: 'two', new_str: 'TWO' }))
   assert.equal(replaced.ok, true)
   assert.equal(replaced.start_line, 2)
   assert.equal(replaced.end_line, 2)
   assert.equal('value' in replaced, false)
   assert.equal((await db.content('/docs/n1')).value, 'one\nTWO\nthree\nfour')
-  const lined = await db.editContent('/docs/n1', { command: 'replace_lines', start_line: 3, end_line: 4, new_str: 'C\nD' })
+  const lined = asContentWrite(await db.editContent('/docs/n1', { command: 'replace_lines', start_line: 3, end_line: 4, new_str: 'C\nD' }))
   assert.equal(lined.start_line, 3)
   assert.equal(lined.end_line, 4)
   assert.equal((await db.content('/docs/n1')).value, 'one\nTWO\nC\nD')
-  const inserted = await db.editContent('/docs/n1', { command: 'insert', insert_line: 1, new_str: 'mid' })
+  const inserted = asContentWrite(await db.editContent('/docs/n1', { command: 'insert', insert_line: 1, new_str: 'mid' }))
   assert.equal(inserted.start_line, 2)
   assert.equal((await db.content('/docs/n1')).value, 'one\nmid\nTWO\nC\nD')
-  const written = await db.editContent('/docs/n1', { command: 'write', value: 'done' })
+  const written = asContentWrite(await db.editContent('/docs/n1', { command: 'write', value: 'done' }))
   assert.equal(written.start_line, 1)
   assert.equal((await db.content('/docs/n1')).value, 'done')
 })
@@ -804,11 +827,11 @@ test('editContent view projects mention titles and writes drop labels', async ()
   })
   const viewed = await db.editContent('/docs/n1', { command: 'view' })
   assert.match(String(viewed.text), /label="现在的标题"/)
-  const replaced = await db.editContent('/docs/n1', {
+  const replaced = asContentWrite(await db.editContent('/docs/n1', {
     command: 'str_replace',
     old_str: '见 [@ id="page/p053" label="现在的标题"]',
     new_str: '见 [@ id="page/p053" label="不要存"] 了',
-  })
+  }))
   assert.equal(replaced.ok, true)
   assert.equal((await db.content('/docs/n1')).value, '见 [@ id="page/p053"] 了')
 })
@@ -843,17 +866,17 @@ test('editContent find_replace supports unique, all and regex modes', async () =
     () => db.editContent('/docs/n1', { command: 'find_replace', old_str: 'two', new_str: 'X' }),
     /not unique/,
   )
-  const all = await db.editContent('/docs/n1', { command: 'find_replace', old_str: 'two', new_str: 'X', all: true })
+  const all = asContentWrite(await db.editContent('/docs/n1', { command: 'find_replace', old_str: 'two', new_str: 'X', all: true }))
   assert.equal(all.ok, true)
   assert.equal(all.replaced, 3)
   assert.equal((await db.content('/docs/n1')).value, 'one X X\nthree X')
-  const regex = await db.editContent('/docs/n1', {
+  const regex = asContentWrite(await db.editContent('/docs/n1', {
     command: 'find_replace',
     old_str: '\\s+',
     new_str: ' ',
     regex: true,
     all: true,
-  })
+  }))
   assert.equal(regex.replaced, 4)
   assert.equal((await db.content('/docs/n1')).value, 'one X X three X')
 })
@@ -886,10 +909,10 @@ test('editContent write accepts from a local file and rejects value+from togethe
   const dir = await mkdtemp(join(tmpdir(), 'db-content-from-'))
   const file = join(dir, 'body.md')
   await writeFile(file, '# 来自文件\n\n正文内容\n')
-  const written = await db.editContent('/docs/n1', { command: 'write', from: file })
+  const written = asContentWrite(await db.editContent('/docs/n1', { command: 'write', from: file }))
   assert.equal(written.ok, true)
   assert.equal((await db.content('/docs/n1')).value, '# 来自文件\n\n正文内容\n')
-  const both = await db.editContent('/docs/n1', { command: 'write', from: file, value: 'x' })
+  const both = asContentWrite(await db.editContent('/docs/n1', { command: 'write', from: file, value: 'x' }))
   assert.equal(both.ok, true)
   assert.equal((await db.content('/docs/n1')).value, '# 来自文件\n\n正文内容\n')
   await assert.rejects(() => db.editContent('/docs/n1', { command: 'write', from: join(dir, 'nope.md') }), /cannot read from/)
@@ -927,17 +950,17 @@ test('editContent insert/str_replace/replace_lines accept from in place of new_s
   await writeFile(insertFile, 'mid-from-file')
   await writeFile(replaceFile, 'TWO')
   await writeFile(linesFile, 'C\nD')
-  const inserted = await db.editContent('/docs/n1', {
+  const inserted = asContentWrite(await db.editContent('/docs/n1', {
     command: 'insert',
     insert_line: 1,
     from: insertFile,
     new_str: 'ignored-short',
-  })
+  }))
   assert.equal(inserted.ok, true)
   assert.equal((await db.content('/docs/n1')).value, 'one\nmid-from-file\ntwo\nthree')
   const replaced = await db.editContent('/docs/n1', { command: 'str_replace', old_str: 'two', from: replaceFile })
   assert.equal((await db.content('/docs/n1')).value, 'one\nmid-from-file\nTWO\nthree')
-  const lined = await db.editContent('/docs/n1', { command: 'replace_lines', start_line: 4, end_line: 4, from: linesFile })
+  const lined = asContentWrite(await db.editContent('/docs/n1', { command: 'replace_lines', start_line: 4, end_line: 4, from: linesFile }))
   assert.equal((await db.content('/docs/n1')).value, 'one\nmid-from-file\nTWO\nC\nD')
   assert.equal(lined.start_line, 4)
   assert.equal(lined.end_line, 5)
@@ -1044,11 +1067,11 @@ test('editAsset can create a new image then reference it from content', async ()
     new_str: `![封面](/api/db/file/${created.name})`,
   })
   assert.match(String((await db.content('/pages/p1')).value), new RegExp(created.name.replace('.', '\\.')))
-  const missingRef = await db.editContent('/pages/p1', {
+  const missingRef = asContentWrite(await db.editContent('/pages/p1', {
     command: 'insert',
     insert_line: 2,
     new_str: '![缺](/api/db/file/soon.png)',
-  })
+  }))
   assert.equal(missingRef.ok, true)
   const viewed = await db.editAsset('/pages/p1', { command: 'view', name: 'soon.png' })
   assert.equal(viewed.missing, true)
@@ -1335,7 +1358,7 @@ test('agent db_stat omits builtin fields; service stat and list still include th
   if (serviceStat.kind !== 'collection') return
   assert.equal(serviceStat.schema.fields.id?.type, 'string')
   assert.equal(serviceStat.schema.fields.tag?.type, 'tag')
-  const listed = await db.list('/notes')
+  const listed = asCollection(await db.list('/notes'))
   assert.ok(listed.schema.fields.status)
   const agentStat = (await ctx.tools.invoke('db_stat', { path: '/notes' })) as {
     schema?: { fields?: Record<string, unknown>; records?: unknown }
@@ -1572,6 +1595,8 @@ test('allowMissing actions can run before the record exists', async () => {
     ],
   })
   const done = await db.action('/notes/n9', 'seed')
+  assert.equal(done.kind, 'record')
+  if (done.kind !== 'record') return
   assert.deepEqual(done.result, { id: 'n9' })
   assert.equal((await db.read('/notes/n9')).kind, 'record')
 })
@@ -1586,6 +1611,8 @@ test('registered actions run when when-clause matches', async () => {
   assert.equal(stat.schema.actions?.[0]?.id, 'pin')
   assert.equal('run' in (stat.schema.actions?.[0] ?? {}), false)
   const pinned = await db.action('/notes/n1', 'pin')
+  assert.equal(pinned.kind, 'record')
+  if (pinned.kind !== 'record') return
   assert.equal((pinned.value as unknown as { pinned: boolean }).pinned, true)
   await assert.rejects(() => db.action('/notes/n1', 'pin'), /not available/)
 })
@@ -1976,11 +2003,11 @@ test('db_update /tags writes tag field packs', async () => {
     views: [{ id: '8fdbc4f8', name: '沙盒 1', kind: 'sandbox', file: `tag-view-${id}-8fdbc4f8.jsx`, dataFile: `tag-view-data-${id}-8fdbc4f8.json` }],
   })
   assert.equal((views.value.views as Array<{ id: string }>)[0]?.id, '8fdbc4f8')
-  const written = await db.editDoc(`/tags/${id}`, {
+  const written = asDocWrite(await db.editDoc(`/tags/${id}`, {
     command: 'write',
     name: `tag-view-${id}-8fdbc4f8.jsx`,
     value: 'export default function App(){return <p>标签沙盒</p>}',
-  })
+  }))
   assert.equal(written.ok, true)
   const viewed = await db.editDoc(`/tags/${id}`, { name: `tag-view-${id}-8fdbc4f8.jsx` })
   if (viewed.kind === 'doc' && 'text' in viewed) assert.match(String(viewed.text), /标签沙盒/)
@@ -2030,11 +2057,11 @@ test('db_update page tag stores flat property values on the stamp', async () => 
   })
   assert.equal(db.tags.recordTag('/pages', 'p1')?.values[id]?.director, '查泽雷')
   const merged = await db.update('/pages/p1', { tag: { values: { 导演: 'Damien Chazelle' } } })
-  assert.equal(merged.value.tag.values[id].director, 'Damien Chazelle')
-  assert.equal(merged.value.tag.values[id].year, 2016)
+  assert.equal(tagOf(merged.value).values[id]?.director, 'Damien Chazelle')
+  assert.equal(tagOf(merged.value).values[id]?.year, 2016)
   const cleared = await db.update('/pages/p1', { tag: { values: { 导演: '' } } })
-  assert.equal(cleared.value.tag.values[id].director, '')
-  assert.equal(cleared.value.tag.values[id].year, 2016)
+  assert.equal(tagOf(cleared.value).values[id]?.director, '')
+  assert.equal(tagOf(cleared.value).values[id]?.year, 2016)
 
   const awards = await db.create('/tags', [{ title: '奖项' }])
   const awardId = String(awards.items[0]?.value.id)
@@ -2050,13 +2077,13 @@ test('db_update page tag stores flat property values on the stamp', async () => 
       },
     },
   })
-  assert.deepEqual(both.value.tag.tags, [id, awardId])
-  assert.equal(both.value.tag.values[id].director, '查泽雷')
-  assert.equal(both.value.tag.values[id].year, 2016)
-  assert.equal(both.value.tag.values[awardId].oscar, true)
+  assert.deepEqual(tagOf(both.value).tags, [id, awardId])
+  assert.equal(tagOf(both.value).values[id]?.director, '查泽雷')
+  assert.equal(tagOf(both.value).values[id]?.year, 2016)
+  assert.equal(tagOf(both.value).values[awardId]?.oscar, true)
   const onlyAward = await db.update('/pages/p1', { tag: { values: { [awardId]: { oscar: false } } } })
-  assert.equal(onlyAward.value.tag.values[awardId].oscar, false)
-  assert.equal(onlyAward.value.tag.values[id].director, '查泽雷')
+  assert.equal(tagOf(onlyAward.value).values[awardId]?.oscar, false)
+  assert.equal(tagOf(onlyAward.value).values[id]?.director, '查泽雷')
   const col = `tag::${id}::director`
   const listed = await db.list('/pages', undefined, { columns: [col] })
   if (listed.kind !== 'collection') return
@@ -2101,9 +2128,9 @@ test('sandbox patch writes only the current record and this tag', async () => {
     tag: { tags: [movieId, awardId], values: { [movieId]: { director: '查泽雷' }, [awardId]: { oscar: true } } },
   })
   const patched = await db.patchTagSandbox('/pages/p1', movieId, { 状态: '进行中' })
-  assert.equal(patched.value.tag.values[movieId].status, '进行中')
-  assert.equal(patched.value.tag.values[movieId].director, '查泽雷')
-  assert.equal(patched.value.tag.values[awardId].oscar, true)
+  assert.equal(tagOf(patched.value).values[movieId]?.status, '进行中')
+  assert.equal(tagOf(patched.value).values[movieId]?.director, '查泽雷')
+  assert.equal(tagOf(patched.value).values[awardId]?.oscar, true)
   assert.equal(db.tags.recordTag('/pages', 'p2')?.values[movieId]?.status, undefined)
   await assert.rejects(() => db.patchTagSandbox('/pages/p1', movieId, { 奥斯卡: true }), /unknown tag field/)
   await db.update(`/tags/${movieId}`, {
@@ -2133,7 +2160,7 @@ test('db_update /views columns accepts array or JSON array and rejects fragments
   })
   db.register(
     viewsCollection(store, () => [
-      { path: '/pages', id: 'pages', kind: 'collection', label: '页面', view: { title: '页面' } },
+      { path: '/pages', id: 'pages', kind: 'collection', label: '页面', view: { moduleId: 'pages', route: '/pages', title: '页面' } },
     ]),
   )
   const created = await db.create('/views', [{ title: '需求', tablePath: '/pages', columns: ['title'] }])
@@ -2347,14 +2374,14 @@ test('create scope separates personal and workspace records and viewers stay rea
 
   await runWithAccount(ada.id, () => db.create('/docs', [{ title: 'Private' }], { scope: 'personal' }))
   await runWithAccount(ada.id, () => db.create('/docs', [{ title: 'Shared' }], { scope: 'workspace' }))
-  const personal = await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'personal' }))
-  const shared = await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'workspace' }))
+  const personal = asCollection(await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'personal' })))
+  const shared = asCollection(await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'workspace' })))
   assert.deepEqual(personal.items.map((row) => row.title), ['Private'])
   assert.deepEqual(shared.items.map((row) => row.title), ['Shared'])
-  assert.deepEqual((await runWithAccount(bob.id, () => db.list('/docs'))).items.map((row) => row.title), ['Shared'])
+  assert.deepEqual(asCollection(await runWithAccount(bob.id, () => db.list('/docs'))).items.map((row) => row.title), ['Shared'])
   const granted = runWithAccount(ada.id, () => collab.recordAccess(ada.id, '/docs', 'd2'))
   assert.equal(granted.memberViews.find((row) => row.id === builtinAllViewId('/workspace-members'))?.role, 'editor')
-  assert.equal((await runWithAccount(ada.id, () => db.list('/docs'))).items.find((row) => row.title === 'Shared')?.shareScope, '空间')
+  assert.equal(asCollection(await runWithAccount(ada.id, () => db.list('/docs'))).items.find((row) => row.title === 'Shared')?.shareScope, '空间')
   const edited = await runWithAccount(bob.id, () => db.update('/docs/d2', { title: 'Shared edited' }))
   assert.equal(edited.kind, 'record')
 
@@ -2420,11 +2447,11 @@ test('shared create is a public view link', async () => {
   assert.ok(link)
   assert.equal(link?.hasPassword, false)
   assert.equal(link?.allowCopy, false)
-  const listed = await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'shared' }))
+  const listed = asCollection(await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'shared' })))
   assert.deepEqual(listed.items.map((row) => row.title), ['公开'])
   db.shares.revokeRecord('/docs', 'pub')
   db.notifyShareChange()
-  const closed = await runWithAccount(ada.id, () => db.list('/docs'))
+  const closed = asCollection(await runWithAccount(ada.id, () => db.list('/docs')))
   assert.equal(closed.items[0]?.shareScope, '私人')
 })
 
@@ -2476,7 +2503,7 @@ test('device workspace share column is only personal or shared', async () => {
     assert.equal(personal.kind === 'created' && personal.items[0]?.value.shareScope, '私人')
     assert.equal(space.kind === 'created' && space.items[0]?.value.shareScope, '私人')
     assert.equal(local.kind === 'created' && local.items[0]?.value.shareScope, '私人')
-    const listed = await runWithAccount(ada.id, () => db.list('/docs'))
+    const listed = asCollection(await runWithAccount(ada.id, () => db.list('/docs')))
     assert.equal(listed.schema.fields.shareScope?.enum?.join(','), '私人,共享')
     assert.equal(listed.items.some((row) => row.shareScope === '空间'), false)
     const shared = await runWithAccount(ada.id, () => db.create('/docs', [{ title: '局域网' }], { scope: 'shared' }))
@@ -2562,7 +2589,7 @@ test('a builtin member view grant lets the other workspace member read personal 
   })
   await runWithAccount(ada.id, () => db.create('/docs', [{ title: 'Ada private' }], { scope: 'personal' }))
   await runWithAccount(ada.id, () => collab.grantViewMemberView(ada.id, '/docs', builtinAllViewId('/docs'), 'builtin-member:member', 'editor'))
-  const seen = await runWithAccount(bob.id, () => db.list('/docs'))
+  const seen = asCollection(await runWithAccount(bob.id, () => db.list('/docs')))
   assert.deepEqual(seen.items.map((row) => row.title), ['Ada private'])
 })
 
@@ -2639,12 +2666,12 @@ test('granting the all-members view lets the other member read the owner private
     builtinAllViewId('/workspace-members'),
     'editor',
   ))
-  const bobList = await runWithAccount(bob.id, () => db.list('/tasks'))
+  const bobList = asCollection(await runWithAccount(bob.id, () => db.list('/tasks')))
   assert.deepEqual(bobList.items.map((row) => row.title).sort(), ['A私人', 'A空间'])
   assert.equal(bobList.items.find((row) => row.title === 'A私人')?.shareScope, '空间')
   assert.equal(bobList.items.find((row) => row.title === 'A私人')?.shareRole, '编辑')
   assert.equal(bobList.items.find((row) => row.title === 'A空间')?.shareRole, '编辑')
-  const adaList = await runWithAccount(ada.id, () => db.list('/tasks'))
+  const adaList = asCollection(await runWithAccount(ada.id, () => db.list('/tasks')))
   assert.equal(adaList.items.find((row) => row.title === 'A私人')?.shareScope, '空间')
   assert.equal(adaList.items.find((row) => row.title === 'A私人')?.shareRole, '管理')
   assert.equal(adaList.schema.fields.shareRole?.label, '权限')
@@ -2739,14 +2766,14 @@ test('sharing one person all-tasks view does not reclassify the other person pri
   ))
 
   const scopeOf = (items: DbRecord[], title: string) => items.find((row) => row.title === title)?.shareScope
-  const adaList = await runWithAccount(ada.id, () => db.list('/tasks'))
+  const adaList = asCollection(await runWithAccount(ada.id, () => db.list('/tasks')))
   assert.deepEqual(adaList.items.map((row) => row.title).sort(), ['A私人', 'A空间', 'B私人', 'B空间'])
   assert.equal(scopeOf(adaList.items, 'A私人'), '私人')
   assert.equal(scopeOf(adaList.items, 'A空间'), '空间')
   assert.equal(scopeOf(adaList.items, 'B私人'), '空间')
   assert.equal(scopeOf(adaList.items, 'B空间'), '空间')
 
-  const bobList = await runWithAccount(bob.id, () => db.list('/tasks'))
+  const bobList = asCollection(await runWithAccount(bob.id, () => db.list('/tasks')))
   assert.deepEqual(bobList.items.map((row) => row.title).sort(), ['A空间', 'B私人', 'B空间'])
   assert.equal(scopeOf(bobList.items, 'B私人'), '空间')
   assert.equal(bobList.items.some((row) => row.title === 'A私人'), false)
@@ -2847,8 +2874,8 @@ test('index rows follow the user records each person can read and omit share', a
   await runWithAccount(ada.id, () => db.update(`/pages/${personalId}`, { tag: { tags: [hiddenId], values: {} } }))
   await runWithAccount(ada.id, () => db.update(`/pages/${sharedId}`, { tag: { tags: [shownId], values: {} } }))
 
-  const adaBlocks = await runWithAccount(ada.id, () => db.list('/editor-blocks'))
-  const bobBlocks = await runWithAccount(bob.id, () => db.list('/editor-blocks'))
+  const adaBlocks = asCollection(await runWithAccount(ada.id, () => db.list('/editor-blocks')))
+  const bobBlocks = asCollection(await runWithAccount(bob.id, () => db.list('/editor-blocks')))
   assert.deepEqual(adaBlocks.items.map((row) => row.title).sort(), ['私人组件', '空间组件'])
   assert.deepEqual(bobBlocks.items.map((row) => row.title), ['空间组件'])
   assert.equal(adaBlocks.items[0]?.shareScope, undefined)
@@ -2907,7 +2934,7 @@ test('builtin plugins stay visible in the workspace plugin list', async () => {
     collab.addMemberByEmail(ada.id, workspace.id, bob.email)
     collab.setActive(ada.id, workspace.id)
     collab.setActive(bob.id, workspace.id)
-    const bobList = await runWithAccount(bob.id, () => db.list('/plugins'))
+    const bobList = asCollection(await runWithAccount(bob.id, () => db.list('/plugins')))
     assert.deepEqual(bobList.items.map((row) => row.id), ['api-playground'])
     assert.equal(bobList.items[0]?.shareScope, '共享')
     assert.equal(bobList.items[0]?.shareRole, '查看')
@@ -3046,7 +3073,7 @@ test('a member sandbox is private until the owner shares it', async () => {
     collab.setActive(cara.id, workspace.id)
     await runWithAccount(cara.id, () => db.action('/plugins/cara-plug', 'sandbox'))
     await runWithAccount(ada.id, () => db.action('/plugins/ada-plug', 'sandbox'))
-    const adaList = await runWithAccount(ada.id, () => db.list('/plugins'))
+    const adaList = asCollection(await runWithAccount(ada.id, () => db.list('/plugins')))
     assert.deepEqual(adaList.items.map((row) => row.id), ['ada-plug'])
     assert.equal(adaList.items[0]?.shareScope, '私人')
     assert.deepEqual(adaList.items[0]?.createdBy, { kind: 'user', name: ada.name, accountId: ada.id })
@@ -3065,7 +3092,7 @@ test('a member sandbox is private until the owner shares it', async () => {
     const shared = await runWithAccount(bob.id, () => db.list('/plugins'))
     assert.deepEqual(shared.items.map((row) => row.id), ['ada-plug'])
     await runWithAccount(bob.id, () => db.action('/plugins/ada-plug', 'pack'))
-    const edited = await runWithAccount(ada.id, () => db.list('/plugins'))
+    const edited = asCollection(await runWithAccount(ada.id, () => db.list('/plugins')))
     assert.deepEqual(edited.items[0]?.createdBy, { kind: 'user', name: ada.name, accountId: ada.id })
     assert.deepEqual(edited.items[0]?.updatedBy, [
       { kind: 'user', name: ada.name, accountId: ada.id },
@@ -3074,7 +3101,7 @@ test('a member sandbox is private until the owner shares it', async () => {
     const caraList = await runWithAccount(cara.id, () => db.list('/plugins'))
     assert.deepEqual(caraList.items.map((row) => row.id), ['cara-plug'])
     await runWithAccount(ada.id, () => db.action('/plugins/ada-open', 'sandbox', { scope: 'shared' }))
-    const openList = await runWithAccount(bob.id, () => db.list('/plugins'))
+    const openList = asCollection(await runWithAccount(bob.id, () => db.list('/plugins')))
     assert.equal(openList.items.find((row) => row.id === 'ada-open')?.shareScope, '共享')
     assert.equal(openList.items.some((row) => row.id === 'ada-plug'), true)
   } finally {
@@ -3175,7 +3202,7 @@ test('a lan tag-view share marks tagged records shared', async () => {
     }] : [],
   }
   db.shares.upsert({ kind: 'view', collection: '/pages', viewId: 'sec' })
-  const listed = await db.list('/pages')
+  const listed = asCollection(await db.list('/pages'))
   assert.equal(listed.items.find((row) => row.title === 'Robust Intelligence')?.shareScope, '共享')
   assert.equal(listed.items.find((row) => row.title === 'Other')?.shareScope, '私人')
 })
@@ -3214,7 +3241,7 @@ test('a lan tag-view share reads tag overlay when listing shareScope', async () 
     }] : [],
   }
   db.shares.upsert({ kind: 'view', collection: '/pages', viewId: 'sec-view' })
-  const listed = await db.list('/pages', undefined, { columns: ['title', 'shareScope'] })
+  const listed = asCollection(await db.list('/pages', undefined, { columns: ['title', 'shareScope'] }))
   assert.equal(listed.items.find((row) => row.title === 'Robust Intelligence')?.shareScope, '共享')
   assert.equal(listed.items.find((row) => row.title === 'Other')?.shareScope, '私人')
 })
@@ -3268,8 +3295,8 @@ test('$scope packs follow shareScope labels for public and lan shares', async ()
   db.notifyShareChange()
 
   const titles = (listed: { items: DbRecord[] }) => listed.items.map((row) => row.title).sort()
-  const personal = await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'personal' }))
-  const shared = await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'shared' }))
+  const personal = asCollection(await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'personal' })))
+  const shared = asCollection(await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'shared' })))
   assert.deepEqual(titles(personal), ['只私人'])
   assert.deepEqual(titles(shared), ['公开链接'])
   assert.equal(personal.items[0]?.shareScope, '私人')
@@ -3595,40 +3622,40 @@ test('db_doc view/write uses record sandbox files as assets', async () => {
   assert.equal(viewed.kind, 'doc')
   if (viewed.kind === 'doc' && 'text' in viewed) {
     assert.match(String(viewed.text), /你好/)
-    const written = await db.editDoc('/pages/p194', {
+    const written = asDocWrite(await db.editDoc('/pages/p194', {
       command: 'write',
       name: 'view-p194-8fdbc4f8.jsx',
       value: String(viewed.text).replace('你好', 'hello'),
       etag: viewed.etag,
-    })
+    }))
     assert.equal(written.ok, true)
   }
   const again = await db.editDoc('/pages/p194', { name: 'view-p194-8fdbc4f8.jsx' })
   if (again.kind === 'doc' && 'text' in again) assert.match(String(again.text), /hello/)
-  const patched = await db.editDoc('/pages/p194', {
+  const patched = asDocWrite(await db.editDoc('/pages/p194', {
     command: 'str_replace',
     name: 'view-p194-8fdbc4f8.jsx',
     old_str: 'hello',
     new_str: 'hi',
-  })
+  }))
   assert.equal(patched.ok, true)
   assert.equal(patched.command, 'str_replace')
   const afterPatch = await db.editDoc('/pages/p194', { name: 'view-p194-8fdbc4f8.jsx' })
   if (afterPatch.kind === 'doc' && 'text' in afterPatch) assert.match(String(afterPatch.text), /hi/)
-  const lined = await db.editDoc('/pages/p194', {
+  const lined = asDocWrite(await db.editDoc('/pages/p194', {
     command: 'replace_lines',
     name: 'view-p194-8fdbc4f8.jsx',
     start_line: 1,
     end_line: 1,
     new_str: 'export default function App(){return <p>ok</p>}',
-  })
+  }))
   assert.equal(lined.ok, true)
-  const inserted = await db.editDoc('/pages/p194', {
+  const inserted = asDocWrite(await db.editDoc('/pages/p194', {
     command: 'insert',
     name: 'view-p194-8fdbc4f8.jsx',
     insert_line: 1,
     new_str: '// note',
-  })
+  }))
   assert.equal(inserted.ok, true)
 })
 
@@ -3670,7 +3697,7 @@ test('group create persists the custom tag attribute through the real creation p
   const stat = await db.stat('/group-notes')
   if (stat.kind !== 'collection') throw new Error('expected collection')
   const field = 'tag::security::lane'
-  const seed = seedGroupRecord({ title: '新建项目' }, field, 'AI红队', stat.schema, packs)!
+  const seed = seedGroupRecord({ title: '新建项目' }, field, 'AI红队', stat.schema as CollectionSchema, packs)!
   await db.create('/group-notes', [seed])
   assert.deepEqual((await db.attributeGroups('/group-notes', field)).groups, [
     { key: 'AI红队', total: 1 }, { key: '', total: 0 },

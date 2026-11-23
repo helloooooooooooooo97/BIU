@@ -1,5 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { REQUIRED_RECORD_FIELDS, type CollectionSchema } from '@biu/type-file-system'
 import {
   collectQueryFields,
   readTagFieldValue,
@@ -146,13 +147,15 @@ test('parseSortsInput accepts JSON strings', () => {
   assert.equal(sorts[0]?.dir, 'desc')
 })
 
-const pagesSchema = {
+const pagesSchema: CollectionSchema = {
+  labelField: 'title',
   fields: {
-    title: { type: 'string' as const, writable: true },
-    status: { type: 'select' as const, writable: true },
-    tags: { type: 'multi-select' as const, writable: true },
-    tag: { type: 'tag' as const, writable: true },
-    createdBy: { type: 'person' as const, writable: false },
+    ...REQUIRED_RECORD_FIELDS,
+    title: { type: 'string', writable: true },
+    status: { type: 'select', writable: true },
+    tags: { type: 'multi-select', writable: true },
+    tag: { type: 'tag', writable: true },
+    createdBy: { type: 'person', writable: false },
   },
 }
 

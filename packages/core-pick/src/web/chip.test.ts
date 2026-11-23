@@ -153,6 +153,7 @@ test('inspect card lists every stored field without a quote preview', () => {
   const wrapped = pickInspectCard({
     kind: 'sandbox',
     id: 'x',
+    label: 'x',
     text: 'line one\nline two',
     route: '/s/655414355-47600-4f3dd-a9338-512fa6e34c26-this-is-long-but-one-line',
   })

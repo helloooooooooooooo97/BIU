@@ -67,7 +67,7 @@ test('sandbox pageBlock fence stores code and data as attachments', () => {
     deck: false,
     source: 'export default function App() { return <div /> }',
   })
-  assert.equal(parsePageBlockData('sandbox', '{"html":"<p>旧</p>","deck":true}').source, '<p>旧</p>')
+  assert.equal((parsePageBlockData('sandbox', '{"html":"<p>旧</p>","deck":true}') as Record<string, unknown>).source, '<p>旧</p>')
   const sized = formatPageBlockFence('sandbox', 'page-sandbox', {
     source: 'export default function App() { return <div>卡</div> }',
     deck: true,
@@ -95,7 +95,7 @@ test('video pageBlock fence stores the tag script, not JSON', () => {
   assert.deepEqual(parsePageBlockData('video', '<timeline fps=24>\n  <track><scene dur=1s>A</scene></track>\n</timeline>'), {
     script: '<timeline fps=24>\n  <track><scene dur=1s>A</scene></track>\n</timeline>',
   })
-  assert.match(String(parsePageBlockData('video', '{"script":"<timeline></timeline>"}').script), /<timeline><\/timeline>/)
+  assert.match(String((parsePageBlockData('video', '{"script":"<timeline></timeline>"}') as Record<string, unknown>).script), /<timeline><\/timeline>/)
 })
 
 test('takePageBlockFence does not close on ::: inside the registered body', () => {
@@ -116,26 +116,28 @@ test('takePageBlockFence does not close on ::: inside the registered body', () =
 
 test('page block fence format then parse roundtrips kind plugin id and data', () => {
   const json = readPageBlockFence(formatPageBlockFence('excalidraw', 'page-excalidraw', { file: 'assets/a.json' }, 'ab12cd34'))
+  const jsonData = json.data as Record<string, unknown>
   assert.equal(json.kind, 'excalidraw')
   assert.equal(json.plugin, 'page-excalidraw')
   assert.equal(json.id, 'ab12cd34')
-  assert.equal(json.data.file, 'assets/a.json')
+  assert.equal(jsonData.file, 'assets/a.json')
   const box = readPageBlockFence(formatPageBlockFence('sandbox', 'page-sandbox', { file: 'assets/sandbox-sandbx01.jsx', dataFile: 'assets/sandbox-data-sandbx01.json', deck: true, title: '海报' }, 'sandbx01'))
+  const boxData = box.data as Record<string, unknown>
   assert.equal(box.kind, 'sandbox')
   assert.equal(box.plugin, 'page-sandbox')
   assert.equal(box.id, 'sandbx01')
-  assert.equal(box.data.file, 'assets/sandbox-sandbx01.jsx')
-  assert.equal(box.data.dataFile, 'assets/sandbox-data-sandbx01.json')
-  assert.equal(box.data.source, undefined)
-  assert.equal(box.data.deck, undefined)
-  assert.equal(box.data.title, '海报')
+  assert.equal(boxData.file, 'assets/sandbox-sandbx01.jsx')
+  assert.equal(boxData.dataFile, 'assets/sandbox-data-sandbx01.json')
+  assert.equal(boxData.source, undefined)
+  assert.equal(boxData.deck, undefined)
+  assert.equal(boxData.title, '海报')
   const legacy = readPageBlockFence(formatPageBlockFence('sandbox', 'page-sandbox', { source: 'export default function App(){return <div/>}' }, 'sandbx01'))
-  assert.equal(legacy.data.source, 'export default function App(){return <div/>}')
+  assert.equal((legacy.data as Record<string, unknown>).source, 'export default function App(){return <div/>}')
   const video = readPageBlockFence(formatPageBlockFence('video', 'page-video', { script: '<timeline></timeline>' }, 'viddemo1'))
   assert.equal(video.kind, 'video')
   assert.equal(video.plugin, 'page-video')
   assert.equal(video.id, 'viddemo1')
-  assert.equal(video.data.script, '<timeline></timeline>')
+  assert.equal((video.data as Record<string, unknown>).script, '<timeline></timeline>')
 })
 
 test('sandbox pageBlock fence keeps title on the header', () => {

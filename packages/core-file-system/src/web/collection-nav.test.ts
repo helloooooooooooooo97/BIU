@@ -20,13 +20,13 @@ test('paintCollectionViews keeps saved rank instead of prepending builtin-all', 
     },
   })
   const path = '/tasks-crumb-view-order'
-  const tables: CollectionInfo[] = [{ path, label: '任务', view: { title: '任务' } }]
+  const tables: CollectionInfo[] = [{ id: 'tasks', path, kind: 'collection', label: '任务', view: { moduleId: 'tasks', route: path, title: '任务' } }]
   persistViewDisplay(path, 'mine', { rank: 0 })
   persistViewDisplay(path, builtinAllViewId(path), { rank: 1 })
   persistViewDisplay(path, 'board', { rank: 2 })
   rememberViews(path, [
-    { id: 'board', name: '看板', mode: 'board', rank: 2 },
-    { id: 'mine', name: '我的', mode: 'table', rank: 0 },
+    { id: 'board', name: '看板', mode: 'board', rank: 2, sortField: '', sortDir: 'asc', filters: {}, columns: [] },
+    { id: 'mine', name: '我的', mode: 'table', rank: 0, sortField: '', sortDir: 'asc', filters: {}, columns: [] },
   ])
   assert.deepEqual(
     paintCollectionViews(path, tables).map((view) => view.id),

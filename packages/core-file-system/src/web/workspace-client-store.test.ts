@@ -19,7 +19,7 @@ test('WorkspaceClientStore resets all registered frontend caches atomically on w
     items: [{ id: 'r1', title: '记录' }],
     stat: null,
     total: 1,
-    pageSize: 20,
+    listLimit: 20,
   })
 
   assert.equal(loadViews(path).length, 1)

@@ -16,8 +16,8 @@ test('emitAppEvent and onAppEvent deliver typed payloads and remain compatible w
     emitAppEvent('biu:page-block-plugin-phase', { plugin: 'page-toc', phase: 'ready' })
     assert.deepEqual(seen, [{ plugin: 'page-toc', phase: 'ready' }])
 
-    emitAppEvent('biu:account-token')
-    emitAppEvent('biu:chat-config-changed')
+    emitAppEvent('biu:account-token', undefined)
+    emitAppEvent('biu:chat-config-changed', undefined)
     assert.deepEqual(multiSeen, ['biu:account-token', 'biu:chat-config-changed'])
   } finally {
     off()

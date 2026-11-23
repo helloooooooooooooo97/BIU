@@ -33,6 +33,7 @@ test('one plugin fills thread, trajectory, composer and approvals dock', async (
   assert.equal(ctx.slots.list('models').length, 0)
   const traj = ctx.slots.list('inspector-panels').find((item) => item.id === 'chat-traj')
   const usage = ctx.slots.list('inspector-panels').find((item) => item.id === 'chat-usage')
+  assert.ok(traj)
   assert.equal(traj.props?.().tabIcon, MapIcon)
   assert.ok(usage)
   assert.equal(traj.props?.().requiresSession, true)

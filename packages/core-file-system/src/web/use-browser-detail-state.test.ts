@@ -29,7 +29,7 @@ test('browserDetailReducer handles atomic PATCH, SET updaters, and no-op referen
   const s3 = browserDetailReducer(s2, {
     type: 'SET',
     key: 'draft',
-    value: (prev) => ({ ...(prev as Record<string, string>), title: 'New' }),
+    value: (prev: unknown) => ({ ...(prev as Record<string, string>), title: 'New' }),
   })
   assert.deepEqual(s3.draft, { title: 'New' })
 })

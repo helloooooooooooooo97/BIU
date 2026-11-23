@@ -82,8 +82,8 @@ test('viewsCollection creates and deletes user views on a registered table', asy
 test('every registered table gets a builtin all-view even before the client syncs', async () => {
   const store = new SavedViewsStore()
   const spec = viewsCollection(store, () => [
-    { path: '/agents', id: 'sessions', kind: 'collection', label: '代理', view: { title: '代理', icon: 'sparkles' } },
-    { path: '/events', id: 'events', kind: 'collection', label: '事件', view: { title: '事件' } },
+    { path: '/agents', id: 'sessions', kind: 'collection', label: '代理', view: { moduleId: 'sessions', route: '/agents', title: '代理', icon: 'sparkles' } },
+    { path: '/events', id: 'events', kind: 'collection', label: '事件', view: { moduleId: 'events', route: '/events', title: '事件' } },
   ])
   const rows = await spec.list()
   assert.equal(rows.length, 2)
@@ -163,7 +163,7 @@ test('index collection views stay with the account that saved them', async () =>
   who = 'bob'
   const bobRows = await spec.list()
   assert.deepEqual(bobRows.map((row) => row.viewId).filter((id) => id !== builtinAllViewId('/tags')), ['bob-view'])
-  await assert.rejects(() => spec.remove!({ ids: ['tags::ada-view'] }), /unknown view/)
+  await assert.rejects(async () => spec.remove!({ ids: ['tags::ada-view'] }), /unknown view/)
 })
 
 test('update and delete accept row ids (table::viewId) and keep the source table label', async () => {
@@ -195,8 +195,8 @@ test('update of another account view on an index collection stays unknown', asyn
   assert.equal(store.viewsFor('/tags', 'bob').length, 0)
   assert.throws(() => store.write('tags::ada-view', { title: '抢改' }, 'bob'), /unknown view/)
   assert.throws(() => spec('bob').update!('tags::ada-view', { title: '抢改' }), /unknown view/)
-  await assert.rejects(() => spec('bob').remove!({ ids: ['tags::ada-view'] }), /unknown view/)
-  assert.equal(spec('ada').update!('tags::ada-view', { title: 'Ada 改' }).title, 'Ada 改')
+  await assert.rejects(async () => spec('bob').remove!({ ids: ['tags::ada-view'] }), /unknown view/)
+  assert.equal((await spec('ada').update!('tags::ada-view', { title: 'Ada 改' })).title, 'Ada 改')
   assert.equal(store.viewsFor('/tags', 'ada')[0]?.name, 'Ada 改')
 })
 

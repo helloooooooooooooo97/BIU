@@ -30,7 +30,7 @@ test('tagsCollection lists tags with stamp counts and supports create/update/del
   const createdAt = Number(created[0]?.createdAt)
 
   await assert.rejects(
-    () => spec.update!(created[0]!.id, { fields: [{ key: 'format', type: 'text' }] }),
+    async () => spec.update!(created[0]!.id, { fields: [{ key: 'format', type: 'text' }] }),
     /unknown field type: text/,
   )
   const updated = await spec.update!(created[0]!.id, { title: 'I/O', fields: [{ key: 'format', type: 'string', label: '格式' }] })

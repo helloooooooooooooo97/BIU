@@ -84,13 +84,13 @@ test('image size and align persist through markdown', () => {
       contentType: 'markdown',
     })
     try {
-      let attrs: Record<string, unknown> | null = null
+      const found: { attrs: Record<string, unknown> | null } = { attrs: null }
       second.state.doc.descendants((node) => {
-        if (node.type.name === 'image') attrs = node.attrs as Record<string, unknown>
+        if (node.type.name === 'image') found.attrs = node.attrs as Record<string, unknown>
       })
-      assert.equal(attrs?.alt, '封面')
-      assert.equal(Number(attrs?.width), 240)
-      assert.equal(attrs?.align, 'center')
+      assert.equal(found.attrs?.alt, '封面')
+      assert.equal(Number(found.attrs?.width), 240)
+      assert.equal(found.attrs?.align, 'center')
     } finally {
       second.destroy()
     }

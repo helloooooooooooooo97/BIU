@@ -37,7 +37,7 @@ test('savedView / view reveal count as views', () => {
 })
 
 test('parseFsdbChange reads scope or legacy flags', () => {
-  const event = (detail: unknown) => ({ detail } as Event)
+  const event = (detail: unknown) => ({ detail } as unknown as Event)
   assert.deepEqual(parseFsdbChange(event({ views: true })), { scope: 'views' })
   assert.deepEqual(parseFsdbChange(event({ scope: 'views', path: '/pages/p1' })), { scope: 'views', path: '/pages/p1' })
   assert.deepEqual(parseFsdbChange(event({ tags: true })), { scope: 'tags' })

@@ -140,18 +140,18 @@ test('table cells preserve bold, text color, highlight, align, and background ac
   assert.match(md, /bg="var\(--biu-color-wash-sky\)"/)
 
   editor.commands.setContent(md, { contentType: 'markdown' })
-  let restoredCell: Record<string, unknown> | null = null
+  const restored: { cell: Record<string, unknown> | null } = { cell: null }
   const marks = new Set<string>()
   editor.state.doc.descendants((node) => {
     if (node.type.name === 'tableCell' && node.textContent === 'hello') {
-      restoredCell = node.attrs as Record<string, unknown>
+      restored.cell = node.attrs as Record<string, unknown>
     }
     if (node.isText && node.text === 'hello') {
       for (const m of node.marks) marks.add(m.type.name)
     }
   })
-  assert.equal(restoredCell?.align, 'center')
-  assert.equal(restoredCell?.background, 'var(--biu-color-wash-sky)')
+  assert.equal(restored.cell?.align, 'center')
+  assert.equal(restored.cell?.background, 'var(--biu-color-wash-sky)')
   assert.equal(marks.has('bold'), true)
   assert.equal(marks.has('textStyle'), true)
   assert.equal(marks.has('highlight'), true)

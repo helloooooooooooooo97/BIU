@@ -62,7 +62,7 @@ test('commentsCollection hides from sidebar by default and filters by targetPath
     { body: '批注 B', targetPath: '/pages/b' },
   ])
   assert.equal(created.length, 2)
-  const listA = await col.list!({ filters: { targetPath: '/pages/a' } })
+  const listA = await col.list!({ filter: { targetPath: '/pages/a' } })
   assert.equal(listA.length, 1)
   assert.equal(listA[0]!.body, '批注 A')
 })

@@ -26,7 +26,8 @@ test('collapse storage merges fsdb.favOpen into fsdb.section.fav', () => {
   localStorage.setItem('fsdb.favOpen', '0')
   const storage = createSidebarCollapseStorage()
   const raw = storage.getItem('cordis.sidebar.projectCollapsed')
-  const parsed = JSON.parse(raw!) as { state: { collapsed: Record<string, boolean> } }
+  assert.equal(typeof raw, 'string')
+  const parsed = JSON.parse(raw as string) as { state: { collapsed: Record<string, boolean> } }
   assert.equal(parsed.state.collapsed['fsdb.section.fav'], true)
   assert.equal(localStorage.getItem('fsdb.favOpen'), null)
 })

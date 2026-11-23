@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { act, cleanup, render } from '@testing-library/react'
 import { createPortal } from 'react-dom'
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
+import type { DbRecord } from '@biu/type-file-system'
 import { WindowedTable, type TableCheckStore } from './windowed-table.tsx'
 import { startTableColumnResize } from './table-col-resize.ts'
 import { usePinnedTableHead } from './pinned-table-head.ts'
@@ -18,7 +19,7 @@ function makeWideColumns(count: number) {
 
 function makeRichNodes(rowCount: number, colCount: number) {
   return Array.from({ length: rowCount }, (_, r) => {
-    const row: Record<string, unknown> = {
+    const row: DbRecord = {
       id: `r-${r}`,
       title: `压测页面 ${r} - 表格性能基准测试数据条目`,
     }
@@ -28,6 +29,7 @@ function makeRichNodes(rowCount: number, colCount: number) {
     return {
       kind: 'row' as const,
       key: `r-${r}`,
+      keyPrefix: '',
       row,
       depth: 0,
       hasKids: false,

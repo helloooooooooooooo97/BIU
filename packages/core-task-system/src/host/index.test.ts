@@ -325,6 +325,8 @@ test('buildDeliverText renders a派工 message with task key fields', () => {
     dependsOn: [],
     depth: 1,
     sort: 1,
+    emoji: '',
+    tag: { tags: [], values: {} },
     createdAt: 1,
     updatedAt: 1,
     creator: { kind: 'agent', sessionId: 'boss', name: 'Boss' },
@@ -332,6 +334,7 @@ test('buildDeliverText renders a派工 message with task key fields', () => {
     assignedAt: 1,
     reportIntervalSec: 60,
     lastReportPromptAt: null,
+    reportPromptCount: 0,
   })
   assert.match(text, /写需求文档/)
   assert.match(text, /状态：todo/)

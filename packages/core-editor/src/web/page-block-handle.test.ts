@@ -108,12 +108,13 @@ test('handleBlockFromDom maps a nested iframe back to the pageBlock atom', () =>
 `,
     contentType: 'markdown',
   })
-  let hole: HTMLElement | null = null
+  const foundHole: { el: HTMLElement | null } = { el: null }
   editor.state.doc.descendants((node, pos) => {
-    if (node.type.name !== 'editorBlock' || hole) return
+    if (node.type.name !== 'editorBlock' || foundHole.el) return
     const raw = editor.view.nodeDOM(pos)
-    hole = visibleHandleEl(raw instanceof Node ? raw : null)
+    foundHole.el = visibleHandleEl(raw instanceof Node ? raw : null)
   })
+  const hole = foundHole.el
   assert.ok(hole instanceof HTMLElement)
   hole.classList.add('page-block')
   hole.setAttribute('data-page-block', 'sandbox')

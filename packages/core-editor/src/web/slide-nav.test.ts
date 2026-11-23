@@ -22,8 +22,10 @@ function cellStarts(editor: Editor) {
 }
 
 test('slide cells refuse gap cursor like table cells', () => {
-  assert.equal(recordEditorExtensions().find((ext) => ext.name === 'slideCell')?.config.allowGapCursor, false)
-  assert.equal(recordEditorExtensions().find((ext) => ext.name === 'slide')?.config.allowGapCursor, false)
+  const slideCellConfig = recordEditorExtensions().find((ext) => ext.name === 'slideCell')?.config as unknown as { allowGapCursor?: boolean } | undefined
+  const slideConfig = recordEditorExtensions().find((ext) => ext.name === 'slide')?.config as unknown as { allowGapCursor?: boolean } | undefined
+  assert.equal(slideCellConfig?.allowGapCursor, false)
+  assert.equal(slideConfig?.allowGapCursor, false)
 })
 
 test('arrow down at the end of a slide cell enters the next cell', () => {
