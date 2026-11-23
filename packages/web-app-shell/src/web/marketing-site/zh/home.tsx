@@ -119,8 +119,8 @@ const HOME_COMPARE_SPECS = [
   },
   {
     verb: '02 存储',
-    slug: 'vs-supabase',
-    line: 'Supabase 把数据留在独立后端数据库；BIU 让自由正文、结构化插件块与调用快照同存一页，自动跨页成表且本地离线可用。',
+    slug: 'vs-notion',
+    line: 'Notion 把文档与固定关系表留在云端；BIU 让自由正文、全栈插件块与外部调用快照同存一页，自动跨页成表且本地离线可用。',
   },
   {
     verb: '03 组合',
@@ -129,13 +129,13 @@ const HOME_COMPARE_SPECS = [
   },
   {
     verb: '04 分发',
-    slug: 'vs-notion',
-    line: 'Notion 分享的是文档与静态名单权限；BIU 一链打包正文、附件与可运行插件，并以「数据视图 × 成员视图」动态计算权限。',
+    slug: 'vs-app-stores',
+    line: 'App Store 与 Google Play 需要打包、审核与最高 30% 抽成；BIU 分享一个链接即发布可运行软件，权限按条件动态计算。',
   },
   {
     verb: '05 衍生',
-    slug: 'vs-linux',
-    line: 'Linux 用内核模块扩展硬件能力；BIU 让插件本身成为结构化数据，人与智能体可直接基于已有软件与开源项目增量衍生。',
+    slug: 'vs-github',
+    line: 'GitHub 的 6.3 亿仓库锁在 git clone 与部署门槛后；BIU 让智能体直接在已有插件与开源项目上做增量叠加，让所有人都能衍生软件。',
   },
 ] as const
 
@@ -446,7 +446,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
             ))}
           </div>
           <p className="site-home-entry-more" data-reveal>
-            <Link to="/compare">查看全部 13 项对比 →</Link>
+            <Link to="/compare">查看全部 16 项对比 →</Link>
           </p>
         </section>
 

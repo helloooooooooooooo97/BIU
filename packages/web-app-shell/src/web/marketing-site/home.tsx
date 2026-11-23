@@ -117,8 +117,8 @@ const HOME_COMPARE_SPECS = [
   },
   {
     verb: '02 Store',
-    slug: 'vs-supabase',
-    line: 'Supabase keeps data in a separate cloud backend; BIU unites prose, structured blocks, and run snapshots on one page with auto-indexed tables and local offline mode.',
+    slug: 'vs-notion',
+    line: 'Notion keeps fixed blocks and tables in the cloud; BIU unites prose, full-stack plugin blocks, and run snapshots on one page with auto-indexed tables and local offline mode.',
   },
   {
     verb: '03 Compose',
@@ -127,13 +127,13 @@ const HOME_COMPARE_SPECS = [
   },
   {
     verb: '04 Distribute',
-    slug: 'vs-notion',
-    line: 'Notion shares static docs with manual ACLs; BIU bundles prose, assets, and runnable plugin source into one link governed by dynamic Data View × Member View permissions.',
+    slug: 'vs-app-stores',
+    line: 'App Store and Google Play require packaging, review queues, and up to a 30% toll; BIU ships runnable software in a single link governed by dynamic condition permissions.',
   },
   {
     verb: '05 Derive',
-    slug: 'vs-linux',
-    line: 'Linux extends hardware through kernel modules; BIU makes plugins structured workspace records so humans and agents layer new capabilities on working software and open source.',
+    slug: 'vs-github',
+    line: 'GitHub’s 630M repos sit behind git clone and deployment barriers; BIU lets agents layer incremental capabilities onto working plugins and open source for everyone.',
   },
 ] as const
 
@@ -444,7 +444,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
             ))}
           </div>
           <p className="site-home-entry-more" data-reveal>
-            <Link to="/compare">All 13 comparisons →</Link>
+            <Link to="/compare">All 16 comparisons →</Link>
           </p>
         </section>
 
