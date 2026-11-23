@@ -1,6 +1,7 @@
 import { SiteChrome, SiteFaq, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 import { asset } from './site-base.ts'
+import { HighlightedCode } from './blog-format.tsx'
 
 type Block = {
   id: string
@@ -17,11 +18,11 @@ const BLOCKS: Block[] = [
     id: 'pages',
     index: '01',
     title: 'Pages',
-    lead: 'One bounded unit unifying logic, state, environment, and delivery.',
+    lead: 'One boundary holding docs, structured data, and live software.',
     points: [
-      'Freeform prose and structured plugin blocks coexist on one page—combining built-in software, external application slices, and agent-authored tools without isolated iframes.',
-      'Page properties form the shared runtime environment: one plugin codebase placed on different client pages isolates its state and adapts automatically to each page’s currency, SLA, and rules.',
-      'Every block subscribes to a reactive property bus over the same underlying data so a single write converges across the page in milliseconds.',
+      'Freeform prose and interactive plugin blocks coexist on one page—no isolated iframes.',
+      'The same plugin placed on different client pages isolates its state and adapts to each page’s currency, SLA, and rules.',
+      'Every tool on the page shares one live data layer—edit once and the whole page updates together.',
     ],
     image: '/site/shot-page.webp',
     alt: 'A page with a masthead, an Excalidraw whiteboard, and an algorithm exercise card, each powered by a plugin',
@@ -30,11 +31,11 @@ const BLOCKS: Block[] = [
     id: 'plugins',
     index: '02',
     title: 'Plugins & Application Slices',
-    lead: 'Dual-mode backends: run in a local controlled sandbox, or slice external services.',
+    lead: 'Run in a local sandbox, or slice external systems onto the page.',
     points: [
-      'Block types are never hardcoded. Controlled host runtimes power isolated code sandboxes, real PTY terminals, and local file indexing—working fully offline on desktop.',
-      'A plugin’s backend never has to migrate into BIU: slice the 5% you need from Apifox, GitHub, internal APIs, or standalone microservices, and persist each run as a structured snapshot right inside the page.',
-      'Matching blocks across dozens of pages automatically aggregate into queryable cross-page tables with zero manual schema wiring.',
+      'Block types are never hardcoded: install plugins or ask an agent to build one directly against live page data.',
+      'External SaaS and enterprise backends stay where they live—slice only the task-specific UI onto your page and persist each run as a snapshot.',
+      'Matching blocks across dozens of pages automatically aggregate into queryable cross-page tables.',
     ],
     image: '/site/shot-plugins.webp',
     alt: 'Plugin table with one plugin per row and controls to install, enable, or stop each one',
@@ -43,11 +44,11 @@ const BLOCKS: Block[] = [
     id: 'share',
     index: '03',
     title: 'Distribution & Condition Permissions',
-    lead: 'Sharing one link is a complete software release.',
+    lead: 'Sharing one link is shipping live software.',
     points: [
-      'Dependency closure resolves per page—bundling prose, attachments, and referenced plugin source into a self-contained link recipients run immediately in the browser.',
-      'Replace brittle static ACL lists with dynamic Data View × Member View evaluation that stays accurate as teams, cohorts, and records evolve.',
-      'The exact same permission engine constrains both humans and any agent acting on their behalf, with full traceability.',
+      'Prose, attachments, and referenced plugin source travel together—recipients open the link in any browser and run it immediately.',
+      'Replace static ACL lists with dynamic Data View × Member View permissions that stay accurate as teams and records change.',
+      'The exact same permission boundary governs both humans and agents, with full audit traceability.',
     ],
     image: '/site/shot-share.webp',
     alt: 'A shared page where the whiteboard and algorithm exercise card work directly from the link',
@@ -55,12 +56,12 @@ const BLOCKS: Block[] = [
   {
     id: 'agent',
     index: '04',
-    title: 'Agents & Context Engineering',
-    lead: 'Fewer tools, harder structure: humans and agents share the exact same truth.',
+    title: 'Agents',
+    lead: 'Humans and agents share the exact same structured records—no screenshots or copy-pasting.',
     points: [
-      'Five universal primitives (db_list, db_read, db_update, db_create, db_action) paired with self-describing table Blurbs keep the agent’s tool surface constant at O(1) as plugins grow.',
-      'Attach exact pages, tables, and skills with @ so agents act directly on structured records and persisted snapshots—never guessing coordinates from screenshots.',
-      'When a capability is missing, agents author new plugins against live page data or derive incremental layers from existing plugins and open-source repos.',
+      'Attach exact pages, tables, or skills with @ so agents read only the context you selected.',
+      'Agents read and write records directly and trigger plugin actions—settling outputs into durable pages, tables, and skills.',
+      'When a capability is missing, agents build it against live fields or derive incremental layers from existing plugins and open source.',
     ],
     image: '/site/shot-agent.webp',
     alt: 'Typing @ in the chat input adds pages and tasks directly to the agent context',
@@ -71,9 +72,9 @@ const BLOCKS: Block[] = [
     title: 'Task Graph & Approval Gates',
     lead: 'Multi-agent coordination on a structured board, guarded by human sign-off.',
     points: [
-      'Every task card declares its owner, dependencies, and live context—handing work downstream automatically with execution traces beside each card.',
-      'Sensitive backend actions such as locking contracts, sending externally, or mutating production pause at an explicit approval gate.',
-      'Every key state transition appends chronologically to events.log for deterministic replay and audit.',
+      'Each task card declares its owner and dependencies, passing work downstream automatically with execution traces beside the card.',
+      'Sensitive actions—sending externally, locking contracts, or mutating production—pause for explicit human approval.',
+      'Key state changes append chronologically to events.log for deterministic replay and review.',
     ],
     image: '/site/shot-tasks.webp',
     alt: 'Task table with status, priority, difficulty, and agent assignment for each task',
@@ -84,9 +85,9 @@ const BLOCKS: Block[] = [
     title: 'Local and Cloud',
     lead: 'Choose where your data lives when you create each space.',
     points: [
-      'Local spaces persist pages, structured tables, and attachments in standard SQLite (.biu/biu.sqlite) and plain files on disk—offline-ready with direct calls to your own model provider.',
-      'Cloud spaces bring multi-device sync, team collaboration, and condition-based permissions—self-hostable today, with BIU Cloud coming soon.',
-      'Open source under Apache 2.0: inspect every line of code and export everything in open formats with zero lock-in.',
+      'Local spaces store standard SQLite and plain files on disk—offline-ready with direct calls to your own model provider.',
+      'Cloud spaces bring multi-device sync, team collaboration, and condition permissions—self-hostable today, with BIU Cloud coming soon.',
+      'Open source under Apache 2.0: inspect the code and export everything in open formats with zero lock-in.',
     ],
     image: '/site/shot-spaces.webp',
     alt: 'Space switcher for moving between spaces or creating a new one',
@@ -126,17 +127,17 @@ const ECOSYSTEM = [
 ] as const
 
 const PRODUCT_FAQ = [
-  ['How are pages different from documents?', 'Documents hold text. Every block on a BIU page is software provided by a plugin. Multiple blocks read and write the same data, combining into a complete service.'],
-  ['Where do plugins come from?', 'The workspace includes common plugins for tables, whiteboards, code execution, and more. You or an agent can also build new ones. Test a new plugin in the sandbox before packaging it.'],
-  ['What happens to plugins on shared pages?', 'The page content, attachments, and plugin source code are packaged together. Recipients can open and use the page without installing anything else.'],
-  ['Which models are supported?', 'Any model works. BIU uses the API keys you provide.'],
-  ['Can local and cloud spaces coexist?', 'Yes. Keep private information in local spaces and collaborative work in cloud spaces.'],
+  ['How are pages different from documents?', 'Documents hold static text. Every block on a BIU page is full-stack software sharing live state—composing into a complete service delivered in one link.'],
+  ['Where do plugins come from? Can they connect to existing systems?', 'Use built-in or community plugins, or ask an agent to build one against live page data. Plugins can also slice external SaaS or internal APIs—keeping heavy backends where they live while persisting run snapshots right in the page.'],
+  ['Do recipients need to install anything to use a shared page?', 'No. Sharing bundles prose, attachments, and referenced plugin source into one link that runs directly in the browser.'],
+  ['Which models are supported? Do calls relay through BIU?', 'Any compatible provider works (DeepSeek, OpenAI, Anthropic, or local models) with your own API key. In local spaces, requests go directly from your machine to your chosen endpoint with no middleman relay.'],
+  ['Can local and cloud spaces coexist?', 'Yes. Keep sensitive personal or diligence records offline in local spaces while running team collaboration and client delivery in cloud spaces.'],
 ] as const
 
 export function MarketingProduct({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
     title: 'Product',
-    description: 'See how BIU turns pages and plugins into complete services, with sharing, agents, task boards, and local or cloud spaces.',
+    description: 'Pages are containers, plugins are software: see how BIU unifies shared state, application slicing, agents, condition permissions, and local-first storage.',
     path: '/product',
   })
 
@@ -146,8 +147,7 @@ export function MarketingProduct({ onLogin, onStart }: { onLogin: SiteAction; on
           <p className="site-section-label">Product</p>
           <h1>Pages are containers. Plugins are software.</h1>
           <p className="site-page-lead">
-            BIU does not achieve All in One by packing features into a single app. It lets one page contain multiple
-            pieces of software that share the same data. Here is how it works.
+            BIU does not achieve All in One by packing features into one vendor app—it lets a single page host full-stack software and external system slices sharing live state for both humans and agents.
           </p>
         </section>
 
@@ -172,7 +172,7 @@ export function MarketingProduct({ onLogin, onStart }: { onLogin: SiteAction; on
         <section className="site-continuity">
           <div className="site-continuity-heading" data-reveal>
             <p className="site-section-label">Pages as services</p>
-            <h2>Combine multiple apps<br />in four steps</h2>
+            <h2>From live data to delivery<br />in four steps</h2>
           </div>
           <div className="site-context-flow" data-reveal aria-label="Pages as services">
             {PAGE_FLOW.map((item, index) => (
@@ -201,7 +201,7 @@ export function MarketingProduct({ onLogin, onStart }: { onLogin: SiteAction; on
                 <span>{item.body}</span>
                 <figure className="site-ecosystem-code">
                   <figcaption>{item.file}</figcaption>
-                  <pre><code>{item.code}</code></pre>
+                  <HighlightedCode code={item.code} />
                 </figure>
               </article>
             ))}
