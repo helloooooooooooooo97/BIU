@@ -9,7 +9,8 @@
     ".": "./src/web/index.ts"
   },
   "dependencies": {
-    "@biu/biu-ui": "0.1.0"
+    "@biu/biu-ui": "0.1.0",
+    "@biu/type-slots": "0.1.0"
   },
   "peerDependencies": {
     "cordis": "4.0.0-rc.8",

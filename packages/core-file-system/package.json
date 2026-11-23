@@ -35,6 +35,7 @@
     "./mention-markup": "./src/mention-markup.ts"
   },
   "dependencies": {
+    "@biu/biu-ui": "0.1.0",
     "@biu/core-pick": "0.1.0",
     "@biu/database-ui": "0.1.0",
     "@biu/host-account": "0.1.0",
@@ -42,8 +43,8 @@
     "@biu/host-sessions": "0.1.0",
     "@biu/host-workspace": "0.1.0",
     "@biu/public-mascot": "0.1.0",
-    "@biu/biu-ui": "0.1.0",
     "@biu/type-file-system": "0.1.0",
+    "@biu/type-slots": "0.1.0",
     "@biu/web-session-view": "0.1.0",
     "@biu/web-snapshot": "0.1.0",
     "@codemirror/commands": "^6.11.0",
@@ -52,13 +53,13 @@
     "@codemirror/language": "^6.12.4",
     "@codemirror/state": "^6.7.4",
     "@codemirror/view": "^6.43.11",
-    "@lezer/highlight": "^1.2.3",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/modifiers": "^9.0.0",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
-    "yaml": "^2.9.0",
-    "sucrase": "^3.35.1"
+    "@lezer/highlight": "^1.2.3",
+    "sucrase": "^3.35.1",
+    "yaml": "^2.9.0"
   },
   "peerDependencies": {
     "cordis": "4.0.0-rc.8",

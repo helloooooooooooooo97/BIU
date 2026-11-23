@@ -10,5 +10,36 @@
   },
   "peerDependencies": {
     "cordis": "4.0.0-rc.8"
+  },
+  "dependencies": {
+    "@biu/host-agent-loop": "0.1.0",
+    "@biu/host-agents": "0.1.0",
+    "@biu/host-approvals": "0.1.0",
+    "@biu/host-fs": "0.1.0",
+    "@biu/host-http": "0.1.0",
+    "@biu/host-hub": "0.1.0",
+    "@biu/host-jobs": "0.1.0",
+    "@biu/host-llm": "0.1.0",
+    "@biu/host-lsp": "0.1.0",
+    "@biu/host-mcp": "0.1.0",
+    "@biu/host-sandbox": "0.1.0",
+    "@biu/host-session-store": "0.1.0",
+    "@biu/host-sessions": "0.1.0",
+    "@biu/host-shell": "0.1.0",
+    "@biu/host-skills": "0.1.0",
+    "@biu/host-subagents": "0.1.0",
+    "@biu/host-subprocess": "0.1.0",
+    "@biu/host-system-prompt": "0.1.0",
+    "@biu/host-terminal": "0.1.0",
+    "@biu/host-tools": "0.1.0",
+    "@biu/host-web": "0.1.0",
+    "@biu/type-agent-loop": "0.1.0",
+    "@biu/type-http": "0.1.0",
+    "@biu/type-session": "0.1.0",
+    "@biu/web-app-modules": "0.1.0",
+    "@biu/web-project-view": "0.1.0",
+    "@biu/web-session-view": "0.1.0",
+    "@biu/web-slots": "0.1.0",
+    "@biu/web-snapshot": "0.1.0"
   }
 }
