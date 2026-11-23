@@ -265,7 +265,7 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
           </span>
         </button>
         <span className="tasks-queue-glabel">{label}</span>
-        {canCreate && !sheet ? (
+        {canCreate ? (
           <button
             type="button"
             className="tasks-icon-btn tasks-group-create"
@@ -315,8 +315,8 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
     const flat = parseTagFlatColumnKey(col.key)
     const tone = flat ? schemaTagTone(flat.packId) : undefined
     const headTip = columnHeadTip(col)
-    const interactive = Boolean(onOpenColMenu && !sheet && col.key !== 'actions')
-    const draggableCol = Boolean(onReorderColumns && !sheet)
+    const interactive = Boolean(onOpenColMenu && col.key !== 'actions')
+    const draggableCol = Boolean(onReorderColumns)
     const menuOpen = interactive && openColMenuKey === col.key
     const pin = resolvePinOf(col.key)
     const thStyle = colCellBox(col.key, {

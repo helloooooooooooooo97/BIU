@@ -16,7 +16,7 @@ import {
   publishDeletedRowsToTrash,
   publishListedMutation,
 } from './browser-list-cache.ts'
-import { placeCreatedRow } from './group-insert.ts'
+import { createdRowGroupKey, placeCreatedRow } from './group-insert.ts'
 import { setViaDataCrumbs } from './data-chrome.ts'
 import { PAGES_COLLECTION_PATH, TRASH_COLLECTION_PATH } from './database-path.ts'
 import { HttpError, invalidateListReads, readJson } from './db-client.ts'
@@ -380,6 +380,18 @@ export function createBrowserMutations(opts: BrowserMutationsOptions) {
       totalRef.current += 1
       setTotal(totalRef.current)
       setGroupBuckets((prev) => placeCreatedRow(prev, value, groupBy, schemaRef.current, tagCatalog, parentId))
+      if (groupBy) {
+        const createdGroupKey = createdRowGroupKey(value, groupBy, schemaRef.current, tagCatalog)
+        if (createdGroupKey) {
+          setCollapsedGroups((prev) => {
+            if (!prev[createdGroupKey]) return prev
+            const next = { ...prev, [createdGroupKey]: false }
+            persistCollapsedGroups(collectionPath, activeViewId ?? routeViewId ?? '', groupBy, next)
+            return next
+          })
+          setGroupPages((prev) => (prev[createdGroupKey] ? { ...prev, [createdGroupKey]: 0 } : prev))
+        }
+      }
       if (parentId) {
         setCollapsed((prev) => ({ ...prev, [parentId]: false }))
         setTreeKidsByParent((prev) => ({

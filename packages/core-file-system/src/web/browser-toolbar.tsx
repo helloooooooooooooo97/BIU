@@ -162,6 +162,7 @@ export type BrowserListChromeProps = {
   createScope: 'personal' | 'workspace' | 'shared' | 'local'
   setCreateScope: (next: 'personal' | 'workspace' | 'shared' | 'local') => void
   localData: boolean
+  hasExternalViews?: boolean
 }
 
 export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserListChromeProps) {
@@ -284,6 +285,7 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
     createScope,
     setCreateScope,
     localData,
+    hasExternalViews = false,
   } = props
 
   const [settingsTab, setSettingsTab] = useState<ViewSettingsTab>('view')
@@ -369,7 +371,7 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
         }}
       >
         <div className="tasks-toolbar-left">
-          {sheet ? (
+          {sheet && !hasExternalViews ? (
             <div className="tasks-viewtabs">
               <span className="tasks-viewdd-btn tasks-viewtab is-active" style={{ cursor: 'default' }}>
                 <ViewModeGlyph mode={mode} />
@@ -691,7 +693,7 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                       <ViewSettingsMenu
                         tab={settingsTab}
                         onTabChange={setSettingsTab}
-                        sheet={sheet}
+                        sheet={sheet && !hasExternalViews}
                         collectionPath={collectionPath}
                         title={title}
                         activeView={activeView}
@@ -757,7 +759,7 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                   </span>
                 ) : null}
               </div>
-              {(canCreate || canAskNewPlugin) && (!sheet || isDataOverview) ? (
+              {canCreate || canAskNewPlugin ? (
                 <div className="fsdb-create-group">
                   <button
                     type="button"

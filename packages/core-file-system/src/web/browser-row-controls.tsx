@@ -77,7 +77,11 @@ export const RecordActions = memo(function RecordActions({
     if (!placed.length) return null
     return wrap(<Actions actions={placed} record={row} busy={busy} place="row" run={finish} />)
   }
+  const allowedActionIds = Array.isArray(row.actionIds) ? new Set(row.actionIds.map(String)) : null
+  const rowSource = String(row.tablePath ?? '')
   const rowShown = visibleActions(paintSchema, row, 'row')
+    .filter((action) => !allowedActionIds || allowedActionIds.has(action.id))
+    .filter((action) => !action.collection || !rowSource || action.collection === rowSource)
     .filter((action) => !nested || (action.id !== 'open-split' && action.id !== 'open-page'))
     .filter((action) => Action || actionIcon(action.id) || action.id === 'open-split' || action.id === 'open-page')
   if (!rowShown.length) return null

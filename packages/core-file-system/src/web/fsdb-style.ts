@@ -770,6 +770,12 @@ const CSS = `
 .fsdb-banner-create{display:flex;align-items:center;justify-content:center;height:56px;border:1px dashed var(--biu-color-border)!important;color:var(--biu-color-text-muted)!important;text-align:center;line-height:1.3}
 .fsdb-tag-collect{display:flex;flex:none;min-width:0;width:100%;min-height:320px}
 .fsdb-tag-collect>.fsdb-page{flex:1;min-width:0;min-height:320px;background:transparent}
+.fsdb-page-db-block{display:flex;flex:none;min-width:0;width:100%;min-height:120px}
+.fsdb-page-db-block>.fsdb-page{flex:1;min-width:0;min-height:120px;background:transparent}
+.fsdb-page-db-block .fsdb-page .fsdb-main{padding:0}
+.fsdb-page-db-block .fsdb-page .fsdb-main > :not(.fsdb-page-banner){max-width:none;margin-inline:0;padding-left:0;padding-right:0}
+.fsdb-page-db-block .fsdb-page .fsdb-main > .tasks-toolbar{position:static;max-width:none;height:var(--biu-size-control-md);min-height:var(--biu-size-control-md);padding-top:0;padding-left:0;padding-right:0;background:transparent}
+.fsdb-page-db-block .fsdb-page .fsdb-main > .tasks-toolbar::before,.fsdb-page-db-block .fsdb-page .fsdb-main > .tasks-toolbar::after{display:none}
 .fsdb-page.is-sheet .tasks-main{padding:0;gap:10px;max-width:none}
 .fsdb-page.is-sheet .fsdb-right-body{overflow:visible}
 .fsdb-page.is-sheet .tasks-table-wrap{width:100%;margin-left:0;padding-left:0}

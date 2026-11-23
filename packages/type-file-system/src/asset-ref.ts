@@ -101,6 +101,7 @@ function ensureDefaultBlockAssets() {
   registerBlockAssets('html', 'page-html-blocks', ['file'])
   registerBlockAssets('htmlframe', 'page-html-blocks', ['file'])
   registerBlockAssets('sandbox', 'page-sandbox', ['file', 'dataFile'])
+  registerBlockAssets('database', 'core-file-system-ui', ['file'])
   registerBlockAssets('video', 'page-video', videoFieldAssets)
 }
 

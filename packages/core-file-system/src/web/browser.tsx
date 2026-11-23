@@ -102,7 +102,6 @@ import {
 } from './windowed-table.tsx'
 import {
   COLLECT_SHEET_COLUMNS,
-  COLLECT_SHEET_FETCH_COLUMNS,
   EMPTY_HOLD_NODES,
   LIST_CACHE_MAX,
   LIST_SEED_COLUMNS,
@@ -428,6 +427,7 @@ export function CollectionBrowser({
   embed = false,
   inspectorPaneId,
   sheet = false,
+  externalViews,
   onOpenRow,
   resolveViews,
 }: {
@@ -453,6 +453,12 @@ export function CollectionBrowser({
   inspectorPaneId?: string
   /** 嵌在详情里的收集表：用同一套表组件，但不写视图、不出现视图切换。 */
   sheet?: boolean
+  /** 嵌入页内块时的外部持久化多视图（由宿主页面存储，不写 /views）。 */
+  externalViews?: {
+    views: SavedView[]
+    activeViewId?: string
+    onChange?: (views: SavedView[], activeViewId: string) => void
+  }
   /** 返回 true 则自己处理这一行，不打开本表详情。 */
   onOpenRow?: (row: DbRecord) => boolean
   resolveViews?: (path: string, user: SavedView[]) => SavedView[]
@@ -562,6 +568,21 @@ export function CollectionBrowser({
     }
   }, [])
   const [total, setTotal] = useState(() => peekBrowserCache(dataPath, routeViewId)?.total ?? 0)
+  const hasExternalViews = Boolean(sheet && externalViews?.views?.length)
+  const initialExternalViews = useMemo(
+    () => (hasExternalViews ? externalViews!.views.map((view) => normalizeSavedView(view)) : undefined),
+    // Seeded once on mount; CollectionBrowser owns live edits and writes back via externalViews.onChange.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  )
+  const initialSheetView = useMemo(() => {
+    if (!initialExternalViews?.length) return undefined
+    const wantId = String(externalViews?.activeViewId ?? '').trim()
+    return initialExternalViews.find((view) => view.id === wantId) ?? initialExternalViews[0]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const externalViewsOnChangeRef = useRef(externalViews?.onChange)
+  externalViewsOnChangeRef.current = externalViews?.onChange
   const {
     pageSize,
     setPageSize,
@@ -604,14 +625,17 @@ export function CollectionBrowser({
     showTree,
     setShowTree,
   } = useBrowserViewConfig(
-    sheet && dataPath === DATA_COLLECTION_PATH
-      ? initialView
-        ? { ...initialView, groupBy: 'table' }
-        : ({ groupBy: 'table' } as SavedView)
-      : initialView,
-    sheet
-      ? collectSheetColumns(loadTags().find((pack) => pack.id === String(lockedFilters.tag ?? lockedFilters.tagId ?? '').trim()))
-      : initialView?.columns ?? [],
+    initialSheetView ??
+      (sheet && dataPath === DATA_COLLECTION_PATH
+        ? initialView
+          ? { ...initialView, groupBy: 'table' }
+          : ({ groupBy: 'table' } as SavedView)
+        : initialView),
+    initialSheetView
+      ? initialSheetView.columns ?? []
+      : sheet
+        ? collectSheetColumns(loadTags().find((pack) => pack.id === String(lockedFilters.tag ?? lockedFilters.tagId ?? '').trim()))
+        : initialView?.columns ?? [],
   )
   const customView = extraViews.find((view) => view.id === mode)
   const rowView = customView ? undefined : extraRows.find((view) => view.id === mode)
@@ -685,9 +709,9 @@ export function CollectionBrowser({
     .slice()
     .sort()
     .join('\n')
-  const [views, setViews] = useState<SavedView[]>(() => paintListedViews(collectionPath))
+  const [views, setViews] = useState<SavedView[]>(() => initialExternalViews ?? paintListedViews(collectionPath))
   const [viewsSaveError, setViewsSaveError] = useState(false)
-  const [activeViewId, setActiveViewId] = useState<string | null>(initialView?.id ?? null)
+  const [activeViewId, setActiveViewId] = useState<string | null>(initialSheetView?.id ?? initialView?.id ?? null)
   const [routeViewReady, setRouteViewReady] = useState(() => !routeViewNeedsFetch(collectionPath, routeViewId))
   const routeViewReadyRef = useRef(routeViewReady)
   routeViewReadyRef.current = routeViewReady
@@ -1008,13 +1032,6 @@ export function CollectionBrowser({
   const loadTreeKidsRef = useRef<(parentId: string, force?: boolean) => Promise<void>>(async () => {})
   const loadedPagesRef = useRef<Record<string, number>>({})
   const listColumns = useMemo(() => {
-    if (sheet) {
-      return listProjectionKeys({
-        schema: stat?.schema,
-        columns: [...COLLECT_SHEET_FETCH_COLUMNS, ...collectSheetColumns(sheetPack).filter((key) => key !== 'title' && key !== 'table')],
-        groupBy,
-      })
-    }
     if (customView) return undefined
     const currentSchema = stat?.schema
     const cellKeys = chrome?.cells ? Object.keys(chrome.cells) : []
@@ -1602,6 +1619,7 @@ export function CollectionBrowser({
     setCollapsedGroups(loadCollapsedGroups(collectionPath, routeViewId ?? activeViewId ?? '', groupBy))
     setError('')
     setPage((prev) => (prev === 0 ? prev : 0))
+    if (hasExternalViews) return
     const stored = viewForPath(collectionPath, routeViewId)
     const listed = paintListedViews(collectionPath)
     rememberViews(collectionPath, listed)
@@ -1843,28 +1861,12 @@ export function CollectionBrowser({
     [allColumnKeys, rowActionColumn, schema],
   )
   const schemaDefaultSig = schemaDefaultKeys.join('\0')
-  const sheetAllColumns = useMemo(() => {
-    if (!sheet) return null
-    const packCols = flattenTagColumns(sheetPack ? [sheetPack] : [])
-    return [
-      { key: 'title', kind: 'string' as const, field: { type: 'string' as const, label: '记录' } },
-      { key: 'table', kind: 'string' as const, field: { type: 'string' as const, label: '来源表' } },
-      ...packCols.map((item) => ({
-        key: item.key,
-        kind: item.kind,
-        field: { ...item.field, label: item.field.label ?? item.key },
-        packId: item.packId,
-      })),
-    ] as typeof allColumns
-  }, [sheet, sheetPack])
   const columns = useMemo(() => {
-    if (sheet && sheetAllColumns) {
-      const requested = columnKeys.length ? columnKeys : collectSheetColumns(sheetPack)
-      return requested
-        .map((key) => sheetAllColumns.find((item) => item.key === key) ?? null)
-        .filter(Boolean) as typeof allColumns
-    }
-    const requested = columnKeys.length ? columnKeys : schemaDefaultKeys
+    const requested = columnKeys.length
+      ? columnKeys
+      : sheet && !hasExternalViews
+        ? collectSheetColumns(sheetPack)
+        : schemaDefaultKeys
     const order = pinActionColumn(
       schema,
       requested.filter((key) => retainSavedColumn(key, schema, allColumnKeys)),
@@ -1885,7 +1887,7 @@ export function CollectionBrowser({
         return null
       })
       .filter(Boolean) as typeof allColumns
-  }, [allColumnKeys, allColumns, columnKeys, rowActionColumn, schema, schemaDefaultKeys, sheet, sheetAllColumns, sheetPack, tagCatalog])
+  }, [allColumnKeys, allColumns, columnKeys, rowActionColumn, schema, schemaDefaultKeys, sheet, sheetPack, tagCatalog])
   const tableColumns = useMemo(
     () =>
       showRowNumbers
@@ -1969,19 +1971,19 @@ export function CollectionBrowser({
   )
 
   useEffect(() => {
-    if (!sheet) return
-    const defaults = collectSheetColumns(sheetPack)
+    if (!sheet || hasExternalViews) return
+    const defaults = pinActionColumn(schema, collectSheetColumns(sheetPack), rowActionColumn)
     setColumnKeys((prev) => {
-      const packKeys = defaults.filter((key) => key !== 'title' && key !== 'table')
-      const kept = prev.filter((key) => key === 'title' || key === 'table' || packKeys.includes(key))
-      const added = packKeys.filter((key) => !kept.includes(key))
-      const next = kept.length ? [...kept, ...added] : defaults
+      const packKeys = defaults.filter((key) => key !== 'title' && key !== 'actions' && key !== 'table')
+      const base = prev.length ? prev : defaults
+      const added = packKeys.filter((key) => !base.includes(key))
+      const next = pinActionColumn(schema, [...base, ...added], rowActionColumn)
       if (next.length === prev.length && next.every((key, index) => key === prev[index])) return prev
       return next
     })
-  }, [sheet, sheetPack])
+  }, [hasExternalViews, rowActionColumn, schema, sheet, sheetPack])
   useEffect(() => {
-    if (sheet) return
+    if (sheet && !hasExternalViews) return
     if (!schemaDefaultKeys.length) return
     const prevDefaults = prevSchemaDefaultSig.current ? prevSchemaDefaultSig.current.split('\0').filter(Boolean) : []
     prevSchemaDefaultSig.current = schemaDefaultSig
@@ -2136,7 +2138,6 @@ export function CollectionBrowser({
           })
         }
         if (
-          !sheet &&
           listed.length &&
           columns.some((col) => {
             if (col.key === 'actions') return false
@@ -2187,7 +2188,6 @@ export function CollectionBrowser({
       })
     }
     if (
-      !sheet &&
       listed.length &&
       columns.some((col) => {
         if (col.key === 'actions') return false
@@ -2743,10 +2743,11 @@ export function CollectionBrowser({
       reloadGen.current += 1
       adoptListCacheForViewRef.current(dataPath, view)
       applyView(view)
+      if (hasExternalViews) externalViewsOnChangeRef.current?.(viewsRef.current, view.id)
     } else {
       setViewMenuOpen(false)
     }
-    rememberInspectorWorkingView(collectionPath, view.id)
+    if (!hasExternalViews) rememberInspectorWorkingView(collectionPath, view.id)
     onOpenView?.(view.id)
   }
 
@@ -2801,9 +2802,9 @@ export function CollectionBrowser({
   }, [collectionPath, sheet, routeRecordId])
 
   useEffect(() => {
-    if (!viewMenuOpen) return
+    if (!viewMenuOpen || hasExternalViews) return
     void syncViewsRef.current()
-  }, [viewMenuOpen])
+  }, [hasExternalViews, viewMenuOpen])
 
   const {
     persistViews,
@@ -2849,6 +2850,11 @@ export function CollectionBrowser({
     rankListedViews,
     selectView,
     onOpenTable,
+    externalViews: hasExternalViews
+      ? {
+          onChange: (nextViews, nextActiveId) => externalViewsOnChangeRef.current?.(nextViews, nextActiveId),
+        }
+      : undefined,
   })
 
   function renderVisibleColumnsFlyout() {
@@ -2856,8 +2862,8 @@ export function CollectionBrowser({
       <Suspense fallback={null}>
         <VisibleColumnsFlyout
           columns={columns}
-          allColumns={sheet && sheetAllColumns ? sheetAllColumns : allColumns}
-          labelField={sheet ? 'title' : schema?.labelField}
+          allColumns={allColumns}
+          labelField={schema?.labelField}
           tagCatalog={sheetPack ? [sheetPack] : tagCatalog}
           onToggle={toggleColumn}
           onToggleMany={toggleManyColumns}
@@ -2868,15 +2874,15 @@ export function CollectionBrowser({
   }
 
   function setVisibleColumns(next: string[]) {
-    const pinned = sheet ? next : pinActionColumn(schema, next, rowActionColumn)
+    const pinned = pinActionColumn(schema, next, rowActionColumn)
     if (!pinned.length) return
     setColumnKeys(pinned)
-    if (sheet || !activeViewId) return
+    if ((sheet && !hasExternalViews) || !activeViewId) return
     patchActiveView({ columns: pinned })
   }
 
   function toggleColumn(key: string) {
-    if (key === (sheet ? 'title' : schema?.labelField) || key === 'actions') return
+    if (key === schema?.labelField || key === 'actions') return
     const current = columnKeys.length ? columnKeys : columns.map((col) => col.key)
     const next = current.includes(key) ? current.filter((item) => item !== key) : [...current, key]
     if (!next.length) return
@@ -2884,7 +2890,7 @@ export function CollectionBrowser({
   }
 
   function toggleManyColumns(keys: string[], show: boolean) {
-    const lockedKey = sheet ? 'title' : schema?.labelField
+    const lockedKey = schema?.labelField
     const targets = keys.filter((key) => key !== lockedKey && key !== 'actions')
     if (!targets.length) return
     const current = columnKeys.length ? columnKeys : columns.map((col) => col.key)
@@ -3637,11 +3643,11 @@ export function CollectionBrowser({
     if (!countFilterRules(next)) setFilters({})
     // Persist user edits immediately so a refresh cannot restore the old tree
     // during the general view-save debounce.
-    if (!sheet && activeViewId) patchActiveView({ filterTree: next, filters: {} })
+    if ((!sheet || hasExternalViews) && activeViewId) patchActiveView({ filterTree: next, filters: {} })
   }
 
   function persistActiveViewNow() {
-    if (sheet || !hydrated || !activeViewId) return
+    if ((sheet && !hasExternalViews) || !hydrated || !activeViewId) return
     if (!routeViewReadyRef.current) return
     if (hydratePath.current !== `${collectionPath}\0${dataPath}`) return
     const current = viewsRef.current.find((view) => view.id === activeViewId)
@@ -3672,7 +3678,7 @@ export function CollectionBrowser({
       columnViews,
     })
     if (viewStateKey(current) === viewStateKey(next)) return
-    persistViewDisplay(collectionPath, next.id, next)
+    if (!hasExternalViews) persistViewDisplay(collectionPath, next.id, next)
     patchActiveView(next)
   }
   persistActiveViewRef.current = persistActiveViewNow
@@ -3696,6 +3702,10 @@ export function CollectionBrowser({
     }
     if (tableHoldRef.current || pendingPathQueryRef.current) return
     hydratePath.current = hydrateKey
+    if (hasExternalViews) {
+      setHydrated(true)
+      return
+    }
     const listedViewsNow = paintListedViews(collectionPath)
     rememberViews(collectionPath, listedViewsNow)
     if (!sameSavedViews(viewsRef.current, listedViewsNow)) {
@@ -3708,12 +3718,12 @@ export function CollectionBrowser({
   }, [allColumnKeys, collectionPath, dataPath, routeViewId, schema, schemaDefaultKeys])
 
   useEffect(() => {
-    if (sheet || !hydrated || !activeViewId) return
+    if ((sheet && !hasExternalViews) || !hydrated || !activeViewId) return
     const persistGen = skipPersistGen.current
     const id = window.setTimeout(() => {
       if (persistGen !== skipPersistGen.current) return
       persistActiveViewRef.current()
-    }, 400)
+    }, 350)
     return () => window.clearTimeout(id)
   }, [
     activeViewId,
@@ -3726,6 +3736,7 @@ export function CollectionBrowser({
     filterTree,
     groupBy,
     groupConfig,
+    hasExternalViews,
     hydrated,
     mode,
     query,
@@ -3759,6 +3770,7 @@ export function CollectionBrowser({
     createTypePath,
     Number(isDataOverview),
     overviewCreateTables.map((table) => table.path).join(','),
+    Number(hasExternalViews),
     Number(localData),
     Number(canCreate),
     Number(canAskNewPlugin),
@@ -3776,6 +3788,7 @@ export function CollectionBrowser({
     Number(sortCustom),
     sortsStateKey(sorts),
     Number(filterActive),
+    JSON.stringify(catalogLocks),
     filterEditorStateKey(filterTree),
     Number(grouping),
     groupBy,
@@ -3919,6 +3932,7 @@ export function CollectionBrowser({
         createScope={createScope}
         setCreateScope={setCreateScope}
         localData={localData}
+        hasExternalViews={hasExternalViews}
       />
     ),
     [listChromeLock],
@@ -4205,7 +4219,7 @@ export function CollectionBrowser({
             else next[colKey] = nextCfg
             columnViewsRef.current = next
             setColumnViews(next)
-            if (!sheet && activeViewId) patchActiveView({ columnViews: normalizeColumnViews(next) ?? {} })
+            if ((!sheet || hasExternalViews) && activeViewId) patchActiveView({ columnViews: normalizeColumnViews(next) ?? {} })
           }}
           onFilter={(colKey) => {
             const targetField = filterFields.find((item) => item.key === colKey)
@@ -4237,7 +4251,7 @@ export function CollectionBrowser({
             else next[colKey] = op
             columnSummariesRef.current = next
             setColumnSummaries(next)
-            if (!sheet && activeViewId) patchActiveView({ columnSummaries: normalizeColumnSummaries(next) ?? {} })
+            if ((!sheet || hasExternalViews) && activeViewId) patchActiveView({ columnSummaries: normalizeColumnSummaries(next) ?? {} })
           }}
           onToggleFreeze={() =>
             setFreezeUntilCol(effectiveFreezeUntil === colHeaderMenu.col.key ? '' : colHeaderMenu.col.key)
