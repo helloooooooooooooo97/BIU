@@ -1178,7 +1178,9 @@ export function apply(ctx: Context) {
           ...(workspaceId ? { 'x-biu-workspace-id': workspaceId } : {}),
         },
         body: JSON.stringify({ leaseId: payload.leaseId }),
-      }).catch(() => undefined)
+      }).catch((error) => {
+        console.warn('[chat] cloud execution lease heartbeat failed', sessionId, error)
+      })
     }, 30_000)
     const execution = {
       sessionId,
@@ -1231,7 +1233,9 @@ export function apply(ctx: Context) {
             ...(execution.workspaceId ? { 'x-biu-workspace-id': execution.workspaceId } : {}),
           },
           body: JSON.stringify({ leaseId: execution.leaseId }),
-        }).catch(() => undefined)
+        }).catch((error) => {
+          console.warn('[chat] cloud execution lease release failed', sessionId, error)
+        })
         if (cloudExecutions.get(sessionId) === execution) cloudExecutions.delete(sessionId)
       }
     })()

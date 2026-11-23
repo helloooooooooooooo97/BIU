@@ -454,7 +454,9 @@ export function readAccountToken() {
 
 export function writeAccountToken(next: string) {
   if (!next && typeof window !== 'undefined') {
-    void fetch('/api/account/logout', { method: 'POST' }).catch(() => undefined)
+    void fetch('/api/account/logout', { method: 'POST' }).catch((error) => {
+      console.warn('[shell] logout request failed', error)
+    })
   }
   if (next) localStorage.setItem(ACCOUNT_KEY, next)
   else {
@@ -1114,7 +1116,9 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                     const token = readAccountToken()
                     void accountFetch(token, '/api/account/cloud', { method: 'DELETE' })
                       .then(() => window.dispatchEvent(new Event(ACCOUNT_EVENT)))
-                      .catch(() => undefined)
+                      .catch((error) => {
+                        console.warn('[shell] cloud logout failed', error)
+                      })
                   }}
                 >
                   <ArrowRightStartOnRectangleIcon aria-hidden />
@@ -1163,7 +1167,9 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                     setCloudMenuOpen(false)
                     window.dispatchEvent(new Event(ACCOUNT_EVENT))
                   })
-                  .catch(() => undefined)
+                  .catch((error) => {
+                    console.warn('[shell] cloud account switch failed', item.id, error)
+                  })
               }}
             >
               <CloudIcon aria-hidden className="shell-workspace-menu-icon" />
@@ -1832,7 +1838,9 @@ export function ShellSettingsUpdate() {
     void fetch('/api/update')
       .then((res) => res.json() as Promise<{ behind?: number }>)
       .then((data) => setBehind(Math.max(0, Number(data.behind) || 0)))
-      .catch(() => { })
+      .catch((error) => {
+        console.warn('[shell] update check failed', error)
+      })
   }, [])
 
   const download = useCallback(async () => {
