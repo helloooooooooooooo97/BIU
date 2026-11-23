@@ -337,19 +337,16 @@ test('对比页：Notion 页的权限差异 —— 授权对象可以是视图�
   const body = document.body.textContent ?? ''
 
   // 核心差异：授权给谁 —— 名单 vs 成员视图
-  assert.match(body, /member view/, '要出现「成员视图」这个授权对象')
-  assert.match(body, /authorized view_id carries its own filter conditions/, '要点出授权对象带着条件')
-
-  // 授权范围是筛选条件而非实体（已并入「授权给谁、授到哪」一行）
-  assert.match(body, /view_id/, '要出现 view_id')
+  assert.match(body, /member views?/, '要出现「成员视图」这个授权对象')
+  assert.match(body, /defined by filter conditions/, '要点出授权对象带着条件')
 
   // 条件先写好，新记录自动落入范围
   assert.match(body, /matching new record enters the authorized scope automatically/, '要点出「不用逐条补授权」')
 
   // 角色与继承
-  assert.match(body, /highest viewer \/ editor \/ manager \/ owner grant wins/, '要出现多重来源取最高')
-  assert.match(body, /inherit \/ private \/ members \/ restricted/, '要出现继承模式')
-  assert.match(body, /inherited parent/, '要出现授权来源可见性')
+  assert.match(body, /Highest applicable grant wins/, '要出现多重来源取最高')
+  assert.match(body, /inherit, private, members, restricted/, '要出现继承模式')
+  assert.match(body, /inherited parents?/, '要出现授权来源可见性')
 
   // 纪律：权限模型再细也要认输打磨程度（成熟度已合并成一行）
   assert.match(body, /not yet at Notion’s level/, '要承认权限与协同的打磨未到同级')
@@ -1077,7 +1074,7 @@ test('产品页：每个板块配一张真实截图', () => {
   assert.ok(images.every((img) => /^\/site\/shot-.+\.webp$/.test(img.getAttribute('src') ?? '')), '截图统一用 webp')
 
   const extend = document.querySelector('#ecosystem')!
-  assert.equal(extend.querySelector('h2')?.textContent, 'Build whatever is missing')
+  assert.equal(extend.querySelector('h2')?.textContent, 'Three open layers: Plugins, Skills, and MCP')
   const cards = [...extend.querySelectorAll('article')]
   assert.deepEqual(cards.map((card) => card.querySelector('p')?.textContent), ['Plugins', 'Skills', 'MCP'])
   assert.ok(cards.every((card) => card.querySelector('.site-ecosystem-code code')?.textContent), '每张卡带一段真实写法')
