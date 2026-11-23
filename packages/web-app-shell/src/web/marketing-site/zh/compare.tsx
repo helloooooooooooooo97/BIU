@@ -318,15 +318,45 @@ export const COMPARE_PAGES: ComparePage[] = [
   },
 ]
 
-/** 被问得最多的三组，放在总览最上面。 */
-export const COMPARE_FEATURED = ['vs-notion', 'vs-obsidian', 'vs-chatgpt'] as const
+/** 五个动词各自对应的代表性参照对象。 */
+export const COMPARE_FEATURED = ['vs-cursor', 'vs-supabase', 'vs-k8s', 'vs-notion', 'vs-linux'] as const
 
 export const COMPARE_CATEGORIES = [
-  { name: '文档与知识库', slugs: ['vs-notion', 'vs-obsidian', 'vs-office'] },
-  { name: 'AI 通用助手', slugs: ['vs-chatgpt', 'vs-claude'] },
-  { name: '应用搭建工具', slugs: ['vs-airtable', 'vs-retool', 'vs-supabase'] },
-  { name: 'AI 编码工具', slugs: ['vs-cursor', 'vs-dsh', 'vs-pi'] },
-  { name: '架构理念类比（给开发者）', slugs: ['vs-linux', 'vs-k8s'] },
+  {
+    id: 'build',
+    name: '01 构建 · Build',
+    lead: '软件如何被生产出来：从面向开发者的代码库与低代码，到面向真实业务数据边服务边生长。',
+    blogSlug: 'build-software',
+    slugs: ['vs-cursor', 'vs-retool', 'vs-dsh', 'vs-pi'],
+  },
+  {
+    id: 'store',
+    name: '02 存储 · Store',
+    lead: '数据如何被承载与检索：自由正文、结构化插件块与外部调用快照合一，自动跨页成表且本地离线可用。',
+    blogSlug: 'store-software',
+    slugs: ['vs-supabase', 'vs-obsidian', 'vs-airtable'],
+  },
+  {
+    id: 'compose',
+    name: '03 组合 · Compose',
+    lead: '多软件与智能体如何协同：在同一页共享实时状态与外部应用切片，取代多应用切换与胶水代码。',
+    blogSlug: 'compose-software',
+    slugs: ['vs-k8s', 'vs-office', 'vs-chatgpt', 'vs-claude'],
+  },
+  {
+    id: 'distribute',
+    name: '04 分发 · Distribute',
+    lead: '服务如何抵达对方手里：一页即一次软件发布，正文、附件与插件源码随链接同行，权限按条件动态计算。',
+    blogSlug: 'distribute-software',
+    slugs: ['vs-notion'],
+  },
+  {
+    id: 'derive',
+    name: '05 衍生 · Derive',
+    lead: '能力如何持续复利：内核级统一抽象与可寻址插件记录，让人与智能体站在已有软件之上增量叠加。',
+    blogSlug: 'derive-software',
+    slugs: ['vs-linux'],
+  },
 ] as const
 
 const MARKS = [
@@ -401,41 +431,38 @@ export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteActio
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-page-hero" data-reveal>
-          <p className="site-section-label">差异</p>
-          <h1>与现有工具的本质差异</h1>
+          <p className="site-section-label">对比</p>
+          <h1>按软件生命周期的五个环节，直面代表性工具与基础设施</h1>
           <p className="site-page-lead">
-            这些产品各自在一个面上做到了最好 —— 结构、协作、对话、本地、编码。
-            BIU 想做的是把这些面装进同一个页面：文档、表格、应用和智能体共用一份数据。
-            每张表都如实写出 BIU 还做不到的地方。
+            构建、存储、组合、分发、衍生——过去四十年，每一个环节都长出了各自的代表产品与万亿级产业。
+            下面按五个动词逐一展开对照，每张表均如实标注 BIU 尚未做到的部分。
           </p>
+          <nav className="site-usecase-jump" aria-label="按五个环节快速跳转">
+            {COMPARE_CATEGORIES.map((category) => (
+              <a key={category.id} href={`#${category.id}`}>{category.name}</a>
+            ))}
+          </nav>
         </section>
 
         <section className="site-compare-index">
-          <div className="site-compare-group site-compare-featured" data-reveal>
-            <h2>最常被问</h2>
-            <div className="site-compare-cards">
-              {COMPARE_FEATURED.map((slug) => {
-                const page = bySlug.get(slug)
-                if (!page) return null
-                return (
-                  <Link key={slug} to={`/compare/${slug}`} className="site-compare-card">
-                    <small>{page.category}</small>
-                    <h3>{page.title}</h3>
-                    <p>{page.opening}</p>
-                  </Link>
-                )
-              })}
-            </div>
-          </div>
           {COMPARE_CATEGORIES.map((category) => (
-            <div key={category.name} className="site-compare-group" data-reveal>
-              <h2>{category.name}</h2>
+            <div key={category.id} id={category.id} className="site-compare-group" data-reveal>
+              <div className="site-compare-group-head">
+                <div>
+                  <h2>{category.name}</h2>
+                  <p>{category.lead}</p>
+                </div>
+                <Link className="site-compare-group-essay" to={`/blog/${category.blogSlug}`}>
+                  阅读该环节长文 →
+                </Link>
+              </div>
               <div className="site-compare-cards">
                 {category.slugs.map((slug) => {
                   const page = bySlug.get(slug)
                   if (!page) return null
                   return (
                     <Link key={slug} to={`/compare/${slug}`} className="site-compare-card">
+                      <small>{page.category}</small>
                       <h3>{page.title}</h3>
                       <p>{page.opening}</p>
                     </Link>
@@ -445,7 +472,7 @@ export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteActio
             </div>
           ))}
           <p className="site-compare-note">
-            信息截至 2026 年 10 月。产品更新很快，如有出入，欢迎<a href={`${GITHUB_URL}/issues`} target="_blank" rel="noreferrer">在 GitHub 提出</a>。
+            信息截至 2026 年 11 月。产品更新很快，如有出入，欢迎<a href={`${GITHUB_URL}/issues`} target="_blank" rel="noreferrer">在 GitHub 提出</a>。
           </p>
         </section>
 

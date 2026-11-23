@@ -318,15 +318,45 @@ export const COMPARE_PAGES: ComparePage[] = [
   },
 ]
 
-/** 被问得最多的三组，放在总览最上面。 */
-export const COMPARE_FEATURED = ['vs-notion', 'vs-obsidian', 'vs-chatgpt'] as const
+/** Representative benchmark per software-lifecycle verb. */
+export const COMPARE_FEATURED = ['vs-cursor', 'vs-supabase', 'vs-k8s', 'vs-notion', 'vs-linux'] as const
 
 export const COMPARE_CATEGORIES = [
-  { name: 'Document Management', slugs: ['vs-notion', 'vs-obsidian', 'vs-office'] },
-  { name: 'General Assistants', slugs: ['vs-chatgpt', 'vs-claude'] },
-  { name: 'App Building', slugs: ['vs-airtable', 'vs-retool', 'vs-supabase'] },
-  { name: 'Coding Harness', slugs: ['vs-cursor', 'vs-dsh', 'vs-pi'] },
-  { name: 'Architecture Analogies', slugs: ['vs-linux', 'vs-k8s'] },
+  {
+    id: 'build',
+    name: '01 Build',
+    lead: 'How software gets created: from code repositories and low-code builders to software growing alongside live business data.',
+    blogSlug: 'build-software',
+    slugs: ['vs-cursor', 'vs-retool', 'vs-dsh', 'vs-pi'],
+  },
+  {
+    id: 'store',
+    name: '02 Store',
+    lead: 'How data lives and gets queried: freeform prose, structured plugin blocks, and run snapshots unified with auto-indexed tables and local offline mode.',
+    blogSlug: 'store-software',
+    slugs: ['vs-supabase', 'vs-obsidian', 'vs-airtable'],
+  },
+  {
+    id: 'compose',
+    name: '03 Compose',
+    lead: 'How tools and agents work together: shared live state and external application slices on one page, replacing app switching and glue code.',
+    blogSlug: 'compose-software',
+    slugs: ['vs-k8s', 'vs-office', 'vs-chatgpt', 'vs-claude'],
+  },
+  {
+    id: 'distribute',
+    name: '04 Distribute',
+    lead: 'How services reach recipients: one page is a complete software release, governed by dynamic condition-based permissions.',
+    blogSlug: 'distribute-software',
+    slugs: ['vs-notion'],
+  },
+  {
+    id: 'derive',
+    name: '05 Derive',
+    lead: 'How capabilities compound: kernel-level uniform primitives and addressable plugins so humans and agents layer on working software.',
+    blogSlug: 'derive-software',
+    slugs: ['vs-linux'],
+  },
 ] as const
 
 const MARKS = [
@@ -401,41 +431,38 @@ export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteActio
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-page-hero" data-reveal>
-          <p className="site-section-label">Why BIU</p>
-          <h1>How BIU differs from existing tools</h1>
+          <p className="site-section-label">Compare</p>
+          <h1>Five stages of software, benchmarked against the best at every layer</h1>
           <p className="site-page-lead">
-            Each of these products excels in one area—structure, collaboration, conversation, local-first work, or coding.
-            BIU brings those strengths onto one page, where documents, tables, applications, and agents share the same data.
-            Every table is candid about what BIU cannot yet do.
+            Build, store, compose, distribute, derive—over four decades, each stage grew its own category-defining products and trillion-dollar industry.
+            Explore how BIU compares at every stage, with every table candid about what BIU cannot yet do.
           </p>
+          <nav className="site-usecase-jump" aria-label="Jump to stage">
+            {COMPARE_CATEGORIES.map((category) => (
+              <a key={category.id} href={`#${category.id}`}>{category.name}</a>
+            ))}
+          </nav>
         </section>
 
         <section className="site-compare-index">
-          <div className="site-compare-group site-compare-featured" data-reveal>
-            <h2>Most requested</h2>
-            <div className="site-compare-cards">
-              {COMPARE_FEATURED.map((slug) => {
-                const page = bySlug.get(slug)
-                if (!page) return null
-                return (
-                  <Link key={slug} to={`/compare/${slug}`} className="site-compare-card">
-                    <small>{page.category}</small>
-                    <h3>{page.title}</h3>
-                    <p>{page.opening}</p>
-                  </Link>
-                )
-              })}
-            </div>
-          </div>
           {COMPARE_CATEGORIES.map((category) => (
-            <div key={category.name} className="site-compare-group" data-reveal>
-              <h2>{category.name}</h2>
+            <div key={category.id} id={category.id} className="site-compare-group" data-reveal>
+              <div className="site-compare-group-head">
+                <div>
+                  <h2>{category.name}</h2>
+                  <p>{category.lead}</p>
+                </div>
+                <Link className="site-compare-group-essay" to={`/blog/${category.blogSlug}`}>
+                  Read stage essay →
+                </Link>
+              </div>
               <div className="site-compare-cards">
                 {category.slugs.map((slug) => {
                   const page = bySlug.get(slug)
                   if (!page) return null
                   return (
                     <Link key={slug} to={`/compare/${slug}`} className="site-compare-card">
+                      <small>{page.category}</small>
                       <h3>{page.title}</h3>
                       <p>{page.opening}</p>
                     </Link>
@@ -445,7 +472,7 @@ export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteActio
             </div>
           ))}
           <p className="site-compare-note">
-            Information current as of October 2026. Products change quickly; if anything is inaccurate, please <a href={`${GITHUB_URL}/issues`} target="_blank" rel="noreferrer">report it on GitHub</a>.
+            Information current as of November 2026. Products change quickly; if anything is inaccurate, please <a href={`${GITHUB_URL}/issues`} target="_blank" rel="noreferrer">report it on GitHub</a>.
           </p>
         </section>
 
