@@ -188,9 +188,6 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
               <div>
                 <p className="site-eyebrow">开源 · 免费 · All in One</p>
                 <h2>一个页面，组合所有软件</h2>
-                <p className="site-hero-band-desc">
-                  将画板、表格、代码运行、视频剪辑，以及智能体按需定制的小型工具组合在同一页面。分享一个链接，接收方打开即可直接使用。
-                </p>
               </div>
               <div className="site-cta-actions">
                 <Link className="site-cta-primary" to="/download"><DownloadIcon />下载</Link>
