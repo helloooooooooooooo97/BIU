@@ -151,6 +151,7 @@ import { BrowserHeader } from './browser-header.tsx'
 import { BrowserListChrome } from './browser-toolbar.tsx'
 import { createBrowserTableNav } from './use-browser-table-nav.ts'
 import { createBrowserViewCrud } from './use-browser-view-crud.ts'
+import { useViewDisplayApplier } from './use-browser-view-display.ts'
 import { createBrowserMutations } from './use-browser-mutations.ts'
 import { buildTableIconLookup, createBrowserTablePaint } from './browser-table-paint.tsx'
 import { BrowserRecordStage } from './browser-record-stage.tsx'
@@ -721,6 +722,28 @@ export function CollectionBrowser({
   const [groupBy, setGroupBy] = useState(initialView?.groupBy ?? '')
   const [groupConfig, setGroupConfig] = useState<GroupConfig | undefined>(() => normalizeGroupConfig(initialView?.groupConfig))
   const [showTree, setShowTree] = useState(Boolean(initialView?.tree))
+  const applyViewDisplay = useViewDisplayApplier({
+    setMode,
+    setSortField,
+    setSortDir,
+    setSorts,
+    setFilters,
+    setFilterTree,
+    setColumnKeys,
+    setColumnWidths,
+    setColumnSummaries,
+    setColumnViews,
+    setGroupBy,
+    setGroupConfig,
+    setShowTree,
+    setWrapCells,
+    setTruncateCells,
+    setFreezeTitle,
+    setFreezeUntil,
+    setQuery,
+    setFetchQuery,
+    setPageSize,
+  })
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [treeKidsByParent, setTreeKidsByParent] = useState<Record<string, DbRecord[]>>({})
   const treeKidsByParentRef = useRef(treeKidsByParent)
@@ -824,26 +847,7 @@ export function CollectionBrowser({
       }
       setViews((prev) => (sameSavedViews(prev, listed) ? prev : listed))
       setActiveViewId(view.id)
-      setMode(view.mode)
-      setSortField(view.sortField)
-      setSortDir(view.sortDir)
-      setSorts(normalizeSorts(view.sorts, view.sortField, view.sortDir))
-      setFilters(view.filters)
-      setFilterTree(resolveViewFilterTree(view))
-      setColumnKeys(
-        pinActionColumn(schema, view.columns, placedActions(schema, 'row').length > 0),
-      )
-      setColumnWidths(normalizeColumnWidths(view.columnWidths))
-      setColumnSummaries(normalizeColumnSummaries(view.columnSummaries) ?? {})
-      setColumnViews(normalizeColumnViews(view.columnViews) ?? {})
-      setGroupBy(view.groupBy ?? '')
-      setGroupConfig(normalizeGroupConfig(view.groupConfig))
-      setShowTree(view.tree !== false)
-      setWrapCells(!!view.wrap)
-      setTruncateCells(view.truncate !== false)
-      setQuery(view.query ?? '')
-      setFetchQuery(view.query ?? '')
-      setPageSize(normalizePageSize(view.pageSize))
+      applyViewDisplay(view, pinActionColumn(schema, view.columns, placedActions(schema, 'row').length > 0))
     }
     if (cached) {
       const snap = listHoldFromCache(cached, next, dataPath)
@@ -1257,28 +1261,17 @@ export function CollectionBrowser({
         const view = pendingView.view
         setViews((prev) => (sameSavedViews(prev, pendingView.listed) ? prev : pendingView.listed))
         setActiveViewId(view.id)
-        setMode(view.mode)
-        setSortField(view.sortField)
-        setSortDir(view.sortDir)
-        setSorts(pendingView.sorts)
-        setFilters(view.filters)
-        setFilterTree(resolveViewFilterTree(view))
-        setColumnKeys(
+        applyViewDisplay(
+          view,
           pinActionColumn(nextSchema, view.columns, placedActions(nextSchema, 'row').length > 0),
+          {
+            sorts: pendingView.sorts,
+            groupBy: pendingView.groupBy,
+            wrapCells: pendingView.wrapCells,
+            query: pendingView.fetchQuery,
+            pageSize: pendingView.pageSize,
+          },
         )
-        setColumnWidths(normalizeColumnWidths(view.columnWidths))
-      setColumnSummaries(normalizeColumnSummaries(view.columnSummaries) ?? {})
-      setColumnViews(normalizeColumnViews(view.columnViews) ?? {})
-        setGroupBy(pendingView.groupBy)
-        setGroupConfig(normalizeGroupConfig(view.groupConfig))
-        setShowTree(Boolean(view.tree))
-        setWrapCells(pendingView.wrapCells)
-        setTruncateCells(view.truncate !== false)
-        setFreezeTitle(Boolean(view.freezeTitle))
-        setFreezeUntil(view.freezeUntil ?? '')
-        setQuery(pendingView.fetchQuery)
-        setFetchQuery(pendingView.fetchQuery)
-        setPageSize(pendingView.pageSize)
         setPage(0)
         setGroupPages({})
         setGroupFillKeys([])
@@ -1549,30 +1542,14 @@ export function CollectionBrowser({
       setViews((prev) => (sameSavedViews(prev, listed) ? prev : listed))
       if (next) {
         setActiveViewId(next.id)
-        setMode(next.mode)
-        setSortField(next.sortField)
-        setSortDir(next.sortDir)
-        setSorts(normalizeSorts(next.sorts, next.sortField, next.sortDir))
-        setFilters(next.filters)
-        setFilterTree(resolveViewFilterTree(next))
-        setColumnKeys(
+        applyViewDisplay(
+          next,
           pinActionColumn(
             cached?.stat?.schema,
             next.columns,
             placedActions(cached?.stat?.schema, 'row').length > 0,
           ),
         )
-        setColumnWidths(normalizeColumnWidths(next.columnWidths))
-        setColumnSummaries(normalizeColumnSummaries(next.columnSummaries) ?? {})
-        setColumnViews(normalizeColumnViews(next.columnViews) ?? {})
-        setGroupBy(next.groupBy ?? '')
-        setGroupConfig(normalizeGroupConfig(next.groupConfig))
-        setShowTree(next.tree !== false)
-        setWrapCells(!!next.wrap)
-        setTruncateCells(next.truncate !== false)
-        setQuery(next.query ?? '')
-        setFetchQuery(next.query ?? '')
-        setPageSize(normalizePageSize(next.pageSize))
       }
     } else {
       setViews([])
@@ -2612,26 +2589,11 @@ export function CollectionBrowser({
       return
     }
     rememberActiveView(next.id)
-    setMode(next.mode)
-    setSortField(next.sortField)
-    setSortDir(next.sortDir)
-    setSorts(normalizeSorts(next.sorts, next.sortField, next.sortDir))
-    setFilters(next.filters)
-    setFilterTree(resolveViewFilterTree(next))
-    setColumnKeys(nextColumns)
-    setColumnWidths(normalizeColumnWidths(next.columnWidths))
-        setColumnSummaries(normalizeColumnSummaries(next.columnSummaries) ?? {})
-        setColumnViews(normalizeColumnViews(next.columnViews) ?? {})
-    setGroupBy(nextGroup)
-    setGroupConfig(normalizeGroupConfig(next.groupConfig))
-    setShowTree(Boolean(next.tree))
-    setWrapCells(!!next.wrap)
-    setTruncateCells(next.truncate !== false)
-    setFreezeTitle(Boolean(next.freezeTitle))
-    setFreezeUntil(next.freezeUntil ?? '')
-    setQuery(nextQuery)
-    setFetchQuery(nextQuery)
-    setPageSize(nextPageSize)
+    applyViewDisplay(next, nextColumns, {
+      groupBy: nextGroup,
+      query: nextQuery,
+      pageSize: nextPageSize,
+    })
     setPage(0)
     setViewMenuOpen(false)
   }
