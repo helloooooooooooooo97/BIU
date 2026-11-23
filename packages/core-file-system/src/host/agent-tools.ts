@@ -279,7 +279,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
   })
   ctx.tools.register({
     name: 'db_update',
-    description: '按表结构 schema 的可写字段更新已有记录，支持单条与批量两种模式：1）单条更新：path 为 /<表>/<id>，属性对象传在 fields 中，可选传 body 整篇覆写正文；2）批量更新：path 为表路径 /<表>（如 /pages），传 view_id（视图 id 或名称）、ids、filter、q 之一配合 fields 统一打补丁，或传 updates=[{id, fields}] 逐条异构更新；可先传 dry_run=true 预览命中条数。标签 tag 统一按标签 id 分组写 values：{tags:["tag-2"],values:{"tag-2":{导演:"查泽雷"}}}；省略 tags 则合并更新当前已贴标签的属性，不撕掉其它标签。新建用 db_create，局部改正文用 db_content。',
+    description: '按表结构 schema 的可写字段更新已有记录，支持单条与批量两种模式：1）单条更新：path 为 /<表>/<id>，属性对象传在 fields 中，可选传 content 整篇覆写正文（也可只传 content 单独覆写正文）；2）批量更新：path 为表路径 /<表>（如 /pages），传 view_id（视图 id 或名称）、ids、filter、q 之一配合 fields 统一打补丁，或传 updates=[{id, fields}] 逐条异构更新；可先传 dry_run=true 预览命中条数。标签 tag 统一按标签 id 分组写 values：{tags:["tag-2"],values:{"tag-2":{导演:"查泽雷"}}}（支持直接传对象或 JSON 字符串，含 + / - 等符号键名均可）；省略 tags 则合并更新当前已贴标签的属性，不撕掉其它标签。新建用 db_create，局部改正文用 db_content。',
     parameters: {
       type: 'object',
       properties: {
@@ -287,17 +287,16 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
         fields: {
           type: 'object',
           description:
-            '要更新的字段对象（至少包含一个字段）。标签写 tag：{tag:{tags:["tag-2"],values:{"tag-2":{导演:"查泽雷"}}}}。省略 tags 只改属性，不撕掉其它标签。',
+            '要更新的字段对象（单条模式传 content 时可省略）。标签写 tag：{tag:{tags:["tag-2"],values:{"tag-2":{导演:"查泽雷"}}}}（支持对象或 JSON 字符串）。省略 tags 只改属性，不撕掉其它标签。',
         },
-        body: {
+        content: {
           type: 'string',
-          description: '可选（单条模式）：同时整篇覆写该记录的 Markdown 正文，省去再调一次 db_content',
+          description: '可选（单条模式）：整篇覆写该记录的 Markdown 正文（可与 fields 同传或单独传入），省去再调一次 db_content',
         },
         view_id: {
           type: 'string',
-          description: '可选（批量模式）：按已保存视图的 id 或名称命中全部记录（与 viewId 等价）',
+          description: '可选（批量模式）：按已保存视图的 id 或名称命中全部记录',
         },
-        viewId: { type: 'string' },
         ids: {
           type: 'array',
           items: { type: 'string' },
@@ -325,14 +324,12 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
         },
         dry_run: {
           type: 'boolean',
-          description: '可选（批量模式）：true 时仅预览命中条数与样本 ID，不落库（与 dryRun 等价）',
+          description: '可选（批量模式）：true 时仅预览命中条数与样本 ID，不落库',
         },
-        dryRun: { type: 'boolean' },
         max_records: {
           type: 'number',
-          description: '可选（批量模式）：单次最大更新条数，默认 200，上限 500（与 maxRecords 等价）',
+          description: '可选（批量模式）：单次最大更新条数，默认 200，上限 500',
         },
-        maxRecords: { type: 'number' },
       },
       required: ['path'],
     },
@@ -343,20 +340,15 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
       const isBatch =
         segments.length === 1 ||
         args.view_id != null ||
-        args.viewId != null ||
         Array.isArray(args.ids) ||
         Array.isArray(args.updates) ||
-        args.dry_run === true ||
-        args.dryRun === true
+        args.dry_run === true
       if (isBatch) {
         if (!db.batchUpdate) throw new Error('batch update is not supported by this database target')
-        const rawViewId = args.view_id ?? args.viewId
-        const rawDryRun = args.dry_run ?? args.dryRun
-        const rawMax = args.max_records ?? args.maxRecords
         return withInspectorReveal(ctx, target, () =>
           db.batchUpdate!(target, {
             ids: Array.isArray(args.ids) ? args.ids.map((item) => String(item)) : undefined,
-            viewId: typeof rawViewId === 'string' ? rawViewId : undefined,
+            viewId: typeof args.view_id === 'string' ? args.view_id : undefined,
             filter: asFilter(args.filter),
             q: typeof args.q === 'string' ? args.q : undefined,
             fields:
@@ -366,21 +358,23 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
             updates: Array.isArray(args.updates)
               ? (args.updates as Array<{ id: string; fields: Record<string, unknown> }>)
               : undefined,
-            dryRun: rawDryRun === true,
-            maxRecords: rawMax != null ? Number(rawMax) : undefined,
+            dryRun: args.dry_run === true,
+            maxRecords: args.max_records != null ? Number(args.max_records) : undefined,
           }),
         ).then((body) => agentDbCompact.write(body))
       }
       const payload = (args.fields && typeof args.fields === 'object' && !Array.isArray(args.fields)
         ? args.fields
         : {}) as Record<string, unknown>
-      if (!Object.keys(payload).length) {
+      const hasFields = Object.keys(payload).length > 0
+      const hasContent = typeof args.content === 'string'
+      if (!hasFields && !hasContent) {
         throw new Error('fields must include at least one field to update')
       }
       return withInspectorReveal(ctx, target, async () => {
-        const updated = await db.update(target, payload)
-        if (typeof args.body === 'string') {
-          await db.editContent(target, { command: 'write', value: args.body })
+        const updated = hasFields ? await db.update(target, payload) : { kind: 'record' as const, path: target }
+        if (hasContent) {
+          await db.editContent(target, { command: 'write', value: args.content as string })
         }
         return updated
       }).then((body) => agentDbCompact.write(body))
@@ -388,7 +382,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
   })
   ctx.tools.register({
     name: 'db_create',
-    description: '在已登记且允许新建的表中新增记录。路径为 /<表>，传 records 非空对象数组（记录内可附带正文或按需后续用 db_content 写正文）。成功返回 {ok, path, ids}，不回整行。能否新建看 db_stat 的 caps。新建标签用 db_create path=/tags records=[{title}]。',
+    description: '在已登记且允许新建的表中新增记录。路径为 /<表>，传 records 非空对象数组；记录内可直接附带正文（字段名 content）及标签 tag（支持对象 {tags:["tag-2"],values:{"tag-2":{...}}} 或 JSON 字符串，含 + / - 等符号键名均可一步写入）。成功返回 {ok, path, ids}（单条带标签时附带 tag）。能否新建看 db_stat 的 caps。新建标签用 db_create path=/tags records=[{title}]。',
     parameters: {
       type: 'object',
       properties: {
@@ -396,7 +390,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
         records: {
           type: 'array',
           items: { type: 'object' },
-          description: '要创建的记录（非空对象数组），按 schema 可写字段给初值',
+          description: '要创建的记录（非空对象数组），按 schema 可写字段给初值；正文用 content 字段，标签 tag 支持对象或 JSON 字符串',
         },
         scope: {
           type: 'string',

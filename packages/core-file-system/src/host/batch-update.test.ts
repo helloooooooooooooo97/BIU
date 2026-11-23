@@ -31,21 +31,35 @@ function pagesFixture(): CollectionSpec {
     ['p2', { id: 'p2', title: '需求二', status: 'open' }],
     ['p3', { id: 'p3', title: '普通文档', status: 'archived' }],
   ])
+  const bodies = new Map<string, string>()
   return {
     id: 'pages',
     path: '/pages',
     label: '页面',
     schema: {
       labelField: 'title',
+      contentField: 'content',
       fields: {
         ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', writable: true },
         status: { type: 'select', writable: true, enum: ['open', 'done', 'archived'] },
+        content: { type: 'file', writable: true },
       },
     },
-    records: { update: true },
+    records: { update: true, create: true },
     list: () => [...rows.values()],
     get: (id) => rows.get(id) ?? null,
+    create: (payloads) =>
+      payloads.map((item) => {
+        const id = String(item.id || `p${rows.size + 1}`)
+        const next: DbRecord = { ...item, id }
+        rows.set(id, next)
+        return next
+      }),
+    readContent: (id) => bodies.get(id) ?? '',
+    writeContent: (id, value) => {
+      bodies.set(id, value)
+    },
     update: (id, patch) => {
       const current = rows.get(id)
       if (!current) throw new Error(`unknown page: ${id}`)
@@ -208,6 +222,55 @@ describe('db_list view_id and db_update batch mode', () => {
       const p3 = (await ctx.tools.invoke('db_read', { path: '/pages/p3' })) as { value: { title: string } }
       assert.equal(p1.value.status, 'done')
       assert.equal(p3.value.title, '已更新普通文档')
+    } finally {
+      await ctx.registry.delete(fsPlugin)
+    }
+  })
+
+  it('db_create writes content & tag values with symbol keys in one step, and db_update allows content-only writes', async () => {
+    const { ctx } = await setupCtx()
+    try {
+      const symbolTag = (await ctx.tools.invoke('db_create', {
+        path: '/tags',
+        records: [{ title: '提交统计', fields: [{ key: '+', label: '+', type: 'number' }, { key: '-', label: '-', type: 'number' }] }],
+      })) as { ids: string[] }
+      const tagId = symbolTag.ids[0]!
+
+      // One-step db_create with content + tag object containing '+' and '-' keys
+      const created = (await ctx.tools.invoke('db_create', {
+        path: '/pages',
+        records: [
+          {
+            id: 'p4',
+            title: '一步创建测试',
+            content: '# 初始正文',
+            tag: { tags: [tagId], values: { [tagId]: { '+': 42, '-': 7 } } },
+          },
+        ],
+      })) as { ok: boolean; ids: string[]; tag?: { values?: Record<string, Record<string, unknown>> } }
+      assert.equal(created.ok, true)
+      assert.equal(created.tag?.values?.[tagId]?.['+'], 42)
+      assert.equal(created.tag?.values?.[tagId]?.['-'], 7)
+
+      const readAfterCreate = (await ctx.tools.invoke('db_read', {
+        path: '/pages/p4',
+        include_content: true,
+      })) as { value: { tag?: { values?: Record<string, Record<string, unknown>> } }; content?: { text?: string } }
+      assert.equal(readAfterCreate.value.tag?.values?.[tagId]?.['+'], 42)
+      assert.equal(readAfterCreate.value.tag?.values?.[tagId]?.['-'], 7)
+      assert.match(readAfterCreate.content?.text ?? '', /初始正文/)
+
+      // db_update with content alone (no fields required)
+      const updated = (await ctx.tools.invoke('db_update', {
+        path: '/pages/p4',
+        content: '# 覆写后的正文',
+      })) as { ok: boolean; path: string }
+      assert.equal(updated.ok, true)
+      const readAfterUpdate = (await ctx.tools.invoke('db_read', {
+        path: '/pages/p4',
+        include_content: true,
+      })) as { content?: { text?: string } }
+      assert.match(readAfterUpdate.content?.text ?? '', /覆写后的正文/)
     } finally {
       await ctx.registry.delete(fsPlugin)
     }
