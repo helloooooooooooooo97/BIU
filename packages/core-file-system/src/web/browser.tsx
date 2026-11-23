@@ -1,6 +1,7 @@
 import { writeStorageString } from '@biu/biu-ui/client-storage'
 import { useBrowserPopovers } from './use-browser-popovers.ts'
 import { useBrowserBulkUi } from './use-browser-bulk-ui.ts'
+import { useBrowserViewConfig } from './use-browser-view-config.ts'
 import { lazy, memo, Suspense, type ComponentProps, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { TOOLTIP_OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
@@ -549,33 +550,56 @@ export function CollectionBrowser({
       live = false
     }
   }, [])
-  const [pageSize, setPageSize] = useState(() => normalizePageSize(initialView?.pageSize))
   const [total, setTotal] = useState(() => peekBrowserCache(dataPath, routeViewId)?.total ?? 0)
-  const [fetchQuery, setFetchQuery] = useState(initialView?.query ?? '')
-  const [mode, setMode] = useState<ViewMode>(initialView?.mode ?? 'table')
-  const customView = extraViews.find((view) => view.id === mode)
-  const rowView = customView ? undefined : extraRows.find((view) => view.id === mode)
-  const [sortField, setSortField] = useState(initialView?.sortField ?? 'title')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>(initialView?.sortDir ?? 'asc')
-  const [sorts, setSorts] = useState<SortRule[]>(() =>
-    normalizeSorts(initialView?.sorts, initialView?.sortField ?? 'title', initialView?.sortDir ?? 'asc'),
-  )
-  const [filters, setFilters] = useState<Record<string, string>>(initialView?.filters ?? {})
-  const [filterTree, setFilterTree] = useState<FilterGroup>(() => resolveViewFilterTree(initialView ?? { filters: {} }))
-  const [columnKeys, setColumnKeys] = useState<string[]>(
+  const {
+    pageSize,
+    setPageSize,
+    fetchQuery,
+    setFetchQuery,
+    mode,
+    setMode,
+    sortField,
+    setSortField,
+    sortDir,
+    setSortDir,
+    sorts,
+    setSorts,
+    filters,
+    setFilters,
+    filterTree,
+    setFilterTree,
+    columnKeys,
+    setColumnKeys,
+    columnWidths,
+    setColumnWidths,
+    columnSummaries,
+    setColumnSummaries,
+    columnViews,
+    setColumnViews,
+    wrapCells,
+    setWrapCells,
+    truncateCells,
+    setTruncateCells,
+    freezeTitle,
+    setFreezeTitle,
+    freezeUntil,
+    setFreezeUntil,
+    groupBy,
+    setGroupBy,
+    groupConfig,
+    setGroupConfig,
+    showTree,
+    setShowTree,
+  } = useBrowserViewConfig(
+    initialView,
     sheet
       ? collectSheetColumns(loadTags().find((pack) => pack.id === String(lockedFilters.tagId ?? '').trim()))
       : initialView?.columns ?? [],
   )
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => normalizeColumnWidths(initialView?.columnWidths))
-  const [columnSummaries, setColumnSummaries] = useState<Record<string, ColumnSummaryOp>>(
-    () => normalizeColumnSummaries(initialView?.columnSummaries) ?? {},
-  )
+  const customView = extraViews.find((view) => view.id === mode)
+  const rowView = customView ? undefined : extraRows.find((view) => view.id === mode)
   const columnSummariesRef = useRef(columnSummaries)
   columnSummariesRef.current = columnSummaries
-  const [columnViews, setColumnViews] = useState<Record<string, ColumnViewConfig>>(
-    () => normalizeColumnViews(initialView?.columnViews) ?? {},
-  )
   const columnViewsRef = useRef(columnViews)
   columnViewsRef.current = columnViews
   const [colHeaderMenu, setColHeaderMenu] = useState<ColumnHeaderMenuTarget | null>(null)
@@ -760,13 +784,6 @@ export function CollectionBrowser({
     setBulkTagIds,
     bulkMenuBox,
   } = useBrowserBulkUi(bulkMenuOpen, bulkRef)
-  const [wrapCells, setWrapCells] = useState(!!initialView?.wrap)
-  const [truncateCells, setTruncateCells] = useState(initialView?.truncate !== false)
-  const [freezeTitle, setFreezeTitle] = useState(Boolean(initialView?.freezeTitle))
-  const [freezeUntil, setFreezeUntil] = useState(initialView?.freezeUntil ?? '')
-  const [groupBy, setGroupBy] = useState(initialView?.groupBy ?? '')
-  const [groupConfig, setGroupConfig] = useState<GroupConfig | undefined>(() => normalizeGroupConfig(initialView?.groupConfig))
-  const [showTree, setShowTree] = useState(Boolean(initialView?.tree))
   const applyViewDisplay = useViewDisplayApplier({
     setMode,
     setSortField,
