@@ -785,7 +785,6 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                         {(q) => {
                           const wrap = flyoutQueryMatch('单元格换行', q)
                           const trunc = flyoutQueryMatch('文本缩略', q)
-                          const freeze = Boolean(schema?.labelField) && flyoutQueryMatch('冻结标题列', q)
                           const tree = parentKey && flyoutQueryMatch('树形展示', q)
                           return (
                             <>
@@ -805,14 +804,6 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                                   onToggle={() => setTruncate(!truncateCells)}
                                 />
                               ) : null}
-                              {freeze ? (
-                                <CheckRow
-                                  icon={<LockClosedIcon aria-hidden className="size-[14px]" />}
-                                  label="冻结标题列"
-                                  on={freezeTitle}
-                                  onToggle={() => setFreezeTitleCol(!freezeTitle)}
-                                />
-                              ) : null}
                               {tree ? (
                                 <CheckRow
                                   icon={<ChevronRightIcon aria-hidden className="size-[14px]" />}
@@ -821,7 +812,7 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                                   onToggle={() => setTree(!showTree)}
                                 />
                               ) : null}
-                              {q.trim() && !wrap && !trunc && !freeze && !tree ? <FlyoutEmpty /> : null}
+                              {q.trim() && !wrap && !trunc && !tree ? <FlyoutEmpty /> : null}
                             </>
                           )
                         }}
