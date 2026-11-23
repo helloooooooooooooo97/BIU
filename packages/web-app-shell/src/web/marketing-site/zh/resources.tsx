@@ -37,7 +37,7 @@ export function MarketingDocs({ onLogin, onStart }: { onLogin: SiteAction; onSta
           </a>
         ))}
       </section>
-      <SiteFinalCta title="先把 BIU 用起来" />
+      <SiteFinalCta title="立即下载 BIU" />
     </SiteChrome>
   )
 }

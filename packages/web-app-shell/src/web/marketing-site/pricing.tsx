@@ -170,7 +170,7 @@ export function MarketingPricing({ onLogin, onStart }: { onLogin: SiteAction; on
 
         <SiteFaq title="Pricing FAQ" items={PRICING_FAQ} />
 
-        <SiteFinalCta title="Start using BIU for free" />
+        <SiteFinalCta title="Download BIU for free" />
     </SiteChrome>
   )
 }

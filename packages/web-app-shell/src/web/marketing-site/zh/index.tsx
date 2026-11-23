@@ -47,7 +47,7 @@ function Placeholder({ label, title, body, onLogin, onStart }: PlaceholderProps)
           <h1>{title}</h1>
           <p className="site-page-lead">{body}</p>
         </section>
-        <SiteFinalCta title="先把 BIU 用起来" />
+        <SiteFinalCta title="开始使用 BIU" />
     </SiteChrome>
   )
 }

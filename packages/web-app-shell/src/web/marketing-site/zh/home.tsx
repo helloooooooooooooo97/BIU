@@ -155,7 +155,6 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
   const [activeVerb, setActiveVerb] = useState(0)
   const [activeRole, setActiveRole] = useState(0)
   const surface = PRODUCT_SURFACES[activeSurface]!
-  const verb = HERO_VERBS[activeVerb]!
   const roleScene = USE_CASES[activeRole]!
   const reducedMotion = usePrefersReducedMotion()
   const brand = useBrandConfig()
@@ -183,11 +182,6 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
               <span>软件的方式</span>
             </h1>
             <p className="site-hero-sub">定义下一代人与 AI 协作的媒介</p>
-            <p className="site-hero-verb-note" aria-live="polite">
-              <span>{String(activeVerb + 1).padStart(2, '0')} {verb.word}</span>
-              {verb.plain}
-              <Link to={`/blog/${verb.slug}`}>读长文 →</Link>
-            </p>
           </div>
           <div className="site-hero-band site-container" data-reveal>
             <div className="site-hero-band-inner">
@@ -391,9 +385,9 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
           </div>
         </section>
 
-        <section className="site-home-entry" aria-label="场景">
+        <section className="site-home-entry" aria-label="用例">
           <div className="site-home-entry-heading" data-reveal>
-            <p className="site-section-label">行业与场景</p>
+            <p className="site-section-label">行业与用例</p>
             <h2>覆盖不同行业的真实工作流</h2>
             <p>每个行业均包含细分角色的仿真页面示例与定制插件方案，点击查看详情。</p>
           </div>
@@ -413,7 +407,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
             ))}
           </div>
           <p className="site-home-entry-more" data-reveal>
-            <Link to="/use-cases">全部行业与场景 →</Link>
+            <Link to="/use-cases">全部行业与用例 →</Link>
           </p>
         </section>
 
@@ -485,7 +479,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
 
         <SiteFaq title="常见问题" items={HOME_FAQ} />
 
-        <SiteFinalCta title={<>开源，免费，<br />现在就能用</>} />
+        <SiteFinalCta title="开始使用 BIU" />
     </SiteChrome>
   )
 }

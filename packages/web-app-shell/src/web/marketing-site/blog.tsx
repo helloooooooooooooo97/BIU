@@ -2,6 +2,8 @@ import { Link, useParams } from 'react-router-dom'
 import { SiteChrome, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 import { BLOG_AUTHOR, BLOG_POSTS, BLOG_SERIES, readingMinutes, type Paragraph } from './blog-posts.ts'
+import { HighlightedCode, renderInlineText } from './blog-format.tsx'
+import { VisionTable } from './invest.tsx'
 import { asset } from './site-base.ts'
 
 export { BLOG_AUTHOR, BLOG_POSTS, readingMinutes }
@@ -60,12 +62,20 @@ function AtomsDiagram() {
 }
 
 function ArticleParagraph({ paragraph }: { paragraph: Paragraph }) {
-  if (typeof paragraph === 'string') return <p>{paragraph}</p>
-  if ('code' in paragraph) return <pre><code>{paragraph.code}</code></pre>
+  if (typeof paragraph === 'string') return <p>{renderInlineText(paragraph)}</p>
+  if ('code' in paragraph) return <HighlightedCode code={paragraph.code} />
   if ('image' in paragraph) {
     return (
       <figure className="site-article-figure">
         <img src={asset(paragraph.image)} alt={paragraph.alt} loading="lazy" decoding="async" />
+        <figcaption>{paragraph.caption}</figcaption>
+      </figure>
+    )
+  }
+  if (paragraph.diagram === 'vision-table') {
+    return (
+      <figure className="site-article-figure">
+        <VisionTable />
         <figcaption>{paragraph.caption}</figcaption>
       </figure>
     )
@@ -171,7 +181,7 @@ export function MarketingBlogPost({ onLogin, onStart }: { onLogin: SiteAction; o
         <div className="site-article-body">
           {post.sections.map((section, i) => (
             <section key={section.heading ?? i}>
-              {section.heading ? <h2>{section.heading}</h2> : null}
+              {section.heading ? <h2>{renderInlineText(section.heading)}</h2> : null}
               {section.body.map((paragraph, j) => <ArticleParagraph key={j} paragraph={paragraph} />)}
             </section>
           ))}
@@ -180,8 +190,8 @@ export function MarketingBlogPost({ onLogin, onStart }: { onLogin: SiteAction; o
           <section className="site-article-refs" aria-label="References">
             <h2>References</h2>
             <ol>
-              {post.references.map((ref) => (
-                <li key={ref.url}>
+              {post.references.map((ref, i) => (
+                <li key={ref.url} id={`ref-${i + 1}`}>
                   <a href={ref.url} target="_blank" rel="noreferrer">
                     {ref.title}
                   </a>

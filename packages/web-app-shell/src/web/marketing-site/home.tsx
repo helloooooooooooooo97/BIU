@@ -153,7 +153,6 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
   const [activeVerb, setActiveVerb] = useState(0)
   const [activeRole, setActiveRole] = useState(0)
   const surface = PRODUCT_SURFACES[activeSurface]!
-  const verb = HERO_VERBS[activeVerb]!
   const roleScene = USE_CASES[activeRole]!
   const reducedMotion = usePrefersReducedMotion()
   const brand = useBrandConfig()
@@ -181,11 +180,6 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
               <span>software</span>
             </h1>
             <p className="site-hero-sub">The next medium for human–AI collaboration</p>
-            <p className="site-hero-verb-note" aria-live="polite">
-              <span>{String(activeVerb + 1).padStart(2, '0')} {verb.word}</span>
-              {verb.plain}
-              <Link to={`/blog/${verb.slug}`}>Read essay →</Link>
-            </p>
           </div>
           <div className="site-hero-band site-container" data-reveal>
             <div className="site-hero-band-inner">
@@ -483,7 +477,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
 
         <SiteFaq title="About BIU" items={HOME_FAQ} />
 
-        <SiteFinalCta title={<>Open source, free,<br />ready today</>} />
+        <SiteFinalCta title="Start building with BIU" />
     </SiteChrome>
   )
 }
