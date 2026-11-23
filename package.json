@@ -17,9 +17,10 @@
     "electron/host-runtime"
   ],
   "scripts": {
+    "clean:stale-js": "node scripts/clean-stale-js.mjs",
     "postinstall": "node scripts/link-cordis-plugins.mjs",
-    "predev": "node scripts/link-cordis-plugins.mjs",
-    "prestart": "node scripts/link-cordis-plugins.mjs",
+    "predev": "node scripts/clean-stale-js.mjs && node scripts/link-cordis-plugins.mjs",
+    "prestart": "node scripts/clean-stale-js.mjs && node scripts/link-cordis-plugins.mjs",
     "dev": "concurrently -k -n online,online-web,desktop,desktop-web \"npm:dev:host\" \"npm:dev:web\" \"npm:dev:desktop:host\" \"npm:dev:desktop:web\"",
     "dev:online": "concurrently -k \"npm:dev:host\" \"npm:dev:web\"",
     "dev:desktop": "concurrently -k \"npm:dev:desktop:host\" \"npm:dev:desktop:web\"",

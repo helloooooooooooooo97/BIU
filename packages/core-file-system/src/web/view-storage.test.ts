@@ -615,8 +615,9 @@ test('group fold state is stored per collection, view, and groupBy', () => {
   assert.deepEqual(loadCollapsedGroups('/plugins', 'builtin-all:/plugins', 'status'), {})
   persistCollapsedGroups('/plugins', 'builtin-all:/plugins', 'shareScope', {})
   assert.equal(store.has('fsdb.collapsedGroups:/plugins:builtin-all:/plugins:shareScope'), false)
+  const paint = readFileSync(resolve(import.meta.dirname, './browser-table-paint.tsx'), 'utf8')
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
-  assert.match(browser, /persistCollapsedGroups\(collectionPath/)
+  assert.match(paint, /persistCollapsedGroups\(collectionPath/)
   assert.match(browser, /loadCollapsedGroups\(collectionPath/)
 })
 

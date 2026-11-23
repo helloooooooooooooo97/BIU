@@ -241,11 +241,9 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
           title={folded ? '展开分组' : '收起分组'}
           onClick={() => {
             captureTableFoldSnapshot()
-            setCollapsedGroups((prev) => {
-              const next = { ...prev, [groupKey]: !prev[groupKey] }
-              persistCollapsedGroups(collectionPath, activeViewId ?? routeViewId ?? '', groupBy, next)
-              return next
-            })
+            const next = { ...collapsedGroups, [groupKey]: !collapsedGroups[groupKey] }
+            setCollapsedGroups(next)
+            persistCollapsedGroups(collectionPath, activeViewId ?? routeViewId ?? '', groupBy, next)
           }}
         >
           <span className="sidebar-rail-icon sidebar-group-fold" aria-hidden>
