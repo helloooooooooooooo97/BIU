@@ -9,7 +9,7 @@ import type {
 import type { CollectionSchema, DbRecord, FieldSpec } from '@biu/type-file-system'
 import type { CellPopState } from './browser-cell-renderer.tsx'
 import { cellUsesPop } from './cell-pop.tsx'
-import { resolveFieldType } from './fields.ts'
+import { parseTagFlatColumnKey, readTagFlatValue, resolveFieldType, tagSourceKey } from './fields.ts'
 import { fieldPickId } from './pick-dom.ts'
 import { tableCursorFromCell, type TableSelectionModel } from './table-cell-selection.ts'
 import { bindTableDragScroll, tableVertScroller } from './table-drag-scroll.ts'
@@ -21,7 +21,6 @@ import {
 } from './table-edit-history.ts'
 import {
   firstTableTitleCell,
-  formatTableCellsForClipboard,
   moveTableCell,
   readTablePaneRest,
   rememberTablePaneRest,
@@ -30,7 +29,6 @@ import {
   tableActionButtonStep,
   tableCellRange,
   tableCellRangeRowIds,
-  tableClearedValue,
   tableClearKey,
   tableCopyHotkey,
   tableCreateKey,
@@ -45,8 +43,17 @@ import {
   writeClipboardText,
   type TableCellCursor,
 } from './table-keys.ts'
+import {
+  buildTableClipboardPayload,
+  buildTablePastePlan,
+  formatTablePasteNotice,
+  isPasteColumnWritable,
+  parseClipboardMatrix,
+  rememberTableClipboard,
+  tableFillDownHotkey,
+  type TableClipboardCell,
+} from './table-paste.ts'
 import { focusRecordTitleNear } from './title-content-nav.ts'
-import { isViewCatalogField } from './view-catalog.ts'
 import type { TablePaintBag, TablePaintNode } from './windowed-table.tsx'
 
 /** 与选区拖选同一阈值：位移超过这个距离只当拖，不当点击。 */
@@ -109,6 +116,10 @@ export type BrowserTableNavOptions = {
   captureTableFoldSnapshot: () => void
   loadTreeKids: (parentId: string) => Promise<void> | void
   writeCellValue: (row: DbRecord, key: string, field: FieldSpec, next: unknown) => void
+  writeBatchCellValues: (
+    mutations: Array<{ row: DbRecord; key: string; field: FieldSpec; value: unknown }>,
+  ) => Promise<void> | void
+  flashNotice?: (message: string) => void
 }
 
 export function createBrowserTableNav(opts: BrowserTableNavOptions) {
@@ -165,6 +176,8 @@ export function createBrowserTableNav(opts: BrowserTableNavOptions) {
     captureTableFoldSnapshot,
     loadTreeKids,
     writeCellValue,
+    writeBatchCellValues,
+    flashNotice,
   } = opts
 
   function tableCellFromEvent(
@@ -646,6 +659,25 @@ export function createBrowserTableNav(opts: BrowserTableNavOptions) {
     return sendSelectedCellToChat()
   }
 
+  function readCellRawValue(row: DbRecord, key: string) {
+    if (parseTagFlatColumnKey(key)) {
+      return readTagFlatValue(row, key, tagSourceKey(schemaRef.current ?? schema))
+    }
+    return row[key]
+  }
+
+  function navPasteColumns() {
+    const keys = tableNavKeys(columns)
+    const byKey = new Map(columns.map((col) => [col.key, col]))
+    return keys.map((key) => byKey.get(key)).filter((col): col is { key: string; field: FieldSpec } => Boolean(col))
+  }
+
+  function currentSelectionRange(): { anchor: TableCellCursor; focus: TableCellCursor } | null {
+    if (cellRangeRef.current) return cellRangeRef.current
+    if (cellPickRef.current) return { anchor: cellPickRef.current, focus: cellPickRef.current }
+    return null
+  }
+
   function copySelectedTableCells(target: EventTarget | null) {
     if (detailId || cellPop) return false
     const hit = target instanceof Element ? target : null
@@ -673,15 +705,181 @@ export function createBrowserTableNav(opts: BrowserTableNavOptions) {
         ? [cellPickRef.current]
         : []
     if (!cursors.length) return false
-    const text = formatTableCellsForClipboard(cursors, (cursor) => {
+    const payload = buildTableClipboardPayload(cursors, (cursor) => {
       const row = findPaintedRow(cursor.id)
       const col = columns.find((item) => item.key === cursor.key)
       if (!row || !col) return null
-      return cellValueText(row, cursor.key, col.field)
+      const readonly = !isPasteColumnWritable(col, cellFieldWritable)
+      if (cursor.key === 'actions') {
+        return { text: '', raw: undefined, fieldType: 'action', fieldKey: cursor.key, readonly: true, empty: true }
+      }
+      const text = cellValueText(row, cursor.key, col.field)
+      const raw = readCellRawValue(row, cursor.key)
+      const kind = resolveFieldType(col.field)
+      const empty =
+        raw === null ||
+        raw === undefined ||
+        raw === '' ||
+        (Array.isArray(raw) && raw.length === 0) ||
+        (kind !== 'boolean' && text.trim() === '')
+      return { text, raw, fieldType: kind, fieldKey: cursor.key, readonly, empty }
     })
-    if (text === null) return false
-    writeClipboardText(text)
+    if (!payload) return false
+    rememberTableClipboard(payload)
+    writeClipboardText(payload.plain)
     return true
+  }
+
+  function applySourceMatrixToSelection(
+    sourceMatrix: TableClipboardCell[][],
+    selection: { anchor: TableCellCursor; focus: TableCellCursor },
+    verb: '粘贴' | '填充' | '清空',
+  ) {
+    const plan = buildTablePastePlan({
+      sourceMatrix,
+      rowIds: tableNavRowIds(),
+      rowKeys: selectionModelRef.current.rowKeys,
+      columns: navPasteColumns(),
+      selection,
+      findRow: findPaintedRow,
+      readCurrentValue: (row, key) => readCellRawValue(row, key),
+      cellFieldWritable,
+    })
+    if (plan.appliedRange) {
+      applyCellRange(plan.appliedRange.anchor, plan.appliedRange.focus)
+    }
+    if (plan.mutations.length) {
+      void writeBatchCellValues(plan.mutations)
+    }
+    const msg = formatTablePasteNotice(plan.stats, verb)
+    if (msg) flashNotice?.(msg)
+    return plan.stats.totalTargetCells > 0
+  }
+
+  function onTablePaste(event: ClipboardEvent) {
+    if (event.defaultPrevented) return false
+    if (detailId || cellPop) return false
+    if (tableKeyFromEditingTarget(event.target)) return false
+    const hit = event.target instanceof Element ? event.target : null
+    const page = hit?.closest('.fsdb-page') ?? null
+    if (page && page !== pageRef.current) return false
+    const live = typeof document !== 'undefined' ? document.activeElement : null
+    if (
+      live instanceof Element &&
+      (tableKeyFromEditingTarget(live) ||
+        live.closest('.page-editor, .composer, .chat-composer-dock, .app-side-bar, .tasks-search-wrap'))
+    ) {
+      return false
+    }
+    const selection = currentSelectionRange()
+    if (!selection) return false
+    const plain = event.clipboardData?.getData('text/plain') ?? ''
+    const html = event.clipboardData?.getData('text/html') ?? ''
+    const matrix = parseClipboardMatrix({ plain, html })
+    if (!matrix.length) return false
+    event.preventDefault()
+    return applySourceMatrixToSelection(matrix, selection, '粘贴')
+  }
+
+  function fillDownSelectedTableCells() {
+    if (detailId || cellPop) return false
+    const selection = currentSelectionRange()
+    if (!selection) return false
+    const rowIds = tableNavRowIds()
+    const rowKeys = selectionModelRef.current.rowKeys
+    const cols = navPasteColumns()
+    const colKeys = cols.map((col) => col.key)
+    const locateRow = (cursor: TableCellCursor) =>
+      rowKeys && cursor.rowKey ? rowKeys.indexOf(cursor.rowKey) : rowIds.indexOf(cursor.id)
+    const r1 = locateRow(selection.anchor)
+    const r2 = locateRow(selection.focus)
+    const c1 = colKeys.indexOf(selection.anchor.key)
+    const c2 = colKeys.indexOf(selection.focus.key)
+    if (r1 < 0 || r2 < 0 || c1 < 0 || c2 < 0) return false
+
+    const rMin = Math.min(r1, r2)
+    const rMax = Math.max(r1, r2)
+    const cMin = Math.min(c1, c2)
+    const cMax = Math.max(c1, c2)
+
+    const sourceRowIdx = rMin === rMax ? rMin - 1 : rMin
+    const targetRStart = rMin === rMax ? rMin : rMin + 1
+    if (sourceRowIdx < 0 || targetRStart > rMax) return false
+    const sourceRowId = rowIds[sourceRowIdx]
+    const sourceRow = sourceRowId ? findPaintedRow(sourceRowId) : undefined
+    if (!sourceRow) return false
+
+    const sourceRowCells: TableClipboardCell[] = []
+    for (let c = cMin; c <= cMax; c += 1) {
+      const col = cols[c]!
+      const readonly = !isPasteColumnWritable(col, cellFieldWritable)
+      if (col.key === 'actions') {
+        sourceRowCells.push({ text: '', raw: undefined, fieldType: 'action', fieldKey: col.key, readonly: true, empty: true, fromInternal: true })
+        continue
+      }
+      const text = cellValueText(sourceRow, col.key, col.field)
+      const raw = readCellRawValue(sourceRow, col.key)
+      const kind = resolveFieldType(col.field)
+      const empty =
+        raw === null ||
+        raw === undefined ||
+        raw === '' ||
+        (Array.isArray(raw) && raw.length === 0) ||
+        (kind !== 'boolean' && text.trim() === '')
+      sourceRowCells.push({ text, raw, fieldType: kind, fieldKey: col.key, readonly, empty, fromInternal: true })
+    }
+
+    const makeCursor = (r: number, c: number): TableCellCursor => ({
+      id: rowIds[r]!,
+      key: colKeys[c]!,
+      ...(rowKeys?.[r] ? { rowKey: rowKeys[r] } : {}),
+    })
+
+    return applySourceMatrixToSelection(
+      [sourceRowCells],
+      { anchor: makeCursor(targetRStart, cMin), focus: makeCursor(rMax, cMax) },
+      '填充',
+    )
+  }
+
+  function clearSelectedTableCells() {
+    const selection = currentSelectionRange()
+    if (!selection) return false
+    return applySourceMatrixToSelection(
+      [[{ text: '', raw: null, empty: true, fromInternal: false }]],
+      selection,
+      '清空',
+    )
+  }
+
+  function submitCellPopValue(row: DbRecord, key: string, field: FieldSpec, next: unknown) {
+    const range = cellRangeRef.current
+    if (range) {
+      const cursors = tableCellRange(
+        tableNavRowIds(),
+        tableNavKeys(columns),
+        range.anchor,
+        range.focus,
+        selectionModelRef.current.rowKeys,
+      )
+      const sameSingleColumn = cursors.length > 1 && cursors.every((c) => c.key === key)
+      if (sameSingleColumn && isPasteColumnWritable({ key, field }, cellFieldWritable)) {
+        const seen = new Set<string>()
+        const mutations: Array<{ row: DbRecord; key: string; field: FieldSpec; value: unknown }> = []
+        for (const cursor of cursors) {
+          if (seen.has(cursor.id)) continue
+          seen.add(cursor.id)
+          const targetRow = findPaintedRow(cursor.id)
+          if (targetRow) mutations.push({ row: targetRow, key, field, value: next })
+        }
+        if (mutations.length > 1) {
+          void writeBatchCellValues(mutations)
+          flashNotice?.(`已批量更新 ${mutations.length} 个单元格`)
+          return
+        }
+      }
+    }
+    writeCellValue(row, key, field, next)
   }
 
   function onTableKeyDown(event: {
@@ -730,6 +928,10 @@ export function createBrowserTableNav(opts: BrowserTableNavOptions) {
     if (tableKeyFromEditingTarget(event.target)) return
     if (tableCopyHotkey(event)) {
       if (copySelectedTableCells(event.target)) event.preventDefault()
+      return
+    }
+    if (tableFillDownHotkey(event)) {
+      if (fillDownSelectedTableCells()) event.preventDefault()
       return
     }
     const titleCursor = cellPickRef.current
@@ -835,19 +1037,28 @@ export function createBrowserTableNav(opts: BrowserTableNavOptions) {
       enterTableCell(cursor)
       return
     }
-    const col = columns.find((item) => item.key === cursor.key)
-    if (!col || !cellFieldWritable(col.field)) return
     if (tableClearKey(event.key)) {
-      const kind = resolveFieldType(col.field)
-      const empty = tableClearedValue(kind)
-      if (empty === undefined || cursor.key === 'actions' || cursor.key === 'shareScope' || cursor.key === 'shareRole') return
-      if (isViewCatalogField(cursor.key)) return
-      const row = findPaintedRow(cursor.id)
-      if (!row) return
-      event.preventDefault()
-      writeCellValue(row, cursor.key, col.field, empty)
+      const range = cellRangeRef.current
+      const rangeSize = range
+        ? tableCellRange(
+            tableNavRowIds(),
+            tableNavKeys(columns),
+            range.anchor,
+            range.focus,
+            selectionModelRef.current.rowKeys,
+          ).length
+        : 1
+      if (rangeSize > 1) {
+        if (clearSelectedTableCells()) event.preventDefault()
+        return
+      }
+      const col = columns.find((item) => item.key === cursor.key)
+      if (!col || !isPasteColumnWritable(col, cellFieldWritable)) return
+      if (clearSelectedTableCells()) event.preventDefault()
       return
     }
+    const col = columns.find((item) => item.key === cursor.key)
+    if (!col || !cellFieldWritable(col.field)) return
     const typed = tableTypeToEditChar(event.key, resolveFieldType(col.field))
     if (!typed) return
     event.preventDefault()
@@ -878,6 +1089,9 @@ export function createBrowserTableNav(opts: BrowserTableNavOptions) {
     sendPickedRowsToChat,
     sendTableSelectionToChat,
     copySelectedTableCells,
+    onTablePaste,
+    fillDownSelectedTableCells,
+    submitCellPopValue,
     onTableKeyDown,
   }
 }

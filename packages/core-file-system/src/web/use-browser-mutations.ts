@@ -690,6 +690,101 @@ export function createBrowserMutations(opts: BrowserMutationsOptions) {
     void writePatch(row, { [key]: next })
   }
 
+  async function writeBatchCellValues(
+    mutations: Array<{ row: DbRecord; key: string; field: FieldSpec; value: unknown }>,
+  ) {
+    if (!mutations.length) return
+    const activeSchema = schemaRef.current ?? schema
+    const source = activeSchema ? tagSourceKey(activeSchema) : 'tag'
+    const byRow = new Map<string, { row: DbRecord; content: Record<string, unknown> }>()
+
+    for (const item of mutations) {
+      const id = item.row.id
+      let bucket = byRow.get(id)
+      if (!bucket) {
+        const latest =
+          itemsRef.current.find((rec) => rec.id === id) ??
+          (detailRowRef.current?.id === id ? detailRowRef.current : null) ??
+          item.row
+        bucket = { row: latest, content: {} }
+        byRow.set(id, bucket)
+      }
+      const flat = parseTagFlatColumnKey(item.key)
+      if (flat && activeSchema) {
+        const baseRow: DbRecord = Object.prototype.hasOwnProperty.call(bucket.content, source)
+          ? { ...bucket.row, [source]: bucket.content[source] }
+          : bucket.row
+        bucket.content[source] = patchTagFlatValue(baseRow, item.key, item.value, source)
+      } else {
+        bucket.content[item.key] = item.value
+      }
+    }
+
+    const groupedEntries = Array.from(byRow.values()).filter((entry) => Object.keys(entry.content).length > 0)
+    if (!groupedEntries.length) return
+
+    const releases: Array<() => void> = []
+    try {
+      quietUntil.current = Date.now() + 800
+      for (const { row, content } of groupedEntries) {
+        releases.push(pendingFieldTrackerRef.current!.track(row.id, content))
+        if (dataPathRef.current === dataPath) {
+          setDetailRow((prev) => (prev?.id === row.id ? overlayListedRow(prev, { ...prev, ...content }) : prev))
+        }
+      }
+
+      await tableEditHistory.editBatch(
+        groupedEntries.map(({ row, content }) => {
+          const path = `${dataPath}/${row.id}`
+          const beforeRow = row
+          return {
+            key: path,
+            patch: content,
+            read: async () => itemsRef.current.find((item) => item.id === row.id) ?? beforeRow,
+            write: async (patch) => {
+              if (dataPathRef.current === dataPath) {
+                setDetailRow((prev) => (prev?.id === row.id ? overlayListedRow(prev, { ...prev, ...patch }) : prev))
+              }
+              const data = await readJson<{ value?: DbRecord }>('/api/db/update', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ path, content: patch }),
+              })
+              const next = data.value
+              if (!next) throw new Error('保存失败：服务端没有返回记录')
+              if (dataPathRef.current === dataPath) {
+                const displayed = next.id === row.id ? next : overlayListedRow(row, { ...next, id: row.id })
+                const merge = (item: DbRecord) => (item.id === row.id ? overlayListedRow(item, displayed) : item)
+                const merged = overlayListedRow(itemsRef.current.find((item) => item.id === row.id) ?? row, displayed)
+                const stillMatches = matchListFilterRecord(merged, queryFiltersRef.current, schemaRef.current, tagCatalogRef.current)
+                if (stillMatches) {
+                  mapListedRecords(merge)
+                } else {
+                  dropListedRecords([row.id], { keepHistory: true })
+                }
+                const protectedDisplay = applyPendingDetailPatches(displayed)
+                setDetailRow((prev) => (prev?.id === row.id ? overlayListedRow(prev, protectedDisplay) : prev))
+                publishListedMutation({ path: dataPath, op: 'patch', row: displayed, groupBy: groupByRef.current })
+                announceListChange(stillMatches, path)
+                quietUntil.current = Date.now() + 800
+              } else {
+                forgetListCache(dataPath)
+                invalidateListReads()
+              }
+              return next
+            },
+          }
+        }),
+      )
+    } catch (err) {
+      if (dataPathRef.current !== dataPath) return
+      quietUntil.current = 0
+      setError(String(err))
+    } finally {
+      for (const release of releases) release()
+    }
+  }
+
   return {
     executeAction,
     writePatch,
@@ -705,5 +800,6 @@ export function createBrowserMutations(opts: BrowserMutationsOptions) {
     executeBulkTag,
     writeOne,
     writeCellValue,
+    writeBatchCellValues,
   }
 }

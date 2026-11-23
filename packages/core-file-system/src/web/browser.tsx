@@ -663,11 +663,16 @@ export function CollectionBrowser({
   const crumbBackLiveRef = useRef<(event: KeyboardEvent) => void>(() => {})
   const tableCellClaimLiveRef = useRef<(event: Event) => void>(() => {})
   const tablePaneFocusInLiveRef = useRef<(event: FocusEvent) => void>(() => {})
+  const tablePasteLiveRef = useRef<(event: ClipboardEvent) => void>(() => {})
   useEffect(() => {
     const keysLive = () => inspectorPaneAcceptsKeys(embed, pageRef.current)
     const onTableNavKey = (event: KeyboardEvent) => {
       if (!keysLive()) return
       tableNavLiveRef.current(event)
+    }
+    const onTablePasteEvent = (event: ClipboardEvent) => {
+      if (!keysLive()) return
+      tablePasteLiveRef.current(event)
     }
     const onPaneHotkey = (event: KeyboardEvent) => {
       if (!keysLive()) return
@@ -681,6 +686,7 @@ export function CollectionBrowser({
     const onCellClaim = (event: Event) => tableCellClaimLiveRef.current(event)
     const onFocusIn = (event: FocusEvent) => tablePaneFocusInLiveRef.current(event)
     window.addEventListener('keydown', onTableNavKey)
+    window.addEventListener('paste', onTablePasteEvent)
     window.addEventListener('keydown', onPaneHotkey, true)
     window.addEventListener('keydown', onCrumbBack, true)
     window.addEventListener(FOCUS_SHELL_TABLE, onFocusTable)
@@ -688,6 +694,7 @@ export function CollectionBrowser({
     window.addEventListener('focusin', onFocusIn)
     return () => {
       window.removeEventListener('keydown', onTableNavKey)
+      window.removeEventListener('paste', onTablePasteEvent)
       window.removeEventListener('keydown', onPaneHotkey, true)
       window.removeEventListener('keydown', onCrumbBack, true)
       window.removeEventListener(FOCUS_SHELL_TABLE, onFocusTable)
@@ -3101,6 +3108,7 @@ export function CollectionBrowser({
     executeBulkTag,
     writeOne,
     writeCellValue,
+    writeBatchCellValues,
   } = createBrowserMutations({
     collectionPath,
     dataPath,
@@ -3361,7 +3369,7 @@ export function CollectionBrowser({
         anchor={cellAnchorRef.current}
         findPaintedRow={findPaintedRow}
         onClose={() => setCellPop(null)}
-        onSubmit={writeCellValue}
+        onSubmit={(row, key, field, next) => submitCellPopValue(row, key, field, next)}
       />
     )
   }
@@ -3384,6 +3392,13 @@ export function CollectionBrowser({
     )
   }
 
+  const flashNotice = (message: string) => {
+    if (!message) return
+    setNotice(message)
+    window.clearTimeout(noticeTimer.current)
+    noticeTimer.current = window.setTimeout(() => setNotice(''), 2400)
+  }
+
   const {
     tableNavRowIds,
     findPaintedCellTd,
@@ -3400,6 +3415,8 @@ export function CollectionBrowser({
     sendPickedRowsToChat,
     sendTableSelectionToChat,
     copySelectedTableCells,
+    onTablePaste,
+    submitCellPopValue,
     onTableKeyDown,
   } = createBrowserTableNav({
     sheet,
@@ -3454,6 +3471,8 @@ export function CollectionBrowser({
     captureTableFoldSnapshot,
     loadTreeKids,
     writeCellValue,
+    writeBatchCellValues,
+    flashNotice,
   })
   landCreatedTitleCellRef.current = landCreatedTitleCell
   function pickCrumbTarget(target: CrumbTarget) {
@@ -3465,6 +3484,9 @@ export function CollectionBrowser({
     onCrumbTarget?.(target)
   }
   tableNavLiveRef.current = (event) => onTableKeyDown(event)
+  tablePasteLiveRef.current = (event) => {
+    onTablePaste(event)
+  }
   tableCellClaimLiveRef.current = (event) => {
     if (sheet) return
     const owner = tablePaneFromEvent(event)

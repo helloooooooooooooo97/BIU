@@ -149,3 +149,34 @@ test('keyboard mapping supports Ctrl/Cmd Z, Y and Shift Z without intercepting c
   assert.equal(tableEditHistoryOwned({ ...idle, inThisTable: true }), true)
   assert.equal(tableEditHistoryOwned({ ...idle, inThisTable: false, foreignPage: true, hasCell: true }), false)
 })
+
+test('editBatch groups multiple record patches into one undo/redo step and forgets deleted records cleanly', async () => {
+  const history = new TableEditHistory()
+  const rows: Record<string, Record<string, unknown>> = {
+    a: { project: '' },
+    b: { project: 'Old' },
+    c: { project: '' },
+  }
+  const makeEntry = (id: string, project: string) => ({
+    key: `/pages/${id}`,
+    patch: { project },
+    read: async () => ({ ...rows[id] }),
+    write: async (patch: Record<string, unknown>) => {
+      rows[id] = { ...rows[id], ...patch }
+      return { ...rows[id] }
+    },
+  })
+
+  await history.editBatch([makeEntry('a', 'BIU'), makeEntry('b', 'BIU'), makeEntry('c', 'BIU')])
+  assert.deepEqual([rows.a.project, rows.b.project, rows.c.project], ['BIU', 'BIU', 'BIU'])
+
+  await history.undo()
+  assert.deepEqual([rows.a.project, rows.b.project, rows.c.project], ['', 'Old', ''])
+
+  await history.redo()
+  assert.deepEqual([rows.a.project, rows.b.project, rows.c.project], ['BIU', 'BIU', 'BIU'])
+
+  await history.forget('/pages/b')
+  await history.undo()
+  assert.deepEqual([rows.a.project, rows.b.project, rows.c.project], ['', 'BIU', ''])
+})

@@ -1,10 +1,17 @@
 export type TableEditPatch = Record<string, unknown>
+export type TableEditEntry = {
+  key: string
+  patch: TableEditPatch
+  read: () => Promise<TableEditPatch>
+  write: (patch: TableEditPatch) => Promise<TableEditPatch>
+}
 type Edit = {
   key: string
   before: TableEditPatch
   after: TableEditPatch
   write: (patch: TableEditPatch) => Promise<TableEditPatch>
 }
+type HistoryStep = Edit[]
 
 function copy<T>(value: T): T {
   return structuredClone(value)
@@ -16,8 +23,8 @@ function pick(record: TableEditPatch, keys: string[], fallback?: TableEditPatch)
 
 /** One history per table instance. Serialize saves and replay; only successful writes move the stacks. */
 export class TableEditHistory {
-  private undoStack: Edit[] = []
-  private redoStack: Edit[] = []
+  private undoStack: HistoryStep[] = []
+  private redoStack: HistoryStep[] = []
   private tail: Promise<unknown> = Promise.resolve()
   private pendingEdits = 0
 
@@ -33,46 +40,77 @@ export class TableEditHistory {
   }
 
   edit(key: string, patch: TableEditPatch, read: () => Promise<TableEditPatch>, write: Edit['write']) {
-    const requested = copy(patch)
+    return this.editBatch([{ key, patch, read, write }])
+  }
+
+  /** Apply multiple record patches as one atomic undo/redo step. */
+  editBatch(entries: TableEditEntry[]) {
+    if (!entries.length) return Promise.resolve()
+    const cloned = entries.map((entry) => ({
+      ...entry,
+      patch: copy(entry.patch),
+    }))
     this.pendingEdits++
     return this.enqueue(async () => {
-      const keys = Object.keys(requested)
-      // Read at execution time, so fast consecutive changes use the last saved value.
-      const before = pick(await read(), keys)
-      const saved = await write(copy(requested))
-      const after = pick(saved, keys, requested)
-      if (JSON.stringify(before) === JSON.stringify(after)) return
-      this.undoStack.push({ key, before, after, write })
-      if (this.undoStack.length > this.limit) this.undoStack.shift()
-      this.redoStack = []
+      const recorded: Edit[] = []
+      let firstError: unknown = null
+      for (const entry of cloned) {
+        const keys = Object.keys(entry.patch)
+        if (!keys.length) continue
+        try {
+          // Read at execution time, so fast consecutive changes use the last saved value.
+          const before = pick(await entry.read(), keys)
+          const saved = await entry.write(copy(entry.patch))
+          const after = pick(saved, keys, entry.patch)
+          if (JSON.stringify(before) === JSON.stringify(after)) continue
+          recorded.push({ key: entry.key, before, after, write: entry.write })
+        } catch (err) {
+          if (firstError === null) firstError = err
+        }
+      }
+      if (recorded.length) {
+        this.undoStack.push(recorded)
+        if (this.undoStack.length > this.limit) this.undoStack.shift()
+        this.redoStack = []
+      }
+      if (firstError !== null) throw firstError
     }).finally(() => { this.pendingEdits-- })
   }
 
   undo() {
     return this.enqueue(async () => {
-      const edit = this.undoStack.at(-1)
-      if (!edit) return
-      await edit.write(copy(edit.before))
+      const step = this.undoStack.at(-1)
+      if (!step) return
+      for (let i = step.length - 1; i >= 0; i -= 1) {
+        const edit = step[i]!
+        await edit.write(copy(edit.before))
+      }
       this.undoStack.pop()
-      this.redoStack.push(edit)
+      this.redoStack.push(step)
     })
   }
 
   redo() {
     return this.enqueue(async () => {
-      const edit = this.redoStack.at(-1)
-      if (!edit) return
-      await edit.write(copy(edit.after))
+      const step = this.redoStack.at(-1)
+      if (!step) return
+      for (const edit of step) {
+        await edit.write(copy(edit.after))
+      }
       this.redoStack.pop()
-      this.undoStack.push(edit)
+      this.undoStack.push(step)
     })
   }
 
   /** Deleting a record does not become an undo action or leave edits targeting a deleted record. */
   forget(key: string) {
     return this.enqueue(async () => {
-      this.undoStack = this.undoStack.filter(edit => edit.key !== key)
-      this.redoStack = this.redoStack.filter(edit => edit.key !== key)
+      this.undoStack = this.undoStack
+        .map((step) => step.filter((edit) => edit.key !== key))
+        .filter((step) => step.length > 0)
+      this.redoStack = this.redoStack
+        .map((step) => step.filter((edit) => edit.key !== key))
+        .filter((step) => step.length > 0)
     })
   }
 }
