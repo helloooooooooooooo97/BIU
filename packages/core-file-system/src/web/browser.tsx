@@ -1914,14 +1914,13 @@ export function CollectionBrowser({
     const sourceTable = handle.closest('table')
     const mainTable = tableRef.current ?? sourceTable
     if (!mainTable) return
-    const heads = Array.from((sourceTable ?? mainTable).querySelectorAll('thead th:not(.fsdb-col-pad)'))
+    const heads = Array.from((sourceTable ?? mainTable).querySelectorAll<HTMLElement>('thead th[data-col-key]:not(.fsdb-rownum-th)'))
     const startX = event.clientX
     const snapshot: Record<string, number> = {}
-    const windowed = windowedColumnsOf(columns, colWindowRef.current)
-    for (let i = 0; i < windowed.length; i += 1) {
-      const key = windowed[i]!.key
-      const measured = heads[i]?.getBoundingClientRect().width ?? 120
-      snapshot[key] = Math.round(measured)
+    for (const th of heads) {
+      const key = th.dataset.colKey
+      if (!key || key === '__rowNumber') continue
+      snapshot[key] = Math.round(th.getBoundingClientRect().width || 120)
     }
     for (const col of columns) {
       if (snapshot[col.key] == null) snapshot[col.key] = tableColumnWidth(col.key, columnWidths[col.key], col.key === schema?.labelField)
