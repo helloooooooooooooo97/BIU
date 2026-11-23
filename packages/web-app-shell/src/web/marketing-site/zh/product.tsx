@@ -210,7 +210,7 @@ export function MarketingProduct({ onLogin, onStart }: { onLogin: SiteAction; on
 
         <SiteFaq title="关于产品" items={PRODUCT_FAQ} />
 
-        <SiteFinalCta title="创建你的第一页" />
+        <SiteFinalCta title="开始使用 BIU" />
     </SiteChrome>
   )
 }
