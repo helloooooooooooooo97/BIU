@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { ArrowPathIcon, ArrowUpIcon, SparklesIcon } from '@heroicons/react/16/solid'
 import { resolveSessionMascot, SidebarMascot } from '@biu/public-mascot'
@@ -97,7 +98,7 @@ export async function requestInlineEdit(
   },
   signal?: AbortSignal,
 ): Promise<string> {
-  const res = await fetch('/api/editor/inline-edit', {
+  const res = await apiFetch('/api/editor/inline-edit', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),

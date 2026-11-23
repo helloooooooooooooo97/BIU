@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { MENTION_KIND_PATH, parseMentionId } from '@biu/core-file-system/mention-markup'
 
 const MAX_MENTION_TITLES = 500
@@ -92,7 +93,7 @@ async function flushMentionTitles() {
             filter: JSON.stringify({ $ids: ids }),
             columns: 'id,title',
           })
-          const res = await fetch(`/api/db/list?${params}`)
+          const res = await apiFetch(`/api/db/list?${params}`)
           const body = (await res.json()) as { items?: Array<Record<string, unknown>> }
           const items = Array.isArray(body.items) ? body.items : []
           for (const row of items) {

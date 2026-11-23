@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { DocumentIcon, PaperClipIcon, XMarkIcon, ArrowDownTrayIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/16/solid'
 
 function safeFileName(name: string) {
@@ -76,7 +77,7 @@ export async function uploadDbAsset(file: File, resourcePath: string) {
   const path = String(resourcePath ?? '').trim()
   if (!path) throw new Error('resource path required')
   const name = `${Date.now()}-${safeFileName(file.name)}`
-  const res = await fetch(`/api/db/file/hash/${encodeURIComponent(name)}?path=${encodeURIComponent(path)}`, {
+  const res = await apiFetch(`/api/db/file/hash/${encodeURIComponent(name)}?path=${encodeURIComponent(path)}`, {
     method: 'PUT',
     headers: {
       'content-type': file.type || 'application/octet-stream',

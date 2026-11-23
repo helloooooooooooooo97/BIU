@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 const CHAT_CONFIG_GET_HOLD_MS = 400
 let chatConfigInflight: Promise<Record<string, unknown> | null> | null = null
 
@@ -22,7 +23,7 @@ export async function getChatConfig<T = Record<string, unknown>>(opts?: {
   if (chatConfigInflight) return chatConfigInflight as Promise<T | null>
   let request: Promise<Record<string, unknown> | null>
   request = (async () => {
-    const res = await fetch('/api/chat/config')
+    const res = await apiFetch('/api/chat/config')
     if (!res.ok) return null
     const data = (await res.json()) as unknown
     return data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, unknown>) : null

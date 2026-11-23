@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import type { Editor } from '@tiptap/core'
 import Image from '@tiptap/extension-image'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
@@ -58,7 +59,7 @@ export function pageResourcePath(editor?: Editor | null) {
 export async function uploadPageImage(file: File, path = '/pages') {
   const hint = `${Date.now()}-${safeAssetFileName(file.name)}`
   const resource = path.trim() || '/pages'
-  const res = await fetch(`/api/db/file/hash/${encodeURIComponent(hint)}?path=${encodeURIComponent(resource)}`, {
+  const res = await apiFetch(`/api/db/file/hash/${encodeURIComponent(hint)}?path=${encodeURIComponent(resource)}`, {
     method: 'PUT',
     headers: {
       'content-type': file.type || 'application/octet-stream',

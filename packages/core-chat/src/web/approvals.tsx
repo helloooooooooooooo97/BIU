@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react'
 import {
   BoltIcon,
@@ -185,7 +186,7 @@ export function ApprovalsRail(props: SlotProps) {
     if (next === agentMode || modeBusy) return
     setModeBusy(true)
     try {
-      const res = await fetch('/api/chat/config', {
+      const res = await apiFetch('/api/chat/config', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ agentMode: next }),

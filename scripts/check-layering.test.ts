@@ -145,3 +145,39 @@ test('global singletons: no hidden globalThis __biuPendingPageBlockEnables chann
   }
   assert.deepEqual(hits, [], `Found hidden globalThis state channel:\n${hits.join('\n')}`)
 })
+
+test('unified entrypoints: no raw fetch("/api/...") outside api-client.ts', () => {
+  const hits: string[] = []
+  for (const dir of readdirSync(PACKAGES_DIR)) {
+    for (const file of walkTsFiles(join(PACKAGES_DIR, dir, 'src'))) {
+      if (file.endsWith('biu-ui/src/api-client.ts') || file.includes('/marketing-site/')) continue
+      const text = readFileSync(file, 'utf8')
+      if (/(?<![.\w$])fetch\s*\(\s*[`'"]\/api\//.test(text)) {
+        hits.push(relative(REPO_ROOT, file))
+      }
+    }
+  }
+  assert.deepEqual(
+    hits,
+    [],
+    `Found raw fetch("/api/...") calls (use apiFetch from @biu/biu-ui/api-client):\n${hits.join('\n')}`,
+  )
+})
+
+test('unified entrypoints: no raw localStorage/sessionStorage outside client-storage.ts', () => {
+  const hits: string[] = []
+  for (const dir of readdirSync(PACKAGES_DIR)) {
+    for (const file of walkTsFiles(join(PACKAGES_DIR, dir, 'src'))) {
+      if (file.endsWith('biu-ui/src/client-storage.ts') || file.includes('/marketing-site/')) continue
+      const text = readFileSync(file, 'utf8')
+      if (/\b(?:localStorage|sessionStorage)\.(?:getItem|setItem|removeItem)\b/.test(text)) {
+        hits.push(relative(REPO_ROOT, file))
+      }
+    }
+  }
+  assert.deepEqual(
+    hits,
+    [],
+    `Found raw localStorage/sessionStorage calls (use @biu/biu-ui/client-storage):\n${hits.join('\n')}`,
+  )
+})

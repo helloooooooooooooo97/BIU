@@ -1,3 +1,5 @@
+import { readStorageString, writeStorageString } from '@biu/biu-ui/client-storage'
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { useSyncExternalStore } from 'react'
 import { FSDB_CHANGE_EVENT, emitFsdbChange, parseFsdbChange } from '@biu/type-file-system'
 import {
@@ -53,7 +55,7 @@ function bump() {
 function readJson(key: string): Record<string, unknown> {
   if (typeof localStorage === 'undefined') return {}
   try {
-    const parsed = JSON.parse(localStorage.getItem(key) || '{}') as unknown
+    const parsed = JSON.parse(readStorageString(key) || '{}') as unknown
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
     return parsed as Record<string, unknown>
   } catch {
@@ -99,7 +101,7 @@ function persistSelection(collectionPath: string, recordId: string, catalog: Rec
     contentViewId: catalog.contentViewId,
     propViewId: catalog.propViewId,
   }
-  localStorage.setItem(SELECTION_KEY, JSON.stringify(all))
+  writeStorageString(SELECTION_KEY, JSON.stringify(all))
 }
 
 function withSelection(collectionPath: string, recordId: string, catalog: RecordViewCatalog): RecordViewCatalog {
@@ -198,7 +200,7 @@ async function pullRecordCatalog(path: string) {
   const parts = splitRecordPath(path)
   if (!parts) return
   try {
-    const res = await fetch(`/api/db/read?path=${encodeURIComponent(path)}`, { cache: 'no-store' })
+    const res = await apiFetch(`/api/db/read?path=${encodeURIComponent(path)}`, { cache: 'no-store' })
     if (!res.ok) return
     const data = (await res.json().catch(() => ({}))) as { value?: { views?: unknown; propViews?: unknown; layouts?: unknown } }
     if (!data.value) return

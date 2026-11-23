@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { lazy, memo, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
@@ -299,7 +300,7 @@ function Shell(props: SlotProps) {
   useEffect(() => {
     if (!settingsOpen) return
     let live = true
-    void fetch('/api/profile')
+    void apiFetch('/api/profile')
       .then((response) => (response.ok ? response.json() : null))
       .then((profile: { dataLocation?: 'device' | 'cloud' } | null) => {
         if (!live) return

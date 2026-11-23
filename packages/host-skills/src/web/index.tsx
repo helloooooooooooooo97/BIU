@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { useRef, useState, type ChangeEvent } from 'react'
 import type { Context } from 'cordis'
 import type { DatabaseUi, FsCellProps, FsViewProps } from '@biu/type-file-system/ui'
@@ -63,7 +64,7 @@ function SkillLibraryView({ rows, onOpen }: FsViewProps) {
           content: await file.text(),
         })),
       )
-      const response = await fetch('/api/skills/import', {
+      const response = await apiFetch('/api/skills/import', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ files }),

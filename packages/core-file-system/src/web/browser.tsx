@@ -1,3 +1,4 @@
+import { writeStorageString } from '@biu/biu-ui/client-storage'
 import { lazy, memo, Suspense, type ComponentProps, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { TOOLTIP_OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
@@ -2565,7 +2566,7 @@ export function CollectionBrowser({
     setActiveViewId(id)
     if (nested) return
     try {
-      localStorage.setItem(activeViewStorageKey(collectionPath), id)
+      writeStorageString(activeViewStorageKey(collectionPath), id)
     } catch {
       /* ignore */
     }
@@ -2574,7 +2575,7 @@ export function CollectionBrowser({
   useEffect(() => {
     if (nested || sheet || !collectionPath || !activeViewId) return
     try {
-      localStorage.setItem(activeViewStorageKey(collectionPath), activeViewId)
+      writeStorageString(activeViewStorageKey(collectionPath), activeViewId)
     } catch {
       /* ignore */
     }

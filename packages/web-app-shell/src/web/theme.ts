@@ -1,3 +1,5 @@
+import { writeStorageString } from '@biu/biu-ui/client-storage'
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { getWorkspaceProfile } from '@biu/core-file-system/page-width'
 
 export type ThemeMode = 'light' | 'dark'
@@ -17,7 +19,7 @@ export function applyTheme(mode: ThemeMode) {
   current = mode
   if (typeof document === 'undefined') return
   try {
-    sessionStorage.setItem('biu.theme.bootstrap', mode)
+    writeStorageString('biu.theme.bootstrap', mode, { area: 'session' })
   } catch {
     /* sessionStorage may be unavailable in embedded/webview contexts */
   }
@@ -29,7 +31,7 @@ export function applyTheme(mode: ThemeMode) {
 }
 
 export async function persistTheme(mode: ThemeMode) {
-  const res = await fetch('/api/profile', {
+  const res = await apiFetch('/api/profile', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ theme: mode }),

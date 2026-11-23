@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { ReUI } from '@biu/reui'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { javascript } from '@codemirror/lang-javascript'
@@ -164,7 +165,7 @@ function useSandboxSource(
   const patchData = async (values: unknown) => {
     const path = pageResourcePath()
     if (!path) throw new Error('no current record')
-    const res = await fetch('/api/page/sandbox/patch', {
+    const res = await apiFetch('/api/page/sandbox/patch', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ path, values }),

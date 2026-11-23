@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { memo, useEffect, useRef, useState } from 'react'
 import { SparklesIcon } from '@heroicons/react/16/solid'
 import { bindSessionView, type SessionViewService } from '@biu/web-session-view'
@@ -41,7 +42,7 @@ export const ChatSessionTitle = memo(function ChatSessionTitle({
     if (!sessionId || naming) return
     setNaming(true)
     try {
-      const res = await fetch('/api/db/action', {
+      const res = await apiFetch('/api/db/action', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ path: `/agents/${sessionId}`, action: 'rename' }),

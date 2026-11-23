@@ -1,3 +1,4 @@
+import { readStorageString, writeStorageString } from '@biu/biu-ui/client-storage'
 import type { CollectionSchema, CollectionSchemaPack, DbRecord } from '@biu/type-file-system'
 import { schemaSearchHaystack } from '@biu/type-file-system'
 import {
@@ -53,7 +54,7 @@ export function shareQueryFromView(view?: Partial<SavedView>): ShareQueryState {
 
 export function loadShareQuery(token: string, fallback: ShareQueryState): ShareQueryState {
   try {
-    const raw = localStorage.getItem(shareQueryStorageKey(token))
+    const raw = readStorageString(shareQueryStorageKey(token))
     if (!raw) return fallback
     const parsed = JSON.parse(raw) as Partial<ShareQueryState>
     return {
@@ -72,7 +73,7 @@ export function loadShareQuery(token: string, fallback: ShareQueryState): ShareQ
 
 export function saveShareQuery(token: string, state: ShareQueryState) {
   try {
-    localStorage.setItem(shareQueryStorageKey(token), JSON.stringify(state))
+    writeStorageString(shareQueryStorageKey(token), JSON.stringify(state))
   } catch {
     /* ignore */
   }

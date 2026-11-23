@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { useEffect, useState } from 'react'
 import {
   ArrowPathIcon,
@@ -14,7 +15,7 @@ import type { DbRecord } from '@biu/type-file-system'
 import type { FsDetailPaneProps } from '@biu/type-file-system/ui'
 
 async function patchRecord(id: string, content: Record<string, unknown>) {
-  const res = await fetch('/api/db/update', {
+  const res = await apiFetch('/api/db/update', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ path: `/tasks/${id}`, content }),

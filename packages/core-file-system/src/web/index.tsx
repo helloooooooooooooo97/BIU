@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { lazy, Suspense, useEffect, useMemo, useState, useSyncExternalStore, type ComponentType } from 'react'
 import type { Context } from 'cordis'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -273,7 +274,7 @@ let collectionsInflight: Promise<CollectionInfo[]> | null = null
 async function loadCollections(): Promise<CollectionInfo[]> {
   if (collectionsInflight) return collectionsInflight
   collectionsInflight = (async () => {
-    const res = await fetch('/api/db/stat?path=/')
+    const res = await apiFetch('/api/db/stat?path=/')
     const body = (await res.json()) as { collections?: CollectionInfo[]; error?: string }
     if (!res.ok) throw new Error(body.error || res.statusText)
     return body.collections ?? []

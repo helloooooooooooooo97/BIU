@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { CellMulti } from '@biu/database-ui'
 import type { DbRecord } from '@biu/type-file-system'
 import type { CollectionChrome, FsCellProps, FsDetailPaneProps } from '@biu/type-file-system/ui'
@@ -35,7 +36,7 @@ export function asNameList(value: unknown): string[] {
 }
 
 async function patchMcp(id: string, content: Record<string, unknown>) {
-  const res = await fetch('/api/db/update', {
+  const res = await apiFetch('/api/db/update', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ path: `/mcp/${id}`, content }),

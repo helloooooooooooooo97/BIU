@@ -1,3 +1,4 @@
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { useEffect, useState } from 'react'
 import type { DbRecord } from '@biu/type-file-system'
 import { FSDB_CHANGE_EVENT, parseFsdbChange, type FsdbChangeDetail } from '@biu/type-file-system'
@@ -7,7 +8,7 @@ export async function readDbRecord(path: string): Promise<DbRecord | null> {
   const want = String(path ?? '').trim()
   if (!want) return null
   try {
-    const res = await fetch(`/api/db/read?path=${encodeURIComponent(want)}`, { cache: 'no-store' })
+    const res = await apiFetch(`/api/db/read?path=${encodeURIComponent(want)}`, { cache: 'no-store' })
     if (!res.ok) return null
     const data = (await res.json().catch(() => ({}))) as { value?: DbRecord }
     return data.value?.id ? data.value : null

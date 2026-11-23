@@ -1,4 +1,4 @@
-import { readStorageString, removeStorageKey } from '@biu/biu-ui/client-storage'
+import { readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { builtinAllView, builtinAllViewId, overlayListedViews, stampRowOpenTarget } from '../catalog-views.ts'
 import { DATA_COLLECTION_PATH } from './database-path.ts'
@@ -26,7 +26,7 @@ const viaDataListeners = new Set<() => void>()
 
 function persistViaData(next: ViaData | null) {
   try {
-    if (next) sessionStorage.setItem(VIA_DATA_KEY, JSON.stringify(next))
+    if (next) writeStorageString(VIA_DATA_KEY, JSON.stringify(next, { area: 'session' }))
     else removeStorageKey(VIA_DATA_KEY, 'session')
   } catch {
     /* ignore */

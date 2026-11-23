@@ -1,3 +1,5 @@
+import { readStorageString, writeStorageString } from '@biu/biu-ui/client-storage'
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { useSyncExternalStore } from 'react'
 import { emitViewCatalogChange, getRecordViewCatalog, patchRecordViewCatalog, subscribeRecordViewCatalog } from './record-view-catalog.ts'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
@@ -52,7 +54,7 @@ function displayKey(key: string, layoutId: string) {
 function readJson(key: string): Record<string, unknown> {
   if (typeof localStorage === 'undefined') return {}
   try {
-    const parsed = JSON.parse(localStorage.getItem(key) || '{}') as unknown
+    const parsed = JSON.parse(readStorageString(key) || '{}') as unknown
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
     return parsed as Record<string, unknown>
   } catch {
@@ -62,7 +64,7 @@ function readJson(key: string): Record<string, unknown> {
 
 function writeJson(key: string, value: Record<string, unknown>) {
   if (typeof localStorage === 'undefined') return
-  localStorage.setItem(key, JSON.stringify(value))
+  writeStorageString(key, JSON.stringify(value))
 }
 
 function hydrateDisplay() {
@@ -151,7 +153,7 @@ export async function saveRecordLayouts(collectionPath: string, recordId: string
     defaultName && defaultName !== defaultRecordLayout().name
       ? [{ id: DEFAULT_RECORD_LAYOUT_ID, name: defaultName }, ...next]
       : next
-  const res = await fetch('/api/db/update', {
+  const res = await apiFetch('/api/db/update', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ path: `${path}/${id}`, content: { layouts: JSON.stringify(payload) } }),
