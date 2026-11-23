@@ -50,3 +50,98 @@ test('monorepo layering: host/ never imports ../web/ and web/ never imports ../h
     `Found cross-layer host <-> web imports (move isomorphic logic to src/shared/):\n${violations.join('\n')}`,
   )
 })
+
+const IMPORT_SPEC_RE = /(?:from|import)\s+['"]([^'"]+)['"]/g
+
+function loadPackageNameMap() {
+  const nameToDir = new Map<string, string>()
+  const dirToName = new Map<string, string>()
+  for (const dir of readdirSync(PACKAGES_DIR)) {
+    const pkgJson = join(PACKAGES_DIR, dir, 'package.json')
+    if (!existsSync(pkgJson)) continue
+    const meta = JSON.parse(readFileSync(pkgJson, 'utf8')) as { name?: string }
+    const name = meta.name || dir
+    nameToDir.set(name, dir)
+    dirToName.set(dir, name)
+  }
+  return { nameToDir, dirToName }
+}
+
+test('unified entrypoints: no relative imports escaping package root', () => {
+  const escapes: string[] = []
+  for (const dir of readdirSync(PACKAGES_DIR)) {
+    const pkgRoot = resolve(PACKAGES_DIR, dir)
+    const srcDir = join(pkgRoot, 'src')
+    for (const file of walkTsFiles(srcDir)) {
+      const text = readFileSync(file, 'utf8')
+      let match: RegExpExecArray | null
+      IMPORT_SPEC_RE.lastIndex = 0
+      while ((match = IMPORT_SPEC_RE.exec(text))) {
+        const spec = match[1]
+        if (!spec.startsWith('.')) continue
+        const target = resolve(file, '..', spec)
+        if (!target.startsWith(pkgRoot + '/') && target !== pkgRoot) {
+          escapes.push(`${relative(REPO_ROOT, file)} -> ${spec}`)
+        }
+      }
+    }
+  }
+  assert.deepEqual(
+    escapes,
+    [],
+    `Found relative imports escaping package boundary (use package exports instead):\n${escapes.join('\n')}`,
+  )
+})
+
+test('unidirectional dependencies: package source import graph is acyclic (DAG)', () => {
+  const { nameToDir, dirToName } = loadPackageNameMap()
+  const graph = new Map<string, string[]>()
+  for (const [dir, pkgName] of dirToName) {
+    const deps = new Set<string>()
+    for (const file of walkTsFiles(join(PACKAGES_DIR, dir, 'src'))) {
+      const text = readFileSync(file, 'utf8')
+      let match: RegExpExecArray | null
+      IMPORT_SPEC_RE.lastIndex = 0
+      while ((match = IMPORT_SPEC_RE.exec(text))) {
+        const spec = match[1]
+        if (!spec.startsWith('@biu/')) continue
+        const targetPkg = spec.split('/').slice(0, 2).join('/')
+        if (targetPkg !== pkgName && nameToDir.has(targetPkg)) deps.add(targetPkg)
+      }
+    }
+    graph.set(pkgName, [...deps])
+  }
+  const cycles: string[][] = []
+  const visited = new Set<string>()
+  const stack = new Set<string>()
+  const dfs = (u: string, trail: string[]) => {
+    visited.add(u)
+    stack.add(u)
+    for (const v of graph.get(u) ?? []) {
+      if (stack.has(v)) cycles.push([...trail.slice(trail.indexOf(v)), v])
+      else if (!visited.has(v)) dfs(v, [...trail, v])
+    }
+    stack.delete(u)
+  }
+  for (const node of graph.keys()) {
+    if (!visited.has(node)) dfs(node, [node])
+  }
+  assert.deepEqual(
+    cycles,
+    [],
+    `Found package-level dependency cycles:\n${cycles.map((c) => c.join(' -> ')).join('\n')}`,
+  )
+})
+
+test('global singletons: no hidden globalThis __biuPendingPageBlockEnables channel', () => {
+  const hits: string[] = []
+  for (const dir of readdirSync(PACKAGES_DIR)) {
+    for (const file of walkTsFiles(join(PACKAGES_DIR, dir, 'src'))) {
+      const text = readFileSync(file, 'utf8')
+      if (text.includes('__biuPendingPageBlockEnables')) {
+        hits.push(relative(REPO_ROOT, file))
+      }
+    }
+  }
+  assert.deepEqual(hits, [], `Found hidden globalThis state channel:\n${hits.join('\n')}`)
+})

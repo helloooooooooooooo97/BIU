@@ -31,7 +31,7 @@ test('enabling a page block starts the plugin and stays on the page', () => {
   assert.match(listen, /startStorePlugin\(plugin\)/)
   assert.match(listen, /reportPhase\(plugin, 'ready'\)/)
   assert.match(listen, /isMissingPlugin\(error\) \? 'missing' : 'failed'/)
-  assert.match(listen, /pendingEnableIds/)
+  assert.match(listen, /pendingPageBlockEnableIds/)
   assert.doesNotMatch(listen, /pushState/)
   assert.doesNotMatch(listen, /pluginRecordHref/)
 })

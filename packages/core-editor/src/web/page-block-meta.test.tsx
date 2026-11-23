@@ -1,7 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { render, waitFor } from '@testing-library/react'
-import { blockDataUnchanged, ENABLE_PAGE_BLOCK_PLUGIN, formatPageBlockFence, parsePageBlockData, parsePageBlockMeta, readPageBlockFence, requestEnablePageBlockPlugin, setPageBlockPluginPhase, takePageBlockFence } from './page-block-meta.ts'
+import { blockDataUnchanged, clearPendingPageBlockEnable, ENABLE_PAGE_BLOCK_PLUGIN, formatPageBlockFence, parsePageBlockData, parsePageBlockMeta, pendingPageBlockEnableKind, readPageBlockFence, requestEnablePageBlockPlugin, setPageBlockPluginPhase, takePageBlockFence } from './page-block-meta.ts'
 import { PageBlockMissing } from './page-plugin-host.tsx'
 
 test('page block fence keeps plugin id in the document', () => {
@@ -204,8 +204,7 @@ test('enable button only dispatches the stored plugin id', () => {
   requestEnablePageBlockPlugin('page-excalidraw', 'excalidraw')
   window.removeEventListener(ENABLE_PAGE_BLOCK_PLUGIN, onEnable)
   assert.deepEqual(seen, ['page-excalidraw'])
-  const pending = (globalThis as typeof globalThis & { __biuPendingPageBlockEnables?: Map<string, string> }).__biuPendingPageBlockEnables
-  assert.equal(pending?.get('page-excalidraw'), 'excalidraw')
+  assert.equal(pendingPageBlockEnableKind('page-excalidraw'), 'excalidraw')
   setPageBlockPluginPhase('page-excalidraw', 'idle')
-  pending?.delete('page-excalidraw')
+  clearPendingPageBlockEnable('page-excalidraw')
 })

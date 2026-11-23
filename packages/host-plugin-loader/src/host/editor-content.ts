@@ -1,6 +1,6 @@
 type DatabaseSync = import('node:sqlite').DatabaseSync
 
-import { assetNamesFromHtml, assetNamesFromMarkdown, collectAssetNames } from '../../../type-file-system/src/asset-ref.ts'
+import { assetNamesFromHtml, assetNamesFromMarkdown, collectAssetNames } from '@biu/type-file-system/asset-ref'
 import { tableColumnNames, tableNames } from './biu-schema.ts'
 
 const LEGACY_BODY: Record<string, { table: string; id: string; column: string }> = {

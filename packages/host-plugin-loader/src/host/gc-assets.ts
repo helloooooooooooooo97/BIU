@@ -1,7 +1,7 @@
 import { unlink } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { assetNamesFromHtml, assetNamesFromMarkdown, collectAssetNames } from '../../../type-file-system/src/asset-ref.ts'
+import { assetNamesFromHtml, assetNamesFromMarkdown, collectAssetNames } from '@biu/type-file-system/asset-ref'
 import { listCasAssetFiles, listDocAssetFiles } from './adopt-cas-assets.ts'
 import { hasEditorContent } from './editor-content.ts'
 import { tableNames } from './biu-schema.ts'

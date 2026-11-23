@@ -57,3 +57,11 @@ export function subscribeWorkspaceScope(listener: (workspaceId: string) => void)
     scopeListeners.delete(listener)
   }
 }
+
+// Auto-reset all registered workspace caches on account/workspace token changes
+// without introducing a reverse import from web-app-shell into core-file-system.
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  window.addEventListener('biu:account-token', () => {
+    resetWorkspaceClientCaches()
+  })
+}

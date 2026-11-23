@@ -4,6 +4,7 @@ import type { SavedView } from './saved-view.ts'
 import { listCollection, readJson } from './db-client.ts'
 import { FSDB_LIST_READY_EVENT } from './fsdb-events.ts'
 import { viewForPath } from './view-storage.ts'
+import { registerWorkspaceCache } from './workspace-client-store.ts'
 
 export const SIDEBAR_PREVIEW_PAGE = 20
 export const SIDEBAR_PREVIEW_MAX = 100
@@ -101,6 +102,10 @@ export function nextPreviewLimit(loaded: number, total: number) {
 const totalCache = new Map<string, number>()
 const totalListeners = new Set<() => void>()
 let totalsVersion = 0
+
+registerWorkspaceCache('sidebar-preview-totals', () => {
+  invalidatePreviewTotals()
+})
 
 export function rememberPreviewTotal(key: string, total: number) {
   if (totalCache.get(key) === total) return

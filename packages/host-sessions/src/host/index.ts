@@ -3,7 +3,7 @@ import { basename, isAbsolute, resolve } from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
 import { platform } from 'node:os'
 import { assistantContentForApi, isVisionImageUrl, stampMessageSeqs, type LlmMessage } from '@biu/host-llm'
-import type { AgentSendOptions, AgentHandle, AgentTurn } from '@biu/host-agents'
+import type { AgentSendOptions, AgentHandle, AgentTurn } from '@biu/type-agent-loop'
 import {
   SESSION_FORMAT_VERSION,
   type SessionEvent,

@@ -1,4 +1,5 @@
 import type { CollectionSchema, DbRecord } from '@biu/type-file-system'
+import { registerWorkspaceCache } from './workspace-client-store.ts'
 
 export class HttpError extends Error {
   constructor(
@@ -83,6 +84,10 @@ export function invalidateListReads() {
   listInflight.clear()
   listFetching.clear()
 }
+
+registerWorkspaceCache('db-client-inflight', () => {
+  invalidateListReads()
+})
 
 export async function listCollection(opts: {
   path: string

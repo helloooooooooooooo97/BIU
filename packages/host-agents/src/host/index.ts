@@ -1,6 +1,6 @@
 import { Service, type Context } from 'cordis'
 import type { LlmConfig } from '@biu/host-llm'
-import type { AgentTurn, ClaimedInput } from '@biu/type-agent-loop'
+import type { AgentHandle, AgentSendOptions, AgentTurn, ClaimedInput } from '@biu/type-agent-loop'
 import type { MessageSender, LiveUiContext, SessionGoal } from '@biu/type-session'
 import { currentSessionId } from '@biu/host-sessions/scope'
 import {
@@ -12,27 +12,7 @@ import {
   type GoalSlash,
 } from './goal.ts'
 
-export type { AgentTurn, LlmConfig }
-
-export interface AgentSendOptions {
-  extraTools?: string[]
-  /** false：入队后立即返回，不阻塞等回合结束（Live 派工后可再 progress）。默认 true。 */
-  wait?: boolean
-  /** 消息来源：Live 派工时传入 { type: 'session', sessionId } */
-  sender?: MessageSender
-  images?: Array<{ name: string; mime: string; url: string; path?: string }>
-  liveContext?: LiveUiContext
-}
-
-export interface AgentHandle {
-  sessionId: string
-  send(text: string, opts?: AgentSendOptions): Promise<AgentTurn>
-  inject(text: string, opts?: AgentSendOptions): void
-  /** 空回车：abort 当前回合，立刻 kick/claim 队列（需至少一条 wake） */
-  flush(opts?: { wait?: boolean }): Promise<{ flushed: boolean }>
-  cancel(): void
-  dispose(): void
-}
+export type { AgentTurn, AgentSendOptions, AgentHandle, LlmConfig }
 
 export type InboxRow = {
   id: string

@@ -4,6 +4,7 @@ import type { RecordSandboxView } from '@biu/type-file-system/record-views'
 import { parseRecordLayouts, parseRecordSandboxes, seedRecordSandbox } from '@biu/type-file-system/record-views'
 import { normalizeCollectionPath } from '../paths.ts'
 import { emitViewCatalogChange, getRecordViewCatalog, patchRecordViewCatalog } from './record-view-catalog.ts'
+import { registerWorkspaceCache } from './workspace-client-store.ts'
 
 function recordViewFileUrl(collectionPath: string, recordId: string, name: string) {
   const path = `${normalizeCollectionPath(collectionPath)}/${recordId}`
@@ -19,6 +20,13 @@ const MAX_FILE_CACHE_ENTRIES = 200
 const fileCache = new Map<string, { text: string; etag: string }>()
 let fileSeq = 0
 const fileListeners = new Set<() => void>()
+
+registerWorkspaceCache('record-sandboxes-files', () => {
+  if (fileCache.size === 0) return
+  fileCache.clear()
+  fileSeq += 1
+  for (const fn of fileListeners) fn()
+})
 
 export class RecordViewFileConflictError extends Error {
   readonly status = 409

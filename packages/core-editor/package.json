@@ -8,7 +8,9 @@
   "exports": {
     "./host": "./src/host/index.ts",
     "./web": "./src/web/index.ts",
-    "./mention": "./src/web/mention.ts"
+    "./mention": "./src/web/mention.ts",
+    "./slash-memory": "./src/web/slash-memory.ts",
+    "./page-block-meta": "./src/web/page-block-meta.ts"
   },
   "peerDependencies": {
     "cordis": "4.0.0-rc.8",

@@ -7,6 +7,26 @@ export interface AgentTurn {
   halt?: boolean
 }
 
+export interface AgentSendOptions {
+  extraTools?: string[]
+  /** false：入队后立即返回，不阻塞等回合结束（Live 派工后可再 progress）。默认 true。 */
+  wait?: boolean
+  /** 消息来源：Live 派工时传入 { type: 'session', sessionId } */
+  sender?: MessageSender
+  images?: Array<{ name: string; mime: string; url: string; path?: string }>
+  liveContext?: LiveUiContext
+}
+
+export interface AgentHandle {
+  sessionId: string
+  send(text: string, opts?: AgentSendOptions): Promise<AgentTurn>
+  inject(text: string, opts?: AgentSendOptions): void
+  /** 空回车：abort 当前回合，立刻 kick/claim 队列（需至少一条 wake） */
+  flush(opts?: { wait?: boolean }): Promise<{ flushed: boolean }>
+  cancel(): void
+  dispose(): void
+}
+
 export interface ClaimedInput {
   kind: InboxKind
   text: string

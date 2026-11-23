@@ -6,10 +6,14 @@ import {
   onSlashCatalogOpen,
   setInstalledPageBlocks,
   setListedPluginIds,
-} from '../../../core-editor/src/web/slash-memory.ts'
+} from '@biu/core-editor/slash-memory'
+import {
+  ENABLE_PAGE_BLOCK_PLUGIN,
+  PAGE_BLOCK_PLUGIN_PHASE,
+  pendingPageBlockEnableIds,
+} from '@biu/core-editor/page-block-meta'
 
-export const ENABLE_PAGE_BLOCK_PLUGIN = 'biu:enable-page-block-plugin'
-export const PAGE_BLOCK_PLUGIN_PHASE = 'biu:page-block-plugin-phase'
+export { ENABLE_PAGE_BLOCK_PLUGIN, PAGE_BLOCK_PLUGIN_PHASE }
 
 export function pluginRecordHref(id: string) {
   return buildAppPath({
@@ -110,13 +114,6 @@ function reportPhase(plugin: string, phase: 'ready' | 'failed' | 'missing' | 'lo
   window.dispatchEvent(new CustomEvent(PAGE_BLOCK_PLUGIN_PHASE, { detail: { plugin, phase } }))
 }
 
-const PENDING_PAGE_BLOCK_ENABLES = '__biuPendingPageBlockEnables'
-
-function pendingEnableIds() {
-  const map = (globalThis as typeof globalThis & { [PENDING_PAGE_BLOCK_ENABLES]?: Map<string, string> })[PENDING_PAGE_BLOCK_ENABLES]
-  return map ? [...map.keys()] : []
-}
-
 export function listenEnablePageBlockPlugin() {
   const run = (plugin: string) => {
     void startStorePlugin(plugin)
@@ -130,7 +127,7 @@ export function listenEnablePageBlockPlugin() {
   }
   window.addEventListener(ENABLE_PAGE_BLOCK_PLUGIN, onEnable)
   // 页面块的 layout effect 往往比插件系统的 effect 更早，事件已经丢了。
-  for (const plugin of pendingEnableIds()) run(plugin)
+  for (const plugin of pendingPageBlockEnableIds()) run(plugin)
   return () => window.removeEventListener(ENABLE_PAGE_BLOCK_PLUGIN, onEnable)
 }
 

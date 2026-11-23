@@ -9,6 +9,7 @@ import { showRecordInInspector } from './inspector-db-route.ts'
 import { RecordMark, recordMarkStub } from './record-mark.tsx'
 import { crumbRecordLabel, normalizeRecordEmoji } from './sidebar-preview.ts'
 import { isSingleRefField, recordLinkIds } from './fields.ts'
+import { registerWorkspaceCache } from './workspace-client-store.ts'
 
 export type RecordLinkPeer = { id: string; label: string; emoji: string }
 
@@ -35,6 +36,9 @@ async function loadTablePeers(path: string, labelField?: string): Promise<Record
 }
 
 const peerReads = new Map<string, Promise<RecordLinkPeer | null>>()
+registerWorkspaceCache('record-link-peers', () => {
+  peerReads.clear()
+})
 
 async function readPeer(collectionPath: string, id: string, labelField?: string): Promise<RecordLinkPeer | null> {
   const key = `${collectionPath}\0${id}\0${labelField ?? ''}`

@@ -1,7 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { hashedAssetRel, isHashedAssetName } from './asset-cas.ts'
-import { assetNamesFromMarkdown } from '../../../type-file-system/src/asset-ref.ts'
+import { assetNamesFromMarkdown } from '@biu/type-file-system/asset-ref'
 
 function rewritePackedName(body: string, name: string, dest: string) {
   const patterns = [

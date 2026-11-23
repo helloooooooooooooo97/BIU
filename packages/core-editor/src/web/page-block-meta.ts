@@ -5,12 +5,22 @@ import { clientLog } from '@biu/web-event-log/log'
 export const ENABLE_PAGE_BLOCK_PLUGIN = 'biu:enable-page-block-plugin'
 export const PAGE_BLOCK_PLUGIN_PHASE = 'biu:page-block-plugin-phase'
 /** 启用请求先记在这里。监听还没挂上时事件会丢，后挂上的监听靠这份名单补上。 */
-export const PENDING_PAGE_BLOCK_ENABLES = '__biuPendingPageBlockEnables'
+const pendingEnables = new Map<string, string>()
 
 function pendingPageBlockEnables() {
-  const host = globalThis as typeof globalThis & { [PENDING_PAGE_BLOCK_ENABLES]?: Map<string, string> }
-  if (!host[PENDING_PAGE_BLOCK_ENABLES]) host[PENDING_PAGE_BLOCK_ENABLES] = new Map()
-  return host[PENDING_PAGE_BLOCK_ENABLES]
+  return pendingEnables
+}
+
+export function pendingPageBlockEnableIds(): string[] {
+  return [...pendingEnables.keys()]
+}
+
+export function pendingPageBlockEnableKind(plugin: string): string | undefined {
+  return pendingEnables.get(plugin.trim())
+}
+
+export function clearPendingPageBlockEnable(plugin: string): void {
+  pendingEnables.delete(plugin.trim())
 }
 
 export type PageBlockPluginPhase = 'idle' | 'loading' | 'failed' | 'missing' | 'ready' | 'deferred'

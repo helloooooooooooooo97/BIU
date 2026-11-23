@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { emitViewCatalogChange, getRecordViewCatalog, patchRecordViewCatalog, subscribeRecordViewCatalog } from './record-view-catalog.ts'
+import { registerWorkspaceCache } from './workspace-client-store.ts'
 import {
   DEFAULT_RECORD_LAYOUT_ID,
   DEFAULT_RECORD_PROP_VIEW_ID,
@@ -19,6 +20,12 @@ const DISPLAY_KEY = 'biu.record.layout.display'
 const display = new Map<string, Partial<RecordLayoutView>>()
 let seq = 0
 const listeners = new Set<() => void>()
+
+registerWorkspaceCache('record-layouts-display', () => {
+  if (display.size === 0) return
+  display.clear()
+  bump()
+})
 
 function bump() {
   seq += 1
