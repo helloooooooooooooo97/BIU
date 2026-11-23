@@ -23,7 +23,7 @@ export function hyperlink(url: string, label = url) {
 export function lanIPv4() {
   for (const list of Object.values(networkInterfaces())) {
     for (const item of list ?? []) {
-      if (item.family !== 'IPv4' && item.family !== 4) continue
+      if (String(item.family) !== 'IPv4' && String(item.family) !== '4') continue
       if (item.internal) continue
       return item.address
     }

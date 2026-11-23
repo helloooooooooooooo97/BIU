@@ -26,7 +26,7 @@ import {
 
 type DatabaseSync = import('node:sqlite').DatabaseSync
 
-export type StoredView = Partial<SavedView> & Pick<SavedView, 'id' | 'name'> & { createdBy?: string }
+export type StoredView = Partial<SavedView> & Pick<SavedView, 'id' | 'name'> & { createdBy?: string; createdAt?: number }
 
 type ViewRow = { collection: string; payload_json: string }
 
@@ -296,14 +296,12 @@ export class SavedViewsStore {
       id,
       name,
       mode: typeof fields.mode === 'string' && isViewModeId(fields.mode) ? fields.mode : 'table',
-      sortField: typeof fields.sortField === 'string' && fields.sortField.trim() ? fields.sortField : 'id',
-      sortDir: fields.sortDir === 'desc' ? 'desc' : 'asc',
       query: typeof fields.query === 'string' ? fields.query : '',
       groupBy: typeof fields.groupBy === 'string' ? fields.groupBy : '',
       groupConfig: normalizeGroupConfig(fields.groupConfig),
       columns: parseViewColumns(fields.columns),
       ...filtersFromPatch(fields.filters),
-      ...sortsFromPatch(fields.sorts, fields.sortField, fields.sortDir),
+      ...sortsFromPatch(fields.sorts, typeof fields.sortField === 'string' && fields.sortField.trim() ? fields.sortField : 'id', fields.sortDir),
       tree: Boolean(fields.tree),
       wrap: Boolean(fields.wrap),
       truncate: fields.truncate !== false,
