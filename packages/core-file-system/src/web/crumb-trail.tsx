@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent, type RefObject } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent, type Ref, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { MagnifyingGlassIcon, PlusIcon } from '@heroicons/react/16/solid'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'

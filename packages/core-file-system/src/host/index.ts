@@ -2161,7 +2161,7 @@ export class DatabaseService extends Service implements Database {
     if (spec.path === VIEWS_COLLECTION_PATH) {
       for (const key of viewRowKeys(matched)) {
         try {
-          savedViews.remove(rowIdOfView(key.collection, key.viewId), currentAccountId())
+          this.viewCatalog?.remove(rowIdOfView(key.collection, key.viewId), currentAccountId())
         } catch {
           /* 视图本体已不在（前端删视图时先走 /api/db/saved-views 整份覆盖） */
         }
