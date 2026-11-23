@@ -43,7 +43,8 @@ export function TableMascotMark({
 }) {
   ensureMascotSymbols()
   return (
-    <svg width={size} height={size} viewBox={VIEW_BOX} aria-hidden title={title}>
+    <svg width={size} height={size} viewBox={VIEW_BOX} aria-hidden>
+      {title ? <title>{title}</title> : null}
       <use href={`#${mascotSymbolId(identity)}`} />
     </svg>
   )

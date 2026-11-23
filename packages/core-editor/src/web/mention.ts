@@ -2,7 +2,8 @@ import { apiFetch } from '@biu/biu-ui/api-client'
 import { mergeAttributes } from '@tiptap/core'
 import { OVERLAY_Z, overlayZ } from '@biu/biu-ui/overlay-portal'
 import type { Editor } from '@tiptap/core'
-import Mention from '@tiptap/extension-mention'
+import Mention, { type MentionNodeAttrs } from '@tiptap/extension-mention'
+import type { SuggestionProps } from '@tiptap/suggestion'
 import { ReactNodeViewRenderer, ReactRenderer } from '@tiptap/react'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { pickChipAttrs, pickKindTone } from '@biu/core-pick/web'
@@ -100,31 +101,36 @@ function mentionAnchor(target: EventTarget | null, root: Element) {
   return el
 }
 
+type MentionRenderProps = SuggestionProps<MentionPick, MentionNodeAttrs> & {
+  mount?: (el: HTMLElement) => () => void
+}
+
 function renderMentionMenu() {
-  let component: ReactRenderer<unknown, Record<string, unknown>> | null = null
+  let component: ReactRenderer | null = null
   let unmount: (() => void) | undefined
   let cancelled = false
-  let pending: ({ editor: Editor; mount: (el: HTMLElement) => () => void } & Record<string, unknown>) | null = null
+  let pending: MentionRenderProps | null = null
 
   return {
-    onStart(props: { editor: Editor; mount: (el: HTMLElement) => () => void } & Record<string, unknown>) {
+    onStart(props: MentionRenderProps) {
       cancelled = false
       pending = props
       if (!slashMayOpen(props.editor)) return
       queueMicrotask(() => {
         if (cancelled || !pending) return
-        component = new ReactRenderer(MentionList, {
+        const renderer = new ReactRenderer(MentionList, {
           props: pending,
           editor: pending.editor,
         })
-        const el = component.element as HTMLElement
+        component = renderer
+        const el = renderer.element as HTMLElement
         el.style.zIndex = String(overlayZ(OVERLAY_Z.expandLift, pending.editor.view?.dom))
         el.style.maxHeight = `${Math.min(280, Math.max(120, window.innerHeight - 16))}px`
-        unmount = pending.mount(el)
+        unmount = pending.mount?.(el)
       })
     },
-    onUpdate(props: Record<string, unknown>) {
-      pending = { ...(pending ?? {}), ...props } as typeof pending
+    onUpdate(props: MentionRenderProps) {
+      pending = { ...(pending ?? {}), ...props }
       component?.updateProps(props)
     },
     onKeyDown(props: { event: KeyboardEvent }) {

@@ -81,7 +81,7 @@ function scrollFindLikeOutline(editor: Editor, pos: number) {
     const el = node instanceof Element ? node : node.parentElement
     if (!(el instanceof HTMLElement)) return
     const block =
-      el.closest('h1, h2, h3, p, li, blockquote, pre, table, .page-block') ?? el
+      el.closest<HTMLElement>('h1, h2, h3, p, li, blockquote, pre, table, .page-block') ?? el
     const run = () => scrollOutlineTarget(block)
     run()
     if (typeof requestAnimationFrame === 'function') {

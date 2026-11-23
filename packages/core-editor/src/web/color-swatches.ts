@@ -29,7 +29,14 @@ export const INK_TONES = [
   { id: 'red', label: '红', value: 'var(--biu-color-ink-red)' },
 ] as const
 
-export const WASH_TONES = [
+export type WashTone = {
+  readonly id: string
+  readonly label: string
+  readonly value: string
+  readonly swatch?: string
+}
+
+export const WASH_TONES: readonly WashTone[] = [
   { id: 'gray', label: '灰', value: 'var(--biu-color-wash-gray)' },
   { id: 'cream', label: '米', value: 'var(--biu-color-wash-cream)' },
   { id: 'peach', label: '桃', value: 'var(--biu-color-wash-peach)' },
@@ -49,7 +56,7 @@ export const WASH_TONES = [
   { id: 'azure', label: '雾蓝', value: 'var(--biu-color-wash-azure)', swatch: 'var(--biu-color-wash-azure-grad)' },
   { id: 'magenta', label: '洋红', value: 'var(--biu-color-wash-magenta)', swatch: 'var(--biu-color-wash-magenta-grad)' },
   { id: 'salmon', label: '鲑', value: 'var(--biu-color-wash-salmon)', swatch: 'var(--biu-color-wash-salmon-grad)' },
-] as const
+]
 
 export function editorTextColor(tone: string) {
   return tone

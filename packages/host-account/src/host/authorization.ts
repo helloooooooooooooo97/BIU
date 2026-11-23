@@ -127,7 +127,7 @@ export function roleCoversAction(role: ResourceRole, action: Action) {
   return ROLE_RANK[role] >= ROLE_RANK[requiredRole(action)]
 }
 
-function memberAccessRole(policy: PolicyRow, membership: string): ResourceRole {
+function memberAccessRole(policy: PolicyRow, membership: string | null): ResourceRole {
   if (membership === 'owner' || membership === 'admin') return 'manager'
   if (membership === 'viewer') return 'viewer'
   if (policy.access_mode === 'members' || policy.member_default_role === 'editor') return 'editor'
@@ -182,7 +182,7 @@ export class AuthorizationService {
     this.notifyInvalidators()
   }
 
-  currentActor(): Actor | null {
+  currentActor(): Extract<Actor, { type: 'account' }> | null {
     const accountId = currentAccountId()
     if (!accountId) return null
     const workspaceId = this.activeWorkspaceFor(accountId)
@@ -438,6 +438,8 @@ export class AuthorizationService {
     input: ResourcePolicyInput = {},
     now = Date.now(),
   ) {
+    const accountId = actor.accountId
+    if (!accountId) throw new Error('permission denied: UNAUTHENTICATED')
     const parentRecordId = input.parentRecordId?.trim() ?? ''
     const parentCollection = parentRecordId ? (input.parentCollection?.trim() || resource.collection) : ''
     const accessMode = input.accessMode ?? (parentRecordId ? 'inherit' : 'private')
@@ -453,15 +455,15 @@ export class AuthorizationService {
         resource.workspaceId,
         resource.collection,
         resource.recordId,
-        actor.accountId,
+        accountId,
         accessMode,
         input.memberDefaultRole ?? 'viewer',
         parentCollection,
         parentRecordId,
-        actor.accountId,
+        accountId,
         now,
       )
-    this.grant(actor.accountId, resource, 'account', actor.accountId, 'owner', now)
+    this.grant(accountId, resource, 'account', accountId, 'owner', now)
     if (Number(inserted.changes) > 0) this.dropScans(resource.workspaceId, resource.collection)
   }
 

@@ -393,7 +393,7 @@ export class SessionsService extends Service {
     const seeded = normalizeSessionConfig({
       ...(opts.config ?? {}),
       title,
-      createdAt: Number(opts.config?.createdAt) > 0 ? opts.config.createdAt : now,
+      createdAt: Number(opts.config?.createdAt) > 0 ? opts.config?.createdAt : now,
     })
     const record: SessionRecord = {
       id,
@@ -525,7 +525,7 @@ export class SessionsService extends Service {
   /** 合并写入会话配置；传 null/空字符串可清除 title / systemPrompt。 */
   async patchConfig(
     id: string,
-    patch: SessionConfig & {
+    patch: Omit<SessionConfig, 'title' | 'systemPrompt' | 'inspector' | 'goal'> & {
       title?: string | null
       systemPrompt?: string | null
       inspector?: SessionConfig['inspector'] | null
@@ -563,7 +563,15 @@ export class SessionsService extends Service {
     const config = chat.resolveLlm(id)
     if (!String(config.apiKey ?? '').trim()) throw new Error('未配置模型 API Key')
     const numbered = formatUserMessagesForTitle(messages)
-    const reply = await llm.forConfig({ ...config, thinking: 'disabled' }).chat(
+    const reply = await llm
+      .forConfig({
+        ...config,
+        provider: config.provider ?? '',
+        apiKey: config.apiKey ?? '',
+        model: config.model ?? '',
+        thinking: 'disabled',
+      })
+      .chat(
       [
         { role: 'system', content: TITLE_FROM_USER_PROMPT },
         { role: 'user', content: numbered },

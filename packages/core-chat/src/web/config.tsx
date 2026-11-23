@@ -260,7 +260,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
     setKeyDraft('')
     seedChatConfig(data as unknown as Record<string, unknown>)
     // 通知 Composer 等刷新模型目录
-    emitAppEvent('biu:chat-config-changed')
+    emitAppEvent('biu:chat-config-changed', undefined)
   }
 
   function selectProvider(id: string) {

@@ -4,7 +4,7 @@ export const PAGE_BLOCK_IDLE_ROOT_MARGIN = '160px'
 type MountFn = () => void
 
 let pending: MountFn[] = []
-let timer = 0
+let timer: ReturnType<typeof setTimeout> | 0 = 0
 
 export function resetPageBlockIdleQueue() {
   pending = []

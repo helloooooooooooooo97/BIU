@@ -7,7 +7,7 @@ function isYScroll(el: Element | null): el is HTMLElement {
 }
 
 export function nearestYScroll(el: Element | null) {
-  for (let node = el instanceof HTMLElement ? el : el?.parentElement; node; node = node.parentElement) {
+  for (let node: Element | null = el instanceof HTMLElement ? el : el?.parentElement ?? null; node; node = node.parentElement) {
     if (isYScroll(node)) return node
   }
   return null

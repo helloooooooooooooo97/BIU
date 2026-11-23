@@ -562,7 +562,7 @@ export class DatabaseService extends Service implements Database {
   tags = new TagStore()
   shares = new SharesStore()
   assets = new FileSystemAssets()
-  viewCatalog?: { viewsFor(collectionPath: string): SharedViewDef[] }
+  viewCatalog?: { viewsFor(collectionPath: string): SharedViewDef[]; remove?(id: string, accountId?: string): unknown }
   recordViews = new RecordViewsStore()
   private readonly access: DatabaseAccessPolicy
   private inflightMatches = new Map<string, Promise<DbRecord[]>>()
@@ -660,7 +660,7 @@ export class DatabaseService extends Service implements Database {
     const rows = await spec.list(query)
     const listed = !query.ids?.length ? rows : rows.filter((row) => query.ids!.includes(row.id))
     const hidden = this.tags.deletedIds(spec.path)
-    const builtinPlugin = (row: { builtin?: unknown }) => isBuiltinPluginRow(spec.path, row)
+    const builtinPlugin = (row: Record<string, unknown>) => isBuiltinPluginRow(spec.path, row)
     return query.trash
       ? listed.filter((row) => hidden.has(row.id) && !builtinPlugin(row))
       : listed.filter((row) => !hidden.has(row.id) || builtinPlugin(row))
@@ -884,7 +884,7 @@ export class DatabaseService extends Service implements Database {
     this.access.markPublicView(collection, recordId)
   }
 
-  private builtinPlugin(spec: CollectionSpec, id: string, record?: { builtin?: unknown }) {
+  private builtinPlugin(spec: CollectionSpec, id: string, record?: Record<string, unknown> | null) {
     return isBuiltinPluginRecord(spec, id, record)
   }
 
@@ -1793,7 +1793,7 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
-  async update(path: string, content: unknown) {
+  async update(path: string, content: unknown): Promise<{ kind: 'record'; path: string; value: DbRecord }> {
     const parts = splitPath(path)
     if (parts.length === 2 && parts[0] === 'data') {
       const stamp = parseStampRecordId(parts[1]!)
@@ -1887,7 +1887,7 @@ export class DatabaseService extends Service implements Database {
       ? { type: 'record' as const, workspaceId: actor.workspaceId, collection: spec.path, recordId: parentRecordId }
       : null
     if (moving && resource) authorization!.validateMove(actor!, resource, parent)
-    let record = Object.keys(patch).length ? await spec.update(parts[1]!, patch) : current
+    let record = Object.keys(patch).length && spec.update ? await spec.update(parts[1]!, patch) : current
     if (moving && resource) authorization!.move(actor!, resource, parent)
     const viewOnly = !bannerPatch.present && Object.keys(patch).length > 0 &&
       Object.keys(patch).every((key) => ['views', 'propViews', 'layouts'].includes(key))
@@ -2161,7 +2161,7 @@ export class DatabaseService extends Service implements Database {
     if (spec.path === VIEWS_COLLECTION_PATH) {
       for (const key of viewRowKeys(matched)) {
         try {
-          this.viewCatalog?.remove(rowIdOfView(key.collection, key.viewId), currentAccountId())
+          this.viewCatalog?.remove?.(rowIdOfView(key.collection, key.viewId), currentAccountId())
         } catch {
           /* 视图本体已不在（前端删视图时先走 /api/db/saved-views 整份覆盖） */
         }
@@ -2240,7 +2240,14 @@ export class DatabaseService extends Service implements Database {
     return { kind: 'trash' as const, items }
   }
 
-  async action(path: string, actionId: string, args?: Record<string, unknown>) {
+  async action(
+    path: string,
+    actionId: string,
+    args?: Record<string, unknown>,
+  ): Promise<
+    | { kind: 'record'; path: string; value: DbRecord; result?: unknown }
+    | { kind: 'deleted'; path: string; ids: string[]; trash?: boolean }
+  > {
     const rewritten = this.rewriteOverviewRecordPath(path)
     if (rewritten) return this.action(rewritten, actionId, args)
     const parts = splitPath(path)
@@ -2290,7 +2297,7 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
-  async content(path: string) {
+  async content(path: string): Promise<{ kind: 'content'; path: string; field: string; value: unknown; version?: number }> {
     const rewritten = this.rewriteOverviewRecordPath(path)
     if (rewritten) return this.content(rewritten)
     const parts = splitPath(path)
@@ -2321,7 +2328,11 @@ export class DatabaseService extends Service implements Database {
     return this.serializeContentWrite(normalized, () => this.writeContentNow(path, value, expectedVersion))
   }
 
-  private async writeContentNow(path: string, value: unknown, expectedVersion?: number) {
+  private async writeContentNow(
+    path: string,
+    value: unknown,
+    expectedVersion?: number,
+  ): Promise<{ kind: 'content'; path: string; field: string; value: unknown; updatedAt: number; version?: number }> {
     const rewritten = this.rewriteOverviewRecordPath(path)
     if (rewritten) return this.writeContentNow(rewritten, value, expectedVersion)
     const parts = splitPath(path)

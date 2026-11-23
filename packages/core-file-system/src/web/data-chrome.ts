@@ -26,7 +26,7 @@ const viaDataListeners = new Set<() => void>()
 
 function persistViaData(next: ViaData | null) {
   try {
-    if (next) writeStorageString(VIA_DATA_KEY, JSON.stringify(next, { area: 'session' }))
+    if (next) writeStorageString(VIA_DATA_KEY, JSON.stringify(next), { area: 'session' })
     else removeStorageKey(VIA_DATA_KEY, 'session')
   } catch {
     /* ignore */

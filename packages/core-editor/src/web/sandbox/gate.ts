@@ -29,13 +29,13 @@ function gateTarget<T extends object>(real: T, live: () => boolean): T {
     get(target, prop, receiver) {
       if (prop === 'addEventListener' && add) {
         return (type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | AddEventListenerOptions) => {
-          if (!listener) return add(type, listener as EventListener, options)
+          if (!listener) return add(type, listener, options)
           return add(type, wrapListener(real as EventTarget, type, listener, live, store), options)
         }
       }
       if (prop === 'removeEventListener' && remove) {
         return (type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | EventListenerOptions) => {
-          if (!listener) return remove(type, listener as EventListener, options)
+          if (!listener) return remove(type, listener, options)
           return remove(type, store.get(listener) ?? listener, options)
         }
       }

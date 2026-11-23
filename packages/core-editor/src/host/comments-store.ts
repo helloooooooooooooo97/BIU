@@ -118,7 +118,6 @@ export function commentToRecord(row: CommentRow): DbRecord {
     body: row.body,
     targetPath: row.targetPath,
     threadId: row.threadId,
-    parentId: row.parentId,
     status: row.status,
     anchor: row.anchor ? JSON.stringify(row.anchor) : '',
     author: row.author,

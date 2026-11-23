@@ -138,7 +138,7 @@ export const pageBlock = Node.create({
     const kind = String(node.attrs?.kind ?? 'card')
     const stored = String(node.attrs?.plugin ?? '').trim()
     const plugin = stored || getBlockEditor()?.block(kind)?.plugin || ''
-    const id = nodePageBlockId(node as PmNode)
+    const id = nodePageBlockId(node as unknown as PmNode)
     const data = { ...((node.attrs?.data && typeof node.attrs.data === 'object' ? node.attrs.data : {}) as Record<string, unknown>) }
     return formatPageBlockFence(kind, plugin, data, id)
   },

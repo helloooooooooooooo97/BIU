@@ -520,7 +520,7 @@ export class TagStore {
     )
     return rows
       .map((row) => entryFromRow(db, row))
-      .filter((item): item is TagEntry => Boolean(item) && !this.isDeleted(TAGS_COLLECTION_PATH, item.pack.id))
+      .filter((item): item is TagEntry => item !== null && !this.isDeleted(TAGS_COLLECTION_PATH, item.pack.id))
   }
 
   get(idOrLabel: string): CollectionSchemaPack | null {

@@ -45,8 +45,8 @@ export function commentsCollection(store: CommentsStore): CollectionSpec {
     },
     list: async (query) => {
       const target =
-        query?.filters && typeof query.filters.targetPath === 'string'
-          ? query.filters.targetPath
+        query?.filter && typeof query.filter.targetPath === 'string'
+          ? query.filter.targetPath
           : undefined
       return store.list(target).map((row) => commentToRecord(row))
     },

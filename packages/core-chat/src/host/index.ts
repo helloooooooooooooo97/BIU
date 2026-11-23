@@ -1254,7 +1254,7 @@ export function apply(ctx: Context) {
       void finishCloudExecution(sessionId)
     }
   })
-  ctx.on('dispose', () => {
+  ctx.effect(() => () => {
     for (const execution of cloudExecutions.values()) clearInterval(execution.heartbeat)
     cloudExecutions.clear()
   })

@@ -11,6 +11,13 @@ import { workspaceMembersCollection } from './workspace-members-collection.ts'
 
 export type { Actor, Action, ResourceRef, ResourceRole, WorkspaceRole, Decision } from './authorization.ts'
 
+declare module 'cordis' {
+  interface Events {
+    'account/request'(payload: { accountId?: string; token?: string }): void
+    dispose(): void
+  }
+}
+
 export const name = 'account'
 export const inject = ['http']
 

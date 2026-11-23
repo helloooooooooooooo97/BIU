@@ -5,8 +5,8 @@ import {
   normalizePageSize,
   type GroupConfig,
   type SavedView,
-  type ViewMode,
 } from './saved-view.ts'
+import type { ViewMode } from './fields.ts'
 import { normalizeColumnSummaries, type ColumnSummaryOp } from './column-summary.ts'
 import { normalizeColumnViews, type ColumnViewConfig } from './column-sandbox-model.ts'
 import {

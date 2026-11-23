@@ -1,6 +1,6 @@
-import type { ComponentType, ReactNode } from 'react'
+import { createElement, type ComponentType, type ReactNode } from 'react'
 import { apiFetch } from '@biu/biu-ui/api-client'
-import type { CollectionSchemaPack } from '@biu/type-file-system'
+import type { CollectionActionInfo, CollectionSchemaPack, DbRecord } from '@biu/type-file-system'
 
 /**
  * Dependency-inversion bridge so L2 `web-app-shell` never statically imports
@@ -21,6 +21,13 @@ export interface ShellPagePrefs {
 export interface ShellDatabaseUi {
   chrome: (collectionPath: string) => {
     actions?: Array<{ id: string; label: string; icon?: string; [key: string]: unknown }>
+    Actions?: ComponentType<{
+      actions: CollectionActionInfo[]
+      record: DbRecord
+      busy: boolean
+      place: 'row' | 'detail'
+      run: (action: CollectionActionInfo) => void
+    }>
     [key: string]: unknown
   } | undefined
   [key: string]: unknown
@@ -108,8 +115,7 @@ export const overlayDataRoute: ShellDataBridge['overlayDataRoute'] = () => bridg
 export const getDatabaseUi: ShellDataBridge['getDatabaseUi'] = () => bridge.getDatabaseUi()
 export const loadTags: ShellDataBridge['loadTags'] = (collectionPath) => bridge.loadTags(collectionPath)
 export function LayoutPrefsMenu(props: Record<string, unknown>) {
-  const Impl = bridge.LayoutPrefsMenu
-  return Impl(props) as ReactNode
+  return createElement(bridge.LayoutPrefsMenu, props)
 }
 export const getInspectorDbPath: ShellDataBridge['getInspectorDbPath'] = (paneId) => bridge.getInspectorDbPath(paneId)
 export const isInspectorPaneAbandoned: ShellDataBridge['isInspectorPaneAbandoned'] = (paneId) =>

@@ -20,16 +20,23 @@ function lazySlot<P extends object = SlotProps>(
   }
 }
 
-const ChatThread = lazySlot(() => import('./thread.tsx').then((m) => ({ default: m.ChatThread })))
-const ChatMessageOutline = lazySlot(() =>
-  import('./message-outline.tsx').then((m) => ({ default: m.ChatMessageOutline })),
-)
-const TrajectoryView = lazySlot(() => import('./trajectory.tsx').then((m) => ({ default: m.TrajectoryView })))
-const UsagePanel = lazySlot(() => import('./usage-panel.tsx').then((m) => ({ default: m.UsagePanel })))
-const ChatComposer = lazySlot(() => import('./composer.tsx').then((m) => ({ default: m.ChatComposer })))
-const ChatConfigBanner = lazySlot(() => import('./config-banner.tsx').then((m) => ({ default: m.ChatConfigBanner })))
-const ApprovalsRail = lazySlot(() => import('./approvals.tsx').then((m) => ({ default: m.ApprovalsRail })))
-const ChatLiveHud = lazySlot(() => import('./live-hud.tsx').then((m) => ({ default: m.ChatLiveHud })))
+const ChatThread = lazySlot(async () => ({ default: (await import('./thread.tsx')).ChatThread }))
+const ChatMessageOutline = lazySlot(async () => ({
+  default: (await import('./message-outline.tsx')).ChatMessageOutline,
+}))
+const TrajectoryView = lazySlot(async () => ({ default: (await import('./trajectory.tsx')).TrajectoryView }))
+const UsagePanel = lazySlot(async () => ({ default: (await import('./usage-panel.tsx')).UsagePanel }))
+const ChatComposer = lazySlot(async () => ({ default: (await import('./composer.tsx')).ChatComposer }))
+const ChatConfigBanner = lazySlot(async () => ({ default: (await import('./config-banner.tsx')).ChatConfigBanner }))
+const ApprovalsRail = lazySlot(async () => ({ default: (await import('./approvals.tsx')).ApprovalsRail }))
+const ChatLiveHud = lazySlot(async () => ({ default: (await import('./live-hud.tsx')).ChatLiveHud }))
+
+function StageChatMessageOutline(props: SlotProps) {
+  return createElement(ChatMessageOutline, {
+    useSessionView: props.useSessionView as ReturnType<typeof bindSessionView>,
+    sessionView: props.sessionView as SessionViewService | undefined,
+  })
+}
 
 function InspectorTrajectory(props: SlotProps) {
   return createElement(
@@ -62,7 +69,7 @@ export function apply(ctx: Context) {
   const props = () => slotProps
   ctx.slots.place('root-overlays', ChatSelectBubble, { key: 'chat-select-bubble', order: 12 })
   ctx.slots.place('stage', ChatThread, { key: 'chat-thread', order: 1, props })
-  ctx.slots.place('stage-aside', ChatMessageOutline, { key: 'chat-outline', order: 1, props })
+  ctx.slots.place('stage-aside', StageChatMessageOutline, { key: 'chat-outline', order: 1, props })
   ctx.slots.place('trajectory', TrajectoryView, { key: 'trajectory', order: 1, props })
   ctx.slots.place('composer', ChatComposer, {
     key: 'chat',

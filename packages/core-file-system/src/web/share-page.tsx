@@ -180,7 +180,7 @@ function SharePage({
   const navigate = useNavigate()
   const [password, setPassword] = useState(() => {
     try {
-      return readStorageString(passwordKey(token, 'session')) ?? ''
+      return readStorageString(passwordKey(token), 'session') ?? ''
     } catch {
       return ''
     }

@@ -211,7 +211,7 @@ function gateEventTarget<T extends object>(
       }
       if (prop === 'removeEventListener' && remove) {
         return (type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | AddEventListenerOptions) => {
-          if (!listener) return remove(type, listener as EventListener, options)
+          if (!listener) return remove(type, listener, options)
           return remove(type, store.get(listener) ?? listener, options)
         }
       }

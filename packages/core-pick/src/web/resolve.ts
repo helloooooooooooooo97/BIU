@@ -199,7 +199,7 @@ function sandboxBlockFrom(node: Element | null) {
   return composedClosest(node, SANDBOX_BLOCK_SEL)
 }
 
-function isSandboxInnerEl(el: Element) {
+function isSandboxInnerEl(el: Element): el is HTMLElement {
   if (!(el instanceof HTMLElement)) return false
   return el.getAttribute('data-biu-kind') === 'sandbox' || el.hasAttribute('data-sandbox-pick')
 }
@@ -214,7 +214,8 @@ export function sandboxInnerFromEvent(event?: Event | null): HTMLElement | null 
   if (!event || typeof event.composedPath !== 'function') return null
   for (const node of event.composedPath()) {
     if (!(node instanceof HTMLElement)) continue
-    if (isSandboxInnerEl(node)) return node
+    const el: Element = node
+    if (isSandboxInnerEl(el)) return el
     if (node.hasAttribute('data-sandbox')) break
   }
   return null

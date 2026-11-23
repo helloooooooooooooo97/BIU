@@ -1,10 +1,10 @@
 import type { Editor } from '@tiptap/core'
-import type { Node, ResolvedPos } from '@tiptap/pm/model'
+import type { Node as PmNode, ResolvedPos } from '@tiptap/pm/model'
 import { NodeSelection } from '@tiptap/pm/state'
 
 export type HandleBlock = {
   pos: number
-  node: Node
+  node: PmNode
 }
 
 /** 所有块共用一条轨道，不跟列表缩进。 */
@@ -142,7 +142,7 @@ export function handleBlockAtPointer(editor: Editor, clientX: number, clientY: n
   return fromPos ?? fromDom
 }
 
-export function deleteHandleBlock(editor: Editor, pos: number, node: Node) {
+export function deleteHandleBlock(editor: Editor, pos: number, node: PmNode) {
   editor.chain().focus().deleteRange({ from: pos, to: pos + node.nodeSize }).run()
 }
 
@@ -150,11 +150,11 @@ export function insertParagraphBefore(editor: Editor, pos: number) {
   editor.chain().focus().insertContentAt(pos, { type: 'paragraph' }).run()
 }
 
-export function insertParagraphAfter(editor: Editor, pos: number, node: Node) {
+export function insertParagraphAfter(editor: Editor, pos: number, node: PmNode) {
   editor.chain().focus().insertContentAt(pos + node.nodeSize, { type: 'paragraph' }).run()
 }
 
-export function duplicateHandleBlock(editor: Editor, pos: number, node: Node) {
+export function duplicateHandleBlock(editor: Editor, pos: number, node: PmNode) {
   editor.chain().focus().insertContentAt(pos + node.nodeSize, node.toJSON()).run()
 }
 

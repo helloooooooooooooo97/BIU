@@ -40,12 +40,8 @@ function omitEmpty(row: DbRecord): DbRecord {
 function asInstalledRecord(row: StoreListing, store: PluginStoreService): DbRecord {
   const shell = row.shell
   return omitEmpty({
-    id: row.id,
-    name: row.name,
-    title: row.name,
-    blurb: row.blurb,
-    tags: row.tags,
     ...withOfficial(row),
+    title: row.name,
     installed: true,
     pluginPath: store.pluginPath(row.id),
     enabled: row.enabled,
@@ -72,12 +68,8 @@ function asInstalledRecord(row: StoreListing, store: PluginStoreService): DbReco
 
 function asSandboxRecord(row: SandboxListing, store: PluginStoreService): DbRecord {
   return omitEmpty({
-    id: row.id,
-    name: row.name,
-    title: row.name,
-    blurb: row.blurb,
-    tags: row.tags,
     ...withOfficial(row),
+    title: row.name,
     sandbox: true,
     sandboxPath: store.sandboxPath(row.id),
     hasHost: row.hasHost,
