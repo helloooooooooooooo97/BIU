@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { resetWorkspaceProfileGet } from '@biu/core-file-system/page-width'
+import { resetWorkspaceProfileGet } from './data-bridge.ts'
 import { applyTheme, hydrateTheme, persistTheme, readTheme } from './theme.ts'
 
 test('readTheme follows the document class and persistTheme posts the profile', async () => {

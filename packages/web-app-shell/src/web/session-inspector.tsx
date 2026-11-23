@@ -31,19 +31,17 @@ import { inspectorHomeRank, inspectorPanelMatches, inspectorPlusPinRank, inspect
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import {
+  bindInspectorPaneMenuDismiss,
   getInspectorDbPath,
+  getInspectorPaneMenu,
+  getInspectorPaneMenuVersion,
   isInspectorPaneAbandoned,
   restoreInspectorDbPaths,
   reuseInspectorOfferPane,
   snapshotInspectorDbPaths,
   subscribeInspectorDbPath,
-} from '@biu/core-file-system/inspector-db-route'
-import {
-  bindInspectorPaneMenuDismiss,
-  getInspectorPaneMenu,
-  getInspectorPaneMenuVersion,
   subscribeInspectorPaneMenu,
-} from '@biu/core-file-system/inspector-pane-menu'
+} from './data-bridge.ts'
 import { mergeInspectorBind, type SessionInspectorBind } from '@biu/type-session'
 
 function captionTableIcon(icon?: string) {

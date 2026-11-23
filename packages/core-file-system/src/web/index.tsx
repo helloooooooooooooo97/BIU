@@ -1,4 +1,23 @@
 import { apiFetch } from '@biu/biu-ui/api-client'
+import { registerShellDataBridge } from '@biu/web-app-shell/data-bridge'
+import { getPagePrefs, getWorkspaceProfile, hydratePagePrefs, resetWorkspaceProfileGet, subscribePageWidth } from './page-width.ts'
+import { overlayDataRoute } from './main-data-route.ts'
+import { loadTags } from './tag-catalog.ts'
+import { LayoutPrefsMenu } from './layout-prefs-menu.tsx'
+import {
+  getInspectorDbPath,
+  isInspectorPaneAbandoned,
+  restoreInspectorDbPaths,
+  reuseInspectorOfferPane,
+  snapshotInspectorDbPaths,
+  subscribeInspectorDbPath,
+} from './inspector-db-route.ts'
+import {
+  bindInspectorPaneMenuDismiss,
+  getInspectorPaneMenu,
+  getInspectorPaneMenuVersion,
+  subscribeInspectorPaneMenu,
+} from './inspector-pane-menu.tsx'
 import { lazy, Suspense, useEffect, useMemo, useState, useSyncExternalStore, type ComponentType } from 'react'
 import type { Context } from 'cordis'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -21,6 +40,28 @@ import { DatabaseInspectorBrowse, DatabaseInspectorTab, bindInspectorSnapshot, c
 import { applyDatabaseChannelPayload } from './inspector-db-route.ts'
 import { InspectorFollowToggle } from './inspector-follow.tsx'
 import { DatabaseUiService, getDatabaseUi } from './database-ui.ts'
+
+registerShellDataBridge({
+  hydratePagePrefs,
+  getPagePrefs,
+  subscribePageWidth,
+  getWorkspaceProfile,
+  resetWorkspaceProfileGet,
+  overlayDataRoute,
+  getDatabaseUi,
+  loadTags,
+  LayoutPrefsMenu: LayoutPrefsMenu as unknown as ComponentType<Record<string, unknown>>,
+  getInspectorDbPath,
+  isInspectorPaneAbandoned,
+  restoreInspectorDbPaths,
+  reuseInspectorOfferPane,
+  snapshotInspectorDbPaths,
+  subscribeInspectorDbPath,
+  bindInspectorPaneMenuDismiss,
+  getInspectorPaneMenu,
+  getInspectorPaneMenuVersion,
+  subscribeInspectorPaneMenu,
+})
 import {
   bootLoadCollections,
   collectionNavKey,

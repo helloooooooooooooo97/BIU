@@ -1,6 +1,6 @@
 import { writeStorageString } from '@biu/biu-ui/client-storage'
 import { apiFetch } from '@biu/biu-ui/api-client'
-import { getWorkspaceProfile } from '@biu/core-file-system/page-width'
+import { getWorkspaceProfile } from './data-bridge.ts'
 
 export type ThemeMode = 'light' | 'dark'
 

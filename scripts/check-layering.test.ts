@@ -212,3 +212,22 @@ test('dependency hygiene: every imported @biu/* package is declared in package.j
   }
   assert.deepEqual(missing, [], `Found undeclared phantom @biu/* dependencies:\n${missing.join('\n')}`)
 })
+
+test('unidirectional dependencies: L2 web-app-shell never imports L3 @biu/core-* plugins', () => {
+  const violations: string[] = []
+  for (const file of walkTsFiles(join(PACKAGES_DIR, 'web-app-shell', 'src'))) {
+    const text = readFileSync(file, 'utf8')
+    let match: RegExpExecArray | null
+    IMPORT_SPEC_RE.lastIndex = 0
+    while ((match = IMPORT_SPEC_RE.exec(text))) {
+      if (match[1].startsWith('@biu/core-')) {
+        violations.push(`${relative(REPO_ROOT, file)} -> ${match[1]}`)
+      }
+    }
+  }
+  assert.deepEqual(
+    violations,
+    [],
+    `L2 web-app-shell must not import L3 @biu/core-* plugins (use data-bridge/slots instead):\n${violations.join('\n')}`,
+  )
+})

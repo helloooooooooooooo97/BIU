@@ -30,8 +30,7 @@ import { applyNoticeClick, noticeIdOf } from './notice-open.ts'
 import { persistTheme, readTheme, type ThemeMode } from './theme.ts'
 import { persistWorkspaceProfile } from '@biu/biu-ui/workspace-profile'
 import { useWorkspaceProfile } from '@biu/biu-ui/use-workspace-profile'
-import { LayoutPrefsMenu } from '@biu/core-file-system/layout-prefs-menu'
-import { getPagePrefs, hydratePagePrefs, subscribePageWidth } from '@biu/core-file-system/page-width'
+import { LayoutPrefsMenu, getPagePrefs, hydratePagePrefs, subscribePageWidth } from './data-bridge.ts'
 
 import { BrandPrint, useBrandConfig } from './marketing-site/brand-mark.tsx'
 
