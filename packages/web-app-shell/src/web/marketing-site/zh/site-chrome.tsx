@@ -22,7 +22,7 @@ const NAV_BRAND_PX = 24
 
 const NAV_PRIMARY = [
   { label: '产品', to: '/product' },
-  { label: '场景', to: '/use-cases' },
+  { label: '用例', to: '/use-cases' },
   { label: '对比', to: '/compare' },
   { label: '安全', to: '/security' },
   { label: '博客', to: '/blog' },
@@ -67,7 +67,7 @@ const FOOTER_COLUMNS: ReadonlyArray<{ title: string; links: readonly FooterLink[
     title: '产品',
     links: [
       { label: '产品总览', to: '/product' },
-      { label: '场景', to: '/use-cases' },
+      { label: '用例', to: '/use-cases' },
       { label: '定价', to: '/pricing' },
       { label: '下载', to: '/download' },
     ],
@@ -137,6 +137,7 @@ export function SiteHeader({ onLogin, onStart }: { onLogin: SiteAction; onStart:
   // 用户在品牌页调好的配置会推到这里，导航栏标记随之更新。
   const brand = useBrandConfig()
   const showLogin = useContext(SiteLoginContext)
+  const { toggleLocale } = useSiteLocale()
 
   return (
     <header className="site-nav" data-menu-open={menuOpen ? '1' : '0'}>
@@ -182,6 +183,17 @@ export function SiteHeader({ onLogin, onStart }: { onLogin: SiteAction; onStart:
         ))}
       </nav>
       <div className="site-nav-actions">
+        <button
+          type="button"
+          className="site-locale"
+          aria-label="切换到英文"
+          onClick={() => {
+            setMenuOpen(false)
+            toggleLocale()
+          }}
+        >
+          English
+        </button>
         {showLogin ? <button type="button" className="site-login" data-testid="site-login" onClick={onLogin}>登录</button> : null}
         <Link className="site-start" data-testid="site-start" to="/download"><DownloadIcon />下载</Link>
       </div>
@@ -210,7 +222,6 @@ function DownloadPageButton() {
 
 export function SiteFooter({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   const showLogin = useContext(SiteLoginContext)
-  const { toggleLocale } = useSiteLocale()
   return (
     <footer className="site-footer">
       <div className="site-footer-columns">
@@ -232,7 +243,6 @@ export function SiteFooter({ onLogin, onStart }: { onLogin: SiteAction; onStart:
           {showLogin ? <button type="button" onClick={onLogin}>登录</button> : null}
           <Link to="/download">下载</Link>
           <a href={`mailto:${CONTACT_EMAIL}`}>联系我们</a>
-          <button type="button" aria-label="切换到英文" onClick={toggleLocale}>English</button>
         </div>
       </div>
       <div className="site-footer-base">

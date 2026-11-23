@@ -8738,6 +8738,7 @@ html:not(.dark) .inspector-add-row .fsdb-record-emoji,
   gap: var(--biu-space-2);
 }
 
+.site-locale,
 .site-login,
 .site-start {
   border: 0;
@@ -8763,12 +8764,15 @@ html:not(.dark) .inspector-add-row .fsdb-record-emoji,
   text-decoration: none;
 }
 
+.site-locale,
 .site-login {
   height: 36px;
   padding: 0 12px;
   border-radius: var(--biu-radius-full);
+  white-space: nowrap;
 }
 
+.site-locale:hover,
 .site-login:hover {
   background: rgba(255, 255, 255, 0.12);
 }
@@ -10735,18 +10739,102 @@ html:not(.has-js) .site [data-reveal] {
   margin: 0 0 18px;
   font-size: var(--biu-font-size-5);
   line-height: 1.9;
-  color: rgba(255, 255, 255, .88);
+  color: rgba(255, 255, 255, .84);
+}
+
+.site-article-body strong {
+  font-weight: var(--biu-font-weight-semibold);
+  color: var(--biu-color-on-emphasis);
+}
+
+.site-article-body em {
+  font-style: italic;
+  color: rgba(255, 255, 255, .92);
+}
+
+.site-article-inline-code {
+  padding: 0.14em 0.42em;
+  margin: 0 0.08em;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .09);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.86em;
+  color: #8be9fd;
+}
+
+.site-article-cite {
+  margin-left: 2px;
+  font-size: 0.72em;
+  line-height: 0;
+  vertical-align: super;
+  font-variant-numeric: tabular-nums;
+}
+
+.site-article-cite a {
+  color: rgba(124, 196, 250, .88);
+  text-decoration: none;
+  padding: 0 1px;
+}
+
+.site-article-cite a:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
+.site-article-refs li:target {
+  color: var(--biu-color-on-emphasis);
+  background: rgba(124, 196, 250, .1);
+  border-radius: 6px;
+  padding: 4px 8px;
 }
 
 .site-article-body pre {
-  margin: 0 0 18px;
+  margin: 0 0 22px;
   padding: 18px 20px;
   border-radius: 12px;
-  background: #0f0f0f;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
+  background: #0d1017;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .09);
   overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: var(--biu-font-size-4);
-  line-height: 1.8;
+  line-height: 1.75;
+  color: rgba(255, 255, 255, .88);
+}
+
+.site-tok-comment {
+  color: #7c8696;
+  font-style: italic;
+}
+
+.site-tok-directive {
+  color: #ff79c6;
+  font-weight: var(--biu-font-weight-medium);
+}
+
+.site-tok-key {
+  color: #7cc4fa;
+}
+
+.site-tok-string {
+  color: #98c379;
+}
+
+.site-tok-path {
+  color: #e5c07b;
+}
+
+.site-tok-cmd {
+  color: #c792ea;
+  font-weight: var(--biu-font-weight-medium);
+}
+
+.site-tok-num {
+  color: #f78c6c;
+}
+
+.site-tok-op {
+  color: #56b6c2;
 }
 
 .site-article-next {
@@ -13657,4 +13745,312 @@ html:not(.has-js) .site [data-reveal] {
 .site-blog-meta small {
   font-size: var(--biu-font-size-2);
   color: rgba(255, 255, 255, .45);
+}
+
+/* ---------- 用例页全面升级：能力全景、角色用例库、4 步闭环、扩展行业 ---------- */
+.site-usecase-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--biu-space-4);
+  margin-top: var(--biu-space-7);
+}
+
+.site-usecase-summary-strip > div {
+  padding: var(--biu-space-5);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .03);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
+}
+
+.site-usecase-summary-strip strong {
+  display: block;
+  font-size: var(--biu-font-size-4);
+  font-weight: var(--biu-font-weight-semibold);
+  color: var(--biu-color-on-emphasis);
+}
+
+.site-usecase-summary-strip span {
+  display: block;
+  margin-top: 6px;
+  font-size: var(--biu-font-size-3);
+  line-height: 1.55;
+  color: rgba(255, 255, 255, .58);
+}
+
+.site-usecase-lead-sub {
+  margin: var(--biu-space-3) 0 0;
+  max-width: 46em;
+  font-size: var(--biu-font-size-4);
+  line-height: 1.7;
+  color: rgba(255, 255, 255, .62);
+}
+
+.site-usecase-section {
+  max-width: var(--site-content);
+  margin: 0 auto;
+  padding: 56px var(--biu-space-6) 0;
+}
+
+.site-usecase-section .site-usecase-grid {
+  padding: 0;
+  max-width: none;
+}
+
+.site-usecase-section-head {
+  margin-bottom: var(--biu-space-6);
+}
+
+.site-usecase-section-head h2 {
+  margin: 0;
+  font-size: clamp(24px, 2.8vw, 34px);
+  font-weight: var(--biu-font-weight-semibold);
+  letter-spacing: -.025em;
+  line-height: 1.2;
+  color: var(--biu-color-on-emphasis);
+}
+
+.site-usecase-section-head p:not(.site-section-label) {
+  margin: var(--biu-space-3) 0 0;
+  max-width: 46em;
+  font-size: var(--biu-font-size-4);
+  line-height: 1.7;
+  color: rgba(255, 255, 255, .62);
+}
+
+.site-usecase-section-head .site-demo-tabs {
+  margin-top: var(--biu-space-5);
+}
+
+.site-usecase-cap-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--biu-space-4);
+}
+
+.site-usecase-cap-card {
+  display: flex;
+  flex-direction: column;
+  padding: var(--biu-space-6);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .025);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
+}
+
+.site-usecase-cap-card h3 {
+  margin: var(--biu-space-3) 0 0;
+  font-size: 18px;
+  font-weight: var(--biu-font-weight-semibold);
+  line-height: 1.35;
+  color: var(--biu-color-on-emphasis);
+}
+
+.site-usecase-cap-card p {
+  margin: var(--biu-space-3) 0 0;
+  font-size: var(--biu-font-size-3);
+  line-height: 1.7;
+  color: rgba(255, 255, 255, .65);
+}
+
+.site-usecase-cap-card .site-usecase-cap-example {
+  margin-top: auto;
+  padding-top: var(--biu-space-4);
+  border-top: 1px solid rgba(255, 255, 255, .08);
+  color: rgba(255, 255, 255, .86);
+}
+
+.site-usecase-card-replaces {
+  margin: var(--biu-space-2) 0 0;
+  font-size: var(--biu-font-size-2);
+  font-weight: var(--biu-font-weight-medium);
+  color: rgba(255, 255, 255, .78);
+}
+
+.site-usecase-card-sync {
+  margin: var(--biu-space-3) 0 0;
+  padding-top: var(--biu-space-3);
+  border-top: 1px solid rgba(255, 255, 255, .08);
+  font-size: var(--biu-font-size-3);
+  line-height: 1.65;
+  color: rgba(255, 255, 255, .72);
+}
+
+.site-usecase-card-output {
+  margin: var(--biu-space-3) 0 0;
+  font-size: var(--biu-font-size-2);
+  color: rgba(255, 255, 255, .52);
+}
+
+.site-usecase-card-go {
+  display: inline-block;
+  margin-top: var(--biu-space-4);
+  font-size: var(--biu-font-size-3);
+  font-weight: var(--biu-font-weight-medium);
+  color: var(--biu-color-on-emphasis);
+  text-decoration: none;
+}
+
+.site-usecase-card-go:hover {
+  text-decoration: underline;
+}
+
+.site-usecase-role-catalog {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--biu-space-5);
+}
+
+.site-usecase-role-card {
+  display: flex;
+  flex-direction: column;
+  padding: var(--biu-space-6);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .025);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
+}
+
+.site-usecase-role-card-head h3 {
+  margin: var(--biu-space-2) 0 0;
+  font-size: 20px;
+  font-weight: var(--biu-font-weight-semibold);
+  line-height: 1.35;
+  color: var(--biu-color-on-emphasis);
+}
+
+.site-usecase-role-card > p {
+  margin: var(--biu-space-3) 0 0;
+  font-size: var(--biu-font-size-3);
+  line-height: 1.68;
+  color: rgba(255, 255, 255, .66);
+}
+
+.site-usecase-role-deliver {
+  color: rgba(255, 255, 255, .78);
+}
+
+.site-usecase-role-deliver strong {
+  color: var(--biu-color-on-emphasis);
+}
+
+.site-usecase-role-plugins {
+  margin-top: var(--biu-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--biu-space-3);
+}
+
+.site-usecase-role-customs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--biu-space-3);
+}
+
+.site-usecase-role-customs > div {
+  padding: var(--biu-space-3);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .035);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
+}
+
+.site-usecase-role-customs span {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: var(--biu-font-weight-medium);
+  color: rgba(255, 255, 255, .6);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.site-usecase-role-customs strong {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--biu-font-size-3);
+  color: var(--biu-color-on-emphasis);
+}
+
+.site-usecase-role-customs small {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--biu-font-size-2);
+  line-height: 1.5;
+  color: rgba(255, 255, 255, .56);
+}
+
+.site-usecase-ext-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--biu-space-4);
+}
+
+.site-usecase-ext-card {
+  padding: var(--biu-space-6);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .025);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
+}
+
+.site-usecase-ext-card h3 {
+  margin: var(--biu-space-2) 0 0;
+  font-size: 19px;
+  font-weight: var(--biu-font-weight-semibold);
+  color: var(--biu-color-on-emphasis);
+}
+
+.site-usecase-ext-card > p:not(.site-usecase-card-replaces) {
+  margin: var(--biu-space-3) 0 var(--biu-space-4);
+  font-size: var(--biu-font-size-3);
+  line-height: 1.68;
+  color: rgba(255, 255, 255, .66);
+}
+
+.site-usecase-flow-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--biu-space-4);
+}
+
+.site-usecase-flow-card {
+  padding: var(--biu-space-5);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .025);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
+}
+
+.site-usecase-flow-card h3 {
+  margin: 0;
+  font-size: var(--biu-font-size-4);
+  font-weight: var(--biu-font-weight-semibold);
+  color: var(--biu-color-on-emphasis);
+}
+
+.site-usecase-flow-card p {
+  margin: var(--biu-space-2) 0 0;
+  font-size: var(--biu-font-size-3);
+  line-height: 1.65;
+  color: rgba(255, 255, 255, .64);
+}
+
+.site-usecase-role-demo-wrap {
+  margin: var(--biu-space-6) 0;
+}
+
+@media (max-width: 960px) {
+  .site-usecase-summary-strip,
+  .site-usecase-cap-grid,
+  .site-usecase-flow-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .site-usecase-role-catalog,
+  .site-usecase-ext-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .site-usecase-summary-strip,
+  .site-usecase-cap-grid,
+  .site-usecase-flow-grid,
+  .site-usecase-role-customs {
+    grid-template-columns: 1fr;
+  }
 }

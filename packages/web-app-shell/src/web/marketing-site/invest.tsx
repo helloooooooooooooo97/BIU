@@ -249,7 +249,7 @@ export function MarketingInvest({ onLogin, onStart }: { onLogin: SiteAction; onS
 
       <SiteFaq title="About investing" items={INVEST_FAQ} />
 
-      <SiteFinalCta title="Try a page for yourself first" />
+      <SiteFinalCta title="Try BIU for yourself" />
     </SiteChrome>
   )
 }

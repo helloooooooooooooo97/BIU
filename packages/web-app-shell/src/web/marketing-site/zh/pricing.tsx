@@ -168,7 +168,7 @@ export function MarketingPricing({ onLogin, onStart }: { onLogin: SiteAction; on
 
         <SiteFaq title="定价说明" items={PRICING_FAQ} />
 
-        <SiteFinalCta title="现在就免费用起来" />
+        <SiteFinalCta title="免费下载，立即开始" />
     </SiteChrome>
   )
 }

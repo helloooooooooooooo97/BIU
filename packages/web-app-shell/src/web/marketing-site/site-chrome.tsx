@@ -137,6 +137,7 @@ export function SiteHeader({ onLogin, onStart }: { onLogin: SiteAction; onStart:
   // 用户在品牌页调好的配置会推到这里，导航栏标记随之更新。
   const brand = useBrandConfig()
   const showLogin = useContext(SiteLoginContext)
+  const { toggleLocale } = useSiteLocale()
 
   return (
     <header className="site-nav" data-menu-open={menuOpen ? '1' : '0'}>
@@ -182,6 +183,17 @@ export function SiteHeader({ onLogin, onStart }: { onLogin: SiteAction; onStart:
         ))}
       </nav>
       <div className="site-nav-actions">
+        <button
+          type="button"
+          className="site-locale"
+          aria-label="Switch to Chinese"
+          onClick={() => {
+            setMenuOpen(false)
+            toggleLocale()
+          }}
+        >
+          中文
+        </button>
         {showLogin ? <button type="button" className="site-login" data-testid="site-login" onClick={onLogin}>Log in</button> : null}
         <Link className="site-start" data-testid="site-start" to="/download"><DownloadIcon />Download</Link>
       </div>
@@ -210,7 +222,6 @@ function DownloadPageButton() {
 
 export function SiteFooter({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   const showLogin = useContext(SiteLoginContext)
-  const { toggleLocale } = useSiteLocale()
   return (
     <footer className="site-footer">
       <div className="site-footer-columns">
@@ -232,7 +243,6 @@ export function SiteFooter({ onLogin, onStart }: { onLogin: SiteAction; onStart:
           {showLogin ? <button type="button" onClick={onLogin}>Log in</button> : null}
           <Link to="/download">Download</Link>
           <a href={`mailto:${CONTACT_EMAIL}`}>Contact us</a>
-          <button type="button" aria-label="Switch to Chinese" onClick={toggleLocale}>中文</button>
         </div>
       </div>
       <div className="site-footer-base">

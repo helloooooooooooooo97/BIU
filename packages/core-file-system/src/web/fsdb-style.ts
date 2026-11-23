@@ -510,7 +510,7 @@ const CSS = `
 .fsdb-page .tasks-table tr.fsdb-table-pad{box-sizing:border-box;font-size:0;line-height:0;overflow:hidden;pointer-events:none}
 .fsdb-page .tasks-table tr.fsdb-table-pad td,.fsdb-page .tasks-table tr.fsdb-table-pad:hover td{padding:0;border:0;background:transparent;line-height:0;font-size:0;height:inherit;box-sizing:border-box;overflow:hidden;vertical-align:top}
 .fsdb-page .tasks-table tr.fsdb-table-pad td > div{--fsdb-pad-line:color-mix(in srgb,var(--biu-color-border) 80%,transparent);display:block;box-sizing:border-box;overflow:hidden;contain:layout paint style;line-height:0;font-size:0;background-image:linear-gradient(to bottom,transparent calc(100% - var(--biu-stroke-width)),var(--fsdb-pad-line) 0),var(--fsdb-pad-cols,none);background-size:100% var(--fsdb-pad-row,32px),auto;background-repeat:repeat-y,no-repeat}
-.fsdb-page .tasks-table.is-grid{display:block;position:relative;width:max-content;min-width:100%}
+.fsdb-page .tasks-table.is-grid{display:block;position:relative;width:max-content;min-width:100%;border-bottom:0}
 .fsdb-page .tasks-table.is-grid colgroup{display:none}
 .fsdb-page .tasks-table.is-grid thead{display:block;width:100%}
 .fsdb-page .tasks-table.is-grid thead tr{display:flex;align-items:stretch;width:100%}

@@ -450,7 +450,7 @@ export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteActio
 
         <SiteFaq title="关于对比" items={COMPARE_FAQ} />
 
-        <SiteFinalCta title="看完对比，自己试一次" />
+        <SiteFinalCta title="下载 BIU，亲身验证" />
     </SiteChrome>
   )
 }
@@ -518,7 +518,7 @@ export function MarketingCompareDetail({ onLogin, onStart }: { onLogin: SiteActi
           </section>
         ) : null}
 
-        <SiteFinalCta title="看完对比，自己试一次" />
+        <SiteFinalCta title="下载 BIU，亲身验证" />
     </SiteChrome>
   )
 }

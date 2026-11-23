@@ -247,7 +247,7 @@ export function MarketingInvest({ onLogin, onStart }: { onLogin: SiteAction; onS
 
       <SiteFaq title="关于投资" items={INVEST_FAQ} />
 
-      <SiteFinalCta title="先亲手试一页" />
+      <SiteFinalCta title="下载产品，亲身体验" />
     </SiteChrome>
   )
 }

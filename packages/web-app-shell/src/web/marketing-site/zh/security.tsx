@@ -143,7 +143,7 @@ export function MarketingSecurity({ onLogin, onStart }: { onLogin: SiteAction; o
 
         <SiteFaq title="关于数据" items={SECURITY_FAQ} />
 
-        <SiteFinalCta title="把边界握在自己手里" />
+        <SiteFinalCta title="让数据与边界尽在掌控" />
     </SiteChrome>
   )
 }

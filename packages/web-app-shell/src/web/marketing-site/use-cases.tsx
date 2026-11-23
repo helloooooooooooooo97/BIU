@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { SiteChrome, SiteFaq, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 import { IndustryInteractiveDemo } from './industry-demos.tsx'
-import type { DemoPageSpec } from './scene-page-demo.tsx'
+import { ScenePageDemo, type DemoPageSpec, type SceneDemoLabels } from './scene-page-demo.tsx'
 
 export type CustomPlugin = {
   name: string
@@ -739,6 +739,170 @@ export const USE_CASES: UseCase[] = [
 
 export const USE_CASE_CATEGORIES = USE_CASES
 
+type IndustryExtra = {
+  replaces: string
+  sharedState: string
+  workflow: readonly [step: string, detail: string][]
+}
+
+const INDUSTRY_EXTRA_EN: Record<string, IndustryExtra> = {
+  tech: {
+    replaces: 'Replaces: Docs + Whiteboard + Terminal/Postman + Issue Tracker',
+    sharedState: 'Service name, failing node, and task status live in shared page properties: select an unhealthy node on the topology canvas, the backend probe retargets automatically, and postmortem tasks appear on the board.',
+    workflow: [
+      ['01 · Start one page with live context', 'Put the PRD or incident runbook, architecture canvas, and diagnostic blocks on one page bound to service metadata.'],
+      ['02 · Run tools together without switching', 'Demo interactive prototypes or execute real sandboxed commands in-page—no copy-pasting across terminal, Postman, and Jira.'],
+      ['03 · Let agents read and act directly', 'Mention slow-query logs and recent commits with @ so the agent pinpoints root causes, drafts migrations, and splits tasks.'],
+      ['04 · Accumulate reusable engineering assets', 'Save rollout checklists and health probes as reusable plugins so the next on-call shift duplicates and runs immediately.'],
+    ],
+  },
+  education: {
+    replaces: 'Replaces: Doc App + External Whiteboard + Coding Site + Excel Tracker',
+    sharedState: 'Sandbox test results and lesson properties share one state: passing every hidden test case immediately updates topic mastery and target-offer readiness on the same page.',
+    workflow: [
+      ['01 · Author one interactive lesson page', 'Combine notes, Excalidraw diagrams, algorithm challenge cards, and mastery tables with student properties on one page.'],
+      ['02 · Sketch and run code in the browser', 'Students open one link to draw, edit code, and run real isolated tests with zero local environment setup.'],
+      ['03 · Agent-assisted review and feedback', 'The agent inspects live submissions and test traces, highlights edge-case gaps, and records structured review notes.'],
+      ['04 · Deliver to one student or an entire cohort', 'Share one link; condition-based permissions ensure 40 students on the same page each see only their own submissions.'],
+    ],
+  },
+  media: {
+    replaces: 'Replaces: Script Doc + Timeline Tool + Cloud Drive + Production Sheet',
+    sharedState: 'Narration copy, pacing estimates, and multi-track timelines share one structured scene list: trim a script beat and total runtime plus B-roll tracks recalculate instantly.',
+    workflow: [
+      ['01 · Draft script and metadata together', 'Write narration alongside target runtime, channel specs, and brand guardrails stored as structured page properties.'],
+      ['02 · Keep timeline and assets in sync', 'Word counts convert into timeline spans automatically so editors and writers align on timecodes without juggling spreadsheets.'],
+      ['03 · Check compliance and generate variants', 'Attach your brand-voice skill with @ so the agent flags banned claims and drafts platform-specific titles and hooks.'],
+      ['04 · Ship one review link to clients', 'Send a single page to clients or freelance editors to check off frame-accurate revisions and reuse the layout next episode.'],
+    ],
+  },
+  consulting: {
+    replaces: 'Replaces: Pricing Spreadsheet + Word Contract + Schedule + Email Attachments',
+    sharedState: 'Seats, currency, SLA, and rush toggles drive the entire page: change seats from 10 to 18 and the quote, contract payment clauses, and delivery milestones rewrite in milliseconds.',
+    workflow: [
+      ['01 · Deliver a live portal on day one', 'Skip static PDFs—share an interactive page containing diagnostic notes, a live pricing calculator, and draft SOW clauses.'],
+      ['02 · Negotiate with zero manual drift', 'Clients toggle scope or rush delivery while totals, installment wording, and milestone dates converge automatically.'],
+      ['03 · Agent redline review with approval gates', 'The agent checks terms against playbook rules and flags risk; locking a contract or sending externally pauses for human approval.'],
+      ['04 · Duplicate for the next engagement', 'Clone the page and change three properties (client, currency, SLA) to spin up a fully isolated portal in a minute.'],
+    ],
+  },
+  ecommerce: {
+    replaces: 'Replaces: Margin Excel + Price Scraper + Creator Brief Doc + P&L Sheet',
+    sharedState: 'SKU price, commission rate, ad ROI, and unit costs share one live model: drop promo price by $10 and net margin, break-even volume, and creator briefs update together.',
+    workflow: [
+      ['01 · Build a live SKU margin sandbox', 'Combine competitor specs, scheduled price monitors, and an interactive unit-economics calculator on one page.'],
+      ['02 · Stress-test seasonal promotions', 'Slide discounts, creator commissions, and return rates to see net margin and cash-flow guardrails in real time.'],
+      ['03 · Turn reviews into creator briefs', 'The agent summarizes structured review tables into top objections and updates creator briefs with the latest pricing.'],
+      ['04 · Roll up every SKU across pages', 'Margin blocks across 50 product pages index automatically into one store-wide table for instant filtering.'],
+    ],
+  },
+  finance: {
+    replaces: 'Replaces: Local PDFs + Valuation Excel + Filings Browser + IC Slide Deck',
+    sharedState: 'Growth, margin, and discount-rate assumptions live in page properties: tweak a sensitivity input and the DCF table, MOIC card, and IC verdict update on the spot.',
+    workflow: [
+      ['01 · Keep sensitive diligence strictly local', 'Store interview transcripts, PDF filings, and valuation models in a local SQLite workspace—offline-ready and never uploaded.'],
+      ['02 · Pair narrative directly with live models', 'Put investment judgment next to working valuation tables so IC partners test assumptions live during the meeting.'],
+      ['03 · Ground agent checks in exact sources', 'Mention specific transcripts and tables with @ so the agent reconciles numbers strictly from primary sources.'],
+      ['04 · Aggregate pipeline across all memos', 'Valuation blocks across every diligence page automatically aggregate into a filterable portfolio table.'],
+    ],
+  },
+}
+
+const CAPABILITY_USE_CASES_EN = [
+  {
+    index: '01',
+    tag: 'Compose · Full-stack reactive plugins',
+    title: 'Host multiple distinct tools on one page sharing live state',
+    body: 'Whiteboards, code sandboxes, real terminals, video timelines, pricing engines, and task boards are not isolated iframes. Every plugin on the page reads and writes the same page properties—one edit converges everywhere.',
+    example: 'Example: raising seats from 10 to 18 recalculates the quote, rewrites contract payment clauses word-for-word, and shifts milestones.',
+  },
+  {
+    index: '02',
+    tag: 'Build · AI-built plugins on demand',
+    title: 'Missing a specialized tool? Grow it directly against live data',
+    body: 'No waiting on vendor roadmaps or spinning up a separate web app. When work requires a rollout checklist, SKU margin sandbox, or interview scorecard, describe it to the agent and run it immediately on real page fields.',
+    example: 'Example: a merchandiser asks the agent to add a return-rate and commission margin slider right inside a live launch page.',
+  },
+  {
+    index: '03',
+    tag: 'Store · Prose and structured tables in one place',
+    title: 'Write freely while structured blocks index into queryable tables',
+    body: 'Freeform narrative and strictly typed plugin blocks coexist on the same page. The workspace automatically aggregates matching blocks across dozens of pages into structured tables for both human views and exact agent queries.',
+    example: 'Example: valuation cards across 50 diligence memos auto-index so you can filter “gross margin < 30% & IC approved” in one click.',
+  },
+  {
+    index: '04',
+    tag: 'Human + Agent · Shared truth & backend actions',
+    title: 'Agents read structured records directly—no screenshot guessing',
+    body: 'Humans and agents operate on the exact same workspace state and backend runtimes. Reference pages, tables, or skills with @; agents execute structured reads/writes and sandbox actions behind explicit approval gates.',
+    example: 'Example: on an incident page, the agent correlates slow SQL with recent commits, identifies the missing index, and drafts the migration.',
+  },
+  {
+    index: '05',
+    tag: 'Distribute · One-link delivery & condition permissions',
+    title: 'Share one link to ship live software with dynamic access rules',
+    body: 'Sharing packages prose, attachments, and referenced plugin source into a single working link—recipients interact immediately without installing anything. Permissions match a Data View against a Member View dynamically.',
+    example: 'Example: share one algorithm course page with 40 students—each student automatically sees and runs only their own submissions.',
+  },
+  {
+    index: '06',
+    tag: 'Derive · Compounding templates & open-source reuse',
+    title: 'Clone a page for the next client, or layer on existing software',
+    body: 'One plugin codebase adapts across pages via page properties (currency, locale, SLA). Proven pages, plugins, and skills compound over time, and agents can derive incremental layers from existing plugins or GitHub repos.',
+    example: 'Example: duplicate a client portal, change currency to USD and SLA to 7 days, and deliver a fully isolated portal in one minute.',
+  },
+] as const
+
+const EXTENDED_USE_CASES_EN = [
+  {
+    tag: 'Research & Healthcare',
+    title: 'Lab notebooks, literature matrices, and local analysis pages',
+    replaces: 'Replaces: Lab Notebook + Zotero Notes + Python Notebook + Charting Apps',
+    body: 'Keep protocol parameters, raw local datasets, and runnable Python plotting blocks on one page. Sensitive clinical or unpublished data stays strictly in local SQLite while agents cross-check literature and outliers.',
+    blocks: ['Code Runner', 'Table', 'PDF Attachments', 'AI Experiment Comparator'],
+  },
+  {
+    tag: 'Hardware & Manufacturing',
+    title: 'BOM cost sandboxes, QA checklists, and device triage manuals',
+    replaces: 'Replaces: BOM Excel + Paper QA Sheets + Serial/SSH Terminal + Defect Log',
+    body: 'Component price edits update unit margins instantly; line engineers run terminal diagnostics right inside the triage page while QA exceptions aggregate across production batches.',
+    blocks: ['Page Terminal', 'Table', 'AI BOM Calculator', 'Tasks'],
+  },
+  {
+    tag: 'HR & Recruiting',
+    title: 'Role scorecards, interview rubrics, and offer calculators',
+    replaces: 'Replaces: Docs + Interview Forms + Comp Spreadsheet + Email Threads',
+    body: 'Interviewers score candidates on one page that rolls into a comparison matrix automatically; recruiters tune level and equity splits live and share one link with hiring managers.',
+    blocks: ['Table', 'AI Interview Scorecard', 'AI Offer Calculator', 'Tasks'],
+  },
+  {
+    tag: 'Personal Systems & Solo Services',
+    title: 'Personal CRM, financial sandboxes, and client delivery portals',
+    replaces: 'Replaces: Notes App + Budget Sheet + Form Builder + Static PDF Portfolio',
+    body: 'Freelancers, advisors, and creators accumulate client records, reusable skills, and mini tools for free in a local space—then clone a template page and ship interactive client portals via one link.',
+    blocks: ['Table', 'Excalidraw Canvas', 'HTML', 'AI Client Portal'],
+  },
+] as const
+
+const USE_CASES_OVERVIEW_FAQ_EN: readonly [string, string][] = [
+  [
+    'How are BIU use-case pages different from Notion or Lark templates?',
+    'Conventional document templates are static layouts (at best with isolated iframes). Every block on a BIU page is a full-stack plugin with real frontend and backend logic—terminals, sandboxes, calculators, monitors—all sharing live page state so one edit converges everywhere.',
+  ],
+  [
+    'Do I need to know how to code to use these use cases or custom plugins?',
+    'No. Built-in pages, tables, whiteboards, task boards, and ready-made plugins work out of the box. When you need a bespoke tool like a quote engine, rubric, or margin sandbox, describe the rules to the agent on the page and it builds it against your live data.',
+  ],
+  [
+    'Do external clients or students have to install an app or sign up?',
+    'No. Sharing bundles prose, attachments, and referenced plugin source into one link. Recipients open it in the browser and immediately draw, run code, or adjust interactive calculators.',
+  ],
+  [
+    'Is it safe to keep diligence memos, contracts, or ops logs in BIU?',
+    'The desktop app defaults to local spaces where all pages, structured tables (SQLite), and attachments stay on your computer and work offline. Model calls go directly to your chosen provider carrying only the context you explicitly select with @.',
+  ],
+]
+
 function BlockChips({ blocks }: { blocks: string[] }) {
   return (
     <ul className="site-block-chips" aria-label="Common plugins">
@@ -749,52 +913,222 @@ function BlockChips({ blocks }: { blocks: string[] }) {
 
 /** Industry & Use Case Overview */
 export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
+  const [demoSlug, setDemoSlug] = useState(USE_CASES[0]!.slug)
+  const [roleFilter, setRoleFilter] = useState<string>('all')
+
   usePageMeta({
     title: 'Use Cases',
-    description: 'Tech, education, media, consulting, e-commerce, and finance—explore how roles across industries combine built-in and AI-built plugins in BIU.',
+    description: 'Tech, education, media, consulting, e-commerce, finance, and beyond—see how BIU combines full-stack plugins, shared state, agents, and one-link delivery on a single page.',
     path: '/use-cases',
   })
+
+  const allRoleEntries = USE_CASES.flatMap((useCase) =>
+    useCase.roles.map((role) => ({ useCase, role })),
+  )
+  const visibleRoles = roleFilter === 'all'
+    ? allRoleEntries
+    : allRoleEntries.filter((entry) => entry.useCase.slug === roleFilter)
 
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <section className="site-page-hero" data-reveal>
         <p className="site-section-label">Industries & Use Cases</p>
-        <h1>Tailored working pages for every industry and role</h1>
+        <h1>Real use cases where one page replaces four disconnected apps</h1>
         <p className="site-page-lead">
-          BIU is not limited to a handful of fixed templates. Explore any industry to see how different roles combine built-in and AI-customized plugins—and try an interactive page preview for each role.
+          BIU is not a static template library. Every block on a page is full-stack software sharing live state—bringing docs, whiteboards, tables, terminals, sandboxes, and custom calculators into one workspace operated by both humans and agents, delivered in one link.
         </p>
+        <div className="site-usecase-summary-strip">
+          <div>
+            <strong>6 Core Industries + 4 Extended Domains</strong>
+            <span>Engineering, education, media, consulting, e-commerce, finance, research, and hardware</span>
+          </div>
+          <div>
+            <strong>12+ Role-Specific Working Pages</strong>
+            <span>Built-in plugin stacks, AI-built custom blocks, and interactive previews for every role</span>
+          </div>
+          <div>
+            <strong>6 Unified Capabilities</strong>
+            <span>Reactive plugins · AI build · Auto-indexed tables · Agent actions · One-link delivery · Derivation</span>
+          </div>
+        </div>
       </section>
 
-      <section className="site-usecase-grid" aria-label="Use cases">
-        {USE_CASES.map((useCase) => (
-          <Link key={useCase.slug} to={`/use-cases/${useCase.slug}`} className="site-usecase-card">
-            <span className="site-solution-index">{useCase.index} · {useCase.roleLabels.join(' · ')}</span>
-            <h2>{useCase.title}</h2>
-            <p>{useCase.summary}</p>
-            <div className="site-usecase-card-blocks">
-              <BlockChips blocks={useCase.blocks} />
-            </div>
-          </Link>
-        ))}
+      <section className="site-usecase-demo-section" aria-label="Interactive Use Case Showcase" data-reveal>
+        <div className="site-usecase-demo-head">
+          <p className="site-section-label">Try It Live · Cross-Plugin Shared State</p>
+          <h2>Pick an industry and test multiple tools reacting on one page</h2>
+          <p className="site-usecase-lead-sub">
+            These are live interactive demos, not screenshots: select a failing node, raise seat count, run code, or slide a discount and watch every other block on the page update together.
+          </p>
+          <div className="site-demo-tabs" role="tablist" aria-label="Switch industry interactive demo">
+            {USE_CASES.map((item) => (
+              <button
+                key={item.slug}
+                type="button"
+                role="tab"
+                aria-selected={demoSlug === item.slug}
+                className={demoSlug === item.slug ? 'is-active' : ''}
+                onClick={() => setDemoSlug(item.slug)}
+              >
+                {item.index} {item.title}
+              </button>
+            ))}
+          </div>
+        </div>
+        <IndustryInteractiveDemo key={demoSlug} slug={demoSlug} locale="en" />
+      </section>
+
+      <section className="site-usecase-section" aria-label="Use cases by core capability" data-reveal>
+        <div className="site-usecase-section-head">
+          <p className="site-section-label">Capabilities in Action · How BIU Powers Every Use Case</p>
+          <h2>Six core capabilities working together in real workflows</h2>
+          <p>
+            Point tools solve one slice and drop context at the boundary. BIU unifies building, storing, composing, distributing, and deriving software inside one page.
+          </p>
+        </div>
+        <div className="site-usecase-cap-grid">
+          {CAPABILITY_USE_CASES_EN.map((cap) => (
+            <article key={cap.index} className="site-usecase-cap-card">
+              <span className="site-solution-index">{cap.index} · {cap.tag}</span>
+              <h3>{cap.title}</h3>
+              <p>{cap.body}</p>
+              <p className="site-usecase-cap-example">{cap.example}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="site-usecase-section" aria-label="Six core industries" data-reveal>
+        <div className="site-usecase-section-head">
+          <p className="site-section-label">Six Core Industries</p>
+          <h2>Explore full stack replacements, workflows, and role demos</h2>
+          <p>
+            Every card shows which legacy tools one BIU page replaces, how plugins share live state, and what gets delivered—click through for the 4-step workflow and role previews.
+          </p>
+        </div>
+        <div className="site-usecase-grid" aria-label="Use cases">
+          {USE_CASES.map((useCase) => {
+            const extra = INDUSTRY_EXTRA_EN[useCase.slug]
+            return (
+              <Link key={useCase.slug} to={`/use-cases/${useCase.slug}`} className="site-usecase-card">
+                <span className="site-solution-index">{useCase.index} · {useCase.roleLabels.join(' · ')}</span>
+                <h2>{useCase.title}</h2>
+                {extra ? <p className="site-usecase-card-replaces">{extra.replaces}</p> : null}
+                <p>{useCase.summary}</p>
+                {extra ? <p className="site-usecase-card-sync">{extra.sharedState}</p> : null}
+                <p className="site-usecase-card-output">Key deliverables: {useCase.output}</p>
+                <div className="site-usecase-card-blocks">
+                  <BlockChips blocks={useCase.blocks} />
+                </div>
+                <span className="site-usecase-card-go">Explore full use case & roles →</span>
+              </Link>
+            )
+          })}
+        </div>
+      </section>
+
+      <section className="site-usecase-section" aria-label="Browse by role" data-reveal>
+        <div className="site-usecase-section-head">
+          <p className="site-section-label">By Role · 12 Complete Working Pages</p>
+          <h2>What goes inside each role’s working page?</h2>
+          <p>
+            Filter by industry to inspect the exact built-in plugins, AI-built custom blocks, and delivery flow for each role.
+          </p>
+          <div className="site-demo-tabs" role="tablist" aria-label="Filter role use cases by industry">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={roleFilter === 'all'}
+              className={roleFilter === 'all' ? 'is-active' : ''}
+              onClick={() => setRoleFilter('all')}
+            >
+              All Roles ({allRoleEntries.length})
+            </button>
+            {USE_CASES.map((item) => (
+              <button
+                key={item.slug}
+                type="button"
+                role="tab"
+                aria-selected={roleFilter === item.slug}
+                className={roleFilter === item.slug ? 'is-active' : ''}
+                onClick={() => setRoleFilter(item.slug)}
+              >
+                {item.title}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="site-usecase-role-catalog">
+          {visibleRoles.map(({ useCase, role }) => (
+            <article key={`${useCase.slug}-${role.id}`} className="site-usecase-role-card">
+              <div className="site-usecase-role-card-head">
+                <span className="site-solution-index">{useCase.title} · {role.role}</span>
+                <h3>{role.pageTitle}</h3>
+              </div>
+              <p>{role.summary}</p>
+              <p className="site-usecase-role-deliver">
+                <strong>Delivery: </strong>{role.deliverTo}
+              </p>
+              <div className="site-usecase-role-plugins">
+                <BlockChips blocks={role.blocks} />
+                <div className="site-usecase-role-customs">
+                  {role.customPlugins.map((plugin) => (
+                    <div key={plugin.name}>
+                      <span>AI-built</span>
+                      <strong>{plugin.name}</strong>
+                      <small>{plugin.body}</small>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <Link className="site-usecase-card-go" to={`/use-cases/${useCase.slug}`}>
+                Open {useCase.title} use case →
+              </Link>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="site-usecase-section" aria-label="More industries and personal workflows" data-reveal>
+        <div className="site-usecase-section-head">
+          <p className="site-section-label">Beyond Six Industries</p>
+          <h2>Any workflow combining docs, tools, data, and delivery fits on one page</h2>
+          <p>
+            Teams and solo practitioners also compose BIU pages across research, hardware, recruiting, and independent client services.
+          </p>
+        </div>
+        <div className="site-usecase-ext-grid">
+          {EXTENDED_USE_CASES_EN.map((item) => (
+            <article key={item.tag} className="site-usecase-ext-card">
+              <span className="site-solution-index">{item.tag}</span>
+              <h3>{item.title}</h3>
+              <p className="site-usecase-card-replaces">{item.replaces}</p>
+              <p>{item.body}</p>
+              <BlockChips blocks={[...item.blocks]} />
+            </article>
+          ))}
+        </div>
       </section>
 
       <section className="site-usecase-open" data-reveal>
         <div>
-          <p className="site-section-label">Beyond six industries</p>
-          <h2>Don’t see your industry or role?</h2>
+          <p className="site-section-label">Grow on Demand · No Fixed Ceiling</p>
+          <h2>Have a niche workflow not listed above?</h2>
           <p>
-            Plugins in BIU are not limited to what ships out of the box. Healthcare, manufacturing, HR, or personal research—describe your workflow and let an agent craft the exact blocks your team needs.
+            Every block in BIU is powered by a plugin rather than hardcoded by a vendor. Start with a page of real records, describe the missing tool to an agent, and ship from day one.
           </p>
         </div>
         <Link className="site-cta-secondary" to="/product#plugins">See how plugin customization works →</Link>
       </section>
 
-      <SiteFinalCta title="Start with your industry and role" />
+      <SiteFaq title="About BIU use cases" items={USE_CASES_OVERVIEW_FAQ_EN} />
+
+      <SiteFinalCta title="Build your working page" />
     </SiteChrome>
   )
 }
 
-/** Industry Detail Page with Role Switcher + Interactive BIU Demo Page */
+/** Industry Detail Page with Cross-Plugin Demo + 4-Step Workflow + Role Switcher & Interactive Role Preview */
 export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   const { slug } = useParams<{ slug: string }>()
   const useCase = USE_CASES.find((item) => item.slug === slug)
@@ -824,13 +1158,15 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
 
   const activeRole = useCase.roles[activeRoleIdx] ?? useCase.roles[0]!
   const others = USE_CASES.filter((item) => item.slug !== useCase.slug)
+  const extra = INDUSTRY_EXTRA_EN[useCase.slug]
 
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <section className="site-page-hero" data-reveal>
-        <p className="site-section-label">Industry · {useCase.index}</p>
+        <p className="site-section-label">Industry Use Case · {useCase.index}</p>
         <h1>{useCase.title}</h1>
         <p className="site-page-lead">{useCase.summary}</p>
+        {extra ? <p className="site-usecase-card-replaces">{extra.replaces}</p> : null}
         <p className="site-usecase-output">Key deliverables: {useCase.output}</p>
         <p className="site-usecase-note">Roles: {useCase.roleLabels.join(' · ')}</p>
       </section>
@@ -844,8 +1180,26 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
         <IndustryInteractiveDemo key={useCase.slug} slug={useCase.slug} locale="en" />
       </section>
 
+      {extra ? (
+        <section className="site-usecase-section" aria-label="End-to-end workflow" data-reveal>
+          <div className="site-usecase-section-head">
+            <p className="site-section-label">End-to-End Loop</p>
+            <h2>How the complete workflow runs from day one to reuse</h2>
+            <p>{extra.sharedState}</p>
+          </div>
+          <div className="site-usecase-flow-grid">
+            {extra.workflow.map(([step, detail]) => (
+              <article key={step} className="site-usecase-flow-card">
+                <h3>{step}</h3>
+                <p>{detail}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <section className="site-usecase-blocks" data-reveal>
-        <h2>Plugin setups by role in this industry</h2>
+        <h2>Working pages & plugin setups by role</h2>
         <div className="site-demo-tabs" role="tablist" aria-label="Choose a role">
           {useCase.roles.map((role, index) => (
             <button
@@ -863,6 +1217,9 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
         <p className="site-usecase-role-lead">{activeRole.summary}</p>
         <p className="site-usecase-note">Delivery: {activeRole.deliverTo}</p>
         <BlockChips blocks={activeRole.blocks} />
+        <div className="site-usecase-role-demo-wrap">
+          <ScenePageDemo key={`${useCase.slug}-${activeRole.id}`} spec={activeRole.demo} labels={DEMO_LABELS_EN} />
+        </div>
         <h3 className="site-usecase-custom-heading">Custom plugins an agent can build for {activeRole.role}</h3>
         <div className="site-usecase-custom-grid">
           {activeRole.customPlugins.map((plugin) => (
@@ -904,7 +1261,7 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
         </div>
       </section>
 
-      <SiteFinalCta title="Build a working page for your industry" />
+      <SiteFinalCta title="Build a page for your team" />
     </SiteChrome>
   )
 }

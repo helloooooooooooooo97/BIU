@@ -3,7 +3,7 @@ export type Paragraph =
   | string
   | { code: string }
   | { image: string; alt: string; caption: string }
-  | { diagram: 'page-env' | 'atoms'; caption: string }
+  | { diagram: 'page-env' | 'atoms' | 'vision-table'; caption: string }
 
 export type BlogSeries = 'paradigm' | 'verbs' | 'architecture'
 
@@ -38,12 +38,15 @@ export type BlogPost = {
 
 export const BLOG_AUTHOR = { name: 'The BIU Team', email: '348876414@qq.com' }
 
-/** 中文按每分钟 400 字估算，代码块和图不计。 */
+/** 英文按每分钟 220 词估算，代码块和图不计。 */
 export function readingMinutes(post: BlogPost) {
-  const chars = post.sections
+  const words = post.sections
     .flatMap((section) => [section.heading ?? '', ...section.body.filter((p): p is string => typeof p === 'string')])
-    .join('').length
-  return Math.max(1, Math.round(chars / 400))
+    .join(' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length
+  return Math.max(1, Math.round(words / 220))
 }
 
 export const BLOG_POSTS: BlogPost[] = [
@@ -97,50 +100,6 @@ export const BLOG_POSTS: BlogPost[] = [
           'No medium fits every kind of software. BIU is not built to replace Photoshop’s GPU pixel pipeline, AAA 3D game engines, or high-frequency banking ledgers—domains that demand raw low-level hardware control rather than collaborative expression. A unified data contract also enforces stricter plugin structure, and our ecosystem is still young compared with twenty-year-old SaaS suites.',
           'Yet across the vast majority of everyday work—engineering triage, coaching, media production, client delivery, merchandising, and diligence—the bottleneck was never frame rate. It was fragmentation across tools and the mismatch between human and machine interfaces.',
           'When software moves into pages with shared structured state, humans and agents finally share the same working medium.',
-        ],
-      },
-    ],
-  },
-  {
-    slug: 'all-in-one',
-    series: 'paradigm',
-    title: 'All in One Is Not About Packing Features into One App',
-    summary: 'Most “all-in-one” products keep adding features to one app until they hit the ceiling of what one vendor can build. BIU lets pages host full-stack software and connect different tools through shared data.',
-    date: '2026-10-14',
-    sections: [
-      {
-        body: [
-          'When people hear “All in One,” they usually picture a super-app: one vendor packing docs, tables, boards, calendars, whiteboards, and an AI assistant under one login.',
-          'That works early on, until every product on that path hits the same structural ceiling: features are always pre-defined and hard-coded by the vendor. The vendor ships six generic modules, and your job happens to need the seventh—a sandboxed code judge with hidden tests, a timeline video editor with live runtime estimates, a SKU margin sandbox, or a pricing engine that rewrites contract clauses word for word.',
-          'No single vendor can build and maintain backend runtimes for every niche industry. Generic suites grow bloated while real domain work forces you back into standalone apps, fragmenting data all over again.',
-          'BIU’s version of All in One is not packing every feature into one vendor’s app; it is letting any software live as a plugin inside the same page.',
-        ],
-      },
-      {
-        heading: 'Blocks are full-stack software, not fixed formats',
-        body: [
-          'Every block on a BIU page is a live, plugin-powered piece of software—an Excalidraw canvas, a coding challenge backed by an isolated sandbox, a timeline video editor, or a scheduled price monitor.',
-          'Block types are never hard-coded by the platform: install a plugin to add a new capability, or ask an agent to build one on demand. Declaring a block on a page takes only a declaration and structured data:',
-          { code: ':::editorBlock {kind=algorithm plugin=page-algorithm}\n{ "title": "1. Two Sum", "lang": "python" }\n:::' },
-          '`kind` and `plugin` specify who renders the interface and runs the backend, while the JSON holds its structured state—readable and editable by both people and agents.',
-        ],
-      },
-      {
-        heading: 'Shared state, not isolated iframe embeds',
-        body: [
-          'Many document tools let you embed external web pages via iframes, yet those embeds sit behind glass walls: raising seat count from 10 to 18 in a pricing sheet never rewrites the contract beside it, and passing a coding test inside an embedded page never updates the student’s mastery table below.',
-          'In BIU, plugins on the same page read and write the same underlying data and page properties. One update immediately converges across the page—when a student passes every test case in the sandbox, mastery metrics and target-offer readiness update on the spot:',
-          { image: '/site/demo-allinone.webp', alt: 'An algorithm interview coaching page with a header, Excalidraw canvas, coding challenge card, and code runner on one page', caption: 'One algorithm interview coaching page: the header, canvas, coding challenge, code runner, and offer comparison are each plugins sharing page state.' },
-          'Because everything lives in one structured workspace, every tool on the page is also directly operable by agents—no screenshot guessing and no manual copy-pasting.',
-        ],
-      },
-      {
-        heading: 'Share a working page of software',
-        body: [
-          'Conventional all-in-one apps collaborate around workspaces and accounts—delivering a finished service to an external client or student means asking them to register, learn an admin UI, and configure permissions across tools.',
-          'In BIU, sharing packages the page body, attachments, and referenced plugin source together. Recipients open one link and immediately draw on the canvas, run code, or adjust pricing:',
-          { image: '/site/shot-share.webp', alt: 'The whiteboard and coding challenge remain usable on a shared page', caption: 'Recipients opening the shared link see more than a screenshot: the whiteboard and coding challenge still work.' },
-          'That is the real goal of All in One: composing the exact software a job requires on one page, backed by shared data, and delivering it directly to clients, students, and teams.',
         ],
       },
     ],
@@ -211,208 +170,360 @@ export const BLOG_POSTS: BlogPost[] = [
     ],
   },
   {
-    slug: 'page-is-the-boundary',
-    series: 'architecture',
-    title: 'The Page Is the Only Bounded Unit',
-    summary: 'The same plugin behaves differently on two pages while sharing one codebase. How the page unifies logic, organization, delivery, and environment boundaries—and how data still aggregates across pages without breaking isolation.',
-    date: '2026-10-14',
+    slug: 'application-slicing',
+    series: 'paradigm',
+    title: 'Application Slicing: Unbundling Bloated SaaS into Composable, Snapshotable Blocks',
+    summary: 'A plugin’s backend does not need to run inside BIU. By projecting bloated SaaS tools into lightweight frontend slices on a page, you recompose only the 5% of each tool you actually need—and persist every run as a structured snapshot that creates new data.',
+    date: '2026-11-20',
     sections: [
       {
         body: [
-          'In most software systems, boundaries are drawn around entire apps or tenant workspaces. Delivering separate portals to twenty clients usually means maintaining twenty permission lists, twenty project silos, or even twenty deployments.',
-          'In BIU, we deliberately collapse those boundaries into a single unit: the page. A plugin (Component) declares what it is, how it computes, and how it renders; the page decides where it sits, what data it shares, and what environment it runs in.',
+          'Why do you have to open an entire aircraft carrier just to test one API endpoint?',
+          'Open almost any mature enterprise SaaS product today—Apifox, Jira, Salesforce, a cloud console, or an internal ERP—and you will witness the same law of software entropy. To defend renewal rates, expand seat pricing, and claim “end-to-end coverage,” every product inevitably bloats into a monolith packed with a hundred menus, environment trees, mock rules, approval workflows, and admin panels.',
+          'Yet during any single piece of real work, you typically need 5% of that monolith. Suppose you are writing a v2.4 checkout release checklist and simply need to verify three core endpoints. In the legacy world, you switch into the full Apifox workspace, absorb the cognitive overhead of its entire project hierarchy and global variables, run the requests, and then paste screenshots or raw JSON back into your release doc. A week later, staging changes or tokens expire—your external links are dead and your screenshots are unsearchable.',
+          'When engineers first hear BIU lets pages host full-stack software, they often assume we expect them to rewrite the backend of every tool on earth inside BIU. Quite the opposite: backends stay right where they are. What BIU introduces is a sharper, far more practical architectural primitive—**Application Slicing**.',
         ],
       },
       {
-        heading: 'Four layers of boundaries, unified',
+        heading: 'Keep the backend where it lives; slice the frontend to fit the task',
         body: [
-          'Logic: every block ID is scoped as “page ID::block ID,” giving each page a natural namespace so identically named quote calculators or code runners on different pages never collide.',
-          'Organization: layout order, narrative prose, and shared state all belong to the page—making one page a complete business unit, whether a client portal, an incident runbook, or an interactive lesson.',
-          'Delivery: sharing resolves dependencies per page, bundling prose, attachments, and referenced plugin source code so recipients get a working unit in one link.',
-          'Environment: the page supplies variables to every plugin inside it, allowing one codebase to behave differently across pages.',
-        ],
-      },
-      {
-        heading: 'Page properties are the runtime environment',
-        body: [
-          'Rather than inventing a separate env panel that drifts away from business data, BIU treats a page’s own structured properties as the runtime environment read by every plugin:',
+          'In BIU’s plugin architecture, a plugin’s backend service does not need to run inside BIU at all. It can be an existing internal microservice, a standalone Python or Go engine, or the public/private API of Apifox, GitHub, Stripe, Sentry, Snowflake, or an enterprise ERP.',
+          'What a BIU plugin constructs is a razor-thin frontend projection—a Slice—that samples only the exact 5% of capability and UI required by the current page and embeds it as a native block:',
           {
-            code: 'Page A properties: { client: "Nova Mfg",  currency: "CNY", slaDays: 14 }\nPage B properties: { client: "Northwind", currency: "USD", slaDays: 7 }\n\nSame pricing & contract plugin:\n  Reads page.currency and page.slaDays → switches currency, tax rules, and SLA clauses automatically',
+            code: 'Legacy Monolith Workflow (forced to absorb 95% irrelevant UI every time):\n  Release Doc ──switch──▶ Full Apifox (100 menus)   ──screenshot──▶ Back to Doc (dead text)\n              ──switch──▶ Full Sentry (50 panels)   ──paste URL───▶ Back to Doc (rots fast)\n              ──switch──▶ Full Jira (heavy forms)\n\nApplication Slicing (Backends stay put; frontend slices recompose on one page):\n  [Apifox / Internal API]  ◀── Slice block: 3 core endpoints + one-click assertions\n  [Sentry Backend]         ◀── Slice block: 10-minute error-rate sparkline           ──▶ One BIU Page\n  [BIU Task Table]         ◀── Built-in block: auto-create regression tickets on fail',
           },
-          { diagram: 'page-env', caption: 'The same plugin on two pages reads two sets of properties and exhibits two behaviors.' },
-          'Because scope is governed by the page boundary rather than hardcoded inside `if (tenant === ...)` branches, a consultant maintains one plugin codebase: on Client A’s page it renders CNY terms, and duplicating it for Client B with three property edits switches it to USD and a shorter schedule—completely isolated.',
+          'The cognitive tax disappears. Inside that release page, you never navigate Apifox’s folder tree or dig through unrelated mock rules; you see only the three endpoints that matter here, their payloads, a Run button, and live assertions. Software stops arriving as a vendor-packaged monolith and starts arriving as a slice shaped around the task.',
         ],
       },
       {
-        heading: 'Isolation without silos: aggregating across pages',
+        heading: 'Why slicing is neither an iframe nor iPaaS glue',
         body: [
-          'A natural question follows: if every client lives on an isolated page, how does the team view total pipeline across twenty clients or track weak topics across an entire class?',
-          'In BIU, the page defines the runtime and delivery boundary, while the workspace automatically indexes page properties and matching plugin blocks into typed tables underneath. In your internal management view, you can filter and aggregate every quote or task across all pages; when you share one page with Client A, packaging and permissions stay strictly scoped to that single page.',
-          'Agents benefit from the exact same boundary: modifying or duplicating a client page stays strictly contained to that page without risking side effects across the rest of the workspace.',
-        ],
-      },
-    ],
-  },
-  {
-    slug: 'fewer-atoms',
-    series: 'architecture',
-    title: 'Fewer Atoms, More Combinations',
-    summary: 'Inventing a new data model and API for every module hurts human maintainers and overwhelms agents with dozens of bespoke tools. BIU uses six primitives and one set of operations so complexity stays constant.',
-    date: '2026-10-14',
-    sections: [
-      {
-        body: [
-          'Conventional software almost always hits the same complexity wall: every new domain invents its own data model, permission rules, filter UI, and API surface. Ten features become ten subsystems.',
-          'That bloat slows human maintainers, and it cripples agents even faster—every new subsystem adds dozens of bespoke tool schemas that crowd the context window and degrade tool-calling accuracy.',
+          'Engineers immediately compare this to two familiar patterns—iframe embeds and iPaaS automation (Zapier, n8n, webhooks). Both stop halfway:',
+          '**Iframes cram the whole monolith into a glass box.** You still load a heavy external web app with brittle auth sessions and full UI clutter—and worse, the box is sealed off from the page. Flipping `env = prod-canary` in your document never updates the embedded API runner or error monitor, and agents are completely blind to what happens inside the frame.',
+          '**iPaaS and webhooks are invisible background plumbing.** They excel at “when A fires, copy field B,” yet they cannot give a human a unified workspace to inspect live systems side-by-side, tweak parameters interactively, verify results, and record judgment—and any upstream schema change silently breaks the pipeline.',
+          'BIU’s application slices take a third path: **every slice speaks one structured data contract and subscribes to shared page properties**. Switch `env` from `staging` to `prod-canary` at the top of the release page, and slices backed by Apifox, Sentry, and an internal log cluster retarget together—connecting not three bloated apps, but the sharpest 5% of each.',
         ],
       },
       {
-        heading: 'Six primitives across every domain',
+        heading: 'Snapshot persistence: creating new data in the act of connecting',
         body: [
-          'Half a century ago, Unix unified diverse hardware behind “everything is a file” and a tiny set of system calls (open, read, write, ioctl). BIU applies the same discipline to workspace data, distilling the system down to six primitives:',
-          { diagram: 'atoms', caption: 'Six atoms combine into tasks, pages, plugins, sessions, and more. Adding a domain is simply another composition.' },
+          'The most quietly transformative property of an application slice is that **it is not a transient remote viewport—every execution writes a structured snapshot directly into the page**.',
+          'Return to that Apifox testing slice. Click Run inside your v2.4 release page, and once the external backend responds, the plugin persists the timestamp, request payload, HTTP status, latency, and assertion verdict right inside the page’s block record:',
           {
-            code: '1. Path    Uniform address for any object, e.g. /tasks/t-102 or /pages/client-nova\n2. Table   Collection of objects of one kind, e.g. /tasks, /pages, /plugins\n3. Record  A single entry with typed fields and timestamps\n4. Schema  Field types and constraints driving forms and validation\n5. Action  Explicit state transitions or backend operations (run sandbox, lock contract)\n6. Blurb   Plain-language self-documentation explaining purpose and usage conventions',
+            code: ':::editorBlock {kind=api-slice plugin=apifox-runner}\n{\n  "endpoint": "POST /v2/orders/checkout",\n  "env": "prod-canary",\n  "payload": { "sku": "pro-annual", "seats": 18 },\n  "lastSnapshot": {\n    "at": "2026-11-20T14:12:08Z",\n    "status": 200,\n    "latencyMs": 142,\n    "assertion": "pass",\n    "traceId": "tr_98a2f1"\n  }\n}\n:::',
           },
-          'The sixth primitive—Blurb—is easy to overlook yet crucial for agents. Conventional databases expose bare column names that force models to guess; in BIU, every table carries plain-language guidance so an agent entering an unfamiliar workspace or inspecting a brand-new plugin table can immediately understand and operate it safely without hardcoded domain logic.',
+          'That single structured write achieves two things legacy tools never could:',
+          'First, **documents gain auditable, queryable point-in-time snapshots**. Reopening the v2.4 release page three months later during a postmortem shows neither a 404 external link nor an unsearchable PNG—it shows the exact structured response verified at release time, while staying one click away from re-running for a fresh snapshot (with prior snapshots preserved in the append-only event log).',
+          'Second, **connecting legacy systems generates brand-new structured data that you own**. The Apifox latency snapshot, the Sentry error rate, and your human sign-off settle together in local SQLite. After thirty releases, all thirty `api-slice` blocks automatically aggregate into a cross-page table—giving you a 90-day checkout latency and reliability ledger without ever standing up a data warehouse.',
         ],
       },
       {
-        heading: 'One set of operations',
+        heading: 'Why slicing is a force multiplier for agents',
         body: [
-          'Every domain—tasks, pages, blocks, plugins, or sessions—is queried, read, updated, created, and acted upon through the exact same operations; only the path changes:',
-          { code: 'db_list   /tasks\ndb_read   /pages/<id>\ndb_update /editor-blocks/<pageId>::<blockId>\ndb_create /plugins\ndb_action /pages/<id> { action: "publish" }' },
-          'This yields two immediate advantages: registering a new table automatically grants it filterable views, split panes, and rule-based permissions with zero API boilerplate; and agents only need a handful of universal verbs to operate any future software added to the workspace.',
-        ],
-      },
-      {
-        heading: 'Bounded complexity as capabilities grow',
-        body: [
-          'Fewer atoms does not mean a toy system—it means conceptual overhead stops scaling linearly with feature count. Because plugins themselves live as structured records in a table, both people and agents use the same operations to inspect, author, and derive new software.',
+          'Point an AI agent at the full UI of Apifox, Jira, and a cloud console, and it either burns vision tokens guessing pixel coordinates or drowns in eighty overlapping MCP tool schemas.',
+          'Point an agent at a page of recomposed application slices, and it sees a minimal, task-scoped action surface alongside persisted structured snapshots. It reads `status` and `latencyMs` directly from `lastSnapshot`, correlates them with the Sentry slice on the same page, and decides within milliseconds whether to approve rollout or open a rollback task—without ever touching the irrelevant 95% of the underlying monoliths.',
+          'Bloated SaaS will not vanish overnight; it will recede into the backend as specialized service engines while lightweight, snapshotable slices recompose on the page.',
         ],
       },
     ],
   },
   {
-    slug: 'accumulate',
-    series: 'architecture',
-    title: 'Make Every Round of Work Last',
-    summary: 'Good results from conversational AI sink into chat history after one use, resetting every round to zero. BIU organizes durable outputs into three clear layers—data, plugins, and skills—so people and agents compound on the same baseline.',
-    date: '2026-10-14',
+    slug: 'malleable-software',
+    series: 'paradigm',
+    title: 'Fifty Years of Malleable Software: From Smalltalk and HyperCard to Agents in the Page',
+    summary: 'For half a century, computing pioneers tried to let everyday users shape and recombine their own software—from Smalltalk and HyperCard to Excel, Notion, and low-code—only to hit structural walls. A deep look at each landmark attempt, and why pages, full-stack plugins, and agents finally close the loop.',
+    date: '2026-11-18',
     sections: [
       {
         body: [
-          'Most conversational AI tools suffer from session amnesia: last week an agent produced a sharp comparison matrix or a handy pricing calculator; this week continuing from it means hunting through buried threads until you give up and ask it to regenerate everything from scratch.',
-          'Chat is an ephemeral stream, not a durable workspace. When outputs remain trapped in message bubbles, every round resets to zero instead of compounding.',
+          'Commercial software rests on an assumption so ubiquitous we barely notice it: software is manufactured in a factory and consumed like a toaster. Vendors weld the casing shut; users press the pre-labeled buttons and never rewire the machine or combine two appliances into one.',
+          'Anyone working across a dozen SaaS tools knows the quiet helplessness this creates: your doc app is missing a live pricing calculator, so you jump to Excel and paste numbers back; your tracker lacks a custom validation checklist, so you file a feature request that sits on a vendor roadmap for years.',
+          'The pioneers of personal computing imagined the exact opposite. When Alan Kay wrote *A Personal Computer for Children of All Ages* at Xerox PARC in 1972—introducing the Dynabook and Smalltalk—he did not envision a television for pre-packaged apps. He envisioned a “dynamic medium” as moldable as paper, ink, and clay, where readers are simultaneously authors [1].',
+          'Over the past fifty years, researchers came to call this ideal **Malleable Software** [2]. Tracing the four landmark attempts to build it reveals exactly why each one changed the world—and why each one stalled at the final mile.',
         ],
       },
       {
-        heading: 'Week 1 to Week 12: two very different curves',
+        heading: 'Stop 1 · Smalltalk (1972): when users held the exact same tools as OS authors',
         body: [
-          'Consider an e-commerce merchandising lead over three months. In a conventional chat app, Week 1 calculates SKU margins, Week 4 analyzes competitor reviews, and Week 12 drafts creator campaign briefs—each round re-uploading spreadsheets, re-explaining pricing rules, and leaving behind hundreds of disconnected threads.',
-          'In BIU, Week 1 creates a live SKU margin page, Week 4 turns review analysis into a reusable skill, and by Week 12 launching a seasonal campaign simply duplicates the proven page where price updates automatically sync into creator briefs.',
+          'Most engineers remember Smalltalk merely as the ancestor of object-oriented programming, overlooking its most radical premise: **there was no hard boundary between using software and modifying it**.',
+          'On the Xerox Alto, the window manager, text editor, and user applications all lived inside one live object image. At any moment, you could open an Inspector on any button on screen, read its live state and source code, edit two lines, and hit save—the running system immediately adopted the new behavior with no separate build pipeline and no vendor-locked binary.',
+          'Alan Kay and Dan Ingalls watched schoolchildren build paint programs and physics simulations in Smalltalk. Yet commercially, Smalltalk’s monolithic image struggled to interoperate with external files, networks, and other languages—and after the 1984 Macintosh popularized shrink-wrapped software, vendors discovered that sealed, unmodifiable binaries were far more profitable to sell and support.',
         ],
       },
       {
-        heading: 'Three layers of accumulation: what belongs where',
+        heading: 'Stop 2 · HyperCard (1987): the closest computing ever came to software for everyone',
         body: [
-          'To keep accumulated work genuinely reusable rather than dumping everything into messy folders, BIU separates durable outputs into three layers:',
-          'First, business facts settle into pages and structured tables—client assumptions, SKU pricing, interview problems, and review verdicts remain typed and queryable.',
-          'Second, interactive and computational capabilities settle into reusable plugins—instead of asking an AI to regenerate hundreds of lines of throwaway HTML each time, a refined margin sandbox or pricing engine becomes a plugin reused across dozens of pages.',
-          'Third, judgment standards and workflow rules settle into skills—compliance checklists, incident postmortem norms, or brand copy rules live as readable files that every future round follows automatically.',
-        ],
-      },
-      {
-        heading: 'Exact context instead of repeated recaps',
-        body: [
-          'In BIU, people and agents operate on the same live workspace. Updates you make to a page or table are immediately visible to the agent; tasks and memos produced by the agent appear live in your interface.',
-          { image: '/site/shot-agent.webp', alt: 'Typing @ in the conversation box lists pages and tasks from the workspace', caption: 'Type @ to bring pages and tasks directly into the context for this round.' },
-          'Mentioning specific pages, tables, or plugins with @ keeps context tight and verifiable—no missing background, and no stale chat history diluting model accuracy. Preserving great work requires no export-and-reimport ritual; it is simply an ordinary write.',
-        ],
-      },
-    ],
-  },
-  {
-    slug: 'open-and-transparent',
-    series: 'architecture',
-    title: 'Open Source, Free, and Transparent Data',
-    summary: 'Once a page holds your business data, client portals, and custom software, ownership and auditability are non-negotiable. Inside BIU’s on-disk layout, append-only event log, model-call boundaries, and Apache 2.0 commitment.',
-    date: '2026-10-14',
-    sections: [
-      {
-        body: [
-          'A closed app might be tolerable for disposable notes, but once a page holds your business data, client portals, custom plugins, and institutional knowledge, data ownership and auditability become non-negotiable.',
-          'That is why BIU is open source under Apache 2.0 from day one: you can inspect every line of code, verify where data lives and where it goes, and take everything with you at any time.',
-        ],
-      },
-      {
-        heading: 'An inspectable directory, not a black-box database',
-        body: [
-          'Cloud-only tools often trap content behind proprietary APIs where exports strip away structure and interactivity. BIU builds directly on standard files—open your workspace folder and every piece is inspectable:',
+          'If Smalltalk was a research utopia, Bill Atkinson’s **HyperCard** at Apple in 1987 was the first time malleable software reached millions of non-programmers.',
+          'Atkinson famously insisted that Apple bundle HyperCard free with every Macintosh. Its mental model was disarmingly simple: everything was a “card,” cards formed a “stack,” and buttons ran HyperTalk—a scripting language that read almost like plain English:',
           {
-            code: '.biu/\n├── biu.sqlite       # Pages, structured tables, and component records (standard SQLite)\n├── assets/          # Original images, PDFs, audio, and video files\n├── skills/          # Human-readable Markdown skill definitions on disk\n└── events.log       # Append-only event log tracing every state transition',
+            code: '-- HyperTalk (1987): software logic an everyday teacher could read and modify\non mouseUp\n  put field "score" into s\n  if s >= 90 then\n    go to card "Honor Roll"\n  else\n    answer "Review the examples in Section 3 before retrying"\n  end if\nend mouseUp',
           },
-          'You get unified search, views, and agent collaboration while remaining free to back up, version-control, or query your files with standard tools. Even if you stop using BIU tomorrow, your data remains intact in open formats.',
-          'Every key write is also recorded chronologically in the append-only event log so interface state can be traced back step by step whenever you need to debug or audit.',
+          'The result was an explosion of grassroots software: biology teachers built interactive textbooks, journalists built searchable investigative archives, small businesses built invoicing tools, and even the bestselling 1993 game *Myst* began life entirely inside HyperCard [3].',
+          'Yet HyperCard faded—not merely due to Apple’s internal neglect, but because of two structural gaps of its era. First, it predated the open web: stacks lived as local files on floppy disks with **no URLs and no network distribution**. When Tim Berners-Lee introduced the Web—initially read-only, yet natively networked via HTTP—hyperlinks swept aside local stacks. Second, HyperCard’s data sat trapped inside freeform card fields with **no modern relational tables or cross-card indexing**.',
         ],
       },
       {
-        heading: 'Clear data boundaries: what stays local vs. what goes to models',
+        heading: 'Stop 3 · Spreadsheets (1979–present): the most successful half-malleable medium',
         body: [
-          'In a local desktop space, all pages, tables, and attachments stay on your computer and remain usable offline.',
-          'When you enable agents, you configure your own model provider and keys (DeepSeek, OpenAI, Anthropic, or a local model server). Requests go directly from your machine to your chosen endpoint with no middleman relay, carrying only the specific context you selected for that turn—unselected confidential files stay strictly on local disk.',
+          'In 1979, Harvard Business School student Dan Bricklin watched a professor erase one number on a blackboard and laboriously recalculate an entire financial table—and invented VisiCalc. Lotus 1-2-3 and Excel followed, creating the most commercially durable malleable software in history.',
+          'Excel survived forty-five years because it invented a reactive dataflow programming model normal people grasp intuitively: every cell displays its live value while hiding an editable formula, and changing one input recalculates the dependency graph in milliseconds.',
+          'Yet every heavy Excel user knows its painful ceiling: **the tyranny of the 2D grid** (narrative, contracts, and diagrams get crushed into cell comments), **no real software runtime** (you cannot run an isolated Python sandbox, attach a live terminal, or slice an external API inside a cell), and **loss of control on delivery** (emailing `model_v3_final_2.xlsx` immediately forks truth and breaks formulas).',
         ],
       },
       {
-        heading: 'Why it is free and open',
+        heading: 'Stop 4 · Block editors and low-code: trapped between fixed blocks and engineering walls',
         body: [
-          'Composing software inside pages is a foundational medium that should not start behind a steep paywall. Under Apache 2.0, the desktop app and self-hosted version remain free for personal and commercial use; future revenue will come from managed cloud collaboration and enterprise support rather than locking in your data.',
-          'Join us on GitHub to open issues, share plugins, and explore what becomes possible when pages become the medium for software.',
+          'Over the past decade, two waves tried again—and landed on opposite sides of the same coin:',
+          '**Block editors (Notion, Coda)** brilliantly united freeform prose and relational tables on one page. Yet block types remain hardcoded by the vendor: you can arrange headings and filter views, but a block cannot become a real algorithm sandbox, an Apifox API-testing slice, or a live contract-rewriting quote engine. Stepping outside presets forces you back into isolated `<iframe>` boxes.',
+          '**Low-code builders (Retool, Airtable)** broke through the capability ceiling, allowing real database connections and custom internal apps—but rebuilt the engineering wall of schemas, auth tokens, state bindings, and glue scripts, keeping everyday consultants, teachers, and operators locked out.',
+          {
+            code: 'Fifty Years of Malleable Software:\n\n  Era / Medium         Prose     Structured Data   Full-Stack   Zero-Friction Share   End-User Molding\n  ────────────────────────────────────────────────────────────────────────────────────────────────────\n  Smalltalk (1972)     Weak      Object image      Strong       None                  Learn Smalltalk\n  HyperCard (1987)     Medium    Card fields       Medium       Floppy / local file   HyperTalk\n  Excel (1979–)        Minimal   2D grid           Weak         File copy             Formulas (strong)\n  Notion (2016–)       Strong    Relational DB     Fixed blocks Link share            Preset blocks only\n  Retool / Low-code    Weak      External DB       Strong       Internal auth         High eng barrier\n  BIU Page (2026)      Strong    Auto-indexed DB   Full plugins One-link release      Plain language + Agent',
+          },
+        ],
+      },
+      {
+        heading: 'Why the final two missing pieces arrived together today',
+        body: [
+          'Across fifty years, malleable software was caught in an impossible triangle: **low authoring friction, genuine full-stack power, and effortless distribution**. No medium delivered all three at once—until two pieces clicked into place simultaneously:',
+          'First, **architectural convergence onto the page**. A BIU page unites freeform prose, structured page properties, and full-stack plugins—whether backed by local sandboxes or external SaaS slices—while automatically indexing matching blocks into cross-page SQLite tables and bundling prose, assets, and plugin source into a single shareable link with condition-based permissions.',
+          'Second, **agents collapsing authoring cost**. Even with Smalltalk’s elegance, a consultant or merchandiser rarely writes React components and backend validators by hand. Now, because real structured records already sit on the page, asking an agent in plain language to “build a margin slider with return-rate sensitivity linked to the brief below” produces a working, persistent, reusable plugin against live fields in seconds.',
+        ],
+      },
+      {
+        heading: 'From consuming appliances back to shaping a medium',
+        body: [
+          'Ink & Switch captured the problem vividly: modern apps lock users inside staged model homes with welded walls—if you want another window, you wait and hope the developer ships it next year [2].',
+          'BIU turns those welded walls back into composable blocks, restoring the page as the dynamic medium Alan Kay envisioned in 1972: start from real data, mold software around your actual work without becoming a full-time engineer, and hand that live page straight to the people you serve.',
+          'Fifty years on, malleable software finally has both its container and its collaborator.',
+        ],
+      },
+    ],
+    references: [
+      { title: 'A Personal Computer for Children of All Ages', publisher: 'Alan Kay / Xerox PARC', year: '1972', url: 'https://www.mprove.de/visionreality/media/kay72.html' },
+      { title: 'Malleable Software: Restoring User Agency in a World of Locked-Down Apps', publisher: 'Ink & Switch', year: '2025', url: 'https://www.inkandswitch.com/essay/malleable-software/' },
+      { title: 'HyperCard: What Could Have Been', publisher: 'Ars Technica', year: '2012', url: 'https://arstechnica.com/gadgets/2012/05/25-years-of-hypercard-the-missing-link-to-the-web/' },
+    ],
+  },
+  {
+    slug: 'inside-biu-architecture',
+    series: 'architecture',
+    title: 'Inside BIU: Data Model, Plugin Sandboxes, and Shared Page State',
+    summary: 'Stripping away the philosophy to look under the hood: BIU’s dual storage layout (SQLite + append-only event log), pageId::blockId scoping, tracing a single reactive write without iframes, dual-mode plugin backends, condition-based permissions, and single-page dependency bundling.',
+    date: '2026-11-16',
+    sections: [
+      {
+        body: [
+          'When a senior engineer hears “one page hosts whiteboards, code sandboxes, pricing engines, and API-testing slices—sharing live state, shipping via one link, and safely operable by agents,” four concrete questions surface immediately:',
+          'First, without `<iframe>`, how do third-party or AI-authored plugins share state on one page without crashing or corrupting each other? Second, where does a plugin’s backend run? Third, how does one share link stay both interactive and strictly permissioned? Fourth, what does the on-disk data model actually look like?',
+          'This post skips the high-level vision and walks through BIU’s core data model, the step-by-step trace of a single write, and the deliberate engineering trade-offs we made.',
+        ],
+      },
+      {
+        heading: 'Data model: everything is a table, scoped by `pageId::blockId`',
+        body: [
+          'Underneath the editor, a BIU page is not an opaque Markdown string overwritten wholesale on every edit. It is a triad—**document AST, structured block records, and page properties**—persisted in standard SQLite (`.biu/biu.sqlite`), with every state transition appended chronologically to `.biu/events.log`.',
+          'In the document body, a block holds only a lightweight reference; its structured state lives in `editor_blocks` keyed globally by `pageId::blockId` and is automatically indexed across pages by plugin type:',
+          {
+            code: 'Local workspace directory (.biu/)\n  ├── biu.sqlite\n  │     ├── pages          { id, title, props: JSON, bodyAst, updatedAt }\n  │     ├── editor_blocks  { key: "<pageId>::<blockId>", kind, plugin, data: JSON }\n  │     ├── plugins        { id, manifest, webEntry, hostEntry, schema, blurb }\n  │     └── tasks / ...    Other domain tables (sharing the exact same read/write primitives)\n  ├── assets/              Original images, PDFs, audio, and video (content-addressed)\n  ├── skills/              Human-readable Markdown skill specs on disk\n  └── events.log           Append-only state transition stream (replay, debugging, audit)',
+          },
+          'Three strong engineering properties fall directly out of this layout. First, **natural namespace isolation**: two pages can both contain a `quote-1` block (`page-nova::quote-1` and `page-northwind::quote-1`) with zero state collision. Second, **zero-setup cross-page aggregation**: inserting a `valuation-card` block across fifty diligence memos automatically yields a queryable table filtered by `kind = "valuation-card"`. Third, **single source of truth for humans and agents**: React plugins and agent tool calls read and write the exact same rows and paths.',
+        ],
+      },
+      {
+        heading: 'Tracing a single write: reactive state sharing without iframes',
+        body: [
+          'How do two independent plugins—say, a pricing calculator and a Statement of Work—stay in sync without importing each other or sitting inside iframes? Trace one write from start to finish.',
+          'Suppose a consultant adjusts seats from 10 to 18 in the quote block, or an agent issues `db_update /pages/client-nova { seats: 18, rush: true }`:',
+          {
+            code: '1. Schema validation   Host validates field types against page and plugin schemas, rejecting malformed writes\n2. Atomic commit       SQLite transaction updates pages.props and appends a stamped event to events.log\n3. Scoped fan-out      Reactive bus notifies only mounted plugins subscribed to pageId="client-nova"\n4. Decoupled converge  Quote recalculates → Contract rewrites payment clauses → Milestones shift dates',
+          },
+          'The whole round-trip finishes in tens of milliseconds. Notice the decoupling: **the quote plugin never imports the contract plugin, and the contract plugin knows nothing about the schedule plugin**. Drop a fourth AI-built “Finance Approval Card” onto the page tomorrow—as soon as it subscribes to `page.props.seats`, it joins the reactive loop with zero glue code.',
+          { diagram: 'page-env', caption: 'The same plugin attached to two pages reads two sets of page properties and exhibits two isolated behaviors.' },
+          'Meanwhile, every plugin frontend mounts inside a dedicated React Render Boundary and restricted host bridge: if an experimental AI-written plugin throws at runtime, only that card degrades—never crashing the host page or sibling blocks.',
+        ],
+      },
+      {
+        heading: 'Dual-mode plugin backends: host runtime and external service slices',
+        body: [
+          'If plugins were limited to browser-only HTML/JS, they would quickly degenerate into toy widgets. Real workflows need sandboxes, terminals, local indexing, and external APIs—so BIU supports two native backend modes:',
+          '**Mode 1: Controlled Host Runtime.** Used for isolated code sandboxes, real PTY terminals, local PDF indexing, and scheduled collectors. Frontend blocks cannot touch the host filesystem arbitrarily; they invoke declared `db_action` handlers registered in `hostEntry`, bounded by workspace sandboxing and human approval gates, and working offline on desktop.',
+          '**Mode 2: External Backend Services (Application Slices).** A plugin’s backend does not need to run on BIU at all—it can talk directly to Apifox, GitHub, Stripe, or an internal enterprise microservice. The plugin projects only the needed frontend slice onto the page and persists execution snapshots back into `editor_blocks`.',
+        ],
+      },
+      {
+        heading: 'Single-page dependency bundling and `Data View × Member View` permissions',
+        body: [
+          'Sharing a page triggers a static dependency closure rooted at `pageId`: traverse the body AST, collect referenced local assets and plugin source bundles, and emit a self-contained delivery package. Recipients open one link in the browser and interact immediately—drawing, running code, or recalculating quotes without installing the desktop app.',
+          'For teams and external cohorts, BIU replaces brittle static ACL lists with dynamic intersection evaluation on every access:',
+          {
+            code: 'Evaluation formula: Visible = DataView(page, block, field) ∩ MemberView(user, role, cohort)\n\nExample: 40-student algorithm cohort sharing one lesson page\n  DataView:   cohort == "2026-Fall" AND (block.kind != "submission" OR block.owner == current_user)\n  MemberView: role == "student" AND cohort == "2026-Fall"\n  Result:     Everyone shares the same notes & canvas, while each student sees only their own submissions',
+          },
+          'Crucially, **the exact same permission evaluator constrains both humans and any agent acting on their behalf**, preventing AI from ever leaking data across tenant boundaries.',
+        ],
+      },
+      {
+        heading: 'Deliberate trade-offs: what we chose not to optimize for',
+        body: [
+          'Every honest architecture post should state its limits. To win unified page boundaries, non-iframe shared state, and agent-native operability, BIU explicitly gives up three things:',
+          'First, **not a GPU hardware-exclusive tool** (Photoshop pixel pipelines, AAA 3D engines, or low-latency DAWs). Second, **no unconstrained ad-hoc blobs**—plugins follow explicit data contracts, schemas, and blurbs so cross-page indexing and zero-hardcoding agent access remain reliable. Third, **not a 100,000-TPS matching engine**—SQLite plus append-only event logging is tuned for personal, team, and enterprise knowledge work and client delivery.',
+          'Clear boundaries keep the core small, auditable, and rock-solid.',
         ],
       },
     ],
   },
   {
-    slug: 'five-stages-overview',
+    slug: 'context-engineering',
+    series: 'architecture',
+    title: 'Context Engineering for Agents: Why Fewer Tools and Harder Structure Win',
+    summary: 'Frontier models are already capable, yet most agents still fail in real workflows. Using concrete token math, O(1) vs O(N) tool complexity, and a traced multi-step turn, this post explains why screenshot loops, RAG stuffing, and tool bloat hit a wall—and how BIU’s minimal primitives fix it.',
+    date: '2026-11-14',
+    sections: [
+      {
+        body: [
+          'Over the past two years, AI discourse has fixated on model leaderboards and clever prompt wording. Yet almost every engineering team that runs agents inside real multi-step business workflows for two weeks reaches the same conclusion: reliability is governed less by raw parameter count than by **Context Engineering**—what state, in what structure, alongside which exact actions the system hands the model before each turn [1].',
+          'A language model is an extraordinarily sensitive state machine. Hand it noisy prose, ambiguous fields, and eighty overlapping tools, and it spends 90% of its intelligence guessing; hand it crisp boundaries, hard structure, and five universal verbs, and even mid-sized models execute with remarkable reliability.',
+        ],
+      },
+      {
+        heading: 'Three mainstream patterns hitting a wall (and their hidden costs)',
+        body: [
+          'Look closely at the three dominant ways teams wire agents into legacy software today:',
+          '**Dead end 1: Screenshot-driven Computer Use.** Clean in-memory state (`{ seats: 10, rush: false }`) is rendered into a 1920×1080 bitmap, screenshotted a dozen times (thousands of vision tokens per turn), and fed to a vision model to guess pixel `(842, 319)` across forty seconds and nine clicks. One unexpected modal or expired session breaks the run and leaves no field-level audit trail.',
+          '**Dead end 2: Unstructured document RAG stuffing.** Dumping dozens of Markdown files, PDFs, and chat logs into a 128K window fails predictably. Research on *Lost in the Middle* demonstrates sharp accuracy drops whenever key facts sit mid-context, while adding more retrieved chunks quickly hits diminishing returns [2].',
+          '**Dead end 3: Tool-schema bloat.** Every external SaaS connected via bespoke functions or MCP adds 15–25 tool definitions. Connect five systems and 80 overlapping, deeply nested schemas sit in the prompt—burning 10,000+ tokens before the user types a word and causing constant tool-selection errors between `update_issue`, `patch_ticket`, and `edit_task_fields`.',
+          {
+            code: 'Tool-surface scaling:\n  Legacy SaaS + bespoke MCP tools: +15–25 schemas per app   → O(N) context bloat\n  BIU Six Atoms + Blurb protocol:  +0 new schemas per plugin → O(1) constant tool surface',
+          },
+        ],
+      },
+      {
+        heading: 'BIU’s five-layer context engineering stack',
+        body: [
+          'BIU deliberately flips the design: **fewer tools, harder data structure, self-describing semantics, and explicit boundaries**:',
+          {
+            code: '1. Constant Action Surface   Five universal verbs: db_list / db_read / db_update / db_create / db_action\n2. Self-Describing Blurbs    Every table & plugin ships Schema + plain-language Blurb—zero hardcoded prompts\n3. Page-Scoped Boundary      Writes stay contained to one pageId, capping blast radius by construction\n4. Explicit @ Referencing    Users attach exact pages, tables, and skills per turn—no stale chat dumps\n5. Approval & Audit Gates    Sensitive backend actions pause for sign-off and log to append-only events.log',
+          },
+          'The quiet hero is layer 2—**Blurb**. Conventional databases expose cryptic column names that force models to guess; in BIU, every table and plugin carries plain-language guidance explaining what it stores, how fields relate, and which actions require approval. Whether a workspace holds five plugins or fifty specialized industry plugins, the agent’s tool surface remains O(1).',
+          { diagram: 'atoms', caption: 'Six primitives combine into tasks, pages, plugins, sessions, and skills—keeping the agent’s action surface constant at O(1).' },
+        ],
+      },
+      {
+        heading: 'Tracing one real agent turn: where determinism comes from',
+        body: [
+          'Take a concrete production moment: `order-gateway` triggers a P99 latency alert. The on-call engineer opens the incident page, attaches the page and the *Slow-Query Triage* skill with `@`, and asks: “Find the cause of the latency spike and draft a mitigation.”',
+          {
+            code: 'Turn 1  db_read   /pages/inc-20261114           → Reads page props, Apifox probe snapshot & Sentry error slice\nTurn 2  db_action /editor-blocks/inc::sql-run   → Runs read-only slow-SQL diagnostic in sandbox (finds 918ms scan)\nTurn 3  db_update /editor-blocks/inc::checklist → Writes root cause & migration SQL draft directly into the page\nTurn 4  [Approval Gate]                         → Pauses before production index migration / worker scale-up',
+          },
+          'Zero screenshots, zero stale chat dumps, zero guessing across eighty tools. Every read and write lands on shared structured truth, visible live to the engineer and recorded permanently in `events.log`.',
+        ],
+      },
+      {
+        heading: 'Putting probabilistic models inside deterministic containers',
+        body: [
+          'In *Building Effective Agents*, Anthropic emphasized that the highest-leverage investment is rarely elaborate multi-agent orchestration—it is designing clean, error-resistant, verifiable Agent-Computer Interfaces (ACI) [3].',
+          'Language models are inherently probabilistic; you cannot wish away every error. What you can do is engineer a deterministic container around them—hard structure to minimize guessing, constant primitives to eliminate tool bloat, page boundaries to cap blast radius, and approval gates plus append-only logs to enforce accountability.',
+          'When context engineering is built into the software medium itself rather than patched on with glue scripts, agents graduate from fragile demos into dependable daily collaborators.',
+        ],
+      },
+    ],
+    references: [
+      { title: 'Effective Context Engineering for AI Agents', publisher: 'Anthropic Engineering', year: '2025', url: 'https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents' },
+      { title: 'Lost in the Middle: How Language Models Use Long Contexts', publisher: 'Transactions of the ACL, 12:157–173', year: '2024', url: 'https://aclanthology.org/2024.tacl-1.9/' },
+      { title: 'Building Effective Agents', publisher: 'Anthropic Research', year: '2024', url: 'https://www.anthropic.com/research/building-effective-agents' },
+    ],
+  },
+  {
+    slug: 'five-trillion-dollar-markets',
     series: 'verbs',
-    title: 'Five breaks in the software lifecycle: build, store, compose, distribute, derive',
-    summary: 'For forty years, building, storing, composing, distributing, and deriving software lived in five disconnected industries. This overview explains how they close into one loop inside the page.',
-    date: '2026-10-14',
+    title: 'Five Verbs, Five Trillion-Dollar Markets',
+    summary: 'Build ($1.47T), Store ($1.49T), Compose ($2.6–4.4T), Distribute ($1.3T), and Derive ($8.8T): why each verb in BIU’s mission names a separate trillion-dollar industry—and why agents force all five to converge inside the page.',
+    date: '2026-11-23',
     sections: [
       {
         body: [
-          'Most discussions of AI and software focus on one isolated slice: generating code faster, searching documents, or bolting a chat sidebar onto a legacy SaaS app. Step back across the full lifecycle of software, however, and a deeper pattern emerges: much of the friction in modern work exists because building, storing, composing, distributing, and deriving software have always been broken apart.',
-          'Building belongs to 48.4 million developers and long release cycles. Storing scatters unstructured files across cloud silos. Composing relies on brittle API glue across an average of 897 enterprise apps. Distributing goes through installers, app store reviews, and 30% fees. Deriving stays locked inside code repositories and closed plugin ecosystems.',
-          'Each stage grew into a trillion-dollar industry of its own, yet together they create the exact bottleneck holding agents back today: context drops at every break. Humans barely bridge these gaps through memory and constant window switching; agents hit a wall.',
+          'In 2011, Marc Andreessen famously wrote that software is eating the world. Fifteen years later, software did eat the world—but along the way, it split itself into five separate empires.',
+          'When people read BIU’s mission—“transform how the world builds, stores, composes, distributes, and derives software”—it is easy to hear a list of product features. It is not a feature list. Each of those five verbs names an independent, trillion-dollar industry that grew up around the physical and economic constraints of the pre-AI era.',
+          'Every time a new computing medium arrives, it does not merely optimize one layer of the stack; it collapses seams that previous incumbents treated as laws of nature. The personal computer collapsed typesetting and calculation onto one desk. The web browser collapsed client installation and server hosting into a URL. Today, AI agents are forcing a far larger collapse: all five trillion-dollar stages of the software lifecycle are converging into a single medium—the page.',
         ],
       },
       {
-        heading: 'How the five stages close into one loop',
+        heading: 'Two tectonic shifts colliding at once',
         body: [
-          'BIU’s thesis is that all five stages belong inside a single medium—the page—forming a continuous loop:',
+          'To see why these five markets are being rewritten simultaneously rather than one by one, look at two structural curves crossing in the same decade.',
+          'First, the production function of software is breaking open. Gartner forecasts global software spending of $1.468 trillion in 2026 [1], and predicts that 33% of enterprise software applications will embed agentic capabilities by 2028—up from less than 1% in 2024 [2]. For forty years, software supply was gated by a scarce priesthood: SlashData counts 48.4 million active developers worldwide [3], serving roughly 1.14 billion knowledge workers [4]. That 1:24 ratio dictated everything about how software was priced, packaged, and rationed. Agents collapse that ratio.',
+          'Second, agents are running headfirst into a medium built strictly for human eyes. MuleSoft’s 2025 benchmark shows that the average enterprise runs 897 applications, only 29% of which are integrated—and 95% of IT leaders say integration is blocking effective AI adoption [5]. McKinsey estimates generative AI can unlock $2.6–4.4 trillion in annual economic value [6], yet almost none of that value materializes if an agent cannot see the live state of work across tools.',
+          'Bolting a chat sidebar onto one of those 897 apps does not solve the seam. Agents do not need a smarter copilot inside legacy silos; they need a medium where software, structured data, and human judgment share one bounded container.',
+          { diagram: 'vision-table', caption: 'Each of the five verbs maps to a distinct trillion-dollar market and a specific missing layer of agent context.' },
+        ],
+      },
+      {
+        heading: '01 · Build ($1.468T): breaking the 1:24 supply bottleneck',
+        body: [
+          'The $1.468 trillion global software market [1] prices in a brutal assumption: you must finish building software before you can start serving anyone. Requirements, architecture, sprints, QA, deployment—only after months of upfront capital does the first real user arrive.',
+          'That waterfall exists only because human engineering hours are scarce. When 48.4 million developers [3] must serve 1.14 billion knowledge workers [4], long-tail domain workflows—a boutique consultant’s live contract-and-pricing engine, an algorithm coach’s interactive rubric, a merchandiser’s SKU margin sandbox—never make it onto a SaaS vendor’s roadmap.',
+          'Inside a BIU page, the timeline inverts. Service starts on day one with real records; when a workflow gap appears in week two, an agent builds a full-stack plugin directly against live page data. The market does not merely get cheaper software—it expands the pool of builders from 48 million engineers to a billion domain practitioners.',
+        ],
+      },
+      {
+        heading: '02 · Store ($1.49T): ending the 200-million-person retrieval tax',
+        body: [
+          'Gartner projects worldwide public-cloud end-user spending to reach $1.49 trillion by 2029 [7]. We spend over a trillion dollars a year hosting data, yet IDC estimates that nearly 90% of newly generated data is unstructured [8]—opaque prose, slides, PDFs, and throwaway HTML that humans can skim but machines can only guess at.',
+          'The hidden bill is even larger than the cloud invoice. McKinsey found that knowledge workers spend roughly 19% of their working week hunting for information [9]. Across 1.14 billion knowledge workers [4], that retrieval tax equals the full-time output of more than 200 million people. Most AI tools today make this worse, flooding disks with even more unstructured Markdown and chat transcripts.',
+          'BIU unites both halves on one page: freeform prose for human reasoning, and typed plugin blocks that the workspace automatically indexes into queryable tables. Write once—humans read a coherent memo while agents run exact field queries instead of stuffing megabytes of text into a context window.',
+        ],
+      },
+      {
+        heading: '03 · Compose ($2.6–4.4T): the layer that unlocks AI’s real value',
+        body: [
+          'If Build is about supply and Store is about memory, Compose is where economic value actually clears. McKinsey’s $2.6–4.4 trillion annual generative AI estimate [6] depends on AI executing multi-step work across real business context—not answering isolated trivia.',
+          'Yet today’s software stack is an integration tax machine. With 897 apps per enterprise and only 29% connected [5], Harvard Business Review found employees toggle between applications roughly 1,200 times a day, burning 9% of their annual working time just regaining focus [10]—another 100-million-worker drag. Glue scripts and webhooks break silently; iframe embeds trap tools behind glass walls.',
+          'When distinct categories of software—whiteboards, code sandboxes, pricing engines, task boards—live as plugins sharing one page state, composition stops being an IT integration project. A single structured update converges across every tool on the page, and referencing a page with `@` hands an agent the complete, live truth in one shot.',
+        ],
+      },
+      {
+        heading: '04 · Distribute ($1.3T): removing the tollbooth on software delivery',
+        body: [
+          'Software distribution is a trillion-dollar tollbooth in its own right. Research commissioned by Apple shows the App Store ecosystem alone facilitated nearly $1.3 trillion in commerce in 2024 [11], flanked by review queues, developer certificates, and a 30% commission on digital goods.',
+          'That friction creates a quiet tragedy across professional services: coaches, analysts, agencies, and internal ops teams know their clients need interactive software, yet the cost of packaging, hosting, and onboarding forces them to downgrade their work into static PDFs and screenshots.',
+          'In BIU, sharing a page is a software release. One link bundles prose, attachments, and referenced plugin code so recipients interact immediately—no installer, no store review, no multi-app sign-up. Just as crucially, condition-based permissions travel with the page: both data views and member views are evaluated dynamically, clearly bounding what a recipient—and the recipient’s agent—can see and execute.',
+        ],
+      },
+      {
+        heading: '05 · Derive ($8.8T): unlocking open source from behind `git clone`',
+        body: [
+          'The largest number of the five is also the least appreciated. A Harvard Business School study estimates the demand-side value of open-source software at $8.8 trillion—3.5 times what firms spend on software each year [12]. GitHub now hosts over 180 million developers and 630 million repositories [13].',
+          'Yet HBS also uncovered a striking asymmetry: 96% of that $8.8 trillion value is created by just 5% of open-source developers [12], and almost all of it can only be reused directly by engineers who know how to clone a repo, resolve dependencies, and deploy a runtime. For everyone else, 630 million repositories might as well be locked in a vault.',
+          'Because BIU plugins are structured workspace records, derivation becomes incremental rather than all-or-nothing. An agent inspects an existing plugin, a shared page, or an open-source repository, preserves the verified core, and authors only the delta layer for your workflow. For the first time, the compounding leverage of open-source reuse extends from 48 million engineers to every knowledge worker.',
+        ],
+      },
+      {
+        heading: 'Why five markets converge—and how value compounds',
+        body: [
+          'A skeptical reader should ask a fair question: incumbents already dominate each of these five verticals—IDEs for building, cloud databases for storing, iPaaS for composing, app stores for distributing, GitHub for deriving. Why wouldn’t each incumbent simply add AI to its own slice?',
+          'Because the bottleneck is not inside any single slice; it is on the seams between them. An IDE cannot share runtime state with a client’s contract; a cloud drive cannot execute a sandboxed plugin; an app store cannot compute row-level page permissions for an agent. Optimizing one verb in isolation still drops context the moment work crosses into the next verb.',
+          'When all five converge inside the page, they close into a single compounding flywheel:',
           {
-            code: 'Build (grow software against live data) → Store (prose + structured blocks on one page) → Compose (shared state)\n   ↑                                                                                                     ↓\nDerive (layer on existing plugins & open source) ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←← Distribute (one page = one release)',
+            code: 'Open Source & Local Free (Adoption) → Pages & Plugins Built on Live Data (Build + Store + Compose)\n   ↑                                                                                       ↓\nPlugin Ecosystem & Revenue Share (Derive) ←←←←←←←←←←←←← BIU Cloud & Team Permissions (Distribute)',
           },
-          '1. Build: software grows alongside real data from day one. When a new need appears mid-service, an agent builds a plugin directly against live page data—expanding software creation from developers to 1.14 billion knowledge workers.',
-          '2. Store: freeform prose and structured plugin blocks coexist on one page. People read a cohesive document while the workspace indexes matching blocks into queryable tables so agents retrieve exact records instead of scanning walls of text.',
-          '3. Compose: distinct full-stack tools—whiteboards, code sandboxes, terminals, pricing engines, and task boards—share live state on one page. One change converges across the page, and every tool is directly operable by agents.',
-          '4. Distribute: sharing a page is a software release. Prose, files, and plugin source travel together in one link with condition-based permissions and full context intact.',
-          '5. Derive: distribution is not the end—it is the next starting point. Agents reference existing plugins, adapt shared pages, or pull in open-source repositories to layer new capabilities incrementally.',
+          'This is also why BIU’s business model mirrors the architecture rather than fighting it. The desktop app and self-hosted runtime remain open source under Apache 2.0 and free—removing every barrier to building and storing on your own machine. Revenue scales naturally with collaboration and distribution: BIU Cloud subscriptions for multi-device sync, teams, and traceable permissions; enterprise private deployments; and a plugin ecosystem with developer revenue sharing as derived software compounds.',
+          'Software ate the world as five disconnected industries. In the age of agents, the platform that unifies all five inside one medium does not compete for one vertical—it defines the substrate where the next decade of software is built, stored, composed, distributed, and derived.',
         ],
       },
-      {
-        heading: 'One thread: agent context and trillion-dollar leverage',
-        body: [
-          'Every essay in this series examines each stage through two lenses: what missing context it restores for agents, and the economic scale behind it—from $1.47T in global software spend and $1.49T in public cloud, to $2.6–4.4T in generative AI value, $1.3T in app distribution, and $8.8T in open-source reuse.',
-        ],
-      },
-      {
-        heading: 'Where to read next',
-        body: [
-          'Marshall McLuhan wrote that the medium is the message. Desktop files defined personal computing; browser apps defined cloud SaaS. As people and agents collaborate continuously, the page becomes the next medium for software.',
-          'The five essays that follow examine Build, Store, Compose, Distribute, and Derive in sequence, complete with primary industry and academic references. Continue below to start with Build.',
-        ],
-      },
+    ],
+    references: [
+      { title: 'Gartner Forecasts Worldwide IT Spending to Grow 14.2% in 2026, Totaling $6.37 Trillion', publisher: 'Gartner', year: '2026', url: 'https://www.gartner.com/en/newsroom/press-releases/2026-07-27-gartner-forecasts-worldwide-it-spending-to-grow-14-point-2-percent-in-2026-totaling-6-point-37-trillion' },
+      { title: 'Gartner Predicts Over 40% of Agentic AI Projects Will Be Canceled by End of 2027', publisher: 'Gartner', year: '2025', url: 'https://www.gartner.com/en/newsroom/press-releases/2025-06-25-gartner-predicts-over-40-percent-of-agentic-ai-projects-will-be-canceled-by-end-of-2027' },
+      { title: 'Developer Population Sizing: 48.4 million developers worldwide', publisher: 'SlashData', year: '2025', url: 'https://www.slashdata.co/research/developer-population' },
+      { title: 'Gartner Says Worldwide Social Software and Collaboration Revenue to Nearly Double by 2023', publisher: 'Gartner', year: '2019', url: 'https://www.gartner.com/en/newsroom/press-releases/09-24-2019-gartner-says-worldwide-social-software-and-collaboration-revenue-to-nearly-double-by-2023' },
+      { title: '2025 Connectivity Benchmark Report', publisher: 'MuleSoft / Salesforce', year: '2025', url: 'https://www.salesforce.com/blog/mulesoft-connectivity-benchmark-2025/' },
+      { title: 'The economic potential of generative AI: The next productivity frontier', publisher: 'McKinsey & Company', year: '2023', url: 'https://www.mckinsey.com/capabilities/tech-and-ai/our-insights/the-economic-potential-of-generative-ai-the-next-productivity-frontier' },
+      { title: 'Forecast: Public Cloud Services, Worldwide, 2023-2029, 4Q25', publisher: 'Gartner', year: '2025', url: 'https://www.gartner.com/en/documents/7281230' },
+      { title: 'Worldwide Global DataSphere Structured and Unstructured Data Forecast, 2024–2028', publisher: 'IDC', year: '2024', url: 'https://techcontentwave.com/files/1763389937_64b594fd4f7f5607256a.pdf' },
+      { title: 'The social economy: Unlocking value and productivity through social technologies', publisher: 'McKinsey Global Institute', year: '2012', url: 'https://www.mckinsey.com/mgi/media-center/social-media-productivity-payoff' },
+      { title: 'How Much Time and Energy Do We Waste Toggling Between Applications?', publisher: 'Harvard Business Review', year: '2022', url: 'https://hbr.org/2022/08/how-much-time-and-energy-do-we-waste-toggling-between-applications' },
+      { title: 'The Global App Store and Its Growth', publisher: 'Analysis Group, commissioned by Apple', year: '2025', url: 'https://www.apple.com/newsroom/pdfs/2024-Apple-Global-Ecosystem-Report-June2025.pdf' },
+      { title: 'The Value of Open Source Software (Working Paper 24-038)', publisher: 'Harvard Business School', year: '2024', url: 'https://www.hbs.edu/faculty/Pages/item.aspx?num=65230' },
+      { title: 'Octoverse 2025: A new developer joins GitHub every second', publisher: 'GitHub', year: '2025', url: 'https://github.blog/news-insights/octoverse/octoverse-a-new-developer-joins-github-every-second-as-ai-leads-typescript-to-1/' },
     ],
   },
   {
