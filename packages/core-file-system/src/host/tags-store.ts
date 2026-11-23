@@ -146,7 +146,45 @@ export class TagStore {
         PRIMARY KEY (collection, field, record_id, value)
       );
       CREATE INDEX IF NOT EXISTS tag_group_lookup ON tag_group_values(collection, field, value, record_id);
+      CREATE TABLE IF NOT EXISTS tag_attr_index (
+        collection TEXT NOT NULL,
+        pack_id TEXT NOT NULL,
+        field_key TEXT NOT NULL,
+        record_id TEXT NOT NULL,
+        val_text TEXT NOT NULL DEFAULT '',
+        val_num REAL,
+        PRIMARY KEY (collection, pack_id, field_key, record_id)
+      );
+      CREATE INDEX IF NOT EXISTS tag_attr_text ON tag_attr_index(collection, pack_id, field_key, val_text, record_id);
+      CREATE INDEX IF NOT EXISTS tag_attr_num ON tag_attr_index(collection, pack_id, field_key, val_num, record_id);
     `)
+    const hasAttr = this.db!.prepare('SELECT 1 FROM tag_attr_index LIMIT 1').get()
+    if (!hasAttr) {
+      const hasValues = this.db!.prepare('SELECT 1 FROM tag_record_values LIMIT 1').get()
+      if (hasValues) {
+        this.backfillAttrIndex()
+      }
+    }
+  }
+
+  private backfillAttrIndex() {
+    const db = this.db!
+    const rows = db.prepare('SELECT collection, record_id, tag_json FROM tag_record_values').all() as Array<{
+      collection: string
+      record_id: string
+      tag_json: string
+    }>
+    if (!rows.length) return
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      for (const row of rows) {
+        this.syncAttrIndexRecord(row.collection, row.record_id, normalizeSchemaValue(row.tag_json))
+      }
+      db.exec('COMMIT')
+    } catch (error) {
+      db.exec('ROLLBACK')
+      throw error
+    }
   }
 
   private indexGroupRecord(collection: string, field: string, recordId: string, tag: unknown) {
@@ -637,6 +675,7 @@ export class TagStore {
       if (isEmptySchemaValue(value)) {
         db.prepare('DELETE FROM tag_record_values WHERE collection = ? AND record_id = ?').run(collection, recordId)
         this.indexRecord(collection, recordId, title, [])
+        this.syncAttrIndexRecord(collection, recordId, value)
         this.updateGroupRecord(collection, recordId, value)
         this.invalidateStatsCache()
         return value
@@ -647,6 +686,7 @@ export class TagStore {
          ON CONFLICT(collection, record_id) DO UPDATE SET tag_json = excluded.tag_json`,
       ).run(collection, recordId, JSON.stringify(value))
       this.indexRecord(collection, recordId, title, value.tags)
+      this.syncAttrIndexRecord(collection, recordId, value)
       this.updateGroupRecord(collection, recordId, value)
       this.invalidateStatsCache()
       return value
@@ -655,6 +695,48 @@ export class TagStore {
       throw error
     } finally {
       db.exec('RELEASE tag_value_write')
+    }
+  }
+
+  private syncAttrIndexRecord(collection: string, recordId: string, value: SchemaFieldValue) {
+    const db = this.ensure()
+    db.prepare('DELETE FROM tag_attr_index WHERE collection = ? AND record_id = ?').run(collection, recordId)
+    if (!value.tags.length) return
+    const insert = db.prepare(
+      `INSERT OR REPLACE INTO tag_attr_index (collection, pack_id, field_key, record_id, val_text, val_num)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    )
+    for (const packId of value.tags) {
+      const bag = value.values[packId]
+      if (!bag || typeof bag !== 'object') continue
+      for (const [fieldKey, raw] of Object.entries(bag)) {
+        if (raw === null || raw === undefined || raw === '') continue
+        let valText = ''
+        let valNum: number | null = null
+        if (typeof raw === 'number' && Number.isFinite(raw)) {
+          valText = String(raw)
+          valNum = raw
+        } else if (typeof raw === 'boolean') {
+          valText = raw ? 'true' : 'false'
+          valNum = raw ? 1 : 0
+        } else if (typeof raw === 'string') {
+          valText = raw
+          const trimmed = raw.trim()
+          if (trimmed && /^-?(?:\d+\.?\d*|\.\d+)$/.test(trimmed)) {
+            const n = Number(trimmed)
+            if (Number.isFinite(n)) valNum = n
+          }
+        } else if (Array.isArray(raw)) {
+          valText = raw.map((item) => String(item ?? '')).filter(Boolean).join(', ')
+        } else if (typeof raw === 'object') {
+          try {
+            valText = JSON.stringify(raw)
+          } catch {
+            valText = ''
+          }
+        }
+        insert.run(collection, packId, fieldKey, recordId, valText, valNum)
+      }
     }
   }
 
@@ -724,6 +806,7 @@ export class TagStore {
     const db = this.ensure()
     db.prepare('DELETE FROM tag_stamps WHERE collection = ? AND record_id = ?').run(collection, recordId)
     db.prepare('DELETE FROM tag_record_values WHERE collection = ? AND record_id = ?').run(collection, recordId)
+    db.prepare('DELETE FROM tag_attr_index WHERE collection = ? AND record_id = ?').run(collection, recordId)
     db.prepare('DELETE FROM tag_group_values WHERE collection = ? AND record_id = ?').run(collection, recordId)
     this.metaStore.removeRecordMetaRows(collection, recordId)
     this.invalidateStatsCache()

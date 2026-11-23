@@ -847,6 +847,38 @@ export type CollectionListQuery = {
   purge?: boolean
 }
 
+export type CollectionListPageQuery = {
+  ids?: string[]
+  q?: string
+  filter?: Record<string, unknown>
+  trash?: boolean
+  tagId?: string
+  sortField: string
+  sortDir: 'asc' | 'desc'
+  sorts?: Array<{ field: string; dir: 'asc' | 'desc' }>
+  limit: number
+  offset: number
+}
+
+export type CollectionListPageResult = {
+  rows: DbRecord[]
+  total: number
+}
+
+export type CollectionGroupBucket = {
+  key: string
+  count: number
+}
+
+export type CollectionGroupQuery = {
+  field: string
+  ids?: string[]
+  q?: string
+  filter?: Record<string, unknown>
+  trash?: boolean
+  tagId?: string
+}
+
 export function hasCollectionDeleteQuery(query?: CollectionListQuery | null): boolean {
   if (!query) return false
   if (Array.isArray(query.ids) && query.ids.some((id) => String(id).trim())) return true
@@ -878,6 +910,10 @@ export type CollectionSpec = {
   records?: CollectionRecordCaps
   /** 可接收查询；不认 ids 时 File System 仍会在内存里收窄。 */
   list: (query?: CollectionListQuery) => DbRecord[] | Promise<DbRecord[]>
+  /** 可选：SQL 下推分页查询。返回 null 时优雅回退到内存全量扫描。 */
+  listPage?: (query: CollectionListPageQuery) => CollectionListPageResult | null | Promise<CollectionListPageResult | null>
+  /** 可选：SQL 下推分组聚合。返回 null 时回退到内存分组。 */
+  groupPage?: (query: CollectionGroupQuery) => CollectionGroupBucket[] | null | Promise<CollectionGroupBucket[] | null>
   get: (id: string) => DbRecord | null | undefined | Promise<DbRecord | null | undefined>
   /** 更新已有记录的可写字段。不要叫 write。 */
   update?: (id: string, patch: Record<string, unknown>, options?: CollectionUpdateOptions) => DbRecord | Promise<DbRecord>

@@ -1,7 +1,16 @@
 import { mkdir, unlink } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import type { CollectionUpdateOptions, DbRecord, SchemaFieldValue } from '@biu/type-file-system'
+import type {
+  CollectionGroupBucket,
+  CollectionGroupQuery,
+  CollectionListPageQuery,
+  CollectionListPageResult,
+  CollectionUpdateOptions,
+  DbRecord,
+  SchemaFieldValue,
+} from '@biu/type-file-system'
 import { allocateRecordId, emptySchemaValue, isAssetFileName, isAssignableRecordId, normalizeSchemaValue } from '@biu/type-file-system'
+import { queryPagesGroupPage, queryPagesListPage } from './sql-query.ts'
 import {
   DATA_DIR_NAME,
   adoptCasAssets,
@@ -235,6 +244,16 @@ export class PagesStore {
     return listed.map(rowFromSql)
   }
 
+  async listPage(query: CollectionListPageQuery): Promise<CollectionListPageResult | null> {
+    const db = await this.openDb()
+    return queryPagesListPage(db, query)
+  }
+
+  async groupPage(query: CollectionGroupQuery): Promise<CollectionGroupBucket[] | null> {
+    const db = await this.openDb()
+    return queryPagesGroupPage(db, query)
+  }
+
   async get(id: string): Promise<PageRow | null> {
     if (!ID_RE.test(id)) return null
     const db = await this.openDb()
@@ -260,12 +279,13 @@ export class PagesStore {
 
   async create(fields: Record<string, unknown> = {}): Promise<PageRow> {
     const db = await this.openDb()
-    const existing = new Set((db.prepare('SELECT id FROM pages').all() as Array<{ id: string }>).map((row) => row.id))
+    const hasIdStmt = db.prepare('SELECT 1 FROM pages WHERE id = ? LIMIT 1')
+    const idExists = (candidate: string) => Boolean(hasIdStmt.get(candidate))
     const requested = typeof fields.id === 'string' ? fields.id.trim() : ''
-    let id = requested && isAssignableRecordId(requested) && ID_RE.test(requested) && !existing.has(requested)
+    let id = requested && isAssignableRecordId(requested) && ID_RE.test(requested) && !idExists(requested)
       ? requested
       : allocateRecordId()
-    while (existing.has(id) || !ID_RE.test(id)) id = allocateRecordId()
+    while (idExists(id) || !ID_RE.test(id)) id = allocateRecordId()
     const ts = Date.now()
     const row = applyPatch(emptyRow(id, ts), { ...fields })
     row.id = id

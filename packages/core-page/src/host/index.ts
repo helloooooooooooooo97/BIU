@@ -37,6 +37,8 @@ export function pagesCollection(store: PagesStore, index: PageBlocksIndex): Coll
     },
     records: { update: true, create: true, delete: true, allocateId: true },
     list: (query) => store.list(query?.ids),
+    listPage: (query) => store.listPage(query),
+    groupPage: (query) => store.groupPage(query),
     get: (id) => store.get(id),
     update: async (id, patch, options) => {
       const row = await store.update(id, patch, options)

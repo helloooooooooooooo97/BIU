@@ -314,6 +314,10 @@ CREATE TABLE IF NOT EXISTS pages (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
+CREATE INDEX IF NOT EXISTS pages_updated_at ON pages(updated_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS pages_created_at ON pages(created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS pages_title ON pages(title COLLATE NOCASE, id);
+CREATE INDEX IF NOT EXISTS pages_parent_id ON pages(parent_id);
 CREATE TABLE IF NOT EXISTS tasks (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
@@ -369,6 +373,17 @@ CREATE TABLE IF NOT EXISTS tag_record_values (
   tag_json TEXT NOT NULL,
   PRIMARY KEY (collection, record_id)
 );
+CREATE TABLE IF NOT EXISTS tag_attr_index (
+  collection TEXT NOT NULL,
+  pack_id TEXT NOT NULL,
+  field_key TEXT NOT NULL,
+  record_id TEXT NOT NULL,
+  val_text TEXT NOT NULL DEFAULT '',
+  val_num REAL,
+  PRIMARY KEY (collection, pack_id, field_key, record_id)
+);
+CREATE INDEX IF NOT EXISTS tag_attr_text ON tag_attr_index(collection, pack_id, field_key, val_text, record_id);
+CREATE INDEX IF NOT EXISTS tag_attr_num ON tag_attr_index(collection, pack_id, field_key, val_num, record_id);
 CREATE TABLE IF NOT EXISTS record_meta (
   collection TEXT NOT NULL,
   record_id TEXT NOT NULL,
@@ -882,9 +897,62 @@ export function dropLegacyEditorColumns(db: DatabaseSync) {
   dropSqliteColumn(db, 'tags', 'notes')
 }
 
+export function ensurePagesPerfIndexes(db: DatabaseSync) {
+  if (hasTable(db, 'pages')) {
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS pages_updated_at ON pages(updated_at DESC, id DESC);
+      CREATE INDEX IF NOT EXISTS pages_created_at ON pages(created_at DESC, id DESC);
+      CREATE INDEX IF NOT EXISTS pages_title ON pages(title COLLATE NOCASE, id);
+      CREATE INDEX IF NOT EXISTS pages_parent_id ON pages(parent_id);
+    `)
+    const hadFts = hasTable(db, 'pages_fts')
+    try {
+      db.exec(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts USING fts5(
+          id UNINDEXED,
+          title,
+          tokenize='unicode61'
+        );
+        CREATE TRIGGER IF NOT EXISTS pages_fts_ai AFTER INSERT ON pages BEGIN
+          INSERT INTO pages_fts(id, title) VALUES (new.id, new.title);
+        END;
+        CREATE TRIGGER IF NOT EXISTS pages_fts_ad AFTER DELETE ON pages BEGIN
+          DELETE FROM pages_fts WHERE id = old.id;
+        END;
+        CREATE TRIGGER IF NOT EXISTS pages_fts_au AFTER UPDATE OF title ON pages BEGIN
+          DELETE FROM pages_fts WHERE id = old.id;
+          INSERT INTO pages_fts(id, title) VALUES (new.id, new.title);
+        END;
+      `)
+      if (!hadFts) {
+        const hasPages = db.prepare('SELECT 1 FROM pages LIMIT 1').get()
+        if (hasPages) {
+          db.exec('INSERT INTO pages_fts(id, title) SELECT id, title FROM pages')
+        }
+      }
+    } catch {
+      /* FTS5 unavailable in custom SQLite build */
+    }
+  }
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tag_attr_index (
+      collection TEXT NOT NULL,
+      pack_id TEXT NOT NULL,
+      field_key TEXT NOT NULL,
+      record_id TEXT NOT NULL,
+      val_text TEXT NOT NULL DEFAULT '',
+      val_num REAL,
+      PRIMARY KEY (collection, pack_id, field_key, record_id)
+    );
+    CREATE INDEX IF NOT EXISTS tag_attr_text ON tag_attr_index(collection, pack_id, field_key, val_text, record_id);
+    CREATE INDEX IF NOT EXISTS tag_attr_num ON tag_attr_index(collection, pack_id, field_key, val_num, record_id);
+  `)
+}
+
 export function applyLatestSchemaPatches(db: DatabaseSync) {
   rebuildPageBlockCollectionKeys(db)
   dropLegacyEditorColumns(db)
+  ensurePagesPerfIndexes(db)
 }
 
 export function createLatestSchema(db: DatabaseSync) {

@@ -1355,6 +1355,22 @@ export class DatabaseService extends Service implements Database {
     if (ids?.length) query.ids = ids
     const auth = this.authorization()
     const actor = auth?.currentActor()
+    const tagId = typeof liveFilter.tag === 'string' && liveFilter.tag !== '' ? liveFilter.tag : undefined
+    if (spec.groupPage && !scope && (!auth || !actor)) {
+      const pushed = await spec.groupPage({
+        field,
+        ids: ids?.length ? ids : undefined,
+        q,
+        filter: liveFilter,
+        trash,
+        tagId,
+      })
+      if (pushed) {
+        return {
+          groups: pushed.map((item) => ({ key: item.key, count: item.count })),
+        }
+      }
+    }
     if (auth && actor) auth.preloadCollection(actor.workspaceId, spec.path, actor.accountId)
     try {
       const pack = await this.visibleSortedCollectionRows(spec, query, 'id', 'asc', undefined, true)
@@ -1422,6 +1438,43 @@ export class DatabaseService extends Service implements Database {
     }
     const auth = this.authorization()
     const actor = auth?.currentActor()
+    if (spec.listPage && !scopeFilter && (!auth || !actor) && spec.path !== TAGS_COLLECTION_PATH) {
+      const pushed = await spec.listPage({
+        ids: idFilter?.length ? idFilter : undefined,
+        q,
+        filter: liveFilter,
+        trash,
+        tagId: schemaFilter || undefined,
+        sortField,
+        sortDir,
+        sorts: page?.sorts,
+        limit,
+        offset,
+      })
+      if (pushed) {
+        const slice = this.decorateSlice(spec, pushed.rows, columnKeys)
+        return {
+          kind: 'collection' as const,
+          path: spec.path,
+          id: spec.id,
+          label: spec.label ?? spec.id,
+          view: spec.view ?? null,
+          schema: this.schemaForCurrent(spec, schema),
+          total: pushed.total,
+          offset,
+          limit,
+          items: slice.map((row): DbRecord & { path: string; kind: 'record' } => {
+            const value = withoutContent(spec, row)
+            const picked = columnKeys ? pickListedFields(value, columnKeys) : value
+            return {
+              ...picked,
+              path: `${spec.path}/${row.id}`,
+              kind: 'record',
+            }
+          }),
+        }
+      }
+    }
     if (auth && actor) auth.preloadCollection(actor.workspaceId, spec.path, actor.accountId)
     try {
       const overlay = listNeedsMatchOverlay(liveFilter, q, sortField, page?.sorts)
