@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { allocateRecordId, asImageSrc, asImageSrcList, asAttachment, asAttachmentList, asPerson, asPersonList, appendPerson, personKey, actionVisibleToUser, BUILTIN_FIELDS, emptySchemaValue, isAllocatedRecordId, isAssignableRecordId, isEmptySchemaValue, hasCollectionDeleteQuery, isReservedSchemaFieldKey, isReservedSchemaFieldLabel, isSchemaFieldKey, matchSchemaField, normalizeSchemaPack, normalizeSchemaValue, parseAtomicFields, pruneSchemaValue, recordBuiltinValues, REQUIRED_RECORD_FIELD_KEYS, REQUIRED_RECORD_FIELDS, resolveSchemaFieldKey, retagSchemaValue, sanitizeRecordPatch, sanitizeTagValuesPatch, schemaSearchHaystack, TAG_PROPERTY_TYPES, withBuiltinFields } from './index.ts'
+import { allocateRecordId, asImageSrc, asImageSrcList, asAttachment, asAttachmentList, asPerson, asPersonList, appendPerson, personKey, actionVisibleToUser, BUILTIN_FIELDS, emptySchemaValue, isAllocatedRecordId, isAssignableRecordId, isEmptySchemaValue, hasCollectionDeleteQuery, isReservedSchemaFieldKey, isReservedSchemaFieldLabel, isSchemaFieldKey, matchSchemaField, normalizeSchemaPack, normalizeSchemaValue, parseAtomicFields, pruneSchemaValue, recordBuiltinValues, REQUIRED_RECORD_FIELD_KEYS, REQUIRED_RECORD_FIELDS, resolveSchemaFieldKey, retagSchemaValue, sanitizeRecordPatch, sanitizeTagValuesPatch, schemaSearchHaystack, TAG_PROPERTY_TYPES, withBuiltinFields, type CollectionSchema, type CollectionSchemaPack } from './index.ts'
 
 test('asImageSrc keeps http, data:image, and same-origin image paths', () => {
   assert.equal(asImageSrc('https://example.com/a.png'), 'https://example.com/a.png')
@@ -251,7 +251,7 @@ test('required record fields are icon, timestamps, tag, parent, and dependency',
   assert.equal(REQUIRED_RECORD_FIELDS.parentId.type, 'ref')
   assert.equal(REQUIRED_RECORD_FIELDS.dependsOn.type, 'multi-ref')
   assert.equal(BUILTIN_FIELDS.content.type, 'file')
-  assert.equal(TAG_PROPERTY_TYPES.includes('file'), false)
+  assert.equal((TAG_PROPERTY_TYPES as readonly string[]).includes('file'), false)
   assert.equal(TAG_PROPERTY_TYPES.includes('attachment'), true)
   assert.equal(TAG_PROPERTY_TYPES.includes('document'), true)
   assert.equal(TAG_PROPERTY_TYPES.includes('image'), true)
@@ -294,7 +294,7 @@ test('actionVisibleToUser shows user and both, hides agent', () => {
 })
 
 test('sanitizeRecordPatch rejects unknown, read-only, computed, and bad types', () => {
-  const schema = {
+  const schema: CollectionSchema = {
     fields: {
       ...REQUIRED_RECORD_FIELDS,
       title: { type: 'string', writable: true, label: '标题' },
@@ -349,7 +349,7 @@ test('matchSchemaField finds fields by id key or display label', () => {
 })
 
 test('sanitizeTagValuesPatch maps labels and rejects read-only tag fields', () => {
-  const pack = {
+  const pack: CollectionSchemaPack = {
     id: 'movie',
     label: '电影',
     fields: [
@@ -357,7 +357,7 @@ test('sanitizeTagValuesPatch maps labels and rejects read-only tag fields', () =
       { key: 'locked', type: 'string', label: '锁定', writable: false },
       { key: 'count', type: 'number', label: '计数', writable: true },
     ],
-  } as const
+  }
   assert.deepEqual(sanitizeTagValuesPatch(pack, { 状态: '进行中', count: '2' }), { status: '进行中', count: 2 })
   assert.throws(() => sanitizeTagValuesPatch(pack, { 奥斯卡: true }), /unknown tag field/)
   assert.throws(() => sanitizeTagValuesPatch(pack, { locked: 'x' }), /field not writable: locked/)

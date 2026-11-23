@@ -53,11 +53,11 @@ test('workspace members collection lists and manages only the active workspace',
   const viewer = await runWithAccount(ada.id, () => collection.update!(bob.id, { role: 'viewer' }))
   assert.equal(viewer.role, 'viewer')
   await assert.rejects(
-    () => runWithAccount(bob.id, () => collection.update!(cara.id, { role: 'admin' })),
+    async () => runWithAccount(bob.id, () => collection.update!(cara.id, { role: 'admin' })),
     /只有所有者可以这样做/,
   )
   await assert.rejects(
-    () => runWithAccount(bob.id, () => collection.remove!({ ids: [cara.id] })),
+    async () => runWithAccount(bob.id, () => collection.remove!({ ids: [cara.id] })),
     /所有者或管理员/,
   )
   assert.notEqual(await runWithAccount(ada.id, () => collection.get(cara.id)), null)
@@ -77,7 +77,7 @@ test('a device-only workspace lists the owner and LAN visitors, but not email in
   assert.equal(listed.length, 1)
   assert.equal(listed[0]?.id, ada.id)
   await assert.rejects(
-    () => runWithAccount(ada.id, () => collection.create!([{ email: 'nobody@example.com' }])),
+    async () => runWithAccount(ada.id, () => collection.create!([{ email: 'nobody@example.com' }])),
     /邮箱邀请/,
   )
   const guest = store.rememberLanMember(workspace.id, 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee')

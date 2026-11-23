@@ -16,7 +16,7 @@ const schema: CollectionSchema = {
   fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } },
 }
 const tables: CollectionInfo[] = ['/selection-a', '/selection-b'].map((path) => ({
-  path, kind: 'collection', label: path.slice(1),
+  id: path.slice(1), path, kind: 'collection', label: path.slice(1), view: null,
 }))
 
 class RenderBoundary extends Component<{ children: ReactNode }, { error: string }> {
@@ -90,7 +90,7 @@ test('sidebar view clicks do not close a record through the previous view route'
     sortField: 'title', sortDir: 'asc', columns: ['title'], filters: {}, query: 'only-target', groupBy: '',
   })
   upsertSavedView(path, target)
-  const viewTables: CollectionInfo[] = [{ path, kind: 'collection', label: '页面' }]
+  const viewTables: CollectionInfo[] = [{ id: path.slice(1), path, kind: 'collection', label: '页面', view: null }]
   const closeRecord = vi.fn()
   function RoutedCollection() {
     const [routeView, setRouteView] = useState(builtinAllViewId(path))
@@ -104,7 +104,7 @@ test('sidebar view clicks do not close a record through the previous view route'
     </>
   }
   const result = render(<RoutedCollection />)
-  const button = await result.findByRole('button', { name: target.name, exact: true })
+  const button = await result.findByRole('button', { name: target.name })
   await waitFor(() => assert.ok(result.container.querySelector('tr[data-record-id="/selection-views-row"]')))
   fireEvent.click(button)
   await act(async () => { await Promise.resolve() })
@@ -112,7 +112,7 @@ test('sidebar view clicks do not close a record through the previous view route'
   assert.equal(closeRecord.mock.calls.length, 0, 'a view switch must not navigate back through onCloseRecord')
   await waitFor(() => {
     assert.equal(result.getByTestId('route-view').textContent, target.id)
-    assert.ok(result.getAllByRole('button', { name: target.name, exact: true }).some((button) => button.closest('.chat-session-row')?.classList.contains('is-active')))
+    assert.ok(result.getAllByRole('button', { name: target.name }).some((button) => button.closest('.chat-session-row')?.classList.contains('is-active')))
     assert.ok(result.container.querySelector('tr[data-record-id="/selection-views-target-row"]'))
     assert.equal(Boolean(result.container.querySelector('tr[data-record-id="/selection-views-row"]')), false)
     assert.ok(result.getByTestId('fsdb-view-tab').textContent?.includes(target.name))
@@ -122,17 +122,17 @@ test('sidebar view clicks do not close a record through the previous view route'
 
 test('sidebar collection and icon navigation open the first remaining view after deleting the builtin', () => {
   const path = '/selection-deleted-builtin'
-  const first = normalizeSavedView({ id: 'first-remaining', name: '第一个视图', rank: 0 })
-  const second = normalizeSavedView({ id: 'second-remaining', name: '第二个视图', rank: 1 })
+  const first = normalizeSavedView({ id: 'first-remaining', name: '第一个视图', rank: 0 } as unknown as Parameters<typeof normalizeSavedView>[0])
+  const second = normalizeSavedView({ id: 'second-remaining', name: '第二个视图', rank: 1 } as unknown as Parameters<typeof normalizeSavedView>[0])
   upsertSavedView(path, second)
   upsertSavedView(path, first)
   omitSavedViewIds(path, [builtinAllViewId(path)])
   const onOpenTable = vi.fn()
   const result = render(<DataSidebar collectionPath="/selection-other" title="其他表"
-    tables={[{ path, kind: 'collection', label: '删除后的页面' }]}
+    tables={[{ id: path.slice(1), path, kind: 'collection', label: '删除后的页面', view: null }]}
     views={[]} activeViewId={null} onOpenTable={onOpenTable}
     onApplyView={vi.fn()} onDeleteView={vi.fn()} onAddView={vi.fn()} />)
-  const heading = result.getAllByRole('button', { name: '删除后的页面', exact: true })
+  const heading = result.getAllByRole('button', { name: '删除后的页面' })
     .find((button) => button.closest('.sidebar-group-head'))!
   fireEvent.click(heading)
   fireEvent.click(within(result.getByTestId('data-icon-rail')).getByRole('button', { name: '删除后的页面' }))
@@ -141,15 +141,15 @@ test('sidebar collection and icon navigation open the first remaining view after
 
 test('sidebar collection navigation follows the displayed view order', () => {
   const path = '/selection-ranked-views'
-  const first = normalizeSavedView({ id: 'ranked-first', name: '排在最前', rank: 0 })
+  const first = normalizeSavedView({ id: 'ranked-first', name: '排在最前', rank: 0 } as unknown as Parameters<typeof normalizeSavedView>[0])
   upsertSavedView(path, first)
   persistViewDisplay(path, builtinAllViewId(path), { rank: 1 })
   const onOpenTable = vi.fn()
   const result = render(<DataSidebar collectionPath="/selection-other" title="其他表"
-    tables={[{ path, kind: 'collection', label: '排序后的页面' }]}
+    tables={[{ id: path.slice(1), path, kind: 'collection', label: '排序后的页面', view: null }]}
     views={[]} activeViewId={null} onOpenTable={onOpenTable}
     onApplyView={vi.fn()} onDeleteView={vi.fn()} onAddView={vi.fn()} />)
-  const heading = result.getAllByRole('button', { name: '排序后的页面', exact: true })
+  const heading = result.getAllByRole('button', { name: '排序后的页面' })
     .find((button) => button.closest('.sidebar-group-head'))!
   fireEvent.click(heading)
   fireEvent.click(within(result.getByTestId('data-icon-rail')).getByRole('button', { name: '排序后的页面' }))
@@ -158,17 +158,17 @@ test('sidebar collection navigation follows the displayed view order', () => {
 
 test('sidebar collection navigation remembers the last active view for each collection', () => {
   const path = '/selection-remembered-view'
-  const first = normalizeSavedView({ id: 'view-first', name: '需求列表', rank: 0 })
-  const second = normalizeSavedView({ id: 'view-second', name: '新视图', rank: 1 })
+  const first = normalizeSavedView({ id: 'view-first', name: '需求列表', rank: 0 } as unknown as Parameters<typeof normalizeSavedView>[0])
+  const second = normalizeSavedView({ id: 'view-second', name: '新视图', rank: 1 } as unknown as Parameters<typeof normalizeSavedView>[0])
   upsertSavedView(path, first)
   upsertSavedView(path, second)
   localStorage.setItem(activeViewStorageKey(path), second.id)
   const onOpenTable = vi.fn()
   const result = render(<DataSidebar collectionPath="/selection-other" title="其他表"
-    tables={[{ path, kind: 'collection', label: '页面' }]}
+    tables={[{ id: path.slice(1), path, kind: 'collection', label: '页面', view: null }]}
     views={[]} activeViewId={null} onOpenTable={onOpenTable}
     onApplyView={vi.fn()} onDeleteView={vi.fn()} onAddView={vi.fn()} />)
-  const heading = result.getAllByRole('button', { name: '页面', exact: true })
+  const heading = result.getAllByRole('button', { name: '页面' })
     .find((button) => button.closest('.sidebar-group-head'))!
   fireEvent.click(heading)
   fireEvent.click(within(result.getByTestId('data-icon-rail')).getByRole('button', { name: '页面' }))
@@ -186,12 +186,12 @@ test('highlighted sidebar row backgrounds activate the title action without hija
   const onOpenTable = vi.fn(), onApplyView = vi.fn()
   const onDeleteView = vi.fn(), onAddView = vi.fn(), onExpandedViewKeyChange = vi.fn()
   const result = render(<DataSidebar collectionPath={path} title="点击区域表"
-    tables={[{ path, kind: 'collection', label: '点击区域表' }]}
+    tables={[{ id: path.slice(1), path, kind: 'collection', label: '点击区域表', view: null }]}
     views={[target]} activeViewId={builtinAllViewId(path)} onOpenTable={onOpenTable}
     onApplyView={onApplyView} onDeleteView={onDeleteView}
     onAddView={onAddView} onExpandedViewKeyChange={onExpandedViewKeyChange} />)
   try {
-    const label = result.getByRole('button', { name: target.name, exact: true })
+    const label = result.getByRole('button', { name: target.name })
     const row = label.closest<HTMLElement>('.chat-session-row')!
     for (const hit of [row, row.querySelector('.chat-session-row-main')!, label]) {
       onOpenTable.mockClear()
@@ -210,13 +210,13 @@ test('highlighted sidebar row backgrounds activate the title action without hija
     assert.equal(onApplyView.mock.calls.length, 0)
     assert.equal(onOpenTable.mock.calls.length, 0)
 
-    const starredLabel = result.getAllByRole('button', { name: target.name, exact: true })
+    const starredLabel = result.getAllByRole('button', { name: target.name })
       .find((button) => button.closest('.chat-session-row') !== row)!
     fireEvent.click(starredLabel.closest('.chat-session-row')!)
     assert.deepEqual(onOpenTable.mock.calls, [[path, target.id]])
 
     onOpenTable.mockClear()
-    const head = result.getAllByRole('button', { name: '点击区域表', exact: true })
+    const head = result.getAllByRole('button', { name: '点击区域表' })
       .find((button) => button.closest('.sidebar-group-head'))!.closest('.sidebar-group-head')!
     fireEvent.click(head)
     assert.deepEqual(onOpenTable.mock.calls, [[path, target.id]])

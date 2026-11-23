@@ -30,10 +30,12 @@ test('listPageBlockFences reads id kind plugin and body', () => {
   assert.equal(fences.length, 2)
   assert.equal(fences[0]?.id, 'ab12cd34')
   assert.equal(fences[0]?.kind, 'sandbox')
-  assert.equal(pageBlockData(fences[0]!).source, '<div>旧</div>')
-  assert.equal(pageBlockData(fences[0]!).deck, true)
+  const first = pageBlockData(fences[0]!) as Record<string, unknown>
+  const second = pageBlockData(fences[1]!) as Record<string, unknown>
+  assert.equal(first.source, '<div>旧</div>')
+  assert.equal(first.deck, true)
   assert.equal(fences[1]?.id, 'ef90ab12')
-  assert.equal(pageBlockData(fences[1]!).file, 'assets/board.json')
+  assert.equal(second.file, 'assets/board.json')
 })
 
 test('patchPageBlockMarkdown merges attrs of one id and leaves the rest', () => {
@@ -73,8 +75,9 @@ test('html fence with inline styles still yields the poster html', () => {
   const fences = listPageBlockFences(md)
   assert.equal(fences.length, 1)
   assert.equal(fences[0]?.kind, 'sandbox')
-  assert.match(String(pageBlockData(fences[0]!).source), /番附/)
-  assert.match(String(pageBlockData(fences[0]!).source), /height:100%/)
+  const data = pageBlockData(fences[0]!) as Record<string, unknown>
+  assert.match(String(data.source), /番附/)
+  assert.match(String(data.source), /height:100%/)
 })
 
 test('uniquifyPageBlockMarkdown keeps the first id and rewrites duplicates', () => {

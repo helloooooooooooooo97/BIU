@@ -351,7 +351,14 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
         }}
       >
         <div className="tasks-toolbar-left">
-          {sheet ? null : (
+          {sheet ? (
+            <div className="tasks-viewtabs">
+              <span className="tasks-viewdd-btn tasks-viewtab is-active" style={{ cursor: 'default' }}>
+                <ViewModeGlyph mode={mode} />
+                <span className="tasks-viewdd-name">{title || '收集'}</span>
+              </span>
+            </div>
+          ) : (
             <div className="tasks-viewdd-wrap" ref={viewRef}>
               <div className="tasks-viewtabs">
                 <button

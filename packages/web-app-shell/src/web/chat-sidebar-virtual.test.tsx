@@ -35,8 +35,8 @@ beforeEach(() => {
   )
   const size = {
     configurable: true,
-    get() {
-      return (this as HTMLElement).getAttribute('data-chat-scroll') != null ? 400 : 29
+    get(this: HTMLElement) {
+      return this.getAttribute('data-chat-scroll') != null ? 400 : 29
     },
   }
   Object.defineProperty(HTMLElement.prototype, 'clientHeight', size)

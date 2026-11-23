@@ -6,7 +6,7 @@ import type { SavedView } from './saved-view.ts'
 
 test('page-blocks chrome lists only 全部组件 as builtin', () => {
   const chrome = pageBlocksChrome()
-  const tables = [{ id: 'editor-blocks', path: '/editor-blocks', kind: 'collection' as const, label: '组件', view: { title: '组件' } }]
+  const tables = [{ id: 'editor-blocks', path: '/editor-blocks', kind: 'collection' as const, label: '组件', view: { moduleId: 'editor-blocks', route: '/editor-blocks', title: '组件' } }]
   const leftover = chrome.listViews?.(tables, [
     { id: builtinBlockKindViewId('sandbox'), name: '沙箱', mode: 'table', sortField: 'id', sortDir: 'asc', filters: { blockKind: 'sandbox' }, columns: [] },
   ]) as SavedView[]

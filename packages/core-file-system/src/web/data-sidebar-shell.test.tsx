@@ -18,7 +18,7 @@ test('skeleton has bars and no live section titles', () => {
 })
 
 test('publish swaps the slot from skeleton to the live list', async () => {
-  const result = render(<DataSidebarSlot />)
+  const result = render(<DataSidebarSlot renderSlot={() => null} />)
   assert.ok(result.container.querySelectorAll('.h-8').length >= 4)
   assert.equal(result.queryByText('核心数据'), null)
 

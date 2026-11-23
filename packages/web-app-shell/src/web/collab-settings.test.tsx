@@ -466,7 +466,7 @@ test('网络错误不清 token —— 一次抖动不应把用户登出', async 
 test('5xx 不清 token，401 才清', async () => {
   localStorage.clear()
   localStorage.setItem('biu.account.token', 'keep-me')
-  globalThis.fetch = (async () => json({ error: '服务端炸了' }, 500)) as typeof fetch
+  globalThis.fetch = (async () => json({ error: '服务端炸了' }, 500)) as unknown as typeof fetch
 
   render(
     <MemoryRouter initialEntries={['/']}>
@@ -480,7 +480,7 @@ test('5xx 不清 token，401 才清', async () => {
 
   // 401 是凭证真的失效 —— 此时才清。
   localStorage.setItem('biu.account.token', 'stale')
-  globalThis.fetch = (async () => json({ error: '凭证已过期' }, 401)) as typeof fetch
+  globalThis.fetch = (async () => json({ error: '凭证已过期' }, 401)) as unknown as typeof fetch
   render(
     <MemoryRouter initialEntries={['/']}>
       <AuthGate>

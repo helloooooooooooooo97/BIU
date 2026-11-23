@@ -51,7 +51,7 @@ test('destroyed editor is not treated as ready and command access is swallowed',
   const exploded = {
     isDestroyed: false,
     get commands() {
-      return (null as unknown as { clearContent: () => void }).commands
+      return (null as unknown as { commands: { clearContent: () => void } }).commands
     },
   }
   runComposerCommands(exploded as never, (ed) => {

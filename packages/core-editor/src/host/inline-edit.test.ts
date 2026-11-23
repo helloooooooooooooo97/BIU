@@ -14,7 +14,7 @@ test('sanitizeInlineEditOutput strips accidental code fences unless requested', 
 })
 
 test('runInlineEdit calls llm directly with temporary context and records events when sessionId is given', async () => {
-  let capturedConfig: Record<string, unknown> | null = null
+  const captured: { config: Record<string, unknown> | null } = { config: null }
   let capturedMessages: Array<{ role: string; content: string }> = []
   const appended: Array<{ id: string; body: Record<string, unknown> }> = []
 
@@ -33,7 +33,7 @@ test('runInlineEdit calls llm directly with temporary context and records events
       if (key === 'llm') {
         return {
           forConfig: (cfg: Record<string, unknown>) => {
-            capturedConfig = cfg
+            captured.config = cfg
             return {
               chat: async (messages: Array<{ role: string; content: string }>) => {
                 capturedMessages = messages
@@ -64,7 +64,7 @@ test('runInlineEdit calls llm directly with temporary context and records events
   })
 
   assert.equal(result, '优化后的文本')
-  assert.equal(capturedConfig?.thinking, 'disabled')
+  assert.equal(captured.config?.thinking, 'disabled')
   assert.equal(capturedMessages[0]?.role, 'system')
   assert.equal(capturedMessages[0]?.content, INLINE_EDIT_SYSTEM_PROMPT)
   assert.match(capturedMessages[1]?.content ?? '', /测试文档/)

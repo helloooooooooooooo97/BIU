@@ -265,7 +265,7 @@ test('fork copies the append-only log into a child session', async () => {
   const parent = await ctx.sessions.create()
   await ctx.sessions.append(parent.id, { type: 'user/message', text: 'keep', kind: 'wake' })
   await ctx.sessions.patchConfig(parent.id, {
-    inspector: { open: true, dbPaths: { 'database:/pages': '/database/pages' } },
+    inspector: { tab: 'database:/pages', dbPaths: { 'database:/pages': '/database/pages' } },
   })
   const child = await ctx.sessions.fork(parent.id)
   assert.notEqual(child.id, parent.id)

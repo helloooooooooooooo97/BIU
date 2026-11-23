@@ -383,6 +383,7 @@ test('all-data source table is a groupable select', () => {
   const dataSchema: CollectionSchema = {
     labelField: 'title',
     fields: {
+      ...REQUIRED_RECORD_FIELDS,
       title: { type: 'string' },
       table: { type: 'select', label: '来源表', computed: true, enum: ['页面', '代理'] },
     },
@@ -392,6 +393,7 @@ test('all-data source table is a groupable select', () => {
     groupableFields({
       labelField: 'title',
       fields: {
+        ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '视图' },
         table: { type: 'select', label: '来源表', computed: true },
       },
@@ -461,6 +463,7 @@ test('groupListKeys keeps 未填 except for shareScope and source table', () => 
     {
       labelField: 'title',
       fields: {
+        ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string' },
         table: { type: 'select', label: '来源表', computed: true },
       },

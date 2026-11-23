@@ -20,7 +20,7 @@ test('isInlineEditHotkey matches Cmd/Ctrl+K only', () => {
 test('InlineEditPopover uses global agent avatar, forwards sessionId, submits on Enter, and closes on Escape', async () => {
   const applied: string[] = []
   let closed = 0
-  let sentBody: Record<string, unknown> | null = null
+  const captured: { sentBody: Record<string, unknown> | null } = { sentBody: null }
 
   bindInlineEditSessionView({
     get: (key) =>
@@ -38,7 +38,7 @@ test('InlineEditPopover uses global agent avatar, forwards sessionId, submits on
   vi.stubGlobal(
     'fetch',
     vi.fn(async (_url: string, init?: RequestInit) => {
-      sentBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>
+      captured.sentBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>
       return new Response(JSON.stringify({ ok: true, text: '精简后的结果' }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
@@ -74,7 +74,7 @@ test('InlineEditPopover uses global agent avatar, forwards sessionId, submits on
     fireEvent.keyDown(input, { key: 'Enter' })
   })
   assert.deepEqual(applied, ['精简后的结果'])
-  assert.equal(sentBody?.sessionId, 'sess-global-42')
+  assert.equal(captured.sentBody?.sessionId, 'sess-global-42')
 
   fireEvent.keyDown(input, { key: 'Escape' })
   assert.equal(closed, 1)

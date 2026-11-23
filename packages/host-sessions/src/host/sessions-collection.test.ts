@@ -1,5 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import type { SessionEvent } from '@biu/type-session'
 import { formatUserMessagesForTitle, lastUserMessages, sanitizeGeneratedTitle, sessionsCollection } from './sessions-collection.ts'
 
 test('sessionsCollection maps summaries and writes title/pinned/tag', async () => {
@@ -31,7 +32,7 @@ test('sessionsCollection maps summaries and writes title/pinned/tag', async () =
     },
     require: async (id) => ({
       id,
-      events: [{ type: 'user/message', text: 'hi', seq: 0, ts: 1, kind: 'user' }],
+      events: [{ type: 'user/message', text: 'hi', seq: 0, ts: 1, kind: 'wake' }],
     }),
   })
   assert.equal(spec.schema.contentField, 'events')
@@ -99,7 +100,7 @@ test('progress is idle when the agent is not busy even if turn/end is missing', 
     }),
   })
   const progress = spec.actions?.find((item) => item.id === 'progress')
-  const got = await progress?.run!('s1', { id: 's1' }, {})
+  const got = (await progress?.run!('s1', { id: 's1' }, {})) as { status: string; turn: number; assistantText: string }
   assert.equal(got.status, 'idle')
   assert.equal(got.turn, 1)
   assert.equal(got.assistantText, 'done talking')
@@ -114,34 +115,34 @@ test('query reads one session timeline', async () => {
     require: async (id) => ({
       id,
       events: [
-        { type: 'user/message', text: '查一下页面', seq: 1, ts: 1, kind: 'user' },
+        { type: 'user/message', text: '查一下页面', seq: 1, ts: 1, kind: 'wake' },
         { type: 'tool/call', id: 't1', name: 'db_list', arguments: '{"path":"/pages"}', seq: 2, ts: 2 },
         { type: 'tool/result', id: 't1', name: 'db_list', ok: true, detail: 'pages ok', seq: 3, ts: 3 },
       ],
     }),
   })
   const query = spec.actions?.find((item) => item.id === 'query')
-  const found = await query?.run!('s1', { id: 's1' }, { query: 'db_list' })
+  const found = (await query?.run!('s1', { id: 's1' }, { query: 'db_list' })) as { hits: number; results: Array<{ type?: string; summary?: string }> }
   assert.equal(found.hits, 2)
   assert.equal(found.results[0]?.type, 'tool/call')
-  const typed = await query?.run!('s1', { id: 's1' }, { type: 'user/message' })
+  const typed = (await query?.run!('s1', { id: 's1' }, { type: 'user/message' })) as { hits: number; results: Array<{ type?: string; summary?: string }> }
   assert.equal(typed.hits, 1)
   assert.match(String(typed.results[0]?.summary), /查一下页面/)
 })
 
 test('rename action titles from the last 100 user messages with timestamps', async () => {
   const calls: unknown[] = []
-  const events = []
+  const events: SessionEvent[] = []
   const epoch = Date.parse('2026-01-01T00:00:00.000Z')
   for (let i = 1; i <= 102; i += 1) {
     events.push({
-      type: 'user/message' as const,
+      type: 'user/message',
       text: `用户${i}`,
       seq: i * 2 - 1,
       ts: epoch + i * 1000,
-      kind: 'user' as const,
+      kind: 'wake',
     })
-    events.push({ type: 'assistant/message' as const, text: `助手${i} 不该进标题`, seq: i * 2, ts: epoch + i * 1000 })
+    events.push({ type: 'assistant/message', text: `助手${i} 不该进标题`, seq: i * 2, ts: epoch + i * 1000 })
   }
   const spec = sessionsCollection({
     listSummaries: async () => [],
@@ -167,7 +168,7 @@ test('rename action titles from the last 100 user messages with timestamps', asy
   assert.doesNotMatch(payload, /助手/)
   assert.equal(sanitizeGeneratedTitle('「页面排查」\nextra'), '页面排查')
   const rename = spec.actions?.find((item) => item.id === 'rename')
-  const got = await rename?.run!('s1', { id: 's1' }, {})
+  const got = (await rename?.run!('s1', { id: 's1' }, {})) as { ok: boolean; title: string }
   assert.equal(got.ok, true)
   assert.equal(got.title, '页面排查')
   assert.deepEqual(calls[0], ['suggest', 's1', messages])
@@ -187,6 +188,6 @@ test('rename action fails without user messages', async () => {
     suggestTitle: async () => '不该调用',
   })
   const rename = spec.actions?.find((item) => item.id === 'rename')
-  await assert.rejects(() => rename?.run!('s1', { id: 's1' }, {}), /没有用户消息/)
+  await assert.rejects(async () => rename?.run!('s1', { id: 's1' }, {}), /没有用户消息/)
 })
 

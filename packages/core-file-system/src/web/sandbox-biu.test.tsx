@@ -2,6 +2,7 @@
 import { afterEach, test, vi } from 'vitest'
 import assert from 'node:assert/strict'
 import { cleanup, render, screen } from '@testing-library/react'
+import { REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 import { RecordPropHostView } from './record-prop-host.tsx'
 import { applyRecordViewAssetChanged, rememberRecordViewFile, resetRecordViewFileState } from './record-sandboxes.ts'
 
@@ -67,7 +68,7 @@ test('biu.useData loads, reloads on remote asset-changed, and retries 409 via up
     <RecordPropHostView
       record={{ id: 'p1', title: '测试' }}
       view={{ id: 'v1', name: 'Hook测试', kind: 'sandbox', file: 'hook-view.jsx', dataFile: 'hook-data.json' }}
-      schema={{ fields: { title: { type: 'string', label: '标题', writable: true } } }}
+      schema={{ fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', label: '标题', writable: true } } }}
       collectionPath="/pages"
     />,
   )
@@ -117,8 +118,8 @@ test('sandbox scopes <style> tags with @scope and gates window keydown outside p
       <button type="button" data-testid="outside-btn">outside</button>
       <RecordPropHostView
         record={{ id: 'p2', title: '隔离测试' }}
-        view={{ id: 'v2', name: '隔离测试', kind: 'sandbox', file: 'isolated-view.jsx' }}
-        schema={{ fields: { title: { type: 'string', label: '标题', writable: true } } }}
+        view={{ id: 'v2', name: '隔离测试', kind: 'sandbox', file: 'isolated-view.jsx', dataFile: '' }}
+        schema={{ fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', label: '标题', writable: true } } }}
         collectionPath="/pages"
       />
     </div>,

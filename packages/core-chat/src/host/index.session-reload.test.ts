@@ -33,7 +33,7 @@ test('a sent message is still readable after refresh, even if another session de
       if (id === other.id) throw new Error('没有权限')
       return originalRequire(id)
     }
-    ;(reloaded.ctx as { tasks?: { list: () => never } }).tasks = {
+    ;(reloaded.ctx as unknown as { tasks?: { list: () => never } }).tasks = {
       list() {
         throw new Error('没有权限')
       },

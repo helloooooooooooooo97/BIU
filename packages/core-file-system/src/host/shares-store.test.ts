@@ -147,7 +147,7 @@ test('record snapshot only includes the shared row', async () => {
   const views = new SavedViewsStore().open(':memory:')
   const shares = new SharesStore().open(':memory:')
   const share = shares.upsert({ kind: 'record', collection: '/notes', recordId: 'open' })
-  const snap = await buildShareSnapshot(db, views, share)
+  const snap = await buildShareSnapshot(db as unknown as Parameters<typeof buildShareSnapshot>[0], views, share)
   assert.deepEqual(snap.records.map((row) => row.id), ['open'])
   assert.equal(snap.records[0]?.shareRole, '查看')
   assert.equal(snap.contents.open, 'ok')
@@ -177,7 +177,7 @@ test('snapshot lists page plugins even when source zip is off', async () => {
   const views = new SavedViewsStore().open(':memory:')
   const shares = new SharesStore().open(':memory:')
   const share = shares.upsert({ kind: 'record', collection: '/notes', recordId: 'open' })
-  const snap = await buildShareSnapshot(db, views, share)
+  const snap = await buildShareSnapshot(db as unknown as Parameters<typeof buildShareSnapshot>[0], views, share)
   assert.equal(snap.sharePlugins, false)
   assert.deepEqual(snap.pluginIds, ['page-excalidraw'])
 })
@@ -210,7 +210,7 @@ test('session snapshot uses db_content events, not page markdown', async () => {
   const views = new SavedViewsStore().open(':memory:')
   const shares = new SharesStore().open(':memory:')
   const share = shares.upsert({ kind: 'record', collection: '/agents', recordId: 's1' })
-  const snap = await buildShareSnapshot(db, views, share)
+  const snap = await buildShareSnapshot(db as unknown as Parameters<typeof buildShareSnapshot>[0], views, share)
   assert.equal(snap.contents.s1, events)
   assert.equal(snap.schema.contentField, 'events')
 })
@@ -220,7 +220,7 @@ test('builtin view snapshot titles use 全部 plus the collection label', async 
     id: 'pages',
     path: '/pages',
     label: '页面',
-    view: { title: '页面', route: '/pages' },
+    view: { moduleId: 'pages', title: '页面', route: '/pages' },
     schema: {
       labelField: 'title',
       contentField: 'notes',
@@ -236,7 +236,7 @@ test('builtin view snapshot titles use 全部 plus the collection label', async 
   const views = new SavedViewsStore().open(':memory:')
   const shares = new SharesStore().open(':memory:')
   const share = shares.upsert({ kind: 'view', collection: '/pages', viewId: builtinAllViewId('/pages') })
-  const snap = await buildShareSnapshot(db, views, share)
+  const snap = await buildShareSnapshot(db as unknown as Parameters<typeof buildShareSnapshot>[0], views, share)
   assert.equal(snap.title, '全部页面')
   assert.equal(snap.collectionLabel, '页面')
   assert.equal(snap.view?.name, '全部页面')
@@ -353,7 +353,7 @@ test('view snapshot keeps grouping and custom tag columns', async () => {
   )
   const shares = new SharesStore().open(':memory:')
   const share = shares.upsert({ kind: 'view', collection: '/pages', viewId: String(created.viewId) })
-  const snap = await buildShareSnapshot(db, views, share)
+  const snap = await buildShareSnapshot(db as unknown as Parameters<typeof buildShareSnapshot>[0], views, share)
   assert.equal(snap.view?.groupBy, laneKey)
   assert.deepEqual(snap.view?.columns, ['title', laneKey, vendorKey, 'tag', 'shareRole', 'createdBy'])
   assert.equal(snap.tags?.[0]?.id, 'security')

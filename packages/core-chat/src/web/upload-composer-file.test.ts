@@ -22,7 +22,7 @@ describe('filesNeedingUpload', () => {
 
 describe('uploadComposerFile', () => {
   it('POSTs bytes to session artifacts and returns the saved path', async () => {
-    const fetchMock = vi.fn(async () => ({
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => ({
       ok: true,
       json: async () => ({ path: '/tmp/.biu/artifacts/s1/spec.pdf' }),
     }))
@@ -30,7 +30,7 @@ describe('uploadComposerFile', () => {
     const file = new File([new Uint8Array([1, 2, 3])], 'spec.pdf', { type: 'application/pdf' })
     await expect(uploadComposerFile('s1', file)).resolves.toBe('/tmp/.biu/artifacts/s1/spec.pdf')
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const [url, init] = fetchMock.mock.calls[0]
     expect(url).toBe('/api/agents/s1/artifacts?name=spec.pdf')
     expect(init.method).toBe('POST')
     expect(init.body).toBe(file)

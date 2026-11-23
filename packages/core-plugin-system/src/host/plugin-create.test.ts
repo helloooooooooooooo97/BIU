@@ -136,8 +136,8 @@ test('sandbox then pack writes manifest.shell from input', async () => {
     assert.equal(manifest.shell.height, 480)
     assert.equal(manifest.shell.resizable, false)
     const listed = await store.list()
-    assert.equal(listed[0]?.shell.width, 640)
-    assert.equal(listed[0]?.shell.resizable, false)
+    assert.equal(listed[0]?.shell?.width, 640)
+    assert.equal(listed[0]?.shell?.resizable, false)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -325,7 +325,7 @@ test('sandbox/pack live on the plugins collection, not as tools', () => {
     pack() {},
     uninstall() {},
     initSandbox: async () => ({ id: 'x', sandboxPath: '/tmp/x' }),
-  } as Store)
+  } as unknown as Store)
   const ids = spec.actions?.map((item) => item.id) ?? []
   assert.deepEqual(ids, ['sandbox', 'start', 'stop', 'pack', 'uninstall'])
   const sandbox = spec.actions?.find((item) => item.id === 'sandbox')

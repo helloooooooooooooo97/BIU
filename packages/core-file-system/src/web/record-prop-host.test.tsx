@@ -7,6 +7,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import type { ComponentType } from 'react'
 import React, { useMemo, useState } from 'react'
 import { RenderBoundary } from '@biu/biu-ui'
+import { REQUIRED_RECORD_FIELDS, type CollectionSchema } from '@biu/type-file-system'
 import { RecordPropHostView, RecordProperties, recordPropSourceText } from './record-prop-host.tsx'
 import { rememberRecordViewFile } from './record-sandboxes.ts'
 import { patchRecordViewCatalog } from './record-view-catalog.ts'
@@ -33,7 +34,7 @@ test('property sandbox throw stays in the host and does not unmount the sibling 
       <RecordPropHostView
         record={{ id: 'home', title: '演示页' }}
         view={{ id: 'card1', name: '卡片', kind: 'sandbox', file: 'boom-prop.jsx', dataFile: 'boom-prop-data.json' }}
-        schema={{ fields: { title: { type: 'string', label: '标题', writable: true } } }}
+        schema={{ fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', label: '标题', writable: true } } }}
         collectionPath="/pages"
       />
     </div>,
@@ -49,10 +50,11 @@ test('sandbox throw is caught as a child so the host keeps its own hooks', () =>
   const compiled = compileHostSource(boomSource)
   assert.equal(compiled.ok, true)
   if (!compiled.ok) return
+  const compiledCode = compiled.code
 
   function HostWithOwnHooks() {
     const [alive] = useState('壳钩子还在')
-    const code = useMemo(() => compiled.code, [])
+    const code = useMemo(() => compiledCode, [])
     return (
       <div>
         <span data-testid="host-hooks">{alive}</span>
@@ -120,10 +122,12 @@ test('property sandbox preserves useState across record updates, injects ui.icon
       )
     }`,
   )
-  const schema = {
+  const schema: CollectionSchema = {
+    labelField: 'title',
     fields: {
-      title: { type: 'string' as const, label: '标题', writable: true },
-      tag: { type: 'tag' as const, label: '标签', writable: true },
+      ...REQUIRED_RECORD_FIELDS,
+      title: { type: 'string', label: '标题', writable: true },
+      tag: { type: 'tag', label: '标签', writable: true },
     },
   }
   const view = { id: 'card1', name: '卡片', kind: 'sandbox' as const, file: 'state-prop.jsx', dataFile: 'state-prop-data.json' }
@@ -184,7 +188,7 @@ test('builtin source property view is read-only JSON', () => {
         layouts: [{ id: 'need', name: '需求', contentViewId: 'doc', propViewId: 'source' }],
       }}
       collectionPath="/pages"
-      schema={{ fields: { title: { type: 'string', label: '标题' }, share: { type: 'select', label: '分享' } } }}
+      schema={{ fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', label: '标题' }, share: { type: 'select', label: '分享' } } }}
     >
       <div data-testid="prop-table">表格</div>
     </RecordProperties>,
@@ -206,6 +210,7 @@ test('property source pretty-prints JSON string fields instead of escaping them'
     },
     {
       fields: {
+        ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '标题' },
         tag: { type: 'tag', label: '标签' },
         fields: { type: 'string', label: '属性' },
@@ -232,6 +237,7 @@ test('property source includes content, property and layout view catalogs', () =
     },
     {
       fields: {
+        ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '标题' },
         views: { type: 'string', label: '内容视图' },
         propViews: { type: 'string', label: '属性视图' },

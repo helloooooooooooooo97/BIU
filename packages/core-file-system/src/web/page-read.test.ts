@@ -39,16 +39,21 @@ test('typing forty line-growths measures once and skips an invisible progress ch
   reads = 0
   writes = 0
   height = 8000
-  let queued: (() => void) | null = null
+  const ref: { queued: (() => void) | null } = { queued: null }
+  const runQueued = (clear = false) => {
+    const fn = ref.queued
+    if (clear) ref.queued = null
+    fn?.()
+  }
   const read = bindPageRead(
     scroller,
     bar,
     (cb) => {
-      queued = cb
+      ref.queued = cb
       return 1
     },
     () => {
-      queued = null
+      ref.queued = null
     },
   )
   for (let i = 0; i < growths; i += 1) {
@@ -56,12 +61,11 @@ test('typing forty line-growths measures once and skips an invisible progress ch
     read.poke()
   }
   assert.equal(reads, 0)
-  queued?.()
-  queued = null
+  runQueued(true)
   const coalescedReads = reads
   const coalescedWrites = writes
   read.poke()
-  queued?.()
+  runQueued()
   assert.equal(writes, coalescedWrites)
   assert.deepEqual(
     { legacyReads, legacyWrites, coalescedReads, coalescedWrites, followUpWrites: writes },
@@ -70,7 +74,7 @@ test('typing forty line-growths measures once and skips an invisible progress ch
 
   top = 4000
   read.poke()
-  queued?.()
+  runQueued()
   assert.equal(writes, 2)
   assert.ok(Math.abs(pageReadRatio(4000, height, 400) - Number(bar.style.getPropertyValue('--page-read'))) < 1e-12)
 })

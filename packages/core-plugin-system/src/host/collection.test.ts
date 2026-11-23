@@ -266,7 +266,7 @@ test('plugin intro is README.md via contentField readme', async () => {
   const written = await spec.update!('demo', { readme: '# Demo\n\n介绍\n' })
   assert.equal(written.readme, '# Demo\n\n介绍\n')
   assert.equal(files.get('demo'), '# Demo\n\n介绍\n')
-  await assert.rejects(() => spec.update!('demo', { name: '改名' }), /not writable/)
+  await assert.rejects(async () => spec.update!('demo', { name: '改名' }), /not writable/)
 })
 
 test('builtin listing prefers live sandbox name over a stale packed HTML title', async () => {

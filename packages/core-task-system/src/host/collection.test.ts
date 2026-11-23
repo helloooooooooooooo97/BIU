@@ -23,10 +23,10 @@ test('tasksCollection maps /tasks rows with rolled-up usage', async () => {
       return id === 't1' ? { id: 't1', title: '写方案', status: 'todo', parentId: 'p' } : undefined
     },
     update(id, patch) {
-      return { id, title: '写方案', status: patch.status ?? 'todo' }
+      return { id, title: '写方案', status: typeof patch.status === 'string' ? patch.status : 'todo' }
     },
     create(input) {
-      return { id: 'new', title: input.title, status: 'todo', parentId: input.parentId }
+      return { id: 'new', title: input.title, status: 'todo', parentId: typeof input.parentId === 'string' ? input.parentId : null }
     },
     delete() {
       return true
@@ -76,7 +76,7 @@ test('tasksCollection maps /tasks rows with rolled-up usage', async () => {
   const addChild = spec.actions?.find((item) => item.id === 'add-child')
   assert.equal(addChild?.label, '添加子任务')
   assert.deepEqual(addChild?.placement, ['row', 'detail'])
-  const childRow = await addChild!.run!('t1', { id: 't1' })
+  const childRow = (await addChild!.run!('t1', { id: 't1' })) as { parentId?: string; title?: string } | undefined
   assert.equal(childRow?.parentId, 't1')
   assert.equal(childRow?.title, '未命名任务')
 })
@@ -95,7 +95,7 @@ test('tasksCollection get reads one row instead of listing the table', async () 
       return id === 't1' ? { id: 't1', title: '写方案', status: 'todo', parentId: 'p' } : undefined
     },
     update(id, patch) {
-      return { id, title: '写方案', status: patch.status ?? 'todo' }
+      return { id, title: '写方案', status: typeof patch.status === 'string' ? patch.status : 'todo' }
     },
     create(input) {
       return { id: 'new', title: input.title, status: 'todo' }

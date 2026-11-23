@@ -1,11 +1,15 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { Context } from 'cordis'
-import { SessionViewService } from './index.ts'
+import { SessionViewService, type SessionViewState } from './index.ts'
+
+function patchView(view: SessionViewService, patch: Partial<SessionViewState>) {
+  ;(view as unknown as { replace(patch: Partial<SessionViewState>): void }).replace(patch)
+}
 
 function createView() {
   const ctx = new Context()
   const view = new SessionViewService(ctx)
-  view.replace({
+  patchView(view, {
     sessionId: 'sess-1',
     agentStatus: 'running',
     pending: true,
@@ -26,35 +30,35 @@ describe('inbox optimistic queue & 404 unknown inbox item recovery', () => {
       new Response(JSON.stringify({ ok: true, inbox: [] }), { status: 200 }),
     )
     await view.send('排查一下bug', 'inject')
-    expect(view.value.inbox).toEqual([])
-    expect(view.value.error).toBeUndefined()
+    expect(view.get().inbox).toEqual([])
+    expect(view.get().error).toBeUndefined()
   })
 
   test('setInbox deduplicates local optimistic item even when server flips wake/inject kind', () => {
     const view = createView()
-    view.replace({
+    patchView(view, {
       inbox: [{ id: 'local-abc', kind: 'wake', text: '排查一下bug' }],
     })
     view.setInbox([{ id: 'inb-1', kind: 'inject', text: '排查一下bug' }], 'sess-1')
-    expect(view.value.inbox).toEqual([{ id: 'inb-1', kind: 'inject', text: '排查一下bug' }])
+    expect(view.get().inbox).toEqual([{ id: 'inb-1', kind: 'inject', text: '排查一下bug' }])
   })
 
   test('dropInboxItem removes local-* items locally without calling server', async () => {
     const view = createView()
     const spy = vi.spyOn(globalThis, 'fetch')
-    view.replace({
+    patchView(view, {
       inbox: [{ id: 'local-1', kind: 'inject', text: 'ghost' }],
     })
     const ok = await view.dropInboxItem('local-1')
     expect(ok).toBe(true)
     expect(spy).not.toHaveBeenCalled()
-    expect(view.value.inbox).toEqual([])
-    expect(view.value.error).toBeUndefined()
+    expect(view.get().inbox).toEqual([])
+    expect(view.get().error).toBeUndefined()
   })
 
   test('dropInboxItem handles 404 unknown inbox item silently by resyncing inbox instead of showing error banner', async () => {
     const view = createView()
-    view.replace({
+    patchView(view, {
       inbox: [
         { id: 'inb-stale', kind: 'inject', text: 'already claimed' },
         { id: 'inb-live', kind: 'wake', text: 'still queued' },
@@ -72,7 +76,7 @@ describe('inbox optimistic queue & 404 unknown inbox item recovery', () => {
     )
     const ok = await view.dropInboxItem('inb-stale')
     expect(ok).toBe(false)
-    expect(view.value.error).toBeUndefined()
-    expect(view.value.inbox).toEqual([{ id: 'inb-live', kind: 'wake', text: 'still queued' }])
+    expect(view.get().error).toBeUndefined()
+    expect(view.get().inbox).toEqual([{ id: 'inb-live', kind: 'wake', text: 'still queued' }])
   })
 })

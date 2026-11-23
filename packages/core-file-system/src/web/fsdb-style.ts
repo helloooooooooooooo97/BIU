@@ -719,8 +719,8 @@ const CSS = `
 .fsdb-banner-create{display:flex;align-items:center;justify-content:center;height:56px;border:1px dashed var(--biu-color-border)!important;color:var(--biu-color-text-muted)!important;text-align:center;line-height:1.3}
 .fsdb-tag-collect{display:flex;flex:none;min-width:0;width:100%;min-height:320px}
 .fsdb-tag-collect>.fsdb-page{flex:1;min-width:0;min-height:320px;background:transparent}
-.fsdb-page.is-sheet .tasks-main{padding:0;gap:8px;max-width:none}
-.fsdb-page.is-sheet .fsdb-right-body{overflow:hidden}
+.fsdb-page.is-sheet .tasks-main{padding:0;gap:10px;max-width:none}
+.fsdb-page.is-sheet .fsdb-right-body{overflow:visible}
 .fsdb-page.is-sheet .tasks-table-wrap{width:100%;margin-left:0;padding-left:0}
 .fsdb-detail-aside{display:flex;flex-direction:column;gap:0;min-width:0;padding:0 0 12px;overflow-x:hidden}
 .fsdb-page .fsdb-detail-aside .tasks-table{box-sizing:border-box;table-layout:fixed;width:100%;min-width:0;max-width:100%;border-right:0}

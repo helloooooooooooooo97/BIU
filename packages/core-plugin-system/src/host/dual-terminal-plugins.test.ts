@@ -47,7 +47,7 @@ describe('page terminal store plugin', () => {
       env: process.env,
     })
     let buf = ''
-    child.onData((chunk) => {
+    child.onData((chunk: string) => {
       buf += chunk
     })
     const deadline = Date.now() + 2000

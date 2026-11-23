@@ -661,15 +661,17 @@ export class ArenaGame {
   }
 
   clickPick(nx: number, ny: number) {
-    if (!this.pick) return
+    const picks = this.pick
+    if (!picks) return
     const { w, h } = this
-    for (let i = 0; i < this.pick.length; i++) {
+    for (let i = 0; i < picks.length; i++) {
       const x = w / 2 - 140
       const y = h / 2 - 48 + i * 52
       if (nx >= x && nx <= x + 280 && ny >= y && ny <= y + 44) {
-        this.pick[i]!.apply()
+        picks[i]!.apply()
         this.pick = null
         this.paused = false
+        return
       }
     }
   }

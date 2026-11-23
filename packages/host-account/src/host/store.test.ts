@@ -766,7 +766,7 @@ test('activeLocalActor tracks the latest logged-in account and workspacePerson r
   const bobWs = collab.createWorkspace(bob.id, 'Bob空间', 1004)
   collab.setActive(ada.id, adaWs.id)
   collab.setActive(bob.id, bobWs.id)
-  collab.addMember(ada.id, sharedWs.id, bob.id, 'editor')
+  collab.addMember(ada.id, sharedWs.id, bob.id)
   runWithAccount(bob.id, () =>
     runWithRequestWorkspace(sharedWs.id, () => {
       collab.saveWorkspaceProfile(bob.id, { name: 'Bob(协作)' })

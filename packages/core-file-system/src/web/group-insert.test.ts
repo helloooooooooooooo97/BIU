@@ -29,7 +29,7 @@ test('multi-value creates appear once in every group, including newly discovered
 })
 
 test('custom attributes and unset values can create their first bucket without sample rows', () => {
-  const packs = [{ id: 'project', fields: [{ key: 'lane', type: 'multi-select' as const }] }]
+  const packs = [{ id: 'project', label: '项目', fields: [{ key: 'lane', type: 'multi-select' as const }] }]
   const key = 'tag::project::lane'
   const groups = placeCreatedRow([], { id: '1', [key]: ['new'] }, key, schema, packs)
   assert.equal(groups[0].key, 'new')

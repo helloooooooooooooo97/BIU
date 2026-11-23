@@ -34,7 +34,9 @@ test('custom storage migrates on read and coalesces writes', async () => {
 
   // 读：旧版扁平 `{ [key]: boolean }` 升级成 zustand persist 信封
   base.setItem('k', JSON.stringify({ '/tmp/legacy': true }))
-  const migrated = JSON.parse(storage.getItem('k')!) as {
+  const raw = storage.getItem('k')
+  assert.equal(typeof raw, 'string')
+  const migrated = JSON.parse(raw as string) as {
     state: { collapsed: Record<string, boolean> }
   }
   assert.equal(migrated.state.collapsed['/tmp/legacy'], true)

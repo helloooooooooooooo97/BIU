@@ -41,7 +41,7 @@ describe('ColumnHeaderMenu', () => {
     const { unmount } = render(
       <ColumnHeaderMenu
         target={{
-          col: { key: 'status', field: { type: 'text', label: '状态' }, kind: 'text' },
+          col: { key: 'status', field: { type: 'string', label: '状态' }, kind: 'string' },
           rect: th.getBoundingClientRect(),
           anchorEl: th,
           mode: 'header',

@@ -4,6 +4,7 @@ import { cleanup, render, waitFor } from '@testing-library/react'
 import { REQUIRED_RECORD_FIELDS, type CollectionSchema } from '@biu/type-file-system'
 import { invalidateListReads } from './db-client.ts'
 import { CollectionBrowser } from './browser.tsx'
+// @ts-expect-error -- untyped .mjs helper script outside package
 import { inspectInspectorPage } from '../../../../scripts/page-perf/inspector-open-ready.mjs'
 
 afterEach(() => {
@@ -87,7 +88,7 @@ test('opening a record requests content before /api/db/read returns', async () =
         title="页面"
         blurb=""
         routeRecordId="p1"
-        tables={[{ path: '/pages', kind: 'collection', label: '页面', view: { title: '页面' } }]}
+        tables={[{ id: 'pages', path: '/pages', kind: 'collection', label: '页面', view: { moduleId: 'pages', route: '/pages', title: '页面' } }]}
       />,
     )
     await waitFor(() => {
@@ -134,7 +135,7 @@ test('embedded inspector page paints editor without /api/db/list', async () => {
         title="页面"
         blurb=""
         routeRecordId="p1"
-        tables={[{ path: '/pages', kind: 'collection', label: '页面', view: { title: '页面' } }]}
+        tables={[{ id: 'pages', path: '/pages', kind: 'collection', label: '页面', view: { moduleId: 'pages', route: '/pages', title: '页面' } }]}
         chrome={{
           Content: ({ value, status }) =>
             status === 'ready' ? (

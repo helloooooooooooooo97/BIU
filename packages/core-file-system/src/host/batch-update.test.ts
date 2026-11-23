@@ -19,7 +19,7 @@ afterEach(() => {
 
 class StubHttp extends Service {
   constructor(ctx: Context) {
-    super(ctx, 'http', true)
+    super(ctx, 'http')
   }
   route() {}
   broadcast() {}
