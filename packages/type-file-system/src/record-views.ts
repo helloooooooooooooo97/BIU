@@ -91,13 +91,26 @@ export function recordSandboxSource(fieldKey: 'views' | 'propViews', title = '')
   return fieldKey === 'propViews' ? defaultPropSandboxSource(title) : defaultContentSandboxSource(title)
 }
 
+export function createRecordViewId(): string {
+  const webCrypto = typeof globalThis !== 'undefined' ? globalThis.crypto : undefined
+  if (webCrypto && typeof webCrypto.randomUUID === 'function') {
+    return webCrypto.randomUUID().replace(/-/g, '').slice(0, 8)
+  }
+  if (webCrypto && typeof webCrypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(4)
+    webCrypto.getRandomValues(bytes)
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+  }
+  return Math.random().toString(16).slice(2, 10).padEnd(8, '0')
+}
+
 export function allocateRecordSandbox(
   fieldKey: 'views' | 'propViews',
   recordId: string,
   name: string,
   taken: Iterable<string>,
 ): RecordSandboxView {
-  const id = crypto.randomUUID().replace(/-/g, '').slice(0, 8)
+  const id = createRecordViewId()
   const prefix = fieldKey === 'propViews' ? 'prop-view' : 'view'
   const rec = String(recordId ?? '').trim() || 'record'
   return {

@@ -69,3 +69,20 @@ test('every collection seeds content and property views from the same templates'
   assert.match(recordSandboxSource('views'), /内容视图介绍/)
   assert.match(recordSandboxSource('propViews'), /属性视图介绍/)
 })
+
+test('allocateRecordSandbox works when crypto.randomUUID is unavailable in non-HTTPS contexts', () => {
+  const cryptoObj = globalThis.crypto as { randomUUID?: () => string } | undefined
+  const original = cryptoObj?.randomUUID
+  if (cryptoObj) {
+    Object.defineProperty(cryptoObj, 'randomUUID', { configurable: true, value: undefined })
+  }
+  try {
+    const view = allocateRecordSandbox('views', 'pg_1', '新视图', [])
+    assert.match(view.id, /^[0-9a-f]{8}$/)
+    assert.equal(view.file, `view-pg_1-${view.id}.jsx`)
+  } finally {
+    if (cryptoObj) {
+      Object.defineProperty(cryptoObj, 'randomUUID', { configurable: true, value: original })
+    }
+  }
+})

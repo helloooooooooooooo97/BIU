@@ -6,6 +6,7 @@ import { registerWorkspaceCache } from './workspace-client-store.ts'
 import {
   DEFAULT_RECORD_LAYOUT_ID,
   DEFAULT_RECORD_PROP_VIEW_ID,
+  createRecordViewId,
   defaultRecordLayout,
   listedRecordLayouts as mergeListed,
   parseRecordLayoutDefaultName,
@@ -215,7 +216,7 @@ export async function addRecordLayout(collectionPath: string, recordId: string, 
   if (!path || !id) return
   const listed = listedRecordLayouts(path, id, fallbackContent)
   const view: RecordLayoutView = {
-    id: crypto.randomUUID().replace(/-/g, '').slice(0, 8),
+    id: createRecordViewId(),
     name: uniqueViewName('新视图', listed.map((item) => item.name)),
     contentViewId: fallbackContent,
     propViewId: DEFAULT_RECORD_PROP_VIEW_ID,
@@ -235,7 +236,7 @@ export async function copyRecordLayout(collectionPath: string, recordId: string,
   const listed = listedRecordLayouts(path, id, fallbackContent)
   const from = source ?? getActiveRecordLayout(path, id, fallbackContent)
   const view: RecordLayoutView = {
-    id: crypto.randomUUID().replace(/-/g, '').slice(0, 8),
+    id: createRecordViewId(),
     name: uniqueViewName(`${from.name} 副本`, listed.map((item) => item.name)),
     contentViewId: from.contentViewId,
     propViewId: from.propViewId,
