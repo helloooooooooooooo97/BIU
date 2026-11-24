@@ -69,8 +69,9 @@ export function tokensMatch(got: string, expected: string) {
   return timingSafeEqual(a, b)
 }
 
-export function mcpClientSnippets(url: string, token: string) {
-  const headers = { Authorization: `Bearer ${token}` }
+export function mcpClientSnippets(url: string, token: string, workspaceId?: string) {
+  const headers: Record<string, string> = { Authorization: `Bearer ${token}` }
+  if (workspaceId) headers['x-biu-workspace-id'] = workspaceId
   return {
     cursor: { mcpServers: { biu: { url, headers } } },
     claude: { mcpServers: { biu: { url, headers } } },

@@ -370,15 +370,21 @@ function normalizeCloudOrigin(raw: string) {
   return parsed.origin
 }
 
-async function relayAccount(route: RouteContext, account: AccountService, localAccountId: string, path: string) {
+async function relayAccount(
+  route: RouteContext,
+  account: AccountService,
+  localAccountId: string,
+  path: string,
+  opts?: { body?: unknown; workspaceId?: string },
+) {
   const connection = account.linkedCloud(localAccountId)
   if (!connection) return null
-  const activeWorkspaceId = account.store.activeWorkspaceId()
+  const activeWorkspaceId = opts?.workspaceId ?? account.store.activeWorkspaceId()
   const cloudWorkspaceId =
     activeWorkspaceId && account.workspaceLocation(activeWorkspaceId) === 'cloud' ? activeWorkspaceId : ''
   const method = route.req.method ?? 'GET'
   const hasBody = method !== 'GET' && method !== 'HEAD'
-  const raw = hasBody ? await route.json().catch(() => ({})) : undefined
+  const raw = hasBody ? (opts && 'body' in opts ? opts.body : await route.json().catch(() => ({}))) : undefined
   let res: Response
   try {
     res = await fetch(`${connection.origin}${path}`, {
@@ -795,6 +801,11 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       const body = (await route.json()) as { workspaceId?: string; allowedTools?: unknown; expiresInHours?: unknown }
       const workspaceId = String(body.workspaceId ?? '').trim()
       if (!workspaceId) throw new CollabError('需要空间', 400)
+      if (!isOnlineRuntime() && account.workspaceLocation(workspaceId) === 'cloud') {
+        const relayed = await relayAccount(route, account, me.id, '/api/account/mcp/credentials', { body, workspaceId })
+        if (!relayed) throw new CollabError('请先连接云端账号', 401)
+        return route.send(relayed.status, relayed.payload)
+      }
       const hours = Math.min(24 * 365, Math.max(1, Number(body.expiresInHours ?? 24 * 90)))
       const allowedTools = Array.isArray(body.allowedTools) ? body.allowedTools.map(String) : []
       route.send(
@@ -814,6 +825,17 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       const me = actor(route)
       const workspaceId = String(route.query.get('workspaceId') ?? '').trim()
       if (!workspaceId) throw new CollabError('需要空间', 400)
+      if (!isOnlineRuntime() && account.workspaceLocation(workspaceId) === 'cloud') {
+        const relayed = await relayAccount(
+          route,
+          account,
+          me.id,
+          `/api/account/mcp/credentials?workspaceId=${encodeURIComponent(workspaceId)}`,
+          { workspaceId },
+        )
+        if (!relayed) throw new CollabError('请先连接云端账号', 401)
+        return route.send(relayed.status, relayed.payload)
+      }
       route.send(200, { credentials: account.store.listMcpCredentials(me.id, workspaceId) })
     } catch (error) {
       fail(route, error)
@@ -822,7 +844,22 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
 
   ctx.http.route('DELETE', '/api/account/mcp/credentials/:id', async (route) => {
     try {
-      route.send(200, account.store.revokeMcpCredential(actor(route).id, String(route.params.id ?? '')))
+      const me = actor(route)
+      const credentialId = String(route.params.id ?? '')
+      const queryWorkspaceId = String(route.query.get('workspaceId') ?? '').trim()
+      const targetWorkspaceId = queryWorkspaceId || account.store.activeWorkspaceId() || ''
+      if (!isOnlineRuntime() && targetWorkspaceId && account.workspaceLocation(targetWorkspaceId) === 'cloud') {
+        const relayed = await relayAccount(
+          route,
+          account,
+          me.id,
+          `/api/account/mcp/credentials/${encodeURIComponent(credentialId)}`,
+          { workspaceId: targetWorkspaceId },
+        )
+        if (!relayed) throw new CollabError('请先连接云端账号', 401)
+        return route.send(relayed.status, relayed.payload)
+      }
+      route.send(200, account.store.revokeMcpCredential(me.id, credentialId))
     } catch (error) {
       fail(route, error)
     }
@@ -833,8 +870,20 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       const me = actor(route)
       const workspaceId = String(route.query.get('workspaceId') ?? '').trim()
       if (!workspaceId) throw new CollabError('需要空间', 400)
+      const limit = Number(route.query.get('limit') ?? 100)
+      if (!isOnlineRuntime() && account.workspaceLocation(workspaceId) === 'cloud') {
+        const relayed = await relayAccount(
+          route,
+          account,
+          me.id,
+          `/api/account/mcp/audit?workspaceId=${encodeURIComponent(workspaceId)}&limit=${encodeURIComponent(String(limit))}`,
+          { workspaceId },
+        )
+        if (!relayed) throw new CollabError('请先连接云端账号', 401)
+        return route.send(relayed.status, relayed.payload)
+      }
       route.send(200, {
-        events: account.store.listMcpAudit(me.id, workspaceId, Number(route.query.get('limit') ?? 100)),
+        events: account.store.listMcpAudit(me.id, workspaceId, limit),
       })
     } catch (error) {
       fail(route, error)

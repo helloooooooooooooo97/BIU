@@ -2398,7 +2398,8 @@ const MCP_CLIENTS: Array<{ id: string; name: string; blurb: string }> = [
 ]
 
 function mcpSnippet(info: McpHostInfo, id: string) {
-  const headers = { Authorization: `Bearer ${info.token}` }
+  const headers: Record<string, string> = { Authorization: `Bearer ${info.token}` }
+  if (!info.online && info.workspaceId) headers['x-biu-workspace-id'] = info.workspaceId
   if (id === 'chatgpt') return JSON.stringify({ url: info.url, headers }, null, 2)
   return JSON.stringify({ mcpServers: { biu: { url: info.url, headers } } }, null, 2)
 }
@@ -2474,7 +2475,8 @@ export function ShellSettingsMcp({ onLeave }: { onLeave?: () => void }) {
       if (info.online) {
         const token = readAccountToken()
         if (info.credentialId) {
-          await accountFetch(token, `/api/account/mcp/credentials/${encodeURIComponent(info.credentialId)}`, { method: 'DELETE' })
+          const q = info.workspaceId ? `?workspaceId=${encodeURIComponent(info.workspaceId)}` : ''
+          await accountFetch(token, `/api/account/mcp/credentials/${encodeURIComponent(info.credentialId)}${q}`, { method: 'DELETE' })
         }
         const created = await accountFetch(token, '/api/account/mcp/credentials', {
           method: 'POST',
@@ -2504,6 +2506,7 @@ export function ShellSettingsMcp({ onLeave }: { onLeave?: () => void }) {
         tools: info.tools,
         clients: data.clients,
         note: info.note,
+        workspaceId: data.workspaceId ?? info.workspaceId,
       })
       setError('')
     } catch (err) {
@@ -2519,7 +2522,9 @@ export function ShellSettingsMcp({ onLeave }: { onLeave?: () => void }) {
     <section className="settings-mcp" data-testid="settings-mcp">
       <h3 className="settings-pane-title">Biu MCP</h3>
       <p className="settings-muted settings-pane-lead">
-        MCP 听在分享口（默认 0.0.0.0），局域网其它电脑用下面的地址 + token 即可调用。工作台本身仍只在本机。
+        {info?.online
+          ? '当前为云端空间，MCP 地址指向远程主机；请先为当前空间生成专属 token（支持工具白名单、撤销与调用审计）。'
+          : '当前为本机空间，MCP 听在分享口（默认 0.0.0.0），局域网其它电脑用下面的地址 + token 即可调用，配置已锁定到当前本机空间。'}
       </p>
       {error ? (
         <p className="settings-muted settings-mcp-error" role="alert">
@@ -2529,7 +2534,7 @@ export function ShellSettingsMcp({ onLeave }: { onLeave?: () => void }) {
       <h4 className="settings-pane-subtitle">连接</h4>
       <div className="settings-mcp-fields">
         <label className="settings-mcp-field">
-          <span>局域网地址</span>
+          <span>{info?.online ? '云端地址' : '局域网地址'}</span>
           <div className="settings-mcp-field-row">
             <input readOnly value={info?.url ?? ''} data-testid="settings-mcp-url" className="settings-mcp-input" />
             <button
@@ -2666,7 +2671,8 @@ export function ShellSettingsMcp({ onLeave }: { onLeave?: () => void }) {
                     type="button"
                     className="settings-mcp-rotate"
                     onClick={() => {
-                      void accountFetch(readAccountToken(), `/api/account/mcp/credentials/${encodeURIComponent(String(credential.id))}`, { method: 'DELETE' })
+                      const q = info.workspaceId ? `?workspaceId=${encodeURIComponent(info.workspaceId)}` : ''
+                      void accountFetch(readAccountToken(), `/api/account/mcp/credentials/${encodeURIComponent(String(credential.id))}${q}`, { method: 'DELETE' })
                         .then(() => loadCredentialData(String(info.workspaceId ?? '')))
                     }}
                   >

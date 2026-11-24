@@ -210,7 +210,7 @@ export function applyHostServer(ctx: Context) {
     return localUrl()
   }
 
-  function payload() {
+  function payload(workspaceId?: string) {
     const url = publicUrl()
     const local = localUrl()
     const shareBind = ctx.http.config.shareHost
@@ -220,7 +220,8 @@ export function applyHostServer(ctx: Context) {
       bind: sharePort > 0 ? shareBind || '0.0.0.0' : listenHost(ctx.http.config.host),
       token,
       tools: [...FILE_TOOL_NAMES],
-      clients: mcpClientSnippets(url, token),
+      clients: mcpClientSnippets(url, token, workspaceId),
+      ...(workspaceId ? { workspaceId } : {}),
       note:
         'MCP 与工作台复用同一个局域网端口，账号 API 与 MCP 均执行鉴权。' +
         '调用必须带 Authorization: Bearer <token>；token 只在本机 info 里明文给出。',
@@ -264,7 +265,28 @@ export function applyHostServer(ctx: Context) {
       return route.send(200, { ...safe, token: '', online: true, workspaceId })
     }
     if (!isLoopbackAddress(route.req.socket.remoteAddress) && mcpTenant(route) === false) return
-    route.send(200, payload())
+    const actor = localActor(route)
+    const workspaceId = actor?.workspaceId || ''
+    const account = ctx.get('account') as {
+      workspaceLocation?(workspaceId: string): 'device' | 'cloud'
+      cloudConnection?(localAccountId: string): { origin: string } | null
+      linkedCloud?(localAccountId?: string): { origin: string } | null
+    } | undefined
+    if (workspaceId && account?.workspaceLocation?.(workspaceId) === 'cloud') {
+      const connection =
+        (actor?.accountId ? account.cloudConnection?.(actor.accountId) : null) ??
+        account.linkedCloud?.(actor?.accountId)
+      if (!connection?.origin) return route.send(401, { error: '请先连接云端账号' })
+      return route.send(200, {
+        url: `${connection.origin}/api/mcp`,
+        tools: [...FILE_TOOL_NAMES],
+        token: '',
+        online: true,
+        workspaceId,
+        note: '当前为云端空间，MCP 地址与空间凭证由远程主机提供。',
+      })
+    }
+    route.send(200, payload(workspaceId || undefined))
   })
 
   ctx.http.route('POST', '/api/mcp/rotate', (route) => {
