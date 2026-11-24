@@ -5,8 +5,6 @@ import { biuSqlitePath, currentAccountId, eventsSqlitePath, isOnlineRuntime, ope
 import { resolveScopedWorkspaceId } from '@biu/host-plugin-loader/runtime'
 import type { RouteContext } from '@biu/type-http'
 import { CollabError, CollabStore } from './store.ts'
-import { httpRemote, RecordReplica } from './replica.ts'
-import { applySnapshot, takeSnapshot, type MirrorSnapshot } from './mirror.ts'
 import type { AuthorizationService, ResourceRole } from './authorization.ts'
 import { workspaceMembersCollection } from './workspace-members-collection.ts'
 
@@ -36,8 +34,6 @@ type CloudConnection = {
 export class AccountService extends Service {
   store: CollabStore
   authorization: AuthorizationService
-  replica: RecordReplica | null = null
-  private replicaOrigin = ''
   private cloudAvatars = new Map<string, string>()
   private db: {
     close(): void
@@ -61,14 +57,7 @@ export class AccountService extends Service {
       const localAccountId = String((event as { accountId?: string }).accountId ?? '')
       if (!localAccountId) return
       this.store.noteActiveAccount(localAccountId)
-      this.syncReplicaCredential(localAccountId)
     })
-    if (!isOnlineRuntime()) {
-      const initialOrigin = this.configuredCloudOrigin()
-      if (initialOrigin) this.ensureReplica(initialOrigin)
-      const saved = this.db.prepare('SELECT local_account_id FROM cloud_connections WHERE active = 1').all() as Array<{ local_account_id: string }>
-      for (const row of saved) this.syncReplicaCredential(row.local_account_id)
-    }
     ctx.inject(['database'], (inner) =>
       inner.database.register(
         workspaceMembersCollection(
@@ -100,20 +89,10 @@ export class AccountService extends Service {
            ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
         )
         .run(normalized)
-      this.ensureReplica(normalized)
     } else {
       this.db.prepare(`DELETE FROM collab_state WHERE key = 'cloud_remote_origin'`).run()
     }
     return this.configuredCloudOrigin()
-  }
-
-  private ensureReplica(origin: string): RecordReplica | null {
-    if (isOnlineRuntime() || !origin) return null
-    if (!this.replica || this.replicaOrigin !== origin) {
-      this.replica = new RecordReplica(this.db as never, httpRemote(origin))
-      this.replicaOrigin = origin
-    }
-    return this.replica
   }
 
   isRemote(collection: string, id: string) {
@@ -285,9 +264,7 @@ export class AccountService extends Service {
         input.token,
         connectedAt,
       )
-    const saved = this.cloudConnection(input.localAccountId)!
-    this.syncReplicaCredential(input.localAccountId)
-    return saved
+    return this.cloudConnection(input.localAccountId)!
   }
 
   /** 已关联的云端身份。当前请求没有账号时，一台设备只有一条关联也可以取到。 */
@@ -298,21 +275,6 @@ export class AccountService extends Service {
       .all() as Array<{ local_account_id: string }>
     if (rows.length !== 1) return null
     return this.cloudConnection(rows[0]?.local_account_id ?? '')
-  }
-
-  syncReplicaCredential(localAccountId: string) {
-    if (isOnlineRuntime() || !localAccountId) return
-    const connection = this.cloudConnection(localAccountId)
-    if (!connection) return
-    const replica = this.ensureReplica(connection.origin)
-    if (!replica) return
-    const active = this.store.activeWorkspaceId()
-    const currentCloud = active && this.workspaceLocation(active) === 'cloud' ? active : ''
-    replica.remember({
-      accountId: localAccountId,
-      workspaceId: currentCloud,
-      token: connection.token,
-    })
   }
 
   /** 统一的桌面端云端空间目标解析，收敛各模块重复判断。 */
@@ -351,7 +313,6 @@ export class AccountService extends Service {
   /** 断开当前连接，保留已配置的远程连接记录。 */
   disconnectCloud(localAccountId: string) {
     this.db.prepare('UPDATE cloud_connections SET active = 0 WHERE local_account_id = ?').run(localAccountId)
-    this.replica?.forget(localAccountId)
     this.fallbackToDeviceWorkspace(localAccountId)
   }
 
@@ -374,7 +335,6 @@ export class AccountService extends Service {
     if (previous && (previous.origin !== origin || previous.remoteAccountId !== remoteAccountId)) {
       this.fallbackToDeviceWorkspace(localAccountId)
     }
-    this.syncReplicaCredential(localAccountId)
     return this.cloudConnection(localAccountId)!
   }
 
@@ -389,7 +349,6 @@ export class AccountService extends Service {
       .prepare('DELETE FROM cloud_connections WHERE local_account_id = ? AND origin = ?')
       .run(localAccountId, normalized)
     if (active && active.origin === normalized) {
-      this.replica?.forget(localAccountId)
       this.fallbackToDeviceWorkspace(localAccountId)
     }
   }
@@ -611,7 +570,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     const workspaceId = String(payload.workspaceId ?? '')
     if (workspaceId) {
       account.markCloudWorkspace(workspaceId)
-      account.replica?.remember({ accountId: local.id, workspaceId, token: payload.token })
     }
     return {
       account: {
@@ -840,7 +798,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       const me = actor(route)
       const body = (await route.json()) as { workspaceId?: string }
       const workspaceId = account.store.setActive(me.id, String(body.workspaceId ?? ''))
-      account.syncReplicaCredential(me.id)
       ctx.http.broadcast('database', { ts: Date.now() })
       route.send(200, { workspaceId, location: account.workspaceLocation(workspaceId) })
     } catch (error) {
@@ -1193,7 +1150,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         })
         account.markCloudWorkspace(payload.id)
         account.store.setActive(me.id, payload.id)
-        account.replica?.remember({ accountId: me.id, workspaceId: payload.id, token: connection.token })
         route.send(201, { ...payload, location: 'cloud' })
         return
       }
@@ -1844,27 +1800,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         expectedVersion: Number(body.expectedVersion ?? 0),
       })
       route.send(200, op)
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('GET', '/api/replica/snapshot', async (route) => {
-    try {
-      actor(route)
-      const sessionsOnly = route.query.get('sessionsOnly') === '1'
-      route.send(200, await takeSnapshot(ctx, { sessionsOnly }))
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('POST', '/api/replica/snapshot', async (route) => {
-    try {
-      actor(route)
-      const body = (await route.json()) as MirrorSnapshot
-      await applySnapshot(ctx, body, 'adopt')
-      route.send(200, { ok: true })
     } catch (error) {
       fail(route, error)
     }
