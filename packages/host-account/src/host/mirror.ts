@@ -6,6 +6,7 @@ import type { SessionRecord } from '@biu/type-session'
 export type MirrorSnapshot = {
   sessions: Array<SessionRecord & { updatedAt?: number }>
   collections: Array<{ path: string; records: Array<Record<string, unknown> & { id: string; updatedAt?: number }> }>
+  savedViews?: Record<string, unknown[]>
 }
 
 type ApplyMode = 'cache' | 'adopt'
@@ -19,13 +20,20 @@ type SessionStoreLike = {
 
 type DatabaseLike = {
   syncedRecords: () => Promise<MirrorSnapshot['collections']>
-  applySynced: (path: string, records: MirrorSnapshot['collections'][number]['records']) => Promise<void>
+  applySynced: (
+    path: string,
+    records: MirrorSnapshot['collections'][number]['records'],
+    options?: { force?: boolean },
+  ) => Promise<boolean | void>
+  syncedViews?: () => Record<string, unknown[]>
+  applySyncedViews?: (viewsByPath: Record<string, unknown[]>) => boolean | void
   read?: (path: string) => Promise<{ value?: Record<string, unknown> & { id?: string } }>
   remove?: (path: string, query: { ids: string[] }) => Promise<unknown>
 }
 
 type AccountLike = {
   isRemote?: (collection: string, id: string) => boolean
+  isLocal?: (collection: string, id: string) => boolean
   markRemote?: (collection: string, id: string) => void
   clearPlace?: (collection: string, id: string) => void
   remoteIds?: (collection: string) => string[]
@@ -107,13 +115,16 @@ export async function takeSnapshot(ctx: Context): Promise<MirrorSnapshot> {
       sessions.push({ ...full, updatedAt: Number(item.updatedAt) || 0 })
     }
   }
-  const collections = (await databaseOf(ctx)?.syncedRecords()) ?? []
-  return { sessions, collections }
+  const database = databaseOf(ctx)
+  const collections = (await database?.syncedRecords()) ?? []
+  const savedViews = database?.syncedViews?.()
+  return { sessions, collections, ...(savedViews ? { savedViews } : {}) }
 }
 
 export async function applySnapshot(ctx: Context, snapshot: MirrorSnapshot, mode: ApplyMode = 'cache') {
   const account = accountOf(ctx)
   const store = sessionsOf(ctx)
+  let changed = false
   if (store) {
     const current = new Set((await store.listSummaries()).map((item) => item.id))
     const incoming = new Set<string>()
@@ -126,6 +137,7 @@ export async function applySnapshot(ctx: Context, snapshot: MirrorSnapshot, mode
         await store.save(record)
         claim(ctx, '/agents', record.id)
         if (mode === 'cache') rememberCloud(ctx, '/agents', record.id)
+        changed = true
       } catch (error) {
         console.warn('[replica] skip session', record.id, error)
       }
@@ -135,6 +147,7 @@ export async function applySnapshot(ctx: Context, snapshot: MirrorSnapshot, mode
         if (incoming.has(id)) continue
         await store.delete?.(id)
         account?.clearPlace?.('/agents', id)
+        changed = true
       }
     }
   }
@@ -147,13 +160,13 @@ export async function applySnapshot(ctx: Context, snapshot: MirrorSnapshot, mode
       const id = String(record?.id ?? '')
       if (!id) continue
       incoming.add(id)
-      if (mode === 'cache' && account?.isRemote && !account.isRemote(collection.path, id)) {
-        const existing = await database.read?.(`${collection.path}/${id}`).catch(() => null)
-        if (existing?.value?.id) continue
+      if (mode === 'cache' && account?.isLocal?.(collection.path, id)) {
+        continue
       }
       writable.push(record)
     }
-    await database.applySynced(collection.path, writable)
+    const updated = await database.applySynced(collection.path, writable, { force: mode === 'cache' })
+    if (updated) changed = true
     for (const record of writable) {
       if (!record?.id) continue
       claim(ctx, collection.path, String(record.id))
@@ -166,7 +179,18 @@ export async function applySnapshot(ctx: Context, snapshot: MirrorSnapshot, mode
           console.warn('[replica] drop', collection.path, id, error)
         })
         account?.clearPlace?.(collection.path, id)
+        changed = true
       }
+    }
+  }
+  if (snapshot.savedViews && database.applySyncedViews) {
+    if (database.applySyncedViews(snapshot.savedViews)) changed = true
+  }
+  if (changed) {
+    try {
+      ctx.emit('database/change')
+    } catch {
+      /* ignore */
     }
   }
 }

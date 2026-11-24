@@ -564,6 +564,7 @@ export class DatabaseService extends Service implements Database {
   assets = new FileSystemAssets()
   viewCatalog?: { viewsFor(collectionPath: string): SharedViewDef[]; remove?(id: string, accountId?: string): unknown }
   recordViews = new RecordViewsStore()
+  savedViews?: SavedViewsStore
   private readonly access: DatabaseAccessPolicy
   private inflightMatches = new Map<string, Promise<DbRecord[]>>()
   private inflightScans = new Map<string, Promise<DbRecord[]>>()
@@ -1232,18 +1233,18 @@ export class DatabaseService extends Service implements Database {
     throw new Error(`path too deep: ${normalizeCollectionPath(path)}`)
   }
 
-  /** 当前账号能读到的记录，带上正文，给本机和集中部署对拷。 */
+  /** 当前账号能读到的记录，带上正文与创建人/编辑人/分享范围等元数据，给本机和集中部署对拷。 */
   async syncedRecords() {
     const out: Array<{ path: string; records: DbRecord[] }> = []
     for (const spec of this.collections.values()) {
-      if (!spec.list || !spec.get) continue
+      if (!spec.list || !spec.get || spec.path === '/views') continue
       try {
         const listed = await this.list(spec.path)
         if (listed.kind !== 'collection') continue
         const records: DbRecord[] = []
         for (const item of listed.items) {
           const full = await spec.get(String(item.id))
-          records.push((full as DbRecord | null) ?? item)
+          records.push(full ? ({ ...item, ...(full as DbRecord) } as DbRecord) : item)
         }
         out.push({ path: spec.path, records })
       } catch {
@@ -1253,24 +1254,78 @@ export class DatabaseService extends Service implements Database {
     return out
   }
 
-  /** 按 id 写入。对方更新时间不比本地新就跳过。 */
-  async applySynced(path: string, records: DbRecord[]) {
+  syncedViews(): Record<string, StoredView[]> {
+    if (!this.savedViews) return {}
+    return this.savedViews.exportAll(currentAccountId())
+  }
+
+  applySyncedViews(viewsByPath: Record<string, StoredView[]>): boolean {
+    if (!this.savedViews || !viewsByPath || typeof viewsByPath !== 'object') return false
+    const accountId = currentAccountId()
+    let changed = false
+    for (const [path, incoming] of Object.entries(viewsByPath)) {
+      if (!Array.isArray(incoming)) continue
+      const prev = this.savedViews.viewsFor(path, accountId)
+      if (JSON.stringify(prev) === JSON.stringify(incoming)) continue
+      if (isIndexCollection(path)) this.savedViews.replaceOwned(path, incoming, accountId)
+      else this.savedViews.replace(path, incoming)
+      changed = true
+    }
+    return changed
+  }
+
+  /** 按 id 写入。cache/云端权威拉取传 force=true，同步正文、创建人/编辑人/标签/分享范围。 */
+  async applySynced(path: string, records: DbRecord[], options?: { force?: boolean }): Promise<boolean> {
     const spec = this.collection(path)
-    if (!spec?.get || !spec.create || !spec.update) return
+    if (!spec?.get || !spec.create || !spec.update) return false
+    const force = options?.force === true
+    let changed = false
     for (const record of records) {
       const id = String(record?.id ?? '')
       if (!id) continue
       try {
-        const existing = await spec.get(id)
+        const existing = (await spec.get(id)) as DbRecord | null
         const incomingAt = Number(record.updatedAt) || 0
-        const existingAt = Number((existing as DbRecord | null)?.updatedAt) || 0
-        if (existing && existingAt >= incomingAt) continue
-        if (!existing) await spec.create([{ ...record, id }])
-        else await spec.update(id, record)
+        const existingAt = Number(existing?.updatedAt) || 0
+        if (!force && existing && existingAt >= incomingAt) continue
+        if (!existing) {
+          await spec.create([{ ...record, id }])
+          changed = true
+        } else if (!force || JSON.stringify(existing) !== JSON.stringify({ ...existing, ...record })) {
+          await spec.update(id, record)
+          changed = true
+        }
+        // 同步创建人、编辑人、图标、标签等记录元数据
+        const rec = record as Record<string, unknown>
+        const metaPatch: {
+          emoji?: string
+          tags?: string[]
+          createdBy?: PersonValue | null
+          updatedBy?: PersonValue[] | PersonValue | null
+        } = {}
+        if (typeof rec.emoji === 'string') metaPatch.emoji = rec.emoji
+        if (Array.isArray(rec.tag)) metaPatch.tags = rec.tag.map((item) => String(item).trim()).filter(Boolean)
+        if (rec.createdBy && typeof rec.createdBy === 'object') metaPatch.createdBy = rec.createdBy as PersonValue
+        if (Array.isArray(rec.updatedBy)) metaPatch.updatedBy = rec.updatedBy as PersonValue[]
+        else if (rec.updatedBy && typeof rec.updatedBy === 'object') metaPatch.updatedBy = [rec.updatedBy as PersonValue]
+        if (Object.keys(metaPatch).length) {
+          const prevMeta = this.tags.recordMeta(spec.path, id)
+          this.tags.writeRecordMeta(spec.path, id, metaPatch)
+          const nextMeta = this.tags.recordMeta(spec.path, id)
+          if (JSON.stringify(prevMeta) !== JSON.stringify(nextMeta)) changed = true
+        }
+        // 同步分享范围（personal / workspace / shared）
+        const shareScope = String(rec.shareScope ?? '').trim()
+        if (shareScope === 'shared') {
+          this.markPublicView(spec.path, id)
+        } else if (shareScope === 'workspace' || shareScope === 'personal') {
+          this.rememberScope(spec.path, id, shareScope)
+        }
       } catch (error) {
         console.warn('[replica] skip', path, id, error)
       }
     }
+    return changed
   }
 
   private async listDataOverview(spec: CollectionSpec, filter?: Record<string, unknown>, page?: ListPage) {
@@ -2473,6 +2528,7 @@ export function apply(ctx: Context) {
   const assets = db.assets
   const savedViews = new SavedViewsStore()
   savedViews.open(process.env.VITEST ? ':memory:' : biuSqlitePath())
+  db.savedViews = savedViews
   db.recordViews.open(biuSqlitePath())
   const account = ctx.get('account') as {
     authorization?: AuthorizationService
