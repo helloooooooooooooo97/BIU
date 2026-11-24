@@ -123,8 +123,26 @@ export function registerDatabaseHttpRoutes(
       route.send(400, { error: String(error) })
     }
   })
-  ctx.http.route('GET', '/api/db/list', (route) =>
-    send(route, () => {
+  const tryForwardCloudRead = async (
+    route: { query: URLSearchParams; send: (status: number, body: unknown) => void },
+    endpoint: string,
+    collection = '',
+    id = '',
+  ) => {
+    const search = route.query.toString()
+    const target = search ? `${endpoint}?${search}` : endpoint
+    try {
+      const forwarded = await forwardCloud(ctx, collection, id, target, { method: 'GET' })
+      if (!forwarded) return false
+      route.send(forwarded.status, forwarded.body)
+      return true
+    } catch {
+      return false
+    }
+  }
+  ctx.http.route('GET', '/api/db/list', async (route) => {
+    if (await tryForwardCloudRead(route, '/api/db/list', route.query.get('path') || '/')) return
+    await send(route, () => {
       let filter: Record<string, unknown> | undefined
       const raw = route.query.get('filter')
       if (raw) {
@@ -144,14 +162,20 @@ export function registerDatabaseHttpRoutes(
         offset: route.query.get('offset') ? Number(route.query.get('offset')) : undefined,
         columns: parseListColumnsParam(route.query.get('columns')),
       })
-    }),
-  )
-  ctx.http.route('GET', '/api/db/groups', route => send(route, () => {
-    const raw = route.query.get('filter')
-    const filter = raw ? JSON.parse(raw) as Record<string, unknown> : undefined
-    return db.attributeGroups(route.query.get('path') || '/', route.query.get('field') || '', filter, route.query.get('q') || '')
-  }))
-  ctx.http.route('GET', '/api/db/read', (route) => send(route, () => db.read(route.query.get('path') || '/')))
+    })
+  })
+  ctx.http.route('GET', '/api/db/groups', async (route) => {
+    if (await tryForwardCloudRead(route, '/api/db/groups', route.query.get('path') || '/')) return
+    await send(route, () => {
+      const raw = route.query.get('filter')
+      const filter = raw ? JSON.parse(raw) as Record<string, unknown> : undefined
+      return db.attributeGroups(route.query.get('path') || '/', route.query.get('field') || '', filter, route.query.get('q') || '')
+    })
+  })
+  ctx.http.route('GET', '/api/db/read', async (route) => {
+    if (await tryForwardCloudRead(route, '/api/db/read', route.query.get('path') || '/')) return
+    await send(route, () => db.read(route.query.get('path') || '/'))
+  })
   ctx.http.route('GET', '/api/db/banner-gallery', (route) =>
     send(route, async () => {
       await db.requirePath(PAGES_COLLECTION_PATH, 'resource:read')
@@ -172,7 +196,10 @@ export function registerDatabaseHttpRoutes(
       route.send(400, { error: String(error) })
     }
   })
-  ctx.http.route('GET', '/api/db/stat', (route) => send(route, () => db.stat(route.query.get('path') || '/')))
+  ctx.http.route('GET', '/api/db/stat', async (route) => {
+    if (await tryForwardCloudRead(route, '/api/db/stat', route.query.get('path') || '/')) return
+    await send(route, () => db.stat(route.query.get('path') || '/'))
+  })
   ctx.http.route('GET', '/api/db/content', async (route) => {
     const path = route.query.get('path') || '/'
     const parts = path.split('/').filter(Boolean)
@@ -270,6 +297,11 @@ export function registerDatabaseHttpRoutes(
         max_records?: number
       }
       const path = String(body?.path ?? '')
+      const forwarded = await forwardCloud(ctx, path, '', '/api/db/batch-update', { body })
+      if (forwarded) {
+        route.send(forwarded.status, forwarded.body)
+        return
+      }
       route.send(
         200,
         await db.batchUpdate(path, {
@@ -400,7 +432,10 @@ export function registerDatabaseHttpRoutes(
       route.send(400, { error: String(error) })
     }
   })
-  ctx.http.route('GET', '/api/db/trash', (route) => send(route, () => db.listTrash()))
+  ctx.http.route('GET', '/api/db/trash', async (route) => {
+    if (await tryForwardCloudRead(route, '/api/db/trash')) return
+    await send(route, () => db.listTrash())
+  })
   ctx.http.route('POST', '/api/db/saved-views', async (route) => {
     try {
       /**
@@ -977,6 +1012,7 @@ export function registerDatabaseHttpRoutes(
   ctx.http.route('POST', '/api/page/sandbox/patch', patchTagSandboxRoute)
   ctx.http.route('GET', '/api/db/tags', async (route) => {
     try {
+      if (await tryForwardCloudRead(route, '/api/db/tags', TAGS_COLLECTION_PATH)) return
       await db.requirePath(TAGS_COLLECTION_PATH, 'resource:read')
       const collect = route.query.get('collect') || ''
       if (collect) {
@@ -995,8 +1031,13 @@ export function registerDatabaseHttpRoutes(
   })
   ctx.http.route('POST', '/api/db/tags', async (route) => {
     try {
-      await db.requirePath(TAGS_COLLECTION_PATH, 'resource:update')
       const body = (await route.json()) as { tags?: unknown[] }
+      const forwarded = await forwardCloud(ctx, TAGS_COLLECTION_PATH, '', '/api/db/tags', { body })
+      if (forwarded) {
+        route.send(forwarded.status, forwarded.body)
+        return
+      }
+      await db.requirePath(TAGS_COLLECTION_PATH, 'resource:update')
       const listed = Array.isArray(body.tags) ? body.tags : []
       for (const item of listed) {
         const pack = normalizeSchemaPack(item)
