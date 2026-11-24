@@ -1170,6 +1170,37 @@ export function apply(ctx: Context) {
     })
     const payload = (await response.json().catch(() => ({}))) as { leaseId?: string; error?: string }
     if (!response.ok || !payload.leaseId) throw new Error(payload.error || '无法取得云端代理执行权')
+    if (!(await ctx.sessions.get(sessionId))) {
+      try {
+        const fetched = await fetch(`${connection.origin}/api/agents/${encodeURIComponent(sessionId)}?turns=all`, {
+          headers: {
+            authorization: `Bearer ${connection.token}`,
+            ...(workspaceId ? { 'x-biu-workspace-id': workspaceId } : {}),
+          },
+        })
+        if (fetched.ok) {
+          const remoteSession = (await fetched.json().catch(() => null)) as {
+            id?: string
+            version?: number
+            events?: unknown[]
+            mascot?: unknown
+            config?: unknown
+          } | null
+          if (remoteSession?.id) {
+            await ctx.sessionStore.save({
+              id: remoteSession.id,
+              version: Number(remoteSession.version) || 1,
+              events: Array.isArray(remoteSession.events) ? (remoteSession.events as never[]) : [],
+              ...(remoteSession.mascot ? { mascot: remoteSession.mascot as never } : {}),
+              ...(remoteSession.config ? { config: remoteSession.config as never } : {}),
+            })
+            runtime?.markRemote?.('/agents', remoteSession.id)
+          }
+        }
+      } catch (error) {
+        console.warn('[chat] failed to hydrate cloud session before local execution', sessionId, error)
+      }
+    }
     const heartbeat = setInterval(() => {
       void fetch(`${connection.origin}/api/agents/${encodeURIComponent(sessionId)}/execution-lease`, {
         method: 'PATCH',
@@ -1445,6 +1476,18 @@ export function apply(ctx: Context) {
       await ctx.sessions.create()
       items = liveSessionItems(ctx, await ctx.sessions.listSummaries())
     }
+    let pinnedSet: Set<string> | null = null
+    try {
+      const accountId = currentAccountId()
+      const store = accountRuntime(ctx)?.store as
+        | { workspacePrefs?: (actorId: string, workspaceId?: string) => { pinnedAgents: string[] } }
+        | undefined
+      if (accountId && store?.workspacePrefs) {
+        pinnedSet = new Set(store.workspacePrefs(accountId).pinnedAgents)
+      }
+    } catch {
+      pinnedSet = null
+    }
     route.send(200, {
       sessions: items.map((item) => ({
         id: item.id,
@@ -1457,7 +1500,7 @@ export function apply(ctx: Context) {
         ...(item.project ? { project: item.project } : {}),
         ...(item.mascot ? { mascot: item.mascot } : {}),
         ...(item.config?.tag ? { tag: item.config.tag } : {}),
-        pinned: Boolean(item.config?.pinned),
+        pinned: pinnedSet ? pinnedSet.has(item.id) : Boolean(item.config?.pinned),
         ...(item.config?.inspector ? { inspector: item.config.inspector } : {}),
         ...(item.config?.goal ? { goal: item.config.goal } : {}),
       })),

@@ -83,28 +83,127 @@ export function registerDatabaseHttpRoutes(
   }
   ctx.http.route('GET', '/api/profile', (route) => {
     let dataLocation: 'device' | 'cloud' = isOnlineRuntime() ? 'cloud' : 'device'
+    let accountPrefs: Record<string, unknown> | null = null
     try {
       const account = ctx.get('account') as {
-        store?: { activeWorkspaceId(): string | null }
+        store?: {
+          activeWorkspaceId(): string | null
+          workspacePrefs?(actorId: string, workspaceId?: string): {
+            starredViews: unknown[]
+            starredRecords: unknown[]
+            pinnedAgents: string[]
+            theme?: 'light' | 'dark'
+            accent?: string
+            pagePrefs?: Record<string, unknown>
+          }
+        }
         workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
       }
-      const workspaceId = currentRequestWorkspaceId() || account.store?.activeWorkspaceId()
+      const workspaceId = currentRequestWorkspaceId() || account.store?.activeWorkspaceId() || ''
       if (workspaceId && account.workspaceLocation) dataLocation = account.workspaceLocation(workspaceId)
+      const actorId = currentAccountId()
+      if (actorId && workspaceId && account.store?.workspacePrefs) {
+        const prefs = account.store.workspacePrefs(actorId, workspaceId)
+        accountPrefs = {
+          starredViews: prefs.starredViews,
+          starredRecords: prefs.starredRecords,
+          pinnedAgents: prefs.pinnedAgents,
+          ...(prefs.theme ? { theme: prefs.theme } : {}),
+          ...(prefs.accent ? { accent: prefs.accent } : {}),
+          ...(prefs.pagePrefs ? { pagePrefs: prefs.pagePrefs } : {}),
+        }
+      }
     } catch {
       /* 没有账号服务时沿用宿主位置 */
     }
-    route.send(200, { ...asPublicProfile(), localData: dataLocation === 'device', dataLocation })
+    const base = asPublicProfile()
+    route.send(200, {
+      ...base,
+      ...(accountPrefs ?? {}),
+      ...(accountPrefs?.pagePrefs
+        ? { pagePrefs: { ...(base.pagePrefs ?? {}), ...(accountPrefs.pagePrefs as Record<string, unknown>) } }
+        : {}),
+      localData: dataLocation === 'device',
+      dataLocation,
+    })
   })
   ctx.http.route('POST', '/api/profile', async (route) => {
     try {
-      const body = (await route.json()) as { name?: unknown; avatar?: unknown; theme?: unknown; accent?: unknown; pagePrefs?: unknown }
-      route.send(200, asPublicProfile(writeWorkspaceProfile({
-        name: typeof body.name === 'string' ? body.name : undefined,
-        avatar: typeof body.avatar === 'string' ? body.avatar : undefined,
-        theme: body.theme === 'dark' || body.theme === 'light' ? body.theme : undefined,
-        accent: typeof body.accent === 'string' ? (body.accent as never) : undefined,
-        pagePrefs: body.pagePrefs,
-      })))
+      const body = (await route.json()) as {
+        name?: unknown
+        avatar?: unknown
+        theme?: unknown
+        accent?: unknown
+        pagePrefs?: unknown
+        starredViews?: unknown
+        starredRecords?: unknown
+        pinnedAgents?: unknown
+      }
+      const actorId = currentAccountId()
+      let savedAccountPrefs: Record<string, unknown> | null = null
+      if (actorId) {
+        try {
+          const account = ctx.get('account') as {
+            store?: {
+              activeWorkspaceId(): string | null
+              saveWorkspacePrefs?(actorId: string, patch: Record<string, unknown>, workspaceId?: string): {
+                starredViews: unknown[]
+                starredRecords: unknown[]
+                pinnedAgents: string[]
+                theme?: 'light' | 'dark'
+                accent?: string
+                pagePrefs?: Record<string, unknown>
+              }
+            }
+          }
+          const workspaceId = currentRequestWorkspaceId() || account.store?.activeWorkspaceId() || ''
+          if (workspaceId && account.store?.saveWorkspacePrefs) {
+            const saved = account.store.saveWorkspacePrefs(
+              actorId,
+              {
+                ...(body.theme === 'dark' || body.theme === 'light' ? { theme: body.theme } : {}),
+                ...(typeof body.accent === 'string' ? { accent: body.accent } : {}),
+                ...(body.pagePrefs !== undefined ? { pagePrefs: body.pagePrefs } : {}),
+                ...(body.starredViews !== undefined ? { starredViews: body.starredViews } : {}),
+                ...(body.starredRecords !== undefined ? { starredRecords: body.starredRecords } : {}),
+                ...(body.pinnedAgents !== undefined ? { pinnedAgents: body.pinnedAgents } : {}),
+              },
+              workspaceId,
+            )
+            savedAccountPrefs = {
+              starredViews: saved.starredViews,
+              starredRecords: saved.starredRecords,
+              pinnedAgents: saved.pinnedAgents,
+              ...(saved.theme ? { theme: saved.theme } : {}),
+              ...(saved.accent ? { accent: saved.accent } : {}),
+              ...(saved.pagePrefs ? { pagePrefs: saved.pagePrefs } : {}),
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      const base =
+        !isOnlineRuntime() || !savedAccountPrefs
+          ? asPublicProfile(
+              writeWorkspaceProfile({
+                name: typeof body.name === 'string' ? body.name : undefined,
+                avatar: typeof body.avatar === 'string' ? body.avatar : undefined,
+                theme: body.theme === 'dark' || body.theme === 'light' ? body.theme : undefined,
+                accent: typeof body.accent === 'string' ? (body.accent as never) : undefined,
+                pagePrefs: body.pagePrefs,
+                starredViews: body.starredViews as never,
+                starredRecords: body.starredRecords as never,
+              }),
+            )
+          : asPublicProfile()
+      route.send(200, {
+        ...base,
+        ...(savedAccountPrefs ?? {}),
+        ...(savedAccountPrefs?.pagePrefs
+          ? { pagePrefs: { ...(base.pagePrefs ?? {}), ...(savedAccountPrefs.pagePrefs as Record<string, unknown>) } }
+          : {}),
+      })
     } catch (error) {
       route.send(400, { error: String(error) })
     }

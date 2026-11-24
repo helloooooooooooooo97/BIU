@@ -167,22 +167,26 @@ export function rewriteLegacyAgentApi(pathname: string) {
 }
 
 const CLOUD_PROXY_WORKSPACE_RE = /^\/api\/account\/workspaces\/([^/]+)\/(?:members|groups|invites)(?:\/|$)/
-const CLOUD_PROXY_AGENT_META_RE = /^\/api\/agents\/[^/]+\/(?:config|fork|artifacts)(?:\/|$)/
+const CLOUD_PROXY_AGENT_META_RE = /^\/api\/agents\/[^/]+\/(?:config|fork|pin|artifacts)(?:\/|$)/
+const CLOUD_PROXY_AGENT_ITEM_RE = /^\/api\/agents\/[^/]+$/
 
 /** 桌面端处于云端空间时，所有空间数据与协作接口统一透传到远端云主机，避免本地 SQLite 镜像与转发遗漏。 */
-export function shouldProxyCloudApi(pathname: string): boolean {
+export function shouldProxyCloudApi(pathname: string, method = 'GET'): boolean {
+  const upper = method.toUpperCase()
   if (
     pathname === '/api/db' ||
     pathname.startsWith('/api/db/') ||
     pathname.startsWith('/api/page/') ||
     pathname.startsWith('/api/doc/') ||
     pathname.startsWith('/api/tag/') ||
-    pathname.startsWith('/api/content-turns/')
+    pathname.startsWith('/api/content-turns/') ||
+    pathname === '/api/profile'
   ) {
     return true
   }
   if (
     pathname === '/api/account/workspace-profile' ||
+    pathname === '/api/account/starred' ||
     pathname === '/api/account/presence' ||
     pathname === '/api/account/locks' ||
     pathname === '/api/account/access' ||
@@ -194,6 +198,9 @@ export function shouldProxyCloudApi(pathname: string): boolean {
     return true
   }
   if (CLOUD_PROXY_WORKSPACE_RE.test(pathname)) return true
+  if (pathname === '/api/agents' && (upper === 'GET' || upper === 'POST')) return true
+  if (pathname.startsWith('/api/agents/') && upper === 'GET') return true
+  if (CLOUD_PROXY_AGENT_ITEM_RE.test(pathname) && upper === 'DELETE') return true
   if (CLOUD_PROXY_AGENT_META_RE.test(pathname)) return true
   return false
 }
@@ -623,7 +630,7 @@ export class HttpService extends Service {
             return
           }
         }
-        if (!isOnlineRuntime() && !shareOnly && accountId && shouldProxyCloudApi(url.pathname)) {
+        if (!isOnlineRuntime() && !shareOnly && accountId && shouldProxyCloudApi(url.pathname, method)) {
           const accountSvc = this.ctx.get('account') as
             | {
                 workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
@@ -645,7 +652,7 @@ export class HttpService extends Service {
               const value = req.headers[key]
               if (typeof value === 'string' && value) forwardHeaders[key] = value
             }
-            const hasBody = method !== 'GET' && method !== 'HEAD'
+            const hasBody = method !== 'GET'
             const rawReqBody = hasBody ? await body() : undefined
             let upstream: Response
             try {

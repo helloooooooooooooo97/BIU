@@ -348,14 +348,78 @@ export function loadStarredViews(): StarredView[] {
 
 let starredViews = loadStarredViews()
 let starredVersion = 0
+let starredHydrateSeq = 0
 const starredListeners = new Set<() => void>()
+
+function pushStarredToServer(patch: { starredViews?: StarredView[]; starredRecords?: StarredRecord[] }) {
+  if (typeof window === 'undefined' || typeof fetch !== 'function') return
+  void apiFetch('/api/account/starred', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(patch),
+  }).catch(() => undefined)
+}
+
+function normalizeStarredViews(raw: unknown): StarredView[] {
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((item) => {
+    if (!item || typeof item !== 'object') return []
+    const rec = item as Record<string, unknown>
+    const path = String(rec.path ?? '').trim()
+    const viewId = String(rec.viewId ?? '').trim()
+    const name = String(rec.name ?? '').trim()
+    return path && viewId ? [{ path, viewId, ...(name ? { name } : {}) }] : []
+  })
+}
+
+function normalizeStarredRecords(raw: unknown): StarredRecord[] {
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((item) => {
+    if (!item || typeof item !== 'object') return []
+    const rec = item as Record<string, unknown>
+    const path = String(rec.path ?? '').trim()
+    const recordId = String(rec.recordId ?? '').trim()
+    if (!path || !recordId) return []
+    const label = String(rec.label ?? '').trim()
+    const emoji = String(rec.emoji ?? '').trim()
+    return [{ path, recordId, ...(label ? { label } : {}), ...(emoji ? { emoji } : {}) }]
+  })
+}
+
+export async function hydrateStarredFromServer() {
+  if (typeof window === 'undefined' || typeof fetch !== 'function') return
+  const seq = ++starredHydrateSeq
+  try {
+    const res = await apiFetch('/api/account/starred')
+    if (!res.ok || seq !== starredHydrateSeq) return
+    const data = (await res.json()) as { starredViews?: unknown; starredRecords?: unknown }
+    if (seq !== starredHydrateSeq) return
+    if (Array.isArray(data.starredViews)) {
+      persistStarredViews(normalizeStarredViews(data.starredViews), { remote: false })
+    }
+    if (Array.isArray(data.starredRecords)) {
+      persistStarredRecords(normalizeStarredRecords(data.starredRecords), { remote: false })
+    }
+  } catch {
+    /* ignore */
+  }
+}
 
 export function getStarredViews() {
   return starredViews
 }
 
+let starredHydratedOnce = false
+
+function ensureStarredHydrated() {
+  if (starredHydratedOnce) return
+  starredHydratedOnce = true
+  void hydrateStarredFromServer()
+}
+
 export function subscribeStarredViews(fn: () => void) {
   starredListeners.add(fn)
+  ensureStarredHydrated()
   return () => {
     starredListeners.delete(fn)
   }
@@ -365,11 +429,13 @@ export function getStarredViewsVersion() {
   return starredVersion
 }
 
-export function persistStarredViews(items: StarredView[]) {
+export function persistStarredViews(items: StarredView[], options?: { remote?: boolean }) {
+  if (options?.remote !== false) starredHydrateSeq += 1
   starredViews = items
   starredVersion += 1
   writeStorageString(STARRED_VIEWS_KEY, JSON.stringify(items))
   for (const fn of starredListeners) fn()
+  if (options?.remote !== false) pushStarredToServer({ starredViews: items })
 }
 
 export type SavedViewsPatch = { upsert?: SavedView[]; remove?: string[] }
@@ -784,6 +850,7 @@ export function getStarredRecords() {
 
 export function subscribeStarredRecords(fn: () => void) {
   starredRecordListeners.add(fn)
+  ensureStarredHydrated()
   return () => {
     starredRecordListeners.delete(fn)
   }
@@ -793,11 +860,13 @@ export function getStarredRecordsVersion() {
   return starredRecordsVersion
 }
 
-export function persistStarredRecords(items: StarredRecord[]) {
+export function persistStarredRecords(items: StarredRecord[], options?: { remote?: boolean }) {
+  if (options?.remote !== false) starredHydrateSeq += 1
   starredRecords = items
   starredRecordsVersion += 1
   writeStorageString(STARRED_RECORDS_KEY, JSON.stringify(items))
   for (const fn of starredRecordListeners) fn()
+  if (options?.remote !== false) pushStarredToServer({ starredRecords: items })
 }
 
 export function isRecordStarred(items: StarredRecord[], path: string, recordId: string) {
@@ -1024,4 +1093,8 @@ registerWorkspaceCache('view-storage', () => {
   viewsPulledAtByKey.clear()
   pulledViewPaths.clear()
   pulledAllViews = false
+  persistStarredViews([], { remote: false })
+  persistStarredRecords([], { remote: false })
+  starredHydratedOnce = true
+  void hydrateStarredFromServer()
 })
