@@ -8,7 +8,7 @@ import assert from 'node:assert/strict'
 import { Context, Service } from 'cordis'
 import { WebSocket } from 'ws'
 import * as http from './index.ts'
-import { deliverTenantEvent, rewriteLegacyAgentApi } from './index.ts'
+import { cloudProxyTargetWorkspace, deliverTenantEvent, rewriteLegacyAgentApi, shouldProxyCloudApi } from './index.ts'
 import { currentAccountId, currentRequestWorkspaceId } from '@biu/host-plugin-loader/data-dir'
 
 async function freePort() {
@@ -420,4 +420,142 @@ test('index html is painted with the profile theme', () => {
   assert.match(src, /paintDocumentTheme/)
   assert.match(src, /profilePath\(\)/)
   assert.match(http.paintDocumentTheme('<html class="light" data-theme-source="static"><meta name="color-scheme" content="light">', 'dark'), /class="dark" data-theme-source="server"/)
+})
+
+test('desktop cloud workspace proxies db/files/collab/agent-meta directly to remote host while keeping local agent execution and device workspaces local', async () => {
+  assert.equal(shouldProxyCloudApi('/api/db/list'), true)
+  assert.equal(shouldProxyCloudApi('/api/db/file/abc.png'), true)
+  assert.equal(shouldProxyCloudApi('/api/db/action'), true)
+  assert.equal(shouldProxyCloudApi('/api/account/presence'), true)
+  assert.equal(shouldProxyCloudApi('/api/account/workspaces/ws-cloud/members'), true)
+  assert.equal(shouldProxyCloudApi('/api/agents/s1/config'), true)
+  assert.equal(shouldProxyCloudApi('/api/agents/s1/messages'), false)
+  assert.equal(shouldProxyCloudApi('/api/account/me'), false)
+  assert.equal(shouldProxyCloudApi('/api/profile'), false)
+  assert.equal(cloudProxyTargetWorkspace('/api/account/workspaces/ws-cloud/members', 'ws-local'), 'ws-cloud')
+
+  const previous = process.env.BIU_ONLINE
+  process.env.BIU_ONLINE = '0'
+  const base = await mkdtemp(join(tmpdir(), 'cordis-http-cloud-proxy-'))
+  const publicDir = join(base, 'public')
+  await mkdir(publicDir, { recursive: true })
+  await writeFile(join(publicDir, 'index.html'), '<html></html>')
+
+  const upstreamHits: Array<{ method: string; url: string; auth: string; ws: string; body: string }> = []
+  const upstreamServer = createServer((req, res) => {
+    const chunks: Buffer[] = []
+    req.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
+    req.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('utf8')
+      upstreamHits.push({
+        method: req.method ?? 'GET',
+        url: req.url ?? '/',
+        auth: String(req.headers.authorization ?? ''),
+        ws: String(req.headers['x-biu-workspace-id'] ?? ''),
+        body: raw,
+      })
+      if (req.url === '/api/db/file/hello.bin') {
+        res.writeHead(200, { 'content-type': 'application/octet-stream', etag: '"bin-1"' })
+        res.end(Buffer.from([1, 2, 3, 4]))
+        return
+      }
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+      res.end(JSON.stringify({ proxied: true, path: req.url }))
+    })
+  })
+  const upstreamPort = await new Promise<number>((resolve, reject) => {
+    upstreamServer.listen(0, '127.0.0.1', () => {
+      const addr = upstreamServer.address()
+      if (!addr || typeof addr === 'string') reject(new Error('no upstream port'))
+      else resolve(addr.port)
+    })
+  })
+
+  let linked = true
+  const ctx = new Context()
+  class FakeDesktopAccount extends Service {
+    store = {
+      accountByToken: (token: string) => (token === 'local-token' ? { id: 'local-ada' } : null),
+      isMember: (_accountId: string, workspaceId: string) => workspaceId === 'ws-cloud' || workspaceId === 'ws-local',
+      activeWorkspaceId: () => 'ws-cloud',
+    }
+    workspaceLocation(workspaceId: string): 'device' | 'cloud' {
+      return workspaceId === 'ws-cloud' ? 'cloud' : 'device'
+    }
+    cloudConnection(accountId: string) {
+      if (!linked || accountId !== 'local-ada') return null
+      return { origin: `http://127.0.0.1:${upstreamPort}`, token: 'cloud-token' }
+    }
+    constructor(inner: Context) {
+      super(inner, 'account')
+    }
+  }
+
+  const ready = new Promise<number>((resolve) => ctx.on('http/ready', ({ port }) => resolve(port)))
+  await ctx.plugin(FakeDesktopAccount)
+  const fiber = await ctx.plugin(http, { port: 0, host: '127.0.0.1', publicDir, fallbackPort: true, sharePort: 0 })
+  const port = await ready
+  ctx.http.route('GET', '/api/db/file/:name', (route) => route.send(200, { local: true }))
+  ctx.http.route('POST', '/api/db/action', (route) => route.send(200, { local: true }))
+  ctx.http.route('POST', '/api/agents/:id/messages', (route) => route.send(200, { localAgent: true }))
+  ctx.http.route('PATCH', '/api/agents/:id/config', (route) => route.send(200, { local: true }))
+
+  try {
+    // 1. Cloud workspace binary file GET proxies transparently
+    const binRes = await fetch(`http://127.0.0.1:${port}/api/db/file/hello.bin`, {
+      headers: { Authorization: 'Bearer local-token', 'X-Biu-Workspace-Id': 'ws-cloud' },
+    })
+    assert.equal(binRes.status, 200)
+    assert.equal(binRes.headers.get('etag'), '"bin-1"')
+    assert.deepEqual(Array.from(new Uint8Array(await binRes.arrayBuffer())), [1, 2, 3, 4])
+
+    // 2. Cloud workspace POST /api/db/action & PATCH /api/agents/:id/config proxy to cloud
+    const actRes = await fetch(`http://127.0.0.1:${port}/api/db/action`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer local-token', 'X-Biu-Workspace-Id': 'ws-cloud', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'add-child' }),
+    })
+    assert.equal((await actRes.json()).proxied, true)
+
+    const cfgRes = await fetch(`http://127.0.0.1:${port}/api/agents/s1/config`, {
+      method: 'PATCH',
+      headers: { Authorization: 'Bearer local-token', 'X-Biu-Workspace-Id': 'ws-cloud', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'New Name' }),
+    })
+    assert.equal((await cfgRes.json()).proxied, true)
+
+    assert.equal(upstreamHits.length, 3)
+    assert.equal(upstreamHits[0]?.auth, 'Bearer cloud-token')
+    assert.equal(upstreamHits[0]?.ws, 'ws-cloud')
+
+    // 3. Desktop local agent execution (/api/agents/:id/messages) stays local
+    const msgRes = await fetch(`http://127.0.0.1:${port}/api/agents/s1/messages`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer local-token', 'X-Biu-Workspace-Id': 'ws-cloud', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'hello' }),
+    })
+    assert.equal((await msgRes.json()).localAgent, true)
+
+    // 4. Device workspace stays local
+    const localRes = await fetch(`http://127.0.0.1:${port}/api/db/action`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer local-token', 'X-Biu-Workspace-Id': 'ws-local', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'add-child' }),
+    })
+    assert.equal((await localRes.json()).local, true)
+
+    // 5. Disconnected cloud returns 401 instead of silently falling back to local
+    linked = false
+    const unlinkedRes = await fetch(`http://127.0.0.1:${port}/api/db/action`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer local-token', 'X-Biu-Workspace-Id': 'ws-cloud', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'add-child' }),
+    })
+    assert.equal(unlinkedRes.status, 401)
+  } finally {
+    await fiber.dispose()
+    await new Promise<void>((resolve) => upstreamServer.close(() => resolve()))
+    if (previous === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = previous
+  }
 })

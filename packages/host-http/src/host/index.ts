@@ -166,6 +166,50 @@ export function rewriteLegacyAgentApi(pathname: string) {
   return pathname
 }
 
+const CLOUD_PROXY_WORKSPACE_RE = /^\/api\/account\/workspaces\/([^/]+)\/(?:members|groups|invites)(?:\/|$)/
+const CLOUD_PROXY_AGENT_META_RE = /^\/api\/agents\/[^/]+\/(?:config|fork|artifacts)(?:\/|$)/
+
+/** 桌面端处于云端空间时，所有空间数据与协作接口统一透传到远端云主机，避免本地 SQLite 镜像与转发遗漏。 */
+export function shouldProxyCloudApi(pathname: string): boolean {
+  if (
+    pathname === '/api/db' ||
+    pathname.startsWith('/api/db/') ||
+    pathname.startsWith('/api/page/') ||
+    pathname.startsWith('/api/doc/') ||
+    pathname.startsWith('/api/tag/') ||
+    pathname.startsWith('/api/content-turns/')
+  ) {
+    return true
+  }
+  if (
+    pathname === '/api/account/workspace-profile' ||
+    pathname === '/api/account/presence' ||
+    pathname === '/api/account/locks' ||
+    pathname === '/api/account/access' ||
+    pathname.startsWith('/api/account/access/') ||
+    pathname === '/api/account/member-activity' ||
+    pathname === '/api/account/plugins/audit' ||
+    pathname.startsWith('/api/account/mcp/')
+  ) {
+    return true
+  }
+  if (CLOUD_PROXY_WORKSPACE_RE.test(pathname)) return true
+  if (CLOUD_PROXY_AGENT_META_RE.test(pathname)) return true
+  return false
+}
+
+export function cloudProxyTargetWorkspace(pathname: string, requestedWorkspace: string): string {
+  const matched = CLOUD_PROXY_WORKSPACE_RE.exec(pathname)
+  if (matched?.[1]) {
+    try {
+      return decodeURIComponent(matched[1])
+    } catch {
+      return matched[1]
+    }
+  }
+  return requestedWorkspace
+}
+
 function upgradePath(req: IncomingMessage) {
   try {
     return new URL(req.url ?? '/', 'http://localhost').pathname
@@ -571,6 +615,55 @@ export class HttpService extends Service {
           const allowed = accountStore?.canAccessPlugin?.(accountId, requestedWorkspace, match.pluginId)
           if (!allowed) {
             context.send(404, { error: 'not found' })
+            return
+          }
+        }
+        if (!isOnlineRuntime() && !shareOnly && accountId && shouldProxyCloudApi(url.pathname)) {
+          const accountSvc = this.ctx.get('account') as
+            | {
+                workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
+                cloudConnection?: (localAccountId: string) => { origin: string; token: string } | null
+              }
+            | undefined
+          const targetWorkspace = cloudProxyTargetWorkspace(url.pathname, requestedWorkspace)
+          if (targetWorkspace && accountSvc?.workspaceLocation?.(targetWorkspace) === 'cloud') {
+            const connection = accountSvc.cloudConnection?.(accountId) ?? null
+            if (!connection?.origin || !connection.token) {
+              context.send(401, { error: '请先登录云端账号' })
+              return
+            }
+            const forwardHeaders: Record<string, string> = {
+              authorization: `Bearer ${connection.token}`,
+              'x-biu-workspace-id': targetWorkspace,
+            }
+            for (const key of ['content-type', 'accept', 'if-match', 'if-none-match', 'x-share-password']) {
+              const value = req.headers[key]
+              if (typeof value === 'string' && value) forwardHeaders[key] = value
+            }
+            const hasBody = method !== 'GET' && method !== 'HEAD'
+            const rawReqBody = hasBody ? await body() : undefined
+            let upstream: Response
+            try {
+              upstream = await fetch(`${connection.origin.replace(/\/+$/, '')}${url.pathname}${url.search}`, {
+                method,
+                headers: forwardHeaders,
+                body: hasBody && rawReqBody && rawReqBody.length > 0 ? new Uint8Array(rawReqBody) : undefined,
+              })
+            } catch {
+              context.send(503, { error: '云端服务暂时连不上' })
+              return
+            }
+            const outHeaders: Record<string, string> = { ...corsHeaders }
+            for (const key of ['content-type', 'etag', 'content-disposition', 'cache-control', 'last-modified']) {
+              const value = upstream.headers.get(key)
+              if (value) outHeaders[key] = value
+            }
+            const payload = Buffer.from(await upstream.arrayBuffer())
+            res.writeHead(upstream.status, outHeaders)
+            res.end(payload)
+            if (hasBody && upstream.ok) {
+              this.broadcast('database', { workspaceId: targetWorkspace, ts: Date.now() })
+            }
             return
           }
         }
