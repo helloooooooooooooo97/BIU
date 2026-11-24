@@ -1,12 +1,20 @@
+import { mkdirSync } from 'node:fs'
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, normalize, relative, resolve } from 'node:path'
 import { Service, type Context } from 'cordis'
 import { currentSessionId } from '@biu/host-sessions/scope'
+import { currentRequestWorkspaceId, dataHome, isOnlineRuntime } from '@biu/host-plugin-loader/data-dir'
 import {
   STR_REPLACE_EDITOR_DESCRIPTION,
   STR_REPLACE_EDITOR_PARAMETERS,
   runStrReplaceEditor,
 } from './str-replace-editor.ts'
+
+export const SANDBOX_VIRTUAL_WORKSPACE = '/workspace'
+
+function sanitizeWorkspaceSegment(id: string) {
+  return id.trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'default'
+}
 
 export class FsService extends Service {
   constructor(
@@ -17,12 +25,18 @@ export class FsService extends Service {
     this.defaultRoot = resolve(defaultRoot)
   }
 
-  /** 当前生效工作区：Session 已绑定 host 路径则为该目录，否则默认 `.workspace`。 */
+  /** 当前生效工作区：云端按 workspaceId 独立隔离；本机若 Session 已绑定 host 路径则为该目录，否则默认 `.workspace`。 */
   get root() {
     return this.effectiveRoot()
   }
 
   effectiveRoot() {
+    if (isOnlineRuntime()) {
+      const wsId = sanitizeWorkspaceSegment(currentRequestWorkspaceId())
+      const dir = resolve(dataHome(), 'workspaces', wsId, 'work')
+      mkdirSync(dir, { recursive: true })
+      return dir
+    }
     return this.sessionProjectRoot() ?? this.defaultRoot
   }
 
@@ -35,7 +49,13 @@ export class FsService extends Service {
   }
 
   resolveIn(root: string, rel: string) {
-    const input = String(rel)
+    const raw = String(rel)
+    const input =
+      raw === SANDBOX_VIRTUAL_WORKSPACE
+        ? '.'
+        : raw.startsWith(`${SANDBOX_VIRTUAL_WORKSPACE}/`)
+          ? raw.slice(SANDBOX_VIRTUAL_WORKSPACE.length + 1)
+          : raw
     const full = isAbsolute(input) ? resolve(input) : resolve(root, input)
     const relToRoot = relative(root, full)
     if (relToRoot.startsWith('..') || (!isAbsolute(input) && normalize(input).startsWith('..'))) {

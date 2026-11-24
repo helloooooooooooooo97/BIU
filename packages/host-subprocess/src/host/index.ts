@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { Service, type Context } from 'cordis'
+import { isOnlineRuntime } from '@biu/host-plugin-loader/data-dir'
 export { posixShellArgv, posixShellBin, hostShellKind, describeHostRuntime } from './posix-shell.ts'
 
 export interface SpawnProgress {
@@ -24,14 +25,72 @@ export interface SpawnResult {
 }
 
 const KILL_GRACE_MS = 800
+const DEFAULT_CLOUD_MAX_CONCURRENCY = 20
+
+export function sandboxMaxConcurrency(): number {
+  const raw = Number(process.env.BIU_SANDBOX_MAX_CONCURRENCY)
+  if (Number.isInteger(raw) && raw > 0) return raw
+  return isOnlineRuntime() ? DEFAULT_CLOUD_MAX_CONCURRENCY : 0
+}
+
+export class ConcurrencyLimiter {
+  private active = 0
+  private queue: Array<{
+    resolve: (release: () => void) => void
+    reject: (error: Error) => void
+    signal?: AbortSignal
+    onAbort?: () => void
+  }> = []
+
+  acquire(limit: number, signal?: AbortSignal): Promise<() => void> {
+    if (limit <= 0) return Promise.resolve(() => {})
+    if (signal?.aborted) return Promise.reject(new Error('aborted while waiting for sandbox slot'))
+    if (this.active < limit) {
+      this.active += 1
+      return Promise.resolve(this.makeRelease(limit))
+    }
+    return new Promise((resolve, reject) => {
+      const entry: (typeof this.queue)[number] = { resolve, reject, signal }
+      if (signal) {
+        entry.onAbort = () => {
+          const idx = this.queue.indexOf(entry)
+          if (idx >= 0) this.queue.splice(idx, 1)
+          reject(new Error('aborted while waiting for sandbox slot'))
+        }
+        signal.addEventListener('abort', entry.onAbort, { once: true })
+      }
+      this.queue.push(entry)
+    })
+  }
+
+  private makeRelease(limit: number) {
+    let released = false
+    return () => {
+      if (released) return
+      released = true
+      this.active = Math.max(0, this.active - 1)
+      while (this.active < limit && this.queue.length > 0) {
+        const next = this.queue.shift()!
+        if (next.signal && next.onAbort) next.signal.removeEventListener('abort', next.onAbort)
+        if (next.signal?.aborted) continue
+        this.active += 1
+        next.resolve(this.makeRelease(limit))
+        break
+      }
+    }
+  }
+}
 
 export class SubprocessService extends Service {
+  private limiter = new ConcurrencyLimiter()
+
   constructor(ctx: Context) {
     super(ctx, 'subprocess')
   }
 
-  run(req: SpawnRequest, signal?: AbortSignal): Promise<SpawnResult> {
+  async run(req: SpawnRequest, signal?: AbortSignal): Promise<SpawnResult> {
     const wrapped = this.ctx.sandbox.wrap(req)
+    const release = await this.limiter.acquire(sandboxMaxConcurrency(), signal)
     return new Promise((resolve, reject) => {
       // Unix：独立进程组，超时才能杀管道子进程。否则只 SIGTERM shell，
       // grep|cat 仍占着 stdout，child.close 永远不来，agent 整回合卡死。
@@ -63,6 +122,7 @@ export class SubprocessService extends Service {
         if (killTimer) clearTimeout(killTimer)
         if (forceTimer) clearTimeout(forceTimer)
         signal?.removeEventListener('abort', onAbort)
+        release()
       }
       const settle = (fn: () => void) => {
         if (settled) return
