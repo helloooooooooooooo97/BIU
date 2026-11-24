@@ -1,5 +1,6 @@
 import { readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
 import { apiFetch, registerApiRequestInterceptor } from '@biu/biu-ui/api-client'
+import { syncWorkspaceEndpoint } from '@biu/biu-ui/workspace-transport'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type Ref } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -984,7 +985,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
           }
           throw err
         })
-        .then(() => {
+        .then(async () => {
+          await syncWorkspaceEndpoint()
           if (live) setVerified(true)
         })
         .catch((err) => {
@@ -1410,6 +1412,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
       method: 'POST',
       body: JSON.stringify({ workspaceId }),
     })
+      .then(() => syncWorkspaceEndpoint(workspaceId))
       .then(() => accountFetch(token, '/api/agents'))
       .then((body) => {
         const sessions = (body as { sessions?: Array<{ id?: string; updatedAt?: number }> }).sessions ?? []
@@ -1434,6 +1437,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
           method: 'POST',
           body: JSON.stringify({ workspaceId: created.id }),
         })
+        await syncWorkspaceEndpoint(created.id)
         const listed = await accountFetch(token, '/api/agents') as { sessions?: Array<{ id?: string; updatedAt?: number }> }
         window.location.assign(defaultSessionPath(listed.sessions ?? []))
       })

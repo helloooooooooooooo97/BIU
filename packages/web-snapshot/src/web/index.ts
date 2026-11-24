@@ -1,5 +1,6 @@
 import { readStorageString } from '@biu/biu-ui/client-storage'
 import { apiFetch } from '@biu/biu-ui/api-client'
+import { getWorkspaceEndpoint, subscribeWorkspaceEndpoint } from '@biu/biu-ui/workspace-transport'
 import { useSyncExternalStore } from 'react'
 import { Service, type Context } from 'cordis'
 import { startMascotDance } from '@biu/public-mascot'
@@ -80,9 +81,29 @@ export class SnapshotService extends Service {
   private booted = false
   /** boot() 刚拉过就不必在第一条 WS 上再 pull 一次。 */
   private bootGotSnapshot = false
+  private lastEndpointKey = ''
 
   constructor(ctx: Context) {
     super(ctx, 'snapshot')
+    const ep = getWorkspaceEndpoint()
+    this.lastEndpointKey = `${ep.mode}|${ep.origin}|${ep.workspaceId}`
+    const unsubEndpoint = subscribeWorkspaceEndpoint((next) => {
+      const key = `${next.mode}|${next.origin}|${next.workspaceId}`
+      if (key === this.lastEndpointKey) return
+      this.lastEndpointKey = key
+      if (!this.booted) return
+      this.authStopped = false
+      const prev = this.socket
+      this.socket = null
+      try {
+        prev?.close()
+      } catch {
+        /* ignore */
+      }
+      void this.pull()
+      this.connect()
+    })
+    this.ctx.effect(() => unsubEndpoint)
     // 官网未登录时拉快照会 401。等账号 token 出现再连。
     if (typeof window === 'undefined' || hasAccountToken() || isLandingPreview()) {
       this.start()

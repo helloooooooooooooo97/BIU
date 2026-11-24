@@ -1,5 +1,5 @@
 import { onAppEvent } from './app-events.ts'
-import { resolveApiRequest } from './workspace-transport.ts'
+import { getPendingWorkspaceEndpointSync, isHostControlPath, resolveApiRequest } from './workspace-transport.ts'
 
 /**
  * Unified frontend HTTP API client singleton.
@@ -102,15 +102,38 @@ export interface ApiFetchOptions extends RequestInit {
  */
 export async function apiFetch(path: string, init?: ApiFetchOptions): Promise<Response> {
   const { scoped, signal, ...rest } = init ?? {}
-  const prepared = applyInterceptors(path, rest)
-  const resolved = resolveApiRequest(path, prepared)
+  const pendingSync =
+    path.startsWith('/api/') && !isHostControlPath(path) ? getPendingWorkspaceEndpointSync() : null
   if (!scoped) {
+    if (pendingSync) {
+      try {
+        await pendingSync
+      } catch {
+        /* fall back to active endpoint */
+      }
+    }
+    const prepared = applyInterceptors(path, rest)
+    const resolved = resolveApiRequest(path, prepared)
     const finalInit = signal ? { ...resolved.init, signal } : resolved.init
     return Object.keys(finalInit).length > 0 ? globalThis.fetch(resolved.url, finalInit) : globalThis.fetch(resolved.url)
   }
   const ctrl = new AbortController()
   activeControllers.add(ctrl)
   try {
+    if (pendingSync) {
+      try {
+        await pendingSync
+      } catch {
+        /* fall back to active endpoint */
+      }
+      if (ctrl.signal.aborted) {
+        throw ctrl.signal.reason instanceof Error
+          ? ctrl.signal.reason
+          : new Error(`Request aborted: ${String(ctrl.signal.reason ?? 'aborted')}`)
+      }
+    }
+    const prepared = applyInterceptors(path, rest)
+    const resolved = resolveApiRequest(path, prepared)
     return await globalThis.fetch(resolved.url, { ...resolved.init, signal: mergeSignals(signal, ctrl.signal) })
   } finally {
     activeControllers.delete(ctrl)
