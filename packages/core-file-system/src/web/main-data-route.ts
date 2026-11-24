@@ -10,7 +10,7 @@ export function isMainDataRoute(pathname: string) {
 
 export function readMainDataRoute() {
   try {
-    const raw = readStorageString(MAIN_DATA_ROUTE_KEY) ?? ''
+    const raw = readStorageString(MAIN_DATA_ROUTE_KEY, { scope: 'workspace' }) ?? ''
     return isMainDataRoute(raw) ? raw : ''
   } catch {
     return ''
@@ -25,7 +25,7 @@ export function overlayDataRoute() {
 export function writeMainDataRoute(pathname: string) {
   try {
     if (!isMainDataRoute(pathname)) return
-    writeStorageString(MAIN_DATA_ROUTE_KEY, pathname)
+    writeStorageString(MAIN_DATA_ROUTE_KEY, pathname, { scope: 'workspace' })
   } catch {
     /* ignore */
   }
