@@ -202,6 +202,15 @@ export class SavedViewsStore {
     return views.filter((view) => view.createdBy === accountId)
   }
 
+  exportAll(accountId = ''): Record<string, StoredView[]> {
+    const out: Record<string, StoredView[]> = {}
+    for (const path of this.byPath.keys()) {
+      const views = this.viewsFor(path, accountId)
+      if (views.length) out[path] = views
+    }
+    return out
+  }
+
   /** 索引表上的视图按创建人分开存：这次写入只替换当前账号自己的视图。 */
   replaceOwned(collectionPath: string, views: StoredView[], accountId: string) {
     const path = normalizeCollectionPath(collectionPath)

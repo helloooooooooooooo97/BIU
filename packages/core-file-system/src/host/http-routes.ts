@@ -235,7 +235,15 @@ export function registerDatabaseHttpRoutes(
         const forwarded = await forwardCloud(ctx, `/${parts[0]}`, parts[1]!, '/api/db/update', { body })
         if (forwarded) {
           const value = (forwarded.body as { value?: { id?: string } } | null)?.value
-          if (forwarded.status < 300 && value?.id) await db.applySynced(`/${parts[0]}`, [value as { id: string }])
+          if (forwarded.status < 300 && value?.id) {
+            await db.applySynced(`/${parts[0]}`, [value as { id: string }], { force: true })
+            try {
+              const account = ctx.get('account') as { markRemote?: (collection: string, id: string) => void }
+              account.markRemote?.(`/${parts[0]}`, value.id)
+            } catch {
+              /* ignore */
+            }
+          }
           route.send(forwarded.status, forwarded.body)
           return
         }
@@ -322,7 +330,7 @@ export function registerDatabaseHttpRoutes(
         if (forwarded.status < 300) {
           const values = (payload.items ?? []).map((item) => item.value).filter((value): value is { id: string } => Boolean(value?.id))
           try {
-            await db.applySynced(collection, values as DbRecord[])
+            await db.applySynced(collection, values as DbRecord[], { force: true })
             for (const value of values) {
               try {
                 const account = ctx.get('account') as { markRemote?: (collection: string, id: string) => void }
@@ -409,6 +417,11 @@ export function registerDatabaseHttpRoutes(
       }
       const path = String(body?.path ?? '')
       const accountId = currentAccountId()
+      const forwarded = await forwardCloud(ctx, path, '', '/api/db/saved-views', { body })
+      if (forwarded && forwarded.status >= 300) {
+        route.send(forwarded.status, forwarded.body)
+        return
+      }
       await db.requirePath(path, 'resource:update')
       const removals = (body.remove ?? []).map(String).filter(Boolean)
       if (body.replace === true || (body.upsert === undefined && body.remove === undefined)) {
