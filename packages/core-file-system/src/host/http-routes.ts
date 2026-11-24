@@ -916,7 +916,7 @@ export function registerDatabaseHttpRoutes(
     try {
       const name = route.params.name ?? ''
       const path = route.query.get('path') || String(route.req.headers['x-biu-resource-path'] ?? '')
-      if (path) await db.requirePath(path, 'resource:read')
+      if (path) await db.requireAssetForPath(name, path, 'resource:read')
       else db.requireAsset(name, 'resource:read')
       const { bytes, type, etag } = await assets.readAny(name)
       const suggested = route.query.get('download')
@@ -936,7 +936,7 @@ export function registerDatabaseHttpRoutes(
     try {
       const name = route.params.name ?? ''
       const path = route.query.get('path') || String(route.req.headers['x-biu-resource-path'] ?? '')
-      if (path) await db.requirePath(path, 'resource:update')
+      if (path) await db.requireAssetForPath(name, path, 'resource:update')
       else if (legacyAssetOnly) db.requireAsset(name, 'resource:update')
       else {
         route.send(400, { error: 'resource path required' })
@@ -973,7 +973,7 @@ export function registerDatabaseHttpRoutes(
         route.send(400, { error: 'resource path required' })
         return
       }
-      await db.requirePath(path, 'resource:update')
+      await db.requireAssetForPath(name, path, 'resource:update')
       const bytes = await route.bytes()
       const written = await assets.write(name, bytes)
       db.tags.putAttachment({

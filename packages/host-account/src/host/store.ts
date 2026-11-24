@@ -605,7 +605,7 @@ export class CollabStore {
   memberActivity(actorId: string, memberId: string, options: { days?: number; limit?: number; now?: number } = {}) {
     const workspaceId = this.activeWorkspaceId()
     if (!workspaceId) throw new CollabError('没有工作区', 400)
-    this.requireMember(actorId, workspaceId)
+    const actorRole = this.requireInternalMember(actorId, workspaceId)
     const now = options.now ?? Date.now()
     const days = Math.max(7, Math.min(365, Math.floor(options.days ?? 182)))
     const limit = Math.max(10, Math.min(200, Math.floor(options.limit ?? 80)))
@@ -618,7 +618,7 @@ export class CollabStore {
     startDate.setHours(0, 0, 0, 0)
     const since = startDate.getTime()
 
-    const rows = this.db
+    const rawRows = this.db
       .prepare(
         `SELECT id, via, category, action, collection, record_id, record_title, detail, count, created_at, updated_at
          FROM workspace_activity_log
@@ -638,6 +638,18 @@ export class CollabStore {
         created_at: number
         updated_at: number
       }>
+    const isAdminOrSelf = actorId === memberId || actorRole === 'owner' || actorRole === 'admin'
+    const rows = rawRows.filter((row) => {
+      if (row.collection && row.record_id) {
+        return this.authorization.authorize(
+          { type: 'account', accountId: actorId, workspaceId },
+          'resource:read',
+          { type: 'record', workspaceId, collection: row.collection, recordId: row.record_id },
+        ).allowed
+      }
+      if (row.category === 'access' && !isAdminOrSelf) return false
+      return true
+    })
 
     const formatDay = (ts: number) => {
       const d = new Date(ts)
@@ -693,23 +705,27 @@ export class CollabStore {
       }
     }
 
-    const recordGrants = this.db
-      .prepare(
-        `SELECT collection, record_id, role
-         FROM record_grants
-         WHERE workspace_id = ? AND subject_type = 'account' AND subject_id = ?
-         ORDER BY created_at DESC LIMIT 50`,
-      )
-      .all(workspaceId, memberId) as Array<{ collection: string; record_id: string; role: string }>
+    const recordGrants = isAdminOrSelf
+      ? (this.db
+          .prepare(
+            `SELECT collection, record_id, role
+             FROM record_grants
+             WHERE workspace_id = ? AND subject_type = 'account' AND subject_id = ?
+             ORDER BY created_at DESC LIMIT 50`,
+          )
+          .all(workspaceId, memberId) as Array<{ collection: string; record_id: string; role: string }>)
+      : []
 
-    const viewGrants = this.db
-      .prepare(
-        `SELECT collection, view_id, role
-         FROM view_grants
-         WHERE workspace_id = ? AND subject_type = 'account' AND subject_id = ?
-         ORDER BY created_at DESC LIMIT 50`,
-      )
-      .all(workspaceId, memberId) as Array<{ collection: string; view_id: string; role: string }>
+    const viewGrants = isAdminOrSelf
+      ? (this.db
+          .prepare(
+            `SELECT collection, view_id, role
+             FROM view_grants
+             WHERE workspace_id = ? AND subject_type = 'account' AND subject_id = ?
+             ORDER BY created_at DESC LIMIT 50`,
+          )
+          .all(workspaceId, memberId) as Array<{ collection: string; view_id: string; role: string }>)
+      : []
 
     return {
       member: {
@@ -1376,11 +1392,13 @@ export class CollabStore {
         this.db.exec('ROLLBACK')
         throw error
       }
+      this.authorization.invalidateAll()
       return this.members(accountId, workspaceId).find((row) => row.id === accountId)!
     }
     this.db
       .prepare('UPDATE workspace_members SET role = ? WHERE workspace_id = ? AND account_id = ?')
       .run(role, workspaceId, accountId)
+    this.authorization.invalidateAll()
     return this.members(actorId, workspaceId).find((row) => row.id === accountId)!
   }
 
@@ -1396,7 +1414,7 @@ export class CollabStore {
   }
 
   groups(actorId: string, workspaceId: string) {
-    this.requireMember(actorId, workspaceId)
+    this.requireInternalMember(actorId, workspaceId)
     const rows = this.db
       .prepare(
         `SELECT g.id, g.name, g.created_by, g.created_at, COUNT(gm.account_id) AS member_count
@@ -1440,11 +1458,12 @@ export class CollabStore {
          ON CONFLICT(group_id, account_id) DO NOTHING`,
       )
       .run(groupId, account.id, now)
+    this.authorization.invalidateAll()
     return this.groupMembers(actorId, workspaceId, groupId)
   }
 
   groupMembers(actorId: string, workspaceId: string, groupId: string) {
-    this.requireMember(actorId, workspaceId)
+    this.requireInternalMember(actorId, workspaceId)
     return this.db
       .prepare(
         `SELECT a.id, COALESCE(NULLIF(m.display_name, ''), '未设置') AS name, COALESCE(a.email, '') AS email
@@ -2973,7 +2992,7 @@ export class CollabStore {
   }
 
   externallySharedRecords(actorId: string, workspaceId: string) {
-    this.requireMember(actorId, workspaceId)
+    this.requireInternalMember(actorId, workspaceId)
     const rows = this.db
       .prepare(
         `SELECT DISTINCT g.collection, g.record_id
@@ -3464,6 +3483,17 @@ export class CollabStore {
       .prepare('SELECT role FROM workspace_members WHERE workspace_id = ? AND account_id = ?')
       .get(workspaceId, accountId) as { role: string } | undefined
     if (!row) throw new CollabError('不是这个工作区的成员', 403)
+    return row.role
+  }
+
+  private requireInternalMember(accountId: string, workspaceId: string) {
+    const row = this.db
+      .prepare('SELECT role, member_kind FROM workspace_members WHERE workspace_id = ? AND account_id = ?')
+      .get(workspaceId, accountId) as { role: string; member_kind?: string } | undefined
+    if (!row) throw new CollabError('不是这个工作区的成员', 403)
+    if (row.member_kind === 'external' || row.member_kind === 'guest') {
+      throw new CollabError('外部协作者无权访问此空间级接口', 403)
+    }
     return row.role
   }
 
