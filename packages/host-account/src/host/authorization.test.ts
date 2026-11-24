@@ -489,3 +489,26 @@ test('updateMemberRole and addGroupMemberByEmail invalidate authorization caches
   assert.ok(invalidated > beforeGroup)
   dispose()
 })
+
+test('moving a private inherited record under a workspace-visible parent preserves privacy unless inheritOnExpand is set', () => {
+  const { auth, ada, bob, actor, page } = setup()
+  auth.attach(actor(ada.id), page('private-folder'), { accessMode: 'private' })
+  auth.attach(actor(ada.id), page('public-folder'), { accessMode: 'members', memberDefaultRole: 'editor' })
+  auth.attach(actor(ada.id), page('secret-note'), {
+    accessMode: 'inherit',
+    parentCollection: '/pages',
+    parentRecordId: 'private-folder',
+  })
+
+  // Before move: Bob cannot see secret-note
+  assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('secret-note')).allowed, false)
+
+  // Default move into public-folder preserves private scope (does NOT silently expose to Bob)
+  const safeMove = auth.move(actor(ada.id), page('secret-note'), page('public-folder'))
+  assert.equal(safeMove.preservedPrivate, true)
+  assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('secret-note')).allowed, false)
+
+  // Explicit inherit toggle or inheritOnExpand exposes it as intended
+  auth.setInheritanceMode(actor(ada.id), page('secret-note'), 'inherit')
+  assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('secret-note')).allowed, true)
+})
