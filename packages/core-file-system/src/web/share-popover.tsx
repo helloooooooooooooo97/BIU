@@ -385,7 +385,7 @@ function WorkspaceAccess({
   async function createGuestLink() {
     setError('')
     try {
-      const data = await readJson<{ path: string }>('/api/account/access/guest-invite', {
+      const data = await readJson<{ path: string; url?: string }>('/api/account/access/guest-invite', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -395,7 +395,7 @@ function WorkspaceAccess({
           expiresInHours: 24,
         }),
       })
-      const url = new URL(data.path, window.location.origin).toString()
+      const url = data.url ? String(data.url) : new URL(data.path, window.location.origin).toString()
       setGuestUrl(url)
       await navigator.clipboard.writeText(url)
       setGuestCopied(true)

@@ -25,7 +25,6 @@ import { estimateTokens, liftToolImages } from '@biu/host-sessions'
 import { persistDroppedFile, persistPastedImages, readArtifactFile, withPastedImagePicks } from '@biu/host-sessions/artifacts'
 import { collectLiveDispatchedTasks } from '@biu/host-live-sessions/usage'
 import { decorateDispatchedTasks, loadLiveDispatchTasks, registerChatInspectorRoutes } from './inspector.ts'
-import { forwardCloud } from '@biu/host-account/mirror'
 
 function workspaceIsCloud(ctx: Context) {
   if (isOnlineRuntime()) return true
@@ -1170,36 +1169,35 @@ export function apply(ctx: Context) {
     })
     const payload = (await response.json().catch(() => ({}))) as { leaseId?: string; error?: string }
     if (!response.ok || !payload.leaseId) throw new Error(payload.error || '无法取得云端代理执行权')
-    if (!(await ctx.sessions.get(sessionId))) {
-      try {
-        const fetched = await fetch(`${connection.origin}/api/agents/${encodeURIComponent(sessionId)}?turns=all`, {
-          headers: {
-            authorization: `Bearer ${connection.token}`,
-            ...(workspaceId ? { 'x-biu-workspace-id': workspaceId } : {}),
-          },
-        })
-        if (fetched.ok) {
-          const remoteSession = (await fetched.json().catch(() => null)) as {
-            id?: string
-            version?: number
-            events?: unknown[]
-            mascot?: unknown
-            config?: unknown
-          } | null
-          if (remoteSession?.id) {
-            await ctx.sessionStore.save({
-              id: remoteSession.id,
-              version: Number(remoteSession.version) || 1,
-              events: Array.isArray(remoteSession.events) ? (remoteSession.events as never[]) : [],
-              ...(remoteSession.mascot ? { mascot: remoteSession.mascot as never } : {}),
-              ...(remoteSession.config ? { config: remoteSession.config as never } : {}),
-            })
-            runtime?.markRemote?.('/agents', remoteSession.id)
-          }
+    try {
+      const fetched = await fetch(`${connection.origin}/api/agents/${encodeURIComponent(sessionId)}?turns=all`, {
+        headers: {
+          authorization: `Bearer ${connection.token}`,
+          ...(workspaceId ? { 'x-biu-workspace-id': workspaceId } : {}),
+        },
+        signal: AbortSignal.timeout(15_000),
+      })
+      if (fetched.ok) {
+        const remoteSession = (await fetched.json().catch(() => null)) as {
+          id?: string
+          version?: number
+          events?: unknown[]
+          mascot?: unknown
+          config?: unknown
+        } | null
+        if (remoteSession?.id) {
+          await ctx.sessionStore.save({
+            id: remoteSession.id,
+            version: Number(remoteSession.version) || 1,
+            events: Array.isArray(remoteSession.events) ? (remoteSession.events as never[]) : [],
+            ...(remoteSession.mascot ? { mascot: remoteSession.mascot as never } : {}),
+            ...(remoteSession.config ? { config: remoteSession.config as never } : {}),
+          })
+          runtime?.markRemote?.('/agents', remoteSession.id)
         }
-      } catch (error) {
-        console.warn('[chat] failed to hydrate cloud session before local execution', sessionId, error)
       }
+    } catch (error) {
+      console.warn('[chat] failed to hydrate cloud session before local execution', sessionId, error)
     }
     const heartbeat = setInterval(() => {
       void fetch(`${connection.origin}/api/agents/${encodeURIComponent(sessionId)}/execution-lease`, {
@@ -1368,45 +1366,10 @@ export function apply(ctx: Context) {
       id?: string
     }
     const requestedId = typeof payload.id === 'string' ? payload.id.trim() : ''
-    let sessionId = isAssignableRecordId(requestedId) ? requestedId : allocateRecordId()
-    if (!isOnlineRuntime()) {
-      const runtime = accountRuntime(ctx)
-      const workspaceId = runtime?.store?.activeWorkspaceId() ?? ''
-      if (workspaceId && runtime?.workspaceLocation?.(workspaceId) === 'cloud') {
-        const localAccountId = currentAccountId()
-        const connection = runtime.linkedCloud?.(localAccountId) ?? (localAccountId ? runtime.cloudConnection?.(localAccountId) : null)
-        if (!connection) return route.send(401, { error: '请先登录云端账号' })
-        let remote: Response
-        try {
-          remote = await fetch(`${connection.origin}/api/agents`, {
-            method: 'POST',
-            headers: {
-              authorization: `Bearer ${connection.token}`,
-              'content-type': 'application/json',
-              'x-biu-workspace-id': workspaceId,
-            },
-            body: JSON.stringify({ id: sessionId, title: payload.title }),
-          })
-        } catch {
-          return route.send(503, { error: '云端暂时连不上' })
-        }
-        const remoteBody = (await remote.json().catch(() => ({}))) as { id?: string; error?: string }
-        if (!remote.ok || !remoteBody.id) {
-          return route.send(remote.status, { error: remoteBody.error || '创建云端代理失败' })
-        }
-        sessionId = remoteBody.id
-      }
-    }
+    const sessionId = isAssignableRecordId(requestedId) ? requestedId : allocateRecordId()
     const record = await ctx.sessions.create(sessionId, {
       ...(typeof payload.title === 'string' ? { title: payload.title } : {}),
     })
-    if (!isOnlineRuntime()) {
-      const runtime = accountRuntime(ctx)
-      const workspaceId = runtime?.store?.activeWorkspaceId() ?? ''
-      if (workspaceId && runtime?.workspaceLocation?.(workspaceId) === 'cloud') {
-        runtime.markRemote?.('/agents', record.id)
-      }
-    }
     route.send(201, {
       id: record.id,
       version: record.version,
@@ -1768,12 +1731,6 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('DELETE', '/api/agents/:id', async (route) => {
     const id = route.params.id
-    const forwarded = await forwardCloud(ctx, '/agents', id, `/api/agents/${id}`, { method: 'DELETE' })
-    if (forwarded) {
-      if (forwarded.status < 300) await ctx.sessions.delete(id)
-      route.send(forwarded.status, forwarded.body)
-      return
-    }
     const record = await visibleSession(id)
     if (!record) return route.send(404, { error: 'unknown session' })
     const db = databaseOf(ctx)
@@ -1798,17 +1755,21 @@ export function apply(ctx: Context) {
       images?: Array<{ name?: string; mime?: string; url?: string }>
       liveContext?: unknown
     }
-    if (!(await visibleSession(route.params.id))) return route.send(404, { error: 'unknown session' })
     if (isOnlineRuntime() && accountRuntime(ctx)?.store?.hasExecutionLease(route.params.id)) {
       return route.send(409, { error: '这个代理正在桌面设备上运行' })
     }
     const shouldExecute = payload.kind !== 'inject' || ctx.agents.isBusy(route.params.id)
+    let cloudExecution: Awaited<ReturnType<typeof beginCloudExecution>> = null
     if (shouldExecute) {
       try {
-        await beginCloudExecution(route.params.id)
+        cloudExecution = await beginCloudExecution(route.params.id)
       } catch (error) {
         return route.send(409, { error: error instanceof Error ? error.message : String(error) })
       }
+    }
+    if (!(await visibleSession(route.params.id))) {
+      if (cloudExecution) void finishCloudExecution(route.params.id)
+      return route.send(404, { error: 'unknown session' })
     }
     const agent = await ctx.agents.create(route.params.id)
     // re-sync in-memory LLM without rewriting disk
@@ -1830,8 +1791,35 @@ export function apply(ctx: Context) {
     if (incomingImages.length) {
       try {
         images = await persistPastedImages(route.params.id, incomingImages)
+        if (cloudExecution) {
+          // 桌面端处于云端空间时，把粘贴图片同步上传到云端 artifacts，避免前端透传 GET /artifacts/:name 404
+          for (const img of images) {
+            const artifactName = img.url.split('/').pop()
+            if (!artifactName) continue
+            const saved = await readArtifactFile(route.params.id, decodeURIComponent(artifactName))
+            if (!saved) continue
+            const uploaded = await fetch(
+              `${cloudExecution.origin}/api/agents/${encodeURIComponent(route.params.id)}/artifacts?name=${encodeURIComponent(img.name)}`,
+              {
+                method: 'POST',
+                headers: {
+                  authorization: `Bearer ${cloudExecution.token}`,
+                  'content-type': saved.mime || img.mime || 'application/octet-stream',
+                  ...(cloudExecution.workspaceId ? { 'x-biu-workspace-id': cloudExecution.workspaceId } : {}),
+                },
+                body: new Uint8Array(saved.data),
+                signal: AbortSignal.timeout(30_000),
+              },
+            ).catch(() => null)
+            if (uploaded?.ok) {
+              const remoteArtifact = (await uploaded.json().catch(() => null)) as { url?: string } | null
+              if (remoteArtifact?.url) img.url = remoteArtifact.url
+            }
+          }
+        }
         text = withPastedImagePicks(text, images)
       } catch {
+        if (cloudExecution) void finishCloudExecution(route.params.id)
         return route.send(400, { error: '粘贴的图片未能保存到本地，请重试' })
       }
     }
@@ -1852,7 +1840,7 @@ export function apply(ctx: Context) {
       })
     }
     try {
-        const turn = await agent.send(text, sendOpts)
+      const turn = await agent.send(text, sendOpts)
       route.send(200, {
         sessionId: agent.sessionId,
         text: turn.text,
@@ -1918,17 +1906,31 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('POST', '/api/agents/:id/inbox/flush', async (route) => {
     const id = route.params.id
-    if (!(await visibleSession(id))) return route.send(404, { error: 'unknown session' })
+    if (isOnlineRuntime() && accountRuntime(ctx)?.store?.hasExecutionLease(id)) {
+      return route.send(409, { error: '这个代理正在桌面设备上运行' })
+    }
+    let cloudExecution: Awaited<ReturnType<typeof beginCloudExecution>> = null
+    try {
+      cloudExecution = await beginCloudExecution(id)
+    } catch (error) {
+      return route.send(409, { error: error instanceof Error ? error.message : String(error) })
+    }
+    if (!(await visibleSession(id))) {
+      if (cloudExecution) void finishCloudExecution(id)
+      return route.send(404, { error: 'unknown session' })
+    }
     const agent = await ctx.agents.create(id)
     chat.patch({}, { persist: false })
     try {
       const result = await agent.flush({ wait: false })
+      if (!result.flushed && cloudExecution) void finishCloudExecution(id)
       route.send(200, {
         sessionId: id,
         flushed: result.flushed,
         inbox: ctx.agents.listInbox(id),
       })
     } catch (error) {
+      if (cloudExecution) void finishCloudExecution(id)
       route.send(500, { error: String(error) })
     }
   })
