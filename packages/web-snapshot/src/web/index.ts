@@ -1,6 +1,6 @@
 import { readStorageString } from '@biu/biu-ui/client-storage'
 import { apiFetch } from '@biu/biu-ui/api-client'
-import { getWorkspaceEndpoint, subscribeWorkspaceEndpoint } from '@biu/biu-ui/workspace-transport'
+import { getWorkspaceEndpoint, mintWsTicket, resolveWsUrl, subscribeWorkspaceEndpoint } from '@biu/biu-ui/workspace-transport'
 import { useSyncExternalStore } from 'react'
 import { Service, type Context } from 'cordis'
 import { startMascotDance } from '@biu/public-mascot'
@@ -213,13 +213,28 @@ export class SnapshotService extends Service {
     if (!this.authStopped) this.connect()
   }
 
+  private connectSeq = 0
+
   private connect() {
+    const seq = ++this.connectSeq
+    const preview = new URLSearchParams(location.search).get('landingPreview') === '1'
+    const workspaceId = preview ? '' : (readStorageString('biu.workspaceId', 'session') || readStorageString('biu.workspaceId') || '')
+    const query = preview ? '?landingPreview=1' : workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ''
+    const ep = getWorkspaceEndpoint()
+    if (!preview && ep.mode === 'cloud' && ep.origin) {
+      void mintWsTicket(ep).then((wsTicket) => {
+        if (seq !== this.connectSeq || this.authStopped) return
+        this.openSocket(resolveWsUrl(`/ws${query}`, { wsTicket }))
+      })
+      return
+    }
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+    this.openSocket(`${proto}://${location.host}/ws${query}`)
+  }
+
+  private openSocket(targetUrl: string) {
     try {
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-      const preview = new URLSearchParams(location.search).get('landingPreview') === '1'
-      const workspaceId = preview ? '' : (readStorageString('biu.workspaceId', 'session') || readStorageString('biu.workspaceId') || '')
-      const query = preview ? '?landingPreview=1' : workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ''
-      const ws = new WebSocket(`${proto}://${location.host}/ws${query}`)
+      const ws = new WebSocket(targetUrl)
       this.socket = ws
       ws.onopen = () => {
         if (this.bootGotSnapshot) {

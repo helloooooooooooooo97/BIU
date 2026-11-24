@@ -155,10 +155,34 @@ export function resolveApiRequest(
 }
 
 /**
- * Resolve a WebSocket path (`/ws` or any custom `ctx.http.ws(path)`) to the active endpoint.
- * In cloud mode, connects directly to `ws(s)://<cloud-origin><path>?workspaceId=...&token=...`.
+ * Mint a short-lived, single-use WebSocket handshake ticket from the active cloud origin
+ * (`POST /api/ws-ticket`) so long-lived Bearer session tokens never appear in WS URLs.
  */
-export function resolveWsUrl(path = '/ws'): string {
+export async function mintWsTicket(ep: WorkspaceEndpoint = activeEndpoint): Promise<string | null> {
+  if (ep.mode !== 'cloud' || !ep.origin || !ep.token || !ep.workspaceId) return null
+  try {
+    const res = await globalThis.fetch(`${ep.origin}/api/ws-ticket`, {
+      method: 'POST',
+      credentials: 'omit',
+      headers: {
+        Authorization: `Bearer ${ep.token}`,
+        'X-Biu-Workspace-Id': ep.workspaceId,
+      },
+    })
+    if (!res.ok) return null
+    const body = (await res.json().catch(() => ({}))) as { ticket?: unknown }
+    return typeof body.ticket === 'string' && body.ticket.trim() ? body.ticket.trim() : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Resolve a WebSocket path (`/ws` or any custom `ctx.http.ws(path)`) to the active endpoint.
+ * In cloud mode, prefers a single-use `wsTicket` when provided (keeping long-lived Bearer
+ * tokens out of URL query strings); falls back to `token` only when no ticket is supplied.
+ */
+export function resolveWsUrl(path = '/ws', opts?: { wsTicket?: string | null }): string {
   const ep = activeEndpoint
   if (ep.mode === 'cloud' && ep.origin) {
     const wsOrigin = ep.origin.replace(/^http:\/\//i, 'ws://').replace(/^https:\/\//i, 'wss://')
@@ -166,7 +190,11 @@ export function resolveWsUrl(path = '/ws'): string {
     if (ep.workspaceId && !url.searchParams.has('workspaceId')) {
       url.searchParams.set('workspaceId', ep.workspaceId)
     }
-    if (ep.token && !url.searchParams.has('token')) {
+    const ticket = opts?.wsTicket?.trim()
+    if (ticket) {
+      url.searchParams.delete('token')
+      url.searchParams.set('wsTicket', ticket)
+    } else if (ep.token && !url.searchParams.has('token') && !url.searchParams.has('wsTicket')) {
       url.searchParams.set('token', ep.token)
     }
     return url.toString()
