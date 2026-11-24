@@ -1135,7 +1135,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     try {
       const me = actor(route)
       const body = (await route.json()) as { name?: string }
-      if (account.workspaceLocation(route.params.id!) === 'cloud') {
+      if (!isOnlineRuntime() && account.workspaceLocation(route.params.id!) === 'cloud') {
         const connection = account.cloudConnection(me.id)
         if (!connection) throw new CollabError('请先登录云端账号', 401)
         let response: Response

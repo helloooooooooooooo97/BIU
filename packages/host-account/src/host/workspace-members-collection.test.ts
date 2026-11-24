@@ -264,3 +264,54 @@ test('GET /api/account/member-activity resolves grant record titles via $ids fil
     ctx.emit('dispose')
   }
 })
+
+test('PATCH /api/account/workspaces/:id renames a cloud workspace directly in online runtime without requiring cloud_connections', async () => {
+  const prevOnline = process.env.BIU_ONLINE
+  process.env.BIU_ONLINE = '1'
+  const dir = mkdtempSync(join(tmpdir(), 'biu-online-rename-'))
+  dirs.push(dir)
+  const sqlitePath = join(dir, 'biu.sqlite')
+  const routes = new Map<string, (route: Record<string, unknown>) => Promise<void>>()
+  const ctx = new Context()
+  ctx.provide('http')
+  ctx.set('http', {
+    route(method: string, path: string, handler: (route: Record<string, unknown>) => Promise<void>) {
+      routes.set(`${method} ${path}`, handler)
+    },
+    broadcast() {},
+    disconnectRevokedSessions() {},
+  })
+  applyAccount(ctx, { sqlitePath })
+  try {
+    const account = ctx.get('account') as AccountService
+    const ada = account.store.register('Ada', Date.now(), 'secret1', 'ada-online@example.com')
+    const workspace = account.store.createWorkspace(ada.id, '云端空间')
+    account.store.setActive(ada.id, workspace.id)
+    const session = account.store.login('ada-online@example.com', 'secret1')
+
+    const handler = routes.get('PATCH /api/account/workspaces/:id')
+    assert.ok(handler)
+    let status = 0
+    let body: Record<string, unknown> = {}
+    await handler({
+      req: { headers: { authorization: `Bearer ${session.token}` }, method: 'PATCH' },
+      res: { setHeader() {} },
+      params: { id: workspace.id },
+      async json() {
+        return { name: '云213端空间' }
+      },
+      send(code: number, payload: Record<string, unknown>) {
+        status = code
+        body = payload
+      },
+    })
+
+    assert.equal(status, 200)
+    assert.equal(body.id, workspace.id)
+    assert.equal(body.name, '云213端空间')
+  } finally {
+    ctx.emit('dispose')
+    if (prevOnline === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = prevOnline
+  }
+})
