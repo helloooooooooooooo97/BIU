@@ -1,4 +1,5 @@
 import { writeStorageString } from '@biu/biu-ui/client-storage'
+import { registerWorkspaceCache } from './workspace-client-store.ts'
 import { useBrowserPopovers } from './use-browser-popovers.ts'
 import { useBrowserBulkUi } from './use-browser-bulk-ui.ts'
 import { useBrowserViewConfig } from './use-browser-view-config.ts'
