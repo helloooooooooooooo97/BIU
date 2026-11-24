@@ -348,3 +348,37 @@ test('preloadCollection caches memberViewMatcher and short-circuits unmatched ac
   assert.equal(memberMatcherCalls, 1)
   assert.equal(dataMatcherCalls, 0)
 })
+
+test('external and guest collaborators are read-only on /views and policy-bound views are detected', () => {
+  const { store, auth, ada, bob, workspace, actor, page } = setup()
+  const external = store.register('Ext', 1, 'secret123', 'ext@example.com')
+  runWithAccount(ada.id, () => {
+    store.attach(workspace.id, '/pages', 'doc-1', 1)
+    store.shareWithEmail(ada.id, '/pages', 'doc-1', 'ext@example.com', 'editor', 'external')
+  })
+
+  const viewRef = { type: 'record' as const, workspaceId: workspace.id, collection: '/views', recordId: 'pages::v1' }
+  assert.equal(auth.authorize(actor(external.id), 'resource:read', viewRef).allowed, true)
+  assert.equal(auth.authorize(actor(external.id), 'resource:update', viewRef).allowed, false)
+  assert.equal(auth.authorize(actor(external.id), 'resource:delete', viewRef).allowed, false)
+
+  runWithAccount(ada.id, () => {
+    store.shareViewWithEmail(ada.id, '/pages', 'v-shared', 'bob@example.com', 'editor', 'internal')
+  })
+  assert.equal(auth.isViewPolicyBound(workspace.id, '/pages', 'v-shared'), true)
+  assert.equal(auth.isViewPolicyBound(workspace.id, '/pages', 'v-other'), false)
+  assert.equal(auth.canModifyPolicyLockedView(workspace.id, ada.id), true)
+  assert.equal(auth.canModifyPolicyLockedView(workspace.id, bob.id), false)
+  assert.equal(auth.canModifyPolicyLockedView(workspace.id, external.id), false)
+
+  runWithAccount(ada.id, () => {
+    store.grantMemberView(ada.id, '/pages', 'doc-1', 'mv-eng', 'viewer')
+  })
+  assert.equal(auth.isViewPolicyBound(workspace.id, '/workspace-members', 'mv-eng'), true)
+
+  store.cleanupViewReferences(workspace.id, '/pages', 'v-shared')
+  assert.equal(auth.isViewPolicyBound(workspace.id, '/pages', 'v-shared'), false)
+  store.cleanupViewReferences(workspace.id, '/workspace-members', 'mv-eng')
+  assert.equal(auth.isViewPolicyBound(workspace.id, '/workspace-members', 'mv-eng'), false)
+  assert.equal(page('doc-1').recordId, 'doc-1')
+})

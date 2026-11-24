@@ -388,7 +388,7 @@ export function registerDatabaseHttpRoutes(
           savedViews.replaceOwned(path, next, accountId)
         } else {
           dropSharesForRemovedViews(shares, path, savedViews.viewsFor(path), next)
-          savedViews.replace(path, next)
+          savedViews.replace(path, next, accountId)
         }
       } else {
         savedViews.applyPatch(path, { upsert: body.upsert ?? [], remove: removals }, accountId)

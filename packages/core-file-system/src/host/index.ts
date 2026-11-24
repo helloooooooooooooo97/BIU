@@ -2555,8 +2555,32 @@ export function apply(ctx: Context) {
         subject_id: string
         role: 'viewer' | 'editor' | 'manager' | 'owner'
       }>
+      cleanupViewReferences?: (workspaceId: string, collection: string, viewId: string) => void
     }
   } | undefined
+  savedViews.setWorkspaceResolver(() => account?.store?.activeWorkspaceId?.() ?? '')
+  savedViews.setPolicyGuard({
+    isLocked: (workspaceId, collection, viewId) => {
+      if (account?.authorization?.isViewPolicyBound(workspaceId, collection, viewId)) return true
+      try {
+        return db.shares.listViews(collection).some((share) => share.viewId === viewId)
+      } catch {
+        return false
+      }
+    },
+    canEditLocked: (workspaceId, accountId) => {
+      if (!account?.authorization || !workspaceId) return true
+      return account.authorization.canModifyPolicyLockedView(workspaceId, accountId)
+    },
+    onRemoved: (workspaceId, collection, viewId) => {
+      try {
+        db.shares.revokeView(collection, viewId)
+      } catch {
+        /* ignore */
+      }
+      account?.store?.cleanupViewReferences?.(workspaceId, collection, viewId)
+    },
+  })
   const activeDataLocation = (): 'device' | 'cloud' => {
     if (isOnlineRuntime()) return 'cloud'
     const workspaceId = account?.store?.activeWorkspaceId?.()
@@ -2567,7 +2591,7 @@ export function apply(ctx: Context) {
     inner.sessions.viewAccess = (id, record) => db.allowsViaView(AGENTS_COLLECTION_PATH, { ...record, id })
   })
   account?.authorization?.setMemberViewMatcher((workspaceId, viewId, accountId) => {
-    const view = savedViews.viewsFor(WORKSPACE_MEMBERS_COLLECTION_PATH).find((item) => item.id === viewId)
+    const view = savedViews.viewsFor(WORKSPACE_MEMBERS_COLLECTION_PATH, '', workspaceId).find((item) => item.id === viewId)
       ?? stubBuiltinMemberView(viewId)
       ?? stubBuiltinAllView(viewId)
     if (!view || !account.store) return false
@@ -2599,12 +2623,13 @@ export function apply(ctx: Context) {
     clearDataViewCache()
     origNotifyViewCatalog(path)
   }
-  account?.authorization?.setDataViewMatcher((_workspaceId, collection, viewId, recordId, context) => {
+  account?.authorization?.setDataViewMatcher((workspaceId, collection, viewId, recordId, context) => {
     if (!context.record) return false
-    let saved = dataViewCache.get(collection)
+    const cacheKey = `${workspaceId}\t${collection}`
+    let saved = dataViewCache.get(cacheKey)
     if (!saved) {
-      saved = [builtinAllView({ path: collection }), ...savedViews.viewsFor(collection)] as ReturnType<typeof savedViews.viewsFor>
-      dataViewCache.set(collection, saved)
+      saved = [builtinAllView({ path: collection }), ...savedViews.viewsFor(collection, '', workspaceId)] as ReturnType<typeof savedViews.viewsFor>
+      dataViewCache.set(cacheKey, saved)
     }
     return recordMatchesGrantedView(
       { id: recordId, ...context.record } as DbRecord,

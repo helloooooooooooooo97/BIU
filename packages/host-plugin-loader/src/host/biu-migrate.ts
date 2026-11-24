@@ -940,6 +940,39 @@ export const BIU_MIGRATIONS: Migration[] = [
   { version: 50, module: 'host-account', name: 'account.avatar', up: (db) => {
     addColumn(db, 'accounts', 'avatar', `avatar TEXT NOT NULL DEFAULT ''`)
   } },
+  { version: 51, module: 'core-file-system', name: 'saved-views.workspace-isolation', up: (db) => {
+    if (hasTable(db, 'saved_views') && !tableColumnNames(db, 'saved_views').includes('workspace_id')) {
+      db.exec(`
+        CREATE TABLE saved_views_v51 (
+          workspace_id TEXT NOT NULL DEFAULT '',
+          collection TEXT NOT NULL,
+          view_id TEXT NOT NULL,
+          payload_json TEXT NOT NULL,
+          updated_at INTEGER NOT NULL,
+          PRIMARY KEY (workspace_id, collection, view_id)
+        );
+        INSERT INTO saved_views_v51 (workspace_id, collection, view_id, payload_json, updated_at)
+        SELECT '', collection, view_id, payload_json, updated_at FROM saved_views;
+        DROP TABLE saved_views;
+        ALTER TABLE saved_views_v51 RENAME TO saved_views;
+      `)
+    }
+    if (hasTable(db, 'saved_view_tombstones') && !tableColumnNames(db, 'saved_view_tombstones').includes('workspace_id')) {
+      db.exec(`
+        CREATE TABLE saved_view_tombstones_v51 (
+          workspace_id TEXT NOT NULL DEFAULT '',
+          collection TEXT NOT NULL,
+          view_id TEXT NOT NULL,
+          deleted_at INTEGER NOT NULL,
+          PRIMARY KEY (workspace_id, collection, view_id)
+        );
+        INSERT INTO saved_view_tombstones_v51 (workspace_id, collection, view_id, deleted_at)
+        SELECT '', collection, view_id, deleted_at FROM saved_view_tombstones;
+        DROP TABLE saved_view_tombstones;
+        ALTER TABLE saved_view_tombstones_v51 RENAME TO saved_view_tombstones;
+      `)
+    }
+  } },
 ]
 
 export function assertBiuMigrationLog(rows: Array<{ version: number }> = BIU_MIGRATIONS) {
