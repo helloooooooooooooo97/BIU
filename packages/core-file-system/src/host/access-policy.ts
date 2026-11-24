@@ -1,4 +1,5 @@
 import { currentAccountId, currentRequestWorkspaceId } from '@biu/host-plugin-loader/data-dir'
+import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { roleCoversAction, type Action as PermissionAction, type AuthorizationService } from '@biu/host-account/authorization'
 import { isRegisteredBuiltinPlugin } from '@biu/host-account/store'
 import type { CollectionSchema, CollectionSchemaPack, CollectionSpec, DbRecord } from '@biu/type-file-system'
@@ -196,15 +197,22 @@ export class DatabaseAccessPolicy {
     this.recordShareCache = null
   }
 
+  private resolveWorkspaceId(): string {
+    const fromRequest = currentRequestWorkspaceId().trim()
+    if (fromRequest) return fromRequest
+    if (!getRuntimePolicy().allowImplicitActiveWorkspace) return ''
+    return String(this.host.collabStore()?.activeWorkspaceId?.() ?? '').trim()
+  }
+
   workspaceMembership(): WorkspaceMembership | null {
     const store = this.host.collabStore()
-    if (!store?.activeWorkspaceId()) return null
+    if (!store || !this.resolveWorkspaceId()) return null
     return store.membership()
   }
 
   ownershipOf(collection: string, id: string): 'personal' | 'workspace' | 'shared' {
     const store = this.host.collabStore()
-    const workspaceId = store?.activeWorkspaceId?.() ?? ''
+    const workspaceId = this.resolveWorkspaceId()
     if (!store?.collectionOwnership || !workspaceId) return 'personal'
     const key = `${workspaceId}\t${collection}`
     if (!this.ownershipCache || this.ownershipCache.key !== key) {
@@ -215,7 +223,7 @@ export class DatabaseAccessPolicy {
 
   recordOwner(collection: string, id: string): string {
     const store = this.host.collabStore()
-    const workspaceId = store?.activeWorkspaceId?.() ?? ''
+    const workspaceId = this.resolveWorkspaceId()
     if (!store?.collectionRecordOwners || !workspaceId) return ''
     const key = `${workspaceId}\t${collection}`
     if (!this.ownerCache || this.ownerCache.key !== key) {
@@ -377,7 +385,7 @@ export class DatabaseAccessPolicy {
   grantAllows(collection: string, id: string) {
     const membership = this.workspaceMembership()
     const store = this.host.collabStore()
-    const workspaceId = store?.activeWorkspaceId()
+    const workspaceId = this.resolveWorkspaceId()
     if (!membership?.strict || !store?.grantMap || !workspaceId) return true
     const people = store.grantMap(workspaceId, collection).get(id)
     if (!people || people.size === 0) return true
@@ -429,7 +437,7 @@ export class DatabaseAccessPolicy {
     const membership = this.workspaceMembership()
     if (!membership) return rows
     const store = this.host.collabStore()
-    const workspaceId = store?.activeWorkspaceId() ?? ''
+    const workspaceId = this.resolveWorkspaceId()
     const grants = new Map<string, Map<string, Set<string>>>()
     return rows.filter((row) => {
       if (isBuiltinPluginRow(collection, row as { builtin?: unknown })) {
@@ -481,7 +489,7 @@ export class DatabaseAccessPolicy {
     },
   ) {
     const store = this.host.collabStore()
-    const workspaceId = store?.activeWorkspaceId()
+    const workspaceId = this.resolveWorkspaceId()
     if (!store || !workspaceId) return
     store.attach(workspaceId, collection, recordId, Date.now(), policy)
     this.ownerCache = null
@@ -636,7 +644,7 @@ export class DatabaseAccessPolicy {
 
   effectiveScope(collection: string, record: DbRecord, stored: DataScopeName): DataScopeName {
     const store = this.host.collabStore()
-    const workspaceId = store?.activeWorkspaceId?.() || currentRequestWorkspaceId() || ''
+    const workspaceId = this.resolveWorkspaceId()
     if (!workspaceId) return stored
     const key = `${workspaceId}\t${collection}`
     if (!this.viewAudienceCache || this.viewAudienceCache.key !== key) {
