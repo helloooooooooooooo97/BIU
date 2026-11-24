@@ -73,12 +73,14 @@ test('cloud runtime isolates workspaces per workspaceId and strips host secrets 
   const prevOnline = process.env.BIU_ONLINE
   const prevHome = process.env.BIU_HOME
   const prevDriver = process.env.BIU_SANDBOX_DRIVER
+  const prevUnsafe = process.env.BIU_ALLOW_UNSAFE_SANDBOX
   const prevSecret = process.env.DEEPSEEK_API_KEY
   const tempHome = mkdtempSync(join(tmpdir(), 'biu-cloud-sbx-'))
   process.env.BIU_ONLINE = '1'
   process.env.BIU_HOME = tempHome
   // Force env-only in unit test when running inside nested OS sandboxes
   process.env.BIU_SANDBOX_DRIVER = 'env-only'
+  process.env.BIU_ALLOW_UNSAFE_SANDBOX = '1'
   process.env.DEEPSEEK_API_KEY = 'sk-must-not-appear-in-bash'
   try {
     const ctx = new Context()
@@ -115,8 +117,51 @@ test('cloud runtime isolates workspaces per workspaceId and strips host secrets 
     else process.env.BIU_HOME = prevHome
     if (prevDriver === undefined) delete process.env.BIU_SANDBOX_DRIVER
     else process.env.BIU_SANDBOX_DRIVER = prevDriver
+    if (prevUnsafe === undefined) delete process.env.BIU_ALLOW_UNSAFE_SANDBOX
+    else process.env.BIU_ALLOW_UNSAFE_SANDBOX = prevUnsafe
     if (prevSecret === undefined) delete process.env.DEEPSEEK_API_KEY
     else process.env.DEEPSEEK_API_KEY = prevSecret
+    rmSync(tempHome, { recursive: true, force: true })
+  }
+})
+
+test('SandboxService.wrap fails closed in cloud mode when driver degrades to env-only or none', async () => {
+  const prevOnline = process.env.BIU_ONLINE
+  const prevDriver = process.env.BIU_SANDBOX_DRIVER
+  const prevUnsafe = process.env.BIU_ALLOW_UNSAFE_SANDBOX
+  const tempHome = mkdtempSync(join(tmpdir(), 'biu-cloud-failclosed-'))
+  process.env.BIU_ONLINE = '1'
+  delete process.env.BIU_ALLOW_UNSAFE_SANDBOX
+  try {
+    const ctx = new Context()
+    await ctx.plugin(tools)
+    await ctx.plugin(fs, { root: join(tempHome, 'default') })
+    await ctx.plugin(sandbox)
+
+    process.env.BIU_SANDBOX_DRIVER = 'env-only'
+    assert.throws(
+      () => ctx.sandbox.wrap({ argv: ['/bin/sh', '-lc', 'echo hi'] }),
+      /Cloud runtime requires an OS-level sandbox/,
+    )
+
+    process.env.BIU_SANDBOX_DRIVER = 'none'
+    assert.throws(
+      () => ctx.sandbox.wrap({ argv: ['/bin/sh', '-lc', 'echo hi'] }),
+      /Cloud runtime requires an OS-level sandbox/,
+    )
+
+    // Explicit dev opt-in allows env-only
+    process.env.BIU_ALLOW_UNSAFE_SANDBOX = '1'
+    process.env.BIU_SANDBOX_DRIVER = 'env-only'
+    const wrapped = ctx.sandbox.wrap({ argv: ['/bin/sh', '-lc', 'echo hi'] })
+    assert.equal(wrapped.driver, 'env-only')
+  } finally {
+    if (prevOnline === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = prevOnline
+    if (prevDriver === undefined) delete process.env.BIU_SANDBOX_DRIVER
+    else process.env.BIU_SANDBOX_DRIVER = prevDriver
+    if (prevUnsafe === undefined) delete process.env.BIU_ALLOW_UNSAFE_SANDBOX
+    else process.env.BIU_ALLOW_UNSAFE_SANDBOX = prevUnsafe
     rmSync(tempHome, { recursive: true, force: true })
   }
 })

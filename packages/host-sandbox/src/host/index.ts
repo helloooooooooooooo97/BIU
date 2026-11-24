@@ -5,6 +5,7 @@ import { join, relative, resolve } from 'node:path'
 import { Service, type Context } from 'cordis'
 import type { SpawnRequest } from '@biu/host-subprocess'
 import { dataHome, isOnlineRuntime } from '@biu/host-plugin-loader/data-dir'
+import { assertSandboxDriverAllowed } from '@biu/host-plugin-loader/runtime'
 
 export type SandboxDriver = 'bwrap' | 'sandbox-exec' | 'env-only' | 'none'
 
@@ -237,6 +238,7 @@ export class SandboxService extends Service {
     const root = this.root()
     const cwd = this.resolveCwd(root, req.cwd)
     const driver = resolveSandboxDriver()
+    assertSandboxDriverAllowed(driver)
     const allowNetwork = sandboxAllowNetwork()
 
     if (driver === 'bwrap') {
