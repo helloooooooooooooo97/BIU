@@ -345,6 +345,9 @@ const EMPTY_ROW_VIEWS: CollectionRowViewType[] = []
 const EMPTY_PICK = {}
 
 let cachedLocalData: boolean | null = null
+registerWorkspaceCache('browser-local-data', () => {
+  cachedLocalData = null
+})
 
 const QUERY_NEST_IGNORE = `${HEADLESS_DISMISS_IGNORE}, .db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`
 

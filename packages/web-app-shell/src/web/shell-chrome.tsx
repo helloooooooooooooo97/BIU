@@ -1779,7 +1779,7 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
         setError('')
       } catch (err) {
         if (gone) return
-        remember('')
+        if (isAuthFailure(err)) remember('')
         setError(err instanceof Error ? err.message : '无法读取账号')
       }
     })()
@@ -1891,6 +1891,8 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
                 return remaining
               })
               setWorkspaceId(nextId)
+              if (nextId) writeWorkspaceId(nextId)
+              else clearWorkspaceId()
               setDeleteName('')
               setError('')
               window.dispatchEvent(new Event(ACCOUNT_EVENT))

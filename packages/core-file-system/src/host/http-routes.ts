@@ -102,7 +102,7 @@ export function registerDatabaseHttpRoutes(
         store?: { activeWorkspaceId(): string | null }
         workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
       }
-      const workspaceId = account.store?.activeWorkspaceId()
+      const workspaceId = currentRequestWorkspaceId() || account.store?.activeWorkspaceId()
       if (workspaceId && account.workspaceLocation) dataLocation = account.workspaceLocation(workspaceId)
     } catch {
       /* 没有账号服务时沿用宿主位置 */

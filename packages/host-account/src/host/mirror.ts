@@ -121,7 +121,12 @@ export async function takeSnapshot(ctx: Context): Promise<MirrorSnapshot> {
   return { sessions, collections, ...(savedViews ? { savedViews } : {}) }
 }
 
-export async function applySnapshot(ctx: Context, snapshot: MirrorSnapshot, mode: ApplyMode = 'cache') {
+export async function applySnapshot(
+  ctx: Context,
+  snapshot: MirrorSnapshot,
+  mode: ApplyMode = 'cache',
+  options: { sessionsOnly?: boolean } = {},
+) {
   const account = accountOf(ctx)
   const store = sessionsOf(ctx)
   let changed = false
@@ -150,6 +155,16 @@ export async function applySnapshot(ctx: Context, snapshot: MirrorSnapshot, mode
         changed = true
       }
     }
+  }
+  if (options.sessionsOnly) {
+    if (changed) {
+      try {
+        ctx.emit('database/change')
+      } catch {
+        /* ignore */
+      }
+    }
+    return
   }
   const database = databaseOf(ctx)
   if (!database) return
@@ -201,6 +216,7 @@ export async function exchangeSnapshot(
   token: string,
   accountId: string,
   workspaceId = '',
+  options: { sessionsOnly?: boolean } = {},
 ) {
   if (!workspaceId) return
   const root = origin.replace(/\/$/, '')
@@ -213,8 +229,8 @@ export async function exchangeSnapshot(
   const body = (await pulled.json()) as MirrorSnapshot
   await runWithAccount(accountId, () =>
     workspaceId
-      ? runWithRequestWorkspace(workspaceId, () => applySnapshot(ctx, body, 'cache'))
-      : applySnapshot(ctx, body, 'cache'),
+      ? runWithRequestWorkspace(workspaceId, () => applySnapshot(ctx, body, 'cache', options))
+      : applySnapshot(ctx, body, 'cache', options),
   )
 }
 

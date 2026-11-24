@@ -295,6 +295,18 @@ export function applyHostServer(ctx: Context) {
       route.send(410, { error: '在线模式请使用空间 MCP 凭证' })
       return
     }
+    const workspaceId = resolveRequestedWorkspace(route)
+    if (workspaceId) {
+      try {
+        const account = ctx.get('account') as { workspaceLocation?: (wsId: string) => 'device' | 'cloud' } | undefined
+        if (account?.workspaceLocation?.(workspaceId) === 'cloud') {
+          route.send(410, { error: '云端空间请使用空间 MCP 凭证' })
+          return
+        }
+      } catch {
+        /* no account service */
+      }
+    }
     if (mcpTenant(route) === false) return
     token = rotateMcpToken(path)
     route.send(200, payload())

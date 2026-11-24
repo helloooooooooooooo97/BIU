@@ -74,7 +74,7 @@ export class AccountService extends Service {
         this.syncReplicaCredential(linked.localAccountId)
         const device = replica?.active()
         if (!device?.token) return
-        void exchangeSnapshot(ctx, linked.origin, device.token, device.accountId, active).catch((error) => {
+        void exchangeSnapshot(ctx, linked.origin, device.token, device.accountId, active, { sessionsOnly: true }).catch((error) => {
           console.warn('[replica] sync failed', error)
         })
       }, 3000)
@@ -1195,6 +1195,16 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         }
         const payload = (await response.json().catch(() => ({}))) as { error?: string; activeWorkspaceId?: string }
         if (!response.ok) throw new CollabError(payload.error || '删除云端空间失败', response.status)
+        try {
+          const deleted = account.store.deleteWorkspace(me.id, workspaceId, confirmName)
+          purgeSessionEvents(deleted.sessionIds)
+          route.send(200, { id: workspaceId, deleted: true, activeWorkspaceId: deleted.activeWorkspaceId })
+        } catch {
+          const fallback = account.store.listWorkspaces(me.id).find((ws) => ws.id !== workspaceId)?.id ?? ''
+          if (fallback) account.store.setActive(me.id, fallback)
+          route.send(200, { id: workspaceId, deleted: true, activeWorkspaceId: fallback })
+        }
+        return
       }
       const deleted = account.store.deleteWorkspace(me.id, workspaceId, confirmName)
       purgeSessionEvents(deleted.sessionIds)
