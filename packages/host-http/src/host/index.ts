@@ -198,7 +198,11 @@ export function shouldProxyCloudApi(pathname: string): boolean {
   return false
 }
 
-export function cloudProxyTargetWorkspace(pathname: string, requestedWorkspace: string): string {
+export function cloudProxyTargetWorkspace(
+  pathname: string,
+  requestedWorkspace: string,
+  query?: URLSearchParams,
+): string {
   const matched = CLOUD_PROXY_WORKSPACE_RE.exec(pathname)
   if (matched?.[1]) {
     try {
@@ -207,7 +211,8 @@ export function cloudProxyTargetWorkspace(pathname: string, requestedWorkspace: 
       return matched[1]
     }
   }
-  return requestedWorkspace
+  const fromQuery = String(query?.get('workspaceId') ?? '').trim()
+  return fromQuery || requestedWorkspace
 }
 
 function upgradePath(req: IncomingMessage) {
@@ -625,7 +630,7 @@ export class HttpService extends Service {
                 cloudConnection?: (localAccountId: string) => { origin: string; token: string } | null
               }
             | undefined
-          const targetWorkspace = cloudProxyTargetWorkspace(url.pathname, requestedWorkspace)
+          const targetWorkspace = cloudProxyTargetWorkspace(url.pathname, requestedWorkspace, url.searchParams)
           if (targetWorkspace && accountSvc?.workspaceLocation?.(targetWorkspace) === 'cloud') {
             const connection = accountSvc.cloudConnection?.(accountId) ?? null
             if (!connection?.origin || !connection.token) {

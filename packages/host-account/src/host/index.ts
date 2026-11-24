@@ -499,20 +499,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     return found
   }
 
-  async function relayCloudWorkspace(
-    route: RouteContext,
-    localAccountId: string,
-    workspaceId: string,
-    path: string,
-  ) {
-    if (isOnlineRuntime()) return false
-    if (account.workspaceLocation(workspaceId) !== 'cloud') return false
-    const relayed = await relayAccount(route, account, localAccountId, path)
-    if (!relayed) throw new CollabError('请先登录云端账号', 401)
-    route.send(relayed.status, relayed.payload)
-    return true
-  }
-
   function requireCollaborativeWorkspace(workspaceId: string) {
     if (!workspaceId || account.workspaceLocation(workspaceId) !== 'cloud') {
       throw new CollabError('本机空间仅供当前本地账号使用，不提供成员、分享或权限功能', 404)
@@ -876,11 +862,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       const body = (await route.json()) as { workspaceId?: string; allowedTools?: unknown; expiresInHours?: unknown }
       const workspaceId = String(body.workspaceId ?? '').trim()
       if (!workspaceId) throw new CollabError('需要空间', 400)
-      if (!isOnlineRuntime() && account.workspaceLocation(workspaceId) === 'cloud') {
-        const relayed = await relayAccount(route, account, me.id, '/api/account/mcp/credentials', { body, workspaceId })
-        if (!relayed) throw new CollabError('请先连接云端账号', 401)
-        return route.send(relayed.status, relayed.payload)
-      }
       const hours = Math.min(24 * 365, Math.max(1, Number(body.expiresInHours ?? 24 * 90)))
       const allowedTools = Array.isArray(body.allowedTools) ? body.allowedTools.map(String) : []
       route.send(
@@ -900,17 +881,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       const me = actor(route)
       const workspaceId = String(route.query.get('workspaceId') ?? '').trim()
       if (!workspaceId) throw new CollabError('需要空间', 400)
-      if (!isOnlineRuntime() && account.workspaceLocation(workspaceId) === 'cloud') {
-        const relayed = await relayAccount(
-          route,
-          account,
-          me.id,
-          `/api/account/mcp/credentials?workspaceId=${encodeURIComponent(workspaceId)}`,
-          { workspaceId },
-        )
-        if (!relayed) throw new CollabError('请先连接云端账号', 401)
-        return route.send(relayed.status, relayed.payload)
-      }
       route.send(200, { credentials: account.store.listMcpCredentials(me.id, workspaceId) })
     } catch (error) {
       fail(route, error)
@@ -921,19 +891,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     try {
       const me = actor(route)
       const credentialId = String(route.params.id ?? '')
-      const queryWorkspaceId = String(route.query.get('workspaceId') ?? '').trim()
-      const targetWorkspaceId = queryWorkspaceId || account.store.activeWorkspaceId() || ''
-      if (!isOnlineRuntime() && targetWorkspaceId && account.workspaceLocation(targetWorkspaceId) === 'cloud') {
-        const relayed = await relayAccount(
-          route,
-          account,
-          me.id,
-          `/api/account/mcp/credentials/${encodeURIComponent(credentialId)}`,
-          { workspaceId: targetWorkspaceId },
-        )
-        if (!relayed) throw new CollabError('请先连接云端账号', 401)
-        return route.send(relayed.status, relayed.payload)
-      }
       route.send(200, account.store.revokeMcpCredential(me.id, credentialId))
     } catch (error) {
       fail(route, error)
@@ -946,17 +903,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       const workspaceId = String(route.query.get('workspaceId') ?? '').trim()
       if (!workspaceId) throw new CollabError('需要空间', 400)
       const limit = Number(route.query.get('limit') ?? 100)
-      if (!isOnlineRuntime() && account.workspaceLocation(workspaceId) === 'cloud') {
-        const relayed = await relayAccount(
-          route,
-          account,
-          me.id,
-          `/api/account/mcp/audit?workspaceId=${encodeURIComponent(workspaceId)}&limit=${encodeURIComponent(String(limit))}`,
-          { workspaceId },
-        )
-        if (!relayed) throw new CollabError('请先连接云端账号', 401)
-        return route.send(relayed.status, relayed.payload)
-      }
       route.send(200, {
         events: account.store.listMcpAudit(me.id, workspaceId, limit),
       })
@@ -1006,8 +952,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('GET', '/api/account/workspace-profile', async (route) => {
     try {
       const me = actor(route)
-      const workspaceId = account.store.activeWorkspaceId()
-      if (workspaceId && (await relayCloudWorkspace(route, me.id, workspaceId, '/api/account/workspace-profile'))) return
       route.send(200, account.store.workspaceProfile(me.id))
     } catch (error) {
       fail(route, error)
@@ -1017,8 +961,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('POST', '/api/account/workspace-profile', async (route) => {
     try {
       const me = actor(route)
-      const workspaceId = account.store.activeWorkspaceId()
-      if (workspaceId && (await relayCloudWorkspace(route, me.id, workspaceId, '/api/account/workspace-profile'))) return
       const body = (await route.json()) as { name?: unknown; avatar?: unknown }
       route.send(
         200,
@@ -1217,7 +1159,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('GET', '/api/account/workspaces/:id/members', async (route) => {
     try {
       const me = actor(route)
-      if (await relayCloudWorkspace(route, me.id, route.params.id!, `/api/account/workspaces/${route.params.id}/members`)) return
       requireCollaborativeWorkspace(route.params.id!)
       route.send(200, { members: account.store.members(me.id, route.params.id!) })
     } catch (error) {
@@ -1228,7 +1169,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('POST', '/api/account/workspaces/:id/members', async (route) => {
     try {
       const me = actor(route)
-      if (await relayCloudWorkspace(route, me.id, route.params.id!, `/api/account/workspaces/${route.params.id}/members`)) return
       requireCollaborativeWorkspace(route.params.id!)
       const body = (await route.json()) as { accountId?: string; email?: string }
       const email = String(body.email ?? '').trim()
@@ -1244,7 +1184,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('POST', '/api/account/workspaces/:id/invites', async (route) => {
     try {
       const me = actor(route)
-      if (await relayCloudWorkspace(route, me.id, route.params.id!, `/api/account/workspaces/${route.params.id}/invites`)) return
       requireCollaborativeWorkspace(route.params.id!)
       const body = (await route.json()) as { role?: string; expiresInHours?: number }
       const role = body.role === 'member' ? 'member' : 'viewer'
@@ -1309,14 +1248,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('DELETE', '/api/account/workspaces/:id/members/:accountId', async (route) => {
     try {
       const me = actor(route)
-      if (
-        await relayCloudWorkspace(
-          route,
-          me.id,
-          route.params.id!,
-          `/api/account/workspaces/${route.params.id}/members/${route.params.accountId}`,
-        )
-      ) return
       requireCollaborativeWorkspace(route.params.id!)
       account.store.removeMember(me.id, route.params.id!, route.params.accountId!)
       ctx.http.disconnectTenant(route.params.accountId!, route.params.id!)
@@ -1329,14 +1260,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('PATCH', '/api/account/workspaces/:id/members/:accountId', async (route) => {
     try {
       const me = actor(route)
-      if (
-        await relayCloudWorkspace(
-          route,
-          me.id,
-          route.params.id!,
-          `/api/account/workspaces/${route.params.id}/members/${route.params.accountId}`,
-        )
-      ) return
       requireCollaborativeWorkspace(route.params.id!)
       const body = (await route.json()) as { role?: string }
       const role = String(body.role ?? '')
@@ -1353,7 +1276,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('GET', '/api/account/workspaces/:id/groups', async (route) => {
     try {
       const me = actor(route)
-      if (await relayCloudWorkspace(route, me.id, route.params.id!, `/api/account/workspaces/${route.params.id}/groups`)) return
       requireCollaborativeWorkspace(route.params.id!)
       route.send(200, { groups: account.store.groups(me.id, route.params.id!) })
     } catch (error) {
@@ -1364,7 +1286,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('POST', '/api/account/workspaces/:id/groups', async (route) => {
     try {
       const me = actor(route)
-      if (await relayCloudWorkspace(route, me.id, route.params.id!, `/api/account/workspaces/${route.params.id}/groups`)) return
       requireCollaborativeWorkspace(route.params.id!)
       const body = (await route.json()) as { name?: string }
       route.send(201, account.store.createGroup(me.id, route.params.id!, String(body.name ?? '')))
@@ -1376,14 +1297,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('POST', '/api/account/workspaces/:id/groups/:groupId/members', async (route) => {
     try {
       const me = actor(route)
-      if (
-        await relayCloudWorkspace(
-          route,
-          me.id,
-          route.params.id!,
-          `/api/account/workspaces/${route.params.id}/groups/${route.params.groupId}/members`,
-        )
-      ) return
       requireCollaborativeWorkspace(route.params.id!)
       const body = (await route.json()) as { email?: string }
       route.send(
@@ -1405,16 +1318,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('GET', '/api/account/member-activity', async (route) => {
     try {
       const me = actor(route)
-      const activeWorkspace = account.store.activeWorkspaceId()
-      if (
-        activeWorkspace &&
-        (await relayCloudWorkspace(
-          route,
-          me.id,
-          activeWorkspace,
-          `/api/account/member-activity${route.query.toString() ? `?${route.query.toString()}` : ''}`,
-        ))
-      ) return
       const memberId = String(route.query.get('memberId') ?? '').trim() || me.id
       const days = Number(route.query.get('days') ?? 182)
       const limit = Number(route.query.get('limit') ?? 80)
@@ -1529,15 +1432,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     try {
       const me = actor(route)
       const activeWorkspace = account.store.activeWorkspaceId()
-      if (
-        activeWorkspace &&
-        (await relayCloudWorkspace(
-          route,
-          me.id,
-          activeWorkspace,
-          `/api/account/access${route.query.toString() ? `?${route.query.toString()}` : ''}`,
-        ))
-      ) return
       if (!activeWorkspace || account.workspaceLocation(activeWorkspace) !== 'cloud') {
         route.send(200, {
           scope: 'personal',
@@ -1568,7 +1462,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     try {
       const me = actor(route)
       const activeWorkspace = account.store.activeWorkspaceId()
-      if (activeWorkspace && (await relayCloudWorkspace(route, me.id, activeWorkspace, '/api/account/access'))) return
       requireCollaborativeWorkspace(activeWorkspace ?? '')
       const body = (await route.json()) as {
         collection?: string
@@ -1607,7 +1500,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     try {
       const me = actor(route)
       const activeWorkspace = account.store.activeWorkspaceId()
-      if (activeWorkspace && (await relayCloudWorkspace(route, me.id, activeWorkspace, '/api/account/access'))) return
       requireCollaborativeWorkspace(activeWorkspace ?? '')
       const body = (await route.json()) as {
         collection?: string
@@ -1631,7 +1523,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     try {
       const me = actor(route)
       const activeWorkspace = account.store.activeWorkspaceId()
-      if (activeWorkspace && (await relayCloudWorkspace(route, me.id, activeWorkspace, '/api/account/access'))) return
       requireCollaborativeWorkspace(activeWorkspace ?? '')
       const body = (await route.json()) as {
         collection?: string
@@ -1670,10 +1561,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     try {
       const me = actor(route)
       const activeWorkspace = account.store.activeWorkspaceId()
-      if (
-        activeWorkspace &&
-        (await relayCloudWorkspace(route, me.id, activeWorkspace, '/api/account/access/guest-invite'))
-      ) return
       requireCollaborativeWorkspace(activeWorkspace ?? '')
       const body = (await route.json()) as {
         collection?: string
