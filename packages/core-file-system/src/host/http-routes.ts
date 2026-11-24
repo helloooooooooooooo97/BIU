@@ -958,6 +958,8 @@ export function registerDatabaseHttpRoutes(
         'content-disposition': assetContentDisposition(name, suggested, inline),
         'cache-control': isHashedAssetName(name) ? 'public, max-age=31536000, immutable' : 'no-store',
         etag: `"${etag}"`,
+        'Access-Control-Allow-Origin': '*',
+        'Cross-Origin-Resource-Policy': 'cross-origin',
       })
       route.res.end(bytes)
     } catch {
