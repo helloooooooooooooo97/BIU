@@ -3237,14 +3237,27 @@ export class CollabStore {
     const hasExternal = collaborators.some(
       (row) => row.subject_type === 'account' && (row.member_kind === 'external' || row.member_kind === 'guest'),
     )
-    this.db
+    const currentPolicy = this.db
       .prepare(
-        `UPDATE resource_policies
-         SET access_mode = ?
+        `SELECT access_mode FROM resource_policies
          WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
       )
-      .run(collaborators.length ? 'restricted' : 'private', workspaceId, collection, recordId)
-    return hasExternal ? 'shared' : collaborators.length ? 'workspace' : 'personal'
+      .get(workspaceId, collection, recordId) as { access_mode?: string } | undefined
+    // 保持 access_mode（members / inherit）与 record_grants 正交，绝不因增删单个协作者而破坏全员可见或父子继承链。
+    if (!currentPolicy?.access_mode || currentPolicy.access_mode === 'private' || currentPolicy.access_mode === 'restricted') {
+      this.db
+        .prepare(
+          `UPDATE resource_policies
+           SET access_mode = ?
+           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+        )
+        .run(collaborators.length ? 'restricted' : 'private', workspaceId, collection, recordId)
+    }
+    return hasExternal
+      ? 'shared'
+      : currentPolicy?.access_mode === 'members' || collaborators.length
+        ? 'workspace'
+        : 'personal'
   }
 
   private recordGrantKeysForAccount(workspaceId: string, accountId: string) {

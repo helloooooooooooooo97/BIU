@@ -9,6 +9,7 @@ export type Actor =
 export type Action =
   | 'resource:list'
   | 'resource:read'
+  | 'resource:comment'
   | 'resource:create'
   | 'resource:create-child'
   | 'resource:update'
@@ -27,7 +28,9 @@ export type ResourceRef =
   | { type: 'collection'; workspaceId: string; collection: string }
   | { type: 'record'; workspaceId: string; collection: string; recordId: string; record?: Record<string, unknown> }
 
-export type ResourceRole = 'viewer' | 'editor' | 'manager' | 'owner'
+export type ResourceRole = 'viewer' | 'commenter' | 'editor' | 'manager' | 'owner'
+export type Capability = 'read' | 'comment' | 'write' | 'delete' | 'move' | 'grant' | 'owner'
+export type GrantEffect = 'allow' | 'deny'
 export type AccessMode = 'inherit' | 'private' | 'members' | 'restricted'
 export type WorkspaceRole = 'viewer' | 'member' | 'admin' | 'owner'
 
@@ -84,6 +87,7 @@ type ScanGrant = {
   subject_type: 'account' | 'group' | 'workspace_role' | 'member_view'
   subject_id: string
   role: ResourceRole
+  effect?: GrantEffect
 }
 
 type ScanViewGrant = {
@@ -91,6 +95,7 @@ type ScanViewGrant = {
   subject_type: 'account' | 'member_view'
   subject_id: string
   role: ResourceRole
+  effect?: GrantEffect
   granted_by: string
 }
 
@@ -113,7 +118,58 @@ type CollectionScan = {
 const POLICY_SELECT = `workspace_id, collection, record_id, owner_account_id, access_mode,
                 member_default_role, parent_collection, parent_record_id`
 
-const ROLE_RANK: Record<ResourceRole, number> = { viewer: 1, editor: 2, manager: 3, owner: 4 }
+const ROLE_RANK: Record<ResourceRole, number> = { viewer: 1, commenter: 2, editor: 3, manager: 4, owner: 5 }
+
+export const ROLE_CAPABILITIES: Record<ResourceRole, ReadonlySet<Capability>> = {
+  viewer: new Set<Capability>(['read']),
+  commenter: new Set<Capability>(['read', 'comment']),
+  editor: new Set<Capability>(['read', 'comment', 'write']),
+  manager: new Set<Capability>(['read', 'comment', 'write', 'delete', 'move', 'grant']),
+  owner: new Set<Capability>(['read', 'comment', 'write', 'delete', 'move', 'grant', 'owner']),
+}
+
+export function requiredCapability(action: Action): Capability {
+  switch (action) {
+    case 'resource:list':
+    case 'resource:read':
+      return 'read'
+    case 'resource:comment':
+      return 'comment'
+    case 'resource:create':
+    case 'resource:create-child':
+    case 'resource:update':
+      return 'write'
+    case 'resource:move':
+      return 'move'
+    case 'resource:delete':
+    case 'resource:restore':
+      return 'delete'
+    case 'resource:share':
+    case 'resource:manage-permissions':
+      return 'grant'
+    default:
+      return 'owner'
+  }
+}
+
+export function actionForCapability(cap: Capability): Action {
+  switch (cap) {
+    case 'read':
+      return 'resource:read'
+    case 'comment':
+      return 'resource:comment'
+    case 'write':
+      return 'resource:update'
+    case 'move':
+      return 'resource:move'
+    case 'delete':
+      return 'resource:delete'
+    case 'grant':
+      return 'resource:manage-permissions'
+    default:
+      return 'workspace:delete'
+  }
+}
 
 function collectionScanKey(workspaceId: string, collection: string, accountId: string) {
   return `${workspaceId}\t${collection}\t${accountId}`
@@ -123,8 +179,25 @@ function maxRole(roles: ResourceRole[]) {
   return roles.sort((a, b) => ROLE_RANK[b] - ROLE_RANK[a])[0] ?? null
 }
 
+/** 根据显式 deny 的最低角色裁剪允许角色：deny viewer = 全面拒绝；deny editor = 最高仅保留 commenter。 */
+function applyRoleDeny(allowed: ResourceRole, denied: ResourceRole | null): ResourceRole | null {
+  if (!denied) return allowed
+  const capRank = ROLE_RANK[denied] - 1
+  if (capRank < ROLE_RANK.viewer) return null
+  if (ROLE_RANK[allowed] <= capRank) return allowed
+  if (capRank >= ROLE_RANK.manager) return 'manager'
+  if (capRank >= ROLE_RANK.editor) return 'editor'
+  if (capRank >= ROLE_RANK.commenter) return 'commenter'
+  return 'viewer'
+}
+
+function minRole(roles: ResourceRole[]): ResourceRole | null {
+  if (!roles.length) return null
+  return roles.sort((a, b) => ROLE_RANK[a] - ROLE_RANK[b])[0] ?? null
+}
+
 export function roleCoversAction(role: ResourceRole, action: Action) {
-  return ROLE_RANK[role] >= ROLE_RANK[requiredRole(action)]
+  return ROLE_CAPABILITIES[role].has(requiredCapability(action))
 }
 
 function memberAccessRole(policy: PolicyRow, membership: string | null): ResourceRole {
@@ -139,6 +212,8 @@ function requiredRole(action: Action): ResourceRole {
     case 'resource:list':
     case 'resource:read':
       return 'viewer'
+    case 'resource:comment':
+      return 'commenter'
     case 'resource:create':
     case 'resource:create-child':
     case 'resource:update':
@@ -270,13 +345,13 @@ export class AuthorizationService {
     const grants = new Map<string, ScanGrant[]>()
     for (const row of this.db
       .prepare(
-        `SELECT record_id, subject_type, subject_id, role
+        `SELECT record_id, subject_type, subject_id, role, COALESCE(effect, 'allow') AS effect
          FROM record_grants
          WHERE workspace_id = ? AND collection = ?`,
       )
       .all(workspaceId, collection) as Array<ScanGrant & { record_id: string }>) {
       const list = grants.get(row.record_id) ?? []
-      list.push({ subject_type: row.subject_type, subject_id: row.subject_id, role: row.role })
+      list.push({ subject_type: row.subject_type, subject_id: row.subject_id, role: row.role, effect: row.effect ?? 'allow' })
       grants.set(row.record_id, list)
     }
     const groups = new Set<string>()
@@ -294,7 +369,7 @@ export class AuthorizationService {
     try {
       viewGrants = this.db
         .prepare(
-          `SELECT view_id, subject_type, subject_id, role, COALESCE(granted_by, '') AS granted_by
+          `SELECT view_id, subject_type, subject_id, role, COALESCE(effect, 'allow') AS effect, COALESCE(granted_by, '') AS granted_by
            FROM view_grants
            WHERE workspace_id = ? AND collection = ?
            ORDER BY created_at`,
@@ -418,14 +493,20 @@ export class AuthorizationService {
     const resolved = this.effectiveRole(actor.accountId, resource, new Set(), 0)
     if (resolved && 'reason' in resolved) return resolved
     const viaView = this.dataViewRole(actor.accountId, resource)
-    const combined = resolved && viaView
-      ? (ROLE_RANK[resolved.effectiveRole] >= ROLE_RANK[viaView.effectiveRole] ? resolved : viaView)
-      : (resolved ?? viaView)
+    const combined = resolved && viaView.allow
+      ? (ROLE_RANK[resolved.effectiveRole] >= ROLE_RANK[viaView.allow.effectiveRole] ? resolved : viaView.allow)
+      : (resolved ?? viaView.allow)
     if (!combined) return { allowed: false, reason: 'PRIVATE_RESOURCE' }
+    // 显式 Deny 优先于 Allow（但不会锁死记录创建者本人）
+    const deniedRole = combined.source === 'ownership'
+      ? null
+      : minRole([this.directDenyRole(actor.accountId, resource), viaView.deny].filter(Boolean) as ResourceRole[])
+    const afterDeny = applyRoleDeny(combined.effectiveRole, deniedRole)
+    if (!afterDeny) return { allowed: false, reason: 'INSUFFICIENT_PERMISSION' }
     const effective = membership === 'viewer'
       ? { effectiveRole: 'viewer' as const, source: combined.source }
-      : combined
-    if (ROLE_RANK[effective.effectiveRole] < ROLE_RANK[requiredRole(action)]) {
+      : { effectiveRole: afterDeny, source: combined.source }
+    if (!roleCoversAction(effective.effectiveRole, action)) {
       return { allowed: false, reason: 'INSUFFICIENT_PERMISSION' }
     }
     return { allowed: true, ...effective }
@@ -521,6 +602,7 @@ export class AuthorizationService {
     subjectId: string,
     role: ResourceRole,
     now = Date.now(),
+    effect: GrantEffect = 'allow',
   ) {
     const actor: Actor = { type: 'account', accountId: actorId, workspaceId: resource.workspaceId }
     const decision = this.authorize(actor, 'resource:manage-permissions', resource)
@@ -531,11 +613,11 @@ export class AuthorizationService {
     const written = this.db
       .prepare(
         `INSERT INTO record_grants
-          (workspace_id, collection, record_id, subject_type, subject_id, role, granted_by, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          (workspace_id, collection, record_id, subject_type, subject_id, role, effect, granted_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(workspace_id, collection, record_id, subject_type, subject_id)
-         DO UPDATE SET role = excluded.role, granted_by = excluded.granted_by, created_at = excluded.created_at
-         WHERE record_grants.role != excluded.role OR record_grants.granted_by != excluded.granted_by`,
+         DO UPDATE SET role = excluded.role, effect = excluded.effect, granted_by = excluded.granted_by, created_at = excluded.created_at
+         WHERE record_grants.role != excluded.role OR record_grants.effect != excluded.effect OR record_grants.granted_by != excluded.granted_by`,
       )
       .run(
         resource.workspaceId,
@@ -544,10 +626,23 @@ export class AuthorizationService {
         subjectType,
         subjectId,
         role,
+        effect,
         actorId,
         now,
       )
     if (Number(written.changes) > 0) this.dropScans(resource.workspaceId, resource.collection)
+  }
+
+  /** 显式拒绝某主体对记录的指定及以上权限（如 deny viewer = 全面拒绝；deny editor = 禁止写及以上）。 */
+  deny(
+    actorId: string,
+    resource: Extract<ResourceRef, { type: 'record' }>,
+    subjectType: 'account' | 'group' | 'workspace_role' | 'member_view',
+    subjectId: string,
+    role: ResourceRole = 'viewer',
+    now = Date.now(),
+  ) {
+    this.grant(actorId, resource, subjectType, subjectId, role, now, 'deny')
   }
 
   move(
@@ -781,16 +876,15 @@ export class AuthorizationService {
     }
     if (policy.owner_account_id === accountId) return { effectiveRole: 'owner', source: 'ownership' }
 
+    const candidates: Array<Omit<Extract<Decision, { allowed: true }>, 'allowed'>> = []
     const direct = this.directRole(accountId, resource)
-    if (direct) return direct
+    if (direct) candidates.push(direct)
 
-    if (policy.access_mode === 'private' || policy.access_mode === 'restricted') return null
-    if (policy.access_mode === 'members') {
-      if (this.membershipKind(accountId, resource.workspaceId) !== 'member') return null
-      return {
+    if (policy.access_mode === 'members' && this.membershipKind(accountId, resource.workspaceId) === 'member') {
+      candidates.push({
         effectiveRole: memberAccessRole(policy, this.membership(accountId, resource.workspaceId)),
         source: 'workspace-default',
-      }
+      })
     }
     if (policy.access_mode === 'inherit' && policy.parent_record_id) {
       const inherited = this.effectiveRole(
@@ -804,17 +898,19 @@ export class AuthorizationService {
         visited,
         depth + 1,
       )
-      if (!inherited || 'reason' in inherited) return inherited
-      return { effectiveRole: inherited.effectiveRole, source: 'inherited' }
+      if (inherited && 'reason' in inherited) return inherited
+      if (inherited) candidates.push({ effectiveRole: inherited.effectiveRole, source: 'inherited' })
     }
-    return null
+    if (!candidates.length) return null
+    candidates.sort((a, b) => ROLE_RANK[b.effectiveRole] - ROLE_RANK[a.effectiveRole])
+    return candidates[0]!
   }
 
   private dataViewRole(
     accountId: string,
     resource: Extract<ResourceRef, { type: 'record' }>,
-  ): { effectiveRole: ResourceRole; source: 'data-view-grant' } | null {
-    if (!this.dataViewMatcher) return null
+  ): { allow: { effectiveRole: ResourceRole; source: 'data-view-grant' } | null; deny: ResourceRole | null } {
+    if (!this.dataViewMatcher) return { allow: null, deny: null }
     const scan = this.scans.get(collectionScanKey(resource.workspaceId, resource.collection, accountId))
     let rows: ScanViewGrant[]
     let prefiltered = false
@@ -825,7 +921,7 @@ export class AuthorizationService {
       try {
         rows = this.db
           .prepare(
-            `SELECT view_id, subject_type, subject_id, role, COALESCE(granted_by, '') AS granted_by
+            `SELECT view_id, subject_type, subject_id, role, COALESCE(effect, 'allow') AS effect, COALESCE(granted_by, '') AS granted_by
              FROM view_grants
              WHERE workspace_id = ? AND collection = ?
              ORDER BY created_at`,
@@ -835,11 +931,12 @@ export class AuthorizationService {
         rows = []
       }
     }
-    if (!rows.length) return null
+    if (!rows.length) return { allow: null, deny: null }
     const policy = this.policy(resource)
     const recordOwnerId = policy?.owner_account_id || this.legacyOwnerId(resource) || ''
     const scope = this.resourceScope(resource, new Set(), 0)
-    const roles: ResourceRole[] = []
+    const allowRoles: ResourceRole[] = []
+    const denyRoles: ResourceRole[] = []
     for (const grant of rows) {
       if (!prefiltered) {
         const subjectMatches = grant.subject_type === 'account'
@@ -859,18 +956,25 @@ export class AuthorizationService {
           record: resource.record,
         },
       )
-      if (matched) roles.push(grant.role)
+      if (!matched) continue
+      if (grant.effect === 'deny') denyRoles.push(grant.role)
+      else allowRoles.push(grant.role)
     }
-    const best = maxRole(roles)
-    return best ? { effectiveRole: best, source: 'data-view-grant' } : null
+    const best = maxRole(allowRoles)
+    return {
+      allow: best ? { effectiveRole: best, source: 'data-view-grant' } : null,
+      deny: minRole(denyRoles),
+    }
   }
 
   private directRole(accountId: string, resource: Extract<ResourceRef, { type: 'record' }>) {
     const scan = this.scans.get(collectionScanKey(resource.workspaceId, resource.collection, accountId))
     const rows = scan ? this.scanGrantsFor(scan, resource.recordId) : this.queryDirectGrants(accountId, resource)
     const matched = rows.filter((row) =>
-      row.subject_type !== 'member_view'
-      || this.matchesMemberView(resource.workspaceId, row.subject_id, accountId),
+      row.effect !== 'deny' && (
+        row.subject_type !== 'member_view'
+        || this.matchesMemberView(resource.workspaceId, row.subject_id, accountId)
+      ),
     )
     const role = maxRole(matched.map((row) => row.role))
     if (!role) return null
@@ -884,10 +988,22 @@ export class AuthorizationService {
     return { effectiveRole: role, source } as const
   }
 
+  private directDenyRole(accountId: string, resource: Extract<ResourceRef, { type: 'record' }>): ResourceRole | null {
+    const scan = this.scans.get(collectionScanKey(resource.workspaceId, resource.collection, accountId))
+    const rows = scan ? this.scanGrantsFor(scan, resource.recordId) : this.queryDirectGrants(accountId, resource)
+    const denied = rows.filter((row) =>
+      row.effect === 'deny' && (
+        row.subject_type !== 'member_view'
+        || this.matchesMemberView(resource.workspaceId, row.subject_id, accountId)
+      ),
+    )
+    return minRole(denied.map((row) => row.role))
+  }
+
   private queryDirectGrants(accountId: string, resource: Extract<ResourceRef, { type: 'record' }>) {
     return this.db
       .prepare(
-        `SELECT g.subject_type, g.subject_id, g.role
+        `SELECT g.subject_type, g.subject_id, g.role, COALESCE(g.effect, 'allow') AS effect
          FROM record_grants g
          WHERE g.workspace_id = ? AND g.collection = ? AND g.record_id = ?
            AND (
