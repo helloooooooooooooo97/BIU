@@ -156,7 +156,7 @@ test('nested pages inherit, while a restricted child cuts inheritance', () => {
   assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('secret-child')).allowed, false)
 })
 
-test('a direct child grant overrides a stronger inherited grant', () => {
+test('allow grants merge by union while explicit deny overrides stronger inherited grants', () => {
   const { auth, ada, bob, actor, page } = setup()
   auth.attach(actor(ada.id), page('parent'), { accessMode: 'private' })
   auth.grant(ada.id, page('parent'), 'account', bob.id, 'editor')
@@ -165,10 +165,53 @@ test('a direct child grant overrides a stronger inherited grant', () => {
     parentCollection: '/pages',
     parentRecordId: 'parent',
   })
+  // Adding a lower allow grant on child does NOT accidentally downgrade inherited editor (Allow union)
   auth.grant(ada.id, page('child'), 'account', bob.id, 'viewer')
-
   assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('child')).allowed, true)
+  assert.equal(auth.authorize(actor(bob.id), 'resource:update', page('child')).allowed, true)
+
+  // Explicit deny on editor caps Bob at commenter (can read & comment, cannot update)
+  auth.deny(ada.id, page('child'), 'account', bob.id, 'editor')
+  assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('child')).allowed, true)
+  assert.equal(auth.authorize(actor(bob.id), 'resource:comment', page('child')).allowed, true)
   assert.equal(auth.authorize(actor(bob.id), 'resource:update', page('child')).allowed, false)
+
+  // Explicit deny on viewer blocks Bob completely
+  auth.deny(ada.id, page('child'), 'account', bob.id, 'viewer')
+  assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('child')).allowed, false)
+})
+
+test('commenter role allows reading and commenting but blocks updates, and reconcileRecordScope preserves members/inherit', () => {
+  const { store, auth, ada, bob, cara, workspace, actor, page } = setup()
+  const ext = store.register('Ext3', 1, 'secret123', 'ext3@example.com')
+
+  // commenter role check
+  auth.attach(actor(ada.id), page('review-doc'), { accessMode: 'private' })
+  auth.grant(ada.id, page('review-doc'), 'account', bob.id, 'commenter')
+  assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('review-doc')).allowed, true)
+  assert.equal(auth.authorize(actor(bob.id), 'resource:comment', page('review-doc')).allowed, true)
+  assert.equal(auth.authorize(actor(bob.id), 'resource:update', page('review-doc')).allowed, false)
+
+  // Adding an external collaborator to a members-visible record must NOT wipe out workspace members' access
+  runWithAccount(ada.id, () => {
+    store.attach(workspace.id, '/pages', 'team-doc', 1, { accessMode: 'members', memberDefaultRole: 'editor' })
+    store.shareWithEmail(ada.id, '/pages', 'team-doc', ext.email, 'viewer', 'external')
+  })
+  assert.equal(auth.authorize(actor(ext.id), 'resource:read', page('team-doc')).allowed, true)
+  assert.equal(auth.authorize(actor(cara.id), 'resource:update', page('team-doc')).allowed, true)
+
+  // Adding a collaborator to an inherited child must NOT cut inheritance
+  runWithAccount(ada.id, () => {
+    store.attach(workspace.id, '/pages', 'root-doc', 1, { accessMode: 'members', memberDefaultRole: 'editor' })
+    store.attach(workspace.id, '/pages', 'sub-doc', 1, {
+      accessMode: 'inherit',
+      parentCollection: '/pages',
+      parentRecordId: 'root-doc',
+    })
+    store.shareWithEmail(ada.id, '/pages', 'sub-doc', ext.email, 'viewer', 'external')
+  })
+  assert.equal(auth.authorize(actor(ext.id), 'resource:read', page('sub-doc')).allowed, true)
+  assert.equal(auth.authorize(actor(cara.id), 'resource:update', page('sub-doc')).allowed, true)
 })
 
 test('collection scan preload matches live sqlite authorization', () => {

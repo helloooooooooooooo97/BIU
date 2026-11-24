@@ -213,11 +213,11 @@ export const BIU_TABLES: Record<string, TableSpec> = {
     indexes: ['resource_policies_parent'],
   },
   record_grants: {
-    columns: ['workspace_id', 'collection', 'record_id', 'subject_type', 'subject_id', 'role', 'granted_by', 'created_at'],
+    columns: ['workspace_id', 'collection', 'record_id', 'subject_type', 'subject_id', 'role', 'effect', 'granted_by', 'created_at'],
     indexes: ['record_grants_subject'],
   },
   view_grants: {
-    columns: ['workspace_id', 'collection', 'view_id', 'subject_type', 'subject_id', 'role', 'granted_by', 'created_at'],
+    columns: ['workspace_id', 'collection', 'view_id', 'subject_type', 'subject_id', 'role', 'effect', 'granted_by', 'created_at'],
     indexes: ['view_grants_subject'],
   },
   record_owners: {
@@ -301,7 +301,7 @@ export const BIU_TABLES: Record<string, TableSpec> = {
   },
 }
 
-export const LATEST_BIU_SCHEMA = 51
+export const LATEST_BIU_SCHEMA = 52
 
 export const CREATE_CORE_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -661,6 +661,7 @@ CREATE TABLE IF NOT EXISTS record_grants (
   subject_type TEXT NOT NULL,
   subject_id TEXT NOT NULL,
   role TEXT NOT NULL,
+  effect TEXT NOT NULL DEFAULT 'allow',
   granted_by TEXT NOT NULL,
   created_at INTEGER NOT NULL,
   PRIMARY KEY (workspace_id, collection, record_id, subject_type, subject_id)
@@ -674,6 +675,7 @@ CREATE TABLE IF NOT EXISTS view_grants (
   subject_type TEXT NOT NULL,
   subject_id TEXT NOT NULL,
   role TEXT NOT NULL,
+  effect TEXT NOT NULL DEFAULT 'allow',
   granted_by TEXT NOT NULL,
   created_at INTEGER NOT NULL,
   PRIMARY KEY (workspace_id, collection, view_id, subject_type, subject_id)

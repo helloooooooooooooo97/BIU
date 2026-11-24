@@ -973,6 +973,10 @@ export const BIU_MIGRATIONS: Migration[] = [
       `)
     }
   } },
+  { version: 52, module: 'host-account', name: 'grants.effect', up: (db) => {
+    addColumn(db, 'record_grants', 'effect', `effect TEXT NOT NULL DEFAULT 'allow'`)
+    addColumn(db, 'view_grants', 'effect', `effect TEXT NOT NULL DEFAULT 'allow'`)
+  } },
 ]
 
 export function assertBiuMigrationLog(rows: Array<{ version: number }> = BIU_MIGRATIONS) {

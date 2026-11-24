@@ -3,9 +3,9 @@ import { matchListFilterRecord } from './query-logic.ts'
 import type { DbRecord } from '@biu/type-file-system'
 
 export type DataScopeName = 'personal' | 'workspace' | 'shared'
-export type ViewGrantRole = 'viewer' | 'editor' | 'manager' | 'owner'
+export type ViewGrantRole = 'viewer' | 'commenter' | 'editor' | 'manager' | 'owner'
 
-const ROLE_RANK: Record<ViewGrantRole, number> = { viewer: 1, editor: 2, manager: 3, owner: 4 }
+const ROLE_RANK: Record<ViewGrantRole, number> = { viewer: 1, commenter: 2, editor: 3, manager: 4, owner: 5 }
 
 export function highestViewRole(roles: ViewGrantRole[]) {
   return roles.sort((a, b) => ROLE_RANK[b] - ROLE_RANK[a])[0] ?? null

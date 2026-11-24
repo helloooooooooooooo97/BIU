@@ -75,10 +75,11 @@ export const SHARE_SCOPE_LABEL = {
   shared: '共享',
 } as const
 
-export const ACCESS_RANK = { viewer: 1, editor: 2, manager: 3, owner: 4 } as const
+export const ACCESS_RANK = { viewer: 1, commenter: 2, editor: 3, manager: 4, owner: 5 } as const
 
 export function accessLabel(role: keyof typeof ACCESS_RANK | null | undefined) {
   if (role === 'editor') return '编辑'
+  if (role === 'commenter') return '评论'
   if (role === 'viewer') return '查看'
   if (role === 'manager' || role === 'owner') return '管理'
   return '查看'
