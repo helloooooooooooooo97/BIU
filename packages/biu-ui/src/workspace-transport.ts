@@ -199,6 +199,78 @@ export function resolveAssetUrl(rawUrl: string): string {
   return url.toString()
 }
 
+const ASSET_SRC_ATTR = 'data-biu-asset-src'
+const ASSET_HREF_ATTR = 'data-biu-asset-href'
+
+/**
+ * Rewrite relative asset `src` / `href` attributes on DOM elements (`<img>`, `<video>`, `<audio>`,
+ * `<source>`, `<a>`) to direct signed cloud URLs, tracking the original logical path so ticket
+ * rotations can re-sign live elements transparently.
+ */
+export function rewriteElementAssetUrls(root: { querySelectorAll?: (selector: string) => Iterable<Element> } | Element): void {
+  const apply = (el: Element) => {
+    const tag = el.tagName?.toUpperCase()
+    if (tag === 'IMG' || tag === 'VIDEO' || tag === 'AUDIO' || tag === 'SOURCE') {
+      const logical = el.getAttribute(ASSET_SRC_ATTR) || el.getAttribute('src') || ''
+      if (isSignedAssetPath(logical)) {
+        if (!el.hasAttribute(ASSET_SRC_ATTR)) el.setAttribute(ASSET_SRC_ATTR, logical)
+        const next = resolveAssetUrl(logical)
+        if (el.getAttribute('src') !== next) el.setAttribute('src', next)
+      }
+    } else if (tag === 'A') {
+      const logical = el.getAttribute(ASSET_HREF_ATTR) || el.getAttribute('href') || ''
+      if (isSignedAssetPath(logical)) {
+        if (!el.hasAttribute(ASSET_HREF_ATTR)) el.setAttribute(ASSET_HREF_ATTR, logical)
+        const next = resolveAssetUrl(logical)
+        if (el.getAttribute('href') !== next) el.setAttribute('href', next)
+      }
+    }
+  }
+  if ('tagName' in root && typeof root.tagName === 'string') {
+    apply(root as Element)
+  }
+  if (typeof root.querySelectorAll === 'function') {
+    for (const el of root.querySelectorAll('img,video,audio,source,a')) {
+      apply(el)
+    }
+  }
+}
+
+let assetObserverCleanup: (() => void) | null = null
+
+export function installAssetUrlObserver(): () => void {
+  if (assetObserverCleanup || typeof document === 'undefined' || typeof MutationObserver === 'undefined') {
+    return () => {}
+  }
+  rewriteElementAssetUrls(document)
+  const observer = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      if (m.type === 'attributes' && m.target instanceof Element) {
+        rewriteElementAssetUrls(m.target)
+      } else if (m.type === 'childList') {
+        for (const node of m.addedNodes) {
+          if (node instanceof Element) rewriteElementAssetUrls(node)
+        }
+      }
+    }
+  })
+  observer.observe(document.documentElement, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ['src', 'href'],
+  })
+  const unsub = subscribeWorkspaceEndpoint(() => {
+    rewriteElementAssetUrls(document)
+  })
+  assetObserverCleanup = () => {
+    observer.disconnect()
+    unsub()
+    assetObserverCleanup = null
+  }
+  return assetObserverCleanup
+}
+
 let globalTransportInstalled = false
 
 /**
@@ -247,7 +319,10 @@ export function installGlobalWorkspaceTransport(): () => void {
     globalThis.WebSocket = WrappedWebSocket
   }
 
+  const stopObserver = installAssetUrlObserver()
+
   return () => {
+    stopObserver()
     globalThis.fetch = origFetch
     if (OrigWebSocket) globalThis.WebSocket = OrigWebSocket
     globalTransportInstalled = false

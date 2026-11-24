@@ -7,6 +7,7 @@ import {
   resolveApiRequest,
   resolveAssetUrl,
   resolveWsUrl,
+  rewriteElementAssetUrls,
   setWorkspaceEndpoint,
   updateWorkspaceAssetTicket,
 } from './workspace-transport.ts'
@@ -135,5 +136,40 @@ describe('WorkspaceTransport direct cloud routing', () => {
     } finally {
       globalThis.fetch = prevFetch
     }
+  })
+
+  it('rewrites DOM img/video/a asset attributes and re-signs on ticket rotation', () => {
+    const makeEl = (tagName: string, attrs: Record<string, string>) => {
+      const map = new Map(Object.entries(attrs))
+      return {
+        tagName,
+        getAttribute: (k: string) => map.get(k) ?? null,
+        setAttribute: (k: string, v: string) => map.set(k, v),
+        hasAttribute: (k: string) => map.has(k),
+      } as unknown as Element
+    }
+    const img = makeEl('IMG', { src: '/api/db/file/a.png' })
+    const link = makeEl('A', { href: '/api/doc/file/report.pdf?download=1' })
+    const ext = makeEl('IMG', { src: 'https://cdn.example.com/logo.png' })
+    const root = { querySelectorAll: () => [img, link, ext] }
+
+    const exp1 = Date.now() + 60_000
+    setWorkspaceEndpoint({
+      mode: 'cloud',
+      origin: 'https://cloud.biu.example',
+      workspaceId: 'ws_1',
+      token: 'tok',
+      assetTicket: { uid: 'acc_1', ws: 'ws_1', exp: exp1, sig: 'sig1' },
+    })
+    rewriteElementAssetUrls(root)
+    assert.equal(img.getAttribute('src'), `https://cloud.biu.example/api/db/file/a.png?uid=acc_1&ws=ws_1&exp=${exp1}&sig=sig1`)
+    assert.equal(link.getAttribute('href'), `https://cloud.biu.example/api/doc/file/report.pdf?download=1&uid=acc_1&ws=ws_1&exp=${exp1}&sig=sig1`)
+    assert.equal(ext.getAttribute('src'), 'https://cdn.example.com/logo.png')
+
+    // Rotate ticket and verify live DOM elements re-sign cleanly using tracked logical path
+    const exp2 = Date.now() + 120_000
+    updateWorkspaceAssetTicket({ uid: 'acc_1', ws: 'ws_1', exp: exp2, sig: 'sig2' })
+    rewriteElementAssetUrls(root)
+    assert.equal(img.getAttribute('src'), `https://cloud.biu.example/api/db/file/a.png?uid=acc_1&ws=ws_1&exp=${exp2}&sig=sig2`)
   })
 })
