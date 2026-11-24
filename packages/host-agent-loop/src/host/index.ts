@@ -1,5 +1,6 @@
 import { Service, type Context } from 'cordis'
 import { hostCtxBudget } from '@biu/host-plugin-loader/env'
+import { currentAccountId, runWithActorContext } from '@biu/host-plugin-loader/data-dir'
 import type { AssistantReply, ChatOptions, LlmClient, LlmConfig, LlmMessage, LlmUsage } from '@biu/host-llm'
 import { classifyLlmError, messagesHaveImages, omitImageContent, omitRejectedImages } from '@biu/host-llm'
 import { runWithSession } from '@biu/host-sessions/scope'
@@ -391,7 +392,18 @@ export class AgentLoop implements AgentRunner {
                   detail: truncateToolResult(partial),
                   partial: true,
                 })
-              }, () => this.ctx.tools.invoke(call.name, args, this.signal)),
+              }, () => {
+                const accountId = currentAccountId()
+                const agentActor = accountId
+                  ? {
+                      type: 'agent' as const,
+                      actorId: this.sessionId,
+                      delegatedBy: accountId,
+                      invokerId: accountId,
+                    }
+                  : null
+                return runWithActorContext(agentActor, () => this.ctx.tools.invoke(call.name, args, this.signal))
+              }),
             ),
           )
         } catch (error) {

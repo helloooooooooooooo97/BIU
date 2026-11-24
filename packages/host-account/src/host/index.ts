@@ -1355,9 +1355,88 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     try {
       const me = actor(route)
       requireCollaborativeWorkspace(route.params.id!)
-      account.store.removeMember(me.id, route.params.id!, route.params.accountId!)
+      const queryTransfer = String(route.query.get('transferToAccountId') ?? '').trim()
+      const body = (await route.json().catch(() => ({}))) as { transferToAccountId?: string }
+      const transferToAccountId = queryTransfer || String(body?.transferToAccountId ?? '').trim() || undefined
+      const removed = account.store.removeMember(me.id, route.params.id!, route.params.accountId!, {
+        ...(transferToAccountId ? { transferToAccountId } : {}),
+      })
       ctx.http.disconnectTenant(route.params.accountId!, route.params.id!)
-      route.send(200, { members: account.store.members(me.id, route.params.id!) })
+      route.send(200, {
+        members: account.store.members(me.id, route.params.id!),
+        transfer: removed,
+      })
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
+  ctx.http.route('GET', '/api/account/workspaces/:id/actor-scopes', async (route) => {
+    try {
+      const me = actor(route)
+      const workspaceId = route.params.id!
+      requireCollaborativeWorkspace(workspaceId)
+      const role = account.store.memberRole(me.id, workspaceId)
+      if (role !== 'owner' && role !== 'admin') throw new CollabError('仅管理员可查看代理作用域', 403)
+      const actorType = String(route.query.get('actorType') ?? '')
+      const actorId = String(route.query.get('actorId') ?? '').trim()
+      if ((actorType !== 'agent' && actorType !== 'mcp' && actorType !== 'public-link') || !actorId) {
+        throw new CollabError('参数 actorType / actorId 无效', 400)
+      }
+      const scope = account.authorization.getActorScope(workspaceId, actorType, actorId)
+      route.send(200, { scope })
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
+  ctx.http.route('POST', '/api/account/workspaces/:id/actor-scopes', async (route) => {
+    try {
+      const me = actor(route)
+      const workspaceId = route.params.id!
+      requireCollaborativeWorkspace(workspaceId)
+      const role = account.store.memberRole(me.id, workspaceId)
+      if (role !== 'owner' && role !== 'admin') throw new CollabError('仅管理员可配置代理作用域', 403)
+      const body = (await route.json()) as {
+        actorType?: string
+        actorId?: string
+        allowedCollections?: string[] | null
+        allowedViews?: string[] | null
+        maxRole?: ResourceRole
+        expiresAt?: number | null
+      }
+      const actorType = body.actorType
+      const actorId = String(body.actorId ?? '').trim()
+      if ((actorType !== 'agent' && actorType !== 'mcp' && actorType !== 'public-link') || !actorId) {
+        throw new CollabError('参数 actorType / actorId 无效', 400)
+      }
+      account.authorization.setActorScope(workspaceId, actorType, actorId, me.id, {
+        allowedCollections: Array.isArray(body.allowedCollections) ? body.allowedCollections : null,
+        allowedViews: Array.isArray(body.allowedViews) ? body.allowedViews : null,
+        maxRole: body.maxRole,
+        expiresAt: typeof body.expiresAt === 'number' ? body.expiresAt : null,
+      })
+      route.send(200, { scope: account.authorization.getActorScope(workspaceId, actorType, actorId) })
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
+  ctx.http.route('DELETE', '/api/account/workspaces/:id/actor-scopes', async (route) => {
+    try {
+      const me = actor(route)
+      const workspaceId = route.params.id!
+      requireCollaborativeWorkspace(workspaceId)
+      const role = account.store.memberRole(me.id, workspaceId)
+      if (role !== 'owner' && role !== 'admin') throw new CollabError('仅管理员可吊销代理作用域', 403)
+      const body = (await route.json()) as { actorType?: string; actorId?: string }
+      const actorType = body.actorType
+      const actorId = String(body.actorId ?? '').trim()
+      if ((actorType !== 'agent' && actorType !== 'mcp' && actorType !== 'public-link') || !actorId) {
+        throw new CollabError('参数 actorType / actorId 无效', 400)
+      }
+      account.authorization.revokeActorScope(workspaceId, actorType, actorId)
+      route.send(200, { ok: true })
     } catch (error) {
       fail(route, error)
     }
