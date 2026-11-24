@@ -36,6 +36,7 @@ export class AccountService extends Service {
   store: CollabStore
   authorization: AuthorizationService
   replica: RecordReplica | null = null
+  private replicaOrigin = ''
   private db: {
     close(): void
     exec(sql: string): void
@@ -54,21 +55,25 @@ export class AccountService extends Service {
       place TEXT NOT NULL,
       PRIMARY KEY (collection, record_id)
     )`)
-    const origin = hostRemoteOrigin()
     ctx.on('account/request', (event) => {
       const localAccountId = String((event as { accountId?: string }).accountId ?? '')
       if (!localAccountId) return
       this.store.noteActiveAccount(localAccountId)
-      if (this.replica) this.syncReplicaCredential(localAccountId)
+      this.syncReplicaCredential(localAccountId)
     })
-    if (!isOnlineRuntime() && origin) {
-      this.replica = new RecordReplica(db, httpRemote(origin))
+    if (!isOnlineRuntime()) {
+      const initialOrigin = this.configuredCloudOrigin()
+      if (initialOrigin) this.ensureReplica(initialOrigin)
       const timer = setInterval(() => {
         const active = this.store.activeWorkspaceId()
         if (!active || this.workspaceLocation(active) !== 'cloud') return
-        const device = this.replica?.active()
+        const linked = this.linkedCloud()
+        if (!linked?.origin || !linked.token) return
+        const replica = this.ensureReplica(linked.origin)
+        this.syncReplicaCredential(linked.localAccountId)
+        const device = replica?.active()
         if (!device?.token) return
-        void exchangeSnapshot(ctx, origin, device.token, device.accountId, active).catch((error) => {
+        void exchangeSnapshot(ctx, linked.origin, device.token, device.accountId, active).catch((error) => {
           console.warn('[replica] sync failed', error)
         })
       }, 3000)
@@ -86,6 +91,41 @@ export class AccountService extends Service {
       ),
     )
     ctx.on('dispose', () => db.close())
+  }
+
+  configuredCloudOrigin(): string {
+    if (isOnlineRuntime()) return ''
+    const row = this.db
+      .prepare(`SELECT value FROM collab_state WHERE key = 'cloud_remote_origin'`)
+      .get() as { value?: string } | undefined
+    const saved = String(row?.value ?? '').trim().replace(/\/+$/, '')
+    return saved || hostRemoteOrigin()
+  }
+
+  setConfiguredCloudOrigin(raw: string): string {
+    if (isOnlineRuntime()) throw new CollabError('服务端不能配置远程云端地址', 400)
+    const normalized = normalizeCloudOrigin(raw)
+    if (normalized) {
+      this.db
+        .prepare(
+          `INSERT INTO collab_state (key, value) VALUES ('cloud_remote_origin', ?)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+        )
+        .run(normalized)
+      this.ensureReplica(normalized)
+    } else {
+      this.db.prepare(`DELETE FROM collab_state WHERE key = 'cloud_remote_origin'`).run()
+    }
+    return this.configuredCloudOrigin()
+  }
+
+  private ensureReplica(origin: string): RecordReplica | null {
+    if (isOnlineRuntime() || !origin) return null
+    if (!this.replica || this.replicaOrigin !== origin) {
+      this.replica = new RecordReplica(this.db as never, httpRemote(origin))
+      this.replicaOrigin = origin
+    }
+    return this.replica
   }
 
   isRemote(collection: string, id: string) {
@@ -232,12 +272,14 @@ export class AccountService extends Service {
   }
 
   syncReplicaCredential(localAccountId: string) {
-    if (!this.replica || !localAccountId) return
+    if (isOnlineRuntime() || !localAccountId) return
     const connection = this.cloudConnection(localAccountId)
     if (!connection) return
+    const replica = this.ensureReplica(connection.origin)
+    if (!replica) return
     const active = this.store.activeWorkspaceId()
     const currentCloud = active && this.workspaceLocation(active) === 'cloud' ? active : ''
-    this.replica.remember({
+    replica.remember({
       accountId: localAccountId,
       workspaceId: currentCloud,
       token: connection.token,
@@ -304,9 +346,19 @@ function rememberLogin(route: RouteContext, token: string) {
   route.res.setHeader('set-cookie', `biu_account=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict`)
 }
 
-function configuredRemoteOrigin() {
-  if (isOnlineRuntime()) return ''
-  return hostRemoteOrigin()
+function normalizeCloudOrigin(raw: string) {
+  const trimmed = raw.trim().replace(/\/+$/, '')
+  if (!trimmed) return ''
+  let parsed: URL
+  try {
+    parsed = new URL(trimmed)
+  } catch {
+    throw new CollabError('远程服务地址格式不对，请输入 http:// 或 https:// 开头的地址', 400)
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new CollabError('远程服务地址只支持 http:// 或 https://', 400)
+  }
+  return parsed.origin
 }
 
 async function relayAccount(route: RouteContext, account: AccountService, localAccountId: string, path: string) {
@@ -413,16 +465,24 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     action: 'login' | 'register',
     email: string,
     password: string,
+    requestedOrigin = '',
+    remoteName = '',
   ) {
     if (isOnlineRuntime()) throw new CollabError('服务端不能连接另一个云端账号', 400)
-    const origin = configuredRemoteOrigin()
-    if (!origin) throw new CollabError('还没有配置云端服务地址', 400)
+    const origin = requestedOrigin.trim()
+      ? account.setConfiguredCloudOrigin(requestedOrigin)
+      : account.configuredCloudOrigin()
+    if (!origin) throw new CollabError('请先配置远程主机服务地址', 400)
     let remote: Response
     try {
       remote = await fetch(`${origin}/api/account/${action}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email,
+          password,
+          ...(remoteName.trim() ? { name: remoteName.trim() } : {}),
+        }),
       })
     } catch {
       throw new CollabError('云端暂时连不上', 503)
@@ -441,7 +501,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       localAccountId: local.id,
       origin,
       remoteAccountId: payload.id,
-      remoteName: payload.name || email,
+      remoteName: payload.name || remoteName.trim() || email,
       remoteEmail: email.trim().toLowerCase(),
       token: payload.token,
     })
@@ -469,6 +529,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         name: connection.remoteName,
         email: connection.remoteEmail,
       },
+      origin: connection.origin,
       workspaceId,
       workspaces,
     }
@@ -476,15 +537,23 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
 
   async function connectCloud(route: RouteContext, action: 'login' | 'register') {
     const local = actor(route)
-    const body = (await route.json()) as { email?: string; password?: string }
-    return connectCloudIdentity(local, action, String(body.email ?? ''), String(body.password ?? ''))
+    const body = (await route.json()) as { email?: string; password?: string; origin?: string; name?: string }
+    return connectCloudIdentity(
+      local,
+      action,
+      String(body.email ?? ''),
+      String(body.password ?? ''),
+      String(body.origin ?? ''),
+      String(body.name ?? ''),
+    )
   }
 
   ctx.http.route('GET', '/api/account/cloud', async (route) => {
     try {
-      if (isOnlineRuntime()) return route.send(200, { available: false, connected: false })
+      if (isOnlineRuntime()) return route.send(200, { available: false, connected: false, configuredOrigin: '' })
       const me = actor(route)
       const connection = account.cloudConnection(me.id)
+      const configuredOrigin = account.configuredCloudOrigin()
       const accounts = account.listCloudConnections(me.id).map((item) => ({
         id: item.remoteAccountId,
         name: item.remoteName,
@@ -493,7 +562,8 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         active: item.active,
       }))
       route.send(200, {
-        available: Boolean(configuredRemoteOrigin()),
+        available: true,
+        configuredOrigin,
         connected: Boolean(connection),
         accounts,
         ...(connection
@@ -507,6 +577,17 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
             }
           : {}),
       })
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
+  ctx.http.route('POST', '/api/account/cloud/config', async (route) => {
+    try {
+      actor(route)
+      const body = (await route.json()) as { origin?: string }
+      const origin = account.setConfiguredCloudOrigin(String(body.origin ?? ''))
+      route.send(200, { origin, available: true })
     } catch (error) {
       fail(route, error)
     }
@@ -532,14 +613,22 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     try {
       if (isOnlineRuntime()) throw new CollabError('服务端不能连接另一个云端账号', 400)
       const local = actor(route)
+      const body = (await route.json().catch(() => ({}))) as { origin?: string }
+      const requestedOrigin = String(body.origin ?? '')
       if (!local.email) throw new CollabError('本地账号没有可同步的邮箱', 400)
       const password = account.store.recalledPassword(local.id)
       if (!password) throw new CollabError('请退出后重新登录一次，就能用本地密码创建云端账号', 400)
       try {
-        route.send(201, { ...(await connectCloudIdentity(local, 'register', local.email, password)), created: true })
+        route.send(201, {
+          ...(await connectCloudIdentity(local, 'register', local.email, password, requestedOrigin, local.name)),
+          created: true,
+        })
       } catch (error) {
         if (!(error instanceof CollabError) || error.status !== 409) throw error
-        route.send(200, { ...(await connectCloudIdentity(local, 'login', local.email, password)), created: false })
+        route.send(200, {
+          ...(await connectCloudIdentity(local, 'login', local.email, password, requestedOrigin)),
+          created: false,
+        })
       }
     } catch (error) {
       fail(route, error)
@@ -599,17 +688,18 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
 
   ctx.http.route('POST', '/api/account/register', async (route) => {
     try {
-      const body = (await route.json()) as { email?: string; password?: string }
+      const body = (await route.json()) as { email?: string; password?: string; name?: string }
       const password = String(body.password ?? '')
       const email = String(body.email ?? '')
+      const name = String(body.name ?? '')
       if (!password.trim()) throw new CollabError('密码不能为空', 400)
       if (!email.trim()) throw new CollabError('邮箱不能为空', 400)
-      const created = account.store.register('', Date.now(), password, email)
+      const created = account.store.register(name, Date.now(), password, email)
       const workspaceId = account.store.enter(created.id)
       const session = account.store.openSession(created.id, String(route.req.headers['user-agent'] ?? '浏览器').slice(0, 120))
       rememberLogin(route, session.token)
       ctx.http.broadcast('database', { ts: Date.now() })
-      route.send(201, { id: created.id, name: created.name, createdAt: created.createdAt, token: session.token, workspaceId })
+      route.send(201, { id: created.id, name: created.name, avatar: created.avatar ?? '', createdAt: created.createdAt, token: session.token, workspaceId })
     } catch (error) {
       fail(route, error)
     }
@@ -740,6 +830,20 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     try {
       const me = actor(route)
       route.send(200, { ...me, online: isOnlineRuntime(), isSuperAdmin: account.store.isSuperAdmin(me.id) })
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
+  ctx.http.route('POST', '/api/account/profile', async (route) => {
+    try {
+      const me = actor(route)
+      const body = (await route.json()) as { name?: unknown; avatar?: unknown }
+      const updated = account.store.saveAccountProfile(me.id, {
+        ...(typeof body.name === 'string' ? { name: body.name } : {}),
+        ...(typeof body.avatar === 'string' ? { avatar: body.avatar } : {}),
+      })
+      route.send(200, { ...updated, online: isOnlineRuntime(), isSuperAdmin: account.store.isSuperAdmin(me.id) })
     } catch (error) {
       fail(route, error)
     }

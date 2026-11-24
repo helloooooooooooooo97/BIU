@@ -7,8 +7,10 @@ import { MemoryRouter } from 'react-router-dom'
 import {
   AuthGate,
   ShellSettingsAccount,
+  ShellSettingsConnections,
   ShellSettingsMembers,
   ShellSettingsMcp,
+  ShellSettingsSecurity,
   ShellSettingsWorkspace,
   ShellWorkspaceSwitcher,
   defaultSessionPath,
@@ -256,8 +258,14 @@ test('account settings are global and workspace switcher lives in the sidebar he
     }
     return json({})
   }) as typeof fetch
-  render(<ShellSettingsAccount />)
-  await waitFor(() => assert.equal(screen.getByTestId('settings-account-global-name').textContent, 'ada@example.com'))
+  render(
+    <>
+      <ShellSettingsAccount />
+      <ShellSettingsSecurity />
+    </>,
+  )
+  await waitFor(() => assert.equal((screen.getByTestId('settings-account-global-name') as HTMLInputElement).value, 'ada@example.com'))
+  assert.ok(screen.getByTestId('settings-account-default-avatar'), '未上传头像时默认显示多色混合 AI 头像')
   assert.match(screen.getByTestId('settings-account-sessions').textContent ?? '', /Test Browser/)
   assert.match(screen.getByTestId('settings-account-sessions').textContent ?? '', /到期/)
   assert.equal(screen.queryByLabelText('空间昵称'), null)
@@ -334,7 +342,7 @@ test('account settings can create and link a cloud account from the local identi
     return json({})
   }) as typeof fetch
 
-  render(<ShellSettingsAccount />)
+  render(<ShellSettingsConnections />)
   const sync = await screen.findByTestId('settings-cloud-sync-create')
   await waitFor(() => assert.match(screen.getByText(/使用本地邮箱/).textContent ?? '', /ada@example\.com/))
   assert.equal(sync.hasAttribute('disabled'), false)
@@ -342,6 +350,74 @@ test('account settings can create and link a cloud account from the local identi
   fireEvent.click(sync)
   await waitFor(() => assert.deepEqual(syncBody, {}))
   await waitFor(() => assert.match(screen.getByText('云端账号已创建并关联。').textContent ?? '', /已创建并关联/))
+})
+
+test('account settings can edit account name, reset avatar, configure remote host url, and register an independent cloud account', async () => {
+  localStorage.setItem('biu.account.token', 'tok')
+  let profileBody: Record<string, unknown> | null = null
+  let configBody: Record<string, unknown> | null = null
+  let registerBody: Record<string, unknown> | null = null
+  globalThis.fetch = (async (path: string, init?: RequestInit) => {
+    const url = String(path)
+    if (url.endsWith('/me')) return json({ id: 'acc_1', name: 'ada@example.com', email: 'ada@example.com', avatar: '' })
+    if (url.endsWith('/profile') && init?.method === 'POST') {
+      profileBody = JSON.parse(String(init.body)) as Record<string, unknown>
+      return json({
+        id: 'acc_1',
+        name: profileBody.name ?? 'ada@example.com',
+        email: 'ada@example.com',
+        avatar: profileBody.avatar ?? '',
+      })
+    }
+    if (url.endsWith('/agents')) return json({ sessions: [] })
+    if (url.endsWith('/cloud/config') && init?.method === 'POST') {
+      configBody = JSON.parse(String(init.body)) as Record<string, unknown>
+      return json({ origin: configBody.origin, available: true })
+    }
+    if (url.endsWith('/cloud/register') && init?.method === 'POST') {
+      registerBody = JSON.parse(String(init.body)) as Record<string, unknown>
+      return json({
+        account: { id: 'cloud_1', name: registerBody.name || registerBody.email, email: registerBody.email },
+        origin: registerBody.origin,
+      }, 201)
+    }
+    if (url.endsWith('/cloud')) return json({ available: true, configuredOrigin: '', connected: false, accounts: [] })
+    return json({})
+  }) as typeof fetch
+
+  render(
+    <>
+      <ShellSettingsAccount />
+      <ShellSettingsConnections />
+    </>,
+  )
+  const nameInput = (await screen.findByTestId('settings-account-global-name')) as HTMLInputElement
+  await waitFor(() => assert.equal(nameInput.value, 'ada@example.com'))
+  assert.equal(screen.getByTestId('settings-account-default-avatar').getAttribute('data-ai-avatar'), 'mesh')
+
+  fireEvent.change(nameInput, { target: { value: 'Ada Lovelace' } })
+  fireEvent.click(screen.getByTestId('settings-account-save-name'))
+  await waitFor(() => assert.deepEqual(profileBody, { name: 'Ada Lovelace' }))
+  await waitFor(() => assert.ok(screen.getByText('账号名已保存。')))
+
+  fireEvent.change(screen.getByTestId('settings-cloud-origin'), { target: { value: 'https://cloud.example.com' } })
+  fireEvent.click(screen.getByTestId('settings-cloud-save-origin'))
+  await waitFor(() => assert.deepEqual(configBody, { origin: 'https://cloud.example.com' }))
+
+  fireEvent.click(screen.getByTestId('settings-cloud-mode-register'))
+  fireEvent.change(screen.getByTestId('settings-cloud-name'), { target: { value: 'Cloud Ada' } })
+  fireEvent.change(screen.getByTestId('settings-cloud-email'), { target: { value: 'cloud-ada@example.com' } })
+  fireEvent.change(screen.getByTestId('settings-cloud-password'), { target: { value: 'secret123' } })
+  fireEvent.click(screen.getByTestId('settings-cloud-submit'))
+  await waitFor(() =>
+    assert.deepEqual(registerBody, {
+      name: 'Cloud Ada',
+      email: 'cloud-ada@example.com',
+      password: 'secret123',
+      origin: 'https://cloud.example.com',
+    }),
+  )
+  await waitFor(() => assert.ok(screen.getByText('独立云端账号已创建并关联。')))
 })
 
 test('workspace creation uses centered local and online cards with default names', async () => {

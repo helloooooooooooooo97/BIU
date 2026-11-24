@@ -7,6 +7,7 @@
   "description": "跨插件共享 UI 零件（Biu UI：不是 Cordis 插件）",
   "exports": {
     ".": "./src/index.ts",
+    "./ai-avatar": "./src/ai-avatar.tsx",
     "./bool-box": "./src/bool-box.tsx",
     "./button": "./src/button.tsx",
     "./input": "./src/input.tsx",

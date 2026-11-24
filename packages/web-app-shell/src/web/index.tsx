@@ -50,7 +50,16 @@ import { BrandCornerMascot, DanceStage } from '@biu/public-mascot'
 import { SessionInspector } from './session-inspector.tsx'
 import { SessionConfigDialog } from '@biu/web-session-view/dialog'
 import { FolderGlyph } from '@biu/web-session-view/folder-glyph'
-import { AuthGate, ShellSettingsAccount, ShellSettingsMembers, ShellSettingsMcp, ShellSettingsShortcuts, ShellSettingsWorkspace } from './shell-chrome.tsx'
+import {
+  AuthGate,
+  ShellSettingsAccount,
+  ShellSettingsConnections,
+  ShellSettingsMembers,
+  ShellSettingsMcp,
+  ShellSettingsSecurity,
+  ShellSettingsShortcuts,
+  ShellSettingsWorkspace,
+} from './shell-chrome.tsx'
 import { hydrateWorkspaceProfile } from '@biu/biu-ui/workspace-profile'
 import { hydrateTheme } from './theme.ts'
 import { hydratePagePrefs, overlayDataRoute } from './data-bridge.ts'
@@ -68,9 +77,11 @@ import {
   ArrowsPointingOutIcon,
   MinusIcon,
   AdjustmentsHorizontalIcon,
+  CloudIcon,
   CommandLineIcon,
   CircleStackIcon,
   LinkIcon,
+  ShieldCheckIcon,
   UserCircleIcon,
   UserGroupIcon,
   XMarkIcon,
@@ -979,6 +990,8 @@ function Shell(props: SlotProps) {
                 <ul className="settings-rail-list">
                   {[
                     { key: 'account', label: '账户', Icon: UserCircleIcon },
+                    { key: 'connections', label: '连接', Icon: CloudIcon },
+                    { key: 'security', label: '安全', Icon: ShieldCheckIcon },
                     { key: 'workspace', label: '空间', Icon: CircleStackIcon },
                     { key: 'members', label: '成员', Icon: UserGroupIcon },
                     { key: 'mcp', label: 'MCP', Icon: LinkIcon },
@@ -1009,6 +1022,8 @@ function Shell(props: SlotProps) {
                 </button>
                 <div className="settings-pane">
                   {settingsTab === 'account' ? <ShellSettingsAccount /> : null}
+                  {settingsTab === 'connections' ? <ShellSettingsConnections /> : null}
+                  {settingsTab === 'security' ? <ShellSettingsSecurity /> : null}
                   {settingsTab === 'workspace' ? <ShellSettingsWorkspace /> : null}
                   {settingsTab === 'members' && workspaceLocation === 'cloud' ? <ShellSettingsMembers /> : null}
                   {settingsTab === 'mcp' ? <ShellSettingsMcp onLeave={() => setSettingsOpen(false)} /> : null}

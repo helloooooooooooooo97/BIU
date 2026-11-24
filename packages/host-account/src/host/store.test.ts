@@ -797,3 +797,30 @@ test('activeLocalActor tracks the latest logged-in account and workspacePerson r
   assert.equal(collab.activeLocalActor()?.accountId, ada.id)
   collab.revokeSession(adaLogin.token)
 })
+
+test('saveAccountProfile updates custom account name and avatar independently of email', () => {
+  const collab = store()
+  const ada = collab.register('', 1000, 'secret1', 'ada@example.com')
+  assert.equal(ada.name, 'ada@example.com')
+  assert.equal(ada.avatar, '')
+
+  const session = collab.login('ada@example.com', 'secret1')
+  const updated = collab.saveAccountProfile(ada.id, {
+    name: 'Ada Lovelace',
+    avatar: 'data:image/png;base64,iVBORw0KGgo=',
+  })
+  assert.equal(updated.name, 'Ada Lovelace')
+  assert.equal(updated.email, 'ada@example.com')
+  assert.equal(updated.avatar, 'data:image/png;base64,iVBORw0KGgo=')
+
+  const fetched = collab.accountByToken(session.token)
+  assert.equal(fetched?.name, 'Ada Lovelace')
+  assert.equal(fetched?.avatar, 'data:image/png;base64,iVBORw0KGgo=')
+
+  const resetAvatar = collab.saveAccountProfile(ada.id, { avatar: '' })
+  assert.equal(resetAvatar.avatar, '')
+  assert.equal(resetAvatar.name, 'Ada Lovelace')
+
+  assert.throws(() => collab.saveAccountProfile(ada.id, { name: '   ' }), /账号名不能为空/)
+  assert.throws(() => collab.saveAccountProfile(ada.id, { avatar: 'https://evil.example/a.png' }), /头像格式不对/)
+})
