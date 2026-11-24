@@ -1,7 +1,7 @@
 import { readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowPathIcon, CheckIcon, LinkIcon, ShareIcon, XMarkIcon } from '@heroicons/react/16/solid'
+import { ArrowPathIcon, CheckIcon, ChevronRightIcon, LinkIcon, ShareIcon, UserGroupIcon, UsersIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { useFloatingPosition } from '@biu/biu-ui/floating-position'
 import { OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
@@ -158,7 +158,7 @@ function WorkspaceAccess({
   const [memberQuery, setMemberQuery] = useState('')
   const [selectedMemberId, setSelectedMemberId] = useState('')
   const [memberPickerOpen, setMemberPickerOpen] = useState(false)
-  const [role, setRole] = useState<'viewer' | 'editor' | 'manager'>('editor')
+  const [role, setRole] = useState<'viewer' | 'commenter' | 'editor' | 'manager'>('editor')
   const [viewGrants, setViewGrants] = useState<Array<{
     viewId: string
     subjectType: 'account' | 'member_view'
@@ -449,12 +449,17 @@ function WorkspaceAccess({
   const selectedMember = workspaceMembers.find((row) => row.id === selectedMemberId)
 
   const roleSelect = (
-    <select value={role} aria-label="权限" onChange={(event) => setRole(event.target.value as typeof role)}>
+    <select className="fsdb-share-role-select" value={role} aria-label="权限" onChange={(event) => setRole(event.target.value as typeof role)}>
       <option value="viewer">可查看</option>
+      <option value="commenter">可评论</option>
       <option value="editor">可编辑</option>
       <option value="manager">可管理</option>
     </select>
   )
+
+  const internalCount = internalPeople.length + groups.length + memberViews.length + inheritedInternal.length
+  const externalCount = externalPeople.length + inheritedExternal.length
+  const avatarText = (name: string) => (name.trim().slice(0, 1) || '?').toUpperCase()
 
   return (
     <div className="fsdb-share-link-section" data-testid="fsdb-share-members">
@@ -481,42 +486,49 @@ function WorkspaceAccess({
       ) : null}
 
       <section className="fsdb-share-collab-section">
-        <h3>内部协作者</h3>
+        <div className="fsdb-share-section-head">
+          <h3>内部协作者</h3>
+          {internalCount > 0 ? <span className="fsdb-share-section-count">{internalCount}</span> : null}
+        </div>
         <ul className="fsdb-share-collaborators">
           {internalPeople.map((row) => (
             <li key={row.id}>
+              <span className="fsdb-share-avatar" aria-hidden>{avatarText(row.name)}</span>
               <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong>{row.email ? <em>{row.email}</em> : null}</span>
               <span className="fsdb-share-collaborator-role">{roleLabel(row.role)}</span>
               <button type="button" className="fsdb-share-remove" title="移除协作者" aria-label={`移除 ${row.name}`} onClick={() => void revoke('account', row.id)}>
-                <XMarkIcon aria-hidden className="size-4" />
+                <XMarkIcon aria-hidden className="size-3.5" />
               </button>
             </li>
           ))}
           {groups.map((row) => (
             <li key={`group:${row.id}`}>
+              <span className="fsdb-share-avatar is-view" aria-hidden><UserGroupIcon className="size-3.5" /></span>
               <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong><em>成员组</em></span>
               <span className="fsdb-share-collaborator-role">{roleLabel(row.role)}</span>
               <button type="button" className="fsdb-share-remove" title="移除成员组" aria-label={`移除 ${row.name}`} onClick={() => void revoke('group', row.id)}>
-                <XMarkIcon aria-hidden className="size-4" />
+                <XMarkIcon aria-hidden className="size-3.5" />
               </button>
             </li>
           ))}
           {memberViews.map((row) => (
             <li key={`view:${row.id}`}>
+              <span className="fsdb-share-avatar is-view" aria-hidden><UsersIcon className="size-3.5" /></span>
               <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong><em>动态成员视图</em></span>
               <span className="fsdb-share-collaborator-role">{roleLabel(row.role ?? '')}</span>
               <button type="button" className="fsdb-share-remove" title="移除成员视图" aria-label={`移除 ${row.name}`} onClick={() => void revoke('member_view', row.id)}>
-                <XMarkIcon aria-hidden className="size-4" />
+                <XMarkIcon aria-hidden className="size-3.5" />
               </button>
             </li>
           ))}
           {inheritedInternal.map((row) => (
-            <li key={`inherited:${row.viewId}:${row.subjectType}:${row.subjectId}`}>
+            <li key={`inherited:${row.viewId}:${row.subjectType}:${row.subjectId}`} className="is-inherited">
+              <span className="fsdb-share-avatar is-view" aria-hidden>{row.subjectType === 'member_view' ? <UsersIcon className="size-3.5" /> : avatarText(row.name)}</span>
               <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong><em>来自视图「{row.source}」</em></span>
               <span className="fsdb-share-collaborator-role">{roleLabel(row.role)}</span>
             </li>
           ))}
-          {!internalPeople.length && !groups.length && !memberViews.length && !inheritedInternal.length ? <li className="is-empty">尚未添加内部协作者</li> : null}
+          {!internalCount ? <li className="is-empty">尚未添加内部协作者</li> : null}
         </ul>
         <div className="fsdb-share-invite-row">
           <div className="fsdb-share-member-picker">
@@ -569,9 +581,9 @@ function WorkspaceAccess({
         </div>
         {availableMemberViews.length ? (
           <details className="fsdb-share-advanced" data-testid="fsdb-share-member-view">
-            <summary>按成员视图批量授权</summary>
+            <summary><ChevronRightIcon aria-hidden className="fsdb-share-advanced-chevron size-3.5" />按成员视图批量授权</summary>
             <div className="fsdb-share-link-row">
-              <select value={memberViewId} aria-label="成员视图" onChange={(event) => setMemberViewId(event.target.value)}>
+              <select className="fsdb-share-role-select" value={memberViewId} aria-label="成员视图" onChange={(event) => setMemberViewId(event.target.value)}>
                 {availableMemberViews.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
               </select>
               <button type="button" className="fsdb-share-publish" disabled={!memberViewId} onClick={() => void grant({ memberViewId })}>授权</button>
@@ -581,24 +593,29 @@ function WorkspaceAccess({
       </section>
 
       <section className="fsdb-share-collab-section is-external">
-        <h3>外部协作者</h3>
+        <div className="fsdb-share-section-head">
+          <h3>外部协作者</h3>
+          {externalCount > 0 ? <span className="fsdb-share-section-count">{externalCount}</span> : null}
+        </div>
         <ul className="fsdb-share-collaborators">
           {externalPeople.map((row) => (
             <li key={row.id}>
+              <span className="fsdb-share-avatar is-external" aria-hidden>{avatarText(row.name)}</span>
               <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong>{row.email ? <em>{row.email}</em> : null}</span>
               <span className="fsdb-share-collaborator-role">{roleLabel(row.role)}</span>
               <button type="button" className="fsdb-share-remove" title="移除协作者" aria-label={`移除 ${row.name}`} onClick={() => void revoke('account', row.id)}>
-                <XMarkIcon aria-hidden className="size-4" />
+                <XMarkIcon aria-hidden className="size-3.5" />
               </button>
             </li>
           ))}
           {inheritedExternal.map((row) => (
-            <li key={`inherited:${row.viewId}:${row.subjectType}:${row.subjectId}`}>
+            <li key={`inherited:${row.viewId}:${row.subjectType}:${row.subjectId}`} className="is-inherited">
+              <span className="fsdb-share-avatar is-external" aria-hidden>{avatarText(row.name)}</span>
               <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong><em>来自视图「{row.source}」</em></span>
               <span className="fsdb-share-collaborator-role">{roleLabel(row.role)}</span>
             </li>
           ))}
-          {!externalPeople.length && !inheritedExternal.length ? <li className="is-empty">尚未添加外部协作者</li> : null}
+          {!externalCount ? <li className="is-empty">尚未添加外部协作者</li> : null}
         </ul>
         <div className="fsdb-share-invite-row">
           <input
@@ -613,7 +630,10 @@ function WorkspaceAccess({
           <button type="button" className="fsdb-share-publish" disabled={!email.trim()} onClick={() => void grant({ email: email.trim() }, 'external')}>添加</button>
         </div>
         <div className="fsdb-share-guest-row" data-testid="fsdb-share-guest">
-          <span><strong>临时访客</strong><em>{guestUrl ? '链接有效期 24 小时' : viewId ? '无需注册，仅可访问此视图' : '无需注册，仅可访问此内容'}</em></span>
+          <span className="fsdb-share-guest-info">
+            <span className="fsdb-share-guest-icon" aria-hidden><LinkIcon className="size-3.5" /></span>
+            <span><strong>临时访客</strong><em>{guestUrl ? '链接有效期 24 小时' : viewId ? '无需注册，仅可访问此视图' : '无需注册，仅可访问此内容'}</em></span>
+          </span>
           <button type="button" onClick={() => void createGuestLink()}>{guestCopied ? '已复制' : guestUrl ? '重新生成' : '生成链接'}</button>
         </div>
       </section>
