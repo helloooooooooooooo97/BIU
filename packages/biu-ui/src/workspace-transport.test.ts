@@ -1,0 +1,139 @@
+import assert from 'node:assert/strict'
+import { afterEach, describe, it } from 'vitest'
+import { apiFetch } from './api-client.ts'
+import {
+  isHostControlPath,
+  resetWorkspaceEndpoint,
+  resolveApiRequest,
+  resolveAssetUrl,
+  resolveWsUrl,
+  setWorkspaceEndpoint,
+  updateWorkspaceAssetTicket,
+} from './workspace-transport.ts'
+
+afterEach(() => {
+  resetWorkspaceEndpoint()
+})
+
+describe('WorkspaceTransport direct cloud routing', () => {
+  it('keeps host-shell control paths local while routing all workspace APIs directly to cloud origin', () => {
+    setWorkspaceEndpoint({
+      mode: 'cloud',
+      origin: 'https://cloud.biu.example/',
+      workspaceId: 'ws_cloud_1',
+      token: 'tok_cloud_abc',
+    })
+
+    // Host-shell paths stay relative (local 3151)
+    for (const hostPath of [
+      '/api/runtime',
+      '/api/update',
+      '/api/account/me',
+      '/api/account/active',
+      '/api/account/cloud',
+      '/api/account/cloud/endpoint',
+      '/api/account/workspaces',
+    ]) {
+      assert.equal(isHostControlPath(hostPath), true)
+      const res = resolveApiRequest(hostPath)
+      assert.equal(res.url, hostPath)
+    }
+
+    // All workspace APIs — including plugins, snapshot, db, agents, chat, access, workspace sub-routes — go directly to cloud
+    for (const wsPath of [
+      '/api/db/list?path=/pages',
+      '/api/snapshot',
+      '/api/plugins/catalog',
+      '/api/plugins/p1',
+      '/api/agents',
+      '/api/chat/config',
+      '/api/account/access?collection=/pages',
+      '/api/account/workspaces/ws_cloud_1/members',
+      '/api/account/workspaces/ws_cloud_1/actor-scopes',
+    ]) {
+      assert.equal(isHostControlPath(wsPath), false)
+      const res = resolveApiRequest(wsPath, { method: 'GET' })
+      assert.equal(res.url, `https://cloud.biu.example${wsPath}`)
+      const headers = new Headers(res.init.headers)
+      assert.equal(headers.get('authorization'), 'Bearer tok_cloud_abc')
+      assert.equal(headers.get('x-biu-workspace-id'), 'ws_cloud_1')
+    }
+  })
+
+  it('routes /ws and custom WS paths directly to cloud wss origin with workspaceId & token', () => {
+    setWorkspaceEndpoint({
+      mode: 'cloud',
+      origin: 'https://cloud.biu.example',
+      workspaceId: 'ws_cloud_1',
+      token: 'tok_cloud_abc',
+    })
+    assert.equal(
+      resolveWsUrl('/ws'),
+      'wss://cloud.biu.example/ws?workspaceId=ws_cloud_1&token=tok_cloud_abc',
+    )
+    assert.equal(
+      resolveWsUrl('/ws/terminal?cols=80'),
+      'wss://cloud.biu.example/ws/terminal?cols=80&workspaceId=ws_cloud_1&token=tok_cloud_abc',
+    )
+  })
+
+  it('rewrites relative asset URLs to signed direct cloud URLs with HMAC ticket', () => {
+    setWorkspaceEndpoint({
+      mode: 'cloud',
+      origin: 'https://cloud.biu.example',
+      workspaceId: 'ws_cloud_1',
+      token: 'tok_cloud_abc',
+    })
+    const futureExp = Date.now() + 60_000
+    updateWorkspaceAssetTicket({
+      uid: 'acc_1',
+      ws: 'ws_cloud_1',
+      exp: futureExp,
+      sig: 'sig_xyz',
+    })
+
+    const resolved = resolveAssetUrl('/api/db/file/photo.png')
+    assert.equal(
+      resolved,
+      `https://cloud.biu.example/api/db/file/photo.png?uid=acc_1&ws=ws_cloud_1&exp=${futureExp}&sig=sig_xyz`,
+    )
+    assert.equal(
+      resolveAssetUrl('/api/page/file/doc.pdf?download=1'),
+      `https://cloud.biu.example/api/page/file/doc.pdf?download=1&uid=acc_1&ws=ws_cloud_1&exp=${futureExp}&sig=sig_xyz`,
+    )
+    // Non-asset or already-absolute URLs are left untouched
+    assert.equal(resolveAssetUrl('https://cdn.other.com/a.png'), 'https://cdn.other.com/a.png')
+    assert.equal(resolveAssetUrl('data:image/png;base64,AAA'), 'data:image/png;base64,AAA')
+    assert.equal(resolveAssetUrl('/api/db/list'), '/api/db/list')
+  })
+
+  it('integrates apiFetch directly with active cloud endpoint', async () => {
+    setWorkspaceEndpoint({
+      mode: 'cloud',
+      origin: 'http://192.168.1.8:3141',
+      workspaceId: 'ws_lan_1',
+      token: 'tok_lan',
+    })
+    const calls: Array<{ url: string; auth: string | null; ws: string | null }> = []
+    const prevFetch = globalThis.fetch
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const headers = new Headers(init?.headers)
+      calls.push({
+        url: String(input),
+        auth: headers.get('authorization'),
+        ws: headers.get('x-biu-workspace-id'),
+      })
+      return new Response(JSON.stringify({ ok: true }), { status: 200 })
+    }) as typeof globalThis.fetch
+    try {
+      await apiFetch('/api/snapshot')
+      await apiFetch('/api/account/me')
+      assert.deepEqual(calls, [
+        { url: 'http://192.168.1.8:3141/api/snapshot', auth: 'Bearer tok_lan', ws: 'ws_lan_1' },
+        { url: '/api/account/me', auth: null, ws: null },
+      ])
+    } finally {
+      globalThis.fetch = prevFetch
+    }
+  })
+})

@@ -638,6 +638,40 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     )
   }
 
+  ctx.http.route(
+    'GET',
+    '/api/account/cloud/endpoint',
+    async (route) => {
+      try {
+        const requested = String(route.query.get('workspaceId') ?? '').trim()
+        if (isOnlineRuntime()) {
+          route.send(200, { mode: 'local', workspaceId: requested || account.store.activeWorkspaceId() || '' })
+          return
+        }
+        const me = actor(route)
+        const targetWorkspace = requested || account.store.activeWorkspaceId() || ''
+        if (!targetWorkspace || account.workspaceLocation(targetWorkspace) !== 'cloud') {
+          route.send(200, { mode: 'local', workspaceId: targetWorkspace })
+          return
+        }
+        const remote = account.resolveCloudTarget(targetWorkspace, me.id)
+        if (!remote) {
+          route.send(401, { error: '请先登录云端账号' })
+          return
+        }
+        route.send(200, {
+          mode: 'cloud',
+          origin: remote.origin,
+          workspaceId: remote.workspaceId,
+          token: remote.token,
+        })
+      } catch (error) {
+        fail(route, error)
+      }
+    },
+    { scope: 'host' },
+  )
+
   ctx.http.route('GET', '/api/account/cloud', async (route) => {
     try {
       if (isOnlineRuntime()) return route.send(200, { available: false, connected: false, configuredOrigin: '' })

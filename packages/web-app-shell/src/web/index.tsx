@@ -1,4 +1,6 @@
 import { apiFetch } from '@biu/biu-ui/api-client'
+import { onAppEvents } from '@biu/biu-ui/app-events'
+import { installGlobalWorkspaceTransport, syncWorkspaceEndpoint } from '@biu/biu-ui/workspace-transport'
 import { lazy, memo, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
@@ -308,6 +310,13 @@ function Shell(props: SlotProps) {
   const [settingsTab, setSettingsTab] = useState<string>('account')
   const [workspaceLocation, setWorkspaceLocation] = useState<'device' | 'cloud'>('device')
   const [configOpen, setConfigOpen] = useState(false)
+  useEffect(() => {
+    installGlobalWorkspaceTransport()
+    void syncWorkspaceEndpoint()
+    return onAppEvents(['biu:account-token', 'biu:workspace-profile'], () => {
+      void syncWorkspaceEndpoint()
+    })
+  }, [])
   useEffect(() => {
     if (!settingsOpen) return
     let live = true

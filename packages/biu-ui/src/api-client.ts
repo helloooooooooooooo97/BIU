@@ -1,4 +1,5 @@
 import { onAppEvent } from './app-events.ts'
+import { resolveApiRequest } from './workspace-transport.ts'
 
 /**
  * Unified frontend HTTP API client singleton.
@@ -102,14 +103,15 @@ export interface ApiFetchOptions extends RequestInit {
 export async function apiFetch(path: string, init?: ApiFetchOptions): Promise<Response> {
   const { scoped, signal, ...rest } = init ?? {}
   const prepared = applyInterceptors(path, rest)
+  const resolved = resolveApiRequest(path, prepared)
   if (!scoped) {
-    const finalInit = signal ? { ...prepared, signal } : prepared
-    return Object.keys(finalInit).length > 0 ? globalThis.fetch(path, finalInit) : globalThis.fetch(path)
+    const finalInit = signal ? { ...resolved.init, signal } : resolved.init
+    return Object.keys(finalInit).length > 0 ? globalThis.fetch(resolved.url, finalInit) : globalThis.fetch(resolved.url)
   }
   const ctrl = new AbortController()
   activeControllers.add(ctrl)
   try {
-    return await globalThis.fetch(path, { ...prepared, signal: mergeSignals(signal, ctrl.signal) })
+    return await globalThis.fetch(resolved.url, { ...resolved.init, signal: mergeSignals(signal, ctrl.signal) })
   } finally {
     activeControllers.delete(ctrl)
   }
