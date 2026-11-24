@@ -106,7 +106,7 @@ export function stripReactImports(source: string): string {
 
 export function prepareSandboxJsx(source: string): string {
   return stripReactImports(source)
-    .replace(/export\s+default\s+function\s+([A-Za-z_][\w]*)/g, 'function $1')
+    .replace(/export\s+default\s+function\s+([A-Za-z_][\w]*)/g, 'const __Component = function $1')
     .replace(/export\s+default\s+/g, 'const __Component = ')
 }
 

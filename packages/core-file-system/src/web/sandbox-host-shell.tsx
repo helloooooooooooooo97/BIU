@@ -125,7 +125,7 @@ export function SandboxHostBar({
   onExpand: () => void
   title: string
   onTitle: (next: string) => void
-  testIdPrefix: 'page-host' | 'record-prop-host'
+  testIdPrefix: 'page-host' | 'record-prop-host' | 'collection-sandbox'
   kindLabel?: string
 }) {
   const coding = tab === 'code'

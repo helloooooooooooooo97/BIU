@@ -134,11 +134,12 @@ function defaultBlockView(collectionPath: string, legacyView?: unknown): SavedVi
     id: 'default',
     name: collectionPath === DATA_COLLECTION_PATH ? '全部数据' : '全部',
     mode: 'table',
-    sortField: 'title',
-    sortDir: 'asc',
+    sortField: 'updatedAt',
+    sortDir: 'desc',
     filters: {},
     columns: [],
-    groupBy: collectionPath === DATA_COLLECTION_PATH ? 'table' : '',
+    groupBy: '',
+    pageSize: 20,
     ...extra,
   })
 }
@@ -153,10 +154,12 @@ function parseBlockViews(raw: Record<string, unknown> | null | undefined, collec
         id: String(item.id ?? `view-${idx + 1}`),
         name: String(item.name ?? `视图 ${idx + 1}`),
         mode: 'table',
-        sortField: 'title',
-        sortDir: 'asc',
+        sortField: 'updatedAt',
+        sortDir: 'desc',
         filters: {},
         columns: [],
+        groupBy: '',
+        pageSize: 20,
         ...(item as Partial<SavedView>),
       }),
     )
@@ -169,7 +172,7 @@ function parseBlockViews(raw: Record<string, unknown> | null | undefined, collec
   return { views, activeViewId }
 }
 
-export function DatabaseBlockView({ data, update, writable }: DatabaseBlockProps) {
+export function DatabaseBlockView({ data, update, writable, selected }: DatabaseBlockProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const rawPath = String(data.collection ?? DATA_COLLECTION_PATH).trim()
   const collectionPath = normalizeCollectionPath(rawPath) || DATA_COLLECTION_PATH
@@ -298,7 +301,12 @@ export function DatabaseBlockView({ data, update, writable }: DatabaseBlockProps
   )
 
   return (
-    <div ref={rootRef} className="fsdb-page-db-block" data-testid="fsdb-page-db-block">
+    <div
+      ref={rootRef}
+      className="fsdb-page-db-block"
+      data-testid="fsdb-page-db-block"
+      data-database-selected={selected ? '' : undefined}
+    >
       {externalViews ? (
         <CollectionBrowser
           key={`${collectionPath}:${file || 'inline'}`}

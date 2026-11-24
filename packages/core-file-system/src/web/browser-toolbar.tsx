@@ -36,6 +36,8 @@ import type { QueryField } from './query-menus.tsx'
 import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search.tsx'
 import { ViewOrderMenu } from './view-order-menu.tsx'
 import type { GroupConfig, SavedView } from './saved-view.ts'
+import type { TableSandboxItem } from '../shared/table-sandbox-model.ts'
+import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 
 const QueryFlyout = lazy(() => import('./query-menus.tsx').then((m) => ({ default: m.QueryFlyout })))
 const ViewSettingsMenu = lazy(() => import('./view-settings-menu.tsx').then((m) => ({ default: m.ViewSettingsMenu })))
@@ -96,6 +98,8 @@ export type BrowserListChromeProps = {
   setMode: (mode: ViewMode) => void
   extraViews: CollectionViewType[]
   extraRows: CollectionRowViewType[]
+  sandboxViews?: TableSandboxItem[]
+  onCreateSandboxView?: () => void
   patchActiveView: (patch: Partial<SavedView>) => void
   sortRef: RefObject<HTMLDivElement | null>
   sortMenuOpen: boolean
@@ -219,6 +223,8 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
     setMode,
     extraViews,
     extraRows,
+    sandboxViews = [],
+    onCreateSandboxView,
     patchActiveView,
     sortRef,
     sortMenuOpen,
@@ -600,13 +606,18 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                     aria-label="查看模式"
                     title={`模式：${
                       VIEW_MODES.find((item) => item.id === mode)?.label ??
+                      sandboxViews.find((item) => item.id === mode)?.name ??
                       extraRows.find((item) => item.id === mode)?.label ??
                       extraViews.find((item) => item.id === mode)?.label ??
                       mode
                     }`}
                     onClick={() => openSettingsTab('view')}
                   >
-                    <ModeGlyph id={mode} extra={extraViews} rows={extraRows} />
+                    {sandboxViews.some((item) => item.id === mode) ? (
+                      <SandboxKindIcon />
+                    ) : (
+                      <ModeGlyph id={mode} extra={extraViews} rows={extraRows} />
+                    )}
                   </button>
                 </div>
               ) : null}
@@ -702,6 +713,8 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                         setMode={setMode}
                         extraViews={extraViews}
                         extraRows={extraRows}
+                        sandboxViews={sandboxViews}
+                        onCreateSandboxView={onCreateSandboxView}
                         patchActiveView={patchActiveView}
                         wrapCells={wrapCells}
                         setWrap={setWrap}

@@ -389,6 +389,7 @@ function viewWirePayload(view: SavedView) {
     columnWidths: normalized.columnWidths ?? {},
     columnSummaries: normalized.columnSummaries ?? {},
     columnViews: normalized.columnViews ?? {},
+    sandboxViews: normalized.sandboxViews ?? [],
     updatedAt: Number(normalized.updatedAt) || 0,
   }
 }
@@ -523,6 +524,7 @@ export function savedViewFromRecord(row: Record<string, unknown>): SavedView | n
     columnWidths: row.columnWidths as Record<string, number> | undefined,
     columnSummaries: row.columnSummaries as SavedView['columnSummaries'],
     columnViews: row.columnViews as SavedView['columnViews'],
+    sandboxViews: row.sandboxViews as SavedView['sandboxViews'],
     builtin: false,
     rank: Number.isFinite(Number(row.rank)) ? Math.round(Number(row.rank)) : undefined,
     updatedAt: Number(row.updatedAt) || 0,
@@ -844,6 +846,7 @@ const DISPLAY_KEYS = [
   'columnWidths',
   'columnSummaries',
   'columnViews',
+  'sandboxViews',
   'filterTree',
   'rank',
 ] as const
@@ -909,6 +912,9 @@ function pickDisplay(patch: Partial<SavedView>): ViewDisplayPatch {
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'columnViews') && patch.columnViews === undefined) {
     next.columnViews = {}
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'sandboxViews') && patch.sandboxViews === undefined) {
+    next.sandboxViews = []
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'columnWidths') && patch.columnWidths === undefined) {
     next.columnWidths = {}

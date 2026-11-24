@@ -28,10 +28,14 @@ function readTarget(editor: Editor, host: HTMLElement, clientX: number, clientY:
   if (!el) return null
   const hostBox = host.getBoundingClientRect()
   const box = el.getBoundingClientRect()
+  const alignEl = el.matches('[data-page-block=database]')
+    ? el.querySelector<HTMLElement>('.tasks-toolbar') ?? el
+    : el
+  const alignTop = alignEl === el ? box.top : alignEl.getBoundingClientRect().top
   const contentBox = editor.view.dom.getBoundingClientRect()
   return {
     ...found,
-    top: box.top - hostBox.top,
+    top: alignTop - hostBox.top,
     left: handleLeftForBlock({
       hostLeft: hostBox.left,
       contentLeft: contentBox.left,
