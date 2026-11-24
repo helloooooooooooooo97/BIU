@@ -77,6 +77,11 @@ describe('WorkspaceTransport direct cloud routing', () => {
       resolveWsUrl('/ws/terminal?cols=80'),
       'wss://cloud.biu.example/ws/terminal?cols=80&workspaceId=ws_cloud_1&token=tok_cloud_abc',
     )
+    // When a single-use wsTicket is provided, long-lived token must NOT appear in the URL
+    assert.equal(
+      resolveWsUrl('/ws', { wsTicket: 'biu_wst_once123' }),
+      'wss://cloud.biu.example/ws?workspaceId=ws_cloud_1&wsTicket=biu_wst_once123',
+    )
   })
 
   it('rewrites relative asset URLs to signed direct cloud URLs with HMAC ticket', () => {

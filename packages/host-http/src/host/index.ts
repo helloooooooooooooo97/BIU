@@ -20,6 +20,7 @@ import {
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { isShareApiPath, isSharePublicPath } from './share-gate.ts'
 import { isAssetTicketEligiblePath, signAssetTicket, verifyAssetTicket } from './asset-ticket.ts'
+import { consumeWsTicket, issueWsTicket, resolveCorsOrigin } from './ws-ticket.ts'
 
 interface Route {
   method: Method
@@ -228,6 +229,29 @@ export class HttpService extends Service {
           return
         }
         route.send(200, signAssetTicket({ accountId, workspaceId }))
+      },
+      { scope: 'workspace' },
+    )
+    this.route(
+      'POST',
+      '/api/ws-ticket',
+      (route) => {
+        const accountId = currentAccountId()
+        const workspaceId = currentRequestWorkspaceId()
+        if (!accountId || !workspaceId) {
+          route.send(401, { error: '需要登录并指定空间' })
+          return
+        }
+        const authHeader = String(route.req.headers.authorization ?? '')
+        const bearerMatch = /^Bearer\s+(\S+)$/i.exec(authHeader)
+        const cookie = String(route.req.headers.cookie ?? '')
+        const encoded = cookie
+          .split(';')
+          .map((part) => part.trim())
+          .find((part) => part.startsWith('biu_account=') || part.startsWith('biu_legacy_account='))
+        const cookieToken = encoded ? decodeURIComponent(encoded.slice(encoded.indexOf('=') + 1)) : ''
+        const sessionToken = bearerMatch?.[1] ?? cookieToken
+        route.send(200, issueWsTicket({ accountId, workspaceId, sessionToken }))
       },
       { scope: 'workspace' },
     )
@@ -455,7 +479,8 @@ export class HttpService extends Service {
     const bearerMatch = /^Bearer\s+(\S+)$/i.exec(authHeader)
     const bearerToken = bearerMatch?.[1] ?? ''
     const preview = url.searchParams.get('landingPreview') === '1'
-    const token = preview ? '' : (url.searchParams.get('token') ?? (bearerToken || cookieToken))
+    const wsTicketRaw = preview ? '' : String(url.searchParams.get('wsTicket') ?? '').trim()
+    let token = preview ? '' : (url.searchParams.get('token') ?? (bearerToken || cookieToken))
     let workspaceId = preview ? '' : (url.searchParams.get('workspaceId') ?? '')
     let accountId = ''
     const store = (
@@ -467,10 +492,27 @@ export class HttpService extends Service {
         }
       } | undefined
     )?.store
-    try {
-      accountId = token ? store?.accountByToken?.(token)?.id ?? '' : ''
-    } catch {
-      accountId = ''
+    if (wsTicketRaw) {
+      const consumed = consumeWsTicket(wsTicketRaw)
+      if (!consumed) {
+        return { accountId: '', workspaceId: '', token: '', error: 4401 as const }
+      }
+      if (workspaceId && workspaceId !== consumed.workspaceId) {
+        return { accountId: consumed.accountId, workspaceId, token: consumed.sessionToken, error: 4403 as const }
+      }
+      accountId = consumed.accountId
+      workspaceId = consumed.workspaceId
+      token = consumed.sessionToken
+      // Verify underlying session is still active when sessionToken is present
+      if (token && store?.accountByToken && store.accountByToken(token)?.id !== accountId) {
+        return { accountId: '', workspaceId, token: '', error: 4401 as const }
+      }
+    } else {
+      try {
+        accountId = token ? store?.accountByToken?.(token)?.id ?? '' : ''
+      } catch {
+        accountId = ''
+      }
     }
     if (!workspaceId && accountId) {
       workspaceId = runWithAccount(accountId, () => String(store?.activeWorkspaceId?.() ?? '').trim())
@@ -492,8 +534,10 @@ export class HttpService extends Service {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
     url.pathname = rewriteLegacyAgentApi(url.pathname)
     const method = (req.method ?? 'GET').toUpperCase() as Method
-    const corsHeaders = {
-      'Access-Control-Allow-Origin': '*',
+    const cors = resolveCorsOrigin(req.headers.origin)
+    const corsHeaders: Record<string, string> = {
+      ...(cors.allowOrigin ? { 'Access-Control-Allow-Origin': cors.allowOrigin } : {}),
+      ...(cors.varyOrigin ? { Vary: 'Origin' } : {}),
       'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
       'Access-Control-Allow-Headers':
         'Content-Type, Authorization, X-Biu-Workspace-Id, X-Biu-Resource-Path, X-Share-Password, If-Match, If-None-Match, mcp-session-id, mcp-protocol-version, Last-Event-ID',
