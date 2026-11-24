@@ -3,7 +3,9 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, test } from 'vitest'
+import { Context } from 'cordis'
 import { openAndMigrateBiu, runWithAccount } from '@biu/host-plugin-loader/data-dir'
+import { apply as applyAccount, type AccountService } from './index.ts'
 import { CollabStore } from './store.ts'
 import { workspaceMembersCollection } from './workspace-members-collection.ts'
 
@@ -178,4 +180,87 @@ test('member activity aggregates heatmap, coalesces rapid updates, and is transp
   const adaRow = listed.find((row) => row.id === ada.id)
   assert.equal(adaRow?.status, 'online')
   assert.ok(Number(adaRow?.lastActiveAt) >= now - 1000)
+})
+
+test('GET /api/account/member-activity resolves grant record titles via $ids filter including untitled and trashed records', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'biu-member-grants-'))
+  dirs.push(dir)
+  const sqlitePath = join(dir, 'biu.sqlite')
+  const routes = new Map<string, (route: Record<string, unknown>) => Promise<void>>()
+  const listCalls: Array<{ path: string; filter?: Record<string, unknown>; page?: Record<string, unknown> }> = []
+
+  const ctx = new Context()
+  ctx.provide('http')
+  ctx.set('http', {
+    route(method: string, path: string, handler: (route: Record<string, unknown>) => Promise<void>) {
+      routes.set(`${method} ${path}`, handler)
+    },
+    broadcast() {},
+    disconnectRevokedSessions() {},
+  })
+  ctx.provide('database')
+  ctx.set('database', {
+    register() { return () => {} },
+    collection(path: string) {
+      return path === '/pages' ? { label: '页面', schema: { labelField: 'title' } } : undefined
+    },
+    async list(path: string, filter?: Record<string, unknown>, page?: Record<string, unknown>) {
+      listCalls.push({ path, filter, page })
+      const ids = Array.isArray(filter?.$ids) ? (filter.$ids as string[]) : []
+      if (filter?.deleted) {
+        return {
+          items: ids.includes('pg_trash') ? [{ id: 'pg_trash', title: '已归档方案' }] : [],
+        }
+      }
+      const rows: Array<Record<string, unknown>> = []
+      if (ids.includes('pg_named')) rows.push({ id: 'pg_named', title: '常用业务系统集成' })
+      if (ids.includes('pg_empty')) rows.push({ id: 'pg_empty', title: '' })
+      return { items: rows }
+    },
+  })
+  applyAccount(ctx, { sqlitePath })
+  try {
+    const account = ctx.get('account') as AccountService
+    const ada = account.store.register('Ada', Date.now(), 'secret1', 'ada-grants@example.com')
+    const workspace = account.store.createWorkspace(ada.id, 'Main')
+    account.store.setActive(ada.id, workspace.id)
+    const db = openAndMigrateBiu(sqlitePath)
+    const now = Date.now()
+    for (const [idx, recId] of (['pg_named', 'pg_empty', 'pg_trash'] as const).entries()) {
+      account.store.claim(ada.id, workspace.id, '/pages', recId)
+      db.prepare(
+        `INSERT INTO record_grants (workspace_id, collection, record_id, subject_type, subject_id, role, granted_by, created_at)
+         VALUES (?, '/pages', ?, 'account', ?, 'owner', ?, ?)`,
+      ).run(workspace.id, recId, ada.id, ada.id, now - idx)
+    }
+    db.close()
+    const session = account.store.login('ada-grants@example.com', 'secret1')
+
+    const handler = routes.get('GET /api/account/member-activity')
+    assert.ok(handler)
+    let status = 0
+    let body: Record<string, unknown> = {}
+    await handler({
+      req: { headers: { authorization: `Bearer ${session.token}` }, method: 'GET' },
+      res: { setHeader() {} },
+      query: new URLSearchParams({ memberId: ada.id }),
+      send(code: number, payload: Record<string, unknown>) {
+        status = code
+        body = payload
+      },
+    })
+
+    assert.equal(status, 200)
+    assert.equal(listCalls.length, 2)
+    assert.deepEqual(listCalls[0]?.filter, { $ids: ['pg_named', 'pg_empty', 'pg_trash'] })
+    assert.deepEqual(listCalls[1]?.filter, { $ids: ['pg_trash'], deleted: true })
+    const records = (body.grants as { records: Array<{ recordId: string; title: string; collectionLabel: string }> }).records
+    const byId = new Map(records.map((item) => [item.recordId, item]))
+    assert.equal(byId.get('pg_named')?.title, '常用业务系统集成')
+    assert.equal(byId.get('pg_named')?.collectionLabel, '页面')
+    assert.equal(byId.get('pg_empty')?.title, '未命名页面')
+    assert.equal(byId.get('pg_trash')?.title, '已归档方案')
+  } finally {
+    ctx.emit('dispose')
+  }
 })
