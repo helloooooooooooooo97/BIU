@@ -164,24 +164,26 @@ export class CollabStore {
       id: id('acc'),
       name: trimmed,
       email: normalized,
+      avatar: '',
       token: randomBytes(24).toString('hex'),
       createdAt: now,
     }
     this.db
-      .prepare('INSERT INTO accounts (id, name, token, password_hash, created_at, email, password_recall) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(account.id, account.name, account.token, secret ? hashPassword(secret) : '', account.createdAt, normalized || null, secret)
+      .prepare('INSERT INTO accounts (id, name, token, password_hash, created_at, email, password_recall, avatar) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(account.id, account.name, account.token, secret ? hashPassword(secret) : '', account.createdAt, normalized || null, secret, '')
     return account
   }
 
   login(email: string, password: string, deviceName = '浏览器'): Account & { token: string } {
     const normalized = email.trim().toLowerCase()
     const row = this.db
-      .prepare('SELECT id, name, email, token, password_hash, created_at, must_change_password FROM accounts WHERE email = ?')
+      .prepare('SELECT id, name, email, avatar, token, password_hash, created_at, must_change_password FROM accounts WHERE email = ?')
       .get(normalized) as
       | {
           id: string
           name: string
           email: string
+          avatar: string | null
           token: string
           password_hash: string
           created_at: number
@@ -199,7 +201,47 @@ export class CollabStore {
       id: row.id,
       name: row.name,
       email: row.email,
+      avatar: row.avatar ?? '',
       token: session.token,
+      createdAt: row.created_at,
+      mustChangePassword: Boolean(row.must_change_password),
+    }
+  }
+
+  saveAccountProfile(accountId: string, patch: { name?: string; avatar?: string }): Account {
+    const row = this.db
+      .prepare('SELECT id, name, email, avatar, created_at, must_change_password FROM accounts WHERE id = ?')
+      .get(accountId) as
+      | {
+          id: string
+          name: string
+          email: string | null
+          avatar: string | null
+          created_at: number
+          must_change_password: number
+        }
+      | undefined
+    if (!row) throw new CollabError('账号不存在', 404)
+    let nextName = row.name
+    if (patch.name !== undefined) {
+      const trimmed = patch.name.trim().slice(0, 40)
+      if (!trimmed) throw new CollabError('账号名不能为空', 400)
+      nextName = trimmed
+    }
+    let nextAvatar = row.avatar ?? ''
+    if (patch.avatar !== undefined) {
+      nextAvatar = patch.avatar.trim()
+      if (nextAvatar && !nextAvatar.startsWith('data:image/')) {
+        throw new CollabError('头像格式不对', 400)
+      }
+      if (nextAvatar.length > 240_000) throw new CollabError('头像太大', 400)
+    }
+    this.db.prepare('UPDATE accounts SET name = ?, avatar = ? WHERE id = ?').run(nextName, nextAvatar, accountId)
+    return {
+      id: row.id,
+      name: nextName,
+      email: row.email ?? '',
+      avatar: nextAvatar,
       createdAt: row.created_at,
       mustChangePassword: Boolean(row.must_change_password),
     }
@@ -747,7 +789,7 @@ export class CollabStore {
   accountByToken(token: string, now = Date.now()): Account | null {
     const session = this.db
       .prepare(
-        `SELECT a.id, a.name, a.email, a.created_at, a.must_change_password,
+        `SELECT a.id, a.name, a.email, a.avatar, a.created_at, a.must_change_password,
                 s.id AS session_id, s.expires_at, s.revoked_at
          FROM auth_sessions s
          JOIN accounts a ON a.id = s.account_id
@@ -758,6 +800,7 @@ export class CollabStore {
           id: string
           name: string
           email: string | null
+          avatar: string | null
           created_at: number
           must_change_password: number
           session_id: string
@@ -772,13 +815,14 @@ export class CollabStore {
         id: session.id,
         name: session.name,
         email: session.email ?? '',
+        avatar: session.avatar ?? '',
         createdAt: session.created_at,
         mustChangePassword: Boolean(session.must_change_password),
       }
     }
     const row = this.db
       .prepare(
-        `SELECT a.id, a.name, a.email, a.created_at,
+        `SELECT a.id, a.name, a.email, a.avatar, a.created_at,
                 gs.id AS guest_session_id, gs.expires_at, gs.revoked_at
          FROM accounts a
          LEFT JOIN guest_sessions gs ON gs.account_id = a.id
@@ -789,6 +833,7 @@ export class CollabStore {
           id: string
           name: string
           email: string | null
+          avatar: string | null
           created_at: number
           guest_session_id?: string
           expires_at?: number
@@ -801,7 +846,7 @@ export class CollabStore {
       if (row.revoked_at || Number(row.expires_at) <= now) return null
       this.db.prepare('UPDATE guest_sessions SET last_seen_at = ? WHERE id = ?').run(now, row.guest_session_id)
     }
-    return { id: row.id, name: row.name, email: row.email ?? '', createdAt: row.created_at }
+    return { id: row.id, name: row.name, email: row.email ?? '', avatar: row.avatar ?? '', createdAt: row.created_at }
   }
 
   requiresPasswordChange(accountId: string) {

@@ -87,14 +87,13 @@ function rememberCloud(ctx: Context, collection: string, id: string) {
 
 function desktopCloudWorkspace(ctx: Context) {
   if (isOnlineRuntime()) return null
-  const origin = hostRemoteOrigin()
-  if (!origin) return null
   const account = accountOf(ctx)
   const workspaceId = currentRequestWorkspaceId() || account?.store?.activeWorkspaceId() || ''
   if (!workspaceId || account?.workspaceLocation?.(workspaceId) !== 'cloud') return null
   const linked = account?.linkedCloud?.(currentAccountId() || undefined)
-  if (!linked?.token) return null
-  return { origin: linked.origin || origin, token: linked.token, workspaceId }
+  const origin = linked?.origin || hostRemoteOrigin()
+  if (!origin || !linked?.token) return null
+  return { origin, token: linked.token, workspaceId }
 }
 
 export async function takeSnapshot(ctx: Context): Promise<MirrorSnapshot> {

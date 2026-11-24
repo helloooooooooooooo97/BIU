@@ -38,6 +38,18 @@ import { type TagStore } from './tags-store.ts'
 import { asDeleteQuery, parseListColumnsParam, parseSortsParam } from './schema-coerce.ts'
 import type { DatabaseService } from './index.ts'
 
+function hasConfiguredCloudOrigin(ctx: Context) {
+  if (hostRemoteOrigin()) return true
+  try {
+    const account = ctx.get('account') as
+      | { configuredCloudOrigin?: () => string; linkedCloud?: () => { origin?: string } | null }
+      | undefined
+    return Boolean(account?.configuredCloudOrigin?.() || account?.linkedCloud?.()?.origin)
+  } catch {
+    return false
+  }
+}
+
 export function databaseHttpFailure(error: unknown) {
   const message = String(error)
   if (/\bunknown (?:record|collection)\b/.test(message)) {
@@ -458,7 +470,7 @@ export function registerDatabaseHttpRoutes(
       }
       const location = activeDataLocation()
       const localOnly = location !== 'cloud'
-      if (!localOnly && !isOnlineRuntime() && hostRemoteOrigin()) {
+      if (!localOnly && !isOnlineRuntime() && hasConfiguredCloudOrigin(ctx)) {
         const search = route.query.toString()
         const forwarded = await forwardCloud(
           ctx,
@@ -601,7 +613,7 @@ export function registerDatabaseHttpRoutes(
         route.send(forwarded.status, forwarded.body)
         return
       }
-      if (hostRemoteOrigin()) {
+      if (hasConfiguredCloudOrigin(ctx)) {
         route.send(401, { error: '请先登录云端账号' })
         return
       }
@@ -719,7 +731,7 @@ export function registerDatabaseHttpRoutes(
       const kind = body.kind === 'record' ? 'record' as const : 'view' as const
       const collection = String(body.collection ?? '')
       const recordId = String(body.recordId ?? '')
-      if (activeDataLocation() === 'cloud' && !isOnlineRuntime() && hostRemoteOrigin()) {
+      if (activeDataLocation() === 'cloud' && !isOnlineRuntime() && hasConfiguredCloudOrigin(ctx)) {
         const forwarded = await forwardCloud(ctx, collection, recordId, '/api/db/shares', { body })
         if (forwarded) {
           route.send(forwarded.status, forwarded.body)

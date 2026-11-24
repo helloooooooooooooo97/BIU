@@ -937,6 +937,9 @@ export const BIU_MIGRATIONS: Migration[] = [
   { version: 49, module: 'core-file-system', name: 'drop.tag-docs', up: (db) => {
     if (hasTable(db, 'tag_docs')) db.exec('DROP TABLE tag_docs')
   } },
+  { version: 50, module: 'host-account', name: 'account.avatar', up: (db) => {
+    addColumn(db, 'accounts', 'avatar', `avatar TEXT NOT NULL DEFAULT ''`)
+  } },
 ]
 
 export function assertBiuMigrationLog(rows: Array<{ version: number }> = BIU_MIGRATIONS) {

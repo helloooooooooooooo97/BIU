@@ -23,6 +23,7 @@ import {
   XMarkIcon,
 } from '@heroicons/react/16/solid'
 import { AnchorMenu } from '@biu/biu-ui/anchor-menu'
+import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import { TagChip } from '@biu/biu-ui/tag-chip'
 import { ConfirmDialog } from '@biu/biu-ui/confirm-dialog'
 import { chromeIcon } from './chrome-icon.ts'
@@ -112,7 +113,7 @@ function WorkspaceMemberProfile() {
             {profile.avatar ? (
               <img src={profile.avatar} alt="" />
             ) : (
-              <span className="settings-account-initial">{initial}</span>
+              <AiAvatar seed={profile.name || initial} className="settings-account-ai-avatar" />
             )}
             <span className="settings-account-avatar-veil" aria-hidden>
               <CameraIcon className="size-4" />
@@ -173,32 +174,200 @@ function WorkspaceMemberProfile() {
 }
 
 export function ShellSettingsAccount() {
-  const [account, setAccount] = useState<{ name: string; email: string }>({ name: '', email: '' })
+  const [account, setAccount] = useState<{ id: string; name: string; email: string; avatar: string; online: boolean }>({
+    id: '',
+    name: '',
+    email: '',
+    avatar: '',
+    online: false,
+  })
+  const [accountName, setAccountName] = useState('')
+  const [profileMessage, setProfileMessage] = useState('')
+  const [savingProfile, setSavingProfile] = useState(false)
+  const avatarFileRef = useRef<HTMLInputElement>(null)
+  const token = readAccountToken()
+
+  useEffect(() => {
+    if (!token) return
+    void getAccountMe(token)
+      .then((body) => {
+        const next = {
+          id: String(body.id ?? ''),
+          name: String(body.name ?? body.email ?? ''),
+          email: String(body.email ?? ''),
+          avatar: String(body.avatar ?? ''),
+          online: body.online === true,
+        }
+        setAccount(next)
+        setAccountName(next.name)
+      })
+      .catch(() => {
+        setAccount({ id: '', name: '', email: '', avatar: '', online: false })
+        setAccountName('')
+      })
+  }, [token])
+
+  const saveAccountProfile = (patch: { name?: string; avatar?: string }, successText: string) => {
+    if (!token) return
+    setSavingProfile(true)
+    setProfileMessage('')
+    void accountFetch(token, '/api/account/profile', {
+      method: 'POST',
+      body: JSON.stringify(patch),
+    })
+      .then((body) => {
+        resetAccountMeGet()
+        const next = {
+          id: String(body.id ?? account.id),
+          name: String(body.name ?? account.name),
+          email: String(body.email ?? account.email),
+          avatar: String(body.avatar ?? ''),
+          online: body.online === true || account.online,
+        }
+        setAccount(next)
+        setAccountName(next.name)
+        setProfileMessage(successText)
+        window.dispatchEvent(new Event(ACCOUNT_EVENT))
+      })
+      .catch((error) => setProfileMessage(error instanceof Error ? error.message : '保存失败'))
+      .finally(() => setSavingProfile(false))
+  }
+
+  return (
+    <section className="settings-account" data-testid="settings-account">
+      <header className="settings-account-head">
+        <h3 className="settings-account-title">账户</h3>
+        <p className="settings-muted settings-account-lead">管理你的个人资料与本地账号信息。</p>
+      </header>
+      <form
+        className="settings-account-row settings-account-profile-row"
+        onSubmit={(event) => {
+          event.preventDefault()
+          const next = accountName.trim()
+          if (!next) {
+            setProfileMessage('账号名不能为空')
+            return
+          }
+          saveAccountProfile({ name: next }, '账号名已保存。')
+        }}
+      >
+        <div className="settings-account-photo is-compact">
+          <button
+            type="button"
+            className="settings-account-avatar is-compact"
+            data-testid="settings-account-profile-avatar"
+            title="更换头像"
+            aria-label="更换头像"
+            disabled={savingProfile}
+            onClick={() => avatarFileRef.current?.click()}
+          >
+            {account.avatar ? (
+              <img src={account.avatar} alt="" />
+            ) : (
+              <AiAvatar
+                seed={account.id || account.name || account.email || 'biu-ai'}
+                className="settings-account-ai-avatar"
+                data-testid="settings-account-default-avatar"
+              />
+            )}
+            <span className="settings-account-avatar-veil" aria-hidden>
+              <CameraIcon className="size-4" />
+            </span>
+          </button>
+          {account.avatar ? (
+            <button
+              type="button"
+              className="settings-account-clear"
+              data-testid="settings-account-reset-avatar"
+              disabled={savingProfile}
+              onClick={() => saveAccountProfile({ avatar: '' }, '已恢复默认 AI 头像。')}
+            >
+              恢复默认
+            </button>
+          ) : null}
+          <input
+            ref={avatarFileRef}
+            type="file"
+            accept="image/*"
+            hidden
+            data-testid="settings-account-profile-avatar-file"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              if (!file) return
+              void readAvatarFile(file)
+                .then((avatar) => saveAccountProfile({ avatar }, '头像已更新。'))
+                .catch((error) => setProfileMessage(error instanceof Error ? error.message : '头像读取失败'))
+            }}
+          />
+        </div>
+        <div className="settings-account-profile-fields">
+          <label className="settings-account-label" htmlFor="settings-account-global-name">账号名</label>
+          <div className="settings-account-field-row">
+            <input
+              id="settings-account-global-name"
+              className="settings-account-input"
+              data-testid="settings-account-global-name"
+              value={accountName}
+              maxLength={40}
+              placeholder="设置账号名"
+              onChange={(event) => setAccountName(event.target.value)}
+            />
+            <button
+              className="settings-account-action"
+              type="submit"
+              data-testid="settings-account-save-name"
+              disabled={savingProfile || !accountName.trim() || accountName.trim() === account.name}
+            >
+              保存
+            </button>
+          </div>
+          <p className="settings-muted settings-account-hint">
+            {profileMessage || '点击左侧头像可上传图片，默认使用多色混合 AI 图像。'}
+          </p>
+        </div>
+      </form>
+      <div className="settings-account-row">
+        <div className="settings-account-copy">
+          <p className="settings-account-label">登录邮箱</p>
+          <p className="settings-muted settings-account-hint" data-testid="settings-account-email">
+            {account.email || '未设置'}
+          </p>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+export function ShellSettingsConnections() {
+  const [account, setAccount] = useState<{ email: string; online: boolean }>({ email: '', online: false })
   const [cloud, setCloud] = useState<{
     available: boolean
     connected: boolean
+    configuredOrigin: string
     origin?: string
     account?: { id?: string; name?: string; email?: string }
     accounts: Array<{ id: string; name?: string; email?: string; origin?: string; active?: boolean }>
-  }>({ available: false, connected: false, accounts: [] })
+  }>({ available: false, connected: false, configuredOrigin: '', accounts: [] })
+  const [remoteOrigin, setRemoteOrigin] = useState('')
+  const [originMessage, setOriginMessage] = useState('')
+  const [cloudMode, setCloudMode] = useState<'login' | 'register'>('login')
+  const [cloudName, setCloudName] = useState('')
   const [cloudEmail, setCloudEmail] = useState('')
   const [cloudPassword, setCloudPassword] = useState('')
   const [cloudMessage, setCloudMessage] = useState('')
-  const [sessions, setSessions] = useState<Array<Record<string, unknown>>>([])
-  const [currentPassword, setCurrentPassword] = useState('')
-  const [nextPassword, setNextPassword] = useState('')
-  const [message, setMessage] = useState('')
   const token = readAccountToken()
-  const loadSessions = () =>
-    accountFetch(token, '/api/account/agents')
-      .then((body) => setSessions(((body.agents ?? body.sessions) as Array<Record<string, unknown>>) ?? []))
-      .catch(() => setSessions([]))
+
   const loadCloud = () =>
     accountFetch(token, '/api/account/cloud')
-      .then((body) =>
+      .then((body) => {
+        const configuredOrigin = typeof body.configuredOrigin === 'string'
+          ? body.configuredOrigin
+          : (typeof body.origin === 'string' ? body.origin : '')
         setCloud({
           available: body.available === true,
           connected: body.connected === true,
+          configuredOrigin,
           origin: typeof body.origin === 'string' ? body.origin : undefined,
           account:
             body.account && typeof body.account === 'object'
@@ -207,123 +376,221 @@ export function ShellSettingsAccount() {
           accounts: Array.isArray(body.accounts)
             ? (body.accounts as Array<{ id: string; name?: string; email?: string; origin?: string; active?: boolean }>)
             : [],
-        }),
-      )
-      .catch(() => setCloud({ available: false, connected: false, accounts: [] }))
+        })
+        setRemoteOrigin((prev) => prev || configuredOrigin)
+      })
+      .catch(() => setCloud({ available: false, connected: false, configuredOrigin: '', accounts: [] }))
+
   useEffect(() => {
     if (!token) return
     void getAccountMe(token)
-      .then((body) => setAccount({ name: String(body.name ?? body.email ?? ''), email: String(body.email ?? '') }))
-      .catch(() => setAccount({ name: '', email: '' }))
-    void loadSessions()
+      .then((body) => setAccount({ email: String(body.email ?? ''), online: body.online === true }))
+      .catch(() => setAccount({ email: '', online: false }))
     void loadCloud()
   }, [token])
+
   return (
-    <section className="settings-account" data-testid="settings-account">
+    <section className="settings-account" data-testid="settings-connections">
       <header className="settings-account-head">
-        <h3 className="settings-account-title">账户</h3>
-        <p className="settings-muted settings-account-lead">本地账号只管理这台设备的数据；云端账号是独立的可选连接。</p>
+        <h3 className="settings-account-title">连接</h3>
+        <p className="settings-muted settings-account-lead">
+          本地账号与云端账号相互独立；配置远程主机服务地址后，可关联或单独创建云端账号。
+        </p>
       </header>
-      <div className="settings-account-row">
-        <div className="settings-account-copy">
-          <p className="settings-account-label">账号名</p>
-          <p className="settings-muted settings-account-hint" data-testid="settings-account-global-name">
-            {account.name || account.email || '未设置'}
-          </p>
-        </div>
-      </div>
-      <div className="settings-account-row">
-        <div className="settings-account-copy">
-          <p className="settings-account-label">云端账号</p>
-          <p className="settings-muted settings-account-hint">可以关联多个云端账号，同一时间连接其中一个。断开后关联记录会保留。</p>
-          {cloud.accounts.length ? (
-            <div className="settings-cloud-accounts" data-testid="settings-cloud-accounts">
-              {cloud.accounts.map((item) => (
-                <div className="settings-member-row" key={`${item.origin ?? ''} ${item.id}`}>
-                  <span className="settings-member-identity">
-                    <strong>{item.email || item.name || '云端账号'}</strong>
-                    <small>{item.active ? `已连接${item.origin ? ` · ${item.origin}` : ''}` : (item.origin || '未连接')}</small>
-                  </span>
-                  <span className="settings-member-controls">
-                    {item.active ? (
-                      <button
-                        type="button"
-                        className="settings-account-action"
-                        onClick={() => {
-                          setCloudMessage('')
-                          void accountFetch(token, '/api/account/cloud', { method: 'DELETE' })
-                            .then(() => {
-                              setCloudMessage('已断开当前云端账号，关联记录还在。')
-                              void loadCloud()
-                              window.dispatchEvent(new Event(ACCOUNT_EVENT))
-                            })
-                            .catch((error) => setCloudMessage(error instanceof Error ? error.message : '断开失败'))
-                        }}
-                      >
-                        断开
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="settings-account-action"
-                        onClick={() => {
-                          setCloudMessage('')
-                          void accountFetch(token, '/api/account/cloud/active', {
-                            method: 'POST',
-                            body: JSON.stringify({ remoteAccountId: item.id, origin: item.origin }),
-                          })
-                            .then(() => {
-                              setCloudMessage('已切换云端账号。')
-                              void loadCloud()
-                              window.dispatchEvent(new Event(ACCOUNT_EVENT))
-                            })
-                            .catch((error) => setCloudMessage(error instanceof Error ? error.message : '连接失败'))
-                        }}
-                      >
-                        连接
-                      </button>
-                    )}
-                  </span>
-                </div>
-              ))}
+      {!account.online && cloud.available ? (
+        <>
+          <div className="settings-account-row is-stacked">
+            <div className="settings-account-copy">
+              <p className="settings-account-label">远程主机服务地址</p>
+              <p className="settings-muted settings-account-hint">填写远端 BIU 服务地址用于云端账号连接与同步。</p>
             </div>
-          ) : null}
-          {cloud.available ? (
+            <form
+              className="settings-cloud-origin"
+              onSubmit={(event) => {
+                event.preventDefault()
+                setOriginMessage('')
+                void accountFetch(token, '/api/account/cloud/config', {
+                  method: 'POST',
+                  body: JSON.stringify({ origin: remoteOrigin.trim() }),
+                })
+                  .then((body) => {
+                    const saved = typeof body.origin === 'string' ? body.origin : ''
+                    setRemoteOrigin(saved)
+                    setOriginMessage(saved ? `远程服务地址已保存：${saved}` : '已清除自定义远程服务地址。')
+                    void loadCloud()
+                  })
+                  .catch((error) => setOriginMessage(error instanceof Error ? error.message : '保存远程服务地址失败'))
+              }}
+            >
+              <input
+                className="settings-account-input"
+                type="url"
+                placeholder="https://cloud.example.com"
+                value={remoteOrigin}
+                data-testid="settings-cloud-origin"
+                onChange={(event) => setRemoteOrigin(event.target.value)}
+              />
+              <button
+                className="settings-account-action"
+                type="submit"
+                data-testid="settings-cloud-save-origin"
+              >
+                保存地址
+              </button>
+            </form>
+            {originMessage ? <p className="settings-muted settings-account-hint">{originMessage}</p> : null}
+          </div>
+          <div className="settings-account-row is-stacked">
+            <div className="settings-account-copy">
+              <p className="settings-account-label">云端账号</p>
+              <p className="settings-muted settings-account-hint">可以关联多个云端账号，同一时间连接其中一个。断开后关联记录会保留。</p>
+            </div>
+            {cloud.accounts.length ? (
+              <div className="settings-cloud-accounts" data-testid="settings-cloud-accounts">
+                {cloud.accounts.map((item) => (
+                  <div className="settings-member-row" key={`${item.origin ?? ''} ${item.id}`}>
+                    <span className="settings-member-identity">
+                      <strong>{item.name || item.email || '云端账号'}</strong>
+                      <small>
+                        {item.name && item.email && item.name !== item.email ? `${item.email} · ` : ''}
+                        {item.active ? `已连接${item.origin ? ` · ${item.origin}` : ''}` : (item.origin || '未连接')}
+                      </small>
+                    </span>
+                    <span className="settings-member-controls">
+                      {item.active ? (
+                        <button
+                          type="button"
+                          className="settings-account-action"
+                          onClick={() => {
+                            setCloudMessage('')
+                            void accountFetch(token, '/api/account/cloud', { method: 'DELETE' })
+                              .then(() => {
+                                setCloudMessage('已断开当前云端账号，关联记录还在。')
+                                void loadCloud()
+                                window.dispatchEvent(new Event(ACCOUNT_EVENT))
+                              })
+                              .catch((error) => setCloudMessage(error instanceof Error ? error.message : '断开失败'))
+                          }}
+                        >
+                          断开
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="settings-account-action"
+                          onClick={() => {
+                            setCloudMessage('')
+                            void accountFetch(token, '/api/account/cloud/active', {
+                              method: 'POST',
+                              body: JSON.stringify({ remoteAccountId: item.id, origin: item.origin }),
+                            })
+                              .then(() => {
+                                setCloudMessage('已切换云端账号。')
+                                void loadCloud()
+                                window.dispatchEvent(new Event(ACCOUNT_EVENT))
+                              })
+                              .catch((error) => setCloudMessage(error instanceof Error ? error.message : '连接失败'))
+                          }}
+                        >
+                          连接
+                        </button>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             <div className="settings-cloud-connect">
+              <div className="settings-cloud-tabs" role="tablist" aria-label="云端账号操作方式">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={cloudMode === 'login'}
+                  className={`settings-cloud-tab${cloudMode === 'login' ? ' is-active' : ''}`}
+                  data-testid="settings-cloud-mode-login"
+                  onClick={() => {
+                    setCloudMode('login')
+                    setCloudMessage('')
+                  }}
+                >
+                  登录已有云端账号
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={cloudMode === 'register'}
+                  className={`settings-cloud-tab${cloudMode === 'register' ? ' is-active' : ''}`}
+                  data-testid="settings-cloud-mode-register"
+                  onClick={() => {
+                    setCloudMode('register')
+                    setCloudMessage('')
+                  }}
+                >
+                  单独创建云端账号
+                </button>
+              </div>
               <form
                 className="settings-cloud-login"
                 onSubmit={(event) => {
                   event.preventDefault()
                   setCloudMessage('')
-                  void accountFetch(token, '/api/account/cloud/login', {
+                  const path = cloudMode === 'register' ? '/api/account/cloud/register' : '/api/account/cloud/login'
+                  const payload: Record<string, string> = {
+                    email: cloudEmail.trim(),
+                    password: cloudPassword,
+                  }
+                  if (remoteOrigin.trim()) payload.origin = remoteOrigin.trim()
+                  if (cloudMode === 'register' && cloudName.trim()) payload.name = cloudName.trim()
+                  void accountFetch(token, path, {
                     method: 'POST',
-                    body: JSON.stringify({ email: cloudEmail.trim(), password: cloudPassword }),
+                    body: JSON.stringify(payload),
                   })
                     .then(() => {
                       setCloudPassword('')
-                      setCloudMessage('云端账号已登录。')
+                      if (cloudMode === 'register') setCloudName('')
+                      setCloudMessage(cloudMode === 'register' ? '独立云端账号已创建并关联。' : '云端账号已登录。')
                       void loadCloud()
                       window.dispatchEvent(new Event(ACCOUNT_EVENT))
                     })
-                    .catch((error) => setCloudMessage(error instanceof Error ? error.message : '云端登录失败'))
+                    .catch((error) =>
+                      setCloudMessage(error instanceof Error ? error.message : (cloudMode === 'register' ? '云端注册失败' : '云端登录失败')),
+                    )
                 }}
               >
+                {cloudMode === 'register' ? (
+                  <input
+                    className="settings-account-input"
+                    type="text"
+                    maxLength={40}
+                    placeholder="云端账号名（可选）"
+                    value={cloudName}
+                    data-testid="settings-cloud-name"
+                    onChange={(event) => setCloudName(event.target.value)}
+                  />
+                ) : null}
                 <input
                   className="settings-account-input"
                   type="email"
                   placeholder="云端邮箱"
                   value={cloudEmail}
+                  data-testid="settings-cloud-email"
                   onChange={(event) => setCloudEmail(event.target.value)}
                 />
                 <input
                   className="settings-account-input"
                   type="password"
-                  placeholder="云端密码"
+                  placeholder={cloudMode === 'register' ? '云端密码（至少 6 位）' : '云端密码'}
                   value={cloudPassword}
+                  data-testid="settings-cloud-password"
                   onChange={(event) => setCloudPassword(event.target.value)}
                 />
-                <button className="settings-account-action" type="submit" disabled={!cloudEmail.trim() || !cloudPassword}>
-                  登录并关联
+                <button
+                  className="settings-account-action"
+                  type="submit"
+                  data-testid="settings-cloud-submit"
+                  disabled={!cloudEmail.trim() || !cloudPassword}
+                >
+                  {cloudMode === 'register' ? '注册并关联' : '登录并关联'}
                 </button>
               </form>
               <div className="settings-cloud-sync">
@@ -335,9 +602,10 @@ export function ShellSettingsAccount() {
                   onSubmit={(event) => {
                     event.preventDefault()
                     setCloudMessage('')
+                    const body = remoteOrigin.trim() ? { origin: remoteOrigin.trim() } : {}
                     void accountFetch(token, '/api/account/cloud/sync-create', {
                       method: 'POST',
-                      body: JSON.stringify({}),
+                      body: JSON.stringify(body),
                     })
                       .then(() => {
                         setCloudMessage('云端账号已创建并关联。')
@@ -358,22 +626,48 @@ export function ShellSettingsAccount() {
                 </form>
               </div>
             </div>
-          ) : (
-            <p className="settings-muted settings-account-hint">当前没有配置中心服务，单机功能可以完整使用。</p>
-          )}
-          {cloudMessage ? <p className="settings-muted settings-account-hint">{cloudMessage}</p> : null}
+            {cloudMessage ? <p className="settings-muted settings-account-hint">{cloudMessage}</p> : null}
+          </div>
+        </>
+      ) : (
+        <div className="settings-account-row">
+          <div className="settings-account-copy">
+            <p className="settings-account-label">云端连接</p>
+            <p className="settings-muted settings-account-hint">
+              {account.online ? '当前已在云端服务模式运行。' : '当前没有配置中心服务，单机功能可以完整使用。'}
+            </p>
+          </div>
         </div>
-      </div>
-      <div className="settings-account-row">
-        <div className="settings-account-copy">
-          <p className="settings-account-label">登录邮箱</p>
-          <p className="settings-muted settings-account-hint" data-testid="settings-account-email">
-            {account.email || '未设置'}
-          </p>
-        </div>
-      </div>
+      )}
+    </section>
+  )
+}
+
+export function ShellSettingsSecurity() {
+  const [sessions, setSessions] = useState<Array<Record<string, unknown>>>([])
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [nextPassword, setNextPassword] = useState('')
+  const [message, setMessage] = useState('')
+  const token = readAccountToken()
+
+  const loadSessions = () =>
+    accountFetch(token, '/api/account/agents')
+      .then((body) => setSessions(((body.agents ?? body.sessions) as Array<Record<string, unknown>>) ?? []))
+      .catch(() => setSessions([]))
+
+  useEffect(() => {
+    if (!token) return
+    void loadSessions()
+  }, [token])
+
+  return (
+    <section className="settings-account" data-testid="settings-security">
+      <header className="settings-account-head">
+        <h3 className="settings-account-title">安全</h3>
+        <p className="settings-muted settings-account-lead">管理当前账号的登录密码与已登录设备。</p>
+      </header>
       <form
-        className="settings-account-row"
+        className="settings-account-row is-stacked"
         onSubmit={(event) => {
           event.preventDefault()
           setMessage('')
@@ -392,41 +686,57 @@ export function ShellSettingsAccount() {
       >
         <div className="settings-account-copy">
           <p className="settings-account-label">修改密码</p>
-          <div className="settings-account-actions">
-            <input className="settings-account-input" type="password" placeholder="当前密码" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} />
-            <input className="settings-account-input" type="password" placeholder="新密码（至少 6 位）" value={nextPassword} onChange={(event) => setNextPassword(event.target.value)} />
-            <button className="settings-account-action" type="submit">修改密码</button>
-          </div>
-          {message ? <p className="settings-muted settings-account-hint">{message}</p> : null}
+          <p className="settings-muted settings-account-hint">修改密码后，其他已登录设备会自动退出。</p>
         </div>
+        <div className="settings-cloud-login">
+          <input
+            className="settings-account-input"
+            type="password"
+            placeholder="当前密码"
+            value={currentPassword}
+            onChange={(event) => setCurrentPassword(event.target.value)}
+          />
+          <input
+            className="settings-account-input"
+            type="password"
+            placeholder="新密码（至少 6 位）"
+            value={nextPassword}
+            onChange={(event) => setNextPassword(event.target.value)}
+          />
+          <button className="settings-account-action" type="submit" disabled={!currentPassword || !nextPassword}>
+            修改密码
+          </button>
+        </div>
+        {message ? <p className="settings-muted settings-account-hint">{message}</p> : null}
       </form>
-      <div className="settings-account-row">
+      <div className="settings-account-row is-stacked">
         <div className="settings-account-copy">
           <p className="settings-account-label">登录设备</p>
-          <div className="settings-account-sessions" data-testid="settings-account-sessions">
-            {sessions.map((session) => (
-              <div className="settings-member-row" key={String(session.id)}>
-                <span>{String(session.device_name || '设备')}</span>
-                <span className="settings-muted">
-                  {session.revoked_at
-                    ? '已退出'
-                    : `最近使用：${new Date(Number(session.last_seen_at)).toLocaleString()} · 到期：${new Date(Number(session.expires_at)).toLocaleString()}`}
-                </span>
-                {!session.revoked_at ? (
-                  <button
-                    type="button"
-                    className="settings-account-action"
-                    onClick={() => {
-                      void accountFetch(token, `/api/account/agents/${encodeURIComponent(String(session.id))}`, { method: 'DELETE' })
-                        .then(loadSessions)
-                    }}
-                  >
-                    移除
-                  </button>
-                ) : null}
-              </div>
-            ))}
-          </div>
+          <p className="settings-muted settings-account-hint">查看并移除已授权的登录会话。</p>
+        </div>
+        <div className="settings-account-sessions" data-testid="settings-account-sessions">
+          {sessions.map((session) => (
+            <div className="settings-member-row" key={String(session.id)}>
+              <span>{String(session.device_name || '设备')}</span>
+              <span className="settings-muted">
+                {session.revoked_at
+                  ? '已退出'
+                  : `最近使用：${new Date(Number(session.last_seen_at)).toLocaleString()} · 到期：${new Date(Number(session.expires_at)).toLocaleString()}`}
+              </span>
+              {!session.revoked_at ? (
+                <button
+                  type="button"
+                  className="settings-account-action"
+                  onClick={() => {
+                    void accountFetch(token, `/api/account/agents/${encodeURIComponent(String(session.id))}`, { method: 'DELETE' })
+                      .then(loadSessions)
+                  }}
+                >
+                  移除
+                </button>
+              ) : null}
+            </div>
+          ))}
         </div>
       </div>
     </section>
@@ -490,6 +800,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [authRoute, setAuthRoute] = useState<'login' | 'register' | null>(initialRoute)
   const [authOpen, setAuthOpen] = useState(Boolean(initialRoute))
   const [name, setName] = useState('')
+  const [accountName, setAccountName] = useState('')
   const [guestName, setGuestName] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -714,13 +1025,18 @@ export function AuthGate({ children }: { children: ReactNode }) {
             const path = mode === 'register' ? '/api/account/register' : '/api/account/login'
             void accountFetch('', path, {
               method: 'POST',
-              body: JSON.stringify({ email: name.trim(), password }),
+              body: JSON.stringify({
+                email: name.trim(),
+                password,
+                ...(mode === 'register' && accountName.trim() ? { name: accountName.trim() } : {}),
+              }),
             })
               .then((body) => {
                 clearWorkspaceId()
                 writeAccountToken(String(body.token ?? ''))
                 if (body.workspaceId) writeWorkspaceId(String(body.workspaceId))
                 setPassword('')
+                setAccountName('')
                 setError('')
                 if (window.location.pathname === '/login' || window.location.pathname === '/register') {
                   setBrowserPath('/', 'replace')
@@ -733,6 +1049,19 @@ export function AuthGate({ children }: { children: ReactNode }) {
           <h2>{mode === 'register' ? '注册' : '登录'}</h2>
           {workspaceInvite ? <p className="auth-lead">登录或注册后加入这个空间。</p> : null}
           {error ? <p className="auth-error">{error}</p> : null}
+          {mode === 'register' ? (
+            <label className="auth-label">
+              账号名
+              <input
+                className="auth-field"
+                value={accountName}
+                maxLength={40}
+                placeholder="你的账号名（可选）"
+                data-testid="auth-account-name"
+                onChange={(event) => setAccountName(event.target.value)}
+              />
+            </label>
+          ) : null}
           <label className="auth-label">
             邮箱
             <input
@@ -898,6 +1227,8 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
   const [creatingLocation, setCreatingLocation] = useState<'device' | 'cloud' | null>(null)
   const [createError, setCreateError] = useState('')
   const [localAccount, setLocalAccount] = useState('')
+  const [localAvatar, setLocalAvatar] = useState('')
+  const [localAccountId, setLocalAccountId] = useState('')
   const [hostOnline, setHostOnline] = useState(false)
   const [cloudAccounts, setCloudAccounts] = useState<Array<{ id: string; email?: string; name?: string; origin?: string; active?: boolean }>>([])
   const [cloudMenuOpen, setCloudMenuOpen] = useState(false)
@@ -913,7 +1244,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
         const [listed, current, me, cloud] = await Promise.all([
           accountFetch(token, '/api/account/workspaces') as Promise<{ workspaces?: CollabWorkspace[] }>,
           accountFetch(token, '/api/account/active') as Promise<{ workspaceId?: string }>,
-          getAccountMe(token) as Promise<{ email?: string; name?: string; online?: boolean }>,
+          getAccountMe(token) as Promise<{ id?: string; email?: string; name?: string; avatar?: string; online?: boolean }>,
           accountFetch(token, '/api/account/cloud').catch(() => ({})) as Promise<{
             accounts?: Array<{ id: string; email?: string; name?: string; origin?: string; active?: boolean }>
           }>,
@@ -923,7 +1254,9 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
         const workspaceId = String(current.workspaceId ?? '')
         setActive(workspaceId)
         if (workspaceId) writeWorkspaceId(workspaceId)
-        setLocalAccount(String(me.email || me.name || ''))
+        setLocalAccount(String(me.name || me.email || ''))
+        setLocalAvatar(String(me.avatar ?? ''))
+        setLocalAccountId(String(me.id ?? ''))
         setHostOnline(me.online === true)
         setCloudAccounts(Array.isArray(cloud.accounts) ? cloud.accounts : [])
       } catch {
@@ -1074,7 +1407,13 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
             </button>
             {hostOnline ? null : (
               <div className="shell-workspace-menu-account" data-testid="shell-workspace-local-account">
-                <ComputerDesktopIcon aria-hidden />
+                <span className="shell-workspace-account-avatar" aria-hidden>
+                  {localAvatar ? (
+                    <img src={localAvatar} alt="" />
+                  ) : (
+                    <AiAvatar seed={localAccountId || localAccount || 'biu-ai'} />
+                  )}
+                </span>
                 <span className="shell-workspace-menu-copy">
                   <strong>{localAccount || '本机账号'}</strong>
                 </span>
@@ -1097,8 +1436,8 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                 <strong className={!hostOnline && !cloudAccounts.some((item) => item.active) ? 'is-empty' : ''}>
                   {hostOnline
                     ? (localAccount || '云端账号')
-                    : (cloudAccounts.find((item) => item.active)?.email
-                      || cloudAccounts.find((item) => item.active)?.name
+                    : (cloudAccounts.find((item) => item.active)?.name
+                      || cloudAccounts.find((item) => item.active)?.email
                       || '暂时无账号')}
                 </strong>
               </span>
@@ -1174,7 +1513,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
             >
               <CloudIcon aria-hidden className="shell-workspace-menu-icon" />
               <span className="shell-workspace-menu-copy">
-                <strong>{item.email || item.name || '在线账号'}</strong>
+                <strong>{item.name || item.email || '在线账号'}</strong>
               </span>
             </button>
           )) : <p className="shell-workspace-cloud-empty">暂无在线账号</p>}
