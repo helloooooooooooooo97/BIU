@@ -1289,8 +1289,12 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         limit: Number.isFinite(limit) ? limit : 80,
       })
       type DatabaseLookup = {
-        collection?: (path: string) => { label?: string } | undefined
-        list?: (path: string, query?: { ids?: string[]; columns?: string[] }) => Promise<{ items?: Array<{ id?: unknown; title?: unknown; name?: unknown }> }>
+        collection?: (path: string) => { label?: string; schema?: { labelField?: string } } | undefined
+        list?: (
+          path: string,
+          filter?: Record<string, unknown>,
+          page?: { columns?: string[]; limit?: number; offset?: number },
+        ) => Promise<{ items?: Array<Record<string, unknown>> }>
         viewCatalog?: { viewsFor(path: string): Array<{ id?: unknown; name?: unknown }> }
       }
       let db: DatabaseLookup | undefined
@@ -1300,6 +1304,13 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         db = undefined
       }
       const titleMap = new Map<string, string>()
+      for (const item of data.recent) {
+        const key = `${item.collection}\t${item.recordId}`
+        const title = item.recordTitle?.trim()
+        if (item.collection && item.recordId && title && !titleMap.has(key)) {
+          titleMap.set(key, title)
+        }
+      }
       const collectionLabels = new Map<string, string>()
       if (db?.list && data.grants.records.length) {
         const byCollection = new Map<string, string[]>()
@@ -1309,17 +1320,37 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
           byCollection.set(grant.collection, list)
         }
         for (const [collection, ids] of byCollection) {
-          const label = db.collection?.(collection)?.label?.trim()
+          const spec = db.collection?.(collection)
+          const label = spec?.label?.trim() ?? ''
           if (label) collectionLabels.set(collection, label)
-          try {
-            const listed = await db.list(collection, { ids, columns: ['title', 'name'] })
-            for (const row of listed?.items ?? []) {
+          const labelField = spec?.schema?.labelField?.trim()
+          const columns = [...new Set(['title', 'name', 'label', ...(labelField ? [labelField] : [])])]
+          const resolvedIds = new Set<string>()
+          const collectRows = (items: Array<Record<string, unknown>> | undefined) => {
+            for (const row of items ?? []) {
               const id = String(row.id ?? '')
-              const title = String(row.title ?? row.name ?? '').trim()
-              if (id && title) titleMap.set(`${collection}\t${id}`, title)
+              if (!id) continue
+              resolvedIds.add(id)
+              const rawTitle = String(
+                (labelField ? row[labelField] : undefined) ?? row.title ?? row.name ?? row.label ?? '',
+              ).trim()
+              titleMap.set(`${collection}\t${id}`, rawTitle || (label ? `未命名${label}` : '未命名'))
+            }
+          }
+          try {
+            const listed = await db.list(collection, { $ids: ids }, { columns, limit: Math.max(ids.length, 100) })
+            collectRows(listed?.items)
+            const missingIds = ids.filter((id) => !resolvedIds.has(id))
+            if (missingIds.length) {
+              const trashed = await db.list(
+                collection,
+                { $ids: missingIds, deleted: true },
+                { columns, limit: Math.max(missingIds.length, 100) },
+              )
+              collectRows(trashed?.items)
             }
           } catch {
-            /* 无法读取该集合时回退为 recordId */
+            /* 无法读取该集合时回退为已有标题或 recordId */
           }
         }
       }
