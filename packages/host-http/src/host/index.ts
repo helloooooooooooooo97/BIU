@@ -515,8 +515,8 @@ export class HttpService extends Service {
     return this.ctx.effect(() => {
       const wss = new WebSocketServer({ noServer: true })
       wss.on('connection', (socket, request) => {
+        const auth = this.authenticateSocket(request)
         if (isOnlineRuntime()) {
-          const auth = this.authenticateSocket(request)
           if (auth.error) {
             socket.close(auth.error, auth.error === 4403 ? 'workspace' : 'tenant')
             return
@@ -531,7 +531,7 @@ export class HttpService extends Service {
             return
           }
         }
-        handler(socket, request)
+        runWithAccount(auth.accountId, () => runWithRequestWorkspace(auth.workspaceId, () => handler(socket, request)))
       })
       this.wsServers.set(path, wss)
       return () => {

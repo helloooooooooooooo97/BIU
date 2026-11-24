@@ -5,6 +5,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  useSyncExternalStore,
   type ImgHTMLAttributes,
   type ReactNode,
 } from 'react'
@@ -12,6 +13,7 @@ import { createPortal } from 'react-dom'
 import { Button } from './button.tsx'
 import { cn } from './cn.ts'
 import { overlayPortalRoot, overlayZ } from './overlay-portal.ts'
+import { getWorkspaceEndpoint, resolveAssetUrl, subscribeWorkspaceEndpoint } from './workspace-transport.ts'
 
 type PreviewCtx = {
   items: string[]
@@ -151,23 +153,25 @@ function ImageRoot({
   fallback?: ReactNode
 }) {
   const group = useContext(PreviewGroupContext)
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(src ? 'loading' : 'error')
+  useSyncExternalStore(subscribeWorkspaceEndpoint, getWorkspaceEndpoint, getWorkspaceEndpoint)
+  const resolvedSrc = src ? resolveAssetUrl(src) : src
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(resolvedSrc ? 'loading' : 'error')
   const [soloOpen, setSoloOpen] = useState(false)
   const [zoomed, setZoomed] = useState(false)
   const canPreview = preview !== false
 
   useEffect(() => {
-    setStatus(src ? 'loading' : 'error')
-  }, [src])
+    setStatus(resolvedSrc ? 'loading' : 'error')
+  }, [resolvedSrc])
 
   useEffect(() => {
-    if (!src || !group) return
-    return group.register(src)
-  }, [group, src])
+    if (!resolvedSrc || !group) return
+    return group.register(resolvedSrc)
+  }, [group, resolvedSrc])
 
   function openPreview() {
-    if (!src || !canPreview) return
-    if (group) group.open(src)
+    if (!resolvedSrc || !canPreview) return
+    if (group) group.open(resolvedSrc)
     else {
       setZoomed(false)
       setSoloOpen(true)
@@ -187,10 +191,10 @@ function ImageRoot({
           {fallback ?? '无法加载'}
         </span>
       ) : null}
-      {src ? (
+      {resolvedSrc ? (
         <img
           {...rest}
-          src={src}
+          src={resolvedSrc}
           alt={alt}
           width={width}
           height={height}
@@ -203,10 +207,10 @@ function ImageRoot({
           }}
         />
       ) : null}
-      {soloOpen && src ? (
+      {soloOpen && resolvedSrc ? (
         <ImageLightbox
-          src={src}
-          items={[src]}
+          src={resolvedSrc}
+          items={[resolvedSrc]}
           zoomed={zoomed}
           onZoom={() => setZoomed((on) => !on)}
           onClose={() => setSoloOpen(false)}
