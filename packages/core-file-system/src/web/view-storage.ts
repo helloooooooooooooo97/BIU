@@ -18,12 +18,26 @@ import { registerWorkspaceCache } from './workspace-client-store.ts'
 /** 按 collectionPath 串行化视图写入，防止连点改属性时并发 POST 乱序覆盖。 */
 export const viewWriteQueue = new KeyedSerialQueue()
 
+/** 按当前活动工作区隔离 localStorage 视图缓存，防止本机空间与云端空间、或不同空间之间互相污染默认视图。 */
+function currentWorkspaceStorageId(): string {
+  return (
+    readStorageString('biu.workspaceId', 'session')?.trim() ||
+    readStorageString('biu.workspaceId')?.trim() ||
+    ''
+  )
+}
+
+function workspaceStoragePrefix(): string {
+  const ws = currentWorkspaceStorageId()
+  return ws ? `${ws}:` : ''
+}
+
 export function viewsKey(collectionPath: string) {
-  return `fsdb.views:${collectionPath}`
+  return `fsdb.views:${workspaceStoragePrefix()}${collectionPath}`
 }
 
 export function omittedViewsKey(collectionPath: string) {
-  return `fsdb.omittedViews:${collectionPath}`
+  return `fsdb.omittedViews:${workspaceStoragePrefix()}${collectionPath}`
 }
 
 export function loadOmittedViewIds(collectionPath: string): string[] {
@@ -60,7 +74,7 @@ export function reviveSavedViewIds(collectionPath: string, ids: Iterable<string>
 }
 
 export function activeViewStorageKey(collectionPath: string) {
-  return `fsdb.activeView:${collectionPath}`
+  return `fsdb.activeView:${workspaceStoragePrefix()}${collectionPath}`
 }
 
 const memoryViews = new Map<string, SavedView[]>()
@@ -328,9 +342,14 @@ export type StarredView = { path: string; viewId: string; name?: string }
 
 const STARRED_VIEWS_KEY = 'fsdb.starredViews'
 
+function starredViewsKey() {
+  const ws = currentWorkspaceStorageId()
+  return ws ? `${STARRED_VIEWS_KEY}:${ws}` : STARRED_VIEWS_KEY
+}
+
 export function loadStarredViews(): StarredView[] {
   try {
-    const raw = readStorageString(STARRED_VIEWS_KEY)
+    const raw = readStorageString(starredViewsKey())
     const parsed = raw ? (JSON.parse(raw) as unknown) : []
     if (!Array.isArray(parsed)) return []
     return parsed.flatMap((item) => {
@@ -433,7 +452,7 @@ export function persistStarredViews(items: StarredView[], options?: { remote?: b
   if (options?.remote !== false) starredHydrateSeq += 1
   starredViews = items
   starredVersion += 1
-  writeStorageString(STARRED_VIEWS_KEY, JSON.stringify(items))
+  writeStorageString(starredViewsKey(), JSON.stringify(items))
   for (const fn of starredListeners) fn()
   if (options?.remote !== false) pushStarredToServer({ starredViews: items })
 }
@@ -820,9 +839,14 @@ export type StarredRecord = { path: string; recordId: string; label?: string; em
 
 const STARRED_RECORDS_KEY = 'fsdb.starredRecords'
 
+function starredRecordsKey() {
+  const ws = currentWorkspaceStorageId()
+  return ws ? `${STARRED_RECORDS_KEY}:${ws}` : STARRED_RECORDS_KEY
+}
+
 export function loadStarredRecords(): StarredRecord[] {
   try {
-    const raw = readStorageString(STARRED_RECORDS_KEY)
+    const raw = readStorageString(starredRecordsKey())
     const parsed = raw ? (JSON.parse(raw) as unknown) : []
     if (!Array.isArray(parsed)) return []
     return parsed.flatMap((item) => {
@@ -864,7 +888,7 @@ export function persistStarredRecords(items: StarredRecord[], options?: { remote
   if (options?.remote !== false) starredHydrateSeq += 1
   starredRecords = items
   starredRecordsVersion += 1
-  writeStorageString(STARRED_RECORDS_KEY, JSON.stringify(items))
+  writeStorageString(starredRecordsKey(), JSON.stringify(items))
   for (const fn of starredRecordListeners) fn()
   if (options?.remote !== false) pushStarredToServer({ starredRecords: items })
 }
@@ -925,11 +949,11 @@ export type ViewDisplayPatch = Partial<Pick<SavedView, (typeof DISPLAY_KEYS)[num
 }
 
 export function viewDisplayKey(collectionPath: string, viewId: string) {
-  return `fsdb.viewDisplay:${collectionPath}:${viewId}`
+  return `fsdb.viewDisplay:${workspaceStoragePrefix()}${collectionPath}:${viewId}`
 }
 
 export function collapsedGroupsKey(collectionPath: string, viewId: string, groupBy = '') {
-  return `fsdb.collapsedGroups:${collectionPath}:${viewId}:${groupBy}`
+  return `fsdb.collapsedGroups:${workspaceStoragePrefix()}${collectionPath}:${viewId}:${groupBy}`
 }
 
 export function loadCollapsedGroups(collectionPath: string, viewId: string, groupBy = ''): Record<string, boolean> {
