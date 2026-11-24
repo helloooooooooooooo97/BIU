@@ -1303,8 +1303,21 @@ a.fsdb-person.is-link:hover .fsdb-person-name,button.fsdb-person.is-link:hover .
 .fsdb-share-empty .fsdb-share-publish{width:auto;flex:none}
 .fsdb-share-invite-row{display:grid;grid-template-columns:minmax(0,1fr) 78px 52px;gap:6px;align-items:center}
 .fsdb-share-invite-row .fsdb-share-publish{width:52px;height:32px;padding:0;border-radius:8px;font-size:12.5px}
-.fsdb-share-invite-row select,.fsdb-share-advanced select{min-width:0;height:32px;appearance:none;-webkit-appearance:none;border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:8px;background:var(--biu-color-bg-input) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23888'%3E%3Cpath fill-rule='evenodd' d='M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z' clip-rule='evenodd'/%3E%3C/svg%3E") no-repeat right 7px center/13px 13px;padding:0 22px 0 8px;color:var(--biu-color-text);font:inherit;font-size:12px;outline:0;cursor:pointer;transition:border-color 120ms ease,box-shadow 120ms ease}
-.fsdb-share-invite-row select:focus,.fsdb-share-advanced select:focus,.fsdb-share-link-field:focus-within,.fsdb-share-invite-row>input.fsdb-share-link-field:focus,.fsdb-share-member-picker>input.fsdb-share-link-field:focus{border-color:color-mix(in srgb,var(--biu-color-emphasis) 70%,var(--biu-color-border));box-shadow:0 0 0 2px color-mix(in srgb,var(--biu-color-emphasis) 18%,transparent)}
+.fsdb-share-select-trigger{display:inline-flex;min-width:0;width:100%;height:32px;align-items:center;justify-content:space-between;gap:4px;border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:8px;background:var(--biu-color-bg-input);padding:0 7px 0 9px;color:var(--biu-color-text);font:inherit;font-size:12px;font-weight:var(--biu-font-weight-medium);cursor:pointer;outline:0;transition:border-color 120ms ease,background-color 120ms ease,box-shadow 120ms ease}
+.fsdb-share-select-trigger span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fsdb-share-select-trigger:hover{background:color-mix(in srgb,var(--biu-color-bg-hover) 70%,var(--biu-color-bg-input))}
+.fsdb-share-select-trigger.is-open,.fsdb-share-select-trigger:focus-visible{border-color:color-mix(in srgb,var(--biu-color-emphasis) 70%,var(--biu-color-border));box-shadow:0 0 0 2px color-mix(in srgb,var(--biu-color-emphasis) 18%,transparent)}
+.fsdb-share-select-chevron{flex:none;color:var(--biu-color-text-subtle);transition:transform 140ms ease}
+.fsdb-share-select-trigger.is-open .fsdb-share-select-chevron{transform:rotate(180deg);color:var(--biu-color-text)}
+.fsdb-share-select-menu{box-sizing:border-box;display:flex;flex-direction:column;gap:2px;overflow:auto;border:var(--biu-stroke-width) solid var(--biu-color-border-popover);border-radius:10px;background:var(--biu-color-bg-popover);padding:4px;box-shadow:var(--biu-shadow-popover)}
+.fsdb-share-select-option{display:flex;width:100%;align-items:center;justify-content:space-between;gap:10px;border:0;border-radius:7px;background:transparent;padding:6px 8px;color:var(--biu-color-text);font:inherit;text-align:left;cursor:pointer;transition:background-color 110ms ease}
+.fsdb-share-select-option:hover{background:var(--biu-color-bg-hover)}
+.fsdb-share-select-option.is-selected{background:color-mix(in srgb,var(--biu-color-emphasis) 14%,transparent)}
+.fsdb-share-select-option-copy{display:flex;min-width:0;flex-direction:column;gap:1px}
+.fsdb-share-select-option-copy strong{color:var(--biu-color-text);font-size:12.5px;font-weight:var(--biu-font-weight-semibold);line-height:1.25}
+.fsdb-share-select-option-copy em{color:var(--biu-color-text-subtle);font-size:11px;font-style:normal;line-height:1.25}
+.fsdb-share-select-check{flex:none;color:var(--biu-color-emphasis)}
+.fsdb-share-link-field:focus-within,.fsdb-share-invite-row>input.fsdb-share-link-field:focus,.fsdb-share-member-picker>input.fsdb-share-link-field:focus{border-color:color-mix(in srgb,var(--biu-color-emphasis) 70%,var(--biu-color-border));box-shadow:0 0 0 2px color-mix(in srgb,var(--biu-color-emphasis) 18%,transparent)}
 .fsdb-share-member-picker{position:relative;min-width:0}
 .fsdb-share-member-picker>input.fsdb-share-link-field{width:100%;outline:0;color:var(--biu-color-text);font:inherit;font-size:var(--biu-font-size-2)}
 .fsdb-share-member-picker>input[type=search]::-webkit-search-cancel-button{display:none}

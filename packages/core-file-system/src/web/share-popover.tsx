@@ -1,7 +1,7 @@
 import { readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowPathIcon, CheckIcon, ChevronRightIcon, LinkIcon, ShareIcon, UserGroupIcon, UsersIcon, XMarkIcon } from '@heroicons/react/16/solid'
+import { ArrowPathIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, LinkIcon, ShareIcon, UserGroupIcon, UsersIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { useFloatingPosition } from '@biu/biu-ui/floating-position'
 import { OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
@@ -88,6 +88,112 @@ function ShareToggle({
     >
       <span />
     </button>
+  )
+}
+
+type ShareSelectOption = {
+  value: string
+  label: string
+  hint?: string
+}
+
+const ROLE_OPTIONS: ShareSelectOption[] = [
+  { value: 'viewer', label: '可查看', hint: '仅查看内容' },
+  { value: 'commenter', label: '可评论', hint: '查看与添加批注' },
+  { value: 'editor', label: '可编辑', hint: '修改属性与正文' },
+  { value: 'manager', label: '可管理', hint: '分享与权限管理' },
+]
+
+function ShareSelect({
+  value,
+  options,
+  ariaLabel,
+  placement = 'bottom-end',
+  minMenuWidth = 156,
+  onChange,
+}: {
+  value: string
+  options: ShareSelectOption[]
+  ariaLabel: string
+  placement?: 'bottom-start' | 'bottom-end'
+  minMenuWidth?: number
+  onChange: (value: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const current = options.find((opt) => opt.value === value) ?? options[0]
+  const pos = useFloatingPosition({
+    anchor: triggerRef,
+    floatingRef: menuRef,
+    enabled: open,
+    placement,
+    offset: 4,
+    fallbackWidth: minMenuWidth,
+    fallbackHeight: options.length * 40 + 12,
+  })
+
+  const portalRoot = typeof document !== 'undefined' ? overlayPortalRoot() : null
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={`fsdb-share-select-trigger${open ? ' is-open' : ''}`}
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <span>{current?.label ?? ''}</span>
+        <ChevronDownIcon aria-hidden className="fsdb-share-select-chevron size-3.5" />
+      </button>
+      {open && portalRoot
+        ? createPortal(
+            <HeadlessDismiss onDismiss={() => setOpen(false)} insideRef={triggerRef}>
+              <div
+                ref={menuRef}
+                className="fsdb-share-select-menu"
+                role="listbox"
+                aria-label={ariaLabel}
+                style={{
+                  position: 'fixed',
+                  top: pos.top,
+                  left: pos.left,
+                  minWidth: Math.max(minMenuWidth, pos.anchorWidth),
+                  maxHeight: pos.maxHeight,
+                  zIndex: overlayZ(OVERLAY_Z.menu),
+                }}
+              >
+                {options.map((opt) => {
+                  const selected = opt.value === value
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      role="option"
+                      aria-selected={selected}
+                      className={`fsdb-share-select-option${selected ? ' is-selected' : ''}`}
+                      onClick={() => {
+                        onChange(opt.value)
+                        setOpen(false)
+                      }}
+                    >
+                      <span className="fsdb-share-select-option-copy">
+                        <strong>{opt.label}</strong>
+                        {opt.hint ? <em>{opt.hint}</em> : null}
+                      </span>
+                      {selected ? <CheckIcon aria-hidden className="fsdb-share-select-check size-3.5" /> : null}
+                    </button>
+                  )
+                })}
+              </div>
+            </HeadlessDismiss>,
+            portalRoot,
+          )
+        : null}
+    </>
   )
 }
 
@@ -449,12 +555,14 @@ function WorkspaceAccess({
   const selectedMember = workspaceMembers.find((row) => row.id === selectedMemberId)
 
   const roleSelect = (
-    <select className="fsdb-share-role-select" value={role} aria-label="权限" onChange={(event) => setRole(event.target.value as typeof role)}>
-      <option value="viewer">可查看</option>
-      <option value="commenter">可评论</option>
-      <option value="editor">可编辑</option>
-      <option value="manager">可管理</option>
-    </select>
+    <ShareSelect
+      value={role}
+      options={ROLE_OPTIONS}
+      ariaLabel="权限"
+      placement="bottom-end"
+      minMenuWidth={168}
+      onChange={(next) => setRole(next as typeof role)}
+    />
   )
 
   const internalCount = internalPeople.length + groups.length + memberViews.length + inheritedInternal.length
@@ -583,9 +691,14 @@ function WorkspaceAccess({
           <details className="fsdb-share-advanced" data-testid="fsdb-share-member-view">
             <summary><ChevronRightIcon aria-hidden className="fsdb-share-advanced-chevron size-3.5" />按成员视图批量授权</summary>
             <div className="fsdb-share-link-row">
-              <select className="fsdb-share-role-select" value={memberViewId} aria-label="成员视图" onChange={(event) => setMemberViewId(event.target.value)}>
-                {availableMemberViews.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
-              </select>
+              <ShareSelect
+                value={memberViewId}
+                options={availableMemberViews.map((row) => ({ value: row.id, label: row.name }))}
+                ariaLabel="成员视图"
+                placement="bottom-start"
+                minMenuWidth={180}
+                onChange={(next) => setMemberViewId(next)}
+              />
               <button type="button" className="fsdb-share-publish" disabled={!memberViewId} onClick={() => void grant({ memberViewId })}>授权</button>
             </div>
           </details>
