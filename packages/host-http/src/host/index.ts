@@ -4,10 +4,10 @@ import { extname, join } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import type { Duplex } from 'node:stream'
 import { Service, type Context } from 'cordis'
-import { WebSocketServer, type WebSocket } from 'ws'
+import { WebSocket as WsClient, WebSocketServer, type WebSocket } from 'ws'
 import { HUB_CHANGE } from '@biu/type-http'
 import { hostPort, hostSharePort, hostShareProxyUi } from '@biu/host-plugin-loader/env'
-import type { Method, RouteContext, RouteHandler } from '@biu/type-http'
+import type { Method, RouteContext, RouteHandler, RouteOptions, RouteScope } from '@biu/type-http'
 import {
   currentAccountId,
   currentPluginId,
@@ -17,6 +17,7 @@ import {
   runWithRequestWorkspace,
   isOnlineRuntime,
 } from '@biu/host-plugin-loader/data-dir'
+import { getRuntimePolicy, resolveRemoteCloudTarget } from '@biu/host-plugin-loader/runtime'
 import { isShareApiPath, isSharePublicPath } from './share-gate.ts'
 
 interface Route {
@@ -26,6 +27,7 @@ interface Route {
   regexp: RegExp
   handler: RouteHandler
   pluginId?: string
+  scope?: RouteScope
 }
 
 const MIME: Record<string, string> = {
@@ -167,19 +169,22 @@ export function rewriteLegacyAgentApi(pathname: string) {
 }
 
 const CLOUD_PROXY_WORKSPACE_RE = /^\/api\/account\/workspaces\/([^/]+)\/(?:members|groups|invites)(?:\/|$)/
-const CLOUD_PROXY_AGENT_META_RE = /^\/api\/agents\/[^/]+\/(?:config|fork|pin|artifacts)(?:\/|$)/
-const CLOUD_PROXY_AGENT_ITEM_RE = /^\/api\/agents\/[^/]+$/
 const CLOUD_PROXY_BODY_WORKSPACE_PATHS = new Set([
   '/api/account/mcp/credentials',
   '/api/account/locks',
   '/api/account/presence',
 ])
 const CLOUD_PROXY_READONLY_DB_TOOLS = new Set(['db_list', 'db_read', 'db_stat'])
-const CLOUD_PROXY_TIMEOUT_MS = 30_000
+const CLOUD_PROXY_TIMEOUT_MS = 60_000
 
-/** 桌面端处于云端空间时，所有空间数据与协作接口统一透传到远端云主机，避免本地 SQLite 镜像与转发遗漏。 */
-export function shouldProxyCloudApi(pathname: string, method = 'GET'): boolean {
-  const upper = method.toUpperCase()
+/**
+ * 桌面端处于云端空间时（方案 A：云端算力 + 云端数据 + 云端沙盒），
+ * 所有 workspace 作用域的接口（数据、协作、Agent 执行与配置、审批、技能、MCP）统一透传到远端云主机。
+ * 优先遵循路由注册时声明的 RouteOptions.scope，未声明时回落到路径规则。
+ */
+export function shouldProxyCloudApi(pathname: string, _method = 'GET', routeScope?: RouteScope): boolean {
+  if (routeScope === 'host' || routeScope === 'public') return false
+  if (routeScope === 'workspace') return true
   if (
     pathname === '/api/db' ||
     pathname.startsWith('/api/db/') ||
@@ -188,6 +193,21 @@ export function shouldProxyCloudApi(pathname: string, method = 'GET'): boolean {
     pathname.startsWith('/api/tag/') ||
     pathname.startsWith('/api/content-turns/') ||
     pathname === '/api/profile'
+  ) {
+    return true
+  }
+  if (
+    pathname === '/api/agents' ||
+    pathname.startsWith('/api/agents/') ||
+    pathname === '/api/chat' ||
+    pathname.startsWith('/api/chat/') ||
+    pathname === '/api/approvals' ||
+    pathname.startsWith('/api/approvals/') ||
+    pathname.startsWith('/api/skills/') ||
+    pathname.startsWith('/api/editor/') ||
+    pathname.startsWith('/api/page-sandbox/') ||
+    pathname === '/api/mcp/info' ||
+    pathname === '/api/mcp/rotate'
   ) {
     return true
   }
@@ -205,10 +225,6 @@ export function shouldProxyCloudApi(pathname: string, method = 'GET'): boolean {
     return true
   }
   if (CLOUD_PROXY_WORKSPACE_RE.test(pathname)) return true
-  if (pathname === '/api/agents' && (upper === 'GET' || upper === 'POST')) return true
-  if (pathname.startsWith('/api/agents/') && upper === 'GET') return true
-  if (CLOUD_PROXY_AGENT_ITEM_RE.test(pathname) && upper === 'DELETE') return true
-  if (CLOUD_PROXY_AGENT_META_RE.test(pathname)) return true
   return false
 }
 
@@ -270,12 +286,43 @@ export class HttpService extends Service {
   private routes: Route[] = []
   private sockets = new Set<WebSocket>()
   private socketMeta = new WeakMap<WebSocket, { accountId: string; workspaceId: string; token: string }>()
+  private cloudBridges = new Map<WebSocket, WsClient>()
   private server: Server | null = null
   /** 同一 HTTP server 上只能有一条 upgrade 路由；多挂几个 `ws.Server({ server })` 会互相 abort 握手。 */
   private wsServers = new Map<string, WebSocketServer>()
 
   constructor(ctx: Context, public config: { port: number; host: string; publicDir: string; fallbackPort: boolean; sharePort: number; shareHost: string }) {
     super(ctx, 'http')
+    this.route(
+      'GET',
+      '/api/runtime',
+      (route) => {
+        const policy = getRuntimePolicy()
+        let wsId = currentRequestWorkspaceId()
+        let location: 'device' | 'cloud' | null = null
+        try {
+          const account = this.ctx.get('account') as
+            | {
+                store?: { activeWorkspaceId(): string | null }
+                workspaceLocation?: (id: string) => 'device' | 'cloud'
+              }
+            | undefined
+          if (!wsId && policy.allowImplicitActiveWorkspace) {
+            wsId = String(account?.store?.activeWorkspaceId?.() ?? '').trim()
+          }
+          if (wsId) {
+            location = policy.hostMode === 'cloud' ? 'cloud' : (account?.workspaceLocation?.(wsId) ?? 'device')
+          }
+        } catch {
+          if (wsId) location = policy.hostMode === 'cloud' ? 'cloud' : 'device'
+        }
+        route.send(200, {
+          ...policy,
+          workspace: wsId ? { id: wsId, location: location ?? (policy.hostMode === 'cloud' ? 'cloud' : 'device') } : null,
+        })
+      },
+      { scope: 'host' },
+    )
     ctx.effect(() => {
       const server = createServer((req, res) => {
         void this.dispatch(req, res, false)
@@ -292,9 +339,21 @@ export class HttpService extends Service {
         this.socketMeta.set(socket, auth)
         this.sockets.add(socket)
         socket.send(JSON.stringify({ type: 'hello', payload: { ok: true, workspaceId: auth.workspaceId } }))
+        if (getRuntimePolicy().hostMode === 'desktop' && auth.accountId && auth.workspaceId) {
+          this.attachCloudWsBridge(socket, auth.accountId, auth.workspaceId)
+        }
         socket.on('close', () => {
           this.sockets.delete(socket)
           this.socketMeta.delete(socket)
+          const upstream = this.cloudBridges.get(socket)
+          if (upstream) {
+            this.cloudBridges.delete(socket)
+            try {
+              upstream.close()
+            } catch {
+              /* ignore */
+            }
+          }
         })
       })
       const onUpgrade = (req: IncomingMessage, socket: Duplex, head: Buffer) => {
@@ -340,6 +399,14 @@ export class HttpService extends Service {
       })
       return () =>
         new Promise<void>((resolve) => {
+          for (const upstream of this.cloudBridges.values()) {
+            try {
+              upstream.terminate()
+            } catch {
+              /* ignore */
+            }
+          }
+          this.cloudBridges.clear()
           for (const socket of this.sockets) socket.terminate()
           server.off('upgrade', onUpgrade)
           hub.close()
@@ -351,11 +418,72 @@ export class HttpService extends Service {
     }, 'http.listen')
   }
 
-  route(method: Method, pattern: string, handler: RouteHandler) {
+  /**
+   * 桌面端处于云端空间时，把本地前端的 /ws 连接桥接到远端云主机 /ws，
+   * 让云端 Agent 流式 chunk、审批、状态、协作数据库变更直接实时推送到桌面端，无需轮询。
+   */
+  private attachCloudWsBridge(localSocket: WebSocket, accountId: string, workspaceId: string) {
+    const remote = resolveRemoteCloudTarget(this.ctx, workspaceId, accountId)
+    if (!remote) return
+    const wsOrigin = remote.origin.replace(/^http:\/\//i, 'ws://').replace(/^https:\/\//i, 'wss://')
+    const wsUrl = `${wsOrigin}/ws?workspaceId=${encodeURIComponent(remote.workspaceId)}`
+    let upstream: WsClient
+    try {
+      upstream = new WsClient(wsUrl, {
+        headers: {
+          authorization: `Bearer ${remote.token}`,
+        },
+      })
+    } catch {
+      return
+    }
+    this.cloudBridges.set(localSocket, upstream)
+    upstream.on('message', (data, isBinary) => {
+      if (localSocket.readyState !== 1) return
+      if (!isBinary) {
+        const text = typeof data === 'string' ? data : data.toString('utf8')
+        try {
+          const parsed = JSON.parse(text) as { type?: unknown }
+          if (parsed?.type === 'hello') return
+        } catch {
+          /* forward non-JSON frames as-is */
+        }
+        localSocket.send(text)
+        return
+      }
+      localSocket.send(data)
+    })
+    localSocket.on('message', (data, isBinary) => {
+      if (upstream.readyState !== 1) return
+      upstream.send(data, { binary: isBinary })
+    })
+    upstream.on('close', (code, reason) => {
+      if (this.cloudBridges.get(localSocket) === upstream) {
+        this.cloudBridges.delete(localSocket)
+      }
+      if ((code === 4401 || code === 4403) && localSocket.readyState === 1) {
+        localSocket.close(code, reason.toString('utf8') || (code === 4403 ? 'workspace' : 'tenant'))
+      }
+    })
+    upstream.on('error', () => {
+      /* close event handles cleanup */
+    })
+  }
+
+  route(method: Method, pattern: string, handler: RouteHandler, options?: RouteOptions) {
     const pluginId = currentPluginId()
+    const scope = options?.scope
     return this.ctx.effect(() => {
       const { keys, regexp } = compile(pattern)
-      const item: Route = { method, pattern, keys, regexp, handler, ...(pluginId ? { pluginId } : {}) }
+      const item: Route = {
+        method,
+        pattern,
+        keys,
+        regexp,
+        handler,
+        ...(pluginId ? { pluginId } : {}),
+        ...(scope ? { scope } : {}),
+      }
       this.routes.push(item)
       this.ctx.emit(HUB_CHANGE)
       return () => {
@@ -487,8 +615,11 @@ export class HttpService extends Service {
       .map((part) => part.trim())
       .find((part) => part.startsWith('biu_account=') || part.startsWith('biu_legacy_account='))
     const cookieToken = encoded ? decodeURIComponent(encoded.slice(encoded.indexOf('=') + 1)) : ''
+    const authHeader = String(request.headers.authorization ?? '')
+    const bearerMatch = /^Bearer\s+(\S+)$/i.exec(authHeader)
+    const bearerToken = bearerMatch?.[1] ?? ''
     const preview = url.searchParams.get('landingPreview') === '1'
-    const token = preview ? '' : (url.searchParams.get('token') ?? cookieToken)
+    const token = preview ? '' : (url.searchParams.get('token') ?? (bearerToken || cookieToken))
     let workspaceId = preview ? '' : (url.searchParams.get('workspaceId') ?? '')
     let accountId = ''
     const store = (
@@ -613,6 +744,7 @@ export class HttpService extends Service {
           (this.ctx.get('account') as { store?: { accountByToken?: unknown } } | undefined)?.store?.accountByToken,
         )
         const publicApi =
+          url.pathname === '/api/runtime' ||
           url.pathname.startsWith('/api/account/') ||
           url.pathname.startsWith('/api/share/') ||
           url.pathname === '/api/mcp' ||
@@ -648,7 +780,7 @@ export class HttpService extends Service {
           return
         }
         if (accountId && token) this.ctx.emit('account/request', { accountId, token })
-        const identityRoute = url.pathname === '/api/account/me'
+        const identityRoute = url.pathname === '/api/account/me' || url.pathname === '/api/runtime'
         if (
           !identityRoute &&
           accountId &&
@@ -666,7 +798,7 @@ export class HttpService extends Service {
             return
           }
         }
-        if (!isOnlineRuntime() && !shareOnly && accountId && shouldProxyCloudApi(url.pathname, method)) {
+        if (!isOnlineRuntime() && !shareOnly && accountId && shouldProxyCloudApi(url.pathname, method, match.scope)) {
           const accountSvc = this.ctx.get('account') as
             | {
                 workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
@@ -678,14 +810,14 @@ export class HttpService extends Service {
             hasBody && CLOUD_PROXY_BODY_WORKSPACE_PATHS.has(url.pathname) ? await body() : undefined
           const targetWorkspace = cloudProxyTargetWorkspace(url.pathname, requestedWorkspace, url.searchParams, rawReqBody)
           if (targetWorkspace && accountSvc?.workspaceLocation?.(targetWorkspace) === 'cloud') {
-            const connection = accountSvc.cloudConnection?.(accountId) ?? null
-            if (!connection?.origin || !connection.token) {
+            const remote = resolveRemoteCloudTarget(this.ctx, targetWorkspace, accountId)
+            if (!remote) {
               context.send(401, { error: '请先登录云端账号' })
               return
             }
             const forwardHeaders: Record<string, string> = {
-              authorization: `Bearer ${connection.token}`,
-              'x-biu-workspace-id': targetWorkspace,
+              authorization: `Bearer ${remote.token}`,
+              'x-biu-workspace-id': remote.workspaceId,
             }
             for (const key of ['content-type', 'accept', 'if-match', 'if-none-match', 'x-share-password']) {
               const value = req.headers[key]
@@ -694,7 +826,7 @@ export class HttpService extends Service {
             const reqBody = hasBody ? (rawReqBody ?? (await body())) : undefined
             let upstream: Response
             try {
-              upstream = await fetch(`${connection.origin.replace(/\/+$/, '')}${url.pathname}${url.search}`, {
+              upstream = await fetch(`${remote.origin}${url.pathname}${url.search}`, {
                 method,
                 headers: forwardHeaders,
                 body: hasBody && reqBody && reqBody.length > 0 ? new Uint8Array(reqBody) : undefined,

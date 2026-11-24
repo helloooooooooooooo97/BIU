@@ -1,7 +1,8 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { currentAccountId, currentRequestWorkspaceId, dataDir, dataHome, dataPath, isOnlineRuntime } from '@biu/host-plugin-loader/data-dir'
+import { currentAccountId, dataDir, dataHome, dataPath } from '@biu/host-plugin-loader/data-dir'
+import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { Service, type Context } from 'cordis'
 import type { ChatMessage } from './chat-types.ts'
 import { isAgentToolMode, normalizeAgentMode, type AgentToolMode } from '@biu/host-tools'
@@ -27,30 +28,6 @@ import { persistDroppedFile, persistPastedImages, readArtifactFile, withPastedIm
 import { collectLiveDispatchedTasks } from '@biu/host-live-sessions/usage'
 import { decorateDispatchedTasks, loadLiveDispatchTasks, registerChatInspectorRoutes } from './inspector.ts'
 
-function workspaceIsCloud(ctx: Context) {
-  if (isOnlineRuntime()) return true
-  try {
-    const account = ctx.get('account') as {
-      workspaceLocation?: (id: string) => string
-      store?: { activeWorkspaceId?: () => string | null }
-    } | undefined
-    const workspaceId = currentRequestWorkspaceId() || account?.store?.activeWorkspaceId?.() || ''
-    return Boolean(workspaceId && account?.workspaceLocation?.(workspaceId) === 'cloud')
-  } catch {
-    return false
-  }
-}
-
-type CloudExecution = {
-  sessionId: string
-  leaseId: string
-  workspaceId: string
-  origin: string
-  token: string
-  heartbeat: ReturnType<typeof setInterval>
-  finishing?: Promise<void>
-}
-
 const CLOUD_SESSION_SECRET_KEYS = new Set(['apikey', 'apikeys', 'authorization', 'xapikey'])
 
 export function redactCloudSessionSecrets(record: SessionRecord): SessionRecord {
@@ -66,27 +43,6 @@ export function redactCloudSessionSecrets(record: SessionRecord): SessionRecord 
     return out
   }
   return scrub(record) as SessionRecord
-}
-
-function accountRuntime(ctx: Context) {
-  try {
-    return ctx.get('account') as {
-      cloudConnection?: (localAccountId: string) => { origin: string; token: string } | null
-      linkedCloud?: (localAccountId?: string) => { origin: string; token: string } | null
-      markRemote?: (collection: string, id: string) => void
-      workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
-      store?: {
-        activeWorkspaceId(): string | null
-        acquireExecutionLease(accountId: string, sessionId: string, executorId: string): { leaseId: string; expiresAt: number }
-        renewExecutionLease(accountId: string, sessionId: string, leaseId: string): unknown
-        requireExecutionLease(accountId: string, sessionId: string, leaseId: string): void
-        releaseExecutionLease(accountId: string, sessionId: string, leaseId: string): unknown
-        hasExecutionLease(sessionId: string): boolean
-      }
-    }
-  } catch {
-    return null
-  }
 }
 
 export type { ChatMessage }
@@ -247,7 +203,7 @@ function readPersisted(accountId = ''): Partial<ChatConfig> | null {
 
 export function cloudSafePersistedConfig(
   saved: (Partial<ChatConfig> & { encryptedApiKeys?: Record<string, string>; apiKey?: unknown }) | null,
-  online = isOnlineRuntime(),
+  online = getRuntimePolicy().hostMode === 'cloud',
 ): Partial<ChatConfig> | null {
   if (!saved || !online) return saved
   const decrypted: Record<string, string> = { ...emptyKeys() }
@@ -264,7 +220,7 @@ export function cloudSafePersistedConfig(
   return safe
 }
 
-export function persistedChatConfig(config: ChatConfig, online = isOnlineRuntime()) {
+export function persistedChatConfig(config: ChatConfig, online = getRuntimePolicy().hostMode === 'cloud') {
   const encryptedApiKeys: Record<string, string> = {}
   if (online) {
     for (const [id, raw] of Object.entries(config.apiKeys)) {
@@ -658,7 +614,7 @@ export class ChatService extends Service {
       /** 当前默认入口是否已配置（兼容旧语义，供 banner 等使用）。 */
       configured: current ? endpointConfigured(this.config, current) : Boolean((this.config.apiKeys[this.config.provider] ?? '').trim()),
       acceptsApiKeys: true,
-      secretsLocalOnly: !isOnlineRuntime(),
+      secretsLocalOnly: getRuntimePolicy().hostMode !== 'cloud',
       hint: hint(this.config.apiKeys[this.config.endpointId] ?? this.config.apiKeys[this.config.provider] ?? ''),
       baseUrl: current ? effectiveBaseUrl(this.config, current) : '',
       /** 各入口是否已配置 key + baseUrl。 */
@@ -1235,150 +1191,6 @@ export async function openSessionHttpPayload(ctx: Context, id: string, limitTurn
 
 export function apply(ctx: Context) {
   const chat = new ChatService(ctx)
-  const cloudExecutions = new Map<string, CloudExecution>()
-
-  const beginCloudExecution = async (sessionId: string) => {
-    if (isOnlineRuntime() || !workspaceIsCloud(ctx)) return null
-    const previous = cloudExecutions.get(sessionId)
-    if (previous) {
-      if (!previous.finishing) return previous
-      await previous.finishing
-    }
-    const localAccountId = currentAccountId()
-    const runtime = accountRuntime(ctx)
-    const connection = runtime?.linkedCloud?.(localAccountId) ?? (localAccountId ? runtime?.cloudConnection?.(localAccountId) : null)
-    if (!connection) throw new Error('请先登录云端账号')
-    const workspaceId = runtime?.store?.activeWorkspaceId() ?? ''
-    const response = await fetch(`${connection.origin}/api/agents/${encodeURIComponent(sessionId)}/execution-lease`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${connection.token}`,
-        'content-type': 'application/json',
-        ...(workspaceId ? { 'x-biu-workspace-id': workspaceId } : {}),
-      },
-      body: JSON.stringify({ executorId: `desktop:${localAccountId}` }),
-    })
-    const payload = (await response.json().catch(() => ({}))) as { leaseId?: string; error?: string }
-    if (!response.ok || !payload.leaseId) throw new Error(payload.error || '无法取得云端代理执行权')
-    try {
-      const fetched = await fetch(`${connection.origin}/api/agents/${encodeURIComponent(sessionId)}?turns=all`, {
-        headers: {
-          authorization: `Bearer ${connection.token}`,
-          ...(workspaceId ? { 'x-biu-workspace-id': workspaceId } : {}),
-        },
-        signal: AbortSignal.timeout(15_000),
-      })
-      if (fetched.ok) {
-        const remoteSession = (await fetched.json().catch(() => null)) as {
-          id?: string
-          version?: number
-          events?: unknown[]
-          mascot?: unknown
-          config?: unknown
-        } | null
-        if (remoteSession?.id) {
-          await ctx.sessionStore.save({
-            id: remoteSession.id,
-            version: Number(remoteSession.version) || 1,
-            events: Array.isArray(remoteSession.events) ? (remoteSession.events as never[]) : [],
-            ...(remoteSession.mascot ? { mascot: remoteSession.mascot as never } : {}),
-            ...(remoteSession.config ? { config: remoteSession.config as never } : {}),
-          })
-          runtime?.markRemote?.('/agents', remoteSession.id)
-        }
-      }
-    } catch (error) {
-      console.warn('[chat] failed to hydrate cloud session before local execution', sessionId, error)
-    }
-    const heartbeat = setInterval(() => {
-      void fetch(`${connection.origin}/api/agents/${encodeURIComponent(sessionId)}/execution-lease`, {
-        method: 'PATCH',
-        headers: {
-          authorization: `Bearer ${connection.token}`,
-          'content-type': 'application/json',
-          ...(workspaceId ? { 'x-biu-workspace-id': workspaceId } : {}),
-        },
-        body: JSON.stringify({ leaseId: payload.leaseId }),
-      }).catch((error) => {
-        console.warn('[chat] cloud execution lease heartbeat failed', sessionId, error)
-      })
-    }, 30_000)
-    const execution = {
-      sessionId,
-      leaseId: payload.leaseId,
-      workspaceId,
-      origin: connection.origin,
-      token: connection.token,
-      heartbeat,
-    }
-    cloudExecutions.set(sessionId, execution)
-    return execution
-  }
-
-  const finishCloudExecution = async (sessionId: string) => {
-    const execution = cloudExecutions.get(sessionId)
-    if (!execution) return
-    if (execution.finishing) return execution.finishing
-    execution.finishing = (async () => {
-      clearInterval(execution.heartbeat)
-      try {
-        const record = await ctx.sessions.get(sessionId)
-        if (record) {
-          const cloudRecord = redactCloudSessionSecrets(record)
-          delete cloudRecord.project
-          const response = await fetch(
-            `${execution.origin}/api/agents/${encodeURIComponent(sessionId)}/execution-sync`,
-            {
-              method: 'POST',
-              headers: {
-                authorization: `Bearer ${execution.token}`,
-                'content-type': 'application/json',
-                ...(execution.workspaceId ? { 'x-biu-workspace-id': execution.workspaceId } : {}),
-              },
-              body: JSON.stringify({ leaseId: execution.leaseId, record: cloudRecord }),
-            },
-          )
-          if (!response.ok) {
-            const body = (await response.json().catch(() => ({}))) as { error?: string }
-            console.warn('[chat] cloud session sync failed', sessionId, body.error || response.status)
-          }
-        }
-      } catch (error) {
-        console.warn('[chat] cloud session sync failed', sessionId, error)
-      } finally {
-        await fetch(`${execution.origin}/api/agents/${encodeURIComponent(sessionId)}/execution-lease`, {
-          method: 'DELETE',
-          headers: {
-            authorization: `Bearer ${execution.token}`,
-            'content-type': 'application/json',
-            ...(execution.workspaceId ? { 'x-biu-workspace-id': execution.workspaceId } : {}),
-          },
-          body: JSON.stringify({ leaseId: execution.leaseId }),
-        }).catch((error) => {
-          console.warn('[chat] cloud execution lease release failed', sessionId, error)
-        })
-        if (cloudExecutions.get(sessionId) === execution) cloudExecutions.delete(sessionId)
-      }
-    })()
-    return execution.finishing
-  }
-
-  ctx.on('agent/status', (event) => {
-    const payload = event as { sessionId?: string; status?: string }
-    const sessionId = String(payload.sessionId ?? '')
-    if (
-      sessionId &&
-      payload.status === 'idle' &&
-      !ctx.agents.isBusy(sessionId) &&
-      ctx.agents.inboxPending(sessionId) === 0
-    ) {
-      void finishCloudExecution(sessionId)
-    }
-  })
-  ctx.effect(() => () => {
-    for (const execution of cloudExecutions.values()) clearInterval(execution.heartbeat)
-    cloudExecutions.clear()
-  })
 
   ctx.hub.register({
     id: 'chat',
@@ -1413,7 +1225,7 @@ export function apply(ctx: Context) {
     const includesSecret =
       typeof payload.apiKey === 'string' ||
       Boolean(payload.setApiKey && Object.values(payload.setApiKey).some((value) => typeof value === 'string' && value.length > 0))
-    if (isOnlineRuntime() && includesSecret && !currentAccountId()) {
+    if (getRuntimePolicy().hostMode === 'cloud' && includesSecret && !currentAccountId()) {
       route.send(401, { error: '请先登录后再配置云端 AI API Token' })
       return
     }
@@ -1428,7 +1240,7 @@ export function apply(ctx: Context) {
       model?: string
     }
     try {
-      if (isOnlineRuntime() && typeof payload.apiKey === 'string' && payload.apiKey.trim() && !currentAccountId()) {
+      if (getRuntimePolicy().hostMode === 'cloud' && typeof payload.apiKey === 'string' && payload.apiKey.trim() && !currentAccountId()) {
         route.send(401, { ok: false, detail: '请先登录后再测试云端 AI API Token' })
         return
       }
@@ -1533,9 +1345,11 @@ export function apply(ctx: Context) {
     let pinnedSet: Set<string> | null = null
     try {
       const accountId = currentAccountId()
-      const store = accountRuntime(ctx)?.store as
-        | { workspacePrefs?: (actorId: string, workspaceId?: string) => { pinnedAgents: string[] } }
-        | undefined
+      const store = (
+        ctx.get('account') as
+          | { store?: { workspacePrefs?: (actorId: string, workspaceId?: string) => { pinnedAgents: string[] } } }
+          | undefined
+      )?.store
       if (accountId && store?.workspacePrefs) {
         pinnedSet = new Set(store.workspacePrefs(accountId).pinnedAgents)
       }
@@ -1564,63 +1378,6 @@ export function apply(ctx: Context) {
     const record = await ctx.sessions.get(id)
     return record && ctx.sessions.inWorkspace(id) ? record : null
   }
-  ctx.http.route('POST', '/api/agents/:id/execution-lease', async (route) => {
-    try {
-      if (!(await visibleSession(route.params.id))) return route.send(404, { error: 'unknown session' })
-      const accountId = currentAccountId()
-      const store = accountRuntime(ctx)?.store
-      if (!accountId || !store) return route.send(401, { error: '需要登录' })
-      const body = (await route.json().catch(() => ({}))) as { executorId?: string }
-      route.send(201, store.acquireExecutionLease(accountId, route.params.id, String(body.executorId ?? 'device')))
-    } catch (error) {
-      const status = Number((error as { status?: number }).status) || 400
-      route.send(status, { error: error instanceof Error ? error.message : String(error) })
-    }
-  })
-  ctx.http.route('PATCH', '/api/agents/:id/execution-lease', async (route) => {
-    try {
-      const accountId = currentAccountId()
-      const store = accountRuntime(ctx)?.store
-      if (!accountId || !store) return route.send(401, { error: '需要登录' })
-      const body = (await route.json().catch(() => ({}))) as { leaseId?: string }
-      route.send(200, store.renewExecutionLease(accountId, route.params.id, String(body.leaseId ?? '')))
-    } catch (error) {
-      const status = Number((error as { status?: number }).status) || 400
-      route.send(status, { error: error instanceof Error ? error.message : String(error) })
-    }
-  })
-  ctx.http.route('DELETE', '/api/agents/:id/execution-lease', async (route) => {
-    try {
-      const accountId = currentAccountId()
-      const store = accountRuntime(ctx)?.store
-      if (!accountId || !store) return route.send(401, { error: '需要登录' })
-      const body = (await route.json().catch(() => ({}))) as { leaseId?: string }
-      route.send(200, store.releaseExecutionLease(accountId, route.params.id, String(body.leaseId ?? '')))
-    } catch (error) {
-      route.send(400, { error: error instanceof Error ? error.message : String(error) })
-    }
-  })
-  ctx.http.route('POST', '/api/agents/:id/execution-sync', async (route) => {
-    try {
-      if (!(await visibleSession(route.params.id))) return route.send(404, { error: 'unknown session' })
-      const accountId = currentAccountId()
-      const store = accountRuntime(ctx)?.store
-      if (!accountId || !store) return route.send(401, { error: '需要登录' })
-      const body = (await route.json().catch(() => ({}))) as { leaseId?: string; record?: SessionRecord }
-      store.requireExecutionLease(accountId, route.params.id, String(body.leaseId ?? ''))
-      if (!body.record || body.record.id !== route.params.id || !Array.isArray(body.record.events)) {
-        return route.send(400, { error: '无效的代理记录' })
-      }
-      const record = { ...body.record }
-      delete record.project
-      await ctx.sessions.replace(record)
-      store.releaseExecutionLease(accountId, route.params.id, String(body.leaseId ?? ''))
-      route.send(200, { ok: true, eventCount: record.events.length })
-    } catch (error) {
-      const status = Number((error as { status?: number }).status) || 400
-      route.send(status, { error: error instanceof Error ? error.message : String(error) })
-    }
-  })
   ctx.http.route('GET', '/api/agents/:id', async (route) => {
     const turnsRaw = route.query.get('turns')
     const limitTurns =
@@ -1846,20 +1603,7 @@ export function apply(ctx: Context) {
       images?: Array<{ name?: string; mime?: string; url?: string }>
       liveContext?: unknown
     }
-    if (isOnlineRuntime() && accountRuntime(ctx)?.store?.hasExecutionLease(route.params.id)) {
-      return route.send(409, { error: '这个代理正在桌面设备上运行' })
-    }
-    const shouldExecute = payload.kind !== 'inject' || ctx.agents.isBusy(route.params.id)
-    let cloudExecution: Awaited<ReturnType<typeof beginCloudExecution>> = null
-    if (shouldExecute) {
-      try {
-        cloudExecution = await beginCloudExecution(route.params.id)
-      } catch (error) {
-        return route.send(409, { error: error instanceof Error ? error.message : String(error) })
-      }
-    }
     if (!(await visibleSession(route.params.id))) {
-      if (cloudExecution) void finishCloudExecution(route.params.id)
       return route.send(404, { error: 'unknown session' })
     }
     const agent = await ctx.agents.create(route.params.id)
@@ -1882,35 +1626,8 @@ export function apply(ctx: Context) {
     if (incomingImages.length) {
       try {
         images = await persistPastedImages(route.params.id, incomingImages)
-        if (cloudExecution) {
-          // 桌面端处于云端空间时，把粘贴图片同步上传到云端 artifacts，避免前端透传 GET /artifacts/:name 404
-          for (const img of images) {
-            const artifactName = img.url.split('/').pop()
-            if (!artifactName) continue
-            const saved = await readArtifactFile(route.params.id, decodeURIComponent(artifactName))
-            if (!saved) continue
-            const uploaded = await fetch(
-              `${cloudExecution.origin}/api/agents/${encodeURIComponent(route.params.id)}/artifacts?name=${encodeURIComponent(img.name)}`,
-              {
-                method: 'POST',
-                headers: {
-                  authorization: `Bearer ${cloudExecution.token}`,
-                  'content-type': saved.mime || img.mime || 'application/octet-stream',
-                  ...(cloudExecution.workspaceId ? { 'x-biu-workspace-id': cloudExecution.workspaceId } : {}),
-                },
-                body: new Uint8Array(saved.data),
-                signal: AbortSignal.timeout(30_000),
-              },
-            ).catch(() => null)
-            if (uploaded?.ok) {
-              const remoteArtifact = (await uploaded.json().catch(() => null)) as { url?: string } | null
-              if (remoteArtifact?.url) img.url = remoteArtifact.url
-            }
-          }
-        }
         text = withPastedImagePicks(text, images)
       } catch {
-        if (cloudExecution) void finishCloudExecution(route.params.id)
         return route.send(400, { error: '粘贴的图片未能保存到本地，请重试' })
       }
     }
@@ -1940,7 +1657,6 @@ export function apply(ctx: Context) {
         inbox: ctx.agents.listInbox(agent.sessionId),
       })
     } catch (error) {
-      void finishCloudExecution(route.params.id)
       route.send(500, { error: String(error) })
     }
   })
@@ -1997,31 +1713,19 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('POST', '/api/agents/:id/inbox/flush', async (route) => {
     const id = route.params.id
-    if (isOnlineRuntime() && accountRuntime(ctx)?.store?.hasExecutionLease(id)) {
-      return route.send(409, { error: '这个代理正在桌面设备上运行' })
-    }
-    let cloudExecution: Awaited<ReturnType<typeof beginCloudExecution>> = null
-    try {
-      cloudExecution = await beginCloudExecution(id)
-    } catch (error) {
-      return route.send(409, { error: error instanceof Error ? error.message : String(error) })
-    }
     if (!(await visibleSession(id))) {
-      if (cloudExecution) void finishCloudExecution(id)
       return route.send(404, { error: 'unknown session' })
     }
     const agent = await ctx.agents.create(id)
     chat.patch({}, { persist: false })
     try {
       const result = await agent.flush({ wait: false })
-      if (!result.flushed && cloudExecution) void finishCloudExecution(id)
       route.send(200, {
         sessionId: id,
         flushed: result.flushed,
         inbox: ctx.agents.listInbox(id),
       })
     } catch (error) {
-      if (cloudExecution) void finishCloudExecution(id)
       route.send(500, { error: String(error) })
     }
   })

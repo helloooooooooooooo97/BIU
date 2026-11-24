@@ -248,3 +248,21 @@ test('global singletons: no monkey-patching global window.fetch or globalThis.fe
     `Found global fetch monkey-patching (use registerApiRequestInterceptor from @biu/biu-ui/api-client):\n${hits.join('\n')}`,
   )
 })
+
+test('runtime policy boundary: core-* and cap-* plugins query @biu/host-plugin-loader/runtime instead of isOnlineRuntime/BIU_ONLINE', () => {
+  const violations: string[] = []
+  for (const dir of readdirSync(PACKAGES_DIR)) {
+    if (!dir.startsWith('core-') && !dir.startsWith('cap-')) continue
+    for (const file of walkTsFiles(join(PACKAGES_DIR, dir, 'src'))) {
+      const text = readFileSync(file, 'utf8')
+      if (/\bisOnlineRuntime\b|\bBIU_ONLINE\b/.test(text)) {
+        violations.push(relative(REPO_ROOT, file))
+      }
+    }
+  }
+  assert.deepEqual(
+    violations,
+    [],
+    `Business plugins must query getRuntimePolicy() from @biu/host-plugin-loader/runtime instead of reading isOnlineRuntime/BIU_ONLINE directly:\n${violations.join('\n')}`,
+  )
+})

@@ -33,8 +33,10 @@ import {
   readEditorContent,
   runWithRequestWorkspace,
   writeEditorContent,
-  isOnlineRuntime,
 } from '@biu/host-plugin-loader/data-dir'
+import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
+
+const rbacEnforced = () => getRuntimePolicy().authzMode === 'rbac'
 
 export type StoreListing = {
   id: string
@@ -389,14 +391,14 @@ export class PluginStoreService extends Service {
   }
 
   viewerIsSuperAdmin() {
-    if (!isOnlineRuntime()) return true
+    if (!rbacEnforced()) return true
     const accountId = currentAccountId()
     return Boolean(accountId && this.accountStore()?.isSuperAdmin?.(accountId))
   }
 
   /** 内置插件的安装、卸载、源码与介绍只有超级管理员能改。 */
   private requireBuiltinManager(id: string) {
-    if (!isOnlineRuntime()) return
+    if (!rbacEnforced()) return
     if (!this.isBuiltin(id)) {
       this.requireWorkspaceMember()
       return
@@ -407,7 +409,7 @@ export class PluginStoreService extends Service {
   /** 在 .plugin-dev/<id>/ 开沙箱，不写入已安装目录。线上任何空间成员都能开。 */
   async initSandbox(input: PluginCreateInput) {
     const id = String(input.id ?? '').trim()
-    if (isOnlineRuntime()) {
+    if (rbacEnforced()) {
       if (input.builtin === true || this.isBuiltin(id)) {
         if (!this.viewerIsSuperAdmin()) throw new Error('只有超级管理员可以更改内置插件')
       } else {
@@ -449,7 +451,7 @@ export class PluginStoreService extends Service {
 
   /** 把沙箱 bundle 进 .plugin/<id>/。 */
   async pack(id: string) {
-    if (isOnlineRuntime()) this.requireBuiltinManager(id)
+    if (rbacEnforced()) this.requireBuiltinManager(id)
     if (!isSafeId(id)) throw new Error(`invalid plugin id: ${id}`)
     const sandbox = this.sandboxPath(id)
     if (!existsSync(join(sandbox, 'manifest.json'))) throw new Error(`sandbox not found: ${sandbox}`)
@@ -517,7 +519,7 @@ export class PluginStoreService extends Service {
 
   /** 空间成员看得到 .plugin-dev；实例草稿权限仍单独放行。 */
   private canSeeSandboxes() {
-    if (!isOnlineRuntime()) return true
+    if (!rbacEnforced()) return true
     const accountId = currentAccountId()
     const workspaceId = currentRequestWorkspaceId()
     return Boolean(accountId && workspaceId && this.accountStore()?.isMember?.(accountId, workspaceId))
@@ -635,7 +637,7 @@ export class PluginStoreService extends Service {
     const sandbox = this.sandboxPath(id)
     const canPack = existsSync(join(sandbox, 'manifest.json')) && (findEntry(sandbox, HOST_ENTRIES) || findEntry(sandbox, WEB_ENTRIES))
     if (!canPack) return hit
-    if (isOnlineRuntime() && this.isBuiltin(id) && !this.viewerIsSuperAdmin()) return hit
+    if (rbacEnforced() && this.isBuiltin(id) && !this.viewerIsSuperAdmin()) return hit
     await this.pack(id)
     return this.findPluginDir(id)
   }
@@ -708,7 +710,7 @@ export class PluginStoreService extends Service {
 
   /** 卸载：停运行，只删 .plugin/<id>/，不动 .plugin-dev。有人在用也可以卸。 */
   async uninstall(id: string) {
-    if (isOnlineRuntime()) this.requireBuiltinManager(id)
+    if (rbacEnforced()) this.requireBuiltinManager(id)
     if (!isSafeId(id)) throw new Error(`invalid plugin id: ${id}`)
     await this.hub().drop(id)
     this.setEnabled(id, false)
@@ -791,7 +793,7 @@ export class PluginStoreService extends Service {
   }
 
   async writeReadme(id: string, markdown: string, options?: CollectionUpdateOptions) {
-    if (isOnlineRuntime()) this.requireBuiltinManager(id)
+    if (rbacEnforced()) this.requireBuiltinManager(id)
     const text = String(markdown ?? '')
     if (options?.persistContent !== false) {
       const sqlitePath = this.contentSqlitePath()
@@ -823,7 +825,7 @@ export class PluginStoreService extends Service {
         const manifest = await readManifest(hit)
         const stats = await pluginDirStats(hit)
         const codeVersion = (await hashInstalledPluginCode(hit)) ?? 'empty'
-        if (isOnlineRuntime()) {
+        if (rbacEnforced()) {
           this.accountStore()?.syncInstalledPluginPackage?.({
             id: manifest.id,
             version: codeVersion,
@@ -853,7 +855,7 @@ export class PluginStoreService extends Service {
     const account = this.accountStore()
     const accountId = currentAccountId()
     const workspaceId = currentRequestWorkspaceId()
-    if (isOnlineRuntime()) {
+    if (rbacEnforced()) {
       return Boolean(accountId && workspaceId && account?.canAccessPlugin?.(accountId, workspaceId, id))
     }
     if (this.isEnabled(id)) return true
@@ -923,11 +925,11 @@ export async function openStore(ctx: Context) {
   ctx.http.route('GET', '/api/plugin-store/files/:id/:file', async (route) => {
     try {
       const requestedWorkspace = String(route.query.get('workspaceId') ?? currentRequestWorkspaceId()).trim()
-      if (isOnlineRuntime() && !currentAccountId()) {
+      if (rbacEnforced() && !currentAccountId()) {
         route.send(401, { error: '需要登录' })
         return
       }
-      if (isOnlineRuntime() && !requestedWorkspace) {
+      if (rbacEnforced() && !requestedWorkspace) {
         route.send(400, { error: '需要空间' })
         return
       }
@@ -959,7 +961,7 @@ export async function openStore(ctx: Context) {
       } | undefined
     )?.store
     const canManagePackages =
-      !isOnlineRuntime() || Boolean(accountId && workspaceId && account?.isMember?.(accountId, workspaceId))
+      !rbacEnforced() || Boolean(accountId && workspaceId && account?.isMember?.(accountId, workspaceId))
     const plugins = (await store.list())
       .filter((item) => !item.builtin && !store.isBuiltin(item.id))
       .map((item) => ({

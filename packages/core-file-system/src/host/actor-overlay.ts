@@ -1,4 +1,5 @@
-import { currentAccountId, isOnlineRuntime } from '@biu/host-plugin-loader/data-dir'
+import { currentAccountId } from '@biu/host-plugin-loader/data-dir'
+import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { currentSessionId } from '@biu/host-sessions/scope'
 import { readWorkspaceProfile } from '@biu/host-workspace'
 import {
@@ -132,7 +133,7 @@ export async function stampRecordActor(host: ActorOverlayHost, collection: strin
 
 export async function touchRecordActor(host: ActorOverlayHost, collection: string, recordId: string) {
   await stampRecordActor(host, collection, recordId)
-  if (isOnlineRuntime()) return
+  if (getRuntimePolicy().hostMode === 'cloud') return
   try {
     const account = host.accountService()
     const workspaceId = account?.store?.activeWorkspaceId?.() ?? ''

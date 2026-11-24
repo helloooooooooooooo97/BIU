@@ -5,7 +5,7 @@ import { biuSqlitePath, currentAccountId, eventsSqlitePath, isOnlineRuntime, ope
 import type { RouteContext } from '@biu/type-http'
 import { CollabError, CollabStore } from './store.ts'
 import { httpRemote, RecordReplica } from './replica.ts'
-import { applySnapshot, exchangeSnapshot, takeSnapshot, type MirrorSnapshot } from './mirror.ts'
+import { applySnapshot, takeSnapshot, type MirrorSnapshot } from './mirror.ts'
 import type { AuthorizationService, ResourceRole } from './authorization.ts'
 import { workspaceMembersCollection } from './workspace-members-collection.ts'
 
@@ -65,27 +65,6 @@ export class AccountService extends Service {
     if (!isOnlineRuntime()) {
       const initialOrigin = this.configuredCloudOrigin()
       if (initialOrigin) this.ensureReplica(initialOrigin)
-      let syncing = false
-      const timer = setInterval(() => {
-        if (syncing) return
-        const active = this.store.activeWorkspaceId()
-        if (!active || this.workspaceLocation(active) !== 'cloud') return
-        const linked = this.linkedCloud()
-        if (!linked?.origin || !linked.token) return
-        const replica = this.ensureReplica(linked.origin)
-        this.syncReplicaCredential(linked.localAccountId)
-        const device = replica?.active()
-        if (!device?.token) return
-        syncing = true
-        void exchangeSnapshot(ctx, linked.origin, device.token, device.accountId, active, { sessionsOnly: true })
-          .catch((error) => {
-            console.warn('[replica] sync failed', error)
-          })
-          .finally(() => {
-            syncing = false
-          })
-      }, 3000)
-      ctx.on('dispose', () => clearInterval(timer))
       const saved = this.db.prepare('SELECT local_account_id FROM cloud_connections WHERE active = 1').all() as Array<{ local_account_id: string }>
       for (const row of saved) this.syncReplicaCredential(row.local_account_id)
     }

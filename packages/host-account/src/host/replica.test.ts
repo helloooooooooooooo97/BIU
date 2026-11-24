@@ -223,10 +223,9 @@ test('secrets and plugin directories are not queued', async () => {
   assert.equal(replica.read(workspace.id, '/pages', 'p1', 'secret'), null)
 })
 
-test('desktop replica snapshot only polls while the active workspace is cloud', () => {
+test('desktop does not run background replica snapshot polling (Plan A uses HTTP proxy + /ws bridge)', () => {
   const src = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
-  assert.match(src, /this\.workspaceLocation\(active\) !== 'cloud'/)
-  assert.match(src, /exchangeSnapshot\(ctx, linked\.origin, device\.token, device\.accountId, active, \{ sessionsOnly: true \}\)/)
+  assert.doesNotMatch(src, /exchangeSnapshot\(/)
   assert.doesNotMatch(src, /previous\?\.workspaceId/)
 })
 

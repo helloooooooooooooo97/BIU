@@ -186,36 +186,9 @@ test('desktop cloud writes send the workspace header and forward bulk delete, re
   }
 })
 
-test('desktop db_* agent tools route to remote /api/db/tool in cloud workspaces and stay local in device workspaces', async () => {
-  const previousOnline = process.env.BIU_ONLINE
-  process.env.BIU_ONLINE = '0'
-  const remoteToolCalls: Array<{ workspaceId: string; auth: string; name: string; args: Record<string, unknown> }> = []
-  const remote = createServer((req, res) => {
-    const chunks: Buffer[] = []
-    req.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
-    req.on('end', () => {
-      const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') as { name?: string; args?: Record<string, unknown> }
-      remoteToolCalls.push({
-        workspaceId: String(req.headers['x-biu-workspace-id'] ?? ''),
-        auth: String(req.headers.authorization ?? ''),
-        name: String(body.name ?? ''),
-        args: body.args ?? {},
-      })
-      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-      res.end(JSON.stringify({ result: { fromCloud: true, tool: body.name, args: body.args } }))
-    })
-  })
-  const remotePort = await new Promise<number>((resolve, reject) => {
-    remote.listen(0, '127.0.0.1', () => {
-      const addr = remote.address()
-      if (!addr || typeof addr === 'string') reject(new Error('no remote port'))
-      else resolve(addr.port)
-    })
-  })
-
+test('db_* agent tools always execute locally on the host running the agent (Plan A)', async () => {
   const { registerDatabaseTools } = await import('./agent-tools.ts')
   const registered = new Map<string, (args: Record<string, unknown>) => Promise<unknown>>()
-  let activeWs = 'cloud-ws'
   let localListCalls = 0
   const ctx = new Context()
   ctx.provide('tools')
@@ -223,12 +196,6 @@ test('desktop db_* agent tools route to remote /api/db/tool in cloud workspaces 
     register(def: { name: string; execute: (args: Record<string, unknown>) => Promise<unknown> }) {
       registered.set(def.name, def.execute)
     },
-  })
-  ctx.provide('account')
-  ctx.set('account', {
-    store: { activeWorkspaceId: () => activeWs },
-    workspaceLocation: (wsId: string) => (wsId === 'cloud-ws' ? 'cloud' : 'device'),
-    linkedCloud: () => ({ origin: `http://127.0.0.1:${remotePort}`, token: 'cloud-tok' }),
   })
   registerDatabaseTools(ctx, {
     async list() {
@@ -247,27 +214,10 @@ test('desktop db_* agent tools route to remote /api/db/tool in cloud workspaces 
     async editDoc() { return {} },
   })
 
-  try {
-    const cloudList = (await registered.get('db_list')!({ path: '/pages' })) as { fromCloud?: boolean; tool?: string }
-    assert.equal(cloudList.fromCloud, true)
-    assert.equal(cloudList.tool, 'db_list')
-    assert.equal(localListCalls, 0)
-    assert.equal(remoteToolCalls.length, 1)
-    assert.equal(remoteToolCalls[0]?.workspaceId, 'cloud-ws')
-    assert.equal(remoteToolCalls[0]?.auth, 'Bearer cloud-tok')
-
-    const cloudCreate = (await registered.get('db_create')!({ path: '/pages', records: [{ title: 'AI 页' }] })) as { fromCloud?: boolean; tool?: string }
-    assert.equal(cloudCreate.fromCloud, true)
-    assert.equal(cloudCreate.tool, 'db_create')
-    assert.equal(remoteToolCalls.length, 2)
-
-    activeWs = 'local-ws'
-    await registered.get('db_list')!({ path: '/pages' })
-    assert.equal(localListCalls, 1)
-    assert.equal(remoteToolCalls.length, 2)
-  } finally {
-    await new Promise<void>((resolve) => remote.close(() => resolve()))
-    if (previousOnline === undefined) delete process.env.BIU_ONLINE
-    else process.env.BIU_ONLINE = previousOnline
-  }
+  const dbList = registered.get('db_list')
+  assert.ok(dbList)
+  const result = (await dbList({ path: '/pages' })) as { kind?: string; path?: string }
+  assert.equal(result.kind, 'collection')
+  assert.equal(result.path, '/pages')
+  assert.equal(localListCalls, 1)
 })
