@@ -824,3 +824,54 @@ test('saveAccountProfile updates custom account name and avatar independently of
   assert.throws(() => collab.saveAccountProfile(ada.id, { name: '   ' }), /账号名不能为空/)
   assert.throws(() => collab.saveAccountProfile(ada.id, { avatar: 'https://evil.example/a.png' }), /头像格式不对/)
 })
+
+test('workspacePrefs isolates starredViews, starredRecords, pinnedAgents, and theme/accent/pagePrefs by (workspaceId, accountId)', () => {
+  const collab = store()
+  const ada = collab.register('Ada', 1000, 'secret1', 'ada-prefs@example.com')
+  const bob = collab.register('Bob', 1001, 'secret1', 'bob-prefs@example.com')
+  const ws1 = collab.createWorkspace(ada.id, 'WS1', 1002)
+  const ws2 = collab.createWorkspace(ada.id, 'WS2', 1003)
+  collab.addMemberByEmail(ada.id, ws1.id, bob.email)
+  collab.setActive(ada.id, ws1.id)
+  collab.setActive(bob.id, ws1.id)
+
+  // Ada stars a view, pins an agent, and sets dark/purple theme in ws1
+  collab.saveWorkspacePrefs(
+    ada.id,
+    {
+      starredViews: [{ path: '/pages', viewId: 'v1', name: '重要页面' }],
+      starredRecords: [{ path: '/pages', recordId: 'p1', label: '首页' }],
+      theme: 'dark',
+      accent: 'purple',
+      pagePrefs: { wide: true },
+    },
+    ws1.id,
+  )
+  collab.setAgentPinned(ada.id, 'agent_1', true, ws1.id)
+
+  // Bob in the SAME workspace ws1 sees completely empty prefs (isolated per account)
+  const bobWs1 = collab.workspacePrefs(bob.id, ws1.id)
+  assert.deepEqual(bobWs1.starredViews, [])
+  assert.deepEqual(bobWs1.starredRecords, [])
+  assert.deepEqual(bobWs1.pinnedAgents, [])
+  assert.equal(bobWs1.theme, undefined)
+  assert.equal(bobWs1.accent, undefined)
+
+  // Ada in a DIFFERENT workspace ws2 sees completely empty prefs (isolated per workspace)
+  const adaWs2 = collab.workspacePrefs(ada.id, ws2.id)
+  assert.deepEqual(adaWs2.starredViews, [])
+  assert.deepEqual(adaWs2.pinnedAgents, [])
+  assert.equal(adaWs2.theme, undefined)
+
+  // Ada in ws1 still has all saved prefs and can unpin agent_1
+  const adaWs1 = collab.workspacePrefs(ada.id, ws1.id)
+  assert.equal(adaWs1.starredViews.length, 1)
+  assert.equal(adaWs1.starredViews[0]?.viewId, 'v1')
+  assert.deepEqual(adaWs1.pinnedAgents, ['agent_1'])
+  assert.equal(adaWs1.theme, 'dark')
+  assert.equal(adaWs1.accent, 'purple')
+  assert.equal(adaWs1.pagePrefs?.wide, true)
+
+  collab.setAgentPinned(ada.id, 'agent_1', false, ws1.id)
+  assert.deepEqual(collab.workspacePrefs(ada.id, ws1.id).pinnedAgents, [])
+})

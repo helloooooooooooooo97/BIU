@@ -974,6 +974,56 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     }
   })
 
+  ctx.http.route('GET', '/api/account/starred', async (route) => {
+    try {
+      const me = actor(route)
+      const prefs = account.store.workspacePrefs(me.id)
+      route.send(200, {
+        workspaceId: prefs.workspaceId,
+        starredViews: prefs.starredViews,
+        starredRecords: prefs.starredRecords,
+        pinnedAgents: prefs.pinnedAgents,
+      })
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
+  ctx.http.route('POST', '/api/account/starred', async (route) => {
+    try {
+      const me = actor(route)
+      const body = (await route.json()) as {
+        starredViews?: unknown
+        starredRecords?: unknown
+        pinnedAgents?: unknown
+      }
+      const saved = account.store.saveWorkspacePrefs(me.id, body)
+      route.send(200, {
+        workspaceId: saved.workspaceId,
+        starredViews: saved.starredViews,
+        starredRecords: saved.starredRecords,
+        pinnedAgents: saved.pinnedAgents,
+      })
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
+  ctx.http.route('POST', '/api/agents/:id/pin', async (route) => {
+    try {
+      const me = actor(route)
+      const body = (await route.json()) as { pinned?: unknown }
+      const saved = account.store.setAgentPinned(me.id, String(route.params.id ?? ''), Boolean(body.pinned))
+      route.send(200, {
+        id: String(route.params.id ?? ''),
+        pinned: saved.pinnedAgents.includes(String(route.params.id ?? '')),
+        pinnedAgents: saved.pinnedAgents,
+      })
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
   ctx.http.route('GET', '/api/account/workspaces', async (route) => {
     try {
       const me = actor(route)

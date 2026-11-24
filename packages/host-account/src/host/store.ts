@@ -1617,6 +1617,167 @@ export class CollabStore {
     return { ...current, name: display, avatar }
   }
 
+  private prefsKey(workspaceId: string, actorId: string) {
+    return `prefs:${workspaceId}:${actorId}`
+  }
+
+  private sanitizeStarredViews(raw: unknown): Array<{ path: string; viewId: string; name?: string }> {
+    if (!Array.isArray(raw)) return []
+    const seen = new Set<string>()
+    const out: Array<{ path: string; viewId: string; name?: string }> = []
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') continue
+      const rec = item as Record<string, unknown>
+      const path = String(rec.path ?? '').trim()
+      const viewId = String(rec.viewId ?? '').trim()
+      const name = String(rec.name ?? '').trim().slice(0, 80)
+      if (!path || !viewId) continue
+      const key = `${path}\0${viewId}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(name ? { path, viewId, name } : { path, viewId })
+    }
+    return out
+  }
+
+  private sanitizeStarredRecords(raw: unknown): Array<{ path: string; recordId: string; label?: string; emoji?: string }> {
+    if (!Array.isArray(raw)) return []
+    const seen = new Set<string>()
+    const out: Array<{ path: string; recordId: string; label?: string; emoji?: string }> = []
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') continue
+      const rec = item as Record<string, unknown>
+      const path = String(rec.path ?? '').trim()
+      const recordId = String(rec.recordId ?? '').trim()
+      const label = String(rec.label ?? '').trim().slice(0, 120)
+      const emoji = String(rec.emoji ?? '').trim().slice(0, 16)
+      if (!path || !recordId) continue
+      const key = `${path}\0${recordId}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push({ path, recordId, ...(label ? { label } : {}), ...(emoji ? { emoji } : {}) })
+    }
+    return out
+  }
+
+  private sanitizePinnedAgents(raw: unknown): string[] {
+    if (!Array.isArray(raw)) return []
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const item of raw) {
+      const id = String(item ?? '').trim()
+      if (!id || seen.has(id)) continue
+      seen.add(id)
+      out.push(id)
+    }
+    return out
+  }
+
+  workspacePrefs(actorId: string, requestedWorkspaceId = '') {
+    const workspaceId = requestedWorkspaceId.trim() || currentRequestWorkspaceId() || this.activeWorkspaceId()
+    if (!workspaceId) throw new CollabError('没有工作区', 400)
+    this.requireMember(actorId, workspaceId)
+    const row = this.db
+      .prepare('SELECT value FROM collab_state WHERE key = ?')
+      .get(this.prefsKey(workspaceId, actorId)) as { value?: string } | undefined
+    const empty = {
+      workspaceId,
+      starredViews: [] as Array<{ path: string; viewId: string; name?: string }>,
+      starredRecords: [] as Array<{ path: string; recordId: string; label?: string; emoji?: string }>,
+      pinnedAgents: [] as string[],
+      theme: undefined as 'light' | 'dark' | undefined,
+      accent: undefined as 'blue' | 'purple' | 'green' | 'orange' | 'pink' | 'red' | undefined,
+      pagePrefs: undefined as Record<string, unknown> | undefined,
+    }
+    if (!row?.value) return empty
+    try {
+      const parsed = JSON.parse(row.value) as Record<string, unknown>
+      const theme = parsed.theme === 'dark' || parsed.theme === 'light' ? parsed.theme : undefined
+      const accent =
+        parsed.accent === 'blue' ||
+        parsed.accent === 'purple' ||
+        parsed.accent === 'green' ||
+        parsed.accent === 'orange' ||
+        parsed.accent === 'pink' ||
+        parsed.accent === 'red'
+          ? parsed.accent
+          : undefined
+      const pagePrefs =
+        parsed.pagePrefs && typeof parsed.pagePrefs === 'object' && !Array.isArray(parsed.pagePrefs)
+          ? (parsed.pagePrefs as Record<string, unknown>)
+          : undefined
+      return {
+        workspaceId,
+        starredViews: this.sanitizeStarredViews(parsed.starredViews),
+        starredRecords: this.sanitizeStarredRecords(parsed.starredRecords),
+        pinnedAgents: this.sanitizePinnedAgents(parsed.pinnedAgents),
+        theme,
+        accent,
+        pagePrefs,
+      }
+    } catch {
+      return empty
+    }
+  }
+
+  saveWorkspacePrefs(
+    actorId: string,
+    patch: {
+      starredViews?: unknown
+      starredRecords?: unknown
+      pinnedAgents?: unknown
+      theme?: unknown
+      accent?: unknown
+      pagePrefs?: unknown
+    },
+    requestedWorkspaceId = '',
+  ) {
+    const current = this.workspacePrefs(actorId, requestedWorkspaceId)
+    const theme =
+      patch.theme === 'dark' || patch.theme === 'light'
+        ? patch.theme
+        : current.theme
+    const accent =
+      patch.accent === 'blue' ||
+      patch.accent === 'purple' ||
+      patch.accent === 'green' ||
+      patch.accent === 'orange' ||
+      patch.accent === 'pink' ||
+      patch.accent === 'red'
+        ? patch.accent
+        : current.accent
+    const pagePrefs =
+      patch.pagePrefs && typeof patch.pagePrefs === 'object' && !Array.isArray(patch.pagePrefs)
+        ? { ...(current.pagePrefs ?? {}), ...(patch.pagePrefs as Record<string, unknown>) }
+        : current.pagePrefs
+    const next = {
+      starredViews: patch.starredViews !== undefined ? this.sanitizeStarredViews(patch.starredViews) : current.starredViews,
+      starredRecords:
+        patch.starredRecords !== undefined ? this.sanitizeStarredRecords(patch.starredRecords) : current.starredRecords,
+      pinnedAgents: patch.pinnedAgents !== undefined ? this.sanitizePinnedAgents(patch.pinnedAgents) : current.pinnedAgents,
+      ...(theme ? { theme } : {}),
+      ...(accent ? { accent } : {}),
+      ...(pagePrefs ? { pagePrefs } : {}),
+    }
+    this.db
+      .prepare(
+        `INSERT INTO collab_state (key, value) VALUES (?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+      )
+      .run(this.prefsKey(current.workspaceId, actorId), JSON.stringify(next))
+    return { workspaceId: current.workspaceId, ...next }
+  }
+
+  setAgentPinned(actorId: string, agentId: string, pinned: boolean, requestedWorkspaceId = '') {
+    const id = String(agentId ?? '').trim()
+    if (!id) throw new CollabError('需要代理 ID', 400)
+    const current = this.workspacePrefs(actorId, requestedWorkspaceId)
+    const nextPinned = pinned
+      ? [...current.pinnedAgents.filter((item) => item !== id), id]
+      : current.pinnedAgents.filter((item) => item !== id)
+    return this.saveWorkspacePrefs(actorId, { pinnedAgents: nextPinned }, current.workspaceId)
+  }
+
   /** 远程工作区在本机留一份成员关系，方便文件权限查询。 */
   upsertPulledWorkspace(input: { accountId: string; id: string; name: string; ownerId?: string; role?: string; createdAt?: number }) {
     const id = input.id.trim()

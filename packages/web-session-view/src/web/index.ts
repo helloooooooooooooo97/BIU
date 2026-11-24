@@ -1475,8 +1475,8 @@ export class SessionViewService extends Service {
       sessions: prev.map((item) => (item.id === id ? { ...item, pinned } : item)),
     })
     try {
-      const res = await apiFetch(`/api/agents/${id}/config`, {
-        method: 'PATCH',
+      const res = await apiFetch(`/api/agents/${id}/pin`, {
+        method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ pinned }),
       })
