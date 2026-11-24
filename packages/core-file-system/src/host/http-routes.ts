@@ -33,6 +33,7 @@ import { readSharePluginWebJs, zipSharePluginSource } from './share-plugin-pack.
 import { dropSharesForRemovedViews, type SharesStore } from './shares-store.ts'
 import { type TagStore } from './tags-store.ts'
 import { asDeleteQuery, parseListColumnsParam, parseSortsParam } from './schema-coerce.ts'
+import { DATABASE_TOOL_NAMES } from './agent-tools.ts'
 import type { DatabaseService } from './index.ts'
 
 export function databaseHttpFailure(error: unknown) {
@@ -915,6 +916,26 @@ export function registerDatabaseHttpRoutes(
       const message = error instanceof Error ? error.message : String(error)
       ctx.logger('database').warn(`action ${action || '(none)'} ${path || '(none)'}: ${message}`)
       route.send(400, { error: String(error) })
+    }
+  })
+  ctx.http.route('POST', '/api/db/tool', async (route) => {
+    try {
+      const body = (await route.json()) as { name?: string; args?: Record<string, unknown> }
+      const name = String(body?.name ?? '').trim()
+      if (!DATABASE_TOOL_NAMES.has(name)) {
+        route.send(400, { error: `unsupported db tool: ${name}` })
+        return
+      }
+      const tools = ctx.get('tools') as { invoke?: (toolName: string, args: Record<string, unknown>) => Promise<unknown> } | undefined
+      if (!tools?.invoke) {
+        route.send(503, { error: 'tools service unavailable' })
+        return
+      }
+      const result = await tools.invoke(name, body?.args && typeof body.args === 'object' ? body.args : {})
+      route.send(200, { result })
+    } catch (error) {
+      const failure = databaseHttpFailure(error)
+      route.send(failure.status, failure.body)
     }
   })
 }

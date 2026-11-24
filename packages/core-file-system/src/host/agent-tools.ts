@@ -5,12 +5,50 @@ import {
   parseContentJump,
   type CollectionListQuery,
 } from '@biu/type-file-system'
+import { currentAccountId, currentRequestWorkspaceId, isOnlineRuntime } from '@biu/host-plugin-loader/data-dir'
 import { databaseRevealForTool } from '../paths.ts'
 import { currentSessionId } from '@biu/host-sessions/scope'
 import { AgentDbCompact } from './agent-payload.ts'
 import { resolveContentCommand } from './content-edit.ts'
 import { clientViewFromDbRow } from './saved-views.ts'
 import { asColumnKeys, asCreateRecords, asDeleteQuery, asFilter } from './schema-coerce.ts'
+
+export const DATABASE_TOOL_NAMES = new Set([
+  'db_list',
+  'db_read',
+  'db_update',
+  'db_create',
+  'db_delete',
+  'db_restore',
+  'db_action',
+  'db_stat',
+  'db_content',
+  'db_media',
+  'db_file',
+])
+
+function resolveCloudToolTarget(ctx: Context): { origin: string; token: string; workspaceId: string } | null {
+  if (isOnlineRuntime()) return null
+  let account:
+    | {
+        store?: { activeWorkspaceId(): string | null }
+        workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
+        linkedCloud?: (localAccountId?: string) => { origin: string; token: string } | null
+      }
+    | undefined
+  try {
+    account = ctx.get('account') as typeof account
+  } catch {
+    return null
+  }
+  const workspaceId = currentRequestWorkspaceId() || account?.store?.activeWorkspaceId() || ''
+  if (!workspaceId || account?.workspaceLocation?.(workspaceId) !== 'cloud') return null
+  const linked = account.linkedCloud?.(currentAccountId() || undefined)
+  if (!linked?.origin || !linked.token) {
+    throw new Error('请先登录云端账号')
+  }
+  return { origin: linked.origin.replace(/\/+$/, ''), token: linked.token, workspaceId }
+}
 
 export type DatabaseToolsTarget = {
   list(
@@ -142,7 +180,39 @@ async function withInspectorReveal<T>(
 }
 
 export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
-  ctx.tools.register({
+  const registerDbTool = (def: Parameters<typeof ctx.tools.register>[0]) => {
+    const localExecute = def.execute
+    ctx.tools.register({
+      ...def,
+      execute: async (args, signal) => {
+        const cloud = resolveCloudToolTarget(ctx)
+        if (cloud) {
+          const response = await fetch(`${cloud.origin}/api/db/tool`, {
+            method: 'POST',
+            headers: {
+              authorization: `Bearer ${cloud.token}`,
+              'x-biu-workspace-id': cloud.workspaceId,
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({ name: def.name, args }),
+            ...(signal ? { signal } : {}),
+          })
+          const payload = (await response.json().catch(() => ({}))) as { result?: unknown; error?: string }
+          if (!response.ok) throw new Error(payload.error || `云端工具 ${def.name} 执行失败 (${response.status})`)
+          if (!def.annotations?.readOnly) {
+            try {
+              ctx.emit('database/change')
+            } catch {
+              /* ignore */
+            }
+          }
+          return payload.result
+        }
+        return localExecute(args, signal)
+      },
+    })
+  }
+  registerDbTool({
     name: 'db_list',
     description: '列出 File System 路径：/ 为已登记表（path、中文名、view.blurb 说明书），/<表> 返回列式 JSON { columns: string[], rows: unknown[][], total }（不含 content、默认不含 createdAt/updatedAt/createdBy/updatedBy）。默认每页 20，最多 200。可传 view_id（视图 id 或名称）直接按已保存视图的筛选/排序条件查询；columns 参数只取需要的列；count_only=true 只返回 { path, total } 省 token。表结构用 db_stat。',
     parameters: {
@@ -214,7 +284,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
       )
     },
   })
-  ctx.tools.register({
+  registerDbTool({
     name: 'db_read',
     description: '读取单条或多条记录（path 或 paths）：返回记录 JSON（空字段省略）。默认不含正文；传 include_content=true 可在同一次调用里附带前 content_lines（默认 80）行正文预览，省去再调 db_content。查表列表请用 db_list。',
     parameters: {
@@ -277,7 +347,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
       return withInspectorReveal(ctx, target, () => readOne(target))
     },
   })
-  ctx.tools.register({
+  registerDbTool({
     name: 'db_update',
     description: '按表结构 schema 的可写字段更新已有记录，支持单条与批量两种模式：1）单条更新：path 为 /<表>/<id>，属性对象传在 fields 中，可选传 content 整篇覆写正文（也可只传 content 单独覆写正文）；2）批量更新：path 为表路径 /<表>（如 /pages），传 view_id（视图 id 或名称）、ids、filter、q 之一配合 fields 统一打补丁，或传 updates=[{id, fields}] 逐条异构更新；可先传 dry_run=true 预览命中条数。标签 tag 统一按标签 id 分组写 values：{tags:["tag-2"],values:{"tag-2":{导演:"查泽雷"}}}（支持直接传对象或 JSON 字符串，含 + / - 等符号键名均可）；省略 tags 则合并更新当前已贴标签的属性，不撕掉其它标签。新建用 db_create，局部改正文用 db_content。',
     parameters: {
@@ -380,7 +450,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
       }).then((body) => agentDbCompact.write(body))
     },
   })
-  ctx.tools.register({
+  registerDbTool({
     name: 'db_create',
     description: '在已登记且允许新建的表中新增记录。路径为 /<表>，传 records 非空对象数组；记录内可直接附带正文（字段名 content）及标签 tag（支持对象 {tags:["tag-2"],values:{"tag-2":{...}}} 或 JSON 字符串，含 + / - 等符号键名均可一步写入）。成功返回 {ok, path, ids}（单条带标签时附带 tag）。能否新建看 db_stat 的 caps。新建标签用 db_create path=/tags records=[{title}]。',
     parameters: {
@@ -410,7 +480,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
         (body) => agentDbCompact.write(body),
       ),
   })
-  ctx.tools.register({
+  registerDbTool({
     name: 'db_delete',
     description: '按条件把记录放进回收站（软删除）。路径为 /<表>，必须带 ids、q 或 filter 之一。purge=true 才从原表彻底删掉。成功返回 {ok, path, ids}。',
     parameters: {
@@ -430,7 +500,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
         (body) => agentDbCompact.write(body),
       ),
   })
-  ctx.tools.register({
+  registerDbTool({
     name: 'db_restore',
     description: '从回收站恢复记录。路径为 /<表>，必须带 ids、q 或 filter 之一。记录仍在原表，只是去掉删除标记。',
     parameters: {
@@ -449,7 +519,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
         (body) => agentDbCompact.write(body),
       ),
   })
-  ctx.tools.register({
+  registerDbTool({
     name: 'db_action',
     description:
       '对一条记录执行该表登记的动作。路径为 /<表>/<id>，action 为动作 id（见 db_stat 的 schema.actions）。成功返回 {ok, path}，有返回值时带 result，不回整行。需要参数时放在 args。任务派工/汇报、代理压缩/进度、插件创建/打包一律走这里。',
@@ -474,7 +544,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
         ),
       ).then((body) => agentDbCompact.write(body)),
   })
-  ctx.tools.register({
+  registerDbTool({
     name: 'db_stat',
     description: `${agentDbCompact.statBlurb} 传 include_tags=true 可一次附带工作区标签定义摘要（id、名称、属性名与类型），写标签属性前无需再额外查 /tags。`,
     parameters: {
@@ -526,7 +596,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
       }
     },
   })
-  ctx.tools.register({
+  registerDbTool({
     name: 'db_content',
     description: [
       '读写一条记录的正文（一篇，只要 path）。list/read 不含正文。path 为 /<表>/<id>。',
@@ -593,7 +663,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
         db.editContent(String(args.path), args).then((body) => agentDbCompact.query(body)),
       ),
   })
-  ctx.tools.register({
+  registerDbTool({
     name: 'db_media',
     description: [
       '读写一条记录的不可变附件（图片、音频、导入文件）。可变文件（画板、沙盒 jsx）用 db_file。正文用 db_content。',
@@ -639,7 +709,7 @@ export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
         db.editAsset(String(args.path), args).then((body) => agentDbCompact.query(body)),
       ),
   })
-  ctx.tools.register({
+  registerDbTool({
     name: 'db_file',
     description: [
       '读写一条记录上的可变文件（画板、视频脚本、htmlframe、页面沙盒 jsx）。不可变附件用 db_media。正文用 db_content。',
