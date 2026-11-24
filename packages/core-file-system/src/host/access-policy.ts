@@ -321,6 +321,60 @@ export class DatabaseAccessPolicy {
     return merged
   }
 
+  hasViewGrants(collection: string): boolean {
+    const store = this.host.collabStore()
+    const authorization = this.host.authorization()
+    const actor = authorization?.currentActor()
+    if (!store?.viewGrantsFor || !authorization || !actor) return false
+    return store.viewGrantsFor(actor.workspaceId, collection).length > 0
+  }
+
+  hasColumnRestrictions(collection: string): boolean {
+    const store = this.host.collabStore()
+    const authorization = this.host.authorization()
+    const actor = authorization?.currentActor()
+    if (!store?.viewGrantsFor || !authorization || !actor) return false
+    return store
+      .viewGrantsFor(actor.workspaceId, collection)
+      .some((g) => Boolean(g.readable_columns || g.writable_columns || g.denied_columns))
+  }
+
+  /**
+   * 当集合没有数据视图过滤授权（view_grants）时，预先用已加载的 RBAC 策略计算当前用户可见的 ID 集合，
+   * 使云端 RBAC 模式也能走 spec.listPage 的 SQL 下推快路径，避免全表拉取到内存排序。
+   */
+  resolvePushdownAllowedIds(collection: string): string[] | null {
+    const store = this.host.collabStore()
+    const authorization = this.host.authorization()
+    const actor = authorization?.currentActor()
+    if (!authorization || !actor) return null
+    if (this.hasViewGrants(collection)) return null
+    const candidateMap = store?.collectionOwnership?.(actor.workspaceId, collection)
+      ?? store?.collectionRecordOwners?.(actor.workspaceId, collection)
+    if (!candidateMap) return null
+    authorization.preloadCollection(actor.workspaceId, collection, actor.accountId)
+    try {
+      const allowed: string[] = []
+      for (const id of candidateMap.keys()) {
+        if (this.host.tags.isDeleted(collection, id)) continue
+        const decision = authorization.authorize(actor, 'resource:read', {
+          type: 'record',
+          workspaceId: actor.workspaceId,
+          collection,
+          recordId: id,
+        })
+        if (decision.allowed) allowed.push(id)
+      }
+      return allowed
+    } finally {
+      authorization.releaseCollection(actor.workspaceId, collection, actor.accountId)
+    }
+  }
+
+  projectRecordWithPolicy<T extends Record<string, unknown>>(record: T, policy: ColumnPolicy): T {
+    return projectRecordColumns(record, policy)
+  }
+
   projectRecord<T extends Record<string, unknown>>(collection: string, record: T): T {
     return projectRecordColumns(record, this.columnPolicyFor(collection, record))
   }
