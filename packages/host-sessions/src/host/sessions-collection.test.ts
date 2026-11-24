@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import type { SessionEvent } from '@biu/type-session'
 import { formatUserMessagesForTitle, lastUserMessages, sanitizeGeneratedTitle, sessionsCollection } from './sessions-collection.ts'
 
-test('sessionsCollection maps summaries and writes title/pinned/tag', async () => {
+test('sessionsCollection maps summaries and writes title/tag without exposing shared pinned field', async () => {
   const calls: unknown[] = []
   const spec = sessionsCollection({
     listSummaries: async () => [
@@ -14,7 +14,7 @@ test('sessionsCollection maps summaries and writes title/pinned/tag', async () =
         title: 'hello',
         updatedAt: 100,
         mascot: { shape: 'pebble', color: 'orange', eye: 1 },
-        config: { pinned: false, tag: { tags: ['a'], values: {} } },
+        config: { tag: { tags: ['a'], values: {} } },
       },
     ],
     rename: async (id, title) => {
@@ -55,12 +55,13 @@ test('sessionsCollection maps summaries and writes title/pinned/tag', async () =
   assert.equal(rows[0]?.events, undefined)
   assert.equal(rows[0]?.project, undefined)
   assert.equal(spec.schema.fields.project, undefined)
+  assert.equal(spec.schema.fields.pinned, undefined)
+  assert.equal(rows[0]?.pinned, undefined)
   assert.equal(spec.schema.fields.projectPath?.type, 'string')
   const got = await spec.get?.('s1')
   assert.equal(Array.isArray(got?.events), true)
   await spec.update?.('s1', {
     title: 'renamed',
-    pinned: true,
     tag: { tags: ['b', 'c'], values: {} },
     model: 'deepseek-reasoner',
     projectPath: '/tmp/app',
@@ -68,7 +69,7 @@ test('sessionsCollection maps summaries and writes title/pinned/tag', async () =
   await spec.remove?.({ ids: ['s1'] })
   assert.deepEqual(calls, [
     ['rename', 's1', 'renamed'],
-    ['patch', 's1', { pinned: true, tag: { tags: ['b', 'c'], values: {} }, model: 'deepseek-reasoner' }],
+    ['patch', 's1', { tag: { tags: ['b', 'c'], values: {} }, model: 'deepseek-reasoner' }],
     ['project', 's1', { path: '/tmp/app' }],
     ['delete', 's1'],
   ])

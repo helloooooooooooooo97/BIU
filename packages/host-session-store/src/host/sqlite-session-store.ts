@@ -212,7 +212,6 @@ export class SqliteSessionStore implements SessionStore {
     const updatedAt = Number.isFinite(stamped) && stamped > 0 ? stamped : Date.now()
     const projectJson = record.project ? JSON.stringify(record.project) : null
     const mascotJson = record.mascot ? JSON.stringify(record.mascot) : null
-    const configJson = record.config ? JSON.stringify(record.config) : null
     const eventCount = record.events.length
     const eventsTable = this.eventsTable()
     const lastMessageAt = lastSpokenAt(record.events)
@@ -235,10 +234,33 @@ export class SqliteSessionStore implements SessionStore {
         last_message_at = excluded.last_message_at,
         first_event_at = excluded.first_event_at
     `)
-    const existing = this.sessions.prepare('SELECT event_count FROM agents WHERE id = ?').get(record.id) as
-      | { event_count: number }
+    const existing = this.sessions
+      .prepare('SELECT event_count, config_json, updated_at, first_event_at FROM agents WHERE id = ?')
+      .get(record.id) as
+      | { event_count: number; config_json: string | null; updated_at: number; first_event_at: number }
       | undefined
     const storedCount = existing?.event_count ?? 0
+    // 固化 createdAt：老会话若 config_json 中未记录 createdAt，改 title/配置时不能让 updated_at 覆盖掉原有创建时间。
+    const incomingCreatedAt = Number(record.config?.createdAt)
+    const existingConfig = existing ? parseConfig(existing.config_json) : undefined
+    const existingCreatedAt = Number(existingConfig?.createdAt)
+    const preservedCreatedAt =
+      Number.isFinite(incomingCreatedAt) && incomingCreatedAt > 0
+        ? incomingCreatedAt
+        : Number.isFinite(existingCreatedAt) && existingCreatedAt > 0
+          ? existingCreatedAt
+          : firstEventAt > 0
+            ? firstEventAt
+            : Number(existing?.first_event_at) > 0
+              ? Number(existing!.first_event_at)
+              : Number(existing?.updated_at) > 0
+                ? Number(existing!.updated_at)
+                : updatedAt
+    const persistedConfig =
+      record.config || preservedCreatedAt > 0
+        ? { ...(record.config ?? {}), createdAt: preservedCreatedAt }
+        : undefined
+    const configJson = persistedConfig ? JSON.stringify(persistedConfig) : null
 
     const replaceAll = () => {
       this.sessions.prepare(`DELETE FROM ${eventsTable} WHERE session_id = ?`).run(record.id)
@@ -351,7 +373,7 @@ export class SqliteSessionStore implements SessionStore {
   peekSummary(id: string): SessionSummary | undefined {
     const row = this.sessions
       .prepare(
-        'SELECT id, version, project_json, mascot_json, config_json, event_count, title, updated_at FROM agents WHERE id = ?',
+        'SELECT id, version, project_json, mascot_json, config_json, event_count, title, updated_at, first_event_at FROM agents WHERE id = ?',
       )
       .get(id) as SessionRow | undefined
     if (!row) return undefined
@@ -359,7 +381,13 @@ export class SqliteSessionStore implements SessionStore {
     const mascot = parseMascot(row.mascot_json)
     const config = parseConfig(row.config_json)
     const createdAt = Number(config?.createdAt)
-    const stamp = Number.isFinite(createdAt) && createdAt > 0 ? createdAt : row.updated_at
+    const firstEventAt = Number(row.first_event_at) || 0
+    const stamp =
+      Number.isFinite(createdAt) && createdAt > 0
+        ? createdAt
+        : firstEventAt > 0
+          ? firstEventAt
+          : row.updated_at
     return {
       id: row.id,
       version: row.version,

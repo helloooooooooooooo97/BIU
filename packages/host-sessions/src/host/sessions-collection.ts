@@ -53,7 +53,6 @@ function asRecord(row: SessionSummary): DbRecord {
   return {
     id: row.id,
     title: row.title,
-    pinned: Boolean(row.config?.pinned),
     eventCount: row.eventCount,
     projectPath: row.project?.path ?? '',
     model: row.config?.model ?? '',
@@ -186,7 +185,7 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec & { p
       route: '/db-agents',
       title: '代理',
       inspector: true,
-      blurb: '这张表的每一行是一个代理（agent）。一个代理 = 一个 session，id 就是代理 id。用户说「再开一个 agent / 叫另一个代理去做」= 在本表 db_create 新建一行（caps.create 为真时），不要去建插件、不要去建任务。你自己也是其中一个代理。列表 db_list /agents。改标题/置顶/emoji/标签/模型/服务商/系统提示/模式/额外工具/自动压缩输入 token/项目路径：db_update /agents/<id>。聊天记录不在这张表，不能用 db_update 写对话。删除 db_delete 进回收站（记录还在）；彻底删除用 purge=true 或 db_action /trash/agents::<id> action=delete。本表动作（db_action path=/agents/<代理id> action=…）：inspect=看这个代理的配置和最近几句对话（可选 args.limit）；query=在这一行代理的时间线里查事件（args.query 匹配类型或摘要，可再传 args.type；不传 query 返回最近若干条）；progress=看它当前回合忙不忙、在用什么工具、刚说了什么（轮询时把上次返回的 newestSeq 当作 afterSeq）；status=看它上下文 token 用了多少；compact=压缩它的旧上下文（第一次不传 text 会返回该怎么写摘要，第二次把摘要放进 args.text）；clear=丢掉摘要、硬切压缩点；retrieve=按关键词找回被压缩的旧内容（必填 args.query）；rename=根据用户发给这个代理的最近 100 条消息（带时间戳）给这个 agent 起准确名字。',
+      blurb: '这张表的每一行是一个代理（agent）。一个代理 = 一个 session，id 就是代理 id。用户说「再开一个 agent / 叫另一个代理去做」= 在本表 db_create 新建一行（caps.create 为真时），不要去建插件、不要去建任务。你自己也是其中一个代理。列表 db_list /agents。改标题/emoji/标签/模型/服务商/系统提示/模式/额外工具/自动压缩输入 token/项目路径：db_update /agents/<id>。聊天记录不在这张表，不能用 db_update 写对话。删除 db_delete 进回收站（记录还在）；彻底删除用 purge=true 或 db_action /trash/agents::<id> action=delete。本表动作（db_action path=/agents/<代理id> action=…）：inspect=看这个代理的配置和最近几句对话（可选 args.limit）；query=在这一行代理的时间线里查事件（args.query 匹配类型或摘要，可再传 args.type；不传 query 返回最近若干条）；progress=看它当前回合忙不忙、在用什么工具、刚说了什么（轮询时把上次返回的 newestSeq 当作 afterSeq）；status=看它上下文 token 用了多少；compact=压缩它的旧上下文（第一次不传 text 会返回该怎么写摘要，第二次把摘要放进 args.text）；clear=丢掉摘要、硬切压缩点；retrieve=按关键词找回被压缩的旧内容（必填 args.query）；rename=根据用户发给这个代理的最近 100 条消息（带时间戳）给这个 agent 起准确名字。',
       order: 18,
       icon: 'cursor',
     },
@@ -194,11 +193,10 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec & { p
     schema: {
       contentField: 'events',
       contentBackend: 'computed',
-      columns: ['title', 'pinned', 'tag', 'eventCount', 'projectPath', 'updatedAt'],
+      columns: ['title', 'tag', 'eventCount', 'projectPath', 'updatedAt'],
       fields: {
         events: { type: 'file', label: '会话', writable: false },
         title: { type: 'string', label: '标题', writable: true },
-        pinned: { type: 'boolean', label: '置顶', writable: true },
         eventCount: { type: 'number', label: '事件数', computed: true, sortable: true },
         projectPath: { type: 'string', label: '项目路径', writable: true },
         model: { type: 'string', label: '模型', writable: true },
@@ -238,7 +236,6 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec & { p
     update: async (id, patch) => {
       if (typeof patch.title === 'string') await sessions.rename(id, patch.title)
       const config: SessionConfig = {}
-      if (typeof patch.pinned === 'boolean') config.pinned = patch.pinned
       if ('emoji' in patch) config.emoji = String(patch.emoji ?? '')
       if ('tag' in patch) config.tag = normalizeSchemaValue(patch.tag)
       if (typeof patch.createdAt === 'number') config.createdAt = patch.createdAt
@@ -337,7 +334,6 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec & { p
             config: record.config ?? null,
             project: record.project ?? null,
             tag: record.config?.tag ?? { tags: [], values: {} },
-            pinned: Boolean(record.config?.pinned),
             eventCount: record.events.length,
             recent: recentMessages(record.events, limit),
           }
