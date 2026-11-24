@@ -55,7 +55,7 @@ function bump() {
 function readJson(key: string): Record<string, unknown> {
   if (typeof localStorage === 'undefined') return {}
   try {
-    const parsed = JSON.parse(readStorageString(key) || '{}') as unknown
+    const parsed = JSON.parse(readStorageString(key, { scope: 'workspace' }) || '{}') as unknown
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
     return parsed as Record<string, unknown>
   } catch {
@@ -101,7 +101,7 @@ function persistSelection(collectionPath: string, recordId: string, catalog: Rec
     contentViewId: catalog.contentViewId,
     propViewId: catalog.propViewId,
   }
-  writeStorageString(SELECTION_KEY, JSON.stringify(all))
+  writeStorageString(SELECTION_KEY, JSON.stringify(all), { scope: 'workspace' })
 }
 
 function withSelection(collectionPath: string, recordId: string, catalog: RecordViewCatalog): RecordViewCatalog {

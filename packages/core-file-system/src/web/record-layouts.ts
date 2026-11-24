@@ -55,7 +55,7 @@ function displayKey(key: string, layoutId: string) {
 function readJson(key: string): Record<string, unknown> {
   if (typeof localStorage === 'undefined') return {}
   try {
-    const parsed = JSON.parse(readStorageString(key) || '{}') as unknown
+    const parsed = JSON.parse(readStorageString(key, { scope: 'workspace' }) || '{}') as unknown
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
     return parsed as Record<string, unknown>
   } catch {
@@ -65,7 +65,7 @@ function readJson(key: string): Record<string, unknown> {
 
 function writeJson(key: string, value: Record<string, unknown>) {
   if (typeof localStorage === 'undefined') return
-  writeStorageString(key, JSON.stringify(value))
+  writeStorageString(key, JSON.stringify(value), { scope: 'workspace' })
 }
 
 function hydrateDisplay() {

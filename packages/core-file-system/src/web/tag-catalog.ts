@@ -107,7 +107,7 @@ export function tagsById() {
 export function loadTags(_collectionPath?: string): CollectionSchemaPack[] {
   if (memory) return memory
   try {
-    memory = parseTags(JSON.parse(readStorageString(TAGS_KEY) ?? '[]'))
+    memory = parseTags(JSON.parse(readStorageString(TAGS_KEY, { scope: 'workspace' }) ?? '[]'))
     return memory
   } catch {
     memory = []
@@ -133,7 +133,7 @@ function adoptFilled(raw: unknown) {
 function adoptTags(next: CollectionSchemaPack[]) {
   memory = next
   try {
-    writeStorageString(TAGS_KEY, JSON.stringify(next))
+    writeStorageString(TAGS_KEY, JSON.stringify(next), { scope: 'workspace' })
     try {
     } catch {
       /* ignore */

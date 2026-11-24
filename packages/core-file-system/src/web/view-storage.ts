@@ -1,4 +1,4 @@
-import { readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
+import { currentStorageWorkspaceId, readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
 import { apiFetch } from '@biu/biu-ui/api-client'
 import { builtinAllGroupBy, builtinAllViewId, stubBuiltinAllView, stubBuiltinBlockKindView, stubBuiltinCatalogView, stubBuiltinTagView, stubBuiltinScopeView, stubBuiltinMemberView, isBuiltinAllViewForCollection, isBuiltinAllViewId } from '../catalog-views.ts'
 import {
@@ -20,11 +20,7 @@ export const viewWriteQueue = new KeyedSerialQueue()
 
 /** 按当前活动工作区隔离 localStorage 视图缓存，防止本机空间与云端空间、或不同空间之间互相污染默认视图。 */
 function currentWorkspaceStorageId(): string {
-  return (
-    readStorageString('biu.workspaceId', 'session')?.trim() ||
-    readStorageString('biu.workspaceId')?.trim() ||
-    ''
-  )
+  return currentStorageWorkspaceId()
 }
 
 function workspaceStoragePrefix(): string {
