@@ -65,7 +65,9 @@ export class AccountService extends Service {
     if (!isOnlineRuntime()) {
       const initialOrigin = this.configuredCloudOrigin()
       if (initialOrigin) this.ensureReplica(initialOrigin)
+      let syncing = false
       const timer = setInterval(() => {
+        if (syncing) return
         const active = this.store.activeWorkspaceId()
         if (!active || this.workspaceLocation(active) !== 'cloud') return
         const linked = this.linkedCloud()
@@ -74,9 +76,14 @@ export class AccountService extends Service {
         this.syncReplicaCredential(linked.localAccountId)
         const device = replica?.active()
         if (!device?.token) return
-        void exchangeSnapshot(ctx, linked.origin, device.token, device.accountId, active, { sessionsOnly: true }).catch((error) => {
-          console.warn('[replica] sync failed', error)
-        })
+        syncing = true
+        void exchangeSnapshot(ctx, linked.origin, device.token, device.accountId, active, { sessionsOnly: true })
+          .catch((error) => {
+            console.warn('[replica] sync failed', error)
+          })
+          .finally(() => {
+            syncing = false
+          })
       }, 3000)
       ctx.on('dispose', () => clearInterval(timer))
       const saved = this.db.prepare('SELECT local_account_id FROM cloud_connections WHERE active = 1').all() as Array<{ local_account_id: string }>
@@ -328,10 +335,44 @@ export class AccountService extends Service {
     })
   }
 
+  /** 统一的桌面端云端空间目标解析，收敛各模块重复判断。 */
+  resolveCloudTarget(
+    workspaceId = '',
+    localAccountId = currentAccountId(),
+  ): { origin: string; token: string; workspaceId: string } | null {
+    if (isOnlineRuntime()) return null
+    const targetWorkspace = workspaceId || this.store.activeWorkspaceId() || ''
+    if (!targetWorkspace || this.workspaceLocation(targetWorkspace) !== 'cloud') return null
+    const connection = (localAccountId ? this.cloudConnection(localAccountId) : null) ?? this.linkedCloud(localAccountId)
+    if (!connection?.origin || !connection.token) return null
+    return { origin: connection.origin.replace(/\/+$/, ''), token: connection.token, workspaceId: targetWorkspace }
+  }
+
+  /** 当断开或切换云端账号时，若当前仍停留在云端空间，自动回落到本机空间，避免持续 401 或跨服务器串空间。 */
+  fallbackToDeviceWorkspace(localAccountId: string): string {
+    if (isOnlineRuntime()) return ''
+    const active = this.store.activeWorkspaceId()
+    if (!active || this.workspaceLocation(active) !== 'cloud') return active ?? ''
+    const device = this.store.listWorkspaces(localAccountId).find((ws) => this.workspaceLocation(ws.id) === 'device')
+    if (device) {
+      this.store.setActive(localAccountId, device.id)
+      return device.id
+    }
+    return ''
+  }
+
+  /** 远端已删除空间但本地名称不匹配时，兜底清理本地缓存记录与 workspace_place，避免留下僵尸空间。 */
+  purgeWorkspaceCache(workspaceId: string) {
+    this.db.prepare('DELETE FROM workspace_place WHERE workspace_id = ?').run(workspaceId)
+    this.db.prepare('DELETE FROM memberships WHERE workspace_id = ?').run(workspaceId)
+    this.db.prepare('DELETE FROM workspaces WHERE id = ?').run(workspaceId)
+  }
+
   /** 断开当前连接，保留已配置的远程连接记录。 */
   disconnectCloud(localAccountId: string) {
     this.db.prepare('UPDATE cloud_connections SET active = 0 WHERE local_account_id = ?').run(localAccountId)
     this.replica?.forget(localAccountId)
+    this.fallbackToDeviceWorkspace(localAccountId)
   }
 
   activateCloud(localAccountId: string, origin: string, remoteAccountId: string) {
@@ -342,6 +383,7 @@ export class AccountService extends Service {
       )
       .get(localAccountId, origin, remoteAccountId) as { token?: string } | undefined
     if (!row?.token) throw new CollabError('还没有关联这个云端账号', 404)
+    const previous = this.cloudConnection(localAccountId)
     this.db.prepare('UPDATE cloud_connections SET active = 0 WHERE local_account_id = ?').run(localAccountId)
     this.db
       .prepare(
@@ -349,6 +391,9 @@ export class AccountService extends Service {
          WHERE local_account_id = ? AND origin = ? AND remote_account_id = ?`,
       )
       .run(Date.now(), localAccountId, origin, remoteAccountId)
+    if (previous && (previous.origin !== origin || previous.remoteAccountId !== remoteAccountId)) {
+      this.fallbackToDeviceWorkspace(localAccountId)
+    }
     this.syncReplicaCredential(localAccountId)
     return this.cloudConnection(localAccountId)!
   }
@@ -365,6 +410,7 @@ export class AccountService extends Service {
       .run(localAccountId, normalized)
     if (active && active.origin === normalized) {
       this.replica?.forget(localAccountId)
+      this.fallbackToDeviceWorkspace(localAccountId)
     }
   }
 
@@ -397,6 +443,21 @@ function bearer(route: RouteContext) {
 
 function rememberLogin(route: RouteContext, token: string) {
   route.res.setHeader('set-cookie', `biu_account=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict`)
+}
+
+function requestPublicOrigin(route: RouteContext): string {
+  const origin = String(route.req.headers.origin ?? '').trim()
+  if (/^https?:\/\//i.test(origin)) {
+    try {
+      return new URL(origin).origin
+    } catch {
+      /* ignore malformed Origin */
+    }
+  }
+  const host = String(route.req.headers['x-forwarded-host'] ?? route.req.headers.host ?? '').split(',')[0]?.trim() ?? ''
+  if (!host) return ''
+  const proto = String(route.req.headers['x-forwarded-proto'] ?? 'http').split(',')[0]?.trim() || 'http'
+  return `${proto}://${host}`
 }
 
 function normalizeCloudOrigin(raw: string) {
@@ -717,7 +778,12 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       const connection = account.activateCloud(me.id, String(body.origin ?? ''), String(body.remoteAccountId ?? ''))
       ctx.http.broadcast('database', { ts: Date.now() })
       route.send(200, {
-        account: { id: connection.remoteAccountId, name: connection.remoteName, email: connection.remoteEmail },
+        account: {
+          id: connection.remoteAccountId,
+          name: connection.remoteName,
+          email: connection.remoteEmail,
+          avatar: account.cloudAvatar(connection.origin, connection.remoteAccountId),
+        },
         origin: connection.origin,
       })
     } catch (error) {
@@ -735,7 +801,8 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         bodyOrigin = String(body?.origin ?? '').trim()
       }
       account.removeCloudConnection(me.id, queryOrigin || bodyOrigin || undefined)
-      route.send(200, { ok: true })
+      ctx.http.broadcast('database', { ts: Date.now() })
+      route.send(200, { ok: true, workspaceId: account.store.activeWorkspaceId() })
     } catch (error) {
       fail(route, error)
     }
@@ -1132,7 +1199,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         if (!connection) throw new CollabError('请先登录云端账号', 401)
         let response: Response
         try {
-          response = await fetch(`${connection.origin}/api/account/workspaces/${route.params.id}`, {
+          response = await fetch(`${connection.origin}/api/account/workspaces/${encodeURIComponent(route.params.id!)}`, {
             method: 'PATCH',
             headers: { authorization: `Bearer ${connection.token}`, 'content-type': 'application/json' },
             body: JSON.stringify(body),
@@ -1177,7 +1244,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         if (!connection) throw new CollabError('请先登录云端账号', 401)
         let response: Response
         try {
-          response = await fetch(`${connection.origin}/api/account/workspaces/${workspaceId}`, {
+          response = await fetch(`${connection.origin}/api/account/workspaces/${encodeURIComponent(workspaceId)}`, {
             method: 'DELETE',
             headers: { authorization: `Bearer ${connection.token}`, 'content-type': 'application/json' },
             body: JSON.stringify({ name: confirmName }),
@@ -1190,8 +1257,10 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         try {
           const deleted = account.store.deleteWorkspace(me.id, workspaceId, confirmName)
           purgeSessionEvents(deleted.sessionIds)
+          account.purgeWorkspaceCache(workspaceId)
           route.send(200, { id: workspaceId, deleted: true, activeWorkspaceId: deleted.activeWorkspaceId })
         } catch {
+          account.purgeWorkspaceCache(workspaceId)
           const fallback = account.store.listWorkspaces(me.id).find((ws) => ws.id !== workspaceId)?.id ?? ''
           if (fallback) account.store.setActive(me.id, fallback)
           route.send(200, { id: workspaceId, deleted: true, activeWorkspaceId: fallback })
@@ -1243,9 +1312,12 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         role,
         Number(body.expiresInHours ?? 168),
       )
+      const invitePath = `/?workspaceInvite=${encodeURIComponent(invite.token)}`
+      const origin = requestPublicOrigin(route)
       route.send(201, {
         ...invite,
-        path: `/?workspaceInvite=${encodeURIComponent(invite.token)}`,
+        path: invitePath,
+        ...(origin ? { url: `${origin}${invitePath}` } : {}),
       })
     } catch (error) {
       fail(route, error)
@@ -1257,7 +1329,12 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       const me = actor(route)
       const connection = !isOnlineRuntime() ? account.cloudConnection(me.id) : null
       if (connection) {
-        const relayed = await relayAccount(route, account, me.id, `/api/account/invites/${route.params.token}/accept`)
+        const relayed = await relayAccount(
+          route,
+          account,
+          me.id,
+          `/api/account/invites/${encodeURIComponent(route.params.token!)}/accept`,
+        )
         if (!relayed) throw new CollabError('请先登录云端账号', 401)
         if (relayed.status < 300) {
           try {
@@ -1628,9 +1705,12 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         Date.now(),
         String(body.viewId ?? ''),
       )
+      const guestPath = `/?guestInvite=${encodeURIComponent(invite.token)}`
+      const origin = requestPublicOrigin(route)
       route.send(201, {
         ...invite,
-        path: `/?guestInvite=${encodeURIComponent(invite.token)}`,
+        path: guestPath,
+        ...(origin ? { url: `${origin}${guestPath}` } : {}),
       })
     } catch (error) {
       fail(route, error)
@@ -1679,7 +1759,8 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('GET', '/api/replica/snapshot', async (route) => {
     try {
       actor(route)
-      route.send(200, await takeSnapshot(ctx))
+      const sessionsOnly = route.query.get('sessionsOnly') === '1'
+      route.send(200, await takeSnapshot(ctx, { sessionsOnly }))
     } catch (error) {
       fail(route, error)
     }

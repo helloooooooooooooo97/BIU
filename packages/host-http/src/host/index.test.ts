@@ -8,7 +8,13 @@ import assert from 'node:assert/strict'
 import { Context, Service } from 'cordis'
 import { WebSocket } from 'ws'
 import * as http from './index.ts'
-import { cloudProxyTargetWorkspace, deliverTenantEvent, rewriteLegacyAgentApi, shouldProxyCloudApi } from './index.ts'
+import {
+  cloudProxyTargetWorkspace,
+  deliverTenantEvent,
+  rewriteLegacyAgentApi,
+  shouldBroadcastCloudMutation,
+  shouldProxyCloudApi,
+} from './index.ts'
 import { currentAccountId, currentRequestWorkspaceId } from '@biu/host-plugin-loader/data-dir'
 
 async function freePort() {
@@ -438,6 +444,26 @@ test('desktop cloud workspace proxies db/files/collab/agent-meta directly to rem
   assert.equal(shouldProxyCloudApi('/api/profile', 'POST'), true)
   assert.equal(shouldProxyCloudApi('/api/account/starred', 'POST'), true)
   assert.equal(cloudProxyTargetWorkspace('/api/account/workspaces/ws-cloud/members', 'ws-local'), 'ws-cloud')
+  assert.equal(
+    cloudProxyTargetWorkspace(
+      '/api/account/mcp/credentials',
+      'ws-local',
+      undefined,
+      Buffer.from(JSON.stringify({ workspaceId: 'ws-cloud' })),
+    ),
+    'ws-cloud',
+  )
+  assert.equal(shouldBroadcastCloudMutation('/api/account/presence', 'POST'), false)
+  assert.equal(shouldBroadcastCloudMutation('/api/account/locks', 'POST'), false)
+  assert.equal(
+    shouldBroadcastCloudMutation('/api/db/tool', 'POST', Buffer.from(JSON.stringify({ name: 'db_list' }))),
+    false,
+  )
+  assert.equal(
+    shouldBroadcastCloudMutation('/api/db/tool', 'POST', Buffer.from(JSON.stringify({ name: 'db_create' }))),
+    true,
+  )
+  assert.equal(shouldBroadcastCloudMutation('/api/db/update', 'POST'), true)
 
   const previous = process.env.BIU_ONLINE
   process.env.BIU_ONLINE = '0'

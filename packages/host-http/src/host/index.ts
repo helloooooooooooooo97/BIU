@@ -169,6 +169,13 @@ export function rewriteLegacyAgentApi(pathname: string) {
 const CLOUD_PROXY_WORKSPACE_RE = /^\/api\/account\/workspaces\/([^/]+)\/(?:members|groups|invites)(?:\/|$)/
 const CLOUD_PROXY_AGENT_META_RE = /^\/api\/agents\/[^/]+\/(?:config|fork|pin|artifacts)(?:\/|$)/
 const CLOUD_PROXY_AGENT_ITEM_RE = /^\/api\/agents\/[^/]+$/
+const CLOUD_PROXY_BODY_WORKSPACE_PATHS = new Set([
+  '/api/account/mcp/credentials',
+  '/api/account/locks',
+  '/api/account/presence',
+])
+const CLOUD_PROXY_READONLY_DB_TOOLS = new Set(['db_list', 'db_read', 'db_stat'])
+const CLOUD_PROXY_TIMEOUT_MS = 30_000
 
 /** 桌面端处于云端空间时，所有空间数据与协作接口统一透传到远端云主机，避免本地 SQLite 镜像与转发遗漏。 */
 export function shouldProxyCloudApi(pathname: string, method = 'GET'): boolean {
@@ -209,6 +216,7 @@ export function cloudProxyTargetWorkspace(
   pathname: string,
   requestedWorkspace: string,
   query?: URLSearchParams,
+  rawBody?: Buffer,
 ): string {
   const matched = CLOUD_PROXY_WORKSPACE_RE.exec(pathname)
   if (matched?.[1]) {
@@ -219,7 +227,35 @@ export function cloudProxyTargetWorkspace(
     }
   }
   const fromQuery = String(query?.get('workspaceId') ?? '').trim()
-  return fromQuery || requestedWorkspace
+  if (fromQuery) return fromQuery
+  if (CLOUD_PROXY_BODY_WORKSPACE_PATHS.has(pathname) && rawBody && rawBody.length > 0) {
+    try {
+      const parsed = JSON.parse(rawBody.toString('utf8')) as { workspaceId?: unknown }
+      const fromBody = typeof parsed?.workspaceId === 'string' ? parsed.workspaceId.trim() : ''
+      if (fromBody) return fromBody
+    } catch {
+      /* 非 JSON 或无 workspaceId 时回退 requestedWorkspace */
+    }
+  }
+  return requestedWorkspace
+}
+
+/** 仅对真正会变更空间数据的写操作广播 database 事件，避免 presence 心跳、锁续期或只读 db_tool 触发前端刷新风暴。 */
+export function shouldBroadcastCloudMutation(pathname: string, method: string, rawBody?: Buffer): boolean {
+  const upper = method.toUpperCase()
+  if (upper === 'GET' || upper === 'HEAD') return false
+  if (pathname === '/api/account/presence' || pathname === '/api/account/locks') return false
+  if (pathname === '/api/db/tool' && rawBody && rawBody.length > 0) {
+    try {
+      const parsed = JSON.parse(rawBody.toString('utf8')) as { name?: unknown }
+      if (typeof parsed?.name === 'string' && CLOUD_PROXY_READONLY_DB_TOOLS.has(parsed.name.trim())) {
+        return false
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return true
 }
 
 function upgradePath(req: IncomingMessage) {
@@ -637,7 +673,10 @@ export class HttpService extends Service {
                 cloudConnection?: (localAccountId: string) => { origin: string; token: string } | null
               }
             | undefined
-          const targetWorkspace = cloudProxyTargetWorkspace(url.pathname, requestedWorkspace, url.searchParams)
+          const hasBody = method !== 'GET'
+          const rawReqBody =
+            hasBody && CLOUD_PROXY_BODY_WORKSPACE_PATHS.has(url.pathname) ? await body() : undefined
+          const targetWorkspace = cloudProxyTargetWorkspace(url.pathname, requestedWorkspace, url.searchParams, rawReqBody)
           if (targetWorkspace && accountSvc?.workspaceLocation?.(targetWorkspace) === 'cloud') {
             const connection = accountSvc.cloudConnection?.(accountId) ?? null
             if (!connection?.origin || !connection.token) {
@@ -652,14 +691,14 @@ export class HttpService extends Service {
               const value = req.headers[key]
               if (typeof value === 'string' && value) forwardHeaders[key] = value
             }
-            const hasBody = method !== 'GET'
-            const rawReqBody = hasBody ? await body() : undefined
+            const reqBody = hasBody ? (rawReqBody ?? (await body())) : undefined
             let upstream: Response
             try {
               upstream = await fetch(`${connection.origin.replace(/\/+$/, '')}${url.pathname}${url.search}`, {
                 method,
                 headers: forwardHeaders,
-                body: hasBody && rawReqBody && rawReqBody.length > 0 ? new Uint8Array(rawReqBody) : undefined,
+                body: hasBody && reqBody && reqBody.length > 0 ? new Uint8Array(reqBody) : undefined,
+                signal: AbortSignal.timeout(CLOUD_PROXY_TIMEOUT_MS),
               })
             } catch {
               context.send(503, { error: '云端服务暂时连不上' })
@@ -673,7 +712,7 @@ export class HttpService extends Service {
             const payload = Buffer.from(await upstream.arrayBuffer())
             res.writeHead(upstream.status, outHeaders)
             res.end(payload)
-            if (hasBody && upstream.ok) {
+            if (upstream.ok && shouldBroadcastCloudMutation(url.pathname, method, reqBody)) {
               this.broadcast('database', { workspaceId: targetWorkspace, ts: Date.now() })
             }
             return

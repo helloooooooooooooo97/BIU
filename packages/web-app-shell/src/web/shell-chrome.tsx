@@ -1240,10 +1240,16 @@ export function useActiveWorkspaceLocation(): 'device' | 'cloud' {
       const token = readAccountToken()
       if (!token) return
       try {
-        const [listed, current] = await Promise.all([
-          accountFetch(token, '/api/account/workspaces') as Promise<{ workspaces?: CollabWorkspace[] }>,
-          accountFetch(token, '/api/account/active') as Promise<{ workspaceId?: string }>,
-        ])
+        const current = (await accountFetch(token, '/api/account/active')) as {
+          workspaceId?: string
+          location?: 'device' | 'cloud'
+        }
+        if (cancelled) return
+        if (current.location === 'cloud' || current.location === 'device') {
+          setLocation(current.location)
+          return
+        }
+        const listed = (await accountFetch(token, '/api/account/workspaces')) as { workspaces?: CollabWorkspace[] }
         if (cancelled) return
         const id = String(current.workspaceId ?? '')
         const workspace = (listed.workspaces ?? []).find((item) => item.id === id)
@@ -2047,7 +2053,10 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
                     body: JSON.stringify({ role: inviteRole, expiresInHours: 168 }),
                   })
                     .then(async (body) => {
-                      const url = new URL(String(body.path ?? '/'), window.location.origin).toString()
+                      const url =
+                        typeof body.url === 'string' && body.url.trim()
+                          ? body.url.trim()
+                          : new URL(String(body.path ?? '/'), window.location.origin).toString()
                       setWorkspaceInviteUrl(url)
                       await navigator.clipboard.writeText(url).catch(() => undefined)
                       setError('')

@@ -104,7 +104,10 @@ function desktopCloudWorkspace(ctx: Context) {
   return { origin, token: linked.token, workspaceId }
 }
 
-export async function takeSnapshot(ctx: Context): Promise<MirrorSnapshot> {
+export async function takeSnapshot(
+  ctx: Context,
+  options: { sessionsOnly?: boolean } = {},
+): Promise<MirrorSnapshot> {
   const sessions: MirrorSnapshot['sessions'] = []
   const store = sessionsOf(ctx)
   if (store) {
@@ -115,6 +118,7 @@ export async function takeSnapshot(ctx: Context): Promise<MirrorSnapshot> {
       sessions.push({ ...full, updatedAt: Number(item.updatedAt) || 0 })
     }
   }
+  if (options.sessionsOnly) return { sessions, collections: [] }
   const database = databaseOf(ctx)
   const collections = (await database?.syncedRecords()) ?? []
   const savedViews = database?.syncedViews?.()
@@ -224,7 +228,11 @@ export async function exchangeSnapshot(
     authorization: `Bearer ${token}`,
     'x-biu-workspace-id': workspaceId,
   }
-  const pulled = await fetch(`${root}/api/replica/snapshot`, { headers })
+  const suffix = options.sessionsOnly ? '?sessionsOnly=1' : ''
+  const pulled = await fetch(`${root}/api/replica/snapshot${suffix}`, {
+    headers,
+    signal: AbortSignal.timeout(10_000),
+  })
   if (!pulled.ok) return
   const body = (await pulled.json()) as MirrorSnapshot
   await runWithAccount(accountId, () =>
