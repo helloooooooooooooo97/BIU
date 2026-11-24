@@ -123,9 +123,7 @@ function ShareSelect({
   const triggerRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const current = options.find((opt) => opt.value === value) ?? options[0]
-  const pos = useFloatingPosition({
-    anchor: triggerRef,
-    floatingRef: menuRef,
+  const pos = useFloatingPosition(open ? triggerRef.current : null, menuRef, {
     enabled: open,
     placement,
     offset: 4,

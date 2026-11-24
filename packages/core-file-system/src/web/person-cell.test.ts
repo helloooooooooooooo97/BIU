@@ -88,3 +88,25 @@ test('clicking a member opens its record in the right inspector before any exter
     resetInspectorDbPathMemory()
   }
 })
+
+test('user person cells render AiAvatar mesh instead of silhouette icon when no custom photo is set', async () => {
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  try {
+    await act(async () => {
+      root.render(createElement(PersonFace, { value: { kind: 'user', name: '97', accountId: 'acc_97' } }))
+    })
+    const aiAvatar = container.querySelector('svg[data-ai-avatar="mesh"]')
+    assert.ok(aiAvatar, 'user without custom photo renders multi-color AiAvatar')
+    assert.equal(container.querySelector('.fsdb-person-avatar'), null)
+
+    await act(async () => {
+      root.render(createElement(PersonFace, { value: { kind: 'system', name: '系统' } }))
+    })
+    assert.ok(container.querySelector('.fsdb-person-avatar'), 'system keeps system chip avatar')
+  } finally {
+    await act(async () => root.unmount())
+    container.remove()
+  }
+})
