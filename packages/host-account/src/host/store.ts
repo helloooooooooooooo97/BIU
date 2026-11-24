@@ -2806,6 +2806,7 @@ export class CollabStore {
     role: ResourceRole = 'editor',
     collaboratorKind: 'internal' | 'external' = 'external',
     now = Date.now(),
+    columns?: { readableColumns?: string[] | null; writableColumns?: string[] | null; deniedColumns?: string[] | null },
   ) {
     const workspaceId = this.activeWorkspaceId()
     if (!workspaceId) throw new CollabError('没有工作区', 400)
@@ -2817,7 +2818,7 @@ export class CollabStore {
     const account = this.db.prepare('SELECT id FROM accounts WHERE email = ?').get(normalized) as { id: string } | undefined
     if (!account) throw new CollabError('没有这个邮箱，对方需要先注册', 404)
     this.ensureCollaboratorMembership(workspaceId, account.id, collaboratorKind, now)
-    this.writeViewGrant(workspaceId, collection, normalizedView, 'account', account.id, role, actorId, now)
+    this.writeViewGrant(workspaceId, collection, normalizedView, 'account', account.id, role, actorId, now, columns)
     this.recordActivity({
       workspaceId,
       actorId,
@@ -2837,6 +2838,7 @@ export class CollabStore {
     memberViewId: string,
     role: ResourceRole,
     now = Date.now(),
+    columns?: { readableColumns?: string[] | null; writableColumns?: string[] | null; deniedColumns?: string[] | null },
   ) {
     const workspaceId = this.activeWorkspaceId()
     if (!workspaceId) throw new CollabError('没有工作区', 400)
@@ -2844,7 +2846,7 @@ export class CollabStore {
     const normalizedMemberView = memberViewId.trim()
     if (!normalizedView || !normalizedMemberView) throw new CollabError('成员视图不能为空', 400)
     this.requireViewSharer(actorId, workspaceId, collection, normalizedView)
-    this.writeViewGrant(workspaceId, collection, normalizedView, 'member_view', normalizedMemberView, role, actorId, now)
+    this.writeViewGrant(workspaceId, collection, normalizedView, 'member_view', normalizedMemberView, role, actorId, now, columns)
     this.recordActivity({
       workspaceId,
       actorId,
@@ -2955,7 +2957,8 @@ export class CollabStore {
   viewGrantsFor(workspaceId: string, collection: string) {
     return this.db
       .prepare(
-        `SELECT view_id, subject_type, subject_id, role, granted_by
+        `SELECT view_id, subject_type, subject_id, role, COALESCE(effect, 'allow') AS effect,
+                readable_columns, writable_columns, denied_columns, granted_by
          FROM view_grants
          WHERE workspace_id = ? AND collection = ?
          ORDER BY created_at`,
@@ -2965,6 +2968,10 @@ export class CollabStore {
         subject_type: 'account' | 'member_view'
         subject_id: string
         role: ResourceRole
+        effect?: 'allow' | 'deny'
+        readable_columns?: string | null
+        writable_columns?: string | null
+        denied_columns?: string | null
         granted_by: string
       }>
   }
@@ -3071,16 +3078,25 @@ export class CollabStore {
     role: ResourceRole,
     grantedBy: string,
     now: number,
+    columns?: { readableColumns?: string[] | null; writableColumns?: string[] | null; deniedColumns?: string[] | null },
   ) {
+    const readable = columns?.readableColumns ? JSON.stringify(columns.readableColumns) : null
+    const writable = columns?.writableColumns ? JSON.stringify(columns.writableColumns) : null
+    const denied = columns?.deniedColumns ? JSON.stringify(columns.deniedColumns) : null
     this.db
       .prepare(
         `INSERT INTO view_grants
-          (workspace_id, collection, view_id, subject_type, subject_id, role, granted_by, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          (workspace_id, collection, view_id, subject_type, subject_id, role, readable_columns, writable_columns, denied_columns, granted_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(workspace_id, collection, view_id, subject_type, subject_id)
-         DO UPDATE SET role = excluded.role, granted_by = excluded.granted_by, created_at = excluded.created_at`,
+         DO UPDATE SET role = excluded.role,
+                       readable_columns = COALESCE(excluded.readable_columns, view_grants.readable_columns),
+                       writable_columns = COALESCE(excluded.writable_columns, view_grants.writable_columns),
+                       denied_columns = COALESCE(excluded.denied_columns, view_grants.denied_columns),
+                       granted_by = excluded.granted_by,
+                       created_at = excluded.created_at`,
       )
-      .run(workspaceId, collection, viewId, subjectType, subjectId, role, grantedBy, now)
+      .run(workspaceId, collection, viewId, subjectType, subjectId, role, readable, writable, denied, grantedBy, now)
     this.authorization.invalidate(workspaceId, collection)
   }
 

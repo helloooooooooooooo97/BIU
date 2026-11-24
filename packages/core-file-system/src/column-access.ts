@@ -1,0 +1,165 @@
+import type { FilterGroup, SortRule } from './query-logic.ts'
+
+export type ColumnPolicy = {
+  readable: '*' | Set<string>
+  writable: '*' | Set<string>
+  denied: Set<string>
+}
+
+export type ColumnGrantSpec = {
+  readableColumns?: string[] | null
+  writableColumns?: string[] | null
+  deniedColumns?: string[] | null
+}
+
+/** 始终保留的记录骨架字段，避免前端表格、链接与时间戳崩溃。 */
+const SKELETON_FIELDS = new Set(['id', 'createdAt', 'updatedAt'])
+
+export function fullColumnPolicy(denied: Iterable<string> = []): ColumnPolicy {
+  return {
+    readable: '*',
+    writable: '*',
+    denied: new Set(denied),
+  }
+}
+
+export function parseColumnList(raw: unknown): string[] | null {
+  if (raw == null) return null
+  if (Array.isArray(raw)) {
+    const items = raw.map((item) => String(item ?? '').trim()).filter(Boolean)
+    return items.length ? [...new Set(items)] : null
+  }
+  if (typeof raw === 'string' && raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        const items = parsed.map((item) => String(item ?? '').trim()).filter(Boolean)
+        return items.length ? [...new Set(items)] : null
+      }
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+function matchesColumnSet(field: string, set: ReadonlySet<string>): boolean {
+  if (set.has(field)) return true
+  if (field.startsWith('tag::') && set.has('tag::*')) return true
+  return false
+}
+
+export function isColumnDenied(field: string, policy: ColumnPolicy): boolean {
+  if (SKELETON_FIELDS.has(field)) return false
+  return matchesColumnSet(field, policy.denied)
+}
+
+export function isColumnReadable(field: string, policy: ColumnPolicy): boolean {
+  if (SKELETON_FIELDS.has(field)) return true
+  if (isColumnDenied(field, policy)) return false
+  if (policy.readable === '*') return true
+  return matchesColumnSet(field, policy.readable)
+}
+
+export function isColumnWritable(field: string, policy: ColumnPolicy): boolean {
+  if (isColumnDenied(field, policy)) return false
+  if (policy.writable === '*') return true
+  return matchesColumnSet(field, policy.writable)
+}
+
+export function isContentReadable(policy: ColumnPolicy): boolean {
+  return isColumnReadable('$content', policy)
+}
+
+export function isContentWritable(policy: ColumnPolicy): boolean {
+  return isColumnWritable('$content', policy)
+}
+
+/**
+ * 合并同一条记录命中的多条列级策略：
+ * - readable 取并集（任意一条为 '*' 则为 '*'）
+ * - writable 取并集（任意一条为 '*' 则为 '*'）
+ * - denied 取并集（显式拒绝优先于所有允许）
+ */
+export function mergeColumnPolicies(policies: ColumnPolicy[]): ColumnPolicy {
+  if (!policies.length) return fullColumnPolicy()
+  let readable: '*' | Set<string> = new Set<string>()
+  let writable: '*' | Set<string> = new Set<string>()
+  const denied = new Set<string>()
+  for (const policy of policies) {
+    for (const col of policy.denied) denied.add(col)
+    if (policy.readable === '*') {
+      readable = '*'
+    } else if (readable !== '*') {
+      for (const col of policy.readable) readable.add(col)
+    }
+    if (policy.writable === '*') {
+      writable = '*'
+    } else if (writable !== '*') {
+      for (const col of policy.writable) writable.add(col)
+    }
+  }
+  return { readable, writable, denied }
+}
+
+/** 后端真裁剪：从记录对象中移除不可读或被显式拒绝的字段。 */
+export function projectRecordColumns<T extends Record<string, unknown>>(record: T, policy: ColumnPolicy): T {
+  if (policy.readable === '*' && policy.denied.size === 0) return record
+  const projected: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(record)) {
+    if (isColumnReadable(key, policy)) projected[key] = value
+  }
+  return projected as T
+}
+
+/** 写入列级守卫：逐字段校验 patch 中的 key 是否允许写入。 */
+export function assertWritableColumns(patch: Record<string, unknown>, policy: ColumnPolicy): void {
+  if (policy.writable === '*' && policy.denied.size === 0) return
+  for (const key of Object.keys(patch)) {
+    if (!isColumnWritable(key, policy)) {
+      throw new Error(`permission denied: FIELD_FORBIDDEN (${key})`)
+    }
+  }
+}
+
+function collectFilterTreeFields(group: FilterGroup | undefined, out: Set<string>) {
+  if (!group || !Array.isArray(group.children)) return
+  for (const child of group.children) {
+    if (child.kind === 'rule' && child.field) {
+      out.add(String(child.field))
+    } else if (child.kind === 'group') {
+      collectFilterTreeFields(child, out)
+    }
+  }
+}
+
+/** 查询侧信道防护：禁止通过 filters / filterTree / sorts / groupBy 引用当前用户不可读的列。 */
+export function assertQueryableColumns(
+  query: {
+    filters?: Record<string, unknown>
+    filterTree?: FilterGroup
+    sorts?: SortRule[]
+    sortField?: string
+    groupBy?: string
+  },
+  policy: ColumnPolicy,
+): void {
+  if (policy.readable === '*' && policy.denied.size === 0) return
+  const referenced = new Set<string>()
+  if (query.filters) {
+    for (const key of Object.keys(query.filters)) {
+      if (!key.startsWith('$')) referenced.add(key)
+    }
+  }
+  collectFilterTreeFields(query.filterTree, referenced)
+  for (const sort of query.sorts ?? []) {
+    if (sort.field) referenced.add(String(sort.field))
+  }
+  if (query.sortField) referenced.add(String(query.sortField))
+  if (query.groupBy) referenced.add(String(query.groupBy))
+  for (const field of referenced) {
+    if (!isColumnReadable(field, policy)) {
+      throw new Error(`permission denied: FIELD_FORBIDDEN (${field})`)
+    }
+  }
+}

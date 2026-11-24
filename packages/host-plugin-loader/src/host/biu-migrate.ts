@@ -977,6 +977,11 @@ export const BIU_MIGRATIONS: Migration[] = [
     addColumn(db, 'record_grants', 'effect', `effect TEXT NOT NULL DEFAULT 'allow'`)
     addColumn(db, 'view_grants', 'effect', `effect TEXT NOT NULL DEFAULT 'allow'`)
   } },
+  { version: 53, module: 'host-account', name: 'view-grants.columns', up: (db) => {
+    addColumn(db, 'view_grants', 'readable_columns', `readable_columns TEXT`)
+    addColumn(db, 'view_grants', 'writable_columns', `writable_columns TEXT`)
+    addColumn(db, 'view_grants', 'denied_columns', `denied_columns TEXT`)
+  } },
 ]
 
 export function assertBiuMigrationLog(rows: Array<{ version: number }> = BIU_MIGRATIONS) {

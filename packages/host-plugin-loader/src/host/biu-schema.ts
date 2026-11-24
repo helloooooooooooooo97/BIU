@@ -217,7 +217,20 @@ export const BIU_TABLES: Record<string, TableSpec> = {
     indexes: ['record_grants_subject'],
   },
   view_grants: {
-    columns: ['workspace_id', 'collection', 'view_id', 'subject_type', 'subject_id', 'role', 'effect', 'granted_by', 'created_at'],
+    columns: [
+      'workspace_id',
+      'collection',
+      'view_id',
+      'subject_type',
+      'subject_id',
+      'role',
+      'effect',
+      'readable_columns',
+      'writable_columns',
+      'denied_columns',
+      'granted_by',
+      'created_at',
+    ],
     indexes: ['view_grants_subject'],
   },
   record_owners: {
@@ -301,7 +314,7 @@ export const BIU_TABLES: Record<string, TableSpec> = {
   },
 }
 
-export const LATEST_BIU_SCHEMA = 52
+export const LATEST_BIU_SCHEMA = 53
 
 export const CREATE_CORE_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -676,6 +689,9 @@ CREATE TABLE IF NOT EXISTS view_grants (
   subject_id TEXT NOT NULL,
   role TEXT NOT NULL,
   effect TEXT NOT NULL DEFAULT 'allow',
+  readable_columns TEXT,
+  writable_columns TEXT,
+  denied_columns TEXT,
   granted_by TEXT NOT NULL,
   created_at INTEGER NOT NULL,
   PRIMARY KEY (workspace_id, collection, view_id, subject_type, subject_id)
