@@ -1,9 +1,25 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { currentAccountId } from '@biu/host-plugin-loader/data-dir'
 
+export type ActorScopeRule = {
+  allowedCollections?: string[] | null
+  allowedViews?: string[] | null
+  maxRole?: ResourceRole
+  expiresAt?: number | null
+  revokedAt?: number | null
+}
+
 export type Actor =
   | { type: 'account'; accountId: string; workspaceId: string }
-  | { type: 'agent'; accountId: string; delegatedBy: string; workspaceId: string; sessionId?: string }
+  | {
+      type: 'agent'
+      accountId: string
+      delegatedBy: string
+      workspaceId: string
+      sessionId?: string
+      invokerId?: string
+      scope?: ActorScopeRule
+    }
   | { type: 'public-link'; shareTokenId: string; accountId?: string; workspaceId?: string }
 
 export type Action =
@@ -319,6 +335,93 @@ export class AuthorizationService {
     return role === 'owner' || role === 'admin'
   }
 
+  /** 为 Agent / MCP / 外链声明能力边界（Scope），运行时与触发者权限取交集。 */
+  setActorScope(
+    workspaceId: string,
+    actorType: 'agent' | 'mcp' | 'public-link',
+    actorId: string,
+    issuerId: string,
+    scope: ActorScopeRule,
+    now = Date.now(),
+  ) {
+    const allowedCols = scope.allowedCollections?.length ? JSON.stringify([...new Set(scope.allowedCollections)]) : null
+    const allowedViews = scope.allowedViews?.length ? JSON.stringify([...new Set(scope.allowedViews)]) : null
+    const maxRole = scope.maxRole ?? 'editor'
+    this.db
+      .prepare(
+        `INSERT INTO actor_scopes
+          (workspace_id, actor_type, actor_id, issuer_id, allowed_collections, allowed_views, max_role, expires_at, revoked_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
+         ON CONFLICT(workspace_id, actor_type, actor_id)
+         DO UPDATE SET issuer_id = excluded.issuer_id,
+                       allowed_collections = excluded.allowed_collections,
+                       allowed_views = excluded.allowed_views,
+                       max_role = excluded.max_role,
+                       expires_at = excluded.expires_at,
+                       revoked_at = NULL`,
+      )
+      .run(workspaceId, actorType, actorId, issuerId, allowedCols, allowedViews, maxRole, scope.expiresAt ?? null, now)
+  }
+
+  getActorScope(workspaceId: string, actorType: 'agent' | 'mcp' | 'public-link', actorId: string): (ActorScopeRule & { issuerId: string }) | null {
+    if (!workspaceId || !actorId) return null
+    try {
+      const row = this.db
+        .prepare(
+          `SELECT issuer_id, allowed_collections, allowed_views, max_role, expires_at, revoked_at
+           FROM actor_scopes
+           WHERE workspace_id = ? AND actor_type = ? AND actor_id = ?`,
+        )
+        .get(workspaceId, actorType, actorId) as
+        | {
+            issuer_id: string
+            allowed_collections: string | null
+            allowed_views: string | null
+            max_role: ResourceRole
+            expires_at: number | null
+            revoked_at: number | null
+          }
+        | undefined
+      if (!row) return null
+      return {
+        issuerId: row.issuer_id,
+        allowedCollections: row.allowed_collections ? (JSON.parse(row.allowed_collections) as string[]) : null,
+        allowedViews: row.allowed_views ? (JSON.parse(row.allowed_views) as string[]) : null,
+        maxRole: row.max_role,
+        expiresAt: row.expires_at,
+        revokedAt: row.revoked_at,
+      }
+    } catch {
+      return null
+    }
+  }
+
+  revokeActorScope(workspaceId: string, actorType: 'agent' | 'mcp' | 'public-link', actorId: string, now = Date.now()) {
+    try {
+      this.db
+        .prepare(
+          `UPDATE actor_scopes SET revoked_at = ?
+           WHERE workspace_id = ? AND actor_type = ? AND actor_id = ? AND revoked_at IS NULL`,
+        )
+        .run(now, workspaceId, actorType, actorId)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  revokeActorScopesByIssuer(workspaceId: string, issuerId: string, now = Date.now()) {
+    try {
+      this.db
+        .prepare(
+          `UPDATE actor_scopes SET revoked_at = ?
+           WHERE workspace_id = ? AND issuer_id = ? AND revoked_at IS NULL`,
+        )
+        .run(now, workspaceId, issuerId)
+    } catch {
+      /* ignore */
+    }
+  }
+
   /** 列表扫描前把这一张表的策略/授权一次读进内存，避免每行一次 SQLite。 */
   preloadCollection(workspaceId: string, collection: string, accountId = currentAccountId()) {
     if (!workspaceId || !collection || !accountId) return
@@ -433,6 +536,48 @@ export class AuthorizationService {
   authorize(actor: Actor | null, action: Action, resource: ResourceRef): Decision {
     if (!actor || actor.type === 'public-link') return { allowed: false, reason: 'UNAUTHENTICATED' }
     if (actor.workspaceId !== resource.workspaceId) return { allowed: false, reason: 'WRONG_WORKSPACE' }
+
+    // Agent 代理边界：有效权限 = Eval(delegatedBy) ∩ Eval(invokerId) ∩ Scope(agent)
+    if (actor.type === 'agent') {
+      const delegated = this.authorize(
+        { type: 'account', accountId: actor.delegatedBy || actor.accountId, workspaceId: actor.workspaceId },
+        action,
+        resource,
+      )
+      if (!delegated.allowed) return delegated
+      let effectiveRole = delegated.effectiveRole
+      if (actor.invokerId && actor.invokerId !== (actor.delegatedBy || actor.accountId)) {
+        const invoked = this.authorize(
+          { type: 'account', accountId: actor.invokerId, workspaceId: actor.workspaceId },
+          action,
+          resource,
+        )
+        if (!invoked.allowed) return invoked
+        effectiveRole = minRole([effectiveRole, invoked.effectiveRole]) ?? 'viewer'
+      }
+      const storedScope = actor.sessionId ? this.getActorScope(actor.workspaceId, 'agent', actor.sessionId) : null
+      const scopes = [storedScope, actor.scope].filter(Boolean) as ActorScopeRule[]
+      const now = Date.now()
+      for (const scope of scopes) {
+        if (scope.revokedAt) return { allowed: false, reason: 'INSUFFICIENT_PERMISSION' }
+        if (scope.expiresAt && scope.expiresAt <= now) return { allowed: false, reason: 'INSUFFICIENT_PERMISSION' }
+        if (
+          scope.allowedCollections?.length &&
+          resource.type !== 'workspace' &&
+          !scope.allowedCollections.includes(resource.collection)
+        ) {
+          return { allowed: false, reason: 'INSUFFICIENT_PERMISSION' }
+        }
+        if (scope.maxRole) {
+          effectiveRole = minRole([effectiveRole, scope.maxRole]) ?? 'viewer'
+        }
+      }
+      if (!roleCoversAction(effectiveRole, action)) {
+        return { allowed: false, reason: 'INSUFFICIENT_PERMISSION' }
+      }
+      return { allowed: true, effectiveRole, source: delegated.source }
+    }
+
     const membership = this.membership(actor.accountId, resource.workspaceId)
     if (!membership) return { allowed: false, reason: 'NOT_A_MEMBER' }
     const memberKind = this.membershipKind(actor.accountId, resource.workspaceId)
