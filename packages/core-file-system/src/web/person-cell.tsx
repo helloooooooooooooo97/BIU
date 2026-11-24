@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowPathIcon, CpuChipIcon, UserIcon } from '@heroicons/react/16/solid'
+import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import { resolveSessionMascot, SidebarMascot } from '@biu/public-mascot'
 import { asPerson, asPersonList, personKey, type PersonValue } from '@biu/type-file-system'
 import { PickOption, PickPanel } from '@biu/database-ui/search'
@@ -19,6 +20,7 @@ type MemberPerson = {
   id: string
   name: string
   email: string
+  avatar?: string
 }
 
 let agentsInflight: Promise<ChatPerson[]> | null = null
@@ -93,7 +95,7 @@ export async function loadMembers(): Promise<MemberPerson[]> {
     limit: 500,
     sortField: 'title',
     sortDir: 'asc',
-    columns: ['title', 'name', 'email'],
+    columns: ['title', 'name', 'email', 'avatar'],
   })
     .then((page) => {
       const rows = page.items
@@ -102,7 +104,8 @@ export async function loadMembers(): Promise<MemberPerson[]> {
           const id = String(item.id)
           const email = String(item.email ?? '').trim()
           const name = String(item.name ?? item.title ?? '').trim() || email || id.slice(0, 8)
-          return { id, name, email }
+          const avatar = typeof item.avatar === 'string' ? item.avatar.trim() : ''
+          return { id, name, email, ...(avatar ? { avatar } : {}) }
         })
       membersListed = rows
       membersListedAt = Date.now()
@@ -149,12 +152,18 @@ export function PersonFace({ value, empty = '' }: { value: unknown; empty?: stri
                   title={label || person.sessionId}
                 />
               </span>
+            ) : person.kind === 'system' ? (
+              <span className="fsdb-person-avatar" aria-hidden>
+                <CpuChipIcon className="size-[14px]" />
+              </span>
             ) : liveUser && profile.avatar ? (
               <img className="fsdb-person-photo" src={profile.avatar} alt="" />
             ) : (
-              <span className="fsdb-person-avatar" aria-hidden>
-                {person.kind === 'system' ? <CpuChipIcon className="size-[14px]" /> : <UserIcon className="size-[14px]" />}
-              </span>
+              <AiAvatar
+                seed={person.accountId || label || person.name || 'biu-ai'}
+                size={18}
+                className="fsdb-person-photo"
+              />
             )}
             {label ? <span className="fsdb-person-name">{label}</span> : null}
           </>
@@ -307,9 +316,15 @@ export function PersonPickPanel({
           selected={selected === `user:${member.id}`}
           onClick={() => pick({ kind: 'user', name: member.name, accountId: member.id })}
         >
-          <span className="fsdb-person-avatar" aria-hidden>
-            <UserIcon className="size-[14px]" />
-          </span>
+          {member.avatar ? (
+            <img className="fsdb-person-photo" src={member.avatar} alt="" />
+          ) : (
+            <AiAvatar
+              seed={member.id || member.name || member.email || 'biu-ai'}
+              size={18}
+              className="fsdb-person-photo"
+            />
+          )}
           <span className="fsdb-person-name">{member.name}</span>
         </PickOption>
       ))}

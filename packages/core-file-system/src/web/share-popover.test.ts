@@ -340,3 +340,9 @@ test('share panel exposes inheritance toggle wired to PATCH /api/account/access'
   assert.match(src, /inheritanceMode/)
   assert.match(accountHost, /PATCH', '\/api\/account\/access'/)
 })
+
+test('ShareSelect calls useFloatingPosition with positional (anchor, menuRef, opts) arguments', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8')
+  assert.match(src, /useFloatingPosition\(open \? triggerRef\.current : null,\s*menuRef,\s*\{/)
+  assert.doesNotMatch(src, /useFloatingPosition\(\{\s*anchor:/)
+})
