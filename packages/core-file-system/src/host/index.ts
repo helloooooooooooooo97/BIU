@@ -11,7 +11,7 @@ import {
   writeEditorContent,
   ASSET_GC_INTERVAL_MS,
 } from '@biu/host-plugin-loader/data-dir'
-import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
+import { getRuntimePolicy, resolveScopedWorkspaceId } from '@biu/host-plugin-loader/runtime'
 import { asPublicProfile, writeWorkspaceProfile } from '@biu/host-workspace'
 import { roleCoversAction, type Action as PermissionAction, type AuthorizationService } from '@biu/host-account/authorization'
 import { isRegisteredBuiltinPlugin } from '@biu/host-account/store'
@@ -1026,7 +1026,7 @@ export class DatabaseService extends Service implements Database {
     const actor = this.authorization()?.currentActor()
     const actorKey = actor
       ? `${actor.workspaceId}\t${actor.accountId}`
-      : `${this.collabStore()?.activeWorkspaceId() ?? ''}\t${currentAccountId()}`
+      : `${resolveScopedWorkspaceId(this.ctx)}\t${currentAccountId()}`
     const rules = normalizeSorts(sorts, sortField, sortDir)
     const key = `${spec.path}\t${load.trash ? 1 : 0}\t${load.q ?? ''}\t${overlay ? 1 : 0}\t${JSON.stringify(load.filter ?? {})}\t${(load.ids ?? []).join(',')}\t${JSON.stringify(rules)}\t${actorKey}`
     const cached = this.visibleCache.get(key)
@@ -1167,7 +1167,7 @@ export class DatabaseService extends Service implements Database {
     this.inflightVisible.clear()
     this.visibleCache.clear()
     this.ctx.emit('database/change')
-    const workspaceId = currentRequestWorkspaceId() || this.collabStore()?.activeWorkspaceId?.() || ''
+    const workspaceId = resolveScopedWorkspaceId(this.ctx)
     const accountId = currentAccountId()
     const key = `${workspaceId}\0${accountId}`
     let entry = this.pendingBumpTenants.get(key)
@@ -2588,7 +2588,7 @@ export function apply(ctx: Context) {
       cleanupViewReferences?: (workspaceId: string, collection: string, viewId: string) => void
     }
   } | undefined
-  savedViews.setWorkspaceResolver(() => account?.store?.activeWorkspaceId?.() ?? '')
+  savedViews.setWorkspaceResolver(() => resolveScopedWorkspaceId(ctx))
   savedViews.setPolicyGuard({
     isLocked: (workspaceId, collection, viewId) => {
       if (account?.authorization?.isViewPolicyBound(workspaceId, collection, viewId)) return true

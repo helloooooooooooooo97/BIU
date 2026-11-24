@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { Service, type Context } from 'cordis'
 import { hostRemoteOrigin } from '@biu/host-plugin-loader/env'
 import { biuSqlitePath, currentAccountId, eventsSqlitePath, isOnlineRuntime, openAndMigrateBiu, openAndMigrateEvents } from '@biu/host-plugin-loader/data-dir'
+import { resolveScopedWorkspaceId } from '@biu/host-plugin-loader/runtime'
 import type { RouteContext } from '@biu/type-http'
 import { CollabError, CollabStore } from './store.ts'
 import { httpRemote, RecordReplica } from './replica.ts'
@@ -1571,7 +1572,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('GET', '/api/account/access', async (route) => {
     try {
       const me = actor(route)
-      const activeWorkspace = account.store.activeWorkspaceId()
+      const activeWorkspace = resolveScopedWorkspaceId(ctx)
       if (!activeWorkspace || account.workspaceLocation(activeWorkspace) !== 'cloud') {
         route.send(200, {
           scope: 'personal',
@@ -1601,7 +1602,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('POST', '/api/account/access', async (route) => {
     try {
       const me = actor(route)
-      const activeWorkspace = account.store.activeWorkspaceId()
+      const activeWorkspace = resolveScopedWorkspaceId(ctx)
       requireCollaborativeWorkspace(activeWorkspace ?? '')
       const body = (await route.json()) as {
         collection?: string
@@ -1639,7 +1640,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('PATCH', '/api/account/access', async (route) => {
     try {
       const me = actor(route)
-      const activeWorkspace = account.store.activeWorkspaceId()
+      const activeWorkspace = resolveScopedWorkspaceId(ctx)
       requireCollaborativeWorkspace(activeWorkspace ?? '')
       const body = (await route.json()) as {
         collection?: string
@@ -1662,7 +1663,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('DELETE', '/api/account/access', async (route) => {
     try {
       const me = actor(route)
-      const activeWorkspace = account.store.activeWorkspaceId()
+      const activeWorkspace = resolveScopedWorkspaceId(ctx)
       requireCollaborativeWorkspace(activeWorkspace ?? '')
       const body = (await route.json()) as {
         collection?: string
@@ -1700,7 +1701,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('POST', '/api/account/access/guest-invite', async (route) => {
     try {
       const me = actor(route)
-      const activeWorkspace = account.store.activeWorkspaceId()
+      const activeWorkspace = resolveScopedWorkspaceId(ctx)
       requireCollaborativeWorkspace(activeWorkspace ?? '')
       const body = (await route.json()) as {
         collection?: string
