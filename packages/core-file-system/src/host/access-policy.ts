@@ -3,6 +3,16 @@ import { roleCoversAction, type Action as PermissionAction, type AuthorizationSe
 import { isRegisteredBuiltinPlugin } from '@biu/host-account/store'
 import type { CollectionSchema, CollectionSchemaPack, CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { builtinAllView, builtinAllViewId, builtinMemberViews } from '../catalog-views.ts'
+import {
+  assertWritableColumns,
+  fullColumnPolicy,
+  isContentReadable,
+  isContentWritable,
+  mergeColumnPolicies,
+  parseColumnList,
+  projectRecordColumns,
+  type ColumnPolicy,
+} from '../column-access.ts'
 import { recordMatchesSharedView, resolveSharedView, type SharedViewDef } from '../share-view-match.ts'
 import { effectiveDataScope, highestViewRole, recordMatchesGrantedView, type DataScopeName, type ViewGrantRole } from '../view-access.ts'
 import {
@@ -62,6 +72,10 @@ export type WorkspaceFiles = {
     subject_type: 'account' | 'member_view'
     subject_id: string
     role: ViewGrantRole
+    effect?: 'allow' | 'deny'
+    readable_columns?: string | null
+    writable_columns?: string | null
+    denied_columns?: string | null
     granted_by?: string
   }>
   collectionRecordOwners?(workspaceId: string, collection: string): Map<string, string>
@@ -247,6 +261,78 @@ export class DatabaseAccessPolicy {
     if (!authorization || !actor) return false
     const role = this.viewGrantRole(actor.workspaceId, collection, record, actor.accountId)
     return Boolean(role && roleCoversAction(role, action))
+  }
+
+  /** 计算当前操作者在某条记录上的有效列级策略（可读列并集、可写列并集、高敏拒绝列差集）。 */
+  columnPolicyFor(collection: string, record: { id?: unknown }): ColumnPolicy {
+    const store = this.host.collabStore()
+    const authorization = this.host.authorization()
+    const actor = authorization?.currentActor()
+    if (!store?.viewGrantsFor || !authorization || !actor) return fullColumnPolicy()
+    const grants = store.viewGrantsFor(actor.workspaceId, collection)
+    if (!grants.length) return fullColumnPolicy()
+
+    const target = resolveScopeTarget(collection, String(record.id ?? ''), record)
+    const decision = authorization.authorize(actor, 'resource:read', {
+      type: 'record',
+      workspaceId: actor.workspaceId,
+      collection: target.collection,
+      recordId: target.id,
+      record: record as Record<string, unknown>,
+    })
+    if (decision.allowed && decision.source === 'ownership') return fullColumnPolicy()
+
+    const saved = [builtinAllView({ path: collection }), ...(this.host.viewCatalog?.viewsFor(collection) ?? [])]
+    const scope = authorization.scopeCurrent({
+      type: 'record',
+      workspaceId: actor.workspaceId,
+      collection: target.collection,
+      recordId: target.id,
+    })
+    const ownerId = this.recordOwner(target.collection, target.id)
+
+    const policies: ColumnPolicy[] = []
+    if (decision.allowed && decision.source !== 'data-view-grant') {
+      policies.push(fullColumnPolicy())
+    }
+    const denied = new Set<string>()
+    for (const grant of grants) {
+      const subjectMatches = grant.subject_type === 'account'
+        ? grant.subject_id === actor.accountId
+        : authorization.matchesMemberView(actor.workspaceId, grant.subject_id, actor.accountId)
+      if (!subjectMatches) continue
+      if (!recordMatchesGrantedView(record as never, grant.view_id, saved, scope, { grantedBy: grant.granted_by, recordOwnerId: ownerId })) {
+        continue
+      }
+      const grantDenied = parseColumnList(grant.denied_columns) ?? []
+      for (const col of grantDenied) denied.add(col)
+      if (grant.effect === 'deny') continue
+      const readableList = parseColumnList(grant.readable_columns)
+      const writableList = parseColumnList(grant.writable_columns)
+      const canWrite = roleCoversAction(grant.role, 'resource:update')
+      policies.push({
+        readable: readableList ? new Set(readableList) : '*',
+        writable: canWrite ? (writableList ? new Set(writableList) : readableList ? new Set(readableList) : '*') : new Set<string>(),
+        denied: new Set(grantDenied),
+      })
+    }
+    const merged = mergeColumnPolicies(policies)
+    for (const col of denied) merged.denied.add(col)
+    return merged
+  }
+
+  projectRecord<T extends Record<string, unknown>>(collection: string, record: T): T {
+    return projectRecordColumns(record, this.columnPolicyFor(collection, record))
+  }
+
+  assertWritablePatch(collection: string, record: { id?: unknown }, patch: Record<string, unknown>) {
+    assertWritableColumns(patch, this.columnPolicyFor(collection, record))
+  }
+
+  assertContentAccess(collection: string, record: { id?: unknown }, mode: 'read' | 'write') {
+    const policy = this.columnPolicyFor(collection, record)
+    const ok = mode === 'read' ? isContentReadable(policy) : isContentWritable(policy)
+    if (!ok) throw new Error('permission denied: FIELD_FORBIDDEN ($content)')
   }
 
   grantAllows(collection: string, id: string) {

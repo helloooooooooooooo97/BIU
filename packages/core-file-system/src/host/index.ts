@@ -1555,7 +1555,10 @@ export class DatabaseService extends Service implements Database {
       const tagFilter = spec.path === TAGS_COLLECTION_PATH ? String(filter?.tagId ?? '').trim() : ''
       if (tagFilter) schema = schemaWithTagPack(schema, this.tags.get(tagFilter))
       const packs = this.tags.list()
-      const sorted = visible.filter((row) => matchListFilter(row, liveFilter, schema, packs) && matchQuery(row, q, packs))
+      const sorted = visible.filter((row) => {
+        const readable = this.access.projectRecord(spec.path, row)
+        return matchListFilter(readable, liveFilter, schema, packs) && matchQuery(readable, q, packs)
+      })
       const total = sorted.length
       const slice = this.decorateSlice(spec, sorted.slice(offset, offset + limit), columnKeys)
       return {
@@ -1569,7 +1572,7 @@ export class DatabaseService extends Service implements Database {
         offset,
         limit,
         items: slice.map((row): DbRecord & { path: string; kind: 'record' } => {
-          const value = withoutContent(spec, row)
+          const value = this.access.projectRecord(spec.path, withoutContent(spec, row))
           const picked = columnKeys ? pickListedFields(value, columnKeys) : value
           return {
             ...picked,
@@ -1770,7 +1773,13 @@ export class DatabaseService extends Service implements Database {
     const record = await spec.get(parts[1]!)
     if (!record) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
     this.assertLiveRecord(spec, record.id, 'resource:read', record)
-    return { kind: 'record' as const, path: `${spec.path}/${record.id}`, schema: this.schemaForCurrent(spec), value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))) }
+    const decorated = withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record)))
+    return {
+      kind: 'record' as const,
+      path: `${spec.path}/${record.id}`,
+      schema: this.schemaForCurrent(spec),
+      value: this.access.projectRecord(spec.path, decorated),
+    }
   }
 
   resolveViewFilter(collectionPath: string, viewId: string): {
@@ -1943,6 +1952,7 @@ export class DatabaseService extends Service implements Database {
     const current = await spec.get(parts[1]!)
     if (!current) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
     this.assertLiveRecord(spec, current.id, 'resource:update', current)
+    this.access.assertWritablePatch(spec.path, current, raw)
     const bannerPatch = takeBannerPatch(raw)
     if ('tag' in raw && schema.fields.tag) {
       if (!schema.fields.tag.writable || schema.fields.tag.computed) throw new Error(`field not writable: tag`)
@@ -2434,6 +2444,7 @@ export class DatabaseService extends Service implements Database {
     const record = await spec.get(parts[1]!)
     if (!record) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
     this.assertLiveRecord(spec, record.id, 'resource:read', record)
+    this.access.assertContentAccess(spec.path, record, 'read')
     if (!schema.fields[field]) throw new Error(`no content field: ${field}`)
     const editorContent = isEditorContentSpec(spec)
       ? readEditorContentRecord(this.tags.ensure(), spec.path, record.id)
@@ -2470,6 +2481,7 @@ export class DatabaseService extends Service implements Database {
     const existing = await spec.get(parts[1]!)
     if (!existing) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
     this.assertLiveRecord(spec, existing.id, 'resource:update', existing)
+    this.access.assertContentAccess(spec.path, existing, 'write')
     if (!schema.fields[field]) throw new Error(`no content field: ${field}`)
     const persisted = typeof value === 'string' ? stripMentionLabels(value) : value
     if (isEditorContentSpec(spec)) {
