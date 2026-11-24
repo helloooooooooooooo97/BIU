@@ -586,6 +586,8 @@ html.dark .fsdb-views {
 }
 
 .app-side-bar .sidebar-rail-icon svg,
+.app-side-bar .sidebar-group-head svg,
+.fsdb-views .sidebar-group-head svg,
 .app-side-bar .fsdb-record-mark,
 .app-side-bar .fsdb-record-mark svg,
 .app-side-bar .chat-session-row-main>span>svg,

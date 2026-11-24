@@ -234,18 +234,16 @@ export class AccountService extends Service {
 
   saveCloudConnection(input: Omit<CloudConnection, 'connectedAt'> & { connectedAt?: number }) {
     const connectedAt = input.connectedAt ?? Date.now()
+    // 每个本地主机可配置多个远程连接，同一时间仅激活一个；同一个远程服务器地址只绑定一个云端账号。
     this.db.prepare('UPDATE cloud_connections SET active = 0 WHERE local_account_id = ?').run(input.localAccountId)
+    this.db
+      .prepare('DELETE FROM cloud_connections WHERE local_account_id = ? AND origin = ?')
+      .run(input.localAccountId, input.origin)
     this.db
       .prepare(
         `INSERT INTO cloud_connections
           (local_account_id, origin, remote_account_id, remote_name, remote_email, token, connected_at, active)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-         ON CONFLICT(local_account_id, origin, remote_account_id) DO UPDATE SET
-           remote_name = excluded.remote_name,
-           remote_email = excluded.remote_email,
-           token = excluded.token,
-           connected_at = excluded.connected_at,
-           active = 1`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
       )
       .run(
         input.localAccountId,
@@ -286,7 +284,7 @@ export class AccountService extends Service {
     })
   }
 
-  /** 断开当前连接，保留已关联的云端账号和令牌。 */
+  /** 断开当前连接，保留已配置的远程连接记录。 */
   disconnectCloud(localAccountId: string) {
     this.db.prepare('UPDATE cloud_connections SET active = 0 WHERE local_account_id = ?').run(localAccountId)
     this.replica?.forget(localAccountId)
@@ -311,8 +309,19 @@ export class AccountService extends Service {
     return this.cloudConnection(localAccountId)!
   }
 
-  removeCloudConnection(localAccountId: string) {
-    this.disconnectCloud(localAccountId)
+  removeCloudConnection(localAccountId: string, origin?: string) {
+    const normalized = origin ? normalizeCloudOrigin(origin) : ''
+    if (!normalized) {
+      this.disconnectCloud(localAccountId)
+      return
+    }
+    const active = this.cloudConnection(localAccountId)
+    this.db
+      .prepare('DELETE FROM cloud_connections WHERE local_account_id = ? AND origin = ?')
+      .run(localAccountId, normalized)
+    if (active && active.origin === normalized) {
+      this.replica?.forget(localAccountId)
+    }
   }
 
   workspaceLocation(workspaceId: string): 'device' | 'cloud' {
@@ -653,7 +662,13 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('DELETE', '/api/account/cloud', async (route) => {
     try {
       const me = actor(route)
-      account.removeCloudConnection(me.id)
+      const queryOrigin = String(route.query.get('origin') ?? '').trim()
+      let bodyOrigin = ''
+      if (!queryOrigin) {
+        const body = (await route.json().catch(() => ({}))) as { origin?: string }
+        bodyOrigin = String(body?.origin ?? '').trim()
+      }
+      account.removeCloudConnection(me.id, queryOrigin || bodyOrigin || undefined)
       route.send(200, { ok: true })
     } catch (error) {
       fail(route, error)

@@ -9,6 +9,7 @@ import type { CollectionActionInfo, CollectionSchemaPack, DbRecord } from '@biu/
  */
 export interface ShellWorkspaceProfile {
   theme?: string
+  accent?: string
   [key: string]: unknown
 }
 

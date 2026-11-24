@@ -111,11 +111,12 @@ export function registerDatabaseHttpRoutes(
   })
   ctx.http.route('POST', '/api/profile', async (route) => {
     try {
-      const body = (await route.json()) as { name?: unknown; avatar?: unknown; theme?: unknown; pagePrefs?: unknown }
+      const body = (await route.json()) as { name?: unknown; avatar?: unknown; theme?: unknown; accent?: unknown; pagePrefs?: unknown }
       route.send(200, asPublicProfile(writeWorkspaceProfile({
         name: typeof body.name === 'string' ? body.name : undefined,
         avatar: typeof body.avatar === 'string' ? body.avatar : undefined,
         theme: body.theme === 'dark' || body.theme === 'light' ? body.theme : undefined,
+        accent: typeof body.accent === 'string' ? (body.accent as never) : undefined,
         pagePrefs: body.pagePrefs,
       })))
     } catch (error) {
