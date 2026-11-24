@@ -19,6 +19,7 @@ import {
 } from '@biu/host-plugin-loader/data-dir'
 import { getRuntimePolicy, resolveRemoteCloudTarget } from '@biu/host-plugin-loader/runtime'
 import { isShareApiPath, isSharePublicPath } from './share-gate.ts'
+import { isAssetTicketEligiblePath, signAssetTicket, verifyAssetTicket } from './asset-ticket.ts'
 
 interface Route {
   method: Method
@@ -322,6 +323,20 @@ export class HttpService extends Service {
         })
       },
       { scope: 'host' },
+    )
+    this.route(
+      'GET',
+      '/api/asset-ticket',
+      (route) => {
+        const accountId = currentAccountId()
+        const workspaceId = currentRequestWorkspaceId()
+        if (!accountId || !workspaceId) {
+          route.send(401, { error: '需要登录并指定空间' })
+          return
+        }
+        route.send(200, signAssetTicket({ accountId, workspaceId }))
+      },
+      { scope: 'workspace' },
     )
     ctx.effect(() => {
       const server = createServer((req, res) => {
@@ -660,8 +675,8 @@ export class HttpService extends Service {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
       'Access-Control-Allow-Headers':
-        'Content-Type, Authorization, X-Biu-Workspace-Id, X-Share-Password, mcp-session-id, mcp-protocol-version, Last-Event-ID',
-      'Access-Control-Expose-Headers': 'mcp-session-id, mcp-protocol-version',
+        'Content-Type, Authorization, X-Biu-Workspace-Id, X-Biu-Resource-Path, X-Share-Password, If-Match, If-None-Match, mcp-session-id, mcp-protocol-version, Last-Event-ID',
+      'Access-Control-Expose-Headers': 'ETag, Content-Disposition, Last-Modified, mcp-session-id, mcp-protocol-version',
       'Access-Control-Max-Age': '86400',
     }
     // CORS 预检：跨内网机器的浏览器请求，先给 OPTIONS 放行
@@ -726,12 +741,20 @@ export class HttpService extends Service {
         const legacyToken = legacyEncoded ? decodeURIComponent(legacyEncoded.slice('biu_legacy_account='.length)) : ''
         const token = bearerToken || accountToken || legacyToken
         let accountId = ''
+        let ticketWorkspace = ''
         if (token) {
           try {
             const store = (this.ctx.get('account') as { store?: { accountByToken(token: string): { id: string } | null } } | undefined)?.store
             accountId = store?.accountByToken(token)?.id ?? ''
           } catch {
             accountId = ''
+          }
+        }
+        if (!accountId && isAssetTicketEligiblePath(method, url.pathname)) {
+          const verified = verifyAssetTicket(url.searchParams)
+          if (verified) {
+            accountId = verified.accountId
+            ticketWorkspace = verified.workspaceId
           }
         }
         if (accountId && legacyToken && !accountToken) {
@@ -754,7 +777,7 @@ export class HttpService extends Service {
           context.send(401, { error: '需要登录' })
           return
         }
-        const headerWorkspace = String(req.headers['x-biu-workspace-id'] ?? '').trim()
+        const headerWorkspace = ticketWorkspace || String(req.headers['x-biu-workspace-id'] ?? '').trim()
         const accountStore = (
           this.ctx.get('account') as {
             store?: {
