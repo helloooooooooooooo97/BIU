@@ -37,6 +37,7 @@ export class AccountService extends Service {
   authorization: AuthorizationService
   replica: RecordReplica | null = null
   private replicaOrigin = ''
+  private cloudAvatars = new Map<string, string>()
   private db: {
     close(): void
     exec(sql: string): void
@@ -229,6 +230,49 @@ export class AccountService extends Service {
       remoteEmail: row.remote_email,
       token: row.token,
       connectedAt: row.connected_at,
+    }
+  }
+
+  private cloudAvatarKey(origin: string, remoteAccountId: string) {
+    return `${origin}\t${remoteAccountId}`
+  }
+
+  cloudAvatar(origin: string, remoteAccountId: string) {
+    return this.cloudAvatars.get(this.cloudAvatarKey(origin, remoteAccountId)) ?? ''
+  }
+
+  setCloudAvatar(origin: string, remoteAccountId: string, avatar: string) {
+    const key = this.cloudAvatarKey(origin, remoteAccountId)
+    const trimmed = avatar.trim()
+    if (trimmed) this.cloudAvatars.set(key, trimmed)
+    else this.cloudAvatars.delete(key)
+  }
+
+  updateCloudIdentity(
+    localAccountId: string,
+    origin: string,
+    remoteAccountId: string,
+    patch: { name?: string; email?: string; avatar?: string },
+  ) {
+    if (typeof patch.avatar === 'string') {
+      this.setCloudAvatar(origin, remoteAccountId, patch.avatar)
+    }
+    const nextName = typeof patch.name === 'string' ? patch.name.trim() : ''
+    const nextEmail = typeof patch.email === 'string' ? patch.email.trim().toLowerCase() : ''
+    if (nextName && nextEmail) {
+      this.db
+        .prepare(
+          `UPDATE cloud_connections SET remote_name = ?, remote_email = ?
+           WHERE local_account_id = ? AND origin = ? AND remote_account_id = ?`,
+        )
+        .run(nextName, nextEmail, localAccountId, origin, remoteAccountId)
+    } else if (nextName) {
+      this.db
+        .prepare(
+          `UPDATE cloud_connections SET remote_name = ?
+           WHERE local_account_id = ? AND origin = ? AND remote_account_id = ?`,
+        )
+        .run(nextName, localAccountId, origin, remoteAccountId)
     }
   }
 
@@ -505,12 +549,16 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     const payload = (await remote.json().catch(() => ({}))) as {
       id?: string
       name?: string
+      avatar?: string
       token?: string
       workspaceId?: string
       error?: string
     }
     if (!remote.ok || !payload.id || !payload.token) {
       throw new CollabError(payload.error || (action === 'login' ? '云端登录失败' : '云端注册失败'), remote.status || 400)
+    }
+    if (typeof payload.avatar === 'string') {
+      account.setCloudAvatar(origin, payload.id, payload.avatar)
     }
     const connection = account.saveCloudConnection({
       localAccountId: local.id,
@@ -543,6 +591,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         id: connection.remoteAccountId,
         name: connection.remoteName,
         email: connection.remoteEmail,
+        avatar: account.cloudAvatar(connection.origin, connection.remoteAccountId),
       },
       origin: connection.origin,
       workspaceId,
@@ -567,12 +616,36 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     try {
       if (isOnlineRuntime()) return route.send(200, { available: false, connected: false, configuredOrigin: '' })
       const me = actor(route)
+      const initial = account.cloudConnection(me.id)
+      if (initial?.origin && initial.token) {
+        try {
+          const res = await fetch(`${initial.origin}/api/account/me`, {
+            headers: { authorization: `Bearer ${initial.token}` },
+            signal: AbortSignal.timeout(2000),
+          })
+          if (res.ok) {
+            const remoteMe = (await res.json().catch(() => ({}))) as {
+              name?: unknown
+              email?: unknown
+              avatar?: unknown
+            }
+            account.updateCloudIdentity(me.id, initial.origin, initial.remoteAccountId, {
+              ...(typeof remoteMe.name === 'string' && remoteMe.name.trim() ? { name: remoteMe.name } : {}),
+              ...(typeof remoteMe.email === 'string' && remoteMe.email.trim() ? { email: remoteMe.email } : {}),
+              ...(typeof remoteMe.avatar === 'string' ? { avatar: remoteMe.avatar } : {}),
+            })
+          }
+        } catch {
+          /* 远端不可达时沿用本地缓存的名称与默认头像 */
+        }
+      }
       const connection = account.cloudConnection(me.id)
       const configuredOrigin = account.configuredCloudOrigin()
       const accounts = account.listCloudConnections(me.id).map((item) => ({
         id: item.remoteAccountId,
         name: item.remoteName,
         email: item.remoteEmail,
+        avatar: account.cloudAvatar(item.origin, item.remoteAccountId),
         origin: item.origin,
         active: item.active,
       }))
@@ -587,6 +660,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
                 id: connection.remoteAccountId,
                 name: connection.remoteName,
                 email: connection.remoteEmail,
+                avatar: account.cloudAvatar(connection.origin, connection.remoteAccountId),
               },
               origin: connection.origin,
             }
@@ -740,6 +814,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       route.send(200, {
         id: found.id,
         name: found.name,
+        avatar: found.avatar ?? '',
         createdAt: found.createdAt,
         token: found.token,
         workspaceId,
