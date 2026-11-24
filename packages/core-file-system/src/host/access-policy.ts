@@ -166,35 +166,77 @@ export type AccessPolicyHost = {
   applyTagOverlay(spec: CollectionSpec, row: DbRecord): DbRecord
 }
 
+const DEFAULT_CACHE_CAPACITY = 256
+
+class BoundedLru<K, V> {
+  private readonly map = new Map<K, V>()
+
+  constructor(private readonly maxEntries = DEFAULT_CACHE_CAPACITY) {}
+
+  get(key: K): V | undefined {
+    const value = this.map.get(key)
+    if (value === undefined) return undefined
+    this.map.delete(key)
+    this.map.set(key, value)
+    return value
+  }
+
+  set(key: K, value: V): void {
+    if (this.map.has(key)) this.map.delete(key)
+    else if (this.map.size >= this.maxEntries) {
+      const oldest = this.map.keys().next().value
+      if (oldest !== undefined) this.map.delete(oldest)
+    }
+    this.map.set(key, value)
+  }
+
+  delete(key: K): void {
+    this.map.delete(key)
+  }
+
+  clear(): void {
+    this.map.clear()
+  }
+
+  get size(): number {
+    return this.map.size
+  }
+}
+
+type ViewAudienceEntry = {
+  grants: Array<{ viewId: string; subjectType: 'account' | 'member_view'; subjectId: string; memberKind?: string; grantedBy?: string }>
+  dataViews: Array<{ id: string; filters?: Record<string, unknown> }>
+  memberViews: Array<{ id: string; filters?: Record<string, unknown> }>
+}
+
 /**
  * 封装工作区数据归属（私人 / 空间 / 共享）、权限判定（管理 / 编辑 / 阅读）、
- * 视图级授权匹配与分享状态缓存。
+ * 视图级授权匹配与多租户有界分享状态缓存。
  */
 export class DatabaseAccessPolicy {
-  private ownershipCache: { key: string; map: Map<string, 'personal' | 'workspace' | 'shared'> } | null = null
-  private ownerCache: { key: string; map: Map<string, string> } | null = null
-  private viewAudienceCache: {
-    key: string
-    grants: Array<{ viewId: string; subjectType: 'account' | 'member_view'; subjectId: string; memberKind?: string; grantedBy?: string }>
-    dataViews: Array<{ id: string; filters?: Record<string, unknown> }>
-    memberViews: Array<{ id: string; filters?: Record<string, unknown> }>
-  } | null = null
-  private viewShareCache: { key: string; views: SharedViewDef[] } | null = null
-  private recordShareCache: { key: string; ids: Set<string> } | null = null
+  private readonly ownershipCache = new BoundedLru<string, Map<string, 'personal' | 'workspace' | 'shared'>>()
+  private readonly ownerCache = new BoundedLru<string, Map<string, string>>()
+  private readonly viewAudienceCache = new BoundedLru<string, ViewAudienceEntry>()
+  private readonly viewShareCache = new BoundedLru<string, SharedViewDef[]>()
+  private readonly recordShareCache = new BoundedLru<string, Set<string>>()
 
   constructor(private readonly host: AccessPolicyHost) {}
 
   clearCaches() {
-    this.ownershipCache = null
-    this.ownerCache = null
-    this.viewAudienceCache = null
-    this.viewShareCache = null
-    this.recordShareCache = null
+    this.ownershipCache.clear()
+    this.ownerCache.clear()
+    this.viewAudienceCache.clear()
+    this.viewShareCache.clear()
+    this.recordShareCache.clear()
   }
 
   clearShareCaches() {
-    this.viewShareCache = null
-    this.recordShareCache = null
+    this.viewShareCache.clear()
+    this.recordShareCache.clear()
+  }
+
+  private cacheWorkspaceId(): string {
+    return currentRequestWorkspaceId().trim() || String(this.host.collabStore()?.activeWorkspaceId?.() ?? '').trim()
   }
 
   private resolveWorkspaceId(): string {
@@ -215,10 +257,12 @@ export class DatabaseAccessPolicy {
     const workspaceId = this.resolveWorkspaceId()
     if (!store?.collectionOwnership || !workspaceId) return 'personal'
     const key = `${workspaceId}\t${collection}`
-    if (!this.ownershipCache || this.ownershipCache.key !== key) {
-      this.ownershipCache = { key, map: store.collectionOwnership(workspaceId, collection) }
+    let map = this.ownershipCache.get(key)
+    if (!map) {
+      map = store.collectionOwnership(workspaceId, collection)
+      this.ownershipCache.set(key, map)
     }
-    return this.ownershipCache.map.get(id) ?? 'personal'
+    return map.get(id) ?? 'personal'
   }
 
   recordOwner(collection: string, id: string): string {
@@ -226,10 +270,12 @@ export class DatabaseAccessPolicy {
     const workspaceId = this.resolveWorkspaceId()
     if (!store?.collectionRecordOwners || !workspaceId) return ''
     const key = `${workspaceId}\t${collection}`
-    if (!this.ownerCache || this.ownerCache.key !== key) {
-      this.ownerCache = { key, map: store.collectionRecordOwners(workspaceId, collection) }
+    let map = this.ownerCache.get(key)
+    if (!map) {
+      map = store.collectionRecordOwners(workspaceId, collection)
+      this.ownerCache.set(key, map)
     }
-    return this.ownerCache.map.get(id) ?? ''
+    return map.get(id) ?? ''
   }
 
   viewGrantRole(
@@ -550,8 +596,9 @@ export class DatabaseAccessPolicy {
     const workspaceId = this.resolveWorkspaceId()
     if (!store || !workspaceId) return
     store.attach(workspaceId, collection, recordId, Date.now(), policy)
-    this.ownerCache = null
-    this.ownershipCache = null
+    const key = `${workspaceId}\t${collection}`
+    this.ownerCache.delete(key)
+    this.ownershipCache.delete(key)
   }
 
   /** 分享里的「按成员视图批量授权」：全部成员可编辑。 */
@@ -569,8 +616,15 @@ export class DatabaseAccessPolicy {
     if (!store?.grantMemberView || !actorId) return
     try {
       store.grantMemberView(actorId, collection, recordId, builtinAllViewId(WORKSPACE_MEMBERS_COLLECTION_PATH), 'editor')
-      this.ownerCache = null
-      this.ownershipCache = null
+      const workspaceId = this.cacheWorkspaceId()
+      if (workspaceId) {
+        const key = `${workspaceId}\t${collection}`
+        this.ownerCache.delete(key)
+        this.ownershipCache.delete(key)
+      } else {
+        this.ownerCache.clear()
+        this.ownershipCache.clear()
+      }
     } catch {
       /* 还没挂上工作区时，记录仍按空间归属保留 */
     }
@@ -653,7 +707,9 @@ export class DatabaseAccessPolicy {
   }
 
   recordShareIds(collection: string) {
-    if (this.recordShareCache?.key === collection) return this.recordShareCache.ids
+    const key = `${this.cacheWorkspaceId()}\t${collection}`
+    const cached = this.recordShareCache.get(key)
+    if (cached) return cached
     const ids = new Set<string>()
     try {
       for (const share of this.host.shares.listRecords(collection)) {
@@ -663,12 +719,14 @@ export class DatabaseAccessPolicy {
     } catch {
       /* 分享库还没打开时，仍按视图链接现算 */
     }
-    this.recordShareCache = { key: collection, ids }
+    this.recordShareCache.set(key, ids)
     return ids
   }
 
   sharedViewsFor(collection: string): SharedViewDef[] {
-    if (this.viewShareCache?.key === collection) return this.viewShareCache.views
+    const key = `${this.cacheWorkspaceId()}\t${collection}`
+    const cached = this.viewShareCache.get(key)
+    if (cached) return cached
     let shares: Array<{ viewId: string }> = []
     try {
       shares = this.host.shares.listViews(collection)
@@ -684,7 +742,7 @@ export class DatabaseAccessPolicy {
       const view = resolveSharedView(share.viewId, saved)
       if (view) views.push(view)
     }
-    this.viewShareCache = { key: collection, views }
+    this.viewShareCache.set(key, views)
     return views
   }
 
@@ -705,7 +763,8 @@ export class DatabaseAccessPolicy {
     const workspaceId = this.resolveWorkspaceId()
     if (!workspaceId) return stored
     const key = `${workspaceId}\t${collection}`
-    if (!this.viewAudienceCache || this.viewAudienceCache.key !== key) {
+    let entry = this.viewAudienceCache.get(key)
+    if (!entry) {
       const grantRows = store?.viewGrantAudiences?.(workspaceId, collection)
         ?? store?.viewGrantsFor?.(workspaceId, collection)?.map((row) => ({
           view_id: row.view_id,
@@ -735,15 +794,16 @@ export class DatabaseAccessPolicy {
             ...(this.host.viewCatalog?.viewsFor(collection) ?? []),
           ]
         : []
-      this.viewAudienceCache = { key, grants, dataViews, memberViews }
+      entry = { grants, dataViews, memberViews }
+      this.viewAudienceCache.set(key, entry)
     }
-    if (!this.viewAudienceCache.grants.length) return stored
+    if (!entry.grants.length) return stored
     return effectiveDataScope(
       stored,
       record,
-      this.viewAudienceCache.grants,
-      this.viewAudienceCache.dataViews,
-      this.viewAudienceCache.memberViews,
+      entry.grants,
+      entry.dataViews,
+      entry.memberViews,
       this.recordOwner(collection, String(record.id ?? '')),
     )
   }
