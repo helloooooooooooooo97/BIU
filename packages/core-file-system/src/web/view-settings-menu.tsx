@@ -2,7 +2,6 @@ import { useState, type ReactElement } from 'react'
 import { PlusIcon } from '@heroicons/react/16/solid'
 import type { CollectionRowViewType, CollectionViewType } from '@biu/type-file-system/ui'
 import type { FilterGroup, SortRule } from '../query-logic.ts'
-import { askNewPresentation } from './browser-row-title.tsx'
 import { LocalText } from './controls.tsx'
 import type { ViewMode } from './fields.ts'
 import { ModeGlyph, VIEW_MODES } from './fsdb-cells.tsx'
@@ -15,6 +14,10 @@ import {
   type QueryField,
 } from './query-menus.tsx'
 import { PAGE_SIZES, type GroupConfig, type SavedView } from './saved-view.ts'
+import type { TableSandboxItem } from '../shared/table-sandbox-model.ts'
+import { LayoutPrefsMenu } from './layout-prefs-menu.tsx'
+import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
+import { getPagePrefs } from './page-width.ts'
 
 export type ViewSettingsTab = 'view' | 'columns' | 'filter' | 'sort' | 'group'
 
@@ -38,6 +41,8 @@ export function ViewSettingsMenu({
   setMode,
   extraViews,
   extraRows,
+  sandboxViews = [],
+  onCreateSandboxView,
   patchActiveView,
   wrapCells,
   setWrap,
@@ -80,6 +85,8 @@ export function ViewSettingsMenu({
   setMode: (next: ViewMode) => void
   extraViews: CollectionViewType[]
   extraRows: CollectionRowViewType[]
+  sandboxViews?: TableSandboxItem[]
+  onCreateSandboxView?: () => void
   patchActiveView: (patch: Partial<SavedView>) => void
   wrapCells: boolean
   setWrap: (next: boolean) => void
@@ -118,6 +125,11 @@ export function ViewSettingsMenu({
       value: opt.id,
       label: opt.label,
       icon: <ModeGlyph id={opt.id} extra={extraViews} rows={extraRows} />,
+    })),
+    ...sandboxViews.map((opt) => ({
+      value: opt.id,
+      label: opt.name,
+      icon: <SandboxKindIcon />,
     })),
     ...extraViews.map((opt) => ({
       value: opt.id,
@@ -198,18 +210,19 @@ export function ViewSettingsMenu({
               }}
             />
 
-            {openAcc === 'mode' ? (
+            {openAcc === 'mode' && onCreateSandboxView && !sheet ? (
               <button
                 type="button"
                 className="fsdb-vset-mode-add"
-                data-testid="fsdb-mode-plus"
+                data-testid="fsdb-sandbox-view-create"
                 onClick={() => {
+                  setOpenAcc(null)
+                  onCreateSandboxView()
                   onClose()
-                  askNewPresentation({ path: collectionPath, title })
                 }}
               >
                 <PlusIcon aria-hidden className="size-[14px]" />
-                <span>添加呈现方式</span>
+                <span>新建沙箱视图</span>
               </button>
             ) : null}
 

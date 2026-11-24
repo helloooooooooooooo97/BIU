@@ -5,6 +5,19 @@ import { getWorkspaceProfile } from './data-bridge.ts'
 export type ThemeMode = 'light' | 'dark'
 
 let current: ThemeMode | null = null
+let themeVersion = 0
+const themeListeners = new Set<() => void>()
+
+export function subscribeTheme(listener: () => void) {
+  themeListeners.add(listener)
+  return () => {
+    themeListeners.delete(listener)
+  }
+}
+
+export function getThemeVersion() {
+  return themeVersion
+}
 
 export function readTheme(): ThemeMode {
   if (current === 'dark' || current === 'light') return current
@@ -17,17 +30,20 @@ export function readTheme(): ThemeMode {
 
 export function applyTheme(mode: ThemeMode) {
   current = mode
-  if (typeof document === 'undefined') return
-  try {
-    writeStorageString('biu.theme.bootstrap', mode, { area: 'session' })
-  } catch {
-    /* sessionStorage may be unavailable in embedded/webview contexts */
+  themeVersion += 1
+  if (typeof document !== 'undefined') {
+    try {
+      writeStorageString('biu.theme.bootstrap', mode, { area: 'session' })
+    } catch {
+      /* sessionStorage may be unavailable in embedded/webview contexts */
+    }
+    const root = document.documentElement
+    root.classList.toggle('dark', mode === 'dark')
+    root.classList.toggle('light', mode === 'light')
+    const meta = document.querySelector('meta[name="color-scheme"]')
+    if (meta) meta.setAttribute('content', mode)
   }
-  const root = document.documentElement
-  root.classList.toggle('dark', mode === 'dark')
-  root.classList.toggle('light', mode === 'light')
-  const meta = document.querySelector('meta[name="color-scheme"]')
-  if (meta) meta.setAttribute('content', mode)
+  for (const listener of themeListeners) listener()
 }
 
 export async function persistTheme(mode: ThemeMode) {

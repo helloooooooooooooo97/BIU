@@ -846,51 +846,61 @@ export const WindowedTable = memo(function WindowedTable({
     return vars
   }, [columnPx, columns])
 
+  const [checkRailHost, setCheckRailHost] = useState<HTMLElement | null>(null)
+  useLayoutEffect(() => {
+    setCheckRailHost(stageRef.current?.closest<HTMLElement>('.tasks-table-shell') ?? null)
+  }, [stageRef])
+  const checkRailNode = (
+    <TableCheckRail
+      tableRef={tableRef}
+      stackRef={checkStackRef}
+      stageRef={stageRef}
+      hoverRef={checkHoverRef}
+      items={items}
+      nodes={nodes}
+      margin={margin}
+      isScrolling={isScrolling}
+      forceLive={forceLiveChecks}
+      paintCheckHover={paintCheckHover}
+      renderHead={renderCheckHead}
+      renderRow={renderCheckRow}
+      checkStore={checkStore}
+    />
+  )
+
   return (
-    <div className="tasks-table-stage" ref={stageRef} onMouseLeave={() => paintCheckHover(null)}>
+    <div className="tasks-table-stage" ref={stageRef} onMouseLeave={checkRailHost ? undefined : () => paintCheckHover(null)}>
       {pinnedHead ? createPortal(
-        <div className="fsdb-pinned-head-viewport" ref={dockedViewportRef} style={{ width: pinnedHead.width }}
-          onScroll={(event) => { if (wrapRef.current) wrapRef.current.scrollLeft = event.currentTarget.scrollLeft }}
-          onWheel={(event) => { if (event.deltaX && wrapRef.current) wrapRef.current.scrollLeft += event.deltaX }}>
-          <div className="fsdb-pinned-head-stage" style={{ width: `calc(${pinnedHead.tableWidth}px + var(--fsdb-check-gutter))` }}>
-            <div className="fsdb-pinned-head-check">{checkStore ? checkStore.renderHead() : renderCheckHead()}</div>
-            <table
-              className="tasks-table is-cols-fixed is-grid fsdb-pinned-head-table"
-              style={{ ...colWidthVars, width: pinnedHead.tableWidth, ['--fsdb-pin-title' as string]: `${columnPx[0] || 240}px` }}
-            >
-              <colgroup>
-                {columns.slice(0, colWindow.pin).map((col, index) => <col key={col.key} data-col-key={col.key} style={paintedColStyle(index)} />)}
-                {colWindow.padLeft > 0 ? <col key="pad-left" style={padColBox(colWindow.padLeft)} /> : null}
-                {columns.slice(colWindow.start, colWindow.end).map((col, index) => <col key={col.key} data-col-key={col.key} style={paintedColStyle(colWindow.start + index)} />)}
-                {colWindow.padRight > 0 ? <col key="pad-right" style={padColBox(colWindow.padRight)} /> : null}
-                <col key="fill" className="fsdb-col-fill" />
-              </colgroup>
-              <thead><tr>
-                {columns.slice(0, colWindow.pin).map((col) => chrome.paintHeadTh(col))}
-                {colWindow.padLeft > 0 ? <th key="pad-left" className="fsdb-col-pad" aria-hidden style={padColBox(colWindow.padLeft)} /> : null}
-                {columns.slice(colWindow.start, colWindow.end).map((col) => chrome.paintHeadTh(col))}
-                {colWindow.padRight > 0 ? <th key="pad-right" className="fsdb-col-pad" aria-hidden style={padColBox(colWindow.padRight)} /> : null}
-                <th key="fill" className="fsdb-col-fill" aria-hidden />
-              </tr></thead>
-            </table>
+        <div className="fsdb-pinned-head-shell" style={{ width: pinnedHead.width }}>
+          <div className="fsdb-pinned-head-check">{checkStore ? checkStore.renderHead() : renderCheckHead()}</div>
+          <div className="fsdb-pinned-head-viewport" ref={dockedViewportRef} style={{ width: pinnedHead.width }}
+            onScroll={(event) => { if (wrapRef.current) wrapRef.current.scrollLeft = event.currentTarget.scrollLeft }}
+            onWheel={(event) => { if (event.deltaX && wrapRef.current) wrapRef.current.scrollLeft += event.deltaX }}>
+            <div className="fsdb-pinned-head-stage" style={{ width: `${pinnedHead.tableWidth}px` }}>
+              <table
+                className="tasks-table is-cols-fixed is-grid fsdb-pinned-head-table"
+                style={{ ...colWidthVars, width: pinnedHead.tableWidth, ['--fsdb-pin-title' as string]: `${columnPx[0] || 240}px` }}
+              >
+                <colgroup>
+                  {columns.slice(0, colWindow.pin).map((col, index) => <col key={col.key} data-col-key={col.key} style={paintedColStyle(index)} />)}
+                  {colWindow.padLeft > 0 ? <col key="pad-left" style={padColBox(colWindow.padLeft)} /> : null}
+                  {columns.slice(colWindow.start, colWindow.end).map((col, index) => <col key={col.key} data-col-key={col.key} style={paintedColStyle(colWindow.start + index)} />)}
+                  {colWindow.padRight > 0 ? <col key="pad-right" style={padColBox(colWindow.padRight)} /> : null}
+                  <col key="fill" className="fsdb-col-fill" />
+                </colgroup>
+                <thead><tr>
+                  {columns.slice(0, colWindow.pin).map((col) => chrome.paintHeadTh(col))}
+                  {colWindow.padLeft > 0 ? <th key="pad-left" className="fsdb-col-pad" aria-hidden style={padColBox(colWindow.padLeft)} /> : null}
+                  {columns.slice(colWindow.start, colWindow.end).map((col) => chrome.paintHeadTh(col))}
+                  {colWindow.padRight > 0 ? <th key="pad-right" className="fsdb-col-pad" aria-hidden style={padColBox(colWindow.padRight)} /> : null}
+                  <th key="fill" className="fsdb-col-fill" aria-hidden />
+                </tr></thead>
+              </table>
+            </div>
           </div>
         </div>, pinnedHead.host,
       ) : null}
-      <TableCheckRail
-        tableRef={tableRef}
-        stackRef={checkStackRef}
-        stageRef={stageRef}
-        hoverRef={checkHoverRef}
-        items={items}
-        nodes={nodes}
-        margin={margin}
-        isScrolling={isScrolling}
-        forceLive={forceLiveChecks}
-        paintCheckHover={paintCheckHover}
-        renderHead={renderCheckHead}
-        renderRow={renderCheckRow}
-        checkStore={checkStore}
-      />
+      {checkRailHost ? createPortal(checkRailNode, checkRailHost) : checkRailNode}
       <table
         ref={tableRef}
         tabIndex={0}

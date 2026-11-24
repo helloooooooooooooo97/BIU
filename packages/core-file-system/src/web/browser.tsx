@@ -140,6 +140,7 @@ import {
   type StatResult,
   type TableHoldSnap,
 } from './browser-list-cache.ts'
+import { createTableSandboxItem, normalizeTableSandboxViews, type TableSandboxItem } from '../shared/table-sandbox-model.ts'
 import {
   DockHoverTip,
   PluginSurface,
@@ -2506,6 +2507,8 @@ export function CollectionBrowser({
   }, [activeViewId, collectionPath, items, routeViewId, schema?.labelField, selected, sheet])
   const filterActive = countFilterRules(filterTree) > 0
   const activeView = views.find((view) => view.id === activeViewId)
+  const sandboxViews = useMemo(() => normalizeTableSandboxViews(activeView?.sandboxViews) ?? [], [activeView?.sandboxViews])
+  const activeSandboxView = useMemo(() => sandboxViews.find((item) => item.id === mode), [mode, sandboxViews])
   const sortCustom = isCustomSorts(
     sorts,
     activeView?.builtin ? 'updatedAt' : (schema?.labelField ?? 'title'),
@@ -2930,6 +2933,18 @@ export function CollectionBrowser({
   function setRowNumbers(next: boolean) {
     setShowRowNumbers(next)
     patchActiveView({ rowNumbers: next })
+  }
+
+  function createSandboxView() {
+    const item = createTableSandboxItem(sandboxViews, activeView?.name || title)
+    const next = [...sandboxViews, item]
+    setMode(item.id as ViewMode)
+    patchActiveView({ sandboxViews: next, mode: item.id as ViewMode })
+  }
+
+  function patchSandboxView(updated: TableSandboxItem) {
+    const next = sandboxViews.map((item) => (item.id === updated.id ? updated : item))
+    patchActiveView({ sandboxViews: next })
   }
 
   function setGroupKey(next: string) {
@@ -3806,6 +3821,7 @@ export function CollectionBrowser({
     extraViews.map((item) => item.id).join(','),
     Number(viewsSaveError),
     extraRows.map((item) => item.id).join(','),
+    sandboxViews.map((item) => `${item.id}:${item.name}`).join(','),
     Number(sortCustom),
     sortsStateKey(sorts),
     Number(filterActive),
@@ -3887,6 +3903,8 @@ export function CollectionBrowser({
         setMode={setMode}
         extraViews={extraViews}
         extraRows={extraRows}
+        sandboxViews={sandboxViews}
+        onCreateSandboxView={createSandboxView}
         patchActiveView={patchActiveView}
         sortRef={sortRef}
         sortMenuOpen={sortMenuOpen}
@@ -4123,6 +4141,14 @@ export function CollectionBrowser({
           error={error}
           customView={customView}
           rowView={rowView}
+          sandboxView={activeSandboxView}
+          onPatchSandboxView={patchSandboxView}
+          canCreate={canCreate}
+          onCreateRecord={createRecord}
+          onOpenRowSplit={openRowSplit}
+          onReload={() => {
+            void reload({ force: true })
+          }}
           dataPath={dataPath}
           items={items}
           columns={tableColumns}

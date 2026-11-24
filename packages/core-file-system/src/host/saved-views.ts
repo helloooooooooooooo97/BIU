@@ -7,6 +7,7 @@ import { builtinAllView, builtinAllViewId, isReadOnlyViewId } from '../catalog-v
 import { normalizeColumnWidths, normalizeGroupConfig, normalizePageSize, parseViewColumns, type SavedView } from '../shared/saved-view.ts'
 import { normalizeColumnSummaries } from '../shared/column-summary.ts'
 import { normalizeColumnViews } from '../shared/column-sandbox-model.ts'
+import { normalizeTableSandboxViews } from '../shared/table-sandbox-model.ts'
 import { isViewModeId } from '../shared/fields.ts'
 import { DATA_COLLECTION_PATH, VIEWS_COLLECTION_PATH, isIndexCollection, normalizeCollectionPath } from '../paths.ts'
 import {
@@ -353,6 +354,7 @@ export class SavedViewsStore {
       columnWidths: normalizeColumnWidths(fields.columnWidths),
       columnSummaries: normalizeColumnSummaries(parseJsonValue(fields.columnSummaries) ?? fields.columnSummaries),
       columnViews: normalizeColumnViews(fields.columnViews),
+      sandboxViews: normalizeTableSandboxViews(fields.sandboxViews),
       rank: Number.isFinite(Number(fields.rank)) ? Math.round(Number(fields.rank)) : views.length,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -425,6 +427,7 @@ export class SavedViewsStore {
         ...('columnWidths' in patch ? { columnWidths: normalizeColumnWidths(patch.columnWidths) } : {}),
         ...('columnSummaries' in patch ? { columnSummaries: normalizeColumnSummaries(parseJsonValue(patch.columnSummaries) ?? patch.columnSummaries) } : {}),
         ...('columnViews' in patch ? { columnViews: normalizeColumnViews(patch.columnViews) } : {}),
+        ...('sandboxViews' in patch ? { sandboxViews: normalizeTableSandboxViews(patch.sandboxViews) } : {}),
         ...(Number.isFinite(Number(patch.rank)) ? { rank: Math.round(Number(patch.rank)) } : {}),
         ...('emoji' in patch ? { emoji: String(patch.emoji ?? '') } : {}),
         ...('tag' in patch ? { tag: normalizeSchemaValue(patch.tag) } : {}),
@@ -478,6 +481,11 @@ function mergeIncomingStoredView(
     const cv = normalizeColumnViews(raw.columnViews)
     if (cv) view.columnViews = cv
     else delete view.columnViews
+  }
+  if ('sandboxViews' in raw) {
+    const sv = normalizeTableSandboxViews(raw.sandboxViews)
+    if (sv) view.sandboxViews = sv
+    else delete view.sandboxViews
   }
   if ('columnWidths' in raw) {
     const cw = normalizeColumnWidths(raw.columnWidths)
@@ -599,6 +607,7 @@ function asRecord(path: string, tableName: string, view: StoredView, tableIcon?:
     columnWidths: view.columnWidths ?? {},
     columnSummaries: view.columnSummaries ?? {},
     columnViews: view.columnViews ?? {},
+    sandboxViews: view.sandboxViews ?? [],
     rank: Number.isFinite(Number(view.rank)) ? Math.round(Number(view.rank)) : 0,
     filters: JSON.stringify(filters),
     sorts: JSON.stringify(sorts.map((item) => ({ field: item.field, dir: item.dir }))),
@@ -640,6 +649,7 @@ export function clientViewFromDbRow(row: Record<string, unknown> | undefined) {
     columnWidths: row.columnWidths,
     columnSummaries: normalizeColumnSummaries(parseJsonValue(row.columnSummaries) ?? row.columnSummaries),
     columnViews: normalizeColumnViews(row.columnViews),
+    sandboxViews: normalizeTableSandboxViews(row.sandboxViews),
     builtin: false,
     rank: Number.isFinite(Number(row.rank)) ? Math.round(Number(row.rank)) : undefined,
   }
@@ -698,6 +708,7 @@ export function viewsCollection(
         filterTree: { type: 'string', label: '筛选树', writable: true, description: VIEW_FILTER_TREE_DESCRIPTION },
         columnSummaries: { type: 'string', label: '列统计', writable: true, description: '每列底部统计方式，JSON 对象：{ "<columnKey>": "sum"|"avg"|"count"|... }' },
         columnViews: { type: 'string', label: '属性视图', writable: true, description: '每列的属性沙箱视图选择，JSON 对象：标签属性列仅存 { activeId }（代码由标签字段 fields[*].views 持有），原生非标签列可内联 { activeId, items: [{ id, name, code }] }。' },
+        sandboxViews: { type: 'string', label: '表级沙箱视图', writable: true, description: '表级自定义沙箱呈现视图列表，JSON 数组：[{ id, name, code, data }]。' },
       },
     },
     list,

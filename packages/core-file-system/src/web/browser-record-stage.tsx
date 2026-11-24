@@ -12,10 +12,12 @@ import { PLUGINS_COLLECTION_PATH } from './database-path.ts'
 import { getDatabaseUi } from './database-ui.ts'
 import { PageContentLoading } from './page-content-status.tsx'
 import type { TableColumnSlice } from './table-window.ts'
+import type { TableSandboxItem } from '../shared/table-sandbox-model.ts'
 
 const RecordDetail = lazy(() => import('./record-detail.tsx').then((m) => ({ default: m.RecordDetail })))
 const LazySharePanel = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.SharePanel })))
 const CollectionRowsShell = lazy(() => import('./rows-view.tsx').then((m) => ({ default: m.CollectionRowsShell })))
+const CollectionSandboxHost = lazy(() => import('./collection-sandbox-host.tsx').then((m) => ({ default: m.CollectionSandboxHost })))
 
 function SharePanel(props: ComponentProps<typeof LazySharePanel>) {
   return (
@@ -33,6 +35,12 @@ export type BrowserRecordStageProps = {
   error: string
   customView?: CollectionViewType
   rowView?: CollectionRowViewType
+  sandboxView?: TableSandboxItem
+  onPatchSandboxView?: (next: TableSandboxItem) => void
+  canCreate?: boolean
+  onCreateRecord?: () => Promise<void> | void
+  onOpenRowSplit?: (row: DbRecord) => void
+  onReload?: () => Promise<void> | void
   dataPath: string
   items: DbRecord[]
   columns: BrowserTableColumn[]
@@ -113,6 +121,12 @@ export const BrowserRecordStage = memo(function BrowserRecordStage(props: Browse
     error,
     customView,
     rowView,
+    sandboxView,
+    onPatchSandboxView,
+    canCreate,
+    onCreateRecord,
+    onOpenRowSplit,
+    onReload,
     dataPath,
     items,
     columns,
@@ -210,42 +224,64 @@ export const BrowserRecordStage = memo(function BrowserRecordStage(props: Browse
                 </Suspense>
               </PluginSurface>
             ) : null}
-            {!customView && !rowView ? (
-              <div className="tasks-table-wrap" ref={tableWrapRef}>
-                <WindowedTable
-                  columns={held?.columns ?? columns}
-                  columnWidths={held?.columnWidths ?? columnWidths}
-                  columnPinCount={held?.columnPinCount ?? columnPinCount}
-                  wrapCells={held?.wrapCells ?? wrapCells}
-                  truncateCells={held?.truncateCells ?? truncateCells}
-                  resizingCol={held ? null : resizingCol}
-                  nodes={held?.nodes ?? tablePaintNodes}
-                  error={held ? '' : error}
-                  pickMode={pickMode}
-                  resetKey={held?.resetKey ?? tableResetKey}
-                  forceLiveChecks={!held && pickedCount > 0}
-                  checkLayoutExtra={held?.checkLayoutExtra ?? checkLayoutExtra}
-                  paintRef={tablePaintRef}
-                  chromeRef={tableChromeRef}
-                  colWindowRef={colWindowRef}
-                  tableRef={tableRef}
-                  wrapRef={tableWrapRef}
-                  stageRef={tableStageRef}
-                  checkStackRef={checkStackRef}
-                  checkHoverRef={checkHoverRef}
-                  paintCheckHover={paintCheckHover}
-                  renderCheckHead={renderCheckHead}
-                  renderCheckRow={renderCheckRow}
-                  checkStore={checkStore}
-                  onVisibleRange={onVisibleRange}
-                  frozen={Boolean(held)}
-                  activeRowId={detailId}
-                  cellViewStamp={cellViewStamp}
-                  retainedRowId={retainedCell?.id}
-                  retainedRowKey={retainedCell?.rowKey}
-                  retainedColumnKey={retainedCell?.key}
-                  preserveMountedRows={preserveMountedRows}
+            {sandboxView && onPatchSandboxView ? (
+              <Suspense fallback={null}>
+                <CollectionSandboxHost
+                  view={sandboxView}
+                  collectionPath={dataPath}
+                  title={title}
+                  rows={items}
+                  total={total}
+                  schema={schema}
+                  columns={columns}
+                  canCreate={Boolean(canCreate)}
+                  onOpenRow={openRow}
+                  onOpenRowSplit={(row) => onOpenRowSplit?.(row)}
+                  onCreateRecord={() => onCreateRecord?.()}
+                  onRequestDeleteRecord={canDelete ? onRequestDeleteRecord : undefined}
+                  onPatchView={onPatchSandboxView}
+                  onReload={onReload}
                 />
+              </Suspense>
+            ) : null}
+            {!customView && !rowView && !sandboxView ? (
+              <div className="tasks-table-shell" onMouseLeave={() => paintCheckHover(null)}>
+                <div className="tasks-table-wrap" ref={tableWrapRef}>
+                  <WindowedTable
+                    columns={held?.columns ?? columns}
+                    columnWidths={held?.columnWidths ?? columnWidths}
+                    columnPinCount={held?.columnPinCount ?? columnPinCount}
+                    wrapCells={held?.wrapCells ?? wrapCells}
+                    truncateCells={held?.truncateCells ?? truncateCells}
+                    resizingCol={held ? null : resizingCol}
+                    nodes={held?.nodes ?? tablePaintNodes}
+                    error={held ? '' : error}
+                    pickMode={pickMode}
+                    resetKey={held?.resetKey ?? tableResetKey}
+                    forceLiveChecks={!held && pickedCount > 0}
+                    checkLayoutExtra={held?.checkLayoutExtra ?? checkLayoutExtra}
+                    paintRef={tablePaintRef}
+                    chromeRef={tableChromeRef}
+                    colWindowRef={colWindowRef}
+                    tableRef={tableRef}
+                    wrapRef={tableWrapRef}
+                    stageRef={tableStageRef}
+                    checkStackRef={checkStackRef}
+                    checkHoverRef={checkHoverRef}
+                    paintCheckHover={paintCheckHover}
+                    renderCheckHead={renderCheckHead}
+                    renderCheckRow={renderCheckRow}
+                    checkStore={checkStore}
+                    onVisibleRange={onVisibleRange}
+                    frozen={Boolean(held)}
+                    activeRowId={detailId}
+                    cellViewStamp={cellViewStamp}
+                    retainedRowId={retainedCell?.id}
+                    retainedRowKey={retainedCell?.rowKey}
+                    retainedColumnKey={retainedCell?.key}
+                    preserveMountedRows={preserveMountedRows}
+                  />
+                </div>
               </div>
             ) : null}
           </div>
