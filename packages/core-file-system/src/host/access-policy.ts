@@ -335,6 +335,45 @@ export class DatabaseAccessPolicy {
     if (!ok) throw new Error('permission denied: FIELD_FORBIDDEN ($content)')
   }
 
+  /**
+   * 锚点字段扩散保护：当修改的字段导致一条记录新命中某条 view_grant（扩大了可见受众）时，
+   * 必须要求当前操作者具备该记录的 resource:share 权限，防止普通编辑绕过分享审批把私密数据推入外部视图。
+   */
+  assertAnchorFieldSafe(collection: string, beforeRecord: DbRecord, afterRecord: DbRecord) {
+    const store = this.host.collabStore()
+    const authorization = this.host.authorization()
+    const actor = authorization?.currentActor()
+    if (!store?.viewGrantsFor || !authorization || !actor) return
+    const grants = store.viewGrantsFor(actor.workspaceId, collection).filter((g) => g.effect !== 'deny')
+    if (!grants.length) return
+    const target = resolveScopeTarget(collection, String(beforeRecord.id ?? ''), beforeRecord)
+    const canShare = authorization.authorize(actor, 'resource:share', {
+      type: 'record',
+      workspaceId: actor.workspaceId,
+      collection: target.collection,
+      recordId: target.id,
+      record: beforeRecord as Record<string, unknown>,
+    }).allowed
+    if (canShare) return
+
+    const saved = [builtinAllView({ path: collection }), ...(this.host.viewCatalog?.viewsFor(collection) ?? [])]
+    const scope = authorization.scopeCurrent({
+      type: 'record',
+      workspaceId: actor.workspaceId,
+      collection: target.collection,
+      recordId: target.id,
+    })
+    const ownerId = this.recordOwner(target.collection, target.id)
+    for (const grant of grants) {
+      const ownerCtx = { grantedBy: grant.granted_by, recordOwnerId: ownerId }
+      const wasMatched = recordMatchesGrantedView(beforeRecord, grant.view_id, saved, scope, ownerCtx)
+      const nowMatched = recordMatchesGrantedView(afterRecord, grant.view_id, saved, scope, ownerCtx)
+      if (!wasMatched && nowMatched) {
+        throw new Error('permission denied: ANCHOR_FIELD_SCOPE_EXPANSION')
+      }
+    }
+  }
+
   grantAllows(collection: string, id: string) {
     const membership = this.workspaceMembership()
     const store = this.host.collabStore()

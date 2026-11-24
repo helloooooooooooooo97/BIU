@@ -649,23 +649,39 @@ export class AuthorizationService {
     actor: Actor,
     resource: Extract<ResourceRef, { type: 'record' }>,
     parent: Extract<ResourceRef, { type: 'record' }> | null,
+    options: { inheritOnExpand?: boolean } = {},
   ) {
     this.validateMove(actor, resource, parent)
+    const currentPolicy = this.policy(resource)
+    const currentScope = this.resourceScope(resource, new Set(), 0)
+    const parentScope = parent ? this.resourceScope(parent, new Set(), 0) : null
+    // 将私密记录移入更公开的父级（如 workspace）时，默认保持独立权限，避免静默扩大可见范围；
+    // 只有调用方显式传 inheritOnExpand: true 时才保持 inherit。
+    const scopeExpanding =
+      Boolean(parent) &&
+      currentScope === 'personal' &&
+      (parentScope === 'workspace' || parentScope === 'shared')
+    const nextAccessMode =
+      scopeExpanding && !options.inheritOnExpand && currentPolicy?.access_mode === 'inherit'
+        ? 'private'
+        : currentPolicy?.access_mode ?? 'private'
     this.db
       .prepare(
         `UPDATE resource_policies
-         SET parent_collection = ?, parent_record_id = ?
+         SET parent_collection = ?, parent_record_id = ?, access_mode = ?
          WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
       )
       .run(
         parent?.collection ?? '',
         parent?.recordId ?? '',
+        nextAccessMode,
         resource.workspaceId,
         resource.collection,
         resource.recordId,
       )
     this.dropScans(resource.workspaceId, resource.collection)
     if (parent) this.dropScans(parent.workspaceId, parent.collection)
+    return { scopeExpanded: scopeExpanding && Boolean(options.inheritOnExpand), preservedPrivate: scopeExpanding && !options.inheritOnExpand }
   }
 
   validateMove(

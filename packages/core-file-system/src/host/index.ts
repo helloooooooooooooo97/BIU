@@ -1953,6 +1953,7 @@ export class DatabaseService extends Service implements Database {
     if (!current) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
     this.assertLiveRecord(spec, current.id, 'resource:update', current)
     this.access.assertWritablePatch(spec.path, current, raw)
+    this.access.assertAnchorFieldSafe(spec.path, current, { ...current, ...raw } as DbRecord)
     const bannerPatch = takeBannerPatch(raw)
     if ('tag' in raw && schema.fields.tag) {
       if (!schema.fields.tag.writable || schema.fields.tag.computed) throw new Error(`field not writable: tag`)
