@@ -2869,6 +2869,30 @@ export class CollabStore {
     return this.viewAccessRows(workspaceId, collection, viewId)
   }
 
+  /** 删除视图时级联清理引用该视图的 view_grants 以及 member_view 授权。 */
+  cleanupViewReferences(workspaceId: string, collection: string, viewId: string) {
+    if (!workspaceId || !collection || !viewId) return
+    let changed = false
+    try {
+      const deletedViewGrants = this.db
+        .prepare('DELETE FROM view_grants WHERE workspace_id = ? AND collection = ? AND view_id = ?')
+        .run(workspaceId, collection, viewId)
+      if (Number(deletedViewGrants.changes) > 0) changed = true
+      if (collection === '/workspace-members') {
+        const deletedMemberViewGrants = this.db
+          .prepare(`DELETE FROM view_grants WHERE workspace_id = ? AND subject_type = 'member_view' AND subject_id = ?`)
+          .run(workspaceId, viewId)
+        const deletedRecordGrants = this.db
+          .prepare(`DELETE FROM record_grants WHERE workspace_id = ? AND subject_type = 'member_view' AND subject_id = ?`)
+          .run(workspaceId, viewId)
+        if (Number(deletedMemberViewGrants.changes) > 0 || Number(deletedRecordGrants.changes) > 0) changed = true
+      }
+    } catch {
+      /* 兼容老库无相关表 */
+    }
+    if (changed) this.authorization.invalidateAll()
+  }
+
   collectionOwnership(workspaceId: string, collection: string) {
     const policies = this.db
       .prepare(

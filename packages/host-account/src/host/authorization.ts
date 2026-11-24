@@ -201,6 +201,49 @@ export class AuthorizationService {
     return Boolean(this.dataViewMatcher)
   }
 
+  /** 判断某视图是否已绑定权限规则（作为数据视图或成员视图），绑定后其 filters / filterTree / columns 进入锁定状态。 */
+  isViewPolicyBound(workspaceId: string, collection: string, viewId: string): boolean {
+    if (!workspaceId || !collection || !viewId) return false
+    try {
+      const dataGrant = this.db
+        .prepare(
+          `SELECT 1 AS ok FROM view_grants
+           WHERE workspace_id = ? AND collection = ? AND view_id = ?
+           LIMIT 1`,
+        )
+        .get(workspaceId, collection, viewId) as { ok?: number } | undefined
+      if (dataGrant?.ok) return true
+      if (collection === '/workspace-members') {
+        const memberRecordGrant = this.db
+          .prepare(
+            `SELECT 1 AS ok FROM record_grants
+             WHERE workspace_id = ? AND subject_type = 'member_view' AND subject_id = ?
+             LIMIT 1`,
+          )
+          .get(workspaceId, viewId) as { ok?: number } | undefined
+        if (memberRecordGrant?.ok) return true
+        const memberViewGrant = this.db
+          .prepare(
+            `SELECT 1 AS ok FROM view_grants
+             WHERE workspace_id = ? AND subject_type = 'member_view' AND subject_id = ?
+             LIMIT 1`,
+          )
+          .get(workspaceId, viewId) as { ok?: number } | undefined
+        if (memberViewGrant?.ok) return true
+      }
+    } catch {
+      return false
+    }
+    return false
+  }
+
+  /** 只有空间 owner / admin 可以修改或删除已绑定权限规则（Policy-Locked）的视图边界。 */
+  canModifyPolicyLockedView(workspaceId: string, accountId: string): boolean {
+    if (!workspaceId || !accountId) return false
+    const role = this.membership(accountId, workspaceId)
+    return role === 'owner' || role === 'admin'
+  }
+
   /** 列表扫描前把这一张表的策略/授权一次读进内存，避免每行一次 SQLite。 */
   preloadCollection(workspaceId: string, collection: string, accountId = currentAccountId()) {
     if (!workspaceId || !collection || !accountId) return
@@ -362,7 +405,11 @@ export class AuthorizationService {
     }
     if (resource.collection === '/views') {
       const effectiveRole: ResourceRole =
-        membership === 'owner' ? 'owner' : membership === 'viewer' ? 'viewer' : 'manager'
+        membership === 'owner'
+          ? 'owner'
+          : membership === 'viewer' || memberKind === 'external' || memberKind === 'guest'
+            ? 'viewer'
+            : 'manager'
       return ROLE_RANK[effectiveRole] >= ROLE_RANK[requiredRole(action)]
         ? { allowed: true, effectiveRole, source: 'workspace-default' }
         : { allowed: false, reason: 'INSUFFICIENT_PERMISSION' }

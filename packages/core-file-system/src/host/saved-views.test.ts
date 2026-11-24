@@ -337,3 +337,91 @@ test('applyPatch clears optional view fields when sent as null or empty and pers
   reopened.open(file)
   check(reopened)
 })
+
+test('saved views and tombstones are isolated by workspace_id', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'biu-saved-views-ws-'))
+  const file = join(dir, 'biu.sqlite')
+  let activeWs = 'ws-a'
+  const store = new SavedViewsStore().open(file)
+  store.setWorkspaceResolver(() => activeWs)
+
+  store.applyPatch('/pages', { upsert: [{ id: 'v1', name: 'Workspace A View', filters: { tag: 'a' } }] })
+  assert.equal(store.viewsFor('/pages').length, 1)
+
+  activeWs = 'ws-b'
+  assert.equal(store.viewsFor('/pages').length, 0)
+  store.applyPatch('/pages', { upsert: [{ id: 'v1', name: 'Workspace B View', filters: { tag: 'b' } }] })
+  store.applyPatch('/pages', { remove: ['v1'] })
+  assert.equal(store.isTombstoned('/pages', 'v1'), true)
+
+  activeWs = 'ws-a'
+  assert.equal(store.isTombstoned('/pages', 'v1'), false)
+  assert.equal(store.viewsFor('/pages')[0]?.name, 'Workspace A View')
+
+  const reopened = new SavedViewsStore().open(file)
+  reopened.setWorkspaceResolver(() => activeWs)
+  assert.equal(reopened.viewsFor('/pages')[0]?.name, 'Workspace A View')
+  activeWs = 'ws-b'
+  assert.equal(reopened.viewsFor('/pages').length, 0)
+  assert.equal(reopened.isTombstoned('/pages', 'v1'), true)
+})
+
+test('policy-locked view blocks filters/columns changes and deletion for non-admins while allowing visual tweaks', () => {
+  const store = new SavedViewsStore().open(':memory:')
+  store.setWorkspaceResolver(() => 'ws-1')
+  const removedCalls: string[] = []
+  store.setPolicyGuard({
+    isLocked: (_ws, col, id) => col === '/pages' && id === 'v-locked',
+    canEditLocked: (_ws, acc) => acc === 'admin-1',
+    onRemoved: (_ws, col, id) => removedCalls.push(`${col}:${id}`),
+  })
+
+  store.applyPatch(
+    '/pages',
+    {
+      upsert: [
+        { id: 'v-locked', name: 'Locked', filters: { status: 'open' }, columns: ['title', 'status'], pageSize: 20 },
+        { id: 'v-free', name: 'Free', filters: {} },
+      ],
+    },
+    'admin-1',
+  )
+
+  // Non-admin can tweak visual settings (pageSize / sortField)
+  store.applyPatch(
+    '/pages',
+    { upsert: [{ id: 'v-locked', name: 'Locked', filters: { status: 'open' }, columns: ['title', 'status'], pageSize: 50 }] },
+    'member-1',
+  )
+  assert.equal(store.viewsFor('/pages').find((v) => v.id === 'v-locked')?.pageSize, 50)
+
+  // Non-admin cannot alter filters or columns or delete
+  assert.throws(
+    () =>
+      store.applyPatch(
+        '/pages',
+        { upsert: [{ id: 'v-locked', name: 'Locked', filters: {}, columns: ['title', 'status'] }] },
+        'member-1',
+      ),
+    /POLICY_LOCKED_VIEW/,
+  )
+  assert.throws(
+    () =>
+      store.applyPatch(
+        '/pages',
+        { upsert: [{ id: 'v-locked', name: 'Locked', filters: { status: 'open' }, columns: ['title', 'secret'] }] },
+        'member-1',
+      ),
+    /POLICY_LOCKED_VIEW/,
+  )
+  assert.throws(() => store.applyPatch('/pages', { remove: ['v-locked'] }, 'member-1'), /POLICY_LOCKED_VIEW/)
+
+  // Admin can modify and delete, triggering cleanup hook
+  store.applyPatch(
+    '/pages',
+    { upsert: [{ id: 'v-locked', name: 'Locked', filters: { status: 'closed' }, columns: ['title'] }] },
+    'admin-1',
+  )
+  store.applyPatch('/pages', { remove: ['v-locked'] }, 'admin-1')
+  assert.deepEqual(removedCalls, ['/pages:v-locked'])
+})

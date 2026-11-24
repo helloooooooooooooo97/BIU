@@ -99,7 +99,7 @@ export const BIU_TABLES: Record<string, TableSpec> = {
     indexes: ['shares_target'],
   },
   saved_views: {
-    columns: ['collection', 'view_id', 'payload_json', 'updated_at'],
+    columns: ['workspace_id', 'collection', 'view_id', 'payload_json', 'updated_at'],
     indexes: [],
   },
   record_views: {
@@ -107,7 +107,7 @@ export const BIU_TABLES: Record<string, TableSpec> = {
     indexes: [],
   },
   saved_view_tombstones: {
-    columns: ['collection', 'view_id', 'deleted_at'],
+    columns: ['workspace_id', 'collection', 'view_id', 'deleted_at'],
     indexes: [],
   },
   agents: {
@@ -301,7 +301,7 @@ export const BIU_TABLES: Record<string, TableSpec> = {
   },
 }
 
-export const LATEST_BIU_SCHEMA = 50
+export const LATEST_BIU_SCHEMA = 51
 
 export const CREATE_CORE_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -452,11 +452,12 @@ CREATE TABLE IF NOT EXISTS shares (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS shares_target ON shares(kind, collection, view_id, record_id);
 CREATE TABLE IF NOT EXISTS saved_views (
+  workspace_id TEXT NOT NULL DEFAULT '',
   collection TEXT NOT NULL,
   view_id TEXT NOT NULL,
   payload_json TEXT NOT NULL,
   updated_at INTEGER NOT NULL,
-  PRIMARY KEY (collection, view_id)
+  PRIMARY KEY (workspace_id, collection, view_id)
 );
 CREATE TABLE IF NOT EXISTS record_views (
   collection TEXT NOT NULL,
@@ -468,10 +469,11 @@ CREATE TABLE IF NOT EXISTS record_views (
 );
 -- 已删视图的墓碑：别的窗口拿着旧快照推 upsert 时不能把删掉的视图复活
 CREATE TABLE IF NOT EXISTS saved_view_tombstones (
+  workspace_id TEXT NOT NULL DEFAULT '',
   collection TEXT NOT NULL,
   view_id TEXT NOT NULL,
   deleted_at INTEGER NOT NULL,
-  PRIMARY KEY (collection, view_id)
+  PRIMARY KEY (workspace_id, collection, view_id)
 );
 CREATE TABLE IF NOT EXISTS agents (
   id TEXT PRIMARY KEY,
