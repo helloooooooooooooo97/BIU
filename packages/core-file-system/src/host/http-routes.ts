@@ -1,15 +1,12 @@
 import type { IncomingMessage } from 'node:http'
 import type { Context } from 'cordis'
-import { hostRemoteOrigin } from '@biu/host-plugin-loader/env'
 import {
   EditorContentConflictError,
   currentAccountId,
   currentRequestWorkspaceId,
-  isDesktopRuntime,
   isOnlineRuntime,
 } from '@biu/host-plugin-loader/data-dir'
 import { asPublicProfile, writeWorkspaceProfile } from '@biu/host-workspace'
-import { forwardCloud } from '@biu/host-account/mirror'
 import {
   DATABASE_CHANNEL,
   databaseChannelPayload,
@@ -37,18 +34,6 @@ import { dropSharesForRemovedViews, type SharesStore } from './shares-store.ts'
 import { type TagStore } from './tags-store.ts'
 import { asDeleteQuery, parseListColumnsParam, parseSortsParam } from './schema-coerce.ts'
 import type { DatabaseService } from './index.ts'
-
-function hasConfiguredCloudOrigin(ctx: Context) {
-  if (hostRemoteOrigin()) return true
-  try {
-    const account = ctx.get('account') as
-      | { configuredCloudOrigin?: () => string; linkedCloud?: () => { origin?: string } | null }
-      | undefined
-    return Boolean(account?.configuredCloudOrigin?.() || account?.linkedCloud?.()?.origin)
-  } catch {
-    return false
-  }
-}
 
 export function databaseHttpFailure(error: unknown) {
   const message = String(error)
@@ -123,25 +108,7 @@ export function registerDatabaseHttpRoutes(
       route.send(400, { error: String(error) })
     }
   })
-  const tryForwardCloudRead = async (
-    route: { query: URLSearchParams; send: (status: number, body: unknown) => void },
-    endpoint: string,
-    collection = '',
-    id = '',
-  ) => {
-    const search = route.query.toString()
-    const target = search ? `${endpoint}?${search}` : endpoint
-    try {
-      const forwarded = await forwardCloud(ctx, collection, id, target, { method: 'GET' })
-      if (!forwarded) return false
-      route.send(forwarded.status, forwarded.body)
-      return true
-    } catch {
-      return false
-    }
-  }
   ctx.http.route('GET', '/api/db/list', async (route) => {
-    if (await tryForwardCloudRead(route, '/api/db/list', route.query.get('path') || '/')) return
     await send(route, () => {
       let filter: Record<string, unknown> | undefined
       const raw = route.query.get('filter')
@@ -165,7 +132,6 @@ export function registerDatabaseHttpRoutes(
     })
   })
   ctx.http.route('GET', '/api/db/groups', async (route) => {
-    if (await tryForwardCloudRead(route, '/api/db/groups', route.query.get('path') || '/')) return
     await send(route, () => {
       const raw = route.query.get('filter')
       const filter = raw ? JSON.parse(raw) as Record<string, unknown> : undefined
@@ -173,7 +139,6 @@ export function registerDatabaseHttpRoutes(
     })
   })
   ctx.http.route('GET', '/api/db/read', async (route) => {
-    if (await tryForwardCloudRead(route, '/api/db/read', route.query.get('path') || '/')) return
     await send(route, () => db.read(route.query.get('path') || '/'))
   })
   ctx.http.route('GET', '/api/db/banner-gallery', (route) =>
@@ -197,47 +162,15 @@ export function registerDatabaseHttpRoutes(
     }
   })
   ctx.http.route('GET', '/api/db/stat', async (route) => {
-    if (await tryForwardCloudRead(route, '/api/db/stat', route.query.get('path') || '/')) return
     await send(route, () => db.stat(route.query.get('path') || '/'))
   })
   ctx.http.route('GET', '/api/db/content', async (route) => {
-    const path = route.query.get('path') || '/'
-    const parts = path.split('/').filter(Boolean)
-    if (parts.length === 2) {
-      const search = route.query.toString()
-      const forwarded = await forwardCloud(
-        ctx,
-        `/${parts[0]}`,
-        parts[1]!,
-        search ? `/api/db/content?${search}` : '/api/db/content',
-        { method: 'GET' },
-      )
-      if (forwarded) {
-        route.send(forwarded.status, forwarded.body)
-        return
-      }
-    }
-    await send(route, () => db.content(path))
+    await send(route, () => db.content(route.query.get('path') || '/'))
   })
   ctx.http.route('POST', '/api/db/content', async (route) => {
     try {
       const body = (await route.json()) as { path?: string; value?: unknown; version?: unknown }
       const path = String(body?.path ?? '')
-      const parts = path.split('/').filter(Boolean)
-      if (parts.length === 2) {
-        const forwarded = await forwardCloud(ctx, `/${parts[0]}`, parts[1]!, '/api/db/content', { body })
-        if (forwarded) {
-          if (forwarded.status < 300) {
-            try {
-              await db.writeContent(path, body?.value)
-            } catch {
-              /* 云端已写入，本地缓存由 replica 补齐 */
-            }
-          }
-          route.send(forwarded.status, forwarded.body)
-          return
-        }
-      }
       const version = typeof body?.version === 'number' && Number.isInteger(body.version) ? body.version : undefined
       route.send(200, await db.writeContent(path, body?.value, version))
     } catch (error) {
@@ -256,26 +189,7 @@ export function registerDatabaseHttpRoutes(
   ctx.http.route('POST', '/api/db/update', async (route) => {
     try {
       const body = (await route.json()) as { path?: string; content?: unknown }
-      const path = String(body?.path ?? '')
-      const parts = path.split('/').filter(Boolean)
-      if (parts.length === 2) {
-        const forwarded = await forwardCloud(ctx, `/${parts[0]}`, parts[1]!, '/api/db/update', { body })
-        if (forwarded) {
-          const value = (forwarded.body as { value?: { id?: string } } | null)?.value
-          if (forwarded.status < 300 && value?.id) {
-            await db.applySynced(`/${parts[0]}`, [value as { id: string }], { force: true })
-            try {
-              const account = ctx.get('account') as { markRemote?: (collection: string, id: string) => void }
-              account.markRemote?.(`/${parts[0]}`, value.id)
-            } catch {
-              /* ignore */
-            }
-          }
-          route.send(forwarded.status, forwarded.body)
-          return
-        }
-      }
-      route.send(200, await db.update(path, body?.content))
+      route.send(200, await db.update(String(body?.path ?? ''), body?.content))
     } catch (error) {
       route.send(400, { error: String(error) })
     }
@@ -296,15 +210,9 @@ export function registerDatabaseHttpRoutes(
         maxRecords?: number
         max_records?: number
       }
-      const path = String(body?.path ?? '')
-      const forwarded = await forwardCloud(ctx, path, '', '/api/db/batch-update', { body })
-      if (forwarded) {
-        route.send(forwarded.status, forwarded.body)
-        return
-      }
       route.send(
         200,
-        await db.batchUpdate(path, {
+        await db.batchUpdate(String(body?.path ?? ''), {
           ids: body?.ids,
           viewId: body?.viewId ?? body?.view_id,
           filter: body?.filter,
@@ -329,59 +237,8 @@ export function registerDatabaseHttpRoutes(
       }
       const scope =
         body?.scope === 'workspace' ? 'workspace' : body?.scope === 'shared' ? 'shared' : body?.scope === 'local' ? 'local' : 'personal'
-      let activeLocation: 'device' | 'cloud' = isOnlineRuntime() ? 'cloud' : 'device'
-      if (!isOnlineRuntime()) {
-        try {
-          const account = ctx.get('account') as {
-            store?: { activeWorkspaceId(): string | null }
-            workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
-          }
-          const workspaceId = account.store?.activeWorkspaceId()
-          if (workspaceId && account.workspaceLocation) activeLocation = account.workspaceLocation(workspaceId)
-        } catch {
-          /* 本机无账号服务时只允许本地创建 */
-        }
-      }
-      if (isDesktopRuntime() && activeLocation === 'cloud') {
-        const collection = String(body?.path ?? '')
-        const forwarded = await forwardCloud(ctx, collection, '', '/api/db/create', {
-          body: {
-            path: body?.path,
-            records: body?.records ?? body?.content,
-            scope: scope === 'local' ? 'personal' : scope,
-          },
-        })
-        if (!forwarded) {
-          route.send(401, { error: '请先登录云端账号' })
-          return
-        }
-        const payload = forwarded.body as {
-          items?: Array<{ value?: { id?: string } }>
-          error?: string
-        }
-        if (forwarded.status < 300) {
-          const values = (payload.items ?? []).map((item) => item.value).filter((value): value is { id: string } => Boolean(value?.id))
-          try {
-            await db.applySynced(collection, values as DbRecord[], { force: true })
-            for (const value of values) {
-              try {
-                const account = ctx.get('account') as { markRemote?: (collection: string, id: string) => void }
-                account.markRemote?.(collection, value.id)
-              } catch {
-                /* 没有账号库时仍返回云端结果 */
-              }
-              if (scope === 'shared') db.markPublicView(collection, value.id)
-              else db.rememberScope(collection, value.id, scope === 'workspace' ? 'workspace' : 'personal')
-            }
-          } catch {
-            /* 云端已创建，本地缓存稍后对齐 */
-          }
-        }
-        route.send(forwarded.status, payload)
-        return
-      }
       const created = await db.create(String(body?.path ?? ''), body?.records ?? body?.content, {
-        scope: activeLocation === 'device' && scope !== 'shared' ? 'local' : scope,
+        scope: activeDataLocation() === 'device' && scope !== 'shared' ? 'local' : scope,
       })
       route.send(200, created)
     } catch (error) {
@@ -391,22 +248,7 @@ export function registerDatabaseHttpRoutes(
   ctx.http.route('POST', '/api/db/delete', async (route) => {
     try {
       const body = (await route.json()) as { path?: string; ids?: unknown; q?: unknown; filter?: unknown; purge?: unknown }
-      const path = String(body?.path ?? '')
-      const ids = Array.isArray(body.ids) ? body.ids.map((id) => String(id)) : []
-      const collection = path.startsWith('/') ? path : `/${path}`
-      const forwarded = await forwardCloud(ctx, collection, ids[0] || '', '/api/db/delete', { body })
-      if (forwarded) {
-        if (forwarded.status < 300) {
-          try {
-            await db.remove(path, asDeleteQuery((body ?? {}) as Record<string, unknown>))
-          } catch {
-            /* 云端已删除，本地缓存稍后对齐 */
-          }
-        }
-        route.send(forwarded.status, forwarded.body)
-        return
-      }
-      route.send(200, await db.remove(path, asDeleteQuery((body ?? {}) as Record<string, unknown>)))
+      route.send(200, await db.remove(String(body?.path ?? ''), asDeleteQuery((body ?? {}) as Record<string, unknown>)))
     } catch (error) {
       route.send(400, { error: String(error) })
     }
@@ -414,26 +256,12 @@ export function registerDatabaseHttpRoutes(
   ctx.http.route('POST', '/api/db/restore', async (route) => {
     try {
       const body = (await route.json()) as { path?: string; ids?: unknown; q?: unknown; filter?: unknown }
-      const path = String(body?.path ?? '')
-      const forwarded = await forwardCloud(ctx, path.startsWith('/') ? path : `/${path}`, '', '/api/db/restore', { body })
-      if (forwarded) {
-        if (forwarded.status < 300) {
-          try {
-            await db.restore(path, asDeleteQuery((body ?? {}) as Record<string, unknown>))
-          } catch {
-            /* 云端已恢复，本地缓存稍后对齐 */
-          }
-        }
-        route.send(forwarded.status, forwarded.body)
-        return
-      }
-      route.send(200, await db.restore(path, asDeleteQuery((body ?? {}) as Record<string, unknown>)))
+      route.send(200, await db.restore(String(body?.path ?? ''), asDeleteQuery((body ?? {}) as Record<string, unknown>)))
     } catch (error) {
       route.send(400, { error: String(error) })
     }
   })
   ctx.http.route('GET', '/api/db/trash', async (route) => {
-    if (await tryForwardCloudRead(route, '/api/db/trash')) return
     await send(route, () => db.listTrash())
   })
   ctx.http.route('POST', '/api/db/saved-views', async (route) => {
@@ -452,11 +280,6 @@ export function registerDatabaseHttpRoutes(
       }
       const path = String(body?.path ?? '')
       const accountId = currentAccountId()
-      const forwarded = await forwardCloud(ctx, path, '', '/api/db/saved-views', { body })
-      if (forwarded && forwarded.status >= 300) {
-        route.send(forwarded.status, forwarded.body)
-        return
-      }
       await db.requirePath(path, 'resource:update')
       const removals = (body.remove ?? []).map(String).filter(Boolean)
       if (body.replace === true || (body.upsert === undefined && body.remove === undefined)) {
@@ -519,22 +342,6 @@ export function registerDatabaseHttpRoutes(
       }
       const location = activeDataLocation()
       const localOnly = location !== 'cloud'
-      if (!localOnly && !isOnlineRuntime() && hasConfiguredCloudOrigin(ctx)) {
-        const search = route.query.toString()
-        const forwarded = await forwardCloud(
-          ctx,
-          collection,
-          recordId,
-          `/api/db/access-explain${search ? `?${search}` : ''}`,
-          { method: 'GET' },
-        )
-        if (forwarded) {
-          route.send(forwarded.status, forwarded.body)
-          return
-        }
-        route.send(401, { error: '请先登录云端账号' })
-        return
-      }
       if (builtin) {
         route.send(200, buildAccessExplanation({ collection, recordId, tableLabel, builtin: true, localOnly }))
         return
@@ -649,24 +456,6 @@ export function registerDatabaseHttpRoutes(
     }
   })
   ctx.http.route('GET', '/api/db/shares', async (route) => {
-    if (activeDataLocation() === 'cloud' && !isOnlineRuntime()) {
-      const search = route.query.toString()
-      const forwarded = await forwardCloud(
-        ctx,
-        route.query.get('collection') || '',
-        route.query.get('recordId') || '',
-        search ? `/api/db/shares?${search}` : '/api/db/shares',
-        { method: 'GET' },
-      )
-      if (forwarded) {
-        route.send(forwarded.status, forwarded.body)
-        return
-      }
-      if (hasConfiguredCloudOrigin(ctx)) {
-        route.send(401, { error: '请先登录云端账号' })
-        return
-      }
-    }
     const collection = route.query.get('collection') || ''
     if (!collection) {
       const items = []
@@ -780,15 +569,6 @@ export function registerDatabaseHttpRoutes(
       const kind = body.kind === 'record' ? 'record' as const : 'view' as const
       const collection = String(body.collection ?? '')
       const recordId = String(body.recordId ?? '')
-      if (activeDataLocation() === 'cloud' && !isOnlineRuntime() && hasConfiguredCloudOrigin(ctx)) {
-        const forwarded = await forwardCloud(ctx, collection, recordId, '/api/db/shares', { body })
-        if (forwarded) {
-          route.send(forwarded.status, forwarded.body)
-          return
-        }
-        route.send(401, { error: '请先登录云端账号' })
-        return
-      }
       await db.requirePath(kind === 'record' ? `${collection}/${recordId}` : collection, 'resource:share')
       if (body.enabled === false) {
         if (kind === 'record') shares.revokeRecord(collection, recordId)
@@ -992,18 +772,7 @@ export function registerDatabaseHttpRoutes(
   const patchTagSandboxRoute: Parameters<typeof ctx.http.route>[2] = async (route) => {
     try {
       const body = (await route.json()) as { path?: string; tagId?: string; values?: unknown }
-      const path = String(body?.path ?? '')
-      const parts = path.split('/').filter(Boolean)
-      if (parts.length === 2) {
-        const forwarded = await forwardCloud(ctx, `/${parts[0]}`, parts[1]!, '/api/tag/sandbox/patch', { body })
-        if (forwarded) {
-          const value = (forwarded.body as { value?: { id?: string } } | null)?.value
-          if (forwarded.status < 300 && value?.id) await db.applySynced(`/${parts[0]}`, [value as { id: string }])
-          route.send(forwarded.status, forwarded.body)
-          return
-        }
-      }
-      route.send(200, await db.patchTagSandbox(path, String(body?.tagId ?? ''), body?.values))
+      route.send(200, await db.patchTagSandbox(String(body?.path ?? ''), String(body?.tagId ?? ''), body?.values))
     } catch (error) {
       route.send(400, { error: String(error) })
     }
@@ -1012,7 +781,6 @@ export function registerDatabaseHttpRoutes(
   ctx.http.route('POST', '/api/page/sandbox/patch', patchTagSandboxRoute)
   ctx.http.route('GET', '/api/db/tags', async (route) => {
     try {
-      if (await tryForwardCloudRead(route, '/api/db/tags', TAGS_COLLECTION_PATH)) return
       await db.requirePath(TAGS_COLLECTION_PATH, 'resource:read')
       const collect = route.query.get('collect') || ''
       if (collect) {
@@ -1032,11 +800,6 @@ export function registerDatabaseHttpRoutes(
   ctx.http.route('POST', '/api/db/tags', async (route) => {
     try {
       const body = (await route.json()) as { tags?: unknown[] }
-      const forwarded = await forwardCloud(ctx, TAGS_COLLECTION_PATH, '', '/api/db/tags', { body })
-      if (forwarded) {
-        route.send(forwarded.status, forwarded.body)
-        return
-      }
       await db.requirePath(TAGS_COLLECTION_PATH, 'resource:update')
       const listed = Array.isArray(body.tags) ? body.tags : []
       for (const item of listed) {
