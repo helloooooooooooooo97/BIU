@@ -801,3 +801,46 @@ test('stampSavedView is strictly monotonic and pushSavedViewsPatch serializes ex
     globalThis.fetch = prevFetch
   }
 })
+
+test('omittedViews and activeView storage keys are isolated per workspaceId', async () => {
+  const {
+    activeViewStorageKey,
+    collapsedGroupsKey,
+    loadOmittedViewIds,
+    omitSavedViewIds,
+    omittedViewsKey,
+    viewDisplayKey,
+  } = await import('./view-storage.ts')
+  const localMem: Record<string, string> = {}
+  const sessionMem: Record<string, string> = {}
+  const prevWin = (globalThis as { window?: unknown }).window
+  const storageOf = (bag: Record<string, string>) => ({
+    getItem: (key: string) => bag[key] ?? null,
+    setItem: (key: string, value: string) => {
+      bag[key] = value
+    },
+    removeItem: (key: string) => {
+      delete bag[key]
+    },
+  })
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { localStorage: storageOf(localMem), sessionStorage: storageOf(sessionMem) },
+  })
+  try {
+    // Omitting the builtin default view in ws_local must not leak into ws_cloud
+    sessionMem['biu.workspaceId'] = 'ws_local'
+    assert.equal(omittedViewsKey('/pages'), 'fsdb.omittedViews:ws_local:/pages')
+    assert.equal(activeViewStorageKey('/pages'), 'fsdb.activeView:ws_local:/pages')
+    assert.equal(viewDisplayKey('/pages', 'all'), 'fsdb.viewDisplay:ws_local:/pages:all')
+    assert.equal(collapsedGroupsKey('/pages', 'all', 'tag'), 'fsdb.collapsedGroups:ws_local:/pages:all:tag')
+    omitSavedViewIds('/pages', ['__all__:/pages'])
+    assert.deepEqual(loadOmittedViewIds('/pages'), ['__all__:/pages'])
+
+    sessionMem['biu.workspaceId'] = 'ws_cloud'
+    assert.equal(omittedViewsKey('/pages'), 'fsdb.omittedViews:ws_cloud:/pages')
+    assert.deepEqual(loadOmittedViewIds('/pages'), [])
+  } finally {
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: prevWin })
+  }
+})
