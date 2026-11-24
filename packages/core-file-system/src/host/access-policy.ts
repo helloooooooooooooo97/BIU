@@ -233,22 +233,26 @@ export class DatabaseAccessPolicy {
     const store = this.host.collabStore()
     const authorization = this.host.authorization()
     if (!store?.viewGrantsFor || !authorization) return null
+    const grants = store.viewGrantsFor(workspaceId, collection)
+    if (!grants.length) return null
     const saved = [builtinAllView({ path: collection }), ...(this.host.viewCatalog?.viewsFor(collection) ?? [])]
+    const target = resolveScopeTarget(collection, String(record.id ?? ''), record)
+    const scope = authorization.scopeCurrent({
+      type: 'record',
+      workspaceId,
+      collection: target.collection,
+      recordId: target.id,
+    })
+    const ownerId = this.recordOwner(target.collection, target.id)
     const roles: ViewGrantRole[] = []
-    for (const grant of store.viewGrantsFor(workspaceId, collection)) {
+    for (const grant of grants) {
       const subjectMatches = grant.subject_type === 'account'
         ? grant.subject_id === accountId
         : authorization.matchesMemberView(workspaceId, grant.subject_id, accountId)
       if (!subjectMatches) continue
-      const target = resolveScopeTarget(collection, String(record.id ?? ''), record)
-      const scope = authorization.scopeCurrent({
-        type: 'record',
-        workspaceId,
-        collection: target.collection,
-        recordId: target.id,
-      })
-      const ownerId = this.recordOwner(target.collection, target.id)
       if (recordMatchesGrantedView(record as never, grant.view_id, saved, scope, { grantedBy: grant.granted_by, recordOwnerId: ownerId })) {
+        // Deny-overrides-Allow: any matching deny view grant blocks view-based access.
+        if (grant.effect === 'deny') return null
         roles.push(grant.role)
       }
     }
