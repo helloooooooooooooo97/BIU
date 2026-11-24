@@ -1509,40 +1509,70 @@ export class DatabaseService extends Service implements Database {
     }
     const auth = this.authorization()
     const actor = auth?.currentActor()
-    if (spec.listPage && !scopeFilter && (!auth || !actor) && spec.path !== TAGS_COLLECTION_PATH) {
-      const pushed = await spec.listPage({
-        ids: idFilter?.length ? idFilter : undefined,
-        q,
-        filter: liveFilter,
-        trash,
-        tagId: schemaFilter || undefined,
-        sortField,
-        sortDir,
-        sorts: page?.sorts,
-        limit,
-        offset,
-      })
-      if (pushed) {
-        const slice = this.decorateSlice(spec, pushed.rows, columnKeys)
-        return {
-          kind: 'collection' as const,
-          path: spec.path,
-          id: spec.id,
-          label: spec.label ?? spec.id,
-          view: spec.view ?? null,
-          schema: this.schemaForCurrent(spec, schema),
-          total: pushed.total,
-          offset,
-          limit,
-          items: slice.map((row): DbRecord & { path: string; kind: 'record' } => {
-            const value = withoutContent(spec, row)
-            const picked = columnKeys ? pickListedFields(value, columnKeys) : value
+    if (spec.listPage && !scopeFilter && spec.path !== TAGS_COLLECTION_PATH) {
+      let pushdownIds: string[] | undefined = idFilter?.length ? idFilter : undefined
+      let canPushdown = !auth || !actor
+      if (!canPushdown) {
+        const rbacIds = this.access.resolvePushdownAllowedIds(spec.path)
+        if (rbacIds !== null) {
+          canPushdown = true
+          if (pushdownIds) {
+            const allowSet = new Set(rbacIds)
+            pushdownIds = pushdownIds.filter((id) => allowSet.has(id))
+          } else {
+            pushdownIds = rbacIds
+          }
+          if (pushdownIds.length === 0) {
             return {
-              ...picked,
-              path: `${spec.path}/${row.id}`,
-              kind: 'record',
+              kind: 'collection' as const,
+              path: spec.path,
+              id: spec.id,
+              label: spec.label ?? spec.id,
+              view: spec.view ?? null,
+              schema: this.schemaForCurrent(spec, schema),
+              total: 0,
+              offset,
+              limit,
+              items: [],
             }
-          }),
+          }
+        }
+      }
+      if (canPushdown) {
+        const pushed = await spec.listPage({
+          ids: pushdownIds,
+          q,
+          filter: liveFilter,
+          trash,
+          tagId: schemaFilter || undefined,
+          sortField,
+          sortDir,
+          sorts: page?.sorts,
+          limit,
+          offset,
+        })
+        if (pushed) {
+          const slice = this.decorateSlice(spec, pushed.rows, columnKeys)
+          return {
+            kind: 'collection' as const,
+            path: spec.path,
+            id: spec.id,
+            label: spec.label ?? spec.id,
+            view: spec.view ?? null,
+            schema: this.schemaForCurrent(spec, schema),
+            total: pushed.total,
+            offset,
+            limit,
+            items: slice.map((row): DbRecord & { path: string; kind: 'record' } => {
+              const value = withoutContent(spec, row)
+              const picked = columnKeys ? pickListedFields(value, columnKeys) : value
+              return {
+                ...picked,
+                path: `${spec.path}/${row.id}`,
+                kind: 'record',
+              }
+            }),
+          }
         }
       }
     }
@@ -1554,8 +1584,15 @@ export class DatabaseService extends Service implements Database {
       const tagFilter = spec.path === TAGS_COLLECTION_PATH ? String(filter?.tagId ?? '').trim() : ''
       if (tagFilter) schema = schemaWithTagPack(schema, this.tags.get(tagFilter))
       const packs = this.tags.list()
+      const needsColumnProjection = this.access.hasColumnRestrictions(spec.path)
+      const policyCache = needsColumnProjection ? new Map<string, ReturnType<DatabaseAccessPolicy['columnPolicyFor']>>() : null
       const sorted = visible.filter((row) => {
-        const readable = this.access.projectRecord(spec.path, row)
+        if (!needsColumnProjection) {
+          return matchListFilter(row, liveFilter, schema, packs) && matchQuery(row, q, packs)
+        }
+        const policy = this.access.columnPolicyFor(spec.path, row)
+        policyCache!.set(row.id, policy)
+        const readable = this.access.projectRecordWithPolicy(row, policy)
         return matchListFilter(readable, liveFilter, schema, packs) && matchQuery(readable, q, packs)
       })
       const total = sorted.length
@@ -1571,7 +1608,13 @@ export class DatabaseService extends Service implements Database {
         offset,
         limit,
         items: slice.map((row): DbRecord & { path: string; kind: 'record' } => {
-          const value = this.access.projectRecord(spec.path, withoutContent(spec, row))
+          const stripped = withoutContent(spec, row)
+          const value = needsColumnProjection
+            ? this.access.projectRecordWithPolicy(
+                stripped,
+                policyCache?.get(row.id) ?? this.access.columnPolicyFor(spec.path, stripped),
+              )
+            : stripped
           const picked = columnKeys ? pickListedFields(value, columnKeys) : value
           return {
             ...picked,
