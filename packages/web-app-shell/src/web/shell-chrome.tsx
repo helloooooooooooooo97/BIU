@@ -1351,7 +1351,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
   const [localAvatar, setLocalAvatar] = useState('')
   const [localAccountId, setLocalAccountId] = useState('')
   const [hostOnline, setHostOnline] = useState(false)
-  const [cloudAccounts, setCloudAccounts] = useState<Array<{ id: string; email?: string; name?: string; origin?: string; active?: boolean }>>([])
+  const [cloudAccounts, setCloudAccounts] = useState<Array<{ id: string; email?: string; name?: string; avatar?: string; origin?: string; active?: boolean }>>([])
   const [cloudMenuOpen, setCloudMenuOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const cloudExpandRef = useRef<HTMLButtonElement>(null)
@@ -1367,7 +1367,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
           accountFetch(token, '/api/account/active') as Promise<{ workspaceId?: string }>,
           getAccountMe(token) as Promise<{ id?: string; email?: string; name?: string; avatar?: string; online?: boolean }>,
           accountFetch(token, '/api/account/cloud').catch(() => ({})) as Promise<{
-            accounts?: Array<{ id: string; email?: string; name?: string; origin?: string; active?: boolean }>
+            accounts?: Array<{ id: string; email?: string; name?: string; avatar?: string; origin?: string; active?: boolean }>
           }>,
         ])
         if (cancelled) return
@@ -1551,52 +1551,75 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                 </button>
               </div>
             )}
-            <div className="shell-workspace-menu-account" data-testid="shell-workspace-cloud-account">
-              <CloudIcon aria-hidden />
-              <span className="shell-workspace-menu-copy">
-                <strong className={!hostOnline && !cloudAccounts.some((item) => item.active) ? 'is-empty' : ''}>
-                  {hostOnline
-                    ? (localAccount || '云端账号')
-                    : (cloudAccounts.find((item) => item.active)?.name
-                      || cloudAccounts.find((item) => item.active)?.email
-                      || '暂时无账号')}
-                </strong>
-              </span>
-              <span className="shell-workspace-menu-account-actions">
-                <button
-                  type="button"
-                  aria-label="退出"
-                  data-testid="shell-workspace-cloud-logout"
-                  onClick={() => {
-                    if (hostOnline) {
-                      setOpen(false)
-                      writeAccountToken('')
-                      return
-                    }
-                    const token = readAccountToken()
-                    void accountFetch(token, '/api/account/cloud', { method: 'DELETE' })
-                      .then(() => window.dispatchEvent(new Event(ACCOUNT_EVENT)))
-                      .catch((error) => {
-                        console.warn('[shell] cloud logout failed', error)
-                      })
-                  }}
-                >
-                  <ArrowRightStartOnRectangleIcon aria-hidden />
-                </button>
-                {hostOnline ? null : (
-                  <button
-                    ref={cloudExpandRef}
-                    type="button"
-                    aria-label="更多在线账号"
-                    aria-expanded={cloudMenuOpen}
-                    data-testid="shell-workspace-cloud-expand"
-                    onClick={() => setCloudMenuOpen((value) => !value)}
-                  >
-                    <ChevronRightIcon aria-hidden />
-                  </button>
-                )}
-              </span>
-            </div>
+            {(() => {
+              const activeCloud = cloudAccounts.find((item) => item.active)
+              return (
+                <div className="shell-workspace-menu-account" data-testid="shell-workspace-cloud-account">
+                  {hostOnline ? (
+                    <span className="shell-workspace-account-avatar" aria-hidden>
+                      {localAvatar ? (
+                        <img src={localAvatar} alt="" />
+                      ) : (
+                        <AiAvatar seed={localAccountId || localAccount || 'biu-ai'} />
+                      )}
+                    </span>
+                  ) : activeCloud ? (
+                    <span className="shell-workspace-account-avatar" aria-hidden>
+                      {activeCloud.avatar ? (
+                        <img src={activeCloud.avatar} alt="" />
+                      ) : (
+                        <AiAvatar seed={activeCloud.id || activeCloud.name || activeCloud.email || 'biu-ai'} />
+                      )}
+                    </span>
+                  ) : (
+                    <CloudIcon aria-hidden />
+                  )}
+                  <span className="shell-workspace-menu-copy">
+                    <strong className={!hostOnline && !activeCloud ? 'is-empty' : ''}>
+                      {hostOnline
+                        ? (localAccount || '云端账号')
+                        : (activeCloud?.name
+                          || activeCloud?.email
+                          || '暂时无账号')}
+                    </strong>
+                  </span>
+                  <span className="shell-workspace-menu-account-actions">
+                    <button
+                      type="button"
+                      aria-label="退出"
+                      data-testid="shell-workspace-cloud-logout"
+                      onClick={() => {
+                        if (hostOnline) {
+                          setOpen(false)
+                          writeAccountToken('')
+                          return
+                        }
+                        const token = readAccountToken()
+                        void accountFetch(token, '/api/account/cloud', { method: 'DELETE' })
+                          .then(() => window.dispatchEvent(new Event(ACCOUNT_EVENT)))
+                          .catch((error) => {
+                            console.warn('[shell] cloud logout failed', error)
+                          })
+                      }}
+                    >
+                      <ArrowRightStartOnRectangleIcon aria-hidden />
+                    </button>
+                    {hostOnline ? null : (
+                      <button
+                        ref={cloudExpandRef}
+                        type="button"
+                        aria-label="更多在线账号"
+                        aria-expanded={cloudMenuOpen}
+                        data-testid="shell-workspace-cloud-expand"
+                        onClick={() => setCloudMenuOpen((value) => !value)}
+                      >
+                        <ChevronRightIcon aria-hidden />
+                      </button>
+                    )}
+                  </span>
+                </div>
+              )
+            })()}
           </div>
         </AnchorMenu>
       ) : null}
@@ -1632,7 +1655,13 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                   })
               }}
             >
-              <CloudIcon aria-hidden className="shell-workspace-menu-icon" />
+              <span className="shell-workspace-account-avatar" aria-hidden>
+                {item.avatar ? (
+                  <img src={item.avatar} alt="" />
+                ) : (
+                  <AiAvatar seed={item.id || item.name || item.email || 'biu-ai'} />
+                )}
+              </span>
               <span className="shell-workspace-menu-copy">
                 <strong>{item.name || item.email || '在线账号'}</strong>
               </span>

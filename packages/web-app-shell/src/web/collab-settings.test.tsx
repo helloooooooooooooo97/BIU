@@ -422,6 +422,39 @@ test('account settings can edit account name, reset avatar, configure remote hos
   await waitFor(() => assert.ok(screen.getByText('独立云端账号已创建并绑定。')))
 })
 
+test('workspace switcher displays active cloud account avatar and custom name', async () => {
+  localStorage.setItem('biu.account.token', 'tok')
+  globalThis.fetch = (async (path: string) => {
+    const url = String(path)
+    if (url.endsWith('/me')) return json({ id: 'acc_local', name: '97', email: 'local@example.com', avatar: '' })
+    if (url.endsWith('/active')) return json({ workspaceId: 'ws_1' })
+    if (url.endsWith('/workspaces')) return json({ workspaces: [{ id: 'ws_1', name: 'Main', role: 'owner', location: 'device' }] })
+    if (url.endsWith('/cloud')) {
+      return json({
+        available: true,
+        connected: true,
+        accounts: [
+          {
+            id: 'acc_cloud',
+            name: 'Cloud 97',
+            email: '348876414@qq.com',
+            avatar: 'data:image/png;base64,iVBORw0KGgo=',
+            origin: 'http://127.0.0.1:3141',
+            active: true,
+          },
+        ],
+      })
+    }
+    return json({})
+  }) as typeof fetch
+
+  render(<ShellWorkspaceSwitcher />)
+  fireEvent.click(await screen.findByTestId('shell-workspace-switcher'))
+  const cloudRow = await screen.findByTestId('shell-workspace-cloud-account')
+  assert.equal(cloudRow.textContent, 'Cloud 97')
+  assert.equal(cloudRow.querySelector('.shell-workspace-account-avatar img')?.getAttribute('src'), 'data:image/png;base64,iVBORw0KGgo=')
+})
+
 test('workspace creation uses centered local and online cards with default names', async () => {
   localStorage.setItem('biu.account.token', 'tok')
   const createBodies: Array<Record<string, unknown>> = []
