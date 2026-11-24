@@ -88,6 +88,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
   const [modelCatalog, setModelCatalog] = useState<ModelDef[]>([])
   const [providers, setProviders] = useState<Record<string, ProviderView> | null>(null)
   const [acceptsApiKeys, setAcceptsApiKeys] = useState(true)
+  const [secretsLocalOnly, setSecretsLocalOnly] = useState(true)
 
   const [keyDraft, setKeyDraft] = useState('')
   const [urlDraft, setUrlDraft] = useState('')
@@ -249,6 +250,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
     setModelCatalog(cats)
     if (data.providers) setProviders(data.providers)
     setAcceptsApiKeys(data.acceptsApiKeys !== false)
+    setSecretsLocalOnly(data.secretsLocalOnly !== false)
 
     const eid = preferActive || data.endpointId || data.provider || 'deepseek'
     setDefaultEndpointId(data.endpointId || data.provider || eid)
@@ -995,6 +997,11 @@ export function ChatConfig(props?: { onClose?: () => void }) {
                   />
                   {testHint ? (
                     <span className="text-[length:var(--biu-font-size-1)] text-(--biu-color-ok)">{testHint}</span>
+                  ) : null}
+                  {!secretsLocalOnly ? (
+                    <span className="text-[length:var(--biu-font-size-1)] text-(--biu-color-text-subtle)">
+                      云端按当前账号加密保存，仅用于调用模型，绝不注入到 Agent 沙箱环境。
+                    </span>
                   ) : null}
                 </label> : (
                   <div className="rounded-lg border border-(--biu-color-border) bg-(--biu-color-bg-hover) px-3 py-2.5 text-[length:var(--biu-font-size-1)] leading-5 text-(--biu-color-text-subtle)">

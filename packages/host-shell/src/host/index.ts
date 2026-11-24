@@ -92,10 +92,12 @@ export function apply(ctx: Context) {
       if (!sessionId) return base
 
       const workspaceRoot = ctx.fs.effectiveRoot()
+      const mapVirtualPath = (p: string) =>
+        p === '/workspace' ? workspaceRoot : p.startsWith('/workspace/') ? p.slice('/workspace/'.length) : p
       const candidates = [
         ...extractImagePathCandidates(`${result.stdout}\n${result.stderr}`),
         ...extractImagePathCandidates(command),
-      ]
+      ].map(mapVirtualPath)
       try {
         const recent = await findRecentImageFiles(workspaceRoot, startedAt)
         candidates.push(...recent)

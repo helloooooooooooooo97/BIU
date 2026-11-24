@@ -1,4 +1,5 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { currentAccountId, currentRequestWorkspaceId, dataDir, dataHome, dataPath, isOnlineRuntime } from '@biu/host-plugin-loader/data-dir'
 import { Service, type Context } from 'cordis'
@@ -134,10 +135,62 @@ interface ChatConfig {
   >
 }
 
+const ENC_PREFIX = 'enc:v1:'
+const cachedMasterKeys = new Map<string, Buffer>()
+
+function masterSecretKey(home = dataHome()): Buffer {
+  const fromEnv = (process.env.BIU_CHAT_SECRET_KEY || process.env.BIU_SECRET_KEY || '').trim()
+  if (fromEnv) return createHash('sha256').update(fromEnv).digest()
+  const keyFile = dataPath(home, '.chat-secret-key')
+  const cached = cachedMasterKeys.get(keyFile)
+  if (cached) return cached
+  if (existsSync(keyFile)) {
+    const hex = readFileSync(keyFile, 'utf8').trim()
+    if (hex.length >= 64) {
+      const buf = Buffer.from(hex.slice(0, 64), 'hex')
+      cachedMasterKeys.set(keyFile, buf)
+      return buf
+    }
+  }
+  mkdirSync(dirname(keyFile), { recursive: true })
+  const buf = randomBytes(32)
+  writeFileSync(keyFile, `${buf.toString('hex')}\n`, { encoding: 'utf8', mode: 0o600 })
+  cachedMasterKeys.set(keyFile, buf)
+  return buf
+}
+
+export function encryptChatSecret(plain: string, home = dataHome()): string {
+  const trimmed = plain.trim()
+  if (!trimmed) return ''
+  const key = masterSecretKey(home)
+  const iv = randomBytes(12)
+  const cipher = createCipheriv('aes-256-gcm', key, iv)
+  const enc = Buffer.concat([cipher.update(trimmed, 'utf8'), cipher.final()])
+  const tag = cipher.getAuthTag()
+  return `${ENC_PREFIX}${iv.toString('hex')}:${tag.toString('hex')}:${enc.toString('hex')}`
+}
+
+export function decryptChatSecret(value: string, home = dataHome()): string {
+  if (!value || !value.startsWith(ENC_PREFIX)) return ''
+  const parts = value.slice(ENC_PREFIX.length).split(':')
+  if (parts.length !== 3) return ''
+  try {
+    const key = masterSecretKey(home)
+    const iv = Buffer.from(parts[0]!, 'hex')
+    const tag = Buffer.from(parts[1]!, 'hex')
+    const data = Buffer.from(parts[2]!, 'hex')
+    const decipher = createDecipheriv('aes-256-gcm', key, iv)
+    decipher.setAuthTag(tag)
+    return Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8')
+  } catch {
+    return ''
+  }
+}
+
 function configPath(accountId = '') {
-  const localAccount = !isOnlineRuntime() ? accountId.trim().replace(/[^a-zA-Z0-9_-]/g, '') : ''
-  return localAccount
-    ? dataPath(dataHome(), 'chat-config', `${localAccount}.json`)
+  const safeAccount = accountId.trim().replace(/[^a-zA-Z0-9_-]/g, '')
+  return safeAccount
+    ? dataPath(dataHome(), 'chat-config', `${safeAccount}.json`)
     : dataPath(dataHome(), 'chat-config.json')
 }
 
@@ -193,16 +246,33 @@ function readPersisted(accountId = ''): Partial<ChatConfig> | null {
 }
 
 export function cloudSafePersistedConfig(
-  saved: Partial<ChatConfig> | null,
+  saved: (Partial<ChatConfig> & { encryptedApiKeys?: Record<string, string>; apiKey?: unknown }) | null,
   online = isOnlineRuntime(),
 ): Partial<ChatConfig> | null {
   if (!saved || !online) return saved
-  const safe = { ...saved, apiKeys: emptyKeys() } as Partial<ChatConfig> & { apiKey?: unknown }
+  const decrypted: Record<string, string> = { ...emptyKeys() }
+  if (saved.encryptedApiKeys && typeof saved.encryptedApiKeys === 'object') {
+    for (const [id, raw] of Object.entries(saved.encryptedApiKeys)) {
+      if (typeof raw !== 'string') continue
+      const plain = decryptChatSecret(raw)
+      if (plain) decrypted[id] = plain
+    }
+  }
+  const safe = { ...saved, apiKeys: decrypted } as Partial<ChatConfig> & { apiKey?: unknown; encryptedApiKeys?: unknown }
   delete safe.apiKey
+  delete safe.encryptedApiKeys
   return safe
 }
 
 export function persistedChatConfig(config: ChatConfig, online = isOnlineRuntime()) {
+  const encryptedApiKeys: Record<string, string> = {}
+  if (online) {
+    for (const [id, raw] of Object.entries(config.apiKeys)) {
+      if (typeof raw === 'string' && raw.trim()) {
+        encryptedApiKeys[id] = encryptChatSecret(raw.trim())
+      }
+    }
+  }
   return {
     endpointId: config.endpointId,
     provider: config.provider,
@@ -215,7 +285,7 @@ export function persistedChatConfig(config: ChatConfig, online = isOnlineRuntime
     contextWindow: config.contextWindow,
     speed: config.speed,
     modelPrefs: config.modelPrefs,
-    ...(!online ? { apiKeys: config.apiKeys } : {}),
+    ...(!online ? { apiKeys: config.apiKeys } : { encryptedApiKeys }),
     baseUrls: config.baseUrls,
     customEndpoints: config.customEndpoints,
     customModels: config.customModels,
@@ -228,7 +298,7 @@ function writePersisted(config: ChatConfig, accountId = '') {
   const dir = dataDir(dataHome())
   mkdirSync(dir, { recursive: true })
   mkdirSync(dirname(path), { recursive: true })
-  writeFileSync(path, `${JSON.stringify(persistedChatConfig(config), null, 2)}\n`, 'utf8')
+  writeFileSync(path, `${JSON.stringify(persistedChatConfig(config), null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
 }
 
 function parseAgentMode(value: unknown, fallback: AgentToolMode): AgentToolMode {
@@ -486,7 +556,26 @@ function blockEndpoint(config: ChatConfig, id: string) {
 
 export class ChatService extends Service {
   private activeAccountId = ''
-  private config = mergePersisted(defaults(), readPersisted())
+  private configs = new Map<string, ChatConfig>()
+
+  private currentAccountKey() {
+    const scoped = currentAccountId().trim()
+    return scoped || this.activeAccountId
+  }
+
+  private get config(): ChatConfig {
+    const key = this.currentAccountKey()
+    let cfg = this.configs.get(key)
+    if (!cfg) {
+      cfg = mergePersisted(defaults(), readPersisted(key))
+      this.configs.set(key, cfg)
+    }
+    return cfg
+  }
+
+  private set config(next: ChatConfig) {
+    this.configs.set(this.currentAccountKey(), next)
+  }
 
   constructor(ctx: Context) {
     super(ctx, 'chat')
@@ -517,10 +606,12 @@ export class ChatService extends Service {
   }
 
   activateAccount(accountId = currentAccountId()) {
-    const next = isOnlineRuntime() ? '' : accountId
+    const next = accountId.trim()
+    if (!this.configs.has(next)) {
+      this.configs.set(next, mergePersisted(defaults(), readPersisted(next)))
+    }
     if (next === this.activeAccountId) return
     this.activeAccountId = next
-    this.config = mergePersisted(defaults(), readPersisted(next))
     this.syncLlm()
     this.syncToolsMode()
   }
@@ -566,8 +657,8 @@ export class ChatService extends Service {
       capabilities: inferModelCapabilities(this.config.model, this.config.provider),
       /** 当前默认入口是否已配置（兼容旧语义，供 banner 等使用）。 */
       configured: current ? endpointConfigured(this.config, current) : Boolean((this.config.apiKeys[this.config.provider] ?? '').trim()),
-      acceptsApiKeys: !isOnlineRuntime(),
-      secretsLocalOnly: true,
+      acceptsApiKeys: true,
+      secretsLocalOnly: !isOnlineRuntime(),
       hint: hint(this.config.apiKeys[this.config.endpointId] ?? this.config.apiKeys[this.config.provider] ?? ''),
       baseUrl: current ? effectiveBaseUrl(this.config, current) : '',
       /** 各入口是否已配置 key + baseUrl。 */
@@ -743,7 +834,7 @@ export class ChatService extends Service {
     this.syncLlm()
     if (opts?.persist !== false) {
       try {
-        writePersisted(this.config, this.activeAccountId)
+        writePersisted(this.config, this.currentAccountKey())
       } catch (error) {
         console.warn('[chat] failed to persist config', error)
       }
@@ -765,7 +856,7 @@ export class ChatService extends Service {
     this.syncLlm()
     if (opts?.persist !== false) {
       try {
-        writePersisted(this.config, this.activeAccountId)
+        writePersisted(this.config, this.currentAccountKey())
       } catch (error) {
         console.warn('[chat] failed to persist config', error)
       }
@@ -986,7 +1077,7 @@ export class ChatService extends Service {
     this.syncToolsMode()
     if (opts?.persist !== false) {
       try {
-        writePersisted(this.config, this.activeAccountId)
+        writePersisted(this.config, this.currentAccountKey())
       } catch (error) {
         console.warn('[chat] failed to persist config', error)
       }
@@ -1322,8 +1413,8 @@ export function apply(ctx: Context) {
     const includesSecret =
       typeof payload.apiKey === 'string' ||
       Boolean(payload.setApiKey && Object.values(payload.setApiKey).some((value) => typeof value === 'string' && value.length > 0))
-    if (isOnlineRuntime() && includesSecret) {
-      route.send(403, { error: 'AI API Token 只能保存在运行 Agent 的设备上' })
+    if (isOnlineRuntime() && includesSecret && !currentAccountId()) {
+      route.send(401, { error: '请先登录后再配置云端 AI API Token' })
       return
     }
     route.send(200, chat.patch(payload ?? {}))
@@ -1337,8 +1428,8 @@ export function apply(ctx: Context) {
       model?: string
     }
     try {
-      if (isOnlineRuntime() && typeof payload.apiKey === 'string' && payload.apiKey.trim()) {
-        route.send(403, { ok: false, detail: 'AI API Token 只能在本机测试，不能发送到云端' })
+      if (isOnlineRuntime() && typeof payload.apiKey === 'string' && payload.apiKey.trim() && !currentAccountId()) {
+        route.send(401, { ok: false, detail: '请先登录后再测试云端 AI API Token' })
         return
       }
       const result = await chat.testConnection(payload)
