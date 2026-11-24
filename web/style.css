@@ -253,6 +253,13 @@ html.dark {
   --biu-color-on-emphasis: #ffffff;
 }
 
+html[data-accent="blue"], html.dark[data-accent="blue"] { --biu-color-emphasis: var(--biu-color-ink-blue); }
+html[data-accent="purple"], html.dark[data-accent="purple"] { --biu-color-emphasis: var(--biu-color-ink-purple); }
+html[data-accent="green"], html.dark[data-accent="green"] { --biu-color-emphasis: var(--biu-color-ink-green); }
+html[data-accent="orange"], html.dark[data-accent="orange"] { --biu-color-emphasis: var(--biu-color-ink-orange); }
+html[data-accent="pink"], html.dark[data-accent="pink"] { --biu-color-emphasis: var(--biu-color-ink-pink); }
+html[data-accent="red"], html.dark[data-accent="red"] { --biu-color-emphasis: var(--biu-color-ink-red); }
+
 /* inline: do not re-emit --font-* (that overwrote :root with var(--font-sans)). */
 @theme inline {
   --font-sans: var(--font-sans);
@@ -887,7 +894,49 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+  width: 100%;
   max-width: 420px;
+}
+
+.settings-accent-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
+.settings-accent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px;
+  border: var(--biu-stroke-width) solid var(--biu-color-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--biu-color-text-muted);
+  font: inherit;
+  font-size: var(--biu-font-size-3);
+  font-weight: var(--biu-font-weight-medium);
+  cursor: pointer;
+}
+
+.settings-accent-chip:hover {
+  background: var(--biu-color-bg-hover);
+  color: var(--biu-color-text);
+}
+
+.settings-accent-chip.is-on {
+  border-color: var(--biu-color-emphasis);
+  color: var(--biu-color-text);
+  box-shadow: inset 0 0 0 1px var(--biu-color-emphasis);
+}
+
+.settings-accent-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  flex: none;
 }
 
 .settings-pane-subtitle {
@@ -2526,6 +2575,75 @@ html.dark .shell-workspace-menu-action svg {
 
 .settings-account-sessions .settings-account-action {
   white-space: nowrap;
+}
+
+.settings-cloud-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-cloud-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: var(--biu-stroke-width) dashed var(--biu-color-border);
+  border-radius: 10px;
+  background: transparent;
+}
+
+.settings-cloud-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: var(--biu-stroke-width) solid var(--biu-color-border);
+  border-radius: 10px;
+  background: transparent;
+}
+
+.settings-cloud-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-cloud-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-cloud-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: var(--biu-stroke-width) solid var(--biu-color-border);
+  color: var(--biu-color-text-subtle);
+  font-size: var(--biu-font-size-2);
+  font-weight: var(--biu-font-weight-medium);
+}
+
+.settings-cloud-badge.is-connected {
+  border-color: color-mix(in srgb, var(--biu-color-emphasis) 45%, transparent);
+  background: color-mix(in srgb, var(--biu-color-emphasis) 14%, transparent);
+  color: var(--biu-color-emphasis);
+}
+
+.settings-cloud-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-cloud-section.is-divided {
+  border-top: var(--biu-stroke-width) solid var(--biu-color-border);
+  padding-top: 14px;
 }
 
 .settings-cloud-accounts {

@@ -53,6 +53,7 @@ import { FolderGlyph } from '@biu/web-session-view/folder-glyph'
 import {
   AuthGate,
   ShellSettingsAccount,
+  ShellSettingsAppearance,
   ShellSettingsConnections,
   ShellSettingsMembers,
   ShellSettingsMcp,
@@ -82,6 +83,7 @@ import {
   CircleStackIcon,
   LinkIcon,
   ShieldCheckIcon,
+  SwatchIcon,
   UserCircleIcon,
   UserGroupIcon,
   XMarkIcon,
@@ -994,6 +996,7 @@ function Shell(props: SlotProps) {
                     { key: 'security', label: '安全', Icon: ShieldCheckIcon },
                     { key: 'workspace', label: '空间', Icon: CircleStackIcon },
                     { key: 'members', label: '成员', Icon: UserGroupIcon },
+                    { key: 'style', label: '样式', Icon: SwatchIcon },
                     { key: 'mcp', label: 'MCP', Icon: LinkIcon },
                     { key: 'shortcuts', label: '快捷键', Icon: CommandLineIcon },
                   ].filter((item) => item.key !== 'members' || workspaceLocation === 'cloud').map((item) => (
@@ -1026,6 +1029,7 @@ function Shell(props: SlotProps) {
                   {settingsTab === 'security' ? <ShellSettingsSecurity /> : null}
                   {settingsTab === 'workspace' ? <ShellSettingsWorkspace /> : null}
                   {settingsTab === 'members' && workspaceLocation === 'cloud' ? <ShellSettingsMembers /> : null}
+                  {settingsTab === 'style' ? <ShellSettingsAppearance /> : null}
                   {settingsTab === 'mcp' ? <ShellSettingsMcp onLeave={() => setSettingsOpen(false)} /> : null}
                   {settingsTab === 'shortcuts' ? <ShellSettingsShortcuts /> : null}
                 </div>

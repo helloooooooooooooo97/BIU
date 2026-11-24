@@ -3,6 +3,7 @@ import { dirname } from 'node:path'
 import { profilePath } from '@biu/host-plugin-loader/data-dir'
 
 export type ThemeMode = 'light' | 'dark'
+export type ThemeAccent = 'blue' | 'purple' | 'green' | 'orange' | 'pink' | 'red'
 export type BodyScale = 'sm' | 'md' | 'lg'
 
 export type PagePrefs = {
@@ -27,14 +28,20 @@ export type WorkspaceProfile = {
   name: string
   avatar: string
   theme: ThemeMode
+  accent: ThemeAccent
   pagePrefs: PagePrefs
 }
 
-const EMPTY: WorkspaceProfile = { name: '', avatar: '', theme: 'light', pagePrefs: { ...DEFAULT_PAGE_PREFS } }
+const EMPTY: WorkspaceProfile = { name: '', avatar: '', theme: 'light', accent: 'blue', pagePrefs: { ...DEFAULT_PAGE_PREFS } }
 const SCALES = new Set<BodyScale>(['sm', 'md', 'lg'])
+const ACCENTS = new Set<ThemeAccent>(['blue', 'purple', 'green', 'orange', 'pink', 'red'])
 
 function parseTheme(value: unknown): ThemeMode {
   return value === 'dark' ? 'dark' : 'light'
+}
+
+function parseAccent(value: unknown): ThemeAccent {
+  return typeof value === 'string' && ACCENTS.has(value as ThemeAccent) ? (value as ThemeAccent) : 'blue'
 }
 
 function asScale(value: unknown, fallback: BodyScale): BodyScale {
@@ -69,6 +76,7 @@ export function readWorkspaceProfile(): WorkspaceProfile {
       name: String(raw.name ?? '').trim().slice(0, 40),
       avatar: String(raw.avatar ?? '').trim(),
       theme: parseTheme(raw.theme),
+      accent: parseAccent(raw.accent),
       pagePrefs: parsePagePrefs(raw.pagePrefs),
     }
   } catch {
@@ -82,6 +90,7 @@ export function writeWorkspaceProfile(next: Partial<Omit<WorkspaceProfile, 'page
     name: String(next.name ?? current.name).trim().slice(0, 40),
     avatar: String(next.avatar ?? current.avatar).trim(),
     theme: parseTheme(next.theme ?? current.theme),
+    accent: parseAccent(next.accent ?? current.accent),
     pagePrefs: next.pagePrefs ? parsePagePrefs(next.pagePrefs, current.pagePrefs) : current.pagePrefs,
   }
   if (saved.avatar && !saved.avatar.startsWith('data:image/')) saved.avatar = ''
@@ -111,6 +120,7 @@ export function asPublicProfile(profile?: WorkspaceProfile) {
     name: current.name,
     avatar: current.avatar,
     theme: current.theme,
+    accent: current.accent,
     pagePrefs,
     displayName: current.name || '用户',
   }

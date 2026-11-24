@@ -1,6 +1,6 @@
 import { readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
 import { apiFetch, registerApiRequestInterceptor } from '@biu/biu-ui/api-client'
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode, type Ref } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type Ref } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
@@ -28,7 +28,19 @@ import { TagChip } from '@biu/biu-ui/tag-chip'
 import { ConfirmDialog } from '@biu/biu-ui/confirm-dialog'
 import { chromeIcon } from './chrome-icon.ts'
 import { applyNoticeClick, noticeIdOf } from './notice-open.ts'
-import { persistTheme, readTheme, type ThemeMode } from './theme.ts'
+import {
+  THEME_ACCENTS,
+  applyAccent,
+  applyTheme,
+  getThemeVersion,
+  persistAccent,
+  persistTheme,
+  readAccent,
+  readTheme,
+  subscribeTheme,
+  type ThemeAccent,
+  type ThemeMode,
+} from './theme.ts'
 import { persistWorkspaceProfile } from '@biu/biu-ui/workspace-profile'
 import { useWorkspaceProfile } from '@biu/biu-ui/use-workspace-profile'
 import { LayoutPrefsMenu, getPagePrefs, hydratePagePrefs, subscribePageWidth } from './data-bridge.ts'
@@ -349,6 +361,7 @@ export function ShellSettingsConnections() {
     account?: { id?: string; name?: string; email?: string }
     accounts: Array<{ id: string; name?: string; email?: string; origin?: string; active?: boolean }>
   }>({ available: false, connected: false, configuredOrigin: '', accounts: [] })
+  const [addingConnection, setAddingConnection] = useState(false)
   const [remoteOrigin, setRemoteOrigin] = useState('')
   const [originMessage, setOriginMessage] = useState('')
   const [cloudMode, setCloudMode] = useState<'login' | 'register'>('login')
@@ -364,9 +377,10 @@ export function ShellSettingsConnections() {
         const configuredOrigin = typeof body.configuredOrigin === 'string'
           ? body.configuredOrigin
           : (typeof body.origin === 'string' ? body.origin : '')
+        const connected = body.connected === true
         setCloud({
           available: body.available === true,
-          connected: body.connected === true,
+          connected,
           configuredOrigin,
           origin: typeof body.origin === 'string' ? body.origin : undefined,
           account:
@@ -378,6 +392,7 @@ export function ShellSettingsConnections() {
             : [],
         })
         setRemoteOrigin((prev) => prev || configuredOrigin)
+        if (connected || configuredOrigin) setAddingConnection(false)
       })
       .catch(() => setCloud({ available: false, connected: false, configuredOrigin: '', accounts: [] }))
 
@@ -389,83 +404,86 @@ export function ShellSettingsConnections() {
     void loadCloud()
   }, [token])
 
+  const hasConnections = cloud.accounts.length > 0
+
   return (
     <section className="settings-account" data-testid="settings-connections">
       <header className="settings-account-head">
-        <h3 className="settings-account-title">连接</h3>
-        <p className="settings-muted settings-account-lead">
-          本地账号与云端账号相互独立；配置远程主机服务地址后，可关联或单独创建云端账号。
-        </p>
+        <div className="settings-cloud-card-head">
+          <div>
+            <h3 className="settings-account-title">连接</h3>
+            <p className="settings-muted settings-account-lead">
+              本地账号与云端账号相互独立；可添加多个远程连接，每个远程服务器地址仅绑定一个云端账号，同一时间连接其中一个。
+            </p>
+          </div>
+          {!account.online && cloud.available && hasConnections && !addingConnection ? (
+            <button
+              type="button"
+              className="settings-account-action"
+              data-testid="settings-cloud-add"
+              onClick={() => {
+                setOriginMessage('')
+                setCloudMessage('')
+                setRemoteOrigin('')
+                setCloudName('')
+                setCloudEmail('')
+                setCloudPassword('')
+                setAddingConnection(true)
+              }}
+            >
+              添加远程连接
+            </button>
+          ) : null}
+        </div>
       </header>
       {!account.online && cloud.available ? (
         <>
-          <div className="settings-account-row is-stacked">
-            <div className="settings-account-copy">
-              <p className="settings-account-label">远程主机服务地址</p>
-              <p className="settings-muted settings-account-hint">填写远端 BIU 服务地址用于云端账号连接与同步。</p>
-            </div>
-            <form
-              className="settings-cloud-origin"
-              onSubmit={(event) => {
-                event.preventDefault()
-                setOriginMessage('')
-                void accountFetch(token, '/api/account/cloud/config', {
-                  method: 'POST',
-                  body: JSON.stringify({ origin: remoteOrigin.trim() }),
-                })
-                  .then((body) => {
-                    const saved = typeof body.origin === 'string' ? body.origin : ''
-                    setRemoteOrigin(saved)
-                    setOriginMessage(saved ? `远程服务地址已保存：${saved}` : '已清除自定义远程服务地址。')
-                    void loadCloud()
-                  })
-                  .catch((error) => setOriginMessage(error instanceof Error ? error.message : '保存远程服务地址失败'))
-              }}
-            >
-              <input
-                className="settings-account-input"
-                type="url"
-                placeholder="https://cloud.example.com"
-                value={remoteOrigin}
-                data-testid="settings-cloud-origin"
-                onChange={(event) => setRemoteOrigin(event.target.value)}
-              />
+          {!hasConnections && !addingConnection ? (
+            <div className="settings-cloud-empty" data-testid="settings-cloud-empty">
+              <div className="settings-account-copy">
+                <p className="settings-account-label">暂无远程连接</p>
+                <p className="settings-muted settings-account-hint">
+                  当前未连接远程主机。添加远程连接后，可在连接内配置远程服务器地址并绑定一个云端账号。
+                </p>
+              </div>
               <button
+                type="button"
                 className="settings-account-action"
-                type="submit"
-                data-testid="settings-cloud-save-origin"
+                data-testid="settings-cloud-add"
+                onClick={() => {
+                  setOriginMessage('')
+                  setCloudMessage('')
+                  setRemoteOrigin(cloud.configuredOrigin || '')
+                  setAddingConnection(true)
+                }}
               >
-                保存地址
+                添加远程连接
               </button>
-            </form>
-            {originMessage ? <p className="settings-muted settings-account-hint">{originMessage}</p> : null}
-          </div>
-          <div className="settings-account-row is-stacked">
-            <div className="settings-account-copy">
-              <p className="settings-account-label">云端账号</p>
-              <p className="settings-muted settings-account-hint">可以关联多个云端账号，同一时间连接其中一个。断开后关联记录会保留。</p>
             </div>
-            {cloud.accounts.length ? (
-              <div className="settings-cloud-accounts" data-testid="settings-cloud-accounts">
-                {cloud.accounts.map((item) => (
-                  <div className="settings-member-row" key={`${item.origin ?? ''} ${item.id}`}>
-                    <span className="settings-member-identity">
-                      <strong>{item.name || item.email || '云端账号'}</strong>
-                      <small>
-                        {item.name && item.email && item.name !== item.email ? `${item.email} · ` : ''}
-                        {item.active ? `已连接${item.origin ? ` · ${item.origin}` : ''}` : (item.origin || '未连接')}
-                      </small>
-                    </span>
+          ) : null}
+
+          {hasConnections ? (
+            <div className="settings-cloud-list" data-testid="settings-cloud-accounts">
+              {cloud.accounts.map((item) => (
+                <div className="settings-cloud-card" key={`${item.origin ?? ''} ${item.id}`} data-testid="settings-cloud-card">
+                  <div className="settings-cloud-card-head">
+                    <div className="settings-cloud-card-title-row">
+                      <p className="settings-account-label">{item.origin || '远程连接'}</p>
+                      <span className={`settings-cloud-badge${item.active ? ' is-connected' : ''}`}>
+                        {item.active ? '已连接' : '未连接'}
+                      </span>
+                    </div>
                     <span className="settings-member-controls">
                       {item.active ? (
                         <button
                           type="button"
                           className="settings-account-action"
+                          data-testid="settings-cloud-disconnect"
                           onClick={() => {
                             setCloudMessage('')
                             void accountFetch(token, '/api/account/cloud', { method: 'DELETE' })
                               .then(() => {
-                                setCloudMessage('已断开当前云端账号，关联记录还在。')
+                                setCloudMessage('已断开当前远程连接。')
                                 void loadCloud()
                                 window.dispatchEvent(new Event(ACCOUNT_EVENT))
                               })
@@ -485,7 +503,7 @@ export function ShellSettingsConnections() {
                               body: JSON.stringify({ remoteAccountId: item.id, origin: item.origin }),
                             })
                               .then(() => {
-                                setCloudMessage('已切换云端账号。')
+                                setCloudMessage('已切换远程连接。')
                                 void loadCloud()
                                 window.dispatchEvent(new Event(ACCOUNT_EVENT))
                               })
@@ -495,139 +513,242 @@ export function ShellSettingsConnections() {
                           连接
                         </button>
                       )}
+                      <button
+                        type="button"
+                        className="settings-account-action"
+                        data-testid="settings-cloud-remove"
+                        onClick={() => {
+                          setCloudMessage('')
+                          const q = item.origin ? `?origin=${encodeURIComponent(item.origin)}` : ''
+                          void accountFetch(token, `/api/account/cloud${q}`, { method: 'DELETE' })
+                            .then(() => {
+                              setCloudMessage('已移除远程连接。')
+                              void loadCloud()
+                              window.dispatchEvent(new Event(ACCOUNT_EVENT))
+                            })
+                            .catch((error) => setCloudMessage(error instanceof Error ? error.message : '移除失败'))
+                        }}
+                      >
+                        移除
+                      </button>
                     </span>
                   </div>
-                ))}
-              </div>
-            ) : null}
-            <div className="settings-cloud-connect">
-              <div className="settings-cloud-tabs" role="tablist" aria-label="云端账号操作方式">
+                  <div className="settings-member-row">
+                    <span className="settings-member-identity">
+                      <strong>{item.name || item.email || '云端账号'}</strong>
+                      <small>
+                        {item.name && item.email && item.name !== item.email ? item.email : '已绑定云端账号'}
+                      </small>
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {addingConnection ? (
+            <div className="settings-cloud-card" data-testid="settings-cloud-add-card">
+              <div className="settings-cloud-card-head">
+                <div className="settings-cloud-card-title-row">
+                  <p className="settings-account-label">新建远程连接</p>
+                  <span className="settings-cloud-badge">未绑定账号</span>
+                </div>
                 <button
                   type="button"
-                  role="tab"
-                  aria-selected={cloudMode === 'login'}
-                  className={`settings-cloud-tab${cloudMode === 'login' ? ' is-active' : ''}`}
-                  data-testid="settings-cloud-mode-login"
-                  onClick={() => {
-                    setCloudMode('login')
-                    setCloudMessage('')
-                  }}
-                >
-                  登录已有云端账号
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={cloudMode === 'register'}
-                  className={`settings-cloud-tab${cloudMode === 'register' ? ' is-active' : ''}`}
-                  data-testid="settings-cloud-mode-register"
-                  onClick={() => {
-                    setCloudMode('register')
-                    setCloudMessage('')
-                  }}
-                >
-                  单独创建云端账号
-                </button>
-              </div>
-              <form
-                className="settings-cloud-login"
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  setCloudMessage('')
-                  const path = cloudMode === 'register' ? '/api/account/cloud/register' : '/api/account/cloud/login'
-                  const payload: Record<string, string> = {
-                    email: cloudEmail.trim(),
-                    password: cloudPassword,
-                  }
-                  if (remoteOrigin.trim()) payload.origin = remoteOrigin.trim()
-                  if (cloudMode === 'register' && cloudName.trim()) payload.name = cloudName.trim()
-                  void accountFetch(token, path, {
-                    method: 'POST',
-                    body: JSON.stringify(payload),
-                  })
-                    .then(() => {
-                      setCloudPassword('')
-                      if (cloudMode === 'register') setCloudName('')
-                      setCloudMessage(cloudMode === 'register' ? '独立云端账号已创建并关联。' : '云端账号已登录。')
-                      void loadCloud()
-                      window.dispatchEvent(new Event(ACCOUNT_EVENT))
-                    })
-                    .catch((error) =>
-                      setCloudMessage(error instanceof Error ? error.message : (cloudMode === 'register' ? '云端注册失败' : '云端登录失败')),
-                    )
-                }}
-              >
-                {cloudMode === 'register' ? (
-                  <input
-                    className="settings-account-input"
-                    type="text"
-                    maxLength={40}
-                    placeholder="云端账号名（可选）"
-                    value={cloudName}
-                    data-testid="settings-cloud-name"
-                    onChange={(event) => setCloudName(event.target.value)}
-                  />
-                ) : null}
-                <input
-                  className="settings-account-input"
-                  type="email"
-                  placeholder="云端邮箱"
-                  value={cloudEmail}
-                  data-testid="settings-cloud-email"
-                  onChange={(event) => setCloudEmail(event.target.value)}
-                />
-                <input
-                  className="settings-account-input"
-                  type="password"
-                  placeholder={cloudMode === 'register' ? '云端密码（至少 6 位）' : '云端密码'}
-                  value={cloudPassword}
-                  data-testid="settings-cloud-password"
-                  onChange={(event) => setCloudPassword(event.target.value)}
-                />
-                <button
                   className="settings-account-action"
-                  type="submit"
-                  data-testid="settings-cloud-submit"
-                  disabled={!cloudEmail.trim() || !cloudPassword}
+                  data-testid="settings-cloud-cancel"
+                  onClick={() => {
+                    setOriginMessage('')
+                    setCloudMessage('')
+                    setRemoteOrigin('')
+                    setAddingConnection(false)
+                  }}
                 >
-                  {cloudMode === 'register' ? '注册并关联' : '登录并关联'}
+                  取消
                 </button>
-              </form>
-              <div className="settings-cloud-sync">
-                <p className="settings-muted settings-account-hint">
-                  或使用本地邮箱 {account.email || '（未设置）'} 和当前登录密码创建并关联云端账号。创建后两边的密码分别修改。
-                </p>
+              </div>
+
+              <div className="settings-cloud-section">
+                <div className="settings-account-copy">
+                  <p className="settings-account-label">远程服务器地址</p>
+                  <p className="settings-muted settings-account-hint">填写远端 BIU 服务地址，每个地址仅绑定一个云端账号。</p>
+                </div>
                 <form
-                  className="settings-cloud-login"
+                  className="settings-cloud-origin"
                   onSubmit={(event) => {
                     event.preventDefault()
-                    setCloudMessage('')
-                    const body = remoteOrigin.trim() ? { origin: remoteOrigin.trim() } : {}
-                    void accountFetch(token, '/api/account/cloud/sync-create', {
+                    setOriginMessage('')
+                    void accountFetch(token, '/api/account/cloud/config', {
                       method: 'POST',
-                      body: JSON.stringify(body),
+                      body: JSON.stringify({ origin: remoteOrigin.trim() }),
                     })
-                      .then(() => {
-                        setCloudMessage('云端账号已创建并关联。')
-                        void loadCloud()
-                        window.dispatchEvent(new Event(ACCOUNT_EVENT))
+                      .then((body) => {
+                        const saved = typeof body.origin === 'string' ? body.origin : ''
+                        setRemoteOrigin(saved)
+                        setOriginMessage(saved ? `远程服务地址已保存：${saved}` : '已清除自定义远程服务地址。')
                       })
-                      .catch((error) => setCloudMessage(error instanceof Error ? error.message : '创建并关联失败'))
+                      .catch((error) => setOriginMessage(error instanceof Error ? error.message : '保存远程服务地址失败'))
                   }}
                 >
+                  <input
+                    className="settings-account-input"
+                    type="url"
+                    placeholder="https://cloud.example.com"
+                    value={remoteOrigin}
+                    data-testid="settings-cloud-origin"
+                    onChange={(event) => setRemoteOrigin(event.target.value)}
+                  />
                   <button
                     className="settings-account-action"
                     type="submit"
-                    data-testid="settings-cloud-sync-create"
-                    disabled={!account.email}
+                    data-testid="settings-cloud-save-origin"
                   >
-                    创建并关联
+                    保存地址
                   </button>
                 </form>
+                {originMessage ? <p className="settings-muted settings-account-hint">{originMessage}</p> : null}
+              </div>
+
+              <div className="settings-cloud-section is-divided">
+                <div className="settings-account-copy">
+                  <p className="settings-account-label">云端账号</p>
+                  <p className="settings-muted settings-account-hint">
+                    登录或创建一个云端账号绑定到此远程连接；若该地址已有绑定账号，新绑定会替换原账号。
+                  </p>
+                </div>
+                <div className="settings-cloud-connect">
+                  <div className="settings-cloud-tabs" role="tablist" aria-label="云端账号操作方式">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={cloudMode === 'login'}
+                      className={`settings-cloud-tab${cloudMode === 'login' ? ' is-active' : ''}`}
+                      data-testid="settings-cloud-mode-login"
+                      onClick={() => {
+                        setCloudMode('login')
+                        setCloudMessage('')
+                      }}
+                    >
+                      登录已有云端账号
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={cloudMode === 'register'}
+                      className={`settings-cloud-tab${cloudMode === 'register' ? ' is-active' : ''}`}
+                      data-testid="settings-cloud-mode-register"
+                      onClick={() => {
+                        setCloudMode('register')
+                        setCloudMessage('')
+                      }}
+                    >
+                      单独创建云端账号
+                    </button>
+                  </div>
+                  <form
+                    className="settings-cloud-login"
+                    onSubmit={(event) => {
+                      event.preventDefault()
+                      setCloudMessage('')
+                      const path = cloudMode === 'register' ? '/api/account/cloud/register' : '/api/account/cloud/login'
+                      const payload: Record<string, string> = {
+                        email: cloudEmail.trim(),
+                        password: cloudPassword,
+                      }
+                      if (remoteOrigin.trim()) payload.origin = remoteOrigin.trim()
+                      if (cloudMode === 'register' && cloudName.trim()) payload.name = cloudName.trim()
+                      void accountFetch(token, path, {
+                        method: 'POST',
+                        body: JSON.stringify(payload),
+                      })
+                        .then(() => {
+                          setCloudPassword('')
+                          if (cloudMode === 'register') setCloudName('')
+                          setCloudMessage(cloudMode === 'register' ? '独立云端账号已创建并绑定。' : '云端账号已登录并绑定。')
+                          setAddingConnection(false)
+                          void loadCloud()
+                          window.dispatchEvent(new Event(ACCOUNT_EVENT))
+                        })
+                        .catch((error) =>
+                          setCloudMessage(error instanceof Error ? error.message : (cloudMode === 'register' ? '云端注册失败' : '云端登录失败')),
+                        )
+                    }}
+                  >
+                    {cloudMode === 'register' ? (
+                      <input
+                        className="settings-account-input"
+                        type="text"
+                        maxLength={40}
+                        placeholder="云端账号名（可选）"
+                        value={cloudName}
+                        data-testid="settings-cloud-name"
+                        onChange={(event) => setCloudName(event.target.value)}
+                      />
+                    ) : null}
+                    <input
+                      className="settings-account-input"
+                      type="email"
+                      placeholder="云端邮箱"
+                      value={cloudEmail}
+                      data-testid="settings-cloud-email"
+                      onChange={(event) => setCloudEmail(event.target.value)}
+                    />
+                    <input
+                      className="settings-account-input"
+                      type="password"
+                      placeholder={cloudMode === 'register' ? '云端密码（至少 6 位）' : '云端密码'}
+                      value={cloudPassword}
+                      data-testid="settings-cloud-password"
+                      onChange={(event) => setCloudPassword(event.target.value)}
+                    />
+                    <button
+                      className="settings-account-action"
+                      type="submit"
+                      data-testid="settings-cloud-submit"
+                      disabled={!cloudEmail.trim() || !cloudPassword}
+                    >
+                      {cloudMode === 'register' ? '注册并绑定' : '登录并绑定'}
+                    </button>
+                  </form>
+                  <div className="settings-cloud-sync">
+                    <p className="settings-muted settings-account-hint">
+                      或使用本地邮箱 {account.email || '（未设置）'} 和当前登录密码创建并绑定云端账号。创建后两边的密码分别修改。
+                    </p>
+                    <form
+                      className="settings-cloud-login"
+                      onSubmit={(event) => {
+                        event.preventDefault()
+                        setCloudMessage('')
+                        const body = remoteOrigin.trim() ? { origin: remoteOrigin.trim() } : {}
+                        void accountFetch(token, '/api/account/cloud/sync-create', {
+                          method: 'POST',
+                          body: JSON.stringify(body),
+                        })
+                          .then(() => {
+                            setCloudMessage('云端账号已创建并绑定。')
+                            setAddingConnection(false)
+                            void loadCloud()
+                            window.dispatchEvent(new Event(ACCOUNT_EVENT))
+                          })
+                          .catch((error) => setCloudMessage(error instanceof Error ? error.message : '创建并绑定失败'))
+                      }}
+                    >
+                      <button
+                        className="settings-account-action"
+                        type="submit"
+                        data-testid="settings-cloud-sync-create"
+                        disabled={!account.email}
+                      >
+                        创建并绑定
+                      </button>
+                    </form>
+                  </div>
+                </div>
               </div>
             </div>
-            {cloudMessage ? <p className="settings-muted settings-account-hint">{cloudMessage}</p> : null}
-          </div>
+          ) : null}
+
+          {cloudMessage ? <p className="settings-muted settings-account-hint">{cloudMessage}</p> : null}
         </>
       ) : (
         <div className="settings-account-row">
@@ -1957,50 +2078,77 @@ export function ShellSettingsMembers() {
 }
 
 export function ShellSettingsAppearance() {
-  const [theme, setTheme] = useState(readTheme)
-  const [pagePrefs, setPagePrefs] = useState(getPagePrefs)
+  useSyncExternalStore(subscribeTheme, getThemeVersion, () => 0)
+  const theme = readTheme()
+  const accent = readAccent()
 
-  useEffect(() => subscribePageWidth(() => setPagePrefs(getPagePrefs())), [])
-  useEffect(() => {
-    void hydratePagePrefs().then(() => setPagePrefs(getPagePrefs()))
-  }, [])
+  const pickTheme = (next: ThemeMode) => {
+    applyTheme(next)
+    void persistTheme(next).catch(() => {})
+  }
 
-  const pick = (next: ThemeMode) => {
-    persistTheme(next)
-    setTheme(next)
+  const pickAccent = (next: ThemeAccent) => {
+    applyAccent(next)
+    void persistAccent(next).catch(() => {})
   }
 
   return (
-    <section data-testid="settings-appearance">
-      <h3 className="settings-pane-title">外观</h3>
-      <p className="settings-muted settings-pane-lead">色彩和布局。日间是浅色，夜间是深色；宽屏、目录和正文字号记在下面。</p>
-      <div className="settings-theme-grid">
-        <button
-          type="button"
-          className={`settings-theme-card${theme === 'light' ? ' is-on' : ''}`}
-          data-theme-card="light"
-          aria-pressed={theme === 'light'}
-          data-testid="settings-theme-light"
-          onClick={() => pick('light')}
-        >
-          <span className="settings-theme-preview is-light" aria-hidden />
-          日间模式
-        </button>
-        <button
-          type="button"
-          className={`settings-theme-card${theme === 'dark' ? ' is-on' : ''}`}
-          data-theme-card="dark"
-          aria-pressed={theme === 'dark'}
-          data-testid="settings-theme-dark"
-          onClick={() => pick('dark')}
-        >
-          <span className="settings-theme-preview is-dark" aria-hidden />
-          夜间模式
-        </button>
+    <section className="settings-account" data-testid="settings-appearance">
+      <header className="settings-account-head">
+        <h3 className="settings-account-title">样式</h3>
+        <p className="settings-muted settings-account-lead">调整日间/夜间模式和界面主题色。</p>
+      </header>
+      <div className="settings-account-row is-stacked">
+        <div className="settings-account-copy">
+          <p className="settings-account-label">日间与夜间模式</p>
+          <p className="settings-muted settings-account-hint">日间为浅色界面，夜间为深色界面。</p>
+        </div>
+        <div className="settings-theme-grid">
+          <button
+            type="button"
+            className={`settings-theme-card${theme === 'light' ? ' is-on' : ''}`}
+            data-theme-card="light"
+            aria-pressed={theme === 'light'}
+            data-testid="settings-theme-light"
+            onClick={() => pickTheme('light')}
+          >
+            <span className="settings-theme-preview is-light" aria-hidden />
+            日间模式
+          </button>
+          <button
+            type="button"
+            className={`settings-theme-card${theme === 'dark' ? ' is-on' : ''}`}
+            data-theme-card="dark"
+            aria-pressed={theme === 'dark'}
+            data-testid="settings-theme-dark"
+            onClick={() => pickTheme('dark')}
+          >
+            <span className="settings-theme-preview is-dark" aria-hidden />
+            夜间模式
+          </button>
+        </div>
       </div>
-      <h4 className="settings-pane-subtitle">布局设计</h4>
-      <p className="settings-muted settings-pane-lead">宽屏、悬浮目录和正文字号。重启后仍按上次选择。</p>
-      <LayoutPrefsMenu prefs={pagePrefs} testPrefix="settings-layout" className="settings-page-prefs" />
+      <div className="settings-account-row is-stacked">
+        <div className="settings-account-copy">
+          <p className="settings-account-label">主题</p>
+          <p className="settings-muted settings-account-hint">选择全局强调色，应用于按钮、开关、选中框与高亮。</p>
+        </div>
+        <div className="settings-accent-grid" role="group" aria-label="主题色" data-testid="settings-accent-grid">
+          {THEME_ACCENTS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`settings-accent-chip${accent === item.id ? ' is-on' : ''}`}
+              aria-pressed={accent === item.id}
+              data-testid={`settings-accent-${item.id}`}
+              onClick={() => pickAccent(item.id)}
+            >
+              <span className="settings-accent-dot" style={{ background: item.colorVar }} aria-hidden />
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
     </section>
   )
 }

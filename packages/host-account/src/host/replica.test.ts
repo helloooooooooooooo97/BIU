@@ -580,39 +580,48 @@ test('disconnecting the cloud hides its workspaces from the desktop list', async
   }
 })
 
-test('saved cloud accounts stay after disconnect and can be selected again', async () => {
+test('a local host supports multiple remote connections while keeping one account per origin', async () => {
   const previousOnline = process.env.BIU_ONLINE
   const previousOrigin = process.env.BIU_REMOTE_ORIGIN
   process.env.BIU_ONLINE = '0'
   process.env.BIU_REMOTE_ORIGIN = 'http://127.0.0.1:9'
-  const dir = mkdtempSync(join(tmpdir(), 'biu-cloud-many-'))
+  const dir = mkdtempSync(join(tmpdir(), 'biu-cloud-origins-'))
   dirs.push(dir)
   const ctx = new Context()
   const service = new account.AccountService(ctx, { sqlitePath: join(dir, 'biu.sqlite') })
   try {
     const ada = service.store.register('', Date.now(), 'secret1', 'local@example.com')
-    const link = (remoteAccountId: string, email: string, token: string) =>
+    const link = (origin: string, remoteAccountId: string, email: string, token: string) =>
       service.saveCloudConnection({
         localAccountId: ada.id,
-        origin: 'http://127.0.0.1:9',
+        origin,
         remoteAccountId,
         remoteName: email,
         remoteEmail: email,
         token,
       })
-    link('remote-a', 'a@example.com', 'token-a')
-    link('remote-b', 'b@example.com', 'token-b')
-    assert.equal(service.cloudConnection(ada.id)?.remoteAccountId, 'remote-b')
+    // Same origin replaces the previous bound account (1 origin = 1 account)
+    link('http://127.0.0.1:9', 'remote-a1', 'a1@example.com', 'token-a1')
+    link('http://127.0.0.1:9', 'remote-a2', 'a2@example.com', 'token-a2')
     assert.deepEqual(
       service.listCloudConnections(ada.id).map((item) => item.remoteEmail),
-      ['b@example.com', 'a@example.com'],
+      ['a2@example.com'],
+    )
+    // Different origin adds a second remote connection
+    link('http://127.0.0.1:10', 'remote-b1', 'b1@example.com', 'token-b1')
+    assert.equal(service.cloudConnection(ada.id)?.origin, 'http://127.0.0.1:10')
+    assert.deepEqual(
+      service.listCloudConnections(ada.id).map((item) => `${item.origin}:${item.remoteEmail}`),
+      ['http://127.0.0.1:10:b1@example.com', 'http://127.0.0.1:9:a2@example.com'],
     )
     service.disconnectCloud(ada.id)
     assert.equal(service.cloudConnection(ada.id), null)
     assert.equal(service.listCloudConnections(ada.id).length, 2)
-    service.activateCloud(ada.id, 'http://127.0.0.1:9', 'remote-a')
-    assert.equal(service.cloudConnection(ada.id)?.token, 'token-a')
-    assert.equal(service.listCloudConnections(ada.id).find((item) => item.remoteAccountId === 'remote-a')?.active, true)
+    service.activateCloud(ada.id, 'http://127.0.0.1:9', 'remote-a2')
+    assert.equal(service.cloudConnection(ada.id)?.token, 'token-a2')
+    service.removeCloudConnection(ada.id, 'http://127.0.0.1:9')
+    assert.equal(service.cloudConnection(ada.id), null)
+    assert.equal(service.listCloudConnections(ada.id).length, 1)
   } finally {
     ctx.emit('dispose')
     if (previousOnline === undefined) delete process.env.BIU_ONLINE

@@ -343,13 +343,14 @@ test('account settings can create and link a cloud account from the local identi
   }) as typeof fetch
 
   render(<ShellSettingsConnections />)
+  fireEvent.click(await screen.findByTestId('settings-cloud-add'))
   const sync = await screen.findByTestId('settings-cloud-sync-create')
   await waitFor(() => assert.match(screen.getByText(/使用本地邮箱/).textContent ?? '', /ada@example\.com/))
   assert.equal(sync.hasAttribute('disabled'), false)
   assert.equal(screen.queryByLabelText('当前本地密码'), null)
   fireEvent.click(sync)
   await waitFor(() => assert.deepEqual(syncBody, {}))
-  await waitFor(() => assert.match(screen.getByText('云端账号已创建并关联。').textContent ?? '', /已创建并关联/))
+  await waitFor(() => assert.match(screen.getByText('云端账号已创建并绑定。').textContent ?? '', /已创建并绑定/))
 })
 
 test('account settings can edit account name, reset avatar, configure remote host url, and register an independent cloud account', async () => {
@@ -400,6 +401,7 @@ test('account settings can edit account name, reset avatar, configure remote hos
   await waitFor(() => assert.deepEqual(profileBody, { name: 'Ada Lovelace' }))
   await waitFor(() => assert.ok(screen.getByText('账号名已保存。')))
 
+  fireEvent.click(await screen.findByTestId('settings-cloud-add'))
   fireEvent.change(screen.getByTestId('settings-cloud-origin'), { target: { value: 'https://cloud.example.com' } })
   fireEvent.click(screen.getByTestId('settings-cloud-save-origin'))
   await waitFor(() => assert.deepEqual(configBody, { origin: 'https://cloud.example.com' }))
@@ -417,7 +419,7 @@ test('account settings can edit account name, reset avatar, configure remote hos
       origin: 'https://cloud.example.com',
     }),
   )
-  await waitFor(() => assert.ok(screen.getByText('独立云端账号已创建并关联。')))
+  await waitFor(() => assert.ok(screen.getByText('独立云端账号已创建并绑定。')))
 })
 
 test('workspace creation uses centered local and online cards with default names', async () => {
