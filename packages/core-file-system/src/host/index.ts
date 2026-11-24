@@ -950,6 +950,24 @@ export class DatabaseService extends Service implements Database {
     throw new Error('permission denied: INSUFFICIENT_PERMISSION')
   }
 
+  /** 校验目标 path 的读写权，并防止用自己有权限的 path 跨页读取或覆写归属于其他记录的文件。 */
+  async requireAssetForPath(name: string, path: string, action: 'resource:read' | 'resource:update') {
+    await this.requirePath(path, action)
+    const authorization = this.authorization()
+    if (!authorization) return
+    const refs = this.tags.recordsReferencingAsset(name)
+    if (refs.length === 0) return
+    const parts = splitPath(path)
+    if (parts.length === 2) {
+      const collection = normalizeCollectionPath(`/${parts[0]}`)
+      const recordId = parts[1]!
+      if (refs.some((ref) => normalizeCollectionPath(ref.collection) === collection && ref.record_id === recordId)) {
+        return
+      }
+    }
+    this.requireAsset(name, action)
+  }
+
   private async matchCollectionRows(
     spec: CollectionSpec,
     query: CollectionListQuery,

@@ -716,6 +716,7 @@ export class AuthorizationService {
       const ownerId = this.legacyOwnerId(resource)
       if (!ownerId) return []
       if (ownerId === accountId) return [{ ...base, detail: '你是创建者', role: 'owner', source: 'ownership' }]
+      if (this.membershipKind(accountId, resource.workspaceId) !== 'member') return []
       const role: ResourceRole = this.membership(accountId, resource.workspaceId) === 'viewer' ? 'viewer' : 'editor'
       return [{ ...base, detail: '沿用空间里的旧记录', role, source: 'legacy' }]
     }
@@ -772,6 +773,7 @@ export class AuthorizationService {
       const ownerId = this.legacyOwnerId(resource)
       if (!ownerId) return null
       if (ownerId === accountId) return { effectiveRole: 'owner', source: 'legacy' }
+      if (this.membershipKind(accountId, resource.workspaceId) !== 'member') return null
       return {
         effectiveRole: this.membership(accountId, resource.workspaceId) === 'viewer' ? 'viewer' : 'editor',
         source: 'legacy',

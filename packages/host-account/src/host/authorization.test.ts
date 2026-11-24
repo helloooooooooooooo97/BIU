@@ -382,3 +382,67 @@ test('external and guest collaborators are read-only on /views and policy-bound 
   assert.equal(auth.isViewPolicyBound(workspace.id, '/workspace-members', 'mv-eng'), false)
   assert.equal(page('doc-1').recordId, 'doc-1')
 })
+
+test('memberActivity blocks external collaborators and filters private records and foreign grants', () => {
+  const { store, auth, ada, bob, workspace, actor, page } = setup()
+  const external = store.register('Ext', 1, 'secret123', 'ext2@example.com')
+  runWithAccount(ada.id, () => {
+    store.attach(workspace.id, '/pages', 'secret-doc', 1, { accessMode: 'private' })
+    store.attach(workspace.id, '/pages', 'public-doc', 1, { accessMode: 'members', memberDefaultRole: 'editor' })
+    store.shareWithEmail(ada.id, '/pages', 'public-doc', 'ext2@example.com', 'viewer', 'external')
+    store.shareWithEmail(ada.id, '/pages', 'public-doc', bob.email, 'editor', 'internal')
+    store.recordActivity({
+      workspaceId: workspace.id,
+      actorId: ada.id,
+      category: 'data',
+      action: 'record.update',
+      collection: '/pages',
+      recordId: 'secret-doc',
+      recordTitle: 'Top Secret Salary',
+    })
+    store.recordActivity({
+      workspaceId: workspace.id,
+      actorId: ada.id,
+      category: 'data',
+      action: 'record.update',
+      collection: '/pages',
+      recordId: 'public-doc',
+      recordTitle: 'Team Handbook',
+    })
+  })
+  store.setActive(external.id, workspace.id)
+
+  // External collaborator cannot call workspace-level endpoints
+  assert.throws(() => runWithAccount(external.id, () => store.memberActivity(external.id, ada.id)), /外部协作者/)
+  assert.throws(() => store.groups(external.id, workspace.id), /外部协作者/)
+  assert.throws(() => store.externallySharedRecords(external.id, workspace.id), /外部协作者/)
+
+  // Internal member Bob sees Ada's activity on public-doc, NOT secret-doc, and cannot see Ada's grants list
+  const bobView = runWithAccount(bob.id, () => store.memberActivity(bob.id, ada.id))
+  assert.equal(bobView.recent.some((item) => item.recordId === 'secret-doc'), false)
+  assert.equal(bobView.recent.some((item) => item.recordId === 'public-doc'), true)
+  assert.deepEqual(bobView.grants.records, [])
+  assert.deepEqual(bobView.grants.views, [])
+
+  // Owner Ada sees her own full activity and grants
+  const adaView = runWithAccount(ada.id, () => store.memberActivity(ada.id, ada.id))
+  assert.equal(adaView.recent.some((item) => item.recordId === 'secret-doc'), true)
+
+  // Legacy record without resource_policies is never readable by external collaborator
+  assert.equal(auth.authorize(actor(external.id), 'resource:read', page('unattached-legacy')).allowed, false)
+})
+
+test('updateMemberRole and addGroupMemberByEmail invalidate authorization caches', () => {
+  const { store, auth, ada, bob, workspace } = setup()
+  let invalidated = 0
+  const dispose = auth.onInvalidate(() => {
+    invalidated += 1
+  })
+  store.updateMemberRole(ada.id, workspace.id, bob.id, 'admin')
+  assert.ok(invalidated >= 1)
+  const beforeGroup = invalidated
+  const grp = store.createGroup(ada.id, workspace.id, 'Eng')
+  store.addGroupMemberByEmail(ada.id, workspace.id, grp.id, bob.email)
+  assert.ok(invalidated > beforeGroup)
+  dispose()
+})
