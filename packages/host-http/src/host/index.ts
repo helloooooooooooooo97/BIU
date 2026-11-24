@@ -4,7 +4,7 @@ import { extname, join } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import type { Duplex } from 'node:stream'
 import { Service, type Context } from 'cordis'
-import { WebSocket as WsClient, WebSocketServer, type WebSocket } from 'ws'
+import { WebSocketServer, type WebSocket } from 'ws'
 import { HUB_CHANGE } from '@biu/type-http'
 import { hostPort, hostSharePort, hostShareProxyUi } from '@biu/host-plugin-loader/env'
 import type { Method, RouteContext, RouteHandler, RouteOptions, RouteScope } from '@biu/type-http'
@@ -17,7 +17,7 @@ import {
   runWithRequestWorkspace,
   isOnlineRuntime,
 } from '@biu/host-plugin-loader/data-dir'
-import { getRuntimePolicy, resolveRemoteCloudTarget } from '@biu/host-plugin-loader/runtime'
+import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { isShareApiPath, isSharePublicPath } from './share-gate.ts'
 import { isAssetTicketEligiblePath, signAssetTicket, verifyAssetTicket } from './asset-ticket.ts'
 
@@ -169,112 +169,6 @@ export function rewriteLegacyAgentApi(pathname: string) {
   return pathname
 }
 
-const CLOUD_PROXY_WORKSPACE_RE = /^\/api\/account\/workspaces\/([^/]+)\/(?:members|groups|invites)(?:\/|$)/
-const CLOUD_PROXY_BODY_WORKSPACE_PATHS = new Set([
-  '/api/account/mcp/credentials',
-  '/api/account/locks',
-  '/api/account/presence',
-])
-const CLOUD_PROXY_READONLY_DB_TOOLS = new Set(['db_list', 'db_read', 'db_stat'])
-const CLOUD_PROXY_TIMEOUT_MS = 60_000
-
-/**
- * 桌面端处于云端空间时（方案 A：云端算力 + 云端数据 + 云端沙盒），
- * 所有 workspace 作用域的接口（数据、协作、Agent 执行与配置、审批、技能、MCP）统一透传到远端云主机。
- * 优先遵循路由注册时声明的 RouteOptions.scope，未声明时回落到路径规则。
- */
-export function shouldProxyCloudApi(pathname: string, _method = 'GET', routeScope?: RouteScope): boolean {
-  if (routeScope === 'host' || routeScope === 'public') return false
-  if (routeScope === 'workspace') return true
-  if (
-    pathname === '/api/db' ||
-    pathname.startsWith('/api/db/') ||
-    pathname.startsWith('/api/page/') ||
-    pathname.startsWith('/api/doc/') ||
-    pathname.startsWith('/api/tag/') ||
-    pathname.startsWith('/api/content-turns/') ||
-    pathname === '/api/profile'
-  ) {
-    return true
-  }
-  if (
-    pathname === '/api/agents' ||
-    pathname.startsWith('/api/agents/') ||
-    pathname === '/api/chat' ||
-    pathname.startsWith('/api/chat/') ||
-    pathname === '/api/approvals' ||
-    pathname.startsWith('/api/approvals/') ||
-    pathname.startsWith('/api/skills/') ||
-    pathname.startsWith('/api/editor/') ||
-    pathname.startsWith('/api/page-sandbox/') ||
-    pathname === '/api/mcp/info' ||
-    pathname === '/api/mcp/rotate'
-  ) {
-    return true
-  }
-  if (
-    pathname === '/api/account/workspace-profile' ||
-    pathname === '/api/account/starred' ||
-    pathname === '/api/account/presence' ||
-    pathname === '/api/account/locks' ||
-    pathname === '/api/account/access' ||
-    pathname.startsWith('/api/account/access/') ||
-    pathname === '/api/account/member-activity' ||
-    pathname === '/api/account/plugins/audit' ||
-    pathname.startsWith('/api/account/mcp/')
-  ) {
-    return true
-  }
-  if (CLOUD_PROXY_WORKSPACE_RE.test(pathname)) return true
-  return false
-}
-
-export function cloudProxyTargetWorkspace(
-  pathname: string,
-  requestedWorkspace: string,
-  query?: URLSearchParams,
-  rawBody?: Buffer,
-): string {
-  const matched = CLOUD_PROXY_WORKSPACE_RE.exec(pathname)
-  if (matched?.[1]) {
-    try {
-      return decodeURIComponent(matched[1])
-    } catch {
-      return matched[1]
-    }
-  }
-  const fromQuery = String(query?.get('workspaceId') ?? '').trim()
-  if (fromQuery) return fromQuery
-  if (CLOUD_PROXY_BODY_WORKSPACE_PATHS.has(pathname) && rawBody && rawBody.length > 0) {
-    try {
-      const parsed = JSON.parse(rawBody.toString('utf8')) as { workspaceId?: unknown }
-      const fromBody = typeof parsed?.workspaceId === 'string' ? parsed.workspaceId.trim() : ''
-      if (fromBody) return fromBody
-    } catch {
-      /* 非 JSON 或无 workspaceId 时回退 requestedWorkspace */
-    }
-  }
-  return requestedWorkspace
-}
-
-/** 仅对真正会变更空间数据的写操作广播 database 事件，避免 presence 心跳、锁续期或只读 db_tool 触发前端刷新风暴。 */
-export function shouldBroadcastCloudMutation(pathname: string, method: string, rawBody?: Buffer): boolean {
-  const upper = method.toUpperCase()
-  if (upper === 'GET' || upper === 'HEAD') return false
-  if (pathname === '/api/account/presence' || pathname === '/api/account/locks') return false
-  if (pathname === '/api/db/tool' && rawBody && rawBody.length > 0) {
-    try {
-      const parsed = JSON.parse(rawBody.toString('utf8')) as { name?: unknown }
-      if (typeof parsed?.name === 'string' && CLOUD_PROXY_READONLY_DB_TOOLS.has(parsed.name.trim())) {
-        return false
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-  return true
-}
-
 function upgradePath(req: IncomingMessage) {
   try {
     return new URL(req.url ?? '/', 'http://localhost').pathname
@@ -287,7 +181,6 @@ export class HttpService extends Service {
   private routes: Route[] = []
   private sockets = new Set<WebSocket>()
   private socketMeta = new WeakMap<WebSocket, { accountId: string; workspaceId: string; token: string }>()
-  private cloudBridges = new Map<WebSocket, WsClient>()
   private server: Server | null = null
   /** 同一 HTTP server 上只能有一条 upgrade 路由；多挂几个 `ws.Server({ server })` 会互相 abort 握手。 */
   private wsServers = new Map<string, WebSocketServer>()
@@ -354,21 +247,9 @@ export class HttpService extends Service {
         this.socketMeta.set(socket, auth)
         this.sockets.add(socket)
         socket.send(JSON.stringify({ type: 'hello', payload: { ok: true, workspaceId: auth.workspaceId } }))
-        if (getRuntimePolicy().hostMode === 'desktop' && auth.accountId && auth.workspaceId) {
-          this.attachCloudWsBridge(socket, auth.accountId, auth.workspaceId)
-        }
         socket.on('close', () => {
           this.sockets.delete(socket)
           this.socketMeta.delete(socket)
-          const upstream = this.cloudBridges.get(socket)
-          if (upstream) {
-            this.cloudBridges.delete(socket)
-            try {
-              upstream.close()
-            } catch {
-              /* ignore */
-            }
-          }
         })
       })
       const onUpgrade = (req: IncomingMessage, socket: Duplex, head: Buffer) => {
@@ -414,14 +295,6 @@ export class HttpService extends Service {
       })
       return () =>
         new Promise<void>((resolve) => {
-          for (const upstream of this.cloudBridges.values()) {
-            try {
-              upstream.terminate()
-            } catch {
-              /* ignore */
-            }
-          }
-          this.cloudBridges.clear()
           for (const socket of this.sockets) socket.terminate()
           server.off('upgrade', onUpgrade)
           hub.close()
@@ -431,58 +304,6 @@ export class HttpService extends Service {
           server.close(() => resolve())
         })
     }, 'http.listen')
-  }
-
-  /**
-   * 桌面端处于云端空间时，把本地前端的 /ws 连接桥接到远端云主机 /ws，
-   * 让云端 Agent 流式 chunk、审批、状态、协作数据库变更直接实时推送到桌面端，无需轮询。
-   */
-  private attachCloudWsBridge(localSocket: WebSocket, accountId: string, workspaceId: string) {
-    const remote = resolveRemoteCloudTarget(this.ctx, workspaceId, accountId)
-    if (!remote) return
-    const wsOrigin = remote.origin.replace(/^http:\/\//i, 'ws://').replace(/^https:\/\//i, 'wss://')
-    const wsUrl = `${wsOrigin}/ws?workspaceId=${encodeURIComponent(remote.workspaceId)}`
-    let upstream: WsClient
-    try {
-      upstream = new WsClient(wsUrl, {
-        headers: {
-          authorization: `Bearer ${remote.token}`,
-        },
-      })
-    } catch {
-      return
-    }
-    this.cloudBridges.set(localSocket, upstream)
-    upstream.on('message', (data, isBinary) => {
-      if (localSocket.readyState !== 1) return
-      if (!isBinary) {
-        const text = typeof data === 'string' ? data : data.toString('utf8')
-        try {
-          const parsed = JSON.parse(text) as { type?: unknown }
-          if (parsed?.type === 'hello') return
-        } catch {
-          /* forward non-JSON frames as-is */
-        }
-        localSocket.send(text)
-        return
-      }
-      localSocket.send(data)
-    })
-    localSocket.on('message', (data, isBinary) => {
-      if (upstream.readyState !== 1) return
-      upstream.send(data, { binary: isBinary })
-    })
-    upstream.on('close', (code, reason) => {
-      if (this.cloudBridges.get(localSocket) === upstream) {
-        this.cloudBridges.delete(localSocket)
-      }
-      if ((code === 4401 || code === 4403) && localSocket.readyState === 1) {
-        localSocket.close(code, reason.toString('utf8') || (code === 4403 ? 'workspace' : 'tenant'))
-      }
-    })
-    upstream.on('error', () => {
-      /* close event handles cleanup */
-    })
   }
 
   route(method: Method, pattern: string, handler: RouteHandler, options?: RouteOptions) {
@@ -818,58 +639,6 @@ export class HttpService extends Service {
           const allowed = accountStore?.canAccessPlugin?.(accountId, requestedWorkspace, match.pluginId)
           if (!allowed) {
             context.send(404, { error: 'not found' })
-            return
-          }
-        }
-        if (!isOnlineRuntime() && !shareOnly && accountId && shouldProxyCloudApi(url.pathname, method, match.scope)) {
-          const accountSvc = this.ctx.get('account') as
-            | {
-                workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
-                cloudConnection?: (localAccountId: string) => { origin: string; token: string } | null
-              }
-            | undefined
-          const hasBody = method !== 'GET'
-          const rawReqBody =
-            hasBody && CLOUD_PROXY_BODY_WORKSPACE_PATHS.has(url.pathname) ? await body() : undefined
-          const targetWorkspace = cloudProxyTargetWorkspace(url.pathname, requestedWorkspace, url.searchParams, rawReqBody)
-          if (targetWorkspace && accountSvc?.workspaceLocation?.(targetWorkspace) === 'cloud') {
-            const remote = resolveRemoteCloudTarget(this.ctx, targetWorkspace, accountId)
-            if (!remote) {
-              context.send(401, { error: '请先登录云端账号' })
-              return
-            }
-            const forwardHeaders: Record<string, string> = {
-              authorization: `Bearer ${remote.token}`,
-              'x-biu-workspace-id': remote.workspaceId,
-            }
-            for (const key of ['content-type', 'accept', 'if-match', 'if-none-match', 'x-share-password']) {
-              const value = req.headers[key]
-              if (typeof value === 'string' && value) forwardHeaders[key] = value
-            }
-            const reqBody = hasBody ? (rawReqBody ?? (await body())) : undefined
-            let upstream: Response
-            try {
-              upstream = await fetch(`${remote.origin}${url.pathname}${url.search}`, {
-                method,
-                headers: forwardHeaders,
-                body: hasBody && reqBody && reqBody.length > 0 ? new Uint8Array(reqBody) : undefined,
-                signal: AbortSignal.timeout(CLOUD_PROXY_TIMEOUT_MS),
-              })
-            } catch {
-              context.send(503, { error: '云端服务暂时连不上' })
-              return
-            }
-            const outHeaders: Record<string, string> = { ...corsHeaders }
-            for (const key of ['content-type', 'etag', 'content-disposition', 'cache-control', 'last-modified']) {
-              const value = upstream.headers.get(key)
-              if (value) outHeaders[key] = value
-            }
-            const payload = Buffer.from(await upstream.arrayBuffer())
-            res.writeHead(upstream.status, outHeaders)
-            res.end(payload)
-            if (upstream.ok && shouldBroadcastCloudMutation(url.pathname, method, reqBody)) {
-              this.broadcast('database', { workspaceId: targetWorkspace, ts: Date.now() })
-            }
             return
           }
         }
