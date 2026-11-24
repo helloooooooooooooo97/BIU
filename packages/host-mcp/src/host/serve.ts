@@ -9,6 +9,7 @@ import {
   currentRequestWorkspaceId,
   type McpTenant,
   runWithAccount,
+  runWithActorContext,
   runWithMcpTenant,
   runWithRequestWorkspace,
   isOnlineRuntime,
@@ -161,7 +162,20 @@ export function createBiuMcpServer(ctx: Context) {
         return ctx.tools.invoke(name, args)
       })
       const result = tenant
-        ? await runWithAccount(tenant.accountId, () => runWithRequestWorkspace(tenant.workspaceId, invoke))
+        ? await runWithAccount(tenant.accountId, () =>
+            runWithRequestWorkspace(tenant.workspaceId, () =>
+              runWithActorContext(
+                {
+                  type: 'mcp',
+                  actorId: tenant.credentialId,
+                  delegatedBy: tenant.accountId,
+                  invokerId: tenant.accountId,
+                  ...(tenant.role === 'viewer' ? { maxRole: 'viewer' as const } : {}),
+                },
+                invoke,
+              ),
+            ),
+          )
         : await invoke()
       audit(true)
       return { content: [{ type: 'text' as const, text: stringify(result) }] }
@@ -295,7 +309,7 @@ export function applyHostServer(ctx: Context) {
       route.send(410, { error: '在线模式请使用空间 MCP 凭证' })
       return
     }
-    const workspaceId = resolveRequestedWorkspace(route)
+    const workspaceId = String(route.req.headers['x-biu-workspace-id'] ?? '').trim()
     if (workspaceId) {
       try {
         const account = ctx.get('account') as { workspaceLocation?: (wsId: string) => 'device' | 'cloud' } | undefined

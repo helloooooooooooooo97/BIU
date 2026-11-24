@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
-import { currentAccountId } from '@biu/host-plugin-loader/data-dir'
+import { currentAccountId, currentActorContext } from '@biu/host-plugin-loader/data-dir'
 
 export type ActorScopeRule = {
   allowedCollections?: string[] | null
@@ -20,7 +20,18 @@ export type Actor =
       invokerId?: string
       scope?: ActorScopeRule
     }
+  | {
+      type: 'mcp'
+      accountId: string
+      delegatedBy: string
+      workspaceId: string
+      credentialId?: string
+      invokerId?: string
+      scope?: ActorScopeRule
+    }
   | { type: 'public-link'; shareTokenId: string; accountId?: string; workspaceId?: string }
+
+export type AuthenticatedActor = Exclude<Actor, { type: 'public-link' }>
 
 export type Action =
   | 'resource:list'
@@ -273,11 +284,49 @@ export class AuthorizationService {
     this.notifyInvalidators()
   }
 
-  currentActor(): Extract<Actor, { type: 'account' }> | null {
+  currentActor(): AuthenticatedActor | null {
     const accountId = currentAccountId()
     if (!accountId) return null
     const workspaceId = this.activeWorkspaceFor(accountId)
-    return workspaceId ? { type: 'account', accountId, workspaceId } : null
+    if (!workspaceId) return null
+    const delegated = currentActorContext()
+    if (delegated?.type === 'agent') {
+      return {
+        type: 'agent',
+        accountId,
+        delegatedBy: delegated.delegatedBy || accountId,
+        workspaceId,
+        sessionId: delegated.actorId,
+        invokerId: delegated.invokerId,
+        ...(delegated.maxRole || delegated.allowedCollections
+          ? {
+              scope: {
+                ...(delegated.maxRole ? { maxRole: delegated.maxRole } : {}),
+                ...(delegated.allowedCollections ? { allowedCollections: delegated.allowedCollections } : {}),
+              },
+            }
+          : {}),
+      }
+    }
+    if (delegated?.type === 'mcp') {
+      return {
+        type: 'mcp',
+        accountId,
+        delegatedBy: delegated.delegatedBy || accountId,
+        workspaceId,
+        credentialId: delegated.actorId,
+        invokerId: delegated.invokerId,
+        ...(delegated.maxRole || delegated.allowedCollections
+          ? {
+              scope: {
+                ...(delegated.maxRole ? { maxRole: delegated.maxRole } : {}),
+                ...(delegated.allowedCollections ? { allowedCollections: delegated.allowedCollections } : {}),
+              },
+            }
+          : {}),
+      }
+    }
+    return { type: 'account', accountId, workspaceId }
   }
 
   setMemberViewMatcher(matcher: (workspaceId: string, viewId: string, accountId: string) => boolean) {
@@ -537,8 +586,8 @@ export class AuthorizationService {
     if (!actor || actor.type === 'public-link') return { allowed: false, reason: 'UNAUTHENTICATED' }
     if (actor.workspaceId !== resource.workspaceId) return { allowed: false, reason: 'WRONG_WORKSPACE' }
 
-    // Agent 代理边界：有效权限 = Eval(delegatedBy) ∩ Eval(invokerId) ∩ Scope(agent)
-    if (actor.type === 'agent') {
+    // Agent / MCP 代理边界：有效权限 = Eval(delegatedBy) ∩ Eval(invokerId) ∩ Scope(actor)
+    if (actor.type === 'agent' || actor.type === 'mcp') {
       const delegated = this.authorize(
         { type: 'account', accountId: actor.delegatedBy || actor.accountId, workspaceId: actor.workspaceId },
         action,
@@ -555,7 +604,8 @@ export class AuthorizationService {
         if (!invoked.allowed) return invoked
         effectiveRole = minRole([effectiveRole, invoked.effectiveRole]) ?? 'viewer'
       }
-      const storedScope = actor.sessionId ? this.getActorScope(actor.workspaceId, 'agent', actor.sessionId) : null
+      const scopeActorId = actor.type === 'agent' ? actor.sessionId : actor.credentialId
+      const storedScope = scopeActorId ? this.getActorScope(actor.workspaceId, actor.type, scopeActorId) : null
       const scopes = [storedScope, actor.scope].filter(Boolean) as ActorScopeRule[]
       const now = Date.now()
       for (const scope of scopes) {

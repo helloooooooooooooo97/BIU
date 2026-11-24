@@ -169,7 +169,17 @@ export type McpTenant = {
   allowedTools: string[]
 }
 
+export type DelegatedActorContext = {
+  type: 'agent' | 'mcp'
+  actorId: string
+  delegatedBy: string
+  invokerId?: string
+  maxRole?: 'viewer' | 'commenter' | 'editor' | 'manager' | 'owner'
+  allowedCollections?: string[] | null
+}
+
 const mcpTenantScope = new AsyncLocalStorage<McpTenant>()
+const actorContextScope = new AsyncLocalStorage<DelegatedActorContext>()
 
 export function currentMcpTenant() {
   return mcpTenantScope.getStore() ?? null
@@ -177,6 +187,15 @@ export function currentMcpTenant() {
 
 export function runWithMcpTenant<T>(tenant: McpTenant, fn: () => T): T {
   return mcpTenantScope.run(tenant, fn)
+}
+
+export function currentActorContext(): DelegatedActorContext | null {
+  return actorContextScope.getStore() ?? null
+}
+
+export function runWithActorContext<T>(actor: DelegatedActorContext | null | undefined, fn: () => T): T {
+  if (!actor) return fn()
+  return actorContextScope.run(actor, fn)
 }
 
 export function currentAccountId() {
