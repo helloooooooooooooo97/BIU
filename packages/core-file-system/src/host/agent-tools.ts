@@ -5,7 +5,6 @@ import {
   parseContentJump,
   type CollectionListQuery,
 } from '@biu/type-file-system'
-import { currentAccountId, currentRequestWorkspaceId, isOnlineRuntime } from '@biu/host-plugin-loader/data-dir'
 import { databaseRevealForTool } from '../paths.ts'
 import { currentSessionId } from '@biu/host-sessions/scope'
 import { AgentDbCompact } from './agent-payload.ts'
@@ -26,29 +25,6 @@ export const DATABASE_TOOL_NAMES = new Set([
   'db_media',
   'db_file',
 ])
-
-function resolveCloudToolTarget(ctx: Context): { origin: string; token: string; workspaceId: string } | null {
-  if (isOnlineRuntime()) return null
-  let account:
-    | {
-        store?: { activeWorkspaceId(): string | null }
-        workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
-        linkedCloud?: (localAccountId?: string) => { origin: string; token: string } | null
-      }
-    | undefined
-  try {
-    account = ctx.get('account') as typeof account
-  } catch {
-    return null
-  }
-  const workspaceId = currentRequestWorkspaceId() || account?.store?.activeWorkspaceId() || ''
-  if (!workspaceId || account?.workspaceLocation?.(workspaceId) !== 'cloud') return null
-  const linked = account.linkedCloud?.(currentAccountId() || undefined)
-  if (!linked?.origin || !linked.token) {
-    throw new Error('请先登录云端账号')
-  }
-  return { origin: linked.origin.replace(/\/+$/, ''), token: linked.token, workspaceId }
-}
 
 export type DatabaseToolsTarget = {
   list(
@@ -181,48 +157,7 @@ async function withInspectorReveal<T>(
 
 export function registerDatabaseTools(ctx: Context, db: DatabaseToolsTarget) {
   const registerDbTool = (def: Parameters<typeof ctx.tools.register>[0]) => {
-    const localExecute = def.execute
-    ctx.tools.register({
-      ...def,
-      execute: async (args, signal) => {
-        const cloud = resolveCloudToolTarget(ctx)
-        if (cloud) {
-          const toolPath = typeof args.path === 'string' ? args.path : ''
-          const dropRecord = def.name === 'db_delete'
-          const invokeRemote = async () => {
-            let response: Response
-            try {
-              response = await fetch(`${cloud.origin}/api/db/tool`, {
-                method: 'POST',
-                headers: {
-                  authorization: `Bearer ${cloud.token}`,
-                  'x-biu-workspace-id': cloud.workspaceId,
-                  'content-type': 'application/json',
-                },
-                body: JSON.stringify({ name: def.name, args }),
-                ...(signal ? { signal } : {}),
-              })
-            } catch (error) {
-              if (signal?.aborted) throw error
-              throw new Error('云端服务暂时连不上')
-            }
-            const payload = (await response.json().catch(() => ({}))) as { result?: unknown; error?: string }
-            if (!response.ok) throw new Error(payload.error || `云端工具 ${def.name} 执行失败 (${response.status})`)
-            const ann = typeof def.annotations === 'function' ? def.annotations(args) : def.annotations
-            if (!ann?.readOnly) {
-              try {
-                ctx.emit('database/change')
-              } catch {
-                /* ignore */
-              }
-            }
-            return payload.result
-          }
-          return toolPath ? withInspectorReveal(ctx, toolPath, invokeRemote, dropRecord) : invokeRemote()
-        }
-        return localExecute(args, signal)
-      },
-    })
+    ctx.tools.register(def)
   }
   registerDbTool({
     name: 'db_list',

@@ -4,8 +4,8 @@ import {
   EditorContentConflictError,
   currentAccountId,
   currentRequestWorkspaceId,
-  isOnlineRuntime,
 } from '@biu/host-plugin-loader/data-dir'
+import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { asPublicProfile, writeWorkspaceProfile } from '@biu/host-workspace'
 import {
   DATABASE_CHANNEL,
@@ -83,7 +83,7 @@ export function registerDatabaseHttpRoutes(
     }
   }
   ctx.http.route('GET', '/api/profile', (route) => {
-    let dataLocation: 'device' | 'cloud' = isOnlineRuntime() ? 'cloud' : 'device'
+    let dataLocation: 'device' | 'cloud' = getRuntimePolicy().hostMode === 'cloud' ? 'cloud' : 'device'
     let accountPrefs: Record<string, unknown> | null = null
     try {
       const account = ctx.get('account') as {
@@ -185,7 +185,7 @@ export function registerDatabaseHttpRoutes(
         }
       }
       const base =
-        !isOnlineRuntime() || !savedAccountPrefs
+        getRuntimePolicy().hostMode !== 'cloud' || !savedAccountPrefs
           ? asPublicProfile(
               writeWorkspaceProfile({
                 name: typeof body.name === 'string' ? body.name : undefined,
@@ -448,7 +448,7 @@ export function registerDatabaseHttpRoutes(
     return String(body?.password ?? '')
   }
   const rememberShareLan = (route: { req: { headers: IncomingMessage['headers'] } }) => {
-    if (isOnlineRuntime()) return
+    if (getRuntimePolicy().hostMode === 'cloud') return
     const code = String(route.req.headers['x-lan-member'] ?? '').trim()
     if (!code) return
     try {

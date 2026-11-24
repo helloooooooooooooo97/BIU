@@ -9,6 +9,7 @@
     ".": "./src/host/index.ts",
     "./data-dir": "./src/host/data-dir.ts",
     "./env": "./src/host/env.ts",
+    "./runtime": "./src/host/runtime.ts",
     "./vite": "./src/host/plugin-loader.ts"
   },
   "dependencies": {

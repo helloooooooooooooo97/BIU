@@ -10,9 +10,8 @@ import {
   readEditorContentRecord,
   writeEditorContent,
   ASSET_GC_INTERVAL_MS,
-  isDesktopRuntime,
-  isOnlineRuntime,
 } from '@biu/host-plugin-loader/data-dir'
+import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { asPublicProfile, writeWorkspaceProfile } from '@biu/host-workspace'
 import { roleCoversAction, type Action as PermissionAction, type AuthorizationService } from '@biu/host-account/authorization'
 import { isRegisteredBuiltinPlugin } from '@biu/host-account/store'
@@ -1681,7 +1680,7 @@ export class DatabaseService extends Service implements Database {
 
   /** 本机空间：私人与共享都留在这台设备。 */
   private deviceWorkspace() {
-    if (isOnlineRuntime()) return false
+    if (getRuntimePolicy().hostMode === 'cloud') return false
     try {
       const account = this.ctx.get('account') as {
         workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
@@ -2613,7 +2612,7 @@ export function apply(ctx: Context) {
     },
   })
   const activeDataLocation = (): 'device' | 'cloud' => {
-    if (isOnlineRuntime()) return 'cloud'
+    if (getRuntimePolicy().hostMode === 'cloud') return 'cloud'
     const workspaceId = account?.store?.activeWorkspaceId?.()
     return workspaceId && account?.workspaceLocation?.(workspaceId) === 'cloud' ? 'cloud' : 'device'
   }
