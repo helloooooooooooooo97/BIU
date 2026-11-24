@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { afterEach, describe, it } from 'vitest'
-import { apiFetch } from './api-client.ts'
+import { apiFetch, registerApiRequestInterceptor } from './api-client.ts'
 import {
   isHostControlPath,
   resetWorkspaceEndpoint,
@@ -9,6 +9,7 @@ import {
   resolveWsUrl,
   rewriteElementAssetUrls,
   setWorkspaceEndpoint,
+  syncWorkspaceEndpoint,
   updateWorkspaceAssetTicket,
 } from './workspace-transport.ts'
 
@@ -171,5 +172,113 @@ describe('WorkspaceTransport direct cloud routing', () => {
     updateWorkspaceAssetTicket({ uid: 'acc_1', ws: 'ws_1', exp: exp2, sig: 'sig2' })
     rewriteElementAssetUrls(root)
     assert.equal(img.getAttribute('src'), `https://cloud.biu.example/api/db/file/a.png?uid=acc_1&ws=ws_1&exp=${exp2}&sig=sig2`)
+  })
+
+  it('overwrites local Authorization and X-Biu-Workspace-Id from interceptors with cloud credentials', async () => {
+    setWorkspaceEndpoint({
+      mode: 'cloud',
+      origin: 'http://localhost:3141',
+      workspaceId: 'ws_cloud_9',
+      token: 'tok_cloud_real',
+    })
+    const unregister = registerApiRequestInterceptor((_path, init) => {
+      const headers = new Headers(init.headers)
+      if (!headers.has('authorization')) headers.set('authorization', 'Bearer tok_local_3151')
+      if (!headers.has('x-biu-workspace-id')) headers.set('x-biu-workspace-id', 'ws_stale_local')
+      return { ...init, headers }
+    })
+    const calls: Array<{ url: string; auth: string | null; ws: string | null; credentials: RequestCredentials | undefined }> = []
+    const prevFetch = globalThis.fetch
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const headers = new Headers(init?.headers)
+      calls.push({
+        url: String(input),
+        auth: headers.get('authorization'),
+        ws: headers.get('x-biu-workspace-id'),
+        credentials: init?.credentials,
+      })
+      return new Response(JSON.stringify({ ok: true }), { status: 200 })
+    }) as typeof globalThis.fetch
+    try {
+      await apiFetch('/api/db/list?path=/pages')
+      await apiFetch('/api/account/me')
+      assert.deepEqual(calls, [
+        {
+          url: 'http://localhost:3141/api/db/list?path=/pages',
+          auth: 'Bearer tok_cloud_real',
+          ws: 'ws_cloud_9',
+          credentials: 'omit',
+        },
+        {
+          url: '/api/account/me',
+          auth: 'Bearer tok_local_3151',
+          ws: 'ws_stale_local',
+          credentials: undefined,
+        },
+      ])
+    } finally {
+      unregister()
+      globalThis.fetch = prevFetch
+    }
+  })
+
+  it('waits for in-flight syncWorkspaceEndpoint before dispatching workspace API requests', async () => {
+    const unregister = registerApiRequestInterceptor((_path, init) => {
+      const headers = new Headers(init.headers)
+      if (!headers.has('authorization')) headers.set('authorization', 'Bearer tok_local_3151')
+      return { ...init, headers }
+    })
+    const calls: Array<{ url: string; auth: string | null; ws: string | null }> = []
+    let releaseEndpoint!: () => void
+    const endpointGate = new Promise<void>((resolve) => {
+      releaseEndpoint = resolve
+    })
+    const prevFetch = globalThis.fetch
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      const headers = new Headers(init?.headers)
+      calls.push({
+        url,
+        auth: headers.get('authorization'),
+        ws: headers.get('x-biu-workspace-id'),
+      })
+      if (url.startsWith('/api/account/cloud/endpoint')) {
+        await endpointGate
+        return new Response(
+          JSON.stringify({
+            mode: 'cloud',
+            origin: 'http://localhost:3141',
+            workspaceId: 'ws_cloud_boot',
+            token: 'tok_cloud_boot',
+          }),
+          { status: 200 },
+        )
+      }
+      if (url === 'http://localhost:3141/api/asset-ticket') {
+        return new Response(
+          JSON.stringify({ uid: 'u1', ws: 'ws_cloud_boot', exp: Date.now() + 60_000, sig: 's1' }),
+          { status: 200 },
+        )
+      }
+      return new Response(JSON.stringify({ items: [] }), { status: 200 })
+    }) as typeof globalThis.fetch
+    try {
+      const syncing = syncWorkspaceEndpoint('ws_cloud_boot')
+      const dbCall = apiFetch('/api/db/list?path=/pages')
+      releaseEndpoint()
+      await Promise.all([syncing, dbCall])
+
+      assert.equal(calls[0]?.url, '/api/account/cloud/endpoint?workspaceId=ws_cloud_boot')
+      assert.equal(calls[0]?.auth, 'Bearer tok_local_3151')
+      const dbReq = calls.find((c) => c.url.includes('/api/db/list'))
+      assert.deepEqual(dbReq, {
+        url: 'http://localhost:3141/api/db/list?path=/pages',
+        auth: 'Bearer tok_cloud_boot',
+        ws: 'ws_cloud_boot',
+      })
+    } finally {
+      unregister()
+      globalThis.fetch = prevFetch
+    }
   })
 })

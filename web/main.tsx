@@ -1,6 +1,7 @@
 import { Context } from 'cordis'
 import './types.ts'
 import './style.css'
+import { installGlobalWorkspaceTransport, syncWorkspaceEndpoint } from '@biu/biu-ui/workspace-transport'
 import { applyStoredTheme } from '@biu/web-app-shell/theme'
 import { applyPagePrefs } from '../packages/core-file-system/src/web/page-width.ts'
 import { seedHomeSessionFetches } from '../packages/web-session-view/src/web/sessions-list.ts'
@@ -9,7 +10,11 @@ import { isShareHref, mountShareApp } from './share-mount.tsx'
 
 applyStoredTheme()
 applyPagePrefs()
-if (!isShareHref()) seedHomeSessionFetches()
+if (!isShareHref()) {
+  installGlobalWorkspaceTransport()
+  void syncWorkspaceEndpoint()
+  seedHomeSessionFetches()
+}
 
 const el = document.querySelector<HTMLElement>('#app')
 if (!el) throw new Error('#app missing')

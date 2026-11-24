@@ -1,4 +1,5 @@
-import { abortApiScope } from './api-client.ts'
+import { abortApiScope, apiFetch } from './api-client.ts'
+import { readStorageString } from './client-storage.ts'
 
 export type AssetTicket = {
   uid: string
@@ -117,10 +118,12 @@ export function resetWorkspaceEndpoint(): void {
   setWorkspaceEndpoint(DEFAULT_ENDPOINT)
 }
 
-function mergeHeaders(base: HeadersInit | undefined, extra: Record<string, string>): Headers {
+function applyCloudHeaders(base: HeadersInit | undefined, extra: Record<string, string>): Headers {
   const headers = new Headers(base)
+  // Always override local host credentials (e.g. local 3151 Bearer token injected by
+  // registerApiRequestInterceptor) with the cloud workspace's credentials.
   for (const [k, v] of Object.entries(extra)) {
-    if (!headers.has(k)) headers.set(k, v)
+    headers.set(k, v)
   }
   return headers
 }
@@ -142,10 +145,12 @@ export function resolveApiRequest(
   const extra: Record<string, string> = {}
   if (ep.token) extra.Authorization = `Bearer ${ep.token}`
   if (ep.workspaceId) extra['X-Biu-Workspace-Id'] = ep.workspaceId
-  const headers = mergeHeaders(init.headers, extra)
+  const headers = applyCloudHeaders(init.headers, extra)
   return {
     url: `${ep.origin}${path}`,
-    init: { ...init, headers },
+    // Direct cross-origin cloud calls authenticate via Bearer token, never cookies.
+    // Using 'omit' guarantees compatibility with `Access-Control-Allow-Origin: *`.
+    init: { ...init, credentials: 'omit', headers },
   }
 }
 
@@ -287,6 +292,12 @@ export function installGlobalWorkspaceTransport(): () => void {
 
   globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
     if (typeof input === 'string' && input.startsWith('/api/')) {
+      if (!isHostControlPath(input) && endpointSyncPromise) {
+        return waitForWorkspaceEndpointReady().then(() => {
+          const resolved = resolveApiRequest(input, init)
+          return origFetch(resolved.url, resolved.init)
+        })
+      }
       const resolved = resolveApiRequest(input, init)
       return origFetch(resolved.url, resolved.init)
     }
@@ -330,6 +341,40 @@ export function installGlobalWorkspaceTransport(): () => void {
 }
 
 let ticketRefreshTimer: ReturnType<typeof setInterval> | null = null
+let endpointSyncPromise: Promise<WorkspaceEndpoint> | null = null
+let endpointSyncSeq = 0
+
+/**
+ * Returns the currently in-flight `syncWorkspaceEndpoint()` promise if one is pending,
+ * or `null` when the endpoint is already settled (allowing callers to stay synchronous).
+ */
+export function getPendingWorkspaceEndpointSync(): Promise<WorkspaceEndpoint> | null {
+  return endpointSyncPromise
+}
+
+/**
+ * Wait for any in-flight `syncWorkspaceEndpoint()` call to finish before dispatching
+ * workspace-scoped `/api/*` requests, preventing boot-time and workspace-switch races.
+ */
+export async function waitForWorkspaceEndpointReady(): Promise<WorkspaceEndpoint> {
+  if (endpointSyncPromise) {
+    try {
+      await endpointSyncPromise
+    } catch {
+      /* ignore sync errors; fall back to current activeEndpoint */
+    }
+  }
+  return activeEndpoint
+}
+
+function localControlHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {}
+  const token = readStorageString('biu.account.token')
+  if (token) headers.Authorization = `Bearer ${token}`
+  const ws = readStorageString('biu.workspaceId', 'session') || readStorageString('biu.workspaceId')
+  if (ws) headers['X-Biu-Workspace-Id'] = ws
+  return headers
+}
 
 /**
  * Fetch active workspace endpoint from local desktop host (`/api/account/cloud/endpoint`).
@@ -337,64 +382,84 @@ let ticketRefreshTimer: ReturnType<typeof setInterval> | null = null
  * and schedules automatic renewal every 10 minutes.
  */
 export async function syncWorkspaceEndpoint(workspaceId = ''): Promise<WorkspaceEndpoint> {
+  const seq = ++endpointSyncSeq
   if (ticketRefreshTimer) {
     clearInterval(ticketRefreshTimer)
     ticketRefreshTimer = null
   }
-  const qs = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ''
-  try {
-    const res = await globalThis.fetch(`/api/account/cloud/endpoint${qs}`)
-    if (!res.ok) {
-      resetWorkspaceEndpoint()
-      return getWorkspaceEndpoint()
-    }
-    const data = (await res.json()) as {
-      mode?: 'local' | 'cloud'
-      origin?: string
-      workspaceId?: string
-      token?: string
-    }
-    if (data.mode === 'cloud' && data.origin && data.workspaceId) {
+  const effectiveWorkspaceId =
+    workspaceId.trim() ||
+    readStorageString('biu.workspaceId', 'session') ||
+    readStorageString('biu.workspaceId') ||
+    ''
+  const qs = effectiveWorkspaceId ? `?workspaceId=${encodeURIComponent(effectiveWorkspaceId)}` : ''
+  const run = (async (): Promise<WorkspaceEndpoint> => {
+    try {
+      const res = await apiFetch(`/api/account/cloud/endpoint${qs}`, {
+        headers: localControlHeaders(),
+      })
+      if (seq !== endpointSyncSeq) return getWorkspaceEndpoint()
+      if (!res.ok) {
+        resetWorkspaceEndpoint()
+        return getWorkspaceEndpoint()
+      }
+      const data = (await res.json()) as {
+        mode?: 'local' | 'cloud'
+        origin?: string
+        workspaceId?: string
+        token?: string
+      }
+      if (seq !== endpointSyncSeq) return getWorkspaceEndpoint()
+      if (data.mode === 'cloud' && data.origin && data.workspaceId) {
+        setWorkspaceEndpoint({
+          mode: 'cloud',
+          origin: data.origin,
+          workspaceId: data.workspaceId,
+          token: data.token,
+          assetTicket: null,
+        })
+        const refreshTicket = async () => {
+          const ep = getWorkspaceEndpoint()
+          if (ep.mode !== 'cloud' || !ep.origin) return
+          try {
+            const tRes = await globalThis.fetch(`${ep.origin}/api/asset-ticket`, {
+              credentials: 'omit',
+              headers: {
+                ...(ep.token ? { Authorization: `Bearer ${ep.token}` } : {}),
+                ...(ep.workspaceId ? { 'X-Biu-Workspace-Id': ep.workspaceId } : {}),
+              },
+            })
+            if (tRes.ok) {
+              const ticket = (await tRes.json()) as AssetTicket
+              if (ticket?.sig && ticket?.exp) updateWorkspaceAssetTicket(ticket)
+            }
+          } catch {
+            /* retry on next tick */
+          }
+        }
+        // Mint asset ticket in background so workspace API requests aren't delayed by a second round-trip.
+        void refreshTicket()
+        ticketRefreshTimer = setInterval(() => {
+          void refreshTicket()
+        }, 10 * 60 * 1000)
+        return getWorkspaceEndpoint()
+      }
       setWorkspaceEndpoint({
-        mode: 'cloud',
-        origin: data.origin,
-        workspaceId: data.workspaceId,
-        token: data.token,
+        mode: 'local',
+        origin: '',
+        workspaceId: data.workspaceId ?? '',
         assetTicket: null,
       })
-      const refreshTicket = async () => {
-        const ep = getWorkspaceEndpoint()
-        if (ep.mode !== 'cloud' || !ep.origin) return
-        try {
-          const tRes = await globalThis.fetch(`${ep.origin}/api/asset-ticket`, {
-            headers: {
-              ...(ep.token ? { Authorization: `Bearer ${ep.token}` } : {}),
-              ...(ep.workspaceId ? { 'X-Biu-Workspace-Id': ep.workspaceId } : {}),
-            },
-          })
-          if (tRes.ok) {
-            const ticket = (await tRes.json()) as AssetTicket
-            if (ticket?.sig && ticket?.exp) updateWorkspaceAssetTicket(ticket)
-          }
-        } catch {
-          /* retry on next tick */
-        }
-      }
-      await refreshTicket()
-      ticketRefreshTimer = setInterval(() => {
-        void refreshTicket()
-      }, 10 * 60 * 1000)
+      return getWorkspaceEndpoint()
+    } catch {
+      if (seq === endpointSyncSeq) resetWorkspaceEndpoint()
       return getWorkspaceEndpoint()
     }
-    setWorkspaceEndpoint({
-      mode: 'local',
-      origin: '',
-      workspaceId: data.workspaceId ?? '',
-      assetTicket: null,
-    })
-    return getWorkspaceEndpoint()
-  } catch {
-    resetWorkspaceEndpoint()
-    return getWorkspaceEndpoint()
+  })()
+  endpointSyncPromise = run
+  try {
+    return await run
+  } finally {
+    if (endpointSyncPromise === run) endpointSyncPromise = null
   }
 }
