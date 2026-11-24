@@ -512,3 +512,75 @@ test('moving a private inherited record under a workspace-visible parent preserv
   auth.setInheritanceMode(actor(ada.id), page('secret-note'), 'inherit')
   assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('secret-note')).allowed, true)
 })
+
+test('agent actor attenuates permissions via invoker intersection and actor_scopes', () => {
+  const { auth, ada, bob, workspace, actor, page } = setup()
+  auth.attach(actor(ada.id), page('ada-secret'), { accessMode: 'private' })
+  auth.attach(actor(ada.id), page('shared-doc'), { accessMode: 'private' })
+  auth.grant(ada.id, page('shared-doc'), 'account', bob.id, 'viewer')
+
+  // Shared session created by Ada (owner), triggered by Bob (viewer on shared-doc, no access on ada-secret)
+  const sharedAgent: Actor = {
+    type: 'agent',
+    accountId: ada.id,
+    delegatedBy: ada.id,
+    invokerId: bob.id,
+    workspaceId: workspace.id,
+    sessionId: 'sess-1',
+  }
+  // Confused deputy blocked: Bob cannot read Ada's private doc via Ada's agent
+  assert.equal(auth.authorize(sharedAgent, 'resource:read', page('ada-secret')).allowed, false)
+  // Intersection on shared-doc: Ada=owner ∩ Bob=viewer => viewer (read ok, update denied)
+  assert.equal(auth.authorize(sharedAgent, 'resource:read', page('shared-doc')).allowed, true)
+  assert.equal(auth.authorize(sharedAgent, 'resource:update', page('shared-doc')).allowed, false)
+
+  // Actor scope restricts collection & maxRole
+  auth.setActorScope(workspace.id, 'agent', 'sess-scoped', ada.id, {
+    allowedCollections: ['/tasks'],
+    maxRole: 'viewer',
+  })
+  const scopedAgent: Actor = {
+    type: 'agent',
+    accountId: ada.id,
+    delegatedBy: ada.id,
+    workspaceId: workspace.id,
+    sessionId: 'sess-scoped',
+  }
+  const taskRef: Extract<ResourceRef, { type: 'record' }> = {
+    type: 'record',
+    workspaceId: workspace.id,
+    collection: '/tasks',
+    recordId: 't1',
+  }
+  auth.attach(actor(ada.id), taskRef, { accessMode: 'private' })
+  assert.equal(auth.authorize(scopedAgent, 'resource:read', taskRef).allowed, true)
+  assert.equal(auth.authorize(scopedAgent, 'resource:update', taskRef).allowed, false)
+  assert.equal(auth.authorize(scopedAgent, 'resource:read', page('ada-secret')).allowed, false)
+
+  // Revoking actor scope immediately blocks the agent
+  auth.revokeActorScope(workspace.id, 'agent', 'sess-scoped')
+  assert.equal(auth.authorize(scopedAgent, 'resource:read', taskRef).allowed, false)
+})
+
+test('removeMember transfers private owned records and revokes locks, leases, and actor scopes', () => {
+  const { store, auth, ada, bob, workspace, actor, page } = setup()
+  runWithAccount(bob.id, () => {
+    store.attach(workspace.id, '/pages', 'bob-private', 1, { accessMode: 'private' })
+  })
+  auth.setActorScope(workspace.id, 'agent', 'bob-agent', bob.id, {
+    allowedCollections: ['/pages'],
+    maxRole: 'editor',
+  })
+  store.acquireExecutionLease(bob.id, 'bob-agent', 'laptop')
+
+  // Before removal: Ada cannot read Bob's private record
+  assert.equal(auth.authorize(actor(ada.id), 'resource:read', page('bob-private')).allowed, false)
+
+  // Remove Bob -> private records transfer to workspace owner Ada, scopes & leases revoked
+  const res = store.removeMember(ada.id, workspace.id, bob.id)
+  assert.equal(res.transferredTo, ada.id)
+  assert.equal(res.transferredRecords, 1)
+  assert.equal(auth.authorize(actor(ada.id), 'resource:manage-permissions', page('bob-private')).allowed, true)
+  assert.equal(store.hasExecutionLease('bob-agent'), false)
+  assert.ok(auth.getActorScope(workspace.id, 'agent', 'bob-agent')?.revokedAt)
+})

@@ -982,6 +982,25 @@ export const BIU_MIGRATIONS: Migration[] = [
     addColumn(db, 'view_grants', 'writable_columns', `writable_columns TEXT`)
     addColumn(db, 'view_grants', 'denied_columns', `denied_columns TEXT`)
   } },
+  { version: 54, module: 'host-account', name: 'actor-scopes', up: (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS actor_scopes (
+        workspace_id TEXT NOT NULL,
+        actor_type TEXT NOT NULL,
+        actor_id TEXT NOT NULL,
+        issuer_id TEXT NOT NULL,
+        allowed_collections TEXT,
+        allowed_views TEXT,
+        max_role TEXT NOT NULL DEFAULT 'editor',
+        expires_at INTEGER,
+        revoked_at INTEGER,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (workspace_id, actor_type, actor_id)
+      );
+      CREATE INDEX IF NOT EXISTS actor_scopes_issuer
+        ON actor_scopes(workspace_id, issuer_id);
+    `)
+  } },
 ]
 
 export function assertBiuMigrationLog(rows: Array<{ version: number }> = BIU_MIGRATIONS) {

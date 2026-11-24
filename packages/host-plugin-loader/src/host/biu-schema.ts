@@ -233,6 +233,21 @@ export const BIU_TABLES: Record<string, TableSpec> = {
     ],
     indexes: ['view_grants_subject'],
   },
+  actor_scopes: {
+    columns: [
+      'workspace_id',
+      'actor_type',
+      'actor_id',
+      'issuer_id',
+      'allowed_collections',
+      'allowed_views',
+      'max_role',
+      'expires_at',
+      'revoked_at',
+      'created_at',
+    ],
+    indexes: ['actor_scopes_issuer'],
+  },
   record_owners: {
     columns: ['workspace_id', 'collection', 'record_id', 'owner_id', 'version', 'updated_at'],
     indexes: [],
@@ -314,7 +329,7 @@ export const BIU_TABLES: Record<string, TableSpec> = {
   },
 }
 
-export const LATEST_BIU_SCHEMA = 53
+export const LATEST_BIU_SCHEMA = 54
 
 export const CREATE_CORE_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -698,6 +713,21 @@ CREATE TABLE IF NOT EXISTS view_grants (
 );
 CREATE INDEX IF NOT EXISTS view_grants_subject
   ON view_grants(workspace_id, subject_type, subject_id);
+CREATE TABLE IF NOT EXISTS actor_scopes (
+  workspace_id TEXT NOT NULL,
+  actor_type TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  issuer_id TEXT NOT NULL,
+  allowed_collections TEXT,
+  allowed_views TEXT,
+  max_role TEXT NOT NULL DEFAULT 'editor',
+  expires_at INTEGER,
+  revoked_at INTEGER,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (workspace_id, actor_type, actor_id)
+);
+CREATE INDEX IF NOT EXISTS actor_scopes_issuer
+  ON actor_scopes(workspace_id, issuer_id);
 CREATE TABLE IF NOT EXISTS edit_locks (
   workspace_id TEXT NOT NULL,
   collection TEXT NOT NULL,

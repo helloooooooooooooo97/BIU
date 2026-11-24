@@ -1323,7 +1323,12 @@ export class CollabStore {
     return { id: accountId, name }
   }
 
-  removeMember(actorId: string, workspaceId: string, accountId: string) {
+  removeMember(
+    actorId: string,
+    workspaceId: string,
+    accountId: string,
+    options: { transferToAccountId?: string } = {},
+  ) {
     const actorRole = this.requireManager(actorId, workspaceId)
     const target = this.db
       .prepare('SELECT role, member_kind FROM workspace_members WHERE workspace_id = ? AND account_id = ?')
@@ -1331,9 +1336,51 @@ export class CollabStore {
     if (!target) throw new CollabError('成员不存在', 404)
     if (target.role === 'owner') throw new CollabError('不能移除工作区所有者', 400)
     if (actorRole === 'admin' && target.role === 'admin') throw new CollabError('管理员不能移除其他管理员', 403)
+
+    // 确定离职资产归属接收人：显式指定（须为本空间有效成员）或默认转交给空间所有者，杜绝孤儿私密数据
+    const wsOwner = this.db.prepare('SELECT owner_id FROM workspaces WHERE id = ?').get(workspaceId) as { owner_id?: string } | undefined
+    let transferTo = options.transferToAccountId?.trim() || wsOwner?.owner_id || actorId
+    if (transferTo === accountId || !this.isMember(transferTo, workspaceId)) {
+      transferTo = wsOwner?.owner_id && wsOwner.owner_id !== accountId ? wsOwner.owner_id : actorId
+    }
+
     const affectedRecords = this.recordGrantKeysForAccount(workspaceId, accountId)
+    const ownedPolicies = this.db
+      .prepare(
+        `SELECT collection, record_id FROM resource_policies
+         WHERE workspace_id = ? AND owner_account_id = ?`,
+      )
+      .all(workspaceId, accountId) as Array<{ collection: string; record_id: string }>
+    const now = Date.now()
     this.db.exec('BEGIN IMMEDIATE')
     try {
+      // 1. 批量转交离职成员名下记录的所有权给接收人
+      if (transferTo && transferTo !== accountId) {
+        this.db
+          .prepare(
+            `UPDATE resource_policies SET owner_account_id = ?
+             WHERE workspace_id = ? AND owner_account_id = ?`,
+          )
+          .run(transferTo, workspaceId, accountId)
+        this.db
+          .prepare(
+            `UPDATE record_owners SET owner_id = ?
+             WHERE workspace_id = ? AND owner_id = ?`,
+          )
+          .run(transferTo, workspaceId, accountId)
+        for (const rec of ownedPolicies) {
+          this.db
+            .prepare(
+              `INSERT INTO record_grants
+                (workspace_id, collection, record_id, subject_type, subject_id, role, effect, granted_by, created_at)
+               VALUES (?, ?, ?, 'account', ?, 'owner', 'allow', ?, ?)
+               ON CONFLICT(workspace_id, collection, record_id, subject_type, subject_id)
+               DO UPDATE SET role = 'owner', effect = 'allow', granted_by = excluded.granted_by, created_at = excluded.created_at`,
+            )
+            .run(workspaceId, rec.collection, rec.record_id, transferTo, actorId, now)
+        }
+      }
+      // 2. 清理成员组、个人授权、作为 granted_by 颁发的内置全量视图授权及插件分发
       this.db.prepare(
         `DELETE FROM workspace_group_members
          WHERE account_id = ? AND group_id IN (SELECT id FROM workspace_groups WHERE workspace_id = ?)`,
@@ -1344,12 +1391,23 @@ export class CollabStore {
       ).run(workspaceId, accountId)
       this.db.prepare(
         `DELETE FROM view_grants
-         WHERE workspace_id = ? AND subject_type = 'account' AND subject_id = ?`,
-      ).run(workspaceId, accountId)
+         WHERE workspace_id = ? AND (
+           (subject_type = 'account' AND subject_id = ?)
+           OR (granted_by = ? AND view_id LIKE 'builtin-all:%')
+         )`,
+      ).run(workspaceId, accountId, accountId)
       this.db.prepare(
         `DELETE FROM plugin_assignments
          WHERE workspace_id = ? AND subject_type = 'account' AND subject_id = ?`,
       ).run(workspaceId, accountId)
+      // 3. 清理实时编辑锁、Agent 执行租约、以及该成员签发的 Agent/MCP/外链 Scope
+      this.db
+        .prepare('DELETE FROM edit_locks WHERE workspace_id = ? AND account_id = ?')
+        .run(workspaceId, accountId)
+      this.db
+        .prepare('DELETE FROM session_execution_leases WHERE account_id = ?')
+        .run(accountId)
+      this.authorization.revokeActorScopesByIssuer(workspaceId, accountId, now)
       this.db
         .prepare('DELETE FROM workspace_members WHERE workspace_id = ? AND account_id = ?')
         .run(workspaceId, accountId)
@@ -1367,7 +1425,7 @@ export class CollabStore {
       throw error
     }
     this.authorization.invalidateAll()
-    return { id: accountId }
+    return { id: accountId, transferredTo: transferTo, transferredRecords: ownedPolicies.length }
   }
 
   updateMemberRole(actorId: string, workspaceId: string, accountId: string, role: WorkspaceRole) {
