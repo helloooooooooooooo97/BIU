@@ -5,6 +5,7 @@ import { biuSqlitePath, currentAccountId, eventsSqlitePath, isOnlineRuntime, ope
 import { resolveScopedWorkspaceId } from '@biu/host-plugin-loader/runtime'
 import type { RouteContext } from '@biu/type-http'
 import { CollabError, CollabStore } from './store.ts'
+import { authRateLimitMax, clientIp, SlidingWindowLimiter } from './rate-limit.ts'
 import type { AuthorizationService, ResourceRole } from './authorization.ts'
 import { workspaceMembersCollection } from './workspace-members-collection.ts'
 
@@ -805,7 +806,19 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     }
   })
 
+  const authLimiter = new SlidingWindowLimiter()
+  const enforceAuthRateLimit = (route: RouteContext, action: 'login' | 'register') => {
+    const limit = authRateLimitMax()
+    if (limit <= 0) return true
+    const result = authLimiter.check(`${action}:${clientIp(route.req)}`, Date.now(), limit)
+    if (result.allowed) return true
+    route.res.setHeader('retry-after', String(result.retryAfterSec))
+    route.send(429, { error: '操作过于频繁，请稍后再试', retryAfterSec: result.retryAfterSec })
+    return false
+  }
+
   ctx.http.route('POST', '/api/account/register', async (route) => {
+    if (!enforceAuthRateLimit(route, 'register')) return
     try {
       const body = (await route.json()) as { email?: string; password?: string; name?: string }
       const password = String(body.password ?? '')
@@ -825,6 +838,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   })
 
   ctx.http.route('POST', '/api/account/login', async (route) => {
+    if (!enforceAuthRateLimit(route, 'login')) return
     try {
       const body = (await route.json()) as { email?: string; password?: string }
       const found = account.store.login(
