@@ -1281,7 +1281,12 @@ export function apply(ctx: Context) {
       ...(record.config ? { config: record.config } : {}),
     })
   })
+  const visibleSession = async (id: string) => {
+    const record = await ctx.sessions.get(id)
+    return record && ctx.sessions.inWorkspace(id) ? record : null
+  }
   ctx.http.route('PATCH', '/api/agents/:id/config', async (route) => {
+    if (!(await visibleSession(route.params.id))) return route.send(404, { error: 'unknown session' })
     try {
       const payload = ((await route.json().catch(() => null)) ?? {}) as Record<string, unknown>
       const patch: {
@@ -1374,10 +1379,6 @@ export function apply(ctx: Context) {
       })),
     })
   })
-  const visibleSession = async (id: string) => {
-    const record = await ctx.sessions.get(id)
-    return record && ctx.sessions.inWorkspace(id) ? record : null
-  }
   ctx.http.route('GET', '/api/agents/:id', async (route) => {
     const turnsRaw = route.query.get('turns')
     const limitTurns =
@@ -1532,6 +1533,7 @@ export function apply(ctx: Context) {
     })
   })
   ctx.http.route('PUT', '/api/agents/:id/project', async (route) => {
+    if (getRuntimePolicy().hostMode === 'cloud') return route.send(403, { error: '云端空间使用隔离沙箱工作区，不支持绑定宿主机路径' })
     if (!(await visibleSession(route.params.id))) return route.send(404, { error: 'unknown session' })
     const payload = (await route.json()) as { path?: string | null; name?: string | null }
     try {
@@ -1548,6 +1550,7 @@ export function apply(ctx: Context) {
     }
   })
   ctx.http.route('POST', '/api/agents/:id/project/pick', async (route) => {
+    if (getRuntimePolicy().hostMode === 'cloud') return route.send(403, { error: '云端空间不支持选择宿主机目录' })
     try {
       const record = await visibleSession(route.params.id)
       if (!record) return route.send(404, { error: 'unknown session' })
@@ -1731,6 +1734,9 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('POST', '/api/chat', async (route) => {
     const payload = (await route.json()) as { messages?: ChatMessage[]; sessionId?: string; text?: string }
+    if (payload?.sessionId && !(await visibleSession(payload.sessionId))) {
+      return route.send(404, { error: 'unknown session' })
+    }
     const messages = Array.isArray(payload?.messages)
       ? payload.messages
       : [{ role: 'user' as const, content: payload.text ?? '' }]
@@ -1740,5 +1746,5 @@ export function apply(ctx: Context) {
       route.send(500, { error: String(error) })
     }
   })
-  registerChatInspectorRoutes(ctx)
+  registerChatInspectorRoutes(ctx, visibleSession)
 }

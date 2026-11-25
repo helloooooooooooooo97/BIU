@@ -8,7 +8,7 @@ import {
   type TaskDispatchSource,
   type TokenUsageSum,
 } from '@biu/host-live-sessions/usage'
-import type { SessionEvent } from '@biu/type-session'
+import type { SessionEvent, SessionRecord } from '@biu/type-session'
 
 export type ToolSourceId = 'minimal' | 'db' | 'plugin' | 'store'
 
@@ -96,10 +96,20 @@ export function buildInspectorTools(
     })
 }
 
-export function registerChatInspectorRoutes(ctx: Context) {
+export function registerChatInspectorRoutes(
+  ctx: Context,
+  visibleSession?: (id: string) => Promise<SessionRecord | null>,
+) {
+  const resolveVisible = async (id: string) => {
+    if (visibleSession) return visibleSession(id)
+    const record = await ctx.sessions.get(id)
+    if (!record) return null
+    if (typeof ctx.sessions.inWorkspace === 'function' && !ctx.sessions.inWorkspace(id)) return null
+    return record
+  }
   ctx.http.route('GET', '/api/agents/:id/inspector', async (route) => {
     const id = route.params.id
-    const record = await ctx.sessions.get(id)
+    const record = await resolveVisible(id)
     if (!record) return route.send(404, { error: 'unknown session' })
     const resolved = ctx.chat.resolveEffective(id)
     const mode: AgentToolMode = normalizeAgentMode(resolved.effective.agentMode)
@@ -128,7 +138,7 @@ export function registerChatInspectorRoutes(ctx: Context) {
 
   ctx.http.route('GET', '/api/agents/:id/dispatched-usage', async (route) => {
     const id = route.params.id
-    const record = await ctx.sessions.get(id)
+    const record = await resolveVisible(id)
     if (!record) return route.send(404, { error: 'unknown session' })
     route.send(200, {
       sessionId: id,

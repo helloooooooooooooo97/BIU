@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { Service, type Context } from 'cordis'
+import { currentAccountId, currentRequestWorkspaceId, isOnlineRuntime } from '@biu/host-plugin-loader/data-dir'
 
 class StdioLsp {
   private child?: ChildProcessWithoutNullStreams
@@ -61,24 +62,42 @@ function frame(value: unknown) {
 }
 
 export class LspService extends Service {
-  private session = new StdioLsp()
+  private sessions = new Map<string, StdioLsp>()
 
   constructor(ctx: Context) {
     super(ctx, 'lsp')
   }
 
+  private tenantKey() {
+    return `${currentAccountId().trim()}\0${currentRequestWorkspaceId().trim()}`
+  }
+
+  private sessionForCurrentTenant() {
+    const key = this.tenantKey()
+    let session = this.sessions.get(key)
+    if (!session) {
+      session = new StdioLsp()
+      this.sessions.set(key, session)
+    }
+    return session
+  }
+
   start(command: string, args: string[] = []) {
-    return this.session.start(command, args)
+    if (isOnlineRuntime()) {
+      throw new Error('lsp_start is disabled in cloud runtime')
+    }
+    return this.sessionForCurrentTenant().start(command, args)
   }
 
   async hover(path: string, line: number, character: number) {
     const uri = `file://${this.ctx.fs.resolve(path)}`
-    if (!this.session.ready) {
+    const session = this.sessions.get(this.tenantKey())
+    if (!session?.ready) {
       const text = await this.ctx.fs.read(path)
       const lines = text.split('\n')
       return { contents: [{ value: lines[line] ?? '' }], fallback: true }
     }
-    return this.session.hover(uri, line, character)
+    return session.hover(uri, line, character)
   }
 }
 
