@@ -229,10 +229,7 @@ export function parseClipboardMatrix(input: { plain?: string; html?: string }): 
   )
 }
 
-function escapeTsvCell(value: string) {
-  if (!/[\t\r\n"]/.test(value)) return value
-  return `"${value.replace(/"/g, '""')}"`
-}
+import { escapeTsvCell } from './table-keys.ts'
 
 /** 构造带位置对齐的内部剪贴板矩阵与纯文本 TSV（只读列保留占位，避免粘贴错列）。 */
 export function buildTableClipboardPayload(

@@ -48,9 +48,7 @@ export function collectSheetColumns(pack?: CollectionSchemaPack | null) {
   return [...COLLECT_SHEET_COLUMNS, ...flats]
 }
 
-function tagFlatColumnKey(packId: string, fieldKey: string) {
-  return `tag::${packId}::${fieldKey}`
-}
+import { tagFlatColumnKey } from '../shared/fields.ts'
 
 export const LIST_SEED_COLUMNS = [
   'title',

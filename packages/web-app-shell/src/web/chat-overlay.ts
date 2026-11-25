@@ -353,32 +353,6 @@ export function setOverlayAutohide(next: boolean) {
   if (next) setOverlayAutohide(false)
   emitPin()
 }
-export function setOverlayResizing(next: boolean) {
-  resizing = next
-}
-
-/** 仅在未钉住、未拖高度、且指针已离开时收起。 */
-/** 指针其实还在浮窗里（子节点重绘、composer 穿透）时不要收起。 */
-export function overlayStillHoldsPointer(
-  panel: EventTarget | null,
-  related: EventTarget | null,
-  clientX?: number,
-  clientY?: number,
-) {
-  const root = panel instanceof Element ? panel : null
-  if (!root) return false
-  if (related instanceof Node && root.contains(related)) return true
-  if (typeof clientX === 'number' && typeof clientY === 'number') {
-    const hit = document.elementFromPoint(clientX, clientY)
-    if (hit && (root.contains(hit) || hit.closest('[data-testid="chat-overlay-panel"]'))) return true
-  }
-  return false
-}
-
-export function requestOverlayAutohide() {
-  if (!overlay || resizing || pinned) return
-  setOverlayAutohide(true)
-}
 
 export function requestInspectorWidth(width: number) {
   window.dispatchEvent(new CustomEvent('biu:inspector-width', { detail: width }))
@@ -391,22 +365,10 @@ export function requestInspectorOpen() {
 export function requestInspectorClose() {
   window.dispatchEvent(new Event('biu:inspector-close'))
 }
-
-export function requestInspectorTab(tabId: string) {
-  if (!tabId) return
-  window.dispatchEvent(new CustomEvent('biu:inspector-tab', { detail: tabId }))
-}
-
 export function requestInspectorAction(action: string) {
   if (!action) return
   window.dispatchEvent(new CustomEvent('biu:inspector-action', { detail: action }))
 }
-
-export function inspectorActionFromEvent(event: Event): string | undefined {
-  const detail = (event as CustomEvent).detail
-  return typeof detail === 'string' && detail ? detail : undefined
-}
-
 export function inspectorTabFromEvent(event: Event): string | undefined {
   const detail = (event as CustomEvent).detail
   if (typeof detail === 'string' && detail) return detail
@@ -539,13 +501,6 @@ export function writeOverlayWinState(state: OverlayWinState): void {
 export function requestOverlayFocus() {
   window.dispatchEvent(new Event('biu:overlay-focus'))
 }
-
-export function clampOverlayChatHeight(height: number, maxHeight = 800) {
-  const max = Math.max(OVERLAY_CHAT_HEIGHT_MIN, Math.round(maxHeight))
-  if (!Number.isFinite(height)) return OVERLAY_CHAT_HEIGHT_DEFAULT
-  return Math.min(max, Math.max(OVERLAY_CHAT_HEIGHT_MIN, Math.round(height)))
-}
-
 function openPickOverlay() {
   if (isChatPagePath(window.location.pathname)) {
     requestComposerFocus()

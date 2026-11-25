@@ -346,7 +346,7 @@ function publicCollection(item: CollectionSpec): CollectionInfo {
   }
 }
 
-function splitPath(path: string): string[] {
+export function splitPath(path: string): string[] {
   const hit = splitResourcePath(path)
   if (!hit) return []
   const name = hit.collection.replace(/^\//, '')

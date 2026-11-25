@@ -30,11 +30,7 @@ import {
   shouldCloseOverlayOnOutside,
   getOverlayAutohide,
   setOverlayAutohide,
-  requestOverlayAutohide,
-  overlayStillHoldsPointer,
-  setOverlayResizing,
   setOverlayPinned,
-  clampOverlayChatHeight,
   clampOverlayWinGeom,
   defaultOverlayWinGeom,
   overlayLayoutGeom,
@@ -45,8 +41,6 @@ import {
   OVERLAY_WIN_MIN_H,
   OVERLAY_WIN_MIN_W,
   inspectorTabFromEvent,
-  inspectorActionFromEvent,
-  requestInspectorTab,
   requestInspectorAction,
   requestComposerFocus,
   isComposerFocusPending,
@@ -549,68 +543,8 @@ test('saved layout recomputes when the viewport changes', () => {
   assert.equal(parseOverlayLayout('bottom'), 'right')
 })
 
-test('overlay chat height clamps', () => {
-  assert.equal(clampOverlayChatHeight(20, 800), OVERLAY_CHAT_HEIGHT_MIN)
-  assert.equal(clampOverlayChatHeight(900, 800), 800)
-})
-
-test('autohide requires leaving and not resizing', () => {
-  setChatOverlay(true)
-  setOverlayAutohide(false)
-  setOverlayResizing(true)
-  requestOverlayAutohide()
-  assert.equal(getOverlayAutohide(), false)
-  setOverlayResizing(false)
-  requestOverlayAutohide()
-  assert.equal(getOverlayAutohide(), true)
-})
-
-test('pointer still inside overlay when relatedTarget or hit is in the panel', () => {
-  const panel = document.createElement('div')
-  panel.setAttribute('data-testid', 'chat-overlay-panel')
-  const child = document.createElement('input')
-  panel.append(child)
-  document.body.append(panel)
-  assert.equal(overlayStillHoldsPointer(panel, child, 0, 0), true)
-  panel.remove()
-})
-
-test('autohide does not fire when overlay is pinned', () => {
-  setChatOverlay(true)
-  setOverlayAutohide(false)
-  setOverlayResizing(false)
-  setOverlayPinned(true)
-  requestOverlayAutohide()
-  assert.equal(getOverlayAutohide(), false)
-  setOverlayPinned(false)
-  requestOverlayAutohide()
-  assert.equal(getOverlayAutohide(), true)
-})
-
 test('inspector tab event accepts string or { tabId }', () => {
   assert.equal(inspectorTabFromEvent(new CustomEvent('biu:inspector-tab', { detail: 'database' })), 'database')
   assert.equal(inspectorTabFromEvent(new CustomEvent('biu:inspector-tab', { detail: { tabId: 'traj' } })), 'traj')
   assert.equal(inspectorTabFromEvent(new Event('biu:inspector-tab')), undefined)
-})
-
-test('requestInspectorTab dispatches tab id', () => {
-  let seen = ''
-  const onTab = (event: Event) => {
-    seen = inspectorTabFromEvent(event) ?? ''
-  }
-  window.addEventListener('biu:inspector-tab', onTab)
-  requestInspectorTab('database')
-  window.removeEventListener('biu:inspector-tab', onTab)
-  assert.equal(seen, 'database')
-})
-
-test('requestInspectorAction dispatches tool id', () => {
-  let seen = ''
-  const onAction = (event: Event) => {
-    seen = inspectorActionFromEvent(event) ?? ''
-  }
-  window.addEventListener('biu:inspector-action', onAction)
-  requestInspectorAction('add-view')
-  window.removeEventListener('biu:inspector-action', onAction)
-  assert.equal(seen, 'add-view')
 })
