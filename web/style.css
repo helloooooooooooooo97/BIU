@@ -2982,15 +2982,15 @@ html.dark .shell-workspace-menu-action svg {
 }
 
 .settings-avatar-swatches {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 34px);
   gap: 10px;
+  align-items: center;
 }
 
 .settings-avatar-swatch {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   margin: 0;
   padding: 0;
   border: 0;

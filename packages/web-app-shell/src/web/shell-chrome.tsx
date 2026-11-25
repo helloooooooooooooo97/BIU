@@ -282,7 +282,7 @@ export function ShellSettingsAccount() {
               className="settings-account-clear"
               data-testid="settings-account-reset-avatar"
               disabled={savingProfile}
-              onClick={() => saveAccountProfile({ avatar: '' }, '已恢复默认 AI 头像。')}
+              onClick={() => saveAccountProfile({ avatar: '' }, '已恢复默认头像。')}
             >
               恢复默认
             </button>
@@ -325,27 +325,27 @@ export function ShellSettingsAccount() {
             </button>
           </div>
           <p className="settings-muted settings-account-hint">
-            {profileMessage || '点击左侧头像可上传图片，也可在下方选择 AI 头像。'}
+            {profileMessage || '点击左侧头像可上传图片，也可在下方挑选预设头像。'}
           </p>
         </div>
       </form>
       <div className="settings-account-row is-stacked settings-avatar-studio" data-testid="settings-avatar-studio">
         <div className="settings-avatar-group">
           <div className="settings-avatar-group-head">
-            <span className="settings-account-label">AI 头像</span>
+            <span className="settings-account-label">头像</span>
             <button
               type="button"
               className="settings-avatar-shuffle"
               data-testid="settings-avatar-ai-shuffle"
               disabled={savingProfile}
-              title="重新生成 AI 头像光晕构图"
+              title="重新生成头像光晕构图"
               onClick={() => {
                 const nextVariant = aiVariant + 1
                 setAiVariant(nextVariant)
                 const themeId = activeAiTheme || AI_AVATAR_THEMES[0]!.id
                 saveAccountProfile(
                   { avatar: buildAiAvatarDataUrl(themeId, `${baseSeed}:${nextVariant}`) },
-                  '已生成新版 AI 头像。',
+                  '已切换为新头像。',
                 )
               }}
             >
@@ -353,7 +353,7 @@ export function ShellSettingsAccount() {
               <span>换一版</span>
             </button>
           </div>
-          <div className="settings-avatar-swatches" role="group" aria-label="AI 头像">
+          <div className="settings-avatar-swatches" role="group" aria-label="预设头像">
             {AI_AVATAR_THEMES.map((theme) => {
               const previewUrl = buildAiAvatarDataUrl(theme.id, `${baseSeed}:${aiVariant}`)
               return (
@@ -363,10 +363,10 @@ export function ShellSettingsAccount() {
                   className={`settings-avatar-swatch${activeAiTheme === theme.id ? ' is-on' : ''}`}
                   data-testid={`settings-avatar-theme-${theme.id}`}
                   title={theme.label}
-                  aria-label={`选择${theme.label} AI 头像`}
+                  aria-label={`选择${theme.label}头像`}
                   aria-pressed={activeAiTheme === theme.id}
                   disabled={savingProfile}
-                  onClick={() => saveAccountProfile({ avatar: previewUrl }, `已切换为${theme.label} AI 头像。`)}
+                  onClick={() => saveAccountProfile({ avatar: previewUrl }, `已切换为${theme.label}头像。`)}
                 >
                   <img src={previewUrl} alt="" />
                 </button>
