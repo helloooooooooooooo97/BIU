@@ -157,6 +157,16 @@ export const BrowserHeader = memo(function BrowserHeader({
               title: String(detailRow?.title ?? title),
             }}
           />
+        ) : !nested && localData && activeViewId ? (
+          <ShareButton
+            localOnly
+            target={{
+              kind: 'view' as const,
+              collection: collectionPath,
+              viewId: activeViewId,
+              title: activeView?.name ?? title,
+            }}
+          />
         ) : !nested ? (
           <AccessRulesButton
             collectionPath={collectionPath}

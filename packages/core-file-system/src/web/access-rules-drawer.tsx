@@ -118,6 +118,7 @@ type RuleDraft = {
   restrictColumns: boolean
   displaySnapshot: AccessRuleDisplaySnapshot | null
   enabled: boolean
+  wantPublicLink: boolean
   grants: AccessRuleGrantItem[]
 }
 
@@ -143,12 +144,13 @@ export function AccessRulesButton({
   const [members, setMembers] = useState<MemberOption[]>([])
   const [draft, setDraft] = useState<RuleDraft | null>(null)
   const [saving, setSaving] = useState(false)
+  const [quickLinkBusy, setQuickLinkBusy] = useState(false)
   const [preview, setPreview] = useState<{ matchCount: number; sampleRecords: Array<{ id: string; title: string }> } | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [filterEditorOpen, setFilterEditorOpen] = useState(false)
   const [memberPickerOpen, setMemberPickerOpen] = useState(false)
   const [publicLink, setPublicLink] = useState<{ token: string; url: string } | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [copiedKey, setCopiedKey] = useState('')
   const drawerRef = useRef<HTMLDivElement | null>(null)
 
   const schemaFields = useMemo(() => {
@@ -197,34 +199,41 @@ export function AccessRulesButton({
     void loadMembers()
   }, [open, loadRules, loadMembers])
 
-  const openEditorForRule = useCallback((rule: AccessRuleItem) => {
-    const normalizedTree = normalizeFilterTree(rule.filterTree)
-    setDraft({
-      id: rule.id,
-      name: rule.name,
-      filterTree: normalizedTree,
-      restrictRows: countFilterRules(normalizedTree) > 0,
-      columns: rule.columns ? [...rule.columns] : null,
-      restrictColumns: Boolean(rule.columns && rule.columns.length > 0),
-      displaySnapshot: rule.displaySnapshot,
-      enabled: rule.enabled,
-      grants: rule.grants.map((g) => ({ ...g })),
-    })
-    setFilterEditorOpen(false)
-    setMemberPickerOpen(false)
-    setPublicLink(null)
-    void apiFetch(
-      `/api/db/shares?kind=rule&collection=${encodeURIComponent(collectionPath)}&ruleId=${encodeURIComponent(rule.id)}`,
-    )
-      .then(async (res) => {
-        if (!res.ok) return
-        const data = (await res.json()) as { share?: { token: string; url: string } | null }
-        setPublicLink(data.share ?? null)
+  const openEditorForRule = useCallback(
+    (rule: AccessRuleItem) => {
+      const normalizedTree = normalizeFilterTree(rule.filterTree)
+      setDraft({
+        id: rule.id,
+        name: rule.name,
+        filterTree: normalizedTree,
+        restrictRows: countFilterRules(normalizedTree) > 0,
+        columns: rule.columns ? [...rule.columns] : null,
+        restrictColumns: Boolean(rule.columns && rule.columns.length > 0),
+        displaySnapshot: rule.displaySnapshot,
+        enabled: rule.enabled,
+        wantPublicLink: false,
+        grants: rule.grants.map((g) => ({ ...g })),
       })
-      .catch(() => {})
-  }, [collectionPath])
+      setFilterEditorOpen(false)
+      setMemberPickerOpen(false)
+      setPublicLink(null)
+      void apiFetch(
+        `/api/db/shares?kind=rule&collection=${encodeURIComponent(collectionPath)}&ruleId=${encodeURIComponent(rule.id)}`,
+      )
+        .then(async (res) => {
+          if (!res.ok) return
+          const data = (await res.json()) as { share?: { token: string; url: string } | null }
+          setPublicLink(data.share ?? null)
+          if (data.share) {
+            setDraft((prev) => (prev && prev.id === rule.id ? { ...prev, wantPublicLink: true } : prev))
+          }
+        })
+        .catch(() => {})
+    },
+    [collectionPath],
+  )
 
-  const startNewDraft = useCallback((fromView?: SavedView | null) => {
+  const startNewDraft = useCallback((fromView?: SavedView | null, wantPublicLink = false) => {
     const snap = snapshotFromView(fromView)
     setDraft({
       id: null,
@@ -235,6 +244,7 @@ export function AccessRulesButton({
       restrictColumns: Boolean(snap.columns && snap.columns.length > 0),
       displaySnapshot: snap.displaySnapshot,
       enabled: true,
+      wantPublicLink,
       grants: [],
     })
     setFilterEditorOpen(false)
@@ -242,7 +252,6 @@ export function AccessRulesButton({
     setPublicLink(null)
   }, [])
 
-  // 监听来自 ViewSettingsMenu（「按此视图条件分享数据…」）或 SharePopover（「管理规则」）的打开事件
   useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<OpenAccessRulesDetail>).detail
@@ -259,7 +268,6 @@ export function AccessRulesButton({
     return () => window.removeEventListener(OPEN_ACCESS_RULES_EVENT, handler)
   }, [collectionPath, rules, startNewDraft, openEditorForRule])
 
-  // 实时命中预览（严格只算当前用户可管理的记录）
   useEffect(() => {
     if (!open || !draft) {
       setPreview(null)
@@ -298,6 +306,90 @@ export function AccessRulesButton({
     }
   }, [open, draft, collectionPath])
 
+  const copyText = async (key: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedKey(key)
+      window.setTimeout(() => setCopiedKey((prev) => (prev === key ? '' : prev)), 1600)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // 一键按当前视图生成公开/局域网只读链接并直接进入规则编辑态展示链接
+  const quickCreatePublicLinkFromView = async () => {
+    setQuickLinkBusy(true)
+    setError('')
+    try {
+      const snap = snapshotFromView(activeView)
+      const createRes = await apiFetch('/api/account/access-rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          collection: collectionPath,
+          name: snap.name || '局域网只读链接',
+          filterTree: snap.filterTree,
+          columns: snap.columns,
+          displaySnapshot: snap.displaySnapshot,
+          enabled: true,
+          grants: [],
+        }),
+      })
+      if (!createRes.ok) {
+        const errBody = (await createRes.json().catch(() => ({}))) as { error?: string }
+        throw new Error(errBody.error || '创建规则失败')
+      }
+      const { rule } = (await createRes.json()) as { rule: AccessRuleItem }
+      const shareRes = await apiFetch('/api/db/shares', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'rule',
+          collection: collectionPath,
+          ruleId: rule.id,
+          enabled: true,
+        }),
+      })
+      const shareData = shareRes.ok
+        ? ((await shareRes.json()) as { share?: { token: string; url: string } | null })
+        : { share: null }
+      await loadRules()
+      emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
+      openEditorForRule(rule)
+      if (shareData.share) {
+        setPublicLink(shareData.share)
+        void copyText('editor-url', shareData.share.url)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '生成链接失败')
+    } finally {
+      setQuickLinkBusy(false)
+    }
+  }
+
+  const copyOrCreateRuleLink = async (rule: AccessRuleItem) => {
+    try {
+      const res = await apiFetch('/api/db/shares', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'rule',
+          collection: collectionPath,
+          ruleId: rule.id,
+          enabled: true,
+        }),
+      })
+      if (!res.ok) return
+      const data = (await res.json()) as { share?: { token: string; url: string } | null }
+      if (data.share?.url) {
+        await copyText(`rule:${rule.id}`, data.share.url)
+        emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
   const saveDraft = async () => {
     if (!draft) return
     const trimmedName = draft.name.trim()
@@ -332,6 +424,30 @@ export function AccessRulesButton({
       if (!res.ok) {
         const errBody = (await res.json().catch(() => ({}))) as { error?: string }
         throw new Error(errBody.error || '保存失败')
+      }
+      const savedData = (await res.json()) as { rule?: AccessRuleItem }
+      const savedRule = savedData.rule
+      if (savedRule && draft.wantPublicLink && !publicLink) {
+        const shareRes = await apiFetch('/api/db/shares', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            kind: 'rule',
+            collection: collectionPath,
+            ruleId: savedRule.id,
+            enabled: true,
+          }),
+        })
+        if (shareRes.ok) {
+          const shareData = (await shareRes.json()) as { share?: { token: string; url: string } | null }
+          if (shareData.share) {
+            await loadRules()
+            emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
+            openEditorForRule(savedRule)
+            setPublicLink(shareData.share)
+            return
+          }
+        }
       }
       await loadRules()
       emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
@@ -380,7 +496,11 @@ export function AccessRulesButton({
   }
 
   const togglePublicLink = async () => {
-    if (!draft?.id) return
+    if (!draft) return
+    if (!draft.id) {
+      setDraft({ ...draft, wantPublicLink: !draft.wantPublicLink })
+      return
+    }
     const enable = !publicLink
     try {
       const res = await apiFetch('/api/db/shares', {
@@ -396,18 +516,8 @@ export function AccessRulesButton({
       if (!res.ok) return
       const data = (await res.json()) as { share?: { token: string; url: string } | null }
       setPublicLink(data.share ?? null)
+      setDraft({ ...draft, wantPublicLink: Boolean(data.share) })
       emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
-    } catch {
-      /* ignore */
-    }
-  }
-
-  const copyPublicUrl = async () => {
-    if (!publicLink?.url) return
-    try {
-      await navigator.clipboard.writeText(publicLink.url)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1500)
     } catch {
       /* ignore */
     }
@@ -415,21 +525,61 @@ export function AccessRulesButton({
 
   if (localOnly) return null
 
-  const activeCount = rules.filter((r) => r.enabled).length
   const hasWorkspaceGrant = draft?.grants.some((g) => g.subjectType === 'workspace') ?? false
+
+  const primaryBtnStyle = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    padding: '6px 12px',
+    borderRadius: 8,
+    fontSize: 12,
+    fontWeight: 600,
+    background: 'var(--biu-color-emphasis)',
+    color: 'var(--biu-color-on-emphasis)',
+    border: 'none',
+    cursor: 'pointer',
+  } as const
+
+  const secondaryBtnStyle = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    padding: '6px 10px',
+    borderRadius: 8,
+    fontSize: 12,
+    fontWeight: 500,
+    background: 'var(--biu-color-bg-input)',
+    color: 'var(--biu-color-text)',
+    border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
+    cursor: 'pointer',
+  } as const
+
+  const pillBtnStyle = (active: boolean) =>
+    ({
+      padding: '4px 10px',
+      borderRadius: 999,
+      fontSize: 12,
+      fontWeight: 500,
+      border: active ? 'var(--biu-stroke-width) solid var(--biu-color-emphasis)' : 'var(--biu-stroke-width) solid var(--biu-color-border)',
+      background: active ? 'var(--biu-color-emphasis)' : 'var(--biu-color-bg-input)',
+      color: active ? 'var(--biu-color-on-emphasis)' : 'var(--biu-color-text)',
+      cursor: 'pointer',
+    }) as const
 
   return (
     <>
       <button
         type="button"
         className={`chat-view-header-expand${open ? ' is-active' : ''}`}
-        title="分享规则（仅作用于我可管理的数据）"
-        aria-label="分享规则"
+        title="分享与规则"
+        aria-label="分享与规则"
         data-testid="access-rules-trigger"
         onClick={() => setOpen((prev) => !prev)}
       >
         <ShieldCheckIcon aria-hidden className="size-4" />
-        {activeCount > 0 ? <span className="ml-0.5 text-[11px] font-medium">{activeCount}</span> : null}
       </button>
 
       {open
@@ -446,10 +596,11 @@ export function AccessRulesButton({
                   width: 420,
                   maxWidth: 'calc(100vw - 24px)',
                   zIndex: overlayZ(OVERLAY_Z.popover),
-                  background: 'var(--bg-elevated, var(--bg, #fff))',
-                  border: '1px solid var(--border, rgba(0,0,0,0.1))',
-                  borderRadius: 12,
-                  boxShadow: '0 12px 32px rgba(0,0,0,0.14)',
+                  background: 'var(--biu-color-bg-popover)',
+                  color: 'var(--biu-color-text)',
+                  border: 'var(--biu-stroke-width) solid var(--biu-color-border-popover)',
+                  borderRadius: 'var(--biu-radius-popover, 12px)',
+                  boxShadow: 'var(--biu-shadow-popover)',
                   display: 'flex',
                   flexDirection: 'column',
                   overflow: 'hidden',
@@ -461,10 +612,10 @@ export function AccessRulesButton({
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '12px 14px',
-                    borderBottom: '1px solid var(--border, rgba(0,0,0,0.08))',
+                    borderBottom: 'var(--biu-stroke-width) solid var(--biu-color-border)',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 14, color: 'var(--biu-color-text)' }}>
                     <ShieldCheckIcon aria-hidden className="size-4" />
                     <span>{draft ? (draft.id ? '编辑分享规则' : '新建分享规则') : '我的分享规则'}</span>
                   </div>
@@ -482,16 +633,17 @@ export function AccessRulesButton({
                   style={{
                     padding: '8px 14px',
                     fontSize: 12,
-                    color: 'var(--text-muted, #666)',
-                    background: 'var(--bg-subtle, rgba(0,0,0,0.03))',
-                    borderBottom: '1px solid var(--border, rgba(0,0,0,0.06))',
+                    lineHeight: 1.45,
+                    color: 'var(--biu-color-text-muted)',
+                    background: 'var(--biu-color-bg-hover)',
+                    borderBottom: 'var(--biu-stroke-width) solid var(--biu-color-border)',
                   }}
                 >
                   作用域：仅对你创建的，或你拥有「管理」权限的数据生效；与视图展示完全独立。
                 </div>
 
                 {error ? (
-                  <div style={{ padding: '8px 14px', fontSize: 12, color: '#dc2626' }}>{error}</div>
+                  <div style={{ padding: '8px 14px', fontSize: 12, color: 'var(--biu-color-danger)' }}>{error}</div>
                 ) : null}
 
                 <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -502,19 +654,7 @@ export function AccessRulesButton({
                           type="button"
                           data-testid="access-rules-new"
                           onClick={() => startNewDraft(null)}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 4,
-                            padding: '6px 10px',
-                            borderRadius: 8,
-                            fontSize: 12,
-                            fontWeight: 500,
-                            background: 'var(--accent, #111)',
-                            color: 'var(--accent-fg, #fff)',
-                            border: 'none',
-                            cursor: 'pointer',
-                          }}
+                          style={primaryBtnStyle}
                         >
                           <PlusIcon aria-hidden className="size-3.5" />
                           <span>新建分享规则</span>
@@ -524,41 +664,42 @@ export function AccessRulesButton({
                             type="button"
                             data-testid="access-rules-from-view"
                             onClick={() => startNewDraft(activeView)}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 4,
-                              padding: '6px 10px',
-                              borderRadius: 8,
-                              fontSize: 12,
-                              background: 'transparent',
-                              color: 'var(--text, inherit)',
-                              border: '1px solid var(--border, rgba(0,0,0,0.14))',
-                              cursor: 'pointer',
-                            }}
+                            style={secondaryBtnStyle}
                           >
-                            <span>按当前视图条件新建</span>
+                            <span>按当前视图新建</span>
                           </button>
                         ) : null}
+                        <button
+                          type="button"
+                          disabled={quickLinkBusy}
+                          data-testid="access-rules-quick-link"
+                          onClick={() => void quickCreatePublicLinkFromView()}
+                          style={secondaryBtnStyle}
+                        >
+                          <LinkIcon aria-hidden className="size-3.5" />
+                          <span>{quickLinkBusy ? '生成中…' : '一键生成只读链接'}</span>
+                        </button>
                       </div>
 
                       {loading ? (
-                        <div style={{ fontSize: 12, color: 'var(--text-muted, #666)' }}>加载中…</div>
+                        <div style={{ fontSize: 12, color: 'var(--biu-color-text-muted)' }}>加载中…</div>
                       ) : rules.length === 0 ? (
                         <div
                           style={{
                             padding: '24px 12px',
                             textAlign: 'center',
                             fontSize: 12,
-                            color: 'var(--text-muted, #666)',
+                            lineHeight: 1.5,
+                            color: 'var(--biu-color-text-subtle)',
                           }}
                         >
-                          暂无分享规则。你可以按条件批量分享自己可管理的数据，修改视图不会影响已生效的规则。
+                          暂无分享规则。你可以按条件批量分享给成员，或点击上方「一键生成只读链接」发到局域网/外部。
                         </div>
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                           {rules.map((rule) => {
                             const rowRulesCount = countFilterRules(normalizeFilterTree(rule.filterTree))
+                            const linkCopied = copiedKey === `rule:${rule.id}`
                             return (
                               <div
                                 key={rule.id}
@@ -566,15 +707,16 @@ export function AccessRulesButton({
                                 style={{
                                   padding: '10px 12px',
                                   borderRadius: 10,
-                                  border: '1px solid var(--border, rgba(0,0,0,0.1))',
-                                  opacity: rule.enabled ? 1 : 0.6,
+                                  background: 'var(--biu-color-bg-input)',
+                                  border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
+                                  opacity: rule.enabled ? 1 : 0.58,
                                   display: 'flex',
                                   flexDirection: 'column',
                                   gap: 6,
                                 }}
                               >
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                                  <span style={{ fontWeight: 600, fontSize: 13 }}>{rule.name}</span>
+                                  <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--biu-color-text)' }}>{rule.name}</span>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                     <button
                                       type="button"
@@ -585,6 +727,14 @@ export function AccessRulesButton({
                                       onClick={() => void toggleRuleEnabled(rule)}
                                     >
                                       <span />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="chat-view-header-expand"
+                                      title={linkCopied ? '已复制只读链接' : '生成并复制只读链接'}
+                                      onClick={() => void copyOrCreateRuleLink(rule)}
+                                    >
+                                      {linkCopied ? <CheckIcon aria-hidden className="size-3.5" /> : <LinkIcon aria-hidden className="size-3.5" />}
                                     </button>
                                     <button
                                       type="button"
@@ -604,7 +754,7 @@ export function AccessRulesButton({
                                     </button>
                                   </div>
                                 </div>
-                                <div style={{ fontSize: 11, color: 'var(--text-muted, #666)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                <div style={{ fontSize: 11.5, color: 'var(--biu-color-text-muted)', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                                   <span>{rowRulesCount > 0 ? `${rowRulesCount} 条行条件` : '全部我可管理的数据'}</span>
                                   <span>·</span>
                                   <span>{rule.columns?.length ? `仅 ${rule.columns.length} 个字段` : '全部字段'}</span>
@@ -619,38 +769,32 @@ export function AccessRulesButton({
                     </>
                   ) : (
                     <>
-                      <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
-                        <span style={{ fontWeight: 500 }}>规则名称</span>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12 }}>
+                        <span style={{ fontWeight: 600, color: 'var(--biu-color-text)' }}>规则名称</span>
                         <input
                           type="text"
                           value={draft.name}
                           onChange={(e) => setDraft({ ...draft, name: e.target.value })}
                           placeholder="例如：Q3 客户交付资料"
                           style={{
-                            padding: '6px 10px',
+                            padding: '7px 10px',
                             borderRadius: 8,
-                            border: '1px solid var(--border, rgba(0,0,0,0.14))',
-                            background: 'transparent',
+                            border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
+                            background: 'var(--biu-color-bg-input)',
+                            color: 'var(--biu-color-text)',
                             fontSize: 13,
+                            outline: 'none',
                           }}
                         />
                       </label>
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <span style={{ fontSize: 12, fontWeight: 500 }}>记录范围（行条件）</span>
-                        <div style={{ display: 'flex', gap: 6 }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--biu-color-text)' }}>记录范围（行条件）</span>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                           <button
                             type="button"
                             onClick={() => setDraft({ ...draft, restrictRows: false, filterTree: emptyFilterGroup() })}
-                            style={{
-                              padding: '4px 10px',
-                              borderRadius: 999,
-                              fontSize: 12,
-                              border: '1px solid var(--border, rgba(0,0,0,0.14))',
-                              background: !draft.restrictRows ? 'var(--accent, #111)' : 'transparent',
-                              color: !draft.restrictRows ? 'var(--accent-fg, #fff)' : 'inherit',
-                              cursor: 'pointer',
-                            }}
+                            style={pillBtnStyle(!draft.restrictRows)}
                           >
                             全部我可管理的记录
                           </button>
@@ -660,15 +804,7 @@ export function AccessRulesButton({
                               setDraft({ ...draft, restrictRows: true })
                               setFilterEditorOpen(true)
                             }}
-                            style={{
-                              padding: '4px 10px',
-                              borderRadius: 999,
-                              fontSize: 12,
-                              border: '1px solid var(--border, rgba(0,0,0,0.14))',
-                              background: draft.restrictRows ? 'var(--accent, #111)' : 'transparent',
-                              color: draft.restrictRows ? 'var(--accent-fg, #fff)' : 'inherit',
-                              cursor: 'pointer',
-                            }}
+                            style={pillBtnStyle(draft.restrictRows)}
                           >
                             满足筛选条件（{countFilterRules(draft.filterTree)}）
                           </button>
@@ -676,7 +812,8 @@ export function AccessRulesButton({
                         {draft.restrictRows && filterEditorOpen && filterFields.length > 0 && filterValueOptions ? (
                           <div
                             style={{
-                              border: '1px solid var(--border, rgba(0,0,0,0.1))',
+                              border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
+                              background: 'var(--biu-color-bg-input)',
                               borderRadius: 8,
                               padding: 8,
                             }}
@@ -692,20 +829,12 @@ export function AccessRulesButton({
                       </div>
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <span style={{ fontSize: 12, fontWeight: 500 }}>字段范围（列白名单）</span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--biu-color-text)' }}>字段范围（列白名单）</span>
                         <div style={{ display: 'flex', gap: 6 }}>
                           <button
                             type="button"
                             onClick={() => setDraft({ ...draft, restrictColumns: false, columns: null })}
-                            style={{
-                              padding: '4px 10px',
-                              borderRadius: 999,
-                              fontSize: 12,
-                              border: '1px solid var(--border, rgba(0,0,0,0.14))',
-                              background: !draft.restrictColumns ? 'var(--accent, #111)' : 'transparent',
-                              color: !draft.restrictColumns ? 'var(--accent-fg, #fff)' : 'inherit',
-                              cursor: 'pointer',
-                            }}
+                            style={pillBtnStyle(!draft.restrictColumns)}
                           >
                             全部字段
                           </button>
@@ -718,15 +847,7 @@ export function AccessRulesButton({
                                 columns: draft.columns?.length ? draft.columns : schemaFields.slice(0, 4).map((f) => f.key),
                               })
                             }
-                            style={{
-                              padding: '4px 10px',
-                              borderRadius: 999,
-                              fontSize: 12,
-                              border: '1px solid var(--border, rgba(0,0,0,0.14))',
-                              background: draft.restrictColumns ? 'var(--accent, #111)' : 'transparent',
-                              color: draft.restrictColumns ? 'var(--accent-fg, #fff)' : 'inherit',
-                              cursor: 'pointer',
-                            }}
+                            style={pillBtnStyle(draft.restrictColumns)}
                           >
                             仅勾选字段
                           </button>
@@ -745,15 +866,7 @@ export function AccessRulesButton({
                                     else current.add(field.key)
                                     setDraft({ ...draft, columns: [...current] })
                                   }}
-                                  style={{
-                                    padding: '3px 8px',
-                                    borderRadius: 6,
-                                    fontSize: 11,
-                                    border: '1px solid var(--border, rgba(0,0,0,0.14))',
-                                    background: checked ? 'var(--accent, #111)' : 'transparent',
-                                    color: checked ? 'var(--accent-fg, #fff)' : 'inherit',
-                                    cursor: 'pointer',
-                                  }}
+                                  style={pillBtnStyle(checked)}
                                 >
                                   {field.label}
                                 </button>
@@ -768,8 +881,10 @@ export function AccessRulesButton({
                         style={{
                           padding: '8px 10px',
                           borderRadius: 8,
-                          background: 'var(--bg-subtle, rgba(0,0,0,0.03))',
+                          background: 'var(--biu-color-bg-hover)',
+                          border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
                           fontSize: 12,
+                          color: 'var(--biu-color-text)',
                         }}
                       >
                         <div style={{ fontWeight: 500 }}>
@@ -780,7 +895,7 @@ export function AccessRulesButton({
                               : '命中预览不可用'}
                         </div>
                         {preview && preview.sampleRecords.length > 0 ? (
-                          <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-muted, #666)' }}>
+                          <div style={{ marginTop: 4, fontSize: 11.5, color: 'var(--biu-color-text-muted)' }}>
                             示例：{preview.sampleRecords.map((r) => r.title).join('、')}
                             {preview.matchCount > preview.sampleRecords.length ? ' 等' : ''}
                           </div>
@@ -789,7 +904,7 @@ export function AccessRulesButton({
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: 12, fontWeight: 500 }}>分享给谁</span>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--biu-color-text)' }}>分享给谁</span>
                           <div style={{ display: 'flex', gap: 6 }}>
                             {!hasWorkspaceGrant ? (
                               <button
@@ -803,14 +918,7 @@ export function AccessRulesButton({
                                     ],
                                   })
                                 }
-                                style={{
-                                  fontSize: 11,
-                                  padding: '3px 8px',
-                                  borderRadius: 6,
-                                  border: '1px solid var(--border, rgba(0,0,0,0.14))',
-                                  background: 'transparent',
-                                  cursor: 'pointer',
-                                }}
+                                style={{ ...secondaryBtnStyle, padding: '3px 8px', fontSize: 11.5 }}
                               >
                                 + 空间全员
                               </button>
@@ -818,14 +926,7 @@ export function AccessRulesButton({
                             <button
                               type="button"
                               onClick={() => setMemberPickerOpen((v) => !v)}
-                              style={{
-                                fontSize: 11,
-                                padding: '3px 8px',
-                                borderRadius: 6,
-                                border: '1px solid var(--border, rgba(0,0,0,0.14))',
-                                background: 'transparent',
-                                cursor: 'pointer',
-                              }}
+                              style={{ ...secondaryBtnStyle, padding: '3px 8px', fontSize: 11.5 }}
                             >
                               + 添加成员
                             </button>
@@ -835,9 +936,10 @@ export function AccessRulesButton({
                         {memberPickerOpen ? (
                           <div
                             style={{
-                              maxHeight: 120,
+                              maxHeight: 130,
                               overflowY: 'auto',
-                              border: '1px solid var(--border, rgba(0,0,0,0.12))',
+                              border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
+                              background: 'var(--biu-color-bg-input)',
                               borderRadius: 8,
                               padding: 4,
                               display: 'flex',
@@ -866,6 +968,7 @@ export function AccessRulesButton({
                                     padding: '5px 8px',
                                     borderRadius: 6,
                                     fontSize: 12,
+                                    color: 'var(--biu-color-text)',
                                     background: 'transparent',
                                     border: 'none',
                                     cursor: 'pointer',
@@ -888,8 +991,10 @@ export function AccessRulesButton({
                                 gap: 8,
                                 padding: '6px 8px',
                                 borderRadius: 8,
-                                border: '1px solid var(--border, rgba(0,0,0,0.08))',
+                                background: 'var(--biu-color-bg-input)',
+                                border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
                                 fontSize: 12,
+                                color: 'var(--biu-color-text)',
                               }}
                             >
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -907,13 +1012,9 @@ export function AccessRulesButton({
                                       setDraft({ ...draft, grants: next })
                                     }}
                                     style={{
-                                      padding: '2px 6px',
-                                      borderRadius: 6,
+                                      ...pillBtnStyle(grant.role === r),
+                                      padding: '2px 7px',
                                       fontSize: 11,
-                                      border: '1px solid var(--border, rgba(0,0,0,0.12))',
-                                      background: grant.role === r ? 'var(--accent, #111)' : 'transparent',
-                                      color: grant.role === r ? 'var(--accent-fg, #fff)' : 'inherit',
-                                      cursor: 'pointer',
                                     }}
                                   >
                                     {ROLE_LABELS[r]}
@@ -933,68 +1034,62 @@ export function AccessRulesButton({
                         </div>
                       </div>
 
-                      {draft.id ? (
-                        <div
-                          style={{
-                            padding: '8px 10px',
-                            borderRadius: 8,
-                            border: '1px solid var(--border, rgba(0,0,0,0.1))',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 6,
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <LinkIcon aria-hidden className="size-3.5" />
-                              <span>公开只读外链（按本规则行/列过滤）</span>
-                            </div>
+                      <div
+                        style={{
+                          padding: '10px 12px',
+                          borderRadius: 8,
+                          background: 'var(--biu-color-bg-input)',
+                          border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: 'var(--biu-color-text)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <LinkIcon aria-hidden className="size-3.5" />
+                            <span>公开 / 局域网只读链接</span>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={Boolean(publicLink || draft.wantPublicLink)}
+                            className={`fsdb-share-toggle${publicLink || draft.wantPublicLink ? ' is-on' : ''}`}
+                            onClick={() => void togglePublicLink()}
+                          >
+                            <span />
+                          </button>
+                        </div>
+                        {publicLink ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <input
+                              readOnly
+                              value={publicLink.url}
+                              style={{
+                                flex: 1,
+                                fontSize: 11.5,
+                                padding: '5px 8px',
+                                borderRadius: 6,
+                                border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
+                                background: 'var(--biu-color-bg-popover)',
+                                color: 'var(--biu-color-text)',
+                              }}
+                            />
                             <button
                               type="button"
-                              role="switch"
-                              aria-checked={Boolean(publicLink)}
-                              className={`fsdb-share-toggle${publicLink ? ' is-on' : ''}`}
-                              onClick={() => void togglePublicLink()}
+                              onClick={() => void copyText('editor-url', publicLink.url)}
+                              style={{ ...secondaryBtnStyle, padding: '5px 10px', fontSize: 11.5 }}
                             >
-                              <span />
+                              {copiedKey === 'editor-url' ? <CheckIcon aria-hidden className="size-3.5" /> : null}
+                              <span>{copiedKey === 'editor-url' ? '已复制' : '复制'}</span>
                             </button>
                           </div>
-                          {publicLink ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <input
-                                readOnly
-                                value={publicLink.url}
-                                style={{
-                                  flex: 1,
-                                  fontSize: 11,
-                                  padding: '4px 8px',
-                                  borderRadius: 6,
-                                  border: '1px solid var(--border, rgba(0,0,0,0.12))',
-                                  background: 'transparent',
-                                }}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => void copyPublicUrl()}
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 4,
-                                  padding: '4px 8px',
-                                  borderRadius: 6,
-                                  fontSize: 11,
-                                  border: '1px solid var(--border, rgba(0,0,0,0.14))',
-                                  background: 'transparent',
-                                  cursor: 'pointer',
-                                }}
-                              >
-                                {copied ? <CheckIcon aria-hidden className="size-3.5" /> : null}
-                                <span>{copied ? '已复制' : '复制'}</span>
-                              </button>
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
+                        ) : draft.wantPublicLink ? (
+                          <div style={{ fontSize: 11.5, color: 'var(--biu-color-text-muted)' }}>
+                            保存规则后将自动生成可复制的公开/局域网只读链接。
+                          </div>
+                        ) : null}
+                      </div>
                     </>
                   )}
                 </div>
@@ -1003,24 +1098,13 @@ export function AccessRulesButton({
                   <div
                     style={{
                       padding: '10px 14px',
-                      borderTop: '1px solid var(--border, rgba(0,0,0,0.08))',
+                      borderTop: 'var(--biu-stroke-width) solid var(--biu-color-border)',
                       display: 'flex',
                       justifyContent: 'flex-end',
                       gap: 8,
                     }}
                   >
-                    <button
-                      type="button"
-                      onClick={() => setDraft(null)}
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: 8,
-                        fontSize: 12,
-                        border: '1px solid var(--border, rgba(0,0,0,0.14))',
-                        background: 'transparent',
-                        cursor: 'pointer',
-                      }}
-                    >
+                    <button type="button" onClick={() => setDraft(null)} style={secondaryBtnStyle}>
                       取消
                     </button>
                     <button
@@ -1028,16 +1112,7 @@ export function AccessRulesButton({
                       disabled={saving}
                       data-testid="access-rule-save"
                       onClick={() => void saveDraft()}
-                      style={{
-                        padding: '6px 14px',
-                        borderRadius: 8,
-                        fontSize: 12,
-                        fontWeight: 500,
-                        background: 'var(--accent, #111)',
-                        color: 'var(--accent-fg, #fff)',
-                        border: 'none',
-                        cursor: 'pointer',
-                      }}
+                      style={primaryBtnStyle}
                     >
                       {saving ? '保存中…' : '保存规则'}
                     </button>
