@@ -2615,14 +2615,16 @@ export function apply(ctx: Context) {
       builtin: Boolean(view.builtin),
     }
   })
-  const authorizeViewAction = (
+  const resolveViewDecision = (
     workspaceId: string,
     collection: string,
     view: { id: string; createdBy?: string },
     accountId: string,
     action: 'resource:read' | 'resource:update' | 'resource:delete',
   ) => {
-    if (!account?.store || !account?.authorization || !workspaceId || !accountId) return true
+    if (!account?.store || !account?.authorization || !workspaceId || !accountId) {
+      return { allowed: true as const, effectiveRole: 'owner' as const }
+    }
     const recordId =
       account.store.ensureViewPolicy?.(workspaceId, collection, String(view.id), view.createdBy || accountId) ??
       rowIdOfView(collection, String(view.id))
@@ -2630,8 +2632,15 @@ export function apply(ctx: Context) {
       { type: 'account', accountId, workspaceId },
       action,
       { type: 'record', workspaceId, collection: VIEWS_COLLECTION_PATH, recordId },
-    ).allowed
+    )
   }
+  const authorizeViewAction = (
+    workspaceId: string,
+    collection: string,
+    view: { id: string; createdBy?: string },
+    accountId: string,
+    action: 'resource:read' | 'resource:update' | 'resource:delete',
+  ) => resolveViewDecision(workspaceId, collection, view, accountId, action).allowed
   savedViews.setPolicyGuard({
     // 方案 B（视图归展示，规则归安全）：视图权限与页面记录完全一致，统一走 /views 下的 resource_policies + record_grants
     // 内置视图全空间共享一份，创建人固定为空间创建人（workspace owner），且仅空间创建人可修改或删除
@@ -2644,6 +2653,10 @@ export function apply(ctx: Context) {
       authorizeViewAction(workspaceId, collection, view, accountId, 'resource:update'),
     canRemoveView: (workspaceId, collection, view, accountId) =>
       authorizeViewAction(workspaceId, collection, view, accountId, 'resource:delete'),
+    viewRoleFor: (workspaceId, collection, view, accountId) => {
+      const decision = resolveViewDecision(workspaceId, collection, view, accountId, 'resource:read')
+      return decision.allowed ? decision.effectiveRole : null
+    },
     onCreated: (workspaceId, collection, view, accountId) => {
       account?.store?.ensureViewPolicy?.(workspaceId, collection, String(view.id), view.createdBy || accountId)
     },

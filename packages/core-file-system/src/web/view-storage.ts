@@ -11,7 +11,7 @@ import { normalizeCollectionPath } from '../paths.ts'
 import { invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { emptyFilterGroup, looksLikeFilterTree, normalizeFilterGroup, parseSortsInput, resolveViewFilterTree } from '../query-logic.ts'
-import { extractViewCreatorId, normalizeGroupConfig, normalizePageSize, normalizeSavedView, normalizeViewScope, parseViewColumns, rankListedViews, viewIsFresher, type SavedView } from './saved-view.ts'
+import { extractViewCreatorId, normalizeGroupConfig, normalizePageSize, normalizeSavedView, normalizeViewRole, normalizeViewScope, parseViewColumns, rankListedViews, viewIsFresher, type SavedView } from './saved-view.ts'
 import { KeyedSerialQueue } from './record-write-queue.ts'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
 import { clearCrumbCache } from './crumb-cache.ts'
@@ -128,7 +128,14 @@ export function mergeSavedViewLists(
     const next = normalizeSavedView(view)
     const prev = byId.get(id)
     if (prev && !viewIsFresher(next, prev)) {
-      if (!prev.createdBy && next.createdBy) byId.set(id, { ...prev, createdBy: next.createdBy })
+      const patched = {
+        ...prev,
+        ...(!prev.createdBy && next.createdBy ? { createdBy: next.createdBy } : {}),
+        ...(next.viewRole && next.viewRole !== prev.viewRole ? { viewRole: next.viewRole } : {}),
+      }
+      if (patched.createdBy !== prev.createdBy || patched.viewRole !== prev.viewRole) {
+        byId.set(id, patched)
+      }
       continue
     }
     byId.set(id, next)
@@ -376,6 +383,7 @@ export function savedViewFromRecord(row: Record<string, unknown>): SavedView | n
     mode: String(row.mode ?? 'table') as SavedView['mode'],
     scope: normalizeViewScope(row.scope),
     createdBy: extractViewCreatorId(row.createdBy),
+    viewRole: normalizeViewRole(row.viewRole),
     sortField,
     sortDir,
     sorts: parseSortsInput(row.sorts, sortField, sortDir),

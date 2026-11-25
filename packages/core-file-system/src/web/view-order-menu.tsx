@@ -19,7 +19,7 @@ import { moveList } from '../query-logic.ts'
 import { DndGrip } from './dnd-grip.tsx'
 import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search.tsx'
 import { ViewModeGlyph } from './nav-glyphs.tsx'
-import { canRemoveCollectionView, type SavedView } from './saved-view.ts'
+import { canDeleteSavedView, canRemoveCollectionView, type SavedView } from './saved-view.ts'
 
 function ViewRowShell({
   view,
@@ -165,7 +165,7 @@ export function ViewOrderMenu({
                     onSelect={onSelect}
                     onCopy={onCopy}
                     onDelete={onDelete}
-                    canRemove={canRemove}
+                    canRemove={canRemove && canDeleteSavedView(view)}
                     grip={
                       <span className="fsdb-query-grip is-locked" aria-hidden>
                         <DndGrip />
@@ -207,7 +207,7 @@ export function ViewOrderMenu({
                     onSelect={onSelect}
                     onCopy={onCopy}
                     onDelete={onDelete}
-                    canRemove={canRemove}
+                    canRemove={canRemove && canDeleteSavedView(view)}
                   />
                 ))}
               </SortableContext>
