@@ -15,7 +15,7 @@ import {
   type ColumnPolicy,
 } from '../column-access.ts'
 import { recordMatchesSharedView, resolveSharedView, type SharedViewDef } from '../share-view-match.ts'
-import { effectiveDataScope, highestViewRole, recordMatchesAccessRule, recordMatchesGrantedView, type DataScopeName, type ViewGrantRole } from '../view-access.ts'
+import { recordMatchesAccessRule, type DataScopeName, type ViewGrantRole } from '../view-access.ts'
 import {
   DATA_COLLECTION_PATH,
   EDITOR_BLOCKS_COLLECTION_PATH,
@@ -437,31 +437,25 @@ export class DatabaseAccessPolicy {
     const store = this.host.collabStore()
     const authorization = this.host.authorization()
     const actor = authorization?.currentActor()
-    if (!store?.viewGrantsFor || !authorization || !actor) return
-    const grants = store.viewGrantsFor(actor.workspaceId, collection)
-    if (!grants.length) return
+    if (!store?.listActiveAccessRulesForCollection || !authorization || !actor) return
+    const rules = store.listActiveAccessRulesForCollection(actor.workspaceId, collection)
+    if (!rules.length) return
     const target = resolveScopeTarget(collection, String(beforeRecord.id ?? ''), beforeRecord)
-    const canShare = authorization.authorize(actor, 'resource:share', {
-      type: 'record',
+    const targetRef = {
+      type: 'record' as const,
       workspaceId: actor.workspaceId,
       collection: target.collection,
       recordId: target.id,
       record: beforeRecord as Record<string, unknown>,
-    }).allowed
+    }
+    const canShare = authorization.authorize(actor, 'resource:share', targetRef).allowed
     if (canShare) return
 
-    const saved = [builtinAllView({ path: collection }), ...(this.host.viewCatalog?.viewsFor(collection) ?? [])]
-    const scope = authorization.scopeCurrent({
-      type: 'record',
-      workspaceId: actor.workspaceId,
-      collection: target.collection,
-      recordId: target.id,
-    })
-    const ownerId = this.recordOwner(target.collection, target.id)
-    for (const grant of grants) {
-      const ownerCtx = { grantedBy: grant.granted_by, recordOwnerId: ownerId }
-      const wasMatched = recordMatchesGrantedView(beforeRecord, grant.view_id, saved, scope, ownerCtx)
-      const nowMatched = recordMatchesGrantedView(afterRecord, grant.view_id, saved, scope, ownerCtx)
+    for (const rule of rules) {
+      if (!rule.enabled) continue
+      if (!authorization.canGrantorShareRecord(rule.createdBy, targetRef)) continue
+      const wasMatched = recordMatchesAccessRule(beforeRecord, rule.filterTree)
+      const nowMatched = recordMatchesAccessRule(afterRecord, rule.filterTree)
       if (!wasMatched && nowMatched) {
         throw new Error('permission denied: ANCHOR_FIELD_SCOPE_EXPANSION')
       }
@@ -515,10 +509,7 @@ export class DatabaseAccessPolicy {
         if (collection === TAGS_COLLECTION_PATH && !String(row.sourceId ?? '') && !String(row.tablePath ?? '')) {
           return this.indexTagVisible(String(row.id ?? ''), actor.accountId)
         }
-        if (authorization.authorize(actor, action, resource).allowed) return true
-        if (authorization.hasDataViewMatcher()) return false
-        const viaView = this.viewGrantRole(actor.workspaceId, collection, row, actor.accountId)
-        return Boolean(viaView && roleCoversAction(viaView, action))
+        return authorization.authorize(actor, action, resource).allowed
       })
     }
     const rbac = getRuntimePolicy().authzMode === 'rbac'
@@ -682,15 +673,7 @@ export class DatabaseAccessPolicy {
         ) {
           return
         }
-        if (authorization.hasDataViewMatcher()) {
-          throw new Error(`unknown record: ${spec.path}/${id}`)
-        }
-        const viaView = record
-          ? this.viewGrantRole(actor.workspaceId, spec.path, record, actor.accountId)
-          : null
-        if (!viaView || !roleCoversAction(viaView, action)) {
-          throw new Error(`unknown record: ${spec.path}/${id}`)
-        }
+        throw new Error(`unknown record: ${spec.path}/${id}`)
       }
       return
     }
@@ -761,54 +744,8 @@ export class DatabaseAccessPolicy {
     return views.some((view) => recordMatchesSharedView(tagged, view, stored, schema, packs))
   }
 
-  effectiveScope(collection: string, record: DbRecord, stored: DataScopeName): DataScopeName {
-    const store = this.host.collabStore()
-    const workspaceId = this.resolveWorkspaceId()
-    if (!workspaceId) return stored
-    const key = `${workspaceId}\t${collection}`
-    let entry = this.viewAudienceCache.get(key)
-    if (!entry) {
-      const grantRows = store?.viewGrantAudiences?.(workspaceId, collection)
-        ?? store?.viewGrantsFor?.(workspaceId, collection)?.map((row) => ({
-          view_id: row.view_id,
-          subject_type: row.subject_type,
-          subject_id: row.subject_id,
-          granted_by: row.granted_by,
-          member_kind: '',
-        }))
-        ?? []
-      const grants = grantRows.map((row) => ({
-        viewId: row.view_id,
-        subjectType: row.subject_type,
-        subjectId: row.subject_id,
-        memberKind: row.member_kind,
-        grantedBy: row.granted_by,
-      }))
-      const memberViews = grants.length
-        ? [
-            builtinAllView({ path: WORKSPACE_MEMBERS_COLLECTION_PATH }),
-            ...builtinMemberViews(),
-            ...(this.host.viewCatalog?.viewsFor(WORKSPACE_MEMBERS_COLLECTION_PATH) ?? []),
-          ]
-        : []
-      const dataViews = grants.length
-        ? [
-            builtinAllView({ path: collection }),
-            ...(this.host.viewCatalog?.viewsFor(collection) ?? []),
-          ]
-        : []
-      entry = { grants, dataViews, memberViews }
-      this.viewAudienceCache.set(key, entry)
-    }
-    if (!entry.grants.length) return stored
-    return effectiveDataScope(
-      stored,
-      record,
-      entry.grants,
-      entry.dataViews,
-      entry.memberViews,
-      this.recordOwner(collection, String(record.id ?? '')),
-    )
+  effectiveScope(_collection: string, _record: DbRecord, stored: DataScopeName): DataScopeName {
+    return stored
   }
 
   shareScopeLabel(collection: string, id: string, record: DbRecord, stored: 'personal' | 'workspace' | 'shared') {
@@ -832,9 +769,6 @@ export class DatabaseAccessPolicy {
       recordId: target.id,
       record: record as Record<string, unknown>,
     })
-    const direct = decision.allowed ? decision.effectiveRole : null
-    if (authorization.hasDataViewMatcher()) return accessLabel(direct)
-    const via = this.viewGrantRole(actor.workspaceId, spec.path, record, actor.accountId)
-    return accessLabel(higherAccess(direct, via))
+    return accessLabel(decision.allowed ? decision.effectiveRole : null)
   }
 }

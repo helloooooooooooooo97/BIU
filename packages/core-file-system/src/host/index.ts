@@ -62,7 +62,7 @@ import { SharesStore } from './shares-store.ts'
 import { builtinAllView, stubBuiltinAllView, stubBuiltinMemberView } from '../catalog-views.ts'
 import { isIndexCollection, isSystemCollection } from '../paths.ts'
 import { dataCollection, isDataOverviewSource, overviewRecord } from './data-collection.ts'
-import { recordMatchesAccessRule, recordMatchesGrantedView } from '../view-access.ts'
+import { recordMatchesAccessRule } from '../view-access.ts'
 import { type SharedViewDef } from '../share-view-match.ts'
 import { FileSystemAssets, collectAssetNames, assetNamesFromMarkdown, assetNamesFromHtml } from './assets-store.ts'
 import { tagsCollection, parseStampRecordId } from './tags-collection.ts'
@@ -2663,32 +2663,6 @@ export function apply(ctx: Context) {
         ...(view.filters ?? {}),
         ...(view.filterTree ? { $tree: view.filterTree } : {}),
       },
-    )
-  })
-  const dataViewCache = new Map<string, ReturnType<typeof savedViews.viewsFor>>()
-  const clearDataViewCache = () => {
-    dataViewCache.clear()
-  }
-  account?.authorization?.onInvalidate?.(clearDataViewCache)
-  const origNotifyViewCatalog = db.notifyViewCatalog.bind(db)
-  db.notifyViewCatalog = (path?: string) => {
-    clearDataViewCache()
-    origNotifyViewCatalog(path)
-  }
-  account?.authorization?.setDataViewMatcher((workspaceId, collection, viewId, recordId, context) => {
-    if (!context.record) return false
-    const cacheKey = `${workspaceId}\t${collection}`
-    let saved = dataViewCache.get(cacheKey)
-    if (!saved) {
-      saved = [builtinAllView({ path: collection }), ...savedViews.viewsFor(collection, '', workspaceId)] as ReturnType<typeof savedViews.viewsFor>
-      dataViewCache.set(cacheKey, saved)
-    }
-    return recordMatchesGrantedView(
-      { id: recordId, ...context.record } as DbRecord,
-      viewId,
-      saved,
-      context.scope,
-      { grantedBy: context.grantedBy, recordOwnerId: context.recordOwnerId },
     )
   })
   const parsedRuleFilterCache = new Map<string, Record<string, unknown>>()

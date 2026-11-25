@@ -128,14 +128,6 @@ type ScanGrant = {
   role: ResourceRole
 }
 
-type ScanViewGrant = {
-  view_id: string
-  subject_type: 'account' | 'member_view'
-  subject_id: string
-  role: ResourceRole
-  granted_by: string
-}
-
 type ScanAccessRuleGrant = {
   rule_id: string
   created_by: string
@@ -153,8 +145,6 @@ type CollectionScan = {
   policies: Map<string, PolicyRow>
   owners: Map<string, string>
   grants: Map<string, ScanGrant[]>
-  viewGrants: ScanViewGrant[]
-  actorViewGrants: ScanViewGrant[]
   accessRuleGrants: ScanAccessRuleGrant[]
   actorAccessRuleGrants: ScanAccessRuleGrant[]
   memberViewCache: Map<string, boolean>
@@ -266,7 +256,6 @@ function requiredRole(action: Action): ResourceRole {
 
 export class AuthorizationService {
   private memberViewMatcher?: (workspaceId: string, viewId: string, accountId: string) => boolean
-  private dataViewMatcher?: DataViewMatcher
   private accessRuleMatcher?: AccessRuleMatcher
   private scans = new Map<string, CollectionScan>()
   private invalidators = new Set<() => void>()
@@ -342,63 +331,12 @@ export class AuthorizationService {
     this.memberViewMatcher = matcher
   }
 
-  setDataViewMatcher(matcher: DataViewMatcher) {
-    this.dataViewMatcher = matcher
-  }
-
-  hasDataViewMatcher() {
-    return Boolean(this.dataViewMatcher)
-  }
-
   setAccessRuleMatcher(matcher: AccessRuleMatcher) {
     this.accessRuleMatcher = matcher
   }
 
   hasAccessRuleMatcher() {
     return Boolean(this.accessRuleMatcher)
-  }
-
-  /** 判断某视图是否已绑定权限规则（作为数据视图或成员视图），绑定后其 filters / filterTree / columns 进入锁定状态。 */
-  isViewPolicyBound(workspaceId: string, collection: string, viewId: string): boolean {
-    if (!workspaceId || !collection || !viewId) return false
-    try {
-      const dataGrant = this.db
-        .prepare(
-          `SELECT 1 AS ok FROM view_grants
-           WHERE workspace_id = ? AND collection = ? AND view_id = ?
-           LIMIT 1`,
-        )
-        .get(workspaceId, collection, viewId) as { ok?: number } | undefined
-      if (dataGrant?.ok) return true
-      if (collection === '/workspace-members') {
-        const memberRecordGrant = this.db
-          .prepare(
-            `SELECT 1 AS ok FROM record_grants
-             WHERE workspace_id = ? AND subject_type = 'member_view' AND subject_id = ?
-             LIMIT 1`,
-          )
-          .get(workspaceId, viewId) as { ok?: number } | undefined
-        if (memberRecordGrant?.ok) return true
-        const memberViewGrant = this.db
-          .prepare(
-            `SELECT 1 AS ok FROM view_grants
-             WHERE workspace_id = ? AND subject_type = 'member_view' AND subject_id = ?
-             LIMIT 1`,
-          )
-          .get(workspaceId, viewId) as { ok?: number } | undefined
-        if (memberViewGrant?.ok) return true
-      }
-    } catch {
-      return false
-    }
-    return false
-  }
-
-  /** 只有空间 owner / admin 可以修改或删除已绑定权限规则（Policy-Locked）的视图边界。 */
-  canModifyPolicyLockedView(workspaceId: string, accountId: string): boolean {
-    if (!workspaceId || !accountId) return false
-    const role = this.membership(accountId, workspaceId)
-    return role === 'owner' || role === 'admin'
   }
 
   /** 为 Agent / MCP / 外链声明能力边界（Scope），运行时与触发者权限取交集。 */
@@ -534,19 +472,6 @@ export class AuthorizationService {
       .all(accountId, workspaceId) as Array<{ group_id: string }>) {
       groups.add(row.group_id)
     }
-    let viewGrants: ScanViewGrant[] = []
-    try {
-      viewGrants = this.db
-        .prepare(
-          `SELECT view_id, subject_type, subject_id, role, COALESCE(granted_by, '') AS granted_by
-           FROM view_grants
-           WHERE workspace_id = ? AND collection = ?
-           ORDER BY created_at`,
-        )
-        .all(workspaceId, collection) as ScanViewGrant[]
-    } catch {
-      viewGrants = []
-    }
     const memberViewCache = new Map<string, boolean>()
     const matchMemberViewCached = (viewId: string) => {
       const hit = memberViewCache.get(viewId)
@@ -555,11 +480,6 @@ export class AuthorizationService {
       memberViewCache.set(viewId, matched)
       return matched
     }
-    const actorViewGrants = viewGrants.filter((grant) =>
-      grant.subject_type === 'account'
-        ? grant.subject_id === accountId
-        : matchMemberViewCached(grant.subject_id),
-    )
     const membership = this.readMembership(accountId, workspaceId)
     const membershipKind = this.readMembershipKind(accountId, workspaceId)
     let accessRuleGrants: ScanAccessRuleGrant[] = []
@@ -591,8 +511,6 @@ export class AuthorizationService {
       policies,
       owners,
       grants,
-      viewGrants,
-      actorViewGrants,
       accessRuleGrants,
       actorAccessRuleGrants,
       memberViewCache,
@@ -1234,63 +1152,6 @@ export class AuthorizationService {
     }
     const best = maxRole(allowRoles)
     return best ? { effectiveRole: best, source: 'access-rule' } : null
-  }
-
-  private dataViewRole(
-    accountId: string,
-    resource: Extract<ResourceRef, { type: 'record' }>,
-  ): { effectiveRole: ResourceRole; source: 'data-view-grant' } | null {
-    if (!this.dataViewMatcher) return null
-    const scan = this.scans.get(collectionScanKey(resource.workspaceId, resource.collection, accountId))
-    let rows: ScanViewGrant[]
-    let prefiltered = false
-    if (scan) {
-      rows = scan.actorViewGrants
-      prefiltered = true
-    } else {
-      try {
-        rows = this.db
-          .prepare(
-            `SELECT view_id, subject_type, subject_id, role, COALESCE(granted_by, '') AS granted_by
-             FROM view_grants
-             WHERE workspace_id = ? AND collection = ?
-             ORDER BY created_at`,
-          )
-          .all(resource.workspaceId, resource.collection) as ScanViewGrant[]
-      } catch {
-        rows = []
-      }
-    }
-    if (!rows.length) return null
-    const policy = this.policy(resource)
-    const recordOwnerId = policy?.owner_account_id || this.legacyOwnerId(resource) || ''
-    const scope = this.resourceScope(resource, new Set(), 0)
-    const allowRoles: ResourceRole[] = []
-    for (const grant of rows) {
-      if (!prefiltered) {
-        const subjectMatches = grant.subject_type === 'account'
-          ? grant.subject_id === accountId
-          : this.matchesMemberView(resource.workspaceId, grant.subject_id, accountId)
-        if (!subjectMatches) continue
-      }
-      // 非提权公理：授权人本人必须对该记录拥有非视图来源的分享/管理权
-      if (!this.canGrantorShareRecord(grant.granted_by, resource)) continue
-      const matched = this.dataViewMatcher(
-        resource.workspaceId,
-        resource.collection,
-        grant.view_id,
-        resource.recordId,
-        {
-          grantedBy: grant.granted_by,
-          recordOwnerId,
-          scope,
-          record: resource.record,
-        },
-      )
-      if (matched) allowRoles.push(grant.role)
-    }
-    const best = maxRole(allowRoles)
-    return best ? { effectiveRole: best, source: 'data-view-grant' } : null
   }
 
   private directRole(accountId: string, resource: Extract<ResourceRef, { type: 'record' }>) {

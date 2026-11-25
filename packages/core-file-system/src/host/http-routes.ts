@@ -13,7 +13,6 @@ import { DATABASE_CHANNEL, databaseChannelPayload, normalizeSchemaPack } from '@
 import { buildAccessExplanation, type BuildAccessExplanationInput } from '../access-explanation.ts'
 import { displayNameForView, isReadOnlyViewId } from '../catalog-views.ts'
 import { PAGES_COLLECTION_PATH, TAGS_COLLECTION_PATH, VIEWS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, isIndexCollection, normalizeCollectionPath } from '../paths.ts'
-import { previewViewFilterImpact } from '../view-impact.ts'
 import { recordMatchesAccessRule } from '../view-access.ts'
 import { isSharePluginId } from '../share-resources.ts'
 import {
@@ -403,43 +402,6 @@ export function registerDatabaseHttpRoutes(
       }
       ctx.emit('database/change')
       route.send(200, { ok: true })
-    } catch (error) {
-      route.send(400, { error: String(error) })
-    }
-  })
-  ctx.http.route('POST', '/api/db/saved-views/preview-impact', async (route) => {
-    try {
-      const body = (await route.json()) as {
-        path?: string
-        viewId?: string
-        afterFilters?: Record<string, unknown>
-        afterFilterTree?: unknown
-      }
-      const path = normalizeCollectionPath(String(body?.path ?? ''))
-      const viewId = String(body?.viewId ?? '').trim()
-      if (!path || !viewId) {
-        route.send(400, { error: 'path and viewId required' })
-        return
-      }
-      await db.requirePath(path, 'resource:read')
-      const beforeView = savedViews.viewsFor(path, currentAccountId()).find((v) => String(v.id) === viewId)
-      const listed = await db.list(path, {}, { limit: 1000, offset: 0 })
-      const records = listed.kind === 'collection' ? listed.items : []
-      const preview = previewViewFilterImpact({
-        records,
-        viewId,
-        beforeView: {
-          id: viewId,
-          filters: (beforeView?.filters ?? {}) as Record<string, unknown>,
-          filterTree: beforeView?.filterTree ?? null,
-        },
-        afterView: {
-          id: viewId,
-          filters: body?.afterFilters ?? {},
-          filterTree: (body?.afterFilterTree as StoredView['filterTree']) ?? null,
-        },
-      })
-      route.send(200, preview)
     } catch (error) {
       route.send(400, { error: String(error) })
     }

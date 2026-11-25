@@ -314,7 +314,6 @@ test('view_grants never grants underlying record access; only access_rules do', 
   auth.attach(actor(ada.id), page('view-doc'), { accessMode: 'private' })
   store.grantViewMemberView(ada.id, '/pages', 'v-public', 'mv-team', 'editor')
   auth.setMemberViewMatcher((_ws, viewId, accountId) => viewId === 'mv-team' && accountId === bob.id)
-  auth.setDataViewMatcher((_ws, _col, viewId, _recordId, ctx) => viewId === 'v-public' && ctx.record?.tag === 'public')
 
   // Sharing a view via view_grants MUST NOT leak underlying data records
   const deniedByViewGrant = auth.authorize(actor(bob.id), 'resource:read', { ...page('view-doc'), record: { tag: 'public' } })
@@ -418,24 +417,8 @@ test('external and guest collaborators are read-only on /views and policy-bound 
   assert.equal(auth.authorize(actor(external.id), 'resource:update', viewRef).allowed, false)
   assert.equal(auth.authorize(actor(external.id), 'resource:delete', viewRef).allowed, false)
 
-  runWithAccount(ada.id, () => {
-    store.shareViewWithEmail(ada.id, '/pages', 'v-shared', 'bob@example.com', 'editor', 'internal')
-  })
-  assert.equal(auth.isViewPolicyBound(workspace.id, '/pages', 'v-shared'), true)
-  assert.equal(auth.isViewPolicyBound(workspace.id, '/pages', 'v-other'), false)
-  assert.equal(auth.canModifyPolicyLockedView(workspace.id, ada.id), true)
-  assert.equal(auth.canModifyPolicyLockedView(workspace.id, bob.id), false)
-  assert.equal(auth.canModifyPolicyLockedView(workspace.id, external.id), false)
-
-  runWithAccount(ada.id, () => {
-    store.grantMemberView(ada.id, '/pages', 'doc-1', 'mv-eng', 'viewer')
-  })
-  assert.equal(auth.isViewPolicyBound(workspace.id, '/workspace-members', 'mv-eng'), true)
-
   store.cleanupViewReferences(workspace.id, '/pages', 'v-shared')
-  assert.equal(auth.isViewPolicyBound(workspace.id, '/pages', 'v-shared'), false)
   store.cleanupViewReferences(workspace.id, '/workspace-members', 'mv-eng')
-  assert.equal(auth.isViewPolicyBound(workspace.id, '/workspace-members', 'mv-eng'), false)
   assert.equal(page('doc-1').recordId, 'doc-1')
 })
 
