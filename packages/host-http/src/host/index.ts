@@ -230,6 +230,7 @@ export class HttpService extends Service {
   private unboundSockets = new Set<WebSocket>()
   private socketMeta = new WeakMap<WebSocket, { accountId: string; workspaceId: string; token: string }>()
   private socketAlive = new WeakMap<WebSocket, boolean>()
+  private sessionReadCache = new Map<string, { allowed: boolean; expiresAt: number }>()
   private server: Server | null = null
   /** 同一 HTTP server 上只能有一条 upgrade 路由；多挂几个 `ws.Server({ server })` 会互相 abort 握手。 */
   private wsServers = new Map<string, WebSocketServer>()
@@ -517,13 +518,36 @@ export class HttpService extends Service {
     }
   }
 
+  private canAccountReadSession(workspaceId: string, sessionId: string, targetAccountId: string): boolean {
+    if (!targetAccountId || !workspaceId || !sessionId) return false
+    const store = getAccountPort(this.ctx)?.store
+    if (!store?.canReadRecord) return false
+    const key = `${workspaceId}:${sessionId}:${targetAccountId}`
+    const now = Date.now()
+    const cached = this.sessionReadCache.get(key)
+    if (cached && cached.expiresAt > now) return cached.allowed
+    let allowed = false
+    try {
+      allowed = runWithAccount(targetAccountId, () =>
+        runWithRequestWorkspace(workspaceId, () => Boolean(store.canReadRecord?.('/agents', sessionId))),
+      )
+    } catch {
+      allowed = false
+    }
+    if (this.sessionReadCache.size >= 500) this.sessionReadCache.clear()
+    this.sessionReadCache.set(key, { allowed, expiresAt: now + 2000 })
+    return allowed
+  }
+
   broadcast(type: string, payload: unknown, workspaceId?: string, accountId?: string) {
+    let sessionId = ''
     if (payload && typeof payload === 'object') {
       const scoped = payload as { workspaceId?: unknown; accountId?: unknown; sessionId?: unknown }
       workspaceId ||= typeof scoped.workspaceId === 'string' ? scoped.workspaceId : ''
       accountId ||= typeof scoped.accountId === 'string' ? scoped.accountId : ''
-      if ((!workspaceId || !accountId) && typeof scoped.sessionId === 'string') {
-        const tenant = getAccountPort(this.ctx)?.store?.tenantForRecord?.('/agents', scoped.sessionId)
+      sessionId = typeof scoped.sessionId === 'string' ? scoped.sessionId : ''
+      if ((!workspaceId || !accountId) && sessionId) {
+        const tenant = getAccountPort(this.ctx)?.store?.tenantForRecord?.('/agents', sessionId)
         workspaceId ||= tenant?.workspaceId ?? ''
         accountId ||= tenant?.accountId ?? ''
       }
@@ -539,7 +563,23 @@ export class HttpService extends Service {
     }
     if (TENANT_EVENTS.has(type)) {
       if (workspaceId) {
-        if (type !== 'database' && accountId) {
+        if (type !== 'database' && sessionId && getAccountPort(this.ctx)?.store?.canReadRecord) {
+          const wsSockets = this.socketsByWorkspace.get(workspaceId)
+          if (wsSockets) {
+            for (const socket of wsSockets) {
+              if (socket.readyState !== socket.OPEN) continue
+              const meta = this.socketMeta.get(socket)
+              if (!meta) continue
+              if (
+                (accountId && meta.accountId === accountId) ||
+                (!accountId && !meta.accountId) ||
+                (meta.accountId && this.canAccountReadSession(workspaceId, sessionId, meta.accountId))
+              ) {
+                socket.send(data)
+              }
+            }
+          }
+        } else if (type !== 'database' && accountId) {
           const acctSockets = this.socketsByAccount.get(accountId)
           if (acctSockets) for (const socket of acctSockets) sendIfEligible(socket)
         } else {

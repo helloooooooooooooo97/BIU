@@ -573,6 +573,11 @@ export class SessionViewService extends Service {
     await this.loadMostRecentSession(sessionId)
   }
 
+  onSocketReconnect() {
+    if (!this.value.sessionId || this.value.switchingSession) return
+    void this.revalidate(this.value.sessionId, this.value.view)
+  }
+
   ingest(sessionId: string, event: SessionEvent) {
     if (event.type === 'turn/end' || event.type === 'turn/start') {
       this.applyTurnBusy(sessionId, event.type)
@@ -2032,7 +2037,15 @@ function upsertEvent(events: SessionEvent[], event: SessionEvent) {
       return [...events.slice(0, -1), event]
     }
   }
-  return [...events, event].sort((a, b) => a.seq - b.seq)
+  return [...events, event].sort(compareSessionEvents)
+}
+
+function compareSessionEvents(a: SessionEvent, b: SessionEvent) {
+  const aOpt = a.seq < 0
+  const bOpt = b.seq < 0
+  if (aOpt !== bOpt) return aOpt ? 1 : -1
+  if (aOpt && bOpt) return a.ts - b.ts || b.seq - a.seq
+  return a.seq - b.seq
 }
 
 function patchStreamingNodes(

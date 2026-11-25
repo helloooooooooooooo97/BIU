@@ -242,6 +242,8 @@ export class SnapshotService extends Service {
           return
         }
         void this.pull()
+        const view = this.ctx.get('sessionView') as { onSocketReconnect?: () => void } | undefined
+        view?.onSocketReconnect?.()
       }
       ws.onmessage = (message) => {
         const parsed = JSON.parse(message.data) as { type: string; payload: unknown }

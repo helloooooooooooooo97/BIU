@@ -12,6 +12,7 @@ export interface AccountStorePort {
   isMember?(accountId: string, workspaceId: string): boolean
   isSuperAdmin?(accountId: string): boolean
   canAccessPlugin?(accountId: string, workspaceId: string, pluginId: string): boolean
+  canReadRecord?(collection: string, recordId: string): boolean
   activeWorkspaceId?(): string | null
   tenantForRecord?(collection: string, recordId: string): { workspaceId: string; accountId: string } | null
   resolveMcpCredential?(token: string): McpTenant | null
