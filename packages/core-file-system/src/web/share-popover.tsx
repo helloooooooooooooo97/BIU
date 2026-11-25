@@ -247,6 +247,7 @@ function WorkspaceAccess({
   const [people, setPeople] = useState<Array<{
     id: string
     name: string
+    avatar?: string
     email: string
     role: string
     memberKind: 'member' | 'external' | 'guest'
@@ -257,6 +258,7 @@ function WorkspaceAccess({
   const [workspaceMembers, setWorkspaceMembers] = useState<Array<{
     id: string
     name: string
+    avatar?: string
     email: string
     role: string
   }>>([])
@@ -274,6 +276,7 @@ function WorkspaceAccess({
     subjectId: string
     role: string
     name: string
+    avatar?: string
     email: string
     memberKind: 'member' | 'external' | 'guest'
     grantedBy?: string
@@ -294,6 +297,7 @@ function WorkspaceAccess({
       people?: Array<{
         id: string
         name: string
+        avatar?: string
         email: string
         role: string
         memberKind: 'member' | 'external' | 'guest'
@@ -306,6 +310,7 @@ function WorkspaceAccess({
         subjectId: string
         role: string
         name: string
+        avatar?: string
         email: string
         memberKind: 'member' | 'external' | 'guest'
       }>
@@ -370,17 +375,19 @@ function WorkspaceAccess({
     void listCollection({
       path: WORKSPACE_MEMBERS_COLLECTION_PATH,
       limit: 200,
-      columns: ['title', 'name', 'email', 'role', 'membershipKind'],
+      columns: ['title', 'name', 'avatar', 'email', 'role', 'membershipKind'],
     })
       .then((page) => {
         setWorkspaceMembers(page.items.flatMap((row) => {
           const id = String(row.id ?? '').trim()
           const email = String(row.email ?? '').trim()
           if (!id || !email || row.membershipKind !== 'member') return []
+          const avatar = typeof row.avatar === 'string' ? row.avatar.trim() : ''
           return [{
             id,
             email,
             name: String(row.name ?? row.title ?? email).trim() || email,
+            ...(avatar ? { avatar } : {}),
             role: String(row.role ?? ''),
           }]
         }))
@@ -580,6 +587,15 @@ function WorkspaceAccess({
   const internalCount = internalPeople.length + groups.length + memberViews.length + inheritedInternal.length
   const externalCount = externalPeople.length + inheritedExternal.length
   const avatarText = (name: string) => (name.trim().slice(0, 1) || '?').toUpperCase()
+  const isImageAvatar = (value?: string) => Boolean(value && /^(https?:\/\/|\/|data:image\/)/i.test(value.trim()))
+  const renderPersonAvatar = (name: string, avatar?: string, extraClass = '') => {
+    const trimmed = avatar?.trim() ?? ''
+    return (
+      <span className={`fsdb-share-avatar${extraClass ? ` ${extraClass}` : ''}`} aria-hidden>
+        {isImageAvatar(trimmed) ? <img src={trimmed} alt="" /> : trimmed || avatarText(name)}
+      </span>
+    )
+  }
 
   return (
     <div className="fsdb-share-link-section" data-testid="fsdb-share-members">
@@ -613,7 +629,7 @@ function WorkspaceAccess({
         <ul className="fsdb-share-collaborators">
           {internalPeople.map((row) => (
             <li key={row.id}>
-              <span className="fsdb-share-avatar" aria-hidden>{avatarText(row.name)}</span>
+              {renderPersonAvatar(row.name, row.avatar)}
               <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong>{row.email ? <em>{row.email}</em> : null}</span>
               {row.email ? (
                 <ShareSelect
@@ -667,7 +683,9 @@ function WorkspaceAccess({
           ))}
           {inheritedInternal.map((row) => (
             <li key={`inherited:${row.viewId}:${row.subjectType}:${row.subjectId}`} className="is-inherited">
-              <span className="fsdb-share-avatar is-view" aria-hidden>{row.subjectType === 'member_view' ? <UsersIcon className="size-3.5" /> : avatarText(row.name)}</span>
+              {row.subjectType === 'member_view'
+                ? <span className="fsdb-share-avatar is-view" aria-hidden><UsersIcon className="size-3.5" /></span>
+                : renderPersonAvatar(row.name, row.avatar, 'is-view')}
               <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong><em>来自视图「{row.source}」</em></span>
               <span className="fsdb-share-collaborator-role">{roleLabel(row.role)}</span>
             </li>
@@ -711,11 +729,11 @@ function WorkspaceAccess({
                       setMemberPickerOpen(false)
                     }}
                   >
-                    <span className="fsdb-share-member-option-head">
-                      <UsersIcon aria-hidden className="size-3.5" />
-                      <span>{row.name}</span>
+                    <span className="fsdb-share-avatar is-view is-sm" aria-hidden><UsersIcon className="size-3.5" /></span>
+                    <span className="fsdb-share-member-option-copy">
+                      <strong>{row.name}</strong>
+                      <em>动态成员视图</em>
                     </span>
-                    <em>动态成员视图</em>
                   </button>
                 ))}
                 {matchingMembers.map((row) => (
@@ -731,8 +749,11 @@ function WorkspaceAccess({
                       setMemberPickerOpen(false)
                     }}
                   >
-                    <span>{row.name}</span>
-                    <em>{row.email}</em>
+                    {renderPersonAvatar(row.name, row.avatar, 'is-sm')}
+                    <span className="fsdb-share-member-option-copy">
+                      <strong>{row.name}</strong>
+                      <em>{row.email}</em>
+                    </span>
                   </button>
                 ))}
                 {!matchingMemberViews.length && !matchingMembers.length ? <p>没有可添加的成员或视图</p> : null}
@@ -756,7 +777,7 @@ function WorkspaceAccess({
         <ul className="fsdb-share-collaborators">
           {externalPeople.map((row) => (
             <li key={row.id}>
-              <span className="fsdb-share-avatar is-external" aria-hidden>{avatarText(row.name)}</span>
+              {renderPersonAvatar(row.name, row.avatar, 'is-external')}
               <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong>{row.email ? <em>{row.email}</em> : null}</span>
               {row.email ? (
                 <ShareSelect
@@ -780,7 +801,7 @@ function WorkspaceAccess({
           ))}
           {inheritedExternal.map((row) => (
             <li key={`inherited:${row.viewId}:${row.subjectType}:${row.subjectId}`} className="is-inherited">
-              <span className="fsdb-share-avatar is-external" aria-hidden>{avatarText(row.name)}</span>
+              {renderPersonAvatar(row.name, row.avatar, 'is-external')}
               <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong><em>来自视图「{row.source}」</em></span>
               <span className="fsdb-share-collaborator-role">{roleLabel(row.role)}</span>
             </li>

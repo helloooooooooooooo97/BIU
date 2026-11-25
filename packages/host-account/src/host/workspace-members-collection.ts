@@ -13,6 +13,7 @@ type MemberRow = {
   id: string
   name: string
   display_name: string
+  avatar?: string
   email: string
   role: string
   member_kind: 'member' | 'external' | 'guest'
@@ -27,6 +28,7 @@ function asRecord(row: MemberRow): DbRecord {
     id: row.id,
     title: row.name || row.email,
     name: row.display_name,
+    avatar: row.avatar ?? '',
     email: row.email,
     role: row.role,
     status: row.status ?? 'active',
@@ -85,6 +87,7 @@ export function workspaceMembersCollection(
       fields: {
         title: { type: 'string', label: '账号名' },
         name: { type: 'string', label: '空间昵称' },
+        avatar: { type: 'string', label: '头像' },
         email: { type: 'string', label: '登录邮箱' },
         role: {
           type: 'select',

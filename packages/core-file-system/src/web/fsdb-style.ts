@@ -1284,7 +1284,9 @@ a.fsdb-person.is-link:hover .fsdb-person-name,button.fsdb-person.is-link:hover .
 .fsdb-share-collaborators li.is-inherited{grid-template-columns:28px minmax(0,1fr) auto}
 .fsdb-share-collaborators li:not(.is-empty):hover{background:color-mix(in srgb,var(--biu-color-bg-hover) 72%,transparent)}
 .fsdb-share-collaborators li.is-empty{display:flex;min-height:32px;margin:0;align-items:center;justify-content:flex-start;border:var(--biu-stroke-width) dashed color-mix(in srgb,var(--biu-color-border) 85%,transparent);border-radius:8px;padding:6px 10px;color:var(--biu-color-text-subtle);font-size:12px}
-.fsdb-share-avatar{display:grid;width:28px;height:28px;place-items:center;border-radius:999px;background:color-mix(in srgb,var(--biu-color-emphasis) 16%,var(--biu-color-bg-hover));color:var(--biu-color-text);font-size:12px;font-weight:var(--biu-font-weight-bold);flex:none}
+.fsdb-share-avatar{display:grid;width:28px;height:28px;place-items:center;overflow:hidden;border-radius:999px;background:color-mix(in srgb,var(--biu-color-emphasis) 16%,var(--biu-color-bg-hover));color:var(--biu-color-text);font-size:12px;font-weight:var(--biu-font-weight-bold);flex:none}
+.fsdb-share-avatar.is-sm{width:26px;height:26px;font-size:11.5px}
+.fsdb-share-avatar img{width:100%;height:100%;object-fit:cover;display:block}
 .fsdb-share-avatar.is-view{background:color-mix(in srgb,var(--biu-color-emphasis) 18%,transparent);color:var(--biu-color-emphasis)}
 .fsdb-share-avatar.is-external{background:color-mix(in srgb,#d97706 18%,transparent);color:#f59e0b}
 .fsdb-share-collaborator-copy{display:flex;min-width:0;flex-direction:column;gap:1px}
@@ -1324,13 +1326,12 @@ a.fsdb-person.is-link:hover .fsdb-person-name,button.fsdb-person.is-link:hover .
 .fsdb-share-member-picker>input.fsdb-share-link-field{width:100%;outline:0;color:var(--biu-color-text);font:inherit;font-size:var(--biu-font-size-2)}
 .fsdb-share-member-picker>input[type=search]::-webkit-search-cancel-button{display:none}
 .fsdb-share-member-options{position:absolute;top:calc(100% + 4px);right:0;left:0;z-index:3;max-height:190px;overflow:auto;border:var(--biu-stroke-width) solid var(--biu-color-border-popover);border-radius:var(--biu-radius-popover);background:var(--biu-color-bg-popover);padding:4px;box-shadow:var(--biu-shadow-popover)}
-.fsdb-share-member-options button{display:flex;width:100%;min-width:0;flex-direction:column;border:0;border-radius:5px;background:transparent;padding:6px 7px;color:var(--biu-color-text);font:inherit;text-align:left;cursor:pointer}
+.fsdb-share-member-options button{display:grid;grid-template-columns:26px minmax(0,1fr);align-items:center;gap:8px;width:100%;min-width:0;border:0;border-radius:6px;background:transparent;padding:6px 7px;color:var(--biu-color-text);font:inherit;text-align:left;cursor:pointer}
 .fsdb-share-member-options button:hover,.fsdb-share-member-options button[aria-selected=true]{background:var(--biu-color-bg-hover)}
-.fsdb-share-member-options span,.fsdb-share-member-options em{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fsdb-share-member-options span{font-size:var(--biu-font-size-3);font-weight:var(--biu-font-weight-semibold)}
-.fsdb-share-member-option-head{display:inline-flex;align-items:center;gap:5px;color:var(--biu-color-text)}
-.fsdb-share-member-option-head svg{flex:none;color:var(--biu-color-emphasis)}
-.fsdb-share-member-options em{color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-2);font-style:normal}
+.fsdb-share-member-option-copy{display:flex;min-width:0;flex-direction:column;gap:1px}
+.fsdb-share-member-option-copy strong,.fsdb-share-member-option-copy em{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fsdb-share-member-option-copy strong{color:var(--biu-color-text);font-size:13px;font-weight:var(--biu-font-weight-semibold);line-height:1.25}
+.fsdb-share-member-option-copy em{color:var(--biu-color-text-subtle);font-size:11.5px;font-style:normal;line-height:1.25}
 .fsdb-share-member-options p{margin:0;padding:8px;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-2);text-align:center}
 .fsdb-share-publish:hover,.fsdb-share-panel .fsdb-share-copy:hover{filter:brightness(.94)}
 .fsdb-share-link-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
