@@ -5,12 +5,11 @@ import { isReadOnlyViewId, viewsForScope, type DataScope } from '../catalog-view
 import type { FilterGroup, SortRule } from '../query-logic.ts'
 import type { ViewMode } from './fields.ts'
 import { FSDB_CRUMB_LABELS_EVENT } from './fsdb-events.ts'
-import { canRemoveCollectionView, type GroupConfig, type SavedView } from './saved-view.ts'
+import { canRemoveCollectionView, normalizeViewScope, type GroupConfig, type SavedView } from './saved-view.ts'
 import {
   activeViewStorageKey,
   diffSavedViews,
   getStarredViews,
-  isLocalOnlyViewPatch,
   isViewStarred,
   loadViews,
   mergeSavedViewLists,
@@ -138,10 +137,13 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       incoming,
     )
     const previous = extra?.baseline ?? loadViews(path)
-    const patch = mergeSavedViewsPatch(
-      { upsert: diffSavedViews(previous, listed).upsert, remove: [] },
-      { upsert: forced.map((view) => stampSavedView(view)), remove: extra?.remove },
-    )
+    const pureRemoval = Boolean(extra?.remove?.length && !forced.length)
+    const patch = pureRemoval
+      ? { upsert: [], remove: extra?.remove }
+      : mergeSavedViewsPatch(
+          { upsert: diffSavedViews(previous, listed).upsert, remove: [] },
+          { upsert: forced.map((view) => stampSavedView(view)), remove: extra?.remove },
+        )
     const stamped = (patch.upsert ?? []).map((view) => stampSavedView(view))
     const stampById = new Map(stamped.map((view) => [view.id, view]))
     const adopted = listed.map((view) => stampById.get(view.id) ?? view)
@@ -284,7 +286,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
         target === collectionPath ? [...schemaDefaultKeys] : [],
         effectiveScope ? { $scope: effectiveScope } : {},
       ),
-      ...(effectiveScope ? { scope: effectiveScope } : {}),
+      ...(normalizeViewScope(effectiveScope) ? { scope: normalizeViewScope(effectiveScope) } : {}),
     }
     const nextStored = mergeSavedViewLists(stored, [view])
     rememberViews(target, nextStored)
@@ -364,11 +366,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       return
     }
     rememberViews(collectionPath, nextList)
-    // 个人展示偏好（列宽/换行/截断/行号/冻结/分页）仅存本地，不写服务端、不覆盖协作者。
-    if (isLocalOnlyViewPatch(patch)) {
-      persistViewDisplay(collectionPath, targetId, { ...patch, updatedAt: updated.updatedAt })
-      return
-    }
+    persistViewDisplay(collectionPath, targetId, { ...patch, updatedAt: updated.updatedAt })
     void persistViewsFor(collectionPath, nextList, { upsert: [updated], baseline: latest }).then((ok) => {
       if (ok || viewsRef.current !== nextList) return
       viewsRef.current = latest

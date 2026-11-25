@@ -1,9 +1,8 @@
 import { useEffect, useState, type ReactElement } from 'react'
-import { PlusIcon, ShieldCheckIcon } from '@heroicons/react/16/solid'
+import { PlusIcon } from '@heroicons/react/16/solid'
 import { apiFetch } from '@biu/biu-ui/api-client'
 import type { CollectionRowViewType, CollectionViewType } from '@biu/type-file-system/ui'
 import type { FilterGroup, SortRule } from '../query-logic.ts'
-import { openAccessRulesDrawer } from './access-rules-drawer.tsx'
 import { LocalText } from './controls.tsx'
 import type { ViewMode } from './fields.ts'
 import { ModeGlyph, VIEW_MODES } from './fsdb-cells.tsx'
@@ -15,7 +14,7 @@ import {
   type GroupMenuBucket,
   type QueryField,
 } from './query-menus.tsx'
-import { PAGE_SIZES, normalizeViewScope, type GroupConfig, type SavedView, type ViewScope } from './saved-view.ts'
+import { PAGE_SIZES, type GroupConfig, type SavedView } from './saved-view.ts'
 import type { TableSandboxItem } from '../shared/table-sandbox-model.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
@@ -28,11 +27,6 @@ const TABS: Array<{ id: ViewSettingsTab; label: string }> = [
   { id: 'filter', label: '筛选' },
   { id: 'sort', label: '排序' },
   { id: 'group', label: '分组' },
-]
-
-const VIEW_SCOPE_OPTIONS: Array<{ value: ViewScope; label: string }> = [
-  { value: 'personal', label: '私人（仅自己）' },
-  { value: 'workspace', label: '空间（纯展示布局）' },
 ]
 
 type ViewerIdentity = { accountId: string; isAdmin: boolean }
@@ -311,53 +305,6 @@ export function ViewSettingsMenu({
               >
                 <PlusIcon aria-hidden className="size-[14px]" />
                 <span>新建沙箱视图</span>
-              </button>
-            ) : null}
-
-            {!sheet && activeView && !activeView.builtin && !foreignViewReadOnly ? (
-              <GroupAccordionSelect
-                testId="fsdb-vset-scope-row"
-                label="可见范围"
-                value={normalizeViewScope(activeView.scope) ?? 'workspace'}
-                options={VIEW_SCOPE_OPTIONS}
-                open={openAcc === 'scope'}
-                onToggle={() => setOpenAcc((prev) => (prev === 'scope' ? null : 'scope'))}
-                onSelect={(next) => {
-                  setOpenAcc(null)
-                  patchActiveView({ scope: next as ViewScope })
-                }}
-              />
-            ) : null}
-
-            {!sheet && activeView && onSaveAsPersonal && !foreignViewReadOnly ? (
-              <button
-                type="button"
-                className="fsdb-vset-mode-add"
-                data-testid="fsdb-view-save-personal"
-                onClick={() => {
-                  setOpenAcc(null)
-                  onSaveAsPersonal()
-                  onClose()
-                }}
-              >
-                <PlusIcon aria-hidden className="size-[14px]" />
-                <span>另存为私人视图</span>
-              </button>
-            ) : null}
-
-            {!sheet && activeView ? (
-              <button
-                type="button"
-                className="fsdb-vset-mode-add"
-                data-testid="fsdb-view-share-as-rule"
-                onClick={() => {
-                  setOpenAcc(null)
-                  onClose()
-                  openAccessRulesDrawer({ collection: collectionPath, fromView: activeView })
-                }}
-              >
-                <ShieldCheckIcon aria-hidden className="size-[14px]" />
-                <span>按此视图条件分享数据…</span>
               </button>
             ) : null}
 
