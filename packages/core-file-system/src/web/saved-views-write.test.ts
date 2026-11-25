@@ -1,5 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { builtinAllViewId, builtinTagViewId } from '../catalog-views.ts'
 import { emptyFilterGroup } from '../query-logic.ts'
 import { rankListedViews, type SavedView } from './saved-view.ts'
 import { createBrowserViewCrud } from './use-browser-view-crud.ts'
@@ -233,6 +234,64 @@ test('commitViewName renames optimistically and rolls back if persist fails', as
     await new Promise((r) => setTimeout(r, 25))
     assert.equal(harness.viewsRef.current[0]?.name, '旧名称')
     assert.equal(loadViews(path)[0]?.name, '旧名称')
+  } finally {
+    restore()
+    env.restore()
+  }
+})
+
+test('commitViewName persists renamed builtin-all view to server so /views stays in sync', async () => {
+  const env = setupBrowserGlobals()
+  const path = '/pages-behavior-builtin-rename'
+  const allId = builtinAllViewId(path)
+  const tagId = builtinTagViewId('tag-1')
+  const allView: SavedView = {
+    id: allId,
+    name: '全部页面',
+    mode: 'table',
+    sortField: 'updatedAt',
+    sortDir: 'desc',
+    filters: {},
+    columns: ['title'],
+    builtin: true,
+    rank: 0,
+  }
+  const tagView: SavedView = {
+    id: tagId,
+    name: '标签视图',
+    mode: 'table',
+    sortField: 'updatedAt',
+    sortDir: 'desc',
+    filters: { tag: 'tag-1' },
+    columns: ['title'],
+    builtin: true,
+    rank: 1,
+  }
+  const harness = makeCrudHarness(path, [allView, tagView], allId)
+  const posted: Array<{ path?: string; upsert?: SavedView[] }> = []
+  const restore = mockFetch(async (input, init) => {
+    const url = String(input)
+    if (url.includes('/api/db/saved-views')) {
+      posted.push(JSON.parse(String(init?.body ?? '{}')))
+      return new Response('{"ok":true}', { status: 200 })
+    }
+    return new Response(JSON.stringify({ items: [], total: 0 }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  })
+  try {
+    harness.crud.commitViewName(allId, '核心页面')
+    await new Promise((r) => setTimeout(r, 25))
+    assert.equal(posted.length, 1)
+    assert.equal(posted[0]?.path, path)
+    assert.equal(posted[0]?.upsert?.[0]?.id, allId)
+    assert.equal(posted[0]?.upsert?.[0]?.name, '核心页面')
+
+    // 其他虚拟只读内置视图仍不写服务端
+    harness.crud.commitViewName(tagId, '标签视图改名')
+    await new Promise((r) => setTimeout(r, 25))
+    assert.equal(posted.length, 1)
   } finally {
     restore()
     env.restore()

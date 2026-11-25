@@ -1,7 +1,7 @@
 import { writeStorageString } from '@biu/biu-ui/client-storage'
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
 import { emitFsdbChange } from '@biu/type-file-system'
-import { isReadOnlyViewId, viewsForScope, type DataScope } from '../catalog-views.ts'
+import { isBuiltinAllViewId, isReadOnlyViewId, viewsForScope, type DataScope } from '../catalog-views.ts'
 import type { FilterGroup, SortRule } from '../query-logic.ts'
 import type { ViewMode } from './fields.ts'
 import { FSDB_CRUMB_LABELS_EVENT } from './fsdb-events.ts'
@@ -393,14 +393,14 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       return
     }
     rememberViews(collectionPath, listed)
-    persistViewDisplay(collectionPath, viewId, { name: nextName })
+    persistViewDisplay(collectionPath, viewId, { name: nextName, updatedAt: updated.updatedAt })
     const stars = getStarredViews()
     if (isViewStarred(stars, collectionPath, viewId)) {
       persistStarredViews(stars.map((item) => (item.path === collectionPath && item.viewId === viewId ? { ...item, name: nextName } : item)))
     }
     emitFsdbChange({ scope: 'views' })
     window.dispatchEvent(new Event(FSDB_CRUMB_LABELS_EVENT))
-    if (isReadOnlyViewId(viewId)) return
+    if (isReadOnlyViewId(viewId) && !isBuiltinAllViewId(viewId)) return
     void persistViewsFor(collectionPath, listed, { upsert: [updated], baseline: current }).then((ok) => {
       if (ok) return
       const live = viewsRef.current
@@ -409,6 +409,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       viewsRef.current = current
       setViews(current)
       rememberViews(collectionPath, current)
+      persistViewDisplay(collectionPath, viewId, { name: target.name, updatedAt: target.updatedAt })
     })
   }
 
