@@ -756,8 +756,6 @@ export const USE_CASES: UseCase[] = [
   },
 ]
 
-export const USE_CASE_CATEGORIES = USE_CASES
-
 export type IndustryExtra = {
   replaces: string
   sharedState: string

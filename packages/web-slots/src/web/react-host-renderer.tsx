@@ -1,7 +1,7 @@
 import { useSyncExternalStore, type ReactNode } from 'react'
 import { BrowserRouter } from 'react-router-dom'
 import { SlotOutlet, type SlotsService } from './index.ts'
-import type { AppModulesService } from '@biu/web-app-modules'
+import type { AppModulesService } from './app-modules.ts'
 
 function AppShell({ slots }: { slots: SlotsService }) {
   return <SlotOutlet slots={slots} name="root" kind="single" />

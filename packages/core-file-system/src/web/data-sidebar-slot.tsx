@@ -1,4 +1,4 @@
-import type { SlotProps } from '@biu/type-slots'
+import type { SlotProps } from '@biu/types/slots'
 import { DataSidebar } from './data-sidebar.tsx'
 import { DataSidebarShell } from './data-sidebar-shell.tsx'
 import { useDataSidebarLive } from './data-sidebar-host.ts'

@@ -406,7 +406,6 @@ export function toggleChatOverlay() {
 }
 
 export const OVERLAY_CHAT_HEIGHT_MIN = 96
-export const OVERLAY_CHAT_HEIGHT_DEFAULT = 200
 
 export type OverlayWinGeom = { x: number; y: number; w: number; h: number }
 export type OverlayLayout = 'right' | 'bottom'

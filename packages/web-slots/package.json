@@ -7,12 +7,13 @@
   "description": "UI 缝运行时",
   "exports": {
     ".": "./src/web/index.ts",
-    "./react-host": "./src/web/react-host.ts"
+    "./react-host": "./src/web/react-host.ts",
+    "./app-modules": "./src/web/app-modules.ts",
+    "./project-view": "./src/web/project-view.ts"
   },
   "dependencies": {
     "@biu/biu-ui": "0.1.0",
-    "@biu/type-slots": "0.1.0",
-    "@biu/web-app-modules": "0.1.0"
+    "@biu/types": "0.1.0"
   },
   "peerDependencies": {
     "cordis": "4.0.0-rc.8",

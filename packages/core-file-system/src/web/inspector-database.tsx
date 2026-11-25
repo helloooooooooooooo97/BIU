@@ -1,6 +1,6 @@
 import { lazy, memo, Suspense, useEffect, useMemo, useRef, useSyncExternalStore, type ComponentType } from 'react'
 import { CircleStackIcon, XMarkIcon } from '@heroicons/react/16/solid'
-import type { SlotProps } from '@biu/type-slots'
+import type { SlotProps } from '@biu/types/slots'
 import { FSDB_CHANGE_EVENT, fsdbChangeHitsPane, parseFsdbChange, type CollectionInfo, type DbRecord } from '@biu/type-file-system'
 import { FSDB_CRUMB_LABELS_EVENT, INSPECTOR_CAPTION_EVENT, onFsdbEvent } from './fsdb-events.ts'
 import type { CollectionChrome } from '@biu/type-file-system/ui'

@@ -222,8 +222,3 @@ export const SITE_PATHS = [
   '/terms',
 ] as const
 
-export function useIsSitePath(): boolean {
-  const { pathname } = useLocation()
-  if (pathname === '/') return true
-  return SITE_PATHS.some((prefix) => prefix !== '/' && pathname.startsWith(prefix))
-}

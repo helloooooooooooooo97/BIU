@@ -260,9 +260,6 @@ export function omitImageContent(messages: LlmMessage[]): LlmMessage[] {
 }
 
 /** @deprecated 用 omitImageContent；保留别名以免旧测试/调用处断裂。 */
-export function stripImageContent(messages: LlmMessage[]): LlmMessage[] {
-  return omitImageContent(messages)
-}
 
 export type LlmErrorKind = 'cancel' | 'images' | 'orphan-tools' | 'fatal'
 

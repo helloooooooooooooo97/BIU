@@ -4,7 +4,7 @@ import { realpath, stat } from 'node:fs/promises'
 import { platform } from 'node:os'
 import { assistantContentForApi, isVisionImageUrl, stampMessageSeqs, type LlmMessage } from '@biu/host-llm'
 import { allocateRecordId } from '@biu/type-file-system'
-import type { AgentSendOptions, AgentHandle, AgentTurn } from '@biu/type-agent-loop'
+import type { AgentSendOptions, AgentHandle, AgentTurn } from '@biu/types/agent-loop'
 import {
   SESSION_FORMAT_VERSION,
   type SessionEvent,

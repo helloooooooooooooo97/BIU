@@ -46,10 +46,6 @@ export function artifactMime(name: string) {
   }
 }
 
-export function isImagePath(path: string) {
-  return IMAGE_EXTENSIONS.has(extname(path).toLowerCase())
-}
-
 export function isVisionImagePath(path: string) {
   return VISION_IMAGE_EXTENSIONS.has(extname(path).toLowerCase())
 }

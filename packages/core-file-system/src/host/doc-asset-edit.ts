@@ -13,7 +13,7 @@ import {
   projectMentionLabels,
   stripMentionLabels,
 } from '../mention-markup.ts'
-import { normalizeCollectionPath, splitResourcePath } from '../paths.ts'
+import { normalizeCollectionPath } from '../paths.ts'
 
 import { splitPath } from './index.ts'
 import {

@@ -5,8 +5,8 @@ export type {
   FillOptions,
   SlotEntry,
   SlotProps,
-} from '@biu/type-slots'
-export { SlotEvent } from '@biu/type-slots'
+} from '@biu/types/slots'
+export { SlotEvent } from '@biu/types/slots'
 export { SlotsService, disposeSlot } from './service.ts'
 export { useSlotEntries } from './use-slots.ts'
 export { SlotOutlet } from './slot-outlet.tsx'

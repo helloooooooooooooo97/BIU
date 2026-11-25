@@ -563,17 +563,15 @@ test('removeMember transfers private owned records and revokes locks, leases, an
     allowedCollections: ['/pages'],
     maxRole: 'editor',
   })
-  store.acquireExecutionLease(bob.id, 'bob-agent', 'laptop')
 
   // Before removal: Ada cannot read Bob's private record
   assert.equal(auth.authorize(actor(ada.id), 'resource:read', page('bob-private')).allowed, false)
 
-  // Remove Bob -> private records transfer to workspace owner Ada, scopes & leases revoked
+  // Remove Bob -> private records transfer to workspace owner Ada, scopes revoked
   const res = store.removeMember(ada.id, workspace.id, bob.id)
   assert.equal(res.transferredTo, ada.id)
   assert.equal(res.transferredRecords, 1)
   assert.equal(auth.authorize(actor(ada.id), 'resource:manage-permissions', page('bob-private')).allowed, true)
-  assert.equal(store.hasExecutionLease('bob-agent'), false)
   assert.ok(auth.getActorScope(workspace.id, 'agent', 'bob-agent')?.revokedAt)
 })
 

@@ -1,5 +1,5 @@
 import { isSessionCompactPoint } from '@biu/type-session'
-import type { PostStepReq } from '@biu/type-agent-loop'
+import type { PostStepReq } from '@biu/types/agent-loop'
 
 export const DEFAULT_CONTEXT_WINDOW_TOKENS = 200_000
 

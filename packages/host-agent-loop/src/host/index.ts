@@ -35,8 +35,8 @@ async function mapConcurrent<T, R>(items: readonly T[], limit: number, run: (ite
   return results
 }
 
-export type { AgentTurn, ClaimedInput, PreStepReq, PostStepReq, AgentRunner } from '@biu/type-agent-loop'
-import type { AgentTurn, ClaimedInput, AgentRunner, PreStepReq, PostStepReq } from '@biu/type-agent-loop'
+export type { AgentTurn, ClaimedInput, PreStepReq, PostStepReq, AgentRunner } from '@biu/types/agent-loop'
+import type { AgentTurn, ClaimedInput, AgentRunner, PreStepReq, PostStepReq } from '@biu/types/agent-loop'
 
 export type AgentLoopFactory = (config: LlmConfig, sessionId: string, signal: AbortSignal) => AgentRunner
 

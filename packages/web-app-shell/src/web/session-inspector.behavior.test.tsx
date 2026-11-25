@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { bindSessionView, type SessionViewService } from '@biu/web-session-view'
 import type { SlotsService } from '@biu/web-slots'
-import type { SlotEntry, SlotProps } from '@biu/type-slots'
+import type { SlotEntry, SlotProps } from '@biu/types/slots'
 import { SessionInspector } from './session-inspector.tsx'
 
 const hits = new Map<string, number>()

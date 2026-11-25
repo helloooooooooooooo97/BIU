@@ -4,8 +4,19 @@ import { cleanup, render, waitFor } from '@testing-library/react'
 import { REQUIRED_RECORD_FIELDS, type CollectionSchema } from '@biu/type-file-system'
 import { invalidateListReads } from './db-client.ts'
 import { CollectionBrowser } from './browser.tsx'
-// @ts-expect-error -- untyped .mjs helper script outside package
-import { inspectInspectorPage } from '../../../../scripts/page-perf/inspector-open-ready.mjs'
+
+function inspectInspectorPage(root: Document = globalThis.document) {
+  if (!root?.querySelector) {
+    return { inspector: false, title: false, editor: false, loading: false, painted: false }
+  }
+  const inspector = Boolean(root.querySelector('[data-testid="inspector-database"]'))
+  const title = Boolean(root.querySelector('.fsdb-detail-title-input, .inspector-database-page .fsdb-detail-title'))
+  const editor = Boolean(
+    root.querySelector('.page-editor, .fsdb-detail-doc, [data-testid="stub-page-editor"]'),
+  )
+  const loading = Boolean(root.querySelector('[data-testid="page-content-loading"]'))
+  return { inspector, title, editor, loading, painted: inspector && title && editor && !loading }
+}
 
 afterEach(() => {
   cleanup()
