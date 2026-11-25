@@ -203,9 +203,9 @@ function readPersisted(accountId = ''): Partial<ChatConfig> | null {
 
 export function cloudSafePersistedConfig(
   saved: (Partial<ChatConfig> & { encryptedApiKeys?: Record<string, string>; apiKey?: unknown }) | null,
-  online = getRuntimePolicy().hostMode === 'cloud',
+  encryptAtRest = getRuntimePolicy().encryptSecretsAtRest,
 ): Partial<ChatConfig> | null {
-  if (!saved || !online) return saved
+  if (!saved || !encryptAtRest) return saved
   const decrypted: Record<string, string> = { ...emptyKeys() }
   if (saved.encryptedApiKeys && typeof saved.encryptedApiKeys === 'object') {
     for (const [id, raw] of Object.entries(saved.encryptedApiKeys)) {
@@ -220,9 +220,9 @@ export function cloudSafePersistedConfig(
   return safe
 }
 
-export function persistedChatConfig(config: ChatConfig, online = getRuntimePolicy().hostMode === 'cloud') {
+export function persistedChatConfig(config: ChatConfig, encryptAtRest = getRuntimePolicy().encryptSecretsAtRest) {
   const encryptedApiKeys: Record<string, string> = {}
-  if (online) {
+  if (encryptAtRest) {
     for (const [id, raw] of Object.entries(config.apiKeys)) {
       if (typeof raw === 'string' && raw.trim()) {
         encryptedApiKeys[id] = encryptChatSecret(raw.trim())
@@ -241,7 +241,7 @@ export function persistedChatConfig(config: ChatConfig, online = getRuntimePolic
     contextWindow: config.contextWindow,
     speed: config.speed,
     modelPrefs: config.modelPrefs,
-    ...(!online ? { apiKeys: config.apiKeys } : { encryptedApiKeys }),
+    ...(!encryptAtRest ? { apiKeys: config.apiKeys } : { encryptedApiKeys }),
     baseUrls: config.baseUrls,
     customEndpoints: config.customEndpoints,
     customModels: config.customModels,
@@ -613,8 +613,8 @@ export class ChatService extends Service {
       capabilities: inferModelCapabilities(this.config.model, this.config.provider),
       /** 当前默认入口是否已配置（兼容旧语义，供 banner 等使用）。 */
       configured: current ? endpointConfigured(this.config, current) : Boolean((this.config.apiKeys[this.config.provider] ?? '').trim()),
-      acceptsApiKeys: true,
-      secretsLocalOnly: getRuntimePolicy().hostMode !== 'cloud',
+      acceptsApiKeys: getRuntimePolicy().acceptsUserApiKeys,
+      secretsLocalOnly: !getRuntimePolicy().encryptSecretsAtRest,
       hint: hint(this.config.apiKeys[this.config.endpointId] ?? this.config.apiKeys[this.config.provider] ?? ''),
       baseUrl: current ? effectiveBaseUrl(this.config, current) : '',
       /** 各入口是否已配置 key + baseUrl。 */
@@ -1533,7 +1533,7 @@ export function apply(ctx: Context) {
     })
   })
   ctx.http.route('PUT', '/api/agents/:id/project', async (route) => {
-    if (getRuntimePolicy().hostMode === 'cloud') return route.send(403, { error: '云端空间使用隔离沙箱工作区，不支持绑定宿主机路径' })
+    if (!getRuntimePolicy().allowHostPathBinding) return route.send(403, { error: '云端空间使用隔离沙箱工作区，不支持绑定宿主机路径' })
     if (!(await visibleSession(route.params.id))) return route.send(404, { error: 'unknown session' })
     const payload = (await route.json()) as { path?: string | null; name?: string | null }
     try {
@@ -1550,7 +1550,7 @@ export function apply(ctx: Context) {
     }
   })
   ctx.http.route('POST', '/api/agents/:id/project/pick', async (route) => {
-    if (getRuntimePolicy().hostMode === 'cloud') return route.send(403, { error: '云端空间不支持选择宿主机目录' })
+    if (!getRuntimePolicy().allowHostPathBinding) return route.send(403, { error: '云端空间不支持选择宿主机目录' })
     try {
       const record = await visibleSession(route.params.id)
       if (!record) return route.send(404, { error: 'unknown session' })

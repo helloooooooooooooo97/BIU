@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs'
 import { Service, type Context } from 'cordis'
 import { hostRemoteOrigin } from '@biu/host-plugin-loader/env'
-import { biuSqlitePath, currentAccountId, eventsSqlitePath, isOnlineRuntime, openAndMigrateBiu, openAndMigrateEvents } from '@biu/host-plugin-loader/data-dir'
+import { biuSqlitePath, currentAccountId, eventsSqlitePath, openAndMigrateBiu, openAndMigrateEvents } from '@biu/host-plugin-loader/data-dir'
+import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { resolveScopedWorkspaceId } from '@biu/host-plugin-loader/runtime'
 import type { RouteContext } from '@biu/type-http'
 import { CollabError, CollabStore } from './store.ts'
@@ -72,7 +73,7 @@ export class AccountService extends Service {
   }
 
   configuredCloudOrigin(): string {
-    if (isOnlineRuntime()) return ''
+    if (!getRuntimePolicy().allowCloudLinking) return ''
     const row = this.db
       .prepare(`SELECT value FROM collab_state WHERE key = 'cloud_remote_origin'`)
       .get() as { value?: string } | undefined
@@ -81,7 +82,7 @@ export class AccountService extends Service {
   }
 
   setConfiguredCloudOrigin(raw: string): string {
-    if (isOnlineRuntime()) throw new CollabError('服务端不能配置远程云端地址', 400)
+    if (!getRuntimePolicy().allowCloudLinking) throw new CollabError('服务端不能配置远程云端地址', 400)
     const normalized = normalizeCloudOrigin(raw)
     if (normalized) {
       this.db
@@ -283,7 +284,7 @@ export class AccountService extends Service {
     workspaceId = '',
     localAccountId = currentAccountId(),
   ): { origin: string; token: string; workspaceId: string } | null {
-    if (isOnlineRuntime()) return null
+    if (!getRuntimePolicy().allowCloudLinking) return null
     const targetWorkspace = workspaceId || this.store.activeWorkspaceId() || ''
     if (!targetWorkspace || this.workspaceLocation(targetWorkspace) !== 'cloud') return null
     const connection = (localAccountId ? this.cloudConnection(localAccountId) : null) ?? this.linkedCloud(localAccountId)
@@ -293,7 +294,7 @@ export class AccountService extends Service {
 
   /** 当断开或切换云端账号时，若当前仍停留在云端空间，自动回落到本机空间，避免持续 401 或跨服务器串空间。 */
   fallbackToDeviceWorkspace(localAccountId: string): string {
-    if (isOnlineRuntime()) return ''
+    if (!getRuntimePolicy().allowCloudLinking) return ''
     const active = this.store.activeWorkspaceId()
     if (!active || this.workspaceLocation(active) !== 'cloud') return active ?? ''
     const device = this.store.listWorkspaces(localAccountId).find((ws) => this.workspaceLocation(ws.id) === 'device')
@@ -355,7 +356,7 @@ export class AccountService extends Service {
   }
 
   workspaceLocation(workspaceId: string): 'device' | 'cloud' {
-    if (isOnlineRuntime()) return 'cloud'
+    if (getRuntimePolicy().hostMode === 'cloud') return 'cloud'
     const row = this.db.prepare('SELECT place FROM workspace_place WHERE workspace_id = ?').get(workspaceId) as
       | { place?: string }
       | undefined
@@ -514,7 +515,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     requestedOrigin = '',
     remoteName = '',
   ) {
-    if (isOnlineRuntime()) throw new CollabError('服务端不能连接另一个云端账号', 400)
+    if (!getRuntimePolicy().allowCloudLinking) throw new CollabError('服务端不能连接另一个云端账号', 400)
     const origin = requestedOrigin.trim()
       ? account.setConfiguredCloudOrigin(requestedOrigin)
       : account.configuredCloudOrigin()
@@ -604,7 +605,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     async (route) => {
       try {
         const requested = String(route.query.get('workspaceId') ?? '').trim()
-        if (isOnlineRuntime()) {
+        if (!getRuntimePolicy().allowCloudLinking) {
           route.send(200, { mode: 'local', workspaceId: requested || account.store.activeWorkspaceId() || '' })
           return
         }
@@ -634,7 +635,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
 
   ctx.http.route('GET', '/api/account/cloud', async (route) => {
     try {
-      if (isOnlineRuntime()) return route.send(200, { available: false, connected: false, configuredOrigin: '' })
+      if (!getRuntimePolicy().allowCloudLinking) return route.send(200, { available: false, connected: false, configuredOrigin: '' })
       const me = actor(route)
       const initial = account.cloudConnection(me.id)
       if (initial?.origin && initial.token) {
@@ -720,7 +721,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
 
   ctx.http.route('POST', '/api/account/cloud/sync-create', async (route) => {
     try {
-      if (isOnlineRuntime()) throw new CollabError('服务端不能连接另一个云端账号', 400)
+      if (!getRuntimePolicy().allowCloudLinking) throw new CollabError('服务端不能连接另一个云端账号', 400)
       const local = actor(route)
       const body = (await route.json().catch(() => ({}))) as { origin?: string }
       const requestedOrigin = String(body.origin ?? '')
@@ -966,7 +967,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('GET', '/api/account/me', async (route) => {
     try {
       const me = actor(route)
-      route.send(200, { ...me, online: isOnlineRuntime(), isSuperAdmin: account.store.isSuperAdmin(me.id) })
+      route.send(200, { ...me, online: getRuntimePolicy().hostMode === 'cloud', isSuperAdmin: account.store.isSuperAdmin(me.id) })
     } catch (error) {
       fail(route, error)
     }
@@ -980,7 +981,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         ...(typeof body.name === 'string' ? { name: body.name } : {}),
         ...(typeof body.avatar === 'string' ? { avatar: body.avatar } : {}),
       })
-      route.send(200, { ...updated, online: isOnlineRuntime(), isSuperAdmin: account.store.isSuperAdmin(me.id) })
+      route.send(200, { ...updated, online: getRuntimePolicy().hostMode === 'cloud', isSuperAdmin: account.store.isSuperAdmin(me.id) })
     } catch (error) {
       fail(route, error)
     }
@@ -1088,9 +1089,10 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
           .listWorkspaces(me.id)
           .filter((workspace) => account.workspaceLocation(workspace.id) === 'cloud')
           .map((workspace) => ({ ...workspace, location: 'cloud' as const }))
-      let cloud: Array<Record<string, unknown>> = isOnlineRuntime() ? cachedCloud() : []
+      const allowCloudLinking = getRuntimePolicy().allowCloudLinking
+      let cloud: Array<Record<string, unknown>> = !allowCloudLinking ? cachedCloud() : []
       let cloudUnavailable = false
-      if (!isOnlineRuntime() && account.cloudConnection(me.id)) {
+      if (allowCloudLinking && account.cloudConnection(me.id)) {
         cloud = cachedCloud()
         try {
           const relayed = await relayAccount(route, account, me.id, '/api/account/workspaces')
@@ -1107,7 +1109,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
           cloudUnavailable = true
         }
       }
-      if (!isOnlineRuntime() && !account.cloudConnection(me.id)) {
+      if (allowCloudLinking && !account.cloudConnection(me.id)) {
         const active = account.store.activeWorkspaceId()
         const device = local[0]
         if (active && account.workspaceLocation(active) === 'cloud' && device) account.store.setActive(me.id, device.id)
@@ -1127,7 +1129,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       const me = actor(route)
       const body = (await route.json()) as { name?: string; location?: string }
       const name = String(body.name ?? '').trim() || (body.location === 'device' ? '本机空间' : '云端空间')
-      if (isOnlineRuntime()) {
+      if (!getRuntimePolicy().allowCloudLinking) {
         const workspace = account.store.createWorkspace(me.id, name)
         route.send(201, { ...workspace, location: 'cloud' })
         return
@@ -1178,7 +1180,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     try {
       const me = actor(route)
       const body = (await route.json()) as { name?: string }
-      if (!isOnlineRuntime() && account.workspaceLocation(route.params.id!) === 'cloud') {
+      if (getRuntimePolicy().allowCloudLinking && account.workspaceLocation(route.params.id!) === 'cloud') {
         const connection = account.cloudConnection(me.id)
         if (!connection) throw new CollabError('请先登录云端账号', 401)
         let response: Response
@@ -1223,7 +1225,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       const body = (await route.json().catch(() => ({}))) as { name?: string }
       const confirmName = String(body.name ?? '')
       const workspaceId = route.params.id!
-      if (!isOnlineRuntime() && account.workspaceLocation(workspaceId) === 'cloud') {
+      if (getRuntimePolicy().allowCloudLinking && account.workspaceLocation(workspaceId) === 'cloud') {
         const connection = account.cloudConnection(me.id)
         if (!connection) throw new CollabError('请先登录云端账号', 401)
         let response: Response
@@ -1311,7 +1313,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('POST', '/api/account/invites/:token/accept', async (route) => {
     try {
       const me = actor(route)
-      const connection = !isOnlineRuntime() ? account.cloudConnection(me.id) : null
+      const connection = getRuntimePolicy().allowCloudLinking ? account.cloudConnection(me.id) : null
       if (connection) {
         const relayed = await relayAccount(
           route,
@@ -1334,7 +1336,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         route.send(relayed.status, relayed.payload)
         return
       }
-      if (!isOnlineRuntime()) throw new CollabError('本机空间不提供成员邀请', 403)
+      if (!getRuntimePolicy().allowWorkspaceInvites) throw new CollabError('本机空间不提供成员邀请', 403)
       const result = account.store.acceptWorkspaceInvite(me.id, route.params.token!)
       ctx.http.broadcast('database', { ts: Date.now() })
       route.send(200, result)
@@ -1345,7 +1347,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
 
   ctx.http.route('POST', '/api/account/guest-invites/:token/accept', async (route) => {
     try {
-      if (!isOnlineRuntime()) throw new CollabError('本机空间不提供访客邀请', 403)
+      if (!getRuntimePolicy().allowWorkspaceInvites) throw new CollabError('本机空间不提供访客邀请', 403)
       const body = (await route.json()) as { name?: string }
       const result = account.store.acceptGuestInvite(route.params.token!, String(body.name ?? ''))
       rememberLogin(route, result.token)

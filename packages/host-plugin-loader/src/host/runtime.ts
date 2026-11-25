@@ -11,12 +11,24 @@ export interface RuntimePolicy {
   authzMode: AuthzMode
   /** Whether users may submit/store their own LLM API keys on this host. */
   acceptsUserApiKeys: boolean
+  /** Whether persisted user secrets (LLM API keys) must be encrypted at rest. */
+  encryptSecretsAtRest: boolean
   /** Whether this host can link to an external cloud host. */
   allowCloudLinking: boolean
   /** Sandbox requirement for shell/subprocess execution. */
   sandboxPolicy: SandboxPolicy
   /** Whether background handlers may fall back to account activeWorkspaceId(). */
   allowImplicitActiveWorkspace: boolean
+  /** Whether spawning arbitrary host processes outside sandbox (lsp_start, stdio MCP) is allowed. */
+  allowHostProcess: boolean
+  /** Whether binding arbitrary host filesystem paths or OS directory pickers is allowed. */
+  allowHostPathBinding: boolean
+  /** Whether workspaces are isolated into per-workspace directories under dataHome. */
+  isolateWorkspaceDirs: boolean
+  /** Whether multi-tenant quotas (sandbox concurrency, WS per-account cap, auth rate limit) are enforced. */
+  enforceTenantQuotas: boolean
+  /** Whether workspace member and guest invitations are supported on this host. */
+  allowWorkspaceInvites: boolean
 }
 
 export type WorkspaceTarget =
@@ -38,19 +50,31 @@ export function getRuntimePolicy(online = isOnlineRuntime()): RuntimePolicy {
     return {
       hostMode: 'cloud',
       authzMode: 'rbac',
-      acceptsUserApiKeys: false,
+      acceptsUserApiKeys: true,
+      encryptSecretsAtRest: true,
       allowCloudLinking: false,
       sandboxPolicy: 'required',
       allowImplicitActiveWorkspace: false,
+      allowHostProcess: false,
+      allowHostPathBinding: false,
+      isolateWorkspaceDirs: true,
+      enforceTenantQuotas: true,
+      allowWorkspaceInvites: true,
     }
   }
   return {
     hostMode: 'desktop',
     authzMode: 'local-allow-all',
     acceptsUserApiKeys: true,
+    encryptSecretsAtRest: false,
     allowCloudLinking: true,
     sandboxPolicy: 'off',
     allowImplicitActiveWorkspace: true,
+    allowHostProcess: true,
+    allowHostPathBinding: true,
+    isolateWorkspaceDirs: false,
+    enforceTenantQuotas: false,
+    allowWorkspaceInvites: false,
   }
 }
 

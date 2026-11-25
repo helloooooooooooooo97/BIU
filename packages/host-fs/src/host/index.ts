@@ -3,7 +3,8 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, normalize, relative, resolve } from 'node:path'
 import { Service, type Context } from 'cordis'
 import { currentSessionId } from '@biu/host-sessions/scope'
-import { currentRequestWorkspaceId, dataHome, isOnlineRuntime } from '@biu/host-plugin-loader/data-dir'
+import { currentRequestWorkspaceId, dataHome } from '@biu/host-plugin-loader/data-dir'
+import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import {
   STR_REPLACE_EDITOR_DESCRIPTION,
   STR_REPLACE_EDITOR_PARAMETERS,
@@ -31,7 +32,7 @@ export class FsService extends Service {
   }
 
   effectiveRoot() {
-    if (isOnlineRuntime()) {
+    if (getRuntimePolicy().isolateWorkspaceDirs) {
       const wsId = sanitizeWorkspaceSegment(currentRequestWorkspaceId())
       const dir = resolve(dataHome(), 'workspaces', wsId, 'work')
       mkdirSync(dir, { recursive: true })

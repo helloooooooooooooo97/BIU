@@ -15,7 +15,6 @@ import {
   profilePath,
   runWithAccount,
   runWithRequestWorkspace,
-  isOnlineRuntime,
 } from '@biu/host-plugin-loader/data-dir'
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { isShareApiPath, isSharePublicPath } from './share-gate.ts'
@@ -418,7 +417,7 @@ export class HttpService extends Service {
       const wss = new WebSocketServer({ noServer: true })
       wss.on('connection', (socket, request) => {
         const auth = this.authenticateSocket(request)
-        if (isOnlineRuntime()) {
+        if (getRuntimePolicy().authzMode === 'rbac') {
           if (auth.error) {
             socket.close(auth.error, auth.error === 4403 ? 'workspace' : 'tenant')
             return
@@ -444,7 +443,7 @@ export class HttpService extends Service {
   }
 
   private registerSocket(socket: WebSocket, meta: { accountId: string; workspaceId: string; token: string }) {
-    if (isOnlineRuntime() && meta.accountId) {
+    if (getRuntimePolicy().enforceTenantQuotas && meta.accountId) {
       const existing = this.socketsByAccount.get(meta.accountId)
       const cap = maxWsPerAccount()
       if (existing && existing.size >= cap) {
@@ -671,7 +670,7 @@ export class HttpService extends Service {
     if (accountId && workspaceId && store?.isMember && !store.isMember(accountId, workspaceId)) {
       return { accountId, workspaceId, token, error: 4403 as const }
     }
-    if (isOnlineRuntime() && (!accountId || !workspaceId)) {
+    if (getRuntimePolicy().authzMode === 'rbac' && (!accountId || !workspaceId)) {
       return { accountId, workspaceId, token, error: 4401 as const }
     }
     return { accountId, workspaceId, token, error: 0 as const }
@@ -831,7 +830,7 @@ export class HttpService extends Service {
           context.send(403, { error: '不在这个空间' })
           return
         }
-        if (isOnlineRuntime() && match.pluginId) {
+        if (getRuntimePolicy().authzMode === 'rbac' && match.pluginId) {
           const allowed = accountStore?.canAccessPlugin?.(accountId, requestedWorkspace, match.pluginId)
           if (!allowed) {
             context.send(404, { error: 'not found' })
