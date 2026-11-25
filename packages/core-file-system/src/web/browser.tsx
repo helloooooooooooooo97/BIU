@@ -3931,6 +3931,9 @@ export function CollectionBrowser({
           title={title}
           nested={nested}
           localData={localData}
+          schema={schema}
+          filterFields={filterFields}
+          filterValueOptions={filterValueOptions}
           viewStarred={viewStarred}
           layoutOpen={layoutOpen}
           layoutRef={layoutRef}

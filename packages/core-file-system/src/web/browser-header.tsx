@@ -1,9 +1,10 @@
 import { lazy, memo, Suspense, type ComponentProps, type RefObject } from 'react'
 import { EllipsisHorizontalIcon } from '@heroicons/react/16/solid'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
-import type { DbRecord } from '@biu/type-file-system'
+import type { CollectionSchema, DbRecord } from '@biu/type-file-system'
 import { CrumbTrail } from './crumb-trail.tsx'
 import type { Crumb, CrumbTarget } from './sidebar-nav.ts'
+import type { QueryField } from './query-menus.tsx'
 import type { SavedView } from './saved-view.ts'
 import {
   PLUGINS_COLLECTION_PATH,
@@ -20,12 +21,21 @@ import {
 } from './view-storage.ts'
 
 const LazyShareButton = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareButton })))
+const LazyAccessRulesButton = lazy(() => import('./access-rules-drawer.tsx').then((m) => ({ default: m.AccessRulesButton })))
 const LayoutPrefsMenu = lazy(() => import('./layout-prefs-menu.tsx').then((m) => ({ default: m.LayoutPrefsMenu })))
 
 function ShareButton(props: ComponentProps<typeof LazyShareButton>) {
   return (
     <Suspense fallback={null}>
       <LazyShareButton {...props} />
+    </Suspense>
+  )
+}
+
+function AccessRulesButton(props: ComponentProps<typeof LazyAccessRulesButton>) {
+  return (
+    <Suspense fallback={null}>
+      <LazyAccessRulesButton {...props} />
     </Suspense>
   )
 }
@@ -44,6 +54,9 @@ export const BrowserHeader = memo(function BrowserHeader({
   title,
   nested,
   localData,
+  schema,
+  filterFields,
+  filterValueOptions,
   viewStarred,
   layoutOpen,
   layoutRef,
@@ -70,6 +83,9 @@ export const BrowserHeader = memo(function BrowserHeader({
   title: string
   nested: boolean
   localData: boolean
+  schema?: CollectionSchema
+  filterFields?: QueryField[]
+  filterValueOptions?: (field: QueryField) => Array<{ value: string; label: string }>
   viewStarred: boolean
   layoutOpen: boolean
   layoutRef: RefObject<HTMLDivElement | null>
@@ -130,29 +146,27 @@ export const BrowserHeader = memo(function BrowserHeader({
             <UiGlyph icon="star" />
           </button>
         ) : null}
-        {isSystemCollection(collectionPath) || isIndexCollection(collectionPath) || (collectionPath === PLUGINS_COLLECTION_PATH && detailRow?.builtin === true) ? null : (
+        {isSystemCollection(collectionPath) || isIndexCollection(collectionPath) || (collectionPath === PLUGINS_COLLECTION_PATH && detailRow?.builtin === true) ? null : detailId ? (
           <ShareButton
             localOnly={localData}
-            target={
-              detailId
-                ? {
-                    kind: 'record' as const,
-                    collection: collectionPath,
-                    viewId: activeViewId ?? undefined,
-                    recordId: detailId,
-                    title: String(detailRow?.title ?? title),
-                  }
-                : !nested && activeViewId
-                  ? {
-                      kind: 'view' as const,
-                      collection: collectionPath,
-                      viewId: activeViewId,
-                      title: activeView?.name ?? title,
-                    }
-                  : null
-            }
+            target={{
+              kind: 'record' as const,
+              collection: collectionPath,
+              viewId: activeViewId ?? undefined,
+              recordId: detailId,
+              title: String(detailRow?.title ?? title),
+            }}
           />
-        )}
+        ) : !nested && !localData ? (
+          <AccessRulesButton
+            collectionPath={collectionPath}
+            activeView={activeView}
+            schema={schema}
+            filterFields={filterFields ?? []}
+            filterValueOptions={filterValueOptions ?? (() => [])}
+            localOnly={localData}
+          />
+        ) : null}
         <div className="fsdb-layout-wrap" ref={layoutRef}>
           <button
             type="button"

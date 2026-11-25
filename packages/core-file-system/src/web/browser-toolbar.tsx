@@ -36,7 +36,7 @@ import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 
 const QueryFlyout = lazy(() => import('./query-menus.tsx').then((m) => ({ default: m.QueryFlyout })))
 const ViewSettingsMenu = lazy(() => import('./view-settings-menu.tsx').then((m) => ({ default: m.ViewSettingsMenu })))
-const AccessRulesButton = lazy(() => import('./access-rules-drawer.tsx').then((m) => ({ default: m.AccessRulesButton })))
+const ShareButton = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareButton })))
 import type { ViewSettingsTab } from './view-settings-menu.tsx'
 
 const QUERY_NEST_IGNORE = `${HEADLESS_DISMISS_IGNORE}, .db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`
@@ -751,16 +751,17 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                   </Suspense>
                 ) : null}
               </div>
-              {!sheet && !localData && !isSystemCollection(collectionPath) && !isIndexCollection(collectionPath) ? (
+              {!sheet && !isSystemCollection(collectionPath) && !isIndexCollection(collectionPath) && activeViewId ? (
                 <Suspense fallback={null}>
-                  <AccessRulesButton
-                    collectionPath={collectionPath}
-                    activeView={activeView}
-                    schema={schema}
-                    filterFields={filterFields}
-                    filterValueOptions={filterValueOptions}
+                  <ShareButton
                     localOnly={localData}
                     buttonClassName="tasks-refresh"
+                    target={{
+                      kind: 'view' as const,
+                      collection: collectionPath,
+                      viewId: activeViewId,
+                      title: activeView?.name ?? title,
+                    }}
                   />
                 </Suspense>
               ) : null}
