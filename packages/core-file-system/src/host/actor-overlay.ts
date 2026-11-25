@@ -4,6 +4,7 @@ import { currentSessionId } from '@biu/host-sessions/scope'
 import { readWorkspaceProfile } from '@biu/host-workspace'
 import {
   appendPerson,
+  asPerson,
   asPersonList,
   type CollectionSpec,
   type DbRecord,
@@ -156,12 +157,18 @@ export function applyRecordPersonOverlay(
   }
   const meta = host.tags.recordMeta(spec.path, row.id)
   const rawCreatedBy = typeof row.createdBy === 'string' ? row.createdBy.trim() : ''
+  const rowCreatedBy = rawCreatedBy
+    ? ({ kind: 'user', accountId: rawCreatedBy, name: rawCreatedBy } as PersonValue)
+    : asPerson(row.createdBy)
   const resolvedCreatedBy = meta?.createdBy
     ? resolveNamedPerson(host, meta.createdBy)
-    : rawCreatedBy
-      ? resolveNamedPerson(host, { kind: 'user', accountId: rawCreatedBy, name: rawCreatedBy })
+    : rowCreatedBy
+      ? resolveNamedPerson(host, rowCreatedBy)
       : null
-  const editors = meta ? asPersonList(meta.updatedBy).map((item) => resolveNamedPerson(host, item)) : []
+  const rawEditors = meta && asPersonList(meta.updatedBy).length
+    ? asPersonList(meta.updatedBy)
+    : asPersonList(row.updatedBy)
+  const editors = rawEditors.map((item) => resolveNamedPerson(host, item))
   if (!resolvedCreatedBy && !editors.length) return row
   return {
     ...row,
