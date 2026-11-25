@@ -78,12 +78,56 @@ function compile(pattern: string) {
   return { keys, regexp }
 }
 
-function readBody(req: IncomingMessage): Promise<Buffer> {
+const DEFAULT_MAX_BODY_BYTES = 10 * 1024 * 1024
+const UPLOAD_MAX_BODY_BYTES = 50 * 1024 * 1024
+const WS_HEARTBEAT_INTERVAL_MS = 30_000
+const DEFAULT_MAX_WS_PER_ACCOUNT = 20
+
+export class PayloadTooLargeError extends Error {
+  readonly status = 413
+  constructor(public readonly maxBytes: number) {
+    super(`payload exceeds limit of ${maxBytes} bytes`)
+    this.name = 'PayloadTooLargeError'
+  }
+}
+
+export function maxBodyBytesForPath(pathname: string): number {
+  const configured = Number(process.env.BIU_HTTP_MAX_BODY_BYTES)
+  if (Number.isInteger(configured) && configured > 0) return configured
+  if (/\/(artifacts|assets|files|upload|import)(\/|$)/.test(pathname)) return UPLOAD_MAX_BODY_BYTES
+  return DEFAULT_MAX_BODY_BYTES
+}
+
+function maxWsPerAccount(): number {
+  const configured = Number(process.env.BIU_WS_MAX_PER_ACCOUNT)
+  if (Number.isInteger(configured) && configured > 0) return configured
+  return DEFAULT_MAX_WS_PER_ACCOUNT
+}
+
+export function readBody(req: IncomingMessage, maxBytes = DEFAULT_MAX_BODY_BYTES): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = []
-    req.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
-    req.on('end', () => resolve(Buffer.concat(chunks)))
-    req.on('error', reject)
+    let total = 0
+    let exceeded = false
+    req.on('data', (chunk) => {
+      if (exceeded) return
+      const buf = Buffer.from(chunk)
+      total += buf.length
+      if (maxBytes > 0 && total > maxBytes) {
+        exceeded = true
+        chunks.length = 0
+        req.resume()
+        reject(new PayloadTooLargeError(maxBytes))
+        return
+      }
+      chunks.push(buf)
+    })
+    req.on('end', () => {
+      if (!exceeded) resolve(Buffer.concat(chunks))
+    })
+    req.on('error', (err) => {
+      if (!exceeded) reject(err)
+    })
   })
 }
 
@@ -181,7 +225,11 @@ function upgradePath(req: IncomingMessage) {
 export class HttpService extends Service {
   private routes: Route[] = []
   private sockets = new Set<WebSocket>()
+  private socketsByWorkspace = new Map<string, Set<WebSocket>>()
+  private socketsByAccount = new Map<string, Set<WebSocket>>()
+  private unboundSockets = new Set<WebSocket>()
   private socketMeta = new WeakMap<WebSocket, { accountId: string; workspaceId: string; token: string }>()
+  private socketAlive = new WeakMap<WebSocket, boolean>()
   private server: Server | null = null
   /** 同一 HTTP server 上只能有一条 upgrade 路由；多挂几个 `ws.Server({ server })` 会互相 abort 握手。 */
   private wsServers = new Map<string, WebSocketServer>()
@@ -268,14 +316,19 @@ export class HttpService extends Service {
           socket.close(auth.error, auth.error === 4403 ? 'workspace' : 'tenant')
           return
         }
-        this.socketMeta.set(socket, auth)
-        this.sockets.add(socket)
+        this.registerSocket(socket, auth)
         socket.send(JSON.stringify({ type: 'hello', payload: { ok: true, workspaceId: auth.workspaceId } }))
+        socket.on('pong', () => {
+          this.socketAlive.set(socket, true)
+        })
         socket.on('close', () => {
-          this.sockets.delete(socket)
-          this.socketMeta.delete(socket)
+          this.unregisterSocket(socket)
         })
       })
+      const heartbeatTimer = setInterval(() => {
+        this.sweepSockets()
+      }, WS_HEARTBEAT_INTERVAL_MS)
+      heartbeatTimer.unref()
       const onUpgrade = (req: IncomingMessage, socket: Duplex, head: Buffer) => {
         const wss = this.wsServers.get(upgradePath(req))
         if (!wss) {
@@ -319,7 +372,11 @@ export class HttpService extends Service {
       })
       return () =>
         new Promise<void>((resolve) => {
-          for (const socket of this.sockets) socket.terminate()
+          clearInterval(heartbeatTimer)
+          for (const socket of [...this.sockets]) {
+            this.unregisterSocket(socket)
+            socket.terminate()
+          }
           server.off('upgrade', onUpgrade)
           hub.close()
           this.wsServers.delete('/ws')
@@ -386,6 +443,100 @@ export class HttpService extends Service {
     }, `http.ws ${path}`)
   }
 
+  private registerSocket(socket: WebSocket, meta: { accountId: string; workspaceId: string; token: string }) {
+    if (isOnlineRuntime() && meta.accountId) {
+      const existing = this.socketsByAccount.get(meta.accountId)
+      const cap = maxWsPerAccount()
+      if (existing && existing.size >= cap) {
+        const oldest = existing.values().next().value as WebSocket | undefined
+        if (oldest) {
+          this.unregisterSocket(oldest)
+          oldest.close(4429, 'too many connections')
+        }
+      }
+    }
+    this.socketMeta.set(socket, meta)
+    this.socketAlive.set(socket, true)
+    this.sockets.add(socket)
+    if (meta.workspaceId) {
+      let bucket = this.socketsByWorkspace.get(meta.workspaceId)
+      if (!bucket) {
+        bucket = new Set()
+        this.socketsByWorkspace.set(meta.workspaceId, bucket)
+      }
+      bucket.add(socket)
+    } else {
+      this.unboundSockets.add(socket)
+    }
+    if (meta.accountId) {
+      let bucket = this.socketsByAccount.get(meta.accountId)
+      if (!bucket) {
+        bucket = new Set()
+        this.socketsByAccount.set(meta.accountId, bucket)
+      }
+      bucket.add(socket)
+    }
+  }
+
+  private unregisterSocket(socket: WebSocket) {
+    const meta = this.socketMeta.get(socket)
+    this.sockets.delete(socket)
+    this.unboundSockets.delete(socket)
+    this.socketAlive.delete(socket)
+    if (meta?.workspaceId) {
+      const bucket = this.socketsByWorkspace.get(meta.workspaceId)
+      bucket?.delete(socket)
+      if (bucket && bucket.size === 0) this.socketsByWorkspace.delete(meta.workspaceId)
+    }
+    if (meta?.accountId) {
+      const bucket = this.socketsByAccount.get(meta.accountId)
+      bucket?.delete(socket)
+      if (bucket && bucket.size === 0) this.socketsByAccount.delete(meta.accountId)
+    }
+    this.socketMeta.delete(socket)
+  }
+
+  /** 定期清理僵死连接，并兜底复核云端 token/成员资格（不在每次广播热路径查 SQLite）。 */
+  private sweepSockets() {
+    const store = (
+      this.ctx.get('account') as {
+        store?: {
+          accountByToken?(token: string): { id: string } | null
+          isMember?(accountId: string, workspaceId: string): boolean
+        }
+      } | undefined
+    )?.store
+    for (const socket of [...this.sockets]) {
+      if (socket.readyState !== socket.OPEN) {
+        this.unregisterSocket(socket)
+        continue
+      }
+      if (this.socketAlive.get(socket) === false) {
+        this.unregisterSocket(socket)
+        socket.terminate()
+        continue
+      }
+      const meta = this.socketMeta.get(socket)
+      if (meta?.accountId && meta.workspaceId && store) {
+        if (
+          (store.accountByToken && store.accountByToken(meta.token)?.id !== meta.accountId) ||
+          (store.isMember && !store.isMember(meta.accountId, meta.workspaceId))
+        ) {
+          this.unregisterSocket(socket)
+          socket.close(4403, 'membership revoked')
+          continue
+        }
+      }
+      this.socketAlive.set(socket, false)
+      try {
+        socket.ping()
+      } catch {
+        this.unregisterSocket(socket)
+        socket.terminate()
+      }
+    }
+  }
+
   broadcast(type: string, payload: unknown, workspaceId?: string, accountId?: string) {
     if (payload && typeof payload === 'object') {
       const scoped = payload as { workspaceId?: unknown; accountId?: unknown; sessionId?: unknown }
@@ -409,28 +560,26 @@ export class HttpService extends Service {
     workspaceId ||= currentRequestWorkspaceId()
     accountId ||= currentAccountId()
     const data = JSON.stringify({ type, payload, ts: Date.now() })
-    for (const socket of this.sockets) {
+    const sendIfEligible = (socket: WebSocket) => {
+      if (socket.readyState !== socket.OPEN) return
       const meta = this.socketMeta.get(socket)
-      if (meta?.accountId && meta.workspaceId) {
-        const store = (
-          this.ctx.get('account') as {
-            store?: {
-              accountByToken?(token: string): { id: string } | null
-              isMember?(accountId: string, workspaceId: string): boolean
-            }
-          } | undefined
-        )?.store
-        if (
-          (store?.accountByToken && store.accountByToken(meta.token)?.id !== meta.accountId) ||
-          (store?.isMember && !store.isMember(meta.accountId, meta.workspaceId))
-        ) {
-          socket.close(4403, 'membership revoked')
-          continue
+      if (!deliverTenantEvent(meta ?? {}, type, { workspaceId, accountId })) return
+      socket.send(data)
+    }
+    if (TENANT_EVENTS.has(type)) {
+      if (workspaceId) {
+        if (type !== 'database' && accountId) {
+          const acctSockets = this.socketsByAccount.get(accountId)
+          if (acctSockets) for (const socket of acctSockets) sendIfEligible(socket)
+        } else {
+          const wsSockets = this.socketsByWorkspace.get(workspaceId)
+          if (wsSockets) for (const socket of wsSockets) sendIfEligible(socket)
         }
       }
-      if (!deliverTenantEvent(meta ?? {}, type, { workspaceId, accountId })) continue
-      if (socket.readyState === socket.OPEN) socket.send(data)
+      for (const socket of this.unboundSockets) sendIfEligible(socket)
+      return
     }
+    for (const socket of this.sockets) sendIfEligible(socket)
   }
 
   broadcastWorkspace(workspaceId: string, type: string, payload: unknown) {
@@ -438,30 +587,36 @@ export class HttpService extends Service {
   }
 
   broadcastAccount(accountId: string, type: string, payload: unknown) {
+    const bucket = this.socketsByAccount.get(accountId)
+    if (!bucket || bucket.size === 0) return
     const data = JSON.stringify({ type, payload, ts: Date.now() })
-    for (const socket of this.sockets) {
-      const meta = this.socketMeta.get(socket)
-      if (meta?.accountId !== accountId || socket.readyState !== socket.OPEN) continue
-      socket.send(data)
+    for (const socket of bucket) {
+      if (socket.readyState === socket.OPEN) socket.send(data)
     }
   }
 
   disconnectTenant(accountId: string, workspaceId: string) {
-    for (const socket of this.sockets) {
+    const bucket = this.socketsByAccount.get(accountId)
+    if (!bucket) return
+    for (const socket of [...bucket]) {
       const meta = this.socketMeta.get(socket)
-      if (meta?.accountId === accountId && meta.workspaceId === workspaceId) {
+      if (meta?.workspaceId === workspaceId) {
+        this.unregisterSocket(socket)
         socket.close(4403, 'membership revoked')
       }
     }
   }
 
   disconnectRevokedSessions(accountId: string) {
+    const bucket = this.socketsByAccount.get(accountId)
+    if (!bucket) return
     const store = (
       this.ctx.get('account') as { store?: { accountByToken?(token: string): { id: string } | null } } | undefined
     )?.store
-    for (const socket of this.sockets) {
+    for (const socket of [...bucket]) {
       const meta = this.socketMeta.get(socket)
-      if (meta?.accountId === accountId && store?.accountByToken?.(meta.token)?.id !== accountId) {
+      if (meta && store?.accountByToken?.(meta.token)?.id !== accountId) {
+        this.unregisterSocket(socket)
         socket.close(4401, 'session revoked')
       }
     }
@@ -572,8 +727,9 @@ export class HttpService extends Service {
         params[key] = decodeURIComponent(result?.[i + 1] ?? '')
       })
       let rawBody: Promise<Buffer> | null = null
+      const maxBytes = maxBodyBytesForPath(url.pathname)
       const body = () => {
-        if (!rawBody) rawBody = readBody(req)
+        if (!rawBody) rawBody = readBody(req, maxBytes)
         return rawBody
       }
       const context: RouteContext = {
@@ -688,8 +844,12 @@ export class HttpService extends Service {
         }
         await runWithAccount(accountId, () => runWithRequestWorkspace(requestedWorkspace, () => match.handler(context)))
       } catch (error) {
-        this.ctx.logger('http').error(error)
-        if (!res.headersSent) context.send(500, { error: String(error) })
+        if (error instanceof PayloadTooLargeError) {
+          if (!res.headersSent) context.send(413, { error: error.message, maxBytes: error.maxBytes })
+        } else {
+          this.ctx.logger('http').error(error)
+          if (!res.headersSent) context.send(500, { error: String(error) })
+        }
       }
       const ms = Date.now() - started
       if (ms >= 8 || url.pathname.startsWith('/api/db')) {

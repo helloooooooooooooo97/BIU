@@ -27,6 +27,16 @@ interface LiveAgent {
   abort: AbortController
   /** 上一回合还在收尾时又 resume / 入队：结束后立刻再 kick，避免 wake 停在 inbox 没人领 */
   restartWhenIdle?: boolean
+  lastActiveAt: number
+}
+
+const DEFAULT_AGENT_IDLE_TTL_MS = 30 * 60_000
+const AGENT_SWEEP_INTERVAL_MS = 5 * 60_000
+
+function agentIdleTtlMs(): number {
+  const raw = Number(process.env.BIU_AGENT_IDLE_TTL_MS)
+  if (Number.isFinite(raw) && raw > 0) return raw
+  return DEFAULT_AGENT_IDLE_TTL_MS
 }
 
 let inboxSeq = 0
@@ -41,6 +51,26 @@ export class AgentsService extends Service {
 
   constructor(ctx: Context) {
     super(ctx, 'agents')
+    ctx.effect(() => {
+      const timer = setInterval(() => {
+        this.evictIdle()
+      }, AGENT_SWEEP_INTERVAL_MS)
+      timer.unref()
+      return () => clearInterval(timer)
+    }, 'agents.idle-sweep')
+  }
+
+  /** 清理长时间空闲且无排队任务的内存 LiveAgent，避免云端长期运行内存持续增长。 */
+  evictIdle(now = Date.now(), ttlMs = agentIdleTtlMs()): number {
+    let evicted = 0
+    for (const [id, live] of [...this.lives]) {
+      if (live.running || live.inbox.length > 0) continue
+      if (now - live.lastActiveAt >= ttlMs) {
+        this.lives.delete(id)
+        evicted += 1
+      }
+    }
+    return evicted
   }
 
   configure(llm: LlmConfig) {
@@ -103,12 +133,16 @@ export class AgentsService extends Service {
     const id = sessionId ?? (await this.ctx.sessions.create()).id
     if (!(await this.ctx.sessions.get(id))) await this.ctx.sessions.create(id)
     const existing = this.lives.get(id)
-    if (existing) return existing.handle
+    if (existing) {
+      existing.lastActiveAt = Date.now()
+      return existing.handle
+    }
 
     const live: LiveAgent = {
       inbox: [],
       abort: new AbortController(),
       handle: {} as AgentHandle,
+      lastActiveAt: Date.now(),
     }
 
     const kick = async (): Promise<AgentTurn> => {
@@ -150,6 +184,7 @@ export class AgentsService extends Service {
           result = turn
         })
         .finally(() => {
+          live.lastActiveAt = Date.now()
           if (live.running === running) {
             live.running = undefined
             this.ctx.emit('agent/status', { sessionId: id, status: 'idle' })
@@ -176,6 +211,7 @@ export class AgentsService extends Service {
     const handle: AgentHandle = {
       sessionId: id,
       send: async (text: string, opts?: AgentSendOptions) => {
+        live.lastActiveAt = Date.now()
         const trimmed = text.trim()
         const images = sanitizeImages(opts?.images)
         if (!trimmed && !images?.length) return { text: '请先输入内容。', steps: [] }
@@ -219,6 +255,7 @@ export class AgentsService extends Service {
         return startKick(wait)
       },
       inject: (text: string, opts?: AgentSendOptions) => {
+        live.lastActiveAt = Date.now()
         const trimmed = text.trim()
         const images = sanitizeImages(opts?.images)
         if (!trimmed && !images?.length) return

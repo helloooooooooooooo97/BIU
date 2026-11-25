@@ -123,16 +123,20 @@ export class ToolsService extends Service {
   private sanitizedNames = new Map<string, string>()
   private notes = new Map<string, string[]>()
   private guards: ToolGuard[] = []
-  private mode: AgentToolMode = 'standard'
-  /** 极简模式下常驻额外工具（配置面板勾选，跨回合生效）。 */
-  private pinnedExtras: string[] = []
+  private modes = new Map<string, AgentToolMode>()
+  /** 极简模式下常驻额外工具（按账号隔离，避免云端多租户互串）。 */
+  private pinnedExtrasMap = new Map<string, string[]>()
 
   constructor(ctx: Context) {
     super(ctx, 'tools')
   }
 
-  getMode() {
-    return this.mode
+  private accountKey() {
+    return currentAccountId().trim()
+  }
+
+  getMode(): AgentToolMode {
+    return this.modes.get(this.accountKey()) ?? 'standard'
   }
 
   originOf(name: string): ToolOrigin {
@@ -141,13 +145,14 @@ export class ToolsService extends Service {
 
   setMode(mode: AgentToolMode) {
     if (!isAgentToolMode(mode)) throw new Error(`unknown agent tool mode: ${mode}`)
-    if (this.mode === mode) return
-    this.mode = mode
+    const key = this.accountKey()
+    if ((this.modes.get(key) ?? 'standard') === mode) return
+    this.modes.set(key, mode)
     this.ctx.emit('hub/change')
   }
 
   getPinnedExtras() {
-    return [...this.pinnedExtras]
+    return [...(this.pinnedExtrasMap.get(this.accountKey()) ?? [])]
   }
 
   setPinnedExtras(names: readonly string[]) {
@@ -160,10 +165,12 @@ export class ToolsService extends Service {
           .filter((name) => !(FILE_TOOL_NAMES as readonly string[]).includes(name)),
       ),
     ]
+    const key = this.accountKey()
+    const prev = this.pinnedExtrasMap.get(key) ?? []
     const same =
-      cleaned.length === this.pinnedExtras.length && cleaned.every((name, i) => name === this.pinnedExtras[i])
+      cleaned.length === prev.length && cleaned.every((name, i) => name === prev[i])
     if (same) return
-    this.pinnedExtras = cleaned
+    this.pinnedExtrasMap.set(key, cleaned)
     this.ctx.emit('hub/change')
   }
 
@@ -178,15 +185,16 @@ export class ToolsService extends Service {
       if (!store?.canAccessPlugin?.(currentAccountId(), currentRequestWorkspaceId(), pluginId)) return false
     }
     const policy = toolPolicyStorage.getStore()
-    const mode = policy?.mode ?? this.mode
+    const mode = policy?.mode ?? this.getMode()
+    const pinnedExtras = this.pinnedExtrasMap.get(this.accountKey()) ?? []
     if (mode === 'standard') return true
     if (this.originOf(name) === 'store') return false
     if (mode === 'file') return (FILE_TOOL_NAMES as readonly string[]).includes(name)
     if ((MINIMAL_TOOL_NAMES as readonly string[]).includes(name)) return true
     if ((policy?.extras ?? new Set()).has(name)) return true
     if ([...(policy?.extras ?? [])].some((item) => this.resolveName(item) === name)) return true
-    if (!policy && this.pinnedExtras.includes(name)) return true
-    if (!policy && this.pinnedExtras.some((item) => this.resolveName(item) === name)) return true
+    if (!policy && pinnedExtras.includes(name)) return true
+    if (!policy && pinnedExtras.some((item) => this.resolveName(item) === name)) return true
     if (extraToolsStorage.getStore()?.has(name)) return true
     return [...(extraToolsStorage.getStore() ?? [])].some((item) => this.resolveName(item) === name)
   }
@@ -330,7 +338,7 @@ export class ToolsService extends Service {
     const resolved = this.resolveName(name)
     if (signal.aborted) throw new Error('cancelled')
     if (!this.visible(resolved)) {
-      const mode = toolPolicyStorage.getStore()?.mode ?? this.mode
+      const mode = toolPolicyStorage.getStore()?.mode ?? this.getMode()
       throw new Error(`tool not available in ${mode} mode: ${resolved}`)
     }
     if (!isPlainObject(args)) {
