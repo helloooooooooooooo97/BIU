@@ -167,7 +167,6 @@ import {
   pullSavedViews,
   rememberRecords,
   rememberViews,
-  persistViewDisplay,
   loadCollapsedGroups,
   pickViewForRoute,
   routeViewNeedsFetch,
@@ -3630,7 +3629,6 @@ export function CollectionBrowser({
       columnViews,
     })
     if (viewStateKey(current) === viewStateKey(next)) return
-    if (!hasExternalViews) persistViewDisplay(collectionPath, next.id, next)
     patchActiveView(next)
   }
   persistActiveViewRef.current = persistActiveViewNow

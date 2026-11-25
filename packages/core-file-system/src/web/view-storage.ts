@@ -483,12 +483,6 @@ async function pullSavedViewsNow(collectionPaths: readonly string[] = []) {
     for (const path of new Set([...fetchPaths, ...byPath.keys()])) {
       pulledViewPaths.add(path)
       const views = byPath.get(path) ?? []
-      for (const view of views) {
-        const viewAt = Number(view.updatedAt) || 0
-        if (viewAt > 0 && viewAt > (Number(loadViewDisplay(path, view.id).updatedAt) || 0)) {
-          persistViewDisplay(path, view.id, view)
-        }
-      }
       const previous = memoryViews.get(path) ?? loadViews(path)
       const ranked = rankListedViews(
         mergeSavedViewLists(previous, views.map((view) => withViewDisplay(path, view)), loadOmittedViewIds(path)),
@@ -511,39 +505,6 @@ export function upsertSavedView(collectionPath: string, view: SavedView) {
   stored.push(next)
   rememberViews(collectionPath, stored)
   noteLocalSavedViewsWrite(collectionPath)
-}
-
-const DISPLAY_KEYS = [
-  'name',
-  'mode',
-  'sortField',
-  'sortDir',
-  'sorts',
-  'columns',
-  'groupBy',
-  'groupConfig',
-  'tree',
-  'wrap',
-  'truncate',
-  'rowNumbers',
-  'freezeTitle',
-  'freezeUntil',
-  'query',
-  'pageSize',
-  'columnWidths',
-  'columnSummaries',
-  'columnViews',
-  'sandboxViews',
-  'filterTree',
-  'rank',
-] as const
-
-export type ViewDisplayPatch = Partial<Pick<SavedView, (typeof DISPLAY_KEYS)[number]>> & {
-  updatedAt?: number
-}
-
-export function viewDisplayKey(collectionPath: string, viewId: string) {
-  return `fsdb.viewDisplay:${workspaceStoragePrefix()}${collectionPath}:${viewId}`
 }
 
 export function collapsedGroupsKey(collectionPath: string, viewId: string, groupBy = '') {
@@ -583,37 +544,6 @@ export function persistCollapsedGroups(
   } catch {
     /* ignore */
   }
-}
-
-const CLEAR_DISPLAY_DEFAULTS: Record<string, () => unknown> = {
-  filterTree: () => emptyFilterGroup(),
-  columnSummaries: () => ({}),
-  columnViews: () => ({}),
-  sandboxViews: () => [],
-  columnWidths: () => ({}),
-  groupConfig: () => ({}),
-  freezeUntil: () => '',
-}
-
-function pickDisplay(patch: Partial<SavedView>): ViewDisplayPatch {
-  const next: ViewDisplayPatch = {}
-  for (const key of DISPLAY_KEYS) {
-    if (patch[key] !== undefined) (next as Record<string, unknown>)[key] = patch[key]
-    else if (Object.prototype.hasOwnProperty.call(patch, key) && CLEAR_DISPLAY_DEFAULTS[key]) {
-      (next as Record<string, unknown>)[key] = CLEAR_DISPLAY_DEFAULTS[key]()
-    }
-  }
-  const stamp = Number(patch.updatedAt) || 0
-  if (stamp > 0) next.updatedAt = stamp
-  return next
-}
-
-export function loadViewDisplay(_collectionPath: string, _viewId: string): ViewDisplayPatch {
-  return {}
-}
-
-export function persistViewDisplay(_collectionPath: string, _viewId: string, _patch: Partial<SavedView>) {
-  // 所有视图（含内置视图）统一以服务端 saved_views 为唯一真相，不再写 localStorage 显示覆盖
 }
 
 /** 仅修正索引/系统内置视图的默认分组约束，不再叠加 localStorage 覆盖。 */

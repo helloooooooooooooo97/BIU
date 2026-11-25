@@ -910,7 +910,6 @@ test('create record sits at the right of the toolbar with a blue label', () => {
   assert.match(css, /\.tasks-minicard-title\{[^}]*font-size:var\(--biu-font-size-4\)/)
   assert.match(css, /\.tasks-minicard-title\{[^}]*font-weight:var\(--biu-font-weight-medium\)/)
   assert.doesNotMatch(css, /fsdb-row-check-cell/)
-  assert.match(browser, /persistViewDisplay/)
   assert.match(browser, /withViewDisplay/)
   assert.doesNotMatch(browser, /if \(current\?\.builtin\) return/)
   assert.doesNotMatch(browser, /setColumnKeys\(defaultColumnKeys\(listed\.schema/)

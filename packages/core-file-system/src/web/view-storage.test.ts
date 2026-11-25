@@ -12,7 +12,6 @@ import {
   loadRecords,
   mergeSavedViewsPatch,
   noteLocalSavedViewsWrite,
-  persistViewDisplay,
   persistCollapsedGroups,
   loadCollapsedGroups,
   collapsedGroupsKey,
@@ -28,7 +27,6 @@ import {
   toggleStarredRecord,
   toggleStarredView,
   isRecordStarred,
-  viewDisplayKey,
   viewForPath,
   withViewDisplay,
 } from './view-storage.ts'
@@ -127,9 +125,8 @@ test('withViewDisplay does not overlay localStorage display prefs onto server vi
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage })
   const path = '/agents'
   const id = builtinAllViewId(path)
-  // Even if legacy localStorage already has stale display JSON, persistViewDisplay is a no-op and withViewDisplay ignores it
-  mem[viewDisplayKey(path, id)] = JSON.stringify({ name: '97', wrap: true, columns: ['title', 'project'], rank: 0 })
-  persistViewDisplay(path, id, { wrap: true, truncate: false, freezeTitle: true })
+  // Even if legacy localStorage already has stale display JSON, withViewDisplay ignores it
+  mem[`fsdb.viewDisplay:${path}:${id}`] = JSON.stringify({ name: '97', wrap: true, columns: ['title', 'project'], rank: 0 })
   const painted = withViewDisplay(path, builtinAllView({ path, label: '代理', view: { title: '代理' } }))
   assert.equal(painted.name, '全部代理')
   assert.equal(painted.wrap, false)
@@ -375,8 +372,6 @@ test('pullSavedViews keeps previous rank when the list comes back shuffled', asy
     { id: 'mine', name: '我的', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [], rank: 0 },
     { id: 'board', name: '看板', mode: 'board', sortField: 'title', sortDir: 'asc', filters: {}, columns: [], rank: 1 },
   ])
-  persistViewDisplay(path, 'mine', { rank: 0 })
-  persistViewDisplay(path, 'board', { rank: 1 })
   const prev = globalThis.fetch
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input)
@@ -620,9 +615,6 @@ test('newer server view wins over stale localStorage display overlay and syncs l
       removeItem: (key: string) => { delete mem[key] },
     },
   })
-  // 本地 localStorage 存了旧时间戳的展示配置
-  persistViewDisplay(path, 'v1', { wrap: false, freezeUntil: 'title', updatedAt: 1000 })
-
   // 服务端（如 Agent/其他窗口）更新了该视图，时间戳更新为 2000
   const serverView = {
     id: 'v1',
@@ -703,7 +695,6 @@ test('omittedViews and activeView storage keys are isolated per workspaceId', as
     loadOmittedViewIds,
     omitSavedViewIds,
     omittedViewsKey,
-    viewDisplayKey,
   } = await import('./view-storage.ts')
   const localMem: Record<string, string> = {}
   const sessionMem: Record<string, string> = {}
@@ -726,7 +717,6 @@ test('omittedViews and activeView storage keys are isolated per workspaceId', as
     sessionMem['biu.workspaceId'] = 'ws_local'
     assert.equal(omittedViewsKey('/pages'), 'fsdb.omittedViews:ws_local:/pages')
     assert.equal(activeViewStorageKey('/pages'), 'fsdb.activeView:ws_local:/pages')
-    assert.equal(viewDisplayKey('/pages', 'all'), 'fsdb.viewDisplay:ws_local:/pages:all')
     assert.equal(collapsedGroupsKey('/pages', 'all', 'tag'), 'fsdb.collapsedGroups:ws_local:/pages:all:tag')
     omitSavedViewIds('/pages', ['__all__:/pages'])
     assert.deepEqual(loadOmittedViewIds('/pages'), ['__all__:/pages'])
