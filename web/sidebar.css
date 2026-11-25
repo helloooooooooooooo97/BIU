@@ -960,7 +960,6 @@ html.dark .fsdb-views {
 .shell-sidebar-account-wrap {
   flex-shrink: 0;
   padding: 6px 8px 8px;
-  border-top: var(--biu-stroke-width) solid var(--biu-color-border);
 }
 
 .shell-sidebar-account {
