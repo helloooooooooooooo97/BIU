@@ -76,17 +76,19 @@ test('workspace ownership can be transferred to another member', () => {
   assert.equal(store.listWorkspaces(bob.id).find((row) => row.id === workspace.id)?.ownerId, bob.id)
 })
 
-test('saved views remain workspace system metadata for all members', () => {
-  const { auth, bob, workspace, actor } = setup()
+test('saved views follow standard record RBAC policies without /views special-casing', () => {
+  const { auth, ada, bob, workspace, actor } = setup()
   const view = {
     type: 'record' as const,
     workspaceId: workspace.id,
     collection: '/views',
     recordId: 'sessions::recent',
   }
+  auth.attach(actor(ada.id), view, { accessMode: 'members', memberDefaultRole: 'editor' })
   assert.equal(auth.authorize(actor(bob.id), 'resource:read', view).allowed, true)
   assert.equal(auth.authorize(actor(bob.id), 'resource:update', view).allowed, true)
-  assert.equal(auth.authorize(actor(bob.id), 'resource:delete', view).allowed, true)
+  assert.equal(auth.authorize(actor(bob.id), 'resource:delete', view).allowed, false)
+  assert.equal(auth.authorize(actor(ada.id), 'resource:delete', view).allowed, true)
 })
 
 test('workspace viewers can only read resources made visible to them', () => {
@@ -124,12 +126,16 @@ test('a group grant applies dynamically to its workspace members', () => {
   if (decision.allowed) assert.equal(decision.source, 'group-grant')
 })
 
-test('a member-view grant evaluates its audience dynamically', () => {
-  const { auth, ada, bob, cara, actor, page } = setup()
+test('a dynamic group grant evaluates its audience dynamically', () => {
+  const { store, auth, workspace, ada, bob, cara, actor, page } = setup()
   auth.attach(actor(ada.id), page('dynamic'), { accessMode: 'private' })
+  const dynGroup = store.createGroup(ada.id, workspace.id, '产品动态组', {
+    kind: 'dynamic',
+    filterTree: { op: 'and', children: [{ field: 'role', op: 'eq', value: 'member' }] },
+  })
   let matching = new Set([bob.id])
-  auth.setMemberViewMatcher((_workspaceId, viewId, accountId) => viewId === 'product-view' && matching.has(accountId))
-  auth.grant(ada.id, page('dynamic'), 'member_view', 'product-view', 'viewer')
+  auth.setDynamicGroupMatcher((_workspaceId, _filterTreeJson, accountId) => matching.has(accountId))
+  auth.grant(ada.id, page('dynamic'), 'group', dynGroup.id, 'viewer')
   assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('dynamic')).allowed, true)
   assert.equal(auth.authorize(actor(cara.id), 'resource:read', page('dynamic')).allowed, false)
   matching = new Set([cara.id])
@@ -221,10 +227,14 @@ test('collection scan preload matches live sqlite authorization', () => {
   store.addGroupMemberByEmail(ada.id, workspace.id, product.id, bob.email)
   auth.attach(actor(ada.id), page('roadmap'), { accessMode: 'restricted' })
   auth.grant(ada.id, page('roadmap'), 'group', product.id, 'editor')
+  const dynGroup = store.createGroup(ada.id, workspace.id, '动态产品组', {
+    kind: 'dynamic',
+    filterTree: { op: 'and', children: [{ field: 'tag', op: 'eq', value: 'product' }] },
+  })
   const matching = new Set([cara.id])
-  auth.setMemberViewMatcher((_workspaceId, viewId, accountId) => viewId === 'product-view' && matching.has(accountId))
+  auth.setDynamicGroupMatcher((_workspaceId, _filterTreeJson, accountId) => matching.has(accountId))
   auth.attach(actor(ada.id), page('dynamic'), { accessMode: 'private' })
-  auth.grant(ada.id, page('dynamic'), 'member_view', 'product-view', 'viewer')
+  auth.grant(ada.id, page('dynamic'), 'group', dynGroup.id, 'viewer')
 
   const snapshot = () => {
     const actions = ['resource:read', 'resource:update', 'resource:delete'] as const
@@ -309,13 +319,17 @@ test('an agent has exactly the delegating account permissions', () => {
   assert.equal(auth.authorize(agent, 'resource:manage-permissions', page('agent-page')).allowed, false)
 })
 
-test('view_grants never grants underlying record access; only access_rules do', () => {
+test('view sharing never grants underlying record access; only access_rules do', () => {
   const { store, auth, ada, bob, actor, page, workspace } = setup()
   auth.attach(actor(ada.id), page('view-doc'), { accessMode: 'private' })
-  store.grantViewMemberView(ada.id, '/pages', 'v-public', 'mv-team', 'editor')
-  auth.setMemberViewMatcher((_ws, viewId, accountId) => viewId === 'mv-team' && accountId === bob.id)
+  const teamGroup = store.createGroup(ada.id, workspace.id, '研发动态组', {
+    kind: 'dynamic',
+    filterTree: { op: 'and', children: [{ field: 'role', op: 'eq', value: 'member' }] },
+  })
+  store.grantViewGroup(ada.id, '/pages', 'v-public', teamGroup.id, 'editor')
+  auth.setDynamicGroupMatcher((_ws, _filterTreeJson, accountId) => accountId === bob.id)
 
-  // Sharing a view via view_grants MUST NOT leak underlying data records
+  // Sharing a view via /views record_grants MUST NOT leak underlying data records
   const deniedByViewGrant = auth.authorize(actor(bob.id), 'resource:read', { ...page('view-doc'), record: { tag: 'public' } })
   assert.equal(deniedByViewGrant.allowed, false)
 
@@ -324,7 +338,7 @@ test('view_grants never grants underlying record access; only access_rules do', 
     collection: '/pages',
     name: 'Public Rule',
     filterTree: { op: 'and', rules: [{ field: 'tag', op: 'eq', value: 'public' }] },
-    grants: [{ subjectType: 'member_view', subjectId: 'mv-team', role: 'editor' }],
+    grants: [{ subjectType: 'group', subjectId: teamGroup.id, role: 'editor' }],
   })
   auth.setAccessRuleMatcher((_ws, _col, filterTreeJson, _recordId, ctx) => {
     const parsed = JSON.parse(filterTreeJson) as { rules?: Array<{ field?: string; value?: unknown }> }
@@ -360,52 +374,56 @@ test('setInheritanceMode toggles inherit vs custom while preserving parent link'
   assert.equal(auth.authorize(actor(bob.id), 'resource:update', page('child')).allowed, true)
 })
 
-test('preloadCollection caches memberViewMatcher and short-circuits unmatched actor access rules', () => {
+test('preloadCollection caches dynamicGroupMatcher and short-circuits unmatched actor access rules', () => {
   const { store, auth, ada, bob, actor, page, workspace } = setup()
   for (let i = 0; i < 30; i += 1) {
     auth.attach(actor(ada.id), page(`doc-${i}`), { accessMode: 'private' })
   }
+  const teamGroup = store.createGroup(ada.id, workspace.id, '动态研发组', {
+    kind: 'dynamic',
+    filterTree: { op: 'and', children: [{ field: 'role', op: 'eq', value: 'member' }] },
+  })
   store.createAccessRule(ada.id, workspace.id, {
     collection: '/pages',
     name: 'Team Public',
     filterTree: { op: 'and', rules: [{ field: 'tag', op: 'eq', value: 'public' }] },
-    grants: [{ subjectType: 'member_view', subjectId: 'mv-team', role: 'editor' }],
+    grants: [{ subjectType: 'group', subjectId: teamGroup.id, role: 'editor' }],
   })
 
-  let memberMatcherCalls = 0
+  let groupMatcherCalls = 0
   let ruleMatcherCalls = 0
-  auth.setMemberViewMatcher((_ws, viewId, accountId) => {
-    memberMatcherCalls += 1
-    return viewId === 'mv-team' && accountId === bob.id
+  auth.setDynamicGroupMatcher((_ws, _filterTreeJson, accountId) => {
+    groupMatcherCalls += 1
+    return accountId === bob.id
   })
   auth.setAccessRuleMatcher((_ws, _col, _filterTreeJson, _recordId, ctx) => {
     ruleMatcherCalls += 1
     return ctx.record?.tag === 'public'
   })
 
-  // Bob 命中 mv-team：30 行扫描，memberViewMatcher 只算 1 次
+  // Bob 命中动态组：30 行扫描，dynamicGroupMatcher 只算 1 次
   auth.preloadCollection(workspace.id, '/pages', bob.id)
   for (let i = 0; i < 30; i += 1) {
     auth.authorize(actor(bob.id), 'resource:read', { ...page(`doc-${i}`), record: { tag: 'public' } })
   }
   auth.releaseCollection(workspace.id, '/pages', bob.id)
-  assert.equal(memberMatcherCalls, 1)
+  assert.equal(groupMatcherCalls, 1)
   assert.equal(ruleMatcherCalls, 30)
 
-  // Ada 不命中 mv-team：30 行扫描，accessRuleMatcher 0 次调用（预过滤后 O(1) 短路）
-  memberMatcherCalls = 0
+  // Ada 不命中动态组：30 行扫描，accessRuleMatcher 0 次调用（预过滤后 O(1) 短路）
+  groupMatcherCalls = 0
   ruleMatcherCalls = 0
   auth.preloadCollection(workspace.id, '/pages', ada.id)
   for (let i = 0; i < 30; i += 1) {
     auth.authorize(actor(ada.id), 'resource:read', { ...page(`doc-${i}`), record: { tag: 'public' } })
   }
   auth.releaseCollection(workspace.id, '/pages', ada.id)
-  assert.equal(memberMatcherCalls, 1)
+  assert.equal(groupMatcherCalls, 1)
   assert.equal(ruleMatcherCalls, 0)
 })
 
-test('external and guest collaborators are read-only on /views and policy-bound views are detected', () => {
-  const { store, auth, ada, bob, workspace, actor, page } = setup()
+test('external and guest collaborators follow standard /views RBAC policies without fallback bypass', () => {
+  const { store, auth, ada, workspace, actor, page } = setup()
   const external = store.register('Ext', 1, 'secret123', 'ext@example.com')
   runWithAccount(ada.id, () => {
     store.attach(workspace.id, '/pages', 'doc-1', 1)
@@ -413,12 +431,17 @@ test('external and guest collaborators are read-only on /views and policy-bound 
   })
 
   const viewRef = { type: 'record' as const, workspaceId: workspace.id, collection: '/views', recordId: 'pages::v1' }
+  // Without explicit policy/grant, external collaborator cannot read /views record
+  assert.equal(auth.authorize(actor(external.id), 'resource:read', viewRef).allowed, false)
+  // Once explicitly shared as viewer, external collaborator can read but cannot update or delete
+  runWithAccount(ada.id, () => {
+    store.shareViewWithEmail(ada.id, '/pages', 'v1', 'ext@example.com', 'viewer', 'external')
+  })
   assert.equal(auth.authorize(actor(external.id), 'resource:read', viewRef).allowed, true)
   assert.equal(auth.authorize(actor(external.id), 'resource:update', viewRef).allowed, false)
   assert.equal(auth.authorize(actor(external.id), 'resource:delete', viewRef).allowed, false)
 
   store.cleanupViewReferences(workspace.id, '/pages', 'v-shared')
-  store.cleanupViewReferences(workspace.id, '/workspace-members', 'mv-eng')
   assert.equal(page('doc-1').recordId, 'doc-1')
 })
 
@@ -593,20 +616,24 @@ test('no-amplification axiom: sharing a custom view NEVER leaks other members pr
     store.attach(workspace.id, '/pages', 'cara-doc', 1, { accessMode: 'private' })
   })
 
-  // Match internal members for 'mv-all' and records with tag === 'project'
+  // Match internal members for dynamic group 'allGroup' and records with tag === 'project'
+  const allGroup = store.createGroup(ada.id, workspace.id, '全员动态组', {
+    kind: 'dynamic',
+    filterTree: { op: 'and', children: [{ field: 'membershipKind', op: 'eq', value: 'member' }] },
+  })
   const internalIds = new Set([ada.id, bob.id, cara.id, dave.id])
-  auth.setMemberViewMatcher((_ws, viewId, accountId) => viewId === 'mv-all' && internalIds.has(accountId))
+  auth.setDynamicGroupMatcher((_ws, _filterTreeJson, accountId) => internalIds.has(accountId))
   auth.setAccessRuleMatcher((_ws, col, _filterTreeJson, _recId, ctx) => col === '/pages' && ctx.record?.tag === 'project')
 
-  // Bob creates an access rule sharing project records to 'mv-all' (all members, including Bob and Dave)
+  // Bob creates an access rule sharing project records to allGroup (all members, including Bob and Dave)
   runWithAccount(bob.id, () => {
     store.createAccessRule(bob.id, workspace.id, {
       collection: '/pages',
       name: 'Project Rule',
       filterTree: { op: 'and', rules: [{ field: 'tag', op: 'eq', value: 'project' }] },
-      grants: [{ subjectType: 'member_view', subjectId: 'mv-all', role: 'manager' }],
+      grants: [{ subjectType: 'group', subjectId: allGroup.id, role: 'manager' }],
     })
-    store.grantViewMemberView(bob.id, '/pages', 'v-project', 'mv-all', 'manager')
+    store.grantViewGroup(bob.id, '/pages', 'v-project', allGroup.id, 'manager')
   })
 
   // Bug #2 fixed: Bob and Dave can see bob-doc, NEVER cara-doc (no 10 -> 20 record leak!)
@@ -615,14 +642,14 @@ test('no-amplification axiom: sharing a custom view NEVER leaks other members pr
   assert.equal(auth.authorize(actor(dave.id), 'resource:read', { ...page('bob-doc'), record: { tag: 'project' } }).allowed, true)
   assert.equal(auth.authorize(actor(dave.id), 'resource:read', { ...page('cara-doc'), record: { tag: 'project' } }).allowed, false)
 
-  // Unified page/view sharing: Bob granted 'mv-all' (member_view) manager role on 'v-project'
+  // Unified page/view sharing: Bob granted dynamic group manager role on 'v-project'
   const daveViewAccess = runWithAccount(dave.id, () => store.viewAccess(dave.id, '/pages', 'v-project'))
   assert.equal(daveViewAccess.scope, 'workspace')
   assert.equal(daveViewAccess.ownerId, bob.id)
-  assert.equal(daveViewAccess.memberViews.length, 1)
-  assert.equal(daveViewAccess.memberViews[0]?.id, 'mv-all')
+  assert.equal(daveViewAccess.groups.length, 1)
+  assert.equal(daveViewAccess.groups[0]?.id, allGroup.id)
 
-  // Even if Dave (manager via member_view) shares 'v-project' to an external user, Bob's/Cara's docs are NEVER leaked!
+  // Even if Dave (manager via dynamic group) shares 'v-project' to an external user, Bob's/Cara's docs are NEVER leaked!
   const ext = store.register('ExtLeak', 1, 'secret123', 'extleak@example.com')
   runWithAccount(dave.id, () => {
     store.shareViewWithEmail(dave.id, '/pages', 'v-project', ext.email, 'editor', 'external')
@@ -631,10 +658,10 @@ test('no-amplification axiom: sharing a custom view NEVER leaks other members pr
   store.setActive(ext.id, workspace.id)
   const extViewAccess = runWithAccount(ext.id, () => store.viewAccess(ext.id, '/pages', 'v-project'))
   assert.equal(extViewAccess.scope, 'shared')
-  assert.equal(extViewAccess.memberViews.length, 1)
+  assert.equal(extViewAccess.groups.length, 1)
   assert.ok(extViewAccess.people.some((p) => p.id === ext.id && p.role === 'editor'))
   assert.throws(
-    () => runWithAccount(ext.id, () => store.revokeViewGrant(ext.id, '/pages', 'v-project', 'member_view', 'mv-all')),
+    () => runWithAccount(ext.id, () => store.revokeViewGrant(ext.id, '/pages', 'v-project', 'group', allGroup.id)),
     /没有权限/,
   )
   assert.equal(auth.authorize(actor(ext.id), 'resource:read', { ...page('bob-doc'), record: { tag: 'project' } }).allowed, false)
@@ -646,27 +673,31 @@ test('no-amplification axiom: sharing a custom view NEVER leaks other members pr
   assert.throws(() => auth.grant(bob.id, page('ada-owned'), 'account', cara.id, 'owner'), /CANNOT_EXCEED_OWN_ROLE/)
 })
 
-test('explicit member-view grant on a workspace record takes precedence over workspace-default admin role', () => {
+test('explicit dynamic-group grant on a workspace record takes precedence over workspace-default admin role', () => {
   const { store, auth, workspace, ada, bob, actor, page } = setup()
   store.updateMemberRole(ada.id, workspace.id, bob.id, 'admin')
 
+  const membersGroup = store.createGroup(ada.id, workspace.id, '内部成员动态组', {
+    kind: 'dynamic',
+    filterTree: { op: 'and', children: [{ field: 'membershipKind', op: 'eq', value: 'member' }] },
+  })
   const internalIds = new Set([ada.id, bob.id])
-  auth.setMemberViewMatcher((_ws, viewId, accountId) => viewId === 'builtin-member:member' && internalIds.has(accountId))
+  auth.setDynamicGroupMatcher((_ws, _filterTreeJson, accountId) => internalIds.has(accountId))
 
-  // Ada creates a workspace-scoped record and explicitly grants all members 'editor'
+  // Ada creates a workspace-scoped record and explicitly grants membersGroup 'editor'
   auth.attach(actor(ada.id), page('ws-doc'), { accessMode: 'members', memberDefaultRole: 'editor' })
-  auth.grant(ada.id, page('ws-doc'), 'member_view', 'builtin-member:member', 'editor')
+  auth.grant(ada.id, page('ws-doc'), 'group', membersGroup.id, 'editor')
 
-  // Bob (workspace admin) gets 'editor' consistently in both authorize() and explainRecordRole()
+  // Bob (workspace admin) gets 'editor' consistently in both authorize() and roleChain()
   const decision = auth.authorize(actor(bob.id), 'resource:read', page('ws-doc'))
   assert.equal(decision.allowed, true)
   if (decision.allowed) {
     assert.equal(decision.effectiveRole, 'editor')
-    assert.equal(decision.source, 'view-grant')
+    assert.equal(decision.source, 'group-grant')
   }
   const chain = auth.roleChain(bob.id, page('ws-doc'))
   assert.equal(chain[0]?.role, 'editor')
-  assert.equal(chain[0]?.source, 'view-grant')
+  assert.equal(chain[0]?.source, 'group-grant')
 })
 
 test('anti-lockout & control/data separation: users cannot self-revoke/downgrade and workspace owner cannot delete others view grants', () => {

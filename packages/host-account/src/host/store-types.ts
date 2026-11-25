@@ -105,7 +105,9 @@ export type PresenceRow = {
   seenAt: number
 }
 
-export type AccessRuleSubjectType = 'account' | 'workspace' | 'member_view'
+export type AccessRuleSubjectType = 'account' | 'workspace' | 'group'
+
+export type WorkspaceGroupKind = 'static' | 'dynamic'
 
 export type AccessRuleRole = 'viewer' | 'editor' | 'manager'
 

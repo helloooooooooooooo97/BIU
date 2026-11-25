@@ -69,7 +69,7 @@ export type WorkspaceFiles = {
     enabled: boolean
     grants: Array<{
       id: string
-      subjectType: 'account' | 'workspace' | 'member_view'
+      subjectType: 'account' | 'workspace' | 'group'
       subjectId: string
       role: 'viewer' | 'editor' | 'manager'
       subjectName?: string
@@ -305,12 +305,13 @@ export class DatabaseAccessPolicy {
       const ruleCols = Array.isArray(rule.columns) && rule.columns.length > 0
         ? [...rule.columns, '$content', 'shareScope', 'shareRole']
         : null
+      let matchedGroups: Set<string> | null = null
       for (const grant of rule.grants) {
         const subjectMatches = grant.subjectType === 'account'
           ? grant.subjectId === actor.accountId
           : grant.subjectType === 'workspace'
             ? grant.subjectId === actor.workspaceId && authorization.membershipKind(actor.accountId, actor.workspaceId) === 'member'
-            : authorization.matchesMemberView(actor.workspaceId, grant.subjectId, actor.accountId)
+            : grant.subjectType === 'group' && (matchedGroups ??= authorization.matchedGroupsFor(actor.workspaceId, actor.accountId)).has(grant.subjectId)
         if (!subjectMatches) continue
         const canWrite = roleCoversAction(grant.role, 'resource:update')
         policies.push({
@@ -548,33 +549,9 @@ export class DatabaseAccessPolicy {
     this.ownershipCache.delete(key)
   }
 
-  /** 分享里的「按成员视图批量授权」：全部成员可编辑。 */
-  grantAllMembersEditable(collection: string, recordId: string) {
-    const store = this.host.collabStore() as {
-      grantMemberView?: (
-        actorId: string,
-        collection: string,
-        recordId: string,
-        viewId: string,
-        role: 'editor',
-      ) => void
-    } | undefined
-    const actorId = currentAccountId()
-    if (!store?.grantMemberView || !actorId) return
-    try {
-      store.grantMemberView(actorId, collection, recordId, builtinAllViewId(WORKSPACE_MEMBERS_COLLECTION_PATH), 'editor')
-      const workspaceId = this.cacheWorkspaceId()
-      if (workspaceId) {
-        const key = `${workspaceId}\t${collection}`
-        this.ownerCache.delete(key)
-        this.ownershipCache.delete(key)
-      } else {
-        this.ownerCache.clear()
-        this.ownershipCache.clear()
-      }
-    } catch {
-      /* 还没挂上工作区时，记录仍按空间归属保留 */
-    }
+  /** 保留空操作兼容旧调用，accessMode='members' + memberDefaultRole='editor' 已原生覆盖全空间可编辑。 */
+  grantAllMembersEditable(_collection: string, _recordId: string) {
+    // no-op: workspace-scoped records already attach accessMode='members', memberDefaultRole='editor'
   }
 
   markPublicView(collection: string, recordId: string) {

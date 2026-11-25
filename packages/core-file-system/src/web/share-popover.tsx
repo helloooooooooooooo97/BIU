@@ -6,7 +6,7 @@ import { ArrowPathIcon, CheckIcon, ChevronDownIcon, LinkIcon, ShareIcon, UserGro
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { useFloatingPosition } from '@biu/biu-ui/floating-position'
 import { OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
-import { VIEWS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH } from './database-path.ts'
+import { WORKSPACE_MEMBERS_COLLECTION_PATH } from './database-path.ts'
 import { listCollection, readJson } from './db-client.ts'
 import { FSDB_SHARES_CHANGE_EVENT, emitFsdbEvent } from './fsdb-events.ts'
 
@@ -15,7 +15,7 @@ export { ShareScopeDetail, ShareRoleDetail } from './share-chain-detail.tsx'
 import { ScopeMark } from './share-scope-label.tsx'
 import { roleLabel } from './share-chain-detail.tsx'
 import { mintSharePin, shareClipboardText } from '../share-resources.ts'
-import { builtinAllView, builtinMemberViews, isBuiltinAllViewId, parseBuiltinScopeViewId, scopedCollectionName } from '../catalog-views.ts'
+import { builtinAllView, isBuiltinAllViewId, parseBuiltinScopeViewId, scopedCollectionName } from '../catalog-views.ts'
 import { openAccessRulesDrawer } from './access-rules-drawer.tsx'
 import type { DbRecord } from '@biu/type-file-system'
 
@@ -331,17 +331,20 @@ function WorkspaceAccess({
     canEdit?: boolean
     canRevoke?: boolean
   }>>([])
-  const [groups, setGroups] = useState<Array<{ id: string; name: string; role: string }>>([])
-  const [memberViews, setMemberViews] = useState<Array<{
+  const [groups, setGroups] = useState<Array<{
     id: string
     name: string
-    role?: string
-    grantedBy?: string
-    grantedByName?: string
+    kind?: 'static' | 'dynamic'
+    role: string
     canEdit?: boolean
     canRevoke?: boolean
   }>>([])
-  const [availableMemberViews, setAvailableMemberViews] = useState<Array<{ id: string; name: string; filters?: Record<string, unknown> }>>([])
+  const [availableGroups, setAvailableGroups] = useState<Array<{
+    id: string
+    name: string
+    kind?: 'static' | 'dynamic'
+    memberCount?: number
+  }>>([])
   const [workspaceMembers, setWorkspaceMembers] = useState<Array<{
     id: string
     name: string
@@ -352,7 +355,7 @@ function WorkspaceAccess({
   const [memberQuery, setMemberQuery] = useState('')
   const [selectedTarget, setSelectedTarget] = useState<
     | { kind: 'member'; id: string; email: string; name: string }
-    | { kind: 'member_view'; id: string; name: string }
+    | { kind: 'group'; id: string; name: string }
     | null
   >(null)
   const [memberPickerOpen, setMemberPickerOpen] = useState(false)
@@ -381,12 +384,11 @@ function WorkspaceAccess({
         canEdit?: boolean
         canRevoke?: boolean
       }>
-      groups?: Array<{ id: string; name: string; role: string }>
-      memberViews?: Array<{
+      groups?: Array<{
         id: string
+        name: string
+        kind?: 'static' | 'dynamic'
         role: string
-        grantedBy?: string
-        grantedByName?: string
         canEdit?: boolean
         canRevoke?: boolean
       }>
@@ -405,11 +407,6 @@ function WorkspaceAccess({
     setCanManage(data.canManage !== false)
     setPeople(data.people ?? [])
     setGroups(data.groups ?? [])
-    const builtinNames = new Map(builtinMemberViews().map((view) => [String(view.viewId ?? ''), String(view.title ?? '')]))
-    setMemberViews((data.memberViews ?? []).map((item) => ({
-      ...item,
-      name: availableMemberViews.find((view) => view.id === item.id)?.name ?? (builtinNames.get(item.id) || item.id),
-    })))
     setInheritance({
       mode: data.inheritance?.mode === 'inherit' ? 'inherit' : 'custom',
       hasParent: Boolean(data.inheritance?.hasParent),
@@ -421,34 +418,15 @@ function WorkspaceAccess({
       console.warn('[share-popover] load grants failed', collection, error)
       setPeople([])
     })
-    void listCollection({
-      path: VIEWS_COLLECTION_PATH,
-      limit: 200,
-      filters: { tablePath: WORKSPACE_MEMBERS_COLLECTION_PATH },
-      columns: ['title', 'tablePath', 'viewId', 'filters'],
-    })
-      .then((page) => {
-        const rows = page.items.flatMap((row) => {
-          const id = String(row.viewId ?? '').trim()
-          if (!id) return []
-          let filters: Record<string, unknown> | undefined
-          try {
-            const parsed = JSON.parse(String(row.filters ?? '{}'))
-            filters = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined
-          } catch {
-            filters = undefined
-          }
-          return [{ id, name: String(row.title ?? id), filters }]
-        })
-        setAvailableMemberViews(rows)
-        setMemberViews((current) => current.map((item) => ({
-          ...item,
-          name: rows.find((view) => view.id === item.id)?.name ?? item.name,
-        })))
+    void readJson<{ groups?: Array<{ id: string; name: string; kind?: 'static' | 'dynamic'; memberCount?: number }> }>(
+      '/api/account/groups',
+    )
+      .then((res) => {
+        setAvailableGroups(Array.isArray(res.groups) ? res.groups : [])
       })
       .catch((error) => {
-        console.warn('[share-popover] load member views failed', error)
-        setAvailableMemberViews([])
+        console.warn('[share-popover] load groups failed', error)
+        setAvailableGroups([])
       })
     void listCollection({
       path: WORKSPACE_MEMBERS_COLLECTION_PATH,
@@ -477,7 +455,7 @@ function WorkspaceAccess({
   }, [collection, recordId, viewId])
 
   function grant(
-    input: { email?: string; memberViewId?: string },
+    input: { email?: string; groupId?: string },
     collaboratorKind: 'internal' | 'external' = 'internal',
     nextRole?: string,
   ) {
@@ -506,7 +484,7 @@ function WorkspaceAccess({
       .catch((err) => setError(err instanceof Error ? err.message : '无法授权'))
   }
 
-  async function revoke(subjectType: 'account' | 'group' | 'member_view', subjectId: string, grantedBy?: string) {
+  async function revoke(subjectType: 'account' | 'group', subjectId: string, grantedBy?: string) {
     setError('')
     try {
       await readJson('/api/account/access', {
@@ -581,11 +559,11 @@ function WorkspaceAccess({
   const inheritedExternal: Array<{ viewId: string; subjectType: string; subjectId: string; name: string; source: string; role: string }> = []
   const shownScope = scope
   const grantedAccountIds = new Set(people.map((row) => row.id))
-  const grantedMemberViewIds = new Set(memberViews.map((row) => row.id))
+  const grantedGroupIds = new Set(groups.map((row) => row.id))
   const normalizedMemberQuery = memberQuery.trim().toLowerCase()
-  const matchingMemberViews = availableMemberViews
-    .filter((row) => !grantedMemberViewIds.has(row.id))
-    .filter((row) => !normalizedMemberQuery || `${row.name} 动态成员视图`.toLowerCase().includes(normalizedMemberQuery))
+  const matchingGroups = availableGroups
+    .filter((row) => !grantedGroupIds.has(row.id))
+    .filter((row) => !normalizedMemberQuery || `${row.name} 成员组 动态成员组`.toLowerCase().includes(normalizedMemberQuery))
     .slice(0, 6)
   const matchingMembers = workspaceMembers
     .filter((row) => row.id !== ownerId && !grantedAccountIds.has(row.id))
@@ -604,7 +582,7 @@ function WorkspaceAccess({
     />
   )
 
-  const internalCount = internalPeople.length + groups.length + memberViews.length + inheritedInternal.length
+  const internalCount = internalPeople.length + groups.length + inheritedInternal.length
   const externalCount = externalPeople.length + inheritedExternal.length
   const isImageAvatar = (value?: string) => Boolean(value && /^(https?:\/\/|\/|data:image\/)/i.test(value.trim()))
   const renderPersonAvatar = (seed: string, avatar?: string, extraClass = '', size = 28) => {
@@ -693,47 +671,31 @@ function WorkspaceAccess({
               </li>
             )
           })}
-          {groups.map((row) => (
-            <li key={`group:${row.id}`}>
-              <span className="fsdb-share-avatar is-view" aria-hidden><UserGroupIcon className="size-3.5" /></span>
-              <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong><em>成员组</em></span>
-              <span className="fsdb-share-collaborator-role">{roleLabel(row.role)}</span>
-              <button type="button" className="fsdb-share-remove" title="移除成员组" aria-label={`移除 ${row.name}`} onClick={() => void revoke('group', row.id)}>
-                <XMarkIcon aria-hidden className="size-3.5" />
-              </button>
-            </li>
-          ))}
-          {memberViews.map((row) => {
-            const sub = ['动态成员视图', grantorText(row.grantedBy, row.grantedByName)].filter(Boolean).join(' · ')
-            const canEdit = row.canEdit !== false
-            const canRevoke = row.canRevoke !== false
+          {groups.map((row) => {
+            const canEdit = canManage && row.canEdit !== false
+            const canRevoke = canManage && row.canRevoke !== false
+            const groupLabel = row.kind === 'dynamic' ? '动态成员组' : '成员组'
             return (
-              <li key={`view:${row.id}:${row.grantedBy ?? ''}`}>
-                <span className="fsdb-share-avatar is-view" aria-hidden><UsersIcon className="size-3.5" /></span>
-                <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong><em>{sub}</em></span>
+              <li key={`group:${row.id}`}>
+                <span className="fsdb-share-avatar is-view" aria-hidden><UserGroupIcon className="size-3.5" /></span>
+                <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong><em>{groupLabel}</em></span>
                 {canEdit ? (
                   <ShareSelect
                     inline
-                    value={row.role ?? 'editor'}
+                    value={row.role || 'editor'}
                     options={roleOptions}
                     ariaLabel={`调整 ${row.name} 的权限`}
                     placement="bottom-end"
                     minMenuWidth={168}
                     onChange={(next) => {
-                      if (next !== row.role) void grant({ memberViewId: row.id }, 'internal', next)
+                      if (next !== row.role) void grant({ groupId: row.id }, 'internal', next)
                     }}
                   />
                 ) : (
-                  <span className="fsdb-share-collaborator-role">{roleLabel(row.role ?? '')}</span>
+                  <span className="fsdb-share-collaborator-role">{roleLabel(row.role)}</span>
                 )}
                 {canRevoke ? (
-                  <button
-                    type="button"
-                    className="fsdb-share-remove"
-                    title={revokeTitle('移除成员视图', row.grantedBy, row.grantedByName)}
-                    aria-label={`移除 ${row.name}`}
-                    onClick={() => void revoke('member_view', row.id, row.grantedBy)}
-                  >
+                  <button type="button" className="fsdb-share-remove" title="移除成员组" aria-label={`移除 ${row.name}`} onClick={() => void revoke('group', row.id)}>
                     <XMarkIcon aria-hidden className="size-3.5" />
                   </button>
                 ) : null}
@@ -749,12 +711,12 @@ function WorkspaceAccess({
               className="fsdb-share-link-field"
               type="search"
               role="combobox"
-              aria-label="搜索空间成员"
+              aria-label="搜索空间成员或成员组"
               aria-expanded={memberPickerOpen}
               aria-controls="fsdb-share-member-options"
               autoComplete="off"
               value={memberQuery}
-              placeholder="搜索空间成员或成员视图"
+              placeholder="搜索空间成员或成员组"
               data-testid="fsdb-share-member-search"
               onFocus={() => setMemberPickerOpen(true)}
               onBlur={() => window.setTimeout(() => setMemberPickerOpen(false), 120)}
@@ -766,24 +728,24 @@ function WorkspaceAccess({
             />
             {memberPickerOpen ? (
               <div className="fsdb-share-member-options" id="fsdb-share-member-options" role="listbox">
-                {matchingMemberViews.map((row) => (
+                {matchingGroups.map((row) => (
                   <button
                     type="button"
                     role="option"
-                    aria-selected={selectedTarget?.kind === 'member_view' && selectedTarget.id === row.id}
-                    data-testid="fsdb-share-member-view"
-                    key={`view:${row.id}`}
+                    aria-selected={selectedTarget?.kind === 'group' && selectedTarget.id === row.id}
+                    data-testid="fsdb-share-group-option"
+                    key={`group:${row.id}`}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => {
-                      setSelectedTarget({ kind: 'member_view', id: row.id, name: row.name })
+                      setSelectedTarget({ kind: 'group', id: row.id, name: row.name })
                       setMemberQuery(row.name)
                       setMemberPickerOpen(false)
                     }}
                   >
-                    <span className="fsdb-share-avatar is-view is-sm" aria-hidden><UsersIcon className="size-3.5" /></span>
+                    <span className="fsdb-share-avatar is-view is-sm" aria-hidden><UserGroupIcon className="size-3.5" /></span>
                     <span className="fsdb-share-member-option-copy">
                       <strong>{row.name}</strong>
-                      <em>动态成员视图</em>
+                      <em>{row.kind === 'dynamic' ? '动态成员组' : '成员组'}{typeof row.memberCount === 'number' ? ` · ${row.memberCount} 人` : ''}</em>
                     </span>
                   </button>
                 ))}
@@ -807,14 +769,14 @@ function WorkspaceAccess({
                     </span>
                   </button>
                 ))}
-                {!matchingMemberViews.length && !matchingMembers.length ? <p>没有可添加的成员或视图</p> : null}
+                {!matchingGroups.length && !matchingMembers.length ? <p>没有可添加的成员或成员组</p> : null}
               </div>
             ) : null}
           </div>
           {roleSelect}
           <button type="button" className="fsdb-share-publish" disabled={!selectedTarget} data-testid="fsdb-share-member-add" onClick={() => {
             if (!selectedTarget) return
-            if (selectedTarget.kind === 'member_view') void grant({ memberViewId: selectedTarget.id }, 'internal')
+            if (selectedTarget.kind === 'group') void grant({ groupId: selectedTarget.id }, 'internal')
             else void grant({ email: selectedTarget.email }, 'internal')
           }}>添加</button>
         </div>

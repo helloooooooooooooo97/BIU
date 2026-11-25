@@ -2692,13 +2692,22 @@ export function apply(ctx: Context) {
     return workspaceId && account?.workspaceLocation?.(workspaceId) === 'cloud' ? 'cloud' : 'device'
   }
   db.viewCatalog = savedViews
-  account?.authorization?.setMemberViewMatcher((workspaceId, viewId, accountId) => {
-    const view = savedViews.viewsFor(WORKSPACE_MEMBERS_COLLECTION_PATH, '', workspaceId).find((item) => item.id === viewId)
-      ?? stubBuiltinMemberView(viewId)
-      ?? stubBuiltinAllView(viewId)
-    if (!view || !account.store) return false
+  const parsedDynamicGroupFilterCache = new Map<string, Record<string, unknown>>()
+  account?.authorization?.setDynamicGroupMatcher((workspaceId, filterTreeJson, accountId) => {
+    if (!account.store) return false
     const member = account.store.members(accountId, workspaceId).find((item) => item.id === accountId)
     if (!member) return false
+    let tree = parsedDynamicGroupFilterCache.get(filterTreeJson)
+    if (!tree) {
+      try {
+        const parsed = JSON.parse(filterTreeJson)
+        tree = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : { op: 'and', children: [] }
+      } catch {
+        tree = { op: 'and', children: [] }
+      }
+      if (parsedDynamicGroupFilterCache.size > 512) parsedDynamicGroupFilterCache.clear()
+      parsedDynamicGroupFilterCache.set(filterTreeJson, tree)
+    }
     return matchListFilterRecord(
       {
         id: member.id,
@@ -2709,10 +2718,7 @@ export function apply(ctx: Context) {
         membershipKind: member.member_kind,
         joinedAt: member.created_at,
       },
-      {
-        ...(view.filters ?? {}),
-        ...(view.filterTree ? { $tree: view.filterTree } : {}),
-      },
+      { $tree: tree },
     )
   })
   const parsedRuleFilterCache = new Map<string, Record<string, unknown>>()

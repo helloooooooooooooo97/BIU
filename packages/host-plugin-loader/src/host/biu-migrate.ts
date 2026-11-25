@@ -1261,6 +1261,230 @@ export const BIU_MIGRATIONS: Migration[] = [
       }
     }
   } },
+  { version: 58, module: 'host-account', name: 'dynamic-groups-and-view-policies', up: (db) => {
+    const shortHash = (input: string) => createHash('sha256').update(input).digest('hex').slice(0, 16)
+    const now = Date.now()
+
+    // 1. 扩展 workspace_groups 支持动态成员组（kind = 'static' | 'dynamic'，filter_tree_json）
+    if (hasTable(db, 'workspace_groups')) {
+      addColumn(db, 'workspace_groups', 'kind', `kind TEXT NOT NULL DEFAULT 'static'`)
+      addColumn(db, 'workspace_groups', 'filter_tree_json', `filter_tree_json TEXT`)
+      addColumn(db, 'workspace_groups', 'updated_at', `updated_at INTEGER NOT NULL DEFAULT 0`)
+    }
+
+    const BUILTIN_MEMBER_VIEW_PRESETS: Record<string, { name: string; filterTree: Record<string, unknown> }> = {
+      'builtin-member:member': {
+        name: '空间成员',
+        filterTree: { op: 'and', children: [{ field: 'membershipKind', op: 'eq', value: 'member' }] },
+      },
+      'builtin-member:external': {
+        name: '外部成员',
+        filterTree: { op: 'and', children: [{ field: 'membershipKind', op: 'eq', value: 'external' }] },
+      },
+      'builtin-member:guest': {
+        name: '临时访客',
+        filterTree: { op: 'and', children: [{ field: 'membershipKind', op: 'eq', value: 'guest' }] },
+      },
+    }
+
+    const findWorkspaceOwner = (workspaceId: string): string => {
+      if (!hasTable(db, 'workspace_members')) return ''
+      const owner = db
+        .prepare(
+          `SELECT account_id FROM workspace_members
+           WHERE workspace_id = ?
+           ORDER BY CASE role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, created_at ASC
+           LIMIT 1`,
+        )
+        .get(workspaceId) as { account_id?: string } | undefined
+      return owner?.account_id ?? ''
+    }
+
+    const parseMemberViewSnapshot = (workspaceId: string, viewId: string): { name: string; filterTreeJson: string; createdBy: string } => {
+      if (hasTable(db, 'saved_views')) {
+        const row = (
+          db
+            .prepare(`SELECT payload_json FROM saved_views WHERE workspace_id = ? AND collection = '/workspace-members' AND view_id = ?`)
+            .get(workspaceId, viewId) ??
+          db
+            .prepare(`SELECT payload_json FROM saved_views WHERE workspace_id = '' AND collection = '/workspace-members' AND view_id = ?`)
+            .get(viewId)
+        ) as { payload_json?: string } | undefined
+        if (row?.payload_json) {
+          try {
+            const parsed = JSON.parse(row.payload_json) as Record<string, unknown>
+            const name = typeof parsed.name === 'string' && parsed.name.trim() ? parsed.name.trim() : viewId
+            const createdBy = typeof parsed.createdBy === 'string' ? parsed.createdBy : ''
+            if (parsed.filterTree && typeof parsed.filterTree === 'object') {
+              return { name, filterTreeJson: JSON.stringify(parsed.filterTree), createdBy }
+            }
+            if (parsed.filters && typeof parsed.filters === 'object' && !Array.isArray(parsed.filters)) {
+              const children = Object.entries(parsed.filters as Record<string, unknown>)
+                .filter(([, val]) => String(val ?? '').trim().length > 0)
+                .map(([field, val]) => ({ field, op: 'eq', value: String(val).trim() }))
+              return { name, filterTreeJson: JSON.stringify({ op: 'and', children }), createdBy }
+            }
+            return { name, filterTreeJson: JSON.stringify({ op: 'and', children: [] }), createdBy }
+          } catch {
+            /* fallback to preset */
+          }
+        }
+      }
+      const preset = BUILTIN_MEMBER_VIEW_PRESETS[viewId]
+      if (preset) {
+        return { name: preset.name, filterTreeJson: JSON.stringify(preset.filterTree), createdBy: '' }
+      }
+      return { name: viewId, filterTreeJson: JSON.stringify({ op: 'and', children: [] }), createdBy: '' }
+    }
+
+    const ROLE_RANK: Record<string, number> = { viewer: 1, commenter: 2, editor: 3, manager: 4, owner: 5 }
+    const migratedGroupByKey = new Map<string, string>()
+
+    const ensureDynamicGroupForMemberView = (workspaceId: string, viewId: string): string => {
+      const key = `${workspaceId}\0${viewId}`
+      const hit = migratedGroupByKey.get(key)
+      if (hit) return hit
+      const groupId = `grp_mig_${shortHash(key)}`
+      migratedGroupByKey.set(key, groupId)
+      if (hasTable(db, 'workspace_groups')) {
+        const snap = parseMemberViewSnapshot(workspaceId, viewId)
+        const createdBy = snap.createdBy || findWorkspaceOwner(workspaceId)
+        db.prepare(
+          `INSERT OR IGNORE INTO workspace_groups
+             (id, workspace_id, name, kind, filter_tree_json, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, 'dynamic', ?, ?, ?, ?)`,
+        ).run(groupId, workspaceId, snap.name, snap.filterTreeJson, createdBy, now, now)
+      }
+      return groupId
+    }
+
+    // 2. 将 record_grants 中的 subject_type = 'member_view' 迁移为动态组 subject_type = 'group'
+    if (hasTable(db, 'record_grants')) {
+      const rows = db
+        .prepare(
+          `SELECT workspace_id, collection, record_id, subject_id, role, effect, granted_by, created_at
+           FROM record_grants
+           WHERE subject_type = 'member_view'`,
+        )
+        .all() as Array<{
+        workspace_id: string
+        collection: string
+        record_id: string
+        subject_id: string
+        role: string
+        effect: string
+        granted_by: string
+        created_at: number
+      }>
+      for (const row of rows) {
+        const groupId = ensureDynamicGroupForMemberView(row.workspace_id, row.subject_id)
+        const existing = db
+          .prepare(
+            `SELECT role FROM record_grants
+             WHERE workspace_id = ? AND collection = ? AND record_id = ? AND subject_type = 'group' AND subject_id = ?`,
+          )
+          .get(row.workspace_id, row.collection, row.record_id, groupId) as { role?: string } | undefined
+        if (!existing) {
+          db.prepare(
+            `INSERT INTO record_grants
+               (workspace_id, collection, record_id, subject_type, subject_id, role, effect, granted_by, created_at)
+             VALUES (?, ?, ?, 'group', ?, ?, ?, ?, ?)`,
+          ).run(row.workspace_id, row.collection, row.record_id, groupId, row.role, row.effect || 'allow', row.granted_by, row.created_at)
+        } else if ((ROLE_RANK[row.role] ?? 0) > (ROLE_RANK[existing.role ?? ''] ?? 0)) {
+          db.prepare(
+            `UPDATE record_grants SET role = ?
+             WHERE workspace_id = ? AND collection = ? AND record_id = ? AND subject_type = 'group' AND subject_id = ?`,
+          ).run(row.role, row.workspace_id, row.collection, row.record_id, groupId)
+        }
+        db.prepare(
+          `DELETE FROM record_grants
+           WHERE workspace_id = ? AND collection = ? AND record_id = ? AND subject_type = 'member_view' AND subject_id = ?`,
+        ).run(row.workspace_id, row.collection, row.record_id, row.subject_id)
+      }
+    }
+
+    // 3. 将 access_rule_grants 中的 subject_type = 'member_view' 迁移为动态组 subject_type = 'group'
+    if (hasTable(db, 'access_rule_grants')) {
+      const rows = db
+        .prepare(
+          `SELECT id, rule_id, workspace_id, subject_id, role, created_at
+           FROM access_rule_grants
+           WHERE subject_type = 'member_view'`,
+        )
+        .all() as Array<{
+        id: string
+        rule_id: string
+        workspace_id: string
+        subject_id: string
+        role: string
+        created_at: number
+      }>
+      for (const row of rows) {
+        const groupId = ensureDynamicGroupForMemberView(row.workspace_id, row.subject_id)
+        const existing = db
+          .prepare(
+            `SELECT id, role FROM access_rule_grants
+             WHERE rule_id = ? AND subject_type = 'group' AND subject_id = ?`,
+          )
+          .get(row.rule_id, groupId) as { id?: string; role?: string } | undefined
+        if (!existing) {
+          db.prepare(
+            `UPDATE access_rule_grants SET subject_type = 'group', subject_id = ? WHERE id = ?`,
+          ).run(groupId, row.id)
+        } else {
+          if (existing.id && (ROLE_RANK[row.role] ?? 0) > (ROLE_RANK[existing.role ?? ''] ?? 0)) {
+            db.prepare(`UPDATE access_rule_grants SET role = ? WHERE id = ?`).run(row.role, existing.id)
+          }
+          db.prepare(`DELETE FROM access_rule_grants WHERE id = ?`).run(row.id)
+        }
+      }
+    }
+
+    // 4. 为存量缺失 resource_policies 的 saved_views 补齐策略行，使 /views 100% 走通用记录 RBAC
+    if (hasTable(db, 'saved_views') && hasTable(db, 'resource_policies')) {
+      const views = db
+        .prepare(`SELECT workspace_id, collection, view_id, payload_json, updated_at FROM saved_views WHERE workspace_id != ''`)
+        .all() as Array<{
+        workspace_id: string
+        collection: string
+        view_id: string
+        payload_json: string
+        updated_at: number
+      }>
+      const insertPolicy = db.prepare(
+        `INSERT OR IGNORE INTO resource_policies
+           (workspace_id, collection, record_id, owner_account_id, access_mode,
+            member_default_role, parent_collection, parent_record_id, created_by, created_at)
+         VALUES (?, '/views', ?, ?, ?, 'viewer', '', '', ?, ?)`,
+      )
+      const insertOwnerGrant = db.prepare(
+        `INSERT OR IGNORE INTO record_grants
+           (workspace_id, collection, record_id, subject_type, subject_id, role, effect, granted_by, created_at)
+         VALUES (?, '/views', ?, 'account', ?, 'owner', 'allow', ?, ?)`,
+      )
+      for (const view of views) {
+        let parsed: Record<string, unknown> | null = null
+        try {
+          parsed = JSON.parse(view.payload_json) as Record<string, unknown>
+        } catch {
+          parsed = null
+        }
+        const cleanCol = view.collection.trim().replace(/^\/+/, '')
+        const recordId = `${cleanCol}::${view.view_id}`
+        const owner =
+          (typeof parsed?.createdBy === 'string' && parsed.createdBy.trim()) ||
+          findWorkspaceOwner(view.workspace_id)
+        if (!owner) continue
+        const scope = parsed?.scope === 'personal' ? 'personal' : 'workspace'
+        const accessMode = scope === 'personal' ? 'private' : 'members'
+        const ts = Number(view.updated_at) || now
+        insertPolicy.run(view.workspace_id, recordId, owner, accessMode, owner, ts)
+        if (hasTable(db, 'record_grants')) {
+          insertOwnerGrant.run(view.workspace_id, recordId, owner, owner, ts)
+        }
+      }
+    }
+  } },
 ]
 
 export function assertBiuMigrationLog(rows: Array<{ version: number }> = BIU_MIGRATIONS) {

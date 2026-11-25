@@ -44,7 +44,7 @@ test('empty database fast path matches upgraded v1 fixture', () => {
 test('BIU_MIGRATIONS versions are unique and increasing', () => {
   assertBiuMigrationLog()
   assert.equal(BIU_MIGRATIONS.at(-1)?.version, LATEST_BIU_SCHEMA)
-  assert.equal(BIU_MIGRATIONS.at(-1)?.name, 'access-rules.decouple-from-views')
+  assert.equal(BIU_MIGRATIONS.at(-1)?.name, 'dynamic-groups-and-view-policies')
   assert.throws(() => assertBiuMigrationLog([{ version: 2 }, { version: 2 }]), /重复/)
   assert.throws(() => assertBiuMigrationLog([{ version: 3 }, { version: 1 }]), /单调递增/)
 })
@@ -315,5 +315,68 @@ test('v57 migrates view_grants, shared views, and view public shares into indepe
   assert.equal(migratedShare.kind, 'rule')
   assert.equal(migratedShare.view_id, '')
   assert.equal(migratedShare.rule_id, rules[0]!.id)
+  db.close()
+})
+
+test('v58 migrates member_view grants to dynamic workspace_groups and backfills view resource_policies', () => {
+  const db = openSqlite(':memory:')
+  migrateBiu(db, {}, 57)
+  db.exec(`
+    INSERT INTO accounts (id, name, token, password_hash, created_at, email)
+    VALUES ('acc_owner', 'Owner', 'tok_o', 'pw', 1, 'owner@example.com');
+    INSERT INTO workspaces (id, name, owner_id, created_at)
+    VALUES ('ws_1', 'W1', 'acc_owner', 1);
+    INSERT INTO workspace_members (workspace_id, account_id, role, created_at)
+    VALUES ('ws_1', 'acc_owner', 'owner', 1);
+    INSERT INTO saved_views (workspace_id, collection, view_id, payload_json, updated_at)
+    VALUES
+      (
+        'ws_1', '/workspace-members', 'mv_admins',
+        '{"id":"mv_admins","name":"管理员组","scope":"workspace","createdBy":"acc_owner","filterTree":{"op":"and","children":[{"field":"role","op":"eq","value":"admin"}]}}',
+        100
+      ),
+      (
+        'ws_1', '/pages', 'v_team',
+        '{"id":"v_team","name":"团队视图","scope":"workspace","createdBy":"acc_owner"}',
+        101
+      );
+    INSERT INTO record_grants (workspace_id, collection, record_id, subject_type, subject_id, role, effect, granted_by, created_at)
+    VALUES
+      ('ws_1', '/pages', 'p1', 'member_view', 'mv_admins', 'editor', 'allow', 'acc_owner', 102),
+      ('ws_1', '/pages', 'p2', 'member_view', 'builtin-member:external', 'viewer', 'allow', 'acc_owner', 103);
+    INSERT INTO access_rules (id, workspace_id, collection, name, created_by, filter_tree_json, enabled, created_at, updated_at)
+    VALUES ('rule_1', 'ws_1', '/pages', 'R1', 'acc_owner', '{"op":"and","children":[]}', 1, 104, 104);
+    INSERT INTO access_rule_grants (id, rule_id, workspace_id, subject_type, subject_id, role, created_at)
+    VALUES ('arg_1', 'rule_1', 'ws_1', 'member_view', 'mv_admins', 'viewer', 105);
+  `)
+  migrateBiu(db)
+
+  const groups = db
+    .prepare(`SELECT id, name, kind, filter_tree_json FROM workspace_groups WHERE workspace_id = 'ws_1' ORDER BY name`)
+    .all() as Array<{ id: string; name: string; kind: string; filter_tree_json: string }>
+  assert.equal(groups.length, 2)
+  const adminGroup = groups.find((g) => g.name === '管理员组')!
+  const extGroup = groups.find((g) => g.name === '外部成员')!
+  assert.equal(adminGroup.kind, 'dynamic')
+  assert.deepEqual(JSON.parse(adminGroup.filter_tree_json), { op: 'and', children: [{ field: 'role', op: 'eq', value: 'admin' }] })
+  assert.equal(extGroup.kind, 'dynamic')
+  assert.deepEqual(JSON.parse(extGroup.filter_tree_json), { op: 'and', children: [{ field: 'membershipKind', op: 'eq', value: 'external' }] })
+
+  const remainingMvRecordGrants = db.prepare(`SELECT COUNT(*) AS cnt FROM record_grants WHERE subject_type = 'member_view'`).get() as { cnt: number }
+  assert.equal(remainingMvRecordGrants.cnt, 0)
+  const migratedP1 = db
+    .prepare(`SELECT subject_type, subject_id, role FROM record_grants WHERE record_id = 'p1'`)
+    .get() as { subject_type: string; subject_id: string; role: string }
+  assert.deepEqual({ ...migratedP1 }, { subject_type: 'group', subject_id: adminGroup.id, role: 'editor' })
+
+  const migratedRuleGrant = db
+    .prepare(`SELECT subject_type, subject_id, role FROM access_rule_grants WHERE id = 'arg_1'`)
+    .get() as { subject_type: string; subject_id: string; role: string }
+  assert.deepEqual({ ...migratedRuleGrant }, { subject_type: 'group', subject_id: adminGroup.id, role: 'viewer' })
+
+  const viewPolicy = db
+    .prepare(`SELECT owner_account_id, access_mode FROM resource_policies WHERE workspace_id = 'ws_1' AND collection = '/views' AND record_id = 'pages::v_team'`)
+    .get() as { owner_account_id: string; access_mode: string } | undefined
+  assert.deepEqual(viewPolicy ? { ...viewPolicy } : null, { owner_account_id: 'acc_owner', access_mode: 'members' })
   db.close()
 })

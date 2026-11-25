@@ -1250,7 +1250,7 @@ export function registerDatabaseHttpRoutes(
             enabled: boolean
             grants: Array<{
               id: string
-              subjectType: 'account' | 'workspace' | 'member_view'
+              subjectType: 'account' | 'workspace' | 'group'
               subjectId: string
               role: 'viewer' | 'editor' | 'manager'
               subjectName?: string

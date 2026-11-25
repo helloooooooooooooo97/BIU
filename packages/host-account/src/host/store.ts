@@ -167,39 +167,6 @@ export class CollabStore {
       { accessMode, memberDefaultRole: 'viewer' },
       now,
     )
-    // 兼容历史 view_grants：首次挂接时把旧表里的协作者一次性迁移到 record_grants
-    try {
-      const legacy = this.db
-        .prepare(
-          `SELECT subject_type, subject_id, role, granted_by, created_at
-           FROM view_grants
-           WHERE workspace_id = ? AND collection = ? AND view_id = ?
-           ORDER BY created_at`,
-        )
-        .all(workspaceId, collection, cleanViewId) as Array<{
-          subject_type: string
-          subject_id: string
-          role: string
-          granted_by: string
-          created_at: number
-        }>
-      if (legacy.length > 0) {
-        const ins = this.db.prepare(
-          `INSERT INTO record_grants
-            (workspace_id, collection, record_id, subject_type, subject_id, role, granted_by, created_at)
-           VALUES (?, '/views', ?, ?, ?, ?, ?, ?)
-           ON CONFLICT(workspace_id, collection, record_id, subject_type, subject_id) DO NOTHING`,
-        )
-        for (const row of legacy) {
-          if (row.subject_type === 'account' && row.subject_id === ownerId) continue
-          ins.run(workspaceId, recordId, row.subject_type, row.subject_id, row.role, row.granted_by || ownerId, row.created_at || now)
-        }
-        this.reconcileRecordScope(workspaceId, '/views', recordId)
-        this.authorization.invalidate(workspaceId, '/views')
-      }
-    } catch {
-      /* 兼容无 view_grants 表的环境 */
-    }
     return recordId
   }
 
@@ -739,16 +706,16 @@ export class CollabStore {
           .all(workspaceId, memberId) as Array<{ collection: string; record_id: string; role: string }>)
       : []
 
-    const viewGrants = isAdminOrSelf
-      ? (this.db
-          .prepare(
-            `SELECT collection, view_id, role
-             FROM view_grants
-             WHERE workspace_id = ? AND subject_type = 'account' AND subject_id = ?
-             ORDER BY created_at DESC LIMIT 50`,
-          )
-          .all(workspaceId, memberId) as Array<{ collection: string; view_id: string; role: string }>)
-      : []
+    const viewGrants = recordGrants
+      .filter((row) => row.collection === '/views')
+      .map((row) => {
+        const sep = row.record_id.indexOf('::')
+        return {
+          collection: sep > 0 ? row.record_id.slice(0, sep) : '/views',
+          view_id: sep > 0 ? row.record_id.slice(sep + 2) : row.record_id,
+          role: row.role,
+        }
+      })
 
     return {
       member: {
@@ -1405,13 +1372,6 @@ export class CollabStore {
          WHERE workspace_id = ? AND subject_type = 'account' AND subject_id = ?`,
       ).run(workspaceId, accountId)
       this.db.prepare(
-        `DELETE FROM view_grants
-         WHERE workspace_id = ? AND (
-           (subject_type = 'account' AND subject_id = ?)
-           OR (granted_by = ? AND view_id LIKE 'builtin-all:%')
-         )`,
-      ).run(workspaceId, accountId, accountId)
-      this.db.prepare(
         `DELETE FROM access_rule_grants
          WHERE workspace_id = ? AND subject_type = 'account' AND subject_id = ?`,
       ).run(workspaceId, accountId)
@@ -1490,22 +1450,108 @@ export class CollabStore {
     return this.members(actorId, workspaceId).find((row) => row.id === accountId)!
   }
 
-  createGroup(actorId: string, workspaceId: string, name: string, now = Date.now()) {
+  createGroup(
+    actorId: string,
+    workspaceId: string,
+    name: string,
+    optionsOrNow?: number | { kind?: 'static' | 'dynamic'; filterTree?: Record<string, unknown> | null; now?: number },
+  ) {
     this.requireManager(actorId, workspaceId)
     const trimmed = name.trim()
     if (!trimmed) throw new CollabError('组名不能为空', 400)
-    const group = { id: id('grp'), workspaceId, name: trimmed, createdBy: actorId, createdAt: now }
+    const opts = typeof optionsOrNow === 'number' ? { now: optionsOrNow } : (optionsOrNow ?? {})
+    const now = opts.now ?? Date.now()
+    const kind: 'static' | 'dynamic' = opts.kind === 'dynamic' ? 'dynamic' : 'static'
+    const filterTree = kind === 'dynamic' ? (opts.filterTree ?? { op: 'and', children: [] }) : null
+    const filterTreeJson = filterTree ? JSON.stringify(filterTree) : null
+    const group = {
+      id: id('grp'),
+      workspaceId,
+      name: trimmed,
+      kind,
+      filterTree,
+      createdBy: actorId,
+      createdAt: now,
+      updatedAt: now,
+    }
     this.db
-      .prepare('INSERT INTO workspace_groups (id, workspace_id, name, created_by, created_at) VALUES (?, ?, ?, ?, ?)')
-      .run(group.id, workspaceId, group.name, actorId, now)
+      .prepare(
+        `INSERT INTO workspace_groups (id, workspace_id, name, kind, filter_tree_json, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(group.id, workspaceId, group.name, kind, filterTreeJson, actorId, now, now)
+    this.authorization.invalidateAll()
     return group
+  }
+
+  updateGroup(
+    actorId: string,
+    workspaceId: string,
+    groupId: string,
+    patch: { name?: string; filterTree?: Record<string, unknown> | null },
+    now = Date.now(),
+  ) {
+    this.requireManager(actorId, workspaceId)
+    const current = this.db
+      .prepare(`SELECT id, name, kind, filter_tree_json, created_by, created_at FROM workspace_groups WHERE id = ? AND workspace_id = ?`)
+      .get(groupId, workspaceId) as
+      | { id: string; name: string; kind: string; filter_tree_json: string | null; created_by: string; created_at: number }
+      | undefined
+    if (!current) throw new CollabError('成员组不存在', 404)
+    const nextName = patch.name !== undefined ? patch.name.trim() : current.name
+    if (!nextName) throw new CollabError('组名不能为空', 400)
+    const kind: 'static' | 'dynamic' = current.kind === 'dynamic' ? 'dynamic' : 'static'
+    const nextFilterTreeJson =
+      kind === 'dynamic' && patch.filterTree !== undefined
+        ? JSON.stringify(patch.filterTree ?? { op: 'and', children: [] })
+        : current.filter_tree_json
+    this.db
+      .prepare(`UPDATE workspace_groups SET name = ?, filter_tree_json = ?, updated_at = ? WHERE id = ? AND workspace_id = ?`)
+      .run(nextName, nextFilterTreeJson, now, groupId, workspaceId)
+    this.authorization.invalidateAll()
+    let filterTree: Record<string, unknown> | null = null
+    if (nextFilterTreeJson) {
+      try {
+        filterTree = JSON.parse(nextFilterTreeJson) as Record<string, unknown>
+      } catch {
+        filterTree = null
+      }
+    }
+    return {
+      id: current.id,
+      workspaceId,
+      name: nextName,
+      kind,
+      filterTree,
+      createdBy: current.created_by,
+      createdAt: current.created_at,
+      updatedAt: now,
+    }
+  }
+
+  deleteGroup(actorId: string, workspaceId: string, groupId: string) {
+    this.requireManager(actorId, workspaceId)
+    const removed = this.db
+      .prepare('DELETE FROM workspace_groups WHERE id = ? AND workspace_id = ?')
+      .run(groupId, workspaceId)
+    if (!removed.changes) throw new CollabError('成员组不存在', 404)
+    this.db.prepare('DELETE FROM workspace_group_members WHERE group_id = ?').run(groupId)
+    this.db
+      .prepare(`DELETE FROM record_grants WHERE workspace_id = ? AND subject_type = 'group' AND subject_id = ?`)
+      .run(workspaceId, groupId)
+    this.db
+      .prepare(`DELETE FROM access_rule_grants WHERE workspace_id = ? AND subject_type = 'group' AND subject_id = ?`)
+      .run(workspaceId, groupId)
+    this.authorization.invalidateAll()
+    return { ok: true, id: groupId }
   }
 
   groups(actorId: string, workspaceId: string) {
     this.requireInternalMember(actorId, workspaceId)
     const rows = this.db
       .prepare(
-        `SELECT g.id, g.name, g.created_by, g.created_at, COUNT(gm.account_id) AS member_count
+        `SELECT g.id, g.name, COALESCE(g.kind, 'static') AS kind, g.filter_tree_json, g.created_by, g.created_at,
+                COALESCE(g.updated_at, g.created_at) AS updated_at, COUNT(gm.account_id) AS member_count
          FROM workspace_groups g
          LEFT JOIN workspace_group_members gm ON gm.group_id = g.id
          WHERE g.workspace_id = ?
@@ -1515,17 +1561,44 @@ export class CollabStore {
       .all(workspaceId) as Array<{
         id: string
         name: string
+        kind: string
+        filter_tree_json: string | null
         created_by: string
         created_at: number
+        updated_at: number
         member_count: number
       }>
-    return rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      createdBy: row.created_by,
-      createdAt: row.created_at,
-      memberCount: Number(row.member_count),
-    }))
+    const hasDynamic = rows.some((row) => row.kind === 'dynamic')
+    const allMembers = hasDynamic
+      ? (this.db
+          .prepare('SELECT account_id FROM workspace_members WHERE workspace_id = ?')
+          .all(workspaceId) as Array<{ account_id: string }>)
+      : []
+    return rows.map((row) => {
+      const kind: 'static' | 'dynamic' = row.kind === 'dynamic' ? 'dynamic' : 'static'
+      let filterTree: Record<string, unknown> | null = null
+      if (kind === 'dynamic' && row.filter_tree_json) {
+        try {
+          filterTree = JSON.parse(row.filter_tree_json) as Record<string, unknown>
+        } catch {
+          filterTree = { op: 'and', children: [] }
+        }
+      }
+      const memberCount =
+        kind === 'dynamic'
+          ? allMembers.filter((m) => this.authorization.matchedGroupsFor(workspaceId, m.account_id).has(row.id)).length
+          : Number(row.member_count)
+      return {
+        id: row.id,
+        name: row.name,
+        kind,
+        filterTree,
+        createdBy: row.created_by,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        memberCount,
+      }
+    })
   }
 
   addGroupMemberByEmail(actorId: string, workspaceId: string, groupId: string, email: string, now = Date.now()) {
@@ -1583,28 +1656,6 @@ export class CollabStore {
       { type: 'record', workspaceId, collection, recordId },
       'group',
       groupId,
-      role,
-    )
-    this.reconcileRecordScope(workspaceId, collection, recordId)
-    return this.accessRows(workspaceId, collection, recordId)
-  }
-
-  grantMemberView(
-    actorId: string,
-    collection: string,
-    recordId: string,
-    viewId: string,
-    role: ResourceRole,
-  ) {
-    const workspaceId = this.activeWorkspaceId()
-    if (!workspaceId) throw new CollabError('没有工作区', 400)
-    const normalized = viewId.trim()
-    if (!normalized) throw new CollabError('成员视图不能为空', 400)
-    this.authorization.grant(
-      actorId,
-      { type: 'record', workspaceId, collection, recordId },
-      'member_view',
-      normalized,
       role,
     )
     this.reconcileRecordScope(workspaceId, collection, recordId)
@@ -2271,12 +2322,6 @@ export class CollabStore {
     const readDecision = this.authorization.authorize(actorObj, 'resource:read', resource)
     const effectiveRole = readDecision.allowed ? readDecision.effectiveRole : undefined
     const inheritance = this.authorization.inheritanceInfo(resource)
-    const viewGrants = this.viewGrantShares(workspaceId, collection).map((grant) => ({
-      ...grant,
-      matchesActor: grant.subjectType === 'account'
-        ? grant.subjectId === actorId
-        : this.authorization.matchesMemberView(workspaceId, grant.subjectId, actorId),
-    }))
     const base = this.accessRows(workspaceId, collection, recordId)
     return {
       ...base,
@@ -2286,13 +2331,13 @@ export class CollabStore {
         const editable = Boolean(canManage && row.role !== 'owner' && row.id !== base.ownerId && row.id !== actorId)
         return { ...row, canEdit: editable, canRevoke: editable }
       }),
-      memberViews: base.memberViews.map((row) => ({
+      groups: base.groups.map((row) => ({
         ...row,
         canEdit: canManage,
         canRevoke: canManage,
       })),
       currentAccountId: actorId,
-      viewGrants,
+      viewGrants: [] as Array<never>,
       roleChain: this.authorization.roleChain(actorId, resource),
       inheritance: {
         mode: inheritance.mode,
@@ -2334,61 +2379,6 @@ export class CollabStore {
       detail: mode === 'inherit' ? '开启继承上级权限' : '断开上级继承，改为独立权限',
     })
     return this.recordAccess(actorId, collection, recordId)
-  }
-
-  private viewGrantShares(workspaceId: string, collection: string) {
-    const people = this.db
-      .prepare(
-        `SELECT g.view_id, g.granted_by, a.id, COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), '未设置') AS name,
-                COALESCE(NULLIF(m.avatar, ''), NULLIF(a.avatar, ''), '') AS avatar,
-                COALESCE(a.email, '') AS email, g.role, COALESCE(m.member_kind, '') AS member_kind
-         FROM view_grants g
-         JOIN accounts a ON g.subject_type = 'account' AND a.id = g.subject_id
-         LEFT JOIN workspace_members m ON m.workspace_id = g.workspace_id AND m.account_id = g.subject_id
-         WHERE g.workspace_id = ? AND g.collection = ? AND g.subject_type = 'account'
-         ORDER BY g.created_at`,
-      )
-      .all(workspaceId, collection) as Array<{
-        view_id: string
-        granted_by: string
-        id: string
-        name: string
-        avatar: string
-        email: string
-        role: string
-        member_kind: string
-      }>
-    const memberViews = this.db
-      .prepare(
-        `SELECT view_id, granted_by, subject_id AS id, role
-         FROM view_grants
-         WHERE workspace_id = ? AND collection = ? AND subject_type = 'member_view'
-         ORDER BY created_at`,
-      )
-      .all(workspaceId, collection) as Array<{ view_id: string; granted_by: string; id: string; role: string }>
-    return [
-      ...people.map((row) => ({
-        viewId: row.view_id,
-        subjectType: 'account' as const,
-        subjectId: row.id,
-        role: row.role,
-        name: row.name,
-        avatar: row.avatar,
-        email: row.email,
-        grantedBy: row.granted_by,
-        memberKind: row.member_kind === 'external' || row.member_kind === 'guest' ? row.member_kind : 'member' as const,
-      })),
-      ...memberViews.map((row) => ({
-        viewId: row.view_id,
-        subjectType: 'member_view' as const,
-        subjectId: row.id,
-        role: row.role,
-        name: row.id,
-        email: '',
-        grantedBy: row.granted_by,
-        memberKind: 'member' as const,
-      })),
-    ]
   }
 
   shareWithEmail(
@@ -2459,7 +2449,7 @@ export class CollabStore {
     actorId: string,
     collection: string,
     recordId: string,
-    subjectType: 'account' | 'group' | 'member_view',
+    subjectType: 'account' | 'group',
     subjectId: string,
   ) {
     const workspaceId = this.activeWorkspaceId()
@@ -2533,23 +2523,6 @@ export class CollabStore {
     return this.shareWithEmail(actorId, '/views', recordId, email, role, collaboratorKind, now)
   }
 
-  grantViewMemberView(
-    actorId: string,
-    collection: string,
-    viewId: string,
-    memberViewId: string,
-    role: ResourceRole,
-    now = Date.now(),
-  ) {
-    const workspaceId = this.activeWorkspaceId()
-    if (!workspaceId) throw new CollabError('没有工作区', 400)
-    const normalizedView = viewId.trim()
-    if (!normalizedView) throw new CollabError('视图不能为空', 400)
-    if (role === 'owner') throw new CollabError('视图授权不能授予所有者角色', 403)
-    const recordId = this.ensureViewPolicy(workspaceId, collection, normalizedView, actorId, now)
-    return this.grantMemberView(actorId, '/views', recordId, memberViewId, role)
-  }
-
   grantViewGroup(
     actorId: string,
     collection: string,
@@ -2571,7 +2544,7 @@ export class CollabStore {
     actorId: string,
     collection: string,
     viewId: string,
-    subjectType: 'account' | 'group' | 'member_view',
+    subjectType: 'account' | 'group',
     subjectId: string,
   ) {
     const workspaceId = this.activeWorkspaceId()
@@ -2582,7 +2555,7 @@ export class CollabStore {
     return this.revokeRecordGrant(actorId, '/views', recordId, subjectType, subjectId)
   }
 
-  /** 删除视图时级联清理该视图在 `/views` 下的策略与授权，以及引用该成员视图的授权。 */
+  /** 删除视图时级联清理该视图在 `/views` 下的策略与授权。 */
   cleanupViewReferences(workspaceId: string, collection: string, viewId: string) {
     if (!workspaceId || !collection || !viewId) return
     let changed = false
@@ -2603,19 +2576,6 @@ export class CollabStore {
         Number(deletedOwner.changes) > 0
       ) {
         changed = true
-      }
-      const deletedViewGrants = this.db
-        .prepare('DELETE FROM view_grants WHERE workspace_id = ? AND collection = ? AND view_id = ?')
-        .run(workspaceId, collection, viewId)
-      if (Number(deletedViewGrants.changes) > 0) changed = true
-      if (collection === '/workspace-members') {
-        const deletedMemberViewGrants = this.db
-          .prepare(`DELETE FROM view_grants WHERE workspace_id = ? AND subject_type = 'member_view' AND subject_id = ?`)
-          .run(workspaceId, viewId)
-        const deletedRecordGrants = this.db
-          .prepare(`DELETE FROM record_grants WHERE workspace_id = ? AND subject_type = 'member_view' AND subject_id = ?`)
-          .run(workspaceId, viewId)
-        if (Number(deletedMemberViewGrants.changes) > 0 || Number(deletedRecordGrants.changes) > 0) changed = true
       }
     } catch {
       /* 兼容老库无相关表 */
@@ -2661,26 +2621,6 @@ export class CollabStore {
       if (!map.has(row.record_id)) map.set(row.record_id, 'workspace')
     }
     return map
-  }
-
-  viewGrantsFor(workspaceId: string, collection: string) {
-    return this.db
-      .prepare(
-        `SELECT view_id, subject_type, subject_id, role,
-                readable_columns, writable_columns, granted_by
-         FROM view_grants
-         WHERE workspace_id = ? AND collection = ?
-         ORDER BY created_at`,
-      )
-      .all(workspaceId, collection) as Array<{
-        view_id: string
-        subject_type: 'account' | 'member_view'
-        subject_id: string
-        role: ResourceRole
-        readable_columns?: string | null
-        writable_columns?: string | null
-        granted_by: string
-      }>
   }
 
   collectionRecordOwners(workspaceId: string, collection: string) {
@@ -2788,142 +2728,6 @@ export class CollabStore {
       .run(workspaceId, accountId, now)
   }
 
-  private writeViewGrant(
-    workspaceId: string,
-    collection: string,
-    viewId: string,
-    subjectType: 'account' | 'member_view',
-    subjectId: string,
-    role: ResourceRole,
-    grantedBy: string,
-    now: number,
-    columns?: { readableColumns?: string[] | null; writableColumns?: string[] | null },
-  ) {
-    const readable = columns?.readableColumns ? JSON.stringify(columns.readableColumns) : null
-    const writable = columns?.writableColumns ? JSON.stringify(columns.writableColumns) : null
-    this.db
-      .prepare(
-        `INSERT INTO view_grants
-          (workspace_id, collection, view_id, subject_type, subject_id, role, readable_columns, writable_columns, granted_by, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(workspace_id, collection, view_id, subject_type, subject_id, granted_by)
-         DO UPDATE SET role = excluded.role,
-                       readable_columns = COALESCE(excluded.readable_columns, view_grants.readable_columns),
-                       writable_columns = COALESCE(excluded.writable_columns, view_grants.writable_columns),
-                       created_at = excluded.created_at`,
-      )
-      .run(workspaceId, collection, viewId, subjectType, subjectId, role, readable, writable, grantedBy, now)
-    this.authorization.invalidate(workspaceId, collection)
-  }
-
-  private viewAccessRows(
-    workspaceId: string,
-    collection: string,
-    viewId: string,
-    viewerId = '',
-    includeAllGrantors = true,
-    canManage = true,
-  ) {
-    const filterByGrantor = Boolean(viewerId && !includeAllGrantors)
-    const people = (filterByGrantor
-      ? this.db
-          .prepare(
-            `SELECT a.id, COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), '未设置') AS name,
-                    COALESCE(NULLIF(m.avatar, ''), NULLIF(a.avatar, ''), '') AS avatar,
-                    COALESCE(a.email, '') AS email, g.role, m.member_kind,
-                    COALESCE(g.granted_by, '') AS granted_by,
-                    COALESCE(NULLIF(gm.display_name, ''), NULLIF(ga.name, ''), NULLIF(ga.email, ''), '') AS granted_by_name
-             FROM view_grants g
-             JOIN accounts a ON g.subject_type = 'account' AND a.id = g.subject_id
-             LEFT JOIN workspace_members m ON m.workspace_id = g.workspace_id AND m.account_id = g.subject_id
-             LEFT JOIN accounts ga ON ga.id = g.granted_by
-             LEFT JOIN workspace_members gm ON gm.workspace_id = g.workspace_id AND gm.account_id = g.granted_by
-             WHERE g.workspace_id = ? AND g.collection = ? AND g.view_id = ? AND g.subject_type = 'account' AND g.granted_by = ?
-             ORDER BY g.created_at`,
-          )
-          .all(workspaceId, collection, viewId, viewerId)
-      : this.db
-          .prepare(
-            `SELECT a.id, COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), '未设置') AS name,
-                    COALESCE(NULLIF(m.avatar, ''), NULLIF(a.avatar, ''), '') AS avatar,
-                    COALESCE(a.email, '') AS email, g.role, m.member_kind,
-                    COALESCE(g.granted_by, '') AS granted_by,
-                    COALESCE(NULLIF(gm.display_name, ''), NULLIF(ga.name, ''), NULLIF(ga.email, ''), '') AS granted_by_name
-             FROM view_grants g
-             JOIN accounts a ON g.subject_type = 'account' AND a.id = g.subject_id
-             LEFT JOIN workspace_members m ON m.workspace_id = g.workspace_id AND m.account_id = g.subject_id
-             LEFT JOIN accounts ga ON ga.id = g.granted_by
-             LEFT JOIN workspace_members gm ON gm.workspace_id = g.workspace_id AND gm.account_id = g.granted_by
-             WHERE g.workspace_id = ? AND g.collection = ? AND g.view_id = ? AND g.subject_type = 'account'
-             ORDER BY g.created_at`,
-          )
-          .all(workspaceId, collection, viewId)) as Array<{
-        id: string
-        name: string
-        avatar: string
-        email: string
-        role: string
-        member_kind: 'member' | 'external' | 'guest'
-        granted_by: string
-        granted_by_name: string
-      }>
-    const memberViews = (filterByGrantor
-      ? this.db
-          .prepare(
-            `SELECT g.subject_id AS id, g.role,
-                    COALESCE(g.granted_by, '') AS granted_by,
-                    COALESCE(NULLIF(gm.display_name, ''), NULLIF(ga.name, ''), NULLIF(ga.email, ''), '') AS granted_by_name
-             FROM view_grants g
-             LEFT JOIN accounts ga ON ga.id = g.granted_by
-             LEFT JOIN workspace_members gm ON gm.workspace_id = g.workspace_id AND gm.account_id = g.granted_by
-             WHERE g.workspace_id = ? AND g.collection = ? AND g.view_id = ? AND g.subject_type = 'member_view' AND g.granted_by = ?
-             ORDER BY g.created_at`,
-          )
-          .all(workspaceId, collection, viewId, viewerId)
-      : this.db
-          .prepare(
-            `SELECT g.subject_id AS id, g.role,
-                    COALESCE(g.granted_by, '') AS granted_by,
-                    COALESCE(NULLIF(gm.display_name, ''), NULLIF(ga.name, ''), NULLIF(ga.email, ''), '') AS granted_by_name
-             FROM view_grants g
-             LEFT JOIN accounts ga ON ga.id = g.granted_by
-             LEFT JOIN workspace_members gm ON gm.workspace_id = g.workspace_id AND gm.account_id = g.granted_by
-             WHERE g.workspace_id = ? AND g.collection = ? AND g.view_id = ? AND g.subject_type = 'member_view'
-             ORDER BY g.created_at`,
-          )
-          .all(workspaceId, collection, viewId)) as Array<{
-        id: string
-        role: string
-        granted_by: string
-        granted_by_name: string
-      }>
-    const canEditRow = (grantedBy: string) => Boolean(canManage && (!viewerId || !grantedBy || grantedBy === viewerId))
-    const canRevokeRow = (grantedBy: string) => Boolean(canManage && (!viewerId || !grantedBy || grantedBy === viewerId))
-    return {
-      private: people.length + memberViews.length === 0,
-      scope: 'personal' as const,
-      ownerId: '',
-      currentAccountId: viewerId,
-      canManage,
-      people: people.map(({ member_kind, granted_by, granted_by_name, ...row }) => ({
-        ...row,
-        memberKind: member_kind,
-        grantedBy: granted_by,
-        grantedByName: granted_by_name,
-        canEdit: canEditRow(granted_by),
-        canRevoke: canRevokeRow(granted_by),
-      })),
-      groups: [] as Array<{ id: string; name: string; role: string }>,
-      memberViews: memberViews.map(({ granted_by, granted_by_name, ...row }) => ({
-        ...row,
-        grantedBy: granted_by,
-        grantedByName: granted_by_name,
-        canEdit: canEditRow(granted_by),
-        canRevoke: canRevokeRow(granted_by),
-      })),
-    }
-  }
-
   private accessRows(workspaceId: string, collection: string, recordId: string) {
     const rows = this.db
       .prepare(
@@ -2946,21 +2750,13 @@ export class CollabStore {
       }>
     const groups = this.db
       .prepare(
-        `SELECT g.id, g.name, rg.role
+        `SELECT g.id, g.name, COALESCE(g.kind, 'static') AS kind, rg.role
          FROM record_grants rg
          JOIN workspace_groups g ON rg.subject_type = 'group' AND g.id = rg.subject_id
          WHERE rg.workspace_id = ? AND rg.collection = ? AND rg.record_id = ?
          ORDER BY rg.created_at`,
       )
-      .all(workspaceId, collection, recordId) as Array<{ id: string; name: string; role: string }>
-    const memberViews = this.db
-      .prepare(
-        `SELECT subject_id AS id, role
-         FROM record_grants
-         WHERE workspace_id = ? AND collection = ? AND record_id = ? AND subject_type = 'member_view'
-         ORDER BY created_at`,
-      )
-      .all(workspaceId, collection, recordId) as Array<{ id: string; role: string }>
+      .all(workspaceId, collection, recordId) as Array<{ id: string; name: string; kind: 'static' | 'dynamic'; role: string }>
     const policy = this.db
       .prepare(
         `SELECT access_mode, owner_account_id FROM resource_policies
@@ -2977,8 +2773,7 @@ export class CollabStore {
           )
           .get(workspaceId, collection, recordId) as { owner_id?: string } | undefined
     const ownerId = policy?.owner_account_id || ownerRow?.owner_id || ''
-    const collaboratorCount =
-      rows.filter((row) => row.id !== ownerId).length + groups.length + memberViews.length
+    const collaboratorCount = rows.filter((row) => row.id !== ownerId).length + groups.length
     const hasExternal = rows.some(
       (row) => row.id !== ownerId && (row.member_kind === 'external' || row.member_kind === 'guest'),
     )
@@ -2993,7 +2788,6 @@ export class CollabStore {
       ownerId,
       people: rows.map(({ member_kind, ...row }) => ({ ...row, memberKind: member_kind })),
       groups,
-      memberViews,
     }
   }
 
@@ -3097,9 +2891,9 @@ export class CollabStore {
          LIMIT 1`,
       )
       .get(workspaceId, accountId)
-    const viewGrant = this.db
+    const ruleGrant = this.db
       .prepare(
-        `SELECT 1 AS ok FROM view_grants
+        `SELECT 1 AS ok FROM access_rule_grants
          WHERE workspace_id = ? AND subject_type = 'account' AND subject_id = ?
          LIMIT 1`,
       )
@@ -3111,7 +2905,7 @@ export class CollabStore {
          LIMIT 1`,
       )
       .get(workspaceId, accountId)
-    if (recordGrant || viewGrant || pluginGrant) return
+    if (recordGrant || ruleGrant || pluginGrant) return
     this.db
       .prepare(`DELETE FROM workspace_members WHERE workspace_id = ? AND account_id = ? AND member_kind = 'external'`)
       .run(workspaceId, accountId)
@@ -3337,7 +3131,7 @@ export class CollabStore {
   }
 
   private normalizeAccessRuleSubjectType(raw: unknown): AccessRuleSubjectType {
-    if (raw === 'account' || raw === 'workspace' || raw === 'member_view') return raw
+    if (raw === 'account' || raw === 'workspace' || raw === 'group') return raw
     throw new CollabError('不支持的受众类型', 400)
   }
 
@@ -3389,9 +3183,11 @@ export class CollabStore {
     const grantRows = this.db
       .prepare(
         `SELECT g.id, g.rule_id, g.workspace_id, g.subject_type, g.subject_id, g.role, g.created_at,
-                a.name AS account_name, a.email AS account_email, a.avatar AS account_avatar
+                a.name AS account_name, a.email AS account_email, a.avatar AS account_avatar,
+                wg.name AS group_name
          FROM access_rule_grants g
          LEFT JOIN accounts a ON g.subject_type = 'account' AND a.id = g.subject_id
+         LEFT JOIN workspace_groups wg ON g.subject_type = 'group' AND wg.id = g.subject_id
          WHERE g.rule_id IN (${placeholders})
          ORDER BY g.created_at ASC`,
       )
@@ -3406,10 +3202,12 @@ export class CollabStore {
       account_name: string | null
       account_email: string | null
       account_avatar: string | null
+      group_name: string | null
     }>
     const grantsByRule = new Map<string, AccessRuleGrantRecord[]>()
     for (const g of grantRows) {
       const list = grantsByRule.get(g.rule_id) ?? []
+      const subjectName = g.account_name || g.group_name || undefined
       list.push({
         id: g.id,
         ruleId: g.rule_id,
@@ -3418,7 +3216,7 @@ export class CollabStore {
         subjectId: g.subject_id,
         role: g.role as AccessRuleRole,
         createdAt: Number(g.created_at) || 0,
-        ...(g.account_name ? { subjectName: g.account_name } : {}),
+        ...(subjectName ? { subjectName } : {}),
         ...(g.account_email ? { subjectEmail: g.account_email } : {}),
         ...(g.account_avatar ? { subjectAvatar: g.account_avatar } : {}),
       })

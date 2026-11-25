@@ -21,7 +21,7 @@ import { FSDB_SHARES_CHANGE_EVENT, OPEN_ACCESS_RULES_EVENT, emitFsdbEvent } from
 import { FilterQueryMenu, type QueryField } from './query-menus.tsx'
 import type { SavedView } from './saved-view.ts'
 
-export type AccessRuleSubjectType = 'account' | 'workspace' | 'member_view'
+export type AccessRuleSubjectType = 'account' | 'workspace' | 'group'
 export type AccessRuleRole = 'viewer' | 'editor' | 'manager'
 
 export type AccessRuleGrantItem = {
@@ -109,6 +109,13 @@ type MemberOption = {
   email?: string
 }
 
+type GroupOption = {
+  id: string
+  name: string
+  kind?: 'static' | 'dynamic'
+  memberCount?: number
+}
+
 type RuleDraft = {
   id: string | null
   name: string
@@ -144,6 +151,7 @@ export function AccessRulesButton({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [members, setMembers] = useState<MemberOption[]>([])
+  const [groups, setGroups] = useState<GroupOption[]>([])
   const [draft, setDraft] = useState<RuleDraft | null>(null)
   const [saving, setSaving] = useState(false)
   const [quickLinkBusy, setQuickLinkBusy] = useState(false)
@@ -214,6 +222,17 @@ export function AccessRulesButton({
       setMembers(items)
     } catch {
       setMembers([])
+    }
+    try {
+      const res = await apiFetch('/api/account/groups')
+      if (res.ok) {
+        const data = (await res.json()) as { groups?: GroupOption[] }
+        setGroups(Array.isArray(data.groups) ? data.groups : [])
+      } else {
+        setGroups([])
+      }
+    } catch {
+      setGroups([])
     }
   }, [localOnly])
 
@@ -1000,6 +1019,36 @@ export function AccessRulesButton({
                               gap: 2,
                             }}
                           >
+                            {groups
+                              .filter((grp) => !draft.grants.some((g) => g.subjectType === 'group' && g.subjectId === grp.id))
+                              .map((grp) => (
+                                <button
+                                  key={`group:${grp.id}`}
+                                  type="button"
+                                  onClick={() => {
+                                    setDraft({
+                                      ...draft,
+                                      grants: [
+                                        ...draft.grants,
+                                        { subjectType: 'group', subjectId: grp.id, role: 'viewer', subjectName: grp.name },
+                                      ],
+                                    })
+                                    setMemberPickerOpen(false)
+                                  }}
+                                  style={{
+                                    textAlign: 'left',
+                                    padding: '5px 8px',
+                                    borderRadius: 6,
+                                    fontSize: 12,
+                                    color: 'var(--biu-color-text)',
+                                    background: 'transparent',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {grp.name} · {grp.kind === 'dynamic' ? '动态成员组' : '成员组'}
+                                </button>
+                              ))}
                             {members
                               .filter((m) => !draft.grants.some((g) => g.subjectType === 'account' && g.subjectId === m.id))
                               .map((member) => (

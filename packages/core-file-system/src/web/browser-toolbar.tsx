@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useState, type ReactElement, type RefObject } from 'react'
+import { lazy, memo, Suspense, useEffect, useRef, useState, type ReactElement, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ArrowDownTrayIcon,
@@ -22,7 +22,7 @@ import { countFilterRules, type FilterGroup, type SortRule } from '../query-logi
 import type { BrowserDialogState } from './browser-dialogs.tsx'
 import { askNewPlugin } from './browser-row-title.tsx'
 import { LocalText } from './controls.tsx'
-import { PAGES_COLLECTION_PATH, PLUGINS_COLLECTION_PATH, isIndexCollection, isSystemCollection } from './database-path.ts'
+import { PAGES_COLLECTION_PATH, PLUGINS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, isIndexCollection, isSystemCollection } from './database-path.ts'
 import { readJson } from './db-client.ts'
 import type { GroupBucket, ViewMode } from './fields.ts'
 import { ModeGlyph, VIEW_MODES } from './fsdb-cells.tsx'
@@ -30,7 +30,7 @@ import { TableGlyph, UiGlyph, ViewModeGlyph } from './nav-glyphs.tsx'
 import { PageBanner } from './page-banner.tsx'
 import type { QueryField } from './query-menus.tsx'
 import { ViewOrderMenu } from './view-order-menu.tsx'
-import { canEditSavedView, type GroupConfig, type SavedView } from './saved-view.ts'
+import { canEditSavedView, viewStateKey, type GroupConfig, type SavedView } from './saved-view.ts'
 import type { TableSandboxItem } from '../shared/table-sandbox-model.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 
@@ -291,6 +291,58 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
   } = props
 
   const [settingsTab, setSettingsTab] = useState<ViewSettingsTab>('view')
+  const [groupSaveBusy, setGroupSaveBusy] = useState(false)
+  const [groupSaveHint, setGroupSaveHint] = useState('')
+  const savedBaselineRef = useRef<Map<string, SavedView>>(new Map())
+
+  // 记录只读视图初次载入/服务端更新时的基准快照，用于识别前端会话临时修改（重置 / 另存为个人视图）。
+  useEffect(() => {
+    if (!activeView || canEditSavedView(activeView)) return
+    const key = `${collectionPath}::${activeView.id}`
+    const prev = savedBaselineRef.current.get(key)
+    if (!prev || prev.updatedAt !== activeView.updatedAt) {
+      savedBaselineRef.current.set(key, activeView)
+    }
+  }, [collectionPath, activeView?.id, activeView?.updatedAt])
+
+  const readOnlyBaseline =
+    activeView && !canEditSavedView(activeView)
+      ? savedBaselineRef.current.get(`${collectionPath}::${activeView.id}`) ?? null
+      : null
+  const hasReadOnlyDraftChanges = Boolean(
+    activeView &&
+      readOnlyBaseline &&
+      viewStateKey(activeView) !== viewStateKey(readOnlyBaseline),
+  )
+
+  const saveAsDynamicGroup = async () => {
+    if (groupSaveBusy) return
+    const defaultName = activeView?.name ? `${activeView.name} 动态组` : '新建动态成员组'
+    const raw = window.prompt('输入动态成员组名称（将拷贝当前成员筛选条件，后续修改视图不影响成员组）：', defaultName)
+    const name = raw?.trim()
+    if (!name) return
+    setGroupSaveBusy(true)
+    setGroupSaveHint('')
+    try {
+      await readJson('/api/account/groups', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          kind: 'dynamic',
+          filterTree,
+        }),
+      })
+      setGroupSaveHint(`已保存动态组「${name}」`)
+      window.setTimeout(() => setGroupSaveHint(''), 2400)
+    } catch (err) {
+      setGroupSaveHint(err instanceof Error ? err.message : '保存动态组失败')
+      window.setTimeout(() => setGroupSaveHint(''), 3000)
+    } finally {
+      setGroupSaveBusy(false)
+    }
+  }
+
   const openSettingsTab = (tab: ViewSettingsTab) => {
     if (configOpen && settingsTab === tab) {
       setConfigOpen(false)
@@ -751,6 +803,73 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                   </Suspense>
                 ) : null}
               </div>
+              {!sheet && !hasExternalViews && hasReadOnlyDraftChanges && activeView && readOnlyBaseline ? (
+                <div
+                  className="fsdb-readonly-draft-pill"
+                  data-testid="fsdb-readonly-draft-pill"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '2px 8px',
+                    borderRadius: 999,
+                    fontSize: 12,
+                    background: 'var(--biu-color-bg-subtle, rgba(128,128,128,0.1))',
+                    border: 'var(--biu-stroke-width, 1px) solid var(--biu-color-border, rgba(128,128,128,0.2))',
+                    color: 'var(--biu-color-text-muted)',
+                  }}
+                >
+                  <span>临时预览</span>
+                  <button
+                    type="button"
+                    data-testid="fsdb-readonly-draft-reset"
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      padding: '0 2px',
+                      cursor: 'pointer',
+                      color: 'var(--biu-color-text)',
+                      fontSize: 12,
+                    }}
+                    onClick={() => {
+                      patchActiveView(readOnlyBaseline)
+                      selectView(readOnlyBaseline)
+                    }}
+                  >
+                    重置
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="fsdb-readonly-draft-save-as"
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      padding: '0 2px',
+                      cursor: 'pointer',
+                      color: 'var(--biu-color-accent, var(--biu-color-text))',
+                      fontWeight: 500,
+                      fontSize: 12,
+                    }}
+                    onClick={() => copyView(activeView, { scope: 'personal' })}
+                  >
+                    另存为我的视图
+                  </button>
+                </div>
+              ) : null}
+              {!sheet && !localData && collectionPath === WORKSPACE_MEMBERS_COLLECTION_PATH ? (
+                <button
+                  type="button"
+                  className="tasks-refresh"
+                  data-testid="fsdb-save-dynamic-group"
+                  disabled={groupSaveBusy}
+                  title={groupSaveHint || '将当前筛选条件拷贝保存为动态成员组（与视图解耦）'}
+                  onClick={() => void saveAsDynamicGroup()}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, width: 'auto', padding: '0 8px', fontSize: 12 }}
+                >
+                  <UsersIcon aria-hidden className="size-[13px]" />
+                  <span>{groupSaveHint || '保存为动态组'}</span>
+                </button>
+              ) : null}
               {!sheet && !isSystemCollection(collectionPath) && !isIndexCollection(collectionPath) && activeViewId ? (
                 <Suspense fallback={null}>
                   <ShareButton

@@ -1262,6 +1262,33 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     route.send(200, { members: account.store.members(me.id, route.params.id!) })
   })
 
+  authedRoute('GET', '/api/account/groups', async (route, me) => {
+    const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
+    if (!workspaceId) {
+      route.send(200, { groups: [] })
+      return
+    }
+    requireCollaborativeWorkspace(workspaceId)
+    route.send(200, { groups: account.store.groups(me.id, workspaceId) })
+  })
+
+  authedRoute('POST', '/api/account/groups', async (route, me) => {
+    const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
+    if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
+    requireCollaborativeWorkspace(workspaceId)
+    const body = (await route.json()) as {
+      name?: string
+      kind?: 'static' | 'dynamic'
+      filterTree?: Record<string, unknown> | null
+    }
+    const group = account.store.createGroup(me.id, workspaceId, String(body.name ?? ''), {
+      kind: body.kind === 'dynamic' ? 'dynamic' : 'static',
+      filterTree: body.filterTree ?? null,
+    })
+    broadcastAccessChange(workspaceId, 'records')
+    route.send(201, group)
+  })
+
   authedRoute('GET', '/api/account/workspaces/:id/groups', async (route, me) => {
     requireCollaborativeWorkspace(route.params.id!)
     route.send(200, { groups: account.store.groups(me.id, route.params.id!) })
@@ -1269,8 +1296,38 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
 
   authedRoute('POST', '/api/account/workspaces/:id/groups', async (route, me) => {
     requireCollaborativeWorkspace(route.params.id!)
-    const body = (await route.json()) as { name?: string }
-    route.send(201, account.store.createGroup(me.id, route.params.id!, String(body.name ?? '')))
+    const body = (await route.json()) as {
+      name?: string
+      kind?: 'static' | 'dynamic'
+      filterTree?: Record<string, unknown> | null
+    }
+    const group = account.store.createGroup(me.id, route.params.id!, String(body.name ?? ''), {
+      kind: body.kind === 'dynamic' ? 'dynamic' : 'static',
+      filterTree: body.filterTree ?? null,
+    })
+    broadcastAccessChange(route.params.id!, 'records')
+    route.send(201, group)
+  })
+
+  authedRoute('PATCH', '/api/account/workspaces/:id/groups/:groupId', async (route, me) => {
+    requireCollaborativeWorkspace(route.params.id!)
+    const body = (await route.json()) as {
+      name?: string
+      filterTree?: Record<string, unknown> | null
+    }
+    const group = account.store.updateGroup(me.id, route.params.id!, route.params.groupId!, {
+      ...(body.name !== undefined ? { name: String(body.name) } : {}),
+      ...(body.filterTree !== undefined ? { filterTree: body.filterTree } : {}),
+    })
+    broadcastAccessChange(route.params.id!, 'records')
+    route.send(200, group)
+  })
+
+  authedRoute('DELETE', '/api/account/workspaces/:id/groups/:groupId', async (route, me) => {
+    requireCollaborativeWorkspace(route.params.id!)
+    const result = account.store.deleteGroup(me.id, route.params.id!, route.params.groupId!)
+    broadcastAccessChange(route.params.id!, 'records')
+    route.send(200, result)
   })
 
   authedRoute('POST', '/api/account/workspaces/:id/groups/:groupId/members', async (route, me) => {
@@ -1440,7 +1497,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       viewId?: string
       email?: string
       groupId?: string
-      memberViewId?: string
       role?: ResourceRole
       collaboratorKind?: 'internal' | 'external'
     }
@@ -1453,13 +1509,9 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         : 'editor'
     const kind = body.collaboratorKind === 'internal' ? 'internal' : 'external'
     const result = viewId
-      ? body.memberViewId
-        ? account.store.grantViewMemberView(me.id, collection, viewId, String(body.memberViewId), role)
-        : body.groupId
+      ? body.groupId
         ? account.store.grantViewGroup(me.id, collection, viewId, String(body.groupId), role)
         : account.store.shareViewWithEmail(me.id, collection, viewId, String(body.email ?? ''), role, kind)
-      : body.memberViewId
-      ? account.store.grantMemberView(me.id, collection, recordId, String(body.memberViewId), role)
       : body.groupId
       ? account.store.grantGroup(me.id, collection, recordId, String(body.groupId), role)
       : account.store.shareWithEmail(me.id, collection, recordId, String(body.email ?? ''), role, kind)
@@ -1494,14 +1546,13 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       collection?: string
       recordId?: string
       viewId?: string
-      subjectType?: 'account' | 'group' | 'member_view'
+      subjectType?: 'account' | 'group'
       subjectId?: string
       grantedBy?: string
     }
     const collection = String(body.collection ?? '')
     const viewId = String(body.viewId ?? '')
-    const subjectType =
-      body.subjectType === 'group' || body.subjectType === 'member_view' ? body.subjectType : 'account'
+    const subjectType = body.subjectType === 'group' ? 'group' : 'account'
     const result = viewId
       ? account.store.revokeViewGrant(
           me.id,
@@ -1567,7 +1618,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       columns?: string[] | null
       displaySnapshot?: { mode?: string; sorts?: unknown[]; groupBy?: string; groupConfig?: Record<string, unknown> } | null
       enabled?: boolean
-      grants?: Array<{ subjectType: 'account' | 'workspace' | 'member_view'; subjectId: string; role: 'viewer' | 'editor' | 'manager' }>
+      grants?: Array<{ subjectType: 'account' | 'workspace' | 'group'; subjectId: string; role: 'viewer' | 'editor' | 'manager' }>
     }
     const rule = account.store.createAccessRule(me.id, workspaceId, {
       collection: String(body.collection ?? ''),
@@ -1592,7 +1643,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       columns?: string[] | null
       displaySnapshot?: { mode?: string; sorts?: unknown[]; groupBy?: string; groupConfig?: Record<string, unknown> } | null
       enabled?: boolean
-      grants?: Array<{ subjectType: 'account' | 'workspace' | 'member_view'; subjectId: string; role: 'viewer' | 'editor' | 'manager' }>
+      grants?: Array<{ subjectType: 'account' | 'workspace' | 'group'; subjectId: string; role: 'viewer' | 'editor' | 'manager' }>
     }
     const rule = account.store.updateAccessRule(me.id, workspaceId, ruleId, body)
     broadcastAccessChange(workspaceId, 'records', rule.collection)
@@ -1613,7 +1664,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
     const ruleId = String(route.params.id ?? '').trim()
     const body = (await route.json()) as {
-      subjectType?: 'account' | 'workspace' | 'member_view'
+      subjectType?: 'account' | 'workspace' | 'group'
       subjectId?: string
       role?: 'viewer' | 'editor' | 'manager'
     }
@@ -1631,7 +1682,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
     const ruleId = String(route.params.id ?? '').trim()
     const body = (await route.json()) as {
-      subjectType?: 'account' | 'workspace' | 'member_view'
+      subjectType?: 'account' | 'workspace' | 'group'
       subjectId?: string
     }
     const rule = account.store.revokeAccessRuleSubject(
