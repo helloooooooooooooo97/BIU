@@ -31,3 +31,24 @@ test('inherited view grants raise a personal record to workspace or shared', () 
   assert.equal(effectiveDataScope('personal', record, [allMembers], [], [{ id: 'builtin-member:member', filters: { membershipKind: 'member' } }], 'ada'), 'personal')
   assert.equal(effectiveDataScope('personal', record, [allMembers], [], [{ id: 'builtin-member:member', filters: { membershipKind: 'member' } }], 'bob'), 'workspace')
 })
+
+test('recordMatchesGrantedView evaluates complex filterTree (OR / contains / neq) instead of leaking all records', () => {
+  const saved = [
+    {
+      id: 'urgent-or-eng',
+      filters: {},
+      filterTree: {
+        kind: 'group' as const,
+        id: 'g1',
+        combinator: 'or' as const,
+        children: [
+          { kind: 'rule' as const, id: 'r1', field: 'priority', op: 'eq' as const, value: 'p0' },
+          { kind: 'rule' as const, id: 'r2', field: 'title', op: 'contains' as const, value: 'Design' },
+        ],
+      },
+    },
+  ]
+  assert.equal(recordMatchesGrantedView({ id: '1', priority: 'p0', title: 'Fix' }, 'urgent-or-eng', saved, 'personal'), true)
+  assert.equal(recordMatchesGrantedView({ id: '2', priority: 'p2', title: 'Design Doc' }, 'urgent-or-eng', saved, 'personal'), true)
+  assert.equal(recordMatchesGrantedView({ id: '3', priority: 'p2', title: 'Secret HR' }, 'urgent-or-eng', saved, 'personal'), false)
+})

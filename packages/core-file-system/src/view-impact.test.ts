@@ -28,4 +28,35 @@ test('previewViewFilterImpact computes exact added, removed, and unchanged recor
   assert.deepEqual(narrowed.addedRecordIds, [])
   assert.deepEqual(narrowed.removedRecordIds, ['r1'])
   assert.equal(narrowed.unchangedCount, 1)
+
+  const treePreview = previewViewFilterImpact({
+    records,
+    viewId: 'v-tree',
+    beforeView: {
+      id: 'v-tree',
+      filters: {},
+      filterTree: {
+        kind: 'group',
+        id: 'g1',
+        combinator: 'and',
+        children: [{ kind: 'rule', id: 'r1', field: 'dept', op: 'eq', value: 'eng' }],
+      },
+    },
+    afterView: {
+      id: 'v-tree',
+      filters: {},
+      filterTree: {
+        kind: 'group',
+        id: 'g2',
+        combinator: 'or',
+        children: [
+          { kind: 'rule', id: 'r1', field: 'dept', op: 'eq', value: 'eng' },
+          { kind: 'rule', id: 'r2', field: 'dept', op: 'eq', value: 'hr' },
+        ],
+      },
+    },
+  })
+  assert.deepEqual(treePreview.addedRecordIds, ['r4'])
+  assert.deepEqual(treePreview.removedRecordIds, [])
+  assert.equal(treePreview.unchangedCount, 2)
 })

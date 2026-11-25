@@ -1,9 +1,12 @@
 import type { DbRecord } from '@biu/type-file-system'
+import type { FilterGroup } from './query-logic.ts'
 import { recordMatchesGrantedView, type DataScopeName } from './view-access.ts'
 
 export type ViewFilterDef = {
   id: string
   filters?: Record<string, unknown>
+  filterTree?: FilterGroup | null
+  builtin?: boolean
 }
 
 export type ViewImpactPreview = {
