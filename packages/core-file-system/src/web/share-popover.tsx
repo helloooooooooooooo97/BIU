@@ -1253,9 +1253,9 @@ export function SharePanel({
           className="fsdb-share-settings"
           aria-label="同时生效的分享规则"
           data-testid="fsdb-share-matched-rules"
-          style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border, rgba(0,0,0,0.08))' }}
+          style={{ marginTop: 10, paddingTop: 10, borderTop: 'var(--biu-stroke-width) solid var(--biu-color-border)' }}
         >
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted, #666)', marginBottom: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--biu-color-text-muted)', marginBottom: 6 }}>
             同时生效的分享规则（{matchedRules.length}）
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -1268,19 +1268,20 @@ export function SharePanel({
                   justifyContent: 'space-between',
                   gap: 8,
                   fontSize: 12,
-                  padding: '5px 8px',
+                  padding: '6px 8px',
                   borderRadius: 6,
-                  background: 'var(--bg-subtle, rgba(0,0,0,0.03))',
+                  background: 'var(--biu-color-bg-hover)',
+                  color: 'var(--biu-color-text)',
                 }}
               >
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 500 }}>
                     {rule.ruleName}
                     {!rule.isMine && rule.createdByName ? (
-                      <span style={{ fontWeight: 400, color: 'var(--text-muted, #666)' }}> · {rule.createdByName}</span>
+                      <span style={{ fontWeight: 400, color: 'var(--biu-color-text-muted)' }}> · {rule.createdByName}</span>
                     ) : null}
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted, #666)' }}>
+                  <div style={{ fontSize: 11, color: 'var(--biu-color-text-subtle)' }}>
                     {rule.grants.length > 0
                       ? rule.grants
                           .map((g) => `${g.subjectType === 'workspace' ? '空间全员' : g.subjectName || g.subjectId}（${roleLabel(g.role)}）`)
@@ -1296,10 +1297,11 @@ export function SharePanel({
                     style={{
                       flexShrink: 0,
                       fontSize: 11,
-                      padding: '2px 7px',
+                      padding: '3px 8px',
                       borderRadius: 6,
-                      border: '1px solid var(--border, rgba(0,0,0,0.14))',
+                      border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
                       background: 'transparent',
+                      color: 'var(--biu-color-text)',
                       cursor: 'pointer',
                     }}
                   >
