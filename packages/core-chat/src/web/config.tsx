@@ -87,7 +87,6 @@ export function ChatConfig(props?: { onClose?: () => void }) {
   const [endpoints, setEndpoints] = useState<EndpointView[]>([])
   const [modelCatalog, setModelCatalog] = useState<ModelDef[]>([])
   const [providers, setProviders] = useState<Record<string, ProviderView> | null>(null)
-  const [acceptsApiKeys, setAcceptsApiKeys] = useState(true)
   const [secretsLocalOnly, setSecretsLocalOnly] = useState(true)
 
   const [keyDraft, setKeyDraft] = useState('')
@@ -249,7 +248,6 @@ export function ChatConfig(props?: { onClose?: () => void }) {
     const cats = Array.isArray(data.modelCatalog) ? data.modelCatalog : []
     setModelCatalog(cats)
     if (data.providers) setProviders(data.providers)
-    setAcceptsApiKeys(data.acceptsApiKeys !== false)
     setSecretsLocalOnly(data.secretsLocalOnly !== false)
 
     const eid = preferActive || data.endpointId || data.provider || 'deepseek'
@@ -890,21 +888,17 @@ export function ChatConfig(props?: { onClose?: () => void }) {
                   />
                 </div>
 
-                {acceptsApiKeys ? (
-                  <div className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-(--biu-color-bg-hover)">
-                    <div className="w-18 shrink-0 text-[length:var(--biu-font-size-2)] text-(--biu-color-text-subtle)">API Key</div>
-                    <input
-                      className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-[6px] text-[length:var(--biu-font-size-3)] text-(--biu-color-text) outline-none placeholder:text-(--biu-color-text-placeholder) hover:border-(--biu-color-border) focus:border-(--biu-color-text-subtle) focus:bg-(--biu-color-bg-input)"
-                      type="password"
-                      autoComplete="off"
-                      placeholder="sk-…（可选，稍后可补）"
-                      value={newKey}
-                      onChange={(e) => setNewKey(e.target.value)}
-                    />
-                  </div>
-                ) : (
-                  <p className="px-2 text-[length:var(--biu-font-size-1)] text-(--biu-color-text-subtle)">AI API Token 只能配置在运行 Agent 的本机，云端不会接收或保存。</p>
-                )}
+                <div className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-(--biu-color-bg-hover)">
+                  <div className="w-18 shrink-0 text-[length:var(--biu-font-size-2)] text-(--biu-color-text-subtle)">API Key</div>
+                  <input
+                    className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-[6px] text-[length:var(--biu-font-size-3)] text-(--biu-color-text) outline-none placeholder:text-(--biu-color-text-placeholder) hover:border-(--biu-color-border) focus:border-(--biu-color-text-subtle) focus:bg-(--biu-color-bg-input)"
+                    type="password"
+                    autoComplete="off"
+                    placeholder="sk-…（可选，稍后可补）"
+                    value={newKey}
+                    onChange={(e) => setNewKey(e.target.value)}
+                  />
+                </div>
               </div>
               <div className="flex items-center justify-end gap-2 border-t border-(--biu-color-border) px-4 py-2.5">
                 {error ? (
@@ -960,7 +954,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
               </div>
 
               <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3">
-                {acceptsApiKeys ? <label className="flex flex-col gap-1.5">
+                <label className="flex flex-col gap-1.5">
                   <span className="flex items-center justify-between text-[length:var(--biu-font-size-1)] font-semibold text-(--biu-color-text-subtle)">
                     <span>API Key</span>
                     <button
@@ -1003,11 +997,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
                       云端按当前账号加密保存，仅用于调用模型，绝不注入到 Agent 沙箱环境。
                     </span>
                   ) : null}
-                </label> : (
-                  <div className="rounded-lg border border-(--biu-color-border) bg-(--biu-color-bg-hover) px-3 py-2.5 text-[length:var(--biu-font-size-1)] leading-5 text-(--biu-color-text-subtle)">
-                    AI API Token 只能保存在运行 Agent 的设备上，不能上传到云端。当前服务仅使用管理员配置的模型凭据。
-                  </div>
-                )}
+                </label>
 
                 {!isOfficial(active.id) ? (
                   <label className="flex flex-col gap-1.5">

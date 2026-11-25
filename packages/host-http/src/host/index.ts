@@ -582,10 +582,6 @@ export class HttpService extends Service {
     for (const socket of this.sockets) sendIfEligible(socket)
   }
 
-  broadcastWorkspace(workspaceId: string, type: string, payload: unknown) {
-    this.broadcast(type, payload, workspaceId)
-  }
-
   broadcastAccount(accountId: string, type: string, payload: unknown) {
     const bucket = this.socketsByAccount.get(accountId)
     if (!bucket || bucket.size === 0) return

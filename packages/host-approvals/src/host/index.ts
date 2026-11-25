@@ -1,6 +1,6 @@
 import { Service, type Context } from 'cordis'
 import type { ToolRequest } from '@biu/host-tools'
-import { currentAccountId, currentRequestWorkspaceId } from '@biu/host-plugin-loader/data-dir'
+import { currentTenantScope } from '@biu/host-plugin-loader/data-dir'
 
 const DEFAULT_HOLD_TIMEOUT_MS = 60_000
 
@@ -28,11 +28,11 @@ export class ApprovalsService extends Service {
   >()
 
   get mode(): 'auto' | 'hold' {
-    return this.modes.get(currentAccountId().trim()) ?? 'auto'
+    return this.modes.get(currentTenantScope().accountId) ?? 'auto'
   }
 
   set mode(next: 'auto' | 'hold') {
-    this.modes.set(currentAccountId().trim(), next)
+    this.modes.set(currentTenantScope().accountId, next)
   }
 
   constructor(ctx: Context) {
@@ -40,8 +40,7 @@ export class ApprovalsService extends Service {
     ctx.tools.guard(async (req) => {
       if (!needsApproval(req.name, this.mode)) return req
       const id = crypto.randomUUID()
-      const accountId = currentAccountId().trim()
-      const workspaceId = currentRequestWorkspaceId().trim()
+      const { accountId, workspaceId } = currentTenantScope()
       const allow = await new Promise<boolean>((resolve) => {
         const timer = setTimeout(() => {
           if (!this.pending.has(id)) return
@@ -66,8 +65,7 @@ export class ApprovalsService extends Service {
   }
 
   private matchesCurrentTenant(item: { accountId: string; workspaceId: string }) {
-    const accountId = currentAccountId().trim()
-    const workspaceId = currentRequestWorkspaceId().trim()
+    const { accountId, workspaceId } = currentTenantScope()
     if (item.accountId !== accountId) return false
     if (item.workspaceId && workspaceId && item.workspaceId !== workspaceId) return false
     return true
