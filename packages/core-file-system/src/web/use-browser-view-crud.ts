@@ -16,16 +16,11 @@ import {
   mergeSavedViewLists,
   mergeSavedViewsPatch,
   noteLocalSavedViewsWrite,
-  omitSavedViewIds,
   persistStarredViews,
   persistViewDisplay,
-  pullSavedViews,
   pushSavedViewsPatch,
   rememberViews,
   removeStarredViews,
-  restoreViewDisplay,
-  reviveSavedViewIds,
-  snapshotViewDisplay,
   stampSavedView,
   viewWriteQueue,
   withViewDisplay,
@@ -134,15 +129,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
   ) {
     if (sheet) return true
     const forced = extra?.upsert ?? []
-    const incoming = [
-      ...next.filter((view) => !forced.some((item) => item.id === view.id)),
-      ...forced,
-    ]
-    const prevDisplays = new Map<string, string | null>()
-    for (const view of incoming) prevDisplays.set(view.id, snapshotViewDisplay(path, view.id))
-    if (extra?.remove?.length) omitSavedViewIds(path, extra.remove)
-    if (forced.length) reviveSavedViewIds(path, forced.map((view) => view.id))
-    for (const view of incoming) persistViewDisplay(path, view.id, view)
+    const incoming = [...next.filter((view) => !forced.some((item) => item.id === view.id)), ...forced]
     const listed = rankListedViews(
       listedViews(path, incoming).map((view) => {
         const painted = withViewDisplay(path, view)
@@ -150,61 +137,26 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       }),
       incoming,
     )
-    const stored = listed
     const previous = extra?.baseline ?? loadViews(path)
-    // 只推这次改过的条目。快照里少了的视图不能当成删除——侧栏新加的视图经常不在中间栏那份 viewsRef 里。
     const patch = mergeSavedViewsPatch(
-      { upsert: diffSavedViews(previous, stored).upsert, remove: [] },
-      {
-        upsert: forced.map((view) => stampSavedView(view)),
-        remove: extra?.remove,
-      },
+      { upsert: diffSavedViews(previous, listed).upsert, remove: [] },
+      { upsert: forced.map((view) => stampSavedView(view)), remove: extra?.remove },
     )
     const stamped = (patch.upsert ?? []).map((view) => stampSavedView(view))
     const stampById = new Map(stamped.map((view) => [view.id, view]))
-    // 用同一个单调递增 updatedAt 回写 localStorage，保证本地缓存与 SQLite 时间戳一致。
-    for (const view of stamped) persistViewDisplay(path, view.id, view)
     const adopted = listed.map((view) => stampById.get(view.id) ?? view)
     const intended = Boolean(forced.length || extra?.remove?.length)
     const gen = ++viewsWriteGenRef.current
     return viewWriteQueue.enqueue(path, async (queueGen) => {
       const result = await pushSavedViewsPatch(path, { ...patch, upsert: stamped })
       if (result === 'failed' || (result === 'skipped' && intended)) {
-        if (viewWriteQueue.isLatest(path, queueGen)) {
-          for (const [viewId, raw] of prevDisplays) restoreViewDisplay(path, viewId, raw)
-          if (extra?.remove?.length) reviveSavedViewIds(path, extra.remove)
-          if (gen === viewsWriteGenRef.current) setViewsSaveError(true)
-        }
+        if (viewWriteQueue.isLatest(path, queueGen) && gen === viewsWriteGenRef.current) setViewsSaveError(true)
         return false
       }
       if (result === 'skipped') return true
+      for (const view of stamped) persistViewDisplay(path, view.id, view)
       if (extra?.remove?.length) removeStarredViews(path, extra.remove)
-      noteLocalSavedViewsWrite(path)
-      // 若后面已有更新的写操作排在队列里，跳过本次全量 pull，交给队尾写操作统一收口。
-      if (!viewWriteQueue.isLatest(path, queueGen)) return true
-      const pulled = await pullSavedViews([path], { force: true })
-      if (!viewWriteQueue.isLatest(path, queueGen)) return true
-      if (pulled === false) adoptPersistedViews(path, adopted, extra?.remove)
-      else {
-        const listedNow = rankListedViews(
-          listedViews(
-            path,
-            mergeSavedViewLists(loadViews(path), adopted, extra?.remove),
-          ).map((view) => {
-            const painted = withViewDisplay(path, view)
-            const forcedView = stampById.get(view.id)
-            return forcedView ? { ...painted, name: forcedView.name, updatedAt: forcedView.updatedAt } : painted
-          }),
-          adopted,
-        )
-        rememberViews(path, listedNow)
-        if (path === collectionPath) {
-          viewsRef.current = listedNow
-          setViews(listedNow)
-        }
-        emitFsdbChange({ scope: 'views' })
-        window.dispatchEvent(new Event(FSDB_CRUMB_LABELS_EVENT))
-      }
+      adoptPersistedViews(path, adopted, extra?.remove)
       setViewsSaveError(false)
       return true
     })
@@ -251,14 +203,6 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     })
   }
 
-  function persistViewsWith(
-    path: string,
-    next: SavedView[],
-    extra?: { baseline?: SavedView[]; upsert?: SavedView[]; remove?: string[] },
-  ) {
-    return persistViewsFor(path, next, extra)
-  }
-
   function newSavedViewId() {
     return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
       ? crypto.randomUUID()
@@ -278,7 +222,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     }
     const painted = paintListedViews(collectionPath)
     const next = { ...view, rank: Number.isFinite(Number(view.rank)) ? view.rank : painted.length }
-    const ok = await persistViewsWith(
+    const ok = await persistViewsFor(
       collectionPath,
       [...painted.filter((item) => item.id !== next.id), next],
       { upsert: [next] },
@@ -289,32 +233,35 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
 
   function uniqueViewName(base: string, listed: SavedView[] = paintListedViews(collectionPath)) {
     const names = new Set(listed.map((item) => item.name))
-    if (base === '新视图') return base
-    if (!names.has(base)) return base
+    if (base === '新视图' || !names.has(base)) return base
     let n = 2
     while (names.has(`${base} ${n}`)) n += 1
     return `${base} ${n}`
   }
 
+  function makeEmptyView(listed: SavedView[], columns: string[], extraFilters: Record<string, string> = {}): SavedView {
+    return {
+      id: newSavedViewId(),
+      name: uniqueViewName('新视图', listed),
+      mode: 'table',
+      sortField: 'title',
+      sortDir: 'asc',
+      filters: { ...catalogLocks, ...extraFilters },
+      columns,
+      groupBy: '',
+      tree: false,
+      freezeTitle: false,
+      wrap: false,
+      truncate: true,
+      query: '',
+      rank: listed.length,
+    }
+  }
+
   function addEmptyView(path = collectionPath, scope?: DataScope) {
     if (externalViews) {
       const current = viewsRef.current
-      const view: SavedView = {
-        id: newSavedViewId(),
-        name: uniqueViewName('新视图', current),
-        mode: 'table',
-        sortField: 'title',
-        sortDir: 'asc',
-        filters: { ...catalogLocks },
-        columns: [...schemaDefaultKeys],
-        groupBy: '',
-        tree: false,
-        freezeTitle: false,
-        wrap: false,
-        truncate: true,
-        query: '',
-        rank: current.length,
-      }
+      const view = makeEmptyView(current, [...schemaDefaultKeys])
       const next = [...current, view]
       viewsRef.current = next
       setViews(next)
@@ -331,22 +278,11 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       : effectiveScope
         ? viewsForScope(allListed, effectiveScope)
         : allListed
-    const view: SavedView = {
-      id: newSavedViewId(),
-      name: uniqueViewName('新视图', listed),
-      mode: 'table',
-      sortField: 'title',
-      sortDir: 'asc',
-      filters: { ...catalogLocks, ...(effectiveScope ? { $scope: effectiveScope } : {}) },
-      columns: target === collectionPath ? [...schemaDefaultKeys] : [],
-      groupBy: '',
-      tree: false,
-      freezeTitle: false,
-      wrap: false,
-      truncate: true,
-      query: '',
-      rank: listed.length,
-    }
+    const view = makeEmptyView(
+      listed,
+      target === collectionPath ? [...schemaDefaultKeys] : [],
+      effectiveScope ? { $scope: effectiveScope } : {},
+    )
     const nextStored = mergeSavedViewLists(stored, [view])
     rememberViews(target, nextStored)
     if (target === collectionPath) {
@@ -461,7 +397,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     emitFsdbChange({ scope: 'views' })
     window.dispatchEvent(new Event(FSDB_CRUMB_LABELS_EVENT))
     if (isReadOnlyViewId(viewId)) return
-    void persistViewsWith(collectionPath, listed, { upsert: [updated], baseline: current }).then((ok) => {
+    void persistViewsFor(collectionPath, listed, { upsert: [updated], baseline: current }).then((ok) => {
       if (ok) return
       const live = viewsRef.current
       const liveTarget = live.find((item) => item.id === viewId)
@@ -501,7 +437,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     if (!canRemoveCollectionView(current)) return
     const removedId = view.id
     const remaining = current.filter((item) => item.id !== removedId)
-    void persistViewsWith(path, remaining, { remove: [removedId] }).then((ok) => {
+    void persistViewsFor(path, remaining, { remove: [removedId] }).then((ok) => {
       if (!ok) return
       if (path === collectionPath && activeViewIdRef.current === removedId) {
         const next = viewsRef.current[0]
@@ -515,7 +451,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     persistViewsFor,
     persistViews,
     persistViewOrder,
-    persistViewsWith,
+    persistViewsWith: persistViewsFor,
     commitView,
     addEmptyView,
     copyView,

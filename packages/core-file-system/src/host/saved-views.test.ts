@@ -148,9 +148,9 @@ test('clientViewFromDbRow keeps flat filters and sorts for the live table', () =
 test('index collection views stay with the account that saved them', async () => {
   const store = new SavedViewsStore()
   store.open(':memory:')
-  store.replaceOwned('/tags', [{ id: 'ada-view', name: 'Ada 的标签' }], 'ada')
-  store.replaceOwned('/tags', [{ id: 'bob-view', name: 'Bob 的标签' }], 'bob')
-  store.replaceOwned('/tags', [{ id: 'ada-view', name: 'Ada 改过' }], 'ada')
+  store.replace('/tags', [{ id: 'ada-view', name: 'Ada 的标签' }], 'ada')
+  store.replace('/tags', [{ id: 'bob-view', name: 'Bob 的标签' }], 'bob')
+  store.replace('/tags', [{ id: 'ada-view', name: 'Ada 改过' }], 'ada')
   let who = 'ada'
   const spec = viewsCollection(
     store,
@@ -216,28 +216,6 @@ test('deleting a /views row also removes the stored view so it cannot come back'
 })
 
 
-test('a stale window pushing its snapshot cannot resurrect A or drop newly created B', async () => {
-  const store = new SavedViewsStore()
-  const spec = viewsCollection(store, () => [
-    { path: '/tasks', id: 'tasks', kind: 'collection', label: 'Task', view: { moduleId: 'tasks', route: '/tasks', title: 'Task' } },
-  ])
-  // 两个窗口各自持有一份快照：都从「A 存在」开始
-  const windowA = ['/tasks', [{ id: 'A', name: '视图 A' }]] as const
-  store.replace(windowA[0], windowA[1] as never)
-  // 窗口 1：新建 B，删掉 A（差异写）
-  store.applyPatch('/tasks', { upsert: [{ id: 'B', name: '视图 B' }], remove: ['A'] })
-  assert.deepEqual(store.viewsFor('/tasks').map((view) => view.id), ['B'])
-  // 窗口 2 还拿着旧快照（含 A）去保存自己的显示状态：只推 A 一条，不应把 A 复活、也不应丢 B
-  store.applyPatch('/tasks', { upsert: [{ id: 'A', name: '视图 A' }] })
-  assert.deepEqual(store.viewsFor('/tasks').map((view) => view.id), ['B'])
-  // 窗口 2 显式删 A（它以为还在）也伤不到 B
-  store.applyPatch('/tasks', { remove: ['A'] })
-  assert.deepEqual(store.viewsFor('/tasks').map((view) => view.id), ['B'])
-  // 窗口 2 的新增仍然能落地
-  store.applyPatch('/tasks', { upsert: [{ id: 'C', name: '视图 C' }] })
-  assert.deepEqual(store.viewsFor('/tasks').map((view) => view.id), ['B', 'C'])
-})
-
 test('an older snapshot loses to newer content when timestamps disagree', async () => {
   const store = new SavedViewsStore()
   store.replace('/tasks', [{ id: 'A', name: '新名字', updatedAt: 2000 }] as never)
@@ -245,25 +223,6 @@ test('an older snapshot loses to newer content when timestamps disagree', async 
   assert.equal(store.viewsFor('/tasks')[0]?.name, '新名字')
   store.applyPatch('/tasks', { upsert: [{ id: 'A', name: '更新的名字', updatedAt: 3000 }] })
   assert.equal(store.viewsFor('/tasks')[0]?.name, '更新的名字')
-})
-
-test('tombstones survive a reopen and can be cleared by recreating the view', async () => {
-  const file = join(mkdtempSync(join(tmpdir(), 'biu-views-')), 'biu.sqlite')
-  const first = new SavedViewsStore()
-  first.open(file)
-  first.applyPatch('/tasks', { upsert: [{ id: 'A', name: '视图 A' }] })
-  first.applyPatch('/tasks', { remove: ['A'] })
-  assert.equal(first.isTombstoned('/tasks', 'A'), true)
-  const second = new SavedViewsStore()
-  second.open(file)
-  assert.equal(second.isTombstoned('/tasks', 'A'), true)
-  // 老窗口再推 A 不复活
-  second.applyPatch('/tasks', { upsert: [{ id: 'A', name: '视图 A' }] })
-  assert.deepEqual(second.viewsFor('/tasks'), [])
-  // 真新建（同 id）会撤掉墓碑
-  second.applyPatch('/tasks', { upsert: [{ id: 'C', name: '视图 C' }] })
-  assert.deepEqual(second.viewsFor('/tasks').map((view) => view.id), ['C'])
-  assert.equal(second.isTombstoned('/tasks', 'C'), false)
 })
 
 test('applyPatch clears optional view fields when sent as null or empty and persists incrementally across reopen', async () => {
@@ -338,7 +297,7 @@ test('applyPatch clears optional view fields when sent as null or empty and pers
   check(reopened)
 })
 
-test('saved views and tombstones are isolated by workspace_id', () => {
+test('saved views are isolated by workspace_id', () => {
   const dir = mkdtempSync(join(tmpdir(), 'biu-saved-views-ws-'))
   const file = join(dir, 'biu.sqlite')
   let activeWs = 'ws-a'
@@ -352,10 +311,9 @@ test('saved views and tombstones are isolated by workspace_id', () => {
   assert.equal(store.viewsFor('/pages').length, 0)
   store.applyPatch('/pages', { upsert: [{ id: 'v1', name: 'Workspace B View', filters: { tag: 'b' } }] })
   store.applyPatch('/pages', { remove: ['v1'] })
-  assert.equal(store.isTombstoned('/pages', 'v1'), true)
+  assert.equal(store.viewsFor('/pages').length, 0)
 
   activeWs = 'ws-a'
-  assert.equal(store.isTombstoned('/pages', 'v1'), false)
   assert.equal(store.viewsFor('/pages')[0]?.name, 'Workspace A View')
 
   const reopened = new SavedViewsStore().open(file)
@@ -363,7 +321,6 @@ test('saved views and tombstones are isolated by workspace_id', () => {
   assert.equal(reopened.viewsFor('/pages')[0]?.name, 'Workspace A View')
   activeWs = 'ws-b'
   assert.equal(reopened.viewsFor('/pages').length, 0)
-  assert.equal(reopened.isTombstoned('/pages', 'v1'), true)
 })
 
 test('policy-locked view blocks filters/columns changes and deletion for non-admins while allowing visual tweaks', () => {

@@ -306,11 +306,9 @@ test('incomplete persist snapshots keep sibling views', () => {
   assert.equal(mergeSavedViewLists([keep, extra], [painted], ['extra']).some((view) => view.id === 'extra'), false)
 })
 
-test('saved views pull shares one in-flight list and a short ttl', () => {
+test('saved views pull shares one in-flight list', () => {
   const src = readFileSync(resolve(import.meta.dirname, './view-storage.ts'), 'utf8')
   assert.match(src, /const viewsPullByKey = new Map/)
-  assert.match(src, /VIEWS_PULL_TTL_MS = 2500/)
-  assert.match(src, /VIEWS_PULL_IDLE_MS = 2800/)
   assert.match(src, /VIEWS_PULL_LIMIT = 200/)
   assert.match(src, /filters: \{ tablePath \}/)
   assert.doesNotMatch(src, /columns: \[\.\.\.VIEWS_PULL/)
