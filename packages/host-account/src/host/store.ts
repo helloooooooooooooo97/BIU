@@ -2266,6 +2266,10 @@ export class CollabStore {
     this.requireMember(actorId, workspaceId)
     if (!this.canReadRecord(collection, recordId)) throw new CollabError('没有权限', 403)
     const resource = { type: 'record' as const, workspaceId, collection, recordId }
+    const actorObj = { type: 'account' as const, accountId: actorId, workspaceId }
+    const canManage = this.authorization.authorize(actorObj, 'resource:manage-permissions', resource).allowed
+    const readDecision = this.authorization.authorize(actorObj, 'resource:read', resource)
+    const effectiveRole = readDecision.allowed ? readDecision.effectiveRole : undefined
     const inheritance = this.authorization.inheritanceInfo(resource)
     const viewGrants = this.viewGrantShares(workspaceId, collection).map((grant) => ({
       ...grant,
@@ -2273,8 +2277,20 @@ export class CollabStore {
         ? grant.subjectId === actorId
         : this.authorization.matchesMemberView(workspaceId, grant.subjectId, actorId),
     }))
+    const base = this.accessRows(workspaceId, collection, recordId)
     return {
-      ...this.accessRows(workspaceId, collection, recordId),
+      ...base,
+      canManage,
+      ...(effectiveRole ? { effectiveRole } : {}),
+      people: base.people.map((row) => {
+        const editable = Boolean(canManage && row.role !== 'owner' && row.id !== base.ownerId && row.id !== actorId)
+        return { ...row, canEdit: editable, canRevoke: editable }
+      }),
+      memberViews: base.memberViews.map((row) => ({
+        ...row,
+        canEdit: canManage,
+        canRevoke: canManage,
+      })),
       currentAccountId: actorId,
       viewGrants,
       roleChain: this.authorization.roleChain(actorId, resource),

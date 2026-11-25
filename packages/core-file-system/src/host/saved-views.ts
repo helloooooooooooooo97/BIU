@@ -35,6 +35,7 @@ export type PolicyViewGuard = {
   canSeeView?(workspaceId: string, collection: string, view: StoredView, accountId: string): boolean
   canModifyView?(workspaceId: string, collection: string, view: StoredView, accountId: string): boolean
   canRemoveView?(workspaceId: string, collection: string, view: StoredView, accountId: string): boolean
+  viewRoleFor?(workspaceId: string, collection: string, view: StoredView, accountId: string): 'owner' | 'manager' | 'editor' | 'commenter' | 'viewer' | null
   onCreated?(workspaceId: string, collection: string, view: StoredView, accountId: string): void
   onRemoved?(workspaceId: string, collection: string, viewId: string): void
 }
@@ -365,7 +366,11 @@ export class SavedViewsStore {
     const out: DbRecord[] = []
     const seen = new Set<string>()
     const emit = (path: string, tableName: string, view: StoredView) => {
-      const rec = asRecord(path, tableName, this.withBuiltinOwner(workspaceId, view), icons.get(path))
+      const owned = this.withBuiltinOwner(workspaceId, view)
+      const viewRole = accountId && this.policyGuard?.viewRoleFor
+        ? this.policyGuard.viewRoleFor(workspaceId, path, owned, accountId) ?? undefined
+        : undefined
+      const rec = asRecord(path, tableName, owned, icons.get(path), viewRole)
       if (seen.has(rec.id)) return
       seen.add(rec.id)
       out.push(rec)
@@ -700,7 +705,13 @@ function asFilters(value: unknown): Record<string, string> {
   return {}
 }
 
-function asRecord(path: string, tableName: string, view: StoredView, tableIcon?: string): DbRecord {
+function asRecord(
+  path: string,
+  tableName: string,
+  view: StoredView,
+  tableIcon?: string,
+  viewRole?: 'owner' | 'manager' | 'editor' | 'commenter' | 'viewer',
+): DbRecord {
   const filters = view.filters && typeof view.filters === 'object' ? view.filters : {}
   const sorts = parseSortsInput(view.sorts, view.sortField, view.sortDir === 'desc' ? 'desc' : 'asc')
   const filterTree = view.filterTree
@@ -711,6 +722,7 @@ function asRecord(path: string, tableName: string, view: StoredView, tableIcon?:
     tablePath: path,
     tableIcon,
     viewId: view.id,
+    ...(viewRole ? { viewRole } : {}),
     mode: view.mode ?? 'table',
     scope: normalizeViewScope(view.scope) ?? 'workspace',
     sortField: sorts[0]?.field || view.sortField || 'title',

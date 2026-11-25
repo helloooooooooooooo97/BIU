@@ -9,6 +9,27 @@ export type GroupSortMode = 'manual' | 'asc' | 'desc'
 /** 视图自身的可见范围两态（纯展示，不授予底层数据权限）：私人（仅创建者可见）、空间（空间内部成员可见）。 */
 export type ViewScope = 'personal' | 'workspace'
 
+export type ViewRole = 'owner' | 'manager' | 'editor' | 'commenter' | 'viewer'
+
+export function normalizeViewRole(value: unknown): ViewRole | undefined {
+  if (value === 'owner' || value === 'manager' || value === 'editor' || value === 'commenter' || value === 'viewer') {
+    return value
+  }
+  return undefined
+}
+
+/** 当前用户是否有权修改并保存该视图定义（缺省 viewRole 时视为本地/桌面模式，默认可编辑）。 */
+export function canEditSavedView(view: Pick<SavedView, 'viewRole'> | null | undefined): boolean {
+  if (!view?.viewRole) return true
+  return view.viewRole === 'owner' || view.viewRole === 'manager' || view.viewRole === 'editor'
+}
+
+/** 当前用户是否有权删除该视图（仅创建者与管理者可删）。 */
+export function canDeleteSavedView(view: Pick<SavedView, 'viewRole'> | null | undefined): boolean {
+  if (!view?.viewRole) return true
+  return view.viewRole === 'owner' || view.viewRole === 'manager'
+}
+
 export function normalizeViewScope(value: unknown): ViewScope | undefined {
   if (value === 'personal' || value === 'workspace') return value
   if (value === 'shared') return 'personal'
@@ -30,6 +51,8 @@ export type SavedView = {
   scope?: ViewScope
   /** 创建者账号 ID（用于私人视图可见性隔离与创建者/管理员独占编辑权）。 */
   createdBy?: string
+  /** 当前操作者在该视图上的有效权限角色（由后端 /views 列表下发）。 */
+  viewRole?: ViewRole
   sortField: string
   sortDir: 'asc' | 'desc'
   sorts?: SortRule[]
@@ -220,10 +243,12 @@ export function normalizeSavedView(view: SavedView): SavedView {
   const sorts = normalizeSorts(view.sorts, view.sortField || 'title', view.sortDir === 'desc' ? 'desc' : 'asc')
   const scope = normalizeViewScope(view.scope)
   const createdBy = extractViewCreatorId(view.createdBy)
+  const viewRole = normalizeViewRole(view.viewRole)
   return {
     ...view,
     ...(scope ? { scope } : { scope: undefined }),
     ...(createdBy ? { createdBy } : { createdBy: undefined }),
+    ...(viewRole ? { viewRole } : { viewRole: undefined }),
     mode: isViewModeId(view.mode) ? view.mode : 'table',
     sortField: sorts[0]?.field || 'title',
     sortDir: sorts[0]?.dir ?? 'asc',

@@ -1,11 +1,11 @@
-import { writeStorageString } from '@biu/biu-ui/client-storage'
+import { readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
 import { emitFsdbChange } from '@biu/type-file-system'
 import { isBuiltinAllViewId, isReadOnlyViewId, viewsForScope, type DataScope } from '../catalog-views.ts'
 import type { FilterGroup, SortRule } from '../query-logic.ts'
 import type { ViewMode } from './fields.ts'
 import { FSDB_CRUMB_LABELS_EVENT } from './fsdb-events.ts'
-import { canRemoveCollectionView, normalizeViewScope, type GroupConfig, type SavedView } from './saved-view.ts'
+import { canDeleteSavedView, canEditSavedView, canRemoveCollectionView, normalizeViewScope, type GroupConfig, type SavedView } from './saved-view.ts'
 import {
   activeViewStorageKey,
   diffSavedViews,
@@ -23,6 +23,7 @@ import {
   removeStarredViews,
   reviveSavedViewIds,
   stampSavedView,
+  viewDisplayKey,
   viewWriteQueue,
   withViewDisplay,
 } from './view-storage.ts'
@@ -358,6 +359,14 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     const latest = viewsRef.current
     const current = latest.find((view) => view.id === targetId)
     if (!current) return
+    // 只读视图（viewer / commenter）：筛选、排序、分组、列与排版仅在当前会话内存中临时生效，
+    // 不写 localStorage 也不发 POST /api/db/saved-views，避免 400 弹回和本地缓存污染。
+    if (!externalViews && !canEditSavedView(current)) {
+      const localNext = latest.map((view) => (view.id === targetId ? { ...view, ...patch } : view))
+      viewsRef.current = localNext
+      setViews(localNext)
+      return
+    }
     const updated = stampSavedView({ ...current, ...patch })
     const nextList = latest.map((view) => (view.id === targetId ? updated : view))
     // 立即同步更新 viewsRef 与内存缓存，保证连点改多个属性时后一次修改基于前一次最新状态。
@@ -368,12 +377,16 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       return
     }
     rememberViews(collectionPath, nextList)
+    const displayStorageKey = viewDisplayKey(collectionPath, targetId)
+    const prevDisplayRaw = readStorageString(displayStorageKey)
     persistViewDisplay(collectionPath, targetId, { ...patch, updatedAt: updated.updatedAt })
     void persistViewsFor(collectionPath, nextList, { upsert: [updated], baseline: latest }).then((ok) => {
       if (ok || viewsRef.current !== nextList) return
       viewsRef.current = latest
       setViews(latest)
       rememberViews(collectionPath, latest)
+      if (prevDisplayRaw === null) removeStorageKey(displayStorageKey)
+      else writeStorageString(displayStorageKey, prevDisplayRaw)
     })
   }
 
@@ -383,6 +396,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     const current = viewsRef.current
     const target = current.find((item) => item.id === viewId)
     if (!target || target.name === nextName) return
+    if (!externalViews && !canEditSavedView(target)) return
     if (current.some((item) => item.id !== viewId && item.name === nextName)) return
     const updated = stampSavedView({ ...target, name: nextName })
     const listed = current.map((item) => (item.id === viewId ? updated : item))
@@ -438,6 +452,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       return
     }
     if (isReadOnlyViewId(view.id)) return
+    if (!canDeleteSavedView(view)) return
     const current = path === collectionPath ? viewsRef.current : loadViews(path)
     if (!canRemoveCollectionView(current)) return
     const removedId = view.id

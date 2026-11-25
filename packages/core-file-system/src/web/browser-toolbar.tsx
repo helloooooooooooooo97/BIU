@@ -30,7 +30,7 @@ import { TableGlyph, UiGlyph, ViewModeGlyph } from './nav-glyphs.tsx'
 import { PageBanner } from './page-banner.tsx'
 import type { QueryField } from './query-menus.tsx'
 import { ViewOrderMenu } from './view-order-menu.tsx'
-import type { GroupConfig, SavedView } from './saved-view.ts'
+import { canEditSavedView, type GroupConfig, type SavedView } from './saved-view.ts'
 import type { TableSandboxItem } from '../shared/table-sandbox-model.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 
@@ -335,7 +335,7 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
           </div>
           <div className="fsdb-detail-title-row">
             <div className="fsdb-detail-title-block">
-              {activeView ? (
+              {activeView && canEditSavedView(activeView) ? (
                 <h1 className="fsdb-detail-title">
                   <LocalText
                     as="textarea"
@@ -353,7 +353,7 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                   />
                 </h1>
               ) : (
-                <h1 className="fsdb-detail-title">{title}</h1>
+                <h1 className="fsdb-detail-title">{activeView ? activeView.name : title}</h1>
               )}
             </div>
           </div>

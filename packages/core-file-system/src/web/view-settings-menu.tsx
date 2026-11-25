@@ -14,7 +14,7 @@ import {
   type GroupMenuBucket,
   type QueryField,
 } from './query-menus.tsx'
-import { PAGE_SIZES, type GroupConfig, type SavedView } from './saved-view.ts'
+import { canEditSavedView, PAGE_SIZES, type GroupConfig, type SavedView } from './saved-view.ts'
 import type { TableSandboxItem } from '../shared/table-sandbox-model.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
@@ -173,10 +173,12 @@ export function ViewSettingsMenu({
     !sheet &&
       activeView &&
       !activeView.builtin &&
-      activeView.createdBy &&
-      viewer.accountId &&
-      activeView.createdBy !== viewer.accountId &&
-      !viewer.isAdmin,
+      (activeView.viewRole
+        ? !canEditSavedView(activeView)
+        : activeView.createdBy &&
+          viewer.accountId &&
+          activeView.createdBy !== viewer.accountId &&
+          !viewer.isAdmin),
   )
 
   const modeOptions = [
@@ -240,7 +242,7 @@ export function ViewSettingsMenu({
       <div className="fsdb-vset-body">
         {foreignViewReadOnly ? (
           <div className="fsdb-vset-readonly-banner" data-testid="fsdb-vset-readonly-banner" style={{ padding: '8px 10px', marginBottom: 8, borderRadius: 8, background: 'var(--bg-subtle, rgba(255,255,255,0.04))', fontSize: 12, lineHeight: 1.5, color: 'var(--text-muted, #9aa0a6)' }}>
-            <div>此视图由他人创建，仅创建者或管理员可改定义（本地排版设置仍可自由调整）。</div>
+            <div>当前视图为只读（仅查看），筛选、排序、分组与排版仅在本地临时生效，不会修改原视图。</div>
             {onSaveAsPersonal ? (
               <button
                 type="button"

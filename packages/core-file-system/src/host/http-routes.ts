@@ -12,7 +12,7 @@ import { asPublicProfile, writeWorkspaceProfile } from '@biu/host-workspace'
 import { DATABASE_CHANNEL, databaseChannelPayload, normalizeSchemaPack } from '@biu/type-file-system'
 import { buildAccessExplanation, type BuildAccessExplanationInput } from '../access-explanation.ts'
 import { displayNameForView, isReadOnlyViewId } from '../catalog-views.ts'
-import { PAGES_COLLECTION_PATH, TAGS_COLLECTION_PATH, VIEWS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, isIndexCollection, normalizeCollectionPath } from '../paths.ts'
+import { PAGES_COLLECTION_PATH, TAGS_COLLECTION_PATH, VIEWS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, isIndexCollection, normalizeCollectionPath, savedViewRecordPath } from '../paths.ts'
 import { recordMatchesAccessRule } from '../view-access.ts'
 import { isSharePluginId } from '../share-resources.ts'
 import {
@@ -712,13 +712,22 @@ export function registerDatabaseHttpRoutes(
           route.send(403, { error: '只有规则创建者可以管理此规则的公开外链' })
           return
         }
-      } else {
-        // 原则 2 + 3：单条记录走记录级 resource:share；视图公开外链允许内部成员（非 viewer/external/guest）创建，
-        // 快照本身严格按 share.createdBy 的权限生成，不会放大暴露他人私密数据。
+      } else if (kind === 'view') {
+        const viewId = String(body.viewId ?? '').trim()
+        const wsId = currentRequestWorkspaceId()
+        const meId = currentAccountId()
+        const account = ctx.get('account') as {
+          store?: { ensureViewPolicy?: (wsId: string, col: string, viewId: string, fallbackActorId?: string) => string }
+        } | undefined
+        if (wsId && viewId) {
+          account?.store?.ensureViewPolicy?.(wsId, collection, viewId, meId)
+        }
         await db.requirePath(
-          kind === 'record' ? `${collection}/${recordId}` : VIEWS_COLLECTION_PATH,
-          kind === 'record' ? 'resource:share' : 'resource:update',
+          viewId ? savedViewRecordPath(collection, viewId) : VIEWS_COLLECTION_PATH,
+          'resource:share',
         )
+      } else {
+        await db.requirePath(`${collection}/${recordId}`, 'resource:share')
       }
       if (body.enabled === false) {
         if (kind === 'record') shares.revokeRecord(collection, recordId)
