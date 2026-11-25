@@ -993,6 +993,10 @@ export class DatabaseService extends Service implements Database {
     overlay: boolean,
   ) {
     const load = specListQuery(query)
+    // /views 本身在 SavedViewsStore 内存中，条数极少且高频改名/共享，不走 visibleCache 避免任何脏缓存
+    if (spec.path === VIEWS_COLLECTION_PATH) {
+      return this.visibleSortedCollectionRowsNow(spec, query, sortField, sortDir, sorts, overlay)
+    }
     const actor = this.authorization()?.currentActor()
     const actorKey = actor
       ? `${actor.workspaceId}\t${actor.accountId}`
@@ -1118,10 +1122,28 @@ export class DatabaseService extends Service implements Database {
     http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('tags'))
   }
 
+  private clearVisibleCaches() {
+    this.visibleGen += 1
+    this.access.clearShareCaches()
+    this.inflightMatches.clear()
+    this.inflightScans.clear()
+    this.inflightVisible.clear()
+    this.visibleCache.clear()
+  }
+
   notifyViewCatalog(path?: string) {
-    const http = this.ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
+    this.clearVisibleCaches()
+    this.ctx.emit('database/change')
+    const http = this.ctx.get('http') as
+      | { broadcast?: (type: string, payload: unknown, workspaceId?: string) => void }
+      | undefined
     const recPath = String(path ?? '').trim()
-    http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('views', recPath ? { path: recPath } : {}))
+    const workspaceId = resolveScopedWorkspaceId(this.ctx)
+    http?.broadcast?.(
+      DATABASE_CHANNEL,
+      databaseChannelPayload('views', recPath ? { path: recPath } : {}),
+      workspaceId || undefined,
+    )
   }
 
   notifyContent(path: string) {
@@ -1130,12 +1152,7 @@ export class DatabaseService extends Service implements Database {
   }
 
   bump(path?: string) {
-    this.visibleGen += 1
-    this.access.clearShareCaches()
-    this.inflightMatches.clear()
-    this.inflightScans.clear()
-    this.inflightVisible.clear()
-    this.visibleCache.clear()
+    this.clearVisibleCaches()
     this.ctx.emit('database/change')
     const workspaceId = resolveScopedWorkspaceId(this.ctx)
     const accountId = currentAccountId()
