@@ -203,10 +203,23 @@ export function applyGroupConfig<T extends { key: string; label: string; rows: u
   return orderGroupBuckets(filtered, config)
 }
 
+export function extractViewCreatorId(raw: unknown): string | undefined {
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim()
+    return trimmed || undefined
+  }
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const obj = raw as { accountId?: unknown; id?: unknown }
+    const id = typeof obj.accountId === 'string' ? obj.accountId.trim() : typeof obj.id === 'string' ? obj.id.trim() : ''
+    return id || undefined
+  }
+  return undefined
+}
+
 export function normalizeSavedView(view: SavedView): SavedView {
   const sorts = normalizeSorts(view.sorts, view.sortField || 'title', view.sortDir === 'desc' ? 'desc' : 'asc')
   const scope = normalizeViewScope(view.scope)
-  const createdBy = typeof view.createdBy === 'string' && view.createdBy.trim() ? view.createdBy.trim() : undefined
+  const createdBy = extractViewCreatorId(view.createdBy)
   return {
     ...view,
     ...(scope ? { scope } : { scope: undefined }),
