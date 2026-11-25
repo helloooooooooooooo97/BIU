@@ -998,29 +998,49 @@ function Shell(props: SlotProps) {
               onClick={(event) => event.stopPropagation()}
             >
               <nav className="settings-rail" aria-label="设置分类">
-                <ul className="settings-rail-list">
-                  {[
-                    { key: 'account', label: '账户', Icon: UserCircleIcon },
-                    { key: 'connections', label: '连接', Icon: CloudIcon },
-                    { key: 'security', label: '安全', Icon: ShieldCheckIcon },
-                    { key: 'workspace', label: '空间', Icon: CircleStackIcon },
-                    { key: 'members', label: '成员', Icon: UserGroupIcon },
-                    { key: 'style', label: '样式', Icon: SwatchIcon },
-                    { key: 'mcp', label: 'MCP', Icon: LinkIcon },
-                    { key: 'shortcuts', label: '快捷键', Icon: CommandLineIcon },
-                  ].filter((item) => item.key !== 'members' || workspaceLocation === 'cloud').map((item) => (
-                    <li key={item.key}>
-                      <button
-                        type="button"
-                        className={`settings-nav-btn${settingsTab === item.key ? ' is-on' : ''}`}
-                        onClick={() => setSettingsTab(item.key)}
-                      >
-                        <item.Icon {...chromeIcon} />
-                        {item.label}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                {[
+                  {
+                    group: '账户',
+                    items: [
+                      { key: 'account', label: '账户', Icon: UserCircleIcon },
+                      { key: 'connections', label: '连接', Icon: CloudIcon },
+                      { key: 'security', label: '安全', Icon: ShieldCheckIcon },
+                    ],
+                  },
+                  {
+                    group: '工作区',
+                    items: [
+                      { key: 'workspace', label: '空间', Icon: CircleStackIcon },
+                      { key: 'members', label: '成员', Icon: UserGroupIcon },
+                      { key: 'mcp', label: 'MCP', Icon: LinkIcon },
+                    ].filter((item) => item.key !== 'members' || workspaceLocation === 'cloud'),
+                  },
+                  {
+                    group: '偏好设置',
+                    items: [
+                      { key: 'style', label: '样式', Icon: SwatchIcon },
+                      { key: 'shortcuts', label: '快捷键', Icon: CommandLineIcon },
+                    ],
+                  },
+                ].map((section) => (
+                  <div key={section.group} className="settings-rail-group">
+                    <div className="settings-rail-heading">{section.group}</div>
+                    <ul className="settings-rail-list">
+                      {section.items.map((item) => (
+                        <li key={item.key}>
+                          <button
+                            type="button"
+                            className={`settings-nav-btn${settingsTab === item.key ? ' is-on' : ''}`}
+                            onClick={() => setSettingsTab(item.key)}
+                          >
+                            <item.Icon {...chromeIcon} />
+                            {item.label}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
               </nav>
               <div className="settings-body">
                 <button

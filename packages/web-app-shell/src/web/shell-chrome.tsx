@@ -101,13 +101,13 @@ function WorkspaceMemberProfile() {
   const initial = (profile.name.trim() || '用户').slice(0, 1)
 
   return (
-    <section className="settings-account" data-testid="settings-account">
-      <header className="settings-account-head">
-        <h3 className="settings-account-title">我的成员资料</h3>
-        <p className="settings-muted settings-account-lead">
+    <section className="settings-subsection" data-testid="settings-account">
+      <div className="settings-subsection-head">
+        <h4 className="settings-pane-subtitle">我的成员资料</h4>
+        <p className="settings-muted settings-subsection-lead">
           头像和空间昵称只用于当前空间，不会修改全局账号。
         </p>
-      </header>
+      </div>
       <div className="settings-account-row">
         <div className="settings-account-copy">
           <p className="settings-account-label">照片</p>
@@ -2198,13 +2198,18 @@ export function ShellSettingsAppearance() {
 
 export function ShellSettingsAbout() {
   return (
-    <section data-testid="settings-about">
-      <h3 className="settings-pane-title">关于</h3>
-      <p className="settings-pane-title" style={{ fontSize: 14, fontWeight: 'var(--biu-font-weight-semibold)', margin: '18px 0 8px' }}>BIU</p>
-      <p className="settings-muted m-0">Apache License 2.0。</p>
-      <p className="settings-muted m-0" style={{ marginTop: 12 }}>
-        public/grok-bot/ 角色素材归 xAI，不随 Apache-2.0 授权。详见 NOTICE.md。
-      </p>
+    <section className="settings-account" data-testid="settings-about">
+      <header className="settings-account-head">
+        <h3 className="settings-account-title">关于</h3>
+        <p className="settings-muted settings-account-lead">版本与开源许可信息。</p>
+      </header>
+      <div className="settings-account-row is-stacked">
+        <p className="settings-account-label">BIU</p>
+        <p className="settings-muted settings-account-hint">Apache License 2.0。</p>
+        <p className="settings-muted settings-account-hint">
+          public/grok-bot/ 角色素材归 xAI，不随 Apache-2.0 授权。详见 NOTICE.md。
+        </p>
+      </div>
     </section>
   )
 }
@@ -2274,9 +2279,12 @@ function SettingsKbd({ keys }: { keys: string[] }) {
 
 export function ShellSettingsShortcuts() {
   return (
-    <section data-testid="settings-shortcuts">
-      <h3 className="settings-pane-title">快捷键</h3>
-      <p className="settings-muted settings-pane-lead">Windows 与 Linux 上 ⌘ 用 Ctrl。编辑器内 ⌘F 为正文查找，⌘⇧F 仍打开全局搜索。</p>
+    <section className="settings-account" data-testid="settings-shortcuts">
+      <header className="settings-account-head">
+        <h3 className="settings-account-title">快捷键</h3>
+        <p className="settings-muted settings-account-lead">Windows 与 Linux 上 ⌘ 用 Ctrl。编辑器内 ⌘F 为正文查找，⌘⇧F 仍打开全局搜索。</p>
+      </header>
+      <h4 className="settings-pane-subtitle">全局</h4>
       <ul className="settings-shortcut-list">
         <li>
           <span>搜索</span>
@@ -2394,7 +2402,7 @@ export function ShellSettingsMcp({ onLeave }: { onLeave?: () => void }) {
   const [copied, setCopied] = useState('')
   const [rotating, setRotating] = useState(false)
   const [confirmRotate, setConfirmRotate] = useState(false)
-  const [allowedTools, setAllowedTools] = useState<string[]>(['db_list', 'db_read', 'db_stat', 'db_content'])
+  const [allowedTools, setAllowedTools] = useState<string[]>([])
   const [credentials, setCredentials] = useState<Array<Record<string, unknown>>>([])
   const [auditEvents, setAuditEvents] = useState<Array<Record<string, unknown>>>([])
 
@@ -2426,8 +2434,7 @@ export function ShellSettingsMcp({ onLeave }: { onLeave?: () => void }) {
           workspaceId: data.workspaceId,
         })
         if (data.online) {
-          const available = new Set(data.tools ?? [])
-          setAllowedTools((current) => current.filter((tool) => available.has(tool)))
+          setAllowedTools(data.tools ?? [])
         }
         if (data.online && data.workspaceId) loadCredentialData(data.workspaceId)
         setError('')
@@ -2501,13 +2508,15 @@ export function ShellSettingsMcp({ onLeave }: { onLeave?: () => void }) {
   const tokenShown = info ? (reveal ? info.token : '•'.repeat(Math.min(28, info.token.length))) : ''
 
   return (
-    <section className="settings-mcp" data-testid="settings-mcp">
-      <h3 className="settings-pane-title">Biu MCP</h3>
-      <p className="settings-muted settings-pane-lead">
-        {info?.online
-          ? '当前为云端空间，MCP 地址指向远程主机；请先为当前空间生成专属 token（支持工具白名单、撤销与调用审计）。'
-          : '当前为本机空间，MCP 听在分享口（默认 0.0.0.0），局域网其它电脑用下面的地址 + token 即可调用，配置已锁定到当前本机空间。'}
-      </p>
+    <section className="settings-account settings-mcp" data-testid="settings-mcp">
+      <header className="settings-account-head">
+        <h3 className="settings-account-title">Biu MCP</h3>
+        <p className="settings-muted settings-account-lead">
+          {info?.online
+            ? '当前为云端空间，MCP 地址指向远程主机；请先为当前空间生成专属 token（支持工具白名单、撤销与调用审计）。'
+            : '当前为本机空间，MCP 听在分享口（默认 0.0.0.0），局域网其它电脑用下面的地址 + token 即可调用，配置已锁定到当前本机空间。'}
+        </p>
+      </header>
       {error ? (
         <p className="settings-muted settings-mcp-error" role="alert">
           {error}
@@ -2626,7 +2635,7 @@ export function ShellSettingsMcp({ onLeave }: { onLeave?: () => void }) {
           <h4 className="settings-pane-subtitle">允许的工具</h4>
           <div className="settings-mcp-grid" data-testid="settings-mcp-allowed-tools">
             {(info.tools ?? []).map((tool) => (
-              <label key={tool} className="settings-mcp-card">
+              <label key={tool} className="settings-mcp-card settings-mcp-tool-card">
                 <input
                   type="checkbox"
                   checked={allowedTools.includes(tool)}
