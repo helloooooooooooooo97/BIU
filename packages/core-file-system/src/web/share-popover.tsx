@@ -16,7 +16,6 @@ import { ScopeMark } from './share-scope-label.tsx'
 import { roleLabel } from './share-chain-detail.tsx'
 import { mintSharePin, shareClipboardText } from '../share-resources.ts'
 import { builtinAllView, builtinMemberViews, isBuiltinAllViewId, parseBuiltinScopeViewId, scopedCollectionName } from '../catalog-views.ts'
-import { effectiveDataScope, grantAudienceKind, recordMatchesGrantedView } from '../view-access.ts'
 import { openAccessRulesDrawer } from './access-rules-drawer.tsx'
 import type { DbRecord } from '@biu/type-file-system'
 
@@ -611,40 +610,12 @@ function WorkspaceAccess({
     }
   }
 
-  const memberViewFilters = [
-    { id: builtinAllView({ path: WORKSPACE_MEMBERS_COLLECTION_PATH }).id, filters: builtinAllView({ path: WORKSPACE_MEMBERS_COLLECTION_PATH }).filters },
-    ...builtinMemberViews().map((view) => ({ id: view.id, filters: view.filters })),
-    ...availableMemberViews,
-  ]
-  const inherited = !viewId && record
-    ? viewGrants.flatMap((grant) => {
-        if (!recordMatchesGrantedView(record, grant.viewId, dataViews, scope, { grantedBy: grant.grantedBy, recordOwnerId: ownerId })) return []
-        const audience = grant.subjectType === 'member_view'
-          ? grantAudienceKind({ subjectType: 'member_view', subjectId: grant.subjectId }, memberViewFilters)
-          : grant.memberKind === 'external' || grant.memberKind === 'guest' ? 'external' : 'internal'
-        const parsed = parseBuiltinScopeViewId(grant.viewId)
-        const source = dataViews.find((view) => view.id === grant.viewId)?.name
-          || (parsed ? scopedCollectionName({ path: collection, label: tableLabel || collection.replace(/^\//, '') }, parsed.scope) : '')
-          || (isBuiltinAllViewId(grant.viewId) ? `全部${tableLabel}` : grant.viewId)
-        const name = grant.subjectType === 'member_view'
-          ? availableMemberViews.find((view) => view.id === grant.subjectId)?.name ?? grant.name
-          : grant.name
-        return [{ ...grant, name, audience, source }]
-      })
-    : []
   const internalPeople = people.filter((row) => row.memberKind === 'member')
   const externalPeople = people.filter((row) => row.memberKind === 'external' || row.memberKind === 'guest')
-  const inheritedInternal = inherited.filter((row) => row.audience === 'internal')
-  const inheritedExternal = inherited.filter((row) => row.audience === 'external')
-  const shownScope = !viewId && record
-    ? effectiveDataScope(scope, record, viewGrants.map((grant) => ({
-        viewId: grant.viewId,
-        subjectType: grant.subjectType,
-        subjectId: grant.subjectId,
-        memberKind: grant.memberKind,
-        grantedBy: grant.grantedBy,
-      })), dataViews, memberViewFilters, ownerId)
-    : scope
+  // 方案 B：view_grants 只分享视图本身，不再向底层数据记录继承协作者（记录命中的批量规则由底部「同时生效的分享规则」展示）
+  const inheritedInternal: Array<{ viewId: string; subjectType: string; subjectId: string; name: string; source: string; role: string }> = []
+  const inheritedExternal: Array<{ viewId: string; subjectType: string; subjectId: string; name: string; source: string; role: string }> = []
+  const shownScope = scope
   const grantedAccountIds = new Set(
     people
       .filter((row) => !viewId || !row.grantedBy || !currentAccountId || row.grantedBy === currentAccountId)
@@ -814,15 +785,6 @@ function WorkspaceAccess({
               </li>
             )
           })}
-          {inheritedInternal.map((row) => (
-            <li key={`inherited:${row.viewId}:${row.subjectType}:${row.subjectId}`} className="is-inherited">
-              {row.subjectType === 'member_view'
-                ? <span className="fsdb-share-avatar is-view" aria-hidden><UsersIcon className="size-3.5" /></span>
-                : renderPersonAvatar(row.subjectId || row.name, row.avatar, 'is-view')}
-              <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong><em>来自视图「{row.source}」</em></span>
-              <span className="fsdb-share-collaborator-role">{roleLabel(row.role)}</span>
-            </li>
-          ))}
           {!internalCount ? <li className="is-empty">尚未添加内部协作者</li> : null}
         </ul>
         <div className="fsdb-share-invite-row">
@@ -945,13 +907,6 @@ function WorkspaceAccess({
               </li>
             )
           })}
-          {inheritedExternal.map((row) => (
-            <li key={`inherited:${row.viewId}:${row.subjectType}:${row.subjectId}`} className="is-inherited">
-              {renderPersonAvatar(row.subjectId || row.name, row.avatar, 'is-external')}
-              <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong><em>来自视图「{row.source}」</em></span>
-              <span className="fsdb-share-collaborator-role">{roleLabel(row.role)}</span>
-            </li>
-          ))}
           {!externalCount ? <li className="is-empty">尚未添加外部协作者</li> : null}
         </ul>
         <div className="fsdb-share-invite-row">

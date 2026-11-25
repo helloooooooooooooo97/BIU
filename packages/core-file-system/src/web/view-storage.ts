@@ -502,25 +502,6 @@ export function upsertSavedView(collectionPath: string, view: SavedView) {
   noteLocalSavedViewsWrite(collectionPath)
 }
 
-/** 个人展示偏好字段：仅存当前用户本地，不触发服务端写盘、不覆盖协作者的布局。 */
-export const LOCAL_VIEW_PREF_KEYS = [
-  'columnWidths',
-  'wrap',
-  'truncate',
-  'rowNumbers',
-  'freezeTitle',
-  'freezeUntil',
-  'pageSize',
-] as const
-
-const LOCAL_VIEW_PREF_KEY_SET = new Set<string>(LOCAL_VIEW_PREF_KEYS)
-
-/** 当本次 patch 只包含个人展示偏好字段时，走纯本地存储，跳过服务端写盘。 */
-export function isLocalOnlyViewPatch(patch: Partial<SavedView>): boolean {
-  const keys = Object.keys(patch)
-  return keys.length > 0 && keys.every((key) => LOCAL_VIEW_PREF_KEY_SET.has(key))
-}
-
 const DISPLAY_KEYS = [
   'name',
   'mode',
