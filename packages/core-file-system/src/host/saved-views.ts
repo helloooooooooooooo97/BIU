@@ -32,6 +32,9 @@ export type PolicyViewGuard = {
   isLocked(workspaceId: string, collection: string, viewId: string): boolean
   canEditLocked(workspaceId: string, accountId: string): boolean
   canSeeView?(workspaceId: string, collection: string, view: StoredView, accountId: string): boolean
+  canModifyView?(workspaceId: string, collection: string, view: StoredView, accountId: string): boolean
+  canRemoveView?(workspaceId: string, collection: string, view: StoredView, accountId: string): boolean
+  onCreated?(workspaceId: string, collection: string, view: StoredView, accountId: string): void
   onRemoved?(workspaceId: string, collection: string, viewId: string): void
 }
 
@@ -99,7 +102,11 @@ export class SavedViewsStore {
     accountId: string,
   ) {
     if (!prev) return
-    if (this.isForeignOwned(prev, workspaceId, accountId)) {
+    if (this.policyGuard?.canModifyView && accountId) {
+      if (!this.policyGuard.canModifyView(workspaceId, path, prev, accountId)) {
+        throw new Error('permission denied: VIEW_OWNER_ONLY')
+      }
+    } else if (this.isForeignOwned(prev, workspaceId, accountId)) {
       throw new Error('permission denied: VIEW_OWNER_ONLY')
     }
     if (!this.policyGuard) return
@@ -117,7 +124,11 @@ export class SavedViewsStore {
     accountId: string,
     prev?: StoredView,
   ) {
-    if (this.isForeignOwned(prev, workspaceId, accountId)) {
+    if (this.policyGuard?.canRemoveView && accountId && prev) {
+      if (!this.policyGuard.canRemoveView(workspaceId, path, prev, accountId)) {
+        throw new Error('permission denied: VIEW_OWNER_ONLY')
+      }
+    } else if (this.isForeignOwned(prev, workspaceId, accountId)) {
       throw new Error('permission denied: VIEW_OWNER_ONLY')
     }
     if (!this.policyGuard) return
@@ -288,6 +299,7 @@ export class SavedViewsStore {
     const foreign = new Set(kept.map((view) => String(view.id)))
     const next = kept.slice()
     const upsertedViews: StoredView[] = []
+    const createdViews: StoredView[] = []
     for (const incoming of patch.upsert ?? []) {
       const id = String(incoming.id ?? '').trim()
       if (!id) continue
@@ -303,12 +315,14 @@ export class SavedViewsStore {
       if (at >= 0) next[at] = view
       else next.push(view)
       upsertedViews.push(view)
+      if (!prevView) createdViews.push(view)
     }
     if (removedIds.length && this.visibleCount(path, next) < 1) {
       throw new Error('至少保留一个视图')
     }
     this.byPath.set(key, next)
     this.persistDelta(path, upsertedViews, removedIds, workspaceId)
+    for (const created of createdViews) this.policyGuard?.onCreated?.(workspaceId, path, created, accountId)
     for (const viewId of removedIds) this.policyGuard?.onRemoved?.(workspaceId, path, viewId)
   }
 
@@ -396,6 +410,7 @@ export class SavedViewsStore {
     })
     this.byPath.set(key, [...views, view])
     this.persistDelta(tablePath, [view], [], workspaceId)
+    this.policyGuard?.onCreated?.(workspaceId, tablePath, view, accountId)
     return asRecord(tablePath, label, view, table?.view?.icon)
   }
 

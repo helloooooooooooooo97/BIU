@@ -231,26 +231,31 @@ export function ShareButton({
           setHasActiveShare(true)
           return
         }
-        if (!localOnly && target.kind === 'record' && target.recordId) {
-          const accessParams = new URLSearchParams({ collection: target.collection, recordId: target.recordId })
+        if (!localOnly && ((target.kind === 'record' && target.recordId) || (target.kind === 'view' && target.viewId))) {
+          const accessParams =
+            target.kind === 'view' && target.viewId
+              ? new URLSearchParams({ collection: target.collection, viewId: target.viewId })
+              : new URLSearchParams({ collection: target.collection, recordId: target.recordId ?? '' })
           const accessData = await readJson<{
             scope?: string
+            ownerId?: string
+            people?: Array<{ id?: string; role?: string }>
+            groups?: unknown[]
+            memberViews?: unknown[]
             grants?: Array<{ role?: string }>
           }>(`/api/account/access?${accessParams}`).catch(() => null)
           if (gone) return
           const nonOwnerGrants = (accessData?.grants ?? []).filter((g) => g.role && g.role !== 'owner')
-          if (nonOwnerGrants.length > 0 || (accessData?.scope && accessData.scope !== 'personal')) {
-            setHasActiveShare(true)
-            return
-          }
-        } else if (!localOnly && target.kind === 'view' && target.viewId) {
-          const accessParams = new URLSearchParams({ collection: target.collection, viewId: target.viewId })
-          const accessData = await readJson<{
-            people?: unknown[]
-            memberViews?: unknown[]
-          }>(`/api/account/access?${accessParams}`).catch(() => null)
-          if (gone) return
-          if ((accessData?.people?.length ?? 0) > 0 || (accessData?.memberViews?.length ?? 0) > 0) {
+          const nonOwnerPeople = (accessData?.people ?? []).filter(
+            (p) => p.role !== 'owner' && (!accessData?.ownerId || p.id !== accessData.ownerId),
+          )
+          if (
+            nonOwnerGrants.length > 0 ||
+            nonOwnerPeople.length > 0 ||
+            (accessData?.groups?.length ?? 0) > 0 ||
+            (accessData?.memberViews?.length ?? 0) > 0 ||
+            (accessData?.scope && accessData.scope !== 'personal')
+          ) {
             setHasActiveShare(true)
             return
           }
@@ -569,16 +574,8 @@ function WorkspaceAccess({
   const inheritedInternal: Array<{ viewId: string; subjectType: string; subjectId: string; name: string; source: string; role: string }> = []
   const inheritedExternal: Array<{ viewId: string; subjectType: string; subjectId: string; name: string; source: string; role: string }> = []
   const shownScope = scope
-  const grantedAccountIds = new Set(
-    people
-      .filter((row) => !viewId || !row.grantedBy || !currentAccountId || row.grantedBy === currentAccountId)
-      .map((row) => row.id),
-  )
-  const grantedMemberViewIds = new Set(
-    memberViews
-      .filter((row) => !viewId || !row.grantedBy || !currentAccountId || row.grantedBy === currentAccountId)
-      .map((row) => row.id),
-  )
+  const grantedAccountIds = new Set(people.map((row) => row.id))
+  const grantedMemberViewIds = new Set(memberViews.map((row) => row.id))
   const normalizedMemberQuery = memberQuery.trim().toLowerCase()
   const matchingMemberViews = availableMemberViews
     .filter((row) => !grantedMemberViewIds.has(row.id))
@@ -625,12 +622,10 @@ function WorkspaceAccess({
 
   return (
     <div className="fsdb-share-link-section" data-testid="fsdb-share-members">
-      {viewId ? null : (
-        <div className="fsdb-share-collab-summary">
-          <span>可见范围</span>
-          <strong className={`fsdb-share-scope is-${shownScope}`} data-testid="fsdb-share-scope"><ScopeMark scope={shownScope} /></strong>
-        </div>
-      )}
+      <div className="fsdb-share-collab-summary">
+        <span>可见范围</span>
+        <strong className={`fsdb-share-scope is-${shownScope}`} data-testid="fsdb-share-scope"><ScopeMark scope={shownScope} /></strong>
+      </div>
       {!viewId && inheritance.hasParent ? (
         <div className="fsdb-share-inherit-row" data-testid="fsdb-share-inherit">
           <span>

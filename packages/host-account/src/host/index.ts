@@ -1455,6 +1455,8 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     const result = viewId
       ? body.memberViewId
         ? account.store.grantViewMemberView(me.id, collection, viewId, String(body.memberViewId), role)
+        : body.groupId
+        ? account.store.grantViewGroup(me.id, collection, viewId, String(body.groupId), role)
         : account.store.shareViewWithEmail(me.id, collection, viewId, String(body.email ?? ''), role, kind)
       : body.memberViewId
       ? account.store.grantMemberView(me.id, collection, recordId, String(body.memberViewId), role)
@@ -1505,7 +1507,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
           me.id,
           collection,
           viewId,
-          subjectType === 'member_view' ? 'member_view' : 'account',
+          subjectType,
           String(body.subjectId ?? ''),
         )
       : account.store.revokeRecordGrant(
