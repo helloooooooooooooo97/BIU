@@ -1,5 +1,6 @@
-import { useState, type ReactElement } from 'react'
+import { useEffect, useState, type ReactElement } from 'react'
 import { PlusIcon } from '@heroicons/react/16/solid'
+import { apiFetch } from '@biu/biu-ui/api-client'
 import type { CollectionRowViewType, CollectionViewType } from '@biu/type-file-system/ui'
 import type { FilterGroup, SortRule } from '../query-logic.ts'
 import { LocalText } from './controls.tsx'
@@ -16,6 +17,7 @@ import {
 import { PAGE_SIZES, normalizeViewScope, type GroupConfig, type SavedView, type ViewScope } from './saved-view.ts'
 import type { TableSandboxItem } from '../shared/table-sandbox-model.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
+import { registerWorkspaceCache } from './workspace-client-store.ts'
 
 export type ViewSettingsTab = 'view' | 'columns' | 'filter' | 'sort' | 'group'
 
@@ -32,6 +34,41 @@ const VIEW_SCOPE_OPTIONS: Array<{ value: ViewScope; label: string }> = [
   { value: 'workspace', label: '空间' },
   { value: 'shared', label: '共享' },
 ]
+
+type ViewerIdentity = { accountId: string; isAdmin: boolean }
+
+let cachedViewerIdentity: ViewerIdentity | null = null
+let viewerIdentityPromise: Promise<ViewerIdentity> | null = null
+
+registerWorkspaceCache('view-settings-viewer', () => {
+  cachedViewerIdentity = null
+  viewerIdentityPromise = null
+})
+
+async function loadViewerIdentity(): Promise<ViewerIdentity> {
+  if (cachedViewerIdentity) return cachedViewerIdentity
+  if (viewerIdentityPromise) return viewerIdentityPromise
+  viewerIdentityPromise = apiFetch('/api/account/me')
+    .then(async (res) => {
+      if (!res.ok) return { accountId: '', isAdmin: false }
+      const data = (await res.json()) as {
+        account?: { id?: string } | null
+        workspace?: { role?: string } | null
+      }
+      const role = String(data.workspace?.role ?? '')
+      const next = {
+        accountId: String(data.account?.id ?? '').trim(),
+        isAdmin: role === 'owner' || role === 'admin',
+      }
+      cachedViewerIdentity = next
+      return next
+    })
+    .catch(() => ({ accountId: '', isAdmin: false }))
+    .finally(() => {
+      viewerIdentityPromise = null
+    })
+  return viewerIdentityPromise
+}
 
 export function ViewSettingsMenu({
   tab,
@@ -125,6 +162,28 @@ export function ViewSettingsMenu({
   onClose: () => void
 }) {
   const [openAcc, setOpenAcc] = useState<'mode' | 'scope' | 'pageSize' | null>(null)
+  const [viewer, setViewer] = useState<ViewerIdentity>(() => cachedViewerIdentity ?? { accountId: '', isAdmin: false })
+
+  useEffect(() => {
+    if (!activeView?.createdBy || cachedViewerIdentity) return
+    let alive = true
+    void loadViewerIdentity().then((next) => {
+      if (alive) setViewer(next)
+    })
+    return () => {
+      alive = false
+    }
+  }, [activeView?.createdBy])
+
+  const foreignViewReadOnly = Boolean(
+    !sheet &&
+      activeView &&
+      !activeView.builtin &&
+      activeView.createdBy &&
+      viewer.accountId &&
+      activeView.createdBy !== viewer.accountId &&
+      !viewer.isAdmin,
+  )
 
   const modeOptions = [
     ...VIEW_MODES.map((opt) => ({
@@ -185,9 +244,30 @@ export function ViewSettingsMenu({
       </div>
 
       <div className="fsdb-vset-body">
+        {foreignViewReadOnly ? (
+          <div className="fsdb-vset-readonly-banner" data-testid="fsdb-vset-readonly-banner" style={{ padding: '8px 10px', marginBottom: 8, borderRadius: 8, background: 'var(--bg-subtle, rgba(255,255,255,0.04))', fontSize: 12, lineHeight: 1.5, color: 'var(--text-muted, #9aa0a6)' }}>
+            <div>此视图由他人创建，仅创建者或管理员可改定义（本地排版设置仍可自由调整）。</div>
+            {onSaveAsPersonal ? (
+              <button
+                type="button"
+                className="fsdb-vset-mode-add"
+                style={{ marginTop: 6 }}
+                onClick={() => {
+                  setOpenAcc(null)
+                  onSaveAsPersonal()
+                  onClose()
+                }}
+              >
+                <PlusIcon aria-hidden className="size-[14px]" />
+                <span>另存为私人视图</span>
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
         {tab === 'view' ? (
           <>
-            {!sheet && activeView ? (
+            {!sheet && activeView && !foreignViewReadOnly ? (
               <LocalText
                 className="fsdb-vset-name-input"
                 value={activeView.name}
@@ -202,21 +282,23 @@ export function ViewSettingsMenu({
               />
             ) : null}
 
-            <GroupAccordionSelect
-              testId="fsdb-vset-mode-row"
-              label="视图类型"
-              value={mode}
-              options={modeOptions}
-              open={openAcc === 'mode'}
-              onToggle={() => setOpenAcc((prev) => (prev === 'mode' ? null : 'mode'))}
-              onSelect={(next) => {
-                setOpenAcc(null)
-                setMode(next as ViewMode)
-                patchActiveView({ mode: next as ViewMode })
-              }}
-            />
+            {!foreignViewReadOnly ? (
+              <GroupAccordionSelect
+                testId="fsdb-vset-mode-row"
+                label="视图类型"
+                value={mode}
+                options={modeOptions}
+                open={openAcc === 'mode'}
+                onToggle={() => setOpenAcc((prev) => (prev === 'mode' ? null : 'mode'))}
+                onSelect={(next) => {
+                  setOpenAcc(null)
+                  setMode(next as ViewMode)
+                  patchActiveView({ mode: next as ViewMode })
+                }}
+              />
+            ) : null}
 
-            {openAcc === 'mode' && onCreateSandboxView && !sheet ? (
+            {!foreignViewReadOnly && openAcc === 'mode' && onCreateSandboxView && !sheet ? (
               <button
                 type="button"
                 className="fsdb-vset-mode-add"
@@ -232,7 +314,7 @@ export function ViewSettingsMenu({
               </button>
             ) : null}
 
-            {!sheet && activeView && !activeView.builtin ? (
+            {!sheet && activeView && !activeView.builtin && !foreignViewReadOnly ? (
               <GroupAccordionSelect
                 testId="fsdb-vset-scope-row"
                 label="可见范围"
@@ -247,7 +329,7 @@ export function ViewSettingsMenu({
               />
             ) : null}
 
-            {!sheet && activeView && onSaveAsPersonal ? (
+            {!sheet && activeView && onSaveAsPersonal && !foreignViewReadOnly ? (
               <button
                 type="button"
                 className="fsdb-vset-mode-add"
