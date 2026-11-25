@@ -636,3 +636,26 @@ test('no-amplification axiom: sharing a custom view NEVER leaks other members pr
   auth.grant(ada.id, page('ada-owned'), 'account', bob.id, 'manager')
   assert.throws(() => auth.grant(bob.id, page('ada-owned'), 'account', cara.id, 'owner'), /CANNOT_EXCEED_OWN_ROLE/)
 })
+
+test('explicit member-view grant on a workspace record takes precedence over workspace-default admin role', () => {
+  const { store, auth, workspace, ada, bob, actor, page } = setup()
+  store.updateMemberRole(ada.id, workspace.id, bob.id, 'admin')
+
+  const internalIds = new Set([ada.id, bob.id])
+  auth.setMemberViewMatcher((_ws, viewId, accountId) => viewId === 'builtin-member:member' && internalIds.has(accountId))
+
+  // Ada creates a workspace-scoped record and explicitly grants all members 'editor'
+  auth.attach(actor(ada.id), page('ws-doc'), { accessMode: 'members', memberDefaultRole: 'editor' })
+  auth.grant(ada.id, page('ws-doc'), 'member_view', 'builtin-member:member', 'editor')
+
+  // Bob (workspace admin) gets 'editor' consistently in both authorize() and explainRecordRole()
+  const decision = auth.authorize(actor(bob.id), 'resource:read', page('ws-doc'))
+  assert.equal(decision.allowed, true)
+  if (decision.allowed) {
+    assert.equal(decision.effectiveRole, 'editor')
+    assert.equal(decision.source, 'view-grant')
+  }
+  const chain = auth.roleChain(bob.id, page('ws-doc'))
+  assert.equal(chain[0]?.role, 'editor')
+  assert.equal(chain[0]?.source, 'view-grant')
+})

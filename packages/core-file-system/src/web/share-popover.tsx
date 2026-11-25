@@ -125,7 +125,7 @@ function ShareSelect({
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
-  const current = options.find((opt) => opt.value === value) ?? options[0]
+  const current = options.find((opt) => opt.value === value)
   const pos = useFloatingPosition(open ? triggerRef.current : null, menuRef, {
     enabled: open,
     placement,
@@ -631,7 +631,7 @@ function WorkspaceAccess({
             <li key={row.id}>
               {renderPersonAvatar(row.id || row.name, row.avatar)}
               <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong>{row.email ? <em>{row.email}</em> : null}</span>
-              {row.email ? (
+              {row.email && row.role !== 'owner' ? (
                 <ShareSelect
                   inline
                   value={row.role}
@@ -646,9 +646,11 @@ function WorkspaceAccess({
               ) : (
                 <span className="fsdb-share-collaborator-role">{roleLabel(row.role)}</span>
               )}
-              <button type="button" className="fsdb-share-remove" title="移除协作者" aria-label={`移除 ${row.name}`} onClick={() => void revoke('account', row.id)}>
-                <XMarkIcon aria-hidden className="size-3.5" />
-              </button>
+              {row.role !== 'owner' ? (
+                <button type="button" className="fsdb-share-remove" title="移除协作者" aria-label={`移除 ${row.name}`} onClick={() => void revoke('account', row.id)}>
+                  <XMarkIcon aria-hidden className="size-3.5" />
+                </button>
+              ) : null}
             </li>
           ))}
           {groups.map((row) => (

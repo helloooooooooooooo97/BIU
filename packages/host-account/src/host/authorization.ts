@@ -1099,7 +1099,9 @@ export class AuthorizationService {
     const direct = this.directRole(accountId, resource)
     if (direct) candidates.push(direct)
 
-    if (policy.access_mode === 'members' && this.membershipKind(accountId, resource.workspaceId) === 'member') {
+    // 显式授权（直接授权 / 成员组 / 成员视图如「全部成员=可编辑」）优先于空间默认兜底，
+    // 保证与 collectRoleChain 一致，不再把空间管理员静默抬升为可管理导致列表与弹窗跳变。
+    if (!direct && policy.access_mode === 'members' && this.membershipKind(accountId, resource.workspaceId) === 'member') {
       candidates.push({
         effectiveRole: memberAccessRole(policy, this.membership(accountId, resource.workspaceId)),
         source: 'workspace-default',
