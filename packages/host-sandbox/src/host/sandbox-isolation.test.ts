@@ -140,20 +140,20 @@ test('SandboxService.wrap fails closed in cloud mode when driver degrades to env
 
     process.env.BIU_SANDBOX_DRIVER = 'env-only'
     assert.throws(
-      () => ctx.sandbox.wrap({ argv: ['/bin/sh', '-lc', 'echo hi'] }),
+      () => runWithRequestWorkspace('ws-test', () => ctx.sandbox.wrap({ argv: ['/bin/sh', '-lc', 'echo hi'] })),
       /Cloud runtime requires an OS-level sandbox/,
     )
 
     process.env.BIU_SANDBOX_DRIVER = 'none'
     assert.throws(
-      () => ctx.sandbox.wrap({ argv: ['/bin/sh', '-lc', 'echo hi'] }),
+      () => runWithRequestWorkspace('ws-test', () => ctx.sandbox.wrap({ argv: ['/bin/sh', '-lc', 'echo hi'] })),
       /Cloud runtime requires an OS-level sandbox/,
     )
 
     // Explicit dev opt-in allows env-only
     process.env.BIU_ALLOW_UNSAFE_SANDBOX = '1'
     process.env.BIU_SANDBOX_DRIVER = 'env-only'
-    const wrapped = ctx.sandbox.wrap({ argv: ['/bin/sh', '-lc', 'echo hi'] })
+    const wrapped = runWithRequestWorkspace('ws-test', () => ctx.sandbox.wrap({ argv: ['/bin/sh', '-lc', 'echo hi'] }))
     assert.equal(wrapped.driver, 'env-only')
   } finally {
     if (prevOnline === undefined) delete process.env.BIU_ONLINE

@@ -243,6 +243,13 @@ test('McpService isolates remote HTTP MCP servers per workspace in cloud runtime
       () => withTenant('acct-b', 'ws-2', () => ctx.mcp.remove('private-remote')),
       /unknown mcp server/,
     )
+
+    // Fail-closed: missing workspaceId in cloud runtime must throw instead of falling back to 'default'
+    assert.throws(() => ctx.fs.effectiveRoot(), /workspace scope is required in cloud runtime/)
+    await assert.rejects(
+      () => ctx.mcp.upsert({ id: 'no-ws', transport: 'http', url: 'https://mcp.example.com', enabled: false }),
+      /workspace scope is required in cloud runtime/,
+    )
   } finally {
     await new Promise((r) => setTimeout(r, 50))
     if (prevOnline === undefined) delete process.env.BIU_ONLINE

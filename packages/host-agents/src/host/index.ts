@@ -4,6 +4,7 @@ import type { AgentHandle, AgentSendOptions, AgentTurn, ClaimedInput } from '@bi
 import type { MessageSender, LiveUiContext, SessionGoal } from '@biu/type-session'
 import { currentSessionId } from '@biu/host-sessions/scope'
 import { getChatPort } from '@biu/host-plugin-loader/ports'
+import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import {
   continuationPrompt,
   decideGoalContinuation,
@@ -79,7 +80,12 @@ export class AgentsService extends Service {
   }
 
   private resolveLlm(sessionId: string): LlmConfig {
-    return getChatPort(this.ctx)?.resolveLlm?.<LlmConfig>(sessionId) ?? this.llm
+    const resolved = getChatPort(this.ctx)?.resolveLlm?.<LlmConfig>(sessionId)
+    if (resolved) return resolved
+    if (getRuntimePolicy().authzMode === 'rbac') {
+      return { provider: this.llm.provider, apiKey: '', model: this.llm.model }
+    }
+    return this.llm
   }
 
   /** Live progress：该 session 的 agent 是否正在跑回合。 */

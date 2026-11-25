@@ -79,8 +79,8 @@ function echoState(): ServerState {
   }
 }
 
-function sanitizeWorkspaceSegment(id: string) {
-  return id.trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'default'
+function sanitizeWorkspaceSegment(id: string): string {
+  return id.trim().replace(/[^a-zA-Z0-9_-]/g, '')
 }
 
 export class McpService extends Service {
@@ -110,11 +110,14 @@ export class McpService extends Service {
   private currentConfigPath() {
     if (!this.isTenantIsolated()) return this.configPath
     const wsId = sanitizeWorkspaceSegment(currentTenantScope().workspaceId)
+    if (!wsId) throw new Error('workspace scope is required in cloud runtime')
     return dataPath(dataHome(), 'mcp', `${wsId}.json`)
   }
 
   private get servers(): Map<string, ServerState> {
     if (!this.isTenantIsolated()) return this.defaultServers
+    const wsId = sanitizeWorkspaceSegment(currentTenantScope().workspaceId)
+    if (!wsId) return new Map([['echo', echoState()]])
     return this.tenantServers.getOrCreate(() => {
       const bucket = new Map<string, ServerState>()
       bucket.set('echo', echoState())
@@ -135,6 +138,9 @@ export class McpService extends Service {
 
   /** 读 .biu/mcp.json 并连上所有 enabled 的 server。连接失败只记在行上，不拖住启动。 */
   async restore() {
+    if (this.isTenantIsolated() && !sanitizeWorkspaceSegment(currentTenantScope().workspaceId)) {
+      return
+    }
     for (const config of readMcpConfig(this.currentConfigPath())) {
       if (config.id === 'echo') continue
       this.servers.set(config.id, {

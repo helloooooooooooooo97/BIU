@@ -13,8 +13,10 @@ import {
 
 export const SANDBOX_VIRTUAL_WORKSPACE = '/workspace'
 
-function sanitizeWorkspaceSegment(id: string) {
-  return id.trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'default'
+function requireWorkspaceSegment(id: string): string {
+  const safe = id.trim().replace(/[^a-zA-Z0-9_-]/g, '')
+  if (!safe) throw new Error('workspace scope is required in cloud runtime')
+  return safe
 }
 
 export class FsService extends Service {
@@ -26,14 +28,14 @@ export class FsService extends Service {
     this.defaultRoot = resolve(defaultRoot)
   }
 
-  /** 当前生效工作区：云端按 workspaceId 独立隔离；本机若 Session 已绑定 host 路径则为该目录，否则默认 `.workspace`。 */
+  /** 当前生效工作区：云端按 workspaceId 独立隔离（无 workspaceId 时 fail-closed）；本机若 Session 已绑定 host 路径则为该目录，否则默认 `.workspace`。 */
   get root() {
     return this.effectiveRoot()
   }
 
   effectiveRoot() {
     if (getRuntimePolicy().isolateWorkspaceDirs) {
-      const wsId = sanitizeWorkspaceSegment(currentRequestWorkspaceId())
+      const wsId = requireWorkspaceSegment(currentRequestWorkspaceId())
       const dir = resolve(dataHome(), 'workspaces', wsId, 'work')
       mkdirSync(dir, { recursive: true })
       return dir
