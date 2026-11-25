@@ -1047,6 +1047,29 @@ html.dark .fsdb-views {
   display: none;
 }
 
+.sidebar-creator-avatar {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--biu-color-bg-hover);
+  margin-left: 2px;
+}
+
+.sidebar-creator-avatar img,
+.sidebar-creator-avatar svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.app-side-bar.is-narrow .sidebar-creator-avatar {
+  display: none;
+}
+
 .app-shell-agent>.sidebar-flyout-host,
 .app-shell-agent>.app-side-bar,
 .app-shell-agent>.session-inspector {
