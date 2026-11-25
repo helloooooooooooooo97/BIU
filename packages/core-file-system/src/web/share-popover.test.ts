@@ -117,6 +117,8 @@ test('private records grant dynamic member views from the unified member search 
   assert.match(src, /<AiAvatar seed=/)
   assert.match(src, /String\(row\.name \?\? ''\)\.trim\(\) \|\| String\(row\.title \?\? ''\)\.trim\(\) \|\| email/)
   assert.match(src, /columns: \['title', 'name', 'avatar', 'email', 'role', 'membershipKind'\]/)
+  const dismissSrc = readFileSync(resolve(import.meta.dirname, '../../../biu-ui/src/headless-dismiss.tsx'), 'utf8')
+  assert.match(dismissSrc, /\.fsdb-share-select-menu/)
 })
 
 test('share panel no longer offers member-group grants', () => {
