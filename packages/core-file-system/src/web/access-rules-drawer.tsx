@@ -153,6 +153,7 @@ export function AccessRulesButton({
   const [memberPickerOpen, setMemberPickerOpen] = useState(false)
   const [publicLink, setPublicLink] = useState<{ token: string; url: string } | null>(null)
   const [copiedKey, setCopiedKey] = useState('')
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
   const drawerRef = useRef<HTMLDivElement | null>(null)
 
   const HIDDEN_SCHEMA_KEYS = new Set([
@@ -604,11 +605,14 @@ export function AccessRulesButton({
   return (
     <>
       <button
+        ref={triggerRef}
         type="button"
         className={`${buttonClassName}${open || hasActiveRules ? ' is-active' : ''}`}
         style={hasActiveRules ? { color: 'var(--biu-color-emphasis)' } : undefined}
         title={hasActiveRules ? '已启用分享规则' : '分享数据与规则'}
         aria-label="分享数据与规则"
+        aria-haspopup="dialog"
+        aria-expanded={open}
         data-testid="access-rules-trigger"
         onClick={() => setOpen((prev) => !prev)}
       >
@@ -621,7 +625,8 @@ export function AccessRulesButton({
               onDismiss={() => setOpen(false)}
               inside={(node) =>
                 node instanceof Node &&
-                (Boolean(drawerRef.current?.contains(node)) ||
+                (Boolean(triggerRef.current?.contains(node)) ||
+                  Boolean(drawerRef.current?.contains(node)) ||
                   (node instanceof Element &&
                     Boolean(
                       node.closest(
