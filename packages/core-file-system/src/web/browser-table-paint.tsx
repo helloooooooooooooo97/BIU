@@ -736,17 +736,11 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
         }
         const op = columnSummaries[col.key] ?? 'none'
         const result = computeColumnSummary(node.rows, col.key, col.field, op)
-        const tip = result
-          ? node.partial
-            ? `${result.label}（当前页 ${node.rows.length} 条）· 点击切换`
-            : `${result.label} · 点击切换`
-          : '点击配置统计方式'
         return (
           <td key={col.key} data-col-key={col.key} style={pinStyle} className={[pinCls, 'fsdb-summary-td'].filter(Boolean).join(' ')}>
             <button
               type="button"
               className={`fsdb-summary-btn${result ? ' is-set' : ''}`}
-              data-dock-tip={tip}
               onClick={(event) => {
                 event.stopPropagation()
                 onOpenColMenu?.({
