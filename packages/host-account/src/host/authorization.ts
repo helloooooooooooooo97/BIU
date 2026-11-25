@@ -729,9 +729,10 @@ export class AuthorizationService {
 
     const resolved = this.effectiveRole(actor.accountId, resource, new Set(), 0)
     if (resolved && 'reason' in resolved) return resolved
+    // 方案 B（视图归展示，规则归安全）：底层数据记录只认直接/继承授权与独立 access_rules，
+    // view_grants 只分享视图本身，绝不授予底层数据记录权限。
     const viaRule = this.accessRuleRole(actor.accountId, resource)
-    const viaView = this.dataViewRole(actor.accountId, resource)
-    const candidates = [resolved, viaRule, viaView].filter(Boolean) as Array<{
+    const candidates = [resolved, viaRule].filter(Boolean) as Array<{
       effectiveRole: ResourceRole
       source: 'ownership' | 'direct-grant' | 'group-grant' | 'view-grant' | 'data-view-grant' | 'access-rule' | 'workspace-default' | 'inherited' | 'legacy'
     }>

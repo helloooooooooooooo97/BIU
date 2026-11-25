@@ -297,40 +297,13 @@ export class DatabaseAccessPolicy {
   }
 
   viewGrantRole(
-    workspaceId: string,
-    collection: string,
-    record: { id?: unknown },
-    accountId: string,
+    _workspaceId: string,
+    _collection: string,
+    _record: { id?: unknown },
+    _accountId: string,
   ): ViewGrantRole | null {
-    const store = this.host.collabStore()
-    const authorization = this.host.authorization()
-    if (!store?.viewGrantsFor || !authorization) return null
-    const grants = store.viewGrantsFor(workspaceId, collection)
-    if (!grants.length) return null
-    const saved = [builtinAllView({ path: collection }), ...(this.host.viewCatalog?.viewsFor(collection) ?? [])]
-    const target = resolveScopeTarget(collection, String(record.id ?? ''), record)
-    const targetRef = {
-      type: 'record' as const,
-      workspaceId,
-      collection: target.collection,
-      recordId: target.id,
-    }
-    const scope = authorization.scopeCurrent(targetRef)
-    const ownerId = this.recordOwner(target.collection, target.id)
-    const roles: ViewGrantRole[] = []
-    for (const grant of grants) {
-      const subjectMatches = grant.subject_type === 'account'
-        ? grant.subject_id === accountId
-        : authorization.matchesMemberView(workspaceId, grant.subject_id, accountId)
-      if (!subjectMatches) continue
-      if (!authorization.canGrantorShareRecord(grant.granted_by ?? '', targetRef)) {
-        continue
-      }
-      if (recordMatchesGrantedView(record as never, grant.view_id, saved, scope, { grantedBy: grant.granted_by, recordOwnerId: ownerId })) {
-        roles.push(grant.role)
-      }
-    }
-    return highestViewRole(roles)
+    // 方案 B：view_grants 只分享视图本身，绝不授予底层数据记录权限。
+    return null
   }
 
   allowsViaView(collection: string, record: { id?: unknown }, action: PermissionAction = 'resource:read') {
@@ -347,9 +320,8 @@ export class DatabaseAccessPolicy {
     const authorization = this.host.authorization()
     const actor = authorization?.currentActor()
     if (!store || !authorization || !actor) return fullColumnPolicy()
-    const grants = store.viewGrantsFor?.(actor.workspaceId, collection) ?? []
     const rules = store.listActiveAccessRulesForCollection?.(actor.workspaceId, collection) ?? []
-    if (!grants.length && !rules.length) return fullColumnPolicy()
+    if (!rules.length) return fullColumnPolicy()
 
     const target = resolveScopeTarget(collection, String(record.id ?? ''), record)
     const targetRef = {
@@ -362,12 +334,8 @@ export class DatabaseAccessPolicy {
     const decision = authorization.authorize(actor, 'resource:read', targetRef)
     if (decision.allowed && decision.source === 'ownership') return fullColumnPolicy()
 
-    const saved = [builtinAllView({ path: collection }), ...(this.host.viewCatalog?.viewsFor(collection) ?? [])]
-    const scope = authorization.scopeCurrent(targetRef)
-    const ownerId = this.recordOwner(target.collection, target.id)
-
     const policies: ColumnPolicy[] = []
-    if (decision.allowed && decision.source !== 'data-view-grant' && decision.source !== 'access-rule') {
+    if (decision.allowed && decision.source !== 'access-rule') {
       policies.push(fullColumnPolicy())
     }
     for (const rule of rules) {
@@ -391,29 +359,6 @@ export class DatabaseAccessPolicy {
         })
       }
     }
-    for (const grant of grants) {
-      const subjectMatches = grant.subject_type === 'account'
-        ? grant.subject_id === actor.accountId
-        : authorization.matchesMemberView(actor.workspaceId, grant.subject_id, actor.accountId)
-      if (!subjectMatches) continue
-      if (!recordMatchesGrantedView(record as never, grant.view_id, saved, scope, { grantedBy: grant.granted_by, recordOwnerId: ownerId })) {
-        continue
-      }
-      // 默认行为（所见即所得）：自定义视图勾选了可见列时，自动以 view.columns 作为后端列白名单
-      // （保留正文 $content 与只读分享元信息字段，避免点开详情页报错）。
-      const matchedView = saved.find((item) => item.id === grant.view_id)
-      const defaultViewCols =
-        matchedView && !isBuiltinAllViewId(matchedView.id) && Array.isArray(matchedView.columns) && matchedView.columns.length > 0
-          ? [...matchedView.columns, '$content', 'shareScope', 'shareRole']
-          : null
-      const readableList = parseColumnList(grant.readable_columns) ?? defaultViewCols
-      const writableList = parseColumnList(grant.writable_columns) ?? defaultViewCols
-      const canWrite = roleCoversAction(grant.role, 'resource:update')
-      policies.push({
-        readable: readableList ? new Set(readableList) : '*',
-        writable: canWrite ? (writableList ? new Set(writableList) : '*') : new Set<string>(),
-      })
-    }
     return mergeColumnPolicies(policies)
   }
 
@@ -422,7 +367,6 @@ export class DatabaseAccessPolicy {
     const authorization = this.host.authorization()
     const actor = authorization?.currentActor()
     if (!store || !authorization || !actor) return false
-    if ((store.viewGrantsFor?.(actor.workspaceId, collection)?.length ?? 0) > 0) return true
     return (store.listActiveAccessRulesForCollection?.(actor.workspaceId, collection)?.length ?? 0) > 0
   }
 
@@ -432,14 +376,7 @@ export class DatabaseAccessPolicy {
     const actor = authorization?.currentActor()
     if (!store || !authorization || !actor) return false
     const rules = store.listActiveAccessRulesForCollection?.(actor.workspaceId, collection) ?? []
-    if (rules.some((r) => r.enabled && Array.isArray(r.columns) && r.columns.length > 0)) return true
-    const views = this.host.viewCatalog?.viewsFor(collection) ?? []
-    return (store.viewGrantsFor?.(actor.workspaceId, collection) ?? []).some((g) => {
-      if (g.readable_columns || g.writable_columns) return true
-      if (isBuiltinAllViewId(g.view_id)) return false
-      const view = views.find((item) => item.id === g.view_id)
-      return Boolean(view && Array.isArray(view.columns) && view.columns.length > 0)
-    })
+    return rules.some((r) => r.enabled && Array.isArray(r.columns) && r.columns.length > 0)
   }
 
   /**
