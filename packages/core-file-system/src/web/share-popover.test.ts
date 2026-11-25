@@ -113,7 +113,9 @@ test('private records grant dynamic member views from the unified member search 
   assert.match(src, /搜索空间成员或成员视图/)
   assert.match(src, /inline\s*\n\s*value=\{row\.role/)
   assert.match(src, /调整 \$\{row\.name\} 的权限/)
-  assert.match(src, /renderPersonAvatar\(row\.name, row\.avatar, 'is-sm'\)/)
+  assert.match(src, /renderPersonAvatar\(row\.id \|\| row\.name, row\.avatar, 'is-sm', 26\)/)
+  assert.match(src, /<AiAvatar seed=/)
+  assert.match(src, /String\(row\.name \?\? ''\)\.trim\(\) \|\| String\(row\.title \?\? ''\)\.trim\(\) \|\| email/)
   assert.match(src, /columns: \['title', 'name', 'avatar', 'email', 'role', 'membershipKind'\]/)
 })
 

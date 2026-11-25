@@ -103,7 +103,7 @@ export async function loadMembers(): Promise<MemberPerson[]> {
         .map((item) => {
           const id = String(item.id)
           const email = String(item.email ?? '').trim()
-          const name = String(item.name ?? item.title ?? '').trim() || email || id.slice(0, 8)
+          const name = String(item.name ?? '').trim() || String(item.title ?? '').trim() || email || id.slice(0, 8)
           const avatar = typeof item.avatar === 'string' ? item.avatar.trim() : ''
           return { id, name, email, ...(avatar ? { avatar } : {}) }
         })

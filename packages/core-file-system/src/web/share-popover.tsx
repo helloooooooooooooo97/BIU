@@ -1,4 +1,5 @@
 import { readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
+import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowPathIcon, CheckIcon, ChevronDownIcon, LinkIcon, ShareIcon, UserGroupIcon, UsersIcon, XMarkIcon } from '@heroicons/react/16/solid'
@@ -386,7 +387,7 @@ function WorkspaceAccess({
           return [{
             id,
             email,
-            name: String(row.name ?? row.title ?? email).trim() || email,
+            name: String(row.name ?? '').trim() || String(row.title ?? '').trim() || email,
             ...(avatar ? { avatar } : {}),
             role: String(row.role ?? ''),
           }]
@@ -586,13 +587,12 @@ function WorkspaceAccess({
 
   const internalCount = internalPeople.length + groups.length + memberViews.length + inheritedInternal.length
   const externalCount = externalPeople.length + inheritedExternal.length
-  const avatarText = (name: string) => (name.trim().slice(0, 1) || '?').toUpperCase()
   const isImageAvatar = (value?: string) => Boolean(value && /^(https?:\/\/|\/|data:image\/)/i.test(value.trim()))
-  const renderPersonAvatar = (name: string, avatar?: string, extraClass = '') => {
+  const renderPersonAvatar = (seed: string, avatar?: string, extraClass = '', size = 28) => {
     const trimmed = avatar?.trim() ?? ''
     return (
       <span className={`fsdb-share-avatar${extraClass ? ` ${extraClass}` : ''}`} aria-hidden>
-        {isImageAvatar(trimmed) ? <img src={trimmed} alt="" /> : trimmed || avatarText(name)}
+        {isImageAvatar(trimmed) ? <img src={trimmed} alt="" /> : trimmed || <AiAvatar seed={seed || 'biu-ai'} size={size} />}
       </span>
     )
   }
@@ -629,7 +629,7 @@ function WorkspaceAccess({
         <ul className="fsdb-share-collaborators">
           {internalPeople.map((row) => (
             <li key={row.id}>
-              {renderPersonAvatar(row.name, row.avatar)}
+              {renderPersonAvatar(row.id || row.name, row.avatar)}
               <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong>{row.email ? <em>{row.email}</em> : null}</span>
               {row.email ? (
                 <ShareSelect
@@ -685,7 +685,7 @@ function WorkspaceAccess({
             <li key={`inherited:${row.viewId}:${row.subjectType}:${row.subjectId}`} className="is-inherited">
               {row.subjectType === 'member_view'
                 ? <span className="fsdb-share-avatar is-view" aria-hidden><UsersIcon className="size-3.5" /></span>
-                : renderPersonAvatar(row.name, row.avatar, 'is-view')}
+                : renderPersonAvatar(row.subjectId || row.name, row.avatar, 'is-view')}
               <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong><em>来自视图「{row.source}」</em></span>
               <span className="fsdb-share-collaborator-role">{roleLabel(row.role)}</span>
             </li>
@@ -749,7 +749,7 @@ function WorkspaceAccess({
                       setMemberPickerOpen(false)
                     }}
                   >
-                    {renderPersonAvatar(row.name, row.avatar, 'is-sm')}
+                    {renderPersonAvatar(row.id || row.name, row.avatar, 'is-sm', 26)}
                     <span className="fsdb-share-member-option-copy">
                       <strong>{row.name}</strong>
                       <em>{row.email}</em>
@@ -777,7 +777,7 @@ function WorkspaceAccess({
         <ul className="fsdb-share-collaborators">
           {externalPeople.map((row) => (
             <li key={row.id}>
-              {renderPersonAvatar(row.name, row.avatar, 'is-external')}
+              {renderPersonAvatar(row.id || row.name, row.avatar, 'is-external')}
               <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong>{row.email ? <em>{row.email}</em> : null}</span>
               {row.email ? (
                 <ShareSelect
@@ -801,7 +801,7 @@ function WorkspaceAccess({
           ))}
           {inheritedExternal.map((row) => (
             <li key={`inherited:${row.viewId}:${row.subjectType}:${row.subjectId}`} className="is-inherited">
-              {renderPersonAvatar(row.name, row.avatar, 'is-external')}
+              {renderPersonAvatar(row.subjectId || row.name, row.avatar, 'is-external')}
               <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong><em>来自视图「{row.source}」</em></span>
               <span className="fsdb-share-collaborator-role">{roleLabel(row.role)}</span>
             </li>
