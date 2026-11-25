@@ -7,6 +7,8 @@ import type { PageSpec } from '@biu/type-http'
 import { HUB_CHANGE, HUB_CHANNEL_EVENT, HUB_CHANNEL_SNAPSHOT } from '@biu/type-http'
 import { runWithToolOrigin } from '@biu/host-tools'
 import { currentAccountId, currentRequestWorkspaceId, runWithPlugin } from '@biu/host-plugin-loader/data-dir'
+import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
+import { getAccountPort } from '@biu/host-plugin-loader/ports'
 
 export { HUB_CHANGE, HUB_CHANNEL_EVENT, HUB_CHANNEL_SNAPSHOT }
 
@@ -256,6 +258,14 @@ export async function apply(ctx: Context) {
   })
   ctx.http.broadcast('plugins/changed', { ts: Date.now() })
   ctx.http.route('POST', '/api/plugins/:id', async (route) => {
+    if (getRuntimePolicy().authzMode === 'rbac') {
+      const accountId = currentAccountId()
+      const isSuperAdmin = Boolean(accountId && getAccountPort(ctx)?.store?.isSuperAdmin?.(accountId))
+      if (!isSuperAdmin) {
+        route.send(403, { error: '仅超级管理员可开关云端宿主插件' })
+        return
+      }
+    }
     const payload = (await route.json()) as { enabled?: boolean }
     try {
       route.send(200, await ctx.hub.setEnabled(route.params.id, Boolean(payload.enabled)))

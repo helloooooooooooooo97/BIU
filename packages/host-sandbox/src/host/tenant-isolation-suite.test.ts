@@ -212,3 +212,43 @@ test('emitTenantRevoked automatically tears down terminals, jobs, pending approv
     rmSync(root, { recursive: true, force: true })
   }
 })
+
+test('McpService isolates remote HTTP MCP servers per workspace in cloud runtime', async () => {
+  const prevOnline = process.env.BIU_ONLINE
+  const prevHome = process.env.BIU_HOME
+  const tempHome = mkdtempSync(join(tmpdir(), 'biu-mcp-mt-'))
+  process.env.BIU_ONLINE = '1'
+  process.env.BIU_HOME = tempHome
+  try {
+    const ctx = new Context()
+    await ctx.plugin(tools)
+    await ctx.plugin(fs, { root: tempHome })
+    await ctx.plugin(mcp)
+
+    await withTenant('acct-a', 'ws-1', () =>
+      ctx.mcp.upsert({
+        id: 'private-remote',
+        transport: 'http',
+        url: 'https://mcp-a.example.com/sse',
+        enabled: false,
+      }),
+    )
+
+    // ws-1 sees private-remote; ws-2 must NOT see or remove it
+    const ws1Ids = withTenant('acct-a', 'ws-1', () => ctx.mcp.listServers().map((s) => s.id))
+    const ws2Ids = withTenant('acct-b', 'ws-2', () => ctx.mcp.listServers().map((s) => s.id))
+    assert.ok(ws1Ids.includes('private-remote'))
+    assert.equal(ws2Ids.includes('private-remote'), false)
+    await assert.rejects(
+      () => withTenant('acct-b', 'ws-2', () => ctx.mcp.remove('private-remote')),
+      /unknown mcp server/,
+    )
+  } finally {
+    await new Promise((r) => setTimeout(r, 50))
+    if (prevOnline === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = prevOnline
+    if (prevHome === undefined) delete process.env.BIU_HOME
+    else process.env.BIU_HOME = prevHome
+    rmSync(tempHome, { recursive: true, force: true })
+  }
+})

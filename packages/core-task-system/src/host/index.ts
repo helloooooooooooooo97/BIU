@@ -1,7 +1,17 @@
 import type { CollectionUpdateOptions } from '@biu/type-file-system'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { biuSqlitePath, openAndMigrateBiu, readEditorContent, writeEditorContent } from '@biu/host-plugin-loader/data-dir'
+import {
+  biuSqlitePath,
+  currentAccountId,
+  currentRequestWorkspaceId,
+  openAndMigrateBiu,
+  readEditorContent,
+  runWithAccount,
+  runWithRequestWorkspace,
+  writeEditorContent,
+} from '@biu/host-plugin-loader/data-dir'
+import { getAccountPort } from '@biu/host-plugin-loader/ports'
 import { Service, type Context } from 'cordis'
 import { currentSessionId } from '@biu/host-sessions/scope'
 import { allocateRecordId, emptySchemaValue, isAssignableRecordId, normalizeSchemaValue, type SchemaFieldValue } from '@biu/type-file-system'
@@ -1519,6 +1529,20 @@ export function apply(ctx: Context) {
   // 状态机：idle → pending → delivered → done（周期任务 done 后按 enabled 重置回 idle）。
   // 防重入：state 守卫（仅 idle 可触发）；防重：无有效 trigger / 未分配 session 不派工。
 
+  /** 后台 cron/进度追问脱离 HTTP 请求上下文时，按目标 session 恢复 (accountId, workspaceId) 租户作用域。 */
+  function runInSessionTenant<T>(sessionId: string, fn: () => T): T {
+    let accountId = currentAccountId().trim()
+    let workspaceId = currentRequestWorkspaceId().trim()
+    if (!accountId || !workspaceId) {
+      const tenant = getAccountPort(ctx)?.store?.tenantForRecord?.('/agents', sessionId)
+      if (tenant) {
+        accountId ||= tenant.accountId
+        workspaceId ||= tenant.workspaceId
+      }
+    }
+    return runWithAccount(accountId, () => runWithRequestWorkspace(workspaceId, fn))
+  }
+
   /**
    * 对任务执行一次性「触发 → 派工 → delivered」。
    * 仅在 trigger.enabled 且 state==='idle' 且 任务未完成 且 有负责 session 时才真正派工。
@@ -1541,10 +1565,12 @@ export function apply(ctx: Context) {
     })
     const text = buildDeliverText({ ...row, ...(row.trigger ? { trigger: row.trigger } : {}) })
     try {
-      await host.sessions.sendMessage(targetSessionId, text, {
-        wait: false,
-        sender: { type: 'session', sessionId: currentSessionId() ?? 'unknown' },
-      })
+      await runInSessionTenant(targetSessionId, () =>
+        host.sessions!.sendMessage(targetSessionId, text, {
+          wait: false,
+          sender: { type: 'session', sessionId: currentSessionId() ?? 'unknown' },
+        }),
+      )
       tasks.update(row.id, { trigger: { state: 'delivered' } })
       return true
     } catch {
@@ -1603,7 +1629,9 @@ export function apply(ctx: Context) {
         if (assigneeSessionId && host.sessions?.sendMessage) {
           const text = `【任务失败】${row.title}\n任务 id：${row.id}\n已询问进度 ${MAX_REPORT_PROMPTS} 次仍未收到汇报，任务已标记为失败。`
           const sender = creatorSessionId ? { type: 'session' as const, sessionId: creatorSessionId } : undefined
-          host.sessions.sendMessage(assigneeSessionId, text, { wait: false, ...(sender ? { sender } : {}) }).catch(() => {})
+          runInSessionTenant(assigneeSessionId, () =>
+            host.sessions!.sendMessage(assigneeSessionId, text, { wait: false, ...(sender ? { sender } : {}) }),
+          ).catch(() => {})
         }
         return
       }
@@ -1616,7 +1644,9 @@ export function apply(ctx: Context) {
       const nextCount = used + 1
       const text = `【任务进度询问】${row.title}\n任务 id：${row.id}\n任务已派发 ${verdict.overdueSec} 秒仍未收到汇报（第 ${nextCount}/${MAX_REPORT_PROMPTS} 次询问）。请问当前进展？`
       const sender = { type: 'session' as const, sessionId: creatorSessionId }
-      host.sessions.sendMessage(assigneeSessionId, text, { wait: false, sender }).catch(() => {
+      runInSessionTenant(assigneeSessionId, () =>
+        host.sessions!.sendMessage(assigneeSessionId, text, { wait: false, sender }),
+      ).catch(() => {
         /* 发送失败：保留 lastReportPromptAt 未更新，下轮可重试 */
       })
       tasks.update(row.id, { lastReportPromptAt: nowTs, reportPromptCount: nextCount })
