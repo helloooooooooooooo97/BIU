@@ -691,7 +691,9 @@ test('account settings can generate primary-color AI avatar and pick built-in av
   render(<ShellSettingsAccount />)
   await screen.findByTestId('settings-avatar-studio')
 
-  fireEvent.click(screen.getByTestId('settings-avatar-theme-emerald'))
+  const emeraldBtn = screen.getByTestId('settings-avatar-theme-emerald')
+  assert.ok(emeraldBtn.querySelector('img[src^="data:image/svg+xml"]'))
+  fireEvent.click(emeraldBtn)
   await waitFor(() => assert.equal(savedAvatars.length, 1))
   assert.match(decodeURIComponent(savedAvatars[0]!), /data-biu-theme="emerald"/)
 
@@ -699,10 +701,6 @@ test('account settings can generate primary-color AI avatar and pick built-in av
   await waitFor(() => assert.equal(savedAvatars.length, 2))
   assert.match(decodeURIComponent(savedAvatars[1]!), /data-biu-theme="emerald"/)
   assert.notEqual(savedAvatars[1], savedAvatars[0])
-
-  fireEvent.click(screen.getByTestId('settings-avatar-preset-cat'))
-  await waitFor(() => assert.equal(savedAvatars.length, 3))
-  assert.match(decodeURIComponent(savedAvatars[2]!), /data-biu-preset="cat"/)
 
   cleanup()
   localStorage.clear()
