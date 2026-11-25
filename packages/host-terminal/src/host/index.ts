@@ -1,11 +1,15 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { Service, type Context } from 'cordis'
 import { posixShellBin } from '@biu/host-subprocess'
+import { currentAccountId, currentRequestWorkspaceId } from '@biu/host-plugin-loader/data-dir'
 
 interface Term {
   id: string
   /** 可选命名代理：同名复用同一个 shell（页面终端和 agent 共用一条就靠它） */
   name: string
+  tenantKey: string
+  accountId: string
+  workspaceId: string
   child: ChildProcessWithoutNullStreams
   buffer: string
   cwd: string
@@ -32,12 +36,16 @@ export interface TerminalOutputEvent {
   name: string
   seq: number
   chunk: string
+  accountId?: string
+  workspaceId?: string
 }
 
 export interface TerminalExitEvent {
   id: string
   name: string
   code: number | null
+  accountId?: string
+  workspaceId?: string
 }
 
 declare module 'cordis' {
@@ -68,18 +76,37 @@ export class TerminalService extends Service {
     super(ctx, 'terminals')
   }
 
-  /** name 传了就复用同名代理；没传就是一条匿名代理。 */
+  private currentTenant() {
+    const accountId = currentAccountId().trim()
+    const workspaceId = currentRequestWorkspaceId().trim()
+    return { accountId, workspaceId, tenantKey: `${accountId}\0${workspaceId}` }
+  }
+
+  private nameKey(tenantKey: string, name: string) {
+    return `${tenantKey}\0${name}`
+  }
+
+  private ownedTerm(id: string): Term | undefined {
+    const term = this.terms.get(id)
+    if (!term) return undefined
+    const { tenantKey } = this.currentTenant()
+    if (term.tenantKey !== tenantKey) return undefined
+    return term
+  }
+
+  /** name 传了就复用同租户同名代理；没传就是一条匿名代理。 */
   open(name = '') {
+    const { accountId, workspaceId, tenantKey } = this.currentTenant()
     const wanted = name.trim()
     if (wanted) {
-      const existing = this.byName.get(wanted)
+      const existing = this.byName.get(this.nameKey(tenantKey, wanted))
       const term = existing ? this.terms.get(existing) : undefined
-      if (term) return { id: term.id, name: term.name, reused: true }
+      if (term && term.tenantKey === tenantKey) return { id: term.id, name: term.name, reused: true }
     }
     const id = crypto.randomUUID().slice(0, 8)
     const sh = posixShellBin()
     const wrapped = this.ctx.sandbox.wrap({ argv: [sh] })
-    const child = spawn(sh, [], {
+    const child = spawn(wrapped.argv[0]!, wrapped.argv.slice(1), {
       cwd: wrapped.cwd,
       env: wrapped.env,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -87,6 +114,9 @@ export class TerminalService extends Service {
     const term: Term = {
       id,
       name: wanted,
+      tenantKey,
+      accountId,
+      workspaceId,
       child,
       buffer: '',
       cwd: wrapped.cwd,
@@ -106,6 +136,8 @@ export class TerminalService extends Service {
         name: term.name,
         seq: term.seq,
         chunk: text,
+        ...(term.accountId ? { accountId: term.accountId } : {}),
+        ...(term.workspaceId ? { workspaceId: term.workspaceId } : {}),
       } satisfies TerminalOutputEvent)
     }
     child.stdout.on('data', append)
@@ -113,17 +145,23 @@ export class TerminalService extends Service {
     child.on('close', (code) => {
       const living = this.terms.get(id)
       if (!living) return
-      this.ctx.emit('internal/terminal/exit', { id, name: living.name, code } satisfies TerminalExitEvent)
+      this.ctx.emit('internal/terminal/exit', {
+        id,
+        name: living.name,
+        code,
+        ...(living.accountId ? { accountId: living.accountId } : {}),
+        ...(living.workspaceId ? { workspaceId: living.workspaceId } : {}),
+      } satisfies TerminalExitEvent)
       this.terms.delete(id)
-      if (living.name) this.byName.delete(living.name)
+      if (living.name) this.byName.delete(this.nameKey(living.tenantKey, living.name))
     })
     this.terms.set(id, term)
-    if (wanted) this.byName.set(wanted, id)
+    if (wanted) this.byName.set(this.nameKey(tenantKey, wanted), id)
     return { id, name: wanted, reused: false }
   }
 
   write(id: string, data: string) {
-    const term = this.terms.get(id)
+    const term = this.ownedTerm(id)
     if (!term) throw new Error(`unknown terminal: ${id}`)
     term.child.stdin.write(data)
     return { id, ok: true }
@@ -131,7 +169,7 @@ export class TerminalService extends Service {
 
   /** since 给了就只回增量（配合 seq）；没给回整段缓冲。 */
   read(id: string, since?: number) {
-    const term = this.terms.get(id)
+    const term = this.ownedTerm(id)
     if (!term) throw new Error(`unknown terminal: ${id}`)
     const pending = since != null && since >= term.seq
     return {
@@ -145,24 +183,28 @@ export class TerminalService extends Service {
   }
 
   list() {
-    return { terms: [...this.terms.values()].map(info) }
+    const { tenantKey } = this.currentTenant()
+    return {
+      terms: [...this.terms.values()].filter((term) => term.tenantKey === tenantKey).map(info),
+    }
   }
 
-  /** 查一条代理：页面按块 id 命名，agent 用同一个名字就能接上。 */
+  /** 查一条代理：页面按块 id 命名，agent 用同一个名字就能接上（仅限当前租户）。 */
   get(idOrName: string) {
-    const direct = this.terms.get(idOrName)
+    const direct = this.ownedTerm(idOrName)
     if (direct) return info(direct)
-    const named = this.byName.get(idOrName.trim())
-    const term = named ? this.terms.get(named) : undefined
+    const { tenantKey } = this.currentTenant()
+    const named = this.byName.get(this.nameKey(tenantKey, idOrName.trim()))
+    const term = named ? this.ownedTerm(named) : undefined
     return term ? info(term) : null
   }
 
   close(id: string) {
-    const term = this.terms.get(id)
+    const term = this.ownedTerm(id)
     if (!term) throw new Error(`unknown terminal: ${id}`)
     term.child.kill('SIGTERM')
     this.terms.delete(id)
-    if (term.name) this.byName.delete(term.name)
+    if (term.name) this.byName.delete(this.nameKey(term.tenantKey, term.name))
     return { id, closed: true }
   }
 }

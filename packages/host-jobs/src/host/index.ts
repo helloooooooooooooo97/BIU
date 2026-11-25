@@ -1,12 +1,17 @@
 import { Service, type Context } from 'cordis'
 import { posixShellArgv } from '@biu/host-subprocess'
+import { currentAccountId, currentRequestWorkspaceId } from '@biu/host-plugin-loader/data-dir'
+
+const JOB_HISTORY_TTL_MS = 10 * 60_000
 
 interface Job {
   id: string
+  tenantKey: string
   argv: string[]
   status: 'running' | 'done' | 'cancelled'
   result?: { code: number | null; stdout: string; stderr: string }
   abort: AbortController
+  finishedAt?: number
 }
 
 export class JobsService extends Service {
@@ -16,36 +21,62 @@ export class JobsService extends Service {
     super(ctx, 'jobs')
   }
 
+  private tenantKey() {
+    return `${currentAccountId().trim()}\0${currentRequestWorkspaceId().trim()}`
+  }
+
+  private pruneFinished(now = Date.now()) {
+    for (const [id, job] of this.jobs) {
+      if (job.status !== 'running' && job.finishedAt && now - job.finishedAt >= JOB_HISTORY_TTL_MS) {
+        this.jobs.delete(id)
+      }
+    }
+  }
+
+  private ownedJob(id: string): Job | undefined {
+    const job = this.jobs.get(id)
+    if (!job || job.tenantKey !== this.tenantKey()) return undefined
+    return job
+  }
+
   async start(argv: string[]) {
+    this.pruneFinished()
     const id = crypto.randomUUID().slice(0, 8)
     const abort = new AbortController()
-    const job: Job = { id, argv, status: 'running', abort }
+    const job: Job = { id, tenantKey: this.tenantKey(), argv, status: 'running', abort }
     this.jobs.set(id, job)
     void this.ctx.subprocess.run({ argv, timeoutMs: 60_000 }, abort.signal).then((result) => {
       job.status = 'done'
       job.result = result
+      job.finishedAt = Date.now()
     }).catch((error) => {
       job.status = 'done'
       job.result = { code: 1, stdout: '', stderr: String(error) }
+      job.finishedAt = Date.now()
     })
     return { id, status: job.status }
   }
 
   list() {
-    return [...this.jobs.values()].map(({ id, argv, status }) => ({ id, argv, status }))
+    this.pruneFinished()
+    const key = this.tenantKey()
+    return [...this.jobs.values()]
+      .filter((job) => job.tenantKey === key)
+      .map(({ id, argv, status }) => ({ id, argv, status }))
   }
 
   collect(id: string) {
-    const job = this.jobs.get(id)
+    const job = this.ownedJob(id)
     if (!job) throw new Error(`unknown job: ${id}`)
     return { id: job.id, status: job.status, result: job.result }
   }
 
   cancel(id: string) {
-    const job = this.jobs.get(id)
+    const job = this.ownedJob(id)
     if (!job) throw new Error(`unknown job: ${id}`)
     job.abort.abort()
     job.status = 'cancelled'
+    job.finishedAt = Date.now()
     return { id, status: job.status }
   }
 }

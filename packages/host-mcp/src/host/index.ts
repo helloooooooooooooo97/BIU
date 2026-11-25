@@ -1,4 +1,5 @@
 import { Service, type Context } from 'cordis'
+import { isOnlineRuntime } from '@biu/host-plugin-loader/data-dir'
 import { mcpCollection } from './collection.ts'
 import { McpConnection, type McpToolInfo } from './client.ts'
 import { applyHostServer } from './serve.ts'
@@ -126,6 +127,12 @@ export class McpService extends Service {
   async connect(id: string) {
     const state = this.require(id)
     if (state.builtin) return this.row(state)
+    if (isOnlineRuntime() && state.config.transport === 'stdio') {
+      state.status = 'error'
+      state.error = 'stdio MCP servers are disabled in cloud runtime'
+      this.changed()
+      throw new Error('stdio MCP servers are disabled in cloud runtime')
+    }
     const missing = incompleteReason(state.config)
     if (missing) {
       state.status = 'error'
@@ -181,6 +188,9 @@ export class McpService extends Service {
   async upsert(raw: Record<string, unknown> & { id: string }) {
     const config = normalizeServerConfig(raw.id, raw)
     if (!config) throw new Error(`invalid mcp server config: ${raw.id}`)
+    if (isOnlineRuntime() && config.transport === 'stdio') {
+      throw new Error('stdio MCP servers are disabled in cloud runtime')
+    }
     if (config.id === 'echo') throw new Error('echo is reserved for the built-in server')
     const existing = this.servers.get(config.id)
     if (existing?.connection) await this.disconnect(config.id)
@@ -249,6 +259,9 @@ export class McpService extends Service {
     const before = state.config
     const merged = normalizeServerConfig(id, { ...before, ...patch, id })
     if (!merged) throw new Error(`invalid mcp server config: ${id}`)
+    if (isOnlineRuntime() && merged.transport === 'stdio') {
+      throw new Error('stdio MCP servers are disabled in cloud runtime')
+    }
     const dialKeys = ['transport', 'command', 'args', 'env', 'cwd', 'url', 'headers'] as const
     const redial = dialKeys.some((key) => JSON.stringify(before[key]) !== JSON.stringify(merged[key]))
     state.config = merged
@@ -314,6 +327,9 @@ export class McpService extends Service {
 
   /** 兼容旧签名：等价于 upsert 一台 stdio server 并连上。 */
   async addStdio(id: string, command: string, args: string[] = [], extra: Record<string, unknown> = {}) {
+    if (isOnlineRuntime()) {
+      throw new Error('stdio MCP servers are disabled in cloud runtime')
+    }
     await this.upsert({ ...extra, id, command, args, transport: 'stdio' })
     return this.listTools()
   }
