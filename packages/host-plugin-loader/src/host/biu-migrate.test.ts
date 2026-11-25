@@ -44,7 +44,7 @@ test('empty database fast path matches upgraded v1 fixture', () => {
 test('BIU_MIGRATIONS versions are unique and increasing', () => {
   assertBiuMigrationLog()
   assert.equal(BIU_MIGRATIONS.at(-1)?.version, LATEST_BIU_SCHEMA)
-  assert.equal(BIU_MIGRATIONS.at(-1)?.name, 'shares.workspace-and-creator')
+  assert.equal(BIU_MIGRATIONS.at(-1)?.name, 'access-rules.decouple-from-views')
   assert.throws(() => assertBiuMigrationLog([{ version: 2 }, { version: 2 }]), /重复/)
   assert.throws(() => assertBiuMigrationLog([{ version: 3 }, { version: 1 }]), /单调递增/)
 })
@@ -251,5 +251,69 @@ test('facet-to-tag migration renames tables, columns, and collection paths', () 
   assert.equal(stamp.tag_id, 'need')
   const body = db.prepare('SELECT collection FROM editor_content WHERE record_id = ?').get('need') as { collection: string }
   assert.equal(body.collection, '/tags')
+  db.close()
+})
+
+test('v57 migrates view_grants, shared views, and view public shares into independent access_rules', () => {
+  const db = openSqlite(':memory:')
+  migrateBiu(db, {}, 56)
+  db.exec(`
+    INSERT INTO saved_views (workspace_id, collection, view_id, payload_json, updated_at)
+    VALUES (
+      'ws_1', '/pages', 'v_q3',
+      '{"id":"v_q3","name":"Q3 客户","scope":"shared","createdBy":"acc_a","mode":"board","groupBy":"status","columns":["title","status"],"filterTree":{"op":"and","rules":[{"field":"tag","op":"eq","value":"q3"}]}}',
+      100
+    );
+    INSERT INTO view_grants (workspace_id, collection, view_id, subject_type, subject_id, role, effect, granted_by, created_at)
+    VALUES
+      ('ws_1', '/pages', 'v_q3', 'account', 'acc_b', 'viewer', 'allow', 'acc_a', 101),
+      ('ws_1', '/pages', 'v_q3', 'workspace', 'ws_1', 'editor', 'allow', 'acc_a', 102);
+    INSERT INTO shares (token, kind, collection, view_id, record_id, workspace_id, created_by, created_at, updated_at)
+    VALUES ('tok_keep_1', 'view', '/pages', 'v_q3', '', 'ws_1', 'acc_a', 103, 103);
+  `)
+  migrateBiu(db)
+
+  const rules = db.prepare('SELECT * FROM access_rules WHERE workspace_id = ?').all('ws_1') as Array<{
+    id: string
+    name: string
+    created_by: string
+    filter_tree_json: string
+    columns_json: string
+    display_snapshot_json: string
+    enabled: number
+  }>
+  assert.equal(rules.length, 1)
+  assert.equal(rules[0]!.name, 'Q3 客户')
+  assert.equal(rules[0]!.created_by, 'acc_a')
+  assert.equal(rules[0]!.enabled, 1)
+  assert.deepEqual(JSON.parse(rules[0]!.filter_tree_json), { op: 'and', rules: [{ field: 'tag', op: 'eq', value: 'q3' }] })
+  assert.deepEqual(JSON.parse(rules[0]!.columns_json), ['title', 'status'])
+  assert.deepEqual(JSON.parse(rules[0]!.display_snapshot_json), { mode: 'board', groupBy: 'status' })
+
+  const grants = db.prepare('SELECT subject_type, subject_id, role FROM access_rule_grants WHERE rule_id = ? ORDER BY subject_type').all(rules[0]!.id) as Array<{
+    subject_type: string
+    subject_id: string
+    role: string
+  }>
+  assert.deepEqual(
+    grants.map((g) => ({ ...g })),
+    [
+      { subject_type: 'account', subject_id: 'acc_b', role: 'viewer' },
+      { subject_type: 'workspace', subject_id: 'ws_1', role: 'editor' },
+    ],
+  )
+
+  const migratedView = db.prepare('SELECT payload_json FROM saved_views WHERE view_id = ?').get('v_q3') as { payload_json: string }
+  assert.equal(JSON.parse(migratedView.payload_json).scope, 'personal')
+
+  const migratedShare = db.prepare('SELECT token, kind, view_id, rule_id FROM shares WHERE token = ?').get('tok_keep_1') as {
+    token: string
+    kind: string
+    view_id: string
+    rule_id: string
+  }
+  assert.equal(migratedShare.kind, 'rule')
+  assert.equal(migratedShare.view_id, '')
+  assert.equal(migratedShare.rule_id, rules[0]!.id)
   db.close()
 })
