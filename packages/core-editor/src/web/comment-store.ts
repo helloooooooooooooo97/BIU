@@ -1,6 +1,6 @@
 import { apiFetch } from '@biu/biu-ui/api-client'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { emitFsdbChange, FSDB_CHANGE_EVENT, type DbRecord } from '@biu/type-file-system'
+import { asPerson, emitFsdbChange, FSDB_CHANGE_EVENT, type DbRecord, type PersonValue } from '@biu/type-file-system'
 import type { CommentAnchor } from './comment-anchor.ts'
 
 export type CommentItem = {
@@ -12,6 +12,7 @@ export type CommentItem = {
   status: 'open' | 'resolved'
   anchor: CommentAnchor | null
   author: string
+  createdBy?: PersonValue | null
   createdAt: number
   updatedAt: number
 }
@@ -52,6 +53,13 @@ export function commentItemFromRecord(row: Record<string, unknown>): CommentItem
   if (!id) return null
   const parentId = String(row.parentId ?? '').trim()
   const threadId = String(row.threadId ?? '').trim() || parentId || id
+  const createdBy = asPerson(row.createdBy)
+  const rawAuthor = String(row.author ?? '').trim()
+  const author =
+    (createdBy?.name && createdBy.name.trim()) ||
+    (rawAuthor && rawAuthor !== '用户' ? rawAuthor : '') ||
+    rawAuthor ||
+    '用户'
   return {
     id,
     body: String(row.body ?? row.title ?? ''),
@@ -60,7 +68,8 @@ export function commentItemFromRecord(row: Record<string, unknown>): CommentItem
     parentId,
     status: row.status === 'resolved' ? 'resolved' : 'open',
     anchor: parseAnchor(row.anchor),
-    author: String(row.author ?? '').trim() || '用户',
+    author,
+    ...(createdBy ? { createdBy } : {}),
     createdAt: Number(row.createdAt) || 0,
     updatedAt: Number(row.updatedAt) || 0,
   }

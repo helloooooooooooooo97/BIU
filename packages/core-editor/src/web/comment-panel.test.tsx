@@ -257,3 +257,53 @@ test('CommentInlinePopover views a single clicked thread without rendering other
   assert.equal(openedAll, 'cmt_1')
   assert.equal(closed, false)
 })
+
+test('CommentPanel displays author avatar and name and jumps to workspace member on click', async () => {
+  const revealed: Array<Record<string, unknown>> = []
+  const onReveal = (e: Event) => {
+    revealed.push((e as CustomEvent).detail as Record<string, unknown>)
+  }
+  window.addEventListener('biu:inspector-reveal', onReveal)
+  try {
+    let selected = ''
+    const memberThread: CommentThread = {
+      root: {
+        id: 'cmt_member',
+        body: '请确认这一段',
+        targetPath: '/pages/p1',
+        threadId: 'cmt_member',
+        parentId: '',
+        status: 'open',
+        anchor: { blockId: 'b1', quote: '目标文本', prefix: '', suffix: '', offset: 0 },
+        author: '文馨',
+        createdBy: { kind: 'user', accountId: 'acc_wenxin', name: '文馨' },
+        createdAt: 1_700_000_000_000,
+        updatedAt: 1_700_000_000_000,
+      },
+      replies: [],
+    }
+    render(
+      <CommentPanel
+        threads={[memberThread]}
+        filter="open"
+        activeId=""
+        detachedIds={new Set()}
+        draftAnchor={null}
+        onCancelDraft={() => undefined}
+        onCreateThread={() => undefined}
+        onReplyThread={() => undefined}
+        onSetStatus={() => undefined}
+        onDelete={() => undefined}
+        onSelectThread={(id) => { selected = id }}
+      />,
+    )
+    const authorBtn = screen.getByTestId('editor-comment-author-link')
+    assert.match(authorBtn.textContent ?? '', /文馨/)
+    assert.ok(authorBtn.querySelector('[data-ai-avatar="mesh"]'))
+    fireEvent.click(authorBtn)
+    assert.equal(selected, '')
+    assert.deepEqual(revealed, [{ collection: '/workspace-members', recordId: 'acc_wenxin', unique: true }])
+  } finally {
+    window.removeEventListener('biu:inspector-reveal', onReveal)
+  }
+})

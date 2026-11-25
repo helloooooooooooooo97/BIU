@@ -6,12 +6,154 @@ import {
   CheckIcon,
   ArrowUturnLeftIcon,
 } from '@heroicons/react/16/solid'
+import { AiAvatar } from '@biu/biu-ui/ai-avatar'
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { CommentAnchor } from './comment-anchor.ts'
-import type { CommentThread } from './comment-store.ts'
+import type { CommentItem, CommentThread } from './comment-store.ts'
 import type { CommentFilter } from './editor-view-state.ts'
 
 export type { CommentFilter }
+
+type CommentMemberInfo = {
+  id: string
+  name: string
+  avatar?: string
+}
+
+const INSPECTOR_REVEAL_EVENT = 'biu:inspector-reveal'
+let membersCache: Map<string, CommentMemberInfo> | null = null
+let membersLoadedAt = 0
+let membersInflight: Promise<Map<string, CommentMemberInfo>> | null = null
+const MEMBERS_TTL_MS = 8000
+
+async function loadCommentMembers(): Promise<Map<string, CommentMemberInfo>> {
+  if (membersCache && Date.now() - membersLoadedAt < MEMBERS_TTL_MS) return membersCache
+  if (membersInflight) return membersInflight
+  const params = new URLSearchParams({
+    path: '/workspace-members',
+    limit: '500',
+    columns: 'title,name,email,avatar',
+  })
+  const req = apiFetch(`/api/db/list?${params.toString()}`)
+    .then(async (res) => {
+      if (!res.ok) return new Map<string, CommentMemberInfo>()
+      const data = (await res.json()) as { items?: Array<Record<string, unknown>> }
+      const map = new Map<string, CommentMemberInfo>()
+      for (const item of data?.items ?? []) {
+        const id = String(item?.id ?? '').trim()
+        if (!id) continue
+        const name =
+          String(item.name ?? '').trim() ||
+          String(item.title ?? '').trim() ||
+          String(item.email ?? '').trim() ||
+          id.slice(0, 8)
+        const avatar = typeof item.avatar === 'string' ? item.avatar.trim() : ''
+        map.set(id, { id, name, ...(avatar ? { avatar } : {}) })
+      }
+      membersCache = map
+      membersLoadedAt = Date.now()
+      return map
+    })
+    .catch(() => new Map<string, CommentMemberInfo>())
+    .finally(() => {
+      membersInflight = null
+    })
+  membersInflight = req
+  return req
+}
+
+function useCommentMembers(enabled: boolean): ReadonlyMap<string, CommentMemberInfo> {
+  const [members, setMembers] = useState<Map<string, CommentMemberInfo>>(() => membersCache ?? new Map())
+  useEffect(() => {
+    if (!enabled) return
+    let cancelled = false
+    void loadCommentMembers().then((map) => {
+      if (!cancelled) setMembers(map)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [enabled])
+  return members
+}
+
+export function openCommentAuthor(item: CommentItem): boolean {
+  const person = item.createdBy
+  if (!person || typeof window === 'undefined') return false
+  if (person.kind === 'user') {
+    const recordId = String(person.accountId ?? '').trim()
+    if (!recordId) return false
+    window.dispatchEvent(
+      new CustomEvent(INSPECTOR_REVEAL_EVENT, {
+        detail: { collection: '/workspace-members', recordId, unique: true },
+      }),
+    )
+    return true
+  }
+  if (person.kind === 'agent') {
+    const recordId = String(person.sessionId ?? '').trim()
+    if (!recordId) return false
+    window.dispatchEvent(
+      new CustomEvent(INSPECTOR_REVEAL_EVENT, {
+        detail: { collection: '/agents', recordId, unique: true },
+      }),
+    )
+    return true
+  }
+  return false
+}
+
+function CommentAuthorBadge({
+  item,
+  members,
+}: {
+  item: CommentItem
+  members: ReadonlyMap<string, CommentMemberInfo>
+}) {
+  const person = item.createdBy
+  const accountId = person?.kind === 'user' ? String(person.accountId ?? '').trim() : ''
+  const sessionId = person?.kind === 'agent' ? String(person.sessionId ?? '').trim() : ''
+  const member = accountId ? members.get(accountId) : undefined
+  const displayName =
+    member?.name ||
+    (person?.name && person.name.trim()) ||
+    item.author ||
+    '用户'
+  const avatar =
+    member?.avatar ||
+    (person?.kind === 'user' && typeof person.avatar === 'string' ? person.avatar.trim() : '')
+  const seed = accountId || sessionId || displayName || 'biu-ai'
+  const clickable = Boolean(accountId || sessionId)
+
+  const content = (
+    <>
+      <span className="editor-comment-author-avatar" aria-hidden>
+        {avatar ? <img src={avatar} alt="" /> : <AiAvatar seed={seed} className="editor-comment-author-ai-avatar" />}
+      </span>
+      <span className="editor-comment-author-name">{displayName}</span>
+    </>
+  )
+
+  if (clickable) {
+    return (
+      <button
+        type="button"
+        className="editor-comment-author editor-comment-author-btn"
+        data-testid="editor-comment-author-link"
+        title={`查看成员：${displayName}`}
+        onClick={(e) => {
+          e.stopPropagation()
+          openCommentAuthor(item)
+        }}
+      >
+        {content}
+      </button>
+    )
+  }
+
+  return <span className="editor-comment-author">{content}</span>
+}
 
 export function layoutRailCards(
   items: ReadonlyArray<{ id: string; desiredTop: number | null; height: number }>,
@@ -76,6 +218,7 @@ export function CommentPanel({
   const [heights, setHeights] = useState<Record<string, number>>({})
   const draftInputRef = useRef<HTMLTextAreaElement>(null)
   const cardRefs = useRef(new Map<string, HTMLElement>())
+  const members = useCommentMembers(threads.length > 0)
 
   useEffect(() => {
     if (draftAnchor) {
@@ -248,7 +391,7 @@ export function CommentPanel({
               ) : null}
 
               <div className="editor-comment-meta">
-                <span className="editor-comment-author">{root.author}</span>
+                <CommentAuthorBadge item={root} members={members} />
                 <span className="editor-comment-time">{formatTime(root.createdAt)}</span>
                 <div className="editor-comment-actions" onClick={(e) => e.stopPropagation()}>
                   {onAskAi ? (
@@ -294,7 +437,7 @@ export function CommentPanel({
                   {replies.map((reply) => (
                     <div key={reply.id} className="editor-comment-reply">
                       <div className="editor-comment-meta">
-                        <span className="editor-comment-author">{reply.author}</span>
+                        <CommentAuthorBadge item={reply} members={members} />
                         <span className="editor-comment-time">{formatTime(reply.createdAt)}</span>
                         <div className="editor-comment-actions" onClick={(e) => e.stopPropagation()}>
                           <button
@@ -397,6 +540,7 @@ export function CommentInlinePopover({
   const [draftBody, setDraftBody] = useState('')
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
+  const members = useCommentMembers(target.kind === 'view' && threads.length > 0)
   const [pos, setPos] = useState<{ top: number; left: number }>(() =>
     computeInlineCommentPopoverPos(
       target.rect,
@@ -553,7 +697,7 @@ export function CommentInlinePopover({
                 ) : null}
 
                 <div className="editor-comment-meta">
-                  <span className="editor-comment-author">{root.author}</span>
+                  <CommentAuthorBadge item={root} members={members} />
                   <span className="editor-comment-time">{formatTime(root.createdAt)}</span>
                   <div className="editor-comment-actions">
                     {onAskAi ? (
@@ -605,7 +749,7 @@ export function CommentInlinePopover({
                     {replies.map((reply) => (
                       <div key={reply.id} className="editor-comment-reply">
                         <div className="editor-comment-meta">
-                          <span className="editor-comment-author">{reply.author}</span>
+                          <CommentAuthorBadge item={reply} members={members} />
                           <span className="editor-comment-time">{formatTime(reply.createdAt)}</span>
                           <div className="editor-comment-actions">
                             <button

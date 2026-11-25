@@ -392,8 +392,13 @@ html.dark .page-editor .tiptap code:has(.editor-pending-selection){background:co
 .page-editor .editor-comment-card.is-active .editor-comment-quote{border-left-color:rgba(245,158,11,.95)}
 .page-editor .editor-comment-quote.is-detached{border-left-color:var(--biu-color-border-strong);font-style:italic}
 .page-editor .editor-comment-detached-tag{display:inline-block;margin-left:6px;padding:0 5px;border-radius:4px;background:var(--biu-color-bg-hover);color:var(--biu-color-text-muted);font-style:normal;font-size:10.5px}
-.page-editor .editor-comment-meta{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--biu-color-text-muted)}
-.page-editor .editor-comment-author{font-weight:var(--biu-font-weight-semibold);color:var(--biu-color-text)}
+.page-editor .editor-comment-meta,.editor-comment-popover .editor-comment-meta{display:flex;align-items:center;gap:6px;min-width:0;font-size:11.5px;color:var(--biu-color-text-muted)}
+.page-editor .editor-comment-author,.editor-comment-popover .editor-comment-author{display:inline-flex;align-items:center;gap:6px;min-width:0;max-width:160px;font-weight:var(--biu-font-weight-semibold);color:var(--biu-color-text)}
+.page-editor .editor-comment-author-btn,.editor-comment-popover .editor-comment-author-btn{margin:0;padding:1px 5px 1px 2px;border:0;border-radius:999px;background:transparent;font:inherit;cursor:pointer;transition:background-color .12s ease}
+.page-editor .editor-comment-author-btn:hover,.editor-comment-popover .editor-comment-author-btn:hover{background:var(--biu-color-bg-hover)}
+.page-editor .editor-comment-author-avatar,.editor-comment-popover .editor-comment-author-avatar{display:inline-flex;width:18px;height:18px;flex:none;overflow:hidden;border-radius:50%;background:var(--biu-color-bg-hover)}
+.page-editor .editor-comment-author-avatar img,.page-editor .editor-comment-author-ai-avatar,.editor-comment-popover .editor-comment-author-avatar img,.editor-comment-popover .editor-comment-author-ai-avatar{display:block;width:100%;height:100%;object-fit:cover}
+.page-editor .editor-comment-author-name,.editor-comment-popover .editor-comment-author-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .page-editor .editor-comment-time{font-variant-numeric:tabular-nums}
 .page-editor .editor-comment-actions{margin-left:auto;display:inline-flex;align-items:center;gap:2px}
 .page-editor .editor-comment-icon-btn{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:0;border-radius:5px;background:transparent;color:var(--biu-color-text-muted);cursor:pointer}
