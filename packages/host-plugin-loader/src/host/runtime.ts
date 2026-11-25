@@ -1,5 +1,6 @@
 import type { Context } from 'cordis'
 import { currentAccountId, currentRequestWorkspaceId, isOnlineRuntime } from './data-dir.ts'
+import { getAccountPort, type AccountServicePort } from './ports.ts'
 
 export type HostMode = 'cloud' | 'desktop'
 export type AuthzMode = 'rbac' | 'local-allow-all'
@@ -78,20 +79,8 @@ export function getRuntimePolicy(online = isOnlineRuntime()): RuntimePolicy {
   }
 }
 
-type AccountServiceLike = {
-  store?: { activeWorkspaceId(): string | null }
-  workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
-  cloudConnection?: (localAccountId: string) => { origin: string; token: string } | null
-  linkedCloud?: (localAccountId?: string) => { origin: string; token: string } | null
-  resolveCloudTarget?: (workspaceId?: string, localAccountId?: string) => RemoteCloudTarget | null
-}
-
-function accountServiceOf(ctx: Context): AccountServiceLike | undefined {
-  try {
-    return ctx.get('account' as never) as AccountServiceLike | undefined
-  } catch {
-    return undefined
-  }
+function accountServiceOf(ctx: Context): AccountServicePort | undefined {
+  return getAccountPort(ctx)
 }
 
 /**

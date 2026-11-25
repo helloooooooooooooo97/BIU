@@ -1,8 +1,9 @@
 import { Service, type Context } from 'cordis'
 import type { LlmConfig } from '@biu/host-llm'
 import type { AgentHandle, AgentSendOptions, AgentTurn, ClaimedInput } from '@biu/type-agent-loop'
-import type { SessionGoal } from '@biu/type-session'
+import type { MessageSender, LiveUiContext, SessionGoal } from '@biu/type-session'
 import { currentSessionId } from '@biu/host-sessions/scope'
+import { getChatPort } from '@biu/host-plugin-loader/ports'
 import {
   continuationPrompt,
   decideGoalContinuation,
@@ -78,8 +79,7 @@ export class AgentsService extends Service {
   }
 
   private resolveLlm(sessionId: string): LlmConfig {
-    const chat = this.ctx.get('chat') as { resolveLlm?: (id?: string | null) => LlmConfig } | undefined
-    return chat?.resolveLlm?.(sessionId) ?? this.llm
+    return getChatPort(this.ctx)?.resolveLlm?.<LlmConfig>(sessionId) ?? this.llm
   }
 
   /** Live progress：该 session 的 agent 是否正在跑回合。 */

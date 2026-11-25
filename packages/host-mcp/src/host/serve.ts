@@ -14,6 +14,7 @@ import {
   runWithRequestWorkspace,
 } from '@biu/host-plugin-loader/data-dir'
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
+import { getAccountPort } from '@biu/host-plugin-loader/ports'
 import type { Context } from 'cordis'
 import type { RouteContext } from '@biu/type-http'
 import {
@@ -271,9 +272,7 @@ export function applyHostServer(ctx: Context) {
       const workspaceId = currentRequestWorkspaceId()
       if (!accountId) return route.send(401, { error: '需要登录' })
       if (!workspaceId) return route.send(400, { error: '需要空间' })
-      const store = (
-        ctx.get('account') as { store?: { isMember?(accountId: string, workspaceId: string): boolean } } | undefined
-      )?.store
+      const store = getAccountPort(ctx)?.store
       if (!store?.isMember?.(accountId, workspaceId)) return route.send(403, { error: '不在这个空间' })
       const { token: _token, clients: _clients, ...safe } = payload()
       return route.send(200, { ...safe, token: '', online: true, workspaceId })
@@ -281,11 +280,7 @@ export function applyHostServer(ctx: Context) {
     if (!isLoopbackAddress(route.req.socket.remoteAddress) && mcpTenant(route) === false) return
     const actor = localActor(route)
     const workspaceId = actor?.workspaceId || ''
-    const account = ctx.get('account') as {
-      workspaceLocation?(workspaceId: string): 'device' | 'cloud'
-      cloudConnection?(localAccountId: string): { origin: string } | null
-      linkedCloud?(localAccountId?: string): { origin: string } | null
-    } | undefined
+    const account = getAccountPort(ctx)
     if (workspaceId && account?.workspaceLocation?.(workspaceId) === 'cloud') {
       const connection =
         (actor?.accountId ? account.cloudConnection?.(actor.accountId) : null) ??
@@ -310,16 +305,9 @@ export function applyHostServer(ctx: Context) {
       return
     }
     const workspaceId = String(route.req.headers['x-biu-workspace-id'] ?? '').trim()
-    if (workspaceId) {
-      try {
-        const account = ctx.get('account') as { workspaceLocation?: (wsId: string) => 'device' | 'cloud' } | undefined
-        if (account?.workspaceLocation?.(workspaceId) === 'cloud') {
-          route.send(410, { error: '云端空间请使用空间 MCP 凭证' })
-          return
-        }
-      } catch {
-        /* no account service */
-      }
+    if (workspaceId && getAccountPort(ctx)?.workspaceLocation?.(workspaceId) === 'cloud') {
+      route.send(410, { error: '云端空间请使用空间 MCP 凭证' })
+      return
     }
     if (mcpTenant(route) === false) return
     token = rotateMcpToken(path)

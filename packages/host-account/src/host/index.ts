@@ -3,6 +3,7 @@ import { Service, type Context } from 'cordis'
 import { hostRemoteOrigin } from '@biu/host-plugin-loader/env'
 import { biuSqlitePath, currentAccountId, eventsSqlitePath, openAndMigrateBiu, openAndMigrateEvents } from '@biu/host-plugin-loader/data-dir'
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
+import { emitTenantRevoked, emitWorkspaceDeleted } from '@biu/host-plugin-loader/tenant-state'
 import { resolveScopedWorkspaceId } from '@biu/host-plugin-loader/runtime'
 import type { RouteContext } from '@biu/type-http'
 import { CollabError, CollabStore } from './store.ts'
@@ -868,7 +869,10 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     const token = bearer(route)
     const found = token ? account.store.accountByToken(token) : null
     account.store.revokeSession(token)
-    if (found) ctx.http.disconnectRevokedSessions(found.id)
+    if (found) {
+      ctx.http.disconnectRevokedSessions(found.id)
+      emitTenantRevoked(ctx, { accountId: found.id })
+    }
     route.res.setHeader('set-cookie', [
       'biu_account=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0',
       'biu_legacy_account=; Path=/; SameSite=Strict; Max-Age=0',
@@ -882,6 +886,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       const body = (await route.json()) as { currentPassword?: string; nextPassword?: string }
       const changed = account.store.changePassword(me.id, String(body.currentPassword ?? ''), String(body.nextPassword ?? ''), bearer(route))
       ctx.http.disconnectRevokedSessions(me.id)
+      emitTenantRevoked(ctx, { accountId: me.id })
       route.send(200, changed)
     } catch (error) {
       fail(route, error)
@@ -903,6 +908,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       const me = actor(route)
       const revoked = account.store.revokeSessionById(me.id, String(route.params.id ?? ''))
       ctx.http.disconnectRevokedSessions(me.id)
+      emitTenantRevoked(ctx, { accountId: me.id })
       route.send(200, revoked)
     } catch (error) {
       fail(route, error)
@@ -1242,6 +1248,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         if (!response.ok) throw new CollabError(payload.error || '删除云端空间失败', response.status)
         try {
           const deleted = account.store.deleteWorkspace(me.id, workspaceId, confirmName)
+      emitWorkspaceDeleted(ctx, workspaceId)
           purgeSessionEvents(deleted.sessionIds)
           account.purgeWorkspaceCache(workspaceId)
           route.send(200, { id: workspaceId, deleted: true, activeWorkspaceId: deleted.activeWorkspaceId })
@@ -1254,6 +1261,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         return
       }
       const deleted = account.store.deleteWorkspace(me.id, workspaceId, confirmName)
+      emitWorkspaceDeleted(ctx, workspaceId)
       purgeSessionEvents(deleted.sessionIds)
       route.send(200, { id: deleted.id, deleted: true, activeWorkspaceId: deleted.activeWorkspaceId })
     } catch (error) {
@@ -1369,6 +1377,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         ...(transferToAccountId ? { transferToAccountId } : {}),
       })
       ctx.http.disconnectTenant(route.params.accountId!, route.params.id!)
+      emitTenantRevoked(ctx, { accountId: route.params.accountId!, workspaceId: route.params.id! })
       route.send(200, {
         members: account.store.members(me.id, route.params.id!),
         transfer: removed,

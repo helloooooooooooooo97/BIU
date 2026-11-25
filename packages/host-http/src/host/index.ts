@@ -17,6 +17,7 @@ import {
   runWithRequestWorkspace,
 } from '@biu/host-plugin-loader/data-dir'
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
+import { getAccountPort } from '@biu/host-plugin-loader/ports'
 import { isShareApiPath, isSharePublicPath } from './share-gate.ts'
 import { isAssetTicketEligiblePath, signAssetTicket, verifyAssetTicket } from './asset-ticket.ts'
 import { consumeWsTicket, issueWsTicket, resolveCorsOrigin } from './ws-ticket.ts'
@@ -242,21 +243,12 @@ export class HttpService extends Service {
         const policy = getRuntimePolicy()
         let wsId = currentRequestWorkspaceId()
         let location: 'device' | 'cloud' | null = null
-        try {
-          const account = this.ctx.get('account') as
-            | {
-                store?: { activeWorkspaceId(): string | null }
-                workspaceLocation?: (id: string) => 'device' | 'cloud'
-              }
-            | undefined
-          if (!wsId && policy.allowImplicitActiveWorkspace) {
-            wsId = String(account?.store?.activeWorkspaceId?.() ?? '').trim()
-          }
-          if (wsId) {
-            location = policy.hostMode === 'cloud' ? 'cloud' : (account?.workspaceLocation?.(wsId) ?? 'device')
-          }
-        } catch {
-          if (wsId) location = policy.hostMode === 'cloud' ? 'cloud' : 'device'
+        const account = getAccountPort(this.ctx)
+        if (!wsId && policy.allowImplicitActiveWorkspace) {
+          wsId = String(account?.store?.activeWorkspaceId?.() ?? '').trim()
+        }
+        if (wsId) {
+          location = policy.hostMode === 'cloud' ? 'cloud' : (account?.workspaceLocation?.(wsId) ?? 'device')
         }
         route.send(200, {
           ...policy,
@@ -422,11 +414,7 @@ export class HttpService extends Service {
             socket.close(auth.error, auth.error === 4403 ? 'workspace' : 'tenant')
             return
           }
-          const store = (
-            this.ctx.get('account') as {
-              store?: { canAccessPlugin?(accountId: string, workspaceId: string, pluginId: string): boolean }
-            } | undefined
-          )?.store
+          const store = getAccountPort(this.ctx)?.store
           if (pluginId && !store?.canAccessPlugin?.(auth.accountId, auth.workspaceId, pluginId)) {
             socket.close(4403, 'plugin access')
             return
@@ -497,14 +485,7 @@ export class HttpService extends Service {
 
   /** 定期清理僵死连接，并兜底复核云端 token/成员资格（不在每次广播热路径查 SQLite）。 */
   private sweepSockets() {
-    const store = (
-      this.ctx.get('account') as {
-        store?: {
-          accountByToken?(token: string): { id: string } | null
-          isMember?(accountId: string, workspaceId: string): boolean
-        }
-      } | undefined
-    )?.store
+    const store = getAccountPort(this.ctx)?.store
     for (const socket of [...this.sockets]) {
       if (socket.readyState !== socket.OPEN) {
         this.unregisterSocket(socket)
@@ -542,16 +523,7 @@ export class HttpService extends Service {
       workspaceId ||= typeof scoped.workspaceId === 'string' ? scoped.workspaceId : ''
       accountId ||= typeof scoped.accountId === 'string' ? scoped.accountId : ''
       if ((!workspaceId || !accountId) && typeof scoped.sessionId === 'string') {
-        const tenant = (
-          this.ctx.get('account') as {
-            store?: {
-              tenantForRecord?(collection: string, recordId: string): {
-                workspaceId: string
-                accountId: string
-              } | null
-            }
-          } | undefined
-        )?.store?.tenantForRecord?.('/agents', scoped.sessionId)
+        const tenant = getAccountPort(this.ctx)?.store?.tenantForRecord?.('/agents', scoped.sessionId)
         workspaceId ||= tenant?.workspaceId ?? ''
         accountId ||= tenant?.accountId ?? ''
       }
@@ -605,9 +577,7 @@ export class HttpService extends Service {
   disconnectRevokedSessions(accountId: string) {
     const bucket = this.socketsByAccount.get(accountId)
     if (!bucket) return
-    const store = (
-      this.ctx.get('account') as { store?: { accountByToken?(token: string): { id: string } | null } } | undefined
-    )?.store
+    const store = getAccountPort(this.ctx)?.store
     for (const socket of [...bucket]) {
       const meta = this.socketMeta.get(socket)
       if (meta && store?.accountByToken?.(meta.token)?.id !== accountId) {
@@ -633,15 +603,7 @@ export class HttpService extends Service {
     let token = preview ? '' : (url.searchParams.get('token') ?? (bearerToken || cookieToken))
     let workspaceId = preview ? '' : (url.searchParams.get('workspaceId') ?? '')
     let accountId = ''
-    const store = (
-      this.ctx.get('account') as {
-        store?: {
-          accountByToken?(token: string): { id: string } | null
-          isMember?(accountId: string, workspaceId: string): boolean
-          activeWorkspaceId?(): string | null
-        }
-      } | undefined
-    )?.store
+    const store = getAccountPort(this.ctx)?.store
     if (wsTicketRaw) {
       const consumed = consumeWsTicket(wsTicketRaw)
       if (!consumed) {
@@ -758,10 +720,10 @@ export class HttpService extends Service {
         const token = bearerToken || accountToken || legacyToken
         let accountId = ''
         let ticketWorkspace = ''
+        const accountStore = getAccountPort(this.ctx)?.store
         if (token) {
           try {
-            const store = (this.ctx.get('account') as { store?: { accountByToken(token: string): { id: string } | null } } | undefined)?.store
-            accountId = store?.accountByToken(token)?.id ?? ''
+            accountId = accountStore?.accountByToken?.(token)?.id ?? ''
           } catch {
             accountId = ''
           }
@@ -779,9 +741,7 @@ export class HttpService extends Service {
             'biu_legacy_account=; Path=/; SameSite=Strict; Max-Age=0',
           ])
         }
-        const hasAccountSystem = Boolean(
-          (this.ctx.get('account') as { store?: { accountByToken?: unknown } } | undefined)?.store?.accountByToken,
-        )
+        const hasAccountSystem = Boolean(accountStore?.accountByToken)
         const publicApi =
           url.pathname === '/api/runtime' ||
           url.pathname.startsWith('/api/account/') ||
@@ -794,15 +754,6 @@ export class HttpService extends Service {
           return
         }
         const headerWorkspace = ticketWorkspace || String(req.headers['x-biu-workspace-id'] ?? '').trim()
-        const accountStore = (
-          this.ctx.get('account') as {
-            store?: {
-              isMember?(accountId: string, workspaceId: string): boolean
-              activeWorkspaceId?(): string | null
-              canAccessPlugin?(accountId: string, workspaceId: string, pluginId: string): boolean
-            }
-          } | undefined
-        )?.store
         const requestedWorkspace = await runWithAccount(accountId, async () => {
           if (headerWorkspace) return headerWorkspace
           if (!accountId) return ''

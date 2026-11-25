@@ -1,6 +1,8 @@
 import { Service, type Context } from 'cordis'
 import type { ToolRequest } from '@biu/host-tools'
 import { currentTenantScope } from '@biu/host-plugin-loader/data-dir'
+import { getNoticesPort } from '@biu/host-plugin-loader/ports'
+import { TenantStateMap } from '@biu/host-plugin-loader/tenant-state'
 
 const DEFAULT_HOLD_TIMEOUT_MS = 60_000
 
@@ -13,7 +15,7 @@ export interface ApprovalNotifyPayload {
 }
 
 export class ApprovalsService extends Service {
-  private modes = new Map<string, 'auto' | 'hold'>()
+  private modes: TenantStateMap<'auto' | 'hold'>
   holdTimeoutMs = DEFAULT_HOLD_TIMEOUT_MS
   private notify: ((payload: ApprovalNotifyPayload) => void) | undefined
   private pending = new Map<
@@ -28,15 +30,40 @@ export class ApprovalsService extends Service {
   >()
 
   get mode(): 'auto' | 'hold' {
-    return this.modes.get(currentTenantScope().accountId) ?? 'auto'
+    return this.modes.get() ?? 'auto'
   }
 
   set mode(next: 'auto' | 'hold') {
-    this.modes.set(currentTenantScope().accountId, next)
+    this.modes.set(next)
   }
 
   constructor(ctx: Context) {
     super(ctx, 'approvals')
+    this.modes = new TenantStateMap(ctx, { granularity: 'account' })
+    ctx.effect(() => {
+      const rejectMatching = (predicate: (item: { accountId: string; workspaceId: string }) => boolean) => {
+        for (const [id, item] of [...this.pending]) {
+          if (!predicate(item)) continue
+          this.pending.delete(id)
+          if (item.timer) clearTimeout(item.timer)
+          item.resolve(false)
+        }
+      }
+      const offRevoked = ctx.on('tenant/revoked', (payload) => {
+        rejectMatching(
+          (item) =>
+            item.accountId === payload.accountId &&
+            (!payload.workspaceId || item.workspaceId === payload.workspaceId),
+        )
+      })
+      const offDeleted = ctx.on('workspace/deleted', (payload) => {
+        rejectMatching((item) => item.workspaceId === payload.workspaceId)
+      })
+      return () => {
+        offRevoked()
+        offDeleted()
+      }
+    }, 'approvals.tenant-lifecycle')
     ctx.tools.guard(async (req) => {
       if (!needsApproval(req.name, this.mode)) return req
       const id = crypto.randomUUID()
@@ -83,12 +110,7 @@ export class ApprovalsService extends Service {
     this.pending.delete(id)
     if (item.timer) clearTimeout(item.timer)
     item.resolve(allow)
-    try {
-      const notices = this.ctx.get('notices') as { markSourceRead?: (key: string) => void } | undefined
-      notices?.markSourceRead?.(`approval:${id}`)
-    } catch {
-      /* notices 未登记 */
-    }
+    getNoticesPort(this.ctx)?.markSourceRead?.(`approval:${id}`)
     return { ok: true }
   }
 }
