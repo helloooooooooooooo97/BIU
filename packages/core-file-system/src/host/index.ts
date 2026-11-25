@@ -8,6 +8,7 @@ import {
   writeEditorContent,
   ASSET_GC_INTERVAL_MS,
 } from '@biu/host-plugin-loader/data-dir'
+import { getAccountPort } from '@biu/host-plugin-loader/ports'
 import { getRuntimePolicy, resolveScopedWorkspaceId } from '@biu/host-plugin-loader/runtime'
 import { type Action as PermissionAction, type AuthorizationService } from '@biu/host-account/authorization'
 import { Service, type Context } from 'cordis'
@@ -782,6 +783,27 @@ export class DatabaseService extends Service implements Database {
     action: PermissionAction = 'resource:read',
   ) {
     return this.access.visibleRecords(collection, rows, action)
+  }
+
+  visibleTagIds(ids: string[], action: PermissionAction = 'resource:read'): Set<string> {
+    if (!ids.length) return new Set()
+    const visible = this.visibleRecords(
+      TAGS_COLLECTION_PATH,
+      ids.map((id) => ({ id })),
+      action,
+    )
+    return new Set(visible.map((row) => String(row.id ?? '')))
+  }
+
+  recordTagOwnership(id: string) {
+    const accountId = currentAccountId().trim()
+    if (!accountId) return
+    const existing = this.tags.recordMeta(TAGS_COLLECTION_PATH, id)
+    if (!existing?.createdBy?.accountId) {
+      this.tags.writeRecordMeta(TAGS_COLLECTION_PATH, id, {
+        createdBy: { kind: 'account', accountId, name: accountId },
+      })
+    }
   }
 
   private recordsInScope<T extends { id?: unknown; pageId?: unknown; collection?: unknown; sessionId?: unknown; sourceId?: unknown; tablePath?: unknown }>(
@@ -2729,10 +2751,26 @@ export function apply(ctx: Context) {
   const contentTurns = new ContentTurnService(ctx).open(
     process.env.VITEST ? ':memory:' : dataPath(dataHome(), 'content-turns.json'),
   )
-  ctx.http.route('GET', '/api/content-turns/file', (route) => {
+  ctx.http.route('GET', '/api/content-turns/file', async (route) => {
     const session = String(route.query.get('session') ?? '').trim()
     const turn = Number(route.query.get('turn'))
     const path = String(route.query.get('path') ?? '').trim()
+    if (getRuntimePolicy().authzMode === 'rbac') {
+      const accountId = currentAccountId().trim()
+      const canReadSession = Boolean(accountId && session && getAccountPort(ctx)?.store?.canReadRecord?.('/agents', session))
+      if (!canReadSession) {
+        route.send(403, { error: '无权访问该会话的内容变更快照' })
+        return
+      }
+      if (path.startsWith('/')) {
+        try {
+          await db.requirePath(path, 'resource:read')
+        } catch {
+          route.send(403, { error: '无权访问目标文档的内容变更快照' })
+          return
+        }
+      }
+    }
     const file = contentTurns.snapshot(session, turn, path)
     if (!file) {
       route.send(404, { error: 'missing' })

@@ -39,7 +39,10 @@ export class HubService extends Service {
         args: clone(args),
       })
       this.events.splice(80)
-      ctx.http.broadcast(HUB_CHANNEL_EVENT, this.events[0])
+      const wsId = currentRequestWorkspaceId().trim()
+      const acctId = currentAccountId().trim()
+      if (getRuntimePolicy().authzMode === 'rbac' && (!wsId || !acctId)) return
+      ctx.http.broadcast(HUB_CHANNEL_EVENT, this.events[0], wsId || undefined, acctId || undefined)
     })
     let snapTimer: ReturnType<typeof setTimeout> | null = null
     const pushSnapshot = () => {
@@ -119,7 +122,10 @@ export class HubService extends Service {
     const snapshot = this.snapshot()
     const store = (
       this.ctx.get('account') as {
-        store?: { canAccessPlugin?(accountId: string, workspaceId: string, pluginId: string): boolean }
+        store?: {
+          canAccessPlugin?(accountId: string, workspaceId: string, pluginId: string): boolean
+          isSuperAdmin?(accountId: string): boolean
+        }
       } | undefined
     )?.store
     const allowed = new Set(
@@ -141,8 +147,11 @@ export class HubService extends Service {
           web: `${plugin.web}${separator}workspaceId=${encodeURIComponent(workspaceId)}`,
         }
       })
+    const allowDebugEvents =
+      getRuntimePolicy().authzMode !== 'rbac' || Boolean(accountId && store?.isSuperAdmin?.(accountId))
     return {
       ...snapshot,
+      events: allowDebugEvents ? snapshot.events : [],
       plugins,
       pages: snapshot.pages.filter((page) => allowed.has(page.plugin)),
     }

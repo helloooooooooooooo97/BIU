@@ -51,15 +51,19 @@ function isHashedAssetPath(pathname: string) {
   return /^\/assets\/[^/]+$/.test(pathname) && Boolean(MIME[extname(pathname)])
 }
 
-const TENANT_EVENTS = new Set(['database', 'session', 'agent', 'inbox', 'approval', 'event', 'snapshot'])
+/**
+ * 默认所有 WS 事件在已绑定空间的连接上均按租户隔离（fail-closed）；
+ * 仅明确声明为无敏感载荷的全局广播事件允许跨租户推送。
+ */
+const GLOBAL_BROADCAST_EVENTS = new Set(['plugins/changed', 'clock'])
 
-/** 已绑定空间的连接只接收同一空间的租户事件。会话类事件还要落到同一账号。数据变更要给同空间的其他成员，否则详情里的正文无法互相刷新。未绑定的本机连接仍接收全部。 */
+/** 已绑定空间的连接只接收同一空间的租户事件。非 database 事件还要落到同一账号。数据变更要给同空间的其他成员，否则详情里的正文无法互相刷新。未绑定的本机连接仍接收全部。 */
 export function deliverTenantEvent(
   socket: { workspaceId?: string; accountId?: string },
   type: string,
   event: { workspaceId?: string; accountId?: string } = {},
 ) {
-  if (!socket.workspaceId || !TENANT_EVENTS.has(type)) return true
+  if (!socket.workspaceId || GLOBAL_BROADCAST_EVENTS.has(type)) return true
   if (!event.workspaceId || event.workspaceId !== socket.workspaceId) return false
   if (type !== 'database' && event.accountId && event.accountId !== socket.accountId) return false
   return true
@@ -561,7 +565,7 @@ export class HttpService extends Service {
       if (!deliverTenantEvent(meta ?? {}, type, { workspaceId, accountId })) return
       socket.send(data)
     }
-    if (TENANT_EVENTS.has(type)) {
+    if (!GLOBAL_BROADCAST_EVENTS.has(type)) {
       if (workspaceId) {
         if (type !== 'database' && sessionId && getAccountPort(this.ctx)?.store?.canReadRecord) {
           const wsSockets = this.socketsByWorkspace.get(workspaceId)
