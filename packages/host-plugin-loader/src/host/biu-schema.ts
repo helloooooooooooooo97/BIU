@@ -93,6 +93,8 @@ export const BIU_TABLES: Record<string, TableSpec> = {
       'password_hash',
       'share_plugins',
       'allow_copy',
+      'workspace_id',
+      'created_by',
       'created_at',
       'updated_at',
     ],
@@ -329,7 +331,7 @@ export const BIU_TABLES: Record<string, TableSpec> = {
   },
 }
 
-export const LATEST_BIU_SCHEMA = 55
+export const LATEST_BIU_SCHEMA = 56
 
 export const CREATE_CORE_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -475,6 +477,8 @@ CREATE TABLE IF NOT EXISTS shares (
   password_hash TEXT NOT NULL DEFAULT '',
   share_plugins INTEGER NOT NULL DEFAULT 0,
   allow_copy INTEGER NOT NULL DEFAULT 1,
+  workspace_id TEXT NOT NULL DEFAULT '',
+  created_by TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );

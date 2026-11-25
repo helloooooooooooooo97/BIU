@@ -485,7 +485,7 @@ export class SavedViewsStore {
       rank: Number.isFinite(Number(fields.rank)) ? Math.round(Number(fields.rank)) : views.length,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      ...(isIndexCollection(tablePath) ? { createdBy: accountId } : {}),
+      ...(accountId ? { createdBy: accountId } : {}),
     }
     this.byPath.set(key, [...views, view])
     this.persistDelta(tablePath, [view], [], workspaceId)
@@ -589,13 +589,14 @@ function mergeIncomingStoredView(
   indexScoped: boolean,
   accountId: string,
 ): StoredView {
+  const owner = prevView?.createdBy || (accountId ? accountId : undefined)
   const view: StoredView = {
     ...prevView,
     ...incoming,
     id,
     name: String(incoming.name || prevView?.name || id),
     ...(incomingAt ? {} : { updatedAt: Date.now() }),
-    ...(indexScoped ? { createdBy: accountId } : {}),
+    ...(owner ? { createdBy: owner } : indexScoped ? { createdBy: accountId } : {}),
   }
   const raw = incoming as Record<string, unknown>
   if ('groupConfig' in raw) {

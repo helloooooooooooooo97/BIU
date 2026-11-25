@@ -425,3 +425,14 @@ test('policy-locked view blocks filters/columns changes and deletion for non-adm
   store.applyPatch('/pages', { remove: ['v-locked'] }, 'admin-1')
   assert.deepEqual(removedCalls, ['/pages:v-locked'])
 })
+
+test('custom views record createdBy and preserve creator ownership across subsequent edits', () => {
+  const store = new SavedViewsStore().open(':memory:')
+  store.setWorkspaceResolver(() => 'ws-1')
+  store.applyPatch('/pages', { upsert: [{ id: 'v-alice', name: 'Alice View', filters: { tag: 'a' } }] }, 'alice')
+  assert.equal(store.viewsFor('/pages').find((v) => v.id === 'v-alice')?.createdBy, 'alice')
+
+  // Another member editing visual settings does not steal createdBy
+  store.applyPatch('/pages', { upsert: [{ id: 'v-alice', name: 'Alice View', pageSize: 50 }] }, 'bob')
+  assert.equal(store.viewsFor('/pages').find((v) => v.id === 'v-alice')?.createdBy, 'alice')
+})
