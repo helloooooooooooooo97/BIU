@@ -1,4 +1,5 @@
 import { Service, type Context } from 'cordis'
+import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { basename, isAbsolute, resolve } from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
 import { platform } from 'node:os'
@@ -769,8 +770,10 @@ export class SessionsService extends Service {
       if (allowed) return true
       return this.viewAccess(id, record)
     }
+    const rbac = getRuntimePolicy().authzMode === 'rbac'
+    if (rbac && authorization && !actor) return false
     const store = this.collabStore()
-    if (!store?.activeWorkspaceId()) return true
+    if (!store?.activeWorkspaceId()) return rbac ? false : true
     if (this.viewAccess(id, record)) return true
     const membership = store.membership()
     const key = `/agents\t${id}`

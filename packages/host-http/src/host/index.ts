@@ -339,6 +339,16 @@ export class HttpService extends Service {
       ctx.on('session/event', (payload) => this.broadcast('session', payload))
       ctx.on('agent/status', (payload) => this.broadcast('agent', payload))
       ctx.on('agent/inbox', (payload) => this.broadcast('inbox', payload))
+      ctx.on('tenant/revoked', (payload) => {
+        this.disconnectTenantSockets(
+          (meta) =>
+            meta.accountId === payload.accountId && (!payload.workspaceId || meta.workspaceId === payload.workspaceId),
+          'tenant revoked',
+        )
+      })
+      ctx.on('workspace/deleted', (payload) => {
+        this.disconnectTenantSockets((meta) => meta.workspaceId === payload.workspaceId, 'workspace deleted')
+      })
       let portFallbackUsed = false
       server.on('error', (error: NodeJS.ErrnoException) => {
         if (error.code === 'EADDRINUSE' && config.fallbackPort && config.port > 0 && !portFallbackUsed) {
@@ -520,6 +530,31 @@ export class HttpService extends Service {
         socket.terminate()
       }
     }
+  }
+
+  /** 租户吊销或工作区删除时立即踢出匹配的 WebSocket 长连接并失效权限缓存。 */
+  disconnectTenantSockets(
+    predicate: (meta: { accountId?: string; workspaceId?: string }) => boolean,
+    reason = 'tenant revoked',
+  ): number {
+    this.sessionReadCache.clear()
+    let closed = 0
+    for (const socket of [...this.sockets]) {
+      const meta = this.socketMeta.get(socket)
+      if (!meta || !predicate(meta)) continue
+      this.unregisterSocket(socket)
+      try {
+        socket.close(4403, reason)
+      } catch {
+        try {
+          socket.terminate()
+        } catch {
+          /* ignore */
+        }
+      }
+      closed += 1
+    }
+    return closed
   }
 
   private canAccountReadSession(workspaceId: string, sessionId: string, targetAccountId: string): boolean {

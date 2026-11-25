@@ -551,6 +551,7 @@ export class DatabaseAccessPolicy {
     }
     const createdBy = this.host.tags.recordMeta(TAGS_COLLECTION_PATH, id)?.createdBy?.accountId
     if (createdBy) return createdBy === accountId
+    if (getRuntimePolicy().authzMode === 'rbac') return false
     return Boolean(this.host.tags.get(id))
   }
 
@@ -583,8 +584,21 @@ export class DatabaseAccessPolicy {
         return Boolean(viaView && roleCoversAction(viaView, action))
       })
     }
+    const rbac = getRuntimePolicy().authzMode === 'rbac'
+    if (rbac && authorization && !actor) {
+      return rows.filter(
+        (row) => isBuiltinPluginRow(collection, row as { builtin?: unknown }) && (action === 'resource:read' || action === 'resource:list'),
+      )
+    }
     const membership = this.workspaceMembership()
-    if (!membership) return rows
+    if (!membership) {
+      if (rbac) {
+        return rows.filter(
+          (row) => isBuiltinPluginRow(collection, row as { builtin?: unknown }) && (action === 'resource:read' || action === 'resource:list'),
+        )
+      }
+      return rows
+    }
     const store = this.host.collabStore()
     const workspaceId = this.resolveWorkspaceId()
     const grants = new Map<string, Map<string, Set<string>>>()
@@ -743,8 +757,15 @@ export class DatabaseAccessPolicy {
       }
       return
     }
+    const rbac = getRuntimePolicy().authzMode === 'rbac'
+    if (rbac && authorization && !actor) {
+      throw new Error(`unknown record: ${spec.path}/${id}`)
+    }
     const membership = this.workspaceMembership()
-    if (!membership) return
+    if (!membership) {
+      if (rbac) throw new Error(`unknown record: ${spec.path}/${id}`)
+      return
+    }
     const target = resolveScopeTarget(spec.path, id)
     if (!isRecordInWorkspace(membership, target.collection, target.id) || !this.grantAllows(target.collection, target.id)) {
       throw new Error(`unknown record: ${spec.path}/${id}`)
