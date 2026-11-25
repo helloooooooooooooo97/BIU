@@ -97,7 +97,9 @@ export function registerDatabaseHttpRoutes(
         }
         workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
       }
-      const workspaceId = currentRequestWorkspaceId() || account.store?.activeWorkspaceId() || ''
+      const policy = getRuntimePolicy()
+      const workspaceId =
+        currentRequestWorkspaceId() || (policy.allowImplicitActiveWorkspace ? account.store?.activeWorkspaceId() : '') || ''
       if (workspaceId && account.workspaceLocation) dataLocation = account.workspaceLocation(workspaceId)
       const actorId = currentAccountId()
       if (actorId && workspaceId && account.store?.workspacePrefs) {
@@ -137,7 +139,9 @@ export function registerDatabaseHttpRoutes(
         starredRecords?: unknown
         pinnedAgents?: unknown
       }
+      const policy = getRuntimePolicy()
       const actorId = currentAccountId()
+      let resolvedWorkspaceId = currentRequestWorkspaceId()
       let savedAccountPrefs: Record<string, unknown> | null = null
       if (actorId) {
         try {
@@ -154,7 +158,9 @@ export function registerDatabaseHttpRoutes(
               }
             }
           }
-          const workspaceId = currentRequestWorkspaceId() || account.store?.activeWorkspaceId() || ''
+          const workspaceId =
+            resolvedWorkspaceId || (policy.allowImplicitActiveWorkspace ? account.store?.activeWorkspaceId() : '') || ''
+          resolvedWorkspaceId = workspaceId
           if (workspaceId && account.store?.saveWorkspacePrefs) {
             const saved = account.store.saveWorkspacePrefs(
               actorId,
@@ -181,8 +187,12 @@ export function registerDatabaseHttpRoutes(
           /* ignore */
         }
       }
+      if (policy.hostMode === 'cloud' && (!actorId || !resolvedWorkspaceId)) {
+        route.send(403, { error: '云端模式缺少账号或工作区上下文，拒绝写入个人配置' })
+        return
+      }
       const base =
-        getRuntimePolicy().hostMode !== 'cloud' || !savedAccountPrefs
+        policy.hostMode !== 'cloud'
           ? asPublicProfile(
               writeWorkspaceProfile({
                 name: typeof body.name === 'string' ? body.name : undefined,
@@ -1017,10 +1027,23 @@ export function registerDatabaseHttpRoutes(
         return
       }
       const q = route.query.get('q') || ''
+      const allTags = tags.list(q)
+      const allowedIds = db.visibleTagIds(
+        allTags.map((item) => item.id),
+        'resource:read',
+      )
+      const visibleTags = allTags.filter((item) => allowedIds.has(item.id))
       const payload: { tags: ReturnType<typeof tags.list>; filled?: ReturnType<typeof tags.filledFieldCounts> } = {
-        tags: tags.list(q),
+        tags: visibleTags,
       }
-      if (route.query.get('filled')) payload.filled = tags.filledFieldCounts()
+      if (route.query.get('filled')) {
+        const allFilled = tags.filledFieldCounts()
+        const filteredFilled: Record<string, Record<string, number>> = {}
+        for (const [tagId, counts] of Object.entries(allFilled)) {
+          if (allowedIds.has(tagId)) filteredFilled[tagId] = counts
+        }
+        payload.filled = filteredFilled
+      }
       route.send(200, payload)
     } catch (error) {
       route.send(400, { error: String(error) })
@@ -1031,12 +1054,24 @@ export function registerDatabaseHttpRoutes(
       const body = (await route.json()) as { tags?: unknown[] }
       await db.requirePath(TAGS_COLLECTION_PATH, 'resource:update')
       const listed = Array.isArray(body.tags) ? body.tags : []
+      const rbac = getRuntimePolicy().authzMode === 'rbac'
       for (const item of listed) {
         const pack = normalizeSchemaPack(item)
-        if (pack) tags.upsert(pack)
+        if (!pack) continue
+        if (rbac && tags.get(pack.id) && !db.visibleTagIds([pack.id], 'resource:update').has(pack.id)) {
+          route.send(403, { error: `无权修改标签定义: ${pack.id}` })
+          return
+        }
+        tags.upsert(pack)
+        db.recordTagOwnership(pack.id)
       }
       db.notifyTagCatalog()
-      route.send(200, { ok: true, tags: tags.list() })
+      const allTags = tags.list()
+      const allowedIds = db.visibleTagIds(
+        allTags.map((item) => item.id),
+        'resource:read',
+      )
+      route.send(200, { ok: true, tags: allTags.filter((item) => allowedIds.has(item.id)) })
     } catch (error) {
       route.send(400, { error: String(error) })
     }

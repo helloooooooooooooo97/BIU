@@ -1,4 +1,7 @@
 import type { Context } from 'cordis'
+import { currentAccountId, currentRequestWorkspaceId } from '@biu/host-plugin-loader/data-dir'
+import { getAccountPort } from '@biu/host-plugin-loader/ports'
+import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 
 export const INLINE_EDIT_SYSTEM_PROMPT = [
   '你是文档原地编辑助手。用户会提供一段文档选区（或光标上下文）以及一条修改指令。',
@@ -96,6 +99,20 @@ export async function runInlineEdit(ctx: Context, input: InlineEditInput) {
 
   if (!chat?.resolveLlm || !llm?.forConfig) throw new Error('模型未就绪')
   const sessionId = String(input.sessionId ?? '').trim() || undefined
+  if (getRuntimePolicy().authzMode === 'rbac') {
+    const accountId = currentAccountId().trim()
+    if (!accountId) throw new Error('需要登录后才能使用原地编辑')
+    if (sessionId) {
+      const store = getAccountPort(ctx)?.store
+      const readable = Boolean(store?.canReadRecord?.('/agents', sessionId))
+      const tenant = store?.tenantForRecord?.('/agents', sessionId)
+      const requestWs = currentRequestWorkspaceId().trim()
+      const workspaceMismatch = Boolean(tenant?.workspaceId && requestWs && tenant.workspaceId !== requestWs)
+      if (!readable || workspaceMismatch) {
+        throw new Error('无权访问目标会话')
+      }
+    }
+  }
   const config = chat.resolveLlm(sessionId ?? null)
   if (!String(config.apiKey ?? '').trim()) throw new Error('未配置模型 API Key')
 
