@@ -1,9 +1,16 @@
+import type { CollectionSchema, CollectionSchemaPack, DbRecord } from '@biu/type-file-system'
 import { isBuiltinAllViewId, parseBuiltinScopeViewId } from './catalog-views.ts'
-import { matchListFilterRecord } from './query-logic.ts'
-import type { DbRecord } from '@biu/type-file-system'
+import { matchListFilterRecord, type FilterGroup } from './query-logic.ts'
+import { viewShareListFilter } from './share-view-match.ts'
 
 export type DataScopeName = 'personal' | 'workspace' | 'shared'
 export type ViewGrantRole = 'viewer' | 'commenter' | 'editor' | 'manager' | 'owner'
+export type ViewGrantTarget = {
+  id: string
+  filters?: Record<string, unknown>
+  filterTree?: FilterGroup | null
+  builtin?: boolean
+}
 
 const ROLE_RANK: Record<ViewGrantRole, number> = { viewer: 1, commenter: 2, editor: 3, manager: 4, owner: 5 }
 
@@ -13,36 +20,38 @@ export function highestViewRole(roles: ViewGrantRole[]) {
 
 export function viewFiltersForGrant(
   viewId: string,
-  saved: Array<{ id: string; filters?: Record<string, unknown> }>,
+  saved: ViewGrantTarget[],
 ) {
   if (isBuiltinAllViewId(viewId)) {
     const view = saved.find((item) => item.id === viewId)
-    return { scope: '', filters: stripScope(view?.filters) }
+    return { scope: '', filters: view ? viewShareListFilter(view) : undefined }
   }
   const scopeView = parseBuiltinScopeViewId(viewId)
   if (scopeView) {
     const base = saved.find((view) => view.id === scopeView.viewId)
-    return { scope: scopeView.scope, filters: stripScope(base?.filters) }
+    return { scope: scopeView.scope, filters: base ? viewShareListFilter(base) : undefined }
   }
   const view = saved.find((item) => item.id === viewId)
   if (!view) return null
   const declared = view.filters?.$scope
   const scope = declared === 'personal' || declared === 'workspace' || declared === 'shared' ? declared : ''
-  return { scope, filters: stripScope(view.filters) }
+  return { scope, filters: viewShareListFilter(view) }
 }
 
 export function recordMatchesGrantedView(
   record: DbRecord,
   viewId: string,
-  saved: Array<{ id: string; filters?: Record<string, unknown> }>,
+  saved: ViewGrantTarget[],
   scope: DataScopeName | null,
   owner?: { grantedBy?: string; recordOwnerId?: string },
+  schema?: CollectionSchema,
+  packs: CollectionSchemaPack[] = [],
 ) {
   const resolved = viewFiltersForGrant(viewId, saved)
   if (!resolved) return false
   if (isBuiltinAllViewId(viewId) && (!owner?.grantedBy || owner.recordOwnerId !== owner.grantedBy)) return false
   if (resolved.scope && scope !== resolved.scope) return false
-  return matchListFilterRecord(record, resolved.filters)
+  return matchListFilterRecord(record, resolved.filters, schema, packs)
 }
 
 export function grantAudienceKind(
@@ -61,7 +70,7 @@ export function effectiveDataScope(
   stored: DataScopeName,
   record: DbRecord,
   grants: Array<{ viewId: string; subjectType: 'account' | 'member_view'; subjectId: string; memberKind?: string; grantedBy?: string }>,
-  dataViews: Array<{ id: string; filters?: Record<string, unknown> }>,
+  dataViews: ViewGrantTarget[],
   memberViews: Array<{ id: string; filters?: Record<string, unknown> }> = [],
   recordOwnerId = '',
 ): DataScopeName {
@@ -75,11 +84,4 @@ export function effectiveDataScope(
   if (external || stored === 'shared') return 'shared'
   if (stored === 'workspace' || internal) return 'workspace'
   return 'personal'
-}
-
-function stripScope(filters: Record<string, unknown> | undefined) {
-  if (!filters) return undefined
-  const rest = { ...filters }
-  delete rest.$scope
-  return rest
 }

@@ -234,49 +234,12 @@ export class SavedViewsStore {
     const path = normalizeCollectionPath(collectionPath)
     const key = bucketKey(workspaceId, path)
     const views = this.byPath.get(key) ?? []
-    const upsert = this.db.prepare(
-      `INSERT INTO saved_views (workspace_id, collection, view_id, payload_json, updated_at)
-       VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(workspace_id, collection, view_id) DO UPDATE SET payload_json = excluded.payload_json, updated_at = excluded.updated_at`,
-    )
-    this.db.exec('BEGIN IMMEDIATE')
-    try {
-      const before = this.db
-        .prepare('SELECT view_id FROM saved_views WHERE workspace_id = ? AND collection = ?')
-        .all(workspaceId, path) as Array<{ view_id: string }>
-      this.db.prepare('DELETE FROM saved_views WHERE workspace_id = ? AND collection = ?').run(workspaceId, path)
-      const alive = new Set<string>()
-      for (const view of views) {
-        const id = String(view.id ?? '').trim()
-        if (!id) continue
-        alive.add(id)
-        upsert.run(workspaceId, path, id, JSON.stringify(view), Date.now())
-      }
-      const tomb = this.db.prepare(
-        `INSERT INTO saved_view_tombstones (workspace_id, collection, view_id, deleted_at)
-         VALUES (?, ?, ?, ?)
-         ON CONFLICT(workspace_id, collection, view_id) DO UPDATE SET deleted_at = excluded.deleted_at`,
-      )
-      const untomb = this.db.prepare('DELETE FROM saved_view_tombstones WHERE workspace_id = ? AND collection = ? AND view_id = ?')
-      const marked = this.tombstones.get(key) ?? new Set<string>()
-      for (const row of before) {
-        if (alive.has(row.view_id)) continue
-        marked.add(row.view_id)
-      }
-      for (const viewId of marked) {
-        if (alive.has(viewId)) continue
-        tomb.run(workspaceId, path, viewId, Date.now())
-      }
-      for (const viewId of alive) {
-        marked.delete(viewId)
-        untomb.run(workspaceId, path, viewId)
-      }
-      this.tombstones.set(key, marked)
-      this.db.exec('COMMIT')
-    } catch (error) {
-      this.db.exec('ROLLBACK')
-      throw error
-    }
+    const alive = new Set(views.map((view) => String(view.id ?? '').trim()).filter(Boolean))
+    const before = this.db
+      .prepare('SELECT view_id FROM saved_views WHERE workspace_id = ? AND collection = ?')
+      .all(workspaceId, path) as Array<{ view_id: string }>
+    const removedIds = before.map((row) => row.view_id).filter((id) => !alive.has(id))
+    this.persistDelta(path, views, removedIds, workspaceId)
   }
 
   private workspacePaths(workspaceId: string): string[] {
@@ -461,41 +424,44 @@ export class SavedViewsStore {
     const views = this.byPath.get(key) ?? []
     if (views.some((view) => view.id === id)) throw new Error(`view exists: ${id}`)
     const name = uniqueViewName(String(fields.title ?? fields.name ?? '新视图').trim() || '新视图', views)
-    const view: StoredView = {
+    const now = Date.now()
+    const base: StoredView = {
       id,
       name,
-      mode: typeof fields.mode === 'string' && isViewModeId(fields.mode) ? fields.mode : 'table',
-      query: typeof fields.query === 'string' ? fields.query : '',
-      groupBy: typeof fields.groupBy === 'string' ? fields.groupBy : '',
-      groupConfig: normalizeGroupConfig(fields.groupConfig),
-      columns: parseViewColumns(fields.columns),
-      ...filtersFromPatch(fields.filters),
-      ...sortsFromPatch(fields.sorts, typeof fields.sortField === 'string' && fields.sortField.trim() ? fields.sortField : 'id', fields.sortDir),
-      tree: Boolean(fields.tree),
-      wrap: Boolean(fields.wrap),
-      truncate: fields.truncate !== false,
-      rowNumbers: Boolean(fields.rowNumbers),
-      freezeTitle: Boolean(fields.freezeTitle),
-      freezeUntil: typeof fields.freezeUntil === 'string' && fields.freezeUntil.trim() ? fields.freezeUntil.trim() : undefined,
+      mode: 'table',
+      query: '',
+      groupBy: '',
+      columns: [],
+      filters: {},
+      sortField: 'id',
+      sortDir: 'asc',
+      sorts: [{ id: 's:id', field: 'id', dir: 'asc' }],
+      tree: false,
+      wrap: false,
+      truncate: true,
+      rowNumbers: false,
+      freezeTitle: false,
       pageSize: normalizePageSize(fields.pageSize),
-      columnWidths: normalizeColumnWidths(fields.columnWidths),
-      columnSummaries: normalizeColumnSummaries(parseJsonValue(fields.columnSummaries) ?? fields.columnSummaries),
-      columnViews: normalizeColumnViews(fields.columnViews),
-      sandboxViews: normalizeTableSandboxViews(fields.sandboxViews),
-      rank: Number.isFinite(Number(fields.rank)) ? Math.round(Number(fields.rank)) : views.length,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      columnWidths: {},
+      rank: views.length,
+      createdAt: now,
+      updatedAt: now,
       ...(accountId ? { createdBy: accountId } : {}),
     }
+    const view = applyViewPatch(base, {
+      ...fields,
+      title: name,
+      filters: fields.filters ?? {},
+      sorts: fields.sorts,
+      sortField: typeof fields.sortField === 'string' && fields.sortField.trim() ? fields.sortField : 'id',
+    })
     this.byPath.set(key, [...views, view])
     this.persistDelta(tablePath, [view], [], workspaceId)
     return asRecord(tablePath, label, view, table?.view?.icon)
   }
 
   remove(id: string, accountId = '', tables: CollectionInfo[] = [], workspaceId = this.resolveWorkspaceId()): boolean {
-    const cut = id.indexOf('::')
-    const tablePath = cut >= 0 ? normalizeCollectionPath(id.slice(0, cut)) : ''
-    const viewId = tablePath ? id.slice(cut + 2) : id
+    const { tablePath, viewId } = parseViewRowId(id)
     const candidates = tablePath
       ? [tablePath]
       : [...this.workspacePaths(workspaceId), ...tables.map((table) => normalizeCollectionPath(table.path))]
@@ -522,9 +488,7 @@ export class SavedViewsStore {
   }
 
   write(id: string, patch: Record<string, unknown>, accountId = '', tables: CollectionInfo[] = [], workspaceId = this.resolveWorkspaceId()): DbRecord {
-    const cut = id.indexOf('::')
-    const tablePath = cut >= 0 ? normalizeCollectionPath(id.slice(0, cut)) : ''
-    const viewId = tablePath ? id.slice(cut + 2) : id
+    const { tablePath, viewId } = parseViewRowId(id)
     const wsPaths = this.workspacePaths(workspaceId)
     const tablePaths = tables.map((table) => normalizeCollectionPath(table.path))
     const candidates = [...new Set(tablePath ? [tablePath, ...wsPaths, ...tablePaths] : [...wsPaths, ...tablePaths])].filter(Boolean)
@@ -538,37 +502,7 @@ export class SavedViewsStore {
       if (!seed) continue
       const idx = hit ? views.indexOf(hit) : -1
       const cur = (hit ?? seed) as StoredView
-      const next: StoredView = {
-        ...cur,
-        ...(typeof patch.title === 'string' ? { name: patch.title } : {}),
-        ...(typeof patch.name === 'string' ? { name: patch.name } : {}),
-        ...(typeof patch.mode === 'string' && isViewModeId(patch.mode) ? { mode: patch.mode } : {}),
-        ...(typeof patch.sortField === 'string' ? { sortField: patch.sortField } : {}),
-        ...(patch.sortDir === 'asc' || patch.sortDir === 'desc' ? { sortDir: patch.sortDir } : {}),
-        ...(typeof patch.query === 'string' ? { query: patch.query } : {}),
-        ...(typeof patch.groupBy === 'string' ? { groupBy: patch.groupBy } : {}),
-        ...('groupConfig' in patch ? { groupConfig: normalizeGroupConfig(patch.groupConfig) } : {}),
-        ...('filters' in patch ? filtersFromPatch(patch.filters) : {}),
-        ...('filterTree' in patch ? { filterTree: normalizeFilterGroup(parseJsonValue(patch.filterTree)) } : {}),
-        ...('sorts' in patch ? sortsFromPatch(patch.sorts, patch.sortField ?? cur.sortField, patch.sortDir ?? cur.sortDir) : {}),
-        ...('columns' in patch ? { columns: parseViewColumns(patch.columns) } : {}),
-        ...(typeof patch.pageSize === 'number' ? { pageSize: patch.pageSize } : {}),
-        ...(typeof patch.tree === 'boolean' ? { tree: patch.tree } : {}),
-        ...(typeof patch.wrap === 'boolean' ? { wrap: patch.wrap } : {}),
-        ...(typeof patch.truncate === 'boolean' ? { truncate: patch.truncate } : {}),
-        ...(typeof patch.rowNumbers === 'boolean' ? { rowNumbers: patch.rowNumbers } : {}),
-        ...(typeof patch.freezeTitle === 'boolean' ? { freezeTitle: patch.freezeTitle } : {}),
-        ...('freezeUntil' in patch ? { freezeUntil: typeof patch.freezeUntil === 'string' && patch.freezeUntil.trim() ? patch.freezeUntil.trim() : undefined } : {}),
-        ...('columnWidths' in patch ? { columnWidths: normalizeColumnWidths(patch.columnWidths) } : {}),
-        ...('columnSummaries' in patch ? { columnSummaries: normalizeColumnSummaries(parseJsonValue(patch.columnSummaries) ?? patch.columnSummaries) } : {}),
-        ...('columnViews' in patch ? { columnViews: normalizeColumnViews(patch.columnViews) } : {}),
-        ...('sandboxViews' in patch ? { sandboxViews: normalizeTableSandboxViews(patch.sandboxViews) } : {}),
-        ...(Number.isFinite(Number(patch.rank)) ? { rank: Math.round(Number(patch.rank)) } : {}),
-        ...('emoji' in patch ? { emoji: String(patch.emoji ?? '') } : {}),
-        ...('tag' in patch ? { tag: normalizeSchemaValue(patch.tag) } : {}),
-        updatedAt: Date.now(),
-        createdAt: Number((cur as { createdAt?: number }).createdAt) || Date.now(),
-      }
+      const next = applyViewPatch(cur, patch)
       this.assertCanModifyView(workspaceId, path, cur, next, accountId)
       if (idx >= 0) views[idx] = next
       else views.push(next)
@@ -577,6 +511,88 @@ export class SavedViewsStore {
       return asRecord(path, tableLabelOf(table, path), next, table?.view?.icon)
     }
     throw new Error(`unknown view: ${id}`)
+  }
+}
+
+function parseViewRowId(id: string) {
+  const cut = id.indexOf('::')
+  const tablePath = cut >= 0 ? normalizeCollectionPath(id.slice(0, cut)) : ''
+  return { tablePath, viewId: tablePath ? id.slice(cut + 2) : id }
+}
+
+/** 统一归一化 create / write 传入的视图字段。 */
+function applyViewPatch(cur: StoredView, patch: Record<string, unknown>): StoredView {
+  const next: StoredView = {
+    ...cur,
+    ...(typeof patch.title === 'string' ? { name: patch.title } : {}),
+    ...(typeof patch.name === 'string' ? { name: patch.name } : {}),
+    ...(typeof patch.mode === 'string' && isViewModeId(patch.mode) ? { mode: patch.mode } : {}),
+    ...(typeof patch.sortField === 'string' ? { sortField: patch.sortField } : {}),
+    ...(patch.sortDir === 'asc' || patch.sortDir === 'desc' ? { sortDir: patch.sortDir } : {}),
+    ...(typeof patch.query === 'string' ? { query: patch.query } : {}),
+    ...(typeof patch.groupBy === 'string' ? { groupBy: patch.groupBy } : {}),
+    ...('filters' in patch ? filtersFromPatch(patch.filters) : {}),
+    ...('filterTree' in patch ? { filterTree: normalizeFilterGroup(parseJsonValue(patch.filterTree)) } : {}),
+    ...('sorts' in patch ? sortsFromPatch(patch.sorts, patch.sortField ?? cur.sortField, patch.sortDir ?? cur.sortDir) : {}),
+    ...('columns' in patch ? { columns: parseViewColumns(patch.columns) } : {}),
+    ...(typeof patch.pageSize === 'number' ? { pageSize: normalizePageSize(patch.pageSize) } : {}),
+    ...(typeof patch.tree === 'boolean' ? { tree: patch.tree } : {}),
+    ...(typeof patch.wrap === 'boolean' ? { wrap: patch.wrap } : {}),
+    ...(typeof patch.truncate === 'boolean' ? { truncate: patch.truncate } : {}),
+    ...(typeof patch.rowNumbers === 'boolean' ? { rowNumbers: patch.rowNumbers } : {}),
+    ...(typeof patch.freezeTitle === 'boolean' ? { freezeTitle: patch.freezeTitle } : {}),
+    ...(Number.isFinite(Number(patch.rank)) ? { rank: Math.round(Number(patch.rank)) } : {}),
+    ...('emoji' in patch ? { emoji: String(patch.emoji ?? '') } : {}),
+    ...('tag' in patch ? { tag: normalizeSchemaValue(patch.tag) } : {}),
+    updatedAt: Date.now(),
+    createdAt: Number(cur.createdAt) || Date.now(),
+  }
+  normalizeOptionalViewFields(next, patch, false)
+  return next
+}
+
+/** 规范化可清空的可选字段；clearEmpty=true 时传 null/空值会彻底删除旧键。 */
+function normalizeOptionalViewFields(view: StoredView, raw: Record<string, unknown>, clearEmpty: boolean) {
+  if ('groupConfig' in raw) {
+    const gc = normalizeGroupConfig(raw.groupConfig)
+    if (gc) view.groupConfig = gc
+    else if (clearEmpty) delete view.groupConfig
+    else view.groupConfig = undefined
+  }
+  if ('freezeUntil' in raw) {
+    const fu = typeof raw.freezeUntil === 'string' && raw.freezeUntil.trim() ? raw.freezeUntil.trim() : undefined
+    if (fu) view.freezeUntil = fu
+    else if (clearEmpty) delete view.freezeUntil
+    else view.freezeUntil = undefined
+  }
+  if ('columnSummaries' in raw) {
+    const cs = normalizeColumnSummaries(parseJsonValue(raw.columnSummaries) ?? raw.columnSummaries)
+    if (cs) view.columnSummaries = cs
+    else if (clearEmpty) delete view.columnSummaries
+    else view.columnSummaries = undefined
+  }
+  if ('columnViews' in raw) {
+    const cv = normalizeColumnViews(raw.columnViews)
+    if (cv) view.columnViews = cv
+    else if (clearEmpty) delete view.columnViews
+    else view.columnViews = undefined
+  }
+  if ('sandboxViews' in raw) {
+    const sv = normalizeTableSandboxViews(raw.sandboxViews)
+    if (sv) view.sandboxViews = sv
+    else if (clearEmpty) delete view.sandboxViews
+    else view.sandboxViews = undefined
+  }
+  if ('columnWidths' in raw) {
+    const cw = normalizeColumnWidths(raw.columnWidths)
+    if (Object.keys(cw).length) view.columnWidths = cw
+    else if (clearEmpty) delete view.columnWidths
+    else view.columnWidths = cw
+  }
+  if (clearEmpty && 'filterTree' in raw) {
+    const parsedTree = raw.filterTree == null ? null : normalizeFilterGroup(parseJsonValue(raw.filterTree))
+    if (parsedTree && countFilterRules(parsedTree) > 0) view.filterTree = parsedTree
+    else delete view.filterTree
   }
 }
 
@@ -598,42 +614,7 @@ function mergeIncomingStoredView(
     ...(incomingAt ? {} : { updatedAt: Date.now() }),
     ...(owner ? { createdBy: owner } : indexScoped ? { createdBy: accountId } : {}),
   }
-  const raw = incoming as Record<string, unknown>
-  if ('groupConfig' in raw) {
-    const gc = normalizeGroupConfig(raw.groupConfig)
-    if (gc) view.groupConfig = gc
-    else delete view.groupConfig
-  }
-  if ('freezeUntil' in raw) {
-    const fu = typeof raw.freezeUntil === 'string' && raw.freezeUntil.trim() ? raw.freezeUntil.trim() : undefined
-    if (fu) view.freezeUntil = fu
-    else delete view.freezeUntil
-  }
-  if ('columnSummaries' in raw) {
-    const cs = normalizeColumnSummaries(parseJsonValue(raw.columnSummaries) ?? raw.columnSummaries)
-    if (cs) view.columnSummaries = cs
-    else delete view.columnSummaries
-  }
-  if ('columnViews' in raw) {
-    const cv = normalizeColumnViews(raw.columnViews)
-    if (cv) view.columnViews = cv
-    else delete view.columnViews
-  }
-  if ('sandboxViews' in raw) {
-    const sv = normalizeTableSandboxViews(raw.sandboxViews)
-    if (sv) view.sandboxViews = sv
-    else delete view.sandboxViews
-  }
-  if ('columnWidths' in raw) {
-    const cw = normalizeColumnWidths(raw.columnWidths)
-    if (Object.keys(cw).length) view.columnWidths = cw
-    else delete view.columnWidths
-  }
-  if ('filterTree' in raw) {
-    const parsedTree = raw.filterTree == null ? null : normalizeFilterGroup(parseJsonValue(raw.filterTree))
-    if (parsedTree && countFilterRules(parsedTree) > 0) view.filterTree = parsedTree
-    else delete view.filterTree
-  }
+  normalizeOptionalViewFields(view, incoming as Record<string, unknown>, true)
   return view
 }
 

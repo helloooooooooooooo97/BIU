@@ -17,6 +17,7 @@ function createPolicy(grants: NonNullable<WorkspaceFiles['viewGrantsFor']> exten
     currentActor: () => ({ type: 'account' as const, accountId: 'acc-1', workspaceId: 'ws-1' }),
     authorize: () => ({ allowed: false, effectiveRole: null, source: 'none' }),
     hasDataViewMatcher: () => false,
+    canGrantorShareRecord: () => true,
   }
   const host = {
     tags: {} as AccessPolicyHost['tags'],
