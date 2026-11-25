@@ -1,16 +1,12 @@
-import { lazy, memo, Suspense, useState, type ReactElement, type ReactNode, type RefObject } from 'react'
+import { lazy, memo, Suspense, useState, type ReactElement, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ArrowDownTrayIcon,
-  Bars3BottomLeftIcon,
   ChatBubbleLeftRightIcon,
   CheckCircleIcon,
-  ChevronRightIcon,
   Cog6ToothIcon,
   EllipsisHorizontalIcon,
   GlobeAltIcon,
-  LockClosedIcon,
-  PlusIcon,
   TagIcon,
   TrashIcon,
   UserIcon,
@@ -24,8 +20,8 @@ import { collectionNoun } from '../catalog-views.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { countFilterRules, type FilterGroup, type SortRule } from '../query-logic.ts'
 import type { BrowserDialogState } from './browser-dialogs.tsx'
-import { askNewPlugin, askNewPresentation } from './browser-row-title.tsx'
-import { CheckRow, LocalText } from './controls.tsx'
+import { askNewPlugin } from './browser-row-title.tsx'
+import { LocalText } from './controls.tsx'
 import { PAGES_COLLECTION_PATH, PLUGINS_COLLECTION_PATH } from './database-path.ts'
 import { readJson } from './db-client.ts'
 import type { GroupBucket, ViewMode } from './fields.ts'
@@ -33,7 +29,6 @@ import { ModeGlyph, VIEW_MODES } from './fsdb-cells.tsx'
 import { TableGlyph, UiGlyph, ViewModeGlyph } from './nav-glyphs.tsx'
 import { PageBanner } from './page-banner.tsx'
 import type { QueryField } from './query-menus.tsx'
-import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search.tsx'
 import { ViewOrderMenu } from './view-order-menu.tsx'
 import type { GroupConfig, SavedView } from './saved-view.ts'
 import type { TableSandboxItem } from '../shared/table-sandbox-model.ts'

@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   CheckCircleIcon,
@@ -26,7 +26,6 @@ import {
   type ChatStepStat,
   type TrajectoryUsage,
 } from '@biu/web-session-view'
-import { SidebarMascot } from '@biu/public-mascot'
 import { StaticMascotMark } from '@biu/public-mascot'
 import { resolveSessionMascot } from '@biu/public-mascot'
 import type { SlotProps } from '@biu/type-slots'

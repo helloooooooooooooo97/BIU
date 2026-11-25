@@ -21,11 +21,8 @@ test('file-system web does not register a page tag block', () => {
   assert.match(pageBar, /aria-label="属性展示"/)
   const css = readFileSync(resolve(import.meta.dirname, '../../../core-editor/src/web/style.ts'), 'utf8')
   assert.doesNotMatch(css, /\.page-tag-block /)
-  const views = readFileSync(resolve(import.meta.dirname, './tag-views.ts'), 'utf8')
   assert.doesNotMatch(page, /TagRecordSandbox/)
   assert.doesNotMatch(chrome, /TagRecordSandbox/)
-  assert.match(views, /export async function patchTagSandbox/)
-  assert.match(views, /\/api\/tag\/sandbox\/patch/)
 })
 
 test('file-system web injects page styles when the plugin applies', () => {

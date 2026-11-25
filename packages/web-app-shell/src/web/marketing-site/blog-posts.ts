@@ -38,10 +38,16 @@ export type BlogPost = {
 
 export const BLOG_AUTHOR = { name: 'The BIU Team', email: '348876414@qq.com' }
 
-/** 英文按每分钟 220 词估算，代码块和图不计。 */
-export function readingMinutes(post: BlogPost) {
-  const words = post.sections
-    .flatMap((section) => [section.heading ?? '', ...section.body.filter((p): p is string => typeof p === 'string')])
+/** 英文按每分钟 220 词、中文按每分钟 400 字估算，代码块和图不计。 */
+export function readingMinutes(post: BlogPost, locale: 'en' | 'zh' = 'en') {
+  const texts = post.sections.flatMap((section) => [
+    section.heading ?? '',
+    ...section.body.filter((p): p is string => typeof p === 'string'),
+  ])
+  if (locale === 'zh') {
+    return Math.max(1, Math.round(texts.join('').length / 400))
+  }
+  const words = texts
     .join(' ')
     .trim()
     .split(/\s+/)

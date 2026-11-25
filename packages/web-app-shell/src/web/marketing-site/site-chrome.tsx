@@ -20,14 +20,24 @@ export type SiteChromeProps = {
 /** 导航栏品牌标记的显示尺寸（与 style.css 的 .site-brand-mark 保持一致）。 */
 const NAV_BRAND_PX = 24
 
-const NAV_PRIMARY = [
-  { label: 'Product', to: '/product' },
-  { label: 'Use Cases', to: '/use-cases' },
-  { label: 'Compare', to: '/compare' },
-  { label: 'Security', to: '/security' },
-  { label: 'Blog', to: '/blog' },
-  { label: 'Pricing', to: '/pricing' },
-] as const
+const NAV_PRIMARY = {
+  en: [
+    { label: 'Product', to: '/product' },
+    { label: 'Use Cases', to: '/use-cases' },
+    { label: 'Compare', to: '/compare' },
+    { label: 'Security', to: '/security' },
+    { label: 'Blog', to: '/blog' },
+    { label: 'Pricing', to: '/pricing' },
+  ],
+  zh: [
+    { label: '产品', to: '/product' },
+    { label: '用例', to: '/use-cases' },
+    { label: '对比', to: '/compare' },
+    { label: '安全', to: '/security' },
+    { label: '博客', to: '/blog' },
+    { label: '定价', to: '/pricing' },
+  ],
+} as const
 
 export const GITHUB_URL = 'https://github.com/helloooooooooooooo97/biu'
 export const CONTACT_EMAIL = '348876414@qq.com'
@@ -52,56 +62,91 @@ export function DownloadIcon() {
 /** GitHub 按钮：拿到星标数就跟在后面显示，拿不到就只是一个按钮。 */
 export function GitHubButton({ label, className = 'site-cta-secondary' }: { label: string; className?: string }) {
   const { stars } = useGitHubStats()
+  const { locale } = useSiteLocale()
   return (
     <a className={className} href={GITHUB_URL} target="_blank" rel="noreferrer">
       <GitHubIcon />{label}
-      {stars !== undefined ? <span className="site-gh-stars" aria-label={`${stars} GitHub stars`}><span className="site-gh-star" aria-hidden>★</span>{formatStars(stars)}</span> : null}
+      {stars !== undefined ? <span className="site-gh-stars" aria-label={locale === 'zh' ? `${stars} 个星标` : `${stars} GitHub stars`}><span className="site-gh-star" aria-hidden>★</span>{formatStars(stars)}</span> : null}
     </a>
   )
 }
 
 type FooterLink = { label: string; to: string } | { label: string; href: string }
 
-const FOOTER_COLUMNS: ReadonlyArray<{ title: string; links: readonly FooterLink[] }> = [
-  {
-    title: 'Product',
-    links: [
-      { label: 'Overview', to: '/product' },
-      { label: 'Use Cases', to: '/use-cases' },
-      { label: 'Pricing', to: '/pricing' },
-      { label: 'Download', to: '/download' },
-    ],
-  },
-  {
-    title: 'Open Source',
-    links: [
-      { label: 'GitHub', href: GITHUB_URL },
-      { label: 'Changelog', to: '/changelog' },
-      { label: 'Report an Issue', href: `${GITHUB_URL}/issues` },
-      { label: 'Apache 2.0 License', href: `${GITHUB_URL}/blob/main/LICENSE` },
-    ],
-  },
-  {
-    title: 'Resources',
-    links: [
-      { label: 'Compare', to: '/compare' },
-      { label: 'Security', to: '/security' },
-      { label: 'Docs', to: '/docs' },
-      { label: 'Blog', to: '/blog' },
-      { label: 'Brand', to: '/brand' },
-      { label: 'Invest', to: '/invest' },
-    ],
-  },
-]
+const FOOTER_COLUMNS: Record<'en' | 'zh', ReadonlyArray<{ title: string; links: readonly FooterLink[] }>> = {
+  en: [
+    {
+      title: 'Product',
+      links: [
+        { label: 'Overview', to: '/product' },
+        { label: 'Use Cases', to: '/use-cases' },
+        { label: 'Pricing', to: '/pricing' },
+        { label: 'Download', to: '/download' },
+      ],
+    },
+    {
+      title: 'Open Source',
+      links: [
+        { label: 'GitHub', href: GITHUB_URL },
+        { label: 'Changelog', to: '/changelog' },
+        { label: 'Report an Issue', href: `${GITHUB_URL}/issues` },
+        { label: 'Apache 2.0 License', href: `${GITHUB_URL}/blob/main/LICENSE` },
+      ],
+    },
+    {
+      title: 'Resources',
+      links: [
+        { label: 'Compare', to: '/compare' },
+        { label: 'Security', to: '/security' },
+        { label: 'Docs', to: '/docs' },
+        { label: 'Blog', to: '/blog' },
+        { label: 'Brand', to: '/brand' },
+        { label: 'Invest', to: '/invest' },
+      ],
+    },
+  ],
+  zh: [
+    {
+      title: '产品',
+      links: [
+        { label: '产品总览', to: '/product' },
+        { label: '用例', to: '/use-cases' },
+        { label: '定价', to: '/pricing' },
+        { label: '下载', to: '/download' },
+      ],
+    },
+    {
+      title: '开源',
+      links: [
+        { label: 'GitHub', href: GITHUB_URL },
+        { label: '更新日志', to: '/changelog' },
+        { label: '问题反馈', href: `${GITHUB_URL}/issues` },
+        { label: 'Apache 2.0 许可', href: `${GITHUB_URL}/blob/main/LICENSE` },
+      ],
+    },
+    {
+      title: '了解',
+      links: [
+        { label: '对比', to: '/compare' },
+        { label: '安全', to: '/security' },
+        { label: '文档', to: '/docs' },
+        { label: '博客', to: '/blog' },
+        { label: '品牌', to: '/brand' },
+        { label: '投资', to: '/invest' },
+      ],
+    },
+  ],
+}
 
 export type FaqItem = readonly [question: string, answer: string]
 
 /** 各页的常见问题：只回答这一页读者真正会卡住的地方。 */
 export function SiteFaq({ title, items }: { title: string; items: readonly FaqItem[] }) {
+  const { locale } = useSiteLocale()
   return (
     <section className="site-faq">
       <div className="site-faq-heading" data-reveal>
-        <p className="site-section-label">FAQ</p>
+        <p className="site-section-label">{locale === 'zh' ? '常见问题' : 'FAQ'}</p>
         <h2>{title}</h2>
       </div>
       <div className="site-faq-list" data-reveal>
@@ -117,14 +162,16 @@ export function SiteFaq({ title, items }: { title: string; items: readonly FaqIt
 }
 
 /** 每页底部的收尾行动：开源项目的入口只有两个 —— 下载，或者去看源码。 */
-export function SiteFinalCta({ title, label = 'Open Source · Free' }: { title: ReactNode; label?: string }) {
+export function SiteFinalCta({ title, label }: { title: ReactNode; label?: string }) {
+  const { locale } = useSiteLocale()
+  const resolvedLabel = label ?? (locale === 'zh' ? '开源 · 免费' : 'Open Source · Free')
   return (
     <section className="site-final-cta" data-reveal>
       <div className="site-container">
-        <p className="site-section-label">{label}</p>
+        <p className="site-section-label">{resolvedLabel}</p>
         <h2>{title}</h2>
         <div className="site-cta-actions">
-          <Link className="site-cta-primary" to="/download"><DownloadIcon />Download</Link>
+          <Link className="site-cta-primary" to="/download"><DownloadIcon />{locale === 'zh' ? '下载' : 'Download'}</Link>
           <GitHubButton label="GitHub" />
         </div>
       </div>
@@ -137,7 +184,8 @@ export function SiteHeader({ onLogin, onStart }: { onLogin: SiteAction; onStart:
   // 用户在品牌页调好的配置会推到这里，导航栏标记随之更新。
   const brand = useBrandConfig()
   const showLogin = useContext(SiteLoginContext)
-  const { toggleLocale } = useSiteLocale()
+  const { locale, toggleLocale } = useSiteLocale()
+  const zh = locale === 'zh'
 
   return (
     <header className="site-nav" data-menu-open={menuOpen ? '1' : '0'}>
@@ -164,15 +212,15 @@ export function SiteHeader({ onLogin, onStart }: { onLogin: SiteAction; onStart:
       <button
         type="button"
         className="site-menu-toggle"
-        aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+        aria-label={menuOpen ? (zh ? '关闭菜单' : 'Close menu') : (zh ? '打开菜单' : 'Open menu')}
         aria-expanded={menuOpen}
         data-testid="site-menu-toggle"
         onClick={() => setMenuOpen((current) => !current)}
       >
         <span aria-hidden>{menuOpen ? '✕' : '☰'}</span>
       </button>
-      <nav className="site-nav-links" aria-label="Main navigation" onClick={() => setMenuOpen(false)}>
-        {NAV_PRIMARY.map((item) => (
+      <nav className="site-nav-links" aria-label={zh ? '官网' : 'Main navigation'} onClick={() => setMenuOpen(false)}>
+        {NAV_PRIMARY[locale].map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -186,16 +234,16 @@ export function SiteHeader({ onLogin, onStart }: { onLogin: SiteAction; onStart:
         <button
           type="button"
           className="site-locale"
-          aria-label="Switch to Chinese"
+          aria-label={zh ? '切换到英文' : 'Switch to Chinese'}
           onClick={() => {
             setMenuOpen(false)
             toggleLocale()
           }}
         >
-          中文
+          {zh ? 'English' : '中文'}
         </button>
-        {showLogin ? <button type="button" className="site-login" data-testid="site-login" onClick={onLogin}>Log in</button> : null}
-        <Link className="site-start" data-testid="site-start" to="/download"><DownloadIcon />Download</Link>
+        {showLogin ? <button type="button" className="site-login" data-testid="site-login" onClick={onLogin}>{zh ? '登录' : 'Log in'}</button> : null}
+        <Link className="site-start" data-testid="site-start" to="/download"><DownloadIcon />{zh ? '下载' : 'Download'}</Link>
       </div>
     </header>
   )
@@ -203,7 +251,13 @@ export function SiteHeader({ onLogin, onStart }: { onLogin: SiteAction; onStart:
 
 function DownloadPageButton() {
   const [state, setState] = useState<'idle' | 'busy' | 'error'>('idle')
-  const label = state === 'busy' ? 'Generating…' : state === 'error' ? 'Generation failed. Try again' : 'Download this page'
+  const { locale } = useSiteLocale()
+  const zh = locale === 'zh'
+  const label = state === 'busy'
+    ? (zh ? '正在生成…' : 'Generating…')
+    : state === 'error'
+      ? (zh ? '生成失败，再试一次' : 'Generation failed. Try again')
+      : (zh ? '下载本页' : 'Download this page')
   return (
     <button
       type="button"
@@ -222,10 +276,12 @@ function DownloadPageButton() {
 
 export function SiteFooter({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   const showLogin = useContext(SiteLoginContext)
+  const { locale } = useSiteLocale()
+  const zh = locale === 'zh'
   return (
     <footer className="site-footer">
       <div className="site-footer-columns">
-        {FOOTER_COLUMNS.map((column) => (
+        {FOOTER_COLUMNS[locale].map((column) => (
           <div key={column.title}>
             <strong>{column.title}</strong>
             {column.links.map((link) => ('to' in link
@@ -235,20 +291,20 @@ export function SiteFooter({ onLogin, onStart }: { onLogin: SiteAction; onStart:
           </div>
         ))}
         <div>
-          <strong>Share</strong>
+          <strong>{zh ? '分享' : 'Share'}</strong>
           <DownloadPageButton />
         </div>
         <div>
-          <strong>Get Started</strong>
-          {showLogin ? <button type="button" onClick={onLogin}>Log in</button> : null}
-          <Link to="/download">Download</Link>
-          <a href={`mailto:${CONTACT_EMAIL}`}>Contact us</a>
+          <strong>{zh ? '开始' : 'Get Started'}</strong>
+          {showLogin ? <button type="button" onClick={onLogin}>{zh ? '登录' : 'Log in'}</button> : null}
+          <Link to="/download">{zh ? '下载' : 'Download'}</Link>
+          <a href={`mailto:${CONTACT_EMAIL}`}>{zh ? '联系我们' : 'Contact us'}</a>
         </div>
       </div>
       <div className="site-footer-base">
-        <p className="site-footer-tagline">BIU · Compose All Your Software on One Page</p>
+        <p className="site-footer-tagline">{zh ? 'BIU · 用一个页面，组合所有软件' : 'BIU · Compose All Your Software on One Page'}</p>
         <p className="site-footer-legal">
-          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> · <Link to="/terms">Privacy & Terms</Link> · Apache 2.0 · © 2026 BIU
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> · <Link to="/terms">{zh ? '隐私与条款' : 'Privacy & Terms'}</Link> · Apache 2.0 · © 2026 BIU
         </p>
       </div>
     </footer>

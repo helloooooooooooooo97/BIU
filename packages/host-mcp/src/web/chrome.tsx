@@ -1,5 +1,5 @@
 import { apiFetch } from '@biu/biu-ui/api-client'
-import { CellMulti } from '@biu/database-ui'
+import { CellMulti } from '@biu/biu-ui/db-ui'
 import type { DbRecord } from '@biu/type-file-system'
 import type { CollectionChrome, FsCellProps, FsDetailPaneProps } from '@biu/type-file-system/ui'
 

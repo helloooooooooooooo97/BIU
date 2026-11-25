@@ -7,7 +7,7 @@ import { Context } from 'cordis'
 import * as tools from '@biu/host-tools'
 import * as sessionStore from '@biu/host-session-store'
 import * as sessions from '@biu/host-sessions'
-import * as systemPrompt from '@biu/host-system-prompt'
+import * as systemPrompt from '@biu/host-agents/system-prompt'
 import * as fs from './index.ts'
 import { runWithSession } from '@biu/host-sessions/scope'
 

@@ -17,7 +17,6 @@ import {
 import { recordMatchesSharedView, resolveSharedView, type SharedViewDef } from '../share-view-match.ts'
 import { effectiveDataScope, highestViewRole, recordMatchesGrantedView, type DataScopeName, type ViewGrantRole } from '../view-access.ts'
 import {
-  AGENTS_COLLECTION_PATH,
   DATA_COLLECTION_PATH,
   EDITOR_BLOCKS_COLLECTION_PATH,
   PLUGINS_COLLECTION_PATH,

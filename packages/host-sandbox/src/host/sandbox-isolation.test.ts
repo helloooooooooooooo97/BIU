@@ -7,7 +7,7 @@ import { Context } from 'cordis'
 import * as tools from '@biu/host-tools'
 import * as fs from '@biu/host-fs'
 import * as subprocess from '@biu/host-subprocess'
-import * as shell from '@biu/host-shell'
+import * as shell from '@biu/host-subprocess/shell'
 import { runWithRequestWorkspace } from '@biu/host-plugin-loader/data-dir'
 import * as sandbox from './index.ts'
 

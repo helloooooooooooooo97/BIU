@@ -6,7 +6,9 @@
   "type": "module",
   "description": "Agent 句柄与 inbox",
   "exports": {
-    ".": "./src/host/index.ts"
+    ".": "./src/host/index.ts",
+    "./subagents": "./src/host/subagents.ts",
+    "./system-prompt": "./src/host/system-prompt.ts"
   },
   "peerDependencies": {
     "cordis": "4.0.0-rc.8"

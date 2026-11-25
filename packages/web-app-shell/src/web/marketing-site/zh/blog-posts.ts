@@ -1,13 +1,6 @@
-/** 段落是字符串；代码块用 { code }，截图用 { image }，示意图用 { diagram }。 */
-export type Paragraph =
-  | string
-  | { code: string }
-  | { image: string; alt: string; caption: string }
-  | { diagram: 'page-env' | 'atoms' | 'vision-table'; caption: string }
+import type { BlogPost, BlogSeries } from '../blog-posts.ts'
 
-export type BlogSeries = 'paradigm' | 'verbs' | 'architecture'
-
-export const BLOG_SERIES: ReadonlyArray<{ id: BlogSeries; title: string; lead: string }> = [
+export const ZH_BLOG_SERIES: ReadonlyArray<{ id: BlogSeries; title: string; lead: string }> = [
   {
     id: 'paradigm',
     title: '产品范式',
@@ -25,28 +18,9 @@ export const BLOG_SERIES: ReadonlyArray<{ id: BlogSeries; title: string; lead: s
   },
 ]
 
-export type BlogPost = {
-  slug: string
-  series: BlogSeries
-  title: string
-  summary: string
-  date: string
-  sections: { heading?: string; body: Paragraph[] }[]
-  /** 正文中的 [n] 对应第 n 条。 */
-  references?: { title: string; publisher: string; year: string; url: string }[]
-}
+export const ZH_BLOG_AUTHOR = { name: 'BIU 团队', email: '348876414@qq.com' }
 
-export const BLOG_AUTHOR = { name: 'BIU 团队', email: '348876414@qq.com' }
-
-/** 中文按每分钟 400 字估算，代码块和图不计。 */
-export function readingMinutes(post: BlogPost) {
-  const chars = post.sections
-    .flatMap((section) => [section.heading ?? '', ...section.body.filter((p): p is string => typeof p === 'string')])
-    .join('').length
-  return Math.max(1, Math.round(chars / 400))
-}
-
-export const BLOG_POSTS: BlogPost[] = [
+export const ZH_BLOG_POSTS: BlogPost[] = [
   {
     slug: 'ai-native-software',
     series: 'paradigm',

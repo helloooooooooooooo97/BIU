@@ -42,15 +42,17 @@ export function buildLockupSvg() {
 }
 
 /** 分享卡片（og:image），1200×630。社交平台大多不认 SVG，发布用的是同名 PNG。 */
-export function buildOgImageSvg() {
+export function buildOgImageSvg(locale: 'en' | 'zh' = 'en') {
+  const headline = locale === 'zh' ? '一个页面，组合所有软件' : 'One page, every piece of software'
+  const sub = locale === 'zh' ? '开源 · 免费 · All in One' : 'Open source · Free · All in One'
   return [
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">',
     '<rect width="1200" height="630" fill="#000000"/>',
     placed(markSvg(280), 120, 175, 280),
     `<g font-family="${FONT}" fill="#ffffff">`,
     '<text x="470" y="282" font-size="96" font-weight="700" letter-spacing="-2">BIU</text>',
-    '<text x="470" y="368" font-size="48" font-weight="600">One page, every piece of software</text>',
-    '<text x="470" y="430" font-size="26" fill-opacity=".6">Open source · Free · All in One</text>',
+    `<text x="470" y="368" font-size="48" font-weight="600">${headline}</text>`,
+    `<text x="470" y="430" font-size="26" fill-opacity=".6">${sub}</text>`,
     '</g>',
     '</svg>',
     '',

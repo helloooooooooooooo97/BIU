@@ -343,42 +343,16 @@ export function revealOverlayThread() {
 export function getOverlayAutohide() {
   return autohide
 }
-
-export function subscribeOverlayAutohide(fn: () => void) {
-  autohideListeners.add(fn)
-  return () => {
-    autohideListeners.delete(fn)
-  }
-}
-
 export function setOverlayAutohide(next: boolean) {
   if (autohide === next) return
   autohide = next
   emitAutohide()
-}
-
-export function getOverlayPinned() {
-  return pinned
-}
-
-export function subscribeOverlayPinned(fn: () => void) {
-  pinListeners.add(fn)
-  return () => {
-    pinListeners.delete(fn)
-  }
-}
-
-export function setOverlayPinned(next: boolean) {
+}export function setOverlayPinned(next: boolean) {
   if (pinned === next) return
   pinned = next
   if (next) setOverlayAutohide(false)
   emitPin()
 }
-
-export function toggleOverlayPinned() {
-  setOverlayPinned(!pinned)
-}
-
 export function setOverlayResizing(next: boolean) {
   resizing = next
 }
@@ -555,12 +529,6 @@ export function readOverlayWinState(): OverlayWinState {
     return fallback
   }
 }
-
-export function readOverlayWinGeom(): OverlayWinGeom {
-  const { layout: _layout, ...geom } = readOverlayWinState()
-  return geom
-}
-
 export function writeOverlayWinState(state: OverlayWinState): void {
   try {
     writeStorageString(OVERLAY_WIN_GEOM_KEY, JSON.stringify(state))
@@ -568,11 +536,6 @@ export function writeOverlayWinState(state: OverlayWinState): void {
     /* ignore */
   }
 }
-
-export function writeOverlayWinGeom(geom: OverlayWinGeom, layout: OverlayLayout = 'right'): void {
-  writeOverlayWinState({ ...geom, layout })
-}
-
 export function requestOverlayFocus() {
   window.dispatchEvent(new Event('biu:overlay-focus'))
 }

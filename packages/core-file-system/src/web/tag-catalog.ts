@@ -30,11 +30,6 @@ function emit() {
 export function tagCatalogRevision() {
   return revision
 }
-
-export function tagFieldFilled(tagId: string, fieldKey: string) {
-  return filledMemory[tagId]?.[fieldKey] ?? 0
-}
-
 export function listenOpenTag() {
   if (typeof window === 'undefined') return () => undefined
   const onOpen = (event: Event) => {
@@ -67,11 +62,6 @@ export function tagLabel(id: string) {
     key
   )
 }
-
-export function tagEmoji(id: string) {
-  return peekRecord(TAGS_COLLECTION_PATH, id)?.emoji?.trim() ?? ''
-}
-
 export function subscribeTagChrome(fn: () => void) {
   const stopTags = subscribeTags(undefined, fn)
   const stopCrumbs = subscribeCrumbs(fn)
@@ -233,11 +223,6 @@ export function randomTagFieldKey(used: Set<string>) {
   }
   return key
 }
-
-export function fieldKeyFromLabel(_label: string, used: Set<string>) {
-  return randomTagFieldKey(used)
-}
-
 export function tagFieldLabelOk(label: string, usedLabels: Iterable<string> = []) {
   const name = label.trim()
   if (!name) return false

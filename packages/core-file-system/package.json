@@ -24,7 +24,6 @@
     "./view-catalog": "./src/web/view-catalog.ts",
     "./host-source-editor": "./src/web/host-source-editor.tsx",
     "./record-prop-host": "./src/web/record-prop-host.tsx",
-    "./tag-views": "./src/web/tag-views.ts",
     "./sandbox-pick-pane": "./src/web/sandbox-pick-pane.ts",
     "./sandbox-files": "./src/web/sandbox-files.ts",
     "./sandbox-ui": "./src/web/sandbox-ui.ts",
@@ -37,7 +36,6 @@
   "dependencies": {
     "@biu/biu-ui": "0.1.0",
     "@biu/core-pick": "0.1.0",
-    "@biu/database-ui": "0.1.0",
     "@biu/host-account": "0.1.0",
     "@biu/host-plugin-loader": "0.1.0",
     "@biu/host-sessions": "0.1.0",

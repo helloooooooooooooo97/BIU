@@ -1,4 +1,4 @@
-import type { CollectionSpec, CollectionInfo, DbRecord } from '@biu/type-file-system'
+import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { actionVisibleToUser, recordBuiltinValues } from '@biu/type-file-system'
 import { parseStampRecordId, stampRecordId } from './tags-collection.ts'
 import { normalizeCollectionPath } from '../paths.ts'

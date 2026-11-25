@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { Context } from 'cordis'
 import * as tools from '@biu/host-tools'
 import { runWithToolProgress } from '@biu/host-tools'
-import * as systemPrompt from '@biu/host-system-prompt'
+import * as systemPrompt from '@biu/host-agents/system-prompt'
 import * as web from './index.ts'
 import { extractPageImages, parseBingHtml, parseDuckDuckGoHtml, stripTags, unwrapBingHref, unwrapDuckHref, WebError, WebService } from './index.ts'
 

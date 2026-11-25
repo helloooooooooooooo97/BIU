@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import type { DbRecord, FieldSpec } from '@biu/type-file-system'
-import { CellDateTime } from '@biu/database-ui'
+import { CellDateTime } from '@biu/biu-ui/db-ui'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
 import { CellPopDraft } from './cell-pop-draft.tsx'
 import { ActionCell, BoolCell, DefaultCell } from './fsdb-cells.tsx'

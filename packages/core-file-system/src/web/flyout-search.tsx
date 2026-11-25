@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { useOptionCursor } from '@biu/database-ui/search'
+import { useOptionCursor } from '@biu/biu-ui/db-search'
 
 export function flyoutQueryMatch(text: string, q: string) {
   const needle = q.trim().toLowerCase()

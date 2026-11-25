@@ -113,9 +113,12 @@ export function formatStars(count: number) {
   return `${k >= 10 ? Math.round(k) : k.toFixed(1).replace(/\.0$/, '')}k`
 }
 
-export function formatDate(iso: string) {
+import { readSiteLocale, type SiteLocale } from './locale.tsx'
+
+export function formatDate(iso: string, locale: SiteLocale = readSiteLocale()) {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return ''
+  if (locale === 'zh') return `${date.getFullYear()} 年 ${date.getMonth() + 1} 月 ${date.getDate()} 日`
   return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric' }).format(date)
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowPathIcon } from '@heroicons/react/16/solid'
-import { PickOption, PickPanel } from '@biu/database-ui/search'
+import { PickOption, PickPanel } from '@biu/biu-ui/db-search'
 import type { DbRecord, FieldSpec } from '@biu/type-file-system'
 import { PAGES_COLLECTION_PATH } from './database-path.ts'
 import { listCollection, readJson } from './db-client.ts'

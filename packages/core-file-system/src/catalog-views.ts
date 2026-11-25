@@ -13,13 +13,6 @@ const ALL_PREFIX = 'builtin-all:'
 const SCOPE_PREFIX = 'builtin-scope:'
 const MEMBER_PREFIX = 'builtin-member:'
 export type DataScope = 'personal' | 'workspace' | 'shared'
-
-export const DATA_SCOPE_LABEL: Record<DataScope, string> = {
-  personal: '私人数据',
-  workspace: '空间数据',
-  shared: '共享数据',
-}
-
 const SCOPE_NAME: Record<DataScope, string> = {
   personal: '私人',
   workspace: '空间',
@@ -155,12 +148,6 @@ export function builtinScopeView(view: SavedView, scope: DataScope): SavedView {
     builtin: true,
   })
 }
-
-export function ownershipScopeViews(table: TableRef): SavedView[] {
-  const base = builtinAllView(table)
-  return (['personal', 'workspace', 'shared'] as const).map((scope) => builtinScopeView(base, scope))
-}
-
 /** 空间与私人区拥有各自的视图集合；历史未标 scope 的用户视图归入私人数据。 */
 export function viewsForScope(views: SavedView[], scope: DataScope): SavedView[] {
   return views.flatMap((view) => {

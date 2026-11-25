@@ -11,7 +11,7 @@ import {
   selectedViewCatalogId,
   subscribeViewCatalog,
 } from './view-catalog.ts'
-import { ensureDbSearchStyle, useOptionCursor } from '@biu/database-ui/search'
+import { ensureDbSearchStyle, useOptionCursor } from '@biu/biu-ui/db-search'
 import { ViewCatalogGlyph } from './view-catalog-glyph.tsx'
 
 export function ViewCatalogPickPanel({

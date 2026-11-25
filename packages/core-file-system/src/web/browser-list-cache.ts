@@ -41,8 +41,6 @@ import type { TablePaintNode } from './windowed-table.tsx'
 export type StatResult = { schema?: CollectionSchema }
 
 export const COLLECT_SHEET_COLUMNS = ['title', 'table'] as const
-export const COLLECT_SHEET_FETCH_COLUMNS = ['title', 'table', 'tablePath', 'sourceId', 'tag'] as const
-
 export function collectSheetColumns(pack?: CollectionSchemaPack | null) {
   const flats = (pack?.fields ?? [])
     .filter((field) => field.deleted !== true)

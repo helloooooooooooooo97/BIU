@@ -6,12 +6,15 @@
   "type": "module",
   "description": "子进程缝",
   "exports": {
-    ".": "./src/host/index.ts"
+    ".": "./src/host/index.ts",
+    "./shell": "./src/host/shell.ts",
+    "./jobs": "./src/host/jobs.ts"
   },
   "peerDependencies": {
     "cordis": "4.0.0-rc.8"
   },
   "dependencies": {
-    "@biu/host-plugin-loader": "0.1.0"
+    "@biu/host-plugin-loader": "0.1.0",
+    "@biu/host-sessions": "0.1.0"
   }
 }

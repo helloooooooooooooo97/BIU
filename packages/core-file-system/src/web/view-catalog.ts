@@ -8,7 +8,6 @@ import {
   SOURCE_RECORD_PROP_VIEW_ID,
   SOURCE_RECORD_PROP_VIEW_LABEL,
   listedRecordLayouts as mergeRecordLayouts,
-  parseRecordLayouts,
   parseRecordSandboxes,
 } from '@biu/type-file-system/record-views'
 import { getDatabaseUi } from './database-ui.ts'

@@ -15,9 +15,7 @@ import {
 } from './query-menus.tsx'
 import { PAGE_SIZES, type GroupConfig, type SavedView } from './saved-view.ts'
 import type { TableSandboxItem } from '../shared/table-sandbox-model.ts'
-import { LayoutPrefsMenu } from './layout-prefs-menu.tsx'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
-import { getPagePrefs } from './page-width.ts'
 
 export type ViewSettingsTab = 'view' | 'columns' | 'filter' | 'sort' | 'group'
 

@@ -42,7 +42,7 @@ import { AttachmentFile, UrlHref } from './cell-media.tsx'
 import { PersonFace } from './person-cell.tsx'
 import { RecordLinkChips } from './record-link-cell.tsx'
 import { tagChipIcon, tagChipLabel } from './schema-field.tsx'
-import { jumpTag, loadTags, tagsById } from './tag-catalog.ts'
+import { jumpTag, tagsById } from './tag-catalog.ts'
 
 export function actionIcon(id: string, opts?: { fallback?: boolean; className?: string }) {
   const cls = opts?.className ?? 'size-[14px]'

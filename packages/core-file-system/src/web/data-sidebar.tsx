@@ -16,7 +16,7 @@ import { BoundedMap } from './bounded-map.ts'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
 import { groupField, groupRecords, parentFieldKey, treeChildren } from './fields.ts'
 import { builtinAllViewId, isReadOnlyViewId, type DataScope } from '../catalog-views.ts'
-import { dataSidebarKind, isRecordTreeCollection, isSystemCollection, sortDataCollections } from './database-path.ts'
+import { dataSidebarKind, isRecordTreeCollection, sortDataCollections } from './database-path.ts'
 import { rememberInspectorWorkingView } from './inspector-db-route.ts'
 import { readJson } from './db-client.ts'
 import { paintCollectionViews } from './collection-nav.ts'
@@ -27,7 +27,6 @@ import {
   getPreviewTotalsVersion,
   nextPreviewLimit,
   previewCacheKey,
-  shouldFetchViewPreview,
   whenListIdle,
   recordPreviewEmoji,
   recordPreviewLabel,

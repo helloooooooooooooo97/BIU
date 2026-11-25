@@ -52,14 +52,6 @@ export function setActiveWorkspaceScope(workspaceId: string): boolean {
 export function getActiveWorkspaceScope(): string {
   return activeWorkspaceScope
 }
-
-export function subscribeWorkspaceScope(listener: (workspaceId: string) => void): () => void {
-  scopeListeners.add(listener)
-  return () => {
-    scopeListeners.delete(listener)
-  }
-}
-
 // Auto-reset all registered workspace caches on account/workspace token changes
 // without introducing a reverse import from web-app-shell into core-file-system.
 onAppEvent('biu:account-token', () => {

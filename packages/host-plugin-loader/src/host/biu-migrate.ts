@@ -1,14 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { openPooledSqlite, sharedSqlitePoolStats, closeAllSharedSqliteConnections } from './sqlite-pool.ts'
-import {
-  assertSqliteVersion,
-  getSchemaVersion,
-  isEmptyDatabase,
-  openSqlite,
-  quoteSqlitePath,
-  setSchemaVersion,
-} from './sqlite-open.ts'
+import { assertSqliteVersion, getSchemaVersion, isEmptyDatabase, quoteSqlitePath, setSchemaVersion } from './sqlite-open.ts'
 import { CREATE_CORE_SQL, LATEST_BIU_SCHEMA, createLatestSchema, dropLegacyEditorColumns, rebuildPageBlockCollectionKeys, tableColumnNames, tableNames } from './biu-schema.ts'
 import { copyLegacyBodies, rebuildContentRefs } from './editor-content.ts'
 

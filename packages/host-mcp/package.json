@@ -16,7 +16,6 @@
   },
   "dependencies": {
     "@biu/biu-ui": "0.1.0",
-    "@biu/database-ui": "0.1.0",
     "@biu/host-plugin-loader": "0.1.0",
     "@biu/host-tools": "0.1.0",
     "@biu/type-file-system": "0.1.0",

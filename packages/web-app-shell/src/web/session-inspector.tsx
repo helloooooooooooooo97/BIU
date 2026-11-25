@@ -33,7 +33,6 @@ import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import {
   bindInspectorPaneMenuDismiss,
-  getInspectorDbPath,
   getInspectorPaneMenu,
   getInspectorPaneMenuVersion,
   isInspectorPaneAbandoned,
