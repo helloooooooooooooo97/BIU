@@ -13,7 +13,7 @@ import {
   type GroupMenuBucket,
   type QueryField,
 } from './query-menus.tsx'
-import { PAGE_SIZES, type GroupConfig, type SavedView } from './saved-view.ts'
+import { PAGE_SIZES, normalizeViewScope, type GroupConfig, type SavedView, type ViewScope } from './saved-view.ts'
 import type { TableSandboxItem } from '../shared/table-sandbox-model.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 
@@ -27,6 +27,12 @@ const TABS: Array<{ id: ViewSettingsTab; label: string }> = [
   { id: 'group', label: '分组' },
 ]
 
+const VIEW_SCOPE_OPTIONS: Array<{ value: ViewScope; label: string }> = [
+  { value: 'personal', label: '私人' },
+  { value: 'workspace', label: '空间' },
+  { value: 'shared', label: '共享' },
+]
+
 export function ViewSettingsMenu({
   tab,
   onTabChange,
@@ -35,6 +41,7 @@ export function ViewSettingsMenu({
   title,
   activeView,
   commitViewName,
+  onSaveAsPersonal,
   mode,
   setMode,
   extraViews,
@@ -79,6 +86,7 @@ export function ViewSettingsMenu({
   title: string
   activeView?: SavedView
   commitViewName: (viewId: string, raw: string) => void
+  onSaveAsPersonal?: () => void
   mode: ViewMode
   setMode: (next: ViewMode) => void
   extraViews: CollectionViewType[]
@@ -116,7 +124,7 @@ export function ViewSettingsMenu({
   setGroupSettings: (next: GroupConfig | undefined) => void
   onClose: () => void
 }) {
-  const [openAcc, setOpenAcc] = useState<'mode' | 'pageSize' | null>(null)
+  const [openAcc, setOpenAcc] = useState<'mode' | 'scope' | 'pageSize' | null>(null)
 
   const modeOptions = [
     ...VIEW_MODES.map((opt) => ({
@@ -221,6 +229,37 @@ export function ViewSettingsMenu({
               >
                 <PlusIcon aria-hidden className="size-[14px]" />
                 <span>新建沙箱视图</span>
+              </button>
+            ) : null}
+
+            {!sheet && activeView && !activeView.builtin ? (
+              <GroupAccordionSelect
+                testId="fsdb-vset-scope-row"
+                label="可见范围"
+                value={normalizeViewScope(activeView.scope) ?? 'workspace'}
+                options={VIEW_SCOPE_OPTIONS}
+                open={openAcc === 'scope'}
+                onToggle={() => setOpenAcc((prev) => (prev === 'scope' ? null : 'scope'))}
+                onSelect={(next) => {
+                  setOpenAcc(null)
+                  patchActiveView({ scope: next as ViewScope })
+                }}
+              />
+            ) : null}
+
+            {!sheet && activeView && onSaveAsPersonal ? (
+              <button
+                type="button"
+                className="fsdb-vset-mode-add"
+                data-testid="fsdb-view-save-personal"
+                onClick={() => {
+                  setOpenAcc(null)
+                  onSaveAsPersonal()
+                  onClose()
+                }}
+              >
+                <PlusIcon aria-hidden className="size-[14px]" />
+                <span>另存为私人视图</span>
               </button>
             ) : null}
 

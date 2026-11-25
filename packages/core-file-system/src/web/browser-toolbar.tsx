@@ -56,7 +56,7 @@ export type BrowserListChromeProps = {
   setViewMenuOpen: (open: boolean) => void
   toggleMenu: (which: 'view' | 'mode' | 'sort' | 'columns' | 'filter' | 'config' | 'group' | 'layout') => void
   selectView: (view: SavedView) => void
-  copyView: (source?: SavedView) => void
+  copyView: (source?: SavedView, overrides?: Partial<SavedView>) => void
   deleteView: (view: SavedView, path?: string) => void
   persistViewOrder: (ids: string[]) => void
   addEmptyView: () => void
@@ -704,6 +704,7 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                         title={title}
                         activeView={activeView}
                         commitViewName={commitViewName}
+                        onSaveAsPersonal={activeView ? () => copyView(activeView, { scope: 'personal' }) : undefined}
                         mode={mode}
                         setMode={setMode}
                         extraViews={extraViews}

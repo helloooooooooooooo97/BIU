@@ -278,11 +278,14 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       : effectiveScope
         ? viewsForScope(allListed, effectiveScope)
         : allListed
-    const view = makeEmptyView(
-      listed,
-      target === collectionPath ? [...schemaDefaultKeys] : [],
-      effectiveScope ? { $scope: effectiveScope } : {},
-    )
+    const view: SavedView = {
+      ...makeEmptyView(
+        listed,
+        target === collectionPath ? [...schemaDefaultKeys] : [],
+        effectiveScope ? { $scope: effectiveScope } : {},
+      ),
+      ...(effectiveScope ? { scope: effectiveScope } : {}),
+    }
     const nextStored = mergeSavedViewLists(stored, [view])
     rememberViews(target, nextStored)
     if (target === collectionPath) {
@@ -318,10 +321,10 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     })
   }
 
-  function copyView(source?: SavedView) {
+  function copyView(source?: SavedView, overrides?: Partial<SavedView>) {
     void commitView(
       source
-        ? { ...source, id: newSavedViewId(), name: uniqueViewName(`${source.name} 副本`), builtin: false }
+        ? { ...source, ...overrides, id: newSavedViewId(), name: uniqueViewName(`${source.name} 副本`), builtin: false }
         : {
             id: newSavedViewId(),
             name: uniqueViewName(`${activeView?.name ?? title} 副本`),
@@ -340,6 +343,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
             freezeTitle,
             query,
             columnWidths,
+            ...overrides,
           },
     )
   }
