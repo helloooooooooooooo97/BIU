@@ -10,6 +10,7 @@ import {
   activeViewStorageKey,
   diffSavedViews,
   getStarredViews,
+  isLocalOnlyViewPatch,
   isViewStarred,
   loadViews,
   mergeSavedViewLists,
@@ -423,6 +424,11 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       return
     }
     rememberViews(collectionPath, nextList)
+    // 个人展示偏好（列宽/换行/截断/行号/冻结/分页）仅存本地，不写服务端、不覆盖协作者。
+    if (isLocalOnlyViewPatch(patch)) {
+      persistViewDisplay(collectionPath, targetId, { ...patch, updatedAt: updated.updatedAt })
+      return
+    }
     void persistViewsFor(collectionPath, nextList, { upsert: [updated], baseline: latest }).then((ok) => {
       if (ok || viewsRef.current !== nextList) return
       viewsRef.current = latest

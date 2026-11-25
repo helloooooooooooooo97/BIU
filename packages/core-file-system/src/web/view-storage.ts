@@ -14,6 +14,41 @@ import { emptyFilterGroup, looksLikeFilterTree, normalizeFilterGroup, parseSorts
 import { normalizeGroupConfig, normalizePageSize, normalizeSavedView, parseViewColumns, rankListedViews, viewIsFresher, type SavedView } from './saved-view.ts'
 import { KeyedSerialQueue } from './record-write-queue.ts'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
+import { clearCrumbCache } from './crumb-cache.ts'
+import { resetStarredWorkspaceCache } from './starred-storage.ts'
+
+export {
+  type CrumbRecord,
+  getCrumbsVersion,
+  subscribeCrumbs,
+  rememberRecords,
+  applyListedCrumbMutation,
+  loadRecords,
+  peekRecord,
+} from './crumb-cache.ts'
+
+export {
+  type StarredView,
+  type StarredRecord,
+  loadStarredViews,
+  hydrateStarredFromServer,
+  getStarredViews,
+  subscribeStarredViews,
+  getStarredViewsVersion,
+  persistStarredViews,
+  isViewStarred,
+  toggleStarredView,
+  removeStarredViews,
+  loadStarredRecords,
+  getStarredRecords,
+  subscribeStarredRecords,
+  getStarredRecordsVersion,
+  persistStarredRecords,
+  isRecordStarred,
+  toggleStarredRecord,
+  starredRecordLabel,
+  starredRecordEmoji,
+} from './starred-storage.ts'
 
 /** 按 collectionPath 串行化视图写入，防止连点改属性时并发 POST 乱序覆盖。 */
 export const viewWriteQueue = new KeyedSerialQueue()
@@ -105,123 +140,6 @@ export function mergeSavedViewLists(
 
 export function loadViews(collectionPath: string): SavedView[] {
   return memoryViews.get(collectionPath) ?? []
-}
-
-export type CrumbRecord = { id: string; label: string; emoji?: string; mascot?: unknown }
-
-const memoryRecords = new Map<string, CrumbRecord[]>()
-const memoryRecordMeta = new Map<string, CrumbRecord>()
-
-function recordsKey(collectionPath: string, viewId?: string) {
-  return `${collectionPath}\0${viewId ?? ''}`
-}
-
-function recordMetaKey(collectionPath: string, recordId: string) {
-  return `${collectionPath}\0id:${recordId}`
-}
-
-function keepCrumbLabel(row: CrumbRecord, prev?: CrumbRecord) {
-  const next = String(row.label ?? '').trim()
-  const last = String(prev?.label ?? '').trim()
-  if (next && next !== row.id) return next
-  if (last && last !== row.id) return last
-  return next || last || row.id
-}
-
-let crumbsVersion = 0
-const crumbListeners = new Set<() => void>()
-
-function emitCrumbs() {
-  crumbsVersion += 1
-  for (const fn of crumbListeners) fn()
-}
-
-export function getCrumbsVersion() {
-  return crumbsVersion
-}
-
-export function subscribeCrumbs(fn: () => void) {
-  crumbListeners.add(fn)
-  return () => {
-    crumbListeners.delete(fn)
-  }
-}
-
-export function rememberRecords(collectionPath: string, rows: CrumbRecord[], viewId?: string) {
-  const painted = rows.map((row) => {
-    const last = memoryRecordMeta.get(recordMetaKey(collectionPath, row.id))
-    const next = {
-      ...last,
-      ...row,
-      label: keepCrumbLabel(row, last),
-      emoji: row.emoji || last?.emoji,
-      mascot: row.mascot ?? last?.mascot,
-    }
-    memoryRecordMeta.set(recordMetaKey(collectionPath, row.id), next)
-    return next
-  })
-  memoryRecords.set(recordsKey(collectionPath, viewId), painted)
-  emitCrumbs()
-}
-
-export function applyListedCrumbMutation(
-  path: string,
-  mutation:
-    | { op: 'patch'; row: CrumbRecord }
-    | { op: 'create'; row: CrumbRecord; viewId?: string | null }
-    | { op: 'remove'; ids: string[] },
-) {
-  if (mutation.op === 'patch') {
-    const last = memoryRecordMeta.get(recordMetaKey(path, mutation.row.id))
-    const next = {
-      ...last,
-      ...mutation.row,
-      label: keepCrumbLabel(mutation.row, last),
-      emoji: mutation.row.emoji || last?.emoji,
-      mascot: mutation.row.mascot ?? last?.mascot,
-    }
-    memoryRecordMeta.set(recordMetaKey(path, mutation.row.id), next)
-    for (const [key, rows] of memoryRecords) {
-      if (!key.startsWith(`${path}\0`)) continue
-      const at = rows.findIndex((row) => row.id === next.id)
-      if (at < 0) continue
-      const copy = rows.slice()
-      copy[at] = { ...copy[at], ...next }
-      memoryRecords.set(key, copy)
-    }
-    emitCrumbs()
-    return
-  }
-  if (mutation.op === 'remove') {
-    const gone = new Set(mutation.ids.map(String))
-    let changed = false
-    for (const [key, rows] of memoryRecords) {
-      if (!key.startsWith(`${path}\0`)) continue
-      const next = rows.filter((row) => !gone.has(row.id))
-      if (next.length === rows.length) continue
-      memoryRecords.set(key, next)
-      changed = true
-    }
-    for (const id of gone) {
-      if (memoryRecordMeta.delete(recordMetaKey(path, id))) changed = true
-    }
-    if (changed) emitCrumbs()
-    return
-  }
-  const crumb = mutation.row
-  memoryRecordMeta.set(recordMetaKey(path, crumb.id), crumb)
-  const key = recordsKey(path, mutation.viewId ?? undefined)
-  const prev = memoryRecords.get(key) ?? []
-  memoryRecords.set(key, [crumb, ...prev.filter((row) => row.id !== crumb.id)])
-  emitCrumbs()
-}
-
-export function loadRecords(collectionPath: string, viewId?: string): CrumbRecord[] {
-  return memoryRecords.get(recordsKey(collectionPath, viewId)) ?? []
-}
-
-export function peekRecord(collectionPath: string, recordId: string): CrumbRecord | undefined {
-  return memoryRecordMeta.get(recordMetaKey(collectionPath, recordId))
 }
 
 export function loadActiveViewId(collectionPath: string, listed: SavedView[]) {
@@ -332,125 +250,6 @@ async function fetchSavedViewNow(collectionPath: string, viewId: string): Promis
   }
   const listed = loadViews(collectionPath).find((view) => view.id === viewId)
   return listed ? withViewDisplay(collectionPath, listed) : null
-}
-
-export type StarredView = { path: string; viewId: string; name?: string }
-
-const STARRED_VIEWS_KEY = 'fsdb.starredViews'
-
-function starredViewsKey() {
-  const ws = currentWorkspaceStorageId()
-  return ws ? `${STARRED_VIEWS_KEY}:${ws}` : STARRED_VIEWS_KEY
-}
-
-export function loadStarredViews(): StarredView[] {
-  try {
-    const raw = readStorageString(starredViewsKey())
-    const parsed = raw ? (JSON.parse(raw) as unknown) : []
-    if (!Array.isArray(parsed)) return []
-    return parsed.flatMap((item) => {
-      if (!item || typeof item !== 'object') return []
-      const rec = item as Record<string, unknown>
-      const path = String(rec.path ?? '').trim()
-      const viewId = String(rec.viewId ?? '').trim()
-      const name = String(rec.name ?? '').trim()
-      return path && viewId ? [{ path, viewId, ...(name ? { name } : {}) }] : []
-    })
-  } catch {
-    return []
-  }
-}
-
-let starredViews = loadStarredViews()
-let starredVersion = 0
-let starredHydrateSeq = 0
-const starredListeners = new Set<() => void>()
-
-function pushStarredToServer(patch: { starredViews?: StarredView[]; starredRecords?: StarredRecord[] }) {
-  if (typeof window === 'undefined' || typeof fetch !== 'function') return
-  void apiFetch('/api/account/starred', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(patch),
-  }).catch(() => undefined)
-}
-
-function normalizeStarredViews(raw: unknown): StarredView[] {
-  if (!Array.isArray(raw)) return []
-  return raw.flatMap((item) => {
-    if (!item || typeof item !== 'object') return []
-    const rec = item as Record<string, unknown>
-    const path = String(rec.path ?? '').trim()
-    const viewId = String(rec.viewId ?? '').trim()
-    const name = String(rec.name ?? '').trim()
-    return path && viewId ? [{ path, viewId, ...(name ? { name } : {}) }] : []
-  })
-}
-
-function normalizeStarredRecords(raw: unknown): StarredRecord[] {
-  if (!Array.isArray(raw)) return []
-  return raw.flatMap((item) => {
-    if (!item || typeof item !== 'object') return []
-    const rec = item as Record<string, unknown>
-    const path = String(rec.path ?? '').trim()
-    const recordId = String(rec.recordId ?? '').trim()
-    if (!path || !recordId) return []
-    const label = String(rec.label ?? '').trim()
-    const emoji = String(rec.emoji ?? '').trim()
-    return [{ path, recordId, ...(label ? { label } : {}), ...(emoji ? { emoji } : {}) }]
-  })
-}
-
-export async function hydrateStarredFromServer() {
-  if (typeof window === 'undefined' || typeof fetch !== 'function') return
-  const seq = ++starredHydrateSeq
-  try {
-    const res = await apiFetch('/api/account/starred')
-    if (!res.ok || seq !== starredHydrateSeq) return
-    const data = (await res.json()) as { starredViews?: unknown; starredRecords?: unknown }
-    if (seq !== starredHydrateSeq) return
-    if (Array.isArray(data.starredViews)) {
-      persistStarredViews(normalizeStarredViews(data.starredViews), { remote: false })
-    }
-    if (Array.isArray(data.starredRecords)) {
-      persistStarredRecords(normalizeStarredRecords(data.starredRecords), { remote: false })
-    }
-  } catch {
-    /* ignore */
-  }
-}
-
-export function getStarredViews() {
-  return starredViews
-}
-
-let starredHydratedOnce = false
-
-function ensureStarredHydrated() {
-  if (starredHydratedOnce) return
-  starredHydratedOnce = true
-  void hydrateStarredFromServer()
-}
-
-export function subscribeStarredViews(fn: () => void) {
-  starredListeners.add(fn)
-  ensureStarredHydrated()
-  return () => {
-    starredListeners.delete(fn)
-  }
-}
-
-export function getStarredViewsVersion() {
-  return starredVersion
-}
-
-export function persistStarredViews(items: StarredView[], options?: { remote?: boolean }) {
-  if (options?.remote !== false) starredHydrateSeq += 1
-  starredViews = items
-  starredVersion += 1
-  writeStorageString(starredViewsKey(), JSON.stringify(items))
-  for (const fn of starredListeners) fn()
-  if (options?.remote !== false) pushStarredToServer({ starredViews: items })
 }
 
 export type SavedViewsPatch = { upsert?: SavedView[]; remove?: string[] }
@@ -811,108 +610,23 @@ export function upsertSavedView(collectionPath: string, view: SavedView) {
   noteLocalSavedViewsWrite(collectionPath)
 }
 
-export function isViewStarred(items: StarredView[], path: string, viewId: string) {
-  return items.some((item) => item.path === path && item.viewId === viewId)
-}
+/** 个人展示偏好字段：仅存当前用户本地，不触发服务端写盘、不覆盖协作者的布局。 */
+export const LOCAL_VIEW_PREF_KEYS = [
+  'columnWidths',
+  'wrap',
+  'truncate',
+  'rowNumbers',
+  'freezeTitle',
+  'freezeUntil',
+  'pageSize',
+] as const
 
-export function toggleStarredView(items: StarredView[], path: string, viewId: string, name?: string): StarredView[] {
-  if (isViewStarred(items, path, viewId)) return items.filter((item) => item.path !== path || item.viewId !== viewId)
-  const label = String(name ?? '').trim()
-  return [...items, { path, viewId, ...(label ? { name: label } : {}) }]
-}
+const LOCAL_VIEW_PREF_KEY_SET = new Set<string>(LOCAL_VIEW_PREF_KEYS)
 
-export function removeStarredViews(path: string, viewIds: Iterable<string>) {
-  const drop = new Set([...viewIds].map((id) => String(id ?? '').trim()).filter(Boolean))
-  if (!drop.size) return false
-  const current = getStarredViews()
-  const next = current.filter((item) => item.path !== path || !drop.has(item.viewId))
-  if (next.length === current.length) return false
-  persistStarredViews(next)
-  return true
-}
-
-export type StarredRecord = { path: string; recordId: string; label?: string; emoji?: string }
-
-const STARRED_RECORDS_KEY = 'fsdb.starredRecords'
-
-function starredRecordsKey() {
-  const ws = currentWorkspaceStorageId()
-  return ws ? `${STARRED_RECORDS_KEY}:${ws}` : STARRED_RECORDS_KEY
-}
-
-export function loadStarredRecords(): StarredRecord[] {
-  try {
-    const raw = readStorageString(starredRecordsKey())
-    const parsed = raw ? (JSON.parse(raw) as unknown) : []
-    if (!Array.isArray(parsed)) return []
-    return parsed.flatMap((item) => {
-      if (!item || typeof item !== 'object') return []
-      const rec = item as Record<string, unknown>
-      const path = String(rec.path ?? '').trim()
-      const recordId = String(rec.recordId ?? '').trim()
-      if (!path || !recordId) return []
-      const label = String(rec.label ?? '').trim()
-      const emoji = String(rec.emoji ?? '').trim()
-      return [{ path, recordId, ...(label ? { label } : {}), ...(emoji ? { emoji } : {}) }]
-    })
-  } catch {
-    return []
-  }
-}
-
-let starredRecords = loadStarredRecords()
-let starredRecordsVersion = 0
-const starredRecordListeners = new Set<() => void>()
-
-export function getStarredRecords() {
-  return starredRecords
-}
-
-export function subscribeStarredRecords(fn: () => void) {
-  starredRecordListeners.add(fn)
-  ensureStarredHydrated()
-  return () => {
-    starredRecordListeners.delete(fn)
-  }
-}
-
-export function getStarredRecordsVersion() {
-  return starredRecordsVersion
-}
-
-export function persistStarredRecords(items: StarredRecord[], options?: { remote?: boolean }) {
-  if (options?.remote !== false) starredHydrateSeq += 1
-  starredRecords = items
-  starredRecordsVersion += 1
-  writeStorageString(starredRecordsKey(), JSON.stringify(items))
-  for (const fn of starredRecordListeners) fn()
-  if (options?.remote !== false) pushStarredToServer({ starredRecords: items })
-}
-
-export function isRecordStarred(items: StarredRecord[], path: string, recordId: string) {
-  return items.some((item) => item.path === path && item.recordId === recordId)
-}
-
-export function toggleStarredRecord(
-  items: StarredRecord[],
-  path: string,
-  recordId: string,
-  meta?: { label?: string; emoji?: string },
-): StarredRecord[] {
-  if (isRecordStarred(items, path, recordId)) return items.filter((item) => item.path !== path || item.recordId !== recordId)
-  const label = String(meta?.label ?? '').trim()
-  const emoji = String(meta?.emoji ?? '').trim()
-  return [...items, { path, recordId, ...(label ? { label } : {}), ...(emoji ? { emoji } : {}) }]
-}
-
-export function starredRecordLabel(item: StarredRecord) {
-  const peeked = peekRecord(item.path, item.recordId)
-  const label = String(peeked?.label ?? item.label ?? '').trim()
-  return label && label !== item.recordId ? label : label || item.recordId
-}
-
-export function starredRecordEmoji(item: StarredRecord) {
-  return String(peekRecord(item.path, item.recordId)?.emoji ?? item.emoji ?? '').trim()
+/** 当本次 patch 只包含个人展示偏好字段时，走纯本地存储，跳过服务端写盘。 */
+export function isLocalOnlyViewPatch(patch: Partial<SavedView>): boolean {
+  const keys = Object.keys(patch)
+  return keys.length > 0 && keys.every((key) => LOCAL_VIEW_PREF_KEY_SET.has(key))
 }
 
 const DISPLAY_KEYS = [
@@ -1107,14 +821,10 @@ export function withViewDisplay(collectionPath: string, view: SavedView): SavedV
 
 registerWorkspaceCache('view-storage', () => {
   memoryViews.clear()
-  memoryRecords.clear()
-  memoryRecordMeta.clear()
+  clearCrumbCache()
   viewsPullByKey.clear()
   viewsPulledAtByKey.clear()
   pulledViewPaths.clear()
   pulledAllViews = false
-  persistStarredViews([], { remote: false })
-  persistStarredRecords([], { remote: false })
-  starredHydratedOnce = true
-  void hydrateStarredFromServer()
+  resetStarredWorkspaceCache()
 })
