@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "MCP 缝：挂载外部 server，同时把本机 Biu 暴露成 Streamable HTTP MCP",
+  "description": "MCP 缝：挂载外部 server，同时把本机 BIU 暴露成 Streamable HTTP MCP",
   "exports": {
     ".": "./src/host/index.ts",
     "./config": "./src/host/config.ts",

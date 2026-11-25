@@ -98,7 +98,7 @@ export function createBiuMcpServer(ctx: Context) {
   const server = new Server(SERVER_INFO, {
     capabilities: { tools: {} },
     instructions:
-      'Biu 工作台的 MCP 入口。默认只开放文件系统 db_* 工具（文件模式）。请求必须带 Authorization: Bearer <token>。' +
+      'BIU 工作台的 MCP 入口。默认只开放文件系统 db_* 工具（文件模式）。请求必须带 Authorization: Bearer <token>。' +
       '统一命名约定：db_list path="/" 列出所有表；db_stat 查表结构；db_read 读单条记录；' +
       'db_create 用 records 非空数组新建；db_update 用 fields 对象更新属性；' +
       'db_content / db_file / db_media 统一用 command + value / from 读写正文与附件（command=view 为只读）。',

@@ -44,7 +44,7 @@ export const SidebarMascot = memo(function SidebarMascot({
   playNonce = 0,
   sessionId,
   className,
-  title = 'Biu',
+  title = 'BIU',
   identity = DEFAULT_SESSION_MASCOT,
   paused = false,
   followPointer = false,

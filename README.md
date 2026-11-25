@@ -1,7 +1,7 @@
 <div align="center">
 
 <p>
-  <img src="public/favicon.svg" width="96" height="96" alt="Biu" />
+  <img src="public/favicon.svg" width="96" height="96" alt="BIU" />
 </p>
 
 # BIU
@@ -16,7 +16,7 @@
 <p>
   <em>“McLuhan said the medium is the message.<br />
   In reinventing the ultimate medium, we define the message itself.<br />
-  Ask not what Biu can do — ask what Biu cannot.”</em>
+  Ask not what BIU can do — ask what BIU cannot.”</em>
 </p>
 
 </div>
@@ -53,11 +53,11 @@
 
 Most agent products separate conversations, content, and tools across different systems. Agent output remains in chat history, so using it again means finding, explaining, or generating it again.
 
-Biu puts pages, tables, tasks, skills, plugins, and agents themselves in one workspace. Humans use the interface, while agents read and modify the same data through a shared API. There is no second copy to keep in sync.
+BIU puts pages, tables, tasks, skills, plugins, and agents themselves in one workspace. Humans use the interface, while agents read and modify the same data through a shared API. There is no second copy to keep in sync.
 
 This shared data and operation model is the **File System**. It is not a file browser bolted onto an app; it is the foundation of the workbench. Every table, page, block, and record has an addressable path.
 
-As Picasso famously said, "Good artists copy, great artists steal." Rather than copying surface features, Biu draws foundational models from four classic systems and recombines them into its own core architecture:
+As Picasso famously said, "Good artists copy, great artists steal." Rather than copying surface features, BIU draws foundational models from four classic systems and recombines them into its own core architecture:
 
 | Borrowed from | What |
 |---|---|
@@ -116,7 +116,7 @@ Now that the product is concrete, two principles explain its design: one limits 
 
 The anti-pattern is a one-to-one mapping between concepts and features — a "task" concept for tasks, a "document" concept for documents, a "chat" concept for chat. N features, N mechanisms; adding a feature means adding a concept.
 
-Biu's set of atoms is small:
+BIU's set of atoms is small:
 
 ```
 path · table · record · schema · operations · blurb
@@ -130,7 +130,7 @@ So **adding a domain is not adding a concept — it is composing the same atoms 
 
 Few atoms are not enough on their own — if every domain had its own access pattern, humans and agents would still have to learn it N times.
 
-Biu exposes one operation interface for reading and writing data in any domain:
+BIU exposes one operation interface for reading and writing data in any domain:
 
 ```
 db_create /<table>
@@ -169,7 +169,7 @@ This principle shows up again and again below, always as the same move:
 
 In most systems, "read and write data" gets written once per domain: one API for tasks, another for documents, another for config. A new domain means a new set of endpoints, and every consumer of that interface — UI, agents, scripts — has to learn it again.
 
-Biu collapses that layer into a single **File System**. What it abstracts is not storage — underneath, SQLite is SQLite, a file is a file — **it abstracts the interface**:
+BIU collapses that layer into a single **File System**. What it abstracts is not storage — underneath, SQLite is SQLite, a file is a file — **it abstracts the interface**:
 
 > Data in every domain follows the same structure, operation interface, and form of self-description.
 
@@ -473,7 +473,7 @@ db_create /plugins    ← make a capability (the only one needing pack, because 
 
 **Same operations, same syntax, only the table name differs.**
 
-In most systems, extending the system and using it are two separate roles: developers write plugins, while users install them. Biu does not impose that division — **humans and agents can create system objects through the same interface.**
+In most systems, extending the system and using it are two separate roles: developers write plugins, while users install them. BIU does not impose that division — **humans and agents can create system objects through the same interface.**
 
 The system's boundary is therefore not limited to features that developers built in advance; it also includes capabilities created at runtime. The `plugins` collection must be a table to close this loop: if only developers could write plugins, agents would remain limited to capabilities provided in advance.
 
@@ -536,7 +536,7 @@ This is also why `.plugin-dev` and `.plugin` sit side by side in the same table 
 
 Put all of this back into a known coordinate system and its shape becomes clear:
 
-| | Linux | Biu |
+| | Linux | BIU |
 |---|---|---|
 | Everything is a path | everything is a file | everything is `/<table>/<id>` |
 | System calls | `read` / `write` | `db_read` / `db_update` |
@@ -547,7 +547,7 @@ Put all of this back into a known coordinate system and its shape becomes clear:
 
 **It is not an agent application; it is a kernel that agent applications can grow out of.**
 
-Cursor put an agent inside an editor, and Notion put blocks inside a document — their core objects are predefined by their respective applications. Biu's core objects are data themselves: **an agent is data, a capability is data, and an agent created by another agent is data too**, so all of them can be read, written, copied, and shared.
+Cursor put an agent inside an editor, and Notion put blocks inside a document — their core objects are predefined by their respective applications. BIU's core objects are data themselves: **an agent is data, a capability is data, and an agent created by another agent is data too**, so all of them can be read, written, copied, and shared.
 
 That also explains why it has to exist — there can be many applications (a writing desk, a dispatch desk, an algorithm workbook), but **they can all share one kernel**.
 
@@ -561,7 +561,7 @@ The agent field has a few problems it has never really settled. This design answ
 
 "What should the agent see?" is one of the most expensive questions in any agent system. Common approaches retrieve large amounts of potentially relevant material, rely on manually configured rules, or push events directly, but they often fail to provide the right context.
 
-Biu has two sources, neither of which is a guess.
+BIU has two sources, neither of which is a guess.
 
 **First, capabilities register their own context.** Context is not generated centrally by the platform; each capability declares and provides it through the same contract: a block, a table, or a tool. **It follows the same pattern as registering a table**: whoever provides a capability also states what context it contributes.
 
@@ -579,7 +579,7 @@ Not notified — **able to read the results the action left behind**.
 
 In most agent products, having an agent produce a UI means having it write a hundred-odd lines of HTML / CSS / JS. Expensive, usually ugly, and it will be written again next time.
 
-In Biu, having an agent produce a UI means writing three fields:
+In BIU, having an agent produce a UI means writing three fields:
 
 ```md
 :::editorBlock {kind=algorithm plugin=page-algorithm}
@@ -595,7 +595,7 @@ In Biu, having an agent produce a UI means writing three fields:
 
 A valuable output from an ordinary agent usually sinks into the chat log and disappears — the next time, the agent generates it all over again.
 
-In Biu it can **settle**: it becomes a page, a block, a skill, a table. Because everything is data, settling needs no extra machinery — it is just an ordinary write.
+In BIU it can **settle**: it becomes a page, a block, a skill, a table. Because everything is data, settling needs no extra machinery — it is just an ordinary write.
 
 The system therefore grows round after round instead of resetting to zero each time.
 
@@ -775,7 +775,7 @@ biu
     ├── web-routes-panel/      # Settings → Routes
     ├── web-ui-hub/
     ├── public-mascot/         # shared mascot UI, not in json
-    ├── biu-ui/                # Biu UI shared parts (fold/count/menu/attachments), not in json
+    ├── biu-ui/                # BIU UI shared parts (fold/count/menu/attachments), not in json
     │
     ├── core-file-system/      # File System: tables + db_* tools + UI
     ├── core-editor/           # record body editor; blocks, refs, slash menu
@@ -803,6 +803,6 @@ As of this version, **code and documentation original to the BIU project** are l
 
 Snapshots previously released under MIT or PolyForm Noncommercial remain under those terms. The current repository tree and all subsequent releases are licensed under Apache-2.0.
 
-**Exception: the Grok Bot character.** The geometry, animation, and character design in `public/grok-bot/` are **not part of the Biu source licensed under Apache-2.0**; rights belong to xAI and other rights holders. See [NOTICE.md](NOTICE.md).
+**Exception: the Grok Bot character.** The geometry, animation, and character design in `public/grok-bot/` are **not part of the BIU source licensed under Apache-2.0**; rights belong to xAI and other rights holders. See [NOTICE.md](NOTICE.md).
 
 The software is provided "as is", without warranty of any kind.

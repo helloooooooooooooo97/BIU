@@ -1,6 +1,6 @@
 # Third-party notice
 
-Grok Bot assets below are **not** Apache-2.0 Biu source. Keep this file
+Grok Bot assets below are **not** Apache-2.0 BIU source. Keep this file
 when redistributing (Apache-2.0 NOTICE).
 
 ## Grok Bot character (study replica)
@@ -18,7 +18,7 @@ avatars; do not treat the assets as original product branding.
 
 Source disclaimer (upstream): for learning reference only; confirm copyright,
 trademark, and license requirements before further distribution.
-Apache-2.0 on Biu does not grant any xAI character rights.
+Apache-2.0 on BIU does not grant any xAI character rights.
 
 ## CursorAvatar / OpenMausBot mascot (retired)
 

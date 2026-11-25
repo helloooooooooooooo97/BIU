@@ -64,7 +64,7 @@ export function normalizeAgentMode(value: unknown, fallback: AgentToolMode = 'st
 
 export const MINIMAL_TOOL_NAMES = ['bash', 'str_replace_editor'] as const
 
-/** Biu 文件系统 DB 工具；文件模式下只开放这些。 */
+/** BIU 文件系统 DB 工具；文件模式下只开放这些。 */
 export const FILE_TOOL_NAMES = [
   'db_list',
   'db_read',

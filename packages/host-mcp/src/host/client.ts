@@ -45,7 +45,7 @@ function buildTransport(config: McpServerConfig): Transport {
 
 /**
  * 一条已完成 initialize 握手的 MCP 连接。
- * SDK 负责协议细节（握手、帧、error、超时）；这里只保留 Biu 需要的四个动作。
+ * SDK 负责协议细节（握手、帧、error、超时）；这里只保留 BIU 需要的四个动作。
  */
 export class McpConnection {
   readonly id: string
