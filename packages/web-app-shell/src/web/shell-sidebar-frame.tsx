@@ -4,7 +4,7 @@ import { computeFloatingPosition } from '@biu/biu-ui/floating-position'
 import { TOOLTIP_OVERLAY_Z, overlayZ } from '@biu/biu-ui/overlay-portal'
 import { ChevronDoubleLeftIcon, ChevronDoubleRightIcon, CloudIcon, ComputerDesktopIcon } from '@heroicons/react/16/solid'
 import { chromeIcon } from './chrome-icon.ts'
-import { ShellSidePlaces, ShellWorkspaceSwitcher, useActiveWorkspaceLocation } from './shell-chrome.tsx'
+import { ShellSidePlaces, ShellSidebarAccount, ShellWorkspaceSwitcher, useActiveWorkspaceLocation } from './shell-chrome.tsx'
 import {
   isSidebarFlyoutKeepTarget,
   isSidebarFlyoutIgnoreTarget,
@@ -220,6 +220,10 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
         </div>
       ) : null}
       {children}
+      <ShellSidebarAccount
+        narrow={narrow}
+        onOpenAccount={onSettings ? () => onSettings('account') : undefined}
+      />
     </aside>
     </div>
   )
