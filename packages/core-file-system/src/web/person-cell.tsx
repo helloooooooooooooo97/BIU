@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowPathIcon, CpuChipIcon, UserIcon } from '@heroicons/react/16/solid'
 import { AiAvatar } from '@biu/biu-ui/ai-avatar'
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { resolveSessionMascot, SidebarMascot } from '@biu/public-mascot'
 import { asPerson, asPersonList, personKey, type PersonValue } from '@biu/type-file-system'
 import { PickOption, PickPanel } from '@biu/biu-ui/db-search'
@@ -32,6 +33,76 @@ let membersInflight: Promise<MemberPerson[]> | null = null
 let membersListed: MemberPerson[] | null = null
 let membersListedAt = 0
 const MEMBERS_TTL_MS = 8000
+const ACCOUNT_EVENT = 'biu:account-token'
+let memberDirCache: Map<string, MemberPerson> | null = null
+let memberDirLoadedAt = 0
+let memberDirInflight: Promise<Map<string, MemberPerson>> | null = null
+
+function invalidateMembersCache() {
+  membersListed = null
+  membersListedAt = 0
+  memberDirCache = null
+  memberDirLoadedAt = 0
+}
+
+function loadMemberDirectory(): Promise<Map<string, MemberPerson>> {
+  if (memberDirCache && Date.now() - memberDirLoadedAt < MEMBERS_TTL_MS) return Promise.resolve(memberDirCache)
+  if (memberDirInflight) return memberDirInflight
+  const params = new URLSearchParams({
+    path: WORKSPACE_MEMBERS_COLLECTION_PATH,
+    limit: '500',
+    columns: 'title,name,email,avatar',
+  })
+  const req = apiFetch(`/api/db/list?${params.toString()}`)
+    .then(async (res) => {
+      if (!res.ok) return new Map<string, MemberPerson>()
+      const page = (await res.json()) as { items?: Array<Record<string, unknown>> }
+      const map = new Map<string, MemberPerson>()
+      for (const item of page?.items ?? []) {
+        const id = String(item?.id ?? '').trim()
+        if (!id) continue
+        const email = String(item.email ?? '').trim()
+        const name = String(item.name ?? '').trim() || String(item.title ?? '').trim() || email || id.slice(0, 8)
+        const avatar = typeof item.avatar === 'string' ? item.avatar.trim() : ''
+        map.set(id, { id, name, email, ...(avatar ? { avatar } : {}) })
+      }
+      memberDirCache = map
+      memberDirLoadedAt = Date.now()
+      return map
+    })
+    .catch(() => new Map<string, MemberPerson>())
+    .finally(() => {
+      memberDirInflight = null
+    })
+  memberDirInflight = req
+  return req
+}
+
+function useMemberDirectory(enabled: boolean): ReadonlyMap<string, MemberPerson> {
+  const [members, setMembers] = useState<Map<string, MemberPerson>>(() => memberDirCache ?? new Map())
+
+  useEffect(() => {
+    if (!enabled) return
+    let cancelled = false
+    const sync = () => {
+      void loadMemberDirectory().then((map) => {
+        if (!cancelled) setMembers(map)
+      })
+    }
+    const onAccountChange = () => {
+      invalidateMembersCache()
+      sync()
+    }
+    sync()
+    window.addEventListener(ACCOUNT_EVENT, onAccountChange)
+    return () => {
+      cancelled = true
+      window.removeEventListener(ACCOUNT_EVENT, onAccountChange)
+    }
+  }, [enabled])
+
+  return members
+}
 
 export function personInspectTarget(person: PersonValue): { collection: string; recordId: string } | null {
   if (person.kind === 'agent') {
@@ -126,6 +197,8 @@ export async function loadMembers(): Promise<MemberPerson[]> {
 export function PersonFace({ value, empty = '' }: { value: unknown; empty?: string }) {
   const profile = useWorkspaceProfile()
   const people = asPersonList(value)
+  const hasUserWithAccount = people.some((person) => person.kind === 'user' && Boolean(person.accountId))
+  const membersById = useMemberDirectory(hasUserWithAccount)
 
   if (!people.length) {
     return empty ? (
@@ -139,8 +212,13 @@ export function PersonFace({ value, empty = '' }: { value: unknown; empty?: stri
   return (
     <span className="fsdb-person-list">
       {people.map((person) => {
+        const member = person.kind === 'user' && person.accountId ? membersById.get(person.accountId) : undefined
         const liveUser = person.kind === 'user' && (person.name === '用户' || person.name === profile.name)
-        const label = (liveUser ? profileDisplayName(profile) : person.name) || empty
+        const label = member?.name || (liveUser ? profileDisplayName(profile) : person.name) || empty
+        const personAvatar =
+          person.kind === 'user'
+            ? (member?.avatar || (typeof person.avatar === 'string' ? person.avatar.trim() : '') || (liveUser ? profile.avatar : ''))
+            : ''
         const body = (
           <>
             {person.kind === 'agent' && (person.sessionId || person.mascot) ? (
@@ -156,8 +234,8 @@ export function PersonFace({ value, empty = '' }: { value: unknown; empty?: stri
               <span className="fsdb-person-avatar" aria-hidden>
                 <CpuChipIcon className="size-[14px]" />
               </span>
-            ) : liveUser && profile.avatar ? (
-              <img className="fsdb-person-photo" src={profile.avatar} alt="" />
+            ) : personAvatar ? (
+              <img className="fsdb-person-photo" src={personAvatar} alt="" />
             ) : (
               <AiAvatar
                 seed={person.accountId || label || person.name || 'biu-ai'}
