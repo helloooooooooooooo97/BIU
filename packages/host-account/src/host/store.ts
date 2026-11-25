@@ -1224,6 +1224,7 @@ export class CollabStore {
         `SELECT a.id,
                 COALESCE(NULLIF(a.name, ''), NULLIF(a.email, ''), '未设置') AS name,
                 COALESCE(m.display_name, '') AS display_name,
+                COALESCE(NULLIF(m.avatar, ''), NULLIF(a.avatar, ''), '') AS avatar,
                 COALESCE(a.email, '') AS email, m.role, m.member_kind, m.created_at,
                 COALESCE((
                   SELECT MAX(COALESCE(s.last_seen_at, s.created_at, 0))
@@ -1254,6 +1255,7 @@ export class CollabStore {
         id: string
         name: string
         display_name: string
+        avatar: string
         email: string
         role: string
         member_kind: 'member' | 'external' | 'guest'
@@ -2689,6 +2691,7 @@ export class CollabStore {
     const people = this.db
       .prepare(
         `SELECT g.view_id, g.granted_by, a.id, COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), '未设置') AS name,
+                COALESCE(NULLIF(m.avatar, ''), NULLIF(a.avatar, ''), '') AS avatar,
                 COALESCE(a.email, '') AS email, g.role, COALESCE(m.member_kind, '') AS member_kind
          FROM view_grants g
          JOIN accounts a ON g.subject_type = 'account' AND a.id = g.subject_id
@@ -2701,6 +2704,7 @@ export class CollabStore {
         granted_by: string
         id: string
         name: string
+        avatar: string
         email: string
         role: string
         member_kind: string
@@ -2720,6 +2724,7 @@ export class CollabStore {
         subjectId: row.id,
         role: row.role,
         name: row.name,
+        avatar: row.avatar,
         email: row.email,
         grantedBy: row.granted_by,
         memberKind: row.member_kind === 'external' || row.member_kind === 'guest' ? row.member_kind : 'member' as const,
@@ -3183,6 +3188,7 @@ export class CollabStore {
       ? this.db
           .prepare(
             `SELECT a.id, COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), '未设置') AS name,
+                    COALESCE(NULLIF(m.avatar, ''), NULLIF(a.avatar, ''), '') AS avatar,
                     COALESCE(a.email, '') AS email, g.role, m.member_kind
              FROM view_grants g
              JOIN accounts a ON g.subject_type = 'account' AND a.id = g.subject_id
@@ -3194,6 +3200,7 @@ export class CollabStore {
       : this.db
           .prepare(
             `SELECT a.id, COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), '未设置') AS name,
+                    COALESCE(NULLIF(m.avatar, ''), NULLIF(a.avatar, ''), '') AS avatar,
                     COALESCE(a.email, '') AS email, g.role, m.member_kind
              FROM view_grants g
              JOIN accounts a ON g.subject_type = 'account' AND a.id = g.subject_id
@@ -3204,6 +3211,7 @@ export class CollabStore {
           .all(workspaceId, collection, viewId)) as Array<{
         id: string
         name: string
+        avatar: string
         email: string
         role: string
         member_kind: 'member' | 'external' | 'guest'
@@ -3239,6 +3247,7 @@ export class CollabStore {
     const rows = this.db
       .prepare(
         `SELECT a.id, COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), '未设置') AS name,
+                COALESCE(NULLIF(m.avatar, ''), NULLIF(a.avatar, ''), '') AS avatar,
                 COALESCE(a.email, '') AS email, g.role, m.member_kind
          FROM record_grants g
          JOIN accounts a ON g.subject_type = 'account' AND a.id = g.subject_id
@@ -3249,6 +3258,7 @@ export class CollabStore {
       .all(workspaceId, collection, recordId) as Array<{
         id: string
         name: string
+        avatar: string
         email: string
         role: string
         member_kind: 'member' | 'external' | 'guest'
