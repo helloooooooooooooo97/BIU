@@ -155,11 +155,17 @@ export function applyRecordPersonOverlay(
     return { ...row, createdBy: official, updatedBy: [official] }
   }
   const meta = host.tags.recordMeta(spec.path, row.id)
-  if (!meta) return row
-  const editors = asPersonList(meta.updatedBy).map((item) => resolveNamedPerson(host, item))
+  const rawCreatedBy = typeof row.createdBy === 'string' ? row.createdBy.trim() : ''
+  const resolvedCreatedBy = meta?.createdBy
+    ? resolveNamedPerson(host, meta.createdBy)
+    : rawCreatedBy
+      ? resolveNamedPerson(host, { kind: 'user', accountId: rawCreatedBy, name: rawCreatedBy })
+      : null
+  const editors = meta ? asPersonList(meta.updatedBy).map((item) => resolveNamedPerson(host, item)) : []
+  if (!resolvedCreatedBy && !editors.length) return row
   return {
     ...row,
-    ...(meta.createdBy ? { createdBy: resolveNamedPerson(host, meta.createdBy) } : {}),
+    ...(resolvedCreatedBy ? { createdBy: resolvedCreatedBy } : {}),
     ...(editors.length ? { updatedBy: editors } : {}),
   }
 }

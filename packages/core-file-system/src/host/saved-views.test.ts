@@ -485,3 +485,13 @@ test('explicitly shared personal views become visible via policyGuard.canSeeView
     [],
   )
 })
+
+test('clientViewFromDbRow extracts createdBy from hydrated PersonValue objects', () => {
+  const view = clientViewFromDbRow({
+    viewId: 'v-97',
+    tablePath: '/pages',
+    title: '97',
+    createdBy: { kind: 'user', accountId: 'acc_29e64d', name: '97' },
+  })
+  assert.equal(view?.createdBy, 'acc_29e64d')
+})

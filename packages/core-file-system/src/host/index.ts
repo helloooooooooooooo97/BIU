@@ -801,7 +801,7 @@ export class DatabaseService extends Service implements Database {
     const existing = this.tags.recordMeta(TAGS_COLLECTION_PATH, id)
     if (!existing?.createdBy?.accountId) {
       this.tags.writeRecordMeta(TAGS_COLLECTION_PATH, id, {
-        createdBy: { kind: 'account', accountId, name: accountId },
+        createdBy: { kind: 'user', accountId, name: accountId },
       })
     }
   }

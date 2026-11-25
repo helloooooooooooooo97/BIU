@@ -705,7 +705,12 @@ export function clientViewFromDbRow(row: Record<string, unknown> | undefined) {
     name: String(row.title ?? row.name ?? id),
     mode: row.mode,
     scope: normalizeViewScope(row.scope),
-    createdBy: typeof row.createdBy === 'string' && row.createdBy.trim() ? row.createdBy.trim() : undefined,
+    createdBy:
+      typeof row.createdBy === 'string' && row.createdBy.trim()
+        ? row.createdBy.trim()
+        : row.createdBy && typeof row.createdBy === 'object' && typeof (row.createdBy as { accountId?: unknown }).accountId === 'string'
+          ? String((row.createdBy as { accountId: string }).accountId).trim() || undefined
+          : undefined,
     sortField: sortsPatch.sortField,
     sortDir: sortsPatch.sortDir,
     sorts: sortsPatch.sorts,
@@ -760,7 +765,7 @@ export function viewsCollection(
         viewId: { type: 'string', label: '视图 ID' },
         mode: { type: 'string', label: '呈现', writable: true },
         scope: { type: 'select', label: '可见范围', writable: true, enum: ['personal', 'workspace', 'shared'] },
-        createdBy: { type: 'string', label: '创建者' },
+        createdBy: { type: 'person', label: '创建者', writable: false },
         sortField: { type: 'string', label: '排序字段', writable: true },
         sortDir: { type: 'select', label: '升降序', writable: true, enum: ['asc', 'desc'] },
         sorts: { type: 'string', label: '排序', writable: true, description: VIEW_SORTS_DESCRIPTION },
