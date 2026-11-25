@@ -61,7 +61,7 @@ import { SharesStore } from './shares-store.ts'
 import { builtinAllView, stubBuiltinAllView, stubBuiltinMemberView } from '../catalog-views.ts'
 import { isIndexCollection, isSystemCollection } from '../paths.ts'
 import { dataCollection, isDataOverviewSource, overviewRecord } from './data-collection.ts'
-import { recordMatchesGrantedView } from '../view-access.ts'
+import { recordMatchesAccessRule, recordMatchesGrantedView } from '../view-access.ts'
 import { type SharedViewDef } from '../share-view-match.ts'
 import { FileSystemAssets, collectAssetNames, assetNamesFromMarkdown, assetNamesFromHtml } from './assets-store.ts'
 import { tagsCollection, parseStampRecordId } from './tags-collection.ts'
@@ -2686,6 +2686,22 @@ export function apply(ctx: Context) {
       context.scope,
       { grantedBy: context.grantedBy, recordOwnerId: context.recordOwnerId },
     )
+  })
+  const parsedRuleFilterCache = new Map<string, Record<string, unknown>>()
+  account?.authorization?.setAccessRuleMatcher((_workspaceId, _collection, filterTreeJson, recordId, context) => {
+    if (!context.record) return false
+    let tree = parsedRuleFilterCache.get(filterTreeJson)
+    if (!tree) {
+      try {
+        const parsed = JSON.parse(filterTreeJson)
+        tree = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : { op: 'and', rules: [] }
+      } catch {
+        tree = { op: 'and', rules: [] }
+      }
+      if (parsedRuleFilterCache.size > 512) parsedRuleFilterCache.clear()
+      parsedRuleFilterCache.set(filterTreeJson, tree)
+    }
+    return recordMatchesAccessRule({ id: recordId, ...context.record } as DbRecord, tree)
   })
   const shares = db.shares
   shares.open(process.env.VITEST ? ':memory:' : biuSqlitePath())

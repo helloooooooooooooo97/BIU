@@ -15,7 +15,7 @@ import {
   type ColumnPolicy,
 } from '../column-access.ts'
 import { recordMatchesSharedView, resolveSharedView, type SharedViewDef } from '../share-view-match.ts'
-import { effectiveDataScope, highestViewRole, recordMatchesGrantedView, type DataScopeName, type ViewGrantRole } from '../view-access.ts'
+import { effectiveDataScope, highestViewRole, recordMatchesAccessRule, recordMatchesGrantedView, type DataScopeName, type ViewGrantRole } from '../view-access.ts'
 import {
   DATA_COLLECTION_PATH,
   EDITOR_BLOCKS_COLLECTION_PATH,
@@ -75,6 +75,27 @@ export type WorkspaceFiles = {
     readable_columns?: string | null
     writable_columns?: string | null
     granted_by?: string
+  }>
+  listActiveAccessRulesForCollection?(
+    workspaceId: string,
+    collection: string,
+  ): Array<{
+    id: string
+    workspaceId: string
+    collection: string
+    name: string
+    createdBy: string
+    createdByName?: string
+    filterTree: Record<string, unknown>
+    columns: string[] | null
+    enabled: boolean
+    grants: Array<{
+      id: string
+      subjectType: 'account' | 'workspace' | 'member_view'
+      subjectId: string
+      role: 'viewer' | 'editor' | 'manager'
+      subjectName?: string
+    }>
   }>
   collectionRecordOwners?(workspaceId: string, collection: string): Map<string, string>
   isMember?(accountId: string, workspaceId: string): boolean
@@ -320,37 +341,55 @@ export class DatabaseAccessPolicy {
     return Boolean(role && roleCoversAction(role, action))
   }
 
-  /** 计算当前操作者在某条记录上的有效列级策略（可读列并集、可写列并集、高敏拒绝列差集）。 */
+  /** 计算当前操作者在某条记录上的有效列级策略（可读列并集、可写列并集）。 */
   columnPolicyFor(collection: string, record: { id?: unknown }): ColumnPolicy {
     const store = this.host.collabStore()
     const authorization = this.host.authorization()
     const actor = authorization?.currentActor()
-    if (!store?.viewGrantsFor || !authorization || !actor) return fullColumnPolicy()
-    const grants = store.viewGrantsFor(actor.workspaceId, collection)
-    if (!grants.length) return fullColumnPolicy()
+    if (!store || !authorization || !actor) return fullColumnPolicy()
+    const grants = store.viewGrantsFor?.(actor.workspaceId, collection) ?? []
+    const rules = store.listActiveAccessRulesForCollection?.(actor.workspaceId, collection) ?? []
+    if (!grants.length && !rules.length) return fullColumnPolicy()
 
     const target = resolveScopeTarget(collection, String(record.id ?? ''), record)
-    const decision = authorization.authorize(actor, 'resource:read', {
-      type: 'record',
+    const targetRef = {
+      type: 'record' as const,
       workspaceId: actor.workspaceId,
       collection: target.collection,
       recordId: target.id,
       record: record as Record<string, unknown>,
-    })
+    }
+    const decision = authorization.authorize(actor, 'resource:read', targetRef)
     if (decision.allowed && decision.source === 'ownership') return fullColumnPolicy()
 
     const saved = [builtinAllView({ path: collection }), ...(this.host.viewCatalog?.viewsFor(collection) ?? [])]
-    const scope = authorization.scopeCurrent({
-      type: 'record',
-      workspaceId: actor.workspaceId,
-      collection: target.collection,
-      recordId: target.id,
-    })
+    const scope = authorization.scopeCurrent(targetRef)
     const ownerId = this.recordOwner(target.collection, target.id)
 
     const policies: ColumnPolicy[] = []
-    if (decision.allowed && decision.source !== 'data-view-grant') {
+    if (decision.allowed && decision.source !== 'data-view-grant' && decision.source !== 'access-rule') {
       policies.push(fullColumnPolicy())
+    }
+    for (const rule of rules) {
+      if (!rule.enabled) continue
+      if (!authorization.canGrantorShareRecord(rule.createdBy, targetRef)) continue
+      if (!recordMatchesAccessRule(record as never, rule.filterTree)) continue
+      const ruleCols = Array.isArray(rule.columns) && rule.columns.length > 0
+        ? [...rule.columns, '$content', 'shareScope', 'shareRole']
+        : null
+      for (const grant of rule.grants) {
+        const subjectMatches = grant.subjectType === 'account'
+          ? grant.subjectId === actor.accountId
+          : grant.subjectType === 'workspace'
+            ? grant.subjectId === actor.workspaceId && authorization.membershipKind(actor.accountId, actor.workspaceId) === 'member'
+            : authorization.matchesMemberView(actor.workspaceId, grant.subjectId, actor.accountId)
+        if (!subjectMatches) continue
+        const canWrite = roleCoversAction(grant.role, 'resource:update')
+        policies.push({
+          readable: ruleCols ? new Set(ruleCols) : '*',
+          writable: canWrite ? (ruleCols ? new Set(ruleCols) : '*') : new Set<string>(),
+        })
+      }
     }
     for (const grant of grants) {
       const subjectMatches = grant.subject_type === 'account'
@@ -382,17 +421,20 @@ export class DatabaseAccessPolicy {
     const store = this.host.collabStore()
     const authorization = this.host.authorization()
     const actor = authorization?.currentActor()
-    if (!store?.viewGrantsFor || !authorization || !actor) return false
-    return store.viewGrantsFor(actor.workspaceId, collection).length > 0
+    if (!store || !authorization || !actor) return false
+    if ((store.viewGrantsFor?.(actor.workspaceId, collection)?.length ?? 0) > 0) return true
+    return (store.listActiveAccessRulesForCollection?.(actor.workspaceId, collection)?.length ?? 0) > 0
   }
 
   hasColumnRestrictions(collection: string): boolean {
     const store = this.host.collabStore()
     const authorization = this.host.authorization()
     const actor = authorization?.currentActor()
-    if (!store?.viewGrantsFor || !authorization || !actor) return false
+    if (!store || !authorization || !actor) return false
+    const rules = store.listActiveAccessRulesForCollection?.(actor.workspaceId, collection) ?? []
+    if (rules.some((r) => r.enabled && Array.isArray(r.columns) && r.columns.length > 0)) return true
     const views = this.host.viewCatalog?.viewsFor(collection) ?? []
-    return store.viewGrantsFor(actor.workspaceId, collection).some((g) => {
+    return (store.viewGrantsFor?.(actor.workspaceId, collection) ?? []).some((g) => {
       if (g.readable_columns || g.writable_columns) return true
       if (isBuiltinAllViewId(g.view_id)) return false
       const view = views.find((item) => item.id === g.view_id)

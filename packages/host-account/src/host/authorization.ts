@@ -73,11 +73,24 @@ export type DataViewMatcher = (
   },
 ) => boolean
 
+export type AccessRuleMatcher = (
+  workspaceId: string,
+  collection: string,
+  filterTreeJson: string,
+  recordId: string,
+  context: {
+    createdBy?: string
+    recordOwnerId?: string
+    scope: 'personal' | 'workspace' | 'shared' | null
+    record?: Record<string, unknown>
+  },
+) => boolean
+
 export type Decision =
   | {
       allowed: true
       effectiveRole: ResourceRole
-      source: 'ownership' | 'direct-grant' | 'group-grant' | 'view-grant' | 'data-view-grant' | 'workspace-default' | 'inherited' | 'legacy'
+      source: 'ownership' | 'direct-grant' | 'group-grant' | 'view-grant' | 'data-view-grant' | 'access-rule' | 'workspace-default' | 'inherited' | 'legacy'
     }
   | {
       allowed: false
@@ -123,6 +136,15 @@ type ScanViewGrant = {
   granted_by: string
 }
 
+type ScanAccessRuleGrant = {
+  rule_id: string
+  created_by: string
+  filter_tree_json: string
+  subject_type: 'account' | 'workspace' | 'member_view'
+  subject_id: string
+  role: ResourceRole
+}
+
 type CollectionScan = {
   refs: number
   workspaceId: string
@@ -133,6 +155,8 @@ type CollectionScan = {
   grants: Map<string, ScanGrant[]>
   viewGrants: ScanViewGrant[]
   actorViewGrants: ScanViewGrant[]
+  accessRuleGrants: ScanAccessRuleGrant[]
+  actorAccessRuleGrants: ScanAccessRuleGrant[]
   memberViewCache: Map<string, boolean>
   groups: Set<string>
   membership: WorkspaceRole | null
@@ -243,6 +267,7 @@ function requiredRole(action: Action): ResourceRole {
 export class AuthorizationService {
   private memberViewMatcher?: (workspaceId: string, viewId: string, accountId: string) => boolean
   private dataViewMatcher?: DataViewMatcher
+  private accessRuleMatcher?: AccessRuleMatcher
   private scans = new Map<string, CollectionScan>()
   private invalidators = new Set<() => void>()
 
@@ -323,6 +348,14 @@ export class AuthorizationService {
 
   hasDataViewMatcher() {
     return Boolean(this.dataViewMatcher)
+  }
+
+  setAccessRuleMatcher(matcher: AccessRuleMatcher) {
+    this.accessRuleMatcher = matcher
+  }
+
+  hasAccessRuleMatcher() {
+    return Boolean(this.accessRuleMatcher)
   }
 
   /** 判断某视图是否已绑定权限规则（作为数据视图或成员视图），绑定后其 filters / filterTree / columns 进入锁定状态。 */
@@ -527,6 +560,29 @@ export class AuthorizationService {
         ? grant.subject_id === accountId
         : matchMemberViewCached(grant.subject_id),
     )
+    const membership = this.readMembership(accountId, workspaceId)
+    const membershipKind = this.readMembershipKind(accountId, workspaceId)
+    let accessRuleGrants: ScanAccessRuleGrant[] = []
+    try {
+      accessRuleGrants = this.db
+        .prepare(
+          `SELECT r.id AS rule_id, r.created_by, r.filter_tree_json, g.subject_type, g.subject_id, g.role
+           FROM access_rules r
+           JOIN access_rule_grants g ON g.rule_id = r.id
+           WHERE r.workspace_id = ? AND r.collection = ? AND r.enabled = 1
+           ORDER BY g.created_at`,
+        )
+        .all(workspaceId, collection) as ScanAccessRuleGrant[]
+    } catch {
+      accessRuleGrants = []
+    }
+    const actorAccessRuleGrants = accessRuleGrants.filter((grant) =>
+      grant.subject_type === 'account'
+        ? grant.subject_id === accountId
+        : grant.subject_type === 'workspace'
+          ? grant.subject_id === workspaceId && membershipKind === 'member'
+          : matchMemberViewCached(grant.subject_id),
+    )
     this.scans.set(key, {
       refs: 1,
       workspaceId,
@@ -537,10 +593,12 @@ export class AuthorizationService {
       grants,
       viewGrants,
       actorViewGrants,
+      accessRuleGrants,
+      actorAccessRuleGrants,
       memberViewCache,
       groups,
-      membership: this.readMembership(accountId, workspaceId),
-      membershipKind: this.readMembershipKind(accountId, workspaceId),
+      membership,
+      membershipKind,
     })
   }
 
@@ -671,12 +729,16 @@ export class AuthorizationService {
 
     const resolved = this.effectiveRole(actor.accountId, resource, new Set(), 0)
     if (resolved && 'reason' in resolved) return resolved
+    const viaRule = this.accessRuleRole(actor.accountId, resource)
     const viaView = this.dataViewRole(actor.accountId, resource)
-    const combined = resolved && viaView
-      ? (ROLE_RANK[resolved.effectiveRole] >= ROLE_RANK[viaView.effectiveRole] ? resolved : viaView)
-      : (resolved ?? viaView)
+    const candidates = [resolved, viaRule, viaView].filter(Boolean) as Array<{
+      effectiveRole: ResourceRole
+      source: 'ownership' | 'direct-grant' | 'group-grant' | 'view-grant' | 'data-view-grant' | 'access-rule' | 'workspace-default' | 'inherited' | 'legacy'
+    }>
+    candidates.sort((a, b) => ROLE_RANK[b.effectiveRole] - ROLE_RANK[a.effectiveRole])
+    const combined = candidates[0] ?? null
     if (!combined) return { allowed: false, reason: 'PRIVATE_RESOURCE' }
-    const effective = membership === 'viewer'
+    const effective = membership === 'viewer' || memberKind === 'guest'
       ? { effectiveRole: 'viewer' as const, source: combined.source }
       : { effectiveRole: combined.effectiveRole, source: combined.source }
     if (!roleCoversAction(effective.effectiveRole, action)) {
@@ -1112,6 +1174,67 @@ export class AuthorizationService {
     return roleCoversAction(resolved.effectiveRole, 'resource:share')
   }
 
+  private accessRuleRole(
+    accountId: string,
+    resource: Extract<ResourceRef, { type: 'record' }>,
+  ): { effectiveRole: ResourceRole; source: 'access-rule' } | null {
+    if (!this.accessRuleMatcher) return null
+    const scan = this.scans.get(collectionScanKey(resource.workspaceId, resource.collection, accountId))
+    let rows: ScanAccessRuleGrant[]
+    let prefiltered = false
+    if (scan) {
+      rows = scan.actorAccessRuleGrants
+      prefiltered = true
+    } else {
+      try {
+        rows = this.db
+          .prepare(
+            `SELECT r.id AS rule_id, r.created_by, r.filter_tree_json, g.subject_type, g.subject_id, g.role
+             FROM access_rules r
+             JOIN access_rule_grants g ON g.rule_id = r.id
+             WHERE r.workspace_id = ? AND r.collection = ? AND r.enabled = 1
+             ORDER BY g.created_at`,
+          )
+          .all(resource.workspaceId, resource.collection) as ScanAccessRuleGrant[]
+      } catch {
+        rows = []
+      }
+    }
+    if (!rows.length) return null
+    const memberKind = scan ? scan.membershipKind : this.membershipKind(accountId, resource.workspaceId)
+    const policy = this.policy(resource)
+    const recordOwnerId = policy?.owner_account_id || this.legacyOwnerId(resource) || ''
+    const scope = this.resourceScope(resource, new Set(), 0)
+    const allowRoles: ResourceRole[] = []
+    for (const grant of rows) {
+      if (!prefiltered) {
+        const subjectMatches = grant.subject_type === 'account'
+          ? grant.subject_id === accountId
+          : grant.subject_type === 'workspace'
+            ? grant.subject_id === resource.workspaceId && memberKind === 'member'
+            : this.matchesMemberView(resource.workspaceId, grant.subject_id, accountId)
+        if (!subjectMatches) continue
+      }
+      // 单跳非提权铁律：规则创建者必须对该记录具备非规则/非视图来源的 owner/manager 分享权
+      if (!this.canGrantorShareRecord(grant.created_by, resource)) continue
+      const matched = this.accessRuleMatcher(
+        resource.workspaceId,
+        resource.collection,
+        grant.filter_tree_json,
+        resource.recordId,
+        {
+          createdBy: grant.created_by,
+          recordOwnerId,
+          scope,
+          record: resource.record,
+        },
+      )
+      if (matched) allowRoles.push(grant.role)
+    }
+    const best = maxRole(allowRoles)
+    return best ? { effectiveRole: best, source: 'access-rule' } : null
+  }
+
   private dataViewRole(
     accountId: string,
     resource: Extract<ResourceRef, { type: 'record' }>,
@@ -1276,7 +1399,7 @@ export class AuthorizationService {
     return this.readMembership(accountId, workspaceId)
   }
 
-  private membershipKind(accountId: string, workspaceId: string): 'member' | 'external' | 'guest' {
+  membershipKind(accountId: string, workspaceId: string): 'member' | 'external' | 'guest' {
     for (const scan of this.scans.values()) {
       if (scan.accountId === accountId && scan.workspaceId === workspaceId) return scan.membershipKind
     }
