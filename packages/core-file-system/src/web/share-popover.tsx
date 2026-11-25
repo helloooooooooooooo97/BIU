@@ -307,6 +307,7 @@ function WorkspaceAccess({
   const [scope, setScope] = useState<'personal' | 'workspace' | 'shared'>('personal')
   const [ownerId, setOwnerId] = useState('')
   const [currentAccountId, setCurrentAccountId] = useState('')
+  const [canManage, setCanManage] = useState(true)
   const [people, setPeople] = useState<Array<{
     id: string
     name: string
@@ -356,6 +357,7 @@ function WorkspaceAccess({
       scope?: 'personal' | 'workspace' | 'shared'
       ownerId?: string
       currentAccountId?: string
+      canManage?: boolean
       people?: Array<{
         id: string
         name: string
@@ -389,11 +391,13 @@ function WorkspaceAccess({
     setScope(data.scope ?? 'personal')
     setOwnerId(data.ownerId ?? '')
     setCurrentAccountId(data.currentAccountId ?? '')
+    setCanManage(data.canManage !== false)
     setPeople(data.people ?? [])
     setGroups(data.groups ?? [])
+    const builtinNames = new Map(builtinMemberViews().map((view) => [String(view.viewId ?? ''), String(view.title ?? '')]))
     setMemberViews((data.memberViews ?? []).map((item) => ({
       ...item,
-      name: availableMemberViews.find((view) => view.id === item.id)?.name ?? item.id,
+      name: availableMemberViews.find((view) => view.id === item.id)?.name ?? (builtinNames.get(item.id) || item.id),
     })))
     setInheritance({
       mode: data.inheritance?.mode === 'inherit' ? 'inherit' : 'custom',
@@ -736,6 +740,7 @@ function WorkspaceAccess({
           })}
           {!internalCount ? <li className="is-empty">尚未添加内部协作者</li> : null}
         </ul>
+        {canManage ? (
         <div className="fsdb-share-invite-row">
           <div className="fsdb-share-member-picker">
             <input
@@ -811,6 +816,7 @@ function WorkspaceAccess({
             else void grant({ email: selectedTarget.email }, 'internal')
           }}>添加</button>
         </div>
+        ) : null}
       </section>
 
       <section className="fsdb-share-collab-section is-external">
@@ -858,25 +864,29 @@ function WorkspaceAccess({
           })}
           {!externalCount ? <li className="is-empty">尚未添加外部协作者</li> : null}
         </ul>
-        <div className="fsdb-share-invite-row">
-          <input
-            className="fsdb-share-link-field"
-            type="email"
-            value={email}
-            placeholder="输入外部账号邮箱"
-            data-testid="fsdb-share-member-email"
-            onChange={(event) => setEmail(event.target.value)}
-          />
-          {roleSelect}
-          <button type="button" className="fsdb-share-publish" disabled={!email.trim()} onClick={() => void grant({ email: email.trim() }, 'external')}>添加</button>
-        </div>
-        <div className="fsdb-share-guest-row" data-testid="fsdb-share-guest">
-          <span className="fsdb-share-guest-info">
-            <span className="fsdb-share-guest-icon" aria-hidden><LinkIcon className="size-3.5" /></span>
-            <span><strong>临时访客</strong><em>{guestUrl ? '链接有效期 24 小时' : viewId ? '无需注册，仅可访问此视图' : '无需注册，仅可访问此内容'}</em></span>
-          </span>
-          <button type="button" onClick={() => void createGuestLink()}>{guestCopied ? '已复制' : guestUrl ? '重新生成' : '生成链接'}</button>
-        </div>
+        {canManage ? (
+          <>
+            <div className="fsdb-share-invite-row">
+              <input
+                className="fsdb-share-link-field"
+                type="email"
+                value={email}
+                placeholder="输入外部账号邮箱"
+                data-testid="fsdb-share-member-email"
+                onChange={(event) => setEmail(event.target.value)}
+              />
+              {roleSelect}
+              <button type="button" className="fsdb-share-publish" disabled={!email.trim()} onClick={() => void grant({ email: email.trim() }, 'external')}>添加</button>
+            </div>
+            <div className="fsdb-share-guest-row" data-testid="fsdb-share-guest">
+              <span className="fsdb-share-guest-info">
+                <span className="fsdb-share-guest-icon" aria-hidden><LinkIcon className="size-3.5" /></span>
+                <span><strong>临时访客</strong><em>{guestUrl ? '链接有效期 24 小时' : viewId ? '无需注册，仅可访问此视图' : '无需注册，仅可访问此内容'}</em></span>
+              </span>
+              <button type="button" onClick={() => void createGuestLink()}>{guestCopied ? '已复制' : guestUrl ? '重新生成' : '生成链接'}</button>
+            </div>
+          </>
+        ) : null}
       </section>
       {error ? <p className="fsdb-share-error is-inline">{error}</p> : null}
     </div>

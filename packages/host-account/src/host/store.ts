@@ -2379,8 +2379,9 @@ export class CollabStore {
   viewAccess(actorId: string, collection: string, viewId: string) {
     const workspaceId = this.activeWorkspaceId()
     if (!workspaceId) throw new CollabError('没有工作区', 400)
-    this.requireViewSharer(actorId, workspaceId, collection, viewId)
-    return this.viewAccessRows(workspaceId, collection, viewId, actorId, false)
+    this.requireMember(actorId, workspaceId)
+    const canManage = this.canShareView(actorId, workspaceId, collection, viewId)
+    return this.viewAccessRows(workspaceId, collection, viewId, actorId, true, canManage)
   }
 
   shareViewWithEmail(
@@ -2414,7 +2415,7 @@ export class CollabStore {
       detail: `将视图授权给 ${normalized}（${role}）`,
       now,
     })
-    return this.viewAccessRows(workspaceId, collection, normalizedView, actorId, false)
+    return this.viewAccessRows(workspaceId, collection, normalizedView, actorId, true, true)
   }
 
   grantViewMemberView(
@@ -2443,7 +2444,7 @@ export class CollabStore {
       detail: `按成员视图授权视图（${role}）`,
       now,
     })
-    return this.viewAccessRows(workspaceId, collection, normalizedView, actorId, false)
+    return this.viewAccessRows(workspaceId, collection, normalizedView, actorId, true, true)
   }
 
   revokeViewGrant(
@@ -2475,7 +2476,7 @@ export class CollabStore {
       collection,
       detail: `移除了视图授权（${subjectType}）`,
     })
-    return this.viewAccessRows(workspaceId, collection, viewId, actorId, false)
+    return this.viewAccessRows(workspaceId, collection, viewId, actorId, true, true)
   }
 
   /** 删除视图时级联清理引用该视图的 view_grants 以及 member_view 授权。 */
@@ -2628,6 +2629,15 @@ export class CollabStore {
     throw new CollabError('没有权限', 403)
   }
 
+  private canShareView(actorId: string, workspaceId: string, collection: string, viewId = ''): boolean {
+    try {
+      this.requireViewSharer(actorId, workspaceId, collection, viewId)
+      return true
+    } catch {
+      return false
+    }
+  }
+
   private ensureCollaboratorMembership(
     workspaceId: string,
     accountId: string,
@@ -2692,6 +2702,7 @@ export class CollabStore {
     viewId: string,
     viewerId = '',
     includeAllGrantors = true,
+    canManage = true,
   ) {
     const filterByGrantor = Boolean(viewerId && !includeAllGrantors)
     const people = (filterByGrantor
@@ -2766,13 +2777,14 @@ export class CollabStore {
         granted_by: string
         granted_by_name: string
       }>
-    const canEditRow = (grantedBy: string) => Boolean(!viewerId || !grantedBy || grantedBy === viewerId)
-    const canRevokeRow = (grantedBy: string) => Boolean(!viewerId || includeAllGrantors || !grantedBy || grantedBy === viewerId)
+    const canEditRow = (grantedBy: string) => Boolean(canManage && (!viewerId || !grantedBy || grantedBy === viewerId))
+    const canRevokeRow = (grantedBy: string) => Boolean(canManage && (!viewerId || !grantedBy || grantedBy === viewerId))
     return {
       private: people.length + memberViews.length === 0,
       scope: 'personal' as const,
       ownerId: '',
       currentAccountId: viewerId,
+      canManage,
       people: people.map(({ member_kind, granted_by, granted_by_name, ...row }) => ({
         ...row,
         memberKind: member_kind,
