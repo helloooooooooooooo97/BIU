@@ -615,9 +615,13 @@ test('no-amplification axiom: sharing a custom view NEVER leaks other members pr
   assert.equal(auth.authorize(actor(dave.id), 'resource:read', { ...page('bob-doc'), record: { tag: 'project' } }).allowed, true)
   assert.equal(auth.authorize(actor(dave.id), 'resource:read', { ...page('cara-doc'), record: { tag: 'project' } }).allowed, false)
 
-  // Bug #1 fixed: Dave (who only got access via Bob's view grant) CANNOT see or revoke Bob's view grant
+  // Everyone sees the same view collaborator list, while non-grantors get read-only rows and CANNOT revoke Bob's view grant
   const daveViewAccess = runWithAccount(dave.id, () => store.viewAccess(dave.id, '/pages', 'v-project'))
-  assert.equal(daveViewAccess.memberViews.length, 0)
+  assert.equal(daveViewAccess.memberViews.length, 1)
+  assert.equal(daveViewAccess.memberViews[0]?.id, 'mv-all')
+  assert.equal(daveViewAccess.memberViews[0]?.grantedBy, bob.id)
+  assert.equal(daveViewAccess.memberViews[0]?.canEdit, false)
+  assert.equal(daveViewAccess.memberViews[0]?.canRevoke, false)
   assert.throws(
     () => runWithAccount(dave.id, () => store.revokeViewGrant(dave.id, '/pages', 'v-project', 'member_view', 'mv-all')),
     /协作者不存在|无权/,
@@ -628,6 +632,16 @@ test('no-amplification axiom: sharing a custom view NEVER leaks other members pr
   runWithAccount(dave.id, () => {
     store.shareViewWithEmail(dave.id, '/pages', 'v-project', ext.email, 'editor', 'external')
   })
+  // External collaborator sees the same shared-view collaborators in read-only mode (canManage === false)
+  store.setActive(ext.id, workspace.id)
+  const extViewAccess = runWithAccount(ext.id, () => store.viewAccess(ext.id, '/pages', 'v-project'))
+  assert.equal(extViewAccess.canManage, false)
+  assert.equal(extViewAccess.memberViews.length, 1)
+  assert.equal(extViewAccess.people.length, 1)
+  assert.equal(extViewAccess.memberViews[0]?.canEdit, false)
+  assert.equal(extViewAccess.memberViews[0]?.canRevoke, false)
+  assert.equal(extViewAccess.people[0]?.canEdit, false)
+  assert.equal(extViewAccess.people[0]?.canRevoke, false)
   assert.equal(auth.authorize(actor(ext.id), 'resource:read', { ...page('bob-doc'), record: { tag: 'project' } }).allowed, false)
   assert.equal(auth.authorize(actor(ext.id), 'resource:read', { ...page('cara-doc'), record: { tag: 'project' } }).allowed, false)
 
@@ -672,12 +686,16 @@ test('anti-lockout & control/data separation: users cannot self-revoke/downgrade
     /不能移除自己的权限/,
   )
 
-  // Bob shares a custom view to Cara; workspace owner Ada cannot see or revoke Bob's view grant in share panel
+  // Bob shares a custom view to Cara; workspace owner Ada sees the same collaborator list (read-only) and still cannot revoke Bob's view grant
   runWithAccount(bob.id, () => {
     store.shareViewWithEmail(bob.id, '/pages', 'v-bob', cara.email, 'editor', 'internal')
   })
   const adaView = runWithAccount(ada.id, () => store.viewAccess(ada.id, '/pages', 'v-bob'))
-  assert.equal(adaView.people.length, 0)
+  assert.equal(adaView.people.length, 1)
+  assert.equal(adaView.people[0]?.id, cara.id)
+  assert.equal(adaView.people[0]?.grantedBy, bob.id)
+  assert.equal(adaView.people[0]?.canEdit, false)
+  assert.equal(adaView.people[0]?.canRevoke, false)
   assert.throws(
     () => runWithAccount(ada.id, () => store.revokeViewGrant(ada.id, '/pages', 'v-bob', 'account', cara.id)),
     /协作者不存在|无权/,
