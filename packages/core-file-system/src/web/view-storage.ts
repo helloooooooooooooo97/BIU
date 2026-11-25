@@ -635,7 +635,7 @@ export function withViewDisplay(collectionPath: string, view: SavedView): SavedV
           ...view,
           ...overlay,
           id: view.id,
-          name: overlayName || view.name,
+          name: view.name || overlayName,
           builtin: view.builtin,
           filters: view.filters,
           filterTree: overlay.filterTree ?? view.filterTree,
