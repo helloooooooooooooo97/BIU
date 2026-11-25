@@ -401,6 +401,7 @@ export function registerDatabaseHttpRoutes(
         }
       }
       ctx.emit('database/change')
+      ctx.http.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('views', path ? { path } : {}))
       route.send(200, { ok: true })
     } catch (error) {
       route.send(400, { error: String(error) })
