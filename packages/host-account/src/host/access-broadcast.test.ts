@@ -1,0 +1,47 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { describe, it } from 'vitest'
+
+describe('access and access-rules realtime broadcast wiring', () => {
+  const accountHostSrc = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
+  const sidebarSrc = readFileSync(
+    resolve(import.meta.dirname, '../../../core-file-system/src/web/data-sidebar.tsx'),
+    'utf8',
+  )
+
+  it('broadcasts workspace-scoped database events on /api/account/access mutations', () => {
+    const postBlock = accountHostSrc.slice(
+      accountHostSrc.indexOf("authedRoute('POST', '/api/account/access'"),
+      accountHostSrc.indexOf("authedRoute('PATCH', '/api/account/access'"),
+    )
+    const patchBlock = accountHostSrc.slice(
+      accountHostSrc.indexOf("authedRoute('PATCH', '/api/account/access'"),
+      accountHostSrc.indexOf("authedRoute('DELETE', '/api/account/access'"),
+    )
+    const deleteBlock = accountHostSrc.slice(
+      accountHostSrc.indexOf("authedRoute('DELETE', '/api/account/access'"),
+      accountHostSrc.indexOf("authedRoute('POST', '/api/account/access/guest-invite'"),
+    )
+
+    assert.match(postBlock, /broadcastAccessChange\(activeWorkspace,\s*viewId \? 'views' : 'records',\s*collection\)/)
+    assert.match(patchBlock, /broadcastAccessChange\(activeWorkspace,\s*'records',\s*collection\)/)
+    assert.match(deleteBlock, /broadcastAccessChange\(activeWorkspace,\s*viewId \? 'views' : 'records',\s*collection\)/)
+  })
+
+  it('broadcasts workspace-scoped database events on /api/account/access-rules mutations', () => {
+    const rulesSection = accountHostSrc.slice(
+      accountHostSrc.indexOf("authedRoute('POST', '/api/account/access-rules'"),
+      accountHostSrc.indexOf("authedRoute('POST', '/api/account/presence'"),
+    )
+    const matches = rulesSection.match(/broadcastAccessChange\(workspaceId,\s*'records'/g) ?? []
+    assert.equal(matches.length, 5)
+  })
+
+  it('data-sidebar force-pulls saved views when a path-scoped views change arrives', () => {
+    assert.match(
+      sidebarSrc,
+      /if \(change\.scope === 'views'\)[\s\S]*pullSavedViews\(\[changedPath\],\s*\{\s*force:\s*true\s*\}\)/,
+    )
+  })
+})
