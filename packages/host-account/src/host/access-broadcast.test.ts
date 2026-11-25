@@ -9,6 +9,10 @@ describe('access and access-rules realtime broadcast wiring', () => {
     resolve(import.meta.dirname, '../../../core-file-system/src/web/data-sidebar.tsx'),
     'utf8',
   )
+  const dbRoutesSrc = readFileSync(
+    resolve(import.meta.dirname, '../../../core-file-system/src/host/http-routes.ts'),
+    'utf8',
+  )
 
   it('broadcasts workspace-scoped database events on /api/account/access mutations', () => {
     const postBlock = accountHostSrc.slice(
@@ -42,6 +46,17 @@ describe('access and access-rules realtime broadcast wiring', () => {
     assert.match(
       sidebarSrc,
       /if \(change\.scope === 'views'\)[\s\S]*pullSavedViews\(\[changedPath\],\s*\{\s*force:\s*true\s*\}\)/,
+    )
+  })
+
+  it('POST /api/db/saved-views broadcasts views database channel event', () => {
+    const savedViewsBlock = dbRoutesSrc.slice(
+      dbRoutesSrc.indexOf("ctx.http.route('POST', '/api/db/saved-views'"),
+      dbRoutesSrc.indexOf('const shareSnapshotOpts'),
+    )
+    assert.match(
+      savedViewsBlock,
+      /ctx\.http\.broadcast\?\.\(DATABASE_CHANNEL,\s*databaseChannelPayload\('views',\s*path \? \{ path \} : \{\}\)\)/,
     )
   })
 })
