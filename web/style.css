@@ -2936,6 +2936,125 @@ html.dark .shell-workspace-menu-action svg {
   color: var(--biu-color-danger);
 }
 
+.settings-avatar-studio {
+  gap: 16px;
+}
+
+.settings-avatar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-avatar-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-avatar-shuffle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  margin: 0;
+  padding: 0 8px;
+  border: var(--biu-stroke-width) solid var(--biu-color-border);
+  border-radius: var(--biu-radius-md);
+  background: transparent;
+  color: var(--biu-color-text-muted);
+  font: inherit;
+  font-size: var(--biu-font-size-2);
+  font-weight: var(--biu-font-weight-medium);
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.settings-avatar-shuffle:hover:not(:disabled) {
+  background: var(--biu-color-bg-hover);
+  color: var(--biu-color-text);
+}
+
+.settings-avatar-shuffle:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.settings-avatar-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-avatar-swatch {
+  width: 26px;
+  height: 26px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.settings-avatar-swatch:hover:not(:disabled) {
+  transform: scale(1.1);
+}
+
+.settings-avatar-swatch.is-on {
+  box-shadow: 0 0 0 2px var(--biu-color-bg), 0 0 0 4px var(--biu-color-emphasis);
+}
+
+.settings-avatar-swatch:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.settings-avatar-presets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-avatar-preset {
+  width: 38px;
+  height: 38px;
+  margin: 0;
+  padding: 0;
+  border: var(--biu-stroke-width) solid var(--biu-color-border);
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--biu-color-bg-subtle);
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+
+.settings-avatar-preset img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.settings-avatar-preset:hover:not(:disabled) {
+  transform: scale(1.08);
+  border-color: color-mix(in srgb, var(--biu-color-text) 24%, transparent);
+}
+
+.settings-avatar-preset.is-on {
+  border-color: transparent;
+  box-shadow: 0 0 0 2px var(--biu-color-bg), 0 0 0 4px var(--biu-color-emphasis);
+}
+
+.settings-avatar-preset:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .settings-account-actions {
   display: flex;
   align-items: center;
