@@ -4,7 +4,7 @@ import { openAndMigrateBiu } from '@biu/host-plugin-loader/data-dir'
 import type { CollectionInfo, CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { normalizeSchemaValue, recordBuiltinValues } from '@biu/type-file-system'
 import { builtinAllView, builtinAllViewId, isReadOnlyViewId } from '../catalog-views.ts'
-import { normalizeColumnWidths, normalizeGroupConfig, normalizePageSize, parseViewColumns, type SavedView } from '../shared/saved-view.ts'
+import { normalizeColumnWidths, normalizeGroupConfig, normalizePageSize, normalizeViewScope, parseViewColumns, type SavedView } from '../shared/saved-view.ts'
 import { normalizeColumnSummaries } from '../shared/column-summary.ts'
 import { normalizeColumnViews } from '../shared/column-sandbox-model.ts'
 import { normalizeTableSandboxViews } from '../shared/table-sandbox-model.ts'
@@ -83,6 +83,15 @@ export class SavedViewsStore {
     return this.workspaceResolver?.() ?? ''
   }
 
+  private isForeignOwned(prev: StoredView | undefined, workspaceId: string, accountId: string): boolean {
+    if (!prev?.createdBy || !accountId || prev.createdBy === accountId) return false
+    // 私人视图：仅创建者本人可改/删，管理员也不越权修改他人私人视图
+    if (prev.scope === 'personal') return true
+    // 空间/共享视图：仅创建者或空间管理员可改/删，其他成员只读消费
+    if (this.policyGuard?.canEditLocked(workspaceId, accountId)) return false
+    return true
+  }
+
   private assertCanModifyView(
     workspaceId: string,
     path: string,
@@ -90,7 +99,11 @@ export class SavedViewsStore {
     next: StoredView,
     accountId: string,
   ) {
-    if (!prev || !this.policyGuard) return
+    if (!prev) return
+    if (this.isForeignOwned(prev, workspaceId, accountId)) {
+      throw new Error('permission denied: VIEW_OWNER_ONLY')
+    }
+    if (!this.policyGuard) return
     if (!this.policyGuard.isLocked(workspaceId, path, String(prev.id))) return
     if (this.policyGuard.canEditLocked(workspaceId, accountId)) return
     if (viewBoundaryChanged(prev, next)) {
@@ -98,7 +111,16 @@ export class SavedViewsStore {
     }
   }
 
-  private assertCanRemoveView(workspaceId: string, path: string, viewId: string, accountId: string) {
+  private assertCanRemoveView(
+    workspaceId: string,
+    path: string,
+    viewId: string,
+    accountId: string,
+    prev?: StoredView,
+  ) {
+    if (this.isForeignOwned(prev, workspaceId, accountId)) {
+      throw new Error('permission denied: VIEW_OWNER_ONLY')
+    }
     if (!this.policyGuard) return
     if (!this.policyGuard.isLocked(workspaceId, path, viewId)) return
     if (this.policyGuard.canEditLocked(workspaceId, accountId)) return
@@ -256,8 +278,7 @@ export class SavedViewsStore {
     const key = bucketKey(workspaceId, path)
     const gone = this.tombstones.get(key)
     const views = (this.byPath.get(key) ?? []).filter((view) => !gone?.has(String(view.id)))
-    if (!isIndexCollection(collectionPath)) return views
-    return views.filter((view) => view.createdBy === accountId)
+    return views.filter((view) => isViewVisibleTo(view, path, accountId))
   }
 
   exportAll(accountId = '', workspaceId = this.resolveWorkspaceId()): Record<string, StoredView[]> {
@@ -293,7 +314,7 @@ export class SavedViewsStore {
     for (const oldView of prev) {
       const oldId = String(oldView.id)
       if (!incomingIds.has(oldId)) {
-        this.assertCanRemoveView(workspaceId, path, oldId, accountId)
+        this.assertCanRemoveView(workspaceId, path, oldId, accountId, oldView)
         removedIds.push(oldId)
       }
     }
@@ -327,7 +348,8 @@ export class SavedViewsStore {
       return !prevView || mine(prevView)
     })
     for (const viewId of removedIds) {
-      this.assertCanRemoveView(workspaceId, path, viewId, accountId)
+      const prevView = prev.find((view) => String(view.id) === viewId)
+      this.assertCanRemoveView(workspaceId, path, viewId, accountId, prevView)
     }
     const kept = prev.filter((view) => {
       if (!removed.has(String(view.id))) return true
@@ -390,7 +412,7 @@ export class SavedViewsStore {
       if (!gone?.has(all.id)) emit(path, label, paintedAll)
       for (const view of stored) {
         if (gone?.has(String(view.id))) continue
-        if (isIndexCollection(path) && view.createdBy !== accountId) continue
+        if (!isViewVisibleTo(view, path, accountId)) continue
         emit(path, label, view)
       }
     }
@@ -401,7 +423,7 @@ export class SavedViewsStore {
       const gone = this.tombstones.get(key)
       for (const view of views) {
         if (gone?.has(String(view.id))) continue
-        if (isIndexCollection(path) && view.createdBy !== accountId) continue
+        if (!isViewVisibleTo(view, path, accountId)) continue
         emit(path, labels.get(path) ?? path, view)
       }
     }
@@ -473,7 +495,7 @@ export class SavedViewsStore {
       const targetId = String(hit?.id ?? viewId)
       if (!hit && views.some((view) => String(view.id) === viewId)) throw new Error(`unknown view: ${id}`)
       if (!hit && !isReadOnlyViewId(targetId)) continue
-      this.assertCanRemoveView(workspaceId, path, targetId, accountId)
+      this.assertCanRemoveView(workspaceId, path, targetId, accountId, hit)
       const gone = new Set(this.tombstones.get(key) ?? [])
       gone.add(targetId)
       const remaining = hit ? views.filter((view) => view !== hit) : views
@@ -527,6 +549,7 @@ function applyViewPatch(cur: StoredView, patch: Record<string, unknown>): Stored
     ...(typeof patch.title === 'string' ? { name: patch.title } : {}),
     ...(typeof patch.name === 'string' ? { name: patch.name } : {}),
     ...(typeof patch.mode === 'string' && isViewModeId(patch.mode) ? { mode: patch.mode } : {}),
+    ...(normalizeViewScope(patch.scope) ? { scope: normalizeViewScope(patch.scope) } : {}),
     ...(typeof patch.sortField === 'string' ? { sortField: patch.sortField } : {}),
     ...(patch.sortDir === 'asc' || patch.sortDir === 'desc' ? { sortDir: patch.sortDir } : {}),
     ...(typeof patch.query === 'string' ? { query: patch.query } : {}),
@@ -553,6 +576,12 @@ function applyViewPatch(cur: StoredView, patch: Record<string, unknown>): Stored
 
 /** 规范化可清空的可选字段；clearEmpty=true 时传 null/空值会彻底删除旧键。 */
 function normalizeOptionalViewFields(view: StoredView, raw: Record<string, unknown>, clearEmpty: boolean) {
+  if ('scope' in raw) {
+    const sc = normalizeViewScope(raw.scope)
+    if (sc) view.scope = sc
+    else if (clearEmpty) delete view.scope
+    else view.scope = undefined
+  }
   if ('groupConfig' in raw) {
     const gc = normalizeGroupConfig(raw.groupConfig)
     if (gc) view.groupConfig = gc
@@ -619,13 +648,25 @@ function mergeIncomingStoredView(
 }
 
 /**
+ * 三态可见性判定：
+ * - 索引表（/tags 等）视图按创建者严格隔离；
+ * - 显式 scope='personal' 的私人视图仅创建者可见；
+ * - scope='workspace' / 'shared'（含历史缺省）对空间成员可见。
+ */
+function isViewVisibleTo(view: StoredView, path: string, accountId: string): boolean {
+  if (isIndexCollection(path)) return view.createdBy === accountId
+  if (view.scope === 'personal' && view.createdBy && accountId) return view.createdBy === accountId
+  return true
+}
+
+/**
  * 标签表（/tags 这类索引表）的视图按创建人分开存，同一个 viewId 可能属于多个账号。
- * 只在当前账号名下的视图里找，避免把别人的视图当成「未知视图」或误改误删。
+ * 只在当前账号可见的视图里找，避免把别人的视图当成「未知视图」或误改误删。
  */
 function findView(views: StoredView[], path: string, viewId: string, accountId: string) {
   const owned = isIndexCollection(path)
     ? views.filter((item) => !item.createdBy || item.createdBy === accountId)
-    : views
+    : views.filter((item) => isViewVisibleTo(item, path, accountId))
   return owned.find((item) => String(item.id) === viewId)
 }
 
@@ -709,6 +750,7 @@ function asRecord(path: string, tableName: string, view: StoredView, tableIcon?:
     tableIcon,
     viewId: view.id,
     mode: view.mode ?? 'table',
+    scope: normalizeViewScope(view.scope) ?? 'workspace',
     sortField: sorts[0]?.field || view.sortField || 'title',
     sortDir: sorts[0]?.dir ?? (view.sortDir === 'desc' ? 'desc' : 'asc'),
     query: view.query ?? '',
@@ -748,6 +790,8 @@ export function clientViewFromDbRow(row: Record<string, unknown> | undefined) {
     tablePath: normalizeCollectionPath(String(row.tablePath ?? '')),
     name: String(row.title ?? row.name ?? id),
     mode: row.mode,
+    scope: normalizeViewScope(row.scope),
+    createdBy: typeof row.createdBy === 'string' && row.createdBy.trim() ? row.createdBy.trim() : undefined,
     sortField: sortsPatch.sortField,
     sortDir: sortsPatch.sortDir,
     sorts: sortsPatch.sorts,
@@ -801,6 +845,8 @@ export function viewsCollection(
         tablePath: { type: 'string', label: '表路径', writable: true },
         viewId: { type: 'string', label: '视图 ID' },
         mode: { type: 'string', label: '呈现', writable: true },
+        scope: { type: 'select', label: '可见范围', writable: true, enum: ['personal', 'workspace', 'shared'] },
+        createdBy: { type: 'string', label: '创建者' },
         sortField: { type: 'string', label: '排序字段', writable: true },
         sortDir: { type: 'select', label: '升降序', writable: true, enum: ['asc', 'desc'] },
         sorts: { type: 'string', label: '排序', writable: true, description: VIEW_SORTS_DESCRIPTION },

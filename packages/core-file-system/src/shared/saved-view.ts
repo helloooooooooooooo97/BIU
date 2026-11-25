@@ -6,6 +6,13 @@ import { countFilterRules, filterTreeStateKey, normalizeSorts, resolveViewFilter
 
 export type GroupSortMode = 'manual' | 'asc' | 'desc'
 
+/** 视图自身的可见范围三态：私人（仅创建者可见可改）、空间（空间内部成员可见）、共享（含外部/跨人授权或公开外链）。 */
+export type ViewScope = 'personal' | 'workspace' | 'shared'
+
+export function normalizeViewScope(value: unknown): ViewScope | undefined {
+  return value === 'personal' || value === 'workspace' || value === 'shared' ? value : undefined
+}
+
 export type GroupConfig = {
   sort?: GroupSortMode
   hideEmpty?: boolean
@@ -17,6 +24,10 @@ export type SavedView = {
   id: string
   name: string
   mode: ViewMode
+  /** 视图自身的可见范围三态（缺省视为 workspace）。 */
+  scope?: ViewScope
+  /** 创建者账号 ID（用于私人视图可见性隔离与创建者/管理员独占编辑权）。 */
+  createdBy?: string
   sortField: string
   sortDir: 'asc' | 'desc'
   sorts?: SortRule[]
@@ -192,8 +203,12 @@ export function applyGroupConfig<T extends { key: string; label: string; rows: u
 
 export function normalizeSavedView(view: SavedView): SavedView {
   const sorts = normalizeSorts(view.sorts, view.sortField || 'title', view.sortDir === 'desc' ? 'desc' : 'asc')
+  const scope = normalizeViewScope(view.scope)
+  const createdBy = typeof view.createdBy === 'string' && view.createdBy.trim() ? view.createdBy.trim() : undefined
   return {
     ...view,
+    ...(scope ? { scope } : { scope: undefined }),
+    ...(createdBy ? { createdBy } : { createdBy: undefined }),
     mode: isViewModeId(view.mode) ? view.mode : 'table',
     sortField: sorts[0]?.field || 'title',
     sortDir: sorts[0]?.dir ?? 'asc',

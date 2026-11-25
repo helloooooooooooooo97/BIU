@@ -384,10 +384,10 @@ test('policy-locked view blocks filters/columns changes and deletion for non-adm
         { id: 'v-free', name: 'Free', filters: {} },
       ],
     },
-    'admin-1',
+    'member-1',
   )
 
-  // Non-admin can tweak visual settings (pageSize / sortField)
+  // Non-admin creator can tweak visual settings (pageSize / sortField)
   store.applyPatch(
     '/pages',
     { upsert: [{ id: 'v-locked', name: 'Locked', filters: { status: 'open' }, columns: ['title', 'status'], pageSize: 50 }] },
@@ -426,13 +426,64 @@ test('policy-locked view blocks filters/columns changes and deletion for non-adm
   assert.deepEqual(removedCalls, ['/pages:v-locked'])
 })
 
-test('custom views record createdBy and preserve creator ownership across subsequent edits', () => {
+test('three-state view scope (personal / workspace / shared) enforces visibility and creator/admin ownership', () => {
   const store = new SavedViewsStore().open(':memory:')
   store.setWorkspaceResolver(() => 'ws-1')
-  store.applyPatch('/pages', { upsert: [{ id: 'v-alice', name: 'Alice View', filters: { tag: 'a' } }] }, 'alice')
-  assert.equal(store.viewsFor('/pages').find((v) => v.id === 'v-alice')?.createdBy, 'alice')
+  store.setPolicyGuard({
+    isLocked: () => false,
+    canEditLocked: (_ws, acc) => acc === 'admin-1',
+  })
 
-  // Another member editing visual settings does not steal createdBy
-  store.applyPatch('/pages', { upsert: [{ id: 'v-alice', name: 'Alice View', pageSize: 50 }] }, 'bob')
-  assert.equal(store.viewsFor('/pages').find((v) => v.id === 'v-alice')?.createdBy, 'alice')
+  // Alice creates a personal view, a workspace view, and a shared view
+  store.applyPatch(
+    '/pages',
+    {
+      upsert: [
+        { id: 'v-personal', name: 'Alice Private', scope: 'personal', filters: { status: 'draft' } },
+        { id: 'v-workspace', name: 'Team Board', scope: 'workspace', filters: { status: 'open' } },
+        { id: 'v-shared', name: 'Client Portal', scope: 'shared', filters: { status: 'published' } },
+      ],
+    },
+    'alice',
+  )
+
+  // Visibility: Alice sees all 3; Bob & Admin only see workspace + shared (not Alice's personal view)
+  assert.deepEqual(
+    store.viewsFor('/pages', 'alice').map((v) => v.id),
+    ['v-personal', 'v-workspace', 'v-shared'],
+  )
+  assert.deepEqual(
+    store.viewsFor('/pages', 'bob').map((v) => v.id),
+    ['v-workspace', 'v-shared'],
+  )
+  assert.deepEqual(
+    store.viewsFor('/pages', 'admin-1').map((v) => v.id),
+    ['v-workspace', 'v-shared'],
+  )
+
+  // Mutation ownership: Bob cannot modify or delete Alice's workspace/shared/personal views
+  assert.throws(
+    () => store.applyPatch('/pages', { upsert: [{ id: 'v-workspace', name: 'Hijacked' }] }, 'bob'),
+    /VIEW_OWNER_ONLY/,
+  )
+  assert.throws(
+    () => store.applyPatch('/pages', { remove: ['v-shared'] }, 'bob'),
+    /VIEW_OWNER_ONLY/,
+  )
+  assert.throws(
+    () => store.applyPatch('/pages', { upsert: [{ id: 'v-personal', name: 'Steal' }] }, 'admin-1'),
+    /VIEW_OWNER_ONLY/,
+  )
+
+  // Admin CAN modify Alice's workspace view, and createdBy stays alice
+  store.applyPatch('/pages', { upsert: [{ id: 'v-workspace', name: 'Team Board v2' }] }, 'admin-1')
+  const updated = store.viewsFor('/pages', 'alice').find((v) => v.id === 'v-workspace')
+  assert.equal(updated?.name, 'Team Board v2')
+  assert.equal(updated?.createdBy, 'alice')
+
+  // Alice CAN modify and delete her own personal view
+  store.applyPatch('/pages', { upsert: [{ id: 'v-personal', name: 'Alice Private 2' }] }, 'alice')
+  assert.equal(store.viewsFor('/pages', 'alice').find((v) => v.id === 'v-personal')?.name, 'Alice Private 2')
+  store.applyPatch('/pages', { remove: ['v-personal'] }, 'alice')
+  assert.equal(store.viewsFor('/pages', 'alice').some((v) => v.id === 'v-personal'), false)
 })
