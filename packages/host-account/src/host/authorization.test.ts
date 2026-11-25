@@ -584,3 +584,55 @@ test('removeMember transfers private owned records and revokes locks, leases, an
   assert.equal(store.hasExecutionLease('bob-agent'), false)
   assert.ok(auth.getActorScope(workspace.id, 'agent', 'bob-agent')?.revokedAt)
 })
+
+test('no-amplification axiom: sharing a custom view NEVER leaks other members private records and blocks secondary re-sharing', () => {
+  const { store, auth, ada, bob, cara, workspace, actor, page } = setup()
+  const dave = store.register('Dave', 1, 'secret123', 'dave@example.com')
+  store.addMemberByEmail(ada.id, workspace.id, dave.email)
+  store.setActive(dave.id, workspace.id)
+
+  // Bob owns 1 private record matching tag='project', Cara owns 1 private record matching tag='project'
+  runWithAccount(bob.id, () => {
+    store.attach(workspace.id, '/pages', 'bob-doc', 1, { accessMode: 'private' })
+  })
+  runWithAccount(cara.id, () => {
+    store.attach(workspace.id, '/pages', 'cara-doc', 1, { accessMode: 'private' })
+  })
+
+  // Match internal members for 'mv-all' and records with tag === 'project' for view 'v-project'
+  const internalIds = new Set([ada.id, bob.id, cara.id, dave.id])
+  auth.setMemberViewMatcher((_ws, viewId, accountId) => viewId === 'mv-all' && internalIds.has(accountId))
+  auth.setDataViewMatcher((_ws, col, viewId, _recId, ctx) => col === '/pages' && viewId === 'v-project' && ctx.record?.tag === 'project')
+
+  // Bob shares custom view 'v-project' to 'mv-all' (all members, including Bob and Dave)
+  runWithAccount(bob.id, () => {
+    store.grantViewMemberView(bob.id, '/pages', 'v-project', 'mv-all', 'manager')
+  })
+
+  // Bug #2 fixed: Bob and Dave can see bob-doc, NEVER cara-doc (no 10 -> 20 record leak!)
+  assert.equal(auth.authorize(actor(bob.id), 'resource:read', { ...page('bob-doc'), record: { tag: 'project' } }).allowed, true)
+  assert.equal(auth.authorize(actor(bob.id), 'resource:read', { ...page('cara-doc'), record: { tag: 'project' } }).allowed, false)
+  assert.equal(auth.authorize(actor(dave.id), 'resource:read', { ...page('bob-doc'), record: { tag: 'project' } }).allowed, true)
+  assert.equal(auth.authorize(actor(dave.id), 'resource:read', { ...page('cara-doc'), record: { tag: 'project' } }).allowed, false)
+
+  // Bug #1 fixed: Dave (who only got access via Bob's view grant) CANNOT see or revoke Bob's view grant
+  const daveViewAccess = runWithAccount(dave.id, () => store.viewAccess(dave.id, '/pages', 'v-project'))
+  assert.equal(daveViewAccess.memberViews.length, 0)
+  assert.throws(
+    () => runWithAccount(dave.id, () => store.revokeViewGrant(dave.id, '/pages', 'v-project', 'member_view', 'mv-all')),
+    /协作者不存在|无权/,
+  )
+
+  // Even if Dave creates his own view grant on 'v-project' to an external user, Bob's doc is NOT re-leaked!
+  const ext = store.register('ExtLeak', 1, 'secret123', 'extleak@example.com')
+  runWithAccount(dave.id, () => {
+    store.shareViewWithEmail(dave.id, '/pages', 'v-project', ext.email, 'editor', 'external')
+  })
+  assert.equal(auth.authorize(actor(ext.id), 'resource:read', { ...page('bob-doc'), record: { tag: 'project' } }).allowed, false)
+  assert.equal(auth.authorize(actor(ext.id), 'resource:read', { ...page('cara-doc'), record: { tag: 'project' } }).allowed, false)
+
+  // Role escalation guard: a manager cannot grant 'owner' on a record
+  auth.attach(actor(ada.id), page('ada-owned'), { accessMode: 'private' })
+  auth.grant(ada.id, page('ada-owned'), 'account', bob.id, 'manager')
+  assert.throws(() => auth.grant(bob.id, page('ada-owned'), 'account', cara.id, 'owner'), /CANNOT_EXCEED_OWN_ROLE/)
+})

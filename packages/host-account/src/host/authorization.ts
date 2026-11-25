@@ -802,8 +802,16 @@ export class AuthorizationService {
     const actor: Actor = { type: 'account', accountId: actorId, workspaceId: resource.workspaceId }
     const decision = this.authorize(actor, 'resource:manage-permissions', resource)
     const policy = this.policy(resource)
-    if (policy && policy.owner_account_id !== actorId && !decision.allowed) {
+    const isOwner = Boolean(policy && policy.owner_account_id === actorId)
+    if (policy && !isOwner && !decision.allowed) {
       throw new Error('permission denied: INSUFFICIENT_PERMISSION')
+    }
+    // 禁止角色放大：授权人不能授予高于自己有效角色的权限（例如 manager 不能授出 owner）
+    if (effect === 'allow' && policy) {
+      const actorRole: ResourceRole = isOwner ? 'owner' : (decision.allowed ? decision.effectiveRole : 'viewer')
+      if (ROLE_RANK[role] > ROLE_RANK[actorRole]) {
+        throw new Error('permission denied: CANNOT_EXCEED_OWN_ROLE')
+      }
     }
     const written = this.db
       .prepare(
@@ -1117,6 +1125,28 @@ export class AuthorizationService {
     return candidates[0]!
   }
 
+  /**
+   * 非提权公理（No-Amplification Axiom）：
+   * 仅校验授权人 grantedBy 通过非视图路径（所有权 / 直接授权 / 成员组 / 空间默认 / 父子继承）
+   * 对目标记录具备分享权（manager / owner）。绝不递归使用 view_grants 背书，从根上杜绝：
+   * 1. 分享自定义视图 A 时把其他成员的私密记录混进结果集（10 条变 20 条）；
+   * 2. 被授权人 B 把通过视图看到的 A 的数据二次转授给第三方。
+   */
+  canGrantorShareRecord(
+    grantorId: string,
+    resource: Extract<ResourceRef, { type: 'record' }>,
+  ): boolean {
+    if (!grantorId) return false
+    const membership = this.membership(grantorId, resource.workspaceId)
+    if (!membership || membership === 'viewer') return false
+    const resolved = this.effectiveRole(grantorId, resource, new Set(), 0)
+    if (!resolved || 'reason' in resolved) return false
+    const denied = resolved.source === 'ownership' ? null : this.directDenyRole(grantorId, resource)
+    const afterDeny = applyRoleDeny(resolved.effectiveRole, denied)
+    if (!afterDeny) return false
+    return roleCoversAction(afterDeny, 'resource:share')
+  }
+
   private dataViewRole(
     accountId: string,
     resource: Extract<ResourceRef, { type: 'record' }>,
@@ -1154,6 +1184,10 @@ export class AuthorizationService {
           ? grant.subject_id === accountId
           : this.matchesMemberView(resource.workspaceId, grant.subject_id, accountId)
         if (!subjectMatches) continue
+      }
+      // 任何 allow 视图授权都必须满足非提权公理：授权人本人必须对该记录拥有非视图来源的分享/管理权
+      if (grant.effect !== 'deny' && !this.canGrantorShareRecord(grant.granted_by, resource)) {
+        continue
       }
       const matched = this.dataViewMatcher(
         resource.workspaceId,

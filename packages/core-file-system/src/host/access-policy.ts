@@ -291,12 +291,13 @@ export class DatabaseAccessPolicy {
     if (!grants.length) return null
     const saved = [builtinAllView({ path: collection }), ...(this.host.viewCatalog?.viewsFor(collection) ?? [])]
     const target = resolveScopeTarget(collection, String(record.id ?? ''), record)
-    const scope = authorization.scopeCurrent({
-      type: 'record',
+    const targetRef = {
+      type: 'record' as const,
       workspaceId,
       collection: target.collection,
       recordId: target.id,
-    })
+    }
+    const scope = authorization.scopeCurrent(targetRef)
     const ownerId = this.recordOwner(target.collection, target.id)
     const roles: ViewGrantRole[] = []
     for (const grant of grants) {
@@ -304,6 +305,9 @@ export class DatabaseAccessPolicy {
         ? grant.subject_id === accountId
         : authorization.matchesMemberView(workspaceId, grant.subject_id, accountId)
       if (!subjectMatches) continue
+      if (grant.effect !== 'deny' && !authorization.canGrantorShareRecord(grant.granted_by ?? '', targetRef)) {
+        continue
+      }
       if (recordMatchesGrantedView(record as never, grant.view_id, saved, scope, { grantedBy: grant.granted_by, recordOwnerId: ownerId })) {
         // Deny-overrides-Allow: any matching deny view grant blocks view-based access.
         if (grant.effect === 'deny') return null
