@@ -12,8 +12,8 @@ import {
   runWithActorContext,
   runWithMcpTenant,
   runWithRequestWorkspace,
-  isOnlineRuntime,
 } from '@biu/host-plugin-loader/data-dir'
+import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import type { Context } from 'cordis'
 import type { RouteContext } from '@biu/type-http'
 import {
@@ -259,14 +259,14 @@ export function applyHostServer(ctx: Context) {
     )?.store
     const credential = got ? store?.resolveMcpCredential?.(got) : null
     if (credential) return credential
-    if (tokensMatch(got, token) && !isOnlineRuntime()) return null
+    if (tokensMatch(got, token) && getRuntimePolicy().authzMode !== 'rbac') return null
     route.send(401, { error: 'mcp token required — 使用绑定空间的凭证' })
     return false as const
   }
 
   ctx.http.route('GET', '/api/mcp/info', (route) => {
     applyCors(route)
-    if (isOnlineRuntime()) {
+    if (getRuntimePolicy().hostMode === 'cloud') {
       const accountId = currentAccountId()
       const workspaceId = currentRequestWorkspaceId()
       if (!accountId) return route.send(401, { error: '需要登录' })
@@ -305,7 +305,7 @@ export function applyHostServer(ctx: Context) {
 
   ctx.http.route('POST', '/api/mcp/rotate', (route) => {
     applyCors(route)
-    if (isOnlineRuntime()) {
+    if (getRuntimePolicy().hostMode === 'cloud') {
       route.send(410, { error: '在线模式请使用空间 MCP 凭证' })
       return
     }

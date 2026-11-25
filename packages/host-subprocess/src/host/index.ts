@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { Service, type Context } from 'cordis'
-import { isOnlineRuntime } from '@biu/host-plugin-loader/data-dir'
+import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 export { posixShellArgv, posixShellBin, hostShellKind, describeHostRuntime } from './posix-shell.ts'
 
 export interface SpawnProgress {
@@ -30,7 +30,7 @@ const DEFAULT_CLOUD_MAX_CONCURRENCY = 20
 export function sandboxMaxConcurrency(): number {
   const raw = Number(process.env.BIU_SANDBOX_MAX_CONCURRENCY)
   if (Number.isInteger(raw) && raw > 0) return raw
-  return isOnlineRuntime() ? DEFAULT_CLOUD_MAX_CONCURRENCY : 0
+  return getRuntimePolicy().enforceTenantQuotas ? DEFAULT_CLOUD_MAX_CONCURRENCY : 0
 }
 
 export class ConcurrencyLimiter {

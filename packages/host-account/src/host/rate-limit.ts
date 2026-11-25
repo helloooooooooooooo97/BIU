@@ -1,5 +1,5 @@
 import type { IncomingMessage } from 'node:http'
-import { isOnlineRuntime } from '@biu/host-plugin-loader/data-dir'
+import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 
 const DEFAULT_WINDOW_MS = 60_000
 const DEFAULT_MAX_ATTEMPTS = 20
@@ -58,5 +58,5 @@ export function authRateLimitMax(): number {
     return Number.isInteger(parsed) && parsed >= 0 ? parsed : DEFAULT_MAX_ATTEMPTS
   }
   if (process.env.VITEST) return 0
-  return isOnlineRuntime() ? DEFAULT_MAX_ATTEMPTS : 0
+  return getRuntimePolicy().enforceTenantQuotas ? DEFAULT_MAX_ATTEMPTS : 0
 }

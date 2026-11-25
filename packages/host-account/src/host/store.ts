@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
-import { currentAccountId, currentRequestWorkspaceId, isOnlineRuntime, superAdminEmail, superAdminPassword } from '@biu/host-plugin-loader/data-dir'
+import { currentAccountId, currentRequestWorkspaceId, superAdminEmail, superAdminPassword } from '@biu/host-plugin-loader/data-dir'
+import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { AuthorizationService, type ResourcePolicyInput, type ResourceRole, type WorkspaceRole } from './authorization.ts'
 import {
   CollabError,
@@ -293,7 +294,7 @@ export class CollabStore {
       if (caller && !this.isMember(caller, requested)) return null
       return requested
     }
-    if (isOnlineRuntime()) return caller ? this.accountActiveWorkspace(caller) : null
+    if (!getRuntimePolicy().allowImplicitActiveWorkspace) return caller ? this.accountActiveWorkspace(caller) : null
     if (caller) return this.accountActiveWorkspace(caller)
     return this.stateValue('active')
   }
@@ -857,7 +858,7 @@ export class CollabStore {
         }
       | undefined
     if (!row) return null
-    if (isOnlineRuntime() && !row.guest_session_id) return null
+    if (getRuntimePolicy().authzMode === 'rbac' && !row.guest_session_id) return null
     if (row.guest_session_id) {
       if (row.revoked_at || Number(row.expires_at) <= now) return null
       this.db.prepare('UPDATE guest_sessions SET last_seen_at = ? WHERE id = ?').run(now, row.guest_session_id)
@@ -2597,7 +2598,7 @@ export class CollabStore {
   canReadRecord(collection: string, recordId: string) {
     const caller = currentAccountId()
     const workspaceId = this.activeWorkspaceId()
-    if (isOnlineRuntime() && (!caller || !workspaceId)) return false
+    if (getRuntimePolicy().authzMode === 'rbac' && (!caller || !workspaceId)) return false
     if (!caller || !workspaceId) return true
     return this.authorization.authorize(
       { type: 'account', accountId: caller, workspaceId },
@@ -3554,7 +3555,7 @@ export class CollabStore {
   }
 
   private ensureBuiltInRoot(now = Date.now()) {
-    if (!isOnlineRuntime()) return false
+    if (getRuntimePolicy().hostMode !== 'cloud') return false
     const email = superAdminEmail()
     const existing = this.db
       .prepare(`SELECT id FROM accounts WHERE lower(email) = ? LIMIT 1`)

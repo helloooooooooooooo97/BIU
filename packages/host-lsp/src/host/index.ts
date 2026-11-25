@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { Service, type Context } from 'cordis'
-import { currentTenantScope, isOnlineRuntime } from '@biu/host-plugin-loader/data-dir'
+import { currentTenantScope } from '@biu/host-plugin-loader/data-dir'
+import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 
 class StdioLsp {
   private child?: ChildProcessWithoutNullStreams
@@ -79,7 +80,7 @@ export class LspService extends Service {
   }
 
   start(command: string, args: string[] = []) {
-    if (isOnlineRuntime()) {
+    if (!getRuntimePolicy().allowHostProcess) {
       throw new Error('lsp_start is disabled in cloud runtime')
     }
     return this.sessionForCurrentTenant().start(command, args)

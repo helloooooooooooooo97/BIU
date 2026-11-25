@@ -1,5 +1,5 @@
 import { Service, type Context } from 'cordis'
-import { isOnlineRuntime } from '@biu/host-plugin-loader/data-dir'
+import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { mcpCollection } from './collection.ts'
 import { McpConnection, type McpToolInfo } from './client.ts'
 import { applyHostServer } from './serve.ts'
@@ -18,7 +18,7 @@ import {
 const CLOUD_STDIO_ERROR = 'stdio MCP servers are disabled in cloud runtime'
 
 function assertCloudTransportAllowed(transport: McpServerConfig['transport']) {
-  if (isOnlineRuntime() && transport === 'stdio') {
+  if (!getRuntimePolicy().allowHostProcess && transport === 'stdio') {
     throw new Error(CLOUD_STDIO_ERROR)
   }
 }
@@ -135,7 +135,7 @@ export class McpService extends Service {
   async connect(id: string) {
     const state = this.require(id)
     if (state.builtin) return this.row(state)
-    if (isOnlineRuntime() && state.config.transport === 'stdio') {
+    if (!getRuntimePolicy().allowHostProcess && state.config.transport === 'stdio') {
       state.status = 'error'
       state.error = CLOUD_STDIO_ERROR
       this.changed()

@@ -4,7 +4,8 @@ import { homedir, tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import { Service, type Context } from 'cordis'
 import type { SpawnRequest } from '@biu/host-subprocess'
-import { dataHome, isOnlineRuntime } from '@biu/host-plugin-loader/data-dir'
+import { dataHome } from '@biu/host-plugin-loader/data-dir'
+import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { assertSandboxDriverAllowed } from '@biu/host-plugin-loader/runtime'
 
 export type SandboxDriver = 'bwrap' | 'sandbox-exec' | 'env-only' | 'none'
@@ -73,14 +74,14 @@ export function sandboxAllowNetwork(): boolean {
   return process.env.BIU_SANDBOX_NET === '1'
 }
 
-export function resolveSandboxDriver(online = isOnlineRuntime()): SandboxDriver {
+export function resolveSandboxDriver(sandboxRequired = getRuntimePolicy().sandboxPolicy === 'required'): SandboxDriver {
   const configured = (process.env.BIU_SANDBOX_DRIVER || '').trim().toLowerCase()
   if (configured === 'none' || configured === 'env-only' || configured === 'bwrap' || configured === 'sandbox-exec') {
     if (configured === 'bwrap' && !bwrapBinary()) return 'env-only'
     if (configured === 'sandbox-exec' && !seatbeltBinary()) return 'env-only'
     return configured
   }
-  if (!online) return 'none'
+  if (!sandboxRequired) return 'none'
   if (process.platform === 'linux' && bwrapBinary()) return 'bwrap'
   if (process.platform === 'darwin' && seatbeltBinary()) return 'sandbox-exec'
   return 'env-only'
