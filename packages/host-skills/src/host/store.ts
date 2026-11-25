@@ -3,6 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpat
 import { isAbsolute, join, posix, resolve, sep } from 'node:path'
 import { tmpdir } from 'node:os'
 import { biuSqlitePath, dataHome, dataPath, openAndMigrateBiu, readEditorContent, writeEditorContent } from '@biu/host-plugin-loader/data-dir'
+import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 
 export type SkillRecord = {
   id: string
@@ -43,6 +44,16 @@ export const LEGACY_MIGRATED = '.biu-migrated'
 
 export function skillRoot(cwd = dataHome()) {
   return process.env.BIU_SKILL_ROOT || dataPath(cwd, 'skill')
+}
+
+export function sanitizeSkillWorkspaceId(id: string) {
+  const safe = String(id ?? '').trim().replace(/[^a-zA-Z0-9_-]/g, '')
+  if (!safe) throw new Error('云端模式缺少工作区上下文，拒绝访问技能仓库')
+  return safe
+}
+
+export function workspaceSkillRoot(workspaceId: string, cwd = dataHome()) {
+  return join(skillRoot(cwd), 'workspaces', sanitizeSkillWorkspaceId(workspaceId))
 }
 
 export function skillsDir(cwd = dataHome()) {
@@ -89,6 +100,9 @@ function isInside(root: string, file: string) {
 
 /** 只许从工作区或 /tmp（含 os.tmpdir）拷文件，避免 agent 把任意系统文件读进技能目录。 */
 export function assertSkillSourcePath(raw: string, cwd = process.cwd()) {
+  if (getRuntimePolicy().isolateWorkspaceDirs) {
+    throw new Error('云端模式不允许通过宿主机路径导入技能文件，请直接传 content')
+  }
   const wanted = String(raw ?? '').trim()
   if (!wanted) throw new Error('from path is empty')
   const file = isAbsolute(wanted) ? resolve(wanted) : resolve(cwd, wanted)
@@ -253,7 +267,11 @@ export function packSkillImport(files: SkillImportFile[]) {
 export class SkillsStore {
   private listed: SkillRecord[] | null = null
 
-  constructor(private root = skillRoot()) {}
+  constructor(private root = skillRoot(), private workspaceId?: string) {}
+
+  private editorCollectionPath() {
+    return this.workspaceId ? `/skills/${this.workspaceId}` : '/skills'
+  }
 
   private ensureRoot() {
     mkdirSync(this.root, { recursive: true })
@@ -338,7 +356,7 @@ export class SkillsStore {
     try {
       const db = openAndMigrateBiu(biuSqlitePath())
       try {
-        const body = readEditorContent(db, '/skills', loaded.id)
+        const body = readEditorContent(db, this.editorCollectionPath(), loaded.id)
         if (body) loaded.notes = body
       } finally {
         db.close()
@@ -368,7 +386,7 @@ export class SkillsStore {
       try {
         const db = openAndMigrateBiu(biuSqlitePath())
         try {
-          writeEditorContent(db, '/skills', next.id, next.notes)
+          writeEditorContent(db, this.editorCollectionPath(), next.id, next.notes)
         } finally {
           db.close()
         }
