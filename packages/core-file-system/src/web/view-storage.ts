@@ -600,68 +600,35 @@ function pickDisplay(patch: Partial<SavedView>): ViewDisplayPatch {
   return next
 }
 
-export function loadViewDisplay(collectionPath: string, viewId: string): ViewDisplayPatch {
-  try {
-    const raw = readStorageString(viewDisplayKey(collectionPath, viewId))
-    if (!raw) return {}
-    const parsed = JSON.parse(raw) as Record<string, unknown>
-    return parsed && typeof parsed === 'object' ? pickDisplay(parsed) : {}
-  } catch {
-    return {}
-  }
+export function loadViewDisplay(_collectionPath: string, _viewId: string): ViewDisplayPatch {
+  return {}
 }
 
-export function persistViewDisplay(collectionPath: string, viewId: string, patch: Partial<SavedView>) {
-  try {
-    const prev = loadViewDisplay(collectionPath, viewId)
-    const picked = pickDisplay(patch)
-    const updatedAt = picked.updatedAt && picked.updatedAt > 0 ? picked.updatedAt : Date.now()
-    writeStorageString(viewDisplayKey(collectionPath, viewId), JSON.stringify({ ...prev, ...picked, updatedAt }))
-  } catch {
-    /* ignore */
-  }
+export function persistViewDisplay(_collectionPath: string, _viewId: string, _patch: Partial<SavedView>) {
+  // 所有视图（含内置视图）统一以服务端 saved_views 为唯一真相，不再写 localStorage 显示覆盖
 }
 
-/** 内置「全部 xx」不能当用户视图存整份，显示项（换行等）单独记。服务端时间戳更新时以服务端为准，不再被旧 localStorage 覆盖。 */
+/** 仅修正索引/系统内置视图的默认分组约束，不再叠加 localStorage 覆盖。 */
 export function withViewDisplay(collectionPath: string, view: SavedView): SavedView {
-  const overlay = loadViewDisplay(collectionPath, view.id)
-  const overlayAt = Number(overlay.updatedAt) || 0
-  const viewAt = Number(view.updatedAt) || 0
-  const serverIsNewer = viewAt > 0 && viewAt > overlayAt
-  const overlayName = typeof overlay.name === 'string' ? overlay.name.trim() : ''
-  const painted =
-    !serverIsNewer && Object.keys(overlay).length
-      ? {
-          ...view,
-          ...overlay,
-          id: view.id,
-          name: view.name || overlayName,
-          builtin: view.builtin,
-          filters: view.filters,
-          filterTree: overlay.filterTree ?? view.filterTree,
-          rank: Number.isFinite(Number(overlay.rank)) ? overlay.rank : view.rank,
-          updatedAt: Math.max(viewAt, overlayAt) || undefined,
-        }
-      : view
   const path = normalizeCollectionPath(collectionPath)
   const forcedGroup =
     isIndexCollection(collectionPath) && isBuiltinAllViewId(view.id)
       ? path === EDITOR_BLOCKS_COLLECTION_PATH
-        ? !painted.groupBy || painted.groupBy === 'shareScope'
+        ? !view.groupBy || view.groupBy === 'shareScope'
           ? builtinAllGroupBy(collectionPath)
           : undefined
         : ''
       : path === WORKSPACE_MEMBERS_COLLECTION_PATH &&
           isBuiltinAllViewId(view.id) &&
-          (!painted.groupBy || painted.groupBy === 'shareScope')
+          (!view.groupBy || view.groupBy === 'shareScope')
         ? builtinAllGroupBy(collectionPath)
         : path === VIEWS_COLLECTION_PATH &&
             isBuiltinAllViewId(view.id) &&
-            painted.groupBy === 'shareScope'
+            view.groupBy === 'shareScope'
           ? builtinAllGroupBy(collectionPath)
           : undefined
   return normalizeSavedView({
-    ...painted,
+    ...view,
     ...(forcedGroup !== undefined ? { groupBy: forcedGroup } : {}),
   })
 }

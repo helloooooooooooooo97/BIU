@@ -3,7 +3,7 @@ import { dirname } from 'node:path'
 import { openAndMigrateBiu } from '@biu/host-plugin-loader/data-dir'
 import type { CollectionInfo, CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { normalizeSchemaValue, recordBuiltinValues } from '@biu/type-file-system'
-import { builtinAllView, builtinAllViewId } from '../catalog-views.ts'
+import { builtinAllView, builtinAllViewId, isBuiltinAllViewId } from '../catalog-views.ts'
 import { normalizeColumnWidths, normalizeGroupConfig, normalizePageSize, normalizeViewScope, parseViewColumns, type SavedView } from '../shared/saved-view.ts'
 import { normalizeColumnSummaries } from '../shared/column-summary.ts'
 import { normalizeColumnViews } from '../shared/column-sandbox-model.ts'
@@ -31,6 +31,7 @@ export type StoredView = Partial<SavedView> & Pick<SavedView, 'id' | 'name'> & {
 export type PolicyViewGuard = {
   isLocked(workspaceId: string, collection: string, viewId: string): boolean
   canEditLocked(workspaceId: string, accountId: string): boolean
+  workspaceOwner?(workspaceId: string): string | null
   canSeeView?(workspaceId: string, collection: string, view: StoredView, accountId: string): boolean
   canModifyView?(workspaceId: string, collection: string, view: StoredView, accountId: string): boolean
   canRemoveView?(workspaceId: string, collection: string, view: StoredView, accountId: string): boolean
@@ -94,6 +95,18 @@ export class SavedViewsStore {
     return true
   }
 
+  private isBuiltinView(viewId: string, view?: { builtin?: unknown }): boolean {
+    return Boolean(view?.builtin) || isBuiltinAllViewId(viewId)
+  }
+
+  private withBuiltinOwner(workspaceId: string, view: StoredView): StoredView {
+    if (!this.isBuiltinView(String(view.id), view)) return view
+    const owner = this.policyGuard?.workspaceOwner?.(workspaceId)?.trim()
+    if (!owner) return view
+    if (view.createdBy === owner && view.scope === 'workspace') return view
+    return { ...view, createdBy: owner, scope: 'workspace' }
+  }
+
   private assertCanModifyView(
     workspaceId: string,
     path: string,
@@ -101,6 +114,14 @@ export class SavedViewsStore {
     next: StoredView,
     accountId: string,
   ) {
+    const viewId = String(prev?.id ?? next.id ?? '')
+    if (this.isBuiltinView(viewId, prev ?? next)) {
+      const owner = this.policyGuard?.workspaceOwner?.(workspaceId)?.trim()
+      if (owner && accountId && accountId !== owner) {
+        throw new Error('permission denied: BUILTIN_VIEW_OWNER_ONLY')
+      }
+      return
+    }
     if (!prev) return
     if (this.policyGuard?.canModifyView && accountId) {
       if (!this.policyGuard.canModifyView(workspaceId, path, prev, accountId)) {
@@ -124,6 +145,13 @@ export class SavedViewsStore {
     accountId: string,
     prev?: StoredView,
   ) {
+    if (this.isBuiltinView(viewId, prev)) {
+      const owner = this.policyGuard?.workspaceOwner?.(workspaceId)?.trim()
+      if (owner && accountId && accountId !== owner) {
+        throw new Error('permission denied: BUILTIN_VIEW_OWNER_ONLY')
+      }
+      return
+    }
     if (this.policyGuard?.canRemoveView && accountId && prev) {
       if (!this.policyGuard.canRemoveView(workspaceId, path, prev, accountId)) {
         throw new Error('permission denied: VIEW_OWNER_ONLY')
@@ -227,7 +255,9 @@ export class SavedViewsStore {
 
   viewsFor(collectionPath: string, accountId = '', workspaceId = this.resolveWorkspaceId()): StoredView[] {
     const path = normalizeCollectionPath(collectionPath)
-    const views = this.byPath.get(bucketKey(workspaceId, path)) ?? []
+    const views = (this.byPath.get(bucketKey(workspaceId, path)) ?? []).map((view) =>
+      this.withBuiltinOwner(workspaceId, view),
+    )
     return views.filter((view) => this.canAccountSeeView(workspaceId, path, view, accountId))
   }
 
@@ -309,7 +339,10 @@ export class SavedViewsStore {
       const incomingAt = Number((incoming as { updatedAt?: unknown }).updatedAt) || 0
       const storedAt = Number((prevView as { updatedAt?: unknown } | undefined)?.updatedAt) || 0
       if (prevView && incomingAt && storedAt && incomingAt < storedAt) continue
-      const view = mergeIncomingStoredView(prevView, incoming, id, incomingAt, indexScoped, accountId)
+      const view = this.withBuiltinOwner(
+        workspaceId,
+        mergeIncomingStoredView(prevView, incoming, id, incomingAt, indexScoped, accountId),
+      )
       this.assertCanModifyView(workspaceId, path, prevView, view, accountId)
       const at = next.findIndex((item) => String(item.id) === id)
       if (at >= 0) next[at] = view
@@ -332,7 +365,7 @@ export class SavedViewsStore {
     const out: DbRecord[] = []
     const seen = new Set<string>()
     const emit = (path: string, tableName: string, view: StoredView) => {
-      const rec = asRecord(path, tableName, view, icons.get(path))
+      const rec = asRecord(path, tableName, this.withBuiltinOwner(workspaceId, view), icons.get(path))
       if (seen.has(rec.id)) return
       seen.add(rec.id)
       out.push(rec)

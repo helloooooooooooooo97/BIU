@@ -525,3 +525,37 @@ test('viewsCollection emits user PersonValue (not agent) for createdBy and updat
   assert.deepEqual(hydrated.createdBy, { kind: 'user', accountId: 'acc_29e64d', name: '97' })
   assert.deepEqual(hydrated.updatedBy, [{ kind: 'user', accountId: 'acc_29e64d', name: '97' }])
 })
+
+test('builtin views are owned by workspace owner and only workspace owner can modify or delete them', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'biu-saved-views-builtin-owner-'))
+  const store = new SavedViewsStore().open(join(dir, 'biu.sqlite'))
+  store.setWorkspaceResolver(() => 'ws-1')
+  store.setPolicyGuard({
+    isLocked: () => false,
+    canEditLocked: () => true,
+    workspaceOwner: (ws) => (ws === 'ws-1' ? 'owner-wenxin' : null),
+  })
+
+  // Non-owner (even admin) cannot modify or delete builtin-all:/pages
+  assert.throws(
+    () => store.applyPatch('/pages', { upsert: [{ id: 'builtin-all:/pages', name: '97', builtin: true }] }, 'admin-97'),
+    /BUILTIN_VIEW_OWNER_ONLY/,
+  )
+
+  // Workspace owner CAN modify builtin-all:/pages, and createdBy is fixed to workspace owner
+  store.applyPatch('/pages', { upsert: [{ id: 'builtin-all:/pages', name: '团队全部页面', builtin: true }] }, 'owner-wenxin')
+  const saved = store.viewsFor('/pages', 'admin-97').find((v) => v.id === 'builtin-all:/pages')
+  assert.equal(saved?.name, '团队全部页面')
+  assert.equal(saved?.createdBy, 'owner-wenxin')
+  assert.equal(saved?.scope, 'workspace')
+
+  // Non-owner still cannot modify or delete it after it exists
+  assert.throws(
+    () => store.applyPatch('/pages', { upsert: [{ id: 'builtin-all:/pages', name: 'Hijacked' }] }, 'admin-97'),
+    /BUILTIN_VIEW_OWNER_ONLY/,
+  )
+  assert.throws(
+    () => store.applyPatch('/pages', { remove: ['builtin-all:/pages'] }, 'admin-97'),
+    /BUILTIN_VIEW_OWNER_ONLY/,
+  )
+})

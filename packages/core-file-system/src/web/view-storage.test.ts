@@ -113,7 +113,7 @@ test('omitted builtin all view is not restored from the route', () => {
   assert.equal(routeViewNeedsFetch(path, allId), false)
 })
 
-test('builtin view wrap is stored as display prefs and restored', () => {
+test('withViewDisplay does not overlay localStorage display prefs onto server views', () => {
   const mem: Record<string, string> = {}
   const storage = {
     getItem: (key: string) => mem[key] ?? null,
@@ -127,69 +127,14 @@ test('builtin view wrap is stored as display prefs and restored', () => {
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage })
   const path = '/agents'
   const id = builtinAllViewId(path)
+  // Even if legacy localStorage already has stale display JSON, persistViewDisplay is a no-op and withViewDisplay ignores it
+  mem[viewDisplayKey(path, id)] = JSON.stringify({ name: '97', wrap: true, columns: ['title', 'project'], rank: 0 })
   persistViewDisplay(path, id, { wrap: true, truncate: false, freezeTitle: true })
-  assert.equal(mem[viewDisplayKey(path, id)]?.includes('"wrap":true'), true)
   const painted = withViewDisplay(path, builtinAllView({ path, label: '代理', view: { title: '代理' } }))
-  assert.equal(painted.wrap, true)
-  assert.equal(painted.truncate, false)
-  assert.equal(painted.freezeTitle, true)
-  assert.equal(painted.tree, false)
-  assert.equal(painted.builtin, true)
   assert.equal(painted.name, '全部代理')
-  assert.equal(viewForPath(path)?.wrap, true)
-})
-
-test('withViewDisplay keeps overlay rank over a stale record rank', () => {
-  const mem: Record<string, string> = {}
-  Object.defineProperty(globalThis, 'localStorage', {
-    configurable: true,
-    value: {
-      getItem: (key: string) => mem[key] ?? null,
-      setItem: (key: string, value: string) => {
-        mem[key] = value
-      },
-      removeItem: (key: string) => {
-        delete mem[key]
-      },
-    },
-  })
-  const path = '/agents'
-  persistViewDisplay(path, 'mine', { rank: 0, wrap: true })
-  const painted = withViewDisplay(path, {
-    id: 'mine',
-    name: '我的',
-    mode: 'table',
-    sortField: 'title',
-    sortDir: 'asc',
-    filters: {},
-    columns: [],
-    rank: 2,
-  })
-  assert.equal(painted.rank, 0)
-  assert.equal(painted.wrap, true)
-})
-
-test('builtin view columns overlay survives withViewDisplay', () => {
-  const mem: Record<string, string> = {}
-  Object.defineProperty(globalThis, 'localStorage', {
-    configurable: true,
-    value: {
-      getItem: (key: string) => mem[key] ?? null,
-      setItem: (key: string, value: string) => {
-        mem[key] = value
-      },
-      removeItem: (key: string) => {
-        delete mem[key]
-      },
-    },
-  })
-  const path = '/agents'
-  const id = builtinAllViewId(path)
-  persistViewDisplay(path, id, { columns: ['title', 'project'] })
-  assert.deepEqual(withViewDisplay(path, builtinAllView({ path, label: '代理', view: { title: '代理' } })).columns, [
-    'title',
-    'project',
-  ])
+  assert.equal(painted.wrap, false)
+  assert.deepEqual(painted.columns, [])
+  assert.equal(painted.builtin, true)
 })
 
 test('savedViewFromRecord restores columns from a JSON string', () => {
@@ -628,52 +573,6 @@ test('starred records toggle by collection path and id', () => {
 })
 
 
-test('clearing a filter overwrites the persisted display tree after a refresh', () => {
-  const mem: Record<string, string> = {}
-  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
-    getItem: (key: string) => mem[key] ?? null,
-    setItem: (key: string, value: string) => { mem[key] = value },
-  } })
-  const view = { ...builtinAllView({ path: '/pages', label: '页面' }),
-    filterTree: { kind: 'group' as const, id: 'root', combinator: 'and' as const, children: [
-      { kind: 'rule' as const, id: 'rule', field: 'tag', op: 'eq' as const, value: 'security' },
-    ] },
-  }
-  persistViewDisplay('/pages', view.id, { filterTree: view.filterTree })
-  persistViewDisplay('/pages', view.id, { filterTree: undefined })
-  assert.equal(withViewDisplay('/pages', view).filterTree, undefined)
-  persistViewDisplay('/pages', view.id, { wrap: true })
-  assert.equal(withViewDisplay('/pages', view).filterTree, undefined)
-})
-
-test('clearing columnSummaries and columnViews overwrites persisted display after a refresh', () => {
-  const mem: Record<string, string> = {}
-  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
-    getItem: (key: string) => mem[key] ?? null,
-    setItem: (key: string, value: string) => { mem[key] = value },
-  } })
-  const view = {
-    ...builtinAllView({ path: '/pages', label: '页面' }),
-    columnSummaries: { title: 'count' as const },
-    columnViews: { 'tag::tag-10::状态': { activeId: 'sv-1' } },
-  }
-  persistViewDisplay('/pages', view.id, {
-    columnSummaries: view.columnSummaries,
-    columnViews: view.columnViews,
-  })
-  assert.deepEqual(withViewDisplay('/pages', view).columnSummaries, { title: 'count' })
-  assert.deepEqual(withViewDisplay('/pages', view).columnViews, { 'tag::tag-10::状态': { activeId: 'sv-1' } })
-
-  // 显式清空（undefined 或 {}）必须覆盖掉 localStorage 旧缓存，刷新后不再复活
-  persistViewDisplay('/pages', view.id, { columnSummaries: undefined, columnViews: undefined })
-  assert.equal(withViewDisplay('/pages', view).columnSummaries, undefined)
-  assert.equal(withViewDisplay('/pages', view).columnViews, undefined)
-
-  persistViewDisplay('/pages', view.id, { columnSummaries: { title: 'count' } })
-  persistViewDisplay('/pages', view.id, { columnSummaries: {} })
-  assert.equal(withViewDisplay('/pages', view).columnSummaries, undefined)
-})
-
 test('removeStarredViews drops deleted views from starredViews without touching other tables', async () => {
   const mod = await import('./view-storage.ts')
   const prev = mod.getStarredViews()
@@ -757,9 +656,6 @@ test('newer server view wins over stale localStorage display overlay and syncs l
     const loaded = loadViews(path).find((v) => v.id === 'v1')
     assert.equal(loaded?.wrap, true)
     assert.equal(loaded?.freezeUntil, undefined)
-    // 冷启动 stub（updatedAt: 0）也会读到已同步的 localStorage 新值
-    const coldStub = withViewDisplay(path, { ...serverView, wrap: false, updatedAt: 0 })
-    assert.equal(coldStub.wrap, true)
   } finally {
     globalThis.fetch = prevFetch
   }
