@@ -3,7 +3,7 @@ import { dirname } from 'node:path'
 import { openAndMigrateBiu } from '@biu/host-plugin-loader/data-dir'
 import type { CollectionInfo, CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { normalizeSchemaValue, recordBuiltinValues } from '@biu/type-file-system'
-import { builtinAllView, builtinAllViewId, isReadOnlyViewId } from '../catalog-views.ts'
+import { builtinAllView, builtinAllViewId } from '../catalog-views.ts'
 import { normalizeColumnWidths, normalizeGroupConfig, normalizePageSize, normalizeViewScope, parseViewColumns, type SavedView } from '../shared/saved-view.ts'
 import { normalizeColumnSummaries } from '../shared/column-summary.ts'
 import { normalizeColumnViews } from '../shared/column-sandbox-model.ts'
@@ -64,8 +64,6 @@ function viewBoundaryChanged(prev: StoredView, next: StoredView): boolean {
 
 export class SavedViewsStore {
   private byPath = new Map<string, StoredView[]>()
-  /** 已删视图的墓碑：别的窗口还拿着旧快照时，不能靠 upsert 把它们复活。 */
-  private tombstones = new Map<string, Set<string>>()
   private db: DatabaseSync | null = null
   private workspaceResolver?: () => string
   private policyGuard?: PolicyViewGuard
@@ -131,49 +129,12 @@ export class SavedViewsStore {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true })
     this.db = openAndMigrateBiu(path, { foreignKeys: false })
     this.hydrate()
-    this.hydrateTombstones()
     return this
   }
 
-  /** 墓碑表可能还不存在（老库），读不到就当没有。 */
-  private hydrateTombstones() {
-    const db = this.db
-    if (!db) return
-    try {
-      const rows = db.prepare('SELECT workspace_id, collection, view_id FROM saved_view_tombstones').all() as Array<{
-        workspace_id?: string
-        collection: string
-        view_id: string
-      }>
-      for (const row of rows) this.markTombstone(row.collection, row.view_id, String(row.workspace_id ?? ''))
-    } catch {
-      try {
-        const rows = db.prepare('SELECT collection, view_id FROM saved_view_tombstones').all() as Array<{
-          collection: string
-          view_id: string
-        }>
-        for (const row of rows) this.markTombstone(row.collection, row.view_id, '')
-      } catch {
-        /* 老库没有墓碑表 */
-      }
-    }
-  }
-
-  private markTombstone(collectionPath: string, viewId: string, workspaceId = this.resolveWorkspaceId()) {
-    const key = bucketKey(workspaceId, collectionPath)
-    const set = this.tombstones.get(key) ?? new Set<string>()
-    set.add(String(viewId))
-    this.tombstones.set(key, set)
-  }
-
-  isTombstoned(collectionPath: string, viewId: string, workspaceId = this.resolveWorkspaceId()) {
-    return this.tombstones.get(bucketKey(workspaceId, collectionPath))?.has(String(viewId)) ?? false
-  }
-
-  private visibleCount(path: string, views: StoredView[], gone: Set<string>) {
-    const ids = new Set(views.map((view) => String(view.id)).filter((id) => id && !gone.has(id)))
-    const allId = builtinAllViewId(path)
-    if (!gone.has(allId)) ids.add(allId)
+  private visibleCount(path: string, views: StoredView[]) {
+    const ids = new Set(views.map((view) => String(view.id)).filter(Boolean))
+    ids.add(builtinAllViewId(path))
     return ids.size
   }
 
@@ -207,12 +168,10 @@ export class SavedViewsStore {
     }
   }
 
-  /** 增量写盘：只 upsert/delete 本次变更的 view_id，不再整表 DELETE 重插。 */
+  /** 增量写盘：只 upsert/delete 本次变更的 view_id。 */
   private persistDelta(collectionPath: string, upserted: StoredView[], removedIds: string[], workspaceId: string) {
-    if (!this.db) return
-    if (!upserted.length && !removedIds.length) return
+    if (!this.db || (!upserted.length && !removedIds.length)) return
     const path = normalizeCollectionPath(collectionPath)
-    const key = bucketKey(workspaceId, path)
     const now = Date.now()
     const upsert = this.db.prepare(
       `INSERT INTO saved_views (workspace_id, collection, view_id, payload_json, updated_at)
@@ -220,48 +179,21 @@ export class SavedViewsStore {
        ON CONFLICT(workspace_id, collection, view_id) DO UPDATE SET payload_json = excluded.payload_json, updated_at = excluded.updated_at`,
     )
     const delView = this.db.prepare('DELETE FROM saved_views WHERE workspace_id = ? AND collection = ? AND view_id = ?')
-    const tomb = this.db.prepare(
-      `INSERT INTO saved_view_tombstones (workspace_id, collection, view_id, deleted_at)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT(workspace_id, collection, view_id) DO UPDATE SET deleted_at = excluded.deleted_at`,
-    )
-    const untomb = this.db.prepare('DELETE FROM saved_view_tombstones WHERE workspace_id = ? AND collection = ? AND view_id = ?')
     this.db.exec('BEGIN IMMEDIATE')
     try {
-      const marked = this.tombstones.get(key) ?? new Set<string>()
       for (const view of upserted) {
         const id = String(view.id ?? '').trim()
-        if (!id) continue
-        upsert.run(workspaceId, path, id, JSON.stringify(view), now)
-        marked.delete(id)
-        untomb.run(workspaceId, path, id)
+        if (id) upsert.run(workspaceId, path, id, JSON.stringify(view), now)
       }
       for (const rawId of removedIds) {
         const viewId = String(rawId ?? '').trim()
-        if (!viewId) continue
-        delView.run(workspaceId, path, viewId)
-        marked.add(viewId)
-        tomb.run(workspaceId, path, viewId, now)
+        if (viewId) delView.run(workspaceId, path, viewId)
       }
-      this.tombstones.set(key, marked)
       this.db.exec('COMMIT')
     } catch (error) {
       this.db.exec('ROLLBACK')
       throw error
     }
-  }
-
-  private persistPath(collectionPath: string, workspaceId: string) {
-    if (!this.db) return
-    const path = normalizeCollectionPath(collectionPath)
-    const key = bucketKey(workspaceId, path)
-    const views = this.byPath.get(key) ?? []
-    const alive = new Set(views.map((view) => String(view.id ?? '').trim()).filter(Boolean))
-    const before = this.db
-      .prepare('SELECT view_id FROM saved_views WHERE workspace_id = ? AND collection = ?')
-      .all(workspaceId, path) as Array<{ view_id: string }>
-    const removedIds = before.map((row) => row.view_id).filter((id) => !alive.has(id))
-    this.persistDelta(path, views, removedIds, workspaceId)
   }
 
   private workspacePaths(workspaceId: string): string[] {
@@ -275,9 +207,7 @@ export class SavedViewsStore {
 
   viewsFor(collectionPath: string, accountId = '', workspaceId = this.resolveWorkspaceId()): StoredView[] {
     const path = normalizeCollectionPath(collectionPath)
-    const key = bucketKey(workspaceId, path)
-    const gone = this.tombstones.get(key)
-    const views = (this.byPath.get(key) ?? []).filter((view) => !gone?.has(String(view.id)))
+    const views = this.byPath.get(bucketKey(workspaceId, path)) ?? []
     return views.filter((view) => isViewVisibleTo(view, path, accountId))
   }
 
@@ -290,28 +220,25 @@ export class SavedViewsStore {
     return out
   }
 
-  /** 索引表上的视图按创建人分开存：这次写入只替换当前账号自己的视图。 */
-  replaceOwned(collectionPath: string, views: StoredView[], accountId: string, workspaceId = this.resolveWorkspaceId()) {
-    const path = normalizeCollectionPath(collectionPath)
-    const key = bucketKey(workspaceId, path)
-    const prev = this.byPath.get(key) ?? []
-    const kept = prev.filter((view) => view.createdBy && view.createdBy !== accountId)
-    const foreign = new Set(kept.map((view) => view.id))
-    const mine = views
-      .filter((view) => !foreign.has(String(view.id)))
-      .map((view) => ({ ...view, id: String(view.id), name: String(view.name || view.id), createdBy: accountId }))
-    this.byPath.set(key, [...kept, ...mine])
-    this.persistPath(path, workspaceId)
-  }
-
   replace(collectionPath: string, views: StoredView[], accountId = '', workspaceId = this.resolveWorkspaceId()) {
     const path = normalizeCollectionPath(collectionPath)
     const key = bucketKey(workspaceId, path)
     const prev = this.byPath.get(key) ?? []
-    const incomingList = views.map((view) => ({ ...view, id: String(view.id), name: String(view.name || view.id) }))
+    const indexScoped = isIndexCollection(path)
+    const keptForeign = indexScoped ? prev.filter((view) => view.createdBy && view.createdBy !== accountId) : []
+    const foreignIds = new Set(keptForeign.map((view) => String(view.id)))
+    const incomingList = views
+      .filter((view) => !foreignIds.has(String(view.id)))
+      .map((view) => ({
+        ...view,
+        id: String(view.id),
+        name: String(view.name || view.id),
+        ...(indexScoped && accountId ? { createdBy: accountId } : {}),
+      }))
     const incomingIds = new Set(incomingList.map((view) => String(view.id)))
+    const prevOwned = indexScoped ? prev.filter((view) => !foreignIds.has(String(view.id))) : prev
     const removedIds: string[] = []
-    for (const oldView of prev) {
+    for (const oldView of prevOwned) {
       const oldId = String(oldView.id)
       if (!incomingIds.has(oldId)) {
         this.assertCanRemoveView(workspaceId, path, oldId, accountId, oldView)
@@ -319,18 +246,15 @@ export class SavedViewsStore {
       }
     }
     for (const nextView of incomingList) {
-      const oldView = prev.find((item) => String(item.id) === String(nextView.id))
+      const oldView = prevOwned.find((item) => String(item.id) === String(nextView.id))
       this.assertCanModifyView(workspaceId, path, oldView, nextView, accountId)
     }
-    this.byPath.set(key, incomingList)
-    this.persistPath(path, workspaceId)
+    this.byPath.set(key, [...keptForeign, ...incomingList])
+    this.persistDelta(path, incomingList, removedIds, workspaceId)
     for (const viewId of removedIds) this.policyGuard?.onRemoved?.(workspaceId, path, viewId)
   }
 
-  /**
-   * 按差异写视图：只动当前账号那几条，别的窗口/会话新加的视图不会被整份覆盖冲掉。
-   * 这是 /api/db/saved-views 的默认语义，整份 replace 只留给全量同步。
-   */
+  /** 按差异写视图：只动当前账号本次变更的条目。 */
   applyPatch(
     collectionPath: string,
     patch: { upsert?: StoredView[]; remove?: string[] },
@@ -351,11 +275,7 @@ export class SavedViewsStore {
       const prevView = prev.find((view) => String(view.id) === viewId)
       this.assertCanRemoveView(workspaceId, path, viewId, accountId, prevView)
     }
-    const kept = prev.filter((view) => {
-      if (!removed.has(String(view.id))) return true
-      // 别人的视图删不动，留给他自己
-      return !mine(view)
-    })
+    const kept = prev.filter((view) => !removed.has(String(view.id)) || !mine(view))
     const foreign = new Set(kept.map((view) => String(view.id)))
     const next = kept.slice()
     const upsertedViews: StoredView[] = []
@@ -365,9 +285,6 @@ export class SavedViewsStore {
       const prevView = prev.find((view) => String(view.id) === id)
       if (prevView && !mine(prevView)) continue
       if (!prevView && foreign.has(id)) continue
-      // 已被别处删掉的视图：旧窗口再推回来也不复活（除非它本来就是新建）
-      if (!prevView && this.isTombstoned(path, id, workspaceId)) continue
-      // 别的窗口拿着旧快照推回来时不能覆盖更新的内容：库里较新就跳过。
       const incomingAt = Number((incoming as { updatedAt?: unknown }).updatedAt) || 0
       const storedAt = Number((prevView as { updatedAt?: unknown } | undefined)?.updatedAt) || 0
       if (prevView && incomingAt && storedAt && incomingAt < storedAt) continue
@@ -378,12 +295,9 @@ export class SavedViewsStore {
       else next.push(view)
       upsertedViews.push(view)
     }
-    const marked = new Set(this.tombstones.get(key) ?? [])
-    for (const viewId of removedIds) marked.add(viewId)
-    if (removedIds.length && this.visibleCount(path, next, marked) < 1) {
+    if (removedIds.length && this.visibleCount(path, next) < 1) {
       throw new Error('至少保留一个视图')
     }
-    this.tombstones.set(key, marked)
     this.byPath.set(key, next)
     this.persistDelta(path, upsertedViews, removedIds, workspaceId)
     for (const viewId of removedIds) this.policyGuard?.onRemoved?.(workspaceId, path, viewId)
@@ -403,28 +317,18 @@ export class SavedViewsStore {
     for (const table of tables) {
       const path = normalizeCollectionPath(table.path)
       if (!path || path === '/') continue
-      const key = bucketKey(workspaceId, path)
       const label = String(labels.get(path) ?? table.label ?? path)
-      const gone = this.tombstones.get(key)
-      const stored = this.byPath.get(key) ?? []
+      const stored = this.byPath.get(bucketKey(workspaceId, path)) ?? []
       const all = builtinAllView({ path, label, view: table.view })
-      const paintedAll = stored.find((view) => String(view.id) === all.id) ?? all
-      if (!gone?.has(all.id)) emit(path, label, paintedAll)
+      emit(path, label, stored.find((view) => String(view.id) === all.id) ?? all)
       for (const view of stored) {
-        if (gone?.has(String(view.id))) continue
-        if (!isViewVisibleTo(view, path, accountId)) continue
-        emit(path, label, view)
+        if (isViewVisibleTo(view, path, accountId)) emit(path, label, view)
       }
     }
     for (const path of this.workspacePaths(workspaceId)) {
       if (tables.some((table) => normalizeCollectionPath(table.path) === path)) continue
-      const key = bucketKey(workspaceId, path)
-      const views = this.byPath.get(key) ?? []
-      const gone = this.tombstones.get(key)
-      for (const view of views) {
-        if (gone?.has(String(view.id))) continue
-        if (!isViewVisibleTo(view, path, accountId)) continue
-        emit(path, labels.get(path) ?? path, view)
+      for (const view of this.byPath.get(bucketKey(workspaceId, path)) ?? []) {
+        if (isViewVisibleTo(view, path, accountId)) emit(path, labels.get(path) ?? path, view)
       }
     }
     return out.sort((a, b) => String(a.table).localeCompare(String(b.table)) || String(a.title).localeCompare(String(b.title)))
@@ -494,14 +398,11 @@ export class SavedViewsStore {
       const hit = findView(views, path, viewId, accountId)
       const targetId = String(hit?.id ?? viewId)
       if (!hit && views.some((view) => String(view.id) === viewId)) throw new Error(`unknown view: ${id}`)
-      if (!hit && !isReadOnlyViewId(targetId)) continue
+      if (!hit) continue
       this.assertCanRemoveView(workspaceId, path, targetId, accountId, hit)
-      const gone = new Set(this.tombstones.get(key) ?? [])
-      gone.add(targetId)
-      const remaining = hit ? views.filter((view) => view !== hit) : views
-      if (this.visibleCount(path, remaining, gone) < 1) throw new Error('至少保留一个视图')
+      const remaining = views.filter((view) => view !== hit)
+      if (this.visibleCount(path, remaining) < 1) throw new Error('至少保留一个视图')
       this.byPath.set(key, remaining)
-      this.tombstones.set(key, gone)
       this.persistDelta(path, [], [targetId], workspaceId)
       this.policyGuard?.onRemoved?.(workspaceId, path, targetId)
       return true

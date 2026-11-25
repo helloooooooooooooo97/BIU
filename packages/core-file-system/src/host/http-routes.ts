@@ -387,12 +387,8 @@ export function registerDatabaseHttpRoutes(
       const removals = (body.remove ?? []).map(String).filter(Boolean)
       if (body.replace === true || (body.upsert === undefined && body.remove === undefined)) {
         const next = Array.isArray(body.views) ? body.views : []
-        if (isIndexCollection(path)) {
-          savedViews.replaceOwned(path, next, accountId)
-        } else {
-          dropSharesForRemovedViews(shares, path, savedViews.viewsFor(path), next)
-          savedViews.replace(path, next, accountId)
-        }
+        if (!isIndexCollection(path)) dropSharesForRemovedViews(shares, path, savedViews.viewsFor(path), next)
+        savedViews.replace(path, next, accountId)
       } else {
         savedViews.applyPatch(path, { upsert: body.upsert ?? [], remove: removals }, accountId)
         for (const viewId of removals) {
@@ -421,10 +417,7 @@ export function registerDatabaseHttpRoutes(
         return
       }
       await db.requirePath(path, 'resource:read')
-      const beforeView = savedViews.viewsFor(path, currentAccountId()).find((v) => String(v.id) === viewId) ?? {
-        id: viewId,
-        filters: {},
-      }
+      const beforeView = savedViews.viewsFor(path, currentAccountId()).find((v) => String(v.id) === viewId)
       const listed = await db.list(path, {}, { limit: 1000, offset: 0 })
       const records = listed.kind === 'collection' ? listed.items : []
       const preview = previewViewFilterImpact({
@@ -432,13 +425,13 @@ export function registerDatabaseHttpRoutes(
         viewId,
         beforeView: {
           id: viewId,
-          filters: beforeView.filters as Record<string, unknown> | undefined,
-          filterTree: beforeView.filterTree ?? null,
+          filters: (beforeView?.filters ?? {}) as Record<string, unknown>,
+          filterTree: beforeView?.filterTree ?? null,
         },
         afterView: {
           id: viewId,
           filters: body?.afterFilters ?? {},
-          filterTree: (body?.afterFilterTree as typeof beforeView.filterTree) ?? null,
+          filterTree: (body?.afterFilterTree as StoredView['filterTree']) ?? null,
         },
       })
       route.send(200, preview)

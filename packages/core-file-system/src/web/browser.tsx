@@ -247,7 +247,6 @@ import {
   loadCollapsedGroups,
   pickViewForRoute,
   defaultViewId,
-  pushSavedViews,
   pushSavedViewsPatch,
   stampSavedView,
   diffSavedViews,
