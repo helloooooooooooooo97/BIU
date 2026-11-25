@@ -1551,3 +1551,16 @@ test('trajectory refresh collapses a burst and skips an unchanged index', async 
   await view.refreshTrajectoryIndex()
   assert.equal(trajHits, 2)
 })
+
+test('optimistic user/message with negative seq stays at the bottom after persisted events', async () => {
+  const ctx = new Context()
+  await ctx.plugin(sessionView)
+  const view = ctx.sessionView as SessionViewService
+  view.ingest('s-opt', { type: 'session/open', version: 1, seq: 0, ts: 1000 })
+  view.ingest('s-opt', { type: 'user/message', text: 'first', kind: 'wake', seq: 1, ts: 1001 })
+  view.ingest('s-opt', { type: 'assistant/message', text: 'reply 1', seq: 2, ts: 1002 })
+  view.ingest('s-opt', { type: 'user/message', text: 'new optimistic', kind: 'wake', seq: -Date.now(), ts: Date.now() })
+  const events = view.get().events
+  assert.equal(events.at(-1)?.type, 'user/message')
+  assert.equal((events.at(-1) as { text?: string })?.text, 'new optimistic')
+})

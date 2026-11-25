@@ -502,3 +502,62 @@ test('direct cloud transport: /api/asset-ticket authorizes GET /api/db/file/* an
     else process.env.BIU_ONLINE = previous
   }
 })
+
+test('shared cloud agent broadcasts session events to authorized collaborators but not unauthorized members', async () => {
+  const previous = process.env.BIU_ONLINE
+  process.env.BIU_ONLINE = '1'
+  const base = await mkdtemp(join(tmpdir(), 'cordis-http-shared-session-'))
+  const publicDir = join(base, 'public')
+  await mkdir(publicDir, { recursive: true })
+  await writeFile(join(publicDir, 'index.html'), '<html></html>')
+  const ctx = new Context()
+  class SharedAccount extends Service {
+    store = {
+      accountByToken: (t: string) =>
+        t === 'owner-tok' ? { id: 'owner' } : t === 'collab-tok' ? { id: 'collab' } : t === 'other-tok' ? { id: 'other' } : null,
+      isMember: (_acc: string, ws: string) => ws === 'ws-shared',
+      activeWorkspaceId: () => 'ws-shared',
+      tenantForRecord: (_col: string, id: string) => (id === 's-shared' ? { workspaceId: 'ws-shared', accountId: 'owner' } : null),
+      canReadRecord: (_col: string, id: string) => {
+        const caller = currentAccountId()
+        return id === 's-shared' && (caller === 'owner' || caller === 'collab')
+      },
+    }
+    constructor(c: Context) {
+      super(c, 'account')
+    }
+  }
+  const ready = new Promise<number>((resolve) => ctx.on('http/ready', ({ port }) => resolve(port)))
+  await ctx.plugin(SharedAccount)
+  const fiber = await ctx.plugin(http, { port: 0, host: '127.0.0.1', publicDir, sharePort: 0 })
+  const port = await ready
+  try {
+    const connect = (token: string) =>
+      new Promise<WebSocket>((resolve, reject) => {
+        const ws = new WebSocket(`ws://127.0.0.1:${port}/ws?workspaceId=ws-shared`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        ws.once('message', () => resolve(ws))
+        ws.once('error', reject)
+      })
+    const [ownerWs, collabWs, otherWs] = await Promise.all([connect('owner-tok'), connect('collab-tok'), connect('other-tok')])
+    const ownerGot = new Promise<string>((resolve) => ownerWs.once('message', (raw) => resolve(String(raw))))
+    const collabGot = new Promise<string>((resolve) => collabWs.once('message', (raw) => resolve(String(raw))))
+    let otherReceived = false
+    otherWs.once('message', () => {
+      otherReceived = true
+    })
+    ctx.http.broadcast('session', { sessionId: 's-shared', event: { type: 'assistant/chunk', seq: 5, text: 'hi' } })
+    assert.match(await ownerGot, /"s-shared"/)
+    assert.match(await collabGot, /"s-shared"/)
+    await new Promise((resolve) => setTimeout(resolve, 25))
+    assert.equal(otherReceived, false)
+    ownerWs.close()
+    collabWs.close()
+    otherWs.close()
+  } finally {
+    await fiber.dispose()
+    if (previous === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = previous
+  }
+})
