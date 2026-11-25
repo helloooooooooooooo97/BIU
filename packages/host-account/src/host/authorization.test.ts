@@ -309,18 +309,34 @@ test('an agent has exactly the delegating account permissions', () => {
   assert.equal(auth.authorize(agent, 'resource:manage-permissions', page('agent-page')).allowed, false)
 })
 
-test('dataViewMatcher unifies view_grants inside AuthorizationService.authorize', () => {
+test('view_grants never grants underlying record access; only access_rules do', () => {
   const { store, auth, ada, bob, actor, page, workspace } = setup()
   auth.attach(actor(ada.id), page('view-doc'), { accessMode: 'private' })
   store.grantViewMemberView(ada.id, '/pages', 'v-public', 'mv-team', 'editor')
   auth.setMemberViewMatcher((_ws, viewId, accountId) => viewId === 'mv-team' && accountId === bob.id)
   auth.setDataViewMatcher((_ws, _col, viewId, _recordId, ctx) => viewId === 'v-public' && ctx.record?.tag === 'public')
 
+  // Sharing a view via view_grants MUST NOT leak underlying data records
+  const deniedByViewGrant = auth.authorize(actor(bob.id), 'resource:read', { ...page('view-doc'), record: { tag: 'public' } })
+  assert.equal(deniedByViewGrant.allowed, false)
+
+  // Independent access_rule grants data record access cleanly
+  store.createAccessRule(ada.id, workspace.id, {
+    collection: '/pages',
+    name: 'Public Rule',
+    filterTree: { op: 'and', rules: [{ field: 'tag', op: 'eq', value: 'public' }] },
+    grants: [{ subjectType: 'member_view', subjectId: 'mv-team', role: 'editor' }],
+  })
+  auth.setAccessRuleMatcher((_ws, _col, filterTreeJson, _recordId, ctx) => {
+    const parsed = JSON.parse(filterTreeJson) as { rules?: Array<{ field?: string; value?: unknown }> }
+    return (parsed.rules ?? []).every((r) => !r.field || ctx.record?.[r.field] === r.value)
+  })
+
   const denied = auth.authorize(actor(bob.id), 'resource:read', { ...page('view-doc'), record: { tag: 'internal' } })
   assert.equal(denied.allowed, false)
 
   const allowed = auth.authorize(actor(bob.id), 'resource:update', { ...page('view-doc'), record: { tag: 'public' } })
-  assert.deepEqual(allowed, { allowed: true, effectiveRole: 'editor', source: 'data-view-grant' })
+  assert.deepEqual(allowed, { allowed: true, effectiveRole: 'editor', source: 'access-rule' })
 })
 
 test('setInheritanceMode toggles inherit vs custom while preserving parent link', () => {
@@ -345,22 +361,27 @@ test('setInheritanceMode toggles inherit vs custom while preserving parent link'
   assert.equal(auth.authorize(actor(bob.id), 'resource:update', page('child')).allowed, true)
 })
 
-test('preloadCollection caches memberViewMatcher and short-circuits unmatched actor view grants', () => {
+test('preloadCollection caches memberViewMatcher and short-circuits unmatched actor access rules', () => {
   const { store, auth, ada, bob, actor, page, workspace } = setup()
   for (let i = 0; i < 30; i += 1) {
     auth.attach(actor(ada.id), page(`doc-${i}`), { accessMode: 'private' })
   }
-  store.grantViewMemberView(ada.id, '/pages', 'v-public', 'mv-team', 'editor')
+  store.createAccessRule(ada.id, workspace.id, {
+    collection: '/pages',
+    name: 'Team Public',
+    filterTree: { op: 'and', rules: [{ field: 'tag', op: 'eq', value: 'public' }] },
+    grants: [{ subjectType: 'member_view', subjectId: 'mv-team', role: 'editor' }],
+  })
 
   let memberMatcherCalls = 0
-  let dataMatcherCalls = 0
+  let ruleMatcherCalls = 0
   auth.setMemberViewMatcher((_ws, viewId, accountId) => {
     memberMatcherCalls += 1
     return viewId === 'mv-team' && accountId === bob.id
   })
-  auth.setDataViewMatcher((_ws, _col, viewId, _recordId, ctx) => {
-    dataMatcherCalls += 1
-    return viewId === 'v-public' && ctx.record?.tag === 'public'
+  auth.setAccessRuleMatcher((_ws, _col, _filterTreeJson, _recordId, ctx) => {
+    ruleMatcherCalls += 1
+    return ctx.record?.tag === 'public'
   })
 
   // Bob 命中 mv-team：30 行扫描，memberViewMatcher 只算 1 次
@@ -370,18 +391,18 @@ test('preloadCollection caches memberViewMatcher and short-circuits unmatched ac
   }
   auth.releaseCollection(workspace.id, '/pages', bob.id)
   assert.equal(memberMatcherCalls, 1)
-  assert.equal(dataMatcherCalls, 30)
+  assert.equal(ruleMatcherCalls, 30)
 
-  // Ada 不命中 mv-team：30 行扫描，dataViewMatcher 0 次调用（预过滤后 O(1) 短路）
+  // Ada 不命中 mv-team：30 行扫描，accessRuleMatcher 0 次调用（预过滤后 O(1) 短路）
   memberMatcherCalls = 0
-  dataMatcherCalls = 0
+  ruleMatcherCalls = 0
   auth.preloadCollection(workspace.id, '/pages', ada.id)
   for (let i = 0; i < 30; i += 1) {
     auth.authorize(actor(ada.id), 'resource:read', { ...page(`doc-${i}`), record: { tag: 'public' } })
   }
   auth.releaseCollection(workspace.id, '/pages', ada.id)
   assert.equal(memberMatcherCalls, 1)
-  assert.equal(dataMatcherCalls, 0)
+  assert.equal(ruleMatcherCalls, 0)
 })
 
 test('external and guest collaborators are read-only on /views and policy-bound views are detected', () => {
@@ -589,13 +610,19 @@ test('no-amplification axiom: sharing a custom view NEVER leaks other members pr
     store.attach(workspace.id, '/pages', 'cara-doc', 1, { accessMode: 'private' })
   })
 
-  // Match internal members for 'mv-all' and records with tag === 'project' for view 'v-project'
+  // Match internal members for 'mv-all' and records with tag === 'project'
   const internalIds = new Set([ada.id, bob.id, cara.id, dave.id])
   auth.setMemberViewMatcher((_ws, viewId, accountId) => viewId === 'mv-all' && internalIds.has(accountId))
-  auth.setDataViewMatcher((_ws, col, viewId, _recId, ctx) => col === '/pages' && viewId === 'v-project' && ctx.record?.tag === 'project')
+  auth.setAccessRuleMatcher((_ws, col, _filterTreeJson, _recId, ctx) => col === '/pages' && ctx.record?.tag === 'project')
 
-  // Bob shares custom view 'v-project' to 'mv-all' (all members, including Bob and Dave)
+  // Bob creates an access rule sharing project records to 'mv-all' (all members, including Bob and Dave)
   runWithAccount(bob.id, () => {
+    store.createAccessRule(bob.id, workspace.id, {
+      collection: '/pages',
+      name: 'Project Rule',
+      filterTree: { op: 'and', rules: [{ field: 'tag', op: 'eq', value: 'project' }] },
+      grants: [{ subjectType: 'member_view', subjectId: 'mv-all', role: 'manager' }],
+    })
     store.grantViewMemberView(bob.id, '/pages', 'v-project', 'mv-all', 'manager')
   })
 
