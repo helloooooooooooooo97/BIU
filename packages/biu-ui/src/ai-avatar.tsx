@@ -202,6 +202,66 @@ export const AI_AVATAR_THEMES: readonly AiAvatarTheme[] = [
     swatch: '#94a3b8',
     palette: ['#0f172a', '#1e293b', '#94a3b8', '#cbd5e1', '#64748b', '#e2e8f0'],
   },
+  {
+    id: 'onyx',
+    label: '黑玛瑙',
+    swatch: '#18181b',
+    palette: ['#050507', '#111116', '#27272a', '#52525b', '#18181b', '#71717a'],
+  },
+  {
+    id: 'carbon',
+    label: '碳纤维',
+    swatch: '#27272a',
+    palette: ['#09090b', '#18181b', '#3f3f46', '#71717a', '#27272a', '#a1a1aa'],
+  },
+  {
+    id: 'noir',
+    label: '暗夜黑',
+    swatch: '#0f172a',
+    palette: ['#020408', '#0a0f18', '#1e293b', '#334155', '#0f172a', '#475569'],
+  },
+  {
+    id: 'midnight-ink',
+    label: '墨蓝黑',
+    swatch: '#172554',
+    palette: ['#020617', '#0a1026', '#1e3a8a', '#3b82f6', '#0f172a', '#1d4ed8'],
+  },
+  {
+    id: 'eclipse',
+    label: '日蚀紫黑',
+    swatch: '#2e1065',
+    palette: ['#05020d', '#140826', '#4c1d95', '#7c3aed', '#1e1b4b', '#6d28d9'],
+  },
+  {
+    id: 'obsidian-gold',
+    label: '黑曜金',
+    swatch: '#422006',
+    palette: ['#090806', '#1c1810', '#854d0e', '#ca8a04', '#292524', '#eab308'],
+  },
+  {
+    id: 'volcanic',
+    label: '熔岩黑',
+    swatch: '#450a0a',
+    palette: ['#0a0506', '#1f0b0e', '#7f1d1d', '#dc2626', '#271216', '#991b1b'],
+  },
+  {
+    id: 'pine-noir',
+    label: '幽林黑',
+    swatch: '#042f2e',
+    palette: ['#030a07', '#081c15', '#115e59', '#0f766e', '#062c22', '#14b8a6'],
+  },
+  {
+    id: 'bronze-noir',
+    label: '古铜黑',
+    swatch: '#451a03',
+    palette: ['#0c0907', '#1f1712', '#78350f', '#b45309', '#292018', '#d97706'],
+  },
+  {
+    id: 'graphite-rose',
+    label: '烟熏玫瑰黑',
+    swatch: '#4c0519',
+    palette: ['#0c0609', '#1f0f17', '#831843', '#be185d', '#2b1320', '#9d174d'],
+  },
 ]
 
 const AI_PALETTES: readonly AiPalette[] = [
