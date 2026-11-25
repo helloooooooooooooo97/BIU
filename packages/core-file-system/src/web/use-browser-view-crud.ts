@@ -15,11 +15,13 @@ import {
   mergeSavedViewLists,
   mergeSavedViewsPatch,
   noteLocalSavedViewsWrite,
+  omitSavedViewIds,
   persistStarredViews,
   persistViewDisplay,
   pushSavedViewsPatch,
   rememberViews,
   removeStarredViews,
+  reviveSavedViewIds,
   stampSavedView,
   viewWriteQueue,
   withViewDisplay,
@@ -439,11 +441,24 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     if (!canRemoveCollectionView(current)) return
     const removedId = view.id
     const remaining = current.filter((item) => item.id !== removedId)
-    void persistViewsFor(path, remaining, { remove: [removedId] }).then((ok) => {
-      if (!ok) return
-      if (path === collectionPath && activeViewIdRef.current === removedId) {
-        const next = viewsRef.current[0]
-        if (next) selectView(next)
+    // 立即标记已删并移出本地缓存，彻底防止删除期间收到 WebSocket 刷新时从旧缓存复活；若服务端拒绝则回滚。
+    omitSavedViewIds(path, [removedId])
+    rememberViews(path, remaining)
+    noteLocalSavedViewsWrite(path)
+    if (path === collectionPath) {
+      viewsRef.current = remaining
+      setViews(remaining)
+      if (activeViewIdRef.current === removedId && remaining[0]) {
+        selectView(remaining[0])
+      }
+    }
+    void persistViewsFor(path, remaining, { baseline: current, remove: [removedId] }).then((ok) => {
+      if (ok) return
+      reviveSavedViewIds(path, [removedId])
+      rememberViews(path, current)
+      if (path === collectionPath) {
+        viewsRef.current = current
+        setViews(current)
       }
     })
   }
