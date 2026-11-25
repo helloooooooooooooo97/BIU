@@ -33,7 +33,7 @@ import type { Context } from 'cordis'
 import type { SlotProps } from '@biu/web-slots'
 import { bindSnapshot, type SnapshotService } from '@biu/web-snapshot'
 import { bindSessionView, getSidebarPersist, parseAppPath, sessionAppPath, setSidebarPersist, SIDEBAR_PERSIST, type SessionViewService } from '@biu/web-session-view'
-import { bindProjectView, type ProjectViewService } from '@biu/web-project-view'
+import { bindProjectView, type ProjectViewService } from '@biu/web-slots/project-view'
 import {
   isMascotDancing,
   mascotDanceShape,
@@ -44,7 +44,7 @@ import {
   bindAppModulesNavReady,
   moduleIdFromPath,
   type AppModulesService,
-} from '@biu/web-app-modules'
+} from '@biu/web-slots/app-modules'
 const ChatSidebar = lazy(() => import('./chat-sidebar.tsx').then((m) => ({ default: m.ChatSidebar })))
 import { ShellSidebarFrame } from './shell-sidebar-frame.tsx'
 import { ChatSessionTitle } from './chat-session-title.tsx'

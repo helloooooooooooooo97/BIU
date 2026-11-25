@@ -75,14 +75,6 @@ export function hostEnvNumber(key: string, fallback: number): number {
   return Number.isFinite(n) ? n : fallback
 }
 
-export function hostEnvBool(key: string, fallback = false): boolean {
-  const raw = process.env[key]?.trim().toLowerCase()
-  if (!raw) return fallback
-  if (raw === '1' || raw === 'true' || raw === 'yes') return true
-  if (raw === '0' || raw === 'false' || raw === 'no') return false
-  return fallback
-}
-
 export function hostRemoteOrigin(): string {
   return hostEnvUrl('BIU_REMOTE_ORIGIN')
 }

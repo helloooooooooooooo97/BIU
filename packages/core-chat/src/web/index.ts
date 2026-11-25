@@ -4,7 +4,7 @@ import { ChatBubbleLeftRightIcon, SignalIcon, MapIcon } from '@heroicons/react/1
 import { bindSessionView, type SessionViewService } from '@biu/web-session-view'
 import type { SlotProps } from '@biu/web-slots'
 import { ChatSelectBubble } from './chat-select-bubble.tsx'
-import { bindProjectView, type ProjectViewService } from '@biu/web-project-view'
+import { bindProjectView, type ProjectViewService } from '@biu/web-slots/project-view'
 import type { PickService } from '@biu/core-pick/web'
 import type { DatabaseUi } from '@biu/type-file-system/ui'
 

@@ -44,6 +44,3 @@ export function subscribePagePresent(fn: () => void) {
   }
 }
 
-export function usePageOutlineFoldTick() {
-  return useSyncExternalStore(subscribePagePresent, () => seq)
-}

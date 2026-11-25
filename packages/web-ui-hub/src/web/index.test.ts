@@ -4,10 +4,10 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { Context } from 'cordis'
 import * as slots from '@biu/web-slots'
-import * as appModules from '@biu/web-app-modules'
+import * as appModules from '@biu/web-slots/app-modules'
 import * as snapshot from '@biu/web-snapshot'
 import * as sessionView from '@biu/web-session-view'
-import * as projectView from '@biu/web-project-view'
+import * as projectView from '@biu/web-slots/project-view'
 import * as uiHub from './index.ts'
 import {
   isRuntimeWebModule,

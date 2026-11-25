@@ -1,8 +1,8 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Context } from 'cordis'
-import * as appModules from './index.ts'
-import { AppModulesService, isAgentPath, moduleById, moduleIdFromPath } from './index.ts'
+import * as appModules from './app-modules.ts'
+import { AppModulesService, isAgentPath, moduleById, moduleIdFromPath } from './app-modules.ts'
 
 test('builtin list is only agent', () => {
   assert.deepEqual(

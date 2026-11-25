@@ -26,9 +26,9 @@
   ],
   "web": [
     { "id": "slots", "package": "@biu/web-slots", "togglable": false, "enabled": true },
-    { "id": "app-modules", "package": "@biu/web-app-modules", "togglable": false, "enabled": true },
+    { "id": "app-modules", "package": "@biu/web-slots/app-modules", "togglable": false, "enabled": true },
     { "id": "session-view", "package": "@biu/web-session-view", "togglable": false, "enabled": true },
-    { "id": "project-view", "package": "@biu/web-project-view", "togglable": false, "enabled": true },
+    { "id": "project-view", "package": "@biu/web-slots/project-view", "togglable": false, "enabled": true },
     { "id": "snapshot", "package": "@biu/web-snapshot", "togglable": false, "enabled": true },
     { "id": "react-host", "package": "@biu/web-slots/react-host", "togglable": false, "enabled": true },
     { "id": "shell", "package": "@biu/web-app-shell", "togglable": false, "enabled": true },

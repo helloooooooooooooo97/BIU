@@ -29,13 +29,10 @@
     "@biu/host-terminal": "0.1.0",
     "@biu/host-tools": "0.1.0",
     "@biu/host-web": "0.1.0",
-    "@biu/type-agent-loop": "0.1.0",
-    "@biu/type-http": "0.1.0",
     "@biu/type-session": "0.1.0",
-    "@biu/web-app-modules": "0.1.0",
-    "@biu/web-project-view": "0.1.0",
     "@biu/web-session-view": "0.1.0",
     "@biu/web-slots": "0.1.0",
-    "@biu/web-snapshot": "0.1.0"
+    "@biu/web-snapshot": "0.1.0",
+    "@biu/types": "0.1.0"
   }
 }

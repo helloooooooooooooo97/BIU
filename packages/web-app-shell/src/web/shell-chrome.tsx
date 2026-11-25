@@ -4,25 +4,7 @@ import { syncWorkspaceEndpoint } from '@biu/biu-ui/workspace-transport'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type Ref } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
-import {
-  ArrowDownTrayIcon,
-  ArrowRightStartOnRectangleIcon,
-  BellIcon,
-  ChatBubbleLeftRightIcon,
-  CheckIcon,
-  ChevronRightIcon,
-  CircleStackIcon,
-  ClipboardDocumentIcon,
-  CloudIcon,
-  ComputerDesktopIcon,
-  Cog6ToothIcon,
-  CameraIcon,
-  EyeIcon,
-  EyeSlashIcon,
-  MagnifyingGlassIcon,
-  PlusIcon,
-  XMarkIcon,
-} from '@heroicons/react/16/solid'
+import { ArrowRightStartOnRectangleIcon, BellIcon, ChatBubbleLeftRightIcon, CheckIcon, ChevronRightIcon, CircleStackIcon, ClipboardDocumentIcon, CloudIcon, ComputerDesktopIcon, Cog6ToothIcon, CameraIcon, EyeIcon, EyeSlashIcon, MagnifyingGlassIcon, PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { AnchorMenu } from '@biu/biu-ui/anchor-menu'
 import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import { TagChip } from '@biu/biu-ui/tag-chip'

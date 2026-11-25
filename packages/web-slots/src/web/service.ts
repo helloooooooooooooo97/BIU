@@ -1,7 +1,7 @@
 import { Service, type Context } from 'cordis'
 import type { ComponentType } from 'react'
-import type { SlotSpec, FillOptions, SlotEntry, SlotProps } from '@biu/type-slots'
-import { SlotEvent } from '@biu/type-slots'
+import type { SlotSpec, FillOptions, SlotEntry, SlotProps } from '@biu/types/slots'
+import { SlotEvent } from '@biu/types/slots'
 
 export function disposeSlot(placed: unknown) {
   if (typeof placed === 'function') return placed()

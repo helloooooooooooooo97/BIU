@@ -9,7 +9,7 @@
  * 旧写法 `/c/` `/v/` `/r/` 仍能解析，写入时改成上面这种。
  * `:type` 为集合 path 去掉前导 `/` 再 encode（`/pages` → `pages`）。
  */
-import { matchRegisteredModule, type AppModule } from '@biu/web-app-modules'
+import { matchRegisteredModule, type AppModule } from '@biu/web-slots/app-modules'
 
 export type RouteView = 'chat' | 'debug'
 

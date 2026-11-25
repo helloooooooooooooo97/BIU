@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import type { SlotProps } from '@biu/type-slots'
+import type { SlotProps } from '@biu/types/slots'
 import { getPick, usePickState } from './service.ts'
 import { boxFromPoints, pickSurfaceAtPoint, resolvePickFromEvent, resolvePickFromNode, resolvePicksInRect, visiblePickBox } from './resolve.ts'
 import { bindPickDragScroll, pickDragScroller } from './drag-scroll.ts'

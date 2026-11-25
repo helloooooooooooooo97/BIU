@@ -22,7 +22,7 @@ import { lazy, Suspense, useEffect, useMemo, useState, useSyncExternalStore, typ
 import type { Context } from 'cordis'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { CircleStackIcon } from '@heroicons/react/16/solid'
-import type { SlotProps } from '@biu/type-slots'
+import type { SlotProps } from '@biu/types/slots'
 import {
   DATABASE_CHANNEL,
   channelNeedsCollectionSync,

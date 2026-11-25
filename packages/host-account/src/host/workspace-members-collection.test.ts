@@ -227,7 +227,7 @@ test('GET /api/account/member-activity resolves grant record titles via $ids fil
     const db = openAndMigrateBiu(sqlitePath)
     const now = Date.now()
     for (const [idx, recId] of (['pg_named', 'pg_empty', 'pg_trash'] as const).entries()) {
-      account.store.claim(ada.id, workspace.id, '/pages', recId)
+      account.store.attach(workspace.id, '/pages', recId, now)
       db.prepare(
         `INSERT INTO record_grants (workspace_id, collection, record_id, subject_type, subject_id, role, granted_by, created_at)
          VALUES (?, '/pages', ?, 'account', ?, 'owner', ?, ?)`,

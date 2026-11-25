@@ -16,7 +16,7 @@ import {
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { getAccountPort } from '@biu/host-plugin-loader/ports'
 import type { Context } from 'cordis'
-import type { RouteContext } from '@biu/type-http'
+import type { RouteContext } from '@biu/types/http'
 import {
   bearerToken,
   loadOrCreateMcpToken,

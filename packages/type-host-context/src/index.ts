@@ -3,7 +3,7 @@ import type { HubService } from '@biu/host-hub'
 import type { ToolsService, ToolRequest } from '@biu/host-tools'
 import type { LlmService } from '@biu/host-llm'
 import type { AgentLoopService } from '@biu/host-agent-loop'
-import type { PreStepReq, PostStepReq } from '@biu/type-agent-loop'
+import type { PreStepReq, PostStepReq } from '@biu/types/agent-loop'
 import type { AgentsService } from '@biu/host-agents'
 import type { ApprovalsService } from '@biu/host-approvals'
 import type { SessionsService } from '@biu/host-sessions'
@@ -23,11 +23,11 @@ import type { WebService } from '@biu/host-web'
 import type { SubagentsService } from '@biu/host-agents/subagents'
 import type { SnapshotService } from '@biu/web-snapshot'
 import type { SessionViewService } from '@biu/web-session-view'
-import type { ProjectViewService } from '@biu/web-project-view'
-import type { AppModulesService } from '@biu/web-app-modules'
+import type { ProjectViewService } from '@biu/web-slots/project-view'
+import type { AppModulesService } from '@biu/web-slots/app-modules'
 import type { SlotsService } from '@biu/web-slots'
 
-export type { Method, PageSpec, RouteContext, RouteHandler } from '@biu/type-http'
+export type { Method, PageSpec, RouteContext, RouteHandler } from '@biu/types/http'
 
 declare module 'cordis' {
   interface Context {

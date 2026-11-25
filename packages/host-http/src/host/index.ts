@@ -5,9 +5,9 @@ import { readFile } from 'node:fs/promises'
 import type { Duplex } from 'node:stream'
 import { Service, type Context } from 'cordis'
 import { WebSocketServer, type WebSocket } from 'ws'
-import { HUB_CHANGE } from '@biu/type-http'
+import { HUB_CHANGE } from '@biu/types/http'
 import { hostPort, hostSharePort, hostShareProxyUi } from '@biu/host-plugin-loader/env'
-import type { Method, RouteContext, RouteHandler, RouteOptions, RouteScope } from '@biu/type-http'
+import type { Method, RouteContext, RouteHandler, RouteOptions, RouteScope } from '@biu/types/http'
 import {
   currentAccountId,
   currentPluginId,

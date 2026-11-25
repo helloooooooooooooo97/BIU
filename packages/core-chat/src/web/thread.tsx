@@ -28,7 +28,7 @@ import {
 } from '@biu/web-session-view'
 import { StaticMascotMark } from '@biu/public-mascot'
 import { resolveSessionMascot } from '@biu/public-mascot'
-import type { SlotProps } from '@biu/type-slots'
+import type { SlotProps } from '@biu/types/slots'
 import { parsePicks, pickDomAttrs, pickPreview } from '@biu/core-pick/web'
 import { MarkdownBody } from './markdown.tsx'
 import { UserBubbleEditor } from './user-bubble-editor.tsx'

@@ -287,18 +287,6 @@ export function markdownWithBlockIds(editor: Editor) {
   }).markdown
 }
 
-export function focusBlockById(editor: Editor, id: string) {
-  let pos = -1
-  editor.state.doc.forEach((node, offset) => {
-    if (nodeBlockId(node) === id) pos = offset
-  })
-  if (pos < 0) return false
-  editor.chain().focus().setTextSelection(pos + 1).run()
-  const dom = editor.view.nodeDOM(pos)
-  if (dom instanceof HTMLElement) dom.scrollIntoView({ block: 'center' })
-  return true
-}
-
 export const pageBlockIds = Extension.create({
   name: 'pageBlockIds',
   addGlobalAttributes() {

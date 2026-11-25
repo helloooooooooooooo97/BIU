@@ -7,7 +7,7 @@ import {
   parseAppPath,
   routeFromState,
 } from '@biu/web-session-view'
-import type { AppModule } from '@biu/web-app-modules'
+import type { AppModule } from '@biu/web-slots/app-modules'
 
 const plugins: AppModule[] = [
   { id: 'tasks', label: 'Tasks', path: '/tasks' },

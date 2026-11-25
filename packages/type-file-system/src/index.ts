@@ -346,8 +346,6 @@ export const REQUIRED_RECORD_FIELDS: RequiredRecordFields = {
 /** 表格默认不展开这些内置列（标题除外）。分面作为默认业务列留下。 */
 export const BUILTIN_FIELD_KEYS = ['id', 'createdAt', 'updatedAt', 'content', 'emoji', 'parentId', 'dependsOn', 'createdBy', 'updatedBy', 'views', 'propViews', 'layouts'] as const
 
-export const RESERVED_SCHEMA_FIELD_KEYS = Object.keys(BUILTIN_FIELDS)
-
 /** 已去掉的 tags 记录列，禁止再登记同名列。 */
 const DROPPED_SCHEMA_FIELDS: Record<string, string> = { tags: '标签' }
 

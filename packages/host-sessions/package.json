@@ -20,8 +20,8 @@
     "@biu/host-account": "0.1.0",
     "@biu/host-llm": "0.1.0",
     "@biu/host-plugin-loader": "0.1.0",
-    "@biu/type-agent-loop": "0.1.0",
     "@biu/type-file-system": "0.1.0",
-    "@biu/type-session": "0.1.0"
+    "@biu/type-session": "0.1.0",
+    "@biu/types": "0.1.0"
   }
 }

@@ -57,10 +57,6 @@ export function usePageFind(recordId: string) {
   return getPageFind(recordId)
 }
 
-export function notifyPageView() {
-  if (typeof window !== 'undefined') window.dispatchEvent(new Event(PAGE_VIEW_EVENT))
-}
-
 export type CommentFilter = 'open' | 'resolved' | 'all'
 
 export type EditorCommentsUiState = {

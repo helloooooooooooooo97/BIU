@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import type { PostStepReq } from '@biu/type-agent-loop'
+import type { PostStepReq } from '@biu/types/agent-loop'
 import { autoCompactPostStep, contextWindowTokens, mechanicalCompactText, resolveAutoCompactThreshold, shouldAutoCompact } from './auto-compact.ts'
 
 function step(patch: Partial<PostStepReq> = {}): PostStepReq {

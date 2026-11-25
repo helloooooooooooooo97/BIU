@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import type { Context } from 'cordis'
 import { useSlotEntries, type SlotsService } from '@biu/web-slots'
-import type { SlotProps } from '@biu/type-slots'
+import type { SlotProps } from '@biu/types/slots'
 
 import { XMarkIcon, MinusIcon, ArrowsPointingOutIcon, ArrowsPointingInIcon, Bars2Icon } from '@heroicons/react/16/solid'
 import type { DatabaseUi } from '@biu/type-file-system/ui'

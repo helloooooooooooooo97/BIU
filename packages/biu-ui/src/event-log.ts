@@ -15,11 +15,6 @@ export function clientLogSnapshot() {
   return entries
 }
 
-export function subscribeClientLogs(listener: () => void) {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
 export function resetClientLogs() {
   entries = []
   for (const listener of listeners) listener()

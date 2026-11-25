@@ -2,7 +2,6 @@ import { readStorageString, removeStorageKey, writeStorageString } from '@biu/bi
 import { TAG_TONES, tagTextColor, tagWashColor } from '@biu/biu-ui'
 
 /** 与标签相同的色相；文字/涂亮直接用饱和色，不叠黑白墨。 */
-export const EDITOR_TONES = TAG_TONES
 
 export { tagTextColor, tagWashColor }
 

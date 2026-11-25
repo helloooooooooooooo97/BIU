@@ -5,7 +5,7 @@ import { biuSqlitePath, currentAccountId, eventsSqlitePath, openAndMigrateBiu, o
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { emitTenantRevoked, emitWorkspaceDeleted } from '@biu/host-plugin-loader/tenant-state'
 import { resolveScopedWorkspaceId } from '@biu/host-plugin-loader/runtime'
-import type { RouteContext } from '@biu/type-http'
+import type { RouteContext } from '@biu/types/http'
 import { CollabError, CollabStore } from './store.ts'
 import { authRateLimitMax, clientIp, SlidingWindowLimiter } from './rate-limit.ts'
 import type { AuthorizationService, ResourceRole } from './authorization.ts'
@@ -97,14 +97,6 @@ export class AccountService extends Service {
     }
     return this.configuredCloudOrigin()
   }
-
-  isRemote(collection: string, id: string) {
-    const row = this.db.prepare('SELECT place FROM record_place WHERE collection = ? AND record_id = ?').get(collection, id) as
-      | { place?: string }
-      | undefined
-    return row?.place === 'remote'
-  }
-
   isLocal(collection: string, id: string) {
     const row = this.db.prepare('SELECT place FROM record_place WHERE collection = ? AND record_id = ?').get(collection, id) as
       | { place?: string }
@@ -119,29 +111,7 @@ export class AccountService extends Service {
          ON CONFLICT(collection, record_id) DO UPDATE SET place = 'local'`,
       )
       .run(collection, id)
-  }
-
-  markRemote(collection: string, id: string) {
-    this.db
-      .prepare(
-        `INSERT INTO record_place (collection, record_id, place) VALUES (?, ?, 'remote')
-         ON CONFLICT(collection, record_id) DO UPDATE SET place = 'remote'`,
-      )
-      .run(collection, id)
-  }
-
-  clearPlace(collection: string, id: string) {
-    this.db.prepare('DELETE FROM record_place WHERE collection = ? AND record_id = ?').run(collection, id)
-  }
-
-  remoteIds(collection: string) {
-    const rows = this.db.prepare(`SELECT record_id FROM record_place WHERE collection = ? AND place = 'remote'`).all(collection) as Array<{
-      record_id: string
-    }>
-    return rows.map((row) => row.record_id)
-  }
-
-  cloudConnection(localAccountId: string): CloudConnection | null {
+  } cloudConnection(localAccountId: string): CloudConnection | null {
     const row = this.db
       .prepare(
         `SELECT local_account_id, origin, remote_account_id, remote_name, remote_email, token, connected_at
@@ -634,178 +604,151 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     { scope: 'host' },
   )
 
-  ctx.http.route('GET', '/api/account/cloud', async (route) => {
-    try {
-      if (!getRuntimePolicy().allowCloudLinking) return route.send(200, { available: false, connected: false, configuredOrigin: '' })
-      const me = actor(route)
-      const initial = account.cloudConnection(me.id)
-      if (initial?.origin && initial.token) {
-        try {
-          const res = await fetch(`${initial.origin}/api/account/me`, {
-            headers: { authorization: `Bearer ${initial.token}` },
-            signal: AbortSignal.timeout(2000),
-          })
-          if (res.ok) {
-            const remoteMe = (await res.json().catch(() => ({}))) as {
-              name?: unknown
-              email?: unknown
-              avatar?: unknown
-            }
-            account.updateCloudIdentity(me.id, initial.origin, initial.remoteAccountId, {
-              ...(typeof remoteMe.name === 'string' && remoteMe.name.trim() ? { name: remoteMe.name } : {}),
-              ...(typeof remoteMe.email === 'string' && remoteMe.email.trim() ? { email: remoteMe.email } : {}),
-              ...(typeof remoteMe.avatar === 'string' ? { avatar: remoteMe.avatar } : {}),
-            })
-          }
-        } catch {
-          /* 远端不可达时沿用本地缓存的名称与默认头像 */
-        }
-      }
-      const connection = account.cloudConnection(me.id)
-      const configuredOrigin = account.configuredCloudOrigin()
-      const accounts = account.listCloudConnections(me.id).map((item) => ({
-        id: item.remoteAccountId,
-        name: item.remoteName,
-        email: item.remoteEmail,
-        avatar: account.cloudAvatar(item.origin, item.remoteAccountId),
-        origin: item.origin,
-        active: item.active,
-      }))
-      route.send(200, {
-        available: true,
-        configuredOrigin,
-        connected: Boolean(connection),
-        accounts,
-        ...(connection
-          ? {
-              account: {
-                id: connection.remoteAccountId,
-                name: connection.remoteName,
-                email: connection.remoteEmail,
-                avatar: account.cloudAvatar(connection.origin, connection.remoteAccountId),
-              },
-              origin: connection.origin,
-            }
-          : {}),
-      })
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('POST', '/api/account/cloud/config', async (route) => {
-    try {
-      actor(route)
-      const body = (await route.json()) as { origin?: string }
-      const origin = account.setConfiguredCloudOrigin(String(body.origin ?? ''))
-      route.send(200, { origin, available: true })
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('POST', '/api/account/cloud/login', async (route) => {
-    try {
-      route.send(200, await connectCloud(route, 'login'))
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('POST', '/api/account/cloud/register', async (route) => {
-    try {
-      route.send(201, await connectCloud(route, 'register'))
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('POST', '/api/account/cloud/sync-create', async (route) => {
-    try {
-      if (!getRuntimePolicy().allowCloudLinking) throw new CollabError('服务端不能连接另一个云端账号', 400)
-      const local = actor(route)
-      const body = (await route.json().catch(() => ({}))) as { origin?: string }
-      const requestedOrigin = String(body.origin ?? '')
-      if (!local.email) throw new CollabError('本地账号没有可同步的邮箱', 400)
-      const password = account.store.recalledPassword(local.id)
-      if (!password) throw new CollabError('请退出后重新登录一次，就能用本地密码创建云端账号', 400)
+  type RouteArg = Parameters<Parameters<typeof ctx.http.route>[2]>[0]
+  const handledRoute = (method: Parameters<typeof ctx.http.route>[0], path: string, fn: (route: RouteArg) => Promise<void> | void) =>
+    ctx.http.route(method, path, async (route) => {
       try {
-        route.send(201, {
-          ...(await connectCloudIdentity(local, 'register', local.email, password, requestedOrigin, local.name)),
-          created: true,
-        })
+        await fn(route)
       } catch (error) {
-        if (!(error instanceof CollabError) || error.status !== 409) throw error
-        route.send(200, {
-          ...(await connectCloudIdentity(local, 'login', local.email, password, requestedOrigin)),
-          created: false,
+        fail(route, error)
+      }
+    })
+  const authedRoute = (method: Parameters<typeof ctx.http.route>[0], path: string, fn: (route: RouteArg, me: ReturnType<typeof actor>) => Promise<void> | void) =>
+    handledRoute(method, path, (route) => fn(route, actor(route)))
+
+  handledRoute('GET', '/api/account/cloud', async (route) => {
+    if (!getRuntimePolicy().allowCloudLinking) return route.send(200, { available: false, connected: false, configuredOrigin: '' })
+    const me = actor(route)
+    const initial = account.cloudConnection(me.id)
+    if (initial?.origin && initial.token) {
+      try {
+        const res = await fetch(`${initial.origin}/api/account/me`, {
+          headers: { authorization: `Bearer ${initial.token}` },
+          signal: AbortSignal.timeout(2000),
         })
+        if (res.ok) {
+          const remoteMe = (await res.json().catch(() => ({}))) as {
+            name?: unknown
+            email?: unknown
+            avatar?: unknown
+          }
+          account.updateCloudIdentity(me.id, initial.origin, initial.remoteAccountId, {
+            ...(typeof remoteMe.name === 'string' && remoteMe.name.trim() ? { name: remoteMe.name } : {}),
+            ...(typeof remoteMe.email === 'string' && remoteMe.email.trim() ? { email: remoteMe.email } : {}),
+            ...(typeof remoteMe.avatar === 'string' ? { avatar: remoteMe.avatar } : {}),
+          })
+        }
+      } catch {
+        /* 远端不可达时沿用本地缓存的名称与默认头像 */
       }
-    } catch (error) {
-      fail(route, error)
     }
+    const connection = account.cloudConnection(me.id)
+    const configuredOrigin = account.configuredCloudOrigin()
+    const accounts = account.listCloudConnections(me.id).map((item) => ({
+      id: item.remoteAccountId,
+      name: item.remoteName,
+      email: item.remoteEmail,
+      avatar: account.cloudAvatar(item.origin, item.remoteAccountId),
+      origin: item.origin,
+      active: item.active,
+    }))
+    route.send(200, {
+      available: true,
+      configuredOrigin,
+      connected: Boolean(connection),
+      accounts,
+      ...(connection
+        ? {
+            account: {
+              id: connection.remoteAccountId,
+              name: connection.remoteName,
+              email: connection.remoteEmail,
+              avatar: account.cloudAvatar(connection.origin, connection.remoteAccountId),
+            },
+            origin: connection.origin,
+          }
+        : {}),
+    })
   })
 
-  ctx.http.route('POST', '/api/account/cloud/active', async (route) => {
+  handledRoute('POST', '/api/account/cloud/config', async (route) => {
+    actor(route)
+    const body = (await route.json()) as { origin?: string }
+    const origin = account.setConfiguredCloudOrigin(String(body.origin ?? ''))
+    route.send(200, { origin, available: true })
+  })
+
+  handledRoute('POST', '/api/account/cloud/login', async (route) => {
+    route.send(200, await connectCloud(route, 'login'))
+  })
+
+  handledRoute('POST', '/api/account/cloud/register', async (route) => {
+    route.send(201, await connectCloud(route, 'register'))
+  })
+
+  handledRoute('POST', '/api/account/cloud/sync-create', async (route) => {
+    if (!getRuntimePolicy().allowCloudLinking) throw new CollabError('服务端不能连接另一个云端账号', 400)
+    const local = actor(route)
+    const body = (await route.json().catch(() => ({}))) as { origin?: string }
+    const requestedOrigin = String(body.origin ?? '')
+    if (!local.email) throw new CollabError('本地账号没有可同步的邮箱', 400)
+    const password = account.store.recalledPassword(local.id)
+    if (!password) throw new CollabError('请退出后重新登录一次，就能用本地密码创建云端账号', 400)
     try {
-      const me = actor(route)
-      const body = (await route.json()) as { remoteAccountId?: string; origin?: string }
-      const connection = account.activateCloud(me.id, String(body.origin ?? ''), String(body.remoteAccountId ?? ''))
-      ctx.http.broadcast('database', { ts: Date.now() })
-      route.send(200, {
-        account: {
-          id: connection.remoteAccountId,
-          name: connection.remoteName,
-          email: connection.remoteEmail,
-          avatar: account.cloudAvatar(connection.origin, connection.remoteAccountId),
-        },
-        origin: connection.origin,
+      route.send(201, {
+        ...(await connectCloudIdentity(local, 'register', local.email, password, requestedOrigin, local.name)),
+        created: true,
       })
     } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('DELETE', '/api/account/cloud', async (route) => {
-    try {
-      const me = actor(route)
-      const queryOrigin = String(route.query.get('origin') ?? '').trim()
-      let bodyOrigin = ''
-      if (!queryOrigin) {
-        const body = (await route.json().catch(() => ({}))) as { origin?: string }
-        bodyOrigin = String(body?.origin ?? '').trim()
-      }
-      account.removeCloudConnection(me.id, queryOrigin || bodyOrigin || undefined)
-      ctx.http.broadcast('database', { ts: Date.now() })
-      route.send(200, { ok: true, workspaceId: account.store.activeWorkspaceId() })
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('GET', '/api/account/active', async (route) => {
-    try {
-      actor(route)
-      const workspaceId = account.store.activeWorkspaceId()
+      if (!(error instanceof CollabError) || error.status !== 409) throw error
       route.send(200, {
-        workspaceId,
-        ...(workspaceId ? { location: account.workspaceLocation(workspaceId) } : {}),
+        ...(await connectCloudIdentity(local, 'login', local.email, password, requestedOrigin)),
+        created: false,
       })
-    } catch (error) {
-      fail(route, error)
     }
   })
 
-  ctx.http.route('POST', '/api/account/active', async (route) => {
-    try {
-      const me = actor(route)
-      const body = (await route.json()) as { workspaceId?: string }
-      const workspaceId = account.store.setActive(me.id, String(body.workspaceId ?? ''))
-      ctx.http.broadcast('database', { ts: Date.now() })
-      route.send(200, { workspaceId, location: account.workspaceLocation(workspaceId) })
-    } catch (error) {
-      fail(route, error)
+  authedRoute('POST', '/api/account/cloud/active', async (route, me) => {
+    const body = (await route.json()) as { remoteAccountId?: string; origin?: string }
+    const connection = account.activateCloud(me.id, String(body.origin ?? ''), String(body.remoteAccountId ?? ''))
+    ctx.http.broadcast('database', { ts: Date.now() })
+    route.send(200, {
+      account: {
+        id: connection.remoteAccountId,
+        name: connection.remoteName,
+        email: connection.remoteEmail,
+        avatar: account.cloudAvatar(connection.origin, connection.remoteAccountId),
+      },
+      origin: connection.origin,
+    })
+  })
+
+  authedRoute('DELETE', '/api/account/cloud', async (route, me) => {
+    const queryOrigin = String(route.query.get('origin') ?? '').trim()
+    let bodyOrigin = ''
+    if (!queryOrigin) {
+      const body = (await route.json().catch(() => ({}))) as { origin?: string }
+      bodyOrigin = String(body?.origin ?? '').trim()
     }
+    account.removeCloudConnection(me.id, queryOrigin || bodyOrigin || undefined)
+    ctx.http.broadcast('database', { ts: Date.now() })
+    route.send(200, { ok: true, workspaceId: account.store.activeWorkspaceId() })
+  })
+
+  handledRoute('GET', '/api/account/active', async (route) => {
+    actor(route)
+    const workspaceId = account.store.activeWorkspaceId()
+    route.send(200, {
+      workspaceId,
+      ...(workspaceId ? { location: account.workspaceLocation(workspaceId) } : {}),
+    })
+  })
+
+  authedRoute('POST', '/api/account/active', async (route, me) => {
+    const body = (await route.json()) as { workspaceId?: string }
+    const workspaceId = account.store.setActive(me.id, String(body.workspaceId ?? ''))
+    ctx.http.broadcast('database', { ts: Date.now() })
+    route.send(200, { workspaceId, location: account.workspaceLocation(workspaceId) })
   })
 
   const authLimiter = new SlidingWindowLimiter()
@@ -880,1150 +823,820 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     route.send(200, { ok: true })
   })
 
-  ctx.http.route('POST', '/api/account/password', async (route) => {
-    try {
-      const me = actor(route)
-      const body = (await route.json()) as { currentPassword?: string; nextPassword?: string }
-      const changed = account.store.changePassword(me.id, String(body.currentPassword ?? ''), String(body.nextPassword ?? ''), bearer(route))
-      ctx.http.disconnectRevokedSessions(me.id)
-      emitTenantRevoked(ctx, { accountId: me.id })
-      route.send(200, changed)
-    } catch (error) {
-      fail(route, error)
-    }
+  authedRoute('POST', '/api/account/password', async (route, me) => {
+    const body = (await route.json()) as { currentPassword?: string; nextPassword?: string }
+    const changed = account.store.changePassword(me.id, String(body.currentPassword ?? ''), String(body.nextPassword ?? ''), bearer(route))
+    ctx.http.disconnectRevokedSessions(me.id)
+    emitTenantRevoked(ctx, { accountId: me.id })
+    route.send(200, changed)
   })
 
-  ctx.http.route('GET', '/api/account/agents', async (route) => {
-    try {
-      const me = actor(route)
-      const agents = account.store.listSessions(me.id)
-      route.send(200, { agents, sessions: agents })
-    } catch (error) {
-      fail(route, error)
-    }
+  authedRoute('GET', '/api/account/agents', async (route, me) => {
+    const agents = account.store.listSessions(me.id)
+    route.send(200, { agents, sessions: agents })
   })
 
-  ctx.http.route('DELETE', '/api/account/agents/:id', async (route) => {
-    try {
-      const me = actor(route)
-      const revoked = account.store.revokeSessionById(me.id, String(route.params.id ?? ''))
-      ctx.http.disconnectRevokedSessions(me.id)
-      emitTenantRevoked(ctx, { accountId: me.id })
-      route.send(200, revoked)
-    } catch (error) {
-      fail(route, error)
-    }
+  authedRoute('DELETE', '/api/account/agents/:id', async (route, me) => {
+    const revoked = account.store.revokeSessionById(me.id, String(route.params.id ?? ''))
+    ctx.http.disconnectRevokedSessions(me.id)
+    emitTenantRevoked(ctx, { accountId: me.id })
+    route.send(200, revoked)
   })
 
-  ctx.http.route('POST', '/api/account/mcp/credentials', async (route) => {
-    try {
-      const me = actor(route)
-      const body = (await route.json()) as { workspaceId?: string; allowedTools?: unknown; expiresInHours?: unknown }
-      const workspaceId = String(body.workspaceId ?? '').trim()
-      if (!workspaceId) throw new CollabError('需要空间', 400)
-      const hours = Math.min(24 * 365, Math.max(1, Number(body.expiresInHours ?? 24 * 90)))
-      const allowedTools = Array.isArray(body.allowedTools) ? body.allowedTools.map(String) : []
-      route.send(
-        201,
-        account.store.issueMcpCredential(me.id, workspaceId, {
-          allowedTools,
-          expiresAt: Date.now() + hours * 60 * 60 * 1000,
-        }),
-      )
-    } catch (error) {
-      fail(route, error)
-    }
+  authedRoute('POST', '/api/account/mcp/credentials', async (route, me) => {
+    const body = (await route.json()) as { workspaceId?: string; allowedTools?: unknown; expiresInHours?: unknown }
+    const workspaceId = String(body.workspaceId ?? '').trim()
+    if (!workspaceId) throw new CollabError('需要空间', 400)
+    const hours = Math.min(24 * 365, Math.max(1, Number(body.expiresInHours ?? 24 * 90)))
+    const allowedTools = Array.isArray(body.allowedTools) ? body.allowedTools.map(String) : []
+    route.send(
+      201,
+      account.store.issueMcpCredential(me.id, workspaceId, {
+        allowedTools,
+        expiresAt: Date.now() + hours * 60 * 60 * 1000,
+      }),
+    )
   })
 
-  ctx.http.route('GET', '/api/account/mcp/credentials', async (route) => {
-    try {
-      const me = actor(route)
-      const workspaceId = String(route.query.get('workspaceId') ?? '').trim()
-      if (!workspaceId) throw new CollabError('需要空间', 400)
-      route.send(200, { credentials: account.store.listMcpCredentials(me.id, workspaceId) })
-    } catch (error) {
-      fail(route, error)
-    }
+  authedRoute('GET', '/api/account/mcp/credentials', async (route, me) => {
+    const workspaceId = String(route.query.get('workspaceId') ?? '').trim()
+    if (!workspaceId) throw new CollabError('需要空间', 400)
+    route.send(200, { credentials: account.store.listMcpCredentials(me.id, workspaceId) })
   })
 
-  ctx.http.route('DELETE', '/api/account/mcp/credentials/:id', async (route) => {
-    try {
-      const me = actor(route)
-      const credentialId = String(route.params.id ?? '')
-      route.send(200, account.store.revokeMcpCredential(me.id, credentialId))
-    } catch (error) {
-      fail(route, error)
-    }
+  authedRoute('DELETE', '/api/account/mcp/credentials/:id', async (route, me) => {
+    const credentialId = String(route.params.id ?? '')
+    route.send(200, account.store.revokeMcpCredential(me.id, credentialId))
   })
 
-  ctx.http.route('GET', '/api/account/mcp/audit', async (route) => {
-    try {
-      const me = actor(route)
-      const workspaceId = String(route.query.get('workspaceId') ?? '').trim()
-      if (!workspaceId) throw new CollabError('需要空间', 400)
-      const limit = Number(route.query.get('limit') ?? 100)
-      route.send(200, {
-        events: account.store.listMcpAudit(me.id, workspaceId, limit),
-      })
-    } catch (error) {
-      fail(route, error)
-    }
+  authedRoute('GET', '/api/account/mcp/audit', async (route, me) => {
+    const workspaceId = String(route.query.get('workspaceId') ?? '').trim()
+    if (!workspaceId) throw new CollabError('需要空间', 400)
+    const limit = Number(route.query.get('limit') ?? 100)
+    route.send(200, {
+      events: account.store.listMcpAudit(me.id, workspaceId, limit),
+    })
   })
 
-  ctx.http.route('GET', '/api/account/me', async (route) => {
-    try {
-      const me = actor(route)
-      route.send(200, { ...me, online: getRuntimePolicy().hostMode === 'cloud', isSuperAdmin: account.store.isSuperAdmin(me.id) })
-    } catch (error) {
-      fail(route, error)
-    }
+  authedRoute('GET', '/api/account/me', async (route, me) => {
+    route.send(200, { ...me, online: getRuntimePolicy().hostMode === 'cloud', isSuperAdmin: account.store.isSuperAdmin(me.id) })
   })
 
-  ctx.http.route('POST', '/api/account/profile', async (route) => {
-    try {
-      const me = actor(route)
-      const body = (await route.json()) as { name?: unknown; avatar?: unknown }
-      const updated = account.store.saveAccountProfile(me.id, {
+  authedRoute('POST', '/api/account/profile', async (route, me) => {
+    const body = (await route.json()) as { name?: unknown; avatar?: unknown }
+    const updated = account.store.saveAccountProfile(me.id, {
+      ...(typeof body.name === 'string' ? { name: body.name } : {}),
+      ...(typeof body.avatar === 'string' ? { avatar: body.avatar } : {}),
+    })
+    route.send(200, { ...updated, online: getRuntimePolicy().hostMode === 'cloud', isSuperAdmin: account.store.isSuperAdmin(me.id) })
+  })
+  authedRoute('GET', '/api/account/workspace-profile', async (route, me) => {
+    route.send(200, account.store.workspaceProfile(me.id))
+  })
+
+  authedRoute('POST', '/api/account/workspace-profile', async (route, me) => {
+    const body = (await route.json()) as { name?: unknown; avatar?: unknown }
+    route.send(
+      200,
+      account.store.saveWorkspaceProfile(me.id, {
         ...(typeof body.name === 'string' ? { name: body.name } : {}),
         ...(typeof body.avatar === 'string' ? { avatar: body.avatar } : {}),
-      })
-      route.send(200, { ...updated, online: getRuntimePolicy().hostMode === 'cloud', isSuperAdmin: account.store.isSuperAdmin(me.id) })
-    } catch (error) {
-      fail(route, error)
-    }
+      }),
+    )
   })
 
-  ctx.http.route('GET', '/api/account/plugins/audit', async (route) => {
-    try {
-      const me = actor(route)
-      route.send(200, {
-        events: account.store.listPluginAudit(
-          me.id,
-          String(route.query.get('workspaceId') ?? ''),
-          Number(route.query.get('limit') ?? 100),
-        ),
-      })
-    } catch (error) {
-      fail(route, error)
-    }
+  authedRoute('GET', '/api/account/starred', async (route, me) => {
+    const prefs = account.store.workspacePrefs(me.id)
+    route.send(200, {
+      workspaceId: prefs.workspaceId,
+      starredViews: prefs.starredViews,
+      starredRecords: prefs.starredRecords,
+      pinnedAgents: prefs.pinnedAgents,
+    })
   })
 
-  ctx.http.route('GET', '/api/account/workspace-profile', async (route) => {
-    try {
-      const me = actor(route)
-      route.send(200, account.store.workspaceProfile(me.id))
-    } catch (error) {
-      fail(route, error)
+  authedRoute('POST', '/api/account/starred', async (route, me) => {
+    const body = (await route.json()) as {
+      starredViews?: unknown
+      starredRecords?: unknown
+      pinnedAgents?: unknown
     }
+    const saved = account.store.saveWorkspacePrefs(me.id, body)
+    route.send(200, {
+      workspaceId: saved.workspaceId,
+      starredViews: saved.starredViews,
+      starredRecords: saved.starredRecords,
+      pinnedAgents: saved.pinnedAgents,
+    })
   })
 
-  ctx.http.route('POST', '/api/account/workspace-profile', async (route) => {
-    try {
-      const me = actor(route)
-      const body = (await route.json()) as { name?: unknown; avatar?: unknown }
-      route.send(
-        200,
-        account.store.saveWorkspaceProfile(me.id, {
-          ...(typeof body.name === 'string' ? { name: body.name } : {}),
-          ...(typeof body.avatar === 'string' ? { avatar: body.avatar } : {}),
-        }),
-      )
-    } catch (error) {
-      fail(route, error)
-    }
+  authedRoute('POST', '/api/agents/:id/pin', async (route, me) => {
+    const body = (await route.json()) as { pinned?: unknown }
+    const saved = account.store.setAgentPinned(me.id, String(route.params.id ?? ''), Boolean(body.pinned))
+    route.send(200, {
+      id: String(route.params.id ?? ''),
+      pinned: saved.pinnedAgents.includes(String(route.params.id ?? '')),
+      pinnedAgents: saved.pinnedAgents,
+    })
   })
 
-  ctx.http.route('GET', '/api/account/starred', async (route) => {
-    try {
-      const me = actor(route)
-      const prefs = account.store.workspacePrefs(me.id)
-      route.send(200, {
-        workspaceId: prefs.workspaceId,
-        starredViews: prefs.starredViews,
-        starredRecords: prefs.starredRecords,
-        pinnedAgents: prefs.pinnedAgents,
-      })
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('POST', '/api/account/starred', async (route) => {
-    try {
-      const me = actor(route)
-      const body = (await route.json()) as {
-        starredViews?: unknown
-        starredRecords?: unknown
-        pinnedAgents?: unknown
-      }
-      const saved = account.store.saveWorkspacePrefs(me.id, body)
-      route.send(200, {
-        workspaceId: saved.workspaceId,
-        starredViews: saved.starredViews,
-        starredRecords: saved.starredRecords,
-        pinnedAgents: saved.pinnedAgents,
-      })
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('POST', '/api/agents/:id/pin', async (route) => {
-    try {
-      const me = actor(route)
-      const body = (await route.json()) as { pinned?: unknown }
-      const saved = account.store.setAgentPinned(me.id, String(route.params.id ?? ''), Boolean(body.pinned))
-      route.send(200, {
-        id: String(route.params.id ?? ''),
-        pinned: saved.pinnedAgents.includes(String(route.params.id ?? '')),
-        pinnedAgents: saved.pinnedAgents,
-      })
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('GET', '/api/account/workspaces', async (route) => {
-    try {
-      const me = actor(route)
-      const local = account.store
+  authedRoute('GET', '/api/account/workspaces', async (route, me) => {
+    const local = account.store
+      .listWorkspaces(me.id)
+      .filter((workspace) => account.workspaceLocation(workspace.id) === 'device')
+      .map((workspace) => ({ ...workspace, location: 'device' as const }))
+    const cachedCloud = () =>
+      account.store
         .listWorkspaces(me.id)
-        .filter((workspace) => account.workspaceLocation(workspace.id) === 'device')
-        .map((workspace) => ({ ...workspace, location: 'device' as const }))
-      const cachedCloud = () =>
-        account.store
-          .listWorkspaces(me.id)
-          .filter((workspace) => account.workspaceLocation(workspace.id) === 'cloud')
-          .map((workspace) => ({ ...workspace, location: 'cloud' as const }))
-      const allowCloudLinking = getRuntimePolicy().allowCloudLinking
-      let cloud: Array<Record<string, unknown>> = !allowCloudLinking ? cachedCloud() : []
-      let cloudUnavailable = false
-      if (allowCloudLinking && account.cloudConnection(me.id)) {
-        cloud = cachedCloud()
-        try {
-          const relayed = await relayAccount(route, account, me.id, '/api/account/workspaces')
-          if (relayed?.status && relayed.status < 300) {
-            cacheWorkspaceList(account, me.id, relayed.payload)
-            cloud = (Array.isArray(relayed.payload.workspaces) ? relayed.payload.workspaces : []).map((workspace) => ({
-              ...(workspace as Record<string, unknown>),
-              location: 'cloud',
-            }))
-          } else if (relayed) {
-            cloudUnavailable = true
-          }
-        } catch {
+        .filter((workspace) => account.workspaceLocation(workspace.id) === 'cloud')
+        .map((workspace) => ({ ...workspace, location: 'cloud' as const }))
+    const allowCloudLinking = getRuntimePolicy().allowCloudLinking
+    let cloud: Array<Record<string, unknown>> = !allowCloudLinking ? cachedCloud() : []
+    let cloudUnavailable = false
+    if (allowCloudLinking && account.cloudConnection(me.id)) {
+      cloud = cachedCloud()
+      try {
+        const relayed = await relayAccount(route, account, me.id, '/api/account/workspaces')
+        if (relayed?.status && relayed.status < 300) {
+          cacheWorkspaceList(account, me.id, relayed.payload)
+          cloud = (Array.isArray(relayed.payload.workspaces) ? relayed.payload.workspaces : []).map((workspace) => ({
+            ...(workspace as Record<string, unknown>),
+            location: 'cloud',
+          }))
+        } else if (relayed) {
           cloudUnavailable = true
         }
-      }
-      if (allowCloudLinking && !account.cloudConnection(me.id)) {
-        const active = account.store.activeWorkspaceId()
-        const device = local[0]
-        if (active && account.workspaceLocation(active) === 'cloud' && device) account.store.setActive(me.id, device.id)
-      }
-      route.send(200, {
-        workspaces: [...local, ...cloud],
-        cloudConnected: Boolean(account.cloudConnection(me.id)),
-        cloudUnavailable,
-      })
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('POST', '/api/account/workspaces', async (route) => {
-    try {
-      const me = actor(route)
-      const body = (await route.json()) as { name?: string; location?: string }
-      const name = String(body.name ?? '').trim() || (body.location === 'device' ? '本机空间' : '云端空间')
-      if (!getRuntimePolicy().allowCloudLinking) {
-        const workspace = account.store.createWorkspace(me.id, name)
-        route.send(201, { ...workspace, location: 'cloud' })
-        return
-      }
-      if (body.location === 'cloud') {
-        const connection = account.cloudConnection(me.id)
-        if (!connection) throw new CollabError('请先登录云端账号', 401)
-        let response: Response
-        try {
-          response = await fetch(`${connection.origin}/api/account/workspaces`, {
-            method: 'POST',
-            headers: { authorization: `Bearer ${connection.token}`, 'content-type': 'application/json' },
-            body: JSON.stringify({ name, location: 'cloud' }),
-          })
-        } catch {
-          throw new CollabError('云端暂时连不上', 503)
-        }
-        const payload = (await response.json().catch(() => ({}))) as {
-          id?: string
-          name?: string
-          ownerId?: string
-          role?: string
-          createdAt?: number
-          error?: string
-        }
-        if (!response.ok || !payload.id) throw new CollabError(payload.error || '创建云端空间失败', response.status)
-        account.store.upsertPulledWorkspace({
-          accountId: me.id,
-          id: payload.id,
-          name: String(payload.name ?? name),
-          ownerId: payload.ownerId,
-          role: payload.role || 'owner',
-          createdAt: payload.createdAt,
-        })
-        account.markCloudWorkspace(payload.id)
-        account.store.setActive(me.id, payload.id)
-        route.send(201, { ...payload, location: 'cloud' })
-        return
-      }
-      const workspace = account.store.createWorkspace(me.id, name)
-      route.send(201, { ...workspace, location: 'device' })
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('PATCH', '/api/account/workspaces/:id', async (route) => {
-    try {
-      const me = actor(route)
-      const body = (await route.json()) as { name?: string }
-      if (getRuntimePolicy().allowCloudLinking && account.workspaceLocation(route.params.id!) === 'cloud') {
-        const connection = account.cloudConnection(me.id)
-        if (!connection) throw new CollabError('请先登录云端账号', 401)
-        let response: Response
-        try {
-          response = await fetch(`${connection.origin}/api/account/workspaces/${encodeURIComponent(route.params.id!)}`, {
-            method: 'PATCH',
-            headers: { authorization: `Bearer ${connection.token}`, 'content-type': 'application/json' },
-            body: JSON.stringify(body),
-          })
-        } catch {
-          throw new CollabError('云端暂时连不上', 503)
-        }
-        const payload = (await response.json().catch(() => ({}))) as {
-          id?: string
-          name?: string
-          ownerId?: string
-          role?: string
-          createdAt?: number
-          error?: string
-        }
-        if (!response.ok || !payload.id) throw new CollabError(payload.error || '重命名云端空间失败', response.status)
-        account.store.upsertPulledWorkspace({
-          accountId: me.id,
-          id: payload.id,
-          name: String(payload.name ?? ''),
-          ownerId: payload.ownerId,
-          role: payload.role,
-          createdAt: payload.createdAt,
-        })
-        route.send(200, { ...payload, location: 'cloud' })
-        return
-      }
-      route.send(200, account.store.renameWorkspace(me.id, route.params.id!, String(body.name ?? '')))
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('DELETE', '/api/account/workspaces/:id', async (route) => {
-    try {
-      const me = actor(route)
-      const body = (await route.json().catch(() => ({}))) as { name?: string }
-      const confirmName = String(body.name ?? '')
-      const workspaceId = route.params.id!
-      if (getRuntimePolicy().allowCloudLinking && account.workspaceLocation(workspaceId) === 'cloud') {
-        const connection = account.cloudConnection(me.id)
-        if (!connection) throw new CollabError('请先登录云端账号', 401)
-        let response: Response
-        try {
-          response = await fetch(`${connection.origin}/api/account/workspaces/${encodeURIComponent(workspaceId)}`, {
-            method: 'DELETE',
-            headers: { authorization: `Bearer ${connection.token}`, 'content-type': 'application/json' },
-            body: JSON.stringify({ name: confirmName }),
-          })
-        } catch {
-          throw new CollabError('云端暂时连不上', 503)
-        }
-        const payload = (await response.json().catch(() => ({}))) as { error?: string; activeWorkspaceId?: string }
-        if (!response.ok) throw new CollabError(payload.error || '删除云端空间失败', response.status)
-        try {
-          const deleted = account.store.deleteWorkspace(me.id, workspaceId, confirmName)
-      emitWorkspaceDeleted(ctx, workspaceId)
-          purgeSessionEvents(deleted.sessionIds)
-          account.purgeWorkspaceCache(workspaceId)
-          route.send(200, { id: workspaceId, deleted: true, activeWorkspaceId: deleted.activeWorkspaceId })
-        } catch {
-          account.purgeWorkspaceCache(workspaceId)
-          const fallback = account.store.listWorkspaces(me.id).find((ws) => ws.id !== workspaceId)?.id ?? ''
-          if (fallback) account.store.setActive(me.id, fallback)
-          route.send(200, { id: workspaceId, deleted: true, activeWorkspaceId: fallback })
-        }
-        return
-      }
-      const deleted = account.store.deleteWorkspace(me.id, workspaceId, confirmName)
-      emitWorkspaceDeleted(ctx, workspaceId)
-      purgeSessionEvents(deleted.sessionIds)
-      route.send(200, { id: deleted.id, deleted: true, activeWorkspaceId: deleted.activeWorkspaceId })
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('GET', '/api/account/workspaces/:id/members', async (route) => {
-    try {
-      const me = actor(route)
-      requireCollaborativeWorkspace(route.params.id!)
-      route.send(200, { members: account.store.members(me.id, route.params.id!) })
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('POST', '/api/account/workspaces/:id/members', async (route) => {
-    try {
-      const me = actor(route)
-      requireCollaborativeWorkspace(route.params.id!)
-      const body = (await route.json()) as { accountId?: string; email?: string }
-      const email = String(body.email ?? '').trim()
-      const members = email
-        ? account.store.addMemberByEmail(me.id, route.params.id!, email)
-        : account.store.addMember(me.id, route.params.id!, String(body.accountId ?? ''))
-      route.send(200, { members })
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('POST', '/api/account/workspaces/:id/invites', async (route) => {
-    try {
-      const me = actor(route)
-      requireCollaborativeWorkspace(route.params.id!)
-      const body = (await route.json()) as { role?: string; expiresInHours?: number }
-      const role = body.role === 'member' ? 'member' : 'viewer'
-      const invite = account.store.createWorkspaceInvite(
-        me.id,
-        route.params.id!,
-        role,
-        Number(body.expiresInHours ?? 168),
-      )
-      const invitePath = `/?workspaceInvite=${encodeURIComponent(invite.token)}`
-      const origin = requestPublicOrigin(route)
-      route.send(201, {
-        ...invite,
-        path: invitePath,
-        ...(origin ? { url: `${origin}${invitePath}` } : {}),
-      })
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('POST', '/api/account/invites/:token/accept', async (route) => {
-    try {
-      const me = actor(route)
-      const connection = getRuntimePolicy().allowCloudLinking ? account.cloudConnection(me.id) : null
-      if (connection) {
-        const relayed = await relayAccount(
-          route,
-          account,
-          me.id,
-          `/api/account/invites/${encodeURIComponent(route.params.token!)}/accept`,
-        )
-        if (!relayed) throw new CollabError('请先登录云端账号', 401)
-        if (relayed.status < 300) {
-          try {
-            const listed = await fetch(`${connection.origin}/api/account/workspaces`, {
-              headers: { authorization: `Bearer ${connection.token}` },
-            })
-            const payload = (await listed.json().catch(() => ({}))) as Record<string, unknown>
-            if (listed.ok) cacheWorkspaceList(account, me.id, payload)
-          } catch {
-            /* 接受已经成功，空间列表稍后刷新 */
-          }
-        }
-        route.send(relayed.status, relayed.payload)
-        return
-      }
-      if (!getRuntimePolicy().allowWorkspaceInvites) throw new CollabError('本机空间不提供成员邀请', 403)
-      const result = account.store.acceptWorkspaceInvite(me.id, route.params.token!)
-      ctx.http.broadcast('database', { ts: Date.now() })
-      route.send(200, result)
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('POST', '/api/account/guest-invites/:token/accept', async (route) => {
-    try {
-      if (!getRuntimePolicy().allowWorkspaceInvites) throw new CollabError('本机空间不提供访客邀请', 403)
-      const body = (await route.json()) as { name?: string }
-      const result = account.store.acceptGuestInvite(route.params.token!, String(body.name ?? ''))
-      rememberLogin(route, result.token)
-      ctx.http.broadcast('database', { ts: Date.now() })
-      route.send(200, result)
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('DELETE', '/api/account/workspaces/:id/members/:accountId', async (route) => {
-    try {
-      const me = actor(route)
-      requireCollaborativeWorkspace(route.params.id!)
-      const queryTransfer = String(route.query.get('transferToAccountId') ?? '').trim()
-      const body = (await route.json().catch(() => ({}))) as { transferToAccountId?: string }
-      const transferToAccountId = queryTransfer || String(body?.transferToAccountId ?? '').trim() || undefined
-      const removed = account.store.removeMember(me.id, route.params.id!, route.params.accountId!, {
-        ...(transferToAccountId ? { transferToAccountId } : {}),
-      })
-      ctx.http.disconnectTenant(route.params.accountId!, route.params.id!)
-      emitTenantRevoked(ctx, { accountId: route.params.accountId!, workspaceId: route.params.id! })
-      route.send(200, {
-        members: account.store.members(me.id, route.params.id!),
-        transfer: removed,
-      })
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('GET', '/api/account/workspaces/:id/actor-scopes', async (route) => {
-    try {
-      const me = actor(route)
-      const workspaceId = route.params.id!
-      requireCollaborativeWorkspace(workspaceId)
-      const role = account.store.memberRole(me.id, workspaceId)
-      if (role !== 'owner' && role !== 'admin') throw new CollabError('仅管理员可查看代理作用域', 403)
-      const actorType = String(route.query.get('actorType') ?? '')
-      const actorId = String(route.query.get('actorId') ?? '').trim()
-      if ((actorType !== 'agent' && actorType !== 'mcp' && actorType !== 'public-link') || !actorId) {
-        throw new CollabError('参数 actorType / actorId 无效', 400)
-      }
-      const scope = account.authorization.getActorScope(workspaceId, actorType, actorId)
-      route.send(200, { scope })
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('POST', '/api/account/workspaces/:id/actor-scopes', async (route) => {
-    try {
-      const me = actor(route)
-      const workspaceId = route.params.id!
-      requireCollaborativeWorkspace(workspaceId)
-      const role = account.store.memberRole(me.id, workspaceId)
-      if (role !== 'owner' && role !== 'admin') throw new CollabError('仅管理员可配置代理作用域', 403)
-      const body = (await route.json()) as {
-        actorType?: string
-        actorId?: string
-        allowedCollections?: string[] | null
-        allowedViews?: string[] | null
-        maxRole?: ResourceRole
-        expiresAt?: number | null
-      }
-      const actorType = body.actorType
-      const actorId = String(body.actorId ?? '').trim()
-      if ((actorType !== 'agent' && actorType !== 'mcp' && actorType !== 'public-link') || !actorId) {
-        throw new CollabError('参数 actorType / actorId 无效', 400)
-      }
-      account.authorization.setActorScope(workspaceId, actorType, actorId, me.id, {
-        allowedCollections: Array.isArray(body.allowedCollections) ? body.allowedCollections : null,
-        allowedViews: Array.isArray(body.allowedViews) ? body.allowedViews : null,
-        maxRole: body.maxRole,
-        expiresAt: typeof body.expiresAt === 'number' ? body.expiresAt : null,
-      })
-      route.send(200, { scope: account.authorization.getActorScope(workspaceId, actorType, actorId) })
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('DELETE', '/api/account/workspaces/:id/actor-scopes', async (route) => {
-    try {
-      const me = actor(route)
-      const workspaceId = route.params.id!
-      requireCollaborativeWorkspace(workspaceId)
-      const role = account.store.memberRole(me.id, workspaceId)
-      if (role !== 'owner' && role !== 'admin') throw new CollabError('仅管理员可吊销代理作用域', 403)
-      const body = (await route.json()) as { actorType?: string; actorId?: string }
-      const actorType = body.actorType
-      const actorId = String(body.actorId ?? '').trim()
-      if ((actorType !== 'agent' && actorType !== 'mcp' && actorType !== 'public-link') || !actorId) {
-        throw new CollabError('参数 actorType / actorId 无效', 400)
-      }
-      account.authorization.revokeActorScope(workspaceId, actorType, actorId)
-      route.send(200, { ok: true })
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('PATCH', '/api/account/workspaces/:id/members/:accountId', async (route) => {
-    try {
-      const me = actor(route)
-      requireCollaborativeWorkspace(route.params.id!)
-      const body = (await route.json()) as { role?: string }
-      const role = String(body.role ?? '')
-      if (role !== 'owner' && role !== 'admin' && role !== 'member' && role !== 'viewer') {
-        throw new CollabError('角色只能是 owner、admin、member 或 viewer', 400)
-      }
-      account.store.updateMemberRole(me.id, route.params.id!, route.params.accountId!, role)
-      route.send(200, { members: account.store.members(me.id, route.params.id!) })
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('GET', '/api/account/workspaces/:id/groups', async (route) => {
-    try {
-      const me = actor(route)
-      requireCollaborativeWorkspace(route.params.id!)
-      route.send(200, { groups: account.store.groups(me.id, route.params.id!) })
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('POST', '/api/account/workspaces/:id/groups', async (route) => {
-    try {
-      const me = actor(route)
-      requireCollaborativeWorkspace(route.params.id!)
-      const body = (await route.json()) as { name?: string }
-      route.send(201, account.store.createGroup(me.id, route.params.id!, String(body.name ?? '')))
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('POST', '/api/account/workspaces/:id/groups/:groupId/members', async (route) => {
-    try {
-      const me = actor(route)
-      requireCollaborativeWorkspace(route.params.id!)
-      const body = (await route.json()) as { email?: string }
-      route.send(
-        200,
-        {
-          members: account.store.addGroupMemberByEmail(
-            me.id,
-            route.params.id!,
-            route.params.groupId!,
-            String(body.email ?? ''),
-          ),
-        },
-      )
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('GET', '/api/account/member-activity', async (route) => {
-    try {
-      const me = actor(route)
-      const memberId = String(route.query.get('memberId') ?? '').trim() || me.id
-      const days = Number(route.query.get('days') ?? 182)
-      const limit = Number(route.query.get('limit') ?? 80)
-      const data = account.store.memberActivity(me.id, memberId, {
-        days: Number.isFinite(days) ? days : 182,
-        limit: Number.isFinite(limit) ? limit : 80,
-      })
-      type DatabaseLookup = {
-        collection?: (path: string) => { label?: string; schema?: { labelField?: string } } | undefined
-        list?: (
-          path: string,
-          filter?: Record<string, unknown>,
-          page?: { columns?: string[]; limit?: number; offset?: number },
-        ) => Promise<{ items?: Array<Record<string, unknown>> }>
-        viewCatalog?: { viewsFor(path: string): Array<{ id?: unknown; name?: unknown }> }
-      }
-      let db: DatabaseLookup | undefined
-      try {
-        db = ctx.get('database') as DatabaseLookup | undefined
       } catch {
-        db = undefined
+        cloudUnavailable = true
       }
-      const titleMap = new Map<string, string>()
-      for (const item of data.recent) {
-        const key = `${item.collection}\t${item.recordId}`
-        const title = item.recordTitle?.trim()
-        if (item.collection && item.recordId && title && !titleMap.has(key)) {
-          titleMap.set(key, title)
-        }
-      }
-      const collectionLabels = new Map<string, string>()
-      if (db?.list && data.grants.records.length) {
-        const byCollection = new Map<string, string[]>()
-        for (const grant of data.grants.records) {
-          const list = byCollection.get(grant.collection) ?? []
-          list.push(grant.recordId)
-          byCollection.set(grant.collection, list)
-        }
-        for (const [collection, ids] of byCollection) {
-          const spec = db.collection?.(collection)
-          const label = spec?.label?.trim() ?? ''
-          if (label) collectionLabels.set(collection, label)
-          const labelField = spec?.schema?.labelField?.trim()
-          const columns = [...new Set(['title', 'name', 'label', ...(labelField ? [labelField] : [])])]
-          const resolvedIds = new Set<string>()
-          const collectRows = (items: Array<Record<string, unknown>> | undefined) => {
-            for (const row of items ?? []) {
-              const id = String(row.id ?? '')
-              if (!id) continue
-              resolvedIds.add(id)
-              const rawTitle = String(
-                (labelField ? row[labelField] : undefined) ?? row.title ?? row.name ?? row.label ?? '',
-              ).trim()
-              titleMap.set(`${collection}\t${id}`, rawTitle || (label ? `未命名${label}` : '未命名'))
-            }
-          }
-          try {
-            const listed = await db.list(collection, { $ids: ids }, { columns, limit: Math.max(ids.length, 100) })
-            collectRows(listed?.items)
-            const missingIds = ids.filter((id) => !resolvedIds.has(id))
-            if (missingIds.length) {
-              const trashed = await db.list(
-                collection,
-                { $ids: missingIds, deleted: true },
-                { columns, limit: Math.max(missingIds.length, 100) },
-              )
-              collectRows(trashed?.items)
-            }
-          } catch {
-            /* 无法读取该集合时回退为已有标题或 recordId */
-          }
-        }
-      }
-      const viewNameMap = new Map<string, string>()
-      if (db?.viewCatalog && data.grants.views.length) {
-        const collections = new Set(data.grants.views.map((item) => item.collection))
-        for (const collection of collections) {
-          const label = db.collection?.(collection)?.label?.trim()
-          if (label) collectionLabels.set(collection, label)
-          try {
-            for (const view of db.viewCatalog.viewsFor(collection)) {
-              const id = String(view.id ?? '')
-              const name = String(view.name ?? '').trim()
-              if (id && name) viewNameMap.set(`${collection}\t${id}`, name)
-            }
-          } catch {
-            /* 视图目录不可用时回退为 viewId */
-          }
-        }
-      }
-      route.send(200, {
-        ...data,
-        grants: {
-          records: data.grants.records.map((grant) => ({
-            ...grant,
-            title: titleMap.get(`${grant.collection}\t${grant.recordId}`) ?? '',
-            collectionLabel: collectionLabels.get(grant.collection) ?? '',
-          })),
-          views: data.grants.views.map((grant) => ({
-            ...grant,
-            viewName: viewNameMap.get(`${grant.collection}\t${grant.viewId}`) ?? '',
-            collectionLabel: collectionLabels.get(grant.collection) ?? '',
-          })),
-        },
-      })
-    } catch (error) {
-      fail(route, error)
     }
+    if (allowCloudLinking && !account.cloudConnection(me.id)) {
+      const active = account.store.activeWorkspaceId()
+      const device = local[0]
+      if (active && account.workspaceLocation(active) === 'cloud' && device) account.store.setActive(me.id, device.id)
+    }
+    route.send(200, {
+      workspaces: [...local, ...cloud],
+      cloudConnected: Boolean(account.cloudConnection(me.id)),
+      cloudUnavailable,
+    })
   })
 
-  ctx.http.route('GET', '/api/account/access', async (route) => {
-    try {
-      const me = actor(route)
-      const activeWorkspace = resolveScopedWorkspaceId(ctx)
-      if (!activeWorkspace || account.workspaceLocation(activeWorkspace) !== 'cloud') {
-        route.send(200, {
-          scope: 'personal',
-          ownerId: me.id,
-          people: [],
-          groups: [],
-          memberViews: [],
-          viewGrants: [],
-          roleChain: [],
-          local: true,
+  authedRoute('POST', '/api/account/workspaces', async (route, me) => {
+    const body = (await route.json()) as { name?: string; location?: string }
+    const name = String(body.name ?? '').trim() || (body.location === 'device' ? '本机空间' : '云端空间')
+    if (!getRuntimePolicy().allowCloudLinking) {
+      const workspace = account.store.createWorkspace(me.id, name)
+      route.send(201, { ...workspace, location: 'cloud' })
+      return
+    }
+    if (body.location === 'cloud') {
+      const connection = account.cloudConnection(me.id)
+      if (!connection) throw new CollabError('请先登录云端账号', 401)
+      let response: Response
+      try {
+        response = await fetch(`${connection.origin}/api/account/workspaces`, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${connection.token}`, 'content-type': 'application/json' },
+          body: JSON.stringify({ name, location: 'cloud' }),
         })
-        return
+      } catch {
+        throw new CollabError('云端暂时连不上', 503)
       }
-      const collection = String(route.query.get('collection') ?? '')
-      const viewId = String(route.query.get('viewId') ?? '')
-      route.send(
-        200,
-        viewId
-          ? account.store.viewAccess(me.id, collection, viewId)
-          : account.store.recordAccess(me.id, collection, String(route.query.get('recordId') ?? '')),
-      )
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('POST', '/api/account/access', async (route) => {
-    try {
-      const me = actor(route)
-      const activeWorkspace = resolveScopedWorkspaceId(ctx)
-      requireCollaborativeWorkspace(activeWorkspace ?? '')
-      const body = (await route.json()) as {
-        collection?: string
-        recordId?: string
-        viewId?: string
-        email?: string
-        groupId?: string
-        memberViewId?: string
-        role?: ResourceRole
-        collaboratorKind?: 'internal' | 'external'
-      }
-      const collection = String(body.collection ?? '')
-      const recordId = String(body.recordId ?? '')
-      const viewId = String(body.viewId ?? '')
-      const role: ResourceRole =
-        body.role === 'viewer' || body.role === 'commenter' || body.role === 'manager' || body.role === 'owner'
-          ? body.role
-          : 'editor'
-      const kind = body.collaboratorKind === 'internal' ? 'internal' : 'external'
-      route.send(
-        200,
-        viewId
-          ? body.memberViewId
-            ? account.store.grantViewMemberView(me.id, collection, viewId, String(body.memberViewId), role)
-            : account.store.shareViewWithEmail(me.id, collection, viewId, String(body.email ?? ''), role, kind)
-          : body.memberViewId
-          ? account.store.grantMemberView(me.id, collection, recordId, String(body.memberViewId), role)
-          : body.groupId
-          ? account.store.grantGroup(me.id, collection, recordId, String(body.groupId), role)
-          : account.store.shareWithEmail(me.id, collection, recordId, String(body.email ?? ''), role, kind),
-      )
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('PATCH', '/api/account/access', async (route) => {
-    try {
-      const me = actor(route)
-      const activeWorkspace = resolveScopedWorkspaceId(ctx)
-      requireCollaborativeWorkspace(activeWorkspace ?? '')
-      const body = (await route.json()) as {
-        collection?: string
-        recordId?: string
-        inheritanceMode?: 'inherit' | 'custom'
-      }
-      const collection = String(body.collection ?? '').trim()
-      const recordId = String(body.recordId ?? '').trim()
-      const mode = body.inheritanceMode === 'inherit' ? 'inherit' : body.inheritanceMode === 'custom' ? 'custom' : null
-      if (!collection || !recordId || !mode) {
-        route.send(400, { error: '参数不完整' })
-        return
-      }
-      route.send(200, account.store.setRecordInheritance(me.id, collection, recordId, mode))
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('DELETE', '/api/account/access', async (route) => {
-    try {
-      const me = actor(route)
-      const activeWorkspace = resolveScopedWorkspaceId(ctx)
-      requireCollaborativeWorkspace(activeWorkspace ?? '')
-      const body = (await route.json()) as {
-        collection?: string
-        recordId?: string
-        viewId?: string
-        subjectType?: 'account' | 'group' | 'member_view'
-        subjectId?: string
-        grantedBy?: string
-      }
-      const viewId = String(body.viewId ?? '')
-      const subjectType =
-        body.subjectType === 'group' || body.subjectType === 'member_view' ? body.subjectType : 'account'
-      route.send(
-        200,
-        viewId
-          ? account.store.revokeViewGrant(
-              me.id,
-              String(body.collection ?? ''),
-              viewId,
-              subjectType === 'member_view' ? 'member_view' : 'account',
-              String(body.subjectId ?? ''),
-            )
-          : account.store.revokeRecordGrant(
-              me.id,
-              String(body.collection ?? ''),
-              String(body.recordId ?? ''),
-              subjectType,
-              String(body.subjectId ?? ''),
-            ),
-      )
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('POST', '/api/account/access/guest-invite', async (route) => {
-    try {
-      const me = actor(route)
-      const activeWorkspace = resolveScopedWorkspaceId(ctx)
-      requireCollaborativeWorkspace(activeWorkspace ?? '')
-      const body = (await route.json()) as {
-        collection?: string
-        recordId?: string
-        viewId?: string
+      const payload = (await response.json().catch(() => ({}))) as {
+        id?: string
+        name?: string
+        ownerId?: string
         role?: string
-        expiresInHours?: number
+        createdAt?: number
+        error?: string
       }
-      const invite = account.store.createGuestInvite(
-        me.id,
-        String(body.collection ?? ''),
-        String(body.recordId ?? ''),
-        body.role === 'editor' ? 'editor' : 'viewer',
-        Number(body.expiresInHours ?? 24),
-        Date.now(),
-        String(body.viewId ?? ''),
-      )
-      const guestPath = `/?guestInvite=${encodeURIComponent(invite.token)}`
-      const origin = requestPublicOrigin(route)
-      route.send(201, {
-        ...invite,
-        path: guestPath,
-        ...(origin ? { url: `${origin}${guestPath}` } : {}),
+      if (!response.ok || !payload.id) throw new CollabError(payload.error || '创建云端空间失败', response.status)
+      account.store.upsertPulledWorkspace({
+        accountId: me.id,
+        id: payload.id,
+        name: String(payload.name ?? name),
+        ownerId: payload.ownerId,
+        role: payload.role || 'owner',
+        createdAt: payload.createdAt,
       })
-    } catch (error) {
-      fail(route, error)
+      account.markCloudWorkspace(payload.id)
+      account.store.setActive(me.id, payload.id)
+      route.send(201, { ...payload, location: 'cloud' })
+      return
     }
+    const workspace = account.store.createWorkspace(me.id, name)
+    route.send(201, { ...workspace, location: 'device' })
   })
 
-  ctx.http.route('POST', '/api/account/records/claim', async (route) => {
-    try {
-      const me = actor(route)
-      const body = (await route.json()) as { workspaceId?: string; collection?: string; recordId?: string }
-      route.send(
-        200,
-        account.store.claim(me.id, String(body.workspaceId ?? ''), String(body.collection ?? ''), String(body.recordId ?? '')),
-      )
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  // 独立分享规则（access_rules）CRUD：个人持有，与视图解耦
-  ctx.http.route('GET', '/api/account/access-rules', async (route) => {
-    try {
-      const me = actor(route)
-      const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
-      if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
-      const collection = route.query.get('collection')?.trim() || undefined
-      const rules = account.store.listAccessRulesForOwner(me.id, workspaceId, collection)
-      route.send(200, { rules })
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('POST', '/api/account/access-rules', async (route) => {
-    try {
-      const me = actor(route)
-      const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
-      if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
-      const body = (await route.json()) as {
-        collection?: string
+  authedRoute('PATCH', '/api/account/workspaces/:id', async (route, me) => {
+    const body = (await route.json()) as { name?: string }
+    if (getRuntimePolicy().allowCloudLinking && account.workspaceLocation(route.params.id!) === 'cloud') {
+      const connection = account.cloudConnection(me.id)
+      if (!connection) throw new CollabError('请先登录云端账号', 401)
+      let response: Response
+      try {
+        response = await fetch(`${connection.origin}/api/account/workspaces/${encodeURIComponent(route.params.id!)}`, {
+          method: 'PATCH',
+          headers: { authorization: `Bearer ${connection.token}`, 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+      } catch {
+        throw new CollabError('云端暂时连不上', 503)
+      }
+      const payload = (await response.json().catch(() => ({}))) as {
+        id?: string
         name?: string
-        filterTree?: Record<string, unknown>
-        columns?: string[] | null
-        displaySnapshot?: { mode?: string; sorts?: unknown[]; groupBy?: string; groupConfig?: Record<string, unknown> } | null
-        enabled?: boolean
-        grants?: Array<{ subjectType: 'account' | 'workspace' | 'member_view'; subjectId: string; role: 'viewer' | 'editor' | 'manager' }>
+        ownerId?: string
+        role?: string
+        createdAt?: number
+        error?: string
       }
-      const rule = account.store.createAccessRule(me.id, workspaceId, {
-        collection: String(body.collection ?? ''),
-        name: String(body.name ?? ''),
-        filterTree: body.filterTree,
-        columns: body.columns,
-        displaySnapshot: body.displaySnapshot,
-        enabled: body.enabled,
-        grants: body.grants,
+      if (!response.ok || !payload.id) throw new CollabError(payload.error || '重命名云端空间失败', response.status)
+      account.store.upsertPulledWorkspace({
+        accountId: me.id,
+        id: payload.id,
+        name: String(payload.name ?? ''),
+        ownerId: payload.ownerId,
+        role: payload.role,
+        createdAt: payload.createdAt,
       })
-      route.send(201, { rule })
-    } catch (error) {
-      fail(route, error)
+      route.send(200, { ...payload, location: 'cloud' })
+      return
     }
+    route.send(200, account.store.renameWorkspace(me.id, route.params.id!, String(body.name ?? '')))
   })
 
-  ctx.http.route('PATCH', '/api/account/access-rules/:id', async (route) => {
-    try {
-      const me = actor(route)
-      const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
-      if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
-      const ruleId = String(route.params.id ?? '').trim()
-      const body = (await route.json()) as {
-        name?: string
-        filterTree?: Record<string, unknown>
-        columns?: string[] | null
-        displaySnapshot?: { mode?: string; sorts?: unknown[]; groupBy?: string; groupConfig?: Record<string, unknown> } | null
-        enabled?: boolean
-        grants?: Array<{ subjectType: 'account' | 'workspace' | 'member_view'; subjectId: string; role: 'viewer' | 'editor' | 'manager' }>
+  authedRoute('DELETE', '/api/account/workspaces/:id', async (route, me) => {
+    const body = (await route.json().catch(() => ({}))) as { name?: string }
+    const confirmName = String(body.name ?? '')
+    const workspaceId = route.params.id!
+    if (getRuntimePolicy().allowCloudLinking && account.workspaceLocation(workspaceId) === 'cloud') {
+      const connection = account.cloudConnection(me.id)
+      if (!connection) throw new CollabError('请先登录云端账号', 401)
+      let response: Response
+      try {
+        response = await fetch(`${connection.origin}/api/account/workspaces/${encodeURIComponent(workspaceId)}`, {
+          method: 'DELETE',
+          headers: { authorization: `Bearer ${connection.token}`, 'content-type': 'application/json' },
+          body: JSON.stringify({ name: confirmName }),
+        })
+      } catch {
+        throw new CollabError('云端暂时连不上', 503)
       }
-      const rule = account.store.updateAccessRule(me.id, workspaceId, ruleId, body)
-      route.send(200, { rule })
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('DELETE', '/api/account/access-rules/:id', async (route) => {
-    try {
-      const me = actor(route)
-      const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
-      if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
-      const ruleId = String(route.params.id ?? '').trim()
-      const result = account.store.deleteAccessRule(me.id, workspaceId, ruleId)
-      route.send(200, result)
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('POST', '/api/account/access-rules/:id/grants', async (route) => {
-    try {
-      const me = actor(route)
-      const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
-      if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
-      const ruleId = String(route.params.id ?? '').trim()
-      const body = (await route.json()) as {
-        subjectType?: 'account' | 'workspace' | 'member_view'
-        subjectId?: string
-        role?: 'viewer' | 'editor' | 'manager'
+      const payload = (await response.json().catch(() => ({}))) as { error?: string; activeWorkspaceId?: string }
+      if (!response.ok) throw new CollabError(payload.error || '删除云端空间失败', response.status)
+      try {
+        const deleted = account.store.deleteWorkspace(me.id, workspaceId, confirmName)
+    emitWorkspaceDeleted(ctx, workspaceId)
+        purgeSessionEvents(deleted.sessionIds)
+        account.purgeWorkspaceCache(workspaceId)
+        route.send(200, { id: workspaceId, deleted: true, activeWorkspaceId: deleted.activeWorkspaceId })
+      } catch {
+        account.purgeWorkspaceCache(workspaceId)
+        const fallback = account.store.listWorkspaces(me.id).find((ws) => ws.id !== workspaceId)?.id ?? ''
+        if (fallback) account.store.setActive(me.id, fallback)
+        route.send(200, { id: workspaceId, deleted: true, activeWorkspaceId: fallback })
       }
-      const rule = account.store.grantAccessRuleSubject(me.id, workspaceId, ruleId, {
-        subjectType: body.subjectType ?? 'account',
-        subjectId: String(body.subjectId ?? ''),
-        role: body.role ?? 'viewer',
-      })
-      route.send(200, { rule })
-    } catch (error) {
-      fail(route, error)
+      return
     }
+    const deleted = account.store.deleteWorkspace(me.id, workspaceId, confirmName)
+    emitWorkspaceDeleted(ctx, workspaceId)
+    purgeSessionEvents(deleted.sessionIds)
+    route.send(200, { id: deleted.id, deleted: true, activeWorkspaceId: deleted.activeWorkspaceId })
   })
 
-  ctx.http.route('DELETE', '/api/account/access-rules/:id/grants', async (route) => {
-    try {
-      const me = actor(route)
-      const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
-      if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
-      const ruleId = String(route.params.id ?? '').trim()
-      const body = (await route.json()) as {
-        subjectType?: 'account' | 'workspace' | 'member_view'
-        subjectId?: string
-      }
-      const rule = account.store.revokeAccessRuleSubject(
+  authedRoute('GET', '/api/account/workspaces/:id/members', async (route, me) => {
+    requireCollaborativeWorkspace(route.params.id!)
+    route.send(200, { members: account.store.members(me.id, route.params.id!) })
+  })
+
+  authedRoute('POST', '/api/account/workspaces/:id/members', async (route, me) => {
+    requireCollaborativeWorkspace(route.params.id!)
+    const body = (await route.json()) as { accountId?: string; email?: string }
+    const email = String(body.email ?? '').trim()
+    const members = email
+      ? account.store.addMemberByEmail(me.id, route.params.id!, email)
+      : account.store.addMember(me.id, route.params.id!, String(body.accountId ?? ''))
+    route.send(200, { members })
+  })
+
+  authedRoute('POST', '/api/account/workspaces/:id/invites', async (route, me) => {
+    requireCollaborativeWorkspace(route.params.id!)
+    const body = (await route.json()) as { role?: string; expiresInHours?: number }
+    const role = body.role === 'member' ? 'member' : 'viewer'
+    const invite = account.store.createWorkspaceInvite(
+      me.id,
+      route.params.id!,
+      role,
+      Number(body.expiresInHours ?? 168),
+    )
+    const invitePath = `/?workspaceInvite=${encodeURIComponent(invite.token)}`
+    const origin = requestPublicOrigin(route)
+    route.send(201, {
+      ...invite,
+      path: invitePath,
+      ...(origin ? { url: `${origin}${invitePath}` } : {}),
+    })
+  })
+
+  authedRoute('POST', '/api/account/invites/:token/accept', async (route, me) => {
+    const connection = getRuntimePolicy().allowCloudLinking ? account.cloudConnection(me.id) : null
+    if (connection) {
+      const relayed = await relayAccount(
+        route,
+        account,
         me.id,
-        workspaceId,
-        ruleId,
-        body.subjectType ?? 'account',
-        String(body.subjectId ?? ''),
+        `/api/account/invites/${encodeURIComponent(route.params.token!)}/accept`,
       )
-      route.send(200, { rule })
-    } catch (error) {
-      fail(route, error)
-    }
-  })
-
-  ctx.http.route('POST', '/api/account/sync', async (route) => {
-    try {
-      const me = actor(route)
-      const body = (await route.json()) as {
-        workspaceId?: string
-        collection?: string
-        recordId?: string
-        field?: string
-        value?: unknown
-        expectedVersion?: number
+      if (!relayed) throw new CollabError('请先登录云端账号', 401)
+      if (relayed.status < 300) {
+        try {
+          const listed = await fetch(`${connection.origin}/api/account/workspaces`, {
+            headers: { authorization: `Bearer ${connection.token}` },
+          })
+          const payload = (await listed.json().catch(() => ({}))) as Record<string, unknown>
+          if (listed.ok) cacheWorkspaceList(account, me.id, payload)
+        } catch {
+          /* 接受已经成功，空间列表稍后刷新 */
+        }
       }
-      const op = account.store.sync({
-        actorId: me.id,
-        workspaceId: String(body.workspaceId ?? ''),
-        collection: String(body.collection ?? ''),
-        recordId: String(body.recordId ?? ''),
-        field: String(body.field ?? ''),
-        value: body.value,
-        expectedVersion: Number(body.expectedVersion ?? 0),
-      })
-      route.send(200, op)
-    } catch (error) {
-      fail(route, error)
+      route.send(relayed.status, relayed.payload)
+      return
     }
+    if (!getRuntimePolicy().allowWorkspaceInvites) throw new CollabError('本机空间不提供成员邀请', 403)
+    const result = account.store.acceptWorkspaceInvite(me.id, route.params.token!)
+    ctx.http.broadcast('database', { ts: Date.now() })
+    route.send(200, result)
   })
 
-  ctx.http.route('GET', '/api/account/sync', async (route) => {
-    try {
-      const me = actor(route)
-      const workspaceId = String(route.query.get('workspaceId') ?? '')
-      const after = Number(route.query.get('after') ?? 0)
-      const ops =
-        route.query.get('visible') === '1'
-          ? account.store.visibleOpsSince(me.id, workspaceId, after)
-          : account.store.opsSince(me.id, workspaceId, after)
-      route.send(200, { ops })
-    } catch (error) {
-      fail(route, error)
-    }
+  handledRoute('POST', '/api/account/guest-invites/:token/accept', async (route) => {
+    if (!getRuntimePolicy().allowWorkspaceInvites) throw new CollabError('本机空间不提供访客邀请', 403)
+    const body = (await route.json()) as { name?: string }
+    const result = account.store.acceptGuestInvite(route.params.token!, String(body.name ?? ''))
+    rememberLogin(route, result.token)
+    ctx.http.broadcast('database', { ts: Date.now() })
+    route.send(200, result)
   })
 
-  ctx.http.route('POST', '/api/account/locks', async (route) => {
-    try {
-      const me = actor(route)
-      const body = (await route.json()) as {
-        workspaceId?: string
-        collection?: string
-        recordId?: string
-        ttlMs?: number
-      }
-      route.send(
-        200,
-        account.store.acquireLock(
+  authedRoute('DELETE', '/api/account/workspaces/:id/members/:accountId', async (route, me) => {
+    requireCollaborativeWorkspace(route.params.id!)
+    const queryTransfer = String(route.query.get('transferToAccountId') ?? '').trim()
+    const body = (await route.json().catch(() => ({}))) as { transferToAccountId?: string }
+    const transferToAccountId = queryTransfer || String(body?.transferToAccountId ?? '').trim() || undefined
+    const removed = account.store.removeMember(me.id, route.params.id!, route.params.accountId!, {
+      ...(transferToAccountId ? { transferToAccountId } : {}),
+    })
+    ctx.http.disconnectTenant(route.params.accountId!, route.params.id!)
+    emitTenantRevoked(ctx, { accountId: route.params.accountId!, workspaceId: route.params.id! })
+    route.send(200, {
+      members: account.store.members(me.id, route.params.id!),
+      transfer: removed,
+    })
+  })
+
+  authedRoute('GET', '/api/account/workspaces/:id/actor-scopes', async (route, me) => {
+    const workspaceId = route.params.id!
+    requireCollaborativeWorkspace(workspaceId)
+    const role = account.store.memberRole(me.id, workspaceId)
+    if (role !== 'owner' && role !== 'admin') throw new CollabError('仅管理员可查看代理作用域', 403)
+    const actorType = String(route.query.get('actorType') ?? '')
+    const actorId = String(route.query.get('actorId') ?? '').trim()
+    if ((actorType !== 'agent' && actorType !== 'mcp' && actorType !== 'public-link') || !actorId) {
+      throw new CollabError('参数 actorType / actorId 无效', 400)
+    }
+    const scope = account.authorization.getActorScope(workspaceId, actorType, actorId)
+    route.send(200, { scope })
+  })
+
+  authedRoute('POST', '/api/account/workspaces/:id/actor-scopes', async (route, me) => {
+    const workspaceId = route.params.id!
+    requireCollaborativeWorkspace(workspaceId)
+    const role = account.store.memberRole(me.id, workspaceId)
+    if (role !== 'owner' && role !== 'admin') throw new CollabError('仅管理员可配置代理作用域', 403)
+    const body = (await route.json()) as {
+      actorType?: string
+      actorId?: string
+      allowedCollections?: string[] | null
+      allowedViews?: string[] | null
+      maxRole?: ResourceRole
+      expiresAt?: number | null
+    }
+    const actorType = body.actorType
+    const actorId = String(body.actorId ?? '').trim()
+    if ((actorType !== 'agent' && actorType !== 'mcp' && actorType !== 'public-link') || !actorId) {
+      throw new CollabError('参数 actorType / actorId 无效', 400)
+    }
+    account.authorization.setActorScope(workspaceId, actorType, actorId, me.id, {
+      allowedCollections: Array.isArray(body.allowedCollections) ? body.allowedCollections : null,
+      allowedViews: Array.isArray(body.allowedViews) ? body.allowedViews : null,
+      maxRole: body.maxRole,
+      expiresAt: typeof body.expiresAt === 'number' ? body.expiresAt : null,
+    })
+    route.send(200, { scope: account.authorization.getActorScope(workspaceId, actorType, actorId) })
+  })
+
+  authedRoute('DELETE', '/api/account/workspaces/:id/actor-scopes', async (route, me) => {
+    const workspaceId = route.params.id!
+    requireCollaborativeWorkspace(workspaceId)
+    const role = account.store.memberRole(me.id, workspaceId)
+    if (role !== 'owner' && role !== 'admin') throw new CollabError('仅管理员可吊销代理作用域', 403)
+    const body = (await route.json()) as { actorType?: string; actorId?: string }
+    const actorType = body.actorType
+    const actorId = String(body.actorId ?? '').trim()
+    if ((actorType !== 'agent' && actorType !== 'mcp' && actorType !== 'public-link') || !actorId) {
+      throw new CollabError('参数 actorType / actorId 无效', 400)
+    }
+    account.authorization.revokeActorScope(workspaceId, actorType, actorId)
+    route.send(200, { ok: true })
+  })
+
+  authedRoute('PATCH', '/api/account/workspaces/:id/members/:accountId', async (route, me) => {
+    requireCollaborativeWorkspace(route.params.id!)
+    const body = (await route.json()) as { role?: string }
+    const role = String(body.role ?? '')
+    if (role !== 'owner' && role !== 'admin' && role !== 'member' && role !== 'viewer') {
+      throw new CollabError('角色只能是 owner、admin、member 或 viewer', 400)
+    }
+    account.store.updateMemberRole(me.id, route.params.id!, route.params.accountId!, role)
+    route.send(200, { members: account.store.members(me.id, route.params.id!) })
+  })
+
+  authedRoute('GET', '/api/account/workspaces/:id/groups', async (route, me) => {
+    requireCollaborativeWorkspace(route.params.id!)
+    route.send(200, { groups: account.store.groups(me.id, route.params.id!) })
+  })
+
+  authedRoute('POST', '/api/account/workspaces/:id/groups', async (route, me) => {
+    requireCollaborativeWorkspace(route.params.id!)
+    const body = (await route.json()) as { name?: string }
+    route.send(201, account.store.createGroup(me.id, route.params.id!, String(body.name ?? '')))
+  })
+
+  authedRoute('POST', '/api/account/workspaces/:id/groups/:groupId/members', async (route, me) => {
+    requireCollaborativeWorkspace(route.params.id!)
+    const body = (await route.json()) as { email?: string }
+    route.send(
+      200,
+      {
+        members: account.store.addGroupMemberByEmail(
           me.id,
-          String(body.workspaceId ?? ''),
-          String(body.collection ?? ''),
-          String(body.recordId ?? ''),
-          body.ttlMs,
+          route.params.id!,
+          route.params.groupId!,
+          String(body.email ?? ''),
         ),
-      )
-    } catch (error) {
-      fail(route, error)
-    }
+      },
+    )
   })
 
-  ctx.http.route('DELETE', '/api/account/locks', async (route) => {
-    try {
-      const me = actor(route)
-      const body = (await route.json()) as { workspaceId?: string; collection?: string; recordId?: string }
-      account.store.releaseLock(
-        me.id,
-        String(body.workspaceId ?? ''),
-        String(body.collection ?? ''),
-        String(body.recordId ?? ''),
-      )
-      route.send(200, { ok: true })
-    } catch (error) {
-      fail(route, error)
+  authedRoute('GET', '/api/account/member-activity', async (route, me) => {
+    const memberId = String(route.query.get('memberId') ?? '').trim() || me.id
+    const days = Number(route.query.get('days') ?? 182)
+    const limit = Number(route.query.get('limit') ?? 80)
+    const data = account.store.memberActivity(me.id, memberId, {
+      days: Number.isFinite(days) ? days : 182,
+      limit: Number.isFinite(limit) ? limit : 80,
+    })
+    type DatabaseLookup = {
+      collection?: (path: string) => { label?: string; schema?: { labelField?: string } } | undefined
+      list?: (
+        path: string,
+        filter?: Record<string, unknown>,
+        page?: { columns?: string[]; limit?: number; offset?: number },
+      ) => Promise<{ items?: Array<Record<string, unknown>> }>
+      viewCatalog?: { viewsFor(path: string): Array<{ id?: unknown; name?: unknown }> }
     }
+    let db: DatabaseLookup | undefined
+    try {
+      db = ctx.get('database') as DatabaseLookup | undefined
+    } catch {
+      db = undefined
+    }
+    const titleMap = new Map<string, string>()
+    for (const item of data.recent) {
+      const key = `${item.collection}\t${item.recordId}`
+      const title = item.recordTitle?.trim()
+      if (item.collection && item.recordId && title && !titleMap.has(key)) {
+        titleMap.set(key, title)
+      }
+    }
+    const collectionLabels = new Map<string, string>()
+    if (db?.list && data.grants.records.length) {
+      const byCollection = new Map<string, string[]>()
+      for (const grant of data.grants.records) {
+        const list = byCollection.get(grant.collection) ?? []
+        list.push(grant.recordId)
+        byCollection.set(grant.collection, list)
+      }
+      for (const [collection, ids] of byCollection) {
+        const spec = db.collection?.(collection)
+        const label = spec?.label?.trim() ?? ''
+        if (label) collectionLabels.set(collection, label)
+        const labelField = spec?.schema?.labelField?.trim()
+        const columns = [...new Set(['title', 'name', 'label', ...(labelField ? [labelField] : [])])]
+        const resolvedIds = new Set<string>()
+        const collectRows = (items: Array<Record<string, unknown>> | undefined) => {
+          for (const row of items ?? []) {
+            const id = String(row.id ?? '')
+            if (!id) continue
+            resolvedIds.add(id)
+            const rawTitle = String(
+              (labelField ? row[labelField] : undefined) ?? row.title ?? row.name ?? row.label ?? '',
+            ).trim()
+            titleMap.set(`${collection}\t${id}`, rawTitle || (label ? `未命名${label}` : '未命名'))
+          }
+        }
+        try {
+          const listed = await db.list(collection, { $ids: ids }, { columns, limit: Math.max(ids.length, 100) })
+          collectRows(listed?.items)
+          const missingIds = ids.filter((id) => !resolvedIds.has(id))
+          if (missingIds.length) {
+            const trashed = await db.list(
+              collection,
+              { $ids: missingIds, deleted: true },
+              { columns, limit: Math.max(missingIds.length, 100) },
+            )
+            collectRows(trashed?.items)
+          }
+        } catch {
+          /* 无法读取该集合时回退为已有标题或 recordId */
+        }
+      }
+    }
+    const viewNameMap = new Map<string, string>()
+    if (db?.viewCatalog && data.grants.views.length) {
+      const collections = new Set(data.grants.views.map((item) => item.collection))
+      for (const collection of collections) {
+        const label = db.collection?.(collection)?.label?.trim()
+        if (label) collectionLabels.set(collection, label)
+        try {
+          for (const view of db.viewCatalog.viewsFor(collection)) {
+            const id = String(view.id ?? '')
+            const name = String(view.name ?? '').trim()
+            if (id && name) viewNameMap.set(`${collection}\t${id}`, name)
+          }
+        } catch {
+          /* 视图目录不可用时回退为 viewId */
+        }
+      }
+    }
+    route.send(200, {
+      ...data,
+      grants: {
+        records: data.grants.records.map((grant) => ({
+          ...grant,
+          title: titleMap.get(`${grant.collection}\t${grant.recordId}`) ?? '',
+          collectionLabel: collectionLabels.get(grant.collection) ?? '',
+        })),
+        views: data.grants.views.map((grant) => ({
+          ...grant,
+          viewName: viewNameMap.get(`${grant.collection}\t${grant.viewId}`) ?? '',
+          collectionLabel: collectionLabels.get(grant.collection) ?? '',
+        })),
+      },
+    })
   })
 
-  ctx.http.route('POST', '/api/account/presence', async (route) => {
-    try {
-      const me = actor(route)
-      const body = (await route.json()) as { workspaceId?: string; collection?: string; recordId?: string }
-      requireCollaborativeWorkspace(String(body.workspaceId ?? ''))
-      account.store.pulse(
-        me.id,
-        String(body.workspaceId ?? ''),
-        String(body.collection ?? ''),
-        String(body.recordId ?? ''),
-      )
-      route.send(200, { presence: account.store.presence(me.id, String(body.workspaceId ?? '')) })
-    } catch (error) {
-      fail(route, error)
+  authedRoute('GET', '/api/account/access', async (route, me) => {
+    const activeWorkspace = resolveScopedWorkspaceId(ctx)
+    if (!activeWorkspace || account.workspaceLocation(activeWorkspace) !== 'cloud') {
+      route.send(200, {
+        scope: 'personal',
+        ownerId: me.id,
+        people: [],
+        groups: [],
+        memberViews: [],
+        viewGrants: [],
+        roleChain: [],
+        local: true,
+      })
+      return
     }
+    const collection = String(route.query.get('collection') ?? '')
+    const viewId = String(route.query.get('viewId') ?? '')
+    route.send(
+      200,
+      viewId
+        ? account.store.viewAccess(me.id, collection, viewId)
+        : account.store.recordAccess(me.id, collection, String(route.query.get('recordId') ?? '')),
+    )
+  })
+
+  authedRoute('POST', '/api/account/access', async (route, me) => {
+    const activeWorkspace = resolveScopedWorkspaceId(ctx)
+    requireCollaborativeWorkspace(activeWorkspace ?? '')
+    const body = (await route.json()) as {
+      collection?: string
+      recordId?: string
+      viewId?: string
+      email?: string
+      groupId?: string
+      memberViewId?: string
+      role?: ResourceRole
+      collaboratorKind?: 'internal' | 'external'
+    }
+    const collection = String(body.collection ?? '')
+    const recordId = String(body.recordId ?? '')
+    const viewId = String(body.viewId ?? '')
+    const role: ResourceRole =
+      body.role === 'viewer' || body.role === 'commenter' || body.role === 'manager' || body.role === 'owner'
+        ? body.role
+        : 'editor'
+    const kind = body.collaboratorKind === 'internal' ? 'internal' : 'external'
+    route.send(
+      200,
+      viewId
+        ? body.memberViewId
+          ? account.store.grantViewMemberView(me.id, collection, viewId, String(body.memberViewId), role)
+          : account.store.shareViewWithEmail(me.id, collection, viewId, String(body.email ?? ''), role, kind)
+        : body.memberViewId
+        ? account.store.grantMemberView(me.id, collection, recordId, String(body.memberViewId), role)
+        : body.groupId
+        ? account.store.grantGroup(me.id, collection, recordId, String(body.groupId), role)
+        : account.store.shareWithEmail(me.id, collection, recordId, String(body.email ?? ''), role, kind),
+    )
+  })
+
+  authedRoute('PATCH', '/api/account/access', async (route, me) => {
+    const activeWorkspace = resolveScopedWorkspaceId(ctx)
+    requireCollaborativeWorkspace(activeWorkspace ?? '')
+    const body = (await route.json()) as {
+      collection?: string
+      recordId?: string
+      inheritanceMode?: 'inherit' | 'custom'
+    }
+    const collection = String(body.collection ?? '').trim()
+    const recordId = String(body.recordId ?? '').trim()
+    const mode = body.inheritanceMode === 'inherit' ? 'inherit' : body.inheritanceMode === 'custom' ? 'custom' : null
+    if (!collection || !recordId || !mode) {
+      route.send(400, { error: '参数不完整' })
+      return
+    }
+    route.send(200, account.store.setRecordInheritance(me.id, collection, recordId, mode))
+  })
+
+  authedRoute('DELETE', '/api/account/access', async (route, me) => {
+    const activeWorkspace = resolveScopedWorkspaceId(ctx)
+    requireCollaborativeWorkspace(activeWorkspace ?? '')
+    const body = (await route.json()) as {
+      collection?: string
+      recordId?: string
+      viewId?: string
+      subjectType?: 'account' | 'group' | 'member_view'
+      subjectId?: string
+      grantedBy?: string
+    }
+    const viewId = String(body.viewId ?? '')
+    const subjectType =
+      body.subjectType === 'group' || body.subjectType === 'member_view' ? body.subjectType : 'account'
+    route.send(
+      200,
+      viewId
+        ? account.store.revokeViewGrant(
+            me.id,
+            String(body.collection ?? ''),
+            viewId,
+            subjectType === 'member_view' ? 'member_view' : 'account',
+            String(body.subjectId ?? ''),
+          )
+        : account.store.revokeRecordGrant(
+            me.id,
+            String(body.collection ?? ''),
+            String(body.recordId ?? ''),
+            subjectType,
+            String(body.subjectId ?? ''),
+          ),
+    )
+  })
+
+  authedRoute('POST', '/api/account/access/guest-invite', async (route, me) => {
+    const activeWorkspace = resolveScopedWorkspaceId(ctx)
+    requireCollaborativeWorkspace(activeWorkspace ?? '')
+    const body = (await route.json()) as {
+      collection?: string
+      recordId?: string
+      viewId?: string
+      role?: string
+      expiresInHours?: number
+    }
+    const invite = account.store.createGuestInvite(
+      me.id,
+      String(body.collection ?? ''),
+      String(body.recordId ?? ''),
+      body.role === 'editor' ? 'editor' : 'viewer',
+      Number(body.expiresInHours ?? 24),
+      Date.now(),
+      String(body.viewId ?? ''),
+    )
+    const guestPath = `/?guestInvite=${encodeURIComponent(invite.token)}`
+    const origin = requestPublicOrigin(route)
+    route.send(201, {
+      ...invite,
+      path: guestPath,
+      ...(origin ? { url: `${origin}${guestPath}` } : {}),
+    })
+  })
+  // 独立分享规则（access_rules）CRUD：个人持有，与视图解耦
+  authedRoute('GET', '/api/account/access-rules', async (route, me) => {
+    const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
+    if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
+    const collection = route.query.get('collection')?.trim() || undefined
+    const rules = account.store.listAccessRulesForOwner(me.id, workspaceId, collection)
+    route.send(200, { rules })
+  })
+
+  authedRoute('POST', '/api/account/access-rules', async (route, me) => {
+    const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
+    if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
+    const body = (await route.json()) as {
+      collection?: string
+      name?: string
+      filterTree?: Record<string, unknown>
+      columns?: string[] | null
+      displaySnapshot?: { mode?: string; sorts?: unknown[]; groupBy?: string; groupConfig?: Record<string, unknown> } | null
+      enabled?: boolean
+      grants?: Array<{ subjectType: 'account' | 'workspace' | 'member_view'; subjectId: string; role: 'viewer' | 'editor' | 'manager' }>
+    }
+    const rule = account.store.createAccessRule(me.id, workspaceId, {
+      collection: String(body.collection ?? ''),
+      name: String(body.name ?? ''),
+      filterTree: body.filterTree,
+      columns: body.columns,
+      displaySnapshot: body.displaySnapshot,
+      enabled: body.enabled,
+      grants: body.grants,
+    })
+    route.send(201, { rule })
+  })
+
+  authedRoute('PATCH', '/api/account/access-rules/:id', async (route, me) => {
+    const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
+    if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
+    const ruleId = String(route.params.id ?? '').trim()
+    const body = (await route.json()) as {
+      name?: string
+      filterTree?: Record<string, unknown>
+      columns?: string[] | null
+      displaySnapshot?: { mode?: string; sorts?: unknown[]; groupBy?: string; groupConfig?: Record<string, unknown> } | null
+      enabled?: boolean
+      grants?: Array<{ subjectType: 'account' | 'workspace' | 'member_view'; subjectId: string; role: 'viewer' | 'editor' | 'manager' }>
+    }
+    const rule = account.store.updateAccessRule(me.id, workspaceId, ruleId, body)
+    route.send(200, { rule })
+  })
+
+  authedRoute('DELETE', '/api/account/access-rules/:id', async (route, me) => {
+    const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
+    if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
+    const ruleId = String(route.params.id ?? '').trim()
+    const result = account.store.deleteAccessRule(me.id, workspaceId, ruleId)
+    route.send(200, result)
+  })
+
+  authedRoute('POST', '/api/account/access-rules/:id/grants', async (route, me) => {
+    const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
+    if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
+    const ruleId = String(route.params.id ?? '').trim()
+    const body = (await route.json()) as {
+      subjectType?: 'account' | 'workspace' | 'member_view'
+      subjectId?: string
+      role?: 'viewer' | 'editor' | 'manager'
+    }
+    const rule = account.store.grantAccessRuleSubject(me.id, workspaceId, ruleId, {
+      subjectType: body.subjectType ?? 'account',
+      subjectId: String(body.subjectId ?? ''),
+      role: body.role ?? 'viewer',
+    })
+    route.send(200, { rule })
+  })
+
+  authedRoute('DELETE', '/api/account/access-rules/:id/grants', async (route, me) => {
+    const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
+    if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
+    const ruleId = String(route.params.id ?? '').trim()
+    const body = (await route.json()) as {
+      subjectType?: 'account' | 'workspace' | 'member_view'
+      subjectId?: string
+    }
+    const rule = account.store.revokeAccessRuleSubject(
+      me.id,
+      workspaceId,
+      ruleId,
+      body.subjectType ?? 'account',
+      String(body.subjectId ?? ''),
+    )
+    route.send(200, { rule })
+  })
+
+  authedRoute('POST', '/api/account/presence', async (route, me) => {
+    const body = (await route.json()) as { workspaceId?: string; collection?: string; recordId?: string }
+    requireCollaborativeWorkspace(String(body.workspaceId ?? ''))
+    account.store.pulse(
+      me.id,
+      String(body.workspaceId ?? ''),
+      String(body.collection ?? ''),
+      String(body.recordId ?? ''),
+    )
+    route.send(200, { presence: account.store.presence(me.id, String(body.workspaceId ?? '')) })
   })
 }

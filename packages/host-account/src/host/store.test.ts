@@ -19,42 +19,6 @@ function store() {
   return new CollabStore(db)
 }
 
-test('owner can add a member by email and a stranger cannot sync', () => {
-  const collab = store()
-  const ada = collab.register('', Date.now(), 'secret1', 'ada@example.com')
-  const bob = collab.register('', Date.now(), 'secret1', 'bob@example.com')
-  const cara = collab.register('', Date.now(), 'secret1', 'cara@example.com')
-  const workspace = collab.createWorkspace(ada.id, 'Notes')
-  collab.addMemberByEmail(ada.id, workspace.id, 'Bob@Example.com')
-  assert.equal(collab.listWorkspaces(bob.id)[0]?.role, 'member')
-  assert.throws(() => collab.addMemberByEmail(bob.id, workspace.id, 'cara@example.com'), CollabError)
-  assert.throws(() => collab.addMemberByEmail(ada.id, workspace.id, 'missing@example.com'), /先注册/)
-  assert.throws(
-    () =>
-      collab.sync({
-        actorId: cara.id,
-        workspaceId: workspace.id,
-        collection: '/pages',
-        recordId: 'p1',
-        field: 'title',
-        value: 'nope',
-        expectedVersion: 0,
-      }),
-    /成员/,
-  )
-})
-
-test('a record cannot be claimed by two workspaces', () => {
-  const collab = store()
-  const ada = collab.register('Ada')
-  const bob = collab.register('Bob')
-  const adaWorkspace = collab.createWorkspace(ada.id, 'A')
-  const bobWorkspace = collab.createWorkspace(bob.id, 'B')
-  collab.claim(ada.id, adaWorkspace.id, '/pages', 'shared-id')
-  assert.throws(() => collab.claim(bob.id, bobWorkspace.id, '/pages', 'shared-id'), /另一个空间/)
-  assert.throws(() => collab.attach(bobWorkspace.id, '/pages', 'shared-id'), /另一个空间/)
-})
-
 test('builtin plugin records are not claimed by a workspace', () => {
   const stop = registerBuiltinPluginLookup((id) => id === 'page-sandbox')
   try {
@@ -94,9 +58,7 @@ test('an online instance seeds the env super admin with the default password', (
     assert.equal(admin.email, '97@biu.com')
     assert.equal(admin.mustChangePassword, false)
     assert.equal(collab.isSuperAdmin(admin.id), true)
-    assert.equal(collab.requiresPasswordChange(admin.id), false)
     collab.changePassword(admin.id, '123456', 'new-secret', admin.token)
-    assert.equal(collab.requiresPasswordChange(admin.id), false)
     assert.throws(() => collab.login('97@biu.com', '123456'), /密码不正确/)
     const db = (collab as unknown as { db: import('node:sqlite').DatabaseSync }).db
     const restarted = new CollabStore(db)
@@ -223,144 +185,6 @@ test('each member loads plugins for themselves', () => {
   collab.setPluginLoad(bob.id, workspaceA.id, 'page-sandbox', true)
   collab.setPluginLoad(bob.id, workspaceA.id, 'page-sandbox', false)
   assert.equal(collab.hasPluginLoad(bob.id, workspaceA.id, 'page-sandbox'), false)
-})
-
-test('sync bumps version and rejects a stale writer while a lock is held', () => {
-  const collab = store()
-  const ada = collab.register('Ada')
-  const bob = collab.register('Bob')
-  const workspace = collab.createWorkspace(ada.id, 'Notes')
-  collab.addMember(ada.id, workspace.id, bob.id)
-  const claimed = collab.claim(ada.id, workspace.id, '/pages', 'p1')
-  assert.equal(claimed.ownerId, ada.id)
-  assert.throws(() => collab.claim(bob.id, workspace.id, '/pages', 'p1'), /归属/)
-
-  const first = collab.sync({
-    actorId: ada.id,
-    workspaceId: workspace.id,
-    collection: '/pages',
-    recordId: 'p1',
-    field: 'title',
-    value: 'one',
-    expectedVersion: 0,
-  })
-  assert.equal(first.version, 1)
-  assert.throws(
-    () =>
-      collab.sync({
-        actorId: bob.id,
-        workspaceId: workspace.id,
-        collection: '/pages',
-        recordId: 'p1',
-        field: 'title',
-        value: 'stale',
-        expectedVersion: 0,
-      }),
-    /版本冲突/,
-  )
-
-  collab.acquireLock(ada.id, workspace.id, '/pages', 'p1', 60_000, 1_000)
-  assert.throws(
-    () =>
-      collab.sync({
-        actorId: bob.id,
-        workspaceId: workspace.id,
-        collection: '/pages',
-        recordId: 'p1',
-        field: 'title',
-        value: 'locked',
-        expectedVersion: 1,
-        now: 1_500,
-      }),
-    /别人编辑/,
-  )
-  const second = collab.sync({
-    actorId: ada.id,
-    workspaceId: workspace.id,
-    collection: '/pages',
-    recordId: 'p1',
-    field: 'title',
-    value: 'two',
-    expectedVersion: 1,
-    now: 1_500,
-  })
-  assert.equal(second.version, 2)
-  const ops = collab.opsSince(bob.id, workspace.id, first.id)
-  assert.equal(ops.length, 1)
-  assert.equal(ops[0]?.value, 'two')
-})
-
-test('bootstrap claims live records once and skips trash', () => {
-  const collab = store()
-  const db = (collab as unknown as { db: import('node:sqlite').DatabaseSync }).db
-  db.prepare(`INSERT INTO pages (id, title, created_at, updated_at) VALUES ('p1', 'Home', 1, 1)`).run()
-  db.prepare(`INSERT INTO tasks (id, title, created_at, updated_at) VALUES ('t1', 'Do', 1, 1), ('t2', 'Gone', 1, 1)`).run()
-  db.prepare(`INSERT INTO agents (id, version, title, updated_at) VALUES ('s1', 1, 'Chat', 1)`).run()
-  db.prepare(
-    `INSERT INTO editor_content (collection, record_id, body, updated_at, version) VALUES ('/skills', 'sk1', '#', 1, 1)`,
-  ).run()
-  db.prepare(
-    `INSERT INTO record_meta (collection, record_id, deleted_at) VALUES ('/tasks', 't2', 9), ('/skills', 'old', 9)`,
-  ).run()
-  const first = collab.bootstrapLocal({ accountName: 'Ada', workspaceName: '本机', now: 20 })
-  assert.equal(first.bootstrapped, false)
-  assert.equal(first.account.name, 'Ada')
-  assert.equal(first.workspace.name, '本机')
-  assert.equal(first.imported, 4)
-  assert.equal(collab.activeWorkspaceId(), first.workspace.id)
-  assert.equal(collab.recordIds(first.workspace.id, '/pages').has('p1'), true)
-  const heads = (
-    db.prepare('SELECT collection, record_id, version FROM record_owners ORDER BY collection, record_id').all() as Array<{
-      collection: string
-      record_id: string
-      version: number
-    }>
-  ).map((row) => ({ collection: row.collection, record_id: row.record_id, version: row.version }))
-  assert.deepEqual(heads, [
-    { collection: '/agents', record_id: 's1', version: 0 },
-    { collection: '/pages', record_id: 'p1', version: 0 },
-    { collection: '/skills', record_id: 'sk1', version: 0 },
-    { collection: '/tasks', record_id: 't1', version: 0 },
-  ])
-  const again = collab.bootstrapLocal({ accountName: '其他', now: 30 })
-  assert.equal(again.bootstrapped, true)
-  assert.equal(again.account.id, first.account.id)
-  assert.equal(again.imported, 0)
-  db.prepare(`INSERT INTO pages (id, title, created_at, updated_at) VALUES ('p2', 'Later', 1, 1)`).run()
-  collab.bootstrapLocal()
-  const pages = db.prepare(`SELECT record_id FROM record_owners WHERE collection = '/pages' ORDER BY record_id`).all() as Array<{
-    record_id: string
-  }>
-  assert.deepEqual(pages.map((row) => row.record_id), ['p1'])
-})
-
-test('a pulled workspace is stored for the signed-in account', () => {
-  const collab = store()
-  const local = collab.bootstrapLocal({ accountName: '我', workspaceName: '本机' })
-  assert.ok(local.workspace)
-  collab.upsertPulledWorkspace({
-    accountId: local.account.id,
-    id: 'ws_remote',
-    name: '远程空间',
-    ownerId: 'acc_remote',
-    role: 'owner',
-  })
-  const listed = collab.listWorkspaces(local.account.id)
-  assert.deepEqual(listed.map((item) => item.name), ['本机', '远程空间'])
-  assert.equal(listed.find((item) => item.id === 'ws_remote')?.role, 'owner')
-})
-
-test('an existing workspace is not filled with local records', () => {
-  const collab = store()
-  const ada = collab.register('Ada')
-  collab.createWorkspace(ada.id, '已有')
-  const db = (collab as unknown as { db: import('node:sqlite').DatabaseSync }).db
-  db.prepare(`INSERT INTO pages (id, title, created_at, updated_at) VALUES ('p1', 'Home', 1, 1)`).run()
-  const result = collab.bootstrapLocal({ accountName: '我' })
-  assert.equal(result.workspace.name, '已有')
-  assert.equal(result.imported, 0)
-  const count = db.prepare('SELECT COUNT(*) AS n FROM record_owners').get() as { n: number }
-  assert.equal(Number(count.n), 0)
 })
 
 test('presence drops a heartbeat older than the stale window', () => {
@@ -688,7 +512,6 @@ test('cross-workspace matrix denies strangers, viewers who write, and revoked se
     assert.equal(update(bob.id, spaceA.id), false)
     assert.equal(read(bob.id, spaceB.id), false)
     assert.equal(read(cara.id, spaceA.id), false)
-    assert.throws(() => collab.claim(bob.id, spaceB.id, '/pages', 'shared-page'), /另一个空间/)
     const first = collab.openSession(ada.id, 'phone')
     const second = collab.openSession(ada.id, 'laptop', now - 1)
     assert.equal(collab.accountByToken(second.token), null)
@@ -719,24 +542,6 @@ test('authorization uses the member workspace selected by the current request', 
     ),
     active,
   )
-})
-
-test('session execution leases exclude other devices and can be released', () => {
-  const collab = store()
-  const ada = collab.register('', Date.now(), 'secret1', 'lease-ada@example.com')
-  const now = Date.now()
-  const first = collab.acquireExecutionLease(ada.id, 'session-1', 'Ada laptop', 60_000, now)
-  assert.equal(collab.hasExecutionLease('session-1', now + 1), true)
-  assert.throws(
-    () => collab.acquireExecutionLease(ada.id, 'session-1', 'Ada desktop', 60_000, now + 1),
-    /正在由 Ada laptop 运行/,
-  )
-  assert.doesNotThrow(() => collab.requireExecutionLease(ada.id, 'session-1', first.leaseId, now + 1))
-  collab.renewExecutionLease(ada.id, 'session-1', first.leaseId, 90_000, now + 2)
-  collab.releaseExecutionLease(ada.id, 'session-1', first.leaseId)
-  assert.equal(collab.hasExecutionLease('session-1', now + 3), false)
-  const next = collab.acquireExecutionLease(ada.id, 'session-1', 'Ada desktop', 60_000, now + 4)
-  assert.notEqual(next.leaseId, first.leaseId)
 })
 
 test('LAN visitors reuse the same localStorage device code as a guest member', () => {

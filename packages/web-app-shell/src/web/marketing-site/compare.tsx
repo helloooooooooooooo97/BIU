@@ -375,7 +375,6 @@ export const COMPARE_PAGES: ComparePage[] = [
 ]
 
 /** Representative benchmark per software-lifecycle verb. */
-export const COMPARE_FEATURED = ['vs-cursor', 'vs-supabase', 'vs-k8s', 'vs-app-stores', 'vs-github'] as const
 
 export const COMPARE_CATEGORIES = [
   {
