@@ -2601,6 +2601,7 @@ export function apply(ctx: Context) {
         viewId: string,
         fallbackActorId?: string,
       ) => string
+      workspaceOwnerId?: (workspaceId: string) => string | null
       cleanupViewReferences?: (workspaceId: string, collection: string, viewId: string) => void
     }
   } | undefined
@@ -2633,8 +2634,10 @@ export function apply(ctx: Context) {
   }
   savedViews.setPolicyGuard({
     // 方案 B（视图归展示，规则归安全）：视图权限与页面记录完全一致，统一走 /views 下的 resource_policies + record_grants
+    // 内置视图全空间共享一份，创建人固定为空间创建人（workspace owner），且仅空间创建人可修改或删除
     isLocked: () => false,
     canEditLocked: () => true,
+    workspaceOwner: (workspaceId) => account?.store?.workspaceOwnerId?.(workspaceId) ?? null,
     canSeeView: (workspaceId, collection, view, accountId) =>
       authorizeViewAction(workspaceId, collection, view, accountId, 'resource:read'),
     canModifyView: (workspaceId, collection, view, accountId) =>

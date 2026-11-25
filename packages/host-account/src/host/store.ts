@@ -1611,6 +1611,14 @@ export class CollabStore {
     return this.accessRows(workspaceId, collection, recordId)
   }
 
+  workspaceOwnerId(workspaceId: string): string | null {
+    if (!workspaceId) return null
+    const row = this.db.prepare('SELECT owner_id FROM workspaces WHERE id = ?').get(workspaceId) as
+      | { owner_id?: string }
+      | undefined
+    return row?.owner_id?.trim() || null
+  }
+
   workspaceProfile(actorId: string) {
     const workspaceId = this.activeWorkspaceId()
     if (!workspaceId) throw new CollabError('没有工作区', 400)
