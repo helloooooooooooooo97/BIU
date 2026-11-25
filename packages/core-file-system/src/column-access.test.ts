@@ -11,16 +11,14 @@ import {
   type ColumnPolicy,
 } from './column-access.ts'
 
-test('mergeColumnPolicies unions readable/writable columns while explicit deny always wins', () => {
+test('mergeColumnPolicies unions readable and writable columns across views', () => {
   const viewA: ColumnPolicy = {
-    readable: new Set(['title', 'status', 'salary']),
+    readable: new Set(['title', 'status']),
     writable: new Set(['status']),
-    denied: new Set(),
   }
   const viewB: ColumnPolicy = {
     readable: new Set(['title', 'owner', '$content']),
     writable: new Set(['owner', '$content']),
-    denied: new Set(['salary']),
   }
   const merged = mergeColumnPolicies([viewA, viewB])
   const projected = projectRecordColumns(
@@ -32,11 +30,10 @@ test('mergeColumnPolicies unions readable/writable columns while explicit deny a
   assert.equal(isContentWritable(merged), true)
 })
 
-test('assertWritableColumns blocks hidden, read-only, and denied columns including tag fields', () => {
+test('assertWritableColumns blocks hidden and read-only columns including tag fields', () => {
   const policy: ColumnPolicy = {
     readable: new Set(['title', 'status', 'tag::crm::stage']),
     writable: new Set(['status', 'tag::crm::stage']),
-    denied: new Set(['cost']),
   }
   assert.doesNotThrow(() => assertWritableColumns({ status: 'done', 'tag::crm::stage': 'won' }, policy))
   assert.throws(() => assertWritableColumns({ title: 'Hacked' }, policy), /FIELD_FORBIDDEN \(title\)/)
@@ -44,11 +41,10 @@ test('assertWritableColumns blocks hidden, read-only, and denied columns includi
   assert.throws(() => assertWritableColumns({ 'tag::hr::level': 'L7' }, policy), /FIELD_FORBIDDEN/)
 })
 
-test('assertQueryableColumns blocks side-channel probing on unreadable or denied fields', () => {
+test('assertQueryableColumns blocks side-channel probing on unreadable fields', () => {
   const policy: ColumnPolicy = {
     readable: new Set(['title', 'status']),
     writable: new Set(),
-    denied: new Set(['salary']),
   }
   assert.doesNotThrow(() =>
     assertQueryableColumns(
@@ -79,9 +75,9 @@ test('assertQueryableColumns blocks side-channel probing on unreadable or denied
   assert.throws(() => assertQueryableColumns({ groupBy: 'salary' }, policy), /FIELD_FORBIDDEN/)
 })
 
-test('fullColumnPolicy with denied fields still strips denied columns on read and write', () => {
-  const policy = fullColumnPolicy(['salary'])
+test('fullColumnPolicy allows reading and writing all fields', () => {
+  const policy = fullColumnPolicy()
   const row = projectRecordColumns({ id: '1', title: 'Bob', salary: 99999 }, policy)
-  assert.deepEqual(row, { id: '1', title: 'Bob' })
-  assert.throws(() => assertWritableColumns({ salary: 1 }, policy), /FIELD_FORBIDDEN \(salary\)/)
+  assert.deepEqual(row, { id: '1', title: 'Bob', salary: 99999 })
+  assert.doesNotThrow(() => assertWritableColumns({ salary: 1 }, policy))
 })

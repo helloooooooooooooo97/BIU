@@ -72,10 +72,8 @@ export type WorkspaceFiles = {
     subject_type: 'account' | 'member_view'
     subject_id: string
     role: ViewGrantRole
-    effect?: 'allow' | 'deny'
     readable_columns?: string | null
     writable_columns?: string | null
-    denied_columns?: string | null
     granted_by?: string
   }>
   collectionRecordOwners?(workspaceId: string, collection: string): Map<string, string>
@@ -304,12 +302,10 @@ export class DatabaseAccessPolicy {
         ? grant.subject_id === accountId
         : authorization.matchesMemberView(workspaceId, grant.subject_id, accountId)
       if (!subjectMatches) continue
-      if (grant.effect !== 'deny' && !authorization.canGrantorShareRecord(grant.granted_by ?? '', targetRef)) {
+      if (!authorization.canGrantorShareRecord(grant.granted_by ?? '', targetRef)) {
         continue
       }
       if (recordMatchesGrantedView(record as never, grant.view_id, saved, scope, { grantedBy: grant.granted_by, recordOwnerId: ownerId })) {
-        // Deny-overrides-Allow: any matching deny view grant blocks view-based access.
-        if (grant.effect === 'deny') return null
         roles.push(grant.role)
       }
     }
@@ -356,7 +352,6 @@ export class DatabaseAccessPolicy {
     if (decision.allowed && decision.source !== 'data-view-grant') {
       policies.push(fullColumnPolicy())
     }
-    const denied = new Set<string>()
     for (const grant of grants) {
       const subjectMatches = grant.subject_type === 'account'
         ? grant.subject_id === actor.accountId
@@ -365,21 +360,15 @@ export class DatabaseAccessPolicy {
       if (!recordMatchesGrantedView(record as never, grant.view_id, saved, scope, { grantedBy: grant.granted_by, recordOwnerId: ownerId })) {
         continue
       }
-      const grantDenied = parseColumnList(grant.denied_columns) ?? []
-      for (const col of grantDenied) denied.add(col)
-      if (grant.effect === 'deny') continue
       const readableList = parseColumnList(grant.readable_columns)
       const writableList = parseColumnList(grant.writable_columns)
       const canWrite = roleCoversAction(grant.role, 'resource:update')
       policies.push({
         readable: readableList ? new Set(readableList) : '*',
         writable: canWrite ? (writableList ? new Set(writableList) : readableList ? new Set(readableList) : '*') : new Set<string>(),
-        denied: new Set(grantDenied),
       })
     }
-    const merged = mergeColumnPolicies(policies)
-    for (const col of denied) merged.denied.add(col)
-    return merged
+    return mergeColumnPolicies(policies)
   }
 
   hasViewGrants(collection: string): boolean {
@@ -397,7 +386,7 @@ export class DatabaseAccessPolicy {
     if (!store?.viewGrantsFor || !authorization || !actor) return false
     return store
       .viewGrantsFor(actor.workspaceId, collection)
-      .some((g) => Boolean(g.readable_columns || g.writable_columns || g.denied_columns))
+      .some((g) => Boolean(g.readable_columns || g.writable_columns))
   }
 
   /**
@@ -459,7 +448,7 @@ export class DatabaseAccessPolicy {
     const authorization = this.host.authorization()
     const actor = authorization?.currentActor()
     if (!store?.viewGrantsFor || !authorization || !actor) return
-    const grants = store.viewGrantsFor(actor.workspaceId, collection).filter((g) => g.effect !== 'deny')
+    const grants = store.viewGrantsFor(actor.workspaceId, collection)
     if (!grants.length) return
     const target = resolveScopeTarget(collection, String(beforeRecord.id ?? ''), beforeRecord)
     const canShare = authorization.authorize(actor, 'resource:share', {

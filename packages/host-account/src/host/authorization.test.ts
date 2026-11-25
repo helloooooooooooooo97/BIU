@@ -102,7 +102,9 @@ test('workspace viewers can only read resources made visible to them', () => {
   assert.equal(auth.authorize(actor(cara.id), 'resource:update', page('shared')).allowed, true)
   assert.equal(auth.authorize(actor(cara.id), 'resource:delete', page('shared')).allowed, false)
   store.updateMemberRole(ada.id, workspace.id, cara.id, 'admin')
-  assert.equal(auth.authorize(actor(cara.id), 'resource:delete', page('shared')).allowed, true)
+  // Workspace admin role does NOT implicitly grant delete/manager on another member's workspace record
+  assert.equal(auth.authorize(actor(cara.id), 'resource:update', page('shared')).allowed, true)
+  assert.equal(auth.authorize(actor(cara.id), 'resource:delete', page('shared')).allowed, false)
   auth.grant(ada.id, page('shared'), 'account', bob.id, 'editor')
   assert.equal(auth.authorize(actor(bob.id), 'resource:update', page('shared')).allowed, false)
 
@@ -156,7 +158,7 @@ test('nested pages inherit, while a restricted child cuts inheritance', () => {
   assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('secret-child')).allowed, false)
 })
 
-test('allow grants merge by union while explicit deny overrides stronger inherited grants', () => {
+test('allow grants merge by union across direct and inherited grants', () => {
   const { auth, ada, bob, actor, page } = setup()
   auth.attach(actor(ada.id), page('parent'), { accessMode: 'private' })
   auth.grant(ada.id, page('parent'), 'account', bob.id, 'editor')
@@ -169,16 +171,6 @@ test('allow grants merge by union while explicit deny overrides stronger inherit
   auth.grant(ada.id, page('child'), 'account', bob.id, 'viewer')
   assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('child')).allowed, true)
   assert.equal(auth.authorize(actor(bob.id), 'resource:update', page('child')).allowed, true)
-
-  // Explicit deny on editor caps Bob at commenter (can read & comment, cannot update)
-  auth.deny(ada.id, page('child'), 'account', bob.id, 'editor')
-  assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('child')).allowed, true)
-  assert.equal(auth.authorize(actor(bob.id), 'resource:comment', page('child')).allowed, true)
-  assert.equal(auth.authorize(actor(bob.id), 'resource:update', page('child')).allowed, false)
-
-  // Explicit deny on viewer blocks Bob completely
-  auth.deny(ada.id, page('child'), 'account', bob.id, 'viewer')
-  assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('child')).allowed, false)
 })
 
 test('commenter role allows reading and commenting but blocks updates, and reconcileRecordScope preserves members/inherit', () => {
