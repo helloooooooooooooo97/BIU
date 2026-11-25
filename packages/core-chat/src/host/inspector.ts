@@ -35,7 +35,7 @@ const SOURCE_INFO: InspectorSourceInfo[] = [
   {
     id: 'db',
     label: '数据库',
-    description: 'agentMode=file 时仅开放这些 db_* 工具（Biu 文件系统）。',
+    description: 'agentMode=file 时仅开放这些 db_* 工具（BIU 文件系统）。',
   },
   {
     id: 'plugin',

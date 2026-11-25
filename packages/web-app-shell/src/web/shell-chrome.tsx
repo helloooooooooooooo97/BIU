@@ -2501,7 +2501,7 @@ export function ShellSettingsMcp(_props?: { onLeave?: () => void }) {
   return (
     <section className="settings-account settings-mcp" data-testid="settings-mcp">
       <header className="settings-account-head">
-        <h3 className="settings-account-title">Biu MCP</h3>
+        <h3 className="settings-account-title">BIU MCP</h3>
         <p className="settings-muted settings-account-lead">
           {info?.online
             ? '当前为云端空间，MCP 地址指向远程主机；请先为当前空间生成专属 token（支持工具白名单、撤销与调用审计）。'

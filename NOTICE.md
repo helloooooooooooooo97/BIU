@@ -1,5 +1,5 @@
 BIU
-Copyright (c) 2026 Biu contributors
+Copyright (c) 2026 BIU contributors
 
 This product is licensed under the Apache License, Version 2.0.
 See the LICENSE file. This NOTICE file is provided as required by
@@ -14,7 +14,7 @@ https://github.com/helloooooooooooooo97/biu
 
 ---
 
-## Grok Bot character (not licensed as Biu Apache-2.0 work)
+## Grok Bot character (not licensed as BIU Apache-2.0 work)
 
 Runtime scripts under `public/grok-bot/` are adapted from the learning-only
 replica [grok_bot-icon-study](https://github.com/w210548735-art/grok_bot-icon-study)
@@ -23,11 +23,11 @@ replica [grok_bot-icon-study](https://github.com/w210548735-art/grok_bot-icon-st
 That study extracts geometry, palette, and animation from Grok Bot.app.
 **Character shapes, trademarks, icons, geometry data, and extracted
 materials belong to xAI and other rights holders.** They are **not**
-Apache-2.0 Biu source. This repo uses them as a local UI experiment
+Apache-2.0 BIU source. This repo uses them as a local UI experiment
 (per-session avatars), not as original product branding.
 
 Upstream: for learning only. Redistributing or using the character
-commercially has trademark/copyright risk even though Biu itself is
+commercially has trademark/copyright risk even though BIU itself is
 Apache-2.0. See also `packages/public-mascot/src/web/NOTICE.md`.
 
 ---
