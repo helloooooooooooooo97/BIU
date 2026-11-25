@@ -14,6 +14,7 @@ import { buildAccessExplanation, type BuildAccessExplanationInput } from '../acc
 import { displayNameForView, isReadOnlyViewId } from '../catalog-views.ts'
 import { PAGES_COLLECTION_PATH, TAGS_COLLECTION_PATH, VIEWS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, isIndexCollection, normalizeCollectionPath } from '../paths.ts'
 import { previewViewFilterImpact } from '../view-impact.ts'
+import { recordMatchesAccessRule } from '../view-access.ts'
 import { isSharePluginId } from '../share-resources.ts'
 import {
   AssetConflictError,
@@ -1077,6 +1078,129 @@ export function registerDatabaseHttpRoutes(
       }
       const result = await tools.invoke(name, body?.args && typeof body.args === 'object' ? body.args : {})
       route.send(200, { result })
+    } catch (error) {
+      const failure = databaseHttpFailure(error)
+      route.send(failure.status, failure.body)
+    }
+  })
+
+  // 分享规则实时命中预览：严格限定在当前用户可管理（owner / manager）的数据子集内
+  ctx.http.route('POST', '/api/db/access-rules/preview', async (route) => {
+    try {
+      const body = (await route.json()) as {
+        collection?: string
+        filterTree?: Record<string, unknown> | null
+        limit?: number
+      }
+      const collection = normalizeCollectionPath(String(body?.collection ?? ''))
+      if (!collection || collection === '/') {
+        route.send(400, { error: 'collection required' })
+        return
+      }
+      const account = ctx.get('account') as {
+        authorization?: {
+          currentActor?: () => { accountId: string; workspaceId: string } | null
+          canGrantorShareRecord?: (grantorId: string, resource: { type: 'record'; workspaceId: string; collection: string; recordId: string }) => boolean
+        }
+      } | undefined
+      const authz = account?.authorization
+      const actor = authz?.currentActor?.()
+      const limit = Math.max(1, Math.min(20, Number(body?.limit ?? 8) || 8))
+      const listed = await db.list(collection)
+      const matched: Array<{ id: string; title: string }> = []
+      let matchCount = 0
+      for (const record of listed.items) {
+        const recordId = String(record.id ?? '').trim()
+        if (!recordId) continue
+        if (actor && authz?.canGrantorShareRecord) {
+          const canManage = authz.canGrantorShareRecord(actor.accountId, {
+            type: 'record',
+            workspaceId: actor.workspaceId,
+            collection,
+            recordId,
+          })
+          if (!canManage) continue
+        }
+        if (!recordMatchesAccessRule(record, body?.filterTree ?? null)) continue
+        matchCount += 1
+        if (matched.length < limit) {
+          matched.push({ id: recordId, title: String((record as Record<string, unknown>).title ?? recordId) })
+        }
+      }
+      route.send(200, { matchCount, sampleRecords: matched })
+    } catch (error) {
+      const failure = databaseHttpFailure(error)
+      route.send(failure.status, failure.body)
+    }
+  })
+
+  // 单条记录命中的分享规则解释：仅对记录 owner / manager 可见（Fail-Closed）
+  ctx.http.route('GET', '/api/db/access-rules/explain', async (route) => {
+    try {
+      const collection = normalizeCollectionPath(route.query.get('collection') || '')
+      const recordId = (route.query.get('recordId') || '').trim()
+      if (!collection || collection === '/' || !recordId) {
+        route.send(400, { error: 'collection and recordId required' })
+        return
+      }
+      const account = ctx.get('account') as {
+        authorization?: {
+          currentActor?: () => { accountId: string; workspaceId: string } | null
+          canGrantorShareRecord?: (grantorId: string, resource: { type: 'record'; workspaceId: string; collection: string; recordId: string }) => boolean
+        }
+        store?: {
+          listActiveAccessRulesForCollection?: (workspaceId: string, collection: string) => Array<{
+            id: string
+            name: string
+            createdBy: string
+            createdByName?: string
+            filterTree: Record<string, unknown>
+            columns: string[] | null
+            enabled: boolean
+            grants: Array<{
+              id: string
+              subjectType: 'account' | 'workspace' | 'member_view'
+              subjectId: string
+              role: 'viewer' | 'editor' | 'manager'
+              subjectName?: string
+            }>
+          }>
+        }
+      } | undefined
+      const authz = account?.authorization
+      const actor = authz?.currentActor?.()
+      if (!actor || !authz?.canGrantorShareRecord || !account?.store?.listActiveAccessRulesForCollection) {
+        route.send(200, { matchedRules: [] })
+        return
+      }
+      const targetRef = { type: 'record' as const, workspaceId: actor.workspaceId, collection, recordId }
+      if (!authz.canGrantorShareRecord(actor.accountId, targetRef)) {
+        route.send(200, { matchedRules: [] })
+        return
+      }
+      const record = await db.read(`${collection}/${recordId}`)
+      const activeRules = account.store.listActiveAccessRulesForCollection(actor.workspaceId, collection)
+      const matchedRules = []
+      for (const rule of activeRules) {
+        if (!rule.enabled) continue
+        if (!authz.canGrantorShareRecord(rule.createdBy, targetRef)) continue
+        if (!recordMatchesAccessRule(record as never, rule.filterTree)) continue
+        matchedRules.push({
+          ruleId: rule.id,
+          ruleName: rule.name,
+          createdBy: rule.createdBy,
+          createdByName: rule.createdByName ?? '',
+          isMine: rule.createdBy === actor.accountId,
+          columns: rule.columns,
+          grants: rule.grants.map((g) => ({
+            subjectType: g.subjectType,
+            subjectId: g.subjectId,
+            subjectName: g.subjectName ?? '',
+            role: g.role,
+          })),
+        })
+      }
+      route.send(200, { matchedRules })
     } catch (error) {
       const failure = databaseHttpFailure(error)
       route.send(failure.status, failure.body)

@@ -38,6 +38,18 @@ export function viewFiltersForGrant(
   return { scope, filters: viewShareListFilter(view) }
 }
 
+export function recordMatchesAccessRule(
+  record: DbRecord,
+  filterTree: FilterGroup | Record<string, unknown> | null | undefined,
+  schema?: CollectionSchema,
+  packs: CollectionSchemaPack[] = [],
+) {
+  const filters = filterTree && typeof filterTree === 'object'
+    ? viewShareListFilter({ filterTree: filterTree as FilterGroup })
+    : undefined
+  return matchListFilterRecord(record, filters, schema, packs)
+}
+
 export function recordMatchesGrantedView(
   record: DbRecord,
   viewId: string,

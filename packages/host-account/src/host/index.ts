@@ -1807,6 +1807,128 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     }
   })
 
+  // 独立分享规则（access_rules）CRUD：个人持有，与视图解耦
+  ctx.http.route('GET', '/api/account/access-rules', async (route) => {
+    try {
+      const me = actor(route)
+      const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
+      if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
+      const collection = route.query.get('collection')?.trim() || undefined
+      const rules = account.store.listAccessRulesForOwner(me.id, workspaceId, collection)
+      route.send(200, { rules })
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
+  ctx.http.route('POST', '/api/account/access-rules', async (route) => {
+    try {
+      const me = actor(route)
+      const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
+      if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
+      const body = (await route.json()) as {
+        collection?: string
+        name?: string
+        filterTree?: Record<string, unknown>
+        columns?: string[] | null
+        displaySnapshot?: { mode?: string; sorts?: unknown[]; groupBy?: string; groupConfig?: Record<string, unknown> } | null
+        enabled?: boolean
+        grants?: Array<{ subjectType: 'account' | 'workspace' | 'member_view'; subjectId: string; role: 'viewer' | 'editor' | 'manager' }>
+      }
+      const rule = account.store.createAccessRule(me.id, workspaceId, {
+        collection: String(body.collection ?? ''),
+        name: String(body.name ?? ''),
+        filterTree: body.filterTree,
+        columns: body.columns,
+        displaySnapshot: body.displaySnapshot,
+        enabled: body.enabled,
+        grants: body.grants,
+      })
+      route.send(201, { rule })
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
+  ctx.http.route('PATCH', '/api/account/access-rules/:id', async (route) => {
+    try {
+      const me = actor(route)
+      const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
+      if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
+      const ruleId = String(route.params.id ?? '').trim()
+      const body = (await route.json()) as {
+        name?: string
+        filterTree?: Record<string, unknown>
+        columns?: string[] | null
+        displaySnapshot?: { mode?: string; sorts?: unknown[]; groupBy?: string; groupConfig?: Record<string, unknown> } | null
+        enabled?: boolean
+        grants?: Array<{ subjectType: 'account' | 'workspace' | 'member_view'; subjectId: string; role: 'viewer' | 'editor' | 'manager' }>
+      }
+      const rule = account.store.updateAccessRule(me.id, workspaceId, ruleId, body)
+      route.send(200, { rule })
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
+  ctx.http.route('DELETE', '/api/account/access-rules/:id', async (route) => {
+    try {
+      const me = actor(route)
+      const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
+      if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
+      const ruleId = String(route.params.id ?? '').trim()
+      const result = account.store.deleteAccessRule(me.id, workspaceId, ruleId)
+      route.send(200, result)
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
+  ctx.http.route('POST', '/api/account/access-rules/:id/grants', async (route) => {
+    try {
+      const me = actor(route)
+      const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
+      if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
+      const ruleId = String(route.params.id ?? '').trim()
+      const body = (await route.json()) as {
+        subjectType?: 'account' | 'workspace' | 'member_view'
+        subjectId?: string
+        role?: 'viewer' | 'editor' | 'manager'
+      }
+      const rule = account.store.grantAccessRuleSubject(me.id, workspaceId, ruleId, {
+        subjectType: body.subjectType ?? 'account',
+        subjectId: String(body.subjectId ?? ''),
+        role: body.role ?? 'viewer',
+      })
+      route.send(200, { rule })
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
+  ctx.http.route('DELETE', '/api/account/access-rules/:id/grants', async (route) => {
+    try {
+      const me = actor(route)
+      const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
+      if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
+      const ruleId = String(route.params.id ?? '').trim()
+      const body = (await route.json()) as {
+        subjectType?: 'account' | 'workspace' | 'member_view'
+        subjectId?: string
+      }
+      const rule = account.store.revokeAccessRuleSubject(
+        me.id,
+        workspaceId,
+        ruleId,
+        body.subjectType ?? 'account',
+        String(body.subjectId ?? ''),
+      )
+      route.send(200, { rule })
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
   ctx.http.route('POST', '/api/account/sync', async (route) => {
     try {
       const me = actor(route)
