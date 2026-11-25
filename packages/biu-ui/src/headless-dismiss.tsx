@@ -1,9 +1,9 @@
 import { DismissableLayer } from '@radix-ui/react-dismissable-layer'
 import type { ReactElement, RefObject } from 'react'
 
-/** 第三方 portal（日期面板、删除确认）不算点在外面。 */
+/** 第三方 portal（日期面板、删除确认、分享权限下拉）不算点在外面。 */
 export const HEADLESS_DISMISS_IGNORE =
-  '.biu-calendar, .biu-image-preview, .pick-chip-data, [data-testid="pick-chip-data"], [data-testid="chat-session-delete-dialog"]'
+  '.biu-calendar, .biu-image-preview, .pick-chip-data, [data-testid="pick-chip-data"], [data-testid="chat-session-delete-dialog"], .fsdb-share-select-menu'
 
 function asNode(target: EventTarget | null): Node | null {
   return target instanceof Node ? target : null
