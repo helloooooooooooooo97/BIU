@@ -959,7 +959,7 @@ html.dark .fsdb-views {
 
 .shell-sidebar-account-wrap {
   flex-shrink: 0;
-  padding: 6px 8px 8px;
+  padding: 8px 8px 16px;
 }
 
 .shell-sidebar-account {
@@ -1031,14 +1031,14 @@ html.dark .fsdb-views {
 }
 
 .app-side-bar.is-narrow .shell-sidebar-account-wrap {
-  padding: 6px 0 8px;
+  padding: 6px 0 16px;
   display: flex;
   justify-content: center;
 }
 
 .app-side-bar.is-narrow .shell-sidebar-account {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   justify-content: center;
 }
