@@ -842,3 +842,19 @@ test('omittedViews and activeView storage keys are isolated per workspaceId', as
     Object.defineProperty(globalThis, 'window', { configurable: true, value: prevWin })
   }
 })
+
+test('savedViewFromRecord extracts createdBy from overlaid PersonValue objects as well as strings', () => {
+  const fromPerson = savedViewFromRecord({
+    viewId: 'v1',
+    title: '文馨的视图',
+    createdBy: { kind: 'user', accountId: 'acc_wenxin', name: '文馨' },
+  })
+  assert.equal(fromPerson?.createdBy, 'acc_wenxin')
+
+  const fromString = savedViewFromRecord({
+    viewId: 'v2',
+    title: '97的视图',
+    createdBy: 'acc_97',
+  })
+  assert.equal(fromString?.createdBy, 'acc_97')
+})

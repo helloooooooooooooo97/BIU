@@ -11,7 +11,7 @@ import { normalizeCollectionPath } from '../paths.ts'
 import { invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { emptyFilterGroup, looksLikeFilterTree, normalizeFilterGroup, parseSortsInput, resolveViewFilterTree } from '../query-logic.ts'
-import { normalizeGroupConfig, normalizePageSize, normalizeSavedView, normalizeViewScope, parseViewColumns, rankListedViews, viewIsFresher, type SavedView } from './saved-view.ts'
+import { extractViewCreatorId, normalizeGroupConfig, normalizePageSize, normalizeSavedView, normalizeViewScope, parseViewColumns, rankListedViews, viewIsFresher, type SavedView } from './saved-view.ts'
 import { KeyedSerialQueue } from './record-write-queue.ts'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
 import { clearCrumbCache } from './crumb-cache.ts'
@@ -127,7 +127,10 @@ export function mergeSavedViewLists(
     if (!id || gone.has(id)) continue
     const next = normalizeSavedView(view)
     const prev = byId.get(id)
-    if (prev && !viewIsFresher(next, prev)) continue
+    if (prev && !viewIsFresher(next, prev)) {
+      if (!prev.createdBy && next.createdBy) byId.set(id, { ...prev, createdBy: next.createdBy })
+      continue
+    }
     byId.set(id, next)
   }
   return [...byId.values()]
@@ -372,7 +375,7 @@ export function savedViewFromRecord(row: Record<string, unknown>): SavedView | n
     name: String(row.title ?? id),
     mode: String(row.mode ?? 'table') as SavedView['mode'],
     scope: normalizeViewScope(row.scope),
-    createdBy: typeof row.createdBy === 'string' && row.createdBy.trim() ? row.createdBy.trim() : undefined,
+    createdBy: extractViewCreatorId(row.createdBy),
     sortField,
     sortDir,
     sorts: parseSortsInput(row.sorts, sortField, sortDir),
