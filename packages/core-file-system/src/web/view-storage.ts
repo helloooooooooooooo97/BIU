@@ -62,11 +62,6 @@ function workspaceStoragePrefix(): string {
   const ws = currentWorkspaceStorageId()
   return ws ? `${ws}:` : ''
 }
-
-export function viewsKey(collectionPath: string) {
-  return `fsdb.views:${workspaceStoragePrefix()}${collectionPath}`
-}
-
 export function omittedViewsKey(collectionPath: string) {
   return `fsdb.omittedViews:${workspaceStoragePrefix()}${collectionPath}`
 }

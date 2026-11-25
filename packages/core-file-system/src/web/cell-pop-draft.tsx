@@ -8,7 +8,7 @@ import {
   type SchemaFieldValue,
 } from '@biu/type-file-system'
 import { TagChip, TagChips } from '@biu/biu-ui'
-import { PickOption, PickPanel } from '@biu/database-ui/search'
+import { PickOption, PickPanel } from '@biu/biu-ui/db-search'
 import { fieldDraftValue, parseFieldValue } from './fsdb-cells.tsx'
 import { FieldEditor } from './field-editor.tsx'
 import { createTag, jumpTag, loadTags, subscribeTags } from './tag-catalog.ts'

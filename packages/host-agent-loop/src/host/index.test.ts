@@ -4,7 +4,7 @@ import { Context } from 'cordis'
 import * as sessionStore from '@biu/host-session-store'
 import * as sessions from '@biu/host-sessions'
 import * as tools from '@biu/host-tools'
-import * as systemPrompt from '@biu/host-system-prompt'
+import * as systemPrompt from '@biu/host-agents/system-prompt'
 import { AgentLoop, MAX_TOOL_RESULT_CHARS, truncateToolResult, type AgentTurn } from '@biu/host-agent-loop'
 import type { AssistantReply, LlmClient, LlmMessage } from '@biu/host-llm'
 

@@ -4,6 +4,15 @@ import { SiteChrome, SiteFaq, SiteFinalCta, type SiteAction } from './site-chrom
 import { usePageMeta } from './use-page-meta.ts'
 import { IndustryInteractiveDemo } from './industry-demos.tsx'
 import { ScenePageDemo, type DemoPageSpec, type SceneDemoLabels } from './scene-page-demo.tsx'
+import { useSiteLocale, type SiteLocale } from './locale.tsx'
+import {
+  EXTENDED_USE_CASES_ZH,
+  INDUSTRY_EXTRA_ZH,
+  USE_CASES_OVERVIEW_FAQ_ZH,
+  ZH_USE_CASES,
+} from './zh/use-cases-data.ts'
+
+export { ZH_USE_CASES }
 
 export type CustomPlugin = {
   name: string
@@ -35,13 +44,23 @@ export type UseCase = {
   blocks: string[]
 }
 
-const DEMO_LABELS_EN: SceneDemoLabels = {
-  demoBadge: 'Interactive BIU Page Preview',
-  shareLabel: 'Shareable page link',
-  customBadge: 'AI custom plugin',
-  builtInBadge: 'Built-in plugin',
-  totalLabel: 'Live total',
-  aiLabel: 'AI Collaborator',
+const DEMO_LABELS: Record<SiteLocale, SceneDemoLabels> = {
+  en: {
+    demoBadge: 'Interactive BIU Page Preview',
+    shareLabel: 'Shareable page link',
+    customBadge: 'AI custom plugin',
+    builtInBadge: 'Built-in plugin',
+    totalLabel: 'Live total',
+    aiLabel: 'AI Collaborator',
+  },
+  zh: {
+    demoBadge: 'BIU 仿真页面示例 · 可交互体验',
+    shareLabel: '整页分享链接',
+    customBadge: 'AI 定制插件',
+    builtInBadge: '内置插件',
+    totalLabel: '实时测算合计',
+    aiLabel: 'AI 协作者',
+  },
 }
 
 export const USE_CASES: UseCase[] = [
@@ -739,7 +758,7 @@ export const USE_CASES: UseCase[] = [
 
 export const USE_CASE_CATEGORIES = USE_CASES
 
-type IndustryExtra = {
+export type IndustryExtra = {
   replaces: string
   sharedState: string
   oneLiner: string
@@ -917,9 +936,172 @@ const USE_CASES_OVERVIEW_FAQ_EN: readonly [string, string][] = [
   ],
 ]
 
-function BlockChips({ blocks }: { blocks: string[] }) {
+type UseCasesCopy = {
+  blockChipsAriaLabel: string
+  metaTitle: string
+  metaDescription: string
+  label: string
+  heroHeading: string
+  heroLead: string
+  jumpAriaLabel: string
+  jumpLinks: readonly [string, string, string, string]
+  demoSectionAria: string
+  demoLabel: string
+  demoHeading: string
+  demoTabsAria: string
+  industriesAria: string
+  industriesLabel: string
+  industriesHeading: string
+  gridAria: string
+  cardExplore: string
+  rolesAria: string
+  rolesLabel: string
+  rolesHeading: string
+  rolesTabsAria: string
+  allRolesLabel: (count: number) => string
+  domainPluginTag: string
+  openIndustry: (title: string) => string
+  extendedAria: string
+  extendedLabel: string
+  extendedHeading: string
+  overviewFaqTitle: string
+  overviewCtaTitle: string
+  detailTitleSuffix: string
+  detailFallbackDescription: string
+  notFoundTitle: string
+  notFoundBack: string
+  detailLabelPrefix: string
+  deliverablesPrefix: string
+  rolesPrefix: string
+  detailDemoAria: string
+  detailDemoLabel: string
+  detailDemoHeading: string
+  flowAria: string
+  flowLabel: string
+  flowHeading: string
+  roleSectionHeading: string
+  roleTabsAria: string
+  deliveryPrefix: string
+  customPluginsHeading: (role: string) => string
+  painHeading: string
+  howHeading: string
+  detailFaqTitle: string
+  moreHeading: string
+  detailCtaTitle: string
+}
+
+const USE_CASES_COPY: Record<SiteLocale, UseCasesCopy> = {
+  en: {
+    blockChipsAriaLabel: 'Common plugins',
+    metaTitle: 'Use Cases',
+    metaDescription: 'Tech, education, media, consulting, e-commerce, finance, and beyond—see how BIU combines full-stack plugins, shared state, agents, and one-link delivery on a single page.',
+    label: 'Use Cases',
+    heroHeading: 'Real use cases where one page replaces disconnected apps',
+    heroLead: 'Each page composes domain-specific full-stack software and external system slices sharing live state—natively open to agents and delivered in one link.',
+    jumpAriaLabel: 'On this page',
+    jumpLinks: ['01 Interactive Demo', '02 Six Industries', '03 12 Role Pages', '04 More Domains'],
+    demoSectionAria: 'Interactive Use Case Showcase',
+    demoLabel: 'Interactive Demo',
+    demoHeading: 'Pick an industry and test live cross-plugin state',
+    demoTabsAria: 'Switch industry interactive demo',
+    industriesAria: 'Six core industries',
+    industriesLabel: 'Six Core Industries',
+    industriesHeading: 'Every industry grows its own domain software slices',
+    gridAria: 'Use cases',
+    cardExplore: 'Explore workflows & role demos →',
+    rolesAria: 'Browse by role',
+    rolesLabel: 'By Role',
+    rolesHeading: '12 role-specific working pages',
+    rolesTabsAria: 'Filter role use cases by industry',
+    allRolesLabel: (count) => `All (${count})`,
+    domainPluginTag: 'Domain plugin',
+    openIndustry: (title) => `Open ${title} →`,
+    extendedAria: 'More industries and personal workflows',
+    extendedLabel: 'More Domains',
+    extendedHeading: 'Research, hardware, recruiting, and independent services',
+    overviewFaqTitle: 'About BIU use cases',
+    overviewCtaTitle: 'Build your working page',
+    detailTitleSuffix: ' · Use Cases',
+    detailFallbackDescription: 'Industry and role workflows built on BIU.',
+    notFoundTitle: 'Use case not found',
+    notFoundBack: 'Back to all use cases',
+    detailLabelPrefix: 'Industry Use Case · ',
+    deliverablesPrefix: 'Key deliverables: ',
+    rolesPrefix: 'Roles: ',
+    detailDemoAria: 'Interactive page preview',
+    detailDemoLabel: 'Cross-Plugin Reactive Demo',
+    detailDemoHeading: 'Distinct tools sharing live state on one page',
+    flowAria: 'End-to-end workflow',
+    flowLabel: 'End-to-End Loop',
+    flowHeading: 'How the complete workflow runs from day one to reuse',
+    roleSectionHeading: 'Working pages & plugin setups by role',
+    roleTabsAria: 'Choose a role',
+    deliveryPrefix: 'Delivery: ',
+    customPluginsHeading: (role) => `Custom plugins an agent can build for ${role}`,
+    painHeading: 'What gets in the way today',
+    howHeading: 'How BIU helps',
+    detailFaqTitle: 'About this use case',
+    moreHeading: 'More use cases',
+    detailCtaTitle: 'Build a page for your team',
+  },
+  zh: {
+    blockChipsAriaLabel: '常用插件',
+    metaTitle: '用例',
+    metaDescription: '科技研发、教育培训、媒体营销、专业服务、电商消费、金融投研及更多行业用例 —— 全面了解 BIU 如何用一页组合全栈插件、共享状态、智能体协作并一链交付。',
+    label: '用例',
+    heroHeading: '一页替代多款割裂软件的真实用例',
+    heroLead: '每一页都是围绕真实业务组装的全栈软件与外部系统切片——共享实时状态，向智能体原生开放，一链即可交付。',
+    jumpAriaLabel: '页面快速导航',
+    jumpLinks: ['01 在线交互演示', '02 六大行业', '03 12 套角色工作页', '04 更多领域'],
+    demoSectionAria: '在线交互用例体验',
+    demoLabel: '交互演示',
+    demoHeading: '选一个行业，直接操作同页联动的真实软件',
+    demoTabsAria: '切换行业交互演示',
+    industriesAria: '六大行业用例全景',
+    industriesLabel: '六大核心行业',
+    industriesHeading: '不同行业，各自长出专属软件切片',
+    gridAria: '用例',
+    cardExplore: '查看详情与角色演示 →',
+    rolesAria: '按角色查找用例',
+    rolesLabel: '按岗位直达',
+    rolesHeading: '12 套细分角色工作页',
+    rolesTabsAria: '按行业筛选角色用例',
+    allRolesLabel: (count) => `全部（${count}）`,
+    domainPluginTag: '行业定制',
+    openIndustry: (title) => `体验「${title}」用例 →`,
+    extendedAria: '更多行业与个人高频用例',
+    extendedLabel: '更多领域',
+    extendedHeading: '科研、制造、招聘与独立服务',
+    overviewFaqTitle: '关于 BIU 用例',
+    overviewCtaTitle: '开始构建你的工作页',
+    detailTitleSuffix: ' · 用例',
+    detailFallbackDescription: 'BIU 的行业与角色工作用例。',
+    notFoundTitle: '未找到该用例',
+    notFoundBack: '返回用例总览',
+    detailLabelPrefix: '行业用例 · ',
+    deliverablesPrefix: '典型交付：',
+    rolesPrefix: '适用角色：',
+    detailDemoAria: '用例页面示例',
+    detailDemoLabel: '跨品类插件联动演示',
+    detailDemoHeading: '多个原本独立的软件，在同一页共享数据并实时联动',
+    flowAria: '端到端工作流',
+    flowLabel: '端到端闭环',
+    flowHeading: '从起一页到交付复用，完整工作流如何跑通',
+    roleSectionHeading: '该行业下不同角色的工作页与插件组合',
+    roleTabsAria: '切换行业角色',
+    deliveryPrefix: '交付方式：',
+    customPluginsHeading: (role) => `可由 AI 为「${role}」按需定制的专属插件`,
+    painHeading: '传统工作方式的痛点',
+    howHeading: 'BIU 的解决方式',
+    detailFaqTitle: '关于此行业用例',
+    moreHeading: '其他行业用例',
+    detailCtaTitle: '立即构建行业工作页',
+  },
+}
+
+function BlockChips({ blocks, ariaLabel }: { blocks: string[]; ariaLabel: string }) {
   return (
-    <ul className="site-block-chips" aria-label="Common plugins">
+    <ul className="site-block-chips" aria-label={ariaLabel}>
       {blocks.map((name) => <li key={name}>{name}</li>)}
     </ul>
   )
@@ -927,16 +1109,23 @@ function BlockChips({ blocks }: { blocks: string[] }) {
 
 /** Industry & Use Case Overview */
 export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
-  const [demoSlug, setDemoSlug] = useState(USE_CASES[0]!.slug)
+  const { locale } = useSiteLocale()
+  const copy = USE_CASES_COPY[locale]
+  const useCases = locale === 'zh' ? ZH_USE_CASES : USE_CASES
+  const industryExtra = locale === 'zh' ? INDUSTRY_EXTRA_ZH : INDUSTRY_EXTRA_EN
+  const extendedUseCases = locale === 'zh' ? EXTENDED_USE_CASES_ZH : EXTENDED_USE_CASES_EN
+  const overviewFaq = locale === 'zh' ? USE_CASES_OVERVIEW_FAQ_ZH : USE_CASES_OVERVIEW_FAQ_EN
+
+  const [demoSlug, setDemoSlug] = useState(useCases[0]!.slug)
   const [roleFilter, setRoleFilter] = useState<string>('all')
 
   usePageMeta({
-    title: 'Use Cases',
-    description: 'Tech, education, media, consulting, e-commerce, finance, and beyond—see how BIU combines full-stack plugins, shared state, agents, and one-link delivery on a single page.',
+    title: copy.metaTitle,
+    description: copy.metaDescription,
     path: '/use-cases',
   })
 
-  const allRoleEntries = USE_CASES.flatMap((useCase) =>
+  const allRoleEntries = useCases.flatMap((useCase) =>
     useCase.roles.map((role) => ({ useCase, role })),
   )
   const visibleRoles = roleFilter === 'all'
@@ -946,25 +1135,23 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <section className="site-page-hero" data-reveal>
-        <p className="site-section-label">Use Cases</p>
-        <h1>Real use cases where one page replaces disconnected apps</h1>
-        <p className="site-page-lead">
-          Each page composes domain-specific full-stack software and external system slices sharing live state—natively open to agents and delivered in one link.
-        </p>
-        <nav className="site-usecase-jump" aria-label="On this page">
-          <a href="#live-demo">01 Interactive Demo</a>
-          <a href="#industries">02 Six Industries</a>
-          <a href="#roles">03 12 Role Pages</a>
-          <a href="#extended">04 More Domains</a>
+        <p className="site-section-label">{copy.label}</p>
+        <h1>{copy.heroHeading}</h1>
+        <p className="site-page-lead">{copy.heroLead}</p>
+        <nav className="site-usecase-jump" aria-label={copy.jumpAriaLabel}>
+          <a href="#live-demo">{copy.jumpLinks[0]}</a>
+          <a href="#industries">{copy.jumpLinks[1]}</a>
+          <a href="#roles">{copy.jumpLinks[2]}</a>
+          <a href="#extended">{copy.jumpLinks[3]}</a>
         </nav>
       </section>
 
-      <section id="live-demo" className="site-usecase-demo-section" aria-label="Interactive Use Case Showcase" data-reveal>
+      <section id="live-demo" className="site-usecase-demo-section" aria-label={copy.demoSectionAria} data-reveal>
         <div className="site-usecase-demo-head">
-          <p className="site-section-label">Interactive Demo</p>
-          <h2>Pick an industry and test live cross-plugin state</h2>
-          <div className="site-demo-tabs" role="tablist" aria-label="Switch industry interactive demo">
-            {USE_CASES.map((item) => (
+          <p className="site-section-label">{copy.demoLabel}</p>
+          <h2>{copy.demoHeading}</h2>
+          <div className="site-demo-tabs" role="tablist" aria-label={copy.demoTabsAria}>
+            {useCases.map((item) => (
               <button
                 key={item.slug}
                 type="button"
@@ -978,17 +1165,17 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
             ))}
           </div>
         </div>
-        <IndustryInteractiveDemo key={demoSlug} slug={demoSlug} locale="en" />
+        <IndustryInteractiveDemo key={`${demoSlug}-${locale}`} slug={demoSlug} locale={locale} />
       </section>
 
-      <section id="industries" className="site-usecase-section" aria-label="Six core industries" data-reveal>
+      <section id="industries" className="site-usecase-section" aria-label={copy.industriesAria} data-reveal>
         <div className="site-usecase-section-head">
-          <p className="site-section-label">Six Core Industries</p>
-          <h2>Every industry grows its own domain software slices</h2>
+          <p className="site-section-label">{copy.industriesLabel}</p>
+          <h2>{copy.industriesHeading}</h2>
         </div>
-        <div className="site-usecase-grid" aria-label="Use cases">
-          {USE_CASES.map((useCase) => {
-            const extra = INDUSTRY_EXTRA_EN[useCase.slug]
+        <div className="site-usecase-grid" aria-label={copy.gridAria}>
+          {useCases.map((useCase) => {
+            const extra = industryExtra[useCase.slug]
             return (
               <Link key={useCase.slug} to={`/use-cases/${useCase.slug}`} className="site-usecase-card">
                 <span className="site-solution-index">{useCase.index} · {useCase.roleLabels.slice(0, 2).join(' · ')}</span>
@@ -996,20 +1183,20 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
                 {extra ? <p className="site-usecase-card-replaces">{extra.replaces}</p> : null}
                 <p>{extra ? extra.oneLiner : useCase.summary}</p>
                 <div className="site-usecase-card-blocks">
-                  <BlockChips blocks={extra ? extra.signatureSlices : useCase.blocks} />
+                  <BlockChips blocks={extra ? extra.signatureSlices : useCase.blocks} ariaLabel={copy.blockChipsAriaLabel} />
                 </div>
-                <span className="site-usecase-card-go">Explore workflows & role demos →</span>
+                <span className="site-usecase-card-go">{copy.cardExplore}</span>
               </Link>
             )
           })}
         </div>
       </section>
 
-      <section id="roles" className="site-usecase-section" aria-label="Browse by role" data-reveal>
+      <section id="roles" className="site-usecase-section" aria-label={copy.rolesAria} data-reveal>
         <div className="site-usecase-section-head">
-          <p className="site-section-label">By Role</p>
-          <h2>12 role-specific working pages</h2>
-          <div className="site-demo-tabs" role="tablist" aria-label="Filter role use cases by industry">
+          <p className="site-section-label">{copy.rolesLabel}</p>
+          <h2>{copy.rolesHeading}</h2>
+          <div className="site-demo-tabs" role="tablist" aria-label={copy.rolesTabsAria}>
             <button
               type="button"
               role="tab"
@@ -1017,9 +1204,9 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
               className={roleFilter === 'all' ? 'is-active' : ''}
               onClick={() => setRoleFilter('all')}
             >
-              All ({allRoleEntries.length})
+              {copy.allRolesLabel(allRoleEntries.length)}
             </button>
-            {USE_CASES.map((item) => (
+            {useCases.map((item) => (
               <button
                 key={item.slug}
                 type="button"
@@ -1045,27 +1232,27 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
                 <div className="site-usecase-role-customs">
                   {role.customPlugins.map((plugin) => (
                     <div key={plugin.name}>
-                      <span>Domain plugin</span>
+                      <span>{copy.domainPluginTag}</span>
                       <strong>{plugin.name}</strong>
                     </div>
                   ))}
                 </div>
               </div>
               <Link className="site-usecase-card-go" to={`/use-cases/${useCase.slug}`}>
-                Open {useCase.title} →
+                {copy.openIndustry(useCase.title)}
               </Link>
             </article>
           ))}
         </div>
       </section>
 
-      <section id="extended" className="site-usecase-section" aria-label="More industries and personal workflows" data-reveal>
+      <section id="extended" className="site-usecase-section" aria-label={copy.extendedAria} data-reveal>
         <div className="site-usecase-section-head">
-          <p className="site-section-label">More Domains</p>
-          <h2>Research, hardware, recruiting, and independent services</h2>
+          <p className="site-section-label">{copy.extendedLabel}</p>
+          <h2>{copy.extendedHeading}</h2>
         </div>
         <div className="site-usecase-ext-grid">
-          {EXTENDED_USE_CASES_EN.map((item) => (
+          {extendedUseCases.map((item) => (
             <article key={item.tag} className="site-usecase-ext-card">
               <span className="site-solution-index">{item.tag}</span>
               <h3>{item.title}</h3>
@@ -1076,17 +1263,22 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
         </div>
       </section>
 
-      <SiteFaq title="About BIU use cases" items={USE_CASES_OVERVIEW_FAQ_EN} />
+      <SiteFaq title={copy.overviewFaqTitle} items={overviewFaq} />
 
-      <SiteFinalCta title="Build your working page" />
+      <SiteFinalCta title={copy.overviewCtaTitle} />
     </SiteChrome>
   )
 }
 
 /** Industry Detail Page with Cross-Plugin Demo + 4-Step Workflow + Role Switcher & Interactive Role Preview */
 export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
+  const { locale } = useSiteLocale()
+  const copy = USE_CASES_COPY[locale]
+  const useCases = locale === 'zh' ? ZH_USE_CASES : USE_CASES
+  const industryExtra = locale === 'zh' ? INDUSTRY_EXTRA_ZH : INDUSTRY_EXTRA_EN
+
   const { slug } = useParams<{ slug: string }>()
-  const useCase = USE_CASES.find((item) => item.slug === slug)
+  const useCase = useCases.find((item) => item.slug === slug)
   const [activeRoleIdx, setActiveRoleIdx] = useState(0)
 
   useEffect(() => {
@@ -1094,8 +1286,8 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
   }, [slug])
 
   usePageMeta({
-    title: useCase ? `${useCase.title} · Use Cases` : 'Use Cases',
-    description: useCase ? useCase.summary : 'Industry and role workflows built on BIU.',
+    title: useCase ? `${useCase.title}${copy.detailTitleSuffix}` : copy.metaTitle,
+    description: useCase ? useCase.summary : copy.detailFallbackDescription,
     path: `/use-cases/${slug ?? ''}`,
   })
 
@@ -1103,43 +1295,43 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
     return (
       <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-page-hero">
-          <p className="site-section-label">Use Cases</p>
-          <h1>Use case not found</h1>
-          <p className="site-page-lead"><Link to="/use-cases">Back to all use cases</Link></p>
+          <p className="site-section-label">{copy.label}</p>
+          <h1>{copy.notFoundTitle}</h1>
+          <p className="site-page-lead"><Link to="/use-cases">{copy.notFoundBack}</Link></p>
         </section>
       </SiteChrome>
     )
   }
 
   const activeRole = useCase.roles[activeRoleIdx] ?? useCase.roles[0]!
-  const others = USE_CASES.filter((item) => item.slug !== useCase.slug)
-  const extra = INDUSTRY_EXTRA_EN[useCase.slug]
+  const others = useCases.filter((item) => item.slug !== useCase.slug)
+  const extra = industryExtra[useCase.slug]
 
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <section className="site-page-hero" data-reveal>
-        <p className="site-section-label">Industry Use Case · {useCase.index}</p>
+        <p className="site-section-label">{copy.detailLabelPrefix}{useCase.index}</p>
         <h1>{useCase.title}</h1>
         <p className="site-page-lead">{useCase.summary}</p>
         {extra ? <p className="site-usecase-card-replaces">{extra.replaces}</p> : null}
-        <p className="site-usecase-output">Key deliverables: {useCase.output}</p>
-        <p className="site-usecase-note">Roles: {useCase.roleLabels.join(' · ')}</p>
+        <p className="site-usecase-output">{copy.deliverablesPrefix}{useCase.output}</p>
+        <p className="site-usecase-note">{copy.rolesPrefix}{useCase.roleLabels.join(' · ')}</p>
       </section>
 
-      <section className="site-usecase-demo-section" aria-label="Interactive page preview" data-reveal>
+      <section className="site-usecase-demo-section" aria-label={copy.detailDemoAria} data-reveal>
         <div className="site-usecase-demo-head">
-          <p className="site-section-label">Cross-Plugin Reactive Demo</p>
-          <h2>Distinct tools sharing live state on one page</h2>
+          <p className="site-section-label">{copy.detailDemoLabel}</p>
+          <h2>{copy.detailDemoHeading}</h2>
         </div>
 
-        <IndustryInteractiveDemo key={useCase.slug} slug={useCase.slug} locale="en" />
+        <IndustryInteractiveDemo key={`${useCase.slug}-${locale}`} slug={useCase.slug} locale={locale} />
       </section>
 
       {extra ? (
-        <section className="site-usecase-section" aria-label="End-to-end workflow" data-reveal>
+        <section className="site-usecase-section" aria-label={copy.flowAria} data-reveal>
           <div className="site-usecase-section-head">
-            <p className="site-section-label">End-to-End Loop</p>
-            <h2>How the complete workflow runs from day one to reuse</h2>
+            <p className="site-section-label">{copy.flowLabel}</p>
+            <h2>{copy.flowHeading}</h2>
             <p>{extra.sharedState}</p>
           </div>
           <div className="site-usecase-flow-grid">
@@ -1154,8 +1346,8 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
       ) : null}
 
       <section className="site-usecase-blocks" data-reveal>
-        <h2>Working pages & plugin setups by role</h2>
-        <div className="site-demo-tabs" role="tablist" aria-label="Choose a role">
+        <h2>{copy.roleSectionHeading}</h2>
+        <div className="site-demo-tabs" role="tablist" aria-label={copy.roleTabsAria}>
           {useCase.roles.map((role, index) => (
             <button
               type="button"
@@ -1170,12 +1362,12 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
           ))}
         </div>
         <p className="site-usecase-role-lead">{activeRole.summary}</p>
-        <p className="site-usecase-note">Delivery: {activeRole.deliverTo}</p>
-        <BlockChips blocks={activeRole.blocks} />
+        <p className="site-usecase-note">{copy.deliveryPrefix}{activeRole.deliverTo}</p>
+        <BlockChips blocks={activeRole.blocks} ariaLabel={copy.blockChipsAriaLabel} />
         <div className="site-usecase-role-demo-wrap">
-          <ScenePageDemo key={`${useCase.slug}-${activeRole.id}`} spec={activeRole.demo} labels={DEMO_LABELS_EN} />
+          <ScenePageDemo key={`${useCase.slug}-${activeRole.id}-${locale}`} spec={activeRole.demo} labels={DEMO_LABELS[locale]} />
         </div>
-        <h3 className="site-usecase-custom-heading">Custom plugins an agent can build for {activeRole.role}</h3>
+        <h3 className="site-usecase-custom-heading">{copy.customPluginsHeading(activeRole.role)}</h3>
         <div className="site-usecase-custom-grid">
           {activeRole.customPlugins.map((plugin) => (
             <article key={plugin.name}>
@@ -1187,14 +1379,14 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
       </section>
 
       <section className="site-usecase-pain" data-reveal>
-        <h2>What gets in the way today</h2>
+        <h2>{copy.painHeading}</h2>
         <ul>
           {useCase.pain.map((item) => <li key={item}>{item}</li>)}
         </ul>
       </section>
 
       <section className="site-usecase-how">
-        <h2 data-reveal>How BIU helps</h2>
+        <h2 data-reveal>{copy.howHeading}</h2>
         <div className="site-usecase-how-grid">
           {useCase.how.map((item) => (
             <article key={item.title} data-reveal>
@@ -1205,10 +1397,10 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
         </div>
       </section>
 
-      <SiteFaq title="About this use case" items={useCase.faq} />
+      <SiteFaq title={copy.detailFaqTitle} items={useCase.faq} />
 
       <section className="site-usecase-more" data-reveal>
-        <h2>More use cases</h2>
+        <h2>{copy.moreHeading}</h2>
         <div className="site-usecase-more-links">
           {others.map((item) => (
             <Link key={item.slug} to={`/use-cases/${item.slug}`}>{item.title} →</Link>
@@ -1216,7 +1408,7 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
         </div>
       </section>
 
-      <SiteFinalCta title="Build a page for your team" />
+      <SiteFinalCta title={copy.detailCtaTitle} />
     </SiteChrome>
   )
 }

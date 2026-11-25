@@ -1,5 +1,5 @@
 import type { FieldSpec } from '@biu/type-file-system'
-import { CellDateTime } from '@biu/database-ui'
+import { CellDateTime } from '@biu/biu-ui/db-ui'
 import { asStringList, enumDisplayLabel, resolveFieldType } from './fields.ts'
 import { LocalText } from './controls.tsx'
 import { TokenMultiSelect } from './token-select.tsx'

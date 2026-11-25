@@ -15,7 +15,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { CheckIcon, ChevronRightIcon, EyeIcon, EyeSlashIcon, PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { FieldSpec, FieldType } from '@biu/type-file-system'
-import { CellSelect } from '@biu/database-ui'
+import { CellSelect } from '@biu/biu-ui/db-ui'
 import { HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
 import { HeadlessPopover } from '@biu/biu-ui/headless-popover'
 import { overlayZ } from '@biu/biu-ui/overlay-portal'
@@ -535,11 +535,6 @@ export const GROUP_GRAIN_OPTIONS: ReadonlyArray<{ value: GroupGrain; label: stri
   { value: 'year', label: '按年' },
   { value: 'relative', label: '相对时间' },
 ]
-
-export function groupGrainLabel(grain?: GroupGrain) {
-  return GROUP_GRAIN_OPTIONS.find((item) => item.value === grain)?.label ?? ''
-}
-
 export type GroupMenuBucket = { key: string; label: string; count: number }
 
 const GROUP_SORT_OPTIONS: Array<{ value: GroupSortMode; label: string }> = [

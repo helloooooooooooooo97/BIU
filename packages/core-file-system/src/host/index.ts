@@ -1,36 +1,21 @@
-import type { IncomingMessage } from 'node:http'
 import {
   biuSqlitePath,
   dataHome,
   dataPath,
-  EditorContentConflictError,
   currentAccountId,
-  currentRequestWorkspaceId,
   readEditorContent,
   readEditorContentRecord,
   writeEditorContent,
   ASSET_GC_INTERVAL_MS,
 } from '@biu/host-plugin-loader/data-dir'
 import { getRuntimePolicy, resolveScopedWorkspaceId } from '@biu/host-plugin-loader/runtime'
-import { asPublicProfile, writeWorkspaceProfile } from '@biu/host-workspace'
-import { roleCoversAction, type Action as PermissionAction, type AuthorizationService } from '@biu/host-account/authorization'
-import { isRegisteredBuiltinPlugin } from '@biu/host-account/store'
+import { type Action as PermissionAction, type AuthorizationService } from '@biu/host-account/authorization'
 import { Service, type Context } from 'cordis'
 import {
   DATABASE_CHANNEL,
   databaseChannelPayload,
-  asAttachmentList,
-  asPerson,
-  asPersonList,
-  appendPerson,
-  asHttpHref,
-  asImageSrc,
-  asImageSrcList,
-  isTagFieldType,
-  bindSchemaValue,
   emptySchemaValue,
   isEmptySchemaValue,
-  normalizeSchemaPack,
   normalizeSchemaValue,
   pruneSchemaValue,
   sanitizeTagValuesPatch,
@@ -48,60 +33,37 @@ import {
   type CollectionSpec,
   type Database,
   type DbRecord,
-  type FieldSpec,
-  type SchemaFieldValue,
   type ListPage,
   type PersonValue,
-  parseContentJump,
-  allocateRecordId,
   isAssignableRecordId,
 } from '@biu/type-file-system'
-import { parsePageBanner, type PageBanner } from '../page-banner.ts'
+import { type PageBanner } from '../page-banner.ts'
 import {
-  applyTagBagPatch,
-  asColumnKeys,
-  asCreateRecords,
-  asDeleteQuery,
-  asFilter,
   asIds,
   assertSameTableLinks,
   coerce,
-  coerceList,
   coerceTagPatch,
-  coerceUrl,
   isPlainObject,
-  isTextDoc,
-  packFieldKey,
   parseContent,
-  parseListColumnsParam,
   parseRecords,
-  parseSortsParam,
   pickWritablePatch,
-  pruneTagBags,
-  remapTagBag,
-  tagBagValueEmpty,
   takeBannerPatch,
   takeRequestedRecordId,
   unusedRecordId,
-  writableFieldKeys,
 } from './schema-coerce.ts'
 import { registerDatabaseTools } from './agent-tools.ts'
 import { databaseHttpFailure, registerDatabaseHttpRoutes } from './http-routes.ts'
 export { databaseHttpFailure }
-import { SavedViewsStore, clientViewFromDbRow, viewsCollection, type StoredView } from './saved-views.ts'
+import { SavedViewsStore, viewsCollection, type StoredView } from './saved-views.ts'
 import { RecordViewsStore, wrapCollectionRecordViews } from './record-views.ts'
-import { publicShareUrl } from './share-origin.ts'
-import { readSharePluginWebJs, zipSharePluginSource } from './share-plugin-pack.ts'
-import { isSharePluginId } from '../share-resources.ts'
 import { TagStore } from './tags-store.ts'
-import { SharesStore, dropSharesForRemovedViews } from './shares-store.ts'
-import { builtinAllView, builtinAllViewId, builtinMemberViews, displayNameForView, isReadOnlyViewId, stubBuiltinAllView, stubBuiltinMemberView } from '../catalog-views.ts'
+import { SharesStore } from './shares-store.ts'
+import { builtinAllView, stubBuiltinAllView, stubBuiltinMemberView } from '../catalog-views.ts'
 import { isIndexCollection, isSystemCollection } from '../paths.ts'
 import { dataCollection, isDataOverviewSource, overviewRecord } from './data-collection.ts'
-import { effectiveDataScope, highestViewRole, recordMatchesGrantedView, type DataScopeName, type ViewGrantRole } from '../view-access.ts'
-import { recordMatchesSharedView, resolveSharedView, type SharedViewDef } from '../share-view-match.ts'
-import { buildShareSnapshot } from './share-payload.ts'
-import { FileSystemAssets, collectAssetNames, assetNamesFromMarkdown, assetNamesFromHtml, isAssetFileName, isHashedAssetName, mimeOfAsset, assetContentDisposition, AssetConflictError, parseIfMatch } from './assets-store.ts'
+import { recordMatchesGrantedView } from '../view-access.ts'
+import { type SharedViewDef } from '../share-view-match.ts'
+import { FileSystemAssets, collectAssetNames, assetNamesFromMarkdown, assetNamesFromHtml } from './assets-store.ts'
 import { tagsCollection, parseStampRecordId } from './tags-collection.ts'
 import { trashCollection } from './trash-collection.ts'
 import { runWorkspaceAssetGc } from './asset-gc-run.ts'
@@ -143,9 +105,6 @@ import {
 } from '../paths.ts'
 import { matchListFilterRecord, normalizeSorts, parseTagFlatColumnKey, readTagFieldValue, sortRecordsBy } from '../query-logic.ts'
 import { actionWhenKeys } from '../shared/fields.ts'
-import { AgentDbCompact } from './agent-payload.ts'
-
-const agentDbCompact = new AgentDbCompact()
 
 function publicAction(action: CollectionAction): CollectionActionInfo {
   const { run: _run, ...info } = action
@@ -392,12 +351,6 @@ function splitPath(path: string): string[] {
   if (!hit) return []
   const name = hit.collection.replace(/^\//, '')
   return hit.recordId ? [name, hit.recordId] : [name]
-}
-
-function linkUploadedAsset(db: { tags: { linkContentRef: (collection: string, recordId: string, name: string, source?: string) => void } }, path: string, name: string) {
-  const parts = splitPath(path)
-  if (parts.length < 2 || !name) return
-  db.tags.linkContentRef(`/${parts[0]}`, parts.slice(1).join('/'), name, 'asset')
 }
 
 function navPath(path: string) {

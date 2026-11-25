@@ -9,13 +9,7 @@ import {
 } from '@biu/host-plugin-loader/data-dir'
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { asPublicProfile, writeWorkspaceProfile } from '@biu/host-workspace'
-import {
-  DATABASE_CHANNEL,
-  databaseChannelPayload,
-  normalizeSchemaPack,
-  type CollectionSchemaPack,
-  type DbRecord,
-} from '@biu/type-file-system'
+import { DATABASE_CHANNEL, databaseChannelPayload, normalizeSchemaPack } from '@biu/type-file-system'
 import { buildAccessExplanation, type BuildAccessExplanationInput } from '../access-explanation.ts'
 import { displayNameForView, isReadOnlyViewId } from '../catalog-views.ts'
 import { PAGES_COLLECTION_PATH, TAGS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, isIndexCollection, normalizeCollectionPath } from '../paths.ts'

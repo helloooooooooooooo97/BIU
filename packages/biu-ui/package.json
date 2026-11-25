@@ -36,7 +36,10 @@
     "./api-client": "./src/api-client.ts",
     "./workspace-transport": "./src/workspace-transport.ts",
     "./app-events": "./src/app-events.ts",
-    "./client-storage": "./src/client-storage.ts"
+    "./client-storage": "./src/client-storage.ts",
+    "./db-ui": "./src/db-ui.ts",
+    "./db-search": "./src/search-menu.tsx",
+    "./event-log": "./src/event-log.ts"
   },
   "peerDependencies": {
     "react": "^19.1.1"

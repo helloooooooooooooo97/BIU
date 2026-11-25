@@ -1,21 +1,19 @@
 /** Builtin sandbox starters for every collection record: content view and property view. */
 
-export function defaultContentSandboxSource(_title = '') {
-  return `export default function App() {
-  const page = biu.page()
-  const blocks = biu.blocks()
-  const kinds = biu.kinds()
-  const record = biu.record()
-  const values = biu.values()
-  const [saved, setSaved] = React.useState(null)
-  const [open, setOpen] = React.useState('')
-  const [tab, setTab] = React.useState('overview')
+const SHARED_SANDBOX_HELPERS = `  const ACCENT = '#0071e3'
+  const GREEN = '#30d158'
+  const font = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", "PingFang SC", system-ui, sans-serif'
 
-  React.useEffect(() => {
-    let gone = false
-    biu.read().then((value) => { if (!gone) setSaved(value) })
-    return () => { gone = true }
-  }, [])
+  const glass = (extra) => ({
+    position: 'relative',
+    borderRadius: 20,
+    background: 'linear-gradient(180deg, color-mix(in srgb, var(--biu-color-bg) 82%, transparent), color-mix(in srgb, var(--biu-color-bg) 62%, transparent))',
+    border: '0.5px solid color-mix(in srgb, var(--biu-color-border) 85%, transparent)',
+    boxShadow: '0 1px 1px rgba(0,0,0,.03), 0 12px 32px -16px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.06)',
+    backdropFilter: 'saturate(180%) blur(24px)',
+    WebkitBackdropFilter: 'saturate(180%) blur(24px)',
+    ...extra,
+  })
 
   const formatValue = (value) => {
     if (value == null || value === '') return ''
@@ -33,49 +31,9 @@ export function defaultContentSandboxSource(_title = '') {
       }
     }
     return String(value)
-  }
+  }`
 
-  const ACCENT = '#0071e3'
-  const GREEN = '#30d158'
-  const font = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", "PingFang SC", system-ui, sans-serif'
-
-  const glass = (extra) => ({
-    position: 'relative',
-    borderRadius: 20,
-    background: 'linear-gradient(180deg, color-mix(in srgb, var(--biu-color-bg) 82%, transparent), color-mix(in srgb, var(--biu-color-bg) 62%, transparent))',
-    border: '0.5px solid color-mix(in srgb, var(--biu-color-border) 85%, transparent)',
-    boxShadow: '0 1px 1px rgba(0,0,0,.03), 0 12px 32px -16px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.06)',
-    backdropFilter: 'saturate(180%) blur(24px)',
-    WebkitBackdropFilter: 'saturate(180%) blur(24px)',
-    ...extra,
-  })
-
-  const tags = record && record.tag && Array.isArray(record.tag.tags) ? record.tag.tags : []
-  const fieldList = biu.fields().filter((f) => f.type !== 'file')
-  const filledFields = fieldList.filter((f) => {
-    const raw = values[f.key]
-    return raw != null && raw !== '' && (!Array.isArray(raw) || raw.length > 0)
-  })
-  const kindCount = new Set(blocks.map((b) => b.kind)).size
-  const progress = fieldList.length ? Math.round((filledFields.length / fieldList.length) * 100) : 0
-
-  const stats = [
-    { label: '正文块', value: blocks.length, hint: 'BLOCKS' },
-    { label: '块类型', value: kindCount, hint: 'USED' },
-    { label: '可用类型', value: kinds.length, hint: 'REGISTERED' },
-    { label: '已填属性', value: filledFields.length, hint: progress + '% 完成' },
-    { label: '标签', value: tags.length, hint: 'TAGS' },
-    { label: '视图数据', value: saved ? '有' : '空', hint: 'SANDBOX' },
-  ]
-
-  const TABS = [
-    { id: 'overview', label: '概览' },
-    { id: 'fields', label: '属性' },
-    { id: 'blocks', label: '正文块' },
-    { id: 'api', label: 'API' },
-  ]
-
-  const Section = (props) => (
+const SHARED_SANDBOX_COMPONENTS = `  const Section = (props) => (
     <section style={glass({ padding: '22px 24px' })}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: props.sub ? 4 : 16 }}>
         <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-.015em' }}>{props.title}</h2>
@@ -88,8 +46,8 @@ export function defaultContentSandboxSource(_title = '') {
 
   const Api = (props) => (
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(150px, 240px) minmax(0, 1fr)', gap: 16, padding: '12px 0', borderTop: '0.5px solid color-mix(in srgb, var(--biu-color-border) 50%, transparent)' }}>
-      <code style={{ fontSize: 12.5, fontFamily: 'ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace', color: ACCENT, letterSpacing: '-.01em' }}>{props.name}</code>
-      <div style={{ display: 'grid', gap: 4 }}>
+      <code style={{ fontSize: 12.5, fontFamily: 'ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace', color: ACCENT, letterSpacing: '-.01em', overflowWrap: 'anywhere' }}>{props.name}</code>
+      <div style={{ display: 'grid', gap: 4, minWidth: 0 }}>
         <div style={{ fontSize: 13, lineHeight: 1.5 }}>{props.use}</div>
         <div style={{ fontSize: 12, lineHeight: 1.55, color: 'var(--biu-color-text-muted)' }}>{props.note}</div>
       </div>
@@ -119,7 +77,53 @@ export function defaultContentSandboxSource(_title = '') {
         />
       </svg>
     )
-  }
+  }`
+
+export function defaultContentSandboxSource(_title = '') {
+  return `export default function App() {
+  const page = biu.page()
+  const blocks = biu.blocks()
+  const kinds = biu.kinds()
+  const record = biu.record()
+  const values = biu.values()
+  const [saved, setSaved] = React.useState(null)
+  const [open, setOpen] = React.useState('')
+  const [tab, setTab] = React.useState('overview')
+
+  React.useEffect(() => {
+    let gone = false
+    biu.read().then((value) => { if (!gone) setSaved(value) })
+    return () => { gone = true }
+  }, [])
+
+${SHARED_SANDBOX_HELPERS}
+
+  const tags = record && record.tag && Array.isArray(record.tag.tags) ? record.tag.tags : []
+  const fieldList = biu.fields().filter((f) => f.type !== 'file')
+  const filledFields = fieldList.filter((f) => {
+    const raw = values[f.key]
+    return raw != null && raw !== '' && (!Array.isArray(raw) || raw.length > 0)
+  })
+  const kindCount = new Set(blocks.map((b) => b.kind)).size
+  const progress = fieldList.length ? Math.round((filledFields.length / fieldList.length) * 100) : 0
+
+  const stats = [
+    { label: '正文块', value: blocks.length, hint: 'BLOCKS' },
+    { label: '块类型', value: kindCount, hint: 'USED' },
+    { label: '可用类型', value: kinds.length, hint: 'REGISTERED' },
+    { label: '已填属性', value: filledFields.length, hint: progress + '% 完成' },
+    { label: '标签', value: tags.length, hint: 'TAGS' },
+    { label: '视图数据', value: saved ? '有' : '空', hint: 'SANDBOX' },
+  ]
+
+  const TABS = [
+    { id: 'overview', label: '概览' },
+    { id: 'fields', label: '属性' },
+    { id: 'blocks', label: '正文块' },
+    { id: 'api', label: 'API' },
+  ]
+
+${SHARED_SANDBOX_COMPONENTS}
 
   return (
     <div
@@ -360,41 +364,7 @@ export function defaultPropSandboxSource(_title = '') {
   const values = biu.values()
   const [tab, setTab] = React.useState('fields')
 
-  const ACCENT = '#0071e3'
-  const GREEN = '#30d158'
-  const font =
-    '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", "PingFang SC", system-ui, sans-serif'
-
-  const glass = (extra) => ({
-    position: 'relative',
-    borderRadius: 20,
-    background:
-      'linear-gradient(180deg, color-mix(in srgb, var(--biu-color-bg) 82%, transparent), color-mix(in srgb, var(--biu-color-bg) 62%, transparent))',
-    border: '0.5px solid color-mix(in srgb, var(--biu-color-border) 85%, transparent)',
-    boxShadow:
-      '0 1px 1px rgba(0,0,0,.03), 0 12px 32px -16px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.06)',
-    backdropFilter: 'saturate(180%) blur(24px)',
-    WebkitBackdropFilter: 'saturate(180%) blur(24px)',
-    ...extra,
-  })
-
-  const formatValue = (value) => {
-    if (value == null || value === '') return ''
-    if (typeof value === 'string') return value
-    if (typeof value === 'number' || typeof value === 'boolean') return String(value)
-    if (Array.isArray(value)) return value.map(formatValue).filter(Boolean).join('、')
-    if (typeof value === 'object') {
-      const row = value
-      const name = row.name ?? row.title ?? row.label ?? row.href ?? row.url ?? ''
-      if (name) return String(name)
-      try {
-        return JSON.stringify(row)
-      } catch {
-        return ''
-      }
-    }
-    return String(value)
-  }
+${SHARED_SANDBOX_HELPERS}
 
   const isFilled = (raw) =>
     raw != null && raw !== '' && (!Array.isArray(raw) || raw.length > 0)
@@ -420,110 +390,7 @@ export function defaultPropSandboxSource(_title = '') {
     { id: 'api', label: 'API' },
   ]
 
-  const Section = (props) => (
-    <section style={glass({ padding: '22px 24px' })}>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'baseline',
-          justifyContent: 'space-between',
-          gap: 12,
-          marginBottom: props.sub ? 4 : 16,
-        }}
-      >
-        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-.015em' }}>
-          {props.title}
-        </h2>
-        {props.trailing ? (
-          <span
-            style={{
-              fontSize: 12,
-              color: 'var(--biu-color-text-muted)',
-              fontVariantNumeric: 'tabular-nums',
-              letterSpacing: '.01em',
-            }}
-          >
-            {props.trailing}
-          </span>
-        ) : null}
-      </div>
-      {props.sub ? (
-        <p
-          style={{
-            margin: '0 0 16px',
-            fontSize: 12.5,
-            lineHeight: 1.6,
-            color: 'var(--biu-color-text-muted)',
-          }}
-        >
-          {props.sub}
-        </p>
-      ) : null}
-      {props.children}
-    </section>
-  )
-
-  const Api = (props) => (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(150px, 240px) minmax(0, 1fr)',
-        gap: 16,
-        padding: '12px 0',
-        borderTop: '0.5px solid color-mix(in srgb, var(--biu-color-border) 50%, transparent)',
-      }}
-    >
-      <code
-        style={{
-          fontSize: 12.5,
-          fontFamily: 'ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace',
-          color: ACCENT,
-          letterSpacing: '-.01em',
-          overflowWrap: 'anywhere',
-        }}
-      >
-        {props.name}
-      </code>
-      <div style={{ display: 'grid', gap: 4, minWidth: 0 }}>
-        <div style={{ fontSize: 13, lineHeight: 1.5 }}>{props.use}</div>
-        <div style={{ fontSize: 12, lineHeight: 1.55, color: 'var(--biu-color-text-muted)' }}>
-          {props.note}
-        </div>
-      </div>
-    </div>
-  )
-
-  const Ring = (props) => {
-    const size = props.size || 54
-    const stroke = 4
-    const r = (size - stroke) / 2
-    const c = 2 * Math.PI * r
-    return (
-      <svg width={size} height={size} viewBox={'0 0 ' + size + ' ' + size} style={{ flex: 'none' }}>
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          strokeWidth={stroke}
-          stroke="color-mix(in srgb, var(--biu-color-border) 70%, transparent)"
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          strokeWidth={stroke}
-          stroke={props.color || GREEN}
-          strokeLinecap="round"
-          strokeDasharray={c}
-          strokeDashoffset={c - (c * props.percent) / 100}
-          transform={'rotate(-90 ' + size / 2 + ' ' + size / 2 + ')'}
-          style={{ transition: 'stroke-dashoffset .5s cubic-bezier(.4,0,.2,1)' }}
-        />
-      </svg>
-    )
-  }
+${SHARED_SANDBOX_COMPONENTS}
 
   return (
     <div

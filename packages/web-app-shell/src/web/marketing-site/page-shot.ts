@@ -1,4 +1,9 @@
 import { sitePath } from './site-base.ts'
+import { readSiteLocale } from './locale.tsx'
+
+function shotErr(en: string, zh: string) {
+  return new Error(readSiteLocale() === 'zh' ? zh : en)
+}
 
 /** 把当前官网页收成一张长图并下载。html-to-image 只在点击时加载。 */
 
@@ -21,14 +26,14 @@ function loadImage(blob: Blob) {
     }
     image.onerror = () => {
       URL.revokeObjectURL(url)
-      reject(new Error('Failed to generate image'))
+      reject(shotErr('Failed to generate image', '生成失败'))
     }
     image.src = url
   })
 }
 
 export async function downloadPageLongImage(root: HTMLElement = document.querySelector('.site') as HTMLElement) {
-  if (!root) throw new Error('Page not found')
+  if (!root) throw shotErr('Page not found', '找不到页面')
   root.classList.add('is-capturing')
   const revealed = [...root.querySelectorAll<HTMLElement>('[data-reveal]:not(.is-visible)')]
   for (const node of revealed) node.classList.add('is-visible')
@@ -51,13 +56,13 @@ export async function downloadPageLongImage(root: HTMLElement = document.querySe
     const stripBlob = print ? await toBlob(print, { pixelRatio, backgroundColor: 'transparent' }) : null
     if (print) print.style.visibility = 'hidden'
     const pageBlob = await toBlob(root, { pixelRatio, backgroundColor: 'transparent' })
-    if (!pageBlob) throw new Error('Failed to generate image')
+    if (!pageBlob) throw shotErr('Failed to generate image', '生成失败')
     const page = await loadImage(pageBlob)
     const canvas = document.createElement('canvas')
     canvas.width = page.width
     canvas.height = page.height
     const ctx = canvas.getContext('2d')
-    if (!ctx) throw new Error('Failed to generate image')
+    if (!ctx) throw shotErr('Failed to generate image', '生成失败')
     ctx.fillStyle = '#000000'
     ctx.fillRect(0, 0, canvas.width, canvas.height)
     if (stripBlob) {
@@ -66,7 +71,7 @@ export async function downloadPageLongImage(root: HTMLElement = document.querySe
     }
     ctx.drawImage(page, 0, 0)
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
-    if (!blob) throw new Error('Failed to generate image')
+    if (!blob) throw shotErr('Failed to generate image', '生成失败')
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url

@@ -44,7 +44,6 @@ import {
 } from './theme.ts'
 import { persistWorkspaceProfile } from '@biu/biu-ui/workspace-profile'
 import { useWorkspaceProfile } from '@biu/biu-ui/use-workspace-profile'
-import { LayoutPrefsMenu, getPagePrefs, hydratePagePrefs, subscribePageWidth } from './data-bridge.ts'
 
 import { BrandPrint, useBrandConfig } from './marketing-site/brand-mark.tsx'
 
@@ -2356,67 +2355,6 @@ export function ShellSettingsShortcuts() {
           <SettingsKbd keys={['esc']} />
         </li>
       </ul>
-    </section>
-  )
-}
-
-export function ShellSettingsUpdate() {
-  const [behind, setBehind] = useState(0)
-  const [busy, setBusy] = useState(false)
-  const [hint, setHint] = useState<string | undefined>()
-
-  useEffect(() => {
-    void apiFetch('/api/update')
-      .then((res) => res.json() as Promise<{ behind?: number }>)
-      .then((data) => setBehind(Math.max(0, Number(data.behind) || 0)))
-      .catch((error) => {
-        console.warn('[shell] update check failed', error)
-      })
-  }, [])
-
-  const download = useCallback(async () => {
-    if (busy) return
-    if (behind <= 0) {
-      setHint('相对于主分支暂时无最新提交版本')
-      return
-    }
-    setBusy(true)
-    setHint(undefined)
-    try {
-      const res = await apiFetch('/api/update', { method: 'POST' })
-      const data = (await res.json()) as { error?: string; restarting?: boolean }
-      if (!res.ok) throw new Error(data.error || '更新失败')
-      setBehind(0)
-      setHint('正在重启…')
-    } catch (error) {
-      setBusy(false)
-      setHint(String(error))
-    }
-  }, [busy, behind])
-
-  const badge = behind > 99 ? '99+' : String(behind)
-
-  return (
-    <section className="shell-settings-update" data-testid="settings-update">
-      <h3 className="settings-pane-title">更新</h3>
-      <p className="settings-muted settings-pane-lead">
-        {behind > 0 ? `当前落后主分支 ${badge} 个提交。` : '已与主分支对齐。'}
-      </p>
-      <button
-        type="button"
-        className="shell-settings-update-btn"
-        data-testid="settings-update-download"
-        disabled={busy}
-        onClick={() => void download()}
-      >
-        <ArrowDownTrayIcon className="size-4" />
-        {busy ? '更新中…' : '下载更新'}
-      </button>
-      {hint ? (
-        <p className="settings-muted mt-3 mb-0" role="status">
-          {hint}
-        </p>
-      ) : null}
     </section>
   )
 }

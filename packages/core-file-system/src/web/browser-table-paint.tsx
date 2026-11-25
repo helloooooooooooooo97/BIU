@@ -25,7 +25,6 @@ import { padColBox, type TablePaintBag, type TablePaintNode } from './windowed-t
 import type { NativeCellDescribe, NativeCellSpec } from './table-native-pool.ts'
 import { EMPTY_HOLD_NODES, type TableHoldSnap } from './browser-list-cache.ts'
 import { RecordTitle } from './browser-row-title.tsx'
-import { PagerSizeControl } from './pager-size.tsx'
 import { FieldGlyph } from './fsdb-cells.tsx'
 import { TableGlyph, UiGlyph } from './nav-glyphs.tsx'
 import { TAGS_COLLECTION_PATH } from './database-path.ts'

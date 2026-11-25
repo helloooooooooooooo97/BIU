@@ -1,7 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Context } from 'cordis'
-import * as systemPrompt from '@biu/host-system-prompt'
+import * as systemPrompt from '@biu/host-agents/system-prompt'
 import * as tools from '@biu/host-tools'
 import * as pick from './index.ts'
 

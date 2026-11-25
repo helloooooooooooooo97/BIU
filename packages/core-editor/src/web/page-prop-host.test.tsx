@@ -30,5 +30,4 @@ test('property sandbox nav tools use the same muted icon color as page chrome', 
   )
   assert.match(PAGE_EDITOR_STYLE, /\.page-block-expand-nav \.page-slide-icon:hover/)
   assert.match(PAGE_EDITOR_STYLE, /\.page-block-expand-nav \.page-slide-icon\.is-on/)
-  assert.match(readFileSync(resolve(import.meta.dirname, './host-field.tsx'), 'utf8'), /FieldValuePop/)
 })

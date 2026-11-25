@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { clientLog } from '@biu/web-event-log/log'
+import { clientLog } from '@biu/biu-ui/event-log'
 
 /** 文档里的块只认自己写下的插件 id，编辑器不猜、不查插件表。 */
 export const ENABLE_PAGE_BLOCK_PLUGIN = 'biu:enable-page-block-plugin'

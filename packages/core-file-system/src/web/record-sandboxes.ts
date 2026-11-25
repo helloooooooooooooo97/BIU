@@ -69,14 +69,6 @@ export function peekRecordViewFile(collectionPath: string, recordId: string, nam
   touchCache(key, hit)
   return hit.text
 }
-
-export function forgetRecordViewFile(collectionPath: string, recordId: string, name: string) {
-  const key = cacheKey(collectionPath, recordId, name)
-  if (!fileCache.has(key)) return
-  fileCache.delete(key)
-  bumpFile()
-}
-
 export function subscribeRecordViewFileTick(fn: () => void) {
   fileListeners.add(fn)
   return () => {

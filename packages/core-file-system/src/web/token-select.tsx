@@ -1,4 +1,4 @@
-import { CellMulti } from '@biu/database-ui'
+import { CellMulti } from '@biu/biu-ui/db-ui'
 
 export function TokenMultiSelect({
   values,

@@ -1,7 +1,6 @@
 import { apiFetch } from '@biu/biu-ui/api-client'
 import { mergeAttributes } from '@tiptap/core'
 import { OVERLAY_Z, overlayZ } from '@biu/biu-ui/overlay-portal'
-import type { Editor } from '@tiptap/core'
 import Mention, { type MentionNodeAttrs } from '@tiptap/extension-mention'
 import type { SuggestionProps } from '@tiptap/suggestion'
 import { ReactNodeViewRenderer, ReactRenderer } from '@tiptap/react'

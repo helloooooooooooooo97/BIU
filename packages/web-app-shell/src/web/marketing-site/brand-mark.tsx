@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type RefObject } from 'react'
+import { useSiteLocale } from './locale.tsx'
 
 /**
  * BIU 品牌标记：B、I、U 三个字母刚好拼成这个形状 ——
@@ -213,36 +214,36 @@ export const BRAND_PRINT_MARK = 24
  * 三色依次对应 B 上弧 / B 下弧 / U 三块。
  * 命名都按颜色本身的观感来，不借用他人商标名。
  */
-const PRESETS: Array<{ name: string; colors: [string, string, string] }> = [
+const PRESETS: Array<{ name: string; zh: string; colors: [string, string, string] }> = [
   // 单色阶：同一灰度的深浅，最克制
-  { name: 'Monochrome', colors: ['#8a8a8a', '#5f5f5f', '#333333'] },
-  { name: 'Ink', colors: ['#f5f5f5', '#a3a3a3', '#404040'] },
-  { name: 'Warm Gray', colors: ['#e8ddd3', '#b3a498', '#6b5f55'] },
+  { name: 'Monochrome', zh: '单色', colors: ['#8a8a8a', '#5f5f5f', '#333333'] },
+  { name: 'Ink', zh: '墨阶', colors: ['#f5f5f5', '#a3a3a3', '#404040'] },
+  { name: 'Warm Gray', zh: '暖灰', colors: ['#e8ddd3', '#b3a498', '#6b5f55'] },
 
   // 明亮系
-  { name: 'Vivid', colors: ['#ff6b35', '#4ecdc4', '#ffe66d'] },
-  { name: 'Candy', colors: ['#ff9ecd', '#7de2d1', '#fdf0a8'] },
-  { name: 'Lime', colors: ['#c3f53c', '#4ade80', '#166534'] },
+  { name: 'Vivid', zh: '鲜亮', colors: ['#ff6b35', '#4ecdc4', '#ffe66d'] },
+  { name: 'Candy', zh: '糖果', colors: ['#ff9ecd', '#7de2d1', '#fdf0a8'] },
+  { name: 'Lime', zh: '青柠', colors: ['#c3f53c', '#4ade80', '#166534'] },
 
   // 冷色系
-  { name: 'Deep Sea', colors: ['#1e3a8a', '#0ea5e9', '#0f172a'] },
-  { name: 'Polar', colors: ['#a5d8ff', '#4dabf7', '#1864ab'] },
-  { name: 'Midnight', colors: ['#4c1d95', '#7c3aed', '#1e1b4b'] },
+  { name: 'Deep Sea', zh: '深海', colors: ['#1e3a8a', '#0ea5e9', '#0f172a'] },
+  { name: 'Polar', zh: '极地', colors: ['#a5d8ff', '#4dabf7', '#1864ab'] },
+  { name: 'Midnight', zh: '午夜', colors: ['#4c1d95', '#7c3aed', '#1e1b4b'] },
 
   // 暖色系
-  { name: 'Sunshine', colors: ['#f59e0b', '#ef4444', '#7c2d12'] },
-  { name: 'Sunset', colors: ['#fb923c', '#e11d48', '#581c87'] },
-  { name: 'Terracotta', colors: ['#e07a5f', '#d1495b', '#7d1a2b'] },
+  { name: 'Sunshine', zh: '暖阳', colors: ['#f59e0b', '#ef4444', '#7c2d12'] },
+  { name: 'Sunset', zh: '落日', colors: ['#fb923c', '#e11d48', '#581c87'] },
+  { name: 'Terracotta', zh: '赤陶', colors: ['#e07a5f', '#d1495b', '#7d1a2b'] },
 
   // 速度：蓝 / 紫 / 红三段，赛车涂装的观感
-  { name: 'Velocity', colors: ['#0066b1', '#662d91', '#e4002b'] },
-  { name: 'Racetrack', colors: ['#1a1a1a', '#e4002b', '#f5f5f5'] },
+  { name: 'Velocity', zh: '速度', colors: ['#0066b1', '#662d91', '#e4002b'] },
+  { name: 'Racetrack', zh: '赛道', colors: ['#1a1a1a', '#e4002b', '#f5f5f5'] },
 
   // 自然
-  { name: 'Forest', colors: ['#86efac', '#16a34a', '#14532d'] },
-  { name: 'Desert', colors: ['#fcd34d', '#d97706', '#78350f'] },
-  { name: 'Cherry Blossom', colors: ['#fbcfe8', '#f472b6', '#9d174d'] },
-  { name: 'Tundra', colors: ['#a7f3d0', '#5eead4', '#134e4a'] },
+  { name: 'Forest', zh: '森林', colors: ['#86efac', '#16a34a', '#14532d'] },
+  { name: 'Desert', zh: '沙漠', colors: ['#fcd34d', '#d97706', '#78350f'] },
+  { name: 'Cherry Blossom', zh: '樱花', colors: ['#fbcfe8', '#f472b6', '#9d174d'] },
+  { name: 'Tundra', zh: '苔原', colors: ['#a7f3d0', '#5eead4', '#134e4a'] },
 ]
 
 /** 可交互的品牌调节器：三块各一个颜色滑块 + 线条粗细。 */
@@ -527,6 +528,7 @@ export function useBrandConfig(): BrandConfig {
 export function BrandStudio() {
   // 直接读写全局 store：改动会立刻推给订阅者（导航栏标记）。
   const config = useBrandConfig()
+  const zh = useSiteLocale().locale === 'zh'
   /** 局部改一项，其余保持不变。 */
   const patch = useCallback(
     <K extends keyof BrandConfig>(key: K, value: BrandConfig[K]) =>
@@ -548,21 +550,22 @@ export function BrandStudio() {
           background={background}
           showBackground={showBackground}
           circleRatio={circleRatio}
+          title={zh ? 'BIU 品牌标记' : 'BIU brand mark'}
         />
       </div>
 
       <div className="brand-studio-controls">
         <fieldset className="brand-field">
-          <legend>Segment colors</legend>
-          <ColorRow label="Upper bowl of B" value={c0} onChange={(v) => patch('c0', v)} testId="brand-color-0" />
-          <ColorRow label="Lower bowl of B" value={c1} onChange={(v) => patch('c1', v)} testId="brand-color-1" />
+          <legend>{zh ? '三个块的颜色' : 'Segment colors'}</legend>
+          <ColorRow label={zh ? 'B 上弧' : 'Upper bowl of B'} value={c0} onChange={(v) => patch('c0', v)} testId="brand-color-0" />
+          <ColorRow label={zh ? 'B 下弧' : 'Lower bowl of B'} value={c1} onChange={(v) => patch('c1', v)} testId="brand-color-1" />
           <ColorRow label="U" value={c2} onChange={(v) => patch('c2', v)} testId="brand-color-2" />
         </fieldset>
 
         <fieldset className="brand-field">
-          <legend>Lines</legend>
+          <legend>{zh ? '线条' : 'Lines'}</legend>
           <RangeRow
-            label="Circle outline weight"
+            label={zh ? '圆环粗细' : 'Circle outline weight'}
             value={strokeWidth}
             min={0}
             max={40}
@@ -571,7 +574,7 @@ export function BrandStudio() {
             testId="brand-stroke-width"
           />
           <RangeRow
-            label="I line weight"
+            label={zh ? 'I 线粗细' : 'I line weight'}
             value={lineWidth}
             min={0}
             max={40}
@@ -579,13 +582,13 @@ export function BrandStudio() {
             onChange={(v) => patch('lineWidth', v)}
             testId="brand-line-width"
           />
-          <ColorRow label="Line color" value={stroke} onChange={(v) => patch('stroke', v)} testId="brand-stroke" />
+          <ColorRow label={zh ? '线条颜色' : 'Line color'} value={stroke} onChange={(v) => patch('stroke', v)} testId="brand-stroke" />
         </fieldset>
 
         <fieldset className="brand-field">
-          <legend>Size</legend>
+          <legend>{zh ? '大小' : 'Size'}</legend>
           <RangeRow
-            label="Circle size"
+            label={zh ? '圆的大小' : 'Circle size'}
             value={circleRatio}
             min={0.3}
             max={1}
@@ -596,8 +599,8 @@ export function BrandStudio() {
         </fieldset>
 
         <fieldset className="brand-field">
-          <legend>Background</legend>
-          <ColorRow label="Rounded-square background" value={background} onChange={(v) => patch('background', v)} testId="brand-bg" />
+          <legend>{zh ? '底色' : 'Background'}</legend>
+          <ColorRow label={zh ? '圆角方底' : 'Rounded-square background'} value={background} onChange={(v) => patch('background', v)} testId="brand-bg" />
           <label className="brand-check">
             <input
               type="checkbox"
@@ -605,12 +608,12 @@ export function BrandStudio() {
               onChange={(event) => patch('showBackground', event.target.checked)}
               data-testid="brand-bg-toggle"
             />
-            <span>Show rounded-square background</span>
+            <span>{zh ? '显示圆角方底' : 'Show rounded-square background'}</span>
           </label>
         </fieldset>
 
         <fieldset className="brand-field">
-          <legend>Presets</legend>
+          <legend>{zh ? '预设' : 'Presets'}</legend>
           <div className="brand-presets">
             {PRESETS.map((preset) => (
               <button
@@ -633,7 +636,7 @@ export function BrandStudio() {
                   }}
                   aria-hidden
                 />
-                {preset.name}
+                {zh ? preset.zh : preset.name}
               </button>
             ))}
           </div>
@@ -654,6 +657,7 @@ function ColorRow({
   onChange: (next: string) => void
   testId: string
 }) {
+  const zh = useSiteLocale().locale === 'zh'
   return (
     <label className="brand-row">
       <span className="brand-row-label">{label}</span>
@@ -669,7 +673,7 @@ function ColorRow({
         className="brand-hex"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        aria-label={`${label} hex value`}
+        aria-label={zh ? `${label} 色值` : `${label} hex value`}
       />
     </label>
   )

@@ -329,10 +329,6 @@ html.dark .fsdb-views {
 .shell-rail-expand:focus-visible {
   background: var(--biu-color-bg-hover);
   color: var(--biu-color-icon-active);
-}.shell-rail-brand {
-  display: block;
-  width: 20px;
-  height: 20px;
 }.shell-rail-expand-chevron {
   display: none;
 }.shell-rail-expand:hover .shell-rail-expand-mark,

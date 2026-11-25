@@ -1,5 +1,5 @@
 import type { Context, Fiber, Plugin } from 'cordis'
-import { clientLog, clientLogErrorText } from '@biu/web-event-log/log'
+import { clientLog, clientLogErrorText } from '@biu/biu-ui/event-log'
 import * as React from 'react'
 import * as ReactDOM from 'react-dom'
 import * as ReactJSXRuntime from 'react/jsx-runtime'

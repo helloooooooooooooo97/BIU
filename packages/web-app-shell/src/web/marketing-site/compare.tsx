@@ -1,6 +1,10 @@
 import { Link, useParams } from 'react-router-dom'
 import { GITHUB_URL, SiteChrome, SiteFaq, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
+import { useSiteLocale, type SiteLocale } from './locale.tsx'
+import { ZH_COMPARE_CATEGORIES, ZH_COMPARE_PAGES } from './zh/compare-data.ts'
+
+export { ZH_COMPARE_PAGES }
 
 /**
  * 对比页数据。
@@ -411,15 +415,104 @@ export const COMPARE_CATEGORIES = [
   },
 ] as const
 
-const MARKS = [
-  { emoji: '✅', kind: 'yes', label: 'Supported' },
-  { emoji: '⚠️', kind: 'partial', label: 'Partially supported' },
-  { emoji: '❌', kind: 'no', label: 'Not supported' },
-] as const
+type CompareCopy = {
+  marks: ReadonlyArray<{ emoji: string; kind: string; label: string }>
+  legendAriaLabel: string
+  dimensionHeader: string
+  faq: ReadonlyArray<readonly [string, string]>
+  indexMetaTitle: string
+  indexMetaDescription: string
+  label: string
+  indexHeading: string
+  indexLead: string
+  jumpAriaLabel: string
+  readEssay: string
+  indexNoteBefore: string
+  reportGithub: string
+  noteAfter: string
+  faqTitle: string
+  ctaTitle: string
+  detailFallbackDescription: string
+  notFoundTitle: string
+  notFoundBack: string
+  detailNoteBefore: string
+  chooseOther: (name: string) => string
+  chooseBiu: string
+  similarHeading: string
+}
+
+const COMPARE_COPY: Record<SiteLocale, CompareCopy> = {
+  en: {
+    marks: [
+      { emoji: '✅', kind: 'yes', label: 'Supported' },
+      { emoji: '⚠️', kind: 'partial', label: 'Partially supported' },
+      { emoji: '❌', kind: 'no', label: 'Not supported' },
+    ],
+    legendAriaLabel: 'Legend',
+    dimensionHeader: 'Dimension',
+    faq: [
+      ['Who wrote these comparisons?', 'BIU wrote these comparisons using verifiable facts and explicitly noting what it cannot yet do. If anything is inaccurate, please report it on GitHub.'],
+      ['Can BIU replace existing tools?', 'Not in every case. Each comparison explains when the other product remains the better choice and when BIU is a better fit.'],
+      ['Can BIU work alongside existing tools?', 'Yes. BIU brings documents, tables, applications, and agents onto one page without requiring you to abandon your current tools.'],
+    ],
+    indexMetaTitle: 'Why BIU',
+    indexMetaDescription: 'How BIU differs from leading products across each category: Notion, Obsidian, ChatGPT, Claude, Airtable, Cursor, Linux, Kubernetes, and more.',
+    label: 'Compare',
+    indexHeading: 'Five stages of software, benchmarked against the best at every layer',
+    indexLead: 'Build, store, compose, distribute, derive—over four decades, each stage grew its own category-defining products and trillion-dollar industry. Explore how BIU compares at every stage, with every table candid about what BIU cannot yet do.',
+    jumpAriaLabel: 'Jump to stage',
+    readEssay: 'Read stage essay →',
+    indexNoteBefore: 'Information current as of November 2026. Products change quickly; if anything is inaccurate, please ',
+    reportGithub: 'report it on GitHub',
+    noteAfter: '.',
+    faqTitle: 'About these comparisons',
+    ctaTitle: 'See the difference for yourself',
+    detailFallbackDescription: 'A dimension-by-dimension comparison of BIU and other products.',
+    notFoundTitle: 'Comparison not found',
+    notFoundBack: 'Back to all comparisons',
+    detailNoteBefore: 'Information current as of October 2026. If anything is inaccurate, please ',
+    chooseOther: (name) => `Choose ${name} when you need`,
+    chooseBiu: 'Choose BIU when you need',
+    similarHeading: 'Similar comparisons',
+  },
+  zh: {
+    marks: [
+      { emoji: '✅', kind: 'yes', label: '支持' },
+      { emoji: '⚠️', kind: 'partial', label: '部分支持' },
+      { emoji: '❌', kind: 'no', label: '不支持' },
+    ],
+    legendAriaLabel: '图例',
+    dimensionHeader: '维度',
+    faq: [
+      ['对比的编写者', '对比由 BIU 编写，只记录可以核对的事实，并写明尚未做到的部分。若有出入，欢迎在 GitHub 提出。'],
+      ['能否替代现有工具', '不能一概替代。每篇对比都写明何时适合继续使用对方，何时适合使用 BIU。'],
+      ['能否与现有工具并用', '可以并行使用。BIU 将文档、表格、应用和智能体放在同一个页面中，不要求放弃现有工具。'],
+    ],
+    indexMetaTitle: '差异',
+    indexMetaDescription: '与各领域代表产品的核心差异：Notion、Obsidian、ChatGPT、Claude、Airtable、Cursor、Linux、Kubernetes 等。',
+    label: '对比',
+    indexHeading: '按软件生命周期的五个环节，直面代表性工具与基础设施',
+    indexLead: '构建、存储、组合、分发、衍生——过去四十年，每一个环节都长出了各自的代表产品与万亿级产业。下面按五个动词逐一展开对照，每张表均如实标注 BIU 尚未做到的部分。',
+    jumpAriaLabel: '按五个环节快速跳转',
+    readEssay: '阅读该环节长文 →',
+    indexNoteBefore: '信息截至 2026 年 11 月。产品更新很快，如有出入，欢迎',
+    reportGithub: '在 GitHub 提出',
+    noteAfter: '。',
+    faqTitle: '关于对比',
+    ctaTitle: '下载 BIU，亲身验证',
+    detailFallbackDescription: 'BIU 与其他产品的逐维度对比。',
+    notFoundTitle: '没有这个对比页',
+    notFoundBack: '返回对比总览',
+    detailNoteBefore: '信息截至 2026 年 10 月。如有出入，欢迎',
+    chooseOther: (name) => `用 ${name} 当你需要`,
+    chooseBiu: '用 BIU 当你需要',
+    similarHeading: '同类对比',
+  },
+}
 
 /** 表格里的 ✅ / ⚠️ / ❌ 换成同色系的圆形标记；原字符留在 DOM 里，读屏和复制都还在。 */
-function CompareCell({ text }: { text: string }) {
-  const mark = MARKS.find((item) => text.startsWith(item.emoji))
+function CompareCell({ text, marks }: { text: string; marks: CompareCopy['marks'] }) {
+  const mark = marks.find((item) => text.startsWith(item.emoji))
   if (!mark) return <>{text}</>
   const rest = text.slice(mark.emoji.length).trim()
   return (
@@ -430,10 +523,10 @@ function CompareCell({ text }: { text: string }) {
   )
 }
 
-function CompareLegend() {
+function CompareLegend({ copy }: { copy: CompareCopy }) {
   return (
-    <p className="site-compare-legend" aria-label="Legend">
-      {MARKS.map((item) => (
+    <p className="site-compare-legend" aria-label={copy.legendAriaLabel}>
+      {copy.marks.map((item) => (
         <span key={item.kind}>
           <span className="site-mark" data-mark={item.kind} aria-hidden />
           {item.label}
@@ -443,12 +536,12 @@ function CompareLegend() {
   )
 }
 
-function CompareTable({ page }: { page: ComparePage }) {
+function CompareTable({ page, copy }: { page: ComparePage; copy: CompareCopy }) {
   return (
     <table className="site-compare-table">
       <thead>
         <tr>
-          <th>Dimension</th>
+          <th>{copy.dimensionHeader}</th>
           <th>{page.columns[0]}</th>
           <th className="is-biu">{page.columns[1]}</th>
         </tr>
@@ -457,8 +550,8 @@ function CompareTable({ page }: { page: ComparePage }) {
         {page.rows.map((row) => (
           <tr key={row.dimension}>
             <th scope="row">{row.dimension}</th>
-            <td><CompareCell text={row.them} /></td>
-            <td className="is-biu"><CompareCell text={row.biu} /></td>
+            <td><CompareCell text={row.them} marks={copy.marks} /></td>
+            <td className="is-biu"><CompareCell text={row.biu} marks={copy.marks} /></td>
           </tr>
         ))}
       </tbody>
@@ -466,38 +559,34 @@ function CompareTable({ page }: { page: ComparePage }) {
   )
 }
 
-const COMPARE_FAQ = [
-  ['Who wrote these comparisons?', 'BIU wrote these comparisons using verifiable facts and explicitly noting what it cannot yet do. If anything is inaccurate, please report it on GitHub.'],
-  ['Can BIU replace existing tools?', 'Not in every case. Each comparison explains when the other product remains the better choice and when BIU is a better fit.'],
-  ['Can BIU work alongside existing tools?', 'Yes. BIU brings documents, tables, applications, and agents onto one page without requiring you to abandon your current tools.'],
-] as const
-
 export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
+  const { locale } = useSiteLocale()
+  const copy = COMPARE_COPY[locale]
+  const pages = locale === 'zh' ? ZH_COMPARE_PAGES : COMPARE_PAGES
+  const categories = locale === 'zh' ? ZH_COMPARE_CATEGORIES : COMPARE_CATEGORIES
+
   usePageMeta({
-    title: 'Why BIU',
-    description: 'How BIU differs from leading products across each category: Notion, Obsidian, ChatGPT, Claude, Airtable, Cursor, Linux, Kubernetes, and more.',
+    title: copy.indexMetaTitle,
+    description: copy.indexMetaDescription,
     path: '/compare',
   })
-  const bySlug = new Map(COMPARE_PAGES.map((page) => [page.slug, page]))
+  const bySlug = new Map(pages.map((page) => [page.slug, page]))
 
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-page-hero" data-reveal>
-          <p className="site-section-label">Compare</p>
-          <h1>Five stages of software, benchmarked against the best at every layer</h1>
-          <p className="site-page-lead">
-            Build, store, compose, distribute, derive—over four decades, each stage grew its own category-defining products and trillion-dollar industry.
-            Explore how BIU compares at every stage, with every table candid about what BIU cannot yet do.
-          </p>
-          <nav className="site-usecase-jump" aria-label="Jump to stage">
-            {COMPARE_CATEGORIES.map((category) => (
+          <p className="site-section-label">{copy.label}</p>
+          <h1>{copy.indexHeading}</h1>
+          <p className="site-page-lead">{copy.indexLead}</p>
+          <nav className="site-usecase-jump" aria-label={copy.jumpAriaLabel}>
+            {categories.map((category) => (
               <a key={category.id} href={`#${category.id}`}>{category.name}</a>
             ))}
           </nav>
         </section>
 
         <section className="site-compare-index">
-          {COMPARE_CATEGORIES.map((category) => (
+          {categories.map((category) => (
             <div key={category.id} id={category.id} className="site-compare-group" data-reveal>
               <div className="site-compare-group-head">
                 <div>
@@ -505,7 +594,7 @@ export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteActio
                   <p>{category.lead}</p>
                 </div>
                 <Link className="site-compare-group-essay" to={`/blog/${category.blogSlug}`}>
-                  Read stage essay →
+                  {copy.readEssay}
                 </Link>
               </div>
               <div className="site-compare-cards">
@@ -524,23 +613,28 @@ export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteActio
             </div>
           ))}
           <p className="site-compare-note">
-            Information current as of November 2026. Products change quickly; if anything is inaccurate, please <a href={`${GITHUB_URL}/issues`} target="_blank" rel="noreferrer">report it on GitHub</a>.
+            {copy.indexNoteBefore}
+            <a href={`${GITHUB_URL}/issues`} target="_blank" rel="noreferrer">{copy.reportGithub}</a>
+            {copy.noteAfter}
           </p>
         </section>
 
-        <SiteFaq title="About these comparisons" items={COMPARE_FAQ} />
+        <SiteFaq title={copy.faqTitle} items={copy.faq} />
 
-        <SiteFinalCta title="See the difference for yourself" />
+        <SiteFinalCta title={copy.ctaTitle} />
     </SiteChrome>
   )
 }
 
 export function MarketingCompareDetail({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
+  const { locale } = useSiteLocale()
+  const copy = COMPARE_COPY[locale]
+  const pages = locale === 'zh' ? ZH_COMPARE_PAGES : COMPARE_PAGES
   const { slug } = useParams<{ slug: string }>()
-  const page = COMPARE_PAGES.find((item) => item.slug === slug)
+  const page = pages.find((item) => item.slug === slug)
   usePageMeta({
-    title: page?.title ?? 'Compare',
-    description: page?.opening ?? 'A dimension-by-dimension comparison of BIU and other products.',
+    title: page?.title ?? copy.label,
+    description: page?.opening ?? copy.detailFallbackDescription,
     path: `/compare/${slug ?? ''}`,
   })
 
@@ -548,15 +642,15 @@ export function MarketingCompareDetail({ onLogin, onStart }: { onLogin: SiteActi
     return (
       <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-page-hero">
-          <p className="site-section-label">Compare</p>
-          <h1>Comparison not found</h1>
-          <p className="site-page-lead"><Link to="/compare">Back to all comparisons</Link></p>
+          <p className="site-section-label">{copy.label}</p>
+          <h1>{copy.notFoundTitle}</h1>
+          <p className="site-page-lead"><Link to="/compare">{copy.notFoundBack}</Link></p>
         </section>
       </SiteChrome>
     )
   }
 
-  const others = COMPARE_PAGES.filter((item) => item.category === page.category && item.slug !== page.slug)
+  const others = pages.filter((item) => item.category === page.category && item.slug !== page.slug)
 
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
@@ -567,27 +661,29 @@ export function MarketingCompareDetail({ onLogin, onStart }: { onLogin: SiteActi
         </section>
 
         <section className="site-compare-body" data-reveal>
-          <CompareLegend />
-          <CompareTable page={page} />
+          <CompareLegend copy={copy} />
+          <CompareTable page={page} copy={copy} />
           <p className="site-compare-note">
-            Information current as of October 2026. If anything is inaccurate, please <a href={`${GITHUB_URL}/issues`} target="_blank" rel="noreferrer">report it on GitHub</a>.
+            {copy.detailNoteBefore}
+            <a href={`${GITHUB_URL}/issues`} target="_blank" rel="noreferrer">{copy.reportGithub}</a>
+            {copy.noteAfter}
           </p>
         </section>
 
         <section className="site-compare-when" data-reveal>
           <article>
-            <h2>Choose {page.columns[0]} when you need</h2>
+            <h2>{copy.chooseOther(page.columns[0])}</h2>
             <p>{page.useWhen}</p>
           </article>
           <article>
-            <h2>Choose BIU when you need</h2>
+            <h2>{copy.chooseBiu}</h2>
             <p>{page.biuWhen}</p>
           </article>
         </section>
 
         {others.length ? (
           <section className="site-compare-more" data-reveal>
-            <h2>Similar comparisons</h2>
+            <h2>{copy.similarHeading}</h2>
             <div className="site-compare-cards">
               {others.map((item) => (
                 <Link key={item.slug} to={`/compare/${item.slug}`} className="site-compare-card">
@@ -598,7 +694,7 @@ export function MarketingCompareDetail({ onLogin, onStart }: { onLogin: SiteActi
           </section>
         ) : null}
 
-        <SiteFinalCta title="See the difference for yourself" />
+        <SiteFinalCta title={copy.ctaTitle} />
     </SiteChrome>
   )
 }

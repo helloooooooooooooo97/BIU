@@ -6,7 +6,6 @@ import { WindowedTable, type TableCheckStore, type TableChromeBag, type TablePai
 import type { TableHoldSnap } from './browser-list-cache.ts'
 import type { BrowserTableColumn } from './browser-table-paint.tsx'
 import { PluginSurface } from './browser-row-title.tsx'
-import { PagerSizeControl } from './pager-size.tsx'
 import { UiGlyph } from './nav-glyphs.tsx'
 import { PLUGINS_COLLECTION_PATH } from './database-path.ts'
 import { getDatabaseUi } from './database-ui.ts'

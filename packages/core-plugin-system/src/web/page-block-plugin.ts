@@ -1,7 +1,7 @@
 import { apiFetch } from '@biu/biu-ui/api-client'
 import { emitAppEvent, onAppEvent } from '@biu/biu-ui/app-events'
 import { buildAppPath } from '@biu/web-session-view'
-import { clientLog, clientLogErrorText } from '@biu/web-event-log/log'
+import { clientLog, clientLogErrorText } from '@biu/biu-ui/event-log'
 import {
   installedPageBlocksFromRows,
   listedPluginKnown,

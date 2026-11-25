@@ -283,12 +283,3 @@ export async function deleteRecordLayout(collectionPath: string, recordId: strin
   if (!ok) return
   if (getActiveRecordLayoutId(path, id) === target) setActiveRecordLayoutId(path, id, DEFAULT_RECORD_LAYOUT_ID)
 }
-
-export function resetRecordLayoutState(collectionPath: string, recordId: string) {
-  const key = recordViewKey(collectionPath, recordId)
-  patchRecordViewCatalog(collectionPath, recordId, { layouts: [], activeLayoutId: '' })
-  for (const slot of [...display.keys()]) {
-    if (slot.startsWith(`${key}::`)) display.delete(slot)
-  }
-  bump()
-}

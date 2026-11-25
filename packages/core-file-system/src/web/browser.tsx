@@ -4,71 +4,45 @@ import { useBrowserPopovers } from './use-browser-popovers.ts'
 import { useBrowserBulkUi } from './use-browser-bulk-ui.ts'
 import { useBrowserViewConfig } from './use-browser-view-config.ts'
 import { useBrowserDetailState } from './use-browser-detail-state.ts'
-import { lazy, memo, Suspense, type ComponentProps, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
-import { TOOLTIP_OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
-import { computeFloatingPosition } from '@biu/biu-ui/floating-position'
 import {
-  ArrowsPointingOutIcon,
-  Bars3BottomLeftIcon,
-  BoltIcon,
-  CheckCircleIcon,
-  CheckIcon,
-  ChevronDownIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  EllipsisHorizontalIcon,
-  HashtagIcon,
-  LockClosedIcon,
-  PlusIcon,
-  TagIcon,
-  ArrowDownTrayIcon,
-  ChatBubbleLeftRightIcon,
-  GlobeAltIcon,
-  UserIcon,
-  UsersIcon,
-  ViewColumnsIcon,
-  TrashIcon,
-} from '@heroicons/react/16/solid'
-import type { CollectionActionInfo, CollectionInfo, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
-import { emitFsdbChange, fsdbRecordChangeReloadsList, normalizeSchemaValue, parseFsdbChange } from '@biu/type-file-system'
+  lazy,
+  Suspense,
+  type ComponentProps,
+  type PointerEvent as ReactPointerEvent,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
+import type { CollectionActionInfo, CollectionInfo, CollectionSchema, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
+import { emitFsdbChange, fsdbRecordChangeReloadsList, parseFsdbChange } from '@biu/type-file-system'
 import { inspectorPaneAcceptsKeys } from './inspector-pane-cost.ts'
 import { subscribeHistoryNavigation } from './history-nav.ts'
-import type { CollectionChrome, CollectionRowViewType, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
-import { getSidebarPersist, parseAppPath, setSidebarPersist, SIDEBAR_PERSIST } from '@biu/web-session-view'
-import { BoolBox } from '@biu/biu-ui/bool-box'
-import { ChatCount } from '@biu/biu-ui/chat-count'
-import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
-import { TagChip, TagChips, tagTextColor, tagTone as schemaTagTone } from '@biu/biu-ui/tag-chip'
-import { tagChipIcon, tagChipLabel, TagFieldChips } from './schema-field.tsx'
+import type { CollectionChrome, CollectionRowViewType, CollectionViewType } from '@biu/type-file-system/ui'
+import { getSidebarPersist, setSidebarPersist, SIDEBAR_PERSIST } from '@biu/web-session-view'
 import {
   contentFieldKey,
   defaultColumnKeys,
   tagSourceKey,
   flattenTagColumns,
-  tagColumnHeadLabel,
-  tagColumnTagTip,
   tagColumnTitle,
   fieldEntries,
   flattenTree,
-  enumDisplayLabel,
   formatField,
   filterFieldValueOptions,
   groupField,
   groupListKeys,
   mergeListFilters,
   groupRecords,
-  groupRowBucketKeys,
   groupableFields,
   hasMissingProjectedColumns,
-  isRecordLinkField,
   listProjectionKeys,
   overlayListed,
   parentFieldKey,
   parseTagFlatColumnKey,
-  tagFlatColumnKey,
-  isTagFlatColumnKey,
-  patchTagFlatValue,
   pinActionColumn,
   readTagFlatValue,
   resolveFieldType,
@@ -76,55 +50,53 @@ import {
   type GroupBucket,
   type ViewMode,
 } from './fields.ts'
-import { createdRowGroupKey, placeCreatedRow } from './group-insert.ts'
-import { seedGroupRecord } from './group-create.ts'
-import { TableEditHistory, tableEditHistoryKey, tableEditHistoryOwned, tableNativeUndoModifier } from './table-edit-history.ts'
+import { placeCreatedRow } from './group-insert.ts'
+import { TableEditHistory } from './table-edit-history.ts'
 import { collectionListCachePath } from './list-cache-scope.ts'
 import { listAttributeGroups, listGroupedCollection } from './group-list.ts'
 import { TREE_HAS_KIDS, listTreeChildren, listTreeCollection, treeRootFilter } from './tree-list.ts'
-import { AppDialog, CheckRow, LocalText } from './controls.tsx'
-import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search.tsx'
 import { buildCrumbs, crumbHotkeyPane, crumbParentHotkey, parentCrumbTarget, type CrumbTarget } from './sidebar-nav.ts'
-import { CrumbTrail } from './crumb-trail.tsx'
-import { fieldPickAttrs, fieldPickId, pickDomAttrs, recordPickKind, recordSourcePath } from './pick-dom.ts'
-import { normalizeRecordEmoji, recordPreviewEmoji, crumbRecordLabel } from './sidebar-preview.ts'
-import { recordPreviewMascot, RecordMark } from './record-mark.tsx'
-import { COL_WIDTH_MAX, COL_WIDTH_MIN, applyGroupConfig, canRemoveCollectionView, groupConfigStateKey, normalizeColumnWidths, normalizeGroupConfig, normalizePageSize, normalizeSavedView, rankListedViews, viewIsFresher, viewStateKey, type GroupConfig, type SavedView } from './saved-view.ts'
+import { fieldPickAttrs, pickDomAttrs, recordPickKind, recordSourcePath } from './pick-dom.ts'
+import { recordPreviewEmoji, crumbRecordLabel } from './sidebar-preview.ts'
+import { recordPreviewMascot } from './record-mark.tsx'
+import {
+  COL_WIDTH_MAX,
+  COL_WIDTH_MIN,
+  applyGroupConfig,
+  groupConfigStateKey,
+  normalizeColumnWidths,
+  normalizeGroupConfig,
+  normalizePageSize,
+  normalizeSavedView,
+  rankListedViews,
+  viewIsFresher,
+  viewStateKey,
+  type GroupConfig,
+  type SavedView,
+} from './saved-view.ts'
 import { LiveTableCellSelection, tableCursorFromCell, type TableSelectionModel } from './table-cell-selection.ts'
 import { startTableColumnResize } from './table-col-resize.ts'
 import {
   WindowedTable,
-  padColBox,
-  windowedColumnsOf,
   type TableCheckStore,
   type TableChromeBag,
   type TablePaintBag,
   type TablePaintNode,
 } from './windowed-table.tsx'
 import {
-  COLLECT_SHEET_COLUMNS,
   EMPTY_HOLD_NODES,
-  LIST_CACHE_MAX,
   LIST_SEED_COLUMNS,
   LISTED_MUTATION_EVENT,
-  appendTreeKids,
-  bucketsReadyToCache,
   collectSheetColumns,
   collectionFromAppUrl,
-  dropListCacheRecords,
   emptyListHold,
   forgetListCache,
   isListColumn,
-  listCache,
-  listCacheKey,
   listHoldFromCache,
-  listHoldResetKey,
   overviewStampOf,
-   overlayListedRow,
+  overlayListedRow,
   patchListCacheRecords,
   peekListCache,
-  publishDeletedRowsToTrash,
-  publishListedMutation,
   recordsFingerprint,
   remapGroupedRecords,
   rememberListCache,
@@ -132,25 +104,12 @@ import {
   rowsWithTreeKids,
   sameSavedViews,
   schemaFingerprint,
-  seedListCacheSnap,
-  toTrashListRow,
-  trashRecordId,
-  upsertListCacheRecord,
-  type ListCacheSnap,
   type ListedMutation,
   type StatResult,
   type TableHoldSnap,
 } from './browser-list-cache.ts'
 import { createTableSandboxItem, normalizeTableSandboxViews, type TableSandboxItem } from '../shared/table-sandbox-model.ts'
-import {
-  DockHoverTip,
-  PluginSurface,
-  RecordOpenControls,
-  RecordTitle,
-  TableRecordIcon,
-  askNewPlugin,
-  askNewPresentation,
-} from './browser-row-title.tsx'
+import { DockHoverTip } from './browser-row-title.tsx'
 import { RecordActions, RowCheck } from './browser-row-controls.tsx'
 import { BrowserCellPopOverlay, renderBrowserCell } from './browser-cell-renderer.tsx'
 import { BrowserHeader } from './browser-header.tsx'
@@ -161,53 +120,28 @@ import { useViewDisplayApplier } from './use-browser-view-display.ts'
 import { createBrowserMutations } from './use-browser-mutations.ts'
 import { buildTableIconLookup, createBrowserTablePaint } from './browser-table-paint.tsx'
 import { BrowserRecordStage } from './browser-record-stage.tsx'
-import { normalizeColumnSummaries, type ColumnSummaryOp } from './column-summary.ts'
-import { activeColumnSandboxItem, normalizeColumnViews, resolveColumnSandboxItems, type ColumnViewConfig } from './column-sandbox-model.ts'
+import { normalizeColumnSummaries } from './column-summary.ts'
+import { activeColumnSandboxItem, normalizeColumnViews, resolveColumnSandboxItems } from './column-sandbox-model.ts'
 import { ColumnHeaderMenu, type ColumnHeaderMenuTarget } from './column-header-menu.tsx'
 import { KeyedSerialQueue, PendingFieldPatchTracker } from './record-write-queue.ts'
 import { ViewSyncController } from './view-sync-controller.ts'
 import { captureTableFoldSnapshot as captureFoldSnapshot, playTableFoldFlip } from './table-fold-flip.ts'
-import { BrowserDialogs, type BrowserDialogState } from './browser-dialogs.tsx'
+import { BrowserDialogs } from './browser-dialogs.tsx'
 export { WindowedTable } from './windowed-table.tsx'
 import { useStickyToolbar } from './sticky-toolbar.ts'
 import { useToolbarOverflow } from './toolbar-overflow.ts'
-import { PagerSizeControl } from './pager-size.tsx'
-import {
-  actionIcon,
-  ActionCell,
-  BoolCell,
-  DefaultCell,
-  draftFromRecord,
-  sameStringDraft,
-  fieldActionId,
-  FieldGlyph,
-  FilePreview,
-  ModeGlyph,
-  parseFieldValue,
-  VIEW_MODES,
-  visibleActions,
-  placedActions,
-} from './fsdb-cells.tsx'
-import { ShareRoleLabel, ShareScopeLabel } from './share-scope-label.tsx'
+import { draftFromRecord, sameStringDraft, placedActions } from './fsdb-cells.tsx'
 import { ensureFsdbStyle } from './fsdb-style.ts'
-import { workspaceColumnsForLocation } from './workspace-columns.ts'
-import { PageBanner } from './page-banner.tsx'
-import { TableGlyph, UiGlyph, ViewModeGlyph, idleTableIconKind } from './nav-glyphs.tsx'
-import { SourceTableCell } from './source-table-cell.tsx'
 import {
   DATA_COLLECTION_PATH,
-  DATA_MODULE,
   PAGES_COLLECTION_PATH,
   PLUGINS_COLLECTION_PATH,
-  TAGS_COLLECTION_PATH,
   TRASH_COLLECTION_PATH,
   isIndexCollection,
   isOverviewCreatableCollection,
   isSystemCollection,
 } from './database-path.ts'
 import {
-  ENABLE_PAGE_BLOCK_PLUGIN_EVENT,
-  EXPAND_SHELL_SIDEBAR_EVENT,
   FSDB_CHANGE_EVENT,
   FSDB_CRUMB_LABELS_EVENT,
   FSDB_DETAIL_REFRESH_EVENT,
@@ -215,14 +149,12 @@ import {
   FSDB_SHARES_CHANGE_EVENT,
   INSPECTOR_CLOSE_EVENT,
   INSPECTOR_OPEN_EVENT,
-  INSPECTOR_TOGGLE_EVENT,
   OPEN_SESSION_EVENT,
   PICK_MODE_EVENT,
   SHELL_LAYOUT_EVENT,
   SHELL_SIDEBAR_WIDTH_EVENT,
   TOGGLE_SHELL_SIDEBAR_EVENT,
 } from './fsdb-events.ts'
-import { ViewOrderMenu } from './view-order-menu.tsx'
 import { getDatabaseUi } from './database-ui.ts'
 import {
   activeViewStorageKey,
@@ -232,28 +164,14 @@ import {
   isViewStarred,
   loadOmittedViewIds,
   loadViews,
-  mergeSavedViewLists,
-  noteLocalSavedViewsWrite,
-  omitSavedViewIds,
   pullSavedViews,
-  applyListedCrumbMutation,
   rememberRecords,
   rememberViews,
-  removeStarredViews,
-  reviveSavedViewIds,
-  persistStarredViews,
-  persistCollapsedGroups,
   persistViewDisplay,
   loadCollapsedGroups,
   pickViewForRoute,
-  defaultViewId,
-  pushSavedViewsPatch,
-  stampSavedView,
-  diffSavedViews,
-  mergeSavedViewsPatch,
   routeViewNeedsFetch,
   subscribeStarredViews,
-  toggleStarredView,
   viewForPath,
   withViewDisplay,
 } from './view-storage.ts'
@@ -265,22 +183,47 @@ import {
   subscribePageWidth,
 } from './page-width.ts'
 import { reportInspectorPaneMenu } from './inspector-pane-menu.tsx'
-import { PageContentLoading } from './page-content-status.tsx'
 import { ViewPaneMenu } from './pane-more-menu.tsx'
 import { HttpError, invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage, locateViewRecord, pageOfIndex, type ViewNeighborQuery } from './view-adjacent.ts'
 import { setViaDataCrumbs, viaDataViewId } from './data-chrome.ts'
 import { paintCollectionViews } from './collection-nav.ts'
-import { TABLE_WINDOW_OVERSCAN, tableColumnWidth, tablePinColClass, tablePinColOffsets, tablePinCount, type TableColumnSlice } from './table-window.ts'
-import { bindTableDragScroll, tableVertScroller } from './table-drag-scroll.ts'
-import { forgetPreviewTotalsForPath, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady } from './sidebar-preview.ts'
+import {
+  TABLE_WINDOW_OVERSCAN,
+  tableColumnWidth,
+  tablePinColOffsets,
+  tablePinCount,
+  type TableColumnSlice,
+} from './table-window.ts'
+import { markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady } from './sidebar-preview.ts'
 import { publishDataSidebar, releaseDataSidebar, type DataSidebarLive } from './data-sidebar-host.ts'
-import { builtinAllViewId, catalogLockFilters, collectionNoun, displayNameForView, isBuiltinAllViewId, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stampRecordId, stampRowOpenTarget, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
-import { SAVED_VIEW_EVENT, moveInspectorRecordsToTrash, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
-import { CellPop, cellUsesPop } from './cell-pop.tsx'
-import { CLEAR_SHELL_TABLE_CELL, FOCUS_SHELL_TABLE, claimTableCellPick, consumePendingTablePane, firstTableTitleCell, formatTableCellsForClipboard, peekPendingTablePane, moveTableCell, readTablePaneRest, rememberTablePaneRest, requestTablePaneFocus, tableActionArrowLeave, tableActionButtons, tableActionButtonStep, tableCellRange, tableCellRangeKey, tableCellRangeRowIds, tableClearKey, tableClearedValue, tableCopyHotkey, tableCreateKey, tableKeyDir, tableKeyFromEditingTarget, tableNavKeys, tablePaneFromEvent, tablePaneHotkey, tablePaneOther, tableSendChatHotkey, tableTitleOpenWhere, tableTreeArrowAction, tableTypeToEditChar, writeClipboardText, type TableCellCursor } from './table-keys.ts'
-import { focusRecordTitleNear } from './title-content-nav.ts'
+import {
+  catalogLockFilters,
+  displayNameForView,
+  isBuiltinAllViewId,
+  mergeTableViews,
+  parseBuiltinScopeViewId,
+  stampRowOpenTarget,
+  stubBuiltinBlockKindView,
+  type DataScope,
+} from '../catalog-views.ts'
+import { SAVED_VIEW_EVENT, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
+import {
+  CLEAR_SHELL_TABLE_CELL,
+  FOCUS_SHELL_TABLE,
+  claimTableCellPick,
+  consumePendingTablePane,
+  firstTableTitleCell,
+  peekPendingTablePane,
+  requestTablePaneFocus,
+  tableKeyFromEditingTarget,
+  tableNavKeys,
+  tablePaneFromEvent,
+  tablePaneHotkey,
+  tablePaneOther,
+  type TableCellCursor,
+} from './table-keys.ts'
 import { isViewCatalogField, selectedViewCatalogOption } from './view-catalog.ts'
 import { jumpTag, loadTags, pullTags, subscribeTags } from './tag-catalog.ts'
 import {
@@ -295,8 +238,6 @@ import {
   filterEditorStateKey,
   filterTreeStateKey,
   matchListFilterRecord,
-  seedRecordFromViewFilters,
-  moveList,
   normalizeSorts,
   resolveViewFilterTree,
   sortsStateKey,
@@ -306,10 +247,7 @@ import {
 
 const SchemaFieldEditor = lazy(() => import('./schema-field.tsx').then((m) => ({ default: m.SchemaFieldEditor })))
 const VisibleColumnsFlyout = lazy(() => import('./column-order-menu.tsx').then((m) => ({ default: m.VisibleColumnsFlyout })))
-const LazyShareButton = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareButton })))
 const LazySharePanel = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.SharePanel })))
-const LazyShareRoleDetail = lazy(() => import('./share-chain-detail.tsx').then((m) => ({ default: m.ShareRoleDetail })))
-const LazyShareScopeDetail = lazy(() => import('./share-chain-detail.tsx').then((m) => ({ default: m.ShareScopeDetail })))
 
 function DataSidebarPublisher(props: DataSidebarLive) {
   useLayoutEffect(() => {
@@ -319,25 +257,8 @@ function DataSidebarPublisher(props: DataSidebarLive) {
   return null
 }
 
-function ShareButton(props: ComponentProps<typeof LazyShareButton>) {
-  return <Suspense fallback={null}><LazyShareButton {...props} /></Suspense>
-}
 function SharePanel(props: ComponentProps<typeof LazySharePanel>) {
   return <Suspense fallback={null}><LazySharePanel {...props} /></Suspense>
-}
-function ShareRoleDetail(props: ComponentProps<typeof LazyShareRoleDetail>) {
-  return (
-    <Suspense fallback={<ShareRoleLabel label={props.label} />}>
-      <LazyShareRoleDetail {...props} />
-    </Suspense>
-  )
-}
-function ShareScopeDetail(props: ComponentProps<typeof LazyShareScopeDetail>) {
-  return (
-    <Suspense fallback={<ShareScopeLabel label={props.label} />}>
-      <LazyShareScopeDetail {...props} />
-    </Suspense>
-  )
 }
 
 const EMPTY_VIEWS: CollectionViewType[] = []
@@ -348,8 +269,6 @@ let cachedLocalData: boolean | null = null
 registerWorkspaceCache('browser-local-data', () => {
   cachedLocalData = null
 })
-
-const QUERY_NEST_IGNORE = `${HEADLESS_DISMISS_IGNORE}, .db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`
 
 function sameGroupBuckets(a: GroupBucket[], b: GroupBucket[]): boolean {
   if (a === b) return true
@@ -376,12 +295,6 @@ function flatMapKey(obj: Record<string, boolean | number | string | undefined>):
 }
 
 const EMPTY_FILTERS: Record<string, string> = {}
-/** 与选区拖选同一阈值：位移超过这个距离只当拖，不当点击。 */
-const CELL_POP_DRAG_PX = 6
-const CELL_POP_IGNORE =
-  '.fsdb-row-check, .fsdb-col-resizer, .tasks-row-tools, .tasks-title-open, .tasks-tree-toggle, .fsdb-action-btn, .tasks-row-actions, .fsdb-boolbtn, .fsdb-thumb-btn, .fsdb-thumb, .biu-image, .fsdb-file-tools, .fsdb-ref-chip, .biu-tag-wrap, .db-datetime, .biu-calendar, .fsdb-scope-detail, .fsdb-source-table'
-const CELL_RANGE_IGNORE =
-  '.fsdb-row-check, .fsdb-col-resizer, .tasks-row-tools, .tasks-title-open, .tasks-tree-toggle, .fsdb-action-btn, .tasks-row-actions, .fsdb-file-tools, .fsdb-scope-detail'
 
 const EMPTY_COL_WINDOW: TableColumnSlice = { pin: 0, start: 0, end: 0, padLeft: 0, padRight: 0 }
 
@@ -1857,14 +1770,14 @@ export function CollectionBrowser({
   const entries = useMemo(() => fieldEntries(schema), [schema])
   const rowActionColumn = placedActions(schema, 'row').length > 0
   const allColumns = useMemo(
-    () => workspaceColumnsForLocation([
+    () => [
       ...entries.filter((item) => isListColumn(item.key) && item.key !== bodyKey && resolveFieldType(item.field) !== 'file'),
       ...(rowActionColumn
         ? [{ key: 'actions', kind: 'action' as const, field: { type: 'action' as const, label: '动作' } }]
         : []),
       ...flattenTagColumns(tagCatalog),
-    ], localData),
-    [bodyKey, entries, tagCatalog, localData, rowActionColumn],
+    ],
+    [bodyKey, entries, tagCatalog, rowActionColumn],
   )
   const allColumnKeys = useMemo(() => allColumns.map((item) => item.key), [allColumns])
   const schemaDefaultKeys = useMemo(

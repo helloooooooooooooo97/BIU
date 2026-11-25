@@ -1,7 +1,7 @@
 import { apiFetch } from '@biu/biu-ui/api-client'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { WrenchScrewdriverIcon, XMarkIcon } from '@heroicons/react/16/solid'
-import { CellMulti } from '@biu/database-ui'
+import { CellMulti } from '@biu/biu-ui/db-ui'
 import { normalizeSchemaValue, type CollectionSchemaPack, type SchemaFieldValue } from '@biu/type-file-system'
 import {
   bindSessionView,

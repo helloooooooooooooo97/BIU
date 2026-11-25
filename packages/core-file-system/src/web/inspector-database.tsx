@@ -9,7 +9,7 @@ import { buildCrumbs, crumbHotkeyPane, crumbParentHotkey, parentCrumbTarget, pat
 import { CrumbTrail } from './crumb-trail.tsx'
 import { defaultViewId, loadRecords, loadViews, peekRecord, rememberRecords, subscribeCrumbs, viewForPath } from './view-storage.ts'
 import { readJson } from './db-client.ts'
-import { builtinAllViewId, displayNameForView, isBuiltinAllViewId, stampRecordId, stampRowOpenTarget } from '../catalog-views.ts'
+import { displayNameForView, isBuiltinAllViewId, stampRecordId, stampRowOpenTarget } from '../catalog-views.ts'
 import { DATA_COLLECTION_PATH, DATA_MODULE, DATA_MODULE_ID, databaseAllViewPath, databaseRecordPath, databaseViewPath } from './database-path.ts'
 import { subscribeViaDataCrumbs, viaDataCrumbsOn, viaDataViewId } from './data-chrome.ts'
 import {

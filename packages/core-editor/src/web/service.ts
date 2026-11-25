@@ -1,7 +1,7 @@
 import { useSyncExternalStore, type ComponentType } from 'react'
 import { Service, type Context } from 'cordis'
 import { registerBlockAssets } from '@biu/type-file-system'
-import { clientLog } from '@biu/web-event-log/log'
+import { clientLog } from '@biu/biu-ui/event-log'
 import { setPageBlockPluginPhase } from './page-block-meta.ts'
 import { rememberSlashBlock } from './slash-memory.ts'
 
