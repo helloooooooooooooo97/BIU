@@ -31,6 +31,7 @@ export type StoredView = Partial<SavedView> & Pick<SavedView, 'id' | 'name'> & {
 export type PolicyViewGuard = {
   isLocked(workspaceId: string, collection: string, viewId: string): boolean
   canEditLocked(workspaceId: string, accountId: string): boolean
+  canSeeView?(workspaceId: string, collection: string, view: StoredView, accountId: string): boolean
   onRemoved?(workspaceId: string, collection: string, viewId: string): void
 }
 
@@ -208,7 +209,11 @@ export class SavedViewsStore {
   viewsFor(collectionPath: string, accountId = '', workspaceId = this.resolveWorkspaceId()): StoredView[] {
     const path = normalizeCollectionPath(collectionPath)
     const views = this.byPath.get(bucketKey(workspaceId, path)) ?? []
-    return views.filter((view) => isViewVisibleTo(view, path, accountId))
+    return views.filter(
+      (view) =>
+        isViewVisibleTo(view, path, accountId) &&
+        (!accountId || !this.policyGuard?.canSeeView || this.policyGuard.canSeeView(workspaceId, path, view, accountId)),
+    )
   }
 
   exportAll(accountId = '', workspaceId = this.resolveWorkspaceId()): Record<string, StoredView[]> {
@@ -322,13 +327,23 @@ export class SavedViewsStore {
       const all = builtinAllView({ path, label, view: table.view })
       emit(path, label, stored.find((view) => String(view.id) === all.id) ?? all)
       for (const view of stored) {
-        if (isViewVisibleTo(view, path, accountId)) emit(path, label, view)
+        if (
+          isViewVisibleTo(view, path, accountId) &&
+          (!accountId || !this.policyGuard?.canSeeView || this.policyGuard.canSeeView(workspaceId, path, view, accountId))
+        ) {
+          emit(path, label, view)
+        }
       }
     }
     for (const path of this.workspacePaths(workspaceId)) {
       if (tables.some((table) => normalizeCollectionPath(table.path) === path)) continue
       for (const view of this.byPath.get(bucketKey(workspaceId, path)) ?? []) {
-        if (isViewVisibleTo(view, path, accountId)) emit(path, labels.get(path) ?? path, view)
+        if (
+          isViewVisibleTo(view, path, accountId) &&
+          (!accountId || !this.policyGuard?.canSeeView || this.policyGuard.canSeeView(workspaceId, path, view, accountId))
+        ) {
+          emit(path, labels.get(path) ?? path, view)
+        }
       }
     }
     return out.sort((a, b) => String(a.table).localeCompare(String(b.table)) || String(a.title).localeCompare(String(b.title)))

@@ -12,7 +12,7 @@ import { asPublicProfile, writeWorkspaceProfile } from '@biu/host-workspace'
 import { DATABASE_CHANNEL, databaseChannelPayload, normalizeSchemaPack } from '@biu/type-file-system'
 import { buildAccessExplanation, type BuildAccessExplanationInput } from '../access-explanation.ts'
 import { displayNameForView, isReadOnlyViewId } from '../catalog-views.ts'
-import { PAGES_COLLECTION_PATH, TAGS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, isIndexCollection, normalizeCollectionPath } from '../paths.ts'
+import { PAGES_COLLECTION_PATH, TAGS_COLLECTION_PATH, VIEWS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, isIndexCollection, normalizeCollectionPath } from '../paths.ts'
 import { previewViewFilterImpact } from '../view-impact.ts'
 import { isSharePluginId } from '../share-resources.ts'
 import {
@@ -699,7 +699,12 @@ export function registerDatabaseHttpRoutes(
       const kind = body.kind === 'record' ? 'record' as const : 'view' as const
       const collection = String(body.collection ?? '')
       const recordId = String(body.recordId ?? '')
-      await db.requirePath(kind === 'record' ? `${collection}/${recordId}` : collection, 'resource:share')
+      // 原则 2 + 3：单条记录走记录级 resource:share；视图公开外链允许内部成员（非 viewer/external/guest）创建，
+      // 快照本身严格按 share.createdBy 的权限生成，不会放大暴露他人私密数据。
+      await db.requirePath(
+        kind === 'record' ? `${collection}/${recordId}` : VIEWS_COLLECTION_PATH,
+        kind === 'record' ? 'resource:share' : 'resource:update',
+      )
       if (body.enabled === false) {
         if (kind === 'record') shares.revokeRecord(collection, recordId)
         else shares.revokeTarget(kind, collection, body.viewId ?? '', body.recordId ?? '')

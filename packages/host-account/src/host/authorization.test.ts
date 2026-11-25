@@ -651,3 +651,32 @@ test('explicit member-view grant on a workspace record takes precedence over wor
   assert.equal(chain[0]?.role, 'editor')
   assert.equal(chain[0]?.source, 'view-grant')
 })
+
+test('anti-lockout & control/data separation: users cannot self-revoke/downgrade and workspace owner cannot delete others view grants', () => {
+  const { store, auth, workspace, ada, bob, cara, actor, page } = setup()
+  auth.attach(actor(ada.id), page('doc-1'), { accessMode: 'private' })
+  auth.grant(ada.id, page('doc-1'), 'account', bob.id, 'manager')
+
+  // Bob (manager, non-owner) cannot downgrade or revoke himself
+  assert.throws(() => auth.grant(bob.id, page('doc-1'), 'account', bob.id, 'viewer'), /CANNOT_MODIFY_OWN_GRANT/)
+  assert.throws(
+    () => runWithAccount(bob.id, () => store.revokeRecordGrant(bob.id, '/pages', 'doc-1', 'account', bob.id)),
+    /不能移除自己的权限/,
+  )
+
+  // Bob shares a custom view to Cara; workspace owner Ada cannot see or revoke Bob's view grant in share panel
+  runWithAccount(bob.id, () => {
+    store.shareViewWithEmail(bob.id, '/pages', 'v-bob', cara.email, 'editor', 'internal')
+  })
+  const adaView = runWithAccount(ada.id, () => store.viewAccess(ada.id, '/pages', 'v-bob'))
+  assert.equal(adaView.people.length, 0)
+  assert.throws(
+    () => runWithAccount(ada.id, () => store.revokeViewGrant(ada.id, '/pages', 'v-bob', 'account', cara.id)),
+    /协作者不存在|无权/,
+  )
+  // Bob himself CAN revoke his own grant
+  runWithAccount(bob.id, () => store.revokeViewGrant(bob.id, '/pages', 'v-bob', 'account', cara.id))
+  const bobView = runWithAccount(bob.id, () => store.viewAccess(bob.id, '/pages', 'v-bob'))
+  assert.equal(bobView.people.length, 0)
+  assert.ok(workspace.id)
+})

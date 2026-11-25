@@ -783,6 +783,10 @@ export class AuthorizationService {
     if (policy && !isOwner && !decision.allowed) {
       throw new Error('permission denied: INSUFFICIENT_PERMISSION')
     }
+    // 原则 1（防自锁）：非创建者不能修改自己在当前记录上的直接授权，避免误降级把自己锁在门外
+    if (policy && !isOwner && subjectType === 'account' && subjectId === actorId) {
+      throw new Error('permission denied: CANNOT_MODIFY_OWN_GRANT')
+    }
     // 禁止角色放大：授权人不能授予高于自己有效角色的权限（例如 manager 不能授出 owner）
     if (policy) {
       const actorRole: ResourceRole = isOwner ? 'owner' : (decision.allowed ? decision.effectiveRole : 'viewer')
@@ -969,6 +973,43 @@ export class AuthorizationService {
     return this.collectRoleChain(accountId, resource, new Set(), 0, true)
   }
 
+  private resolveLocalPolicyRole(
+    accountId: string,
+    resource: Extract<ResourceRef, { type: 'record' }>,
+    policy: PolicyRow | null | undefined,
+  ): {
+    role: ResourceRole
+    source: 'ownership' | 'direct-grant' | 'group-grant' | 'view-grant' | 'workspace-default' | 'legacy'
+    detail: string
+  } | null {
+    if (!policy) {
+      const ownerId = this.legacyOwnerId(resource)
+      if (!ownerId) return null
+      if (ownerId === accountId) return { role: 'owner', source: 'legacy', detail: '你是创建者' }
+      if (this.membershipKind(accountId, resource.workspaceId) !== 'member') return null
+      const role: ResourceRole = this.membership(accountId, resource.workspaceId) === 'viewer' ? 'viewer' : 'editor'
+      return { role, source: 'legacy', detail: '沿用空间里的旧记录' }
+    }
+    if (policy.owner_account_id === accountId) return { role: 'owner', source: 'ownership', detail: '你是创建者' }
+    const direct = this.directRole(accountId, resource)
+    if (direct) {
+      const detail = direct.source === 'group-grant'
+        ? '通过成员组授权'
+        : direct.source === 'view-grant'
+          ? '通过成员视图授权'
+          : direct.source === 'direct-grant'
+            ? '直接授权给你'
+            : '按空间角色授权'
+      return { role: direct.effectiveRole, source: direct.source, detail }
+    }
+    if (policy.access_mode === 'members' && this.membershipKind(accountId, resource.workspaceId) === 'member') {
+      const role = memberAccessRole(policy, this.membership(accountId, resource.workspaceId))
+      const detail = role === 'viewer' ? '查看者默认可查看' : '空间成员默认可编辑'
+      return { role, source: 'workspace-default', detail }
+    }
+    return null
+  }
+
   private collectRoleChain(
     accountId: string,
     resource: Extract<ResourceRef, { type: 'record' }>,
@@ -990,48 +1031,27 @@ export class AuthorizationService {
     const title = top ? '这条内容' : '上一级内容'
     const base = { id: key, collection: resource.collection, recordId: resource.recordId, title }
     const policy = this.policy(resource)
-    if (!policy) {
-      const ownerId = this.legacyOwnerId(resource)
-      if (!ownerId) return []
-      if (ownerId === accountId) return [{ ...base, detail: '你是创建者', role: 'owner', source: 'ownership' }]
-      if (this.membershipKind(accountId, resource.workspaceId) !== 'member') return []
-      const role: ResourceRole = this.membership(accountId, resource.workspaceId) === 'viewer' ? 'viewer' : 'editor'
-      return [{ ...base, detail: '沿用空间里的旧记录', role, source: 'legacy' }]
+    const local = this.resolveLocalPolicyRole(accountId, resource, policy)
+    const parent = policy?.access_mode === 'inherit' && policy.parent_record_id
+      ? this.collectRoleChain(
+          accountId,
+          {
+            type: 'record',
+            workspaceId: resource.workspaceId,
+            collection: policy.parent_collection || resource.collection,
+            recordId: policy.parent_record_id,
+          },
+          visited,
+          depth + 1,
+          false,
+        )
+      : []
+    const inheritedRole = parent.length ? parent[parent.length - 1]!.role : null
+    if (local && (!inheritedRole || ROLE_RANK[local.role] >= ROLE_RANK[inheritedRole])) {
+      return [{ ...base, detail: local.detail, role: local.role, source: local.source === 'legacy' && local.role === 'owner' ? 'ownership' : local.source }]
     }
-    if (policy.owner_account_id === accountId) return [{ ...base, detail: '你是创建者', role: 'owner', source: 'ownership' }]
-    const direct = this.directRole(accountId, resource)
-    if (direct) {
-      const detail = direct.source === 'group-grant'
-        ? '通过成员组授权'
-        : direct.source === 'view-grant'
-          ? '通过成员视图授权'
-          : direct.source === 'direct-grant'
-            ? '直接授权给你'
-            : '按空间角色授权'
-      return [{ ...base, detail, role: direct.effectiveRole, source: direct.source }]
-    }
-    if (policy.access_mode === 'members' && this.membershipKind(accountId, resource.workspaceId) === 'member') {
-      const membership = this.membership(accountId, resource.workspaceId)
-      const role = memberAccessRole(policy, membership)
-      const detail = role === 'viewer' ? '查看者默认可查看' : '空间成员默认可编辑'
-      return [{ ...base, detail, role, source: 'workspace-default' }]
-    }
-    if (policy.access_mode === 'inherit' && policy.parent_record_id) {
-      const parent = this.collectRoleChain(
-        accountId,
-        {
-          type: 'record',
-          workspaceId: resource.workspaceId,
-          collection: policy.parent_collection || resource.collection,
-          recordId: policy.parent_record_id,
-        },
-        visited,
-        depth + 1,
-        false,
-      )
-      if (!parent.length) return []
-      const concrete = parent[parent.length - 1]!
-      return [{ ...base, detail: '继承上级权限', role: concrete.role, source: 'inherited' }, ...parent]
+    if (inheritedRole) {
+      return [{ ...base, detail: '继承上级权限', role: inheritedRole, source: 'inherited' }, ...parent]
     }
     return []
   }
@@ -1047,31 +1067,13 @@ export class AuthorizationService {
     visited.add(key)
 
     const policy = this.policy(resource)
-    if (!policy) {
-      const ownerId = this.legacyOwnerId(resource)
-      if (!ownerId) return null
-      if (ownerId === accountId) return { effectiveRole: 'owner', source: 'legacy' }
-      if (this.membershipKind(accountId, resource.workspaceId) !== 'member') return null
-      return {
-        effectiveRole: this.membership(accountId, resource.workspaceId) === 'viewer' ? 'viewer' : 'editor',
-        source: 'legacy',
-      }
+    const local = this.resolveLocalPolicyRole(accountId, resource, policy)
+    if (local && (local.source === 'ownership' || !policy)) {
+      return { effectiveRole: local.role, source: local.source }
     }
-    if (policy.owner_account_id === accountId) return { effectiveRole: 'owner', source: 'ownership' }
-
     const candidates: Array<Omit<Extract<Decision, { allowed: true }>, 'allowed'>> = []
-    const direct = this.directRole(accountId, resource)
-    if (direct) candidates.push(direct)
-
-    // 显式授权（直接授权 / 成员组 / 成员视图如「全部成员=可编辑」）优先于空间默认兜底，
-    // 保证与 collectRoleChain 一致，不再把空间管理员静默抬升为可管理导致列表与弹窗跳变。
-    if (!direct && policy.access_mode === 'members' && this.membershipKind(accountId, resource.workspaceId) === 'member') {
-      candidates.push({
-        effectiveRole: memberAccessRole(policy, this.membership(accountId, resource.workspaceId)),
-        source: 'workspace-default',
-      })
-    }
-    if (policy.access_mode === 'inherit' && policy.parent_record_id) {
+    if (local) candidates.push({ effectiveRole: local.role, source: local.source })
+    if (policy?.access_mode === 'inherit' && policy.parent_record_id) {
       const inherited = this.effectiveRole(
         accountId,
         {
