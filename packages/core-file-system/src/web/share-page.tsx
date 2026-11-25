@@ -359,14 +359,15 @@ function SharePage({
 
   const schema = snapshot.schema
   const live = snapshot
-  const listed = snapshot.kind === 'view' && queryState
+  const isCollectionShare = snapshot.kind === 'view' || snapshot.kind === 'rule'
+  const listed = isCollectionShare && queryState
     ? applyShareQuery(snapshot.records, schema, queryState, snapshot.contents, snapshot.tags)
     : snapshot.records
   const total = listed.length
   const lastPage = Math.max(0, Math.ceil(total / pageSize) - 1)
   const safePage = Math.min(page, lastPage)
-  const grouped = Boolean(snapshot.kind === 'view' && snapshot.view?.groupBy)
-  const paged = snapshot.kind === 'view' && !grouped ? listed.slice(safePage * pageSize, safePage * pageSize + pageSize) : listed
+  const grouped = Boolean(isCollectionShare && snapshot.view?.groupBy)
+  const paged = isCollectionShare && !grouped ? listed.slice(safePage * pageSize, safePage * pageSize + pageSize) : listed
   const shown = selected ?? (snapshot.kind === 'record' ? snapshot.records[0] : null)
   const detailChrome = chromeFor?.(snapshot.collection) ?? chrome
   if (recordId && !shown) {
@@ -382,7 +383,7 @@ function SharePage({
 
   async function downloadShare() {
     const packed =
-      live.kind === 'view' && live.records.some((row) => !Object.prototype.hasOwnProperty.call(live.contents, row.id))
+      (live.kind === 'view' || live.kind === 'rule') && live.records.some((row) => !Object.prototype.hasOwnProperty.call(live.contents, row.id))
         ? await loadSnapshot(token, password, { contents: 'all' })
         : live
     if (!packed || 'error' in packed || 'needsPassword' in packed) return
@@ -423,15 +424,15 @@ function SharePage({
   const canCopy = snapshot.allowCopy !== false
   const pluginIds = snapshot.sharePlugins ? snapshot.pluginIds ?? [] : []
   const canDownload = canCopy || pluginIds.length > 0
-  const viewIndex = shown && snapshot.kind === 'view' ? listed.findIndex((row) => row.id === shown.id) : -1
-  const viewNav = snapshot.kind === 'view' && listed.length > 1
+  const viewIndex = shown && isCollectionShare ? listed.findIndex((row) => row.id === shown.id) : -1
+  const viewNav = isCollectionShare && listed.length > 1
   const tableLabel = snapshot.collectionLabel || snapshot.title
-  const crumbs = snapshot.kind === 'view'
+  const crumbs = isCollectionShare
     ? buildCrumbs({
         collection: snapshot.collection,
         collectionLabel: tableLabel,
         tables: [{ path: snapshot.collection, label: tableLabel }],
-        viewId: snapshot.viewId,
+        viewId: snapshot.viewId || snapshot.ruleId || '',
         viewName: snapshot.title,
         views: [{ id: snapshot.viewId, name: snapshot.title }],
         recordId: shown?.id,
@@ -653,7 +654,7 @@ function SharePage({
               <h1 className="fsdb-detail-title">{snapshot.title}</h1>
             </div>
           </div>
-          {snapshot.kind === 'view' && queryState ? (
+          {isCollectionShare && queryState ? (
             <ShareViewQueryBar
               schema={schema}
               records={snapshot.records}

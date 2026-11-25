@@ -6,11 +6,13 @@ import { countFilterRules, filterTreeStateKey, normalizeSorts, resolveViewFilter
 
 export type GroupSortMode = 'manual' | 'asc' | 'desc'
 
-/** 视图自身的可见范围三态：私人（仅创建者可见可改）、空间（空间内部成员可见）、共享（含外部/跨人授权或公开外链）。 */
-export type ViewScope = 'personal' | 'workspace' | 'shared'
+/** 视图自身的可见范围两态（纯展示，不授予底层数据权限）：私人（仅创建者可见）、空间（空间内部成员可见）。 */
+export type ViewScope = 'personal' | 'workspace'
 
 export function normalizeViewScope(value: unknown): ViewScope | undefined {
-  return value === 'personal' || value === 'workspace' || value === 'shared' ? value : undefined
+  if (value === 'personal' || value === 'workspace') return value
+  if (value === 'shared') return 'personal'
+  return undefined
 }
 
 export type GroupConfig = {
