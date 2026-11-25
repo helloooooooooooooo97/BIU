@@ -2206,27 +2206,6 @@ export class CollabStore {
     return this.recordAccess(actorId, collection, recordId)
   }
 
-  viewGrantAudiences(workspaceId: string, collection: string) {
-    return this.db
-      .prepare(
-        `SELECT g.view_id, g.subject_type, g.subject_id, g.granted_by, COALESCE(m.member_kind, '') AS member_kind
-         FROM view_grants g
-         LEFT JOIN workspace_members m
-           ON g.subject_type = 'account'
-          AND m.workspace_id = g.workspace_id
-          AND m.account_id = g.subject_id
-         WHERE g.workspace_id = ? AND g.collection = ?
-         ORDER BY g.created_at`,
-      )
-      .all(workspaceId, collection) as Array<{
-        view_id: string
-        subject_type: 'account' | 'member_view'
-        subject_id: string
-        granted_by: string
-        member_kind: string
-      }>
-  }
-
   private viewGrantShares(workspaceId: string, collection: string) {
     const people = this.db
       .prepare(

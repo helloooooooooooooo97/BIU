@@ -814,10 +814,6 @@ export class DatabaseService extends Service implements Database {
     return this.access.recordsInScope(collection, rows, scope)
   }
 
-  allowsViaView(collection: string, record: { id?: unknown }, action: PermissionAction = 'resource:read') {
-    return this.access.allowsViaView(collection, record, action)
-  }
-
   private attachWorkspaceRecord(
     collection: string,
     recordId: string,
@@ -909,8 +905,7 @@ export class DatabaseService extends Service implements Database {
         collection: ref.collection,
         recordId: ref.record_id,
       }
-      if (authorization.authorize(actor, action, resource).allowed) return true
-      return this.allowsViaView(ref.collection, { id: ref.record_id }, action)
+      return authorization.authorize(actor, action, resource).allowed
     })
     if (allowed) return
     if (action === 'resource:update' && refs.length === 0) {
@@ -2610,9 +2605,21 @@ export function apply(ctx: Context) {
     // 方案 B（视图归展示，规则归安全）：视图不再绑定数据权限，创建者可随时自由修改筛选/列/删除视图
     isLocked: () => false,
     canEditLocked: () => true,
-    canSeeView: (workspaceId, _collection, view, accountId) => {
+    canSeeView: (workspaceId, collection, view, accountId) => {
       if (!account?.store || !workspaceId || !accountId) return true
       if (view.createdBy === accountId) return true
+      // 显式分享给某成员或成员视图（如「空间成员」）的视图，被分享者可见该视图本身（不授予底层数据记录权限）
+      const grants = account.store.viewGrantsFor?.(workspaceId, collection) ?? []
+      const explicitlyShared = grants.some(
+        (g) =>
+          g.view_id === String(view.id) &&
+          (g.subject_type === 'account'
+            ? g.subject_id === accountId
+            : Boolean(account.authorization?.matchesMemberView(workspaceId, g.subject_id, accountId))),
+      )
+      if (explicitlyShared) return true
+      // 未显式分享的私人视图仅创建者本人可见
+      if (view.scope === 'personal' && view.createdBy) return false
       let isInternal = true
       try {
         const members = account.store.members(accountId, workspaceId)
@@ -2639,9 +2646,6 @@ export function apply(ctx: Context) {
     return workspaceId && account?.workspaceLocation?.(workspaceId) === 'cloud' ? 'cloud' : 'device'
   }
   db.viewCatalog = savedViews
-  ctx.inject(['sessions'], (inner) => {
-    inner.sessions.viewAccess = (id, record) => db.allowsViaView(AGENTS_COLLECTION_PATH, { ...record, id })
-  })
   account?.authorization?.setMemberViewMatcher((workspaceId, viewId, accountId) => {
     const view = savedViews.viewsFor(WORKSPACE_MEMBERS_COLLECTION_PATH, '', workspaceId).find((item) => item.id === viewId)
       ?? stubBuiltinMemberView(viewId)

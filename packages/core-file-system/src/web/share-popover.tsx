@@ -334,20 +334,6 @@ function WorkspaceAccess({
   >(null)
   const [memberPickerOpen, setMemberPickerOpen] = useState(false)
   const [role, setRole] = useState<'viewer' | 'commenter' | 'editor' | 'manager'>('editor')
-  const [viewGrants, setViewGrants] = useState<Array<{
-    viewId: string
-    subjectType: 'account' | 'member_view'
-    subjectId: string
-    role: string
-    name: string
-    avatar?: string
-    email: string
-    memberKind: 'member' | 'external' | 'guest'
-    grantedBy?: string
-  }>>([])
-  const [record, setRecord] = useState<DbRecord | null>(null)
-  const [dataViews, setDataViews] = useState<Array<{ id: string; name: string; filters?: Record<string, unknown> }>>([])
-  const [tableLabel, setTableLabel] = useState('')
   const [guestUrl, setGuestUrl] = useState('')
   const [guestCopied, setGuestCopied] = useState(false)
   const [inheritance, setInheritance] = useState<{ mode: 'inherit' | 'custom'; hasParent: boolean }>({ mode: 'custom', hasParent: false })
@@ -380,16 +366,6 @@ function WorkspaceAccess({
         canEdit?: boolean
         canRevoke?: boolean
       }>
-      viewGrants?: Array<{
-        viewId: string
-        subjectType: 'account' | 'member_view'
-        subjectId: string
-        role: string
-        name: string
-        avatar?: string
-        email: string
-        memberKind: 'member' | 'external' | 'guest'
-      }>
       inheritance?: {
         mode?: 'inherit' | 'custom'
         hasParent?: boolean
@@ -408,7 +384,6 @@ function WorkspaceAccess({
       ...item,
       name: availableMemberViews.find((view) => view.id === item.id)?.name ?? item.id,
     })))
-    setViewGrants(data.viewGrants ?? [])
     setInheritance({
       mode: data.inheritance?.mode === 'inherit' ? 'inherit' : 'custom',
       hasParent: Boolean(data.inheritance?.hasParent),
@@ -472,43 +447,6 @@ function WorkspaceAccess({
       .catch((error) => {
         console.warn('[share-popover] load workspace members failed', error)
         setWorkspaceMembers([])
-      })
-    if (viewId || !recordId) {
-      setRecord(null)
-      setDataViews([])
-      return
-    }
-    void listCollection({ path: collection, limit: 1, filters: { id: recordId } })
-      .then((page) => setRecord(page.items[0] ?? null))
-      .catch((error) => {
-        console.warn('[share-popover] load record failed', collection, recordId, error)
-        setRecord(null)
-      })
-    void listCollection({
-      path: VIEWS_COLLECTION_PATH,
-      limit: 200,
-      filters: { tablePath: collection },
-      columns: ['title', 'table', 'viewId', 'filters'],
-    })
-      .then((page) => {
-        const label = String(page.items[0]?.table ?? '').trim()
-        if (label) setTableLabel(label)
-        setDataViews(page.items.flatMap((row) => {
-          const id = String(row.viewId ?? '').trim()
-          if (!id) return []
-          let filters: Record<string, unknown> | undefined
-          try {
-            const parsed = JSON.parse(String(row.filters ?? '{}'))
-            filters = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined
-          } catch {
-            filters = undefined
-          }
-          return [{ id, name: String(row.title ?? id), filters }]
-        }))
-      })
-      .catch((error) => {
-        console.warn('[share-popover] load data views failed', collection, error)
-        setDataViews([])
       })
   }, [collection, recordId, viewId])
 

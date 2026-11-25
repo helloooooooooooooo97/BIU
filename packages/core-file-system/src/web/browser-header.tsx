@@ -1,10 +1,9 @@
 import { lazy, memo, Suspense, type ComponentProps, type RefObject } from 'react'
 import { EllipsisHorizontalIcon } from '@heroicons/react/16/solid'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
-import type { CollectionSchema, DbRecord } from '@biu/type-file-system'
+import type { DbRecord } from '@biu/type-file-system'
 import { CrumbTrail } from './crumb-trail.tsx'
 import type { Crumb, CrumbTarget } from './sidebar-nav.ts'
-import type { QueryField } from './query-menus.tsx'
 import type { SavedView } from './saved-view.ts'
 import {
   PLUGINS_COLLECTION_PATH,
@@ -21,21 +20,12 @@ import {
 } from './view-storage.ts'
 
 const LazyShareButton = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareButton })))
-const LazyAccessRulesButton = lazy(() => import('./access-rules-drawer.tsx').then((m) => ({ default: m.AccessRulesButton })))
 const LayoutPrefsMenu = lazy(() => import('./layout-prefs-menu.tsx').then((m) => ({ default: m.LayoutPrefsMenu })))
 
 function ShareButton(props: ComponentProps<typeof LazyShareButton>) {
   return (
     <Suspense fallback={null}>
       <LazyShareButton {...props} />
-    </Suspense>
-  )
-}
-
-function AccessRulesButton(props: ComponentProps<typeof LazyAccessRulesButton>) {
-  return (
-    <Suspense fallback={null}>
-      <LazyAccessRulesButton {...props} />
     </Suspense>
   )
 }
@@ -48,9 +38,6 @@ export const BrowserHeader = memo(function BrowserHeader({
   views,
   activeViewId,
   activeView,
-  schema,
-  filterFields,
-  filterValueOptions,
   selected,
   detailId,
   detailRow,
@@ -77,9 +64,6 @@ export const BrowserHeader = memo(function BrowserHeader({
   views: SavedView[]
   activeViewId: string | null
   activeView?: SavedView
-  schema?: CollectionSchema
-  filterFields?: QueryField[]
-  filterValueOptions?: (field: QueryField) => Array<{ value: string; label: string }>
   selected: DbRecord | null
   detailId: string | null
   detailRow: DbRecord | null
@@ -146,42 +130,29 @@ export const BrowserHeader = memo(function BrowserHeader({
             <UiGlyph icon="star" />
           </button>
         ) : null}
-        {isSystemCollection(collectionPath) || isIndexCollection(collectionPath) || (collectionPath === PLUGINS_COLLECTION_PATH && detailRow?.builtin === true) ? null : detailId ? (
+        {isSystemCollection(collectionPath) || isIndexCollection(collectionPath) || (collectionPath === PLUGINS_COLLECTION_PATH && detailRow?.builtin === true) ? null : (
           <ShareButton
             localOnly={localData}
-            target={{
-              kind: 'record' as const,
-              collection: collectionPath,
-              viewId: activeViewId ?? undefined,
-              recordId: detailId,
-              title: String(detailRow?.title ?? title),
-            }}
+            target={
+              detailId
+                ? {
+                    kind: 'record' as const,
+                    collection: collectionPath,
+                    viewId: activeViewId ?? undefined,
+                    recordId: detailId,
+                    title: String(detailRow?.title ?? title),
+                  }
+                : !nested && activeViewId
+                  ? {
+                      kind: 'view' as const,
+                      collection: collectionPath,
+                      viewId: activeViewId,
+                      title: activeView?.name ?? title,
+                    }
+                  : null
+            }
           />
-        ) : !nested ? (
-          <>
-            {!localData ? (
-              <AccessRulesButton
-                collectionPath={collectionPath}
-                activeView={activeView}
-                schema={schema}
-                filterFields={filterFields}
-                filterValueOptions={filterValueOptions}
-                localOnly={localData}
-              />
-            ) : null}
-            {activeViewId ? (
-              <ShareButton
-                localOnly={localData}
-                target={{
-                  kind: 'view' as const,
-                  collection: collectionPath,
-                  viewId: activeViewId,
-                  title: activeView?.name ?? title,
-                }}
-              />
-            ) : null}
-          </>
-        ) : null}
+        )}
         <div className="fsdb-layout-wrap" ref={layoutRef}>
           <button
             type="button"

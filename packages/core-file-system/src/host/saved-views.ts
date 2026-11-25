@@ -206,14 +206,18 @@ export class SavedViewsStore {
     return paths
   }
 
+  private canAccountSeeView(workspaceId: string, path: string, view: StoredView, accountId: string): boolean {
+    if (isIndexCollection(path)) return view.createdBy === accountId
+    if (accountId && this.policyGuard?.canSeeView) {
+      return this.policyGuard.canSeeView(workspaceId, path, view, accountId)
+    }
+    return isViewVisibleTo(view, path, accountId)
+  }
+
   viewsFor(collectionPath: string, accountId = '', workspaceId = this.resolveWorkspaceId()): StoredView[] {
     const path = normalizeCollectionPath(collectionPath)
     const views = this.byPath.get(bucketKey(workspaceId, path)) ?? []
-    return views.filter(
-      (view) =>
-        isViewVisibleTo(view, path, accountId) &&
-        (!accountId || !this.policyGuard?.canSeeView || this.policyGuard.canSeeView(workspaceId, path, view, accountId)),
-    )
+    return views.filter((view) => this.canAccountSeeView(workspaceId, path, view, accountId))
   }
 
   exportAll(accountId = '', workspaceId = this.resolveWorkspaceId()): Record<string, StoredView[]> {
@@ -327,10 +331,7 @@ export class SavedViewsStore {
       const all = builtinAllView({ path, label, view: table.view })
       emit(path, label, stored.find((view) => String(view.id) === all.id) ?? all)
       for (const view of stored) {
-        if (
-          isViewVisibleTo(view, path, accountId) &&
-          (!accountId || !this.policyGuard?.canSeeView || this.policyGuard.canSeeView(workspaceId, path, view, accountId))
-        ) {
+        if (this.canAccountSeeView(workspaceId, path, view, accountId)) {
           emit(path, label, view)
         }
       }
@@ -338,10 +339,7 @@ export class SavedViewsStore {
     for (const path of this.workspacePaths(workspaceId)) {
       if (tables.some((table) => normalizeCollectionPath(table.path) === path)) continue
       for (const view of this.byPath.get(bucketKey(workspaceId, path)) ?? []) {
-        if (
-          isViewVisibleTo(view, path, accountId) &&
-          (!accountId || !this.policyGuard?.canSeeView || this.policyGuard.canSeeView(workspaceId, path, view, accountId))
-        ) {
+        if (this.canAccountSeeView(workspaceId, path, view, accountId)) {
           emit(path, labels.get(path) ?? path, view)
         }
       }

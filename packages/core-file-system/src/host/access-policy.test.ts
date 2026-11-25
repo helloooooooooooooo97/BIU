@@ -1,17 +1,14 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'vitest'
-import { builtinAllViewId } from '../catalog-views.ts'
 import { DatabaseAccessPolicy, type AccessPolicyHost, type WorkspaceFiles } from './access-policy.ts'
 
 function createPolicy(
   rules: NonNullable<WorkspaceFiles['listActiveAccessRulesForCollection']> extends (...args: never[]) => infer R ? R : never,
-  viewGrants: NonNullable<WorkspaceFiles['viewGrantsFor']> extends (...args: never[]) => infer R ? R : never = [],
 ) {
   const store: WorkspaceFiles = {
     activeWorkspaceId: () => 'ws-1',
     membership: () => ({ active: 'ws-1', home: 'ws-1', mine: new Set(), any: new Set() }),
     attach: () => {},
-    viewGrantsFor: () => viewGrants,
     listActiveAccessRulesForCollection: () => rules,
     collectionRecordOwners: () => new Map([['rec-1', 'owner-1']]),
   }
@@ -21,7 +18,6 @@ function createPolicy(
     scopeCurrent: () => 'workspace' as const,
     currentActor: () => ({ type: 'account' as const, accountId: 'acc-1', workspaceId: 'ws-1' }),
     authorize: () => ({ allowed: true, effectiveRole: 'editor', source: 'access-rule' }),
-    hasDataViewMatcher: () => false,
     canGrantorShareRecord: () => true,
   }
   const host = {
@@ -39,23 +35,7 @@ function createPolicy(
   return new DatabaseAccessPolicy(host)
 }
 
-describe('DatabaseAccessPolicy access_rules column whitelist & view_grants isolation', () => {
-  const allViewId = builtinAllViewId('/pages')
-
-  it('view_grants never grants data record roles via viewGrantRole', () => {
-    const policy = createPolicy([], [
-      {
-        view_id: allViewId,
-        subject_type: 'account',
-        subject_id: 'acc-1',
-        role: 'editor',
-        granted_by: 'owner-1',
-      },
-    ])
-    assert.equal(policy.viewGrantRole('ws-1', '/pages', { id: 'rec-1' }, 'acc-1'), null)
-    assert.equal(policy.allowsViaView('/pages', { id: 'rec-1' }, 'resource:update'), false)
-  })
-
+describe('DatabaseAccessPolicy access_rules column whitelist', () => {
   it('enforces readable and writable column whitelist from active access_rules', () => {
     const policy = createPolicy([
       {

@@ -129,6 +129,7 @@ export function AccessRulesButton({
   filterFields = [],
   filterValueOptions,
   localOnly = false,
+  buttonClassName = 'chat-view-header-expand',
 }: {
   collectionPath: string
   activeView?: SavedView
@@ -136,6 +137,7 @@ export function AccessRulesButton({
   filterFields?: QueryField[]
   filterValueOptions?: (field: QueryField) => Array<{ value: string; label: string }>
   localOnly?: boolean
+  buttonClassName?: string
 }) {
   const [open, setOpen] = useState(false)
   const [rules, setRules] = useState<AccessRuleItem[]>([])
@@ -603,10 +605,10 @@ export function AccessRulesButton({
     <>
       <button
         type="button"
-        className={`chat-view-header-expand${open || hasActiveRules ? ' is-active' : ''}`}
+        className={`${buttonClassName}${open || hasActiveRules ? ' is-active' : ''}`}
         style={hasActiveRules ? { color: 'var(--biu-color-emphasis)' } : undefined}
-        title={hasActiveRules ? '已启用分享规则' : '分享与规则'}
-        aria-label="分享与规则"
+        title={hasActiveRules ? '已启用分享规则' : '分享数据与规则'}
+        aria-label="分享数据与规则"
         data-testid="access-rules-trigger"
         onClick={() => setOpen((prev) => !prev)}
       >

@@ -444,3 +444,44 @@ test('three-state view scope (personal / workspace / shared) enforces visibility
   store.applyPatch('/pages', { remove: ['v-personal'] }, 'alice')
   assert.equal(store.viewsFor('/pages', 'alice').some((v) => v.id === 'v-personal'), false)
 })
+
+test('explicitly shared personal views become visible via policyGuard.canSeeView', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'biu-saved-views-shared-'))
+  const file = join(dir, 'biu.sqlite')
+  const store = new SavedViewsStore().open(file)
+  store.setWorkspaceResolver(() => 'ws-1')
+  const sharedToBob = new Set(['v-shared-personal'])
+  store.setPolicyGuard({
+    isLocked: () => false,
+    canEditLocked: () => true,
+    canSeeView: (_ws, _col, view, accountId) => {
+      if (view.createdBy === accountId) return true
+      if (sharedToBob.has(view.id) && accountId === 'bob') return true
+      return view.scope !== 'personal'
+    },
+  })
+
+  store.applyPatch(
+    '/pages',
+    {
+      upsert: [
+        { id: 'v-private', name: 'Private Only', scope: 'personal' },
+        { id: 'v-shared-personal', name: 'Shared View 97', scope: 'personal' },
+      ],
+    },
+    'alice',
+  )
+
+  assert.deepEqual(
+    store.viewsFor('/pages', 'alice').map((v) => v.id),
+    ['v-private', 'v-shared-personal'],
+  )
+  assert.deepEqual(
+    store.viewsFor('/pages', 'bob').map((v) => v.id),
+    ['v-shared-personal'],
+  )
+  assert.deepEqual(
+    store.viewsFor('/pages', 'charlie').map((v) => v.id),
+    [],
+  )
+})
