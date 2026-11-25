@@ -666,3 +666,44 @@ test('sidebar account footer displays current account avatar and name and opens 
   cleanup()
   localStorage.clear()
 })
+
+test('account settings can generate primary-color AI avatar and pick built-in avatar presets', async () => {
+  localStorage.clear()
+  localStorage.setItem('biu.account.token', 'tok')
+  const savedAvatars: string[] = []
+  let currentAvatar = ''
+  globalThis.fetch = (async (path: string, init?: RequestInit) => {
+    const url = String(path)
+    if (url.endsWith('/me')) {
+      return json({ id: 'acc_97', name: '97', email: '97@example.com', avatar: currentAvatar })
+    }
+    if (url.endsWith('/api/account/profile') && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body)) as { avatar?: string }
+      if (typeof body.avatar === 'string') {
+        currentAvatar = body.avatar
+        savedAvatars.push(body.avatar)
+      }
+      return json({ id: 'acc_97', name: '97', email: '97@example.com', avatar: currentAvatar })
+    }
+    return json({})
+  }) as typeof fetch
+
+  render(<ShellSettingsAccount />)
+  await screen.findByTestId('settings-avatar-studio')
+
+  fireEvent.click(screen.getByTestId('settings-avatar-theme-emerald'))
+  await waitFor(() => assert.equal(savedAvatars.length, 1))
+  assert.match(decodeURIComponent(savedAvatars[0]!), /data-biu-theme="emerald"/)
+
+  fireEvent.click(screen.getByTestId('settings-avatar-ai-shuffle'))
+  await waitFor(() => assert.equal(savedAvatars.length, 2))
+  assert.match(decodeURIComponent(savedAvatars[1]!), /data-biu-theme="emerald"/)
+  assert.notEqual(savedAvatars[1], savedAvatars[0])
+
+  fireEvent.click(screen.getByTestId('settings-avatar-preset-cat'))
+  await waitFor(() => assert.equal(savedAvatars.length, 3))
+  assert.match(decodeURIComponent(savedAvatars[2]!), /data-biu-preset="cat"/)
+
+  cleanup()
+  localStorage.clear()
+})

@@ -4,9 +4,16 @@ import { syncWorkspaceEndpoint } from '@biu/biu-ui/workspace-transport'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type Ref } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ArrowRightStartOnRectangleIcon, BellIcon, ChatBubbleLeftRightIcon, CheckIcon, ChevronRightIcon, CircleStackIcon, ClipboardDocumentIcon, CloudIcon, ComputerDesktopIcon, Cog6ToothIcon, CameraIcon, EyeIcon, EyeSlashIcon, MagnifyingGlassIcon, PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
+import { ArrowPathIcon, ArrowRightStartOnRectangleIcon, BellIcon, ChatBubbleLeftRightIcon, CheckIcon, ChevronRightIcon, CircleStackIcon, ClipboardDocumentIcon, CloudIcon, ComputerDesktopIcon, Cog6ToothIcon, CameraIcon, EyeIcon, EyeSlashIcon, MagnifyingGlassIcon, PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { AnchorMenu } from '@biu/biu-ui/anchor-menu'
-import { AiAvatar } from '@biu/biu-ui/ai-avatar'
+import {
+  AI_AVATAR_THEMES,
+  AiAvatar,
+  BUILTIN_AVATAR_PRESETS,
+  buildAiAvatarDataUrl,
+  detectAiAvatarTheme,
+  detectBuiltinAvatarPreset,
+} from '@biu/biu-ui/ai-avatar'
 import { TagChip } from '@biu/biu-ui/tag-chip'
 import { ConfirmDialog } from '@biu/biu-ui/confirm-dialog'
 import { chromeIcon } from './chrome-icon.ts'
@@ -178,8 +185,12 @@ export function ShellSettingsAccount() {
   const [accountName, setAccountName] = useState('')
   const [profileMessage, setProfileMessage] = useState('')
   const [savingProfile, setSavingProfile] = useState(false)
+  const [aiVariant, setAiVariant] = useState(0)
   const avatarFileRef = useRef<HTMLInputElement>(null)
   const token = readAccountToken()
+  const activeAiTheme = detectAiAvatarTheme(account.avatar)
+  const activePreset = detectBuiltinAvatarPreset(account.avatar)
+  const baseSeed = account.id || account.name || account.email || 'biu-ai'
 
   useEffect(() => {
     if (!token) return
@@ -317,10 +328,79 @@ export function ShellSettingsAccount() {
             </button>
           </div>
           <p className="settings-muted settings-account-hint">
-            {profileMessage || '点击左侧头像可上传图片，默认使用多色混合 AI 图像。'}
+            {profileMessage || '点击左侧头像可上传图片，也可在下方选主色生成 AI 头像或选用内置头像。'}
           </p>
         </div>
       </form>
+      <div className="settings-account-row is-stacked settings-avatar-studio" data-testid="settings-avatar-studio">
+        <div className="settings-avatar-group">
+          <div className="settings-avatar-group-head">
+            <span className="settings-account-label">AI 流体主色</span>
+            <button
+              type="button"
+              className="settings-avatar-shuffle"
+              data-testid="settings-avatar-ai-shuffle"
+              disabled={savingProfile}
+              title="按当前主色重新生成光晕构图"
+              onClick={() => {
+                const nextVariant = aiVariant + 1
+                setAiVariant(nextVariant)
+                const themeId = activeAiTheme || AI_AVATAR_THEMES[0]!.id
+                saveAccountProfile(
+                  { avatar: buildAiAvatarDataUrl(themeId, `${baseSeed}:${nextVariant}`) },
+                  '已生成新版 AI 头像。',
+                )
+              }}
+            >
+              <ArrowPathIcon className="size-3.5" />
+              <span>换一版</span>
+            </button>
+          </div>
+          <div className="settings-avatar-swatches" role="group" aria-label="AI 头像主色">
+            {AI_AVATAR_THEMES.map((theme) => (
+              <button
+                key={theme.id}
+                type="button"
+                className={`settings-avatar-swatch${activeAiTheme === theme.id ? ' is-on' : ''}`}
+                data-testid={`settings-avatar-theme-${theme.id}`}
+                title={theme.label}
+                aria-label={`生成${theme.label} AI 头像`}
+                aria-pressed={activeAiTheme === theme.id}
+                disabled={savingProfile}
+                style={{
+                  background: `radial-gradient(circle at 30% 28%, ${theme.palette[3]}, ${theme.swatch} 55%, ${theme.palette[1]})`,
+                }}
+                onClick={() =>
+                  saveAccountProfile(
+                    { avatar: buildAiAvatarDataUrl(theme.id, `${baseSeed}:${aiVariant}`) },
+                    `已切换为${theme.label} AI 头像。`,
+                  )
+                }
+              />
+            ))}
+          </div>
+        </div>
+        <div className="settings-avatar-group">
+          <span className="settings-account-label">内置头像</span>
+          <div className="settings-avatar-presets" role="group" aria-label="内置头像">
+            {BUILTIN_AVATAR_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className={`settings-avatar-preset${activePreset === preset.id ? ' is-on' : ''}`}
+                data-testid={`settings-avatar-preset-${preset.id}`}
+                title={preset.label}
+                aria-label={`选择内置头像：${preset.label}`}
+                aria-pressed={activePreset === preset.id}
+                disabled={savingProfile}
+                onClick={() => saveAccountProfile({ avatar: preset.url }, `已切换为「${preset.label}」头像。`)}
+              >
+                <img src={preset.url} alt="" />
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
       <div className="settings-account-row">
         <div className="settings-account-copy">
           <p className="settings-account-label">登录邮箱</p>
