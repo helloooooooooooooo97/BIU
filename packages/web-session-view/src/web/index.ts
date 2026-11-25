@@ -104,6 +104,8 @@ export interface SessionListItem {
   mascot?: { shape: string; color: string; eye?: number }
   tag?: { tags: string[]; values?: Record<string, Record<string, unknown>> }
   pinned?: boolean
+  /** 创建者账号 ID（云端协作空间中用于展示其他创建人头像）。 */
+  createdBy?: string
   /** 云端记录。本机只留缓存，改动走云端接口。 */
   remote?: boolean
   inspector?: SessionInspectorBind

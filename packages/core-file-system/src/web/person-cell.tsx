@@ -78,7 +78,7 @@ function loadMemberDirectory(): Promise<Map<string, MemberPerson>> {
   return req
 }
 
-function useMemberDirectory(enabled: boolean): ReadonlyMap<string, MemberPerson> {
+export function useMemberDirectory(enabled: boolean): ReadonlyMap<string, MemberPerson> {
   const [members, setMembers] = useState<Map<string, MemberPerson>>(() => memberDirCache ?? new Map())
 
   useEffect(() => {

@@ -1,7 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { currentAccountId, dataDir, dataHome, dataPath } from '@biu/host-plugin-loader/data-dir'
+import { currentAccountId, currentRequestWorkspaceId, dataDir, dataHome, dataPath } from '@biu/host-plugin-loader/data-dir'
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { TenantStateMap } from '@biu/host-plugin-loader/tenant-state'
 import { Service, type Context } from 'cordis'
@@ -1357,35 +1357,49 @@ export function apply(ctx: Context) {
       items = liveSessionItems(ctx, await ctx.sessions.listSummaries())
     }
     let pinnedSet: Set<string> | null = null
+    let ownerMap: Map<string, string> | null = null
     try {
       const accountId = currentAccountId()
-      const store = (
-        ctx.get('account') as
-          | { store?: { workspacePrefs?: (actorId: string, workspaceId?: string) => { pinnedAgents: string[] } } }
-          | undefined
-      )?.store
+      const accountSvc = ctx.get('account') as
+        | {
+            activeWorkspaceId?: () => string | null
+            store?: {
+              workspacePrefs?: (actorId: string, workspaceId?: string) => { pinnedAgents: string[] }
+              collectionRecordOwners?: (workspaceId: string, collection: string) => Map<string, string>
+            }
+          }
+        | undefined
+      const store = accountSvc?.store
       if (accountId && store?.workspacePrefs) {
         pinnedSet = new Set(store.workspacePrefs(accountId).pinnedAgents)
+      }
+      const workspaceId = currentRequestWorkspaceId() || accountSvc?.activeWorkspaceId?.() || ''
+      if (workspaceId && store?.collectionRecordOwners) {
+        ownerMap = store.collectionRecordOwners(workspaceId, '/agents')
       }
     } catch {
       pinnedSet = null
     }
     route.send(200, {
-      sessions: items.map((item) => ({
-        id: item.id,
-        version: item.version,
-        eventCount: item.eventCount,
-        title: item.title,
-        updatedAt: item.updatedAt,
-        ...(item.lastMessageAt ? { lastMessageAt: item.lastMessageAt } : {}),
-        busy: ctx.agents.isBusy(item.id),
-        ...(item.project ? { project: item.project } : {}),
-        ...(item.mascot ? { mascot: item.mascot } : {}),
-        ...(item.config?.tag ? { tag: item.config.tag } : {}),
-        pinned: pinnedSet ? pinnedSet.has(item.id) : Boolean(item.config?.pinned),
-        ...(item.config?.inspector ? { inspector: item.config.inspector } : {}),
-        ...(item.config?.goal ? { goal: item.config.goal } : {}),
-      })),
+      sessions: items.map((item) => {
+        const createdBy = ownerMap?.get(item.id)
+        return {
+          id: item.id,
+          version: item.version,
+          eventCount: item.eventCount,
+          title: item.title,
+          updatedAt: item.updatedAt,
+          ...(item.lastMessageAt ? { lastMessageAt: item.lastMessageAt } : {}),
+          busy: ctx.agents.isBusy(item.id),
+          ...(item.project ? { project: item.project } : {}),
+          ...(item.mascot ? { mascot: item.mascot } : {}),
+          ...(item.config?.tag ? { tag: item.config.tag } : {}),
+          pinned: pinnedSet ? pinnedSet.has(item.id) : Boolean(item.config?.pinned),
+          ...(createdBy ? { createdBy } : {}),
+          ...(item.config?.inspector ? { inspector: item.config.inspector } : {}),
+          ...(item.config?.goal ? { goal: item.config.goal } : {}),
+        }
+      }),
     })
   })
   ctx.http.route('GET', '/api/agents/:id', async (route) => {

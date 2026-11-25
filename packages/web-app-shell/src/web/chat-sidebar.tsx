@@ -1,4 +1,4 @@
-import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Link, useNavigate } from 'react-router-dom'
 import {
@@ -7,8 +7,11 @@ import {
   resolveSessionMascot,
   subscribeMascotDance,
 } from '@biu/public-mascot'
+import { AiAvatar } from '@biu/biu-ui/ai-avatar'
+import { apiFetch } from '@biu/biu-ui/api-client'
 import { ChatCount } from '@biu/biu-ui/chat-count'
 import { SidebarFold } from '@biu/biu-ui/sidebar-fold'
+import { useActiveWorkspaceLocation } from './shell-chrome.tsx'
 import {
   PINNED_GROUP_KEY,
   bindSessionView,
@@ -47,11 +50,67 @@ const sessionRowMainProps = {
   'data-dock-tip-at': 'e',
 } as const
 
+type ChatMemberInfo = { id: string; name: string; avatar?: string }
+const ACCOUNT_EVENT = 'biu:account-token'
+
+function useCloudSessionCreators(isCloud: boolean) {
+  const [myAccountId, setMyAccountId] = useState('')
+  const [membersById, setMembersById] = useState<Map<string, ChatMemberInfo>>(() => new Map())
+
+  useEffect(() => {
+    if (!isCloud) {
+      setMyAccountId('')
+      setMembersById(new Map())
+      return
+    }
+    let cancelled = false
+    const load = () => {
+      const params = new URLSearchParams({
+        path: '/workspace-members',
+        limit: '500',
+        columns: 'title,name,email,avatar',
+      })
+      void Promise.all([
+        apiFetch('/api/account/me').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        apiFetch(`/api/db/list?${params.toString()}`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      ]).then(([me, listed]) => {
+        if (cancelled) return
+        setMyAccountId(String((me as { id?: string } | null)?.id ?? '').trim())
+        const map = new Map<string, ChatMemberInfo>()
+        const rows = Array.isArray((listed as { items?: unknown[] } | null)?.items)
+          ? ((listed as { items: Array<Record<string, unknown>> }).items)
+          : []
+        for (const item of rows) {
+          const id = String(item?.id ?? '').trim()
+          if (!id) continue
+          const name =
+            String(item.name ?? '').trim() ||
+            String(item.title ?? '').trim() ||
+            String(item.email ?? '').trim() ||
+            id.slice(0, 8)
+          const avatar = typeof item.avatar === 'string' ? item.avatar.trim() : ''
+          map.set(id, { id, name, ...(avatar ? { avatar } : {}) })
+        }
+        setMembersById(map)
+      })
+    }
+    load()
+    window.addEventListener(ACCOUNT_EVENT, load)
+    return () => {
+      cancelled = true
+      window.removeEventListener(ACCOUNT_EVENT, load)
+    }
+  }, [isCloud])
+
+  return { myAccountId, membersById }
+}
+
 const SessionRow = memo(function SessionRow({
   item,
   active,
   busy,
   dancing,
+  creator,
   onDelete,
   onPin,
   onOpen,
@@ -60,6 +119,7 @@ const SessionRow = memo(function SessionRow({
   active: boolean
   busy: boolean
   dancing: boolean
+  creator?: ChatMemberInfo | null
   onDelete: (item: SessionListItem) => void
   onPin: (item: SessionListItem) => void
   onOpen?: (item: SessionListItem) => void
@@ -79,11 +139,22 @@ const SessionRow = memo(function SessionRow({
       {label}
     </Link>
   )
+  const creatorTrail = creator ? (
+    <span
+      className="sidebar-creator-avatar"
+      data-testid="sidebar-session-creator-avatar"
+      title={`创建人：${creator.name}`}
+      aria-label={`创建人：${creator.name}`}
+    >
+      {creator.avatar ? <img src={creator.avatar} alt="" /> : <AiAvatar seed={creator.id} size={16} />}
+    </span>
+  ) : null
   return (
     <SidebarRow
       active={active}
       pinned={pinned}
       main={main}
+      trail={creatorTrail}
       onDelete={() => onDelete(item)}
       deleteLabel={`Delete session ${item.title}`}
       deleteIcon={<TrashGlyph {...chromeIcon} />}
@@ -130,6 +201,7 @@ const WindowedSessionList = memo(function WindowedSessionList({
   highlightId,
   busySessions,
   dancing,
+  creatorOf,
   onDelete,
   onPin,
   onOpen,
@@ -140,6 +212,7 @@ const WindowedSessionList = memo(function WindowedSessionList({
   highlightId: string | null
   busySessions: Record<string, true>
   dancing: boolean
+  creatorOf?: (item: SessionListItem) => ChatMemberInfo | null
   onDelete: (item: SessionListItem) => void
   onPin: (item: SessionListItem) => void
   onOpen?: (item: SessionListItem) => void
@@ -192,6 +265,7 @@ const WindowedSessionList = memo(function WindowedSessionList({
               active={item.id === highlightId}
               busy={Boolean(busySessions[item.id])}
               dancing={dancing}
+              creator={creatorOf?.(item) ?? null}
               onDelete={onDelete}
               onPin={onPin}
               onOpen={onOpen}
@@ -339,6 +413,20 @@ export const ChatSidebar = memo(function ChatSidebar({
     [sessionView],
   )
 
+  const workspaceLocation = useActiveWorkspaceLocation()
+  const isCloudSpace = workspaceLocation === 'cloud'
+  const { myAccountId, membersById } = useCloudSessionCreators(isCloudSpace)
+  const creatorOf = useCallback(
+    (item: SessionListItem): ChatMemberInfo | null => {
+      if (!isCloudSpace || !myAccountId) return null
+      const creatorId = item.createdBy?.trim()
+      if (!creatorId || creatorId === myAccountId) return null
+      const member = membersById.get(creatorId)
+      return member ?? { id: creatorId, name: creatorId.slice(0, 8) }
+    },
+    [isCloudSpace, myAccountId, membersById],
+  )
+
   const list = (section: SidebarSection, rowKey: string, rows: SessionListItem[]) => (
     <WindowedSessionList
       sessions={rows}
@@ -346,6 +434,7 @@ export const ChatSidebar = memo(function ChatSidebar({
       highlightId={highlightId}
       busySessions={busySessions}
       dancing={dancing}
+      creatorOf={creatorOf}
       onDelete={deleteChat}
       onPin={pinChat}
       onOpen={popover ? openSession : undefined}

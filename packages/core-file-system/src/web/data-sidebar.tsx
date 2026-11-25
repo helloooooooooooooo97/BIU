@@ -1,4 +1,6 @@
 import { writeStorageString } from '@biu/biu-ui/client-storage'
+import { apiFetch } from '@biu/biu-ui/api-client'
+import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import { lazy, memo, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import { ChatCount } from '@biu/biu-ui/chat-count'
 import { SidebarFold } from '@biu/biu-ui/sidebar-fold'
@@ -21,6 +23,7 @@ import { rememberInspectorWorkingView } from './inspector-db-route.ts'
 import { readJson } from './db-client.ts'
 import { paintCollectionViews } from './collection-nav.ts'
 import { canRemoveCollectionView, normalizeSavedView, type SavedView } from './saved-view.ts'
+import { useMemberDirectory } from './person-cell.tsx'
 import {
   fetchViewPreview,
   getPreviewTotal,
@@ -164,6 +167,42 @@ function onSidebarRowClick(event: MouseEvent<HTMLElement>) {
   if (event.defaultPrevented || !(hit instanceof Element) || !event.currentTarget.contains(hit)) return
   if (hit.closest('button, a, input, textarea, select, [contenteditable], [role="button"], [role="menuitem"]')) return
   event.currentTarget.querySelector<HTMLButtonElement>('button.min-w-0.flex-1')?.click()
+}
+
+const ACCOUNT_EVENT = 'biu:account-token'
+
+function useCloudCreatorContext() {
+  const [ctx, setCtx] = useState<{ isCloud: boolean; myAccountId: string }>({ isCloud: false, myAccountId: '' })
+
+  useEffect(() => {
+    let cancelled = false
+    const load = () => {
+      void Promise.all([
+        apiFetch('/api/account/me').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        apiFetch('/api/account/active').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        apiFetch('/api/account/workspaces').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      ]).then(([me, active, listed]) => {
+        if (cancelled) return
+        const myAccountId = String((me as { id?: string } | null)?.id ?? '').trim()
+        const hostOnline = (me as { online?: boolean } | null)?.online === true
+        const activeId = String((active as { workspaceId?: string } | null)?.workspaceId ?? '').trim()
+        const workspaces = Array.isArray((listed as { workspaces?: unknown[] } | null)?.workspaces)
+          ? ((listed as { workspaces: Array<{ id?: string; location?: string }> }).workspaces)
+          : []
+        const current = workspaces.find((w) => w.id === activeId)
+        const isCloud = hostOnline || current?.location === 'cloud'
+        setCtx({ isCloud, myAccountId })
+      })
+    }
+    load()
+    window.addEventListener(ACCOUNT_EVENT, load)
+    return () => {
+      cancelled = true
+      window.removeEventListener(ACCOUNT_EVENT, load)
+    }
+  }, [])
+
+  return ctx
 }
 
 type PreviewState = {
@@ -788,6 +827,28 @@ export const DataSidebar = memo(function DataSidebar({
     }
   }, [starredRecords])
 
+  const { isCloud: isCloudSpace, myAccountId } = useCloudCreatorContext()
+  const membersById = useMemberDirectory(isCloudSpace)
+
+  const renderViewCreatorAvatar = (view: SavedView) => {
+    if (!isCloudSpace || !myAccountId || view.builtin) return null
+    const creatorId = view.createdBy?.trim()
+    if (!creatorId || creatorId === myAccountId) return null
+    const member = membersById.get(creatorId)
+    const creatorName = member?.name || creatorId.slice(0, 8)
+    const avatar = member?.avatar?.trim() || ''
+    return (
+      <span
+        className="sidebar-creator-avatar"
+        data-testid="sidebar-view-creator-avatar"
+        title={`创建人：${creatorName}`}
+        aria-label={`创建人：${creatorName}`}
+      >
+        {avatar ? <img src={avatar} alt="" /> : <AiAvatar seed={creatorId} size={16} />}
+      </span>
+    )
+  }
+
   const starredTreePreviewKey = starredRecordRows
     .filter(({ table }) => isRecordTreeCollection(table.path))
     .map(({ table }) => table.path)
@@ -932,6 +993,7 @@ export const DataSidebar = memo(function DataSidebar({
                         </button>
                       </SidebarRowMain>
                     }
+                    trail={renderViewCreatorAvatar(view)}
                     onDelete={viewRowDelete(table.path, view, listed)}
                     deleteLabel={`删除 ${view.name}`}
                     deleteIcon={<TrashGlyph className="size-4 shrink-0" />}
@@ -1105,9 +1167,12 @@ export const DataSidebar = memo(function DataSidebar({
                             </SidebarRowMain>
                           }
                           trail={
-                            <span className="sidebar-trail-icon" title={tableName} aria-label={tableName}>
-                              <TableGlyph icon={table.view?.icon} />
-                            </span>
+                            <>
+                              {renderViewCreatorAvatar(view)}
+                              <span className="sidebar-trail-icon" title={tableName} aria-label={tableName}>
+                                <TableGlyph icon={table.view?.icon} />
+                              </span>
+                            </>
                           }
                           onDelete={viewRowDelete(table.path, view, viewsFor(table.path))}
                           deleteLabel={`删除 ${view.name}`}
