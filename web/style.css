@@ -3310,8 +3310,8 @@ select.settings-account-input {
 
 .brand-corner-cluster {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
+  right: 8px;
+  bottom: 8px;
   z-index: var(--biu-z-corner);
   display: flex;
   overflow: visible;
@@ -3332,10 +3332,10 @@ select.settings-account-input {
 .brand-corner-mascot-btn {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   border: 0;
-  border-radius: 12px;
+  border-radius: 10px;
   background: transparent;
   padding: 0;
   cursor: pointer;
