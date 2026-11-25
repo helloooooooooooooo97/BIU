@@ -609,6 +609,18 @@ export function registerDatabaseHttpRoutes(
             shares.revoke(share.token)
             continue
           }
+        } else if (share.kind === 'rule' && share.ruleId) {
+          const account = ctx.get('account') as {
+            store?: { getAccessRule?: (wsId: string, ruleId: string) => { name: string; createdBy: string; enabled: boolean } | null }
+          } | undefined
+          const wsId = share.workspaceId || currentRequestWorkspaceId()
+          const rule = wsId ? account?.store?.getAccessRule?.(wsId, share.ruleId) : null
+          if (!rule) {
+            shares.revoke(share.token)
+            continue
+          }
+          if (currentAccountId() && rule.createdBy !== currentAccountId()) continue
+          title = rule.name || title
         } else {
           const named = savedViews.viewsFor(share.collection).find((item) => item.id === share.viewId)
           if (!named && share.viewId && !isReadOnlyViewId(share.viewId)) {
@@ -671,16 +683,22 @@ export function registerDatabaseHttpRoutes(
       route.send(200, { shares: items })
       return
     }
-    const kind = route.query.get('kind') === 'record' ? 'record' as const : 'view' as const
+    const rawKind = route.query.get('kind')
+    const kind = rawKind === 'record' ? 'record' as const : rawKind === 'rule' ? 'rule' as const : 'view' as const
     const viewId = route.query.get('viewId') || ''
     const recordId = route.query.get('recordId') || ''
+    const ruleId = route.query.get('ruleId') || ''
     try {
       await db.requirePath(kind === 'record' ? `${collection}/${recordId}` : collection, 'resource:read')
     } catch {
       route.send(404, { error: 'not found' })
       return
     }
-    const share = kind === 'record' ? shares.findRecord(collection, recordId) : shares.find(kind, collection, viewId, recordId)
+    const share = kind === 'record'
+      ? shares.findRecord(collection, recordId)
+      : kind === 'rule'
+        ? shares.findRule(collection, ruleId)
+        : shares.find(kind, collection, viewId, recordId)
     route.send(200, {
       share: share ? { ...share, url: publicShareUrl(route.req, share.token) } : null,
     })
@@ -692,22 +710,46 @@ export function registerDatabaseHttpRoutes(
         collection?: string
         viewId?: string
         recordId?: string
+        ruleId?: string
         password?: string | null
         enabled?: boolean
         sharePlugins?: boolean
         allowCopy?: boolean
       }
-      const kind = body.kind === 'record' ? 'record' as const : 'view' as const
+      const kind = body.kind === 'record' ? 'record' as const : body.kind === 'rule' ? 'rule' as const : 'view' as const
       const collection = String(body.collection ?? '')
       const recordId = String(body.recordId ?? '')
-      // 原则 2 + 3：单条记录走记录级 resource:share；视图公开外链允许内部成员（非 viewer/external/guest）创建，
-      // 快照本身严格按 share.createdBy 的权限生成，不会放大暴露他人私密数据。
-      await db.requirePath(
-        kind === 'record' ? `${collection}/${recordId}` : VIEWS_COLLECTION_PATH,
-        kind === 'record' ? 'resource:share' : 'resource:update',
-      )
+      const ruleId = String(body.ruleId ?? '').trim()
+      if (kind === 'rule') {
+        if (!ruleId) {
+          route.send(400, { error: 'ruleId required' })
+          return
+        }
+        const account = ctx.get('account') as {
+          store?: { getAccessRule?: (wsId: string, id: string) => { createdBy: string } | null }
+        } | undefined
+        const wsId = currentRequestWorkspaceId()
+        const meId = currentAccountId()
+        const rule = wsId ? account?.store?.getAccessRule?.(wsId, ruleId) : null
+        if (!rule) {
+          route.send(404, { error: 'rule not found' })
+          return
+        }
+        if (meId && rule.createdBy !== meId) {
+          route.send(403, { error: '只有规则创建者可以管理此规则的公开外链' })
+          return
+        }
+      } else {
+        // 原则 2 + 3：单条记录走记录级 resource:share；视图公开外链允许内部成员（非 viewer/external/guest）创建，
+        // 快照本身严格按 share.createdBy 的权限生成，不会放大暴露他人私密数据。
+        await db.requirePath(
+          kind === 'record' ? `${collection}/${recordId}` : VIEWS_COLLECTION_PATH,
+          kind === 'record' ? 'resource:share' : 'resource:update',
+        )
+      }
       if (body.enabled === false) {
         if (kind === 'record') shares.revokeRecord(collection, recordId)
+        else if (kind === 'rule') shares.revokeRule(collection, ruleId)
         else shares.revokeTarget(kind, collection, body.viewId ?? '', body.recordId ?? '')
         db.notifyShareChange()
         route.send(200, { share: null })
@@ -718,6 +760,7 @@ export function registerDatabaseHttpRoutes(
         collection,
         viewId: body.viewId,
         recordId: body.recordId,
+        ruleId,
         password: body.password,
         sharePlugins: body.sharePlugins,
         allowCopy: body.allowCopy,
@@ -734,6 +777,46 @@ export function registerDatabaseHttpRoutes(
     const withWs = () => (share.workspaceId ? runWithRequestWorkspace(share.workspaceId, fn) : fn())
     return share.createdBy ? runWithAccount(share.createdBy, withWs) : withWs()
   }
+  const resolveRuleSnapshotOpts = (
+    share: { kind: string; collection: string; ruleId?: string; workspaceId?: string; createdBy?: string },
+    baseOpts: ReturnType<typeof shareSnapshotOpts>,
+  ) => {
+    if (share.kind !== 'rule' || !share.ruleId) return baseOpts
+    const account = ctx.get('account') as {
+      store?: {
+        getAccessRule?: (wsId: string, id: string) => {
+          id: string
+          name: string
+          createdBy: string
+          filterTree: Record<string, unknown>
+          columns: string[] | null
+          displaySnapshot: { mode?: string; sorts?: unknown[]; groupBy?: string; groupConfig?: Record<string, unknown> } | null
+          enabled: boolean
+        } | null
+      }
+      authorization?: {
+        canGrantorShareRecord?: (grantorId: string, ref: { type: 'record'; workspaceId: string; collection: string; recordId: string }) => boolean
+      }
+    } | undefined
+    const wsId = share.workspaceId || currentRequestWorkspaceId()
+    const rule = wsId ? account?.store?.getAccessRule?.(wsId, share.ruleId) ?? null : null
+    const authz = account?.authorization
+    return {
+      ...baseOpts,
+      accessRule: rule,
+      ...(rule && wsId && authz?.canGrantorShareRecord
+        ? {
+            canCreatorShareRecord: (recordId: string) =>
+              authz.canGrantorShareRecord!(rule.createdBy, {
+                type: 'record',
+                workspaceId: wsId,
+                collection: share.collection,
+                recordId,
+              }),
+          }
+        : {}),
+    }
+  }
   ctx.http.route('GET', '/api/share/:token', async (route) => {
     const token = route.params.token ?? ''
     const share = shares.get(token)
@@ -748,13 +831,13 @@ export function registerDatabaseHttpRoutes(
     rememberShareLan(route)
     try {
       const snapshot = await runInShareContext(share, () =>
-        buildShareSnapshot(db, savedViews, share, shareSnapshotOpts(route.query)),
+        buildShareSnapshot(db, savedViews, share, resolveRuleSnapshotOpts(share, shareSnapshotOpts(route.query))),
       )
       route.send(200, snapshot)
     } catch (error) {
       const msg = String(error)
-      if (share.kind === 'record' && /unknown record/.test(msg)) {
-        shares.revoke(token)
+      if ((share.kind === 'record' && /unknown record/.test(msg)) || (share.kind === 'rule' && /unknown rule/.test(msg))) {
+        if (share.kind === 'record') shares.revoke(token)
         route.send(404, { error: 'not found' })
         return
       }
@@ -776,13 +859,13 @@ export function registerDatabaseHttpRoutes(
     rememberShareLan(route)
     try {
       const snapshot = await runInShareContext(share, () =>
-        buildShareSnapshot(db, savedViews, share, shareSnapshotOpts(route.query)),
+        buildShareSnapshot(db, savedViews, share, resolveRuleSnapshotOpts(share, shareSnapshotOpts(route.query))),
       )
       route.send(200, snapshot)
     } catch (error) {
       const msg = String(error)
-      if (share.kind === 'record' && /unknown record/.test(msg)) {
-        shares.revoke(token)
+      if ((share.kind === 'record' && /unknown record/.test(msg)) || (share.kind === 'rule' && /unknown rule/.test(msg))) {
+        if (share.kind === 'record') shares.revoke(token)
         route.send(404, { error: 'not found' })
         return
       }
@@ -802,7 +885,9 @@ export function registerDatabaseHttpRoutes(
     }
     const recordId = route.params.recordId ?? ''
     try {
-      const snapshot = await buildShareSnapshot(db, savedViews, share, { contentIds: [recordId] })
+      const snapshot = await runInShareContext(share, () =>
+        buildShareSnapshot(db, savedViews, share, resolveRuleSnapshotOpts(share, { contentIds: [recordId] })),
+      )
       if (!snapshot.records.some((row) => String(row.id) === recordId)) {
         route.send(404, { error: 'not found' })
         return
