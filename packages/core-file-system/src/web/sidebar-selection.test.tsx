@@ -6,7 +6,7 @@ import { REQUIRED_RECORD_FIELDS, type CollectionInfo, type CollectionSchema } fr
 import { builtinAllViewId } from '../catalog-views.ts'
 import { invalidateListReads } from './db-client.ts'
 import { CollectionBrowser } from './browser.tsx'
-import { activeViewStorageKey, getStarredViews, omitSavedViewIds, persistStarredViews, persistViewDisplay, upsertSavedView } from './view-storage.ts'
+import { activeViewStorageKey, getStarredViews, omitSavedViewIds, persistStarredViews, upsertSavedView } from './view-storage.ts'
 import { DataSidebar } from './data-sidebar.tsx'
 import { DataSidebarSlot } from './data-sidebar-slot.tsx'
 import { normalizeSavedView } from './saved-view.ts'
@@ -142,8 +142,9 @@ test('sidebar collection and icon navigation open the first remaining view after
 test('sidebar collection navigation follows the displayed view order', () => {
   const path = '/selection-ranked-views'
   const first = normalizeSavedView({ id: 'ranked-first', name: '排在最前', rank: 0 } as unknown as Parameters<typeof normalizeSavedView>[0])
+  const builtin = normalizeSavedView({ id: builtinAllViewId(path), name: '全部排序后的页面', builtin: true, rank: 1 } as unknown as Parameters<typeof normalizeSavedView>[0])
   upsertSavedView(path, first)
-  persistViewDisplay(path, builtinAllViewId(path), { rank: 1 })
+  upsertSavedView(path, builtin)
   const onOpenTable = vi.fn()
   const result = render(<DataSidebar collectionPath="/selection-other" title="其他表"
     tables={[{ id: path.slice(1), path, kind: 'collection', label: '排序后的页面', view: null }]}

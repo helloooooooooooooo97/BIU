@@ -1,4 +1,4 @@
-import { readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
+import { writeStorageString } from '@biu/biu-ui/client-storage'
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
 import { emitFsdbChange } from '@biu/type-file-system'
 import { isBuiltinAllViewId, isReadOnlyViewId, viewsForScope, type DataScope } from '../catalog-views.ts'
@@ -17,13 +17,11 @@ import {
   noteLocalSavedViewsWrite,
   omitSavedViewIds,
   persistStarredViews,
-  persistViewDisplay,
   pushSavedViewsPatch,
   rememberViews,
   removeStarredViews,
   reviveSavedViewIds,
   stampSavedView,
-  viewDisplayKey,
   viewWriteQueue,
   withViewDisplay,
 } from './view-storage.ts'
@@ -159,7 +157,6 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
         return false
       }
       if (result === 'skipped') return true
-      for (const view of stamped) persistViewDisplay(path, view.id, view)
       if (extra?.remove?.length) removeStarredViews(path, extra.remove)
       adoptPersistedViews(path, adopted, extra?.remove)
       setViewsSaveError(false)
@@ -194,14 +191,12 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     // persistViewsFor 用 loadViews 当 baseline 算差异。先 rememberViews 的话
     // baseline 已经是新顺序，patch 会 skipped，库里的 rank 永远不更新。
     const baseline = loadViews(collectionPath)
-    for (const view of next) persistViewDisplay(collectionPath, view.id, { rank: view.rank })
     viewsRef.current = next
     setViews(next)
     rememberViews(collectionPath, next)
     noteLocalSavedViewsWrite(collectionPath)
     void persistViewsFor(collectionPath, next, { baseline }).then((ok) => {
       if (ok || viewsRef.current !== next) return
-      for (const view of current) persistViewDisplay(collectionPath, view.id, { rank: view.rank })
       viewsRef.current = current
       setViews(current)
       rememberViews(collectionPath, current)
@@ -377,16 +372,11 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       return
     }
     rememberViews(collectionPath, nextList)
-    const displayStorageKey = viewDisplayKey(collectionPath, targetId)
-    const prevDisplayRaw = readStorageString(displayStorageKey)
-    persistViewDisplay(collectionPath, targetId, { ...patch, updatedAt: updated.updatedAt })
     void persistViewsFor(collectionPath, nextList, { upsert: [updated], baseline: latest }).then((ok) => {
       if (ok || viewsRef.current !== nextList) return
       viewsRef.current = latest
       setViews(latest)
       rememberViews(collectionPath, latest)
-      if (prevDisplayRaw === null) removeStorageKey(displayStorageKey)
-      else writeStorageString(displayStorageKey, prevDisplayRaw)
     })
   }
 
@@ -407,7 +397,6 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       return
     }
     rememberViews(collectionPath, listed)
-    persistViewDisplay(collectionPath, viewId, { name: nextName, updatedAt: updated.updatedAt })
     const stars = getStarredViews()
     if (isViewStarred(stars, collectionPath, viewId)) {
       persistStarredViews(stars.map((item) => (item.path === collectionPath && item.viewId === viewId ? { ...item, name: nextName } : item)))
@@ -423,7 +412,6 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       viewsRef.current = current
       setViews(current)
       rememberViews(collectionPath, current)
-      persistViewDisplay(collectionPath, viewId, { name: target.name, updatedAt: target.updatedAt })
     })
   }
 

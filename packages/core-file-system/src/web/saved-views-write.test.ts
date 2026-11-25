@@ -4,7 +4,7 @@ import { builtinAllViewId, builtinTagViewId } from '../catalog-views.ts'
 import { emptyFilterGroup } from '../query-logic.ts'
 import { rankListedViews, type SavedView } from './saved-view.ts'
 import { createBrowserViewCrud } from './use-browser-view-crud.ts'
-import { loadViews, pushSavedViewsPatch, rememberViews, viewDisplayKey } from './view-storage.ts'
+import { loadViews, pushSavedViewsPatch, rememberViews } from './view-storage.ts'
 
 function mockFetch(impl: typeof fetch) {
   const prev = globalThis.fetch
@@ -431,41 +431,6 @@ test('failed patchActiveView rolls back viewsRef, memoryViews, and localStorage 
     assert.equal(harness.getSaveError(), true)
     assert.equal(harness.viewsRef.current[0]?.groupBy, '')
     assert.equal(loadViews(path)[0]?.groupBy, '')
-    assert.equal(env.mem[viewDisplayKey(path, 'v1')], undefined)
-  } finally {
-    restore()
-    env.restore()
-  }
-})
-
-test('local-only personal display prefs persist locally without firing server POST', async () => {
-  const env = setupBrowserGlobals()
-  const path = '/pages-local-prefs'
-  const initial: SavedView = {
-    id: 'v1',
-    name: '默认',
-    mode: 'table',
-    sortField: 'title',
-    sortDir: 'asc',
-    filters: {},
-    columns: ['title'],
-    wrap: false,
-    columnWidths: {},
-  }
-  const harness = makeCrudHarness(path, [initial], 'v1')
-  let fetchCalls = 0
-  const restore = mockFetch(async () => {
-    fetchCalls += 1
-    return new Response('{"ok":true}', { status: 200 })
-  })
-  try {
-    harness.crud.patchActiveView({ columnWidths: { title: 320 }, wrap: true, pageSize: 50 })
-    await new Promise((r) => setTimeout(r, 20))
-    assert.equal(fetchCalls, 0)
-    assert.equal(harness.viewsRef.current[0]?.wrap, true)
-    assert.equal(harness.viewsRef.current[0]?.columnWidths?.title, 320)
-    assert.equal(harness.viewsRef.current[0]?.pageSize, 50)
-    assert.ok(env.mem[viewDisplayKey(path, 'v1')]?.includes('"title":320'))
   } finally {
     restore()
     env.restore()
