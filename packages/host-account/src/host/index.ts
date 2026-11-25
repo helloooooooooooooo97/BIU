@@ -1722,6 +1722,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         viewId?: string
         subjectType?: 'account' | 'group' | 'member_view'
         subjectId?: string
+        grantedBy?: string
       }
       const viewId = String(body.viewId ?? '')
       const subjectType =
@@ -1735,6 +1736,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
               viewId,
               subjectType === 'member_view' ? 'member_view' : 'account',
               String(body.subjectId ?? ''),
+              String(body.grantedBy ?? ''),
             )
           : account.store.revokeRecordGrant(
               me.id,

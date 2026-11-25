@@ -2930,19 +2930,29 @@ export class CollabStore {
     viewId: string,
     subjectType: 'account' | 'member_view',
     subjectId: string,
+    grantedBy = '',
   ) {
     const workspaceId = this.activeWorkspaceId()
     if (!workspaceId) throw new CollabError('没有工作区', 400)
     const actorRole = this.requireViewSharer(actorId, workspaceId, collection, viewId)
-    // 谁签发的视图授权只能由谁移除（空间所有者可强制审计移除），防止成员 B 篡改成员 A 的分享规则
+    const targetGrantor = grantedBy.trim()
+    // 谁签发的视图授权只能由谁移除（空间所有者可按 grantedBy 精确审计移除单条），防止成员 B 篡改成员 A 的分享规则
     const removed = actorRole === 'owner'
-      ? this.db
-          .prepare(
-            `DELETE FROM view_grants
-             WHERE workspace_id = ? AND collection = ? AND view_id = ?
-               AND subject_type = ? AND subject_id = ?`,
-          )
-          .run(workspaceId, collection, viewId, subjectType, subjectId)
+      ? targetGrantor
+        ? this.db
+            .prepare(
+              `DELETE FROM view_grants
+               WHERE workspace_id = ? AND collection = ? AND view_id = ?
+                 AND subject_type = ? AND subject_id = ? AND granted_by = ?`,
+            )
+            .run(workspaceId, collection, viewId, subjectType, subjectId, targetGrantor)
+        : this.db
+            .prepare(
+              `DELETE FROM view_grants
+               WHERE workspace_id = ? AND collection = ? AND view_id = ?
+                 AND subject_type = ? AND subject_id = ?`,
+            )
+            .run(workspaceId, collection, viewId, subjectType, subjectId)
       : this.db
           .prepare(
             `DELETE FROM view_grants
@@ -3189,10 +3199,14 @@ export class CollabStore {
           .prepare(
             `SELECT a.id, COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), '未设置') AS name,
                     COALESCE(NULLIF(m.avatar, ''), NULLIF(a.avatar, ''), '') AS avatar,
-                    COALESCE(a.email, '') AS email, g.role, m.member_kind
+                    COALESCE(a.email, '') AS email, g.role, m.member_kind,
+                    COALESCE(g.granted_by, '') AS granted_by,
+                    COALESCE(NULLIF(gm.display_name, ''), NULLIF(ga.name, ''), NULLIF(ga.email, ''), '') AS granted_by_name
              FROM view_grants g
              JOIN accounts a ON g.subject_type = 'account' AND a.id = g.subject_id
              LEFT JOIN workspace_members m ON m.workspace_id = g.workspace_id AND m.account_id = g.subject_id
+             LEFT JOIN accounts ga ON ga.id = g.granted_by
+             LEFT JOIN workspace_members gm ON gm.workspace_id = g.workspace_id AND gm.account_id = g.granted_by
              WHERE g.workspace_id = ? AND g.collection = ? AND g.view_id = ? AND g.subject_type = 'account' AND g.granted_by = ?
              ORDER BY g.created_at`,
           )
@@ -3201,10 +3215,14 @@ export class CollabStore {
           .prepare(
             `SELECT a.id, COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), '未设置') AS name,
                     COALESCE(NULLIF(m.avatar, ''), NULLIF(a.avatar, ''), '') AS avatar,
-                    COALESCE(a.email, '') AS email, g.role, m.member_kind
+                    COALESCE(a.email, '') AS email, g.role, m.member_kind,
+                    COALESCE(g.granted_by, '') AS granted_by,
+                    COALESCE(NULLIF(gm.display_name, ''), NULLIF(ga.name, ''), NULLIF(ga.email, ''), '') AS granted_by_name
              FROM view_grants g
              JOIN accounts a ON g.subject_type = 'account' AND a.id = g.subject_id
              LEFT JOIN workspace_members m ON m.workspace_id = g.workspace_id AND m.account_id = g.subject_id
+             LEFT JOIN accounts ga ON ga.id = g.granted_by
+             LEFT JOIN workspace_members gm ON gm.workspace_id = g.workspace_id AND gm.account_id = g.granted_by
              WHERE g.workspace_id = ? AND g.collection = ? AND g.view_id = ? AND g.subject_type = 'account'
              ORDER BY g.created_at`,
           )
@@ -3215,31 +3233,62 @@ export class CollabStore {
         email: string
         role: string
         member_kind: 'member' | 'external' | 'guest'
+        granted_by: string
+        granted_by_name: string
       }>
     const memberViews = (filterByGrantor
       ? this.db
           .prepare(
-            `SELECT subject_id AS id, role
-             FROM view_grants
-             WHERE workspace_id = ? AND collection = ? AND view_id = ? AND subject_type = 'member_view' AND granted_by = ?
-             ORDER BY created_at`,
+            `SELECT g.subject_id AS id, g.role,
+                    COALESCE(g.granted_by, '') AS granted_by,
+                    COALESCE(NULLIF(gm.display_name, ''), NULLIF(ga.name, ''), NULLIF(ga.email, ''), '') AS granted_by_name
+             FROM view_grants g
+             LEFT JOIN accounts ga ON ga.id = g.granted_by
+             LEFT JOIN workspace_members gm ON gm.workspace_id = g.workspace_id AND gm.account_id = g.granted_by
+             WHERE g.workspace_id = ? AND g.collection = ? AND g.view_id = ? AND g.subject_type = 'member_view' AND g.granted_by = ?
+             ORDER BY g.created_at`,
           )
           .all(workspaceId, collection, viewId, viewerId)
       : this.db
           .prepare(
-            `SELECT subject_id AS id, role
-             FROM view_grants
-             WHERE workspace_id = ? AND collection = ? AND view_id = ? AND subject_type = 'member_view'
-             ORDER BY created_at`,
+            `SELECT g.subject_id AS id, g.role,
+                    COALESCE(g.granted_by, '') AS granted_by,
+                    COALESCE(NULLIF(gm.display_name, ''), NULLIF(ga.name, ''), NULLIF(ga.email, ''), '') AS granted_by_name
+             FROM view_grants g
+             LEFT JOIN accounts ga ON ga.id = g.granted_by
+             LEFT JOIN workspace_members gm ON gm.workspace_id = g.workspace_id AND gm.account_id = g.granted_by
+             WHERE g.workspace_id = ? AND g.collection = ? AND g.view_id = ? AND g.subject_type = 'member_view'
+             ORDER BY g.created_at`,
           )
-          .all(workspaceId, collection, viewId)) as Array<{ id: string; role: string }>
+          .all(workspaceId, collection, viewId)) as Array<{
+        id: string
+        role: string
+        granted_by: string
+        granted_by_name: string
+      }>
+    const canEditRow = (grantedBy: string) => Boolean(!viewerId || !grantedBy || grantedBy === viewerId)
+    const canRevokeRow = (grantedBy: string) => Boolean(!viewerId || includeAllGrantors || !grantedBy || grantedBy === viewerId)
     return {
       private: people.length + memberViews.length === 0,
       scope: 'personal' as const,
       ownerId: '',
-      people: people.map(({ member_kind, ...row }) => ({ ...row, memberKind: member_kind })),
+      currentAccountId: viewerId,
+      people: people.map(({ member_kind, granted_by, granted_by_name, ...row }) => ({
+        ...row,
+        memberKind: member_kind,
+        grantedBy: granted_by,
+        grantedByName: granted_by_name,
+        canEdit: canEditRow(granted_by),
+        canRevoke: canRevokeRow(granted_by),
+      })),
       groups: [] as Array<{ id: string; name: string; role: string }>,
-      memberViews,
+      memberViews: memberViews.map(({ granted_by, granted_by_name, ...row }) => ({
+        ...row,
+        grantedBy: granted_by,
+        grantedByName: granted_by_name,
+        canEdit: canEditRow(granted_by),
+        canRevoke: canRevokeRow(granted_by),
+      })),
     }
   }
 
