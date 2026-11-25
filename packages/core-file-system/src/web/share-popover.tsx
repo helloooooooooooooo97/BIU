@@ -243,6 +243,17 @@ export function ShareButton({
             setHasActiveShare(true)
             return
           }
+        } else if (!localOnly && target.kind === 'view' && target.viewId) {
+          const accessParams = new URLSearchParams({ collection: target.collection, viewId: target.viewId })
+          const accessData = await readJson<{
+            people?: unknown[]
+            memberViews?: unknown[]
+          }>(`/api/account/access?${accessParams}`).catch(() => null)
+          if (gone) return
+          if ((accessData?.people?.length ?? 0) > 0 || (accessData?.memberViews?.length ?? 0) > 0) {
+            setHasActiveShare(true)
+            return
+          }
         }
         if (!gone) setHasActiveShare(false)
       } catch {
