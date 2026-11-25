@@ -210,13 +210,63 @@ export function ShareButton({
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
+  const [hasActiveShare, setHasActiveShare] = useState(false)
+
+  useEffect(() => {
+    if (!target) {
+      setHasActiveShare(false)
+      return
+    }
+    let gone = false
+    const check = async () => {
+      try {
+        const params = new URLSearchParams({
+          kind: target.kind,
+          collection: target.collection,
+          viewId: target.viewId ?? '',
+          recordId: target.recordId ?? '',
+        })
+        const shareData = await readJson<SharePayload>(`/api/db/shares?${params}`).catch(() => ({ share: null }))
+        if (gone) return
+        if (shareData.share) {
+          setHasActiveShare(true)
+          return
+        }
+        if (!localOnly && target.kind === 'record' && target.recordId) {
+          const accessParams = new URLSearchParams({ collection: target.collection, recordId: target.recordId })
+          const accessData = await readJson<{
+            scope?: string
+            grants?: Array<{ role?: string }>
+          }>(`/api/account/access?${accessParams}`).catch(() => null)
+          if (gone) return
+          const nonOwnerGrants = (accessData?.grants ?? []).filter((g) => g.role && g.role !== 'owner')
+          if (nonOwnerGrants.length > 0 || (accessData?.scope && accessData.scope !== 'personal')) {
+            setHasActiveShare(true)
+            return
+          }
+        }
+        if (!gone) setHasActiveShare(false)
+      } catch {
+        if (!gone) setHasActiveShare(false)
+      }
+    }
+    void check()
+    const onChange = () => void check()
+    window.addEventListener(FSDB_SHARES_CHANGE_EVENT, onChange)
+    return () => {
+      gone = true
+      window.removeEventListener(FSDB_SHARES_CHANGE_EVENT, onChange)
+    }
+  }, [target?.kind, target?.collection, target?.viewId, target?.recordId, localOnly])
+
   if (!target) return null
   return (
     <div className="fsdb-share-wrap" ref={wrapRef}>
       <button
         type="button"
-        className={`${buttonClassName}${open ? ' is-active' : ''}`}
-        title="分享"
+        className={`${buttonClassName}${open || hasActiveShare ? ' is-active' : ''}`}
+        style={hasActiveShare ? { color: 'var(--biu-color-emphasis)' } : undefined}
+        title={hasActiveShare ? '已开启分享' : '分享'}
         aria-label="分享"
         aria-haspopup="dialog"
         aria-expanded={open}

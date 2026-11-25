@@ -215,6 +215,14 @@ export function AccessRulesButton({
   }, [localOnly])
 
   useEffect(() => {
+    if (localOnly) return
+    void loadRules()
+    const onChange = () => void loadRules()
+    window.addEventListener(FSDB_SHARES_CHANGE_EVENT, onChange)
+    return () => window.removeEventListener(FSDB_SHARES_CHANGE_EVENT, onChange)
+  }, [localOnly, loadRules])
+
+  useEffect(() => {
     if (!open) return
     void loadRules()
     void loadMembers()
@@ -546,6 +554,7 @@ export function AccessRulesButton({
 
   if (localOnly) return null
 
+  const hasActiveRules = rules.some((r) => r.enabled)
   const hasWorkspaceGrant = draft?.grants.some((g) => g.subjectType === 'workspace') ?? false
 
   const primaryBtnStyle = {
@@ -594,8 +603,9 @@ export function AccessRulesButton({
     <>
       <button
         type="button"
-        className={`chat-view-header-expand${open ? ' is-active' : ''}`}
-        title="分享与规则"
+        className={`chat-view-header-expand${open || hasActiveRules ? ' is-active' : ''}`}
+        style={hasActiveRules ? { color: 'var(--biu-color-emphasis)' } : undefined}
+        title={hasActiveRules ? '已启用分享规则' : '分享与规则'}
         aria-label="分享与规则"
         data-testid="access-rules-trigger"
         onClick={() => setOpen((prev) => !prev)}
