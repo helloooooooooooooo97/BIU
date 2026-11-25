@@ -2,6 +2,8 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { Service, type Context } from 'cordis'
 import { toolNameForApi, stripToolApiName } from './tool-name.ts'
 import { currentAccountId, currentPluginId, currentRequestWorkspaceId } from '@biu/host-plugin-loader/data-dir'
+import { getAccountPort } from '@biu/host-plugin-loader/ports'
+import { TenantStateMap } from '@biu/host-plugin-loader/tenant-state'
 
 export { toolNameForApi, stripToolApiName, TOOL_API_NAME } from './tool-name.ts'
 
@@ -123,20 +125,18 @@ export class ToolsService extends Service {
   private sanitizedNames = new Map<string, string>()
   private notes = new Map<string, string[]>()
   private guards: ToolGuard[] = []
-  private modes = new Map<string, AgentToolMode>()
-  /** 极简模式下常驻额外工具（按账号隔离，避免云端多租户互串）。 */
-  private pinnedExtrasMap = new Map<string, string[]>()
+  private modes: TenantStateMap<AgentToolMode>
+  /** 极简模式下常驻额外工具（按账号隔离，随租户吊销自动回收）。 */
+  private pinnedExtrasMap: TenantStateMap<string[]>
 
   constructor(ctx: Context) {
     super(ctx, 'tools')
-  }
-
-  private accountKey() {
-    return currentAccountId().trim()
+    this.modes = new TenantStateMap(ctx, { granularity: 'account' })
+    this.pinnedExtrasMap = new TenantStateMap(ctx, { granularity: 'account' })
   }
 
   getMode(): AgentToolMode {
-    return this.modes.get(this.accountKey()) ?? 'standard'
+    return this.modes.get() ?? 'standard'
   }
 
   originOf(name: string): ToolOrigin {
@@ -145,14 +145,13 @@ export class ToolsService extends Service {
 
   setMode(mode: AgentToolMode) {
     if (!isAgentToolMode(mode)) throw new Error(`unknown agent tool mode: ${mode}`)
-    const key = this.accountKey()
-    if ((this.modes.get(key) ?? 'standard') === mode) return
-    this.modes.set(key, mode)
+    if ((this.modes.get() ?? 'standard') === mode) return
+    this.modes.set(mode)
     this.ctx.emit('hub/change')
   }
 
   getPinnedExtras() {
-    return [...(this.pinnedExtrasMap.get(this.accountKey()) ?? [])]
+    return [...(this.pinnedExtrasMap.get() ?? [])]
   }
 
   setPinnedExtras(names: readonly string[]) {
@@ -165,28 +164,23 @@ export class ToolsService extends Service {
           .filter((name) => !(FILE_TOOL_NAMES as readonly string[]).includes(name)),
       ),
     ]
-    const key = this.accountKey()
-    const prev = this.pinnedExtrasMap.get(key) ?? []
+    const prev = this.pinnedExtrasMap.get() ?? []
     const same =
       cleaned.length === prev.length && cleaned.every((name, i) => name === prev[i])
     if (same) return
-    this.pinnedExtrasMap.set(key, cleaned)
+    this.pinnedExtrasMap.set(cleaned)
     this.ctx.emit('hub/change')
   }
 
   private visible(name: string) {
     const pluginId = this.pluginIds.get(this.resolveName(name))
     if (pluginId && currentAccountId()) {
-      const store = (
-        this.ctx.get('account') as {
-          store?: { canAccessPlugin?(accountId: string, workspaceId: string, pluginId: string): boolean }
-        } | undefined
-      )?.store
+      const store = getAccountPort(this.ctx)?.store
       if (!store?.canAccessPlugin?.(currentAccountId(), currentRequestWorkspaceId(), pluginId)) return false
     }
     const policy = toolPolicyStorage.getStore()
     const mode = policy?.mode ?? this.getMode()
-    const pinnedExtras = this.pinnedExtrasMap.get(this.accountKey()) ?? []
+    const pinnedExtras = this.pinnedExtrasMap.get() ?? []
     if (mode === 'standard') return true
     if (this.originOf(name) === 'store') return false
     if (mode === 'file') return (FILE_TOOL_NAMES as readonly string[]).includes(name)

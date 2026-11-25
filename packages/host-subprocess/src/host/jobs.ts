@@ -1,12 +1,15 @@
 import { Service, type Context } from 'cordis'
 import { posixShellArgv } from '@biu/host-subprocess'
 import { currentTenantScope } from '@biu/host-plugin-loader/data-dir'
+import '@biu/host-plugin-loader/tenant-state'
 
 const JOB_HISTORY_TTL_MS = 10 * 60_000
 
 interface Job {
   id: string
   tenantKey: string
+  accountId: string
+  workspaceId: string
   argv: string[]
   status: 'running' | 'done' | 'cancelled'
   result?: { code: number | null; stdout: string; stderr: string }
@@ -19,6 +22,29 @@ export class JobsService extends Service {
 
   constructor(ctx: Context) {
     super(ctx, 'jobs')
+    ctx.effect(() => {
+      const disposeMatching = (predicate: (job: Job) => boolean) => {
+        for (const [id, job] of [...this.jobs]) {
+          if (!predicate(job)) continue
+          job.abort.abort()
+          this.jobs.delete(id)
+        }
+      }
+      const offRevoked = ctx.on('tenant/revoked', (payload) => {
+        disposeMatching(
+          (job) =>
+            job.accountId === payload.accountId &&
+            (!payload.workspaceId || job.workspaceId === payload.workspaceId),
+        )
+      })
+      const offDeleted = ctx.on('workspace/deleted', (payload) => {
+        disposeMatching((job) => job.workspaceId === payload.workspaceId)
+      })
+      return () => {
+        offRevoked()
+        offDeleted()
+      }
+    }, 'jobs.tenant-lifecycle')
   }
 
   private pruneFinished(now = Date.now()) {
@@ -39,7 +65,8 @@ export class JobsService extends Service {
     this.pruneFinished()
     const id = crypto.randomUUID().slice(0, 8)
     const abort = new AbortController()
-    const job: Job = { id, tenantKey: currentTenantScope().key, argv, status: 'running', abort }
+    const { accountId, workspaceId, key } = currentTenantScope()
+    const job: Job = { id, tenantKey: key, accountId, workspaceId, argv, status: 'running', abort }
     this.jobs.set(id, job)
     void this.ctx.subprocess.run({ argv, timeoutMs: 60_000 }, abort.signal).then((result) => {
       job.status = 'done'

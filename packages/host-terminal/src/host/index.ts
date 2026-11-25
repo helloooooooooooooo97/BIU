@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { Service, type Context } from 'cordis'
 import { posixShellBin } from '@biu/host-subprocess'
 import { currentTenantScope } from '@biu/host-plugin-loader/data-dir'
+import '@biu/host-plugin-loader/tenant-state'
 
 interface Term {
   id: string
@@ -74,6 +75,34 @@ export class TerminalService extends Service {
 
   constructor(ctx: Context) {
     super(ctx, 'terminals')
+    ctx.effect(() => {
+      const disposeMatching = (predicate: (term: Term) => boolean) => {
+        for (const [id, term] of [...this.terms]) {
+          if (!predicate(term)) continue
+          this.terms.delete(id)
+          if (term.name) this.byName.delete(this.nameKey(term.tenantKey, term.name))
+          try {
+            term.child.kill('SIGTERM')
+          } catch {
+            /* already dead */
+          }
+        }
+      }
+      const offRevoked = ctx.on('tenant/revoked', (payload) => {
+        disposeMatching(
+          (term) =>
+            term.accountId === payload.accountId &&
+            (!payload.workspaceId || term.workspaceId === payload.workspaceId),
+        )
+      })
+      const offDeleted = ctx.on('workspace/deleted', (payload) => {
+        disposeMatching((term) => term.workspaceId === payload.workspaceId)
+      })
+      return () => {
+        offRevoked()
+        offDeleted()
+      }
+    }, 'terminals.tenant-lifecycle')
   }
 
   private nameKey(tenantKey: string, name: string) {

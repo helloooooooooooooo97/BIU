@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { test } from 'vitest'
 import { Context } from 'cordis'
 import { runWithAccount, runWithRequestWorkspace } from '@biu/host-plugin-loader/data-dir'
+import { emitTenantRevoked } from '@biu/host-plugin-loader/tenant-state'
 import * as tools from '@biu/host-tools'
 import * as fs from '@biu/host-fs'
 import * as sandbox from './index.ts'
@@ -158,5 +159,56 @@ test('LspService and McpService block host process execution (lsp_start / stdio 
     if (prevHome === undefined) delete process.env.BIU_HOME
     else process.env.BIU_HOME = prevHome
     rmSync(tempHome, { recursive: true, force: true })
+  }
+})
+
+test('emitTenantRevoked automatically tears down terminals, jobs, pending approvals, and tool mode', async () => {
+  const ctx = new Context()
+  const root = mkdtempSync(join(tmpdir(), 'biu-revoke-cascade-'))
+  try {
+    await ctx.plugin(tools)
+    await ctx.plugin(fs, { root })
+    await ctx.plugin(sandbox)
+    await ctx.plugin(subprocess)
+    await ctx.plugin(terminal)
+    await ctx.plugin(jobs)
+    await ctx.plugin(approvals)
+
+    ctx.tools.register({
+      name: 'bash',
+      description: 'shell',
+      parameters: { type: 'object', properties: {} },
+      execute: async () => 'ran',
+    })
+
+    // Alice sets up terminal, job, approval hold, and minimal tool mode
+    const termA = withTenant('acct-a', 'ws-1', () => ctx.terminals.open('work'))
+    const termB = withTenant('acct-b', 'ws-1', () => ctx.terminals.open('work'))
+    await withTenant('acct-a', 'ws-1', () => ctx.jobs.start(subprocess.posixShellArgv('sleep 5')))
+    withTenant('acct-a', 'ws-1', () => {
+      ctx.approvals.mode = 'hold'
+      ctx.tools.setMode('minimal')
+    })
+    const pendingCall = withTenant('acct-a', 'ws-1', () => ctx.tools.invoke('bash', {}))
+    await new Promise((r) => setTimeout(r, 20))
+    assert.equal(withTenant('acct-a', 'ws-1', () => ctx.approvals.list().length), 1)
+
+    // Revoking acct-a in ws-1 tears down terminal, job, and pending approval; Bob is untouched
+    emitTenantRevoked(ctx, { accountId: 'acct-a', workspaceId: 'ws-1' })
+    await assert.rejects(() => pendingCall, /denied: bash/)
+    assert.equal(withTenant('acct-a', 'ws-1', () => ctx.terminals.list().terms.length), 0)
+    assert.equal(withTenant('acct-a', 'ws-1', () => ctx.jobs.list().length), 0)
+    assert.equal(withTenant('acct-a', 'ws-1', () => ctx.approvals.list().length), 0)
+    assert.equal(withTenant('acct-b', 'ws-1', () => ctx.terminals.list().terms[0]?.id), termB.id)
+    assert.notEqual(termA.id, termB.id)
+
+    // Full account revoke resets Alice's tool mode back to standard
+    emitTenantRevoked(ctx, { accountId: 'acct-a' })
+    assert.equal(withTenant('acct-a', 'ws-1', () => ctx.tools.getMode()), 'standard')
+
+    withTenant('acct-b', 'ws-1', () => ctx.terminals.close(termB.id))
+  } finally {
+    await new Promise((r) => setTimeout(r, 50))
+    rmSync(root, { recursive: true, force: true })
   }
 })

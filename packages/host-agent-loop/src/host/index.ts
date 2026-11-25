@@ -1,3 +1,4 @@
+import { getChatPort } from '@biu/host-plugin-loader/ports'
 import { Service, type Context } from 'cordis'
 import { hostCtxBudget } from '@biu/host-plugin-loader/env'
 import { currentAccountId, runWithActorContext } from '@biu/host-plugin-loader/data-dir'
@@ -51,18 +52,8 @@ export class AgentLoop implements AgentRunner {
     let extras = [
       ...new Set(claimed.flatMap((item) => item.extraTools ?? []).map((name) => name.trim()).filter(Boolean)),
     ]
-    const chat = this.ctx.get('chat') as
-      | {
-          resolveEffective?: (id?: string | null) => {
-            effective: {
-              agentMode: AgentToolMode
-              extraTools: string[]
-            }
-          }
-        }
-      | undefined
-    const effective = chat?.resolveEffective?.(this.sessionId)?.effective
-    const mode: AgentToolMode = effective?.agentMode ?? 'standard'
+    const effective = getChatPort(this.ctx)?.resolveEffective?.(this.sessionId)?.effective
+    const mode: AgentToolMode = (effective?.agentMode as AgentToolMode | undefined) ?? 'standard'
     if (mode === 'minimal' && effective?.extraTools?.length) {
       for (const name of effective.extraTools) {
         if (!extras.includes(name)) extras.push(name)
@@ -123,7 +114,7 @@ export class AgentLoop implements AgentRunner {
     toolCalls: PostStepReq['toolCalls'],
   ): Promise<string> {
     const config = (await this.ctx.sessions.get(this.sessionId))?.config
-    const chat = this.ctx.get('chat') as { contextWindowFor?: (id: string) => string } | undefined
+    const chat = getChatPort(this.ctx)
     const req: PostStepReq = {
       sessionId: this.sessionId,
       turn,
@@ -141,7 +132,7 @@ export class AgentLoop implements AgentRunner {
   private async writeAutoCompact(inputTokens: number | undefined, toolCalls: PostStepReq['toolCalls']) {
     const session = this.ctx.sessions
     const config = (await session.get(this.sessionId))?.config
-    const chat = this.ctx.get('chat') as { contextWindowFor?: (id: string) => string } | undefined
+    const chat = getChatPort(this.ctx)
     if (!shouldAutoCompact({
       inputTokens,
       toolCalls,
