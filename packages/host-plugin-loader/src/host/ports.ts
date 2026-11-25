@@ -10,6 +10,7 @@ export interface RemoteCloudTargetPort {
 export interface AccountStorePort {
   accountByToken?(token: string): { id: string } | null
   isMember?(accountId: string, workspaceId: string): boolean
+  isSuperAdmin?(accountId: string): boolean
   canAccessPlugin?(accountId: string, workspaceId: string, pluginId: string): boolean
   activeWorkspaceId?(): string | null
   tenantForRecord?(collection: string, recordId: string): { workspaceId: string; accountId: string } | null

@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { allocateRecordId, recordBuiltinValues, type DbRecord } from '@biu/type-file-system'
+import { currentTenantScope } from '@biu/host-plugin-loader/data-dir'
 
 export const NOTICE_KINDS = ['approval', 'task', 'session'] as const
 export type NoticeKind = (typeof NOTICE_KINDS)[number]
@@ -14,6 +15,8 @@ export type NoticeRow = {
   read: boolean
   href: string
   sourceKey: string
+  accountId?: string
+  workspaceId?: string
   /** 详情正文。资产通知是附件卡片数组，不放进摘要 body。 */
   content?: unknown
   createdAt: number
@@ -26,6 +29,8 @@ export type NoticeInput = {
   kind: NoticeKind
   href?: string
   sourceKey: string
+  accountId?: string
+  workspaceId?: string
   content?: unknown
 }
 
@@ -57,6 +62,8 @@ function parseRow(raw: unknown): NoticeRow | null {
   const sourceKey = String(rec.sourceKey ?? '').trim()
   if (!id || !title || !sourceKey) return null
   const createdAt = Number(rec.createdAt) || Date.now()
+  const accountId = typeof rec.accountId === 'string' ? rec.accountId.trim() : ''
+  const workspaceId = typeof rec.workspaceId === 'string' ? rec.workspaceId.trim() : ''
   return {
     id,
     title,
@@ -65,6 +72,8 @@ function parseRow(raw: unknown): NoticeRow | null {
     read: rec.read === true,
     href: String(rec.href ?? ''),
     sourceKey,
+    ...(accountId ? { accountId } : {}),
+    ...(workspaceId ? { workspaceId } : {}),
     ...(Array.isArray(rec.content) ? { content: rec.content } : {}),
     createdAt,
     updatedAt: Number(rec.updatedAt) || createdAt,
@@ -91,19 +100,36 @@ export class NoticesStore {
     return this
   }
 
+  private matchesTenant(row: NoticeRow, scope = currentTenantScope()) {
+    const rowAcct = row.accountId ?? ''
+    const rowWs = row.workspaceId ?? ''
+    if (rowAcct !== scope.accountId) return false
+    if (scope.workspaceId && rowWs && rowWs !== scope.workspaceId) return false
+    if (!scope.workspaceId && rowWs) return false
+    return true
+  }
+
   list() {
-    return [...this.rows].sort((a, b) => b.createdAt - a.createdAt)
+    const scope = currentTenantScope()
+    return this.rows.filter((row) => this.matchesTenant(row, scope)).sort((a, b) => b.createdAt - a.createdAt)
   }
 
   get(id: string) {
-    return this.rows.find((row) => row.id === id) ?? null
+    const scope = currentTenantScope()
+    return this.rows.find((row) => row.id === id && this.matchesTenant(row, scope)) ?? null
   }
 
   push(input: NoticeInput) {
     const title = input.title.trim()
     const sourceKey = input.sourceKey.trim()
     if (!title || !sourceKey) return null
-    const unread = this.rows.find((row) => row.sourceKey === sourceKey && !row.read)
+    const scope = currentTenantScope()
+    const accountId = (input.accountId ?? scope.accountId).trim()
+    const workspaceId = (input.workspaceId ?? scope.workspaceId).trim()
+    const targetScope = { accountId, workspaceId, key: `${accountId}\0${workspaceId}` }
+    const unread = this.rows.find(
+      (row) => row.sourceKey === sourceKey && !row.read && this.matchesTenant(row, targetScope),
+    )
     if (unread) {
       unread.title = title
       unread.body = input.body?.trim() || unread.body
@@ -125,19 +151,26 @@ export class NoticesStore {
       read: false,
       href: input.href?.trim() || '',
       sourceKey,
+      ...(accountId ? { accountId } : {}),
+      ...(workspaceId ? { workspaceId } : {}),
       ...(input.content !== undefined ? { content: input.content } : {}),
       createdAt: now,
       updatedAt: now,
     }
     this.rows.unshift(row)
-    if (this.rows.length > MAX_NOTICES) {
-      const extra = this.rows.length - MAX_NOTICES
-      const drop = this.rows
-        .map((item, index) => ({ item, index }))
-        .filter((entry) => entry.item.read)
-        .slice(-extra)
-      const indexes = new Set(drop.map((entry) => entry.index))
-      this.rows = this.rows.filter((_, index) => !indexes.has(index)).slice(0, MAX_NOTICES)
+    const tenantRows = this.rows.filter((item) => this.matchesTenant(item, targetScope))
+    if (tenantRows.length > MAX_NOTICES) {
+      const extra = tenantRows.length - MAX_NOTICES
+      const dropIds = new Set(
+        tenantRows
+          .filter((item) => item.read)
+          .slice(-extra)
+          .map((item) => item.id),
+      )
+      if (dropIds.size < extra) {
+        for (const item of tenantRows.slice(-(extra - dropIds.size))) dropIds.add(item.id)
+      }
+      this.rows = this.rows.filter((item) => !dropIds.has(item.id))
     }
     this.flush()
     return row
@@ -153,7 +186,8 @@ export class NoticesStore {
   }
 
   remove(id: string) {
-    const next = this.rows.filter((row) => row.id !== id)
+    const scope = currentTenantScope()
+    const next = this.rows.filter((row) => !(row.id === id && this.matchesTenant(row, scope)))
     if (next.length === this.rows.length) throw new Error('unknown notice')
     this.rows = next
     this.flush()
@@ -162,10 +196,11 @@ export class NoticesStore {
   markSourceRead(sourceKey: string) {
     const key = sourceKey.trim()
     if (!key) return 0
+    const scope = currentTenantScope()
     let n = 0
     const now = Date.now()
     for (const row of this.rows) {
-      if (row.sourceKey !== key || row.read) continue
+      if (row.sourceKey !== key || row.read || !this.matchesTenant(row, scope)) continue
       row.read = true
       row.updatedAt = now
       n += 1
@@ -175,11 +210,13 @@ export class NoticesStore {
   }
 
   clear() {
-    const n = this.rows.length
-    if (!n) return 0
-    this.rows = []
+    const scope = currentTenantScope()
+    const before = this.rows.length
+    this.rows = this.rows.filter((row) => !this.matchesTenant(row, scope))
+    const removed = before - this.rows.length
+    if (!removed) return 0
     this.flush()
-    return n
+    return removed
   }
 
   private flushTimer: ReturnType<typeof setTimeout> | null = null

@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { currentAccountId, dataDir, dataHome, dataPath } from '@biu/host-plugin-loader/data-dir'
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
+import { TenantStateMap } from '@biu/host-plugin-loader/tenant-state'
 import { Service, type Context } from 'cordis'
 import type { ChatMessage } from './chat-types.ts'
 import { isAgentToolMode, normalizeAgentMode, type AgentToolMode } from '@biu/host-tools'
@@ -512,29 +513,30 @@ function blockEndpoint(config: ChatConfig, id: string) {
 
 export class ChatService extends Service {
   private activeAccountId = ''
-  private configs = new Map<string, ChatConfig>()
+  private configs: TenantStateMap<ChatConfig>
 
   private currentAccountKey() {
     const scoped = currentAccountId().trim()
     return scoped || this.activeAccountId
   }
 
+  private scopeFor(accountId: string) {
+    const clean = accountId.trim()
+    return { accountId: clean, workspaceId: '', key: `${clean}\0` }
+  }
+
   private get config(): ChatConfig {
     const key = this.currentAccountKey()
-    let cfg = this.configs.get(key)
-    if (!cfg) {
-      cfg = mergePersisted(defaults(), readPersisted(key))
-      this.configs.set(key, cfg)
-    }
-    return cfg
+    return this.configs.getOrCreate(() => mergePersisted(defaults(), readPersisted(key)), this.scopeFor(key))
   }
 
   private set config(next: ChatConfig) {
-    this.configs.set(this.currentAccountKey(), next)
+    this.configs.set(next, this.scopeFor(this.currentAccountKey()))
   }
 
   constructor(ctx: Context) {
     super(ctx, 'chat')
+    this.configs = new TenantStateMap(ctx, { granularity: 'account' })
     ctx.systemPrompt.register('chat.persona', () => {
       const sessionId = currentSessionId()
       if (sessionId) {
@@ -563,9 +565,8 @@ export class ChatService extends Service {
 
   activateAccount(accountId = currentAccountId()) {
     const next = accountId.trim()
-    if (!this.configs.has(next)) {
-      this.configs.set(next, mergePersisted(defaults(), readPersisted(next)))
-    }
+    const scope = this.scopeFor(next)
+    this.configs.getOrCreate(() => mergePersisted(defaults(), readPersisted(next)), scope)
     if (next === this.activeAccountId) return
     this.activeAccountId = next
     this.syncLlm()

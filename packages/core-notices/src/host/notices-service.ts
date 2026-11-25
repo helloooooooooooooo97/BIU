@@ -1,5 +1,5 @@
 import { Service, type Context } from 'cordis'
-import { dataHome, dataPath } from '@biu/host-plugin-loader/data-dir'
+import { currentTenantScope, dataHome, dataPath } from '@biu/host-plugin-loader/data-dir'
 import { DATABASE_CHANNEL, databaseChannelPayload } from '@biu/type-file-system'
 import { noticesCollection } from './notices-collection.ts'
 import { NoticesStore, type NoticeInput } from './notices-store.ts'
@@ -43,8 +43,11 @@ export class NoticesService extends Service {
   }
 
   private bump() {
-    const http = this.ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
-    http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('notices'))
+    const { accountId, workspaceId } = currentTenantScope()
+    const http = this.ctx.get('http') as
+      | { broadcast?: (type: string, payload: unknown, workspaceId?: string, accountId?: string) => void }
+      | undefined
+    http?.broadcast?.(DATABASE_CHANNEL, databaseChannelPayload('notices'), workspaceId || undefined, accountId || undefined)
   }
 }
 

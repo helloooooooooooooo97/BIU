@@ -1,5 +1,7 @@
 import { Service, type Context } from 'cordis'
+import { currentTenantScope, dataHome, dataPath } from '@biu/host-plugin-loader/data-dir'
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
+import { TenantStateMap } from '@biu/host-plugin-loader/tenant-state'
 import { mcpCollection } from './collection.ts'
 import { McpConnection, type McpToolInfo } from './client.ts'
 import { applyHostServer } from './serve.ts'
@@ -77,23 +79,63 @@ function echoState(): ServerState {
   }
 }
 
+function sanitizeWorkspaceSegment(id: string) {
+  return id.trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'default'
+}
+
 export class McpService extends Service {
-  private servers = new Map<string, ServerState>()
+  private defaultServers = new Map<string, ServerState>()
+  private tenantServers: TenantStateMap<Map<string, ServerState>>
   private configPath: string
 
   constructor(ctx: Context) {
     super(ctx, 'mcp')
     this.configPath = mcpConfigPath()
-    this.servers.set('echo', echoState())
+    this.defaultServers.set('echo', echoState())
+    this.tenantServers = new TenantStateMap(ctx, {
+      onDispose: (bucket) => {
+        for (const state of bucket.values()) void state.connection?.close()
+      },
+    })
     ctx.effect(() => () => void this.closeAll(), 'mcp.dispose-all')
     ctx.inject(['database'], (inner) => {
       inner.database.register(mcpCollection(this))
     })
   }
 
+  private isTenantIsolated() {
+    return getRuntimePolicy().authzMode === 'rbac'
+  }
+
+  private currentConfigPath() {
+    if (!this.isTenantIsolated()) return this.configPath
+    const wsId = sanitizeWorkspaceSegment(currentTenantScope().workspaceId)
+    return dataPath(dataHome(), 'mcp', `${wsId}.json`)
+  }
+
+  private get servers(): Map<string, ServerState> {
+    if (!this.isTenantIsolated()) return this.defaultServers
+    return this.tenantServers.getOrCreate(() => {
+      const bucket = new Map<string, ServerState>()
+      bucket.set('echo', echoState())
+      for (const config of readMcpConfig(this.currentConfigPath())) {
+        if (config.id === 'echo') continue
+        bucket.set(config.id, {
+          config,
+          status: 'idle',
+          error: '',
+          tools: [],
+          connectedAt: 0,
+          builtin: false,
+        })
+      }
+      return bucket
+    })
+  }
+
   /** 读 .biu/mcp.json 并连上所有 enabled 的 server。连接失败只记在行上，不拖住启动。 */
   async restore() {
-    for (const config of readMcpConfig(this.configPath)) {
+    for (const config of readMcpConfig(this.currentConfigPath())) {
       if (config.id === 'echo') continue
       this.servers.set(config.id, {
         config,
@@ -129,7 +171,7 @@ export class McpService extends Service {
 
   private persist() {
     const servers = [...this.servers.values()].filter((state) => !state.builtin).map((state) => state.config)
-    writeMcpConfig(servers, this.configPath)
+    writeMcpConfig(servers, this.currentConfigPath())
   }
 
   async connect(id: string) {
@@ -415,8 +457,9 @@ export class McpService extends Service {
   }
 
   private async closeAll() {
-    for (const state of this.servers.values()) await state.connection?.close()
-    this.servers.clear()
+    for (const state of this.defaultServers.values()) await state.connection?.close()
+    this.defaultServers.clear()
+    this.tenantServers.clear()
   }
 }
 
