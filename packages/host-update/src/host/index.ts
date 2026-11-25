@@ -1,5 +1,8 @@
 import type { Context } from 'cordis'
 import { findRepoRoot } from '@biu/host-plugin-loader'
+import { currentAccountId } from '@biu/host-plugin-loader/data-dir'
+import { getAccountPort } from '@biu/host-plugin-loader/ports'
+import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { behindMain, fetchMain, mergeMain, scheduleRestart, updateSource } from './git.ts'
 
 export const name = 'update'
@@ -33,12 +36,25 @@ export function apply(ctx: Context) {
     void refresh()
   })
 
+  function requireSuperAdmin(route: { send(status: number, body: unknown): void }): boolean {
+    if (getRuntimePolicy().authzMode !== 'rbac') return true
+    const accountId = currentAccountId()
+    const isSuperAdmin = Boolean(accountId && getAccountPort(ctx)?.store?.isSuperAdmin?.(accountId))
+    if (!isSuperAdmin) {
+      route.send(403, { error: '仅超级管理员可执行云端服务更新' })
+      return false
+    }
+    return true
+  }
+
   ctx.http.route('GET', '/api/update', async (route) => {
+    if (!requireSuperAdmin(route)) return
     if (!status.ready) await refresh()
     route.send(200, status)
   })
 
   ctx.http.route('POST', '/api/update', async (route) => {
+    if (!requireSuperAdmin(route)) return
     if (applying) {
       route.send(409, { error: '更新进行中' })
       return

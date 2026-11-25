@@ -2,7 +2,23 @@ import { spawn } from 'node:child_process'
 import { mkdir, readFile, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { currentRequestWorkspaceId } from '@biu/host-plugin-loader/data-dir'
+import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { combineSignals, fetchHeaders } from './html.ts'
+import { WebError } from './types.ts'
+
+const MAX_REDIRECTS = 5
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
+
+function tempCacheDir() {
+  const base = join(tmpdir(), 'biu-web')
+  if (!getRuntimePolicy().isolateWorkspaceDirs) return base
+  const workspaceId = currentRequestWorkspaceId().trim().replace(/[^a-zA-Z0-9_-]/g, '')
+  if (!workspaceId) {
+    throw new WebError('WEB_PROVIDER_ERROR', '云端模式缺少工作区上下文，拒绝写入网页临时缓存')
+  }
+  return join(base, 'workspaces', workspaceId)
+}
 
 function curlAvailable() {
   return new Promise<boolean>((resolve) => {
@@ -98,22 +114,43 @@ export async function loadJson(url: string, signal?: AbortSignal) {
   return JSON.parse(text) as unknown
 }
 
-async function fetchRaw(
-  url: string,
-  init: { signal?: AbortSignal; headers?: Record<string, string> } = {},
-) {
-  const res = await fetch(url, {
-    headers: fetchHeaders(init.headers),
-    signal: combineSignals(init.signal),
-    redirect: 'follow',
-  })
-  const bytes = Buffer.from(await res.arrayBuffer())
-  return {
-    status: res.status,
-    url: res.url || url,
-    type: res.headers.get('content-type') ?? '',
-    bytes,
+export type LoadRawOptions = {
+  signal?: AbortSignal
+  headers?: Record<string, string>
+  validateUrl?: (url: string) => Promise<void> | void
+}
+
+async function fetchRaw(url: string, init: LoadRawOptions = {}) {
+  let currentUrl = url
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    const res = await fetch(currentUrl, {
+      headers: fetchHeaders(init.headers),
+      signal: combineSignals(init.signal),
+      redirect: init.validateUrl ? 'manual' : 'follow',
+    })
+    if (init.validateUrl && REDIRECT_STATUSES.has(res.status)) {
+      const location = res.headers.get('location')
+      if (!location) {
+        const bytes = Buffer.from(await res.arrayBuffer())
+        return { status: res.status, url: res.url || currentUrl, type: res.headers.get('content-type') ?? '', bytes }
+      }
+      if (hop >= MAX_REDIRECTS) {
+        throw new WebError('WEB_PROVIDER_ERROR', `too many redirects (max ${MAX_REDIRECTS})`)
+      }
+      const nextUrl = new URL(location, currentUrl).href
+      await init.validateUrl(nextUrl)
+      currentUrl = nextUrl
+      continue
+    }
+    const bytes = Buffer.from(await res.arrayBuffer())
+    return {
+      status: res.status,
+      url: res.url || currentUrl,
+      type: res.headers.get('content-type') ?? '',
+      bytes,
+    }
   }
+  throw new WebError('WEB_PROVIDER_ERROR', `too many redirects (max ${MAX_REDIRECTS})`)
 }
 
 function sniffImageType(bytes: Buffer, url: string) {
@@ -125,36 +162,60 @@ function sniffImageType(bytes: Buffer, url: string) {
   return url
 }
 
-export async function loadRaw(
-  url: string,
-  init: { signal?: AbortSignal; headers?: Record<string, string> } = {},
-) {
+export async function loadRaw(url: string, init: LoadRawOptions = {}) {
   if (process.env.VITEST === 'true') return fetchRaw(url, init)
   if (await hasCurl()) {
-    const dir = join(tmpdir(), 'biu-web')
+    const dir = tempCacheDir()
     await mkdir(dir, { recursive: true })
-    const dest = join(dir, `page-${Date.now()}-${Math.random().toString(16).slice(2)}`)
-    try {
-      const argv = ['-sS', '-L', '--max-time', '20', '-A', UA, '-o', dest, '-w', '%{http_code}\n%{content_type}\n%{url_effective}']
-      for (const [key, value] of Object.entries(init.headers ?? {})) {
-        argv.push('-H', `${key}: ${value}`)
+    let currentUrl = url
+    for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+      const dest = join(dir, `page-${Date.now()}-${Math.random().toString(16).slice(2)}`)
+      try {
+        const argv = [
+          '-sS',
+          ...(init.validateUrl ? [] : ['-L']),
+          '--max-time',
+          '20',
+          '-A',
+          UA,
+          '-o',
+          dest,
+          '-w',
+          '%{http_code}\n%{content_type}\n%{url_effective}\n%{redirect_url}',
+        ]
+        for (const [key, value] of Object.entries(init.headers ?? {})) {
+          argv.push('-H', `${key}: ${value}`)
+        }
+        argv.push(currentUrl)
+        const meta = (await runCurl(argv, init.signal)).split('\n')
+        const status = Number(meta[0]?.trim() || 0) || 200
+        const type = (meta[1] || '').trim()
+        const finalUrl = (meta[2] || currentUrl).trim() || currentUrl
+        const redirectUrl = (meta[3] || '').trim()
+
+        if (init.validateUrl && REDIRECT_STATUSES.has(status) && redirectUrl) {
+          if (hop >= MAX_REDIRECTS) {
+            throw new WebError('WEB_PROVIDER_ERROR', `too many redirects (max ${MAX_REDIRECTS})`)
+          }
+          const nextUrl = new URL(redirectUrl, currentUrl).href
+          await init.validateUrl(nextUrl)
+          currentUrl = nextUrl
+          continue
+        }
+
+        const bytes = await readFile(dest)
+        const sniffed = sniffImageType(bytes, '')
+        return {
+          status,
+          url: finalUrl,
+          type: type || (sniffed.startsWith('image/') ? sniffed : ''),
+          bytes,
+        }
+      } finally {
+        await unlink(dest).catch(() => undefined)
       }
-      argv.push(url)
-      const meta = (await runCurl(argv, init.signal)).trim().split('\n')
-      const bytes = await readFile(dest)
-      const status = Number(meta[0] || 0) || 200
-      const type = (meta[1] || '').trim()
-      const finalUrl = (meta[2] || url).trim() || url
-      const sniffed = sniffImageType(bytes, '')
-      return {
-        status,
-        url: finalUrl,
-        type: type || (sniffed.startsWith('image/') ? sniffed : ''),
-        bytes,
-      }
-    } finally {
-      await unlink(dest).catch(() => undefined)
     }
+    throw new WebError('WEB_PROVIDER_ERROR', `too many redirects (max ${MAX_REDIRECTS})`)
   }
   return fetchRaw(url, init)
 }
