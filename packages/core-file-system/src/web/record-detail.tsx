@@ -228,18 +228,24 @@ function RecordFloatNav({
 }) {
   const mark = useRef<HTMLSpanElement>(null)
   const [host, setHost] = useState<HTMLElement | null>(null)
+  const active = Boolean(canPrev || canNext)
 
   useLayoutEffect(() => {
+    if (!active) {
+      setHost(null)
+      return
+    }
     const stage = mark.current?.closest('.fsdb-detail-stage')
     const main = stage?.querySelector('.fsdb-detail-main')
     const root =
       (main instanceof HTMLElement
         ? main.closest('.fsdb-right') ?? main.closest('.fsdb-right-body')
         : null) ?? stage
-    setHost(root instanceof HTMLElement ? root : null)
-  }, [])
+    const nextHost = root instanceof HTMLElement ? root : null
+    setHost((prev) => (prev === nextHost ? prev : nextHost))
+  }, [active])
 
-  if (!canPrev && !canNext) return null
+  if (!active) return null
   const nav = (
     <div className="fsdb-detail-float-host">
       <nav className="fsdb-detail-float-nav" aria-label="按视图顺序切换记录">

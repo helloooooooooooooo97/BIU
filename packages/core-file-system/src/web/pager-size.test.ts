@@ -34,3 +34,9 @@ test('pager next is disabled on the last page', () => {
   assert.match(css, /\.fsdb-pager \.tasks-icon-btn:disabled\{[^}]*opacity:\.4/)
   assert.match(css, /\.fsdb-detail-float-btn:disabled\{[^}]*opacity:\.35/)
 })
+
+test('RecordFloatNav resolves portal host when canPrev/canNext becomes active', () => {
+  const detail = readFileSync(resolve(import.meta.dirname, './record-detail.tsx'), 'utf8')
+  assert.match(detail, /const active = Boolean\(canPrev \|\| canNext\)/)
+  assert.match(detail, /\[active\]\)/)
+})
