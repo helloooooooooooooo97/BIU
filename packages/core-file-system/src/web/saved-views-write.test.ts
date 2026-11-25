@@ -318,7 +318,7 @@ test('rapid consecutive patchActiveView calls accumulate immediately and seriali
     }
     return new Response(
       JSON.stringify({
-        items: [{ viewId: 'v1', title: '默认', tablePath: path, wrap: true, freezeTitle: true, updatedAt: posts.at(-1)?.updatedAt }],
+        items: [{ viewId: 'v1', title: '默认', tablePath: path, groupBy: 'status', sortDir: 'desc', updatedAt: posts.at(-1)?.updatedAt }],
         total: 1,
       }),
       { status: 200, headers: { 'content-type': 'application/json' } },
@@ -326,23 +326,23 @@ test('rapid consecutive patchActiveView calls accumulate immediately and seriali
   })
 
   try {
-    harness.crud.patchActiveView({ wrap: true })
-    harness.crud.patchActiveView({ freezeTitle: true })
+    harness.crud.patchActiveView({ groupBy: 'status' })
+    harness.crud.patchActiveView({ sortDir: 'desc' })
 
-    assert.equal(harness.viewsRef.current[0]?.wrap, true)
-    assert.equal(harness.viewsRef.current[0]?.freezeTitle, true)
+    assert.equal(harness.viewsRef.current[0]?.groupBy, 'status')
+    assert.equal(harness.viewsRef.current[0]?.sortDir, 'desc')
 
     await new Promise((r) => setTimeout(r, 0))
     assert.equal(posts.length, 1)
-    assert.equal(posts[0]?.wrap, true)
+    assert.equal(posts[0]?.groupBy, 'status')
 
     releaseFirst()
     await new Promise((r) => setTimeout(r, 30))
 
     assert.equal(maxConcurrentPosts, 1)
     assert.equal(posts.length, 2)
-    assert.equal(posts[1]?.wrap, true)
-    assert.equal(posts[1]?.freezeTitle, true)
+    assert.equal(posts[1]?.groupBy, 'status')
+    assert.equal(posts[1]?.sortDir, 'desc')
     assert.ok(Number(posts[1]?.updatedAt) > Number(posts[0]?.updatedAt))
     assert.equal(harness.getSaveError(), false)
   } finally {
@@ -362,17 +362,51 @@ test('failed patchActiveView rolls back viewsRef, memoryViews, and localStorage 
     sortDir: 'asc',
     filters: {},
     columns: ['title'],
-    wrap: false,
+    groupBy: '',
   }
   const harness = makeCrudHarness(path, [initial], 'v1')
   const restore = mockFetch(async () => new Response('boom', { status: 500 }))
   try {
-    harness.crud.patchActiveView({ wrap: true })
+    harness.crud.patchActiveView({ groupBy: 'status' })
     await new Promise((r) => setTimeout(r, 30))
     assert.equal(harness.getSaveError(), true)
-    assert.equal(harness.viewsRef.current[0]?.wrap, false)
-    assert.equal(loadViews(path)[0]?.wrap, false)
+    assert.equal(harness.viewsRef.current[0]?.groupBy, '')
+    assert.equal(loadViews(path)[0]?.groupBy, '')
     assert.equal(env.mem[viewDisplayKey(path, 'v1')], undefined)
+  } finally {
+    restore()
+    env.restore()
+  }
+})
+
+test('local-only personal display prefs persist locally without firing server POST', async () => {
+  const env = setupBrowserGlobals()
+  const path = '/pages-local-prefs'
+  const initial: SavedView = {
+    id: 'v1',
+    name: '默认',
+    mode: 'table',
+    sortField: 'title',
+    sortDir: 'asc',
+    filters: {},
+    columns: ['title'],
+    wrap: false,
+    columnWidths: {},
+  }
+  const harness = makeCrudHarness(path, [initial], 'v1')
+  let fetchCalls = 0
+  const restore = mockFetch(async () => {
+    fetchCalls += 1
+    return new Response('{"ok":true}', { status: 200 })
+  })
+  try {
+    harness.crud.patchActiveView({ columnWidths: { title: 320 }, wrap: true, pageSize: 50 })
+    await new Promise((r) => setTimeout(r, 20))
+    assert.equal(fetchCalls, 0)
+    assert.equal(harness.viewsRef.current[0]?.wrap, true)
+    assert.equal(harness.viewsRef.current[0]?.columnWidths?.title, 320)
+    assert.equal(harness.viewsRef.current[0]?.pageSize, 50)
+    assert.ok(env.mem[viewDisplayKey(path, 'v1')]?.includes('"title":320'))
   } finally {
     restore()
     env.restore()
