@@ -15,6 +15,7 @@ export type SharedViewDef = {
   name?: string
   filters?: Record<string, unknown>
   filterTree?: FilterGroup | null
+  columns?: string[]
   builtin?: boolean
 }
 

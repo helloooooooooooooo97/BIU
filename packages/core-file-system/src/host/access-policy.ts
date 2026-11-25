@@ -3,7 +3,7 @@ import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { roleCoversAction, type Action as PermissionAction, type AuthorizationService } from '@biu/host-account/authorization'
 import { isRegisteredBuiltinPlugin } from '@biu/host-account/store'
 import type { CollectionSchema, CollectionSchemaPack, CollectionSpec, DbRecord } from '@biu/type-file-system'
-import { builtinAllView, builtinAllViewId, builtinMemberViews } from '../catalog-views.ts'
+import { builtinAllView, builtinAllViewId, builtinMemberViews, isBuiltinAllViewId } from '../catalog-views.ts'
 import {
   assertWritableColumns,
   fullColumnPolicy,
@@ -360,12 +360,19 @@ export class DatabaseAccessPolicy {
       if (!recordMatchesGrantedView(record as never, grant.view_id, saved, scope, { grantedBy: grant.granted_by, recordOwnerId: ownerId })) {
         continue
       }
-      const readableList = parseColumnList(grant.readable_columns)
-      const writableList = parseColumnList(grant.writable_columns)
+      // 默认行为（所见即所得）：自定义视图勾选了可见列时，自动以 view.columns 作为后端列白名单
+      // （保留正文 $content 与只读分享元信息字段，避免点开详情页报错）。
+      const matchedView = saved.find((item) => item.id === grant.view_id)
+      const defaultViewCols =
+        matchedView && !isBuiltinAllViewId(matchedView.id) && Array.isArray(matchedView.columns) && matchedView.columns.length > 0
+          ? [...matchedView.columns, '$content', 'shareScope', 'shareRole']
+          : null
+      const readableList = parseColumnList(grant.readable_columns) ?? defaultViewCols
+      const writableList = parseColumnList(grant.writable_columns) ?? defaultViewCols
       const canWrite = roleCoversAction(grant.role, 'resource:update')
       policies.push({
         readable: readableList ? new Set(readableList) : '*',
-        writable: canWrite ? (writableList ? new Set(writableList) : readableList ? new Set(readableList) : '*') : new Set<string>(),
+        writable: canWrite ? (writableList ? new Set(writableList) : '*') : new Set<string>(),
       })
     }
     return mergeColumnPolicies(policies)
@@ -384,9 +391,13 @@ export class DatabaseAccessPolicy {
     const authorization = this.host.authorization()
     const actor = authorization?.currentActor()
     if (!store?.viewGrantsFor || !authorization || !actor) return false
-    return store
-      .viewGrantsFor(actor.workspaceId, collection)
-      .some((g) => Boolean(g.readable_columns || g.writable_columns))
+    const views = this.host.viewCatalog?.viewsFor(collection) ?? []
+    return store.viewGrantsFor(actor.workspaceId, collection).some((g) => {
+      if (g.readable_columns || g.writable_columns) return true
+      if (isBuiltinAllViewId(g.view_id)) return false
+      const view = views.find((item) => item.id === g.view_id)
+      return Boolean(view && Array.isArray(view.columns) && view.columns.length > 0)
+    })
   }
 
   /**
