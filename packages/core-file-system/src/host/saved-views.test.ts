@@ -398,24 +398,24 @@ test('three-state view scope (personal / workspace / shared) enforces visibility
       upsert: [
         { id: 'v-personal', name: 'Alice Private', scope: 'personal', filters: { status: 'draft' } },
         { id: 'v-workspace', name: 'Team Board', scope: 'workspace', filters: { status: 'open' } },
-        { id: 'v-shared', name: 'Client Portal', scope: 'shared', filters: { status: 'published' } },
+        { id: 'v-shared', name: 'Client Portal', scope: 'shared' as never, filters: { status: 'published' } },
       ],
     },
     'alice',
   )
 
-  // Visibility: Alice sees all 3; Bob & Admin only see workspace + shared (not Alice's personal view)
+  // Visibility: two-state pure-display views (legacy 'shared' normalizes to 'personal')
   assert.deepEqual(
     store.viewsFor('/pages', 'alice').map((v) => v.id),
     ['v-personal', 'v-workspace', 'v-shared'],
   )
   assert.deepEqual(
     store.viewsFor('/pages', 'bob').map((v) => v.id),
-    ['v-workspace', 'v-shared'],
+    ['v-workspace'],
   )
   assert.deepEqual(
     store.viewsFor('/pages', 'admin-1').map((v) => v.id),
-    ['v-workspace', 'v-shared'],
+    ['v-workspace'],
   )
 
   // Mutation ownership: Bob cannot modify or delete Alice's workspace/shared/personal views

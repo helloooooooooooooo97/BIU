@@ -2607,19 +2607,10 @@ export function apply(ctx: Context) {
   } | undefined
   savedViews.setWorkspaceResolver(() => resolveScopedWorkspaceId(ctx))
   savedViews.setPolicyGuard({
-    isLocked: (workspaceId, collection, viewId) => {
-      if (account?.authorization?.isViewPolicyBound(workspaceId, collection, viewId)) return true
-      try {
-        return db.shares.listViews(collection).some((share) => share.viewId === viewId)
-      } catch {
-        return false
-      }
-    },
-    canEditLocked: (workspaceId, accountId) => {
-      if (!account?.authorization || !workspaceId) return true
-      return account.authorization.canModifyPolicyLockedView(workspaceId, accountId)
-    },
-    canSeeView: (workspaceId, collection, view, accountId) => {
+    // 方案 B（视图归展示，规则归安全）：视图不再绑定数据权限，创建者可随时自由修改筛选/列/删除视图
+    isLocked: () => false,
+    canEditLocked: () => true,
+    canSeeView: (workspaceId, _collection, view, accountId) => {
       if (!account?.store || !workspaceId || !accountId) return true
       if (view.createdBy === accountId) return true
       let isInternal = true
@@ -2628,19 +2619,10 @@ export function apply(ctx: Context) {
         const me = members.find((m) => m.id === accountId)
         if (me && me.member_kind !== 'member') isInternal = false
       } catch {
-        // requireInternalMember 对 external/guest 会抛错，此时按外部协作者处理
         isInternal = false
       }
-      if (isInternal) return true
-      // 原则 5（默认拒绝）：外部协作者 / 临时访客仅可见显式分享给自己的视图，不暴露空间内部 workspace 视图
-      const grants = account.store.viewGrantsFor?.(workspaceId, collection) ?? []
-      return grants.some(
-        (g) =>
-          g.view_id === String(view.id) &&
-          (g.subject_type === 'account'
-            ? g.subject_id === accountId
-            : Boolean(account.authorization?.matchesMemberView(workspaceId, g.subject_id, accountId))),
-      )
+      // 原则 5（默认拒绝）：外部协作者 / 临时访客不暴露空间内部 workspace 视图
+      return isInternal
     },
     onRemoved: (workspaceId, collection, viewId) => {
       try {
