@@ -33,55 +33,16 @@ function createPolicy(grants: NonNullable<WorkspaceFiles['viewGrantsFor']> exten
   return new DatabaseAccessPolicy(host)
 }
 
-describe('DatabaseAccessPolicy.viewGrantRole deny semantics', () => {
+describe('DatabaseAccessPolicy.viewGrantRole union semantics', () => {
   const allViewId = builtinAllViewId('/pages')
 
-  it('does not treat an explicit deny view grant as allow', () => {
-    const policy = createPolicy([
-      {
-        view_id: allViewId,
-        subject_type: 'account',
-        subject_id: 'acc-1',
-        role: 'editor',
-        effect: 'deny',
-        granted_by: 'owner-1',
-      },
-    ])
-    assert.equal(policy.viewGrantRole('ws-1', '/pages', { id: 'rec-1' }, 'acc-1'), null)
-    assert.equal(policy.allowsViaView('/pages', { id: 'rec-1' }, 'resource:read'), false)
-  })
-
-  it('enforces Deny-overrides-Allow when both allow and deny view grants match', () => {
-    const policy = createPolicy([
-      {
-        view_id: allViewId,
-        subject_type: 'account',
-        subject_id: 'acc-1',
-        role: 'editor',
-        effect: 'allow',
-        granted_by: 'owner-1',
-      },
-      {
-        view_id: allViewId,
-        subject_type: 'account',
-        subject_id: 'acc-1',
-        role: 'viewer',
-        effect: 'deny',
-        granted_by: 'owner-1',
-      },
-    ])
-    assert.equal(policy.viewGrantRole('ws-1', '/pages', { id: 'rec-1' }, 'acc-1'), null)
-    assert.equal(policy.allowsViaView('/pages', { id: 'rec-1' }, 'resource:read'), false)
-  })
-
-  it('returns highest allow role when no deny grant matches', () => {
+  it('returns highest allow role when multiple view grants match', () => {
     const policy = createPolicy([
       {
         view_id: allViewId,
         subject_type: 'account',
         subject_id: 'acc-1',
         role: 'viewer',
-        effect: 'allow',
         granted_by: 'owner-1',
       },
       {
@@ -89,7 +50,6 @@ describe('DatabaseAccessPolicy.viewGrantRole deny semantics', () => {
         subject_type: 'account',
         subject_id: 'acc-1',
         role: 'editor',
-        effect: 'allow',
         granted_by: 'owner-1',
       },
     ])
