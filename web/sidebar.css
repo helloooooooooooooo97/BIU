@@ -1055,7 +1055,7 @@ html.dark .fsdb-views {
   overflow: hidden;
   border-radius: 50%;
   background: var(--biu-color-bg-hover);
-  margin-left: 2px;
+  margin: 0 4px;
 }
 
 .sidebar-creator-avatar img,
