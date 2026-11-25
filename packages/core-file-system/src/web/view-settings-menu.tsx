@@ -1,8 +1,9 @@
 import { useEffect, useState, type ReactElement } from 'react'
-import { PlusIcon } from '@heroicons/react/16/solid'
+import { PlusIcon, ShieldCheckIcon } from '@heroicons/react/16/solid'
 import { apiFetch } from '@biu/biu-ui/api-client'
 import type { CollectionRowViewType, CollectionViewType } from '@biu/type-file-system/ui'
 import type { FilterGroup, SortRule } from '../query-logic.ts'
+import { openAccessRulesDrawer } from './access-rules-drawer.tsx'
 import { LocalText } from './controls.tsx'
 import type { ViewMode } from './fields.ts'
 import { ModeGlyph, VIEW_MODES } from './fsdb-cells.tsx'
@@ -30,9 +31,8 @@ const TABS: Array<{ id: ViewSettingsTab; label: string }> = [
 ]
 
 const VIEW_SCOPE_OPTIONS: Array<{ value: ViewScope; label: string }> = [
-  { value: 'personal', label: '私人' },
-  { value: 'workspace', label: '空间' },
-  { value: 'shared', label: '共享' },
+  { value: 'personal', label: '私人（仅自己）' },
+  { value: 'workspace', label: '空间（纯展示布局）' },
 ]
 
 type ViewerIdentity = { accountId: string; isAdmin: boolean }
@@ -342,6 +342,22 @@ export function ViewSettingsMenu({
               >
                 <PlusIcon aria-hidden className="size-[14px]" />
                 <span>另存为私人视图</span>
+              </button>
+            ) : null}
+
+            {!sheet && activeView ? (
+              <button
+                type="button"
+                className="fsdb-vset-mode-add"
+                data-testid="fsdb-view-share-as-rule"
+                onClick={() => {
+                  setOpenAcc(null)
+                  onClose()
+                  openAccessRulesDrawer({ collection: collectionPath, fromView: activeView })
+                }}
+              >
+                <ShieldCheckIcon aria-hidden className="size-[14px]" />
+                <span>按此视图条件分享数据…</span>
               </button>
             ) : null}
 

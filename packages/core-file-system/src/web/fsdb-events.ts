@@ -36,6 +36,7 @@ export const ENABLE_PAGE_BLOCK_PLUGIN_EVENT = 'biu:enable-page-block-plugin' as 
 export const PAGE_OUTLINE_EVENT = 'biu:page-outline' as const
 export const PAGE_PREFS_EVENT = 'biu:page-prefs' as const
 export const OPEN_TAG_EVENT = 'biu:open-tag' as const
+export const OPEN_ACCESS_RULES_EVENT = 'biu:open-access-rules' as const
 
 export const FOCUS_RECORD_TITLE = 'biu:focus-record-title' as const
 export const FOCUS_RECORD_CONTENT = 'biu:focus-record-content' as const

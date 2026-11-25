@@ -17,6 +17,7 @@ import { roleLabel } from './share-chain-detail.tsx'
 import { mintSharePin, shareClipboardText } from '../share-resources.ts'
 import { builtinAllView, builtinMemberViews, isBuiltinAllViewId, parseBuiltinScopeViewId, scopedCollectionName } from '../catalog-views.ts'
 import { effectiveDataScope, grantAudienceKind, recordMatchesGrantedView } from '../view-access.ts'
+import { openAccessRulesDrawer } from './access-rules-drawer.tsx'
 import type { DbRecord } from '@biu/type-file-system'
 
 export type ShareKind = 'view' | 'record'
@@ -968,6 +969,34 @@ export function SharePanel({
     }
   }, [target.kind, target.collection, target.viewId, target.recordId])
 
+  const [matchedRules, setMatchedRules] = useState<Array<{
+    ruleId: string
+    ruleName: string
+    createdByName: string
+    isMine: boolean
+    columns: string[] | null
+    grants: Array<{ subjectType: string; subjectId: string; subjectName: string; role: string }>
+  }>>([])
+
+  useEffect(() => {
+    if (localOnly || target.kind !== 'record' || !target.recordId) {
+      setMatchedRules([])
+      return
+    }
+    let gone = false
+    const qs = new URLSearchParams({ collection: target.collection, recordId: target.recordId })
+    void readJson<{ matchedRules?: typeof matchedRules }>(`/api/db/access-rules/explain?${qs}`)
+      .then((data) => {
+        if (!gone) setMatchedRules(Array.isArray(data.matchedRules) ? data.matchedRules : [])
+      })
+      .catch(() => {
+        if (!gone) setMatchedRules([])
+      })
+    return () => {
+      gone = true
+    }
+  }, [localOnly, target.kind, target.collection, target.recordId])
+
   function applyPayload(data: SharePayload, nextPin?: string, flagsOnly = false) {
     if (data.share === undefined) return
     if (!data.share) {
@@ -1219,6 +1248,69 @@ export function SharePanel({
         </>
       ) : null}
       </> : null}
+      {target.kind === 'record' && matchedRules.length > 0 ? (
+        <section
+          className="fsdb-share-settings"
+          aria-label="同时生效的分享规则"
+          data-testid="fsdb-share-matched-rules"
+          style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border, rgba(0,0,0,0.08))' }}
+        >
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted, #666)', marginBottom: 6 }}>
+            同时生效的分享规则（{matchedRules.length}）
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {matchedRules.map((rule) => (
+              <div
+                key={rule.ruleId}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  fontSize: 12,
+                  padding: '5px 8px',
+                  borderRadius: 6,
+                  background: 'var(--bg-subtle, rgba(0,0,0,0.03))',
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 500 }}>
+                    {rule.ruleName}
+                    {!rule.isMine && rule.createdByName ? (
+                      <span style={{ fontWeight: 400, color: 'var(--text-muted, #666)' }}> · {rule.createdByName}</span>
+                    ) : null}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted, #666)' }}>
+                    {rule.grants.length > 0
+                      ? rule.grants
+                          .map((g) => `${g.subjectType === 'workspace' ? '空间全员' : g.subjectName || g.subjectId}（${roleLabel(g.role)}）`)
+                          .join('、')
+                      : '公开链接 / 未指定成员'}
+                    {rule.columns?.length ? ` · 仅 ${rule.columns.length} 列` : ''}
+                  </div>
+                </div>
+                {rule.isMine ? (
+                  <button
+                    type="button"
+                    onClick={() => openAccessRulesDrawer({ collection: target.collection, editRuleId: rule.ruleId })}
+                    style={{
+                      flexShrink: 0,
+                      fontSize: 11,
+                      padding: '2px 7px',
+                      borderRadius: 6,
+                      border: '1px solid var(--border, rgba(0,0,0,0.14))',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    管理
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
       {error ? <p className="fsdb-share-error">{error}</p> : null}
     </div>
   )
