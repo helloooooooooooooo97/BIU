@@ -22,7 +22,7 @@ import { countFilterRules, type FilterGroup, type SortRule } from '../query-logi
 import type { BrowserDialogState } from './browser-dialogs.tsx'
 import { askNewPlugin } from './browser-row-title.tsx'
 import { LocalText } from './controls.tsx'
-import { PAGES_COLLECTION_PATH, PLUGINS_COLLECTION_PATH } from './database-path.ts'
+import { PAGES_COLLECTION_PATH, PLUGINS_COLLECTION_PATH, isIndexCollection, isSystemCollection } from './database-path.ts'
 import { readJson } from './db-client.ts'
 import type { GroupBucket, ViewMode } from './fields.ts'
 import { ModeGlyph, VIEW_MODES } from './fsdb-cells.tsx'
@@ -36,6 +36,7 @@ import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 
 const QueryFlyout = lazy(() => import('./query-menus.tsx').then((m) => ({ default: m.QueryFlyout })))
 const ViewSettingsMenu = lazy(() => import('./view-settings-menu.tsx').then((m) => ({ default: m.ViewSettingsMenu })))
+const AccessRulesButton = lazy(() => import('./access-rules-drawer.tsx').then((m) => ({ default: m.AccessRulesButton })))
 import type { ViewSettingsTab } from './view-settings-menu.tsx'
 
 const QUERY_NEST_IGNORE = `${HEADLESS_DISMISS_IGNORE}, .db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`
@@ -750,6 +751,19 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                   </Suspense>
                 ) : null}
               </div>
+              {!sheet && !localData && !isSystemCollection(collectionPath) && !isIndexCollection(collectionPath) ? (
+                <Suspense fallback={null}>
+                  <AccessRulesButton
+                    collectionPath={collectionPath}
+                    activeView={activeView}
+                    schema={schema}
+                    filterFields={filterFields}
+                    filterValueOptions={filterValueOptions}
+                    localOnly={localData}
+                    buttonClassName="tasks-refresh"
+                  />
+                </Suspense>
+              ) : null}
               <div className="fsdb-refresh-wrap">
                 <button
                   type="button"

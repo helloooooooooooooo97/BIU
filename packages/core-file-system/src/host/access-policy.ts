@@ -54,28 +54,6 @@ export type WorkspaceFiles = {
   ): void
   grantMap?(workspaceId: string, collection: string): Map<string, Set<string>>
   collectionOwnership?(workspaceId: string, collection: string): Map<string, 'personal' | 'workspace' | 'shared'>
-  viewGrantAudiences?(
-    workspaceId: string,
-    collection: string,
-  ): Array<{
-    view_id: string
-    subject_type: 'account' | 'member_view'
-    subject_id: string
-    granted_by?: string
-    member_kind: string
-  }>
-  viewGrantsFor?(
-    workspaceId: string,
-    collection: string,
-  ): Array<{
-    view_id: string
-    subject_type: 'account' | 'member_view'
-    subject_id: string
-    role: ViewGrantRole
-    readable_columns?: string | null
-    writable_columns?: string | null
-    granted_by?: string
-  }>
   listActiveAccessRulesForCollection?(
     workspaceId: string,
     collection: string,
@@ -294,24 +272,6 @@ export class DatabaseAccessPolicy {
       this.ownerCache.set(key, map)
     }
     return map.get(id) ?? ''
-  }
-
-  viewGrantRole(
-    _workspaceId: string,
-    _collection: string,
-    _record: { id?: unknown },
-    _accountId: string,
-  ): ViewGrantRole | null {
-    // 方案 B：view_grants 只分享视图本身，绝不授予底层数据记录权限。
-    return null
-  }
-
-  allowsViaView(collection: string, record: { id?: unknown }, action: PermissionAction = 'resource:read') {
-    const authorization = this.host.authorization()
-    const actor = authorization?.currentActor()
-    if (!authorization || !actor) return false
-    const role = this.viewGrantRole(actor.workspaceId, collection, record, actor.accountId)
-    return Boolean(role && roleCoversAction(role, action))
   }
 
   /** 计算当前操作者在某条记录上的有效列级策略（可读列并集、可写列并集）。 */

@@ -13,7 +13,6 @@ describe('RBAC SQL pushdown pre-filtering & column-restriction fast path', () =>
       activeWorkspaceId: () => 'ws-1',
       membership: () => ({ active: 'ws-1', home: 'ws-1', mine: new Set(), any: new Set() }),
       attach: () => {},
-      viewGrantsFor: () => [],
       collectionOwnership: () => ownership,
     }
 
@@ -67,18 +66,29 @@ describe('RBAC SQL pushdown pre-filtering & column-restriction fast path', () =>
     assert.ok(elapsedMs < 500, `expected fast ID pre-filter, took ${elapsedMs.toFixed(2)}ms`)
   })
 
-  it('disables ID-only pushdown and enables column projection when view_grants have column rules', () => {
+  it('disables ID-only pushdown and enables column projection when access_rules have column rules', () => {
     const store: WorkspaceFiles = {
       activeWorkspaceId: () => 'ws-1',
       membership: () => ({ active: 'ws-1', home: 'ws-1', mine: new Set(), any: new Set() }),
       attach: () => {},
-      viewGrantsFor: () => [
+      listActiveAccessRulesForCollection: () => [
         {
-          view_id: 'v-1',
-          subject_type: 'account',
-          subject_id: 'acc-1',
-          role: 'viewer',
-          readable_columns: JSON.stringify(['title', 'status']),
+          id: 'rule-1',
+          workspaceId: 'ws-1',
+          collection: '/pages',
+          name: '公开列规则',
+          createdBy: 'owner-1',
+          filterTree: { kind: 'group', id: 'root', combinator: 'and', children: [] },
+          columns: ['title', 'status'],
+          enabled: true,
+          grants: [
+            {
+              id: 'rg-1',
+              subjectType: 'account',
+              subjectId: 'acc-1',
+              role: 'viewer',
+            },
+          ],
         },
       ],
       collectionOwnership: () => new Map([['rec-1', 'workspace']]),

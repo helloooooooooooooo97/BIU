@@ -3925,9 +3925,6 @@ export function CollectionBrowser({
           views={views}
           activeViewId={activeViewId}
           activeView={activeView}
-          schema={schema}
-          filterFields={filterFields}
-          filterValueOptions={filterValueOptions}
           selected={selected}
           detailId={detailId}
           detailRow={detailRow}
