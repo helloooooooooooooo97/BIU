@@ -22,6 +22,7 @@ type CommentMemberInfo = {
 }
 
 const INSPECTOR_REVEAL_EVENT = 'biu:inspector-reveal'
+const ACCOUNT_EVENT = 'biu:account-token'
 let membersCache: Map<string, CommentMemberInfo> | null = null
 let membersLoadedAt = 0
 let membersInflight: Promise<Map<string, CommentMemberInfo>> | null = null
@@ -68,11 +69,21 @@ function useCommentMembers(enabled: boolean): ReadonlyMap<string, CommentMemberI
   useEffect(() => {
     if (!enabled) return
     let cancelled = false
-    void loadCommentMembers().then((map) => {
-      if (!cancelled) setMembers(map)
-    })
+    const sync = () => {
+      void loadCommentMembers().then((map) => {
+        if (!cancelled) setMembers(map)
+      })
+    }
+    const onAccountChange = () => {
+      membersCache = null
+      membersLoadedAt = 0
+      sync()
+    }
+    sync()
+    window.addEventListener(ACCOUNT_EVENT, onAccountChange)
     return () => {
       cancelled = true
+      window.removeEventListener(ACCOUNT_EVENT, onAccountChange)
     }
   }, [enabled])
   return members
