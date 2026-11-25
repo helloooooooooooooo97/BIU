@@ -3006,3 +3006,78 @@ export function ShellSidePlaces({
     </div>
   )
 }
+
+export function ShellSidebarAccount({
+  narrow = false,
+  onOpenAccount,
+}: {
+  narrow?: boolean
+  onOpenAccount?: () => void
+}) {
+  const [account, setAccount] = useState<{ id: string; name: string; email: string; avatar: string } | null>(null)
+
+  useEffect(() => {
+    if (isLandingPreview()) return
+    let cancelled = false
+    const load = () => {
+      const token = readAccountToken()
+      if (!token) {
+        if (!cancelled) setAccount(null)
+        return
+      }
+      void getAccountMe(token)
+        .then((body) => {
+          if (cancelled) return
+          const id = String(body.id ?? '')
+          const name = String(body.name ?? body.email ?? '')
+          const email = String(body.email ?? '')
+          const avatar = String(body.avatar ?? '')
+          if (!id && !name && !email) {
+            setAccount(null)
+            return
+          }
+          setAccount({ id, name, email, avatar })
+        })
+        .catch(() => undefined)
+    }
+    load()
+    window.addEventListener(ACCOUNT_EVENT, load)
+    return () => {
+      cancelled = true
+      window.removeEventListener(ACCOUNT_EVENT, load)
+    }
+  }, [])
+
+  if (!account) return null
+  const displayName = account.name || account.email || '账户'
+  const showEmail = Boolean(account.email && account.email !== displayName)
+
+  return (
+    <div className="shell-sidebar-account-wrap" data-biu-ignore>
+      <button
+        type="button"
+        className="shell-sidebar-account"
+        data-testid="shell-sidebar-account"
+        data-dock-tip={narrow ? displayName : undefined}
+        title={narrow ? undefined : (showEmail ? `${displayName} (${account.email})` : displayName)}
+        aria-label={`个人账户：${displayName}`}
+        onClick={onOpenAccount}
+      >
+        <span className="shell-sidebar-account-avatar" aria-hidden>
+          {account.avatar ? (
+            <img src={account.avatar} alt="" />
+          ) : (
+            <AiAvatar
+              seed={account.id || displayName || 'biu-ai'}
+              className="shell-sidebar-account-ai-avatar"
+            />
+          )}
+        </span>
+        <span className="shell-sidebar-account-meta">
+          <strong className="shell-sidebar-account-name">{displayName}</strong>
+          {showEmail ? <small className="shell-sidebar-account-email">{account.email}</small> : null}
+        </span>
+      </button>
+    </div>
+  )
+}

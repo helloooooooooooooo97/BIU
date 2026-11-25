@@ -12,6 +12,7 @@ import {
   ShellSettingsMcp,
   ShellSettingsSecurity,
   ShellSettingsWorkspace,
+  ShellSidebarAccount,
   ShellWorkspaceSwitcher,
   defaultSessionPath,
   readAccountToken,
@@ -640,6 +641,28 @@ test('网络抖动恢复后自动进入应用，不用手动刷新', async () =>
   assert.equal(screen.getByTestId('inside').textContent, 'in')
   assert.equal(screen.queryByTestId('auth-verifying'), null)
   await waitFor(() => assert.ok(calls >= 3, '应当重试到成功为止'), { timeout: 5000 })
+  cleanup()
+  localStorage.clear()
+})
+
+test('sidebar account footer displays current account avatar and name and opens account settings', async () => {
+  localStorage.clear()
+  localStorage.setItem('biu.account.token', 'tok')
+  globalThis.fetch = (async (path: string) => {
+    if (String(path).endsWith('/me')) {
+      return json({ id: 'acc_97', name: '97', email: '97@example.com', avatar: '' })
+    }
+    return json({})
+  }) as typeof fetch
+
+  let opened = 0
+  render(<ShellSidebarAccount onOpenAccount={() => { opened += 1 }} />)
+  const btn = await screen.findByTestId('shell-sidebar-account')
+  assert.match(btn.textContent ?? '', /97/)
+  assert.match(btn.textContent ?? '', /97@example\.com/)
+  assert.ok(btn.querySelector('[data-ai-avatar="mesh"]'))
+  fireEvent.click(btn)
+  assert.equal(opened, 1)
   cleanup()
   localStorage.clear()
 })

@@ -957,6 +957,97 @@ html.dark .fsdb-views {
   height: 0;
 }
 
+.shell-sidebar-account-wrap {
+  flex-shrink: 0;
+  padding: 6px 8px 8px;
+  border-top: var(--biu-stroke-width) solid var(--biu-color-border);
+}
+
+.shell-sidebar-account {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  border: 0;
+  border-radius: var(--biu-radius-md);
+  background: transparent;
+  padding: 6px 8px;
+  color: var(--biu-color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.shell-sidebar-account:hover {
+  background: var(--biu-color-bg-sidebar-hover);
+}
+
+.shell-sidebar-account-avatar {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--biu-color-bg-hover);
+}
+
+.shell-sidebar-account-avatar img,
+.shell-sidebar-account-ai-avatar {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.shell-sidebar-account-meta {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.25;
+}
+
+.shell-sidebar-account-name,
+.shell-sidebar-account-email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell-sidebar-account-name {
+  color: var(--biu-color-text);
+  font-size: var(--biu-font-size-3);
+  font-weight: var(--biu-font-weight-medium);
+}
+
+.shell-sidebar-account-email {
+  color: var(--biu-color-text-subtle);
+  font-size: var(--biu-font-size-1);
+  font-weight: var(--biu-font-weight-regular);
+}
+
+.app-side-bar.is-narrow .shell-sidebar-account-wrap {
+  padding: 6px 0 8px;
+  display: flex;
+  justify-content: center;
+}
+
+.app-side-bar.is-narrow .shell-sidebar-account {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  justify-content: center;
+}
+
+.app-side-bar.is-narrow .shell-sidebar-account-meta {
+  display: none;
+}
+
 .app-shell-agent>.sidebar-flyout-host,
 .app-shell-agent>.app-side-bar,
 .app-shell-agent>.session-inspector {
