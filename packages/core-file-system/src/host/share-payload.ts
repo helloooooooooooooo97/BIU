@@ -51,7 +51,7 @@ function withResources(
 ): ShareSnapshot {
   const resources = collectShareResources(snap.records, snap.contents, {
     skipIds: snap.records.map((row) => String(row.id)),
-    includeRecords: share.kind === 'view',
+    includeRecords: share.kind === 'view' || share.kind === 'rule',
   })
   return {
     ...snap,
@@ -66,9 +66,38 @@ function withResources(
   }
 }
 
+export type ShareAccessRuleInput = {
+  id: string
+  name: string
+  createdBy: string
+  filterTree: Record<string, unknown>
+  columns: string[] | null
+  displaySnapshot: {
+    mode?: string
+    sorts?: unknown[]
+    groupBy?: string
+    groupConfig?: Record<string, unknown>
+  } | null
+  enabled: boolean
+}
+
 export type ShareSnapshotOpts = {
-  /** View shares skip bodies until the visitor opens a row (or downloads). */
+  /** View/rule shares skip bodies until the visitor opens a row (or downloads). */
   contentIds?: readonly string[] | 'all'
+  /** Independent access rule definition when share.kind === 'rule'. */
+  accessRule?: ShareAccessRuleInput | null
+  /** Enforce single-hop creator authority (owner/manager) per record in rule shares. */
+  canCreatorShareRecord?: (recordId: string) => boolean
+}
+
+function projectRuleRecordColumns(record: DbRecord, columns: string[] | null): DbRecord {
+  if (!columns || columns.length === 0) return record
+  const allow = new Set(['id', 'title', 'shareRole', 'emoji', ...columns])
+  const out: Record<string, unknown> = { id: record.id }
+  for (const [k, v] of Object.entries(record)) {
+    if (allow.has(k)) out[k] = v
+  }
+  return out as DbRecord
 }
 
 async function loadContents(
@@ -153,6 +182,52 @@ export async function buildShareSnapshot(
       assets: [...collectAssetNames(record, content, record.banner)],
       banner: record.banner ?? null,
       tags: shareTagCatalog(db, [record]),
+    }, share)
+  }
+  if (share.kind === 'rule') {
+    const rule = opts?.accessRule
+    if (!rule || !rule.enabled) throw new Error('unknown rule')
+    const snap = rule.displaySnapshot ?? {}
+    const view = {
+      id: rule.id,
+      name: rule.name || collectionLabel,
+      mode: (typeof snap.mode === 'string' ? snap.mode : undefined) as never,
+      query: '',
+      sortField: 'title',
+      sortDir: 'asc' as const,
+      sorts: Array.isArray(snap.sorts) ? (snap.sorts as never) : undefined,
+      filterTree: rule.filterTree as never,
+      columns: rule.columns ?? undefined,
+      groupBy: typeof snap.groupBy === 'string' ? snap.groupBy : '',
+      groupConfig: snap.groupConfig && typeof snap.groupConfig === 'object' ? (snap.groupConfig as never) : undefined,
+    }
+    const listed = (await db.list(share.collection, viewShareListFilter(view), {
+      q: '',
+      sortField: view.sortField,
+      sortDir: view.sortDir,
+      sorts: view.sorts,
+      limit: SHARE_LIMIT,
+    })) as { items?: DbRecord[] }
+    const rawItems = (listed.items ?? []).filter((row) =>
+      opts?.canCreatorShareRecord ? opts.canCreatorShareRecord(String(row.id)) : true,
+    )
+    const records = rawItems.map((row) => audienceRecord(projectRuleRecordColumns(row, rule.columns)))
+    const contents = await loadContents(db, share.collection, records, contentIdsFor(share, records, opts))
+    return withResources({
+      kind: 'rule',
+      collection: share.collection,
+      viewId: '',
+      recordId: '',
+      ruleId: rule.id,
+      title: rule.name || collectionLabel,
+      collectionLabel,
+      schema,
+      view,
+      records,
+      contents,
+      assets: [...collectAssetNames(...records, ...Object.values(contents))],
+      banner: null,
+      tags: shareTagCatalog(db, records, view),
     }, share)
   }
   const stored = savedViews.viewsFor(share.collection).find((item) => item.id === share.viewId)
