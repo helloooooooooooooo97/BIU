@@ -329,7 +329,7 @@ export const BIU_TABLES: Record<string, TableSpec> = {
   },
 }
 
-export const LATEST_BIU_SCHEMA = 54
+export const LATEST_BIU_SCHEMA = 55
 
 export const CREATE_CORE_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -709,7 +709,7 @@ CREATE TABLE IF NOT EXISTS view_grants (
   denied_columns TEXT,
   granted_by TEXT NOT NULL,
   created_at INTEGER NOT NULL,
-  PRIMARY KEY (workspace_id, collection, view_id, subject_type, subject_id)
+  PRIMARY KEY (workspace_id, collection, view_id, subject_type, subject_id, granted_by)
 );
 CREATE INDEX IF NOT EXISTS view_grants_subject
   ON view_grants(workspace_id, subject_type, subject_id);

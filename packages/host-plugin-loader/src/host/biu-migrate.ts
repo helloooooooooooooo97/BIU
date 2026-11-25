@@ -1001,6 +1001,36 @@ export const BIU_MIGRATIONS: Migration[] = [
         ON actor_scopes(workspace_id, issuer_id);
     `)
   } },
+  { version: 55, module: 'host-account', name: 'view-grants.pk-granted-by', up: (db) => {
+    if (!hasTable(db, 'view_grants')) return
+    db.exec(`
+      CREATE TABLE view_grants_v55 (
+        workspace_id TEXT NOT NULL,
+        collection TEXT NOT NULL,
+        view_id TEXT NOT NULL,
+        subject_type TEXT NOT NULL,
+        subject_id TEXT NOT NULL,
+        role TEXT NOT NULL,
+        effect TEXT NOT NULL DEFAULT 'allow',
+        readable_columns TEXT,
+        writable_columns TEXT,
+        denied_columns TEXT,
+        granted_by TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (workspace_id, collection, view_id, subject_type, subject_id, granted_by)
+      );
+      INSERT OR REPLACE INTO view_grants_v55
+        (workspace_id, collection, view_id, subject_type, subject_id, role, effect, readable_columns, writable_columns, denied_columns, granted_by, created_at)
+      SELECT workspace_id, collection, view_id, subject_type, subject_id, role,
+             COALESCE(effect, 'allow'), readable_columns, writable_columns, denied_columns,
+             COALESCE(granted_by, ''), created_at
+      FROM view_grants;
+      DROP TABLE view_grants;
+      ALTER TABLE view_grants_v55 RENAME TO view_grants;
+      CREATE INDEX IF NOT EXISTS view_grants_subject
+        ON view_grants(workspace_id, subject_type, subject_id);
+    `)
+  } },
 ]
 
 export function assertBiuMigrationLog(rows: Array<{ version: number }> = BIU_MIGRATIONS) {

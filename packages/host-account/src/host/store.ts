@@ -2852,8 +2852,8 @@ export class CollabStore {
   viewAccess(actorId: string, collection: string, viewId: string) {
     const workspaceId = this.activeWorkspaceId()
     if (!workspaceId) throw new CollabError('没有工作区', 400)
-    this.requireViewSharer(actorId, workspaceId, collection)
-    return this.viewAccessRows(workspaceId, collection, viewId)
+    const actorRole = this.requireViewSharer(actorId, workspaceId, collection, viewId)
+    return this.viewAccessRows(workspaceId, collection, viewId, actorId, actorRole === 'owner')
   }
 
   shareViewWithEmail(
@@ -2870,7 +2870,8 @@ export class CollabStore {
     if (!workspaceId) throw new CollabError('没有工作区', 400)
     const normalizedView = viewId.trim()
     if (!normalizedView) throw new CollabError('视图不能为空', 400)
-    this.requireViewSharer(actorId, workspaceId, collection, normalizedView)
+    const actorRole = this.requireViewSharer(actorId, workspaceId, collection, normalizedView)
+    if (role === 'owner') throw new CollabError('视图授权不能授予所有者角色', 403)
     const normalized = email.trim().toLowerCase()
     if (!normalized) throw new CollabError('邮箱不能为空', 400)
     const account = this.db.prepare('SELECT id FROM accounts WHERE email = ?').get(normalized) as { id: string } | undefined
@@ -2886,7 +2887,7 @@ export class CollabStore {
       detail: `将视图授权给 ${normalized}（${role}）`,
       now,
     })
-    return this.viewAccessRows(workspaceId, collection, normalizedView)
+    return this.viewAccessRows(workspaceId, collection, normalizedView, actorId, actorRole === 'owner')
   }
 
   grantViewMemberView(
@@ -2903,7 +2904,8 @@ export class CollabStore {
     const normalizedView = viewId.trim()
     const normalizedMemberView = memberViewId.trim()
     if (!normalizedView || !normalizedMemberView) throw new CollabError('成员视图不能为空', 400)
-    this.requireViewSharer(actorId, workspaceId, collection, normalizedView)
+    const actorRole = this.requireViewSharer(actorId, workspaceId, collection, normalizedView)
+    if (role === 'owner') throw new CollabError('视图授权不能授予所有者角色', 403)
     this.writeViewGrant(workspaceId, collection, normalizedView, 'member_view', normalizedMemberView, role, actorId, now, columns)
     this.recordActivity({
       workspaceId,
@@ -2914,7 +2916,7 @@ export class CollabStore {
       detail: `按成员视图授权视图（${role}）`,
       now,
     })
-    return this.viewAccessRows(workspaceId, collection, normalizedView)
+    return this.viewAccessRows(workspaceId, collection, normalizedView, actorId, actorRole === 'owner')
   }
 
   revokeViewGrant(
@@ -2926,15 +2928,24 @@ export class CollabStore {
   ) {
     const workspaceId = this.activeWorkspaceId()
     if (!workspaceId) throw new CollabError('没有工作区', 400)
-    this.requireViewSharer(actorId, workspaceId, collection, viewId)
-    const removed = this.db
-      .prepare(
-        `DELETE FROM view_grants
-         WHERE workspace_id = ? AND collection = ? AND view_id = ?
-           AND subject_type = ? AND subject_id = ?`,
-      )
-      .run(workspaceId, collection, viewId, subjectType, subjectId)
-    if (!removed.changes) throw new CollabError('协作者不存在', 404)
+    const actorRole = this.requireViewSharer(actorId, workspaceId, collection, viewId)
+    // 谁签发的视图授权只能由谁移除（空间所有者可强制审计移除），防止成员 B 篡改成员 A 的分享规则
+    const removed = actorRole === 'owner'
+      ? this.db
+          .prepare(
+            `DELETE FROM view_grants
+             WHERE workspace_id = ? AND collection = ? AND view_id = ?
+               AND subject_type = ? AND subject_id = ?`,
+          )
+          .run(workspaceId, collection, viewId, subjectType, subjectId)
+      : this.db
+          .prepare(
+            `DELETE FROM view_grants
+             WHERE workspace_id = ? AND collection = ? AND view_id = ?
+               AND subject_type = ? AND subject_id = ? AND granted_by = ?`,
+          )
+          .run(workspaceId, collection, viewId, subjectType, subjectId, actorId)
+    if (!removed.changes) throw new CollabError('协作者不存在或无权移除他人的分享规则', 404)
     if (subjectType === 'account') this.cleanupExternalMembership(workspaceId, subjectId)
     this.authorization.invalidate(workspaceId, collection)
     this.recordActivity({
@@ -2945,7 +2956,7 @@ export class CollabStore {
       collection,
       detail: `移除了视图授权（${subjectType}）`,
     })
-    return this.viewAccessRows(workspaceId, collection, viewId)
+    return this.viewAccessRows(workspaceId, collection, viewId, actorId, actorRole === 'owner')
   }
 
   /** 删除视图时级联清理引用该视图的 view_grants 以及 member_view 授权。 */
@@ -3086,14 +3097,17 @@ export class CollabStore {
       .prepare('SELECT role, member_kind FROM workspace_members WHERE workspace_id = ? AND account_id = ?')
       .get(workspaceId, actorId) as { role: string; member_kind: string } | undefined
     if (!row) throw new CollabError('不是这个工作区的成员', 403)
+    if (row.member_kind === 'external' || row.member_kind === 'guest') {
+      throw new CollabError('外部协作者无权管理视图分享', 403)
+    }
     const decision = this.authorization.authorize(
       { type: 'account', accountId: actorId, workspaceId },
       'resource:share',
       { type: 'collection', workspaceId, collection },
     )
-    if (decision.allowed) return
-    // 全部视图按人隔离，普通成员可以分享自己的那一份，授权只覆盖自己创建的条目。
-    if (viewId.startsWith('builtin-all:') && row.role === 'member' && row.member_kind === 'member') return
+    if (decision.allowed) return row.role
+    // 内部正式成员可按视图分享自己名下的记录（受非提权公理约束，永远只覆盖自己有权分享的记录）
+    if (row.role === 'member' && row.member_kind === 'member' && viewId) return row.role
     throw new CollabError('没有权限', 403)
   }
 
@@ -3146,44 +3160,71 @@ export class CollabStore {
         `INSERT INTO view_grants
           (workspace_id, collection, view_id, subject_type, subject_id, role, readable_columns, writable_columns, denied_columns, granted_by, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(workspace_id, collection, view_id, subject_type, subject_id)
+         ON CONFLICT(workspace_id, collection, view_id, subject_type, subject_id, granted_by)
          DO UPDATE SET role = excluded.role,
                        readable_columns = COALESCE(excluded.readable_columns, view_grants.readable_columns),
                        writable_columns = COALESCE(excluded.writable_columns, view_grants.writable_columns),
                        denied_columns = COALESCE(excluded.denied_columns, view_grants.denied_columns),
-                       granted_by = excluded.granted_by,
                        created_at = excluded.created_at`,
       )
       .run(workspaceId, collection, viewId, subjectType, subjectId, role, readable, writable, denied, grantedBy, now)
     this.authorization.invalidate(workspaceId, collection)
   }
 
-  private viewAccessRows(workspaceId: string, collection: string, viewId: string) {
-    const people = this.db
-      .prepare(
-        `SELECT a.id, COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), '未设置') AS name,
-                COALESCE(a.email, '') AS email, g.role, m.member_kind
-         FROM view_grants g
-         JOIN accounts a ON g.subject_type = 'account' AND a.id = g.subject_id
-         LEFT JOIN workspace_members m ON m.workspace_id = g.workspace_id AND m.account_id = g.subject_id
-         WHERE g.workspace_id = ? AND g.collection = ? AND g.view_id = ? AND g.subject_type = 'account'
-         ORDER BY g.created_at`,
-      )
-      .all(workspaceId, collection, viewId) as Array<{
+  private viewAccessRows(
+    workspaceId: string,
+    collection: string,
+    viewId: string,
+    viewerId = '',
+    includeAllGrantors = true,
+  ) {
+    const filterByGrantor = Boolean(viewerId && !includeAllGrantors)
+    const people = (filterByGrantor
+      ? this.db
+          .prepare(
+            `SELECT a.id, COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), '未设置') AS name,
+                    COALESCE(a.email, '') AS email, g.role, m.member_kind
+             FROM view_grants g
+             JOIN accounts a ON g.subject_type = 'account' AND a.id = g.subject_id
+             LEFT JOIN workspace_members m ON m.workspace_id = g.workspace_id AND m.account_id = g.subject_id
+             WHERE g.workspace_id = ? AND g.collection = ? AND g.view_id = ? AND g.subject_type = 'account' AND g.granted_by = ?
+             ORDER BY g.created_at`,
+          )
+          .all(workspaceId, collection, viewId, viewerId)
+      : this.db
+          .prepare(
+            `SELECT a.id, COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), '未设置') AS name,
+                    COALESCE(a.email, '') AS email, g.role, m.member_kind
+             FROM view_grants g
+             JOIN accounts a ON g.subject_type = 'account' AND a.id = g.subject_id
+             LEFT JOIN workspace_members m ON m.workspace_id = g.workspace_id AND m.account_id = g.subject_id
+             WHERE g.workspace_id = ? AND g.collection = ? AND g.view_id = ? AND g.subject_type = 'account'
+             ORDER BY g.created_at`,
+          )
+          .all(workspaceId, collection, viewId)) as Array<{
         id: string
         name: string
         email: string
         role: string
         member_kind: 'member' | 'external' | 'guest'
       }>
-    const memberViews = this.db
-      .prepare(
-        `SELECT subject_id AS id, role
-         FROM view_grants
-         WHERE workspace_id = ? AND collection = ? AND view_id = ? AND subject_type = 'member_view'
-         ORDER BY created_at`,
-      )
-      .all(workspaceId, collection, viewId) as Array<{ id: string; role: string }>
+    const memberViews = (filterByGrantor
+      ? this.db
+          .prepare(
+            `SELECT subject_id AS id, role
+             FROM view_grants
+             WHERE workspace_id = ? AND collection = ? AND view_id = ? AND subject_type = 'member_view' AND granted_by = ?
+             ORDER BY created_at`,
+          )
+          .all(workspaceId, collection, viewId, viewerId)
+      : this.db
+          .prepare(
+            `SELECT subject_id AS id, role
+             FROM view_grants
+             WHERE workspace_id = ? AND collection = ? AND view_id = ? AND subject_type = 'member_view'
+             ORDER BY created_at`,
+          )
+          .all(workspaceId, collection, viewId)) as Array<{ id: string; role: string }>
     return {
       private: people.length + memberViews.length === 0,
       scope: 'personal' as const,
