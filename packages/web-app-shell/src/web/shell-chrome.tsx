@@ -2380,22 +2380,13 @@ type McpHostInfo = {
   credentialId?: string
 }
 
-const MCP_CLIENTS: Array<{ id: string; name: string; blurb: string }> = [
-  { id: 'cursor', name: 'Cursor', blurb: '把工作区交给 Cursor Agent 当 MCP 工具。' },
-  { id: 'claude', name: 'Claude', blurb: 'Claude Desktop / Claude.ai 连进这个工作区。' },
-  { id: 'chatgpt', name: 'ChatGPT', blurb: 'Custom GPT 或 Connector 填同一套 URL + token。' },
-  { id: 'codex', name: 'Codex', blurb: 'CLI 用 Streamable HTTP，请求头带 Bearer。' },
-]
-
-function mcpSnippet(info: McpHostInfo, id: string) {
+function mcpSnippet(info: McpHostInfo) {
   const headers: Record<string, string> = { Authorization: `Bearer ${info.token}` }
   if (!info.online && info.workspaceId) headers['x-biu-workspace-id'] = info.workspaceId
-  if (id === 'chatgpt') return JSON.stringify({ url: info.url, headers }, null, 2)
   return JSON.stringify({ mcpServers: { biu: { url: info.url, headers } } }, null, 2)
 }
 
-export function ShellSettingsMcp({ onLeave }: { onLeave?: () => void }) {
-  const navigate = useNavigate()
+export function ShellSettingsMcp(_props?: { onLeave?: () => void }) {
   const [info, setInfo] = useState<McpHostInfo | null>(null)
   const [error, setError] = useState('')
   const [reveal, setReveal] = useState(false)
@@ -2522,7 +2513,19 @@ export function ShellSettingsMcp({ onLeave }: { onLeave?: () => void }) {
           {error}
         </p>
       ) : null}
-      <h4 className="settings-pane-subtitle">连接</h4>
+      <div className="settings-mcp-subtitle-row">
+        <h4 className="settings-pane-subtitle">连接</h4>
+        <button
+          type="button"
+          className="settings-mcp-copy-config"
+          disabled={!info?.token}
+          data-testid="settings-mcp-copy-config"
+          onClick={() => info && void copy('config', mcpSnippet(info))}
+        >
+          {copied === 'config' ? <CheckIcon className="size-3.5" /> : <ClipboardDocumentIcon className="size-3.5" />}
+          <span>{copied === 'config' ? '已复制' : '复制配置'}</span>
+        </button>
+      </div>
       <div className="settings-mcp-fields">
         <label className="settings-mcp-field">
           <span>{info?.online ? '云端地址' : '局域网地址'}</span>
@@ -2593,42 +2596,7 @@ export function ShellSettingsMcp({ onLeave }: { onLeave?: () => void }) {
           >
             {rotating ? '正在生成…' : info?.token ? '重新生成 token' : '生成空间 token'}
           </button>
-          <button
-            type="button"
-            className="settings-mcp-link"
-            data-testid="settings-mcp-open-table"
-            onClick={() => {
-              onLeave?.()
-              navigate('/mcp')
-            }}
-          >
-            挂外部 MCP 服务器
-          </button>
         </div>
-      </div>
-      <h4 className="settings-pane-subtitle">客户端</h4>
-      <p className="settings-muted settings-pane-lead">复制配置后贴进对应产品。没有各家 OAuth 向导，接入就是带 Bearer 的同一条地址。</p>
-      <div className="settings-mcp-grid">
-        {MCP_CLIENTS.map((client) => (
-          <article key={client.id} className="settings-mcp-card" data-testid={`settings-mcp-client-${client.id}`}>
-            <span className="settings-mcp-mark" aria-hidden>
-              {client.name.slice(0, 1)}
-            </span>
-            <div className="settings-mcp-card-copy">
-              <strong>{client.name}</strong>
-              <p>{client.blurb}</p>
-            </div>
-            <button
-              type="button"
-              className="settings-mcp-enable"
-              disabled={!info?.token}
-              data-testid={`settings-mcp-copy-${client.id}`}
-              onClick={() => info && void copy(client.id, mcpSnippet(info, client.id))}
-            >
-              {copied === client.id ? '已复制' : '复制配置'}
-            </button>
-          </article>
-        ))}
       </div>
       {info?.online ? (
         <>

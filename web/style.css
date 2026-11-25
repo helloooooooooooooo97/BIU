@@ -1218,6 +1218,49 @@ body {
   letter-spacing: -0.01em;
 }
 
+.settings-mcp-subtitle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 26px 0 8px;
+  padding-bottom: 8px;
+  border-bottom: var(--biu-stroke-width) solid var(--biu-color-border-strong);
+}
+
+.settings-mcp-subtitle-row .settings-pane-subtitle {
+  margin: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.settings-mcp-copy-config {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
+  border: var(--biu-stroke-width) solid var(--biu-color-border);
+  border-radius: var(--biu-radius-md);
+  background: var(--biu-color-bg);
+  color: var(--biu-color-text-muted);
+  font: inherit;
+  font-size: var(--biu-font-size-2);
+  font-weight: var(--biu-font-weight-medium);
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.settings-mcp-copy-config:hover:not(:disabled) {
+  background: var(--biu-color-bg-hover);
+  color: var(--biu-color-text);
+}
+
+.settings-mcp-copy-config:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .settings-subsection {
   margin-top: 20px;
 }
