@@ -1653,7 +1653,9 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       const recordId = String(body.recordId ?? '')
       const viewId = String(body.viewId ?? '')
       const role: ResourceRole =
-        body.role === 'viewer' || body.role === 'manager' || body.role === 'owner' ? body.role : 'editor'
+        body.role === 'viewer' || body.role === 'commenter' || body.role === 'manager' || body.role === 'owner'
+          ? body.role
+          : 'editor'
       const kind = body.collaboratorKind === 'internal' ? 'internal' : 'external'
       route.send(
         200,

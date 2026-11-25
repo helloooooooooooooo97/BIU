@@ -1,7 +1,7 @@
 import { readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowPathIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, LinkIcon, ShareIcon, UserGroupIcon, UsersIcon, XMarkIcon } from '@heroicons/react/16/solid'
+import { ArrowPathIcon, CheckIcon, ChevronDownIcon, LinkIcon, ShareIcon, UserGroupIcon, UsersIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { useFloatingPosition } from '@biu/biu-ui/floating-position'
 import { OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
@@ -110,6 +110,7 @@ function ShareSelect({
   ariaLabel,
   placement = 'bottom-end',
   minMenuWidth = 156,
+  inline = false,
   onChange,
 }: {
   value: string
@@ -117,6 +118,7 @@ function ShareSelect({
   ariaLabel: string
   placement?: 'bottom-start' | 'bottom-end'
   minMenuWidth?: number
+  inline?: boolean
   onChange: (value: string) => void
 }) {
   const [open, setOpen] = useState(false)
@@ -138,14 +140,14 @@ function ShareSelect({
       <button
         ref={triggerRef}
         type="button"
-        className={`fsdb-share-select-trigger${open ? ' is-open' : ''}`}
+        className={`fsdb-share-select-trigger${inline ? ' is-inline' : ''}${open ? ' is-open' : ''}`}
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((prev) => !prev)}
       >
-        <span>{current?.label ?? ''}</span>
-        <ChevronDownIcon aria-hidden className="fsdb-share-select-chevron size-3.5" />
+        <span>{current?.label ?? roleLabel(value)}</span>
+        <ChevronDownIcon aria-hidden className={`fsdb-share-select-chevron ${inline ? 'size-3' : 'size-3.5'}`} />
       </button>
       {open && portalRoot
         ? createPortal(
@@ -252,7 +254,6 @@ function WorkspaceAccess({
   const [groups, setGroups] = useState<Array<{ id: string; name: string; role: string }>>([])
   const [memberViews, setMemberViews] = useState<Array<{ id: string; name: string; role?: string }>>([])
   const [availableMemberViews, setAvailableMemberViews] = useState<Array<{ id: string; name: string; filters?: Record<string, unknown> }>>([])
-  const [memberViewId, setMemberViewId] = useState('')
   const [workspaceMembers, setWorkspaceMembers] = useState<Array<{
     id: string
     name: string
@@ -260,7 +261,11 @@ function WorkspaceAccess({
     role: string
   }>>([])
   const [memberQuery, setMemberQuery] = useState('')
-  const [selectedMemberId, setSelectedMemberId] = useState('')
+  const [selectedTarget, setSelectedTarget] = useState<
+    | { kind: 'member'; id: string; email: string; name: string }
+    | { kind: 'member_view'; id: string; name: string }
+    | null
+  >(null)
   const [memberPickerOpen, setMemberPickerOpen] = useState(false)
   const [role, setRole] = useState<'viewer' | 'commenter' | 'editor' | 'manager'>('editor')
   const [viewGrants, setViewGrants] = useState<Array<{
@@ -357,7 +362,6 @@ function WorkspaceAccess({
           ...item,
           name: rows.find((view) => view.id === item.id)?.name ?? item.name,
         })))
-        setMemberViewId((current) => current || rows[0]?.id || '')
       })
       .catch((error) => {
         console.warn('[share-popover] load member views failed', error)
@@ -424,7 +428,11 @@ function WorkspaceAccess({
       })
   }, [collection, recordId, viewId])
 
-  function grant(input: { email?: string; memberViewId?: string }, collaboratorKind: 'internal' | 'external' = 'internal') {
+  function grant(
+    input: { email?: string; memberViewId?: string },
+    collaboratorKind: 'internal' | 'external' = 'internal',
+    nextRole?: string,
+  ) {
     setError('')
     return readJson(`/api/account/access`, {
       method: 'POST',
@@ -432,16 +440,18 @@ function WorkspaceAccess({
       body: JSON.stringify({
         collection,
         ...(viewId ? { viewId } : { recordId }),
-        role,
+        role: nextRole ?? role,
         ...(input.email ? { collaboratorKind } : {}),
         ...input,
       }),
     })
       .then(() => {
-        setEmail('')
-        setMemberQuery('')
-        setSelectedMemberId('')
-        setMemberPickerOpen(false)
+        if (!nextRole) {
+          setEmail('')
+          setMemberQuery('')
+          setSelectedTarget(null)
+          setMemberPickerOpen(false)
+        }
         emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
         return load()
       })
@@ -545,12 +555,16 @@ function WorkspaceAccess({
       })), dataViews, memberViewFilters, ownerId)
     : scope
   const grantedAccountIds = new Set(people.map((row) => row.id))
+  const grantedMemberViewIds = new Set(memberViews.map((row) => row.id))
   const normalizedMemberQuery = memberQuery.trim().toLowerCase()
+  const matchingMemberViews = availableMemberViews
+    .filter((row) => !grantedMemberViewIds.has(row.id))
+    .filter((row) => !normalizedMemberQuery || `${row.name} 动态成员视图`.toLowerCase().includes(normalizedMemberQuery))
+    .slice(0, 6)
   const matchingMembers = workspaceMembers
     .filter((row) => row.id !== ownerId && !grantedAccountIds.has(row.id))
     .filter((row) => !normalizedMemberQuery || `${row.name} ${row.email}`.toLowerCase().includes(normalizedMemberQuery))
     .slice(0, 8)
-  const selectedMember = workspaceMembers.find((row) => row.id === selectedMemberId)
 
   const roleSelect = (
     <ShareSelect
@@ -601,7 +615,21 @@ function WorkspaceAccess({
             <li key={row.id}>
               <span className="fsdb-share-avatar" aria-hidden>{avatarText(row.name)}</span>
               <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong>{row.email ? <em>{row.email}</em> : null}</span>
-              <span className="fsdb-share-collaborator-role">{roleLabel(row.role)}</span>
+              {row.email ? (
+                <ShareSelect
+                  inline
+                  value={row.role}
+                  options={ROLE_OPTIONS}
+                  ariaLabel={`调整 ${row.name} 的权限`}
+                  placement="bottom-end"
+                  minMenuWidth={168}
+                  onChange={(next) => {
+                    if (next !== row.role) void grant({ email: row.email }, 'internal', next)
+                  }}
+                />
+              ) : (
+                <span className="fsdb-share-collaborator-role">{roleLabel(row.role)}</span>
+              )}
               <button type="button" className="fsdb-share-remove" title="移除协作者" aria-label={`移除 ${row.name}`} onClick={() => void revoke('account', row.id)}>
                 <XMarkIcon aria-hidden className="size-3.5" />
               </button>
@@ -621,7 +649,17 @@ function WorkspaceAccess({
             <li key={`view:${row.id}`}>
               <span className="fsdb-share-avatar is-view" aria-hidden><UsersIcon className="size-3.5" /></span>
               <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong><em>动态成员视图</em></span>
-              <span className="fsdb-share-collaborator-role">{roleLabel(row.role ?? '')}</span>
+              <ShareSelect
+                inline
+                value={row.role ?? 'editor'}
+                options={ROLE_OPTIONS}
+                ariaLabel={`调整 ${row.name} 的权限`}
+                placement="bottom-end"
+                minMenuWidth={168}
+                onChange={(next) => {
+                  if (next !== row.role) void grant({ memberViewId: row.id }, 'internal', next)
+                }}
+              />
               <button type="button" className="fsdb-share-remove" title="移除成员视图" aria-label={`移除 ${row.name}`} onClick={() => void revoke('member_view', row.id)}>
                 <XMarkIcon aria-hidden className="size-3.5" />
               </button>
@@ -647,27 +685,48 @@ function WorkspaceAccess({
               aria-controls="fsdb-share-member-options"
               autoComplete="off"
               value={memberQuery}
-              placeholder="搜索空间成员"
+              placeholder="搜索空间成员或成员视图"
               data-testid="fsdb-share-member-search"
               onFocus={() => setMemberPickerOpen(true)}
               onBlur={() => window.setTimeout(() => setMemberPickerOpen(false), 120)}
               onChange={(event) => {
                 setMemberQuery(event.target.value)
-                setSelectedMemberId('')
+                setSelectedTarget(null)
                 setMemberPickerOpen(true)
               }}
             />
             {memberPickerOpen ? (
               <div className="fsdb-share-member-options" id="fsdb-share-member-options" role="listbox">
+                {matchingMemberViews.map((row) => (
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={selectedTarget?.kind === 'member_view' && selectedTarget.id === row.id}
+                    data-testid="fsdb-share-member-view"
+                    key={`view:${row.id}`}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      setSelectedTarget({ kind: 'member_view', id: row.id, name: row.name })
+                      setMemberQuery(row.name)
+                      setMemberPickerOpen(false)
+                    }}
+                  >
+                    <span className="fsdb-share-member-option-head">
+                      <UsersIcon aria-hidden className="size-3.5" />
+                      <span>{row.name}</span>
+                    </span>
+                    <em>动态成员视图</em>
+                  </button>
+                ))}
                 {matchingMembers.map((row) => (
                   <button
                     type="button"
                     role="option"
-                    aria-selected={row.id === selectedMemberId}
-                    key={row.id}
+                    aria-selected={selectedTarget?.kind === 'member' && selectedTarget.id === row.id}
+                    key={`member:${row.id}`}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => {
-                      setSelectedMemberId(row.id)
+                      setSelectedTarget({ kind: 'member', id: row.id, email: row.email, name: row.name })
                       setMemberQuery(row.name)
                       setMemberPickerOpen(false)
                     }}
@@ -676,31 +735,17 @@ function WorkspaceAccess({
                     <em>{row.email}</em>
                   </button>
                 ))}
-                {!matchingMembers.length ? <p>没有可添加的空间成员</p> : null}
+                {!matchingMemberViews.length && !matchingMembers.length ? <p>没有可添加的成员或视图</p> : null}
               </div>
             ) : null}
           </div>
           {roleSelect}
-          <button type="button" className="fsdb-share-publish" disabled={!selectedMember} data-testid="fsdb-share-member-add" onClick={() => {
-            if (selectedMember) void grant({ email: selectedMember.email }, 'internal')
+          <button type="button" className="fsdb-share-publish" disabled={!selectedTarget} data-testid="fsdb-share-member-add" onClick={() => {
+            if (!selectedTarget) return
+            if (selectedTarget.kind === 'member_view') void grant({ memberViewId: selectedTarget.id }, 'internal')
+            else void grant({ email: selectedTarget.email }, 'internal')
           }}>添加</button>
         </div>
-        {availableMemberViews.length ? (
-          <details className="fsdb-share-advanced" data-testid="fsdb-share-member-view">
-            <summary><ChevronRightIcon aria-hidden className="fsdb-share-advanced-chevron size-3.5" />按成员视图批量授权</summary>
-            <div className="fsdb-share-link-row">
-              <ShareSelect
-                value={memberViewId}
-                options={availableMemberViews.map((row) => ({ value: row.id, label: row.name }))}
-                ariaLabel="成员视图"
-                placement="bottom-start"
-                minMenuWidth={180}
-                onChange={(next) => setMemberViewId(next)}
-              />
-              <button type="button" className="fsdb-share-publish" disabled={!memberViewId} onClick={() => void grant({ memberViewId })}>授权</button>
-            </div>
-          </details>
-        ) : null}
       </section>
 
       <section className="fsdb-share-collab-section is-external">
@@ -713,7 +758,21 @@ function WorkspaceAccess({
             <li key={row.id}>
               <span className="fsdb-share-avatar is-external" aria-hidden>{avatarText(row.name)}</span>
               <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong>{row.email ? <em>{row.email}</em> : null}</span>
-              <span className="fsdb-share-collaborator-role">{roleLabel(row.role)}</span>
+              {row.email ? (
+                <ShareSelect
+                  inline
+                  value={row.role}
+                  options={ROLE_OPTIONS}
+                  ariaLabel={`调整 ${row.name} 的权限`}
+                  placement="bottom-end"
+                  minMenuWidth={168}
+                  onChange={(next) => {
+                    if (next !== row.role) void grant({ email: row.email }, 'external', next)
+                  }}
+                />
+              ) : (
+                <span className="fsdb-share-collaborator-role">{roleLabel(row.role)}</span>
+              )}
               <button type="button" className="fsdb-share-remove" title="移除协作者" aria-label={`移除 ${row.name}`} onClick={() => void revoke('account', row.id)}>
                 <XMarkIcon aria-hidden className="size-3.5" />
               </button>

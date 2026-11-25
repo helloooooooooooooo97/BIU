@@ -102,14 +102,17 @@ test('permission column opens the same kind of chain as data scope', () => {
   assert.doesNotMatch(detailSrc, /\/api\/account\/access/)
 })
 
-test('private records can grant access to a dynamic member view', () => {
+test('private records grant dynamic member views from the unified member search and edit roles inline', () => {
   const src =
     readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8') +
     '\n' +
     readFileSync(resolve(import.meta.dirname, './share-chain-detail.tsx'), 'utf8')
   assert.match(src, /memberViewId/)
   assert.match(src, /data-testid="fsdb-share-member-view"/)
-  assert.match(src, /按成员视图批量授权/)
+  assert.doesNotMatch(src, /按成员视图批量授权/)
+  assert.match(src, /搜索空间成员或成员视图/)
+  assert.match(src, /inline\s*\n\s*value=\{row\.role/)
+  assert.match(src, /调整 \$\{row\.name\} 的权限/)
 })
 
 test('share panel no longer offers member-group grants', () => {
