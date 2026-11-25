@@ -1,6 +1,6 @@
 type DatabaseSync = import('node:sqlite').DatabaseSync
 
-export const LATEST_BIU_SCHEMA = 56
+export const LATEST_BIU_SCHEMA = 57
 
 export const CREATE_CORE_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -142,6 +142,7 @@ CREATE TABLE IF NOT EXISTS shares (
   collection TEXT NOT NULL,
   view_id TEXT NOT NULL DEFAULT '',
   record_id TEXT NOT NULL DEFAULT '',
+  rule_id TEXT NOT NULL DEFAULT '',
   password_salt TEXT NOT NULL DEFAULT '',
   password_hash TEXT NOT NULL DEFAULT '',
   share_plugins INTEGER NOT NULL DEFAULT 0,
@@ -151,7 +152,7 @@ CREATE TABLE IF NOT EXISTS shares (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS shares_target ON shares(kind, collection, view_id, record_id);
+CREATE UNIQUE INDEX IF NOT EXISTS shares_target ON shares(kind, collection, view_id, record_id, rule_id);
 CREATE TABLE IF NOT EXISTS saved_views (
   workspace_id TEXT NOT NULL DEFAULT '',
   collection TEXT NOT NULL,
@@ -386,6 +387,35 @@ CREATE TABLE IF NOT EXISTS view_grants (
 );
 CREATE INDEX IF NOT EXISTS view_grants_subject
   ON view_grants(workspace_id, subject_type, subject_id);
+CREATE TABLE IF NOT EXISTS access_rules (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
+  collection TEXT NOT NULL,
+  name TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  filter_tree_json TEXT NOT NULL,
+  columns_json TEXT,
+  display_snapshot_json TEXT,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS access_rules_ws_col
+  ON access_rules(workspace_id, collection, enabled);
+CREATE INDEX IF NOT EXISTS access_rules_owner
+  ON access_rules(workspace_id, created_by);
+CREATE TABLE IF NOT EXISTS access_rule_grants (
+  id TEXT PRIMARY KEY,
+  rule_id TEXT NOT NULL REFERENCES access_rules(id) ON DELETE CASCADE,
+  workspace_id TEXT NOT NULL,
+  subject_type TEXT NOT NULL,
+  subject_id TEXT NOT NULL,
+  role TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  UNIQUE(rule_id, subject_type, subject_id)
+);
+CREATE INDEX IF NOT EXISTS access_rule_grants_subject
+  ON access_rule_grants(workspace_id, subject_type, subject_id);
 CREATE TABLE IF NOT EXISTS actor_scopes (
   workspace_id TEXT NOT NULL,
   actor_type TEXT NOT NULL,

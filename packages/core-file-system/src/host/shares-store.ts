@@ -10,7 +10,7 @@ export type { ShareKind, ShareRecord } from '../share-snapshot.ts'
 type DatabaseSync = import('node:sqlite').DatabaseSync
 
 const SHARE_PUBLIC_COLUMNS =
-  'token, kind, collection, view_id, record_id, password_hash, share_plugins, allow_copy, workspace_id, created_by, created_at, updated_at'
+  'token, kind, collection, view_id, record_id, rule_id, password_hash, share_plugins, allow_copy, workspace_id, created_by, created_at, updated_at'
 
 type ShareRow = {
   token: string
@@ -18,6 +18,7 @@ type ShareRow = {
   collection: string
   view_id: string
   record_id: string
+  rule_id?: string
   password_salt: string
   password_hash: string
   share_plugins: number
@@ -37,7 +38,7 @@ function hashPassword(password: string, salt = randomBytes(16)) {
 }
 
 function asKind(value: unknown): ShareKind | '' {
-  return value === 'view' || value === 'record' ? value : ''
+  return value === 'view' || value === 'record' || value === 'rule' ? value : ''
 }
 
 function publicShare(row: ShareRow): ShareRecord {
@@ -47,6 +48,7 @@ function publicShare(row: ShareRow): ShareRecord {
     collection: row.collection,
     viewId: row.view_id,
     recordId: row.record_id,
+    ...(row.rule_id ? { ruleId: row.rule_id } : {}),
     hasPassword: Boolean(row.password_hash),
     sharePlugins: Boolean(row.share_plugins),
     allowCopy: row.allow_copy !== 0,
@@ -76,6 +78,11 @@ export class SharesStore {
     if (!names.has('allow_copy')) db.exec('ALTER TABLE shares ADD COLUMN allow_copy INTEGER NOT NULL DEFAULT 1')
     if (!names.has('workspace_id')) db.exec(`ALTER TABLE shares ADD COLUMN workspace_id TEXT NOT NULL DEFAULT ''`)
     if (!names.has('created_by')) db.exec(`ALTER TABLE shares ADD COLUMN created_by TEXT NOT NULL DEFAULT ''`)
+    if (!names.has('rule_id')) {
+      db.exec(`ALTER TABLE shares ADD COLUMN rule_id TEXT NOT NULL DEFAULT ''`)
+      db.exec('DROP INDEX IF EXISTS shares_target')
+      db.exec('CREATE UNIQUE INDEX IF NOT EXISTS shares_target ON shares(kind, collection, view_id, record_id, rule_id)')
+    }
   }
 
   private conn() {
@@ -88,10 +95,19 @@ export class SharesStore {
     return row ? publicShare(row) : null
   }
 
-  find(kind: ShareKind, collection: string, viewId = '', recordId = ''): ShareRecord | null {
+  find(kind: ShareKind, collection: string, viewId = '', recordId = '', ruleId = ''): ShareRecord | null {
     const row = this.conn().prepare(
-      `SELECT ${SHARE_PUBLIC_COLUMNS} FROM shares WHERE kind = ? AND collection = ? AND view_id = ? AND record_id = ?`,
-    ).get(kind, normalizeCollectionPath(collection), viewId, recordId) as ShareRow | undefined
+      `SELECT ${SHARE_PUBLIC_COLUMNS} FROM shares WHERE kind = ? AND collection = ? AND view_id = ? AND record_id = ? AND rule_id = ?`,
+    ).get(kind, normalizeCollectionPath(collection), viewId, recordId, ruleId) as ShareRow | undefined
+    return row ? publicShare(row) : null
+  }
+
+  findRule(collection: string, ruleId: string): ShareRecord | null {
+    const id = String(ruleId ?? '').trim()
+    if (!id) return null
+    const row = this.conn().prepare(
+      `SELECT ${SHARE_PUBLIC_COLUMNS} FROM shares WHERE kind = ? AND collection = ? AND rule_id = ? ORDER BY updated_at DESC LIMIT 1`,
+    ).get('rule', normalizeCollectionPath(collection), id) as ShareRow | undefined
     return row ? publicShare(row) : null
   }
 
@@ -122,6 +138,7 @@ export class SharesStore {
     collection: string
     viewId?: string
     recordId?: string
+    ruleId?: string
     password?: string | null
     sharePlugins?: boolean
     allowCopy?: boolean
@@ -132,13 +149,17 @@ export class SharesStore {
     if (!kind) throw new Error('invalid share kind')
     const collection = normalizeCollectionPath(input.collection)
     if (!collection || collection === '/') throw new Error('invalid collection')
-    const requestedViewId = String(input.viewId ?? '').trim()
-    const recordId = String(input.recordId ?? '').trim()
+    const requestedViewId = kind === 'rule' ? '' : String(input.viewId ?? '').trim()
+    const recordId = kind === 'rule' ? '' : String(input.recordId ?? '').trim()
+    const ruleId = kind === 'rule' ? String(input.ruleId ?? '').trim() : ''
     if (kind === 'record' && !recordId) throw new Error('record share needs recordId')
+    if (kind === 'rule' && !ruleId) throw new Error('rule share needs ruleId')
     const now = Date.now()
     const existing = kind === 'record'
       ? this.findRecord(collection, recordId)
-      : this.find(kind, collection, requestedViewId, recordId)
+      : kind === 'rule'
+        ? this.findRule(collection, ruleId)
+        : this.find(kind, collection, requestedViewId, recordId, '')
     const viewId = existing?.kind === 'record' ? existing.viewId : requestedViewId
     let salt = ''
     let hash = ''
@@ -159,9 +180,9 @@ export class SharesStore {
     const createdBy = String(existing?.createdBy || input.createdBy || '').trim()
     const token = existing?.token ?? mintToken()
     this.conn().prepare(`
-      INSERT INTO shares (token, kind, collection, view_id, record_id, password_salt, password_hash, share_plugins, allow_copy, workspace_id, created_by, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(kind, collection, view_id, record_id) DO UPDATE SET
+      INSERT INTO shares (token, kind, collection, view_id, record_id, rule_id, password_salt, password_hash, share_plugins, allow_copy, workspace_id, created_by, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(kind, collection, view_id, record_id, rule_id) DO UPDATE SET
         password_salt=excluded.password_salt,
         password_hash=excluded.password_hash,
         share_plugins=excluded.share_plugins,
@@ -175,6 +196,7 @@ export class SharesStore {
       collection,
       viewId,
       recordId,
+      ruleId,
       salt,
       hash,
       sharePlugins ? 1 : 0,
@@ -200,10 +222,27 @@ export class SharesStore {
     this.conn().prepare('DELETE FROM shares WHERE token = ?').run(token)
   }
 
-  revokeTarget(kind: ShareKind, collection: string, viewId = '', recordId = '') {
+  revokeTarget(kind: ShareKind, collection: string, viewId = '', recordId = '', ruleId = '') {
     this.conn().prepare(
-      'DELETE FROM shares WHERE kind = ? AND collection = ? AND view_id = ? AND record_id = ?',
-    ).run(kind, normalizeCollectionPath(collection), viewId, recordId)
+      'DELETE FROM shares WHERE kind = ? AND collection = ? AND view_id = ? AND record_id = ? AND rule_id = ?',
+    ).run(kind, normalizeCollectionPath(collection), viewId, recordId, ruleId)
+  }
+
+  revokeRule(collection: string, ruleId: string) {
+    const id = String(ruleId ?? '').trim()
+    if (!id) return
+    this.conn().prepare('DELETE FROM shares WHERE kind = ? AND collection = ? AND rule_id = ?').run(
+      'rule',
+      normalizeCollectionPath(collection),
+      id,
+    )
+  }
+
+  listRules(collection: string): ShareRecord[] {
+    const rows = this.conn().prepare(
+      `SELECT ${SHARE_PUBLIC_COLUMNS} FROM shares WHERE kind = ? AND collection = ? ORDER BY updated_at DESC, token DESC`,
+    ).all('rule', normalizeCollectionPath(collection)) as ShareRow[]
+    return rows.map(publicShare)
   }
 
   revokeRecord(collection: string, recordId: string) {

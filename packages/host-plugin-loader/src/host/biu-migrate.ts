@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { openPooledSqlite, sharedSqlitePoolStats, closeAllSharedSqliteConnections } from './sqlite-pool.ts'
@@ -1027,6 +1028,238 @@ export const BIU_MIGRATIONS: Migration[] = [
   { version: 56, module: 'core-file-system', name: 'shares.workspace-and-creator', up: (db) => {
     addColumn(db, 'shares', 'workspace_id', `workspace_id TEXT NOT NULL DEFAULT ''`)
     addColumn(db, 'shares', 'created_by', `created_by TEXT NOT NULL DEFAULT ''`)
+  } },
+  { version: 57, module: 'host-account', name: 'access-rules.decouple-from-views', up: (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS access_rules (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        collection TEXT NOT NULL,
+        name TEXT NOT NULL,
+        created_by TEXT NOT NULL,
+        filter_tree_json TEXT NOT NULL,
+        columns_json TEXT,
+        display_snapshot_json TEXT,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS access_rules_ws_col
+        ON access_rules(workspace_id, collection, enabled);
+      CREATE INDEX IF NOT EXISTS access_rules_owner
+        ON access_rules(workspace_id, created_by);
+      CREATE TABLE IF NOT EXISTS access_rule_grants (
+        id TEXT PRIMARY KEY,
+        rule_id TEXT NOT NULL REFERENCES access_rules(id) ON DELETE CASCADE,
+        workspace_id TEXT NOT NULL,
+        subject_type TEXT NOT NULL,
+        subject_id TEXT NOT NULL,
+        role TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        UNIQUE(rule_id, subject_type, subject_id)
+      );
+      CREATE INDEX IF NOT EXISTS access_rule_grants_subject
+        ON access_rule_grants(workspace_id, subject_type, subject_id);
+    `)
+    if (hasTable(db, 'shares')) {
+      addColumn(db, 'shares', 'rule_id', `rule_id TEXT NOT NULL DEFAULT ''`)
+      db.exec('DROP INDEX IF EXISTS shares_target')
+      db.exec('CREATE UNIQUE INDEX IF NOT EXISTS shares_target ON shares(kind, collection, view_id, record_id, rule_id)')
+    }
+
+    const shortHash = (input: string) => createHash('sha256').update(input).digest('hex').slice(0, 16)
+    const parseViewPayload = (workspaceId: string, collection: string, viewId: string): Record<string, unknown> | null => {
+      if (!hasTable(db, 'saved_views')) return null
+      const row = (
+        db
+          .prepare('SELECT payload_json FROM saved_views WHERE workspace_id = ? AND collection = ? AND view_id = ?')
+          .get(workspaceId, collection, viewId) ??
+        db
+          .prepare(`SELECT payload_json FROM saved_views WHERE workspace_id = '' AND collection = ? AND view_id = ?`)
+          .get(collection, viewId)
+      ) as { payload_json?: string } | undefined
+      if (!row?.payload_json) return null
+      try {
+        const parsed = JSON.parse(row.payload_json)
+        return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null
+      } catch {
+        return null
+      }
+    }
+    const extractFilterTreeJson = (payload: Record<string, unknown> | null): string => {
+      if (payload?.filterTree && typeof payload.filterTree === 'object') {
+        return JSON.stringify(payload.filterTree)
+      }
+      if (Array.isArray(payload?.filters) && payload.filters.length > 0) {
+        return JSON.stringify({ op: 'and', rules: payload.filters })
+      }
+      return JSON.stringify({ op: 'and', rules: [] })
+    }
+    const extractColumnsJson = (payload: Record<string, unknown> | null, fallbackReadable?: string | null): string | null => {
+      if (Array.isArray(payload?.columns) && payload.columns.length > 0) {
+        const cols = payload.columns.filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
+        if (cols.length > 0) return JSON.stringify(cols)
+      }
+      if (fallbackReadable) {
+        try {
+          const parsed = JSON.parse(fallbackReadable)
+          if (Array.isArray(parsed) && parsed.length > 0) return JSON.stringify(parsed)
+        } catch {
+          /* ignore */
+        }
+      }
+      return null
+    }
+    const extractDisplaySnapshotJson = (payload: Record<string, unknown> | null): string | null => {
+      if (!payload) return null
+      const snap: Record<string, unknown> = {}
+      if (typeof payload.mode === 'string') snap.mode = payload.mode
+      if (Array.isArray(payload.sorts) && payload.sorts.length > 0) snap.sorts = payload.sorts
+      if (typeof payload.groupBy === 'string' && payload.groupBy) snap.groupBy = payload.groupBy
+      if (payload.groupConfig && typeof payload.groupConfig === 'object') snap.groupConfig = payload.groupConfig
+      return Object.keys(snap).length > 0 ? JSON.stringify(snap) : null
+    }
+
+    const migratedRuleIdByKey = new Map<string, string>()
+
+    // 1. 将现有 view_grants 按 (workspace_id, collection, view_id, granted_by) 迁移为独立 access_rules + access_rule_grants
+    if (hasTable(db, 'view_grants')) {
+      const rows = db
+        .prepare(
+          `SELECT workspace_id, collection, view_id, subject_type, subject_id, role, readable_columns, granted_by, created_at
+           FROM view_grants
+           ORDER BY created_at ASC`,
+        )
+        .all() as Array<{
+        workspace_id: string
+        collection: string
+        view_id: string
+        subject_type: string
+        subject_id: string
+        role: string
+        readable_columns: string | null
+        granted_by: string
+        created_at: number
+      }>
+      const now = Date.now()
+      const insertRule = db.prepare(
+        `INSERT OR IGNORE INTO access_rules
+           (id, workspace_id, collection, name, created_by, filter_tree_json, columns_json, display_snapshot_json, enabled, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+      )
+      const insertGrant = db.prepare(
+        `INSERT OR IGNORE INTO access_rule_grants
+           (id, rule_id, workspace_id, subject_type, subject_id, role, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      for (const row of rows) {
+        if (!row.granted_by) continue
+        const groupKey = `${row.workspace_id}\0${row.collection}\0${row.view_id}\0${row.granted_by}`
+        let ruleId = migratedRuleIdByKey.get(groupKey)
+        if (!ruleId) {
+          ruleId = `rule_mig_${shortHash(groupKey)}`
+          migratedRuleIdByKey.set(groupKey, ruleId)
+          const payload = parseViewPayload(row.workspace_id, row.collection, row.view_id)
+          const baseName = typeof payload?.name === 'string' && payload.name.trim() ? payload.name.trim() : row.view_id
+          const ts = Number(row.created_at) || now
+          insertRule.run(
+            ruleId,
+            row.workspace_id,
+            row.collection,
+            baseName,
+            row.granted_by,
+            extractFilterTreeJson(payload),
+            extractColumnsJson(payload, row.readable_columns),
+            extractDisplaySnapshotJson(payload),
+            ts,
+            ts,
+          )
+        }
+        const grantId = `rg_mig_${shortHash(`${ruleId}\0${row.subject_type}\0${row.subject_id}`)}`
+        insertGrant.run(
+          grantId,
+          ruleId,
+          row.workspace_id,
+          row.subject_type,
+          row.subject_id,
+          row.role,
+          Number(row.created_at) || now,
+        )
+      }
+    }
+
+    // 2. 将 saved_views 中的 scope = 'shared' 归一为 'personal'（视图纯展示，只保留 personal / workspace 两态）
+    if (hasTable(db, 'saved_views')) {
+      const sharedViews = db
+        .prepare(`SELECT workspace_id, collection, view_id, payload_json FROM saved_views WHERE payload_json LIKE '%"shared"%'`)
+        .all() as Array<{ workspace_id: string; collection: string; view_id: string; payload_json: string }>
+      const updateView = db.prepare(
+        'UPDATE saved_views SET payload_json = ? WHERE workspace_id = ? AND collection = ? AND view_id = ?',
+      )
+      for (const view of sharedViews) {
+        try {
+          const parsed = JSON.parse(view.payload_json) as Record<string, unknown>
+          if (parsed && typeof parsed === 'object' && parsed.scope === 'shared') {
+            parsed.scope = 'personal'
+            updateView.run(JSON.stringify(parsed), view.workspace_id, view.collection, view.view_id)
+          }
+        } catch {
+          /* ignore malformed payload */
+        }
+      }
+    }
+
+    // 3. 将 shares 中 kind = 'view' 的公开外链迁到独立 access_rule（保留原 token 不失效）
+    if (hasTable(db, 'shares')) {
+      const viewShares = db
+        .prepare(
+          `SELECT token, collection, view_id, workspace_id, created_by, created_at
+           FROM shares
+           WHERE kind = 'view' AND view_id != ''`,
+        )
+        .all() as Array<{
+        token: string
+        collection: string
+        view_id: string
+        workspace_id: string
+        created_by: string
+        created_at: number
+      }>
+      const now = Date.now()
+      const insertRule = db.prepare(
+        `INSERT OR IGNORE INTO access_rules
+           (id, workspace_id, collection, name, created_by, filter_tree_json, columns_json, display_snapshot_json, enabled, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+      )
+      const updateShare = db.prepare(
+        `UPDATE shares SET kind = 'rule', rule_id = ?, view_id = '' WHERE token = ?`,
+      )
+      for (const share of viewShares) {
+        const payload = parseViewPayload(share.workspace_id, share.collection, share.view_id)
+        const owner = share.created_by || (typeof payload?.createdBy === 'string' ? payload.createdBy : '')
+        const groupKey = `${share.workspace_id}\0${share.collection}\0${share.view_id}\0${owner}`
+        let ruleId = migratedRuleIdByKey.get(groupKey)
+        if (!ruleId) {
+          ruleId = `rule_share_${shortHash(`${share.token}\0${groupKey}`)}`
+          migratedRuleIdByKey.set(groupKey, ruleId)
+          const baseName = typeof payload?.name === 'string' && payload.name.trim() ? payload.name.trim() : share.view_id
+          const ts = Number(share.created_at) || now
+          insertRule.run(
+            ruleId,
+            share.workspace_id,
+            share.collection,
+            baseName,
+            owner,
+            extractFilterTreeJson(payload),
+            extractColumnsJson(payload),
+            extractDisplaySnapshotJson(payload),
+            ts,
+            ts,
+          )
+        }
+        updateShare.run(ruleId, share.token)
+      }
+    }
   } },
 ]
 

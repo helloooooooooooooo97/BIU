@@ -16,13 +16,21 @@ import {
   registerBuiltinPluginLookup,
   tokenHash,
   verifyPassword,
+  type AccessRuleDisplaySnapshot,
+  type AccessRuleGrantInput,
+  type AccessRuleGrantRecord,
+  type AccessRuleRecord,
+  type AccessRuleRole,
+  type AccessRuleSubjectType,
   type Account,
+  type CreateAccessRuleInput,
   type EditLock,
   type PluginAssignmentSubject,
   type PluginPackageInput,
   type PresenceRow,
   type RecordHead,
   type SyncOp,
+  type UpdateAccessRuleInput,
   type Workspace,
 } from './store-types.ts'
 
@@ -34,13 +42,21 @@ export {
   PRESENCE_STALE_MS,
   isRegisteredBuiltinPlugin,
   registerBuiltinPluginLookup,
+  type AccessRuleDisplaySnapshot,
+  type AccessRuleGrantInput,
+  type AccessRuleGrantRecord,
+  type AccessRuleRecord,
+  type AccessRuleRole,
+  type AccessRuleSubjectType,
   type Account,
+  type CreateAccessRuleInput,
   type EditLock,
   type PluginAssignmentSubject,
   type PluginPackageInput,
   type PresenceRow,
   type RecordHead,
   type SyncOp,
+  type UpdateAccessRuleInput,
   type Workspace,
 }
 
@@ -75,6 +91,41 @@ export class CollabStore {
     })
     this.ensureBuiltInRoot()
     this.ensureActivityTable()
+    this.ensureAccessRulesTables()
+  }
+
+  private ensureAccessRulesTables() {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS access_rules (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        collection TEXT NOT NULL,
+        name TEXT NOT NULL,
+        created_by TEXT NOT NULL,
+        filter_tree_json TEXT NOT NULL,
+        columns_json TEXT,
+        display_snapshot_json TEXT,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS access_rules_ws_col
+        ON access_rules(workspace_id, collection, enabled);
+      CREATE INDEX IF NOT EXISTS access_rules_owner
+        ON access_rules(workspace_id, created_by);
+      CREATE TABLE IF NOT EXISTS access_rule_grants (
+        id TEXT PRIMARY KEY,
+        rule_id TEXT NOT NULL REFERENCES access_rules(id) ON DELETE CASCADE,
+        workspace_id TEXT NOT NULL,
+        subject_type TEXT NOT NULL,
+        subject_id TEXT NOT NULL,
+        role TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        UNIQUE(rule_id, subject_type, subject_id)
+      );
+      CREATE INDEX IF NOT EXISTS access_rule_grants_subject
+        ON access_rule_grants(workspace_id, subject_type, subject_id);
+    `)
   }
 
   private ensureActivityTable() {
@@ -1330,7 +1381,7 @@ export class CollabStore {
     actorId: string,
     workspaceId: string,
     accountId: string,
-    options: { transferToAccountId?: string } = {},
+    options: { transferToAccountId?: string; transferAccessRules?: boolean } = {},
   ) {
     const actorRole = this.requireManager(actorId, workspaceId)
     const target = this.db
@@ -1399,6 +1450,21 @@ export class CollabStore {
            OR (granted_by = ? AND view_id LIKE 'builtin-all:%')
          )`,
       ).run(workspaceId, accountId, accountId)
+      this.db.prepare(
+        `DELETE FROM access_rule_grants
+         WHERE workspace_id = ? AND subject_type = 'account' AND subject_id = ?`,
+      ).run(workspaceId, accountId)
+      if (options.transferAccessRules && transferTo && transferTo !== accountId) {
+        this.db.prepare(
+          `UPDATE access_rules SET created_by = ?, updated_at = ?
+           WHERE workspace_id = ? AND created_by = ?`,
+        ).run(transferTo, now, workspaceId, accountId)
+      } else {
+        this.db.prepare(
+          `UPDATE access_rules SET enabled = 0, updated_at = ?
+           WHERE workspace_id = ? AND created_by = ?`,
+        ).run(now, workspaceId, accountId)
+      }
       this.db.prepare(
         `DELETE FROM plugin_assignments
          WHERE workspace_id = ? AND subject_type = 'account' AND subject_id = ?`,
@@ -3675,6 +3741,397 @@ export class CollabStore {
     const actual = this.requireMember(accountId, workspaceId)
     if (actual !== 'owner' && actual !== 'admin') throw new CollabError('只有所有者或管理员可以这样做', 403)
     return actual
+  }
+
+  // ---------------------------------------------------------------------------
+  // 独立分享规则（access_rules & access_rule_grants）：个人持有，与视图彻底解耦
+  // ---------------------------------------------------------------------------
+
+  private normalizeAccessRuleRole(raw: unknown): AccessRuleRole {
+    if (raw === 'viewer' || raw === 'editor' || raw === 'manager') return raw
+    throw new CollabError('不支持的规则角色', 400)
+  }
+
+  private normalizeAccessRuleSubjectType(raw: unknown): AccessRuleSubjectType {
+    if (raw === 'account' || raw === 'workspace' || raw === 'member_view') return raw
+    throw new CollabError('不支持的受众类型', 400)
+  }
+
+  private normalizeAccessRuleCollection(raw: string): string {
+    const normalized = raw.trim()
+    if (!normalized.startsWith('/') || normalized.includes('..')) {
+      throw new CollabError('集合路径不合法', 400)
+    }
+    return normalized
+  }
+
+  private normalizeAccessRuleColumns(columns: string[] | null | undefined): string[] | null {
+    if (columns === null || columns === undefined) return null
+    const cleaned = Array.from(
+      new Set(columns.map((c) => String(c ?? '').trim()).filter(Boolean)),
+    )
+    return cleaned.length > 0 ? cleaned : null
+  }
+
+  private requireAccessRuleCreatorEligibility(actorId: string, workspaceId: string) {
+    const row = this.db
+      .prepare('SELECT role, member_kind FROM workspace_members WHERE workspace_id = ? AND account_id = ?')
+      .get(workspaceId, actorId) as { role: string; member_kind: string } | undefined
+    if (!row) throw new CollabError('不是该工作区成员', 403)
+    if (row.role === 'viewer' || row.member_kind === 'guest') {
+      throw new CollabError('只读成员不能创建分享规则', 403)
+    }
+  }
+
+  private hydrateAccessRules(
+    rows: Array<{
+      id: string
+      workspace_id: string
+      collection: string
+      name: string
+      created_by: string
+      created_by_name?: string
+      filter_tree_json: string
+      columns_json: string | null
+      display_snapshot_json: string | null
+      enabled: number
+      created_at: number
+      updated_at: number
+    }>,
+  ): AccessRuleRecord[] {
+    if (rows.length === 0) return []
+    const ruleIds = rows.map((r) => r.id)
+    const placeholders = ruleIds.map(() => '?').join(', ')
+    const grantRows = this.db
+      .prepare(
+        `SELECT g.id, g.rule_id, g.workspace_id, g.subject_type, g.subject_id, g.role, g.created_at,
+                a.name AS account_name, a.email AS account_email, a.avatar AS account_avatar
+         FROM access_rule_grants g
+         LEFT JOIN accounts a ON g.subject_type = 'account' AND a.id = g.subject_id
+         WHERE g.rule_id IN (${placeholders})
+         ORDER BY g.created_at ASC`,
+      )
+      .all(...ruleIds) as Array<{
+      id: string
+      rule_id: string
+      workspace_id: string
+      subject_type: string
+      subject_id: string
+      role: string
+      created_at: number
+      account_name: string | null
+      account_email: string | null
+      account_avatar: string | null
+    }>
+    const grantsByRule = new Map<string, AccessRuleGrantRecord[]>()
+    for (const g of grantRows) {
+      const list = grantsByRule.get(g.rule_id) ?? []
+      list.push({
+        id: g.id,
+        ruleId: g.rule_id,
+        workspaceId: g.workspace_id,
+        subjectType: g.subject_type as AccessRuleSubjectType,
+        subjectId: g.subject_id,
+        role: g.role as AccessRuleRole,
+        createdAt: Number(g.created_at) || 0,
+        ...(g.account_name ? { subjectName: g.account_name } : {}),
+        ...(g.account_email ? { subjectEmail: g.account_email } : {}),
+        ...(g.account_avatar ? { subjectAvatar: g.account_avatar } : {}),
+      })
+      grantsByRule.set(g.rule_id, list)
+    }
+    return rows.map((row) => {
+      let filterTree: Record<string, unknown> = { op: 'and', rules: [] }
+      try {
+        const parsed = JSON.parse(row.filter_tree_json)
+        if (parsed && typeof parsed === 'object') filterTree = parsed as Record<string, unknown>
+      } catch {
+        /* fallback to empty filterTree */
+      }
+      let columns: string[] | null = null
+      if (row.columns_json) {
+        try {
+          const parsed = JSON.parse(row.columns_json)
+          if (Array.isArray(parsed)) {
+            columns = parsed.filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
+          }
+        } catch {
+          columns = null
+        }
+      }
+      let displaySnapshot: AccessRuleDisplaySnapshot | null = null
+      if (row.display_snapshot_json) {
+        try {
+          const parsed = JSON.parse(row.display_snapshot_json)
+          if (parsed && typeof parsed === 'object') displaySnapshot = parsed as AccessRuleDisplaySnapshot
+        } catch {
+          displaySnapshot = null
+        }
+      }
+      return {
+        id: row.id,
+        workspaceId: row.workspace_id,
+        collection: row.collection,
+        name: row.name,
+        createdBy: row.created_by,
+        ...(row.created_by_name ? { createdByName: row.created_by_name } : {}),
+        filterTree,
+        columns,
+        displaySnapshot,
+        enabled: row.enabled !== 0,
+        createdAt: Number(row.created_at) || 0,
+        updatedAt: Number(row.updated_at) || 0,
+        grants: grantsByRule.get(row.id) ?? [],
+      }
+    })
+  }
+
+  getAccessRule(workspaceId: string, ruleId: string): AccessRuleRecord | null {
+    const row = this.db
+      .prepare(
+        `SELECT r.*, a.name AS created_by_name
+         FROM access_rules r
+         LEFT JOIN accounts a ON a.id = r.created_by
+         WHERE r.workspace_id = ? AND r.id = ?`,
+      )
+      .get(workspaceId, ruleId) as
+      | {
+          id: string
+          workspace_id: string
+          collection: string
+          name: string
+          created_by: string
+          created_by_name?: string
+          filter_tree_json: string
+          columns_json: string | null
+          display_snapshot_json: string | null
+          enabled: number
+          created_at: number
+          updated_at: number
+        }
+      | undefined
+    if (!row) return null
+    return this.hydrateAccessRules([row])[0] ?? null
+  }
+
+  listAccessRulesForOwner(actorId: string, workspaceId: string, collection?: string): AccessRuleRecord[] {
+    if (!this.isMember(actorId, workspaceId)) throw new CollabError('不是该工作区成员', 403)
+    const rows = collection
+      ? (this.db
+          .prepare(
+            `SELECT r.*, a.name AS created_by_name
+             FROM access_rules r
+             LEFT JOIN accounts a ON a.id = r.created_by
+             WHERE r.workspace_id = ? AND r.created_by = ? AND r.collection = ?
+             ORDER BY r.updated_at DESC, r.created_at DESC`,
+          )
+          .all(workspaceId, actorId, this.normalizeAccessRuleCollection(collection)) as Array<any>)
+      : (this.db
+          .prepare(
+            `SELECT r.*, a.name AS created_by_name
+             FROM access_rules r
+             LEFT JOIN accounts a ON a.id = r.created_by
+             WHERE r.workspace_id = ? AND r.created_by = ?
+             ORDER BY r.updated_at DESC, r.created_at DESC`,
+          )
+          .all(workspaceId, actorId) as Array<any>)
+    return this.hydrateAccessRules(rows)
+  }
+
+  listActiveAccessRulesForCollection(workspaceId: string, collection: string): AccessRuleRecord[] {
+    const rows = this.db
+      .prepare(
+        `SELECT r.*, a.name AS created_by_name
+         FROM access_rules r
+         LEFT JOIN accounts a ON a.id = r.created_by
+         WHERE r.workspace_id = ? AND r.collection = ? AND r.enabled = 1
+         ORDER BY r.created_at ASC`,
+      )
+      .all(workspaceId, this.normalizeAccessRuleCollection(collection)) as Array<any>
+    return this.hydrateAccessRules(rows)
+  }
+
+  countAccessRulesForOwner(workspaceId: string, accountId: string): number {
+    const row = this.db
+      .prepare('SELECT COUNT(*) AS cnt FROM access_rules WHERE workspace_id = ? AND created_by = ? AND enabled = 1')
+      .get(workspaceId, accountId) as { cnt?: number } | undefined
+    return Number(row?.cnt ?? 0)
+  }
+
+  createAccessRule(actorId: string, workspaceId: string, input: CreateAccessRuleInput): AccessRuleRecord {
+    this.requireAccessRuleCreatorEligibility(actorId, workspaceId)
+    const collection = this.normalizeAccessRuleCollection(input.collection)
+    const name = String(input.name ?? '').trim()
+    if (!name) throw new CollabError('规则名称不能为空', 400)
+    const filterTree = input.filterTree && typeof input.filterTree === 'object' ? input.filterTree : { op: 'and', rules: [] }
+    const columns = this.normalizeAccessRuleColumns(input.columns)
+    const displaySnapshot = input.displaySnapshot && typeof input.displaySnapshot === 'object' ? input.displaySnapshot : null
+    const enabled = input.enabled === false ? 0 : 1
+    const ruleId = id('rule')
+    const now = Date.now()
+    const grants = Array.isArray(input.grants) ? input.grants : []
+
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      this.db
+        .prepare(
+          `INSERT INTO access_rules
+             (id, workspace_id, collection, name, created_by, filter_tree_json, columns_json, display_snapshot_json, enabled, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          ruleId,
+          workspaceId,
+          collection,
+          name,
+          actorId,
+          JSON.stringify(filterTree),
+          columns ? JSON.stringify(columns) : null,
+          displaySnapshot ? JSON.stringify(displaySnapshot) : null,
+          enabled,
+          now,
+          now,
+        )
+      for (const g of grants) {
+        const subjectType = this.normalizeAccessRuleSubjectType(g.subjectType)
+        const subjectId = subjectType === 'workspace' ? workspaceId : String(g.subjectId ?? '').trim()
+        if (!subjectId) throw new CollabError('受众 ID 不能为空', 400)
+        const role = this.normalizeAccessRuleRole(g.role)
+        this.db
+          .prepare(
+            `INSERT INTO access_rule_grants (id, rule_id, workspace_id, subject_type, subject_id, role, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(rule_id, subject_type, subject_id)
+             DO UPDATE SET role = excluded.role`,
+          )
+          .run(id('rg'), ruleId, workspaceId, subjectType, subjectId, role, now)
+      }
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+    this.authorization.invalidateAll()
+    return this.getAccessRule(workspaceId, ruleId)!
+  }
+
+  updateAccessRule(actorId: string, workspaceId: string, ruleId: string, patch: UpdateAccessRuleInput): AccessRuleRecord {
+    const existing = this.getAccessRule(workspaceId, ruleId)
+    if (!existing) throw new CollabError('分享规则不存在', 404)
+    if (existing.createdBy !== actorId) throw new CollabError('只有规则创建者可以修改此规则', 403)
+    const nextName = patch.name !== undefined ? String(patch.name).trim() : existing.name
+    if (!nextName) throw new CollabError('规则名称不能为空', 400)
+    const nextFilterTree = patch.filterTree !== undefined ? patch.filterTree : existing.filterTree
+    const nextColumns = patch.columns !== undefined ? this.normalizeAccessRuleColumns(patch.columns) : existing.columns
+    const nextDisplaySnapshot = patch.displaySnapshot !== undefined ? patch.displaySnapshot : existing.displaySnapshot
+    const nextEnabled = patch.enabled !== undefined ? (patch.enabled ? 1 : 0) : existing.enabled ? 1 : 0
+    const now = Date.now()
+
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      this.db
+        .prepare(
+          `UPDATE access_rules
+           SET name = ?, filter_tree_json = ?, columns_json = ?, display_snapshot_json = ?, enabled = ?, updated_at = ?
+           WHERE workspace_id = ? AND id = ?`,
+        )
+        .run(
+          nextName,
+          JSON.stringify(nextFilterTree ?? { op: 'and', rules: [] }),
+          nextColumns ? JSON.stringify(nextColumns) : null,
+          nextDisplaySnapshot ? JSON.stringify(nextDisplaySnapshot) : null,
+          nextEnabled,
+          now,
+          workspaceId,
+          ruleId,
+        )
+      if (patch.grants !== undefined) {
+        this.db.prepare('DELETE FROM access_rule_grants WHERE rule_id = ?').run(ruleId)
+        for (const g of patch.grants) {
+          const subjectType = this.normalizeAccessRuleSubjectType(g.subjectType)
+          const subjectId = subjectType === 'workspace' ? workspaceId : String(g.subjectId ?? '').trim()
+          if (!subjectId) throw new CollabError('受众 ID 不能为空', 400)
+          const role = this.normalizeAccessRuleRole(g.role)
+          this.db
+            .prepare(
+              `INSERT INTO access_rule_grants (id, rule_id, workspace_id, subject_type, subject_id, role, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(rule_id, subject_type, subject_id)
+               DO UPDATE SET role = excluded.role`,
+            )
+            .run(id('rg'), ruleId, workspaceId, subjectType, subjectId, role, now)
+        }
+      }
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+    this.authorization.invalidateAll()
+    return this.getAccessRule(workspaceId, ruleId)!
+  }
+
+  deleteAccessRule(actorId: string, workspaceId: string, ruleId: string): { deleted: boolean; collection: string } {
+    const existing = this.getAccessRule(workspaceId, ruleId)
+    if (!existing) throw new CollabError('分享规则不存在', 404)
+    if (existing.createdBy !== actorId) throw new CollabError('只有规则创建者可以删除此规则', 403)
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      this.db.prepare('DELETE FROM access_rule_grants WHERE rule_id = ?').run(ruleId)
+      this.db.prepare('DELETE FROM access_rules WHERE workspace_id = ? AND id = ?').run(workspaceId, ruleId)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+    this.authorization.invalidateAll()
+    return { deleted: true, collection: existing.collection }
+  }
+
+  grantAccessRuleSubject(
+    actorId: string,
+    workspaceId: string,
+    ruleId: string,
+    grant: AccessRuleGrantInput,
+  ): AccessRuleRecord {
+    const existing = this.getAccessRule(workspaceId, ruleId)
+    if (!existing) throw new CollabError('分享规则不存在', 404)
+    if (existing.createdBy !== actorId) throw new CollabError('只有规则创建者可以修改此规则', 403)
+    const subjectType = this.normalizeAccessRuleSubjectType(grant.subjectType)
+    const subjectId = subjectType === 'workspace' ? workspaceId : String(grant.subjectId ?? '').trim()
+    if (!subjectId) throw new CollabError('受众 ID 不能为空', 400)
+    const role = this.normalizeAccessRuleRole(grant.role)
+    const now = Date.now()
+    this.db
+      .prepare(
+        `INSERT INTO access_rule_grants (id, rule_id, workspace_id, subject_type, subject_id, role, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(rule_id, subject_type, subject_id)
+         DO UPDATE SET role = excluded.role`,
+      )
+      .run(id('rg'), ruleId, workspaceId, subjectType, subjectId, role, now)
+    this.db.prepare('UPDATE access_rules SET updated_at = ? WHERE workspace_id = ? AND id = ?').run(now, workspaceId, ruleId)
+    this.authorization.invalidateAll()
+    return this.getAccessRule(workspaceId, ruleId)!
+  }
+
+  revokeAccessRuleSubject(
+    actorId: string,
+    workspaceId: string,
+    ruleId: string,
+    subjectType: AccessRuleSubjectType,
+    subjectId: string,
+  ): AccessRuleRecord {
+    const existing = this.getAccessRule(workspaceId, ruleId)
+    if (!existing) throw new CollabError('分享规则不存在', 404)
+    if (existing.createdBy !== actorId) throw new CollabError('只有规则创建者可以修改此规则', 403)
+    const resolvedSubjectId = subjectType === 'workspace' ? workspaceId : subjectId.trim()
+    this.db
+      .prepare('DELETE FROM access_rule_grants WHERE rule_id = ? AND subject_type = ? AND subject_id = ?')
+      .run(ruleId, subjectType, resolvedSubjectId)
+    this.db.prepare('UPDATE access_rules SET updated_at = ? WHERE workspace_id = ? AND id = ?').run(Date.now(), workspaceId, ruleId)
+    this.authorization.invalidateAll()
+    return this.getAccessRule(workspaceId, ruleId)!
   }
 
   private recordKey(collection: string, recordId: string) {

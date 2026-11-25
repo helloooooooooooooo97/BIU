@@ -105,6 +105,71 @@ export type PresenceRow = {
   seenAt: number
 }
 
+export type AccessRuleSubjectType = 'account' | 'workspace' | 'member_view'
+
+export type AccessRuleRole = 'viewer' | 'editor' | 'manager'
+
+export type AccessRuleDisplaySnapshot = {
+  mode?: string
+  sorts?: unknown[]
+  groupBy?: string
+  groupConfig?: Record<string, unknown>
+}
+
+export type AccessRuleGrantRecord = {
+  id: string
+  ruleId: string
+  workspaceId: string
+  subjectType: AccessRuleSubjectType
+  subjectId: string
+  role: AccessRuleRole
+  createdAt: number
+  subjectName?: string
+  subjectEmail?: string
+  subjectAvatar?: string
+}
+
+export type AccessRuleRecord = {
+  id: string
+  workspaceId: string
+  collection: string
+  name: string
+  createdBy: string
+  createdByName?: string
+  filterTree: Record<string, unknown>
+  columns: string[] | null
+  displaySnapshot: AccessRuleDisplaySnapshot | null
+  enabled: boolean
+  createdAt: number
+  updatedAt: number
+  grants: AccessRuleGrantRecord[]
+}
+
+export type AccessRuleGrantInput = {
+  subjectType: AccessRuleSubjectType
+  subjectId: string
+  role: AccessRuleRole
+}
+
+export type CreateAccessRuleInput = {
+  collection: string
+  name: string
+  filterTree?: Record<string, unknown>
+  columns?: string[] | null
+  displaySnapshot?: AccessRuleDisplaySnapshot | null
+  enabled?: boolean
+  grants?: AccessRuleGrantInput[]
+}
+
+export type UpdateAccessRuleInput = {
+  name?: string
+  filterTree?: Record<string, unknown>
+  columns?: string[] | null
+  displaySnapshot?: AccessRuleDisplaySnapshot | null
+  enabled?: boolean
+  grants?: AccessRuleGrantInput[]
+}
+
 export function id(prefix: string) {
   return `${prefix}_${randomBytes(8).toString('hex')}`
 }
