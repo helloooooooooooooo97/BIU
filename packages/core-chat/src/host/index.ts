@@ -517,6 +517,8 @@ export class ChatService extends Service {
 
   private currentAccountKey() {
     const scoped = currentAccountId().trim()
+    // 云端多租户模式下绝不回退到进程级 activeAccountId，避免脱离请求上下文时串用上一个用户的配置与密钥。
+    if (getRuntimePolicy().authzMode === 'rbac') return scoped
     return scoped || this.activeAccountId
   }
 
@@ -567,6 +569,10 @@ export class ChatService extends Service {
     const next = accountId.trim()
     const scope = this.scopeFor(next)
     this.configs.getOrCreate(() => mergePersisted(defaults(), readPersisted(next)), scope)
+    if (getRuntimePolicy().authzMode === 'rbac') {
+      if (next) this.syncToolsMode()
+      return
+    }
     if (next === this.activeAccountId) return
     this.activeAccountId = next
     this.syncLlm()
@@ -1052,6 +1058,8 @@ export class ChatService extends Service {
   }
 
   private syncLlm() {
+    // 云端多租户下不写入全局 AgentsService.llm 单例，每次回合通过 chat.resolveLlm() 按当前请求账号动态解析。
+    if (getRuntimePolicy().authzMode === 'rbac') return
     const llm = this.resolveLlm()
     this.ctx.agents.configure(llm)
   }

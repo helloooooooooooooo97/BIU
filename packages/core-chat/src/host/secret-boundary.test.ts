@@ -146,6 +146,10 @@ test('online ChatService isolates API keys per account concurrently and encrypts
     assert.equal(aliceLlm.apiKey, 'sk-alice-token-1111')
     assert.equal(bobLlm.apiKey, 'sk-bob-token-2222')
 
+    // Outside any account scope in cloud mode, must never fall back to last activeAccountId
+    const unscopedLlm = chat.resolveLlm()
+    assert.equal(unscopedLlm.apiKey, '')
+
     const aliceView = runWithAccount('acct-alice', () => chat.publicView())
     assert.equal(aliceView.acceptsApiKeys, true)
     assert.equal(aliceView.secretsLocalOnly, false)
