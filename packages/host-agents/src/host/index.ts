@@ -3,7 +3,8 @@ import type { LlmConfig } from '@biu/host-llm'
 import type { AgentHandle, AgentSendOptions, AgentTurn, ClaimedInput } from '@biu/type-agent-loop'
 import type { MessageSender, LiveUiContext, SessionGoal } from '@biu/type-session'
 import { currentSessionId } from '@biu/host-sessions/scope'
-import { getChatPort } from '@biu/host-plugin-loader/ports'
+import { currentAccountId, currentRequestWorkspaceId } from '@biu/host-plugin-loader/data-dir'
+import { getAccountPort, getChatPort } from '@biu/host-plugin-loader/ports'
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import {
   continuationPrompt,
@@ -30,6 +31,8 @@ interface LiveAgent {
   /** 上一回合还在收尾时又 resume / 入队：结束后立刻再 kick，避免 wake 停在 inbox 没人领 */
   restartWhenIdle?: boolean
   lastActiveAt: number
+  accountId?: string
+  workspaceId?: string
 }
 
 const DEFAULT_AGENT_IDLE_TTL_MS = 30 * 60_000
@@ -58,8 +61,49 @@ export class AgentsService extends Service {
         this.evictIdle()
       }, AGENT_SWEEP_INTERVAL_MS)
       timer.unref()
-      return () => clearInterval(timer)
+      const offRevoked = ctx.on('tenant/revoked', (payload) => {
+        this.disposeForTenant(payload.accountId, payload.workspaceId)
+      })
+      const offDeleted = ctx.on('workspace/deleted', (payload) => {
+        this.disposeForWorkspace(payload.workspaceId)
+      })
+      return () => {
+        clearInterval(timer)
+        offRevoked()
+        offDeleted()
+      }
     }, 'agents.idle-sweep')
+  }
+
+  private resolveAgentTenant(sessionId: string, live: LiveAgent): { accountId?: string; workspaceId?: string } {
+    if (live.accountId || live.workspaceId) {
+      return { accountId: live.accountId, workspaceId: live.workspaceId }
+    }
+    const tenant = getAccountPort(this.ctx)?.store?.tenantForRecord?.('/agents', sessionId)
+    return { accountId: tenant?.accountId, workspaceId: tenant?.workspaceId }
+  }
+
+  disposeForTenant(accountId: string, workspaceId?: string): number {
+    let disposed = 0
+    for (const [sessionId, live] of [...this.lives]) {
+      const tenant = this.resolveAgentTenant(sessionId, live)
+      if (tenant.accountId !== accountId) continue
+      if (workspaceId && tenant.workspaceId !== workspaceId) continue
+      live.handle.dispose()
+      disposed += 1
+    }
+    return disposed
+  }
+
+  disposeForWorkspace(workspaceId: string): number {
+    let disposed = 0
+    for (const [sessionId, live] of [...this.lives]) {
+      const tenant = this.resolveAgentTenant(sessionId, live)
+      if (tenant.workspaceId !== workspaceId) continue
+      live.handle.dispose()
+      disposed += 1
+    }
+    return disposed
   }
 
   /** 清理长时间空闲且无排队任务的内存 LiveAgent，避免云端长期运行内存持续增长。 */
@@ -144,11 +188,14 @@ export class AgentsService extends Service {
       return existing.handle
     }
 
+    const tenant = getAccountPort(this.ctx)?.store?.tenantForRecord?.('/agents', id)
     const live: LiveAgent = {
       inbox: [],
       abort: new AbortController(),
       handle: {} as AgentHandle,
       lastActiveAt: Date.now(),
+      accountId: currentAccountId().trim() || tenant?.accountId || undefined,
+      workspaceId: currentRequestWorkspaceId().trim() || tenant?.workspaceId || undefined,
     }
 
     const kick = async (): Promise<AgentTurn> => {
