@@ -495,3 +495,33 @@ test('clientViewFromDbRow extracts createdBy from hydrated PersonValue objects',
   })
   assert.equal(view?.createdBy, 'acc_29e64d')
 })
+
+test('viewsCollection emits user PersonValue (not agent) for createdBy and updatedBy, and actor overlay resolves member name', async () => {
+  const { applyRecordPersonOverlay } = await import('./actor-overlay.ts')
+  const dir = mkdtempSync(join(tmpdir(), 'biu-saved-views-person-'))
+  const store = new SavedViewsStore().open(join(dir, 'biu.sqlite'))
+  store.setWorkspaceResolver(() => 'ws-1')
+  store.applyPatch('/pages', { upsert: [{ id: 'v-97', name: '97', scope: 'personal' }] }, 'acc_29e64d')
+
+  const spec = viewsCollection(store, () => [{ id: 'pages', path: '/pages', label: '页面' }], () => 'acc_29e64d')
+  const rows = await spec.list()
+  const row = rows.find((item) => item.viewId === 'v-97')
+  assert.ok(row)
+  assert.deepEqual(row.createdBy, { kind: 'user', accountId: 'acc_29e64d', name: 'acc_29e64d' })
+  assert.deepEqual(row.updatedBy, { kind: 'user', accountId: 'acc_29e64d', name: 'acc_29e64d' })
+
+  const hydrated = applyRecordPersonOverlay(
+    {
+      tags: { recordMeta: () => null } as never,
+      collection: () => undefined,
+      workspacePerson: (accountId) =>
+        accountId === 'acc_29e64d' ? { accountId, workspaceId: 'ws-1', name: '97' } : null,
+      sessionsService: () => undefined,
+      accountService: () => undefined,
+    },
+    spec,
+    row,
+  )
+  assert.deepEqual(hydrated.createdBy, { kind: 'user', accountId: 'acc_29e64d', name: '97' })
+  assert.deepEqual(hydrated.updatedBy, [{ kind: 'user', accountId: 'acc_29e64d', name: '97' }])
+})

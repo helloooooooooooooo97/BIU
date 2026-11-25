@@ -686,7 +686,15 @@ function asRecord(path: string, tableName: string, view: StoredView, tableIcon?:
     filters: JSON.stringify(filters),
     sorts: JSON.stringify(sorts.map((item) => ({ field: item.field, dir: item.dir }))),
     filterTree: filterTree ? JSON.stringify(filterTree) : '',
-    ...recordBuiltinValues(view as Record<string, unknown>),
+    ...recordBuiltinValues({
+      ...(view as Record<string, unknown>),
+      ...(view.createdBy
+        ? {
+            createdBy: { kind: 'user', accountId: view.createdBy, name: view.createdBy },
+            updatedBy: [{ kind: 'user', accountId: view.createdBy, name: view.createdBy }],
+          }
+        : {}),
+    }),
   }
 }
 
