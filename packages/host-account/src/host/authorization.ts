@@ -634,15 +634,20 @@ export class AuthorizationService {
         : { allowed: false, reason: 'INSUFFICIENT_PERMISSION' }
     }
     if (resource.collection === '/views') {
-      const effectiveRole: ResourceRole =
-        membership === 'owner'
-          ? 'owner'
-          : membership === 'viewer' || memberKind === 'external' || memberKind === 'guest'
-            ? 'viewer'
-            : 'manager'
-      return ROLE_RANK[effectiveRole] >= ROLE_RANK[requiredRole(action)]
-        ? { allowed: true, effectiveRole, source: 'workspace-default' }
-        : { allowed: false, reason: 'INSUFFICIENT_PERMISSION' }
+      // 已挂接 resource_policies 的视图走与普通页面记录完全一致的 RBAC 路径（owner / record_grants / member_view）；
+      // 仅对尚未挂接策略的历史/集合级查询回退为空间级默认权限。
+      const hasPolicy = resource.type === 'record' && Boolean(this.policy(resource))
+      if (!hasPolicy) {
+        const effectiveRole: ResourceRole =
+          membership === 'owner'
+            ? 'owner'
+            : membership === 'viewer' || memberKind === 'external' || memberKind === 'guest'
+              ? 'viewer'
+              : 'manager'
+        return ROLE_RANK[effectiveRole] >= ROLE_RANK[requiredRole(action)]
+          ? { allowed: true, effectiveRole, source: 'workspace-default' }
+          : { allowed: false, reason: 'INSUFFICIENT_PERMISSION' }
+      }
     }
 
     const resolved = this.effectiveRole(actor.accountId, resource, new Set(), 0)

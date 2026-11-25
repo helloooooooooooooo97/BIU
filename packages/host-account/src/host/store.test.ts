@@ -376,16 +376,18 @@ test('view collaborators do not change record ownership', () => {
     /必须先加入当前空间/,
   )
   const shared = asAda(() => collab.shareViewWithEmail(ada.id, '/pages', viewId, cara.email, 'viewer', 'external'))
+  assert.equal(shared.scope, 'shared')
+  assert.equal(shared.ownerId, ada.id)
   assert.equal(shared.people.find((row) => row.id === cara.id)?.memberKind, 'external')
   assert.equal(asAda(() => collab.recordAccess(ada.id, '/pages', 'view-page')).scope, 'personal')
   const internal = asAda(() => collab.shareViewWithEmail(ada.id, '/pages', viewId, bob.email, 'editor', 'internal'))
+  assert.equal(internal.scope, 'shared')
   assert.equal(internal.people.find((row) => row.id === bob.id)?.role, 'editor')
   assert.equal(asAda(() => collab.recordAccess(ada.id, '/pages', 'view-page')).scope, 'personal')
-  assert.equal(
-    collab.viewGrantsFor(workspaceId, '/pages').filter((row) => row.view_id === viewId).length,
-    2,
-  )
-  asAda(() => collab.revokeViewGrant(ada.id, '/pages', viewId, 'account', cara.id))
+  const viewAccess = asAda(() => collab.viewAccess(ada.id, '/pages', viewId))
+  assert.equal(viewAccess.people.filter((row) => row.id !== ada.id).length, 2)
+  const afterRevoke = asAda(() => collab.revokeViewGrant(ada.id, '/pages', viewId, 'account', cara.id))
+  assert.equal(afterRevoke.scope, 'workspace')
   assert.equal(collab.members(ada.id, workspaceId).some((row) => row.id === cara.id), false)
   assert.equal(asAda(() => collab.recordAccess(ada.id, '/pages', 'view-page')).scope, 'personal')
 })

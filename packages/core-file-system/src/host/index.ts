@@ -2588,48 +2588,61 @@ export function apply(ctx: Context) {
         accountId: string,
         workspaceId: string,
       ) => Array<{ collection: string; record_id: string }>
-      viewGrantsFor?: (
+      setViewMetaResolver?: (
+        resolver: (
+          workspaceId: string,
+          collection: string,
+          viewId: string,
+        ) => { createdBy?: string; scope?: 'personal' | 'workspace' | 'shared'; builtin?: boolean } | null,
+      ) => void
+      ensureViewPolicy?: (
         workspaceId: string,
         collection: string,
-      ) => Array<{
-        view_id: string
-        subject_type: 'account' | 'member_view'
-        subject_id: string
-        role: 'viewer' | 'editor' | 'manager' | 'owner'
-      }>
+        viewId: string,
+        fallbackActorId?: string,
+      ) => string
       cleanupViewReferences?: (workspaceId: string, collection: string, viewId: string) => void
     }
   } | undefined
   savedViews.setWorkspaceResolver(() => resolveScopedWorkspaceId(ctx))
+  account?.store?.setViewMetaResolver?.((workspaceId, collection, viewId) => {
+    const view = savedViews.viewsFor(collection, '', workspaceId).find((item) => String(item.id) === viewId)
+    if (!view) return null
+    return {
+      createdBy: view.createdBy,
+      scope: view.scope,
+      builtin: Boolean(view.builtin),
+    }
+  })
+  const authorizeViewAction = (
+    workspaceId: string,
+    collection: string,
+    view: { id: string; createdBy?: string },
+    accountId: string,
+    action: 'resource:read' | 'resource:update' | 'resource:delete',
+  ) => {
+    if (!account?.store || !account?.authorization || !workspaceId || !accountId) return true
+    const recordId =
+      account.store.ensureViewPolicy?.(workspaceId, collection, String(view.id), view.createdBy || accountId) ??
+      rowIdOfView(collection, String(view.id))
+    return account.authorization.authorize(
+      { type: 'account', accountId, workspaceId },
+      action,
+      { type: 'record', workspaceId, collection: VIEWS_COLLECTION_PATH, recordId },
+    ).allowed
+  }
   savedViews.setPolicyGuard({
-    // 方案 B（视图归展示，规则归安全）：视图不再绑定数据权限，创建者可随时自由修改筛选/列/删除视图
+    // 方案 B（视图归展示，规则归安全）：视图权限与页面记录完全一致，统一走 /views 下的 resource_policies + record_grants
     isLocked: () => false,
     canEditLocked: () => true,
-    canSeeView: (workspaceId, collection, view, accountId) => {
-      if (!account?.store || !workspaceId || !accountId) return true
-      if (view.createdBy === accountId) return true
-      // 显式分享给某成员或成员视图（如「空间成员」）的视图，被分享者可见该视图本身（不授予底层数据记录权限）
-      const grants = account.store.viewGrantsFor?.(workspaceId, collection) ?? []
-      const explicitlyShared = grants.some(
-        (g) =>
-          g.view_id === String(view.id) &&
-          (g.subject_type === 'account'
-            ? g.subject_id === accountId
-            : Boolean(account.authorization?.matchesMemberView(workspaceId, g.subject_id, accountId))),
-      )
-      if (explicitlyShared) return true
-      // 未显式分享的私人视图仅创建者本人可见
-      if (view.scope === 'personal' && view.createdBy) return false
-      let isInternal = true
-      try {
-        const members = account.store.members(accountId, workspaceId)
-        const me = members.find((m) => m.id === accountId)
-        if (me && me.member_kind !== 'member') isInternal = false
-      } catch {
-        isInternal = false
-      }
-      // 原则 5（默认拒绝）：外部协作者 / 临时访客不暴露空间内部 workspace 视图
-      return isInternal
+    canSeeView: (workspaceId, collection, view, accountId) =>
+      authorizeViewAction(workspaceId, collection, view, accountId, 'resource:read'),
+    canModifyView: (workspaceId, collection, view, accountId) =>
+      authorizeViewAction(workspaceId, collection, view, accountId, 'resource:update'),
+    canRemoveView: (workspaceId, collection, view, accountId) =>
+      authorizeViewAction(workspaceId, collection, view, accountId, 'resource:delete'),
+    onCreated: (workspaceId, collection, view, accountId) => {
+      account?.store?.ensureViewPolicy?.(workspaceId, collection, String(view.id), view.createdBy || accountId)
     },
     onRemoved: (workspaceId, collection, viewId) => {
       try {
