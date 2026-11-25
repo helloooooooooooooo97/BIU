@@ -680,8 +680,9 @@ function WorkspaceAccess({
         <ul className="fsdb-share-collaborators">
           {internalPeople.map((row) => {
             const sub = [row.email, grantorText(row.grantedBy, row.grantedByName)].filter(Boolean).join(' · ')
-            const canEdit = Boolean(row.email && row.role !== 'owner' && row.canEdit !== false)
-            const canRevoke = Boolean(row.role !== 'owner' && row.canRevoke !== false)
+            const isSelf = Boolean(currentAccountId && row.id === currentAccountId)
+            const canEdit = Boolean(row.email && row.role !== 'owner' && !isSelf && row.canEdit !== false)
+            const canRevoke = Boolean(row.role !== 'owner' && !isSelf && row.canRevoke !== false)
             return (
               <li key={`${row.id}:${row.grantedBy ?? ''}`}>
                 {renderPersonAvatar(row.id || row.name, row.avatar)}

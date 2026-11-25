@@ -2832,6 +2832,9 @@ export class CollabStore {
     if (subjectType === 'account' && subjectId === policy?.owner_account_id) {
       throw new CollabError('不能移除数据创建者', 400)
     }
+    if (subjectType === 'account' && subjectId === actorId) {
+      throw new CollabError('不能移除自己的权限', 400)
+    }
     const removed = this.db
       .prepare(
         `DELETE FROM record_grants
@@ -2858,8 +2861,8 @@ export class CollabStore {
   viewAccess(actorId: string, collection: string, viewId: string) {
     const workspaceId = this.activeWorkspaceId()
     if (!workspaceId) throw new CollabError('没有工作区', 400)
-    const actorRole = this.requireViewSharer(actorId, workspaceId, collection, viewId)
-    return this.viewAccessRows(workspaceId, collection, viewId, actorId, actorRole === 'owner')
+    this.requireViewSharer(actorId, workspaceId, collection, viewId)
+    return this.viewAccessRows(workspaceId, collection, viewId, actorId, false)
   }
 
   shareViewWithEmail(
@@ -2876,7 +2879,7 @@ export class CollabStore {
     if (!workspaceId) throw new CollabError('没有工作区', 400)
     const normalizedView = viewId.trim()
     if (!normalizedView) throw new CollabError('视图不能为空', 400)
-    const actorRole = this.requireViewSharer(actorId, workspaceId, collection, normalizedView)
+    this.requireViewSharer(actorId, workspaceId, collection, normalizedView)
     if (role === 'owner') throw new CollabError('视图授权不能授予所有者角色', 403)
     const normalized = email.trim().toLowerCase()
     if (!normalized) throw new CollabError('邮箱不能为空', 400)
@@ -2893,7 +2896,7 @@ export class CollabStore {
       detail: `将视图授权给 ${normalized}（${role}）`,
       now,
     })
-    return this.viewAccessRows(workspaceId, collection, normalizedView, actorId, actorRole === 'owner')
+    return this.viewAccessRows(workspaceId, collection, normalizedView, actorId, false)
   }
 
   grantViewMemberView(
@@ -2910,7 +2913,7 @@ export class CollabStore {
     const normalizedView = viewId.trim()
     const normalizedMemberView = memberViewId.trim()
     if (!normalizedView || !normalizedMemberView) throw new CollabError('成员视图不能为空', 400)
-    const actorRole = this.requireViewSharer(actorId, workspaceId, collection, normalizedView)
+    this.requireViewSharer(actorId, workspaceId, collection, normalizedView)
     if (role === 'owner') throw new CollabError('视图授权不能授予所有者角色', 403)
     this.writeViewGrant(workspaceId, collection, normalizedView, 'member_view', normalizedMemberView, role, actorId, now, columns)
     this.recordActivity({
@@ -2922,7 +2925,7 @@ export class CollabStore {
       detail: `按成员视图授权视图（${role}）`,
       now,
     })
-    return this.viewAccessRows(workspaceId, collection, normalizedView, actorId, actorRole === 'owner')
+    return this.viewAccessRows(workspaceId, collection, normalizedView, actorId, false)
   }
 
   revokeViewGrant(
@@ -2931,36 +2934,18 @@ export class CollabStore {
     viewId: string,
     subjectType: 'account' | 'member_view',
     subjectId: string,
-    grantedBy = '',
   ) {
     const workspaceId = this.activeWorkspaceId()
     if (!workspaceId) throw new CollabError('没有工作区', 400)
-    const actorRole = this.requireViewSharer(actorId, workspaceId, collection, viewId)
-    const targetGrantor = grantedBy.trim()
-    // 谁签发的视图授权只能由谁移除（空间所有者可按 grantedBy 精确审计移除单条），防止成员 B 篡改成员 A 的分享规则
-    const removed = actorRole === 'owner'
-      ? targetGrantor
-        ? this.db
-            .prepare(
-              `DELETE FROM view_grants
-               WHERE workspace_id = ? AND collection = ? AND view_id = ?
-                 AND subject_type = ? AND subject_id = ? AND granted_by = ?`,
-            )
-            .run(workspaceId, collection, viewId, subjectType, subjectId, targetGrantor)
-        : this.db
-            .prepare(
-              `DELETE FROM view_grants
-               WHERE workspace_id = ? AND collection = ? AND view_id = ?
-                 AND subject_type = ? AND subject_id = ?`,
-            )
-            .run(workspaceId, collection, viewId, subjectType, subjectId)
-      : this.db
-          .prepare(
-            `DELETE FROM view_grants
-             WHERE workspace_id = ? AND collection = ? AND view_id = ?
-               AND subject_type = ? AND subject_id = ? AND granted_by = ?`,
-          )
-          .run(workspaceId, collection, viewId, subjectType, subjectId, actorId)
+    this.requireViewSharer(actorId, workspaceId, collection, viewId)
+    // 原则 1 + 3：谁签发的视图授权只能由谁移除（包括空间 owner），防止误删他人授权或自毁访问权
+    const removed = this.db
+      .prepare(
+        `DELETE FROM view_grants
+         WHERE workspace_id = ? AND collection = ? AND view_id = ?
+           AND subject_type = ? AND subject_id = ? AND granted_by = ?`,
+      )
+      .run(workspaceId, collection, viewId, subjectType, subjectId, actorId)
     if (!removed.changes) throw new CollabError('协作者不存在或无权移除他人的分享规则', 404)
     if (subjectType === 'account') this.cleanupExternalMembership(workspaceId, subjectId)
     this.authorization.invalidate(workspaceId, collection)
@@ -2972,7 +2957,7 @@ export class CollabStore {
       collection,
       detail: `移除了视图授权（${subjectType}）`,
     })
-    return this.viewAccessRows(workspaceId, collection, viewId, actorId, actorRole === 'owner')
+    return this.viewAccessRows(workspaceId, collection, viewId, actorId, false)
   }
 
   /** 删除视图时级联清理引用该视图的 view_grants 以及 member_view 授权。 */
