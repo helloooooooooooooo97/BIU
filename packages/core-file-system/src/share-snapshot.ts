@@ -12,6 +12,8 @@ export type ShareRecord = {
   hasPassword: boolean
   sharePlugins: boolean
   allowCopy: boolean
+  workspaceId?: string
+  createdBy?: string
   createdAt: number
   updatedAt: number
 }

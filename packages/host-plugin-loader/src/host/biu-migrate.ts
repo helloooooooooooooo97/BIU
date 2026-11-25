@@ -1031,6 +1031,10 @@ export const BIU_MIGRATIONS: Migration[] = [
         ON view_grants(workspace_id, subject_type, subject_id);
     `)
   } },
+  { version: 56, module: 'core-file-system', name: 'shares.workspace-and-creator', up: (db) => {
+    addColumn(db, 'shares', 'workspace_id', `workspace_id TEXT NOT NULL DEFAULT ''`)
+    addColumn(db, 'shares', 'created_by', `created_by TEXT NOT NULL DEFAULT ''`)
+  } },
 ]
 
 export function assertBiuMigrationLog(rows: Array<{ version: number }> = BIU_MIGRATIONS) {

@@ -10,7 +10,7 @@ export type { ShareKind, ShareRecord } from '../share-snapshot.ts'
 type DatabaseSync = import('node:sqlite').DatabaseSync
 
 const SHARE_PUBLIC_COLUMNS =
-  'token, kind, collection, view_id, record_id, password_hash, share_plugins, allow_copy, created_at, updated_at'
+  'token, kind, collection, view_id, record_id, password_hash, share_plugins, allow_copy, workspace_id, created_by, created_at, updated_at'
 
 type ShareRow = {
   token: string
@@ -22,6 +22,8 @@ type ShareRow = {
   password_hash: string
   share_plugins: number
   allow_copy: number
+  workspace_id?: string
+  created_by?: string
   created_at: number
   updated_at: number
 }
@@ -48,6 +50,8 @@ function publicShare(row: ShareRow): ShareRecord {
     hasPassword: Boolean(row.password_hash),
     sharePlugins: Boolean(row.share_plugins),
     allowCopy: row.allow_copy !== 0,
+    ...(row.workspace_id ? { workspaceId: row.workspace_id } : {}),
+    ...(row.created_by ? { createdBy: row.created_by } : {}),
     createdAt: Number(row.created_at) || 0,
     updatedAt: Number(row.updated_at) || 0,
   }
@@ -70,6 +74,8 @@ export class SharesStore {
     const names = new Set(cols.map((col) => col.name))
     if (!names.has('share_plugins')) db.exec('ALTER TABLE shares ADD COLUMN share_plugins INTEGER NOT NULL DEFAULT 0')
     if (!names.has('allow_copy')) db.exec('ALTER TABLE shares ADD COLUMN allow_copy INTEGER NOT NULL DEFAULT 1')
+    if (!names.has('workspace_id')) db.exec(`ALTER TABLE shares ADD COLUMN workspace_id TEXT NOT NULL DEFAULT ''`)
+    if (!names.has('created_by')) db.exec(`ALTER TABLE shares ADD COLUMN created_by TEXT NOT NULL DEFAULT ''`)
   }
 
   private conn() {
@@ -119,6 +125,8 @@ export class SharesStore {
     password?: string | null
     sharePlugins?: boolean
     allowCopy?: boolean
+    workspaceId?: string
+    createdBy?: string
   }): ShareRecord {
     const kind = asKind(input.kind)
     if (!kind) throw new Error('invalid share kind')
@@ -147,15 +155,19 @@ export class SharesStore {
     }
     const sharePlugins = input.sharePlugins ?? existing?.sharePlugins ?? false
     const allowCopy = input.allowCopy ?? existing?.allowCopy ?? true
+    const workspaceId = String(input.workspaceId ?? existing?.workspaceId ?? '').trim()
+    const createdBy = String(existing?.createdBy || input.createdBy || '').trim()
     const token = existing?.token ?? mintToken()
     this.conn().prepare(`
-      INSERT INTO shares (token, kind, collection, view_id, record_id, password_salt, password_hash, share_plugins, allow_copy, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO shares (token, kind, collection, view_id, record_id, password_salt, password_hash, share_plugins, allow_copy, workspace_id, created_by, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(kind, collection, view_id, record_id) DO UPDATE SET
         password_salt=excluded.password_salt,
         password_hash=excluded.password_hash,
         share_plugins=excluded.share_plugins,
         allow_copy=excluded.allow_copy,
+        workspace_id=CASE WHEN shares.workspace_id = '' THEN excluded.workspace_id ELSE shares.workspace_id END,
+        created_by=CASE WHEN shares.created_by = '' THEN excluded.created_by ELSE shares.created_by END,
         updated_at=excluded.updated_at
     `).run(
       token,
@@ -167,10 +179,21 @@ export class SharesStore {
       hash,
       sharePlugins ? 1 : 0,
       allowCopy ? 1 : 0,
+      workspaceId,
+      createdBy,
       existing?.createdAt ?? now,
       now,
     )
     return this.get(token)!
+  }
+
+  revokeByCreator(workspaceId: string, createdBy: string) {
+    if (!createdBy) return
+    if (workspaceId) {
+      this.conn().prepare('DELETE FROM shares WHERE workspace_id = ? AND created_by = ?').run(workspaceId, createdBy)
+    } else {
+      this.conn().prepare('DELETE FROM shares WHERE created_by = ?').run(createdBy)
+    }
   }
 
   revoke(token: string) {

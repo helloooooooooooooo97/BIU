@@ -4,6 +4,8 @@ import {
   EditorContentConflictError,
   currentAccountId,
   currentRequestWorkspaceId,
+  runWithAccount,
+  runWithRequestWorkspace,
 } from '@biu/host-plugin-loader/data-dir'
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { asPublicProfile, writeWorkspaceProfile } from '@biu/host-workspace'
@@ -717,6 +719,8 @@ export function registerDatabaseHttpRoutes(
         password: body.password,
         sharePlugins: body.sharePlugins,
         allowCopy: body.allowCopy,
+        workspaceId: currentRequestWorkspaceId(),
+        createdBy: currentAccountId(),
       })
       db.notifyShareChange()
       route.send(200, { share: { ...share, url: publicShareUrl(route.req, share.token) } })
@@ -724,6 +728,10 @@ export function registerDatabaseHttpRoutes(
       route.send(400, { error: String(error) })
     }
   })
+  const runInShareContext = <T>(share: { workspaceId?: string; createdBy?: string }, fn: () => T): T => {
+    const withWs = () => (share.workspaceId ? runWithRequestWorkspace(share.workspaceId, fn) : fn())
+    return share.createdBy ? runWithAccount(share.createdBy, withWs) : withWs()
+  }
   ctx.http.route('GET', '/api/share/:token', async (route) => {
     const token = route.params.token ?? ''
     const share = shares.get(token)
@@ -737,7 +745,9 @@ export function registerDatabaseHttpRoutes(
     }
     rememberShareLan(route)
     try {
-      const snapshot = await buildShareSnapshot(db, savedViews, share, shareSnapshotOpts(route.query))
+      const snapshot = await runInShareContext(share, () =>
+        buildShareSnapshot(db, savedViews, share, shareSnapshotOpts(route.query)),
+      )
       route.send(200, snapshot)
     } catch (error) {
       const msg = String(error)
@@ -763,7 +773,9 @@ export function registerDatabaseHttpRoutes(
     }
     rememberShareLan(route)
     try {
-      const snapshot = await buildShareSnapshot(db, savedViews, share, shareSnapshotOpts(route.query))
+      const snapshot = await runInShareContext(share, () =>
+        buildShareSnapshot(db, savedViews, share, shareSnapshotOpts(route.query)),
+      )
       route.send(200, snapshot)
     } catch (error) {
       const msg = String(error)
