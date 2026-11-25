@@ -31,21 +31,3 @@ export function ensureMascotSymbols() {
   svg.innerHTML = `<defs>${SYMBOL_MARKUP}</defs>`
   document.body.prepend(svg)
 }
-
-export function TableMascotMark({
-  identity,
-  size = 18,
-  title,
-}: {
-  identity: SessionMascotIdentity
-  size?: number
-  title?: string
-}) {
-  ensureMascotSymbols()
-  return (
-    <svg width={size} height={size} viewBox={VIEW_BOX} aria-hidden>
-      {title ? <title>{title}</title> : null}
-      <use href={`#${mascotSymbolId(identity)}`} />
-    </svg>
-  )
-}

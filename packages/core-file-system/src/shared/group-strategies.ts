@@ -1,13 +1,6 @@
 import type { CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
 import { asPersonList, isTagFieldType, normalizeSchemaValue, personKey } from '@biu/type-file-system'
-
-function asStringList(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map(String).filter(Boolean)
-  if (typeof value === 'string' && value.trim()) {
-    return value.split(',').map((item) => item.trim()).filter(Boolean)
-  }
-  return []
-}
+import { asStringList } from './fields.ts'
 import { parseTagFlatColumnKey, readTagFieldValue } from '../query-logic.ts'
 
 function fieldKind(field: FieldSpec): FieldType {

@@ -15,12 +15,7 @@ import {
 } from '../mention-markup.ts'
 import { normalizeCollectionPath, splitResourcePath } from '../paths.ts'
 
-function splitPath(path: string): string[] {
-  const hit = splitResourcePath(path)
-  if (!hit) return []
-  const name = hit.collection.replace(/^\//, '')
-  return hit.recordId ? [name, hit.recordId] : [name]
-}
+import { splitPath } from './index.ts'
 import {
   collectAssetNames,
   isAssetFileName,

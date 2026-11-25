@@ -24,13 +24,11 @@
   --biu-color-bg-hover: #ececec;
   --biu-color-bg-hover-weak: #f4f4f4;
   --biu-color-bg-hover-strong: #e0e0e0;
-  --biu-color-bg-hover-subtle: var(--biu-color-bg-hover);
   --biu-color-text: #2c2c2b;
   --biu-color-text-muted: color-mix(in srgb, var(--biu-color-text) 72%, var(--biu-color-bg-subtle));
   --biu-color-text-subtle: color-mix(in srgb, var(--biu-color-text) 45%, transparent);
   --biu-color-text-placeholder: #a0a0a0;
   --biu-color-text-soft: color-mix(in srgb, var(--biu-color-text) 6%, transparent);
-  --biu-color-text-code: var(--biu-color-text);
   --biu-color-bg-faint: var(--biu-color-text-soft);
   --biu-color-overlay: color-mix(in srgb, var(--biu-color-bg) 72%, transparent);
   --biu-color-bg-code: #f7f7f5;
@@ -68,7 +66,6 @@ html.dark ::selection {
   --biu-color-danger-muted: color-mix(in srgb, var(--biu-color-danger) 22%, transparent);
   --biu-color-ok: #1f8a65;
   --biu-color-warning: #d9730d;
-  --biu-color-warning-muted: color-mix(in srgb, var(--biu-color-warning) 22%, transparent);
   --biu-color-warning-on-surface: #e8b84a;
 
   --biu-color-ink: var(--biu-color-text);
@@ -117,14 +114,12 @@ html.dark ::selection {
   --biu-shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.06);
   --biu-radius-popover: 12px;
 
-  --biu-radius-xs: 3px;
   --biu-radius-sm: 4px;
   --biu-radius-md: 6px;
   --biu-radius-lg: 8px;
   --biu-radius-xl: 12px;
   --biu-radius-full: 999px;
 
-  --biu-space-0: 0px;
   --biu-space-1: 4px;
   --biu-space-2: 8px;
   --biu-space-3: 12px;
@@ -139,8 +134,6 @@ html.dark ::selection {
   --biu-font-size-3: 13px;
   --biu-font-size-4: 14px;
   --biu-font-size-5: 16px;
-  --biu-font-size-6: 20px;
-  --biu-leading-tight: 1.3;
   --biu-leading-normal: 1.5;
   --biu-leading-relaxed: 1.6;
   --biu-font-weight-regular: 400;
@@ -200,7 +193,6 @@ html.dark {
   --biu-color-bg-hover: color-mix(in srgb, #fff 9%, var(--biu-color-bg));
   --biu-color-bg-hover-weak: color-mix(in srgb, #fff 4%, var(--biu-color-bg));
   --biu-color-bg-hover-strong: color-mix(in srgb, #fff 12%, var(--biu-color-bg));
-  --biu-color-bg-hover-subtle: color-mix(in srgb, #fff 9%, var(--biu-color-bg-subtle));
   --biu-color-text: #d4d4d4;
   --biu-color-bg-code: #1e1e1e;
   --biu-color-icon: #bab9b5;
@@ -5346,18 +5338,6 @@ html.dark .composer-model-flyout {
   align-items: center;
   color: var(--biu-color-text-subtle);
   cursor: help;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
 }
 
 /* legacy panel styles kept minimal for tests / empty states */
@@ -11096,18 +11076,6 @@ html:not(.has-js) .site [data-reveal] {
 
 .site-footer-legal a:hover {
   color: var(--biu-color-on-emphasis);
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
 }
 
 /* 移动端 */

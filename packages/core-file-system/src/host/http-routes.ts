@@ -909,16 +909,14 @@ export function registerDatabaseHttpRoutes(
       route.send(404, { error: 'not found' })
     }
   })
-  const patchTagSandboxRoute: Parameters<typeof ctx.http.route>[2] = async (route) => {
+  ctx.http.route('POST', '/api/page/sandbox/patch', async (route) => {
     try {
       const body = (await route.json()) as { path?: string; tagId?: string; values?: unknown }
       route.send(200, await db.patchTagSandbox(String(body?.path ?? ''), String(body?.tagId ?? ''), body?.values))
     } catch (error) {
       route.send(400, { error: String(error) })
     }
-  }
-  ctx.http.route('POST', '/api/tag/sandbox/patch', patchTagSandboxRoute)
-  ctx.http.route('POST', '/api/page/sandbox/patch', patchTagSandboxRoute)
+  })
   ctx.http.route('GET', '/api/db/tags', async (route) => {
     try {
       await db.requirePath(TAGS_COLLECTION_PATH, 'resource:read')

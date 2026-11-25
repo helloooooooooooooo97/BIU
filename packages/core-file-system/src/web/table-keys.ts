@@ -148,7 +148,7 @@ export function tableCopyHotkey(event: {
   return event.key === 'c' || event.key === 'C'
 }
 
-function escapeTsvCell(value: string) {
+export function escapeTsvCell(value: string) {
   if (!/[\t\r\n"]/.test(value)) return value
   return `"${value.replace(/"/g, '""')}"`
 }
