@@ -157,25 +157,30 @@ export const BrowserHeader = memo(function BrowserHeader({
               title: String(detailRow?.title ?? title),
             }}
           />
-        ) : !nested && localData && activeViewId ? (
-          <ShareButton
-            localOnly
-            target={{
-              kind: 'view' as const,
-              collection: collectionPath,
-              viewId: activeViewId,
-              title: activeView?.name ?? title,
-            }}
-          />
         ) : !nested ? (
-          <AccessRulesButton
-            collectionPath={collectionPath}
-            activeView={activeView}
-            schema={schema}
-            filterFields={filterFields}
-            filterValueOptions={filterValueOptions}
-            localOnly={localData}
-          />
+          <>
+            {!localData ? (
+              <AccessRulesButton
+                collectionPath={collectionPath}
+                activeView={activeView}
+                schema={schema}
+                filterFields={filterFields}
+                filterValueOptions={filterValueOptions}
+                localOnly={localData}
+              />
+            ) : null}
+            {activeViewId ? (
+              <ShareButton
+                localOnly={localData}
+                target={{
+                  kind: 'view' as const,
+                  collection: collectionPath,
+                  viewId: activeViewId,
+                  title: activeView?.name ?? title,
+                }}
+              />
+            ) : null}
+          </>
         ) : null}
         <div className="fsdb-layout-wrap" ref={layoutRef}>
           <button

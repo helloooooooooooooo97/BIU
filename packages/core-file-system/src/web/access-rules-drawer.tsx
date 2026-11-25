@@ -153,10 +153,31 @@ export function AccessRulesButton({
   const [copiedKey, setCopiedKey] = useState('')
   const drawerRef = useRef<HTMLDivElement | null>(null)
 
+  const HIDDEN_SCHEMA_KEYS = new Set([
+    'id',
+    'parentId',
+    'dependsOn',
+    'emoji',
+    'banner',
+    'actions',
+    'contentViews',
+    'propViews',
+    'globalViews',
+    'views',
+    'layouts',
+    'shareScope',
+    'shareRole',
+  ])
+
   const schemaFields = useMemo(() => {
     if (!schema?.fields) return []
     return Object.entries(schema.fields)
-      .filter(([key]) => !key.startsWith('$') && key !== 'shareScope' && key !== 'shareRole')
+      .filter(([key, spec]) => {
+        if (key.startsWith('$') || HIDDEN_SCHEMA_KEYS.has(key)) return false
+        const t = String((spec as { type?: unknown }).type ?? '')
+        if (t === 'action' || t === 'views' || t === 'internal') return false
+        return true
+      })
       .map(([key, spec]) => ({ key, label: String(spec.label || key) }))
   }, [schema])
 
@@ -584,17 +605,30 @@ export function AccessRulesButton({
 
       {open
         ? createPortal(
-            <HeadlessDismiss onDismiss={() => setOpen(false)} insideRef={drawerRef}>
+            <HeadlessDismiss
+              onDismiss={() => setOpen(false)}
+              inside={(node) =>
+                node instanceof Node &&
+                (Boolean(drawerRef.current?.contains(node)) ||
+                  (node instanceof Element &&
+                    Boolean(
+                      node.closest(
+                        '.db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]',
+                      ),
+                    )))
+              }
+            >
               <div
                 ref={drawerRef}
+                className="fsdb-page"
                 data-testid="access-rules-drawer"
                 style={{
                   position: 'fixed',
                   top: 48,
-                  right: 12,
-                  bottom: 12,
-                  width: 420,
-                  maxWidth: 'calc(100vw - 24px)',
+                  right: 14,
+                  bottom: 68,
+                  width: 520,
+                  maxWidth: 'calc(100vw - 28px)',
                   zIndex: overlayZ(OVERLAY_Z.popover),
                   background: 'var(--biu-color-bg-popover)',
                   color: 'var(--biu-color-text)',
@@ -811,11 +845,13 @@ export function AccessRulesButton({
                         </div>
                         {draft.restrictRows && filterEditorOpen && filterFields.length > 0 && filterValueOptions ? (
                           <div
+                            className="fsdb-vset-body"
                             style={{
                               border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
                               background: 'var(--biu-color-bg-input)',
                               borderRadius: 8,
-                              padding: 8,
+                              padding: '8px 10px',
+                              overflow: 'visible',
                             }}
                           >
                             <FilterQueryMenu
