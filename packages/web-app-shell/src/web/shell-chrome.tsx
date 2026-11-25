@@ -185,6 +185,7 @@ export function ShellSettingsAccount() {
   const [savingProfile, setSavingProfile] = useState(false)
   const [aiVariant, setAiVariant] = useState(0)
   const avatarFileRef = useRef<HTMLInputElement>(null)
+  const saveSeqRef = useRef(0)
   const token = readAccountToken()
   const activeAiTheme = detectAiAvatarTheme(account.avatar)
   const baseSeed = account.id || account.name || account.email || 'biu-ai'
@@ -211,28 +212,44 @@ export function ShellSettingsAccount() {
 
   const saveAccountProfile = (patch: { name?: string; avatar?: string }, successText: string) => {
     if (!token) return
-    setSavingProfile(true)
-    setProfileMessage('')
+    const seq = ++saveSeqRef.current
+    const isAvatarOnly = patch.avatar !== undefined && patch.name === undefined
+    const previous = account
+    if (isAvatarOnly) {
+      // Optimistically apply avatar without toggling disabled opacity across all 42 swatches (eliminates flash).
+      setAccount((prev) => ({ ...prev, avatar: patch.avatar ?? '' }))
+      setProfileMessage(successText)
+    } else {
+      setSavingProfile(true)
+      setProfileMessage('')
+    }
     void accountFetch(token, '/api/account/profile', {
       method: 'POST',
       body: JSON.stringify(patch),
     })
       .then((body) => {
+        if (seq !== saveSeqRef.current) return
         resetAccountMeGet()
         const next = {
-          id: String(body.id ?? account.id),
-          name: String(body.name ?? account.name),
-          email: String(body.email ?? account.email),
+          id: String(body.id ?? previous.id),
+          name: String(body.name ?? previous.name),
+          email: String(body.email ?? previous.email),
           avatar: String(body.avatar ?? ''),
-          online: body.online === true || account.online,
+          online: body.online === true || previous.online,
         }
         setAccount(next)
-        setAccountName(next.name)
+        if (!isAvatarOnly) setAccountName(next.name)
         setProfileMessage(successText)
         window.dispatchEvent(new Event(ACCOUNT_EVENT))
       })
-      .catch((error) => setProfileMessage(error instanceof Error ? error.message : '保存失败'))
-      .finally(() => setSavingProfile(false))
+      .catch((error) => {
+        if (seq !== saveSeqRef.current) return
+        if (isAvatarOnly) setAccount(previous)
+        setProfileMessage(error instanceof Error ? error.message : '保存失败')
+      })
+      .finally(() => {
+        if (!isAvatarOnly && seq === saveSeqRef.current) setSavingProfile(false)
+      })
   }
 
   return (
