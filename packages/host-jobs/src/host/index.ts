@@ -1,6 +1,6 @@
 import { Service, type Context } from 'cordis'
 import { posixShellArgv } from '@biu/host-subprocess'
-import { currentAccountId, currentRequestWorkspaceId } from '@biu/host-plugin-loader/data-dir'
+import { currentTenantScope } from '@biu/host-plugin-loader/data-dir'
 
 const JOB_HISTORY_TTL_MS = 10 * 60_000
 
@@ -21,10 +21,6 @@ export class JobsService extends Service {
     super(ctx, 'jobs')
   }
 
-  private tenantKey() {
-    return `${currentAccountId().trim()}\0${currentRequestWorkspaceId().trim()}`
-  }
-
   private pruneFinished(now = Date.now()) {
     for (const [id, job] of this.jobs) {
       if (job.status !== 'running' && job.finishedAt && now - job.finishedAt >= JOB_HISTORY_TTL_MS) {
@@ -35,7 +31,7 @@ export class JobsService extends Service {
 
   private ownedJob(id: string): Job | undefined {
     const job = this.jobs.get(id)
-    if (!job || job.tenantKey !== this.tenantKey()) return undefined
+    if (!job || job.tenantKey !== currentTenantScope().key) return undefined
     return job
   }
 
@@ -43,7 +39,7 @@ export class JobsService extends Service {
     this.pruneFinished()
     const id = crypto.randomUUID().slice(0, 8)
     const abort = new AbortController()
-    const job: Job = { id, tenantKey: this.tenantKey(), argv, status: 'running', abort }
+    const job: Job = { id, tenantKey: currentTenantScope().key, argv, status: 'running', abort }
     this.jobs.set(id, job)
     void this.ctx.subprocess.run({ argv, timeoutMs: 60_000 }, abort.signal).then((result) => {
       job.status = 'done'
@@ -59,7 +55,7 @@ export class JobsService extends Service {
 
   list() {
     this.pruneFinished()
-    const key = this.tenantKey()
+    const key = currentTenantScope().key
     return [...this.jobs.values()]
       .filter((job) => job.tenantKey === key)
       .map(({ id, argv, status }) => ({ id, argv, status }))

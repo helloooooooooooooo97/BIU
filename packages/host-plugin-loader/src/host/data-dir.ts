@@ -207,6 +207,19 @@ export function currentRequestWorkspaceId() {
   return requestWorkspaceScope.getStore() || ''
 }
 
+export interface TenantScope {
+  accountId: string
+  workspaceId: string
+  key: string
+}
+
+/** 统一当前请求/任务的租户隔离键，供各 host 有状态服务复用。 */
+export function currentTenantScope(): TenantScope {
+  const accountId = currentAccountId().trim()
+  const workspaceId = currentRequestWorkspaceId().trim()
+  return { accountId, workspaceId, key: `${accountId}\0${workspaceId}` }
+}
+
 /** Store 插件 apply/执行期间的包 ID，供 HTTP、WS 和工具注册边界捕获。 */
 export function currentPluginId() {
   return pluginScope.getStore() || ''
