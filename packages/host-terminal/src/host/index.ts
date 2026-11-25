@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { Service, type Context } from 'cordis'
 import { posixShellBin } from '@biu/host-subprocess'
-import { currentAccountId, currentRequestWorkspaceId } from '@biu/host-plugin-loader/data-dir'
+import { currentTenantScope } from '@biu/host-plugin-loader/data-dir'
 
 interface Term {
   id: string
@@ -76,27 +76,19 @@ export class TerminalService extends Service {
     super(ctx, 'terminals')
   }
 
-  private currentTenant() {
-    const accountId = currentAccountId().trim()
-    const workspaceId = currentRequestWorkspaceId().trim()
-    return { accountId, workspaceId, tenantKey: `${accountId}\0${workspaceId}` }
-  }
-
   private nameKey(tenantKey: string, name: string) {
     return `${tenantKey}\0${name}`
   }
 
   private ownedTerm(id: string): Term | undefined {
     const term = this.terms.get(id)
-    if (!term) return undefined
-    const { tenantKey } = this.currentTenant()
-    if (term.tenantKey !== tenantKey) return undefined
+    if (!term || term.tenantKey !== currentTenantScope().key) return undefined
     return term
   }
 
   /** name 传了就复用同租户同名代理；没传就是一条匿名代理。 */
   open(name = '') {
-    const { accountId, workspaceId, tenantKey } = this.currentTenant()
+    const { accountId, workspaceId, key: tenantKey } = currentTenantScope()
     const wanted = name.trim()
     if (wanted) {
       const existing = this.byName.get(this.nameKey(tenantKey, wanted))
@@ -183,7 +175,7 @@ export class TerminalService extends Service {
   }
 
   list() {
-    const { tenantKey } = this.currentTenant()
+    const { key: tenantKey } = currentTenantScope()
     return {
       terms: [...this.terms.values()].filter((term) => term.tenantKey === tenantKey).map(info),
     }
@@ -193,7 +185,7 @@ export class TerminalService extends Service {
   get(idOrName: string) {
     const direct = this.ownedTerm(idOrName)
     if (direct) return info(direct)
-    const { tenantKey } = this.currentTenant()
+    const { key: tenantKey } = currentTenantScope()
     const named = this.byName.get(this.nameKey(tenantKey, idOrName.trim()))
     const term = named ? this.ownedTerm(named) : undefined
     return term ? info(term) : null

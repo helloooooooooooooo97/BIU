@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { Service, type Context } from 'cordis'
-import { currentAccountId, currentRequestWorkspaceId, isOnlineRuntime } from '@biu/host-plugin-loader/data-dir'
+import { currentTenantScope, isOnlineRuntime } from '@biu/host-plugin-loader/data-dir'
 
 class StdioLsp {
   private child?: ChildProcessWithoutNullStreams
@@ -68,12 +68,8 @@ export class LspService extends Service {
     super(ctx, 'lsp')
   }
 
-  private tenantKey() {
-    return `${currentAccountId().trim()}\0${currentRequestWorkspaceId().trim()}`
-  }
-
   private sessionForCurrentTenant() {
-    const key = this.tenantKey()
+    const { key } = currentTenantScope()
     let session = this.sessions.get(key)
     if (!session) {
       session = new StdioLsp()
@@ -91,7 +87,7 @@ export class LspService extends Service {
 
   async hover(path: string, line: number, character: number) {
     const uri = `file://${this.ctx.fs.resolve(path)}`
-    const session = this.sessions.get(this.tenantKey())
+    const session = this.sessions.get(currentTenantScope().key)
     if (!session?.ready) {
       const text = await this.ctx.fs.read(path)
       const lines = text.split('\n')

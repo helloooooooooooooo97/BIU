@@ -298,15 +298,6 @@ export async function pushSavedViewsPatch(collectionPath: string, patch: SavedVi
   }
 }
 
-/** 整份覆盖。只有确知「本地就是权威」时才用，普通增删改请走 pushSavedViewsPatch。 */
-export function pushSavedViews(collectionPath: string, views: SavedView[]) {
-  return apiFetch('/api/db/saved-views', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ path: collectionPath, views, replace: true }),
-  }).catch(() => undefined)
-}
-
 /** 两份视图列表的差异：新增/改了什么、删了哪些 id。 */
 export function diffSavedViews(prev: SavedView[], next: SavedView[]): SavedViewsPatch {
   const before = new Map(prev.map((view) => [view.id, view]))
@@ -409,57 +400,24 @@ export function savedViewFromRecord(row: Record<string, unknown>): SavedView | n
 }
 
 const viewsPullByKey = new Map<string, Promise<boolean>>()
-const viewsPulledAtByKey = new Map<string, number>()
-const viewsWriteEpoch = new Map<string, number>()
 const pulledViewPaths = new Set<string>()
 let pulledAllViews = false
-let viewsIdle = 0
+const VIEWS_PULL_LIMIT = 200
 
 export function hasPulledSavedViews(collectionPath: string) {
   const path = String(collectionPath ?? '').trim()
-  if (!path) return false
-  return pulledAllViews || pulledViewPaths.has(path)
+  return Boolean(path) && (pulledAllViews || pulledViewPaths.has(path))
 }
-let viewsIdleResolve: ((changed: boolean) => void) | null = null
-let viewsIdlePaths: readonly string[] = []
-const VIEWS_PULL_TTL_MS = 2500
-const VIEWS_PULL_IDLE_MS = 2800
-const VIEWS_PULL_LIMIT = 200
-/** 视图行要整份拿：可见列/列宽/筛选不能跟表数据一样做 list 投影，否则 `columns` 字段会被投影参数吃掉。 */
 
 function viewsPullKey(collectionPaths: readonly string[]) {
   return collectionPaths.map((path) => String(path ?? '').trim()).filter(Boolean).sort().join('\0') || '*'
 }
 
-function viewsPullTouches(key: string, path: string) {
-  if (key === '*') return true
-  return key.split('\0').includes(path)
-}
-
-function snapshotViewWriteEpochs(paths: readonly string[]) {
-  const out = new Map<string, number>()
-  if (!paths.length) {
-    for (const [path, epoch] of viewsWriteEpoch) out.set(path, epoch)
-    return out
-  }
-  for (const path of paths) out.set(path, viewsWriteEpoch.get(path) ?? 0)
-  return out
-}
-
-function viewWriteStale(path: string, started: Map<string, number>) {
-  return (viewsWriteEpoch.get(path) ?? 0) !== (started.get(path) ?? 0)
-}
-
-/** 本地刚写过视图（含删除）时，丢掉进行中的 /views 拉取，并立刻允许再拉一次服务端列表。 */
 export function noteLocalSavedViewsWrite(collectionPath: string) {
   const path = String(collectionPath ?? '').trim()
   if (!path) return
-  viewsWriteEpoch.set(path, (viewsWriteEpoch.get(path) ?? 0) + 1)
   for (const key of [...viewsPullByKey.keys()]) {
-    if (viewsPullTouches(key, path)) viewsPullByKey.delete(key)
-  }
-  for (const key of [...viewsPulledAtByKey.keys()]) {
-    if (viewsPullTouches(key, path)) viewsPulledAtByKey.delete(key)
+    if (key === '*' || key.split('\0').includes(path)) viewsPullByKey.delete(key)
   }
   invalidateListReads()
 }
@@ -470,56 +428,11 @@ export async function pullSavedViews(
 ) {
   const key = viewsPullKey(collectionPaths)
   const pending = viewsPullByKey.get(key)
-  if (opts?.idle && !opts.force) {
-    if (pending) return pending
-    const pulledAt = viewsPulledAtByKey.get(key) ?? 0
-    if (pulledAt && Date.now() - pulledAt < VIEWS_PULL_TTL_MS) return false
-    if (viewsIdle) return new Promise<boolean>((resolve) => {
-      const prev = viewsIdleResolve
-      viewsIdleResolve = (changed) => {
-        prev?.(changed)
-        resolve(changed)
-      }
-    })
-    viewsIdlePaths = collectionPaths
-    return new Promise<boolean>((resolve) => {
-      viewsIdleResolve = resolve
-      viewsIdle = window.setTimeout(() => {
-        viewsIdle = 0
-        const done = viewsIdleResolve
-        viewsIdleResolve = null
-        const paths = viewsIdlePaths
-        void pullSavedViews(paths, { force: true }).then(done ?? (() => undefined), () => done?.(false))
-      }, VIEWS_PULL_IDLE_MS)
-    })
-  }
-  if (viewsIdle) {
-    window.clearTimeout(viewsIdle)
-    viewsIdle = 0
-  }
-  const idleDone = viewsIdleResolve
-  viewsIdleResolve = null
-  if (pending && !opts?.force) {
-    if (idleDone) void pending.then(idleDone)
-    return pending
-  }
-  if (pending && opts?.force) {
-    viewsPullByKey.delete(key)
-    await pending.catch(() => false)
-  }
-  const started = snapshotViewWriteEpochs(
-    collectionPaths.map((path) => String(path ?? '').trim()).filter(Boolean),
-  )
-  const request = pullSavedViewsNow(collectionPaths, started).finally(() => {
+  if (pending && !opts?.force) return pending
+  const request = pullSavedViewsNow(collectionPaths).finally(() => {
     if (viewsPullByKey.get(key) === request) viewsPullByKey.delete(key)
-    const paths = [...started.keys()]
-    if (paths.length ? paths.some((path) => viewWriteStale(path, started)) : [...viewsWriteEpoch.keys()].some((path) => viewWriteStale(path, started))) {
-      return
-    }
-    viewsPulledAtByKey.set(key, Date.now())
   })
   viewsPullByKey.set(key, request)
-  if (idleDone) void request.then(idleDone)
   return request
 }
 
@@ -535,19 +448,12 @@ async function listAllSavedViewRows(tablePath?: string) {
       ...(tablePath ? { filters: { tablePath } } : {}),
     })
     items.push(...page.items)
-    if (page.items.length < VIEWS_PULL_LIMIT) break
-    offset += page.items.length
-    if (offset >= 4000) break
+    if (page.items.length < VIEWS_PULL_LIMIT || (offset += page.items.length) >= 4000) break
   }
   return items
 }
 
-async function pullSavedViewsNow(
-  collectionPaths: readonly string[] = [],
-  started = snapshotViewWriteEpochs(
-    collectionPaths.map((path) => String(path ?? '').trim()).filter(Boolean),
-  ),
-) {
+async function pullSavedViewsNow(collectionPaths: readonly string[] = []) {
   try {
     const fetchPaths = [...new Set(collectionPaths.map((path) => String(path ?? '').trim()).filter(Boolean))]
     const pages = fetchPaths.length
@@ -562,36 +468,25 @@ async function pullSavedViewsNow(
       list.push(view)
       byPath.set(tablePath, list)
     }
-    const paths = new Set([...fetchPaths, ...byPath.keys()])
     let changed = false
-    for (const path of paths) {
-      if (viewWriteStale(path, started)) continue
+    for (const path of new Set([...fetchPaths, ...byPath.keys()])) {
       pulledViewPaths.add(path)
       const views = byPath.get(path) ?? []
       for (const view of views) {
         const viewAt = Number(view.updatedAt) || 0
-        if (viewAt > 0) {
-          const overlayAt = Number(loadViewDisplay(path, view.id).updatedAt) || 0
-          if (viewAt > overlayAt) persistViewDisplay(path, view.id, view)
+        if (viewAt > 0 && viewAt > (Number(loadViewDisplay(path, view.id).updatedAt) || 0)) {
+          persistViewDisplay(path, view.id, view)
         }
       }
       const previous = memoryViews.get(path) ?? loadViews(path)
       const ranked = rankListedViews(
-        mergeSavedViewLists(
-          previous,
-          views.map((view) => withViewDisplay(path, view)),
-          loadOmittedViewIds(path),
-        ),
+        mergeSavedViewLists(previous, views.map((view) => withViewDisplay(path, view)), loadOmittedViewIds(path)),
         previous,
       )
-      const prev = JSON.stringify(previous)
-      const next = JSON.stringify(ranked)
-      if (prev !== next) changed = true
+      if (JSON.stringify(previous) !== JSON.stringify(ranked)) changed = true
       rememberViews(path, ranked)
     }
-    if (!fetchPaths.length && ![...viewsWriteEpoch.keys()].some((path) => viewWriteStale(path, started))) {
-      pulledAllViews = true
-    }
+    if (!fetchPaths.length) pulledAllViews = true
     return changed
   } catch {
     return false
@@ -698,32 +593,23 @@ export function persistCollapsedGroups(
   }
 }
 
+const CLEAR_DISPLAY_DEFAULTS: Record<string, () => unknown> = {
+  filterTree: () => emptyFilterGroup(),
+  columnSummaries: () => ({}),
+  columnViews: () => ({}),
+  sandboxViews: () => [],
+  columnWidths: () => ({}),
+  groupConfig: () => ({}),
+  freezeUntil: () => '',
+}
+
 function pickDisplay(patch: Partial<SavedView>): ViewDisplayPatch {
   const next: ViewDisplayPatch = {}
   for (const key of DISPLAY_KEYS) {
     if (patch[key] !== undefined) (next as Record<string, unknown>)[key] = patch[key]
-  }
-  // An explicit clear must overwrite the previously stored display value in localStorage.
-  if (Object.prototype.hasOwnProperty.call(patch, 'filterTree') && patch.filterTree === undefined) {
-    next.filterTree = emptyFilterGroup()
-  }
-  if (Object.prototype.hasOwnProperty.call(patch, 'columnSummaries') && patch.columnSummaries === undefined) {
-    next.columnSummaries = {}
-  }
-  if (Object.prototype.hasOwnProperty.call(patch, 'columnViews') && patch.columnViews === undefined) {
-    next.columnViews = {}
-  }
-  if (Object.prototype.hasOwnProperty.call(patch, 'sandboxViews') && patch.sandboxViews === undefined) {
-    next.sandboxViews = []
-  }
-  if (Object.prototype.hasOwnProperty.call(patch, 'columnWidths') && patch.columnWidths === undefined) {
-    next.columnWidths = {}
-  }
-  if (Object.prototype.hasOwnProperty.call(patch, 'groupConfig') && patch.groupConfig === undefined) {
-    next.groupConfig = {}
-  }
-  if (Object.prototype.hasOwnProperty.call(patch, 'freezeUntil') && patch.freezeUntil === undefined) {
-    next.freezeUntil = ''
+    else if (Object.prototype.hasOwnProperty.call(patch, key) && CLEAR_DISPLAY_DEFAULTS[key]) {
+      (next as Record<string, unknown>)[key] = CLEAR_DISPLAY_DEFAULTS[key]()
+    }
   }
   const stamp = Number(patch.updatedAt) || 0
   if (stamp > 0) next.updatedAt = stamp
@@ -735,28 +621,9 @@ export function loadViewDisplay(collectionPath: string, viewId: string): ViewDis
     const raw = readStorageString(viewDisplayKey(collectionPath, viewId))
     if (!raw) return {}
     const parsed = JSON.parse(raw) as Record<string, unknown>
-    if (!parsed || typeof parsed !== 'object') return {}
-    return pickDisplay(parsed)
+    return parsed && typeof parsed === 'object' ? pickDisplay(parsed) : {}
   } catch {
     return {}
-  }
-}
-
-export function snapshotViewDisplay(collectionPath: string, viewId: string): string | null {
-  try {
-    return readStorageString(viewDisplayKey(collectionPath, viewId))
-  } catch {
-    return null
-  }
-}
-
-export function restoreViewDisplay(collectionPath: string, viewId: string, raw: string | null) {
-  try {
-    const key = viewDisplayKey(collectionPath, viewId)
-    if (raw === null) removeStorageKey(key)
-    else writeStorageString(key, raw)
-  } catch {
-    /* ignore */
   }
 }
 
@@ -765,8 +632,7 @@ export function persistViewDisplay(collectionPath: string, viewId: string, patch
     const prev = loadViewDisplay(collectionPath, viewId)
     const picked = pickDisplay(patch)
     const updatedAt = picked.updatedAt && picked.updatedAt > 0 ? picked.updatedAt : Date.now()
-    const next = { ...prev, ...picked, updatedAt }
-    writeStorageString(viewDisplayKey(collectionPath, viewId), JSON.stringify(next))
+    writeStorageString(viewDisplayKey(collectionPath, viewId), JSON.stringify({ ...prev, ...picked, updatedAt }))
   } catch {
     /* ignore */
   }
@@ -820,7 +686,6 @@ registerWorkspaceCache('view-storage', () => {
   memoryViews.clear()
   clearCrumbCache()
   viewsPullByKey.clear()
-  viewsPulledAtByKey.clear()
   pulledViewPaths.clear()
   pulledAllViews = false
   resetStarredWorkspaceCache()

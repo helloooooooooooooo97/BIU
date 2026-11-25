@@ -1236,8 +1236,7 @@ export class DatabaseService extends Service implements Database {
       if (!Array.isArray(incoming)) continue
       const prev = this.savedViews.viewsFor(path, accountId)
       if (JSON.stringify(prev) === JSON.stringify(incoming)) continue
-      if (isIndexCollection(path)) this.savedViews.replaceOwned(path, incoming, accountId)
-      else this.savedViews.replace(path, incoming)
+      this.savedViews.replace(path, incoming, accountId)
       changed = true
     }
     return changed
