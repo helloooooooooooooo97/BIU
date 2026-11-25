@@ -1422,6 +1422,15 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     )
   })
 
+  const broadcastAccessChange = (workspaceId: string, scope: 'views' | 'records', path?: string) => {
+    const cleanPath = String(path ?? '').trim()
+    const payload =
+      scope === 'views'
+        ? { ts: Date.now(), scope: 'views' as const, views: true, ...(cleanPath ? { path: cleanPath } : {}) }
+        : { ts: Date.now(), scope: 'records' as const, ...(cleanPath ? { path: cleanPath } : {}) }
+    ctx.http.broadcast('database', payload, workspaceId)
+  }
+
   authedRoute('POST', '/api/account/access', async (route, me) => {
     const activeWorkspace = resolveScopedWorkspaceId(ctx)
     requireCollaborativeWorkspace(activeWorkspace ?? '')
@@ -1443,18 +1452,17 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         ? body.role
         : 'editor'
     const kind = body.collaboratorKind === 'internal' ? 'internal' : 'external'
-    route.send(
-      200,
-      viewId
-        ? body.memberViewId
-          ? account.store.grantViewMemberView(me.id, collection, viewId, String(body.memberViewId), role)
-          : account.store.shareViewWithEmail(me.id, collection, viewId, String(body.email ?? ''), role, kind)
-        : body.memberViewId
-        ? account.store.grantMemberView(me.id, collection, recordId, String(body.memberViewId), role)
-        : body.groupId
-        ? account.store.grantGroup(me.id, collection, recordId, String(body.groupId), role)
-        : account.store.shareWithEmail(me.id, collection, recordId, String(body.email ?? ''), role, kind),
-    )
+    const result = viewId
+      ? body.memberViewId
+        ? account.store.grantViewMemberView(me.id, collection, viewId, String(body.memberViewId), role)
+        : account.store.shareViewWithEmail(me.id, collection, viewId, String(body.email ?? ''), role, kind)
+      : body.memberViewId
+      ? account.store.grantMemberView(me.id, collection, recordId, String(body.memberViewId), role)
+      : body.groupId
+      ? account.store.grantGroup(me.id, collection, recordId, String(body.groupId), role)
+      : account.store.shareWithEmail(me.id, collection, recordId, String(body.email ?? ''), role, kind)
+    broadcastAccessChange(activeWorkspace, viewId ? 'views' : 'records', collection)
+    route.send(200, result)
   })
 
   authedRoute('PATCH', '/api/account/access', async (route, me) => {
@@ -1472,7 +1480,9 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       route.send(400, { error: '参数不完整' })
       return
     }
-    route.send(200, account.store.setRecordInheritance(me.id, collection, recordId, mode))
+    const result = account.store.setRecordInheritance(me.id, collection, recordId, mode)
+    broadcastAccessChange(activeWorkspace, 'records', collection)
+    route.send(200, result)
   })
 
   authedRoute('DELETE', '/api/account/access', async (route, me) => {
@@ -1486,27 +1496,27 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       subjectId?: string
       grantedBy?: string
     }
+    const collection = String(body.collection ?? '')
     const viewId = String(body.viewId ?? '')
     const subjectType =
       body.subjectType === 'group' || body.subjectType === 'member_view' ? body.subjectType : 'account'
-    route.send(
-      200,
-      viewId
-        ? account.store.revokeViewGrant(
-            me.id,
-            String(body.collection ?? ''),
-            viewId,
-            subjectType === 'member_view' ? 'member_view' : 'account',
-            String(body.subjectId ?? ''),
-          )
-        : account.store.revokeRecordGrant(
-            me.id,
-            String(body.collection ?? ''),
-            String(body.recordId ?? ''),
-            subjectType,
-            String(body.subjectId ?? ''),
-          ),
-    )
+    const result = viewId
+      ? account.store.revokeViewGrant(
+          me.id,
+          collection,
+          viewId,
+          subjectType === 'member_view' ? 'member_view' : 'account',
+          String(body.subjectId ?? ''),
+        )
+      : account.store.revokeRecordGrant(
+          me.id,
+          collection,
+          String(body.recordId ?? ''),
+          subjectType,
+          String(body.subjectId ?? ''),
+        )
+    broadcastAccessChange(activeWorkspace, viewId ? 'views' : 'records', collection)
+    route.send(200, result)
   })
 
   authedRoute('POST', '/api/account/access/guest-invite', async (route, me) => {
@@ -1566,6 +1576,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       enabled: body.enabled,
       grants: body.grants,
     })
+    broadcastAccessChange(workspaceId, 'records', rule.collection)
     route.send(201, { rule })
   })
 
@@ -1582,6 +1593,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       grants?: Array<{ subjectType: 'account' | 'workspace' | 'member_view'; subjectId: string; role: 'viewer' | 'editor' | 'manager' }>
     }
     const rule = account.store.updateAccessRule(me.id, workspaceId, ruleId, body)
+    broadcastAccessChange(workspaceId, 'records', rule.collection)
     route.send(200, { rule })
   })
 
@@ -1590,6 +1602,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
     const ruleId = String(route.params.id ?? '').trim()
     const result = account.store.deleteAccessRule(me.id, workspaceId, ruleId)
+    broadcastAccessChange(workspaceId, 'records')
     route.send(200, result)
   })
 
@@ -1607,6 +1620,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       subjectId: String(body.subjectId ?? ''),
       role: body.role ?? 'viewer',
     })
+    broadcastAccessChange(workspaceId, 'records', rule.collection)
     route.send(200, { rule })
   })
 
@@ -1625,6 +1639,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       body.subjectType ?? 'account',
       String(body.subjectId ?? ''),
     )
+    broadcastAccessChange(workspaceId, 'records', rule.collection)
     route.send(200, { rule })
   })
 

@@ -715,7 +715,15 @@ export const DataSidebar = memo(function DataSidebar({
       const change = parseFsdbChange(event)
       if (change.scope === 'tags') return
       if (change.scope === 'views') {
-        setViewsTick((n) => n + 1)
+        const changedPath = 'path' in change ? (change.path ?? '') : ''
+        if (changedPath) {
+          void pullSavedViews([changedPath], { force: true }).then(
+            () => setViewsTick((n) => n + 1),
+            () => setViewsTick((n) => n + 1),
+          )
+        } else {
+          setViewsTick((n) => n + 1)
+        }
         return
       }
       const changedPath = 'path' in change ? (change.path ?? '') : ''
