@@ -11,7 +11,7 @@ import { normalizeCollectionPath } from '../paths.ts'
 import { invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { emptyFilterGroup, looksLikeFilterTree, normalizeFilterGroup, parseSortsInput, resolveViewFilterTree } from '../query-logic.ts'
-import { normalizeGroupConfig, normalizePageSize, normalizeSavedView, parseViewColumns, rankListedViews, viewIsFresher, type SavedView } from './saved-view.ts'
+import { normalizeGroupConfig, normalizePageSize, normalizeSavedView, normalizeViewScope, parseViewColumns, rankListedViews, viewIsFresher, type SavedView } from './saved-view.ts'
 import { KeyedSerialQueue } from './record-write-queue.ts'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
 import { clearCrumbCache } from './crumb-cache.ts'
@@ -385,6 +385,8 @@ export function savedViewFromRecord(row: Record<string, unknown>): SavedView | n
     id,
     name: String(row.title ?? id),
     mode: String(row.mode ?? 'table') as SavedView['mode'],
+    scope: normalizeViewScope(row.scope),
+    createdBy: typeof row.createdBy === 'string' && row.createdBy.trim() ? row.createdBy.trim() : undefined,
     sortField,
     sortDir,
     sorts: parseSortsInput(row.sorts, sortField, sortDir),

@@ -412,6 +412,7 @@ export function registerDatabaseHttpRoutes(
         path?: string
         viewId?: string
         afterFilters?: Record<string, unknown>
+        afterFilterTree?: unknown
       }
       const path = normalizeCollectionPath(String(body?.path ?? ''))
       const viewId = String(body?.viewId ?? '').trim()
@@ -429,8 +430,16 @@ export function registerDatabaseHttpRoutes(
       const preview = previewViewFilterImpact({
         records,
         viewId,
-        beforeView: { id: viewId, filters: beforeView.filters as Record<string, unknown> | undefined },
-        afterView: { id: viewId, filters: body?.afterFilters ?? {} },
+        beforeView: {
+          id: viewId,
+          filters: beforeView.filters as Record<string, unknown> | undefined,
+          filterTree: beforeView.filterTree ?? null,
+        },
+        afterView: {
+          id: viewId,
+          filters: body?.afterFilters ?? {},
+          filterTree: (body?.afterFilterTree as typeof beforeView.filterTree) ?? null,
+        },
       })
       route.send(200, preview)
     } catch (error) {
