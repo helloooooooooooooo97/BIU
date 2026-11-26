@@ -867,4 +867,32 @@ test('catalogLockFilters and viewsForScope enforce strict K+1 view-to-table bind
   assert.deepEqual(catalogLockFilters(bobPublicView.id, [bobPublicView], 'bob'), {
     $scope: 'personal',
   })
+
+  // pickViewForRoute upgrades fallback builtin-scope:workspace / builtin-scope:personal routes to real savable views
+  const wsReal: SavedView = {
+    id: 'default:workspace:/pages',
+    name: '空间页面',
+    mode: 'table',
+    ownerTable: 'workspace',
+    protection: 'public',
+    scope: 'workspace',
+    sortField: 'updatedAt',
+    sortDir: 'desc',
+    filters: {},
+    columns: ['title'],
+  }
+  const myReal: SavedView = {
+    id: 'default:account:alice:/pages',
+    name: '私人页面',
+    mode: 'table',
+    ownerTable: 'account:alice',
+    protection: 'public',
+    scope: 'workspace',
+    sortField: 'updatedAt',
+    sortDir: 'desc',
+    filters: {},
+    columns: ['title'],
+  }
+  assert.equal(pickViewForRoute([wsReal, myReal], '/pages', `builtin-scope:workspace:${encodeURIComponent(builtinAllViewId('/pages'))}`)?.id, wsReal.id)
+  assert.equal(pickViewForRoute([wsReal, myReal], '/pages', `builtin-scope:personal:${encodeURIComponent(builtinAllViewId('/pages'))}`)?.id, myReal.id)
 })

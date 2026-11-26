@@ -1,6 +1,6 @@
 import { currentStorageWorkspaceId, readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
 import { apiFetch } from '@biu/biu-ui/api-client'
-import { builtinAllGroupBy, builtinAllViewId, stubBuiltinAllView, stubBuiltinBlockKindView, stubBuiltinCatalogView, stubBuiltinTagView, stubBuiltinScopeView, stubBuiltinOwnerView, stubBuiltinMemberView, isBuiltinAllViewForCollection, isBuiltinAllViewId } from '../catalog-views.ts'
+import { builtinAllGroupBy, builtinAllViewId, stubBuiltinAllView, stubBuiltinBlockKindView, stubBuiltinCatalogView, stubBuiltinTagView, stubBuiltinScopeView, stubBuiltinOwnerView, stubBuiltinMemberView, isBuiltinAllViewForCollection, isBuiltinAllViewId, isNonPersonalView, parseBuiltinScopeViewId, viewDomainOf } from '../catalog-views.ts'
 import {
   EDITOR_BLOCKS_COLLECTION_PATH,
   VIEWS_COLLECTION_PATH,
@@ -202,6 +202,20 @@ export function pickViewForRoute(listed: SavedView[], collectionPath: string, ro
   if (route) {
     const hit = listed.find((item) => item.id === route)
     if (hit) return hit
+    // 具体多维表（空间 / 个人）已下发真实视图时，自动把旧/兜底 builtin-scope: 路由升级为真实可持久化视图
+    const parsedScope = parseBuiltinScopeViewId(route)
+    if (parsedScope && (parsedScope.scope === 'workspace' || parsedScope.scope === 'personal')) {
+      const concrete = listed.filter(
+        (item) =>
+          !isBuiltinAllViewId(item.id) &&
+          !item.builtin &&
+          (parsedScope.scope === 'workspace'
+            ? item.ownerTable === 'workspace' || (!item.ownerTable && viewDomainOf(item) === 'workspace')
+            : Boolean(item.ownerTable?.startsWith('account:')) || viewDomainOf(item) === 'personal'),
+      )
+      const preferred = concrete.find((item) => isNonPersonalView(item)) ?? concrete[0]
+      if (preferred) return preferred
+    }
     if (isOmittedViewId(collectionPath, route)) {
       return listed.find((item) => item.id === loadActiveViewId(collectionPath, listed)) ?? listed[0] ?? null
     }
