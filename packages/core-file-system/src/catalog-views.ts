@@ -107,6 +107,40 @@ export function defaultTableViewId(ownerTable: string, collectionPath: string) {
   return `default:${ownerTable}:${normalizeCollectionPath(collectionPath)}`
 }
 
+export function parseDefaultTableViewId(id: string): { ownerTable: string; collectionPath: string } | null {
+  if (!id.startsWith('default:')) return null
+  const rest = id.slice('default:'.length)
+  const split = rest.lastIndexOf(':/')
+  if (split <= 0) return null
+  const ownerTable = rest.slice(0, split).trim()
+  const collectionPath = normalizeCollectionPath(rest.slice(split + 1))
+  if (!ownerTable || !collectionPath || collectionPath === '/') return null
+  return { ownerTable, collectionPath }
+}
+
+export function stubDefaultTableView(id: string, table?: TableRef): SavedView | null {
+  const parsed = parseDefaultTableViewId(id)
+  if (!parsed) return null
+  const isWorkspace = parsed.ownerTable === 'workspace'
+  const noun = collectionNoun(table ?? { path: parsed.collectionPath, label: parsed.collectionPath.replace(/^\//, '') })
+  return normalizeSavedView({
+    id,
+    name: `${isWorkspace ? '空间' : '私人'}${noun}`,
+    mode: 'table',
+    ownerTable: parsed.ownerTable,
+    scope: 'workspace',
+    protection: 'public',
+    ...builtinViewLayout(),
+    filters: {},
+    columns: [],
+    groupBy: '',
+    wrap: false,
+    truncate: true,
+    query: '',
+    builtin: false,
+  })
+}
+
 export function isNonPersonalView(view: { protection?: string; scope?: string; ownerTable?: string } | null | undefined): boolean {
   if (!view || view.ownerTable === 'all') return false
   const p = view.protection ?? (view.scope === 'personal' ? 'personal' : 'public')
@@ -379,8 +413,24 @@ export function catalogLockFilters(
     base.$scope = domain
     return base
   }
-  const stub = stubAnyBuiltinView(key)
-  return stub ? { ...(stub.filters ?? {}) } : {}
+  const stub = stubDefaultTableView(key) ?? stubAnyBuiltinView(key)
+  if (!stub) return {}
+  const base = { ...(stub.filters ?? {}) }
+  const ot = stub.ownerTable?.trim()
+  if (ot && ot.startsWith('account:')) {
+    if (viewerAccountId && ot !== `account:${viewerAccountId}`) {
+      base.$scope = 'shared'
+      base.$ownerTable = ot
+    } else {
+      base.$scope = 'personal'
+    }
+    return base
+  }
+  if (ot === 'workspace') {
+    base.$scope = 'workspace'
+    return base
+  }
+  return base
 }
 
 /** /editor-blocks：只内置「全部组件」。 */

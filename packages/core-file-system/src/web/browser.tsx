@@ -204,6 +204,7 @@ import {
   mergeTableViews,
   stampRowOpenTarget,
   stubBuiltinBlockKindView,
+  stubDefaultTableView,
   viewDomainOf,
   type DataScope,
   type ViewDomain,
@@ -2453,7 +2454,9 @@ export function CollectionBrowser({
     window.dispatchEvent(new Event(FSDB_CRUMB_LABELS_EVENT))
   }, [activeViewId, collectionPath, items, routeViewId, schema?.labelField, selected, sheet])
   const filterActive = countFilterRules(filterTree) > 0
-  const activeView = views.find((view) => view.id === activeViewId)
+  const activeView =
+    views.find((view) => view.id === activeViewId) ??
+    (activeViewId ? stubDefaultTableView(activeViewId, { path: collectionPath, label: title }) ?? undefined : undefined)
   const activeSharedOwnerAccountId = useMemo(() => {
     const ot = activeView?.ownerTable?.trim()
     if (ot && ot.startsWith('account:')) {

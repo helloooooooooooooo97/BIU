@@ -32,6 +32,7 @@ export type PolicyViewGuard = {
   isLocked(workspaceId: string, collection: string, viewId: string): boolean
   canEditLocked(workspaceId: string, accountId: string): boolean
   workspaceOwner?(workspaceId: string): string | null
+  sharedOwnersFor?(workspaceId: string, collection: string, accountId: string): string[]
   canSeeView?(workspaceId: string, collection: string, view: StoredView, accountId: string): boolean
   canModifyView?(workspaceId: string, collection: string, view: StoredView, accountId: string): boolean
   canRemoveView?(workspaceId: string, collection: string, view: StoredView, accountId: string): boolean
@@ -485,6 +486,11 @@ export class SavedViewsStore {
     seedTable('workspace', 'workspace', wsOwner)
     if (accountId) {
       seedTable(`account:${accountId}`, 'personal', accountId)
+      for (const sharedOwnerId of this.policyGuard?.sharedOwnersFor?.(workspaceId, path, accountId) ?? []) {
+        if (sharedOwnerId && sharedOwnerId !== accountId) {
+          seedTable(`account:${sharedOwnerId}`, 'personal', sharedOwnerId)
+        }
+      }
     }
     if (created.length > 0) {
       this.byPath.set(key, stored)
