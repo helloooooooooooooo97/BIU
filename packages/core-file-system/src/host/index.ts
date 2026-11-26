@@ -435,7 +435,7 @@ export function listNeedsMatchOverlay(
   if (!filter) return false
   if (filter.$tree && typeof filter.$tree === 'object') return true
   for (const [key, expected] of Object.entries(filter)) {
-    if (key === '$tree' || key === '$scope' || key === '$ids' || key === 'shareScope' || expected == null || expected === '') continue
+    if (key === '$tree' || key === '$scope' || key === '$ownerTable' || key === '$ids' || key === 'shareScope' || expected == null || expected === '') continue
     if (overlayListField(key)) return true
   }
   return false
@@ -1405,9 +1405,11 @@ export class DatabaseService extends Service implements Database {
     if (!spec || spec.path === DATA_COLLECTION_PATH || !parsed) return { groups: null }
     const liveFilter = { ...filter }
     const scope = liveFilter.$scope
+    const ownerTableFilter = typeof liveFilter.$ownerTable === 'string' ? liveFilter.$ownerTable.trim() : ''
     const ids = asIds(liveFilter.$ids)
     const trash = liveFilter.deleted === true || liveFilter.trash === true
     delete liveFilter.$scope
+    delete liveFilter.$ownerTable
     delete liveFilter.$ids
     delete liveFilter.deleted
     delete liveFilter.trash
@@ -1416,7 +1418,7 @@ export class DatabaseService extends Service implements Database {
     const auth = this.authorization()
     const actor = auth?.currentActor()
     const tagId = typeof liveFilter.tag === 'string' && liveFilter.tag !== '' ? liveFilter.tag : undefined
-    if (spec.groupPage && !scope && (!auth || !actor)) {
+    if (spec.groupPage && !scope && !ownerTableFilter && (!auth || !actor)) {
       const pushed = await spec.groupPage({
         field,
         ids: ids?.length ? ids : undefined,
@@ -1434,7 +1436,8 @@ export class DatabaseService extends Service implements Database {
     if (auth && actor) auth.preloadCollection(actor.workspaceId, spec.path, actor.accountId)
     try {
       const pack = await this.visibleSortedCollectionRows(spec, query, 'id', 'asc', undefined, true)
-      const visible = scope === 'personal' || scope === 'workspace' || scope === 'shared' ? pack[scope] : pack.rows
+      const scoped = scope === 'personal' || scope === 'workspace' || scope === 'shared' ? pack[scope] : pack.rows
+      const visible = ownerTableFilter ? this.access.recordsInOwnerTable(spec.path, scoped, ownerTableFilter) : scoped
       const schema = schemaFor(spec)
       const packs = this.tags.list()
       const matching = visible.filter(row => matchListFilter(row, liveFilter, schema, packs) && matchQuery(row, q, packs))
@@ -1466,6 +1469,7 @@ export class DatabaseService extends Service implements Database {
       ? filter.tag
       : ''
     const scopeFilter = filter?.$scope === 'workspace' || filter?.$scope === 'personal' || filter?.$scope === 'shared' ? filter.$scope : ''
+    const ownerTableFilter = typeof filter?.$ownerTable === 'string' ? filter.$ownerTable.trim() : ''
     const columnKeys = listedColumnKeys(page?.columns, schema.labelField ?? 'title', schema)
     const trash = filter?.deleted === true || filter?.trash === true
     const liveFilter = filter ? { ...filter } : undefined
@@ -1474,6 +1478,7 @@ export class DatabaseService extends Service implements Database {
       delete liveFilter.deleted
       delete liveFilter.trash
       delete liveFilter.$scope
+      delete liveFilter.$ownerTable
       delete liveFilter.$ids
     }
     const query: CollectionListQuery = { q, filter: liveFilter, trash }
@@ -1498,7 +1503,7 @@ export class DatabaseService extends Service implements Database {
     }
     const auth = this.authorization()
     const actor = auth?.currentActor()
-    if (spec.listPage && !scopeFilter && spec.path !== TAGS_COLLECTION_PATH) {
+    if (spec.listPage && !scopeFilter && !ownerTableFilter && spec.path !== TAGS_COLLECTION_PATH) {
       let pushdownIds: string[] | undefined = idFilter?.length ? idFilter : undefined
       let canPushdown = !auth || !actor
       if (!canPushdown) {
@@ -1569,7 +1574,8 @@ export class DatabaseService extends Service implements Database {
     try {
       const overlay = listNeedsMatchOverlay(liveFilter, q, sortField, page?.sorts)
       const pack = await this.visibleSortedCollectionRows(spec, query, sortField, sortDir, page?.sorts, overlay)
-      const visible = scopeFilter ? pack[scopeFilter] : pack.rows
+      const scoped = scopeFilter ? pack[scopeFilter] : pack.rows
+      const visible = ownerTableFilter ? this.access.recordsInOwnerTable(spec.path, scoped, ownerTableFilter) : scoped
       const tagFilter = spec.path === TAGS_COLLECTION_PATH ? String(filter?.tagId ?? '').trim() : ''
       if (tagFilter) schema = schemaWithTagPack(schema, this.tags.get(tagFilter))
       const packs = this.tags.list()

@@ -1,6 +1,6 @@
 import { currentStorageWorkspaceId, readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
 import { apiFetch } from '@biu/biu-ui/api-client'
-import { builtinAllGroupBy, builtinAllViewId, stubBuiltinAllView, stubBuiltinBlockKindView, stubBuiltinCatalogView, stubBuiltinTagView, stubBuiltinScopeView, stubBuiltinMemberView, isBuiltinAllViewForCollection, isBuiltinAllViewId } from '../catalog-views.ts'
+import { builtinAllGroupBy, builtinAllViewId, stubBuiltinAllView, stubBuiltinBlockKindView, stubBuiltinCatalogView, stubBuiltinTagView, stubBuiltinScopeView, stubBuiltinOwnerView, stubBuiltinMemberView, isBuiltinAllViewForCollection, isBuiltinAllViewId } from '../catalog-views.ts'
 import {
   EDITOR_BLOCKS_COLLECTION_PATH,
   VIEWS_COLLECTION_PATH,
@@ -172,6 +172,7 @@ export function viewForPath(collectionPath: string, routeViewId?: string): Saved
   const preferred =
     (want
       ? listed.find((item) => item.id === want) ??
+        stubBuiltinOwnerView(want) ??
         stubBuiltinScopeView(want, listed) ??
         stubBuiltinMemberView(want) ??
         stubBuiltinCatalogView(want) ??
@@ -214,7 +215,7 @@ export function routeViewNeedsFetch(collectionPath: string, routeViewId?: string
   const id = String(routeViewId ?? '').trim()
   if (!id) return false
   if (isOmittedViewId(collectionPath, id)) return false
-  if (stubBuiltinAllView(id) || stubBuiltinBlockKindView(id) || stubBuiltinCatalogView(id) || stubBuiltinTagView(id) || stubBuiltinMemberView(id) || stubBuiltinScopeView(id)) {
+  if (stubBuiltinAllView(id) || stubBuiltinBlockKindView(id) || stubBuiltinCatalogView(id) || stubBuiltinTagView(id) || stubBuiltinMemberView(id) || stubBuiltinOwnerView(id) || stubBuiltinScopeView(id)) {
     return false
   }
   return !loadViews(collectionPath).some((view) => view.id === id)

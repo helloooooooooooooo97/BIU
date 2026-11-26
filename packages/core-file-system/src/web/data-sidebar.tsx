@@ -20,7 +20,7 @@ import { FSDB_CHANGE_EVENT, parseFsdbChange, type CollectionInfo, type Collectio
 import { BoundedMap } from './bounded-map.ts'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
 import { groupField, groupRecords, parentFieldKey, treeChildren } from './fields.ts'
-import { builtinAllViewId, builtinScopeViewId, isReadOnlyViewId, viewDomainOf, type DataScope } from '../catalog-views.ts'
+import { builtinAllViewId, builtinOwnerViewId, builtinScopeViewId, isReadOnlyViewId, viewDomainOf, type DataScope } from '../catalog-views.ts'
 import { tableModeFor } from '../paths.ts'
 import { dataSidebarKind, isRecordTreeCollection, sortDataCollections } from './database-path.ts'
 import { rememberInspectorWorkingView } from './inspector-db-route.ts'
@@ -846,6 +846,52 @@ export const DataSidebar = memo(function DataSidebar({
 
   const { isCloud: isCloudSpace, myAccountId, isExternal } = useCloudCreatorContext()
   const membersById = useMemberDirectory(isCloudSpace)
+  const [sharedOwnersByPath, setSharedOwnersByPath] = useState<
+    Record<string, Array<{ accountId: string; ownerTable: string; name: string; count: number }>>
+  >({})
+  const openKPlus1PathsKey = useMemo(() => {
+    if (!isCloudSpace) return ''
+    return listedTables
+      .filter((table) => {
+        if (tableModeFor(table.path) !== 'k-plus-1') return false
+        const group = dataSidebarKind(table.path)
+        return Boolean(openTables[`${group}:${table.path}`])
+      })
+      .map((table) => table.path)
+      .sort()
+      .join('\0')
+  }, [isCloudSpace, listedTables, openTables])
+
+  useEffect(() => {
+    if (!isCloudSpace || !openKPlus1PathsKey) return
+    const paths = openKPlus1PathsKey.split('\0').filter(Boolean)
+    let cancelled = false
+    const loadAll = () => {
+      void Promise.all(
+        paths.map(async (path) => {
+          try {
+            const data = await readJson<{
+              owners?: Array<{ accountId: string; ownerTable: string; name: string; count: number }>
+            }>(`/api/db/shared-owners?collection=${encodeURIComponent(path)}`)
+            if (cancelled) return
+            const list = Array.isArray(data?.owners) ? data.owners : []
+            setSharedOwnersByPath((prev) => ({ ...prev, [path]: list }))
+          } catch {
+            /* ignore */
+          }
+        }),
+      )
+    }
+    loadAll()
+    const onRefresh = () => loadAll()
+    window.addEventListener(FSDB_CHANGE_EVENT, onRefresh)
+    window.addEventListener('biu:fsdb-shares-change', onRefresh)
+    return () => {
+      cancelled = true
+      window.removeEventListener(FSDB_CHANGE_EVENT, onRefresh)
+      window.removeEventListener('biu:fsdb-shares-change', onRefresh)
+    }
+  }, [isCloudSpace, openKPlus1PathsKey])
 
   const renderViewCreatorAvatar = (view: SavedView) => {
     if (!isCloudSpace || !myAccountId || view.builtin) return null
@@ -1018,7 +1064,12 @@ export const DataSidebar = memo(function DataSidebar({
                     ]
                 return domains.map((domain) => {
                   const scopeViewId = builtinScopeViewId(domain.scope, allId)
-                  const domainActive = table.path === litPath && activeTableDomain === domain.scope
+                  const sharedOwners = domain.scope === 'shared' ? (sharedOwnersByPath[table.path] ?? []) : []
+                  const ownerRowActive =
+                    domain.scope === 'shared' &&
+                    table.path === litPath &&
+                    sharedOwners.some((owner) => litViewId === builtinOwnerViewId(owner.accountId, table.path))
+                  const domainActive = table.path === litPath && activeTableDomain === domain.scope && !ownerRowActive
                   const Icon = domain.icon
                   return (
                     <div key={`${table.path}:${domain.scope}`} className="min-w-0" data-testid={`sidebar-domain-${table.path}-${domain.scope}`}>
@@ -1040,6 +1091,45 @@ export const DataSidebar = memo(function DataSidebar({
                           </SidebarRowMain>
                         }
                       />
+                      {sharedOwners.length > 0 ? (
+                        <div className="min-w-0 pl-4" data-testid={`sidebar-shared-owners-${table.path}`}>
+                          {sharedOwners.map((owner) => {
+                            const ownerViewId = builtinOwnerViewId(owner.accountId, table.path)
+                            const member = membersById.get(owner.accountId)
+                            const displayName = member?.name?.trim() || owner.name
+                            const avatar = member?.avatar?.trim() || ''
+                            const active = table.path === litPath && litViewId === ownerViewId
+                            return (
+                              <div key={owner.accountId} className="min-w-0" data-testid={`sidebar-shared-owner-${owner.accountId}`}>
+                                <SidebarRow
+                                  active={active}
+                                  onClick={onSidebarRowClick}
+                                  main={
+                                    <SidebarRowMain>
+                                      <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+                                        {avatar ? (
+                                          <img src={avatar} alt="" className="size-4 rounded-full object-cover" />
+                                        ) : (
+                                          <AiAvatar seed={owner.accountId} size={16} />
+                                        )}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
+                                        title={`${displayName} 共享给我的${name}`}
+                                        onClick={() => openView(table.path, ownerViewId)}
+                                      >
+                                        {displayName}
+                                      </button>
+                                    </SidebarRowMain>
+                                  }
+                                  trail={<ChatCount count={owner.count} />}
+                                />
+                              </div>
+                            )
+                          })}
+                        </div>
+                      ) : null}
                     </div>
                   )
                 })

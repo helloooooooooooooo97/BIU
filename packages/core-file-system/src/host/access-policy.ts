@@ -594,6 +594,30 @@ export class DatabaseAccessPolicy {
     return rows.filter((row) => this.scopeBucketFor(collection, row, isExternal)[scope])
   }
 
+  recordsInOwnerTable<T extends { id?: unknown; pageId?: unknown; collection?: unknown; sessionId?: unknown; sourceId?: unknown; tablePath?: unknown }>(
+    collection: string,
+    rows: T[],
+    ownerTable: string,
+  ): T[] {
+    const targetTable = ownerTable.trim()
+    if (!targetTable) return rows
+    const authorization = this.host.authorization()
+    const actor = authorization?.currentActor()
+    if (!authorization || !actor) return rows
+    return rows.filter((row) => {
+      const target = resolveScopeTarget(collection, String(row.id ?? ''), row)
+      return (
+        authorization.ownerTableOf({
+          type: 'record',
+          workspaceId: actor.workspaceId,
+          collection: target.collection,
+          recordId: target.id,
+          record: row as Record<string, unknown>,
+        }) === targetTable
+      )
+    })
+  }
+
   attachWorkspaceRecord(
     collection: string,
     recordId: string,

@@ -371,6 +371,43 @@ export function registerDatabaseHttpRoutes(
   ctx.http.route('GET', '/api/db/trash', async (route) => {
     await send(route, () => db.listTrash())
   })
+  /** 列出当前集合中向当前用户共享了私人表文档的所有成员（用于左侧边栏「共享」下展示他人私人表入口）。 */
+  ctx.http.route('GET', '/api/db/shared-owners', async (route) => {
+    try {
+      const collection = normalizeCollectionPath(String(route.query.get('collection') ?? ''))
+      if (!collection || collection === '/') {
+        route.send(200, { owners: [] })
+        return
+      }
+      const me = currentAccountId()
+      const listed = await db.list(collection, { $scope: 'shared' }, { limit: 500, columns: ['id', 'ownerTable'] })
+      const items = listed.kind === 'collection' ? listed.items : []
+      const counts = new Map<string, { accountId: string; ownerTable: string; name: string; count: number }>()
+      for (const item of items) {
+        const raw = item.ownerTable
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
+        const person = raw as { kind?: unknown; accountId?: unknown; name?: unknown }
+        if (person.kind !== 'user') continue
+        const accountId = String(person.accountId ?? '').trim()
+        if (!accountId || accountId === me) continue
+        const existing = counts.get(accountId)
+        if (existing) {
+          existing.count += 1
+        } else {
+          counts.set(accountId, {
+            accountId,
+            ownerTable: `account:${accountId}`,
+            name: String(person.name ?? '').trim() || accountId.slice(0, 8),
+            count: 1,
+          })
+        }
+      }
+      const owners = [...counts.values()].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+      route.send(200, { owners })
+    } catch {
+      route.send(200, { owners: [] })
+    }
+  })
   ctx.http.route('POST', '/api/db/saved-views', async (route) => {
     try {
       /**
