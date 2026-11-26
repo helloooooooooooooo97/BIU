@@ -1,7 +1,7 @@
 import { writeStorageString } from '@biu/biu-ui/client-storage'
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
 import { emitFsdbChange } from '@biu/type-file-system'
-import { isBuiltinAllViewId, isReadOnlyViewId, viewsForScope, type DataScope } from '../catalog-views.ts'
+import { isBuiltinAllViewId, isNonPersonalView, isReadOnlyViewId, viewsForScope, type DataScope } from '../catalog-views.ts'
 import type { FilterGroup, SortRule } from '../query-logic.ts'
 import type { ViewMode } from './fields.ts'
 import { FSDB_CRUMB_LABELS_EVENT } from './fsdb-events.ts'
@@ -31,6 +31,7 @@ export type BrowserViewCrudOptions = {
   collectionPath: string
   title: string
   routeScope: DataScope | null
+  activeOwnerTable?: string
   catalogLocks: Record<string, string>
   schemaDefaultKeys: string[]
   views: SavedView[]
@@ -73,6 +74,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     collectionPath,
     title,
     routeScope,
+    activeOwnerTable,
     catalogLocks,
     schemaDefaultKeys,
     views,
@@ -280,19 +282,31 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       : effectiveScope
         ? viewsForScope(allListed, effectiveScope)
         : allListed
+    const isForeignSharedOwner = Boolean(
+      effectiveScope === 'shared' && activeOwnerTable && activeOwnerTable.startsWith('account:'),
+    )
     const bindingPatch: Partial<SavedView> =
-      effectiveScope === 'workspace'
-        ? { scope: 'workspace', protection: 'public', ownerTable: 'workspace' }
-        : effectiveScope === 'personal'
-          ? { scope: 'personal', protection: 'personal' }
-          : effectiveScope === 'shared'
-            ? { scope: 'personal', protection: 'personal' }
+      isForeignSharedOwner
+        ? { scope: 'personal', protection: 'personal', ownerTable: activeOwnerTable }
+        : effectiveScope === 'workspace'
+          ? { scope: 'workspace', protection: 'public', ownerTable: 'workspace' }
+          : effectiveScope === 'personal'
+            ? {
+                scope: 'workspace',
+                protection: 'public',
+                ...(activeOwnerTable?.startsWith('account:') ? { ownerTable: activeOwnerTable } : {}),
+              }
             : { scope: 'personal', protection: 'personal', ownerTable: 'all' }
+    const extraFilters: Record<string, string> = isForeignSharedOwner
+      ? { $scope: 'shared', $ownerTable: activeOwnerTable! }
+      : effectiveScope
+        ? { $scope: effectiveScope }
+        : {}
     const view: SavedView = {
       ...makeEmptyView(
         listed,
         target === collectionPath ? [...schemaDefaultKeys] : [],
-        effectiveScope ? { $scope: effectiveScope } : {},
+        extraFilters,
       ),
       ...bindingPatch,
     }
@@ -332,12 +346,21 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
   }
 
   function copyView(source?: SavedView, overrides?: Partial<SavedView>) {
+    const isForeignSharedOwner = Boolean(
+      routeScope === 'shared' && activeOwnerTable && activeOwnerTable.startsWith('account:'),
+    )
     const scopeBinding: Partial<SavedView> =
-      routeScope === 'workspace'
-        ? { scope: 'workspace', protection: 'public', ownerTable: 'workspace' }
-        : routeScope === 'personal' || routeScope === 'shared'
-          ? { scope: 'personal', protection: 'personal', ownerTable: undefined }
-          : { scope: 'personal', protection: 'personal', ownerTable: 'all' }
+      isForeignSharedOwner
+        ? { scope: 'personal', protection: 'personal', ownerTable: activeOwnerTable }
+        : routeScope === 'workspace'
+          ? { scope: 'workspace', protection: 'public', ownerTable: 'workspace' }
+          : routeScope === 'personal'
+            ? {
+                scope: 'workspace',
+                protection: 'public',
+                ...(activeOwnerTable?.startsWith('account:') ? { ownerTable: activeOwnerTable } : {}),
+              }
+            : { scope: 'personal', protection: 'personal', ownerTable: 'all' }
     void commitView(
       source
         ? {
@@ -470,6 +493,12 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     const stored = loadViews(path)
     const currentVisible = path === collectionPath ? viewsRef.current : stored
     if (!canRemoveCollectionView(currentVisible)) return
+    // 保底约束：每张具体多维表（空间表 / 个人表）至少保留 1 个非私有视图（public 或 locked）
+    const ot = view.ownerTable?.trim()
+    if (ot && ot !== 'all' && isNonPersonalView(view)) {
+      const otherPublic = stored.filter((item) => item.id !== view.id && item.ownerTable?.trim() === ot && isNonPersonalView(item))
+      if (otherPublic.length < 1) return
+    }
     const removedId = view.id
     const remainingStored = stored.filter((item) => item.id !== removedId)
     // 立即标记已删并移出本地缓存（基于完整 stored 列表，避免单域视图列表覆盖其他域缓存）；若服务端拒绝则回滚。
@@ -480,12 +509,15 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       const painted = paintListedViews(path)
       viewsRef.current = painted
       setViews(painted)
-      if (activeViewIdRef.current === removedId && painted[0]) {
-        selectView(painted[0])
-      }
     }
     void persistViewsFor(path, remainingStored, { baseline: stored, remove: [removedId] }).then((ok) => {
-      if (ok) return
+      if (ok) {
+        if (path === collectionPath && activeViewIdRef.current === removedId) {
+          const nextActive = viewsRef.current[0]
+          if (nextActive) selectView(nextActive)
+        }
+        return
+      }
       reviveSavedViewIds(path, [removedId])
       rememberViews(path, stored)
       if (path === collectionPath) {
@@ -502,6 +534,12 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     const current = viewsRef.current
     const target = current.find((item) => item.id === view.id)
     if (!target) return
+    // 保底约束：不可将具体多维表的最后一个公共/锁定视图切换为个人视图
+    const ot = target.ownerTable?.trim()
+    if (protection === 'personal' && ot && ot !== 'all' && isNonPersonalView(target)) {
+      const otherPublic = current.filter((item) => item.id !== target.id && item.ownerTable?.trim() === ot && isNonPersonalView(item))
+      if (otherPublic.length < 1) return
+    }
     const updated: SavedView = { ...target, protection, scope: nextScope }
     const next = current.map((item) => (item.id === view.id ? updated : item))
     viewsRef.current = next

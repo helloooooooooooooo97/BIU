@@ -41,9 +41,10 @@ export function viewDomainOf(
   ) {
     return 'all'
   }
-  if (view.ownerTable === 'all') return 'all'
   const filterScope = view.filters?.$scope
-  if (filterScope === 'workspace' || filterScope === 'personal' || filterScope === 'shared') return filterScope
+  if (filterScope === 'shared') return 'shared'
+  if (view.ownerTable === 'all') return 'all'
+  if (filterScope === 'workspace' || filterScope === 'personal') return filterScope
   if (view.ownerTable === 'workspace') return 'workspace'
   if (view.ownerTable?.startsWith('account:')) return 'personal'
   if (view.scope === 'personal' || view.protection === 'personal') return 'personal'
@@ -104,6 +105,16 @@ export function isBuiltinTagViewId(id: string) {
 
 export function tagIdFromViewId(id: string) {
   return isBuiltinTagViewId(id) ? id.slice(TAG_PREFIX.length) : ''
+}
+
+export function defaultTableViewId(ownerTable: string, collectionPath: string) {
+  return `default:${ownerTable}:${normalizeCollectionPath(collectionPath)}`
+}
+
+export function isNonPersonalView(view: { protection?: string; scope?: string; ownerTable?: string } | null | undefined): boolean {
+  if (!view || view.ownerTable === 'all') return false
+  const p = view.protection ?? (view.scope === 'personal' ? 'personal' : 'public')
+  return p === 'public' || p === 'locked'
 }
 
 export function builtinAllViewId(collectionPath: string) {
@@ -451,12 +462,19 @@ export function stubAnyBuiltinView(id: string, listed: SavedView[] = []): SavedV
 export function catalogLockFilters(
   viewId: string | null | undefined,
   listed: Array<{ id: string; builtin?: boolean; filters?: Record<string, string>; ownerTable?: string; scope?: string; protection?: string }> = [],
+  viewerAccountId = '',
 ): Record<string, string> {
   const key = String(viewId ?? '').trim()
   if (!key) return {}
   const current = listed.find((view) => view.id === key)
   if (current) {
     const base = { ...(current.filters ?? {}) }
+    const ot = current.ownerTable?.trim()
+    if (ot && ot.startsWith('account:') && viewerAccountId && ot !== `account:${viewerAccountId}`) {
+      base.$scope = 'shared'
+      base.$ownerTable = ot
+      return base
+    }
     const domain = viewDomainOf(current)
     if (domain === 'all') {
       delete base.$scope

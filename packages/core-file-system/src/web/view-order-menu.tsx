@@ -15,7 +15,7 @@ import { CSS as DndCSS } from '@dnd-kit/utilities'
 import { CheckIcon, LockClosedIcon, PlusIcon, Square2StackIcon, UserIcon, UsersIcon } from '@heroicons/react/16/solid'
 import { overlayZ } from '@biu/biu-ui/overlay-portal'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
-import { isReadOnlyViewId } from '../catalog-views.ts'
+import { isBuiltinAllViewId, isNonPersonalView, isReadOnlyViewId } from '../catalog-views.ts'
 import { moveList } from '../query-logic.ts'
 import { DndGrip } from './dnd-grip.tsx'
 import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search.tsx'
@@ -34,11 +34,17 @@ const PROTECTION_OPTIONS: Array<{
 ]
 
 function resolveViewProtection(view: SavedView): ViewProtection {
-  if (view.ownerTable === 'all') return 'personal'
+  if (view.ownerTable === 'all' || isBuiltinAllViewId(view.id)) return 'personal'
   if (view.protection === 'public' || view.protection === 'locked' || view.protection === 'personal') {
     return view.protection
   }
   return view.scope === 'personal' ? 'personal' : 'public'
+}
+
+function isLastPublicViewForTable(view: SavedView, views: SavedView[]): boolean {
+  const ot = view.ownerTable?.trim()
+  if (!ot || ot === 'all' || !isNonPersonalView(view)) return false
+  return views.filter((item) => item.ownerTable?.trim() === ot && isNonPersonalView(item)).length <= 1
 }
 
 function ViewRowShell({
@@ -51,6 +57,7 @@ function ViewRowShell({
   protectionMenuOpen,
   onToggleProtectionMenu,
   canRemove,
+  isLastPublic,
   grip,
   rowRef,
   className,
@@ -65,21 +72,25 @@ function ViewRowShell({
   protectionMenuOpen?: boolean
   onToggleProtectionMenu?: () => void
   canRemove: boolean
+  isLastPublic?: boolean
   grip: ReactNode
   rowRef?: (node: HTMLElement | null) => void
   className?: string
   style?: CSSProperties
 }) {
-  const isBuiltin = Boolean(view.builtin) || isReadOnlyViewId(view.id)
+  const isAggregation = view.ownerTable === 'all' || isBuiltinAllViewId(view.id)
+  const isReadOnlyStub = Boolean(view.builtin) || isReadOnlyViewId(view.id)
   const protection = resolveViewProtection(view)
   const meta = PROTECTION_OPTIONS.find((item) => item.value === protection) ?? PROTECTION_OPTIONS[0]!
   const ProtectionIcon = meta.Icon
   const canSwitchProtection = Boolean(
-    !isBuiltin &&
-      view.ownerTable !== 'all' &&
+    !isReadOnlyStub &&
+      !isAggregation &&
       onChangeProtection &&
       (canEditSavedView(view) || canDeleteSavedView(view)),
   )
+  const canLock = !(view.ownerTable?.startsWith('account:') && view.viewRole && view.viewRole !== 'owner')
+  const showProtectionBadge = !isReadOnlyStub || isAggregation
   return (
     <div ref={rowRef} style={style}>
       <div
@@ -95,14 +106,14 @@ function ViewRowShell({
           <span className="tasks-viewdd-item-name font-medium">{view.name}</span>
         </button>
         <span className="tasks-viewdd-item-actions">
-          {!isBuiltin ? (
+          {showProtectionBadge ? (
             <button
               type="button"
               className="tasks-viewdd-act"
               data-testid={`view-protection-btn-${view.id}`}
               title={
-                view.ownerTable === 'all'
-                  ? '个人视图（跨表汇总仅你自己可见）'
+                isAggregation
+                  ? '个人视图（聚合视角仅你自己可见）'
                   : `${meta.label}：${meta.desc}`
               }
               style={{
@@ -121,7 +132,7 @@ function ViewRowShell({
           <button type="button" className="tasks-viewdd-act" title="拷贝视图" onClick={() => onCopy(view)}>
             <Square2StackIcon aria-hidden className="size-[14px]" />
           </button>
-          {canRemove && !isBuiltin ? (
+          {canRemove && !isReadOnlyStub && !isLastPublic ? (
             <button type="button" className="tasks-viewdd-act is-danger" title="删除" onClick={() => onDelete(view)}>
               <TrashGlyph aria-hidden className="size-[14px]" />
             </button>
@@ -145,13 +156,22 @@ function ViewRowShell({
           {PROTECTION_OPTIONS.map((opt) => {
             const Icon = opt.Icon
             const selected = protection === opt.value
+            const disabled = (opt.value === 'personal' && Boolean(isLastPublic)) || (opt.value === 'locked' && !canLock)
+            const disabledHint =
+              opt.value === 'personal' && isLastPublic
+                ? '每张表至少保留一个公共/锁定视图'
+                : opt.value === 'locked' && !canLock
+                  ? '仅个人表拥有者可设为锁定视图'
+                  : opt.desc
             return (
               <button
                 key={opt.value}
                 type="button"
+                disabled={disabled}
                 data-testid={`view-protection-opt-${opt.value}`}
                 onClick={(event) => {
                   event.stopPropagation()
+                  if (disabled) return
                   onChangeProtection?.(view, opt.value)
                   onToggleProtectionMenu?.()
                 }}
@@ -165,14 +185,15 @@ function ViewRowShell({
                   background: selected ? 'var(--biu-color-bg-hover)' : 'transparent',
                   color: 'var(--biu-color-text)',
                   textAlign: 'left',
-                  cursor: 'pointer',
+                  cursor: disabled ? 'not-allowed' : 'pointer',
+                  opacity: disabled ? 0.45 : 1,
                   width: '100%',
                 }}
               >
                 <Icon aria-hidden className="size-[15px] shrink-0" style={{ opacity: 0.85 }} />
                 <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
                   <span style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.25 }}>{opt.label}</span>
-                  <span style={{ fontSize: 11, color: 'var(--biu-color-text-muted)', lineHeight: 1.25 }}>{opt.desc}</span>
+                  <span style={{ fontSize: 11, color: 'var(--biu-color-text-muted)', lineHeight: 1.25 }}>{disabledHint}</span>
                 </span>
                 {selected ? (
                   <CheckIcon aria-hidden className="size-[14px] shrink-0" style={{ color: 'var(--biu-color-emphasis)' }} />
@@ -196,6 +217,7 @@ function SortableViewRow({
   protectionMenuOpen,
   onToggleProtectionMenu,
   canRemove,
+  isLastPublic,
 }: {
   view: SavedView
   active: boolean
@@ -206,6 +228,7 @@ function SortableViewRow({
   protectionMenuOpen?: boolean
   onToggleProtectionMenu?: () => void
   canRemove: boolean
+  isLastPublic?: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: view.id })
   return (
@@ -219,6 +242,7 @@ function SortableViewRow({
       protectionMenuOpen={protectionMenuOpen}
       onToggleProtectionMenu={onToggleProtectionMenu}
       canRemove={canRemove}
+      isLastPublic={isLastPublic}
       rowRef={setNodeRef}
       className={isDragging ? 'is-drag' : undefined}
       style={{ transform: DndCSS.Transform.toString(transform), transition }}
@@ -296,6 +320,7 @@ export function ViewOrderMenu({
                       setProtectionOpenId((prev) => (prev === view.id ? null : view.id))
                     }
                     canRemove={canRemove && canDeleteSavedView(view)}
+                    isLastPublic={isLastPublicViewForTable(view, views)}
                     grip={
                       <span className="fsdb-query-grip is-locked" aria-hidden>
                         <DndGrip />
@@ -343,6 +368,7 @@ export function ViewOrderMenu({
                       setProtectionOpenId((prev) => (prev === view.id ? null : view.id))
                     }
                     canRemove={canRemove && canDeleteSavedView(view)}
+                    isLastPublic={isLastPublicViewForTable(view, views)}
                   />
                 ))}
               </SortableContext>
