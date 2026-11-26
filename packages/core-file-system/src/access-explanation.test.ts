@@ -38,40 +38,22 @@ test('builtin plugin explanation returns shared visibility and viewer role', () 
   assert.equal(result.myAccess.paths[0]?.title, '内置插件')
 })
 
-test('view grants for other users appear in visibility audience but never leak into myAccess', () => {
+test('external collaborator appears in visibility audience without overriding actor direct role', () => {
   const result = buildAccessExplanation({
     collection: '/tasks',
     recordId: 't1',
     recordTitle: '接口联调',
     tableLabel: '任务',
     localOnly: false,
-    record: { id: 't1', title: '接口联调', status: '公开' },
-    dataViews: [
-      { id: 'v-public', name: '对外看板', filters: { status: '公开' } },
-    ],
-    memberViews: [
-      { id: 'mv-ext', name: '外部客户', filters: { membershipKind: 'external' } },
-    ],
     access: {
       scope: 'personal',
       ownerId: 'u-alice',
       people: [
         { id: 'u-alice', name: 'Alice', role: 'owner', memberKind: 'member' },
         { id: 'u-bob', name: 'Bob', role: 'viewer', memberKind: 'member' },
+        { id: 'u-ext', name: '外部客户', role: 'manager', memberKind: 'external' },
       ],
       groups: [],
-      memberViews: [],
-      viewGrants: [
-        {
-          viewId: 'v-public',
-          subjectType: 'member_view',
-          subjectId: 'mv-ext',
-          role: 'manager',
-          name: 'mv-ext',
-          memberKind: 'external',
-          matchesActor: false,
-        },
-      ],
       roleChain: [
         {
           id: 'ws\t/tasks\tt1',
@@ -88,29 +70,19 @@ test('view grants for other users appear in visibility audience but never leak i
   })
 
   assert.equal(result.visibility.scope, 'shared')
-  assert.equal(result.audience.fromViews.length, 1)
-  assert.equal(result.audience.fromViews[0]?.viewName, '对外看板')
-  assert.equal(result.audience.fromViews[0]?.subjectName, '外部客户')
-  // Bob 的个人权限不受别人（外部客户）视图上的 manager 授权污染
+  assert.equal(result.audience.direct.some((item) => item.subjectName === '外部客户' && item.audienceKind === 'external'), true)
   assert.equal(result.myAccess.effectiveRole, 'viewer')
   assert.equal(result.myAccess.paths.length, 1)
   assert.equal(result.myAccess.paths[0]?.kind, 'direct')
 })
 
-test('multi-level inheritance chain resolves real ancestor titles and ranks primary vs secondary paths', () => {
+test('multi-level inheritance chain resolves real ancestor titles and group grants', () => {
   const result = buildAccessExplanation({
     collection: '/pages',
     recordId: 'p-leaf',
     recordTitle: '登录页设计',
     tableLabel: '页面',
     localOnly: false,
-    record: { id: 'p-leaf', title: '登录页设计', category: '前端' },
-    dataViews: [
-      { id: 'v-fe', name: '前端文档', filters: { category: '前端' } },
-    ],
-    memberViews: [
-      { id: 'mv-dev', name: '研发部', filters: { department: 'dev' } },
-    ],
     recordTitles: {
       '/pages\tp-root': '项目 A',
       '/pages\tp-mid': '需求池',
@@ -121,18 +93,6 @@ test('multi-level inheritance chain resolves real ancestor titles and ranks prim
       ownerId: 'u-alice',
       people: [],
       groups: [],
-      memberViews: [],
-      viewGrants: [
-        {
-          viewId: 'v-fe',
-          subjectType: 'member_view',
-          subjectId: 'mv-dev',
-          role: 'viewer',
-          name: 'mv-dev',
-          memberKind: 'member',
-          matchesActor: true,
-        },
-      ],
       roleChain: [
         {
           id: 'ws\t/pages\tp-leaf',
@@ -157,9 +117,9 @@ test('multi-level inheritance chain resolves real ancestor titles and ranks prim
           collection: '/pages',
           recordId: 'p-root',
           title: '上一级内容',
-          detail: '通过成员视图授权',
+          detail: '通过成员组授权',
           role: 'editor',
-          source: 'view-grant',
+          source: 'group-grant',
         },
       ],
       inheritance: {
@@ -171,8 +131,7 @@ test('multi-level inheritance chain resolves real ancestor titles and ranks prim
             scope: 'workspace',
             ownerId: 'u-alice',
             people: [],
-            groups: [],
-            memberViews: [{ id: 'mv-dev', role: 'editor' }],
+            groups: [{ id: 'grp-dev', name: '研发部', role: 'editor' }],
           },
           {
             collection: '/pages',
@@ -181,7 +140,6 @@ test('multi-level inheritance chain resolves real ancestor titles and ranks prim
             ownerId: 'u-alice',
             people: [],
             groups: [],
-            memberViews: [],
           },
         ],
       },
@@ -198,7 +156,7 @@ test('multi-level inheritance chain resolves real ancestor titles and ranks prim
 
   assert.equal(result.myAccess.effectiveRole, 'editor')
   assert.equal(result.myAccess.primarySummary, '继承自上级「项目 A」')
-  assert.equal(result.myAccess.paths.length, 2)
+  assert.equal(result.myAccess.paths.length, 1)
 
   const primary = result.myAccess.paths[0]!
   assert.equal(primary.isPrimary, true)
@@ -207,13 +165,7 @@ test('multi-level inheritance chain resolves real ancestor titles and ranks prim
     primary.chain?.map((n) => n.title),
     ['项目 A', '需求池', '登录页设计'],
   )
-  assert.equal(primary.chain?.[0]?.note, '通过成员视图授权')
+  assert.equal(primary.chain?.[0]?.note, '通过成员组授权')
   assert.equal(primary.chain?.[1]?.note, '继承上级权限')
   assert.equal(primary.chain?.[2]?.note, '继承上级权限')
-
-  const secondary = result.myAccess.paths[1]!
-  assert.equal(secondary.isPrimary, false)
-  assert.equal(secondary.kind, 'data_view')
-  assert.equal(secondary.title, '视图「前端文档」')
-  assert.equal(secondary.reason, '你属于成员视图「研发部」')
 })

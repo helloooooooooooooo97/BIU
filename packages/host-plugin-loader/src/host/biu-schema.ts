@@ -389,8 +389,7 @@ CREATE TABLE IF NOT EXISTS access_rules (
   enabled INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
-  owner_table TEXT NOT NULL DEFAULT '',
-  visible_views_json TEXT
+  owner_table TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS access_rules_ws_col
   ON access_rules(workspace_id, collection, enabled);

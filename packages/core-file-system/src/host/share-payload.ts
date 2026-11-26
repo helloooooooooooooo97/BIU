@@ -4,8 +4,6 @@ import { collectAssetNames } from './assets-store.ts'
 import type { SavedViewsStore } from './saved-views.ts'
 import { freezeSchema, type ShareSnapshot } from '../share-snapshot.ts'
 import { collectShareResources } from '../share-resources.ts'
-import { savedViewRecordPath } from '../paths.ts'
-import { displayNameForView } from '../catalog-views.ts'
 import type { ShareRecord } from './shares-store.ts'
 import { asPublicProfile } from '@biu/host-workspace'
 import { parseTagFlatColumnKey } from '../query-logic.ts'
@@ -51,7 +49,7 @@ function withResources(
 ): ShareSnapshot {
   const resources = collectShareResources(snap.records, snap.contents, {
     skipIds: snap.records.map((row) => String(row.id)),
-    includeRecords: share.kind === 'view' || share.kind === 'rule',
+    includeRecords: share.kind === 'rule',
   })
   return {
     ...snap,
@@ -149,7 +147,7 @@ function contentIdsFor(share: ShareRecord, records: DbRecord[], opts?: ShareSnap
 
 export async function buildShareSnapshot(
   db: Pick<Database, 'stat' | 'list' | 'read' | 'content'> & { tags?: { list: () => CollectionSchemaPack[] } },
-  savedViews: SavedViewsStore,
+  _savedViews: SavedViewsStore,
   share: ShareRecord,
   opts?: ShareSnapshotOpts,
 ): Promise<ShareSnapshot> {
@@ -157,7 +155,6 @@ export async function buildShareSnapshot(
   if (stat.kind !== 'collection' || !stat.schema) throw new Error('unknown collection')
   const schema = freezeSchema(stat.schema)
   const collectionLabel = String(stat.view?.title ?? stat.label ?? share.collection.replace(/^\//, ''))
-  const table = { path: share.collection, label: collectionLabel, view: { title: collectionLabel } }
   if (share.kind === 'record') {
     const got = asRecordRead(await db.read(`${share.collection}/${share.recordId}`))
     const record = got.value
@@ -230,63 +227,5 @@ export async function buildShareSnapshot(
       tags: shareTagCatalog(db, records, view),
     }, share)
   }
-  const stored = savedViews.viewsFor(share.collection).find((item) => item.id === share.viewId)
-  const viewName = displayNameForView(share.viewId, table, stored?.name)
-  const view = {
-    id: share.viewId,
-    name: viewName,
-    query: stored?.query ?? '',
-    sortField: stored?.sortField || 'title',
-    sortDir: stored?.sortDir === 'desc' ? 'desc' as const : 'asc' as const,
-    sorts: stored?.sorts,
-    filters: stored?.filters,
-    filterTree: stored?.filterTree,
-    columns: stored?.columns,
-    wrap: stored?.wrap,
-    truncate: stored?.truncate,
-    pageSize: stored?.pageSize,
-    groupBy: stored?.groupBy ?? '',
-  }
-  const listed = (await db.list(share.collection, viewShareListFilter(view), {
-    q: String(view.query ?? ''),
-    sortField: view.sortField,
-    sortDir: view.sortDir,
-    sorts: view.sorts,
-    limit: SHARE_LIMIT,
-  })) as { items?: DbRecord[] }
-  const records = (listed.items ?? []).map(audienceRecord)
-  const contents = await loadContents(db, share.collection, records, contentIdsFor(share, records, opts))
-  const banner = await readShareBanner(db, share.collection, share.viewId)
-  return withResources({
-    kind: 'view',
-    collection: share.collection,
-    viewId: share.viewId,
-    recordId: '',
-    title: viewName,
-    collectionLabel,
-    schema,
-    view,
-    records,
-    contents,
-    assets: [...collectAssetNames(...records, ...Object.values(contents), banner)],
-    banner,
-      tags: shareTagCatalog(db, records, view),
-  }, share)
-}
-
-async function readShareBanner(
-  db: Pick<Database, 'read'>,
-  collection: string,
-  viewId: string,
-) {
-  // The host deliberately has no banner for built-in/read-only views.
-  // Keep the share page on the same rule even if an old banner overlay
-  // still exists for that synthetic /views row.
-  const path = savedViewRecordPath(collection, viewId)
-  if (!path) return null
-  try {
-    return asRecordRead(await db.read(path)).value?.banner ?? null
-  } catch {
-    return null
-  }
+  throw new Error('unsupported share kind')
 }

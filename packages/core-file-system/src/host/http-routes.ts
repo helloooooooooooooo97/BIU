@@ -11,8 +11,7 @@ import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { asPublicProfile, writeWorkspaceProfile } from '@biu/host-workspace'
 import { DATABASE_CHANNEL, databaseChannelPayload, normalizeSchemaPack } from '@biu/type-file-system'
 import { buildAccessExplanation, type BuildAccessExplanationInput } from '../access-explanation.ts'
-import { displayNameForView, isReadOnlyViewId } from '../catalog-views.ts'
-import { PAGES_COLLECTION_PATH, TAGS_COLLECTION_PATH, VIEWS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, isIndexCollection, normalizeCollectionPath, savedViewRecordPath } from '../paths.ts'
+import { PAGES_COLLECTION_PATH, TAGS_COLLECTION_PATH, VIEWS_COLLECTION_PATH, normalizeCollectionPath, savedViewRecordPath } from '../paths.ts'
 import { recordMatchesAccessRule } from '../view-access.ts'
 import { isSharePluginId } from '../share-resources.ts'
 import {
@@ -27,7 +26,7 @@ import { type SavedViewsStore, type StoredView } from './saved-views.ts'
 import { buildShareSnapshot } from './share-payload.ts'
 import { publicShareUrl } from './share-origin.ts'
 import { readSharePluginWebJs, zipSharePluginSource } from './share-plugin-pack.ts'
-import { dropSharesForRemovedViews, type SharesStore } from './shares-store.ts'
+import { type SharesStore } from './shares-store.ts'
 import { type TagStore } from './tags-store.ts'
 import { asDeleteQuery, parseListColumnsParam, parseSortsParam } from './schema-coerce.ts'
 import { DATABASE_TOOL_NAMES } from './agent-tools.ts'
@@ -430,14 +429,9 @@ export function registerDatabaseHttpRoutes(
       const removals = (body.remove ?? []).map(String).filter(Boolean)
       if (body.replace === true || (body.upsert === undefined && body.remove === undefined)) {
         const next = Array.isArray(body.views) ? body.views : []
-        if (!isIndexCollection(path)) dropSharesForRemovedViews(shares, path, savedViews.viewsFor(path), next)
         savedViews.replace(path, next, accountId)
       } else {
         savedViews.applyPatch(path, { upsert: body.upsert ?? [], remove: removals }, accountId)
-        for (const viewId of removals) {
-          const view = savedViews.viewsFor(path, accountId).find((item) => String(item.id) === viewId)
-          if (!view) shares.revokeView(path, viewId)
-        }
       }
       db.notifyViewCatalog(path)
       route.send(200, { ok: true })
@@ -494,33 +488,13 @@ export function registerDatabaseHttpRoutes(
       }
       const record = rawRecord.value ? { id: recordId, ...rawRecord.value } : { id: recordId }
       const recordTitle = String(record.title ?? record.name ?? '').trim() || recordId
-      const dataViews = savedViews.viewsFor(collection).map((view) => ({
-        id: String(view.id ?? ''),
-        name: String(view.name ?? view.id ?? ''),
-        filters: view.filters && typeof view.filters === 'object' ? view.filters as Record<string, unknown> : undefined,
-        filterTree: view.filterTree ?? undefined,
-      }))
-      const memberViews = savedViews.viewsFor(WORKSPACE_MEMBERS_COLLECTION_PATH).map((view) => ({
-        id: String(view.id ?? ''),
-        name: String(view.name ?? view.id ?? ''),
-        filters: view.filters && typeof view.filters === 'object' ? view.filters as Record<string, unknown> : undefined,
-      }))
-      const publicShares: NonNullable<BuildAccessExplanationInput['publicShares']> = [
-        ...shares.listRecords(collection).map((share) => ({
+      const publicShares: NonNullable<BuildAccessExplanationInput['publicShares']> = shares
+        .listRecords(collection)
+        .map((share) => ({
           kind: 'record' as const,
           collection: share.collection,
           recordId: share.recordId,
-        })),
-        ...shares.listViews(collection).map((share) => {
-          const named = dataViews.find((view) => view.id === share.viewId)
-          return {
-            kind: 'view' as const,
-            collection: share.collection,
-            viewId: share.viewId,
-            title: named?.name || share.viewId,
-          }
-        }),
-      ]
+        }))
       let access: BuildAccessExplanationInput['access']
       const recordTitles: Record<string, string> = {
         [`${collection}\t${recordId}`]: recordTitle,
@@ -572,9 +546,6 @@ export function registerDatabaseHttpRoutes(
               ? 'owner' as const
               : 'viewer' as const
       const spec = db.collection(collection)
-      const schema: BuildAccessExplanationInput['schema'] = spec
-        ? (db.publishCollection(spec) as { schema?: BuildAccessExplanationInput['schema'] }).schema
-        : undefined
       const explanation = buildAccessExplanation({
         collection,
         recordId,
@@ -582,11 +553,6 @@ export function registerDatabaseHttpRoutes(
         tableLabel: tableLabel || spec?.label || '',
         localOnly,
         fallbackRole,
-        record: record as { id: string; [key: string]: unknown },
-        schema,
-        packs: tags.list(),
-        dataViews,
-        memberViews,
         publicShares,
         recordTitles,
         access,
@@ -633,23 +599,7 @@ export function registerDatabaseHttpRoutes(
           if (currentAccountId() && rule.createdBy !== currentAccountId()) continue
           title = rule.name || title
         } else {
-          const named = savedViews.viewsFor(share.collection).find((item) => item.id === share.viewId)
-          if (!named && share.viewId && !isReadOnlyViewId(share.viewId)) {
-            shares.revoke(share.token)
-            continue
-          }
-          let collectionLabel = share.collection.replace(/^\//, '')
-          try {
-            const stat = (await db.stat(share.collection)) as { label?: string; view?: { title?: string } | null }
-            collectionLabel = String(stat.view?.title ?? stat.label ?? collectionLabel)
-          } catch {
-            /* keep path slug */
-          }
-          title = displayNameForView(
-            share.viewId,
-            { path: share.collection, label: collectionLabel, view: { title: collectionLabel } },
-            named?.name,
-          )
+          continue
         }
         items.push({ ...share, title, url: publicShareUrl(route.req, share.token) })
         if (share.kind === 'record' && share.recordId) {
@@ -695,8 +645,11 @@ export function registerDatabaseHttpRoutes(
       return
     }
     const rawKind = route.query.get('kind')
-    const kind = rawKind === 'record' ? 'record' as const : rawKind === 'rule' ? 'rule' as const : 'view' as const
-    const viewId = route.query.get('viewId') || ''
+    const kind = rawKind === 'rule' ? 'rule' as const : rawKind === 'record' ? 'record' as const : null
+    if (!kind) {
+      route.send(200, { share: null })
+      return
+    }
     const recordId = route.query.get('recordId') || ''
     const ruleId = route.query.get('ruleId') || ''
     try {
@@ -707,9 +660,7 @@ export function registerDatabaseHttpRoutes(
     }
     const share = kind === 'record'
       ? shares.findRecord(collection, recordId)
-      : kind === 'rule'
-        ? shares.findRule(collection, ruleId)
-        : shares.find(kind, collection, viewId, recordId)
+      : shares.findRule(collection, ruleId)
     route.send(200, {
       share: share ? { ...share, url: publicShareUrl(route.req, share.token) } : null,
     })
@@ -719,7 +670,6 @@ export function registerDatabaseHttpRoutes(
       const body = (await route.json()) as {
         kind?: string
         collection?: string
-        viewId?: string
         recordId?: string
         ruleId?: string
         password?: string | null
@@ -727,7 +677,15 @@ export function registerDatabaseHttpRoutes(
         sharePlugins?: boolean
         allowCopy?: boolean
       }
-      const kind = body.kind === 'record' ? 'record' as const : body.kind === 'rule' ? 'rule' as const : 'view' as const
+      if (body.kind === 'view') {
+        route.send(400, { error: '视图不支持独立公开分享，请使用访问规则生成公开链接' })
+        return
+      }
+      const kind = body.kind === 'rule' ? 'rule' as const : body.kind === 'record' ? 'record' as const : null
+      if (!kind) {
+        route.send(400, { error: '不支持的分享类型' })
+        return
+      }
       const collection = String(body.collection ?? '')
       const recordId = String(body.recordId ?? '')
       const ruleId = String(body.ruleId ?? '').trim()
@@ -756,16 +714,12 @@ export function registerDatabaseHttpRoutes(
           route.send(403, { error: rule.ownerTable === 'workspace' ? '仅空间管理员可以管理空间规则的公开外链' : '只有规则创建者可以管理此规则的公开外链' })
           return
         }
-      } else if (kind === 'view') {
-        route.send(400, { error: '视图不支持独立公开分享，请使用访问规则生成公开链接' })
-        return
       } else {
         await db.requirePath(`${collection}/${recordId}`, 'resource:share')
       }
       if (body.enabled === false) {
         if (kind === 'record') shares.revokeRecord(collection, recordId)
-        else if (kind === 'rule') shares.revokeRule(collection, ruleId)
-        else shares.revokeTarget(kind, collection, body.viewId ?? '', body.recordId ?? '')
+        else shares.revokeRule(collection, ruleId)
         db.notifyShareChange()
         route.send(200, { share: null })
         return
@@ -773,7 +727,6 @@ export function registerDatabaseHttpRoutes(
       const share = shares.upsert({
         kind,
         collection,
-        viewId: body.viewId,
         recordId: body.recordId,
         ruleId,
         password: body.password,

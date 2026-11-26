@@ -714,12 +714,6 @@ export class AuthorizationService {
     return resources.filter(({ resource }) => this.authorize(actor, action, resource).allowed).map(({ value }) => value)
   }
 
-  scopeCurrent(resource: Extract<ResourceRef, { type: 'record' }>): 'personal' | 'workspace' | 'shared' | null {
-    const actor = this.currentActor()
-    if (!actor || actor.workspaceId !== resource.workspaceId) return null
-    return this.resourceScope(resource, new Set(), 0)
-  }
-
   /** 返回记录所属的逻辑表（'workspace' 或 'account:<id>'）。 */
   ownerTableOf(resource: Extract<ResourceRef, { type: 'record' }>): string | null {
     return this.resolveOwnerTable(resource, new Set(), 0)

@@ -3,7 +3,6 @@ import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { roleCoversAction, type Action as PermissionAction, type AuthorizationService } from '@biu/host-account/authorization'
 import { isRegisteredBuiltinPlugin } from '@biu/host-account/store'
 import type { CollectionSchema, CollectionSchemaPack, CollectionSpec, DbRecord } from '@biu/type-file-system'
-import { builtinAllView, builtinAllViewId, builtinMemberViews, isBuiltinAllViewId } from '../catalog-views.ts'
 import {
   assertWritableColumns,
   fullColumnPolicy,
@@ -14,7 +13,6 @@ import {
   projectRecordColumns,
   type ColumnPolicy,
 } from '../column-access.ts'
-import { recordMatchesSharedView, resolveSharedView, type SharedViewDef } from '../share-view-match.ts'
 import { recordMatchesAccessRule, type DataScopeName, type ViewGrantRole } from '../view-access.ts'
 import {
   DATA_COLLECTION_PATH,
@@ -33,7 +31,6 @@ export type WorkspaceMembership = {
   home: string | null
   mine: Set<string>
   any: Set<string>
-  strict?: boolean
 }
 
 export type WorkspaceFiles = {
@@ -52,7 +49,6 @@ export type WorkspaceFiles = {
       parentRecordId?: string
     },
   ): void
-  grantMap?(workspaceId: string, collection: string): Map<string, Set<string>>
   collectionOwnership?(workspaceId: string, collection: string): Map<string, 'personal' | 'workspace' | 'shared' | 'external'>
   listActiveAccessRulesForCollection?(
     workspaceId: string,
@@ -140,7 +136,6 @@ export function isRecordInWorkspace(membership: WorkspaceMembership, collection:
   const key = `${collection}\t${id}`
   if (membership.mine.has(key)) return true
   if (membership.any.has(key)) return false
-  if (membership.strict) return false
   return membership.active === membership.home
 }
 
@@ -156,7 +151,6 @@ export function isBuiltinPluginRecord(spec: CollectionSpec, id: string, record?:
 export type AccessPolicyHost = {
   tags: TagStore
   shares: SharesStore
-  viewCatalog?: { viewsFor(collectionPath: string): SharedViewDef[] }
   collabStore(): WorkspaceFiles | undefined
   authorization(): AuthorizationService | undefined
   deviceWorkspace(): boolean
@@ -210,7 +204,6 @@ class BoundedLru<K, V> {
 export class DatabaseAccessPolicy {
   private readonly ownershipCache = new BoundedLru<string, Map<string, 'personal' | 'workspace' | 'shared' | 'external'>>()
   private readonly ownerCache = new BoundedLru<string, Map<string, string>>()
-  private readonly viewShareCache = new BoundedLru<string, SharedViewDef[]>()
   private readonly recordShareCache = new BoundedLru<string, Set<string>>()
 
   constructor(private readonly host: AccessPolicyHost) {}
@@ -218,12 +211,10 @@ export class DatabaseAccessPolicy {
   clearCaches() {
     this.ownershipCache.clear()
     this.ownerCache.clear()
-    this.viewShareCache.clear()
     this.recordShareCache.clear()
   }
 
   clearShareCaches() {
-    this.viewShareCache.clear()
     this.recordShareCache.clear()
   }
 
@@ -423,16 +414,6 @@ export class DatabaseAccessPolicy {
     }
   }
 
-  grantAllows(collection: string, id: string) {
-    const membership = this.workspaceMembership()
-    const store = this.host.collabStore()
-    const workspaceId = this.resolveWorkspaceId()
-    if (!membership?.strict || !store?.grantMap || !workspaceId) return true
-    const people = store.grantMap(workspaceId, collection).get(id)
-    if (!people || people.size === 0) return true
-    return people.has(currentAccountId())
-  }
-
   /** 标签目录只留下当前用户能读到的源记录上贴过的标签；还没贴到公开数据上的，只留给创建人。 */
   indexTagVisible(id: string, accountId: string) {
     const found = this.host.tags.collect(id)
@@ -492,24 +473,12 @@ export class DatabaseAccessPolicy {
       }
       return rows
     }
-    const store = this.host.collabStore()
-    const workspaceId = this.resolveWorkspaceId()
-    const grants = new Map<string, Map<string, Set<string>>>()
     return rows.filter((row) => {
       if (isBuiltinPluginRow(collection, row as { builtin?: unknown })) {
         return action === 'resource:read' || action === 'resource:list'
       }
       const target = resolveScopeTarget(collection, String(row.id ?? ''), row)
-      if (!isRecordInWorkspace(membership, target.collection, target.id)) return false
-      if (!membership.strict || !store?.grantMap || !workspaceId) return true
-      let map = grants.get(target.collection)
-      if (!map) {
-        map = store.grantMap(workspaceId, target.collection)
-        grants.set(target.collection, map)
-      }
-      const people = map.get(target.id)
-      if (!people || people.size === 0) return true
-      return people.has(currentAccountId())
+      return isRecordInWorkspace(membership, target.collection, target.id)
     })
   }
 
@@ -549,7 +518,7 @@ export class DatabaseAccessPolicy {
     }
     const id = String(row.id ?? '')
     const stored = this.ownershipOf(collection, id)
-    const isPublicShared = this.hasPublicShare(collection, id, row as DbRecord, stored)
+    const isPublicShared = this.hasPublicShare(collection, id)
     if (this.host.deviceWorkspace()) {
       return isPublicShared
         ? { personal: false, workspace: false, shared: true }
@@ -709,7 +678,7 @@ export class DatabaseAccessPolicy {
       return
     }
     const target = resolveScopeTarget(spec.path, id)
-    if (!isRecordInWorkspace(membership, target.collection, target.id) || !this.grantAllows(target.collection, target.id)) {
+    if (!isRecordInWorkspace(membership, target.collection, target.id)) {
       throw new Error(`unknown record: ${spec.path}/${id}`)
     }
   }
@@ -725,65 +694,28 @@ export class DatabaseAccessPolicy {
         if (recordId) ids.add(recordId)
       }
     } catch {
-      /* 分享库还没打开时，仍按视图链接现算 */
+      /* 分享库还没打开时按无分享处理 */
     }
     this.recordShareCache.set(key, ids)
     return ids
   }
 
-  sharedViewsFor(collection: string): SharedViewDef[] {
-    const key = `${this.cacheWorkspaceId()}\t${collection}`
-    const cached = this.viewShareCache.get(key)
-    if (cached) return cached
-    let shares: Array<{ viewId: string }> = []
-    try {
-      shares = this.host.shares.listViews(collection)
-    } catch {
-      shares = []
-    }
-    const saved = [
-      builtinAllView({ path: collection }),
-      ...(this.host.viewCatalog?.viewsFor(collection) ?? []),
-    ]
-    const views: SharedViewDef[] = []
-    for (const share of shares) {
-      const view = resolveSharedView(share.viewId, saved)
-      if (view) views.push(view)
-    }
-    this.viewShareCache.set(key, views)
-    return views
-  }
-
-  hasPublicShare(collection: string, id: string, record?: DbRecord, stored?: DataScopeName | 'external') {
-    if (this.recordShareIds(collection).has(id)) return true
-    if (!record || !stored) return false
-    const views = this.sharedViewsFor(collection)
-    if (!views.length) return false
-    const spec = this.host.collection(collection)
-    const tagged = spec ? this.host.applyTagOverlay(spec, record) : record
-    const schema = spec ? this.host.schemaFor(spec) : undefined
-    const packs: CollectionSchemaPack[] = this.host.tags.list()
-    const scopeForMatch: DataScopeName = stored === 'external' ? 'shared' : stored
-    return views.some((view) => recordMatchesSharedView(tagged, view, scopeForMatch, schema, packs))
-  }
-
-  effectiveScope(_collection: string, _record: DbRecord, stored: DataScopeName | 'external'): DataScopeName | 'external' {
-    return stored
+  hasPublicShare(collection: string, id: string) {
+    return this.recordShareIds(collection).has(id)
   }
 
   shareScopeLabel(collection: string, id: string, record: DbRecord, stored: 'personal' | 'workspace' | 'shared' | 'external') {
     if (this.host.deviceWorkspace()) {
-      return this.hasPublicShare(collection, id, record, stored) ? '共享' : '私人'
+      return this.hasPublicShare(collection, id) ? '共享' : '私人'
     }
     // 云端 K+1 归属模型：
     // - 任何公开链接或外部协作者/访客 -> 「外部」
     // - 空间公共表（workspace） -> 「空间」 / 「外部」
     // - 个人表（account:<id>） -> 「私人」 / 「共享」（空间内分享） / 「外部」
-    if (stored === 'external' || this.hasPublicShare(collection, id, record, stored)) return '外部'
-    const scope = this.effectiveScope(collection, record, stored)
-    if (scope === 'workspace') return '空间'
-    if (scope === 'shared') return '共享'
-    if (scope === 'personal') {
+    if (stored === 'external' || this.hasPublicShare(collection, id)) return '外部'
+    if (stored === 'workspace') return '空间'
+    if (stored === 'shared') return '共享'
+    if (stored === 'personal') {
       // 检查是否被个人表的分享规则命中且有受众
       const store = this.host.collabStore()
       const authorization = this.host.authorization()

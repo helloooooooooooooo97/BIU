@@ -94,13 +94,8 @@ describe('view role permissions & UI guards', () => {
     assert.match(crudSrc, /if \(!externalViews && !canEditSavedView\(current\)\)/)
     assert.match(crudSrc, /if \(!externalViews && !canEditSavedView\(target\)\) return/)
     assert.match(crudSrc, /if \(!canDeleteSavedView\(view\)\) return/)
-    // SharePopover uses VIEW_ROLE_OPTIONS (no commenter) and hides public tab for cloud views
-    assert.match(shareSrc, /const VIEW_ROLE_OPTIONS:[\s\S]*viewer[\s\S]*editor[\s\S]*manager/)
-    assert.doesNotMatch(
-      shareSrc.slice(shareSrc.indexOf('const VIEW_ROLE_OPTIONS'), shareSrc.indexOf('function ShareSelect')),
-      /commenter/,
-    )
-    assert.match(shareSrc, /const hidePublicTab = target\.kind === 'view' && !localOnly/)
+    // SharePopover only handles record sharing (no dead view-sharing branches)
+    assert.doesNotMatch(shareSrc, /VIEW_ROLE_OPTIONS|hidePublicTab|inheritedInternal/)
     // POST /api/db/shares rejects independent view public shares (use access rules instead)
     assert.match(routesSrc, /视图不支持独立公开分享/)
   })

@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'vitest'
 import {
-  assertQueryableColumns,
   assertWritableColumns,
   fullColumnPolicy,
   isContentReadable,
@@ -39,40 +38,6 @@ test('assertWritableColumns blocks hidden and read-only columns including tag fi
   assert.throws(() => assertWritableColumns({ title: 'Hacked' }, policy), /FIELD_FORBIDDEN \(title\)/)
   assert.throws(() => assertWritableColumns({ cost: 1 }, policy), /FIELD_FORBIDDEN \(cost\)/)
   assert.throws(() => assertWritableColumns({ 'tag::hr::level': 'L7' }, policy), /FIELD_FORBIDDEN/)
-})
-
-test('assertQueryableColumns blocks side-channel probing on unreadable fields', () => {
-  const policy: ColumnPolicy = {
-    readable: new Set(['title', 'status']),
-    writable: new Set(),
-  }
-  assert.doesNotThrow(() =>
-    assertQueryableColumns(
-      {
-        filters: { status: 'open', $scope: 'workspace' },
-        sorts: [{ field: 'title', dir: 'asc' }],
-        groupBy: 'status',
-      },
-      policy,
-    ),
-  )
-  assert.throws(() => assertQueryableColumns({ filters: { salary: '50000' } }, policy), /FIELD_FORBIDDEN \(salary\)/)
-  assert.throws(
-    () =>
-      assertQueryableColumns(
-        {
-          filterTree: {
-            kind: 'group',
-            combinator: 'and',
-            children: [{ kind: 'rule', field: 'secret', op: 'eq', value: 'x' }],
-          },
-        },
-        policy,
-      ),
-    /FIELD_FORBIDDEN \(secret\)/,
-  )
-  assert.throws(() => assertQueryableColumns({ sorts: [{ field: 'salary', dir: 'desc' }] }, policy), /FIELD_FORBIDDEN/)
-  assert.throws(() => assertQueryableColumns({ groupBy: 'salary' }, policy), /FIELD_FORBIDDEN/)
 })
 
 test('fullColumnPolicy allows reading and writing all fields', () => {

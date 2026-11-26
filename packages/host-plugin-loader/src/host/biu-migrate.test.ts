@@ -416,10 +416,9 @@ test('v59 backfills owner_table, inherit_parent, access_rules.owner_table, and s
   assert.deepEqual(policies.get('p_child_priv'), { owner_table: 'account:acc_a', inherit_parent: 1 })
 
   const rule = db
-    .prepare(`SELECT owner_table, visible_views_json FROM access_rules WHERE id = 'rule_legacy'`)
-    .get() as { owner_table: string; visible_views_json: string | null }
+    .prepare(`SELECT owner_table FROM access_rules WHERE id = 'rule_legacy'`)
+    .get() as { owner_table: string }
   assert.equal(rule.owner_table, 'account:acc_a')
-  assert.equal(rule.visible_views_json, null)
 
   const vWs = JSON.parse(
     (db.prepare(`SELECT payload_json FROM saved_views WHERE view_id = 'v_ws'`).get() as { payload_json: string }).payload_json,

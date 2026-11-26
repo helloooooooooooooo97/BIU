@@ -29,8 +29,6 @@ type DatabaseSync = import('node:sqlite').DatabaseSync
 export type StoredView = Partial<SavedView> & Pick<SavedView, 'id' | 'name'> & { createdBy?: string; createdAt?: number }
 
 export type PolicyViewGuard = {
-  isLocked(workspaceId: string, collection: string, viewId: string): boolean
-  canEditLocked(workspaceId: string, accountId: string): boolean
   workspaceOwner?(workspaceId: string): string | null
   canSeeView?(workspaceId: string, collection: string, view: StoredView, accountId: string): boolean
   canModifyView?(workspaceId: string, collection: string, view: StoredView, accountId: string): boolean
@@ -65,28 +63,6 @@ function bucketKey(workspaceId: string, collectionPath: string) {
   return `${workspaceId}\t${normalizeCollectionPath(collectionPath)}`
 }
 
-function stableJson(value: unknown): string {
-  if (value === undefined || value === null) return ''
-  if (typeof value !== 'object') return JSON.stringify(value)
-  if (Array.isArray(value)) return `[${value.map((item) => stableJson(item)).join(',')}]`
-  const entries = Object.entries(value as Record<string, unknown>)
-    .filter(([, v]) => v !== undefined)
-    .sort(([a], [b]) => a.localeCompare(b))
-  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableJson(v)}`).join(',')}}`
-}
-
-function viewBoundaryChanged(prev: StoredView, next: StoredView): boolean {
-  const prevFilters = stableJson(prev.filters ?? {})
-  const nextFilters = stableJson(next.filters ?? {})
-  if (prevFilters !== nextFilters) return true
-  const prevTree = stableJson(prev.filterTree ?? null)
-  const nextTree = stableJson(next.filterTree ?? null)
-  if (prevTree !== nextTree) return true
-  const prevCols = stableJson(prev.columns ?? [])
-  const nextCols = stableJson(next.columns ?? [])
-  return prevCols !== nextCols
-}
-
 export class SavedViewsStore {
   private byPath = new Map<string, StoredView[]>()
   private db: DatabaseSync | null = null
@@ -106,12 +82,8 @@ export class SavedViewsStore {
     return this.workspaceResolver?.() ?? ''
   }
 
-  private isForeignOwned(prev: StoredView | undefined, workspaceId: string, accountId: string): boolean {
+  private isForeignOwned(prev: StoredView | undefined, accountId: string): boolean {
     if (!prev?.createdBy || !accountId || prev.createdBy === accountId) return false
-    // 私人视图：仅创建者本人可改/删，管理员也不越权修改他人私人视图
-    if (prev.scope === 'personal') return true
-    // 空间/共享视图：仅创建者或空间管理员可改/删，其他成员只读消费
-    if (this.policyGuard?.canEditLocked(workspaceId, accountId)) return false
     return true
   }
 
@@ -175,14 +147,8 @@ export class SavedViewsStore {
       if (!this.policyGuard.canModifyView(workspaceId, path, prev, accountId)) {
         throw new Error('permission denied: VIEW_OWNER_ONLY')
       }
-    } else if (this.isForeignOwned(prev, workspaceId, accountId)) {
+    } else if (this.isForeignOwned(prev, accountId)) {
       throw new Error('permission denied: VIEW_OWNER_ONLY')
-    }
-    if (!this.policyGuard) return
-    if (!this.policyGuard.isLocked(workspaceId, path, String(prev.id))) return
-    if (this.policyGuard.canEditLocked(workspaceId, accountId)) return
-    if (viewBoundaryChanged(prev, next)) {
-      throw new Error('permission denied: POLICY_LOCKED_VIEW')
     }
   }
 
@@ -210,13 +176,9 @@ export class SavedViewsStore {
       if (!this.policyGuard.canRemoveView(workspaceId, path, prev, accountId)) {
         throw new Error('permission denied: VIEW_OWNER_ONLY')
       }
-    } else if (this.isForeignOwned(prev, workspaceId, accountId)) {
+    } else if (this.isForeignOwned(prev, accountId)) {
       throw new Error('permission denied: VIEW_OWNER_ONLY')
     }
-    if (!this.policyGuard) return
-    if (!this.policyGuard.isLocked(workspaceId, path, viewId)) return
-    if (this.policyGuard.canEditLocked(workspaceId, accountId)) return
-    throw new Error('permission denied: POLICY_LOCKED_VIEW')
   }
 
   open(path = ':memory:') {

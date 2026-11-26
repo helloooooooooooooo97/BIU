@@ -17,10 +17,10 @@ test('DatabaseAccessPolicy fails closed in cloud RBAC mode when actor or workspa
 
   const policy = new DatabaseAccessPolicy({
     tags,
-    shares: { listRecords: () => [], listViews: () => [] } as never,
+    shares: { listRecords: () => [] } as never,
     collabStore: () => ({
       activeWorkspaceId: () => null,
-      membership: () => ({ active: null, home: null, mine: new Set(), any: new Set(), strict: true }),
+      membership: () => ({ active: null, home: null, mine: new Set(), any: new Set() }),
     }) as never,
     authorization: () =>
       ({

@@ -1,14 +1,10 @@
-import type { CollectionSchema, CollectionSchemaPack, DbRecord } from '@biu/type-file-system'
-import { stubAnyBuiltinView } from './catalog-views.ts'
 import {
   encodeListFilter,
   looksLikeFilterTree,
-  matchListFilterRecord,
   normalizeFilterGroup,
   resolveViewFilterTree,
   type FilterGroup,
 } from './query-logic.ts'
-import type { DataScopeName } from './view-access.ts'
 
 export type SharedViewDef = {
   id: string
@@ -63,25 +59,4 @@ export function viewShareListFilter(view: {
       filterTree,
     }),
   )
-}
-
-export function resolveSharedView(viewId: string, saved: SharedViewDef[]): SharedViewDef | null {
-  const id = String(viewId ?? '').trim()
-  if (!id) return null
-  const stored = saved.find((view) => view.id === id)
-  if (stored) return stored
-  return stubAnyBuiltinView(id, saved as Parameters<typeof stubAnyBuiltinView>[1])
-}
-
-export function recordMatchesSharedView(
-  record: DbRecord,
-  view: SharedViewDef,
-  storedScope: DataScopeName,
-  schema?: CollectionSchema,
-  packs: CollectionSchemaPack[] = [],
-) {
-  const declared = view.filters?.$scope
-  const scope = declared === 'personal' || declared === 'workspace' || declared === 'shared' ? declared : ''
-  if (scope && storedScope !== scope) return false
-  return matchListFilterRecord(record, viewShareListFilter(view), schema, packs)
 }

@@ -108,8 +108,7 @@ export class CollabStore {
         enabled INTEGER NOT NULL DEFAULT 1,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
-        owner_table TEXT NOT NULL DEFAULT '',
-        visible_views_json TEXT
+        owner_table TEXT NOT NULL DEFAULT ''
       );
       CREATE INDEX IF NOT EXISTS access_rules_ws_col
         ON access_rules(workspace_id, collection, enabled);
@@ -131,9 +130,6 @@ export class CollabStore {
     const cols = (this.db.prepare('PRAGMA table_info(access_rules)').all() as Array<{ name: string }>).map((c) => c.name)
     if (!cols.includes('owner_table')) {
       this.db.exec(`ALTER TABLE access_rules ADD COLUMN owner_table TEXT NOT NULL DEFAULT ''`)
-    }
-    if (!cols.includes('visible_views_json')) {
-      this.db.exec(`ALTER TABLE access_rules ADD COLUMN visible_views_json TEXT`)
     }
     this.db.exec(
       `CREATE INDEX IF NOT EXISTS access_rules_ws_col_table
@@ -2214,23 +2210,6 @@ export class CollabStore {
     }
   }
 
-  grantMap(workspaceId: string, collection: string) {
-    const rows = this.db
-      .prepare(
-        `SELECT record_id, subject_id
-         FROM record_grants
-         WHERE workspace_id = ? AND collection = ? AND subject_type = 'account'`,
-      )
-      .all(workspaceId, collection) as Array<{ record_id: string; subject_id: string }>
-    const map = new Map<string, Set<string>>()
-    for (const row of rows) {
-      const set = map.get(row.record_id) ?? new Set<string>()
-      set.add(row.subject_id)
-      map.set(row.record_id, set)
-    }
-    return map
-  }
-
   canReadRecord(collection: string, recordId: string) {
     const caller = currentAccountId()
     const workspaceId = this.activeWorkspaceId()
@@ -2269,7 +2248,6 @@ export class CollabStore {
         canRevoke: canManage,
       })),
       currentAccountId: actorId,
-      viewGrants: [] as Array<never>,
       roleChain: this.authorization.roleChain(actorId, resource),
       inheritance: {
         mode: inheritance.mode,
@@ -3125,7 +3103,6 @@ export class CollabStore {
       owner_table?: string
       filter_tree_json: string
       columns_json: string | null
-      visible_views_json?: string | null
       display_snapshot_json: string | null
       enabled: number
       created_at: number
@@ -3196,17 +3173,6 @@ export class CollabStore {
           columns = null
         }
       }
-      let visibleViews: string[] | null = null
-      if (row.visible_views_json) {
-        try {
-          const parsed = JSON.parse(row.visible_views_json)
-          if (Array.isArray(parsed)) {
-            visibleViews = parsed.filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
-          }
-        } catch {
-          visibleViews = null
-        }
-      }
       let displaySnapshot: AccessRuleDisplaySnapshot | null = null
       if (row.display_snapshot_json) {
         try {
@@ -3229,7 +3195,6 @@ export class CollabStore {
         scope,
         filterTree,
         columns,
-        visibleViews,
         displaySnapshot,
         enabled: row.enabled !== 0,
         createdAt: Number(row.created_at) || 0,
@@ -3366,7 +3331,6 @@ export class CollabStore {
     if (!name) throw new CollabError('规则名称不能为空', 400)
     const filterTree = input.filterTree && typeof input.filterTree === 'object' ? input.filterTree : { op: 'and', rules: [] }
     const columns = this.normalizeAccessRuleColumns(input.columns)
-    const visibleViews = this.normalizeAccessRuleColumns(input.visibleViews)
     const displaySnapshot = input.displaySnapshot && typeof input.displaySnapshot === 'object' ? input.displaySnapshot : null
     const enabled = input.enabled === false ? 0 : 1
     const ruleId = id('rule')
@@ -3378,8 +3342,8 @@ export class CollabStore {
       this.db
         .prepare(
           `INSERT INTO access_rules
-             (id, workspace_id, collection, name, created_by, owner_table, filter_tree_json, columns_json, visible_views_json, display_snapshot_json, enabled, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             (id, workspace_id, collection, name, created_by, owner_table, filter_tree_json, columns_json, display_snapshot_json, enabled, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           ruleId,
@@ -3390,7 +3354,6 @@ export class CollabStore {
           ownerTable,
           JSON.stringify(filterTree),
           columns ? JSON.stringify(columns) : null,
-          visibleViews ? JSON.stringify(visibleViews) : null,
           displaySnapshot ? JSON.stringify(displaySnapshot) : null,
           enabled,
           now,
@@ -3441,9 +3404,6 @@ export class CollabStore {
     if (!nextName) throw new CollabError('规则名称不能为空', 400)
     const nextFilterTree = patch.filterTree !== undefined ? patch.filterTree : existing.filterTree
     const nextColumns = patch.columns !== undefined ? this.normalizeAccessRuleColumns(patch.columns) : existing.columns
-    const nextVisibleViews = patch.visibleViews !== undefined
-      ? this.normalizeAccessRuleColumns(patch.visibleViews)
-      : (existing.visibleViews ?? null)
     const nextDisplaySnapshot = patch.displaySnapshot !== undefined ? patch.displaySnapshot : existing.displaySnapshot
     const nextEnabled = patch.enabled !== undefined ? (patch.enabled ? 1 : 0) : existing.enabled ? 1 : 0
     const now = Date.now()
@@ -3453,7 +3413,7 @@ export class CollabStore {
       this.db
         .prepare(
           `UPDATE access_rules
-           SET name = ?, owner_table = ?, filter_tree_json = ?, columns_json = ?, visible_views_json = ?, display_snapshot_json = ?, enabled = ?, updated_at = ?
+           SET name = ?, owner_table = ?, filter_tree_json = ?, columns_json = ?, display_snapshot_json = ?, enabled = ?, updated_at = ?
            WHERE workspace_id = ? AND id = ?`,
         )
         .run(
@@ -3461,7 +3421,6 @@ export class CollabStore {
           nextOwnerTable,
           JSON.stringify(nextFilterTree ?? { op: 'and', rules: [] }),
           nextColumns ? JSON.stringify(nextColumns) : null,
-          nextVisibleViews ? JSON.stringify(nextVisibleViews) : null,
           nextDisplaySnapshot ? JSON.stringify(nextDisplaySnapshot) : null,
           nextEnabled,
           now,

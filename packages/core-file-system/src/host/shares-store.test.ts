@@ -4,21 +4,21 @@ import { SharesStore } from './shares-store.ts'
 
 test('shares persist workspaceId and createdBy and support creator revocation', () => {
   const store = new SharesStore().open(':memory:')
-  const viewShare = store.upsert({
-    kind: 'view',
+  const recShare = store.upsert({
+    kind: 'record',
     collection: '/pages',
-    viewId: 'v-team',
+    recordId: 'p-1',
     workspaceId: 'ws-1',
     createdBy: 'alice',
   })
-  assert.equal(viewShare.workspaceId, 'ws-1')
-  assert.equal(viewShare.createdBy, 'alice')
+  assert.equal(recShare.workspaceId, 'ws-1')
+  assert.equal(recShare.createdBy, 'alice')
 
   // Updating flags does not overwrite original createdBy
   const updated = store.upsert({
-    kind: 'view',
+    kind: 'record',
     collection: '/pages',
-    viewId: 'v-team',
+    recordId: 'p-1',
     allowCopy: false,
     workspaceId: 'ws-1',
     createdBy: 'bob',
@@ -28,7 +28,13 @@ test('shares persist workspaceId and createdBy and support creator revocation', 
 
   // Revoking by creator removes Alice's shares in ws-1
   store.revokeByCreator('ws-1', 'alice')
-  assert.equal(store.get(viewShare.token), null)
+  assert.equal(store.get(recShare.token), null)
+
+  // Legacy view shares are rejected
+  assert.throws(
+    () => store.upsert({ kind: 'view' as never, collection: '/pages', viewId: 'v-team' }),
+    /invalid share kind/,
+  )
 })
 
 test('shares support kind=rule public links decoupled from views', () => {

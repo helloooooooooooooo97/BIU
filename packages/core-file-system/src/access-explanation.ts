@@ -1,12 +1,4 @@
-import type { CollectionSchema, CollectionSchemaPack, DbRecord } from '@biu/type-file-system'
-import {
-  builtinAllView,
-  builtinMemberViews,
-  isBuiltinAllViewId,
-} from './catalog-views.ts'
-import { WORKSPACE_MEMBERS_COLLECTION_PATH } from './paths.ts'
-import { recordMatchesSharedView, resolveSharedView, type SharedViewDef } from './share-view-match.ts'
-import { grantAudienceKind, recordMatchesGrantedView, type DataScopeName, type ViewGrantRole } from './view-access.ts'
+import type { DataScopeName, ViewGrantRole } from './view-access.ts'
 
 export type AccessExplanation = {
   builtin?: boolean
@@ -28,31 +20,22 @@ export type AccessExplanation = {
       id: string
       sourceRecordId: string
       sourceTitle: string
-      subjectType: 'account' | 'group' | 'member_view' | 'workspace_members'
+      subjectType: 'account' | 'group' | 'workspace_members'
       subjectName: string
       audienceKind: 'internal' | 'external'
       role: ViewGrantRole
     }>
     direct: Array<{
       id: string
-      subjectType: 'account' | 'group' | 'member_view' | 'workspace_members'
+      subjectType: 'account' | 'group' | 'workspace_members'
       subjectId: string
-      subjectName: string
-      audienceKind: 'internal' | 'external'
-      role: ViewGrantRole
-    }>
-    fromViews: Array<{
-      id: string
-      viewId: string
-      viewName: string
-      subjectType: 'account' | 'member_view'
       subjectName: string
       audienceKind: 'internal' | 'external'
       role: ViewGrantRole
     }>
     publicLinks: Array<{
       id: string
-      kind: 'record' | 'view'
+      kind: 'record'
       targetName: string
       lanOnly: boolean
     }>
@@ -62,7 +45,7 @@ export type AccessExplanation = {
     primarySummary: string
     paths: Array<{
       id: string
-      kind: 'ownership' | 'direct' | 'inherited' | 'data_view' | 'public_link'
+      kind: 'ownership' | 'direct' | 'inherited' | 'public_link'
       isPrimary: boolean
       role: ViewGrantRole
       title: string
@@ -83,7 +66,7 @@ export type RoleChainInput = {
   title: string
   detail: string
   role: string
-  source?: 'ownership' | 'direct-grant' | 'group-grant' | 'view-grant' | 'workspace-default' | 'inherited' | 'legacy'
+  source?: 'ownership' | 'direct-grant' | 'group-grant' | 'workspace-default' | 'inherited' | 'legacy'
 }
 
 export type AncestorAccessInput = {
@@ -94,25 +77,12 @@ export type AncestorAccessInput = {
   ownerId: string
   people: Array<{ id: string; name: string; role: string; memberKind: 'member' | 'external' | 'guest' }>
   groups: Array<{ id: string; name: string; role: string }>
-  memberViews: Array<{ id: string; role: string }>
-}
-
-export type ViewGrantInput = {
-  viewId: string
-  subjectType: 'account' | 'member_view'
-  subjectId: string
-  role: string
-  name: string
-  memberKind?: 'member' | 'external' | 'guest' | string
-  grantedBy?: string
-  matchesActor?: boolean
 }
 
 export type PublicShareInput = {
-  kind: 'record' | 'view'
+  kind: 'record'
   collection: string
-  recordId?: string
-  viewId?: string
+  recordId: string
   title?: string
 }
 
@@ -124,11 +94,6 @@ export type BuildAccessExplanationInput = {
   builtin?: boolean
   localOnly: boolean
   fallbackRole?: ViewGrantRole
-  record?: DbRecord | null
-  schema?: CollectionSchema
-  packs?: CollectionSchemaPack[]
-  dataViews?: SharedViewDef[]
-  memberViews?: Array<{ id: string; name: string; filters?: Record<string, unknown> }>
   publicShares?: PublicShareInput[]
   recordTitles?: Record<string, string>
   access?: {
@@ -136,8 +101,6 @@ export type BuildAccessExplanationInput = {
     ownerId: string
     people: Array<{ id: string; name: string; role: string; memberKind: 'member' | 'external' | 'guest' }>
     groups: Array<{ id: string; name: string; role: string }>
-    memberViews: Array<{ id: string; role: string }>
-    viewGrants: ViewGrantInput[]
     roleChain: RoleChainInput[]
     inheritance?: {
       mode: 'inherit' | 'custom'
@@ -146,19 +109,19 @@ export type BuildAccessExplanationInput = {
   }
 }
 
-const ROLE_RANK: Record<ViewGrantRole, number> = { viewer: 1, editor: 2, manager: 3, owner: 4 }
+const ROLE_RANK: Record<ViewGrantRole, number> = { viewer: 1, commenter: 2, editor: 3, manager: 4, owner: 5 }
 const KIND_PRIORITY: Record<AccessExplanation['myAccess']['paths'][number]['kind'], number> = {
-  ownership: 5,
-  direct: 4,
-  inherited: 3,
-  data_view: 2,
+  ownership: 4,
+  direct: 3,
+  inherited: 2,
   public_link: 1,
 }
 
 function normalizeRole(role: string | undefined, fallback: ViewGrantRole = 'viewer'): ViewGrantRole {
-  if (role === 'owner' || role === 'manager' || role === 'editor' || role === 'viewer') return role
+  if (role === 'owner' || role === 'manager' || role === 'editor' || role === 'commenter' || role === 'viewer') return role
   if (role === '管理') return 'manager'
   if (role === '编辑') return 'editor'
+  if (role === '评论') return 'commenter'
   if (role === '查看' || role === '阅读') return 'viewer'
   return fallback
 }
@@ -171,21 +134,8 @@ function titleOf(recordTitles: Record<string, string> | undefined, collection: s
   )
 }
 
-function resolveViewName(
-  viewId: string,
-  _collection: string,
-  tableLabel: string,
-  dataViews: SharedViewDef[],
-) {
-  const found = dataViews.find((view) => view.id === viewId)?.name?.trim()
-  if (found) return found
-  if (isBuiltinAllViewId(viewId)) return `全部${tableLabel || ''}`
-  return viewId
-}
-
 export function buildAccessExplanation(input: BuildAccessExplanationInput): AccessExplanation {
   const recordTitle = input.recordTitle?.trim() || '本条'
-  const tableLabel = input.tableLabel?.trim() || ''
 
   if (input.builtin) {
     return {
@@ -196,7 +146,7 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
         summary: '内置插件，所有成员可见',
       },
       inheritance: { mode: 'custom', ancestors: [] },
-      audience: { inherited: [], direct: [], fromViews: [], publicLinks: [] },
+      audience: { inherited: [], direct: [], publicLinks: [] },
       myAccess: {
         effectiveRole: 'viewer',
         primarySummary: '内置插件仅支持查看',
@@ -212,18 +162,7 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
     }
   }
 
-  const allDataViews: SharedViewDef[] = [
-    builtinAllView({ path: input.collection }),
-    ...(input.dataViews ?? []).filter((view) => !isBuiltinAllViewId(view.id)),
-  ]
-  const allMemberViews = [
-    { ...builtinAllView({ path: WORKSPACE_MEMBERS_COLLECTION_PATH }) },
-    ...builtinMemberViews().map((view) => ({ id: view.id, name: view.name, filters: view.filters })),
-    ...(input.memberViews ?? []),
-  ]
-
   const storedScope: DataScopeName = input.localOnly ? 'personal' : (input.access?.scope ?? 'personal')
-  const record = input.record ?? { id: input.recordId }
 
   // 1. 公开/局域网链接命中
   const publicLinks: AccessExplanation['audience']['publicLinks'] = []
@@ -238,22 +177,6 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
           id: 'public:record',
           kind: 'record',
           targetName: '本条',
-          lanOnly: input.localOnly,
-        })
-      }
-      continue
-    }
-    if (share.kind === 'view' && share.viewId) {
-      const view = resolveSharedView(share.viewId, allDataViews)
-      if (!view || !recordMatchesSharedView(record, view, storedScope, input.schema, input.packs ?? [])) continue
-      const key = `view:${share.viewId}`
-      if (!seenLinks.has(key)) {
-        seenLinks.add(key)
-        const targetName = String(share.title || view.name || share.viewId).trim() || view.id
-        publicLinks.push({
-          id: `public:view:${share.viewId}`,
-          kind: 'view',
-          targetName,
           lanOnly: input.localOnly,
         })
       }
@@ -275,7 +198,6 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
       audience: {
         inherited: [],
         direct: [],
-        fromViews: [],
         publicLinks,
       },
       myAccess: {
@@ -333,19 +255,6 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
           role: normalizeRole(group.role),
         })
       }
-      for (const mv of ancestor.memberViews) {
-        addedFromAncestor = true
-        const mvName = allMemberViews.find((view) => view.id === mv.id)?.name ?? mv.id
-        inheritedAudience.push({
-          id: `inh:${ancestor.recordId}:mv:${mv.id}`,
-          sourceRecordId: ancestor.recordId,
-          sourceTitle,
-          subjectType: 'member_view',
-          subjectName: mvName,
-          audienceKind: grantAudienceKind({ subjectType: 'member_view', subjectId: mv.id }, allMemberViews),
-          role: normalizeRole(mv.role),
-        })
-      }
       if (!addedFromAncestor && ancestor.scope === 'workspace') {
         inheritedAudience.push({
           id: `inh:${ancestor.recordId}:workspace_members`,
@@ -384,17 +293,6 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
       role: normalizeRole(group.role),
     })
   }
-  for (const mv of access?.memberViews ?? []) {
-    const mvName = allMemberViews.find((view) => view.id === mv.id)?.name ?? mv.id
-    directAudience.push({
-      id: `direct:mv:${mv.id}`,
-      subjectType: 'member_view',
-      subjectId: mv.id,
-      subjectName: mvName,
-      audienceKind: grantAudienceKind({ subjectType: 'member_view', subjectId: mv.id }, allMemberViews),
-      role: normalizeRole(mv.role),
-    })
-  }
   if (!directAudience.length && inheritanceMode !== 'inherit' && storedScope === 'workspace') {
     directAudience.push({
       id: 'direct:workspace_members',
@@ -406,61 +304,16 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
     })
   }
 
-  // 5. 数据视图开放
-  const fromViews: AccessExplanation['audience']['fromViews'] = []
-  const matchedActorViewPaths: AccessExplanation['myAccess']['paths'] = []
-  for (const grant of access?.viewGrants ?? []) {
-    if (!recordMatchesGrantedView(record, grant.viewId, allDataViews, storedScope, {
-      grantedBy: grant.grantedBy,
-      recordOwnerId: ownerId,
-    })) {
-      continue
-    }
-    const viewName = resolveViewName(grant.viewId, input.collection, tableLabel, allDataViews)
-    const subjectName = grant.subjectType === 'member_view'
-      ? (allMemberViews.find((view) => view.id === grant.subjectId)?.name ?? grant.name)
-      : grant.name
-    const audienceKind = grantAudienceKind(
-      { subjectType: grant.subjectType, subjectId: grant.subjectId, memberKind: grant.memberKind },
-      allMemberViews,
-    )
-    const role = normalizeRole(grant.role)
-    const id = `view:${grant.viewId}:${grant.subjectType}:${grant.subjectId}`
-    fromViews.push({
-      id,
-      viewId: grant.viewId,
-      viewName,
-      subjectType: grant.subjectType,
-      subjectName,
-      audienceKind,
-      role,
-    })
-    if (grant.matchesActor) {
-      matchedActorViewPaths.push({
-        id,
-        kind: 'data_view',
-        isPrimary: false,
-        role,
-        title: `视图「${viewName}」`,
-        reason: grant.subjectType === 'member_view'
-          ? `你属于成员视图「${subjectName}」`
-          : '通过该视图直接授权给你',
-      })
-    }
-  }
-
-  // 6. 可见范围结论
+  // 5. 可见范围结论
   const hasExternal =
     storedScope === 'shared'
     || inheritedAudience.some((item) => item.audienceKind === 'external')
     || directAudience.some((item) => item.audienceKind === 'external')
-    || fromViews.some((item) => item.audienceKind === 'external')
   const hasPublicLink = publicLinks.length > 0
   const hasInternal =
     storedScope === 'workspace'
     || inheritedAudience.some((item) => item.audienceKind === 'internal')
     || directAudience.some((item) => item.audienceKind === 'internal')
-    || fromViews.some((item) => item.audienceKind === 'internal')
 
   const visibilityScope: DataScopeName = hasPublicLink || hasExternal
     ? 'shared'
@@ -469,8 +322,7 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
       : 'personal'
 
   const hasAllMembers = [...inheritedAudience, ...directAudience].some(
-    (item) => item.subjectType === 'workspace_members'
-      || (item.subjectType === 'member_view' && item.subjectName.includes('全部')),
+    (item) => item.subjectType === 'workspace_members',
   )
   const visibilitySummary = visibilityScope === 'shared'
     ? (hasPublicLink && hasExternal
@@ -482,11 +334,10 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
       ? (hasAllMembers ? '全部空间成员可见' : '空间内指定成员可见')
       : '仅创建者自己可见'
 
-  // 7. 我的权限路径（严格只含命中当前用户的路径）
+  // 6. 我的权限路径（严格只含命中当前用户的路径）
   const myPaths: AccessExplanation['myAccess']['paths'] = []
   const roleChain = access?.roleChain ?? []
   if (roleChain.length > 1) {
-    // roleChain[0] 是本条，最后一个是产生权限的源祖先 -> 反转为「源祖先 -> ... -> 本条」
     const ordered = [...roleChain].reverse()
     const origin = ordered[0]!
     const originTitle = titleOf(
@@ -532,8 +383,6 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
     })
   }
 
-  myPaths.push(...matchedActorViewPaths)
-
   if (!myPaths.length) {
     const fallback = input.fallbackRole ?? 'viewer'
     myPaths.push({
@@ -558,9 +407,7 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
     ? '你是这条内容的创建者'
     : primary.kind === 'inherited'
       ? `继承自上级「${primary.title}」`
-      : primary.kind === 'data_view'
-        ? `通过${primary.title}获得`
-        : primary.reason
+      : primary.reason
 
   return {
     localOnly: false,
@@ -575,7 +422,6 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
     audience: {
       inherited: inheritedAudience,
       direct: directAudience,
-      fromViews,
       publicLinks,
     },
     myAccess: {

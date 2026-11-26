@@ -26,7 +26,6 @@ describe('DatabaseAccessPolicy multi-tenant bounded LRU caches', () => {
       tags: {} as AccessPolicyHost['tags'],
       shares: {
         listRecords: () => [],
-        listViews: () => [],
       } as unknown as AccessPolicyHost['shares'],
       collabStore: () => store,
       authorization: () => undefined,
@@ -54,7 +53,7 @@ describe('DatabaseAccessPolicy multi-tenant bounded LRU caches', () => {
     assert.equal(ownerCalls, 10)
   })
 
-  it('isolates recordShareIds and sharedViewsFor by workspaceId', () => {
+  it('isolates recordShareIds by workspaceId', () => {
     const sharesByWs: Record<string, Array<{ recordId: string }>> = {
       'ws-a': [{ recordId: 'shared-in-a' }],
       'ws-b': [{ recordId: 'shared-in-b' }],
@@ -68,7 +67,6 @@ describe('DatabaseAccessPolicy multi-tenant bounded LRU caches', () => {
       tags: {} as AccessPolicyHost['tags'],
       shares: {
         listRecords: () => sharesByWs[currentRequestWorkspaceId()] ?? [],
-        listViews: () => [],
       } as unknown as AccessPolicyHost['shares'],
       collabStore: () => store,
       authorization: () => undefined,

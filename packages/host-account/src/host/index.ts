@@ -1273,8 +1273,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         ownerId: me.id,
         people: [],
         groups: [],
-        memberViews: [],
-        viewGrants: [],
         roleChain: [],
         local: true,
       })
@@ -1414,7 +1412,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       ownerTable?: string
       filterTree?: Record<string, unknown>
       columns?: string[] | null
-      visibleViews?: string[] | null
       displaySnapshot?: { mode?: string; sorts?: unknown[]; groupBy?: string; groupConfig?: Record<string, unknown> } | null
       enabled?: boolean
       grants?: Array<{ subjectType: 'account' | 'workspace' | 'group'; subjectId: string; role: 'viewer' | 'editor' | 'manager' }>
@@ -1426,7 +1423,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       ownerTable: body.ownerTable,
       filterTree: body.filterTree,
       columns: body.columns,
-      visibleViews: body.visibleViews,
       displaySnapshot: body.displaySnapshot,
       enabled: body.enabled,
       grants: body.grants,

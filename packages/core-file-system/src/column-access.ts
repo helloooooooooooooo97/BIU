@@ -1,5 +1,3 @@
-import type { FilterGroup, SortRule } from './query-logic.ts'
-
 export type ColumnPolicy = {
   readable: '*' | Set<string>
   writable: '*' | Set<string>
@@ -105,48 +103,6 @@ export function assertWritableColumns(patch: Record<string, unknown>, policy: Co
   for (const key of Object.keys(patch)) {
     if (!isColumnWritable(key, policy)) {
       throw new Error(`permission denied: FIELD_FORBIDDEN (${key})`)
-    }
-  }
-}
-
-function collectFilterTreeFields(group: FilterGroup | undefined, out: Set<string>) {
-  if (!group || !Array.isArray(group.children)) return
-  for (const child of group.children) {
-    if (child.kind === 'rule' && child.field) {
-      out.add(String(child.field))
-    } else if (child.kind === 'group') {
-      collectFilterTreeFields(child, out)
-    }
-  }
-}
-
-/** 查询侧信道防护：禁止通过 filters / filterTree / sorts / groupBy 引用当前用户不可读的列。 */
-export function assertQueryableColumns(
-  query: {
-    filters?: Record<string, unknown>
-    filterTree?: FilterGroup
-    sorts?: SortRule[]
-    sortField?: string
-    groupBy?: string
-  },
-  policy: ColumnPolicy,
-): void {
-  if (policy.readable === '*') return
-  const referenced = new Set<string>()
-  if (query.filters) {
-    for (const key of Object.keys(query.filters)) {
-      if (!key.startsWith('$')) referenced.add(key)
-    }
-  }
-  collectFilterTreeFields(query.filterTree, referenced)
-  for (const sort of query.sorts ?? []) {
-    if (sort.field) referenced.add(String(sort.field))
-  }
-  if (query.sortField) referenced.add(String(query.sortField))
-  if (query.groupBy) referenced.add(String(query.groupBy))
-  for (const field of referenced) {
-    if (!isColumnReadable(field, policy)) {
-      throw new Error(`permission denied: FIELD_FORBIDDEN (${field})`)
     }
   }
 }

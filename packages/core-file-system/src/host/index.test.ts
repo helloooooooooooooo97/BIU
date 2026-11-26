@@ -3110,7 +3110,7 @@ test('a member sandbox is private until the owner shares it', async () => {
   }
 })
 
-test('a lan view share marks matching records shared without stamping ownership', async () => {
+test('a lan record share marks the shared record without affecting other records', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
   const rows = new Map<string, DbRecord>([
@@ -3130,120 +3130,17 @@ test('a lan view share marks matching records shared without stamping ownership'
     list: () => [...rows.values()],
     get: (id) => rows.get(id) ?? null,
   })
-  db.viewCatalog = {
-    viewsFor: (path) => path === '/docs' ? [{ id: 'open', name: '进行中', filters: { status: 'open' } }] : [],
-  }
   const scopeOf = (items: DbRecord[], title: string) => items.find((row) => row.title === title)?.shareScope
   assert.equal(scopeOf((await db.list('/docs')).items, '进行中'), '私人')
-  db.shares.upsert({ kind: 'view', collection: '/docs', viewId: 'open' })
+  db.shares.upsert({ kind: 'record', collection: '/docs', recordId: 'done1' })
   const listed = await db.list('/docs')
-  assert.equal(scopeOf(listed.items, '进行中'), '共享')
-  assert.equal(scopeOf(listed.items, '已完成'), '私人')
+  assert.equal(scopeOf(listed.items, '进行中'), '私人')
+  assert.equal(scopeOf(listed.items, '已完成'), '共享')
   const roleOf = (items: DbRecord[], title: string) => items.find((row) => row.title === title)?.shareRole
   assert.equal(roleOf(listed.items, '进行中'), '管理')
   assert.equal(roleOf(listed.items, '已完成'), '管理')
-  assert.equal(db.shares.findRecord('/docs', 'open1'), null)
-  db.shares.revokeView('/docs', 'open')
-  assert.equal(scopeOf((await db.list('/docs')).items, '进行中'), '私人')
-  db.shares.upsert({ kind: 'record', collection: '/docs', recordId: 'done1' })
-  db.shares.upsert({ kind: 'view', collection: '/docs', viewId: 'open' })
-  const mixed = await db.list('/docs')
-  assert.equal(scopeOf(mixed.items, '进行中'), '共享')
-  assert.equal(scopeOf(mixed.items, '已完成'), '共享')
-  db.shares.revokeView('/docs', 'open')
-  const keepRecord = await db.list('/docs')
-  assert.equal(scopeOf(keepRecord.items, '进行中'), '私人')
-  assert.equal(scopeOf(keepRecord.items, '已完成'), '共享')
-  db.viewCatalog = {
-    viewsFor: (path) => path === '/docs' ? [{ id: 'open', name: '进行中', filters: { status: 'done' } }] : [],
-  }
-  db.shares.upsert({ kind: 'view', collection: '/docs', viewId: 'open' })
-  const shifted = await db.list('/docs')
-  assert.equal(scopeOf(shifted.items, '进行中'), '私人')
-  assert.equal(scopeOf(shifted.items, '已完成'), '共享')
-  db.shares.revokeView('/docs', 'open')
   db.shares.revokeRecord('/docs', 'done1')
-  db.shares.upsert({ kind: 'view', collection: '/docs', viewId: builtinAllViewId('/docs') })
-  const all = await db.list('/docs')
-  assert.equal(scopeOf(all.items, '进行中'), '共享')
-  assert.equal(scopeOf(all.items, '已完成'), '共享')
-})
-
-test('a lan tag-view share marks tagged records shared', async () => {
-  const ctx = new Context()
-  const db = new DatabaseService(ctx)
-  const rows = new Map<string, DbRecord>([
-    ['sec1', { id: 'sec1', title: 'Robust Intelligence', tag: { tags: ['sec'] } }],
-    ['other1', { id: 'other1', title: 'Other', tag: { tags: ['other'] } }],
-  ])
-  db.register({
-    id: 'pages',
-    path: '/pages',
-    schema: {
-      fields: {
-        ...REQUIRED_RECORD_FIELDS,
-        title: { type: 'string', writable: true },
-        tag: { type: 'tag', writable: true },
-      },
-    },
-    list: () => [...rows.values()],
-    get: (id) => rows.get(id) ?? null,
-  })
-  db.viewCatalog = {
-    viewsFor: (path) => path === '/pages' ? [{
-      id: 'sec',
-      name: '安全项目',
-      filterTree: {
-        kind: 'group',
-        id: 'g',
-        combinator: 'and',
-        children: [{ kind: 'rule', id: 'r', field: 'tag', op: 'eq', value: 'sec' }],
-      },
-    }] : [],
-  }
-  db.shares.upsert({ kind: 'view', collection: '/pages', viewId: 'sec' })
-  const listed = asCollection(await db.list('/pages'))
-  assert.equal(listed.items.find((row) => row.title === 'Robust Intelligence')?.shareScope, '共享')
-  assert.equal(listed.items.find((row) => row.title === 'Other')?.shareScope, '私人')
-})
-
-test('a lan tag-view share reads tag overlay when listing shareScope', async () => {
-  const ctx = new Context()
-  const db = new DatabaseService(ctx)
-  const rows = new Map<string, DbRecord>([
-    ['sec1', { id: 'sec1', title: 'Robust Intelligence' }],
-    ['other1', { id: 'other1', title: 'Other' }],
-  ])
-  db.register({
-    id: 'pages',
-    path: '/pages',
-    schema: {
-      fields: {
-        ...REQUIRED_RECORD_FIELDS,
-        title: { type: 'string', writable: true },
-        tag: { type: 'tag', writable: true },
-      },
-    },
-    list: () => [...rows.values()],
-    get: (id) => rows.get(id) ?? null,
-  })
-  db.tags.replace([{ id: 'sec', label: '安全项目', fields: [] }])
-  db.tags.writeRecordTag('/pages', 'sec1', { tags: ['sec'] }, 'Robust Intelligence')
-  db.viewCatalog = {
-    viewsFor: (path) => path === '/pages' ? [{
-      id: 'sec-view',
-      name: '安全项目',
-      filterTree: JSON.stringify({
-        kind: 'group',
-        combinator: 'and',
-        children: [{ kind: 'rule', field: 'tag', op: 'eq', value: 'sec' }],
-      }) as never,
-    }] : [],
-  }
-  db.shares.upsert({ kind: 'view', collection: '/pages', viewId: 'sec-view' })
-  const listed = asCollection(await db.list('/pages', undefined, { columns: ['title', 'shareScope'] }))
-  assert.equal(listed.items.find((row) => row.title === 'Robust Intelligence')?.shareScope, '共享')
-  assert.equal(listed.items.find((row) => row.title === 'Other')?.shareScope, '私人')
+  assert.equal(scopeOf((await db.list('/docs')).items, '已完成'), '私人')
 })
 
 test('$scope packs follow shareScope labels for public and lan shares', async () => {
@@ -3297,17 +3194,10 @@ test('$scope packs follow shareScope labels for public and lan shares', async ()
   const titles = (listed: { items: DbRecord[] }) => listed.items.map((row) => row.title).sort()
   const personal = asCollection(await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'personal' })))
   const shared = asCollection(await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'shared' })))
-  assert.deepEqual(titles(personal), ['只私人'])
+  assert.deepEqual(titles(personal), ['公开链接', '只私人'])
   assert.deepEqual(titles(shared), ['公开链接'])
-  assert.equal(personal.items[0]?.shareScope, '私人')
-  assert.equal(shared.items[0]?.shareScope, '共享')
-
-  db.shares.upsert({ kind: 'view', collection: '/docs', viewId: builtinAllViewId('/docs') })
-  db.notifyShareChange()
-  const afterView = await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'shared' }))
-  const personalAfter = await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'personal' }))
-  assert.deepEqual(titles(afterView), ['公开链接', '只私人'])
-  assert.deepEqual(titles(personalAfter), [])
+  assert.equal(personal.items.find((row) => row.title === '只私人')?.shareScope, '私人')
+  assert.equal(shared.items[0]?.shareScope, '外部')
 })
 
 test('list match overlay is only loaded for overlay fields or tree filters', () => {
