@@ -120,10 +120,10 @@ export function renderBrowserCell(
       return <PersonFace value={raw as PersonValue} />
     }
     const label = String(raw ?? (localData ? '个人' : ''))
-    const isSpace = label === '空间'
+    if (label === '空间') return <ShareScopeLabel label="空间" />
     return (
       <span
-        className={`fsdb-share-scope is-${isSpace ? 'workspace' : 'personal'}`}
+        className="fsdb-share-scope is-personal"
         data-testid="fsdb-owner-table-cell"
         style={{ fontSize: 12, padding: '1px 7px', borderRadius: 999, display: 'inline-flex', alignItems: 'center', gap: 4 }}
       >
