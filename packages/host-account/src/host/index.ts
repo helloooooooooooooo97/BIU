@@ -1599,12 +1599,14 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       ...(origin ? { url: `${origin}${guestPath}` } : {}),
     })
   })
-  // 独立分享规则（access_rules）CRUD：个人持有，与视图解耦
+  // 独立分享规则（access_rules）CRUD：按 K+1 逻辑表分区（workspace 规则由管理员共管，personal 规则个人持有）
   authedRoute('GET', '/api/account/access-rules', async (route, me) => {
     const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
     if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
     const collection = route.query.get('collection')?.trim() || undefined
-    const rules = account.store.listAccessRulesForOwner(me.id, workspaceId, collection)
+    const rawScope = route.query.get('scope')?.trim()
+    const scopeFilter = rawScope === 'workspace' || rawScope === 'personal' ? rawScope : 'all'
+    const rules = account.store.listVisibleAccessRules(me.id, workspaceId, collection, scopeFilter)
     route.send(200, { rules })
   })
 
@@ -1614,8 +1616,11 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     const body = (await route.json()) as {
       collection?: string
       name?: string
+      scope?: 'workspace' | 'personal'
+      ownerTable?: string
       filterTree?: Record<string, unknown>
       columns?: string[] | null
+      visibleViews?: string[] | null
       displaySnapshot?: { mode?: string; sorts?: unknown[]; groupBy?: string; groupConfig?: Record<string, unknown> } | null
       enabled?: boolean
       grants?: Array<{ subjectType: 'account' | 'workspace' | 'group'; subjectId: string; role: 'viewer' | 'editor' | 'manager' }>
@@ -1623,14 +1628,33 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     const rule = account.store.createAccessRule(me.id, workspaceId, {
       collection: String(body.collection ?? ''),
       name: String(body.name ?? ''),
+      scope: body.scope,
+      ownerTable: body.ownerTable,
       filterTree: body.filterTree,
       columns: body.columns,
+      visibleViews: body.visibleViews,
       displaySnapshot: body.displaySnapshot,
       enabled: body.enabled,
       grants: body.grants,
     })
     broadcastAccessChange(workspaceId, 'records', rule.collection)
     route.send(201, { rule })
+  })
+
+  authedRoute('POST', '/api/account/records/owner-table', async (route, me) => {
+    const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
+    if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
+    const body = (await route.json()) as {
+      collection?: string
+      recordId?: string
+      ownerTable?: string
+    }
+    const collection = String(body.collection ?? '').trim()
+    const recordId = String(body.recordId ?? '').trim()
+    const ownerTable = String(body.ownerTable ?? '').trim()
+    const result = account.store.transferRecordOwnerTable(me.id, workspaceId, collection, recordId, ownerTable)
+    broadcastAccessChange(workspaceId, 'records', collection)
+    route.send(200, result)
   })
 
   authedRoute('PATCH', '/api/account/access-rules/:id', async (route, me) => {

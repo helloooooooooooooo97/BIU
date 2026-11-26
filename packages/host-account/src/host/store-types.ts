@@ -107,6 +107,8 @@ export type PresenceRow = {
 
 export type AccessRuleSubjectType = 'account' | 'workspace' | 'group'
 
+export type AccessRuleScope = 'workspace' | 'personal'
+
 export type WorkspaceGroupKind = 'static' | 'dynamic'
 
 export type AccessRuleRole = 'viewer' | 'editor' | 'manager'
@@ -138,10 +140,14 @@ export type AccessRuleRecord = {
   name: string
   createdBy: string
   createdByName?: string
+  ownerTable: string
+  scope: AccessRuleScope
   filterTree: Record<string, unknown>
   columns: string[] | null
+  visibleViews?: string[] | null
   displaySnapshot: AccessRuleDisplaySnapshot | null
   enabled: boolean
+  canManage?: boolean
   createdAt: number
   updatedAt: number
   grants: AccessRuleGrantRecord[]
@@ -156,8 +162,11 @@ export type AccessRuleGrantInput = {
 export type CreateAccessRuleInput = {
   collection: string
   name: string
+  scope?: AccessRuleScope
+  ownerTable?: string
   filterTree?: Record<string, unknown>
   columns?: string[] | null
+  visibleViews?: string[] | null
   displaySnapshot?: AccessRuleDisplaySnapshot | null
   enabled?: boolean
   grants?: AccessRuleGrantInput[]
@@ -165,8 +174,11 @@ export type CreateAccessRuleInput = {
 
 export type UpdateAccessRuleInput = {
   name?: string
+  scope?: AccessRuleScope
+  ownerTable?: string
   filterTree?: Record<string, unknown>
   columns?: string[] | null
+  visibleViews?: string[] | null
   displaySnapshot?: AccessRuleDisplaySnapshot | null
   enabled?: boolean
   grants?: AccessRuleGrantInput[]

@@ -45,6 +45,10 @@ export type AccessRuleItem = {
   collection: string
   name: string
   createdBy: string
+  createdByName?: string
+  ownerTable?: string
+  scope?: 'workspace' | 'personal'
+  canManage?: boolean
   filterTree: FilterGroup
   columns: string[] | null
   displaySnapshot: AccessRuleDisplaySnapshot | null
@@ -119,6 +123,7 @@ type GroupOption = {
 type RuleDraft = {
   id: string | null
   name: string
+  scope: 'workspace' | 'personal'
   filterTree: FilterGroup
   restrictRows: boolean
   columns: string[] | null
@@ -256,6 +261,7 @@ export function AccessRulesButton({
       setDraft({
         id: rule.id,
         name: rule.name,
+        scope: rule.scope === 'workspace' || rule.ownerTable === 'workspace' ? 'workspace' : 'personal',
         filterTree: normalizedTree,
         restrictRows: countFilterRules(normalizedTree) > 0,
         columns: rule.columns ? [...rule.columns] : null,
@@ -289,6 +295,7 @@ export function AccessRulesButton({
     setDraft({
       id: null,
       name: snap.name || '新建分享规则',
+      scope: 'personal',
       filterTree: snap.filterTree,
       restrictRows: countFilterRules(snap.filterTree) > 0,
       columns: snap.columns,
@@ -454,6 +461,7 @@ export function AccessRulesButton({
       const payload = {
         collection: collectionPath,
         name: trimmedName,
+        scope: draft.scope,
         filterTree: draft.restrictRows ? draft.filterTree : emptyFilterGroup(),
         columns: draft.restrictColumns && draft.columns?.length ? draft.columns : null,
         displaySnapshot: draft.displaySnapshot,
@@ -709,7 +717,7 @@ export function AccessRulesButton({
                     borderBottom: 'var(--biu-stroke-width) solid var(--biu-color-border)',
                   }}
                 >
-                  作用域：仅对你创建的，或你拥有「管理」权限的数据生效；与视图展示完全独立。
+                  K+1 分区治理：空间规则仅作用于空间公共表（管理员共管）；个人规则仅作用于你的个人表，互不串扰。
                 </div>
 
                 {error ? (
@@ -770,6 +778,8 @@ export function AccessRulesButton({
                           {rules.map((rule) => {
                             const rowRulesCount = countFilterRules(normalizeFilterTree(rule.filterTree))
                             const linkCopied = copiedKey === `rule:${rule.id}`
+                            const isWorkspaceRule = rule.scope === 'workspace' || rule.ownerTable === 'workspace'
+                            const editable = rule.canManage !== false
                             return (
                               <div
                                 key={rule.id}
@@ -786,46 +796,64 @@ export function AccessRulesButton({
                                 }}
                               >
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                                  <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--biu-color-text)' }}>{rule.name}</span>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    <button
-                                      type="button"
-                                      role="switch"
-                                      aria-checked={rule.enabled}
-                                      aria-label={rule.enabled ? '停用规则' : '启用规则'}
-                                      className={`fsdb-share-toggle${rule.enabled ? ' is-on' : ''}`}
-                                      onClick={() => void toggleRuleEnabled(rule)}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                                    <span
+                                      style={{
+                                        fontSize: 10.5,
+                                        padding: '1px 6px',
+                                        borderRadius: 999,
+                                        background: isWorkspaceRule ? 'var(--biu-color-accent-soft, rgba(59,130,246,0.14))' : 'var(--biu-color-bg-hover)',
+                                        color: isWorkspaceRule ? 'var(--biu-color-accent, #3b82f6)' : 'var(--biu-color-text-muted)',
+                                        whiteSpace: 'nowrap',
+                                      }}
                                     >
-                                      <span />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="chat-view-header-expand"
-                                      title={linkCopied ? '已复制只读链接' : '生成并复制只读链接'}
-                                      onClick={() => void copyOrCreateRuleLink(rule)}
-                                    >
-                                      {linkCopied ? <CheckIcon aria-hidden className="size-3.5" /> : <LinkIcon aria-hidden className="size-3.5" />}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="chat-view-header-expand"
-                                      title="编辑规则"
-                                      onClick={() => openEditorForRule(rule)}
-                                    >
-                                      <PencilSquareIcon aria-hidden className="size-3.5" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="chat-view-header-expand"
-                                      title="删除规则"
-                                      onClick={() => void deleteRule(rule)}
-                                    >
-                                      <TrashIcon aria-hidden className="size-3.5" />
-                                    </button>
+                                      {isWorkspaceRule ? '空间规则' : '我的规则'}
+                                    </span>
+                                    <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--biu-color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rule.name}</span>
                                   </div>
+                                  {editable ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                      <button
+                                        type="button"
+                                        role="switch"
+                                        aria-checked={rule.enabled}
+                                        aria-label={rule.enabled ? '停用规则' : '启用规则'}
+                                        className={`fsdb-share-toggle${rule.enabled ? ' is-on' : ''}`}
+                                        onClick={() => void toggleRuleEnabled(rule)}
+                                      >
+                                        <span />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="chat-view-header-expand"
+                                        title={linkCopied ? '已复制只读链接' : '生成并复制只读链接'}
+                                        onClick={() => void copyOrCreateRuleLink(rule)}
+                                      >
+                                        {linkCopied ? <CheckIcon aria-hidden className="size-3.5" /> : <LinkIcon aria-hidden className="size-3.5" />}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="chat-view-header-expand"
+                                        title="编辑规则"
+                                        onClick={() => openEditorForRule(rule)}
+                                      >
+                                        <PencilSquareIcon aria-hidden className="size-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="chat-view-header-expand"
+                                        title="删除规则"
+                                        onClick={() => void deleteRule(rule)}
+                                      >
+                                        <TrashIcon aria-hidden className="size-3.5" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <span style={{ fontSize: 11, color: 'var(--biu-color-text-subtle)', whiteSpace: 'nowrap' }}>只读</span>
+                                  )}
                                 </div>
                                 <div style={{ fontSize: 11.5, color: 'var(--biu-color-text-muted)', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                                  <span>{rowRulesCount > 0 ? `${rowRulesCount} 条行条件` : '全部我可管理的数据'}</span>
+                                  <span>{rowRulesCount > 0 ? `${rowRulesCount} 条行条件` : (isWorkspaceRule ? '全部空间表数据' : '全部我的个人表数据')}</span>
                                   <span>·</span>
                                   <span>{rule.columns?.length ? `仅 ${rule.columns.length} 个字段` : '全部字段'}</span>
                                   <span>·</span>
@@ -857,6 +885,26 @@ export function AccessRulesButton({
                           }}
                         />
                       </label>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--biu-color-text)' }}>归属逻辑表</span>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            onClick={() => setDraft({ ...draft, scope: 'workspace' })}
+                            style={pillBtnStyle(draft.scope === 'workspace')}
+                          >
+                            空间公共表（管理员共管）
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDraft({ ...draft, scope: 'personal' })}
+                            style={pillBtnStyle(draft.scope === 'personal')}
+                          >
+                            我的个人表（仅我管理）
+                          </button>
+                        </div>
+                      </div>
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--biu-color-text)' }}>记录范围（行条件）</span>

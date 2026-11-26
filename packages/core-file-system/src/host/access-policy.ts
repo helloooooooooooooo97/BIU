@@ -64,6 +64,8 @@ export type WorkspaceFiles = {
     name: string
     createdBy: string
     createdByName?: string
+    ownerTable?: string
+    scope?: 'workspace' | 'personal'
     filterTree: Record<string, unknown>
     columns: string[] | null
     enabled: boolean
@@ -199,20 +201,13 @@ class BoundedLru<K, V> {
   }
 }
 
-type ViewAudienceEntry = {
-  grants: Array<{ viewId: string; subjectType: 'account' | 'member_view'; subjectId: string; memberKind?: string; grantedBy?: string }>
-  dataViews: Array<{ id: string; filters?: Record<string, unknown> }>
-  memberViews: Array<{ id: string; filters?: Record<string, unknown> }>
-}
-
 /**
- * 封装工作区数据归属（私人 / 空间 / 共享）、权限判定（管理 / 编辑 / 阅读）、
- * 视图级授权匹配与多租户有界分享状态缓存。
+ * 封装工作区数据归属（K+1 逻辑表）、权限判定（管理 / 编辑 / 阅读）、
+ * 独立访问规则（access_rules）列策略与多租户有界分享状态缓存。
  */
 export class DatabaseAccessPolicy {
   private readonly ownershipCache = new BoundedLru<string, Map<string, 'personal' | 'workspace' | 'shared'>>()
   private readonly ownerCache = new BoundedLru<string, Map<string, string>>()
-  private readonly viewAudienceCache = new BoundedLru<string, ViewAudienceEntry>()
   private readonly viewShareCache = new BoundedLru<string, SharedViewDef[]>()
   private readonly recordShareCache = new BoundedLru<string, Set<string>>()
 
@@ -221,7 +216,6 @@ export class DatabaseAccessPolicy {
   clearCaches() {
     this.ownershipCache.clear()
     this.ownerCache.clear()
-    this.viewAudienceCache.clear()
     this.viewShareCache.clear()
     this.recordShareCache.clear()
   }
@@ -298,12 +292,14 @@ export class DatabaseAccessPolicy {
     if (decision.allowed && decision.source !== 'access-rule') {
       policies.push(fullColumnPolicy())
     }
+    const recordOwnerTable = authorization.ownerTableOf(targetRef)
     for (const rule of rules) {
       if (!rule.enabled) continue
-      if (!authorization.canGrantorShareRecord(rule.createdBy, targetRef)) continue
+      const ruleOwnerTable = rule.ownerTable?.trim() || (rule.createdBy ? `account:${rule.createdBy}` : '')
+      if (!recordOwnerTable || !ruleOwnerTable || ruleOwnerTable !== recordOwnerTable) continue
       if (!recordMatchesAccessRule(record as never, rule.filterTree)) continue
       const ruleCols = Array.isArray(rule.columns) && rule.columns.length > 0
-        ? [...rule.columns, '$content', 'shareScope', 'shareRole']
+        ? [...rule.columns, '$content', 'shareScope', 'shareRole', 'ownerTable']
         : null
       let matchedGroups: Set<string> | null = null
       for (const grant of rule.grants) {
@@ -412,9 +408,11 @@ export class DatabaseAccessPolicy {
     const canShare = authorization.authorize(actor, 'resource:share', targetRef).allowed
     if (canShare) return
 
+    const recordOwnerTable = authorization.ownerTableOf(targetRef)
     for (const rule of rules) {
       if (!rule.enabled) continue
-      if (!authorization.canGrantorShareRecord(rule.createdBy, targetRef)) continue
+      const ruleOwnerTable = rule.ownerTable?.trim() || (rule.createdBy ? `account:${rule.createdBy}` : '')
+      if (!recordOwnerTable || !ruleOwnerTable || ruleOwnerTable !== recordOwnerTable) continue
       const wasMatched = recordMatchesAccessRule(beforeRecord, rule.filterTree)
       const nowMatched = recordMatchesAccessRule(afterRecord, rule.filterTree)
       if (!wasMatched && nowMatched) {

@@ -698,7 +698,10 @@ export function registerDatabaseHttpRoutes(
           return
         }
         const account = ctx.get('account') as {
-          store?: { getAccessRule?: (wsId: string, id: string) => { createdBy: string } | null }
+          store?: {
+            getAccessRule?: (wsId: string, id: string) => { createdBy: string; ownerTable: string } | null
+            canManageAccessRule?: (actorId: string, wsId: string, rule: { createdBy: string; ownerTable: string }) => boolean
+          }
         } | undefined
         const wsId = currentRequestWorkspaceId()
         const meId = currentAccountId()
@@ -707,8 +710,11 @@ export function registerDatabaseHttpRoutes(
           route.send(404, { error: 'rule not found' })
           return
         }
-        if (meId && rule.createdBy !== meId) {
-          route.send(403, { error: '只有规则创建者可以管理此规则的公开外链' })
+        const canManage = meId && wsId && account?.store?.canManageAccessRule
+          ? account.store.canManageAccessRule(meId, wsId, rule)
+          : (!meId || rule.createdBy === meId)
+        if (!canManage) {
+          route.send(403, { error: rule.ownerTable === 'workspace' ? '仅空间管理员可以管理空间规则的公开外链' : '只有规则创建者可以管理此规则的公开外链' })
           return
         }
       } else if (kind === 'view') {

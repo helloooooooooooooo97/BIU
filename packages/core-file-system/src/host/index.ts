@@ -59,7 +59,7 @@ import { SavedViewsStore, viewsCollection, type StoredView } from './saved-views
 import { RecordViewsStore, wrapCollectionRecordViews } from './record-views.ts'
 import { TagStore } from './tags-store.ts'
 import { SharesStore } from './shares-store.ts'
-import { builtinAllView, stubBuiltinAllView, stubBuiltinMemberView } from '../catalog-views.ts'
+import { builtinAllView, isBuiltinAllViewId, stubBuiltinAllView, stubBuiltinMemberView } from '../catalog-views.ts'
 import { isIndexCollection, isSystemCollection } from '../paths.ts'
 import { dataCollection, isDataOverviewSource, overviewRecord } from './data-collection.ts'
 import { recordMatchesAccessRule } from '../view-access.ts'
@@ -2635,26 +2635,75 @@ export function apply(ctx: Context) {
   const resolveViewDecision = (
     workspaceId: string,
     collection: string,
-    view: { id: string; createdBy?: string },
+    view: { id: string; createdBy?: string; scope?: string; protection?: string; ownerTable?: string; builtin?: boolean },
     accountId: string,
     action: 'resource:read' | 'resource:update' | 'resource:delete',
-  ) => {
+  ): { allowed: boolean; effectiveRole: 'owner' | 'manager' | 'editor' | 'viewer' } => {
     if (!account?.store || !account?.authorization || !workspaceId || !accountId) {
-      return { allowed: true as const, effectiveRole: 'owner' as const }
+      return { allowed: true, effectiveRole: 'owner' }
     }
-    const recordId =
-      account.store.ensureViewPolicy?.(workspaceId, collection, String(view.id), view.createdBy || accountId) ??
-      rowIdOfView(collection, String(view.id))
-    return account.authorization.authorize(
-      { type: 'account', accountId, workspaceId },
-      action,
-      { type: 'record', workspaceId, collection: VIEWS_COLLECTION_PATH, recordId },
-    )
+    const member = account.store.members(accountId, workspaceId).find((item) => item.id === accountId)
+    if (!member) return { allowed: false, effectiveRole: 'viewer' }
+    const isInternal = member.member_kind === 'member'
+    const isWsOwner = account.store.workspaceOwnerId?.(workspaceId) === accountId || member.role === 'owner'
+    const isWsAdmin = isWsOwner || member.role === 'admin'
+    const isBuiltin = Boolean(view.builtin) || isBuiltinAllViewId(String(view.id))
+
+    // 1. 内置视图：空间内部成员默认只读可见，仅空间 owner 可修改/删除
+    if (isBuiltin) {
+      if (!isInternal) return { allowed: false, effectiveRole: 'viewer' }
+      const effectiveRole = isWsOwner ? 'owner' : 'viewer'
+      if (action === 'resource:read') return { allowed: true, effectiveRole }
+      return { allowed: isWsOwner, effectiveRole }
+    }
+
+    const protection =
+      view.protection === 'public' || view.protection === 'locked' || view.protection === 'personal'
+        ? view.protection
+        : view.scope === 'personal'
+          ? 'personal'
+          : 'locked'
+    const isCreator = Boolean(view.createdBy && view.createdBy === accountId)
+
+    // 2. 个人视图（personal）：仅创建者本人可见、可改、可删（彻底取消视图级分享 ACL）
+    if (protection === 'personal') {
+      return isCreator
+        ? { allowed: true, effectiveRole: 'owner' }
+        : { allowed: false, effectiveRole: 'viewer' }
+    }
+
+    // 3. 公共视图（public）与锁定视图（locked）：对空间内部成员默认可见，外部协作者默认不可见
+    if (!isInternal) {
+      return { allowed: false, effectiveRole: 'viewer' }
+    }
+    const isOwnerTableWorkspace = !view.ownerTable || view.ownerTable === 'workspace'
+    if (protection === 'public') {
+      const effectiveRole: 'owner' | 'manager' | 'editor' | 'viewer' = isCreator
+        ? 'owner'
+        : isWsAdmin && isOwnerTableWorkspace
+          ? 'manager'
+          : member.role === 'viewer'
+            ? 'viewer'
+            : 'editor'
+      if (action === 'resource:read') return { allowed: true, effectiveRole }
+      if (action === 'resource:update') return { allowed: effectiveRole !== 'viewer', effectiveRole }
+      return { allowed: effectiveRole === 'owner' || effectiveRole === 'manager', effectiveRole }
+    }
+
+    // 锁定视图（locked）：所有内部成员可见，但仅创建者或空间管理员（对空间表视图）可修改/删除
+    const canManageLocked = isCreator || (isWsAdmin && isOwnerTableWorkspace)
+    const effectiveRole: 'owner' | 'manager' | 'editor' | 'viewer' = isCreator
+      ? 'owner'
+      : canManageLocked
+        ? 'manager'
+        : 'viewer'
+    if (action === 'resource:read') return { allowed: true, effectiveRole }
+    return { allowed: canManageLocked, effectiveRole }
   }
   const authorizeViewAction = (
     workspaceId: string,
     collection: string,
-    view: { id: string; createdBy?: string },
+    view: { id: string; createdBy?: string; scope?: string; protection?: string; ownerTable?: string; builtin?: boolean },
     accountId: string,
     action: 'resource:read' | 'resource:update' | 'resource:delete',
   ) => resolveViewDecision(workspaceId, collection, view, accountId, action).allowed

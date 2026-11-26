@@ -380,3 +380,56 @@ test('v58 migrates member_view grants to dynamic workspace_groups and backfills 
   assert.deepEqual(viewPolicy ? { ...viewPolicy } : null, { owner_account_id: 'acc_owner', access_mode: 'members' })
   db.close()
 })
+
+test('v59 backfills owner_table, inherit_parent, access_rules.owner_table, and saved_views protection', () => {
+  const db = openSqlite(':memory:')
+  migrateBiu(db, {}, 58)
+  db.exec(`
+    INSERT INTO resource_policies
+      (workspace_id, collection, record_id, owner_account_id, access_mode, member_default_role, parent_collection, parent_record_id, created_by, created_at)
+    VALUES
+      ('ws_1', '/pages', 'p_ws', 'acc_a', 'members', 'editor', '', '', 'acc_a', 1),
+      ('ws_1', '/pages', 'p_priv', 'acc_a', 'private', 'viewer', '', '', 'acc_a', 2),
+      ('ws_1', '/pages', 'p_child_ws', 'acc_b', 'inherit', 'viewer', '/pages', 'p_ws', 'acc_b', 3),
+      ('ws_1', '/pages', 'p_child_priv', 'acc_a', 'inherit', 'viewer', '/pages', 'p_priv', 'acc_a', 4);
+    INSERT INTO access_rules
+      (id, workspace_id, collection, name, created_by, filter_tree_json, enabled, created_at, updated_at)
+    VALUES
+      ('rule_legacy', 'ws_1', '/pages', 'Legacy Rule', 'acc_a', '{"op":"and","children":[]}', 1, 5, 5);
+    INSERT INTO saved_views (workspace_id, collection, view_id, payload_json, updated_at)
+    VALUES
+      ('ws_1', '/pages', 'v_ws', '{"id":"v_ws","name":"空间视图","scope":"workspace","createdBy":"acc_a"}', 6),
+      ('ws_1', '/pages', 'v_priv', '{"id":"v_priv","name":"我的视图","scope":"personal","createdBy":"acc_a"}', 7);
+  `)
+  migrateBiu(db)
+
+  const policies = new Map(
+    (
+      db
+        .prepare(`SELECT record_id, owner_table, inherit_parent FROM resource_policies WHERE workspace_id = 'ws_1'`)
+        .all() as Array<{ record_id: string; owner_table: string; inherit_parent: number }>
+    ).map((r) => [r.record_id, { owner_table: r.owner_table, inherit_parent: r.inherit_parent }]),
+  )
+  assert.deepEqual(policies.get('p_ws'), { owner_table: 'workspace', inherit_parent: 0 })
+  assert.deepEqual(policies.get('p_priv'), { owner_table: 'account:acc_a', inherit_parent: 0 })
+  assert.deepEqual(policies.get('p_child_ws'), { owner_table: 'workspace', inherit_parent: 1 })
+  assert.deepEqual(policies.get('p_child_priv'), { owner_table: 'account:acc_a', inherit_parent: 1 })
+
+  const rule = db
+    .prepare(`SELECT owner_table, visible_views_json FROM access_rules WHERE id = 'rule_legacy'`)
+    .get() as { owner_table: string; visible_views_json: string | null }
+  assert.equal(rule.owner_table, 'account:acc_a')
+  assert.equal(rule.visible_views_json, null)
+
+  const vWs = JSON.parse(
+    (db.prepare(`SELECT payload_json FROM saved_views WHERE view_id = 'v_ws'`).get() as { payload_json: string }).payload_json,
+  )
+  const vPriv = JSON.parse(
+    (db.prepare(`SELECT payload_json FROM saved_views WHERE view_id = 'v_priv'`).get() as { payload_json: string }).payload_json,
+  )
+  assert.equal(vWs.protection, 'locked')
+  assert.equal(vWs.ownerTable, 'workspace')
+  assert.equal(vPriv.protection, 'personal')
+  assert.equal(vPriv.ownerTable, 'account:acc_a')
+  db.close()
+})
