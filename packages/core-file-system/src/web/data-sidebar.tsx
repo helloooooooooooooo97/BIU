@@ -981,7 +981,7 @@ export const DataSidebar = memo(function DataSidebar({
               </button>
           </div>
           <SidebarFold open={open} className="sidebar-session-list min-w-0">
-            {isCloud && tableModeFor(table.path) === 'k-plus-1' ? (
+            {isCloudSpace && tableModeFor(table.path) === 'k-plus-1' ? (
               (() => {
                 const customViews = listed.filter((v) => !v.builtin)
                 const wsViews = customViews.filter(
