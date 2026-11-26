@@ -162,6 +162,7 @@ export function ShellSettingsAccount() {
     })
       .then((body) => {
         if (seq !== saveSeqRef.current) return
+        resetAccountMeGet()
         resetWorkspaceProfileHydrate()
         const savedName = String(body.name ?? nextOptimistic.name)
         const savedAvatar = String(body.avatar ?? '')
@@ -1338,6 +1339,7 @@ export function resetAccountMeGet() {
 }
 
 export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSettings?: () => void }) {
+  const workspaceProfile = useWorkspaceProfile()
   const [workspaces, setWorkspaces] = useState<CollabWorkspace[]>([])
   const [active, setActive] = useState('')
   const [open, setOpen] = useState(false)
@@ -1528,14 +1530,14 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
             {hostOnline ? null : (
               <div className="shell-workspace-menu-account" data-testid="shell-workspace-local-account">
                 <span className="shell-workspace-account-avatar" aria-hidden>
-                  {localAvatar ? (
-                    <img src={localAvatar} alt="" />
+                  {(workspaceProfile.avatar || localAvatar) ? (
+                    <img src={workspaceProfile.avatar || localAvatar} alt="" />
                   ) : (
-                    <AiAvatar seed={localAccountId || localAccount || 'biu-ai'} />
+                    <AiAvatar seed={localAccountId || workspaceProfile.name || localAccount || 'biu-ai'} />
                   )}
                 </span>
                 <span className="shell-workspace-menu-copy">
-                  <strong>{localAccount || '本机账号'}</strong>
+                  <strong>{workspaceProfile.name || localAccount || '本机账号'}</strong>
                 </span>
                 <button
                   type="button"
@@ -1552,20 +1554,22 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
             )}
             {(() => {
               const activeCloud = cloudAccounts.find((item) => item.active)
+              const shownName = workspaceProfile.name || localAccount
+              const shownAvatar = workspaceProfile.avatar || localAvatar
               return (
                 <div className="shell-workspace-menu-account" data-testid="shell-workspace-cloud-account">
                   {hostOnline ? (
                     <span className="shell-workspace-account-avatar" aria-hidden>
-                      {localAvatar ? (
-                        <img src={localAvatar} alt="" />
+                      {shownAvatar ? (
+                        <img src={shownAvatar} alt="" />
                       ) : (
-                        <AiAvatar seed={localAccountId || localAccount || 'biu-ai'} />
+                        <AiAvatar seed={localAccountId || shownName || 'biu-ai'} />
                       )}
                     </span>
                   ) : activeCloud ? (
                     <span className="shell-workspace-account-avatar" aria-hidden>
-                      {activeCloud.avatar ? (
-                        <img src={activeCloud.avatar} alt="" />
+                      {(current.location === 'cloud' && workspaceProfile.avatar) || activeCloud.avatar ? (
+                        <img src={(current.location === 'cloud' && workspaceProfile.avatar) || activeCloud.avatar} alt="" />
                       ) : (
                         <AiAvatar seed={activeCloud.id || activeCloud.name || activeCloud.email || 'biu-ai'} />
                       )}
@@ -1576,8 +1580,9 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                   <span className="shell-workspace-menu-copy">
                     <strong className={!hostOnline && !activeCloud ? 'is-empty' : ''}>
                       {hostOnline
-                        ? (localAccount || '云端账号')
-                        : (activeCloud?.name
+                        ? (shownName || '云端账号')
+                        : ((current.location === 'cloud' && workspaceProfile.name)
+                          || activeCloud?.name
                           || activeCloud?.email
                           || '暂时无账号')}
                     </strong>
