@@ -696,13 +696,12 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
 
   authedRoute('POST', '/api/account/workspace-profile', async (route, me) => {
     const body = (await route.json()) as { name?: unknown; avatar?: unknown }
-    route.send(
-      200,
-      account.store.saveWorkspaceProfile(me.id, {
-        ...(typeof body.name === 'string' ? { name: body.name } : {}),
-        ...(typeof body.avatar === 'string' ? { avatar: body.avatar } : {}),
-      }),
-    )
+    const saved = account.store.saveWorkspaceProfile(me.id, {
+      ...(typeof body.name === 'string' ? { name: body.name } : {}),
+      ...(typeof body.avatar === 'string' ? { avatar: body.avatar } : {}),
+    })
+    ctx.http.broadcast('database', { ts: Date.now(), scope: 'records', path: '/workspace-members' }, saved.workspaceId)
+    route.send(200, saved)
   })
 
   authedRoute('GET', '/api/account/starred', async (route, me) => {

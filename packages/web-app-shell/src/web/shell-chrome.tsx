@@ -29,7 +29,11 @@ import {
   type ThemeAccent,
   type ThemeMode,
 } from './theme.ts'
-import { persistWorkspaceProfile } from '@biu/biu-ui/workspace-profile'
+import {
+  hydrateWorkspaceProfile,
+  resetWorkspaceProfileHydrate,
+  writeWorkspaceProfile,
+} from '@biu/biu-ui/workspace-profile'
 import { useWorkspaceProfile } from '@biu/biu-ui/use-workspace-profile'
 
 import { BrandPrint, useBrandConfig } from './marketing-site/brand-mark.tsx'
@@ -77,102 +81,8 @@ async function readAvatarFile(file: File) {
   }
 }
 
-function WorkspaceMemberProfile() {
-  const profile = useWorkspaceProfile()
-  const [name, setName] = useState(profile.name)
-  const fileRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    setName(profile.name)
-  }, [profile.name])
-  const initial = (profile.name.trim() || '用户').slice(0, 1)
-
-  return (
-    <section className="settings-subsection" data-testid="settings-account">
-      <div className="settings-subsection-head">
-        <h4 className="settings-pane-subtitle">我的成员资料</h4>
-        <p className="settings-muted settings-subsection-lead">
-          头像和空间昵称只用于当前空间，不会修改全局账号。
-        </p>
-      </div>
-      <div className="settings-account-row">
-        <div className="settings-account-copy">
-          <p className="settings-account-label">照片</p>
-          <p className="settings-muted settings-account-hint">点击更换。会出现在侧栏和分享页。</p>
-        </div>
-        <div className="settings-account-photo">
-          <button
-            type="button"
-            className="settings-account-avatar"
-            data-testid="settings-account-avatar"
-            title="更换照片"
-            aria-label="更换照片"
-            onClick={() => fileRef.current?.click()}
-          >
-            {profile.avatar ? (
-              <img src={profile.avatar} alt="" />
-            ) : (
-              <AiAvatar seed={profile.name || initial} className="settings-account-ai-avatar" />
-            )}
-            <span className="settings-account-avatar-veil" aria-hidden>
-              <CameraIcon className="size-4" />
-            </span>
-          </button>
-          {profile.avatar ? (
-            <button
-              type="button"
-              className="settings-account-clear"
-              data-testid="settings-account-clear-avatar"
-              onClick={() => void persistWorkspaceProfile({ name: name.trim(), avatar: '' })}
-            >
-              移除
-            </button>
-          ) : null}
-        </div>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          hidden
-          data-testid="settings-account-avatar-file"
-          onChange={(event) => {
-            const file = event.target.files?.[0]
-            event.target.value = ''
-            if (!file) return
-            void readAvatarFile(file).then((avatar) => {
-              void persistWorkspaceProfile({ name: name.trim(), avatar })
-            })
-          }}
-        />
-      </div>
-      <div className="settings-account-row">
-        <div className="settings-account-copy">
-          <label className="settings-account-label" htmlFor="settings-account-name">
-            空间昵称
-          </label>
-          <p className="settings-muted settings-account-hint">只在当前工作区里使用，可以和别人重名。</p>
-        </div>
-        <input
-          id="settings-account-name"
-          className="settings-account-input"
-          value={name}
-          maxLength={40}
-          placeholder="你的名字"
-          data-testid="settings-account-name"
-          onChange={(event) => setName(event.target.value)}
-          onBlur={() => {
-            void persistWorkspaceProfile({ name: name.trim(), avatar: profile.avatar })
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') event.currentTarget.blur()
-          }}
-        />
-      </div>
-    </section>
-  )
-}
-
 export function ShellSettingsAccount() {
+  const workspaceProfile = useWorkspaceProfile()
   const [account, setAccount] = useState<{ id: string; name: string; email: string; avatar: string; online: boolean }>({
     id: '',
     name: '',
@@ -180,71 +90,98 @@ export function ShellSettingsAccount() {
     avatar: '',
     online: false,
   })
-  const [accountName, setAccountName] = useState('')
+  const [accountName, setAccountName] = useState(() => workspaceProfile.name)
   const [profileMessage, setProfileMessage] = useState('')
   const [savingProfile, setSavingProfile] = useState(false)
   const [aiVariant, setAiVariant] = useState(0)
   const avatarFileRef = useRef<HTMLInputElement>(null)
   const saveSeqRef = useRef(0)
   const token = readAccountToken()
-  const activeAiTheme = detectAiAvatarTheme(account.avatar)
-  const baseSeed = account.id || account.name || account.email || 'biu-ai'
+  const currentName = workspaceProfile.name || account.name
+  const currentAvatar = workspaceProfile.avatar || account.avatar
+  const activeAiTheme = detectAiAvatarTheme(currentAvatar)
+  const baseSeed = account.id || currentName || account.email || 'biu-ai'
 
   useEffect(() => {
     if (!token) return
-    void getAccountMe(token)
-      .then((body) => {
-        const next = {
-          id: String(body.id ?? ''),
-          name: String(body.name ?? body.email ?? ''),
-          email: String(body.email ?? ''),
-          avatar: String(body.avatar ?? ''),
-          online: body.online === true,
-        }
-        setAccount(next)
-        setAccountName(next.name)
+    let cancelled = false
+    const load = () => {
+      resetWorkspaceProfileHydrate()
+      void Promise.all([
+        getAccountMe(token).catch(() => null),
+        hydrateWorkspaceProfile().catch(() => null),
+      ]).then(([me, wp]) => {
+        if (cancelled) return
+        const nextAccount = me
+          ? {
+              id: String(me.id ?? ''),
+              name: String(me.name ?? me.email ?? ''),
+              email: String(me.email ?? ''),
+              avatar: String(me.avatar ?? ''),
+              online: me.online === true,
+            }
+          : { id: '', name: '', email: '', avatar: '', online: false }
+        setAccount(nextAccount)
+        setAccountName(wp?.name || nextAccount.name)
       })
-      .catch(() => {
-        setAccount({ id: '', name: '', email: '', avatar: '', online: false })
-        setAccountName('')
-      })
+    }
+    load()
+    window.addEventListener(ACCOUNT_EVENT, load)
+    return () => {
+      cancelled = true
+      window.removeEventListener(ACCOUNT_EVENT, load)
+    }
   }, [token])
+
+  useEffect(() => {
+    if (workspaceProfile.name) setAccountName(workspaceProfile.name)
+  }, [workspaceProfile.name])
 
   const saveAccountProfile = (patch: { name?: string; avatar?: string }, successText: string) => {
     if (!token) return
     const seq = ++saveSeqRef.current
     const isAvatarOnly = patch.avatar !== undefined && patch.name === undefined
-    const previous = account
+    const previousAccount = account
+    const previousWorkspace = { name: currentName, avatar: currentAvatar }
+    const nextOptimistic = {
+      name: patch.name !== undefined ? patch.name : currentName,
+      avatar: patch.avatar !== undefined ? patch.avatar : currentAvatar,
+    }
     if (isAvatarOnly) {
-      // Optimistically apply avatar without toggling disabled opacity across all 42 swatches (eliminates flash).
+      // Optimistically apply avatar without toggling disabled opacity across all swatches (eliminates flash).
+      writeWorkspaceProfile(nextOptimistic)
       setAccount((prev) => ({ ...prev, avatar: patch.avatar ?? '' }))
       setProfileMessage(successText)
     } else {
       setSavingProfile(true)
       setProfileMessage('')
     }
-    void accountFetch(token, '/api/account/profile', {
+    void accountFetch(token, '/api/account/workspace-profile', {
       method: 'POST',
       body: JSON.stringify(patch),
     })
       .then((body) => {
         if (seq !== saveSeqRef.current) return
-        resetAccountMeGet()
-        const next = {
-          id: String(body.id ?? previous.id),
-          name: String(body.name ?? previous.name),
-          email: String(body.email ?? previous.email),
-          avatar: String(body.avatar ?? ''),
-          online: body.online === true || previous.online,
-        }
-        setAccount(next)
-        if (!isAvatarOnly) setAccountName(next.name)
+        resetWorkspaceProfileHydrate()
+        const savedName = String(body.name ?? nextOptimistic.name)
+        const savedAvatar = String(body.avatar ?? '')
+        writeWorkspaceProfile({ name: savedName, avatar: savedAvatar })
+        setAccount((prev) => ({
+          ...prev,
+          email: String(body.email ?? prev.email),
+          name: savedName || prev.name,
+          avatar: savedAvatar,
+        }))
+        if (!isAvatarOnly) setAccountName(savedName)
         setProfileMessage(successText)
         window.dispatchEvent(new Event(ACCOUNT_EVENT))
       })
       .catch((error) => {
         if (seq !== saveSeqRef.current) return
-        if (isAvatarOnly) setAccount(previous)
+        if (isAvatarOnly) {
+          writeWorkspaceProfile(previousWorkspace)
+          setAccount(previousAccount)
+        }
         setProfileMessage(error instanceof Error ? error.message : '保存失败')
       })
       .finally(() => {
@@ -256,7 +193,7 @@ export function ShellSettingsAccount() {
     <section className="settings-account" data-testid="settings-account">
       <header className="settings-account-head">
         <h3 className="settings-account-title">账户</h3>
-        <p className="settings-muted settings-account-lead">管理你的个人资料与本地账号信息。</p>
+        <p className="settings-muted settings-account-lead">管理你在当前空间的昵称、头像与登录信息。</p>
       </header>
       <form
         className="settings-account-row settings-account-profile-row"
@@ -264,10 +201,10 @@ export function ShellSettingsAccount() {
           event.preventDefault()
           const next = accountName.trim()
           if (!next) {
-            setProfileMessage('账号名不能为空')
+            setProfileMessage('空间昵称不能为空')
             return
           }
-          saveAccountProfile({ name: next }, '账号名已保存。')
+          saveAccountProfile({ name: next }, '空间昵称已保存。')
         }}
       >
         <div className="settings-account-photo is-compact">
@@ -280,11 +217,11 @@ export function ShellSettingsAccount() {
             disabled={savingProfile}
             onClick={() => avatarFileRef.current?.click()}
           >
-            {account.avatar ? (
-              <img src={account.avatar} alt="" />
+            {currentAvatar ? (
+              <img src={currentAvatar} alt="" />
             ) : (
               <AiAvatar
-                seed={account.id || account.name || account.email || 'biu-ai'}
+                seed={account.id || currentName || account.email || 'biu-ai'}
                 className="settings-account-ai-avatar"
                 data-testid="settings-account-default-avatar"
               />
@@ -293,7 +230,7 @@ export function ShellSettingsAccount() {
               <CameraIcon className="size-4" />
             </span>
           </button>
-          {account.avatar ? (
+          {currentAvatar ? (
             <button
               type="button"
               className="settings-account-clear"
@@ -321,7 +258,7 @@ export function ShellSettingsAccount() {
           />
         </div>
         <div className="settings-account-profile-fields">
-          <label className="settings-account-label" htmlFor="settings-account-global-name">账号名</label>
+          <label className="settings-account-label" htmlFor="settings-account-global-name">空间昵称</label>
           <div className="settings-account-field-row">
             <input
               id="settings-account-global-name"
@@ -329,20 +266,20 @@ export function ShellSettingsAccount() {
               data-testid="settings-account-global-name"
               value={accountName}
               maxLength={40}
-              placeholder="设置账号名"
+              placeholder="设置空间昵称"
               onChange={(event) => setAccountName(event.target.value)}
             />
             <button
               className="settings-account-action"
               type="submit"
               data-testid="settings-account-save-name"
-              disabled={savingProfile || !accountName.trim() || accountName.trim() === account.name}
+              disabled={savingProfile || !accountName.trim() || accountName.trim() === currentName}
             >
               保存
             </button>
           </div>
           <p className="settings-muted settings-account-hint">
-            {profileMessage || '点击左侧头像可上传图片，也可在下方挑选预设头像。'}
+            {profileMessage || '仅用于当前空间，切换不同空间会展示对应空间的昵称与头像。'}
           </p>
         </div>
       </form>
@@ -1993,7 +1930,6 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
       ) : null}
       {panel === 'members' ? (
       <>
-      <WorkspaceMemberProfile />
       <form
         className="settings-account-row settings-members-section"
         onSubmit={(event) => {
@@ -3035,6 +2971,7 @@ export function ShellSidebarAccount({
   narrow?: boolean
   onOpenAccount?: () => void
 }) {
+  const workspaceProfile = useWorkspaceProfile()
   const [account, setAccount] = useState<{ id: string; name: string; email: string; avatar: string } | null>(null)
 
   useEffect(() => {
@@ -3046,6 +2983,8 @@ export function ShellSidebarAccount({
         if (!cancelled) setAccount(null)
         return
       }
+      resetWorkspaceProfileHydrate()
+      void hydrateWorkspaceProfile()
       void getAccountMe(token)
         .then((body) => {
           if (cancelled) return
@@ -3070,7 +3009,8 @@ export function ShellSidebarAccount({
   }, [])
 
   if (!account) return null
-  const displayName = account.name || account.email || '账户'
+  const displayName = workspaceProfile.name || account.name || account.email || '账户'
+  const displayAvatar = workspaceProfile.avatar || account.avatar
   const showEmail = Boolean(account.email && account.email !== displayName)
 
   return (
@@ -3085,8 +3025,8 @@ export function ShellSidebarAccount({
         onClick={onOpenAccount}
       >
         <span className="shell-sidebar-account-avatar" aria-hidden>
-          {account.avatar ? (
-            <img src={account.avatar} alt="" />
+          {displayAvatar ? (
+            <img src={displayAvatar} alt="" />
           ) : (
             <AiAvatar
               seed={account.id || displayName || 'biu-ai'}
