@@ -658,6 +658,10 @@ export function CollectionBrowser({
   const queryFiltersRef = useRef(queryFilters)
   queryFiltersRef.current = queryFilters
   const lockedFilterKeys = Object.keys(catalogLocks)
+  useEffect(() => {
+    if (catalogLocks.$scope === 'workspace') setCreateScope('workspace')
+    else if (catalogLocks.$scope === 'personal') setCreateScope('personal')
+  }, [catalogLocks.$scope])
   const lockedSource = catalogLocks.tablePath ?? ''
   const lockedKind = String(catalogLocks.blockKind ?? '').trim()
   const sheetPackId = String(catalogLocks.tag ?? catalogLocks.tagId ?? '').trim()
@@ -1744,13 +1748,17 @@ export function CollectionBrowser({
 
   const schema = stat?.schema
   const isDataOverview = dataPath === DATA_COLLECTION_PATH
-  const subsetLocked = lockedFilterKeys.length > 0 && !(sheet && isDataOverview)
+  const nonScopeLockedKeys = lockedFilterKeys.filter((key) => key !== '$scope')
+  const subsetLocked = nonScopeLockedKeys.length > 0 && !(sheet && isDataOverview)
+  const isSharedScopeView = catalogLocks.$scope === 'shared'
   const overviewCreateTables = useMemo(
     () => tables.filter((table) => isOverviewCreatableCollection(table)),
     [tables],
   )
   const canCreate =
-    (isDataOverview ? overviewCreateTables.length > 0 : Boolean(schema?.records?.create)) && !subsetLocked
+    (isDataOverview ? overviewCreateTables.length > 0 : Boolean(schema?.records?.create)) &&
+    !subsetLocked &&
+    !isSharedScopeView
   const canAskNewPlugin = collectionPath === PLUGINS_COLLECTION_PATH && !subsetLocked
   const createTypeTable =
     overviewCreateTables.find((table) => table.path === createTypePath) ??
