@@ -11,7 +11,7 @@ import { FSDB_CRUMB_LABELS_EVENT, emitFsdbEvent } from './fsdb-events.ts'
 import { pullSavedViews } from './view-storage.ts'
 
 function canOpenCrumbMenu(crumb: Crumb) {
-  return crumb.kind === 'collection' || crumb.kind === 'view' || crumb.kind === 'record'
+  return crumb.kind === 'collection' || crumb.kind === 'scope' || crumb.kind === 'view' || crumb.kind === 'record'
 }
 
 function createKindOf(crumb: Crumb): 'view' | 'record' | null {

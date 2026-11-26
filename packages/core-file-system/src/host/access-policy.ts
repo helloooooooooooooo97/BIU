@@ -686,6 +686,28 @@ export class DatabaseAccessPolicy {
     return SHARE_SCOPE_LABEL[scope]
   }
 
+  ownerTableLabel(spec: CollectionSpec, record: DbRecord): string {
+    if (this.host.deviceWorkspace()) return '个人'
+    const authorization = this.host.authorization()
+    const actor = authorization?.currentActor()
+    if (!authorization || !actor) return '个人'
+    const target = resolveScopeTarget(spec.path, String(record.id ?? ''), record)
+    const ownerTable = authorization.ownerTableOf({
+      type: 'record',
+      workspaceId: actor.workspaceId,
+      collection: target.collection,
+      recordId: target.id,
+      record: record as Record<string, unknown>,
+    })
+    if (!ownerTable || ownerTable === 'workspace') return '空间'
+    if (ownerTable.startsWith('account:')) {
+      const accountId = ownerTable.slice('account:'.length)
+      const person = this.host.collabStore()?.workspacePerson?.(accountId)
+      return person?.name?.trim() || (accountId === actor.accountId ? '我' : '个人')
+    }
+    return ownerTable
+  }
+
   shareRoleLabel(spec: CollectionSpec, record: DbRecord) {
     const authorization = this.host.authorization()
     const actor = authorization?.currentActor()

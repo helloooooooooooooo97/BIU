@@ -1802,6 +1802,7 @@ export function CollectionBrowser({
         if (key === 'actions') return { key, kind: 'action' as const, field: { type: 'action' as const, label: '动作' } }
         if (key === 'shareScope') return { key, kind: 'select' as const, field: { type: 'select' as const, label: '分享' } }
         if (key === 'shareRole') return { key, kind: 'select' as const, field: { type: 'select' as const, label: '权限' } }
+        if (key === 'ownerTable') return { key, kind: 'select' as const, field: { type: 'select' as const, label: '归属' } }
         const tag = parseTagFlatColumnKey(key)
         if (tag) {
           const pack = tagCatalog.find((entry) => entry.id === tag.packId)
@@ -3219,6 +3220,15 @@ export function CollectionBrowser({
         icon: table.view?.icon,
       })),
       viewId: crumbFromData ? dataViewId : (routeViewId ?? activeViewId ?? undefined),
+      viewScope: crumbFromData
+        ? undefined
+        : activeView?.filters?.$scope === 'workspace' || activeView?.filters?.$scope === 'personal' || activeView?.filters?.$scope === 'shared'
+          ? activeView.filters.$scope
+          : activeView?.ownerTable === 'workspace' || activeView?.scope === 'workspace'
+            ? 'workspace'
+            : activeView?.scope === 'personal' || activeView?.protection === 'personal'
+              ? 'personal'
+              : undefined,
       viewName: crumbFromData
         ? displayNameForView(
             dataViewId,

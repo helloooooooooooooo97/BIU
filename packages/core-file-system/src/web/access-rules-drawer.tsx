@@ -340,6 +340,7 @@ export function AccessRulesButton({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             collection: collectionPath,
+            scope: draft.scope,
             filterTree: draft.restrictRows ? draft.filterTree : emptyFilterGroup(),
             limit: 5,
           }),

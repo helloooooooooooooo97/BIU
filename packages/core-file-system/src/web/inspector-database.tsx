@@ -274,6 +274,14 @@ function crumbsForRoute(
         tables: tables.map((item) => ({ path: item.path, label: tableLabel(item), icon: item.view?.icon })),
         viewId: collection ? activeViewId : undefined,
         viewName: resolvedView?.name,
+        viewScope:
+          resolvedView?.filters?.$scope === 'workspace' || resolvedView?.filters?.$scope === 'personal' || resolvedView?.filters?.$scope === 'shared'
+            ? resolvedView.filters.$scope
+            : resolvedView?.ownerTable === 'workspace' || resolvedView?.scope === 'workspace'
+              ? 'workspace'
+              : resolvedView?.scope === 'personal' || resolvedView?.protection === 'personal'
+                ? 'personal'
+                : undefined,
         views: views.map((item) => ({ id: item.id, name: item.name, mode: item.mode })),
         recordId,
         recordLabel: recordHit?.label,

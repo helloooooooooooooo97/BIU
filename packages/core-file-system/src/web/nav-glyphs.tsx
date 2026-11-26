@@ -2,6 +2,8 @@ import {
   CircleStackIcon,
   ShareIcon,
   TableCellsIcon,
+  UserIcon,
+  UsersIcon,
 } from '@heroicons/react/16/solid'
 import type { ViewMode } from './fields.ts'
 import type { CrumbKind } from './sidebar-nav.ts'
@@ -42,6 +44,11 @@ export function CrumbItemGlyph({
     const Icon = collection ? getDatabaseUi()?.chrome(collection).Icon : undefined
     const record = recordId ? recordMarkStub({ id: recordId, emoji, mascot }) : undefined
     return <RecordMark record={record} emoji={emoji} tableIcon={icon} Icon={Icon} className={className} />
+  }
+  if (kind === 'scope') {
+    if (icon === 'workspace') return <UsersIcon aria-hidden className={className} />
+    if (icon === 'shared') return <ShareIcon aria-hidden className={className} />
+    return <UserIcon aria-hidden className={className} />
   }
   if (kind === 'view') return <ViewModeGlyph mode={mode} className={className} />
   if (kind === 'collection') return <TableGlyph icon={icon} className={className} />

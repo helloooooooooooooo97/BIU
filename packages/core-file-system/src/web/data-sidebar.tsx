@@ -176,7 +176,11 @@ function onSidebarRowClick(event: MouseEvent<HTMLElement>) {
 const ACCOUNT_EVENT = 'biu:account-token'
 
 function useCloudCreatorContext() {
-  const [ctx, setCtx] = useState<{ isCloud: boolean; myAccountId: string }>({ isCloud: false, myAccountId: '' })
+  const [ctx, setCtx] = useState<{ isCloud: boolean; myAccountId: string; isExternal: boolean }>({
+    isCloud: false,
+    myAccountId: '',
+    isExternal: false,
+  })
 
   useEffect(() => {
     let cancelled = false
@@ -191,11 +195,12 @@ function useCloudCreatorContext() {
         const hostOnline = (me as { online?: boolean } | null)?.online === true
         const activeId = String((active as { workspaceId?: string } | null)?.workspaceId ?? '').trim()
         const workspaces = Array.isArray((listed as { workspaces?: unknown[] } | null)?.workspaces)
-          ? ((listed as { workspaces: Array<{ id?: string; location?: string }> }).workspaces)
+          ? ((listed as { workspaces: Array<{ id?: string; location?: string; memberKind?: string }> }).workspaces)
           : []
         const current = workspaces.find((w) => w.id === activeId)
         const isCloud = hostOnline || current?.location === 'cloud'
-        setCtx({ isCloud, myAccountId })
+        const isExternal = current?.memberKind === 'external' || current?.memberKind === 'guest'
+        setCtx({ isCloud, myAccountId, isExternal })
       })
     }
     load()
@@ -839,7 +844,7 @@ export const DataSidebar = memo(function DataSidebar({
     }
   }, [starredRecords])
 
-  const { isCloud: isCloudSpace, myAccountId } = useCloudCreatorContext()
+  const { isCloud: isCloudSpace, myAccountId, isExternal } = useCloudCreatorContext()
   const membersById = useMemberDirectory(isCloudSpace)
 
   const renderViewCreatorAvatar = (view: SavedView) => {
@@ -1002,11 +1007,13 @@ export const DataSidebar = memo(function DataSidebar({
                   icon: typeof UsersIcon
                   views: SavedView[]
                   canAdd: boolean
-                }> = [
-                  { scope: 'workspace', label: '空间', icon: UsersIcon, views: wsViews, canAdd: true },
-                  { scope: 'personal', label: '个人', icon: UserIcon, views: personalViews, canAdd: true },
-                  { scope: 'shared', label: '共享', icon: ShareIcon, views: sharedViews, canAdd: false },
-                ]
+                }> = isExternal
+                  ? [{ scope: 'shared', label: '共享', icon: ShareIcon, views: sharedViews, canAdd: false }]
+                  : [
+                      { scope: 'workspace', label: '空间', icon: UsersIcon, views: wsViews, canAdd: true },
+                      { scope: 'personal', label: '个人', icon: UserIcon, views: personalViews, canAdd: true },
+                      { scope: 'shared', label: '共享', icon: ShareIcon, views: sharedViews, canAdd: false },
+                    ]
                 return domains.map((domain) => {
                   const scopeViewId = builtinScopeViewId(domain.scope, allId)
                   const domainActive = table.path === litPath && litViewId === scopeViewId
