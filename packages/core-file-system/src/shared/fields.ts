@@ -590,6 +590,17 @@ export function uniqueValues(rows: DbRecord[], key: string, field: FieldSpec): s
   const cell = (row: DbRecord) => (parseTagFlatColumnKey(key) ? readTagFieldValue(row, key) : row[key])
   for (const row of rows) {
     const raw = cell(row)
+    if (key === 'ownerTable') {
+      if (raw === '空间') {
+        set.add('workspace')
+      } else if (raw && typeof raw === 'object' && !Array.isArray(raw) && (raw as { kind?: unknown }).kind === 'user') {
+        const accId = String((raw as { accountId?: unknown }).accountId ?? '').trim()
+        if (accId) set.add(`account:${accId}`)
+      } else if (raw != null && raw !== '') {
+        set.add(String(raw))
+      }
+      continue
+    }
     if (kind === 'multi-select' || kind === 'multi-ref') {
       for (const item of asStringList(raw)) set.add(item)
     } else if (kind === 'tag') {
@@ -638,6 +649,11 @@ export function recordGroupLabels(rows: DbRecord[]): Record<string, string> {
   }
   for (const row of rows) {
     put(row.id, row.title)
+    const owner = row.ownerTable
+    if (owner && typeof owner === 'object' && !Array.isArray(owner) && (owner as { kind?: unknown }).kind === 'user') {
+      const accId = String((owner as { accountId?: unknown }).accountId ?? '').trim()
+      if (accId) put(`account:${accId}`, (owner as { name?: unknown }).name)
+    }
     const chain = row.parentChain
     if (!Array.isArray(chain)) continue
     for (const node of chain) {
@@ -728,6 +744,9 @@ export function mergeListFilters(
   const baseScope = typeof base.$scope === 'string' ? base.$scope : ''
   const extraScope = typeof extra.$scope === 'string' ? extra.$scope : ''
   if (baseScope && extraScope && baseScope !== extraScope) return null
+  const baseOwnerTable = typeof base.$ownerTable === 'string' ? base.$ownerTable : ''
+  const extraOwnerTable = typeof extra.$ownerTable === 'string' ? extra.$ownerTable : ''
+  if (baseOwnerTable && extraOwnerTable && baseOwnerTable !== extraOwnerTable) return null
   const out: Record<string, unknown> = { ...base, ...extra }
   const left = base.$tree
   const right = extra.$tree
