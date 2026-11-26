@@ -317,24 +317,43 @@ export class SavedViewsStore {
     const key = bucketKey(workspaceId, path)
     const prev = this.byPath.get(key) ?? []
     const indexScoped = isIndexCollection(path)
-    const keptForeign = indexScoped ? prev.filter((view) => view.createdBy && view.createdBy !== accountId) : []
-    const foreignIds = new Set(keptForeign.map((view) => String(view.id)))
+    const isForeign = (view: StoredView) =>
+      Boolean(
+        accountId &&
+          view.createdBy &&
+          view.createdBy !== accountId &&
+          (indexScoped || this.isPerUserPrivateView(String(view.id), view)),
+      )
+    const keptForeign = prev.filter(isForeign)
+    const foreignNonPerUserIds = new Set(
+      keptForeign
+        .filter((view) => !this.isPerUserPrivateView(String(view.id), view))
+        .map((view) => String(view.id)),
+    )
     const incomingList = views
-      .filter((view) => !foreignIds.has(String(view.id)))
-      .map((view) => ({
-        ...view,
-        id: String(view.id),
-        name: String(view.name || view.id),
-        ...(indexScoped && accountId ? { createdBy: accountId } : {}),
-      }))
+      .filter((view) => !foreignNonPerUserIds.has(String(view.id)))
+      .map((view) => {
+        const id = String(view.id)
+        const perUser = indexScoped || this.isPerUserPrivateView(id, view)
+        return this.withBuiltinOwner(
+          workspaceId,
+          {
+            ...view,
+            id,
+            name: String(view.name || id),
+            ...(perUser && accountId ? { createdBy: accountId } : {}),
+          },
+          accountId,
+        )
+      })
     const incomingIds = new Set(incomingList.map((view) => String(view.id)))
-    const prevOwned = indexScoped ? prev.filter((view) => !foreignIds.has(String(view.id))) : prev
-    const removedIds: string[] = []
+    const prevOwned = prev.filter((view) => !isForeign(view))
+    const removedRows: Array<{ id: string; storageKey: string }> = []
     for (const oldView of prevOwned) {
       const oldId = String(oldView.id)
       if (!incomingIds.has(oldId)) {
         this.assertCanRemoveView(workspaceId, path, oldId, accountId, oldView)
-        removedIds.push(oldId)
+        removedRows.push({ id: oldId, storageKey: this.storageViewId(oldId, oldView.createdBy) })
       }
     }
     for (const nextView of incomingList) {
@@ -342,8 +361,13 @@ export class SavedViewsStore {
       this.assertCanModifyView(workspaceId, path, oldView, nextView, accountId)
     }
     this.byPath.set(key, [...keptForeign, ...incomingList])
-    this.persistDelta(path, incomingList, removedIds, workspaceId)
-    for (const viewId of removedIds) this.policyGuard?.onRemoved?.(workspaceId, path, viewId)
+    this.persistDelta(
+      path,
+      incomingList,
+      removedRows.map((item) => item.storageKey),
+      workspaceId,
+    )
+    for (const item of removedRows) this.policyGuard?.onRemoved?.(workspaceId, path, item.id)
   }
 
   /** 按差异写视图：只动当前账号本次变更的条目。 */
@@ -429,7 +453,7 @@ export class SavedViewsStore {
     const out: DbRecord[] = []
     const seen = new Set<string>()
     const emit = (path: string, tableName: string, view: StoredView) => {
-      const owned = this.withBuiltinOwner(workspaceId, view)
+      const owned = this.withBuiltinOwner(workspaceId, view, accountId)
       const viewRole = accountId && this.policyGuard?.viewRoleFor
         ? this.policyGuard.viewRoleFor(workspaceId, path, owned, accountId) ?? undefined
         : undefined
@@ -444,7 +468,15 @@ export class SavedViewsStore {
       const label = String(labels.get(path) ?? table.label ?? path)
       const stored = this.byPath.get(bucketKey(workspaceId, path)) ?? []
       const all = builtinAllView({ path, label, view: table.view })
-      emit(path, label, stored.find((view) => String(view.id) === all.id) ?? all)
+      const myAll =
+        stored.find((view) => String(view.id) === all.id && (!accountId || view.createdBy === accountId)) ?? {
+          ...all,
+          ...(accountId ? { createdBy: accountId } : {}),
+          ownerTable: 'all',
+          scope: 'personal',
+          protection: 'personal',
+        }
+      emit(path, label, myAll)
       for (const view of stored) {
         if (this.canAccountSeeView(workspaceId, path, view, accountId)) {
           emit(path, label, view)
@@ -532,7 +564,7 @@ export class SavedViewsStore {
       const remaining = views.filter((view) => view !== hit)
       if (this.visibleCount(path, remaining) < 1) throw new Error('至少保留一个视图')
       this.byPath.set(key, remaining)
-      this.persistDelta(path, [], [targetId], workspaceId)
+      this.persistDelta(path, [], [this.storageViewId(targetId, hit.createdBy)], workspaceId)
       this.policyGuard?.onRemoved?.(workspaceId, path, targetId)
       return true
     }
@@ -548,9 +580,21 @@ export class SavedViewsStore {
       const key = bucketKey(workspaceId, path)
       const views = this.byPath.get(key) ?? []
       const hit = findView(views, path, viewId, accountId)
-      if (!hit && views.some((view) => String(view.id) === viewId)) throw new Error(`unknown view: ${id}`)
+      if (!hit && !isBuiltinAllViewId(viewId) && views.some((view) => String(view.id) === viewId)) {
+        throw new Error(`unknown view: ${id}`)
+      }
       const table = tables.find((item) => normalizeCollectionPath(item.path) === path)
-      const seed = hit ?? (viewId === builtinAllViewId(path) ? builtinAllView({ path, label: tableLabelOf(table, path), view: table?.view }) : null)
+      const seed =
+        hit ??
+        (viewId === builtinAllViewId(path)
+          ? {
+              ...builtinAllView({ path, label: tableLabelOf(table, path), view: table?.view }),
+              ...(accountId ? { createdBy: accountId } : {}),
+              ownerTable: 'all',
+              scope: 'personal' as const,
+              protection: 'personal' as const,
+            }
+          : null)
       if (!seed) continue
       const idx = hit ? views.indexOf(hit) : -1
       const cur = (hit ?? seed) as StoredView
