@@ -764,6 +764,7 @@ export function registerDatabaseHttpRoutes(
           id: string
           name: string
           createdBy: string
+          ownerTable?: string
           filterTree: Record<string, unknown>
           columns: string[] | null
           displaySnapshot: { mode?: string; sorts?: unknown[]; groupBy?: string; groupConfig?: Record<string, unknown> } | null
@@ -771,24 +772,25 @@ export function registerDatabaseHttpRoutes(
         } | null
       }
       authorization?: {
-        canGrantorShareRecord?: (grantorId: string, ref: { type: 'record'; workspaceId: string; collection: string; recordId: string }) => boolean
+        ownerTableOf?: (ref: { type: 'record'; workspaceId: string; collection: string; recordId: string }) => string | null
       }
     } | undefined
     const wsId = share.workspaceId || currentRequestWorkspaceId()
     const rule = wsId ? account?.store?.getAccessRule?.(wsId, share.ruleId) ?? null : null
     const authz = account?.authorization
+    const ruleOwnerTable = rule ? (rule.ownerTable?.trim() || (rule.createdBy ? `account:${rule.createdBy}` : '')) : ''
     return {
       ...baseOpts,
       accessRule: rule,
-      ...(rule && wsId && authz?.canGrantorShareRecord
+      ...(rule && wsId && ruleOwnerTable && authz?.ownerTableOf
         ? {
             canCreatorShareRecord: (recordId: string) =>
-              authz.canGrantorShareRecord!(rule.createdBy, {
+              authz.ownerTableOf!({
                 type: 'record',
                 workspaceId: wsId,
                 collection: share.collection,
                 recordId,
-              }),
+              }) === ruleOwnerTable,
           }
         : {}),
     }
@@ -1175,6 +1177,8 @@ export function registerDatabaseHttpRoutes(
     try {
       const body = (await route.json()) as {
         collection?: string
+        scope?: 'workspace' | 'personal'
+        ownerTable?: string
         filterTree?: Record<string, unknown> | null
         limit?: number
       }
@@ -1186,11 +1190,17 @@ export function registerDatabaseHttpRoutes(
       const account = ctx.get('account') as {
         authorization?: {
           currentActor?: () => { accountId: string; workspaceId: string } | null
-          canGrantorShareRecord?: (grantorId: string, resource: { type: 'record'; workspaceId: string; collection: string; recordId: string }) => boolean
+          ownerTableOf?: (resource: { type: 'record'; workspaceId: string; collection: string; recordId: string }) => string | null
         }
       } | undefined
       const authz = account?.authorization
       const actor = authz?.currentActor?.()
+      const targetOwnerTable =
+        body?.scope === 'workspace' || body?.ownerTable === 'workspace'
+          ? 'workspace'
+          : actor
+            ? `account:${actor.accountId}`
+            : ''
       const limit = Math.max(1, Math.min(20, Number(body?.limit ?? 8) || 8))
       const listed = await db.list(collection)
       const matched: Array<{ id: string; title: string }> = []
@@ -1198,14 +1208,14 @@ export function registerDatabaseHttpRoutes(
       for (const record of listed.items) {
         const recordId = String(record.id ?? '').trim()
         if (!recordId) continue
-        if (actor && authz?.canGrantorShareRecord) {
-          const canManage = authz.canGrantorShareRecord(actor.accountId, {
+        if (actor && targetOwnerTable && authz?.ownerTableOf) {
+          const recTable = authz.ownerTableOf({
             type: 'record',
             workspaceId: actor.workspaceId,
             collection,
             recordId,
           })
-          if (!canManage) continue
+          if (recTable !== targetOwnerTable) continue
         }
         if (!recordMatchesAccessRule(record, body?.filterTree ?? null)) continue
         matchCount += 1
@@ -1231,8 +1241,9 @@ export function registerDatabaseHttpRoutes(
       }
       const account = ctx.get('account') as {
         authorization?: {
-          currentActor?: () => { accountId: string; workspaceId: string } | null
-          canGrantorShareRecord?: (grantorId: string, resource: { type: 'record'; workspaceId: string; collection: string; recordId: string }) => boolean
+          currentActor?: () => { type: 'account'; accountId: string; workspaceId: string } | null
+          authorize?: (actor: unknown, action: string, resource: { type: 'record'; workspaceId: string; collection: string; recordId: string }) => { allowed: boolean }
+          ownerTableOf?: (resource: { type: 'record'; workspaceId: string; collection: string; recordId: string }) => string | null
         }
         store?: {
           listActiveAccessRulesForCollection?: (workspaceId: string, collection: string) => Array<{
@@ -1240,6 +1251,8 @@ export function registerDatabaseHttpRoutes(
             name: string
             createdBy: string
             createdByName?: string
+            ownerTable?: string
+            scope?: 'workspace' | 'personal'
             filterTree: Record<string, unknown>
             columns: string[] | null
             enabled: boolean
@@ -1255,12 +1268,17 @@ export function registerDatabaseHttpRoutes(
       } | undefined
       const authz = account?.authorization
       const actor = authz?.currentActor?.()
-      if (!actor || !authz?.canGrantorShareRecord || !account?.store?.listActiveAccessRulesForCollection) {
+      if (!actor || !authz?.authorize || !authz?.ownerTableOf || !account?.store?.listActiveAccessRulesForCollection) {
         route.send(200, { matchedRules: [] })
         return
       }
       const targetRef = { type: 'record' as const, workspaceId: actor.workspaceId, collection, recordId }
-      if (!authz.canGrantorShareRecord(actor.accountId, targetRef)) {
+      if (!authz.authorize(actor, 'resource:share', targetRef).allowed) {
+        route.send(200, { matchedRules: [] })
+        return
+      }
+      const recordOwnerTable = authz.ownerTableOf(targetRef)
+      if (!recordOwnerTable) {
         route.send(200, { matchedRules: [] })
         return
       }
@@ -1269,11 +1287,13 @@ export function registerDatabaseHttpRoutes(
       const matchedRules = []
       for (const rule of activeRules) {
         if (!rule.enabled) continue
-        if (!authz.canGrantorShareRecord(rule.createdBy, targetRef)) continue
+        const ruleOwnerTable = rule.ownerTable?.trim() || (rule.createdBy ? `account:${rule.createdBy}` : '')
+        if (!ruleOwnerTable || ruleOwnerTable !== recordOwnerTable) continue
         if (!recordMatchesAccessRule(record as never, rule.filterTree)) continue
         matchedRules.push({
           ruleId: rule.id,
           ruleName: rule.name,
+          scope: ruleOwnerTable === 'workspace' ? 'workspace' : 'personal',
           createdBy: rule.createdBy,
           createdByName: rule.createdByName ?? '',
           isMine: rule.createdBy === actor.accountId,

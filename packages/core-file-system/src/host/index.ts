@@ -191,6 +191,14 @@ function schemaFor(spec: CollectionSpec): CollectionSchema {
       enum: ['管理', '编辑', '查看'],
       description: '计算属性。当前用户对这一条的权限：管理、编辑或查看。',
     }
+    fields.ownerTable = {
+      type: 'select',
+      label: '归属',
+      computed: true,
+      writable: false,
+      sortable: true,
+      description: '计算属性。K+1 逻辑表归属：空间公共表显示「空间」，个人表显示归属成员名。',
+    }
     columns = columnAfter(ensureColumn(columns, 'shareScope'), 'shareRole', 'shareScope')
   }
   return {
@@ -286,6 +294,7 @@ type ListDecorateNeed = {
   meta: boolean
   shareScope: boolean
   shareRole: boolean
+  ownerTable: boolean
 }
 
 function listDecorateNeed(wanted: string[] | null | undefined): ListDecorateNeed | null {
@@ -298,6 +307,7 @@ function listDecorateNeed(wanted: string[] | null | undefined): ListDecorateNeed
     meta: set.has('emoji'),
     shareScope,
     shareRole: set.has('shareRole'),
+    ownerTable: set.has('ownerTable'),
   }
 }
 
@@ -1639,15 +1649,18 @@ export class DatabaseService extends Service implements Database {
         ...withMeta,
         ...(!need || need.shareScope ? { shareScope: '共享' } : {}),
         ...(!need || need.shareRole ? { shareRole: '查看' } : {}),
+        ...(!need || need.ownerTable ? { ownerTable: '空间' } : {}),
       }
     }
     const wantScope = !need || need.shareScope
     const wantRole = !need || need.shareRole
+    const wantOwnerTable = !need || need.ownerTable
     const stored = wantScope ? this.access.ownershipOf(spec.path, String(row.id ?? '')) : 'personal'
     return {
       ...withMeta,
       ...(wantScope ? { shareScope: this.access.shareScopeLabel(spec.path, String(row.id ?? ''), withMeta, stored) } : {}),
       ...(wantRole ? { shareRole: this.access.shareRoleLabel(spec, withMeta) } : {}),
+      ...(wantOwnerTable ? { ownerTable: this.access.ownerTableLabel(spec, withMeta) } : {}),
     }
   }
 

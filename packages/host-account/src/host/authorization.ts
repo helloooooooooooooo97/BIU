@@ -1340,25 +1340,6 @@ export class AuthorizationService {
     return candidates[0]!
   }
 
-  /**
-   * 非提权公理（No-Amplification Axiom）：
-   * 仅校验授权人 grantedBy 通过非视图路径（所有权 / 直接授权 / 成员组 / 空间默认 / 父子继承）
-   * 对目标记录具备分享权（manager / owner）。绝不递归使用 view_grants 背书，从根上杜绝：
-   * 1. 分享自定义视图 A 时把其他成员的私密记录混进结果集（10 条变 20 条）；
-   * 2. 被授权人 B 把通过视图看到的 A 的数据二次转授给第三方。
-   */
-  canGrantorShareRecord(
-    grantorId: string,
-    resource: Extract<ResourceRef, { type: 'record' }>,
-  ): boolean {
-    if (!grantorId) return false
-    const membership = this.membership(grantorId, resource.workspaceId)
-    if (!membership || membership === 'viewer') return false
-    const resolved = this.effectiveRole(grantorId, resource, new Set(), 0)
-    if (!resolved || 'reason' in resolved) return false
-    return roleCoversAction(resolved.effectiveRole, 'resource:share')
-  }
-
   private accessRuleRole(
     accountId: string,
     resource: Extract<ResourceRef, { type: 'record' }>,

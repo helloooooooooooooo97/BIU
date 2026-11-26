@@ -162,7 +162,12 @@ test('unlisted builtin breadcrumbs resolve names without changing saved view nam
   const all = buildCrumbs({ ...input, viewId: builtinAllViewId('/pages') })[1]!
   assert.equal(all.label, '全部页面')
   assert.equal(all.choices[0]!.label, '全部页面')
-  assert.equal(buildCrumbs({ ...input, viewId: builtinScopeViewId('personal', builtinAllViewId('/pages')), views: [] })[1]!.label, '私人页面')
+  const personalCrumbs = buildCrumbs({ ...input, viewId: builtinScopeViewId('personal', builtinAllViewId('/pages')), views: [] })
+  assert.equal(personalCrumbs[1]!.kind, 'scope')
+  assert.equal(personalCrumbs[1]!.label, '个人')
+  assert.equal(personalCrumbs[2]!.label, '私人页面')
+  const wsCrumbs = buildCrumbs({ ...input, viewId: 'team', viewScope: 'workspace', views: [{ id: 'team', name: '团队看板' }] })
+  assert.equal(wsCrumbs.map((c) => c.label).join(' / '), '页面 / 空间 / 团队看板')
   assert.equal(buildCrumbs({ ...input, viewId: 'mine', views: [{ id: 'mine', name: '我的页面' }] })[1]!.label, '我的页面')
   assert.equal(buildCrumbs({ ...input, viewId: all.id, viewName: '自定义名称' })[1]!.label, '自定义名称')
 })

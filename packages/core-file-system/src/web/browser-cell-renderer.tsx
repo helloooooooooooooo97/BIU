@@ -113,6 +113,19 @@ export function renderBrowserCell(
       />
     )
   }
+  if (key === 'ownerTable') {
+    const label = String(row[key] ?? (localData ? '个人' : ''))
+    const isSpace = label === '空间'
+    return (
+      <span
+        className={`fsdb-share-scope is-${isSpace ? 'workspace' : 'personal'}`}
+        data-testid="fsdb-owner-table-cell"
+        style={{ fontSize: 12, padding: '1px 7px', borderRadius: 999, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+      >
+        {label || '—'}
+      </span>
+    )
+  }
   const kind = resolveFieldType(field)
   const flat = parseTagFlatColumnKey(key)
   if (surface === 'table') {

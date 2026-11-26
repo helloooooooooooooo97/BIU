@@ -1,5 +1,8 @@
 # BIU 多人协作权限体系探讨与改造方案
 
+> [!NOTE]
+> **历史演进文档（已归档）**：本文记录了早期「`member_view` × `view_grants`」阶段的权限探讨。自 Schema v58–v59 起，BIU 已全面收口至 **「K + 1 张逻辑表（`owner_table`）」** 极简架构：`member_view` 已由动态 `workspace_groups` 取代、`view_grants` 死表与视图分享 ACL 已下线、视图改为三态保护（`public / locked / personal`）、空间表 `access_rules` 由 `owner`/`admin` 共管。最新实现请以 `packages/host-account/src/host/authorization.ts`、`store.ts` 与 `packages/core-file-system/src/host/access-policy.ts` 为准。
+
 > 本文档整理了围绕 BIU 多人协作权限体系的全部讨论问题、核心设计取舍，以及基于 **「用户子集（Member View）× 二维数据子集（Data View：行 + 列）」** 初衷的最终落地方案与现有代码改造清单。
 
 ---
