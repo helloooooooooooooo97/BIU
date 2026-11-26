@@ -621,11 +621,12 @@ export function AccessRulesButton({
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
-    padding: '6px 12px',
-    borderRadius: 8,
+    gap: 4,
+    height: 28,
+    padding: '0 10px',
+    borderRadius: 6,
     fontSize: 12,
-    fontWeight: 600,
+    fontWeight: 500,
     background: 'var(--biu-color-emphasis)',
     color: 'var(--biu-color-on-emphasis)',
     border: 'none',
@@ -636,13 +637,14 @@ export function AccessRulesButton({
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
-    padding: '6px 10px',
-    borderRadius: 8,
+    gap: 4,
+    height: 28,
+    padding: '0 10px',
+    borderRadius: 6,
     fontSize: 12,
     fontWeight: 500,
-    background: 'var(--biu-color-bg-input)',
-    color: 'var(--biu-color-text)',
+    background: 'transparent',
+    color: 'var(--biu-color-text-muted)',
     border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
     cursor: 'pointer',
   } as const
@@ -726,14 +728,14 @@ export function AccessRulesButton({
                   position: 'fixed',
                   top: 48,
                   right: 14,
-                  bottom: 68,
-                  width: 520,
+                  width: draft ? 480 : 400,
                   maxWidth: 'calc(100vw - 28px)',
+                  maxHeight: 'calc(100vh - 116px)',
                   zIndex: overlayZ(OVERLAY_Z.popover),
                   background: 'var(--biu-color-bg-popover)',
                   color: 'var(--biu-color-text)',
                   border: 'var(--biu-stroke-width) solid var(--biu-color-border-popover)',
-                  borderRadius: 'var(--biu-radius-popover, 12px)',
+                  borderRadius: 'var(--biu-radius-popover, 10px)',
                   boxShadow: 'var(--biu-shadow-popover)',
                   display: 'flex',
                   flexDirection: 'column',
@@ -745,12 +747,12 @@ export function AccessRulesButton({
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '12px 14px',
+                    padding: '10px 12px 10px 14px',
                     borderBottom: 'var(--biu-stroke-width) solid var(--biu-color-border)',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 14, color: 'var(--biu-color-text)' }}>
-                    <LockClosedIcon aria-hidden className="size-4" />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 13, color: 'var(--biu-color-text)' }}>
+                    <LockClosedIcon aria-hidden className="size-3.5" style={{ color: 'var(--biu-color-text-muted)' }} />
                     <span>{draft ? (draft.id ? '编辑分享规则' : '新建分享规则') : drawerTitle}</span>
                   </div>
                   <button
@@ -763,27 +765,14 @@ export function AccessRulesButton({
                   </button>
                 </div>
 
-                <div
-                  style={{
-                    padding: '8px 14px',
-                    fontSize: 12,
-                    lineHeight: 1.45,
-                    color: 'var(--biu-color-text-muted)',
-                    background: 'var(--biu-color-bg-hover)',
-                    borderBottom: 'var(--biu-stroke-width) solid var(--biu-color-border)',
-                  }}
-                >
-                  K+1 分区治理：空间规则仅作用于空间公共表（管理员共管）；个人规则仅作用于你的个人表，互不串扰。
-                </div>
-
                 {error ? (
-                  <div style={{ padding: '8px 14px', fontSize: 12, color: 'var(--biu-color-danger)' }}>{error}</div>
+                  <div style={{ padding: '8px 14px 0', fontSize: 12, color: 'var(--biu-color-danger)' }}>{error}</div>
                 ) : null}
 
-                <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {!draft ? (
                     <>
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         <button
                           type="button"
                           data-testid="access-rules-new"
@@ -791,7 +780,7 @@ export function AccessRulesButton({
                           style={primaryBtnStyle}
                         >
                           <PlusIcon aria-hidden className="size-3.5" />
-                          <span>新建分享规则</span>
+                          <span>新建规则</span>
                         </button>
                         {activeView ? (
                           <button
@@ -800,7 +789,7 @@ export function AccessRulesButton({
                             onClick={() => startNewDraft(activeView)}
                             style={secondaryBtnStyle}
                           >
-                            <span>按当前视图新建</span>
+                            <span>按当前视图</span>
                           </button>
                         ) : null}
                         <button
@@ -811,30 +800,25 @@ export function AccessRulesButton({
                           style={secondaryBtnStyle}
                         >
                           <LinkIcon aria-hidden className="size-3.5" />
-                          <span>{quickLinkBusy ? '生成中…' : '一键生成只读链接'}</span>
+                          <span>{quickLinkBusy ? '生成中…' : '只读链接'}</span>
                         </button>
                       </div>
 
                       {loading ? (
-                        <div style={{ fontSize: 12, color: 'var(--biu-color-text-muted)' }}>加载中…</div>
+                        <div style={{ padding: '16px 0', textAlign: 'center', fontSize: 12, color: 'var(--biu-color-text-subtle)' }}>加载中…</div>
                       ) : visibleRules.length === 0 ? (
                         <div
                           style={{
-                            padding: '24px 12px',
+                            padding: '20px 0',
                             textAlign: 'center',
                             fontSize: 12,
-                            lineHeight: 1.5,
                             color: 'var(--biu-color-text-subtle)',
                           }}
                         >
-                          {lockedScope === 'workspace'
-                            ? '当前空间表暂无分享规则。你可以按条件批量分享给成员，或点击上方「一键生成只读链接」发到局域网/外部。'
-                            : lockedScope === 'personal'
-                              ? '当前个人表暂无分享规则。你可以按条件批量分享给成员，或点击上方「一键生成只读链接」发到局域网/外部。'
-                              : '暂无分享规则。你可以按条件批量分享给成员，或点击上方「一键生成只读链接」发到局域网/外部。'}
+                          暂无分享规则
                         </div>
                       ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                           {visibleRules.map((rule) => {
                             const rowRulesCount = countFilterRules(normalizeFilterTree(rule.filterTree))
                             const linkCopied = copiedKey === `rule:${rule.id}`
@@ -845,31 +829,33 @@ export function AccessRulesButton({
                                 key={rule.id}
                                 data-testid={`access-rule-card-${rule.id}`}
                                 style={{
-                                  padding: '10px 12px',
-                                  borderRadius: 10,
+                                  padding: '9px 11px',
+                                  borderRadius: 8,
                                   background: 'var(--biu-color-bg-input)',
                                   border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
-                                  opacity: rule.enabled ? 1 : 0.58,
+                                  opacity: rule.enabled ? 1 : 0.56,
                                   display: 'flex',
                                   flexDirection: 'column',
-                                  gap: 6,
+                                  gap: 5,
                                 }}
                               >
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                                    <span
-                                      style={{
-                                        fontSize: 10.5,
-                                        padding: '1px 6px',
-                                        borderRadius: 999,
-                                        background: isWorkspaceRule ? 'var(--biu-color-accent-soft, rgba(59,130,246,0.14))' : 'var(--biu-color-bg-hover)',
-                                        color: isWorkspaceRule ? 'var(--biu-color-accent, #3b82f6)' : 'var(--biu-color-text-muted)',
-                                        whiteSpace: 'nowrap',
-                                      }}
-                                    >
-                                      {isWorkspaceRule ? '空间规则' : '我的规则'}
-                                    </span>
-                                    <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--biu-color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rule.name}</span>
+                                    {!lockedScope ? (
+                                      <span
+                                        style={{
+                                          fontSize: 10.5,
+                                          padding: '1px 6px',
+                                          borderRadius: 999,
+                                          background: isWorkspaceRule ? 'var(--biu-color-accent-soft, rgba(59,130,246,0.14))' : 'var(--biu-color-bg-hover)',
+                                          color: isWorkspaceRule ? 'var(--biu-color-accent, #3b82f6)' : 'var(--biu-color-text-muted)',
+                                          whiteSpace: 'nowrap',
+                                        }}
+                                      >
+                                        {isWorkspaceRule ? '空间规则' : '我的规则'}
+                                      </span>
+                                    ) : null}
+                                    <span style={{ fontWeight: 500, fontSize: 13, color: 'var(--biu-color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rule.name}</span>
                                   </div>
                                   {editable ? (
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
