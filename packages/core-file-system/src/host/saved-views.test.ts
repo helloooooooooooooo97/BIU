@@ -561,6 +561,15 @@ test('builtin-all aggregation views are strictly per-user private and isolated a
   assert.equal(reloaded.viewsFor('/pages', 'owner-wenxin').find((v) => v.id === 'builtin-all:/pages')?.name, '文馨的全部页面')
   assert.equal(reloaded.viewsFor('/pages', 'admin-97').find((v) => v.id === 'builtin-all:/pages')?.name, '97的全部页面')
   assert.equal(reloaded.viewsFor('/pages', 'bob').find((v) => v.id === 'builtin-all:/pages'), undefined)
+
+  // /views collection rows() (used by GET /api/db/list?path=/views) also strictly isolates builtin-all per account
+  const tables = [{ id: 'pages', path: '/pages', label: '页面', kind: 'collection' as const, view: { title: '页面' } }]
+  const wenxinAllRow = reloaded.rows(tables as never, 'owner-wenxin').find((r) => r.viewId === 'builtin-all:/pages')
+  const user97AllRow = reloaded.rows(tables as never, 'admin-97').find((r) => r.viewId === 'builtin-all:/pages')
+  const bobAllRow = reloaded.rows(tables as never, 'bob').find((r) => r.viewId === 'builtin-all:/pages')
+  assert.equal(wenxinAllRow?.title, '文馨的全部页面')
+  assert.equal(user97AllRow?.title, '97的全部页面')
+  assert.equal(bobAllRow?.title, '全部页面')
 })
 
 test('top-level cross-table views (ownerTable=all) are locked to personal protection and creator-only visibility', () => {
