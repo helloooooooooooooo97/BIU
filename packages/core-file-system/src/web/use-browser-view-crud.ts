@@ -282,9 +282,9 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
         : allListed
     const bindingPatch: Partial<SavedView> =
       effectiveScope === 'workspace'
-        ? { scope: 'workspace', protection: 'locked', ownerTable: 'workspace' }
+        ? { scope: 'workspace', protection: 'public', ownerTable: 'workspace' }
         : effectiveScope === 'personal'
-          ? { scope: 'personal', protection: 'personal' }
+          ? { scope: 'workspace', protection: 'public' }
           : effectiveScope === 'shared'
             ? { scope: 'personal', protection: 'personal' }
             : { scope: 'personal', protection: 'personal', ownerTable: 'all' }
@@ -477,6 +477,31 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     })
   }
 
+  function updateViewProtection(view: SavedView, protection: 'public' | 'locked' | 'personal') {
+    if (isReadOnlyViewId(view.id) || view.ownerTable === 'all') return
+    const nextScope = protection === 'personal' ? 'personal' : 'workspace'
+    const current = viewsRef.current
+    const target = current.find((item) => item.id === view.id)
+    if (!target) return
+    const updated: SavedView = { ...target, protection, scope: nextScope }
+    const next = current.map((item) => (item.id === view.id ? updated : item))
+    viewsRef.current = next
+    setViews(next)
+    if (externalViews) {
+      externalViews.onChange?.(next, activeViewIdRef.current ?? view.id)
+      return
+    }
+    const baseline = loadViews(collectionPath)
+    rememberViews(collectionPath, next)
+    noteLocalSavedViewsWrite(collectionPath)
+    void persistViewsFor(collectionPath, next, { baseline, upsert: [updated] }).then((ok) => {
+      if (ok || viewsRef.current !== next) return
+      viewsRef.current = current
+      setViews(current)
+      rememberViews(collectionPath, current)
+    })
+  }
+
   return {
     adoptPersistedViews,
     persistViewsFor,
@@ -487,6 +512,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     addEmptyView,
     copyView,
     patchActiveView,
+    updateViewProtection,
     commitViewName,
     renameView,
     deleteView,
