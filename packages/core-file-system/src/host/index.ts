@@ -2625,6 +2625,11 @@ export function apply(ctx: Context) {
         ownerAccountId: string,
         actorId: string,
       ) => boolean
+      sharedOwnerAccountIds?: (
+        workspaceId: string,
+        collection: string,
+        actorId: string,
+      ) => string[]
       workspaceOwnerId?: (workspaceId: string) => string | null
     }
   } | undefined
@@ -2748,6 +2753,8 @@ export function apply(ctx: Context) {
     isLocked: () => false,
     canEditLocked: () => true,
     workspaceOwner: (workspaceId) => account?.store?.workspaceOwnerId?.(workspaceId) ?? null,
+    sharedOwnersFor: (workspaceId, collection, accountId) =>
+      account?.store?.sharedOwnerAccountIds?.(workspaceId, collection, accountId) ?? [],
     canSeeView: (workspaceId, collection, view, accountId) =>
       authorizeViewAction(workspaceId, collection, view, accountId, 'resource:read'),
     canModifyView: (workspaceId, collection, view, accountId) =>

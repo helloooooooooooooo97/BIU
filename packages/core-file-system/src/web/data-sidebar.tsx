@@ -19,7 +19,7 @@ import { FSDB_CHANGE_EVENT, parseFsdbChange, type CollectionInfo, type Collectio
 import { BoundedMap } from './bounded-map.ts'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
 import { groupField, groupRecords, parentFieldKey, treeChildren } from './fields.ts'
-import { builtinAllViewId, defaultTableViewId, isBuiltinAllViewId, isNonPersonalView, isReadOnlyViewId, type DataScope } from '../catalog-views.ts'
+import { builtinAllViewId, defaultTableViewId, isBuiltinAllViewId, isNonPersonalView, isReadOnlyViewId, parseDefaultTableViewId, stubDefaultTableView, type DataScope } from '../catalog-views.ts'
 import { tableModeFor } from '../paths.ts'
 import { dataSidebarKind, isRecordTreeCollection, sortDataCollections } from './database-path.ts'
 import { rememberInspectorWorkingView } from './inspector-db-route.ts'
@@ -973,7 +973,10 @@ export const DataSidebar = memo(function DataSidebar({
     }
     rememberInspectorWorkingView(path, viewId)
     if (path === collectionPath) {
-      const view = loadViews(path).find((item) => item.id === viewId) ?? viewsFor(path).find((item) => item.id === viewId)
+      const view =
+        loadViews(path).find((item) => item.id === viewId) ??
+        viewsFor(path).find((item) => item.id === viewId) ??
+        stubDefaultTableView(viewId)
       if (view) onApplyView(view)
     }
     onOpenTable?.(path, viewId)
@@ -1028,6 +1031,7 @@ export const DataSidebar = memo(function DataSidebar({
           : null
       const activeOwnerTable =
         litViewForTable?.ownerTable?.trim() ||
+        (litViewId ? parseDefaultTableViewId(litViewId)?.ownerTable : '') ||
         (litViewId === wsTargetViewId
           ? 'workspace'
           : myTargetViewId && litViewId === myTargetViewId

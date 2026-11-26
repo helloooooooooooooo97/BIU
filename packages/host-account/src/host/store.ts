@@ -2608,6 +2608,87 @@ export class CollabStore {
     return false
   }
 
+  /**
+   * 列出在指定集合下向 actorId 共享了至少一条个人表记录的所有表主人 accountId。
+   * 用于 SavedViewsStore.ensureDefaultTableViews 为他人个人表自动补齐默认公共视图。
+   */
+  sharedOwnerAccountIds(workspaceId: string, collection: string, actorId: string): string[] {
+    if (!workspaceId || !collection || !actorId) return []
+    const owners = new Set<string>()
+    try {
+      const directRows = this.db
+        .prepare(
+          `SELECT DISTINCT
+             CASE
+               WHEN p.owner_table LIKE 'account:%' THEN substr(p.owner_table, 9)
+               WHEN COALESCE(p.owner_table, '') = '' AND p.access_mode != 'members' THEN p.owner_account_id
+               ELSE ''
+             END AS owner_id
+           FROM record_grants g
+           JOIN resource_policies p
+             ON p.workspace_id = g.workspace_id
+            AND p.collection = g.collection
+            AND p.record_id = g.record_id
+           WHERE g.workspace_id = ?
+             AND g.collection = ?
+             AND (
+               (g.subject_type = 'account' AND g.subject_id = ?)
+               OR (g.subject_type = 'group' AND g.subject_id IN (
+                 SELECT gm.group_id
+                 FROM workspace_group_members gm
+                 JOIN workspace_groups wg ON wg.id = gm.group_id
+                 WHERE wg.workspace_id = ? AND gm.account_id = ?
+               ))
+             )`,
+        )
+        .all(workspaceId, collection, actorId, workspaceId, actorId) as Array<{ owner_id?: string }>
+      for (const row of directRows) {
+        const id = String(row.owner_id ?? '').trim()
+        if (id && id !== actorId) owners.add(id)
+      }
+    } catch {
+      /* ignore */
+    }
+    try {
+      const member = this.db
+        .prepare('SELECT member_kind FROM workspace_members WHERE workspace_id = ? AND account_id = ?')
+        .get(workspaceId, actorId) as { member_kind?: string } | undefined
+      const isInternal = member?.member_kind === 'member'
+      const ruleRows = this.db
+        .prepare(
+          `SELECT DISTINCT
+             CASE
+               WHEN r.owner_table LIKE 'account:%' THEN substr(r.owner_table, 9)
+               WHEN COALESCE(r.owner_table, '') = '' THEN r.created_by
+               ELSE ''
+             END AS owner_id
+           FROM access_rules r
+           JOIN access_rule_grants g ON g.rule_id = r.id
+           WHERE r.workspace_id = ?
+             AND r.collection = ?
+             AND r.enabled = 1
+             AND (
+               (g.subject_type = 'account' AND g.subject_id = ?)
+               OR (? = 1 AND g.subject_type = 'workspace' AND g.subject_id = ?)
+               OR (g.subject_type = 'group' AND g.subject_id IN (
+                 SELECT gm.group_id
+                 FROM workspace_group_members gm
+                 JOIN workspace_groups wg ON wg.id = gm.group_id
+                 WHERE wg.workspace_id = ? AND gm.account_id = ?
+               ))
+             )`,
+        )
+        .all(workspaceId, collection, actorId, isInternal ? 1 : 0, workspaceId, workspaceId, actorId) as Array<{ owner_id?: string }>
+      for (const row of ruleRows) {
+        const id = String(row.owner_id ?? '').trim()
+        if (id && id !== actorId) owners.add(id)
+      }
+    } catch {
+      /* ignore */
+    }
+    return [...owners]
+  }
+
   private requireViewSharer(actorId: string, workspaceId: string, collection: string, viewId = '') {
     const row = this.db
       .prepare('SELECT role, member_kind FROM workspace_members WHERE workspace_id = ? AND account_id = ?')

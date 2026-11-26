@@ -1,6 +1,6 @@
 import { currentStorageWorkspaceId, readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
 import { apiFetch } from '@biu/biu-ui/api-client'
-import { builtinAllGroupBy, builtinAllViewId, stubBuiltinAllView, stubBuiltinBlockKindView, stubBuiltinCatalogView, stubBuiltinTagView, stubBuiltinMemberView, isBuiltinAllViewForCollection, isBuiltinAllViewId, isNonPersonalView } from '../catalog-views.ts'
+import { builtinAllGroupBy, builtinAllViewId, stubBuiltinAllView, stubBuiltinBlockKindView, stubBuiltinCatalogView, stubBuiltinTagView, stubBuiltinMemberView, isBuiltinAllViewForCollection, isBuiltinAllViewId, isNonPersonalView, parseDefaultTableViewId, stubDefaultTableView } from '../catalog-views.ts'
 import {
   DATA_COLLECTION_PATH,
   EDITOR_BLOCKS_COLLECTION_PATH,
@@ -175,6 +175,7 @@ export function viewForPath(collectionPath: string, routeViewId?: string): Saved
   const preferred =
     (want
       ? listed.find((item) => item.id === want) ??
+        stubDefaultTableView(want) ??
         stubBuiltinMemberView(want) ??
         stubBuiltinCatalogView(want) ??
         stubBuiltinTagView(want) ??
@@ -207,6 +208,14 @@ export function pickViewForRoute(listed: SavedView[], collectionPath: string, ro
   if (route) {
     const hit = listed.find((item) => item.id === route)
     if (hit) return hit
+    // 如果路由点名具体表默认视图（如 default:account:97:/agents），优先匹配该表的真实视图，否则临时 stub 防止误跳空间表
+    const parsedDefault = parseDefaultTableViewId(route)
+    if (parsedDefault) {
+      const sameTable = listed.filter((item) => item.ownerTable === parsedDefault.ownerTable)
+      const preferred = sameTable.find((item) => isNonPersonalView(item)) ?? sameTable[0]
+      if (preferred) return preferred
+      return stubDefaultTableView(route)
+    }
     // K+1 业务集合不再有聚合视图：旧 URL（builtin-all / builtin-scope 等）自动落回空间表或首个真实视图
     if (isKPlus1 && listed.length > 0) {
       const wsDefault = listed.find((item) => item.ownerTable === 'workspace' && isNonPersonalView(item))

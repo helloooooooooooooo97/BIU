@@ -869,4 +869,13 @@ test('catalogLockFilters and viewsForScope enforce strict K+1 view-to-table bind
   }
   assert.equal(pickViewForRoute([wsReal, myReal], '/pages', builtinAllViewId('/pages'))?.id, wsReal.id)
   assert.equal(pickViewForRoute([wsReal, myReal], '/pages', myReal.id)?.id, myReal.id)
+
+  // Clicking a shared personal table (default:account:97:/agents) before its server view arrives must NOT bounce back to workspace table
+  const foreignPicked = pickViewForRoute([wsReal, myReal], '/agents', 'default:account:97:/agents')
+  assert.equal(foreignPicked?.id, 'default:account:97:/agents')
+  assert.equal(foreignPicked?.ownerTable, 'account:97')
+  assert.deepEqual(catalogLockFilters('default:account:97:/agents', [], 'wenxin'), {
+    $scope: 'shared',
+    $ownerTable: 'account:97',
+  })
 })
