@@ -4009,6 +4009,8 @@ export function CollectionBrowser({
     [listChromeLock],
   )
 
+  const isUnresolvedPersonalOwner = Boolean(activeView?.ownerTable?.startsWith('account:') && !viewerAccountId)
+  const hideAccessRules = Boolean(activeSharedOwnerAccountId) || isUnresolvedPersonalOwner || isDataOverview
   const listHeaderLock = [
     Number(nested),
     Number(viewsOpen),
@@ -4016,6 +4018,7 @@ export function CollectionBrowser({
     Number(canCreate),
     Number(canAskNewPlugin),
     Number(viewStarred),
+    Number(hideAccessRules),
     activeViewId ?? '',
     selected?.id ?? '',
     Number(localData),
@@ -4047,6 +4050,7 @@ export function CollectionBrowser({
           title={title}
           nested={nested}
           localData={localData}
+          hideAccessRules={hideAccessRules}
           schema={schema}
           filterFields={filterFields}
           filterValueOptions={filterValueOptions}

@@ -54,6 +54,7 @@ export const BrowserHeader = memo(function BrowserHeader({
   title,
   nested,
   localData,
+  hideAccessRules,
   schema,
   filterFields,
   filterValueOptions,
@@ -83,6 +84,7 @@ export const BrowserHeader = memo(function BrowserHeader({
   title: string
   nested: boolean
   localData: boolean
+  hideAccessRules?: boolean
   schema?: CollectionSchema
   filterFields?: QueryField[]
   filterValueOptions?: (field: QueryField) => Array<{ value: string; label: string }>
@@ -157,7 +159,7 @@ export const BrowserHeader = memo(function BrowserHeader({
               title: String(detailRow?.title ?? title),
             }}
           />
-        ) : !nested && !localData ? (
+        ) : !nested && !localData && !hideAccessRules ? (
           <AccessRulesButton
             collectionPath={collectionPath}
             activeView={activeView}
