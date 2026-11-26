@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { builtinAllView, builtinAllViewId, builtinCatalogViewId, catalogLockFilters, viewDomainOf, viewsForScope } from '../catalog-views.ts'
+import { builtinAllView, builtinAllViewId, builtinCatalogViewId, builtinOwnerViewId, catalogLockFilters, parseBuiltinOwnerViewId, stubBuiltinOwnerView, viewDomainOf, viewsForScope } from '../catalog-views.ts'
 import { VIEWS_COLLECTION_PATH } from './database-path.ts'
 import {
   defaultViewId,
@@ -828,4 +828,12 @@ test('catalogLockFilters and viewsForScope enforce strict K+1 view-to-table bind
   assert.equal(hydrated?.ownerTable, 'all')
   assert.equal(hydrated?.protection, 'personal')
   assert.equal(hydrated?.scope, 'personal')
+
+  // builtin-owner view IDs resolve to shared domain and lock both $scope and $ownerTable
+  const ownerId = builtinOwnerViewId('acc_wenxin', '/pages')
+  assert.deepEqual(parseBuiltinOwnerViewId(ownerId), { accountId: 'acc_wenxin', collectionPath: '/pages' })
+  const ownerStub = stubBuiltinOwnerView(ownerId, 'wenxin', { path: '/pages', label: '页面' })
+  assert.equal(ownerStub?.name, 'wenxin的页面')
+  assert.equal(viewDomainOf(ownerStub), 'shared')
+  assert.deepEqual(catalogLockFilters(ownerId, []), { $scope: 'shared', $ownerTable: 'account:acc_wenxin' })
 })

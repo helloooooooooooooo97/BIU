@@ -204,9 +204,11 @@ import {
   displayNameForView,
   isBuiltinAllViewId,
   mergeTableViews,
+  parseBuiltinOwnerViewId,
   parseBuiltinScopeViewId,
   stampRowOpenTarget,
   stubBuiltinBlockKindView,
+  stubBuiltinOwnerView,
   stubBuiltinScopeView,
   viewDomainOf,
   type DataScope,
@@ -1748,7 +1750,7 @@ export function CollectionBrowser({
 
   const schema = stat?.schema
   const isDataOverview = dataPath === DATA_COLLECTION_PATH
-  const nonScopeLockedKeys = lockedFilterKeys.filter((key) => key !== '$scope')
+  const nonScopeLockedKeys = lockedFilterKeys.filter((key) => key !== '$scope' && key !== '$ownerTable')
   const subsetLocked = nonScopeLockedKeys.length > 0 && !(sheet && isDataOverview)
   const isSharedScopeView = catalogLocks.$scope === 'shared'
   const overviewCreateTables = useMemo(
@@ -2438,13 +2440,40 @@ export function CollectionBrowser({
     window.dispatchEvent(new Event(FSDB_CRUMB_LABELS_EVENT))
   }, [activeViewId, collectionPath, items, routeViewId, schema?.labelField, selected, sheet])
   const filterActive = countFilterRules(filterTree) > 0
+  const parsedOwnerView = activeViewId ? parseBuiltinOwnerViewId(activeViewId) : null
+  const ownerDisplayName = useMemo(() => {
+    if (!parsedOwnerView) return ''
+    for (const row of items) {
+      const raw = row.ownerTable as { kind?: unknown; accountId?: unknown; name?: unknown } | undefined
+      if (raw?.kind === 'user' && raw.accountId === parsedOwnerView.accountId && typeof raw.name === 'string' && raw.name.trim()) {
+        return raw.name.trim()
+      }
+    }
+    return ''
+  }, [items, parsedOwnerView])
   const activeView =
     views.find((view) => view.id === activeViewId) ??
-    (activeViewId ? stubBuiltinScopeView(activeViewId, views) ?? undefined : undefined)
+    (activeViewId
+      ? stubBuiltinOwnerView(activeViewId, ownerDisplayName, { path: collectionPath, label: title }) ??
+        stubBuiltinScopeView(activeViewId, views) ??
+        undefined
+      : undefined)
   const isKPlus1Cloud = !sheet && !localData && tableModeFor(collectionPath) === 'k-plus-1'
   const activeDomain: ViewDomain = activeView ? viewDomainOf(activeView) : (routeScope ?? 'all')
   const domainViews = useMemo(() => {
     if (!isKPlus1Cloud) return views
+    if (parsedOwnerView && activeViewId) {
+      const targetOwnerTable = `account:${parsedOwnerView.accountId}`
+      const ownerBuiltin = stubBuiltinOwnerView(activeViewId, ownerDisplayName, { path: collectionPath, label: title })!
+      const ownerPublicViews = views.filter(
+        (view) =>
+          !isBuiltinAllViewId(view.id) &&
+          !view.builtin &&
+          view.ownerTable === targetOwnerTable &&
+          view.protection !== 'personal',
+      )
+      return [ownerBuiltin, ...ownerPublicViews]
+    }
     if (activeDomain === 'all') {
       return views.filter((view) => viewDomainOf(view) === 'all')
     }
@@ -2454,7 +2483,7 @@ export function CollectionBrowser({
       (view) => !isBuiltinAllViewId(view.id) && !view.builtin && viewDomainOf(view) === activeDomain,
     )
     return [scopedBuiltin, ...scopedCustom]
-  }, [activeDomain, collectionPath, isKPlus1Cloud, title, views])
+  }, [activeDomain, activeViewId, collectionPath, isKPlus1Cloud, ownerDisplayName, parsedOwnerView, title, views])
   const sandboxViews = useMemo(() => normalizeTableSandboxViews(activeView?.sandboxViews) ?? [], [activeView?.sandboxViews])
   const activeSandboxView = useMemo(() => sandboxViews.find((item) => item.id === mode), [mode, sandboxViews])
   const sortCustom = isCustomSorts(

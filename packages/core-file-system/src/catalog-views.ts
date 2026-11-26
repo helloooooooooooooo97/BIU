@@ -11,6 +11,7 @@ import { normalizeSavedView, type SavedView } from './web/saved-view.ts'
 
 const ALL_PREFIX = 'builtin-all:'
 const SCOPE_PREFIX = 'builtin-scope:'
+const OWNER_PREFIX = 'builtin-owner:'
 const MEMBER_PREFIX = 'builtin-member:'
 export type DataScope = 'personal' | 'workspace' | 'shared'
 /** 视图的逻辑域归属：'all' 为跨表聚合视图，'workspace' / 'personal' / 'shared' 为依附于 K+1 逻辑表的视图。 */
@@ -30,6 +31,7 @@ export function viewDomainOf(
   const id = String(view.id ?? '').trim()
   const parsedScope = parseBuiltinScopeViewId(id)
   if (parsedScope) return parsedScope.scope
+  if (isBuiltinOwnerViewId(id)) return 'shared'
   if (
     isBuiltinAllViewId(id) ||
     isBuiltinCatalogViewId(id) ||
@@ -118,7 +120,15 @@ export function isBuiltinAllViewForCollection(id: string, collectionPath: string
 }
 
 export function isReadOnlyViewId(id: string) {
-  return isBuiltinAllViewId(id) || isBuiltinCatalogViewId(id) || isBuiltinTagViewId(id) || isBuiltinBlockKindViewId(id) || isBuiltinScopeViewId(id) || isBuiltinMemberViewId(id)
+  return (
+    isBuiltinAllViewId(id) ||
+    isBuiltinCatalogViewId(id) ||
+    isBuiltinTagViewId(id) ||
+    isBuiltinBlockKindViewId(id) ||
+    isBuiltinScopeViewId(id) ||
+    isBuiltinOwnerViewId(id) ||
+    isBuiltinMemberViewId(id)
+  )
 }
 
 const MEMBER_VIEWS = [
@@ -192,6 +202,49 @@ export function viewsForScope(views: SavedView[], scope: DataScope): SavedView[]
   })
 }
 
+export function builtinOwnerViewId(accountId: string, collectionPath: string) {
+  return `${OWNER_PREFIX}${encodeURIComponent(String(accountId ?? '').trim())}:${normalizeCollectionPath(collectionPath)}`
+}
+
+export function isBuiltinOwnerViewId(id: string) {
+  return id.startsWith(OWNER_PREFIX)
+}
+
+export function parseBuiltinOwnerViewId(id: string): { accountId: string; collectionPath: string } | null {
+  if (!isBuiltinOwnerViewId(id)) return null
+  const rest = id.slice(OWNER_PREFIX.length)
+  const split = rest.indexOf(':')
+  if (split <= 0) return null
+  try {
+    const accountId = decodeURIComponent(rest.slice(0, split)).trim()
+    const collectionPath = normalizeCollectionPath(rest.slice(split + 1))
+    return accountId && collectionPath && collectionPath !== '/' ? { accountId, collectionPath } : null
+  } catch {
+    return null
+  }
+}
+
+export function stubBuiltinOwnerView(id: string, ownerName?: string, table?: TableRef): SavedView | null {
+  const parsed = parseBuiltinOwnerViewId(id)
+  if (!parsed) return null
+  const noun = collectionNoun(table ?? { path: parsed.collectionPath, label: parsed.collectionPath.replace(/^\//, '') })
+  const displayOwner = String(ownerName ?? '').trim()
+  return normalizeSavedView({
+    id,
+    name: displayOwner ? `${displayOwner}的${noun}` : `共享${noun}`,
+    mode: 'table',
+    ...builtinViewLayout(),
+    filters: { $scope: 'shared', $ownerTable: `account:${parsed.accountId}` },
+    ownerTable: `account:${parsed.accountId}`,
+    columns: [],
+    groupBy: '',
+    wrap: false,
+    truncate: true,
+    query: '',
+    builtin: true,
+  })
+}
+
 export function stubBuiltinScopeView(id: string, listed: SavedView[] = []): SavedView | null {
   const parsed = parseBuiltinScopeViewId(id)
   if (!parsed) return null
@@ -227,6 +280,9 @@ export function displayNameForView(viewId: string, table: TableRef, storedName?:
   if (isBuiltinScopeViewId(id)) {
     const parsed = parseBuiltinScopeViewId(id)
     return parsed ? `${SCOPE_NAME[parsed.scope]}${collectionNoun(table)}` : collectionNoun(table)
+  }
+  if (isBuiltinOwnerViewId(id)) {
+    return stubBuiltinOwnerView(id, undefined, table)?.name || collectionNoun(table)
   }
   return collectionNoun(table)
 }
@@ -378,7 +434,8 @@ export function stubBuiltinBlockKindView(id: string): SavedView | null {
 }
 
 export function stubAnyBuiltinView(id: string, listed: SavedView[] = []): SavedView | null {
-  return stubBuiltinScopeView(id, listed)
+  return stubBuiltinOwnerView(id)
+    ?? stubBuiltinScopeView(id, listed)
     ?? stubBuiltinMemberView(id)
     ?? stubBuiltinBlockKindView(id)
     ?? stubBuiltinCatalogView(id)

@@ -117,6 +117,7 @@ describe('DatabaseAccessPolicy K+1 strict scope binding', () => {
     assert.deepEqual(policy.recordsInScope('/pages', rows, 'workspace').map((r) => r.id), ['ws-1'])
     assert.deepEqual(policy.recordsInScope('/pages', rows, 'personal').map((r) => r.id), ['bob-1'])
     assert.deepEqual(policy.recordsInScope('/pages', rows, 'shared').map((r) => r.id), ['ada-shared'])
+    assert.deepEqual(policy.recordsInOwnerTable('/pages', rows, 'account:ada').map((r) => r.id), ['ada-shared'])
   })
 
   it('classifies workspace records as shared for external collaborators', () => {
