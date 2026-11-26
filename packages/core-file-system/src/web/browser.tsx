@@ -198,6 +198,8 @@ import {
 import { markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady } from './sidebar-preview.ts'
 import { publishDataSidebar, releaseDataSidebar, type DataSidebarLive } from './data-sidebar-host.ts'
 import {
+  builtinAllView,
+  builtinScopeView,
   catalogLockFilters,
   displayNameForView,
   isBuiltinAllViewId,
@@ -205,8 +207,12 @@ import {
   parseBuiltinScopeViewId,
   stampRowOpenTarget,
   stubBuiltinBlockKindView,
+  stubBuiltinScopeView,
+  viewDomainOf,
   type DataScope,
+  type ViewDomain,
 } from '../catalog-views.ts'
+import { tableModeFor } from '../paths.ts'
 import { SAVED_VIEW_EVENT, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import {
   CLEAR_SHELL_TABLE_CELL,
@@ -384,13 +390,11 @@ export function CollectionBrowser({
   const routeScope: DataScope | null = (() => {
     const builtin = routeViewId ? parseBuiltinScopeViewId(routeViewId) : null
     if (builtin) return builtin.scope
-    const stored = routeViewId ? loadViews(collectionPath).find((view) => view.id === routeViewId && !view.builtin) : null
-    if (!stored || stored.ownerTable === 'all') return null
-    const scope = stored.filters?.$scope
-    if (scope === 'workspace' || scope === 'personal' || scope === 'shared') return scope
-    if (stored.ownerTable === 'workspace') return 'workspace'
-    if (stored.ownerTable?.startsWith('account:')) return 'personal'
-    return 'personal'
+    if (routeViewId && isBuiltinAllViewId(routeViewId)) return null
+    const stored = routeViewId ? loadViews(collectionPath).find((view) => view.id === routeViewId) : null
+    if (!stored) return null
+    const domain = viewDomainOf(stored)
+    return domain === 'all' ? null : domain
   })()
   const listedViews = (path: string, user: SavedView[]) => {
     const skipIds = loadOmittedViewIds(path)
@@ -2426,7 +2430,23 @@ export function CollectionBrowser({
     window.dispatchEvent(new Event(FSDB_CRUMB_LABELS_EVENT))
   }, [activeViewId, collectionPath, items, routeViewId, schema?.labelField, selected, sheet])
   const filterActive = countFilterRules(filterTree) > 0
-  const activeView = views.find((view) => view.id === activeViewId)
+  const activeView =
+    views.find((view) => view.id === activeViewId) ??
+    (activeViewId ? stubBuiltinScopeView(activeViewId, views) ?? undefined : undefined)
+  const isKPlus1Cloud = !sheet && !localData && tableModeFor(collectionPath) === 'k-plus-1'
+  const activeDomain: ViewDomain = activeView ? viewDomainOf(activeView) : (routeScope ?? 'all')
+  const domainViews = useMemo(() => {
+    if (!isKPlus1Cloud) return views
+    if (activeDomain === 'all') {
+      return views.filter((view) => viewDomainOf(view) === 'all')
+    }
+    const baseAll = views.find((view) => isBuiltinAllViewId(view.id)) ?? builtinAllView({ path: collectionPath, label: title })
+    const scopedBuiltin = builtinScopeView(baseAll, activeDomain)
+    const scopedCustom = views.filter(
+      (view) => !isBuiltinAllViewId(view.id) && !view.builtin && viewDomainOf(view) === activeDomain,
+    )
+    return [scopedBuiltin, ...scopedCustom]
+  }, [activeDomain, collectionPath, isKPlus1Cloud, title, views])
   const sandboxViews = useMemo(() => normalizeTableSandboxViews(activeView?.sandboxViews) ?? [], [activeView?.sandboxViews])
   const activeSandboxView = useMemo(() => sandboxViews.find((item) => item.id === mode), [mode, sandboxViews])
   const sortCustom = isCustomSorts(
@@ -3226,15 +3246,9 @@ export function CollectionBrowser({
       viewId: crumbFromData ? dataViewId : (routeViewId ?? activeViewId ?? undefined),
       viewScope: crumbFromData
         ? undefined
-        : activeView?.ownerTable === 'all'
+        : activeDomain === 'all'
           ? undefined
-          : activeView?.filters?.$scope === 'workspace' || activeView?.filters?.$scope === 'personal' || activeView?.filters?.$scope === 'shared'
-            ? activeView.filters.$scope
-            : activeView?.ownerTable === 'workspace' || activeView?.scope === 'workspace'
-              ? 'workspace'
-              : activeView?.scope === 'personal' || activeView?.protection === 'personal'
-                ? 'personal'
-                : undefined,
+          : activeDomain,
       viewName: crumbFromData
         ? displayNameForView(
             dataViewId,
@@ -3244,7 +3258,7 @@ export function CollectionBrowser({
         : activeView?.name,
       views: crumbFromData
         ? dataViews.map((view) => ({ id: view.id, name: view.name, mode: view.mode }))
-        : views.map((view) => ({ id: view.id, name: view.name, mode: view.mode })),
+        : domainViews.map((view) => ({ id: view.id, name: view.name, mode: view.mode })),
       recordId: crumbFromData ? stampId : selected?.id,
       recordLabel: selected ? crumbRecordLabel(selected, schema?.labelField) : undefined,
       records: selected
@@ -3786,7 +3800,7 @@ export function CollectionBrowser({
         title={title}
         activeViewId={activeViewId}
         activeView={activeView}
-        views={views}
+        views={domainViews}
         viewBanner={viewBanner}
         setViewBanner={setViewBanner}
         commitViewName={commitViewName}
@@ -3936,7 +3950,7 @@ export function CollectionBrowser({
           crumbs={crumbs}
           canCreate={canCreate}
           collectionPath={collectionPath}
-          views={views}
+          views={domainViews}
           activeViewId={activeViewId}
           activeView={activeView}
           selected={selected}

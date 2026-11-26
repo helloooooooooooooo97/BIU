@@ -13,6 +13,41 @@ const ALL_PREFIX = 'builtin-all:'
 const SCOPE_PREFIX = 'builtin-scope:'
 const MEMBER_PREFIX = 'builtin-member:'
 export type DataScope = 'personal' | 'workspace' | 'shared'
+/** 视图的逻辑域归属：'all' 为跨表聚合视图，'workspace' / 'personal' / 'shared' 为依附于 K+1 逻辑表的视图。 */
+export type ViewDomain = DataScope | 'all'
+
+export function viewDomainOf(
+  view: {
+    id?: string
+    builtin?: boolean
+    filters?: Record<string, string>
+    ownerTable?: string
+    scope?: string
+    protection?: string
+  } | null | undefined,
+): ViewDomain {
+  if (!view) return 'all'
+  const id = String(view.id ?? '').trim()
+  const parsedScope = parseBuiltinScopeViewId(id)
+  if (parsedScope) return parsedScope.scope
+  if (
+    isBuiltinAllViewId(id) ||
+    isBuiltinCatalogViewId(id) ||
+    isBuiltinTagViewId(id) ||
+    isBuiltinBlockKindViewId(id) ||
+    isBuiltinMemberViewId(id)
+  ) {
+    return 'all'
+  }
+  if (view.ownerTable === 'all') return 'all'
+  const filterScope = view.filters?.$scope
+  if (filterScope === 'workspace' || filterScope === 'personal' || filterScope === 'shared') return filterScope
+  if (view.ownerTable === 'workspace') return 'workspace'
+  if (view.ownerTable?.startsWith('account:')) return 'personal'
+  if (view.scope === 'personal' || view.protection === 'personal') return 'personal'
+  if (view.scope === 'workspace') return 'workspace'
+  return 'all'
+}
 const SCOPE_NAME: Record<DataScope, string> = {
   personal: '私人',
   workspace: '空间',
@@ -148,13 +183,11 @@ export function builtinScopeView(view: SavedView, scope: DataScope): SavedView {
     builtin: true,
   })
 }
-/** 空间与私人区拥有各自的视图集合；历史未标 scope 的用户视图归入私人数据；顶层跨表视图（ownerTable='all'）不归入单域。 */
+/** 空间与私人区拥有各自的视图集合；顶层聚合视图（ownerTable='all' 或 builtin-all）不归入单域。 */
 export function viewsForScope(views: SavedView[], scope: DataScope): SavedView[] {
   return views.flatMap((view) => {
-    if (view.builtin) return [builtinScopeView(view, scope)]
-    if (view.ownerTable === 'all') return []
-    const declared = view.filters?.$scope
-    if ((declared || (view.ownerTable === 'workspace' ? 'workspace' : 'personal')) !== scope) return []
+    if (view.builtin || isBuiltinAllViewId(view.id)) return [builtinScopeView(view, scope)]
+    if (viewDomainOf(view) !== scope) return []
     return [normalizeSavedView({ ...view, filters: { ...view.filters, $scope: scope } })]
   })
 }
@@ -355,26 +388,24 @@ export function stubAnyBuiltinView(id: string, listed: SavedView[] = []): SavedV
 
 /**
  * 视图自己的扁平筛选（含 K+1 逻辑表强绑定）：
- * - 顶层汇总视图（ownerTable='all' 或 builtin-all）不锁 $scope，可跨表筛选所有我可见的数据；
- * - 空间/个人/共享视图始终锁定对应 $scope，即使筛选条件被清空也不可越表读取。
+ * - 聚合视图（ownerTable='all' 或 builtin-all）不锁 $scope，可跨表筛选所有我可见的数据；
+ * - 依附于空间/个人/共享逻辑表的视图始终锁定对应 $scope，即使筛选条件为空也绝不越表读取。
  */
 export function catalogLockFilters(
   viewId: string | null | undefined,
-  listed: Array<{ id: string; builtin?: boolean; filters?: Record<string, string>; ownerTable?: string; scope?: string }> = [],
+  listed: Array<{ id: string; builtin?: boolean; filters?: Record<string, string>; ownerTable?: string; scope?: string; protection?: string }> = [],
 ): Record<string, string> {
   const key = String(viewId ?? '').trim()
   if (!key) return {}
   const current = listed.find((view) => view.id === key)
   if (current) {
     const base = { ...(current.filters ?? {}) }
-    if (current.ownerTable === 'all' || isBuiltinAllViewId(key)) {
+    const domain = viewDomainOf(current)
+    if (domain === 'all') {
       delete base.$scope
       return base
     }
-    if (!base.$scope && !current.builtin) {
-      if (current.ownerTable === 'workspace') base.$scope = 'workspace'
-      else if (current.ownerTable?.startsWith('account:')) base.$scope = 'personal'
-    }
+    base.$scope = domain
     return base
   }
   const stub = stubAnyBuiltinView(key, listed as SavedView[])

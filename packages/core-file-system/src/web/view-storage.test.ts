@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { builtinAllView, builtinAllViewId, builtinCatalogViewId, catalogLockFilters, viewsForScope } from '../catalog-views.ts'
+import { builtinAllView, builtinAllViewId, builtinCatalogViewId, catalogLockFilters, viewDomainOf, viewsForScope } from '../catalog-views.ts'
 import { VIEWS_COLLECTION_PATH } from './database-path.ts'
 import {
   defaultViewId,
@@ -787,6 +787,29 @@ test('catalogLockFilters and viewsForScope enforce strict K+1 view-to-table bind
   // Workspace and personal views always lock $scope even when filters omit $scope
   assert.deepEqual(catalogLockFilters('v-ws', listed), { status: 'open', $scope: 'workspace' })
   assert.deepEqual(catalogLockFilters('v-personal', listed), { status: 'draft', $scope: 'personal' })
+  // Legacy personal view with scope='personal' and no ownerTable still locks $scope='personal'
+  const legacyPersonal = {
+    id: 'v-legacy-p',
+    name: '历史个人视图',
+    mode: 'table' as const,
+    sortField: 'title',
+    sortDir: 'asc' as const,
+    filters: {},
+    columns: [],
+    scope: 'personal' as const,
+  }
+  assert.equal(viewDomainOf(legacyPersonal), 'personal')
+  assert.deepEqual(catalogLockFilters('v-legacy-p', [legacyPersonal]), { $scope: 'personal' })
+  // Renamed builtin-all view saved with builtin: false stays in 'all' domain (never leaks into workspace)
+  const renamedAll = {
+    id: builtinAllViewId('/pages'),
+    name: '全部页面（重命名）',
+    builtin: false,
+    filters: {},
+    scope: 'workspace' as const,
+  }
+  assert.equal(viewDomainOf(renamedAll), 'all')
+  assert.deepEqual(catalogLockFilters(renamedAll.id, [renamedAll]), {})
   // Top-level cross-table view never locks $scope
   assert.deepEqual(catalogLockFilters('v-all', listed), { status: 'open' })
 
