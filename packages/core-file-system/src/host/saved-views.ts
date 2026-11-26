@@ -4,7 +4,7 @@ import { openAndMigrateBiu } from '@biu/host-plugin-loader/data-dir'
 import type { CollectionInfo, CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { normalizeSchemaValue, recordBuiltinValues } from '@biu/type-file-system'
 import { builtinAllView, builtinAllViewId, isBuiltinAllViewId } from '../catalog-views.ts'
-import { normalizeColumnWidths, normalizeGroupConfig, normalizePageSize, normalizeViewScope, parseViewColumns, type SavedView } from '../shared/saved-view.ts'
+import { normalizeColumnWidths, normalizeGroupConfig, normalizePageSize, normalizeViewProtection, normalizeViewScope, parseViewColumns, type SavedView } from '../shared/saved-view.ts'
 import { normalizeColumnSummaries } from '../shared/column-summary.ts'
 import { normalizeColumnViews } from '../shared/column-sandbox-model.ts'
 import { normalizeTableSandboxViews } from '../shared/table-sandbox-model.ts'
@@ -725,6 +725,8 @@ function asRecord(
     ...(viewRole ? { viewRole } : {}),
     mode: view.mode ?? 'table',
     scope: normalizeViewScope(view.scope) ?? 'workspace',
+    protection: normalizeViewProtection(view.protection, normalizeViewScope(view.scope) ?? 'workspace') ?? 'locked',
+    ownerTable: view.ownerTable ?? ((normalizeViewScope(view.scope) === 'personal' && view.createdBy) ? `account:${view.createdBy}` : 'workspace'),
     sortField: sorts[0]?.field || view.sortField || 'title',
     sortDir: sorts[0]?.dir ?? (view.sortDir === 'desc' ? 'desc' : 'asc'),
     query: view.query ?? '',
@@ -773,6 +775,8 @@ export function clientViewFromDbRow(row: Record<string, unknown> | undefined) {
     name: String(row.title ?? row.name ?? id),
     mode: row.mode,
     scope: normalizeViewScope(row.scope),
+    protection: normalizeViewProtection(row.protection, normalizeViewScope(row.scope)),
+    ownerTable: typeof row.ownerTable === 'string' && row.ownerTable.trim() ? row.ownerTable.trim() : undefined,
     createdBy:
       typeof row.createdBy === 'string' && row.createdBy.trim()
         ? row.createdBy.trim()
@@ -832,7 +836,9 @@ export function viewsCollection(
         tablePath: { type: 'string', label: '表路径', writable: true },
         viewId: { type: 'string', label: '视图 ID' },
         mode: { type: 'string', label: '呈现', writable: true },
-        scope: { type: 'select', label: '可见范围', writable: true, enum: ['personal', 'workspace', 'shared'] },
+        scope: { type: 'select', label: '可见范围', writable: true, enum: ['personal', 'workspace'] },
+        protection: { type: 'select', label: '保护视图', writable: true, enum: ['public', 'locked', 'personal'] },
+        ownerTable: { type: 'string', label: '归属表', writable: true },
         createdBy: { type: 'person', label: '创建者', writable: false },
         sortField: { type: 'string', label: '排序字段', writable: true },
         sortDir: { type: 'select', label: '升降序', writable: true, enum: ['asc', 'desc'] },

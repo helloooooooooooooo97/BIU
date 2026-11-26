@@ -505,6 +505,29 @@ function WorkspaceAccess({
     }
   }
 
+  async function transferOwnerTable(target: 'workspace' | 'personal') {
+    if (viewId || !recordId || !currentAccountId) return
+    setError('')
+    setInheritanceBusy(true)
+    try {
+      await readJson('/api/account/records/owner-table', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          collection,
+          recordId,
+          ownerTable: target === 'workspace' ? 'workspace' : `account:${currentAccountId}`,
+        }),
+      })
+      emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '无法切换归属表')
+    } finally {
+      setInheritanceBusy(false)
+    }
+  }
+
   async function toggleInheritance(on: boolean) {
     if (viewId || !recordId) return
     setError('')
@@ -608,8 +631,22 @@ function WorkspaceAccess({
   return (
     <div className="fsdb-share-link-section" data-testid="fsdb-share-members">
       <div className="fsdb-share-collab-summary">
-        <span>可见范围</span>
-        <strong className={`fsdb-share-scope is-${shownScope}`} data-testid="fsdb-share-scope"><ScopeMark scope={shownScope} /></strong>
+        <span>归属与可见范围</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <strong className={`fsdb-share-scope is-${shownScope}`} data-testid="fsdb-share-scope"><ScopeMark scope={shownScope} /></strong>
+          {!viewId && recordId && currentAccountId ? (
+            <button
+              type="button"
+              disabled={inheritanceBusy}
+              data-testid="fsdb-share-owner-table-toggle"
+              className="fsdb-share-ghost"
+              style={{ fontSize: 11.5, padding: '2px 8px' }}
+              onClick={() => void transferOwnerTable(shownScope === 'workspace' ? 'personal' : 'workspace')}
+            >
+              {shownScope === 'workspace' ? '收归个人表' : '转入空间表'}
+            </button>
+          ) : null}
+        </div>
       </div>
       {!viewId && inheritance.hasParent ? (
         <div className="fsdb-share-inherit-row" data-testid="fsdb-share-inherit">

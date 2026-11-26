@@ -895,10 +895,14 @@ export type CollectionSchemaInput = Omit<CollectionSchema, 'fields'> & {
 /** 宿主已持久化正文时，集合只同步业务副作用，避免再次写入 editor_content。 */
 export type CollectionUpdateOptions = { persistContent?: boolean }
 
+export type CollectionTableMode = 'k-plus-1' | 'workspace-only' | 'personal-only' | 'derived'
+
 export type CollectionSpec = {
   id: string
   path: string
   label?: string
+  /** 集合的 K+1 逻辑表形态：缺省由路径策略决定（业务表默认 k-plus-1）。 */
+  tableMode?: CollectionTableMode
   schema: CollectionSchemaInput
   view?: CollectionView
   /**

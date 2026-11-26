@@ -104,14 +104,15 @@ test('workspace viewers can only read resources made visible to them', () => {
   assert.equal(auth.authorize(actor(cara.id), 'resource:update', page('shared')).allowed, true)
   assert.equal(auth.authorize(actor(cara.id), 'resource:delete', page('shared')).allowed, false)
   store.updateMemberRole(ada.id, workspace.id, cara.id, 'admin')
-  // Workspace admin role does NOT implicitly grant delete/manager on another member's workspace record
+  // K+1 空间公共表：空间 admin 天然具备 manager 治理权（但对他人私人表仍无权）
   assert.equal(auth.authorize(actor(cara.id), 'resource:update', page('shared')).allowed, true)
-  assert.equal(auth.authorize(actor(cara.id), 'resource:delete', page('shared')).allowed, false)
+  assert.equal(auth.authorize(actor(cara.id), 'resource:delete', page('shared')).allowed, true)
   auth.grant(ada.id, page('shared'), 'account', bob.id, 'editor')
   assert.equal(auth.authorize(actor(bob.id), 'resource:update', page('shared')).allowed, false)
 
   auth.attach(actor(ada.id), page('private-viewer'), { accessMode: 'private' })
   assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('private-viewer')).allowed, false)
+  assert.equal(auth.authorize(actor(cara.id), 'resource:read', page('private-viewer')).allowed, false)
 })
 
 test('a group grant applies dynamically to its workspace members', () => {
@@ -527,8 +528,11 @@ test('moving a private inherited record under a workspace-visible parent preserv
   assert.equal(safeMove.preservedPrivate, true)
   assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('secret-note')).allowed, false)
 
-  // Explicit inherit toggle or inheritOnExpand exposes it as intended
-  auth.setInheritanceMode(actor(ada.id), page('secret-note'), 'inherit')
+  // Cross-table inherit is blocked until explicitly moved with inheritOnExpand: true
+  assert.throws(() => auth.setInheritanceMode(actor(ada.id), page('secret-note'), 'inherit'), /CROSS_TABLE_INHERIT_FORBIDDEN/)
+  const expandMove = auth.move(actor(ada.id), page('secret-note'), page('public-folder'), { inheritOnExpand: true })
+  assert.equal(expandMove.scopeExpanded, true)
+  assert.equal(auth.ownerTableOf(page('secret-note')), 'workspace')
   assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('secret-note')).allowed, true)
 })
 
@@ -688,16 +692,100 @@ test('explicit dynamic-group grant on a workspace record takes precedence over w
   auth.attach(actor(ada.id), page('ws-doc'), { accessMode: 'members', memberDefaultRole: 'editor' })
   auth.grant(ada.id, page('ws-doc'), 'group', membersGroup.id, 'editor')
 
-  // Bob (workspace admin) gets 'editor' consistently in both authorize() and roleChain()
+  // Bob (workspace admin) gets 'manager' via workspace-default (higher than group 'editor') consistently in authorize() and roleChain()
   const decision = auth.authorize(actor(bob.id), 'resource:read', page('ws-doc'))
   assert.equal(decision.allowed, true)
   if (decision.allowed) {
-    assert.equal(decision.effectiveRole, 'editor')
-    assert.equal(decision.source, 'group-grant')
+    assert.equal(decision.effectiveRole, 'manager')
+    assert.equal(decision.source, 'workspace-default')
   }
   const chain = auth.roleChain(bob.id, page('ws-doc'))
-  assert.equal(chain[0]?.role, 'editor')
-  assert.equal(chain[0]?.source, 'group-grant')
+  assert.equal(chain[0]?.role, 'manager')
+  assert.equal(chain[0]?.source, 'workspace-default')
+})
+
+test('K+1 logical tables: workspace rules co-managed by admins, strict table isolation, owner-only transfer, and offboarding stability', () => {
+  const { store, auth, workspace, ada, bob, cara, actor, page } = setup()
+  store.updateMemberRole(ada.id, workspace.id, bob.id, 'admin')
+  const ext = store.register('External', Date.now(), 'password123', 'ext@example.com')
+  store.addMemberByEmail(ada.id, workspace.id, ext.email, 'member')
+  store.db.prepare(`UPDATE workspace_members SET member_kind = 'external' WHERE workspace_id = ? AND account_id = ?`).run(workspace.id, ext.id)
+
+  auth.setAccessRuleMatcher((_ws, _col, _tree, _id, ctx) => ctx.record?.tag === 'client')
+
+  // Cara (normal member) creates a workspace record AND a personal record both tagged 'client'
+  auth.attach(actor(cara.id), page('ws-client'), { accessMode: 'members', memberDefaultRole: 'editor' })
+  auth.attach(actor(cara.id), page('cara-priv-client'), { accessMode: 'private' })
+
+  // Cara (normal member) cannot create a workspace rule
+  assert.throws(
+    () =>
+      store.createAccessRule(cara.id, workspace.id, {
+        collection: '/pages',
+        name: 'Forbidden WS Rule',
+        scope: 'workspace',
+      }),
+    /仅空间管理员/,
+  )
+
+  // Admin Bob creates a workspace rule granting External viewer access
+  const wsRule = store.createAccessRule(bob.id, workspace.id, {
+    collection: '/pages',
+    name: 'Client Workspace Docs',
+    scope: 'workspace',
+    filterTree: { op: 'and', children: [] },
+    grants: [{ subjectType: 'account', subjectId: ext.id, role: 'viewer' }],
+  })
+  assert.equal(wsRule.ownerTable, 'workspace')
+  assert.equal(wsRule.scope, 'workspace')
+
+  // Owner Ada can see and co-manage Bob's workspace rule; Member Cara sees it read-only
+  const adaRules = store.listVisibleAccessRules(ada.id, workspace.id, '/pages')
+  assert.equal(adaRules.find((r) => r.id === wsRule.id)?.canManage, true)
+  const caraRules = store.listVisibleAccessRules(cara.id, workspace.id, '/pages')
+  assert.equal(caraRules.find((r) => r.id === wsRule.id)?.canManage, false)
+  assert.throws(() => store.updateAccessRule(cara.id, workspace.id, wsRule.id, { name: 'Hack' }), /仅空间管理员/)
+  const renamed = store.updateAccessRule(ada.id, workspace.id, wsRule.id, { name: 'Client WS Docs v2' })
+  assert.equal(renamed.name, 'Client WS Docs v2')
+
+  // Workspace rule grants External access to Cara's workspace record, but NEVER to Cara's personal record
+  assert.equal(
+    auth.authorize(actor(ext.id), 'resource:read', { ...page('ws-client'), record: { id: 'ws-client', tag: 'client' } }).allowed,
+    true,
+  )
+  assert.equal(
+    auth.authorize(actor(ext.id), 'resource:read', { ...page('cara-priv-client'), record: { id: 'cara-priv-client', tag: 'client' } }).allowed,
+    false,
+  )
+
+  // Delegated manager on personal record cannot transfer owner_table to workspace, nor create-child in another's personal table
+  auth.grant(cara.id, page('cara-priv-client'), 'account', bob.id, 'manager')
+  assert.throws(() => auth.transferOwnerTable(actor(bob.id), page('cara-priv-client'), 'workspace'), /PERSONAL_OWNER_ONLY/)
+  assert.equal(auth.authorize(actor(bob.id), 'resource:create-child', page('cara-priv-client')).allowed, false)
+
+  // Owner Cara can transfer personal record to workspace -> External immediately gains access via workspace rule
+  auth.transferOwnerTable(actor(cara.id), page('cara-priv-client'), 'workspace')
+  assert.equal(
+    auth.authorize(actor(ext.id), 'resource:read', { ...page('cara-priv-client'), record: { id: 'cara-priv-client', tag: 'client' } }).allowed,
+    true,
+  )
+
+  // Admin Ada reclaims workspace record back to Cara's personal table -> External immediately loses access
+  auth.transferOwnerTable(actor(ada.id), page('cara-priv-client'), `account:${cara.id}`)
+  assert.equal(
+    auth.authorize(actor(ext.id), 'resource:read', { ...page('cara-priv-client'), record: { id: 'cara-priv-client', tag: 'client' } }).allowed,
+    false,
+  )
+
+  // Offboarding Bob preserves Bob's workspace rule while disabling Bob's personal rule
+  const bobPersonalRule = store.createAccessRule(bob.id, workspace.id, {
+    collection: '/pages',
+    name: 'Bob Personal Rule',
+    scope: 'personal',
+  })
+  store.removeMember(ada.id, workspace.id, bob.id)
+  assert.equal(store.getAccessRule(workspace.id, wsRule.id)?.enabled, true)
+  assert.equal(store.getAccessRule(workspace.id, bobPersonalRule.id)?.enabled, false)
 })
 
 test('anti-lockout & control/data separation: users cannot self-revoke/downgrade and workspace owner cannot delete others view grants', () => {

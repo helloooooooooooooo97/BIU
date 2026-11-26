@@ -183,7 +183,9 @@ export class CollabStore {
         display_snapshot_json TEXT,
         enabled INTEGER NOT NULL DEFAULT 1,
         created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
+        updated_at INTEGER NOT NULL,
+        owner_table TEXT NOT NULL DEFAULT '',
+        visible_views_json TEXT
       );
       CREATE INDEX IF NOT EXISTS access_rules_ws_col
         ON access_rules(workspace_id, collection, enabled);
@@ -202,6 +204,17 @@ export class CollabStore {
       CREATE INDEX IF NOT EXISTS access_rule_grants_subject
         ON access_rule_grants(workspace_id, subject_type, subject_id);
     `)
+    const cols = (this.db.prepare('PRAGMA table_info(access_rules)').all() as Array<{ name: string }>).map((c) => c.name)
+    if (!cols.includes('owner_table')) {
+      this.db.exec(`ALTER TABLE access_rules ADD COLUMN owner_table TEXT NOT NULL DEFAULT ''`)
+    }
+    if (!cols.includes('visible_views_json')) {
+      this.db.exec(`ALTER TABLE access_rules ADD COLUMN visible_views_json TEXT`)
+    }
+    this.db.exec(
+      `CREATE INDEX IF NOT EXISTS access_rules_ws_col_table
+       ON access_rules(workspace_id, collection, owner_table, enabled)`,
+    )
   }
 
   private ensureActivityTable() {
@@ -1375,15 +1388,16 @@ export class CollabStore {
         `DELETE FROM access_rule_grants
          WHERE workspace_id = ? AND subject_type = 'account' AND subject_id = ?`,
       ).run(workspaceId, accountId)
+      // 空间规则（owner_table = 'workspace'）归属空间本身，成员离职后继续生效；仅处理个人表规则
       if (options.transferAccessRules && transferTo && transferTo !== accountId) {
         this.db.prepare(
-          `UPDATE access_rules SET created_by = ?, updated_at = ?
-           WHERE workspace_id = ? AND created_by = ?`,
-        ).run(transferTo, now, workspaceId, accountId)
+          `UPDATE access_rules SET created_by = ?, owner_table = ?, updated_at = ?
+           WHERE workspace_id = ? AND created_by = ? AND owner_table != 'workspace'`,
+        ).run(transferTo, `account:${transferTo}`, now, workspaceId, accountId)
       } else {
         this.db.prepare(
           `UPDATE access_rules SET enabled = 0, updated_at = ?
-           WHERE workspace_id = ? AND created_by = ?`,
+           WHERE workspace_id = ? AND created_by = ? AND owner_table != 'workspace'`,
         ).run(now, workspaceId, accountId)
       }
       this.db.prepare(
@@ -3169,8 +3183,10 @@ export class CollabStore {
       name: string
       created_by: string
       created_by_name?: string
+      owner_table?: string
       filter_tree_json: string
       columns_json: string | null
+      visible_views_json?: string | null
       display_snapshot_json: string | null
       enabled: number
       created_at: number
@@ -3241,6 +3257,17 @@ export class CollabStore {
           columns = null
         }
       }
+      let visibleViews: string[] | null = null
+      if (row.visible_views_json) {
+        try {
+          const parsed = JSON.parse(row.visible_views_json)
+          if (Array.isArray(parsed)) {
+            visibleViews = parsed.filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+          }
+        } catch {
+          visibleViews = null
+        }
+      }
       let displaySnapshot: AccessRuleDisplaySnapshot | null = null
       if (row.display_snapshot_json) {
         try {
@@ -3250,6 +3277,8 @@ export class CollabStore {
           displaySnapshot = null
         }
       }
+      const ownerTable = row.owner_table?.trim() || (row.created_by ? `account:${row.created_by}` : 'workspace')
+      const scope = ownerTable === 'workspace' ? 'workspace' as const : 'personal' as const
       return {
         id: row.id,
         workspaceId: row.workspace_id,
@@ -3257,8 +3286,11 @@ export class CollabStore {
         name: row.name,
         createdBy: row.created_by,
         ...(row.created_by_name ? { createdByName: row.created_by_name } : {}),
+        ownerTable,
+        scope,
         filterTree,
         columns,
+        visibleViews,
         displaySnapshot,
         enabled: row.enabled !== 0,
         createdAt: Number(row.created_at) || 0,
@@ -3296,28 +3328,67 @@ export class CollabStore {
     return this.hydrateAccessRules([row])[0] ?? null
   }
 
+  private memberRoleAndKind(actorId: string, workspaceId: string): { role: string; memberKind: string } | null {
+    const row = this.db
+      .prepare('SELECT role, member_kind FROM workspace_members WHERE workspace_id = ? AND account_id = ?')
+      .get(workspaceId, actorId) as { role: string; member_kind: string } | undefined
+    return row ? { role: row.role, memberKind: row.member_kind } : null
+  }
+
+  canManageAccessRule(actorId: string, workspaceId: string, rule: Pick<AccessRuleRecord, 'ownerTable' | 'createdBy'>): boolean {
+    const member = this.memberRoleAndKind(actorId, workspaceId)
+    if (!member) return false
+    if (rule.ownerTable === 'workspace') {
+      return member.role === 'owner' || member.role === 'admin'
+    }
+    return rule.ownerTable === `account:${actorId}` || rule.createdBy === actorId
+  }
+
+  /**
+   * 列出当前操作者可见的分享规则：
+   * - 空间 owner / admin：全部空间规则（canManage=true）+ 自己的个人规则（canManage=true）
+   * - 内部 member：全部空间规则（canManage=false，只读透明防幽灵权限）+ 自己的个人规则（canManage=true）
+   * - viewer / external / guest：空列表
+   */
+  listVisibleAccessRules(
+    actorId: string,
+    workspaceId: string,
+    collection?: string,
+    scopeFilter: 'all' | 'workspace' | 'personal' = 'all',
+  ): AccessRuleRecord[] {
+    const member = this.memberRoleAndKind(actorId, workspaceId)
+    if (!member) throw new CollabError('不是该工作区成员', 403)
+    if (member.role === 'viewer' || member.memberKind === 'external' || member.memberKind === 'guest') {
+      return []
+    }
+    const isWsAdmin = member.role === 'owner' || member.role === 'admin'
+    const normalizedCol = collection ? this.normalizeAccessRuleCollection(collection) : ''
+    const personalTable = `account:${actorId}`
+    let whereScope = `(r.owner_table = 'workspace' OR r.owner_table = ? OR (r.owner_table = '' AND r.created_by = ?))`
+    const params: Array<string | number | null> = [workspaceId]
+    if (scopeFilter === 'workspace') {
+      whereScope = `r.owner_table = 'workspace'`
+    } else if (scopeFilter === 'personal') {
+      whereScope = `(r.owner_table = ? OR (r.owner_table = '' AND r.created_by = ?))`
+      params.push(personalTable, actorId)
+    } else {
+      params.push(personalTable, actorId)
+    }
+    if (normalizedCol) params.push(normalizedCol)
+    const sql = `SELECT r.*, a.name AS created_by_name
+       FROM access_rules r
+       LEFT JOIN accounts a ON a.id = r.created_by
+       WHERE r.workspace_id = ? AND ${whereScope}${normalizedCol ? ' AND r.collection = ?' : ''}
+       ORDER BY CASE WHEN r.owner_table = 'workspace' THEN 0 ELSE 1 END, r.updated_at DESC, r.created_at DESC`
+    const rows = this.db.prepare(sql).all(...params) as Array<any>
+    return this.hydrateAccessRules(rows).map((rule) => ({
+      ...rule,
+      canManage: rule.ownerTable === 'workspace' ? isWsAdmin : (rule.ownerTable === personalTable || rule.createdBy === actorId),
+    }))
+  }
+
   listAccessRulesForOwner(actorId: string, workspaceId: string, collection?: string): AccessRuleRecord[] {
-    if (!this.isMember(actorId, workspaceId)) throw new CollabError('不是该工作区成员', 403)
-    const rows = collection
-      ? (this.db
-          .prepare(
-            `SELECT r.*, a.name AS created_by_name
-             FROM access_rules r
-             LEFT JOIN accounts a ON a.id = r.created_by
-             WHERE r.workspace_id = ? AND r.created_by = ? AND r.collection = ?
-             ORDER BY r.updated_at DESC, r.created_at DESC`,
-          )
-          .all(workspaceId, actorId, this.normalizeAccessRuleCollection(collection)) as Array<any>)
-      : (this.db
-          .prepare(
-            `SELECT r.*, a.name AS created_by_name
-             FROM access_rules r
-             LEFT JOIN accounts a ON a.id = r.created_by
-             WHERE r.workspace_id = ? AND r.created_by = ?
-             ORDER BY r.updated_at DESC, r.created_at DESC`,
-          )
-          .all(workspaceId, actorId) as Array<any>)
-    return this.hydrateAccessRules(rows)
+    return this.listVisibleAccessRules(actorId, workspaceId, collection, 'personal')
   }
 
   listActiveAccessRulesForCollection(workspaceId: string, collection: string): AccessRuleRecord[] {
@@ -3335,18 +3406,28 @@ export class CollabStore {
 
   countAccessRulesForOwner(workspaceId: string, accountId: string): number {
     const row = this.db
-      .prepare('SELECT COUNT(*) AS cnt FROM access_rules WHERE workspace_id = ? AND created_by = ? AND enabled = 1')
+      .prepare(
+        `SELECT COUNT(*) AS cnt FROM access_rules
+         WHERE workspace_id = ? AND created_by = ? AND owner_table != 'workspace' AND enabled = 1`,
+      )
       .get(workspaceId, accountId) as { cnt?: number } | undefined
     return Number(row?.cnt ?? 0)
   }
 
   createAccessRule(actorId: string, workspaceId: string, input: CreateAccessRuleInput): AccessRuleRecord {
     this.requireAccessRuleCreatorEligibility(actorId, workspaceId)
+    const member = this.memberRoleAndKind(actorId, workspaceId)!
+    const wantsWorkspace = input.scope === 'workspace' || input.ownerTable === 'workspace'
+    if (wantsWorkspace && member.role !== 'owner' && member.role !== 'admin') {
+      throw new CollabError('仅空间管理员可创建空间表访问规则', 403)
+    }
+    const ownerTable = wantsWorkspace ? 'workspace' : `account:${actorId}`
     const collection = this.normalizeAccessRuleCollection(input.collection)
     const name = String(input.name ?? '').trim()
     if (!name) throw new CollabError('规则名称不能为空', 400)
     const filterTree = input.filterTree && typeof input.filterTree === 'object' ? input.filterTree : { op: 'and', rules: [] }
     const columns = this.normalizeAccessRuleColumns(input.columns)
+    const visibleViews = this.normalizeAccessRuleColumns(input.visibleViews)
     const displaySnapshot = input.displaySnapshot && typeof input.displaySnapshot === 'object' ? input.displaySnapshot : null
     const enabled = input.enabled === false ? 0 : 1
     const ruleId = id('rule')
@@ -3358,8 +3439,8 @@ export class CollabStore {
       this.db
         .prepare(
           `INSERT INTO access_rules
-             (id, workspace_id, collection, name, created_by, filter_tree_json, columns_json, display_snapshot_json, enabled, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             (id, workspace_id, collection, name, created_by, owner_table, filter_tree_json, columns_json, visible_views_json, display_snapshot_json, enabled, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           ruleId,
@@ -3367,8 +3448,10 @@ export class CollabStore {
           collection,
           name,
           actorId,
+          ownerTable,
           JSON.stringify(filterTree),
           columns ? JSON.stringify(columns) : null,
+          visibleViews ? JSON.stringify(visibleViews) : null,
           displaySnapshot ? JSON.stringify(displaySnapshot) : null,
           enabled,
           now,
@@ -3394,17 +3477,34 @@ export class CollabStore {
       throw error
     }
     this.authorization.invalidateAll()
-    return this.getAccessRule(workspaceId, ruleId)!
+    const created = this.getAccessRule(workspaceId, ruleId)!
+    return { ...created, canManage: true }
   }
 
   updateAccessRule(actorId: string, workspaceId: string, ruleId: string, patch: UpdateAccessRuleInput): AccessRuleRecord {
     const existing = this.getAccessRule(workspaceId, ruleId)
     if (!existing) throw new CollabError('分享规则不存在', 404)
-    if (existing.createdBy !== actorId) throw new CollabError('只有规则创建者可以修改此规则', 403)
+    if (!this.canManageAccessRule(actorId, workspaceId, existing)) {
+      throw new CollabError(
+        existing.ownerTable === 'workspace' ? '仅空间管理员可以修改空间规则' : '只有规则创建者可以修改此规则',
+        403,
+      )
+    }
+    let nextOwnerTable = existing.ownerTable
+    if (patch.scope === 'workspace' || patch.ownerTable === 'workspace') {
+      const member = this.memberRoleAndKind(actorId, workspaceId)
+      if (!member || (member.role !== 'owner' && member.role !== 'admin')) {
+        throw new CollabError('仅空间管理员可将规则提升为空间规则', 403)
+      }
+      nextOwnerTable = 'workspace'
+    }
     const nextName = patch.name !== undefined ? String(patch.name).trim() : existing.name
     if (!nextName) throw new CollabError('规则名称不能为空', 400)
     const nextFilterTree = patch.filterTree !== undefined ? patch.filterTree : existing.filterTree
     const nextColumns = patch.columns !== undefined ? this.normalizeAccessRuleColumns(patch.columns) : existing.columns
+    const nextVisibleViews = patch.visibleViews !== undefined
+      ? this.normalizeAccessRuleColumns(patch.visibleViews)
+      : (existing.visibleViews ?? null)
     const nextDisplaySnapshot = patch.displaySnapshot !== undefined ? patch.displaySnapshot : existing.displaySnapshot
     const nextEnabled = patch.enabled !== undefined ? (patch.enabled ? 1 : 0) : existing.enabled ? 1 : 0
     const now = Date.now()
@@ -3414,13 +3514,15 @@ export class CollabStore {
       this.db
         .prepare(
           `UPDATE access_rules
-           SET name = ?, filter_tree_json = ?, columns_json = ?, display_snapshot_json = ?, enabled = ?, updated_at = ?
+           SET name = ?, owner_table = ?, filter_tree_json = ?, columns_json = ?, visible_views_json = ?, display_snapshot_json = ?, enabled = ?, updated_at = ?
            WHERE workspace_id = ? AND id = ?`,
         )
         .run(
           nextName,
+          nextOwnerTable,
           JSON.stringify(nextFilterTree ?? { op: 'and', rules: [] }),
           nextColumns ? JSON.stringify(nextColumns) : null,
+          nextVisibleViews ? JSON.stringify(nextVisibleViews) : null,
           nextDisplaySnapshot ? JSON.stringify(nextDisplaySnapshot) : null,
           nextEnabled,
           now,
@@ -3450,13 +3552,19 @@ export class CollabStore {
       throw error
     }
     this.authorization.invalidateAll()
-    return this.getAccessRule(workspaceId, ruleId)!
+    const updated = this.getAccessRule(workspaceId, ruleId)!
+    return { ...updated, canManage: true }
   }
 
   deleteAccessRule(actorId: string, workspaceId: string, ruleId: string): { deleted: boolean; collection: string } {
     const existing = this.getAccessRule(workspaceId, ruleId)
     if (!existing) throw new CollabError('分享规则不存在', 404)
-    if (existing.createdBy !== actorId) throw new CollabError('只有规则创建者可以删除此规则', 403)
+    if (!this.canManageAccessRule(actorId, workspaceId, existing)) {
+      throw new CollabError(
+        existing.ownerTable === 'workspace' ? '仅空间管理员可以删除空间规则' : '只有规则创建者可以删除此规则',
+        403,
+      )
+    }
     this.db.exec('BEGIN IMMEDIATE')
     try {
       this.db.prepare('DELETE FROM access_rule_grants WHERE rule_id = ?').run(ruleId)
@@ -3478,7 +3586,12 @@ export class CollabStore {
   ): AccessRuleRecord {
     const existing = this.getAccessRule(workspaceId, ruleId)
     if (!existing) throw new CollabError('分享规则不存在', 404)
-    if (existing.createdBy !== actorId) throw new CollabError('只有规则创建者可以修改此规则', 403)
+    if (!this.canManageAccessRule(actorId, workspaceId, existing)) {
+      throw new CollabError(
+        existing.ownerTable === 'workspace' ? '仅空间管理员可以修改空间规则' : '只有规则创建者可以修改此规则',
+        403,
+      )
+    }
     const subjectType = this.normalizeAccessRuleSubjectType(grant.subjectType)
     const subjectId = subjectType === 'workspace' ? workspaceId : String(grant.subjectId ?? '').trim()
     if (!subjectId) throw new CollabError('受众 ID 不能为空', 400)
@@ -3494,7 +3607,8 @@ export class CollabStore {
       .run(id('rg'), ruleId, workspaceId, subjectType, subjectId, role, now)
     this.db.prepare('UPDATE access_rules SET updated_at = ? WHERE workspace_id = ? AND id = ?').run(now, workspaceId, ruleId)
     this.authorization.invalidateAll()
-    return this.getAccessRule(workspaceId, ruleId)!
+    const updated = this.getAccessRule(workspaceId, ruleId)!
+    return { ...updated, canManage: true }
   }
 
   revokeAccessRuleSubject(
@@ -3506,14 +3620,40 @@ export class CollabStore {
   ): AccessRuleRecord {
     const existing = this.getAccessRule(workspaceId, ruleId)
     if (!existing) throw new CollabError('分享规则不存在', 404)
-    if (existing.createdBy !== actorId) throw new CollabError('只有规则创建者可以修改此规则', 403)
+    if (!this.canManageAccessRule(actorId, workspaceId, existing)) {
+      throw new CollabError(
+        existing.ownerTable === 'workspace' ? '仅空间管理员可以修改空间规则' : '只有规则创建者可以修改此规则',
+        403,
+      )
+    }
     const resolvedSubjectId = subjectType === 'workspace' ? workspaceId : subjectId.trim()
     this.db
       .prepare('DELETE FROM access_rule_grants WHERE rule_id = ? AND subject_type = ? AND subject_id = ?')
       .run(ruleId, subjectType, resolvedSubjectId)
     this.db.prepare('UPDATE access_rules SET updated_at = ? WHERE workspace_id = ? AND id = ?').run(Date.now(), workspaceId, ruleId)
     this.authorization.invalidateAll()
-    return this.getAccessRule(workspaceId, ruleId)!
+    const updated = this.getAccessRule(workspaceId, ruleId)!
+    return { ...updated, canManage: true }
+  }
+
+  transferRecordOwnerTable(
+    actorId: string,
+    workspaceId: string,
+    collection: string,
+    recordId: string,
+    targetOwnerTable: string,
+  ) {
+    const target = this.recordKey(collection, recordId)
+    try {
+      return this.authorization.transferOwnerTable(
+        { type: 'account', accountId: actorId, workspaceId },
+        { type: 'record', workspaceId, collection: target.collection, recordId: target.recordId },
+        targetOwnerTable,
+      )
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      throw new CollabError(msg, msg.includes('permission denied') ? 403 : 400)
+    }
   }
 
   private recordKey(collection: string, recordId: string) {

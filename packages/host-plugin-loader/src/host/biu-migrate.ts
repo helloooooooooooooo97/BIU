@@ -1485,6 +1485,125 @@ export const BIU_MIGRATIONS: Migration[] = [
       }
     }
   } },
+  { version: 59, module: 'authz', name: 'k_plus_1_owner_table_and_view_protection', up: (db) => {
+    // 1. resource_policies 增加 owner_table 与 inherit_parent，并按既有 access_mode / 父子链回填
+    if (hasTable(db, 'resource_policies')) {
+      const cols = tableColumnNames(db, 'resource_policies')
+      if (!cols.includes('owner_table')) {
+        db.exec(`ALTER TABLE resource_policies ADD COLUMN owner_table TEXT NOT NULL DEFAULT ''`)
+      }
+      if (!cols.includes('inherit_parent')) {
+        db.exec(`ALTER TABLE resource_policies ADD COLUMN inherit_parent INTEGER NOT NULL DEFAULT 0`)
+      }
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS resource_policies_owner_table
+         ON resource_policies(workspace_id, collection, owner_table)`,
+      )
+      const rows = db
+        .prepare(
+          `SELECT workspace_id, collection, record_id, owner_account_id, access_mode, parent_collection, parent_record_id, owner_table
+           FROM resource_policies`,
+        )
+        .all() as Array<{
+        workspace_id: string
+        collection: string
+        record_id: string
+        owner_account_id: string
+        access_mode: string
+        parent_collection: string
+        parent_record_id: string
+        owner_table: string
+      }>
+      const byKey = new Map<string, (typeof rows)[number]>()
+      for (const row of rows) {
+        byKey.set(`${row.workspace_id}\t${row.collection}\t${row.record_id}`, row)
+      }
+      const resolveOwnerTable = (row: (typeof rows)[number]): string => {
+        if (row.owner_table) return row.owner_table
+        let cursor: (typeof rows)[number] | undefined = row
+        const visited = new Set<string>()
+        let depth = 0
+        while (cursor && cursor.access_mode === 'inherit' && cursor.parent_record_id && depth < 64) {
+          const k = `${cursor.workspace_id}\t${cursor.collection}\t${cursor.record_id}`
+          if (visited.has(k)) break
+          visited.add(k)
+          const parentCol = cursor.parent_collection || cursor.collection
+          const parent = byKey.get(`${cursor.workspace_id}\t${parentCol}\t${cursor.parent_record_id}`)
+          if (!parent) break
+          cursor = parent
+          depth += 1
+        }
+        if (cursor?.access_mode === 'members') return 'workspace'
+        const ownerId = (cursor?.owner_account_id || row.owner_account_id || '').trim()
+        return ownerId ? `account:${ownerId}` : 'workspace'
+      }
+      const updatePolicy = db.prepare(
+        `UPDATE resource_policies
+         SET owner_table = ?, inherit_parent = ?
+         WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+      )
+      for (const row of rows) {
+        const ownerTable = resolveOwnerTable(row)
+        const inheritParent = row.access_mode === 'inherit' && Boolean(row.parent_record_id) ? 1 : 0
+        updatePolicy.run(ownerTable, inheritParent, row.workspace_id, row.collection, row.record_id)
+      }
+    }
+
+    // 2. access_rules 增加 owner_table 与 visible_views_json，存量保守归属创建者个人表避免静默扩权
+    if (hasTable(db, 'access_rules')) {
+      const cols = tableColumnNames(db, 'access_rules')
+      if (!cols.includes('owner_table')) {
+        db.exec(`ALTER TABLE access_rules ADD COLUMN owner_table TEXT NOT NULL DEFAULT ''`)
+      }
+      if (!cols.includes('visible_views_json')) {
+        db.exec(`ALTER TABLE access_rules ADD COLUMN visible_views_json TEXT`)
+      }
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS access_rules_ws_col_table
+         ON access_rules(workspace_id, collection, owner_table, enabled)`,
+      )
+      db.exec(
+        `UPDATE access_rules
+         SET owner_table = CASE
+           WHEN created_by != '' THEN 'account:' || created_by
+           ELSE 'workspace'
+         END
+         WHERE owner_table = ''`,
+      )
+    }
+
+    // 3. saved_views 补齐三态保护字段 protection ('public' | 'locked' | 'personal') 与 ownerTable
+    if (hasTable(db, 'saved_views')) {
+      const views = db
+        .prepare(`SELECT workspace_id, collection, view_id, payload_json FROM saved_views`)
+        .all() as Array<{ workspace_id: string; collection: string; view_id: string; payload_json: string }>
+      const saveView = db.prepare(
+        `UPDATE saved_views SET payload_json = ? WHERE workspace_id = ? AND collection = ? AND view_id = ?`,
+      )
+      for (const row of views) {
+        try {
+          const parsed = JSON.parse(row.payload_json) as Record<string, unknown>
+          if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue
+          let changed = false
+          const scope = parsed.scope === 'personal' ? 'personal' : 'workspace'
+          if (parsed.protection !== 'public' && parsed.protection !== 'locked' && parsed.protection !== 'personal') {
+            parsed.protection = scope === 'personal' ? 'personal' : 'locked'
+            changed = true
+          }
+          if (typeof parsed.ownerTable !== 'string' || !parsed.ownerTable) {
+            const createdBy = typeof parsed.createdBy === 'string' ? parsed.createdBy.trim() : ''
+            parsed.ownerTable = scope === 'personal' && createdBy ? `account:${createdBy}` : 'workspace'
+            changed = true
+          }
+          if (changed) {
+            saveView.run(JSON.stringify(parsed), row.workspace_id, row.collection, row.view_id)
+          }
+        } catch {
+          /* skip malformed payload */
+        }
+      }
+    }
+  } },
 ]
 
 export function assertBiuMigrationLog(rows: Array<{ version: number }> = BIU_MIGRATIONS) {

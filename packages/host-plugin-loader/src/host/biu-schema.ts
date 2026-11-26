@@ -1,6 +1,6 @@
 type DatabaseSync = import('node:sqlite').DatabaseSync
 
-export const LATEST_BIU_SCHEMA = 58
+export const LATEST_BIU_SCHEMA = 59
 
 export const CREATE_CORE_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -355,10 +355,14 @@ CREATE TABLE IF NOT EXISTS resource_policies (
   parent_record_id TEXT NOT NULL DEFAULT '',
   created_by TEXT NOT NULL,
   created_at INTEGER NOT NULL,
+  owner_table TEXT NOT NULL DEFAULT '',
+  inherit_parent INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (workspace_id, collection, record_id)
 );
 CREATE INDEX IF NOT EXISTS resource_policies_parent
   ON resource_policies(workspace_id, parent_collection, parent_record_id);
+CREATE INDEX IF NOT EXISTS resource_policies_owner_table
+  ON resource_policies(workspace_id, collection, owner_table);
 CREATE TABLE IF NOT EXISTS record_grants (
   workspace_id TEXT NOT NULL,
   collection TEXT NOT NULL,
@@ -401,10 +405,14 @@ CREATE TABLE IF NOT EXISTS access_rules (
   display_snapshot_json TEXT,
   enabled INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
+  updated_at INTEGER NOT NULL,
+  owner_table TEXT NOT NULL DEFAULT '',
+  visible_views_json TEXT
 );
 CREATE INDEX IF NOT EXISTS access_rules_ws_col
   ON access_rules(workspace_id, collection, enabled);
+CREATE INDEX IF NOT EXISTS access_rules_ws_col_table
+  ON access_rules(workspace_id, collection, owner_table, enabled);
 CREATE INDEX IF NOT EXISTS access_rules_owner
   ON access_rules(workspace_id, created_by);
 CREATE TABLE IF NOT EXISTS access_rule_grants (
