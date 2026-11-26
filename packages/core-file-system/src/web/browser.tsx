@@ -1535,6 +1535,11 @@ export function CollectionBrowser({
     }
     if (!pathChanged && !pathHandled) {
       if (viewSyncRef.current!.shouldSkipRouteAdopt(collectionPath, routeViewId, false)) return
+      // 同集合内通过 URL / 侧边栏切换视图前，先刷盘当前视图未落盘的防抖改动
+      if (activeViewIdRef.current && routeViewId && routeViewId !== activeViewIdRef.current) {
+        persistActiveViewRef.current()
+      }
+      skipPersistGen.current += 1
       adoptRoutedView()
       return
     }
@@ -2802,17 +2807,19 @@ export function CollectionBrowser({
   function selectView(view: SavedView) {
     viewSyncRef.current!.markSelect(collectionPath, view.id, routeViewId, Boolean(onOpenView))
     persistActiveViewRef.current()
-    if (view.id !== activeViewIdRef.current) {
+    const target = viewsRef.current.find((item) => item.id === view.id) ?? view
+    if (target.id !== activeViewIdRef.current) {
       pendingPathQueryRef.current = null
       reloadGen.current += 1
-      adoptListCacheForViewRef.current(dataPath, view)
-      applyView(view)
-      if (hasExternalViews) externalViewsOnChangeRef.current?.(viewsRef.current, view.id)
+      skipPersistGen.current += 1
+      adoptListCacheForViewRef.current(dataPath, target)
+      applyView(target)
+      if (hasExternalViews) externalViewsOnChangeRef.current?.(viewsRef.current, target.id)
     } else {
       setViewMenuOpen(false)
     }
-    if (!hasExternalViews) rememberInspectorWorkingView(collectionPath, view.id)
-    onOpenView?.(view.id)
+    if (!hasExternalViews) rememberInspectorWorkingView(collectionPath, target.id)
+    onOpenView?.(target.id)
   }
 
   useEffect(() => {
