@@ -100,8 +100,29 @@ export class SavedViewsStore {
     return Boolean(view?.builtin) || isBuiltinAllViewId(viewId)
   }
 
-  private withBuiltinOwner(workspaceId: string, view: StoredView): StoredView {
-    if (!this.isBuiltinView(String(view.id), view)) return view
+  /** 聚合视图（builtin-all:* 或 ownerTable='all'）为每个用户严格私有，互不互通。 */
+  private isPerUserPrivateView(viewId: string, view?: { ownerTable?: string }): boolean {
+    return isBuiltinAllViewId(viewId) || view?.ownerTable === 'all'
+  }
+
+  private storageViewId(viewId: string, createdBy?: string): string {
+    if (isBuiltinAllViewId(viewId) && createdBy) return `${viewId}::user:${createdBy}`
+    return viewId
+  }
+
+  private withBuiltinOwner(workspaceId: string, view: StoredView, accountId = ''): StoredView {
+    const id = String(view.id)
+    if (isBuiltinAllViewId(id)) {
+      const owner = view.createdBy || accountId || undefined
+      return {
+        ...view,
+        ...(owner ? { createdBy: owner } : {}),
+        ownerTable: 'all',
+        scope: 'personal',
+        protection: 'personal',
+      }
+    }
+    if (!this.isBuiltinView(id, view)) return view
     const owner = this.policyGuard?.workspaceOwner?.(workspaceId)?.trim()
     if (!owner) return view
     if (view.createdBy === owner && view.scope === 'workspace') return view
@@ -116,6 +137,12 @@ export class SavedViewsStore {
     accountId: string,
   ) {
     const viewId = String(prev?.id ?? next.id ?? '')
+    if (this.isPerUserPrivateView(viewId, prev ?? next)) {
+      if (prev?.createdBy && accountId && prev.createdBy !== accountId) {
+        throw new Error('permission denied: VIEW_OWNER_ONLY')
+      }
+      return
+    }
     if (this.isBuiltinView(viewId, prev ?? next)) {
       const owner = this.policyGuard?.workspaceOwner?.(workspaceId)?.trim()
       if (owner && accountId && accountId !== owner) {
@@ -146,6 +173,12 @@ export class SavedViewsStore {
     accountId: string,
     prev?: StoredView,
   ) {
+    if (this.isPerUserPrivateView(viewId, prev)) {
+      if (prev?.createdBy && accountId && prev.createdBy !== accountId) {
+        throw new Error('permission denied: VIEW_OWNER_ONLY')
+      }
+      return
+    }
     if (this.isBuiltinView(viewId, prev)) {
       const owner = this.policyGuard?.workspaceOwner?.(workspaceId)?.trim()
       if (owner && accountId && accountId !== owner) {
@@ -210,8 +243,13 @@ export class SavedViewsStore {
   }
 
   /** 增量写盘：只 upsert/delete 本次变更的 view_id。 */
-  private persistDelta(collectionPath: string, upserted: StoredView[], removedIds: string[], workspaceId: string) {
-    if (!this.db || (!upserted.length && !removedIds.length)) return
+  private persistDelta(
+    collectionPath: string,
+    upserted: StoredView[],
+    removedKeys: string[],
+    workspaceId: string,
+  ) {
+    if (!this.db || (!upserted.length && !removedKeys.length)) return
     const path = normalizeCollectionPath(collectionPath)
     const now = Date.now()
     const upsert = this.db.prepare(
@@ -224,9 +262,9 @@ export class SavedViewsStore {
     try {
       for (const view of upserted) {
         const id = String(view.id ?? '').trim()
-        if (id) upsert.run(workspaceId, path, id, JSON.stringify(view), now)
+        if (id) upsert.run(workspaceId, path, this.storageViewId(id, view.createdBy), JSON.stringify(view), now)
       }
-      for (const rawId of removedIds) {
+      for (const rawId of removedKeys) {
         const viewId = String(rawId ?? '').trim()
         if (viewId) delView.run(workspaceId, path, viewId)
       }
@@ -248,6 +286,9 @@ export class SavedViewsStore {
 
   private canAccountSeeView(workspaceId: string, path: string, view: StoredView, accountId: string): boolean {
     if (isIndexCollection(path)) return view.createdBy === accountId
+    if (this.isPerUserPrivateView(String(view.id), view)) {
+      return !accountId || view.createdBy === accountId
+    }
     if (accountId && this.policyGuard?.canSeeView) {
       return this.policyGuard.canSeeView(workspaceId, path, view, accountId)
     }
@@ -316,48 +357,70 @@ export class SavedViewsStore {
     const key = bucketKey(workspaceId, path)
     const indexScoped = isIndexCollection(path)
     const prev = this.byPath.get(key) ?? []
-    const mine = (view: StoredView) => !indexScoped || !view.createdBy || view.createdBy === accountId
-    const removed = new Set((patch.remove ?? []).map(String).filter(Boolean))
-    const removedIds = [...removed].filter((viewId) => {
-      const prevView = prev.find((view) => String(view.id) === viewId)
-      return !prevView || mine(prevView)
-    })
-    for (const viewId of removedIds) {
-      const prevView = prev.find((view) => String(view.id) === viewId)
-      this.assertCanRemoveView(workspaceId, path, viewId, accountId, prevView)
+    const isRowOwnedByActor = (view: StoredView) => {
+      if (indexScoped || this.isPerUserPrivateView(String(view.id), view)) {
+        return !accountId || !view.createdBy || view.createdBy === accountId
+      }
+      return true
     }
-    const kept = prev.filter((view) => !removed.has(String(view.id)) || !mine(view))
-    const foreign = new Set(kept.map((view) => String(view.id)))
+    const matchesTarget = (view: StoredView, viewId: string) =>
+      String(view.id) === viewId && isRowOwnedByActor(view)
+    const removed = new Set((patch.remove ?? []).map(String).filter(Boolean))
+    const removedRows: Array<{ id: string; storageKey: string }> = []
+    for (const viewId of removed) {
+      const prevView = prev.find((view) => matchesTarget(view, viewId))
+      if (!prevView && prev.some((view) => String(view.id) === viewId)) continue
+      this.assertCanRemoveView(workspaceId, path, viewId, accountId, prevView)
+      removedRows.push({
+        id: viewId,
+        storageKey: this.storageViewId(viewId, prevView?.createdBy ?? accountId),
+      })
+    }
+    const kept = prev.filter((view) => !(removed.has(String(view.id)) && isRowOwnedByActor(view)))
     const next = kept.slice()
     const upsertedViews: StoredView[] = []
     const createdViews: StoredView[] = []
     for (const incoming of patch.upsert ?? []) {
       const id = String(incoming.id ?? '').trim()
       if (!id) continue
-      const prevView = prev.find((view) => String(view.id) === id)
-      if (prevView && !mine(prevView)) continue
-      if (!prevView && foreign.has(id)) continue
+      const perUser = indexScoped || this.isPerUserPrivateView(id, incoming)
+      const prevView = prev.find((view) =>
+        perUser
+          ? String(view.id) === id && (!accountId || view.createdBy === accountId)
+          : String(view.id) === id,
+      )
+      if (!perUser && prevView && !isRowOwnedByActor(prevView)) continue
       const incomingAt = Number((incoming as { updatedAt?: unknown }).updatedAt) || 0
       const storedAt = Number((prevView as { updatedAt?: unknown } | undefined)?.updatedAt) || 0
       if (prevView && incomingAt && storedAt && incomingAt < storedAt) continue
       const view = this.withBuiltinOwner(
         workspaceId,
-        mergeIncomingStoredView(prevView, incoming, id, incomingAt, indexScoped, accountId),
+        mergeIncomingStoredView(prevView, incoming, id, incomingAt, perUser, accountId),
+        accountId,
       )
       this.assertCanModifyView(workspaceId, path, prevView, view, accountId)
-      const at = next.findIndex((item) => String(item.id) === id)
+      const at = next.findIndex((item) =>
+        perUser
+          ? String(item.id) === id && (!accountId || item.createdBy === accountId)
+          : String(item.id) === id,
+      )
       if (at >= 0) next[at] = view
       else next.push(view)
       upsertedViews.push(view)
       if (!prevView) createdViews.push(view)
     }
-    if (removedIds.length && this.visibleCount(path, next) < 1) {
+    if (removedRows.length && this.visibleCount(path, next) < 1) {
       throw new Error('至少保留一个视图')
     }
     this.byPath.set(key, next)
-    this.persistDelta(path, upsertedViews, removedIds, workspaceId)
+    this.persistDelta(
+      path,
+      upsertedViews,
+      removedRows.map((item) => item.storageKey),
+      workspaceId,
+    )
     for (const created of createdViews) this.policyGuard?.onCreated?.(workspaceId, path, created, accountId)
-    for (const viewId of removedIds) this.policyGuard?.onRemoved?.(workspaceId, path, viewId)
+    for (const item of removedRows) this.policyGuard?.onRemoved?.(workspaceId, path, item.id)
   }
 
   rows(tables: CollectionInfo[], accountId = '', workspaceId = this.resolveWorkspaceId()): DbRecord[] {
@@ -491,7 +554,7 @@ export class SavedViewsStore {
       if (!seed) continue
       const idx = hit ? views.indexOf(hit) : -1
       const cur = (hit ?? seed) as StoredView
-      const next = applyViewPatch(cur, patch)
+      const next = this.withBuiltinOwner(workspaceId, applyViewPatch(cur, patch), accountId)
       this.assertCanModifyView(workspaceId, path, cur, next, accountId)
       if (idx >= 0) views[idx] = next
       else views.push(next)
@@ -640,7 +703,9 @@ function mergeIncomingStoredView(
  */
 function isViewVisibleTo(view: StoredView, path: string, accountId: string): boolean {
   if (isIndexCollection(path)) return view.createdBy === accountId
-  if ((view.ownerTable === 'all' || view.scope === 'personal') && view.createdBy && accountId) return view.createdBy === accountId
+  if ((isBuiltinAllViewId(String(view.id)) || view.ownerTable === 'all' || view.scope === 'personal') && accountId) {
+    return view.createdBy === accountId
+  }
   return true
 }
 
