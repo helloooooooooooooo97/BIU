@@ -631,3 +631,50 @@ test('top-level cross-table views (ownerTable=all) are locked to personal protec
   assert.equal(after?.scope, 'personal')
   assert.equal(store.viewsFor('/pages', 'bob').some((v) => v.id === 'v-all-agg'), false)
 })
+
+test('personal-table views auto-bind ownerTable=account:<id>, lock to personal protection, and stay isolated from others', () => {
+  const store = new SavedViewsStore().open(':memory:')
+  store.setWorkspaceResolver(() => 'ws-1')
+  store.setPolicyGuard({
+    isLocked: () => false,
+    canEditLocked: (_ws, acc) => acc === 'admin-1',
+  })
+
+  store.applyPatch(
+    '/pages',
+    {
+      upsert: [
+        {
+          id: 'v-my-personal',
+          name: '我的个人视图',
+          scope: 'personal',
+          protection: 'personal',
+          filters: { $scope: 'personal' },
+        },
+        {
+          id: 'v-forged-owner',
+          name: '伪造归属视图',
+          ownerTable: 'account:bob',
+          scope: 'workspace',
+          protection: 'public',
+        },
+      ],
+    },
+    'alice',
+  )
+
+  const aliceViews = store.viewsFor('/pages', 'alice')
+  const mine = aliceViews.find((v) => v.id === 'v-my-personal')
+  assert.equal(mine?.ownerTable, 'account:alice')
+  assert.equal(mine?.scope, 'personal')
+  assert.equal(mine?.protection, 'personal')
+
+  const forged = aliceViews.find((v) => v.id === 'v-forged-owner')
+  assert.equal(forged?.ownerTable, 'account:alice')
+  assert.equal(forged?.scope, 'personal')
+  assert.equal(forged?.protection, 'personal')
+
+  assert.equal(store.viewsFor('/pages', 'bob').some((v) => v.id === 'v-my-personal'), false)
+  assert.equal(store.viewsFor('/pages', 'admin-1').some((v) => v.id === 'v-my-personal'), false)
+  assert.equal(store.viewsFor('/pages', 'bob').some((v) => v.id === 'v-forged-owner'), false)
+})

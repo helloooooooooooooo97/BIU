@@ -721,7 +721,20 @@ function mergeIncomingStoredView(
   accountId: string,
 ): StoredView {
   const owner = prevView?.createdBy || (accountId ? accountId : undefined)
-  const lockedOwnerTable = prevView?.ownerTable?.trim() || incoming.ownerTable?.trim() || undefined
+  const rawIncomingOwnerTable = incoming.ownerTable?.trim() || ''
+  const isPersonalIntent =
+    incoming.scope === 'personal' ||
+    incoming.protection === 'personal' ||
+    incoming.filters?.$scope === 'personal'
+  let lockedOwnerTable = prevView?.ownerTable?.trim() || rawIncomingOwnerTable || undefined
+  // 禁止伪造其他用户的个人表归属；个人表意图缺省自动绑定到当前用户 `account:<id>`
+  if (!prevView && accountId) {
+    if (lockedOwnerTable?.startsWith('account:') && lockedOwnerTable !== `account:${accountId}`) {
+      lockedOwnerTable = `account:${accountId}`
+    } else if (!lockedOwnerTable && isPersonalIntent) {
+      lockedOwnerTable = `account:${accountId}`
+    }
+  }
   const view: StoredView = {
     ...prevView,
     ...incoming,
@@ -732,7 +745,7 @@ function mergeIncomingStoredView(
     ...(lockedOwnerTable ? { ownerTable: lockedOwnerTable } : {}),
   }
   normalizeOptionalViewFields(view, incoming as Record<string, unknown>, true)
-  if (view.ownerTable === 'all') {
+  if (view.ownerTable === 'all' || view.ownerTable?.startsWith('account:')) {
     view.protection = 'personal'
     view.scope = 'personal'
   }
@@ -742,11 +755,14 @@ function mergeIncomingStoredView(
 /**
  * 三态可见性判定：
  * - 索引表（/tags 等）视图按创建者严格隔离；
- * - 顶层跨表汇总视图（ownerTable='all'）与显式 scope='personal' 的私人视图仅创建者可见；
+ * - 顶层跨表汇总视图（ownerTable='all'）、个人表视图（ownerTable='account:<id>'）与显式 scope='personal' 的私人视图仅创建者可见；
  * - scope='workspace' / 'shared'（含历史缺省）对空间成员可见。
  */
 function isViewVisibleTo(view: StoredView, path: string, accountId: string): boolean {
   if (isIndexCollection(path)) return view.createdBy === accountId
+  if (view.ownerTable?.startsWith('account:') && accountId) {
+    return view.ownerTable === `account:${accountId}` || view.createdBy === accountId
+  }
   if ((isBuiltinAllViewId(String(view.id)) || view.ownerTable === 'all' || view.scope === 'personal') && accountId) {
     return view.createdBy === accountId
   }

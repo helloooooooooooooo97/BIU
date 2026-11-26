@@ -284,7 +284,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       effectiveScope === 'workspace'
         ? { scope: 'workspace', protection: 'public', ownerTable: 'workspace' }
         : effectiveScope === 'personal'
-          ? { scope: 'workspace', protection: 'public' }
+          ? { scope: 'personal', protection: 'personal' }
           : effectiveScope === 'shared'
             ? { scope: 'personal', protection: 'personal' }
             : { scope: 'personal', protection: 'personal', ownerTable: 'all' }
@@ -332,12 +332,28 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
   }
 
   function copyView(source?: SavedView, overrides?: Partial<SavedView>) {
+    const scopeBinding: Partial<SavedView> =
+      routeScope === 'workspace'
+        ? { scope: 'workspace', protection: 'public', ownerTable: 'workspace' }
+        : routeScope === 'personal' || routeScope === 'shared'
+          ? { scope: 'personal', protection: 'personal', ownerTable: undefined }
+          : { scope: 'personal', protection: 'personal', ownerTable: 'all' }
     void commitView(
       source
-        ? { ...source, ...overrides, id: newSavedViewId(), name: uniqueViewName(`${source.name} 副本`), builtin: false }
+        ? {
+            ...source,
+            ...scopeBinding,
+            ...overrides,
+            id: newSavedViewId(),
+            name: uniqueViewName(`${source.name} 副本`),
+            builtin: false,
+            createdBy: undefined,
+            viewRole: undefined,
+          }
         : {
             id: newSavedViewId(),
             name: uniqueViewName(`${activeView?.name ?? title} 副本`),
+            ...scopeBinding,
             mode,
             sortField,
             sortDir,
@@ -451,28 +467,31 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     }
     if (isReadOnlyViewId(view.id)) return
     if (!canDeleteSavedView(view)) return
-    const current = path === collectionPath ? viewsRef.current : loadViews(path)
-    if (!canRemoveCollectionView(current)) return
+    const stored = loadViews(path)
+    const currentVisible = path === collectionPath ? viewsRef.current : stored
+    if (!canRemoveCollectionView(currentVisible)) return
     const removedId = view.id
-    const remaining = current.filter((item) => item.id !== removedId)
-    // 立即标记已删并移出本地缓存，彻底防止删除期间收到 WebSocket 刷新时从旧缓存复活；若服务端拒绝则回滚。
+    const remainingStored = stored.filter((item) => item.id !== removedId)
+    // 立即标记已删并移出本地缓存（基于完整 stored 列表，避免单域视图列表覆盖其他域缓存）；若服务端拒绝则回滚。
     omitSavedViewIds(path, [removedId])
-    rememberViews(path, remaining)
+    rememberViews(path, remainingStored)
     noteLocalSavedViewsWrite(path)
     if (path === collectionPath) {
-      viewsRef.current = remaining
-      setViews(remaining)
-      if (activeViewIdRef.current === removedId && remaining[0]) {
-        selectView(remaining[0])
+      const painted = paintListedViews(path)
+      viewsRef.current = painted
+      setViews(painted)
+      if (activeViewIdRef.current === removedId && painted[0]) {
+        selectView(painted[0])
       }
     }
-    void persistViewsFor(path, remaining, { baseline: current, remove: [removedId] }).then((ok) => {
+    void persistViewsFor(path, remainingStored, { baseline: stored, remove: [removedId] }).then((ok) => {
       if (ok) return
       reviveSavedViewIds(path, [removedId])
-      rememberViews(path, current)
+      rememberViews(path, stored)
       if (path === collectionPath) {
-        viewsRef.current = current
-        setViews(current)
+        const painted = paintListedViews(path)
+        viewsRef.current = painted
+        setViews(painted)
       }
     })
   }

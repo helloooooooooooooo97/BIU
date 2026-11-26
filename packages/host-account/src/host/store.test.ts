@@ -310,25 +310,27 @@ test('collaborators move a record between personal, workspace, and shared scopes
     /必须先加入当前空间/,
   )
 
-  const workspaceAccess = asAda(() =>
+  const internalShared = asAda(() =>
     collab.shareWithEmail(ada.id, '/pages', 'scope-page', bob.email, 'editor', 'internal'),
   )
-  assert.equal(workspaceAccess.scope, 'workspace')
-  assert.equal(workspaceAccess.people.find((row) => row.id === bob.id)?.memberKind, 'member')
+  // K+1 模型：个人表记录分享给空间内成员 -> shared（共享），不改变归属为空间表
+  assert.equal(internalShared.scope, 'shared')
+  assert.equal(internalShared.people.find((row) => row.id === bob.id)?.memberKind, 'member')
 
-  const sharedAccess = asAda(() =>
+  const externalShared = asAda(() =>
     collab.shareWithEmail(ada.id, '/pages', 'scope-page', cara.email, 'viewer', 'external'),
   )
-  assert.equal(sharedAccess.scope, 'shared')
-  assert.equal(sharedAccess.people.find((row) => row.id === cara.id)?.memberKind, 'external')
+  // 分享给外部协作者 -> external（外部）
+  assert.equal(externalShared.scope, 'external')
+  assert.equal(externalShared.people.find((row) => row.id === cara.id)?.memberKind, 'external')
   assert.deepEqual(collab.externallySharedRecords(ada.id, workspaceId), [
     { collection: '/pages', record_id: 'scope-page' },
   ])
 
-  const backToWorkspace = asAda(() =>
+  const backToInternalShared = asAda(() =>
     collab.revokeRecordGrant(ada.id, '/pages', 'scope-page', 'account', cara.id),
   )
-  assert.equal(backToWorkspace.scope, 'workspace')
+  assert.equal(backToInternalShared.scope, 'shared')
   assert.equal(collab.members(ada.id, workspaceId).some((row) => row.id === cara.id), false)
 
   const backToPersonal = asAda(() =>
@@ -338,7 +340,7 @@ test('collaborators move a record between personal, workspace, and shared scopes
   assert.equal(backToPersonal.private, true)
 })
 
-test('collection ownership reports personal, workspace, and shared records', () => {
+test('collection ownership reports personal, workspace, shared, and external records', () => {
   const collab = store()
   const ada = collab.register('', Date.now(), 'secret1', 'own-ada@example.com')
   const bob = collab.register('', Date.now(), 'secret1', 'own-bob@example.com')
@@ -351,12 +353,17 @@ test('collection ownership reports personal, workspace, and shared records', () 
   asAda(() => collab.attach(workspaceId, '/pages', 'only-ada'))
   asAda(() => collab.attach(workspaceId, '/pages', 'with-bob'))
   asAda(() => collab.attach(workspaceId, '/pages', 'with-cara'))
+  asAda(() => collab.attach(workspaceId, '/pages', 'ws-doc', Date.now(), { accessMode: 'members' }))
+  asAda(() => collab.attach(workspaceId, '/pages', 'ws-ext-doc', Date.now(), { accessMode: 'members' }))
   asAda(() => collab.shareWithEmail(ada.id, '/pages', 'with-bob', bob.email, 'viewer', 'internal'))
   asAda(() => collab.shareWithEmail(ada.id, '/pages', 'with-cara', cara.email, 'viewer', 'external'))
+  asAda(() => collab.shareWithEmail(ada.id, '/pages', 'ws-ext-doc', cara.email, 'viewer', 'external'))
   const scopes = asAda(() => collab.collectionOwnership(workspaceId, '/pages'))
   assert.equal(scopes.get('only-ada'), 'personal')
-  assert.equal(scopes.get('with-bob'), 'workspace')
-  assert.equal(scopes.get('with-cara'), 'shared')
+  assert.equal(scopes.get('with-bob'), 'shared')
+  assert.equal(scopes.get('with-cara'), 'external')
+  assert.equal(scopes.get('ws-doc'), 'workspace')
+  assert.equal(scopes.get('ws-ext-doc'), 'external')
 })
 
 test('an account can join as a workspace member through a one-use invite link', () => {

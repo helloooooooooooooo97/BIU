@@ -2429,15 +2429,28 @@ export class CollabStore {
   }
 
   collectionOwnership(workspaceId: string, collection: string) {
-    const policies = this.db
-      .prepare(
-        `SELECT record_id, access_mode, owner_account_id FROM resource_policies
-         WHERE workspace_id = ? AND collection = ?`,
-      )
-      .all(workspaceId, collection) as Array<{ record_id: string; access_mode: string; owner_account_id: string }>
-    const map = new Map<string, 'personal' | 'workspace' | 'shared'>()
+    let policies: Array<{ record_id: string; access_mode: string; owner_account_id: string; owner_table?: string }> = []
+    try {
+      policies = this.db
+        .prepare(
+          `SELECT record_id, access_mode, owner_account_id, COALESCE(owner_table, '') AS owner_table FROM resource_policies
+           WHERE workspace_id = ? AND collection = ?`,
+        )
+        .all(workspaceId, collection) as Array<{ record_id: string; access_mode: string; owner_account_id: string; owner_table?: string }>
+    } catch {
+      policies = this.db
+        .prepare(
+          `SELECT record_id, access_mode, owner_account_id FROM resource_policies
+           WHERE workspace_id = ? AND collection = ?`,
+        )
+        .all(workspaceId, collection) as Array<{ record_id: string; access_mode: string; owner_account_id: string }>
+    }
+    const map = new Map<string, 'personal' | 'workspace' | 'shared' | 'external'>()
+    const isWorkspaceTable = new Map<string, boolean>()
     for (const row of policies) {
-      map.set(row.record_id, row.access_mode === 'members' ? 'workspace' : 'personal')
+      const wsTable = row.owner_table === 'workspace' || (!row.owner_table && row.access_mode === 'members')
+      isWorkspaceTable.set(row.record_id, wsTable)
+      map.set(row.record_id, wsTable ? 'workspace' : 'personal')
     }
     const grants = this.db
       .prepare(
@@ -2454,8 +2467,12 @@ export class CollabStore {
     for (const grant of grants) {
       if (grant.subject_id === owners.get(grant.record_id)) continue
       const current = map.get(grant.record_id) ?? 'personal'
-      if (grant.member_kind === 'external' || grant.member_kind === 'guest') map.set(grant.record_id, 'shared')
-      else if (current !== 'shared') map.set(grant.record_id, 'workspace')
+      if (grant.member_kind === 'external' || grant.member_kind === 'guest') {
+        map.set(grant.record_id, 'external')
+      } else if (current !== 'external' && !isWorkspaceTable.get(grant.record_id)) {
+        // 个人表记录分享给空间内成员/成员组 -> 显示为「共享」，不改归属为「空间」
+        map.set(grant.record_id, 'shared')
+      }
     }
     const owned = this.db
       .prepare(
@@ -2602,14 +2619,26 @@ export class CollabStore {
          ORDER BY rg.created_at`,
       )
       .all(workspaceId, collection, recordId) as Array<{ id: string; name: string; kind: 'static' | 'dynamic'; role: string }>
-    const policy = this.db
-      .prepare(
-        `SELECT access_mode, owner_account_id FROM resource_policies
-         WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-      )
-      .get(workspaceId, collection, recordId) as
-      | { access_mode: string; owner_account_id: string }
-      | undefined
+    let policy: { access_mode: string; owner_account_id: string; owner_table?: string } | undefined
+    try {
+      policy = this.db
+        .prepare(
+          `SELECT access_mode, owner_account_id, COALESCE(owner_table, '') AS owner_table FROM resource_policies
+           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+        )
+        .get(workspaceId, collection, recordId) as
+        | { access_mode: string; owner_account_id: string; owner_table?: string }
+        | undefined
+    } catch {
+      policy = this.db
+        .prepare(
+          `SELECT access_mode, owner_account_id FROM resource_policies
+           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+        )
+        .get(workspaceId, collection, recordId) as
+        | { access_mode: string; owner_account_id: string }
+        | undefined
+    }
     const ownerRow = policy?.owner_account_id
       ? { owner_id: policy.owner_account_id }
       : this.db
@@ -2622,11 +2651,14 @@ export class CollabStore {
     const hasExternal = rows.some(
       (row) => row.id !== ownerId && (row.member_kind === 'external' || row.member_kind === 'guest'),
     )
+    const wsTable = policy?.owner_table === 'workspace' || (!policy?.owner_table && policy?.access_mode === 'members')
     const scope = hasExternal
-      ? 'shared' as const
-      : collaboratorCount || policy?.access_mode === 'members'
+      ? 'external' as const
+      : wsTable
         ? 'workspace' as const
-        : 'personal' as const
+        : collaboratorCount > 0
+          ? 'shared' as const
+          : 'personal' as const
     return {
       private: collaboratorCount === 0,
       scope,

@@ -1,25 +1,29 @@
-import { EyeIcon, GlobeAltIcon, PencilSquareIcon, ShieldCheckIcon, UserIcon, UsersIcon } from '@heroicons/react/16/solid'
+import { EyeIcon, GlobeAltIcon, PencilSquareIcon, ShieldCheckIcon, UserGroupIcon, UserIcon, UsersIcon } from '@heroicons/react/16/solid'
 
 export function scopeText(scope: string) {
+  if (scope === 'external') return '外部'
   if (scope === 'shared') return '共享'
   if (scope === 'workspace') return '空间'
   return '私人'
 }
 
 export function scopeTone(scope: string) {
-  const text = scope === '私人' || scope === '空间' || scope === '共享' ? scope : scopeText(scope)
+  const text = scope === '私人' || scope === '空间' || scope === '共享' || scope === '外部' ? scope : scopeText(scope)
+  if (text === '外部') return 'external'
   if (text === '共享') return 'shared'
   if (text === '空间') return 'workspace'
   return 'personal'
 }
 
 export function ScopeMark({ scope }: { scope: string }) {
-  const text = scope === '私人' || scope === '空间' || scope === '共享' ? scope : scopeText(scope)
-  const icon = text === '空间'
-    ? <UsersIcon aria-hidden className="size-[14px]" />
+  const text = scope === '私人' || scope === '空间' || scope === '共享' || scope === '外部' ? scope : scopeText(scope)
+  const icon = text === '外部'
+    ? <GlobeAltIcon aria-hidden className="size-[14px]" />
     : text === '共享'
-      ? <GlobeAltIcon aria-hidden className="size-[14px]" />
-      : <UserIcon aria-hidden className="size-[14px]" />
+      ? <UserGroupIcon aria-hidden className="size-[14px]" />
+      : text === '空间'
+        ? <UsersIcon aria-hidden className="size-[14px]" />
+        : <UserIcon aria-hidden className="size-[14px]" />
   return <>{icon}{text}</>
 }
 

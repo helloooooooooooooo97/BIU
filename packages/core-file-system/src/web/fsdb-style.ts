@@ -1148,6 +1148,7 @@ a.fsdb-person.is-link:hover .fsdb-person-name,button.fsdb-person.is-link:hover .
 .fsdb-share-collab-summary{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;color:var(--biu-color-text-muted);font-size:var(--biu-font-size-2)}
 .fsdb-share-scope{display:inline-flex;align-items:center;gap:4px;flex:none;border-radius:999px;background:var(--biu-color-bg-hover);padding:4px 8px;color:var(--biu-color-text-muted);font-size:var(--biu-font-size-2);font-weight:var(--biu-font-weight-bold)}
 .fsdb-share-scope.is-shared{background:var(--biu-color-emphasis-muted);color:var(--biu-color-emphasis)}
+.fsdb-share-scope.is-external{background:color-mix(in srgb,var(--biu-color-warning,#d9730d) 16%,transparent);color:var(--biu-color-warning,#d9730d)}
 .fsdb-scope-detail{position:relative;display:inline-flex}
 .fsdb-scope-tag{--biu-tag:var(--biu-color-ink-gray);display:inline-flex;align-items:center;gap:var(--biu-space-1);height:var(--biu-space-5);border:0;border-radius:var(--biu-radius-sm);background:color-mix(in srgb,var(--biu-tag) 22%,transparent);padding:0 var(--biu-pad-chip-x);color:var(--biu-tag);font:inherit;font-size:var(--biu-chat-chip-font-size,var(--biu-font-size-3));font-weight:var(--biu-font-weight-medium);line-height:var(--biu-space-5);white-space:nowrap;cursor:pointer}
 .fsdb-page .tasks-table th.fsdb-action-col,.fsdb-page .tasks-table td.fsdb-action-col,.fsdb-page .tasks-table th[data-col-key="actions"],.fsdb-page .tasks-table td[data-col-key="actions"]{width:1%;white-space:nowrap}
@@ -1155,6 +1156,7 @@ a.fsdb-person.is-link:hover .fsdb-person-name,button.fsdb-person.is-link:hover .
 .fsdb-scope-tag svg{width:var(--biu-size-icon,14px);height:var(--biu-size-icon,14px);flex:none;display:block}
 .fsdb-scope-tag.is-workspace,.fsdb-scope-pill.is-workspace,.fsdb-scope-tag.is-personal,.fsdb-scope-pill.is-personal,.fsdb-scope-tag.is-manage,.fsdb-scope-pill.is-manage,.fsdb-scope-tag.is-read,.fsdb-scope-pill.is-read{--biu-tag:var(--biu-color-ink-gray)}
 .fsdb-scope-tag.is-shared,.fsdb-scope-pill.is-shared,.fsdb-page .tasks-table td .fsdb-scope-tag.is-shared,.fsdb-page .tasks-table td .fsdb-scope-pill.is-shared,.fsdb-page .fsdb-proprow-v .fsdb-scope-tag.is-shared,.fsdb-page .fsdb-proprow-v .fsdb-scope-pill.is-shared{--biu-tag:var(--biu-color-ink-blue)}
+.fsdb-scope-tag.is-external,.fsdb-scope-pill.is-external,.fsdb-page .tasks-table td .fsdb-scope-tag.is-external,.fsdb-page .tasks-table td .fsdb-scope-pill.is-external,.fsdb-page .fsdb-proprow-v .fsdb-scope-tag.is-external,.fsdb-page .fsdb-proprow-v .fsdb-scope-pill.is-external{--biu-tag:var(--biu-color-warning,#d9730d)}
 .fsdb-scope-tag.is-edit,.fsdb-scope-pill.is-edit,.fsdb-page .tasks-table td .fsdb-scope-tag.is-edit,.fsdb-page .tasks-table td .fsdb-scope-pill.is-edit,.fsdb-page .fsdb-proprow-v .fsdb-scope-tag.is-edit,.fsdb-page .fsdb-proprow-v .fsdb-scope-pill.is-edit{--biu-tag:var(--biu-color-ink-green)}
 .fsdb-page .tasks-table td:has(.fsdb-scope-detail) .fsdb-cell{overflow:visible}
 .fsdb-scope-tag{position:relative;z-index:2;pointer-events:auto}
