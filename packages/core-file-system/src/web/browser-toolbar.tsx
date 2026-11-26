@@ -58,6 +58,7 @@ export type BrowserListChromeProps = {
   selectView: (view: SavedView) => void
   copyView: (source?: SavedView, overrides?: Partial<SavedView>) => void
   deleteView: (view: SavedView, path?: string) => void
+  updateViewProtection?: (view: SavedView, protection: 'public' | 'locked' | 'personal') => void
   persistViewOrder: (ids: string[]) => void
   addEmptyView: () => void
   pickedIds: string[]
@@ -183,6 +184,7 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
     selectView,
     copyView,
     deleteView,
+    updateViewProtection,
     persistViewOrder,
     addEmptyView,
     pickedIds,
@@ -463,6 +465,7 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                       }}
                       onCopy={copyView}
                       onDelete={deleteView}
+                      onChangeProtection={updateViewProtection}
                       onReorder={persistViewOrder}
                       onAdd={() => addEmptyView()}
                     />

@@ -12,14 +12,34 @@ import {
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS as DndCSS } from '@dnd-kit/utilities'
-import { PlusIcon, Square2StackIcon } from '@heroicons/react/16/solid'
+import { CheckIcon, LockClosedIcon, PlusIcon, Square2StackIcon, UserIcon, UsersIcon } from '@heroicons/react/16/solid'
 import { overlayZ } from '@biu/biu-ui/overlay-portal'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
+import { isReadOnlyViewId } from '../catalog-views.ts'
 import { moveList } from '../query-logic.ts'
 import { DndGrip } from './dnd-grip.tsx'
 import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search.tsx'
 import { ViewModeGlyph } from './nav-glyphs.tsx'
-import { canDeleteSavedView, canRemoveCollectionView, type SavedView } from './saved-view.ts'
+import { canDeleteSavedView, canEditSavedView, canRemoveCollectionView, type SavedView, type ViewProtection } from './saved-view.ts'
+
+const PROTECTION_OPTIONS: Array<{
+  value: ViewProtection
+  label: string
+  desc: string
+  Icon: typeof UsersIcon
+}> = [
+  { value: 'public', label: '公共视图', desc: '所有成员可修改视图配置', Icon: UsersIcon },
+  { value: 'locked', label: '锁定视图', desc: '所有成员都不可修改视图配置', Icon: LockClosedIcon },
+  { value: 'personal', label: '个人视图', desc: '仅你自己可见', Icon: UserIcon },
+]
+
+function resolveViewProtection(view: SavedView): ViewProtection {
+  if (view.ownerTable === 'all') return 'personal'
+  if (view.protection === 'public' || view.protection === 'locked' || view.protection === 'personal') {
+    return view.protection
+  }
+  return view.scope === 'personal' ? 'personal' : 'public'
+}
 
 function ViewRowShell({
   view,
@@ -27,6 +47,9 @@ function ViewRowShell({
   onSelect,
   onCopy,
   onDelete,
+  onChangeProtection,
+  protectionMenuOpen,
+  onToggleProtectionMenu,
   canRemove,
   grip,
   rowRef,
@@ -38,37 +61,127 @@ function ViewRowShell({
   onSelect: (view: SavedView) => void
   onCopy: (view: SavedView) => void
   onDelete: (view: SavedView) => void
+  onChangeProtection?: (view: SavedView, protection: ViewProtection) => void
+  protectionMenuOpen?: boolean
+  onToggleProtectionMenu?: () => void
   canRemove: boolean
   grip: ReactNode
   rowRef?: (node: HTMLElement | null) => void
   className?: string
   style?: CSSProperties
 }) {
+  const isBuiltin = Boolean(view.builtin) || isReadOnlyViewId(view.id)
+  const protection = resolveViewProtection(view)
+  const meta = PROTECTION_OPTIONS.find((item) => item.value === protection) ?? PROTECTION_OPTIONS[0]!
+  const ProtectionIcon = meta.Icon
+  const canSwitchProtection = Boolean(
+    !isBuiltin &&
+      view.ownerTable !== 'all' &&
+      onChangeProtection &&
+      (canEditSavedView(view) || canDeleteSavedView(view)),
+  )
   return (
-    <div
-      ref={rowRef}
-      className={`tasks-viewdd-item${active ? ' is-active' : ''}${className ? ` ${className}` : ''}`}
-      style={style}
-    >
-      {grip}
-      <button
-        type="button"
-        className="tasks-viewdd-item-main fsdb-tool-row"
-        onClick={() => onSelect(view)}
+    <div ref={rowRef} style={style}>
+      <div
+        className={`tasks-viewdd-item${active ? ' is-active' : ''}${className ? ` ${className}` : ''}`}
       >
-        <ViewModeGlyph mode={view.mode} className="tasks-viewdd-item-ico" />
-        <span className="tasks-viewdd-item-name font-medium">{view.name}</span>
-      </button>
-      <span className="tasks-viewdd-item-actions">
-        <button type="button" className="tasks-viewdd-act" title="拷贝视图" onClick={() => onCopy(view)}>
-          <Square2StackIcon aria-hidden className="size-[14px]" />
+        {grip}
+        <button
+          type="button"
+          className="tasks-viewdd-item-main fsdb-tool-row"
+          onClick={() => onSelect(view)}
+        >
+          <ViewModeGlyph mode={view.mode} className="tasks-viewdd-item-ico" />
+          <span className="tasks-viewdd-item-name font-medium">{view.name}</span>
         </button>
-        {canRemove ? (
-          <button type="button" className="tasks-viewdd-act is-danger" title="删除" onClick={() => onDelete(view)}>
-            <TrashGlyph aria-hidden className="size-[14px]" />
+        <span className="tasks-viewdd-item-actions">
+          {!isBuiltin ? (
+            <button
+              type="button"
+              className="tasks-viewdd-act"
+              data-testid={`view-protection-btn-${view.id}`}
+              title={
+                view.ownerTable === 'all'
+                  ? '个人视图（跨表汇总仅你自己可见）'
+                  : `${meta.label}：${meta.desc}`
+              }
+              style={{
+                opacity: protection === 'public' ? 0.65 : 1,
+                color: protection === 'locked' ? 'var(--biu-color-emphasis)' : undefined,
+                cursor: canSwitchProtection ? 'pointer' : 'default',
+              }}
+              onClick={(event) => {
+                event.stopPropagation()
+                if (canSwitchProtection) onToggleProtectionMenu?.()
+              }}
+            >
+              <ProtectionIcon aria-hidden className="size-[14px]" />
+            </button>
+          ) : null}
+          <button type="button" className="tasks-viewdd-act" title="拷贝视图" onClick={() => onCopy(view)}>
+            <Square2StackIcon aria-hidden className="size-[14px]" />
           </button>
-        ) : null}
-      </span>
+          {canRemove && !isBuiltin ? (
+            <button type="button" className="tasks-viewdd-act is-danger" title="删除" onClick={() => onDelete(view)}>
+              <TrashGlyph aria-hidden className="size-[14px]" />
+            </button>
+          ) : null}
+        </span>
+      </div>
+      {protectionMenuOpen && canSwitchProtection ? (
+        <div
+          data-testid={`view-protection-menu-${view.id}`}
+          style={{
+            margin: '4px 6px 6px 26px',
+            padding: 4,
+            borderRadius: 8,
+            background: 'var(--biu-color-bg-input)',
+            border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
+          }}
+        >
+          {PROTECTION_OPTIONS.map((opt) => {
+            const Icon = opt.Icon
+            const selected = protection === opt.value
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                data-testid={`view-protection-opt-${opt.value}`}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onChangeProtection?.(view, opt.value)
+                  onToggleProtectionMenu?.()
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '6px 8px',
+                  borderRadius: 6,
+                  border: 'none',
+                  background: selected ? 'var(--biu-color-bg-hover)' : 'transparent',
+                  color: 'var(--biu-color-text)',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  width: '100%',
+                }}
+              >
+                <Icon aria-hidden className="size-[15px] shrink-0" style={{ opacity: 0.85 }} />
+                <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.25 }}>{opt.label}</span>
+                  <span style={{ fontSize: 11, color: 'var(--biu-color-text-muted)', lineHeight: 1.25 }}>{opt.desc}</span>
+                </span>
+                {selected ? (
+                  <CheckIcon aria-hidden className="size-[14px] shrink-0" style={{ color: 'var(--biu-color-emphasis)' }} />
+                ) : null}
+              </button>
+            )
+          })}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -79,6 +192,9 @@ function SortableViewRow({
   onSelect,
   onCopy,
   onDelete,
+  onChangeProtection,
+  protectionMenuOpen,
+  onToggleProtectionMenu,
   canRemove,
 }: {
   view: SavedView
@@ -86,6 +202,9 @@ function SortableViewRow({
   onSelect: (view: SavedView) => void
   onCopy: (view: SavedView) => void
   onDelete: (view: SavedView) => void
+  onChangeProtection?: (view: SavedView, protection: ViewProtection) => void
+  protectionMenuOpen?: boolean
+  onToggleProtectionMenu?: () => void
   canRemove: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: view.id })
@@ -96,6 +215,9 @@ function SortableViewRow({
       onSelect={onSelect}
       onCopy={onCopy}
       onDelete={onDelete}
+      onChangeProtection={onChangeProtection}
+      protectionMenuOpen={protectionMenuOpen}
+      onToggleProtectionMenu={onToggleProtectionMenu}
       canRemove={canRemove}
       rowRef={setNodeRef}
       className={isDragging ? 'is-drag' : undefined}
@@ -115,6 +237,7 @@ export function ViewOrderMenu({
   onSelect,
   onCopy,
   onDelete,
+  onChangeProtection,
   onReorder,
   onAdd,
 }: {
@@ -123,10 +246,12 @@ export function ViewOrderMenu({
   onSelect: (view: SavedView) => void
   onCopy: (view: SavedView) => void
   onDelete: (view: SavedView) => void
+  onChangeProtection?: (view: SavedView, protection: ViewProtection) => void
   onReorder: (ids: string[]) => void
   onAdd: () => void
 }) {
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [protectionOpenId, setProtectionOpenId] = useState<string | null>(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
   const ids = views.map((view) => view.id)
   const canRemove = canRemoveCollectionView(views)
@@ -165,6 +290,11 @@ export function ViewOrderMenu({
                     onSelect={onSelect}
                     onCopy={onCopy}
                     onDelete={onDelete}
+                    onChangeProtection={onChangeProtection}
+                    protectionMenuOpen={protectionOpenId === view.id}
+                    onToggleProtectionMenu={() =>
+                      setProtectionOpenId((prev) => (prev === view.id ? null : view.id))
+                    }
                     canRemove={canRemove && canDeleteSavedView(view)}
                     grip={
                       <span className="fsdb-query-grip is-locked" aria-hidden>
@@ -207,6 +337,11 @@ export function ViewOrderMenu({
                     onSelect={onSelect}
                     onCopy={onCopy}
                     onDelete={onDelete}
+                    onChangeProtection={onChangeProtection}
+                    protectionMenuOpen={protectionOpenId === view.id}
+                    onToggleProtectionMenu={() =>
+                      setProtectionOpenId((prev) => (prev === view.id ? null : view.id))
+                    }
                     canRemove={canRemove && canDeleteSavedView(view)}
                   />
                 ))}

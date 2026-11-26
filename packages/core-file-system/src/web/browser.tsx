@@ -2761,6 +2761,7 @@ export function CollectionBrowser({
     addEmptyView,
     copyView,
     patchActiveView,
+    updateViewProtection,
     commitViewName,
     deleteView,
   } = createBrowserViewCrud({
@@ -3812,6 +3813,7 @@ export function CollectionBrowser({
         selectView={selectView}
         copyView={copyView}
         deleteView={deleteView}
+        updateViewProtection={updateViewProtection}
         persistViewOrder={persistViewOrder}
         addEmptyView={() => addEmptyView()}
         pickedIds={pickedIds}
