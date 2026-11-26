@@ -21,6 +21,12 @@ import type { TerminalService } from '@biu/host-terminal'
 import type { LspService } from '@biu/host-lsp'
 import type { WebService } from '@biu/host-web'
 import type { SubagentsService } from '@biu/host-agents/subagents'
+import type {
+  RealtimeBusPort,
+  BlobStorePort,
+  StoragePort,
+  TaskDispatchPort,
+} from '@biu/host-plugin-loader/ports'
 import type { SnapshotService } from '@biu/web-snapshot'
 import type { SessionViewService } from '@biu/web-session-view'
 import type { ProjectViewService } from '@biu/web-slots/project-view'
@@ -31,6 +37,10 @@ export type { Method, PageSpec, RouteContext, RouteHandler } from '@biu/types/ht
 
 declare module 'cordis' {
   interface Context {
+    realtime: RealtimeBusPort
+    blob: BlobStorePort
+    storage: StoragePort
+    taskDispatch: TaskDispatchPort
     http: HttpService
     hub: HubService
     tools: ToolsService

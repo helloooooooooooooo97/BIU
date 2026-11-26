@@ -23,6 +23,8 @@ host/**/*.js.map
 electron/out/
 pack-app/
 pack-host/
+pack-cloud-api/
+pack-cloud-worker/
 release/
 web/**/*.js
 web/**/*.js.map

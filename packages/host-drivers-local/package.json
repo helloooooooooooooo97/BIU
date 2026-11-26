@@ -1,0 +1,21 @@
+{
+  "name": "@biu/host-drivers-local",
+  "license": "Apache-2.0",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "单机默认后端驱动组（Memory Realtime / Local FS Blob / SQLite Async Storage / Local Task Dispatch）",
+  "exports": {
+    ".": "./src/host/index.ts",
+    "./realtime": "./src/host/realtime-memory.ts",
+    "./blob": "./src/host/blob-fs.ts",
+    "./storage": "./src/host/storage-sqlite.ts",
+    "./task-dispatch": "./src/host/task-dispatch-local.ts"
+  },
+  "peerDependencies": {
+    "cordis": "4.0.0-rc.8"
+  },
+  "dependencies": {
+    "@biu/host-plugin-loader": "0.1.0"
+  }
+}

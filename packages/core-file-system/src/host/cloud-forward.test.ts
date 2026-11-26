@@ -7,6 +7,7 @@ import { afterEach, test } from 'vitest'
 import { Context } from 'cordis'
 import * as http from '@biu/host-http'
 import * as account from '@biu/host-account'
+import * as desktopCloudLink from '@biu/host-account/desktop-cloud-link'
 import * as tools from '@biu/host-tools'
 import { apply as applyFileSystem } from './index.ts'
 
@@ -88,6 +89,7 @@ test('desktop cloud writes send the workspace header and forward bulk delete, re
   const ready = new Promise<number>((resolve) => ctx.on('http/ready', ({ port }) => resolve(port)))
   const httpFiber = await ctx.plugin(http, { port: 0, host: '127.0.0.1', publicDir, sharePort: 0 })
   const accountFiber = await ctx.plugin(account, { sqlitePath: join(dir, 'local.sqlite') })
+  await ctx.plugin(desktopCloudLink)
   await ctx.plugin(tools)
   await ctx.plugin({ inject: ['tools', 'http'], apply: applyFileSystem })
   const port = await ready

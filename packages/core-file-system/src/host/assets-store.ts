@@ -1,13 +1,16 @@
 import { basename, join } from 'node:path'
 import {
   assetsRootPath,
+  contentAddressHash,
   dataHome,
   isHashedAssetName,
   readContentAddressed,
   readDocument,
   writeContentAddressed,
   writeDocument,
+  AssetConflictError,
 } from '@biu/host-plugin-loader/data-dir'
+import type { BlobStorePort } from '@biu/host-plugin-loader/ports'
 import { collectAssetNames, isAssetFileName } from '../asset-refs.ts'
 
 export { collectAssetNames, isAssetFileName, assetNamesFromMarkdown, assetNamesFromHtml } from '../asset-refs.ts'
@@ -53,7 +56,18 @@ export function mimeOfAsset(name: string) {
 }
 
 export class FileSystemAssets {
-  constructor(private dir = assetsRootPath(dataHome())) {}
+  constructor(
+    private dir = assetsRootPath(dataHome()),
+    private blob?: BlobStorePort,
+  ) {}
+
+  setBlobStore(blob?: BlobStorePort) {
+    this.blob = blob
+  }
+
+  blobStore(): BlobStorePort | undefined {
+    return this.blob
+  }
 
   root() {
     return this.dir
@@ -70,6 +84,12 @@ export class FileSystemAssets {
   async write(name: string, content: string | Buffer | Uint8Array) {
     const file = basename(name)
     if (!file || file !== name.replace(/\\/g, '/') || !isAssetFileName(file)) throw new Error('invalid asset')
+    if (this.blob && this.blob.driver !== 'local-fs') {
+      const buf = typeof content === 'string' ? Buffer.from(content, 'utf8') : Buffer.from(content)
+      const ext = file.includes('.') ? file.slice(file.lastIndexOf('.')) : ''
+      const stored = await this.blob.putCas(buf, { ext, rootDir: this.casRoot() })
+      return { name: stored.name, href: assetHref(stored.name), etag: stored.hash, bytes: stored.size, storage: 'hash' as const }
+    }
     const written = await writeContentAddressed(this.casRoot(), file, content)
     return { name: written.name, href: assetHref(written.name), etag: written.etag, bytes: written.bytes.length, storage: 'hash' as const }
   }
@@ -77,6 +97,18 @@ export class FileSystemAssets {
   async writeDoc(name: string, content: string | Buffer | Uint8Array, opts?: { etag?: string }) {
     const file = basename(name)
     if (!file || file !== name.replace(/\\/g, '/') || !isAssetFileName(file)) throw new Error('invalid asset')
+    if (this.blob && this.blob.driver !== 'local-fs') {
+      const buf = typeof content === 'string' ? Buffer.from(content, 'utf8') : Buffer.from(content)
+      if (opts?.etag) {
+        const existing = await this.blob.get(`name/${file}`, { rootDir: this.dir })
+        const currentEtag = existing ? contentAddressHash(existing) : ''
+        if (currentEtag && currentEtag !== opts.etag) {
+          throw new AssetConflictError(file, currentEtag)
+        }
+      }
+      const meta = await this.blob.put(`name/${file}`, buf, { contentType: mimeOfAsset(file), rootDir: this.dir })
+      return { name: file, href: assetHref(file), etag: meta.etag ?? contentAddressHash(buf), bytes: meta.size, storage: 'name' as const }
+    }
     const written = await writeDocument(this.docRoot(), file, content, opts)
     return { name: written.name, href: assetHref(written.name), etag: written.etag, bytes: written.bytes.length, storage: 'name' as const }
   }
@@ -84,6 +116,11 @@ export class FileSystemAssets {
   async read(name: string) {
     const file = basename(name)
     if (!file || file !== name.replace(/\\/g, '/')) throw new Error('invalid asset')
+    if (this.blob && this.blob.driver !== 'local-fs') {
+      const bytes = await this.blob.getCas(file, { rootDir: this.casRoot() })
+      if (!bytes) throw new Error(`ENOENT: asset not found: ${file}`)
+      return { bytes, type: mimeOfAsset(file), etag: file, storage: 'hash' as const }
+    }
     const { bytes } = await readContentAddressed(this.casRoot(), file)
     return { bytes, type: mimeOfAsset(file), etag: file, storage: 'hash' as const }
   }
@@ -91,6 +128,11 @@ export class FileSystemAssets {
   async readDoc(name: string) {
     const file = basename(name)
     if (!file || file !== name.replace(/\\/g, '/')) throw new Error('invalid asset')
+    if (this.blob && this.blob.driver !== 'local-fs') {
+      const bytes = await this.blob.get(`name/${file}`, { rootDir: this.dir })
+      if (!bytes) throw new Error(`ENOENT: doc asset not found: ${file}`)
+      return { bytes, type: mimeOfAsset(file), etag: contentAddressHash(bytes), storage: 'name' as const }
+    }
     const { bytes, etag } = await readDocument(this.docRoot(), file)
     return { bytes, type: mimeOfAsset(file), etag, storage: 'name' as const }
   }
