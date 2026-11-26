@@ -679,7 +679,19 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   })
 
   authedRoute('GET', '/api/account/me', async (route, me) => {
-    route.send(200, { ...me, online: getRuntimePolicy().hostMode === 'cloud', isSuperAdmin: account.store.isSuperAdmin(me.id) })
+    let wp: { name: string; avatar: string } | null = null
+    try {
+      wp = account.store.workspaceProfile(me.id)
+    } catch {
+      /* 无活跃空间时回退全局账号 */
+    }
+    route.send(200, {
+      ...me,
+      name: wp?.name || me.name,
+      avatar: wp?.avatar || me.avatar,
+      online: getRuntimePolicy().hostMode === 'cloud',
+      isSuperAdmin: account.store.isSuperAdmin(me.id),
+    })
   })
 
   authedRoute('POST', '/api/account/profile', async (route, me) => {
