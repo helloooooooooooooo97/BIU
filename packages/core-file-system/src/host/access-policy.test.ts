@@ -15,7 +15,6 @@ function createPolicy(
   const authorization = {
     matchesMemberView: () => false,
     membershipKind: () => 'member' as const,
-    scopeCurrent: () => 'workspace' as const,
     ownerTableOf: () => 'workspace' as string | null,
     currentActor: () => ({ type: 'account' as const, accountId: 'acc-1', workspaceId: 'ws-1' }),
     authorize: () => ({ allowed: true, effectiveRole: 'editor', source: 'access-rule' }),

@@ -331,13 +331,13 @@ test('saved views are isolated by workspace_id', () => {
   assert.deepEqual(reopened.viewsFor('/pages').map((v) => v.id), ['v0'])
 })
 
-test('policy-locked view blocks filters/columns changes and deletion for non-admins while allowing visual tweaks', () => {
+test('policyGuard canModifyView/canRemoveView enforces view write & delete permissions and triggers onRemoved', () => {
   const store = new SavedViewsStore().open(':memory:')
   store.setWorkspaceResolver(() => 'ws-1')
   const removedCalls: string[] = []
   store.setPolicyGuard({
-    isLocked: (_ws, col, id) => col === '/pages' && id === 'v-locked',
-    canEditLocked: (_ws, acc) => acc === 'admin-1',
+    canModifyView: (_ws, _col, view, acc) => acc === 'admin-1' || view.createdBy === acc,
+    canRemoveView: (_ws, _col, view, acc) => acc === 'admin-1' || view.createdBy === acc,
     onRemoved: (_ws, col, id) => removedCalls.push(`${col}:${id}`),
   })
 
@@ -345,58 +345,43 @@ test('policy-locked view blocks filters/columns changes and deletion for non-adm
     '/pages',
     {
       upsert: [
-        { id: 'v-locked', name: 'Locked', filters: { status: 'open' }, columns: ['title', 'status'], pageSize: 20 },
-        { id: 'v-free', name: 'Free', filters: {} },
+        { id: 'v-team', name: 'Team', scope: 'workspace', filters: { status: 'open' }, columns: ['title', 'status'], pageSize: 20 },
+        { id: 'v-free', name: 'Free', scope: 'workspace', filters: {} },
       ],
     },
     'member-1',
   )
 
-  // Non-admin creator can tweak visual settings (pageSize / sortField)
-  store.applyPatch(
-    '/pages',
-    { upsert: [{ id: 'v-locked', name: 'Locked', filters: { status: 'open' }, columns: ['title', 'status'], pageSize: 50 }] },
-    'member-1',
-  )
-  assert.equal(store.viewsFor('/pages').find((v) => v.id === 'v-locked')?.pageSize, 50)
-
-  // Non-admin cannot alter filters or columns or delete
+  // Non-owner regular member cannot modify or delete
   assert.throws(
     () =>
       store.applyPatch(
         '/pages',
-        { upsert: [{ id: 'v-locked', name: 'Locked', filters: {}, columns: ['title', 'status'] }] },
-        'member-1',
+        { upsert: [{ id: 'v-team', name: 'Hijacked', scope: 'workspace', filters: {} }] },
+        'member-2',
       ),
-    /POLICY_LOCKED_VIEW/,
+    /VIEW_OWNER_ONLY/,
   )
-  assert.throws(
-    () =>
-      store.applyPatch(
-        '/pages',
-        { upsert: [{ id: 'v-locked', name: 'Locked', filters: { status: 'open' }, columns: ['title', 'secret'] }] },
-        'member-1',
-      ),
-    /POLICY_LOCKED_VIEW/,
-  )
-  assert.throws(() => store.applyPatch('/pages', { remove: ['v-locked'] }, 'member-1'), /POLICY_LOCKED_VIEW/)
+  assert.throws(() => store.applyPatch('/pages', { remove: ['v-team'] }, 'member-2'), /VIEW_OWNER_ONLY/)
 
   // Admin can modify and delete, triggering cleanup hook
   store.applyPatch(
     '/pages',
-    { upsert: [{ id: 'v-locked', name: 'Locked', filters: { status: 'closed' }, columns: ['title'] }] },
+    { upsert: [{ id: 'v-team', name: 'Team v2', scope: 'workspace', filters: { status: 'closed' }, columns: ['title'] }] },
     'admin-1',
   )
-  store.applyPatch('/pages', { remove: ['v-locked'] }, 'admin-1')
-  assert.deepEqual(removedCalls, ['/pages:v-locked'])
+  store.applyPatch('/pages', { remove: ['v-team'] }, 'admin-1')
+  assert.deepEqual(removedCalls, ['/pages:v-team'])
 })
 
 test('three-state view scope (personal / workspace / shared) enforces visibility and creator/admin ownership', () => {
   const store = new SavedViewsStore().open(':memory:')
   store.setWorkspaceResolver(() => 'ws-1')
   store.setPolicyGuard({
-    isLocked: () => false,
-    canEditLocked: (_ws, acc) => acc === 'admin-1',
+    canModifyView: (_ws, _col, view, acc) =>
+      view.createdBy === acc || (view.scope !== 'personal' && acc === 'admin-1'),
+    canRemoveView: (_ws, _col, view, acc) =>
+      view.createdBy === acc || (view.scope !== 'personal' && acc === 'admin-1'),
   })
 
   // Alice creates a personal view, a workspace view, and a shared view
@@ -460,8 +445,6 @@ test('explicitly shared personal views become visible via policyGuard.canSeeView
   store.setWorkspaceResolver(() => 'ws-1')
   const sharedToBob = new Set(['v-shared-personal'])
   store.setPolicyGuard({
-    isLocked: () => false,
-    canEditLocked: () => true,
     canSeeView: (_ws, _col, view, accountId) => {
       if (view.createdBy === accountId) return true
       if (sharedToBob.has(view.id) && accountId === 'bob') return true
@@ -540,8 +523,6 @@ test('/data builtin-all aggregation views are strictly per-user private and isol
   const store = new SavedViewsStore().open(file)
   store.setWorkspaceResolver(() => 'ws-1')
   store.setPolicyGuard({
-    isLocked: () => false,
-    canEditLocked: () => true,
     workspaceOwner: (ws) => (ws === 'ws-1' ? 'owner-wenxin' : null),
   })
 
@@ -584,10 +565,7 @@ test('/data views are strictly personal and account-bound, while legacy K+1 aggr
   const file = join(mkdtempSync(join(tmpdir(), 'biu-saved-views-purge-')), 'file-system.sqlite')
   const store = new SavedViewsStore().open(file)
   store.setWorkspaceResolver(() => 'ws-1')
-  store.setPolicyGuard({
-    isLocked: () => false,
-    canEditLocked: (_ws, acc) => acc === 'admin-1',
-  })
+  store.setPolicyGuard({})
 
   // /data custom views are forced to ownerTable='all', protection='personal', scope='personal'
   store.applyPatch(
@@ -656,10 +634,7 @@ test('personal-table views support 3 protection states for owner, force personal
   const file = join(mkdtempSync(join(tmpdir(), 'fsdb-views-kplus1-')), 'file-system.sqlite')
   const store = new SavedViewsStore().open(file)
   store.setWorkspaceResolver(() => 'ws-1')
-  store.setPolicyGuard({
-    isLocked: () => false,
-    canEditLocked: (_ws, acc) => acc === 'admin-1',
-  })
+  store.setPolicyGuard({})
 
   // 1. 首次列出 /views 自动为空间表与当前用户个人表各生成 1 个普通公共视图（无 builtin 特殊态）
   const tables = [

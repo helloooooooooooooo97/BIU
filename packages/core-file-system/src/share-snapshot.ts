@@ -1,7 +1,7 @@
 import type { CollectionSchema, CollectionSchemaPack, DbRecord } from '@biu/type-file-system'
 import type { SavedView } from './web/saved-view.ts'
 
-export type ShareKind = 'view' | 'record' | 'rule'
+export type ShareKind = 'record' | 'rule'
 
 export type ShareRecord = {
   token: string

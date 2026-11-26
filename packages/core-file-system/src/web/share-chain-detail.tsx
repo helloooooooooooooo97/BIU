@@ -14,10 +14,9 @@ export function roleLabel(role: string) {
   return '可编辑'
 }
 
-function subjectNote(subjectType: 'account' | 'group' | 'member_view' | 'workspace_members', audienceKind: 'internal' | 'external') {
+function subjectNote(subjectType: 'account' | 'group' | 'workspace_members', audienceKind: 'internal' | 'external') {
   if (subjectType === 'workspace_members') return '空间全员'
   if (subjectType === 'group') return '成员组'
-  if (subjectType === 'member_view') return audienceKind === 'external' ? '外部成员视图' : '成员视图'
   return audienceKind === 'external' ? '外部协作者' : '空间成员'
 }
 
@@ -118,7 +117,6 @@ export function ShareScopeDetail({
       hasInheritance
       || data.audience.inherited.length > 0
       || data.audience.direct.length > 0
-      || data.audience.fromViews.length > 0
       || data.audience.publicLinks.length > 0
     ),
   )
@@ -230,23 +228,6 @@ export function ShareScopeDetail({
                   </section>
                 ) : null}
 
-                {data.audience.fromViews.length > 0 ? (
-                  <section className="fsdb-scope-section">
-                    <h3>通过数据视图开放</h3>
-                    <ul className="fsdb-scope-list">
-                      {data.audience.fromViews.map((item) => (
-                        <li key={item.id}>
-                          <div>
-                            <strong>视图「{item.viewName}」</strong>
-                            <em>向 {item.subjectName}（{subjectNote(item.subjectType, item.audienceKind)}）开放</em>
-                          </div>
-                          <span>{roleLabel(item.role)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                ) : null}
-
                 {data.audience.publicLinks.length > 0 ? (
                   <section className="fsdb-scope-section">
                     <h3>{data.localOnly ? '局域网链接' : '公开链接'}</h3>
@@ -254,11 +235,7 @@ export function ShareScopeDetail({
                       {data.audience.publicLinks.map((link) => (
                         <li key={link.id}>
                           <div>
-                            <strong>
-                              {link.kind === 'record'
-                                ? (link.lanOnly ? '本条局域网链接' : '本条公开链接')
-                                : `视图「${link.targetName}」${link.lanOnly ? '局域网链接' : '公开链接'}`}
-                            </strong>
+                            <strong>{link.lanOnly ? '本条局域网链接' : '本条公开链接'}</strong>
                             <em>{link.lanOnly ? '同一局域网内打开链接可查看' : '获得链接的人可查看'}</em>
                           </div>
                           <span>可查看</span>

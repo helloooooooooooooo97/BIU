@@ -1,38 +1,26 @@
 import assert from 'node:assert/strict'
 import { test } from 'vitest'
-import { builtinAllViewId } from './catalog-views.ts'
-import { recordMatchesSharedView, resolveSharedView, viewShareListFilter } from './share-view-match.ts'
+import { matchListFilterRecord } from './query-logic.ts'
+import { viewShareListFilter } from './share-view-match.ts'
 
-test('a shared view hits the same records the share snapshot would list', () => {
-  const open = { id: 'open', name: '进行中', filters: { status: 'open' } }
-  const all = { id: builtinAllViewId('/docs'), name: '全部文档', filters: {}, builtin: true }
-  const record = { id: 'p1', title: '进行中', status: 'open' }
-  const other = { id: 'p2', title: '已完成', status: 'done' }
-  assert.equal(recordMatchesSharedView(record, open, 'personal'), true)
-  assert.equal(recordMatchesSharedView(other, open, 'personal'), false)
-  assert.equal(recordMatchesSharedView(other, all, 'personal'), true)
-  assert.equal(recordMatchesSharedView(record, { ...open, filters: { ...open.filters, $scope: 'workspace' } }, 'personal'), false)
-  assert.equal(recordMatchesSharedView(record, { ...open, filters: { ...open.filters, $scope: 'workspace' } }, 'workspace'), true)
-  assert.deepEqual(viewShareListFilter(open).status, 'open')
-  assert.equal(resolveSharedView('open', [open])?.name, '进行中')
-  assert.equal(resolveSharedView(all.id, [])?.id, all.id)
-  assert.equal(resolveSharedView('missing', [open]), null)
+test('viewShareListFilter converts flat filters and strips internal scope keys', () => {
+  const filters = viewShareListFilter({
+    filters: { status: 'open', $scope: 'workspace', $ids: ['p1'] },
+  })
+  assert.equal(matchListFilterRecord({ id: 'p1', status: 'open' }, filters), true)
+  assert.equal(matchListFilterRecord({ id: 'p2', status: 'done' }, filters), false)
 })
 
-test('a shared tag view still hits records when schema is not passed', () => {
-  const view = {
-    id: 'sec',
-    name: '安全项目',
-    filterTree: {
-      kind: 'group' as const,
-      id: 'g',
-      combinator: 'and' as const,
-      children: [{ kind: 'rule' as const, id: 'r', field: 'tag', op: 'eq' as const, value: 'sec' }],
-    },
+test('viewShareListFilter evaluates tag filterTree both as object and JSON string', () => {
+  const filterTree = {
+    kind: 'group' as const,
+    id: 'g',
+    combinator: 'and' as const,
+    children: [{ kind: 'rule' as const, id: 'r', field: 'tag', op: 'eq' as const, value: 'sec' }],
   }
   const hit = { id: 'p1', title: 'Robust Intelligence', tag: { tags: ['sec'] } }
   const miss = { id: 'p2', title: 'Other', tag: { tags: ['other'] } }
-  assert.equal(recordMatchesSharedView(hit, view, 'personal'), true)
-  assert.equal(recordMatchesSharedView(miss, view, 'personal'), false)
-  assert.equal(recordMatchesSharedView(hit, { ...view, filterTree: JSON.stringify(view.filterTree) as never }, 'personal'), true)
+  assert.equal(matchListFilterRecord(hit, viewShareListFilter({ filterTree })), true)
+  assert.equal(matchListFilterRecord(miss, viewShareListFilter({ filterTree })), false)
+  assert.equal(matchListFilterRecord(hit, viewShareListFilter({ filterTree: JSON.stringify(filterTree) })), true)
 })

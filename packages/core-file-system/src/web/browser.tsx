@@ -4032,7 +4032,9 @@ export function CollectionBrowser({
     Number(inspectorOpen),
     collectionPath,
     title,
+    viewerAccountId,
     activeView?.name ?? '',
+    activeView?.ownerTable ?? '',
     crumbs.map((crumb) => `${crumb.kind}:${crumb.id}:${crumb.label}`).join('\n'),
     views.map((view) => view.id).join(','),
   ].join('\0')
@@ -4047,6 +4049,7 @@ export function CollectionBrowser({
           views={domainViews}
           activeViewId={activeViewId}
           activeView={activeView}
+          viewerAccountId={viewerAccountId}
           selected={selected}
           detailId={detailId}
           detailRow={detailRow}

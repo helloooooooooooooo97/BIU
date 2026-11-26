@@ -102,15 +102,12 @@ test('permission column opens the same kind of chain as data scope', () => {
   assert.doesNotMatch(detailSrc, /\/api\/account\/access/)
 })
 
-test('private records grant dynamic member views from the unified member search and edit roles inline', () => {
+test('private records grant workspace members and groups from unified search and edit roles inline', () => {
   const src =
     readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8') +
     '\n' +
     readFileSync(resolve(import.meta.dirname, './share-chain-detail.tsx'), 'utf8')
-  assert.match(src, /memberViewId/)
-  assert.match(src, /data-testid="fsdb-share-member-view"/)
-  assert.doesNotMatch(src, /按成员视图批量授权/)
-  assert.match(src, /搜索空间成员或成员视图/)
+  assert.match(src, /搜索空间成员或成员组/)
   assert.match(src, /inline\s*\n\s*value=\{row\.role/)
   assert.match(src, /调整 \$\{row\.name\} 的权限/)
   assert.match(src, /renderPersonAvatar\(row\.id \|\| row\.name, row\.avatar, 'is-sm', 26\)/)
@@ -120,18 +117,10 @@ test('private records grant dynamic member views from the unified member search 
   assert.match(src, /由我授权/)
   assert.match(src, /row\.canEdit !== false/)
   assert.match(src, /row\.canRevoke !== false/)
-  assert.match(src, /revoke\('member_view', row\.id, row\.grantedBy\)/)
+  assert.match(src, /revoke\('group', row\.id\)/)
+  assert.doesNotMatch(src, /memberViewId|member_view|VIEW_ROLE_OPTIONS|inheritedInternal/)
   const dismissSrc = readFileSync(resolve(import.meta.dirname, '../../../biu-ui/src/headless-dismiss.tsx'), 'utf8')
   assert.match(dismissSrc, /\.fsdb-share-select-menu/)
-})
-
-test('share panel no longer offers member-group grants', () => {
-  const src =
-    readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8') +
-    '\n' +
-    readFileSync(resolve(import.meta.dirname, './share-chain-detail.tsx'), 'utf8')
-  assert.doesNotMatch(src, /availableGroups|groupId|添加成员组/)
-  assert.doesNotMatch(src, /\/groups`\)/)
 })
 
 test('share panel separates public sharing from internal and external collaboration', () => {
@@ -146,8 +135,6 @@ test('share panel separates public sharing from internal and external collaborat
     readFileSync(resolve(import.meta.dirname, '../host/http-routes.ts'), 'utf8')
   assert.match(src, /公开分享/)
   assert.match(src, /邀请协作/)
-  assert.match(src, /target\.kind === 'view' && target\.viewId/)
-  assert.match(src, /来自视图「/)
   assert.match(src, /export \{ ShareScopeLabel[, }]/ )
   assert.match(readFileSync(resolve(import.meta.dirname, './share-scope-label.tsx'), 'utf8'), /export function ShareScopeLabel/)
   assert.match(readFileSync(resolve(import.meta.dirname, './share-scope-label.tsx'), 'utf8'), /GlobeAltIcon/)
@@ -155,7 +142,6 @@ test('share panel separates public sharing from internal and external collaborat
   assert.match(src, /export function ShareScopeDetail/)
   assert.match(src, /可见范围/)
   assert.match(src, /fsdb-scope-sections/)
-  assert.match(src, /effectiveDataScope/)
   assert.match(src, /<ScopeMark scope=\{chip\} \/>/)
   assert.doesNotMatch(src, /ScopeMark scope=\{label \|\| scope\}/)
   assert.match(src, /内部协作者/)
@@ -196,7 +182,7 @@ test('device workspace keeps LAN links but hides collaboration and cloud publish
     readFileSync(resolve(import.meta.dirname, '../host/http-routes.ts'), 'utf8')
   const sharesPost = databaseHost.slice(databaseHost.indexOf("POST', '/api/db/shares'"), databaseHost.indexOf("GET', '/api/share/:token'"))
   assert.match(src, /localOnly \? '局域网分享' : '公开分享'/)
-  assert.match(src, /!localOnly && \(\(target\.kind === 'record'/)
+  assert.match(src, /!localOnly && target\.recordId/)
   assert.match(src, /同一局域网/)
   assert.match(browser, /localOnly=\{localData\}/)
   assert.match(browser, /localOnly=\{localKnown \? localData : null\}/)
@@ -207,7 +193,7 @@ test('device workspace keeps LAN links but hides collaboration and cloud publish
   assert.doesNotMatch(databaseHost, /publishToCloud/)
   assert.doesNotMatch(sharesPost, /localIds/)
   assert.doesNotMatch(sharesPost, /body.enabled !== false/)
-  assert.match(databaseHost, /\/api\/db\/shares\?\$\{search\}/)
+  assert.match(databaseHost, /GET', '\/api\/db\/shares'/)
 })
 
 test('list permission column uses the same capsule and loads the chain on click', () => {
@@ -287,7 +273,7 @@ test('list share column uses the same capsule and loads the chain on click', () 
   assert.match(browser, /if \(key === 'shareRole'\)/)
 })
 
-test('device share scope detail explains lan view links via unified access-explain endpoint', () => {
+test('device share scope detail explains lan record links via unified access-explain endpoint', () => {
   const detailSrc = readFileSync(resolve(import.meta.dirname, './share-chain-detail.tsx'), 'utf8')
   const explainSrc = readFileSync(resolve(import.meta.dirname, '../access-explanation.ts'), 'utf8')
   const host =
@@ -300,12 +286,9 @@ test('device share scope detail explains lan view links via unified access-expla
   assert.match(detailSrc, /\/api\/db\/access-explain/)
   assert.doesNotMatch(detailSrc, /\/api\/account\/access/)
   assert.doesNotMatch(detailSrc, /未单独开链接|取最宽/)
-  assert.match(explainSrc, /recordMatchesSharedView/)
   assert.match(explainSrc, /已开启局域网分享/)
   assert.match(host, /GET', '\/api\/db\/access-explain'/)
-  assert.match(host, /sharedViewsFor/)
-  assert.match(host, /recordMatchesSharedView/)
-  assert.match(host, /deviceWorkspace\(\)\) return '私人'/)
+  assert.match(host, /this\.host\.deviceWorkspace\(\)/)
   assert.match(host, /enum: \['私人', '共享'\]/)
   assert.doesNotMatch(sharesPostOf(host), /markPublicView/)
 })

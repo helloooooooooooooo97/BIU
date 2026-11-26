@@ -144,7 +144,6 @@ export type AccessRuleRecord = {
   scope: AccessRuleScope
   filterTree: Record<string, unknown>
   columns: string[] | null
-  visibleViews?: string[] | null
   displaySnapshot: AccessRuleDisplaySnapshot | null
   enabled: boolean
   canManage?: boolean
@@ -166,7 +165,6 @@ export type CreateAccessRuleInput = {
   ownerTable?: string
   filterTree?: Record<string, unknown>
   columns?: string[] | null
-  visibleViews?: string[] | null
   displaySnapshot?: AccessRuleDisplaySnapshot | null
   enabled?: boolean
   grants?: AccessRuleGrantInput[]
@@ -178,7 +176,6 @@ export type UpdateAccessRuleInput = {
   ownerTable?: string
   filterTree?: Record<string, unknown>
   columns?: string[] | null
-  visibleViews?: string[] | null
   displaySnapshot?: AccessRuleDisplaySnapshot | null
   enabled?: boolean
   grants?: AccessRuleGrantInput[]

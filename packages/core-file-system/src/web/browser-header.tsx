@@ -48,6 +48,7 @@ export const BrowserHeader = memo(function BrowserHeader({
   views,
   activeViewId,
   activeView,
+  viewerAccountId,
   selected,
   detailId,
   detailRow,
@@ -78,6 +79,7 @@ export const BrowserHeader = memo(function BrowserHeader({
   views: SavedView[]
   activeViewId: string | null
   activeView?: SavedView
+  viewerAccountId?: string
   selected: DbRecord | null
   detailId: string | null
   detailRow: DbRecord | null
@@ -154,7 +156,6 @@ export const BrowserHeader = memo(function BrowserHeader({
             target={{
               kind: 'record' as const,
               collection: collectionPath,
-              viewId: activeViewId ?? undefined,
               recordId: detailId,
               title: String(detailRow?.title ?? title),
             }}
@@ -163,6 +164,7 @@ export const BrowserHeader = memo(function BrowserHeader({
           <AccessRulesButton
             collectionPath={collectionPath}
             activeView={activeView}
+            viewerAccountId={viewerAccountId}
             schema={schema}
             filterFields={filterFields ?? []}
             filterValueOptions={filterValueOptions ?? (() => [])}

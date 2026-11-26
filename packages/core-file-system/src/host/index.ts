@@ -2313,13 +2313,6 @@ export class DatabaseService extends Service implements Database {
         this.tags.markDeleted(spec.path, id, at)
         this.shares.revokeRecord(spec.path, id)
       }
-      if (spec.path === VIEWS_COLLECTION_PATH) {
-        for (const row of matched) {
-          const collection = normalizeCollectionPath(String(row.tablePath ?? ''))
-          const viewId = String(row.viewId ?? '').trim()
-          if (collection && collection !== '/' && viewId) this.shares.revokeView(collection, viewId)
-        }
-      }
       this.bump(spec.path)
       for (const row of matched) {
         const title = String(row.title ?? row.name ?? row.id ?? '').trim()
@@ -2348,11 +2341,6 @@ export class DatabaseService extends Service implements Database {
     for (const id of ids) {
       this.tags.removeRecord(spec.path, id)
       this.shares.revokeRecord(spec.path, id)
-    }
-    if (spec.path === VIEWS_COLLECTION_PATH) {
-      for (const key of viewRowKeys(matched)) {
-        this.shares.revokeView(key.collection, key.viewId)
-      }
     }
     this.bump(spec.path)
     this.recycleAssets?.()
@@ -2750,8 +2738,6 @@ export function apply(ctx: Context) {
   savedViews.setPolicyGuard({
     // 方案 B（视图归展示，规则归安全）：视图权限与页面记录完全一致，统一走 /views 下的 resource_policies + record_grants
     // 内置视图全空间共享一份，创建人固定为空间创建人（workspace owner），且仅空间创建人可修改或删除
-    isLocked: () => false,
-    canEditLocked: () => true,
     workspaceOwner: (workspaceId) => account?.store?.workspaceOwnerId?.(workspaceId) ?? null,
     sharedOwnersFor: (workspaceId, collection, accountId) =>
       account?.store?.sharedOwnerAccountIds?.(workspaceId, collection, accountId) ?? [],
@@ -2764,13 +2750,6 @@ export function apply(ctx: Context) {
     viewRoleFor: (workspaceId, collection, view, accountId) => {
       const decision = resolveViewDecision(workspaceId, collection, view, accountId, 'resource:read')
       return decision.allowed ? decision.effectiveRole : null
-    },
-    onRemoved: (_workspaceId, collection, viewId) => {
-      try {
-        db.shares.revokeView(collection, viewId)
-      } catch {
-        /* ignore */
-      }
     },
   })
   const activeDataLocation = (): 'device' | 'cloud' => {

@@ -141,6 +141,7 @@ type RuleDraft = {
 export function AccessRulesButton({
   collectionPath,
   activeView,
+  viewerAccountId = '',
   schema,
   filterFields = [],
   filterValueOptions,
@@ -149,6 +150,7 @@ export function AccessRulesButton({
 }: {
   collectionPath: string
   activeView?: SavedView
+  viewerAccountId?: string
   schema?: CollectionSchema
   filterFields?: QueryField[]
   filterValueOptions?: (field: QueryField) => Array<{ value: string; label: string }>
@@ -317,8 +319,19 @@ export function AccessRulesButton({
   )
 
   const activeDomain = activeView ? viewDomainOf(activeView) : 'all'
+  const isForeignPersonalTable = Boolean(
+    activeView?.ownerTable?.startsWith('account:') &&
+      viewerAccountId &&
+      activeView.ownerTable !== `account:${viewerAccountId}`,
+  )
   const lockedScope: 'workspace' | 'personal' | null =
-    activeDomain === 'workspace' ? 'workspace' : activeDomain === 'personal' ? 'personal' : null
+    isForeignPersonalTable
+      ? null
+      : activeDomain === 'workspace'
+        ? 'workspace'
+        : activeDomain === 'personal'
+          ? 'personal'
+          : null
   const visibleRules = useMemo(() => {
     if (lockedScope === 'workspace') {
       return rules.filter((r) => r.scope === 'workspace' || r.ownerTable === 'workspace')
@@ -684,8 +697,13 @@ export function AccessRulesButton({
     }
   }
 
-  // 聚合表（每人私有、不可分享）与共享域不展示分享规则盾牌
-  if (localOnly || activeDomain === 'shared' || (activeDomain === 'all' && tableModeFor(collectionPath) === 'k-plus-1')) {
+  // 聚合表（每人私有、不可分享）、共享域与他人的个人表不展示分享规则盾牌
+  if (
+    localOnly ||
+    activeDomain === 'shared' ||
+    isForeignPersonalTable ||
+    (activeDomain === 'all' && tableModeFor(collectionPath) === 'k-plus-1')
+  ) {
     return null
   }
 

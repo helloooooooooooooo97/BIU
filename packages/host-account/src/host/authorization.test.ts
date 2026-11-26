@@ -261,7 +261,7 @@ test('collection scan preload matches live sqlite authorization', () => {
         people.map((who) => [
           who.email,
           Object.fromEntries(
-            ids.map((id) => [id, runWithAccount(who.id, () => auth.scopeCurrent(page(id)))]),
+            ids.map((id) => [id, runWithAccount(who.id, () => auth.ownerTableOf(page(id)))]),
           ),
         ]),
       ),

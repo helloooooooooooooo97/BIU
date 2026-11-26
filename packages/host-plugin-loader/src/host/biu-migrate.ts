@@ -1549,14 +1549,11 @@ export const BIU_MIGRATIONS: Migration[] = [
       }
     }
 
-    // 2. access_rules 增加 owner_table 与 visible_views_json，存量保守归属创建者个人表避免静默扩权
+    // 2. access_rules 增加 owner_table，存量保守归属创建者个人表避免静默扩权
     if (hasTable(db, 'access_rules')) {
       const cols = tableColumnNames(db, 'access_rules')
       if (!cols.includes('owner_table')) {
         db.exec(`ALTER TABLE access_rules ADD COLUMN owner_table TEXT NOT NULL DEFAULT ''`)
-      }
-      if (!cols.includes('visible_views_json')) {
-        db.exec(`ALTER TABLE access_rules ADD COLUMN visible_views_json TEXT`)
       }
       db.exec(
         `CREATE INDEX IF NOT EXISTS access_rules_ws_col_table

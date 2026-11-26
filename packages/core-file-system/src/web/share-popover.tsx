@@ -2,7 +2,7 @@ import { readStorageString, removeStorageKey, writeStorageString } from '@biu/bi
 import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowPathIcon, CheckIcon, ChevronDownIcon, LinkIcon, ShareIcon, UserGroupIcon, UsersIcon, XMarkIcon } from '@heroicons/react/16/solid'
+import { ArrowPathIcon, CheckIcon, ChevronDownIcon, LinkIcon, ShareIcon, UserGroupIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { useFloatingPosition } from '@biu/biu-ui/floating-position'
 import { OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
@@ -16,15 +16,13 @@ import { ScopeMark } from './share-scope-label.tsx'
 import { roleLabel } from './share-chain-detail.tsx'
 import { mintSharePin, shareClipboardText } from '../share-resources.ts'
 import { openAccessRulesDrawer } from './access-rules-drawer.tsx'
-import type { DbRecord } from '@biu/type-file-system'
 
-export type ShareKind = 'view' | 'record'
+export type ShareKind = 'record'
 
 export type ShareTarget = {
   kind: ShareKind
   collection: string
-  viewId?: string
-  recordId?: string
+  recordId: string
   title: string
 }
 
@@ -102,12 +100,6 @@ const ROLE_OPTIONS: ShareSelectOption[] = [
   { value: 'commenter', label: '可评论', hint: '查看与添加批注' },
   { value: 'editor', label: '可编辑', hint: '修改属性与正文' },
   { value: 'manager', label: '可管理', hint: '分享与权限管理' },
-]
-
-const VIEW_ROLE_OPTIONS: ShareSelectOption[] = [
-  { value: 'viewer', label: '可查看', hint: '仅查看视图' },
-  { value: 'editor', label: '可编辑', hint: '修改视图名称与筛选配置' },
-  { value: 'manager', label: '可管理', hint: '分享、权限与删除视图' },
 ]
 
 function ShareSelect({
@@ -225,10 +217,9 @@ export function ShareButton({
     const check = async () => {
       try {
         const params = new URLSearchParams({
-          kind: target.kind,
+          kind: 'record',
           collection: target.collection,
-          viewId: target.viewId ?? '',
-          recordId: target.recordId ?? '',
+          recordId: target.recordId,
         })
         const shareData = await readJson<SharePayload>(`/api/db/shares?${params}`).catch(() => ({ share: null }))
         if (gone) return
@@ -236,29 +227,21 @@ export function ShareButton({
           setHasActiveShare(true)
           return
         }
-        if (!localOnly && ((target.kind === 'record' && target.recordId) || (target.kind === 'view' && target.viewId))) {
-          const accessParams =
-            target.kind === 'view' && target.viewId
-              ? new URLSearchParams({ collection: target.collection, viewId: target.viewId })
-              : new URLSearchParams({ collection: target.collection, recordId: target.recordId ?? '' })
+        if (!localOnly && target.recordId) {
+          const accessParams = new URLSearchParams({ collection: target.collection, recordId: target.recordId })
           const accessData = await readJson<{
             scope?: string
             ownerId?: string
             people?: Array<{ id?: string; role?: string }>
             groups?: unknown[]
-            memberViews?: unknown[]
-            grants?: Array<{ role?: string }>
           }>(`/api/account/access?${accessParams}`).catch(() => null)
           if (gone) return
-          const nonOwnerGrants = (accessData?.grants ?? []).filter((g) => g.role && g.role !== 'owner')
           const nonOwnerPeople = (accessData?.people ?? []).filter(
             (p) => p.role !== 'owner' && (!accessData?.ownerId || p.id !== accessData.ownerId),
           )
           if (
-            nonOwnerGrants.length > 0 ||
             nonOwnerPeople.length > 0 ||
             (accessData?.groups?.length ?? 0) > 0 ||
-            (accessData?.memberViews?.length ?? 0) > 0 ||
             (accessData?.scope && accessData.scope !== 'personal')
           ) {
             setHasActiveShare(true)
@@ -277,7 +260,7 @@ export function ShareButton({
       gone = true
       window.removeEventListener(FSDB_SHARES_CHANGE_EVENT, onChange)
     }
-  }, [target?.kind, target?.collection, target?.viewId, target?.recordId, localOnly])
+  }, [target?.collection, target?.recordId, localOnly])
 
   if (!target) return null
   return (
@@ -306,12 +289,10 @@ export function ShareButton({
 
 function WorkspaceAccess({
   collection,
-  recordId = '',
-  viewId = '',
+  recordId,
 }: {
   collection: string
-  recordId?: string
-  viewId?: string
+  recordId: string
 }) {
   const [email, setEmail] = useState('')
   const [scope, setScope] = useState<'personal' | 'workspace' | 'shared' | 'external'>('personal')
@@ -395,11 +376,7 @@ function WorkspaceAccess({
         mode?: 'inherit' | 'custom'
         hasParent?: boolean
       }
-    }>(
-      viewId
-        ? `/api/account/access?collection=${encodeURIComponent(collection)}&viewId=${encodeURIComponent(viewId)}`
-        : `/api/account/access?collection=${encodeURIComponent(collection)}&recordId=${encodeURIComponent(recordId)}`,
-    )
+    }>(`/api/account/access?collection=${encodeURIComponent(collection)}&recordId=${encodeURIComponent(recordId)}`)
     setScope(data.scope ?? 'personal')
     setOwnerId(data.ownerId ?? '')
     setCurrentAccountId(data.currentAccountId ?? '')
@@ -451,7 +428,7 @@ function WorkspaceAccess({
         console.warn('[share-popover] load workspace members failed', error)
         setWorkspaceMembers([])
       })
-  }, [collection, recordId, viewId])
+  }, [collection, recordId])
 
   function grant(
     input: { email?: string; groupId?: string },
@@ -464,7 +441,7 @@ function WorkspaceAccess({
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         collection,
-        ...(viewId ? { viewId } : { recordId }),
+        recordId,
         role: nextRole ?? role,
         ...(input.email ? { collaboratorKind } : {}),
         ...input,
@@ -491,7 +468,7 @@ function WorkspaceAccess({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           collection,
-          ...(viewId ? { viewId } : { recordId }),
+          recordId,
           subjectType,
           subjectId,
           ...(grantedBy ? { grantedBy } : {}),
@@ -505,7 +482,7 @@ function WorkspaceAccess({
   }
 
   async function transferOwnerTable(target: 'workspace' | 'personal') {
-    if (viewId || !recordId || !currentAccountId) return
+    if (!recordId || !currentAccountId) return
     setError('')
     setInheritanceBusy(true)
     try {
@@ -528,7 +505,7 @@ function WorkspaceAccess({
   }
 
   async function toggleInheritance(on: boolean) {
-    if (viewId || !recordId) return
+    if (!recordId) return
     setError('')
     setInheritanceBusy(true)
     try {
@@ -558,7 +535,7 @@ function WorkspaceAccess({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           collection,
-          ...(viewId ? { viewId } : { recordId }),
+          recordId,
           role: role === 'editor' ? 'editor' : 'viewer',
           expiresInHours: 24,
         }),
@@ -576,9 +553,6 @@ function WorkspaceAccess({
 
   const internalPeople = people.filter((row) => row.memberKind === 'member')
   const externalPeople = people.filter((row) => row.memberKind === 'external' || row.memberKind === 'guest')
-  // 方案 B：view_grants 只分享视图本身，不再向底层数据记录继承协作者（记录命中的批量规则由底部「同时生效的分享规则」展示）
-  const inheritedInternal: Array<{ viewId: string; subjectType: string; subjectId: string; name: string; source: string; role: string }> = []
-  const inheritedExternal: Array<{ viewId: string; subjectType: string; subjectId: string; name: string; source: string; role: string }> = []
   const shownScope = scope
   const grantedAccountIds = new Set(people.map((row) => row.id))
   const grantedGroupIds = new Set(groups.map((row) => row.id))
@@ -592,11 +566,10 @@ function WorkspaceAccess({
     .filter((row) => !normalizedMemberQuery || `${row.name} ${row.email}`.toLowerCase().includes(normalizedMemberQuery))
     .slice(0, 8)
 
-  const roleOptions = viewId ? VIEW_ROLE_OPTIONS : ROLE_OPTIONS
   const roleSelect = (
     <ShareSelect
       value={role}
-      options={roleOptions}
+      options={ROLE_OPTIONS}
       ariaLabel="权限"
       placement="bottom-end"
       minMenuWidth={168}
@@ -604,8 +577,8 @@ function WorkspaceAccess({
     />
   )
 
-  const internalCount = internalPeople.length + groups.length + inheritedInternal.length
-  const externalCount = externalPeople.length + inheritedExternal.length
+  const internalCount = internalPeople.length + groups.length
+  const externalCount = externalPeople.length
   const isImageAvatar = (value?: string) => Boolean(value && /^(https?:\/\/|\/|data:image\/)/i.test(value.trim()))
   const renderPersonAvatar = (seed: string, avatar?: string, extraClass = '', size = 28) => {
     const trimmed = avatar?.trim() ?? ''
@@ -633,7 +606,7 @@ function WorkspaceAccess({
         <span>归属与可见范围</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <strong className={`fsdb-share-scope is-${shownScope}`} data-testid="fsdb-share-scope"><ScopeMark scope={shownScope} /></strong>
-          {!viewId && recordId && currentAccountId ? (
+          {recordId && currentAccountId ? (
             <button
               type="button"
               disabled={inheritanceBusy}
@@ -647,7 +620,7 @@ function WorkspaceAccess({
           ) : null}
         </div>
       </div>
-      {!viewId && inheritance.hasParent ? (
+      {inheritance.hasParent ? (
         <div className="fsdb-share-inherit-row" data-testid="fsdb-share-inherit">
           <span>
             <strong>继承上级权限</strong>
@@ -682,7 +655,7 @@ function WorkspaceAccess({
                   <ShareSelect
                     inline
                     value={row.role}
-                    options={roleOptions}
+                    options={ROLE_OPTIONS}
                     ariaLabel={`调整 ${row.name} 的权限`}
                     placement="bottom-end"
                     minMenuWidth={168}
@@ -719,7 +692,7 @@ function WorkspaceAccess({
                   <ShareSelect
                     inline
                     value={row.role || 'editor'}
-                    options={roleOptions}
+                    options={ROLE_OPTIONS}
                     ariaLabel={`调整 ${row.name} 的权限`}
                     placement="bottom-end"
                     minMenuWidth={168}
@@ -837,7 +810,7 @@ function WorkspaceAccess({
                   <ShareSelect
                     inline
                     value={row.role}
-                    options={roleOptions}
+                    options={ROLE_OPTIONS}
                     ariaLabel={`调整 ${row.name} 的权限`}
                     placement="bottom-end"
                     minMenuWidth={168}
@@ -881,7 +854,7 @@ function WorkspaceAccess({
             <div className="fsdb-share-guest-row" data-testid="fsdb-share-guest">
               <span className="fsdb-share-guest-info">
                 <span className="fsdb-share-guest-icon" aria-hidden><LinkIcon className="size-3.5" /></span>
-                <span><strong>临时访客</strong><em>{guestUrl ? '链接有效期 24 小时' : viewId ? '无需注册，仅可访问此视图' : '无需注册，仅可访问此内容'}</em></span>
+                <span><strong>临时访客</strong><em>{guestUrl ? '链接有效期 24 小时' : '无需注册，仅可访问此内容'}</em></span>
               </span>
               <button type="button" onClick={() => void createGuestLink()}>{guestCopied ? '已复制' : guestUrl ? '重新生成' : '生成链接'}</button>
             </div>
@@ -902,8 +875,7 @@ export function SharePanel({
   embedded?: boolean
   localOnly?: boolean
 }) {
-  const hidePublicTab = target.kind === 'view' && !localOnly
-  const [tab, setTab] = useState<'public' | 'collaboration'>(hidePublicTab ? 'collaboration' : 'public')
+  const [tab, setTab] = useState<'public' | 'collaboration'>('public')
   const [share, setShare] = useState<ShareInfo | null>(null)
   const [pin, setPin] = useState('')
   const [usePassword, setUsePassword] = useState(false)
@@ -912,21 +884,15 @@ export function SharePanel({
   const [error, setError] = useState('')
   useEffect(() => {
     if (localOnly && tab !== 'public') setTab('public')
-    else if (hidePublicTab && tab !== 'collaboration') setTab('collaboration')
-  }, [localOnly, hidePublicTab, tab])
+  }, [localOnly, tab])
 
   const params = new URLSearchParams({
-    kind: target.kind,
+    kind: 'record',
     collection: target.collection,
-    viewId: target.viewId ?? '',
-    recordId: target.recordId ?? '',
+    recordId: target.recordId,
   })
 
   useEffect(() => {
-    if (hidePublicTab) {
-      setShare(null)
-      return
-    }
     let gone = false
     void readJson<SharePayload>(`/api/db/shares?${params}`).then((data) => {
       if (gone) return
@@ -937,7 +903,7 @@ export function SharePanel({
     return () => {
       gone = true
     }
-  }, [hidePublicTab, target.kind, target.collection, target.viewId, target.recordId])
+  }, [target.collection, target.recordId])
 
   const [matchedRules, setMatchedRules] = useState<Array<{
     ruleId: string
@@ -949,7 +915,7 @@ export function SharePanel({
   }>>([])
 
   useEffect(() => {
-    if (localOnly || target.kind !== 'record' || !target.recordId) {
+    if (localOnly || !target.recordId) {
       setMatchedRules([])
       return
     }
@@ -965,7 +931,7 @@ export function SharePanel({
     return () => {
       gone = true
     }
-  }, [localOnly, target.kind, target.collection, target.recordId])
+  }, [localOnly, target.collection, target.recordId])
 
   function applyPayload(data: SharePayload, nextPin?: string, flagsOnly = false) {
     if (data.share === undefined) return
@@ -1007,10 +973,9 @@ export function SharePanel({
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          kind: target.kind,
+          kind: 'record',
           collection: target.collection,
-          viewId: target.viewId ?? '',
-          recordId: target.recordId ?? '',
+          recordId: target.recordId,
           ...patch,
         }),
       })
@@ -1072,36 +1037,34 @@ export function SharePanel({
 
   return (
     <div className={`fsdb-share-panel${embedded ? ' is-embedded' : ''}`} role="dialog" aria-label="分享" data-testid="fsdb-share-panel">
-      {!hidePublicTab ? (
-        <div className="fsdb-share-tabs" role="tablist" aria-label="分享方式">
+      <div className="fsdb-share-tabs" role="tablist" aria-label="分享方式">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'public'}
+          className={tab === 'public' ? 'is-on' : ''}
+          data-testid="fsdb-share-public-tab"
+          onClick={() => setTab('public')}
+        >
+          {localOnly ? '局域网分享' : '公开分享'}
+        </button>
+        {!localOnly && target.recordId ? (
           <button
             type="button"
             role="tab"
-            aria-selected={tab === 'public'}
-            className={tab === 'public' ? 'is-on' : ''}
-            data-testid="fsdb-share-public-tab"
-            onClick={() => setTab('public')}
+            aria-selected={tab === 'collaboration'}
+            className={tab === 'collaboration' ? 'is-on' : ''}
+            data-testid="fsdb-share-collaboration-tab"
+            onClick={() => setTab('collaboration')}
           >
-            {localOnly ? '局域网分享' : '公开分享'}
+            邀请协作
           </button>
-          {!localOnly && ((target.kind === 'record' && target.recordId) || (target.kind === 'view' && target.viewId)) ? (
-            <button
-              type="button"
-              role="tab"
-              aria-selected={tab === 'collaboration'}
-              className={tab === 'collaboration' ? 'is-on' : ''}
-              data-testid="fsdb-share-collaboration-tab"
-              onClick={() => setTab('collaboration')}
-            >
-              邀请协作
-            </button>
-          ) : null}
-        </div>
+        ) : null}
+      </div>
+      {tab === 'collaboration' && target.recordId ? (
+        <WorkspaceAccess collection={target.collection} recordId={target.recordId} />
       ) : null}
-      {tab === 'collaboration' && ((target.kind === 'record' && target.recordId) || (target.kind === 'view' && target.viewId)) ? (
-        <WorkspaceAccess collection={target.collection} recordId={target.recordId} viewId={target.kind === 'view' ? target.viewId : ''} />
-      ) : null}
-      {!hidePublicTab && tab === 'public' ? <><section className="fsdb-share-link-section">
+      {tab === 'public' ? <><section className="fsdb-share-link-section">
         {!share ? (
           <div className="fsdb-share-empty">
             <span>
@@ -1220,7 +1183,7 @@ export function SharePanel({
         </>
       ) : null}
       </> : null}
-      {target.kind === 'record' && matchedRules.length > 0 ? (
+      {matchedRules.length > 0 ? (
         <section
           className="fsdb-share-settings"
           aria-label="同时生效的分享规则"
