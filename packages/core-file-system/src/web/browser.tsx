@@ -385,8 +385,12 @@ export function CollectionBrowser({
     const builtin = routeViewId ? parseBuiltinScopeViewId(routeViewId) : null
     if (builtin) return builtin.scope
     const stored = routeViewId ? loadViews(collectionPath).find((view) => view.id === routeViewId && !view.builtin) : null
-    const scope = stored?.filters?.$scope
-    return scope === 'workspace' ? 'workspace' : stored ? 'personal' : null
+    if (!stored || stored.ownerTable === 'all') return null
+    const scope = stored.filters?.$scope
+    if (scope === 'workspace' || scope === 'personal' || scope === 'shared') return scope
+    if (stored.ownerTable === 'workspace') return 'workspace'
+    if (stored.ownerTable?.startsWith('account:')) return 'personal'
+    return 'personal'
   })()
   const listedViews = (path: string, user: SavedView[]) => {
     const skipIds = loadOmittedViewIds(path)
@@ -3222,13 +3226,15 @@ export function CollectionBrowser({
       viewId: crumbFromData ? dataViewId : (routeViewId ?? activeViewId ?? undefined),
       viewScope: crumbFromData
         ? undefined
-        : activeView?.filters?.$scope === 'workspace' || activeView?.filters?.$scope === 'personal' || activeView?.filters?.$scope === 'shared'
-          ? activeView.filters.$scope
-          : activeView?.ownerTable === 'workspace' || activeView?.scope === 'workspace'
-            ? 'workspace'
-            : activeView?.scope === 'personal' || activeView?.protection === 'personal'
-              ? 'personal'
-              : undefined,
+        : activeView?.ownerTable === 'all'
+          ? undefined
+          : activeView?.filters?.$scope === 'workspace' || activeView?.filters?.$scope === 'personal' || activeView?.filters?.$scope === 'shared'
+            ? activeView.filters.$scope
+            : activeView?.ownerTable === 'workspace' || activeView?.scope === 'workspace'
+              ? 'workspace'
+              : activeView?.scope === 'personal' || activeView?.protection === 'personal'
+                ? 'personal'
+                : undefined,
       viewName: crumbFromData
         ? displayNameForView(
             dataViewId,

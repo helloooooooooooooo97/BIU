@@ -511,12 +511,20 @@ function parseViewRowId(id: string) {
 
 /** 统一归一化 create / write 传入的视图字段。 */
 function applyViewPatch(cur: StoredView, patch: Record<string, unknown>): StoredView {
+  const lockedOwnerTable = cur.ownerTable?.trim() || (typeof patch.ownerTable === 'string' && patch.ownerTable.trim() ? patch.ownerTable.trim() : undefined)
+  const isCrossTableAll = lockedOwnerTable === 'all'
+  const nextScope = isCrossTableAll ? 'personal' : normalizeViewScope(patch.scope)
+  const nextProtection = isCrossTableAll
+    ? 'personal'
+    : normalizeViewProtection(patch.protection)
   const next: StoredView = {
     ...cur,
     ...(typeof patch.title === 'string' ? { name: patch.title } : {}),
     ...(typeof patch.name === 'string' ? { name: patch.name } : {}),
     ...(typeof patch.mode === 'string' && isViewModeId(patch.mode) ? { mode: patch.mode } : {}),
-    ...(normalizeViewScope(patch.scope) ? { scope: normalizeViewScope(patch.scope) } : {}),
+    ...(nextScope ? { scope: nextScope } : {}),
+    ...(nextProtection ? { protection: nextProtection } : {}),
+    ...(lockedOwnerTable ? { ownerTable: lockedOwnerTable } : {}),
     ...(typeof patch.sortField === 'string' ? { sortField: patch.sortField } : {}),
     ...(patch.sortDir === 'asc' || patch.sortDir === 'desc' ? { sortDir: patch.sortDir } : {}),
     ...(typeof patch.query === 'string' ? { query: patch.query } : {}),
@@ -538,6 +546,10 @@ function applyViewPatch(cur: StoredView, patch: Record<string, unknown>): Stored
     createdAt: Number(cur.createdAt) || Date.now(),
   }
   normalizeOptionalViewFields(next, patch, false)
+  if (next.ownerTable === 'all') {
+    next.protection = 'personal'
+    next.scope = 'personal'
+  }
   return next
 }
 
@@ -602,6 +614,7 @@ function mergeIncomingStoredView(
   accountId: string,
 ): StoredView {
   const owner = prevView?.createdBy || (accountId ? accountId : undefined)
+  const lockedOwnerTable = prevView?.ownerTable?.trim() || incoming.ownerTable?.trim() || undefined
   const view: StoredView = {
     ...prevView,
     ...incoming,
@@ -609,20 +622,25 @@ function mergeIncomingStoredView(
     name: String(incoming.name || prevView?.name || id),
     ...(incomingAt ? {} : { updatedAt: Date.now() }),
     ...(owner ? { createdBy: owner } : indexScoped ? { createdBy: accountId } : {}),
+    ...(lockedOwnerTable ? { ownerTable: lockedOwnerTable } : {}),
   }
   normalizeOptionalViewFields(view, incoming as Record<string, unknown>, true)
+  if (view.ownerTable === 'all') {
+    view.protection = 'personal'
+    view.scope = 'personal'
+  }
   return view
 }
 
 /**
  * 三态可见性判定：
  * - 索引表（/tags 等）视图按创建者严格隔离；
- * - 显式 scope='personal' 的私人视图仅创建者可见；
+ * - 顶层跨表汇总视图（ownerTable='all'）与显式 scope='personal' 的私人视图仅创建者可见；
  * - scope='workspace' / 'shared'（含历史缺省）对空间成员可见。
  */
 function isViewVisibleTo(view: StoredView, path: string, accountId: string): boolean {
   if (isIndexCollection(path)) return view.createdBy === accountId
-  if (view.scope === 'personal' && view.createdBy && accountId) return view.createdBy === accountId
+  if ((view.ownerTable === 'all' || view.scope === 'personal') && view.createdBy && accountId) return view.createdBy === accountId
   return true
 }
 
@@ -715,6 +733,12 @@ function asRecord(
   const filters = view.filters && typeof view.filters === 'object' ? view.filters : {}
   const sorts = parseSortsInput(view.sorts, view.sortField, view.sortDir === 'desc' ? 'desc' : 'asc')
   const filterTree = view.filterTree
+  const isCrossTableAll = view.ownerTable === 'all'
+  const resolvedScope = isCrossTableAll ? 'personal' : (normalizeViewScope(view.scope) ?? 'workspace')
+  const resolvedProtection = isCrossTableAll ? 'personal' : (normalizeViewProtection(view.protection, resolvedScope) ?? 'locked')
+  const resolvedOwnerTable = isCrossTableAll
+    ? 'all'
+    : (view.ownerTable ?? ((resolvedScope === 'personal' && view.createdBy) ? `account:${view.createdBy}` : 'workspace'))
   return {
     id: rowId(path, view.id),
     title: view.name,
@@ -724,9 +748,9 @@ function asRecord(
     viewId: view.id,
     ...(viewRole ? { viewRole } : {}),
     mode: view.mode ?? 'table',
-    scope: normalizeViewScope(view.scope) ?? 'workspace',
-    protection: normalizeViewProtection(view.protection, normalizeViewScope(view.scope) ?? 'workspace') ?? 'locked',
-    ownerTable: view.ownerTable ?? ((normalizeViewScope(view.scope) === 'personal' && view.createdBy) ? `account:${view.createdBy}` : 'workspace'),
+    scope: resolvedScope,
+    protection: resolvedProtection,
+    ownerTable: resolvedOwnerTable,
     sortField: sorts[0]?.field || view.sortField || 'title',
     sortDir: sorts[0]?.dir ?? (view.sortDir === 'desc' ? 'desc' : 'asc'),
     query: view.query ?? '',

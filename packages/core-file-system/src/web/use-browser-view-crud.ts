@@ -258,7 +258,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     }
   }
 
-  function addEmptyView(path = collectionPath, scope?: DataScope) {
+  function addEmptyView(path?: string, scope?: DataScope) {
     if (externalViews) {
       const current = viewsRef.current
       const view = makeEmptyView(current, [...schemaDefaultKeys])
@@ -270,7 +270,9 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       return
     }
     const target = path || collectionPath
-    const effectiveScope = scope ?? (target === collectionPath ? routeScope ?? undefined : undefined)
+    const explicitTopLevel = path !== undefined && scope === undefined
+    const effectiveScope: DataScope | undefined =
+      scope ?? (explicitTopLevel ? undefined : (target === collectionPath ? routeScope ?? undefined : undefined))
     const stored = loadViews(target)
     const allListed = listedViews(target, stored)
     const listed = target === collectionPath
@@ -278,13 +280,21 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       : effectiveScope
         ? viewsForScope(allListed, effectiveScope)
         : allListed
+    const bindingPatch: Partial<SavedView> =
+      effectiveScope === 'workspace'
+        ? { scope: 'workspace', protection: 'locked', ownerTable: 'workspace' }
+        : effectiveScope === 'personal'
+          ? { scope: 'personal', protection: 'personal' }
+          : effectiveScope === 'shared'
+            ? { scope: 'personal', protection: 'personal' }
+            : { scope: 'personal', protection: 'personal', ownerTable: 'all' }
     const view: SavedView = {
       ...makeEmptyView(
         listed,
         target === collectionPath ? [...schemaDefaultKeys] : [],
         effectiveScope ? { $scope: effectiveScope } : {},
       ),
-      ...(normalizeViewScope(effectiveScope) ? { scope: normalizeViewScope(effectiveScope) } : {}),
+      ...bindingPatch,
     }
     const nextStored = mergeSavedViewLists(stored, [view])
     rememberViews(target, nextStored)

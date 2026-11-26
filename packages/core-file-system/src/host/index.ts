@@ -1056,17 +1056,12 @@ export class DatabaseService extends Service implements Database {
     const personal: DbRecord[] = []
     const workspace: DbRecord[] = []
     const shared: DbRecord[] = []
+    const isExternal = this.access.isCurrentActorExternal()
     for (const row of rows) {
-      if (isBuiltinPluginRow(collection, row as { builtin?: unknown })) {
-        shared.push(row)
-        continue
-      }
-      const id = String(row.id ?? '')
-      const stored = this.access.ownershipOf(collection, id)
-      const label = this.access.shareScopeLabel(collection, id, row, stored)
-      if (label === '共享') shared.push(row)
-      else if (label === '空间') workspace.push(row)
-      else personal.push(row)
+      const bucket = this.access.scopeBucketFor(collection, row, isExternal)
+      if (bucket.workspace) workspace.push(row)
+      if (bucket.personal) personal.push(row)
+      if (bucket.shared) shared.push(row)
     }
     return { rows, personal, workspace, shared }
   }
@@ -2647,8 +2642,11 @@ export function apply(ctx: Context) {
       return { allowed: isWsOwner, effectiveRole }
     }
 
-    const protection =
-      view.protection === 'public' || view.protection === 'locked' || view.protection === 'personal'
+    // 顶层跨表汇总视图（ownerTable === 'all'）强制锁定为个人视图，仅创建者可见，不可公开或共享
+    const isCrossTableAll = view.ownerTable === 'all'
+    const protection = isCrossTableAll
+      ? 'personal'
+      : view.protection === 'public' || view.protection === 'locked' || view.protection === 'personal'
         ? view.protection
         : view.scope === 'personal'
           ? 'personal'

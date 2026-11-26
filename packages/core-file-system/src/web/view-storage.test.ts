@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { builtinAllView, builtinAllViewId, builtinCatalogViewId } from '../catalog-views.ts'
+import { builtinAllView, builtinAllViewId, builtinCatalogViewId, catalogLockFilters, viewsForScope } from '../catalog-views.ts'
 import { VIEWS_COLLECTION_PATH } from './database-path.ts'
 import {
   defaultViewId,
@@ -743,4 +743,66 @@ test('savedViewFromRecord extracts createdBy from overlaid PersonValue objects a
     createdBy: 'acc_97',
   })
   assert.equal(fromString?.createdBy, 'acc_97')
+})
+
+test('catalogLockFilters and viewsForScope enforce strict K+1 view-to-table binding', () => {
+  const wsView = {
+    id: 'v-ws',
+    name: '空间看板',
+    mode: 'table' as const,
+    sortField: 'title',
+    sortDir: 'asc' as const,
+    filters: { status: 'open' },
+    columns: [],
+    ownerTable: 'workspace',
+    scope: 'workspace' as const,
+    protection: 'locked' as const,
+  }
+  const personalView = {
+    id: 'v-personal',
+    name: '我的草稿',
+    mode: 'table' as const,
+    sortField: 'title',
+    sortDir: 'asc' as const,
+    filters: { status: 'draft' },
+    columns: [],
+    ownerTable: 'account:u1',
+    scope: 'personal' as const,
+    protection: 'personal' as const,
+  }
+  const topAllView = {
+    id: 'v-all',
+    name: '跨表汇总',
+    mode: 'table' as const,
+    sortField: 'title',
+    sortDir: 'asc' as const,
+    filters: { status: 'open', $scope: 'workspace' },
+    columns: [],
+    ownerTable: 'all',
+    scope: 'personal' as const,
+    protection: 'personal' as const,
+  }
+  const listed = [wsView, personalView, topAllView]
+
+  // Workspace and personal views always lock $scope even when filters omit $scope
+  assert.deepEqual(catalogLockFilters('v-ws', listed), { status: 'open', $scope: 'workspace' })
+  assert.deepEqual(catalogLockFilters('v-personal', listed), { status: 'draft', $scope: 'personal' })
+  // Top-level cross-table view never locks $scope
+  assert.deepEqual(catalogLockFilters('v-all', listed), { status: 'open' })
+
+  // viewsForScope excludes top-level ownerTable='all' views from single-domain lists
+  assert.deepEqual(viewsForScope(listed, 'workspace').map((v) => v.id), ['v-ws'])
+  assert.deepEqual(viewsForScope(listed, 'personal').map((v) => v.id), ['v-personal'])
+
+  // savedViewFromRecord preserves ownerTable='all' and forces personal protection
+  const hydrated = savedViewFromRecord({
+    viewId: 'v-all',
+    title: '跨表汇总',
+    ownerTable: 'all',
+    scope: 'workspace',
+    protection: 'public',
+  })
+  assert.equal(hydrated?.ownerTable, 'all')
+  assert.equal(hydrated?.protection, 'personal')
+  assert.equal(hydrated?.scope, 'personal')
 })

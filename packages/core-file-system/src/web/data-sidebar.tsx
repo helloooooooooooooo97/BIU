@@ -989,17 +989,20 @@ export const DataSidebar = memo(function DataSidebar({
             {isCloudSpace && tableModeFor(table.path) === 'k-plus-1' ? (
               (() => {
                 const customViews = listed.filter((v) => !v.builtin)
+                const topAllViews = customViews.filter((v) => v.ownerTable === 'all')
                 const wsViews = customViews.filter(
                   (v) =>
-                    v.filters?.$scope === 'workspace' ||
-                    (v.filters?.$scope !== 'personal' && v.filters?.$scope !== 'shared' && (v.ownerTable === 'workspace' || v.scope === 'workspace' || v.protection === 'public' || v.protection === 'locked')),
+                    v.ownerTable !== 'all' &&
+                    (v.filters?.$scope === 'workspace' ||
+                      (v.filters?.$scope !== 'personal' && v.filters?.$scope !== 'shared' && (v.ownerTable === 'workspace' || v.scope === 'workspace' || v.protection === 'public' || v.protection === 'locked'))),
                 )
                 const personalViews = customViews.filter(
                   (v) =>
-                    v.filters?.$scope === 'personal' ||
-                    (!wsViews.includes(v) && v.filters?.$scope !== 'shared'),
+                    v.ownerTable !== 'all' &&
+                    (v.filters?.$scope === 'personal' ||
+                      (!wsViews.includes(v) && v.filters?.$scope !== 'shared')),
                 )
-                const sharedViews = customViews.filter((v) => v.filters?.$scope === 'shared')
+                const sharedViews = customViews.filter((v) => v.ownerTable !== 'all' && v.filters?.$scope === 'shared')
                 const allId = builtinAllViewId(table.path)
                 const domains: Array<{
                   scope: DataScope
@@ -1014,7 +1017,45 @@ export const DataSidebar = memo(function DataSidebar({
                       { scope: 'personal', label: '个人', icon: UserIcon, views: personalViews, canAdd: true },
                       { scope: 'shared', label: '共享', icon: ShareIcon, views: sharedViews, canAdd: false },
                     ]
-                return domains.map((domain) => {
+                return (
+                  <>
+                    {topAllViews.map((view) => {
+                      const starred = isViewStarred(starredViews, table.path, view.id)
+                      const active = table.path === litPath && view.id === litViewId
+                      return (
+                        <div key={view.id} className="min-w-0" data-testid={`sidebar-top-all-view-${view.id}`}>
+                          <SidebarRow
+                            active={active}
+                            pinned={starred}
+                            onClick={onSidebarRowClick}
+                            attrs={pickDomAttrs('view', viewPickId(table.path, view.id), view.name, { path: table.path })}
+                            main={
+                              <SidebarRowMain>
+                                <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+                                  <ViewModeGlyph mode={view.mode} />
+                                </span>
+                                <button
+                                  type="button"
+                                  className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
+                                  onClick={() => openView(table.path, view.id)}
+                                >
+                                  {view.name}
+                                </button>
+                              </SidebarRowMain>
+                            }
+                            trail={renderViewCreatorAvatar(view)}
+                            onDelete={viewRowDelete(table.path, view, listed)}
+                            deleteLabel={`删除 ${view.name}`}
+                            deleteIcon={<TrashGlyph className="size-4 shrink-0" />}
+                            onStar={() => toggleStar(table.path, view.id)}
+                            starOn={starred}
+                            starLabel={starred ? `取消收藏 ${view.name}` : `收藏 ${view.name}`}
+                            starIcon={<StarIcon className="size-4 shrink-0" />}
+                          />
+                        </div>
+                      )
+                    })}
+                    {domains.map((domain) => {
                   const scopeViewId = builtinScopeViewId(domain.scope, allId)
                   const domainActive = table.path === litPath && litViewId === scopeViewId
                   const Icon = domain.icon
@@ -1098,7 +1139,9 @@ export const DataSidebar = memo(function DataSidebar({
                       ) : null}
                     </div>
                   )
-                })
+                })}
+                  </>
+                )
               })()
             ) : (
               listed.map((view) => {
