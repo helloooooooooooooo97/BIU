@@ -615,7 +615,7 @@ function WorkspaceAccess({
               style={{ fontSize: 11.5, padding: '2px 8px' }}
               onClick={() => void transferOwnerTable(shownScope === 'workspace' ? 'personal' : 'workspace')}
             >
-              {shownScope === 'workspace' ? '收归个人表' : '转入空间表'}
+              {shownScope === 'workspace' ? '收归个人数据' : '转入空间数据'}
             </button>
           ) : null}
         </div>

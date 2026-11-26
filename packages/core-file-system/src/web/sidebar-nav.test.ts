@@ -166,13 +166,26 @@ test('unlisted builtin breadcrumbs resolve names without changing saved view nam
     ...input,
     viewId: 'default:account:alice:/pages',
     viewScope: 'personal',
-    views: [{ id: 'default:account:alice:/pages', name: '私人页面' }],
+    viewerAccountId: 'alice',
+    views: [{ id: 'default:account:alice:/pages', name: '个人页面' }],
   })
   assert.equal(personalCrumbs[1]!.kind, 'scope')
-  assert.equal(personalCrumbs[1]!.label, '个人表')
-  assert.equal(personalCrumbs[2]!.label, '私人页面')
+  assert.equal(personalCrumbs[1]!.label, '个人数据')
+  assert.deepEqual(
+    personalCrumbs[1]!.choices.map((c) => c.label),
+    ['空间数据', '共享数据', '个人数据'],
+  )
+  assert.equal(personalCrumbs[2]!.label, '个人页面')
+  const sharedCrumbs = buildCrumbs({
+    ...input,
+    viewId: 'default:shared:/pages',
+    viewScope: 'shared',
+    viewerAccountId: 'alice',
+    views: [{ id: 'default:shared:/pages', name: '共享页面' }],
+  })
+  assert.equal(sharedCrumbs.map((c) => c.label).join(' / '), '页面 / 共享数据 / 共享页面')
   const wsCrumbs = buildCrumbs({ ...input, viewId: 'team', viewScope: 'workspace', views: [{ id: 'team', name: '团队看板' }] })
-  assert.equal(wsCrumbs.map((c) => c.label).join(' / '), '页面 / 空间表 / 团队看板')
+  assert.equal(wsCrumbs.map((c) => c.label).join(' / '), '页面 / 空间数据 / 团队看板')
   assert.equal(buildCrumbs({ ...input, viewId: 'mine', views: [{ id: 'mine', name: '我的页面' }] })[1]!.label, '我的页面')
   assert.equal(buildCrumbs({ ...input, viewId: all.id, viewName: '自定义名称' })[1]!.label, '自定义名称')
 })

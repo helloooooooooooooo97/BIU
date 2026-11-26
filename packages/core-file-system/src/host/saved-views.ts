@@ -3,7 +3,7 @@ import { dirname } from 'node:path'
 import { openAndMigrateBiu } from '@biu/host-plugin-loader/data-dir'
 import type { CollectionInfo, CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { normalizeSchemaValue, recordBuiltinValues } from '@biu/type-file-system'
-import { builtinAllView, builtinAllViewId, defaultTableViewId, isBuiltinAllViewId, isNonPersonalView, scopedCollectionName } from '../catalog-views.ts'
+import { builtinAllView, builtinAllViewId, defaultTableViewId, isBuiltinAllViewId, isNonPersonalView, parseDefaultTableViewId, scopedCollectionName } from '../catalog-views.ts'
 import { normalizeColumnWidths, normalizeGroupConfig, normalizePageSize, normalizeViewProtection, normalizeViewScope, parseViewColumns, type SavedView } from '../shared/saved-view.ts'
 import { normalizeColumnSummaries } from '../shared/column-summary.ts'
 import { normalizeColumnViews } from '../shared/column-sandbox-model.ts'
@@ -30,7 +30,6 @@ export type StoredView = Partial<SavedView> & Pick<SavedView, 'id' | 'name'> & {
 
 export type PolicyViewGuard = {
   workspaceOwner?(workspaceId: string): string | null
-  sharedOwnersFor?(workspaceId: string, collection: string, accountId: string): string[]
   canSeeView?(workspaceId: string, collection: string, view: StoredView, accountId: string): boolean
   canModifyView?(workspaceId: string, collection: string, view: StoredView, accountId: string): boolean
   canRemoveView?(workspaceId: string, collection: string, view: StoredView, accountId: string): boolean
@@ -92,14 +91,18 @@ export class SavedViewsStore {
     return Boolean(view?.builtin) || isBuiltinAllViewId(viewId)
   }
 
-  /** 聚合视图（/data 全部视图、builtin-all:* 或 ownerTable='all'）为每个用户严格私有，互不互通。 */
+  /** 聚合视图（/data、builtin-all:*、ownerTable='all'）与共享数据视图（ownerTable='shared'）按用户严格隔离，互不互通。 */
   private isPerUserPrivateView(viewId: string, view?: { ownerTable?: string }, path = ''): boolean {
     if (path && normalizeCollectionPath(path) === DATA_COLLECTION_PATH) return true
-    return isBuiltinAllViewId(viewId) || view?.ownerTable === 'all'
+    if (isBuiltinAllViewId(viewId) || view?.ownerTable === 'all') return true
+    if (view?.ownerTable === 'shared' || parseDefaultTableViewId(viewId)?.ownerTable === 'shared') return true
+    return false
   }
 
   private storageViewId(viewId: string, createdBy?: string): string {
-    if (isBuiltinAllViewId(viewId) && createdBy) return `${viewId}::user:${createdBy}`
+    if (createdBy && (isBuiltinAllViewId(viewId) || parseDefaultTableViewId(viewId)?.ownerTable === 'shared')) {
+      return `${viewId}::user:${createdBy}`
+    }
     return viewId
   }
 
@@ -334,19 +337,19 @@ export class SavedViewsStore {
         accountId &&
           view.createdBy &&
           view.createdBy !== accountId &&
-          (indexScoped || this.isPerUserPrivateView(String(view.id), view)),
+          (indexScoped || this.isPerUserPrivateView(String(view.id), view, path)),
       )
     const keptForeign = prev.filter(isForeign)
     const foreignNonPerUserIds = new Set(
       keptForeign
-        .filter((view) => !this.isPerUserPrivateView(String(view.id), view))
+        .filter((view) => !this.isPerUserPrivateView(String(view.id), view, path))
         .map((view) => String(view.id)),
     )
     const incomingList = views
       .filter((view) => !foreignNonPerUserIds.has(String(view.id)))
       .map((view) => {
         const id = String(view.id)
-        const perUser = indexScoped || this.isPerUserPrivateView(id, view)
+        const perUser = indexScoped || this.isPerUserPrivateView(id, view, path)
         return this.withBuiltinOwner(
           workspaceId,
           {
@@ -382,23 +385,41 @@ export class SavedViewsStore {
     for (const item of removedRows) this.policyGuard?.onRemoved?.(workspaceId, path, item.id)
   }
 
-  /** 保底约束：每张具体多维表（空间表 / 个人表）至少保留 1 个非私有视图（public 或 locked）。 */
-  private assertTableKeepsPublicView(path: string, prev: StoredView[], next: StoredView[]) {
+  /** 保底约束：空间数据表至少保留 1 个非私有视图（public/locked）；个人数据表与共享数据表至少保留 1 个视图。 */
+  private assertTableKeepsPublicView(path: string, prev: StoredView[], next: StoredView[], accountId = '') {
     if (tableModeFor(path) !== 'k-plus-1') return
-    const concreteTables = new Set<string>()
+    const hadWorkspacePublic = prev.some((view) => view.ownerTable?.trim() === 'workspace' && isNonPersonalView(view))
+    if (hadWorkspacePublic) {
+      const remainingWs = next.filter((view) => view.ownerTable?.trim() === 'workspace' && isNonPersonalView(view))
+      if (remainingWs.length < 1) {
+        throw new Error('每张表至少保留一个公共视图')
+      }
+    }
+    const personalTables = new Set<string>()
     for (const view of prev) {
       const ot = view.ownerTable?.trim()
-      if (ot && ot !== 'all' && isNonPersonalView(view)) concreteTables.add(ot)
+      if (ot && ot.startsWith('account:')) personalTables.add(ot)
     }
-    for (const ot of concreteTables) {
-      const remaining = next.filter((view) => view.ownerTable?.trim() === ot && isNonPersonalView(view))
+    for (const ot of personalTables) {
+      const remaining = next.filter((view) => view.ownerTable?.trim() === ot)
       if (remaining.length < 1) {
-        throw new Error('每张表至少保留一个公共视图')
+        throw new Error('每张表至少保留一个视图')
+      }
+    }
+    const hadMyShared = prev.some(
+      (view) => view.ownerTable?.trim() === 'shared' && (!accountId || !view.createdBy || view.createdBy === accountId),
+    )
+    if (hadMyShared) {
+      const remainingShared = next.filter(
+        (view) => view.ownerTable?.trim() === 'shared' && (!accountId || !view.createdBy || view.createdBy === accountId),
+      )
+      if (remainingShared.length < 1) {
+        throw new Error('每张表至少保留一个视图')
       }
     }
   }
 
-  /** 为 K+1 具体多维表（空间表 + 当前用户个人表）确保至少存在 1 个普通公共视图（无 builtin 特殊概念）。 */
+  /** 为 K+1 三个域（空间数据 / 共享数据 / 个人数据）确保至少存在 1 个默认视图。 */
   private ensureDefaultTableViews(
     workspaceId: string,
     path: string,
@@ -411,16 +432,16 @@ export class SavedViewsStore {
     if (tableModeFor(path) !== 'k-plus-1') return stored
     const created: StoredView[] = []
     const now = Date.now()
-    const seedTable = (ownerTable: string, scopeLabel: 'workspace' | 'personal', creatorId: string) => {
-      const hasPublic = stored.some((v) => v.ownerTable === ownerTable && isNonPersonalView(v))
+    const seedWorkspace = (creatorId: string) => {
+      const hasPublic = stored.some((v) => v.ownerTable === 'workspace' && isNonPersonalView(v))
       if (hasPublic) return
-      const id = defaultTableViewId(ownerTable, path)
+      const id = defaultTableViewId('workspace', path)
       if (stored.some((v) => String(v.id) === id)) return
       const view: StoredView = {
         id,
-        name: scopedCollectionName({ path, label, view: table.view }, scopeLabel),
+        name: scopedCollectionName({ path, label, view: table.view }, 'workspace'),
         mode: 'table',
-        ownerTable,
+        ownerTable: 'workspace',
         scope: 'workspace',
         protection: 'public',
         ...(creatorId ? { createdBy: creatorId } : {}),
@@ -430,7 +451,71 @@ export class SavedViewsStore {
         query: '',
         groupBy: '',
         columns: [],
-        filters: {},
+        filters: { $scope: 'workspace' },
+        tree: false,
+        wrap: false,
+        truncate: true,
+        rowNumbers: false,
+        freezeTitle: false,
+        builtin: false,
+        rank: 0,
+        createdAt: now,
+        updatedAt: now,
+      }
+      stored.push(view)
+      created.push(view)
+    }
+    const seedPersonal = (ownerAccountId: string) => {
+      const ownerTable = `account:${ownerAccountId}`
+      if (stored.some((v) => v.ownerTable === ownerTable)) return
+      const id = defaultTableViewId(ownerTable, path)
+      if (stored.some((v) => String(v.id) === id)) return
+      const view: StoredView = {
+        id,
+        name: scopedCollectionName({ path, label, view: table.view }, 'personal'),
+        mode: 'table',
+        ownerTable,
+        scope: 'personal',
+        protection: 'personal',
+        createdBy: ownerAccountId,
+        sortField: 'updatedAt',
+        sortDir: 'desc',
+        sorts: [{ id: 's:updatedAt', field: 'updatedAt', dir: 'desc' }],
+        query: '',
+        groupBy: '',
+        columns: [],
+        filters: { $scope: 'personal' },
+        tree: false,
+        wrap: false,
+        truncate: true,
+        rowNumbers: false,
+        freezeTitle: false,
+        builtin: false,
+        rank: 0,
+        createdAt: now,
+        updatedAt: now,
+      }
+      stored.push(view)
+      created.push(view)
+    }
+    const seedShared = (viewerId: string) => {
+      if (stored.some((v) => v.ownerTable === 'shared' && v.createdBy === viewerId)) return
+      const id = defaultTableViewId('shared', path)
+      const view: StoredView = {
+        id,
+        name: scopedCollectionName({ path, label, view: table.view }, 'shared'),
+        mode: 'table',
+        ownerTable: 'shared',
+        scope: 'personal',
+        protection: 'personal',
+        createdBy: viewerId,
+        sortField: 'updatedAt',
+        sortDir: 'desc',
+        sorts: [{ id: 's:updatedAt', field: 'updatedAt', dir: 'desc' }],
+        query: '',
+        groupBy: '',
+        columns: [],
+        filters: { $scope: 'shared' },
         tree: false,
         wrap: false,
         truncate: true,
@@ -445,14 +530,10 @@ export class SavedViewsStore {
       created.push(view)
     }
     const wsOwner = this.policyGuard?.workspaceOwner?.(workspaceId)?.trim() || accountId
-    seedTable('workspace', 'workspace', wsOwner)
+    seedWorkspace(wsOwner)
     if (accountId) {
-      seedTable(`account:${accountId}`, 'personal', accountId)
-      for (const sharedOwnerId of this.policyGuard?.sharedOwnersFor?.(workspaceId, path, accountId) ?? []) {
-        if (sharedOwnerId && sharedOwnerId !== accountId) {
-          seedTable(`account:${sharedOwnerId}`, 'personal', sharedOwnerId)
-        }
-      }
+      seedPersonal(accountId)
+      seedShared(accountId)
     }
     if (created.length > 0) {
       this.byPath.set(key, stored)
@@ -533,7 +614,7 @@ export class SavedViewsStore {
     if (removedRows.length && this.visibleCount(path, next) < 1) {
       throw new Error('至少保留一个视图')
     }
-    this.assertTableKeepsPublicView(path, prev, next)
+    this.assertTableKeepsPublicView(path, prev, next, accountId)
     this.byPath.set(key, next)
     this.persistDelta(
       path,
@@ -657,10 +738,13 @@ export class SavedViewsStore {
       sorts: fields.sorts,
       sortField: typeof fields.sortField === 'string' && fields.sortField.trim() ? fields.sortField : 'id',
     })
-    // 非表主人在他人个人表下创建视图时，不允许设为锁定视图
-    if (accountId && view.ownerTable?.startsWith('account:') && view.ownerTable !== `account:${accountId}` && view.protection === 'locked') {
+    // 聚合视图（all）、共享数据视图（shared）与个人数据视图（account:*）均为个人私有视图，仅空间数据视图支持三态
+    if (view.ownerTable === 'all' || view.ownerTable === 'shared' || view.ownerTable?.startsWith('account:')) {
       view.protection = 'personal'
       view.scope = 'personal'
+      if (view.ownerTable === 'shared') {
+        view.filters = { ...(view.filters ?? {}), $scope: 'shared' }
+      }
     }
     this.byPath.set(key, [...views, view])
     this.persistDelta(tablePath, [view], [], workspaceId)
@@ -684,7 +768,7 @@ export class SavedViewsStore {
       this.assertCanRemoveView(workspaceId, path, targetId, accountId, hit)
       const remaining = views.filter((view) => view !== hit)
       if (this.visibleCount(path, remaining) < 1) throw new Error('至少保留一个视图')
-      this.assertTableKeepsPublicView(path, views, remaining)
+      this.assertTableKeepsPublicView(path, views, remaining, accountId)
       this.byPath.set(key, remaining)
       this.persistDelta(path, [], [this.storageViewId(targetId, hit.createdBy)], workspaceId)
       this.policyGuard?.onRemoved?.(workspaceId, path, targetId)
@@ -865,19 +949,18 @@ function mergeIncomingStoredView(
     ...(lockedOwnerTable ? { ownerTable: lockedOwnerTable } : {}),
   }
   normalizeOptionalViewFields(view, incoming as Record<string, unknown>, true)
-  // 聚合视图（ownerTable === 'all' 或 builtin-all:*）强制为个人视图；
-  // 具体多维表（workspace / account:<id>）允许 public / locked / personal 三态。
-  if (view.ownerTable === 'all' || isBuiltinAllViewId(id)) {
+  // 聚合视图（ownerTable === 'all' / builtin-all:*）、共享数据视图（ownerTable === 'shared'）与个人数据视图（account:<id>）
+  // 均为当前用户的个人视图；只有空间数据表（ownerTable === 'workspace'）拥有 public / locked / personal 三态。
+  if (
+    view.ownerTable === 'all' ||
+    view.ownerTable === 'shared' ||
+    view.ownerTable?.startsWith('account:') ||
+    isBuiltinAllViewId(id)
+  ) {
     view.protection = 'personal'
     view.scope = 'personal'
   } else {
     view.protection = normalizeViewProtection(view.protection, normalizeViewScope(view.scope), view.ownerTable)
-    // 非表主人在他人个人表下创建视图只能为个人视图，修改视图不可设为锁定视图
-    if (accountId && view.ownerTable?.startsWith('account:') && view.ownerTable !== `account:${accountId}`) {
-      if (!prevView || view.protection === 'locked') {
-        view.protection = 'personal'
-      }
-    }
     view.scope = view.protection === 'personal' ? 'personal' : 'workspace'
   }
   return view
@@ -885,21 +968,22 @@ function mergeIncomingStoredView(
 
 /**
  * 可见性判定（无 policyGuard 时的兜底）：
- * - 索引表（/tags 等）与聚合视图（ownerTable='all' / builtin-all:*）按创建者严格隔离；
+ * - 索引表（/tags 等）、聚合视图（ownerTable='all' / builtin-all:*）与共享数据视图（ownerTable='shared'）按创建者严格隔离；
  * - protection === 'personal'（含 scope === 'personal'）仅创建者可见；
- * - 具体多维表的 public / locked 视图在有 policyGuard 时由 resolveViewDecision 精确判定。
+ * - 个人数据表（account:<id>）仅归属人可见；
+ * - 空间数据表的 public / locked 视图在有 policyGuard 时由 resolveViewDecision 精确判定。
  */
 function isViewVisibleTo(view: StoredView, path: string, accountId: string): boolean {
   if (isIndexCollection(path)) return view.createdBy === accountId
-  if ((isBuiltinAllViewId(String(view.id)) || view.ownerTable === 'all') && accountId) {
+  if ((isBuiltinAllViewId(String(view.id)) || view.ownerTable === 'all' || view.ownerTable === 'shared') && accountId) {
     return view.createdBy === accountId
+  }
+  if (view.ownerTable?.startsWith('account:') && accountId) {
+    return view.ownerTable === `account:${accountId}`
   }
   const protection = normalizeViewProtection(view.protection, normalizeViewScope(view.scope), view.ownerTable)
   if (protection === 'personal' && accountId) {
     return view.createdBy === accountId
-  }
-  if (view.ownerTable?.startsWith('account:') && accountId) {
-    return view.ownerTable === `account:${accountId}` || view.createdBy === accountId
   }
   return true
 }

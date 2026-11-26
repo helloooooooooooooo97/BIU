@@ -33,8 +33,13 @@ const PROTECTION_OPTIONS: Array<{
   { value: 'personal', label: '个人视图', desc: '仅你自己可见', Icon: UserIcon },
 ]
 
+function isPersonalOnlyView(view: SavedView): boolean {
+  const ot = view.ownerTable?.trim()
+  return ot === 'all' || ot === 'shared' || Boolean(ot?.startsWith('account:')) || isBuiltinAllViewId(view.id)
+}
+
 function resolveViewProtection(view: SavedView): ViewProtection {
-  if (view.ownerTable === 'all' || isBuiltinAllViewId(view.id)) return 'personal'
+  if (isPersonalOnlyView(view)) return 'personal'
   if (view.protection === 'public' || view.protection === 'locked' || view.protection === 'personal') {
     return view.protection
   }
@@ -43,7 +48,11 @@ function resolveViewProtection(view: SavedView): ViewProtection {
 
 function isLastPublicViewForTable(view: SavedView, views: SavedView[]): boolean {
   const ot = view.ownerTable?.trim()
-  if (!ot || ot === 'all' || !isNonPersonalView(view)) return false
+  if (!ot || ot === 'all') return false
+  if (ot === 'shared' || ot.startsWith('account:')) {
+    return views.filter((item) => item.ownerTable?.trim() === ot).length <= 1
+  }
+  if (!isNonPersonalView(view)) return false
   return views.filter((item) => item.ownerTable?.trim() === ot && isNonPersonalView(item)).length <= 1
 }
 
@@ -79,17 +88,18 @@ function ViewRowShell({
   style?: CSSProperties
 }) {
   const isAggregation = view.ownerTable === 'all' || isBuiltinAllViewId(view.id)
+  const isPersonalOnly = isPersonalOnlyView(view)
   const isReadOnlyStub = Boolean(view.builtin) || isReadOnlyViewId(view.id)
   const protection = resolveViewProtection(view)
   const meta = PROTECTION_OPTIONS.find((item) => item.value === protection) ?? PROTECTION_OPTIONS[0]!
   const ProtectionIcon = meta.Icon
   const canSwitchProtection = Boolean(
     !isReadOnlyStub &&
-      !isAggregation &&
+      !isPersonalOnly &&
       onChangeProtection &&
       (canEditSavedView(view) || canDeleteSavedView(view)),
   )
-  const canLock = !(view.ownerTable?.startsWith('account:') && view.viewRole && view.viewRole !== 'owner')
+  const canLock = true
   const showProtectionBadge = !isReadOnlyStub || isAggregation
   return (
     <div ref={rowRef} style={style}>
@@ -114,7 +124,9 @@ function ViewRowShell({
               title={
                 isAggregation
                   ? '个人视图（数据聚合视角仅自己可见）'
-                  : `${meta.label}：${meta.desc}`
+                  : isPersonalOnly
+                    ? '个人视图（仅自己可见）'
+                    : `${meta.label}：${meta.desc}`
               }
               style={{
                 opacity: protection === 'public' ? 0.65 : 1,

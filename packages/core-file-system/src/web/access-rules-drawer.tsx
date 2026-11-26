@@ -711,9 +711,9 @@ export function AccessRulesButton({
   const hasActiveRules = visibleRules.some((r) => r.enabled)
   const drawerTitle =
     lockedScope === 'workspace'
-      ? '空间表分享规则'
+      ? '空间数据分享规则'
       : lockedScope === 'personal'
-        ? '个人表分享规则'
+        ? '个人数据分享规则'
         : '我的分享规则'
   const hasWorkspaceGrant = draft?.grants.some((g) => g.subjectType === 'workspace') ?? false
 
@@ -989,7 +989,7 @@ export function AccessRulesButton({
                                   )}
                                 </div>
                                 <div style={{ fontSize: 11.5, color: 'var(--biu-color-text-muted)', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                                  <span>{rowRulesCount > 0 ? `${rowRulesCount} 条行条件` : (isWorkspaceRule ? '全部空间表数据' : '全部我的个人表数据')}</span>
+                                  <span>{rowRulesCount > 0 ? `${rowRulesCount} 条行条件` : (isWorkspaceRule ? '全部空间数据' : '全部个人数据')}</span>
                                   <span>·</span>
                                   <span>{rule.columns?.length ? `仅 ${rule.columns.length} 个字段` : '全部字段'}</span>
                                   <span>·</span>
@@ -1048,10 +1048,10 @@ export function AccessRulesButton({
                             {!lockedScope ? (
                               <div style={{ display: 'flex', gap: 4 }}>
                                 <button type="button" onClick={() => setDraft({ ...draft, scope: 'workspace' })} style={chipStyle(draft.scope === 'workspace')}>
-                                  空间表
+                                  空间数据
                                 </button>
                                 <button type="button" onClick={() => setDraft({ ...draft, scope: 'personal' })} style={chipStyle(draft.scope === 'personal')}>
-                                  个人表
+                                  个人数据
                                 </button>
                               </div>
                             ) : null}

@@ -208,11 +208,14 @@ export function pickViewForRoute(listed: SavedView[], collectionPath: string, ro
   if (route) {
     const hit = listed.find((item) => item.id === route)
     if (hit) return hit
-    // 如果路由点名具体表默认视图（如 default:account:97:/agents），优先匹配该表的真实视图，否则临时 stub 防止误跳空间表
+    // 如果路由点名具体表默认视图（如 default:account:97:/agents 或 default:shared:/pages），优先匹配该域的真实视图，否则临时 stub 防止误跳空间数据
     const parsedDefault = parseDefaultTableViewId(route)
     if (parsedDefault) {
       const sameTable = listed.filter((item) => item.ownerTable === parsedDefault.ownerTable)
-      const preferred = sameTable.find((item) => isNonPersonalView(item)) ?? sameTable[0]
+      const preferred =
+        parsedDefault.ownerTable === 'workspace'
+          ? sameTable.find((item) => isNonPersonalView(item)) ?? sameTable[0]
+          : sameTable[0]
       if (preferred) return preferred
       return stubDefaultTableView(route)
     }

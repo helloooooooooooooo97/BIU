@@ -535,11 +535,11 @@ export class DatabaseAccessPolicy {
     const myTable = `account:${actor.accountId}`
     if (ownerTable === 'workspace') {
       if (isExternal) return { personal: false, workspace: false, shared: true }
-      return { personal: false, workspace: true, shared: isPublicShared }
+      return { personal: false, workspace: true, shared: false }
     }
     if (ownerTable && ownerTable.startsWith('account:')) {
       if (ownerTable === myTable) {
-        return { personal: true, workspace: false, shared: isPublicShared }
+        return { personal: true, workspace: false, shared: false }
       }
       return { personal: false, workspace: false, shared: true }
     }
@@ -742,7 +742,7 @@ export class DatabaseAccessPolicy {
       }
       return '私人'
     }
-    return SHARE_SCOPE_LABEL[scope]
+    return SHARE_SCOPE_LABEL[stored]
   }
 
   ownerTableLabel(spec: CollectionSpec, record: DbRecord): string | { kind: 'user'; accountId: string; name: string } {

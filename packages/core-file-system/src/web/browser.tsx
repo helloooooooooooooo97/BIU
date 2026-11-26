@@ -2457,53 +2457,26 @@ export function CollectionBrowser({
   const activeView =
     views.find((view) => view.id === activeViewId) ??
     (activeViewId ? stubDefaultTableView(activeViewId, { path: collectionPath, label: title }) ?? undefined : undefined)
-  const activeSharedOwnerAccountId = useMemo(() => {
-    const ot = activeView?.ownerTable?.trim()
-    if (ot && ot.startsWith('account:')) {
-      const ownerAcc = ot.slice('account:'.length).trim()
-      if ((viewerAccountId && ownerAcc && ownerAcc !== viewerAccountId) || activeView?.filters?.$ownerTable === ot) {
-        return ownerAcc
-      }
-    }
-    return null
-  }, [activeView?.filters?.$ownerTable, activeView?.ownerTable, viewerAccountId])
-  const ownerDisplayName = useMemo(() => {
-    if (!activeSharedOwnerAccountId) return ''
-    for (const row of items) {
-      const ownerVal = row.ownerTable as { kind?: unknown; accountId?: unknown; name?: unknown } | undefined
-      if (ownerVal?.kind === 'user' && ownerVal.accountId === activeSharedOwnerAccountId && typeof ownerVal.name === 'string' && ownerVal.name.trim()) {
-        return ownerVal.name.trim()
-      }
-      const creatorVal = row.createdBy as { kind?: unknown; accountId?: unknown; name?: unknown } | undefined
-      if (creatorVal?.kind === 'user' && creatorVal.accountId === activeSharedOwnerAccountId && typeof creatorVal.name === 'string' && creatorVal.name.trim()) {
-        return creatorVal.name.trim()
-      }
-    }
-    return ''
-  }, [activeSharedOwnerAccountId, items])
   const activeDomain: ViewDomain = isDataOverview
     ? 'all'
-    : activeSharedOwnerAccountId
-      ? 'shared'
-      : activeView
-        ? viewDomainOf(activeView)
-        : (routeScope ?? 'workspace')
+    : activeView
+      ? viewDomainOf(activeView)
+      : (routeScope ?? 'workspace')
   const activeOwnerTable = useMemo(() => {
     if (isDataOverview) return 'all'
-    if (activeSharedOwnerAccountId) return `account:${activeSharedOwnerAccountId}`
+    if (activeDomain === 'shared') return 'shared'
     if (activeDomain === 'personal') return viewerAccountId ? `account:${viewerAccountId}` : undefined
     return 'workspace'
-  }, [activeDomain, activeSharedOwnerAccountId, isDataOverview, viewerAccountId])
+  }, [activeDomain, isDataOverview, viewerAccountId])
   const effectiveRouteScope: DataScope | null = isDataOverview
     ? null
-    : activeSharedOwnerAccountId
-      ? 'shared'
-      : (routeScope ?? (activeDomain === 'all' ? 'workspace' : activeDomain))
+    : (routeScope ?? (activeDomain === 'all' ? 'workspace' : activeDomain))
   const domainViews = useMemo(() => {
     if (!isKPlus1Cloud) return views
-    if (activeSharedOwnerAccountId) {
-      const targetOwnerTable = `account:${activeSharedOwnerAccountId}`
-      return views.filter((view) => !isBuiltinAllViewId(view.id) && !view.builtin && view.ownerTable === targetOwnerTable)
+    if (activeDomain === 'shared') {
+      return views.filter(
+        (view) => !isBuiltinAllViewId(view.id) && !view.builtin && (view.ownerTable === 'shared' || viewDomainOf(view) === 'shared'),
+      )
     }
     if (activeDomain === 'personal') {
       return views.filter(
@@ -2516,7 +2489,7 @@ export function CollectionBrowser({
     return views.filter(
       (view) => !isBuiltinAllViewId(view.id) && !view.builtin && (view.ownerTable === 'workspace' || (!view.ownerTable && viewDomainOf(view) === 'workspace')),
     )
-  }, [activeDomain, activeSharedOwnerAccountId, isKPlus1Cloud, viewerAccountId, views])
+  }, [activeDomain, isKPlus1Cloud, viewerAccountId, views])
   const sandboxViews = useMemo(() => normalizeTableSandboxViews(activeView?.sandboxViews) ?? [], [activeView?.sandboxViews])
   const activeSandboxView = useMemo(() => sandboxViews.find((item) => item.id === mode), [mode, sandboxViews])
   const sortCustom = isCustomSorts(
@@ -3323,13 +3296,7 @@ export function CollectionBrowser({
         : activeDomain === 'all'
           ? undefined
           : activeDomain,
-      sharedOwner:
-        !crumbFromData && activeSharedOwnerAccountId
-          ? {
-              accountId: activeSharedOwnerAccountId,
-              name: ownerDisplayName || activeSharedOwnerAccountId.slice(0, 8),
-            }
-          : undefined,
+      viewerAccountId: !crumbFromData && viewerAccountId ? viewerAccountId : undefined,
       viewName: crumbFromData
         ? displayNameForView(
             dataViewId,
@@ -3351,7 +3318,7 @@ export function CollectionBrowser({
           }))
         : undefined,
     })
-  }, [activeView?.name, activeViewId, collectionPath, crumbFromData, originNav, originStamp, routeViewId, schema?.labelField, selected, selected ? items : null, tables, title, views])
+  }, [activeDomain, activeView?.name, activeViewId, collectionPath, crumbFromData, domainViews, originNav, originStamp, routeViewId, schema?.labelField, selected, selected ? items : null, tables, title, viewerAccountId, views])
   const currentTable = tables.find((item) => item.path === collectionPath)
   const recordKind = recordPickKind(currentTable?.view?.moduleId || currentTable?.id)
   const recordPathOf = (row: DbRecord) => recordSourcePath(collectionPath, row.id)
@@ -4013,7 +3980,7 @@ export function CollectionBrowser({
   )
 
   const isUnresolvedPersonalOwner = Boolean(activeView?.ownerTable?.startsWith('account:') && !viewerAccountId)
-  const hideAccessRules = Boolean(activeSharedOwnerAccountId) || isUnresolvedPersonalOwner || isDataOverview
+  const hideAccessRules = activeDomain === 'shared' || isUnresolvedPersonalOwner || isDataOverview
   const listHeaderLock = [
     Number(nested),
     Number(viewsOpen),

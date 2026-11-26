@@ -2640,8 +2640,9 @@ export function apply(ctx: Context) {
     const isCrossTableAll = view.ownerTable === 'all' || isBuiltinAllViewId(String(view.id))
     const isCreator = Boolean(view.createdBy && view.createdBy === accountId)
 
-    // 1. 聚合视图（builtin-all:* 与 ownerTable === 'all'）：每个用户严格私有，互不互通，仅本人可见/可改/可删
-    if (isCrossTableAll) {
+    // 1. 聚合视图（builtin-all:* 与 ownerTable === 'all'）与共享数据视图（ownerTable === 'shared'）：
+    //    每个用户严格私有，互不互通，仅本人可见/可改/可删
+    if (isCrossTableAll || view.ownerTable === 'shared') {
       return isCreator
         ? { allowed: true, effectiveRole: 'owner' }
         : { allowed: false, effectiveRole: 'viewer' }
@@ -2671,34 +2672,13 @@ export function apply(ctx: Context) {
         : { allowed: false, effectiveRole: 'viewer' }
     }
 
-    // 4. 个人表（ownerTable === 'account:<X>'）的 public / locked 视图：
-    //    - 表主人 X 拥有全部权限（owner）；
-    //    - 仅向「在当前集合被 X 共享了至少 1 条记录的协作者」可见（未获共享的成员与管理员均不可见）；
-    //    - locked 视图仅 X 可改/删，协作者只读（viewer）；public 视图协作者可编辑，仅 X/创建者可删。
+    // 4. 个人数据表（ownerTable === 'account:<X>'）：仅归属人 X 本人可见/可改/可删；
+    //    他人被 X 共享的记录统一在对方的「共享数据（ownerTable === 'shared'）」中消费。
     if (view.ownerTable?.startsWith('account:')) {
       const tableOwnerId = view.ownerTable.slice('account:'.length).trim()
-      if (tableOwnerId === accountId) {
-        return { allowed: true, effectiveRole: 'owner' }
-      }
-      const hasShared = Boolean(
-        tableOwnerId && account.store.hasSharedRecordsFromOwner?.(workspaceId, collection, tableOwnerId, accountId),
-      )
-      if (!hasShared) {
-        return { allowed: false, effectiveRole: 'viewer' }
-      }
-      if (protection === 'locked') {
-        return action === 'resource:read'
-          ? { allowed: true, effectiveRole: 'viewer' }
-          : { allowed: false, effectiveRole: 'viewer' }
-      }
-      const effectiveRole: 'owner' | 'editor' | 'viewer' = isCreator
-        ? 'owner'
-        : member.role === 'viewer'
-          ? 'viewer'
-          : 'editor'
-      if (action === 'resource:read') return { allowed: true, effectiveRole }
-      if (action === 'resource:update') return { allowed: effectiveRole !== 'viewer', effectiveRole }
-      return { allowed: isCreator, effectiveRole }
+      return tableOwnerId === accountId
+        ? { allowed: true, effectiveRole: 'owner' }
+        : { allowed: false, effectiveRole: 'viewer' }
     }
 
     // 5. 空间表（ownerTable === 'workspace'）的 public / locked 视图：仅空间内部成员可见
@@ -2739,8 +2719,6 @@ export function apply(ctx: Context) {
     // 方案 B（视图归展示，规则归安全）：视图权限与页面记录完全一致，统一走 /views 下的 resource_policies + record_grants
     // 内置视图全空间共享一份，创建人固定为空间创建人（workspace owner），且仅空间创建人可修改或删除
     workspaceOwner: (workspaceId) => account?.store?.workspaceOwnerId?.(workspaceId) ?? null,
-    sharedOwnersFor: (workspaceId, collection, accountId) =>
-      account?.store?.sharedOwnerAccountIds?.(workspaceId, collection, accountId) ?? [],
     canSeeView: (workspaceId, collection, view, accountId) =>
       authorizeViewAction(workspaceId, collection, view, accountId, 'resource:read'),
     canModifyView: (workspaceId, collection, view, accountId) =>

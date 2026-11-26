@@ -384,12 +384,13 @@ test('three-state view scope (personal / workspace / shared) enforces visibility
       view.createdBy === acc || (view.scope !== 'personal' && acc === 'admin-1'),
   })
 
-  // Alice creates a personal view, a workspace view, and a shared view
+  // Alice creates two personal views (at least 1 personal view must remain), a workspace view, and a legacy shared view
   store.applyPatch(
     '/pages',
     {
       upsert: [
         { id: 'v-personal', name: 'Alice Private', scope: 'personal', filters: { status: 'draft' } },
+        { id: 'v-personal-keep', name: 'Alice Keep', scope: 'personal', filters: { status: 'keep' } },
         { id: 'v-workspace', name: 'Team Board', scope: 'workspace', filters: { status: 'open' } },
         { id: 'v-shared', name: 'Client Portal', scope: 'shared' as never, filters: { status: 'published' } },
       ],
@@ -400,7 +401,7 @@ test('three-state view scope (personal / workspace / shared) enforces visibility
   // Visibility: two-state pure-display views (legacy 'shared' normalizes to 'personal')
   assert.deepEqual(
     store.viewsFor('/pages', 'alice').map((v) => v.id),
-    ['v-personal', 'v-workspace', 'v-shared'],
+    ['v-personal', 'v-personal-keep', 'v-workspace', 'v-shared'],
   )
   assert.deepEqual(
     store.viewsFor('/pages', 'bob').map((v) => v.id),
@@ -630,27 +631,33 @@ test('/data views are strictly personal and account-bound, while legacy K+1 aggr
   assert.equal(remainingLegacy.cnt, 0)
 })
 
-test('personal-table views support 3 protection states for owner, force personal for non-owners, and enforce at-least-1 public view per concrete table', () => {
+test('cloud 3-domain views: workspace supports 3 states, personal and shared are strictly per-user personal views', () => {
   const file = join(mkdtempSync(join(tmpdir(), 'fsdb-views-kplus1-')), 'file-system.sqlite')
   const store = new SavedViewsStore().open(file)
   store.setWorkspaceResolver(() => 'ws-1')
   store.setPolicyGuard({})
 
-  // 1. 首次列出 /views 自动为空间表与当前用户个人表各生成 1 个普通公共视图（无 builtin 特殊态）
+  // 1. 首次列出 /views 自动为空间数据（public）、个人数据（personal）、共享数据（personal）各生成默认视图
   const tables = [
     { path: '/pages', id: 'pages', kind: 'collection' as const, label: '页面', view: { moduleId: 'pages', route: '/pages', title: '页面' } },
   ]
   const aliceRows = store.rows(tables, 'alice')
   const wsDefault = aliceRows.find((r) => r.ownerTable === 'workspace')
   const myDefault = aliceRows.find((r) => r.ownerTable === 'account:alice')
-  assert.ok(wsDefault, '空间表应自动生成默认公共视图')
+  const sharedDefault = aliceRows.find((r) => r.ownerTable === 'shared')
+  assert.ok(wsDefault, '空间数据应自动生成默认公共视图')
   assert.equal(wsDefault?.protection, 'public')
-  assert.ok(myDefault, '个人表应自动生成默认公共视图')
-  assert.equal(myDefault?.protection, 'public')
+  assert.ok(myDefault, '个人数据应自动生成默认个人视图')
+  assert.equal(myDefault?.protection, 'personal')
+  assert.ok(sharedDefault, '共享数据应自动生成默认个人视图')
+  assert.equal(sharedDefault?.protection, 'personal')
+  assert.equal(sharedDefault?.viewId, 'default:shared:/pages')
 
-  // 2. 保底约束：不能删除具体表的最后一个公共/锁定视图，也不能将其切为个人视图
+  // 2. 保底约束：
+  //    - 空间数据不能删除最后一个公共/锁定视图，也不能将其切为个人视图
+  //    - 个人数据与共享数据不能删除最后一个视图
   assert.throws(
-    () => store.applyPatch('/pages', { remove: [String(myDefault!.viewId)] }, 'alice'),
+    () => store.applyPatch('/pages', { remove: [String(wsDefault!.viewId)] }, 'alice'),
     /至少保留一个公共视图/,
   )
   assert.throws(
@@ -660,9 +667,9 @@ test('personal-table views support 3 protection states for owner, force personal
         {
           upsert: [
             {
-              id: String(myDefault!.viewId),
-              name: String(myDefault!.title),
-              ownerTable: 'account:alice',
+              id: String(wsDefault!.viewId),
+              name: String(wsDefault!.title),
+              ownerTable: 'workspace',
               protection: 'personal',
               scope: 'personal',
             },
@@ -672,32 +679,42 @@ test('personal-table views support 3 protection states for owner, force personal
       ),
     /至少保留一个公共视图/,
   )
+  assert.throws(
+    () => store.applyPatch('/pages', { remove: [String(myDefault!.viewId)] }, 'alice'),
+    /每张表至少保留一个视图/,
+  )
+  assert.throws(
+    () => store.applyPatch('/pages', { remove: [String(sharedDefault!.viewId)] }, 'alice'),
+    /每张表至少保留一个视图/,
+  )
 
-  // 3. 个人表支持三态（public / locked / personal），非表主人在他人个人表下新建强制 personal
+  // 3. 空间数据支持锁定视图，个人数据与共享数据强制 personal 且严格按人隔离
   store.applyPatch(
     '/pages',
     {
       upsert: [
         {
-          id: 'v-my-personal',
-          name: '我的个人视图',
-          scope: 'personal',
-          protection: 'personal',
-          filters: { $scope: 'personal' },
-        },
-        {
-          id: 'v-my-locked',
-          name: '我的锁定视图',
-          ownerTable: 'account:alice',
+          id: 'v-ws-locked',
+          name: '空间锁定视图',
+          ownerTable: 'workspace',
           scope: 'workspace',
           protection: 'locked',
         },
         {
-          id: 'v-in-bob-table',
-          name: '在Bob表里建的私有视图',
-          ownerTable: 'account:bob',
+          id: 'v-my-personal',
+          name: '我的个人视图',
+          ownerTable: 'account:alice',
           scope: 'workspace',
           protection: 'public',
+          filters: { $scope: 'personal' },
+        },
+        {
+          id: 'v-my-shared',
+          name: '我的共享视图',
+          ownerTable: 'shared',
+          scope: 'workspace',
+          protection: 'locked',
+          filters: { $scope: 'shared' },
         },
       ],
     },
@@ -705,21 +722,39 @@ test('personal-table views support 3 protection states for owner, force personal
   )
 
   const aliceViews = store.viewsFor('/pages', 'alice')
+  assert.equal(aliceViews.find((v) => v.id === 'v-ws-locked')?.protection, 'locked')
   const mine = aliceViews.find((v) => v.id === 'v-my-personal')
   assert.equal(mine?.ownerTable, 'account:alice')
   assert.equal(mine?.scope, 'personal')
   assert.equal(mine?.protection, 'personal')
+  const myShared = aliceViews.find((v) => v.id === 'v-my-shared')
+  assert.equal(myShared?.ownerTable, 'shared')
+  assert.equal(myShared?.scope, 'personal')
+  assert.equal(myShared?.protection, 'personal')
 
-  const locked = aliceViews.find((v) => v.id === 'v-my-locked')
-  assert.equal(locked?.ownerTable, 'account:alice')
-  assert.equal(locked?.protection, 'locked')
-
-  // 非表主人 alice 在 bob 个人表下新建视图，强制为 personal，且 bob 看不到 alice 的私有视图
-  const inBob = aliceViews.find((v) => v.id === 'v-in-bob-table')
-  assert.equal(inBob?.ownerTable, 'account:bob')
-  assert.equal(inBob?.protection, 'personal')
-  assert.equal(inBob?.scope, 'personal')
-  assert.equal(store.viewsFor('/pages', 'bob').some((v) => v.id === 'v-in-bob-table'), false)
+  // 4. Bob 拥有独立的 default:shared:/pages 与 default:account:bob:/pages，看不到 Alice 的个人/共享视图，且重启持久化不串号
+  const bobRows = store.rows(tables, 'bob')
+  assert.ok(bobRows.some((r) => r.ownerTable === 'shared' && r.viewId === 'default:shared:/pages'))
+  assert.ok(bobRows.some((r) => r.ownerTable === 'account:bob'))
   assert.equal(store.viewsFor('/pages', 'bob').some((v) => v.id === 'v-my-personal'), false)
+  assert.equal(store.viewsFor('/pages', 'bob').some((v) => v.id === 'v-my-shared'), false)
   assert.equal(store.viewsFor('/pages', 'admin-1').some((v) => v.id === 'v-my-personal'), false)
+
+  // 修改 Alice 的默认共享视图名称，不应影响 Bob 的默认共享视图，且重启后仍各存各的
+  store.applyPatch(
+    '/pages',
+    { upsert: [{ id: 'default:shared:/pages', name: 'Alice共享自定义', ownerTable: 'shared', filters: { $scope: 'shared' } }] },
+    'alice',
+  )
+  const reopened = new SavedViewsStore().open(file)
+  reopened.setWorkspaceResolver(() => 'ws-1')
+  reopened.setPolicyGuard({})
+  assert.equal(
+    reopened.viewsFor('/pages', 'alice').find((v) => v.id === 'default:shared:/pages')?.name,
+    'Alice共享自定义',
+  )
+  assert.equal(
+    reopened.viewsFor('/pages', 'bob').find((v) => v.id === 'default:shared:/pages')?.name,
+    '共享页面',
+  )
 })

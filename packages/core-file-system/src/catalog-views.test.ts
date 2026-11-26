@@ -23,8 +23,11 @@ import {
   displayNameForView,
   builtinTagViewId,
   isBuiltinTagViewId,
+  isNonPersonalView,
   stampRecordId,
   stampRowOpenTarget,
+  stubDefaultTableView,
+  viewDomainOf,
 } from './catalog-views.ts'
 
 test('overlay keeps stored seed edits on /data and strips builtin-all on K+1 collections', () => {
@@ -196,4 +199,32 @@ test('page blocks collection only seeds 全部组件', () => {
     {},
   )
   assert.deepEqual(catalogLockFilters('mine', [{ id: 'mine', builtin: false, filters: { blockKind: 'html' } }]), { blockKind: 'html' })
+})
+
+test('shared and personal default table views resolve domain, locks, and personal protection', () => {
+  const sharedStub = stubDefaultTableView('default:shared:/pages', { path: '/pages', label: '页面' })
+  assert.ok(sharedStub)
+  assert.equal(sharedStub?.ownerTable, 'shared')
+  assert.equal(sharedStub?.protection, 'personal')
+  assert.equal(sharedStub?.name, '共享页面')
+  assert.equal(viewDomainOf(sharedStub!), 'shared')
+  assert.equal(isNonPersonalView(sharedStub!), false)
+  assert.deepEqual(catalogLockFilters('default:shared:/pages', [sharedStub!], 'alice'), { $scope: 'shared' })
+
+  const personalStub = stubDefaultTableView('default:account:alice:/pages', { path: '/pages', label: '页面' })
+  assert.ok(personalStub)
+  assert.equal(personalStub?.ownerTable, 'account:alice')
+  assert.equal(personalStub?.protection, 'personal')
+  assert.equal(personalStub?.name, '个人页面')
+  assert.equal(viewDomainOf(personalStub!), 'personal')
+  assert.equal(isNonPersonalView(personalStub!), false)
+  assert.deepEqual(catalogLockFilters('default:account:alice:/pages', [personalStub!], 'alice'), { $scope: 'personal' })
+
+  const wsStub = stubDefaultTableView('default:workspace:/pages', { path: '/pages', label: '页面' })
+  assert.ok(wsStub)
+  assert.equal(wsStub?.ownerTable, 'workspace')
+  assert.equal(wsStub?.protection, 'public')
+  assert.equal(viewDomainOf(wsStub!), 'workspace')
+  assert.equal(isNonPersonalView(wsStub!), true)
+  assert.deepEqual(catalogLockFilters('default:workspace:/pages', [wsStub!], 'alice'), { $scope: 'workspace' })
 })

@@ -280,24 +280,21 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     const stored = loadViews(target)
     const allListed = listedViews(target, stored)
     const listed = target === collectionPath ? paintListedViews(target) : allListed
-    const isForeignSharedOwner = Boolean(
-      !isDataAgg && effectiveScope === 'shared' && activeOwnerTable && activeOwnerTable.startsWith('account:'),
-    )
     const bindingPatch: Partial<SavedView> = isDataAgg
       ? { scope: 'personal', protection: 'personal', ownerTable: 'all' }
-      : isForeignSharedOwner
-        ? { scope: 'personal', protection: 'personal', ownerTable: activeOwnerTable }
+      : effectiveScope === 'shared'
+        ? { scope: 'personal', protection: 'personal', ownerTable: 'shared' }
         : effectiveScope === 'personal'
           ? {
-              scope: 'workspace',
-              protection: 'public',
+              scope: 'personal',
+              protection: 'personal',
               ...(activeOwnerTable?.startsWith('account:') ? { ownerTable: activeOwnerTable } : {}),
             }
           : { scope: 'workspace', protection: 'public', ownerTable: 'workspace' }
     const extraFilters: Record<string, string> = isDataAgg
       ? {}
-      : isForeignSharedOwner
-        ? { $scope: 'shared', $ownerTable: activeOwnerTable! }
+      : effectiveScope === 'shared'
+        ? { $scope: 'shared' }
         : effectiveScope === 'personal'
           ? { $scope: 'personal' }
           : { $scope: 'workspace' }
@@ -492,11 +489,14 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     const stored = loadViews(path)
     const currentVisible = path === collectionPath ? viewsRef.current : stored
     if (!canRemoveCollectionView(currentVisible)) return
-    // 保底约束：每张具体多维表（空间表 / 个人表）至少保留 1 个非私有视图（public 或 locked）
+    // 保底约束：空间数据至少保留 1 个非私有视图（public 或 locked）；个人数据 / 共享数据至少保留 1 个视图
     const ot = view.ownerTable?.trim()
-    if (ot && ot !== 'all' && isNonPersonalView(view)) {
-      const otherPublic = stored.filter((item) => item.id !== view.id && item.ownerTable?.trim() === ot && isNonPersonalView(item))
+    if (ot === 'workspace' && isNonPersonalView(view)) {
+      const otherPublic = stored.filter((item) => item.id !== view.id && item.ownerTable?.trim() === 'workspace' && isNonPersonalView(item))
       if (otherPublic.length < 1) return
+    } else if (ot && (ot === 'shared' || ot.startsWith('account:'))) {
+      const otherSameTable = stored.filter((item) => item.id !== view.id && item.ownerTable?.trim() === ot)
+      if (otherSameTable.length < 1) return
     }
     const removedId = view.id
     const remainingStored = stored.filter((item) => item.id !== removedId)
@@ -528,15 +528,16 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
   }
 
   function updateViewProtection(view: SavedView, protection: 'public' | 'locked' | 'personal') {
-    if (isReadOnlyViewId(view.id) || view.ownerTable === 'all') return
+    const viewOt = view.ownerTable?.trim()
+    if (isReadOnlyViewId(view.id) || viewOt === 'all' || viewOt === 'shared' || viewOt?.startsWith('account:')) return
     const nextScope = protection === 'personal' ? 'personal' : 'workspace'
     const current = viewsRef.current
     const target = current.find((item) => item.id === view.id)
     if (!target) return
-    // 保底约束：不可将具体多维表的最后一个公共/锁定视图切换为个人视图
+    // 保底约束：不可将空间数据的最后一个公共/锁定视图切换为个人视图
     const ot = target.ownerTable?.trim()
-    if (protection === 'personal' && ot && ot !== 'all' && isNonPersonalView(target)) {
-      const otherPublic = current.filter((item) => item.id !== target.id && item.ownerTable?.trim() === ot && isNonPersonalView(item))
+    if (protection === 'personal' && ot === 'workspace' && isNonPersonalView(target)) {
+      const otherPublic = current.filter((item) => item.id !== target.id && item.ownerTable?.trim() === 'workspace' && isNonPersonalView(item))
       if (otherPublic.length < 1) return
     }
     const updated: SavedView = { ...target, protection, scope: nextScope }

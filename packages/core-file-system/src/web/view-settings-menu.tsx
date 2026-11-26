@@ -281,14 +281,21 @@ export function ViewSettingsMenu({
             ) : null}
 
             {!foreignViewReadOnly && !sheet && activeView && (!activeView.builtin || isBuiltinAllViewId(activeView.id)) ? (
-              activeView.ownerTable === 'all' || isBuiltinAllViewId(activeView.id) ? (
+              activeView.ownerTable === 'all' ||
+              isBuiltinAllViewId(activeView.id) ||
+              activeView.ownerTable === 'shared' ||
+              activeView.ownerTable?.startsWith('account:') ? (
                 <div
                   className="fsdb-group-panel-row"
                   data-testid="fsdb-vset-all-table-note"
                   style={{ fontSize: 12, color: 'var(--text-muted, #9aa0a6)' }}
                 >
                   <span className="fsdb-group-panel-label">保护视图</span>
-                  <span>个人视图（数据聚合视角仅自己可见）</span>
+                  <span>
+                    {activeView.ownerTable === 'all' || isBuiltinAllViewId(activeView.id)
+                      ? '个人视图（数据聚合视角仅自己可见）'
+                      : '个人视图（仅自己可见）'}
+                  </span>
                 </div>
               ) : (
                 <GroupAccordionSelect
@@ -297,9 +304,7 @@ export function ViewSettingsMenu({
                   value={activeView.protection ?? (activeView.scope === 'personal' ? 'personal' : 'public')}
                   options={[
                     { value: 'public', label: '公共视图（成员可改）' },
-                    ...(!(activeView.ownerTable?.startsWith('account:') && viewer.accountId && activeView.ownerTable !== `account:${viewer.accountId}`)
-                      ? [{ value: 'locked', label: '锁定视图（仅管理者可改）' }]
-                      : []),
+                    { value: 'locked', label: '锁定视图（仅管理者可改）' },
                     { value: 'personal', label: '个人视图（仅自己可见）' },
                   ]}
                   open={openAcc === 'scope'}

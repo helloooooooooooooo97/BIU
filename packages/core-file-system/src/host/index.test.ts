@@ -3183,21 +3183,38 @@ test('$scope packs follow shareScope labels for public and lan shares', async ()
   }
   await ctx.plugin(AccountBridge)
   const ada = collab.register('', Date.now(), 'secret1', 'scope-share-ada@example.com')
+  const bob = collab.register('', Date.now(), 'secret1', 'scope-share-bob@example.com')
   const workspace = collab.createWorkspace(ada.id, 'Share pack')
+  collab.addMemberByEmail(ada.id, workspace.id, bob.email)
   collab.setActive(ada.id, workspace.id)
+  collab.setActive(bob.id, workspace.id)
 
   await runWithAccount(ada.id, () => db.create('/docs', [{ title: '只私人' }], { scope: 'personal' }))
   await runWithAccount(ada.id, () => db.create('/docs', [{ title: '公开链接' }], { scope: 'personal' }))
   db.shares.upsert({ kind: 'record', collection: '/docs', recordId: 'd2' })
+  collab.authorization.grant(
+    ada.id,
+    { type: 'record', workspaceId: workspace.id, collection: '/docs', recordId: 'd2' },
+    'account',
+    bob.id,
+    'viewer',
+    Date.now(),
+  )
   db.notifyShareChange()
 
   const titles = (listed: { items: DbRecord[] }) => listed.items.map((row) => row.title).sort()
-  const personal = asCollection(await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'personal' })))
-  const shared = asCollection(await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'shared' })))
-  assert.deepEqual(titles(personal), ['公开链接', '只私人'])
-  assert.deepEqual(titles(shared), ['公开链接'])
-  assert.equal(personal.items.find((row) => row.title === '只私人')?.shareScope, '私人')
-  assert.equal(shared.items[0]?.shareScope, '外部')
+  // 云端三段式语义：
+  // - 个人数据（$scope: 'personal'）保留我自己的全部个人记录（即使开了公开链接或分享给他人，仍留在个人数据中）
+  // - 共享数据（$scope: 'shared'）仅含他人共享给我的记录（不含我自己分享出去的记录）
+  const adaPersonal = asCollection(await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'personal' })))
+  const adaShared = asCollection(await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'shared' })))
+  const bobShared = asCollection(await runWithAccount(bob.id, () => db.list('/docs', { $scope: 'shared' })))
+  assert.deepEqual(titles(adaPersonal), ['公开链接', '只私人'])
+  assert.deepEqual(titles(adaShared), [])
+  assert.equal(adaPersonal.items.find((row) => row.title === '只私人')?.shareScope, '私人')
+  assert.equal(adaPersonal.items.find((row) => row.title === '公开链接')?.shareScope, '外部')
+  assert.deepEqual(titles(bobShared), ['公开链接'])
+  assert.equal(bobShared.items[0]?.shareScope, '外部')
 })
 
 test('list match overlay is only loaded for overlay fields or tree filters', () => {

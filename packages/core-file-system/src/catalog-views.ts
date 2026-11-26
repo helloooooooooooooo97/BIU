@@ -38,7 +38,7 @@ export function viewDomainOf(
     return 'all'
   }
   const filterScope = view.filters?.$scope
-  if (filterScope === 'shared') return 'shared'
+  if (view.ownerTable === 'shared' || filterScope === 'shared') return 'shared'
   if (view.ownerTable === 'all') return 'all'
   if (filterScope === 'workspace' || filterScope === 'personal') return filterScope
   if (view.ownerTable === 'workspace') return 'workspace'
@@ -48,7 +48,7 @@ export function viewDomainOf(
   return 'all'
 }
 const SCOPE_NAME: Record<DataScope, string> = {
-  personal: '私人',
+  personal: '个人',
   workspace: '空间',
   shared: '共享',
 }
@@ -122,16 +122,18 @@ export function stubDefaultTableView(id: string, table?: TableRef): SavedView | 
   const parsed = parseDefaultTableViewId(id)
   if (!parsed) return null
   const isWorkspace = parsed.ownerTable === 'workspace'
+  const isShared = parsed.ownerTable === 'shared'
+  const scope: DataScope = isWorkspace ? 'workspace' : isShared ? 'shared' : 'personal'
   const noun = collectionNoun(table ?? { path: parsed.collectionPath, label: parsed.collectionPath.replace(/^\//, '') })
   return normalizeSavedView({
     id,
-    name: `${isWorkspace ? '空间' : '私人'}${noun}`,
+    name: `${SCOPE_NAME[scope]}${noun}`,
     mode: 'table',
     ownerTable: parsed.ownerTable,
-    scope: 'workspace',
-    protection: 'public',
+    scope: isWorkspace ? 'workspace' : 'personal',
+    protection: isWorkspace ? 'public' : 'personal',
     ...builtinViewLayout(),
-    filters: {},
+    filters: { $scope: scope },
     columns: [],
     groupBy: '',
     wrap: false,
@@ -142,7 +144,7 @@ export function stubDefaultTableView(id: string, table?: TableRef): SavedView | 
 }
 
 export function isNonPersonalView(view: { protection?: string; scope?: string; ownerTable?: string } | null | undefined): boolean {
-  if (!view || view.ownerTable === 'all') return false
+  if (!view || view.ownerTable === 'all' || view.ownerTable === 'shared') return false
   const p = view.protection ?? (view.scope === 'personal' ? 'personal' : 'public')
   return p === 'public' || p === 'locked'
 }
@@ -400,6 +402,11 @@ export function catalogLockFilters(
   if (current) {
     const base = { ...(current.filters ?? {}) }
     const ot = current.ownerTable?.trim()
+    if (ot === 'shared') {
+      base.$scope = 'shared'
+      delete base.$ownerTable
+      return base
+    }
     if (ot && ot.startsWith('account:') && viewerAccountId && ot !== `account:${viewerAccountId}`) {
       base.$scope = 'shared'
       base.$ownerTable = ot

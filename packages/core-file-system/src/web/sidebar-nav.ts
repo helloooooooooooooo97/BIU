@@ -125,9 +125,9 @@ export function recordCrumbLabel(label: string | undefined, id: string) {
 }
 
 const SCOPE_CRUMB_LABEL: Record<DataScope, string> = {
-  workspace: '空间表',
-  personal: '个人表',
-  shared: '个人表',
+  workspace: '空间数据',
+  shared: '共享数据',
+  personal: '个人数据',
 }
 
 export function buildCrumbs(input: {
@@ -137,7 +137,7 @@ export function buildCrumbs(input: {
   viewId?: string
   viewName?: string
   viewScope?: DataScope
-  sharedOwner?: { accountId: string; name: string }
+  viewerAccountId?: string
   views?: Array<{ id: string; name: string; mode?: ViewMode }>
   recordId?: string
   recordLabel?: string
@@ -162,51 +162,52 @@ export function buildCrumbs(input: {
       })),
   })
   if (input.viewId) {
-    // K+1 逻辑表面包屑：数据类型 / 表归属（空间表 | 个人表）/ [他人名] / 视图
+    // 云端三段式面包屑：数据类型 / 数据域（空间数据 | 共享数据 | 个人数据）/ 视图
     const resolvedScope: DataScope | undefined = isBuiltinAllViewId(input.viewId) ? undefined : input.viewScope
     if (resolvedScope && tableModeFor(input.collection) === 'k-plus-1') {
       const wsViewId = defaultTableViewId('workspace', input.collection)
-      const currentTargetId = resolvedScope === 'workspace' ? wsViewId : input.viewId
+      const sharedViewId = defaultTableViewId('shared', input.collection)
+      const personalViewId = input.viewerAccountId
+        ? defaultTableViewId(`account:${input.viewerAccountId}`, input.collection)
+        : (resolvedScope === 'personal' ? input.viewId : wsViewId)
+      const currentTargetId =
+        resolvedScope === 'workspace'
+          ? wsViewId
+          : resolvedScope === 'shared'
+            ? sharedViewId
+            : personalViewId
+      const choices: CrumbChoice[] = [
+        {
+          id: 'scope:workspace',
+          label: '空间数据',
+          icon: 'workspace',
+          target: { kind: 'view', collection: input.collection, viewId: wsViewId },
+        },
+        {
+          id: 'scope:shared',
+          label: '共享数据',
+          icon: 'shared',
+          target: { kind: 'view', collection: input.collection, viewId: sharedViewId },
+        },
+        ...(input.viewerAccountId || resolvedScope === 'personal'
+          ? [
+              {
+                id: 'scope:personal',
+                label: '个人数据',
+                icon: 'personal',
+                target: { kind: 'view' as const, collection: input.collection, viewId: personalViewId },
+              },
+            ]
+          : []),
+      ]
       crumbs.push({
         kind: 'scope',
-        id: `scope:${resolvedScope === 'shared' ? 'personal' : resolvedScope}`,
+        id: `scope:${resolvedScope}`,
         label: SCOPE_CRUMB_LABEL[resolvedScope],
-        icon: resolvedScope === 'workspace' ? 'workspace' : 'personal',
+        icon: resolvedScope,
         target: { kind: 'view', collection: input.collection, viewId: currentTargetId },
-        choices: [
-          {
-            id: 'scope:workspace',
-            label: '空间表',
-            icon: 'workspace',
-            target: { kind: 'view', collection: input.collection, viewId: wsViewId },
-          },
-          {
-            id: 'scope:personal',
-            label: '个人表',
-            icon: 'personal',
-            target: { kind: 'view', collection: input.collection, viewId: input.viewId },
-          },
-        ],
+        choices,
       })
-      if (input.sharedOwner?.accountId) {
-        const ownerViewId = defaultTableViewId(`account:${input.sharedOwner.accountId}`, input.collection)
-        const ownerLabel = input.sharedOwner.name.trim() || input.sharedOwner.accountId.slice(0, 8)
-        crumbs.push({
-          kind: 'scope',
-          id: `owner:${input.sharedOwner.accountId}`,
-          label: ownerLabel,
-          icon: 'personal',
-          target: { kind: 'view', collection: input.collection, viewId: ownerViewId },
-          choices: [
-            {
-              id: `owner:${input.sharedOwner.accountId}`,
-              label: ownerLabel,
-              icon: 'personal',
-              target: { kind: 'view', collection: input.collection, viewId: ownerViewId },
-            },
-          ],
-        })
-      }
     }
     const storedName = input.viewName || input.views?.find((view) => view.id === input.viewId)?.name
     // 内置视图被隐藏后仍可通过导航打开，名称不能依赖可见视图列表。
