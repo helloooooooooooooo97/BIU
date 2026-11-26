@@ -222,6 +222,7 @@ test('workspace and member settings are separate and workspace switching stays o
   fireEvent.click(screen.getByText('取消'))
   assert.equal(screen.queryByTestId('settings-member-remove-dialog'), null)
   assert.match(screen.getByTestId('settings-collab-presence').textContent ?? '', /Ada/)
+  assert.equal(screen.queryByText('我的成员资料'), null)
   assert.equal(screen.queryByText('成员组'), null)
   assert.equal(screen.queryByText('添加组成员'), null)
   assert.equal(calls.some((line) => line.includes('/login')), false)
@@ -269,7 +270,7 @@ test('account settings are global and workspace switcher lives in the sidebar he
   assert.ok(screen.getByTestId('settings-account-default-avatar'), '未上传头像时默认显示多色混合 AI 头像')
   assert.match(screen.getByTestId('settings-account-sessions').textContent ?? '', /Test Browser/)
   assert.match(screen.getByTestId('settings-account-sessions').textContent ?? '', /到期/)
-  assert.equal(screen.queryByLabelText('空间昵称'), null)
+  assert.ok(screen.getByLabelText('空间昵称'))
   assert.equal(screen.queryByTestId('settings-account-logout'), null)
   cleanup()
   let settingsOpened = false
@@ -362,10 +363,13 @@ test('account settings can edit account name, reset avatar, configure remote hos
   globalThis.fetch = (async (path: string, init?: RequestInit) => {
     const url = String(path)
     if (url.endsWith('/me')) return json({ id: 'acc_1', name: 'ada@example.com', email: 'ada@example.com', avatar: '' })
-    if (url.endsWith('/profile') && init?.method === 'POST') {
+    if (url.endsWith('/workspace-profile') && (!init?.method || init.method === 'GET')) {
+      return json({ workspaceId: 'ws_1', email: 'ada@example.com', name: String(profileBody?.name ?? ''), avatar: String(profileBody?.avatar ?? '') })
+    }
+    if (url.endsWith('/workspace-profile') && init?.method === 'POST') {
       profileBody = JSON.parse(String(init.body)) as Record<string, unknown>
       return json({
-        id: 'acc_1',
+        workspaceId: 'ws_1',
         name: profileBody.name ?? 'ada@example.com',
         email: 'ada@example.com',
         avatar: profileBody.avatar ?? '',
@@ -400,7 +404,7 @@ test('account settings can edit account name, reset avatar, configure remote hos
   fireEvent.change(nameInput, { target: { value: 'Ada Lovelace' } })
   fireEvent.click(screen.getByTestId('settings-account-save-name'))
   await waitFor(() => assert.deepEqual(profileBody, { name: 'Ada Lovelace' }))
-  await waitFor(() => assert.ok(screen.getByText('账号名已保存。')))
+  await waitFor(() => assert.ok(screen.getByText('空间昵称已保存。')))
 
   fireEvent.click(await screen.findByTestId('settings-cloud-add'))
   fireEvent.change(screen.getByTestId('settings-cloud-origin'), { target: { value: 'https://cloud.example.com' } })
@@ -677,13 +681,16 @@ test('account settings can generate primary-color AI avatar and pick built-in av
     if (url.endsWith('/me')) {
       return json({ id: 'acc_97', name: '97', email: '97@example.com', avatar: currentAvatar })
     }
-    if (url.endsWith('/api/account/profile') && init?.method === 'POST') {
+    if (url.endsWith('/api/account/workspace-profile') && (!init?.method || init.method === 'GET')) {
+      return json({ workspaceId: 'ws_1', name: '97', email: '97@example.com', avatar: currentAvatar })
+    }
+    if (url.endsWith('/api/account/workspace-profile') && init?.method === 'POST') {
       const body = JSON.parse(String(init.body)) as { avatar?: string }
       if (typeof body.avatar === 'string') {
         currentAvatar = body.avatar
         savedAvatars.push(body.avatar)
       }
-      return json({ id: 'acc_97', name: '97', email: '97@example.com', avatar: currentAvatar })
+      return json({ workspaceId: 'ws_1', name: '97', email: '97@example.com', avatar: currentAvatar })
     }
     return json({})
   }) as typeof fetch

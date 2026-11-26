@@ -1709,6 +1709,9 @@ export class CollabStore {
         `UPDATE workspace_members SET display_name = ?, avatar = ? WHERE workspace_id = ? AND account_id = ?`,
       )
       .run(display, avatar, current.workspaceId, actorId)
+    if (patch.avatar !== undefined && !avatar) {
+      this.db.prepare('UPDATE accounts SET avatar = ? WHERE id = ?').run('', actorId)
+    }
     return { ...current, name: display, avatar }
   }
 
