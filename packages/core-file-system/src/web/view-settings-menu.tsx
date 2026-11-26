@@ -279,24 +279,35 @@ export function ViewSettingsMenu({
             ) : null}
 
             {!foreignViewReadOnly && !sheet && activeView && !activeView.builtin ? (
-              <GroupAccordionSelect
-                testId="fsdb-vset-protection-row"
-                label="保护视图"
-                value={activeView.protection ?? (activeView.scope === 'personal' ? 'personal' : 'locked')}
-                options={[
-                  { value: 'public', label: '公共视图（成员可改）' },
-                  { value: 'locked', label: '锁定视图（仅管理者可改）' },
-                  { value: 'personal', label: '个人视图（仅自己可见）' },
-                ]}
-                open={openAcc === 'scope'}
-                onToggle={() => setOpenAcc((prev) => (prev === 'scope' ? null : 'scope'))}
-                onSelect={(next) => {
-                  setOpenAcc(null)
-                  const protection = next as 'public' | 'locked' | 'personal'
-                  const nextScope = protection === 'personal' ? 'personal' : 'workspace'
-                  patchActiveView({ protection, scope: nextScope })
-                }}
-              />
+              activeView.ownerTable === 'all' ? (
+                <div
+                  className="fsdb-group-panel-row"
+                  data-testid="fsdb-vset-all-table-note"
+                  style={{ fontSize: 12, color: 'var(--text-muted, #9aa0a6)' }}
+                >
+                  <span className="fsdb-group-panel-label">保护视图</span>
+                  <span>个人视图（跨表汇总仅自己可见）</span>
+                </div>
+              ) : (
+                <GroupAccordionSelect
+                  testId="fsdb-vset-protection-row"
+                  label="保护视图"
+                  value={activeView.protection ?? (activeView.scope === 'personal' ? 'personal' : 'locked')}
+                  options={[
+                    { value: 'public', label: '公共视图（成员可改）' },
+                    { value: 'locked', label: '锁定视图（仅管理者可改）' },
+                    { value: 'personal', label: '个人视图（仅自己可见）' },
+                  ]}
+                  open={openAcc === 'scope'}
+                  onToggle={() => setOpenAcc((prev) => (prev === 'scope' ? null : 'scope'))}
+                  onSelect={(next) => {
+                    setOpenAcc(null)
+                    const protection = next as 'public' | 'locked' | 'personal'
+                    const nextScope = protection === 'personal' ? 'personal' : 'workspace'
+                    patchActiveView({ protection, scope: nextScope })
+                  }}
+                />
+              )
             ) : null}
 
             {!foreignViewReadOnly ? (

@@ -559,3 +559,63 @@ test('builtin views are owned by workspace owner and only workspace owner can mo
     /BUILTIN_VIEW_OWNER_ONLY/,
   )
 })
+
+test('top-level cross-table views (ownerTable=all) are locked to personal protection and creator-only visibility', () => {
+  const store = new SavedViewsStore().open(':memory:')
+  store.setWorkspaceResolver(() => 'ws-1')
+  store.setPolicyGuard({
+    isLocked: () => false,
+    canEditLocked: (_ws, acc) => acc === 'admin-1',
+  })
+
+  // Even if caller attempts to set protection='public' / scope='workspace' on an ownerTable='all' view,
+  // it is forced to protection='personal', scope='personal', ownerTable='all'.
+  store.applyPatch(
+    '/pages',
+    {
+      upsert: [
+        {
+          id: 'v-all-agg',
+          name: '我的跨表汇总',
+          ownerTable: 'all',
+          scope: 'workspace',
+          protection: 'public',
+          filters: { status: 'open' },
+        },
+      ],
+    },
+    'alice',
+  )
+
+  const aliceViews = store.viewsFor('/pages', 'alice')
+  const agg = aliceViews.find((v) => v.id === 'v-all-agg')
+  assert.equal(agg?.ownerTable, 'all')
+  assert.equal(agg?.protection, 'personal')
+  assert.equal(agg?.scope, 'personal')
+
+  // Strictly invisible to other workspace members and admins
+  assert.equal(store.viewsFor('/pages', 'bob').some((v) => v.id === 'v-all-agg'), false)
+  assert.equal(store.viewsFor('/pages', 'admin-1').some((v) => v.id === 'v-all-agg'), false)
+
+  // Attempting to mutate ownerTable or escalate protection via applyPatch keeps it locked to all + personal
+  store.applyPatch(
+    '/pages',
+    {
+      upsert: [
+        {
+          id: 'v-all-agg',
+          name: '我的跨表汇总 2',
+          ownerTable: 'workspace',
+          scope: 'workspace',
+          protection: 'public',
+        },
+      ],
+    },
+    'alice',
+  )
+  const after = store.viewsFor('/pages', 'alice').find((v) => v.id === 'v-all-agg')
+  assert.equal(after?.ownerTable, 'all')
+  assert.equal(after?.protection, 'personal')
+  assert.equal(after?.scope, 'personal')
+  assert.equal(store.viewsFor('/pages', 'bob').some((v) => v.id === 'v-all-agg'), false)
+})

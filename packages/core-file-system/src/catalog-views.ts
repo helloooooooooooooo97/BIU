@@ -148,12 +148,13 @@ export function builtinScopeView(view: SavedView, scope: DataScope): SavedView {
     builtin: true,
   })
 }
-/** 空间与私人区拥有各自的视图集合；历史未标 scope 的用户视图归入私人数据。 */
+/** 空间与私人区拥有各自的视图集合；历史未标 scope 的用户视图归入私人数据；顶层跨表视图（ownerTable='all'）不归入单域。 */
 export function viewsForScope(views: SavedView[], scope: DataScope): SavedView[] {
   return views.flatMap((view) => {
     if (view.builtin) return [builtinScopeView(view, scope)]
+    if (view.ownerTable === 'all') return []
     const declared = view.filters?.$scope
-    if ((declared || 'personal') !== scope) return []
+    if ((declared || (view.ownerTable === 'workspace' ? 'workspace' : 'personal')) !== scope) return []
     return [normalizeSavedView({ ...view, filters: { ...view.filters, $scope: scope } })]
   })
 }
@@ -352,15 +353,30 @@ export function stubAnyBuiltinView(id: string, listed: SavedView[] = []): SavedV
     ?? stubBuiltinAllView(id)
 }
 
-/** 视图自己的扁平筛选；没有已存条目时才回退到种子 id 的默认条件。 */
+/**
+ * 视图自己的扁平筛选（含 K+1 逻辑表强绑定）：
+ * - 顶层汇总视图（ownerTable='all' 或 builtin-all）不锁 $scope，可跨表筛选所有我可见的数据；
+ * - 空间/个人/共享视图始终锁定对应 $scope，即使筛选条件被清空也不可越表读取。
+ */
 export function catalogLockFilters(
   viewId: string | null | undefined,
-  listed: Array<{ id: string; builtin?: boolean; filters?: Record<string, string> }> = [],
+  listed: Array<{ id: string; builtin?: boolean; filters?: Record<string, string>; ownerTable?: string; scope?: string }> = [],
 ): Record<string, string> {
   const key = String(viewId ?? '').trim()
   if (!key) return {}
   const current = listed.find((view) => view.id === key)
-  if (current) return { ...(current.filters ?? {}) }
+  if (current) {
+    const base = { ...(current.filters ?? {}) }
+    if (current.ownerTable === 'all' || isBuiltinAllViewId(key)) {
+      delete base.$scope
+      return base
+    }
+    if (!base.$scope && !current.builtin) {
+      if (current.ownerTable === 'workspace') base.$scope = 'workspace'
+      else if (current.ownerTable?.startsWith('account:')) base.$scope = 'personal'
+    }
+    return base
+  }
   const stub = stubAnyBuiltinView(key, listed as SavedView[])
   return stub ? { ...(stub.filters ?? {}) } : {}
 }

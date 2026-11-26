@@ -79,6 +79,7 @@ export type WorkspaceFiles = {
   }>
   collectionRecordOwners?(workspaceId: string, collection: string): Map<string, string>
   isMember?(accountId: string, workspaceId: string): boolean
+  members?(accountId: string, workspaceId: string): Array<{ id: string; member_kind?: string }>
   isSuperAdmin?(accountId?: string | null): boolean
 }
 
@@ -507,6 +508,74 @@ export class DatabaseAccessPolicy {
     })
   }
 
+  isCurrentActorExternal(): boolean {
+    const authorization = this.host.authorization()
+    const actor = authorization?.currentActor()
+    if (!actor?.workspaceId || !actor.accountId) return false
+    const list = this.host.collabStore()?.members?.(actor.accountId, actor.workspaceId)
+    if (!list) return false
+    const me = list.find((item) => item.id === actor.accountId)
+    return Boolean(me?.member_kind && me.member_kind !== 'member')
+  }
+
+  /**
+   * 判定一条已通过可见性鉴权的记录归属哪些逻辑域（K+1 严格归属绑定）：
+   * - `workspace`：仅 `owner_table = 'workspace'` 的记录（且当前用户为空间内部成员）；
+   * - `personal`：仅 `owner_table = 'account:<当前用户>'` 的记录（排除他人共享给我的个人记录，以及对外公开链接分享的记录）；
+   * - `shared`：他人个人表共享给我的记录、外部协作者看到的记录、内置插件，以及对外公开/局域网分享的记录。
+   */
+  scopeBucketFor(
+    collection: string,
+    row: { id?: unknown; pageId?: unknown; collection?: unknown; sessionId?: unknown; sourceId?: unknown; tablePath?: unknown },
+    isExternal = this.isCurrentActorExternal(),
+  ): { personal: boolean; workspace: boolean; shared: boolean } {
+    if (isBuiltinPluginRow(collection, row as { builtin?: unknown })) {
+      return { personal: false, workspace: false, shared: true }
+    }
+    const authorization = this.host.authorization()
+    const actor = authorization?.currentActor()
+    if (!authorization || !actor) {
+      return { personal: true, workspace: true, shared: true }
+    }
+    const id = String(row.id ?? '')
+    const stored = this.ownershipOf(collection, id)
+    const isPublicShared = this.hasPublicShare(collection, id, row as DbRecord, stored)
+    if (this.host.deviceWorkspace()) {
+      return isPublicShared
+        ? { personal: false, workspace: false, shared: true }
+        : { personal: true, workspace: false, shared: false }
+    }
+    const target = resolveScopeTarget(collection, id, row)
+    const ownerTable = authorization.ownerTableOf({
+      type: 'record',
+      workspaceId: actor.workspaceId,
+      collection: target.collection,
+      recordId: target.id,
+      record: row as Record<string, unknown>,
+    })
+    const myTable = `account:${actor.accountId}`
+    if (ownerTable === 'workspace') {
+      if (isExternal) return { personal: false, workspace: false, shared: true }
+      return { personal: false, workspace: true, shared: isPublicShared }
+    }
+    if (ownerTable && ownerTable.startsWith('account:')) {
+      if (ownerTable === myTable) {
+        return isPublicShared
+          ? { personal: false, workspace: false, shared: true }
+          : { personal: true, workspace: false, shared: false }
+      }
+      return { personal: false, workspace: false, shared: true }
+    }
+    const label = this.shareScopeLabel(collection, id, row as DbRecord, stored)
+    if (label === '共享') return { personal: false, workspace: false, shared: true }
+    if (label === '空间') {
+      return isExternal
+        ? { personal: false, workspace: false, shared: true }
+        : { personal: false, workspace: true, shared: false }
+    }
+    return { personal: true, workspace: false, shared: false }
+  }
+
   recordsInScope<T extends { id?: unknown; pageId?: unknown; collection?: unknown; sessionId?: unknown; sourceId?: unknown; tablePath?: unknown }>(
     collection: string,
     rows: T[],
@@ -516,16 +585,8 @@ export class DatabaseAccessPolicy {
     const authorization = this.host.authorization()
     const actor = authorization?.currentActor()
     if (!authorization || !actor) return rows
-    return rows.filter((row) => {
-      if (isBuiltinPluginRow(collection, row as { builtin?: unknown })) return scope === 'shared'
-      const target = resolveScopeTarget(collection, String(row.id ?? ''), row)
-      return authorization.scopeCurrent({
-        type: 'record',
-        workspaceId: actor.workspaceId,
-        collection: target.collection,
-        recordId: target.id,
-      }) === scope
-    })
+    const isExternal = this.isCurrentActorExternal()
+    return rows.filter((row) => this.scopeBucketFor(collection, row, isExternal)[scope])
   }
 
   attachWorkspaceRecord(

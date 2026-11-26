@@ -11,7 +11,7 @@ import { normalizeCollectionPath } from '../paths.ts'
 import { invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { emptyFilterGroup, looksLikeFilterTree, normalizeFilterGroup, parseSortsInput, resolveViewFilterTree } from '../query-logic.ts'
-import { extractViewCreatorId, normalizeGroupConfig, normalizePageSize, normalizeSavedView, normalizeViewRole, normalizeViewScope, parseViewColumns, rankListedViews, viewIsFresher, type SavedView } from './saved-view.ts'
+import { extractViewCreatorId, normalizeGroupConfig, normalizePageSize, normalizeSavedView, normalizeViewProtection, normalizeViewRole, normalizeViewScope, parseViewColumns, rankListedViews, viewIsFresher, type SavedView } from './saved-view.ts'
 import { KeyedSerialQueue } from './record-write-queue.ts'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
 import { clearCrumbCache } from './crumb-cache.ts'
@@ -377,11 +377,16 @@ export function savedViewFromRecord(row: Record<string, unknown>): SavedView | n
   const sortField = String(row.sortField ?? 'title')
   const filters = parseViewFilters(row.filters)
   const filterTree = parseViewFilterTree(row.filterTree) ?? (looksLikeFilterTree(parseMaybeJson(row.filters)) ? normalizeFilterGroup(parseMaybeJson(row.filters)) : undefined)
+  const scope = normalizeViewScope(row.scope)
+  const ownerTable = typeof row.ownerTable === 'string' && row.ownerTable.trim() ? row.ownerTable.trim() : undefined
+  const protection = ownerTable === 'all' ? 'personal' : normalizeViewProtection(row.protection, scope)
   return normalizeSavedView({
     id,
     name: String(row.title ?? id),
     mode: String(row.mode ?? 'table') as SavedView['mode'],
-    scope: normalizeViewScope(row.scope),
+    scope: ownerTable === 'all' ? 'personal' : scope,
+    protection,
+    ownerTable,
     createdBy: extractViewCreatorId(row.createdBy),
     viewRole: normalizeViewRole(row.viewRole),
     sortField,
