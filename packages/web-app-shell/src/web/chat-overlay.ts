@@ -12,11 +12,33 @@ export const SIDEBAR_RAIL = 48
 export const SIDEBAR_MIN = 160
 /** 到这个宽度就显示文字标签（会话名、「添加聊天」等）。 */
 export const SIDEBAR_LABEL_AT = SIDEBAR_MIN
-/** 分栏时主内容区的最小宽度；与右侧检查器一起保留，窄窗口横向滚动。 */
-export const CENTER_MIN = 500
-export const INSPECTOR_MIN = 500
+/** 分栏时主内容区与右侧检查器的最小宽度（对标 Notion，配合响应式页面边距，不再整页横向滚动）。 */
+export const CENTER_MIN = 360
+export const INSPECTOR_MIN = 360
+export const INSPECTOR_DEFAULT = 480
+export const INSPECTOR_MAX = 1000
+/** 低于此视口宽度时左侧栏自动离开文档流，退化为顶栏展开按钮 + 浮层抽屉（px）。 */
+export const SIDEBAR_AUTO_HIDE_BELOW = 768
+/** 右侧检查器在极窄视口下直接铺满全宽，否则保留左侧遮罩点击区（px）。 */
+export const INSPECTOR_OVERLAY_FULL_BELOW = 520
+export const INSPECTOR_OVERLAY_PEEK_GUTTER = 48
 const RAIL = 0
 const SIDEBAR = SIDEBAR_MAX
+
+export type ShellLeftMode = 'none' | 'docked' | 'rail' | 'hidden'
+export type ShellInspectorMode = 'closed' | 'split' | 'overlay'
+
+export type ShellColumns = {
+  left: number
+  center: number
+  inspector: number
+  leftMode: ShellLeftMode
+  inspectorMode: ShellInspectorMode
+  /** 左侧栏因视口不足被自动收窄/隐藏（未改写用户持久化偏好，扩窗自动还原）。 */
+  leftAutoCollapsed: boolean
+  /** 当前视口下左侧栏是否可以停靠展开；为 false 时展开走浮层抽屉。 */
+  leftCanDock: boolean
+}
 
 /** 低于图标轨则 0（视口实在不够）；低于文字最小宽度则收到图标轨。 */
 export function clampSidebarWidth(width: number) {
@@ -30,7 +52,13 @@ export function sidebarColumnWidth(collapsed: boolean, width: number) {
   return collapsed ? SIDEBAR_RAIL : width
 }
 
-/** Keep both content panes usable; narrow windows scroll instead of squeezing either pane. */
+/**
+ * Notion 式优先级分级自适应分配三栏宽度（纯函数、扩缩窗完全可逆、永不整页横向滚动）：
+ * 1. 宽屏：三栏按用户偏好并排；压缩时先让中栏收窄至 CENTER_MIN，再温和压缩右栏至 INSPECTOR_MIN，再收窄左栏至 SIDEBAR_MIN。
+ * 2. 中屏（放不下三栏但放得下 48px 图标轨 + 双栏）：优先自动把左栏临时收为 48px 图标轨，保住中 + 右双栏。
+ * 3. 窄屏（< 768px）：左栏自动离开文档流（0px + 顶栏按钮 / 浮层抽屉）；放得下双栏则中 + 右分屏。
+ * 4. 更窄（< CENTER_MIN + INSPECTOR_MIN = 720px）：右栏从分屏平滑降级为右侧 Overlay 浮层（Notion Side Peek），中栏保持 100% 满宽。
+ */
 export function allocateShellColumns(opts: {
   viewportWidth: number
   railWidth?: number
@@ -39,20 +67,130 @@ export function allocateShellColumns(opts: {
   inspectorOpen: boolean
   inspectorWidth: number
   holdCenter?: number | null
-}) {
+}): ShellColumns {
   const rail = opts.railWidth ?? RAIL
-  const available = Math.max(0, opts.viewportWidth - rail)
-  const left = opts.leftPane ? clampSidebarWidth(opts.leftWidth ?? SIDEBAR_MAX) : 0
-  if (opts.inspectorOpen) {
-    const total = Math.max(available, left + CENTER_MIN + INSPECTOR_MIN)
-    if (opts.holdCenter != null && opts.holdCenter > 0) {
-      const center = Math.max(CENTER_MIN, Math.min(opts.holdCenter, total - left - INSPECTOR_MIN))
-      return { left, center, inspector: total - left - center }
+  const available = Math.max(0, Math.round(opts.viewportWidth - rail))
+  const desiredLeft = opts.leftPane ? clampSidebarWidth(opts.leftWidth ?? SIDEBAR_DEFAULT) : 0
+  const rawInspector = Number(opts.inspectorWidth)
+  const desiredInspector = Math.min(
+    INSPECTOR_MAX,
+    Math.max(INSPECTOR_MIN, Math.round(Number.isFinite(rawInspector) && rawInspector > 0 ? rawInspector : INSPECTOR_DEFAULT)),
+  )
+
+  if (!opts.inspectorOpen) {
+    if (!opts.leftPane) {
+      return {
+        left: 0,
+        center: available,
+        inspector: 0,
+        leftMode: 'none',
+        inspectorMode: 'closed',
+        leftAutoCollapsed: false,
+        leftCanDock: false,
+      }
     }
-    const inspector = Math.min(total - left - CENTER_MIN, Math.max(INSPECTOR_MIN, opts.inspectorWidth))
-    return { left, inspector, center: total - left - inspector }
+    const leftCanDock = available >= SIDEBAR_AUTO_HIDE_BELOW && available - SIDEBAR_MIN >= CENTER_MIN
+    if (available < SIDEBAR_AUTO_HIDE_BELOW) {
+      return {
+        left: 0,
+        center: available,
+        inspector: 0,
+        leftMode: 'hidden',
+        inspectorMode: 'closed',
+        leftAutoCollapsed: desiredLeft > 0,
+        leftCanDock: false,
+      }
+    }
+    const maxDockedLeft = Math.max(0, available - CENTER_MIN)
+    let left = desiredLeft
+    let leftAutoCollapsed = false
+    if (left > maxDockedLeft) {
+      if (maxDockedLeft >= SIDEBAR_MIN) {
+        left = maxDockedLeft
+      } else if (maxDockedLeft >= SIDEBAR_RAIL) {
+        left = SIDEBAR_RAIL
+        leftAutoCollapsed = true
+      } else {
+        left = 0
+        leftAutoCollapsed = desiredLeft > 0
+      }
+    }
+    const leftMode: ShellLeftMode = left <= 0 ? 'hidden' : left < SIDEBAR_MIN ? 'rail' : 'docked'
+    return {
+      left,
+      center: Math.max(0, available - left),
+      inspector: 0,
+      leftMode,
+      inspectorMode: 'closed',
+      leftAutoCollapsed,
+      leftCanDock,
+    }
   }
-  return { left, inspector: 0, center: Math.max(0, available - left) }
+
+  const splitMin = CENTER_MIN + INSPECTOR_MIN
+  const leftCanDock = opts.leftPane && available >= SIDEBAR_AUTO_HIDE_BELOW && available >= SIDEBAR_MIN + splitMin
+
+  if (available < splitMin) {
+    const full = available < INSPECTOR_OVERLAY_FULL_BELOW
+    const overlayMax = full ? available : Math.max(Math.min(INSPECTOR_MIN, available), available - INSPECTOR_OVERLAY_PEEK_GUTTER)
+    const overlayWidth = full
+      ? available
+      : Math.min(overlayMax, Math.max(Math.min(INSPECTOR_MIN, overlayMax), desiredInspector))
+    return {
+      left: 0,
+      center: available,
+      inspector: Math.max(0, Math.round(overlayWidth)),
+      leftMode: opts.leftPane ? 'hidden' : 'none',
+      inspectorMode: 'overlay',
+      leftAutoCollapsed: opts.leftPane && desiredLeft > 0,
+      leftCanDock: false,
+    }
+  }
+
+  let left = 0
+  let leftAutoCollapsed = false
+  if (opts.leftPane) {
+    if (available < SIDEBAR_AUTO_HIDE_BELOW) {
+      left = 0
+      leftAutoCollapsed = desiredLeft > 0
+    } else if (desiredLeft <= SIDEBAR_RAIL) {
+      left = desiredLeft
+    } else {
+      const maxDockedLeft = available - splitMin
+      if (maxDockedLeft >= desiredLeft) {
+        left = desiredLeft
+      } else if (maxDockedLeft >= SIDEBAR_MIN) {
+        left = maxDockedLeft
+      } else if (available >= SIDEBAR_RAIL + splitMin) {
+        left = SIDEBAR_RAIL
+        leftAutoCollapsed = true
+      } else {
+        left = 0
+        leftAutoCollapsed = true
+      }
+    }
+  }
+
+  const remaining = available - left
+  const inspector = Math.min(remaining - CENTER_MIN, desiredInspector)
+  const center = remaining - inspector
+  const leftMode: ShellLeftMode = !opts.leftPane
+    ? 'none'
+    : left <= 0
+      ? 'hidden'
+      : left < SIDEBAR_MIN
+        ? 'rail'
+        : 'docked'
+
+  return {
+    left,
+    center,
+    inspector,
+    leftMode,
+    inspectorMode: 'split',
+    leftAutoCollapsed,
+    leftCanDock,
+  }
 }
 
 export function applyShellColumnCssVars(el: HTMLElement | null, cols: { left: number; inspector: number; center?: number }) {
@@ -427,16 +565,18 @@ export function overlayDockY(h: number, vh = 800) {
 }
 
 export function defaultOverlayWinGeom(vw = 1280, vh = 800): OverlayWinGeom {
-  const w = Math.min(OVERLAY_WIN_DEFAULT_W, Math.max(OVERLAY_WIN_MIN_W, vw - 40))
+  const minW = Math.min(OVERLAY_WIN_MIN_W, Math.max(280, vw - OVERLAY_MARGIN * 2))
+  const w = Math.min(OVERLAY_WIN_DEFAULT_W, Math.max(minW, vw - 40))
   const h = Math.min(OVERLAY_WIN_DEFAULT_H, Math.max(OVERLAY_WIN_MIN_H, vh - OVERLAY_MARGIN * 2))
   return overlayLayoutGeom('right', { x: 0, y: overlayDockY(h, vh), w, h }, vw, vh)
 }
 
 export function clampOverlayWinGeom(geom: OverlayWinGeom, vw = 1280, vh = 800): OverlayWinGeom {
-  const maxW = Math.max(OVERLAY_WIN_MIN_W, vw - 24)
+  const maxW = Math.max(280, vw - 24)
+  const minW = Math.min(OVERLAY_WIN_MIN_W, maxW)
   const maxH = Math.max(OVERLAY_CHAT_HEIGHT_MIN, vh - 24)
   const minH = Math.min(OVERLAY_WIN_MIN_H, maxH)
-  const w = Math.min(maxW, Math.max(OVERLAY_WIN_MIN_W, Math.round(geom.w)))
+  const w = Math.min(maxW, Math.max(minW, Math.round(geom.w)))
   const h = Math.min(maxH, Math.max(minH, Math.round(geom.h)))
   const x = Math.min(vw - 48, Math.max(12 - (w - 48), Math.round(geom.x)))
   const y = Math.min(overlayDockY(h, vh), Math.max(OVERLAY_MARGIN, Math.round(geom.y)))
@@ -449,10 +589,11 @@ export function overlayLayoutGeom(
   vw = 1280,
   vh = 800,
 ): OverlayWinGeom {
-  const maxW = Math.max(OVERLAY_WIN_MIN_W, vw - OVERLAY_MARGIN * 2)
+  const maxW = Math.max(280, vw - OVERLAY_MARGIN * 2)
+  const minW = Math.min(OVERLAY_WIN_MIN_W, maxW)
   const maxH = Math.max(OVERLAY_CHAT_HEIGHT_MIN, vh - OVERLAY_MARGIN * 2)
   const minH = Math.min(OVERLAY_WIN_MIN_H, maxH)
-  const w = Math.min(Math.max(prev.w, OVERLAY_WIN_MIN_W), maxW)
+  const w = Math.min(Math.max(prev.w, minW), maxW)
   const h = Math.min(Math.max(prev.h, minH), maxH)
   const dockY = overlayDockY(h, vh)
   const y = Number.isFinite(prev.y) ? prev.y : dockY

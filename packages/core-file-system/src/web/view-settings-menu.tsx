@@ -40,7 +40,7 @@ registerWorkspaceCache('view-settings-viewer', () => {
   viewerIdentityPromise = null
 })
 
-async function loadViewerIdentity(): Promise<ViewerIdentity> {
+export async function loadViewerIdentity(): Promise<ViewerIdentity> {
   if (cachedViewerIdentity) return cachedViewerIdentity
   if (viewerIdentityPromise) return viewerIdentityPromise
   viewerIdentityPromise = apiFetch('/api/account/me')
@@ -281,7 +281,7 @@ export function ViewSettingsMenu({
             ) : null}
 
             {!foreignViewReadOnly && !sheet && activeView && (!activeView.builtin || isBuiltinAllViewId(activeView.id)) ? (
-              activeView.ownerTable === 'all' || isBuiltinAllViewId(activeView.id) ? (
+              isBuiltinAllViewId(activeView.id) || (activeView.ownerTable === 'all' && !viewer.isAdmin) ? (
                 <div
                   className="fsdb-group-panel-row"
                   data-testid="fsdb-vset-all-table-note"

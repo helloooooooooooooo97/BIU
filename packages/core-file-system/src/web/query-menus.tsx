@@ -303,14 +303,16 @@ export function FilterQueryMenu({
   fields,
   valueOptions,
   onChange,
+  bare = false,
 }: {
   tree: FilterGroup
   fields: QueryField[]
   valueOptions: (field: QueryField) => Array<{ value: string; label: string }>
   onChange: (next: FilterGroup) => void
+  bare?: boolean
 }) {
   const [savedTree, setSavedTree] = useState<FilterGroup | null>(null)
-  const enabled = countFilterRules(tree) > 0
+  const enabled = bare || countFilterRules(tree) > 0
   const displayTree = enabled ? tree : (savedTree && countFilterRules(savedTree) > 0 ? savedTree : tree)
 
   const commitTree = (next: FilterGroup) => {
@@ -337,23 +339,25 @@ export function FilterQueryMenu({
   }
 
   return (
-    <div className="fsdb-tool-flyout fsdb-query-menu is-filter" role="menu">
-      <div className="fsdb-query-head">
-        <span className="fsdb-query-head-title">筛选设置</span>
-        <span className="fsdb-query-head-toggle">
-          <span className="fsdb-query-toggle-label">{enabled ? '已生效' : '未生效'}</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={enabled}
-            aria-label="启用筛选"
-            className={`fsdb-group-switch${enabled ? ' is-on' : ''}`}
-            onClick={toggleEnabled}
-          >
-            <span className="fsdb-group-switch-thumb" />
-          </button>
-        </span>
-      </div>
+    <div className={`fsdb-tool-flyout fsdb-query-menu is-filter${bare ? ' is-bare' : ''}`} role="menu">
+      {!bare ? (
+        <div className="fsdb-query-head">
+          <span className="fsdb-query-head-title">筛选设置</span>
+          <span className="fsdb-query-head-toggle">
+            <span className="fsdb-query-toggle-label">{enabled ? '已生效' : '未生效'}</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={enabled}
+              aria-label="启用筛选"
+              className={`fsdb-group-switch${enabled ? ' is-on' : ''}`}
+              onClick={toggleEnabled}
+            >
+              <span className="fsdb-group-switch-thumb" />
+            </button>
+          </span>
+        </div>
+      ) : null}
       <FilterGroupEditor
         group={displayTree}
         fields={fields}

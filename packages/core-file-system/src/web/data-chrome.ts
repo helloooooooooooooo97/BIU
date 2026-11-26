@@ -1,6 +1,7 @@
 import { readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
-import { builtinAllView, builtinAllViewId, overlayListedViews, stampRowOpenTarget } from '../catalog-views.ts'
+import { builtinAllView, builtinAllViewId, builtinCatalogViews, overlayListedViews, stampRowOpenTarget } from '../catalog-views.ts'
+import type { CollectionInfo } from '@biu/type-file-system'
 import { DATA_COLLECTION_PATH } from './database-path.ts'
 import type { SavedView } from './saved-view.ts'
 import { loadOmittedViewIds } from './view-storage.ts'
@@ -64,12 +65,13 @@ export const dataChrome: CollectionChrome = {
     if (!stamp) return false
     return { kind: 'record', recordId: stamp.recordId, collection: stamp.collection }
   },
-  listViews(_tables, user) {
+  listViews(tables, user) {
     const all = {
       ...builtinAllView({ path: DATA_COLLECTION_PATH, label: '数据', view: { title: '数据' } }),
       groupBy: '',
       columns: ['title', 'actions', 'table'],
     }
-    return overlayListedViews([all], user as SavedView[], loadOmittedViewIds(DATA_COLLECTION_PATH))
+    const perTable = builtinCatalogViews(tables as CollectionInfo[])
+    return overlayListedViews([all, ...perTable], user as SavedView[], loadOmittedViewIds(DATA_COLLECTION_PATH))
   },
 }

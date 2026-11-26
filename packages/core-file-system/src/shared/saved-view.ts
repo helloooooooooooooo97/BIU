@@ -19,8 +19,8 @@ export function normalizeViewProtection(
   fallbackScope?: ViewScope,
   ownerTable?: string,
 ): ViewProtection {
-  if (ownerTable === 'all') return 'personal'
   if (value === 'public' || value === 'locked' || value === 'personal') return value
+  if (ownerTable === 'all') return 'personal'
   if (fallbackScope === 'personal') return 'personal'
   return 'public'
 }

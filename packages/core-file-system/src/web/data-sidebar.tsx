@@ -10,7 +10,6 @@ import {
   PlusIcon,
   RectangleStackIcon,
   StarIcon,
-  UserIcon,
   UsersIcon,
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
@@ -19,8 +18,8 @@ import { FSDB_CHANGE_EVENT, parseFsdbChange, type CollectionInfo, type Collectio
 import { BoundedMap } from './bounded-map.ts'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
 import { groupField, groupRecords, parentFieldKey, treeChildren } from './fields.ts'
-import { builtinAllViewId, defaultTableViewId, isBuiltinAllViewId, isNonPersonalView, isReadOnlyViewId, parseDefaultTableViewId, stubDefaultTableView, type DataScope } from '../catalog-views.ts'
-import { tableModeFor } from '../paths.ts'
+import { builtinAllViewId, builtinCatalogViewId, defaultTableViewId, isBuiltinAllViewId, isNonPersonalView, isReadOnlyViewId, parseDefaultTableViewId, stubDefaultTableView, type DataScope } from '../catalog-views.ts'
+import { DATA_COLLECTION_PATH, tableModeFor } from '../paths.ts'
 import { dataSidebarKind, isRecordTreeCollection, sortDataCollections } from './database-path.ts'
 import { rememberInspectorWorkingView } from './inspector-db-route.ts'
 import { readJson } from './db-client.ts'
@@ -59,8 +58,8 @@ import {
   subscribeCrumbs,
   persistStarredRecords,
   persistStarredViews,
-  mergeSavedViewLists,
   pullSavedViews,
+  subscribeViews,
   rememberRecords,
   starredRecordEmoji,
   starredRecordLabel,
@@ -173,6 +172,7 @@ function onSidebarRowClick(event: MouseEvent<HTMLElement>) {
 }
 
 const ACCOUNT_EVENT = 'biu:account-token'
+const WORKSPACE_PROFILE_EVENT = 'biu:workspace-profile'
 
 function useCloudCreatorContext() {
   const [ctx, setCtx] = useState<{
@@ -180,12 +180,14 @@ function useCloudCreatorContext() {
     myAccountId: string
     myName: string
     myAvatar: string
+    workspaceAvatar: string
     isExternal: boolean
   }>({
     isCloud: false,
     myAccountId: '',
     myName: '',
     myAvatar: '',
+    workspaceAvatar: '',
     isExternal: false,
   })
 
@@ -194,30 +196,35 @@ function useCloudCreatorContext() {
     const load = () => {
       void Promise.all([
         apiFetch('/api/account/me').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        apiFetch('/api/account/workspace-profile').then((r) => (r.ok ? r.json() : null)).catch(() => null),
         apiFetch('/api/account/active').then((r) => (r.ok ? r.json() : null)).catch(() => null),
         apiFetch('/api/account/workspaces').then((r) => (r.ok ? r.json() : null)).catch(() => null),
-      ]).then(([me, active, listed]) => {
+      ]).then(([me, wp, active, listed]) => {
         if (cancelled) return
         const meObj = me as { id?: string; name?: string; avatar?: string; online?: boolean } | null
-        const myAccountId = String(meObj?.id ?? '').trim()
-        const myName = String(meObj?.name ?? '').trim()
-        const myAvatar = String(meObj?.avatar ?? '').trim()
+        const wpObj = wp as { accountId?: string; name?: string; fallbackName?: string; avatar?: string } | null
+        const myAccountId = String(wpObj?.accountId ?? meObj?.id ?? '').trim()
+        const myName = String(wpObj?.name || wpObj?.fallbackName || meObj?.name || '').trim()
+        const myAvatar = wpObj ? String(wpObj.avatar ?? '').trim() : String(meObj?.avatar ?? '').trim()
         const hostOnline = meObj?.online === true
         const activeId = String((active as { workspaceId?: string } | null)?.workspaceId ?? '').trim()
         const workspaces = Array.isArray((listed as { workspaces?: unknown[] } | null)?.workspaces)
-          ? ((listed as { workspaces: Array<{ id?: string; location?: string; memberKind?: string }> }).workspaces)
+          ? ((listed as { workspaces: Array<{ id?: string; avatar?: string; location?: string; memberKind?: string }> }).workspaces)
           : []
         const current = workspaces.find((w) => w.id === activeId)
         const isCloud = hostOnline || current?.location === 'cloud'
         const isExternal = current?.memberKind === 'external' || current?.memberKind === 'guest'
-        setCtx({ isCloud, myAccountId, myName, myAvatar, isExternal })
+        const workspaceAvatar = String(current?.avatar ?? '').trim()
+        setCtx({ isCloud, myAccountId, myName, myAvatar, workspaceAvatar, isExternal })
       })
     }
     load()
     window.addEventListener(ACCOUNT_EVENT, load)
+    window.addEventListener(WORKSPACE_PROFILE_EVENT, load)
     return () => {
       cancelled = true
       window.removeEventListener(ACCOUNT_EVENT, load)
+      window.removeEventListener(WORKSPACE_PROFILE_EVENT, load)
     }
   }, [])
 
@@ -678,16 +685,10 @@ export const DataSidebar = memo(function DataSidebar({
     return [...user, ...index, ...system]
   }, [collectionPath, tables, title])
   const { user: userTables, index: indexTables, system: systemTables } = useMemo(() => sortDataCollections(listedTables), [listedTables])
-  const [openTables, setOpenTables] = useState<Record<string, boolean>>(() => {
-    const group = dataSidebarKind(collectionPath)
-    return {
-      [`${group}:${collectionPath}`]: true,
-    }
-  })
-  useLayoutEffect(() => {
-    const group = dataSidebarKind(collectionPath)
-    setOpenTables({ [`${group}:${collectionPath}`]: true })
-  }, [collectionPath])
+  const [openTables, setOpenTables] = useState<Record<string, boolean>>({})
+  const toggleTableOpen = (tableStateKey: string) => {
+    setOpenTables((prev) => ({ ...prev, [tableStateKey]: !prev[tableStateKey] }))
+  }
   const [pendingPick, setPendingPick] = useState<{ path: string; viewId: string } | null>(null)
   useEffect(() => {
     if (!pendingPick) return
@@ -729,6 +730,7 @@ export const DataSidebar = memo(function DataSidebar({
       live = false
     }
   }, [starredPathsKey, tablePathsKey])
+  useEffect(() => subscribeViews(() => setViewsTick((n) => n + 1)), [])
   useEffect(() => {
     const onChange = (event: Event) => {
       const change = parseFsdbChange(event)
@@ -767,7 +769,7 @@ export const DataSidebar = memo(function DataSidebar({
     for (const table of listedTables) {
       const path = table.path
       const stored = loadViews(path)
-      const user = path === collectionPath && views.length ? mergeSavedViewLists(stored, views) : stored
+      const user = stored.length ? stored : path === collectionPath ? views : stored
       map.set(path, paintCollectionViews(path, tables, user))
     }
     return map
@@ -777,7 +779,7 @@ export const DataSidebar = memo(function DataSidebar({
     const hit = viewsByPath.get(path)
     if (hit) return hit
     const stored = loadViews(path)
-    const user = path === collectionPath && views.length ? mergeSavedViewLists(stored, views) : stored
+    const user = stored.length ? stored : path === collectionPath ? views : stored
     return paintCollectionViews(path, tables, user)
   }
 
@@ -854,7 +856,7 @@ export const DataSidebar = memo(function DataSidebar({
     }
   }, [starredRecords])
 
-  const { isCloud: isCloudSpace, myAccountId, myName, myAvatar, isExternal } = useCloudCreatorContext()
+  const { isCloud: isCloudSpace, myAccountId, myName, myAvatar, workspaceAvatar, isExternal } = useCloudCreatorContext()
   const membersById = useMemberDirectory(isCloudSpace)
   const [sharedOwnersByPath, setSharedOwnersByPath] = useState<
     Record<string, Array<{ accountId: string; ownerTable: string; name: string; count: number }>>
@@ -965,7 +967,6 @@ export const DataSidebar = memo(function DataSidebar({
 
   function openView(path: string, viewId: string) {
     setPendingPick({ path, viewId })
-    setOpenTables({ [`${dataSidebarKind(path)}:${path}`]: true })
     try {
       writeStorageString(activeViewStorageKey(path), viewId)
     } catch {
@@ -992,8 +993,7 @@ export const DataSidebar = memo(function DataSidebar({
     onOpenRecord?.(path, view, recordId, row)
   }
 
-  function revealTable(tableStateKey: string, path: string, viewId?: string) {
-    setOpenTables({ [tableStateKey]: true })
+  function revealTable(_tableStateKey: string, path: string, viewId?: string) {
     onOpenTable?.(path, viewId)
   }
 
@@ -1019,12 +1019,6 @@ export const DataSidebar = memo(function DataSidebar({
       const sharedOwners = (sharedOwnersByPath[table.path] ?? []).filter((o) => o.accountId !== myAccountId)
       const wsTargetViewId = pickConcreteViewId('workspace')
       const myTargetViewId = myAccountId ? pickConcreteViewId(`account:${myAccountId}`) : ''
-      const personalDefaultViewId =
-        !isExternal && myTargetViewId
-          ? myTargetViewId
-          : sharedOwners[0]
-            ? pickConcreteViewId(`account:${sharedOwners[0].accountId}`)
-            : wsTargetViewId
       const litViewForTable =
         table.path === litPath && litViewId
           ? listed.find((v) => v.id === litViewId) ?? null
@@ -1040,29 +1034,49 @@ export const DataSidebar = memo(function DataSidebar({
       const myMember = myAccountId ? membersById.get(myAccountId) : undefined
       const myDisplayName = myMember?.name?.trim() || myName || (myAccountId ? myAccountId.slice(0, 8) : '我')
       const myDisplayAvatar = myMember?.avatar?.trim() || myAvatar || ''
+      const aggViewId = builtinCatalogViewId(table.path)
+      const headActive = isKPlus1Cloud && litPath === DATA_COLLECTION_PATH && litViewId === aggViewId
       return (
         <div key={`${group}:${table.path}`} className="flex min-w-0 flex-col gap-px" data-collection-kind={group}>
-          <div className="sidebar-group-head" onClick={onSidebarRowClick}>
+          <div className={`sidebar-group-head${headActive ? ' is-active bg-(--biu-color-bg-hover) text-(--biu-color-text)' : ''}`} onClick={onSidebarRowClick}>
             <div
               className="flex min-h-8 min-w-0 flex-1 items-center gap-1.5 rounded-md text-left text-[14px] font-medium tracking-normal text-inherit"
               title={name}
               aria-expanded={open}
               {...pickDomAttrs('collection', table.path, name, { path: table.path })}
             >
-              <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
-                <TableGlyph icon={table.view?.icon} />
-              </span>
+              <button
+                type="button"
+                className="grid size-6 shrink-0 place-items-center border-0 bg-transparent p-0 text-inherit"
+                title={open ? `收起 ${name}` : `展开 ${name}`}
+                aria-label={open ? `收起 ${name}` : `展开 ${name}`}
+                aria-expanded={open}
+                data-testid={`sidebar-toggle-table-${table.path}`}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  toggleTableOpen(tableStateKey)
+                }}
+              >
+                <span className="sidebar-rail-icon sidebar-group-fold">
+                  <span className="sidebar-group-fold-face">
+                    <TableGlyph icon={table.view?.icon} />
+                  </span>
+                  <span className="sidebar-group-fold-chevron">
+                    <ChevronRightIcon className={`size-4 shrink-0 opacity-80 sidebar-chevron${open ? ' is-open' : ''}`} />
+                  </span>
+                </span>
+              </button>
               <button
                 type="button"
                 className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit outline-none hover:text-(--biu-color-text) focus-visible:ring-1 focus-visible:ring-(--biu-color-border)"
                 onClick={() =>
-                  revealTable(
-                    tableStateKey,
-                    table.path,
-                    isKPlus1Cloud
-                      ? (!isExternal ? wsTargetViewId : personalDefaultViewId)
-                      : (loadActiveViewId(table.path, listed) ?? listed[0]?.id),
-                  )
+                  isKPlus1Cloud
+                    ? openView(DATA_COLLECTION_PATH, aggViewId)
+                    : revealTable(
+                        tableStateKey,
+                        table.path,
+                        loadActiveViewId(table.path, listed) ?? listed[0]?.id,
+                      )
                 }
               >
                 {name}
@@ -1079,7 +1093,7 @@ export const DataSidebar = memo(function DataSidebar({
                   data-testid={`sidebar-add-view-${table.path}`}
                   onClick={(event) => {
                     event.stopPropagation()
-                    setOpenTables({ [tableStateKey]: true })
+                    setOpenTables((prev) => ({ ...prev, [tableStateKey]: true }))
                     onAddView(table.path)
                   }}
                 >
@@ -1099,105 +1113,87 @@ export const DataSidebar = memo(function DataSidebar({
                       main={
                         <SidebarRowMain>
                           <span className="grid size-6 shrink-0 place-items-center opacity-80" aria-hidden>
-                            <UsersIcon className="size-3.5 shrink-0" />
+                            {workspaceAvatar ? (
+                              <img src={workspaceAvatar} alt="" className="size-4 rounded-full object-cover" />
+                            ) : (
+                              <UsersIcon className="size-3.5 shrink-0" />
+                            )}
                           </span>
                           <button
                             type="button"
                             className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
                             onClick={() => openView(table.path, wsTargetViewId)}
                           >
-                            空间表
+                            空间数据
                           </button>
                         </SidebarRowMain>
                       }
                     />
                   </div>
                 ) : null}
-                <div className="min-w-0" data-testid={`sidebar-domain-${table.path}-personal`}>
-                  <SidebarRow
-                    active={false}
-                    onClick={onSidebarRowClick}
-                    main={
-                      <SidebarRowMain>
-                        <span className="grid size-6 shrink-0 place-items-center opacity-80" aria-hidden>
-                          <UserIcon className="size-3.5 shrink-0" />
-                        </span>
-                        <button
-                          type="button"
-                          className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
-                          onClick={() => openView(table.path, personalDefaultViewId)}
-                        >
-                          个人表
-                        </button>
-                      </SidebarRowMain>
-                    }
-                  />
-                  <div className="min-w-0 pl-4" data-testid={`sidebar-personal-owners-${table.path}`}>
-                    {!isExternal && myAccountId ? (
-                      <div className="min-w-0" data-testid={`sidebar-personal-owner-me`}>
-                        <SidebarRow
-                          active={table.path === litPath && activeOwnerTable === `account:${myAccountId}`}
-                          onClick={onSidebarRowClick}
-                          main={
-                            <SidebarRowMain>
-                              <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
-                                {myDisplayAvatar ? (
-                                  <img src={myDisplayAvatar} alt="" className="size-4 rounded-full object-cover" />
-                                ) : (
-                                  <AiAvatar seed={myAccountId} size={16} />
-                                )}
-                              </span>
-                              <button
-                                type="button"
-                                className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
-                                title={`我的个人${name}`}
-                                onClick={() => openView(table.path, myTargetViewId)}
-                              >
-                                {`${myDisplayName}（我）`}
-                              </button>
-                            </SidebarRowMain>
-                          }
-                        />
-                      </div>
-                    ) : null}
-                    {sharedOwners.map((owner) => {
-                      const ownerTableKey = `account:${owner.accountId}`
-                      const ownerTargetViewId = pickConcreteViewId(ownerTableKey)
-                      const member = membersById.get(owner.accountId)
-                      const displayName = member?.name?.trim() || owner.name
-                      const avatar = member?.avatar?.trim() || ''
-                      const active = table.path === litPath && activeOwnerTable === ownerTableKey
-                      return (
-                        <div key={owner.accountId} className="min-w-0" data-testid={`sidebar-shared-owner-${owner.accountId}`}>
-                          <SidebarRow
-                            active={active}
-                            onClick={onSidebarRowClick}
-                            main={
-                              <SidebarRowMain>
-                                <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
-                                  {avatar ? (
-                                    <img src={avatar} alt="" className="size-4 rounded-full object-cover" />
-                                  ) : (
-                                    <AiAvatar seed={owner.accountId} size={16} />
-                                  )}
-                                </span>
-                                <button
-                                  type="button"
-                                  className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
-                                  title={`${displayName} 共享给我的${name}`}
-                                  onClick={() => openView(table.path, ownerTargetViewId)}
-                                >
-                                  {displayName}
-                                </button>
-                              </SidebarRowMain>
-                            }
-                            trail={<ChatCount count={owner.count} />}
-                          />
-                        </div>
-                      )
-                    })}
+                {!isExternal && myAccountId ? (
+                  <div className="min-w-0" data-testid={`sidebar-personal-owner-me`}>
+                    <SidebarRow
+                      active={table.path === litPath && activeOwnerTable === `account:${myAccountId}`}
+                      onClick={onSidebarRowClick}
+                      main={
+                        <SidebarRowMain>
+                          <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+                            {myDisplayAvatar ? (
+                              <img src={myDisplayAvatar} alt="" className="size-4 rounded-full object-cover" />
+                            ) : (
+                              <AiAvatar seed={myAccountId} size={16} />
+                            )}
+                          </span>
+                          <button
+                            type="button"
+                            className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
+                            title={`我的${name}数据`}
+                            onClick={() => openView(table.path, myTargetViewId)}
+                          >
+                            我的数据
+                          </button>
+                        </SidebarRowMain>
+                      }
+                    />
                   </div>
-                </div>
+                ) : null}
+                {sharedOwners.map((owner) => {
+                  const ownerTableKey = `account:${owner.accountId}`
+                  const ownerTargetViewId = pickConcreteViewId(ownerTableKey)
+                  const member = membersById.get(owner.accountId)
+                  const displayName = member?.name?.trim() || owner.name
+                  const avatar = member?.avatar?.trim() || ''
+                  const active = table.path === litPath && activeOwnerTable === ownerTableKey
+                  return (
+                    <div key={owner.accountId} className="min-w-0" data-testid={`sidebar-shared-owner-${owner.accountId}`}>
+                      <SidebarRow
+                        active={active}
+                        onClick={onSidebarRowClick}
+                        main={
+                          <SidebarRowMain>
+                            <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+                              {avatar ? (
+                                <img src={avatar} alt="" className="size-4 rounded-full object-cover" />
+                              ) : (
+                                <AiAvatar seed={owner.accountId} size={16} />
+                              )}
+                            </span>
+                            <button
+                              type="button"
+                              className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
+                              title={`${displayName} 共享给我的${name}`}
+                              onClick={() => openView(table.path, ownerTargetViewId)}
+                            >
+                              {displayName}
+                            </button>
+                          </SidebarRowMain>
+                        }
+                        trail={<ChatCount count={owner.count} />}
+                      />
+                    </div>
+                  )
+                })}
               </>
             ) : (
               listed.map((view) => {

@@ -16,8 +16,10 @@ import { shellColumnStartWidth } from './chat-overlay.ts'
 export type ShellSidebarFrameProps = {
   visible: boolean
   narrow?: boolean
+  drawerOpen?: boolean
   onCollapse?: () => void
   onExpand?: () => void
+  onDrawerClose?: () => void
   onWidthChange?: (width: number) => void
   onWidthLive?: (width: number) => void
   testId?: string
@@ -29,12 +31,14 @@ export type ShellSidebarFrameProps = {
   children: ReactNode
 }
 
-/** 聊天与数据库共用的左侧栏外框：品牌头、收起/展开、拖宽。 */
+/** 聊天与数据库共用的左侧栏外框：品牌头、收起/展开、拖宽、窄窗浮层抽屉。 */
 export const ShellSidebarFrame = memo(function ShellSidebarFrame({
   visible,
   narrow = false,
+  drawerOpen = false,
   onCollapse,
   onExpand,
+  onDrawerClose,
   onWidthChange,
   onWidthLive,
   testId = 'shell-sidebar',
@@ -45,6 +49,8 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
   searchOpen = false,
   children,
 }: ShellSidebarFrameProps) {
+  const effectiveNarrow = narrow && !drawerOpen
+  const effectiveVisible = visible || drawerOpen
   const dragRef = useRef<{ startX: number; startWidth: number; last: number } | null>(null)
   const hostRef = useRef<HTMLDivElement | null>(null)
   const peekRef = useRef(false)
@@ -91,7 +97,7 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
   }, [onWidthChange, onWidthLive])
 
   useEffect(() => {
-    if (visible) {
+    if (visible || drawerOpen) {
       peekRef.current = false
       setPeek(false)
       if (hideRef.current != null) {
@@ -145,23 +151,31 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
         hideRef.current = null
       }
     }
-  }, [visible])
+  }, [visible, drawerOpen])
 
   return (
     <div
       ref={hostRef}
-      className={`sidebar-flyout-host${visible ? '' : ' is-collapsed'}${!visible && peek ? ' is-flyout-open' : ''}`}
+      className={`sidebar-flyout-host${visible ? '' : ' is-collapsed'}${!visible && !drawerOpen && peek ? ' is-flyout-open' : ''}${drawerOpen ? ' is-drawer-open' : ''}`}
       data-testid="sidebar-flyout-host"
     >
-      {visible ? null : <div className="sidebar-edge-hot" data-testid="sidebar-edge-hot" aria-hidden />}
-      {narrow ? <RailHoverTip hostRef={hostRef} /> : null}
+      {drawerOpen ? (
+        <div
+          className="shell-drawer-backdrop"
+          data-testid="sidebar-drawer-backdrop"
+          aria-hidden
+          onClick={onDrawerClose ?? onCollapse}
+        />
+      ) : null}
+      {visible || drawerOpen ? null : <div className="sidebar-edge-hot" data-testid="sidebar-edge-hot" aria-hidden />}
+      {effectiveNarrow ? <RailHoverTip hostRef={hostRef} /> : null}
     <aside
-      className={`app-side-bar min-h-0 flex-col border-r border-(--biu-color-border) bg-(--biu-color-bg-subtle)${narrow ? ' is-narrow overflow-visible' : ' overflow-hidden'}${visible ? (entering ? ' flex is-entering' : ' flex') : ' is-closed flex'}`}
-      aria-hidden={!visible}
+      className={`app-side-bar min-h-0 flex-col border-r border-(--biu-color-border) bg-(--biu-color-bg-subtle)${effectiveNarrow ? ' is-narrow overflow-visible' : ' overflow-hidden'}${drawerOpen ? ' is-drawer flex' : visible ? (entering ? ' flex is-entering' : ' flex') : ' is-closed flex'}`}
+      aria-hidden={!effectiveVisible}
       data-testid={testId}
       onAnimationEnd={() => setEntering(false)}
     >
-      {onWidthChange && !narrow ? (
+      {onWidthChange && !narrow && !drawerOpen && visible ? (
         <div
           className="sidebar-resize"
           data-biu-ignore
@@ -176,14 +190,14 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
           }}
         />
       ) : null}
-      {visible && narrow ? (
+      {visible && narrow && !drawerOpen ? (
         <ShellRailHead onExpand={onExpand} />
       ) : (
         <div className="app-side-bar-head app-side-bar-head-brand" data-biu-ignore>
           <div className="shell-workspace-head">
             <ShellWorkspaceSwitcher onWorkspaceSettings={() => onSettings?.('workspace')} />
           </div>
-          {!visible ? (
+          {!effectiveVisible ? (
             <button
               type="button"
               className="chat-view-header-expand"
@@ -201,7 +215,7 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
               title="收起左侧边栏"
               aria-label="收起左侧边栏"
               data-testid="sidebar-collapse"
-              onClick={onCollapse}
+              onClick={drawerOpen ? (onDrawerClose ?? onCollapse) : onCollapse}
             >
               <ChevronDoubleLeftIcon {...chromeIcon} />
             </button>
@@ -221,7 +235,7 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
       ) : null}
       {children}
       <ShellSidebarAccount
-        narrow={narrow}
+        narrow={effectiveNarrow}
         onOpenAccount={onSettings ? () => onSettings('account') : undefined}
       />
     </aside>

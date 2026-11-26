@@ -48,23 +48,31 @@ export class RecordViewsStore {
     const collection = normalizeCollectionPath(collectionPath)
     const id = String(recordId ?? '').trim()
     if (!collection || !id) return this.read(collection, id)
-    const current = this.read(collection, id)
-    const next: RecordViewCatalog = {
-      views: patch.views !== undefined ? parseRecordSandboxes(patch.views) : current.views,
-      propViews: patch.propViews !== undefined ? parseRecordSandboxes(patch.propViews) : current.propViews,
-      layouts: patch.layouts !== undefined ? parseRecordLayouts(patch.layouts) : current.layouts,
+    const db = this.ensure()
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      const current = this.read(collection, id)
+      const next: RecordViewCatalog = {
+        views: patch.views !== undefined ? parseRecordSandboxes(patch.views) : current.views,
+        propViews: patch.propViews !== undefined ? parseRecordSandboxes(patch.propViews) : current.propViews,
+        layouts: patch.layouts !== undefined ? parseRecordLayouts(patch.layouts) : current.layouts,
+      }
+      db
+        .prepare(
+          `INSERT INTO record_views (collection, record_id, views_json, prop_views_json, layouts_json)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(collection, record_id) DO UPDATE SET
+             views_json = excluded.views_json,
+             prop_views_json = excluded.prop_views_json,
+             layouts_json = excluded.layouts_json`,
+        )
+        .run(collection, id, JSON.stringify(next.views), JSON.stringify(next.propViews), JSON.stringify(next.layouts))
+      db.exec('COMMIT')
+      return next
+    } catch (error) {
+      db.exec('ROLLBACK')
+      throw error
     }
-    this.ensure()
-      .prepare(
-        `INSERT INTO record_views (collection, record_id, views_json, prop_views_json, layouts_json)
-         VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(collection, record_id) DO UPDATE SET
-           views_json = excluded.views_json,
-           prop_views_json = excluded.prop_views_json,
-           layouts_json = excluded.layouts_json`,
-      )
-      .run(collection, id, JSON.stringify(next.views), JSON.stringify(next.propViews), JSON.stringify(next.layouts))
-    return next
   }
 }
 

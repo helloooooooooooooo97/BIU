@@ -372,6 +372,7 @@ const CSS = `
 .fsdb-tool-flyout .tasks-sort-list,.fsdb-tool-flyout .fsdb-col-menu-list,.fsdb-page .fsdb-col-menu-list{min-height:0;overflow:auto;display:flex;flex-direction:column;gap:var(--biu-gap-flyout)}
 .fsdb-tool-flyout.fsdb-query-menu,.fsdb-page .fsdb-query-menu.fsdb-tool-flyout{overflow:auto}
 .fsdb-query-flyout.fsdb-page > .fsdb-tool-flyout{min-width:0;max-width:min(calc(100vw - 16px),var(--radix-popover-content-available-width,100vw));max-height:min(70vh,520px,var(--radix-popover-content-available-height,520px));overflow:auto}
+.fsdb-query-flyout.fsdb-page > .fsdb-tool-flyout.tasks-viewdd-menu{min-width:min(320px,calc(100vw - 16px))}
 .fsdb-tool-flyout .fsdb-query-menu:not(.fsdb-tool-flyout){padding:0;border:0;background:transparent;box-shadow:none;min-width:0;max-width:none;width:auto;max-height:none;overflow:visible;animation:none}
 .fsdb-tool-flyout .db-search-menu,.fsdb-query-menu .db-search-menu{box-shadow:none;border:0;background:transparent}
 .fsdb-tool-flyout .tasks-sort-search,.fsdb-tool-flyout .db-search-field,.fsdb-tool-flyout .db-search-field input,.fsdb-query-menu .db-search-field,.fsdb-query-menu .db-search-field input{background:transparent}
@@ -1372,6 +1373,10 @@ html.share .fsdb-crumb-menu.is-fixed,html.share .fsdb-cellselect-menu,html.share
 .fsdb-page .tasks-toolbar-right .tasks-refresh .fsdb-ui-glyph{color:inherit;fill:currentColor;background:currentColor;opacity:1}
 .fsdb-page .tasks-viewdd-btn svg,.fsdb-page .tasks-viewdd-btn .fsdb-ui-glyph,.fsdb-page .tasks-viewtab svg,.fsdb-page .tasks-viewtab .fsdb-ui-glyph{color:var(--biu-color-icon)!important;fill:currentColor;opacity:1}
 .fsdb-page .tasks-viewtab.is-active svg,.fsdb-page .tasks-viewtab.is-active .fsdb-ui-glyph,.fsdb-page .tasks-viewdd-btn.is-active svg,.fsdb-page .tasks-viewdd-btn.is-active .fsdb-ui-glyph{color:var(--biu-color-icon-active)!important}
+.fsdb-page .tasks-viewdd-btn .tasks-viewdd-protection{display:inline-flex;align-items:center;justify-content:center;flex:none}
+.fsdb-page .tasks-viewdd-btn .tasks-viewdd-protection.is-public svg,.fsdb-page .tasks-viewdd-btn .tasks-viewdd-protection.is-personal svg{color:var(--biu-color-icon-active)!important;opacity:1}
+.fsdb-page .tasks-viewdd-btn .tasks-viewdd-protection.is-locked svg{color:var(--biu-color-emphasis)!important;opacity:1}
+.fsdb-page .tasks-viewdd-act.is-locked,.fsdb-page .tasks-viewdd-act.is-locked svg,html:not(.dark) .tasks-viewdd-act.is-locked,html:not(.dark) .tasks-viewdd-act.is-locked svg{color:var(--biu-color-emphasis)}
 .fsdb-page .tasks-table thead .tasks-th svg,.fsdb-page .tasks-table thead .fsdb-field-bool-glyph{color:var(--biu-color-icon)!important;fill:currentColor;opacity:1}
 .fsdb-page .tasks-table thead .tasks-th.is-on svg,.fsdb-page .tasks-table thead .tasks-th.is-on .fsdb-field-bool-glyph{color:var(--biu-color-icon-active)!important}
 html:not(.dark) .tasks-viewdd-menu,

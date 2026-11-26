@@ -733,12 +733,15 @@ test('K+1 logical tables: workspace rules co-managed by admins, strict table iso
     true,
   )
 
-  // Admin Ada reclaims workspace record back to Cara's personal table -> External immediately loses access
-  auth.transferOwnerTable(actor(ada.id), page('cara-priv-client'), `account:${cara.id}`)
-  assert.equal(
-    auth.authorize(actor(ext.id), 'resource:read', { ...page('cara-priv-client'), record: { id: 'cara-priv-client', tag: 'client' } }).allowed,
-    false,
+  // Space records are strictly one-way: even workspace owner Ada CANNOT transfer a workspace record back to a personal table
+  assert.throws(
+    () => auth.transferOwnerTable(actor(ada.id), page('cara-priv-client'), `account:${cara.id}`),
+    /WORKSPACE_TRANSFER_OUT_FORBIDDEN/,
   )
+  // Switching the workspace record to 'restricted' restricts internal baseline without moving it out of workspace
+  store.setRecordAccessMode(ada.id, '/pages', 'cara-priv-client', 'restricted')
+  assert.equal(auth.ownerTableOf(page('cara-priv-client')), 'workspace')
+  assert.equal(auth.authorize(actor(cara.id), 'resource:read', page('cara-priv-client')).allowed, false)
 
   // Offboarding Bob preserves Bob's workspace rule while disabling Bob's personal rule
   const bobPersonalRule = store.createAccessRule(bob.id, workspace.id, {
@@ -763,4 +766,203 @@ test('anti-lockout: non-owner managers cannot self-revoke or downgrade themselve
     /不能移除自己的权限/,
   )
   assert.ok(workspace.id)
+})
+
+test('removeMember transfers personal owner_table to recipient while keeping workspace records in workspace table', () => {
+  const { store, auth, ada, bob, cara, workspace, actor, page } = setup()
+  runWithAccount(bob.id, () => {
+    store.attach(workspace.id, '/pages', 'bob-priv-1', 1, { accessMode: 'private' })
+    store.attach(workspace.id, '/pages', 'bob-ws-1', 1, { accessMode: 'members', memberDefaultRole: 'editor' })
+  })
+  assert.equal(auth.ownerTableOf(page('bob-priv-1')), `account:${bob.id}`)
+  assert.equal(auth.ownerTableOf(page('bob-ws-1')), 'workspace')
+
+  // Ada sets up a personal access rule sharing her personal records tagged 'handoff' to Cara
+  auth.setAccessRuleMatcher((_ws, _col, _tree, _id, ctx) => ctx.record?.tag === 'handoff')
+  store.createAccessRule(ada.id, workspace.id, {
+    collection: '/pages',
+    name: 'Ada Handoff Rule',
+    scope: 'personal',
+    grants: [{ subjectType: 'account', subjectId: cara.id, role: 'viewer' }],
+  })
+
+  // Offboard Bob -> personal record's owner_table transfers to account:<ada>, workspace record stays 'workspace'
+  store.removeMember(ada.id, workspace.id, bob.id)
+  assert.equal(auth.ownerTableOf(page('bob-priv-1')), `account:${ada.id}`)
+  assert.equal(auth.ownerTableOf(page('bob-ws-1')), 'workspace')
+
+  // Because owner_table is now account:<ada>, Ada's personal access rule immediately matches the transferred record
+  assert.equal(
+    auth.authorize(actor(cara.id), 'resource:read', { ...page('bob-priv-1'), record: { id: 'bob-priv-1', tag: 'handoff' } }).allowed,
+    true,
+  )
+  // Workspace record was NOT given a personal 'owner' grant to Ada
+  const wsDecision = auth.authorize(actor(ada.id), 'resource:read', page('bob-ws-1'))
+  assert.equal(wsDecision.allowed, true)
+  if (wsDecision.allowed) {
+    assert.equal(wsDecision.effectiveRole, 'manager')
+    assert.equal(wsDecision.source, 'workspace-default')
+  }
+})
+
+test('workspace table records have no personal owner privilege and block non-admin reclamation', () => {
+  const { store, auth, workspace, ada, bob, cara, actor, page } = setup()
+  store.updateMemberRole(ada.id, workspace.id, bob.id, 'admin')
+
+  // Normal member Cara creates a workspace record
+  auth.attach(actor(cara.id), page('team-spec'), { accessMode: 'members', memberDefaultRole: 'editor' })
+  const caraDecision = auth.authorize(actor(cara.id), 'resource:read', page('team-spec'))
+  assert.equal(caraDecision.allowed, true)
+  if (caraDecision.allowed) {
+    assert.equal(caraDecision.effectiveRole, 'editor')
+    assert.equal(caraDecision.source, 'workspace-default')
+  }
+  // Admin Bob has higher authority (manager) than creator Cara (editor)
+  const bobDecision = auth.authorize(actor(bob.id), 'resource:manage-permissions', page('team-spec'))
+  assert.equal(bobDecision.allowed, true)
+  assert.equal(auth.authorize(actor(cara.id), 'resource:manage-permissions', page('team-spec')).allowed, false)
+
+  // Workspace records cannot be moved back to any personal table (neither creator nor workspace admin)
+  assert.throws(
+    () => auth.transferOwnerTable(actor(cara.id), page('team-spec'), `account:${cara.id}`),
+    /WORKSPACE_TRANSFER_OUT_FORBIDDEN/,
+  )
+  assert.throws(
+    () => auth.transferOwnerTable(actor(bob.id), page('team-spec'), `account:${cara.id}`),
+    /WORKSPACE_TRANSFER_OUT_FORBIDDEN/,
+  )
+
+  // Transferring a personal record into workspace also strips the stale personal 'owner' grant
+  auth.attach(actor(cara.id), page('cara-draft'), { accessMode: 'private' })
+  auth.transferOwnerTable(actor(cara.id), page('cara-draft'), 'workspace')
+  const afterTransfer = auth.authorize(actor(cara.id), 'resource:read', page('cara-draft'))
+  assert.equal(afterTransfer.allowed, true)
+  if (afterTransfer.allowed) {
+    assert.equal(afterTransfer.effectiveRole, 'editor')
+  }
+  assert.throws(
+    () => auth.transferOwnerTable(actor(cara.id), page('cara-draft'), `account:${cara.id}`),
+    /WORKSPACE_TRANSFER_OUT_FORBIDDEN/,
+  )
+  assert.equal(auth.ownerTableOf(page('team-spec')), 'workspace')
+})
+
+test('workspace table supports restricted access mode decoupled from all-members baseline', () => {
+  const { store, auth, workspace, ada, bob, cara, actor, page } = setup()
+  store.updateMemberRole(ada.id, workspace.id, bob.id, 'admin')
+  const dave = store.register('Dave', Date.now(), 'secret1', 'dave@example.com')
+  store.addMemberByEmail(ada.id, workspace.id, dave.email)
+  store.setActive(dave.id, workspace.id)
+
+  runWithAccount(ada.id, () => {
+    store.attach(workspace.id, '/pages', 'finance-doc', 1, { accessMode: 'members', memberDefaultRole: 'editor' })
+  })
+  // Initially all internal members can read
+  assert.equal(auth.authorize(actor(cara.id), 'resource:read', page('finance-doc')).allowed, true)
+  assert.equal(auth.authorize(actor(dave.id), 'resource:read', page('finance-doc')).allowed, true)
+
+  // Admin Bob switches finance-doc to 'restricted' while keeping owner_table = 'workspace'
+  const restrictedInfo = store.setRecordAccessMode(bob.id, '/pages', 'finance-doc', 'restricted')
+  assert.equal(restrictedInfo.ownerTable, 'workspace')
+  assert.equal(restrictedInfo.accessMode, 'restricted')
+  assert.equal(auth.ownerTableOf(page('finance-doc')), 'workspace')
+
+  // Workspace owner/admin keep manager governance; normal members lose baseline access
+  assert.equal(auth.authorize(actor(ada.id), 'resource:manage-permissions', page('finance-doc')).allowed, true)
+  assert.equal(auth.authorize(actor(bob.id), 'resource:manage-permissions', page('finance-doc')).allowed, true)
+  assert.equal(auth.authorize(actor(cara.id), 'resource:read', page('finance-doc')).allowed, false)
+  assert.equal(auth.authorize(actor(dave.id), 'resource:read', page('finance-doc')).allowed, false)
+
+  // Explicit grant to Cara lets Cara read, edit, AND create-child (because it's still a workspace table!)
+  store.shareWithEmail(bob.id, '/pages', 'finance-doc', cara.email, 'editor', 'internal')
+  assert.equal(auth.authorize(actor(cara.id), 'resource:update', page('finance-doc')).allowed, true)
+  assert.equal(auth.authorize(actor(cara.id), 'resource:create-child', page('finance-doc')).allowed, true)
+  assert.equal(auth.authorize(actor(dave.id), 'resource:read', page('finance-doc')).allowed, false)
+
+  // Revoking Cara keeps access_mode as 'restricted' (reconcileRecordScope must NOT downgrade workspace table to 'private')
+  store.revokeRecordGrant(bob.id, '/pages', 'finance-doc', 'account', cara.id)
+  assert.equal(store.recordAccess(bob.id, '/pages', 'finance-doc').accessMode, 'restricted')
+  assert.equal(auth.authorize(actor(cara.id), 'resource:read', page('finance-doc')).allowed, false)
+
+  // Switching back to 'members' restores workspace-wide visibility
+  store.setRecordAccessMode(bob.id, '/pages', 'finance-doc', 'members')
+  assert.equal(auth.authorize(actor(dave.id), 'resource:read', page('finance-doc')).allowed, true)
+})
+
+test('canEditPersonalTable and foreign personal attach assign ownership to table owner while granting creator editor access', () => {
+  const { store, auth, workspace, ada, bob, cara, actor, page } = setup()
+  // Cara creates a personal record and shares it to Bob with viewer only -> Bob cannot create in Cara's personal table
+  auth.attach(actor(cara.id), page('cara-p1'), { accessMode: 'private' })
+  auth.grant(cara.id, page('cara-p1'), 'account', bob.id, 'viewer')
+  assert.equal(auth.canEditPersonalTable(actor(bob.id), workspace.id, '/pages', cara.id), false)
+
+  // Cara upgrades Bob to editor -> Bob can now create records in Cara's personal table
+  auth.grant(cara.id, page('cara-p1'), 'account', bob.id, 'editor')
+  assert.equal(auth.canEditPersonalTable(actor(bob.id), workspace.id, '/pages', cara.id), true)
+
+  // Bob attaches a new record targeting Cara's personal table -> owned by Cara, Bob gets editor access
+  auth.attach(actor(bob.id), page('bob-in-cara'), {
+    accessMode: 'private',
+    ownerTable: `account:${cara.id}`,
+  })
+  assert.equal(auth.ownerTableOf(page('bob-in-cara')), `account:${cara.id}`)
+  const caraDecision = auth.authorize(actor(cara.id), 'resource:manage-permissions', page('bob-in-cara'))
+  assert.equal(caraDecision.allowed, true)
+  if (caraDecision.allowed) assert.equal(caraDecision.effectiveRole, 'owner')
+  const bobDecision = auth.authorize(actor(bob.id), 'resource:update', page('bob-in-cara'))
+  assert.equal(bobDecision.allowed, true)
+  if (bobDecision.allowed) assert.equal(bobDecision.effectiveRole, 'editor')
+  assert.equal(auth.authorize(actor(ada.id), 'resource:read', page('bob-in-cara')).allowed, false)
+
+  // Workspace avatar update persists and appears in listWorkspaces
+  const updatedWs = store.updateWorkspace(ada.id, workspace.id, { avatar: 'data:image/png;base64,wsicon' })
+  assert.equal(updatedWs.avatar, 'data:image/png;base64,wsicon')
+  assert.equal(store.listWorkspaces(ada.id).find((w) => w.id === workspace.id)?.avatar, 'data:image/png;base64,wsicon')
+})
+
+test('transferOwnerTable cascades across same-table descendant subtree and preserves internal inheritance', () => {
+  const { auth, ada, bob, cara, actor, page } = setup()
+  // Cara builds a personal tree: folder -> child-inherit -> grandchild-inherit, plus child-custom
+  auth.attach(actor(cara.id), page('folder'), { accessMode: 'private' })
+  auth.attach(actor(cara.id), page('child-inherit'), {
+    accessMode: 'inherit',
+    parentCollection: '/pages',
+    parentRecordId: 'folder',
+  })
+  auth.attach(actor(cara.id), page('grandchild-inherit'), {
+    accessMode: 'inherit',
+    parentCollection: '/pages',
+    parentRecordId: 'child-inherit',
+  })
+  auth.attach(actor(cara.id), page('child-custom'), {
+    accessMode: 'private',
+    parentCollection: '/pages',
+    parentRecordId: 'folder',
+  })
+
+  // Before transfer: Bob cannot read any node
+  assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('folder')).allowed, false)
+  assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('grandchild-inherit')).allowed, false)
+
+  // Cara transfers folder to workspace -> entire same-table subtree migrates atomically
+  const res = auth.transferOwnerTable(actor(cara.id), page('folder'), 'workspace')
+  assert.equal(res.changed, true)
+  assert.equal(res.transferredCount, 4)
+  assert.equal(res.transferredDescendants, 3)
+
+  for (const id of ['folder', 'child-inherit', 'grandchild-inherit', 'child-custom']) {
+    assert.equal(auth.ownerTableOf(page(id)), 'workspace')
+    assert.equal(auth.authorize(actor(bob.id), 'resource:read', page(id)).allowed, true)
+  }
+  assert.equal(auth.authorize(actor(bob.id), 'resource:create-child', page('grandchild-inherit')).allowed, true)
+  assert.equal(auth.inheritanceInfo(page('grandchild-inherit')).mode, 'inherit')
+
+  // Once in workspace, transferring back to personal is strictly forbidden (must use duplicate instead)
+  assert.throws(
+    () => auth.transferOwnerTable(actor(ada.id), page('folder'), `account:${cara.id}`),
+    /WORKSPACE_TRANSFER_OUT_FORBIDDEN/,
+  )
+  for (const id of ['folder', 'child-inherit', 'grandchild-inherit', 'child-custom']) {
+    assert.equal(auth.ownerTableOf(page(id)), 'workspace')
+  }
 })

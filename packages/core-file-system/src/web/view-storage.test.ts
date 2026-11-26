@@ -259,16 +259,22 @@ test('saved views pull shares one in-flight list', () => {
   assert.match(src, /opts\?: \{ idle\?: boolean; force\?: boolean \}/)
   assert.match(src, /export function noteLocalSavedViewsWrite/)
   const crud = readFileSync(resolve(import.meta.dirname, './use-browser-view-crud.ts'), 'utf8')
-  assert.match(crud, /noteLocalSavedViewsWrite\(path\)/)
+  assert.match(crud, /beginPendingViewOp\(path/)
+  assert.match(crud, /commitPendingViewOp\(path/)
+  assert.match(crud, /rollbackPendingViewOp\(path/)
   assert.match(crud, /function deleteView/)
 })
 
-test('saved views pull keeps a newly remembered view missing from a stale list', async () => {
+test('authoritative pull removes server-deleted views while preserving pending local creations', async () => {
+  const { beginPendingViewOp, commitPendingViewOp, rollbackPendingViewOp } = await import('./view-storage.ts')
   const path = '/pages-keep-new-view'
   rememberViews(path, [
     { id: 'keep', name: '留下', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] },
-    { id: 'fresh', name: '新视图', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] },
+    { id: 'deleted-elsewhere', name: '别处已删', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] },
   ])
+  const pendingOpId = beginPendingViewOp(path, {
+    upsert: [{ id: 'fresh-pending', name: '在途新建', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] }],
+  })
   const prev = globalThis.fetch
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input)
@@ -285,12 +291,59 @@ test('saved views pull keeps a newly remembered view missing from a stale list',
   }) as typeof fetch
   try {
     await pullSavedViews([path], { force: true })
+    // 服务端已删除的 deleted-elsewhere 必须消失（杜绝诈尸），同时本地在途新建 fresh-pending 保留
     assert.deepEqual(
       loadViews(path).map((view) => view.id),
-      ['keep', 'fresh'],
+      ['keep', 'fresh-pending'],
     )
+    // 回滚在途新建后，只剩服务端权威视图 keep
+    rollbackPendingViewOp(path, pendingOpId)
+    assert.deepEqual(
+      loadViews(path).map((view) => view.id),
+      ['keep'],
+    )
+    // 提交带服务端权威列表的 op 时直接更新 serverViews
+    const op2 = beginPendingViewOp(path, {
+      upsert: [{ id: 'committed', name: '已提交', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] }],
+    })
+    commitPendingViewOp(path, op2, [
+      { id: 'keep', name: '留下', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] },
+      { id: 'committed', name: '服务端权威名', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] },
+    ])
+    assert.equal(loadViews(path).find((v) => v.id === 'committed')?.name, '服务端权威名')
   } finally {
     globalThis.fetch = prev
+  }
+})
+
+test('in-flight pullSavedViews discards stale response when workspace switches mid-flight', async () => {
+  const { resetWorkspaceClientCaches } = await import('./workspace-client-store.ts')
+  const path = '/pages-ws-race'
+  let releaseFetch!: () => void
+  const gate = new Promise<void>((r) => {
+    releaseFetch = r
+  })
+  const prevFetch = globalThis.fetch
+  globalThis.fetch = (async () => {
+    await gate
+    return new Response(
+      JSON.stringify({
+        items: [{ viewId: 'ws-a-view', title: '空间A视图', tablePath: path }],
+        total: 1,
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    )
+  }) as typeof fetch
+  try {
+    const pulling = pullSavedViews([path], { force: true })
+    // 切换工作区，触发 workspaceGen 递增并清空缓存
+    resetWorkspaceClientCaches()
+    releaseFetch()
+    const changed = await pulling
+    assert.equal(changed, false)
+    assert.deepEqual(loadViews(path), [])
+  } finally {
+    globalThis.fetch = prevFetch
   }
 })
 
@@ -814,17 +867,26 @@ test('catalogLockFilters and viewsForScope enforce strict K+1 view-to-table bind
   // Top-level cross-table view never locks $scope
   assert.deepEqual(catalogLockFilters('v-all', listed), { status: 'open' })
 
-  // savedViewFromRecord preserves ownerTable='all' and forces personal protection
-  const hydrated = savedViewFromRecord({
-    viewId: 'v-all',
+  // savedViewFromRecord preserves ownerTable='all', defaults to personal, and honors explicit public protection
+  const hydratedDefault = savedViewFromRecord({
+    viewId: 'v-all-default',
     title: '跨表汇总',
+    ownerTable: 'all',
+  })
+  assert.equal(hydratedDefault?.ownerTable, 'all')
+  assert.equal(hydratedDefault?.protection, 'personal')
+  assert.equal(hydratedDefault?.scope, 'personal')
+
+  const hydratedPublic = savedViewFromRecord({
+    viewId: 'v-all',
+    title: '跨表公开汇总',
     ownerTable: 'all',
     scope: 'workspace',
     protection: 'public',
   })
-  assert.equal(hydrated?.ownerTable, 'all')
-  assert.equal(hydrated?.protection, 'personal')
-  assert.equal(hydrated?.scope, 'personal')
+  assert.equal(hydratedPublic?.ownerTable, 'all')
+  assert.equal(hydratedPublic?.protection, 'public')
+  assert.equal(hydratedPublic?.scope, 'workspace')
 
   // Real view belonging to another user's personal table locks $scope='shared' + $ownerTable when viewer != owner
   const bobPublicView = {

@@ -1610,6 +1610,29 @@ export const BIU_MIGRATIONS: Migration[] = [
       db.exec(`DELETE FROM resource_policies WHERE collection = '/views'`)
     }
   } },
+  { version: 60, module: 'host-account', name: 'workspace-members.single-identity', up: (db) => {
+    if (!hasTable(db, 'workspace_members') || !hasTable(db, 'accounts')) return
+    const memberCols = tableColumnNames(db, 'workspace_members')
+    const accountCols = tableColumnNames(db, 'accounts')
+    if (memberCols.includes('avatar') && accountCols.includes('avatar')) {
+      // 将历史全局头像一次性平滑迁入尚未自定义头像的空间成员行，之后空间内头像完全以 workspace_members.avatar 为准
+      db.exec(
+        `UPDATE workspace_members
+         SET avatar = COALESCE((SELECT a.avatar FROM accounts a WHERE a.id = workspace_members.account_id), '')
+         WHERE COALESCE(avatar, '') = ''
+           AND EXISTS (
+             SELECT 1 FROM accounts a
+             WHERE a.id = workspace_members.account_id AND COALESCE(a.avatar, '') != ''
+           )`,
+      )
+      db.exec(
+        `UPDATE accounts
+         SET avatar = ''
+         WHERE COALESCE(avatar, '') != ''
+           AND EXISTS (SELECT 1 FROM workspace_members m WHERE m.account_id = accounts.id)`,
+      )
+    }
+  } },
 ]
 
 export function assertBiuMigrationLog(rows: Array<{ version: number }> = BIU_MIGRATIONS) {

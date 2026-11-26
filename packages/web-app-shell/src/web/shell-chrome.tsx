@@ -4,7 +4,7 @@ import { syncWorkspaceEndpoint } from '@biu/biu-ui/workspace-transport'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type Ref } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ArrowPathIcon, ArrowRightStartOnRectangleIcon, BellIcon, ChatBubbleLeftRightIcon, CheckIcon, ChevronRightIcon, CircleStackIcon, ClipboardDocumentIcon, CloudIcon, ComputerDesktopIcon, Cog6ToothIcon, CameraIcon, EyeIcon, EyeSlashIcon, MagnifyingGlassIcon, PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
+import { ArrowPathIcon, ArrowRightStartOnRectangleIcon, BellIcon, ChatBubbleLeftRightIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, CircleStackIcon, ClipboardDocumentIcon, CloudIcon, ComputerDesktopIcon, Cog6ToothIcon, CameraIcon, EyeIcon, EyeSlashIcon, MagnifyingGlassIcon, PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { AnchorMenu } from '@biu/biu-ui/anchor-menu'
 import {
   AI_AVATAR_THEMES,
@@ -97,10 +97,10 @@ export function ShellSettingsAccount() {
   const avatarFileRef = useRef<HTMLInputElement>(null)
   const saveSeqRef = useRef(0)
   const token = readAccountToken()
-  const currentName = workspaceProfile.name || account.name
-  const currentAvatar = workspaceProfile.avatar || account.avatar
+  const currentName = workspaceProfile.name || workspaceProfile.fallbackName || account.name
+  const currentAvatar = workspaceProfile.hydrated ? workspaceProfile.avatar : (workspaceProfile.avatar || account.avatar)
   const activeAiTheme = detectAiAvatarTheme(currentAvatar)
-  const baseSeed = account.id || currentName || account.email || 'biu-ai'
+  const baseSeed = workspaceProfile.accountId || account.id || currentName || workspaceProfile.email || account.email || 'biu-ai'
 
   useEffect(() => {
     if (!token) return
@@ -122,7 +122,7 @@ export function ShellSettingsAccount() {
             }
           : { id: '', name: '', email: '', avatar: '', online: false }
         setAccount(nextAccount)
-        setAccountName(wp?.name || nextAccount.name)
+        setAccountName(wp?.name || wp?.fallbackName || nextAccount.name)
       })
     }
     load()
@@ -134,18 +134,28 @@ export function ShellSettingsAccount() {
   }, [token])
 
   useEffect(() => {
-    if (workspaceProfile.name) setAccountName(workspaceProfile.name)
-  }, [workspaceProfile.name])
+    if (workspaceProfile.name || workspaceProfile.fallbackName) {
+      setAccountName(workspaceProfile.name || workspaceProfile.fallbackName || '')
+    }
+  }, [workspaceProfile.name, workspaceProfile.fallbackName])
 
   const saveAccountProfile = (patch: { name?: string; avatar?: string }, successText: string) => {
     if (!token) return
     const seq = ++saveSeqRef.current
     const isAvatarOnly = patch.avatar !== undefined && patch.name === undefined
     const previousAccount = account
-    const previousWorkspace = { name: currentName, avatar: currentAvatar }
+    const previousWorkspace = {
+      name: workspaceProfile.name,
+      avatar: currentAvatar,
+      accountId: workspaceProfile.accountId,
+      email: workspaceProfile.email,
+      fallbackName: workspaceProfile.fallbackName,
+      hydrated: workspaceProfile.hydrated,
+    }
     const nextOptimistic = {
-      name: patch.name !== undefined ? patch.name : currentName,
+      name: patch.name !== undefined ? patch.name : workspaceProfile.name,
       avatar: patch.avatar !== undefined ? patch.avatar : currentAvatar,
+      hydrated: true,
     }
     if (isAvatarOnly) {
       // Optimistically apply avatar without toggling disabled opacity across all swatches (eliminates flash).
@@ -166,14 +176,24 @@ export function ShellSettingsAccount() {
         resetWorkspaceProfileHydrate()
         const savedName = String(body.name ?? nextOptimistic.name)
         const savedAvatar = String(body.avatar ?? '')
-        writeWorkspaceProfile({ name: savedName, avatar: savedAvatar })
+        const savedAccountId = typeof body.accountId === 'string' ? body.accountId : workspaceProfile.accountId
+        const savedEmail = typeof body.email === 'string' ? body.email : workspaceProfile.email
+        const savedFallbackName = typeof body.fallbackName === 'string' ? body.fallbackName : workspaceProfile.fallbackName
+        writeWorkspaceProfile({
+          name: savedName,
+          avatar: savedAvatar,
+          accountId: savedAccountId,
+          email: savedEmail,
+          fallbackName: savedFallbackName,
+          hydrated: true,
+        })
         setAccount((prev) => ({
           ...prev,
           email: String(body.email ?? prev.email),
-          name: savedName || prev.name,
+          name: savedName || savedFallbackName || prev.name,
           avatar: savedAvatar,
         }))
-        if (!isAvatarOnly) setAccountName(savedName)
+        if (!isAvatarOnly) setAccountName(savedName || savedFallbackName || '')
         setProfileMessage(successText)
         window.dispatchEvent(new Event(ACCOUNT_EVENT))
       })
@@ -222,7 +242,7 @@ export function ShellSettingsAccount() {
               <img src={currentAvatar} alt="" />
             ) : (
               <AiAvatar
-                seed={account.id || currentName || account.email || 'biu-ai'}
+                seed={baseSeed}
                 className="settings-account-ai-avatar"
                 data-testid="settings-account-default-avatar"
               />
@@ -1222,7 +1242,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   )
 }
 
-type CollabWorkspace = { id: string; name: string; role: string; location?: 'device' | 'cloud' }
+type CollabWorkspace = { id: string; name: string; avatar?: string; role: string; location?: 'device' | 'cloud' }
 
 export function useActiveWorkspaceLocation(): 'device' | 'cloud' {
   const [location, setLocation] = useState<'device' | 'cloud'>('device')
@@ -1259,8 +1279,101 @@ export function useActiveWorkspaceLocation(): 'device' | 'cloud' {
   }, [])
   return location
 }
-type CollabMember = { id: string; name: string; email?: string; role: string }
+type CollabMember = { id: string; name: string; email?: string; avatar?: string; role: string }
 type CollabPresence = { accountId: string; name: string; collection: string; recordId: string }
+
+type SettingsSelectOption<T extends string = string> = {
+  value: T
+  label: string
+  description?: string
+}
+
+function SettingsSelect<T extends string>({
+  value,
+  options,
+  ariaLabel,
+  className = '',
+  menuMinWidth = 200,
+  testId,
+  onChange,
+}: {
+  value: T
+  options: ReadonlyArray<SettingsSelectOption<T>>
+  ariaLabel: string
+  className?: string
+  menuMinWidth?: number
+  testId?: string
+  onChange: (next: T) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const selected = options.find((item) => item.value === value) ?? options[0]
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        role="combobox"
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        data-testid={testId}
+        className={`settings-select-trigger${open ? ' is-open' : ''}${className ? ` ${className}` : ''}`}
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <span className="settings-select-value">{selected?.label ?? value}</span>
+        <ChevronDownIcon aria-hidden className="settings-select-chevron size-3.5" />
+      </button>
+      {open ? (
+        <AnchorMenu
+          anchor={triggerRef.current}
+          onClose={() => setOpen(false)}
+          className="settings-select-menu"
+          role="listbox"
+          aria-label={ariaLabel}
+          minWidth={menuMinWidth}
+          zIndex={420}
+        >
+          {options.map((opt) => {
+            const active = opt.value === value
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                role="option"
+                aria-selected={active}
+                className={`settings-select-option${active ? ' is-active' : ''}`}
+                onClick={() => {
+                  setOpen(false)
+                  if (opt.value !== value) onChange(opt.value)
+                }}
+              >
+                <span className="settings-select-option-copy">
+                  <strong>{opt.label}</strong>
+                  {opt.description ? <small>{opt.description}</small> : null}
+                </span>
+                {active ? <CheckIcon aria-hidden className="settings-select-check size-3.5" /> : null}
+              </button>
+            )
+          })}
+        </AnchorMenu>
+      ) : null}
+    </>
+  )
+}
+
+const MEMBER_ROLE_OPTIONS: ReadonlyArray<SettingsSelectOption<'owner' | 'admin' | 'member' | 'viewer'>> = [
+  { value: 'owner', label: '所有者', description: '转让空间所有权' },
+  { value: 'admin', label: '管理者', description: '管理成员、设置与空间规则' },
+  { value: 'member', label: '编辑者', description: '创建与编辑空间数据' },
+  { value: 'viewer', label: '查看者', description: '仅只读查看获准内容' },
+]
+
+const INVITE_ROLE_OPTIONS: ReadonlyArray<SettingsSelectOption<'viewer' | 'member'>> = [
+  { value: 'viewer', label: '查看者', description: '加入后仅可查看' },
+  { value: 'member', label: '编辑者', description: '加入后可协作编辑' },
+]
 
 function workspaceRoleLabel(role: string) {
   if (role === 'owner') return '所有者'
@@ -1527,17 +1640,25 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
               <Cog6ToothIcon className="size-4" />
               <span>空间设置</span>
             </button>
-            {hostOnline ? null : (
+            {hostOnline ? null : (() => {
+              const isDeviceActive = current.location !== 'cloud'
+              const localShownName = isDeviceActive
+                ? (workspaceProfile.name || workspaceProfile.fallbackName || localAccount || '本机账号')
+                : (localAccount || '本机账号')
+              const localShownAvatar = isDeviceActive
+                ? (workspaceProfile.hydrated ? workspaceProfile.avatar : (workspaceProfile.avatar || localAvatar))
+                : localAvatar
+              return (
               <div className="shell-workspace-menu-account" data-testid="shell-workspace-local-account">
                 <span className="shell-workspace-account-avatar" aria-hidden>
-                  {(workspaceProfile.avatar || localAvatar) ? (
-                    <img src={workspaceProfile.avatar || localAvatar} alt="" />
+                  {localShownAvatar ? (
+                    <img src={localShownAvatar} alt="" />
                   ) : (
-                    <AiAvatar seed={localAccountId || workspaceProfile.name || localAccount || 'biu-ai'} />
+                    <AiAvatar seed={(isDeviceActive && workspaceProfile.accountId) || localAccountId || localShownName || 'biu-ai'} />
                   )}
                 </span>
                 <span className="shell-workspace-menu-copy">
-                  <strong>{workspaceProfile.name || localAccount || '本机账号'}</strong>
+                  <strong>{localShownName}</strong>
                 </span>
                 <button
                   type="button"
@@ -1551,11 +1672,19 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                   <ArrowRightStartOnRectangleIcon aria-hidden />
                 </button>
               </div>
-            )}
+              )
+            })()}
             {(() => {
               const activeCloud = cloudAccounts.find((item) => item.active)
-              const shownName = workspaceProfile.name || localAccount
-              const shownAvatar = workspaceProfile.avatar || localAvatar
+              const isCloudActive = current.location === 'cloud'
+              const shownName = workspaceProfile.name || workspaceProfile.fallbackName || localAccount
+              const shownAvatar = workspaceProfile.hydrated ? workspaceProfile.avatar : (workspaceProfile.avatar || localAvatar)
+              const cloudShownAvatar = isCloudActive
+                ? (workspaceProfile.hydrated ? workspaceProfile.avatar : (workspaceProfile.avatar || activeCloud?.avatar || ''))
+                : (activeCloud?.avatar || '')
+              const cloudShownName = isCloudActive
+                ? (workspaceProfile.name || workspaceProfile.fallbackName || activeCloud?.name || activeCloud?.email || '暂时无账号')
+                : (activeCloud?.name || activeCloud?.email || '暂时无账号')
               return (
                 <div className="shell-workspace-menu-account" data-testid="shell-workspace-cloud-account">
                   {hostOnline ? (
@@ -1563,15 +1692,15 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                       {shownAvatar ? (
                         <img src={shownAvatar} alt="" />
                       ) : (
-                        <AiAvatar seed={localAccountId || shownName || 'biu-ai'} />
+                        <AiAvatar seed={workspaceProfile.accountId || localAccountId || shownName || 'biu-ai'} />
                       )}
                     </span>
                   ) : activeCloud ? (
                     <span className="shell-workspace-account-avatar" aria-hidden>
-                      {(current.location === 'cloud' && workspaceProfile.avatar) || activeCloud.avatar ? (
-                        <img src={(current.location === 'cloud' && workspaceProfile.avatar) || activeCloud.avatar} alt="" />
+                      {cloudShownAvatar ? (
+                        <img src={cloudShownAvatar} alt="" />
                       ) : (
-                        <AiAvatar seed={activeCloud.id || activeCloud.name || activeCloud.email || 'biu-ai'} />
+                        <AiAvatar seed={(isCloudActive && workspaceProfile.accountId) || activeCloud.id || cloudShownName || activeCloud.email || 'biu-ai'} />
                       )}
                     </span>
                   ) : (
@@ -1579,12 +1708,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                   )}
                   <span className="shell-workspace-menu-copy">
                     <strong className={!hostOnline && !activeCloud ? 'is-empty' : ''}>
-                      {hostOnline
-                        ? (shownName || '云端账号')
-                        : ((current.location === 'cloud' && workspaceProfile.name)
-                          || activeCloud?.name
-                          || activeCloud?.email
-                          || '暂时无账号')}
+                      {hostOnline ? (shownName || '云端账号') : cloudShownName}
                     </strong>
                   </span>
                   <span className="shell-workspace-menu-account-actions">
@@ -1738,6 +1862,7 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
   const [inviteId, setInviteId] = useState('')
   const [inviteRole, setInviteRole] = useState<'member' | 'viewer'>('viewer')
   const [workspaceInviteUrl, setWorkspaceInviteUrl] = useState('')
+  const [inviteCopied, setInviteCopied] = useState(false)
   const [presence, setPresence] = useState<CollabPresence[]>([])
   const [pendingRemove, setPendingRemove] = useState<CollabMember | null>(null)
   const [deleteName, setDeleteName] = useState('')
@@ -1794,14 +1919,42 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
 
   useEffect(() => {
     if (panel !== 'members' || !token || !workspaceId) return
-    void loadWorkspace(token, workspaceId).catch((err) => {
-      setError(err instanceof Error ? err.message : '无法读取工作区')
-    })
+    const sync = () => {
+      void loadWorkspace(token, workspaceId).catch((err) => {
+        setError(err instanceof Error ? err.message : '无法读取工作区')
+      })
+    }
+    sync()
+    window.addEventListener('biu:workspace-profile', sync)
+    window.addEventListener(ACCOUNT_EVENT, sync)
+    return () => {
+      window.removeEventListener('biu:workspace-profile', sync)
+      window.removeEventListener(ACCOUNT_EVENT, sync)
+    }
   }, [panel, token, workspaceId, loadWorkspace])
 
   const currentWorkspace = workspaces.find((row) => row.id === workspaceId)
   const workspaceRole = currentWorkspace?.role
   const savedWorkspaceName = currentWorkspace?.name ?? ''
+  const currentWorkspaceAvatar = currentWorkspace?.avatar?.trim() ?? ''
+  const workspaceAvatarFileRef = useRef<HTMLInputElement | null>(null)
+  const [savingWorkspaceAvatar, setSavingWorkspaceAvatar] = useState(false)
+  const saveWorkspaceAvatar = (avatar: string) => {
+    if (!token || !workspaceId || !canManage) return
+    setSavingWorkspaceAvatar(true)
+    void accountFetch(token, `/api/account/workspaces/${workspaceId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ avatar }),
+    })
+      .then((body) => {
+        const updated = body as CollabWorkspace
+        setWorkspaces((rows) => rows.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)))
+        setError('')
+        window.dispatchEvent(new Event(ACCOUNT_EVENT))
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : '保存空间头像失败'))
+      .finally(() => setSavingWorkspaceAvatar(false))
+  }
   const canManage = workspaceRole === 'owner' || workspaceRole === 'admin'
   const canDeleteWorkspace = workspaceRole === 'owner'
   const canChangeRoles = workspaceRole === 'owner'
@@ -1826,12 +1979,68 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
         <p className="settings-muted settings-account-lead">
           {panel === 'workspace'
             ? '设置当前选中的空间。空间切换和新建空间请使用左上角菜单。'
-            : '管理当前空间的个人资料、成员和邀请。需要分类时，可贴标签并保存视图。'}
+            : '管理当前空间的成员角色、邀请方式与在线状态。'}
         </p>
       </header>
       {error ? <p className="settings-account-error" data-testid="settings-collab-error">{error}</p> : null}
       {panel === 'workspace' ? (
       <>
+      <div className="settings-account-row">
+        <div className="settings-account-copy">
+          <span className="settings-account-label">空间头像</span>
+          <p className="settings-muted settings-account-hint">
+            {canManage ? '设置当前空间的头像，将展示在侧边栏与空间数据入口。' : '只有空间所有者或管理者可以修改空间头像。'}
+          </p>
+        </div>
+        <div className="settings-account-photo is-compact">
+          <button
+            type="button"
+            className="settings-account-avatar is-compact"
+            data-testid="settings-workspace-avatar"
+            title={canManage ? '更换空间头像' : '空间头像'}
+            aria-label="更换空间头像"
+            disabled={!canManage || savingWorkspaceAvatar}
+            onClick={() => workspaceAvatarFileRef.current?.click()}
+          >
+            {currentWorkspaceAvatar ? (
+              <img src={currentWorkspaceAvatar} alt="" />
+            ) : (
+              <AiAvatar seed={workspaceId || 'workspace'} className="settings-account-ai-avatar" />
+            )}
+            {canManage ? (
+              <span className="settings-account-avatar-veil" aria-hidden>
+                <CameraIcon className="size-4" />
+              </span>
+            ) : null}
+          </button>
+          {canManage && currentWorkspaceAvatar ? (
+            <button
+              type="button"
+              className="settings-account-clear"
+              data-testid="settings-workspace-reset-avatar"
+              disabled={savingWorkspaceAvatar}
+              onClick={() => saveWorkspaceAvatar('')}
+            >
+              恢复默认
+            </button>
+          ) : null}
+          <input
+            ref={workspaceAvatarFileRef}
+            type="file"
+            accept="image/*"
+            hidden
+            data-testid="settings-workspace-avatar-file"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              if (!file) return
+              void readAvatarFile(file)
+                .then((dataUrl) => saveWorkspaceAvatar(dataUrl))
+                .catch((err) => setError(err instanceof Error ? err.message : '无法读取头像图片'))
+            }}
+          />
+        </div>
+      </div>
       <form
         className="settings-account-row"
         onSubmit={(event) => {
@@ -1953,25 +2162,39 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
         }}
       >
         <div className="settings-account-copy">
-          <label className="settings-account-label" htmlFor="settings-collab-invite">空间成员</label>
+          <div className="settings-member-section-head">
+            <label className="settings-account-label" htmlFor="settings-collab-invite">空间成员</label>
+            {members.length ? <span className="settings-member-count">{members.length}</span> : null}
+          </div>
           <p className="settings-muted settings-account-hint">
             所有者管理管理员；管理员可以邀请和移除普通成员。
           </p>
-          <ul className="settings-account-people" data-testid="settings-collab-members">
+          <ul className="settings-account-people settings-member-list" data-testid="settings-collab-members">
             {members.length ? members.map((row) => (
               <li key={row.id} className="settings-member-row">
-                <span className="settings-member-identity">
-                  <strong title={row.name || row.email}>{row.name || row.email || '未命名成员'}</strong>
-                  {row.email && row.email !== row.name ? <small title={row.email}>{row.email}</small> : null}
+                <span className="settings-member-person">
+                  <span className="settings-member-avatar" aria-hidden>
+                    {row.avatar ? (
+                      <img src={row.avatar} alt="" />
+                    ) : (
+                      <AiAvatar seed={row.id || row.name || row.email || 'biu-ai'} />
+                    )}
+                  </span>
+                  <span className="settings-member-identity">
+                    <strong title={row.name || row.email}>{row.name || row.email || '未命名成员'}</strong>
+                    {row.email && row.email !== row.name ? <small title={row.email}>{row.email}</small> : null}
+                  </span>
                 </span>
                 <span className="settings-member-controls">
                   {canChangeRoles && row.role !== 'owner' ? (
-                  <select
-                    className="settings-account-input settings-member-role"
-                    aria-label={`修改 ${row.name || row.email} 的角色`}
+                  <SettingsSelect
+                    className="settings-member-role"
+                    ariaLabel={`修改 ${row.name || row.email} 的角色`}
+                    testId={`settings-member-role-${row.id}`}
                     value={row.role === 'admin' || row.role === 'viewer' ? row.role : 'member'}
-                    onChange={(event) => {
-                      const nextRole = event.target.value
+                    options={MEMBER_ROLE_OPTIONS}
+                    menuMinWidth={210}
+                    onChange={(nextRole) => {
                       void accountFetch(token, `/api/account/workspaces/${workspaceId}/members/${row.id}`, {
                         method: 'PATCH',
                         body: JSON.stringify({ role: nextRole }),
@@ -1987,12 +2210,7 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
                         })
                         .catch((err) => setError(err instanceof Error ? err.message : '修改角色失败'))
                     }}
-                  >
-                    <option value="owner">所有者</option>
-                    <option value="admin">管理者</option>
-                    <option value="member">编辑者</option>
-                    <option value="viewer">查看者（只读）</option>
-                  </select>
+                  />
                   ) : (
                     <span className="settings-member-role-label">
                       {row.role === 'owner' ? '所有者' : row.role === 'admin' ? '管理者' : row.role === 'viewer' ? '查看者' : '编辑者'}
@@ -2001,7 +2219,7 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
                   {canManage && row.role !== 'owner' && (workspaceRole === 'owner' || row.role === 'member' || row.role === 'viewer') ? (
                   <button
                     type="button"
-                    className="settings-account-clear"
+                    className="settings-account-clear settings-member-remove"
                     onClick={() => setPendingRemove(row)}
                   >
                     移除
@@ -2009,83 +2227,127 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
                   ) : null}
                 </span>
               </li>
-            )) : <li className="settings-muted">当前空间还没有其他成员。</li>}
+            )) : <li className="settings-muted settings-member-empty">当前空间还没有其他成员。</li>}
           </ul>
         </div>
         {canManage ? (
           <div className="settings-member-invite">
-            <p className="settings-account-label">邀请成员</p>
-            <div className="settings-member-invite-row">
-              <input
-                id="settings-collab-invite"
-                className="settings-account-input"
-                value={inviteId}
-                placeholder="成员的登录邮箱"
-                type="email"
-                data-testid="settings-collab-invite"
-                onChange={(event) => setInviteId(event.target.value)}
-              />
-              <button type="submit" className="settings-account-action" disabled={!token || !workspaceId || !inviteId.trim()}>
-                邀请
-              </button>
+            <div className="settings-member-invite-block">
+              <div className="settings-member-invite-copy">
+                <p className="settings-account-label">邀请成员</p>
+                <p className="settings-muted settings-account-hint">通过登录邮箱直接将已有账号加入空间。</p>
+              </div>
+              <div className="settings-member-invite-row">
+                <input
+                  id="settings-collab-invite"
+                  className="settings-account-input"
+                  value={inviteId}
+                  placeholder="成员的登录邮箱"
+                  type="email"
+                  data-testid="settings-collab-invite"
+                  onChange={(event) => setInviteId(event.target.value)}
+                />
+                <button type="submit" className="settings-account-action" disabled={!token || !workspaceId || !inviteId.trim()}>
+                  邀请
+                </button>
+              </div>
             </div>
-            <p className="settings-account-label">邀请链接</p>
-            <div className="settings-member-invite-row">
-              <select
-                className="settings-account-input"
-                aria-label="邀请链接角色"
-                value={inviteRole}
-                onChange={(event) => setInviteRole(event.target.value === 'member' ? 'member' : 'viewer')}
-              >
-                <option value="viewer">查看者</option>
-                <option value="member">编辑者</option>
-              </select>
-              <button
-                type="button"
-                className="settings-account-action"
-                data-testid="settings-collab-invite-link"
-                onClick={() => {
-                  void accountFetch(token, `/api/account/workspaces/${workspaceId}/invites`, {
-                    method: 'POST',
-                    body: JSON.stringify({ role: inviteRole, expiresInHours: 168 }),
-                  })
-                    .then(async (body) => {
-                      const url =
-                        typeof body.url === 'string' && body.url.trim()
-                          ? body.url.trim()
-                          : new URL(String(body.path ?? '/'), window.location.origin).toString()
-                      setWorkspaceInviteUrl(url)
-                      await navigator.clipboard.writeText(url).catch(() => undefined)
-                      setError('')
+            <div className="settings-member-invite-block">
+              <div className="settings-member-invite-copy">
+                <p className="settings-account-label">邀请链接</p>
+                <p className="settings-muted settings-account-hint">选择默认权限并生成 7 天有效的加入链接。</p>
+              </div>
+              <div className="settings-member-invite-row is-link-row">
+                <SettingsSelect
+                  className="settings-invite-role"
+                  ariaLabel="邀请链接角色"
+                  testId="settings-invite-role"
+                  value={inviteRole}
+                  options={INVITE_ROLE_OPTIONS}
+                  menuMinWidth={190}
+                  onChange={(next) => setInviteRole(next)}
+                />
+                <button
+                  type="button"
+                  className="settings-account-action"
+                  data-testid="settings-collab-invite-link"
+                  onClick={() => {
+                    void accountFetch(token, `/api/account/workspaces/${workspaceId}/invites`, {
+                      method: 'POST',
+                      body: JSON.stringify({ role: inviteRole, expiresInHours: 168 }),
                     })
-                    .catch((err) => setError(err instanceof Error ? err.message : '生成邀请链接失败'))
-                }}
-              >
-                生成链接
-              </button>
+                      .then(async (body) => {
+                        const url =
+                          typeof body.url === 'string' && body.url.trim()
+                            ? body.url.trim()
+                            : new URL(String(body.path ?? '/'), window.location.origin).toString()
+                        setWorkspaceInviteUrl(url)
+                        setInviteCopied(true)
+                        window.setTimeout(() => setInviteCopied(false), 1800)
+                        await navigator.clipboard.writeText(url).catch(() => undefined)
+                        setError('')
+                      })
+                      .catch((err) => setError(err instanceof Error ? err.message : '生成邀请链接失败'))
+                  }}
+                >
+                  {inviteCopied ? '已复制链接' : '生成链接'}
+                </button>
+              </div>
+              {workspaceInviteUrl ? (
+                <div className="settings-member-invite-url-row">
+                  <input
+                    className="settings-account-input settings-member-invite-url"
+                    aria-label="空间邀请链接"
+                    readOnly
+                    value={workspaceInviteUrl}
+                    onFocus={(event) => event.currentTarget.select()}
+                  />
+                  <button
+                    type="button"
+                    className="settings-account-action"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(workspaceInviteUrl).then(() => {
+                        setInviteCopied(true)
+                        window.setTimeout(() => setInviteCopied(false), 1800)
+                      }).catch(() => undefined)
+                    }}
+                  >
+                    {inviteCopied ? <CheckIcon aria-hidden className="size-3.5" /> : <ClipboardDocumentIcon aria-hidden className="size-3.5" />}
+                    <span>{inviteCopied ? '已复制' : '复制'}</span>
+                  </button>
+                </div>
+              ) : null}
             </div>
-            {workspaceInviteUrl ? (
-            <input
-              className="settings-account-input settings-member-invite-url"
-              aria-label="空间邀请链接"
-              readOnly
-              value={workspaceInviteUrl}
-              onFocus={(event) => event.currentTarget.select()}
-            />
-            ) : null}
           </div>
         ) : null}
       </form>
       <div className="settings-account-row">
         <div className="settings-account-copy">
-          <p className="settings-account-label">正在看</p>
-          <ul className="settings-account-people" data-testid="settings-collab-presence">
-            {presence.length ? presence.map((row) => (
-              <li key={row.accountId}>
-                {row.name}
-                {row.collection && row.recordId ? ` · ${row.collection}/${row.recordId}` : ''}
-              </li>
-            )) : <li className="settings-muted">打开工作区后，30 秒内有心跳的人会出现在这里。</li>}
+          <div className="settings-member-section-head">
+            <p className="settings-account-label">正在看</p>
+            {presence.length ? <span className="settings-member-count">{presence.length}</span> : null}
+          </div>
+          <ul className="settings-account-people settings-presence-list" data-testid="settings-collab-presence">
+            {presence.length ? presence.map((row) => {
+              const member = members.find((m) => m.id === row.accountId)
+              const displayName = member?.name || row.name
+              return (
+                <li key={row.accountId} className="settings-presence-pill">
+                  <span className="settings-presence-dot" aria-hidden />
+                  <span className="settings-presence-avatar" aria-hidden>
+                    {member?.avatar ? (
+                      <img src={member.avatar} alt="" />
+                    ) : (
+                      <AiAvatar seed={row.accountId || displayName || 'biu-ai'} />
+                    )}
+                  </span>
+                  <span className="settings-presence-name">{displayName}</span>
+                  {row.collection && row.recordId ? (
+                    <span className="settings-presence-path">{row.collection}/{row.recordId}</span>
+                  ) : null}
+                </li>
+              )
+            }) : <li className="settings-muted">打开工作区后，30 秒内有心跳的人会出现在这里。</li>}
           </ul>
         </div>
       </div>
@@ -3014,9 +3276,11 @@ export function ShellSidebarAccount({
   }, [])
 
   if (!account) return null
-  const displayName = workspaceProfile.name || account.name || account.email || '账户'
-  const displayAvatar = workspaceProfile.avatar || account.avatar
-  const showEmail = Boolean(account.email && account.email !== displayName)
+  const displayName = workspaceProfile.name || workspaceProfile.fallbackName || account.name || account.email || '账户'
+  const displayAvatar = workspaceProfile.hydrated ? workspaceProfile.avatar : (workspaceProfile.avatar || account.avatar)
+  const displayEmail = workspaceProfile.email || account.email
+  const displaySeed = workspaceProfile.accountId || account.id || displayName || 'biu-ai'
+  const showEmail = Boolean(displayEmail && displayEmail !== displayName)
 
   return (
     <div className="shell-sidebar-account-wrap" data-biu-ignore>
@@ -3025,7 +3289,7 @@ export function ShellSidebarAccount({
         className="shell-sidebar-account"
         data-testid="shell-sidebar-account"
         data-dock-tip={narrow ? displayName : undefined}
-        title={narrow ? undefined : (showEmail ? `${displayName} (${account.email})` : displayName)}
+        title={narrow ? undefined : (showEmail ? `${displayName} (${displayEmail})` : displayName)}
         aria-label={`个人账户：${displayName}`}
         onClick={onOpenAccount}
       >
@@ -3034,14 +3298,14 @@ export function ShellSidebarAccount({
             <img src={displayAvatar} alt="" />
           ) : (
             <AiAvatar
-              seed={account.id || displayName || 'biu-ai'}
+              seed={displaySeed}
               className="shell-sidebar-account-ai-avatar"
             />
           )}
         </span>
         <span className="shell-sidebar-account-meta">
           <strong className="shell-sidebar-account-name">{displayName}</strong>
-          {showEmail ? <small className="shell-sidebar-account-email">{account.email}</small> : null}
+          {showEmail ? <small className="shell-sidebar-account-email">{displayEmail}</small> : null}
         </span>
       </button>
     </div>

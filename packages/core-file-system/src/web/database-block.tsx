@@ -7,7 +7,7 @@ import { DATA_COLLECTION_PATH, sortDataCollections } from './database-path.ts'
 import { getDatabaseUi } from './database-ui.ts'
 import { readJson } from './db-client.ts'
 import { showRecordInInspector } from './inspector-db-route.ts'
-import { normalizeSavedView, type SavedView } from './saved-view.ts'
+import { normalizeSavedView, viewIsFresher, type SavedView } from './saved-view.ts'
 
 export type DatabaseBlockProps = {
   data: Record<string, unknown>
@@ -89,28 +89,54 @@ async function loadJsonAsset(file: string, path: string): Promise<{ data: Record
   return { data: null, etag: '', missing: res.status === 404 }
 }
 
-async function saveJsonAsset(file: string, payload: PersistedBlockViews, etag: string, path: string): Promise<string> {
+export function mergeBlockViewsOnConflict(remote: PersistedBlockViews, local: PersistedBlockViews): PersistedBlockViews {
+  const remoteById = new Map(remote.views.map((view) => [view.id, normalizeSavedView(view)]))
+  const mergedViews: SavedView[] = []
+  const seen = new Set<string>()
+  for (const localView of local.views) {
+    const normLocal = normalizeSavedView(localView)
+    const remoteView = remoteById.get(normLocal.id)
+    seen.add(normLocal.id)
+    mergedViews.push(remoteView && !viewIsFresher(normLocal, remoteView) ? remoteView : normLocal)
+  }
+  for (const remoteView of remote.views) {
+    const normRemote = normalizeSavedView(remoteView)
+    if (!seen.has(normRemote.id)) mergedViews.push(normRemote)
+  }
+  const activeViewId = mergedViews.some((view) => view.id === local.activeViewId)
+    ? local.activeViewId
+    : mergedViews[0]?.id ?? remote.activeViewId
+  return { views: mergedViews, activeViewId }
+}
+
+async function saveJsonAsset(
+  file: string,
+  payload: PersistedBlockViews,
+  etag: string,
+  path: string,
+  collectionPath: string,
+): Promise<{ ok: boolean; etag: string; merged?: PersistedBlockViews }> {
   const name = assetName(file)
-  if (!name) return etag
+  if (!name) return { ok: false, etag }
   const url = assetFileUrl(name, path)
-  const body = JSON.stringify(payload, null, 2)
-  const put = (match: string) => {
+  const put = (match: string, data: PersistedBlockViews) => {
     const headers: Record<string, string> = { 'Content-Type': 'application/json; charset=utf-8' }
     if (path) headers['x-biu-resource-path'] = path
     if (match) headers['If-Match'] = match
-    return fetch(url, { method: 'PUT', headers, body })
+    return fetch(url, { method: 'PUT', headers, body: JSON.stringify(data, null, 2) })
   }
-  let res = await put(etag)
+  let res = await put(etag, payload)
+  let merged: PersistedBlockViews | undefined
   if (res.status === 409) {
-    let next = await readResponseEtag(res)
-    if (!next) {
-      const current = await fetch(url)
-      next = assetEtag(String(current.headers.get('etag') ?? ''))
+    const latest = await loadJsonAsset(file, path)
+    const nextEtag = latest.etag || (await readResponseEtag(res))
+    if (latest.data) {
+      merged = mergeBlockViewsOnConflict(parseBlockViews(latest.data, collectionPath), payload)
     }
-    if (next) res = await put(next)
+    if (nextEtag) res = await put(nextEtag, merged ?? payload)
   }
-  if (!res.ok) return etag
-  return (await readResponseEtag(res)) || etag
+  if (!res.ok) return { ok: false, etag }
+  return { ok: true, etag: (await readResponseEtag(res)) || etag, merged }
 }
 
 function loadBlockTables(): Promise<CollectionInfo[]> {
@@ -187,6 +213,8 @@ export function DatabaseBlockView({ data, update, writable, selected }: Database
   const saveQueueRef = useRef(Promise.resolve())
   const fileRef = useRef(file)
   fileRef.current = file
+  const migratingRef = useRef(false)
+  const migratedFileRef = useRef('')
 
   useEffect(() => {
     if (cachedTables) {
@@ -202,28 +230,46 @@ export function DatabaseBlockView({ data, update, writable, selected }: Database
     }
   }, [])
 
-  // Ensure the block always has a JSON asset file pointer; migrate any inline views out of the page fence.
+  // Ensure the block always has a JSON asset file pointer; wait for PUT to finish BEFORE
+  // clearing inline views so the subsequent load effect cannot hit 404 and overwrite with defaults.
   useEffect(() => {
-    if (file || !writable) return
+    if (file || !writable || migratingRef.current) return
+    migratingRef.current = true
+    let alive = true
     const created = newDatabaseBlockFile()
     const seed = parseBlockViews(data, collectionPath)
     setLoadedViews(seed)
     const path = resolvePageResourcePath(rootRef.current)
     saveQueueRef.current = saveQueueRef.current
-      .then(() => saveJsonAsset(created, seed, '', path))
-      .then((nextEtag) => {
-        etagRef.current = nextEtag
+      .then(async () => {
+        const result = await saveJsonAsset(created, seed, '', path, collectionPath)
+        if (!alive) return
+        if (!result.ok) {
+          migratingRef.current = false
+          return
+        }
+        etagRef.current = result.etag
+        migratedFileRef.current = created
+        update({
+          file: created,
+          ...(hasInlineLegacy ? { views: undefined, activeViewId: undefined, view: undefined } : {}),
+        })
       })
-      .catch(() => undefined)
-    update({
-      file: created,
-      ...(hasInlineLegacy ? { views: undefined, activeViewId: undefined, view: undefined } : {}),
-    })
+      .catch(() => {
+        migratingRef.current = false
+      })
+    return () => {
+      alive = false
+    }
   }, [collectionPath, data, file, hasInlineLegacy, update, writable])
 
   // Load persisted views from the JSON asset file.
   useEffect(() => {
     if (!file) return
+    if (migratedFileRef.current === file) {
+      migratedFileRef.current = ''
+      return
+    }
     let alive = true
     const path = resolvePageResourcePath(rootRef.current)
     void loadJsonAsset(file, path).then(async (loaded) => {
@@ -239,7 +285,8 @@ export function DatabaseBlockView({ data, update, writable, selected }: Database
       const fallback = parseBlockViews(hasInlineLegacy ? data : null, collectionPath)
       setLoadedViews(fallback)
       if (loaded.missing && writable) {
-        etagRef.current = await saveJsonAsset(file, fallback, '', path).catch(() => '')
+        const res = await saveJsonAsset(file, fallback, '', path, collectionPath).catch(() => ({ ok: false, etag: '' }))
+        if (res.ok) etagRef.current = res.etag
       }
       if (hasInlineLegacy && writable) {
         update({ views: undefined, activeViewId: undefined, view: undefined })
@@ -265,13 +312,16 @@ export function DatabaseBlockView({ data, update, writable, selected }: Database
       const path = resolvePageResourcePath(rootRef.current)
       const payload: PersistedBlockViews = { views: nextViews, activeViewId: nextActiveViewId }
       saveQueueRef.current = saveQueueRef.current
-        .then(() => saveJsonAsset(targetFile, payload, etagRef.current, path))
-        .then((nextEtag) => {
-          etagRef.current = nextEtag
+        .then(async () => {
+          const result = await saveJsonAsset(targetFile, payload, etagRef.current, path, collectionPath)
+          if (result.ok) {
+            etagRef.current = result.etag
+            if (result.merged) setLoadedViews(result.merged)
+          }
         })
         .catch(() => undefined)
     },
-    [writable],
+    [collectionPath, writable],
   )
 
   const externalViews = useMemo(

@@ -16,6 +16,7 @@ import {
   RectangleGroupIcon,
   TagIcon,
   BoltIcon,
+  ChevronDoubleRightIcon,
   EyeIcon,
 } from '@heroicons/react/16/solid'
 import { chromeIcon } from './chrome-icon.ts'
@@ -132,6 +133,9 @@ export const InspectorStagePane = memo(function InspectorStagePane({
 export type SessionInspectorProps = {
   open: boolean
   width: number
+  overlay?: boolean
+  fullOverlay?: boolean
+  onCloseOverlay?: () => void
   onWidthChange: (width: number) => void
   onWidthLive?: (width: number) => void
   useSessionView: ReturnType<typeof bindSessionView>
@@ -144,6 +148,9 @@ export type SessionInspectorProps = {
 export const SessionInspector = memo(function SessionInspector({
   open,
   width,
+  overlay = false,
+  fullOverlay = false,
+  onCloseOverlay,
   onWidthChange,
   onWidthLive,
   useSessionView,
@@ -508,26 +515,37 @@ export const SessionInspector = memo(function SessionInspector({
   tabActionsRef.current.close = closeOpenedTab
 
   return (
+    <>
+      {open && overlay ? (
+        <div
+          className="shell-inspector-backdrop"
+          data-testid="inspector-overlay-backdrop"
+          aria-hidden
+          onClick={onCloseOverlay}
+        />
+      ) : null}
     <aside
-      className={`session-inspector relative flex min-h-0 min-w-0 flex-col bg-(--biu-color-bg) text-(--biu-color-text)${open ? '' : ' is-closed'}`}
+      className={`session-inspector relative flex min-h-0 min-w-0 flex-col bg-(--biu-color-bg) text-(--biu-color-text)${open ? '' : ' is-closed'}${open && overlay ? ' is-overlay' : ''}${open && overlay && fullOverlay ? ' is-overlay-full' : ''}`}
       data-testid="session-inspector"
       aria-label="代理检查器"
       aria-hidden={!open}
       inert={!open || undefined}
     >
-      <div
-        className="inspector-resize"
-        data-biu-ignore
-        data-testid="inspector-resize"
-        title="拖动调整宽度"
-        onPointerDown={(event) => {
-          event.preventDefault()
-          const visual = shellColumnStartWidth(event.currentTarget, 'inspector', width)
-          dragRef.current = { startX: event.clientX, startWidth: visual, last: visual }
-          document.body.style.cursor = 'col-resize'
-          document.body.style.userSelect = 'none'
-        }}
-      />
+      {open && overlay && fullOverlay ? null : (
+        <div
+          className="inspector-resize"
+          data-biu-ignore
+          data-testid="inspector-resize"
+          title="拖动调整宽度"
+          onPointerDown={(event) => {
+            event.preventDefault()
+            const visual = shellColumnStartWidth(event.currentTarget, 'inspector', width)
+            dragRef.current = { startX: event.clientX, startWidth: visual, last: visual }
+            document.body.style.cursor = 'col-resize'
+            document.body.style.userSelect = 'none'
+          }}
+        />
+      )}
 
       <div className="app-side-bar-head" data-biu-ignore>
         <div className="inspector-tabs" ref={tabsRef} role="tablist" aria-label="检查器分区">
@@ -725,6 +743,18 @@ export const SessionInspector = memo(function SessionInspector({
           )
           : null}
         </div>
+        {open && overlay && onCloseOverlay ? (
+          <button
+            type="button"
+            className="chat-view-header-expand"
+            title="收起检查器"
+            aria-label="收起检查器"
+            data-testid="inspector-overlay-close"
+            onClick={onCloseOverlay}
+          >
+            <ChevronDoubleRightIcon {...chromeIcon} />
+          </button>
+        ) : null}
         </div>
       </div>
 
@@ -764,5 +794,6 @@ export const SessionInspector = memo(function SessionInspector({
         </div>
       </div>
     </aside>
+    </>
   )
 })

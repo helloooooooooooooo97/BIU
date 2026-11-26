@@ -131,6 +131,10 @@ export class CollabStore {
     if (!cols.includes('owner_table')) {
       this.db.exec(`ALTER TABLE access_rules ADD COLUMN owner_table TEXT NOT NULL DEFAULT ''`)
     }
+    const wsCols = (this.db.prepare('PRAGMA table_info(workspaces)').all() as Array<{ name: string }>).map((c) => c.name)
+    if (wsCols.length > 0 && !wsCols.includes('avatar')) {
+      this.db.exec(`ALTER TABLE workspaces ADD COLUMN avatar TEXT NOT NULL DEFAULT ''`)
+    }
     this.db.exec(
       `CREATE INDEX IF NOT EXISTS access_rules_ws_col_table
        ON access_rules(workspace_id, collection, owner_table, enabled)`,
@@ -818,15 +822,26 @@ export class CollabStore {
     return { ...workspace, role: 'owner' }
   }
 
-  renameWorkspace(actorId: string, workspaceId: string, name: string): Workspace {
+  updateWorkspace(actorId: string, workspaceId: string, patch: { name?: string; avatar?: string }): Workspace {
     this.requireManager(actorId, workspaceId)
-    const trimmed = name.trim()
-    if (!trimmed) throw new CollabError('空间名称不能为空', 400)
-    if (trimmed.length > 40) throw new CollabError('空间名称不能超过 40 个字符', 400)
-    this.db.prepare('UPDATE workspaces SET name = ? WHERE id = ?').run(trimmed, workspaceId)
+    if (patch.name !== undefined) {
+      const trimmed = patch.name.trim()
+      if (!trimmed) throw new CollabError('空间名称不能为空', 400)
+      if (trimmed.length > 40) throw new CollabError('空间名称不能超过 40 个字符', 400)
+      this.db.prepare('UPDATE workspaces SET name = ? WHERE id = ?').run(trimmed, workspaceId)
+    }
+    if (patch.avatar !== undefined) {
+      const avatar = String(patch.avatar ?? '').trim()
+      if (avatar.length > 512_000) throw new CollabError('空间头像图片过大', 400)
+      this.db.prepare('UPDATE workspaces SET avatar = ? WHERE id = ?').run(avatar, workspaceId)
+    }
     const workspace = this.listWorkspaces(actorId).find((row) => row.id === workspaceId)
     if (!workspace) throw new CollabError('空间不存在', 404)
     return workspace
+  }
+
+  renameWorkspace(actorId: string, workspaceId: string, name: string): Workspace {
+    return this.updateWorkspace(actorId, workspaceId, { name })
   }
 
   /** 所有者输入完整空间名称后，硬删除空间及其记录、成员和授权。 */
@@ -868,10 +883,6 @@ export class CollabStore {
         for (const record of records) {
           if (record.collection === collection) stmt.run(record.record_id)
         }
-      }
-      if (tables.some((item) => item.name === 'saved_views')) {
-        const stmt = this.db.prepare('DELETE FROM saved_views WHERE view_id = ?')
-        for (const record of records) stmt.run(record.record_id)
       }
       for (const table of tables) {
         if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table.name)) continue
@@ -1126,9 +1137,9 @@ export class CollabStore {
     const rows = this.db
       .prepare(
         `SELECT a.id,
-                COALESCE(NULLIF(a.name, ''), NULLIF(a.email, ''), '未设置') AS name,
-                COALESCE(m.display_name, '') AS display_name,
-                COALESCE(NULLIF(m.avatar, ''), NULLIF(a.avatar, ''), '') AS avatar,
+                COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), NULLIF(a.email, ''), '未设置') AS name,
+                COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), NULLIF(a.email, ''), '') AS display_name,
+                COALESCE(m.avatar, '') AS avatar,
                 COALESCE(a.email, '') AS email, m.role, m.member_kind, m.created_at,
                 COALESCE((
                   SELECT MAX(COALESCE(s.last_seen_at, s.created_at, 0))
@@ -1251,16 +1262,31 @@ export class CollabStore {
     }
 
     const affectedRecords = this.recordGrantKeysForAccount(workspaceId, accountId)
-    const ownedPolicies = this.db
-      .prepare(
-        `SELECT collection, record_id FROM resource_policies
-         WHERE workspace_id = ? AND owner_account_id = ?`,
-      )
-      .all(workspaceId, accountId) as Array<{ collection: string; record_id: string }>
+    let ownedPolicies: Array<{ collection: string; record_id: string; owner_table?: string; access_mode?: string }> = []
+    try {
+      ownedPolicies = this.db
+        .prepare(
+          `SELECT collection, record_id, COALESCE(owner_table, '') AS owner_table, access_mode FROM resource_policies
+           WHERE workspace_id = ? AND (owner_account_id = ? OR owner_table = ?)`,
+        )
+        .all(workspaceId, accountId, `account:${accountId}`) as Array<{
+        collection: string
+        record_id: string
+        owner_table?: string
+        access_mode?: string
+      }>
+    } catch {
+      ownedPolicies = this.db
+        .prepare(
+          `SELECT collection, record_id, access_mode FROM resource_policies
+           WHERE workspace_id = ? AND owner_account_id = ?`,
+        )
+        .all(workspaceId, accountId) as Array<{ collection: string; record_id: string; access_mode?: string }>
+    }
     const now = Date.now()
     this.db.exec('BEGIN IMMEDIATE')
     try {
-      // 1. 批量转交离职成员名下记录的所有权给接收人
+      // 1. 批量转交离职成员名下记录的所有权与个人逻辑表归属给接收人（空间表记录保持 owner_table = 'workspace'）
       if (transferTo && transferTo !== accountId) {
         this.db
           .prepare(
@@ -1268,6 +1294,16 @@ export class CollabStore {
              WHERE workspace_id = ? AND owner_account_id = ?`,
           )
           .run(transferTo, workspaceId, accountId)
+        try {
+          this.db
+            .prepare(
+              `UPDATE resource_policies SET owner_table = ?, owner_account_id = ?
+               WHERE workspace_id = ? AND owner_table = ?`,
+            )
+            .run(`account:${transferTo}`, transferTo, workspaceId, `account:${accountId}`)
+        } catch {
+          /* 兼容无 owner_table 列的旧库 */
+        }
         this.db
           .prepare(
             `UPDATE record_owners SET owner_id = ?
@@ -1275,6 +1311,8 @@ export class CollabStore {
           )
           .run(transferTo, workspaceId, accountId)
         for (const rec of ownedPolicies) {
+          const isWsTable = rec.owner_table === 'workspace' || (!rec.owner_table && rec.access_mode === 'members')
+          if (isWsTable) continue
           this.db
             .prepare(
               `INSERT INTO record_grants
@@ -1552,7 +1590,7 @@ export class CollabStore {
     this.requireInternalMember(actorId, workspaceId)
     return this.db
       .prepare(
-        `SELECT a.id, COALESCE(NULLIF(m.display_name, ''), '未设置') AS name, COALESCE(a.email, '') AS email
+        `SELECT a.id, COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), NULLIF(a.email, ''), '未设置') AS name, COALESCE(a.email, '') AS email
          FROM workspace_group_members gm
          JOIN workspace_groups g ON g.id = gm.group_id AND g.workspace_id = ?
          JOIN accounts a ON a.id = gm.account_id
@@ -1601,14 +1639,23 @@ export class CollabStore {
     this.requireMember(actorId, workspaceId)
     const row = this.db
       .prepare(
-        `SELECT a.email AS login_email, m.display_name, m.avatar
+        `SELECT a.name AS account_name, a.email AS login_email, m.display_name, m.avatar
          FROM workspace_members m
          JOIN accounts a ON a.id = m.account_id
          WHERE m.workspace_id = ? AND m.account_id = ?`,
       )
-      .get(workspaceId, actorId) as { login_email: string | null; display_name: string; avatar: string } | undefined
+      .get(workspaceId, actorId) as { account_name: string | null; login_email: string | null; display_name: string; avatar: string } | undefined
     if (!row) throw new CollabError('不在这个工作区', 403)
-    return { workspaceId, email: row.login_email ?? '', name: row.display_name.trim(), avatar: row.avatar }
+    const email = row.login_email ?? ''
+    const fallbackName = String(row.account_name ?? '').trim() || email
+    return {
+      workspaceId,
+      accountId: actorId,
+      email,
+      name: row.display_name.trim(),
+      fallbackName,
+      avatar: row.avatar ?? '',
+    }
   }
 
   noteActiveAccount(accountId: string, now = Date.now()) {
@@ -1705,9 +1752,6 @@ export class CollabStore {
         `UPDATE workspace_members SET display_name = ?, avatar = ? WHERE workspace_id = ? AND account_id = ?`,
       )
       .run(display, avatar, current.workspaceId, actorId)
-    if (patch.avatar !== undefined && !avatar) {
-      this.db.prepare('UPDATE accounts SET avatar = ? WHERE id = ?').run('', actorId)
-    }
     return { ...current, name: display, avatar }
   }
 
@@ -1873,18 +1917,32 @@ export class CollabStore {
   }
 
   /** 远程工作区在本机留一份成员关系，方便文件权限查询。 */
-  upsertPulledWorkspace(input: { accountId: string; id: string; name: string; ownerId?: string; role?: string; createdAt?: number }) {
+  upsertPulledWorkspace(input: { accountId: string; id: string; name: string; avatar?: string; ownerId?: string; role?: string; createdAt?: number }) {
     const id = input.id.trim()
     if (!id || id === this.homeWorkspaceId()) return
     const name = input.name.trim() || '在线'
     const now = input.createdAt || Date.now()
     const existing = this.db.prepare('SELECT id FROM workspaces WHERE id = ?').get(id) as { id: string } | undefined
     if (!existing) {
-      this.db
-        .prepare('INSERT INTO workspaces (id, name, owner_id, created_at) VALUES (?, ?, ?, ?)')
-        .run(id, name, input.ownerId || input.accountId, now)
+      try {
+        this.db
+          .prepare('INSERT INTO workspaces (id, name, owner_id, created_at, avatar) VALUES (?, ?, ?, ?, ?)')
+          .run(id, name, input.ownerId || input.accountId, now, input.avatar ?? '')
+      } catch {
+        this.db
+          .prepare('INSERT INTO workspaces (id, name, owner_id, created_at) VALUES (?, ?, ?, ?)')
+          .run(id, name, input.ownerId || input.accountId, now)
+      }
     } else {
-      this.db.prepare('UPDATE workspaces SET name = ? WHERE id = ?').run(name, id)
+      if (input.avatar !== undefined) {
+        try {
+          this.db.prepare('UPDATE workspaces SET name = ?, avatar = ? WHERE id = ?').run(name, input.avatar, id)
+        } catch {
+          this.db.prepare('UPDATE workspaces SET name = ? WHERE id = ?').run(name, id)
+        }
+      } else {
+        this.db.prepare('UPDATE workspaces SET name = ? WHERE id = ?').run(name, id)
+      }
     }
     const role = input.role === 'owner' || input.role === 'admin' || input.role === 'viewer' ? input.role : 'member'
     this.db
@@ -1897,18 +1955,32 @@ export class CollabStore {
   }
 
   listWorkspaces(accountId: string): Workspace[] {
-    const rows = this.db
-      .prepare(
-        `SELECT w.id, w.name, w.owner_id, w.created_at, m.role
-         FROM workspace_members m
-         JOIN workspaces w ON w.id = m.workspace_id
-         WHERE m.account_id = ?
-         ORDER BY w.created_at`,
-      )
-      .all(accountId) as Array<{ id: string; name: string; owner_id: string; created_at: number; role: WorkspaceRole }>
+    let rows: Array<{ id: string; name: string; avatar?: string; owner_id: string; created_at: number; role: WorkspaceRole }> = []
+    try {
+      rows = this.db
+        .prepare(
+          `SELECT w.id, w.name, COALESCE(w.avatar, '') AS avatar, w.owner_id, w.created_at, m.role
+           FROM workspace_members m
+           JOIN workspaces w ON w.id = m.workspace_id
+           WHERE m.account_id = ?
+           ORDER BY w.created_at`,
+        )
+        .all(accountId) as Array<{ id: string; name: string; avatar?: string; owner_id: string; created_at: number; role: WorkspaceRole }>
+    } catch {
+      rows = this.db
+        .prepare(
+          `SELECT w.id, w.name, w.owner_id, w.created_at, m.role
+           FROM workspace_members m
+           JOIN workspaces w ON w.id = m.workspace_id
+           WHERE m.account_id = ?
+           ORDER BY w.created_at`,
+        )
+        .all(accountId) as Array<{ id: string; name: string; owner_id: string; created_at: number; role: WorkspaceRole }>
+    }
     return rows.map((row) => ({
       id: row.id,
       name: row.name,
+      ...(row.avatar ? { avatar: row.avatar } : {}),
       ownerId: row.owner_id,
       role: row.role,
       createdAt: row.created_at,
@@ -2082,10 +2154,11 @@ export class CollabStore {
          DO UPDATE SET collection = excluded.collection, record_id = excluded.record_id, seen_at = excluded.seen_at`,
       )
       .run(workspaceId, actorId, collection, recordId, now)
+    const person = this.workspacePerson(actorId)
     return {
       workspaceId,
       accountId: actorId,
-      name: account.name,
+      name: person?.name || account.name,
       collection,
       recordId,
       seenAt: now,
@@ -2096,7 +2169,7 @@ export class CollabStore {
     this.requireMember(actorId, workspaceId)
     const rows = this.db
       .prepare(
-        `SELECT p.workspace_id, p.account_id, COALESCE(NULLIF(m.display_name, ''), '未设置') AS name, p.collection, p.record_id, p.seen_at
+        `SELECT p.workspace_id, p.account_id, COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), NULLIF(a.email, ''), '未设置') AS name, p.collection, p.record_id, p.seen_at
          FROM presence p
          JOIN accounts a ON a.id = p.account_id
          LEFT JOIN workspace_members m ON m.workspace_id = p.workspace_id AND m.account_id = p.account_id
@@ -2185,7 +2258,11 @@ export class CollabStore {
     if (!owner) throw new CollabError('工作区不存在', 404)
     if (collection === '/plugins' && isRegisteredBuiltinPlugin(recordId)) return
     const caller = currentAccountId()
-    const recordOwner = caller || owner.owner_id
+    const explicitOwnerTable = policy.ownerTable?.trim() ?? ''
+    const explicitPersonalOwner = explicitOwnerTable.startsWith('account:')
+      ? explicitOwnerTable.slice('account:'.length)
+      : ''
+    const recordOwner = explicitPersonalOwner || caller || owner.owner_id
     const elsewhere = this.db
       .prepare(
         `SELECT workspace_id FROM record_owners
@@ -2210,36 +2287,58 @@ export class CollabStore {
     }
   }
 
-  canReadRecord(collection: string, recordId: string) {
-    const caller = currentAccountId()
+  canReadRecord(collection: string, recordId: string, record?: Record<string, unknown>, actorId?: string) {
+    const caller = actorId || currentAccountId()
     const workspaceId = this.activeWorkspaceId()
     if (getRuntimePolicy().authzMode === 'rbac' && (!caller || !workspaceId)) return false
     if (!caller || !workspaceId) return true
     return this.authorization.authorize(
       { type: 'account', accountId: caller, workspaceId },
       'resource:read',
-      { type: 'record', workspaceId, collection, recordId },
+      { type: 'record', workspaceId, collection, recordId, ...(record ? { record } : {}) },
     ).allowed
   }
 
-  recordAccess(actorId: string, collection: string, recordId: string) {
+  private resolveRecordTarget(collection: string, recordId: string): { collection: string; recordId: string } {
+    const col = collection.trim()
+    const idPart = recordId.trim()
+    if ((col === '/data' || col === '/trash') && idPart.includes('::')) {
+      const sep = idPart.indexOf('::')
+      const table = idPart.slice(0, sep).trim().replace(/^\/+/, '')
+      const source = idPart.slice(sep + 2).trim()
+      if (table && source) return { collection: `/${table}`, recordId: source }
+    }
+    return { collection: col, recordId: idPart }
+  }
+
+  recordAccess(actorId: string, collection: string, recordId: string, record?: Record<string, unknown>) {
     const workspaceId = this.activeWorkspaceId()
     if (!workspaceId) throw new CollabError('没有工作区', 400)
     this.requireMember(actorId, workspaceId)
-    if (!this.canReadRecord(collection, recordId)) throw new CollabError('没有权限', 403)
-    const resource = { type: 'record' as const, workspaceId, collection, recordId }
+    const target = this.resolveRecordTarget(collection, recordId)
+    if (!this.canReadRecord(target.collection, target.recordId, record, actorId)) {
+      throw new CollabError('没有权限', 403)
+    }
+    const resource = {
+      type: 'record' as const,
+      workspaceId,
+      collection: target.collection,
+      recordId: target.recordId,
+      ...(record ? { record } : {}),
+    }
     const actorObj = { type: 'account' as const, accountId: actorId, workspaceId }
     const canManage = this.authorization.authorize(actorObj, 'resource:manage-permissions', resource).allowed
     const readDecision = this.authorization.authorize(actorObj, 'resource:read', resource)
     const effectiveRole = readDecision.allowed ? readDecision.effectiveRole : undefined
     const inheritance = this.authorization.inheritanceInfo(resource)
-    const base = this.accessRows(workspaceId, collection, recordId)
+    const base = this.accessRows(workspaceId, target.collection, target.recordId)
     return {
       ...base,
       canManage,
       ...(effectiveRole ? { effectiveRole } : {}),
       people: base.people.map((row) => {
-        const editable = Boolean(canManage && row.role !== 'owner' && row.id !== base.ownerId && row.id !== actorId)
+        const isPersonalOwnerRow = base.ownerTable !== 'workspace' && row.id === base.ownerId
+        const editable = Boolean(canManage && row.role !== 'owner' && !isPersonalOwnerRow && row.id !== actorId)
         return { ...row, canEdit: editable, canRevoke: editable }
       }),
       groups: base.groups.map((row) => ({
@@ -2287,6 +2386,36 @@ export class CollabStore {
       collection,
       recordId,
       detail: mode === 'inherit' ? '开启继承上级权限' : '断开上级继承，改为独立权限',
+    })
+    return this.recordAccess(actorId, collection, recordId)
+  }
+
+  setRecordAccessMode(
+    actorId: string,
+    collection: string,
+    recordId: string,
+    accessMode: 'members' | 'restricted',
+  ) {
+    const workspaceId = this.activeWorkspaceId()
+    if (!workspaceId) throw new CollabError('没有工作区', 400)
+    this.requireMember(actorId, workspaceId)
+    const target = this.resolveRecordTarget(collection, recordId)
+    const resource = { type: 'record' as const, workspaceId, collection: target.collection, recordId: target.recordId }
+    try {
+      this.authorization.setAccessMode({ type: 'account', accountId: actorId, workspaceId }, resource, accessMode)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (message.includes('permission denied')) throw new CollabError('没有权限', 403)
+      throw new CollabError(message, 400)
+    }
+    this.recordActivity({
+      workspaceId,
+      actorId,
+      category: 'access',
+      action: 'access.mode',
+      collection: target.collection,
+      recordId: target.recordId,
+      detail: accessMode === 'restricted' ? '切换空间内容为仅指定成员可见（受限）' : '切换空间内容为全员可见',
     })
     return this.recordAccess(actorId, collection, recordId)
   }
@@ -2728,8 +2857,8 @@ export class CollabStore {
   private accessRows(workspaceId: string, collection: string, recordId: string) {
     const rows = this.db
       .prepare(
-        `SELECT a.id, COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), '未设置') AS name,
-                COALESCE(NULLIF(m.avatar, ''), NULLIF(a.avatar, ''), '') AS avatar,
+        `SELECT a.id, COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), NULLIF(a.email, ''), '未设置') AS name,
+                COALESCE(m.avatar, '') AS avatar,
                 COALESCE(a.email, '') AS email, g.role, m.member_kind
          FROM record_grants g
          JOIN accounts a ON g.subject_type = 'account' AND a.id = g.subject_id
@@ -2794,9 +2923,13 @@ export class CollabStore {
         : collaboratorCount > 0
           ? 'shared' as const
           : 'personal' as const
+    const ownerTable = wsTable ? 'workspace' : (policy?.owner_table?.trim() || (ownerId ? `account:${ownerId}` : 'workspace'))
+    const accessMode = (policy?.access_mode || (wsTable ? 'members' : 'private')) as 'inherit' | 'private' | 'members' | 'restricted'
     return {
       private: collaboratorCount === 0,
       scope,
+      ownerTable,
+      accessMode,
       ownerId,
       people: rows.map(({ member_kind, ...row }) => ({ ...row, memberKind: member_kind })),
       groups,
@@ -2849,14 +2982,28 @@ export class CollabStore {
     const hasExternal = collaborators.some(
       (row) => row.subject_type === 'account' && (row.member_kind === 'external' || row.member_kind === 'guest'),
     )
-    const currentPolicy = this.db
-      .prepare(
-        `SELECT access_mode FROM resource_policies
-         WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-      )
-      .get(workspaceId, collection, recordId) as { access_mode?: string } | undefined
-    // 保持 access_mode（members / inherit）与 record_grants 正交，绝不因增删单个协作者而破坏全员可见或父子继承链。
-    if (!currentPolicy?.access_mode || currentPolicy.access_mode === 'private' || currentPolicy.access_mode === 'restricted') {
+    let currentPolicy: { access_mode?: string; owner_table?: string } | undefined
+    try {
+      currentPolicy = this.db
+        .prepare(
+          `SELECT access_mode, COALESCE(owner_table, '') AS owner_table FROM resource_policies
+           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+        )
+        .get(workspaceId, collection, recordId) as { access_mode?: string; owner_table?: string } | undefined
+    } catch {
+      currentPolicy = this.db
+        .prepare(
+          `SELECT access_mode FROM resource_policies
+           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+        )
+        .get(workspaceId, collection, recordId) as { access_mode?: string } | undefined
+    }
+    const isWorkspaceTable =
+      currentPolicy?.owner_table === 'workspace' ||
+      (!currentPolicy?.owner_table && currentPolicy?.access_mode === 'members')
+    // 保持空间表的 access_mode（members / restricted / inherit）与 record_grants 正交；
+    // 仅个人表记录在 private / restricted 之间随协作者增删自动切换。
+    if (!isWorkspaceTable && (!currentPolicy?.access_mode || currentPolicy.access_mode === 'private' || currentPolicy.access_mode === 'restricted')) {
       this.db
         .prepare(
           `UPDATE resource_policies
@@ -2866,10 +3013,12 @@ export class CollabStore {
         .run(collaborators.length ? 'restricted' : 'private', workspaceId, collection, recordId)
     }
     return hasExternal
-      ? 'shared'
-      : currentPolicy?.access_mode === 'members' || collaborators.length
+      ? 'external'
+      : isWorkspaceTable
         ? 'workspace'
-        : 'personal'
+        : collaborators.length
+          ? 'shared'
+          : 'personal'
   }
 
   private recordGrantKeysForAccount(workspaceId: string, accountId: string) {
@@ -3196,10 +3345,13 @@ export class CollabStore {
     const grantRows = this.db
       .prepare(
         `SELECT g.id, g.rule_id, g.workspace_id, g.subject_type, g.subject_id, g.role, g.created_at,
-                a.name AS account_name, a.email AS account_email, a.avatar AS account_avatar,
+                COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), NULLIF(a.email, ''), '') AS account_name,
+                a.email AS account_email,
+                COALESCE(m.avatar, '') AS account_avatar,
                 wg.name AS group_name
          FROM access_rule_grants g
          LEFT JOIN accounts a ON g.subject_type = 'account' AND a.id = g.subject_id
+         LEFT JOIN workspace_members m ON g.subject_type = 'account' AND m.workspace_id = g.workspace_id AND m.account_id = g.subject_id
          LEFT JOIN workspace_groups wg ON g.subject_type = 'group' AND wg.id = g.subject_id
          WHERE g.rule_id IN (${placeholders})
          ORDER BY g.created_at ASC`,
@@ -3288,9 +3440,10 @@ export class CollabStore {
   getAccessRule(workspaceId: string, ruleId: string): AccessRuleRecord | null {
     const row = this.db
       .prepare(
-        `SELECT r.*, a.name AS created_by_name
+        `SELECT r.*, COALESCE(NULLIF(cm.display_name, ''), NULLIF(a.name, ''), NULLIF(a.email, ''), '') AS created_by_name
          FROM access_rules r
          LEFT JOIN accounts a ON a.id = r.created_by
+         LEFT JOIN workspace_members cm ON cm.workspace_id = r.workspace_id AND cm.account_id = r.created_by
          WHERE r.workspace_id = ? AND r.id = ?`,
       )
       .get(workspaceId, ruleId) as
@@ -3360,9 +3513,10 @@ export class CollabStore {
       params.push(personalTable, actorId)
     }
     if (normalizedCol) params.push(normalizedCol)
-    const sql = `SELECT r.*, a.name AS created_by_name
+    const sql = `SELECT r.*, COALESCE(NULLIF(cm.display_name, ''), NULLIF(a.name, ''), NULLIF(a.email, ''), '') AS created_by_name
        FROM access_rules r
        LEFT JOIN accounts a ON a.id = r.created_by
+       LEFT JOIN workspace_members cm ON cm.workspace_id = r.workspace_id AND cm.account_id = r.created_by
        WHERE r.workspace_id = ? AND ${whereScope}${normalizedCol ? ' AND r.collection = ?' : ''}
        ORDER BY CASE WHEN r.owner_table = 'workspace' THEN 0 ELSE 1 END, r.updated_at DESC, r.created_at DESC`
     const rows = this.db.prepare(sql).all(...params) as Array<any>
@@ -3379,9 +3533,10 @@ export class CollabStore {
   listActiveAccessRulesForCollection(workspaceId: string, collection: string): AccessRuleRecord[] {
     const rows = this.db
       .prepare(
-        `SELECT r.*, a.name AS created_by_name
+        `SELECT r.*, COALESCE(NULLIF(cm.display_name, ''), NULLIF(a.name, ''), NULLIF(a.email, ''), '') AS created_by_name
          FROM access_rules r
          LEFT JOIN accounts a ON a.id = r.created_by
+         LEFT JOIN workspace_members cm ON cm.workspace_id = r.workspace_id AND cm.account_id = r.created_by
          WHERE r.workspace_id = ? AND r.collection = ? AND r.enabled = 1
          ORDER BY r.created_at ASC`,
       )

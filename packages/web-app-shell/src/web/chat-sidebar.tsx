@@ -68,14 +68,15 @@ function useCloudSessionCreators(isCloud: boolean) {
       const params = new URLSearchParams({
         path: '/workspace-members',
         limit: '500',
-        columns: 'title,name,email,avatar',
+        columns: 'title,email,avatar',
       })
       void Promise.all([
+        apiFetch('/api/account/workspace-profile').then((r) => (r.ok ? r.json() : null)).catch(() => null),
         apiFetch('/api/account/me').then((r) => (r.ok ? r.json() : null)).catch(() => null),
         apiFetch(`/api/db/list?${params.toString()}`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
-      ]).then(([me, listed]) => {
+      ]).then(([wp, me, listed]) => {
         if (cancelled) return
-        setMyAccountId(String((me as { id?: string } | null)?.id ?? '').trim())
+        setMyAccountId(String((wp as { accountId?: string } | null)?.accountId ?? (me as { id?: string } | null)?.id ?? '').trim())
         const map = new Map<string, ChatMemberInfo>()
         const rows = Array.isArray((listed as { items?: unknown[] } | null)?.items)
           ? ((listed as { items: Array<Record<string, unknown>> }).items)
@@ -84,8 +85,8 @@ function useCloudSessionCreators(isCloud: boolean) {
           const id = String(item?.id ?? '').trim()
           if (!id) continue
           const name =
-            String(item.name ?? '').trim() ||
             String(item.title ?? '').trim() ||
+            String(item.name ?? '').trim() ||
             String(item.email ?? '').trim() ||
             id.slice(0, 8)
           const avatar = typeof item.avatar === 'string' ? item.avatar.trim() : ''
@@ -96,9 +97,11 @@ function useCloudSessionCreators(isCloud: boolean) {
     }
     load()
     window.addEventListener(ACCOUNT_EVENT, load)
+    window.addEventListener('biu:workspace-profile', load)
     return () => {
       cancelled = true
       window.removeEventListener(ACCOUNT_EVENT, load)
+      window.removeEventListener('biu:workspace-profile', load)
     }
   }, [isCloud])
 

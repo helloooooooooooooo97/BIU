@@ -3,21 +3,36 @@ import { apiFetch } from './api-client.ts'
 export type WorkspaceProfile = {
   name: string
   avatar: string
+  accountId?: string
+  email?: string
+  fallbackName?: string
+  hydrated?: boolean
 }
 
 const EVENT = 'biu:workspace-profile'
-const EMPTY: WorkspaceProfile = { name: '', avatar: '' }
+const EMPTY: WorkspaceProfile = { name: '', avatar: '', accountId: '', email: '', fallbackName: '', hydrated: false }
 let cached: WorkspaceProfile = EMPTY
 
 function sameProfile(a: WorkspaceProfile, b: WorkspaceProfile) {
-  return a.name === b.name && a.avatar === b.avatar
+  return (
+    a.name === b.name &&
+    a.avatar === b.avatar &&
+    (a.accountId ?? '') === (b.accountId ?? '') &&
+    (a.email ?? '') === (b.email ?? '') &&
+    (a.fallbackName ?? '') === (b.fallbackName ?? '') &&
+    Boolean(a.hydrated) === Boolean(b.hydrated)
+  )
 }
 
-function parse(raw: unknown): WorkspaceProfile {
+function parse(raw: unknown, hydrated = false): WorkspaceProfile {
   const rec = raw && typeof raw === 'object' ? (raw as Partial<WorkspaceProfile>) : {}
   return {
     name: String(rec.name ?? '').trim().slice(0, 40),
     avatar: String(rec.avatar ?? '').trim(),
+    accountId: String(rec.accountId ?? '').trim(),
+    email: String(rec.email ?? '').trim(),
+    fallbackName: String(rec.fallbackName ?? '').trim().slice(0, 40),
+    hydrated,
   }
 }
 
@@ -35,6 +50,10 @@ export function writeWorkspaceProfile(next: WorkspaceProfile) {
   const saved = remember({
     name: next.name.trim().slice(0, 40),
     avatar: next.avatar.trim(),
+    accountId: next.accountId !== undefined ? next.accountId.trim() : (cached.accountId ?? ''),
+    email: next.email !== undefined ? next.email.trim() : (cached.email ?? ''),
+    fallbackName: next.fallbackName !== undefined ? next.fallbackName.trim().slice(0, 40) : (cached.fallbackName ?? ''),
+    hydrated: next.hydrated !== undefined ? next.hydrated : cached.hydrated,
   })
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(EVENT))
   return saved
@@ -50,7 +69,7 @@ export function subscribeWorkspaceProfile(onStore: () => void) {
 }
 
 export function profileDisplayName(profile = readWorkspaceProfile()) {
-  return profile.name.trim() || '用户'
+  return profile.name.trim() || profile.fallbackName?.trim() || '用户'
 }
 
 function accountToken() {
@@ -77,7 +96,7 @@ export async function hydrateWorkspaceProfile() {
       })
       if (!res.ok) return readWorkspaceProfile()
       const data = (await res.json()) as Partial<WorkspaceProfile>
-      const next = parse(data)
+      const next = parse(data, true)
       const current = readWorkspaceProfile()
       if (sameProfile(current, next)) return current
       return writeWorkspaceProfile(next)

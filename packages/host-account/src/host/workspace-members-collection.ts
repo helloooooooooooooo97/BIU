@@ -24,10 +24,10 @@ type MemberRow = {
 
 function asRecord(row: MemberRow): DbRecord {
   const lastActiveAt = row.last_active_at ?? row.created_at
+  const nickname = row.display_name.trim() || row.name.trim() || row.email
   return {
     id: row.id,
-    title: row.name || row.email,
-    name: row.display_name,
+    title: nickname,
     avatar: row.avatar ?? '',
     email: row.email,
     role: row.role,
@@ -85,8 +85,7 @@ export function workspaceMembersCollection(
     schema: {
       columns: ['title', 'email', 'role', 'status', 'membershipKind', 'lastActiveAt', 'joinedAt'],
       fields: {
-        title: { type: 'string', label: '账号名' },
-        name: { type: 'string', label: '空间昵称' },
+        title: { type: 'string', label: '空间昵称' },
         avatar: { type: 'string', label: '头像' },
         email: { type: 'string', label: '登录邮箱' },
         role: {

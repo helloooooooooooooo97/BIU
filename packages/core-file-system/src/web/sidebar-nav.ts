@@ -60,6 +60,8 @@ export type CrumbChoice = {
   label: string
   target: CrumbTarget
   icon?: string
+  avatar?: string
+  avatarSeed?: string
   mode?: ViewMode
   emoji?: string
   mascot?: unknown
@@ -72,6 +74,8 @@ export type Crumb = {
   target: CrumbTarget
   choices: CrumbChoice[]
   icon?: string
+  avatar?: string
+  avatarSeed?: string
   emoji?: string
   mascot?: unknown
 }
@@ -125,9 +129,9 @@ export function recordCrumbLabel(label: string | undefined, id: string) {
 }
 
 const SCOPE_CRUMB_LABEL: Record<DataScope, string> = {
-  workspace: '空间表',
-  personal: '个人表',
-  shared: '个人表',
+  workspace: '空间数据',
+  personal: '我的数据',
+  shared: '我的数据',
 }
 
 export function buildCrumbs(input: {
@@ -137,7 +141,17 @@ export function buildCrumbs(input: {
   viewId?: string
   viewName?: string
   viewScope?: DataScope
-  sharedOwner?: { accountId: string; name: string }
+  workspaceAvatar?: string
+  personalOwner?: { accountId: string; name: string; avatar?: string }
+  sharedOwner?: { accountId: string; name: string; avatar?: string }
+  scopeChoices?: Array<{
+    id: string
+    label: string
+    icon?: string
+    avatar?: string
+    avatarSeed?: string
+    viewId: string
+  }>
   views?: Array<{ id: string; name: string; mode?: ViewMode }>
   recordId?: string
   recordLabel?: string
@@ -146,67 +160,87 @@ export function buildCrumbs(input: {
   const crumbs: Crumb[] = []
   if (!input.collection) return crumbs
   const table = input.tables.find((item) => item.path === input.collection)
+  const collectionIcon =
+    table?.icon ?? (input.collection === DATA_COLLECTION_PATH ? 'circle-stack' : undefined)
   crumbs.push({
     kind: 'collection',
     id: input.collection,
     label: input.collectionLabel,
-    icon: table?.icon,
+    icon: collectionIcon,
     target: { kind: 'collection', collection: input.collection },
     choices: input.tables
       .filter((item) => item.path && item.path !== '/')
       .map((item) => ({
         id: item.path,
         label: item.label,
-        icon: item.icon,
+        icon: item.icon ?? (item.path === DATA_COLLECTION_PATH ? 'circle-stack' : undefined),
         target: { kind: 'collection', collection: item.path },
       })),
   })
   if (input.viewId) {
-    // K+1 逻辑表面包屑：数据类型 / 表归属（空间表 | 个人表）/ [他人名] / 视图
+    // K+1 扁平逻辑表面包屑：数据类型 / 逻辑表（空间表 | 我的表 | 他人表）/ 视图
     const resolvedScope: DataScope | undefined = isBuiltinAllViewId(input.viewId) ? undefined : input.viewScope
     if (resolvedScope && tableModeFor(input.collection) === 'k-plus-1') {
       const wsViewId = defaultTableViewId('workspace', input.collection)
-      const currentTargetId = resolvedScope === 'workspace' ? wsViewId : input.viewId
+      const activeOwner = resolvedScope === 'workspace' ? undefined : (input.personalOwner ?? input.sharedOwner)
+      const ownerId = activeOwner?.accountId?.trim() || ''
+      const ownerLabel = activeOwner?.name?.trim() || (ownerId ? ownerId.slice(0, 8) : SCOPE_CRUMB_LABEL[resolvedScope])
+      const ownerAvatar = activeOwner?.avatar?.trim() || ''
+      const currentCrumbId =
+        resolvedScope === 'workspace'
+          ? 'scope:workspace'
+          : ownerId
+            ? `owner:${ownerId}`
+            : 'scope:personal'
+      const currentTargetId =
+        resolvedScope === 'workspace'
+          ? wsViewId
+          : ownerId
+            ? defaultTableViewId(`account:${ownerId}`, input.collection)
+            : input.viewId
+      const wsAvatar = input.workspaceAvatar?.trim() || ''
+      const defaultChoices: CrumbChoice[] = [
+        {
+          id: 'scope:workspace',
+          label: '空间数据',
+          icon: 'workspace',
+          ...(wsAvatar ? { avatar: wsAvatar } : {}),
+          target: { kind: 'view', collection: input.collection, viewId: wsViewId },
+        },
+        ...(resolvedScope !== 'workspace'
+          ? [
+              {
+                id: currentCrumbId,
+                label: ownerLabel,
+                icon: 'personal',
+                ...(ownerAvatar ? { avatar: ownerAvatar } : {}),
+                ...(ownerId ? { avatarSeed: ownerId } : {}),
+                target: { kind: 'view' as const, collection: input.collection, viewId: currentTargetId },
+              },
+            ]
+          : []),
+      ]
+      const choices: CrumbChoice[] = input.scopeChoices?.length
+        ? input.scopeChoices.map((choice) => ({
+            id: choice.id,
+            label: choice.label,
+            icon: choice.icon,
+            ...(choice.avatar ? { avatar: choice.avatar } : {}),
+            ...(choice.avatarSeed ? { avatarSeed: choice.avatarSeed } : {}),
+            target: { kind: 'view', collection: input.collection, viewId: choice.viewId },
+          }))
+        : defaultChoices
       crumbs.push({
         kind: 'scope',
-        id: `scope:${resolvedScope === 'shared' ? 'personal' : resolvedScope}`,
-        label: SCOPE_CRUMB_LABEL[resolvedScope],
+        id: currentCrumbId,
+        label: resolvedScope === 'workspace' ? '空间数据' : ownerLabel,
         icon: resolvedScope === 'workspace' ? 'workspace' : 'personal',
+        ...(resolvedScope === 'workspace' && wsAvatar ? { avatar: wsAvatar } : {}),
+        ...(resolvedScope !== 'workspace' && ownerAvatar ? { avatar: ownerAvatar } : {}),
+        ...(resolvedScope !== 'workspace' && ownerId ? { avatarSeed: ownerId } : {}),
         target: { kind: 'view', collection: input.collection, viewId: currentTargetId },
-        choices: [
-          {
-            id: 'scope:workspace',
-            label: '空间表',
-            icon: 'workspace',
-            target: { kind: 'view', collection: input.collection, viewId: wsViewId },
-          },
-          {
-            id: 'scope:personal',
-            label: '个人表',
-            icon: 'personal',
-            target: { kind: 'view', collection: input.collection, viewId: input.viewId },
-          },
-        ],
+        choices,
       })
-      if (input.sharedOwner?.accountId) {
-        const ownerViewId = defaultTableViewId(`account:${input.sharedOwner.accountId}`, input.collection)
-        const ownerLabel = input.sharedOwner.name.trim() || input.sharedOwner.accountId.slice(0, 8)
-        crumbs.push({
-          kind: 'scope',
-          id: `owner:${input.sharedOwner.accountId}`,
-          label: ownerLabel,
-          icon: 'personal',
-          target: { kind: 'view', collection: input.collection, viewId: ownerViewId },
-          choices: [
-            {
-              id: `owner:${input.sharedOwner.accountId}`,
-              label: ownerLabel,
-              icon: 'personal',
-              target: { kind: 'view', collection: input.collection, viewId: ownerViewId },
-            },
-          ],
-        })
-      }
     }
     const storedName = input.viewName || input.views?.find((view) => view.id === input.viewId)?.name
     // 内置视图被隐藏后仍可通过导航打开，名称不能依赖可见视图列表。
@@ -227,7 +261,7 @@ export function buildCrumbs(input: {
     })
   }
   if (input.recordId) {
-    const tableIcon = input.tables.find((item) => item.path === input.collection)?.icon
+    const tableIcon = collectionIcon
     const current = (input.records ?? []).find((row) => row.id === input.recordId)
     const label = recordCrumbLabel(input.recordLabel, input.recordId)
     crumbs.push({
@@ -257,9 +291,9 @@ export function crumbLabelAction(crumb: Crumb, parent?: Crumb): CrumbTarget {
   return { kind: 'root' }
 }
 
-/** 表 / 视图 / 记录点标题一律弹出同级选择菜单。其它级才回到上一级。 */
+/** 表 / 逻辑表 / 视图 / 记录点标题一律弹出同级选择菜单。其它级才回到上一级。 */
 export function crumbButtonAction(crumb: Crumb, parent?: Crumb): 'menu' | CrumbTarget {
-  if (crumb.kind === 'collection' || crumb.kind === 'view' || crumb.kind === 'record') return 'menu'
+  if (crumb.kind === 'collection' || crumb.kind === 'scope' || crumb.kind === 'view' || crumb.kind === 'record') return 'menu'
   return crumbLabelAction(crumb, parent)
 }
 

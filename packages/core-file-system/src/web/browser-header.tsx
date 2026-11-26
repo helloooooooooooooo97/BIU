@@ -21,7 +21,9 @@ import {
 } from './view-storage.ts'
 
 const LazyShareButton = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareButton })))
-const LazyAccessRulesButton = lazy(() => import('./access-rules-drawer.tsx').then((m) => ({ default: m.AccessRulesButton })))
+const LazyTableCollaboratorsButton = lazy(() =>
+  import('./table-collaborators-button.tsx').then((m) => ({ default: m.TableCollaboratorsButton })),
+)
 const LayoutPrefsMenu = lazy(() => import('./layout-prefs-menu.tsx').then((m) => ({ default: m.LayoutPrefsMenu })))
 
 function ShareButton(props: ComponentProps<typeof LazyShareButton>) {
@@ -32,10 +34,10 @@ function ShareButton(props: ComponentProps<typeof LazyShareButton>) {
   )
 }
 
-function AccessRulesButton(props: ComponentProps<typeof LazyAccessRulesButton>) {
+function TableCollaboratorsButton(props: ComponentProps<typeof LazyTableCollaboratorsButton>) {
   return (
     <Suspense fallback={null}>
-      <LazyAccessRulesButton {...props} />
+      <LazyTableCollaboratorsButton {...props} />
     </Suspense>
   )
 }
@@ -160,14 +162,11 @@ export const BrowserHeader = memo(function BrowserHeader({
               title: String(detailRow?.title ?? title),
             }}
           />
-        ) : !nested && !localData && !hideAccessRules ? (
-          <AccessRulesButton
+        ) : !nested && !localData ? (
+          <TableCollaboratorsButton
             collectionPath={collectionPath}
             activeView={activeView}
             viewerAccountId={viewerAccountId}
-            schema={schema}
-            filterFields={filterFields ?? []}
-            filterValueOptions={filterValueOptions ?? (() => [])}
             localOnly={localData}
           />
         ) : null}

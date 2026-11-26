@@ -565,9 +565,11 @@ test('/data views are strictly personal and account-bound, while legacy K+1 aggr
   const file = join(mkdtempSync(join(tmpdir(), 'biu-saved-views-purge-')), 'file-system.sqlite')
   const store = new SavedViewsStore().open(file)
   store.setWorkspaceResolver(() => 'ws-1')
-  store.setPolicyGuard({})
+  store.setPolicyGuard({
+    isWorkspaceAdmin: (_ws, accountId) => accountId === 'admin-1',
+  })
 
-  // /data custom views are forced to ownerTable='all', protection='personal', scope='personal'
+  // Non-admin /data custom views are forced to ownerTable='all', protection='personal', scope='personal'
   store.applyPatch(
     '/data',
     {
@@ -591,6 +593,30 @@ test('/data views are strictly personal and account-bound, while legacy K+1 aggr
   assert.equal(aliceData?.scope, 'personal')
   assert.equal(store.viewsFor('/data', 'bob').some((v) => v.id === 'v-data-agg'), false)
   assert.equal(store.viewsFor('/data', 'admin-1').some((v) => v.id === 'v-data-agg'), false)
+
+  // Workspace admin can publish a /data custom view as public so all workspace members see it
+  store.applyPatch(
+    '/data',
+    {
+      upsert: [
+        {
+          id: 'v-data-public',
+          name: '空间公开数据视图',
+          ownerTable: 'all',
+          scope: 'workspace',
+          protection: 'public',
+          filters: {},
+        },
+      ],
+    },
+    'admin-1',
+  )
+  const adminPublic = store.viewsFor('/data', 'admin-1').find((v) => v.id === 'v-data-public')
+  assert.equal(adminPublic?.ownerTable, 'all')
+  assert.equal(adminPublic?.protection, 'public')
+  assert.equal(adminPublic?.scope, 'workspace')
+  assert.equal(store.viewsFor('/data', 'alice').some((v) => v.id === 'v-data-public'), true)
+  assert.equal(store.viewsFor('/data', 'bob').some((v) => v.id === 'v-data-public'), true)
 
   // Attempting to write aggregation views onto a K+1 collection (/pages) is ignored
   store.applyPatch(
@@ -722,4 +748,113 @@ test('personal-table views support 3 protection states for owner, force personal
   assert.equal(store.viewsFor('/pages', 'bob').some((v) => v.id === 'v-in-bob-table'), false)
   assert.equal(store.viewsFor('/pages', 'bob').some((v) => v.id === 'v-my-personal'), false)
   assert.equal(store.viewsFor('/pages', 'admin-1').some((v) => v.id === 'v-my-personal'), false)
+})
+
+test('builtin workspace views can be modified by workspace admins as well as workspace owner, but not normal members', () => {
+  const store = new SavedViewsStore().open(':memory:')
+  store.setWorkspaceResolver(() => 'ws-1')
+  store.setPolicyGuard({
+    workspaceOwner: () => 'owner-1',
+    isWorkspaceAdmin: (_ws, accountId) => accountId === 'owner-1' || accountId === 'admin-1',
+    canSeeView: () => true,
+    canModifyView: () => true,
+    canRemoveView: () => true,
+  })
+  store.applyPatch(
+    '/pages',
+    { upsert: [{ id: 'v-builtin', name: '内置空间视图', builtin: true, scope: 'workspace', ownerTable: 'workspace' }] },
+    'owner-1',
+  )
+
+  // Normal member is blocked
+  assert.throws(
+    () => store.applyPatch('/pages', { upsert: [{ id: 'v-builtin', name: '被普通成员改名' }] }, 'member-1'),
+    /BUILTIN_VIEW_OWNER_ONLY/,
+  )
+  // Workspace admin succeeds
+  store.applyPatch('/pages', { upsert: [{ id: 'v-builtin', name: '管理员重命名' }] }, 'admin-1')
+  assert.equal(store.viewsFor('/pages', 'admin-1').find((v) => v.id === 'v-builtin')?.name, '管理员重命名')
+})
+
+test('/data admin public/locked views survive asRecord(), write(), and SQLite reopen without resetting to personal', () => {
+  const file = join(mkdtempSync(join(tmpdir(), 'biu-data-public-reopen-')), 'file-system.sqlite')
+  const store = new SavedViewsStore().open(file)
+  store.setWorkspaceResolver(() => 'ws-1')
+  store.setPolicyGuard({
+    isWorkspaceAdmin: (_ws, accountId) => accountId === 'admin-1',
+  })
+
+  store.applyPatch(
+    '/data',
+    {
+      upsert: [
+        { id: 'v-data-pub', name: '公开总览', ownerTable: 'all', protection: 'public', scope: 'workspace' },
+        { id: 'v-data-lock', name: '锁定总览', ownerTable: 'all', protection: 'locked', scope: 'workspace' },
+      ],
+    },
+    'admin-1',
+  )
+
+  const tables = [{ path: '/data', id: 'data', kind: 'collection' as const, label: '数据', view: { moduleId: 'data', route: '/data', title: '数据' } }]
+  const rowsBefore = store.rows(tables, 'admin-1')
+  assert.equal(rowsBefore.find((r) => r.viewId === 'v-data-pub')?.protection, 'public')
+  assert.equal(rowsBefore.find((r) => r.viewId === 'v-data-pub')?.scope, 'workspace')
+  assert.equal(rowsBefore.find((r) => r.viewId === 'v-data-lock')?.protection, 'locked')
+  assert.equal(rowsBefore.find((r) => r.viewId === 'builtin-all:/data')?.protection, 'personal')
+
+  // write() preserves public/locked for admin
+  const updated = store.write('data::v-data-pub', { title: '公开总览 v2', protection: 'locked' }, 'admin-1', tables)
+  assert.equal(updated.protection, 'locked')
+  assert.equal(updated.scope, 'workspace')
+
+  // Reopen from SQLite (hydrate) preserves public/locked
+  const reopened = new SavedViewsStore().open(file)
+  reopened.setWorkspaceResolver(() => 'ws-1')
+  const rowsAfter = reopened.rows(tables, 'alice')
+  assert.equal(rowsAfter.find((r) => r.viewId === 'v-data-pub')?.protection, 'locked')
+  assert.equal(rowsAfter.find((r) => r.viewId === 'v-data-lock')?.protection, 'locked')
+})
+
+test('clientViewFromDbRow preserves updatedAt, applyPatch accepts clock-skew edits with matching baseUpdatedAt, and batch create avoids id collisions', () => {
+  const rowView = clientViewFromDbRow({
+    viewId: 'v-sync',
+    tablePath: '/pages',
+    title: '同步视图',
+    updatedAt: 987654321,
+  })
+  assert.equal(rowView?.updatedAt, 987654321)
+
+  const store = new SavedViewsStore().open(':memory:')
+  store.setWorkspaceResolver(() => 'ws-1')
+  store.applyPatch('/pages', { upsert: [{ id: 'v1', name: '初始', updatedAt: 5000 }] }, 'alice')
+
+  // Client with slow wall clock (updatedAt: 1000 < storedAt: 5000) succeeds when baseUpdatedAt matches 5000
+  const res = store.applyPatch(
+    '/pages',
+    { upsert: [{ id: 'v1', name: '慢时钟改名', updatedAt: 1000, baseUpdatedAt: 5000 }] },
+    'alice',
+  )
+  assert.equal(res.skipped.length, 0)
+  const after = res.views.find((v) => v.id === 'v1')
+  assert.equal(after?.name, '慢时钟改名')
+  assert.ok((after?.updatedAt ?? 0) > 5000)
+
+  // replace() preserves foreign users' personal views
+  store.applyPatch('/pages', { upsert: [{ id: 'bob-priv', name: 'Bob私密', protection: 'personal', scope: 'personal' }] }, 'bob')
+  store.replace('/pages', [{ id: 'v1', name: 'Alice更新' }], 'alice')
+  assert.equal(store.viewsFor('/pages', 'bob').some((v) => v.id === 'bob-priv'), true)
+
+  // Batch create in the same millisecond produces unique IDs
+  const tables = [{ path: '/pages', id: 'pages', kind: 'collection' as const, label: '页面' }]
+  const spec = viewsCollection(store, () => tables, () => 'alice')
+  const created = spec.create!([
+    { tablePath: '/pages', title: '批量1' },
+    { tablePath: '/pages', title: '批量2' },
+    { tablePath: '/pages', title: '批量3' },
+  ]) as Array<{ viewId?: string }>
+  assert.equal(new Set(created.map((r) => r.viewId)).size, 3)
+
+  // clearWorkspace evicts memory cache for that workspace only
+  store.clearWorkspace('ws-1')
+  assert.equal(store.viewsFor('/pages', 'alice', 'ws-1').length, 0)
 })

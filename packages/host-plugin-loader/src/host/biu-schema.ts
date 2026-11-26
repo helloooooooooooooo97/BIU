@@ -1,6 +1,6 @@
 type DatabaseSync = import('node:sqlite').DatabaseSync
 
-export const LATEST_BIU_SCHEMA = 59
+export const LATEST_BIU_SCHEMA = 60
 
 export const CREATE_CORE_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -231,7 +231,8 @@ CREATE TABLE IF NOT EXISTS workspaces (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   owner_id TEXT NOT NULL,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  avatar TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS workspace_members (
   workspace_id TEXT NOT NULL,

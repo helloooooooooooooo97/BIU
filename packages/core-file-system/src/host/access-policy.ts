@@ -47,6 +47,7 @@ export type WorkspaceFiles = {
       memberDefaultRole?: 'viewer' | 'editor'
       parentCollection?: string
       parentRecordId?: string
+      ownerTable?: string
     },
   ): void
   collectionOwnership?(workspaceId: string, collection: string): Map<string, 'personal' | 'workspace' | 'shared' | 'external'>
@@ -578,15 +579,16 @@ export class DatabaseAccessPolicy {
     if (!authorization || !actor) return rows
     return rows.filter((row) => {
       const target = resolveScopeTarget(collection, String(row.id ?? ''), row)
-      return (
-        authorization.ownerTableOf({
-          type: 'record',
-          workspaceId: actor.workspaceId,
-          collection: target.collection,
-          recordId: target.id,
-          record: row as Record<string, unknown>,
-        }) === targetTable
-      )
+      const actual = authorization.ownerTableOf({
+        type: 'record',
+        workspaceId: actor.workspaceId,
+        collection: target.collection,
+        recordId: target.id,
+        record: row as Record<string, unknown>,
+      })
+      return targetTable === 'workspace'
+        ? (!actual || actual === 'workspace')
+        : actual === targetTable
     })
   }
 
@@ -598,6 +600,7 @@ export class DatabaseAccessPolicy {
       memberDefaultRole?: 'viewer' | 'editor'
       parentCollection?: string
       parentRecordId?: string
+      ownerTable?: string
     },
   ) {
     const store = this.host.collabStore()
@@ -742,7 +745,7 @@ export class DatabaseAccessPolicy {
       }
       return '私人'
     }
-    return SHARE_SCOPE_LABEL[scope]
+    return SHARE_SCOPE_LABEL[stored]
   }
 
   ownerTableLabel(spec: CollectionSpec, record: DbRecord): string | { kind: 'user'; accountId: string; name: string } {

@@ -164,6 +164,8 @@ function CrumbMenu({
               <CrumbItemGlyph
                 kind={glyphKind}
                 icon={choice.icon}
+                avatar={choice.avatar}
+                avatarSeed={choice.avatarSeed}
                 mode={choice.mode}
                 emoji={choice.emoji}
                 mascot={choice.mascot}
@@ -283,6 +285,8 @@ export function CrumbTrail({
             <CrumbItemGlyph
               kind={crumb.kind}
               icon={crumb.icon ?? current?.icon}
+              avatar={crumb.avatar ?? current?.avatar}
+              avatarSeed={crumb.avatarSeed ?? current?.avatarSeed}
               mode={current?.mode}
               emoji={current?.emoji ?? crumb.emoji}
               mascot={current?.mascot ?? crumb.mascot}

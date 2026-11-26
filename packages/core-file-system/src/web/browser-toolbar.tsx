@@ -12,6 +12,7 @@ import {
   UserIcon,
   UsersIcon,
 } from '@heroicons/react/16/solid'
+import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import { HEADLESS_DISMISS_IGNORE, HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import { emitFsdbChange, type CollectionInfo, type CollectionSchema, type DbRecord, type FieldSpec } from '@biu/type-file-system'
@@ -29,7 +30,7 @@ import { ModeGlyph, VIEW_MODES } from './fsdb-cells.tsx'
 import { TableGlyph, UiGlyph, ViewModeGlyph } from './nav-glyphs.tsx'
 import { PageBanner } from './page-banner.tsx'
 import type { QueryField } from './query-menus.tsx'
-import { ViewOrderMenu } from './view-order-menu.tsx'
+import { ViewOrderMenu, ViewProtectionBadge } from './view-order-menu.tsx'
 import { canEditSavedView, viewStateKey, type GroupConfig, type SavedView } from './saved-view.ts'
 import type { TableSandboxItem } from '../shared/table-sandbox-model.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
@@ -161,6 +162,10 @@ export type BrowserListChromeProps = {
   setCreateScopeOpen: (next: boolean | ((open: boolean) => boolean)) => void
   createScope: 'personal' | 'workspace' | 'shared' | 'local'
   setCreateScope: (next: 'personal' | 'workspace' | 'shared' | 'local') => void
+  createOwnerTable?: string
+  createOwnerName?: string
+  createOwnerAvatar?: string
+  createOwnerAccountId?: string
   localData: boolean
   hasExternalViews?: boolean
 }
@@ -287,6 +292,10 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
     setCreateScopeOpen,
     createScope,
     setCreateScope,
+    createOwnerTable,
+    createOwnerName,
+    createOwnerAvatar,
+    createOwnerAccountId,
     localData,
     hasExternalViews = false,
   } = props
@@ -446,6 +455,7 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                 >
                   {activeView ? <ViewModeGlyph mode={activeView.mode} /> : <UiGlyph icon="squares" />}
                   <span className="tasks-viewdd-name">{activeView?.name ?? '未保存'}</span>
+                  {activeView ? <ViewProtectionBadge view={activeView} /> : null}
                 </button>
               </div>
               {viewMenuOpen ? (
@@ -943,7 +953,43 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                         ) : null}
                       </div>
                     </HeadlessDismiss>
-                  ) : activeView && (viewDomainOf(activeView) === 'workspace' || viewDomainOf(activeView) === 'personal') ? null : (
+                  ) : activeView && (viewDomainOf(activeView) === 'workspace' || viewDomainOf(activeView) === 'personal') ? (
+                    <button
+                      type="button"
+                      className="fsdb-create-scope"
+                      aria-label={
+                        createOwnerAccountId
+                          ? `归属 ${createOwnerName || '他人'}`
+                          : viewDomainOf(activeView) === 'workspace'
+                            ? '新建到空间数据'
+                            : '新建到我的数据'
+                      }
+                      title={
+                        createOwnerAccountId
+                          ? `新建到 ${createOwnerName || '他人'} 的数据（归属对方）`
+                          : viewDomainOf(activeView) === 'workspace'
+                            ? '新建到空间数据'
+                            : '新建到我的数据'
+                      }
+                      data-testid="fsdb-create-scope-badge"
+                      onClick={() => {
+                        if (canAskNewPlugin) askNewPlugin(createScope)
+                        else void createRecord()
+                      }}
+                    >
+                      {createOwnerAccountId ? (
+                        createOwnerAvatar ? (
+                          <img src={createOwnerAvatar} alt="" className="size-3.5 rounded-full object-cover" />
+                        ) : (
+                          <AiAvatar seed={createOwnerAccountId} size={14} />
+                        )
+                      ) : viewDomainOf(activeView) === 'workspace' ? (
+                        <UsersIcon aria-hidden className="size-[14px]" />
+                      ) : (
+                        <UserIcon aria-hidden className="size-[14px]" />
+                      )}
+                    </button>
+                  ) : (
                     <HeadlessDismiss enabled={createScopeOpen} onDismiss={() => setCreateScopeOpen(false)}>
                       <div className="fsdb-create-scope-wrap">
                         <button

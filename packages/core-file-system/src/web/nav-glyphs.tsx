@@ -5,6 +5,7 @@ import {
   UserIcon,
   UsersIcon,
 } from '@heroicons/react/16/solid'
+import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import type { ViewMode } from './fields.ts'
 import type { CrumbKind } from './sidebar-nav.ts'
 import { RecordMark, recordMarkStub } from './record-mark.tsx'
@@ -24,6 +25,8 @@ export function ViewModeGlyph({ mode, className = 'size-4' }: { mode?: ViewMode;
 export function CrumbItemGlyph({
   kind,
   icon,
+  avatar,
+  avatarSeed,
   mode,
   emoji,
   mascot,
@@ -33,6 +36,8 @@ export function CrumbItemGlyph({
 }: {
   kind: CrumbKind
   icon?: string
+  avatar?: string
+  avatarSeed?: string
   mode?: ViewMode
   emoji?: string
   mascot?: unknown
@@ -46,6 +51,12 @@ export function CrumbItemGlyph({
     return <RecordMark record={record} emoji={emoji} tableIcon={icon} Icon={Icon} className={className} />
   }
   if (kind === 'scope') {
+    if (avatar) {
+      return <img src={avatar} alt="" aria-hidden className="size-4 shrink-0 rounded-full object-cover" />
+    }
+    if (avatarSeed) {
+      return <AiAvatar seed={avatarSeed} size={16} className="size-4 shrink-0 rounded-full" />
+    }
     if (icon === 'workspace') return <UsersIcon aria-hidden className={className} />
     if (icon === 'shared') return <ShareIcon aria-hidden className={className} />
     return <UserIcon aria-hidden className={className} />

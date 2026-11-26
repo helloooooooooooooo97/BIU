@@ -160,6 +160,32 @@ html.dark .fsdb-views {
   transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), opacity 140ms ease;
 }
 
+/* 窄窗/中屏下以 Notion 风格全高浮层抽屉滑出左侧栏，不挤占文档流 */
+.sidebar-flyout-host.is-drawer-open {
+  pointer-events: auto;
+  z-index: 95;
+}
+
+.sidebar-flyout-host.is-drawer-open .app-side-bar.is-drawer {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: min(var(--sidebar-flyout-width, 240px), calc(100vw - 48px));
+  min-width: 0;
+  max-width: calc(100vw - 48px);
+  border-right: var(--biu-stroke-width) solid var(--biu-color-border);
+  border-radius: 0;
+  background: var(--biu-color-bg-subtle);
+  box-shadow: var(--biu-shadow-lg);
+  contain: none;
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
+  z-index: 95;
+  animation: sidebar-expand-in 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 @keyframes sidebar-expand-in {
   from {
     opacity: 0;
@@ -311,8 +337,8 @@ html.dark .fsdb-views {
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  height: auto;
-  padding: 8px 8px 0;
+  height: 44px;
+  padding: 0 8px;
 }.shell-rail-expand {
   display: grid;
   width: 100%;
@@ -1087,6 +1113,26 @@ html.dark .fsdb-views {
   min-width: min(var(--biu-inspector-min), 100vw);
 }
 
+.app-shell-agent.is-inspector-open>.session-inspector.is-overlay,
+.app-shell-module.is-inspector-open>.session-inspector.is-overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: auto;
+  width: var(--inspector-width, 360px);
+  min-width: 0;
+  max-width: 100vw;
+  z-index: 85;
+  box-shadow: var(--biu-shadow-lg);
+}
+
+.app-shell-agent.is-inspector-open>.session-inspector.is-overlay.is-overlay-full,
+.app-shell-module.is-inspector-open>.session-inspector.is-overlay.is-overlay-full {
+  width: 100vw;
+  border-left: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chat-session-row::before,
   .chat-session-row.is-active,
@@ -1095,6 +1141,7 @@ html.dark .fsdb-views {
   .sidebar-chevron,
   .shell-rail-tip,
   .app-side-bar.is-entering:not(.is-closed),
+  .sidebar-flyout-host.is-drawer-open .app-side-bar.is-drawer,
   .sidebar-flyout-host.is-collapsed .app-side-bar.is-closed {
     transition: none;
     animation: none;

@@ -34,6 +34,7 @@ let membersListed: MemberPerson[] | null = null
 let membersListedAt = 0
 const MEMBERS_TTL_MS = 8000
 const ACCOUNT_EVENT = 'biu:account-token'
+const WORKSPACE_PROFILE_EVENT = 'biu:workspace-profile'
 let memberDirCache: Map<string, MemberPerson> | null = null
 let memberDirLoadedAt = 0
 let memberDirInflight: Promise<Map<string, MemberPerson>> | null = null
@@ -51,7 +52,7 @@ function loadMemberDirectory(): Promise<Map<string, MemberPerson>> {
   const params = new URLSearchParams({
     path: WORKSPACE_MEMBERS_COLLECTION_PATH,
     limit: '500',
-    columns: 'title,name,email,avatar',
+    columns: 'title,email,avatar',
   })
   const req = apiFetch(`/api/db/list?${params.toString()}`)
     .then(async (res) => {
@@ -62,7 +63,7 @@ function loadMemberDirectory(): Promise<Map<string, MemberPerson>> {
         const id = String(item?.id ?? '').trim()
         if (!id) continue
         const email = String(item.email ?? '').trim()
-        const name = String(item.name ?? '').trim() || String(item.title ?? '').trim() || email || id.slice(0, 8)
+        const name = String(item.title ?? '').trim() || String(item.name ?? '').trim() || email || id.slice(0, 8)
         const avatar = typeof item.avatar === 'string' ? item.avatar.trim() : ''
         map.set(id, { id, name, email, ...(avatar ? { avatar } : {}) })
       }
@@ -95,9 +96,11 @@ export function useMemberDirectory(enabled: boolean): ReadonlyMap<string, Member
     }
     sync()
     window.addEventListener(ACCOUNT_EVENT, onAccountChange)
+    window.addEventListener(WORKSPACE_PROFILE_EVENT, onAccountChange)
     return () => {
       cancelled = true
       window.removeEventListener(ACCOUNT_EVENT, onAccountChange)
+      window.removeEventListener(WORKSPACE_PROFILE_EVENT, onAccountChange)
     }
   }, [enabled])
 
@@ -166,7 +169,7 @@ export async function loadMembers(): Promise<MemberPerson[]> {
     limit: 500,
     sortField: 'title',
     sortDir: 'asc',
-    columns: ['title', 'name', 'email', 'avatar'],
+    columns: ['title', 'email', 'avatar'],
   })
     .then((page) => {
       const rows = page.items
@@ -174,7 +177,7 @@ export async function loadMembers(): Promise<MemberPerson[]> {
         .map((item) => {
           const id = String(item.id)
           const email = String(item.email ?? '').trim()
-          const name = String(item.name ?? '').trim() || String(item.title ?? '').trim() || email || id.slice(0, 8)
+          const name = String(item.title ?? '').trim() || String(item.name ?? '').trim() || email || id.slice(0, 8)
           const avatar = typeof item.avatar === 'string' ? item.avatar.trim() : ''
           return { id, name, email, ...(avatar ? { avatar } : {}) }
         })
@@ -213,11 +216,18 @@ export function PersonFace({ value, empty = '' }: { value: unknown; empty?: stri
     <span className="fsdb-person-list">
       {people.map((person) => {
         const member = person.kind === 'user' && person.accountId ? membersById.get(person.accountId) : undefined
-        const liveUser = person.kind === 'user' && (person.name === '用户' || person.name === profile.name)
-        const label = member?.name || (liveUser ? profileDisplayName(profile) : person.name) || empty
+        const isCurrentProfile = Boolean(person.kind === 'user' && profile.accountId && person.accountId === profile.accountId)
+        const liveUser = person.kind === 'user' && (isCurrentProfile || person.name === '用户' || (profile.name && person.name === profile.name))
+        const label =
+          (isCurrentProfile ? (profile.name || profile.fallbackName) : '') ||
+          member?.name ||
+          (liveUser ? profileDisplayName(profile) : person.name) ||
+          empty
         const personAvatar =
           person.kind === 'user'
-            ? (member?.avatar || (typeof person.avatar === 'string' ? person.avatar.trim() : '') || (liveUser ? profile.avatar : ''))
+            ? (isCurrentProfile && profile.hydrated
+                ? profile.avatar
+                : (member?.avatar || (typeof person.avatar === 'string' ? person.avatar.trim() : '') || (liveUser ? profile.avatar : '')))
             : ''
         const body = (
           <>

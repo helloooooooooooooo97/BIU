@@ -679,7 +679,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   })
 
   authedRoute('GET', '/api/account/me', async (route, me) => {
-    let wp: { name: string; avatar: string } | null = null
+    let wp: { name: string; fallbackName?: string; avatar: string } | null = null
     try {
       wp = account.store.workspaceProfile(me.id)
     } catch {
@@ -687,8 +687,8 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     }
     route.send(200, {
       ...me,
-      name: wp?.name || me.name,
-      avatar: wp?.avatar || me.avatar,
+      name: wp ? (wp.name || wp.fallbackName || me.name) : me.name,
+      avatar: wp ? wp.avatar : me.avatar,
       online: getRuntimePolicy().hostMode === 'cloud',
       isSuperAdmin: account.store.isSuperAdmin(me.id),
     })
@@ -841,7 +841,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   })
 
   authedRoute('PATCH', '/api/account/workspaces/:id', async (route, me) => {
-    const body = (await route.json()) as { name?: string }
+    const body = (await route.json()) as { name?: string; avatar?: string }
     if (getRuntimePolicy().allowCloudLinking && account.workspaceLocation(route.params.id!) === 'cloud') {
       const connection = account.cloudConnection(me.id)
       if (!connection) throw new CollabError('请先登录云端账号', 401)
@@ -858,16 +858,18 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       const payload = (await response.json().catch(() => ({}))) as {
         id?: string
         name?: string
+        avatar?: string
         ownerId?: string
         role?: string
         createdAt?: number
         error?: string
       }
-      if (!response.ok || !payload.id) throw new CollabError(payload.error || '重命名云端空间失败', response.status)
+      if (!response.ok || !payload.id) throw new CollabError(payload.error || '更新云端空间失败', response.status)
       account.store.upsertPulledWorkspace({
         accountId: me.id,
         id: payload.id,
         name: String(payload.name ?? ''),
+        ...(payload.avatar !== undefined ? { avatar: payload.avatar } : {}),
         ownerId: payload.ownerId,
         role: payload.role,
         createdAt: payload.createdAt,
@@ -875,7 +877,13 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       route.send(200, { ...payload, location: 'cloud' })
       return
     }
-    route.send(200, account.store.renameWorkspace(me.id, route.params.id!, String(body.name ?? '')))
+    route.send(
+      200,
+      account.store.updateWorkspace(me.id, route.params.id!, {
+        ...(body.name !== undefined ? { name: String(body.name) } : {}),
+        ...(body.avatar !== undefined ? { avatar: String(body.avatar) } : {}),
+      }),
+    )
   })
 
   authedRoute('DELETE', '/api/account/workspaces/:id', async (route, me) => {
@@ -1270,6 +1278,8 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     if (!activeWorkspace || account.workspaceLocation(activeWorkspace) !== 'cloud') {
       route.send(200, {
         scope: 'personal',
+        ownerTable: `account:${me.id}`,
+        accessMode: 'private',
         ownerId: me.id,
         people: [],
         groups: [],
@@ -1327,15 +1337,21 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       collection?: string
       recordId?: string
       inheritanceMode?: 'inherit' | 'custom'
+      accessMode?: 'members' | 'restricted'
     }
     const collection = String(body.collection ?? '').trim()
     const recordId = String(body.recordId ?? '').trim()
-    const mode = body.inheritanceMode === 'inherit' ? 'inherit' : body.inheritanceMode === 'custom' ? 'custom' : null
-    if (!collection || !recordId || !mode) {
+    const inheritanceMode =
+      body.inheritanceMode === 'inherit' ? 'inherit' : body.inheritanceMode === 'custom' ? 'custom' : null
+    const accessMode =
+      body.accessMode === 'members' ? 'members' : body.accessMode === 'restricted' ? 'restricted' : null
+    if (!collection || !recordId || (!inheritanceMode && !accessMode)) {
       route.send(400, { error: '参数不完整' })
       return
     }
-    const result = account.store.setRecordInheritance(me.id, collection, recordId, mode)
+    const result = accessMode
+      ? account.store.setRecordAccessMode(me.id, collection, recordId, accessMode)
+      : account.store.setRecordInheritance(me.id, collection, recordId, inheritanceMode!)
     broadcastAccessChange(activeWorkspace, 'records', collection)
     route.send(200, result)
   })

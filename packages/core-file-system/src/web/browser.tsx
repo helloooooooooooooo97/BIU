@@ -166,11 +166,12 @@ import {
   loadViews,
   pullSavedViews,
   rememberRecords,
-  rememberViews,
   loadCollapsedGroups,
   pickViewForRoute,
   routeViewNeedsFetch,
   subscribeStarredViews,
+  subscribeViews,
+  upsertSavedView,
   viewForPath,
   withViewDisplay,
 } from './view-storage.ts'
@@ -197,6 +198,7 @@ import {
 } from './table-window.ts'
 import { markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady } from './sidebar-preview.ts'
 import { publishDataSidebar, releaseDataSidebar, type DataSidebarLive } from './data-sidebar-host.ts'
+import { useMemberDirectory } from './person-cell.tsx'
 import {
   catalogLockFilters,
   displayNameForView,
@@ -206,6 +208,7 @@ import {
   stubBuiltinBlockKindView,
   stubDefaultTableView,
   viewDomainOf,
+  defaultTableViewId,
   type DataScope,
   type ViewDomain,
 } from '../catalog-views.ts'
@@ -238,7 +241,6 @@ import {
   emptySortRule,
   encodeListFilter,
   filterEditorStateKey,
-  filterTreeStateKey,
   matchListFilterRecord,
   normalizeSorts,
   resolveViewFilterTree,
@@ -638,23 +640,41 @@ export function CollectionBrowser({
   const [views, setViews] = useState<SavedView[]>(() => initialExternalViews ?? paintListedViews(collectionPath))
   const [viewsSaveError, setViewsSaveError] = useState(false)
   const [activeViewId, setActiveViewId] = useState<string | null>(initialSheetView?.id ?? initialView?.id ?? null)
+  const activeView =
+    views.find((view) => view.id === activeViewId) ??
+    (activeViewId ? stubDefaultTableView(activeViewId, { path: collectionPath, label: title }) ?? undefined : undefined)
   const [routeViewReady, setRouteViewReady] = useState(() => !routeViewNeedsFetch(collectionPath, routeViewId))
   const routeViewReadyRef = useRef(routeViewReady)
   routeViewReadyRef.current = routeViewReady
   const isKPlus1Cloud = !sheet && !localData && tableModeFor(collectionPath) === 'k-plus-1'
+  const membersById = useMemberDirectory(isKPlus1Cloud)
   const [viewerAccountId, setViewerAccountId] = useState('')
+  const [workspaceAvatar, setWorkspaceAvatar] = useState('')
   useEffect(() => {
     if (!isKPlus1Cloud) return
     let alive = true
-    void readJson<{ id?: string; account?: { id?: string } | null }>('/api/account/me')
-      .then((data) => {
-        if (!alive) return
-        const id = String(data?.id ?? data?.account?.id ?? '').trim()
-        if (id) setViewerAccountId(id)
-      })
-      .catch(() => {})
+    const loadIdentity = () => {
+      void Promise.all([
+        readJson<{ accountId?: string }>('/api/account/workspace-profile').catch(() => null),
+        readJson<{ id?: string; account?: { id?: string } | null }>('/api/account/me').catch(() => null),
+        readJson<{ workspaceId?: string }>('/api/account/active').catch(() => null),
+        readJson<{ workspaces?: Array<{ id?: string; avatar?: string }> }>('/api/account/workspaces').catch(() => null),
+      ])
+        .then(([wp, data, active, listed]) => {
+          if (!alive) return
+          const id = String(wp?.accountId ?? data?.id ?? data?.account?.id ?? '').trim()
+          if (id) setViewerAccountId(id)
+          const activeId = String(active?.workspaceId ?? '').trim()
+          const currentWs = listed?.workspaces?.find((w) => w.id === activeId)
+          setWorkspaceAvatar(String(currentWs?.avatar ?? '').trim())
+        })
+        .catch(() => {})
+    }
+    loadIdentity()
+    window.addEventListener('biu:account-token', loadIdentity)
     return () => {
       alive = false
+      window.removeEventListener('biu:account-token', loadIdentity)
     }
   }, [isKPlus1Cloud])
   const catalogLocks = useMemo(() => {
@@ -687,7 +707,8 @@ export function CollectionBrowser({
   useEffect(() => {
     if (!lockedSource) return
     setMode('table')
-  }, [lockedSource])
+    if (dataPath === DATA_COLLECTION_PATH) setCreateTypePath(lockedSource)
+  }, [dataPath, lockedSource])
   const detailId = openDetailId
   const setDetailId = (id: string | null, row?: DbRecord | null) => {
     if (id) setCellPop(null)
@@ -888,7 +909,6 @@ export function CollectionBrowser({
     prevSchemaDefaultSig.current = ''
     const stored = viewForPath(collectionPath, routeViewId)
     const listed = paintListedViews(collectionPath)
-    rememberViews(collectionPath, listed)
     const rawNext = stored || listed[0] ? pickViewForRoute(listed, collectionPath, routeViewId) || stored || listed[0] : null
     const next = sheet && dataPath === DATA_COLLECTION_PATH && rawNext ? { ...rawNext, groupBy: 'table' } : rawNext
     const cached = peekBrowserCache(dataPath, next?.id, normalizePageSize(next?.pageSize))
@@ -1018,9 +1038,10 @@ export function CollectionBrowser({
   const confirmedCreates = useRef(new Set<string>())
   const hydratePath = useRef('')
   const viewsRef = useRef<SavedView[]>([])
-  const skipPersistGen = useRef(0)
   const viewsWriteGenRef = useRef(0)
-  const persistActiveViewRef = useRef<() => void>(() => {})
+  const pendingQueryTimerRef = useRef<number>(0)
+  const pendingQueryDraftRef = useRef<{ viewId: string; query: string } | null>(null)
+  const flushPendingQueryRef = useRef<() => void>(() => {})
   const activeViewIdRef = useRef<string | null>(null)
   const routeViewIdRef = useRef<string | undefined>(routeViewId)
   routeViewIdRef.current = routeViewId
@@ -1511,7 +1532,6 @@ export function CollectionBrowser({
     const adoptRoutedView = () => {
       const stored = viewForPath(collectionPath, routeViewId)
       const listed = paintListedViews(collectionPath)
-      rememberViews(collectionPath, listed)
       if (stored || listed[0]) {
         const next = pickViewForRoute(listed, collectionPath, routeViewId) || stored || listed[0]
         setViews((prev) => (sameSavedViews(prev, listed) ? prev : listed))
@@ -1527,14 +1547,15 @@ export function CollectionBrowser({
     }
     if (!pathChanged && !pathHandled) {
       if (viewSyncRef.current!.shouldSkipRouteAdopt(collectionPath, routeViewId, false)) return
-      // 同集合内通过 URL / 侧边栏切换视图前，先刷盘当前视图未落盘的防抖改动
+      // 同集合内通过 URL / 侧边栏切换视图前，先刷盘未落盘的搜索词防抖改动
       if (activeViewIdRef.current && routeViewId && routeViewId !== activeViewIdRef.current) {
-        persistActiveViewRef.current()
+        flushPendingQueryRef.current()
       }
-      skipPersistGen.current += 1
       adoptRoutedView()
       return
     }
+    // 切换集合前先刷盘旧集合未落盘的搜索词防抖改动
+    if (pathChanged) flushPendingQueryRef.current()
     viewSyncRef.current!.clear()
     hydratePath.current = ''
     loadedIdentityRef.current = ''
@@ -1573,7 +1594,6 @@ export function CollectionBrowser({
     if (hasExternalViews) return
     const stored = viewForPath(collectionPath, routeViewId)
     const listed = paintListedViews(collectionPath)
-    rememberViews(collectionPath, listed)
     if (stored || listed[0]) {
       const next = pickViewForRoute(listed, collectionPath, routeViewId) || stored || listed[0]
       setViews((prev) => (sameSavedViews(prev, listed) ? prev : listed))
@@ -1765,16 +1785,26 @@ export function CollectionBrowser({
   const schema = stat?.schema
   const isDataOverview = dataPath === DATA_COLLECTION_PATH
   const nonScopeLockedKeys = lockedFilterKeys.filter((key) => key !== '$scope' && key !== '$ownerTable')
-  const subsetLocked = nonScopeLockedKeys.length > 0 && !(sheet && isDataOverview)
+  const subsetLocked = nonScopeLockedKeys.length > 0 && !(isDataOverview && (sheet || lockedSource))
   const isSharedScopeView = catalogLocks.$scope === 'shared'
   const overviewCreateTables = useMemo(
     () => tables.filter((table) => isOverviewCreatableCollection(table)),
     [tables],
   )
+  const foreignOwnerIdForCreate =
+    activeView?.ownerTable?.startsWith('account:') &&
+    viewerAccountId &&
+    activeView.ownerTable !== `account:${viewerAccountId}`
+      ? activeView.ownerTable.slice('account:'.length)
+      : ''
+  const canEditForeignPersonalTable = foreignOwnerIdForCreate
+    ? items.some((row) => row.shareRole === '编辑' || row.shareRole === '管理')
+    : false
+  const createOwnerTable = foreignOwnerIdForCreate ? `account:${foreignOwnerIdForCreate}` : undefined
   const canCreate =
     (isDataOverview ? overviewCreateTables.length > 0 : Boolean(schema?.records?.create)) &&
     !subsetLocked &&
-    !isSharedScopeView
+    (foreignOwnerIdForCreate ? canEditForeignPersonalTable : !isSharedScopeView)
   const canAskNewPlugin = collectionPath === PLUGINS_COLLECTION_PATH && !subsetLocked
   const createTypeTable =
     overviewCreateTables.find((table) => table.path === createTypePath) ??
@@ -1896,6 +1926,9 @@ export function CollectionBrowser({
       onCommit: (nextWidths) => {
         setColumnWidths(nextWidths)
         setResizingCol(null)
+        if ((!sheet || hasExternalViews) && activeViewIdRef.current) {
+          patchActiveView({ columnWidths: nextWidths })
+        }
       },
     })
   }
@@ -1959,7 +1992,6 @@ export function CollectionBrowser({
         if (kept.length === prev.length && kept.every((key, index) => key === prev[index])) return prev
         return kept
       }
-      skipPersistGen.current += 1
       return schemaDefaultKeys
     })
   }, [allColumnKeys, rowActionColumn, schema, schemaDefaultKeys, schemaDefaultSig, sheet])
@@ -2454,9 +2486,6 @@ export function CollectionBrowser({
     window.dispatchEvent(new Event(FSDB_CRUMB_LABELS_EVENT))
   }, [activeViewId, collectionPath, items, routeViewId, schema?.labelField, selected, sheet])
   const filterActive = countFilterRules(filterTree) > 0
-  const activeView =
-    views.find((view) => view.id === activeViewId) ??
-    (activeViewId ? stubDefaultTableView(activeViewId, { path: collectionPath, label: title }) ?? undefined : undefined)
   const activeSharedOwnerAccountId = useMemo(() => {
     const ot = activeView?.ownerTable?.trim()
     if (ot && ot.startsWith('account:')) {
@@ -2679,27 +2708,37 @@ export function CollectionBrowser({
     const nextQuery = next.query ?? ''
     const nextPageSize = normalizePageSize(next.pageSize)
     const nextGroup = next.groupBy ?? ''
-    if (
-      next.id === activeViewId &&
-      mode === next.mode &&
-      sortField === next.sortField &&
-      sortDir === next.sortDir &&
-      groupBy === nextGroup &&
-      groupConfigStateKey(groupConfig) === groupConfigStateKey(next.groupConfig) &&
-      showTree === Boolean(next.tree) &&
-      wrapCells === !!next.wrap &&
-      truncateCells === (next.truncate !== false) &&
-      showRowNumbers === Boolean(next.rowNumbers) &&
-      freezeTitle === Boolean(next.freezeTitle) &&
-      freezeUntil === (next.freezeUntil ?? '') &&
-      query === nextQuery &&
-      pageSize === nextPageSize &&
-      sortsStateKey(sorts) === sortsStateKey(next.sorts) &&
-      filterTreeStateKey(filterTree) === filterTreeStateKey(resolveViewFilterTree(next)) &&
-      JSON.stringify(filters) === JSON.stringify(next.filters) &&
-      JSON.stringify(columnKeys) === JSON.stringify(nextColumns) &&
-      JSON.stringify(columnWidths) === JSON.stringify(normalizeColumnWidths(next.columnWidths))
-    ) {
+    const liveKey = viewStateKey({
+      mode,
+      sortField,
+      sortDir,
+      sorts,
+      filters,
+      filterTree,
+      columns: columnKeys,
+      groupBy,
+      groupConfig,
+      tree: showTree,
+      wrap: wrapCells,
+      truncate: truncateCells,
+      rowNumbers: showRowNumbers,
+      freezeTitle,
+      freezeUntil: freezeUntil || undefined,
+      query,
+      pageSize,
+      columnWidths,
+      columnSummaries,
+      columnViews,
+      sandboxViews,
+    })
+    const nextKey = viewStateKey({
+      ...next,
+      columns: nextColumns,
+      groupBy: nextGroup,
+      query: nextQuery,
+      pageSize: nextPageSize,
+    })
+    if (next.id === activeViewId && liveKey === nextKey) {
       return
     }
     rememberActiveView(next.id)
@@ -2720,18 +2759,12 @@ export function CollectionBrowser({
     const current = painted.find((item) => item.id === view.id) ?? viewsRef.current.find((item) => item.id === view.id)
     if (current && !viewIsFresher(view, current)) return
     const incoming = withViewDisplay(collectionPath, view)
-    const listed = rankListedViews(
-      painted.some((item) => item.id === view.id)
-        ? painted.map((item) => (item.id === view.id ? incoming : item))
-        : [...painted, incoming],
-      viewsRef.current,
-    )
-    rememberViews(collectionPath, listed)
+    upsertSavedView(collectionPath, incoming)
+    const listed = rankListedViews(paintListedViews(collectionPath), viewsRef.current)
     viewsRef.current = listed
     setViews(listed)
     if (view.id === activeViewIdRef.current) {
-      skipPersistGen.current += 1
-      applyView(view)
+      applyView(incoming)
     }
   }
   syncViewsRef.current = async () => {
@@ -2742,26 +2775,27 @@ export function CollectionBrowser({
     const listed = rankListedViews(paintListedViews(targetPath), viewsRef.current)
     const prev = viewsRef.current
     const activeId = viewSyncRef.current!.resolveSyncedViewId(targetPath, activeViewIdRef.current, routeViewIdRef.current)
-    rememberViews(targetPath, listed)
     viewsRef.current = listed
-    setViews(listed)
+    setViews((prevViews) => (sameSavedViews(prevViews, listed) ? prevViews : listed))
     const nextView =
       pickViewForRoute(listed, targetPath, activeId) ?? listed[0]
     const prevView = activeId ? prev.find((item) => item.id === activeId) : undefined
     if (!nextView) return
-    if (prevView && viewStateKey(normalizeSavedView(prevView)) === viewStateKey(normalizeSavedView(nextView))) return
-    skipPersistGen.current += 1
-    applyView(nextView)
+    // 用户正在输入搜索词尚未刷盘时，保留当前输入的草稿搜索词不被后台拉取冲掉
+    const typingQuery =
+      pendingQueryDraftRef.current?.viewId === nextView.id ? pendingQueryDraftRef.current.query : undefined
+    const effectiveNext = typingQuery !== undefined ? { ...nextView, query: typingQuery } : nextView
+    if (prevView && viewStateKey(normalizeSavedView(prevView)) === viewStateKey(normalizeSavedView(effectiveNext))) return
+    applyView(effectiveNext)
   }
 
   function selectView(view: SavedView) {
     viewSyncRef.current!.markSelect(collectionPath, view.id, routeViewId, Boolean(onOpenView))
-    persistActiveViewRef.current()
+    flushPendingQueryRef.current()
     const target = viewsRef.current.find((item) => item.id === view.id) ?? view
     if (target.id !== activeViewIdRef.current) {
       pendingPathQueryRef.current = null
       reloadGen.current += 1
-      skipPersistGen.current += 1
       adoptListCacheForViewRef.current(dataPath, target)
       applyView(target)
       if (hasExternalViews) externalViewsOnChangeRef.current?.(viewsRef.current, target.id)
@@ -2771,6 +2805,17 @@ export function CollectionBrowser({
     if (!hasExternalViews) rememberInspectorWorkingView(collectionPath, target.id)
     onOpenView?.(target.id)
   }
+
+  useEffect(() => {
+    if (sheet || hasExternalViews) return
+    return subscribeViews(() => {
+      const listed = paintListedViews(collectionPath)
+      if (!sameSavedViews(viewsRef.current, listed)) {
+        viewsRef.current = listed
+        setViews(listed)
+      }
+    })
+  }, [collectionPath, hasExternalViews, sheet])
 
   useEffect(() => {
     const onSaved = (event: Event) => {
@@ -2796,12 +2841,10 @@ export function CollectionBrowser({
       .then((view) => {
         if (!live) return
         const listed = paintListedViews(collectionPath)
-        rememberViews(collectionPath, listed)
         viewsRef.current = listed
         setViews((prev) => (sameSavedViews(prev, listed) ? prev : listed))
         const next = view ?? pickViewForRoute(listed, collectionPath, id)
         if (next) {
-          skipPersistGen.current += 1
           applyView(next)
         }
         routeViewReadyRef.current = true
@@ -2828,7 +2871,6 @@ export function CollectionBrowser({
   }, [hasExternalViews, viewMenuOpen])
 
   const {
-    persistViews,
     persistViewOrder,
     addEmptyView,
     copyView,
@@ -3178,6 +3220,7 @@ export function CollectionBrowser({
     tagCatalog,
     tagCatalogRef,
     createScope,
+    createOwnerTable,
     createTypeTable,
     overviewCreateTables,
     pickedIds,
@@ -3303,12 +3346,88 @@ export function CollectionBrowser({
     claimTableCellPick(embed ? 'inspector' : 'main')
   }
 
+  const sharedOwnerMember = activeSharedOwnerAccountId ? membersById.get(activeSharedOwnerAccountId) : undefined
+  const viewerMember = viewerAccountId ? membersById.get(viewerAccountId) : undefined
   const labelOf = (row: DbRecord) => crumbRecordLabel(row, schema?.labelField)
   const crumbs = useMemo(() => {
     const dataViewId = crumbFromData ? viaDataViewId() : ''
     const dataView = crumbFromData ? viewForPath(DATA_COLLECTION_PATH, dataViewId) : null
     const dataViews = crumbFromData ? paintCollectionViews(DATA_COLLECTION_PATH, tables) : []
     const stampId = crumbFromData ? originStamp : ''
+    const pickScopeViewId = (targetOwnerTable: string) => {
+      const matches = views.filter((v) => !isBuiltinAllViewId(v.id) && !v.builtin && v.ownerTable === targetOwnerTable)
+      const preferred = matches.find((v) => v.protection !== 'personal') ?? matches[0]
+      return preferred ? preferred.id : defaultTableViewId(targetOwnerTable, collectionPath)
+    }
+    const scopeChoices: Array<{
+      id: string
+      label: string
+      icon?: string
+      avatar?: string
+      avatarSeed?: string
+      viewId: string
+    }> = []
+    if (!crumbFromData && isKPlus1Cloud) {
+      scopeChoices.push({
+        id: 'scope:workspace',
+        label: '空间数据',
+        icon: 'workspace',
+        ...(workspaceAvatar ? { avatar: workspaceAvatar } : {}),
+        viewId: pickScopeViewId('workspace'),
+      })
+      if (viewerAccountId) {
+        scopeChoices.push({
+          id: `owner:${viewerAccountId}`,
+          label: '我的数据',
+          icon: 'personal',
+          avatar: viewerMember?.avatar || '',
+          avatarSeed: viewerAccountId,
+          viewId: pickScopeViewId(`account:${viewerAccountId}`),
+        })
+      }
+      const seenOwners = new Set<string>(viewerAccountId ? [viewerAccountId] : [])
+      for (const v of views) {
+        const ot = v.ownerTable?.trim() || ''
+        if (!ot.startsWith('account:')) continue
+        const accId = ot.slice('account:'.length)
+        if (!accId || seenOwners.has(accId)) continue
+        seenOwners.add(accId)
+        const m = membersById.get(accId)
+        scopeChoices.push({
+          id: `owner:${accId}`,
+          label: m?.name?.trim() || (accId === activeSharedOwnerAccountId ? ownerDisplayName : '') || accId.slice(0, 8),
+          icon: 'personal',
+          avatar: m?.avatar || '',
+          avatarSeed: accId,
+          viewId: pickScopeViewId(ot),
+        })
+      }
+      if (activeSharedOwnerAccountId && !seenOwners.has(activeSharedOwnerAccountId)) {
+        scopeChoices.push({
+          id: `owner:${activeSharedOwnerAccountId}`,
+          label: sharedOwnerMember?.name || ownerDisplayName || activeSharedOwnerAccountId.slice(0, 8),
+          icon: 'personal',
+          avatar: sharedOwnerMember?.avatar || '',
+          avatarSeed: activeSharedOwnerAccountId,
+          viewId: pickScopeViewId(`account:${activeSharedOwnerAccountId}`),
+        })
+      }
+    }
+    const personalOwner = !crumbFromData
+      ? activeSharedOwnerAccountId
+        ? {
+            accountId: activeSharedOwnerAccountId,
+            name: sharedOwnerMember?.name || ownerDisplayName || activeSharedOwnerAccountId.slice(0, 8),
+            avatar: sharedOwnerMember?.avatar || '',
+          }
+        : activeDomain === 'personal' && viewerAccountId
+          ? {
+              accountId: viewerAccountId,
+              name: '我的数据',
+              avatar: viewerMember?.avatar || '',
+            }
+          : undefined
+      : undefined
     return buildCrumbs({
       collection: crumbFromData ? DATA_COLLECTION_PATH : collectionPath,
       collectionLabel: crumbFromData ? '数据' : title,
@@ -3323,13 +3442,9 @@ export function CollectionBrowser({
         : activeDomain === 'all'
           ? undefined
           : activeDomain,
-      sharedOwner:
-        !crumbFromData && activeSharedOwnerAccountId
-          ? {
-              accountId: activeSharedOwnerAccountId,
-              name: ownerDisplayName || activeSharedOwnerAccountId.slice(0, 8),
-            }
-          : undefined,
+      workspaceAvatar: crumbFromData ? undefined : workspaceAvatar,
+      personalOwner,
+      scopeChoices: scopeChoices.length ? scopeChoices : undefined,
       viewName: crumbFromData
         ? displayNameForView(
             dataViewId,
@@ -3351,7 +3466,33 @@ export function CollectionBrowser({
           }))
         : undefined,
     })
-  }, [activeView?.name, activeViewId, collectionPath, crumbFromData, originNav, originStamp, routeViewId, schema?.labelField, selected, selected ? items : null, tables, title, views])
+  }, [
+    activeDomain,
+    activeSharedOwnerAccountId,
+    activeView?.name,
+    activeViewId,
+    collectionPath,
+    crumbFromData,
+    domainViews,
+    isKPlus1Cloud,
+    membersById,
+    originNav,
+    originStamp,
+    ownerDisplayName,
+    routeViewId,
+    schema?.labelField,
+    selected,
+    selected ? items : null,
+    sharedOwnerMember?.avatar,
+    sharedOwnerMember?.name,
+    tables,
+    title,
+    viewerAccountId,
+    viewerMember?.avatar,
+    viewerMember?.name,
+    views,
+    workspaceAvatar,
+  ])
   const currentTable = tables.find((item) => item.path === collectionPath)
   const recordKind = recordPickKind(currentTable?.view?.moduleId || currentTable?.id)
   const recordPathOf = (row: DbRecord) => recordSourcePath(collectionPath, row.id)
@@ -3695,16 +3836,20 @@ export function CollectionBrowser({
   })
 
   function applySorts(next: SortRule[]) {
+    const sortFieldNext = next[0]?.field ?? 'title'
+    const sortDirNext = next[0]?.dir ?? 'asc'
     setSorts(next)
-    setSortField(next[0]?.field ?? 'title')
-    setSortDir(next[0]?.dir ?? 'asc')
+    setSortField(sortFieldNext)
+    setSortDir(sortDirNext)
+    if ((!sheet || hasExternalViews) && activeViewIdRef.current) {
+      patchActiveView({ sorts: next, sortField: sortFieldNext, sortDir: sortDirNext })
+    }
   }
 
   function applyFilterTree(next: FilterGroup) {
     setFilterTree(next)
     if (!countFilterRules(next)) setFilters({})
-    // Persist user edits immediately so a refresh cannot restore the old tree
-    // during the general view-save debounce. Preserve $scope / $ownerTable locks.
+    // Preserve $scope / $ownerTable locks when writing user filterTree edits.
     if ((!sheet || hasExternalViews) && activeViewId) {
       const current = viewsRef.current.find((view) => view.id === activeViewId)
       const preservedLocks: Record<string, string> = {}
@@ -3714,44 +3859,42 @@ export function CollectionBrowser({
     }
   }
 
-  function persistActiveViewNow() {
-    if ((sheet && !hasExternalViews) || !hydrated || !activeViewId) return
-    if (!routeViewReadyRef.current) return
-    if (hydratePath.current !== `${collectionPath}\0${dataPath}`) return
-    const current = viewsRef.current.find((view) => view.id === activeViewId)
-    if (!current) return
-    const liveTree = !countFilterRules(filterTree) ? undefined : filterTree
-    const preservedLocks: Record<string, string> = {}
-    if (current.filters?.$scope) preservedLocks.$scope = current.filters.$scope
-    if (current.filters?.$ownerTable) preservedLocks.$ownerTable = current.filters.$ownerTable
-    const liveFilters = liveTree ? { ...preservedLocks, ...filters } : preservedLocks
-    const next = normalizeSavedView({
-      ...current,
-      mode,
-      sortField,
-      sortDir,
-      sorts,
-      filters: liveFilters,
-      filterTree: liveTree,
-      columns: columnKeys.length ? pinActionColumn(schema, columnKeys, rowActionColumn) : current.columns,
-      groupBy,
-      groupConfig,
-      tree: showTree,
-      wrap: wrapCells,
-      truncate: truncateCells,
-      rowNumbers: showRowNumbers,
-      freezeTitle,
-      freezeUntil: freezeUntil || undefined,
-      query,
-      pageSize,
-      columnWidths,
-      columnSummaries,
-      columnViews,
-    })
-    if (viewStateKey(current) === viewStateKey(next)) return
-    patchActiveView(next)
+  function flushPendingQuery() {
+    window.clearTimeout(pendingQueryTimerRef.current)
+    pendingQueryTimerRef.current = 0
+    const draft = pendingQueryDraftRef.current
+    pendingQueryDraftRef.current = null
+    if (!draft) return
+    if (sheet && !hasExternalViews) return
+    const target = viewsRef.current.find((view) => view.id === draft.viewId)
+    if (!target || (target.query ?? '') === draft.query) return
+    patchActiveView({ query: draft.query })
   }
-  persistActiveViewRef.current = persistActiveViewNow
+  flushPendingQueryRef.current = flushPendingQuery
+
+  function changeQuery(next: string) {
+    setQuery(next)
+    if ((sheet && !hasExternalViews) || !activeViewIdRef.current) return
+    pendingQueryDraftRef.current = { viewId: activeViewIdRef.current, query: next }
+    window.clearTimeout(pendingQueryTimerRef.current)
+    pendingQueryTimerRef.current = window.setTimeout(() => {
+      flushPendingQueryRef.current()
+    }, 350)
+  }
+
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') flushPendingQueryRef.current()
+    }
+    const onBeforeUnload = () => flushPendingQueryRef.current()
+    window.addEventListener('beforeunload', onBeforeUnload)
+    document.addEventListener('visibilitychange', onHide)
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload)
+      document.removeEventListener('visibilitychange', onHide)
+      flushPendingQueryRef.current()
+    }
+  }, [])
 
   viewsRef.current = views
 
@@ -3764,7 +3907,6 @@ export function CollectionBrowser({
     if (hydratePath.current === hydrateKey) {
       const routed = pickViewForRoute(paintListedViews(collectionPath), collectionPath, routeViewId)
       if (routed && routed.id !== activeViewIdRef.current) {
-        skipPersistGen.current += 1
         adoptListCacheForViewRef.current(dataPath, routed)
         applyView(routed)
       }
@@ -3777,7 +3919,6 @@ export function CollectionBrowser({
       return
     }
     const listedViewsNow = paintListedViews(collectionPath)
-    rememberViews(collectionPath, listedViewsNow)
     if (!sameSavedViews(viewsRef.current, listedViewsNow)) {
       viewsRef.current = listedViewsNow
       setViews(listedViewsNow)
@@ -3786,42 +3927,6 @@ export function CollectionBrowser({
     if (view) applyView(view)
     setHydrated(true)
   }, [allColumnKeys, collectionPath, dataPath, routeViewId, schema, schemaDefaultKeys])
-
-  useEffect(() => {
-    if ((sheet && !hasExternalViews) || !hydrated || !activeViewId) return
-    const persistGen = skipPersistGen.current
-    const id = window.setTimeout(() => {
-      if (persistGen !== skipPersistGen.current) return
-      persistActiveViewRef.current()
-    }, 350)
-    return () => window.clearTimeout(id)
-  }, [
-    activeViewId,
-    collectionPath,
-    columnKeys,
-    columnWidths,
-    columnSummaries,
-    columnViews,
-    filters,
-    filterTree,
-    groupBy,
-    groupConfig,
-    hasExternalViews,
-    hydrated,
-    mode,
-    query,
-    pageSize,
-    schema,
-    showTree,
-    sortDir,
-    sortField,
-    sorts,
-    truncateCells,
-    wrapCells,
-    freezeTitle,
-    freezeUntil,
-    sheet,
-  ])
 
   const listChromeLock = [
     Number(sheet),
@@ -3927,7 +4032,7 @@ export function CollectionBrowser({
         viewsSaveError={viewsSaveError}
         setViewsSaveError={setViewsSaveError}
         query={query}
-        setQuery={setQuery}
+        setQuery={changeQuery}
         setSearchOpen={setSearchOpen}
         searchRef={searchRef}
         searchInputRef={searchInputRef}
@@ -4005,6 +4110,10 @@ export function CollectionBrowser({
         setCreateScopeOpen={setCreateScopeOpen}
         createScope={createScope}
         setCreateScope={setCreateScope}
+        createOwnerTable={createOwnerTable}
+        createOwnerAccountId={foreignOwnerIdForCreate || undefined}
+        createOwnerName={foreignOwnerIdForCreate ? (sharedOwnerMember?.name || ownerDisplayName || foreignOwnerIdForCreate.slice(0, 8)) : undefined}
+        createOwnerAvatar={foreignOwnerIdForCreate ? (sharedOwnerMember?.avatar || '') : undefined}
         localData={localData}
         hasExternalViews={hasExternalViews}
       />
@@ -4035,7 +4144,7 @@ export function CollectionBrowser({
     viewerAccountId,
     activeView?.name ?? '',
     activeView?.ownerTable ?? '',
-    crumbs.map((crumb) => `${crumb.kind}:${crumb.id}:${crumb.label}`).join('\n'),
+    crumbs.map((crumb) => `${crumb.kind}:${crumb.id}:${crumb.label}:${crumb.avatar ?? ''}:${crumb.avatarSeed ?? ''}`).join('\n'),
     views.map((view) => view.id).join(','),
   ].join('\0')
   const listHeader = useMemo(

@@ -34,7 +34,7 @@ async function loadCommentMembers(): Promise<Map<string, CommentMemberInfo>> {
   const params = new URLSearchParams({
     path: '/workspace-members',
     limit: '500',
-    columns: 'title,name,email,avatar',
+    columns: 'title,email,avatar',
   })
   const req = apiFetch(`/api/db/list?${params.toString()}`)
     .then(async (res) => {
@@ -45,8 +45,8 @@ async function loadCommentMembers(): Promise<Map<string, CommentMemberInfo>> {
         const id = String(item?.id ?? '').trim()
         if (!id) continue
         const name =
-          String(item.name ?? '').trim() ||
           String(item.title ?? '').trim() ||
+          String(item.name ?? '').trim() ||
           String(item.email ?? '').trim() ||
           id.slice(0, 8)
         const avatar = typeof item.avatar === 'string' ? item.avatar.trim() : ''
@@ -81,9 +81,11 @@ function useCommentMembers(enabled: boolean): ReadonlyMap<string, CommentMemberI
     }
     sync()
     window.addEventListener(ACCOUNT_EVENT, onAccountChange)
+    window.addEventListener('biu:workspace-profile', onAccountChange)
     return () => {
       cancelled = true
       window.removeEventListener(ACCOUNT_EVENT, onAccountChange)
+      window.removeEventListener('biu:workspace-profile', onAccountChange)
     }
   }, [enabled])
   return members

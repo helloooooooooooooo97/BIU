@@ -14,6 +14,7 @@ import { buildAccessExplanation, type BuildAccessExplanationInput } from '../acc
 import { PAGES_COLLECTION_PATH, TAGS_COLLECTION_PATH, VIEWS_COLLECTION_PATH, normalizeCollectionPath, savedViewRecordPath } from '../paths.ts'
 import { recordMatchesAccessRule } from '../view-access.ts'
 import { isSharePluginId } from '../share-resources.ts'
+import { resolveScopeTarget } from './access-policy.ts'
 import {
   AssetConflictError,
   assetContentDisposition,
@@ -33,6 +34,11 @@ import { DATABASE_TOOL_NAMES } from './agent-tools.ts'
 import type { DatabaseService } from './index.ts'
 
 export function databaseHttpFailure(error: unknown) {
+  if (error instanceof Error && typeof (error as Error & { status?: unknown }).status === 'number') {
+    const status = (error as Error & { status: number }).status
+    const code = status === 403 ? 'FORBIDDEN' : status === 404 ? 'NOT_FOUND' : 'BAD_REQUEST'
+    return { status, body: { error: error.message || String(error), code } } as const
+  }
   const message = String(error)
   if (/\bunknown (?:record|collection)\b/.test(message)) {
     return { status: 404, body: { error: 'not found', code: 'NOT_FOUND' } } as const
@@ -340,15 +346,38 @@ export function registerDatabaseHttpRoutes(
         records?: unknown
         content?: unknown
         scope?: 'personal' | 'workspace' | 'shared' | 'local'
+        ownerTable?: string
       }
       const scope =
         body?.scope === 'workspace' ? 'workspace' : body?.scope === 'shared' ? 'shared' : body?.scope === 'local' ? 'local' : 'personal'
+      const ownerTable = typeof body?.ownerTable === 'string' ? body.ownerTable.trim() : ''
       const created = await db.create(String(body?.path ?? ''), body?.records ?? body?.content, {
         scope: activeDataLocation() === 'device' && scope !== 'shared' ? 'local' : scope,
+        ...(ownerTable ? { ownerTable } : {}),
       })
       route.send(200, created)
     } catch (error) {
       route.send(400, { error: String(error) })
+    }
+  })
+  ctx.http.route('POST', '/api/db/duplicate', async (route) => {
+    try {
+      const body = (await route.json()) as {
+        path?: string
+        scope?: 'personal' | 'workspace' | 'local'
+        title?: string
+      }
+      const requestedScope =
+        body?.scope === 'workspace' ? 'workspace' : body?.scope === 'local' ? 'local' : 'personal'
+      const effectiveScope = activeDataLocation() === 'device' ? 'local' : requestedScope
+      const duplicated = await db.duplicate(String(body?.path ?? ''), {
+        scope: effectiveScope,
+        ...(typeof body?.title === 'string' && body.title.trim() ? { title: body.title.trim() } : {}),
+      })
+      route.send(200, duplicated)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      route.send(message.includes('permission denied') ? 403 : 400, { error: message })
     }
   })
   ctx.http.route('POST', '/api/db/delete', async (route) => {
@@ -427,14 +456,19 @@ export function registerDatabaseHttpRoutes(
       // 此处仅校验调用方对目标集合具有读访问权，避免 viewer / 外部协作者无法持久化自己的个人聚合视图。
       await db.requirePath(path, 'resource:read')
       const removals = (body.remove ?? []).map(String).filter(Boolean)
+      let views: StoredView[] = []
+      let skipped: string[] = []
       if (body.replace === true || (body.upsert === undefined && body.remove === undefined)) {
         const next = Array.isArray(body.views) ? body.views : []
         savedViews.replace(path, next, accountId)
+        views = savedViews.clientViewsFor(path, accountId)
       } else {
-        savedViews.applyPatch(path, { upsert: body.upsert ?? [], remove: removals }, accountId)
+        const result = savedViews.applyPatch(path, { upsert: body.upsert ?? [], remove: removals }, accountId)
+        views = result.views
+        skipped = result.skipped
       }
       db.notifyViewCatalog(path)
-      route.send(200, { ok: true })
+      route.send(200, { ok: true, views, ...(skipped.length ? { skipped } : {}) })
     } catch (error) {
       route.send(400, { error: String(error) })
     }
@@ -487,9 +521,10 @@ export function registerDatabaseHttpRoutes(
         value?: { id?: unknown; title?: unknown; name?: unknown; [key: string]: unknown }
       }
       const record = rawRecord.value ? { id: recordId, ...rawRecord.value } : { id: recordId }
-      const recordTitle = String(record.title ?? record.name ?? '').trim() || recordId
+      const target = resolveScopeTarget(collection, recordId, record)
+      const recordTitle = String(record.title ?? record.name ?? '').trim() || target.id
       const publicShares: NonNullable<BuildAccessExplanationInput['publicShares']> = shares
-        .listRecords(collection)
+        .listRecords(target.collection)
         .map((share) => ({
           kind: 'record' as const,
           collection: share.collection,
@@ -497,12 +532,17 @@ export function registerDatabaseHttpRoutes(
         }))
       let access: BuildAccessExplanationInput['access']
       const recordTitles: Record<string, string> = {
-        [`${collection}\t${recordId}`]: recordTitle,
+        [`${target.collection}\t${target.id}`]: recordTitle,
       }
       if (!localOnly) {
         let account: {
           store?: {
-            recordAccess?: (actorId: string, collection: string, recordId: string) => NonNullable<BuildAccessExplanationInput['access']>
+            recordAccess?: (
+              actorId: string,
+              collection: string,
+              recordId: string,
+              record?: Record<string, unknown>,
+            ) => NonNullable<BuildAccessExplanationInput['access']>
           }
         } | undefined
         try {
@@ -512,7 +552,7 @@ export function registerDatabaseHttpRoutes(
         }
         const actorId = currentAccountId()
         if (actorId && account?.store?.recordAccess) {
-          access = account.store.recordAccess(actorId, collection, recordId)
+          access = account.store.recordAccess(actorId, target.collection, target.id, record)
           const refs = new Map<string, { collection: string; recordId: string }>()
           for (const anc of access.inheritance?.ancestors ?? []) {
             refs.set(`${anc.collection}\t${anc.recordId}`, { collection: anc.collection, recordId: anc.recordId })
@@ -545,10 +585,10 @@ export function registerDatabaseHttpRoutes(
             : localOnly
               ? 'owner' as const
               : 'viewer' as const
-      const spec = db.collection(collection)
+      const spec = db.collection(target.collection) ?? db.collection(collection)
       const explanation = buildAccessExplanation({
-        collection,
-        recordId,
+        collection: target.collection,
+        recordId: target.id,
         recordTitle,
         tableLabel: tableLabel || spec?.label || '',
         localOnly,

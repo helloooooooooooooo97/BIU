@@ -159,7 +159,7 @@ export function ShareScopeDetail({
             <header className="fsdb-scope-head">
               <div>
                 <strong>可见范围</strong>
-                <em>{data?.visibility.summary ?? (error || '正在读取…')}</em>
+                <em>{data?.visibility.summary ?? (error ? '读取失败' : '正在读取…')}</em>
               </div>
               <b className={`fsdb-scope-pill is-${chip}`}><ScopeMark scope={chip} /></b>
             </header>
@@ -333,7 +333,7 @@ export function ShareRoleDetail({
             <header className="fsdb-scope-head">
               <div>
                 <strong>我的权限</strong>
-                <em>{data?.myAccess.primarySummary ?? (error || '正在读取…')}</em>
+                <em>{data?.myAccess.primarySummary ?? (error ? '读取失败' : '正在读取…')}</em>
               </div>
               <b className={`fsdb-scope-pill is-${accessTone(shown)}`}><AccessMark role={shown} /></b>
             </header>

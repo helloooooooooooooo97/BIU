@@ -1,8 +1,11 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { emptyFilterGroup } from '../query-logic.ts'
 import { rankListedViews, type SavedView } from './saved-view.ts'
 import { createBrowserViewCrud } from './use-browser-view-crud.ts'
+import { resolveViewProtection, viewProtectionMeta } from './view-order-menu.tsx'
 import { loadViews, rememberViews } from './view-storage.ts'
 
 test('persistViewOrder paints new rank order immediately, sends diff upsert, and rolls back on failure', async () => {
@@ -110,4 +113,29 @@ test('persistViewOrder paints new rank order immediately, sends diff upsert, and
     globalThis.fetch = prevFetch
     if (!prevWin) delete (globalThis as Record<string, unknown>).window
   }
+})
+
+test('view switcher button and dropdown both resolve and render 3-state protection badges', () => {
+  // Builtin aggregation / catalog views (/data) always resolve to personal
+  assert.equal(resolveViewProtection({ id: 'builtin-all:/data' }), 'personal')
+  assert.equal(resolveViewProtection({ id: 'builtin:/plugins' }), 'personal')
+  assert.equal(viewProtectionMeta({ id: 'builtin:/plugins' }).isAggregation, true)
+  // Custom /data views default to personal, and honor public/locked when set by workspace admin
+  assert.equal(resolveViewProtection({ id: 'v-agg-default', ownerTable: 'all' }), 'personal')
+  assert.equal(resolveViewProtection({ id: 'v-agg-pub', ownerTable: 'all', protection: 'public' }), 'public')
+  assert.equal(resolveViewProtection({ id: 'v-agg-lock', ownerTable: 'all', protection: 'locked' }), 'locked')
+
+  // Concrete table views reflect public / locked / personal accurately
+  assert.equal(resolveViewProtection({ id: 'v-pub', ownerTable: 'workspace', protection: 'public' }), 'public')
+  assert.equal(resolveViewProtection({ id: 'v-lock', ownerTable: 'workspace', protection: 'locked' }), 'locked')
+  assert.equal(resolveViewProtection({ id: 'v-priv', ownerTable: 'workspace', protection: 'personal' }), 'personal')
+  assert.equal(resolveViewProtection({ id: 'v-legacy-priv', scope: 'personal' }), 'personal')
+  assert.equal(resolveViewProtection({ id: 'v-legacy-ws', scope: 'workspace' }), 'public')
+
+  const toolbar = readFileSync(resolve(import.meta.dirname, './browser-toolbar.tsx'), 'utf8')
+  const orderMenu = readFileSync(resolve(import.meta.dirname, './view-order-menu.tsx'), 'utf8')
+  assert.match(toolbar, /data-testid="fsdb-view-tab"[\s\S]*?<ViewProtectionBadge view=\{activeView\} \/>/)
+  assert.match(orderMenu, /data-testid="fsdb-view-tab-protection"/)
+  assert.match(orderMenu, /data-testid=\{`view-protection-btn-\$\{view\.id\}`\}/)
+  assert.doesNotMatch(orderMenu, /showProtectionBadge/)
 })

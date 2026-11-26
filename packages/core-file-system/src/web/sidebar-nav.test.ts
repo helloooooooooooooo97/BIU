@@ -169,10 +169,10 @@ test('unlisted builtin breadcrumbs resolve names without changing saved view nam
     views: [{ id: 'default:account:alice:/pages', name: '私人页面' }],
   })
   assert.equal(personalCrumbs[1]!.kind, 'scope')
-  assert.equal(personalCrumbs[1]!.label, '个人表')
+  assert.equal(personalCrumbs[1]!.label, '我的数据')
   assert.equal(personalCrumbs[2]!.label, '私人页面')
   const wsCrumbs = buildCrumbs({ ...input, viewId: 'team', viewScope: 'workspace', views: [{ id: 'team', name: '团队看板' }] })
-  assert.equal(wsCrumbs.map((c) => c.label).join(' / '), '页面 / 空间表 / 团队看板')
+  assert.equal(wsCrumbs.map((c) => c.label).join(' / '), '页面 / 空间数据 / 团队看板')
   assert.equal(buildCrumbs({ ...input, viewId: 'mine', views: [{ id: 'mine', name: '我的页面' }] })[1]!.label, '我的页面')
   assert.equal(buildCrumbs({ ...input, viewId: all.id, viewName: '自定义名称' })[1]!.label, '自定义名称')
 })
@@ -303,6 +303,51 @@ test('表视图记录点标题一律出选择菜单', () => {
   })
   assert.equal(crumbButtonAction(many[1]!, many[0]!), 'menu')
   assert.equal(crumbLabelAction(many[1]!, many[0]!), many[0]!.target)
+
+  const shared = buildCrumbs({
+    collection: '/pages',
+    collectionLabel: '页面',
+    tables: [{ path: '/pages', label: '页面' }],
+    viewId: 'default:account:acc_f6d79999:/pages',
+    viewName: '私人页面',
+    viewScope: 'shared',
+    sharedOwner: { accountId: 'acc_f6d79999', name: 'lulu@qq.com', avatar: 'data:image/png;base64,abc' },
+  })
+  // 扁平逻辑表面包屑：页面 / lulu@qq.com / 私人页面（不再多一层「个人表」）
+  assert.deepEqual(
+    shared.map((item) => item.label),
+    ['页面', 'lulu@qq.com', '私人页面'],
+  )
+  const ownerCrumb = shared.find((item) => item.id === 'owner:acc_f6d79999')
+  assert.equal(ownerCrumb?.label, 'lulu@qq.com')
+  assert.equal(ownerCrumb?.avatar, 'data:image/png;base64,abc')
+  assert.equal(ownerCrumb?.avatarSeed, 'acc_f6d79999')
+
+  const mineFlat = buildCrumbs({
+    collection: '/pages',
+    collectionLabel: '页面',
+    tables: [{ path: '/pages', label: '页面' }],
+    viewId: 'default:account:acc_97:/pages',
+    viewName: '公开页面',
+    viewScope: 'personal',
+  })
+  assert.deepEqual(
+    mineFlat.map((item) => item.label),
+    ['页面', '我的数据', '公开页面'],
+  )
+})
+
+test('/data 面包屑在 tables 不含 /data 时仍使用 circle-stack 数据图标', () => {
+  const crumbs = buildCrumbs({
+    collection: '/data',
+    collectionLabel: '数据',
+    tables: [{ path: '/pages', label: '页面', icon: 'document' }],
+    viewId: 'catalog:/pages',
+    viewName: '页面',
+    views: [{ id: 'catalog:/pages', name: '页面', mode: 'table' }],
+  })
+  assert.equal(crumbs[0]?.label, '数据')
+  assert.equal(crumbs[0]?.icon, 'circle-stack')
 })
 
 test('压测：随机切换表/视图/记录/展开，路由与展开不串台', () => {

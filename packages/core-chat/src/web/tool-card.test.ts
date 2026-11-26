@@ -29,7 +29,7 @@ test('tool panels match the step bar: sidebar fill, no border', () => {
   assert.match(css, /\.tool-call-inspect\s*\{[^}]*color:\s*var\(--biu-color-icon-muted\)/s)
   assert.match(css, /\.tool-call-copy,\s*\.tool-call-copy:hover,\s*\.tool-call-copy\.is-done,\s*\.tool-call-copy svg\s*\{[^}]*color:\s*var\(--biu-color-icon-muted\)/s)
   assert.match(css, /\.tool-call-head:hover \.tool-call-chars[\s\S]*display:\s*none/)
-  assert.match(css, /:root \{[^}]*--biu-color-icon: #91918e/)
+  assert.match(css, /:root \{[^}]*--biu-color-icon: #787773/)
   assert.match(css, /html:not\(\.dark\) \[data-testid="content-edits-table"\] \.content-edits-ink[\s\S]*color:\s*var\(--biu-color-text-muted\)/)
   assert.match(css, /html:not\(\.dark\) \[data-testid="content-edits-table"\] \.content-edits-icon[\s\S]*color:\s*var\(--biu-color-icon\)/)
   assert.match(css, /\.tool-call-tools\s*\{[^}]*width:\s*0/s)

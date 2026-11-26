@@ -214,7 +214,7 @@ test('login accepts the password set at register and rejects the rest', () => {
   assert.equal(saved.name, '蓝团')
   assert.equal(saved.email, 'ada@example.com')
   const directoryEntry = collab.members(ada.id, workspaceId).find((row) => row.id === ada.id)
-  assert.equal(directoryEntry?.name, 'ada@example.com')
+  assert.equal(directoryEntry?.name, '蓝团')
   assert.equal(directoryEntry?.display_name, '蓝团')
   const bob = collab.register('', Date.now(), 'secret1', 'bob@example.com')
   const bobWorkspace = collab.createWorkspace(bob.id, 'Bob')
@@ -301,6 +301,7 @@ test('collaborators move a record between personal, workspace, and shared scopes
     runWithAccount(ada.id, () => runWithRequestWorkspace(workspaceId, op))
   asAda(() => collab.attach(workspaceId, '/pages', 'scope-page'))
   assert.equal(asAda(() => collab.recordAccess(ada.id, '/pages', 'scope-page')).scope, 'personal')
+  assert.equal(asAda(() => collab.recordAccess(ada.id, '/data', 'pages::scope-page')).scope, 'personal')
   assert.throws(
     () => asAda(() => collab.shareWithEmail(ada.id, '/pages', 'scope-page', bob.email, 'editor', 'external')),
     /已经是内部空间成员/,
@@ -655,4 +656,53 @@ test('workspacePrefs isolates starredViews, starredRecords, pinnedAgents, and th
 
   collab.setAgentPinned(ada.id, 'agent_1', false, ws1.id)
   assert.deepEqual(collab.workspacePrefs(ada.id, ws1.id).pinnedAgents, [])
+})
+
+test('single workspace identity: nickname and avatar stay isolated per workspace without duplicate account fallback', () => {
+  const collab = store()
+  const ada = collab.register('GlobalAda', Date.now(), 'secret1', 'single-ada@example.com')
+  const bob = collab.register('GlobalBob', Date.now(), 'secret1', 'single-bob@example.com')
+  collab.saveAccountProfile(ada.id, { avatar: 'data:image/png;base64,legacyGlobalAvatar' })
+  const ws1 = collab.createWorkspace(ada.id, 'Space 1')
+  const ws2 = collab.createWorkspace(ada.id, 'Space 2')
+  collab.addMemberByEmail(ada.id, ws1.id, bob.email)
+
+  collab.setActive(ada.id, ws1.id)
+  collab.saveWorkspaceProfile(ada.id, {
+    name: 'Space1Ada',
+    avatar: 'data:image/png;base64,ws1Avatar',
+  })
+  collab.setActive(ada.id, ws2.id)
+  collab.saveWorkspaceProfile(ada.id, {
+    name: 'Space2Ada',
+    avatar: 'data:image/png;base64,ws2Avatar',
+  })
+
+  // Clearing ws1 avatar must NOT clear ws2 avatar or revive legacy global avatar
+  collab.setActive(ada.id, ws1.id)
+  collab.saveWorkspaceProfile(ada.id, { avatar: '' })
+  const ws1Member = collab.members(ada.id, ws1.id).find((m) => m.id === ada.id)
+  assert.equal(ws1Member?.name, 'Space1Ada')
+  assert.equal(ws1Member?.display_name, 'Space1Ada')
+  assert.equal(ws1Member?.avatar, '')
+
+  const ws2Member = collab.members(ada.id, ws2.id).find((m) => m.id === ada.id)
+  assert.equal(ws2Member?.name, 'Space2Ada')
+  assert.equal(ws2Member?.avatar, 'data:image/png;base64,ws2Avatar')
+
+  // Presence and access rules both reflect workspace nickname/avatar (never '未设置' or stale account name)
+  collab.pulse(bob.id, ws1.id, '/pages', 'p1')
+  const present = collab.presence(ada.id, ws1.id)
+  assert.equal(present.find((p) => p.accountId === bob.id)?.name, 'GlobalBob')
+
+  const rule = collab.createAccessRule(ada.id, ws1.id, {
+    collection: '/pages',
+    name: 'Rule 1',
+    scope: 'workspace',
+    filterTree: { op: 'and', children: [] },
+    grants: [{ subjectType: 'account', subjectId: ada.id, role: 'editor' }],
+  })
+  assert.equal(rule.createdByName, 'Space1Ada')
+  assert.equal(rule.grants[0]?.subjectName, 'Space1Ada')
+  assert.equal(rule.grants[0]?.subjectAvatar, undefined)
 })

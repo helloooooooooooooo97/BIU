@@ -1340,12 +1340,14 @@ export class DatabaseService extends Service implements Database {
     const sortField = page?.sortField?.trim() || 'title'
     const sortDir = page?.sortDir === 'desc' ? 'desc' : 'asc'
     const scopeFilter = filter?.$scope === 'workspace' || filter?.$scope === 'personal' || filter?.$scope === 'shared' ? filter.$scope : ''
+    const ownerTableFilter = typeof filter?.$ownerTable === 'string' ? filter.$ownerTable.trim() : ''
     const columnKeys = listedColumnKeys(page?.columns, schema.labelField ?? 'title', schema)
     const liveFilter = filter ? { ...filter } : undefined
     if (liveFilter) {
       delete liveFilter.deleted
       delete liveFilter.trash
       delete liveFilter.$scope
+      delete liveFilter.$ownerTable
     }
     const tableFilter = normalizeCollectionPath(String(liveFilter?.tablePath ?? ''))
     const tableNameFilter = String(liveFilter?.table ?? '').trim()
@@ -1364,7 +1366,8 @@ export class DatabaseService extends Service implements Database {
         if (title !== tableNameFilter) continue
       }
       const pack = await this.visibleSortedCollectionRows(source, query, sortField, sortDir, page?.sorts, overlay)
-      const visible = scopeFilter ? pack[scopeFilter] : pack.rows
+      const scoped = scopeFilter ? pack[scopeFilter] : pack.rows
+      const visible = ownerTableFilter ? this.access.recordsInOwnerTable(source.path, scoped, ownerTableFilter) : scoped
       const decorated = this.decorateSlice(source, visible, null)
       for (const row of decorated) gathered.push(overviewRecord(source, row))
     }
@@ -2143,7 +2146,11 @@ export class DatabaseService extends Service implements Database {
     return { ...patch, id: await unusedRecordId(spec, requested) }
   }
 
-  async create(path: string, content?: unknown, options: { scope?: 'personal' | 'workspace' | 'shared' | 'local' } = {}) {
+  async create(
+    path: string,
+    content?: unknown,
+    options: { scope?: 'personal' | 'workspace' | 'shared' | 'local'; ownerTable?: string } = {},
+  ) {
     const parts = splitPath(path)
     if (parts.length !== 1) throw new Error(`cannot create: ${normalizeCollectionPath(path)}`)
     const spec = this.collection(`/${parts[0]}`)
@@ -2151,12 +2158,23 @@ export class DatabaseService extends Service implements Database {
     if (!spec.records?.create || !spec.create) throw new Error(`collection cannot create: ${spec.path}`)
     const authorization = this.authorization()
     const actor = authorization?.currentActor()
+    const explicitOwnerTable = options.ownerTable?.trim() || ''
+    const foreignOwnerId =
+      explicitOwnerTable.startsWith('account:') && actor?.accountId && explicitOwnerTable !== `account:${actor.accountId}`
+        ? explicitOwnerTable.slice('account:'.length)
+        : ''
     if (authorization && actor) {
-      authorization.requireCurrent('resource:create', {
-        type: 'collection',
-        workspaceId: actor.workspaceId,
-        collection: spec.path,
-      })
+      if (foreignOwnerId) {
+        if (!authorization.canEditPersonalTable(actor, actor.workspaceId, spec.path, foreignOwnerId)) {
+          throw new Error('permission denied: INSUFFICIENT_PERMISSION')
+        }
+      } else {
+        authorization.requireCurrent('resource:create', {
+          type: 'collection',
+          workspaceId: actor.workspaceId,
+          collection: spec.path,
+        })
+      }
     }
     const schema = schemaFor(spec)
     const bodyKey = spec.schema.contentField
@@ -2217,13 +2235,14 @@ export class DatabaseService extends Service implements Database {
       const parentRecordId = parentField ? String(record[parentField] ?? '').trim() : ''
       if (spec.path !== WORKSPACE_MEMBERS_COLLECTION_PATH) {
         const device = this.deviceWorkspace()
-        const workspaceOwned = options.scope === 'workspace' && !device
-        const shared = options.scope === 'shared' && !parentRecordId
-        const local = options.scope === 'local' && !parentRecordId
+        const workspaceOwned = !foreignOwnerId && (explicitOwnerTable === 'workspace' || options.scope === 'workspace') && !device
+        const shared = !foreignOwnerId && options.scope === 'shared' && !parentRecordId
+        const local = !foreignOwnerId && options.scope === 'local' && !parentRecordId
         this.attachWorkspaceRecord(spec.path, record.id, {
           accessMode: parentRecordId ? 'inherit' : workspaceOwned ? 'members' : 'private',
           ...(workspaceOwned ? { memberDefaultRole: 'editor' as const } : {}),
           ...(parentRecordId ? { parentCollection: spec.path, parentRecordId } : {}),
+          ...(foreignOwnerId ? { ownerTable: explicitOwnerTable } : {}),
         })
         if (shared) this.markPublicView(spec.path, record.id)
         if (workspaceOwned && !parentRecordId) {
@@ -2258,6 +2277,74 @@ export class DatabaseService extends Service implements Database {
       kind: 'created' as const,
       path: spec.path,
       items,
+    }
+  }
+
+  /**
+   * 复制单条记录到指定归属域（默认复制到当前用户的个人表 'personal'，也可复制到 'workspace'）。
+   * 严格遵循源记录的行级与列级可读权限，绝不泄露当前用户无权查看的字段或正文；
+   * 源记录、协作者、链接与评论完全不受影响。
+   */
+  async duplicate(
+    path: string,
+    options: { scope?: 'personal' | 'workspace' | 'local'; title?: string } = {},
+  ) {
+    const rewritten = this.rewriteOverviewRecordPath(path)
+    if (rewritten) return this.duplicate(rewritten, options)
+    const parts = splitPath(path)
+    if (parts.length !== 2) throw new Error(`cannot duplicate: ${normalizeCollectionPath(path)}`)
+    const spec = this.collection(`/${parts[0]}`)
+    if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
+    if (!spec.records?.create || !spec.create) throw new Error(`collection cannot create: ${spec.path}`)
+    const raw = await spec.get(parts[1]!)
+    if (!raw) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
+    this.assertLiveRecord(spec, raw.id, 'resource:read', raw)
+
+    const schema = schemaFor(spec)
+    const decorated = withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, raw)))
+    const visible = this.access.projectRecord(spec.path, decorated) as Record<string, unknown>
+    const payload: Record<string, unknown> = {}
+    const parentField = spec.schema.parentField
+    for (const [key, value] of Object.entries(visible)) {
+      if (key === 'id' || key === parentField) continue
+      if (key === 'shareScope' || key === 'shareRole' || key === 'ownerTable' || key === 'createdBy' || key === 'updatedBy') {
+        continue
+      }
+      if (value === undefined) continue
+      if (key === 'banner' || key === 'emoji' || schema.fields[key]) {
+        payload[key] = value
+      }
+    }
+
+    const titleField = schema.fields.title ? 'title' : schema.fields.name ? 'name' : ''
+    if (titleField) {
+      const explicitTitle = typeof options.title === 'string' ? options.title.trim() : ''
+      const baseTitle = typeof payload[titleField] === 'string' ? (payload[titleField] as string).trim() : ''
+      payload[titleField] = explicitTitle || (baseTitle ? `${baseTitle}（副本）` : '未命名副本')
+    }
+
+    const bodyKey = spec.schema.contentField
+    if (bodyKey && spec.path !== TAGS_COLLECTION_PATH && schema.fields[bodyKey]) {
+      try {
+        const bodyRes = await this.content(`${spec.path}/${raw.id}`)
+        if (typeof bodyRes.value === 'string') {
+          payload[bodyKey] = bodyRes.value
+        }
+      } catch {
+        // 若当前用户对正文列无读取权或无正文内容，跳过正文复制，绝不越权拷贝
+      }
+    }
+
+    const targetScope = options.scope === 'workspace' ? 'workspace' : options.scope === 'local' ? 'local' : 'personal'
+    const created = await this.create(spec.path, [payload], { scope: targetScope })
+    const first = created.items[0]
+    if (!first) throw new Error('duplicate failed: no record created')
+    return {
+      kind: 'duplicated' as const,
+      sourcePath: `${spec.path}/${raw.id}`,
+      path: first.path,
+      scope: targetScope,
+      value: first.value,
     }
   }
 
@@ -2589,6 +2676,9 @@ export function apply(ctx: Context) {
   const savedViews = new SavedViewsStore()
   savedViews.open(process.env.VITEST ? ':memory:' : biuSqlitePath())
   db.savedViews = savedViews
+  ctx.on('workspace/deleted' as never, ({ workspaceId }: { workspaceId?: string }) => {
+    if (workspaceId) savedViews.clearWorkspace(workspaceId)
+  })
   db.recordViews.open(biuSqlitePath())
   const account = ctx.get('account') as {
     authorization?: AuthorizationService
@@ -2639,12 +2729,37 @@ export function apply(ctx: Context) {
     const isWsAdmin = isWsOwner || member.role === 'admin'
     const isCrossTableAll = view.ownerTable === 'all' || isBuiltinAllViewId(String(view.id))
     const isCreator = Boolean(view.createdBy && view.createdBy === accountId)
+    const allProtection =
+      view.protection === 'public' || view.protection === 'locked' || view.protection === 'personal'
+        ? view.protection
+        : 'personal'
 
-    // 1. 聚合视图（builtin-all:* 与 ownerTable === 'all'）：每个用户严格私有，互不互通，仅本人可见/可改/可删
+    // 1. 聚合视图（builtin-all:* 与 ownerTable === 'all'）：
+    //    - 默认/personal 仅创建者本人可见、可改、可删；
+    //    - 空间管理员设为 public / locked 后，空间内部成员可见（底层数据仍按各自权限过滤）。
     if (isCrossTableAll) {
-      return isCreator
-        ? { allowed: true, effectiveRole: 'owner' }
-        : { allowed: false, effectiveRole: 'viewer' }
+      if (isBuiltinAllViewId(String(view.id)) || allProtection === 'personal') {
+        return isCreator
+          ? { allowed: true, effectiveRole: 'owner' }
+          : { allowed: false, effectiveRole: 'viewer' }
+      }
+      if (!isInternal) return { allowed: false, effectiveRole: 'viewer' }
+      if (allProtection === 'locked') {
+        if (isWsAdmin) return { allowed: true, effectiveRole: isCreator ? 'owner' : 'manager' }
+        return action === 'resource:read'
+          ? { allowed: true, effectiveRole: 'viewer' }
+          : { allowed: false, effectiveRole: 'viewer' }
+      }
+      const effectiveRole: 'owner' | 'manager' | 'editor' | 'viewer' = isCreator
+        ? 'owner'
+        : isWsAdmin
+          ? 'manager'
+          : member.role === 'viewer'
+            ? 'viewer'
+            : 'editor'
+      if (action === 'resource:read') return { allowed: true, effectiveRole }
+      if (action === 'resource:update') return { allowed: effectiveRole !== 'viewer', effectiveRole }
+      return { allowed: isCreator || isWsAdmin, effectiveRole }
     }
 
     const isBuiltin = Boolean(view.builtin)
@@ -2739,6 +2854,12 @@ export function apply(ctx: Context) {
     // 方案 B（视图归展示，规则归安全）：视图权限与页面记录完全一致，统一走 /views 下的 resource_policies + record_grants
     // 内置视图全空间共享一份，创建人固定为空间创建人（workspace owner），且仅空间创建人可修改或删除
     workspaceOwner: (workspaceId) => account?.store?.workspaceOwnerId?.(workspaceId) ?? null,
+    isWorkspaceAdmin: (workspaceId, accountId) => {
+      if (!account?.store || !workspaceId || !accountId) return true
+      if (account.store.workspaceOwnerId?.(workspaceId) === accountId) return true
+      const member = account.store.members(accountId, workspaceId).find((item) => item.id === accountId)
+      return member?.role === 'owner' || member?.role === 'admin'
+    },
     sharedOwnersFor: (workspaceId, collection, accountId) =>
       account?.store?.sharedOwnerAccountIds?.(workspaceId, collection, accountId) ?? [],
     canSeeView: (workspaceId, collection, view, accountId) =>

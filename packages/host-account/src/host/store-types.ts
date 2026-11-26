@@ -62,6 +62,7 @@ export type Account = {
 export type Workspace = {
   id: string
   name: string
+  avatar?: string
   ownerId: string
   role: WorkspaceRole
   createdAt: number

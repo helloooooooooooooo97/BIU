@@ -436,3 +436,72 @@ test('failed patchActiveView rolls back viewsRef, memoryViews, and localStorage 
     env.restore()
   }
 })
+
+test('concurrent op failure rolls back ONLY the failed op without clobbering concurrent successful op', async () => {
+  const env = setupBrowserGlobals()
+  const path = '/pages-concurrent-op-isolation'
+  const initial: SavedView = {
+    id: 'v1',
+    name: '默认',
+    mode: 'table',
+    sortField: 'title',
+    sortDir: 'asc',
+    filters: {},
+    columns: ['title'],
+    wrap: false,
+    groupBy: '',
+    updatedAt: 100,
+  }
+  const harness = makeCrudHarness(path, [initial], 'v1')
+  let callIndex = 0
+  const restore = mockFetch(async (_input, init) => {
+    callIndex += 1
+    const body = JSON.parse(String(init?.body ?? '{}')) as { upsert?: SavedView[] }
+    if (callIndex === 1) {
+      // First write succeeds and returns authoritative server view
+      const saved = { ...body.upsert![0]!, updatedAt: 200 }
+      return new Response(JSON.stringify({ ok: true, views: [saved] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    }
+    // Second write fails with 500
+    return new Response('err', { status: 500 })
+  })
+  try {
+    harness.crud.patchActiveView({ wrap: true })
+    harness.crud.patchActiveView({ groupBy: 'status' })
+    await new Promise((r) => setTimeout(r, 40))
+    // First op (wrap: true) MUST survive; only second op (groupBy: 'status') rolled back!
+    assert.equal(harness.viewsRef.current[0]?.wrap, true)
+    assert.equal(harness.viewsRef.current[0]?.groupBy, '')
+    assert.equal(loadViews(path)[0]?.wrap, true)
+    assert.equal(loadViews(path)[0]?.groupBy, '')
+  } finally {
+    restore()
+    env.restore()
+  }
+})
+
+test('mergeBlockViewsOnConflict keeps fresher views per ID and preserves collaborator-added views', async () => {
+  const { mergeBlockViewsOnConflict } = await import('./database-block.tsx')
+  const remote = {
+    activeViewId: 'v1',
+    views: [
+      { id: 'v1', name: '协作者更新', mode: 'table' as const, sortField: 'title', sortDir: 'asc' as const, filters: {}, columns: [], updatedAt: 300 },
+      { id: 'v-collab', name: '协作者新建', mode: 'table' as const, sortField: 'title', sortDir: 'asc' as const, filters: {}, columns: [], updatedAt: 250 },
+    ],
+  }
+  const local = {
+    activeViewId: 'v-local',
+    views: [
+      { id: 'v1', name: '本地旧改', mode: 'table' as const, sortField: 'title', sortDir: 'asc' as const, filters: {}, columns: [], updatedAt: 100 },
+      { id: 'v-local', name: '本地新建', mode: 'table' as const, sortField: 'title', sortDir: 'asc' as const, filters: {}, columns: [], updatedAt: 400 },
+    ],
+  }
+  const merged = mergeBlockViewsOnConflict(remote, local)
+  assert.equal(merged.views.find((v) => v.id === 'v1')?.name, '协作者更新')
+  assert.equal(merged.views.find((v) => v.id === 'v-collab')?.name, '协作者新建')
+  assert.equal(merged.views.find((v) => v.id === 'v-local')?.name, '本地新建')
+  assert.equal(merged.activeViewId, 'v-local')
+})

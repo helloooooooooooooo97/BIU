@@ -12,7 +12,11 @@ import {
   shellColumnStartWidth,
   CHAT_OVERLAY_ENTER,
   CENTER_MIN,
+  INSPECTOR_DEFAULT,
   INSPECTOR_MIN,
+  INSPECTOR_OVERLAY_FULL_BELOW,
+  INSPECTOR_OVERLAY_PEEK_GUTTER,
+  SIDEBAR_AUTO_HIDE_BELOW,
   SIDEBAR_MAX,
   SIDEBAR_MIN,
   SIDEBAR_DEFAULT,
@@ -147,97 +151,194 @@ test('publishShellLayout reports painted column widths', () => {
   assert.deepEqual(seen, [{ left: 0, inspector: 320 }])
 })
 
-test('narrow viewport preserves both content pane minimums', () => {
+test('Notion-style progressive compression sheds sidebar first, then switches inspector to overlay without horizontal overflow', () => {
+  assert.equal(CENTER_MIN, 360)
+  assert.equal(INSPECTOR_MIN, 360)
+  assert.equal(INSPECTOR_DEFAULT, 480)
+  assert.equal(SIDEBAR_AUTO_HIDE_BELOW, 768)
+
+  // 1. 宽屏三栏并排：保留用户偏好的左栏与右栏宽度
   const wide = allocateShellColumns({
     viewportWidth: 1600,
     leftPane: true,
+    leftWidth: 240,
     inspectorOpen: true,
-    inspectorWidth: 320,
+    inspectorWidth: 480,
   })
-  assert.equal(wide.left, SIDEBAR_MAX)
-  assert.equal(wide.inspector, INSPECTOR_MIN)
-  assert.equal(wide.center, 1600 - SIDEBAR_MAX - INSPECTOR_MIN)
+  assert.equal(wide.left, 240)
+  assert.equal(wide.inspector, 480)
+  assert.equal(wide.center, 880)
+  assert.equal(wide.leftMode, 'docked')
+  assert.equal(wide.inspectorMode, 'split')
+  assert.equal(wide.leftAutoCollapsed, false)
+  assert.equal(wide.leftCanDock, true)
 
-  const keepLeft = allocateShellColumns({
-    viewportWidth: SIDEBAR_MAX + CENTER_MIN + 320 - 100,
-    leftPane: true,
-    inspectorOpen: true,
-    inspectorWidth: 320,
-  })
-  assert.equal(keepLeft.left, SIDEBAR_MAX)
-  assert.equal(keepLeft.inspector, INSPECTOR_MIN)
-  assert.equal(keepLeft.center, CENTER_MIN)
-
+  // 2. 压缩中：先让中栏收窄到 CENTER_MIN，再温和压窄右栏到 INSPECTOR_MIN
   const squeezeInspector = allocateShellColumns({
-    viewportWidth: SIDEBAR_MAX + 200 + INSPECTOR_MIN,
+    viewportWidth: 1000,
     leftPane: true,
+    leftWidth: 240,
     inspectorOpen: true,
-    inspectorWidth: 320,
+    inspectorWidth: 480,
   })
-  assert.equal(squeezeInspector.left, SIDEBAR_MAX)
-  assert.equal(squeezeInspector.inspector, INSPECTOR_MIN)
+  assert.equal(squeezeInspector.left, 240)
   assert.equal(squeezeInspector.center, CENTER_MIN)
+  assert.equal(squeezeInspector.inspector, 400)
+  assert.equal(squeezeInspector.inspectorMode, 'split')
 
-  const hideLeft = allocateShellColumns({
-    viewportWidth: SIDEBAR_MIN + INSPECTOR_MIN - 1,
+  // 3. 继续压缩到 900px：左栏先在 [SIDEBAR_MIN, desiredLeft] 内温和收窄，避免拖拽时突跳
+  const narrowLeft = allocateShellColumns({
+    viewportWidth: 900,
     leftPane: true,
+    leftWidth: 240,
     inspectorOpen: true,
-    inspectorWidth: 320,
+    inspectorWidth: 480,
   })
-  assert.equal(hideLeft.left, SIDEBAR_MAX)
-  assert.equal(hideLeft.inspector, INSPECTOR_MIN)
-  assert.equal(hideLeft.center, CENTER_MIN)
+  assert.equal(narrowLeft.left, 180)
+  assert.equal(narrowLeft.center, CENTER_MIN)
+  assert.equal(narrowLeft.inspector, INSPECTOR_MIN)
+  assert.equal(narrowLeft.leftMode, 'docked')
+  assert.equal(narrowLeft.inspectorMode, 'split')
+
+  // 4. 中屏（768~879px）：优先自动把左栏临时收到 48px 图标轨，保住中 + 右双栏
+  const autoRail = allocateShellColumns({
+    viewportWidth: 840,
+    leftPane: true,
+    leftWidth: 240,
+    inspectorOpen: true,
+    inspectorWidth: 480,
+  })
+  assert.equal(autoRail.left, SIDEBAR_RAIL)
+  assert.equal(autoRail.leftMode, 'rail')
+  assert.equal(autoRail.leftAutoCollapsed, true)
+  assert.equal(autoRail.leftCanDock, false)
+  assert.equal(autoRail.inspectorMode, 'split')
+  assert.equal(autoRail.center, CENTER_MIN)
+  assert.equal(autoRail.inspector, 840 - SIDEBAR_RAIL - CENTER_MIN)
+
+  // 5. 窄屏（720~767px）：左栏自动隐藏为 0px（顶栏展开 + 抽屉），中 + 右继续无滚动分屏
+  const autoHideLeft = allocateShellColumns({
+    viewportWidth: 740,
+    leftPane: true,
+    leftWidth: 240,
+    inspectorOpen: true,
+    inspectorWidth: 480,
+  })
+  assert.equal(autoHideLeft.left, 0)
+  assert.equal(autoHideLeft.leftMode, 'hidden')
+  assert.equal(autoHideLeft.leftAutoCollapsed, true)
+  assert.equal(autoHideLeft.inspectorMode, 'split')
+  assert.equal(autoHideLeft.center, CENTER_MIN)
+  assert.equal(autoHideLeft.inspector, 740 - CENTER_MIN)
+
+  // 6. < 720px：右栏平滑降级为 Notion 右侧 Overlay 浮层，中栏占满 100% 宽度
+  const overlayPeek = allocateShellColumns({
+    viewportWidth: 640,
+    leftPane: true,
+    leftWidth: 240,
+    inspectorOpen: true,
+    inspectorWidth: 480,
+  })
+  assert.equal(overlayPeek.left, 0)
+  assert.equal(overlayPeek.center, 640)
+  assert.equal(overlayPeek.inspectorMode, 'overlay')
+  assert.equal(overlayPeek.inspector, Math.min(480, 640 - INSPECTOR_OVERLAY_PEEK_GUTTER))
+
+  // 7. 极窄屏（< 520px）：右栏 Overlay 全宽覆盖
+  const fullOverlay = allocateShellColumns({
+    viewportWidth: INSPECTOR_OVERLAY_FULL_BELOW - 20,
+    leftPane: true,
+    leftWidth: 240,
+    inspectorOpen: true,
+    inspectorWidth: 480,
+  })
+  assert.equal(fullOverlay.left, 0)
+  assert.equal(fullOverlay.center, 500)
+  assert.equal(fullOverlay.inspectorMode, 'overlay')
+  assert.equal(fullOverlay.inspector, 500)
 })
 
-test('holdCenter yields when the inspector reaches its minimum', () => {
-  const wide = allocateShellColumns({
+test('compressing then restoring viewport is completely reversible without ratcheting center', () => {
+  const before = allocateShellColumns({
     viewportWidth: 1600,
     leftPane: true,
+    leftWidth: 240,
     inspectorOpen: true,
-    inspectorWidth: 320,
-    holdCenter: 800,
+    inspectorWidth: 480,
   })
-  assert.equal(wide.left, SIDEBAR_MAX)
-  assert.equal(wide.center, 1600 - SIDEBAR_MAX - INSPECTOR_MIN)
-  assert.equal(wide.inspector, INSPECTOR_MIN)
-
-  const squeezed = allocateShellColumns({
-    viewportWidth: SIDEBAR_MAX + 800 + 80,
+  const compressed = allocateShellColumns({
+    viewportWidth: 600,
     leftPane: true,
+    leftWidth: 240,
     inspectorOpen: true,
-    inspectorWidth: 320,
-    holdCenter: 800,
+    inspectorWidth: 480,
+    holdCenter: before.center,
   })
-  assert.equal(squeezed.left, SIDEBAR_MAX)
-  assert.equal(squeezed.center, CENTER_MIN)
-  assert.equal(squeezed.inspector, INSPECTOR_MIN)
+  assert.equal(compressed.inspectorMode, 'overlay')
+  const restored = allocateShellColumns({
+    viewportWidth: 1600,
+    leftPane: true,
+    leftWidth: 240,
+    inspectorOpen: true,
+    inspectorWidth: 480,
+    holdCenter: compressed.center,
+  })
+  assert.deepEqual(restored, before)
 })
 
-test('both content panes keep minimum widths while narrow windows overflow', () => {
-  for (const viewportWidth of [200, 320, 480, 800, 1200]) {
-    for (const inspectorWidth of [0, 80, 320, 1000]) {
-      for (const holdCenter of [null, 800]) {
-        const cols = allocateShellColumns({ viewportWidth, leftPane: true, inspectorOpen: true, inspectorWidth, holdCenter })
-        assert.ok(cols.inspector >= INSPECTOR_MIN)
-        assert.ok(cols.center >= CENTER_MIN)
-        assert.equal(cols.left + cols.center + cols.inspector, Math.max(viewportWidth, cols.left + CENTER_MIN + INSPECTOR_MIN))
+test('closed inspector still auto-hides left sidebar below 768px and restores when widened', () => {
+  const desktop = allocateShellColumns({
+    viewportWidth: 900,
+    leftPane: true,
+    leftWidth: 240,
+    inspectorOpen: false,
+    inspectorWidth: 480,
+  })
+  assert.equal(desktop.left, 240)
+  assert.equal(desktop.center, 660)
+  assert.equal(desktop.leftMode, 'docked')
+  assert.equal(desktop.leftCanDock, true)
+
+  const narrow = allocateShellColumns({
+    viewportWidth: 640,
+    leftPane: true,
+    leftWidth: 240,
+    inspectorOpen: false,
+    inspectorWidth: 480,
+  })
+  assert.equal(narrow.left, 0)
+  assert.equal(narrow.center, 640)
+  assert.equal(narrow.leftMode, 'hidden')
+  assert.equal(narrow.leftAutoCollapsed, true)
+  assert.equal(narrow.leftCanDock, false)
+})
+
+test('shell columns never overflow viewport horizontally across all widths', () => {
+  for (const viewportWidth of [200, 320, 480, 640, 720, 767, 768, 840, 960, 1200, 1600]) {
+    for (const inspectorWidth of [0, 80, 360, 480, 1000]) {
+      for (const inspectorOpen of [false, true]) {
+        const cols = allocateShellColumns({
+          viewportWidth,
+          leftPane: true,
+          leftWidth: 240,
+          inspectorOpen,
+          inspectorWidth,
+        })
+        if (cols.inspectorMode === 'split') {
+          assert.equal(cols.left + cols.center + cols.inspector, viewportWidth)
+          assert.ok(cols.center >= CENTER_MIN)
+          assert.ok(cols.inspector >= INSPECTOR_MIN)
+        } else if (cols.inspectorMode === 'overlay') {
+          assert.equal(cols.left, 0)
+          assert.equal(cols.center, viewportWidth)
+          assert.ok(cols.inspector <= viewportWidth)
+        } else {
+          assert.equal(cols.left + cols.center, viewportWidth)
+          assert.equal(cols.inspector, 0)
+        }
       }
     }
   }
-})
-
-test('both content pane minimums are 500px', () => {
-  assert.equal(CENTER_MIN, 500)
-  assert.equal(INSPECTOR_MIN, 500)
-  const keepBoth = allocateShellColumns({
-    viewportWidth: SIDEBAR_MAX + 600 + INSPECTOR_MIN,
-    leftPane: true,
-    inspectorOpen: true,
-    inspectorWidth: 320,
-  })
-  assert.equal(keepBoth.left, SIDEBAR_MAX)
-  assert.equal(keepBoth.inspector, INSPECTOR_MIN)
-  assert.equal(keepBoth.center, 600)
 })
 
 test('expanding chat clamps inspector so the column is at least ENTER', () => {
@@ -496,6 +597,9 @@ test('overlay window geom clamps and docks to the right, bottom-aligned by defau
   const short = clampOverlayWinGeom({ x: 12, y: 12, w: 420, h: 520 }, 1280, 400)
   assert.ok(short.h <= 400 - 24)
   assert.ok(short.h >= OVERLAY_CHAT_HEIGHT_MIN)
+  const narrow = overlayLayoutGeom('right', { x: 0, y: 12, w: 420, h: 400 }, 380, 700)
+  assert.equal(narrow.w, 380 - 24)
+  assert.equal(narrow.x, 12)
 })
 
 test('layout always pins the overlay to the right of the viewport', () => {

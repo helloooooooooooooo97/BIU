@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -15,14 +15,15 @@ import { CSS as DndCSS } from '@dnd-kit/utilities'
 import { CheckIcon, LockClosedIcon, PlusIcon, Square2StackIcon, UserIcon, UsersIcon } from '@heroicons/react/16/solid'
 import { overlayZ } from '@biu/biu-ui/overlay-portal'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
-import { isBuiltinAllViewId, isNonPersonalView, isReadOnlyViewId } from '../catalog-views.ts'
+import { isBuiltinAllViewId, isBuiltinCatalogViewId, isNonPersonalView, isReadOnlyViewId } from '../catalog-views.ts'
 import { moveList } from '../query-logic.ts'
 import { DndGrip } from './dnd-grip.tsx'
 import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search.tsx'
 import { ViewModeGlyph } from './nav-glyphs.tsx'
 import { canDeleteSavedView, canEditSavedView, canRemoveCollectionView, type SavedView, type ViewProtection } from './saved-view.ts'
+import { loadViewerIdentity } from './view-settings-menu.tsx'
 
-const PROTECTION_OPTIONS: Array<{
+export const PROTECTION_OPTIONS: Array<{
   value: ViewProtection
   label: string
   desc: string
@@ -33,12 +34,54 @@ const PROTECTION_OPTIONS: Array<{
   { value: 'personal', label: '个人视图', desc: '仅你自己可见', Icon: UserIcon },
 ]
 
-function resolveViewProtection(view: SavedView): ViewProtection {
-  if (view.ownerTable === 'all' || isBuiltinAllViewId(view.id)) return 'personal'
+export function isBuiltinAggregationView(view: Pick<SavedView, 'id'>): boolean {
+  return isBuiltinAllViewId(view.id) || isBuiltinCatalogViewId(view.id)
+}
+
+export function isAggregationView(view: Pick<SavedView, 'id' | 'ownerTable'>): boolean {
+  return view.ownerTable === 'all' || isBuiltinAggregationView(view)
+}
+
+export function resolveViewProtection(view: Pick<SavedView, 'id' | 'ownerTable' | 'protection' | 'scope'>): ViewProtection {
+  if (isBuiltinAggregationView(view)) return 'personal'
   if (view.protection === 'public' || view.protection === 'locked' || view.protection === 'personal') {
     return view.protection
   }
+  if (view.ownerTable === 'all') return 'personal'
   return view.scope === 'personal' ? 'personal' : 'public'
+}
+
+export function viewProtectionMeta(view: Pick<SavedView, 'id' | 'ownerTable' | 'protection' | 'scope'>) {
+  const isBuiltinAgg = isBuiltinAggregationView(view)
+  const isAggregation = isAggregationView(view)
+  const protection = resolveViewProtection(view)
+  const option = PROTECTION_OPTIONS.find((item) => item.value === protection) ?? PROTECTION_OPTIONS[0]!
+  const title = isBuiltinAgg
+    ? '个人视图（数据聚合视角仅自己可见）'
+    : `${option.label}：${option.desc}`
+  return { protection, isAggregation, isBuiltinAgg, option, title }
+}
+
+export function ViewProtectionBadge({
+  view,
+  className,
+}: {
+  view: Pick<SavedView, 'id' | 'ownerTable' | 'protection' | 'scope'>
+  className?: string
+}) {
+  const { protection, option, title } = viewProtectionMeta(view)
+  const ProtectionIcon = option.Icon
+  return (
+    <span
+      className={['tasks-viewdd-protection', `is-${protection}`, className].filter(Boolean).join(' ')}
+      data-testid="fsdb-view-tab-protection"
+      data-protection={protection}
+      title={title}
+      aria-label={option.label}
+    >
+      <ProtectionIcon aria-hidden className="size-[14px]" />
+    </span>
+  )
 }
 
 function isLastPublicViewForTable(view: SavedView, views: SavedView[]): boolean {
@@ -58,6 +101,7 @@ function ViewRowShell({
   onToggleProtectionMenu,
   canRemove,
   isLastPublic,
+  viewerIsAdmin,
   grip,
   rowRef,
   className,
@@ -73,24 +117,24 @@ function ViewRowShell({
   onToggleProtectionMenu?: () => void
   canRemove: boolean
   isLastPublic?: boolean
+  viewerIsAdmin?: boolean
   grip: ReactNode
   rowRef?: (node: HTMLElement | null) => void
   className?: string
   style?: CSSProperties
 }) {
-  const isAggregation = view.ownerTable === 'all' || isBuiltinAllViewId(view.id)
+  const { protection, isBuiltinAgg, option: meta, title: protectionTitle } = viewProtectionMeta(view)
   const isReadOnlyStub = Boolean(view.builtin) || isReadOnlyViewId(view.id)
-  const protection = resolveViewProtection(view)
-  const meta = PROTECTION_OPTIONS.find((item) => item.value === protection) ?? PROTECTION_OPTIONS[0]!
+  const isAllTable = view.ownerTable === 'all'
   const ProtectionIcon = meta.Icon
   const canSwitchProtection = Boolean(
     !isReadOnlyStub &&
-      !isAggregation &&
+      !isBuiltinAgg &&
+      (!isAllTable || viewerIsAdmin) &&
       onChangeProtection &&
       (canEditSavedView(view) || canDeleteSavedView(view)),
   )
   const canLock = !(view.ownerTable?.startsWith('account:') && view.viewRole && view.viewRole !== 'owner')
-  const showProtectionBadge = !isReadOnlyStub || isAggregation
   return (
     <div ref={rowRef} style={style}>
       <div
@@ -106,29 +150,24 @@ function ViewRowShell({
           <span className="tasks-viewdd-item-name font-medium">{view.name}</span>
         </button>
         <span className="tasks-viewdd-item-actions">
-          {showProtectionBadge ? (
-            <button
-              type="button"
-              className="tasks-viewdd-act"
-              data-testid={`view-protection-btn-${view.id}`}
-              title={
-                isAggregation
-                  ? '个人视图（数据聚合视角仅自己可见）'
-                  : `${meta.label}：${meta.desc}`
-              }
-              style={{
-                opacity: protection === 'public' ? 0.65 : 1,
-                color: protection === 'locked' ? 'var(--biu-color-emphasis)' : undefined,
-                cursor: canSwitchProtection ? 'pointer' : 'default',
-              }}
-              onClick={(event) => {
-                event.stopPropagation()
-                if (canSwitchProtection) onToggleProtectionMenu?.()
-              }}
-            >
-              <ProtectionIcon aria-hidden className="size-[14px]" />
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className={`tasks-viewdd-act${protection === 'locked' ? ' is-locked' : ''}`}
+            data-testid={`view-protection-btn-${view.id}`}
+            data-protection={protection}
+            title={protectionTitle}
+            aria-label={meta.label}
+            style={{
+              color: protection === 'locked' ? 'var(--biu-color-emphasis)' : undefined,
+              cursor: canSwitchProtection ? 'pointer' : 'default',
+            }}
+            onClick={(event) => {
+              event.stopPropagation()
+              if (canSwitchProtection) onToggleProtectionMenu?.()
+            }}
+          >
+            <ProtectionIcon aria-hidden className="size-[14px]" />
+          </button>
           <button type="button" className="tasks-viewdd-act" title="拷贝视图" onClick={() => onCopy(view)}>
             <Square2StackIcon aria-hidden className="size-[14px]" />
           </button>
@@ -218,6 +257,7 @@ function SortableViewRow({
   onToggleProtectionMenu,
   canRemove,
   isLastPublic,
+  viewerIsAdmin,
 }: {
   view: SavedView
   active: boolean
@@ -229,6 +269,7 @@ function SortableViewRow({
   onToggleProtectionMenu?: () => void
   canRemove: boolean
   isLastPublic?: boolean
+  viewerIsAdmin?: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: view.id })
   return (
@@ -243,6 +284,7 @@ function SortableViewRow({
       onToggleProtectionMenu={onToggleProtectionMenu}
       canRemove={canRemove}
       isLastPublic={isLastPublic}
+      viewerIsAdmin={viewerIsAdmin}
       rowRef={setNodeRef}
       className={isDragging ? 'is-drag' : undefined}
       style={{ transform: DndCSS.Transform.toString(transform), transition }}
@@ -276,6 +318,16 @@ export function ViewOrderMenu({
 }) {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [protectionOpenId, setProtectionOpenId] = useState<string | null>(null)
+  const [viewerIsAdmin, setViewerIsAdmin] = useState(false)
+  useEffect(() => {
+    let alive = true
+    void loadViewerIdentity().then((viewer) => {
+      if (alive) setViewerIsAdmin(viewer.isAdmin)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
   const ids = views.map((view) => view.id)
   const canRemove = canRemoveCollectionView(views)
@@ -321,6 +373,7 @@ export function ViewOrderMenu({
                     }
                     canRemove={canRemove && canDeleteSavedView(view)}
                     isLastPublic={isLastPublicViewForTable(view, views)}
+                    viewerIsAdmin={viewerIsAdmin}
                     grip={
                       <span className="fsdb-query-grip is-locked" aria-hidden>
                         <DndGrip />
@@ -369,6 +422,7 @@ export function ViewOrderMenu({
                     }
                     canRemove={canRemove && canDeleteSavedView(view)}
                     isLastPublic={isLastPublicViewForTable(view, views)}
+                    viewerIsAdmin={viewerIsAdmin}
                   />
                 ))}
               </SortableContext>

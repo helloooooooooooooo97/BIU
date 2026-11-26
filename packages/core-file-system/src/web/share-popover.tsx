@@ -296,9 +296,12 @@ function WorkspaceAccess({
 }) {
   const [email, setEmail] = useState('')
   const [scope, setScope] = useState<'personal' | 'workspace' | 'shared' | 'external'>('personal')
+  const [ownerTable, setOwnerTable] = useState('')
+  const [accessMode, setAccessMode] = useState<'inherit' | 'private' | 'members' | 'restricted'>('private')
   const [ownerId, setOwnerId] = useState('')
   const [currentAccountId, setCurrentAccountId] = useState('')
   const [canManage, setCanManage] = useState(true)
+  const [statusNotice, setStatusNotice] = useState('')
   const [people, setPeople] = useState<Array<{
     id: string
     name: string
@@ -349,6 +352,8 @@ function WorkspaceAccess({
   async function load() {
     const data = await readJson<{
       scope?: 'personal' | 'workspace' | 'shared' | 'external'
+      ownerTable?: string
+      accessMode?: 'inherit' | 'private' | 'members' | 'restricted'
       ownerId?: string
       currentAccountId?: string
       canManage?: boolean
@@ -378,6 +383,8 @@ function WorkspaceAccess({
       }
     }>(`/api/account/access?collection=${encodeURIComponent(collection)}&recordId=${encodeURIComponent(recordId)}`)
     setScope(data.scope ?? 'personal')
+    setOwnerTable(data.ownerTable ?? '')
+    setAccessMode(data.accessMode ?? (data.ownerTable === 'workspace' || data.scope === 'workspace' ? 'members' : 'private'))
     setOwnerId(data.ownerId ?? '')
     setCurrentAccountId(data.currentAccountId ?? '')
     setCanManage(data.canManage !== false)
@@ -407,7 +414,7 @@ function WorkspaceAccess({
     void listCollection({
       path: WORKSPACE_MEMBERS_COLLECTION_PATH,
       limit: 200,
-      columns: ['title', 'name', 'avatar', 'email', 'role', 'membershipKind'],
+      columns: ['title', 'avatar', 'email', 'role', 'membershipKind'],
     })
       .then((page) => {
         setWorkspaceMembers(page.items.flatMap((row) => {
@@ -418,7 +425,7 @@ function WorkspaceAccess({
           return [{
             id,
             email,
-            name: String(row.name ?? '').trim() || String(row.title ?? '').trim() || email,
+            name: String(row.title ?? '').trim() || String(row.name ?? '').trim() || email,
             ...(avatar ? { avatar } : {}),
             role: String(row.role ?? ''),
           }]
@@ -481,24 +488,74 @@ function WorkspaceAccess({
     }
   }
 
-  async function transferOwnerTable(target: 'workspace' | 'personal') {
+  async function moveToWorkspaceTable() {
     if (!recordId || !currentAccountId) return
     setError('')
+    setStatusNotice('')
     setInheritanceBusy(true)
     try {
-      await readJson('/api/account/records/owner-table', {
+      const res = await readJson<{ transferredDescendants?: number }>('/api/account/records/owner-table', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           collection,
           recordId,
-          ownerTable: target === 'workspace' ? 'workspace' : `account:${currentAccountId}`,
+          ownerTable: 'workspace',
+        }),
+      })
+      const desc = Number(res.transferredDescendants ?? 0)
+      setStatusNotice(desc > 0 ? `已移入空间表（含 ${desc} 篇子内容）` : '已移入空间表')
+      emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '无法移入空间表')
+    } finally {
+      setInheritanceBusy(false)
+    }
+  }
+
+  async function duplicateToPersonalTable() {
+    if (!recordId || !currentAccountId) return
+    setError('')
+    setStatusNotice('')
+    setInheritanceBusy(true)
+    try {
+      await readJson<{ path?: string }>('/api/db/duplicate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          path: `${collection}/${recordId}`,
+          scope: 'personal',
+        }),
+      })
+      setStatusNotice('已复制副本到我的个人表')
+      emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '无法复制到个人表')
+    } finally {
+      setInheritanceBusy(false)
+    }
+  }
+
+  async function toggleWorkspaceRestricted(restricted: boolean) {
+    if (!recordId) return
+    setError('')
+    setStatusNotice('')
+    setInheritanceBusy(true)
+    try {
+      await readJson('/api/account/access', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          collection,
+          recordId,
+          accessMode: restricted ? 'restricted' : 'members',
         }),
       })
       emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
       await load()
     } catch (err) {
-      setError(err instanceof Error ? err.message : '无法切换归属表')
+      setError(err instanceof Error ? err.message : '无法切换空间可见模式')
     } finally {
       setInheritanceBusy(false)
     }
@@ -600,26 +657,63 @@ function WorkspaceAccess({
     return base
   }
 
+  const isWorkspaceRecord = ownerTable === 'workspace' || (!ownerTable && shownScope === 'workspace')
+  const isMyPersonalRecord = Boolean(
+    !isWorkspaceRecord && currentAccountId && (ownerTable === `account:${currentAccountId}` || ownerId === currentAccountId),
+  )
+
   return (
     <div className="fsdb-share-link-section" data-testid="fsdb-share-members">
       <div className="fsdb-share-collab-summary">
         <span>归属与可见范围</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <strong className={`fsdb-share-scope is-${shownScope}`} data-testid="fsdb-share-scope"><ScopeMark scope={shownScope} /></strong>
-          {recordId && currentAccountId ? (
+          {recordId && currentAccountId && isMyPersonalRecord ? (
             <button
               type="button"
               disabled={inheritanceBusy}
               data-testid="fsdb-share-owner-table-toggle"
               className="fsdb-share-ghost"
               style={{ fontSize: 11.5, padding: '2px 8px' }}
-              onClick={() => void transferOwnerTable(shownScope === 'workspace' ? 'personal' : 'workspace')}
+              onClick={() => void moveToWorkspaceTable()}
             >
-              {shownScope === 'workspace' ? '收归个人表' : '转入空间表'}
+              移入空间表
+            </button>
+          ) : null}
+          {recordId && currentAccountId && isWorkspaceRecord ? (
+            <button
+              type="button"
+              disabled={inheritanceBusy}
+              data-testid="fsdb-share-duplicate-personal"
+              className="fsdb-share-ghost"
+              style={{ fontSize: 11.5, padding: '2px 8px' }}
+              onClick={() => void duplicateToPersonalTable()}
+            >
+              复制到个人表
             </button>
           ) : null}
         </div>
       </div>
+      {statusNotice ? (
+        <div style={{ fontSize: 12, color: 'var(--biu-color-emphasis)', marginTop: 4 }} data-testid="fsdb-share-status-notice">
+          {statusNotice}
+        </div>
+      ) : null}
+      {isWorkspaceRecord && canManage ? (
+        <div className="fsdb-share-inherit-row" data-testid="fsdb-share-workspace-restricted">
+          <span>
+            <strong>仅指定成员可见（受限空间）</strong>
+            <em>{accessMode === 'restricted' ? '已开启：仅管理员、下方协作者/成员组及空间规则可见' : '未开启：空间内部成员默认可访问'}</em>
+          </span>
+          <ShareToggle
+            on={accessMode === 'restricted'}
+            disabled={inheritanceBusy}
+            label="仅指定成员可见"
+            testId="fsdb-share-workspace-restricted-toggle"
+            onChange={(on) => void toggleWorkspaceRestricted(on)}
+          />
+        </div>
+      ) : null}
       {inheritance.hasParent ? (
         <div className="fsdb-share-inherit-row" data-testid="fsdb-share-inherit">
           <span>

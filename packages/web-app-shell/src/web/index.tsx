@@ -24,7 +24,10 @@ import {
   SIDEBAR_LABEL_AT,
   SIDEBAR_MAX,
   SIDEBAR_MIN,
+  INSPECTOR_DEFAULT,
+  INSPECTOR_MAX,
   INSPECTOR_MIN,
+  INSPECTOR_OVERLAY_FULL_BELOW,
   SIDEBAR_RAIL,
   sidebarColumnWidth,
 } from './chat-overlay.ts'
@@ -84,6 +87,7 @@ import {
   CommandLineIcon,
   CircleStackIcon,
   LinkIcon,
+  LockClosedIcon,
   ShieldCheckIcon,
   SwatchIcon,
   UserCircleIcon,
@@ -326,7 +330,7 @@ function Shell(props: SlotProps) {
         if (!live) return
         const next = profile?.dataLocation === 'cloud' ? 'cloud' : 'device'
         setWorkspaceLocation(next)
-        if (next === 'device') setSettingsTab((current) => (current === 'members' ? 'workspace' : current))
+        if (next === 'device') setSettingsTab((current) => (current === 'members' || current === 'permissions' ? 'workspace' : current))
       })
       .catch(() => {
         if (live) setWorkspaceLocation('device')
@@ -335,6 +339,14 @@ function Shell(props: SlotProps) {
       live = false
     }
   }, [settingsOpen])
+  useEffect(() => {
+    const onOpenRules = () => {
+      setSettingsTab('permissions')
+      setSettingsOpen(true)
+    }
+    window.addEventListener('biu:open-access-rules', onOpenRules)
+    return () => window.removeEventListener('biu:open-access-rules', onOpenRules)
+  }, [])
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => getSidebarPersist(SIDEBAR_PERSIST.collapsed) === '1')
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const n = Number(getSidebarPersist(SIDEBAR_PERSIST.width))
@@ -344,11 +356,17 @@ function Shell(props: SlotProps) {
   const lastWideSidebar = useRef(sidebarWidth >= SIDEBAR_LABEL_AT ? sidebarWidth : SIDEBAR_MAX)
   const sidebarCollapsedRef = useRef(sidebarCollapsed)
   const sidebarWidthRef = useRef(sidebarWidth)
-  const holdCenterRef = useRef<number | null>(null)
+  const [leftDrawerOpen, setLeftDrawerOpen] = useState(false)
+  const leftDrawerOpenRef = useRef(leftDrawerOpen)
+  const leftCanDockRef = useRef(true)
+  const inspectorOverlayRef = useRef(false)
   sidebarCollapsedRef.current = sidebarCollapsed
   sidebarWidthRef.current = sidebarWidth
+  leftDrawerOpenRef.current = leftDrawerOpen
+  const closeLeftDrawer = useCallback(() => {
+    setLeftDrawerOpen(false)
+  }, [])
   const persistSidebar = useCallback((width: number, collapsed: boolean) => {
-    holdCenterRef.current = null
     if (collapsed) {
       paintLiveLayoutRef.current({ sidebarCollapsed: true })
       setSidebarCollapsed(true)
@@ -370,14 +388,26 @@ function Shell(props: SlotProps) {
     setSidebarPersist(SIDEBAR_PERSIST.collapsed, '0')
   }, [])
   const collapseSidebar = useCallback(() => {
+    if (leftDrawerOpenRef.current) {
+      setLeftDrawerOpen(false)
+      return
+    }
     paintLiveLayoutRef.current({ sidebarCollapsed: true })
     setSidebarCollapsed(true)
     setSidebarPersist(SIDEBAR_PERSIST.collapsed, '1')
   }, [])
-  const expandSidebar = useCallback(
-    () => persistSidebar(Math.max(SIDEBAR_LABEL_AT, lastWideSidebar.current, sidebarWidthRef.current), false),
-    [persistSidebar],
-  )
+  const expandSidebar = useCallback(() => {
+    if (!leftCanDockRef.current) {
+      if (inspectorOverlayRef.current) {
+        applyInspectorRef.current(false)
+        requestInspectorClose()
+      }
+      setLeftDrawerOpen(true)
+      return
+    }
+    setLeftDrawerOpen(false)
+    persistSidebar(Math.max(SIDEBAR_LABEL_AT, lastWideSidebar.current, sidebarWidthRef.current), false)
+  }, [persistSidebar])
   const onSidebarWidthChange = useCallback(
     (width: number) => {
       endColumnResizeRef.current({ sidebar: width })
@@ -428,8 +458,8 @@ function Shell(props: SlotProps) {
   const [inspectorOpen, setInspectorOpen] = useState(() => getSidebarPersist(SIDEBAR_PERSIST.inspectorOpen) === '1')
   const [inspectorWidth, setInspectorWidth] = useState(() => {
     const n = Number(getSidebarPersist(SIDEBAR_PERSIST.inspectorWidth))
-    if (Number.isFinite(n) && n >= INSPECTOR_MIN && n <= 1000) return n
-    return INSPECTOR_MIN
+    if (Number.isFinite(n) && n >= INSPECTOR_MIN && n <= INSPECTOR_MAX) return n
+    return INSPECTOR_DEFAULT
   })
   const layoutSnap = useRef({
     leftPane: true,
@@ -447,20 +477,25 @@ function Shell(props: SlotProps) {
   const inspectorOpenRef = useRef(inspectorOpen)
   inspectorOpenRef.current = inspectorOpen
   const applyInspector = useCallback((next: boolean) => {
-    holdCenterRef.current = null
+    if (next && !leftCanDockRef.current) setLeftDrawerOpen(false)
     inspectorOpenRef.current = next
     paintLiveLayoutRef.current({ inspectorOpen: next })
     setInspectorOpen(next)
     setSidebarPersist(SIDEBAR_PERSIST.inspectorOpen, next ? '1' : '0')
   }, [])
+  const applyInspectorRef = useRef(applyInspector)
+  applyInspectorRef.current = applyInspector
+  const closeInspectorOverlay = useCallback(() => {
+    applyInspector(false)
+    requestInspectorClose()
+  }, [applyInspector])
   const toggleInspector = useCallback(() => {
     const next = !inspectorOpenRef.current
     applyInspector(next)
     if (!next) requestInspectorClose()
   }, [applyInspector])
   const persistInspectorWidth = useCallback((width: number) => {
-    const next = Math.min(1000, Math.max(INSPECTOR_MIN, Math.round(width)))
-    holdCenterRef.current = null
+    const next = Math.min(INSPECTOR_MAX, Math.max(INSPECTOR_MIN, Math.round(width)))
     layoutSnap.current = commitShellLayoutSnap(layoutSnap.current, { inspectorWidth: next })
     setInspectorWidth(next)
     setSidebarPersist(SIDEBAR_PERSIST.inspectorWidth, String(next))
@@ -504,7 +539,6 @@ function Shell(props: SlotProps) {
   const visitedChatSidebar = useRef(false)
   if (showChatSidebar) visitedChatSidebar.current = true
   const sidebarCol = sidebarColumnWidth(sidebarCollapsed, sidebarWidth)
-  const sidebarNarrow = sidebarCollapsed || sidebarWidth < SIDEBAR_LABEL_AT
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window === 'undefined' ? 1440 : window.innerWidth,
   )
@@ -545,14 +579,41 @@ function Shell(props: SlotProps) {
     leftWidth: leftPane ? sidebarCol : undefined,
     inspectorOpen: inspectorVisible,
     inspectorWidth,
-    holdCenter: columnResizing || !inspectorVisible ? null : holdCenterRef.current,
   })
+  const sidebarNarrow = shellColumns.leftMode === 'rail'
+  const leftHidden = shellColumns.leftMode === 'hidden' || shellColumns.leftMode === 'none'
+  const inspectorOverlay = inspectorVisible && shellColumns.inspectorMode === 'overlay'
+  const inspectorFullOverlay = inspectorOverlay && viewportWidth < INSPECTOR_OVERLAY_FULL_BELOW
+  leftCanDockRef.current = shellColumns.leftCanDock
+  inspectorOverlayRef.current = inspectorOverlay
   layoutSnap.current.leftPane = leftPane
   const paintedCols = useRef({ left: shellColumns.left, inspector: shellColumns.inspector, center: shellColumns.center })
   if (!columnResizing) {
     paintedCols.current = { left: shellColumns.left, inspector: shellColumns.inspector, center: shellColumns.center }
-    holdCenterRef.current = inspectorVisible ? shellColumns.center : null
   }
+  useEffect(() => {
+    if (shellColumns.leftCanDock && leftDrawerOpen) setLeftDrawerOpen(false)
+  }, [shellColumns.leftCanDock, leftDrawerOpen])
+  useEffect(() => {
+    if (leftDrawerOpenRef.current && shellColumns.leftMode === 'hidden') setLeftDrawerOpen(false)
+  }, [location.pathname, shellColumns.leftMode])
+  useEffect(() => {
+    if (!leftDrawerOpen && !inspectorOverlay) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || settingsOpen || searchOpen || configOpen) return
+      if (leftDrawerOpenRef.current) {
+        event.preventDefault()
+        setLeftDrawerOpen(false)
+        return
+      }
+      if (inspectorOverlayRef.current) {
+        event.preventDefault()
+        closeInspectorOverlay()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [leftDrawerOpen, inspectorOverlay, settingsOpen, searchOpen, configOpen, closeInspectorOverlay])
   const dragPaintRaf = useRef(0)
   const dragPaintPending = useRef<{ sidebar?: number; inspector?: number }>({})
   const applyPendingColumnDrag = useCallback((patch?: { sidebar?: number; inspector?: number }) => {
@@ -574,7 +635,7 @@ function Shell(props: SlotProps) {
     paintedCols.current = { left: cols.left, inspector: cols.inspector, center: cols.center }
     applyShellColumnCssVars(shellRef.current, cols)
     if (pending.sidebar != null) {
-      const wantRail = cols.left === SIDEBAR_RAIL
+      const wantRail = !cols.leftAutoCollapsed && cols.left === SIDEBAR_RAIL
       if (wantRail !== sidebarCollapsedRef.current) {
         sidebarCollapsedRef.current = wantRail
         layoutSnap.current.sidebarCollapsed = wantRail
@@ -663,13 +724,17 @@ function Shell(props: SlotProps) {
   }, [])
   const onSidebarWidthLive = useCallback((width: number) => paintColumnDrag({ sidebar: width }), [paintColumnDrag])
   const onInspectorWidthLive = useCallback((width: number) => paintColumnDrag({ inspector: width }), [paintColumnDrag])
-  const leftHidden = shellColumns.left <= 0
   useEffect(() => {
-    window.dispatchEvent(new CustomEvent('biu:shell-sidebar-width', { detail: sidebarCol }))
-    publishShellLayout({ left: paintedCols.current.left, inspector: paintedCols.current.inspector })
-  }, [sidebarCol, inspectorVisible])
+    window.dispatchEvent(new CustomEvent('biu:shell-sidebar-width', { detail: shellColumns.left }))
+    publishShellLayout({ left: shellColumns.left, inspector: shellColumns.inspector })
+  }, [shellColumns.left, shellColumns.inspector])
   useEffect(() => {
     const toggle = () => {
+      if (!leftCanDockRef.current) {
+        if (leftDrawerOpenRef.current) setLeftDrawerOpen(false)
+        else expandSidebar()
+        return
+      }
       if (sidebarCollapsedRef.current || sidebarWidthRef.current < SIDEBAR_LABEL_AT) expandSidebar()
       else collapseSidebar()
     }
@@ -882,9 +947,9 @@ function Shell(props: SlotProps) {
     <div
       ref={shellRef}
       className={`app-shell${leftPane
-        ? ` app-shell-agent${leftHidden ? ' is-sidebar-collapsed' : ''}${sidebarNarrow && !leftHidden ? ' is-sidebar-narrow' : ''}${inspectorVisible ? ' is-inspector-open' : ''
+        ? ` app-shell-agent${leftHidden ? ' is-sidebar-collapsed' : ''}${sidebarNarrow && !leftHidden ? ' is-sidebar-narrow' : ''}${inspectorVisible ? ' is-inspector-open' : ''}${inspectorOverlay ? ' is-inspector-overlay' : ''
         }${columnResizing ? ' is-resizing' : ''}${windowResizing ? ' is-window-resizing' : ''}`
-        : ` app-shell-module${inspectorVisible ? ' is-inspector-open' : ''}${columnResizing ? ' is-resizing' : ''}${windowResizing ? ' is-window-resizing' : ''}`
+        : ` app-shell-module${inspectorVisible ? ' is-inspector-open' : ''}${inspectorOverlay ? ' is-inspector-overlay' : ''}${columnResizing ? ' is-resizing' : ''}${windowResizing ? ' is-window-resizing' : ''}`
         }${leftHidden ? ' is-left-hidden' : ''}`}
       data-testid="app-shell"
       style={
@@ -900,8 +965,10 @@ function Shell(props: SlotProps) {
         <ShellSidebarFrame
           visible={!leftHidden}
           narrow={sidebarNarrow}
+          drawerOpen={leftDrawerOpen}
           onCollapse={collapseSidebar}
           onExpand={expandSidebar}
+          onDrawerClose={closeLeftDrawer}
           onWidthChange={onSidebarWidthChange}
           onWidthLive={onSidebarWidthLive}
           testId={showChatSidebar ? 'chat-sidebar' : 'module-sidebar'}
@@ -923,7 +990,7 @@ function Shell(props: SlotProps) {
                     routeSessionId={routeSessionId}
                     useSessionView={useSessionView}
                     sessionView={sessionView}
-                    iconRail={sidebarNarrow}
+                    iconRail={sidebarNarrow && !leftDrawerOpen}
                   />
                 </Suspense>
               ) : null}
@@ -967,6 +1034,9 @@ function Shell(props: SlotProps) {
       <SessionInspector
         open={inspectorVisible}
         width={inspectorWidth}
+        overlay={inspectorOverlay}
+        fullOverlay={inspectorFullOverlay}
+        onCloseOverlay={closeInspectorOverlay}
         onWidthChange={onInspectorWidthChange}
         onWidthLive={onInspectorWidthLive}
         useSessionView={useSessionView}
@@ -991,7 +1061,7 @@ function Shell(props: SlotProps) {
             onClick={() => setSettingsOpen(false)}
           >
             <div
-              className="biu-float settings-float"
+              className={`biu-float settings-float${settingsTab === 'permissions' ? ' is-permissions' : ''}`}
               role="dialog"
               aria-modal="true"
               aria-label="设置"
@@ -1012,8 +1082,9 @@ function Shell(props: SlotProps) {
                     items: [
                       { key: 'workspace', label: '空间', Icon: CircleStackIcon },
                       { key: 'members', label: '成员', Icon: UserGroupIcon },
+                      { key: 'permissions', label: '权限', Icon: LockClosedIcon },
                       { key: 'mcp', label: 'MCP', Icon: LinkIcon },
-                    ].filter((item) => item.key !== 'members' || workspaceLocation === 'cloud'),
+                    ].filter((item) => (item.key !== 'members' && item.key !== 'permissions') || workspaceLocation === 'cloud'),
                   },
                   {
                     group: '偏好设置',
@@ -1052,12 +1123,13 @@ function Shell(props: SlotProps) {
                 >
                   <XMarkIcon {...chromeIcon} />
                 </button>
-                <div className="settings-pane">
+                <div className={`settings-pane${settingsTab === 'permissions' ? ' is-permissions' : ''}`}>
                   {settingsTab === 'account' ? <ShellSettingsAccount /> : null}
                   {settingsTab === 'connections' ? <ShellSettingsConnections /> : null}
                   {settingsTab === 'security' ? <ShellSettingsSecurity /> : null}
                   {settingsTab === 'workspace' ? <ShellSettingsWorkspace /> : null}
                   {settingsTab === 'members' && workspaceLocation === 'cloud' ? <ShellSettingsMembers /> : null}
+                  {settingsTab === 'permissions' && workspaceLocation === 'cloud' ? props.renderSlot('settings-permissions') : null}
                   {settingsTab === 'style' ? <ShellSettingsAppearance /> : null}
                   {settingsTab === 'mcp' ? <ShellSettingsMcp onLeave={() => setSettingsOpen(false)} /> : null}
                   {settingsTab === 'shortcuts' ? <ShellSettingsShortcuts /> : null}
@@ -1121,6 +1193,7 @@ export function apply(ctx: Context) {
       project: { kind: 'single' },
       composer: { kind: 'single' },
       settings: { kind: 'list' },
+      'settings-permissions': { kind: 'single' },
       log: { kind: 'single' },
       routes: { kind: 'single' },
       'app-modules': { kind: 'list' },
