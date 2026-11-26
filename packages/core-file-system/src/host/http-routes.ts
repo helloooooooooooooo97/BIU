@@ -718,19 +718,8 @@ export function registerDatabaseHttpRoutes(
           return
         }
       } else if (kind === 'view') {
-        const viewId = String(body.viewId ?? '').trim()
-        const wsId = currentRequestWorkspaceId()
-        const meId = currentAccountId()
-        const account = ctx.get('account') as {
-          store?: { ensureViewPolicy?: (wsId: string, col: string, viewId: string, fallbackActorId?: string) => string }
-        } | undefined
-        if (wsId && viewId) {
-          account?.store?.ensureViewPolicy?.(wsId, collection, viewId, meId)
-        }
-        await db.requirePath(
-          viewId ? savedViewRecordPath(collection, viewId) : VIEWS_COLLECTION_PATH,
-          'resource:share',
-        )
+        route.send(400, { error: '视图不支持独立公开分享，请使用访问规则生成公开链接' })
+        return
       } else {
         await db.requirePath(`${collection}/${recordId}`, 'resource:share')
       }

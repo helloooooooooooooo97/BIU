@@ -9,7 +9,10 @@ import {
   ChevronRightIcon,
   PlusIcon,
   RectangleStackIcon,
+  ShareIcon,
   StarIcon,
+  UserIcon,
+  UsersIcon,
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { SidebarRow, SidebarRowMain } from '@biu/web-session-view/sidebar-row'
@@ -17,7 +20,8 @@ import { FSDB_CHANGE_EVENT, parseFsdbChange, type CollectionInfo, type Collectio
 import { BoundedMap } from './bounded-map.ts'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
 import { groupField, groupRecords, parentFieldKey, treeChildren } from './fields.ts'
-import { builtinAllViewId, isReadOnlyViewId, type DataScope } from '../catalog-views.ts'
+import { builtinAllViewId, builtinScopeViewId, isReadOnlyViewId, type DataScope } from '../catalog-views.ts'
+import { tableModeFor } from '../paths.ts'
 import { dataSidebarKind, isRecordTreeCollection, sortDataCollections } from './database-path.ts'
 import { rememberInspectorWorkingView } from './inspector-db-route.ts'
 import { readJson } from './db-client.ts'
@@ -977,42 +981,156 @@ export const DataSidebar = memo(function DataSidebar({
               </button>
           </div>
           <SidebarFold open={open} className="sidebar-session-list min-w-0">
-            {listed.map((view) => {
-              const starred = isViewStarred(starredViews, table.path, view.id)
-              const active = table.path === litPath && view.id === litViewId
-              return (
-                <div key={view.id} className="min-w-0">
-                  <SidebarRow
-                    active={active}
-                    pinned={starred}
-                    onClick={onSidebarRowClick}
-                    attrs={pickDomAttrs('view', viewPickId(table.path, view.id), view.name, { path: table.path })}
-                    main={
-                      <SidebarRowMain>
-                        <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
-                          <ViewModeGlyph mode={view.mode} />
-                        </span>
-                        <button
-                          type="button"
-                          className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
-                          onClick={() => openView(table.path, view.id)}
-                        >
-                          {view.name}
-                        </button>
-                      </SidebarRowMain>
-                    }
-                    trail={renderViewCreatorAvatar(view)}
-                    onDelete={viewRowDelete(table.path, view, listed)}
-                    deleteLabel={`删除 ${view.name}`}
-                    deleteIcon={<TrashGlyph className="size-4 shrink-0" />}
-                    onStar={() => toggleStar(table.path, view.id)}
-                    starOn={starred}
-                    starLabel={starred ? `取消收藏 ${view.name}` : `收藏 ${view.name}`}
-                    starIcon={<StarIcon className="size-4 shrink-0" />}
-                  />
-                </div>
-              )
-            })}
+            {isCloud && tableModeFor(table.path) === 'k-plus-1' ? (
+              (() => {
+                const customViews = listed.filter((v) => !v.builtin)
+                const wsViews = customViews.filter(
+                  (v) =>
+                    v.filters?.$scope === 'workspace' ||
+                    (v.filters?.$scope !== 'personal' && v.filters?.$scope !== 'shared' && (v.ownerTable === 'workspace' || v.scope === 'workspace' || v.protection === 'public' || v.protection === 'locked')),
+                )
+                const personalViews = customViews.filter(
+                  (v) =>
+                    v.filters?.$scope === 'personal' ||
+                    (!wsViews.includes(v) && v.filters?.$scope !== 'shared'),
+                )
+                const sharedViews = customViews.filter((v) => v.filters?.$scope === 'shared')
+                const allId = builtinAllViewId(table.path)
+                const domains: Array<{
+                  scope: DataScope
+                  label: string
+                  icon: typeof UsersIcon
+                  views: SavedView[]
+                  canAdd: boolean
+                }> = [
+                  { scope: 'workspace', label: '空间', icon: UsersIcon, views: wsViews, canAdd: true },
+                  { scope: 'personal', label: '个人', icon: UserIcon, views: personalViews, canAdd: true },
+                  { scope: 'shared', label: '共享', icon: ShareIcon, views: sharedViews, canAdd: false },
+                ]
+                return domains.map((domain) => {
+                  const scopeViewId = builtinScopeViewId(domain.scope, allId)
+                  const domainActive = table.path === litPath && litViewId === scopeViewId
+                  const Icon = domain.icon
+                  return (
+                    <div key={`${table.path}:${domain.scope}`} className="min-w-0" data-testid={`sidebar-domain-${table.path}-${domain.scope}`}>
+                      <SidebarRow
+                        active={domainActive}
+                        onClick={onSidebarRowClick}
+                        main={
+                          <SidebarRowMain>
+                            <span className="grid size-6 shrink-0 place-items-center opacity-80" aria-hidden>
+                              <Icon className="size-3.5 shrink-0" />
+                            </span>
+                            <button
+                              type="button"
+                              className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
+                              onClick={() => openView(table.path, scopeViewId)}
+                            >
+                              {domain.label}
+                            </button>
+                          </SidebarRowMain>
+                        }
+                        trail={
+                          domain.canAdd ? (
+                            <button
+                              type="button"
+                              className="sidebar-add"
+                              title={`在 ${name} · ${domain.label} 下添加视图`}
+                              aria-label={`在 ${name} · ${domain.label} 下添加视图`}
+                              data-testid={`sidebar-add-view-${table.path}-${domain.scope}`}
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setOpenTables({ [tableStateKey]: true })
+                                onAddView(table.path, domain.scope)
+                              }}
+                            >
+                              <PlusIcon className="size-3.5 shrink-0" />
+                            </button>
+                          ) : undefined
+                        }
+                      />
+                      {domain.views.length > 0 ? (
+                        <div className="min-w-0 pl-4">
+                          {domain.views.map((view) => {
+                            const starred = isViewStarred(starredViews, table.path, view.id)
+                            const active = table.path === litPath && view.id === litViewId
+                            return (
+                              <div key={view.id} className="min-w-0">
+                                <SidebarRow
+                                  active={active}
+                                  pinned={starred}
+                                  onClick={onSidebarRowClick}
+                                  attrs={pickDomAttrs('view', viewPickId(table.path, view.id), view.name, { path: table.path })}
+                                  main={
+                                    <SidebarRowMain>
+                                      <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+                                        <ViewModeGlyph mode={view.mode} />
+                                      </span>
+                                      <button
+                                        type="button"
+                                        className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
+                                        onClick={() => openView(table.path, view.id)}
+                                      >
+                                        {view.name}
+                                      </button>
+                                    </SidebarRowMain>
+                                  }
+                                  trail={renderViewCreatorAvatar(view)}
+                                  onDelete={viewRowDelete(table.path, view, listed)}
+                                  deleteLabel={`删除 ${view.name}`}
+                                  deleteIcon={<TrashGlyph className="size-4 shrink-0" />}
+                                  onStar={() => toggleStar(table.path, view.id)}
+                                  starOn={starred}
+                                  starLabel={starred ? `取消收藏 ${view.name}` : `收藏 ${view.name}`}
+                                  starIcon={<StarIcon className="size-4 shrink-0" />}
+                                />
+                              </div>
+                            )
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
+                  )
+                })
+              })()
+            ) : (
+              listed.map((view) => {
+                const starred = isViewStarred(starredViews, table.path, view.id)
+                const active = table.path === litPath && view.id === litViewId
+                return (
+                  <div key={view.id} className="min-w-0">
+                    <SidebarRow
+                      active={active}
+                      pinned={starred}
+                      onClick={onSidebarRowClick}
+                      attrs={pickDomAttrs('view', viewPickId(table.path, view.id), view.name, { path: table.path })}
+                      main={
+                        <SidebarRowMain>
+                          <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+                            <ViewModeGlyph mode={view.mode} />
+                          </span>
+                          <button
+                            type="button"
+                            className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
+                            onClick={() => openView(table.path, view.id)}
+                          >
+                            {view.name}
+                          </button>
+                        </SidebarRowMain>
+                      }
+                      trail={renderViewCreatorAvatar(view)}
+                      onDelete={viewRowDelete(table.path, view, listed)}
+                      deleteLabel={`删除 ${view.name}`}
+                      deleteIcon={<TrashGlyph className="size-4 shrink-0" />}
+                      onStar={() => toggleStar(table.path, view.id)}
+                      starOn={starred}
+                      starLabel={starred ? `取消收藏 ${view.name}` : `收藏 ${view.name}`}
+                      starIcon={<StarIcon className="size-4 shrink-0" />}
+                    />
+                  </div>
+                )
+              })
+            )}
           </SidebarFold>
         </div>
       )

@@ -359,39 +359,6 @@ test('collection ownership reports personal, workspace, and shared records', () 
   assert.equal(scopes.get('with-cara'), 'shared')
 })
 
-test('view collaborators do not change record ownership', () => {
-  const collab = store()
-  const ada = collab.register('', Date.now(), 'secret1', 'view-ada@example.com')
-  const bob = collab.register('', Date.now(), 'secret1', 'view-bob@example.com')
-  const cara = collab.register('', Date.now(), 'secret1', 'view-cara@example.com')
-  const workspaceId = collab.enter(ada.id)
-  collab.enter(bob.id)
-  collab.enter(cara.id)
-  collab.addMemberByEmail(ada.id, workspaceId, bob.email)
-  const asAda = <T>(op: () => T) => runWithAccount(ada.id, () => runWithRequestWorkspace(workspaceId, op))
-  asAda(() => collab.attach(workspaceId, '/pages', 'view-page'))
-  const viewId = 'builtin-scope:personal:all'
-  assert.throws(
-    () => asAda(() => collab.shareViewWithEmail(ada.id, '/pages', viewId, cara.email, 'editor', 'internal')),
-    /必须先加入当前空间/,
-  )
-  const shared = asAda(() => collab.shareViewWithEmail(ada.id, '/pages', viewId, cara.email, 'viewer', 'external'))
-  assert.equal(shared.scope, 'shared')
-  assert.equal(shared.ownerId, ada.id)
-  assert.equal(shared.people.find((row) => row.id === cara.id)?.memberKind, 'external')
-  assert.equal(asAda(() => collab.recordAccess(ada.id, '/pages', 'view-page')).scope, 'personal')
-  const internal = asAda(() => collab.shareViewWithEmail(ada.id, '/pages', viewId, bob.email, 'editor', 'internal'))
-  assert.equal(internal.scope, 'shared')
-  assert.equal(internal.people.find((row) => row.id === bob.id)?.role, 'editor')
-  assert.equal(asAda(() => collab.recordAccess(ada.id, '/pages', 'view-page')).scope, 'personal')
-  const viewAccess = asAda(() => collab.viewAccess(ada.id, '/pages', viewId))
-  assert.equal(viewAccess.people.filter((row) => row.id !== ada.id).length, 2)
-  const afterRevoke = asAda(() => collab.revokeViewGrant(ada.id, '/pages', viewId, 'account', cara.id))
-  assert.equal(afterRevoke.scope, 'workspace')
-  assert.equal(collab.members(ada.id, workspaceId).some((row) => row.id === cara.id), false)
-  assert.equal(asAda(() => collab.recordAccess(ada.id, '/pages', 'view-page')).scope, 'personal')
-})
-
 test('an account can join as a workspace member through a one-use invite link', () => {
   const collab = store()
   const ada = collab.register('', Date.now(), 'secret1', 'invite-ada@example.com')

@@ -59,7 +59,7 @@ import { SavedViewsStore, viewsCollection, type StoredView } from './saved-views
 import { RecordViewsStore, wrapCollectionRecordViews } from './record-views.ts'
 import { TagStore } from './tags-store.ts'
 import { SharesStore } from './shares-store.ts'
-import { builtinAllView, isBuiltinAllViewId, stubBuiltinAllView, stubBuiltinMemberView } from '../catalog-views.ts'
+import { builtinAllView, isBuiltinAllViewId } from '../catalog-views.ts'
 import { isIndexCollection, isSystemCollection } from '../paths.ts'
 import { dataCollection, isDataOverviewSource, overviewRecord } from './data-collection.ts'
 import { recordMatchesAccessRule } from '../view-access.ts'
@@ -825,10 +825,6 @@ export class DatabaseService extends Service implements Database {
     },
   ) {
     this.access.attachWorkspaceRecord(collection, recordId, policy)
-  }
-
-  private grantAllMembersEditable(collection: string, recordId: string) {
-    this.access.grantAllMembersEditable(collection, recordId)
   }
 
   private pluginCreateScope(args?: Record<string, unknown>): 'personal' | 'workspace' | 'shared' {
@@ -2214,7 +2210,9 @@ export class DatabaseService extends Service implements Database {
           ...(parentRecordId ? { parentCollection: spec.path, parentRecordId } : {}),
         })
         if (shared) this.markPublicView(spec.path, record.id)
-        if (workspaceOwned && !parentRecordId) this.grantAllMembersEditable(spec.path, record.id)
+        if (workspaceOwned && !parentRecordId) {
+          // workspace-scoped records already attach accessMode='members', owner_table='workspace'
+        }
         if (local || device) this.markDeviceRecord(spec.path, record.id)
       }
       const initialBody = initialBodies[sourceIndex]
@@ -2605,33 +2603,10 @@ export function apply(ctx: Context) {
         accountId: string,
         workspaceId: string,
       ) => Array<{ collection: string; record_id: string }>
-      setViewMetaResolver?: (
-        resolver: (
-          workspaceId: string,
-          collection: string,
-          viewId: string,
-        ) => { createdBy?: string; scope?: 'personal' | 'workspace' | 'shared'; builtin?: boolean } | null,
-      ) => void
-      ensureViewPolicy?: (
-        workspaceId: string,
-        collection: string,
-        viewId: string,
-        fallbackActorId?: string,
-      ) => string
       workspaceOwnerId?: (workspaceId: string) => string | null
-      cleanupViewReferences?: (workspaceId: string, collection: string, viewId: string) => void
     }
   } | undefined
   savedViews.setWorkspaceResolver(() => resolveScopedWorkspaceId(ctx))
-  account?.store?.setViewMetaResolver?.((workspaceId, collection, viewId) => {
-    const view = savedViews.viewsFor(collection, '', workspaceId).find((item) => String(item.id) === viewId)
-    if (!view) return null
-    return {
-      createdBy: view.createdBy,
-      scope: view.scope,
-      builtin: Boolean(view.builtin),
-    }
-  })
   const resolveViewDecision = (
     workspaceId: string,
     collection: string,
@@ -2723,16 +2698,12 @@ export function apply(ctx: Context) {
       const decision = resolveViewDecision(workspaceId, collection, view, accountId, 'resource:read')
       return decision.allowed ? decision.effectiveRole : null
     },
-    onCreated: (workspaceId, collection, view, accountId) => {
-      account?.store?.ensureViewPolicy?.(workspaceId, collection, String(view.id), view.createdBy || accountId)
-    },
-    onRemoved: (workspaceId, collection, viewId) => {
+    onRemoved: (_workspaceId, collection, viewId) => {
       try {
         db.shares.revokeView(collection, viewId)
       } catch {
         /* ignore */
       }
-      account?.store?.cleanupViewReferences?.(workspaceId, collection, viewId)
     },
   })
   const activeDataLocation = (): 'device' | 'cloud' => {

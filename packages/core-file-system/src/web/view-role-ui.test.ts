@@ -101,7 +101,7 @@ describe('view role permissions & UI guards', () => {
       /commenter/,
     )
     assert.match(shareSrc, /const hidePublicTab = target\.kind === 'view' && !localOnly/)
-    // POST /api/db/shares checks resource:share on specific view record path
-    assert.match(routesSrc, /savedViewRecordPath\(collection,\s*viewId\)[\s\S]*'resource:share'/)
+    // POST /api/db/shares rejects independent view public shares (use access rules instead)
+    assert.match(routesSrc, /视图不支持独立公开分享/)
   })
 })

@@ -94,82 +94,6 @@ export class CollabStore {
     this.ensureAccessRulesTables()
   }
 
-  private viewMetaResolver?: (
-    workspaceId: string,
-    collection: string,
-    viewId: string,
-  ) => { createdBy?: string; scope?: 'personal' | 'workspace' | 'shared'; builtin?: boolean } | null
-
-  setViewMetaResolver(
-    resolver: (
-      workspaceId: string,
-      collection: string,
-      viewId: string,
-    ) => { createdBy?: string; scope?: 'personal' | 'workspace' | 'shared'; builtin?: boolean } | null,
-  ) {
-    this.viewMetaResolver = resolver
-  }
-
-  viewRecordId(collection: string, viewId: string): string {
-    const cleanCol = String(collection ?? '').trim().replace(/^\/+/, '')
-    return `${cleanCol}::${String(viewId ?? '').trim()}`
-  }
-
-  /** 确保视图在 `/views` 下拥有与普通页面记录完全一致的 resource_policies 与 record_owners。 */
-  ensureViewPolicy(
-    workspaceId: string,
-    collection: string,
-    viewId: string,
-    fallbackActorId = '',
-    now = Date.now(),
-  ): string {
-    const cleanViewId = String(viewId ?? '').trim()
-    const recordId = this.viewRecordId(collection, cleanViewId)
-    if (!workspaceId || !cleanViewId) return recordId
-    const existing = this.db
-      .prepare(
-        `SELECT owner_account_id FROM resource_policies
-         WHERE workspace_id = ? AND collection = '/views' AND record_id = ?`,
-      )
-      .get(workspaceId, recordId) as { owner_account_id?: string } | undefined
-    if (existing?.owner_account_id) {
-      this.db
-        .prepare(
-          `INSERT INTO record_owners (workspace_id, collection, record_id, owner_id, version, updated_at)
-           VALUES (?, '/views', ?, ?, 0, ?)
-           ON CONFLICT(workspace_id, collection, record_id) DO NOTHING`,
-        )
-        .run(workspaceId, recordId, existing.owner_account_id, now)
-      return recordId
-    }
-    const meta = this.viewMetaResolver?.(workspaceId, collection, cleanViewId) ?? null
-    const isBuiltin = Boolean(meta?.builtin || cleanViewId.startsWith('builtin-all:'))
-    const ws = this.db.prepare('SELECT owner_id FROM workspaces WHERE id = ?').get(workspaceId) as
-      | { owner_id?: string }
-      | undefined
-    const ownerId =
-      meta?.createdBy ||
-      (isBuiltin ? ws?.owner_id || fallbackActorId : fallbackActorId || ws?.owner_id) ||
-      ''
-    if (!ownerId) return recordId
-    const accessMode: 'members' | 'private' =
-      isBuiltin || meta?.scope === 'workspace' ? 'members' : 'private'
-    this.db
-      .prepare(
-        `INSERT INTO record_owners (workspace_id, collection, record_id, owner_id, version, updated_at)
-         VALUES (?, '/views', ?, ?, 0, ?)
-         ON CONFLICT(workspace_id, collection, record_id) DO NOTHING`,
-      )
-      .run(workspaceId, recordId, ownerId, now)
-    this.authorization.attach(
-      { type: 'account', accountId: ownerId, workspaceId },
-      { type: 'record', workspaceId, collection: '/views', recordId },
-      { accessMode, memberDefaultRole: 'viewer' },
-      now,
-    )
-    return recordId
-  }
-
   private ensureAccessRulesTables() {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS access_rules (
@@ -1091,15 +1015,8 @@ export class CollabStore {
   ) {
     const workspaceId = this.activeWorkspaceId()
     if (!workspaceId) throw new CollabError('没有工作区', 400)
-    const normalizedView = viewId.trim()
-    const targetResource = normalizedView
-      ? {
-          type: 'record' as const,
-          workspaceId,
-          collection: '/views',
-          recordId: this.ensureViewPolicy(workspaceId, collection, normalizedView, actorId, now),
-        }
-      : { type: 'record' as const, workspaceId, ...this.recordKey(collection, recordId) }
+    if (viewId.trim()) throw new CollabError('视图不支持独立访客邀请，请使用访问规则分享', 400)
+    const targetResource = { type: 'record' as const, workspaceId, ...this.recordKey(collection, recordId) }
     const decision = this.authorization.authorize(
       { type: 'account', accountId: actorId, workspaceId },
       'resource:manage-permissions',
@@ -1113,8 +1030,8 @@ export class CollabStore {
       workspaceId,
       kind: 'guest' as const,
       collection,
-      recordId: normalizedView ? '' : recordId,
-      viewId: normalizedView,
+      recordId,
+      viewId: '',
       role: resourceRole,
       expiresAt: now + Math.max(1, Math.min(24 * 30, expiresInHours)) * 60 * 60 * 1000,
     }
@@ -1130,8 +1047,8 @@ export class CollabStore {
         tokenHash(raw),
         workspaceId,
         collection,
-        normalizedView ? '' : recordId,
-        normalizedView,
+        recordId,
+        '',
         resourceRole,
         invite.expiresAt,
         actorId,
@@ -1168,10 +1085,8 @@ export class CollabStore {
            VALUES (?, ?, ?, ?, ?, ?)`,
         )
         .run(sessionId, accountId, invite.workspace_id, invite.expires_at, now, now)
-      const grantCollection = invite.view_id ? '/views' : invite.collection
-      const grantRecordId = invite.view_id
-        ? this.ensureViewPolicy(invite.workspace_id, invite.collection, invite.view_id, invite.created_by, now)
-        : invite.record_id
+      const grantCollection = invite.collection
+      const grantRecordId = invite.record_id
       this.db
         .prepare(
           `INSERT INTO record_grants
@@ -2508,93 +2423,6 @@ export class CollabStore {
       detail: `移除了协作者权限（${subjectType}）`,
     })
     return this.accessRows(workspaceId, collection, recordId)
-  }
-
-  viewAccess(actorId: string, collection: string, viewId: string) {
-    const workspaceId = this.activeWorkspaceId()
-    if (!workspaceId) throw new CollabError('没有工作区', 400)
-    const normalizedView = viewId.trim()
-    if (!normalizedView) throw new CollabError('视图不能为空', 400)
-    const recordId = this.ensureViewPolicy(workspaceId, collection, normalizedView, actorId)
-    return this.recordAccess(actorId, '/views', recordId)
-  }
-
-  shareViewWithEmail(
-    actorId: string,
-    collection: string,
-    viewId: string,
-    email: string,
-    role: ResourceRole = 'editor',
-    collaboratorKind: 'internal' | 'external' = 'external',
-    now = Date.now(),
-  ) {
-    const workspaceId = this.activeWorkspaceId()
-    if (!workspaceId) throw new CollabError('没有工作区', 400)
-    const normalizedView = viewId.trim()
-    if (!normalizedView) throw new CollabError('视图不能为空', 400)
-    if (role === 'owner') throw new CollabError('视图授权不能授予所有者角色', 403)
-    const recordId = this.ensureViewPolicy(workspaceId, collection, normalizedView, actorId, now)
-    return this.shareWithEmail(actorId, '/views', recordId, email, role, collaboratorKind, now)
-  }
-
-  grantViewGroup(
-    actorId: string,
-    collection: string,
-    viewId: string,
-    groupId: string,
-    role: ResourceRole,
-    now = Date.now(),
-  ) {
-    const workspaceId = this.activeWorkspaceId()
-    if (!workspaceId) throw new CollabError('没有工作区', 400)
-    const normalizedView = viewId.trim()
-    if (!normalizedView) throw new CollabError('视图不能为空', 400)
-    if (role === 'owner') throw new CollabError('视图授权不能授予所有者角色', 403)
-    const recordId = this.ensureViewPolicy(workspaceId, collection, normalizedView, actorId, now)
-    return this.grantGroup(actorId, '/views', recordId, groupId, role)
-  }
-
-  revokeViewGrant(
-    actorId: string,
-    collection: string,
-    viewId: string,
-    subjectType: 'account' | 'group',
-    subjectId: string,
-  ) {
-    const workspaceId = this.activeWorkspaceId()
-    if (!workspaceId) throw new CollabError('没有工作区', 400)
-    const normalizedView = viewId.trim()
-    if (!normalizedView) throw new CollabError('视图不能为空', 400)
-    const recordId = this.ensureViewPolicy(workspaceId, collection, normalizedView, actorId)
-    return this.revokeRecordGrant(actorId, '/views', recordId, subjectType, subjectId)
-  }
-
-  /** 删除视图时级联清理该视图在 `/views` 下的策略与授权。 */
-  cleanupViewReferences(workspaceId: string, collection: string, viewId: string) {
-    if (!workspaceId || !collection || !viewId) return
-    let changed = false
-    const recordId = this.viewRecordId(collection, viewId)
-    try {
-      const deletedViewRecordGrants = this.db
-        .prepare(`DELETE FROM record_grants WHERE workspace_id = ? AND collection = '/views' AND record_id = ?`)
-        .run(workspaceId, recordId)
-      const deletedPolicy = this.db
-        .prepare(`DELETE FROM resource_policies WHERE workspace_id = ? AND collection = '/views' AND record_id = ?`)
-        .run(workspaceId, recordId)
-      const deletedOwner = this.db
-        .prepare(`DELETE FROM record_owners WHERE workspace_id = ? AND collection = '/views' AND record_id = ?`)
-        .run(workspaceId, recordId)
-      if (
-        Number(deletedViewRecordGrants.changes) > 0 ||
-        Number(deletedPolicy.changes) > 0 ||
-        Number(deletedOwner.changes) > 0
-      ) {
-        changed = true
-      }
-    } catch {
-      /* 兼容老库无相关表 */
-    }
-    if (changed) this.authorization.invalidateAll()
   }
 
   collectionOwnership(workspaceId: string, collection: string) {

@@ -1470,12 +1470,9 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       return
     }
     const collection = String(route.query.get('collection') ?? '')
-    const viewId = String(route.query.get('viewId') ?? '')
     route.send(
       200,
-      viewId
-        ? account.store.viewAccess(me.id, collection, viewId)
-        : account.store.recordAccess(me.id, collection, String(route.query.get('recordId') ?? '')),
+      account.store.recordAccess(me.id, collection, String(route.query.get('recordId') ?? '')),
     )
   })
 
@@ -1502,20 +1499,15 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     }
     const collection = String(body.collection ?? '')
     const recordId = String(body.recordId ?? '')
-    const viewId = String(body.viewId ?? '')
     const role: ResourceRole =
       body.role === 'viewer' || body.role === 'commenter' || body.role === 'manager' || body.role === 'owner'
         ? body.role
         : 'editor'
     const kind = body.collaboratorKind === 'internal' ? 'internal' : 'external'
-    const result = viewId
-      ? body.groupId
-        ? account.store.grantViewGroup(me.id, collection, viewId, String(body.groupId), role)
-        : account.store.shareViewWithEmail(me.id, collection, viewId, String(body.email ?? ''), role, kind)
-      : body.groupId
+    const result = body.groupId
       ? account.store.grantGroup(me.id, collection, recordId, String(body.groupId), role)
       : account.store.shareWithEmail(me.id, collection, recordId, String(body.email ?? ''), role, kind)
-    broadcastAccessChange(activeWorkspace, viewId ? 'views' : 'records', collection)
+    broadcastAccessChange(activeWorkspace, 'records', collection)
     route.send(200, result)
   })
 
@@ -1551,24 +1543,15 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       grantedBy?: string
     }
     const collection = String(body.collection ?? '')
-    const viewId = String(body.viewId ?? '')
     const subjectType = body.subjectType === 'group' ? 'group' : 'account'
-    const result = viewId
-      ? account.store.revokeViewGrant(
-          me.id,
-          collection,
-          viewId,
-          subjectType,
-          String(body.subjectId ?? ''),
-        )
-      : account.store.revokeRecordGrant(
-          me.id,
-          collection,
-          String(body.recordId ?? ''),
-          subjectType,
-          String(body.subjectId ?? ''),
-        )
-    broadcastAccessChange(activeWorkspace, viewId ? 'views' : 'records', collection)
+    const result = account.store.revokeRecordGrant(
+      me.id,
+      collection,
+      String(body.recordId ?? ''),
+      subjectType,
+      String(body.subjectId ?? ''),
+    )
+    broadcastAccessChange(activeWorkspace, 'records', collection)
     route.send(200, result)
   })
 
