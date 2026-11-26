@@ -20,7 +20,7 @@ import { FSDB_CHANGE_EVENT, parseFsdbChange, type CollectionInfo, type Collectio
 import { BoundedMap } from './bounded-map.ts'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
 import { groupField, groupRecords, parentFieldKey, treeChildren } from './fields.ts'
-import { builtinAllViewId, builtinOwnerViewId, builtinScopeViewId, isReadOnlyViewId, viewDomainOf, type DataScope } from '../catalog-views.ts'
+import { builtinAllViewId, builtinOwnerViewId, builtinScopeViewId, isBuiltinAllViewId, isNonPersonalView, isReadOnlyViewId, viewDomainOf, type DataScope } from '../catalog-views.ts'
 import { tableModeFor } from '../paths.ts'
 import { dataSidebarKind, isRecordTreeCollection, sortDataCollections } from './database-path.ts'
 import { rememberInspectorWorkingView } from './inspector-db-route.ts'
@@ -1062,13 +1062,33 @@ export const DataSidebar = memo(function DataSidebar({
                       { scope: 'personal', label: '个人', icon: UserIcon },
                       { scope: 'shared', label: '共享', icon: ShareIcon },
                     ]
+                const pickConcreteViewId = (targetOwnerTable: string, fallbackId: string, fallbackScope?: DataScope) => {
+                  const matches = listed.filter(
+                    (v) =>
+                      !isBuiltinAllViewId(v.id) &&
+                      !v.builtin &&
+                      (v.ownerTable === targetOwnerTable || (!v.ownerTable && fallbackScope && viewDomainOf(v) === fallbackScope)),
+                  )
+                  const preferred = matches.find((v) => isNonPersonalView(v)) ?? matches[0]
+                  return preferred ? preferred.id : fallbackId
+                }
                 return domains.map((domain) => {
                   const scopeViewId = builtinScopeViewId(domain.scope, allId)
+                  const targetViewId =
+                    domain.scope === 'workspace'
+                      ? pickConcreteViewId('workspace', scopeViewId, 'workspace')
+                      : domain.scope === 'personal' && myAccountId
+                        ? pickConcreteViewId(`account:${myAccountId}`, scopeViewId, 'personal')
+                        : scopeViewId
                   const sharedOwners = domain.scope === 'shared' ? (sharedOwnersByPath[table.path] ?? []) : []
                   const ownerRowActive =
                     domain.scope === 'shared' &&
                     table.path === litPath &&
-                    sharedOwners.some((owner) => litViewId === builtinOwnerViewId(owner.accountId, table.path))
+                    sharedOwners.some(
+                      (owner) =>
+                        litViewId === builtinOwnerViewId(owner.accountId, table.path) ||
+                        listed.some((v) => v.id === litViewId && v.ownerTable === `account:${owner.accountId}`),
+                    )
                   const domainActive = table.path === litPath && activeTableDomain === domain.scope && !ownerRowActive
                   const Icon = domain.icon
                   return (
@@ -1084,7 +1104,7 @@ export const DataSidebar = memo(function DataSidebar({
                             <button
                               type="button"
                               className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
-                              onClick={() => openView(table.path, scopeViewId)}
+                              onClick={() => openView(table.path, targetViewId)}
                             >
                               {domain.label}
                             </button>
@@ -1095,10 +1115,14 @@ export const DataSidebar = memo(function DataSidebar({
                         <div className="min-w-0 pl-4" data-testid={`sidebar-shared-owners-${table.path}`}>
                           {sharedOwners.map((owner) => {
                             const ownerViewId = builtinOwnerViewId(owner.accountId, table.path)
+                            const ownerTargetViewId = pickConcreteViewId(`account:${owner.accountId}`, ownerViewId)
                             const member = membersById.get(owner.accountId)
                             const displayName = member?.name?.trim() || owner.name
                             const avatar = member?.avatar?.trim() || ''
-                            const active = table.path === litPath && litViewId === ownerViewId
+                            const active =
+                              table.path === litPath &&
+                              (litViewId === ownerViewId ||
+                                listed.some((v) => v.id === litViewId && v.ownerTable === `account:${owner.accountId}`))
                             return (
                               <div key={owner.accountId} className="min-w-0" data-testid={`sidebar-shared-owner-${owner.accountId}`}>
                                 <SidebarRow
@@ -1117,7 +1141,7 @@ export const DataSidebar = memo(function DataSidebar({
                                         type="button"
                                         className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
                                         title={`${displayName} 共享给我的${name}`}
-                                        onClick={() => openView(table.path, ownerViewId)}
+                                        onClick={() => openView(table.path, ownerTargetViewId)}
                                       >
                                         {displayName}
                                       </button>

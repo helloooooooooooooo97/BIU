@@ -199,6 +199,7 @@ import { markPaintedListReady, rememberPreviewTotalForView, resetPaintedListRead
 import { publishDataSidebar, releaseDataSidebar, type DataSidebarLive } from './data-sidebar-host.ts'
 import {
   builtinAllView,
+  builtinOwnerViewId,
   builtinScopeView,
   catalogLockFilters,
   displayNameForView,
@@ -648,10 +649,26 @@ export function CollectionBrowser({
   const [routeViewReady, setRouteViewReady] = useState(() => !routeViewNeedsFetch(collectionPath, routeViewId))
   const routeViewReadyRef = useRef(routeViewReady)
   routeViewReadyRef.current = routeViewReady
+  const isKPlus1Cloud = !sheet && !localData && tableModeFor(collectionPath) === 'k-plus-1'
+  const [viewerAccountId, setViewerAccountId] = useState('')
+  useEffect(() => {
+    if (!isKPlus1Cloud) return
+    let alive = true
+    void readJson<{ id?: string; account?: { id?: string } | null }>('/api/account/me')
+      .then((data) => {
+        if (!alive) return
+        const id = String(data?.id ?? data?.account?.id ?? '').trim()
+        if (id) setViewerAccountId(id)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [isKPlus1Cloud])
   const catalogLocks = useMemo(() => {
     if (sheet) return lockedFilters
-    return { ...catalogLockFilters(activeViewId, views), ...lockedFilters }
-  }, [activeViewId, lockedFilters, sheet, views])
+    return { ...catalogLockFilters(activeViewId, views, viewerAccountId), ...lockedFilters }
+  }, [activeViewId, lockedFilters, sheet, viewerAccountId, views])
   const queryFilters = useMemo(
     () => encodeListFilter(catalogLocks, filterTree),
     [catalogLocks, filterTree],
@@ -2475,39 +2492,76 @@ export function CollectionBrowser({
     }
     return fetchedOwnerName
   }, [fetchedOwnerName, items, parsedOwnerView])
+  const activeViewRaw = views.find((view) => view.id === activeViewId)
+  const activeSharedOwnerAccountId = useMemo(() => {
+    if (parsedOwnerView?.accountId) return parsedOwnerView.accountId
+    const ot = activeViewRaw?.ownerTable?.trim()
+    if (ot && ot.startsWith('account:')) {
+      const ownerAcc = ot.slice('account:'.length).trim()
+      if ((viewerAccountId && ownerAcc && ownerAcc !== viewerAccountId) || activeViewRaw?.filters?.$ownerTable === ot) {
+        return ownerAcc
+      }
+    }
+    return null
+  }, [activeViewRaw?.filters?.$ownerTable, activeViewRaw?.ownerTable, parsedOwnerView?.accountId, viewerAccountId])
   const activeView =
-    views.find((view) => view.id === activeViewId) ??
+    activeViewRaw ??
     (activeViewId
       ? stubBuiltinOwnerView(activeViewId, ownerDisplayName, { path: collectionPath, label: title }) ??
         stubBuiltinScopeView(activeViewId, views) ??
         undefined
       : undefined)
-  const isKPlus1Cloud = !sheet && !localData && tableModeFor(collectionPath) === 'k-plus-1'
-  const activeDomain: ViewDomain = activeView ? viewDomainOf(activeView) : (routeScope ?? 'all')
+  const activeDomain: ViewDomain = activeSharedOwnerAccountId
+    ? 'shared'
+    : activeView
+      ? viewDomainOf(activeView)
+      : (routeScope ?? 'all')
+  const activeOwnerTable = useMemo(() => {
+    if (activeSharedOwnerAccountId) return `account:${activeSharedOwnerAccountId}`
+    if (activeDomain === 'workspace') return 'workspace'
+    if (activeDomain === 'personal') return viewerAccountId ? `account:${viewerAccountId}` : undefined
+    return 'all'
+  }, [activeDomain, activeSharedOwnerAccountId, viewerAccountId])
+  const effectiveRouteScope: DataScope | null = activeSharedOwnerAccountId
+    ? 'shared'
+    : (routeScope ?? (activeDomain === 'all' ? null : activeDomain))
   const domainViews = useMemo(() => {
     if (!isKPlus1Cloud) return views
-    if (parsedOwnerView && activeViewId) {
-      const targetOwnerTable = `account:${parsedOwnerView.accountId}`
-      const ownerBuiltin = stubBuiltinOwnerView(activeViewId, ownerDisplayName, { path: collectionPath, label: title })!
-      const ownerPublicViews = views.filter(
-        (view) =>
-          !isBuiltinAllViewId(view.id) &&
-          !view.builtin &&
-          view.ownerTable === targetOwnerTable &&
-          view.protection !== 'personal',
+    if (activeSharedOwnerAccountId) {
+      const targetOwnerTable = `account:${activeSharedOwnerAccountId}`
+      const ownerRealViews = views.filter(
+        (view) => !isBuiltinAllViewId(view.id) && !view.builtin && view.ownerTable === targetOwnerTable,
       )
-      return [ownerBuiltin, ...ownerPublicViews]
+      if (ownerRealViews.length > 0) return ownerRealViews
+      const fallbackId = parsedOwnerView && activeViewId ? activeViewId : builtinOwnerViewId(activeSharedOwnerAccountId, collectionPath)
+      const ownerStub = stubBuiltinOwnerView(fallbackId, ownerDisplayName, { path: collectionPath, label: title })
+      return ownerStub ? [ownerStub] : []
     }
     if (activeDomain === 'all') {
       return views.filter((view) => viewDomainOf(view) === 'all')
     }
     const baseAll = views.find((view) => isBuiltinAllViewId(view.id)) ?? builtinAllView({ path: collectionPath, label: title })
-    const scopedBuiltin = builtinScopeView(baseAll, activeDomain)
-    const scopedCustom = views.filter(
-      (view) => !isBuiltinAllViewId(view.id) && !view.builtin && viewDomainOf(view) === activeDomain,
+    if (activeDomain === 'shared') {
+      const sharedCustom = views.filter(
+        (view) => !isBuiltinAllViewId(view.id) && !view.builtin && viewDomainOf(view) === 'shared' && (!view.ownerTable || view.ownerTable === 'all'),
+      )
+      return [builtinScopeView(baseAll, 'shared'), ...sharedCustom]
+    }
+    if (activeDomain === 'workspace') {
+      const wsViews = views.filter(
+        (view) => !isBuiltinAllViewId(view.id) && !view.builtin && (view.ownerTable === 'workspace' || (!view.ownerTable && viewDomainOf(view) === 'workspace')),
+      )
+      return wsViews.length > 0 ? wsViews : [builtinScopeView(baseAll, 'workspace')]
+    }
+    // personal 具体个人表
+    const myViews = views.filter(
+      (view) =>
+        !isBuiltinAllViewId(view.id) &&
+        !view.builtin &&
+        (viewerAccountId ? view.ownerTable === `account:${viewerAccountId}` : viewDomainOf(view) === 'personal'),
     )
-    return [scopedBuiltin, ...scopedCustom]
-  }, [activeDomain, activeViewId, collectionPath, isKPlus1Cloud, ownerDisplayName, parsedOwnerView, title, views])
+    return myViews.length > 0 ? myViews : [builtinScopeView(baseAll, 'personal')]
+  }, [activeDomain, activeSharedOwnerAccountId, activeViewId, collectionPath, isKPlus1Cloud, ownerDisplayName, parsedOwnerView, title, viewerAccountId, views])
   const sandboxViews = useMemo(() => normalizeTableSandboxViews(activeView?.sandboxViews) ?? [], [activeView?.sandboxViews])
   const activeSandboxView = useMemo(() => sandboxViews.find((item) => item.id === mode), [mode, sandboxViews])
   const sortCustom = isCustomSorts(
@@ -2829,7 +2883,8 @@ export function CollectionBrowser({
     sheet,
     collectionPath,
     title,
-    routeScope,
+    routeScope: effectiveRouteScope,
+    activeOwnerTable,
     catalogLocks,
     schemaDefaultKeys,
     views,
@@ -3692,8 +3747,14 @@ export function CollectionBrowser({
     setFilterTree(next)
     if (!countFilterRules(next)) setFilters({})
     // Persist user edits immediately so a refresh cannot restore the old tree
-    // during the general view-save debounce.
-    if ((!sheet || hasExternalViews) && activeViewId) patchActiveView({ filterTree: next, filters: {} })
+    // during the general view-save debounce. Preserve $scope / $ownerTable locks.
+    if ((!sheet || hasExternalViews) && activeViewId) {
+      const current = viewsRef.current.find((view) => view.id === activeViewId)
+      const preservedLocks: Record<string, string> = {}
+      if (current?.filters?.$scope) preservedLocks.$scope = current.filters.$scope
+      if (current?.filters?.$ownerTable) preservedLocks.$ownerTable = current.filters.$ownerTable
+      patchActiveView({ filterTree: next, filters: preservedLocks })
+    }
   }
 
   function persistActiveViewNow() {
@@ -3703,7 +3764,10 @@ export function CollectionBrowser({
     const current = viewsRef.current.find((view) => view.id === activeViewId)
     if (!current) return
     const liveTree = !countFilterRules(filterTree) ? undefined : filterTree
-    const liveFilters = liveTree ? filters : {}
+    const preservedLocks: Record<string, string> = {}
+    if (current.filters?.$scope) preservedLocks.$scope = current.filters.$scope
+    if (current.filters?.$ownerTable) preservedLocks.$ownerTable = current.filters.$ownerTable
+    const liveFilters = liveTree ? { ...preservedLocks, ...filters } : preservedLocks
     const next = normalizeSavedView({
       ...current,
       mode,

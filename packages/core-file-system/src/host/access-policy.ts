@@ -452,6 +452,10 @@ export class DatabaseAccessPolicy {
     rows: T[],
     action: PermissionAction = 'resource:read',
   ) {
+    // /views 行已由 SavedViewsStore.rows() 按 resolveViewDecision 完成视图级可见性判定，不再按普通数据表记录二次拦截
+    if (collection === '/views' && (action === 'resource:read' || action === 'resource:list')) {
+      return rows
+    }
     const authorization = this.host.authorization()
     const actor = authorization?.currentActor()
     if (authorization && actor) {
@@ -566,9 +570,7 @@ export class DatabaseAccessPolicy {
     }
     if (ownerTable && ownerTable.startsWith('account:')) {
       if (ownerTable === myTable) {
-        return isPublicShared
-          ? { personal: false, workspace: false, shared: true }
-          : { personal: true, workspace: false, shared: false }
+        return { personal: true, workspace: false, shared: isPublicShared }
       }
       return { personal: false, workspace: false, shared: true }
     }

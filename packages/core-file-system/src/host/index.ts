@@ -2619,6 +2619,12 @@ export function apply(ctx: Context) {
         accountId: string,
         workspaceId: string,
       ) => Array<{ collection: string; record_id: string }>
+      hasSharedRecordsFromOwner?: (
+        workspaceId: string,
+        collection: string,
+        ownerAccountId: string,
+        actorId: string,
+      ) => boolean
       workspaceOwnerId?: (workspaceId: string) => string | null
     }
   } | undefined
@@ -2650,7 +2656,7 @@ export function apply(ctx: Context) {
 
     const isBuiltin = Boolean(view.builtin)
 
-    // 2. 其他内置视图：空间内部成员默认只读可见，仅空间 owner 可修改/删除
+    // 2. 系统/索引内置视图（如成员表、组件表）：空间内部成员默认只读可见，仅空间 owner 可修改/删除
     if (isBuiltin) {
       if (!isInternal) return { allowed: false, effectiveRole: 'viewer' }
       const effectiveRole = isWsOwner ? 'owner' : 'viewer'
@@ -2658,37 +2664,58 @@ export function apply(ctx: Context) {
       return { allowed: isWsOwner, effectiveRole }
     }
 
-    // 2.5 个人表视图（ownerTable === 'account:<id>'）：严格归属该个人表拥有者，不对其他成员或管理员暴露
-    if (view.ownerTable?.startsWith('account:')) {
-      const isPersonalOwner = view.ownerTable === `account:${accountId}` || isCreator
-      return isPersonalOwner
-        ? { allowed: true, effectiveRole: 'owner' }
-        : { allowed: false, effectiveRole: 'viewer' }
-    }
-
     const protection =
       view.protection === 'public' || view.protection === 'locked' || view.protection === 'personal'
         ? view.protection
         : view.scope === 'personal'
           ? 'personal'
-          : 'locked'
+          : 'public'
 
-    // 2. 个人视图（personal）：仅创建者本人可见、可改、可删（彻底取消视图级分享 ACL）
+    // 3. 个人视图（personal）：仅创建者本人可见、可改、可删
     if (protection === 'personal') {
       return isCreator
         ? { allowed: true, effectiveRole: 'owner' }
         : { allowed: false, effectiveRole: 'viewer' }
     }
 
-    // 3. 公共视图（public）与锁定视图（locked）：对空间内部成员默认可见，外部协作者默认不可见
+    // 4. 个人表（ownerTable === 'account:<X>'）的 public / locked 视图：
+    //    - 表主人 X 拥有全部权限（owner）；
+    //    - 仅向「在当前集合被 X 共享了至少 1 条记录的协作者」可见（未获共享的成员与管理员均不可见）；
+    //    - locked 视图仅 X 可改/删，协作者只读（viewer）；public 视图协作者可编辑，仅 X/创建者可删。
+    if (view.ownerTable?.startsWith('account:')) {
+      const tableOwnerId = view.ownerTable.slice('account:'.length).trim()
+      if (tableOwnerId === accountId) {
+        return { allowed: true, effectiveRole: 'owner' }
+      }
+      const hasShared = Boolean(
+        tableOwnerId && account.store.hasSharedRecordsFromOwner?.(workspaceId, collection, tableOwnerId, accountId),
+      )
+      if (!hasShared) {
+        return { allowed: false, effectiveRole: 'viewer' }
+      }
+      if (protection === 'locked') {
+        return action === 'resource:read'
+          ? { allowed: true, effectiveRole: 'viewer' }
+          : { allowed: false, effectiveRole: 'viewer' }
+      }
+      const effectiveRole: 'owner' | 'editor' | 'viewer' = isCreator
+        ? 'owner'
+        : member.role === 'viewer'
+          ? 'viewer'
+          : 'editor'
+      if (action === 'resource:read') return { allowed: true, effectiveRole }
+      if (action === 'resource:update') return { allowed: effectiveRole !== 'viewer', effectiveRole }
+      return { allowed: isCreator, effectiveRole }
+    }
+
+    // 5. 空间表（ownerTable === 'workspace'）的 public / locked 视图：仅空间内部成员可见
     if (!isInternal) {
       return { allowed: false, effectiveRole: 'viewer' }
     }
-    const isOwnerTableWorkspace = !view.ownerTable || view.ownerTable === 'workspace'
     if (protection === 'public') {
       const effectiveRole: 'owner' | 'manager' | 'editor' | 'viewer' = isCreator
         ? 'owner'
-        : isWsAdmin && isOwnerTableWorkspace
+        : isWsAdmin
           ? 'manager'
           : member.role === 'viewer'
             ? 'viewer'
@@ -2698,8 +2725,8 @@ export function apply(ctx: Context) {
       return { allowed: effectiveRole === 'owner' || effectiveRole === 'manager', effectiveRole }
     }
 
-    // 锁定视图（locked）：所有内部成员可见，但仅创建者或空间管理员（对空间表视图）可修改/删除
-    const canManageLocked = isCreator || (isWsAdmin && isOwnerTableWorkspace)
+    // 空间表锁定视图（locked）：所有内部成员可见，仅创建者或空间管理员可修改/删除
+    const canManageLocked = isCreator || isWsAdmin
     const effectiveRole: 'owner' | 'manager' | 'editor' | 'viewer' = isCreator
       ? 'owner'
       : canManageLocked

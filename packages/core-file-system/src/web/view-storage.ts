@@ -363,7 +363,7 @@ function parseViewFilters(value: unknown): Record<string, string> {
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
     const out: Record<string, string> = {}
     for (const [key, item] of Object.entries(raw as Record<string, unknown>)) {
-      if (key.startsWith('$')) continue
+      if (key.startsWith('$') && key !== '$scope' && key !== '$ownerTable') continue
       out[key] = String(item)
     }
     return out
@@ -380,7 +380,7 @@ export function savedViewFromRecord(row: Record<string, unknown>): SavedView | n
   const filterTree = parseViewFilterTree(row.filterTree) ?? (looksLikeFilterTree(parseMaybeJson(row.filters)) ? normalizeFilterGroup(parseMaybeJson(row.filters)) : undefined)
   const scope = normalizeViewScope(row.scope)
   const ownerTable = typeof row.ownerTable === 'string' && row.ownerTable.trim() ? row.ownerTable.trim() : undefined
-  const protection = ownerTable === 'all' ? 'personal' : normalizeViewProtection(row.protection, scope)
+  const protection = normalizeViewProtection(row.protection, scope, ownerTable)
   return normalizeSavedView({
     id,
     name: String(row.title ?? id),

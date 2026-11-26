@@ -86,9 +86,12 @@ test('every registered table gets a builtin all-view even before the client sync
     { path: '/events', id: 'events', kind: 'collection', label: '事件', view: { moduleId: 'events', route: '/events', title: '事件' } },
   ])
   const rows = await spec.list()
-  assert.equal(rows.length, 2)
-  assert.equal(rows.find((row) => row.tablePath === '/agents')?.title, '全部代理')
-  assert.equal(rows.find((row) => row.tablePath === '/events')?.title, '全部事件')
+  // 每个 K+1 集合自动具备 1 个聚合视图（builtin-all）+ 1 个空间表公共视图（default:workspace:*）
+  assert.equal(rows.length, 4)
+  assert.equal(rows.find((row) => row.tablePath === '/agents' && row.ownerTable === 'all')?.title, '全部代理')
+  assert.equal(rows.find((row) => row.tablePath === '/events' && row.ownerTable === 'all')?.title, '全部事件')
+  assert.equal(rows.find((row) => row.tablePath === '/agents' && row.ownerTable === 'workspace')?.protection, 'public')
+  assert.equal(rows.find((row) => row.tablePath === '/events' && row.ownerTable === 'workspace')?.protection, 'public')
   assert.equal(rows.find((row) => row.tablePath === '/agents')?.tableIcon, 'sparkles')
 })
 
@@ -632,14 +635,53 @@ test('top-level cross-table views (ownerTable=all) are locked to personal protec
   assert.equal(store.viewsFor('/pages', 'bob').some((v) => v.id === 'v-all-agg'), false)
 })
 
-test('personal-table views auto-bind ownerTable=account:<id>, lock to personal protection, and stay isolated from others', () => {
-  const store = new SavedViewsStore().open(':memory:')
+test('personal-table views support 3 protection states for owner, force personal for non-owners, and enforce at-least-1 public view per concrete table', () => {
+  const file = join(mkdtempSync(join(tmpdir(), 'fsdb-views-kplus1-')), 'file-system.sqlite')
+  const store = new SavedViewsStore().open(file)
   store.setWorkspaceResolver(() => 'ws-1')
   store.setPolicyGuard({
     isLocked: () => false,
     canEditLocked: (_ws, acc) => acc === 'admin-1',
   })
 
+  // 1. 首次列出 /views 自动为空间表与当前用户个人表各生成 1 个普通公共视图（无 builtin 特殊态）
+  const tables = [
+    { path: '/pages', id: 'pages', kind: 'collection' as const, label: '页面', view: { moduleId: 'pages', route: '/pages', title: '页面' } },
+  ]
+  const aliceRows = store.rows(tables, 'alice')
+  const wsDefault = aliceRows.find((r) => r.ownerTable === 'workspace')
+  const myDefault = aliceRows.find((r) => r.ownerTable === 'account:alice')
+  assert.ok(wsDefault, '空间表应自动生成默认公共视图')
+  assert.equal(wsDefault?.protection, 'public')
+  assert.ok(myDefault, '个人表应自动生成默认公共视图')
+  assert.equal(myDefault?.protection, 'public')
+
+  // 2. 保底约束：不能删除具体表的最后一个公共/锁定视图，也不能将其切为个人视图
+  assert.throws(
+    () => store.applyPatch('/pages', { remove: [String(myDefault!.viewId)] }, 'alice'),
+    /至少保留一个公共视图/,
+  )
+  assert.throws(
+    () =>
+      store.applyPatch(
+        '/pages',
+        {
+          upsert: [
+            {
+              id: String(myDefault!.viewId),
+              name: String(myDefault!.title),
+              ownerTable: 'account:alice',
+              protection: 'personal',
+              scope: 'personal',
+            },
+          ],
+        },
+        'alice',
+      ),
+    /至少保留一个公共视图/,
+  )
+
+  // 3. 个人表支持三态（public / locked / personal），非表主人在他人个人表下新建强制 personal
   store.applyPatch(
     '/pages',
     {
@@ -652,11 +694,26 @@ test('personal-table views auto-bind ownerTable=account:<id>, lock to personal p
           filters: { $scope: 'personal' },
         },
         {
-          id: 'v-forged-owner',
-          name: '伪造归属视图',
+          id: 'v-my-locked',
+          name: '我的锁定视图',
+          ownerTable: 'account:alice',
+          scope: 'workspace',
+          protection: 'locked',
+        },
+        {
+          id: 'v-in-bob-table',
+          name: '在Bob表里建的私有视图',
           ownerTable: 'account:bob',
           scope: 'workspace',
           protection: 'public',
+        },
+        {
+          id: 'v-shared-agg',
+          name: '共享聚合视图',
+          ownerTable: 'all',
+          scope: 'personal',
+          protection: 'personal',
+          filters: { $scope: 'shared' },
         },
       ],
     },
@@ -669,12 +726,25 @@ test('personal-table views auto-bind ownerTable=account:<id>, lock to personal p
   assert.equal(mine?.scope, 'personal')
   assert.equal(mine?.protection, 'personal')
 
-  const forged = aliceViews.find((v) => v.id === 'v-forged-owner')
-  assert.equal(forged?.ownerTable, 'account:alice')
-  assert.equal(forged?.scope, 'personal')
-  assert.equal(forged?.protection, 'personal')
+  const locked = aliceViews.find((v) => v.id === 'v-my-locked')
+  assert.equal(locked?.ownerTable, 'account:alice')
+  assert.equal(locked?.protection, 'locked')
 
+  // 非表主人 alice 在 bob 个人表下新建视图，强制为 personal，且 bob 看不到 alice 的私有视图
+  const inBob = aliceViews.find((v) => v.id === 'v-in-bob-table')
+  assert.equal(inBob?.ownerTable, 'account:bob')
+  assert.equal(inBob?.protection, 'personal')
+  assert.equal(inBob?.scope, 'personal')
+  assert.equal(store.viewsFor('/pages', 'bob').some((v) => v.id === 'v-in-bob-table'), false)
   assert.equal(store.viewsFor('/pages', 'bob').some((v) => v.id === 'v-my-personal'), false)
   assert.equal(store.viewsFor('/pages', 'admin-1').some((v) => v.id === 'v-my-personal'), false)
-  assert.equal(store.viewsFor('/pages', 'bob').some((v) => v.id === 'v-forged-owner'), false)
+
+  // 4. 聚合视图（含共享聚合 filters.$scope='shared'）重启后完整持久化
+  const reopened = new SavedViewsStore().open(file)
+  reopened.setWorkspaceResolver(() => 'ws-1')
+  const reopenedAgg = reopened.viewsFor('/pages', 'alice').find((v) => v.id === 'v-shared-agg')
+  assert.equal(reopenedAgg?.ownerTable, 'all')
+  assert.equal(reopenedAgg?.protection, 'personal')
+  assert.equal(reopenedAgg?.filters?.$scope, 'shared')
+  assert.equal(reopened.viewsFor('/pages', 'bob').some((v) => v.id === 'v-shared-agg'), false)
 })

@@ -836,4 +836,35 @@ test('catalogLockFilters and viewsForScope enforce strict K+1 view-to-table bind
   assert.equal(ownerStub?.name, 'wenxin的页面')
   assert.equal(viewDomainOf(ownerStub), 'shared')
   assert.deepEqual(catalogLockFilters(ownerId, []), { $scope: 'shared', $ownerTable: 'account:acc_wenxin' })
+
+  // Shared aggregation view preserves filters.$scope='shared' across hydration and resolves to 'shared' domain
+  const sharedAgg = savedViewFromRecord({
+    viewId: 'v-shared-agg',
+    title: '共享聚合视图',
+    ownerTable: 'all',
+    scope: 'personal',
+    protection: 'personal',
+    filters: JSON.stringify({ $scope: 'shared', status: 'open' }),
+  })
+  assert.equal(sharedAgg?.ownerTable, 'all')
+  assert.equal(sharedAgg?.protection, 'personal')
+  assert.equal(sharedAgg?.filters?.$scope, 'shared')
+  assert.equal(sharedAgg?.filters?.status, 'open')
+  assert.equal(viewDomainOf(sharedAgg), 'shared')
+
+  // Real view belonging to another user's personal table locks $scope='shared' + $ownerTable when viewer != owner
+  const bobPublicView = {
+    id: 'default:account:bob:/pages',
+    name: '私人页面',
+    ownerTable: 'account:bob',
+    protection: 'public' as const,
+    filters: {},
+  }
+  assert.deepEqual(catalogLockFilters(bobPublicView.id, [bobPublicView], 'alice'), {
+    $scope: 'shared',
+    $ownerTable: 'account:bob',
+  })
+  assert.deepEqual(catalogLockFilters(bobPublicView.id, [bobPublicView], 'bob'), {
+    $scope: 'personal',
+  })
 })

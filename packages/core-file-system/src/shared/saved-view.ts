@@ -14,11 +14,15 @@ export type ViewProtection = 'public' | 'locked' | 'personal'
 
 export type ViewRole = 'owner' | 'manager' | 'editor' | 'commenter' | 'viewer'
 
-export function normalizeViewProtection(value: unknown, fallbackScope?: ViewScope): ViewProtection | undefined {
+export function normalizeViewProtection(
+  value: unknown,
+  fallbackScope?: ViewScope,
+  ownerTable?: string,
+): ViewProtection {
+  if (ownerTable === 'all') return 'personal'
   if (value === 'public' || value === 'locked' || value === 'personal') return value
   if (fallbackScope === 'personal') return 'personal'
-  if (fallbackScope === 'workspace') return 'locked'
-  return undefined
+  return 'public'
 }
 
 export function normalizeViewRole(value: unknown): ViewRole | undefined {
@@ -256,14 +260,14 @@ export function extractViewCreatorId(raw: unknown): string | undefined {
 export function normalizeSavedView(view: SavedView): SavedView {
   const sorts = normalizeSorts(view.sorts, view.sortField || 'title', view.sortDir === 'desc' ? 'desc' : 'asc')
   const scope = normalizeViewScope(view.scope)
-  const protection = normalizeViewProtection(view.protection, scope)
   const ownerTable = typeof view.ownerTable === 'string' && view.ownerTable.trim() ? view.ownerTable.trim() : undefined
+  const protection = normalizeViewProtection(view.protection, scope, ownerTable)
   const createdBy = extractViewCreatorId(view.createdBy)
   const viewRole = normalizeViewRole(view.viewRole)
   return {
     ...view,
     ...(scope ? { scope } : { scope: undefined }),
-    ...(protection ? { protection } : { protection: undefined }),
+    protection,
     ...(ownerTable ? { ownerTable } : { ownerTable: undefined }),
     ...(createdBy ? { createdBy } : { createdBy: undefined }),
     ...(viewRole ? { viewRole } : { viewRole: undefined }),

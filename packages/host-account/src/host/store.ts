@@ -2532,6 +2532,82 @@ export class CollabStore {
       .map((row) => ({ collection: row.collection, record_id: row.record_id }))
   }
 
+  /**
+   * 判定 actorId 在指定集合下是否被 ownerAccountId 的个人表（account:<ownerAccountId>）共享了至少一条记录
+   *（通过 record_grants 直接/成员组授权，或通过该个人表启用的 access_rules）。
+   * 用于 K+1 个人表 public/locked 视图的可见性边界：未获共享的成员看不到他人个人表视图。
+   */
+  hasSharedRecordsFromOwner(
+    workspaceId: string,
+    collection: string,
+    ownerAccountId: string,
+    actorId: string,
+  ): boolean {
+    if (!workspaceId || !collection || !ownerAccountId || !actorId) return false
+    if (ownerAccountId === actorId) return true
+    const ownerTable = `account:${ownerAccountId}`
+    try {
+      const directHit = this.db
+        .prepare(
+          `SELECT 1 AS hit
+           FROM record_grants g
+           JOIN resource_policies p
+             ON p.workspace_id = g.workspace_id
+            AND p.collection = g.collection
+            AND p.record_id = g.record_id
+           WHERE g.workspace_id = ?
+             AND g.collection = ?
+             AND (p.owner_table = ? OR (COALESCE(p.owner_table, '') = '' AND p.access_mode != 'members' AND p.owner_account_id = ?))
+             AND (
+               (g.subject_type = 'account' AND g.subject_id = ?)
+               OR (g.subject_type = 'group' AND g.subject_id IN (
+                 SELECT gm.group_id
+                 FROM workspace_group_members gm
+                 JOIN workspace_groups wg ON wg.id = gm.group_id
+                 WHERE wg.workspace_id = ? AND gm.account_id = ?
+               ))
+             )
+           LIMIT 1`,
+        )
+        .get(workspaceId, collection, ownerTable, ownerAccountId, actorId, workspaceId, actorId)
+      if (directHit) return true
+    } catch {
+      /* ignore if schema not yet migrated */
+    }
+    try {
+      const member = this.db
+        .prepare('SELECT member_kind FROM workspace_members WHERE workspace_id = ? AND account_id = ?')
+        .get(workspaceId, actorId) as { member_kind?: string } | undefined
+      const isInternal = member?.member_kind === 'member'
+      const ruleHit = this.db
+        .prepare(
+          `SELECT 1 AS hit
+           FROM access_rules r
+           JOIN access_rule_grants g ON g.rule_id = r.id
+           WHERE r.workspace_id = ?
+             AND r.collection = ?
+             AND r.enabled = 1
+             AND (r.owner_table = ? OR (COALESCE(r.owner_table, '') = '' AND r.created_by = ?))
+             AND (
+               (g.subject_type = 'account' AND g.subject_id = ?)
+               OR (? = 1 AND g.subject_type = 'workspace' AND g.subject_id = ?)
+               OR (g.subject_type = 'group' AND g.subject_id IN (
+                 SELECT gm.group_id
+                 FROM workspace_group_members gm
+                 JOIN workspace_groups wg ON wg.id = gm.group_id
+                 WHERE wg.workspace_id = ? AND gm.account_id = ?
+               ))
+             )
+           LIMIT 1`,
+        )
+        .get(workspaceId, collection, ownerTable, ownerAccountId, actorId, isInternal ? 1 : 0, workspaceId, workspaceId, actorId)
+      if (ruleHit) return true
+    } catch {
+      /* ignore if schema not yet migrated */
+    }
+    return false
+  }
+
   private requireViewSharer(actorId: string, workspaceId: string, collection: string, viewId = '') {
     const row = this.db
       .prepare('SELECT role, member_kind FROM workspace_members WHERE workspace_id = ? AND account_id = ?')

@@ -424,7 +424,9 @@ export function registerDatabaseHttpRoutes(
       }
       const path = String(body?.path ?? '')
       const accountId = currentAccountId()
-      await db.requirePath(path, 'resource:update')
+      // 视图级写/删权限由 SavedViewsStore.applyPatch / replace 内部按 resolveViewDecision 精确判定，
+      // 此处仅校验调用方对目标集合具有读访问权，避免 viewer / 外部协作者无法持久化自己的个人聚合视图。
+      await db.requirePath(path, 'resource:read')
       const removals = (body.remove ?? []).map(String).filter(Boolean)
       if (body.replace === true || (body.upsert === undefined && body.remove === undefined)) {
         const next = Array.isArray(body.views) ? body.views : []
