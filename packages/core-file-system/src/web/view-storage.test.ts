@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { builtinAllView, builtinAllViewId, builtinCatalogViewId, builtinOwnerViewId, catalogLockFilters, parseBuiltinOwnerViewId, stubBuiltinOwnerView, viewDomainOf, viewsForScope } from '../catalog-views.ts'
+import { builtinAllView, builtinAllViewId, builtinCatalogViewId, catalogLockFilters, viewDomainOf } from '../catalog-views.ts'
 import { VIEWS_COLLECTION_PATH } from './database-path.ts'
 import {
   defaultViewId,
@@ -79,12 +79,13 @@ test('pickViewForRoute keeps builtin-block from the URL when the list is still o
   assert.equal(picked?.filters.blockKind, 'terminal')
 })
 
-test('tables default to the builtin 全部xx view', () => {
-  assert.equal(defaultViewId('/agents'), builtinAllViewId('/agents'))
+test('/data and system collections default to builtin 全部xx view while K+1 collections do not', () => {
+  assert.equal(defaultViewId('/data'), builtinAllViewId('/data'))
   assert.equal(defaultViewId(VIEWS_COLLECTION_PATH), builtinAllViewId(VIEWS_COLLECTION_PATH))
-  assert.equal(viewForPath('/agents')?.builtin, true)
-  assert.deepEqual(viewForPath('/agents')?.filters, {})
-  assert.equal(viewForPath('/pages', builtinAllViewId('/agents'))?.id, builtinAllViewId('/pages'))
+  assert.equal(viewForPath('/data')?.builtin, true)
+  assert.deepEqual(viewForPath('/data')?.filters, {})
+  assert.equal(defaultViewId('/agents'), '')
+  assert.equal(viewForPath('/agents'), null)
 })
 
 test('omitted builtin all view is not restored from the route', () => {
@@ -813,10 +814,6 @@ test('catalogLockFilters and viewsForScope enforce strict K+1 view-to-table bind
   // Top-level cross-table view never locks $scope
   assert.deepEqual(catalogLockFilters('v-all', listed), { status: 'open' })
 
-  // viewsForScope excludes top-level ownerTable='all' views from single-domain lists
-  assert.deepEqual(viewsForScope(listed, 'workspace').map((v) => v.id), ['v-ws'])
-  assert.deepEqual(viewsForScope(listed, 'personal').map((v) => v.id), ['v-personal'])
-
   // savedViewFromRecord preserves ownerTable='all' and forces personal protection
   const hydrated = savedViewFromRecord({
     viewId: 'v-all',
@@ -828,29 +825,6 @@ test('catalogLockFilters and viewsForScope enforce strict K+1 view-to-table bind
   assert.equal(hydrated?.ownerTable, 'all')
   assert.equal(hydrated?.protection, 'personal')
   assert.equal(hydrated?.scope, 'personal')
-
-  // builtin-owner view IDs resolve to shared domain and lock both $scope and $ownerTable
-  const ownerId = builtinOwnerViewId('acc_wenxin', '/pages')
-  assert.deepEqual(parseBuiltinOwnerViewId(ownerId), { accountId: 'acc_wenxin', collectionPath: '/pages' })
-  const ownerStub = stubBuiltinOwnerView(ownerId, 'wenxin', { path: '/pages', label: '页面' })
-  assert.equal(ownerStub?.name, 'wenxin的页面')
-  assert.equal(viewDomainOf(ownerStub), 'shared')
-  assert.deepEqual(catalogLockFilters(ownerId, []), { $scope: 'shared', $ownerTable: 'account:acc_wenxin' })
-
-  // Shared aggregation view preserves filters.$scope='shared' across hydration and resolves to 'shared' domain
-  const sharedAgg = savedViewFromRecord({
-    viewId: 'v-shared-agg',
-    title: '共享聚合视图',
-    ownerTable: 'all',
-    scope: 'personal',
-    protection: 'personal',
-    filters: JSON.stringify({ $scope: 'shared', status: 'open' }),
-  })
-  assert.equal(sharedAgg?.ownerTable, 'all')
-  assert.equal(sharedAgg?.protection, 'personal')
-  assert.equal(sharedAgg?.filters?.$scope, 'shared')
-  assert.equal(sharedAgg?.filters?.status, 'open')
-  assert.equal(viewDomainOf(sharedAgg), 'shared')
 
   // Real view belonging to another user's personal table locks $scope='shared' + $ownerTable when viewer != owner
   const bobPublicView = {
@@ -868,7 +842,7 @@ test('catalogLockFilters and viewsForScope enforce strict K+1 view-to-table bind
     $scope: 'personal',
   })
 
-  // pickViewForRoute upgrades fallback builtin-scope:workspace / builtin-scope:personal routes to real savable views
+  // pickViewForRoute on K+1 collection redirects legacy builtin-all / unknown routes to concrete workspace public view
   const wsReal: SavedView = {
     id: 'default:workspace:/pages',
     name: '空间页面',
@@ -893,6 +867,6 @@ test('catalogLockFilters and viewsForScope enforce strict K+1 view-to-table bind
     filters: {},
     columns: ['title'],
   }
-  assert.equal(pickViewForRoute([wsReal, myReal], '/pages', `builtin-scope:workspace:${encodeURIComponent(builtinAllViewId('/pages'))}`)?.id, wsReal.id)
-  assert.equal(pickViewForRoute([wsReal, myReal], '/pages', `builtin-scope:personal:${encodeURIComponent(builtinAllViewId('/pages'))}`)?.id, myReal.id)
+  assert.equal(pickViewForRoute([wsReal, myReal], '/pages', builtinAllViewId('/pages'))?.id, wsReal.id)
+  assert.equal(pickViewForRoute([wsReal, myReal], '/pages', myReal.id)?.id, myReal.id)
 })

@@ -1,7 +1,8 @@
 import { writeStorageString } from '@biu/biu-ui/client-storage'
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
 import { emitFsdbChange } from '@biu/type-file-system'
-import { isBuiltinAllViewId, isNonPersonalView, isReadOnlyViewId, viewsForScope, type DataScope } from '../catalog-views.ts'
+import { isBuiltinAllViewId, isNonPersonalView, isReadOnlyViewId, type DataScope } from '../catalog-views.ts'
+import { DATA_COLLECTION_PATH, normalizeCollectionPath } from '../paths.ts'
 import type { FilterGroup, SortRule } from '../query-logic.ts'
 import type { ViewMode } from './fields.ts'
 import { FSDB_CRUMB_LABELS_EVENT } from './fsdb-events.ts'
@@ -272,36 +273,34 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       return
     }
     const target = path || collectionPath
+    const isDataAgg = normalizeCollectionPath(target) === DATA_COLLECTION_PATH
     const explicitTopLevel = path !== undefined && scope === undefined
     const effectiveScope: DataScope | undefined =
       scope ?? (explicitTopLevel ? undefined : (target === collectionPath ? routeScope ?? undefined : undefined))
     const stored = loadViews(target)
     const allListed = listedViews(target, stored)
-    const listed = target === collectionPath
-      ? paintListedViews(target)
-      : effectiveScope
-        ? viewsForScope(allListed, effectiveScope)
-        : allListed
+    const listed = target === collectionPath ? paintListedViews(target) : allListed
     const isForeignSharedOwner = Boolean(
-      effectiveScope === 'shared' && activeOwnerTable && activeOwnerTable.startsWith('account:'),
+      !isDataAgg && effectiveScope === 'shared' && activeOwnerTable && activeOwnerTable.startsWith('account:'),
     )
-    const bindingPatch: Partial<SavedView> =
-      isForeignSharedOwner
+    const bindingPatch: Partial<SavedView> = isDataAgg
+      ? { scope: 'personal', protection: 'personal', ownerTable: 'all' }
+      : isForeignSharedOwner
         ? { scope: 'personal', protection: 'personal', ownerTable: activeOwnerTable }
-        : effectiveScope === 'workspace'
-          ? { scope: 'workspace', protection: 'public', ownerTable: 'workspace' }
-          : effectiveScope === 'personal'
-            ? {
-                scope: 'workspace',
-                protection: 'public',
-                ...(activeOwnerTable?.startsWith('account:') ? { ownerTable: activeOwnerTable } : {}),
-              }
-            : { scope: 'personal', protection: 'personal', ownerTable: 'all' }
-    const extraFilters: Record<string, string> = isForeignSharedOwner
-      ? { $scope: 'shared', $ownerTable: activeOwnerTable! }
-      : effectiveScope
-        ? { $scope: effectiveScope }
-        : {}
+        : effectiveScope === 'personal'
+          ? {
+              scope: 'workspace',
+              protection: 'public',
+              ...(activeOwnerTable?.startsWith('account:') ? { ownerTable: activeOwnerTable } : {}),
+            }
+          : { scope: 'workspace', protection: 'public', ownerTable: 'workspace' }
+    const extraFilters: Record<string, string> = isDataAgg
+      ? {}
+      : isForeignSharedOwner
+        ? { $scope: 'shared', $ownerTable: activeOwnerTable! }
+        : effectiveScope === 'personal'
+          ? { $scope: 'personal' }
+          : { $scope: 'workspace' }
     const view: SavedView = {
       ...makeEmptyView(
         listed,
@@ -346,21 +345,21 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
   }
 
   function copyView(source?: SavedView, overrides?: Partial<SavedView>) {
+    const isDataAgg = normalizeCollectionPath(collectionPath) === DATA_COLLECTION_PATH
     const isForeignSharedOwner = Boolean(
-      routeScope === 'shared' && activeOwnerTable && activeOwnerTable.startsWith('account:'),
+      !isDataAgg && routeScope === 'shared' && activeOwnerTable && activeOwnerTable.startsWith('account:'),
     )
-    const scopeBinding: Partial<SavedView> =
-      isForeignSharedOwner
+    const scopeBinding: Partial<SavedView> = isDataAgg
+      ? { scope: 'personal', protection: 'personal', ownerTable: 'all' }
+      : isForeignSharedOwner
         ? { scope: 'personal', protection: 'personal', ownerTable: activeOwnerTable }
-        : routeScope === 'workspace'
-          ? { scope: 'workspace', protection: 'public', ownerTable: 'workspace' }
-          : routeScope === 'personal'
-            ? {
-                scope: 'workspace',
-                protection: 'public',
-                ...(activeOwnerTable?.startsWith('account:') ? { ownerTable: activeOwnerTable } : {}),
-              }
-            : { scope: 'personal', protection: 'personal', ownerTable: 'all' }
+        : routeScope === 'personal'
+          ? {
+              scope: 'workspace',
+              protection: 'public',
+              ...(activeOwnerTable?.startsWith('account:') ? { ownerTable: activeOwnerTable } : {}),
+            }
+          : { scope: 'workspace', protection: 'public', ownerTable: 'workspace' }
     void commitView(
       source
         ? {

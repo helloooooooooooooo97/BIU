@@ -6,8 +6,6 @@ import {
   builtinBlockKindViewId,
   builtinCatalogViewId,
   builtinCatalogViews,
-  builtinScopeView,
-  builtinScopeViewId,
   builtinMemberViews,
   isBuiltinBlockKindViewId,
   isBuiltinCatalogViewId,
@@ -27,51 +25,30 @@ import {
   isBuiltinTagViewId,
   stampRecordId,
   stampRowOpenTarget,
-  stubBuiltinScopeView,
-  viewsForScope,
 } from './catalog-views.ts'
 
-test('scoped builtin views preserve their base view and lock data ownership', () => {
-  const base = builtinAllView({ path: '/pages', label: '页面' })
-  const scoped = builtinScopeView(base, 'workspace')
-  assert.equal(scoped.name, '空间页面')
-  assert.equal(scoped.id, builtinScopeViewId('workspace', base.id))
-  assert.deepEqual(scoped.filters, { $scope: 'workspace' })
-  assert.equal(isReadOnlyViewId(scoped.id), true)
-  assert.deepEqual(stubBuiltinScopeView(scoped.id)?.filters, { $scope: 'workspace' })
-  assert.deepEqual(catalogLockFilters(scoped.id), { $scope: 'workspace' })
-})
-
-test('personal and workspace scopes keep independent custom views', () => {
-  const base = builtinAllView({ path: '/pages', label: '页面' })
-  const views = [
-    base,
-    { ...base, id: 'legacy-personal', name: '旧私人视图', builtin: false, filters: {} },
-    { ...base, id: 'workspace-only', name: '空间视图', builtin: false, filters: { $scope: 'workspace' } },
-  ]
-  const personal = viewsForScope(views, 'personal')
-  const workspace = viewsForScope(views, 'workspace')
-  assert.equal(personal.some((view) => view.id === 'legacy-personal'), true)
-  assert.equal(personal.some((view) => view.id === 'workspace-only'), false)
-  assert.equal(workspace.some((view) => view.id === 'legacy-personal'), false)
-  assert.equal(workspace.some((view) => view.id === 'workspace-only'), true)
-  assert.deepEqual(personal.find((view) => view.id === 'legacy-personal')?.filters, { $scope: 'personal' })
-})
-
-test('overlay keeps stored seed edits and honors omitted ids', () => {
-  const table = { path: '/pages', label: '页面', view: { title: '页面' } }
-  const allId = builtinAllViewId('/pages')
-  const renamed = mergeTableViews(table, [
-    { id: allId, name: '我的页面', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] },
+test('overlay keeps stored seed edits on /data and strips builtin-all on K+1 collections', () => {
+  const dataTable = { path: '/data', label: '数据', view: { title: '数据' } }
+  const dataAllId = builtinAllViewId('/data')
+  const renamed = mergeTableViews(dataTable, [
+    { id: dataAllId, name: '我的数据', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] },
   ])
-  assert.equal(renamed[0]?.name, '我的页面')
+  assert.equal(renamed[0]?.name, '我的数据')
   const omitted = mergeTableViews(
-    table,
+    dataTable,
     [{ id: 'mine', name: '周报', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] }],
-    [allId],
+    [dataAllId],
   )
-  assert.equal(omitted.some((view) => view.id === allId), false)
+  assert.equal(omitted.some((view) => view.id === dataAllId), false)
   assert.equal(omitted.some((view) => view.id === 'mine'), true)
+
+  // K+1 业务集合不再注入 builtin-all 聚合视图
+  const pagesTable = { path: '/pages', label: '页面', view: { title: '页面' } }
+  const pagesMerged = mergeTableViews(pagesTable, [
+    { id: builtinAllViewId('/pages'), name: '旧聚合', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
+    { id: 'ws-default', name: '空间页面', ownerTable: 'workspace', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
+  ])
+  assert.deepEqual(pagesMerged.map((v) => v.id), ['ws-default'])
 })
 
 test('member directory exposes builtin audience views', () => {
@@ -118,24 +95,23 @@ test('builtin all view ids belong to one collection', () => {
   assert.equal(isBuiltinAllViewForCollection('mine', '/agents'), false)
 })
 
-test('every registered table gets a 全部xx seed view', () => {
-  const sessions = { id: 'sessions', path: '/agents', kind: 'collection' as const, label: '代理', view: { title: '代理' } }
-  const all = builtinAllView(sessions)
-  assert.equal(all.id, builtinAllViewId('/agents'))
-  assert.equal(all.name, '全部代理')
+test('/data gets a 全部数据 seed view while K+1 collections only keep concrete table views', () => {
+  const data = { id: 'data', path: '/data', kind: 'collection' as const, label: '数据', view: { title: '数据' } }
+  const all = builtinAllView(data)
+  assert.equal(all.id, builtinAllViewId('/data'))
+  assert.equal(all.name, '全部数据')
   assert.deepEqual(all.filters, {})
   assert.equal(all.builtin, true)
   assert.equal(all.sortField, 'updatedAt')
   assert.equal(all.sortDir, 'desc')
   assert.equal(all.tree, false)
-  const merged = mergeTableViews(sessions, [
-    { id: builtinAllViewId('/agents'), name: '假的', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
+  const merged = mergeTableViews(data, [
+    { id: builtinAllViewId('/data'), name: '自定义数据', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
     { id: 'mine', name: '置顶', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
   ])
   assert.equal(all.groupBy, 'shareScope')
-  assert.deepEqual(merged.slice(0, 1).map((view) => view.name), ['假的'])
-  assert.equal(merged.some((view) => view.name === '私人代理'), false)
-  assert.equal(merged.filter((view) => view.id === builtinAllViewId('/agents')).length, 1)
+  assert.deepEqual(merged.slice(0, 1).map((view) => view.name), ['自定义数据'])
+  assert.equal(merged.filter((view) => view.id === builtinAllViewId('/data')).length, 1)
   assert.equal(merged.some((view) => view.id === 'mine'), true)
   assert.equal(stubBuiltinAllView('builtin-all:/pages')?.name, '全部pages')
 })

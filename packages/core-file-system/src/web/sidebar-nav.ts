@@ -1,6 +1,6 @@
 /** 侧栏展开/收起与数据路由切换的纯逻辑，UI 和压测共用。 */
 import { parseAppPath } from '@biu/web-session-view'
-import { builtinAllViewId, builtinOwnerViewId, builtinScopeViewId, displayNameForView, isBuiltinAllViewId, isReadOnlyViewId, parseBuiltinScopeViewId, type DataScope } from '../catalog-views.ts'
+import { defaultTableViewId, displayNameForView, isBuiltinAllViewId, isReadOnlyViewId, type DataScope } from '../catalog-views.ts'
 import { tableModeFor } from '../paths.ts'
 import { DATA_COLLECTION_PATH, DATA_MODULE, databaseAllViewPath, databaseRecordPath, databaseViewPath } from './database-path.ts'
 import { defaultViewId } from './view-storage.ts'
@@ -125,9 +125,9 @@ export function recordCrumbLabel(label: string | undefined, id: string) {
 }
 
 const SCOPE_CRUMB_LABEL: Record<DataScope, string> = {
-  workspace: '空间',
-  personal: '个人',
-  shared: '共享',
+  workspace: '空间表',
+  personal: '个人表',
+  shared: '个人表',
 }
 
 export function buildCrumbs(input: {
@@ -162,27 +162,34 @@ export function buildCrumbs(input: {
       })),
   })
   if (input.viewId) {
-    // K+1 逻辑表面包屑：数据类型 / 数据归属（空间 | 个人 | 共享）/ 视图
-    const parsedScope = parseBuiltinScopeViewId(input.viewId)?.scope
-    const resolvedScope: DataScope | undefined = parsedScope ?? (isBuiltinAllViewId(input.viewId) ? undefined : input.viewScope)
+    // K+1 逻辑表面包屑：数据类型 / 表归属（空间表 | 个人表）/ [他人名] / 视图
+    const resolvedScope: DataScope | undefined = isBuiltinAllViewId(input.viewId) ? undefined : input.viewScope
     if (resolvedScope && tableModeFor(input.collection) === 'k-plus-1') {
-      const allId = builtinAllViewId(input.collection)
-      const scopeOrder: DataScope[] = ['workspace', 'personal', 'shared']
+      const wsViewId = defaultTableViewId('workspace', input.collection)
+      const currentTargetId = resolvedScope === 'workspace' ? wsViewId : input.viewId
       crumbs.push({
         kind: 'scope',
-        id: `scope:${resolvedScope}`,
+        id: `scope:${resolvedScope === 'shared' ? 'personal' : resolvedScope}`,
         label: SCOPE_CRUMB_LABEL[resolvedScope],
-        icon: resolvedScope,
-        target: { kind: 'view', collection: input.collection, viewId: builtinScopeViewId(resolvedScope, allId) },
-        choices: scopeOrder.map((sc) => ({
-          id: `scope:${sc}`,
-          label: SCOPE_CRUMB_LABEL[sc],
-          icon: sc,
-          target: { kind: 'view', collection: input.collection, viewId: builtinScopeViewId(sc, allId) },
-        })),
+        icon: resolvedScope === 'workspace' ? 'workspace' : 'personal',
+        target: { kind: 'view', collection: input.collection, viewId: currentTargetId },
+        choices: [
+          {
+            id: 'scope:workspace',
+            label: '空间表',
+            icon: 'workspace',
+            target: { kind: 'view', collection: input.collection, viewId: wsViewId },
+          },
+          {
+            id: 'scope:personal',
+            label: '个人表',
+            icon: 'personal',
+            target: { kind: 'view', collection: input.collection, viewId: input.viewId },
+          },
+        ],
       })
-      if (resolvedScope === 'shared' && input.sharedOwner?.accountId) {
-        const ownerViewId = builtinOwnerViewId(input.sharedOwner.accountId, input.collection)
+      if (input.sharedOwner?.accountId) {
+        const ownerViewId = defaultTableViewId(`account:${input.sharedOwner.accountId}`, input.collection)
         const ownerLabel = input.sharedOwner.name.trim() || input.sharedOwner.accountId.slice(0, 8)
         crumbs.push({
           kind: 'scope',
