@@ -377,23 +377,6 @@ CREATE TABLE IF NOT EXISTS record_grants (
 );
 CREATE INDEX IF NOT EXISTS record_grants_subject
   ON record_grants(workspace_id, subject_type, subject_id);
-CREATE TABLE IF NOT EXISTS view_grants (
-  workspace_id TEXT NOT NULL,
-  collection TEXT NOT NULL,
-  view_id TEXT NOT NULL,
-  subject_type TEXT NOT NULL,
-  subject_id TEXT NOT NULL,
-  role TEXT NOT NULL,
-  effect TEXT NOT NULL DEFAULT 'allow',
-  readable_columns TEXT,
-  writable_columns TEXT,
-  denied_columns TEXT,
-  granted_by TEXT NOT NULL,
-  created_at INTEGER NOT NULL,
-  PRIMARY KEY (workspace_id, collection, view_id, subject_type, subject_id, granted_by)
-);
-CREATE INDEX IF NOT EXISTS view_grants_subject
-  ON view_grants(workspace_id, subject_type, subject_id);
 CREATE TABLE IF NOT EXISTS access_rules (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL,

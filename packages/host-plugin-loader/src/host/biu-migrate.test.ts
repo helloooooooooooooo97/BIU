@@ -349,7 +349,7 @@ test('v58 migrates member_view grants to dynamic workspace_groups and backfills 
     INSERT INTO access_rule_grants (id, rule_id, workspace_id, subject_type, subject_id, role, created_at)
     VALUES ('arg_1', 'rule_1', 'ws_1', 'member_view', 'mv_admins', 'viewer', 105);
   `)
-  migrateBiu(db)
+  migrateBiu(db, {}, 58)
 
   const groups = db
     .prepare(`SELECT id, name, kind, filter_tree_json FROM workspace_groups WHERE workspace_id = 'ws_1' ORDER BY name`)

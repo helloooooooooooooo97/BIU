@@ -547,11 +547,6 @@ export class DatabaseAccessPolicy {
     this.ownershipCache.delete(key)
   }
 
-  /** 保留空操作兼容旧调用，accessMode='members' + memberDefaultRole='editor' 已原生覆盖全空间可编辑。 */
-  grantAllMembersEditable(_collection: string, _recordId: string) {
-    // no-op: workspace-scoped records already attach accessMode='members', memberDefaultRole='editor'
-  }
-
   markPublicView(collection: string, recordId: string) {
     try {
       this.host.shares.upsert({ kind: 'record', collection, recordId, password: null, allowCopy: false })
@@ -574,7 +569,6 @@ export class DatabaseAccessPolicy {
       accessMode: scope === 'workspace' ? 'members' : 'private',
       ...(scope === 'workspace' ? { memberDefaultRole: 'editor' as const } : {}),
     })
-    if (scope === 'workspace') this.grantAllMembersEditable(collection, recordId)
   }
 
   assertLiveRecord(

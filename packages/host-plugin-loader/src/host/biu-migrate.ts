@@ -1603,6 +1603,15 @@ export const BIU_MIGRATIONS: Migration[] = [
         }
       }
     }
+
+    // 4. 彻底清理已下线的 view_grants 死表与 /views 历史记录级 ACL 行
+    db.exec('DROP TABLE IF EXISTS view_grants')
+    if (hasTable(db, 'record_grants')) {
+      db.exec(`DELETE FROM record_grants WHERE collection = '/views'`)
+    }
+    if (hasTable(db, 'resource_policies')) {
+      db.exec(`DELETE FROM resource_policies WHERE collection = '/views'`)
+    }
   } },
 ]
 

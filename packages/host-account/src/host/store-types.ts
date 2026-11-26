@@ -25,7 +25,7 @@ export function isRegisteredBuiltinPlugin(pluginId: string) {
 
 export type PluginAssignmentSubject =
   | { type: 'account'; id: string }
-  | { type: 'member_view'; id: string }
+  | { type: 'group'; id: string }
 
 export type PluginPackageInput = {
   id: string
