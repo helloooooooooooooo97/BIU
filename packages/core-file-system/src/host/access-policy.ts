@@ -53,7 +53,7 @@ export type WorkspaceFiles = {
     },
   ): void
   grantMap?(workspaceId: string, collection: string): Map<string, Set<string>>
-  collectionOwnership?(workspaceId: string, collection: string): Map<string, 'personal' | 'workspace' | 'shared'>
+  collectionOwnership?(workspaceId: string, collection: string): Map<string, 'personal' | 'workspace' | 'shared' | 'external'>
   listActiveAccessRulesForCollection?(
     workspaceId: string,
     collection: string,
@@ -87,6 +87,7 @@ export const SHARE_SCOPE_LABEL = {
   personal: '私人',
   workspace: '空间',
   shared: '共享',
+  external: '外部',
 } as const
 
 export const ACCESS_RANK = { viewer: 1, commenter: 2, editor: 3, manager: 4, owner: 5 } as const
@@ -207,7 +208,7 @@ class BoundedLru<K, V> {
  * 独立访问规则（access_rules）列策略与多租户有界分享状态缓存。
  */
 export class DatabaseAccessPolicy {
-  private readonly ownershipCache = new BoundedLru<string, Map<string, 'personal' | 'workspace' | 'shared'>>()
+  private readonly ownershipCache = new BoundedLru<string, Map<string, 'personal' | 'workspace' | 'shared' | 'external'>>()
   private readonly ownerCache = new BoundedLru<string, Map<string, string>>()
   private readonly viewShareCache = new BoundedLru<string, SharedViewDef[]>()
   private readonly recordShareCache = new BoundedLru<string, Set<string>>()
@@ -243,7 +244,7 @@ export class DatabaseAccessPolicy {
     return store.membership()
   }
 
-  ownershipOf(collection: string, id: string): 'personal' | 'workspace' | 'shared' {
+  ownershipOf(collection: string, id: string): 'personal' | 'workspace' | 'shared' | 'external' {
     const store = this.host.collabStore()
     const workspaceId = this.resolveWorkspaceId()
     if (!store?.collectionOwnership || !workspaceId) return 'personal'
@@ -751,7 +752,7 @@ export class DatabaseAccessPolicy {
     return views
   }
 
-  hasPublicShare(collection: string, id: string, record?: DbRecord, stored?: DataScopeName) {
+  hasPublicShare(collection: string, id: string, record?: DbRecord, stored?: DataScopeName | 'external') {
     if (this.recordShareIds(collection).has(id)) return true
     if (!record || !stored) return false
     const views = this.sharedViewsFor(collection)
@@ -760,19 +761,53 @@ export class DatabaseAccessPolicy {
     const tagged = spec ? this.host.applyTagOverlay(spec, record) : record
     const schema = spec ? this.host.schemaFor(spec) : undefined
     const packs: CollectionSchemaPack[] = this.host.tags.list()
-    return views.some((view) => recordMatchesSharedView(tagged, view, stored, schema, packs))
+    const scopeForMatch: DataScopeName = stored === 'external' ? 'shared' : stored
+    return views.some((view) => recordMatchesSharedView(tagged, view, scopeForMatch, schema, packs))
   }
 
-  effectiveScope(_collection: string, _record: DbRecord, stored: DataScopeName): DataScopeName {
+  effectiveScope(_collection: string, _record: DbRecord, stored: DataScopeName | 'external'): DataScopeName | 'external' {
     return stored
   }
 
-  shareScopeLabel(collection: string, id: string, record: DbRecord, stored: 'personal' | 'workspace' | 'shared') {
-    if (this.hasPublicShare(collection, id, record, stored)) return '共享'
-    if (this.host.deviceWorkspace()) return '私人'
+  shareScopeLabel(collection: string, id: string, record: DbRecord, stored: 'personal' | 'workspace' | 'shared' | 'external') {
+    if (this.host.deviceWorkspace()) {
+      return this.hasPublicShare(collection, id, record, stored) ? '共享' : '私人'
+    }
+    // 云端 K+1 归属模型：
+    // - 任何公开链接或外部协作者/访客 -> 「外部」
+    // - 空间公共表（workspace） -> 「空间」 / 「外部」
+    // - 个人表（account:<id>） -> 「私人」 / 「共享」（空间内分享） / 「外部」
+    if (stored === 'external' || this.hasPublicShare(collection, id, record, stored)) return '外部'
     const scope = this.effectiveScope(collection, record, stored)
     if (scope === 'workspace') return '空间'
-    if (scope === 'personal') return '私人'
+    if (scope === 'shared') return '共享'
+    if (scope === 'personal') {
+      // 检查是否被个人表的分享规则命中且有受众
+      const store = this.host.collabStore()
+      const authorization = this.host.authorization()
+      const actor = authorization?.currentActor()
+      if (store?.listActiveAccessRulesForCollection && authorization && actor) {
+        const rules = store.listActiveAccessRulesForCollection(actor.workspaceId, collection)
+        const target = resolveScopeTarget(collection, id, record)
+        const ownerTable = authorization.ownerTableOf({
+          type: 'record',
+          workspaceId: actor.workspaceId,
+          collection: target.collection,
+          recordId: target.id,
+          record: record as Record<string, unknown>,
+        })
+        if (ownerTable === 'workspace') return '空间'
+        const matchedInternalRule = rules.some(
+          (rule) =>
+            rule.enabled &&
+            rule.grants.length > 0 &&
+            (!ownerTable || rule.ownerTable === ownerTable || rule.createdBy === ownerTable.replace(/^account:/, '')) &&
+            recordMatchesAccessRule(record as never, rule.filterTree),
+        )
+        if (matchedInternalRule) return '共享'
+      }
+      return '私人'
+    }
     return SHARE_SCOPE_LABEL[scope]
   }
 

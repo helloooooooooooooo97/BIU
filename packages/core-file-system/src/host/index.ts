@@ -179,8 +179,8 @@ function schemaFor(spec: CollectionSpec): CollectionSchema {
       computed: true,
       writable: false,
       sortable: true,
-      enum: ['私人', '空间', '共享'],
-      description: '计算属性。按当前能进的人：只有创建者是私人，有内部成员是空间，有外部协作者或公开/局域网链接是共享。',
+      enum: ['私人', '空间', '共享', '外部'],
+      description: '计算属性。个人表数据展示私人/共享/外部；空间表数据展示空间/外部。',
     }
     fields.shareRole = {
       type: 'select',
@@ -2656,6 +2656,14 @@ export function apply(ctx: Context) {
       const effectiveRole = isWsOwner ? 'owner' : 'viewer'
       if (action === 'resource:read') return { allowed: true, effectiveRole }
       return { allowed: isWsOwner, effectiveRole }
+    }
+
+    // 2.5 个人表视图（ownerTable === 'account:<id>'）：严格归属该个人表拥有者，不对其他成员或管理员暴露
+    if (view.ownerTable?.startsWith('account:')) {
+      const isPersonalOwner = view.ownerTable === `account:${accountId}` || isCreator
+      return isPersonalOwner
+        ? { allowed: true, effectiveRole: 'owner' }
+        : { allowed: false, effectiveRole: 'viewer' }
     }
 
     const protection =

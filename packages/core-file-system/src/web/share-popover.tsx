@@ -315,7 +315,7 @@ function WorkspaceAccess({
   viewId?: string
 }) {
   const [email, setEmail] = useState('')
-  const [scope, setScope] = useState<'personal' | 'workspace' | 'shared'>('personal')
+  const [scope, setScope] = useState<'personal' | 'workspace' | 'shared' | 'external'>('personal')
   const [ownerId, setOwnerId] = useState('')
   const [currentAccountId, setCurrentAccountId] = useState('')
   const [canManage, setCanManage] = useState(true)
@@ -368,7 +368,7 @@ function WorkspaceAccess({
 
   async function load() {
     const data = await readJson<{
-      scope?: 'personal' | 'workspace' | 'shared'
+      scope?: 'personal' | 'workspace' | 'shared' | 'external'
       ownerId?: string
       currentAccountId?: string
       canManage?: boolean
