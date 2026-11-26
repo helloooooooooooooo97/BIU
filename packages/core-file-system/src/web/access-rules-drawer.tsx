@@ -15,6 +15,7 @@ import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import type { CollectionSchema } from '@biu/type-file-system'
 import { countFilterRules, emptyFilterGroup, type FilterGroup } from '../query-logic.ts'
+import { viewDomainOf } from '../catalog-views.ts'
 import { WORKSPACE_MEMBERS_COLLECTION_PATH } from './database-path.ts'
 import { listCollection } from './db-client.ts'
 import { FSDB_SHARES_CHANGE_EVENT, OPEN_ACCESS_RULES_EVENT, emitFsdbEvent } from './fsdb-events.ts'
@@ -290,25 +291,41 @@ export function AccessRulesButton({
     [collectionPath],
   )
 
-  const startNewDraft = useCallback((fromView?: SavedView | null, wantPublicLink = false) => {
-    const snap = snapshotFromView(fromView)
-    setDraft({
-      id: null,
-      name: snap.name || '新建分享规则',
-      scope: 'personal',
-      filterTree: snap.filterTree,
-      restrictRows: countFilterRules(snap.filterTree) > 0,
-      columns: snap.columns,
-      restrictColumns: Boolean(snap.columns && snap.columns.length > 0),
-      displaySnapshot: snap.displaySnapshot,
-      enabled: true,
-      wantPublicLink,
-      grants: [],
-    })
-    setFilterEditorOpen(false)
-    setMemberPickerOpen(false)
-    setPublicLink(null)
-  }, [])
+  const activeDomain = activeView ? viewDomainOf(activeView) : 'all'
+  const lockedScope: 'workspace' | 'personal' | null =
+    activeDomain === 'workspace' ? 'workspace' : activeDomain === 'personal' ? 'personal' : null
+  const visibleRules = useMemo(() => {
+    if (lockedScope === 'workspace') {
+      return rules.filter((r) => r.scope === 'workspace' || r.ownerTable === 'workspace')
+    }
+    if (lockedScope === 'personal') {
+      return rules.filter((r) => r.scope !== 'workspace' && r.ownerTable !== 'workspace')
+    }
+    return rules
+  }, [lockedScope, rules])
+
+  const startNewDraft = useCallback(
+    (fromView?: SavedView | null, wantPublicLink = false) => {
+      const snap = snapshotFromView(fromView)
+      setDraft({
+        id: null,
+        name: snap.name || '新建分享规则',
+        scope: lockedScope ?? 'personal',
+        filterTree: snap.filterTree,
+        restrictRows: countFilterRules(snap.filterTree) > 0,
+        columns: snap.columns,
+        restrictColumns: Boolean(snap.columns && snap.columns.length > 0),
+        displaySnapshot: snap.displaySnapshot,
+        enabled: true,
+        wantPublicLink,
+        grants: [],
+      })
+      setFilterEditorOpen(false)
+      setMemberPickerOpen(false)
+      setPublicLink(null)
+    },
+    [lockedScope],
+  )
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -387,6 +404,7 @@ export function AccessRulesButton({
         body: JSON.stringify({
           collection: collectionPath,
           name: snap.name || '局域网只读链接',
+          scope: lockedScope ?? 'personal',
           filterTree: snap.filterTree,
           columns: snap.columns,
           displaySnapshot: snap.displaySnapshot,
@@ -583,9 +601,16 @@ export function AccessRulesButton({
     }
   }
 
-  if (localOnly) return null
+  if (localOnly || activeDomain === 'shared') return null
 
-  const hasActiveRules = rules.some((r) => r.enabled)
+  const ruleCount = visibleRules.length
+  const hasActiveRules = visibleRules.some((r) => r.enabled)
+  const drawerTitle =
+    lockedScope === 'workspace'
+      ? '空间表分享规则'
+      : lockedScope === 'personal'
+        ? '个人表分享规则'
+        : '我的分享规则'
   const hasWorkspaceGrant = draft?.grants.some((g) => g.subjectType === 'workspace') ?? false
 
   const primaryBtnStyle = {
@@ -636,15 +661,41 @@ export function AccessRulesButton({
         ref={triggerRef}
         type="button"
         className={`${buttonClassName}${open || hasActiveRules ? ' is-active' : ''}`}
-        style={hasActiveRules ? { color: 'var(--biu-color-emphasis)' } : undefined}
-        title={hasActiveRules ? '已启用分享规则' : '分享数据与规则'}
-        aria-label="分享数据与规则"
+        style={{
+          position: 'relative',
+          ...(hasActiveRules ? { color: 'var(--biu-color-emphasis)' } : {}),
+        }}
+        title={ruleCount > 0 ? `${drawerTitle}（${ruleCount} 条）` : drawerTitle}
+        aria-label={drawerTitle}
         aria-haspopup="dialog"
         aria-expanded={open}
         data-testid="access-rules-trigger"
         onClick={() => setOpen((prev) => !prev)}
       >
         <ShieldCheckIcon aria-hidden className="size-4" />
+        {ruleCount > 0 ? (
+          <span
+            data-testid="access-rules-count"
+            style={{
+              position: 'absolute',
+              top: 1,
+              right: 1,
+              minWidth: 14,
+              height: 14,
+              padding: '0 3px',
+              borderRadius: 999,
+              fontSize: 10,
+              fontWeight: 600,
+              lineHeight: '14px',
+              textAlign: 'center',
+              background: 'var(--biu-color-emphasis)',
+              color: 'var(--biu-color-on-emphasis)',
+              pointerEvents: 'none',
+            }}
+          >
+            {ruleCount > 99 ? '99+' : ruleCount}
+          </span>
+        ) : null}
       </button>
 
       {open
@@ -696,7 +747,7 @@ export function AccessRulesButton({
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 14, color: 'var(--biu-color-text)' }}>
                     <ShieldCheckIcon aria-hidden className="size-4" />
-                    <span>{draft ? (draft.id ? '编辑分享规则' : '新建分享规则') : '我的分享规则'}</span>
+                    <span>{draft ? (draft.id ? '编辑分享规则' : '新建分享规则') : drawerTitle}</span>
                   </div>
                   <button
                     type="button"
@@ -762,7 +813,7 @@ export function AccessRulesButton({
 
                       {loading ? (
                         <div style={{ fontSize: 12, color: 'var(--biu-color-text-muted)' }}>加载中…</div>
-                      ) : rules.length === 0 ? (
+                      ) : visibleRules.length === 0 ? (
                         <div
                           style={{
                             padding: '24px 12px',
@@ -772,11 +823,15 @@ export function AccessRulesButton({
                             color: 'var(--biu-color-text-subtle)',
                           }}
                         >
-                          暂无分享规则。你可以按条件批量分享给成员，或点击上方「一键生成只读链接」发到局域网/外部。
+                          {lockedScope === 'workspace'
+                            ? '当前空间表暂无分享规则。你可以按条件批量分享给成员，或点击上方「一键生成只读链接」发到局域网/外部。'
+                            : lockedScope === 'personal'
+                              ? '当前个人表暂无分享规则。你可以按条件批量分享给成员，或点击上方「一键生成只读链接」发到局域网/外部。'
+                              : '暂无分享规则。你可以按条件批量分享给成员，或点击上方「一键生成只读链接」发到局域网/外部。'}
                         </div>
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          {rules.map((rule) => {
+                          {visibleRules.map((rule) => {
                             const rowRulesCount = countFilterRules(normalizeFilterTree(rule.filterTree))
                             const linkCopied = copiedKey === `rule:${rule.id}`
                             const isWorkspaceRule = rule.scope === 'workspace' || rule.ownerTable === 'workspace'
@@ -889,22 +944,28 @@ export function AccessRulesButton({
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--biu-color-text)' }}>归属逻辑表</span>
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                          <button
-                            type="button"
-                            onClick={() => setDraft({ ...draft, scope: 'workspace' })}
-                            style={pillBtnStyle(draft.scope === 'workspace')}
-                          >
-                            空间公共表（管理员共管）
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDraft({ ...draft, scope: 'personal' })}
-                            style={pillBtnStyle(draft.scope === 'personal')}
-                          >
-                            我的个人表（仅我管理）
-                          </button>
-                        </div>
+                        {lockedScope ? (
+                          <div style={{ fontSize: 12, color: 'var(--biu-color-text-muted)' }}>
+                            {lockedScope === 'workspace' ? '空间公共表（管理员共管）' : '我的个人表（仅我管理）'}
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              onClick={() => setDraft({ ...draft, scope: 'workspace' })}
+                              style={pillBtnStyle(draft.scope === 'workspace')}
+                            >
+                              空间公共表（管理员共管）
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDraft({ ...draft, scope: 'personal' })}
+                              style={pillBtnStyle(draft.scope === 'personal')}
+                            >
+                              我的个人表（仅我管理）
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
