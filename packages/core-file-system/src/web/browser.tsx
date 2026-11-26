@@ -2441,16 +2441,40 @@ export function CollectionBrowser({
   }, [activeViewId, collectionPath, items, routeViewId, schema?.labelField, selected, sheet])
   const filterActive = countFilterRules(filterTree) > 0
   const parsedOwnerView = activeViewId ? parseBuiltinOwnerViewId(activeViewId) : null
+  const [fetchedOwnerName, setFetchedOwnerName] = useState('')
+  useEffect(() => {
+    if (!parsedOwnerView) {
+      setFetchedOwnerName('')
+      return
+    }
+    let alive = true
+    void readJson<{ owners?: Array<{ accountId: string; name: string }> }>(
+      `/api/db/shared-owners?collection=${encodeURIComponent(collectionPath)}`,
+    )
+      .then((data) => {
+        if (!alive) return
+        const hit = data?.owners?.find((item) => item.accountId === parsedOwnerView.accountId)
+        if (hit?.name) setFetchedOwnerName(hit.name.trim())
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [collectionPath, parsedOwnerView?.accountId])
   const ownerDisplayName = useMemo(() => {
     if (!parsedOwnerView) return ''
     for (const row of items) {
-      const raw = row.ownerTable as { kind?: unknown; accountId?: unknown; name?: unknown } | undefined
-      if (raw?.kind === 'user' && raw.accountId === parsedOwnerView.accountId && typeof raw.name === 'string' && raw.name.trim()) {
-        return raw.name.trim()
+      const ownerVal = row.ownerTable as { kind?: unknown; accountId?: unknown; name?: unknown } | undefined
+      if (ownerVal?.kind === 'user' && ownerVal.accountId === parsedOwnerView.accountId && typeof ownerVal.name === 'string' && ownerVal.name.trim()) {
+        return ownerVal.name.trim()
+      }
+      const creatorVal = row.createdBy as { kind?: unknown; accountId?: unknown; name?: unknown } | undefined
+      if (creatorVal?.kind === 'user' && creatorVal.accountId === parsedOwnerView.accountId && typeof creatorVal.name === 'string' && creatorVal.name.trim()) {
+        return creatorVal.name.trim()
       }
     }
-    return ''
-  }, [items, parsedOwnerView])
+    return fetchedOwnerName
+  }, [fetchedOwnerName, items, parsedOwnerView])
   const activeView =
     views.find((view) => view.id === activeViewId) ??
     (activeViewId
@@ -3287,6 +3311,13 @@ export function CollectionBrowser({
         : activeDomain === 'all'
           ? undefined
           : activeDomain,
+      sharedOwner:
+        !crumbFromData && parsedOwnerView
+          ? {
+              accountId: parsedOwnerView.accountId,
+              name: ownerDisplayName || parsedOwnerView.accountId.slice(0, 8),
+            }
+          : undefined,
       viewName: crumbFromData
         ? displayNameForView(
             dataViewId,
