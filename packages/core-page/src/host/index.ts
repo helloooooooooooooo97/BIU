@@ -1,3 +1,5 @@
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
+import { dirname, resolve as pathResolve, sep } from 'node:path'
 import { assetsRootPath, dataHome, migrateLegacyPageDir } from '@biu/host-plugin-loader/data-dir'
 import type { Context } from 'cordis'
 import type { CollectionSpec } from '@biu/type-file-system'
@@ -90,20 +92,62 @@ export function pagesCollection(store: PagesStore, index: PageBlocksIndex): Coll
 }
 
 export const name = 'page'
-export const inject = ['database', 'fs']
+export const inject = ['database']
+
+function localWorkspaceFs(root: string): WorkspaceFs {
+  const base = pathResolve(root)
+  const resolve = (rel: string) => {
+    const abs = pathResolve(base, rel)
+    if (abs !== base && !abs.startsWith(`${base}${sep}`)) {
+      throw new Error(`path escapes data root: ${rel}`)
+    }
+    return abs
+  }
+  return {
+    resolve,
+    read: (rel) => readFile(resolve(rel), 'utf8'),
+    write: async (rel, content) => {
+      const target = resolve(rel)
+      await mkdir(dirname(target), { recursive: true })
+      await writeFile(target, content, 'utf8')
+    },
+    list: async (rel = '.') => {
+      try {
+        return await readdir(resolve(rel))
+      } catch {
+        return []
+      }
+    },
+  }
+}
 
 export function apply(ctx: Context) {
   // 页面落到工作区 `.biu`（与 file-system / sessions 同一数据目录的父目录）。
-  // 用 defaultRoot，不随 Session 绑定项目路径漂移。
-  const workspaceRoot = ctx.fs.workspace.resolve('.')
+  // 用 defaultRoot，不随 Session 绑定项目路径漂移；云端 profile 不加载 host-fs 时直接以 dataHome() 读写。
+  const hostFs = (() => {
+    try {
+      return ctx.get('fs') as {
+        workspace: { resolve: (p: string) => string }
+        resolveIn: (r: string, p: string) => string
+        readIn: (r: string, p: string) => Promise<string>
+        writeIn: (r: string, p: string, c: string) => Promise<unknown>
+        listIn: (r: string, p: string) => Promise<string[]>
+      } | undefined
+    } catch {
+      return undefined
+    }
+  })()
+  const workspaceRoot = hostFs ? hostFs.workspace.resolve('.') : dataHome()
   const root = process.env.VITEST ? workspaceRoot : dataHome()
   if (root !== workspaceRoot) migrateLegacyPageDir(workspaceRoot, root)
-  const fs: WorkspaceFs = {
-    resolve: (rel) => ctx.fs.resolveIn(root, rel),
-    read: (rel) => ctx.fs.readIn(root, rel),
-    write: (rel, content) => ctx.fs.writeIn(root, rel, content),
-    list: (rel) => ctx.fs.listIn(root, rel ?? '.'),
-  }
+  const fs: WorkspaceFs = hostFs
+    ? {
+        resolve: (rel) => hostFs.resolveIn(root, rel),
+        read: (rel) => hostFs.readIn(root, rel),
+        write: (rel, content) => hostFs.writeIn(root, rel, content),
+        list: (rel) => hostFs.listIn(root, rel ?? '.'),
+      }
+    : localWorkspaceFs(root)
   const store = new PagesStore(fs, assetsRootPath(root))
   const index = new PageBlocksIndex(store)
   ctx.database.register(pagesCollection(store, index))
