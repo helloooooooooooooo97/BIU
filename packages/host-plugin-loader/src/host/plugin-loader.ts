@@ -3,6 +3,11 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import type { Plugin as VitePlugin } from 'vite'
 
+export type HostProfile = 'desktop' | 'cloud-api' | 'cloud-worker' | 'all'
+export type ConcreteHostProfile = Exclude<HostProfile, 'all'>
+
+const VALID_HOST_PROFILES = new Set<HostProfile>(['desktop', 'cloud-api', 'cloud-worker', 'all'])
+
 export interface CordisPluginEntry {
   id: string
   name?: string
@@ -13,6 +18,8 @@ export interface CordisPluginEntry {
   blurb?: string
   togglable?: boolean
   enabled?: boolean
+  /** 仅在指定部署 profile 加载；缺省表示全 profile 通用。 */
+  profiles?: ConcreteHostProfile[]
   config?: unknown
 }
 
@@ -54,15 +61,40 @@ export function splitPackageRef(specifier: string): { name: string; subpath: str
   return { name: specifier.slice(0, slash), subpath: `.${specifier.slice(slash)}` }
 }
 
-export function readCordisConfig(root: string): CordisConfig {
+export function resolveHostProfile(env: Record<string, string | undefined> = process.env): HostProfile {
+  const raw = String(env.BIU_PROFILE ?? '').trim().toLowerCase() as HostProfile
+  if (VALID_HOST_PROFILES.has(raw)) return raw
+  if (env.BIU_ONLINE === '0') return 'desktop'
+  if (env.BIU_ONLINE === '1') return 'cloud-api'
+  return 'all'
+}
+
+export function entryMatchesProfile(entry: CordisPluginEntry, profile: HostProfile): boolean {
+  if (profile === 'all') return true
+  if (!Array.isArray(entry.profiles) || entry.profiles.length === 0) return true
+  return entry.profiles.includes(profile)
+}
+
+export function filterCordisConfigByProfile(config: CordisConfig, profile: HostProfile): CordisConfig {
+  if (profile === 'all') {
+    return {
+      host: Array.isArray(config.host) ? config.host : [],
+      web: Array.isArray(config.web) ? config.web : [],
+      plugins: Array.isArray(config.plugins) ? config.plugins : [],
+    }
+  }
+  return {
+    host: (Array.isArray(config.host) ? config.host : []).filter((item) => entryMatchesProfile(item, profile)),
+    web: (Array.isArray(config.web) ? config.web : []).filter((item) => entryMatchesProfile(item, profile)),
+    plugins: (Array.isArray(config.plugins) ? config.plugins : []).filter((item) => entryMatchesProfile(item, profile)),
+  }
+}
+
+export function readCordisConfig(root: string, options?: { profile?: HostProfile }): CordisConfig {
   const path = join(root, 'cordis.plugins.json')
   if (!existsSync(path)) return {}
   const body = JSON.parse(readFileSync(path, 'utf8')) as CordisConfig
-  return {
-    host: Array.isArray(body.host) ? body.host : [],
-    web: Array.isArray(body.web) ? body.web : [],
-    plugins: Array.isArray(body.plugins) ? body.plugins : [],
-  }
+  return filterCordisConfigByProfile(body, options?.profile ?? 'all')
 }
 
 export function readCordisPlugins(root: string): CordisPluginEntry[] {

@@ -65,8 +65,23 @@ function exportTarget(value, fallback) {
   return fallback
 }
 
-function configuredHostEntries() {
+function matchesProfile(item, profile) {
+  if (!profile || profile === 'all') return true
+  if (!Array.isArray(item?.profiles) || item.profiles.length === 0) return true
+  return item.profiles.includes(profile)
+}
+
+function readFilteredManifest(profile = 'desktop') {
   const config = JSON.parse(readFileSync(join(root, 'cordis.plugins.json'), 'utf8'))
+  return {
+    host: (config.host ?? []).filter((item) => matchesProfile(item, profile)),
+    web: (config.web ?? []).filter((item) => matchesProfile(item, profile)),
+    plugins: (config.plugins ?? []).filter((item) => matchesProfile(item, profile)),
+  }
+}
+
+function configuredHostEntries(profile = 'desktop') {
+  const config = readFilteredManifest(profile)
   const refs = [...(config.host ?? []), ...(config.plugins ?? [])]
     .map((item) => item.package)
     .filter(Boolean)
@@ -183,7 +198,10 @@ export async function stagePackHost() {
   rmSync(hostDir, { recursive: true, force: true })
   mkdirSync(hostDir, { recursive: true })
   cpSync(hostRuntimeManifest, join(hostDir, 'package.json'))
-  cpSync(join(root, 'cordis.plugins.json'), join(hostDir, 'cordis.plugins.json'))
+  writeFileSync(
+    join(hostDir, 'cordis.plugins.json'),
+    JSON.stringify(readFilteredManifest('desktop'), null, 2) + '\n',
+  )
   if (!existsSync(join(root, 'dist', 'index.html'))) {
     throw new Error('desktop web build missing: dist/index.html')
   }

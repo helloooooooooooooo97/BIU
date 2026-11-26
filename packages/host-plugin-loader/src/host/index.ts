@@ -1,6 +1,11 @@
 export {
+  type HostProfile,
+  type ConcreteHostProfile,
   type CordisPluginEntry,
   type CordisConfig,
+  resolveHostProfile,
+  entryMatchesProfile,
+  filterCordisConfigByProfile,
   pluginWebSpecifier,
   findRepoRoot,
   splitPackageRef,

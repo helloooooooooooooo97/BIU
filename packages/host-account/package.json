@@ -9,6 +9,7 @@
     ".": "./src/host/index.ts",
     "./store": "./src/host/store.ts",
     "./authorization": "./src/host/authorization.ts",
+    "./desktop-cloud-link": "./src/host/desktop-cloud-link.ts",
     "./workspace-members-collection": "./src/host/workspace-members-collection.ts"
   },
   "peerDependencies": {

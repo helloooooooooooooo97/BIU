@@ -21,6 +21,7 @@
     "@biu/host-llm": "0.1.0",
     "@biu/host-lsp": "0.1.0",
     "@biu/host-mcp": "0.1.0",
+    "@biu/host-plugin-loader": "0.1.0",
     "@biu/host-sandbox": "0.1.0",
     "@biu/host-session-store": "0.1.0",
     "@biu/host-sessions": "0.1.0",

@@ -8,7 +8,7 @@ import {
   writeEditorContent,
   ASSET_GC_INTERVAL_MS,
 } from '@biu/host-plugin-loader/data-dir'
-import { getAccountPort } from '@biu/host-plugin-loader/ports'
+import { getAccountPort, getBlobPort } from '@biu/host-plugin-loader/ports'
 import { getRuntimePolicy, resolveScopedWorkspaceId } from '@biu/host-plugin-loader/runtime'
 import { type Action as PermissionAction, type AuthorizationService } from '@biu/host-account/authorization'
 import { Service, type Context } from 'cordis'
@@ -535,6 +535,8 @@ export class DatabaseService extends Service implements Database {
 
   constructor(ctx: Context) {
     super(ctx, 'database')
+    const blob = getBlobPort(ctx)
+    if (blob) this.assets.setBlobStore(blob)
     const self = this
     this.access = new DatabaseAccessPolicy({
       tags: this.tags,

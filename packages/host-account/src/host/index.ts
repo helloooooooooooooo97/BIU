@@ -3,6 +3,7 @@ import { Service, type Context } from 'cordis'
 import { hostRemoteOrigin } from '@biu/host-plugin-loader/env'
 import { biuSqlitePath, currentAccountId, eventsSqlitePath, openAndMigrateBiu, openAndMigrateEvents } from '@biu/host-plugin-loader/data-dir'
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
+import { getRealtimePort } from '@biu/host-plugin-loader/ports'
 import { emitTenantRevoked, emitWorkspaceDeleted } from '@biu/host-plugin-loader/tenant-state'
 import { resolveScopedWorkspaceId } from '@biu/host-plugin-loader/runtime'
 import type { RouteContext } from '@biu/types/http'
@@ -464,6 +465,30 @@ function fail(route: RouteContext, error: unknown) {
 export function apply(ctx: Context, config: AccountConfig = {}) {
   const account = new AccountService(ctx, config)
 
+  // 跨节点权限缓存失效桥接：本节点权限变更时通过 RealtimeBusPort 广播，其他节点收到后立即清本地缓存。
+  ctx.effect(() => {
+    const realtime = getRealtimePort(ctx)
+    if (!realtime) return () => {}
+    let applyingRemote = false
+    const unsubLocal = account.store.authorization.onInvalidate(() => {
+      if (applyingRemote) return
+      void realtime.publish('biu:authz:invalidate', { ts: Date.now() })
+    })
+    const unsubRemote = realtime.subscribe('biu:authz:invalidate', (message) => {
+      if (message.originNodeId && message.originNodeId === realtime.nodeId) return
+      applyingRemote = true
+      try {
+        account.store.authorization.invalidateAll()
+      } finally {
+        applyingRemote = false
+      }
+    })
+    return () => {
+      unsubLocal()
+      unsubRemote()
+    }
+  }, 'account.authz.realtime-bridge')
+
   function actor(route: RouteContext) {
     const token = bearer(route)
     const found = token ? account.store.accountByToken(token) : null
@@ -478,132 +503,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     }
   }
 
-  async function connectCloudIdentity(
-    local: { id: string },
-    action: 'login' | 'register',
-    email: string,
-    password: string,
-    requestedOrigin = '',
-    remoteName = '',
-  ) {
-    if (!getRuntimePolicy().allowCloudLinking) throw new CollabError('服务端不能连接另一个云端账号', 400)
-    const origin = requestedOrigin.trim()
-      ? account.setConfiguredCloudOrigin(requestedOrigin)
-      : account.configuredCloudOrigin()
-    if (!origin) throw new CollabError('请先配置远程主机服务地址', 400)
-    let remote: Response
-    try {
-      remote = await fetch(`${origin}/api/account/${action}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          password,
-          ...(remoteName.trim() ? { name: remoteName.trim() } : {}),
-        }),
-      })
-    } catch {
-      throw new CollabError('云端暂时连不上', 503)
-    }
-    const payload = (await remote.json().catch(() => ({}))) as {
-      id?: string
-      name?: string
-      avatar?: string
-      token?: string
-      workspaceId?: string
-      error?: string
-    }
-    if (!remote.ok || !payload.id || !payload.token) {
-      throw new CollabError(payload.error || (action === 'login' ? '云端登录失败' : '云端注册失败'), remote.status || 400)
-    }
-    if (typeof payload.avatar === 'string') {
-      account.setCloudAvatar(origin, payload.id, payload.avatar)
-    }
-    const connection = account.saveCloudConnection({
-      localAccountId: local.id,
-      origin,
-      remoteAccountId: payload.id,
-      remoteName: payload.name || remoteName.trim() || email,
-      remoteEmail: email.trim().toLowerCase(),
-      token: payload.token,
-    })
-    let workspaces: unknown[] = []
-    try {
-      const listed = await fetch(`${origin}/api/account/workspaces`, {
-        headers: { authorization: `Bearer ${payload.token}` },
-      })
-      const listedBody = (await listed.json().catch(() => ({}))) as Record<string, unknown>
-      if (listed.ok) {
-        cacheWorkspaceList(account, local.id, listedBody)
-        workspaces = Array.isArray(listedBody.workspaces) ? listedBody.workspaces : []
-      }
-    } catch {
-      /* 登录已经成功，空间稍后重试加载 */
-    }
-    const workspaceId = String(payload.workspaceId ?? '')
-    if (workspaceId) {
-      account.markCloudWorkspace(workspaceId)
-    }
-    return {
-      account: {
-        id: connection.remoteAccountId,
-        name: connection.remoteName,
-        email: connection.remoteEmail,
-        avatar: account.cloudAvatar(connection.origin, connection.remoteAccountId),
-      },
-      origin: connection.origin,
-      workspaceId,
-      workspaces,
-    }
-  }
-
-  async function connectCloud(route: RouteContext, action: 'login' | 'register') {
-    const local = actor(route)
-    const body = (await route.json()) as { email?: string; password?: string; origin?: string; name?: string }
-    return connectCloudIdentity(
-      local,
-      action,
-      String(body.email ?? ''),
-      String(body.password ?? ''),
-      String(body.origin ?? ''),
-      String(body.name ?? ''),
-    )
-  }
-
-  ctx.http.route(
-    'GET',
-    '/api/account/cloud/endpoint',
-    async (route) => {
-      try {
-        const requested = String(route.query.get('workspaceId') ?? '').trim()
-        if (!getRuntimePolicy().allowCloudLinking) {
-          route.send(200, { mode: 'local', workspaceId: requested || account.store.activeWorkspaceId() || '' })
-          return
-        }
-        const me = actor(route)
-        const targetWorkspace = requested || account.store.activeWorkspaceId() || ''
-        if (!targetWorkspace || account.workspaceLocation(targetWorkspace) !== 'cloud') {
-          route.send(200, { mode: 'local', workspaceId: targetWorkspace })
-          return
-        }
-        const remote = account.resolveCloudTarget(targetWorkspace, me.id)
-        if (!remote) {
-          route.send(401, { error: '请先登录云端账号' })
-          return
-        }
-        route.send(200, {
-          mode: 'cloud',
-          origin: remote.origin,
-          workspaceId: remote.workspaceId,
-          token: remote.token,
-        })
-      } catch (error) {
-        fail(route, error)
-      }
-    },
-    { scope: 'host' },
-  )
-
   type RouteArg = Parameters<Parameters<typeof ctx.http.route>[2]>[0]
   const handledRoute = (method: Parameters<typeof ctx.http.route>[0], path: string, fn: (route: RouteArg) => Promise<void> | void) =>
     ctx.http.route(method, path, async (route) => {
@@ -616,124 +515,21 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   const authedRoute = (method: Parameters<typeof ctx.http.route>[0], path: string, fn: (route: RouteArg, me: ReturnType<typeof actor>) => Promise<void> | void) =>
     handledRoute(method, path, (route) => fn(route, actor(route)))
 
-  handledRoute('GET', '/api/account/cloud', async (route) => {
-    if (!getRuntimePolicy().allowCloudLinking) return route.send(200, { available: false, connected: false, configuredOrigin: '' })
-    const me = actor(route)
-    const initial = account.cloudConnection(me.id)
-    if (initial?.origin && initial.token) {
-      try {
-        const res = await fetch(`${initial.origin}/api/account/me`, {
-          headers: { authorization: `Bearer ${initial.token}` },
-          signal: AbortSignal.timeout(2000),
-        })
-        if (res.ok) {
-          const remoteMe = (await res.json().catch(() => ({}))) as {
-            name?: unknown
-            email?: unknown
-            avatar?: unknown
-          }
-          account.updateCloudIdentity(me.id, initial.origin, initial.remoteAccountId, {
-            ...(typeof remoteMe.name === 'string' && remoteMe.name.trim() ? { name: remoteMe.name } : {}),
-            ...(typeof remoteMe.email === 'string' && remoteMe.email.trim() ? { email: remoteMe.email } : {}),
-            ...(typeof remoteMe.avatar === 'string' ? { avatar: remoteMe.avatar } : {}),
-          })
-        }
-      } catch {
-        /* 远端不可达时沿用本地缓存的名称与默认头像 */
-      }
-    }
-    const connection = account.cloudConnection(me.id)
-    const configuredOrigin = account.configuredCloudOrigin()
-    const accounts = account.listCloudConnections(me.id).map((item) => ({
-      id: item.remoteAccountId,
-      name: item.remoteName,
-      email: item.remoteEmail,
-      avatar: account.cloudAvatar(item.origin, item.remoteAccountId),
-      origin: item.origin,
-      active: item.active,
-    }))
-    route.send(200, {
-      available: true,
-      configuredOrigin,
-      connected: Boolean(connection),
-      accounts,
-      ...(connection
-        ? {
-            account: {
-              id: connection.remoteAccountId,
-              name: connection.remoteName,
-              email: connection.remoteEmail,
-              avatar: account.cloudAvatar(connection.origin, connection.remoteAccountId),
-            },
-            origin: connection.origin,
-          }
-        : {}),
-    })
-  })
-
-  handledRoute('POST', '/api/account/cloud/config', async (route) => {
-    actor(route)
-    const body = (await route.json()) as { origin?: string }
-    const origin = account.setConfiguredCloudOrigin(String(body.origin ?? ''))
-    route.send(200, { origin, available: true })
-  })
-
-  handledRoute('POST', '/api/account/cloud/login', async (route) => {
-    route.send(200, await connectCloud(route, 'login'))
-  })
-
-  handledRoute('POST', '/api/account/cloud/register', async (route) => {
-    route.send(201, await connectCloud(route, 'register'))
-  })
-
-  handledRoute('POST', '/api/account/cloud/sync-create', async (route) => {
-    if (!getRuntimePolicy().allowCloudLinking) throw new CollabError('服务端不能连接另一个云端账号', 400)
-    const local = actor(route)
-    const body = (await route.json().catch(() => ({}))) as { origin?: string }
-    const requestedOrigin = String(body.origin ?? '')
-    if (!local.email) throw new CollabError('本地账号没有可同步的邮箱', 400)
-    const password = account.store.recalledPassword(local.id)
-    if (!password) throw new CollabError('请退出后重新登录一次，就能用本地密码创建云端账号', 400)
-    try {
-      route.send(201, {
-        ...(await connectCloudIdentity(local, 'register', local.email, password, requestedOrigin, local.name)),
-        created: true,
-      })
-    } catch (error) {
-      if (!(error instanceof CollabError) || error.status !== 409) throw error
-      route.send(200, {
-        ...(await connectCloudIdentity(local, 'login', local.email, password, requestedOrigin)),
-        created: false,
-      })
-    }
-  })
-
-  authedRoute('POST', '/api/account/cloud/active', async (route, me) => {
-    const body = (await route.json()) as { remoteAccountId?: string; origin?: string }
-    const connection = account.activateCloud(me.id, String(body.origin ?? ''), String(body.remoteAccountId ?? ''))
-    ctx.http.broadcast('database', { ts: Date.now() })
-    route.send(200, {
-      account: {
-        id: connection.remoteAccountId,
-        name: connection.remoteName,
-        email: connection.remoteEmail,
-        avatar: account.cloudAvatar(connection.origin, connection.remoteAccountId),
+  // 云端模式不加载 @biu/host-account/desktop-cloud-link，仅保留只读探测端点告知前端无需云端桥接。
+  if (!getRuntimePolicy().allowCloudLinking) {
+    ctx.http.route(
+      'GET',
+      '/api/account/cloud/endpoint',
+      (route) => {
+        const requested = String(route.query.get('workspaceId') ?? '').trim()
+        route.send(200, { mode: 'local', workspaceId: requested || account.store.activeWorkspaceId() || '' })
       },
-      origin: connection.origin,
+      { scope: 'host' },
+    )
+    handledRoute('GET', '/api/account/cloud', (route) => {
+      route.send(200, { available: false, connected: false, configuredOrigin: '' })
     })
-  })
-
-  authedRoute('DELETE', '/api/account/cloud', async (route, me) => {
-    const queryOrigin = String(route.query.get('origin') ?? '').trim()
-    let bodyOrigin = ''
-    if (!queryOrigin) {
-      const body = (await route.json().catch(() => ({}))) as { origin?: string }
-      bodyOrigin = String(body?.origin ?? '').trim()
-    }
-    account.removeCloudConnection(me.id, queryOrigin || bodyOrigin || undefined)
-    ctx.http.broadcast('database', { ts: Date.now() })
-    route.send(200, { ok: true, workspaceId: account.store.activeWorkspaceId() })
-  })
+  }
 
   handledRoute('GET', '/api/account/active', async (route) => {
     actor(route)
@@ -752,10 +548,14 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   })
 
   const authLimiter = new SlidingWindowLimiter()
-  const enforceAuthRateLimit = (route: RouteContext, action: 'login' | 'register') => {
+  const enforceAuthRateLimit = async (route: RouteContext, action: 'login' | 'register') => {
     const limit = authRateLimitMax()
     if (limit <= 0) return true
-    const result = authLimiter.check(`${action}:${clientIp(route.req)}`, Date.now(), limit)
+    const key = `auth:${action}:${clientIp(route.req)}`
+    const realtime = getRealtimePort(ctx)
+    const result = realtime
+      ? await realtime.checkRateLimit(key, { windowMs: 60_000, maxAttempts: limit, now: Date.now() })
+      : authLimiter.check(`${action}:${clientIp(route.req)}`, Date.now(), limit)
     if (result.allowed) return true
     route.res.setHeader('retry-after', String(result.retryAfterSec))
     route.send(429, { error: '操作过于频繁，请稍后再试', retryAfterSec: result.retryAfterSec })
@@ -763,7 +563,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   }
 
   ctx.http.route('POST', '/api/account/register', async (route) => {
-    if (!enforceAuthRateLimit(route, 'register')) return
+    if (!(await enforceAuthRateLimit(route, 'register'))) return
     try {
       const body = (await route.json()) as { email?: string; password?: string; name?: string }
       const password = String(body.password ?? '')
@@ -783,7 +583,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   })
 
   ctx.http.route('POST', '/api/account/login', async (route) => {
-    if (!enforceAuthRateLimit(route, 'login')) return
+    if (!(await enforceAuthRateLimit(route, 'login'))) return
     try {
       const body = (await route.json()) as { email?: string; password?: string }
       const found = account.store.login(

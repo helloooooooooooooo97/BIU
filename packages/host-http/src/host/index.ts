@@ -17,7 +17,7 @@ import {
   runWithRequestWorkspace,
 } from '@biu/host-plugin-loader/data-dir'
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
-import { getAccountPort } from '@biu/host-plugin-loader/ports'
+import { getAccountPort, getBlobPort, getRealtimePort } from '@biu/host-plugin-loader/ports'
 import { isShareApiPath, isSharePublicPath } from './share-gate.ts'
 import { isAssetTicketEligiblePath, signAssetTicket, verifyAssetTicket } from './asset-ticket.ts'
 import { consumeWsTicket, issueWsTicket, resolveCorsOrigin } from './ws-ticket.ts'
@@ -238,9 +238,37 @@ export class HttpService extends Service {
   private server: Server | null = null
   /** 同一 HTTP server 上只能有一条 upgrade 路由；多挂几个 `ws.Server({ server })` 会互相 abort 握手。 */
   private wsServers = new Map<string, WebSocketServer>()
+  private draining = false
+  private ready = false
+
+  /** 进入优雅下线排空阶段：/readyz 立即返回 503，通知负载均衡摘除本节点流量。 */
+  beginDrain() {
+    this.draining = true
+  }
+
+  isDraining() {
+    return this.draining
+  }
 
   constructor(ctx: Context, public config: { port: number; host: string; publicDir: string; fallbackPort: boolean; sharePort: number; shareHost: string }) {
     super(ctx, 'http')
+    this.route(
+      'GET',
+      '/healthz',
+      (route) => {
+        route.send(200, { ok: true, draining: this.draining })
+      },
+      { scope: 'public' },
+    )
+    this.route(
+      'GET',
+      '/readyz',
+      (route) => {
+        const isReady = this.ready && !this.draining
+        route.send(isReady ? 200 : 503, { ok: isReady, ready: isReady, draining: this.draining })
+      },
+      { scope: 'public' },
+    )
     this.route(
       'GET',
       '/api/runtime',
@@ -272,14 +300,15 @@ export class HttpService extends Service {
           route.send(401, { error: '需要登录并指定空间' })
           return
         }
-        route.send(200, signAssetTicket({ accountId, workspaceId }))
+        const blob = getBlobPort(this.ctx)
+        route.send(200, blob ? blob.signAssetTicket({ accountId, workspaceId }) : signAssetTicket({ accountId, workspaceId }))
       },
       { scope: 'workspace' },
     )
     this.route(
       'POST',
       '/api/ws-ticket',
-      (route) => {
+      async (route) => {
         const accountId = currentAccountId()
         const workspaceId = currentRequestWorkspaceId()
         if (!accountId || !workspaceId) {
@@ -295,7 +324,11 @@ export class HttpService extends Service {
           .find((part) => part.startsWith('biu_account=') || part.startsWith('biu_legacy_account='))
         const cookieToken = encoded ? decodeURIComponent(encoded.slice(encoded.indexOf('=') + 1)) : ''
         const sessionToken = bearerMatch?.[1] ?? cookieToken
-        route.send(200, issueWsTicket({ accountId, workspaceId, sessionToken }))
+        const realtime = getRealtimePort(this.ctx)
+        const issued = realtime
+          ? await realtime.issueWsTicket({ accountId, workspaceId, sessionToken })
+          : issueWsTicket({ accountId, workspaceId, sessionToken })
+        route.send(200, issued)
       },
       { scope: 'workspace' },
     )
@@ -306,8 +339,25 @@ export class HttpService extends Service {
       this.server = server
       const hub = new WebSocketServer({ noServer: true })
       this.wsServers.set('/ws', hub)
-      hub.on('connection', (socket, request: IncomingMessage) => {
-        const auth = this.authenticateSocket(request)
+      const realtime = getRealtimePort(this.ctx)
+      const unsubBroadcast = realtime?.subscribe<{
+        type: string
+        payload: unknown
+        workspaceId?: string
+        accountId?: string
+        sessionId?: string
+      }>('biu:ws:broadcast', ({ payload }) => {
+        this.deliverLocalBroadcast(payload.type, payload.payload, payload.workspaceId ?? '', payload.accountId ?? '', payload.sessionId ?? '')
+      })
+      const unsubAccount = realtime?.subscribe<{
+        accountId: string
+        type: string
+        payload: unknown
+      }>('biu:ws:account', ({ payload }) => {
+        this.deliverLocalAccountBroadcast(payload.accountId, payload.type, payload.payload)
+      })
+      hub.on('connection', async (socket, request: IncomingMessage) => {
+        const auth = await this.authenticateSocket(request)
         if (auth.error) {
           socket.close(auth.error, auth.error === 4403 ? 'workspace' : 'tenant')
           return
@@ -367,6 +417,7 @@ export class HttpService extends Service {
       })
       const host = config.host ?? '127.0.0.1'
       server.listen(config.port, host, () => {
+        this.ready = true
         const address = server.address()
         const port = address && typeof address !== 'string' ? address.port : config.port
         if (config.sharePort > 0 && config.sharePort === config.port) {
@@ -378,6 +429,10 @@ export class HttpService extends Service {
       })
       return () =>
         new Promise<void>((resolve) => {
+          this.ready = false
+          this.draining = true
+          unsubBroadcast?.()
+          unsubAccount?.()
           clearInterval(heartbeatTimer)
           for (const socket of [...this.sockets]) {
             this.unregisterSocket(socket)
@@ -422,8 +477,8 @@ export class HttpService extends Service {
     const pluginId = currentPluginId()
     return this.ctx.effect(() => {
       const wss = new WebSocketServer({ noServer: true })
-      wss.on('connection', (socket, request) => {
-        const auth = this.authenticateSocket(request)
+      wss.on('connection', async (socket, request) => {
+        const auth = await this.authenticateSocket(request)
         if (getRuntimePolicy().authzMode === 'rbac') {
           if (auth.error) {
             socket.close(auth.error, auth.error === 4403 ? 'workspace' : 'tenant')
@@ -593,6 +648,21 @@ export class HttpService extends Service {
     }
     workspaceId ||= currentRequestWorkspaceId()
     accountId ||= currentAccountId()
+    const realtime = getRealtimePort(this.ctx)
+    if (realtime) {
+      void realtime.publish('biu:ws:broadcast', { type, payload, workspaceId, accountId, sessionId })
+      return
+    }
+    this.deliverLocalBroadcast(type, payload, workspaceId, accountId, sessionId)
+  }
+
+  private deliverLocalBroadcast(
+    type: string,
+    payload: unknown,
+    workspaceId: string,
+    accountId: string,
+    sessionId: string,
+  ) {
     const data = JSON.stringify({ type, payload, ts: Date.now() })
     const sendIfEligible = (socket: WebSocket) => {
       if (socket.readyState !== socket.OPEN) return
@@ -633,6 +703,15 @@ export class HttpService extends Service {
   }
 
   broadcastAccount(accountId: string, type: string, payload: unknown) {
+    const realtime = getRealtimePort(this.ctx)
+    if (realtime) {
+      void realtime.publish('biu:ws:account', { accountId, type, payload })
+      return
+    }
+    this.deliverLocalAccountBroadcast(accountId, type, payload)
+  }
+
+  private deliverLocalAccountBroadcast(accountId: string, type: string, payload: unknown) {
     const bucket = this.socketsByAccount.get(accountId)
     if (!bucket || bucket.size === 0) return
     const data = JSON.stringify({ type, payload, ts: Date.now() })
@@ -666,7 +745,7 @@ export class HttpService extends Service {
     }
   }
 
-  private authenticateSocket(request: IncomingMessage) {
+  private async authenticateSocket(request: IncomingMessage) {
     const url = new URL(request.url ?? '/', 'http://localhost')
     const cookie = String(request.headers.cookie ?? '')
     const encoded = cookie
@@ -684,7 +763,8 @@ export class HttpService extends Service {
     let accountId = ''
     const store = getAccountPort(this.ctx)?.store
     if (wsTicketRaw) {
-      const consumed = consumeWsTicket(wsTicketRaw)
+      const realtime = getRealtimePort(this.ctx)
+      const consumed = realtime ? await realtime.consumeWsTicket(wsTicketRaw) : consumeWsTicket(wsTicketRaw)
       if (!consumed) {
         return { accountId: '', workspaceId: '', token: '', error: 4401 as const }
       }
@@ -808,7 +888,8 @@ export class HttpService extends Service {
           }
         }
         if (!accountId && isAssetTicketEligiblePath(method, url.pathname)) {
-          const verified = verifyAssetTicket(url.searchParams)
+          const blob = getBlobPort(this.ctx)
+          const verified = blob ? blob.verifyAssetTicket(url.searchParams) : verifyAssetTicket(url.searchParams)
           if (verified) {
             accountId = verified.accountId
             ticketWorkspace = verified.workspaceId
