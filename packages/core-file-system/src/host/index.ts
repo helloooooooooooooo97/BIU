@@ -2632,9 +2632,19 @@ export function apply(ctx: Context) {
     const isInternal = member.member_kind === 'member'
     const isWsOwner = account.store.workspaceOwnerId?.(workspaceId) === accountId || member.role === 'owner'
     const isWsAdmin = isWsOwner || member.role === 'admin'
-    const isBuiltin = Boolean(view.builtin) || isBuiltinAllViewId(String(view.id))
+    const isCrossTableAll = view.ownerTable === 'all' || isBuiltinAllViewId(String(view.id))
+    const isCreator = Boolean(view.createdBy && view.createdBy === accountId)
 
-    // 1. 内置视图：空间内部成员默认只读可见，仅空间 owner 可修改/删除
+    // 1. 聚合视图（builtin-all:* 与 ownerTable === 'all'）：每个用户严格私有，互不互通，仅本人可见/可改/可删
+    if (isCrossTableAll) {
+      return isCreator
+        ? { allowed: true, effectiveRole: 'owner' }
+        : { allowed: false, effectiveRole: 'viewer' }
+    }
+
+    const isBuiltin = Boolean(view.builtin)
+
+    // 2. 其他内置视图：空间内部成员默认只读可见，仅空间 owner 可修改/删除
     if (isBuiltin) {
       if (!isInternal) return { allowed: false, effectiveRole: 'viewer' }
       const effectiveRole = isWsOwner ? 'owner' : 'viewer'
@@ -2642,16 +2652,12 @@ export function apply(ctx: Context) {
       return { allowed: isWsOwner, effectiveRole }
     }
 
-    // 顶层跨表汇总视图（ownerTable === 'all'）强制锁定为个人视图，仅创建者可见，不可公开或共享
-    const isCrossTableAll = view.ownerTable === 'all'
-    const protection = isCrossTableAll
-      ? 'personal'
-      : view.protection === 'public' || view.protection === 'locked' || view.protection === 'personal'
+    const protection =
+      view.protection === 'public' || view.protection === 'locked' || view.protection === 'personal'
         ? view.protection
         : view.scope === 'personal'
           ? 'personal'
           : 'locked'
-    const isCreator = Boolean(view.createdBy && view.createdBy === accountId)
 
     // 2. 个人视图（personal）：仅创建者本人可见、可改、可删（彻底取消视图级分享 ACL）
     if (protection === 'personal') {

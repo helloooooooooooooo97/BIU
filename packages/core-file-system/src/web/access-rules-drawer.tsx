@@ -3,9 +3,9 @@ import { createPortal } from 'react-dom'
 import {
   CheckIcon,
   LinkIcon,
+  LockClosedIcon,
   PencilSquareIcon,
   PlusIcon,
-  ShieldCheckIcon,
   TrashIcon,
   UsersIcon,
   XMarkIcon,
@@ -16,6 +16,7 @@ import { OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-port
 import type { CollectionSchema } from '@biu/type-file-system'
 import { countFilterRules, emptyFilterGroup, type FilterGroup } from '../query-logic.ts'
 import { viewDomainOf } from '../catalog-views.ts'
+import { tableModeFor } from '../paths.ts'
 import { WORKSPACE_MEMBERS_COLLECTION_PATH } from './database-path.ts'
 import { listCollection } from './db-client.ts'
 import { FSDB_SHARES_CHANGE_EVENT, OPEN_ACCESS_RULES_EVENT, emitFsdbEvent } from './fsdb-events.ts'
@@ -601,7 +602,10 @@ export function AccessRulesButton({
     }
   }
 
-  if (localOnly || activeDomain === 'shared') return null
+  // 聚合表（每人私有、不可分享）与共享域不展示分享规则盾牌
+  if (localOnly || activeDomain === 'shared' || (activeDomain === 'all' && tableModeFor(collectionPath) === 'k-plus-1')) {
+    return null
+  }
 
   const ruleCount = visibleRules.length
   const hasActiveRules = visibleRules.some((r) => r.enabled)
@@ -672,7 +676,7 @@ export function AccessRulesButton({
         data-testid="access-rules-trigger"
         onClick={() => setOpen((prev) => !prev)}
       >
-        <ShieldCheckIcon aria-hidden className="size-4" />
+        <LockClosedIcon aria-hidden className="size-4" />
         {ruleCount > 0 ? (
           <span
             data-testid="access-rules-count"
@@ -746,7 +750,7 @@ export function AccessRulesButton({
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 14, color: 'var(--biu-color-text)' }}>
-                    <ShieldCheckIcon aria-hidden className="size-4" />
+                    <LockClosedIcon aria-hidden className="size-4" />
                     <span>{draft ? (draft.id ? '编辑分享规则' : '新建分享规则') : drawerTitle}</span>
                   </div>
                   <button
