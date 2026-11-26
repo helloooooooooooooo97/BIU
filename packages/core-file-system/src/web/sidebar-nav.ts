@@ -1,6 +1,6 @@
 /** 侧栏展开/收起与数据路由切换的纯逻辑，UI 和压测共用。 */
 import { parseAppPath } from '@biu/web-session-view'
-import { builtinAllViewId, builtinScopeViewId, displayNameForView, isBuiltinAllViewId, isReadOnlyViewId, parseBuiltinScopeViewId, type DataScope } from '../catalog-views.ts'
+import { builtinAllViewId, builtinOwnerViewId, builtinScopeViewId, displayNameForView, isBuiltinAllViewId, isReadOnlyViewId, parseBuiltinScopeViewId, type DataScope } from '../catalog-views.ts'
 import { tableModeFor } from '../paths.ts'
 import { DATA_COLLECTION_PATH, DATA_MODULE, databaseAllViewPath, databaseRecordPath, databaseViewPath } from './database-path.ts'
 import { defaultViewId } from './view-storage.ts'
@@ -137,6 +137,7 @@ export function buildCrumbs(input: {
   viewId?: string
   viewName?: string
   viewScope?: DataScope
+  sharedOwner?: { accountId: string; name: string }
   views?: Array<{ id: string; name: string; mode?: ViewMode }>
   recordId?: string
   recordLabel?: string
@@ -180,6 +181,25 @@ export function buildCrumbs(input: {
           target: { kind: 'view', collection: input.collection, viewId: builtinScopeViewId(sc, allId) },
         })),
       })
+      if (resolvedScope === 'shared' && input.sharedOwner?.accountId) {
+        const ownerViewId = builtinOwnerViewId(input.sharedOwner.accountId, input.collection)
+        const ownerLabel = input.sharedOwner.name.trim() || input.sharedOwner.accountId.slice(0, 8)
+        crumbs.push({
+          kind: 'scope',
+          id: `owner:${input.sharedOwner.accountId}`,
+          label: ownerLabel,
+          icon: 'personal',
+          target: { kind: 'view', collection: input.collection, viewId: ownerViewId },
+          choices: [
+            {
+              id: `owner:${input.sharedOwner.accountId}`,
+              label: ownerLabel,
+              icon: 'personal',
+              target: { kind: 'view', collection: input.collection, viewId: ownerViewId },
+            },
+          ],
+        })
+      }
     }
     const storedName = input.viewName || input.views?.find((view) => view.id === input.viewId)?.name
     // 内置视图被隐藏后仍可通过导航打开，名称不能依赖可见视图列表。
