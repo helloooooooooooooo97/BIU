@@ -752,7 +752,7 @@ export class DatabaseAccessPolicy {
     return SHARE_SCOPE_LABEL[scope]
   }
 
-  ownerTableLabel(spec: CollectionSpec, record: DbRecord): string {
+  ownerTableLabel(spec: CollectionSpec, record: DbRecord): string | { kind: 'user'; accountId: string; name: string } {
     if (this.host.deviceWorkspace()) return '个人'
     const authorization = this.host.authorization()
     const actor = authorization?.currentActor()
@@ -769,7 +769,8 @@ export class DatabaseAccessPolicy {
     if (ownerTable.startsWith('account:')) {
       const accountId = ownerTable.slice('account:'.length)
       const person = this.host.collabStore()?.workspacePerson?.(accountId)
-      return person?.name?.trim() || (accountId === actor.accountId ? '我' : '个人')
+      const name = person?.name?.trim() || (accountId === actor.accountId ? '我' : '个人')
+      return { kind: 'user', accountId, name }
     }
     return ownerTable
   }

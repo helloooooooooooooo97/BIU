@@ -1,6 +1,6 @@
 import { lazy, Suspense, type ComponentProps, type ReactNode } from 'react'
 import { TagChip, TagChips } from '@biu/biu-ui/tag-chip'
-import { normalizeSchemaValue, type CollectionActionInfo, type CollectionInfo, type CollectionSchema, type DbRecord, type FieldSpec } from '@biu/type-file-system'
+import { normalizeSchemaValue, type CollectionActionInfo, type CollectionInfo, type CollectionSchema, type DbRecord, type FieldSpec, type PersonValue } from '@biu/type-file-system'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { CellPop } from './cell-pop.tsx'
 import { PLUGINS_COLLECTION_PATH, TAGS_COLLECTION_PATH } from './database-path.ts'
@@ -14,6 +14,7 @@ import {
   uniqueValues,
 } from './fields.ts'
 import { ActionCell, BoolCell, DefaultCell, fieldActionId } from './fsdb-cells.tsx'
+import { PersonFace } from './person-cell.tsx'
 import { tagChipIcon, tagChipLabel } from './schema-field.tsx'
 import { ShareRoleLabel, ShareScopeLabel } from './share-scope-label.tsx'
 import { SourceTableCell } from './source-table-cell.tsx'
@@ -114,7 +115,11 @@ export function renderBrowserCell(
     )
   }
   if (key === 'ownerTable') {
-    const label = String(row[key] ?? (localData ? '个人' : ''))
+    const raw = row[key]
+    if (raw && typeof raw === 'object' && !Array.isArray(raw) && (raw as { kind?: unknown }).kind === 'user') {
+      return <PersonFace value={raw as PersonValue} />
+    }
+    const label = String(raw ?? (localData ? '个人' : ''))
     const isSpace = label === '空间'
     return (
       <span
