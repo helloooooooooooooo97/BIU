@@ -1,5 +1,5 @@
 import type { CollectionSchema, CollectionSchemaPack, DbRecord } from '@biu/type-file-system'
-import { isBuiltinAllViewId, parseBuiltinScopeViewId } from './catalog-views.ts'
+import { isBuiltinAllViewId } from './catalog-views.ts'
 import { matchListFilterRecord, type FilterGroup } from './query-logic.ts'
 import { viewShareListFilter } from './share-view-match.ts'
 
@@ -25,11 +25,6 @@ export function viewFiltersForGrant(
   if (isBuiltinAllViewId(viewId)) {
     const view = saved.find((item) => item.id === viewId)
     return { scope: '', filters: view ? viewShareListFilter(view) : undefined }
-  }
-  const scopeView = parseBuiltinScopeViewId(viewId)
-  if (scopeView) {
-    const base = saved.find((view) => view.id === scopeView.viewId)
-    return { scope: scopeView.scope, filters: base ? viewShareListFilter(base) : undefined }
   }
   const view = saved.find((item) => item.id === viewId)
   if (!view) return null

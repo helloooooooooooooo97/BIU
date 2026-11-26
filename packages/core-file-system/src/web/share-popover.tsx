@@ -15,7 +15,6 @@ export { ShareScopeDetail, ShareRoleDetail } from './share-chain-detail.tsx'
 import { ScopeMark } from './share-scope-label.tsx'
 import { roleLabel } from './share-chain-detail.tsx'
 import { mintSharePin, shareClipboardText } from '../share-resources.ts'
-import { builtinAllView, isBuiltinAllViewId, parseBuiltinScopeViewId, scopedCollectionName } from '../catalog-views.ts'
 import { openAccessRulesDrawer } from './access-rules-drawer.tsx'
 import type { DbRecord } from '@biu/type-file-system'
 

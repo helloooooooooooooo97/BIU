@@ -113,7 +113,7 @@ function ViewRowShell({
               data-testid={`view-protection-btn-${view.id}`}
               title={
                 isAggregation
-                  ? '个人视图（聚合视角仅你自己可见）'
+                  ? '个人视图（数据聚合视角仅自己可见）'
                   : `${meta.label}：${meta.desc}`
               }
               style={{

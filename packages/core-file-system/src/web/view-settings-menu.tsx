@@ -288,7 +288,7 @@ export function ViewSettingsMenu({
                   style={{ fontSize: 12, color: 'var(--text-muted, #9aa0a6)' }}
                 >
                   <span className="fsdb-group-panel-label">保护视图</span>
-                  <span>个人视图（聚合视角仅自己可见）</span>
+                  <span>个人视图（数据聚合视角仅自己可见）</span>
                 </div>
               ) : (
                 <GroupAccordionSelect

@@ -6,15 +6,14 @@ import {
   VIEWS_COLLECTION_PATH,
   WORKSPACE_MEMBERS_COLLECTION_PATH,
   normalizeCollectionPath,
+  tableModeFor,
 } from './paths.ts'
 import { normalizeSavedView, type SavedView } from './web/saved-view.ts'
 
 const ALL_PREFIX = 'builtin-all:'
-const SCOPE_PREFIX = 'builtin-scope:'
-const OWNER_PREFIX = 'builtin-owner:'
 const MEMBER_PREFIX = 'builtin-member:'
 export type DataScope = 'personal' | 'workspace' | 'shared'
-/** 视图的逻辑域归属：'all' 为跨表聚合视图，'workspace' / 'personal' / 'shared' 为依附于 K+1 逻辑表的视图。 */
+/** 视图的逻辑域归属：'all' 为 /data 跨表聚合视图，'workspace' / 'personal' / 'shared' 为依附于 K+1 逻辑表的视图。 */
 export type ViewDomain = DataScope | 'all'
 
 export function viewDomainOf(
@@ -29,9 +28,6 @@ export function viewDomainOf(
 ): ViewDomain {
   if (!view) return 'all'
   const id = String(view.id ?? '').trim()
-  const parsedScope = parseBuiltinScopeViewId(id)
-  if (parsedScope) return parsedScope.scope
-  if (isBuiltinOwnerViewId(id)) return 'shared'
   if (
     isBuiltinAllViewId(id) ||
     isBuiltinCatalogViewId(id) ||
@@ -136,8 +132,6 @@ export function isReadOnlyViewId(id: string) {
     isBuiltinCatalogViewId(id) ||
     isBuiltinTagViewId(id) ||
     isBuiltinBlockKindViewId(id) ||
-    isBuiltinScopeViewId(id) ||
-    isBuiltinOwnerViewId(id) ||
     isBuiltinMemberViewId(id)
   )
 }
@@ -172,101 +166,6 @@ export function builtinMemberViews() {
   return MEMBER_VIEWS.map((item) => stubBuiltinMemberView(`${MEMBER_PREFIX}${item.kind}`)!)
 }
 
-export function builtinScopeViewId(scope: DataScope, viewId: string) {
-  return `${SCOPE_PREFIX}${scope}:${encodeURIComponent(viewId)}`
-}
-
-export function isBuiltinScopeViewId(id: string) {
-  return id.startsWith(`${SCOPE_PREFIX}personal:`) || id.startsWith(`${SCOPE_PREFIX}workspace:`) || id.startsWith(`${SCOPE_PREFIX}shared:`)
-}
-
-export function parseBuiltinScopeViewId(id: string): { scope: DataScope; viewId: string } | null {
-  if (!isBuiltinScopeViewId(id)) return null
-  const rest = id.slice(SCOPE_PREFIX.length)
-  const split = rest.indexOf(':')
-  if (split < 0) return null
-  const scope = rest.slice(0, split)
-  if (scope !== 'personal' && scope !== 'workspace' && scope !== 'shared') return null
-  try {
-    const viewId = decodeURIComponent(rest.slice(split + 1))
-    return viewId ? { scope, viewId } : null
-  } catch {
-    return null
-  }
-}
-
-export function builtinScopeView(view: SavedView, scope: DataScope): SavedView {
-  return normalizeSavedView({
-    ...view,
-    id: builtinScopeViewId(scope, view.id),
-    name: isBuiltinAllViewId(view.id) ? `${SCOPE_NAME[scope]}${view.name.replace(/^全部/, '')}` : view.name,
-    filters: { ...view.filters, $scope: scope },
-    builtin: true,
-  })
-}
-/** 空间与私人区拥有各自的视图集合；顶层聚合视图（ownerTable='all' 或 builtin-all）不归入单域。 */
-export function viewsForScope(views: SavedView[], scope: DataScope): SavedView[] {
-  return views.flatMap((view) => {
-    if (view.builtin || isBuiltinAllViewId(view.id)) return [builtinScopeView(view, scope)]
-    if (viewDomainOf(view) !== scope) return []
-    return [normalizeSavedView({ ...view, filters: { ...view.filters, $scope: scope } })]
-  })
-}
-
-export function builtinOwnerViewId(accountId: string, collectionPath: string) {
-  return `${OWNER_PREFIX}${encodeURIComponent(String(accountId ?? '').trim())}:${normalizeCollectionPath(collectionPath)}`
-}
-
-export function isBuiltinOwnerViewId(id: string) {
-  return id.startsWith(OWNER_PREFIX)
-}
-
-export function parseBuiltinOwnerViewId(id: string): { accountId: string; collectionPath: string } | null {
-  if (!isBuiltinOwnerViewId(id)) return null
-  const rest = id.slice(OWNER_PREFIX.length)
-  const split = rest.indexOf(':')
-  if (split <= 0) return null
-  try {
-    const accountId = decodeURIComponent(rest.slice(0, split)).trim()
-    const collectionPath = normalizeCollectionPath(rest.slice(split + 1))
-    return accountId && collectionPath && collectionPath !== '/' ? { accountId, collectionPath } : null
-  } catch {
-    return null
-  }
-}
-
-export function stubBuiltinOwnerView(id: string, ownerName?: string, table?: TableRef): SavedView | null {
-  const parsed = parseBuiltinOwnerViewId(id)
-  if (!parsed) return null
-  const noun = collectionNoun(table ?? { path: parsed.collectionPath, label: parsed.collectionPath.replace(/^\//, '') })
-  const displayOwner = String(ownerName ?? '').trim()
-  return normalizeSavedView({
-    id,
-    name: displayOwner ? `${displayOwner}的${noun}` : `共享${noun}`,
-    mode: 'table',
-    ...builtinViewLayout(),
-    filters: { $scope: 'shared', $ownerTable: `account:${parsed.accountId}` },
-    ownerTable: `account:${parsed.accountId}`,
-    columns: [],
-    groupBy: '',
-    wrap: false,
-    truncate: true,
-    query: '',
-    builtin: true,
-  })
-}
-
-export function stubBuiltinScopeView(id: string, listed: SavedView[] = []): SavedView | null {
-  const parsed = parseBuiltinScopeViewId(id)
-  if (!parsed) return null
-  const base = listed.find((view) => view.id === parsed.viewId)
-    ?? stubBuiltinBlockKindView(parsed.viewId)
-    ?? stubBuiltinCatalogView(parsed.viewId)
-    ?? stubBuiltinTagView(parsed.viewId)
-    ?? stubBuiltinAllView(parsed.viewId)
-  return base ? builtinScopeView(base, parsed.scope) : null
-}
-
 export function collectionNoun(table: TableRef) {
   const path = normalizeCollectionPath(table.path)
   const named = String(table.view?.title ?? table.label ?? '').trim()
@@ -288,13 +187,6 @@ export function displayNameForView(viewId: string, table: TableRef, storedName?:
   if (isBuiltinTagViewId(id)) return stubBuiltinTagView(id)?.name || collectionNoun(table)
   if (isBuiltinBlockKindViewId(id)) return stubBuiltinBlockKindView(id)?.name || collectionNoun(table)
   if (isBuiltinMemberViewId(id)) return stubBuiltinMemberView(id)?.name || collectionNoun(table)
-  if (isBuiltinScopeViewId(id)) {
-    const parsed = parseBuiltinScopeViewId(id)
-    return parsed ? `${SCOPE_NAME[parsed.scope]}${collectionNoun(table)}` : collectionNoun(table)
-  }
-  if (isBuiltinOwnerViewId(id)) {
-    return stubBuiltinOwnerView(id, undefined, table)?.name || collectionNoun(table)
-  }
   return collectionNoun(table)
 }
 
@@ -400,7 +292,13 @@ export function mergeCatalogViews(tables: CollectionInfo[], user: SavedView[], s
 
 export function mergeTableViews(table: TableRef | undefined, user: SavedView[], skipIds: Iterable<string> = []): SavedView[] {
   if (!table?.path || table.path === '/') return overlayListedViews([], user, skipIds)
-  const seeds = normalizeCollectionPath(table.path) === WORKSPACE_MEMBERS_COLLECTION_PATH
+  const path = normalizeCollectionPath(table.path)
+  // K+1 业务集合不再注入顶层聚合视图（/data 是唯一聚合表）
+  if (path !== DATA_COLLECTION_PATH && tableModeFor(path) === 'k-plus-1') {
+    const concrete = user.filter((v) => !isBuiltinAllViewId(String(v?.id ?? '')) && v?.ownerTable !== 'all')
+    return overlayListedViews([], concrete, skipIds)
+  }
+  const seeds = path === WORKSPACE_MEMBERS_COLLECTION_PATH
     ? [builtinAllView(table), ...builtinMemberViews()]
     : [builtinAllView(table)]
   return overlayListedViews(seeds, user, skipIds)
@@ -444,10 +342,8 @@ export function stubBuiltinBlockKindView(id: string): SavedView | null {
   return builtinBlockKindView({ kind, label: kind })
 }
 
-export function stubAnyBuiltinView(id: string, listed: SavedView[] = []): SavedView | null {
-  return stubBuiltinOwnerView(id)
-    ?? stubBuiltinScopeView(id, listed)
-    ?? stubBuiltinMemberView(id)
+export function stubAnyBuiltinView(id: string): SavedView | null {
+  return stubBuiltinMemberView(id)
     ?? stubBuiltinBlockKindView(id)
     ?? stubBuiltinCatalogView(id)
     ?? stubBuiltinTagView(id)
@@ -483,7 +379,7 @@ export function catalogLockFilters(
     base.$scope = domain
     return base
   }
-  const stub = stubAnyBuiltinView(key, listed as SavedView[])
+  const stub = stubAnyBuiltinView(key)
   return stub ? { ...(stub.filters ?? {}) } : {}
 }
 

@@ -1,13 +1,14 @@
 import { currentStorageWorkspaceId, readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
 import { apiFetch } from '@biu/biu-ui/api-client'
-import { builtinAllGroupBy, builtinAllViewId, stubBuiltinAllView, stubBuiltinBlockKindView, stubBuiltinCatalogView, stubBuiltinTagView, stubBuiltinScopeView, stubBuiltinOwnerView, stubBuiltinMemberView, isBuiltinAllViewForCollection, isBuiltinAllViewId, isNonPersonalView, parseBuiltinScopeViewId, viewDomainOf } from '../catalog-views.ts'
+import { builtinAllGroupBy, builtinAllViewId, stubBuiltinAllView, stubBuiltinBlockKindView, stubBuiltinCatalogView, stubBuiltinTagView, stubBuiltinMemberView, isBuiltinAllViewForCollection, isBuiltinAllViewId, isNonPersonalView } from '../catalog-views.ts'
 import {
+  DATA_COLLECTION_PATH,
   EDITOR_BLOCKS_COLLECTION_PATH,
   VIEWS_COLLECTION_PATH,
   WORKSPACE_MEMBERS_COLLECTION_PATH,
   isIndexCollection,
 } from './database-path.ts'
-import { normalizeCollectionPath } from '../paths.ts'
+import { normalizeCollectionPath, tableModeFor } from '../paths.ts'
 import { invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { emptyFilterGroup, looksLikeFilterTree, normalizeFilterGroup, parseSortsInput, resolveViewFilterTree } from '../query-logic.ts'
@@ -163,22 +164,22 @@ export function isOmittedViewId(collectionPath: string, viewId: string) {
 }
 
 export function viewForPath(collectionPath: string, routeViewId?: string): SavedView | null {
+  const path = normalizeCollectionPath(collectionPath)
+  const isKPlus1 = path !== DATA_COLLECTION_PATH && tableModeFor(path) === 'k-plus-1'
   const omitted = new Set(loadOmittedViewIds(collectionPath))
   const listed = loadViews(collectionPath).filter((item) => !omitted.has(item.id))
   const allId = builtinAllViewId(collectionPath)
-  const fallback = omitted.has(allId) ? null : stubBuiltinAllView(allId)
+  const fallback = isKPlus1 || omitted.has(allId) ? null : stubBuiltinAllView(allId)
   const route = String(routeViewId ?? '').trim()
   const want = route && !omitted.has(route) ? route : ''
   const preferred =
     (want
       ? listed.find((item) => item.id === want) ??
-        stubBuiltinOwnerView(want) ??
-        stubBuiltinScopeView(want, listed) ??
         stubBuiltinMemberView(want) ??
         stubBuiltinCatalogView(want) ??
         stubBuiltinTagView(want) ??
         stubBuiltinBlockKindView(want) ??
-        (isBuiltinAllViewForCollection(want, collectionPath) ? stubBuiltinAllView(want) : null)
+        (!isKPlus1 && isBuiltinAllViewForCollection(want, collectionPath) ? stubBuiltinAllView(want) : null)
       : undefined) ??
     listed.find((item) => item.id === loadActiveViewId(collectionPath, listed)) ??
     fallback ??
@@ -192,29 +193,24 @@ export function defaultViewId(collectionPath: string, routeViewId?: string) {
   const omitted = new Set(loadOmittedViewIds(collectionPath))
   const listed = loadViews(collectionPath).filter((item) => !omitted.has(item.id))
   if (listed[0]) return listed[0].id
+  const path = normalizeCollectionPath(collectionPath)
+  if (path !== DATA_COLLECTION_PATH && tableModeFor(path) === 'k-plus-1') return ''
   const allId = builtinAllViewId(collectionPath)
   return omitted.has(allId) ? '' : allId
 }
 
 /** 水合时列表可能还没有内置块类型视图；URL 上的 builtin-block: 仍用 stub 还原，不能退回「全部」。 */
 export function pickViewForRoute(listed: SavedView[], collectionPath: string, routeViewId?: string) {
+  const path = normalizeCollectionPath(collectionPath)
+  const isKPlus1 = path !== DATA_COLLECTION_PATH && tableModeFor(path) === 'k-plus-1'
   const route = String(routeViewId ?? '').trim()
   if (route) {
     const hit = listed.find((item) => item.id === route)
     if (hit) return hit
-    // 具体多维表（空间 / 个人）已下发真实视图时，自动把旧/兜底 builtin-scope: 路由升级为真实可持久化视图
-    const parsedScope = parseBuiltinScopeViewId(route)
-    if (parsedScope && (parsedScope.scope === 'workspace' || parsedScope.scope === 'personal')) {
-      const concrete = listed.filter(
-        (item) =>
-          !isBuiltinAllViewId(item.id) &&
-          !item.builtin &&
-          (parsedScope.scope === 'workspace'
-            ? item.ownerTable === 'workspace' || (!item.ownerTable && viewDomainOf(item) === 'workspace')
-            : Boolean(item.ownerTable?.startsWith('account:')) || viewDomainOf(item) === 'personal'),
-      )
-      const preferred = concrete.find((item) => isNonPersonalView(item)) ?? concrete[0]
-      if (preferred) return preferred
+    // K+1 业务集合不再有聚合视图：旧 URL（builtin-all / builtin-scope 等）自动落回空间表或首个真实视图
+    if (isKPlus1 && listed.length > 0) {
+      const wsDefault = listed.find((item) => item.ownerTable === 'workspace' && isNonPersonalView(item))
+      return wsDefault ?? listed.find((item) => isNonPersonalView(item)) ?? listed[0] ?? null
     }
     if (isOmittedViewId(collectionPath, route)) {
       return listed.find((item) => item.id === loadActiveViewId(collectionPath, listed)) ?? listed[0] ?? null
@@ -229,7 +225,7 @@ export function routeViewNeedsFetch(collectionPath: string, routeViewId?: string
   const id = String(routeViewId ?? '').trim()
   if (!id) return false
   if (isOmittedViewId(collectionPath, id)) return false
-  if (stubBuiltinAllView(id) || stubBuiltinBlockKindView(id) || stubBuiltinCatalogView(id) || stubBuiltinTagView(id) || stubBuiltinMemberView(id) || stubBuiltinOwnerView(id) || stubBuiltinScopeView(id)) {
+  if (stubBuiltinAllView(id) || stubBuiltinBlockKindView(id) || stubBuiltinCatalogView(id) || stubBuiltinTagView(id) || stubBuiltinMemberView(id)) {
     return false
   }
   return !loadViews(collectionPath).some((view) => view.id === id)

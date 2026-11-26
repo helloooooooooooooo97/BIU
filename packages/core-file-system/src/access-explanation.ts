@@ -3,8 +3,6 @@ import {
   builtinAllView,
   builtinMemberViews,
   isBuiltinAllViewId,
-  parseBuiltinScopeViewId,
-  scopedCollectionName,
 } from './catalog-views.ts'
 import { WORKSPACE_MEMBERS_COLLECTION_PATH } from './paths.ts'
 import { recordMatchesSharedView, resolveSharedView, type SharedViewDef } from './share-view-match.ts'
@@ -175,16 +173,12 @@ function titleOf(recordTitles: Record<string, string> | undefined, collection: s
 
 function resolveViewName(
   viewId: string,
-  collection: string,
+  _collection: string,
   tableLabel: string,
   dataViews: SharedViewDef[],
 ) {
   const found = dataViews.find((view) => view.id === viewId)?.name?.trim()
   if (found) return found
-  const parsed = parseBuiltinScopeViewId(viewId)
-  if (parsed) {
-    return scopedCollectionName({ path: collection, label: tableLabel || collection.replace(/^\//, '') }, parsed.scope)
-  }
   if (isBuiltinAllViewId(viewId)) return `全部${tableLabel || ''}`
   return viewId
 }

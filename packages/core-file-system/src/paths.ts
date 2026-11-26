@@ -43,6 +43,7 @@ const DERIVED_COLLECTIONS = new Set<string>([
   TRASH_COLLECTION_PATH,
   DATA_COLLECTION_PATH,
   TAGS_COLLECTION_PATH,
+  VIEWS_COLLECTION_PATH,
 ])
 
 /** 集合的逻辑表形态：workspace-only（仅空间表）、personal-only（仅个人表）、derived（派生跟随源记录）、k-plus-1（1 张空间表 + K 张个人表）。 */

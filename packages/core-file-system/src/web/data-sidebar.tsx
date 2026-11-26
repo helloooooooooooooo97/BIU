@@ -9,7 +9,6 @@ import {
   ChevronRightIcon,
   PlusIcon,
   RectangleStackIcon,
-  ShareIcon,
   StarIcon,
   UserIcon,
   UsersIcon,
@@ -20,7 +19,7 @@ import { FSDB_CHANGE_EVENT, parseFsdbChange, type CollectionInfo, type Collectio
 import { BoundedMap } from './bounded-map.ts'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
 import { groupField, groupRecords, parentFieldKey, treeChildren } from './fields.ts'
-import { builtinAllViewId, builtinOwnerViewId, builtinScopeViewId, isBuiltinAllViewId, isNonPersonalView, isReadOnlyViewId, viewDomainOf, type DataScope } from '../catalog-views.ts'
+import { builtinAllViewId, defaultTableViewId, isBuiltinAllViewId, isNonPersonalView, isReadOnlyViewId, type DataScope } from '../catalog-views.ts'
 import { tableModeFor } from '../paths.ts'
 import { dataSidebarKind, isRecordTreeCollection, sortDataCollections } from './database-path.ts'
 import { rememberInspectorWorkingView } from './inspector-db-route.ts'
@@ -176,9 +175,17 @@ function onSidebarRowClick(event: MouseEvent<HTMLElement>) {
 const ACCOUNT_EVENT = 'biu:account-token'
 
 function useCloudCreatorContext() {
-  const [ctx, setCtx] = useState<{ isCloud: boolean; myAccountId: string; isExternal: boolean }>({
+  const [ctx, setCtx] = useState<{
+    isCloud: boolean
+    myAccountId: string
+    myName: string
+    myAvatar: string
+    isExternal: boolean
+  }>({
     isCloud: false,
     myAccountId: '',
+    myName: '',
+    myAvatar: '',
     isExternal: false,
   })
 
@@ -191,8 +198,11 @@ function useCloudCreatorContext() {
         apiFetch('/api/account/workspaces').then((r) => (r.ok ? r.json() : null)).catch(() => null),
       ]).then(([me, active, listed]) => {
         if (cancelled) return
-        const myAccountId = String((me as { id?: string } | null)?.id ?? '').trim()
-        const hostOnline = (me as { online?: boolean } | null)?.online === true
+        const meObj = me as { id?: string; name?: string; avatar?: string; online?: boolean } | null
+        const myAccountId = String(meObj?.id ?? '').trim()
+        const myName = String(meObj?.name ?? '').trim()
+        const myAvatar = String(meObj?.avatar ?? '').trim()
+        const hostOnline = meObj?.online === true
         const activeId = String((active as { workspaceId?: string } | null)?.workspaceId ?? '').trim()
         const workspaces = Array.isArray((listed as { workspaces?: unknown[] } | null)?.workspaces)
           ? ((listed as { workspaces: Array<{ id?: string; location?: string; memberKind?: string }> }).workspaces)
@@ -200,7 +210,7 @@ function useCloudCreatorContext() {
         const current = workspaces.find((w) => w.id === activeId)
         const isCloud = hostOnline || current?.location === 'cloud'
         const isExternal = current?.memberKind === 'external' || current?.memberKind === 'guest'
-        setCtx({ isCloud, myAccountId, isExternal })
+        setCtx({ isCloud, myAccountId, myName, myAvatar, isExternal })
       })
     }
     load()
@@ -844,7 +854,7 @@ export const DataSidebar = memo(function DataSidebar({
     }
   }, [starredRecords])
 
-  const { isCloud: isCloudSpace, myAccountId, isExternal } = useCloudCreatorContext()
+  const { isCloud: isCloudSpace, myAccountId, myName, myAvatar, isExternal } = useCloudCreatorContext()
   const membersById = useMemberDirectory(isCloudSpace)
   const [sharedOwnersByPath, setSharedOwnersByPath] = useState<
     Record<string, Array<{ accountId: string; ownerTable: string; name: string; count: number }>>
@@ -996,14 +1006,39 @@ export const DataSidebar = memo(function DataSidebar({
       const open = openTables[tableStateKey] ?? false
       const listed = viewsFor(table.path)
       const isKPlus1Cloud = isCloudSpace && tableModeFor(table.path) === 'k-plus-1'
+      const pickConcreteViewId = (targetOwnerTable: string) => {
+        const matches = listed.filter(
+          (v) => !isBuiltinAllViewId(v.id) && !v.builtin && v.ownerTable === targetOwnerTable,
+        )
+        const preferred = matches.find((v) => isNonPersonalView(v)) ?? matches[0]
+        return preferred ? preferred.id : defaultTableViewId(targetOwnerTable, table.path)
+      }
+      const sharedOwners = (sharedOwnersByPath[table.path] ?? []).filter((o) => o.accountId !== myAccountId)
+      const wsTargetViewId = pickConcreteViewId('workspace')
+      const myTargetViewId = myAccountId ? pickConcreteViewId(`account:${myAccountId}`) : ''
+      const personalDefaultViewId =
+        !isExternal && myTargetViewId
+          ? myTargetViewId
+          : sharedOwners[0]
+            ? pickConcreteViewId(`account:${sharedOwners[0].accountId}`)
+            : wsTargetViewId
       const litViewForTable =
         table.path === litPath && litViewId
-          ? listed.find((v) => v.id === litViewId) ?? { id: litViewId }
+          ? listed.find((v) => v.id === litViewId) ?? null
           : null
-      const activeTableDomain = litViewForTable ? viewDomainOf(litViewForTable) : null
+      const activeOwnerTable =
+        litViewForTable?.ownerTable?.trim() ||
+        (litViewId === wsTargetViewId
+          ? 'workspace'
+          : myTargetViewId && litViewId === myTargetViewId
+            ? `account:${myAccountId}`
+            : '')
+      const myMember = myAccountId ? membersById.get(myAccountId) : undefined
+      const myDisplayName = myMember?.name?.trim() || myName || (myAccountId ? myAccountId.slice(0, 8) : '我')
+      const myDisplayAvatar = myMember?.avatar?.trim() || myAvatar || ''
       return (
         <div key={`${group}:${table.path}`} className="flex min-w-0 flex-col gap-px" data-collection-kind={group}>
-          <div className={`sidebar-group-head${isKPlus1Cloud && activeTableDomain === 'all' ? ' is-active' : ''}`} onClick={onSidebarRowClick}>
+          <div className="sidebar-group-head" onClick={onSidebarRowClick}>
             <div
               className="flex min-h-8 min-w-0 flex-1 items-center gap-1.5 rounded-md text-left text-[14px] font-medium tracking-normal text-inherit"
               title={name}
@@ -1020,7 +1055,9 @@ export const DataSidebar = memo(function DataSidebar({
                   revealTable(
                     tableStateKey,
                     table.path,
-                    isKPlus1Cloud ? builtinAllViewId(table.path) : (loadActiveViewId(table.path, listed) ?? listed[0]?.id),
+                    isKPlus1Cloud
+                      ? (!isExternal ? wsTargetViewId : personalDefaultViewId)
+                      : (loadActiveViewId(table.path, listed) ?? listed[0]?.id),
                   )
                 }
               >
@@ -1049,115 +1086,115 @@ export const DataSidebar = memo(function DataSidebar({
           </div>
           <SidebarFold open={open} className="sidebar-session-list min-w-0">
             {isKPlus1Cloud ? (
-              (() => {
-                const allId = builtinAllViewId(table.path)
-                const domains: Array<{
-                  scope: DataScope
-                  label: string
-                  icon: typeof UsersIcon
-                }> = isExternal
-                  ? [{ scope: 'shared', label: '共享', icon: ShareIcon }]
-                  : [
-                      { scope: 'workspace', label: '空间', icon: UsersIcon },
-                      { scope: 'personal', label: '个人', icon: UserIcon },
-                      { scope: 'shared', label: '共享', icon: ShareIcon },
-                    ]
-                const pickConcreteViewId = (targetOwnerTable: string, fallbackId: string, fallbackScope?: DataScope) => {
-                  const matches = listed.filter(
-                    (v) =>
-                      !isBuiltinAllViewId(v.id) &&
-                      !v.builtin &&
-                      (v.ownerTable === targetOwnerTable || (!v.ownerTable && fallbackScope && viewDomainOf(v) === fallbackScope)),
-                  )
-                  const preferred = matches.find((v) => isNonPersonalView(v)) ?? matches[0]
-                  return preferred ? preferred.id : fallbackId
-                }
-                return domains.map((domain) => {
-                  const scopeViewId = builtinScopeViewId(domain.scope, allId)
-                  const targetViewId =
-                    domain.scope === 'workspace'
-                      ? pickConcreteViewId('workspace', scopeViewId, 'workspace')
-                      : domain.scope === 'personal' && myAccountId
-                        ? pickConcreteViewId(`account:${myAccountId}`, scopeViewId, 'personal')
-                        : scopeViewId
-                  const sharedOwners = domain.scope === 'shared' ? (sharedOwnersByPath[table.path] ?? []) : []
-                  const ownerRowActive =
-                    domain.scope === 'shared' &&
-                    table.path === litPath &&
-                    sharedOwners.some(
-                      (owner) =>
-                        litViewId === builtinOwnerViewId(owner.accountId, table.path) ||
-                        listed.some((v) => v.id === litViewId && v.ownerTable === `account:${owner.accountId}`),
-                    )
-                  const domainActive = table.path === litPath && activeTableDomain === domain.scope && !ownerRowActive
-                  const Icon = domain.icon
-                  return (
-                    <div key={`${table.path}:${domain.scope}`} className="min-w-0" data-testid={`sidebar-domain-${table.path}-${domain.scope}`}>
-                      <SidebarRow
-                        active={domainActive}
-                        onClick={onSidebarRowClick}
-                        main={
-                          <SidebarRowMain>
-                            <span className="grid size-6 shrink-0 place-items-center opacity-80" aria-hidden>
-                              <Icon className="size-3.5 shrink-0" />
-                            </span>
-                            <button
-                              type="button"
-                              className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
-                              onClick={() => openView(table.path, targetViewId)}
-                            >
-                              {domain.label}
-                            </button>
-                          </SidebarRowMain>
-                        }
-                      />
-                      {sharedOwners.length > 0 ? (
-                        <div className="min-w-0 pl-4" data-testid={`sidebar-shared-owners-${table.path}`}>
-                          {sharedOwners.map((owner) => {
-                            const ownerViewId = builtinOwnerViewId(owner.accountId, table.path)
-                            const ownerTargetViewId = pickConcreteViewId(`account:${owner.accountId}`, ownerViewId)
-                            const member = membersById.get(owner.accountId)
-                            const displayName = member?.name?.trim() || owner.name
-                            const avatar = member?.avatar?.trim() || ''
-                            const active =
-                              table.path === litPath &&
-                              (litViewId === ownerViewId ||
-                                listed.some((v) => v.id === litViewId && v.ownerTable === `account:${owner.accountId}`))
-                            return (
-                              <div key={owner.accountId} className="min-w-0" data-testid={`sidebar-shared-owner-${owner.accountId}`}>
-                                <SidebarRow
-                                  active={active}
-                                  onClick={onSidebarRowClick}
-                                  main={
-                                    <SidebarRowMain>
-                                      <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
-                                        {avatar ? (
-                                          <img src={avatar} alt="" className="size-4 rounded-full object-cover" />
-                                        ) : (
-                                          <AiAvatar seed={owner.accountId} size={16} />
-                                        )}
-                                      </span>
-                                      <button
-                                        type="button"
-                                        className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
-                                        title={`${displayName} 共享给我的${name}`}
-                                        onClick={() => openView(table.path, ownerTargetViewId)}
-                                      >
-                                        {displayName}
-                                      </button>
-                                    </SidebarRowMain>
-                                  }
-                                  trail={<ChatCount count={owner.count} />}
-                                />
-                              </div>
-                            )
-                          })}
+              <>
+                {!isExternal ? (
+                  <div className="min-w-0" data-testid={`sidebar-domain-${table.path}-workspace`}>
+                    <SidebarRow
+                      active={table.path === litPath && activeOwnerTable === 'workspace'}
+                      onClick={onSidebarRowClick}
+                      main={
+                        <SidebarRowMain>
+                          <span className="grid size-6 shrink-0 place-items-center opacity-80" aria-hidden>
+                            <UsersIcon className="size-3.5 shrink-0" />
+                          </span>
+                          <button
+                            type="button"
+                            className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
+                            onClick={() => openView(table.path, wsTargetViewId)}
+                          >
+                            空间表
+                          </button>
+                        </SidebarRowMain>
+                      }
+                    />
+                  </div>
+                ) : null}
+                <div className="min-w-0" data-testid={`sidebar-domain-${table.path}-personal`}>
+                  <SidebarRow
+                    active={false}
+                    onClick={onSidebarRowClick}
+                    main={
+                      <SidebarRowMain>
+                        <span className="grid size-6 shrink-0 place-items-center opacity-80" aria-hidden>
+                          <UserIcon className="size-3.5 shrink-0" />
+                        </span>
+                        <button
+                          type="button"
+                          className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
+                          onClick={() => openView(table.path, personalDefaultViewId)}
+                        >
+                          个人表
+                        </button>
+                      </SidebarRowMain>
+                    }
+                  />
+                  <div className="min-w-0 pl-4" data-testid={`sidebar-personal-owners-${table.path}`}>
+                    {!isExternal && myAccountId ? (
+                      <div className="min-w-0" data-testid={`sidebar-personal-owner-me`}>
+                        <SidebarRow
+                          active={table.path === litPath && activeOwnerTable === `account:${myAccountId}`}
+                          onClick={onSidebarRowClick}
+                          main={
+                            <SidebarRowMain>
+                              <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+                                {myDisplayAvatar ? (
+                                  <img src={myDisplayAvatar} alt="" className="size-4 rounded-full object-cover" />
+                                ) : (
+                                  <AiAvatar seed={myAccountId} size={16} />
+                                )}
+                              </span>
+                              <button
+                                type="button"
+                                className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
+                                title={`我的个人${name}`}
+                                onClick={() => openView(table.path, myTargetViewId)}
+                              >
+                                {`${myDisplayName}（我）`}
+                              </button>
+                            </SidebarRowMain>
+                          }
+                        />
+                      </div>
+                    ) : null}
+                    {sharedOwners.map((owner) => {
+                      const ownerTableKey = `account:${owner.accountId}`
+                      const ownerTargetViewId = pickConcreteViewId(ownerTableKey)
+                      const member = membersById.get(owner.accountId)
+                      const displayName = member?.name?.trim() || owner.name
+                      const avatar = member?.avatar?.trim() || ''
+                      const active = table.path === litPath && activeOwnerTable === ownerTableKey
+                      return (
+                        <div key={owner.accountId} className="min-w-0" data-testid={`sidebar-shared-owner-${owner.accountId}`}>
+                          <SidebarRow
+                            active={active}
+                            onClick={onSidebarRowClick}
+                            main={
+                              <SidebarRowMain>
+                                <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+                                  {avatar ? (
+                                    <img src={avatar} alt="" className="size-4 rounded-full object-cover" />
+                                  ) : (
+                                    <AiAvatar seed={owner.accountId} size={16} />
+                                  )}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
+                                  title={`${displayName} 共享给我的${name}`}
+                                  onClick={() => openView(table.path, ownerTargetViewId)}
+                                >
+                                  {displayName}
+                                </button>
+                              </SidebarRowMain>
+                            }
+                            trail={<ChatCount count={owner.count} />}
+                          />
                         </div>
-                      ) : null}
-                    </div>
-                  )
-                })
-              })()
+                      )
+                    })}
+                  </div>
+                </div>
+              </>
             ) : (
               listed.map((view) => {
                 const starred = isViewStarred(starredViews, table.path, view.id)

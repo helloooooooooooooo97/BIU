@@ -40,7 +40,26 @@ export type PolicyViewGuard = {
   onRemoved?(workspaceId: string, collection: string, viewId: string): void
 }
 
-type ViewRow = { workspace_id?: string; collection: string; payload_json: string }
+type ViewRow = { workspace_id?: string; collection: string; view_id?: string; payload_json: string }
+
+/** 仅 /data 是聚合表；K+1 业务集合（/pages、/tasks 等）彻底移除聚合视图。 */
+function isLegacyKPlus1AggregationView(
+  collection: string,
+  viewId: string,
+  view?: { ownerTable?: string; filters?: Record<string, string> },
+): boolean {
+  const path = normalizeCollectionPath(collection)
+  if (path === DATA_COLLECTION_PATH || tableModeFor(path) !== 'k-plus-1') return false
+  if (isBuiltinAllViewId(viewId)) return true
+  if (view?.ownerTable === 'all') return true
+  if (view?.filters?.$scope === 'shared' && (!view.ownerTable || view.ownerTable === 'all')) return true
+  return false
+}
+
+function collectionHasBuiltinAllView(collection: string): boolean {
+  const path = normalizeCollectionPath(collection)
+  return path === DATA_COLLECTION_PATH || tableModeFor(path) !== 'k-plus-1'
+}
 
 function bucketKey(workspaceId: string, collectionPath: string) {
   return `${workspaceId}\t${normalizeCollectionPath(collectionPath)}`
@@ -100,8 +119,9 @@ export class SavedViewsStore {
     return Boolean(view?.builtin) || isBuiltinAllViewId(viewId)
   }
 
-  /** 聚合视图（builtin-all:* 或 ownerTable='all'）为每个用户严格私有，互不互通。 */
-  private isPerUserPrivateView(viewId: string, view?: { ownerTable?: string }): boolean {
+  /** 聚合视图（/data 全部视图、builtin-all:* 或 ownerTable='all'）为每个用户严格私有，互不互通。 */
+  private isPerUserPrivateView(viewId: string, view?: { ownerTable?: string }, path = ''): boolean {
+    if (path && normalizeCollectionPath(path) === DATA_COLLECTION_PATH) return true
     return isBuiltinAllViewId(viewId) || view?.ownerTable === 'all'
   }
 
@@ -208,7 +228,7 @@ export class SavedViewsStore {
 
   private visibleCount(path: string, views: StoredView[]) {
     const ids = new Set(views.map((view) => String(view.id)).filter(Boolean))
-    ids.add(builtinAllViewId(path))
+    if (collectionHasBuiltinAllView(path)) ids.add(builtinAllViewId(path))
     return ids.size
   }
 
@@ -216,11 +236,14 @@ export class SavedViewsStore {
     if (!this.db) return
     this.byPath.clear()
     let rows: ViewRow[] = []
+    let hasWorkspaceId = true
     try {
-      rows = this.db.prepare('SELECT workspace_id, collection, payload_json FROM saved_views').all() as ViewRow[]
+      rows = this.db.prepare('SELECT workspace_id, collection, view_id, payload_json FROM saved_views').all() as ViewRow[]
     } catch {
-      rows = this.db.prepare('SELECT collection, payload_json FROM saved_views').all() as ViewRow[]
+      hasWorkspaceId = false
+      rows = this.db.prepare('SELECT collection, view_id, payload_json FROM saved_views').all() as ViewRow[]
     }
+    const staleRows: Array<{ workspaceId: string; collection: string; viewId: string }> = []
     for (const row of rows) {
       const workspaceId = String(row.workspace_id ?? '')
       const collection = normalizeCollectionPath(row.collection)
@@ -235,10 +258,35 @@ export class SavedViewsStore {
       const id = String(parsed.id ?? '').trim()
       const name = String(parsed.name ?? id).trim()
       if (!id) continue
+      // 物理清理 K+1 业务集合下历史遗留的聚合视图（仅 /data 为聚合表）
+      if (isLegacyKPlus1AggregationView(collection, id, parsed)) {
+        const storageId = String(row.view_id ?? '').trim() || id
+        staleRows.push({ workspaceId, collection: row.collection, viewId: storageId })
+        continue
+      }
       const key = bucketKey(workspaceId, collection)
       const list = this.byPath.get(key) ?? []
-      list.push({ ...parsed, id, name })
+      if (collection === DATA_COLLECTION_PATH) {
+        list.push({ ...parsed, id, name, ownerTable: 'all', scope: 'personal', protection: 'personal' })
+      } else {
+        list.push({ ...parsed, id, name })
+      }
       this.byPath.set(key, list)
+    }
+    if (staleRows.length > 0) {
+      const del = hasWorkspaceId
+        ? this.db.prepare('DELETE FROM saved_views WHERE workspace_id = ? AND collection = ? AND view_id = ?')
+        : this.db.prepare('DELETE FROM saved_views WHERE collection = ? AND view_id = ?')
+      this.db.exec('BEGIN IMMEDIATE')
+      try {
+        for (const item of staleRows) {
+          if (hasWorkspaceId) del.run(item.workspaceId, item.collection, item.viewId)
+          else del.run(item.collection, item.viewId)
+        }
+        this.db.exec('COMMIT')
+      } catch {
+        this.db.exec('ROLLBACK')
+      }
     }
   }
 
@@ -285,8 +333,9 @@ export class SavedViewsStore {
   }
 
   private canAccountSeeView(workspaceId: string, path: string, view: StoredView, accountId: string): boolean {
+    if (isLegacyKPlus1AggregationView(path, String(view.id), view)) return false
     if (isIndexCollection(path)) return view.createdBy === accountId
-    if (this.isPerUserPrivateView(String(view.id), view)) {
+    if (this.isPerUserPrivateView(String(view.id), view, path)) {
       return !accountId || view.createdBy === accountId
     }
     if (accountId && this.policyGuard?.canSeeView) {
@@ -456,7 +505,7 @@ export class SavedViewsStore {
     const indexScoped = isIndexCollection(path)
     const prev = this.byPath.get(key) ?? []
     const isRowOwnedByActor = (view: StoredView) => {
-      if (indexScoped || this.isPerUserPrivateView(String(view.id), view)) {
+      if (indexScoped || this.isPerUserPrivateView(String(view.id), view, path)) {
         return !accountId || !view.createdBy || view.createdBy === accountId
       }
       return true
@@ -481,19 +530,25 @@ export class SavedViewsStore {
     for (const incoming of patch.upsert ?? []) {
       const id = String(incoming.id ?? '').trim()
       if (!id) continue
-      const perUser = indexScoped || this.isPerUserPrivateView(id, incoming)
+      // K+1 业务集合不再允许写入聚合视图（仅 /data 为聚合表）
+      if (isLegacyKPlus1AggregationView(path, id, incoming)) continue
+      const normalizedIncoming =
+        path === DATA_COLLECTION_PATH
+          ? { ...incoming, ownerTable: 'all', scope: 'personal' as const, protection: 'personal' as const }
+          : incoming
+      const perUser = indexScoped || this.isPerUserPrivateView(id, normalizedIncoming, path)
       const prevView = prev.find((view) =>
         perUser
           ? String(view.id) === id && (!accountId || view.createdBy === accountId)
           : String(view.id) === id,
       )
       if (!perUser && prevView && !isRowOwnedByActor(prevView)) continue
-      const incomingAt = Number((incoming as { updatedAt?: unknown }).updatedAt) || 0
+      const incomingAt = Number((normalizedIncoming as { updatedAt?: unknown }).updatedAt) || 0
       const storedAt = Number((prevView as { updatedAt?: unknown } | undefined)?.updatedAt) || 0
       if (prevView && incomingAt && storedAt && incomingAt < storedAt) continue
       const view = this.withBuiltinOwner(
         workspaceId,
-        mergeIncomingStoredView(prevView, incoming, id, incomingAt, perUser, accountId),
+        mergeIncomingStoredView(prevView, normalizedIncoming, id, incomingAt, perUser, accountId),
         accountId,
       )
       this.assertCanModifyView(workspaceId, path, prevView, view, accountId)
@@ -542,16 +597,18 @@ export class SavedViewsStore {
       if (!path || path === '/') continue
       const label = String(labels.get(path) ?? table.label ?? path)
       const stored = this.ensureDefaultTableViews(workspaceId, path, table, label, accountId)
-      const all = builtinAllView({ path, label, view: table.view })
-      const myAll =
-        stored.find((view) => String(view.id) === all.id && (!accountId || view.createdBy === accountId)) ?? {
-          ...all,
-          ...(accountId ? { createdBy: accountId } : {}),
-          ownerTable: 'all',
-          scope: 'personal',
-          protection: 'personal',
-        }
-      emit(path, label, myAll)
+      if (collectionHasBuiltinAllView(path)) {
+        const all = builtinAllView({ path, label, view: table.view })
+        const myAll =
+          stored.find((view) => String(view.id) === all.id && (!accountId || view.createdBy === accountId)) ?? {
+            ...all,
+            ...(accountId ? { createdBy: accountId } : {}),
+            ownerTable: 'all',
+            scope: 'personal',
+            protection: 'personal',
+          }
+        emit(path, label, myAll)
+      }
       for (const view of stored) {
         if (this.canAccountSeeView(workspaceId, path, view, accountId)) {
           emit(path, label, view)
@@ -587,10 +644,18 @@ export class SavedViewsStore {
     const name = uniqueViewName(String(fields.title ?? fields.name ?? '新视图').trim() || '新视图', views)
     const now = Date.now()
     const rawOwnerTable = typeof fields.ownerTable === 'string' ? fields.ownerTable.trim() : ''
-    let resolvedOwnerTable = rawOwnerTable || undefined
+    let resolvedOwnerTable =
+      tablePath === DATA_COLLECTION_PATH
+        ? 'all'
+        : rawOwnerTable === 'all' && tableModeFor(tablePath) === 'k-plus-1'
+          ? ''
+          : rawOwnerTable || undefined
     const wantsPersonal = fields.scope === 'personal' || fields.protection === 'personal'
-    if (accountId && !resolvedOwnerTable && wantsPersonal) {
+    if (tablePath !== DATA_COLLECTION_PATH && accountId && !resolvedOwnerTable && wantsPersonal) {
       resolvedOwnerTable = `account:${accountId}`
+    }
+    if (tablePath !== DATA_COLLECTION_PATH && tableModeFor(tablePath) === 'k-plus-1' && !resolvedOwnerTable) {
+      resolvedOwnerTable = 'workspace'
     }
     const base: StoredView = {
       id,
