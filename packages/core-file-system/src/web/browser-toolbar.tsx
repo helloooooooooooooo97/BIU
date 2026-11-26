@@ -16,7 +16,7 @@ import { HEADLESS_DISMISS_IGNORE, HeadlessDismiss } from '@biu/biu-ui/headless-d
 import { overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import { emitFsdbChange, type CollectionInfo, type CollectionSchema, type DbRecord, type FieldSpec } from '@biu/type-file-system'
 import type { CollectionRowViewType, CollectionViewType } from '@biu/type-file-system/ui'
-import { collectionNoun } from '../catalog-views.ts'
+import { collectionNoun, viewDomainOf } from '../catalog-views.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { countFilterRules, type FilterGroup, type SortRule } from '../query-logic.ts'
 import type { BrowserDialogState } from './browser-dialogs.tsx'
@@ -943,7 +943,7 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                         ) : null}
                       </div>
                     </HeadlessDismiss>
-                  ) : (
+                  ) : activeView && (viewDomainOf(activeView) === 'workspace' || viewDomainOf(activeView) === 'personal') ? null : (
                     <HeadlessDismiss enabled={createScopeOpen} onDismiss={() => setCreateScopeOpen(false)}>
                       <div className="fsdb-create-scope-wrap">
                         <button
