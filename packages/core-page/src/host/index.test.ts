@@ -599,3 +599,20 @@ test('adding and deleting page and property views preserves editor content witho
     assert.equal(removed.notes, '# 正文\n保留内容')
   }
 })
+
+test('page plugin activates and registers /pages without host-fs (cloud-api profile)', async () => {
+  const registered: CollectionSpec[] = []
+  const ctx = new Context()
+  class FakeDatabase extends Service {
+    constructor(inner: Context) {
+      super(inner, 'database')
+    }
+    register(spec: CollectionSpec) {
+      registered.push(spec)
+    }
+  }
+  await ctx.plugin(FakeDatabase)
+  await ctx.plugin(page)
+  assert.ok(registered.some((item) => item.path === '/pages'), '/pages should register without host-fs')
+  assert.ok(registered.some((item) => item.path === '/editor-blocks'), '/editor-blocks should register without host-fs')
+})

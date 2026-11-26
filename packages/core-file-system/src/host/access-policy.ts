@@ -509,13 +509,18 @@ export class DatabaseAccessPolicy {
   }
 
   isCurrentActorExternal(): boolean {
+    if (this.host.deviceWorkspace()) return false
     const authorization = this.host.authorization()
     const actor = authorization?.currentActor()
     if (!actor?.workspaceId || !actor.accountId) return false
-    const list = this.host.collabStore()?.members?.(actor.accountId, actor.workspaceId)
-    if (!list) return false
-    const me = list.find((item) => item.id === actor.accountId)
-    return Boolean(me?.member_kind && me.member_kind !== 'member')
+    try {
+      const list = this.host.collabStore()?.members?.(actor.accountId, actor.workspaceId)
+      if (!list) return false
+      const me = list.find((item) => item.id === actor.accountId)
+      return Boolean(me?.member_kind && me.member_kind !== 'member')
+    } catch {
+      return false
+    }
   }
 
   /**
