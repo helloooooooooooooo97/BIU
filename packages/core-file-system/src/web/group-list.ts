@@ -67,6 +67,9 @@ export async function listGroupedCollection(opts: {
         sortField: 'id', sortDir: 'asc',
       })
       for (const value of uniqueValues(page.items, group.key, group.field)) extraValues.add(value)
+      if (group.key === 'ownerTable') {
+        Object.assign(seedLabels, recordGroupLabels(page.items))
+      }
       if (!page.items.length || offset + page.items.length >= page.total || extraValues.size >= 80) break
     }
   }
