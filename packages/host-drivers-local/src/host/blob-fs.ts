@@ -1,6 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { mkdir, readdir, readFile, stat, unlink, writeFile } from 'node:fs/promises'
-import { dirname, extname, join, relative, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { Service, type Context } from 'cordis'
 import { assetsRootPath, contentAddressHash, hashedAssetName } from '@biu/host-plugin-loader'
 import type { BlobObjectMeta, BlobSignedTicket, BlobStorePort } from '@biu/host-plugin-loader/ports'
@@ -210,5 +210,3 @@ export const inject = [] as const
 export function apply(ctx: Context, config?: { rootDir?: string }) {
   new LocalFsBlobDriver(ctx, config)
 }
-
-export { extname }
