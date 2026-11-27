@@ -9,9 +9,11 @@ import { SidebarFold } from '@biu/biu-ui/sidebar-fold'
 import {
   ChevronDoubleLeftIcon,
   ChevronRightIcon,
+  LinkIcon,
   LockClosedIcon,
   PlusIcon,
   RectangleStackIcon,
+  ShieldCheckIcon,
   StarIcon,
   UserGroupIcon,
   UserIcon,
@@ -24,7 +26,7 @@ import { BoundedMap } from './bounded-map.ts'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
 import { groupField, groupRecords, parentFieldKey, treeChildren } from './fields.ts'
 import type { DataScope } from '../catalog-views.ts'
-import { DATA_COLLECTION_PATH, TRASH_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, normalizeCollectionPath } from '../paths.ts'
+import { DATA_COLLECTION_PATH, TRASH_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, isPersonalOnlyCollection, normalizeCollectionPath } from '../paths.ts'
 import { dataSidebarKind, isRecordTreeCollection, sortDataCollections } from './database-path.ts'
 import { rememberInspectorWorkingView } from './inspector-db-route.ts'
 import { readJson } from './db-client.ts'
@@ -919,6 +921,46 @@ export const DataSidebar = memo(function DataSidebar({
     )
   }
 
+  const renderCollectionPermissionIcon = (tablePath: string) => {
+    if (!isCloudSpace) return null
+    const normalized = normalizeCollectionPath(tablePath)
+    let kind: 'personal' | 'workspace' | 'derived' | 'acl'
+    let Icon: typeof ShieldCheckIcon
+    let tip: string
+    if (isPersonalOnlyCollection(normalized)) {
+      kind = 'personal'
+      Icon = UserIcon
+      tip = '纯私人数据 · 仅自己可见'
+    } else if (normalized === WORKSPACE_MEMBERS_COLLECTION_PATH) {
+      kind = 'workspace'
+      Icon = UserGroupIcon
+      tip = '纯空间数据 · 空间成员共享'
+    } else if (
+      dataSidebarKind(normalized) === 'index' ||
+      normalized === DATA_COLLECTION_PATH ||
+      normalized === TRASH_COLLECTION_PATH
+    ) {
+      kind = 'derived'
+      Icon = LinkIcon
+      tip = '衍生数据 · 权限跟随源记录'
+    } else {
+      kind = 'acl'
+      Icon = ShieldCheckIcon
+      tip = '权限数据 · 支持私人/共享/空间权限控制'
+    }
+    return (
+      <span
+        className="inline-grid size-6 shrink-0 place-items-center text-(--biu-color-text-muted)"
+        data-testid={`sidebar-collection-kind-${normalized}`}
+        data-kind={kind}
+        title={tip}
+        aria-label={tip}
+      >
+        <Icon aria-hidden className="size-4 shrink-0" />
+      </span>
+    )
+  }
+
   const starredTreePreviewKey = starredRecordRows
     .filter(({ table }) => isRecordTreeCollection(table.path))
     .map(({ table }) => table.path)
@@ -1046,6 +1088,7 @@ export const DataSidebar = memo(function DataSidebar({
                 {name}
               </button>
             </div>
+            {renderCollectionPermissionIcon(table.path)}
             <ChatCount count={listed.length} />
             <button
               type="button"

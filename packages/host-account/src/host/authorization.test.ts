@@ -357,3 +357,55 @@ test('isLockedMemberView fails closed when no lock checker is registered', () =>
     /LOCKED_MEMBER_VIEW_REQUIRED/,
   )
 })
+
+test('tasks and mcp are strictly personal-only and reject all sharing operations', () => {
+  const { store, auth, workspace, ada, bob, actor } = setup()
+  const asAda = <T>(op: () => T) => runWithAccount(ada.id, () => runWithRequestWorkspace(workspace.id, op))
+
+  for (const col of ['/tasks', '/mcp'] as const) {
+    const rec = { type: 'record' as const, workspaceId: workspace.id, collection: col, recordId: 'r1' }
+    auth.attach(actor(ada.id), rec, { accessMode: 'private' })
+
+    assert.equal(auth.authorize(actor(ada.id), 'resource:read', rec).allowed, true)
+    assert.equal(auth.authorize(actor(ada.id), 'resource:update', rec).allowed, true)
+    assert.equal(auth.authorize(actor(ada.id), 'resource:share', rec).allowed, false)
+    assert.equal(auth.authorize(actor(ada.id), 'resource:manage-permissions', rec).allowed, false)
+    assert.equal(auth.authorize(actor(bob.id), 'resource:read', rec).allowed, false)
+
+    assert.throws(() => asAda(() => store.shareWithEmail(ada.id, col, 'r1', bob.email, 'viewer')), /不支持分享/)
+    assert.throws(() => asAda(() => store.setRecordAccessMode(ada.id, col, 'r1', 'members', 'viewer')), /不支持分享/)
+    assert.throws(() => asAda(() => store.createGuestInvite(ada.id, col, 'r1', 'viewer')), /不支持分享/)
+    assert.throws(
+      () =>
+        asAda(() =>
+          store.batchUpdateRecordPermissions(ada.id, {
+            collection: col,
+            recordIds: ['r1'],
+            mode: 'grant',
+            subjects: [{ subjectType: 'account', subjectId: bob.id }],
+            role: 'viewer',
+          }),
+        ),
+      /不支持分享/,
+    )
+  }
+})
+
+test('agents clamp non-owner sharing to read-only viewer role', () => {
+  const { store, auth, workspace, ada, bob, actor } = setup()
+  const asAda = <T>(op: () => T) => runWithAccount(ada.id, () => runWithRequestWorkspace(workspace.id, op))
+  const agentRec = { type: 'record' as const, workspaceId: workspace.id, collection: '/agents', recordId: 'ag-1' }
+
+  auth.attach(actor(ada.id), agentRec, { accessMode: 'private' })
+  // Even if caller requests editor role via shareWithEmail or members mode, /agents clamps to viewer
+  asAda(() => store.shareWithEmail(ada.id, '/agents', 'ag-1', bob.email, 'editor', 'internal'))
+  assert.equal(auth.authorize(actor(bob.id), 'resource:read', agentRec).allowed, true)
+  assert.equal(auth.authorize(actor(bob.id), 'resource:update', agentRec).allowed, false)
+  assert.equal(auth.authorize(actor(bob.id), 'resource:delete', agentRec).allowed, false)
+  assert.equal(auth.authorize(actor(ada.id), 'resource:update', agentRec).allowed, true)
+
+  asAda(() => store.setRecordAccessMode(ada.id, '/agents', 'ag-1', 'members', 'editor'))
+  const decision = auth.authorize(actor(bob.id), 'resource:read', agentRec)
+  assert.equal(decision.allowed, true)
+  assert.equal(decision.effectiveRole, 'viewer')
+})

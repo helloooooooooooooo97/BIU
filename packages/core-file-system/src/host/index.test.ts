@@ -2618,8 +2618,8 @@ test('granting a locked member view to a private record shares it dynamically an
   const rows = new Map<string, DbRecord>()
   let seq = 0
   db.register({
-    id: 'tasks',
-    path: '/tasks',
+    id: 'pages',
+    path: '/pages',
     schema: {
       fields: {
         ...REQUIRED_RECORD_FIELDS,
@@ -2630,7 +2630,7 @@ test('granting a locked member view to a private record shares it dynamically an
     list: () => [...rows.values()],
     get: (id) => rows.get(id) ?? null,
     create: (records) => records.map((record) => {
-      const row = { id: `m${++seq}`, title: String(record.title ?? `Task ${seq}`) }
+      const row = { id: `m${++seq}`, title: String(record.title ?? `Page ${seq}`) }
       rows.set(row.id, row)
       return row
     }),
@@ -2663,27 +2663,27 @@ test('granting a locked member view to a private record shares it dynamically an
     const member = collab.members(accountId, workspaceId).find((item) => item.id === accountId)
     return Boolean(member && member.member_kind === 'member')
   })
-  await runWithAccount(ada.id, () => db.create('/tasks', [{ title: 'A空间' }], { scope: 'workspace' }))
-  await runWithAccount(ada.id, () => db.create('/tasks', [{ title: 'A私人' }], { scope: 'personal' }))
-  await runWithAccount(ada.id, () => collab.grantMemberView(ada.id, '/tasks', 'm2', 'mv-all-locked', 'editor'))
-  const bobList = asCollection(await runWithAccount(bob.id, () => db.list('/tasks')))
+  await runWithAccount(ada.id, () => db.create('/pages', [{ title: 'A空间' }], { scope: 'workspace' }))
+  await runWithAccount(ada.id, () => db.create('/pages', [{ title: 'A私人' }], { scope: 'personal' }))
+  await runWithAccount(ada.id, () => collab.grantMemberView(ada.id, '/pages', 'm2', 'mv-all-locked', 'editor'))
+  const bobList = asCollection(await runWithAccount(bob.id, () => db.list('/pages')))
   assert.deepEqual(bobList.items.map((row) => row.title).sort(), ['A私人', 'A空间'])
   assert.equal(bobList.items.find((row) => row.title === 'A私人')?.shareScope, '共享')
   assert.equal(bobList.items.find((row) => row.title === 'A私人')?.shareRole, '编辑')
   assert.equal(bobList.items.find((row) => row.title === 'A空间')?.shareRole, '编辑')
-  const adaList = asCollection(await runWithAccount(ada.id, () => db.list('/tasks')))
+  const adaList = asCollection(await runWithAccount(ada.id, () => db.list('/pages')))
   assert.equal(adaList.items.find((row) => row.title === 'A私人')?.shareScope, '共享')
   assert.equal(adaList.items.find((row) => row.title === 'A私人')?.shareRole, '管理')
   assert.equal(adaList.schema.fields.shareRole?.label, '权限')
   assert.equal(adaList.schema.fields.shareRole?.enum?.join(','), '管理,编辑,评论,查看')
   const privateId = String(bobList.items.find((row) => row.title === 'A私人')?.id ?? '')
-  const privateChain = runWithAccount(bob.id, () => collab.recordAccess(bob.id, '/tasks', privateId)).roleChain
+  const privateChain = runWithAccount(bob.id, () => collab.recordAccess(bob.id, '/pages', privateId)).roleChain
   assert.equal(privateChain[0]?.source, 'member-view-grant')
   assert.equal(privateChain[0]?.role, 'editor')
-  const ownChain = runWithAccount(ada.id, () => collab.recordAccess(ada.id, '/tasks', privateId)).roleChain
+  const ownChain = runWithAccount(ada.id, () => collab.recordAccess(ada.id, '/pages', privateId)).roleChain
   assert.equal(ownChain[0]?.detail, '你是创建者')
   assert.equal(ownChain[0]?.role, 'owner')
-  db.tags.replaceContentRefs('/tasks', privateId, ['via-view.png'])
+  db.tags.replaceContentRefs('/pages', privateId, ['via-view.png'])
   assert.doesNotThrow(() => runWithAccount(bob.id, () => db.requireAsset('via-view.png', 'resource:read')))
 })
 
@@ -2693,8 +2693,8 @@ test('batch static grant on one user records does not touch the other user priva
   const rows = new Map<string, DbRecord>()
   let seq = 0
   db.register({
-    id: 'tasks',
-    path: '/tasks',
+    id: 'pages',
+    path: '/pages',
     schema: {
       fields: {
         ...REQUIRED_RECORD_FIELDS,
@@ -2705,7 +2705,7 @@ test('batch static grant on one user records does not touch the other user priva
     list: () => [...rows.values()],
     get: (id) => rows.get(id) ?? null,
     create: (records) => records.map((record) => {
-      const row = { id: `t${++seq}`, title: String(record.title ?? `Task ${seq}`) }
+      const row = { id: `t${++seq}`, title: String(record.title ?? `Page ${seq}`) }
       rows.set(row.id, row)
       return row
     }),
@@ -2728,7 +2728,7 @@ test('batch static grant on one user records does not touch the other user priva
   await ctx.plugin(AccountBridge)
   const ada = collab.register('', Date.now(), 'secret1', 'all-ada@example.com')
   const bob = collab.register('', Date.now(), 'secret1', 'all-bob@example.com')
-  const workspace = collab.createWorkspace(ada.id, 'All tasks')
+  const workspace = collab.createWorkspace(ada.id, 'All pages')
   collab.addMemberByEmail(ada.id, workspace.id, bob.email)
   collab.setActive(ada.id, workspace.id)
   collab.setActive(bob.id, workspace.id)
@@ -2739,14 +2739,14 @@ test('batch static grant on one user records does not touch the other user priva
     return Boolean(member && member.member_kind === 'member')
   })
 
-  await runWithAccount(ada.id, () => db.create('/tasks', [{ title: 'A空间' }], { scope: 'workspace' }))
-  await runWithAccount(ada.id, () => db.create('/tasks', [{ title: 'A私人' }], { scope: 'personal' }))
-  await runWithAccount(bob.id, () => db.create('/tasks', [{ title: 'B空间' }], { scope: 'workspace' }))
-  await runWithAccount(bob.id, () => db.create('/tasks', [{ title: 'B私人' }], { scope: 'personal' }))
+  await runWithAccount(ada.id, () => db.create('/pages', [{ title: 'A空间' }], { scope: 'workspace' }))
+  await runWithAccount(ada.id, () => db.create('/pages', [{ title: 'A私人' }], { scope: 'personal' }))
+  await runWithAccount(bob.id, () => db.create('/pages', [{ title: 'B空间' }], { scope: 'workspace' }))
+  await runWithAccount(bob.id, () => db.create('/pages', [{ title: 'B私人' }], { scope: 'personal' }))
   // Bob runs batch grant over all 4 ids -> automatically updates only Bob-manageable ones (t3, t4), skipping Ada's (t1, t2)
   const res = runWithAccount(bob.id, () =>
     collab.batchUpdateRecordPermissions(bob.id, {
-      collection: '/tasks',
+      collection: '/pages',
       recordIds: ['t1', 't2', 't3', 't4'],
       mode: 'grant',
       subjects: [{ subjectType: 'member_view', subjectId: 'mv-team' }],
@@ -2757,14 +2757,14 @@ test('batch static grant on one user records does not touch the other user priva
   assert.equal(res.skippedCount, 2)
 
   const scopeOf = (items: DbRecord[], title: string) => items.find((row) => row.title === title)?.shareScope
-  const adaList = asCollection(await runWithAccount(ada.id, () => db.list('/tasks')))
+  const adaList = asCollection(await runWithAccount(ada.id, () => db.list('/pages')))
   assert.deepEqual(adaList.items.map((row) => row.title).sort(), ['A私人', 'A空间', 'B私人', 'B空间'])
   assert.equal(scopeOf(adaList.items, 'A私人'), '私人')
   assert.equal(scopeOf(adaList.items, 'A空间'), '空间')
   assert.equal(scopeOf(adaList.items, 'B私人'), '共享')
   assert.equal(scopeOf(adaList.items, 'B空间'), '空间')
 
-  const bobList = asCollection(await runWithAccount(bob.id, () => db.list('/tasks')))
+  const bobList = asCollection(await runWithAccount(bob.id, () => db.list('/pages')))
   assert.deepEqual(bobList.items.map((row) => row.title).sort(), ['A空间', 'B私人', 'B空间'])
   assert.equal(scopeOf(bobList.items, 'B私人'), '共享')
   assert.equal(bobList.items.some((row) => row.title === 'A私人'), false)

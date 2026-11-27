@@ -131,6 +131,9 @@ const POLICY_SELECT = `workspace_id, collection, record_id, owner_account_id, ac
 
 export const ROLE_RANK: Record<ResourceRole, number> = { viewer: 1, commenter: 2, editor: 3, manager: 4, owner: 5 }
 
+const PERSONAL_ONLY_COLLECTIONS = new Set(['/notices', '/tasks', '/mcp'])
+const READ_ONLY_SHARE_COLLECTIONS = new Set(['/agents'])
+
 export const ROLE_CAPABILITIES: Record<ResourceRole, ReadonlySet<Capability>> = {
   viewer: new Set<Capability>(['read']),
   commenter: new Set<Capability>(['read', 'comment']),
@@ -533,10 +536,36 @@ export class AuthorizationService {
         : { allowed: false, reason: 'INSUFFICIENT_PERMISSION' }
     }
 
+    if (PERSONAL_ONLY_COLLECTIONS.has(resource.collection)) {
+      if (action === 'resource:share' || action === 'resource:manage-permissions') {
+        return { allowed: false, reason: 'INSUFFICIENT_PERMISSION' }
+      }
+      const policy = this.policy(resource)
+      if (policy) {
+        if (policy.owner_account_id !== actor.accountId) {
+          return { allowed: false, reason: 'PRIVATE_RESOURCE' }
+        }
+        return { allowed: true, effectiveRole: 'owner', source: 'ownership' }
+      }
+      const legacy = this.db
+        .prepare(
+          `SELECT owner_id FROM workspace_records
+           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+        )
+        .get(resource.workspaceId, resource.collection, resource.recordId) as { owner_id?: string | null } | undefined
+      const legacyOwner = legacy?.owner_id ?? null
+      if (legacyOwner === actor.accountId) {
+        return { allowed: true, effectiveRole: 'owner', source: 'ownership' }
+      }
+      return { allowed: false, reason: 'PRIVATE_RESOURCE' }
+    }
+
     const resolved = this.effectiveRole(actor.accountId, resource, new Set(), 0)
     if (resolved && 'reason' in resolved) return resolved
     if (!resolved) return { allowed: false, reason: 'PRIVATE_RESOURCE' }
-    const effective = membership === 'viewer' || memberKind === 'guest'
+    // /agents 分享出去一律仅只读看聊天记录：非创建者强制收敛为 viewer，禁止操作或修改原代理
+    const readOnlyShared = READ_ONLY_SHARE_COLLECTIONS.has(resource.collection) && resolved.source !== 'ownership'
+    const effective = membership === 'viewer' || memberKind === 'guest' || readOnlyShared
       ? { effectiveRole: 'viewer' as const, source: resolved.source }
       : { effectiveRole: resolved.effectiveRole, source: resolved.source }
     if (!roleCoversAction(effective.effectiveRole, action)) {

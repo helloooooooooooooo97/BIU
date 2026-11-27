@@ -62,7 +62,7 @@ import { SavedViewsStore, viewRecordId, viewsCollection, type StoredView } from 
 import { RecordViewsStore, wrapCollectionRecordViews } from './record-views.ts'
 import { TagStore } from './tags-store.ts'
 import { SharesStore } from './shares-store.ts'
-import { isIndexCollection, isSystemCollection } from '../paths.ts'
+import { isIndexCollection, isPersonalOnlyCollection, isSystemCollection } from '../paths.ts'
 import { matchActionWhen } from '../shared/fields.ts'
 export { matchActionWhen }
 import { dataCollection, isDataOverviewSource, overviewRecord } from './data-collection.ts'
@@ -175,7 +175,7 @@ function schemaFor(spec: CollectionSpec): CollectionSchema {
     fields[key] = field.computed ? { ...field, writable: false } : field
   }
   let columns = ensureColumn(spec.schema.columns, 'tag')
-  if (!isSystemCollection(spec.path) && !isIndexCollection(spec.path)) {
+  if (!isSystemCollection(spec.path) && !isIndexCollection(spec.path) && !isPersonalOnlyCollection(spec.path)) {
     fields.shareScope = {
       type: 'select',
       label: '分享',
@@ -1582,7 +1582,7 @@ export class DatabaseService extends Service implements Database {
     const withTag = !need || need.tag || need.shareScope ? this.applyTagOverlay(spec, row) : row
     const withPeople = !need || need.people ? this.applyPersonOverlay(spec, withTag) : withTag
     const withMeta = !need || need.meta ? this.applyMetaOverlay(spec, withPeople) : withPeople
-    if (isSystemCollection(spec.path) || isIndexCollection(spec.path)) return withMeta
+    if (isSystemCollection(spec.path) || isIndexCollection(spec.path) || isPersonalOnlyCollection(spec.path)) return withMeta
     if (isBuiltinPluginRow(spec.path, row)) {
       return {
         ...withMeta,
@@ -2141,13 +2141,14 @@ export class DatabaseService extends Service implements Database {
       const parentRecordId = parentField ? String(record[parentField] ?? '').trim() : ''
       if (spec.path !== WORKSPACE_MEMBERS_COLLECTION_PATH) {
         const device = this.deviceWorkspace()
-        const workspaceOwned = options.scope === 'workspace' && !device
-        const shared = options.scope === 'shared' && !parentRecordId
+        const personalOnly = isPersonalOnlyCollection(spec.path)
+        const workspaceOwned = !personalOnly && options.scope === 'workspace' && !device
+        const shared = !personalOnly && options.scope === 'shared' && !parentRecordId
         const local = options.scope === 'local' && !parentRecordId
         this.attachWorkspaceRecord(spec.path, record.id, {
-          accessMode: parentRecordId ? 'inherit' : workspaceOwned ? 'members' : 'private',
+          accessMode: personalOnly ? 'private' : parentRecordId ? 'inherit' : workspaceOwned ? 'members' : 'private',
           ...(workspaceOwned ? { memberDefaultRole: 'editor' as const } : {}),
-          ...(parentRecordId ? { parentCollection: spec.path, parentRecordId } : {}),
+          ...(!personalOnly && parentRecordId ? { parentCollection: spec.path, parentRecordId } : {}),
         })
         if (shared) this.markPublicView(spec.path, record.id)
         if (local || device) this.markDeviceRecord(spec.path, record.id)

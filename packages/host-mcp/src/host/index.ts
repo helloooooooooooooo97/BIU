@@ -383,13 +383,40 @@ export class McpService extends Service {
     return this.listTools()
   }
 
+  private canReadServer(id: string): boolean {
+    if (getRuntimePolicy().authzMode !== 'rbac') return true
+    const account = this.ctx.get('account' as never) as
+      | {
+          authorization?: {
+            currentActor?: () => { accountId: string; workspaceId: string } | null
+            authorize?: (
+              actor: { accountId: string; workspaceId: string },
+              action: string,
+              resource: { type: 'record'; workspaceId: string; collection: string; recordId: string },
+            ) => { allowed: boolean }
+          }
+        }
+      | undefined
+    const authz = account?.authorization
+    const actor = authz?.currentActor?.()
+    if (!authz?.authorize || !actor) return true
+    return authz.authorize(actor, 'resource:read', {
+      type: 'record',
+      workspaceId: actor.workspaceId,
+      collection: '/mcp',
+      recordId: id,
+    }).allowed
+  }
+
   private visibleTools(state: ServerState) {
     if (state.builtin) return state.tools
     return state.tools.filter((tool) => toolAllowed(state.config.tools, tool.name))
   }
 
   listTools(serverId?: string) {
-    const states = serverId ? [this.require(serverId)] : [...this.servers.values()]
+    const states = (serverId ? [this.require(serverId)] : [...this.servers.values()]).filter(
+      (state) => state.builtin || this.canReadServer(state.config.id),
+    )
     return states.flatMap((state) =>
       this.visibleTools(state).map((tool) => ({ server: state.config.id, ...tool })),
     )
@@ -453,6 +480,9 @@ export class McpService extends Service {
     if (state.builtin) {
       if (name !== 'mcp_echo') throw new Error(`unknown mcp tool: ${name}`)
       return { text: String(args.text ?? '') }
+    }
+    if (!this.canReadServer(serverId)) {
+      throw new Error(`permission denied: mcp server is private (${serverId})`)
     }
     // 工具选择是硬约束：被排除的工具即使 Agent 猜到名字也调不动。
     if (!toolAllowed(state.config.tools, name)) {

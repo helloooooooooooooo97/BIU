@@ -18,6 +18,7 @@ import {
   TAGS_COLLECTION_PATH,
   VIEWS_COLLECTION_PATH,
   WORKSPACE_MEMBERS_COLLECTION_PATH,
+  isPersonalOnlyCollection,
   normalizeCollectionPath,
   savedViewRecordPath,
 } from '../paths.ts'
@@ -769,6 +770,10 @@ export function registerDatabaseHttpRoutes(
       }
       const collection = String(body.collection ?? '')
       const recordId = String(body.recordId ?? '')
+      if (isPersonalOnlyCollection(collection)) {
+        route.send(400, { error: '该数据类型仅自己可见，不支持分享' })
+        return
+      }
       await db.requirePath(`${collection}/${recordId}`, 'resource:share')
       const notifyViewShare = () => {
         if (normalizeCollectionPath(collection) !== VIEWS_COLLECTION_PATH) return
@@ -1418,6 +1423,10 @@ export function registerDatabaseHttpRoutes(
         q?: string
       }
       const { collection, recordIds } = await resolveBatchTargetIds(body)
+      if (isPersonalOnlyCollection(collection)) {
+        route.send(400, { error: '该数据类型仅自己可见，不支持分享' })
+        return
+      }
       const account = getAccountService(ctx)
       const { actorId } = resolveWorkspaceContext(account)
       if (!actorId || !account?.store?.previewBatchRecordPermissions) {
@@ -1458,6 +1467,10 @@ export function registerDatabaseHttpRoutes(
         return
       }
       const { collection, recordIds } = await resolveBatchTargetIds(body)
+      if (isPersonalOnlyCollection(collection)) {
+        route.send(400, { error: '该数据类型仅自己可见，不支持分享' })
+        return
+      }
       const account = getAccountService(ctx)
       const { actorId } = resolveWorkspaceContext(account)
       if (!actorId || !account?.store?.batchUpdateRecordPermissions) {
