@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { UsersIcon } from '@heroicons/react/16/solid'
+import { ShieldCheckIcon } from '@heroicons/react/16/solid'
 import { DATA_COLLECTION_PATH, isIndexCollection, WORKSPACE_MEMBERS_COLLECTION_PATH } from '../paths.ts'
 import { BatchShareDialog } from './batch-share-dialog.tsx'
 import type { SavedView } from './saved-view.ts'
@@ -41,13 +41,13 @@ export function TableCollaboratorsButton({
     <>
       <button
         type="button"
-        className="fsdb-btn fsdb-collab-btn"
+        className="tasks-refresh tasks-rbar-btn fsdb-collab-btn"
         data-testid="fsdb-table-collaborators-btn"
-        title="对当前视图筛选命中的全部记录批量设置权限"
+        aria-label="批量权限"
+        title="批量权限：对当前视图筛选命中的全部记录批量设置权限"
         onClick={() => setOpen(true)}
       >
-        <UsersIcon aria-hidden className="size-3.5" />
-        <span>批量权限</span>
+        <ShieldCheckIcon aria-hidden className="size-[15px]" />
       </button>
       <BatchShareDialog
         open={open}

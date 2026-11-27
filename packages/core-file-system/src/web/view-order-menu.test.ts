@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 import { emptyFilterGroup } from '../query-logic.ts'
 import { rankListedViews, type SavedView } from './saved-view.ts'
 import { createBrowserViewCrud } from './use-browser-view-crud.ts'
-import { resolveViewProtection, viewProtectionMeta } from './view-order-menu.tsx'
+import { viewScopeMeta } from './view-order-menu.tsx'
 import { loadViews, rememberViews } from './view-storage.ts'
 
 test('persistViewOrder paints new rank order immediately, sends diff upsert, and rolls back on failure', async () => {
@@ -115,23 +115,21 @@ test('persistViewOrder paints new rank order immediately, sends diff upsert, and
   }
 })
 
-test('view switcher button and dropdown both resolve and render 3-state protection badges', () => {
-  // Builtin aggregation / catalog views (/data) always resolve to personal
-  assert.equal(resolveViewProtection({ id: 'builtin-all:/data' }), 'personal')
-  assert.equal(resolveViewProtection({ id: 'builtin:/plugins' }), 'personal')
-  assert.equal(viewProtectionMeta({ id: 'builtin:/plugins' }).isAggregation, true)
-
-  // Single-table views reflect public / locked / personal accurately
-  assert.equal(resolveViewProtection({ id: 'v-pub', protection: 'public' }), 'public')
-  assert.equal(resolveViewProtection({ id: 'v-lock', protection: 'locked' }), 'locked')
-  assert.equal(resolveViewProtection({ id: 'v-priv', protection: 'personal' }), 'personal')
-  assert.equal(resolveViewProtection({ id: 'v-legacy-priv', scope: 'personal' }), 'personal')
-  assert.equal(resolveViewProtection({ id: 'v-legacy-ws', scope: 'workspace' }), 'public')
+test('view switcher button and dropdown resolve and render unified shareScope + locked badges', () => {
+  assert.equal(viewScopeMeta({ shareScope: 'personal', locked: false }).scope, 'personal')
+  assert.equal(viewScopeMeta({ shareScope: 'shared', locked: false }).scope, 'shared')
+  assert.equal(viewScopeMeta({ shareScope: 'workspace', locked: true }).scope, 'workspace')
+  assert.match(viewScopeMeta({ shareScope: 'workspace', locked: true }).title, /已锁定配置/)
+  assert.match(
+    viewScopeMeta({ shareScope: 'workspace', locked: true }, { isMembersCollection: true }).title,
+    /动态成员组/,
+  )
 
   const toolbar = readFileSync(resolve(import.meta.dirname, './browser-toolbar.tsx'), 'utf8')
   const orderMenu = readFileSync(resolve(import.meta.dirname, './view-order-menu.tsx'), 'utf8')
-  assert.match(toolbar, /data-testid="fsdb-view-tab"[\s\S]*?<ViewProtectionBadge view=\{activeView\} \/>/)
-  assert.match(orderMenu, /data-testid="fsdb-view-tab-protection"/)
-  assert.match(orderMenu, /data-testid=\{`view-protection-btn-\$\{view\.id\}`\}/)
-  assert.doesNotMatch(orderMenu, /showProtectionBadge/)
+  assert.match(toolbar, /data-testid="fsdb-view-tab"[\s\S]*?<ViewStatusBadge/)
+  assert.doesNotMatch(toolbar, /data-testid="fsdb-view-lock-btn"/)
+  assert.match(orderMenu, /data-testid="fsdb-view-tab-status"/)
+  assert.match(orderMenu, /data-testid=\{`view-lock-btn-\$\{view\.id\}`\}/)
+  assert.match(orderMenu, /data-testid=\{`view-scope-btn-\$\{view\.id\}`\}/)
 })

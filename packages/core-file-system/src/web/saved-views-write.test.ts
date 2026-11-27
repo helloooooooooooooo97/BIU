@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { builtinAllViewId, builtinTagViewId } from '../catalog-views.ts'
+import { EPHEMERAL_VIEW_ID } from '../catalog-views.ts'
 import { emptyFilterGroup } from '../query-logic.ts'
 import { rankListedViews, type SavedView } from './saved-view.ts'
 import { createBrowserViewCrud } from './use-browser-view-crud.ts'
@@ -49,7 +49,7 @@ function makeCrudHarness(path: string, initialViews: SavedView[], activeId = ini
   let latestViews = initialViews
   const activeViewIdRef = { current: activeId }
   const viewsWriteGenRef = { current: 0 }
-  let saveError = false
+  let saveError = ''
   const selected: SavedView[] = []
 
   const crud = createBrowserViewCrud({
@@ -176,7 +176,7 @@ test('addEmptyView optimistically inserts, selects after 200 OK, and rolls back 
     assert.equal(failHarness.viewsRef.current.length, 1)
     assert.equal(loadViews(path).length, 1)
     assert.equal(failHarness.selected.length, 0)
-    assert.equal(failHarness.getSaveError(), true)
+    assert.ok(failHarness.getSaveError().length > 0)
   } finally {
     restoreFail()
   }
@@ -185,18 +185,17 @@ test('addEmptyView optimistically inserts, selects after 200 OK, and rolls back 
   const posted: Array<{ upsert?: SavedView[] }> = []
   const restoreOk = mockFetch(async (input, init) => {
     const url = String(input)
-    if (url.includes('/api/db/saved-views')) {
+    if (url.includes('/api/db/saved-views') && init?.method === 'POST') {
       posted.push(JSON.parse(String(init?.body ?? '{}')))
       return new Response('{"ok":true}', { status: 200 })
     }
     const created = posted[0]?.upsert?.[0]
     return new Response(
       JSON.stringify({
-        items: [
-          { viewId: base.id, title: base.name, tablePath: path, rank: 0 },
-          ...(created ? [{ viewId: created.id, title: created.name, tablePath: path, rank: 1 }] : []),
+        views: [
+          base,
+          ...(created ? [{ ...created, rank: 1, revision: 1 }] : []),
         ],
-        total: 2,
       }),
       { status: 200, headers: { 'content-type': 'application/json' } },
     )
@@ -207,7 +206,7 @@ test('addEmptyView optimistically inserts, selects after 200 OK, and rolls back 
     assert.equal(posted.length, 1)
     assert.equal(okHarness.selected.length, 1)
     assert.equal(okHarness.selected[0]?.name, '新视图')
-    assert.equal(okHarness.getSaveError(), false)
+    assert.equal(okHarness.getSaveError(), '')
   } finally {
     restoreOk()
     env.restore()
@@ -240,56 +239,53 @@ test('commitViewName renames optimistically and rolls back if persist fails', as
   }
 })
 
-test('commitViewName persists renamed builtin-all view to server so /views stays in sync', async () => {
+test('commitViewName persists renamed seed all view and ignores ephemeral views', async () => {
   const env = setupBrowserGlobals()
-  const path = '/pages-behavior-builtin-rename'
-  const allId = builtinAllViewId(path)
-  const tagId = builtinTagViewId('tag-1')
+  const path = '/pages-behavior-seed-rename'
   const allView: SavedView = {
-    id: allId,
+    id: 'all',
     name: '全部页面',
     mode: 'table',
     sortField: 'updatedAt',
     sortDir: 'desc',
     filters: {},
     columns: ['title'],
-    builtin: true,
     rank: 0,
   }
-  const tagView: SavedView = {
-    id: tagId,
-    name: '标签视图',
+  const ephemeralView: SavedView = {
+    id: EPHEMERAL_VIEW_ID,
+    name: '临时视图',
     mode: 'table',
     sortField: 'updatedAt',
     sortDir: 'desc',
-    filters: { tag: 'tag-1' },
+    filters: {},
     columns: ['title'],
-    builtin: true,
+    ephemeral: true,
     rank: 1,
   }
-  const harness = makeCrudHarness(path, [allView, tagView], allId)
-  const posted: Array<{ path?: string; upsert?: SavedView[] }> = []
+  const harness = makeCrudHarness(path, [allView, ephemeralView], 'all')
+  const posted: Array<{ path?: string; upsert?: Array<Record<string, unknown>> }> = []
   const restore = mockFetch(async (input, init) => {
     const url = String(input)
-    if (url.includes('/api/db/saved-views')) {
+    if (url.includes('/api/db/saved-views') && init?.method === 'POST') {
       posted.push(JSON.parse(String(init?.body ?? '{}')))
       return new Response('{"ok":true}', { status: 200 })
     }
-    return new Response(JSON.stringify({ items: [], total: 0 }), {
+    return new Response(JSON.stringify({ views: [] }), {
       status: 200,
       headers: { 'content-type': 'application/json' },
     })
   })
   try {
-    harness.crud.commitViewName(allId, '核心页面')
+    harness.crud.commitViewName('all', '核心页面')
     await new Promise((r) => setTimeout(r, 25))
     assert.equal(posted.length, 1)
     assert.equal(posted[0]?.path, path)
-    assert.equal(posted[0]?.upsert?.[0]?.id, allId)
+    assert.equal(posted[0]?.upsert?.[0]?.id, 'all')
     assert.equal(posted[0]?.upsert?.[0]?.name, '核心页面')
 
-    // 其他虚拟只读内置视图仍不写服务端
-    harness.crud.commitViewName(tagId, '标签视图改名')
+    // 临时视图不写服务端
+    harness.crud.commitViewName(EPHEMERAL_VIEW_ID, '临时改名')
     await new Promise((r) => setTimeout(r, 25))
     assert.equal(posted.length, 1)
   } finally {
@@ -318,13 +314,13 @@ test('deleteView waits for persist OK before switching active view and stays put
   const removes: string[][] = []
   const restoreOk = mockFetch(async (input, init) => {
     const url = String(input)
-    if (url.includes('/api/db/saved-views')) {
+    if (url.includes('/api/db/saved-views') && init?.method === 'POST') {
       const body = JSON.parse(String(init?.body ?? '{}')) as { remove?: string[] }
       removes.push(body.remove ?? [])
       return new Response('{"ok":true}', { status: 200 })
     }
     return new Response(
-      JSON.stringify({ items: [{ viewId: 'v2', title: '视图 2', tablePath: path, rank: 0 }], total: 1 }),
+      JSON.stringify({ views: [{ ...v2, rank: 0 }] }),
       { status: 200, headers: { 'content-type': 'application/json' } },
     )
   })
@@ -340,7 +336,7 @@ test('deleteView waits for persist OK before switching active view and stays put
   }
 })
 
-test('rapid consecutive patchActiveView calls accumulate immediately and serialize POSTs in FIFO order', async () => {
+test('rapid consecutive patchActiveView calls accumulate immediately and serialize field-level POSTs in FIFO order', async () => {
   const env = setupBrowserGlobals()
   const path = '/pages-serial-patch'
   const initial: SavedView = {
@@ -366,7 +362,7 @@ test('rapid consecutive patchActiveView calls accumulate immediately and seriali
 
   const restore = mockFetch(async (input, init) => {
     const url = String(input)
-    if (url.includes('/api/db/saved-views')) {
+    if (url.includes('/api/db/saved-views') && init?.method === 'POST') {
       inFlightPosts += 1
       maxConcurrentPosts = Math.max(maxConcurrentPosts, inFlightPosts)
       const body = JSON.parse(String(init?.body ?? '{}')) as { upsert?: Array<Record<string, unknown>> }
@@ -377,8 +373,7 @@ test('rapid consecutive patchActiveView calls accumulate immediately and seriali
     }
     return new Response(
       JSON.stringify({
-        items: [{ viewId: 'v1', title: '默认', tablePath: path, groupBy: 'status', sortDir: 'desc', updatedAt: posts.at(-1)?.updatedAt }],
-        total: 1,
+        views: [{ ...initial, groupBy: 'status', sortDir: 'desc', revision: 2 }],
       }),
       { status: 200, headers: { 'content-type': 'application/json' } },
     )
@@ -394,23 +389,23 @@ test('rapid consecutive patchActiveView calls accumulate immediately and seriali
     await new Promise((r) => setTimeout(r, 0))
     assert.equal(posts.length, 1)
     assert.equal(posts[0]?.groupBy, 'status')
+    assert.equal('sortDir' in posts[0]!, false)
 
     releaseFirst()
     await new Promise((r) => setTimeout(r, 30))
 
     assert.equal(maxConcurrentPosts, 1)
     assert.equal(posts.length, 2)
-    assert.equal(posts[1]?.groupBy, 'status')
     assert.equal(posts[1]?.sortDir, 'desc')
-    assert.ok(Number(posts[1]?.updatedAt) > Number(posts[0]?.updatedAt))
-    assert.equal(harness.getSaveError(), false)
+    assert.equal('groupBy' in posts[1]!, false)
+    assert.equal(harness.getSaveError(), '')
   } finally {
     restore()
     env.restore()
   }
 })
 
-test('failed patchActiveView rolls back viewsRef, memoryViews, and localStorage display', async () => {
+test('failed patchActiveView rolls back viewsRef, memoryViews, and sets error message', async () => {
   const env = setupBrowserGlobals()
   const path = '/pages-patch-rollback'
   const initial: SavedView = {
@@ -428,7 +423,7 @@ test('failed patchActiveView rolls back viewsRef, memoryViews, and localStorage 
   try {
     harness.crud.patchActiveView({ groupBy: 'status' })
     await new Promise((r) => setTimeout(r, 30))
-    assert.equal(harness.getSaveError(), true)
+    assert.ok(harness.getSaveError().length > 0)
     assert.equal(harness.viewsRef.current[0]?.groupBy, '')
     assert.equal(loadViews(path)[0]?.groupBy, '')
   } finally {
@@ -459,7 +454,7 @@ test('concurrent op failure rolls back ONLY the failed op without clobbering con
     const body = JSON.parse(String(init?.body ?? '{}')) as { upsert?: SavedView[] }
     if (callIndex === 1) {
       // First write succeeds and returns authoritative server view
-      const saved = { ...body.upsert![0]!, updatedAt: 200 }
+      const saved = { ...initial, ...body.upsert![0]!, revision: 2, updatedAt: 200 }
       return new Response(JSON.stringify({ ok: true, views: [saved] }), {
         status: 200,
         headers: { 'content-type': 'application/json' },

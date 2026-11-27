@@ -64,8 +64,8 @@ describe('view role permissions & UI guards', () => {
     })
     store.applyPatch('/pages', {
       upsert: [
-        { id: 'v-edit', name: '编辑视图', createdBy: 'acc-a', scope: 'personal' },
-        { id: 'v-read', name: '查看视图', createdBy: 'acc-a', scope: 'personal' },
+        { id: 'v-edit', name: '编辑视图', createdBy: 'acc-a', accessMode: 'private' },
+        { id: 'v-read', name: '查看视图', createdBy: 'acc-a', accessMode: 'private' },
       ],
     }, 'acc-a', 'ws-1')
 
@@ -84,8 +84,9 @@ describe('view role permissions & UI guards', () => {
 
     // H1 view title only renders editable input when canEditSavedView(activeView)
     assert.match(toolbarSrc, /activeView && canEditSavedView\(activeView\)/)
-    // ViewSettingsMenu uses activeView.viewRole via canEditSavedView
-    assert.match(settingsSrc, /activeView\.viewRole\s*\?\s*!canEditSavedView\(activeView\)/)
+    // ViewSettingsMenu uses canEditSavedView & canManageSavedView (respecting both viewRole and locked)
+    assert.match(settingsSrc, /canEditSavedView\(activeView\)/)
+    assert.match(settingsSrc, /canManageSavedView\(activeView\)/)
     // ViewOrderMenu gates delete per view via canDeleteSavedView(view)
     assert.match(orderSrc, /canRemove=\{canRemove && canDeleteSavedView\(view\)\}/)
     // CRUD keeps viewer edits local-only without server POST or localStorage pollution

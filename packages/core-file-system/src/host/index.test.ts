@@ -18,7 +18,6 @@ import { runWithSession } from '@biu/host-sessions/scope'
 import { openAndMigrateBiu, runWithAccount } from '@biu/host-plugin-loader/data-dir'
 import { CollabStore } from '@biu/host-account/store'
 import { workspaceMembersCollection } from '@biu/host-account/workspace-members-collection'
-import { builtinAllViewId, stubBuiltinAllView, stubBuiltinMemberView } from '../catalog-views.ts'
 import { seedGroupRecord } from '../web/group-create.ts'
 import { matchListFilterRecord } from '../query-logic.ts'
 import { savedViewRecordPath } from '../paths.ts'
@@ -300,7 +299,7 @@ test('each view keeps its own html banner outside list rows', async () => {
   await ctx.plugin({ inject: ['tools', 'http'], apply: applyFileSystem })
   const db = ctx.get('database') as DatabaseService
   db.register(notesCollection())
-  const allPath = savedViewRecordPath('/notes', builtinAllViewId('/notes'))
+  const allPath = savedViewRecordPath('/notes', 'all')
   await db.update(allPath, { banner: { kind: 'html', html: '<div>all</div>' } })
   assert.ok(
     seen.some((row) => row.type === DATABASE_CHANNEL && row.payload.scope === 'content' && row.payload.path === allPath),
@@ -2369,7 +2368,7 @@ test('create scope separates personal and workspace records and viewers stay rea
   collab.setActive(ada.id, workspace.id)
   collab.setActive(bob.id, workspace.id)
   collab.authorization.setMemberViewMatcher((workspaceId, viewId, accountId) => {
-    return viewId === builtinAllViewId('/workspace-members') && collab.isMember(accountId, workspaceId)
+    return (viewId === 'all' || viewId === 'member') && collab.isMember(accountId, workspaceId)
   })
 
   await runWithAccount(ada.id, () => db.create('/docs', [{ title: 'Private' }], { scope: 'personal' }))
@@ -2834,9 +2833,7 @@ test('index rows follow the user records each person can read and omit share', a
   collab.setActive(ada.id, workspace.id)
   collab.setActive(bob.id, workspace.id)
   collab.authorization.setMemberViewMatcher((workspaceId, viewId, accountId) => {
-    const view = stubBuiltinAllView(viewId)
-    if (!view) return false
-    return collab.isMember(accountId, workspaceId)
+    return Boolean(viewId) && collab.isMember(accountId, workspaceId)
   })
 
   const personal = await runWithAccount(ada.id, () => db.create('/pages', [{ title: '私人' }], { scope: 'personal' }))
@@ -3434,6 +3431,7 @@ test('deleting a /views row is a hard delete and drops the stored view', async (
   await ctx.plugin({ inject: ['tools', 'http'], apply: applyFileSystem })
   const db = ctx.get('database') as DatabaseService
   db.register(notesCollection())
+  await db.create('/views', [{ title: '保底视图', tablePath: '/notes', mode: 'table' }])
   const created = await db.create('/views', [{ title: '会被删掉', tablePath: '/notes', mode: 'table' }])
   const row = created.items[0]?.value as { id?: unknown; viewId?: unknown }
   const viewId = String(row.viewId ?? '')

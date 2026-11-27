@@ -1827,6 +1827,270 @@ export const BIU_MIGRATIONS: Migration[] = [
     db.exec('DROP TABLE IF EXISTS workspace_groups')
     ensurePagesPerfIndexes(db)
   } },
+  { version: 62, module: 'core', name: 'unify_views_record_permissions_and_remove_builtin', up(db) {
+    const now = Date.now()
+    if (!hasTable(db, 'saved_views')) return
+
+    const svCols = tableColumnNames(db, 'saved_views')
+    if (!svCols.includes('revision')) {
+      db.exec('ALTER TABLE saved_views ADD COLUMN revision INTEGER NOT NULL DEFAULT 1')
+    }
+
+    const wsOwners = new Map<string, string>()
+    if (hasTable(db, 'workspaces')) {
+      const wsRows = db.prepare('SELECT id, owner_id FROM workspaces').all() as Array<{ id: string; owner_id: string }>
+      for (const ws of wsRows) {
+        if (ws.id && ws.owner_id) wsOwners.set(ws.id, ws.owner_id)
+      }
+    }
+
+    const hasOwnersTable = hasTable(db, 'record_owners')
+    const hasPoliciesTable = hasTable(db, 'resource_policies')
+    const hasGrantsTable = hasTable(db, 'record_grants')
+    const policyCols = hasPoliciesTable ? tableColumnNames(db, 'resource_policies') : []
+    const hasInheritParent = policyCols.includes('inherit_parent')
+
+    const insertOwnerStmt = hasOwnersTable
+      ? db.prepare(
+          `INSERT INTO record_owners (workspace_id, collection, record_id, owner_id, version, updated_at)
+           VALUES (?, '/views', ?, ?, 0, ?)
+           ON CONFLICT(workspace_id, collection, record_id) DO NOTHING`,
+        )
+      : null
+    const insertPolicyStmt = hasPoliciesTable
+      ? hasInheritParent
+        ? db.prepare(
+            `INSERT INTO resource_policies
+              (workspace_id, collection, record_id, owner_account_id, access_mode, member_default_role,
+               parent_collection, parent_record_id, created_by, created_at, inherit_parent)
+             VALUES (?, '/views', ?, ?, ?, ?, '', '', ?, ?, 0)
+             ON CONFLICT(workspace_id, collection, record_id) DO NOTHING`,
+          )
+        : db.prepare(
+            `INSERT INTO resource_policies
+              (workspace_id, collection, record_id, owner_account_id, access_mode, member_default_role,
+               parent_collection, parent_record_id, created_by, created_at)
+             VALUES (?, '/views', ?, ?, ?, ?, '', '', ?, ?)
+             ON CONFLICT(workspace_id, collection, record_id) DO NOTHING`,
+          )
+      : null
+    const insertOwnerGrantStmt = hasGrantsTable
+      ? db.prepare(
+          `INSERT INTO record_grants
+            (workspace_id, collection, record_id, subject_type, subject_id, role, granted_by, created_at)
+           VALUES (?, '/views', ?, 'account', ?, 'owner', ?, ?)
+           ON CONFLICT(workspace_id, collection, record_id, subject_type, subject_id) DO NOTHING`,
+        )
+      : null
+
+    const ensureViewPolicy = (
+      workspaceId: string,
+      collection: string,
+      viewId: string,
+      ownerId: string,
+      accessMode: 'private' | 'members',
+      memberDefaultRole: 'viewer' | 'editor',
+    ) => {
+      if (!workspaceId || !ownerId) return
+      const tableName = collection.replace(/^\/+/, '')
+      if (!tableName || !viewId) return
+      const recordId = `${tableName}::${viewId}`
+      insertOwnerStmt?.run(workspaceId, recordId, ownerId, now)
+      insertPolicyStmt?.run(workspaceId, recordId, ownerId, accessMode, memberDefaultRole, ownerId, now)
+      insertOwnerGrantStmt?.run(workspaceId, recordId, ownerId, ownerId, now)
+    }
+
+    const hasCustomViewConfig = (parsed: Record<string, unknown>) => {
+      if (typeof parsed.query === 'string' && parsed.query.trim()) return true
+      if (typeof parsed.mode === 'string' && parsed.mode && parsed.mode !== 'table') return true
+      if (Array.isArray(parsed.columns) && parsed.columns.length > 0) return true
+      if (parsed.filters && typeof parsed.filters === 'object' && !Array.isArray(parsed.filters)) {
+        if (Object.keys(parsed.filters as Record<string, unknown>).length > 0) return true
+      }
+      if (parsed.filterTree && typeof parsed.filterTree === 'object' && !Array.isArray(parsed.filterTree)) {
+        const children = (parsed.filterTree as { children?: unknown[] }).children
+        if (Array.isArray(children) && children.length > 0) return true
+      }
+      return false
+    }
+
+    const rows = db
+      .prepare('SELECT workspace_id, collection, view_id, payload_json, updated_at FROM saved_views')
+      .all() as Array<{
+      workspace_id: string
+      collection: string
+      view_id: string
+      payload_json: string
+      updated_at: number
+    }>
+
+    const delStmt = db.prepare('DELETE FROM saved_views WHERE workspace_id = ? AND collection = ? AND view_id = ?')
+    const upsertStmt = db.prepare(
+      `INSERT INTO saved_views (workspace_id, collection, view_id, payload_json, updated_at, revision)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(workspace_id, collection, view_id) DO UPDATE SET
+         payload_json = excluded.payload_json,
+         updated_at = excluded.updated_at,
+         revision = excluded.revision`,
+    )
+
+    // 先按 (workspace_id, collection) 分组，合并 builtin-all:*::user:* 历史分身
+    const builtinAllGroups = new Map<
+      string,
+      Array<{
+        workspaceId: string
+        collection: string
+        storageViewId: string
+        userId: string
+        parsed: Record<string, unknown>
+        updatedAt: number
+      }>
+    >()
+
+    const existingIdsByBucket = new Map<string, Set<string>>()
+    for (const row of rows) {
+      const bKey = `${row.workspace_id}\t${row.collection}`
+      const set = existingIdsByBucket.get(bKey) ?? new Set<string>()
+      set.add(row.view_id)
+      existingIdsByBucket.set(bKey, set)
+    }
+
+    for (const row of rows) {
+      let parsed: Record<string, unknown> | null = null
+      try {
+        const raw = JSON.parse(row.payload_json) as unknown
+        if (raw && typeof raw === 'object' && !Array.isArray(raw)) parsed = raw as Record<string, unknown>
+      } catch {
+        parsed = null
+      }
+      if (!parsed) continue
+
+      const rawViewId = String(row.view_id ?? '')
+      const payloadId = String(parsed.id ?? rawViewId).trim()
+      const userCut = rawViewId.indexOf('::user:')
+      const baseId = userCut >= 0 ? rawViewId.slice(0, userCut) : payloadId
+      const shadowUser = userCut >= 0 ? rawViewId.slice(userCut + '::user:'.length) : String(parsed.createdBy ?? '').trim()
+
+      // 历史 builtin-all:* 分身归组处理
+      if (baseId.startsWith('builtin-all:')) {
+        const bKey = `${row.workspace_id}\t${row.collection}`
+        const list = builtinAllGroups.get(bKey) ?? []
+        list.push({
+          workspaceId: row.workspace_id,
+          collection: row.collection,
+          storageViewId: rawViewId,
+          userId: shadowUser,
+          parsed,
+          updatedAt: Number(row.updated_at) || now,
+        })
+        builtinAllGroups.set(bKey, list)
+        continue
+      }
+
+      // 废弃的 builtin: 跨表聚合分身直接清理
+      if (baseId.startsWith('builtin:') && !baseId.startsWith('builtin-member:')) {
+        delStmt.run(row.workspace_id, row.collection, rawViewId)
+        continue
+      }
+
+      // 历史 builtin-member:* 转为普通默认锁定成员视图（member / external / guest）
+      let nextViewId = baseId
+      let forceMemberSeed = false
+      if (baseId.startsWith('builtin-member:')) {
+        nextViewId = baseId.slice('builtin-member:'.length) || baseId
+        forceMemberSeed = true
+        if (hasGrantsTable && nextViewId !== baseId) {
+          db.prepare(
+            `UPDATE OR IGNORE record_grants
+             SET subject_id = ?
+             WHERE workspace_id = ? AND subject_type = 'member_view' AND subject_id = ?`,
+          ).run(nextViewId, row.workspace_id, baseId)
+          db.prepare(
+            `DELETE FROM record_grants
+             WHERE workspace_id = ? AND subject_type = 'member_view' AND subject_id = ?`,
+          ).run(row.workspace_id, baseId)
+        }
+      }
+
+      const oldProtection = String(parsed.protection ?? '')
+      const oldScope = String(parsed.scope ?? '')
+      const isPersonal = !forceMemberSeed && (oldProtection === 'personal' || oldScope === 'personal')
+      const isLocked = forceMemberSeed || oldProtection === 'locked' || parsed.locked === true
+      const accessMode: 'private' | 'members' = isPersonal ? 'private' : 'members'
+      const memberDefaultRole: 'viewer' | 'editor' = isPersonal || isLocked ? 'viewer' : 'editor'
+      const ownerId = String(parsed.createdBy ?? '').trim() || wsOwners.get(row.workspace_id) || ''
+      const rev = Math.max(1, Number(parsed.revision) || 1)
+
+      const cleaned: Record<string, unknown> = { ...parsed, id: nextViewId, locked: isLocked, revision: rev }
+      delete cleaned.protection
+      delete cleaned.scope
+      delete cleaned.builtin
+      delete cleaned.ownerTable
+      if (ownerId && !cleaned.createdBy) cleaned.createdBy = ownerId
+
+      if (rawViewId !== nextViewId) {
+        delStmt.run(row.workspace_id, row.collection, rawViewId)
+      }
+      upsertStmt.run(row.workspace_id, row.collection, nextViewId, JSON.stringify(cleaned), Number(row.updated_at) || now, rev)
+      ensureViewPolicy(row.workspace_id, row.collection, nextViewId, ownerId, accessMode, memberDefaultRole)
+    }
+
+    for (const [bKey, entries] of builtinAllGroups) {
+      const [workspaceId, collection] = bKey.split('\t')
+      const wsOwner = wsOwners.get(workspaceId) || ''
+      const usedIds = existingIdsByBucket.get(bKey) ?? new Set<string>()
+      const primary =
+        entries.find((e) => wsOwner && e.userId === wsOwner) ??
+        entries.find((e) => !e.storageViewId.includes('::user:')) ??
+        entries[0]
+
+      for (const entry of entries) {
+        delStmt.run(entry.workspaceId, entry.collection, entry.storageViewId)
+      }
+
+      if (primary) {
+        const targetId = usedIds.has('all') ? `all-${primary.updatedAt.toString(36)}` : 'all'
+        usedIds.add(targetId)
+        const ownerId = wsOwner || primary.userId || ''
+        const rev = Math.max(1, Number(primary.parsed.revision) || 1)
+        const cleaned: Record<string, unknown> = {
+          ...primary.parsed,
+          id: targetId,
+          locked: false,
+          revision: rev,
+          ...(ownerId ? { createdBy: ownerId } : {}),
+        }
+        delete cleaned.protection
+        delete cleaned.scope
+        delete cleaned.builtin
+        delete cleaned.ownerTable
+        upsertStmt.run(workspaceId, collection, targetId, JSON.stringify(cleaned), primary.updatedAt, rev)
+        ensureViewPolicy(workspaceId, collection, targetId, ownerId, 'members', 'editor')
+      }
+
+      for (const entry of entries) {
+        if (entry === primary) continue
+        if (!entry.userId || !hasCustomViewConfig(entry.parsed)) continue
+        const personalId = `personal-${entry.userId.slice(0, 8)}`
+        if (usedIds.has(personalId)) continue
+        usedIds.add(personalId)
+        const rev = Math.max(1, Number(entry.parsed.revision) || 1)
+        const cleaned: Record<string, unknown> = {
+          ...entry.parsed,
+          id: personalId,
+          locked: false,
+          revision: rev,
+          createdBy: entry.userId,
+        }
+        delete cleaned.protection
+        delete cleaned.scope
+        delete cleaned.builtin
+        delete cleaned.ownerTable
+        upsertStmt.run(workspaceId, collection, personalId, JSON.stringify(cleaned), entry.updatedAt, rev)
+        ensureViewPolicy(workspaceId, collection, personalId, entry.userId, 'private', 'viewer')
+      }
+    }
+  } },
 ]
 
 export function assertBiuMigrationLog(rows: Array<{ version: number }> = BIU_MIGRATIONS) {

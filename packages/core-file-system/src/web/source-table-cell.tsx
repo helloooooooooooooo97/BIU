@@ -1,7 +1,8 @@
 import type { CollectionInfo, DbRecord } from '@biu/type-file-system'
-import { builtinAllView, builtinAllViewId, collectionNoun } from '../catalog-views.ts'
+import { collectionNoun } from '../catalog-views.ts'
 import { normalizeCollectionPath } from '../paths.ts'
 import { idleTableIconKind } from './nav-glyphs.tsx'
+import { defaultViewId } from './view-storage.ts'
 
 export function SourceTableCell({
   record,
@@ -15,9 +16,9 @@ export function SourceTableCell({
   const path = normalizeCollectionPath(String(record.tablePath ?? ''))
   if (!path || path === '/') return null
   const table = tables.find((item) => item.path === path)
-  const viewId = builtinAllViewId(path)
+  const viewId = defaultViewId(path)
   const name = collectionNoun({ path, label: table?.label, view: table?.view })
-  const jump = builtinAllView({ path, label: table?.label, view: table?.view }).name
+  const jump = `全部${name}`
   const icon = String(record.tableIcon ?? table?.view?.icon ?? '').trim()
   const mark = (
     <>

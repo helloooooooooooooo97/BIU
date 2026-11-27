@@ -1,4 +1,3 @@
-import type { CollectionInfo } from '@biu/type-file-system'
 import {
   DATA_COLLECTION_PATH,
   EDITOR_BLOCKS_COLLECTION_PATH,
@@ -7,40 +6,27 @@ import {
   WORKSPACE_MEMBERS_COLLECTION_PATH,
   normalizeCollectionPath,
 } from './paths.ts'
-import { normalizeSavedView, type SavedView } from './web/saved-view.ts'
+import { normalizeSavedView, type SavedView } from './shared/saved-view.ts'
 
-const ALL_PREFIX = 'builtin-all:'
-const MEMBER_PREFIX = 'builtin-member:'
 export type DataScope = 'personal' | 'workspace' | 'shared'
+
 /** 视图的逻辑域归属：默认 'all'（单逻辑表展示全部我可见数据），或通过 filters.$scope 筛选 'workspace' / 'personal' / 'shared'。 */
 export type ViewDomain = DataScope | 'all'
 
 export function viewDomainOf(
   view: {
     id?: string
-    builtin?: boolean
     filters?: Record<string, string>
-    scope?: string
-    protection?: string
   } | null | undefined,
 ): ViewDomain {
   if (!view) return 'all'
-  const id = String(view.id ?? '').trim()
-  if (
-    isBuiltinAllViewId(id) ||
-    isBuiltinCatalogViewId(id) ||
-    isBuiltinTagViewId(id) ||
-    isBuiltinBlockKindViewId(id) ||
-    isBuiltinMemberViewId(id)
-  ) {
-    return 'all'
-  }
   const filterScope = view.filters?.$scope
   if (filterScope === 'shared' || filterScope === 'workspace' || filterScope === 'personal') {
     return filterScope
   }
   return 'all'
 }
+
 const SCOPE_NAME: Record<DataScope, string> = {
   personal: '私人',
   workspace: '空间',
@@ -51,109 +37,13 @@ export function scopedCollectionName(table: TableRef, scope: DataScope) {
   return `${SCOPE_NAME[scope]}${collectionNoun(table)}`
 }
 
-export const BUILTIN_VIEW_SORT_FIELD = 'updatedAt'
-export const BUILTIN_VIEW_SORT_DIR = 'desc' as const
-
-function builtinViewLayout() {
-  return {
-    sortField: BUILTIN_VIEW_SORT_FIELD,
-    sortDir: BUILTIN_VIEW_SORT_DIR,
-    tree: false as const,
-  }
-}
+export const DEFAULT_VIEW_SORT_FIELD = 'updatedAt'
+export const DEFAULT_VIEW_SORT_DIR = 'desc' as const
 
 export type TableRef = {
   path: string
   label?: string
   view?: { title?: string } | null
-}
-
-export function builtinCatalogViewId(collectionPath: string) {
-  return `builtin:${normalizeCollectionPath(collectionPath)}`
-}
-
-const TAG_PREFIX = 'builtin-tag:'
-
-const BLOCK_PREFIX = 'builtin-block:'
-
-export function isBuiltinCatalogViewId(id: string) {
-  return (
-    id.startsWith('builtin:') &&
-    !id.startsWith(ALL_PREFIX) &&
-    !id.startsWith(TAG_PREFIX) &&
-    !id.startsWith(BLOCK_PREFIX)
-  )
-}
-
-export function builtinTagViewId(tagId: string) {
-  return `${TAG_PREFIX}${String(tagId ?? '').trim()}`
-}
-
-export function isBuiltinTagViewId(id: string) {
-  return id.startsWith(TAG_PREFIX)
-}
-
-export function tagIdFromViewId(id: string) {
-  return isBuiltinTagViewId(id) ? id.slice(TAG_PREFIX.length) : ''
-}
-
-export function isNonPersonalView(view: { protection?: string; scope?: string } | null | undefined): boolean {
-  if (!view) return false
-  const p = view.protection ?? (view.scope === 'personal' ? 'personal' : 'public')
-  return p === 'public' || p === 'locked'
-}
-
-export function builtinAllViewId(collectionPath: string) {
-  return `${ALL_PREFIX}${normalizeCollectionPath(collectionPath)}`
-}
-
-export function isBuiltinAllViewId(id: string) {
-  return id.startsWith(ALL_PREFIX)
-}
-
-export function isBuiltinAllViewForCollection(id: string, collectionPath: string) {
-  if (!isBuiltinAllViewId(id)) return false
-  return normalizeCollectionPath(id.slice(ALL_PREFIX.length)) === normalizeCollectionPath(collectionPath)
-}
-
-export function isReadOnlyViewId(id: string) {
-  return (
-    isBuiltinAllViewId(id) ||
-    isBuiltinCatalogViewId(id) ||
-    isBuiltinTagViewId(id) ||
-    isBuiltinBlockKindViewId(id) ||
-    isBuiltinMemberViewId(id)
-  )
-}
-
-const MEMBER_VIEWS = [
-  { kind: 'member', name: '空间成员' },
-  { kind: 'external', name: '外部成员' },
-  { kind: 'guest', name: '临时访客' },
-] as const
-
-export function isBuiltinMemberViewId(id: string) {
-  return id.startsWith(MEMBER_PREFIX)
-}
-
-export function stubBuiltinMemberView(id: string): SavedView | null {
-  if (!isBuiltinMemberViewId(id)) return null
-  const kind = id.slice(MEMBER_PREFIX.length)
-  const found = MEMBER_VIEWS.find((item) => item.kind === kind)
-  if (!found) return null
-  return normalizeSavedView({
-    id: `${MEMBER_PREFIX}${found.kind}`,
-    name: found.name,
-    mode: 'table',
-    ...builtinViewLayout(),
-    filters: { membershipKind: found.kind },
-    columns: ['title', 'email', 'role', 'joinedAt'],
-    builtin: true,
-  })
-}
-
-export function builtinMemberViews() {
-  return MEMBER_VIEWS.map((item) => stubBuiltinMemberView(`${MEMBER_PREFIX}${item.kind}`)!)
 }
 
 export function collectionNoun(table: TableRef) {
@@ -163,24 +53,14 @@ export function collectionNoun(table: TableRef) {
   return named || path.replace(/^\//, '') || '记录'
 }
 
-/** 分享/面包屑用：内置视图不在 saved-views 里，不能把路径 id 当名称。 */
 export function displayNameForView(viewId: string, table: TableRef, storedName?: string) {
   const named = String(storedName ?? '').trim()
   if (named) return named
-  const id = String(viewId ?? '').trim()
-  if (isBuiltinAllViewId(id)) return builtinAllView(table).name
-  if (isBuiltinCatalogViewId(id)) {
-    const path = normalizeCollectionPath(id.slice('builtin:'.length))
-    if (normalizeCollectionPath(table.path) === path) return collectionNoun(table)
-    return collectionNoun({ path, label: path.replace(/^\//, '') })
-  }
-  if (isBuiltinTagViewId(id)) return stubBuiltinTagView(id)?.name || collectionNoun(table)
-  if (isBuiltinBlockKindViewId(id)) return stubBuiltinBlockKindView(id)?.name || collectionNoun(table)
-  if (isBuiltinMemberViewId(id)) return stubBuiltinMemberView(id)?.name || collectionNoun(table)
+  if (String(viewId ?? '').trim() === 'all') return `全部${collectionNoun(table)}`
   return collectionNoun(table)
 }
 
-export function builtinAllGroupBy(collectionPath: string) {
+export function defaultGroupByForCollection(collectionPath: string) {
   const path = normalizeCollectionPath(collectionPath)
   if (path === WORKSPACE_MEMBERS_COLLECTION_PATH) return 'membershipKind'
   if (path === VIEWS_COLLECTION_PATH) return 'table'
@@ -189,213 +69,116 @@ export function builtinAllGroupBy(collectionPath: string) {
   return 'shareScope'
 }
 
-export function builtinAllView(table: TableRef): SavedView {
+export type SeedViewSpec = {
+  view: SavedView
+  accessMode: 'members' | 'private'
+  memberDefaultRole: 'viewer' | 'editor'
+}
+
+const MEMBER_SEED_VIEWS = [
+  { id: 'member', kind: 'member', name: '空间成员' },
+  { id: 'external', kind: 'external', name: '外部成员' },
+  { id: 'guest', kind: 'guest', name: '临时访客' },
+] as const
+
+/**
+ * 集合首次初始化时写入数据库的普通默认种子视图（写库后与用户自建视图 100% 平权）。
+ * - 普通业务表：1 条「全部<表名>」（空间可编辑，未锁定）
+ * - /workspace-members：3 条默认锁定成员视图（空间成员 / 外部成员 / 临时访客，开箱即用作为动态成员组）
+ * - /data：1 条「全部数据」（空间可编辑，未锁定）
+ */
+export function defaultSeedViewsForCollection(table: TableRef): SeedViewSpec[] {
   const path = normalizeCollectionPath(table.path)
-  return normalizeSavedView({
-    id: builtinAllViewId(path),
-    name: `全部${collectionNoun({ ...table, path })}`,
-    mode: 'table',
-    ...builtinViewLayout(),
-    filters: {},
-    columns: [],
-    groupBy: builtinAllGroupBy(path),
-    wrap: false,
-    truncate: true,
-    query: '',
-    builtin: true,
-  })
-}
-
-export function stubBuiltinAllView(id: string): SavedView | null {
-  if (!isBuiltinAllViewId(id)) return null
-  const path = normalizeCollectionPath(id.slice(ALL_PREFIX.length))
-  return builtinAllView({ path, label: path.replace(/^\//, '') })
-}
-
-export function builtinCatalogViews(tables: CollectionInfo[]): SavedView[] {
-  return tables
-    .filter((table) => table.path && table.path !== '/' && table.path !== DATA_COLLECTION_PATH)
-    .map((table) => {
-      const path = normalizeCollectionPath(table.path)
-      return normalizeSavedView({
-        id: builtinCatalogViewId(path),
-        name: table.view?.title ?? table.label ?? path.replace(/^\//, ''),
+  if (!path || path === '/' || path === VIEWS_COLLECTION_PATH) return []
+  if (path === WORKSPACE_MEMBERS_COLLECTION_PATH) {
+    return MEMBER_SEED_VIEWS.map((item, rank) => ({
+      view: normalizeSavedView({
+        id: item.id,
+        name: item.name,
         mode: 'table',
-        ...builtinViewLayout(),
-        filters: { tablePath: path },
-        columns: [],
-        groupBy: 'shareScope',
+        locked: true,
+        revision: 1,
+        sortField: DEFAULT_VIEW_SORT_FIELD,
+        sortDir: DEFAULT_VIEW_SORT_DIR,
+        filters: { membershipKind: item.kind },
+        columns: ['title', 'email', 'role', 'joinedAt'],
+        groupBy: '',
+        tree: false,
         wrap: false,
         truncate: true,
         query: '',
-        builtin: true,
-      })
-    })
+        rank,
+      }),
+      accessMode: 'members',
+      memberDefaultRole: 'viewer',
+    }))
+  }
+  const name = path === DATA_COLLECTION_PATH ? '全部数据' : `全部${collectionNoun({ ...table, path })}`
+  return [
+    {
+      view: normalizeSavedView({
+        id: 'all',
+        name,
+        mode: 'table',
+        locked: false,
+        revision: 1,
+        sortField: DEFAULT_VIEW_SORT_FIELD,
+        sortDir: DEFAULT_VIEW_SORT_DIR,
+        filters: {},
+        columns: path === DATA_COLLECTION_PATH ? ['title', 'actions', 'table'] : [],
+        groupBy: defaultGroupByForCollection(path),
+        tree: false,
+        wrap: false,
+        truncate: true,
+        query: '',
+        rank: 0,
+      }),
+      accessMode: 'members',
+      memberDefaultRole: 'editor',
+    },
+  ]
 }
 
-/** 工作区种子视图和后来保存的视图同一套：同 id 以已存为准，删掉的 id 不再插回去。 */
-export function overlayListedViews(
-  seeds: SavedView[],
-  user: SavedView[],
-  skipIds: Iterable<string> = [],
-): SavedView[] {
-  const skip = new Set([...skipIds].map((id) => String(id ?? '').trim()).filter(Boolean))
-  const byId = new Map<string, SavedView>()
-  for (const view of user) {
-    const id = String(view?.id ?? '').trim()
-    if (!id || skip.has(id)) continue
-    byId.set(id, normalizeSavedView(view))
-  }
-  const out: SavedView[] = []
-  const used = new Set<string>()
-  for (const seed of seeds) {
-    const id = String(seed.id ?? '').trim()
-    if (!id || skip.has(id)) continue
-    out.push(byId.get(id) ?? normalizeSavedView(seed))
-    used.add(id)
-  }
-  for (const view of user) {
-    const id = String(view?.id ?? '').trim()
-    if (!id || skip.has(id) || used.has(id)) continue
-    out.push(byId.get(id) ?? normalizeSavedView(view))
-    used.add(id)
-  }
-  return out
-}
+export const EPHEMERAL_VIEW_ID = '__ephemeral__'
 
-function withoutRetiredBuiltinViews(user: SavedView[], retired: (id: string) => boolean) {
-  return user.filter((view) => !retired(String(view.id ?? '').trim()))
-}
-
-export function mergeCatalogViews(tables: CollectionInfo[], user: SavedView[], skipIds: Iterable<string> = []): SavedView[] {
-  const viewsTable = tables.find((table) => normalizeCollectionPath(table.path) === VIEWS_COLLECTION_PATH) ?? {
-    path: VIEWS_COLLECTION_PATH,
-    label: '视图',
-    view: { title: '视图' },
-  }
-  return overlayListedViews(
-    [builtinAllView(viewsTable)],
-    withoutRetiredBuiltinViews(user, isBuiltinCatalogViewId),
-    skipIds,
-  )
-}
-
-export function mergeTableViews(table: TableRef | undefined, user: SavedView[], skipIds: Iterable<string> = []): SavedView[] {
-  if (!table?.path || table.path === '/') return overlayListedViews([], user, skipIds)
+/**
+ * 零可见视图的只读兜底（外部协作者 / 访客无可见持久化视图时在内存中临时呈现，不落盘）。
+ */
+export function ephemeralFallbackView(table: TableRef): SavedView {
   const path = normalizeCollectionPath(table.path)
-  const seeds = path === WORKSPACE_MEMBERS_COLLECTION_PATH
-    ? [builtinAllView(table), ...builtinMemberViews()]
-    : [builtinAllView(table)]
-  return overlayListedViews(seeds, user, skipIds)
-}
-
-export type BlockKindRef = { kind: string; label: string }
-
-export function builtinBlockKindViewId(kind: string) {
-  return `${BLOCK_PREFIX}${String(kind ?? '').trim()}`
-}
-
-export function isBuiltinBlockKindViewId(id: string) {
-  return id.startsWith(BLOCK_PREFIX)
-}
-
-export function blockKindFromViewId(id: string) {
-  return isBuiltinBlockKindViewId(id) ? id.slice(BLOCK_PREFIX.length) : ''
-}
-
-export function builtinBlockKindView(block: BlockKindRef): SavedView {
-  const kind = String(block.kind ?? '').trim()
   return normalizeSavedView({
-    id: builtinBlockKindViewId(kind),
-    name: String(block.label ?? '').trim() || kind,
+    id: EPHEMERAL_VIEW_ID,
+    name: `全部${collectionNoun({ ...table, path })}`,
     mode: 'table',
-    ...builtinViewLayout(),
-    filters: { blockKind: kind },
+    ephemeral: true,
+    viewRole: 'viewer',
+    locked: false,
+    sortField: DEFAULT_VIEW_SORT_FIELD,
+    sortDir: DEFAULT_VIEW_SORT_DIR,
+    filters: {},
     columns: [],
-    groupBy: '',
+    groupBy: defaultGroupByForCollection(path),
+    tree: false,
     wrap: false,
     truncate: true,
     query: '',
-    builtin: true,
+    rank: 0,
   })
 }
 
-export function stubBuiltinBlockKindView(id: string): SavedView | null {
-  if (!isBuiltinBlockKindViewId(id)) return null
-  const kind = blockKindFromViewId(id)
-  if (!kind) return null
-  return builtinBlockKindView({ kind, label: kind })
-}
-
-export function stubAnyBuiltinView(id: string): SavedView | null {
-  return stubBuiltinMemberView(id)
-    ?? stubBuiltinBlockKindView(id)
-    ?? stubBuiltinCatalogView(id)
-    ?? stubBuiltinTagView(id)
-    ?? stubBuiltinAllView(id)
-}
-
-/**
- * 视图自己的扁平筛选：单逻辑表下直接透传视图自身的 filters（含用户可选的 $scope 筛选）。
- */
+/** 视图自己的扁平筛选：单逻辑表下直接透传视图自身的 filters（含用户可选的 $scope 筛选）。 */
 export function catalogLockFilters(
   viewId: string | null | undefined,
-  listed: Array<{ id: string; builtin?: boolean; filters?: Record<string, string>; scope?: string; protection?: string }> = [],
+  listed: Array<{ id: string; filters?: Record<string, string> }> = [],
   _viewerAccountId = '',
 ): Record<string, string> {
   const key = String(viewId ?? '').trim()
   if (!key) return {}
   const current = listed.find((view) => view.id === key)
-  if (current) {
-    const base = { ...(current.filters ?? {}) }
-    delete base.$ownerTable
-    return base
-  }
-  const stub = stubAnyBuiltinView(key)
-  if (!stub) return {}
-  return { ...(stub.filters ?? {}) }
-}
-
-/** /editor-blocks：只内置「全部组件」。 */
-export function mergePageBlockViews(
-  table: TableRef | undefined,
-  user: SavedView[],
-  skipIds: Iterable<string> = [],
-): SavedView[] {
-  if (!table?.path || table.path === '/') {
-    return overlayListedViews([], withoutRetiredBuiltinViews(user, isBuiltinBlockKindViewId), skipIds)
-  }
-  return overlayListedViews(
-    [builtinAllView(table)],
-    withoutRetiredBuiltinViews(user, isBuiltinBlockKindViewId),
-    skipIds,
-  )
-}
-
-export type TagRef = { id: string; label: string }
-
-export function builtinTagView(tag: TagRef): SavedView {
-  const id = String(tag.id ?? '').trim()
-  return normalizeSavedView({
-    id: builtinTagViewId(id),
-    name: tag.label || id,
-    mode: 'table',
-    ...builtinViewLayout(),
-    filters: { tag: id },
-    columns: ['title', 'table'],
-    groupBy: '',
-    wrap: false,
-    truncate: true,
-    query: '',
-    builtin: true,
-  })
-}
-
-export function stubBuiltinTagView(id: string): SavedView | null {
-  if (!isBuiltinTagViewId(id)) return null
-  const tagId = tagIdFromViewId(id)
-  if (!tagId) return null
-  return builtinTagView({ id: tagId, label: tagId })
+  if (!current) return {}
+  const base = { ...(current.filters ?? {}) }
+  delete base.$ownerTable
+  return base
 }
 
 export function stampRecordId(collection: string, recordId: string) {
@@ -418,25 +201,6 @@ export function stampRowOpenTarget(row: { id?: unknown; tablePath?: unknown; sou
     if (table && source) return { collection: normalizeCollectionPath(`/${table}`), recordId: source }
   }
   return null
-}
-
-/** 路由里已经是 builtin: 时，即使本地还没合并登记表，也能先还原筛选。 */
-export function stubBuiltinCatalogView(id: string): SavedView | null {
-  if (!isBuiltinCatalogViewId(id)) return null
-  const path = normalizeCollectionPath(id.slice('builtin:'.length))
-  return normalizeSavedView({
-    id: builtinCatalogViewId(path),
-    name: path.replace(/^\//, '') || 'views',
-    mode: 'table',
-    ...builtinViewLayout(),
-    filters: { tablePath: path },
-    columns: [],
-    groupBy: 'ownerTable',
-    wrap: false,
-    truncate: true,
-    query: '',
-    builtin: true,
-  })
 }
 
 /** /views 表里的一行：打开时应跳到该视图对应表，而不是看视图记录自己的属性。 */

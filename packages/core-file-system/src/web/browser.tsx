@@ -69,7 +69,6 @@ import {
   normalizePageSize,
   normalizeSavedView,
   rankListedViews,
-  viewIsFresher,
   viewStateKey,
   type GroupConfig,
   type SavedView,
@@ -137,6 +136,7 @@ import {
   PAGES_COLLECTION_PATH,
   PLUGINS_COLLECTION_PATH,
   TRASH_COLLECTION_PATH,
+  VIEWS_COLLECTION_PATH,
   isIndexCollection,
   isOverviewCreatableCollection,
   isSystemCollection,
@@ -161,8 +161,8 @@ import {
   fetchSavedView,
   getStarredViews,
   getStarredViewsVersion,
+  hasPulledSavedViews,
   isViewStarred,
-  loadOmittedViewIds,
   loadViews,
   pullSavedViews,
   rememberRecords,
@@ -173,7 +173,6 @@ import {
   subscribeViews,
   upsertSavedView,
   viewForPath,
-  withViewDisplay,
 } from './view-storage.ts'
 import {
   getPagePrefs,
@@ -202,10 +201,8 @@ import { useMemberDirectory } from './person-cell.tsx'
 import {
   catalogLockFilters,
   displayNameForView,
-  isBuiltinAllViewId,
-  mergeTableViews,
+  ephemeralFallbackView,
   stampRowOpenTarget,
-  stubBuiltinBlockKindView,
   viewDomainOf,
   type DataScope,
   type ViewDomain,
@@ -384,32 +381,23 @@ export function CollectionBrowser({
   ensureFsdbStyle()
   const nested = embed || sheet
   const routeScope: DataScope | null = (() => {
-    if (routeViewId && isBuiltinAllViewId(routeViewId)) return null
     const stored = routeViewId ? loadViews(collectionPath).find((view) => view.id === routeViewId) : null
     if (!stored) return null
     const domain = viewDomainOf(stored)
     return domain === 'all' ? null : domain
   })()
   const listedViews = (path: string, user: SavedView[]) => {
-    const skipIds = loadOmittedViewIds(path)
-    const listed = resolveViews
-      ? resolveViews(path, user)
-      : mergeTableViews(
-          tables.find((item) => item.path === path) ?? {
-            path,
-            label: path === collectionPath ? title : path.replace(/^\//, ''),
-          },
-          user,
-          skipIds,
-        )
-    return listed
+    if (resolveViews) return resolveViews(path, user)
+    return user.map((view) => normalizeSavedView(view))
   }
   const paintListedViews = (path: string) => {
     const remembered = loadViews(path)
-    return rankListedViews(
-      listedViews(path, remembered).map((view) => withViewDisplay(path, view)),
-      remembered,
-    )
+    const ranked = rankListedViews(listedViews(path, remembered), remembered)
+    if (ranked.length === 0 && path === collectionPath && hasPulledSavedViews(path)) {
+      const table = tables.find((item) => item.path === path) ?? { path, label: title }
+      return [ephemeralFallbackView(table)]
+    }
+    return ranked
   }
   const dataPath = collectionPath
   const cachePath = collectionListCachePath(dataPath, sheet, lockedFilters)
@@ -635,7 +623,7 @@ export function CollectionBrowser({
     .sort()
     .join('\n')
   const [views, setViews] = useState<SavedView[]>(() => initialExternalViews ?? paintListedViews(collectionPath))
-  const [viewsSaveError, setViewsSaveError] = useState(false)
+  const [viewsSaveError, setViewsSaveError] = useState('')
   const [activeViewId, setActiveViewId] = useState<string | null>(initialSheetView?.id ?? initialView?.id ?? null)
   const activeView = views.find((view) => view.id === activeViewId)
   const [routeViewReady, setRouteViewReady] = useState(() => !routeViewNeedsFetch(collectionPath, routeViewId))
@@ -689,7 +677,6 @@ export function CollectionBrowser({
   )
   const lockedKindLabel =
     views.find((view) => view.id === activeViewId)?.name ||
-    stubBuiltinBlockKindView(activeViewId ?? '')?.name ||
     lockedKind
   useEffect(() => {
     if (!lockedSource) return
@@ -2475,8 +2462,8 @@ export function CollectionBrowser({
   const activeSandboxView = useMemo(() => sandboxViews.find((item) => item.id === mode), [mode, sandboxViews])
   const sortCustom = isCustomSorts(
     sorts,
-    activeView?.builtin ? 'updatedAt' : (schema?.labelField ?? 'title'),
-    activeView?.builtin ? 'desc' : 'asc',
+    schema?.labelField ?? 'title',
+    'asc',
   )
   const queryFields = useMemo(
     () => collectQueryFields(sorts, filterTree, schema?.labelField ?? 'title'),
@@ -2530,14 +2517,14 @@ export function CollectionBrowser({
         collectionPath={collectionPath}
         viewId={activeViewId}
         share={
-          canShare && activeViewId ? (
+          canShare && activeViewId && !activeView?.ephemeral ? (
             <SharePanel
               embedded
               localOnly={localData}
               target={{
-                kind: 'view',
-                collection: collectionPath,
-                viewId: activeViewId,
+                kind: 'record',
+                collection: VIEWS_COLLECTION_PATH,
+                recordId: `${collectionPath.replace(/^\/+/, '')}::${activeViewId}`,
                 title: activeView?.name ?? title,
               }}
             />
@@ -2621,7 +2608,7 @@ export function CollectionBrowser({
 
   function applyView(view: SavedView) {
     const current = viewsRef.current.find((item) => item.id === view.id)
-    if (current && view.id === activeViewIdRef.current && !viewIsFresher(view, current)) return
+    if (current && view.id === activeViewIdRef.current && (current.revision ?? 0) > (view.revision ?? 0)) return
     const next = normalizeSavedView({
       ...view,
       filters: { ...catalogLockFilters(view.id, [view]), ...view.filters },
@@ -2682,8 +2669,8 @@ export function CollectionBrowser({
     if (sheet) return
     const painted = paintListedViews(collectionPath)
     const current = painted.find((item) => item.id === view.id) ?? viewsRef.current.find((item) => item.id === view.id)
-    if (current && !viewIsFresher(view, current)) return
-    const incoming = withViewDisplay(collectionPath, view)
+    if (current && (current.revision ?? 0) > (view.revision ?? 0)) return
+    const incoming = normalizeSavedView(view)
     upsertSavedView(collectionPath, incoming)
     const listed = rankListedViews(paintListedViews(collectionPath), viewsRef.current)
     viewsRef.current = listed
@@ -2800,7 +2787,7 @@ export function CollectionBrowser({
     addEmptyView,
     copyView,
     patchActiveView,
-    updateViewProtection,
+    toggleViewLock,
     commitViewName,
     deleteView,
   } = createBrowserViewCrud({
@@ -3288,7 +3275,7 @@ export function CollectionBrowser({
         ? displayNameForView(
             dataViewId,
             { path: DATA_COLLECTION_PATH, label: '数据', view: { title: '数据' } },
-            isBuiltinAllViewId(dataViewId) ? undefined : dataView?.name,
+            dataView?.name,
           )
         : activeView?.name,
       views: crumbFromData
@@ -3778,13 +3765,13 @@ export function CollectionBrowser({
     Number(refreshing),
     notice,
     activeViewId ?? '',
-    views.map((view) => `${view.id}:${view.name}:${view.builtin ? 1 : 0}`).join('\n'),
+    views.map((view) => `${view.id}:${view.name}:${view.locked ? 1 : 0}:${view.shareScope ?? ''}:${view.viewRole ?? ''}`).join('\n'),
     lockedSource,
     lockedKind,
     lockedKindLabel,
     mode,
     extraViews.map((item) => item.id).join(','),
-    Number(viewsSaveError),
+    viewsSaveError,
     extraRows.map((item) => item.id).join(','),
     sandboxViews.map((item) => `${item.id}:${item.name}`).join(','),
     Number(sortCustom),
@@ -3833,7 +3820,7 @@ export function CollectionBrowser({
         selectView={selectView}
         copyView={copyView}
         deleteView={deleteView}
-        updateViewProtection={updateViewProtection}
+        toggleViewLock={toggleViewLock}
         persistViewOrder={persistViewOrder}
         addEmptyView={() => addEmptyView()}
         pickedIds={pickedIds}
@@ -3964,6 +3951,7 @@ export function CollectionBrowser({
     title,
     viewerAccountId,
     activeView?.name ?? '',
+    `${activeView?.id ?? ''}:${activeView?.locked ? 1 : 0}:${activeView?.shareScope ?? ''}:${activeView?.ephemeral ? 1 : 0}`,
     crumbs.map((crumb) => `${crumb.kind}:${crumb.id}:${crumb.label}:${crumb.avatar ?? ''}:${crumb.avatarSeed ?? ''}`).join('\n'),
     views.map((view) => view.id).join(','),
   ].join('\0')

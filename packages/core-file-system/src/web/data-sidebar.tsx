@@ -7,9 +7,12 @@ import { SidebarFold } from '@biu/biu-ui/sidebar-fold'
 import {
   ChevronDoubleLeftIcon,
   ChevronRightIcon,
+  LockClosedIcon,
   PlusIcon,
   RectangleStackIcon,
   StarIcon,
+  UserGroupIcon,
+  UserIcon,
   UsersIcon,
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
@@ -18,8 +21,8 @@ import { FSDB_CHANGE_EVENT, parseFsdbChange, type CollectionInfo, type Collectio
 import { BoundedMap } from './bounded-map.ts'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
 import { groupField, groupRecords, parentFieldKey, treeChildren } from './fields.ts'
-import { builtinAllViewId, isReadOnlyViewId, type DataScope } from '../catalog-views.ts'
-import { DATA_COLLECTION_PATH } from '../paths.ts'
+import type { DataScope } from '../catalog-views.ts'
+import { DATA_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, normalizeCollectionPath } from '../paths.ts'
 import { dataSidebarKind, isRecordTreeCollection, sortDataCollections } from './database-path.ts'
 import { rememberInspectorWorkingView } from './inspector-db-route.ts'
 import { readJson } from './db-client.ts'
@@ -47,7 +50,6 @@ import {
   getStarredViews,
   getStarredViewsVersion,
   hasPulledSavedViews,
-  isOmittedViewId,
   isRecordStarred,
   isViewStarred,
   getCrumbsVersion,
@@ -789,7 +791,6 @@ export const DataSidebar = memo(function DataSidebar({
   const starredRows = starredViews.flatMap((item) => {
     const table = listedTables.find((row) => row.path === item.path)
     if (!table) return []
-    if (isOmittedViewId(item.path, item.viewId)) return []
     const listedView = viewsFor(item.path).find((row) => row.id === item.viewId)
     const storedName = String(item.name ?? '').trim()
     if (!listedView && (hasPulledSavedViews(item.path) || !storedName)) return []
@@ -808,7 +809,6 @@ export const DataSidebar = memo(function DataSidebar({
     const current = getStarredViews()
     if (!current.length) return
     const next = current.filter((item) => {
-      if (isOmittedViewId(item.path, item.viewId)) return false
       if (!hasPulledSavedViews(item.path)) return true
       if (!listedTables.some((row) => row.path === item.path)) return true
       return viewsFor(item.path).some((row) => row.id === item.viewId)
@@ -859,21 +859,39 @@ export const DataSidebar = memo(function DataSidebar({
   const { isCloud: isCloudSpace, myAccountId } = useCloudCreatorContext()
   const membersById = useMemberDirectory(isCloudSpace)
 
-  const renderViewCreatorAvatar = (view: SavedView) => {
-    if (!isCloudSpace || !myAccountId || view.builtin) return null
+  const renderViewStatusIcons = (view: SavedView, tablePath: string) => {
+    if (!isCloudSpace && !view.locked) return null
+    const scope = view.shareScope ?? 'workspace'
+    const isMembersCol = normalizeCollectionPath(tablePath) === WORKSPACE_MEMBERS_COLLECTION_PATH
     const creatorId = view.createdBy?.trim()
-    if (!creatorId || creatorId === myAccountId) return null
-    const member = membersById.get(creatorId)
-    const creatorName = member?.name || creatorId.slice(0, 8)
-    const avatar = member?.avatar?.trim() || ''
+    const sharedByOther = Boolean(scope === 'shared' && creatorId && myAccountId && creatorId !== myAccountId)
+    const creatorName = sharedByOther ? (membersById.get(creatorId!)?.name || creatorId!.slice(0, 8)) : ''
+    const baseTip =
+      scope === 'personal'
+        ? '私人视图 · 仅自己可见'
+        : scope === 'shared'
+          ? sharedByOther
+            ? `共享视图 · 由 ${creatorName} 共享`
+            : '共享视图 · 指定成员可见'
+          : '空间视图 · 全员可见'
+    const lockTip = view.locked
+      ? isMembersCol
+        ? ' · 动态成员组（管理员锁定）'
+        : ' · 已锁定配置'
+      : ''
+    const fullTip = `${baseTip}${lockTip}`
+    const ScopeIcon = scope === 'personal' ? UserIcon : scope === 'shared' ? UserGroupIcon : UsersIcon
     return (
       <span
-        className="sidebar-creator-avatar"
-        data-testid="sidebar-view-creator-avatar"
-        title={`创建人：${creatorName}`}
-        aria-label={`创建人：${creatorName}`}
+        className="sidebar-view-status inline-flex items-center gap-1.5 text-(--biu-color-text-muted)"
+        data-testid="sidebar-view-status"
+        data-scope={scope}
+        data-locked={view.locked ? '1' : '0'}
+        title={fullTip}
+        aria-label={fullTip}
       >
-        {avatar ? <img src={avatar} alt="" /> : <AiAvatar seed={creatorId} size={16} />}
+        {view.locked ? <LockClosedIcon aria-hidden className="size-4 shrink-0" /> : null}
+        {isCloudSpace ? <ScopeIcon aria-hidden className="size-4 shrink-0" /> : null}
       </span>
     )
   }
@@ -893,7 +911,7 @@ export const DataSidebar = memo(function DataSidebar({
       void Promise.all(
         paths.map((path) => {
           const listed = viewsForRef.current(path)
-          const view = listed.find((row) => row.id === builtinAllViewId(path)) ?? listed[0]
+          const view = listed.find((row) => row.id === 'all') ?? listed[0]
           if (!view) return Promise.resolve()
           const key = previewCacheKey(path, view)
           if (previewCache.get(key)?.items.length) return Promise.resolve()
@@ -951,7 +969,8 @@ export const DataSidebar = memo(function DataSidebar({
   }
 
   function viewRowDelete(path: string, view: SavedView, listed: SavedView[]) {
-    if (isReadOnlyViewId(view.id) || !canRemoveCollectionView(listed)) return undefined
+    if (view.ephemeral || !canRemoveCollectionView(listed)) return undefined
+    if (view.viewRole && view.viewRole !== 'owner' && view.viewRole !== 'manager') return undefined
     return () => onDeleteView(view, path)
   }
 
@@ -1046,7 +1065,7 @@ export const DataSidebar = memo(function DataSidebar({
                         </button>
                       </SidebarRowMain>
                     }
-                    trail={renderViewCreatorAvatar(view)}
+                    trail={renderViewStatusIcons(view, table.path)}
                     onDelete={viewRowDelete(table.path, view, listed)}
                     deleteLabel={`删除 ${view.name}`}
                     deleteIcon={<TrashGlyph className="size-4 shrink-0" />}
@@ -1077,7 +1096,7 @@ export const DataSidebar = memo(function DataSidebar({
                     const label = starredRecordLabel(item)
                     const emoji = starredRecordEmoji(item)
                     const chromeIcon = getDatabaseUi()?.chrome(table.path).Icon
-                    const view = viewsFor(table.path).find((row) => row.id === builtinAllViewId(table.path)) ?? viewsFor(table.path)[0]
+                    const view = viewsFor(table.path).find((row) => row.id === 'all') ?? viewsFor(table.path)[0]
                     const nested = isRecordTreeCollection(table.path)
                     const previewKey = `star-record:${table.path}:${item.recordId}`
                     const expanded = expandedViewKey === previewKey
@@ -1221,7 +1240,7 @@ export const DataSidebar = memo(function DataSidebar({
                           }
                           trail={
                             <>
-                              {renderViewCreatorAvatar(view)}
+                              {renderViewStatusIcons(view, table.path)}
                               <span className="sidebar-trail-icon" title={tableName} aria-label={tableName}>
                                 <TableGlyph icon={table.view?.icon} />
                               </span>

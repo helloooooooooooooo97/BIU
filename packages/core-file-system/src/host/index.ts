@@ -55,11 +55,10 @@ import {
 import { registerDatabaseTools } from './agent-tools.ts'
 import { databaseHttpFailure, registerDatabaseHttpRoutes } from './http-routes.ts'
 export { databaseHttpFailure }
-import { SavedViewsStore, viewsCollection, type StoredView } from './saved-views.ts'
+import { SavedViewsStore, viewRecordId, viewsCollection, type StoredView } from './saved-views.ts'
 import { RecordViewsStore, wrapCollectionRecordViews } from './record-views.ts'
 import { TagStore } from './tags-store.ts'
 import { SharesStore } from './shares-store.ts'
-import { builtinAllView, isBuiltinAllViewId } from '../catalog-views.ts'
 import { isIndexCollection, isSystemCollection } from '../paths.ts'
 import { dataCollection, isDataOverviewSource, overviewRecord } from './data-collection.ts'
 import { type SharedViewDef } from '../share-view-match.ts'
@@ -514,7 +513,7 @@ export class DatabaseService extends Service implements Database {
   tags = new TagStore()
   shares = new SharesStore()
   assets = new FileSystemAssets()
-  viewCatalog?: { viewsFor(collectionPath: string): SharedViewDef[]; remove?(id: string, accountId?: string): unknown }
+  viewCatalog?: { viewsFor(collectionPath: string, accountId?: string): SharedViewDef[]; remove?(id: string, accountId?: string): unknown }
   recordViews = new RecordViewsStore()
   savedViews?: SavedViewsStore
   private readonly access: DatabaseAccessPolicy
@@ -1804,10 +1803,11 @@ export class DatabaseService extends Service implements Database {
     const colPath = normalizeCollectionPath(collectionPath)
     const rawId = viewId.trim()
     if (!rawId) throw new Error('view_id must be a non-empty string')
-    const saved = [
-      builtinAllView({ path: colPath }),
-      ...(this.viewCatalog?.viewsFor(colPath) ?? []),
-    ] as Array<SharedViewDef & { query?: string; sortField?: string; sortDir?: 'asc' | 'desc' }>
+    const spec = this.collection(colPath)
+    this.savedViews?.ensureSeedViews(colPath, spec ? { path: colPath, label: spec.label, view: spec.view } : { path: colPath })
+    const saved = (this.viewCatalog?.viewsFor(colPath, currentAccountId()) ?? []) as Array<
+      SharedViewDef & { query?: string; sortField?: string; sortDir?: 'asc' | 'desc' }
+    >
     const hit = saved.find((item) => item.id === rawId || (item.name && item.name === rawId))
     if (!hit) {
       const choices = saved.map((item) => `${item.id}${item.name ? `(${item.name})` : ''}`).join(', ')
@@ -2659,92 +2659,37 @@ export function apply(ctx: Context) {
       memberRole?: (accountId: string, workspaceId: string) => string | null
       memberViewGrantCount?: (workspaceId: string, viewId: string) => number
       workspaceOwnerId?: (workspaceId: string) => string | null
+      attachAs?: (
+        workspaceId: string,
+        collection: string,
+        recordId: string,
+        ownerAccountId: string,
+        policy?: { accessMode?: 'private' | 'members' | 'inherit'; memberDefaultRole?: 'viewer' | 'editor' },
+      ) => void
+      detachRecord?: (workspaceId: string, collection: string, recordId: string) => void
+      collectionOwnership?: (workspaceId: string, collection: string) => Map<string, 'personal' | 'workspace' | 'shared'>
+      collectionExternalSharedIds?: (workspaceId: string, collection: string) => Set<string>
     }
   } | undefined
   savedViews.setWorkspaceResolver(() => resolveScopedWorkspaceId(ctx))
-  const resolveViewDecision = (
+  const authorizeViewRecord = (
     workspaceId: string,
     collection: string,
-    view: { id: string; createdBy?: string; scope?: string; protection?: string; builtin?: boolean },
+    view: { id: string },
     accountId: string,
-    action: 'resource:read' | 'resource:update' | 'resource:delete',
-  ): { allowed: boolean; effectiveRole: 'owner' | 'manager' | 'editor' | 'viewer' } => {
-    if (!account?.store || !account?.authorization || !workspaceId || !accountId) {
-      return { allowed: true, effectiveRole: 'owner' }
+    action: 'resource:read' | 'resource:update' | 'resource:manage-permissions' | 'resource:delete',
+  ) => {
+    if (!account?.authorization || !workspaceId || !accountId) {
+      return { allowed: true as const, effectiveRole: 'owner' as const }
     }
-    const member = account.store.memberById?.(workspaceId, accountId)
-      ?? account.store.members(accountId, workspaceId).find((item) => item.id === accountId)
-    if (!member) return { allowed: false, effectiveRole: 'viewer' }
-    const isInternal = member.member_kind === 'member'
-    const isWsOwner = account.store.workspaceOwnerId?.(workspaceId) === accountId || member.role === 'owner'
-    const isWsAdmin = isWsOwner || member.role === 'admin'
-    const isCreator = Boolean(view.createdBy && view.createdBy === accountId)
-
-    // 1. /data 聚合内置视图与个人视图：严格按创建者隔离
-    if (collection === DATA_COLLECTION_PATH && (isBuiltinAllViewId(String(view.id)) || view.protection === 'personal' || view.scope === 'personal')) {
-      return isCreator
-        ? { allowed: true, effectiveRole: 'owner' }
-        : { allowed: false, effectiveRole: 'viewer' }
-    }
-
-    const isBuiltin = Boolean(view.builtin) || isBuiltinAllViewId(String(view.id))
-
-    // 2. 内置视图：空间内部成员可读（底层数据仍按各自静态权限过滤），仅空间 owner 可修改/删除
-    if (isBuiltin) {
-      if (!isInternal) return { allowed: false, effectiveRole: 'viewer' }
-      const effectiveRole = isWsOwner ? 'owner' : 'viewer'
-      if (action === 'resource:read') return { allowed: true, effectiveRole }
-      return { allowed: isWsOwner, effectiveRole }
-    }
-
-    const protection =
-      view.protection === 'public' || view.protection === 'locked' || view.protection === 'personal'
-        ? view.protection
-        : view.scope === 'personal'
-          ? 'personal'
-          : 'public'
-
-    // 3. 个人视图（personal）：仅创建者本人可见、可改、可删
-    if (protection === 'personal') {
-      return isCreator
-        ? { allowed: true, effectiveRole: 'owner' }
-        : { allowed: false, effectiveRole: 'viewer' }
-    }
-
-    // 4. 公开/锁定视图：仅空间内部成员可见
-    if (!isInternal) {
-      return { allowed: false, effectiveRole: 'viewer' }
-    }
-    if (protection === 'public') {
-      const effectiveRole: 'owner' | 'manager' | 'editor' | 'viewer' = isCreator
-        ? 'owner'
-        : isWsAdmin
-          ? 'manager'
-          : member.role === 'viewer'
-            ? 'viewer'
-            : 'editor'
-      if (action === 'resource:read') return { allowed: true, effectiveRole }
-      if (action === 'resource:update') return { allowed: effectiveRole !== 'viewer', effectiveRole }
-      return { allowed: effectiveRole === 'owner' || effectiveRole === 'manager', effectiveRole }
-    }
-
-    // 5. 锁定视图（locked）：所有内部成员可见；/workspace-members 锁定视图作为动态成员组严格限管理员维护
-    const canManageLocked = collection === WORKSPACE_MEMBERS_COLLECTION_PATH ? isWsAdmin : (isCreator || isWsAdmin)
-    const effectiveRole: 'owner' | 'manager' | 'editor' | 'viewer' = isCreator
-      ? 'owner'
-      : canManageLocked
-        ? 'manager'
-        : 'viewer'
-    if (action === 'resource:read') return { allowed: true, effectiveRole }
-    return { allowed: canManageLocked, effectiveRole }
+    const recId = viewRecordId(collection, view.id)
+    if (!recId) return { allowed: false as const, effectiveRole: 'viewer' as const }
+    return account.authorization.authorize(
+      { type: 'account', accountId, workspaceId },
+      action,
+      { type: 'record', workspaceId, collection: VIEWS_COLLECTION_PATH, recordId: recId },
+    )
   }
-  const authorizeViewAction = (
-    workspaceId: string,
-    collection: string,
-    view: { id: string; createdBy?: string; scope?: string; protection?: string; builtin?: boolean },
-    accountId: string,
-    action: 'resource:read' | 'resource:update' | 'resource:delete',
-  ) => resolveViewDecision(workspaceId, collection, view, accountId, action).allowed
   savedViews.setPolicyGuard({
     workspaceOwner: (workspaceId) => account?.store?.workspaceOwnerId?.(workspaceId) ?? null,
     isWorkspaceAdmin: (workspaceId, accountId) => {
@@ -2753,20 +2698,59 @@ export function apply(ctx: Context) {
       const role = account.store.memberRole?.(accountId, workspaceId)
       return role === 'owner' || role === 'admin'
     },
+    isInternalMember: (workspaceId, accountId) => {
+      if (!account?.store || !workspaceId || !accountId) return true
+      const member = account.store.memberById?.(workspaceId, accountId)
+      return !member || member.member_kind === 'member'
+    },
     memberViewGrantCount: (workspaceId, viewId) =>
       account?.store?.memberViewGrantCount?.(workspaceId, viewId) ?? 0,
     onMemberViewChanged: () => {
       account?.authorization?.invalidateAll()
     },
     canSeeView: (workspaceId, collection, view, accountId) =>
-      authorizeViewAction(workspaceId, collection, view, accountId, 'resource:read'),
+      authorizeViewRecord(workspaceId, collection, view, accountId, 'resource:read').allowed,
     canModifyView: (workspaceId, collection, view, accountId) =>
-      authorizeViewAction(workspaceId, collection, view, accountId, 'resource:update'),
+      authorizeViewRecord(workspaceId, collection, view, accountId, 'resource:update').allowed,
+    canManageView: (workspaceId, collection, view, accountId) =>
+      authorizeViewRecord(workspaceId, collection, view, accountId, 'resource:manage-permissions').allowed,
     canRemoveView: (workspaceId, collection, view, accountId) =>
-      authorizeViewAction(workspaceId, collection, view, accountId, 'resource:delete'),
+      authorizeViewRecord(workspaceId, collection, view, accountId, 'resource:delete').allowed,
     viewRoleFor: (workspaceId, collection, view, accountId) => {
-      const decision = resolveViewDecision(workspaceId, collection, view, accountId, 'resource:read')
+      const decision = authorizeViewRecord(workspaceId, collection, view, accountId, 'resource:read')
       return decision.allowed ? decision.effectiveRole : null
+    },
+    shareScopesFor: (workspaceId) =>
+      account?.store?.collectionOwnership?.(workspaceId, VIEWS_COLLECTION_PATH) ?? new Map(),
+    externalSharedIdsFor: (workspaceId) => {
+      const set = new Set<string>(
+        account?.store?.collectionExternalSharedIds?.(workspaceId, VIEWS_COLLECTION_PATH) ?? [],
+      )
+      for (const share of db.shares.listRecords(VIEWS_COLLECTION_PATH)) {
+        if (!share.workspaceId || share.workspaceId === workspaceId) {
+          if (share.recordId) set.add(share.recordId)
+        }
+      }
+      return set
+    },
+    onCreated: (workspaceId, collection, view, ownerAccountId, initialPolicy) => {
+      if (!workspaceId || !account?.store?.attachAs) return
+      const recId = viewRecordId(collection, view.id)
+      if (!recId) return
+      const ownerId = ownerAccountId || account.store.workspaceOwnerId?.(workspaceId) || ''
+      if (!ownerId) return
+      account.store.attachAs(workspaceId, VIEWS_COLLECTION_PATH, recId, ownerId, {
+        accessMode: initialPolicy?.accessMode ?? 'members',
+        memberDefaultRole: initialPolicy?.memberDefaultRole ?? (view.locked ? 'viewer' : 'editor'),
+      })
+    },
+    onRemoved: (workspaceId, collection, viewId) => {
+      const recId = viewRecordId(collection, viewId)
+      if (!recId) return
+      if (workspaceId) {
+        account?.store?.detachRecord?.(workspaceId, VIEWS_COLLECTION_PATH, recId)
+      }
+      db.shares.revokeRecord(VIEWS_COLLECTION_PATH, recId)
     },
   })
   const activeDataLocation = (): 'device' | 'cloud' => {
@@ -2781,7 +2765,7 @@ export function apply(ctx: Context) {
   account?.authorization?.setMemberViewMatcher((workspaceId, viewId, accountId) => {
     if (!account.store) return false
     const view = savedViews.getMemberView(workspaceId, viewId)
-    if (!view || view.protection !== 'locked') return false
+    if (!view || !view.locked) return false
     const member = account.store.memberById?.(workspaceId, accountId)
     if (!member) return false
     const memberSpec = db.collection(WORKSPACE_MEMBERS_COLLECTION_PATH)

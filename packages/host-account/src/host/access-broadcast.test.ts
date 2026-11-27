@@ -28,9 +28,10 @@ describe('access realtime broadcast wiring', () => {
       accountHostSrc.indexOf("authedRoute('POST', '/api/account/access/guest-invite'"),
     )
 
-    assert.match(postBlock, /broadcastAccessChange\(activeWorkspace,\s*'records',\s*collection\)/)
-    assert.match(patchBlock, /broadcastAccessChange\(activeWorkspace,\s*'records',\s*collection\)/)
-    assert.match(deleteBlock, /broadcastAccessChange\(activeWorkspace,\s*'records',\s*collection\)/)
+    assert.match(postBlock, /broadcastRecordAccessChange\(activeWorkspace,\s*collection,\s*recordId\)/)
+    assert.match(patchBlock, /broadcastRecordAccessChange\(activeWorkspace,\s*collection,\s*recordId\)/)
+    assert.match(deleteBlock, /broadcastRecordAccessChange\(activeWorkspace,\s*collection,\s*recordId\)/)
+    assert.match(accountHostSrc, /if \(collection === '\/views'\)[\s\S]*broadcastAccessChange\(workspaceId,\s*'views'/)
   })
 
   it('data-sidebar force-pulls saved views when a path-scoped views change arrives', () => {

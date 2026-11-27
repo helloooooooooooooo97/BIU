@@ -2166,6 +2166,69 @@ export class CollabStore {
     }
   }
 
+  /** 以显式 owner 挂载记录归属与策略（用于 /views 视图创建与默认种子视图懒初始化）。 */
+  attachAs(
+    workspaceId: string,
+    collection: string,
+    recordId: string,
+    ownerAccountId: string,
+    policy: ResourcePolicyInput = {},
+    now = Date.now(),
+  ) {
+    if (!workspaceId || !collection || !recordId) return
+    const ownerRow = this.db.prepare('SELECT owner_id FROM workspaces WHERE id = ?').get(workspaceId) as
+      | { owner_id: string }
+      | undefined
+    if (!ownerRow) return
+    const recordOwner = ownerAccountId.trim() || ownerRow.owner_id
+    if (!recordOwner) return
+    this.db
+      .prepare(
+        `INSERT INTO record_owners (workspace_id, collection, record_id, owner_id, version, updated_at)
+         VALUES (?, ?, ?, ?, 0, ?)
+         ON CONFLICT(workspace_id, collection, record_id) DO NOTHING`,
+      )
+      .run(workspaceId, collection, recordId, recordOwner, now)
+    this.authorization.attach(
+      { type: 'account', accountId: recordOwner, workspaceId },
+      { type: 'record', workspaceId, collection, recordId },
+      policy,
+      now,
+    )
+  }
+
+  /** 移除记录在工作区内的归属、策略与定向授权（用于删除视图等硬删场景）。 */
+  detachRecord(workspaceId: string, collection: string, recordId: string) {
+    if (!workspaceId || !collection || !recordId) return
+    this.db
+      .prepare('DELETE FROM record_grants WHERE workspace_id = ? AND collection = ? AND record_id = ?')
+      .run(workspaceId, collection, recordId)
+    this.db
+      .prepare('DELETE FROM resource_policies WHERE workspace_id = ? AND collection = ? AND record_id = ?')
+      .run(workspaceId, collection, recordId)
+    this.db
+      .prepare('DELETE FROM record_owners WHERE workspace_id = ? AND collection = ? AND record_id = ?')
+      .run(workspaceId, collection, recordId)
+    this.authorization.invalidate(workspaceId, collection)
+  }
+
+  /** 查询某集合内存在外部/访客协作者授权的 record_id 集合（正交外部标记）。 */
+  collectionExternalSharedIds(workspaceId: string, collection: string): Set<string> {
+    if (!workspaceId || !collection) return new Set()
+    const rows = this.db
+      .prepare(
+        `SELECT DISTINCT g.record_id
+         FROM record_grants g
+         JOIN workspace_members m
+           ON m.workspace_id = g.workspace_id AND m.account_id = g.subject_id
+         WHERE g.workspace_id = ? AND g.collection = ?
+           AND g.subject_type = 'account'
+           AND m.member_kind IN ('external', 'guest')`,
+      )
+      .all(workspaceId, collection) as Array<{ record_id: string }>
+    return new Set(rows.map((r) => r.record_id))
+  }
+
   canReadRecord(collection: string, recordId: string, record?: Record<string, unknown>, actorId?: string) {
     const caller = actorId || currentAccountId()
     const workspaceId = this.activeWorkspaceId()

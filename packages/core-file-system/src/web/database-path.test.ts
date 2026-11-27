@@ -18,32 +18,17 @@ test('view and record helpers match the database URL scheme', () => {
   if (nested.kind === 'record') assert.equal(nested.viewId, 'board')
 })
 
-test('builtin all-view helpers keep the database URL scheme', () => {
-  assert.equal(
-    databaseAllViewPath('/agents'),
-    `/database/agents/view/${encodeURIComponent('builtin-all:/agents')}`,
-  )
-  assert.equal(
-    databaseAllViewPath('/tasks'),
-    `/database/tasks/view/${encodeURIComponent('builtin-all:/tasks')}`,
-  )
-  assert.equal(
-    databaseAllViewPath('/pages'),
-    `/database/pages/view/${encodeURIComponent('builtin-all:/pages')}`,
-  )
-  assert.equal(
-    databaseAllViewPath('/plugins'),
-    `/database/plugins/view/${encodeURIComponent('builtin-all:/plugins')}`,
-  )
-  assert.equal(
-    databaseAllViewPath('/data'),
-    `/database/data/view/${encodeURIComponent('builtin-all:/data')}`,
-  )
+test('default all-view helpers keep the database URL scheme', () => {
+  assert.equal(databaseAllViewPath('/agents'), '/database/agents/view/all')
+  assert.equal(databaseAllViewPath('/tasks'), '/database/tasks/view/all')
+  assert.equal(databaseAllViewPath('/pages'), '/database/pages/view/all')
+  assert.equal(databaseAllViewPath('/plugins'), '/database/plugins/view/all')
+  assert.equal(databaseAllViewPath('/data'), '/database/data/view/all')
   const parsed = parseAppPath(databaseAllViewPath('/agents'), plugins)
   assert.equal(parsed.kind, 'collection-view')
   if (parsed.kind === 'collection-view') {
     assert.equal(parsed.collection, '/agents')
-    assert.equal(parsed.viewId, 'builtin-all:/agents')
+    assert.equal(parsed.viewId, 'all')
   }
 })
 

@@ -2,9 +2,10 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { builtinAllView, builtinAllViewId, builtinCatalogViewId, catalogLockFilters, viewDomainOf } from '../catalog-views.ts'
+import { catalogLockFilters, defaultGroupByForCollection, defaultSeedViewsForCollection, viewDomainOf } from '../catalog-views.ts'
 import { VIEWS_COLLECTION_PATH } from './database-path.ts'
 import {
+  defaultSeedViewId,
   defaultViewId,
   diffSavedViews,
   fetchSavedView,
@@ -16,8 +17,8 @@ import {
   loadCollapsedGroups,
   collapsedGroupsKey,
   pickViewForRoute,
-  omitSavedViewIds,
   pullSavedViews,
+  pushSavedViewsMutation,
   mergeSavedViewLists,
   rememberViews,
   rememberRecords,
@@ -28,7 +29,6 @@ import {
   toggleStarredView,
   isRecordStarred,
   viewForPath,
-  withViewDisplay,
 } from './view-storage.ts'
 
 test('starring a view keeps its display name', () => {
@@ -54,102 +54,51 @@ test('authoritative empty saved views hide stale local workspace data', () => {
   assert.deepEqual(loadViews(path), [])
 })
 
-test('index all views do not group by share', () => {
-  const all = builtinAllView({ path: '/editor-blocks', label: '组件' })
-  assert.equal(all.groupBy, 'blockKind')
-  assert.equal(withViewDisplay('/editor-blocks', { ...all, groupBy: 'shareScope' }).groupBy, 'blockKind')
-  assert.equal(withViewDisplay('/editor-blocks', { ...all, groupBy: '' }).groupBy, 'blockKind')
-  assert.equal(builtinAllView({ path: '/tasks', label: '任务' }).groupBy, 'shareScope')
-  assert.equal(builtinAllView({ path: '/workspace-members', label: '成员' }).groupBy, 'membershipKind')
-  assert.equal(withViewDisplay('/workspace-members', { ...builtinAllView({ path: '/workspace-members' }), groupBy: 'shareScope' }).groupBy, 'membershipKind')
-  assert.equal(builtinAllView({ path: '/views', label: '视图' }).groupBy, 'table')
-  assert.equal(withViewDisplay('/views', { ...builtinAllView({ path: '/views' }), groupBy: 'shareScope' }).groupBy, 'table')
+test('defaultGroupByForCollection and seed views assign expected default groupBy per collection', () => {
+  assert.equal(defaultGroupByForCollection('/editor-blocks'), 'blockKind')
+  assert.equal(defaultGroupByForCollection('/tasks'), 'shareScope')
+  assert.equal(defaultGroupByForCollection('/workspace-members'), 'membershipKind')
+  assert.equal(defaultGroupByForCollection('/views'), 'table')
+  const seed = defaultSeedViewsForCollection({ path: '/pages', label: '页面' })
+  assert.equal(seed[0]?.view.id, 'all')
+  assert.equal(seed[0]?.view.groupBy, 'shareScope')
 })
 
-test('views collection still resolves catalog stubs from the route', () => {
-  assert.equal(viewForPath(VIEWS_COLLECTION_PATH, 'builtin:/events')?.filters.tablePath, '/events')
-  assert.equal(viewForPath(VIEWS_COLLECTION_PATH, builtinCatalogViewId('/events'))?.id, builtinCatalogViewId('/events'))
-  assert.equal(viewForPath('/editor-blocks', 'builtin-block:terminal')?.filters.blockKind, 'terminal')
+test('defaultSeedViewId and defaultViewId default to plain seed view id', () => {
+  assert.equal(defaultSeedViewId('/data'), 'all')
+  assert.equal(defaultSeedViewId('/pages'), 'all')
+  assert.equal(defaultSeedViewId('/workspace-members'), 'member')
+  assert.equal(defaultViewId('/data'), 'all')
+  assert.equal(defaultViewId(VIEWS_COLLECTION_PATH), 'all')
+  assert.equal(defaultViewId('/agents'), 'all')
+  rememberViews('/agents', [{ id: 'custom-first', name: '自定义', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] }])
+  assert.equal(defaultViewId('/agents'), 'custom-first')
+  assert.equal(viewForPath('/agents')?.id, 'custom-first')
 })
 
-test('pickViewForRoute keeps builtin-block from the URL when the list is still only 全部', () => {
-  const all = builtinAllView({ path: '/editor-blocks', label: '组件', view: { title: '组件' } })
-  const picked = pickViewForRoute([all], '/editor-blocks', 'builtin-block:terminal')
-  assert.equal(picked?.id, 'builtin-block:terminal')
-  assert.equal(picked?.filters.blockKind, 'terminal')
-})
-
-test('single-table collections and /data all default to builtin 全部xx view', () => {
-  assert.equal(defaultViewId('/data'), builtinAllViewId('/data'))
-  assert.equal(defaultViewId(VIEWS_COLLECTION_PATH), builtinAllViewId(VIEWS_COLLECTION_PATH))
-  assert.equal(viewForPath('/data')?.builtin, true)
-  assert.deepEqual(viewForPath('/data')?.filters, {})
-  assert.equal(defaultViewId('/agents'), builtinAllViewId('/agents'))
-  assert.equal(viewForPath('/agents')?.id, builtinAllViewId('/agents'))
-})
-
-test('omitted builtin all view is not restored from the route', () => {
-  const path = '/pages'
-  const allId = builtinAllViewId(path)
-  const mem: Record<string, string> = {}
-  Object.defineProperty(globalThis, 'localStorage', {
-    configurable: true,
-    value: {
-      getItem: (key: string) => mem[key] ?? null,
-      setItem: (key: string, value: string) => {
-        mem[key] = value
-      },
-      removeItem: (key: string) => {
-        delete mem[key]
-      },
-    },
-  })
-  rememberViews(path, [{ id: 'safe', name: '安全项目', mode: 'table' }] as never)
-  omitSavedViewIds(path, [allId])
-  assert.equal(viewForPath(path, allId)?.id, 'safe')
-  assert.equal(defaultViewId(path, allId), 'safe')
-  assert.equal(pickViewForRoute([{ id: 'safe', name: '安全项目', mode: 'table' }] as never, path, allId)?.id, 'safe')
-  assert.equal(routeViewNeedsFetch(path, allId), false)
-})
-
-test('withViewDisplay does not overlay localStorage display prefs onto server views', () => {
-  const mem: Record<string, string> = {}
-  const storage = {
-    getItem: (key: string) => mem[key] ?? null,
-    setItem: (key: string, value: string) => {
-      mem[key] = value
-    },
-    removeItem: (key: string) => {
-      delete mem[key]
-    },
-  }
-  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage })
-  const path = '/agents'
-  const id = builtinAllViewId(path)
-  // Even if legacy localStorage already has stale display JSON, withViewDisplay ignores it
-  mem[`fsdb.viewDisplay:${path}:${id}`] = JSON.stringify({ name: '97', wrap: true, columns: ['title', 'project'], rank: 0 })
-  const painted = withViewDisplay(path, builtinAllView({ path, label: '代理', view: { title: '代理' } }))
-  assert.equal(painted.name, '全部代理')
-  assert.equal(painted.wrap, false)
-  assert.deepEqual(painted.columns, [])
-  assert.equal(painted.builtin, true)
-})
-
-test('savedViewFromRecord restores columns from a JSON string', () => {
+test('savedViewFromRecord restores columns, locked, revision, and shareScope', () => {
   const view = savedViewFromRecord({
     viewId: 'v-cols',
     title: '列',
     columns: '["title","status","dueAt"]',
     wrap: true,
     pageSize: 50,
+    locked: true,
+    revision: 7,
+    shareScope: '共享',
+    hasExternal: true,
   })
   assert.deepEqual(view?.columns, ['title', 'status', 'dueAt'])
   assert.equal(view?.wrap, true)
   assert.equal(view?.pageSize, 50)
+  assert.equal(view?.locked, true)
+  assert.equal(view?.revision, 7)
+  assert.equal(view?.shareScope, 'shared')
+  assert.equal(view?.hasExternal, true)
 })
 
 test('savedViewFromRecord keeps seed rows and filters', () => {
-  assert.equal(savedViewFromRecord({ viewId: builtinAllViewId('/tasks'), title: '全部' })?.name, '全部')
+  assert.equal(savedViewFromRecord({ viewId: 'all', title: '全部' })?.name, '全部')
   const view = savedViewFromRecord({
     viewId: 'v1',
     title: '看板',
@@ -219,24 +168,29 @@ test('rememberRecords scopes crumb rows to the current view', () => {
   assert.equal(loadRecords('/pages', 'all').some((row) => row.id === 't1'), false)
 })
 
-test('stale /views titles do not overwrite a locally stamped rename', () => {
+test('higher server revision wins during mergeSavedViewLists and sibling views are preserved', () => {
   const prev = {
     id: 'mine',
-    name: '什么呢？？？',
+    name: '新版标题',
     mode: 'table' as const,
     sortField: 'title',
     sortDir: 'asc' as const,
     filters: {},
     columns: [] as string[],
-    updatedAt: 9,
+    revision: 5,
   }
-  const pulled = {
+  const stalePulled = {
     ...prev,
-    name: '新视图 2',
-    updatedAt: 0,
+    name: '旧版标题',
+    revision: 3,
   }
-  const merged = mergeSavedViewLists([prev], [pulled])
-  assert.equal(merged.find((view) => view.id === 'mine')?.name, '什么呢？？？')
+  const newerPulled = {
+    ...prev,
+    name: '更新版标题',
+    revision: 6,
+  }
+  assert.equal(mergeSavedViewLists([prev], [stalePulled]).find((view) => view.id === 'mine')?.name, '新版标题')
+  assert.equal(mergeSavedViewLists([prev], [newerPulled]).find((view) => view.id === 'mine')?.name, '更新版标题')
 })
 
 test('incomplete persist snapshots keep sibling views', () => {
@@ -249,12 +203,10 @@ test('incomplete persist snapshots keep sibling views', () => {
   assert.equal(mergeSavedViewLists([keep, extra], [painted], ['extra']).some((view) => view.id === 'extra'), false)
 })
 
-test('saved views pull shares one in-flight list', () => {
+test('saved views pull uses unified GET /api/db/saved-views and shares one in-flight request', () => {
   const src = readFileSync(resolve(import.meta.dirname, './view-storage.ts'), 'utf8')
   assert.match(src, /const viewsPullByKey = new Map/)
-  assert.match(src, /VIEWS_PULL_LIMIT = 200/)
-  assert.match(src, /filters: \{ tablePath \}/)
-  assert.doesNotMatch(src, /columns: \[\.\.\.VIEWS_PULL/)
+  assert.match(src, /\/api\/db\/saved-views\?/)
   assert.match(src, /if \(pending && !opts\?\.force\)/)
   assert.match(src, /opts\?: \{ idle\?: boolean; force\?: boolean \}/)
   assert.match(src, /export function noteLocalSavedViewsWrite/)
@@ -278,11 +230,10 @@ test('authoritative pull removes server-deleted views while preserving pending l
   const prev = globalThis.fetch
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input)
-    if (url.includes('/api/db/list')) {
+    if (url.includes('/api/db/saved-views')) {
       return new Response(
         JSON.stringify({
-          items: [{ viewId: 'keep', title: '留下', tablePath: path }],
-          total: 1,
+          views: [{ id: 'keep', name: '留下', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [], revision: 1 }],
         }),
         { status: 200, headers: { 'content-type': 'application/json' } },
       )
@@ -291,18 +242,15 @@ test('authoritative pull removes server-deleted views while preserving pending l
   }) as typeof fetch
   try {
     await pullSavedViews([path], { force: true })
-    // 服务端已删除的 deleted-elsewhere 必须消失（杜绝诈尸），同时本地在途新建 fresh-pending 保留
     assert.deepEqual(
       loadViews(path).map((view) => view.id),
       ['keep', 'fresh-pending'],
     )
-    // 回滚在途新建后，只剩服务端权威视图 keep
     rollbackPendingViewOp(path, pendingOpId)
     assert.deepEqual(
       loadViews(path).map((view) => view.id),
       ['keep'],
     )
-    // 提交带服务端权威列表的 op 时直接更新 serverViews
     const op2 = beginPendingViewOp(path, {
       upsert: [{ id: 'committed', name: '已提交', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] }],
     })
@@ -328,15 +276,13 @@ test('in-flight pullSavedViews discards stale response when workspace switches m
     await gate
     return new Response(
       JSON.stringify({
-        items: [{ viewId: 'ws-a-view', title: '空间A视图', tablePath: path }],
-        total: 1,
+        views: [{ id: 'ws-a-view', name: '空间A视图', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] }],
       }),
       { status: 200, headers: { 'content-type': 'application/json' } },
     )
   }) as typeof fetch
   try {
     const pulling = pullSavedViews([path], { force: true })
-    // 切换工作区，触发 workspaceGen 递增并清空缓存
     resetWorkspaceClientCaches()
     releaseFetch()
     const changed = await pulling
@@ -347,21 +293,8 @@ test('in-flight pullSavedViews discards stale response when workspace switches m
   }
 })
 
-test('local view delete is not restored by a stale /views pull', async () => {
+test('local view delete is not restored by a stale saved-views pull', async () => {
   const path = '/pages-delete-view-stay'
-  const mem: Record<string, string> = {}
-  Object.defineProperty(globalThis, 'localStorage', {
-    configurable: true,
-    value: {
-      getItem: (key: string) => mem[key] ?? null,
-      setItem: (key: string, value: string) => {
-        mem[key] = value
-      },
-      removeItem: (key: string) => {
-        delete mem[key]
-      },
-    },
-  })
   rememberViews(path, [
     { id: 'keep', name: '留下', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] },
     { id: 'gone', name: '删掉', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] },
@@ -370,16 +303,16 @@ test('local view delete is not restored by a stale /views pull', async () => {
   const prev = globalThis.fetch
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input)
-    if (url.includes('/api/db/list')) {
+    if (url.includes('/api/db/saved-views')) {
       await new Promise((resolve) => setTimeout(resolve, 40))
-      const items = includeGone
+      const views = includeGone
         ? [
-            { viewId: 'keep', title: '留下', tablePath: path },
-            { viewId: 'gone', title: '删掉', tablePath: path },
+            { id: 'keep', name: '留下', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] },
+            { id: 'gone', name: '删掉', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] },
           ]
-        : [{ viewId: 'keep', title: '留下', tablePath: path }]
+        : [{ id: 'keep', name: '留下', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] }]
       return new Response(
-        JSON.stringify({ items, total: items.length }),
+        JSON.stringify({ views }),
         { status: 200, headers: { 'content-type': 'application/json' } },
       )
     }
@@ -409,34 +342,20 @@ test('local view delete is not restored by a stale /views pull', async () => {
 
 test('pullSavedViews keeps previous rank when the list comes back shuffled', async () => {
   const path = '/pages-view-rank-stable'
-  const mem: Record<string, string> = {}
-  Object.defineProperty(globalThis, 'localStorage', {
-    configurable: true,
-    value: {
-      getItem: (key: string) => mem[key] ?? null,
-      setItem: (key: string, value: string) => {
-        mem[key] = value
-      },
-      removeItem: (key: string) => {
-        delete mem[key]
-      },
-    },
-  })
   rememberViews(path, [
     { id: 'mine', name: '我的', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [], rank: 0 },
-    { id: 'board', name: '看板', mode: 'board', sortField: 'title', sortDir: 'asc', filters: {}, columns: [], rank: 1 },
+    { id: 'board', name: '看板', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [], rank: 1 },
   ])
   const prev = globalThis.fetch
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input)
-    if (url.includes('/api/db/list')) {
+    if (url.includes('/api/db/saved-views')) {
       return new Response(
         JSON.stringify({
-          items: [
-            { viewId: 'board', title: '看板', tablePath: path, mode: 'board' },
-            { viewId: 'mine', title: '我的', tablePath: path },
+          views: [
+            { id: 'board', name: '看板', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] },
+            { id: 'mine', name: '我的', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] },
           ],
-          total: 2,
         }),
         { status: 200, headers: { 'content-type': 'application/json' } },
       )
@@ -444,7 +363,7 @@ test('pullSavedViews keeps previous rank when the list comes back shuffled', asy
     return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })
   }) as typeof fetch
   try {
-    await pullSavedViews([path])
+    await pullSavedViews([path], { force: true })
     assert.deepEqual(
       loadViews(path).map((view) => view.id),
       ['mine', 'board'],
@@ -458,45 +377,38 @@ test('route saved views need a fetch until they are remembered', () => {
   const path = '/pages-route-view-need'
   rememberViews(path, [])
   assert.equal(routeViewNeedsFetch(path, '1792146752009'), true)
-  assert.equal(routeViewNeedsFetch(path, builtinAllViewId(path)), false)
-  assert.equal(routeViewNeedsFetch(path, 'builtin-block:terminal'), false)
+  assert.equal(routeViewNeedsFetch(path, 'all'), true)
   rememberViews(path, [{ id: '1792146752009', name: '压测百行', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [], wrap: true, pageSize: 100 }])
   assert.equal(routeViewNeedsFetch(path, '1792146752009'), false)
 })
 
-test('fetchSavedView reads the URL view and remembers wrap and pageSize', async () => {
+test('fetchSavedView reads via GET /api/db/saved-views and remembers wrap and pageSize', async () => {
   const path = '/pages-route-view-fetch'
-  const mem: Record<string, string> = {}
-  Object.defineProperty(globalThis, 'localStorage', {
-    configurable: true,
-    value: {
-      getItem: (key: string) => mem[key] ?? null,
-      setItem: (key: string, value: string) => {
-        mem[key] = value
-      },
-      removeItem: (key: string) => {
-        delete mem[key]
-      },
-    },
-  })
   rememberViews(path, [])
   const urls: string[] = []
   const prev = globalThis.fetch
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input)
     urls.push(url)
-    assert.match(url, /\/api\/db\/read\?/)
+    assert.match(url, /\/api\/db\/saved-views\?/)
     assert.match(url, /pages-route-view-fetch/)
     return new Response(
       JSON.stringify({
-        value: {
-          viewId: '1792146752009',
-          title: '压测百行',
-          wrap: true,
-          pageSize: 100,
-          groupBy: '',
-          tablePath: path,
-        },
+        views: [
+          {
+            id: '1792146752009',
+            name: '压测百行',
+            mode: 'table',
+            sortField: 'title',
+            sortDir: 'asc',
+            filters: {},
+            columns: [],
+            wrap: true,
+            pageSize: 100,
+            groupBy: '',
+            revision: 2,
+          },
+        ],
       }),
       { status: 200, headers: { 'content-type': 'application/json' } },
     )
@@ -534,27 +446,6 @@ test('diffSavedViews upserts rank changes without removing other views', () => {
   const diff = diffSavedViews([a, b], moved)
   assert.deepEqual(diff.upsert?.map((view) => view.id).sort(), ['a', 'b'])
   assert.deepEqual(diff.remove, [])
-})
-
-test('remembering the new order first makes a rank-only patch look empty', () => {
-  const path = '/pages'
-  const a = {
-    id: 'a',
-    name: 'A',
-    mode: 'table' as const,
-    sortField: 'title',
-    sortDir: 'asc' as const,
-    filters: {},
-    columns: [] as string[],
-    rank: 0,
-  }
-  const b = { ...a, id: 'b', name: 'B', rank: 1 }
-  const moved = [{ ...b, rank: 0 }, { ...a, rank: 1 }]
-  rememberViews(path, [a, b])
-  const baseline = loadViews(path)
-  rememberViews(path, moved)
-  assert.deepEqual(diffSavedViews(loadViews(path), moved).upsert, [])
-  assert.deepEqual(diffSavedViews(baseline, moved).upsert?.map((view) => view.id).sort(), ['a', 'b'])
 })
 
 test('diffSavedViews upserts ids that were never in baseline', () => {
@@ -601,12 +492,12 @@ test('group fold state is stored per collection, view, and groupBy', () => {
       removeItem: (key: string) => { store.delete(key) },
     },
   })
-  persistCollapsedGroups('/plugins', 'builtin-all:/plugins', 'shareScope', { 共享: true, 私人: false })
-  assert.equal(collapsedGroupsKey('/plugins', 'builtin-all:/plugins', 'shareScope'), 'fsdb.collapsedGroups:/plugins:builtin-all:/plugins:shareScope')
-  assert.deepEqual(loadCollapsedGroups('/plugins', 'builtin-all:/plugins', 'shareScope'), { 共享: true })
-  assert.deepEqual(loadCollapsedGroups('/plugins', 'builtin-all:/plugins', 'status'), {})
-  persistCollapsedGroups('/plugins', 'builtin-all:/plugins', 'shareScope', {})
-  assert.equal(store.has('fsdb.collapsedGroups:/plugins:builtin-all:/plugins:shareScope'), false)
+  persistCollapsedGroups('/plugins', 'all', 'shareScope', { 共享: true, 私人: false })
+  assert.equal(collapsedGroupsKey('/plugins', 'all', 'shareScope'), 'fsdb.collapsedGroups:/plugins:all:shareScope')
+  assert.deepEqual(loadCollapsedGroups('/plugins', 'all', 'shareScope'), { 共享: true })
+  assert.deepEqual(loadCollapsedGroups('/plugins', 'all', 'status'), {})
+  persistCollapsedGroups('/plugins', 'all', 'shareScope', {})
+  assert.equal(store.has('fsdb.collapsedGroups:/plugins:all:shareScope'), false)
   const paint = readFileSync(resolve(import.meta.dirname, './browser-table-paint.tsx'), 'utf8')
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   assert.match(paint, /persistCollapsedGroups\(collectionPath/)
@@ -620,7 +511,6 @@ test('starred records toggle by collection path and id', () => {
   assert.equal(isRecordStarred(next, '/tasks', 'home'), false)
   assert.equal(isRecordStarred(toggleStarredRecord(next, '/pages', 'home'), '/pages', 'home'), false)
 })
-
 
 test('removeStarredViews drops deleted views from starredViews without touching other tables', async () => {
   const mod = await import('./view-storage.ts')
@@ -658,126 +548,56 @@ test('removeStarredViews drops deleted views from starredViews without touching 
   }
 })
 
-test('newer server view wins over stale localStorage display overlay and syncs local cache', async () => {
-  const path = '/pages-server-wins'
-  const mem: Record<string, string> = {}
-  Object.defineProperty(globalThis, 'localStorage', {
-    configurable: true,
-    value: {
-      getItem: (key: string) => mem[key] ?? null,
-      setItem: (key: string, value: string) => { mem[key] = value },
-      removeItem: (key: string) => { delete mem[key] },
-    },
-  })
-  // 服务端（如 Agent/其他窗口）更新了该视图，时间戳更新为 2000
-  const serverView = {
-    id: 'v1',
-    name: '服务端新名',
-    mode: 'table' as const,
-    sortField: 'title',
-    sortDir: 'asc' as const,
-    filters: {},
-    columns: ['title', 'status'],
-    wrap: true,
-    freezeUntil: undefined,
-    updatedAt: 2000,
-  }
-  const painted = withViewDisplay(path, serverView)
-  assert.equal(painted.wrap, true)
-  assert.equal(painted.freezeUntil, undefined)
-  assert.equal(painted.name, '服务端新名')
-
-  // pullSavedViews 拉回后也会把旧 localStorage 同步更新掉
-  const prevFetch = globalThis.fetch
-  globalThis.fetch = (async () =>
-    new Response(
-      JSON.stringify({
-        items: [{ viewId: 'v1', title: '服务端新名', tablePath: path, wrap: true, freezeUntil: '', updatedAt: 2000 }],
-        total: 1,
-      }),
-      { status: 200, headers: { 'content-type': 'application/json' } },
-    )) as typeof fetch
-  try {
-    await pullSavedViews([path], { force: true })
-    const loaded = loadViews(path).find((v) => v.id === 'v1')
-    assert.equal(loaded?.wrap, true)
-    assert.equal(loaded?.freezeUntil, undefined)
-  } finally {
-    globalThis.fetch = prevFetch
-  }
-})
-
-test('stampSavedView is strictly monotonic and pushSavedViewsPatch serializes explicit nulls for cleared fields', async () => {
-  const { stampSavedView, pushSavedViewsPatch } = await import('./view-storage.ts')
-  const base = {
-    id: 'v-mono',
-    name: '单调视图',
-    mode: 'table' as const,
-    sortField: 'title',
-    sortDir: 'asc' as const,
-    filters: {},
-    columns: ['title'],
-  }
-  const s1 = stampSavedView(base)
-  const s2 = stampSavedView(s1)
-  assert.ok((s2.updatedAt ?? 0) > (s1.updatedAt ?? 0))
-
+test('pushSavedViewsMutation sends only field-level keys and returns server error message on 403', async () => {
   let sentBody = ''
   const prevFetch = globalThis.fetch
   globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
     sentBody = String(init?.body ?? '')
-    return new Response('{"ok":true}', { status: 200 })
+    return new Response(JSON.stringify({ ok: true, views: [] }), { status: 200 })
   }) as typeof fetch
   try {
-    const res = await pushSavedViewsPatch('/pages', { upsert: [s2] })
-    assert.equal(res, 'ok')
+    const res = await pushSavedViewsMutation('/pages', {
+      upsert: [{ id: 'v-patch', groupBy: 'status', freezeUntil: null }],
+    })
+    assert.equal(res.status, 'ok')
     const parsed = JSON.parse(sentBody) as { upsert: Array<Record<string, unknown>> }
-    assert.equal(parsed.upsert[0]?.groupConfig, null)
-    assert.equal(parsed.upsert[0]?.freezeUntil, null)
-    assert.deepEqual(parsed.upsert[0]?.columnSummaries, {})
-    assert.deepEqual(parsed.upsert[0]?.columnViews, {})
-    assert.deepEqual(parsed.upsert[0]?.columnWidths, {})
+    assert.deepEqual(parsed.upsert[0], { id: 'v-patch', groupBy: 'status', freezeUntil: null })
+
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ error: '视图已锁定，请先解锁后再修改配置', code: 'VIEW_LOCKED' }), {
+        status: 403,
+        headers: { 'content-type': 'application/json' },
+      })) as typeof fetch
+    const denied = await pushSavedViewsMutation('/pages', { upsert: [{ id: 'v-patch', name: '改名' }] })
+    assert.equal(denied.status, 'failed')
+    assert.equal(denied.error, '视图已锁定，请先解锁后再修改配置')
   } finally {
     globalThis.fetch = prevFetch
   }
 })
 
-test('omittedViews and activeView storage keys are isolated per workspaceId', async () => {
-  const {
-    activeViewStorageKey,
-    collapsedGroupsKey,
-    loadOmittedViewIds,
-    omitSavedViewIds,
-    omittedViewsKey,
-  } = await import('./view-storage.ts')
+test('activeView and collapsedGroups storage keys are isolated per workspaceId', async () => {
+  const { activeViewStorageKey, collapsedGroupsKey } = await import('./view-storage.ts')
   const localMem: Record<string, string> = {}
   const sessionMem: Record<string, string> = {}
   const prevWin = (globalThis as { window?: unknown }).window
   const storageOf = (bag: Record<string, string>) => ({
     getItem: (key: string) => bag[key] ?? null,
-    setItem: (key: string, value: string) => {
-      bag[key] = value
-    },
-    removeItem: (key: string) => {
-      delete bag[key]
-    },
+    setItem: (key: string, value: string) => { bag[key] = value },
+    removeItem: (key: string) => { delete bag[key] },
   })
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
     value: { localStorage: storageOf(localMem), sessionStorage: storageOf(sessionMem) },
   })
   try {
-    // Omitting the builtin default view in ws_local must not leak into ws_cloud
     sessionMem['biu.workspaceId'] = 'ws_local'
-    assert.equal(omittedViewsKey('/pages'), 'fsdb.omittedViews:ws_local:/pages')
     assert.equal(activeViewStorageKey('/pages'), 'fsdb.activeView:ws_local:/pages')
     assert.equal(collapsedGroupsKey('/pages', 'all', 'tag'), 'fsdb.collapsedGroups:ws_local:/pages:all:tag')
-    omitSavedViewIds('/pages', ['__all__:/pages'])
-    assert.deepEqual(loadOmittedViewIds('/pages'), ['__all__:/pages'])
 
     sessionMem['biu.workspaceId'] = 'ws_cloud'
-    assert.equal(omittedViewsKey('/pages'), 'fsdb.omittedViews:ws_cloud:/pages')
-    assert.deepEqual(loadOmittedViewIds('/pages'), [])
+    assert.equal(activeViewStorageKey('/pages'), 'fsdb.activeView:ws_cloud:/pages')
+    assert.equal(collapsedGroupsKey('/pages', 'all', 'tag'), 'fsdb.collapsedGroups:ws_cloud:/pages:all:tag')
   } finally {
     Object.defineProperty(globalThis, 'window', { configurable: true, value: prevWin })
   }
@@ -799,7 +619,7 @@ test('savedViewFromRecord extracts createdBy from overlaid PersonValue objects a
   assert.equal(fromString?.createdBy, 'acc_97')
 })
 
-test('catalogLockFilters and savedViewFromRecord preserve single-table filters and 3-state protection', () => {
+test('catalogLockFilters, viewDomainOf, and pickViewForRoute work cleanly with plain views', () => {
   const wsView = {
     id: 'v-ws',
     name: '空间看板',
@@ -808,8 +628,7 @@ test('catalogLockFilters and savedViewFromRecord preserve single-table filters a
     sortDir: 'asc' as const,
     filters: { status: 'open', $scope: 'workspace' },
     columns: [],
-    scope: 'workspace' as const,
-    protection: 'locked' as const,
+    locked: true,
   }
   const personalView = {
     id: 'v-personal',
@@ -819,55 +638,27 @@ test('catalogLockFilters and savedViewFromRecord preserve single-table filters a
     sortDir: 'asc' as const,
     filters: { status: 'draft', $scope: 'personal' },
     columns: [],
-    scope: 'personal' as const,
-    protection: 'personal' as const,
+    shareScope: 'personal' as const,
   }
   const unfilteredView = {
-    id: 'v-all',
+    id: 'all',
     name: '全部汇总',
     mode: 'table' as const,
     sortField: 'title',
     sortDir: 'asc' as const,
     filters: { status: 'open' },
     columns: [],
-    scope: 'workspace' as const,
-    protection: 'public' as const,
+    shareScope: 'workspace' as const,
   }
   const listed = [wsView, personalView, unfilteredView]
 
   assert.deepEqual(catalogLockFilters('v-ws', listed), { status: 'open', $scope: 'workspace' })
   assert.deepEqual(catalogLockFilters('v-personal', listed), { status: 'draft', $scope: 'personal' })
-  assert.deepEqual(catalogLockFilters('v-all', listed), { status: 'open' })
+  assert.deepEqual(catalogLockFilters('all', listed), { status: 'open' })
   assert.equal(viewDomainOf(wsView), 'workspace')
   assert.equal(viewDomainOf(personalView), 'personal')
   assert.equal(viewDomainOf(unfilteredView), 'all')
 
-  const renamedAll = {
-    id: builtinAllViewId('/pages'),
-    name: '全部页面（重命名）',
-    builtin: false,
-    filters: {},
-    scope: 'workspace' as const,
-  }
-  assert.equal(viewDomainOf(renamedAll), 'all')
-  assert.deepEqual(catalogLockFilters(renamedAll.id, [renamedAll]), {})
-
-  const hydratedDefault = savedViewFromRecord({
-    viewId: 'v-default',
-    title: '普通视图',
-  })
-  assert.equal(hydratedDefault?.protection, 'public')
-  assert.equal(hydratedDefault?.scope, 'workspace')
-
-  const hydratedPersonal = savedViewFromRecord({
-    viewId: 'v-priv',
-    title: '个人视图',
-    scope: 'personal',
-    protection: 'personal',
-  })
-  assert.equal(hydratedPersonal?.protection, 'personal')
-  assert.equal(hydratedPersonal?.scope, 'personal')
-
   assert.equal(pickViewForRoute([wsView, personalView], '/pages', 'v-personal')?.id, 'v-personal')
-  assert.equal(pickViewForRoute([wsView, personalView], '/pages', builtinAllViewId('/pages'))?.id, builtinAllViewId('/pages'))
+  assert.equal(pickViewForRoute([wsView, personalView], '/pages', 'missing')?.id, 'v-ws')
 })

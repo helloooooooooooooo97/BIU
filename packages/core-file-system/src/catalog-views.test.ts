@@ -1,198 +1,97 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import {
-  builtinAllView,
-  builtinAllViewId,
-  builtinBlockKindViewId,
-  builtinCatalogViewId,
-  builtinCatalogViews,
-  builtinMemberViews,
-  isBuiltinBlockKindViewId,
-  isBuiltinCatalogViewId,
-  isReadOnlyViewId,
-  mergeCatalogViews,
-  mergePageBlockViews,
-  mergeTableViews,
   catalogLockFilters,
-  stubBuiltinAllView,
-  stubBuiltinBlockKindView,
-  isBuiltinAllViewForCollection,
-  stubBuiltinCatalogView,
   catalogRowOpenTarget,
   collectionNoun,
+  defaultGroupByForCollection,
+  defaultSeedViewsForCollection,
   displayNameForView,
-  builtinTagViewId,
-  isBuiltinTagViewId,
+  EPHEMERAL_VIEW_ID,
+  ephemeralFallbackView,
+  scopedCollectionName,
   stampRecordId,
   stampRowOpenTarget,
+  viewDomainOf,
 } from './catalog-views.ts'
+import {
+  DATA_COLLECTION_PATH,
+  EDITOR_BLOCKS_COLLECTION_PATH,
+  TAGS_COLLECTION_PATH,
+  VIEWS_COLLECTION_PATH,
+  WORKSPACE_MEMBERS_COLLECTION_PATH,
+} from './paths.ts'
 
-test('overlay keeps stored seed edits on /data and standard single-table collections', () => {
-  const dataTable = { path: '/data', label: '数据', view: { title: '数据' } }
-  const dataAllId = builtinAllViewId('/data')
-  const renamed = mergeTableViews(dataTable, [
-    { id: dataAllId, name: '我的数据', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] },
-  ])
-  assert.equal(renamed[0]?.name, '我的数据')
-  const omitted = mergeTableViews(
-    dataTable,
-    [{ id: 'mine', name: '周报', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] }],
-    [dataAllId],
-  )
-  assert.equal(omitted.some((view) => view.id === dataAllId), false)
-  assert.equal(omitted.some((view) => view.id === 'mine'), true)
+test('defaultSeedViewsForCollection produces plain workspace seed views for business tables, /data, and locked member views', () => {
+  const pagesSeeds = defaultSeedViewsForCollection({ path: '/pages', label: '页面' })
+  assert.equal(pagesSeeds.length, 1)
+  assert.equal(pagesSeeds[0]?.view.id, 'all')
+  assert.equal(pagesSeeds[0]?.view.name, '全部页面')
+  assert.equal(pagesSeeds[0]?.view.locked, false)
+  assert.equal(pagesSeeds[0]?.view.groupBy, 'shareScope')
+  assert.equal(pagesSeeds[0]?.accessMode, 'members')
+  assert.equal(pagesSeeds[0]?.memberDefaultRole, 'editor')
 
-  // 单逻辑表业务集合恢复内置 builtin-all 顶层视图，并保留用户自定义视图
-  const pagesTable = { path: '/pages', label: '页面', view: { title: '页面' } }
-  const pagesMerged = mergeTableViews(pagesTable, [
-    { id: 'ws-default', name: '空间页面', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
-  ])
-  assert.deepEqual(pagesMerged.map((v) => v.id), [builtinAllViewId('/pages'), 'ws-default'])
-})
-
-test('member directory exposes builtin audience views', () => {
-  const views = mergeTableViews({ path: '/workspace-members', label: '成员' }, [])
-  assert.equal(views[0]?.name, '全部成员')
-  assert.equal(views[0]?.groupBy, 'membershipKind')
-  assert.deepEqual(views.slice(1).map((view) => view.name), ['空间成员', '外部成员', '临时访客'])
-  assert.deepEqual(builtinMemberViews().map((view) => view.filters.membershipKind), ['member', 'external', 'guest'])
-})
-
-test('views collection only seeds 全部视图', () => {
-  const tables = [
-    { id: 'views', path: '/views', kind: 'collection' as const, label: '视图', view: { moduleId: 'views-db', route: '/db-views', title: '视图' } },
-    { id: 'pages', path: '/pages', kind: 'collection' as const, label: '页面', view: { moduleId: 'page', route: '/pages', title: '页面' } },
-    { id: 'tasks', path: '/tasks', kind: 'collection' as const, label: '任务', view: { moduleId: 'tasks', route: '/tasks', title: '任务' } },
-  ]
-  const listed = builtinCatalogViews(tables)
-  assert.equal(listed.length, 3)
-  assert.equal(listed[1]?.id, builtinCatalogViewId('/pages'))
-  const merged = mergeCatalogViews(tables, [
-    { id: builtinCatalogViewId('/pages'), name: '旧的', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
-    { id: 'user-1', name: '周报', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
-  ])
-  assert.equal(merged[0]?.id, builtinAllViewId('/views'))
-  assert.equal(merged[0]?.name, '全部视图')
-  assert.equal(merged[0]?.groupBy, 'table')
-  assert.deepEqual(merged.filter((view) => view.builtin).map((view) => view.id), [builtinAllViewId('/views')])
-  assert.equal(merged.some((view) => view.id === 'user-1'), true)
-  assert.equal(merged.some((view) => view.id === builtinCatalogViewId('/pages')), false)
-})
-
-test('stub builtin catalog view from route id', () => {
-  const stub = stubBuiltinCatalogView('builtin:/drawings')
-  assert.equal(stub?.builtin, true)
-  assert.deepEqual(stub?.filters, { tablePath: '/drawings' })
-  assert.equal(stubBuiltinCatalogView('user-1'), null)
-  assert.equal(isBuiltinCatalogViewId('builtin-all:/agents'), false)
-  assert.equal(stubBuiltinCatalogView('builtin-all:/agents'), null)
-})
-
-test('builtin all view ids belong to one collection', () => {
-  assert.equal(isBuiltinAllViewForCollection('builtin-all:/agents', '/agents'), true)
-  assert.equal(isBuiltinAllViewForCollection('builtin-all:/agents', '/pages'), false)
-  assert.equal(isBuiltinAllViewForCollection('mine', '/agents'), false)
-})
-
-test('/data gets a 全部数据 seed view while K+1 collections only keep concrete table views', () => {
-  const data = { id: 'data', path: '/data', kind: 'collection' as const, label: '数据', view: { title: '数据' } }
-  const all = builtinAllView(data)
-  assert.equal(all.id, builtinAllViewId('/data'))
-  assert.equal(all.name, '全部数据')
-  assert.deepEqual(all.filters, {})
-  assert.equal(all.builtin, true)
-  assert.equal(all.sortField, 'updatedAt')
-  assert.equal(all.sortDir, 'desc')
-  assert.equal(all.tree, false)
-  const merged = mergeTableViews(data, [
-    { id: builtinAllViewId('/data'), name: '自定义数据', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
-    { id: 'mine', name: '置顶', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
-  ])
-  assert.equal(all.groupBy, 'shareScope')
-  assert.deepEqual(merged.slice(0, 1).map((view) => view.name), ['自定义数据'])
-  assert.equal(merged.filter((view) => view.id === builtinAllViewId('/data')).length, 1)
-  assert.equal(merged.some((view) => view.id === 'mine'), true)
-  assert.equal(stubBuiltinAllView('builtin-all:/pages')?.name, '全部pages')
-})
-
-test('builtin share titles use collection Chinese names instead of path ids', () => {
-  const pages = { path: '/pages', label: '页面', view: { title: '页面' } }
-  assert.equal(displayNameForView(builtinAllViewId('/pages'), pages), '全部页面')
-  assert.equal(displayNameForView(builtinAllViewId('/agents'), { path: '/agents', label: '代理', view: { title: '代理' } }), '全部代理')
-  assert.equal(displayNameForView(builtinAllViewId('/mcp'), { path: '/mcp', label: 'MCP', view: { title: 'MCP' } }), '全部MCP')
-  assert.equal(displayNameForView(builtinAllViewId('/editor-blocks'), { path: '/editor-blocks', label: '组件', view: { title: '组件' } }), '全部组件')
-  assert.equal(displayNameForView('mine', pages, '周报'), '周报')
-})
-
-test('catalog view rows open the source table view instead of a record pane', () => {
-  assert.deepEqual(catalogRowOpenTarget({ tablePath: '/plugins', viewId: builtinAllViewId('/plugins') }), {
-    collection: '/plugins',
-    viewId: builtinAllViewId('/plugins'),
-  })
-  assert.equal(catalogRowOpenTarget({ tablePath: '', viewId: 'x' }), null)
-  assert.equal(catalogRowOpenTarget({ tablePath: '/events' }), null)
-})
-
-test('tags collection uses the same view list as other tables', () => {
-  assert.equal(isBuiltinTagViewId(builtinTagViewId('dp')), true)
-  assert.equal(isBuiltinCatalogViewId(builtinTagViewId('dp')), false)
-  const table = { path: '/tags', label: '标签', view: { title: '标签' } }
-  const merged = mergeTableViews(table, [{ id: 'mine', name: '置顶', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] }])
-  assert.equal(merged[0]?.name, '全部标签')
-  assert.equal(merged.some((view) => view.name === '私人标签'), false)
-  assert.equal(merged.some((view) => isBuiltinTagViewId(view.id)), false)
-  assert.equal(merged.some((view) => view.id === 'mine'), true)
-})
-
-test('stamp rows open the source record, not a tag view', () => {
-  assert.deepEqual(stampRowOpenTarget({ tablePath: '/pages', sourceId: 'home' }), {
-    collection: '/pages',
-    recordId: 'home',
-  })
-  assert.equal(stampRowOpenTarget({ tablePath: '', sourceId: 'home' }), null)
-  assert.deepEqual(stampRowOpenTarget({ id: 'pages::p180' }), {
-    collection: '/pages',
-    recordId: 'p180',
-  })
-  assert.equal(stampRecordId('/agents', 's1'), 'agents::s1')
-})
-
-test('seed view ids still use builtin-all prefixes', () => {
-  assert.equal(isReadOnlyViewId(builtinAllViewId('/agents')), true)
-  assert.equal(isReadOnlyViewId('user-traj'), false)
-})
-
-test('data collection noun is 数据, not the path segment', () => {
-  assert.equal(collectionNoun({ path: '/data' }), '数据')
-  assert.equal(collectionNoun({ path: '/data', label: 'data' }), '数据')
-  assert.equal(stubBuiltinAllView(builtinAllViewId('/data'))?.name, '全部数据')
-  assert.equal(
-    displayNameForView(builtinAllViewId('/data'), { path: '/data', label: '数据', view: { title: '数据' } }),
-    '全部数据',
-  )
-})
-
-test('page blocks collection only seeds 全部组件', () => {
-  const table = { path: '/editor-blocks', label: '组件', view: { title: '组件' } }
-  const merged = mergePageBlockViews(table, [
-    { id: builtinBlockKindViewId('html'), name: '旧的', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
-    { id: 'mine', name: '置顶', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
-  ])
-  assert.equal(merged[0]?.id, builtinAllViewId('/editor-blocks'))
-  assert.equal(merged[0]?.name, '全部组件')
-  assert.deepEqual(merged.filter((view) => view.builtin).map((view) => view.id), [builtinAllViewId('/editor-blocks')])
-  assert.equal(merged.some((view) => view.id === builtinBlockKindViewId('excalidraw')), false)
-  assert.equal(merged.some((view) => view.id === builtinBlockKindViewId('html')), false)
-  assert.equal(merged.some((view) => view.id === 'mine'), true)
-  assert.equal(isReadOnlyViewId(builtinBlockKindViewId('html')), true)
-  assert.equal(isBuiltinCatalogViewId(builtinBlockKindViewId('html')), false)
-  assert.equal(isBuiltinBlockKindViewId(builtinBlockKindViewId('algorithm')), true)
-  assert.equal(stubBuiltinBlockKindView('builtin-block:html')?.filters.blockKind, 'html')
-  assert.equal(stubBuiltinBlockKindView('user-1'), null)
-  assert.deepEqual(catalogLockFilters('builtin-block:terminal', []), { blockKind: 'terminal' })
+  const memberSeeds = defaultSeedViewsForCollection({ path: WORKSPACE_MEMBERS_COLLECTION_PATH, label: '空间成员' })
   assert.deepEqual(
-    catalogLockFilters('builtin-block:terminal', [{ id: 'builtin-block:terminal', builtin: true, filters: {} }]),
-    {},
+    memberSeeds.map((s) => ({
+      id: s.view.id,
+      name: s.view.name,
+      locked: s.view.locked,
+      kind: s.view.filters.membershipKind,
+      role: s.memberDefaultRole,
+    })),
+    [
+      { id: 'member', name: '空间成员', locked: true, kind: 'member', role: 'viewer' },
+      { id: 'external', name: '外部成员', locked: true, kind: 'external', role: 'viewer' },
+      { id: 'guest', name: '临时访客', locked: true, kind: 'guest', role: 'viewer' },
+    ],
   )
-  assert.deepEqual(catalogLockFilters('mine', [{ id: 'mine', builtin: false, filters: { blockKind: 'html' } }]), { blockKind: 'html' })
+
+  const dataSeeds = defaultSeedViewsForCollection({ path: DATA_COLLECTION_PATH, label: '数据' })
+  assert.equal(dataSeeds.length, 1)
+  assert.equal(dataSeeds[0]?.view.id, 'all')
+  assert.equal(dataSeeds[0]?.view.name, '全部数据')
+  assert.equal(dataSeeds[0]?.view.locked, false)
+
+  assert.deepEqual(defaultSeedViewsForCollection({ path: VIEWS_COLLECTION_PATH, label: '视图' }), [])
+})
+
+test('ephemeralFallbackView returns an in-memory read-only fallback view for zero-visible-views scenarios', () => {
+  const fallback = ephemeralFallbackView({ path: '/pages', label: '页面' })
+  assert.equal(fallback.id, EPHEMERAL_VIEW_ID)
+  assert.equal(fallback.ephemeral, true)
+  assert.equal(fallback.viewRole, 'viewer')
+  assert.equal(fallback.name, '全部页面')
+})
+
+test('defaultGroupByForCollection maps system and business collections accurately', () => {
+  assert.equal(defaultGroupByForCollection('/pages'), 'shareScope')
+  assert.equal(defaultGroupByForCollection(WORKSPACE_MEMBERS_COLLECTION_PATH), 'membershipKind')
+  assert.equal(defaultGroupByForCollection(VIEWS_COLLECTION_PATH), 'table')
+  assert.equal(defaultGroupByForCollection(EDITOR_BLOCKS_COLLECTION_PATH), 'blockKind')
+  assert.equal(defaultGroupByForCollection(TAGS_COLLECTION_PATH), '')
+})
+
+test('viewDomainOf and catalogLockFilters preserve optional $scope filters and strip legacy $ownerTable', () => {
+  assert.equal(viewDomainOf({ id: 'v1', filters: { $scope: 'workspace' } }), 'workspace')
+  assert.equal(viewDomainOf({ id: 'v2', filters: { $scope: 'personal' } }), 'personal')
+  assert.equal(viewDomainOf({ id: 'v3', filters: { $scope: 'shared' } }), 'shared')
+  assert.equal(viewDomainOf({ id: 'v4', filters: {} }), 'all')
+
+  const locks = catalogLockFilters('v1', [{ id: 'v1', filters: { $scope: 'workspace', $ownerTable: 'legacy', status: 'open' } }])
+  assert.deepEqual(locks, { $scope: 'workspace', status: 'open' })
+  assert.deepEqual(catalogLockFilters('missing', []), {})
+})
+
+test('naming, stampRecordId, stampRowOpenTarget, and catalogRowOpenTarget helpers work consistently', () => {
+  assert.equal(collectionNoun({ path: '/pages', label: '页面' }), '页面')
+  assert.equal(collectionNoun({ path: DATA_COLLECTION_PATH, label: 'data' }), '数据')
+  assert.equal(scopedCollectionName({ path: '/pages', label: '页面' }, 'personal'), '私人页面')
+  assert.equal(displayNameForView('v1', { path: '/pages', label: '页面' }, '自定义'), '自定义')
+  assert.equal(displayNameForView('v1', { path: '/pages', label: '页面' }), '页面')
+
+  assert.equal(stampRecordId('/pages', 'p1'), 'pages::p1')
+  assert.deepEqual(stampRowOpenTarget({ id: 'pages::p1' }), { collection: '/pages', recordId: 'p1' })
+  assert.deepEqual(catalogRowOpenTarget({ tablePath: '/pages', viewId: 'v1' }), { collection: '/pages', viewId: 'v1' })
 })

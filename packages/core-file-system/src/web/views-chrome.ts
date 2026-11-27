@@ -1,9 +1,7 @@
-import type { CollectionInfo, DbRecord } from '@biu/type-file-system'
+import type { DbRecord } from '@biu/type-file-system'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
-import { catalogRowOpenTarget, mergeCatalogViews } from '../catalog-views.ts'
-import { loadOmittedViewIds } from './view-storage.ts'
-import { VIEWS_COLLECTION_PATH, viewsCatalogSource } from './database-path.ts'
-import type { SavedView } from './saved-view.ts'
+import { catalogRowOpenTarget } from '../catalog-views.ts'
+import { viewsCatalogSource } from './database-path.ts'
 
 const EMPTY_FILTERS: Record<string, string> = {}
 
@@ -16,8 +14,5 @@ export const viewsChrome: CollectionChrome = {
   lockedFiltersFromSearch(search: string) {
     const source = viewsCatalogSource(search)
     return source ? { tablePath: source } : EMPTY_FILTERS
-  },
-  listViews(tables: CollectionInfo[], user: unknown[]) {
-    return mergeCatalogViews(tables, user as SavedView[], loadOmittedViewIds(VIEWS_COLLECTION_PATH))
   },
 }

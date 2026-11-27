@@ -1,4 +1,5 @@
 import { lazy, Suspense, type ComponentProps, type ReactNode } from 'react'
+import { GlobeAltIcon } from '@heroicons/react/16/solid'
 import { TagChip, TagChips } from '@biu/biu-ui/tag-chip'
 import { normalizeSchemaValue, type CollectionActionInfo, type CollectionInfo, type CollectionSchema, type DbRecord, type FieldSpec, type PersonValue } from '@biu/type-file-system'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
@@ -106,16 +107,14 @@ export function renderBrowserCell(
           <span
             data-testid="fsdb-share-external-badge"
             title="已对外公开或邀请外部访客"
+            aria-label="已对外公开或邀请外部访客"
             style={{
-              fontSize: 10,
-              padding: '0 5px',
-              borderRadius: 999,
-              border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
-              color: 'var(--biu-color-text-muted)',
-              lineHeight: '16px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              color: 'var(--biu-color-accent, var(--biu-color-emphasis))',
             }}
           >
-            外部
+            <GlobeAltIcon aria-hidden className="size-[14px]" />
           </span>
         ) : null}
       </span>

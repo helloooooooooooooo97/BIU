@@ -11,6 +11,7 @@ export {
 }
 
 export const FSDB_SHARES_CHANGE_EVENT = 'fsdb:shares-change' as const
+export const FSDB_OPEN_VIEW_SHARE_EVENT = 'fsdb:open-view-share' as const
 export const FSDB_CRUMB_LABELS_EVENT = 'fsdb:crumb-labels' as const
 export const FSDB_LIST_READY_EVENT = 'fsdb:list-ready' as const
 export const FSDB_DETAIL_REFRESH_EVENT = 'fsdb:detail-refresh' as const

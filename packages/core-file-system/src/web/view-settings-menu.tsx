@@ -1,8 +1,8 @@
-import { useEffect, useState, type ReactElement } from 'react'
-import { PlusIcon } from '@heroicons/react/16/solid'
+import { useState, type ReactElement } from 'react'
+import { LockClosedIcon, LockOpenIcon, PlusIcon, ShareIcon } from '@heroicons/react/16/solid'
 import { apiFetch } from '@biu/biu-ui/api-client'
 import type { CollectionRowViewType, CollectionViewType } from '@biu/type-file-system/ui'
-import { isBuiltinAllViewId } from '../catalog-views.ts'
+import { WORKSPACE_MEMBERS_COLLECTION_PATH, normalizeCollectionPath } from '../paths.ts'
 import type { FilterGroup, SortRule } from '../query-logic.ts'
 import { LocalText } from './controls.tsx'
 import type { ViewMode } from './fields.ts'
@@ -15,9 +15,10 @@ import {
   type GroupMenuBucket,
   type QueryField,
 } from './query-menus.tsx'
-import { canEditSavedView, PAGE_SIZES, type GroupConfig, type SavedView } from './saved-view.ts'
+import { canEditSavedView, canManageSavedView, PAGE_SIZES, type GroupConfig, type SavedView } from './saved-view.ts'
 import type { TableSandboxItem } from '../shared/table-sandbox-model.ts'
 import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
+import { viewScopeMeta } from './view-order-menu.tsx'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
 
 export type ViewSettingsTab = 'view' | 'columns' | 'filter' | 'sort' | 'group'
@@ -71,10 +72,12 @@ export function ViewSettingsMenu({
   onTabChange,
   sheet,
   collectionPath,
-  title,
+  localData = false,
   activeView,
   commitViewName,
   onSaveAsPersonal,
+  onToggleViewLock,
+  onOpenViewShare,
   mode,
   setMode,
   extraViews,
@@ -116,10 +119,13 @@ export function ViewSettingsMenu({
   onTabChange: (next: ViewSettingsTab) => void
   sheet: boolean
   collectionPath: string
-  title: string
+  title?: string
+  localData?: boolean
   activeView?: SavedView
   commitViewName: (viewId: string, raw: string) => void
   onSaveAsPersonal?: () => void
+  onToggleViewLock?: (view: SavedView) => void
+  onOpenViewShare?: () => void
   mode: ViewMode
   setMode: (next: ViewMode) => void
   extraViews: CollectionViewType[]
@@ -157,31 +163,13 @@ export function ViewSettingsMenu({
   setGroupSettings: (next: GroupConfig | undefined) => void
   onClose: () => void
 }) {
-  const [openAcc, setOpenAcc] = useState<'mode' | 'scope' | 'pageSize' | null>(null)
-  const [viewer, setViewer] = useState<ViewerIdentity>(() => cachedViewerIdentity ?? { accountId: '', isAdmin: false })
-
-  useEffect(() => {
-    if (!activeView?.createdBy || cachedViewerIdentity) return
-    let alive = true
-    void loadViewerIdentity().then((next) => {
-      if (alive) setViewer(next)
-    })
-    return () => {
-      alive = false
-    }
-  }, [activeView?.createdBy])
-
-  const foreignViewReadOnly = Boolean(
-    !sheet &&
-      activeView &&
-      !activeView.builtin &&
-      (activeView.viewRole
-        ? !canEditSavedView(activeView)
-        : activeView.createdBy &&
-          viewer.accountId &&
-          activeView.createdBy !== viewer.accountId &&
-          !viewer.isAdmin),
-  )
+  const [openAcc, setOpenAcc] = useState<'mode' | 'pageSize' | null>(null)
+  const isMembersCollection = normalizeCollectionPath(collectionPath) === WORKSPACE_MEMBERS_COLLECTION_PATH
+  const isLocked = Boolean(activeView?.locked)
+  const canEdit = Boolean(!sheet && activeView && canEditSavedView(activeView))
+  const canManage = Boolean(!sheet && activeView && canManageSavedView(activeView))
+  const readOnlyOrLocked = Boolean(!sheet && activeView && !canEdit)
+  const scopeMeta = activeView ? viewScopeMeta(activeView, { isMembersCollection }) : null
 
   const modeOptions = [
     ...VIEW_MODES.map((opt) => ({
@@ -242,30 +230,63 @@ export function ViewSettingsMenu({
       </div>
 
       <div className="fsdb-vset-body">
-        {foreignViewReadOnly ? (
-          <div className="fsdb-vset-readonly-banner" data-testid="fsdb-vset-readonly-banner" style={{ padding: '8px 10px', marginBottom: 8, borderRadius: 8, background: 'var(--bg-subtle, rgba(255,255,255,0.04))', fontSize: 12, lineHeight: 1.5, color: 'var(--text-muted, #9aa0a6)' }}>
-            <div>当前视图为只读（仅查看），筛选、排序、分组与排版仅在本地临时生效，不会修改原视图。</div>
-            {onSaveAsPersonal ? (
-              <button
-                type="button"
-                className="fsdb-vset-mode-add"
-                style={{ marginTop: 6 }}
-                onClick={() => {
-                  setOpenAcc(null)
-                  onSaveAsPersonal()
-                  onClose()
-                }}
-              >
-                <PlusIcon aria-hidden className="size-[14px]" />
-                <span>另存为私人视图</span>
-              </button>
-            ) : null}
+        {readOnlyOrLocked && activeView ? (
+          <div
+            className="fsdb-vset-readonly-banner"
+            data-testid="fsdb-vset-readonly-banner"
+            style={{
+              padding: '8px 10px',
+              marginBottom: 8,
+              borderRadius: 8,
+              background: 'var(--bg-subtle, rgba(255,255,255,0.04))',
+              fontSize: 12,
+              lineHeight: 1.5,
+              color: 'var(--text-muted, #9aa0a6)',
+            }}
+          >
+            <div>
+              {isLocked
+                ? isMembersCollection
+                  ? '当前视图已由管理员锁定（动态成员组），筛选与排序仅临时预览，解锁后可修改。'
+                  : '当前视图已锁定，筛选与排序仅临时预览，解锁后可修改配置。'
+                : '当前视图为只读，筛选、排序、分组与排版仅临时预览，不会修改原视图。'}
+            </div>
+            <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+              {isLocked && canManage && onToggleViewLock ? (
+                <button
+                  type="button"
+                  className="fsdb-vset-mode-add"
+                  data-testid="fsdb-vset-unlock-btn"
+                  onClick={() => {
+                    onToggleViewLock(activeView)
+                  }}
+                >
+                  <LockOpenIcon aria-hidden className="size-[13px]" />
+                  <span>解锁</span>
+                </button>
+              ) : null}
+              {onSaveAsPersonal ? (
+                <button
+                  type="button"
+                  className="fsdb-vset-mode-add"
+                  data-testid="fsdb-vset-save-as-personal"
+                  onClick={() => {
+                    setOpenAcc(null)
+                    onSaveAsPersonal()
+                    onClose()
+                  }}
+                >
+                  <PlusIcon aria-hidden className="size-[14px]" />
+                  <span>另存为我的视图</span>
+                </button>
+              ) : null}
+            </div>
           </div>
         ) : null}
 
         {tab === 'view' ? (
           <>
-            {!sheet && activeView && !foreignViewReadOnly ? (
+            {!sheet && activeView && canEdit ? (
               <LocalText
                 className="fsdb-vset-name-input"
                 value={activeView.name}
@@ -280,39 +301,45 @@ export function ViewSettingsMenu({
               />
             ) : null}
 
-            {!foreignViewReadOnly && !sheet && activeView && (!activeView.builtin || isBuiltinAllViewId(activeView.id)) ? (
-              isBuiltinAllViewId(activeView.id) ? (
-                <div
-                  className="fsdb-group-panel-row"
-                  data-testid="fsdb-vset-all-table-note"
-                  style={{ fontSize: 12, color: 'var(--text-muted, #9aa0a6)' }}
-                >
-                  <span className="fsdb-group-panel-label">保护视图</span>
-                  <span>个人视图（数据聚合视角仅自己可见）</span>
-                </div>
-              ) : (
-                <GroupAccordionSelect
-                  testId="fsdb-vset-protection-row"
-                  label="保护视图"
-                  value={activeView.protection ?? (activeView.scope === 'personal' ? 'personal' : 'public')}
-                  options={[
-                    { value: 'public', label: '公共视图（成员可改）' },
-                    { value: 'locked', label: '锁定视图（仅管理者可改）' },
-                    { value: 'personal', label: '个人视图（仅自己可见）' },
-                  ]}
-                  open={openAcc === 'scope'}
-                  onToggle={() => setOpenAcc((prev) => (prev === 'scope' ? null : 'scope'))}
-                  onSelect={(next) => {
-                    setOpenAcc(null)
-                    const protection = next as 'public' | 'locked' | 'personal'
-                    const nextScope = protection === 'personal' ? 'personal' : 'workspace'
-                    patchActiveView({ protection, scope: nextScope })
+            {!sheet && activeView && !activeView.ephemeral && !localData && scopeMeta ? (
+              <div className="fsdb-group-panel-row" data-testid="fsdb-vset-share-row">
+                <span className="fsdb-group-panel-label">视图权限</span>
+                <button
+                  type="button"
+                  className="fsdb-vset-mode-add"
+                  data-testid="fsdb-vset-open-share"
+                  onClick={() => {
+                    onClose()
+                    onOpenViewShare?.()
                   }}
-                />
-              )
+                >
+                  <ShareIcon aria-hidden className="size-[13px]" />
+                  <span>{scopeMeta.scopeLabel}</span>
+                </button>
+              </div>
             ) : null}
 
-            {!foreignViewReadOnly ? (
+            {!sheet && activeView && !activeView.ephemeral && canManage && onToggleViewLock ? (
+              <div className="fsdb-group-panel-row" data-testid="fsdb-vset-lock-row">
+                <span className="fsdb-group-panel-label" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <LockClosedIcon aria-hidden className="size-[13px]" />
+                  <span>{isMembersCollection ? '锁定（动态成员组）' : '锁定视图'}</span>
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={isLocked}
+                  aria-label="锁定视图"
+                  data-testid="fsdb-vset-lock-switch"
+                  className={`fsdb-group-switch${isLocked ? ' is-on' : ''}`}
+                  onClick={() => onToggleViewLock(activeView)}
+                >
+                  <span className="fsdb-group-switch-thumb" />
+                </button>
+              </div>
+            ) : null}
+
+            {canEdit || sheet ? (
               <GroupAccordionSelect
                 testId="fsdb-vset-mode-row"
                 label="视图类型"
@@ -328,7 +355,7 @@ export function ViewSettingsMenu({
               />
             ) : null}
 
-            {!foreignViewReadOnly && openAcc === 'mode' && onCreateSandboxView && !sheet ? (
+            {canEdit && openAcc === 'mode' && onCreateSandboxView && !sheet ? (
               <button
                 type="button"
                 className="fsdb-vset-mode-add"
