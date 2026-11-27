@@ -1033,11 +1033,6 @@ export class HttpService extends Service {
       })
       res.end(data)
     } catch {
-      if (pathname.startsWith('/api/')) {
-        res.writeHead(404, { 'content-type': 'application/json; charset=utf-8' })
-        res.end(JSON.stringify({ error: 'not found — 对应插件可能已卸载' }))
-        return
-      }
       if (isHashedAssetPath(pathname)) {
         res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
         res.end('not found')
