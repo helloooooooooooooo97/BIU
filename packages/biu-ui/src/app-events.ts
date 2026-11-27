@@ -6,6 +6,7 @@
 export interface BiuEventMap {
   'biu:account-token': { token?: string; action?: string } | undefined
   'biu:workspace-profile': Record<string, unknown> | undefined
+  'biu:workspace-meta': { workspaceId?: string; name?: string; avatar?: string } | undefined
   'biu:chat-config-changed': Record<string, unknown> | undefined
   'biu:inspector-reveal': Record<string, unknown> | undefined
   'biu:inspector-open': Record<string, unknown> | undefined

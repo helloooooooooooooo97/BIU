@@ -1,4 +1,5 @@
 import { readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
+import { emitAppEvent, onAppEvent } from '@biu/biu-ui/app-events'
 import { apiFetch, registerApiRequestInterceptor } from '@biu/biu-ui/api-client'
 import { syncWorkspaceEndpoint } from '@biu/biu-ui/workspace-transport'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type Ref } from 'react'
@@ -1505,9 +1506,27 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
     }
     void load()
     window.addEventListener(ACCOUNT_EVENT, load)
+    const offWorkspaceMeta = onAppEvent('biu:workspace-meta', (detail) => {
+      if (!detail?.workspaceId) {
+        void load()
+        return
+      }
+      setWorkspaces((rows) =>
+        rows.map((row) =>
+          row.id === detail.workspaceId
+            ? {
+                ...row,
+                ...(detail.name !== undefined ? { name: detail.name } : {}),
+                ...(detail.avatar !== undefined ? { avatar: detail.avatar } : {}),
+              }
+            : row,
+        ),
+      )
+    })
     return () => {
       cancelled = true
       window.removeEventListener(ACCOUNT_EVENT, load)
+      offWorkspaceMeta()
     }
   }, [])
 
@@ -1960,7 +1979,11 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
         const updated = body as CollabWorkspace
         setWorkspaces((rows) => rows.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)))
         setError('')
-        window.dispatchEvent(new Event(ACCOUNT_EVENT))
+        emitAppEvent('biu:workspace-meta', {
+          workspaceId: updated.id,
+          name: updated.name,
+          avatar: updated.avatar ?? '',
+        })
       })
       .catch((err) => setError(err instanceof Error ? err.message : '保存空间头像失败'))
       .finally(() => setSavingWorkspaceAvatar(false))
@@ -2099,7 +2122,11 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
               const updated = body as CollabWorkspace
               setWorkspaces((rows) => rows.map((row) => row.id === updated.id ? updated : row))
               setError('')
-              window.dispatchEvent(new Event(ACCOUNT_EVENT))
+              emitAppEvent('biu:workspace-meta', {
+                workspaceId: updated.id,
+                name: updated.name,
+                avatar: updated.avatar ?? '',
+              })
             })
             .catch((err) => setError(err instanceof Error ? err.message : '保存失败'))
         }}

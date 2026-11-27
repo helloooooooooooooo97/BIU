@@ -1,4 +1,5 @@
 import { writeStorageString } from '@biu/biu-ui/client-storage'
+import { onAppEvent } from '@biu/biu-ui/app-events'
 import { apiFetch } from '@biu/biu-ui/api-client'
 import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import { lazy, memo, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react'
@@ -223,10 +224,16 @@ function useCloudCreatorContext() {
     load()
     window.addEventListener(ACCOUNT_EVENT, load)
     window.addEventListener(WORKSPACE_PROFILE_EVENT, load)
+    const offWorkspaceMeta = onAppEvent('biu:workspace-meta', (detail) => {
+      if (detail?.avatar === undefined) return
+      const nextAvatar = String(detail.avatar ?? '').trim()
+      setCtx((prev) => (prev.workspaceAvatar === nextAvatar ? prev : { ...prev, workspaceAvatar: nextAvatar }))
+    })
     return () => {
       cancelled = true
       window.removeEventListener(ACCOUNT_EVENT, load)
       window.removeEventListener(WORKSPACE_PROFILE_EVENT, load)
+      offWorkspaceMeta()
     }
   }, [])
 
