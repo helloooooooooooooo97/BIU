@@ -1,12 +1,5 @@
 import type { CollectionChrome, FsCellProps } from '@biu/type-file-system/ui'
-import { ReportsPane, ScriptPane } from './detail-panes.tsx'
-
-function formatTokens(n: number) {
-  if (!n) return '0'
-  if (n < 1000) return String(n)
-  if (n < 1_000_000) return `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}k`
-  return `${(n / 1_000_000).toFixed(2)}M`
-}
+import { formatTokens, ReportsPane, ScriptPane } from './detail-panes.tsx'
 
 function UsageCell({ record, value }: FsCellProps) {
   const parts = record.usageParts
