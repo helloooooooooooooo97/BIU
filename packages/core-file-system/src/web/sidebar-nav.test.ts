@@ -162,17 +162,8 @@ test('unlisted builtin breadcrumbs resolve names without changing saved view nam
   const all = buildCrumbs({ ...input, viewId: builtinAllViewId('/pages') })[1]!
   assert.equal(all.label, '全部页面')
   assert.equal(all.choices[0]!.label, '全部页面')
-  const personalCrumbs = buildCrumbs({
-    ...input,
-    viewId: 'default:account:alice:/pages',
-    viewScope: 'personal',
-    views: [{ id: 'default:account:alice:/pages', name: '私人页面' }],
-  })
-  assert.equal(personalCrumbs[1]!.kind, 'scope')
-  assert.equal(personalCrumbs[1]!.label, '我的数据')
-  assert.equal(personalCrumbs[2]!.label, '私人页面')
-  const wsCrumbs = buildCrumbs({ ...input, viewId: 'team', viewScope: 'workspace', views: [{ id: 'team', name: '团队看板' }] })
-  assert.equal(wsCrumbs.map((c) => c.label).join(' / '), '页面 / 空间数据 / 团队看板')
+  const wsCrumbs = buildCrumbs({ ...input, viewId: 'team', views: [{ id: 'team', name: '团队看板' }] })
+  assert.equal(wsCrumbs.map((c) => c.label).join(' / '), '页面 / 团队看板')
   assert.equal(buildCrumbs({ ...input, viewId: 'mine', views: [{ id: 'mine', name: '我的页面' }] })[1]!.label, '我的页面')
   assert.equal(buildCrumbs({ ...input, viewId: all.id, viewName: '自定义名称' })[1]!.label, '自定义名称')
 })
@@ -198,7 +189,7 @@ test('面包屑点上级会清掉后面几级', () => {
   )
   assert.equal(crumbs[0]!.label, 'Task')
   assert.equal(crumbs[0]!.icon, 'bolt')
-  assert.equal(pathForCrumbTarget(crumbs[0]!.target), '/database/tasks')
+  assert.equal(pathForCrumbTarget(crumbs[0]!.target), '/database/tasks/view/builtin-all%3A%2Ftasks')
   assert.equal(pathForCrumbTarget(crumbs[1]!.target), '/database/tasks/view/1787983501816')
   assert.equal(crumbButtonAction(crumbs[0]!), 'menu')
   const board = crumbs[1]!.choices.find((item) => item.id === 'board')
@@ -206,7 +197,7 @@ test('面包屑点上级会清掉后面几级', () => {
   assert.equal(board?.mode, 'board')
   assert.equal(pathForCrumbTarget(board!.target), '/database/tasks/view/board')
   assert.equal(crumbs[0]!.choices.find((item) => item.id === '/pages')?.label, 'Page')
-  assert.equal(pathForCrumbTarget(crumbs[0]!.choices.find((item) => item.id === '/pages')!.target), '/database/pages')
+  assert.equal(pathForCrumbTarget(crumbs[0]!.choices.find((item) => item.id === '/pages')!.target), '/database/pages/view/builtin-all%3A%2Fpages')
   assert.ok(!crumbs[0]!.choices.some((item) => item.id === 'board'))
 })
 
@@ -226,7 +217,7 @@ test('记录页面包屑是表 / 视图 / 记录，点表回到集合', () => {
     crumbs.map((item) => item.kind),
     ['collection', 'view', 'record'],
   )
-  assert.equal(pathForCrumbTarget(crumbs[0]!.target), '/database/tasks')
+  assert.equal(pathForCrumbTarget(crumbs[0]!.target), '/database/tasks/view/builtin-all%3A%2Ftasks')
   assert.equal(pathForCrumbTarget(crumbs[1]!.target), '/database/tasks/view/1787983501816')
   assert.ok(pathForCrumbTarget(crumbs[2]!.target).includes('/view/1787983501816/record/'))
   assert.ok(!pathForCrumbTarget(crumbs[0]!.target).includes('/record/'))
@@ -304,36 +295,17 @@ test('表视图记录点标题一律出选择菜单', () => {
   assert.equal(crumbButtonAction(many[1]!, many[0]!), 'menu')
   assert.equal(crumbLabelAction(many[1]!, many[0]!), many[0]!.target)
 
-  const shared = buildCrumbs({
+  // 单逻辑表面包屑始终扁平为：数据类型 / 视图
+  const flat = buildCrumbs({
     collection: '/pages',
     collectionLabel: '页面',
     tables: [{ path: '/pages', label: '页面' }],
-    viewId: 'default:account:acc_f6d79999:/pages',
-    viewName: '私人页面',
-    viewScope: 'shared',
-    sharedOwner: { accountId: 'acc_f6d79999', name: 'lulu@qq.com', avatar: 'data:image/png;base64,abc' },
-  })
-  // 扁平逻辑表面包屑：页面 / lulu@qq.com / 私人页面（不再多一层「个人表」）
-  assert.deepEqual(
-    shared.map((item) => item.label),
-    ['页面', 'lulu@qq.com', '私人页面'],
-  )
-  const ownerCrumb = shared.find((item) => item.id === 'owner:acc_f6d79999')
-  assert.equal(ownerCrumb?.label, 'lulu@qq.com')
-  assert.equal(ownerCrumb?.avatar, 'data:image/png;base64,abc')
-  assert.equal(ownerCrumb?.avatarSeed, 'acc_f6d79999')
-
-  const mineFlat = buildCrumbs({
-    collection: '/pages',
-    collectionLabel: '页面',
-    tables: [{ path: '/pages', label: '页面' }],
-    viewId: 'default:account:acc_97:/pages',
-    viewName: '公开页面',
-    viewScope: 'personal',
+    viewId: 'v-team',
+    viewName: '团队页面',
   })
   assert.deepEqual(
-    mineFlat.map((item) => item.label),
-    ['页面', '我的数据', '公开页面'],
+    flat.map((item) => item.label),
+    ['页面', '团队页面'],
   )
 })
 

@@ -75,7 +75,6 @@ export type BrowserMutationsOptions = {
   tagCatalog: CollectionSchemaPack[]
   tagCatalogRef: MutableRefObject<CollectionSchemaPack[]>
   createScope: 'personal' | 'workspace' | 'shared' | 'local'
-  createOwnerTable?: string
   createTypeTable?: CollectionInfo
   overviewCreateTables: CollectionInfo[]
   pickedIds: string[]
@@ -147,7 +146,6 @@ export function createBrowserMutations(opts: BrowserMutationsOptions) {
     tagCatalog,
     tagCatalogRef,
     createScope,
-    createOwnerTable,
     createTypeTable,
     overviewCreateTables,
     pickedIds,
@@ -349,7 +347,6 @@ export function createBrowserMutations(opts: BrowserMutationsOptions) {
           path: targetPath,
           records: [fields],
           scope,
-          ...(createOwnerTable ? { ownerTable: createOwnerTable } : {}),
         }),
       })
       const created = data.items?.[0]?.value

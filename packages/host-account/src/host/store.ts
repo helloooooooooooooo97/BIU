@@ -16,21 +16,17 @@ import {
   registerBuiltinPluginLookup,
   tokenHash,
   verifyPassword,
-  type AccessRuleDisplaySnapshot,
-  type AccessRuleGrantInput,
-  type AccessRuleGrantRecord,
-  type AccessRuleRecord,
-  type AccessRuleRole,
-  type AccessRuleSubjectType,
   type Account,
-  type CreateAccessRuleInput,
+  type BatchPermissionApplyInput,
+  type BatchPermissionApplyResult,
+  type BatchPermissionPreviewResult,
+  type BatchPermissionSubject,
   type EditLock,
   type PluginAssignmentSubject,
   type PluginPackageInput,
   type PresenceRow,
   type RecordHead,
   type SyncOp,
-  type UpdateAccessRuleInput,
   type Workspace,
 } from './store-types.ts'
 
@@ -42,21 +38,17 @@ export {
   PRESENCE_STALE_MS,
   isRegisteredBuiltinPlugin,
   registerBuiltinPluginLookup,
-  type AccessRuleDisplaySnapshot,
-  type AccessRuleGrantInput,
-  type AccessRuleGrantRecord,
-  type AccessRuleRecord,
-  type AccessRuleRole,
-  type AccessRuleSubjectType,
   type Account,
-  type CreateAccessRuleInput,
+  type BatchPermissionApplyInput,
+  type BatchPermissionApplyResult,
+  type BatchPermissionPreviewResult,
+  type BatchPermissionSubject,
   type EditLock,
   type PluginAssignmentSubject,
   type PluginPackageInput,
   type PresenceRow,
   type RecordHead,
   type SyncOp,
-  type UpdateAccessRuleInput,
   type Workspace,
 }
 
@@ -91,54 +83,14 @@ export class CollabStore {
     })
     this.ensureBuiltInRoot()
     this.ensureActivityTable()
-    this.ensureAccessRulesTables()
+    this.ensureWorkspaceAvatarColumn()
   }
 
-  private ensureAccessRulesTables() {
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS access_rules (
-        id TEXT PRIMARY KEY,
-        workspace_id TEXT NOT NULL,
-        collection TEXT NOT NULL,
-        name TEXT NOT NULL,
-        created_by TEXT NOT NULL,
-        filter_tree_json TEXT NOT NULL,
-        columns_json TEXT,
-        display_snapshot_json TEXT,
-        enabled INTEGER NOT NULL DEFAULT 1,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        owner_table TEXT NOT NULL DEFAULT ''
-      );
-      CREATE INDEX IF NOT EXISTS access_rules_ws_col
-        ON access_rules(workspace_id, collection, enabled);
-      CREATE INDEX IF NOT EXISTS access_rules_owner
-        ON access_rules(workspace_id, created_by);
-      CREATE TABLE IF NOT EXISTS access_rule_grants (
-        id TEXT PRIMARY KEY,
-        rule_id TEXT NOT NULL REFERENCES access_rules(id) ON DELETE CASCADE,
-        workspace_id TEXT NOT NULL,
-        subject_type TEXT NOT NULL,
-        subject_id TEXT NOT NULL,
-        role TEXT NOT NULL,
-        created_at INTEGER NOT NULL,
-        UNIQUE(rule_id, subject_type, subject_id)
-      );
-      CREATE INDEX IF NOT EXISTS access_rule_grants_subject
-        ON access_rule_grants(workspace_id, subject_type, subject_id);
-    `)
-    const cols = (this.db.prepare('PRAGMA table_info(access_rules)').all() as Array<{ name: string }>).map((c) => c.name)
-    if (!cols.includes('owner_table')) {
-      this.db.exec(`ALTER TABLE access_rules ADD COLUMN owner_table TEXT NOT NULL DEFAULT ''`)
-    }
+  private ensureWorkspaceAvatarColumn() {
     const wsCols = (this.db.prepare('PRAGMA table_info(workspaces)').all() as Array<{ name: string }>).map((c) => c.name)
     if (wsCols.length > 0 && !wsCols.includes('avatar')) {
       this.db.exec(`ALTER TABLE workspaces ADD COLUMN avatar TEXT NOT NULL DEFAULT ''`)
     }
-    this.db.exec(
-      `CREATE INDEX IF NOT EXISTS access_rules_ws_col_table
-       ON access_rules(workspace_id, collection, owner_table, enabled)`,
-    )
   }
 
   private ensureActivityTable() {
@@ -325,6 +277,43 @@ export class CollabStore {
       .prepare('SELECT role FROM workspace_members WHERE workspace_id = ? AND account_id = ?')
       .get(workspaceId, accountId) as { role?: string } | undefined
     return Boolean(row)
+  }
+
+  memberRole(accountId: string, workspaceId: string): WorkspaceRole | null {
+    const row = this.db
+      .prepare('SELECT role FROM workspace_members WHERE workspace_id = ? AND account_id = ?')
+      .get(workspaceId, accountId) as { role?: string } | undefined
+    return row?.role === 'owner' || row?.role === 'admin' || row?.role === 'member' || row?.role === 'viewer'
+      ? row.role
+      : null
+  }
+
+  /** 按主键单行查询成员资料（O(1)），用于锁定成员视图匹配，避免全员表扫描。 */
+  memberById(workspaceId: string, accountId: string) {
+    const row = this.db
+      .prepare(
+        `SELECT a.id, COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), NULLIF(a.email, ''), '未设置') AS name,
+                COALESCE(m.display_name, '') AS display_name,
+                COALESCE(m.avatar, '') AS avatar,
+                COALESCE(a.email, '') AS email,
+                m.role, m.member_kind, m.created_at
+         FROM workspace_members m
+         JOIN accounts a ON a.id = m.account_id
+         WHERE m.workspace_id = ? AND m.account_id = ?`,
+      )
+      .get(workspaceId, accountId) as
+      | {
+          id: string
+          name: string
+          display_name: string
+          avatar: string
+          email: string
+          role: WorkspaceRole
+          member_kind: 'member' | 'external' | 'guest'
+          created_at: number
+        }
+      | undefined
+    return row ?? null
   }
 
   private digestToken(token: string) {
@@ -943,7 +932,7 @@ export class CollabStore {
            member_kind = CASE WHEN workspace_members.member_kind = 'external' THEN 'member' ELSE workspace_members.member_kind END`,
       )
       .run(workspaceId, accountId, now)
-    this.reconcileAccountGrantScopes(workspaceId, accountId)
+    this.authorization.invalidateAll()
     return this.members(actorId, workspaceId)
   }
 
@@ -1000,7 +989,7 @@ export class CollabStore {
              member_kind = CASE WHEN workspace_members.member_kind = 'external' THEN 'member' ELSE workspace_members.member_kind END`,
         )
         .run(invite.workspace_id, actorId, invite.role, now)
-      this.reconcileAccountGrantScopes(invite.workspace_id, actorId)
+      this.authorization.invalidateAll()
       this.useInvite(invite.id)
       this.rememberActive(actorId, invite.workspace_id)
       this.db.exec('COMMIT')
@@ -1111,7 +1100,6 @@ export class CollabStore {
           invite.created_by,
           now,
         )
-      this.reconcileRecordScope(invite.workspace_id, grantCollection, grantRecordId)
       this.authorization.invalidate(invite.workspace_id, grantCollection)
       this.useInvite(invite.id)
       this.db.exec('COMMIT')
@@ -1261,32 +1249,16 @@ export class CollabStore {
       transferTo = wsOwner?.owner_id && wsOwner.owner_id !== accountId ? wsOwner.owner_id : actorId
     }
 
-    const affectedRecords = this.recordGrantKeysForAccount(workspaceId, accountId)
-    let ownedPolicies: Array<{ collection: string; record_id: string; owner_table?: string; access_mode?: string }> = []
-    try {
-      ownedPolicies = this.db
-        .prepare(
-          `SELECT collection, record_id, COALESCE(owner_table, '') AS owner_table, access_mode FROM resource_policies
-           WHERE workspace_id = ? AND (owner_account_id = ? OR owner_table = ?)`,
-        )
-        .all(workspaceId, accountId, `account:${accountId}`) as Array<{
-        collection: string
-        record_id: string
-        owner_table?: string
-        access_mode?: string
-      }>
-    } catch {
-      ownedPolicies = this.db
-        .prepare(
-          `SELECT collection, record_id, access_mode FROM resource_policies
-           WHERE workspace_id = ? AND owner_account_id = ?`,
-        )
-        .all(workspaceId, accountId) as Array<{ collection: string; record_id: string; access_mode?: string }>
-    }
+    const ownedPolicies = this.db
+      .prepare(
+        `SELECT collection, record_id, access_mode FROM resource_policies
+         WHERE workspace_id = ? AND owner_account_id = ?`,
+      )
+      .all(workspaceId, accountId) as Array<{ collection: string; record_id: string; access_mode?: string }>
     const now = Date.now()
     this.db.exec('BEGIN IMMEDIATE')
     try {
-      // 1. 批量转交离职成员名下记录的所有权与个人逻辑表归属给接收人（空间表记录保持 owner_table = 'workspace'）
+      // 1. 批量转交离职成员名下记录的所有权给接收人
       if (transferTo && transferTo !== accountId) {
         this.db
           .prepare(
@@ -1294,16 +1266,6 @@ export class CollabStore {
              WHERE workspace_id = ? AND owner_account_id = ?`,
           )
           .run(transferTo, workspaceId, accountId)
-        try {
-          this.db
-            .prepare(
-              `UPDATE resource_policies SET owner_table = ?, owner_account_id = ?
-               WHERE workspace_id = ? AND owner_table = ?`,
-            )
-            .run(`account:${transferTo}`, transferTo, workspaceId, `account:${accountId}`)
-        } catch {
-          /* 兼容无 owner_table 列的旧库 */
-        }
         this.db
           .prepare(
             `UPDATE record_owners SET owner_id = ?
@@ -1311,8 +1273,6 @@ export class CollabStore {
           )
           .run(transferTo, workspaceId, accountId)
         for (const rec of ownedPolicies) {
-          const isWsTable = rec.owner_table === 'workspace' || (!rec.owner_table && rec.access_mode === 'members')
-          if (isWsTable) continue
           this.db
             .prepare(
               `INSERT INTO record_grants
@@ -1324,31 +1284,11 @@ export class CollabStore {
             .run(workspaceId, rec.collection, rec.record_id, transferTo, actorId, now)
         }
       }
-      // 2. 清理成员组、个人授权、作为 granted_by 颁发的内置全量视图授权及插件分发
-      this.db.prepare(
-        `DELETE FROM workspace_group_members
-         WHERE account_id = ? AND group_id IN (SELECT id FROM workspace_groups WHERE workspace_id = ?)`,
-      ).run(accountId, workspaceId)
+      // 2. 清理个人授权与插件分发
       this.db.prepare(
         `DELETE FROM record_grants
          WHERE workspace_id = ? AND subject_type = 'account' AND subject_id = ?`,
       ).run(workspaceId, accountId)
-      this.db.prepare(
-        `DELETE FROM access_rule_grants
-         WHERE workspace_id = ? AND subject_type = 'account' AND subject_id = ?`,
-      ).run(workspaceId, accountId)
-      // 空间规则（owner_table = 'workspace'）归属空间本身，成员离职后继续生效；仅处理个人表规则
-      if (options.transferAccessRules && transferTo && transferTo !== accountId) {
-        this.db.prepare(
-          `UPDATE access_rules SET created_by = ?, owner_table = ?, updated_at = ?
-           WHERE workspace_id = ? AND created_by = ? AND owner_table != 'workspace'`,
-        ).run(transferTo, `account:${transferTo}`, now, workspaceId, accountId)
-      } else {
-        this.db.prepare(
-          `UPDATE access_rules SET enabled = 0, updated_at = ?
-           WHERE workspace_id = ? AND created_by = ? AND owner_table != 'workspace'`,
-        ).run(now, workspaceId, accountId)
-      }
       this.db.prepare(
         `DELETE FROM plugin_assignments
          WHERE workspace_id = ? AND subject_type = 'account' AND subject_id = ?`,
@@ -1364,9 +1304,6 @@ export class CollabStore {
       this.db
         .prepare('DELETE FROM workspace_members WHERE workspace_id = ? AND account_id = ?')
         .run(workspaceId, accountId)
-      for (const record of affectedRecords) {
-        this.reconcileRecordScope(workspaceId, record.collection, record.record_id)
-      }
       this.revokeMcpForMember(accountId, workspaceId)
       if (target.member_kind === 'guest') {
         this.db.prepare('DELETE FROM guest_sessions WHERE account_id = ?').run(accountId)
@@ -1413,216 +1350,162 @@ export class CollabStore {
     return this.members(actorId, workspaceId).find((row) => row.id === accountId)!
   }
 
-  createGroup(
-    actorId: string,
-    workspaceId: string,
-    name: string,
-    optionsOrNow?: number | { kind?: 'static' | 'dynamic'; filterTree?: Record<string, unknown> | null; now?: number },
-  ) {
-    this.requireManager(actorId, workspaceId)
-    const trimmed = name.trim()
-    if (!trimmed) throw new CollabError('组名不能为空', 400)
-    const opts = typeof optionsOrNow === 'number' ? { now: optionsOrNow } : (optionsOrNow ?? {})
-    const now = opts.now ?? Date.now()
-    const kind: 'static' | 'dynamic' = opts.kind === 'dynamic' ? 'dynamic' : 'static'
-    const filterTree = kind === 'dynamic' ? (opts.filterTree ?? { op: 'and', children: [] }) : null
-    const filterTreeJson = filterTree ? JSON.stringify(filterTree) : null
-    const group = {
-      id: id('grp'),
-      workspaceId,
-      name: trimmed,
-      kind,
-      filterTree,
-      createdBy: actorId,
-      createdAt: now,
-      updatedAt: now,
-    }
-    this.db
-      .prepare(
-        `INSERT INTO workspace_groups (id, workspace_id, name, kind, filter_tree_json, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(group.id, workspaceId, group.name, kind, filterTreeJson, actorId, now, now)
-    this.authorization.invalidateAll()
-    return group
-  }
-
-  updateGroup(
-    actorId: string,
-    workspaceId: string,
-    groupId: string,
-    patch: { name?: string; filterTree?: Record<string, unknown> | null },
-    now = Date.now(),
-  ) {
-    this.requireManager(actorId, workspaceId)
-    const current = this.db
-      .prepare(`SELECT id, name, kind, filter_tree_json, created_by, created_at FROM workspace_groups WHERE id = ? AND workspace_id = ?`)
-      .get(groupId, workspaceId) as
-      | { id: string; name: string; kind: string; filter_tree_json: string | null; created_by: string; created_at: number }
-      | undefined
-    if (!current) throw new CollabError('成员组不存在', 404)
-    const nextName = patch.name !== undefined ? patch.name.trim() : current.name
-    if (!nextName) throw new CollabError('组名不能为空', 400)
-    const kind: 'static' | 'dynamic' = current.kind === 'dynamic' ? 'dynamic' : 'static'
-    const nextFilterTreeJson =
-      kind === 'dynamic' && patch.filterTree !== undefined
-        ? JSON.stringify(patch.filterTree ?? { op: 'and', children: [] })
-        : current.filter_tree_json
-    this.db
-      .prepare(`UPDATE workspace_groups SET name = ?, filter_tree_json = ?, updated_at = ? WHERE id = ? AND workspace_id = ?`)
-      .run(nextName, nextFilterTreeJson, now, groupId, workspaceId)
-    this.authorization.invalidateAll()
-    let filterTree: Record<string, unknown> | null = null
-    if (nextFilterTreeJson) {
-      try {
-        filterTree = JSON.parse(nextFilterTreeJson) as Record<string, unknown>
-      } catch {
-        filterTree = null
-      }
-    }
-    return {
-      id: current.id,
-      workspaceId,
-      name: nextName,
-      kind,
-      filterTree,
-      createdBy: current.created_by,
-      createdAt: current.created_at,
-      updatedAt: now,
-    }
-  }
-
-  deleteGroup(actorId: string, workspaceId: string, groupId: string) {
-    this.requireManager(actorId, workspaceId)
-    const removed = this.db
-      .prepare('DELETE FROM workspace_groups WHERE id = ? AND workspace_id = ?')
-      .run(groupId, workspaceId)
-    if (!removed.changes) throw new CollabError('成员组不存在', 404)
-    this.db.prepare('DELETE FROM workspace_group_members WHERE group_id = ?').run(groupId)
-    this.db
-      .prepare(`DELETE FROM record_grants WHERE workspace_id = ? AND subject_type = 'group' AND subject_id = ?`)
-      .run(workspaceId, groupId)
-    this.db
-      .prepare(`DELETE FROM access_rule_grants WHERE workspace_id = ? AND subject_type = 'group' AND subject_id = ?`)
-      .run(workspaceId, groupId)
-    this.authorization.invalidateAll()
-    return { ok: true, id: groupId }
-  }
-
-  groups(actorId: string, workspaceId: string) {
-    this.requireInternalMember(actorId, workspaceId)
-    const rows = this.db
-      .prepare(
-        `SELECT g.id, g.name, COALESCE(g.kind, 'static') AS kind, g.filter_tree_json, g.created_by, g.created_at,
-                COALESCE(g.updated_at, g.created_at) AS updated_at, COUNT(gm.account_id) AS member_count
-         FROM workspace_groups g
-         LEFT JOIN workspace_group_members gm ON gm.group_id = g.id
-         WHERE g.workspace_id = ?
-         GROUP BY g.id
-         ORDER BY g.created_at`,
-      )
-      .all(workspaceId) as Array<{
-        id: string
-        name: string
-        kind: string
-        filter_tree_json: string | null
-        created_by: string
-        created_at: number
-        updated_at: number
-        member_count: number
-      }>
-    const hasDynamic = rows.some((row) => row.kind === 'dynamic')
-    const allMembers = hasDynamic
-      ? (this.db
-          .prepare('SELECT account_id FROM workspace_members WHERE workspace_id = ?')
-          .all(workspaceId) as Array<{ account_id: string }>)
-      : []
-    return rows.map((row) => {
-      const kind: 'static' | 'dynamic' = row.kind === 'dynamic' ? 'dynamic' : 'static'
-      let filterTree: Record<string, unknown> | null = null
-      if (kind === 'dynamic' && row.filter_tree_json) {
-        try {
-          filterTree = JSON.parse(row.filter_tree_json) as Record<string, unknown>
-        } catch {
-          filterTree = { op: 'and', children: [] }
-        }
-      }
-      const memberCount =
-        kind === 'dynamic'
-          ? allMembers.filter((m) => this.authorization.matchedGroupsFor(workspaceId, m.account_id).has(row.id)).length
-          : Number(row.member_count)
-      return {
-        id: row.id,
-        name: row.name,
-        kind,
-        filterTree,
-        createdBy: row.created_by,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        memberCount,
-      }
-    })
-  }
-
-  addGroupMemberByEmail(actorId: string, workspaceId: string, groupId: string, email: string, now = Date.now()) {
-    this.requireManager(actorId, workspaceId)
-    const group = this.db
-      .prepare('SELECT id FROM workspace_groups WHERE id = ? AND workspace_id = ?')
-      .get(groupId, workspaceId) as { id: string } | undefined
-    if (!group) throw new CollabError('成员组不存在', 404)
-    const account = this.db
-      .prepare('SELECT id FROM accounts WHERE email = ?')
-      .get(email.trim().toLowerCase()) as { id: string } | undefined
-    if (!account) throw new CollabError('没有这个邮箱，对方需要先注册', 404)
-    this.requireMember(account.id, workspaceId)
-    this.db
-      .prepare(
-        `INSERT INTO workspace_group_members (group_id, account_id, created_at)
-         VALUES (?, ?, ?)
-         ON CONFLICT(group_id, account_id) DO NOTHING`,
-      )
-      .run(groupId, account.id, now)
-    this.authorization.invalidateAll()
-    return this.groupMembers(actorId, workspaceId, groupId)
-  }
-
-  groupMembers(actorId: string, workspaceId: string, groupId: string) {
-    this.requireInternalMember(actorId, workspaceId)
-    return this.db
-      .prepare(
-        `SELECT a.id, COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), NULLIF(a.email, ''), '未设置') AS name, COALESCE(a.email, '') AS email
-         FROM workspace_group_members gm
-         JOIN workspace_groups g ON g.id = gm.group_id AND g.workspace_id = ?
-         JOIN accounts a ON a.id = gm.account_id
-         LEFT JOIN workspace_members m ON m.workspace_id = g.workspace_id AND m.account_id = a.id
-         WHERE gm.group_id = ?
-         ORDER BY gm.created_at`,
-      )
-      .all(workspaceId, groupId)
-  }
-
-  grantGroup(
+  /** 将单条记录授权给 `/workspace-members` 管理员锁定视图（动态成员组）。 */
+  grantMemberView(
     actorId: string,
     collection: string,
     recordId: string,
-    groupId: string,
+    viewId: string,
     role: ResourceRole,
+    now = Date.now(),
   ) {
     const workspaceId = this.activeWorkspaceId()
     if (!workspaceId) throw new CollabError('没有工作区', 400)
-    const group = this.db
-      .prepare('SELECT id FROM workspace_groups WHERE id = ? AND workspace_id = ?')
-      .get(groupId, workspaceId) as { id: string } | undefined
-    if (!group) throw new CollabError('成员组不存在', 404)
-    this.authorization.grant(
+    this.requireMember(actorId, workspaceId)
+    const normalizedViewId = viewId.trim()
+    if (!normalizedViewId) throw new CollabError('成员视图不能为空', 400)
+    const target = this.resolveRecordTarget(collection, recordId)
+    const owned = this.db
+      .prepare('SELECT 1 AS ok FROM record_owners WHERE workspace_id = ? AND collection = ? AND record_id = ?')
+      .get(workspaceId, target.collection, target.recordId) as { ok: number } | undefined
+    if (!owned) throw new CollabError('记录不在这个工作区', 404)
+    try {
+      this.authorization.grant(
+        actorId,
+        { type: 'record', workspaceId, collection: target.collection, recordId: target.recordId },
+        'member_view',
+        normalizedViewId,
+        role,
+        now,
+      )
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      if (msg.includes('LOCKED_MEMBER_VIEW_REQUIRED')) {
+        throw new CollabError('只有管理员锁定的成员视图可以作为动态组授权', 400)
+      }
+      if (msg.includes('permission denied')) throw new CollabError('没有权限', 403)
+      throw new CollabError(msg, 400)
+    }
+    this.recordActivity({
+      workspaceId,
       actorId,
-      { type: 'record', workspaceId, collection, recordId },
-      'group',
-      groupId,
-      role,
-    )
-    this.reconcileRecordScope(workspaceId, collection, recordId)
-    return this.accessRows(workspaceId, collection, recordId)
+      category: 'access',
+      action: 'access.grant',
+      collection: target.collection,
+      recordId: target.recordId,
+      detail: `授权给锁定成员视图 ${normalizedViewId}（${role}）`,
+      now,
+    })
+    return this.accessRows(workspaceId, target.collection, target.recordId)
+  }
+
+  /** 统计指定 `/workspace-members` 锁定视图当前被多少条记录动态引用。 */
+  memberViewGrantCount(workspaceId: string, viewId: string): number {
+    if (!workspaceId || !viewId) return 0
+    const row = this.db
+      .prepare(
+        `SELECT COUNT(*) AS cnt FROM record_grants
+         WHERE workspace_id = ? AND subject_type = 'member_view' AND subject_id = ?`,
+      )
+      .get(workspaceId, viewId) as { cnt?: number } | undefined
+    return Number(row?.cnt ?? 0)
+  }
+
+  /**
+   * 解锁或删除已被引用的 `/workspace-members` 锁定视图前，将动态引用固化为此刻命中的成员个人授权快照。
+   * 仅 space owner / admin 可执行。
+   */
+  freezeMemberViewGrants(
+    actorId: string,
+    workspaceId: string,
+    viewId: string,
+    memberIds: string[],
+    now = Date.now(),
+  ) {
+    this.requireManager(actorId, workspaceId)
+    const normalizedViewId = viewId.trim()
+    if (!normalizedViewId) return { frozenRecords: 0, expandedGrants: 0 }
+    const roleRank: Record<string, number> = { viewer: 1, commenter: 2, editor: 3, manager: 4, owner: 5 }
+    const refs = this.db
+      .prepare(
+        `SELECT collection, record_id, role, granted_by
+         FROM record_grants
+         WHERE workspace_id = ? AND subject_type = 'member_view' AND subject_id = ?`,
+      )
+      .all(workspaceId, normalizedViewId) as Array<{
+      collection: string
+      record_id: string
+      role: ResourceRole
+      granted_by: string
+    }>
+    if (!refs.length) return { frozenRecords: 0, expandedGrants: 0 }
+    const uniqueMembers = [...new Set(memberIds.map((m) => m.trim()).filter(Boolean))]
+    let expandedGrants = 0
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      for (const ref of refs) {
+        const ownerRow = this.db
+          .prepare(
+            `SELECT owner_account_id FROM resource_policies
+             WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+          )
+          .get(workspaceId, ref.collection, ref.record_id) as { owner_account_id?: string } | undefined
+        for (const memberId of uniqueMembers) {
+          if (ownerRow?.owner_account_id && memberId === ownerRow.owner_account_id) continue
+          const existing = this.db
+            .prepare(
+              `SELECT role FROM record_grants
+               WHERE workspace_id = ? AND collection = ? AND record_id = ? AND subject_type = 'account' AND subject_id = ?`,
+            )
+            .get(workspaceId, ref.collection, ref.record_id, memberId) as { role: string } | undefined
+          if (!existing) {
+            this.db
+              .prepare(
+                `INSERT INTO record_grants
+                  (workspace_id, collection, record_id, subject_type, subject_id, role, granted_by, created_at)
+                 VALUES (?, ?, ?, 'account', ?, ?, ?, ?)`,
+              )
+              .run(workspaceId, ref.collection, ref.record_id, memberId, ref.role, actorId, now)
+            expandedGrants += 1
+          } else if ((roleRank[ref.role] ?? 0) > (roleRank[existing.role] ?? 0)) {
+            this.db
+              .prepare(
+                `UPDATE record_grants SET role = ?, granted_by = ?, created_at = ?
+                 WHERE workspace_id = ? AND collection = ? AND record_id = ? AND subject_type = 'account' AND subject_id = ?`,
+              )
+              .run(ref.role, actorId, now, workspaceId, ref.collection, ref.record_id, memberId)
+            expandedGrants += 1
+          }
+        }
+      }
+      this.db
+        .prepare(
+          `DELETE FROM record_grants
+           WHERE workspace_id = ? AND subject_type = 'member_view' AND subject_id = ?`,
+        )
+        .run(workspaceId, normalizedViewId)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+    this.authorization.invalidateAll()
+    return { frozenRecords: refs.length, expandedGrants }
+  }
+
+  /** 解锁或删除已被引用的 `/workspace-members` 锁定视图时，直接撤销其全部动态授权引用。 */
+  revokeAllMemberViewGrants(actorId: string, workspaceId: string, viewId: string) {
+    this.requireManager(actorId, workspaceId)
+    const normalizedViewId = viewId.trim()
+    if (!normalizedViewId) return { revokedRecords: 0 }
+    const res = this.db
+      .prepare(
+        `DELETE FROM record_grants
+         WHERE workspace_id = ? AND subject_type = 'member_view' AND subject_id = ?`,
+      )
+      .run(workspaceId, normalizedViewId)
+    this.authorization.invalidateAll()
+    return { revokedRecords: Number(res.changes) }
   }
 
   workspaceOwnerId(workspaceId: string): string | null {
@@ -2258,11 +2141,7 @@ export class CollabStore {
     if (!owner) throw new CollabError('工作区不存在', 404)
     if (collection === '/plugins' && isRegisteredBuiltinPlugin(recordId)) return
     const caller = currentAccountId()
-    const explicitOwnerTable = policy.ownerTable?.trim() ?? ''
-    const explicitPersonalOwner = explicitOwnerTable.startsWith('account:')
-      ? explicitOwnerTable.slice('account:'.length)
-      : ''
-    const recordOwner = explicitPersonalOwner || caller || owner.owner_id
+    const recordOwner = caller || owner.owner_id
     const elsewhere = this.db
       .prepare(
         `SELECT workspace_id FROM record_owners
@@ -2337,11 +2216,10 @@ export class CollabStore {
       canManage,
       ...(effectiveRole ? { effectiveRole } : {}),
       people: base.people.map((row) => {
-        const isPersonalOwnerRow = base.ownerTable !== 'workspace' && row.id === base.ownerId
-        const editable = Boolean(canManage && row.role !== 'owner' && !isPersonalOwnerRow && row.id !== actorId)
+        const editable = Boolean(canManage && row.role !== 'owner' && row.id !== base.ownerId && row.id !== actorId)
         return { ...row, canEdit: editable, canRevoke: editable }
       }),
-      groups: base.groups.map((row) => ({
+      memberViews: base.memberViews.map((row) => ({
         ...row,
         canEdit: canManage,
         canRevoke: canManage,
@@ -2377,7 +2255,6 @@ export class CollabStore {
       if (message.includes('permission denied')) throw new CollabError('没有权限', 403)
       throw new CollabError(message, 400)
     }
-    if (mode === 'custom') this.reconcileRecordScope(workspaceId, collection, recordId)
     this.recordActivity({
       workspaceId,
       actorId,
@@ -2394,7 +2271,8 @@ export class CollabStore {
     actorId: string,
     collection: string,
     recordId: string,
-    accessMode: 'members' | 'restricted',
+    accessMode: 'private' | 'members',
+    memberDefaultRole?: 'viewer' | 'editor',
   ) {
     const workspaceId = this.activeWorkspaceId()
     if (!workspaceId) throw new CollabError('没有工作区', 400)
@@ -2402,7 +2280,12 @@ export class CollabStore {
     const target = this.resolveRecordTarget(collection, recordId)
     const resource = { type: 'record' as const, workspaceId, collection: target.collection, recordId: target.recordId }
     try {
-      this.authorization.setAccessMode({ type: 'account', accountId: actorId, workspaceId }, resource, accessMode)
+      this.authorization.setAccessMode(
+        { type: 'account', accountId: actorId, workspaceId },
+        resource,
+        accessMode,
+        memberDefaultRole,
+      )
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       if (message.includes('permission denied')) throw new CollabError('没有权限', 403)
@@ -2415,7 +2298,7 @@ export class CollabStore {
       action: 'access.mode',
       collection: target.collection,
       recordId: target.recordId,
-      detail: accessMode === 'restricted' ? '切换空间内容为仅指定成员可见（受限）' : '切换空间内容为全员可见',
+      detail: accessMode === 'private' ? '切换为仅受邀人员可见' : '切换为空间全员可见',
     })
     return this.recordAccess(actorId, collection, recordId)
   }
@@ -2470,7 +2353,6 @@ export class CollabStore {
         .run(workspaceId, account.id, now)
     }
     this.authorization.grant(actorId, resource, 'account', account.id, role, now)
-    this.reconcileRecordScope(workspaceId, collection, recordId)
     this.recordActivity({
       workspaceId,
       actorId,
@@ -2488,12 +2370,13 @@ export class CollabStore {
     actorId: string,
     collection: string,
     recordId: string,
-    subjectType: 'account' | 'group',
+    subjectType: 'account' | 'member_view',
     subjectId: string,
   ) {
     const workspaceId = this.activeWorkspaceId()
     if (!workspaceId) throw new CollabError('没有工作区', 400)
-    const resource = { type: 'record' as const, workspaceId, collection, recordId }
+    const target = this.resolveRecordTarget(collection, recordId)
+    const resource = { type: 'record' as const, workspaceId, collection: target.collection, recordId: target.recordId }
     const decision = this.authorization.authorize(
       { type: 'account', accountId: actorId, workspaceId },
       'resource:manage-permissions',
@@ -2505,7 +2388,7 @@ export class CollabStore {
         `SELECT owner_account_id FROM resource_policies
          WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
       )
-      .get(workspaceId, collection, recordId) as { owner_account_id?: string } | undefined
+      .get(workspaceId, target.collection, target.recordId) as { owner_account_id?: string } | undefined
     if (subjectType === 'account' && subjectId === policy?.owner_account_id) {
       throw new CollabError('不能移除数据创建者', 400)
     }
@@ -2518,66 +2401,64 @@ export class CollabStore {
          WHERE workspace_id = ? AND collection = ? AND record_id = ?
            AND subject_type = ? AND subject_id = ?`,
       )
-      .run(workspaceId, collection, recordId, subjectType, subjectId)
+      .run(workspaceId, target.collection, target.recordId, subjectType, subjectId)
     if (!removed.changes) throw new CollabError('协作者不存在', 404)
     if (subjectType === 'account') this.cleanupExternalMembership(workspaceId, subjectId)
-    this.authorization.invalidate(workspaceId, collection)
-    this.reconcileRecordScope(workspaceId, collection, recordId)
+    this.authorization.invalidate(workspaceId, target.collection)
     this.recordActivity({
       workspaceId,
       actorId,
       category: 'access',
       action: 'access.revoke',
-      collection,
-      recordId,
+      collection: target.collection,
+      recordId: target.recordId,
       detail: `移除了协作者权限（${subjectType}）`,
     })
-    return this.accessRows(workspaceId, collection, recordId)
+    return this.accessRows(workspaceId, target.collection, target.recordId)
   }
 
+  /** Notion 对齐三态内部域：'workspace'（空间全员） / 'shared'（仅受邀协作者，不论内外） / 'personal'（仅创建者）。 */
   collectionOwnership(workspaceId: string, collection: string) {
-    let policies: Array<{ record_id: string; access_mode: string; owner_account_id: string; owner_table?: string }> = []
-    try {
-      policies = this.db
-        .prepare(
-          `SELECT record_id, access_mode, owner_account_id, COALESCE(owner_table, '') AS owner_table FROM resource_policies
-           WHERE workspace_id = ? AND collection = ?`,
-        )
-        .all(workspaceId, collection) as Array<{ record_id: string; access_mode: string; owner_account_id: string; owner_table?: string }>
-    } catch {
-      policies = this.db
-        .prepare(
-          `SELECT record_id, access_mode, owner_account_id FROM resource_policies
-           WHERE workspace_id = ? AND collection = ?`,
-        )
-        .all(workspaceId, collection) as Array<{ record_id: string; access_mode: string; owner_account_id: string }>
-    }
-    const map = new Map<string, 'personal' | 'workspace' | 'shared' | 'external'>()
-    const isWorkspaceTable = new Map<string, boolean>()
+    const policies = this.db
+      .prepare(
+        `SELECT record_id, access_mode, owner_account_id, parent_collection, parent_record_id
+         FROM resource_policies
+         WHERE workspace_id = ? AND collection = ?`,
+      )
+      .all(workspaceId, collection) as Array<{
+      record_id: string
+      access_mode: string
+      owner_account_id: string
+      parent_collection: string
+      parent_record_id: string
+    }>
+    const map = new Map<string, 'personal' | 'workspace' | 'shared'>()
+    const owners = new Map<string, string>()
     for (const row of policies) {
-      const wsTable = row.owner_table === 'workspace' || (!row.owner_table && row.access_mode === 'members')
-      isWorkspaceTable.set(row.record_id, wsTable)
-      map.set(row.record_id, wsTable ? 'workspace' : 'personal')
+      owners.set(row.record_id, row.owner_account_id)
+      const effectiveMode =
+        row.access_mode === 'members'
+          ? 'members'
+          : row.access_mode === 'inherit' && row.parent_record_id
+            ? this.authorization.effectiveAccessMode({
+                type: 'record',
+                workspaceId,
+                collection,
+                recordId: row.record_id,
+              })
+            : 'private'
+      map.set(row.record_id, effectiveMode === 'members' ? 'workspace' : 'personal')
     }
     const grants = this.db
       .prepare(
-        `SELECT g.record_id, g.subject_id, COALESCE(m.member_kind, '') AS member_kind
-         FROM record_grants g
-         LEFT JOIN workspace_members m
-           ON g.subject_type = 'account'
-          AND m.workspace_id = g.workspace_id
-          AND m.account_id = g.subject_id
-         WHERE g.workspace_id = ? AND g.collection = ?`,
+        `SELECT record_id, subject_type, subject_id
+         FROM record_grants
+         WHERE workspace_id = ? AND collection = ?`,
       )
-      .all(workspaceId, collection) as Array<{ record_id: string; subject_id: string; member_kind: string }>
-    const owners = new Map(policies.map((row) => [row.record_id, row.owner_account_id]))
+      .all(workspaceId, collection) as Array<{ record_id: string; subject_type: string; subject_id: string }>
     for (const grant of grants) {
-      if (grant.subject_id === owners.get(grant.record_id)) continue
-      const current = map.get(grant.record_id) ?? 'personal'
-      if (grant.member_kind === 'external' || grant.member_kind === 'guest') {
-        map.set(grant.record_id, 'external')
-      } else if (current !== 'external' && !isWorkspaceTable.get(grant.record_id)) {
-        // 个人表记录分享给空间内成员/成员组 -> 显示为「共享」，不改归属为「空间」
+      if (grant.subject_type === 'account' && grant.subject_id === owners.get(grant.record_id)) continue
+      if (map.get(grant.record_id) === 'personal') {
         map.set(grant.record_id, 'shared')
       }
     }
@@ -2590,6 +2471,23 @@ export class CollabStore {
       if (!map.has(row.record_id)) map.set(row.record_id, 'workspace')
     }
     return map
+  }
+
+  /** 返回该集合下存在外部协作者/访客授权的记录 ID 集合（正交外部标记，不覆盖内部三态）。 */
+  collectionExternalCollaborators(workspaceId: string, collection: string): Set<string> {
+    const rows = this.db
+      .prepare(
+        `SELECT DISTINCT g.record_id
+         FROM record_grants g
+         JOIN workspace_members m
+           ON g.subject_type = 'account'
+          AND m.workspace_id = g.workspace_id
+          AND m.account_id = g.subject_id
+          AND m.member_kind IN ('external', 'guest')
+         WHERE g.workspace_id = ? AND g.collection = ?`,
+      )
+      .all(workspaceId, collection) as Array<{ record_id: string }>
+    return new Set(rows.map((r) => r.record_id))
   }
 
   collectionRecordOwners(workspaceId: string, collection: string) {
@@ -2639,219 +2537,229 @@ export class CollabStore {
       .map((row) => ({ collection: row.collection, record_id: row.record_id }))
   }
 
-  /**
-   * 判定 actorId 在指定集合下是否被 ownerAccountId 的个人表（account:<ownerAccountId>）共享了至少一条记录
-   *（通过 record_grants 直接/成员组授权，或通过该个人表启用的 access_rules）。
-   * 用于 K+1 个人表 public/locked 视图的可见性边界：未获共享的成员看不到他人个人表视图。
-   */
-  hasSharedRecordsFromOwner(
-    workspaceId: string,
-    collection: string,
-    ownerAccountId: string,
+  /** 预览批量静态授权：统计总目标数、当前用户可管理记录数与将跳过的无权记录数。 */
+  previewBatchRecordPermissions(
     actorId: string,
-  ): boolean {
-    if (!workspaceId || !collection || !ownerAccountId || !actorId) return false
-    if (ownerAccountId === actorId) return true
-    const ownerTable = `account:${ownerAccountId}`
-    try {
-      const directHit = this.db
-        .prepare(
-          `SELECT 1 AS hit
-           FROM record_grants g
-           JOIN resource_policies p
-             ON p.workspace_id = g.workspace_id
-            AND p.collection = g.collection
-            AND p.record_id = g.record_id
-           WHERE g.workspace_id = ?
-             AND g.collection = ?
-             AND (p.owner_table = ? OR (COALESCE(p.owner_table, '') = '' AND p.access_mode != 'members' AND p.owner_account_id = ?))
-             AND (
-               (g.subject_type = 'account' AND g.subject_id = ?)
-               OR (g.subject_type = 'group' AND g.subject_id IN (
-                 SELECT gm.group_id
-                 FROM workspace_group_members gm
-                 JOIN workspace_groups wg ON wg.id = gm.group_id
-                 WHERE wg.workspace_id = ? AND gm.account_id = ?
-               ))
-             )
-           LIMIT 1`,
-        )
-        .get(workspaceId, collection, ownerTable, ownerAccountId, actorId, workspaceId, actorId)
-      if (directHit) return true
-    } catch {
-      /* ignore if schema not yet migrated */
+    collection: string,
+    recordIds: string[],
+  ): BatchPermissionPreviewResult {
+    const workspaceId = this.activeWorkspaceId()
+    if (!workspaceId) throw new CollabError('没有工作区', 400)
+    this.requireMember(actorId, workspaceId)
+    const normalizedCol = collection.trim()
+    if (!normalizedCol.startsWith('/')) throw new CollabError('集合路径不合法', 400)
+    const uniqueIds = [...new Set(recordIds.map((item) => String(item ?? '').trim()).filter(Boolean))]
+    if (!uniqueIds.length) {
+      return { collection: normalizedCol, totalCount: 0, manageableCount: 0, skippedCount: 0, manageableIds: [] }
     }
+    const actor = { type: 'account' as const, accountId: actorId, workspaceId }
+    this.authorization.preloadCollection(workspaceId, normalizedCol, actorId)
     try {
-      const member = this.db
-        .prepare('SELECT member_kind FROM workspace_members WHERE workspace_id = ? AND account_id = ?')
-        .get(workspaceId, actorId) as { member_kind?: string } | undefined
-      const isInternal = member?.member_kind === 'member'
-      const ruleHit = this.db
-        .prepare(
-          `SELECT 1 AS hit
-           FROM access_rules r
-           JOIN access_rule_grants g ON g.rule_id = r.id
-           WHERE r.workspace_id = ?
-             AND r.collection = ?
-             AND r.enabled = 1
-             AND (r.owner_table = ? OR (COALESCE(r.owner_table, '') = '' AND r.created_by = ?))
-             AND (
-               (g.subject_type = 'account' AND g.subject_id = ?)
-               OR (? = 1 AND g.subject_type = 'workspace' AND g.subject_id = ?)
-               OR (g.subject_type = 'group' AND g.subject_id IN (
-                 SELECT gm.group_id
-                 FROM workspace_group_members gm
-                 JOIN workspace_groups wg ON wg.id = gm.group_id
-                 WHERE wg.workspace_id = ? AND gm.account_id = ?
-               ))
-             )
-           LIMIT 1`,
-        )
-        .get(workspaceId, collection, ownerTable, ownerAccountId, actorId, isInternal ? 1 : 0, workspaceId, workspaceId, actorId)
-      if (ruleHit) return true
-    } catch {
-      /* ignore if schema not yet migrated */
+      const manageableIds: string[] = []
+      for (const rawId of uniqueIds) {
+        const target = this.resolveRecordTarget(normalizedCol, rawId)
+        const allowed = this.authorization.authorize(actor, 'resource:manage-permissions', {
+          type: 'record',
+          workspaceId,
+          collection: target.collection,
+          recordId: target.recordId,
+        }).allowed
+        if (allowed) manageableIds.push(rawId)
+      }
+      return {
+        collection: normalizedCol,
+        totalCount: uniqueIds.length,
+        manageableCount: manageableIds.length,
+        skippedCount: uniqueIds.length - manageableIds.length,
+        manageableIds,
+      }
+    } finally {
+      this.authorization.releaseCollection(workspaceId, normalizedCol, actorId)
     }
-    return false
   }
 
   /**
-   * 列出在指定集合下向 actorId 共享了至少一条个人表记录的所有表主人 accountId。
-   * 用于 SavedViewsStore.ensureDefaultTableViews 为他人个人表自动补齐默认公共视图。
+   * 单事务批量静态授权：仅对当前操作者具备 resource:manage-permissions 的记录生效，其余自动跳过。
+   * 支持增量叠加协作者（不覆写原协作者）、批量移除协作者、批量切换通用访问（private / members）。
    */
-  sharedOwnerAccountIds(workspaceId: string, collection: string, actorId: string): string[] {
-    if (!workspaceId || !collection || !actorId) return []
-    const owners = new Set<string>()
-    try {
-      const directRows = this.db
-        .prepare(
-          `SELECT DISTINCT
-             CASE
-               WHEN p.owner_table LIKE 'account:%' THEN substr(p.owner_table, 9)
-               WHEN COALESCE(p.owner_table, '') = '' AND p.access_mode != 'members' THEN p.owner_account_id
-               ELSE ''
-             END AS owner_id
-           FROM record_grants g
-           JOIN resource_policies p
-             ON p.workspace_id = g.workspace_id
-            AND p.collection = g.collection
-            AND p.record_id = g.record_id
-           WHERE g.workspace_id = ?
-             AND g.collection = ?
-             AND (
-               (g.subject_type = 'account' AND g.subject_id = ?)
-               OR (g.subject_type = 'group' AND g.subject_id IN (
-                 SELECT gm.group_id
-                 FROM workspace_group_members gm
-                 JOIN workspace_groups wg ON wg.id = gm.group_id
-                 WHERE wg.workspace_id = ? AND gm.account_id = ?
-               ))
-             )`,
-        )
-        .all(workspaceId, collection, actorId, workspaceId, actorId) as Array<{ owner_id?: string }>
-      for (const row of directRows) {
-        const id = String(row.owner_id ?? '').trim()
-        if (id && id !== actorId) owners.add(id)
-      }
-    } catch {
-      /* ignore */
+  batchUpdateRecordPermissions(
+    actorId: string,
+    input: BatchPermissionApplyInput,
+    now = Date.now(),
+  ): BatchPermissionApplyResult {
+    const workspaceId = this.activeWorkspaceId()
+    if (!workspaceId) throw new CollabError('没有工作区', 400)
+    this.requireMember(actorId, workspaceId)
+    const normalizedCol = input.collection.trim()
+    if (!normalizedCol.startsWith('/')) throw new CollabError('集合路径不合法', 400)
+    const uniqueIds = [...new Set((input.recordIds ?? []).map((item) => String(item ?? '').trim()).filter(Boolean))]
+    if (!uniqueIds.length) {
+      return { collection: normalizedCol, totalCount: 0, updatedCount: 0, skippedCount: 0, updatedIds: [] }
     }
-    try {
-      const member = this.db
-        .prepare('SELECT member_kind FROM workspace_members WHERE workspace_id = ? AND account_id = ?')
-        .get(workspaceId, actorId) as { member_kind?: string } | undefined
-      const isInternal = member?.member_kind === 'member'
-      const ruleRows = this.db
-        .prepare(
-          `SELECT DISTINCT
-             CASE
-               WHEN r.owner_table LIKE 'account:%' THEN substr(r.owner_table, 9)
-               WHEN COALESCE(r.owner_table, '') = '' THEN r.created_by
-               ELSE ''
-             END AS owner_id
-           FROM access_rules r
-           JOIN access_rule_grants g ON g.rule_id = r.id
-           WHERE r.workspace_id = ?
-             AND r.collection = ?
-             AND r.enabled = 1
-             AND (
-               (g.subject_type = 'account' AND g.subject_id = ?)
-               OR (? = 1 AND g.subject_type = 'workspace' AND g.subject_id = ?)
-               OR (g.subject_type = 'group' AND g.subject_id IN (
-                 SELECT gm.group_id
-                 FROM workspace_group_members gm
-                 JOIN workspace_groups wg ON wg.id = gm.group_id
-                 WHERE wg.workspace_id = ? AND gm.account_id = ?
-               ))
-             )`,
-        )
-        .all(workspaceId, collection, actorId, isInternal ? 1 : 0, workspaceId, workspaceId, actorId) as Array<{ owner_id?: string }>
-      for (const row of ruleRows) {
-        const id = String(row.owner_id ?? '').trim()
-        if (id && id !== actorId) owners.add(id)
-      }
-    } catch {
-      /* ignore */
-    }
-    return [...owners]
-  }
-
-  private requireViewSharer(actorId: string, workspaceId: string, collection: string, viewId = '') {
-    const row = this.db
-      .prepare('SELECT role, member_kind FROM workspace_members WHERE workspace_id = ? AND account_id = ?')
-      .get(workspaceId, actorId) as { role: string; member_kind: string } | undefined
-    if (!row) throw new CollabError('不是这个工作区的成员', 403)
-    if (row.member_kind === 'external' || row.member_kind === 'guest') {
-      throw new CollabError('外部协作者无权管理视图分享', 403)
-    }
-    const decision = this.authorization.authorize(
-      { type: 'account', accountId: actorId, workspaceId },
-      'resource:share',
-      { type: 'collection', workspaceId, collection },
-    )
-    if (decision.allowed) return row.role
-    // 内部正式成员可按视图分享自己名下的记录（受非提权公理约束，永远只覆盖自己有权分享的记录）
-    if (row.role === 'member' && row.member_kind === 'member' && viewId) return row.role
-    throw new CollabError('没有权限', 403)
-  }
-
-  private canShareView(actorId: string, workspaceId: string, collection: string, viewId = ''): boolean {
-    try {
-      this.requireViewSharer(actorId, workspaceId, collection, viewId)
-      return true
-    } catch {
-      return false
-    }
-  }
-
-  private ensureCollaboratorMembership(
-    workspaceId: string,
-    accountId: string,
-    collaboratorKind: 'internal' | 'external',
-    now: number,
-  ) {
-    const membership = this.db
-      .prepare('SELECT member_kind FROM workspace_members WHERE workspace_id = ? AND account_id = ?')
-      .get(workspaceId, accountId) as { member_kind: string } | undefined
-    if (collaboratorKind === 'internal') {
-      if (membership?.member_kind !== 'member') {
-        throw new CollabError('内部协作者必须先加入当前空间', 409)
-      }
-      return
-    }
-    if (membership?.member_kind === 'member') {
-      throw new CollabError('这个账号已经是内部空间成员', 409)
-    }
-    if (membership?.member_kind === 'guest') {
-      throw new CollabError('临时访客不能转为外部协作者', 409)
-    }
-    this.db
-      .prepare(
-        `INSERT INTO workspace_members (workspace_id, account_id, role, member_kind, created_at)
-         VALUES (?, ?, 'member', 'external', ?)
-         ON CONFLICT(workspace_id, account_id) DO NOTHING`,
+    const actor = { type: 'account' as const, accountId: actorId, workspaceId }
+    const subjects: BatchPermissionSubject[] = (input.subjects ?? [])
+      .map((s) => ({ subjectType: s.subjectType, subjectId: String(s.subjectId ?? '').trim() }))
+      .filter(
+        (s): s is BatchPermissionSubject =>
+          (s.subjectType === 'account' || s.subjectType === 'member_view') && Boolean(s.subjectId),
       )
-      .run(workspaceId, accountId, now)
+
+    if (input.mode === 'grant') {
+      if (!subjects.length) throw new CollabError('请至少选择一个协作者或成员视图', 400)
+      if (!input.role || !['viewer', 'commenter', 'editor', 'manager'].includes(input.role)) {
+        throw new CollabError('不支持的权限角色', 400)
+      }
+      for (const s of subjects) {
+        if (s.subjectType === 'member_view' && !this.authorization.isLockedMemberView(workspaceId, s.subjectId)) {
+          throw new CollabError('只有管理员锁定的成员视图可以作为动态组授权', 400)
+        }
+      }
+    } else if (input.mode === 'revoke') {
+      if (!subjects.length) throw new CollabError('请至少选择一个要移除的协作者或成员视图', 400)
+    } else if (input.mode === 'access_mode') {
+      if (input.accessMode !== 'private' && input.accessMode !== 'members') {
+        throw new CollabError('不支持的访问模式', 400)
+      }
+    } else {
+      throw new CollabError('不支持的批量授权动作', 400)
+    }
+
+    const touchedCollections = new Set<string>([normalizedCol])
+    const updatedIds: string[] = []
+    const revokedAccountIds = new Set<string>()
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      for (const rawId of uniqueIds) {
+        const target = this.resolveRecordTarget(normalizedCol, rawId)
+        const resource = {
+          type: 'record' as const,
+          workspaceId,
+          collection: target.collection,
+          recordId: target.recordId,
+        }
+        const decision = this.authorization.authorize(actor, 'resource:manage-permissions', resource)
+        if (!decision.allowed) continue
+
+        if (input.mode === 'access_mode') {
+          try {
+            this.authorization.setAccessMode(
+              actor,
+              resource,
+              input.accessMode!,
+              input.memberDefaultRole,
+              { skipInvalidate: true },
+            )
+            touchedCollections.add(target.collection)
+            updatedIds.push(rawId)
+          } catch {
+            continue
+          }
+          continue
+        }
+
+        const policyRow = this.db
+          .prepare(
+            `SELECT owner_account_id FROM resource_policies
+             WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+          )
+          .get(workspaceId, target.collection, target.recordId) as { owner_account_id?: string } | undefined
+        const ownerId = policyRow?.owner_account_id ?? ''
+        let recordChanged = false
+
+        for (const subject of subjects) {
+          if (subject.subjectType === 'account' && (subject.subjectId === ownerId || subject.subjectId === actorId)) {
+            continue
+          }
+          if (input.mode === 'grant') {
+            try {
+              this.authorization.grant(
+                actorId,
+                resource,
+                subject.subjectType,
+                subject.subjectId,
+                input.role!,
+                now,
+                { skipInvalidate: true },
+              )
+              recordChanged = true
+            } catch {
+              /* 跳过违反防自锁或防角色放大的单项 */
+            }
+          } else {
+            const removed = this.db
+              .prepare(
+                `DELETE FROM record_grants
+                 WHERE workspace_id = ? AND collection = ? AND record_id = ?
+                   AND subject_type = ? AND subject_id = ?`,
+              )
+              .run(workspaceId, target.collection, target.recordId, subject.subjectType, subject.subjectId)
+            if (Number(removed.changes) > 0) {
+              recordChanged = true
+              if (subject.subjectType === 'account') revokedAccountIds.add(subject.subjectId)
+            }
+          }
+        }
+        if (recordChanged) {
+          touchedCollections.add(target.collection)
+          updatedIds.push(rawId)
+        }
+      }
+      for (const accountId of revokedAccountIds) {
+        this.cleanupExternalMembership(workspaceId, accountId)
+      }
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+
+    for (const col of touchedCollections) {
+      this.authorization.invalidate(workspaceId, col)
+    }
+    if (updatedIds.length > 0) {
+      const detail =
+        input.mode === 'access_mode'
+          ? `批量修改 ${updatedIds.length} 条记录为${input.accessMode === 'members' ? '空间全员可见' : '仅受邀人员可见'}`
+          : input.mode === 'grant'
+            ? `批量授权 ${updatedIds.length} 条记录（${input.role}）`
+            : `批量移除 ${updatedIds.length} 条记录的协作者`
+      this.recordActivity({
+        workspaceId,
+        actorId,
+        category: 'access',
+        action: 'access.batch',
+        collection: normalizedCol,
+        detail,
+        now,
+      })
+    }
+    return {
+      collection: normalizedCol,
+      totalCount: uniqueIds.length,
+      updatedCount: updatedIds.length,
+      skippedCount: uniqueIds.length - updatedIds.length,
+      updatedIds,
+    }
+  }
+
+  private memberViewName(workspaceId: string, viewId: string): string {
+    try {
+      const row = this.db
+        .prepare(
+          `SELECT payload_json FROM saved_views
+           WHERE (workspace_id = ? OR workspace_id = '') AND collection = '/workspace-members' AND view_id = ?
+           ORDER BY CASE WHEN workspace_id = ? THEN 0 ELSE 1 END
+           LIMIT 1`,
+        )
+        .get(workspaceId, viewId, workspaceId) as { payload_json?: string } | undefined
+      if (row?.payload_json) {
+        const parsed = JSON.parse(row.payload_json) as { name?: unknown }
+        if (typeof parsed.name === 'string' && parsed.name.trim()) return parsed.name.trim()
+      }
+    } catch {
+      /* ignore */
+    }
+    return viewId
   }
 
   private accessRows(workspaceId: string, collection: string, recordId: string) {
@@ -2874,35 +2782,27 @@ export class CollabStore {
         role: string
         member_kind: 'member' | 'external' | 'guest'
       }>
-    const groups = this.db
+    const memberViewRows = this.db
       .prepare(
-        `SELECT g.id, g.name, COALESCE(g.kind, 'static') AS kind, rg.role
-         FROM record_grants rg
-         JOIN workspace_groups g ON rg.subject_type = 'group' AND g.id = rg.subject_id
-         WHERE rg.workspace_id = ? AND rg.collection = ? AND rg.record_id = ?
-         ORDER BY rg.created_at`,
+        `SELECT subject_id AS id, role
+         FROM record_grants
+         WHERE workspace_id = ? AND collection = ? AND record_id = ? AND subject_type = 'member_view'
+         ORDER BY created_at`,
       )
-      .all(workspaceId, collection, recordId) as Array<{ id: string; name: string; kind: 'static' | 'dynamic'; role: string }>
-    let policy: { access_mode: string; owner_account_id: string; owner_table?: string } | undefined
-    try {
-      policy = this.db
-        .prepare(
-          `SELECT access_mode, owner_account_id, COALESCE(owner_table, '') AS owner_table FROM resource_policies
-           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-        )
-        .get(workspaceId, collection, recordId) as
-        | { access_mode: string; owner_account_id: string; owner_table?: string }
-        | undefined
-    } catch {
-      policy = this.db
-        .prepare(
-          `SELECT access_mode, owner_account_id FROM resource_policies
-           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-        )
-        .get(workspaceId, collection, recordId) as
-        | { access_mode: string; owner_account_id: string }
-        | undefined
-    }
+      .all(workspaceId, collection, recordId) as Array<{ id: string; role: string }>
+    const memberViews = memberViewRows.map((row) => ({
+      id: row.id,
+      name: this.memberViewName(workspaceId, row.id),
+      role: row.role,
+    }))
+    const policy = this.db
+      .prepare(
+        `SELECT access_mode, member_default_role, owner_account_id FROM resource_policies
+         WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+      )
+      .get(workspaceId, collection, recordId) as
+      | { access_mode: string; member_default_role: 'viewer' | 'editor'; owner_account_id: string }
+      | undefined
     const ownerRow = policy?.owner_account_id
       ? { owner_id: policy.owner_account_id }
       : this.db
@@ -2911,129 +2811,34 @@ export class CollabStore {
           )
           .get(workspaceId, collection, recordId) as { owner_id?: string } | undefined
     const ownerId = policy?.owner_account_id || ownerRow?.owner_id || ''
-    const collaboratorCount = rows.filter((row) => row.id !== ownerId).length + groups.length
-    const hasExternal = rows.some(
+    const collaboratorCount = rows.filter((row) => row.id !== ownerId).length + memberViews.length
+    const hasExternalCollaborator = rows.some(
       (row) => row.id !== ownerId && (row.member_kind === 'external' || row.member_kind === 'guest'),
     )
-    const wsTable = policy?.owner_table === 'workspace' || (!policy?.owner_table && policy?.access_mode === 'members')
-    const scope = hasExternal
-      ? 'external' as const
-      : wsTable
-        ? 'workspace' as const
-        : collaboratorCount > 0
-          ? 'shared' as const
-          : 'personal' as const
-    const ownerTable = wsTable ? 'workspace' : (policy?.owner_table?.trim() || (ownerId ? `account:${ownerId}` : 'workspace'))
-    const accessMode = (policy?.access_mode || (wsTable ? 'members' : 'private')) as 'inherit' | 'private' | 'members' | 'restricted'
+    const effectiveMode = this.authorization.effectiveAccessMode({
+      type: 'record',
+      workspaceId,
+      collection,
+      recordId,
+    })
+    // Notion 对齐三态内部域（外部协作者/外链改为正交标记，不覆盖内部状态）
+    const scope = effectiveMode === 'members'
+      ? ('workspace' as const)
+      : collaboratorCount > 0
+        ? ('shared' as const)
+        : ('personal' as const)
+    const rawMode = policy?.access_mode
+    const accessMode = (rawMode === 'members' || rawMode === 'inherit' ? rawMode : 'private') as 'inherit' | 'private' | 'members'
+    const memberDefaultRole: 'viewer' | 'editor' = policy?.member_default_role === 'editor' ? 'editor' : 'viewer'
     return {
-      private: collaboratorCount === 0,
+      private: effectiveMode === 'private' && collaboratorCount === 0,
       scope,
-      ownerTable,
+      hasExternalCollaborator,
       accessMode,
+      memberDefaultRole,
       ownerId,
       people: rows.map(({ member_kind, ...row }) => ({ ...row, memberKind: member_kind })),
-      groups,
-    }
-  }
-
-  private reconcileRecordScope(workspaceId: string, collection: string, recordId: string) {
-    let policy = this.db
-      .prepare(
-        `SELECT owner_account_id FROM resource_policies
-         WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-      )
-      .get(workspaceId, collection, recordId) as { owner_account_id: string } | undefined
-    if (!policy) {
-      const owner = this.db
-        .prepare(
-          `SELECT owner_id FROM record_owners
-           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-        )
-        .get(workspaceId, collection, recordId) as { owner_id?: string } | undefined
-      if (!owner?.owner_id) throw new CollabError('记录不在这个工作区', 404)
-      this.db
-        .prepare(
-          `INSERT INTO resource_policies
-            (workspace_id, collection, record_id, owner_account_id, access_mode,
-             member_default_role, parent_collection, parent_record_id, created_by, created_at)
-           VALUES (?, ?, ?, ?, 'private', 'viewer', '', '', ?, ?)`,
-        )
-        .run(workspaceId, collection, recordId, owner.owner_id, owner.owner_id, Date.now())
-      policy = { owner_account_id: owner.owner_id }
-    }
-    const rows = this.db
-      .prepare(
-        `SELECT g.subject_type, g.subject_id, COALESCE(m.member_kind, '') AS member_kind
-         FROM record_grants g
-         LEFT JOIN workspace_members m
-           ON g.subject_type = 'account'
-          AND m.workspace_id = g.workspace_id
-          AND m.account_id = g.subject_id
-         WHERE g.workspace_id = ? AND g.collection = ? AND g.record_id = ?`,
-      )
-      .all(workspaceId, collection, recordId) as Array<{
-        subject_type: string
-        subject_id: string
-        member_kind: string
-      }>
-    const collaborators = rows.filter(
-      (row) => row.subject_type !== 'account' || row.subject_id !== policy!.owner_account_id,
-    )
-    const hasExternal = collaborators.some(
-      (row) => row.subject_type === 'account' && (row.member_kind === 'external' || row.member_kind === 'guest'),
-    )
-    let currentPolicy: { access_mode?: string; owner_table?: string } | undefined
-    try {
-      currentPolicy = this.db
-        .prepare(
-          `SELECT access_mode, COALESCE(owner_table, '') AS owner_table FROM resource_policies
-           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-        )
-        .get(workspaceId, collection, recordId) as { access_mode?: string; owner_table?: string } | undefined
-    } catch {
-      currentPolicy = this.db
-        .prepare(
-          `SELECT access_mode FROM resource_policies
-           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-        )
-        .get(workspaceId, collection, recordId) as { access_mode?: string } | undefined
-    }
-    const isWorkspaceTable =
-      currentPolicy?.owner_table === 'workspace' ||
-      (!currentPolicy?.owner_table && currentPolicy?.access_mode === 'members')
-    // 保持空间表的 access_mode（members / restricted / inherit）与 record_grants 正交；
-    // 仅个人表记录在 private / restricted 之间随协作者增删自动切换。
-    if (!isWorkspaceTable && (!currentPolicy?.access_mode || currentPolicy.access_mode === 'private' || currentPolicy.access_mode === 'restricted')) {
-      this.db
-        .prepare(
-          `UPDATE resource_policies
-           SET access_mode = ?
-           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-        )
-        .run(collaborators.length ? 'restricted' : 'private', workspaceId, collection, recordId)
-    }
-    return hasExternal
-      ? 'external'
-      : isWorkspaceTable
-        ? 'workspace'
-        : collaborators.length
-          ? 'shared'
-          : 'personal'
-  }
-
-  private recordGrantKeysForAccount(workspaceId: string, accountId: string) {
-    return this.db
-      .prepare(
-        `SELECT DISTINCT collection, record_id
-         FROM record_grants
-         WHERE workspace_id = ? AND subject_type = 'account' AND subject_id = ?`,
-      )
-      .all(workspaceId, accountId) as Array<{ collection: string; record_id: string }>
-  }
-
-  private reconcileAccountGrantScopes(workspaceId: string, accountId: string) {
-    for (const record of this.recordGrantKeysForAccount(workspaceId, accountId)) {
-      this.reconcileRecordScope(workspaceId, record.collection, record.record_id)
+      memberViews,
     }
   }
 
@@ -3052,13 +2857,6 @@ export class CollabStore {
          LIMIT 1`,
       )
       .get(workspaceId, accountId)
-    const ruleGrant = this.db
-      .prepare(
-        `SELECT 1 AS ok FROM access_rule_grants
-         WHERE workspace_id = ? AND subject_type = 'account' AND subject_id = ?
-         LIMIT 1`,
-      )
-      .get(workspaceId, accountId)
     const pluginGrant = this.db
       .prepare(
         `SELECT 1 AS ok FROM plugin_assignments
@@ -3066,7 +2864,7 @@ export class CollabStore {
          LIMIT 1`,
       )
       .get(workspaceId, accountId)
-    if (recordGrant || ruleGrant || pluginGrant) return
+    if (recordGrant || pluginGrant) return
     this.db
       .prepare(`DELETE FROM workspace_members WHERE workspace_id = ? AND account_id = ? AND member_kind = 'external'`)
       .run(workspaceId, accountId)
@@ -3282,513 +3080,6 @@ export class CollabStore {
     return actual
   }
 
-  // ---------------------------------------------------------------------------
-  // 独立分享规则（access_rules & access_rule_grants）：个人持有，与视图彻底解耦
-  // ---------------------------------------------------------------------------
-
-  private normalizeAccessRuleRole(raw: unknown): AccessRuleRole {
-    if (raw === 'viewer' || raw === 'editor' || raw === 'manager') return raw
-    throw new CollabError('不支持的规则角色', 400)
-  }
-
-  private normalizeAccessRuleSubjectType(raw: unknown): AccessRuleSubjectType {
-    if (raw === 'account' || raw === 'workspace' || raw === 'group') return raw
-    throw new CollabError('不支持的受众类型', 400)
-  }
-
-  private normalizeAccessRuleCollection(raw: string): string {
-    const normalized = raw.trim()
-    if (!normalized.startsWith('/') || normalized.includes('..')) {
-      throw new CollabError('集合路径不合法', 400)
-    }
-    return normalized
-  }
-
-  private normalizeAccessRuleColumns(columns: string[] | null | undefined): string[] | null {
-    if (columns === null || columns === undefined) return null
-    const cleaned = Array.from(
-      new Set(columns.map((c) => String(c ?? '').trim()).filter(Boolean)),
-    )
-    return cleaned.length > 0 ? cleaned : null
-  }
-
-  private requireAccessRuleCreatorEligibility(actorId: string, workspaceId: string) {
-    const row = this.db
-      .prepare('SELECT role, member_kind FROM workspace_members WHERE workspace_id = ? AND account_id = ?')
-      .get(workspaceId, actorId) as { role: string; member_kind: string } | undefined
-    if (!row) throw new CollabError('不是该工作区成员', 403)
-    if (row.role === 'viewer' || row.member_kind === 'guest') {
-      throw new CollabError('只读成员不能创建分享规则', 403)
-    }
-  }
-
-  private hydrateAccessRules(
-    rows: Array<{
-      id: string
-      workspace_id: string
-      collection: string
-      name: string
-      created_by: string
-      created_by_name?: string
-      owner_table?: string
-      filter_tree_json: string
-      columns_json: string | null
-      display_snapshot_json: string | null
-      enabled: number
-      created_at: number
-      updated_at: number
-    }>,
-  ): AccessRuleRecord[] {
-    if (rows.length === 0) return []
-    const ruleIds = rows.map((r) => r.id)
-    const placeholders = ruleIds.map(() => '?').join(', ')
-    const grantRows = this.db
-      .prepare(
-        `SELECT g.id, g.rule_id, g.workspace_id, g.subject_type, g.subject_id, g.role, g.created_at,
-                COALESCE(NULLIF(m.display_name, ''), NULLIF(a.name, ''), NULLIF(a.email, ''), '') AS account_name,
-                a.email AS account_email,
-                COALESCE(m.avatar, '') AS account_avatar,
-                wg.name AS group_name
-         FROM access_rule_grants g
-         LEFT JOIN accounts a ON g.subject_type = 'account' AND a.id = g.subject_id
-         LEFT JOIN workspace_members m ON g.subject_type = 'account' AND m.workspace_id = g.workspace_id AND m.account_id = g.subject_id
-         LEFT JOIN workspace_groups wg ON g.subject_type = 'group' AND wg.id = g.subject_id
-         WHERE g.rule_id IN (${placeholders})
-         ORDER BY g.created_at ASC`,
-      )
-      .all(...ruleIds) as Array<{
-      id: string
-      rule_id: string
-      workspace_id: string
-      subject_type: string
-      subject_id: string
-      role: string
-      created_at: number
-      account_name: string | null
-      account_email: string | null
-      account_avatar: string | null
-      group_name: string | null
-    }>
-    const grantsByRule = new Map<string, AccessRuleGrantRecord[]>()
-    for (const g of grantRows) {
-      const list = grantsByRule.get(g.rule_id) ?? []
-      const subjectName = g.account_name || g.group_name || undefined
-      list.push({
-        id: g.id,
-        ruleId: g.rule_id,
-        workspaceId: g.workspace_id,
-        subjectType: g.subject_type as AccessRuleSubjectType,
-        subjectId: g.subject_id,
-        role: g.role as AccessRuleRole,
-        createdAt: Number(g.created_at) || 0,
-        ...(subjectName ? { subjectName } : {}),
-        ...(g.account_email ? { subjectEmail: g.account_email } : {}),
-        ...(g.account_avatar ? { subjectAvatar: g.account_avatar } : {}),
-      })
-      grantsByRule.set(g.rule_id, list)
-    }
-    return rows.map((row) => {
-      let filterTree: Record<string, unknown> = { op: 'and', rules: [] }
-      try {
-        const parsed = JSON.parse(row.filter_tree_json)
-        if (parsed && typeof parsed === 'object') filterTree = parsed as Record<string, unknown>
-      } catch {
-        /* fallback to empty filterTree */
-      }
-      let columns: string[] | null = null
-      if (row.columns_json) {
-        try {
-          const parsed = JSON.parse(row.columns_json)
-          if (Array.isArray(parsed)) {
-            columns = parsed.filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
-          }
-        } catch {
-          columns = null
-        }
-      }
-      let displaySnapshot: AccessRuleDisplaySnapshot | null = null
-      if (row.display_snapshot_json) {
-        try {
-          const parsed = JSON.parse(row.display_snapshot_json)
-          if (parsed && typeof parsed === 'object') displaySnapshot = parsed as AccessRuleDisplaySnapshot
-        } catch {
-          displaySnapshot = null
-        }
-      }
-      const ownerTable = row.owner_table?.trim() || (row.created_by ? `account:${row.created_by}` : 'workspace')
-      const scope = ownerTable === 'workspace' ? 'workspace' as const : 'personal' as const
-      return {
-        id: row.id,
-        workspaceId: row.workspace_id,
-        collection: row.collection,
-        name: row.name,
-        createdBy: row.created_by,
-        ...(row.created_by_name ? { createdByName: row.created_by_name } : {}),
-        ownerTable,
-        scope,
-        filterTree,
-        columns,
-        displaySnapshot,
-        enabled: row.enabled !== 0,
-        createdAt: Number(row.created_at) || 0,
-        updatedAt: Number(row.updated_at) || 0,
-        grants: grantsByRule.get(row.id) ?? [],
-      }
-    })
-  }
-
-  getAccessRule(workspaceId: string, ruleId: string): AccessRuleRecord | null {
-    const row = this.db
-      .prepare(
-        `SELECT r.*, COALESCE(NULLIF(cm.display_name, ''), NULLIF(a.name, ''), NULLIF(a.email, ''), '') AS created_by_name
-         FROM access_rules r
-         LEFT JOIN accounts a ON a.id = r.created_by
-         LEFT JOIN workspace_members cm ON cm.workspace_id = r.workspace_id AND cm.account_id = r.created_by
-         WHERE r.workspace_id = ? AND r.id = ?`,
-      )
-      .get(workspaceId, ruleId) as
-      | {
-          id: string
-          workspace_id: string
-          collection: string
-          name: string
-          created_by: string
-          created_by_name?: string
-          filter_tree_json: string
-          columns_json: string | null
-          display_snapshot_json: string | null
-          enabled: number
-          created_at: number
-          updated_at: number
-        }
-      | undefined
-    if (!row) return null
-    return this.hydrateAccessRules([row])[0] ?? null
-  }
-
-  private memberRoleAndKind(actorId: string, workspaceId: string): { role: string; memberKind: string } | null {
-    const row = this.db
-      .prepare('SELECT role, member_kind FROM workspace_members WHERE workspace_id = ? AND account_id = ?')
-      .get(workspaceId, actorId) as { role: string; member_kind: string } | undefined
-    return row ? { role: row.role, memberKind: row.member_kind } : null
-  }
-
-  canManageAccessRule(actorId: string, workspaceId: string, rule: Pick<AccessRuleRecord, 'ownerTable' | 'createdBy'>): boolean {
-    const member = this.memberRoleAndKind(actorId, workspaceId)
-    if (!member) return false
-    if (rule.ownerTable === 'workspace') {
-      return member.role === 'owner' || member.role === 'admin'
-    }
-    return rule.ownerTable === `account:${actorId}` || rule.createdBy === actorId
-  }
-
-  /**
-   * 列出当前操作者可见的分享规则：
-   * - 空间 owner / admin：全部空间规则（canManage=true）+ 自己的个人规则（canManage=true）
-   * - 内部 member：全部空间规则（canManage=false，只读透明防幽灵权限）+ 自己的个人规则（canManage=true）
-   * - viewer / external / guest：空列表
-   */
-  listVisibleAccessRules(
-    actorId: string,
-    workspaceId: string,
-    collection?: string,
-    scopeFilter: 'all' | 'workspace' | 'personal' = 'all',
-  ): AccessRuleRecord[] {
-    const member = this.memberRoleAndKind(actorId, workspaceId)
-    if (!member) throw new CollabError('不是该工作区成员', 403)
-    if (member.role === 'viewer' || member.memberKind === 'external' || member.memberKind === 'guest') {
-      return []
-    }
-    const isWsAdmin = member.role === 'owner' || member.role === 'admin'
-    const normalizedCol = collection ? this.normalizeAccessRuleCollection(collection) : ''
-    const personalTable = `account:${actorId}`
-    let whereScope = `(r.owner_table = 'workspace' OR r.owner_table = ? OR (r.owner_table = '' AND r.created_by = ?))`
-    const params: Array<string | number | null> = [workspaceId]
-    if (scopeFilter === 'workspace') {
-      whereScope = `r.owner_table = 'workspace'`
-    } else if (scopeFilter === 'personal') {
-      whereScope = `(r.owner_table = ? OR (r.owner_table = '' AND r.created_by = ?))`
-      params.push(personalTable, actorId)
-    } else {
-      params.push(personalTable, actorId)
-    }
-    if (normalizedCol) params.push(normalizedCol)
-    const sql = `SELECT r.*, COALESCE(NULLIF(cm.display_name, ''), NULLIF(a.name, ''), NULLIF(a.email, ''), '') AS created_by_name
-       FROM access_rules r
-       LEFT JOIN accounts a ON a.id = r.created_by
-       LEFT JOIN workspace_members cm ON cm.workspace_id = r.workspace_id AND cm.account_id = r.created_by
-       WHERE r.workspace_id = ? AND ${whereScope}${normalizedCol ? ' AND r.collection = ?' : ''}
-       ORDER BY CASE WHEN r.owner_table = 'workspace' THEN 0 ELSE 1 END, r.updated_at DESC, r.created_at DESC`
-    const rows = this.db.prepare(sql).all(...params) as Array<any>
-    return this.hydrateAccessRules(rows).map((rule) => ({
-      ...rule,
-      canManage: rule.ownerTable === 'workspace' ? isWsAdmin : (rule.ownerTable === personalTable || rule.createdBy === actorId),
-    }))
-  }
-
-  listAccessRulesForOwner(actorId: string, workspaceId: string, collection?: string): AccessRuleRecord[] {
-    return this.listVisibleAccessRules(actorId, workspaceId, collection, 'personal')
-  }
-
-  listActiveAccessRulesForCollection(workspaceId: string, collection: string): AccessRuleRecord[] {
-    const rows = this.db
-      .prepare(
-        `SELECT r.*, COALESCE(NULLIF(cm.display_name, ''), NULLIF(a.name, ''), NULLIF(a.email, ''), '') AS created_by_name
-         FROM access_rules r
-         LEFT JOIN accounts a ON a.id = r.created_by
-         LEFT JOIN workspace_members cm ON cm.workspace_id = r.workspace_id AND cm.account_id = r.created_by
-         WHERE r.workspace_id = ? AND r.collection = ? AND r.enabled = 1
-         ORDER BY r.created_at ASC`,
-      )
-      .all(workspaceId, this.normalizeAccessRuleCollection(collection)) as Array<any>
-    return this.hydrateAccessRules(rows)
-  }
-
-  countAccessRulesForOwner(workspaceId: string, accountId: string): number {
-    const row = this.db
-      .prepare(
-        `SELECT COUNT(*) AS cnt FROM access_rules
-         WHERE workspace_id = ? AND created_by = ? AND owner_table != 'workspace' AND enabled = 1`,
-      )
-      .get(workspaceId, accountId) as { cnt?: number } | undefined
-    return Number(row?.cnt ?? 0)
-  }
-
-  createAccessRule(actorId: string, workspaceId: string, input: CreateAccessRuleInput): AccessRuleRecord {
-    this.requireAccessRuleCreatorEligibility(actorId, workspaceId)
-    const member = this.memberRoleAndKind(actorId, workspaceId)!
-    const wantsWorkspace = input.scope === 'workspace' || input.ownerTable === 'workspace'
-    if (wantsWorkspace && member.role !== 'owner' && member.role !== 'admin') {
-      throw new CollabError('仅空间管理员可创建空间表访问规则', 403)
-    }
-    const ownerTable = wantsWorkspace ? 'workspace' : `account:${actorId}`
-    const collection = this.normalizeAccessRuleCollection(input.collection)
-    const name = String(input.name ?? '').trim()
-    if (!name) throw new CollabError('规则名称不能为空', 400)
-    const filterTree = input.filterTree && typeof input.filterTree === 'object' ? input.filterTree : { op: 'and', rules: [] }
-    const columns = this.normalizeAccessRuleColumns(input.columns)
-    const displaySnapshot = input.displaySnapshot && typeof input.displaySnapshot === 'object' ? input.displaySnapshot : null
-    const enabled = input.enabled === false ? 0 : 1
-    const ruleId = id('rule')
-    const now = Date.now()
-    const grants = Array.isArray(input.grants) ? input.grants : []
-
-    this.db.exec('BEGIN IMMEDIATE')
-    try {
-      this.db
-        .prepare(
-          `INSERT INTO access_rules
-             (id, workspace_id, collection, name, created_by, owner_table, filter_tree_json, columns_json, display_snapshot_json, enabled, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(
-          ruleId,
-          workspaceId,
-          collection,
-          name,
-          actorId,
-          ownerTable,
-          JSON.stringify(filterTree),
-          columns ? JSON.stringify(columns) : null,
-          displaySnapshot ? JSON.stringify(displaySnapshot) : null,
-          enabled,
-          now,
-          now,
-        )
-      for (const g of grants) {
-        const subjectType = this.normalizeAccessRuleSubjectType(g.subjectType)
-        const subjectId = subjectType === 'workspace' ? workspaceId : String(g.subjectId ?? '').trim()
-        if (!subjectId) throw new CollabError('受众 ID 不能为空', 400)
-        const role = this.normalizeAccessRuleRole(g.role)
-        this.db
-          .prepare(
-            `INSERT INTO access_rule_grants (id, rule_id, workspace_id, subject_type, subject_id, role, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)
-             ON CONFLICT(rule_id, subject_type, subject_id)
-             DO UPDATE SET role = excluded.role`,
-          )
-          .run(id('rg'), ruleId, workspaceId, subjectType, subjectId, role, now)
-      }
-      this.db.exec('COMMIT')
-    } catch (error) {
-      this.db.exec('ROLLBACK')
-      throw error
-    }
-    this.authorization.invalidateAll()
-    const created = this.getAccessRule(workspaceId, ruleId)!
-    return { ...created, canManage: true }
-  }
-
-  updateAccessRule(actorId: string, workspaceId: string, ruleId: string, patch: UpdateAccessRuleInput): AccessRuleRecord {
-    const existing = this.getAccessRule(workspaceId, ruleId)
-    if (!existing) throw new CollabError('分享规则不存在', 404)
-    if (!this.canManageAccessRule(actorId, workspaceId, existing)) {
-      throw new CollabError(
-        existing.ownerTable === 'workspace' ? '仅空间管理员可以修改空间规则' : '只有规则创建者可以修改此规则',
-        403,
-      )
-    }
-    let nextOwnerTable = existing.ownerTable
-    if (patch.scope === 'workspace' || patch.ownerTable === 'workspace') {
-      const member = this.memberRoleAndKind(actorId, workspaceId)
-      if (!member || (member.role !== 'owner' && member.role !== 'admin')) {
-        throw new CollabError('仅空间管理员可将规则提升为空间规则', 403)
-      }
-      nextOwnerTable = 'workspace'
-    }
-    const nextName = patch.name !== undefined ? String(patch.name).trim() : existing.name
-    if (!nextName) throw new CollabError('规则名称不能为空', 400)
-    const nextFilterTree = patch.filterTree !== undefined ? patch.filterTree : existing.filterTree
-    const nextColumns = patch.columns !== undefined ? this.normalizeAccessRuleColumns(patch.columns) : existing.columns
-    const nextDisplaySnapshot = patch.displaySnapshot !== undefined ? patch.displaySnapshot : existing.displaySnapshot
-    const nextEnabled = patch.enabled !== undefined ? (patch.enabled ? 1 : 0) : existing.enabled ? 1 : 0
-    const now = Date.now()
-
-    this.db.exec('BEGIN IMMEDIATE')
-    try {
-      this.db
-        .prepare(
-          `UPDATE access_rules
-           SET name = ?, owner_table = ?, filter_tree_json = ?, columns_json = ?, display_snapshot_json = ?, enabled = ?, updated_at = ?
-           WHERE workspace_id = ? AND id = ?`,
-        )
-        .run(
-          nextName,
-          nextOwnerTable,
-          JSON.stringify(nextFilterTree ?? { op: 'and', rules: [] }),
-          nextColumns ? JSON.stringify(nextColumns) : null,
-          nextDisplaySnapshot ? JSON.stringify(nextDisplaySnapshot) : null,
-          nextEnabled,
-          now,
-          workspaceId,
-          ruleId,
-        )
-      if (patch.grants !== undefined) {
-        this.db.prepare('DELETE FROM access_rule_grants WHERE rule_id = ?').run(ruleId)
-        for (const g of patch.grants) {
-          const subjectType = this.normalizeAccessRuleSubjectType(g.subjectType)
-          const subjectId = subjectType === 'workspace' ? workspaceId : String(g.subjectId ?? '').trim()
-          if (!subjectId) throw new CollabError('受众 ID 不能为空', 400)
-          const role = this.normalizeAccessRuleRole(g.role)
-          this.db
-            .prepare(
-              `INSERT INTO access_rule_grants (id, rule_id, workspace_id, subject_type, subject_id, role, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(rule_id, subject_type, subject_id)
-               DO UPDATE SET role = excluded.role`,
-            )
-            .run(id('rg'), ruleId, workspaceId, subjectType, subjectId, role, now)
-        }
-      }
-      this.db.exec('COMMIT')
-    } catch (error) {
-      this.db.exec('ROLLBACK')
-      throw error
-    }
-    this.authorization.invalidateAll()
-    const updated = this.getAccessRule(workspaceId, ruleId)!
-    return { ...updated, canManage: true }
-  }
-
-  deleteAccessRule(actorId: string, workspaceId: string, ruleId: string): { deleted: boolean; collection: string } {
-    const existing = this.getAccessRule(workspaceId, ruleId)
-    if (!existing) throw new CollabError('分享规则不存在', 404)
-    if (!this.canManageAccessRule(actorId, workspaceId, existing)) {
-      throw new CollabError(
-        existing.ownerTable === 'workspace' ? '仅空间管理员可以删除空间规则' : '只有规则创建者可以删除此规则',
-        403,
-      )
-    }
-    this.db.exec('BEGIN IMMEDIATE')
-    try {
-      this.db.prepare('DELETE FROM access_rule_grants WHERE rule_id = ?').run(ruleId)
-      this.db.prepare('DELETE FROM access_rules WHERE workspace_id = ? AND id = ?').run(workspaceId, ruleId)
-      this.db.exec('COMMIT')
-    } catch (error) {
-      this.db.exec('ROLLBACK')
-      throw error
-    }
-    this.authorization.invalidateAll()
-    return { deleted: true, collection: existing.collection }
-  }
-
-  grantAccessRuleSubject(
-    actorId: string,
-    workspaceId: string,
-    ruleId: string,
-    grant: AccessRuleGrantInput,
-  ): AccessRuleRecord {
-    const existing = this.getAccessRule(workspaceId, ruleId)
-    if (!existing) throw new CollabError('分享规则不存在', 404)
-    if (!this.canManageAccessRule(actorId, workspaceId, existing)) {
-      throw new CollabError(
-        existing.ownerTable === 'workspace' ? '仅空间管理员可以修改空间规则' : '只有规则创建者可以修改此规则',
-        403,
-      )
-    }
-    const subjectType = this.normalizeAccessRuleSubjectType(grant.subjectType)
-    const subjectId = subjectType === 'workspace' ? workspaceId : String(grant.subjectId ?? '').trim()
-    if (!subjectId) throw new CollabError('受众 ID 不能为空', 400)
-    const role = this.normalizeAccessRuleRole(grant.role)
-    const now = Date.now()
-    this.db
-      .prepare(
-        `INSERT INTO access_rule_grants (id, rule_id, workspace_id, subject_type, subject_id, role, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(rule_id, subject_type, subject_id)
-         DO UPDATE SET role = excluded.role`,
-      )
-      .run(id('rg'), ruleId, workspaceId, subjectType, subjectId, role, now)
-    this.db.prepare('UPDATE access_rules SET updated_at = ? WHERE workspace_id = ? AND id = ?').run(now, workspaceId, ruleId)
-    this.authorization.invalidateAll()
-    const updated = this.getAccessRule(workspaceId, ruleId)!
-    return { ...updated, canManage: true }
-  }
-
-  revokeAccessRuleSubject(
-    actorId: string,
-    workspaceId: string,
-    ruleId: string,
-    subjectType: AccessRuleSubjectType,
-    subjectId: string,
-  ): AccessRuleRecord {
-    const existing = this.getAccessRule(workspaceId, ruleId)
-    if (!existing) throw new CollabError('分享规则不存在', 404)
-    if (!this.canManageAccessRule(actorId, workspaceId, existing)) {
-      throw new CollabError(
-        existing.ownerTable === 'workspace' ? '仅空间管理员可以修改空间规则' : '只有规则创建者可以修改此规则',
-        403,
-      )
-    }
-    const resolvedSubjectId = subjectType === 'workspace' ? workspaceId : subjectId.trim()
-    this.db
-      .prepare('DELETE FROM access_rule_grants WHERE rule_id = ? AND subject_type = ? AND subject_id = ?')
-      .run(ruleId, subjectType, resolvedSubjectId)
-    this.db.prepare('UPDATE access_rules SET updated_at = ? WHERE workspace_id = ? AND id = ?').run(Date.now(), workspaceId, ruleId)
-    this.authorization.invalidateAll()
-    const updated = this.getAccessRule(workspaceId, ruleId)!
-    return { ...updated, canManage: true }
-  }
-
-  transferRecordOwnerTable(
-    actorId: string,
-    workspaceId: string,
-    collection: string,
-    recordId: string,
-    targetOwnerTable: string,
-  ) {
-    const target = this.recordKey(collection, recordId)
-    try {
-      return this.authorization.transferOwnerTable(
-        { type: 'account', accountId: actorId, workspaceId },
-        { type: 'record', workspaceId, collection: target.collection, recordId: target.recordId },
-        targetOwnerTable,
-      )
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error)
-      throw new CollabError(msg, msg.includes('permission denied') ? 403 : 400)
-    }
-  }
 
   private recordKey(collection: string, recordId: string) {
     const normalized = collection.trim()

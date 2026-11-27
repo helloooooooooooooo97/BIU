@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node
 import { basename, dirname, join } from 'node:path'
 import { openPooledSqlite, sharedSqlitePoolStats, closeAllSharedSqliteConnections } from './sqlite-pool.ts'
 import { assertSqliteVersion, getSchemaVersion, isEmptyDatabase, quoteSqlitePath, setSchemaVersion } from './sqlite-open.ts'
-import { CREATE_CORE_SQL, LATEST_BIU_SCHEMA, createLatestSchema, dropLegacyEditorColumns, rebuildPageBlockCollectionKeys, tableColumnNames, tableNames } from './biu-schema.ts'
+import { CREATE_CORE_SQL, LATEST_BIU_SCHEMA, createLatestSchema, dropLegacyEditorColumns, ensurePagesPerfIndexes, rebuildPageBlockCollectionKeys, tableColumnNames, tableNames } from './biu-schema.ts'
 import { copyLegacyBodies, rebuildContentRefs } from './editor-content.ts'
 
 type DatabaseSync = import('node:sqlite').DatabaseSync
@@ -1632,6 +1632,200 @@ export const BIU_MIGRATIONS: Migration[] = [
            AND EXISTS (SELECT 1 FROM workspace_members m WHERE m.account_id = accounts.id)`,
       )
     }
+  } },
+  { version: 61, module: 'authz', name: 'single_table_static_authz_and_member_views', up: (db) => {
+    const roleRank: Record<string, number> = { viewer: 1, commenter: 2, editor: 3, manager: 4, owner: 5 }
+    const now = Date.now()
+
+    // 1. 将遗留 workspace_groups 迁移：
+    //    - kind = 'dynamic' -> 转为 /workspace-members 管理员锁定视图，record_grants 改为 subject_type = 'member_view'
+    //    - kind = 'static'  -> 将关联的 record_grants 展开为成员个人 account 授权，防止升级丢权
+    if (hasTable(db, 'workspace_groups')) {
+      const groupCols = tableColumnNames(db, 'workspace_groups')
+      const hasKind = groupCols.includes('kind')
+      const hasFilter = groupCols.includes('filter_tree_json')
+      const groups = db
+        .prepare(
+          `SELECT id, workspace_id, name, created_by, created_at${hasKind ? ', kind' : ''}${hasFilter ? ', filter_tree_json' : ''}
+           FROM workspace_groups`,
+        )
+        .all() as Array<{
+        id: string
+        workspace_id: string
+        name: string
+        created_by: string
+        created_at: number
+        kind?: string
+        filter_tree_json?: string | null
+      }>
+
+      const hasSavedViews = hasTable(db, 'saved_views')
+      const hasRecordGrants = hasTable(db, 'record_grants')
+      const hasGroupMembers = hasTable(db, 'workspace_group_members')
+
+      for (const grp of groups) {
+        const isDynamic = grp.kind === 'dynamic'
+        if (isDynamic && hasSavedViews) {
+          const viewId = `mv_${grp.id}`
+          let filterTree: unknown = undefined
+          if (grp.filter_tree_json) {
+            try {
+              filterTree = JSON.parse(grp.filter_tree_json)
+            } catch {
+              filterTree = undefined
+            }
+          }
+          const payload: Record<string, unknown> = {
+            id: viewId,
+            name: grp.name || '成员分组',
+            scope: 'workspace',
+            protection: 'locked',
+            createdBy: grp.created_by,
+            createdAt: grp.created_at || now,
+            ...(filterTree ? { filterTree } : {}),
+          }
+          db.prepare(
+            `INSERT OR IGNORE INTO saved_views (workspace_id, collection, view_id, payload_json, updated_at)
+             VALUES (?, '/workspace-members', ?, ?, ?)`,
+          ).run(grp.workspace_id, viewId, JSON.stringify(payload), now)
+
+          if (hasRecordGrants) {
+            const groupGrants = db
+              .prepare(
+                `SELECT collection, record_id, role, granted_by, created_at
+                 FROM record_grants
+                 WHERE workspace_id = ? AND subject_type = 'group' AND subject_id = ?`,
+              )
+              .all(grp.workspace_id, grp.id) as Array<{
+              collection: string
+              record_id: string
+              role: string
+              granted_by: string
+              created_at: number
+            }>
+            for (const g of groupGrants) {
+              const existing = db
+                .prepare(
+                  `SELECT role FROM record_grants
+                   WHERE workspace_id = ? AND collection = ? AND record_id = ? AND subject_type = 'member_view' AND subject_id = ?`,
+                )
+                .get(grp.workspace_id, g.collection, g.record_id, viewId) as { role: string } | undefined
+              if (!existing) {
+                db.prepare(
+                  `INSERT INTO record_grants (workspace_id, collection, record_id, subject_type, subject_id, role, granted_by, created_at)
+                   VALUES (?, ?, ?, 'member_view', ?, ?, ?, ?)`,
+                ).run(grp.workspace_id, g.collection, g.record_id, viewId, g.role, g.granted_by, g.created_at)
+              } else if ((roleRank[g.role] ?? 0) > (roleRank[existing.role] ?? 0)) {
+                db.prepare(
+                  `UPDATE record_grants SET role = ?
+                   WHERE workspace_id = ? AND collection = ? AND record_id = ? AND subject_type = 'member_view' AND subject_id = ?`,
+                ).run(g.role, grp.workspace_id, g.collection, g.record_id, viewId)
+              }
+            }
+          }
+        } else if (!isDynamic && hasRecordGrants && hasGroupMembers) {
+          const members = db
+            .prepare('SELECT account_id FROM workspace_group_members WHERE group_id = ?')
+            .all(grp.id) as Array<{ account_id: string }>
+          const groupGrants = db
+            .prepare(
+              `SELECT collection, record_id, role, granted_by, created_at
+               FROM record_grants
+               WHERE workspace_id = ? AND subject_type = 'group' AND subject_id = ?`,
+            )
+            .all(grp.workspace_id, grp.id) as Array<{
+            collection: string
+            record_id: string
+            role: string
+            granted_by: string
+            created_at: number
+          }>
+          for (const g of groupGrants) {
+            for (const m of members) {
+              const existing = db
+                .prepare(
+                  `SELECT role FROM record_grants
+                   WHERE workspace_id = ? AND collection = ? AND record_id = ? AND subject_type = 'account' AND subject_id = ?`,
+                )
+                .get(grp.workspace_id, g.collection, g.record_id, m.account_id) as { role: string } | undefined
+              if (!existing) {
+                db.prepare(
+                  `INSERT INTO record_grants (workspace_id, collection, record_id, subject_type, subject_id, role, granted_by, created_at)
+                   VALUES (?, ?, ?, 'account', ?, ?, ?, ?)`,
+                ).run(grp.workspace_id, g.collection, g.record_id, m.account_id, g.role, g.granted_by, g.created_at)
+              } else if ((roleRank[g.role] ?? 0) > (roleRank[existing.role] ?? 0)) {
+                db.prepare(
+                  `UPDATE record_grants SET role = ?
+                   WHERE workspace_id = ? AND collection = ? AND record_id = ? AND subject_type = 'account' AND subject_id = ?`,
+                ).run(g.role, grp.workspace_id, g.collection, g.record_id, m.account_id)
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (hasTable(db, 'record_grants')) {
+      db.exec(`DELETE FROM record_grants WHERE subject_type = 'group'`)
+    }
+    if (hasTable(db, 'plugin_assignments')) {
+      db.exec(`DELETE FROM plugin_assignments WHERE subject_type = 'group'`)
+    }
+
+    // 2. resource_policies 归一化：废除 restricted 与 owner_table 逻辑分表，回归 Notion 三态 access_mode（private / members / inherit）
+    if (hasTable(db, 'resource_policies')) {
+      db.exec(`UPDATE resource_policies SET access_mode = 'private' WHERE access_mode = 'restricted'`)
+      db.exec(`DROP INDEX IF EXISTS resource_policies_owner_table`)
+    }
+
+    // 3. saved_views 清理 K+1 专属 ownerTable 强绑定与他人个人表默认视图
+    if (hasTable(db, 'saved_views')) {
+      const rows = db
+        .prepare('SELECT workspace_id, collection, view_id, payload_json FROM saved_views')
+        .all() as Array<{ workspace_id: string; collection: string; view_id: string; payload_json: string }>
+      const saveStmt = db.prepare(
+        'UPDATE saved_views SET payload_json = ? WHERE workspace_id = ? AND collection = ? AND view_id = ?',
+      )
+      const delStmt = db.prepare(
+        'DELETE FROM saved_views WHERE workspace_id = ? AND collection = ? AND view_id = ?',
+      )
+      for (const row of rows) {
+        if (row.collection === '/data') continue
+        if (row.view_id.startsWith('default:account:') || row.view_id.startsWith('default:shared:')) {
+          delStmt.run(row.workspace_id, row.collection, row.view_id)
+          continue
+        }
+        try {
+          const parsed = JSON.parse(row.payload_json) as Record<string, unknown>
+          if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue
+          let changed = false
+          if ('ownerTable' in parsed) {
+            delete parsed.ownerTable
+            changed = true
+          }
+          if (parsed.filters && typeof parsed.filters === 'object' && !Array.isArray(parsed.filters)) {
+            const filters = { ...(parsed.filters as Record<string, unknown>) }
+            if ('$ownerTable' in filters) {
+              delete filters.$ownerTable
+              parsed.filters = filters
+              changed = true
+            }
+          }
+          if (changed) {
+            saveStmt.run(JSON.stringify(parsed), row.workspace_id, row.collection, row.view_id)
+          }
+        } catch {
+          /* skip malformed payload */
+        }
+      }
+    }
+
+    // 4. 下线数据侧动态规则表与成员组表
+    db.exec('DROP TABLE IF EXISTS access_rule_grants')
+    db.exec('DROP TABLE IF EXISTS access_rules')
+    db.exec('DROP TABLE IF EXISTS workspace_group_members')
+    db.exec('DROP TABLE IF EXISTS workspace_groups')
+    ensurePagesPerfIndexes(db)
   } },
 ]
 

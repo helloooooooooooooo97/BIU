@@ -32,7 +32,7 @@ function specForFilterField(
   if (parsed) {
     return packs.find((pack) => pack.id === parsed.packId)?.fields.find((item) => item.key === parsed.fieldKey)
   }
-  return schema?.fields[fieldKey]
+  return schema?.fields?.[fieldKey]
 }
 
 export type SortRule = { id: string; field: string; dir: 'asc' | 'desc' }

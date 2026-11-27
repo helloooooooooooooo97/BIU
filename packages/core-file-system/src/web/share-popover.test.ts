@@ -102,23 +102,24 @@ test('permission column opens the same kind of chain as data scope', () => {
   assert.doesNotMatch(detailSrc, /\/api\/account\/access/)
 })
 
-test('private records grant workspace members and groups from unified search and edit roles inline', () => {
+test('private records grant workspace members and member views from unified search and edit roles inline', () => {
   const src =
     readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8') +
     '\n' +
     readFileSync(resolve(import.meta.dirname, './share-chain-detail.tsx'), 'utf8')
-  assert.match(src, /搜索空间成员或成员组/)
+  assert.match(src, /搜索空间成员或成员视图/)
   assert.match(src, /inline\s*\n\s*value=\{row\.role/)
   assert.match(src, /调整 \$\{row\.name\} 的权限/)
   assert.match(src, /renderPersonAvatar\(row\.id \|\| row\.name, row\.avatar, 'is-sm', 26\)/)
   assert.match(src, /<AiAvatar seed=/)
-  assert.match(src, /String\(row\.name \?\? ''\)\.trim\(\) \|\| String\(row\.title \?\? ''\)\.trim\(\) \|\| email/)
+  assert.match(src, /String\(row\.title \?\? ''\)\.trim\(\) \|\| String\(row\.name \?\? ''\)\.trim\(\) \|\| email/)
   assert.match(src, /columns: \['title', 'name', 'avatar', 'email', 'role', 'membershipKind'\]/)
   assert.match(src, /由我授权/)
   assert.match(src, /row\.canEdit !== false/)
   assert.match(src, /row\.canRevoke !== false/)
-  assert.match(src, /revoke\('group', row\.id\)/)
-  assert.doesNotMatch(src, /memberViewId|member_view|VIEW_ROLE_OPTIONS|inheritedInternal/)
+  assert.match(src, /revoke\('member_view', row\.id\)/)
+  assert.match(src, /\/api\/db\/member-views/)
+  assert.doesNotMatch(src, /\/api\/account\/groups|VIEW_ROLE_OPTIONS|inheritedInternal/)
   const dismissSrc = readFileSync(resolve(import.meta.dirname, '../../../biu-ui/src/headless-dismiss.tsx'), 'utf8')
   assert.match(dismissSrc, /\.fsdb-share-select-menu/)
 })

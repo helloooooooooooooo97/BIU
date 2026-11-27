@@ -2380,7 +2380,8 @@ test('create scope separates personal and workspace records and viewers stay rea
   assert.deepEqual(shared.items.map((row) => row.title), ['Shared'])
   assert.deepEqual(asCollection(await runWithAccount(bob.id, () => db.list('/docs'))).items.map((row) => row.title), ['Shared'])
   const granted = runWithAccount(ada.id, () => collab.recordAccess(ada.id, '/docs', 'd2'))
-  assert.equal(granted.memberViews.find((row) => row.id === builtinAllViewId('/workspace-members'))?.role, 'editor')
+  assert.equal(granted.accessMode, 'members')
+  assert.equal(granted.memberDefaultRole, 'editor')
   assert.equal(asCollection(await runWithAccount(ada.id, () => db.list('/docs'))).items.find((row) => row.title === 'Shared')?.shareScope, '空间')
   const edited = await runWithAccount(bob.id, () => db.update('/docs/d2', { title: 'Shared edited' }))
   assert.equal(edited.kind, 'record')
@@ -2442,17 +2443,20 @@ test('shared create is a public view link', async () => {
   const created = await runWithAccount(ada.id, () => db.create('/docs', [{ title: '公开' }], { scope: 'shared' }))
   assert.equal(created.kind, 'created')
   if (created.kind !== 'created') return
-  assert.equal(created.items[0]?.value.shareScope, '共享')
+  // Notion 对齐：公开链接正交于内部三态（hasExternal = true，不覆写内部私人状态）
+  assert.equal(created.items[0]?.value.shareScope, '私人')
+  assert.equal(created.items[0]?.value.hasExternal, true)
   const link = db.shares.find('record', '/docs', '', 'pub')
   assert.ok(link)
   assert.equal(link?.hasPassword, false)
   assert.equal(link?.allowCopy, false)
-  const listed = asCollection(await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'shared' })))
+  const listed = asCollection(await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'personal' })))
   assert.deepEqual(listed.items.map((row) => row.title), ['公开'])
   db.shares.revokeRecord('/docs', 'pub')
   db.notifyShareChange()
   const closed = asCollection(await runWithAccount(ada.id, () => db.list('/docs')))
   assert.equal(closed.items[0]?.shareScope, '私人')
+  assert.equal(Boolean(closed.items[0]?.hasExternal), false)
 })
 
 test('device workspace share column is only personal or shared', async () => {
@@ -2568,10 +2572,9 @@ test('a builtin member view grant lets the other workspace member read personal 
   collab.addMemberByEmail(ada.id, workspace.id, bob.email)
   collab.setActive(ada.id, workspace.id)
   collab.setActive(bob.id, workspace.id)
-  db.viewCatalog = { viewsFor: () => [] }
+  collab.authorization.setMemberViewLockChecker((_ws, viewId) => viewId === 'locked-members')
   collab.authorization.setMemberViewMatcher((workspaceId, viewId, accountId) => {
-    const view = stubBuiltinMemberView(viewId) ?? stubBuiltinAllView(viewId)
-    if (!view) return false
+    if (viewId !== 'locked-members') return false
     const member = collab.members(accountId, workspaceId).find((item) => item.id === accountId)
     if (!member) return false
     return matchListFilterRecord(
@@ -2584,16 +2587,17 @@ test('a builtin member view grant lets the other workspace member read personal 
         membershipKind: member.member_kind,
         joinedAt: member.created_at,
       },
-      view.filters,
+      { membershipKind: 'member' },
     )
   })
-  await runWithAccount(ada.id, () => db.create('/docs', [{ title: 'Ada private' }], { scope: 'personal' }))
-  await runWithAccount(ada.id, () => collab.grantViewMemberView(ada.id, '/docs', builtinAllViewId('/docs'), 'builtin-member:member', 'editor'))
+  const createdDoc = await runWithAccount(ada.id, () => db.create('/docs', [{ title: 'Ada private' }], { scope: 'personal' }))
+  const docId = String(createdDoc.items[0]?.value.id ?? '')
+  await runWithAccount(ada.id, () => collab.grantMemberView(ada.id, '/docs', docId, 'locked-members', 'editor'))
   const seen = asCollection(await runWithAccount(bob.id, () => db.list('/docs')))
   assert.deepEqual(seen.items.map((row) => row.title), ['Ada private'])
 })
 
-test('granting the all-members view lets the other member read the owner private records', async () => {
+test('granting a locked member view to a private record shares it dynamically and preserves Notion 3-state', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
   const rows = new Map<string, DbRecord>()
@@ -2638,49 +2642,29 @@ test('granting the all-members view lets the other member read the owner private
   collab.addMemberByEmail(ada.id, workspace.id, bob.email)
   collab.setActive(ada.id, workspace.id)
   collab.setActive(bob.id, workspace.id)
-  db.viewCatalog = { viewsFor: () => [] }
+  collab.authorization.setMemberViewLockChecker((_ws, viewId) => viewId === 'mv-all-locked')
   collab.authorization.setMemberViewMatcher((workspaceId, viewId, accountId) => {
-    const view = stubBuiltinMemberView(viewId) ?? stubBuiltinAllView(viewId)
-    if (!view) return false
+    if (viewId !== 'mv-all-locked') return false
     const member = collab.members(accountId, workspaceId).find((item) => item.id === accountId)
-    if (!member) return false
-    return matchListFilterRecord(
-      {
-        id: member.id,
-        title: member.name,
-        name: member.name,
-        email: member.email,
-        role: member.role,
-        membershipKind: member.member_kind,
-        joinedAt: member.created_at,
-      },
-      view.filters,
-    )
+    return Boolean(member && member.member_kind === 'member')
   })
   await runWithAccount(ada.id, () => db.create('/tasks', [{ title: 'A空间' }], { scope: 'workspace' }))
   await runWithAccount(ada.id, () => db.create('/tasks', [{ title: 'A私人' }], { scope: 'personal' }))
-  await runWithAccount(ada.id, () => collab.grantViewMemberView(
-    ada.id,
-    '/tasks',
-    builtinAllViewId('/tasks'),
-    builtinAllViewId('/workspace-members'),
-    'editor',
-  ))
+  await runWithAccount(ada.id, () => collab.grantMemberView(ada.id, '/tasks', 'm2', 'mv-all-locked', 'editor'))
   const bobList = asCollection(await runWithAccount(bob.id, () => db.list('/tasks')))
   assert.deepEqual(bobList.items.map((row) => row.title).sort(), ['A私人', 'A空间'])
-  assert.equal(bobList.items.find((row) => row.title === 'A私人')?.shareScope, '空间')
+  assert.equal(bobList.items.find((row) => row.title === 'A私人')?.shareScope, '共享')
   assert.equal(bobList.items.find((row) => row.title === 'A私人')?.shareRole, '编辑')
   assert.equal(bobList.items.find((row) => row.title === 'A空间')?.shareRole, '编辑')
   const adaList = asCollection(await runWithAccount(ada.id, () => db.list('/tasks')))
-  assert.equal(adaList.items.find((row) => row.title === 'A私人')?.shareScope, '空间')
+  assert.equal(adaList.items.find((row) => row.title === 'A私人')?.shareScope, '共享')
   assert.equal(adaList.items.find((row) => row.title === 'A私人')?.shareRole, '管理')
   assert.equal(adaList.schema.fields.shareRole?.label, '权限')
   assert.equal(adaList.schema.fields.shareRole?.enum?.join(','), '管理,编辑,查看')
-  const spaceId = String(bobList.items.find((row) => row.title === 'A空间')?.id ?? '')
   const privateId = String(bobList.items.find((row) => row.title === 'A私人')?.id ?? '')
-  const spaceChain = runWithAccount(bob.id, () => collab.recordAccess(bob.id, '/tasks', spaceId)).roleChain
-  assert.equal(spaceChain[0]?.detail, '通过成员视图授权')
-  assert.equal(spaceChain[0]?.role, 'editor')
+  const privateChain = runWithAccount(bob.id, () => collab.recordAccess(bob.id, '/tasks', privateId)).roleChain
+  assert.equal(privateChain[0]?.source, 'member-view-grant')
+  assert.equal(privateChain[0]?.role, 'editor')
   const ownChain = runWithAccount(ada.id, () => collab.recordAccess(ada.id, '/tasks', privateId)).roleChain
   assert.equal(ownChain[0]?.detail, '你是创建者')
   assert.equal(ownChain[0]?.role, 'owner')
@@ -2688,7 +2672,7 @@ test('granting the all-members view lets the other member read the owner private
   assert.doesNotThrow(() => runWithAccount(bob.id, () => db.requireAsset('via-view.png', 'resource:read')))
 })
 
-test('sharing one person all-tasks view does not reclassify the other person private tasks', async () => {
+test('batch static grant on one user records does not touch the other user private records', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
   const rows = new Map<string, DbRecord>()
@@ -2733,49 +2717,41 @@ test('sharing one person all-tasks view does not reclassify the other person pri
   collab.addMemberByEmail(ada.id, workspace.id, bob.email)
   collab.setActive(ada.id, workspace.id)
   collab.setActive(bob.id, workspace.id)
-  db.viewCatalog = { viewsFor: () => [] }
+  collab.authorization.setMemberViewLockChecker((_ws, viewId) => viewId === 'mv-team')
   collab.authorization.setMemberViewMatcher((workspaceId, viewId, accountId) => {
-    const view = stubBuiltinMemberView(viewId) ?? stubBuiltinAllView(viewId)
-    if (!view) return false
+    if (viewId !== 'mv-team') return false
     const member = collab.members(accountId, workspaceId).find((item) => item.id === accountId)
-    if (!member) return false
-    return matchListFilterRecord(
-      {
-        id: member.id,
-        title: member.name,
-        name: member.name,
-        email: member.email,
-        role: member.role,
-        membershipKind: member.member_kind,
-        joinedAt: member.created_at,
-      },
-      view.filters,
-    )
+    return Boolean(member && member.member_kind === 'member')
   })
 
   await runWithAccount(ada.id, () => db.create('/tasks', [{ title: 'A空间' }], { scope: 'workspace' }))
   await runWithAccount(ada.id, () => db.create('/tasks', [{ title: 'A私人' }], { scope: 'personal' }))
   await runWithAccount(bob.id, () => db.create('/tasks', [{ title: 'B空间' }], { scope: 'workspace' }))
   await runWithAccount(bob.id, () => db.create('/tasks', [{ title: 'B私人' }], { scope: 'personal' }))
-  await runWithAccount(bob.id, () => collab.grantViewMemberView(
-    bob.id,
-    '/tasks',
-    builtinAllViewId('/tasks'),
-    'builtin-member:member',
-    'editor',
-  ))
+  // Bob runs batch grant over all 4 ids -> automatically updates only Bob-manageable ones (t3, t4), skipping Ada's (t1, t2)
+  const res = runWithAccount(bob.id, () =>
+    collab.batchUpdateRecordPermissions(bob.id, {
+      collection: '/tasks',
+      recordIds: ['t1', 't2', 't3', 't4'],
+      mode: 'grant',
+      subjects: [{ subjectType: 'member_view', subjectId: 'mv-team' }],
+      role: 'editor',
+    }),
+  )
+  assert.equal(res.updatedCount, 2)
+  assert.equal(res.skippedCount, 2)
 
   const scopeOf = (items: DbRecord[], title: string) => items.find((row) => row.title === title)?.shareScope
   const adaList = asCollection(await runWithAccount(ada.id, () => db.list('/tasks')))
   assert.deepEqual(adaList.items.map((row) => row.title).sort(), ['A私人', 'A空间', 'B私人', 'B空间'])
   assert.equal(scopeOf(adaList.items, 'A私人'), '私人')
   assert.equal(scopeOf(adaList.items, 'A空间'), '空间')
-  assert.equal(scopeOf(adaList.items, 'B私人'), '空间')
+  assert.equal(scopeOf(adaList.items, 'B私人'), '共享')
   assert.equal(scopeOf(adaList.items, 'B空间'), '空间')
 
   const bobList = asCollection(await runWithAccount(bob.id, () => db.list('/tasks')))
   assert.deepEqual(bobList.items.map((row) => row.title).sort(), ['A空间', 'B私人', 'B空间'])
-  assert.equal(scopeOf(bobList.items, 'B私人'), '空间')
+  assert.equal(scopeOf(bobList.items, 'B私人'), '共享')
   assert.equal(bobList.items.some((row) => row.title === 'A私人'), false)
 })
 
@@ -3102,7 +3078,8 @@ test('a member sandbox is private until the owner shares it', async () => {
     assert.deepEqual(caraList.items.map((row) => row.id), ['cara-plug'])
     await runWithAccount(ada.id, () => db.action('/plugins/ada-open', 'sandbox', { scope: 'shared' }))
     const openList = asCollection(await runWithAccount(bob.id, () => db.list('/plugins')))
-    assert.equal(openList.items.find((row) => row.id === 'ada-open')?.shareScope, '共享')
+    assert.equal(openList.items.find((row) => row.id === 'ada-open')?.shareScope, '空间')
+    assert.equal(openList.items.find((row) => row.id === 'ada-open')?.hasExternal, true)
     assert.equal(openList.items.some((row) => row.id === 'ada-plug'), true)
   } finally {
     if (previous === undefined) delete process.env.BIU_ONLINE
@@ -3195,9 +3172,11 @@ test('$scope packs follow shareScope labels for public and lan shares', async ()
   const personal = asCollection(await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'personal' })))
   const shared = asCollection(await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'shared' })))
   assert.deepEqual(titles(personal), ['公开链接', '只私人'])
-  assert.deepEqual(titles(shared), ['公开链接'])
+  assert.deepEqual(titles(shared), [])
   assert.equal(personal.items.find((row) => row.title === '只私人')?.shareScope, '私人')
-  assert.equal(shared.items[0]?.shareScope, '外部')
+  assert.equal(Boolean(personal.items.find((row) => row.title === '只私人')?.hasExternal), false)
+  assert.equal(personal.items.find((row) => row.title === '公开链接')?.shareScope, '私人')
+  assert.equal(personal.items.find((row) => row.title === '公开链接')?.hasExternal, true)
 })
 
 test('list match overlay is only loaded for overlay fields or tree filters', () => {
@@ -3368,7 +3347,7 @@ test('collection list preloads authorization scans and releases them', () => {
   assert.match(host, /auth\.onInvalidate\(\(\) => this\.bump\(\)\)/)
   assert.match(host, /visibleSortedCollectionRows/)
   assert.match(host, /partitionVisibleRows/)
-  assert.match(host, /shareScopeLabel\(collection, id, row, stored\)/)
+  assert.match(host, /shareScopeLabel\(/)
   assert.match(host, /notifyShareChange\(\)/)
   assert.match(host, /notifyTagCatalog\(\)/)
   assert.match(host, /notifyViewCatalog\(/)
@@ -3380,7 +3359,6 @@ test('collection list preloads authorization scans and releases them', () => {
   assert.match(host, /databaseChannelPayload\('records'\)/)
   assert.match(host, /databaseChannelPayload\('asset'/)
   assert.match(host, /if \(viewOnly\) this\.notifyViewCatalog\(`\$\{spec\.path\}\/\$\{record\.id\}`\)/)
-  assert.match(host, /else this\.bump\(\)/)
   assert.doesNotMatch(host, /db\.bump\(\)\s*\n\s*route\.send\(200, \{ ok: true, tags: tags\.list\(\), filled:/)
   assert.match(host, /listRecords\(collection\)/)
   assert.match(host, /shareInflight/)

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, it } from 'vitest'
 
-describe('access and access-rules realtime broadcast wiring', () => {
+describe('access realtime broadcast wiring', () => {
   const accountHostSrc = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
   const sidebarSrc = readFileSync(
     resolve(import.meta.dirname, '../../../core-file-system/src/web/data-sidebar.tsx'),
@@ -28,18 +28,9 @@ describe('access and access-rules realtime broadcast wiring', () => {
       accountHostSrc.indexOf("authedRoute('POST', '/api/account/access/guest-invite'"),
     )
 
-    assert.match(postBlock, /broadcastAccessChange\(activeWorkspace,\s*viewId \? 'views' : 'records',\s*collection\)/)
+    assert.match(postBlock, /broadcastAccessChange\(activeWorkspace,\s*'records',\s*collection\)/)
     assert.match(patchBlock, /broadcastAccessChange\(activeWorkspace,\s*'records',\s*collection\)/)
-    assert.match(deleteBlock, /broadcastAccessChange\(activeWorkspace,\s*viewId \? 'views' : 'records',\s*collection\)/)
-  })
-
-  it('broadcasts workspace-scoped database events on /api/account/access-rules mutations', () => {
-    const rulesSection = accountHostSrc.slice(
-      accountHostSrc.indexOf("authedRoute('POST', '/api/account/access-rules'"),
-      accountHostSrc.indexOf("authedRoute('POST', '/api/account/presence'"),
-    )
-    const matches = rulesSection.match(/broadcastAccessChange\(workspaceId,\s*'records'/g) ?? []
-    assert.equal(matches.length, 5)
+    assert.match(deleteBlock, /broadcastAccessChange\(activeWorkspace,\s*'records',\s*collection\)/)
   })
 
   it('data-sidebar force-pulls saved views when a path-scoped views change arrives', () => {
@@ -56,7 +47,7 @@ describe('access and access-rules realtime broadcast wiring', () => {
     )
     assert.match(
       savedViewsBlock,
-      /ctx\.http\.broadcast\?\.\(DATABASE_CHANNEL,\s*databaseChannelPayload\('views',\s*path \? \{ path \} : \{\}\)\)/,
+      /db\.notifyViewCatalog\(path\)/,
     )
   })
 })

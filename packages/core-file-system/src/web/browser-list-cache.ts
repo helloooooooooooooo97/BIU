@@ -63,7 +63,6 @@ export const LIST_SEED_COLUMNS = [
   'dueAt',
   'shareScope',
   'shareRole',
-  'ownerTable',
   'pinned',
   'eventCount',
   'updatedAt',
@@ -78,7 +77,7 @@ export function isListColumn(key: string) {
 
 /** Saved view columns stay until we know the field is gone. Tag / share overlay keys are not schema fields. */
 export function retainSavedColumn(key: string, schema: CollectionSchema | undefined, allColumnKeys: string[]) {
-  if (key === 'actions' || key === 'shareScope' || key === 'shareRole' || key === 'ownerTable') return true
+  if (key === 'actions' || key === 'shareScope' || key === 'shareRole') return true
   if (key === 'createdBy' || key === 'updatedBy' || key === 'createdAt' || key === 'updatedAt') return true
   if (parseTagFlatColumnKey(key) || isTagFlatColumnKey(key)) return true
   if (!schema) return true
@@ -524,7 +523,6 @@ export function listHoldFromCache(cached: ListCacheSnap, view: SavedView | null,
       if (key === 'actions') return { key, kind: 'action' as const, field: { type: 'action' as const, label: '动作' } }
       if (key === 'shareScope') return { key, kind: 'select' as const, field: { type: 'select' as const, label: '分享' } }
       if (key === 'shareRole') return { key, kind: 'select' as const, field: { type: 'select' as const, label: '权限' } }
-      if (key === 'ownerTable') return { key, kind: 'select' as const, field: { type: 'select' as const, label: '归属' } }
       const tagCol = tagColsByKey.get(key)
       if (tagCol) return tagCol
       const parsedTag = parseTagFlatColumnKey(key)

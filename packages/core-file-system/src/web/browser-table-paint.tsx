@@ -396,7 +396,7 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
         />
       )
     }
-    if (key === 'shareScope' || key === 'shareRole' || key === 'ownerTable') {
+    if (key === 'shareScope' || key === 'shareRole') {
       return renderCell(row, key, field, 'table')
     }
     const kind = resolveFieldType(field)
@@ -501,7 +501,6 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
       key === 'actions' ||
       key === 'shareScope' ||
       key === 'shareRole' ||
-      key === 'ownerTable' ||
       key === 'table' ||
       (key === 'fields' && collectionPath === TAGS_COLLECTION_PATH) ||
       Boolean(chrome?.cells?.[key]) ||

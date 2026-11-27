@@ -56,8 +56,6 @@ describe('view role permissions & UI guards', () => {
     store.open(':memory:')
     store.setWorkspaceResolver(() => 'ws-1')
     store.setPolicyGuard({
-      isLocked: () => false,
-      canEditLocked: () => true,
       canSeeView: () => true,
       viewRoleFor: (_ws, _col, view, accountId) => {
         if (view.createdBy === accountId) return 'owner'
@@ -96,7 +94,7 @@ describe('view role permissions & UI guards', () => {
     assert.match(crudSrc, /if \(!canDeleteSavedView\(view\)\) return/)
     // SharePopover only handles record sharing (no dead view-sharing branches)
     assert.doesNotMatch(shareSrc, /VIEW_ROLE_OPTIONS|hidePublicTab|inheritedInternal/)
-    // POST /api/db/shares rejects independent view public shares (use access rules instead)
-    assert.match(routesSrc, /视图不支持独立公开分享/)
+    // POST /api/db/shares only allows record shares
+    assert.match(routesSrc, /body\.kind !== 'record'/)
   })
 })

@@ -91,15 +91,34 @@ export function renderBrowserCell(
   if (key === 'shareScope') {
     const raw = String(row[key] ?? (localData ? '私人' : ''))
     const label = localData && raw === '空间' ? '私人' : raw
+    const hasExternal = Boolean((row as { hasExternal?: unknown }).hasExternal)
     return (
-      <ShareScopeDetail
-        collection={collectionPath}
-        recordId={row.id}
-        label={label}
-        tableLabel={currentTable?.label}
-        builtin={collectionPath === PLUGINS_COLLECTION_PATH && row.builtin === true}
-        localOnly={localKnown ? localData : null}
-      />
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <ShareScopeDetail
+          collection={collectionPath}
+          recordId={row.id}
+          label={label}
+          tableLabel={currentTable?.label}
+          builtin={collectionPath === PLUGINS_COLLECTION_PATH && row.builtin === true}
+          localOnly={localKnown ? localData : null}
+        />
+        {hasExternal ? (
+          <span
+            data-testid="fsdb-share-external-badge"
+            title="已对外公开或邀请外部访客"
+            style={{
+              fontSize: 10,
+              padding: '0 5px',
+              borderRadius: 999,
+              border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
+              color: 'var(--biu-color-text-muted)',
+              lineHeight: '16px',
+            }}
+          >
+            外部
+          </span>
+        ) : null}
+      </span>
     )
   }
   if (key === 'shareRole') {
@@ -112,23 +131,6 @@ export function renderBrowserCell(
         builtin={collectionPath === PLUGINS_COLLECTION_PATH && row.builtin === true}
         localOnly={localKnown ? localData : null}
       />
-    )
-  }
-  if (key === 'ownerTable') {
-    const raw = row[key]
-    if (raw && typeof raw === 'object' && !Array.isArray(raw) && (raw as { kind?: unknown }).kind === 'user') {
-      return <PersonFace value={raw as PersonValue} />
-    }
-    const label = String(raw ?? (localData ? '个人' : ''))
-    if (label === '空间') return <ShareScopeLabel label="空间" />
-    return (
-      <span
-        className="fsdb-share-scope is-personal"
-        data-testid="fsdb-owner-table-cell"
-        style={{ fontSize: 12, padding: '1px 7px', borderRadius: 999, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-      >
-        {label || '—'}
-      </span>
     )
   }
   const kind = resolveFieldType(field)

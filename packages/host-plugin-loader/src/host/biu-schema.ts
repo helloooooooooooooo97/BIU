@@ -1,6 +1,6 @@
 type DatabaseSync = import('node:sqlite').DatabaseSync
 
-export const LATEST_BIU_SCHEMA = 60
+export const LATEST_BIU_SCHEMA = 61
 
 export const CREATE_CORE_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -306,24 +306,6 @@ CREATE TABLE IF NOT EXISTS mcp_audit_log (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS mcp_audit_workspace ON mcp_audit_log(workspace_id, created_at);
-CREATE TABLE IF NOT EXISTS workspace_groups (
-  id TEXT PRIMARY KEY,
-  workspace_id TEXT NOT NULL,
-  name TEXT NOT NULL,
-  kind TEXT NOT NULL DEFAULT 'static',
-  filter_tree_json TEXT,
-  created_by TEXT NOT NULL,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL DEFAULT 0
-);
-CREATE INDEX IF NOT EXISTS workspace_groups_workspace ON workspace_groups(workspace_id);
-CREATE TABLE IF NOT EXISTS workspace_group_members (
-  group_id TEXT NOT NULL,
-  account_id TEXT NOT NULL,
-  created_at INTEGER NOT NULL,
-  PRIMARY KEY (group_id, account_id)
-);
-CREATE INDEX IF NOT EXISTS workspace_group_members_account ON workspace_group_members(account_id);
 CREATE TABLE IF NOT EXISTS record_owners (
   workspace_id TEXT NOT NULL,
   collection TEXT NOT NULL,
@@ -356,14 +338,11 @@ CREATE TABLE IF NOT EXISTS resource_policies (
   parent_record_id TEXT NOT NULL DEFAULT '',
   created_by TEXT NOT NULL,
   created_at INTEGER NOT NULL,
-  owner_table TEXT NOT NULL DEFAULT '',
   inherit_parent INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (workspace_id, collection, record_id)
 );
 CREATE INDEX IF NOT EXISTS resource_policies_parent
   ON resource_policies(workspace_id, parent_collection, parent_record_id);
-CREATE INDEX IF NOT EXISTS resource_policies_owner_table
-  ON resource_policies(workspace_id, collection, owner_table);
 CREATE TABLE IF NOT EXISTS record_grants (
   workspace_id TEXT NOT NULL,
   collection TEXT NOT NULL,
@@ -378,38 +357,6 @@ CREATE TABLE IF NOT EXISTS record_grants (
 );
 CREATE INDEX IF NOT EXISTS record_grants_subject
   ON record_grants(workspace_id, subject_type, subject_id);
-CREATE TABLE IF NOT EXISTS access_rules (
-  id TEXT PRIMARY KEY,
-  workspace_id TEXT NOT NULL,
-  collection TEXT NOT NULL,
-  name TEXT NOT NULL,
-  created_by TEXT NOT NULL,
-  filter_tree_json TEXT NOT NULL,
-  columns_json TEXT,
-  display_snapshot_json TEXT,
-  enabled INTEGER NOT NULL DEFAULT 1,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  owner_table TEXT NOT NULL DEFAULT ''
-);
-CREATE INDEX IF NOT EXISTS access_rules_ws_col
-  ON access_rules(workspace_id, collection, enabled);
-CREATE INDEX IF NOT EXISTS access_rules_ws_col_table
-  ON access_rules(workspace_id, collection, owner_table, enabled);
-CREATE INDEX IF NOT EXISTS access_rules_owner
-  ON access_rules(workspace_id, created_by);
-CREATE TABLE IF NOT EXISTS access_rule_grants (
-  id TEXT PRIMARY KEY,
-  rule_id TEXT NOT NULL REFERENCES access_rules(id) ON DELETE CASCADE,
-  workspace_id TEXT NOT NULL,
-  subject_type TEXT NOT NULL,
-  subject_id TEXT NOT NULL,
-  role TEXT NOT NULL,
-  created_at INTEGER NOT NULL,
-  UNIQUE(rule_id, subject_type, subject_id)
-);
-CREATE INDEX IF NOT EXISTS access_rule_grants_subject
-  ON access_rule_grants(workspace_id, subject_type, subject_id);
 CREATE TABLE IF NOT EXISTS actor_scopes (
   workspace_id TEXT NOT NULL,
   actor_type TEXT NOT NULL,

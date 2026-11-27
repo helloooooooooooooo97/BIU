@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'vitest'
 import { DatabaseAccessPolicy, type AccessPolicyHost, type WorkspaceFiles } from './access-policy.ts'
 
-describe('RBAC SQL pushdown pre-filtering & column-restriction fast path', () => {
-  it('computes authorized IDs for SQL pushdown when no view_grants exist and excludes deleted/denied records', () => {
+describe('RBAC 100% SQL pushdown pre-filtering', () => {
+  it('computes authorized IDs for SQL pushdown across 5000 records and excludes deleted/denied records', () => {
     const ownership = new Map<string, 'personal' | 'workspace' | 'shared'>()
     for (let i = 0; i < 5000; i += 1) {
       ownership.set(`rec-${i}`, i % 2 === 0 ? 'workspace' : 'personal')
@@ -27,9 +27,8 @@ describe('RBAC SQL pushdown pre-filtering & column-restriction fast path', () =>
         released += 1
       },
       authorize: (_actor: unknown, _action: unknown, res: { recordId: string }) => {
-        // Even IDs allowed, odd IDs denied
         const idx = Number(res.recordId.split('-')[1])
-        return { allowed: idx % 2 === 0, effectiveRole: idx % 2 === 0 ? 'viewer' : null, source: 'workspace' }
+        return { allowed: idx % 2 === 0, effectiveRole: idx % 2 === 0 ? 'viewer' : null, source: 'workspace-default' }
       },
     }
 
@@ -48,15 +47,12 @@ describe('RBAC SQL pushdown pre-filtering & column-restriction fast path', () =>
     } as unknown as AccessPolicyHost
 
     const policy = new DatabaseAccessPolicy(host)
-    assert.equal(policy.hasViewGrants('/pages'), false)
-    assert.equal(policy.hasColumnRestrictions('/pages'), false)
 
     const t0 = performance.now()
     const allowedIds = policy.resolvePushdownAllowedIds('/pages')
     const elapsedMs = performance.now() - t0
 
     assert.ok(Array.isArray(allowedIds))
-    // 2500 even IDs minus 2 deleted (rec-0, rec-2) = 2498
     assert.equal(allowedIds.length, 2498)
     assert.equal(allowedIds.includes('rec-0'), false)
     assert.equal(allowedIds.includes('rec-1'), false)
@@ -66,36 +62,26 @@ describe('RBAC SQL pushdown pre-filtering & column-restriction fast path', () =>
     assert.ok(elapsedMs < 500, `expected fast ID pre-filter, took ${elapsedMs.toFixed(2)}ms`)
   })
 
-  it('disables ID-only pushdown and enables column projection when access_rules have column rules', () => {
+  it('never circuit-breaks pushdown even when member_view grants are active', () => {
     const store: WorkspaceFiles = {
       activeWorkspaceId: () => 'ws-1',
       membership: () => ({ active: 'ws-1', home: 'ws-1', mine: new Set(), any: new Set() }),
       attach: () => {},
-      listActiveAccessRulesForCollection: () => [
-        {
-          id: 'rule-1',
-          workspaceId: 'ws-1',
-          collection: '/pages',
-          name: '公开列规则',
-          createdBy: 'owner-1',
-          filterTree: { kind: 'group', id: 'root', combinator: 'and', children: [] },
-          columns: ['title', 'status'],
-          enabled: true,
-          grants: [
-            {
-              id: 'rg-1',
-              subjectType: 'account',
-              subjectId: 'acc-1',
-              role: 'viewer',
-            },
-          ],
-        },
-      ],
-      collectionOwnership: () => new Map([['rec-1', 'workspace']]),
+      collectionOwnership: () =>
+        new Map([
+          ['rec-1', 'shared'],
+          ['rec-2', 'personal'],
+        ]),
     }
 
     const authorization = {
       currentActor: () => ({ type: 'account' as const, accountId: 'acc-1', workspaceId: 'ws-1' }),
+      preloadCollection: () => {},
+      releaseCollection: () => {},
+      authorize: (_actor: unknown, _action: unknown, res: { recordId: string }) =>
+        res.recordId === 'rec-1'
+          ? { allowed: true, effectiveRole: 'editor', source: 'member-view-grant' }
+          : { allowed: false, reason: 'INSUFFICIENT_PERMISSION' },
     }
 
     const host = {
@@ -111,8 +97,6 @@ describe('RBAC SQL pushdown pre-filtering & column-restriction fast path', () =>
     } as unknown as AccessPolicyHost
 
     const policy = new DatabaseAccessPolicy(host)
-    assert.equal(policy.hasViewGrants('/pages'), true)
-    assert.equal(policy.hasColumnRestrictions('/pages'), true)
-    assert.equal(policy.resolvePushdownAllowedIds('/pages'), null)
+    assert.deepEqual(policy.resolvePushdownAllowedIds('/pages'), ['rec-1'])
   })
 })

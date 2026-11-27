@@ -1,10 +1,11 @@
 import { writeStorageString } from '@biu/biu-ui/client-storage'
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
-import { isBuiltinAllViewId, isNonPersonalView, isReadOnlyViewId, type DataScope } from '../catalog-views.ts'
-import { DATA_COLLECTION_PATH, normalizeCollectionPath } from '../paths.ts'
+import { isBuiltinAllViewId, isReadOnlyViewId, type DataScope } from '../catalog-views.ts'
+import { DATA_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, normalizeCollectionPath } from '../paths.ts'
+import { apiFetch } from '@biu/biu-ui/api-client'
 import type { FilterGroup, SortRule } from '../query-logic.ts'
 import type { ViewMode } from './fields.ts'
-import { FSDB_CRUMB_LABELS_EVENT } from './fsdb-events.ts'
+import { FSDB_CRUMB_LABELS_EVENT, FSDB_SHARES_CHANGE_EVENT, emitFsdbEvent } from './fsdb-events.ts'
 import { canDeleteSavedView, canEditSavedView, canRemoveCollectionView, type GroupConfig, type SavedView } from './saved-view.ts'
 import {
   activeViewStorageKey,
@@ -15,6 +16,7 @@ import {
   loadViews,
   omitSavedViewIds,
   persistStarredViews,
+  pullSavedViews,
   pushSavedViewsMutation,
   removeStarredViews,
   reviveSavedViewIds,
@@ -29,7 +31,6 @@ export type BrowserViewCrudOptions = {
   collectionPath: string
   title: string
   routeScope: DataScope | null
-  activeOwnerTable?: string
   catalogLocks: Record<string, string>
   schemaDefaultKeys: string[]
   views: SavedView[]
@@ -72,7 +73,6 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     collectionPath,
     title,
     routeScope,
-    activeOwnerTable,
     catalogLocks,
     schemaDefaultKeys,
     viewsRef,
@@ -267,33 +267,14 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     }
     const target = path || collectionPath
     const isDataAgg = normalizeCollectionPath(target) === DATA_COLLECTION_PATH
-    const explicitTopLevel = path !== undefined && scope === undefined
-    const effectiveScope: DataScope | undefined =
-      scope ?? (explicitTopLevel ? undefined : (target === collectionPath ? routeScope ?? undefined : undefined))
     const stored = loadViews(target)
     const allListed = listedViews(target, stored)
     const listed = target === collectionPath ? paintListedViews(target) : allListed
-    const isForeignSharedOwner = Boolean(
-      !isDataAgg && effectiveScope === 'shared' && activeOwnerTable && activeOwnerTable.startsWith('account:'),
-    )
     const bindingPatch: Partial<SavedView> = isDataAgg
-      ? { scope: 'personal', protection: 'personal', ownerTable: 'all' }
-      : isForeignSharedOwner
-        ? { scope: 'personal', protection: 'personal', ownerTable: activeOwnerTable }
-        : effectiveScope === 'personal'
-          ? {
-              scope: 'workspace',
-              protection: 'public',
-              ...(activeOwnerTable?.startsWith('account:') ? { ownerTable: activeOwnerTable } : {}),
-            }
-          : { scope: 'workspace', protection: 'public', ownerTable: 'workspace' }
-    const extraFilters: Record<string, string> = isDataAgg
-      ? {}
-      : isForeignSharedOwner
-        ? { $scope: 'shared', $ownerTable: activeOwnerTable! }
-        : effectiveScope === 'personal'
-          ? { $scope: 'personal' }
-          : { $scope: 'workspace' }
+      ? { scope: 'personal', protection: 'personal' }
+      : { scope: 'workspace', protection: 'public' }
+    const extraFilters: Record<string, string> =
+      !isDataAgg && scope ? { $scope: scope } : {}
     const view: SavedView = {
       ...makeEmptyView(
         listed,
@@ -319,20 +300,9 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
 
   function copyView(source?: SavedView, overrides?: Partial<SavedView>) {
     const isDataAgg = normalizeCollectionPath(collectionPath) === DATA_COLLECTION_PATH
-    const isForeignSharedOwner = Boolean(
-      !isDataAgg && routeScope === 'shared' && activeOwnerTable && activeOwnerTable.startsWith('account:'),
-    )
     const scopeBinding: Partial<SavedView> = isDataAgg
-      ? { scope: 'personal', protection: 'personal', ownerTable: 'all' }
-      : isForeignSharedOwner
-        ? { scope: 'personal', protection: 'personal', ownerTable: activeOwnerTable }
-        : routeScope === 'personal'
-          ? {
-              scope: 'workspace',
-              protection: 'public',
-              ...(activeOwnerTable?.startsWith('account:') ? { ownerTable: activeOwnerTable } : {}),
-            }
-          : { scope: 'workspace', protection: 'public', ownerTable: 'workspace' }
+      ? { scope: 'personal', protection: 'personal' }
+      : { scope: 'workspace', protection: 'public' }
     void commitView(
       source
         ? {
@@ -490,13 +460,32 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     const stored = loadViews(path)
     const currentVisible = path === collectionPath ? viewsRef.current : stored
     if (!canRemoveCollectionView(currentVisible)) return
-    // 保底约束：每张具体多维表（空间表 / 个人表）至少保留 1 个非私有视图（public 或 locked）
-    const ot = view.ownerTable?.trim()
-    if (ot && ot !== 'all' && isNonPersonalView(view)) {
-      const otherPublic = stored.filter((item) => item.id !== view.id && item.ownerTable?.trim() === ot && isNonPersonalView(item))
-      if (otherPublic.length < 1) return
-    }
     const removedId = view.id
+    if (normalizeCollectionPath(path) === WORKSPACE_MEMBERS_COLLECTION_PATH && view.protection === 'locked') {
+      void releaseReferencedMemberView(path, view, 'delete').then((handled) => {
+        if (handled === 'done') {
+          if (path === collectionPath && activeViewIdRef.current === removedId) {
+            const nextActive = viewsRef.current[0]
+            if (nextActive) selectView(nextActive)
+          }
+          return
+        }
+        if (handled === 'cancelled') return
+        omitSavedViewIds(path, [removedId])
+        void commitViewMutation(path, { remove: [removedId], emitCrumb: true }).then((ok) => {
+          if (ok) {
+            if (path === collectionPath && activeViewIdRef.current === removedId) {
+              const nextActive = viewsRef.current[0]
+              if (nextActive) selectView(nextActive)
+            }
+            return
+          }
+          reviveSavedViewIds(path, [removedId])
+          syncPaintedState(path)
+        })
+      })
+      return
+    }
     // 仅虚拟内置种子视图写入 omittedViews；普通数据库视图通过 pendingOps 隐藏并在 200 后由服务端权威列表移除。
     omitSavedViewIds(path, [removedId])
     void commitViewMutation(path, { remove: [removedId], emitCrumb: true }).then((ok) => {
@@ -512,17 +501,73 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     })
   }
 
+  async function releaseReferencedMemberView(
+    path: string,
+    view: SavedView,
+    action: 'unlock' | 'delete',
+    targetProtection?: 'public' | 'personal',
+  ): Promise<'none' | 'done' | 'cancelled'> {
+    try {
+      const res = await apiFetch('/api/db/member-views')
+      if (!res.ok) return 'none'
+      const data = (await res.json()) as { views?: Array<{ id: string; grantCount?: number }> }
+      const hit = (data.views ?? []).find((item) => item.id === view.id)
+      const grantCount = Number(hit?.grantCount ?? 0)
+      if (grantCount <= 0) return 'none'
+      const verb = action === 'delete' ? '删除' : '解锁'
+      const freeze = window.confirm(
+        `锁定成员视图「${view.name}」正被 ${grantCount} 条记录动态引用。\n\n点击「确定」：将当前匹配成员固化为静态授权后${verb}；\n点击「取消」：选择撤销关联授权或放弃操作。`,
+      )
+      let mode: 'freeze' | 'revoke' | null = freeze ? 'freeze' : null
+      if (!mode) {
+        const revoke = window.confirm(
+          `是否改为「取消所有关联授权」并${verb}「${view.name}」？\n\n点击「确定」将撤销这 ${grantCount} 条记录对该视图的动态授权；点击「取消」放弃本次操作。`,
+        )
+        if (!revoke) return 'cancelled'
+        mode = 'revoke'
+      }
+      const releaseRes = await apiFetch(`/api/db/member-views/${encodeURIComponent(view.id)}/release`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          mode,
+          ...(targetProtection ? { targetProtection } : {}),
+        }),
+      })
+      if (!releaseRes.ok) return 'cancelled'
+      await pullSavedViews([path], { force: true })
+      syncPaintedState(path)
+      emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
+      window.dispatchEvent(new Event(FSDB_CRUMB_LABELS_EVENT))
+      return 'done'
+    } catch {
+      return 'none'
+    }
+  }
+
   function updateViewProtection(view: SavedView, protection: 'public' | 'locked' | 'personal') {
     if (isReadOnlyViewId(view.id)) return
     const nextScope = protection === 'personal' ? 'personal' : 'workspace'
     const current = viewsRef.current
     const target = current.find((item) => item.id === view.id)
     if (!target) return
-    // 保底约束：不可将具体多维表的最后一个公共/锁定视图切换为个人视图
-    const ot = target.ownerTable?.trim()
-    if (protection === 'personal' && ot && ot !== 'all' && isNonPersonalView(target)) {
-      const otherPublic = current.filter((item) => item.id !== target.id && item.ownerTable?.trim() === ot && isNonPersonalView(item))
-      if (otherPublic.length < 1) return
+    if (
+      !externalViews &&
+      normalizeCollectionPath(collectionPath) === WORKSPACE_MEMBERS_COLLECTION_PATH &&
+      target.protection === 'locked' &&
+      protection !== 'locked'
+    ) {
+      void releaseReferencedMemberView(collectionPath, target, 'unlock', protection).then((handled) => {
+        if (handled !== 'none') return
+        const baseUpdatedAt = Number(target.updatedAt) || 0
+        const updated: SavedView = { ...target, protection, scope: nextScope }
+        void commitViewMutation(collectionPath, {
+          upsert: [updated],
+          ...(baseUpdatedAt ? { baseUpdatedAtById: { [target.id]: baseUpdatedAt } } : {}),
+        })
+      })
+      return
     }
     const baseUpdatedAt = Number(target.updatedAt) || 0
     const updated: SavedView = { ...target, protection, scope: nextScope }

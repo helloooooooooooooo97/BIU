@@ -838,31 +838,3 @@ test('recordLinkIds treats ref as one id and multi-ref as many', () => {
   assert.deepEqual(recordLinkIds('parentId', 'p1'), ['p1'])
 })
 
-test('ownerTable grouping separates workspace and personal PersonValue tables with $ownerTable filters', () => {
-  const ownerSchema: CollectionSchema = {
-    labelField: 'title',
-    fields: {
-      ...REQUIRED_RECORD_FIELDS,
-      title: { type: 'string' },
-      ownerTable: { type: 'select', label: '归属' },
-    },
-  }
-  const rows = [
-    { id: '1', title: '空间页', ownerTable: '空间' },
-    { id: '2', title: '97的页', ownerTable: { kind: 'user', accountId: 'acc_97', name: '97' } },
-    { id: '3', title: '文馨的页', ownerTable: { kind: 'user', accountId: 'acc_wx', name: 'wenxin' } },
-  ]
-  const grouped = groupRecords(rows, ownerSchema, 'ownerTable')
-  assert.deepEqual(
-    grouped.map((b) => [b.key, b.label, b.rows.map((r) => r.id)]),
-    [
-      ['workspace', '空间', ['1']],
-      ['account:acc_97', '97', ['2']],
-      ['account:acc_wx', 'wenxin', ['3']],
-    ],
-  )
-  assert.deepEqual(groupListFilter('ownerTable', 'workspace', ownerSchema), { $ownerTable: 'workspace' })
-  assert.deepEqual(groupListFilter('ownerTable', 'account:acc_97', ownerSchema), { $ownerTable: 'account:acc_97' })
-  assert.equal(mergeListFilters({ $ownerTable: 'workspace' }, { $ownerTable: 'account:acc_97' }), null)
-})
-

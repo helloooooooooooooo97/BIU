@@ -17,10 +17,8 @@ export type ViewRole = 'owner' | 'manager' | 'editor' | 'commenter' | 'viewer'
 export function normalizeViewProtection(
   value: unknown,
   fallbackScope?: ViewScope,
-  ownerTable?: string,
 ): ViewProtection {
   if (value === 'public' || value === 'locked' || value === 'personal') return value
-  if (ownerTable === 'all') return 'personal'
   if (fallbackScope === 'personal') return 'personal'
   return 'public'
 }
@@ -63,10 +61,8 @@ export type SavedView = {
   mode: ViewMode
   /** 视图自身的可见范围两态（缺省视为 workspace）。 */
   scope?: ViewScope
-  /** 视图三态保护：public（公共视图，本表协作者可改）、locked（锁定视图，仅表管理者可改）、personal（个人视图，仅自己可见）。 */
+  /** 视图三态保护：public（公共视图，空间成员可改）、locked（锁定视图，仅创建者/管理员可改）、personal（个人视图，仅自己可见）。 */
   protection?: ViewProtection
-  /** 视图所属逻辑表：'workspace' 或 'account:<id>'。 */
-  ownerTable?: string
   /** 创建者账号 ID（用于私人视图可见性隔离与创建者/管理员独占编辑权）。 */
   createdBy?: string
   /** 当前操作者在该视图上的有效权限角色（由后端 /views 列表下发）。 */
@@ -260,15 +256,13 @@ export function extractViewCreatorId(raw: unknown): string | undefined {
 export function normalizeSavedView(view: SavedView): SavedView {
   const sorts = normalizeSorts(view.sorts, view.sortField || 'title', view.sortDir === 'desc' ? 'desc' : 'asc')
   const scope = normalizeViewScope(view.scope)
-  const ownerTable = typeof view.ownerTable === 'string' && view.ownerTable.trim() ? view.ownerTable.trim() : undefined
-  const protection = normalizeViewProtection(view.protection, scope, ownerTable)
+  const protection = normalizeViewProtection(view.protection, scope)
   const createdBy = extractViewCreatorId(view.createdBy)
   const viewRole = normalizeViewRole(view.viewRole)
   return {
     ...view,
     ...(scope ? { scope } : { scope: undefined }),
     protection,
-    ...(ownerTable ? { ownerTable } : { ownerTable: undefined }),
     ...(createdBy ? { createdBy } : { createdBy: undefined }),
     ...(viewRole ? { viewRole } : { viewRole: undefined }),
     mode: isViewModeId(view.mode) ? view.mode : 'table',

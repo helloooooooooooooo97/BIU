@@ -86,17 +86,6 @@ const ShareRoot = lazy(() => import('./share-page.tsx').then((m) => ({ default: 
 const CollectionBrowser = lazy(() => import('./browser.tsx').then((m) => ({ default: m.CollectionBrowser })))
 const DataOverview = lazy(() => import('./data-overview.tsx').then((m) => ({ default: m.DataOverview })))
 const LazyDatabaseBlockView = lazy(() => import('./database-block.tsx').then((m) => ({ default: m.DatabaseBlockView })))
-const LazyWorkspacePermissionsSettings = lazy(() =>
-  import('./workspace-permissions-settings.tsx').then((m) => ({ default: m.WorkspacePermissionsSettings })),
-)
-
-function SettingsPermissionsSlot() {
-  return (
-    <Suspense fallback={null}>
-      <LazyWorkspacePermissionsSettings />
-    </Suspense>
-  )
-}
 
 function DatabaseBlockSlot(props: {
   data: Record<string, unknown>
@@ -452,7 +441,6 @@ export function apply(ctx: Context) {
   })
   const slots = ctx.get('slots') as SlotsService
   slots.place('module-sidebar', DataSidebarSlot, { key: 'fsdb-data-sidebar' })
-  slots.place('settings-permissions', SettingsPermissionsSlot, { key: 'fsdb-settings-permissions' })
   const appModules = ctx.get('appModules') as AppModulesService
   const mounted = new Map<string, () => void>()
   const inspectorOffers = new Map<string, () => void>()

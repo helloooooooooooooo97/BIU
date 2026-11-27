@@ -57,33 +57,26 @@ export type ResourceRef =
 
 export type ResourceRole = 'viewer' | 'commenter' | 'editor' | 'manager' | 'owner'
 export type Capability = 'read' | 'comment' | 'write' | 'delete' | 'move' | 'grant' | 'owner'
-export type AccessMode = 'inherit' | 'private' | 'members' | 'restricted'
+export type AccessMode = 'inherit' | 'private' | 'members'
 export type WorkspaceRole = 'viewer' | 'member' | 'admin' | 'owner'
+export type GrantSubjectType = 'account' | 'member_view' | 'workspace_role'
 
-export type DynamicGroupMatcher = (
+export type MemberViewMatcher = (
   workspaceId: string,
-  filterTreeJson: string,
+  viewId: string,
   accountId: string,
 ) => boolean
 
-export type AccessRuleMatcher = (
+export type MemberViewLockChecker = (
   workspaceId: string,
-  collection: string,
-  filterTreeJson: string,
-  recordId: string,
-  context: {
-    createdBy?: string
-    recordOwnerId?: string
-    scope: 'personal' | 'workspace' | 'shared' | null
-    record?: Record<string, unknown>
-  },
+  viewId: string,
 ) => boolean
 
 export type Decision =
   | {
       allowed: true
       effectiveRole: ResourceRole
-      source: 'ownership' | 'direct-grant' | 'group-grant' | 'access-rule' | 'workspace-default' | 'inherited' | 'legacy'
+      source: 'ownership' | 'direct-grant' | 'member-view-grant' | 'workspace-default' | 'inherited' | 'legacy'
     }
   | {
       allowed: false
@@ -102,7 +95,6 @@ export type ResourcePolicyInput = {
   memberDefaultRole?: 'viewer' | 'editor'
   parentCollection?: string
   parentRecordId?: string
-  ownerTable?: string
   inheritParent?: boolean
 }
 
@@ -111,35 +103,15 @@ type PolicyRow = {
   collection: string
   record_id: string
   owner_account_id: string
-  access_mode: AccessMode
+  access_mode: string
   member_default_role: 'viewer' | 'editor'
   parent_collection: string
   parent_record_id: string
-  owner_table?: string
   inherit_parent?: number
 }
 
-export function ownerTableForPolicy(
-  policy: Pick<PolicyRow, 'owner_table' | 'access_mode' | 'owner_account_id'>,
-): string {
-  const explicit = policy.owner_table?.trim()
-  if (explicit) return explicit
-  if (policy.access_mode === 'members') return 'workspace'
-  return policy.owner_account_id ? `account:${policy.owner_account_id}` : 'workspace'
-}
-
 type ScanGrant = {
-  subject_type: 'account' | 'group' | 'workspace_role'
-  subject_id: string
-  role: ResourceRole
-}
-
-type ScanAccessRuleGrant = {
-  rule_id: string
-  created_by: string
-  owner_table?: string
-  filter_tree_json: string
-  subject_type: 'account' | 'workspace' | 'group'
+  subject_type: GrantSubjectType
   subject_id: string
   role: ResourceRole
 }
@@ -152,15 +124,13 @@ type CollectionScan = {
   policies: Map<string, PolicyRow>
   owners: Map<string, string>
   grants: Map<string, ScanGrant[]>
-  accessRuleGrants: ScanAccessRuleGrant[]
-  actorAccessRuleGrants: ScanAccessRuleGrant[]
-  groups: Set<string>
+  matchedMemberViews: Set<string>
   membership: WorkspaceRole | null
   membershipKind: 'member' | 'external' | 'guest'
 }
 
 const POLICY_SELECT = `workspace_id, collection, record_id, owner_account_id, access_mode,
-                member_default_role, parent_collection, parent_record_id, owner_table, inherit_parent`
+                member_default_role, parent_collection, parent_record_id, inherit_parent`
 const POLICY_SELECT_LEGACY = `workspace_id, collection, record_id, owner_account_id, access_mode,
                 member_default_role, parent_collection, parent_record_id`
 
@@ -236,8 +206,12 @@ export function roleCoversAction(role: ResourceRole, action: Action) {
 
 function memberAccessRole(policy: PolicyRow, membership: string | null): ResourceRole {
   if (membership === 'viewer') return 'viewer'
-  if (policy.access_mode === 'members' || policy.member_default_role === 'editor') return 'editor'
-  return 'viewer'
+  return policy.member_default_role === 'editor' ? 'editor' : 'viewer'
+}
+
+function normalizeStoredAccessMode(raw: string | null | undefined): AccessMode {
+  if (raw === 'members' || raw === 'inherit') return raw
+  return 'private'
 }
 
 function requiredRole(action: Action): ResourceRole {
@@ -263,8 +237,9 @@ function requiredRole(action: Action): ResourceRole {
 }
 
 export class AuthorizationService {
-  private dynamicGroupMatcher?: DynamicGroupMatcher
-  private accessRuleMatcher?: AccessRuleMatcher
+  private memberViewMatcher?: MemberViewMatcher
+  private memberViewLockChecker?: MemberViewLockChecker
+  private memberViewMatchCache = new Map<string, boolean>()
   private scans = new Map<string, CollectionScan>()
   private invalidators = new Set<() => void>()
 
@@ -287,6 +262,7 @@ export class AuthorizationService {
 
   invalidateAll() {
     this.scans.clear()
+    this.memberViewMatchCache.clear()
     this.notifyInvalidators()
   }
 
@@ -335,16 +311,31 @@ export class AuthorizationService {
     return { type: 'account', accountId, workspaceId }
   }
 
-  setDynamicGroupMatcher(matcher: DynamicGroupMatcher) {
-    this.dynamicGroupMatcher = matcher
+  /** 注册 `/workspace-members` 管理员锁定视图匹配器（动态组），结果按 (ws, viewId, accountId) 缓存。 */
+  setMemberViewMatcher(matcher: MemberViewMatcher) {
+    this.memberViewMatcher = matcher
+    this.memberViewMatchCache.clear()
   }
 
-  setAccessRuleMatcher(matcher: AccessRuleMatcher) {
-    this.accessRuleMatcher = matcher
+  /** 注册 `/workspace-members` 锁定视图校验器，防止对非锁定视图建立动态授权。 */
+  setMemberViewLockChecker(checker: MemberViewLockChecker) {
+    this.memberViewLockChecker = checker
   }
 
-  hasAccessRuleMatcher() {
-    return Boolean(this.accessRuleMatcher)
+  isLockedMemberView(workspaceId: string, viewId: string): boolean {
+    if (!this.memberViewLockChecker) return true
+    return this.memberViewLockChecker(workspaceId, viewId)
+  }
+
+  matchesMemberView(workspaceId: string, viewId: string, accountId: string): boolean {
+    if (!this.memberViewMatcher || !workspaceId || !viewId || !accountId) return false
+    const key = `${workspaceId}\t${viewId}\t${accountId}`
+    const cached = this.memberViewMatchCache.get(key)
+    if (cached !== undefined) return cached
+    const matched = Boolean(this.memberViewMatcher(workspaceId, viewId, accountId))
+    if (this.memberViewMatchCache.size >= 4096) this.memberViewMatchCache.clear()
+    this.memberViewMatchCache.set(key, matched)
+    return matched
   }
 
   /** 为 Agent / MCP / 外链声明能力边界（Scope），运行时与触发者权限取交集。 */
@@ -466,6 +457,7 @@ export class AuthorizationService {
       owners.set(row.record_id, row.owner_id)
     }
     const grants = new Map<string, ScanGrant[]>()
+    const referencedMemberViews = new Set<string>()
     for (const row of this.db
       .prepare(
         `SELECT record_id, subject_type, subject_id, role
@@ -476,43 +468,18 @@ export class AuthorizationService {
       const list = grants.get(row.record_id) ?? []
       list.push({ subject_type: row.subject_type, subject_id: row.subject_id, role: row.role })
       grants.set(row.record_id, list)
-    }
-    const groups = this.computeMatchedGroups(workspaceId, accountId)
-    const membership = this.readMembership(accountId, workspaceId)
-    const membershipKind = this.readMembershipKind(accountId, workspaceId)
-    let accessRuleGrants: ScanAccessRuleGrant[] = []
-    try {
-      accessRuleGrants = this.db
-        .prepare(
-          `SELECT r.id AS rule_id, r.created_by, r.owner_table, r.filter_tree_json, g.subject_type, g.subject_id, g.role
-           FROM access_rules r
-           JOIN access_rule_grants g ON g.rule_id = r.id
-           WHERE r.workspace_id = ? AND r.collection = ? AND r.enabled = 1
-           ORDER BY g.created_at`,
-        )
-        .all(workspaceId, collection) as ScanAccessRuleGrant[]
-    } catch {
-      try {
-        accessRuleGrants = this.db
-          .prepare(
-            `SELECT r.id AS rule_id, r.created_by, r.filter_tree_json, g.subject_type, g.subject_id, g.role
-             FROM access_rules r
-             JOIN access_rule_grants g ON g.rule_id = r.id
-             WHERE r.workspace_id = ? AND r.collection = ? AND r.enabled = 1
-             ORDER BY g.created_at`,
-          )
-          .all(workspaceId, collection) as ScanAccessRuleGrant[]
-      } catch {
-        accessRuleGrants = []
+      if (row.subject_type === 'member_view' && row.subject_id) {
+        referencedMemberViews.add(row.subject_id)
       }
     }
-    const actorAccessRuleGrants = accessRuleGrants.filter((grant) =>
-      grant.subject_type === 'account'
-        ? grant.subject_id === accountId
-        : grant.subject_type === 'workspace'
-          ? grant.subject_id === workspaceId && membershipKind === 'member'
-          : grant.subject_type === 'group' && groups.has(grant.subject_id),
-    )
+    const matchedMemberViews = new Set<string>()
+    for (const viewId of referencedMemberViews) {
+      if (this.matchesMemberView(workspaceId, viewId, accountId)) {
+        matchedMemberViews.add(viewId)
+      }
+    }
+    const membership = this.readMembership(accountId, workspaceId)
+    const membershipKind = this.readMembershipKind(accountId, workspaceId)
     this.scans.set(key, {
       refs: 1,
       workspaceId,
@@ -521,9 +488,7 @@ export class AuthorizationService {
       policies,
       owners,
       grants,
-      accessRuleGrants,
-      actorAccessRuleGrants,
-      groups,
+      matchedMemberViews,
       membership,
       membershipKind,
     })
@@ -536,48 +501,6 @@ export class AuthorizationService {
     if (!hit) return
     hit.refs -= 1
     if (hit.refs <= 0) this.scans.delete(key)
-  }
-
-  private computeMatchedGroups(workspaceId: string, accountId: string): Set<string> {
-    const groups = new Set<string>()
-    for (const row of this.db
-      .prepare(
-        `SELECT gm.group_id AS group_id
-         FROM workspace_group_members gm
-         JOIN workspace_groups wg ON wg.id = gm.group_id
-         WHERE gm.account_id = ? AND wg.workspace_id = ?`,
-      )
-      .all(accountId, workspaceId) as Array<{ group_id: string }>) {
-      groups.add(row.group_id)
-    }
-    if (this.dynamicGroupMatcher) {
-      try {
-        const dynamicGroups = this.db
-          .prepare(
-            `SELECT id, filter_tree_json
-             FROM workspace_groups
-             WHERE workspace_id = ? AND kind = 'dynamic'`,
-          )
-          .all(workspaceId) as Array<{ id: string; filter_tree_json: string | null }>
-        for (const row of dynamicGroups) {
-          if (this.dynamicGroupMatcher(workspaceId, row.filter_tree_json || '{}', accountId)) {
-            groups.add(row.id)
-          }
-        }
-      } catch {
-        /* 兼容缺少 kind / filter_tree_json 列的旧测试库 */
-      }
-    }
-    return groups
-  }
-
-  matchedGroupsFor(workspaceId: string, accountId: string): Set<string> {
-    for (const scan of this.scans.values()) {
-      if (scan.workspaceId === workspaceId && scan.accountId === accountId) {
-        return scan.groups
-      }
-    }
-    return this.computeMatchedGroups(workspaceId, accountId)
   }
 
   authorize(actor: Actor | null, action: Action, resource: ResourceRef): Decision {
@@ -674,25 +597,10 @@ export class AuthorizationService {
 
     const resolved = this.effectiveRole(actor.accountId, resource, new Set(), 0)
     if (resolved && 'reason' in resolved) return resolved
-    // K+1 逻辑表：禁止在他人个人表父节点下新建子记录（多人共创统一走空间表）
-    if (action === 'resource:create-child') {
-      const targetOwnerTable = this.ownerTableOf(resource)
-      if (targetOwnerTable && targetOwnerTable.startsWith('account:') && targetOwnerTable !== `account:${actor.accountId}`) {
-        return { allowed: false, reason: 'INSUFFICIENT_PERMISSION' }
-      }
-    }
-    // 视图归展示，规则归安全：底层数据记录只认本表基线、同表继承/单条授权与本表 access_rules
-    const viaRule = this.accessRuleRole(actor.accountId, resource)
-    const candidates = [resolved, viaRule].filter(Boolean) as Array<{
-      effectiveRole: ResourceRole
-      source: 'ownership' | 'direct-grant' | 'group-grant' | 'access-rule' | 'workspace-default' | 'inherited' | 'legacy'
-    }>
-    candidates.sort((a, b) => ROLE_RANK[b.effectiveRole] - ROLE_RANK[a.effectiveRole])
-    const combined = candidates[0] ?? null
-    if (!combined) return { allowed: false, reason: 'PRIVATE_RESOURCE' }
+    if (!resolved) return { allowed: false, reason: 'PRIVATE_RESOURCE' }
     const effective = membership === 'viewer' || memberKind === 'guest'
-      ? { effectiveRole: 'viewer' as const, source: combined.source }
-      : { effectiveRole: combined.effectiveRole, source: combined.source }
+      ? { effectiveRole: 'viewer' as const, source: resolved.source }
+      : { effectiveRole: resolved.effectiveRole, source: resolved.source }
     if (!roleCoversAction(effective.effectiveRole, action)) {
       return { allowed: false, reason: 'INSUFFICIENT_PERMISSION' }
     }
@@ -714,103 +622,23 @@ export class AuthorizationService {
     return resources.filter(({ resource }) => this.authorize(actor, action, resource).allowed).map(({ value }) => value)
   }
 
-  /**
-   * 判定 actor 是否有权在他人个人表（account:<targetOwnerAccountId>）下新建数据：
-   * 对方需通过该个人表的 access_rules 或 record_grants 授予当前用户 editor / manager 权限。
-   */
-  canEditPersonalTable(
-    actor: Actor | null,
-    workspaceId: string,
-    collection: string,
-    targetOwnerAccountId: string,
-  ): boolean {
-    if (!actor || actor.type === 'public-link' || !actor.accountId) return false
-    if (actor.workspaceId !== workspaceId) return false
-    if (!targetOwnerAccountId || targetOwnerAccountId === actor.accountId) return true
-    const wsRole = this.membership(actor.accountId, workspaceId)
-    if (!wsRole || wsRole === 'viewer') return false
-    const memberKind = this.membershipKind(actor.accountId, workspaceId)
-    if (memberKind === 'guest') return false
-    const ownerTable = `account:${targetOwnerAccountId}`
-    const matchedGroups = this.matchedGroupsFor(workspaceId, actor.accountId)
-
-    // 1. 检查该他人个人表下启用的 access_rules 是否有 editor/manager 授权
-    try {
-      const ruleGrants = this.db
-        .prepare(
-          `SELECT g.subject_type, g.subject_id, g.role
-           FROM access_rules r
-           JOIN access_rule_grants g ON g.rule_id = r.id
-           WHERE r.workspace_id = ? AND r.collection = ? AND r.enabled = 1
-             AND (r.owner_table = ? OR (COALESCE(r.owner_table, '') = '' AND r.created_by = ?))
-             AND g.role IN ('editor', 'manager')`,
-        )
-        .all(workspaceId, collection, ownerTable, targetOwnerAccountId) as Array<{
-        subject_type: 'account' | 'workspace' | 'group'
-        subject_id: string
-        role: ResourceRole
-      }>
-      for (const grant of ruleGrants) {
-        if (grant.subject_type === 'account' && grant.subject_id === actor.accountId) return true
-        if (grant.subject_type === 'workspace' && grant.subject_id === workspaceId && memberKind === 'member') return true
-        if (grant.subject_type === 'group' && matchedGroups.has(grant.subject_id)) return true
-      }
-    } catch {
-      /* ignore */
-    }
-
-    // 2. 检查该他人个人表下的单条 record_grants 是否有 editor/manager 授权
-    try {
-      const directGrants = this.db
-        .prepare(
-          `SELECT g.subject_type, g.subject_id, g.role
-           FROM record_grants g
-           JOIN resource_policies p
-             ON p.workspace_id = g.workspace_id
-            AND p.collection = g.collection
-            AND p.record_id = g.record_id
-           WHERE g.workspace_id = ? AND g.collection = ?
-             AND (p.owner_table = ? OR (COALESCE(p.owner_table, '') = '' AND p.access_mode != 'members' AND p.owner_account_id = ?))
-             AND g.role IN ('editor', 'manager')`,
-        )
-        .all(workspaceId, collection, ownerTable, targetOwnerAccountId) as Array<{
-        subject_type: 'account' | 'group' | 'workspace_role'
-        subject_id: string
-        role: ResourceRole
-      }>
-      for (const grant of directGrants) {
-        if (grant.subject_type === 'account' && grant.subject_id === actor.accountId) return true
-        if (grant.subject_type === 'workspace_role' && grant.subject_id === wsRole) return true
-        if (grant.subject_type === 'group' && matchedGroups.has(grant.subject_id)) return true
-      }
-    } catch {
-      /* ignore */
-    }
-    return false
-  }
-
-  /** 返回记录所属的逻辑表（'workspace' 或 'account:<id>'）。 */
-  ownerTableOf(resource: Extract<ResourceRef, { type: 'record' }>): string | null {
-    return this.resolveOwnerTable(resource, new Set(), 0)
-  }
-
-  private resolveOwnerTable(
+  /** 解析记录在继承链上的有效通用访问模式（'members' 或 'private'）。 */
+  effectiveAccessMode(
     resource: Extract<ResourceRef, { type: 'record' }>,
-    visited: Set<string>,
-    depth: number,
-  ): string | null {
+    visited = new Set<string>(),
+    depth = 0,
+  ): 'members' | 'private' {
     const key = `${resource.workspaceId}\t${resource.collection}\t${resource.recordId}`
-    if (visited.has(key) || depth > 64) return null
+    if (visited.has(key) || depth > 64) return 'private'
     visited.add(key)
     const policy = this.policy(resource)
     if (!policy) {
-      return this.legacyOwnerId(resource) ? 'workspace' : null
+      return this.legacyOwnerId(resource) ? 'members' : 'private'
     }
-    if (policy.owner_table && policy.owner_table.trim()) {
-      return policy.owner_table.trim()
-    }
-    if (policy.access_mode === 'inherit' && policy.parent_record_id) {
-      return this.resolveOwnerTable(
+    const mode = normalizeStoredAccessMode(policy.access_mode)
+    if (mode === 'members') return 'members'
+    if (mode === 'inherit' && policy.parent_record_id) {
+      return this.effectiveAccessMode(
         {
           type: 'record',
           workspaceId: resource.workspaceId,
@@ -821,17 +649,7 @@ export class AuthorizationService {
         depth + 1,
       )
     }
-    return ownerTableForPolicy(policy)
-  }
-
-  private resourceScope(
-    resource: Extract<ResourceRef, { type: 'record' }>,
-    visited: Set<string>,
-    depth: number,
-  ): 'personal' | 'workspace' | 'shared' | null {
-    const ownerTable = this.resolveOwnerTable(resource, visited, depth)
-    if (!ownerTable) return null
-    return ownerTable === 'workspace' ? 'workspace' : 'personal'
+    return 'private'
   }
 
   attach(
@@ -844,51 +662,34 @@ export class AuthorizationService {
     if (!accountId) throw new Error('permission denied: UNAUTHENTICATED')
     const parentRecordId = input.parentRecordId?.trim() ?? ''
     const parentCollection = parentRecordId ? (input.parentCollection?.trim() || resource.collection) : ''
-    const accessMode = input.accessMode ?? (parentRecordId ? 'inherit' : 'private')
-    let ownerTable = input.ownerTable?.trim() || ''
-    if (!ownerTable) {
-      if (accessMode === 'members') {
-        ownerTable = 'workspace'
-      } else if (parentRecordId && accessMode === 'inherit') {
-        const parentTable = this.ownerTableOf({
-          type: 'record',
-          workspaceId: resource.workspaceId,
-          collection: parentCollection,
-          recordId: parentRecordId,
-        })
-        ownerTable = parentTable || `account:${accountId}`
-      } else {
-        ownerTable = `account:${accountId}`
-      }
-    }
+    const accessMode: AccessMode = input.accessMode ?? (parentRecordId ? 'inherit' : 'private')
+    const memberDefaultRole: 'viewer' | 'editor' =
+      input.memberDefaultRole ?? (accessMode === 'members' ? 'editor' : 'viewer')
     const inheritParent = input.inheritParent !== undefined
       ? (input.inheritParent ? 1 : 0)
       : (accessMode === 'inherit' && Boolean(parentRecordId) ? 1 : 0)
-    const tableOwnerId = ownerTable.startsWith('account:') ? ownerTable.slice('account:'.length) : ''
-    const recordOwnerAccountId = tableOwnerId || accountId
-    const isForeignPersonalCreate = Boolean(tableOwnerId && tableOwnerId !== accountId)
+
     let inserted: { changes: number | bigint }
     try {
       inserted = this.db
         .prepare(
           `INSERT INTO resource_policies
             (workspace_id, collection, record_id, owner_account_id, access_mode,
-             member_default_role, parent_collection, parent_record_id, created_by, created_at, owner_table, inherit_parent)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             member_default_role, parent_collection, parent_record_id, created_by, created_at, inherit_parent)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(workspace_id, collection, record_id) DO NOTHING`,
         )
         .run(
           resource.workspaceId,
           resource.collection,
           resource.recordId,
-          recordOwnerAccountId,
+          accountId,
           accessMode,
-          input.memberDefaultRole ?? 'viewer',
+          memberDefaultRole,
           parentCollection,
           parentRecordId,
           accountId,
           now,
-          ownerTable,
           inheritParent,
         )
     } catch {
@@ -904,80 +705,46 @@ export class AuthorizationService {
           resource.workspaceId,
           resource.collection,
           resource.recordId,
-          recordOwnerAccountId,
+          accountId,
           accessMode,
-          input.memberDefaultRole ?? 'viewer',
+          memberDefaultRole,
           parentCollection,
           parentRecordId,
           accountId,
           now,
         )
     }
-    if (ownerTable === 'workspace') {
-      // 空间表资产归属空间本身，不再为创建者颁发凌驾于空间管理员之上的个人 owner 权限；
-      // 仅当直接以 restricted 模式创建且创建者非空间管理员时，补发一条 editor 授权避免创建后自己不可见。
-      const wsRole = this.membership(accountId, resource.workspaceId)
-      if (accessMode === 'restricted' && wsRole !== 'owner' && wsRole !== 'admin') {
-        this.db
-          .prepare(
-            `INSERT INTO record_grants
-              (workspace_id, collection, record_id, subject_type, subject_id, role, granted_by, created_at)
-             VALUES (?, ?, ?, 'account', ?, 'editor', ?, ?)
-             ON CONFLICT(workspace_id, collection, record_id, subject_type, subject_id) DO NOTHING`,
-          )
-          .run(resource.workspaceId, resource.collection, resource.recordId, accountId, accountId, now)
-      }
-    } else if (isForeignPersonalCreate) {
-      // 协作者在他人个人表新建数据：归属为对方（owner），创建人自身获得 editor 权限确保立即可见可编辑
-      this.db
-        .prepare(
-          `INSERT INTO record_grants
-            (workspace_id, collection, record_id, subject_type, subject_id, role, granted_by, created_at)
-           VALUES (?, ?, ?, 'account', ?, 'owner', ?, ?)
-           ON CONFLICT(workspace_id, collection, record_id, subject_type, subject_id) DO NOTHING`,
-        )
-        .run(resource.workspaceId, resource.collection, resource.recordId, recordOwnerAccountId, accountId, now)
-      this.db
-        .prepare(
-          `INSERT INTO record_grants
-            (workspace_id, collection, record_id, subject_type, subject_id, role, granted_by, created_at)
-           VALUES (?, ?, ?, 'account', ?, 'editor', ?, ?)
-           ON CONFLICT(workspace_id, collection, record_id, subject_type, subject_id) DO NOTHING`,
-        )
-        .run(resource.workspaceId, resource.collection, resource.recordId, accountId, recordOwnerAccountId, now)
-    } else {
-      this.grant(accountId, resource, 'account', accountId, 'owner', now)
-    }
+    this.grant(accountId, resource, 'account', accountId, 'owner', now)
     if (Number(inserted.changes) > 0) this.dropScans(resource.workspaceId, resource.collection)
   }
 
   grant(
     actorId: string,
     resource: Extract<ResourceRef, { type: 'record' }>,
-    subjectType: 'account' | 'group' | 'workspace_role',
+    subjectType: GrantSubjectType,
     subjectId: string,
     role: ResourceRole,
     now = Date.now(),
+    options: { skipInvalidate?: boolean } = {},
   ) {
     const actor: Actor = { type: 'account', accountId: actorId, workspaceId: resource.workspaceId }
     const decision = this.authorize(actor, 'resource:manage-permissions', resource)
     const policy = this.policy(resource)
-    const policyOwnerTable = policy ? ownerTableForPolicy(policy) : ''
-    const isPersonalOwner = Boolean(
-      policy &&
-      policyOwnerTable !== 'workspace' &&
-      (policyOwnerTable === `account:${actorId}` || policy.owner_account_id === actorId),
-    )
-    if (policy && !isPersonalOwner && !decision.allowed) {
+    const isOwner = Boolean(policy && policy.owner_account_id === actorId)
+    if (policy && !isOwner && !decision.allowed) {
       throw new Error('permission denied: INSUFFICIENT_PERMISSION')
     }
-    // 原则 1（防自锁）：非个人表主人不能修改自己在当前记录上的直接授权，避免误降级把自己锁在门外
-    if (policy && !isPersonalOwner && subjectType === 'account' && subjectId === actorId) {
+    // 原则 1（防自锁）：非创建者不能修改自己在当前记录上的直接授权，避免误降级把自己锁在门外
+    if (policy && !isOwner && subjectType === 'account' && subjectId === actorId) {
       throw new Error('permission denied: CANNOT_MODIFY_OWN_GRANT')
     }
-    // 禁止角色放大：授权人不能授予高于自己有效角色的权限（例如 manager 不能授出 owner）
+    // 原则 2（动态成员视图门禁）：member_view 仅允许引用管理员锁定的 /workspace-members 视图
+    if (subjectType === 'member_view' && !this.isLockedMemberView(resource.workspaceId, subjectId)) {
+      throw new Error('permission denied: LOCKED_MEMBER_VIEW_REQUIRED')
+    }
+    // 原则 3（禁止角色放大）：授权人不能授予高于自己有效角色的权限（例如 manager 不能授出 owner）
     if (policy) {
-      const actorRole: ResourceRole = isPersonalOwner ? 'owner' : (decision.allowed ? decision.effectiveRole : 'viewer')
+      const actorRole: ResourceRole = isOwner ? 'owner' : (decision.allowed ? decision.effectiveRole : 'viewer')
       if (ROLE_RANK[role] > ROLE_RANK[actorRole]) {
         throw new Error('permission denied: CANNOT_EXCEED_OWN_ROLE')
       }
@@ -1001,7 +768,61 @@ export class AuthorizationService {
         actorId,
         now,
       )
-    if (Number(written.changes) > 0) this.dropScans(resource.workspaceId, resource.collection)
+    if (!options.skipInvalidate && Number(written.changes) > 0) {
+      this.dropScans(resource.workspaceId, resource.collection)
+    }
+  }
+
+  /**
+   * 切换单条记录的通用访问模式（Notion 正交槽位：'private' 仅受邀 ↔ 'members' 空间全员）。
+   * 铁律：修改通用访问模式绝不覆写、绝不清空已有的定向协作者（record_grants）。
+   */
+  setAccessMode(
+    actor: Actor,
+    resource: Extract<ResourceRef, { type: 'record' }>,
+    accessMode: 'private' | 'members',
+    memberDefaultRole?: 'viewer' | 'editor',
+    options: { skipInvalidate?: boolean } = {},
+  ) {
+    if (actor.type === 'public-link' || !actor.accountId) {
+      throw new Error('permission denied: UNAUTHENTICATED')
+    }
+    if (actor.workspaceId !== resource.workspaceId) {
+      throw new Error('permission denied: WRONG_WORKSPACE')
+    }
+    const decision = this.authorize(actor, 'resource:manage-permissions', resource)
+    if (!decision.allowed) {
+      throw new Error('permission denied: INSUFFICIENT_PERMISSION')
+    }
+    if (accessMode === 'members' && this.membershipKind(actor.accountId, resource.workspaceId) !== 'member') {
+      throw new Error('permission denied: INSUFFICIENT_PERMISSION')
+    }
+    const policy = this.policy(resource)
+    if (!policy) throw new Error('unknown resource')
+    const nextDefaultRole: 'viewer' | 'editor' =
+      memberDefaultRole ??
+      (accessMode === 'members'
+        ? (policy.access_mode === 'members' ? policy.member_default_role : 'editor')
+        : policy.member_default_role)
+    try {
+      this.db
+        .prepare(
+          `UPDATE resource_policies
+           SET access_mode = ?, member_default_role = ?, inherit_parent = 0
+           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+        )
+        .run(accessMode, nextDefaultRole, resource.workspaceId, resource.collection, resource.recordId)
+    } catch {
+      this.db
+        .prepare(
+          `UPDATE resource_policies
+           SET access_mode = ?, member_default_role = ?
+           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+        )
+        .run(accessMode, nextDefaultRole, resource.workspaceId, resource.collection, resource.recordId)
+    }
+    if (!options.skipInvalidate) this.dropScans(resource.workspaceId, resource.collection)
+    return { accessMode, memberDefaultRole: nextDefaultRole }
   }
 
   move(
@@ -1012,40 +833,37 @@ export class AuthorizationService {
   ) {
     this.validateMove(actor, resource, parent)
     const currentPolicy = this.policy(resource)
-    const currentScope = this.resourceScope(resource, new Set(), 0)
-    const parentScope = parent ? this.resourceScope(parent, new Set(), 0) : null
-    // 将私密记录移入更公开的父级（如 workspace）时，默认保持独立权限，避免静默扩大可见范围；
-    // 只有调用方显式传 inheritOnExpand: true 时才保持 inherit 并转入父级归属表。
+    const currentEffective = this.effectiveAccessMode(resource)
+    const parentEffective = parent ? this.effectiveAccessMode(parent) : null
+    // 将私密记录移入空间全员父级时，默认保持独立 private，避免静默扩大可见范围；
+    // 仅调用方显式传 inheritOnExpand: true 时才切换为 inherit。
     const scopeExpanding =
       Boolean(parent) &&
-      currentScope === 'personal' &&
-      (parentScope === 'workspace' || parentScope === 'shared')
-    const nextAccessMode =
+      currentEffective === 'private' &&
+      parentEffective === 'members'
+    const currentMode = normalizeStoredAccessMode(currentPolicy?.access_mode)
+    const nextAccessMode: AccessMode =
       scopeExpanding && options.inheritOnExpand
         ? 'inherit'
-        : scopeExpanding && !options.inheritOnExpand && currentPolicy?.access_mode === 'inherit'
+        : scopeExpanding && !options.inheritOnExpand
           ? 'private'
-          : currentPolicy?.access_mode ?? 'private'
-    const currentTable = this.ownerTableOf(resource) || (currentPolicy ? ownerTableForPolicy(currentPolicy) : `account:${actor.accountId ?? ''}`)
-    const parentTable = parent ? this.ownerTableOf(parent) : null
-    const nextOwnerTable =
-      scopeExpanding && options.inheritOnExpand && parentTable
-        ? parentTable
-        : currentTable
-    const nextInheritParent =
-      Boolean(parent) && nextAccessMode === 'inherit' && (!parentTable || parentTable === nextOwnerTable) ? 1 : 0
+          : parent
+            ? currentMode
+            : currentMode === 'inherit'
+              ? currentEffective
+              : currentMode
+    const nextInheritParent = Boolean(parent) && nextAccessMode === 'inherit' ? 1 : 0
     try {
       this.db
         .prepare(
           `UPDATE resource_policies
-           SET parent_collection = ?, parent_record_id = ?, access_mode = ?, owner_table = ?, inherit_parent = ?
+           SET parent_collection = ?, parent_record_id = ?, access_mode = ?, inherit_parent = ?
            WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
         )
         .run(
           parent?.collection ?? '',
           parent?.recordId ?? '',
           nextAccessMode,
-          nextOwnerTable,
           nextInheritParent,
           resource.workspaceId,
           resource.collection,
@@ -1069,219 +887,10 @@ export class AuthorizationService {
     }
     this.dropScans(resource.workspaceId, resource.collection)
     if (parent) this.dropScans(parent.workspaceId, parent.collection)
-    return { scopeExpanded: scopeExpanding && Boolean(options.inheritOnExpand), preservedPrivate: scopeExpanding && !options.inheritOnExpand }
-  }
-
-  /**
-   * 显式将记录（及同表子树）从个人表「单向移入」空间表。
-   * 铁律：
-   * 1. 单向沉淀（个人盘 → 空间盘）：仅个人表主人（owner）且为空间内部成员可将个人资产移入空间表。
-   * 2. 禁止逆向搬运（空间盘 ↛ 个人盘）：空间资产归属组织本身，不可把原件直接迁回个人表（如需个人魔改请走复制副本）。
-   * 3. 级联迁移：同一 owner_table 下的所有后代记录随父节点原子迁移，子树内部 inherit 链路保持不断裂。
-   */
-  transferOwnerTable(
-    actor: Actor,
-    resource: Extract<ResourceRef, { type: 'record' }>,
-    targetOwnerTable: string,
-  ) {
-    if (actor.type === 'public-link' || !actor.accountId) {
-      throw new Error('permission denied: UNAUTHENTICATED')
-    }
-    if (actor.workspaceId !== resource.workspaceId) {
-      throw new Error('permission denied: WRONG_WORKSPACE')
-    }
-    const target = targetOwnerTable.trim()
-    if (target !== 'workspace' && !target.startsWith('account:')) {
-      throw new Error('invalid ownerTable')
-    }
-    const policy = this.policy(resource)
-    if (!policy) throw new Error('unknown resource')
-    const currentTable = this.ownerTableOf(resource) || ownerTableForPolicy(policy)
-    if (currentTable === target) {
-      return { ownerTable: target, changed: false, transferredCount: 0, transferredDescendants: 0 }
-    }
-
-    if (currentTable === 'workspace') {
-      // 空间盘原件不可直接转出到个人盘（防资产流失与团队链接断链）；请使用「复制到个人表」
-      throw new Error('permission denied: WORKSPACE_TRANSFER_OUT_FORBIDDEN')
-    }
-    if (target !== 'workspace') {
-      throw new Error('permission denied: WORKSPACE_TARGET_ONLY')
-    }
-
-    // 个人表记录 → 空间表：仅表主人本人（owner）且为空间内部成员可操作
-    const tableOwnerId = currentTable.startsWith('account:') ? currentTable.slice('account:'.length) : ''
-    if (actor.accountId !== tableOwnerId && policy.owner_account_id !== actor.accountId) {
-      throw new Error('permission denied: PERSONAL_OWNER_ONLY')
-    }
-    if (this.membershipKind(actor.accountId, resource.workspaceId) !== 'member') {
-      throw new Error('permission denied: INSUFFICIENT_PERMISSION')
-    }
-
-    // BFS 收集同一 owner_table 下的所有后代记录（防环，最多 64 层）
-    const descendants = this.collectSameTableDescendants(resource, currentTable)
-    const nextAccessMode: AccessMode = 'members'
-    const nextMemberDefaultRole = 'editor'
-    const touchedCollections = new Set<string>([resource.collection])
-
-    const applyUpdate = (
-      col: string,
-      recId: string,
-      mode: AccessMode,
-      inheritParentFlag: number,
-      ownerAccId: string,
-    ) => {
-      try {
-        this.db
-          .prepare(
-            `UPDATE resource_policies
-             SET owner_table = ?, owner_account_id = ?, access_mode = ?, member_default_role = ?, inherit_parent = ?
-             WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-          )
-          .run(target, ownerAccId, mode, nextMemberDefaultRole, inheritParentFlag, resource.workspaceId, col, recId)
-      } catch {
-        this.db
-          .prepare(
-            `UPDATE resource_policies
-             SET owner_account_id = ?, access_mode = ?, member_default_role = ?
-             WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-          )
-          .run(ownerAccId, mode, nextMemberDefaultRole, resource.workspaceId, col, recId)
-      }
-      // 转入空间表后清理残留的个人 owner 授权，避免原个人主人凌驾于空间管理员之上
-      this.db
-        .prepare(
-          `DELETE FROM record_grants
-           WHERE workspace_id = ? AND collection = ? AND record_id = ? AND role = 'owner'`,
-        )
-        .run(resource.workspaceId, col, recId)
-    }
-
-    this.db.exec('SAVEPOINT transfer_owner_table')
-    try {
-      applyUpdate(resource.collection, resource.recordId, nextAccessMode, 0, policy.owner_account_id)
-      for (const child of descendants) {
-        touchedCollections.add(child.collection)
-        const keepInherit = child.access_mode === 'inherit' || child.inherit_parent === 1
-        const childMode: AccessMode = keepInherit ? 'inherit' : nextAccessMode
-        const childInherit = keepInherit ? 1 : 0
-        applyUpdate(child.collection, child.record_id, childMode, childInherit, child.owner_account_id)
-      }
-      this.db.exec('RELEASE SAVEPOINT transfer_owner_table')
-    } catch (error) {
-      this.db.exec('ROLLBACK TO SAVEPOINT transfer_owner_table')
-      this.db.exec('RELEASE SAVEPOINT transfer_owner_table')
-      throw error
-    }
-
-    for (const col of touchedCollections) {
-      this.dropScans(resource.workspaceId, col)
-    }
     return {
-      ownerTable: target,
-      changed: true,
-      transferredCount: 1 + descendants.length,
-      transferredDescendants: descendants.length,
+      scopeExpanded: scopeExpanding && Boolean(options.inheritOnExpand),
+      preservedPrivate: scopeExpanding && !options.inheritOnExpand,
     }
-  }
-
-  private collectSameTableDescendants(
-    root: Extract<ResourceRef, { type: 'record' }>,
-    sourceTable: string,
-  ): Array<{ collection: string; record_id: string; owner_account_id: string; access_mode: AccessMode; inherit_parent?: number }> {
-    const result: Array<{ collection: string; record_id: string; owner_account_id: string; access_mode: AccessMode; inherit_parent?: number }> = []
-    const visited = new Set<string>([`${root.collection}\t${root.recordId}`])
-    const queue: Array<{ collection: string; recordId: string; depth: number }> = [
-      { collection: root.collection, recordId: root.recordId, depth: 0 },
-    ]
-    while (queue.length > 0) {
-      const current = queue.shift()!
-      if (current.depth >= 64) continue
-      let children: PolicyRow[] = []
-      try {
-        children = this.db
-          .prepare(
-            `SELECT ${POLICY_SELECT} FROM resource_policies
-             WHERE workspace_id = ? AND parent_collection = ? AND parent_record_id = ?`,
-          )
-          .all(root.workspaceId, current.collection, current.recordId) as PolicyRow[]
-      } catch {
-        children = this.db
-          .prepare(
-            `SELECT ${POLICY_SELECT_LEGACY} FROM resource_policies
-             WHERE workspace_id = ? AND parent_collection = ? AND parent_record_id = ?`,
-          )
-          .all(root.workspaceId, current.collection, current.recordId) as PolicyRow[]
-      }
-      for (const child of children) {
-        const key = `${child.collection}\t${child.record_id}`
-        if (visited.has(key)) continue
-        visited.add(key)
-        const childRef: Extract<ResourceRef, { type: 'record' }> = {
-          type: 'record',
-          workspaceId: root.workspaceId,
-          collection: child.collection,
-          recordId: child.record_id,
-        }
-        const childTable = this.ownerTableOf(childRef) || ownerTableForPolicy(child)
-        if (childTable !== sourceTable) continue
-        result.push({
-          collection: child.collection,
-          record_id: child.record_id,
-          owner_account_id: child.owner_account_id,
-          access_mode: child.access_mode,
-          inherit_parent: child.inherit_parent,
-        })
-        queue.push({ collection: child.collection, recordId: child.record_id, depth: current.depth + 1 })
-      }
-    }
-    return result
-  }
-
-  /**
-   * 切换空间表记录的可见模式（全员可见 'members' ↔ 受限空间资产 'restricted'）。
-   * 仅适用于 owner_table = 'workspace' 的记录；归属不变，但 'restricted' 时普通成员不再获得默认全员基线。
-   */
-  setAccessMode(
-    actor: Actor,
-    resource: Extract<ResourceRef, { type: 'record' }>,
-    accessMode: 'members' | 'restricted',
-  ) {
-    if (actor.type === 'public-link' || !actor.accountId) {
-      throw new Error('permission denied: UNAUTHENTICATED')
-    }
-    if (actor.workspaceId !== resource.workspaceId) {
-      throw new Error('permission denied: WRONG_WORKSPACE')
-    }
-    const decision = this.authorize(actor, 'resource:manage-permissions', resource)
-    if (!decision.allowed) {
-      throw new Error('permission denied: INSUFFICIENT_PERMISSION')
-    }
-    const policy = this.policy(resource)
-    if (!policy) throw new Error('unknown resource')
-    const currentTable = this.ownerTableOf(resource) || ownerTableForPolicy(policy)
-    if (currentTable !== 'workspace') {
-      throw new Error('仅空间表记录支持切换全员/受限模式')
-    }
-    try {
-      this.db
-        .prepare(
-          `UPDATE resource_policies
-           SET access_mode = ?, inherit_parent = 0
-           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-        )
-        .run(accessMode, resource.workspaceId, resource.collection, resource.recordId)
-    } catch {
-      this.db
-        .prepare(
-          `UPDATE resource_policies
-           SET access_mode = ?
-           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-        )
-        .run(accessMode, resource.workspaceId, resource.collection, resource.recordId)
-    }
-    this.dropScans(resource.workspaceId, resource.collection)
-    return { ownerTable: 'workspace', accessMode }
   }
 
   validateMove(
@@ -1326,25 +935,12 @@ export class AuthorizationService {
     const decision = this.authorize(actor, 'resource:manage-permissions', resource)
     const policy = this.policy(resource)
     if (!policy) throw new Error('unknown resource')
-    const policyOwnerTable = ownerTableForPolicy(policy)
-    const isPersonalOwner =
-      policyOwnerTable !== 'workspace' &&
-      (policyOwnerTable === `account:${actor.accountId}` || policy.owner_account_id === actor.accountId)
-    if (!isPersonalOwner && !decision.allowed) {
+    const isOwner = policy.owner_account_id === actor.accountId
+    if (!isOwner && !decision.allowed) {
       throw new Error('permission denied: INSUFFICIENT_PERMISSION')
     }
     if (mode === 'inherit') {
       if (!policy.parent_record_id) throw new Error('这条内容没有上级记录')
-      const parentTable = this.ownerTableOf({
-        type: 'record',
-        workspaceId: resource.workspaceId,
-        collection: policy.parent_collection || resource.collection,
-        recordId: policy.parent_record_id,
-      })
-      const currentTable = this.ownerTableOf(resource)
-      if (parentTable && currentTable && parentTable !== currentTable) {
-        throw new Error('permission denied: CROSS_TABLE_INHERIT_FORBIDDEN')
-      }
       try {
         this.db
           .prepare(
@@ -1363,8 +959,7 @@ export class AuthorizationService {
           .run(resource.workspaceId, resource.collection, resource.recordId)
       }
     } else {
-      const currentTable = this.ownerTableOf(resource)
-      const fallbackMode: AccessMode = currentTable === 'workspace' ? 'members' : 'private'
+      const effectiveMode = this.effectiveAccessMode(resource)
       try {
         this.db
           .prepare(
@@ -1373,7 +968,7 @@ export class AuthorizationService {
                  inherit_parent = 0
              WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
           )
-          .run(fallbackMode, resource.workspaceId, resource.collection, resource.recordId)
+          .run(effectiveMode, resource.workspaceId, resource.collection, resource.recordId)
       } catch {
         this.db
           .prepare(
@@ -1381,7 +976,7 @@ export class AuthorizationService {
              SET access_mode = CASE WHEN access_mode = 'inherit' THEN ? ELSE access_mode END
              WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
           )
-          .run(fallbackMode, resource.workspaceId, resource.collection, resource.recordId)
+          .run(effectiveMode, resource.workspaceId, resource.collection, resource.recordId)
       }
     }
     this.dropScans(resource.workspaceId, resource.collection)
@@ -1434,7 +1029,7 @@ export class AuthorizationService {
     return { mode, hasParent, parent, ancestors }
   }
 
-  /** 当前用户在这条记录上的权限是怎么来的。继承会逐级展开，视图授权由调用方另算。 */
+  /** 当前用户在这条记录上的权限是怎么来的（含父子继承逐级展开）。 */
   roleChain(accountId: string, resource: Extract<ResourceRef, { type: 'record' }>) {
     return this.collectRoleChain(accountId, resource, new Set(), 0, true)
   }
@@ -1445,7 +1040,7 @@ export class AuthorizationService {
     policy: PolicyRow | null | undefined,
   ): {
     role: ResourceRole
-    source: 'ownership' | 'direct-grant' | 'group-grant' | 'workspace-default' | 'legacy'
+    source: 'ownership' | 'direct-grant' | 'member-view-grant' | 'workspace-default' | 'legacy'
     detail: string
   } | null {
     if (!policy) {
@@ -1462,33 +1057,27 @@ export class AuthorizationService {
             : 'editor'
       return { role, source: 'legacy', detail: '沿用空间里的旧记录' }
     }
-    const ownerTable = ownerTableForPolicy(policy)
-    const tableOwnerId = ownerTable.startsWith('account:') ? ownerTable.slice('account:'.length) : ''
-    // 仅个人表资产存在“个人 Owner”身份；空间表资产归属组织本身，不再赋予原创建者凌驾于空间管理员之上的 owner 特权。
-    if (ownerTable !== 'workspace' && (policy.owner_account_id === accountId || (tableOwnerId && tableOwnerId === accountId))) {
+    if (policy.owner_account_id === accountId) {
       return { role: 'owner', source: 'ownership', detail: '你是创建者' }
     }
     const direct = this.directRole(accountId, resource)
     let workspaceBaseline: { role: ResourceRole; source: 'workspace-default'; detail: string } | null = null
     if (
-      ownerTable === 'workspace' &&
+      policy.access_mode === 'members' &&
       this.membershipKind(accountId, resource.workspaceId) === 'member'
     ) {
       const wsRole = this.membership(accountId, resource.workspaceId)
       if (wsRole === 'owner' || wsRole === 'admin') {
-        // 空间管理员对空间表资产（包括 restricted 受限资产）始终保有兜底治理权，防止形成无主黑盒
         workspaceBaseline = { role: 'manager', source: 'workspace-default', detail: '空间管理员默认可管理' }
-      } else if (policy.access_mode === 'members') {
-        // 解耦空间归属与全员可见：仅当 access_mode === 'members' 时才向普通成员发放全员基线；
-        // 当 access_mode === 'restricted' 时普通成员仅按 record_grants / 成员组 / 空间 access_rules 放行。
+      } else {
         const role = memberAccessRole(policy, wsRole)
-        const detail = role === 'viewer' ? '查看者默认可查看' : '空间成员默认可编辑'
+        const detail = role === 'viewer' ? '空间全员默认可查看' : '空间全员默认可编辑'
         workspaceBaseline = { role, source: 'workspace-default', detail }
       }
     }
     if (direct && (!workspaceBaseline || ROLE_RANK[direct.effectiveRole] >= ROLE_RANK[workspaceBaseline.role])) {
-      const detail = direct.source === 'group-grant'
-        ? '通过成员组授权'
+      const detail = direct.source === 'member-view-grant'
+        ? '通过锁定成员视图（动态组）授权'
         : direct.source === 'direct-grant'
           ? '直接授权给你'
           : '按空间角色授权'
@@ -1510,7 +1099,7 @@ export class AuthorizationService {
     title: string
     detail: string
     role: ResourceRole
-    source: 'ownership' | 'direct-grant' | 'group-grant' | 'workspace-default' | 'inherited' | 'legacy'
+    source: 'ownership' | 'direct-grant' | 'member-view-grant' | 'workspace-default' | 'inherited' | 'legacy'
   }> {
     const key = `${resource.workspaceId}\t${resource.collection}\t${resource.recordId}`
     if (visited.has(key) || depth > 64) return []
@@ -1572,95 +1161,13 @@ export class AuthorizationService {
         collection: policy.parent_collection || resource.collection,
         recordId: policy.parent_record_id,
       }
-      // K+1 同表树继承：跨表时不继承父级授权（防静默扩权）
-      const childTable = policy.owner_table?.trim()
-      const parentTable = childTable ? this.ownerTableOf(parentRef) : null
-      if (!childTable || !parentTable || childTable === parentTable) {
-        const inherited = this.effectiveRole(accountId, parentRef, visited, depth + 1)
-        if (inherited && 'reason' in inherited) return inherited
-        if (inherited) candidates.push({ effectiveRole: inherited.effectiveRole, source: 'inherited' })
-      }
+      const inherited = this.effectiveRole(accountId, parentRef, visited, depth + 1)
+      if (inherited && 'reason' in inherited) return inherited
+      if (inherited) candidates.push({ effectiveRole: inherited.effectiveRole, source: 'inherited' })
     }
     if (!candidates.length) return null
     candidates.sort((a, b) => ROLE_RANK[b.effectiveRole] - ROLE_RANK[a.effectiveRole])
     return candidates[0]!
-  }
-
-  private accessRuleRole(
-    accountId: string,
-    resource: Extract<ResourceRef, { type: 'record' }>,
-  ): { effectiveRole: ResourceRole; source: 'access-rule' } | null {
-    if (!this.accessRuleMatcher) return null
-    const scan = this.scans.get(collectionScanKey(resource.workspaceId, resource.collection, accountId))
-    let rows: ScanAccessRuleGrant[]
-    let prefiltered = false
-    if (scan) {
-      rows = scan.actorAccessRuleGrants
-      prefiltered = true
-    } else {
-      try {
-        rows = this.db
-          .prepare(
-            `SELECT r.id AS rule_id, r.created_by, r.owner_table, r.filter_tree_json, g.subject_type, g.subject_id, g.role
-             FROM access_rules r
-             JOIN access_rule_grants g ON g.rule_id = r.id
-             WHERE r.workspace_id = ? AND r.collection = ? AND r.enabled = 1
-             ORDER BY g.created_at`,
-          )
-          .all(resource.workspaceId, resource.collection) as ScanAccessRuleGrant[]
-      } catch {
-        try {
-          rows = this.db
-            .prepare(
-              `SELECT r.id AS rule_id, r.created_by, r.filter_tree_json, g.subject_type, g.subject_id, g.role
-               FROM access_rules r
-               JOIN access_rule_grants g ON g.rule_id = r.id
-               WHERE r.workspace_id = ? AND r.collection = ? AND r.enabled = 1
-               ORDER BY g.created_at`,
-            )
-            .all(resource.workspaceId, resource.collection) as ScanAccessRuleGrant[]
-        } catch {
-          rows = []
-        }
-      }
-    }
-    if (!rows.length) return null
-    const memberKind = scan ? scan.membershipKind : this.membershipKind(accountId, resource.workspaceId)
-    const policy = this.policy(resource)
-    const recordOwnerId = policy?.owner_account_id || this.legacyOwnerId(resource) || ''
-    const recordOwnerTable = this.ownerTableOf(resource)
-    if (!recordOwnerTable) return null
-    const scope = recordOwnerTable === 'workspace' ? 'workspace' : 'personal'
-    const allowRoles: ResourceRole[] = []
-    let matchedGroups: Set<string> | null = null
-    for (const grant of rows) {
-      if (!prefiltered) {
-        const subjectMatches = grant.subject_type === 'account'
-          ? grant.subject_id === accountId
-          : grant.subject_type === 'workspace'
-            ? grant.subject_id === resource.workspaceId && memberKind === 'member'
-            : grant.subject_type === 'group' && (matchedGroups ??= this.matchedGroupsFor(resource.workspaceId, accountId)).has(grant.subject_id)
-        if (!subjectMatches) continue
-      }
-      // K+1 同表分区铁律：规则只匹配其所在 owner_table 的记录，杜绝跨表提权
-      const ruleOwnerTable = grant.owner_table?.trim() || (grant.created_by ? `account:${grant.created_by}` : '')
-      if (!ruleOwnerTable || ruleOwnerTable !== recordOwnerTable) continue
-      const matched = this.accessRuleMatcher(
-        resource.workspaceId,
-        resource.collection,
-        grant.filter_tree_json,
-        resource.recordId,
-        {
-          createdBy: grant.created_by,
-          recordOwnerId,
-          scope,
-          record: resource.record,
-        },
-      )
-      if (matched) allowRoles.push(grant.role)
-    }
-    const best = maxRole(allowRoles)
-    return best ? { effectiveRole: best, source: 'access-rule' } : null
   }
 
   private directRole(accountId: string, resource: Extract<ResourceRef, { type: 'record' }>) {
@@ -1670,8 +1177,8 @@ export class AuthorizationService {
     if (!role) return null
     const source = matched.some((row) => row.subject_type === 'account' && row.role === role)
       ? 'direct-grant'
-      : matched.some((row) => row.subject_type === 'group' && row.role === role)
-        ? 'group-grant'
+      : matched.some((row) => row.subject_type === 'member_view' && row.role === role)
+        ? 'member-view-grant'
         : 'workspace-default'
     return { effectiveRole: role, source } as const
   }
@@ -1685,7 +1192,7 @@ export class AuthorizationService {
            AND (
              (g.subject_type = 'account' AND g.subject_id = ?)
              OR (g.subject_type = 'workspace_role' AND g.subject_id = ?)
-             OR g.subject_type = 'group'
+             OR g.subject_type = 'member_view'
            )`,
       )
       .all(
@@ -1695,16 +1202,17 @@ export class AuthorizationService {
         accountId,
         this.membership(accountId, resource.workspaceId) ?? '',
       ) as ScanGrant[]
-    if (!rows.some((row) => row.subject_type === 'group')) return rows
-    const matchedGroups = this.matchedGroupsFor(resource.workspaceId, accountId)
-    return rows.filter((row) => row.subject_type !== 'group' || matchedGroups.has(row.subject_id))
+    if (!rows.some((row) => row.subject_type === 'member_view')) return rows
+    return rows.filter(
+      (row) => row.subject_type !== 'member_view' || this.matchesMemberView(resource.workspaceId, row.subject_id, accountId),
+    )
   }
 
   private scanGrantsFor(scan: CollectionScan, recordId: string) {
     return (scan.grants.get(recordId) ?? []).filter((row) => {
       if (row.subject_type === 'account') return row.subject_id === scan.accountId
       if (row.subject_type === 'workspace_role') return row.subject_id === (scan.membership ?? '')
-      if (row.subject_type === 'group') return scan.groups.has(row.subject_id)
+      if (row.subject_type === 'member_view') return scan.matchedMemberViews.has(row.subject_id)
       return false
     })
   }

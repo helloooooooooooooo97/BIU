@@ -1,26 +1,14 @@
 import { currentAccountId, currentRequestWorkspaceId } from '@biu/host-plugin-loader/data-dir'
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
-import { roleCoversAction, type Action as PermissionAction, type AuthorizationService } from '@biu/host-account/authorization'
+import { type Action as PermissionAction, type AuthorizationService } from '@biu/host-account/authorization'
 import { isRegisteredBuiltinPlugin } from '@biu/host-account/store'
-import type { CollectionSchema, CollectionSchemaPack, CollectionSpec, DbRecord } from '@biu/type-file-system'
-import {
-  assertWritableColumns,
-  fullColumnPolicy,
-  isContentReadable,
-  isContentWritable,
-  mergeColumnPolicies,
-  parseColumnList,
-  projectRecordColumns,
-  type ColumnPolicy,
-} from '../column-access.ts'
-import { recordMatchesAccessRule, type DataScopeName, type ViewGrantRole } from '../view-access.ts'
+import type { CollectionSchema, CollectionSpec, DbRecord } from '@biu/type-file-system'
 import {
   DATA_COLLECTION_PATH,
   EDITOR_BLOCKS_COLLECTION_PATH,
   PLUGINS_COLLECTION_PATH,
   TAGS_COLLECTION_PATH,
   TRASH_COLLECTION_PATH,
-  WORKSPACE_MEMBERS_COLLECTION_PATH,
 } from '../paths.ts'
 import type { SharesStore } from './shares-store.ts'
 import { parseStampRecordId } from './tags-collection.ts'
@@ -43,37 +31,14 @@ export type WorkspaceFiles = {
     recordId: string,
     now?: number,
     policy?: {
-      accessMode?: 'inherit' | 'private' | 'members' | 'restricted'
+      accessMode?: 'inherit' | 'private' | 'members'
       memberDefaultRole?: 'viewer' | 'editor'
       parentCollection?: string
       parentRecordId?: string
-      ownerTable?: string
     },
   ): void
-  collectionOwnership?(workspaceId: string, collection: string): Map<string, 'personal' | 'workspace' | 'shared' | 'external'>
-  listActiveAccessRulesForCollection?(
-    workspaceId: string,
-    collection: string,
-  ): Array<{
-    id: string
-    workspaceId: string
-    collection: string
-    name: string
-    createdBy: string
-    createdByName?: string
-    ownerTable?: string
-    scope?: 'workspace' | 'personal'
-    filterTree: Record<string, unknown>
-    columns: string[] | null
-    enabled: boolean
-    grants: Array<{
-      id: string
-      subjectType: 'account' | 'workspace' | 'group'
-      subjectId: string
-      role: 'viewer' | 'editor' | 'manager'
-      subjectName?: string
-    }>
-  }>
+  collectionOwnership?(workspaceId: string, collection: string): Map<string, 'personal' | 'workspace' | 'shared'>
+  collectionExternalCollaborators?(workspaceId: string, collection: string): Set<string>
   collectionRecordOwners?(workspaceId: string, collection: string): Map<string, string>
   isMember?(accountId: string, workspaceId: string): boolean
   members?(accountId: string, workspaceId: string): Array<{ id: string; member_kind?: string }>
@@ -84,7 +49,6 @@ export const SHARE_SCOPE_LABEL = {
   personal: '私人',
   workspace: '空间',
   shared: '共享',
-  external: '外部',
 } as const
 
 export const ACCESS_RANK = { viewer: 1, commenter: 2, editor: 3, manager: 4, owner: 5 } as const
@@ -199,11 +163,12 @@ class BoundedLru<K, V> {
 }
 
 /**
- * 封装工作区数据归属（K+1 逻辑表）、权限判定（管理 / 编辑 / 阅读）、
- * 独立访问规则（access_rules）列策略与多租户有界分享状态缓存。
+ * 封装单逻辑表工作区数据归属（Notion 三态：私人 / 共享 / 空间 + 正交外部标记）、
+ * 静态权限判定与 100% SQL 下推 ID 预计算。
  */
 export class DatabaseAccessPolicy {
-  private readonly ownershipCache = new BoundedLru<string, Map<string, 'personal' | 'workspace' | 'shared' | 'external'>>()
+  private readonly ownershipCache = new BoundedLru<string, Map<string, 'personal' | 'workspace' | 'shared'>>()
+  private readonly externalCollaboratorCache = new BoundedLru<string, Set<string>>()
   private readonly ownerCache = new BoundedLru<string, Map<string, string>>()
   private readonly recordShareCache = new BoundedLru<string, Set<string>>()
 
@@ -211,6 +176,7 @@ export class DatabaseAccessPolicy {
 
   clearCaches() {
     this.ownershipCache.clear()
+    this.externalCollaboratorCache.clear()
     this.ownerCache.clear()
     this.recordShareCache.clear()
   }
@@ -226,6 +192,8 @@ export class DatabaseAccessPolicy {
   private resolveWorkspaceId(): string {
     const fromRequest = currentRequestWorkspaceId().trim()
     if (fromRequest) return fromRequest
+    const fromActor = this.host.authorization()?.currentActor()?.workspaceId?.trim()
+    if (fromActor) return fromActor
     if (!getRuntimePolicy().allowImplicitActiveWorkspace) return ''
     return String(this.host.collabStore()?.activeWorkspaceId?.() ?? '').trim()
   }
@@ -236,7 +204,7 @@ export class DatabaseAccessPolicy {
     return store.membership()
   }
 
-  ownershipOf(collection: string, id: string): 'personal' | 'workspace' | 'shared' | 'external' {
+  ownershipOf(collection: string, id: string): 'personal' | 'workspace' | 'shared' {
     const store = this.host.collabStore()
     const workspaceId = this.resolveWorkspaceId()
     if (!store?.collectionOwnership || !workspaceId) return 'personal'
@@ -247,6 +215,24 @@ export class DatabaseAccessPolicy {
       this.ownershipCache.set(key, map)
     }
     return map.get(id) ?? 'personal'
+  }
+
+  hasExternalCollaborator(collection: string, id: string): boolean {
+    const store = this.host.collabStore()
+    const workspaceId = this.resolveWorkspaceId()
+    if (!store?.collectionExternalCollaborators || !workspaceId) return false
+    const key = `${workspaceId}\t${collection}`
+    let set = this.externalCollaboratorCache.get(key)
+    if (!set) {
+      set = store.collectionExternalCollaborators(workspaceId, collection)
+      this.externalCollaboratorCache.set(key, set)
+    }
+    return set.has(id)
+  }
+
+  /** 正交外部访问标记：是否开启了公开链接或包含外部协作者/访客（不覆盖内部三态）。 */
+  hasExternalAccess(collection: string, id: string): boolean {
+    return this.hasPublicShare(collection, id) || this.hasExternalCollaborator(collection, id)
   }
 
   recordOwner(collection: string, id: string): string {
@@ -262,84 +248,15 @@ export class DatabaseAccessPolicy {
     return map.get(id) ?? ''
   }
 
-  /** 计算当前操作者在某条记录上的有效列级策略（可读列并集、可写列并集）。 */
-  columnPolicyFor(collection: string, record: { id?: unknown }): ColumnPolicy {
-    const store = this.host.collabStore()
-    const authorization = this.host.authorization()
-    const actor = authorization?.currentActor()
-    if (!store || !authorization || !actor) return fullColumnPolicy()
-    const rules = store.listActiveAccessRulesForCollection?.(actor.workspaceId, collection) ?? []
-    if (!rules.length) return fullColumnPolicy()
-
-    const target = resolveScopeTarget(collection, String(record.id ?? ''), record)
-    const targetRef = {
-      type: 'record' as const,
-      workspaceId: actor.workspaceId,
-      collection: target.collection,
-      recordId: target.id,
-      record: record as Record<string, unknown>,
-    }
-    const decision = authorization.authorize(actor, 'resource:read', targetRef)
-    if (decision.allowed && decision.source === 'ownership') return fullColumnPolicy()
-
-    const policies: ColumnPolicy[] = []
-    if (decision.allowed && decision.source !== 'access-rule') {
-      policies.push(fullColumnPolicy())
-    }
-    const recordOwnerTable = authorization.ownerTableOf(targetRef)
-    for (const rule of rules) {
-      if (!rule.enabled) continue
-      const ruleOwnerTable = rule.ownerTable?.trim() || (rule.createdBy ? `account:${rule.createdBy}` : '')
-      if (!recordOwnerTable || !ruleOwnerTable || ruleOwnerTable !== recordOwnerTable) continue
-      if (!recordMatchesAccessRule(record as never, rule.filterTree)) continue
-      const ruleCols = Array.isArray(rule.columns) && rule.columns.length > 0
-        ? [...rule.columns, '$content', 'shareScope', 'shareRole', 'ownerTable']
-        : null
-      let matchedGroups: Set<string> | null = null
-      for (const grant of rule.grants) {
-        const subjectMatches = grant.subjectType === 'account'
-          ? grant.subjectId === actor.accountId
-          : grant.subjectType === 'workspace'
-            ? grant.subjectId === actor.workspaceId && authorization.membershipKind(actor.accountId, actor.workspaceId) === 'member'
-            : grant.subjectType === 'group' && (matchedGroups ??= authorization.matchedGroupsFor(actor.workspaceId, actor.accountId)).has(grant.subjectId)
-        if (!subjectMatches) continue
-        const canWrite = roleCoversAction(grant.role, 'resource:update')
-        policies.push({
-          readable: ruleCols ? new Set(ruleCols) : '*',
-          writable: canWrite ? (ruleCols ? new Set(ruleCols) : '*') : new Set<string>(),
-        })
-      }
-    }
-    return mergeColumnPolicies(policies)
-  }
-
-  hasViewGrants(collection: string): boolean {
-    const store = this.host.collabStore()
-    const authorization = this.host.authorization()
-    const actor = authorization?.currentActor()
-    if (!store || !authorization || !actor) return false
-    return (store.listActiveAccessRulesForCollection?.(actor.workspaceId, collection)?.length ?? 0) > 0
-  }
-
-  hasColumnRestrictions(collection: string): boolean {
-    const store = this.host.collabStore()
-    const authorization = this.host.authorization()
-    const actor = authorization?.currentActor()
-    if (!store || !authorization || !actor) return false
-    const rules = store.listActiveAccessRulesForCollection?.(actor.workspaceId, collection) ?? []
-    return rules.some((r) => r.enabled && Array.isArray(r.columns) && r.columns.length > 0)
-  }
-
   /**
-   * 当集合没有数据视图过滤授权（view_grants）时，预先用已加载的 RBAC 策略计算当前用户可见的 ID 集合，
-   * 使云端 RBAC 模式也能走 spec.listPage 的 SQL 下推快路径，避免全表拉取到内存排序。
+   * 100% 静态元数据预计算当前用户可见的 ID 集合（支持锁定成员视图动态组，不读任何业务行内容），
+   * 使云端 RBAC 模式全场景走 spec.listPage SQL 下推快路径。
    */
   resolvePushdownAllowedIds(collection: string): string[] | null {
     const store = this.host.collabStore()
     const authorization = this.host.authorization()
     const actor = authorization?.currentActor()
     if (!authorization || !actor) return null
-    if (this.hasViewGrants(collection)) return null
     const candidateMap = store?.collectionOwnership?.(actor.workspaceId, collection)
       ?? store?.collectionRecordOwners?.(actor.workspaceId, collection)
     if (!candidateMap) return null
@@ -362,59 +279,6 @@ export class DatabaseAccessPolicy {
     }
   }
 
-  projectRecordWithPolicy<T extends Record<string, unknown>>(record: T, policy: ColumnPolicy): T {
-    return projectRecordColumns(record, policy)
-  }
-
-  projectRecord<T extends Record<string, unknown>>(collection: string, record: T): T {
-    return projectRecordColumns(record, this.columnPolicyFor(collection, record))
-  }
-
-  assertWritablePatch(collection: string, record: { id?: unknown }, patch: Record<string, unknown>) {
-    assertWritableColumns(patch, this.columnPolicyFor(collection, record))
-  }
-
-  assertContentAccess(collection: string, record: { id?: unknown }, mode: 'read' | 'write') {
-    const policy = this.columnPolicyFor(collection, record)
-    const ok = mode === 'read' ? isContentReadable(policy) : isContentWritable(policy)
-    if (!ok) throw new Error('permission denied: FIELD_FORBIDDEN ($content)')
-  }
-
-  /**
-   * 锚点字段扩散保护：当修改的字段导致一条记录新命中某条 view_grant（扩大了可见受众）时，
-   * 必须要求当前操作者具备该记录的 resource:share 权限，防止普通编辑绕过分享审批把私密数据推入外部视图。
-   */
-  assertAnchorFieldSafe(collection: string, beforeRecord: DbRecord, afterRecord: DbRecord) {
-    const store = this.host.collabStore()
-    const authorization = this.host.authorization()
-    const actor = authorization?.currentActor()
-    if (!store?.listActiveAccessRulesForCollection || !authorization || !actor) return
-    const rules = store.listActiveAccessRulesForCollection(actor.workspaceId, collection)
-    if (!rules.length) return
-    const target = resolveScopeTarget(collection, String(beforeRecord.id ?? ''), beforeRecord)
-    const targetRef = {
-      type: 'record' as const,
-      workspaceId: actor.workspaceId,
-      collection: target.collection,
-      recordId: target.id,
-      record: beforeRecord as Record<string, unknown>,
-    }
-    const canShare = authorization.authorize(actor, 'resource:share', targetRef).allowed
-    if (canShare) return
-
-    const recordOwnerTable = authorization.ownerTableOf(targetRef)
-    for (const rule of rules) {
-      if (!rule.enabled) continue
-      const ruleOwnerTable = rule.ownerTable?.trim() || (rule.createdBy ? `account:${rule.createdBy}` : '')
-      if (!recordOwnerTable || !ruleOwnerTable || ruleOwnerTable !== recordOwnerTable) continue
-      const wasMatched = recordMatchesAccessRule(beforeRecord, rule.filterTree)
-      const nowMatched = recordMatchesAccessRule(afterRecord, rule.filterTree)
-      if (!wasMatched && nowMatched) {
-        throw new Error('permission denied: ANCHOR_FIELD_SCOPE_EXPANSION')
-      }
-    }
-  }
-
   /** 标签目录只留下当前用户能读到的源记录上贴过的标签；还没贴到公开数据上的，只留给创建人。 */
   indexTagVisible(id: string, accountId: string) {
     const found = this.host.tags.collect(id)
@@ -434,7 +298,6 @@ export class DatabaseAccessPolicy {
     rows: T[],
     action: PermissionAction = 'resource:read',
   ) {
-    // /views 行已由 SavedViewsStore.rows() 按 resolveViewDecision 完成视图级可见性判定，不再按普通数据表记录二次拦截
     if (collection === '/views' && (action === 'resource:read' || action === 'resource:list')) {
       return rows
     }
@@ -487,22 +350,15 @@ export class DatabaseAccessPolicy {
     if (this.host.deviceWorkspace()) return false
     const authorization = this.host.authorization()
     const actor = authorization?.currentActor()
-    if (!actor?.workspaceId || !actor.accountId) return false
-    try {
-      const list = this.host.collabStore()?.members?.(actor.accountId, actor.workspaceId)
-      if (!list) return false
-      const me = list.find((item) => item.id === actor.accountId)
-      return Boolean(me?.member_kind && me.member_kind !== 'member')
-    } catch {
-      return false
-    }
+    if (!authorization || !actor?.workspaceId || !actor.accountId) return false
+    return authorization.membershipKind(actor.accountId, actor.workspaceId) !== 'member'
   }
 
   /**
-   * 判定一条已通过可见性鉴权的记录归属哪些逻辑域（K+1 严格归属绑定）：
-   * - `workspace`：仅 `owner_table = 'workspace'` 的记录（且当前用户为空间内部成员）；
-   * - `personal`：仅 `owner_table = 'account:<当前用户>'` 的记录（排除他人共享给我的个人记录，以及对外公开链接分享的记录）；
-   * - `shared`：他人个人表共享给我的记录、外部协作者看到的记录、内置插件，以及对外公开/局域网分享的记录。
+   * 判定一条已通过可见性鉴权的记录归属哪些逻辑域（Notion 对齐三态）：
+   * - `workspace`：全空间内部成员可见（`access_mode = 'members'`，且当前用户为空间内部成员）；
+   * - `shared`：非全空间记录中存在协作者（含他人分享给我、我分享给他人、外部访客看到的记录、内置插件）；
+   * - `personal`：仅创建者本人可见的私密记录。
    */
   scopeBucketFor(
     collection: string,
@@ -518,38 +374,23 @@ export class DatabaseAccessPolicy {
       return { personal: true, workspace: true, shared: true }
     }
     const id = String(row.id ?? '')
-    const stored = this.ownershipOf(collection, id)
-    const isPublicShared = this.hasPublicShare(collection, id)
     if (this.host.deviceWorkspace()) {
-      return isPublicShared
+      return this.hasPublicShare(collection, id)
         ? { personal: false, workspace: false, shared: true }
         : { personal: true, workspace: false, shared: false }
     }
     const target = resolveScopeTarget(collection, id, row)
-    const ownerTable = authorization.ownerTableOf({
-      type: 'record',
-      workspaceId: actor.workspaceId,
-      collection: target.collection,
-      recordId: target.id,
-      record: row as Record<string, unknown>,
-    })
-    const myTable = `account:${actor.accountId}`
-    if (ownerTable === 'workspace') {
+    const stored = this.ownershipOf(target.collection, target.id)
+    if (stored === 'workspace') {
       if (isExternal) return { personal: false, workspace: false, shared: true }
-      return { personal: false, workspace: true, shared: isPublicShared }
+      return { personal: false, workspace: true, shared: false }
     }
-    if (ownerTable && ownerTable.startsWith('account:')) {
-      if (ownerTable === myTable) {
-        return { personal: true, workspace: false, shared: isPublicShared }
-      }
+    if (stored === 'shared') {
       return { personal: false, workspace: false, shared: true }
     }
-    const label = this.shareScopeLabel(collection, id, row as DbRecord, stored)
-    if (label === '共享') return { personal: false, workspace: false, shared: true }
-    if (label === '空间') {
-      return isExternal
-        ? { personal: false, workspace: false, shared: true }
-        : { personal: false, workspace: true, shared: false }
+    const ownerId = this.recordOwner(target.collection, target.id)
+    if (ownerId && ownerId !== actor.accountId) {
+      return { personal: false, workspace: false, shared: true }
     }
     return { personal: true, workspace: false, shared: false }
   }
@@ -567,40 +408,14 @@ export class DatabaseAccessPolicy {
     return rows.filter((row) => this.scopeBucketFor(collection, row, isExternal)[scope])
   }
 
-  recordsInOwnerTable<T extends { id?: unknown; pageId?: unknown; collection?: unknown; sessionId?: unknown; sourceId?: unknown; tablePath?: unknown }>(
-    collection: string,
-    rows: T[],
-    ownerTable: string,
-  ): T[] {
-    const targetTable = ownerTable.trim()
-    if (!targetTable) return rows
-    const authorization = this.host.authorization()
-    const actor = authorization?.currentActor()
-    if (!authorization || !actor) return rows
-    return rows.filter((row) => {
-      const target = resolveScopeTarget(collection, String(row.id ?? ''), row)
-      const actual = authorization.ownerTableOf({
-        type: 'record',
-        workspaceId: actor.workspaceId,
-        collection: target.collection,
-        recordId: target.id,
-        record: row as Record<string, unknown>,
-      })
-      return targetTable === 'workspace'
-        ? (!actual || actual === 'workspace')
-        : actual === targetTable
-    })
-  }
-
   attachWorkspaceRecord(
     collection: string,
     recordId: string,
     policy?: {
-      accessMode?: 'inherit' | 'private' | 'members' | 'restricted'
+      accessMode?: 'inherit' | 'private' | 'members'
       memberDefaultRole?: 'viewer' | 'editor'
       parentCollection?: string
       parentRecordId?: string
-      ownerTable?: string
     },
   ) {
     const store = this.host.collabStore()
@@ -610,6 +425,7 @@ export class DatabaseAccessPolicy {
     const key = `${workspaceId}\t${collection}`
     this.ownerCache.delete(key)
     this.ownershipCache.delete(key)
+    this.externalCollaboratorCache.delete(key)
   }
 
   markPublicView(collection: string, recordId: string) {
@@ -707,68 +523,12 @@ export class DatabaseAccessPolicy {
     return this.recordShareIds(collection).has(id)
   }
 
-  shareScopeLabel(collection: string, id: string, record: DbRecord, stored: 'personal' | 'workspace' | 'shared' | 'external') {
+  /** Notion 对齐三态内部展示文案：私人 / 共享 / 空间（公开外链与外部协作者由 hasExternalAccess 正交呈现）。 */
+  shareScopeLabel(collection: string, id: string, _record: DbRecord, stored: 'personal' | 'workspace' | 'shared') {
     if (this.host.deviceWorkspace()) {
       return this.hasPublicShare(collection, id) ? '共享' : '私人'
     }
-    // 云端 K+1 归属模型：
-    // - 任何公开链接或外部协作者/访客 -> 「外部」
-    // - 空间公共表（workspace） -> 「空间」 / 「外部」
-    // - 个人表（account:<id>） -> 「私人」 / 「共享」（空间内分享） / 「外部」
-    if (stored === 'external' || this.hasPublicShare(collection, id)) return '外部'
-    if (stored === 'workspace') return '空间'
-    if (stored === 'shared') return '共享'
-    if (stored === 'personal') {
-      // 检查是否被个人表的分享规则命中且有受众
-      const store = this.host.collabStore()
-      const authorization = this.host.authorization()
-      const actor = authorization?.currentActor()
-      if (store?.listActiveAccessRulesForCollection && authorization && actor) {
-        const rules = store.listActiveAccessRulesForCollection(actor.workspaceId, collection)
-        const target = resolveScopeTarget(collection, id, record)
-        const ownerTable = authorization.ownerTableOf({
-          type: 'record',
-          workspaceId: actor.workspaceId,
-          collection: target.collection,
-          recordId: target.id,
-          record: record as Record<string, unknown>,
-        })
-        if (ownerTable === 'workspace') return '空间'
-        const matchedInternalRule = rules.some(
-          (rule) =>
-            rule.enabled &&
-            rule.grants.length > 0 &&
-            (!ownerTable || rule.ownerTable === ownerTable || rule.createdBy === ownerTable.replace(/^account:/, '')) &&
-            recordMatchesAccessRule(record as never, rule.filterTree),
-        )
-        if (matchedInternalRule) return '共享'
-      }
-      return '私人'
-    }
     return SHARE_SCOPE_LABEL[stored]
-  }
-
-  ownerTableLabel(spec: CollectionSpec, record: DbRecord): string | { kind: 'user'; accountId: string; name: string } {
-    if (this.host.deviceWorkspace()) return '个人'
-    const authorization = this.host.authorization()
-    const actor = authorization?.currentActor()
-    if (!authorization || !actor) return '个人'
-    const target = resolveScopeTarget(spec.path, String(record.id ?? ''), record)
-    const ownerTable = authorization.ownerTableOf({
-      type: 'record',
-      workspaceId: actor.workspaceId,
-      collection: target.collection,
-      recordId: target.id,
-      record: record as Record<string, unknown>,
-    })
-    if (!ownerTable || ownerTable === 'workspace') return '空间'
-    if (ownerTable.startsWith('account:')) {
-      const accountId = ownerTable.slice('account:'.length)
-      const person = this.host.collabStore()?.workspacePerson?.(accountId)
-      const name = person?.name?.trim() || (accountId === actor.accountId ? '我' : '个人')
-      return { kind: 'user', accountId, name }
-    }
-    return ownerTable
   }
 
   shareRoleLabel(spec: CollectionSpec, record: DbRecord) {

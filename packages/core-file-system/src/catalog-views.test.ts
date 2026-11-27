@@ -27,7 +27,7 @@ import {
   stampRowOpenTarget,
 } from './catalog-views.ts'
 
-test('overlay keeps stored seed edits on /data and strips builtin-all on K+1 collections', () => {
+test('overlay keeps stored seed edits on /data and standard single-table collections', () => {
   const dataTable = { path: '/data', label: '数据', view: { title: '数据' } }
   const dataAllId = builtinAllViewId('/data')
   const renamed = mergeTableViews(dataTable, [
@@ -42,13 +42,12 @@ test('overlay keeps stored seed edits on /data and strips builtin-all on K+1 col
   assert.equal(omitted.some((view) => view.id === dataAllId), false)
   assert.equal(omitted.some((view) => view.id === 'mine'), true)
 
-  // K+1 业务集合不再注入 builtin-all 聚合视图
+  // 单逻辑表业务集合恢复内置 builtin-all 顶层视图，并保留用户自定义视图
   const pagesTable = { path: '/pages', label: '页面', view: { title: '页面' } }
   const pagesMerged = mergeTableViews(pagesTable, [
-    { id: builtinAllViewId('/pages'), name: '旧聚合', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
-    { id: 'ws-default', name: '空间页面', ownerTable: 'workspace', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
+    { id: 'ws-default', name: '空间页面', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
   ])
-  assert.deepEqual(pagesMerged.map((v) => v.id), ['ws-default'])
+  assert.deepEqual(pagesMerged.map((v) => v.id), [builtinAllViewId('/pages'), 'ws-default'])
 })
 
 test('member directory exposes builtin audience views', () => {

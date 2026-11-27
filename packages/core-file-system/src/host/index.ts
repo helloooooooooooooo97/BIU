@@ -62,7 +62,6 @@ import { SharesStore } from './shares-store.ts'
 import { builtinAllView, isBuiltinAllViewId } from '../catalog-views.ts'
 import { isIndexCollection, isSystemCollection } from '../paths.ts'
 import { dataCollection, isDataOverviewSource, overviewRecord } from './data-collection.ts'
-import { recordMatchesAccessRule } from '../view-access.ts'
 import { type SharedViewDef } from '../share-view-match.ts'
 import { FileSystemAssets, collectAssetNames, assetNamesFromMarkdown, assetNamesFromHtml } from './assets-store.ts'
 import { tagsCollection, parseStampRecordId } from './tags-collection.ts'
@@ -179,8 +178,8 @@ function schemaFor(spec: CollectionSpec): CollectionSchema {
       computed: true,
       writable: false,
       sortable: true,
-      enum: ['私人', '空间', '共享', '外部'],
-      description: '计算属性。个人表数据展示私人/共享/外部；空间表数据展示空间/外部。',
+      enum: ['私人', '共享', '空间'],
+      description: '计算属性。Notion 对齐三态内部访问范围：私人 / 共享 / 空间（公开外链与外部协作者以独立角标呈现）。',
     }
     fields.shareRole = {
       type: 'select',
@@ -190,14 +189,6 @@ function schemaFor(spec: CollectionSpec): CollectionSchema {
       sortable: true,
       enum: ['管理', '编辑', '查看'],
       description: '计算属性。当前用户对这一条的权限：管理、编辑或查看。',
-    }
-    fields.ownerTable = {
-      type: 'select',
-      label: '归属',
-      computed: true,
-      writable: false,
-      sortable: true,
-      description: '计算属性。K+1 逻辑表归属：空间公共表显示「空间」，个人表显示归属成员名。',
     }
     columns = columnAfter(ensureColumn(columns, 'shareScope'), 'shareRole', 'shareScope')
   }
@@ -262,6 +253,7 @@ const LIST_FIELD_COMPANIONS: Record<string, string[]> = {
   usage: ['usageParts'],
   title: ['parentChain', 'blocked', 'emoji', 'actionIds'],
   table: ['tablePath', 'tableIcon', 'sourceId'],
+  shareScope: ['hasExternal'],
 }
 
 function listedColumnKeys(requested: unknown, labelField: string, schema?: CollectionSchema): string[] | null {
@@ -294,7 +286,6 @@ type ListDecorateNeed = {
   meta: boolean
   shareScope: boolean
   shareRole: boolean
-  ownerTable: boolean
 }
 
 function listDecorateNeed(wanted: string[] | null | undefined): ListDecorateNeed | null {
@@ -307,7 +298,6 @@ function listDecorateNeed(wanted: string[] | null | undefined): ListDecorateNeed
     meta: set.has('emoji'),
     shareScope,
     shareRole: set.has('shareRole'),
-    ownerTable: set.has('ownerTable'),
   }
 }
 
@@ -547,13 +537,9 @@ export class DatabaseService extends Service implements Database {
     super(ctx, 'database')
     const blob = getBlobPort(ctx)
     if (blob) this.assets.setBlobStore(blob)
-    const self = this
     this.access = new DatabaseAccessPolicy({
       tags: this.tags,
       shares: this.shares,
-      get viewCatalog() {
-        return self.viewCatalog
-      },
       collabStore: () => this.collabStore(),
       authorization: () => this.authorization(),
       deviceWorkspace: () => this.deviceWorkspace(),
@@ -830,7 +816,7 @@ export class DatabaseService extends Service implements Database {
     collection: string,
     recordId: string,
     policy?: {
-      accessMode?: 'inherit' | 'private' | 'members' | 'restricted'
+      accessMode?: 'inherit' | 'private' | 'members'
       memberDefaultRole?: 'viewer' | 'editor'
       parentCollection?: string
       parentRecordId?: string
@@ -1340,7 +1326,6 @@ export class DatabaseService extends Service implements Database {
     const sortField = page?.sortField?.trim() || 'title'
     const sortDir = page?.sortDir === 'desc' ? 'desc' : 'asc'
     const scopeFilter = filter?.$scope === 'workspace' || filter?.$scope === 'personal' || filter?.$scope === 'shared' ? filter.$scope : ''
-    const ownerTableFilter = typeof filter?.$ownerTable === 'string' ? filter.$ownerTable.trim() : ''
     const columnKeys = listedColumnKeys(page?.columns, schema.labelField ?? 'title', schema)
     const liveFilter = filter ? { ...filter } : undefined
     if (liveFilter) {
@@ -1366,8 +1351,7 @@ export class DatabaseService extends Service implements Database {
         if (title !== tableNameFilter) continue
       }
       const pack = await this.visibleSortedCollectionRows(source, query, sortField, sortDir, page?.sorts, overlay)
-      const scoped = scopeFilter ? pack[scopeFilter] : pack.rows
-      const visible = ownerTableFilter ? this.access.recordsInOwnerTable(source.path, scoped, ownerTableFilter) : scoped
+      const visible = scopeFilter ? pack[scopeFilter] : pack.rows
       const decorated = this.decorateSlice(source, visible, null)
       for (const row of decorated) gathered.push(overviewRecord(source, row))
     }
@@ -1408,7 +1392,6 @@ export class DatabaseService extends Service implements Database {
     if (!spec || spec.path === DATA_COLLECTION_PATH || !parsed) return { groups: null }
     const liveFilter = { ...filter }
     const scope = liveFilter.$scope
-    const ownerTableFilter = typeof liveFilter.$ownerTable === 'string' ? liveFilter.$ownerTable.trim() : ''
     const ids = asIds(liveFilter.$ids)
     const trash = liveFilter.deleted === true || liveFilter.trash === true
     delete liveFilter.$scope
@@ -1421,7 +1404,7 @@ export class DatabaseService extends Service implements Database {
     const auth = this.authorization()
     const actor = auth?.currentActor()
     const tagId = typeof liveFilter.tag === 'string' && liveFilter.tag !== '' ? liveFilter.tag : undefined
-    if (spec.groupPage && !scope && !ownerTableFilter && (!auth || !actor)) {
+    if (spec.groupPage && !scope && (!auth || !actor)) {
       const pushed = await spec.groupPage({
         field,
         ids: ids?.length ? ids : undefined,
@@ -1439,8 +1422,7 @@ export class DatabaseService extends Service implements Database {
     if (auth && actor) auth.preloadCollection(actor.workspaceId, spec.path, actor.accountId)
     try {
       const pack = await this.visibleSortedCollectionRows(spec, query, 'id', 'asc', undefined, true)
-      const scoped = scope === 'personal' || scope === 'workspace' || scope === 'shared' ? pack[scope] : pack.rows
-      const visible = ownerTableFilter ? this.access.recordsInOwnerTable(spec.path, scoped, ownerTableFilter) : scoped
+      const visible = scope === 'personal' || scope === 'workspace' || scope === 'shared' ? pack[scope] : pack.rows
       const schema = schemaFor(spec)
       const packs = this.tags.list()
       const matching = visible.filter(row => matchListFilter(row, liveFilter, schema, packs) && matchQuery(row, q, packs))
@@ -1472,7 +1454,6 @@ export class DatabaseService extends Service implements Database {
       ? filter.tag
       : ''
     const scopeFilter = filter?.$scope === 'workspace' || filter?.$scope === 'personal' || filter?.$scope === 'shared' ? filter.$scope : ''
-    const ownerTableFilter = typeof filter?.$ownerTable === 'string' ? filter.$ownerTable.trim() : ''
     const columnKeys = listedColumnKeys(page?.columns, schema.labelField ?? 'title', schema)
     const trash = filter?.deleted === true || filter?.trash === true
     const liveFilter = filter ? { ...filter } : undefined
@@ -1506,7 +1487,7 @@ export class DatabaseService extends Service implements Database {
     }
     const auth = this.authorization()
     const actor = auth?.currentActor()
-    if (spec.listPage && !scopeFilter && !ownerTableFilter && spec.path !== TAGS_COLLECTION_PATH) {
+    if (spec.listPage && !scopeFilter && spec.path !== TAGS_COLLECTION_PATH) {
       let pushdownIds: string[] | undefined = idFilter?.length ? idFilter : undefined
       let canPushdown = !auth || !actor
       if (!canPushdown) {
@@ -1577,22 +1558,11 @@ export class DatabaseService extends Service implements Database {
     try {
       const overlay = listNeedsMatchOverlay(liveFilter, q, sortField, page?.sorts)
       const pack = await this.visibleSortedCollectionRows(spec, query, sortField, sortDir, page?.sorts, overlay)
-      const scoped = scopeFilter ? pack[scopeFilter] : pack.rows
-      const visible = ownerTableFilter ? this.access.recordsInOwnerTable(spec.path, scoped, ownerTableFilter) : scoped
+      const visible = scopeFilter ? pack[scopeFilter] : pack.rows
       const tagFilter = spec.path === TAGS_COLLECTION_PATH ? String(filter?.tagId ?? '').trim() : ''
       if (tagFilter) schema = schemaWithTagPack(schema, this.tags.get(tagFilter))
       const packs = this.tags.list()
-      const needsColumnProjection = this.access.hasColumnRestrictions(spec.path)
-      const policyCache = needsColumnProjection ? new Map<string, ReturnType<DatabaseAccessPolicy['columnPolicyFor']>>() : null
-      const sorted = visible.filter((row) => {
-        if (!needsColumnProjection) {
-          return matchListFilter(row, liveFilter, schema, packs) && matchQuery(row, q, packs)
-        }
-        const policy = this.access.columnPolicyFor(spec.path, row)
-        policyCache!.set(row.id, policy)
-        const readable = this.access.projectRecordWithPolicy(row, policy)
-        return matchListFilter(readable, liveFilter, schema, packs) && matchQuery(readable, q, packs)
-      })
+      const sorted = visible.filter((row) => matchListFilter(row, liveFilter, schema, packs) && matchQuery(row, q, packs))
       const total = sorted.length
       const slice = this.decorateSlice(spec, sorted.slice(offset, offset + limit), columnKeys)
       return {
@@ -1606,13 +1576,7 @@ export class DatabaseService extends Service implements Database {
         offset,
         limit,
         items: slice.map((row): DbRecord & { path: string; kind: 'record' } => {
-          const stripped = withoutContent(spec, row)
-          const value = needsColumnProjection
-            ? this.access.projectRecordWithPolicy(
-                stripped,
-                policyCache?.get(row.id) ?? this.access.columnPolicyFor(spec.path, stripped),
-              )
-            : stripped
+          const value = withoutContent(spec, row)
           const picked = columnKeys ? pickListedFields(value, columnKeys) : value
           return {
             ...picked,
@@ -1653,18 +1617,22 @@ export class DatabaseService extends Service implements Database {
         ...withMeta,
         ...(!need || need.shareScope ? { shareScope: '共享' } : {}),
         ...(!need || need.shareRole ? { shareRole: '查看' } : {}),
-        ...(!need || need.ownerTable ? { ownerTable: '空间' } : {}),
       }
     }
     const wantScope = !need || need.shareScope
     const wantRole = !need || need.shareRole
-    const wantOwnerTable = !need || need.ownerTable
-    const stored = wantScope ? this.access.ownershipOf(spec.path, String(row.id ?? '')) : 'personal'
+    const recordId = String(row.id ?? '')
+    const stored = wantScope ? this.access.ownershipOf(spec.path, recordId) : 'personal'
+    const hasExternal = wantScope ? this.access.hasExternalAccess(spec.path, recordId) : false
     return {
       ...withMeta,
-      ...(wantScope ? { shareScope: this.access.shareScopeLabel(spec.path, String(row.id ?? ''), withMeta, stored) } : {}),
+      ...(wantScope
+        ? {
+            shareScope: this.access.shareScopeLabel(spec.path, recordId, withMeta, stored),
+            ...(hasExternal ? { hasExternal: true } : {}),
+          }
+        : {}),
       ...(wantRole ? { shareRole: this.access.shareRoleLabel(spec, withMeta) } : {}),
-      ...(wantOwnerTable ? { ownerTable: this.access.ownerTableLabel(spec, withMeta) } : {}),
     }
   }
 
@@ -1760,7 +1728,7 @@ export class DatabaseService extends Service implements Database {
     return resolveNamedPerson(this.actorHost(), person)
   }
 
-  private applyTagOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
+  applyTagOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
     if (!schemaFor(spec).fields.tag) return row
     // Collected rows are projections, not records owned by /tags. Never write
     // them back to /tags: that would collect the projection again on each read.
@@ -1821,7 +1789,7 @@ export class DatabaseService extends Service implements Database {
       kind: 'record' as const,
       path: `${spec.path}/${record.id}`,
       schema: this.schemaForCurrent(spec),
-      value: this.access.projectRecord(spec.path, decorated),
+      value: decorated,
     }
   }
 
@@ -1995,8 +1963,6 @@ export class DatabaseService extends Service implements Database {
     const current = await spec.get(parts[1]!)
     if (!current) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
     this.assertLiveRecord(spec, current.id, 'resource:update', current)
-    this.access.assertWritablePatch(spec.path, current, raw)
-    this.access.assertAnchorFieldSafe(spec.path, current, { ...current, ...raw } as DbRecord)
     const bannerPatch = takeBannerPatch(raw)
     if ('tag' in raw && schema.fields.tag) {
       if (!schema.fields.tag.writable || schema.fields.tag.computed) throw new Error(`field not writable: tag`)
@@ -2149,7 +2115,7 @@ export class DatabaseService extends Service implements Database {
   async create(
     path: string,
     content?: unknown,
-    options: { scope?: 'personal' | 'workspace' | 'shared' | 'local'; ownerTable?: string } = {},
+    options: { scope?: 'personal' | 'workspace' | 'shared' | 'local' } = {},
   ) {
     const parts = splitPath(path)
     if (parts.length !== 1) throw new Error(`cannot create: ${normalizeCollectionPath(path)}`)
@@ -2158,23 +2124,12 @@ export class DatabaseService extends Service implements Database {
     if (!spec.records?.create || !spec.create) throw new Error(`collection cannot create: ${spec.path}`)
     const authorization = this.authorization()
     const actor = authorization?.currentActor()
-    const explicitOwnerTable = options.ownerTable?.trim() || ''
-    const foreignOwnerId =
-      explicitOwnerTable.startsWith('account:') && actor?.accountId && explicitOwnerTable !== `account:${actor.accountId}`
-        ? explicitOwnerTable.slice('account:'.length)
-        : ''
     if (authorization && actor) {
-      if (foreignOwnerId) {
-        if (!authorization.canEditPersonalTable(actor, actor.workspaceId, spec.path, foreignOwnerId)) {
-          throw new Error('permission denied: INSUFFICIENT_PERMISSION')
-        }
-      } else {
-        authorization.requireCurrent('resource:create', {
-          type: 'collection',
-          workspaceId: actor.workspaceId,
-          collection: spec.path,
-        })
-      }
+      authorization.requireCurrent('resource:create', {
+        type: 'collection',
+        workspaceId: actor.workspaceId,
+        collection: spec.path,
+      })
     }
     const schema = schemaFor(spec)
     const bodyKey = spec.schema.contentField
@@ -2235,19 +2190,15 @@ export class DatabaseService extends Service implements Database {
       const parentRecordId = parentField ? String(record[parentField] ?? '').trim() : ''
       if (spec.path !== WORKSPACE_MEMBERS_COLLECTION_PATH) {
         const device = this.deviceWorkspace()
-        const workspaceOwned = !foreignOwnerId && (explicitOwnerTable === 'workspace' || options.scope === 'workspace') && !device
-        const shared = !foreignOwnerId && options.scope === 'shared' && !parentRecordId
-        const local = !foreignOwnerId && options.scope === 'local' && !parentRecordId
+        const workspaceOwned = options.scope === 'workspace' && !device
+        const shared = options.scope === 'shared' && !parentRecordId
+        const local = options.scope === 'local' && !parentRecordId
         this.attachWorkspaceRecord(spec.path, record.id, {
           accessMode: parentRecordId ? 'inherit' : workspaceOwned ? 'members' : 'private',
           ...(workspaceOwned ? { memberDefaultRole: 'editor' as const } : {}),
           ...(parentRecordId ? { parentCollection: spec.path, parentRecordId } : {}),
-          ...(foreignOwnerId ? { ownerTable: explicitOwnerTable } : {}),
         })
         if (shared) this.markPublicView(spec.path, record.id)
-        if (workspaceOwned && !parentRecordId) {
-          // workspace-scoped records already attach accessMode='members', owner_table='workspace'
-        }
         if (local || device) this.markDeviceRecord(spec.path, record.id)
       }
       const initialBody = initialBodies[sourceIndex]
@@ -2301,13 +2252,12 @@ export class DatabaseService extends Service implements Database {
     this.assertLiveRecord(spec, raw.id, 'resource:read', raw)
 
     const schema = schemaFor(spec)
-    const decorated = withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, raw)))
-    const visible = this.access.projectRecord(spec.path, decorated) as Record<string, unknown>
+    const visible = withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, raw))) as Record<string, unknown>
     const payload: Record<string, unknown> = {}
     const parentField = spec.schema.parentField
     for (const [key, value] of Object.entries(visible)) {
       if (key === 'id' || key === parentField) continue
-      if (key === 'shareScope' || key === 'shareRole' || key === 'ownerTable' || key === 'createdBy' || key === 'updatedBy') {
+      if (key === 'shareScope' || key === 'shareRole' || key === 'hasExternal' || key === 'createdBy' || key === 'updatedBy') {
         continue
       }
       if (value === undefined) continue
@@ -2562,7 +2512,6 @@ export class DatabaseService extends Service implements Database {
     const record = await spec.get(parts[1]!)
     if (!record) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
     this.assertLiveRecord(spec, record.id, 'resource:read', record)
-    this.access.assertContentAccess(spec.path, record, 'read')
     if (!schema.fields[field]) throw new Error(`no content field: ${field}`)
     const editorContent = isEditorContentSpec(spec)
       ? readEditorContentRecord(this.tags.ensure(), spec.path, record.id)
@@ -2599,7 +2548,6 @@ export class DatabaseService extends Service implements Database {
     const existing = await spec.get(parts[1]!)
     if (!existing) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
     this.assertLiveRecord(spec, existing.id, 'resource:update', existing)
-    this.access.assertContentAccess(spec.path, existing, 'write')
     if (!schema.fields[field]) throw new Error(`no content field: ${field}`)
     const persisted = typeof value === 'string' ? stripMentionLabels(value) : value
     if (isEditorContentSpec(spec)) {
@@ -2697,17 +2645,19 @@ export function apply(ctx: Context) {
         accountId: string,
         workspaceId: string,
       ) => Array<{ collection: string; record_id: string }>
-      hasSharedRecordsFromOwner?: (
+      memberById?: (
         workspaceId: string,
-        collection: string,
-        ownerAccountId: string,
-        actorId: string,
-      ) => boolean
-      sharedOwnerAccountIds?: (
-        workspaceId: string,
-        collection: string,
-        actorId: string,
-      ) => string[]
+        accountId: string,
+      ) => {
+        id: string
+        name: string
+        email: string
+        role: string
+        member_kind: 'member' | 'external' | 'guest'
+        created_at: number
+      } | null
+      memberRole?: (accountId: string, workspaceId: string) => string | null
+      memberViewGrantCount?: (workspaceId: string, viewId: string) => number
       workspaceOwnerId?: (workspaceId: string) => string | null
     }
   } | undefined
@@ -2715,56 +2665,31 @@ export function apply(ctx: Context) {
   const resolveViewDecision = (
     workspaceId: string,
     collection: string,
-    view: { id: string; createdBy?: string; scope?: string; protection?: string; ownerTable?: string; builtin?: boolean },
+    view: { id: string; createdBy?: string; scope?: string; protection?: string; builtin?: boolean },
     accountId: string,
     action: 'resource:read' | 'resource:update' | 'resource:delete',
   ): { allowed: boolean; effectiveRole: 'owner' | 'manager' | 'editor' | 'viewer' } => {
     if (!account?.store || !account?.authorization || !workspaceId || !accountId) {
       return { allowed: true, effectiveRole: 'owner' }
     }
-    const member = account.store.members(accountId, workspaceId).find((item) => item.id === accountId)
+    const member = account.store.memberById?.(workspaceId, accountId)
+      ?? account.store.members(accountId, workspaceId).find((item) => item.id === accountId)
     if (!member) return { allowed: false, effectiveRole: 'viewer' }
     const isInternal = member.member_kind === 'member'
     const isWsOwner = account.store.workspaceOwnerId?.(workspaceId) === accountId || member.role === 'owner'
     const isWsAdmin = isWsOwner || member.role === 'admin'
-    const isCrossTableAll = view.ownerTable === 'all' || isBuiltinAllViewId(String(view.id))
     const isCreator = Boolean(view.createdBy && view.createdBy === accountId)
-    const allProtection =
-      view.protection === 'public' || view.protection === 'locked' || view.protection === 'personal'
-        ? view.protection
-        : 'personal'
 
-    // 1. 聚合视图（builtin-all:* 与 ownerTable === 'all'）：
-    //    - 默认/personal 仅创建者本人可见、可改、可删；
-    //    - 空间管理员设为 public / locked 后，空间内部成员可见（底层数据仍按各自权限过滤）。
-    if (isCrossTableAll) {
-      if (isBuiltinAllViewId(String(view.id)) || allProtection === 'personal') {
-        return isCreator
-          ? { allowed: true, effectiveRole: 'owner' }
-          : { allowed: false, effectiveRole: 'viewer' }
-      }
-      if (!isInternal) return { allowed: false, effectiveRole: 'viewer' }
-      if (allProtection === 'locked') {
-        if (isWsAdmin) return { allowed: true, effectiveRole: isCreator ? 'owner' : 'manager' }
-        return action === 'resource:read'
-          ? { allowed: true, effectiveRole: 'viewer' }
-          : { allowed: false, effectiveRole: 'viewer' }
-      }
-      const effectiveRole: 'owner' | 'manager' | 'editor' | 'viewer' = isCreator
-        ? 'owner'
-        : isWsAdmin
-          ? 'manager'
-          : member.role === 'viewer'
-            ? 'viewer'
-            : 'editor'
-      if (action === 'resource:read') return { allowed: true, effectiveRole }
-      if (action === 'resource:update') return { allowed: effectiveRole !== 'viewer', effectiveRole }
-      return { allowed: isCreator || isWsAdmin, effectiveRole }
+    // 1. /data 聚合内置视图与个人视图：严格按创建者隔离
+    if (collection === DATA_COLLECTION_PATH && (isBuiltinAllViewId(String(view.id)) || view.protection === 'personal' || view.scope === 'personal')) {
+      return isCreator
+        ? { allowed: true, effectiveRole: 'owner' }
+        : { allowed: false, effectiveRole: 'viewer' }
     }
 
-    const isBuiltin = Boolean(view.builtin)
+    const isBuiltin = Boolean(view.builtin) || isBuiltinAllViewId(String(view.id))
 
-    // 2. 系统/索引内置视图（如成员表、组件表）：空间内部成员默认只读可见，仅空间 owner 可修改/删除
+    // 2. 内置视图：空间内部成员可读（底层数据仍按各自静态权限过滤），仅空间 owner 可修改/删除
     if (isBuiltin) {
       if (!isInternal) return { allowed: false, effectiveRole: 'viewer' }
       const effectiveRole = isWsOwner ? 'owner' : 'viewer'
@@ -2786,37 +2711,7 @@ export function apply(ctx: Context) {
         : { allowed: false, effectiveRole: 'viewer' }
     }
 
-    // 4. 个人表（ownerTable === 'account:<X>'）的 public / locked 视图：
-    //    - 表主人 X 拥有全部权限（owner）；
-    //    - 仅向「在当前集合被 X 共享了至少 1 条记录的协作者」可见（未获共享的成员与管理员均不可见）；
-    //    - locked 视图仅 X 可改/删，协作者只读（viewer）；public 视图协作者可编辑，仅 X/创建者可删。
-    if (view.ownerTable?.startsWith('account:')) {
-      const tableOwnerId = view.ownerTable.slice('account:'.length).trim()
-      if (tableOwnerId === accountId) {
-        return { allowed: true, effectiveRole: 'owner' }
-      }
-      const hasShared = Boolean(
-        tableOwnerId && account.store.hasSharedRecordsFromOwner?.(workspaceId, collection, tableOwnerId, accountId),
-      )
-      if (!hasShared) {
-        return { allowed: false, effectiveRole: 'viewer' }
-      }
-      if (protection === 'locked') {
-        return action === 'resource:read'
-          ? { allowed: true, effectiveRole: 'viewer' }
-          : { allowed: false, effectiveRole: 'viewer' }
-      }
-      const effectiveRole: 'owner' | 'editor' | 'viewer' = isCreator
-        ? 'owner'
-        : member.role === 'viewer'
-          ? 'viewer'
-          : 'editor'
-      if (action === 'resource:read') return { allowed: true, effectiveRole }
-      if (action === 'resource:update') return { allowed: effectiveRole !== 'viewer', effectiveRole }
-      return { allowed: isCreator, effectiveRole }
-    }
-
-    // 5. 空间表（ownerTable === 'workspace'）的 public / locked 视图：仅空间内部成员可见
+    // 4. 公开/锁定视图：仅空间内部成员可见
     if (!isInternal) {
       return { allowed: false, effectiveRole: 'viewer' }
     }
@@ -2833,8 +2728,8 @@ export function apply(ctx: Context) {
       return { allowed: effectiveRole === 'owner' || effectiveRole === 'manager', effectiveRole }
     }
 
-    // 空间表锁定视图（locked）：所有内部成员可见，仅创建者或空间管理员可修改/删除
-    const canManageLocked = isCreator || isWsAdmin
+    // 5. 锁定视图（locked）：所有内部成员可见；/workspace-members 锁定视图作为动态成员组严格限管理员维护
+    const canManageLocked = collection === WORKSPACE_MEMBERS_COLLECTION_PATH ? isWsAdmin : (isCreator || isWsAdmin)
     const effectiveRole: 'owner' | 'manager' | 'editor' | 'viewer' = isCreator
       ? 'owner'
       : canManageLocked
@@ -2846,22 +2741,23 @@ export function apply(ctx: Context) {
   const authorizeViewAction = (
     workspaceId: string,
     collection: string,
-    view: { id: string; createdBy?: string; scope?: string; protection?: string; ownerTable?: string; builtin?: boolean },
+    view: { id: string; createdBy?: string; scope?: string; protection?: string; builtin?: boolean },
     accountId: string,
     action: 'resource:read' | 'resource:update' | 'resource:delete',
   ) => resolveViewDecision(workspaceId, collection, view, accountId, action).allowed
   savedViews.setPolicyGuard({
-    // 方案 B（视图归展示，规则归安全）：视图权限与页面记录完全一致，统一走 /views 下的 resource_policies + record_grants
-    // 内置视图全空间共享一份，创建人固定为空间创建人（workspace owner），且仅空间创建人可修改或删除
     workspaceOwner: (workspaceId) => account?.store?.workspaceOwnerId?.(workspaceId) ?? null,
     isWorkspaceAdmin: (workspaceId, accountId) => {
       if (!account?.store || !workspaceId || !accountId) return true
       if (account.store.workspaceOwnerId?.(workspaceId) === accountId) return true
-      const member = account.store.members(accountId, workspaceId).find((item) => item.id === accountId)
-      return member?.role === 'owner' || member?.role === 'admin'
+      const role = account.store.memberRole?.(accountId, workspaceId)
+      return role === 'owner' || role === 'admin'
     },
-    sharedOwnersFor: (workspaceId, collection, accountId) =>
-      account?.store?.sharedOwnerAccountIds?.(workspaceId, collection, accountId) ?? [],
+    memberViewGrantCount: (workspaceId, viewId) =>
+      account?.store?.memberViewGrantCount?.(workspaceId, viewId) ?? 0,
+    onMemberViewChanged: () => {
+      account?.authorization?.invalidateAll()
+    },
     canSeeView: (workspaceId, collection, view, accountId) =>
       authorizeViewAction(workspaceId, collection, view, accountId, 'resource:read'),
     canModifyView: (workspaceId, collection, view, accountId) =>
@@ -2879,50 +2775,29 @@ export function apply(ctx: Context) {
     return workspaceId && account?.workspaceLocation?.(workspaceId) === 'cloud' ? 'cloud' : 'device'
   }
   db.viewCatalog = savedViews
-  const parsedDynamicGroupFilterCache = new Map<string, Record<string, unknown>>()
-  account?.authorization?.setDynamicGroupMatcher((workspaceId, filterTreeJson, accountId) => {
+  account?.authorization?.setMemberViewLockChecker((workspaceId, viewId) =>
+    savedViews.isLockedMemberView(workspaceId, viewId),
+  )
+  account?.authorization?.setMemberViewMatcher((workspaceId, viewId, accountId) => {
     if (!account.store) return false
-    const member = account.store.members(accountId, workspaceId).find((item) => item.id === accountId)
+    const view = savedViews.getMemberView(workspaceId, viewId)
+    if (!view || view.protection !== 'locked') return false
+    const member = account.store.memberById?.(workspaceId, accountId)
     if (!member) return false
-    let tree = parsedDynamicGroupFilterCache.get(filterTreeJson)
-    if (!tree) {
-      try {
-        const parsed = JSON.parse(filterTreeJson)
-        tree = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : { op: 'and', children: [] }
-      } catch {
-        tree = { op: 'and', children: [] }
-      }
-      if (parsedDynamicGroupFilterCache.size > 512) parsedDynamicGroupFilterCache.clear()
-      parsedDynamicGroupFilterCache.set(filterTreeJson, tree)
+    const memberSpec = db.collection(WORKSPACE_MEMBERS_COLLECTION_PATH)
+    const baseRow: DbRecord = {
+      id: member.id,
+      title: member.name || member.email,
+      name: member.name,
+      email: member.email,
+      role: member.role,
+      membershipKind: member.member_kind,
+      joinedAt: member.created_at,
     }
-    return matchListFilterRecord(
-      {
-        id: member.id,
-        title: member.name || member.email,
-        name: member.name,
-        email: member.email,
-        role: member.role,
-        membershipKind: member.member_kind,
-        joinedAt: member.created_at,
-      },
-      { $tree: tree },
-    )
-  })
-  const parsedRuleFilterCache = new Map<string, Record<string, unknown>>()
-  account?.authorization?.setAccessRuleMatcher((_workspaceId, _collection, filterTreeJson, recordId, context) => {
-    if (!context.record) return false
-    let tree = parsedRuleFilterCache.get(filterTreeJson)
-    if (!tree) {
-      try {
-        const parsed = JSON.parse(filterTreeJson)
-        tree = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : { op: 'and', rules: [] }
-      } catch {
-        tree = { op: 'and', rules: [] }
-      }
-      if (parsedRuleFilterCache.size > 512) parsedRuleFilterCache.clear()
-      parsedRuleFilterCache.set(filterTreeJson, tree)
-    }
-    return recordMatchesAccessRule({ id: recordId, ...context.record } as DbRecord, tree)
+    const taggedRow = memberSpec ? db.applyTagOverlay(memberSpec, baseRow) : baseRow
+    const filter: Record<string, unknown> = { ...(view.filters ?? {}) }
+    if (view.filterTree) filter.$tree = view.filterTree
+    return matchListFilterRecord(taggedRow, filter, memberSpec?.schema as never, db.tags.list())
   })
   const shares = db.shares
   shares.open(process.env.VITEST ? ':memory:' : biuSqlitePath())

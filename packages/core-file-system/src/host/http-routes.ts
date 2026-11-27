@@ -11,8 +11,15 @@ import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { asPublicProfile, writeWorkspaceProfile } from '@biu/host-workspace'
 import { DATABASE_CHANNEL, databaseChannelPayload, normalizeSchemaPack } from '@biu/type-file-system'
 import { buildAccessExplanation, type BuildAccessExplanationInput } from '../access-explanation.ts'
-import { PAGES_COLLECTION_PATH, TAGS_COLLECTION_PATH, VIEWS_COLLECTION_PATH, normalizeCollectionPath, savedViewRecordPath } from '../paths.ts'
-import { recordMatchesAccessRule } from '../view-access.ts'
+import {
+  PAGES_COLLECTION_PATH,
+  TAGS_COLLECTION_PATH,
+  VIEWS_COLLECTION_PATH,
+  WORKSPACE_MEMBERS_COLLECTION_PATH,
+  normalizeCollectionPath,
+  savedViewRecordPath,
+} from '../paths.ts'
+import { matchListFilterRecord } from '../query-logic.ts'
 import { isSharePluginId } from '../share-resources.ts'
 import { resolveScopeTarget } from './access-policy.ts'
 import {
@@ -346,14 +353,11 @@ export function registerDatabaseHttpRoutes(
         records?: unknown
         content?: unknown
         scope?: 'personal' | 'workspace' | 'shared' | 'local'
-        ownerTable?: string
       }
       const scope =
         body?.scope === 'workspace' ? 'workspace' : body?.scope === 'shared' ? 'shared' : body?.scope === 'local' ? 'local' : 'personal'
-      const ownerTable = typeof body?.ownerTable === 'string' ? body.ownerTable.trim() : ''
       const created = await db.create(String(body?.path ?? ''), body?.records ?? body?.content, {
         scope: activeDataLocation() === 'device' && scope !== 'shared' ? 'local' : scope,
-        ...(ownerTable ? { ownerTable } : {}),
       })
       route.send(200, created)
     } catch (error) {
@@ -398,43 +402,6 @@ export function registerDatabaseHttpRoutes(
   })
   ctx.http.route('GET', '/api/db/trash', async (route) => {
     await send(route, () => db.listTrash())
-  })
-  /** 列出当前集合中向当前用户共享了私人表文档的所有成员（用于左侧边栏「共享」下展示他人私人表入口）。 */
-  ctx.http.route('GET', '/api/db/shared-owners', async (route) => {
-    try {
-      const collection = normalizeCollectionPath(String(route.query.get('collection') ?? ''))
-      if (!collection || collection === '/') {
-        route.send(200, { owners: [] })
-        return
-      }
-      const me = currentAccountId()
-      const listed = await db.list(collection, { $scope: 'shared' }, { limit: 500, columns: ['id', 'ownerTable'] })
-      const items = listed.kind === 'collection' ? listed.items : []
-      const counts = new Map<string, { accountId: string; ownerTable: string; name: string; count: number }>()
-      for (const item of items) {
-        const raw = item.ownerTable
-        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
-        const person = raw as { kind?: unknown; accountId?: unknown; name?: unknown }
-        if (person.kind !== 'user') continue
-        const accountId = String(person.accountId ?? '').trim()
-        if (!accountId || accountId === me) continue
-        const existing = counts.get(accountId)
-        if (existing) {
-          existing.count += 1
-        } else {
-          counts.set(accountId, {
-            accountId,
-            ownerTable: `account:${accountId}`,
-            name: String(person.name ?? '').trim() || accountId.slice(0, 8),
-            count: 1,
-          })
-        }
-      }
-      const owners = [...counts.values()].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
-      route.send(200, { owners })
-    } catch {
-      route.send(200, { owners: [] })
-    }
   })
   ctx.http.route('POST', '/api/db/saved-views', async (route) => {
     try {
@@ -626,18 +593,6 @@ export function registerDatabaseHttpRoutes(
             shares.revoke(share.token)
             continue
           }
-        } else if (share.kind === 'rule' && share.ruleId) {
-          const account = ctx.get('account') as {
-            store?: { getAccessRule?: (wsId: string, ruleId: string) => { name: string; createdBy: string; enabled: boolean } | null }
-          } | undefined
-          const wsId = share.workspaceId || currentRequestWorkspaceId()
-          const rule = wsId ? account?.store?.getAccessRule?.(wsId, share.ruleId) : null
-          if (!rule) {
-            shares.revoke(share.token)
-            continue
-          }
-          if (currentAccountId() && rule.createdBy !== currentAccountId()) continue
-          title = rule.name || title
         } else {
           continue
         }
@@ -685,22 +640,19 @@ export function registerDatabaseHttpRoutes(
       return
     }
     const rawKind = route.query.get('kind')
-    const kind = rawKind === 'rule' ? 'rule' as const : rawKind === 'record' ? 'record' as const : null
+    const kind = rawKind === 'record' ? 'record' as const : null
     if (!kind) {
       route.send(200, { share: null })
       return
     }
     const recordId = route.query.get('recordId') || ''
-    const ruleId = route.query.get('ruleId') || ''
     try {
-      await db.requirePath(kind === 'record' ? `${collection}/${recordId}` : collection, 'resource:read')
+      await db.requirePath(`${collection}/${recordId}`, 'resource:read')
     } catch {
       route.send(404, { error: 'not found' })
       return
     }
-    const share = kind === 'record'
-      ? shares.findRecord(collection, recordId)
-      : shares.findRule(collection, ruleId)
+    const share = shares.findRecord(collection, recordId)
     route.send(200, {
       share: share ? { ...share, url: publicShareUrl(route.req, share.token) } : null,
     })
@@ -711,64 +663,28 @@ export function registerDatabaseHttpRoutes(
         kind?: string
         collection?: string
         recordId?: string
-        ruleId?: string
         password?: string | null
         enabled?: boolean
         sharePlugins?: boolean
         allowCopy?: boolean
       }
-      if (body.kind === 'view') {
-        route.send(400, { error: '视图不支持独立公开分享，请使用访问规则生成公开链接' })
-        return
-      }
-      const kind = body.kind === 'rule' ? 'rule' as const : body.kind === 'record' ? 'record' as const : null
-      if (!kind) {
+      if (body.kind !== 'record') {
         route.send(400, { error: '不支持的分享类型' })
         return
       }
       const collection = String(body.collection ?? '')
       const recordId = String(body.recordId ?? '')
-      const ruleId = String(body.ruleId ?? '').trim()
-      if (kind === 'rule') {
-        if (!ruleId) {
-          route.send(400, { error: 'ruleId required' })
-          return
-        }
-        const account = ctx.get('account') as {
-          store?: {
-            getAccessRule?: (wsId: string, id: string) => { createdBy: string; ownerTable: string } | null
-            canManageAccessRule?: (actorId: string, wsId: string, rule: { createdBy: string; ownerTable: string }) => boolean
-          }
-        } | undefined
-        const wsId = currentRequestWorkspaceId()
-        const meId = currentAccountId()
-        const rule = wsId ? account?.store?.getAccessRule?.(wsId, ruleId) : null
-        if (!rule) {
-          route.send(404, { error: 'rule not found' })
-          return
-        }
-        const canManage = meId && wsId && account?.store?.canManageAccessRule
-          ? account.store.canManageAccessRule(meId, wsId, rule)
-          : (!meId || rule.createdBy === meId)
-        if (!canManage) {
-          route.send(403, { error: rule.ownerTable === 'workspace' ? '仅空间管理员可以管理空间规则的公开外链' : '只有规则创建者可以管理此规则的公开外链' })
-          return
-        }
-      } else {
-        await db.requirePath(`${collection}/${recordId}`, 'resource:share')
-      }
+      await db.requirePath(`${collection}/${recordId}`, 'resource:share')
       if (body.enabled === false) {
-        if (kind === 'record') shares.revokeRecord(collection, recordId)
-        else shares.revokeRule(collection, ruleId)
+        shares.revokeRecord(collection, recordId)
         db.notifyShareChange()
         route.send(200, { share: null })
         return
       }
       const share = shares.upsert({
-        kind,
+        kind: 'record',
         collection,
         recordId: body.recordId,
-        ruleId,
         password: body.password,
         sharePlugins: body.sharePlugins,
         allowCopy: body.allowCopy,
@@ -785,48 +701,6 @@ export function registerDatabaseHttpRoutes(
     const withWs = () => (share.workspaceId ? runWithRequestWorkspace(share.workspaceId, fn) : fn())
     return share.createdBy ? runWithAccount(share.createdBy, withWs) : withWs()
   }
-  const resolveRuleSnapshotOpts = (
-    share: { kind: string; collection: string; ruleId?: string; workspaceId?: string; createdBy?: string },
-    baseOpts: ReturnType<typeof shareSnapshotOpts>,
-  ) => {
-    if (share.kind !== 'rule' || !share.ruleId) return baseOpts
-    const account = ctx.get('account') as {
-      store?: {
-        getAccessRule?: (wsId: string, id: string) => {
-          id: string
-          name: string
-          createdBy: string
-          ownerTable?: string
-          filterTree: Record<string, unknown>
-          columns: string[] | null
-          displaySnapshot: { mode?: string; sorts?: unknown[]; groupBy?: string; groupConfig?: Record<string, unknown> } | null
-          enabled: boolean
-        } | null
-      }
-      authorization?: {
-        ownerTableOf?: (ref: { type: 'record'; workspaceId: string; collection: string; recordId: string }) => string | null
-      }
-    } | undefined
-    const wsId = share.workspaceId || currentRequestWorkspaceId()
-    const rule = wsId ? account?.store?.getAccessRule?.(wsId, share.ruleId) ?? null : null
-    const authz = account?.authorization
-    const ruleOwnerTable = rule ? (rule.ownerTable?.trim() || (rule.createdBy ? `account:${rule.createdBy}` : '')) : ''
-    return {
-      ...baseOpts,
-      accessRule: rule,
-      ...(rule && wsId && ruleOwnerTable && authz?.ownerTableOf
-        ? {
-            canCreatorShareRecord: (recordId: string) =>
-              authz.ownerTableOf!({
-                type: 'record',
-                workspaceId: wsId,
-                collection: share.collection,
-                recordId,
-              }) === ruleOwnerTable,
-          }
-        : {}),
-    }
-  }
   ctx.http.route('GET', '/api/share/:token', async (route) => {
     const token = route.params.token ?? ''
     const share = shares.get(token)
@@ -841,13 +715,13 @@ export function registerDatabaseHttpRoutes(
     rememberShareLan(route)
     try {
       const snapshot = await runInShareContext(share, () =>
-        buildShareSnapshot(db, savedViews, share, resolveRuleSnapshotOpts(share, shareSnapshotOpts(route.query))),
+        buildShareSnapshot(db, savedViews, share, shareSnapshotOpts(route.query)),
       )
       route.send(200, snapshot)
     } catch (error) {
       const msg = String(error)
-      if ((share.kind === 'record' && /unknown record/.test(msg)) || (share.kind === 'rule' && /unknown rule/.test(msg))) {
-        if (share.kind === 'record') shares.revoke(token)
+      if (share.kind === 'record' && /unknown record/.test(msg)) {
+        shares.revoke(token)
         route.send(404, { error: 'not found' })
         return
       }
@@ -869,13 +743,13 @@ export function registerDatabaseHttpRoutes(
     rememberShareLan(route)
     try {
       const snapshot = await runInShareContext(share, () =>
-        buildShareSnapshot(db, savedViews, share, resolveRuleSnapshotOpts(share, shareSnapshotOpts(route.query))),
+        buildShareSnapshot(db, savedViews, share, shareSnapshotOpts(route.query)),
       )
       route.send(200, snapshot)
     } catch (error) {
       const msg = String(error)
-      if ((share.kind === 'record' && /unknown record/.test(msg)) || (share.kind === 'rule' && /unknown rule/.test(msg))) {
-        if (share.kind === 'record') shares.revoke(token)
+      if (share.kind === 'record' && /unknown record/.test(msg)) {
+        shares.revoke(token)
         route.send(404, { error: 'not found' })
         return
       }
@@ -896,7 +770,7 @@ export function registerDatabaseHttpRoutes(
     const recordId = route.params.recordId ?? ''
     try {
       const snapshot = await runInShareContext(share, () =>
-        buildShareSnapshot(db, savedViews, share, resolveRuleSnapshotOpts(share, { contentIds: [recordId] })),
+        buildShareSnapshot(db, savedViews, share, { contentIds: [recordId] }),
       )
       if (!snapshot.records.some((row) => String(row.id) === recordId)) {
         route.send(404, { error: 'not found' })
@@ -1204,141 +1078,351 @@ export function registerDatabaseHttpRoutes(
     }
   })
 
-  // 分享规则实时命中预览：严格限定在当前用户可管理（owner / manager）的数据子集内
-  ctx.http.route('POST', '/api/db/access-rules/preview', async (route) => {
+  type AccountHttpService = {
+    store?: {
+      activeWorkspaceId?: () => string | null
+      memberRole?: (accountId: string, workspaceId: string) => string | null
+      members?: (actorId: string, workspaceId?: string) => Array<{
+        id: string
+        name: string
+        email: string
+        avatar?: string
+        role: string
+        member_kind: string
+        created_at: number
+      }>
+      memberViewGrantCount?: (workspaceId: string, viewId: string) => number
+      freezeMemberViewGrants?: (actorId: string, workspaceId: string, viewId: string, memberIds: string[]) => { frozenRecords: number; expandedGrants: number }
+      revokeAllMemberViewGrants?: (actorId: string, workspaceId: string, viewId: string) => { revokedRecords: number }
+      previewBatchRecordPermissions?: (
+        actorId: string,
+        collection: string,
+        recordIds: string[],
+      ) => { totalCount: number; manageableCount: number; skippedCount: number; manageableIds: string[] }
+      batchUpdateRecordPermissions?: (
+        actorId: string,
+        input: {
+          collection: string
+          recordIds: string[]
+          mode: 'grant' | 'revoke' | 'access_mode'
+          subjects?: Array<{ subjectType: 'account' | 'member_view'; subjectId: string }>
+          role?: 'viewer' | 'commenter' | 'editor' | 'manager'
+          accessMode?: 'private' | 'members'
+          memberDefaultRole?: 'viewer' | 'editor'
+        },
+      ) => { totalCount: number; updatedCount: number; skippedCount: number; updatedIds: string[] }
+    }
+  }
+
+  const getAccountService = (): AccountHttpService | undefined => {
     try {
-      const body = (await route.json()) as {
-        collection?: string
-        scope?: 'workspace' | 'personal'
-        ownerTable?: string
-        filterTree?: Record<string, unknown> | null
-        limit?: number
+      return ctx.get('account') as AccountHttpService | undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  const resolveWorkspaceContext = (account: AccountHttpService | undefined) => {
+    const policy = getRuntimePolicy()
+    const actorId = currentAccountId()
+    const workspaceId =
+      currentRequestWorkspaceId() ||
+      (policy.allowImplicitActiveWorkspace ? account?.store?.activeWorkspaceId?.() : '') ||
+      ''
+    return { actorId, workspaceId }
+  }
+
+  const resolveMemberViewMatches = (
+    account: AccountHttpService | undefined,
+    actorId: string,
+    workspaceId: string,
+    view: StoredView,
+  ) => {
+    const rawMembers = account?.store?.members?.(actorId, workspaceId) ?? []
+    const memberSpec = db.collection(WORKSPACE_MEMBERS_COLLECTION_PATH)
+    const filter: Record<string, unknown> = { ...(view.filters ?? {}) }
+    if (view.filterTree) filter.$tree = view.filterTree
+    const allTags = db.tags.list()
+    const q = String(view.query ?? '').trim().toLowerCase()
+    const matched: Array<{ id: string; name: string; email: string; avatar?: string; memberKind: string }> = []
+    for (const member of rawMembers) {
+      const baseRow = {
+        id: member.id,
+        title: member.name || member.email,
+        name: member.name,
+        email: member.email,
+        role: member.role,
+        membershipKind: member.member_kind,
+        joinedAt: member.created_at,
       }
-      const collection = normalizeCollectionPath(String(body?.collection ?? ''))
-      if (!collection || collection === '/') {
-        route.send(400, { error: 'collection required' })
+      const taggedRow = memberSpec ? db.applyTagOverlay(memberSpec, baseRow) : baseRow
+      if (!matchListFilterRecord(taggedRow, filter, memberSpec?.schema as never, allTags)) continue
+      if (q) {
+        const hay = `${member.name} ${member.email} ${member.role}`.toLowerCase()
+        if (!hay.includes(q)) continue
+      }
+      matched.push({
+        id: member.id,
+        name: member.name || member.email,
+        email: member.email,
+        ...(member.avatar ? { avatar: member.avatar } : {}),
+        memberKind: member.member_kind,
+      })
+    }
+    return matched
+  }
+
+  // 成员视图列表：区分「管理员锁定动态成员组」与「个人/公开快捷名单」
+  ctx.http.route('GET', '/api/db/member-views', async (route) => {
+    try {
+      const account = getAccountService()
+      const { actorId, workspaceId } = resolveWorkspaceContext(account)
+      if (!workspaceId) {
+        route.send(200, { views: [] })
         return
       }
-      const account = ctx.get('account') as {
-        authorization?: {
-          currentActor?: () => { accountId: string; workspaceId: string } | null
-          ownerTableOf?: (resource: { type: 'record'; workspaceId: string; collection: string; recordId: string }) => string | null
+      const visibleViews = savedViews.listMemberViews(workspaceId, actorId)
+      const items = visibleViews.map((view) => {
+        const isLocked = view.protection === 'locked'
+        const matched = resolveMemberViewMatches(account, actorId, workspaceId, view)
+        return {
+          id: String(view.id),
+          name: String(view.name || view.id),
+          protection: view.protection ?? 'public',
+          isLocked,
+          createdBy: view.createdBy ?? '',
+          memberCount: matched.length,
+          grantCount: isLocked ? (account?.store?.memberViewGrantCount?.(workspaceId, String(view.id)) ?? 0) : 0,
         }
-      } | undefined
-      const authz = account?.authorization
-      const actor = authz?.currentActor?.()
-      const targetOwnerTable =
-        body?.scope === 'workspace' || body?.ownerTable === 'workspace'
-          ? 'workspace'
-          : actor
-            ? `account:${actor.accountId}`
-            : ''
-      const limit = Math.max(1, Math.min(20, Number(body?.limit ?? 8) || 8))
-      const listed = await db.list(collection)
-      const matched: Array<{ id: string; title: string }> = []
-      let matchCount = 0
-      for (const record of listed.items) {
-        const recordId = String(record.id ?? '').trim()
-        if (!recordId) continue
-        if (actor && targetOwnerTable && authz?.ownerTableOf) {
-          const recTable = authz.ownerTableOf({
-            type: 'record',
-            workspaceId: actor.workspaceId,
-            collection,
-            recordId,
-          })
-          if (recTable !== targetOwnerTable) continue
-        }
-        if (!recordMatchesAccessRule(record, body?.filterTree ?? null)) continue
-        matchCount += 1
-        if (matched.length < limit) {
-          matched.push({ id: recordId, title: String((record as Record<string, unknown>).title ?? recordId) })
-        }
-      }
-      route.send(200, { matchCount, sampleRecords: matched })
+      })
+      route.send(200, { views: items })
     } catch (error) {
       const failure = databaseHttpFailure(error)
       route.send(failure.status, failure.body)
     }
   })
 
-  // 单条记录命中的分享规则解释：仅对记录 owner / manager 可见（Fail-Closed）
-  ctx.http.route('GET', '/api/db/access-rules/explain', async (route) => {
+  // 成员视图瞬时展开：返回当前命中的成员名单（用于个人/公开视图的一次性快照授权，或动态组预览）
+  ctx.http.route('GET', '/api/db/member-views/:viewId/resolve', async (route) => {
     try {
-      const collection = normalizeCollectionPath(route.query.get('collection') || '')
-      const recordId = (route.query.get('recordId') || '').trim()
-      if (!collection || collection === '/' || !recordId) {
-        route.send(400, { error: 'collection and recordId required' })
+      const viewId = String(route.params.viewId ?? '').trim()
+      if (!viewId) {
+        route.send(400, { error: 'viewId required' })
         return
       }
-      const account = ctx.get('account') as {
-        authorization?: {
-          currentActor?: () => { type: 'account'; accountId: string; workspaceId: string } | null
-          authorize?: (actor: unknown, action: string, resource: { type: 'record'; workspaceId: string; collection: string; recordId: string }) => { allowed: boolean }
-          ownerTableOf?: (resource: { type: 'record'; workspaceId: string; collection: string; recordId: string }) => string | null
+      const account = getAccountService()
+      const { actorId, workspaceId } = resolveWorkspaceContext(account)
+      const visible = savedViews.listMemberViews(workspaceId, actorId)
+      const view = visible.find((item) => String(item.id) === viewId)
+      if (!view) {
+        route.send(404, { error: 'member view not found' })
+        return
+      }
+      const members = resolveMemberViewMatches(account, actorId, workspaceId, view)
+      route.send(200, {
+        viewId: String(view.id),
+        name: String(view.name || view.id),
+        isLocked: view.protection === 'locked',
+        members,
+      })
+    } catch (error) {
+      const failure = databaseHttpFailure(error)
+      route.send(failure.status, failure.body)
+    }
+  })
+
+  // 解除或删除被引用的管理员锁定成员视图：显式选择「固化为当前名单 (freeze)」或「取消关联授权 (revoke)」
+  ctx.http.route('POST', '/api/db/member-views/:viewId/release', async (route) => {
+    try {
+      const viewId = String(route.params.viewId ?? '').trim()
+      if (!viewId) {
+        route.send(400, { error: 'viewId required' })
+        return
+      }
+      const body = (await route.json()) as {
+        action?: 'unlock' | 'delete'
+        mode?: 'freeze' | 'revoke'
+        targetProtection?: 'public' | 'personal'
+      }
+      const action = body?.action === 'delete' ? 'delete' : 'unlock'
+      const mode = body?.mode === 'revoke' ? 'revoke' : body?.mode === 'freeze' ? 'freeze' : null
+      if (!mode) {
+        route.send(400, { error: 'mode must be freeze or revoke' })
+        return
+      }
+      const account = getAccountService()
+      const { actorId, workspaceId } = resolveWorkspaceContext(account)
+      if (!actorId || !workspaceId || !account?.store) {
+        route.send(403, { error: 'permission denied' })
+        return
+      }
+      const role = account.store.memberRole?.(actorId, workspaceId)
+      if (role !== 'owner' && role !== 'admin') {
+        route.send(403, { error: 'permission denied: MEMBER_LOCKED_VIEW_ADMIN_ONLY' })
+        return
+      }
+      const view = savedViews.getMemberView(workspaceId, viewId)
+      if (!view) {
+        route.send(404, { error: 'member view not found' })
+        return
+      }
+      let transition: Record<string, unknown> = {}
+      if (mode === 'freeze') {
+        const matched = resolveMemberViewMatches(account, actorId, workspaceId, view)
+        transition = account.store.freezeMemberViewGrants?.(
+          actorId,
+          workspaceId,
+          viewId,
+          matched.map((m) => m.id),
+        ) ?? {}
+      } else {
+        transition = account.store.revokeAllMemberViewGrants?.(actorId, workspaceId, viewId) ?? {}
+      }
+      if (action === 'delete') {
+        savedViews.remove(`${WORKSPACE_MEMBERS_COLLECTION_PATH}::${viewId}`, actorId, [], workspaceId)
+      } else {
+        const nextProtection = body?.targetProtection === 'personal' ? 'personal' : 'public'
+        savedViews.applyPatch(
+          WORKSPACE_MEMBERS_COLLECTION_PATH,
+          {
+            upsert: [
+              {
+                ...view,
+                protection: nextProtection,
+                scope: nextProtection === 'personal' ? 'personal' : 'workspace',
+              },
+            ],
+          },
+          actorId,
+          workspaceId,
+        )
+      }
+      db.notifyViewCatalog(WORKSPACE_MEMBERS_COLLECTION_PATH)
+      db.notifyShareChange()
+      route.send(200, { ok: true, action, mode, ...transition })
+    } catch (error) {
+      const failure = databaseHttpFailure(error)
+      route.send(failure.status, failure.body)
+    }
+  })
+
+  const resolveBatchTargetIds = async (body: {
+    collection?: string
+    recordIds?: unknown
+    viewId?: string
+    filter?: Record<string, unknown>
+    q?: string
+  }) => {
+    const collection = normalizeCollectionPath(String(body?.collection ?? ''))
+    if (!collection || collection === '/') throw new Error('collection required')
+    if (Array.isArray(body?.recordIds) && body.recordIds.length > 0) {
+      return {
+        collection,
+        recordIds: [...new Set(body.recordIds.map((id) => String(id ?? '').trim()).filter(Boolean))],
+      }
+    }
+    let resolvedFilter: Record<string, unknown> | undefined =
+      body?.filter && typeof body.filter === 'object' && !Array.isArray(body.filter) ? { ...body.filter } : undefined
+    let q = typeof body?.q === 'string' ? body.q : ''
+    if (body?.viewId) {
+      const actorId = currentAccountId()
+      const view = savedViews.viewsFor(collection, actorId).find((item) => String(item.id) === String(body.viewId))
+      if (view) {
+        if (!resolvedFilter) {
+          const next: Record<string, unknown> = { ...(view.filters ?? {}) }
+          if (view.filterTree) next.$tree = view.filterTree
+          if (Object.keys(next).length) resolvedFilter = next
         }
-        store?: {
-          listActiveAccessRulesForCollection?: (workspaceId: string, collection: string) => Array<{
-            id: string
-            name: string
-            createdBy: string
-            createdByName?: string
-            ownerTable?: string
-            scope?: 'workspace' | 'personal'
-            filterTree: Record<string, unknown>
-            columns: string[] | null
-            enabled: boolean
-            grants: Array<{
-              id: string
-              subjectType: 'account' | 'workspace' | 'group'
-              subjectId: string
-              role: 'viewer' | 'editor' | 'manager'
-              subjectName?: string
-            }>
-          }>
-        }
-      } | undefined
-      const authz = account?.authorization
-      const actor = authz?.currentActor?.()
-      if (!actor || !authz?.authorize || !authz?.ownerTableOf || !account?.store?.listActiveAccessRulesForCollection) {
-        route.send(200, { matchedRules: [] })
-        return
+        if (!q && view.query) q = String(view.query)
       }
-      const targetRef = { type: 'record' as const, workspaceId: actor.workspaceId, collection, recordId }
-      if (!authz.authorize(actor, 'resource:share', targetRef).allowed) {
-        route.send(200, { matchedRules: [] })
-        return
+    }
+    const listed = await db.list(collection, resolvedFilter, { q, limit: 10000, columns: ['id'] })
+    const items = listed.kind === 'collection' ? listed.items : []
+    return {
+      collection,
+      recordIds: [...new Set(items.map((row) => String(row.id ?? '').trim()).filter(Boolean))],
+    }
+  }
+
+  // 批量静态权限预览：统计命中总数、可管理数与将跳过的无权记录数
+  ctx.http.route('POST', '/api/db/batch-permissions/preview', async (route) => {
+    try {
+      const body = (await route.json()) as {
+        collection?: string
+        recordIds?: unknown
+        viewId?: string
+        filter?: Record<string, unknown>
+        q?: string
       }
-      const recordOwnerTable = authz.ownerTableOf(targetRef)
-      if (!recordOwnerTable) {
-        route.send(200, { matchedRules: [] })
-        return
-      }
-      const record = await db.read(`${collection}/${recordId}`)
-      const activeRules = account.store.listActiveAccessRulesForCollection(actor.workspaceId, collection)
-      const matchedRules = []
-      for (const rule of activeRules) {
-        if (!rule.enabled) continue
-        const ruleOwnerTable = rule.ownerTable?.trim() || (rule.createdBy ? `account:${rule.createdBy}` : '')
-        if (!ruleOwnerTable || ruleOwnerTable !== recordOwnerTable) continue
-        if (!recordMatchesAccessRule(record as never, rule.filterTree)) continue
-        matchedRules.push({
-          ruleId: rule.id,
-          ruleName: rule.name,
-          scope: ruleOwnerTable === 'workspace' ? 'workspace' : 'personal',
-          createdBy: rule.createdBy,
-          createdByName: rule.createdByName ?? '',
-          isMine: rule.createdBy === actor.accountId,
-          columns: rule.columns,
-          grants: rule.grants.map((g) => ({
-            subjectType: g.subjectType,
-            subjectId: g.subjectId,
-            subjectName: g.subjectName ?? '',
-            role: g.role,
-          })),
+      const { collection, recordIds } = await resolveBatchTargetIds(body)
+      const account = getAccountService()
+      const { actorId } = resolveWorkspaceContext(account)
+      if (!actorId || !account?.store?.previewBatchRecordPermissions) {
+        route.send(200, {
+          totalCount: recordIds.length,
+          manageableCount: recordIds.length,
+          skippedCount: 0,
+          manageableIds: recordIds,
         })
+        return
       }
-      route.send(200, { matchedRules })
+      const preview = account.store.previewBatchRecordPermissions(actorId, collection, recordIds)
+      route.send(200, preview)
+    } catch (error) {
+      const failure = databaseHttpFailure(error)
+      route.send(failure.status, failure.body)
+    }
+  })
+
+  // 批量静态权限落库：单事务执行增量授权 / 回收 / 通用访问切换，自动跳过无管理权限记录
+  ctx.http.route('POST', '/api/db/batch-permissions/apply', async (route) => {
+    try {
+      const body = (await route.json()) as {
+        collection?: string
+        recordIds?: unknown
+        viewId?: string
+        filter?: Record<string, unknown>
+        q?: string
+        mode?: 'grant' | 'revoke' | 'access_mode'
+        subjects?: Array<{ type?: string; id?: string; subjectType?: string; subjectId?: string }>
+        role?: 'viewer' | 'commenter' | 'editor' | 'manager'
+        accessMode?: 'private' | 'members'
+        memberDefaultRole?: 'viewer' | 'editor'
+      }
+      const mode = body?.mode === 'grant' || body?.mode === 'revoke' || body?.mode === 'access_mode' ? body.mode : null
+      if (!mode) {
+        route.send(400, { error: 'mode must be grant, revoke, or access_mode' })
+        return
+      }
+      const { collection, recordIds } = await resolveBatchTargetIds(body)
+      const account = getAccountService()
+      const { actorId } = resolveWorkspaceContext(account)
+      if (!actorId || !account?.store?.batchUpdateRecordPermissions) {
+        route.send(403, { error: 'permission denied' })
+        return
+      }
+      const subjects = Array.isArray(body.subjects)
+        ? body.subjects
+            .map((s) => {
+              const subjectType = s?.subjectType ?? s?.type
+              const subjectId = String(s?.subjectId ?? s?.id ?? '').trim()
+              return subjectType === 'account' || subjectType === 'member_view'
+                ? { subjectType, subjectId }
+                : null
+            })
+            .filter((s): s is { subjectType: 'account' | 'member_view'; subjectId: string } => Boolean(s && s.subjectId))
+        : undefined
+      const result = account.store.batchUpdateRecordPermissions(actorId, {
+        collection,
+        recordIds,
+        mode,
+        ...(subjects ? { subjects } : {}),
+        ...(body.role ? { role: body.role } : {}),
+        ...(body.accessMode ? { accessMode: body.accessMode } : {}),
+        ...(body.memberDefaultRole ? { memberDefaultRole: body.memberDefaultRole } : {}),
+      })
+      if (result.updatedCount > 0) db.notifyShareChange()
+      route.send(200, result)
     } catch (error) {
       const failure = databaseHttpFailure(error)
       route.send(failure.status, failure.body)

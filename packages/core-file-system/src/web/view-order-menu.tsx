@@ -38,20 +38,19 @@ export function isBuiltinAggregationView(view: Pick<SavedView, 'id'>): boolean {
   return isBuiltinAllViewId(view.id) || isBuiltinCatalogViewId(view.id)
 }
 
-export function isAggregationView(view: Pick<SavedView, 'id' | 'ownerTable'>): boolean {
-  return view.ownerTable === 'all' || isBuiltinAggregationView(view)
+export function isAggregationView(view: Pick<SavedView, 'id'>): boolean {
+  return isBuiltinAggregationView(view)
 }
 
-export function resolveViewProtection(view: Pick<SavedView, 'id' | 'ownerTable' | 'protection' | 'scope'>): ViewProtection {
+export function resolveViewProtection(view: Pick<SavedView, 'id' | 'protection' | 'scope'>): ViewProtection {
   if (isBuiltinAggregationView(view)) return 'personal'
   if (view.protection === 'public' || view.protection === 'locked' || view.protection === 'personal') {
     return view.protection
   }
-  if (view.ownerTable === 'all') return 'personal'
   return view.scope === 'personal' ? 'personal' : 'public'
 }
 
-export function viewProtectionMeta(view: Pick<SavedView, 'id' | 'ownerTable' | 'protection' | 'scope'>) {
+export function viewProtectionMeta(view: Pick<SavedView, 'id' | 'protection' | 'scope'>) {
   const isBuiltinAgg = isBuiltinAggregationView(view)
   const isAggregation = isAggregationView(view)
   const protection = resolveViewProtection(view)
@@ -66,7 +65,7 @@ export function ViewProtectionBadge({
   view,
   className,
 }: {
-  view: Pick<SavedView, 'id' | 'ownerTable' | 'protection' | 'scope'>
+  view: Pick<SavedView, 'id' | 'protection' | 'scope'>
   className?: string
 }) {
   const { protection, option, title } = viewProtectionMeta(view)
@@ -84,10 +83,8 @@ export function ViewProtectionBadge({
   )
 }
 
-function isLastPublicViewForTable(view: SavedView, views: SavedView[]): boolean {
-  const ot = view.ownerTable?.trim()
-  if (!ot || ot === 'all' || !isNonPersonalView(view)) return false
-  return views.filter((item) => item.ownerTable?.trim() === ot && isNonPersonalView(item)).length <= 1
+function isLastPublicViewForTable(_view: SavedView, _views: SavedView[]): boolean {
+  return false
 }
 
 function ViewRowShell({
@@ -125,16 +122,14 @@ function ViewRowShell({
 }) {
   const { protection, isBuiltinAgg, option: meta, title: protectionTitle } = viewProtectionMeta(view)
   const isReadOnlyStub = Boolean(view.builtin) || isReadOnlyViewId(view.id)
-  const isAllTable = view.ownerTable === 'all'
   const ProtectionIcon = meta.Icon
   const canSwitchProtection = Boolean(
     !isReadOnlyStub &&
       !isBuiltinAgg &&
-      (!isAllTable || viewerIsAdmin) &&
       onChangeProtection &&
       (canEditSavedView(view) || canDeleteSavedView(view)),
   )
-  const canLock = !(view.ownerTable?.startsWith('account:') && view.viewRole && view.viewRole !== 'owner')
+  const canLock = true
   return (
     <div ref={rowRef} style={style}>
       <div

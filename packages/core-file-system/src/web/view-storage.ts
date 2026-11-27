@@ -6,14 +6,11 @@ import {
   isBuiltinAllViewForCollection,
   isBuiltinAllViewId,
   isBuiltinCatalogViewId,
-  isNonPersonalView,
-  parseDefaultTableViewId,
   stubBuiltinAllView,
   stubBuiltinBlockKindView,
   stubBuiltinCatalogView,
   stubBuiltinMemberView,
   stubBuiltinTagView,
-  stubDefaultTableView,
 } from '../catalog-views.ts'
 import {
   DATA_COLLECTION_PATH,
@@ -22,7 +19,7 @@ import {
   WORKSPACE_MEMBERS_COLLECTION_PATH,
   isIndexCollection,
 } from './database-path.ts'
-import { normalizeCollectionPath, savedViewRecordPath, tableModeFor } from '../paths.ts'
+import { normalizeCollectionPath, savedViewRecordPath } from '../paths.ts'
 import { invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { looksLikeFilterTree, normalizeFilterGroup, parseSortsInput, resolveViewFilterTree } from '../query-logic.ts'
 import {
@@ -339,23 +336,20 @@ export function isOmittedViewId(collectionPath: string, viewId: string) {
 }
 
 export function viewForPath(collectionPath: string, routeViewId?: string): SavedView | null {
-  const path = normalizeCollectionPath(collectionPath)
-  const isKPlus1 = path !== DATA_COLLECTION_PATH && tableModeFor(path) === 'k-plus-1'
   const omitted = new Set(loadOmittedViewIds(collectionPath))
   const listed = loadViews(collectionPath).filter((item) => !omitted.has(item.id))
   const allId = builtinAllViewId(collectionPath)
-  const fallback = isKPlus1 || omitted.has(allId) ? null : stubBuiltinAllView(allId)
+  const fallback = omitted.has(allId) ? null : stubBuiltinAllView(allId)
   const route = String(routeViewId ?? '').trim()
   const want = route && !omitted.has(route) ? route : ''
   const preferred =
     (want
       ? listed.find((item) => item.id === want) ??
-        stubDefaultTableView(want) ??
         stubBuiltinMemberView(want) ??
         stubBuiltinCatalogView(want) ??
         stubBuiltinTagView(want) ??
         stubBuiltinBlockKindView(want) ??
-        (!isKPlus1 && isBuiltinAllViewForCollection(want, collectionPath) ? stubBuiltinAllView(want) : null)
+        (isBuiltinAllViewForCollection(want, collectionPath) ? stubBuiltinAllView(want) : null)
       : undefined) ??
     listed.find((item) => item.id === loadActiveViewId(collectionPath, listed)) ??
     fallback ??
@@ -369,33 +363,16 @@ export function defaultViewId(collectionPath: string, routeViewId?: string) {
   const omitted = new Set(loadOmittedViewIds(collectionPath))
   const listed = loadViews(collectionPath).filter((item) => !omitted.has(item.id))
   if (listed[0]) return listed[0].id
-  const path = normalizeCollectionPath(collectionPath)
-  if (path !== DATA_COLLECTION_PATH && tableModeFor(path) === 'k-plus-1') return ''
   const allId = builtinAllViewId(collectionPath)
   return omitted.has(allId) ? '' : allId
 }
 
 /** 水合时列表可能还没有内置块类型视图；URL 上的 builtin-block: 仍用 stub 还原，不能退回「全部」。 */
 export function pickViewForRoute(listed: SavedView[], collectionPath: string, routeViewId?: string) {
-  const path = normalizeCollectionPath(collectionPath)
-  const isKPlus1 = path !== DATA_COLLECTION_PATH && tableModeFor(path) === 'k-plus-1'
   const route = String(routeViewId ?? '').trim()
   if (route) {
     const hit = listed.find((item) => item.id === route)
     if (hit) return hit
-    // 如果路由点名具体表默认视图（如 default:account:97:/agents），优先匹配该表的真实视图，否则临时 stub 防止误跳空间表
-    const parsedDefault = parseDefaultTableViewId(route)
-    if (parsedDefault) {
-      const sameTable = listed.filter((item) => item.ownerTable === parsedDefault.ownerTable)
-      const preferred = sameTable.find((item) => isNonPersonalView(item)) ?? sameTable[0]
-      if (preferred) return preferred
-      return stubDefaultTableView(route)
-    }
-    // K+1 业务集合不再有聚合视图：旧 URL（builtin-all / builtin-scope 等）自动落回空间表或首个真实视图
-    if (isKPlus1 && listed.length > 0) {
-      const wsDefault = listed.find((item) => item.ownerTable === 'workspace' && isNonPersonalView(item))
-      return wsDefault ?? listed.find((item) => isNonPersonalView(item)) ?? listed[0] ?? null
-    }
     if (isOmittedViewId(collectionPath, route)) {
       return listed.find((item) => item.id === loadActiveViewId(collectionPath, listed)) ?? listed[0] ?? null
     }
@@ -611,7 +588,7 @@ function parseViewFilters(value: unknown): Record<string, string> {
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
     const out: Record<string, string> = {}
     for (const [key, item] of Object.entries(raw as Record<string, unknown>)) {
-      if (key.startsWith('$') && key !== '$scope' && key !== '$ownerTable') continue
+      if (key.startsWith('$') && key !== '$scope') continue
       out[key] = String(item)
     }
     return out
@@ -629,15 +606,13 @@ export function savedViewFromRecord(row: Record<string, unknown>): SavedView | n
     parseViewFilterTree(row.filterTree) ??
     (looksLikeFilterTree(parseMaybeJson(row.filters)) ? normalizeFilterGroup(parseMaybeJson(row.filters)) : undefined)
   const scope = normalizeViewScope(row.scope)
-  const ownerTable = typeof row.ownerTable === 'string' && row.ownerTable.trim() ? row.ownerTable.trim() : undefined
-  const protection = normalizeViewProtection(row.protection, scope, ownerTable)
+  const protection = normalizeViewProtection(row.protection, scope)
   return normalizeSavedView({
     id,
     name: String(row.title ?? id),
     mode: String(row.mode ?? 'table') as SavedView['mode'],
     scope: protection === 'personal' ? 'personal' : (scope ?? 'workspace'),
     protection,
-    ownerTable,
     createdBy: extractViewCreatorId(row.createdBy),
     viewRole: normalizeViewRole(row.viewRole),
     sortField,

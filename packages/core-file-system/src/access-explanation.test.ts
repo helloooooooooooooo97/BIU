@@ -53,7 +53,7 @@ test('external collaborator appears in visibility audience without overriding ac
         { id: 'u-bob', name: 'Bob', role: 'viewer', memberKind: 'member' },
         { id: 'u-ext', name: '外部客户', role: 'manager', memberKind: 'external' },
       ],
-      groups: [],
+      memberViews: [],
       roleChain: [
         {
           id: 'ws\t/tasks\tt1',
@@ -76,7 +76,7 @@ test('external collaborator appears in visibility audience without overriding ac
   assert.equal(result.myAccess.paths[0]?.kind, 'direct')
 })
 
-test('multi-level inheritance chain resolves real ancestor titles and group grants', () => {
+test('multi-level inheritance chain resolves real ancestor titles and member view grants', () => {
   const result = buildAccessExplanation({
     collection: '/pages',
     recordId: 'p-leaf',
@@ -92,7 +92,7 @@ test('multi-level inheritance chain resolves real ancestor titles and group gran
       scope: 'personal',
       ownerId: 'u-alice',
       people: [],
-      groups: [],
+      memberViews: [],
       roleChain: [
         {
           id: 'ws\t/pages\tp-leaf',
@@ -117,9 +117,9 @@ test('multi-level inheritance chain resolves real ancestor titles and group gran
           collection: '/pages',
           recordId: 'p-root',
           title: '上一级内容',
-          detail: '通过成员组授权',
+          detail: '通过锁定成员视图授权',
           role: 'editor',
-          source: 'group-grant',
+          source: 'member-view-grant',
         },
       ],
       inheritance: {
@@ -128,10 +128,10 @@ test('multi-level inheritance chain resolves real ancestor titles and group gran
           {
             collection: '/pages',
             recordId: 'p-root',
-            scope: 'workspace',
+            scope: 'shared',
             ownerId: 'u-alice',
             people: [],
-            groups: [{ id: 'grp-dev', name: '研发部', role: 'editor' }],
+            memberViews: [{ id: 'mv-dev', name: '研发部', role: 'editor' }],
           },
           {
             collection: '/pages',
@@ -139,7 +139,7 @@ test('multi-level inheritance chain resolves real ancestor titles and group gran
             scope: 'personal',
             ownerId: 'u-alice',
             people: [],
-            groups: [],
+            memberViews: [],
           },
         ],
       },
@@ -153,6 +153,7 @@ test('multi-level inheritance chain resolves real ancestor titles and group gran
   )
   assert.equal(result.audience.inherited[0]?.sourceTitle, '项目 A')
   assert.equal(result.audience.inherited[0]?.subjectName, '研发部')
+  assert.equal(result.audience.inherited[0]?.subjectType, 'member_view')
 
   assert.equal(result.myAccess.effectiveRole, 'editor')
   assert.equal(result.myAccess.primarySummary, '继承自上级「项目 A」')
@@ -165,7 +166,7 @@ test('multi-level inheritance chain resolves real ancestor titles and group gran
     primary.chain?.map((n) => n.title),
     ['项目 A', '需求池', '登录页设计'],
   )
-  assert.equal(primary.chain?.[0]?.note, '通过成员组授权')
+  assert.equal(primary.chain?.[0]?.note, '通过锁定成员视图授权')
   assert.equal(primary.chain?.[1]?.note, '继承上级权限')
   assert.equal(primary.chain?.[2]?.note, '继承上级权限')
 })

@@ -321,8 +321,9 @@ test('collaborators move a record between personal, workspace, and shared scopes
   const externalShared = asAda(() =>
     collab.shareWithEmail(ada.id, '/pages', 'scope-page', cara.email, 'viewer', 'external'),
   )
-  // 分享给外部协作者 -> external（外部）
-  assert.equal(externalShared.scope, 'external')
+  // Notion 对齐三态：分享给外部协作者仍为 shared，外部标记通过 hasExternalCollaborator 正交表达
+  assert.equal(externalShared.scope, 'shared')
+  assert.equal(externalShared.hasExternalCollaborator, true)
   assert.equal(externalShared.people.find((row) => row.id === cara.id)?.memberKind, 'external')
   assert.deepEqual(collab.externallySharedRecords(ada.id, workspaceId), [
     { collection: '/pages', record_id: 'scope-page' },
@@ -332,6 +333,7 @@ test('collaborators move a record between personal, workspace, and shared scopes
     collab.revokeRecordGrant(ada.id, '/pages', 'scope-page', 'account', cara.id),
   )
   assert.equal(backToInternalShared.scope, 'shared')
+  assert.equal(backToInternalShared.hasExternalCollaborator, false)
   assert.equal(collab.members(ada.id, workspaceId).some((row) => row.id === cara.id), false)
 
   const backToPersonal = asAda(() =>
@@ -341,7 +343,7 @@ test('collaborators move a record between personal, workspace, and shared scopes
   assert.equal(backToPersonal.private, true)
 })
 
-test('collection ownership reports personal, workspace, shared, and external records', () => {
+test('collection ownership reports Notion-aligned 3-state internal scopes plus orthogonal external collaborators', () => {
   const collab = store()
   const ada = collab.register('', Date.now(), 'secret1', 'own-ada@example.com')
   const bob = collab.register('', Date.now(), 'secret1', 'own-bob@example.com')
@@ -360,11 +362,15 @@ test('collection ownership reports personal, workspace, shared, and external rec
   asAda(() => collab.shareWithEmail(ada.id, '/pages', 'with-cara', cara.email, 'viewer', 'external'))
   asAda(() => collab.shareWithEmail(ada.id, '/pages', 'ws-ext-doc', cara.email, 'viewer', 'external'))
   const scopes = asAda(() => collab.collectionOwnership(workspaceId, '/pages'))
+  const externalIds = asAda(() => collab.collectionExternalCollaborators(workspaceId, '/pages'))
   assert.equal(scopes.get('only-ada'), 'personal')
   assert.equal(scopes.get('with-bob'), 'shared')
-  assert.equal(scopes.get('with-cara'), 'external')
+  assert.equal(scopes.get('with-cara'), 'shared')
   assert.equal(scopes.get('ws-doc'), 'workspace')
-  assert.equal(scopes.get('ws-ext-doc'), 'external')
+  assert.equal(scopes.get('ws-ext-doc'), 'workspace')
+  assert.equal(externalIds.has('with-cara'), true)
+  assert.equal(externalIds.has('ws-ext-doc'), true)
+  assert.equal(externalIds.has('with-bob'), false)
 })
 
 test('an account can join as a workspace member through a one-use invite link', () => {
@@ -690,19 +696,9 @@ test('single workspace identity: nickname and avatar stay isolated per workspace
   assert.equal(ws2Member?.name, 'Space2Ada')
   assert.equal(ws2Member?.avatar, 'data:image/png;base64,ws2Avatar')
 
-  // Presence and access rules both reflect workspace nickname/avatar (never '未设置' or stale account name)
+  // Presence reflects workspace nickname (never '未设置' or stale account name)
   collab.pulse(bob.id, ws1.id, '/pages', 'p1')
   const present = collab.presence(ada.id, ws1.id)
   assert.equal(present.find((p) => p.accountId === bob.id)?.name, 'GlobalBob')
-
-  const rule = collab.createAccessRule(ada.id, ws1.id, {
-    collection: '/pages',
-    name: 'Rule 1',
-    scope: 'workspace',
-    filterTree: { op: 'and', children: [] },
-    grants: [{ subjectType: 'account', subjectId: ada.id, role: 'editor' }],
-  })
-  assert.equal(rule.createdByName, 'Space1Ada')
-  assert.equal(rule.grants[0]?.subjectName, 'Space1Ada')
-  assert.equal(rule.grants[0]?.subjectAvatar, undefined)
+  assert.equal(collab.memberById(ws1.id, ada.id)?.name, 'Space1Ada')
 })

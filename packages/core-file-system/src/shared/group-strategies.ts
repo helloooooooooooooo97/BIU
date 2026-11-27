@@ -125,30 +125,11 @@ function singleValueStrategy(
   return {
     kind,
     keys(ctx) {
-      if (ctx.fieldKey === 'ownerTable') {
-        const items = enumOrExtraKeys(ctx, (key) => {
-          if (key === 'workspace') return '空间'
-          if (key.startsWith('account:')) return ctx.recordLabels?.[key] || key.slice('account:'.length)
-          return labelOf(key, ctx.field)
-        })
-        return items.sort((a, b) => {
-          if (a.key === 'workspace') return -1
-          if (b.key === 'workspace') return 1
-          return a.label.localeCompare(b.label, 'zh')
-        })
-      }
       return enumOrExtraKeys(ctx, (key) => labelOf(key, ctx.field))
     },
     bucketOf(row, ctx) {
       const raw = cellGroupValue(row, ctx.fieldKey)
       if (raw == null || raw === '') return []
-      if (ctx.fieldKey === 'ownerTable') {
-        if (raw === '空间') return ['workspace']
-        if (typeof raw === 'object' && !Array.isArray(raw) && (raw as { kind?: unknown }).kind === 'user') {
-          const accId = String((raw as { accountId?: unknown }).accountId ?? '').trim()
-          return accId ? [`account:${accId}`] : []
-        }
-      }
       const key = String(raw)
       return key ? [key] : []
     },
@@ -157,17 +138,11 @@ function singleValueStrategy(
         const scope = SHARE_SCOPE_FILTER[groupKey]
         return scope ? { $scope: scope } : {}
       }
-      if (ctx.fieldKey === 'ownerTable') {
-        if (groupKey === 'workspace' || groupKey.startsWith('account:')) {
-          return { $ownerTable: groupKey }
-        }
-        return {}
-      }
       if (!groupKey) return emptyFilter(ctx.fieldKey)
       return eqFilter(ctx.fieldKey, groupKey)
     },
     skipEmpty(ctx) {
-      return ctx.fieldKey === 'shareScope' || ctx.fieldKey === 'ownerTable' || ctx.fieldKey === 'table' || ctx.fieldKey === 'tablePath'
+      return ctx.fieldKey === 'shareScope' || ctx.fieldKey === 'table' || ctx.fieldKey === 'tablePath'
     },
   }
 }

@@ -1,7 +1,6 @@
 /** 侧栏展开/收起与数据路由切换的纯逻辑，UI 和压测共用。 */
 import { parseAppPath } from '@biu/web-session-view'
-import { defaultTableViewId, displayNameForView, isBuiltinAllViewId, isReadOnlyViewId, type DataScope } from '../catalog-views.ts'
-import { tableModeFor } from '../paths.ts'
+import { displayNameForView, isReadOnlyViewId, type DataScope } from '../catalog-views.ts'
 import { DATA_COLLECTION_PATH, DATA_MODULE, databaseAllViewPath, databaseRecordPath, databaseViewPath } from './database-path.ts'
 import { defaultViewId } from './view-storage.ts'
 import type { ViewMode } from './fields.ts'
@@ -178,70 +177,6 @@ export function buildCrumbs(input: {
       })),
   })
   if (input.viewId) {
-    // K+1 扁平逻辑表面包屑：数据类型 / 逻辑表（空间表 | 我的表 | 他人表）/ 视图
-    const resolvedScope: DataScope | undefined = isBuiltinAllViewId(input.viewId) ? undefined : input.viewScope
-    if (resolvedScope && tableModeFor(input.collection) === 'k-plus-1') {
-      const wsViewId = defaultTableViewId('workspace', input.collection)
-      const activeOwner = resolvedScope === 'workspace' ? undefined : (input.personalOwner ?? input.sharedOwner)
-      const ownerId = activeOwner?.accountId?.trim() || ''
-      const ownerLabel = activeOwner?.name?.trim() || (ownerId ? ownerId.slice(0, 8) : SCOPE_CRUMB_LABEL[resolvedScope])
-      const ownerAvatar = activeOwner?.avatar?.trim() || ''
-      const currentCrumbId =
-        resolvedScope === 'workspace'
-          ? 'scope:workspace'
-          : ownerId
-            ? `owner:${ownerId}`
-            : 'scope:personal'
-      const currentTargetId =
-        resolvedScope === 'workspace'
-          ? wsViewId
-          : ownerId
-            ? defaultTableViewId(`account:${ownerId}`, input.collection)
-            : input.viewId
-      const wsAvatar = input.workspaceAvatar?.trim() || ''
-      const defaultChoices: CrumbChoice[] = [
-        {
-          id: 'scope:workspace',
-          label: '空间数据',
-          icon: 'workspace',
-          ...(wsAvatar ? { avatar: wsAvatar } : {}),
-          target: { kind: 'view', collection: input.collection, viewId: wsViewId },
-        },
-        ...(resolvedScope !== 'workspace'
-          ? [
-              {
-                id: currentCrumbId,
-                label: ownerLabel,
-                icon: 'personal',
-                ...(ownerAvatar ? { avatar: ownerAvatar } : {}),
-                ...(ownerId ? { avatarSeed: ownerId } : {}),
-                target: { kind: 'view' as const, collection: input.collection, viewId: currentTargetId },
-              },
-            ]
-          : []),
-      ]
-      const choices: CrumbChoice[] = input.scopeChoices?.length
-        ? input.scopeChoices.map((choice) => ({
-            id: choice.id,
-            label: choice.label,
-            icon: choice.icon,
-            ...(choice.avatar ? { avatar: choice.avatar } : {}),
-            ...(choice.avatarSeed ? { avatarSeed: choice.avatarSeed } : {}),
-            target: { kind: 'view', collection: input.collection, viewId: choice.viewId },
-          }))
-        : defaultChoices
-      crumbs.push({
-        kind: 'scope',
-        id: currentCrumbId,
-        label: resolvedScope === 'workspace' ? '空间数据' : ownerLabel,
-        icon: resolvedScope === 'workspace' ? 'workspace' : 'personal',
-        ...(resolvedScope === 'workspace' && wsAvatar ? { avatar: wsAvatar } : {}),
-        ...(resolvedScope !== 'workspace' && ownerAvatar ? { avatar: ownerAvatar } : {}),
-        ...(resolvedScope !== 'workspace' && ownerId ? { avatarSeed: ownerId } : {}),
-        target: { kind: 'view', collection: input.collection, viewId: currentTargetId },
-        choices,
-      })
-    }
     const storedName = input.viewName || input.views?.find((view) => view.id === input.viewId)?.name
     // 内置视图被隐藏后仍可通过导航打开，名称不能依赖可见视图列表。
     const viewName = storedName || (isReadOnlyViewId(input.viewId)

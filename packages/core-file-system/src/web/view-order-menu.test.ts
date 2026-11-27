@@ -120,15 +120,11 @@ test('view switcher button and dropdown both resolve and render 3-state protecti
   assert.equal(resolveViewProtection({ id: 'builtin-all:/data' }), 'personal')
   assert.equal(resolveViewProtection({ id: 'builtin:/plugins' }), 'personal')
   assert.equal(viewProtectionMeta({ id: 'builtin:/plugins' }).isAggregation, true)
-  // Custom /data views default to personal, and honor public/locked when set by workspace admin
-  assert.equal(resolveViewProtection({ id: 'v-agg-default', ownerTable: 'all' }), 'personal')
-  assert.equal(resolveViewProtection({ id: 'v-agg-pub', ownerTable: 'all', protection: 'public' }), 'public')
-  assert.equal(resolveViewProtection({ id: 'v-agg-lock', ownerTable: 'all', protection: 'locked' }), 'locked')
 
-  // Concrete table views reflect public / locked / personal accurately
-  assert.equal(resolveViewProtection({ id: 'v-pub', ownerTable: 'workspace', protection: 'public' }), 'public')
-  assert.equal(resolveViewProtection({ id: 'v-lock', ownerTable: 'workspace', protection: 'locked' }), 'locked')
-  assert.equal(resolveViewProtection({ id: 'v-priv', ownerTable: 'workspace', protection: 'personal' }), 'personal')
+  // Single-table views reflect public / locked / personal accurately
+  assert.equal(resolveViewProtection({ id: 'v-pub', protection: 'public' }), 'public')
+  assert.equal(resolveViewProtection({ id: 'v-lock', protection: 'locked' }), 'locked')
+  assert.equal(resolveViewProtection({ id: 'v-priv', protection: 'personal' }), 'personal')
   assert.equal(resolveViewProtection({ id: 'v-legacy-priv', scope: 'personal' }), 'personal')
   assert.equal(resolveViewProtection({ id: 'v-legacy-ws', scope: 'workspace' }), 'public')
 
