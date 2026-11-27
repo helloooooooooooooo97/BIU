@@ -6,7 +6,7 @@ import { REQUIRED_RECORD_FIELDS, type CollectionInfo, type CollectionSchema } fr
 import { invalidateListReads } from './db-client.ts'
 import { CollectionBrowser } from './browser.tsx'
 import { activeViewStorageKey, getStarredViews, persistStarredViews, upsertSavedView } from './view-storage.ts'
-import { DataSidebar } from './data-sidebar.tsx'
+import { DataIconRail, DataSidebar } from './data-sidebar.tsx'
 import { DataSidebarSlot } from './data-sidebar-slot.tsx'
 import { normalizeSavedView } from './saved-view.ts'
 
@@ -236,4 +236,42 @@ test('highlighted sidebar row backgrounds activate the title action without hija
     result.unmount()
     persistStarredViews(starredBefore)
   }
+})
+
+test('collapsed data icon rail follows the expanded sidebar order (core -> public -> system)', () => {
+  const unordered: CollectionInfo[] = [
+    { id: 'trash', path: '/trash', kind: 'collection', label: '回收站', view: null },
+    { id: 'tags', path: '/tags', kind: 'collection', label: '标签', view: null },
+    { id: 'workspace-members', path: '/workspace-members', kind: 'collection', label: '成员', view: null },
+    { id: 'pages', path: '/pages', kind: 'collection', label: '页面', view: null },
+    { id: 'skills', path: '/skills', kind: 'collection', label: '技能', view: null },
+    { id: 'agents', path: '/agents', kind: 'collection', label: '代理', view: null },
+    { id: 'mcp', path: '/mcp', kind: 'collection', label: 'MCP', view: null },
+    { id: 'plugins', path: '/plugins', kind: 'collection', label: '插件', view: null },
+  ]
+  const expected = ['代理', '页面', '插件', 'MCP', '技能', '标签', '成员', '回收站']
+
+  const sidebar = render(
+    <DataSidebar
+      collectionPath="/pages"
+      title="页面"
+      tables={unordered}
+      views={[]}
+      activeViewId={null}
+      onApplyView={vi.fn()}
+      onDeleteView={vi.fn()}
+      onAddView={vi.fn()}
+    />,
+  )
+  const sidebarRailLabels = within(sidebar.getByTestId('data-icon-rail'))
+    .getAllByRole('button')
+    .map((button) => button.getAttribute('aria-label'))
+  assert.deepEqual(sidebarRailLabels, expected)
+  sidebar.unmount()
+
+  const standaloneRail = render(<DataIconRail tables={unordered} collectionPath="/pages" />)
+  const standaloneLabels = within(standaloneRail.getByTestId('data-icon-rail'))
+    .getAllByRole('button')
+    .map((button) => button.getAttribute('aria-label'))
+  assert.deepEqual(standaloneLabels, expected)
 })

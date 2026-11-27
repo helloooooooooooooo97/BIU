@@ -157,8 +157,8 @@ const EMPTY_FILTERS: Record<string, string> = {}
 function CollectionPage(props: SlotProps) {
   const tables = (props.tables as CollectionInfo[] | undefined) ?? []
   const orderedTables = useMemo(() => {
-    const { user, system, public: publicTables } = sortDataCollections(tables)
-    return [...user, ...system, ...publicTables]
+    const { user, public: publicTables, system } = sortDataCollections(tables)
+    return [...user, ...publicTables, ...system]
   }, [tables])
   const ui = getDatabaseUi()
   const location = useLocation()

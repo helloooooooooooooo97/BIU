@@ -140,7 +140,11 @@ export function DataIconRail({
   collectionPath: string
   onOpenTable?: (path: string, viewId?: string) => void
 }) {
-  const visible = tables.filter((table) => table.view?.sidebar !== false)
+  const visible = useMemo(() => {
+    const shown = tables.filter((table) => table.view?.sidebar !== false)
+    const { user, public: publicTables, system } = sortDataCollections(shown)
+    return [...user, ...publicTables, ...system]
+  }, [tables])
   return (
     <nav className="fsdb-icon-rail" aria-label="数据" data-testid="data-icon-rail">
       {visible.map((table) => {
@@ -691,8 +695,8 @@ export const DataSidebar = memo(function DataSidebar({
   const listedTables = useMemo(() => {
     const visible = tables.filter((table) => table.view?.sidebar !== false)
     const raw = visible.length ? visible : ([{ path: collectionPath, label: title, view: { title } }] as CollectionInfo[])
-    const { user, system, public: publicTables } = sortDataCollections(raw)
-    return [...user, ...system, ...publicTables]
+    const { user, public: publicTables, system } = sortDataCollections(raw)
+    return [...user, ...publicTables, ...system]
   }, [collectionPath, tables, title])
   const { user: userTables, system: systemTables, public: publicTables } = useMemo(() => sortDataCollections(listedTables), [listedTables])
   const [openTables, setOpenTables] = useState<Record<string, boolean>>({})

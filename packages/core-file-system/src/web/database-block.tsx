@@ -284,8 +284,8 @@ export function DatabaseBlockView({ data, update, writable, selected }: Database
   }, [collectionPath, file]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const orderedTables = useMemo(() => {
-    const { user, system, public: publicTables } = sortDataCollections(tables)
-    return [...user, ...system, ...publicTables]
+    const { user, public: publicTables, system } = sortDataCollections(tables)
+    return [...user, ...publicTables, ...system]
   }, [tables])
 
   const chrome = getDatabaseUi()?.chrome(collectionPath)
