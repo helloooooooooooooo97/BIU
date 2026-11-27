@@ -10,7 +10,7 @@ import {
 
 const rootDir = findRepoRoot()
 
-export function pluginCatalogLayer(item: CordisPluginEntry): CatalogEntry['layer'] {
+function pluginCatalogLayer(item: CordisPluginEntry): CatalogEntry['layer'] {
   if (item.layer === 'web') return 'web'
   if (item.layer === 'core') return 'core'
   const pkg = item.package ?? ''
