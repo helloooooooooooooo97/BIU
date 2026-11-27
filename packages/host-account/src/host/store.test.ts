@@ -749,3 +749,68 @@ test('collectionOwnership and collectionExternalCollaborators propagate inherite
   assert.equal(afterMembers.get('grandchild'), 'workspace')
   assert.equal(afterMembers.get('detached'), 'personal')
 })
+
+test('recordAccess, collectionInheritedSources, and collectInheritingDescendants follow Notion additive inheritance and strict detach isolation', () => {
+  const collab = store()
+  const ada = collab.register('Ada', Date.now(), 'secret1', 'tree-ada@example.com')
+  const bob = collab.register('Bob', Date.now(), 'secret1', 'tree-bob@example.com')
+  const carol = collab.register('Carol', Date.now(), 'secret1', 'tree-carol@example.com')
+  const ext = collab.register('Ext', Date.now(), 'secret1', 'tree-ext@example.com')
+  const ws = collab.createWorkspace(ada.id, 'Tree Notion Space')
+  collab.addMemberByEmail(ada.id, ws.id, bob.email)
+  collab.addMemberByEmail(ada.id, ws.id, carol.email)
+  collab.setActive(ada.id, ws.id)
+
+  collab.attachAs(ws.id, '/pages', 'root', ada.id, { accessMode: 'private' })
+  collab.attachAs(ws.id, '/pages', 'child-inh', ada.id, { accessMode: 'inherit', parentCollection: '/pages', parentRecordId: 'root' })
+  collab.attachAs(ws.id, '/pages', 'grand-inh', ada.id, { accessMode: 'inherit', parentCollection: '/pages', parentRecordId: 'child-inh' })
+  collab.attachAs(ws.id, '/pages', 'child-det', ada.id, { accessMode: 'private', parentCollection: '/pages', parentRecordId: 'root' })
+  collab.attachAs(ws.id, '/pages', 'grand-under-det', ada.id, { accessMode: 'inherit', parentCollection: '/pages', parentRecordId: 'child-det' })
+
+  // 1. Share root with Bob & Ext -> child-inh's recordAccess merges scope='shared' & hasExternalCollaborator=true
+  collab.shareWithEmail(ada.id, '/pages', 'root', bob.email, 'viewer', 'internal')
+  collab.shareWithEmail(ada.id, '/pages', 'root', ext.email, 'viewer', 'external')
+
+  const childAccess = collab.recordAccess(ada.id, '/pages', 'child-inh')
+  assert.equal(childAccess.scope, 'shared')
+  assert.equal(childAccess.private, false)
+  assert.equal(childAccess.hasExternalCollaborator, true)
+  assert.equal(childAccess.inheritance.mode, 'inherit')
+  assert.equal(childAccess.inheritance.ancestors.length, 1)
+
+  // 2. Adding a direct collaborator Carol on child-inh MUST keep inheritance enabled (Notion additive model)
+  collab.shareWithEmail(ada.id, '/pages', 'child-inh', carol.email, 'editor', 'internal')
+  const afterAdditive = collab.recordAccess(ada.id, '/pages', 'child-inh')
+  assert.equal(afterAdditive.inheritance.mode, 'inherit')
+  assert.equal(afterAdditive.accessMode, 'inherit')
+  assert.equal(afterAdditive.scope, 'shared')
+  assert.equal(afterAdditive.people.some((p) => p.id === carol.id), true)
+
+  // 3. Public share source inheritance: root is published -> child-inh & grand-inh inherit; child-det & grand-under-det do NOT
+  const directPublic = new Set<string>(['/pages\troot'])
+  const sources = collab.collectionInheritedSources(ws.id, '/pages', directPublic)
+  assert.deepEqual(sources.get('child-inh'), { collection: '/pages', recordId: 'root' })
+  assert.deepEqual(sources.get('grand-inh'), { collection: '/pages', recordId: 'root' })
+  assert.equal(sources.has('root'), false)
+  assert.equal(sources.has('child-det'), false)
+  assert.equal(sources.has('grand-under-det'), false)
+
+  // 4. collectInheritingDescendants strictly truncates at detached child-det
+  const descendants = collab.collectInheritingDescendants(ws.id, '/pages', 'root')
+  assert.deepEqual(
+    descendants.map((d) => d.recordId).sort(),
+    ['child-inh', 'grand-inh'],
+  )
+
+  // 5. Turning OFF inheritance on child-inh drops inherited Bob/Ext & public share while preserving direct grant Carol
+  collab.setRecordInheritance(ada.id, '/pages', 'child-inh', 'custom')
+  const detachedChildAccess = collab.recordAccess(ada.id, '/pages', 'child-inh')
+  assert.equal(detachedChildAccess.inheritance.mode, 'custom')
+  assert.equal(detachedChildAccess.scope, 'shared') // still has direct grant Carol
+  assert.equal(detachedChildAccess.hasExternalCollaborator, false) // no longer inherits Ext
+  assert.equal(detachedChildAccess.people.some((p) => p.id === carol.id), true)
+  assert.deepEqual(
+    collab.collectInheritingDescendants(ws.id, '/pages', 'root').map((d) => d.recordId),
+    [],
+  )
+})

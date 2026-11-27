@@ -126,3 +126,17 @@ test('share corner uses the owner photo when set, else the brand icon', () => {
   assert.match(src, /registerShareOwnerExtra/)
   assert.match(css, /\.fsdb-share-owner-face\{/)
 })
+
+test('record share page supports inheriting subpages directory, unified inheritance UI, and tree kid refresh', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './share-page.tsx'), 'utf8')
+  const popover = readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8')
+  const detail = readFileSync(resolve(import.meta.dirname, './share-chain-detail.tsx'), 'utf8')
+  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  assert.match(src, /data-testid="fsdb-share-subpages"/)
+  assert.match(src, /data-testid="fsdb-share-subcrumbs"/)
+  assert.match(popover, /data-testid="fsdb-share-inherited"/)
+  assert.match(popover, /data-testid="fsdb-share-public-inherit"/)
+  assert.match(popover, /data-testid="fsdb-share-inherited-public"/)
+  assert.match(detail, /继承的公开链接/)
+  assert.match(browser, /for \(const parentId of Object\.keys\(treeKidsByParentRef\.current\)\)/)
+})

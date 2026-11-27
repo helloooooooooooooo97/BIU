@@ -170,3 +170,71 @@ test('multi-level inheritance chain resolves real ancestor titles and member vie
   assert.equal(primary.chain?.[1]?.note, '继承上级权限')
   assert.equal(primary.chain?.[2]?.note, '继承上级权限')
 })
+
+test('buildAccessExplanation propagates ancestor public links when inheriting and stays orthogonal to personal scope', () => {
+  const inherited = buildAccessExplanation({
+    collection: '/pages',
+    recordId: 'child-1',
+    recordTitle: '需求文档',
+    localOnly: false,
+    publicShares: [{ kind: 'record', collection: '/pages', recordId: 'parent-1' }],
+    recordTitles: {
+      '/pages\tparent-1': '项目总览',
+      '/pages\tchild-1': '需求文档',
+    },
+    access: {
+      scope: 'personal',
+      ownerId: 'u-ada',
+      people: [],
+      memberViews: [],
+      roleChain: [{ id: 'own', title: '这条内容', detail: '你是创建者', role: 'owner', source: 'ownership' }],
+      inheritance: {
+        mode: 'inherit',
+        ancestors: [
+          {
+            collection: '/pages',
+            recordId: 'parent-1',
+            title: '项目总览',
+            scope: 'personal',
+            ownerId: 'u-ada',
+            people: [],
+            memberViews: [],
+          },
+        ],
+      },
+    },
+  })
+
+  // Public link is orthogonal to internal 3-state scope: remains 'personal' with hasExternal=true
+  assert.equal(inherited.visibility.scope, 'personal')
+  assert.equal(inherited.visibility.hasExternal, true)
+  assert.equal(inherited.audience.publicLinks.length, 1)
+  assert.deepEqual(inherited.audience.publicLinks[0]?.inheritedFrom, {
+    collection: '/pages',
+    recordId: 'parent-1',
+    title: '项目总览',
+  })
+
+  // Detached (mode='custom') child does NOT inherit parent's public link
+  const detached = buildAccessExplanation({
+    collection: '/pages',
+    recordId: 'child-secret',
+    recordTitle: '内部报价',
+    localOnly: false,
+    publicShares: [{ kind: 'record', collection: '/pages', recordId: 'parent-1' }],
+    access: {
+      scope: 'personal',
+      ownerId: 'u-ada',
+      people: [],
+      memberViews: [],
+      roleChain: [{ id: 'own', title: '这条内容', detail: '你是创建者', role: 'owner', source: 'ownership' }],
+      inheritance: {
+        mode: 'custom',
+        ancestors: [],
+      },
+    },
+  })
+  assert.equal(detached.visibility.scope, 'personal')
+  assert.equal(detached.visibility.hasExternal, false)
+  assert.equal(detached.audience.publicLinks.length, 0)
+})

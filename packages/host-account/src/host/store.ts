@@ -2274,8 +2274,35 @@ export class CollabStore {
     const effectiveRole = readDecision.allowed ? readDecision.effectiveRole : undefined
     const inheritance = this.authorization.inheritanceInfo(resource)
     const base = this.accessRows(workspaceId, target.collection, target.recordId)
+    const ancestors = inheritance.ancestors.map((ancestor) => ({
+      ...ancestor,
+      ...this.accessRows(workspaceId, ancestor.collection, ancestor.recordId),
+    }))
+    let effectiveScope = base.scope
+    let effectiveHasExternalCollaborator = base.hasExternalCollaborator
+    if (inheritance.mode === 'inherit' && ancestors.length > 0) {
+      if (effectiveScope !== 'workspace' && ancestors.some((a) => a.scope === 'workspace')) {
+        effectiveScope = 'workspace'
+      } else if (
+        effectiveScope === 'personal' &&
+        ancestors.some(
+          (a) =>
+            a.scope === 'shared' ||
+            a.people.some((p) => p.id !== a.ownerId) ||
+            a.memberViews.length > 0,
+        )
+      ) {
+        effectiveScope = 'shared'
+      }
+      if (!effectiveHasExternalCollaborator && ancestors.some((a) => a.hasExternalCollaborator)) {
+        effectiveHasExternalCollaborator = true
+      }
+    }
     return {
       ...base,
+      private: effectiveScope === 'personal',
+      scope: effectiveScope,
+      hasExternalCollaborator: effectiveHasExternalCollaborator,
       canManage,
       ...(effectiveRole ? { effectiveRole } : {}),
       people: base.people.map((row) => {
@@ -2293,10 +2320,7 @@ export class CollabStore {
         mode: inheritance.mode,
         hasParent: inheritance.hasParent,
         parent: inheritance.parent,
-        ancestors: inheritance.ancestors.map((ancestor) => ({
-          ...ancestor,
-          ...this.accessRows(workspaceId, ancestor.collection, ancestor.recordId),
-        })),
+        ancestors,
       },
     }
   }
@@ -2730,6 +2754,137 @@ export class CollabStore {
     for (const p of policies) {
       if (p.access_mode === 'inherit' && p.parent_record_id && hasExternalOn(collection, p.record_id)) {
         out.add(p.record_id)
+      }
+    }
+    return out
+  }
+
+  /** 查询单条记录的继承配置与祖先链（从顶层祖先到直接父级），不要求当前账号必须先调用 recordAccess。 */
+  recordInheritance(workspaceId: string, collection: string, recordId: string) {
+    const target = this.resolveRecordTarget(collection, recordId)
+    return this.authorization.inheritanceInfo({
+      type: 'record',
+      workspaceId,
+      collection: target.collection,
+      recordId: target.recordId,
+    })
+  }
+
+  /**
+   * 批量解析集合内所有处于 `access_mode = 'inherit'` 的记录，沿继承链向上找到最近的命中 `directKeys` 的祖先。
+   * 用于公开链接等随统一继承开关向下传递的能力（不计入本条自身，仅返回继承来源）。
+   * `directKeys` 的元素格式为 `${collection}\t${recordId}`。
+   */
+  collectionInheritedSources(
+    workspaceId: string,
+    collection: string,
+    directKeys: ReadonlySet<string>,
+  ): Map<string, { collection: string; recordId: string }> {
+    const out = new Map<string, { collection: string; recordId: string }>()
+    if (!directKeys.size) return out
+    type ParentLink = {
+      record_id: string
+      access_mode: string
+      parent_collection: string
+      parent_record_id: string
+    }
+    const policies = this.db
+      .prepare(
+        `SELECT record_id, access_mode, parent_collection, parent_record_id
+         FROM resource_policies
+         WHERE workspace_id = ? AND collection = ?`,
+      )
+      .all(workspaceId, collection) as ParentLink[]
+    const policyById = new Map(policies.map((p) => [p.record_id, p]))
+    const crossPolicyCache = new Map<string, ParentLink | null>()
+    const getPolicy = (col: string, recId: string): ParentLink | null => {
+      if (col === collection) return policyById.get(recId) ?? null
+      const key = `${col}\t${recId}`
+      if (crossPolicyCache.has(key)) return crossPolicyCache.get(key) ?? null
+      const row = this.db
+        .prepare(
+          `SELECT record_id, access_mode, parent_collection, parent_record_id
+           FROM resource_policies
+           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+        )
+        .get(workspaceId, col, recId) as ParentLink | undefined
+      const found = row ?? null
+      crossPolicyCache.set(key, found)
+      return found
+    }
+
+    const memo = new Map<string, { collection: string; recordId: string } | null>()
+    const findHitOrAncestor = (
+      col: string,
+      recId: string,
+      visiting = new Set<string>(),
+      depth = 0,
+    ): { collection: string; recordId: string } | null => {
+      const key = `${col}\t${recId}`
+      if (directKeys.has(key)) return { collection: col, recordId: recId }
+      if (memo.has(key)) return memo.get(key) ?? null
+      if (visiting.has(key) || depth > 64) return null
+      visiting.add(key)
+      const p = getPolicy(col, recId)
+      let hit: { collection: string; recordId: string } | null = null
+      if (p?.access_mode === 'inherit' && p.parent_record_id) {
+        hit = findHitOrAncestor(p.parent_collection || col, p.parent_record_id, visiting, depth + 1)
+      }
+      visiting.delete(key)
+      memo.set(key, hit)
+      return hit
+    }
+
+    for (const p of policies) {
+      if (p.access_mode !== 'inherit' || !p.parent_record_id) continue
+      const parentCol = p.parent_collection || collection
+      const source = findHitOrAncestor(parentCol, p.parent_record_id, new Set([`${collection}\t${p.record_id}`]), 1)
+      if (source) out.set(p.record_id, source)
+    }
+    return out
+  }
+
+  /**
+   * 从指定根记录出发，按 BFS 枚举所有处于有效 `access_mode = 'inherit'` 链上的后代记录。
+   * 任意节点关闭继承（private / members）即截断该分支，绝不返回其本身及其后代。
+   */
+  collectInheritingDescendants(
+    workspaceId: string,
+    collection: string,
+    rootRecordId: string,
+    maxCount = 2000,
+  ): Array<{ collection: string; recordId: string; parentCollection: string; parentRecordId: string }> {
+    const out: Array<{ collection: string; recordId: string; parentCollection: string; parentRecordId: string }> = []
+    const visited = new Set<string>([`${collection}\t${rootRecordId}`])
+    const queue: Array<{ collection: string; recordId: string }> = [{ collection, recordId: rootRecordId }]
+    const stmt = this.db.prepare(
+      `SELECT collection, record_id, parent_collection, parent_record_id
+       FROM resource_policies
+       WHERE workspace_id = ?
+         AND access_mode = 'inherit'
+         AND parent_record_id = ?
+         AND (parent_collection = ? OR (parent_collection = '' AND collection = ?))`,
+    )
+    while (queue.length > 0 && out.length < maxCount) {
+      const current = queue.shift()!
+      const children = stmt.all(
+        workspaceId,
+        current.recordId,
+        current.collection,
+        current.collection,
+      ) as Array<{ collection: string; record_id: string; parent_collection: string; parent_record_id: string }>
+      for (const child of children) {
+        const key = `${child.collection}\t${child.record_id}`
+        if (visited.has(key)) continue
+        visited.add(key)
+        out.push({
+          collection: child.collection,
+          recordId: child.record_id,
+          parentCollection: child.parent_collection || current.collection,
+          parentRecordId: child.parent_record_id,
+        })
+        if (out.length >= maxCount) break
+        queue.push({ collection: child.collection, recordId: child.record_id })
       }
     }
     return out

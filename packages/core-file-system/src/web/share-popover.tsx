@@ -43,8 +43,23 @@ type ShareInfo = {
   allowCopy: boolean
 }
 
+type InheritedShareInfo = ShareInfo & {
+  rootUrl?: string
+  sourceCollection: string
+  sourceRecordId: string
+  sourceTitle: string
+}
+
+type ShareInheritanceMeta = {
+  mode: 'inherit' | 'custom'
+  hasParent: boolean
+  parentTitle?: string
+}
+
 type SharePayload = {
   share: ShareInfo | null
+  inheritedShare?: InheritedShareInfo | null
+  inheritance?: ShareInheritanceMeta
   viewPublicStats?: { matchedCount: number; publicCount: number }
 }
 
@@ -367,7 +382,32 @@ function WorkspaceAccess({
   const [role, setRole] = useState<'viewer' | 'commenter' | 'editor' | 'manager'>('editor')
   const [guestUrl, setGuestUrl] = useState('')
   const [guestCopied, setGuestCopied] = useState(false)
-  const [inheritance, setInheritance] = useState<{ mode: 'inherit' | 'custom'; hasParent: boolean }>({ mode: 'custom', hasParent: false })
+  const [inheritance, setInheritance] = useState<{
+    mode: 'inherit' | 'custom'
+    hasParent: boolean
+    parentTitle?: string
+    ancestors: Array<{
+      collection: string
+      recordId: string
+      title?: string
+      scope?: 'personal' | 'workspace' | 'shared'
+      memberDefaultRole?: 'viewer' | 'editor'
+      ownerId?: string
+      people?: Array<{
+        id: string
+        name: string
+        avatar?: string
+        email: string
+        role: string
+        memberKind: 'member' | 'external' | 'guest'
+      }>
+      memberViews?: Array<{
+        id: string
+        name: string
+        role: string
+      }>
+    }>
+  }>({ mode: 'custom', hasParent: false, ancestors: [] })
   const [inheritanceBusy, setInheritanceBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -402,6 +442,28 @@ function WorkspaceAccess({
       inheritance?: {
         mode?: 'inherit' | 'custom'
         hasParent?: boolean
+        parent?: { collection: string; recordId: string; title?: string } | null
+        ancestors?: Array<{
+          collection: string
+          recordId: string
+          title?: string
+          scope?: 'personal' | 'workspace' | 'shared'
+          memberDefaultRole?: 'viewer' | 'editor'
+          ownerId?: string
+          people?: Array<{
+            id: string
+            name: string
+            avatar?: string
+            email: string
+            role: string
+            memberKind: 'member' | 'external' | 'guest'
+          }>
+          memberViews?: Array<{
+            id: string
+            name: string
+            role: string
+          }>
+        }>
       }
     }>(`/api/account/access?collection=${encodeURIComponent(collection)}&recordId=${encodeURIComponent(recordId)}`)
     setScope(data.scope ?? 'personal')
@@ -416,6 +478,8 @@ function WorkspaceAccess({
     setInheritance({
       mode: data.inheritance?.mode === 'inherit' ? 'inherit' : 'custom',
       hasParent: Boolean(data.inheritance?.hasParent),
+      parentTitle: data.inheritance?.parent?.title,
+      ancestors: Array.isArray(data.inheritance?.ancestors) ? data.inheritance!.ancestors : [],
     })
   }
 
@@ -554,6 +618,7 @@ function WorkspaceAccess({
 
   async function updateGeneralAccess(nextAccessMode: 'private' | 'members', nextMemberDefaultRole?: 'viewer' | 'editor') {
     if (!recordId) return
+    const wasInheriting = inheritance.mode === 'inherit'
     setError('')
     setStatusNotice('')
     setInheritanceBusy(true)
@@ -568,6 +633,9 @@ function WorkspaceAccess({
           ...(nextAccessMode === 'members' ? { memberDefaultRole: nextMemberDefaultRole ?? memberDefaultRole } : {}),
         }),
       })
+      if (wasInheriting) {
+        setStatusNotice('已切换为独立通用访问，已自动关闭「继承上级权限」')
+      }
       emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
       notifyViewShareChanged(collection, recordId)
       await load()
@@ -676,6 +744,65 @@ function WorkspaceAccess({
   }
 
   const isMembersOpen = accessMode === 'members' || (accessMode === 'inherit' && shownScope === 'workspace')
+  const inheritedEntries = (() => {
+    if (inheritance.mode !== 'inherit' || !inheritance.ancestors.length) return []
+    const rank = (r: string) =>
+      r === 'owner' ? 5 : r === 'manager' ? 4 : r === 'editor' ? 3 : r === 'commenter' ? 2 : 1
+    type InheritedRow = {
+      key: string
+      kind: 'workspace_members' | 'account' | 'member_view'
+      id: string
+      name: string
+      avatar?: string
+      memberKind?: 'member' | 'external' | 'guest'
+      role: string
+      sourceTitle: string
+    }
+    const byKey = new Map<string, InheritedRow>()
+    const upsert = (row: InheritedRow) => {
+      const prev = byKey.get(row.key)
+      if (!prev || rank(row.role) > rank(prev.role)) {
+        byKey.set(row.key, row)
+      }
+    }
+    for (const anc of inheritance.ancestors) {
+      const sourceTitle = anc.title?.trim() || '上级内容'
+      if (anc.scope === 'workspace') {
+        upsert({
+          key: 'workspace_members',
+          kind: 'workspace_members',
+          id: 'workspace_members',
+          name: '全部空间成员',
+          role: anc.memberDefaultRole === 'editor' ? 'editor' : 'viewer',
+          sourceTitle,
+        })
+      }
+      for (const person of anc.people ?? []) {
+        if (person.id === anc.ownerId) continue
+        upsert({
+          key: `account:${person.id}`,
+          kind: 'account',
+          id: person.id,
+          name: person.name,
+          avatar: person.avatar,
+          memberKind: person.memberKind,
+          role: person.role,
+          sourceTitle,
+        })
+      }
+      for (const mv of anc.memberViews ?? []) {
+        upsert({
+          key: `member_view:${mv.id}`,
+          kind: 'member_view',
+          id: mv.id,
+          name: mv.name,
+          role: mv.role,
+          sourceTitle,
+        })
+      }
+    }
+    return [...byKey.values()]
+  })()
 
   return (
     <div className="fsdb-share-link-section" data-testid="fsdb-share-members">
@@ -752,7 +879,11 @@ function WorkspaceAccess({
         <div className="fsdb-share-inherit-row" data-testid="fsdb-share-inherit">
           <span>
             <strong>继承上级权限</strong>
-            <em>{inheritance.mode === 'inherit' ? '自动沿用上级内容的通用访问与协作者权限' : '已断开继承，按本条独立设置生效'}</em>
+            <em>
+              {inheritance.mode === 'inherit'
+                ? `自动沿用${inheritance.parentTitle ? `「${inheritance.parentTitle}」` : '上级内容'}的通用访问、协作者与公开分享（本条可额外叠加）`
+                : '已断开继承，按本条独立设置生效'}
+            </em>
           </span>
           <ShareToggle
             on={inheritance.mode === 'inherit'}
@@ -762,6 +893,39 @@ function WorkspaceAccess({
             onChange={(on) => void toggleInheritance(on)}
           />
         </div>
+      ) : null}
+
+      {inheritedEntries.length > 0 ? (
+        <section className="fsdb-share-collab-section is-inherited" data-testid="fsdb-share-inherited">
+          <div className="fsdb-share-section-head">
+            <h3>继承自上级</h3>
+            <span className="fsdb-share-section-count">{inheritedEntries.length}</span>
+          </div>
+          <ul className="fsdb-share-collaborators">
+            {inheritedEntries.map((row) => (
+              <li key={row.key} className="is-inherited">
+                {row.kind === 'workspace_members' ? (
+                  <span className="fsdb-share-avatar is-view" aria-hidden><UserGroupIcon className="size-3.5" /></span>
+                ) : row.kind === 'member_view' ? (
+                  <span className="fsdb-share-avatar is-view" aria-hidden><LockClosedIcon className="size-3.5" /></span>
+                ) : (
+                  renderPersonAvatar(row.id || row.name, row.avatar, row.memberKind !== 'member' ? 'is-external' : '')
+                )}
+                <span className="fsdb-share-collaborator-copy">
+                  <strong>{row.name}</strong>
+                  <em>
+                    {row.kind === 'workspace_members'
+                      ? `空间全员 · 来自「${row.sourceTitle}」`
+                      : row.kind === 'member_view'
+                        ? `锁定成员视图 · 来自「${row.sourceTitle}」`
+                        : `${row.memberKind === 'member' ? '空间成员' : '外部协作者'} · 来自「${row.sourceTitle}」`}
+                  </em>
+                </span>
+                <span className="fsdb-share-collaborator-role">{roleLabel(row.role)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
 
       <section className="fsdb-share-collab-section">
@@ -1012,6 +1176,10 @@ export function SharePanel({
     !localOnly && target.collection === VIEWS_COLLECTION_PATH ? 'collaboration' : 'public',
   )
   const [share, setShare] = useState<ShareInfo | null>(null)
+  const [inheritedShare, setInheritedShare] = useState<InheritedShareInfo | null>(null)
+  const [publicInheritance, setPublicInheritance] = useState<ShareInheritanceMeta | null>(null)
+  const [publicInheritBusy, setPublicInheritBusy] = useState(false)
+  const [inheritedCopied, setInheritedCopied] = useState(false)
   const [viewPublicStats, setViewPublicStats] = useState<{ matchedCount: number; publicCount: number } | null>(null)
   const [pin, setPin] = useState('')
   const [usePassword, setUsePassword] = useState(false)
@@ -1028,22 +1196,71 @@ export function SharePanel({
     recordId: target.recordId,
   })
 
+  async function refreshPublicShare() {
+    const data = await readJson<SharePayload>(`/api/db/shares?${params}`, undefined, { fresh: true })
+    applyPayload(data)
+    setInheritedShare(data.inheritedShare ?? null)
+    setPublicInheritance(data.inheritance ?? null)
+    setViewPublicStats(data.viewPublicStats ?? null)
+  }
+
   useEffect(() => {
+    if (tab !== 'public') return
     let gone = false
-    void readJson<SharePayload>(`/api/db/shares?${params}`).then((data) => {
+    void readJson<SharePayload>(`/api/db/shares?${params}`, undefined, { fresh: true }).then((data) => {
       if (gone) return
       applyPayload(data)
+      setInheritedShare(data.inheritedShare ?? null)
+      setPublicInheritance(data.inheritance ?? null)
       setViewPublicStats(data.viewPublicStats ?? null)
     }).catch(() => {
       if (!gone) {
         setShare(null)
+        setInheritedShare(null)
+        setPublicInheritance(null)
         setViewPublicStats(null)
       }
     })
     return () => {
       gone = true
     }
-  }, [target.collection, target.recordId])
+  }, [target.collection, target.recordId, tab])
+
+  async function togglePublicInheritance(on: boolean) {
+    if (!target.recordId || localOnly) return
+    setError('')
+    setPublicInheritBusy(true)
+    try {
+      await readJson('/api/account/access', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          collection: target.collection,
+          recordId: target.recordId,
+          inheritanceMode: on ? 'inherit' : 'custom',
+        }),
+      })
+      emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
+      notifyViewShareChanged(target.collection, target.recordId)
+      await refreshPublicShare()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '无法切换继承模式')
+    } finally {
+      setPublicInheritBusy(false)
+    }
+  }
+
+  async function copyInheritedShare() {
+    if (!inheritedShare?.url) return
+    setError('')
+    try {
+      await navigator.clipboard.writeText(inheritedShare.url)
+      setInheritedCopied(true)
+      window.setTimeout(() => setInheritedCopied(false), 1600)
+    } catch {
+      setError('无法复制，请重试')
+    }
+  }
 
   function applyPayload(data: SharePayload, nextPin?: string, flagsOnly = false) {
     if (data.share === undefined) return
@@ -1178,6 +1395,56 @@ export function SharePanel({
         <WorkspaceAccess collection={target.collection} recordId={target.recordId} />
       ) : null}
       {tab === 'public' ? <><section className="fsdb-share-link-section">
+        {!localOnly && publicInheritance?.hasParent ? (
+          <div className="fsdb-share-inherit-row" data-testid="fsdb-share-public-inherit">
+            <span>
+              <strong>继承上级权限</strong>
+              <em>
+                {publicInheritance.mode === 'inherit'
+                  ? `自动沿用${publicInheritance.parentTitle ? `「${publicInheritance.parentTitle}」` : '上级内容'}的通用访问、协作者与公开分享`
+                  : '已断开继承，不会随上级公开链接对外展示'}
+              </em>
+            </span>
+            <ShareToggle
+              on={publicInheritance.mode === 'inherit'}
+              disabled={publicInheritBusy}
+              label="继承上级权限"
+              testId="fsdb-share-public-inherit-toggle"
+              onChange={(on) => void togglePublicInheritance(on)}
+            />
+          </div>
+        ) : null}
+        {!localOnly && inheritedShare && publicInheritance?.mode === 'inherit' ? (
+          <div className="fsdb-share-inherited-public" data-testid="fsdb-share-inherited-public">
+            <div className="fsdb-share-public-state">
+              <span><i aria-hidden />已继承自「{inheritedShare.sourceTitle}」的公开分享</span>
+            </div>
+            <div className="fsdb-share-link-row">
+              <div className="fsdb-share-link-field">
+                <LinkIcon aria-hidden className="size-4" />
+                <input
+                  readOnly
+                  value={inheritedShare.url}
+                  aria-label="继承的公开链接"
+                  data-testid="fsdb-share-inherited-url"
+                  onFocus={(event) => event.currentTarget.select()}
+                />
+              </div>
+              <button
+                type="button"
+                className="fsdb-share-copy"
+                data-testid="fsdb-share-inherited-copy"
+                onClick={() => void copyInheritedShare()}
+              >
+                {inheritedCopied ? <CheckIcon aria-hidden className="size-4" /> : null}
+                {inheritedCopied ? '已复制' : '复制链接'}
+              </button>
+            </div>
+            <p className="fsdb-share-copy-note">
+              关闭上方「继承上级权限」即可单独隐藏本条；下方可额外为本条开启独立公开链接。
+            </p>
+          </div>
+        ) : null}
         {target.collection === VIEWS_COLLECTION_PATH ? (
           <p
             className="fsdb-share-copy-note"
@@ -1192,9 +1459,15 @@ export function SharePanel({
         {!share ? (
           <div className="fsdb-share-empty">
             <span>
-              <p className="fsdb-share-empty-title">{localOnly ? '局域网链接' : '公开链接'}</p>
+              <p className="fsdb-share-empty-title">
+                {localOnly ? '局域网链接' : inheritedShare ? '本条独立公开链接' : '公开链接'}
+              </p>
               <p className="fsdb-share-empty-copy">
-                {localOnly ? '仅在本机服务运行且处于同一局域网时可访问' : '获得链接的人可以查看'}
+                {localOnly
+                  ? '仅在本机服务运行且处于同一局域网时可访问'
+                  : inheritedShare
+                    ? '可单独为本条生成独立链接与密码（不影响上级继承）'
+                    : '获得链接的人可以查看'}
               </p>
             </span>
             <button

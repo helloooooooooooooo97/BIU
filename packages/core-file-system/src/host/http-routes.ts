@@ -486,10 +486,45 @@ export function registerDatabaseHttpRoutes(
       route.send(status, { error: msg })
     }
   })
-  const shareSnapshotOpts = (query: URLSearchParams) => {
-    if (query.get('contents') === 'all') return { contentIds: 'all' as const, shares }
+  const resolveShareCollabStore = () => {
+    try {
+      const account = ctx.get('account') as {
+        store?: {
+          activeWorkspaceId?: () => string | null
+          recordInheritance?: (
+            workspaceId: string,
+            collection: string,
+            recordId: string,
+          ) => {
+            mode: 'inherit' | 'custom'
+            hasParent: boolean
+            parent: { collection: string; recordId: string } | null
+            ancestors: Array<{ collection: string; recordId: string }>
+          }
+          collectionInheritedSources?: (
+            workspaceId: string,
+            collection: string,
+            directKeys: ReadonlySet<string>,
+          ) => Map<string, { collection: string; recordId: string }>
+          collectInheritingDescendants?: (
+            workspaceId: string,
+            collection: string,
+            rootRecordId: string,
+            maxCount?: number,
+          ) => Array<{ collection: string; recordId: string; parentCollection: string; parentRecordId: string }>
+        }
+      } | undefined
+      return account?.store
+    } catch {
+      return undefined
+    }
+  }
+  const shareSnapshotOpts = (query: URLSearchParams, share?: { workspaceId?: string }) => {
+    const collabStore = resolveShareCollabStore()
+    const workspaceId = share?.workspaceId || currentRequestWorkspaceId() || collabStore?.activeWorkspaceId?.() || ''
+    if (query.get('contents') === 'all') return { contentIds: 'all' as const, shares, collabStore, workspaceId }
     const record = query.get('record') || ''
-    return { contentIds: record ? [record] : [], shares }
+    return { contentIds: record ? [record] : [], shares, collabStore, workspaceId }
   }
   const sharePasswordOf = (route: { req: { headers: IncomingMessage['headers'] }; query: URLSearchParams }, body?: { password?: unknown }) => {
     const header = String(route.req.headers['x-share-password'] ?? '')
@@ -569,6 +604,18 @@ export function registerDatabaseHttpRoutes(
           const refs = new Map<string, { collection: string; recordId: string }>()
           for (const anc of access.inheritance?.ancestors ?? []) {
             refs.set(`${anc.collection}\t${anc.recordId}`, { collection: anc.collection, recordId: anc.recordId })
+          }
+          const seenShareCollections = new Set<string>([target.collection])
+          for (const anc of access.inheritance?.ancestors ?? []) {
+            if (!anc.collection || seenShareCollections.has(anc.collection)) continue
+            seenShareCollections.add(anc.collection)
+            for (const share of shares.listRecords(anc.collection)) {
+              publicShares.push({
+                kind: 'record',
+                collection: share.collection,
+                recordId: share.recordId,
+              })
+            }
           }
           for (const step of access.roleChain ?? []) {
             if (step.collection && step.recordId) {
@@ -699,14 +746,84 @@ export function registerDatabaseHttpRoutes(
       return
     }
     const share = shares.findRecord(collection, recordId)
+    const collabStore = resolveShareCollabStore()
+    const workspaceId = currentRequestWorkspaceId() || collabStore?.activeWorkspaceId?.() || ''
     let viewPublicStats: { matchedCount: number; publicCount: number } | undefined
     if (normalizeCollectionPath(collection) === VIEWS_COLLECTION_PATH && recordId) {
       viewPublicStats =
-        (await computeViewPublicStats(db, savedViews, shares, recordId, currentAccountId(), currentRequestWorkspaceId())) ??
-        undefined
+        (await computeViewPublicStats(
+          db,
+          savedViews,
+          shares,
+          recordId,
+          currentAccountId(),
+          workspaceId,
+          collabStore,
+        )) ?? undefined
+    }
+    let inheritance: { mode: 'inherit' | 'custom'; hasParent: boolean; parentTitle?: string } | undefined
+    let inheritedShare:
+      | (ReturnType<typeof shares.findRecord> & {
+          url: string
+          rootUrl: string
+          sourceCollection: string
+          sourceRecordId: string
+          sourceTitle: string
+        })
+      | null = null
+    if (activeDataLocation() === 'cloud' && workspaceId && collabStore?.recordInheritance && recordId) {
+      const info = collabStore.recordInheritance(workspaceId, collection, recordId)
+      let parentTitle = ''
+      if (info.parent) {
+        try {
+          const parentGot = (await db.read(`${info.parent.collection}/${info.parent.recordId}`)) as {
+            value?: { title?: unknown; name?: unknown }
+          }
+          parentTitle = String(parentGot.value?.title ?? parentGot.value?.name ?? '').trim()
+        } catch {
+          /* 上级不可读时回退默认名称 */
+        }
+      }
+      inheritance = {
+        mode: info.mode,
+        hasParent: info.hasParent,
+        ...(parentTitle ? { parentTitle } : {}),
+      }
+      if (info.mode === 'inherit' && info.ancestors.length > 0) {
+        const normalizedSelfCollection = normalizeCollectionPath(collection)
+        for (let i = info.ancestors.length - 1; i >= 0; i -= 1) {
+          const anc = info.ancestors[i]!
+          const ancShare = shares.findRecord(anc.collection, anc.recordId)
+          if (!ancShare) continue
+          if (workspaceId && ancShare.workspaceId && ancShare.workspaceId !== workspaceId) continue
+          let sourceTitle = ''
+          try {
+            const ancGot = (await db.read(`${anc.collection}/${anc.recordId}`)) as {
+              value?: { title?: unknown; name?: unknown }
+            }
+            sourceTitle = String(ancGot.value?.title ?? ancGot.value?.name ?? '').trim()
+          } catch {
+            /* 祖先不可读时使用 ID 兜底 */
+          }
+          const rootUrl = publicShareUrl(route.req, ancShare.token)
+          const sameCollection = normalizeCollectionPath(anc.collection) === normalizedSelfCollection
+          const url = sameCollection ? `${rootUrl}/r/${encodeURIComponent(recordId)}` : rootUrl
+          inheritedShare = {
+            ...ancShare,
+            url,
+            rootUrl,
+            sourceCollection: anc.collection,
+            sourceRecordId: anc.recordId,
+            sourceTitle: sourceTitle || anc.recordId,
+          }
+          break
+        }
+      }
     }
     route.send(200, {
       share: share ? { ...share, url: publicShareUrl(route.req, share.token) } : null,
+      ...(inheritedShare ? { inheritedShare } : { inheritedShare: null }),
+      ...(inheritance ? { inheritance } : {}),
       ...(viewPublicStats ? { viewPublicStats } : {}),
     })
   })
@@ -775,7 +892,7 @@ export function registerDatabaseHttpRoutes(
     rememberShareLan(route)
     try {
       const snapshot = await runInShareContext(share, () =>
-        buildShareSnapshot(db, savedViews, share, shareSnapshotOpts(route.query)),
+        buildShareSnapshot(db, savedViews, share, shareSnapshotOpts(route.query, share)),
       )
       route.send(200, snapshot)
     } catch (error) {
@@ -803,7 +920,7 @@ export function registerDatabaseHttpRoutes(
     rememberShareLan(route)
     try {
       const snapshot = await runInShareContext(share, () =>
-        buildShareSnapshot(db, savedViews, share, shareSnapshotOpts(route.query)),
+        buildShareSnapshot(db, savedViews, share, shareSnapshotOpts(route.query, share)),
       )
       route.send(200, snapshot)
     } catch (error) {
@@ -829,8 +946,10 @@ export function registerDatabaseHttpRoutes(
     }
     const recordId = route.params.recordId ?? ''
     try {
+      const collabStore = resolveShareCollabStore()
+      const workspaceId = share.workspaceId || currentRequestWorkspaceId() || collabStore?.activeWorkspaceId?.() || ''
       const snapshot = await runInShareContext(share, () =>
-        buildShareSnapshot(db, savedViews, share, { contentIds: [recordId], shares }),
+        buildShareSnapshot(db, savedViews, share, { contentIds: [recordId], shares, collabStore, workspaceId }),
       )
       if (!snapshot.records.some((row) => String(row.id) === recordId)) {
         route.send(404, { error: 'not found' })
@@ -859,8 +978,17 @@ export function registerDatabaseHttpRoutes(
     }
     try {
       const record = route.query.get('record') || ''
+      const collabStore = resolveShareCollabStore()
+      const workspaceId = share.workspaceId || currentRequestWorkspaceId() || collabStore?.activeWorkspaceId?.() || ''
       const snapshot = await runInShareContext(share, () =>
-        buildShareSnapshot(db, savedViews, share, record ? { contentIds: [record], shares } : { contentIds: [], shares }),
+        buildShareSnapshot(
+          db,
+          savedViews,
+          share,
+          record
+            ? { contentIds: [record], shares, collabStore, workspaceId }
+            : { contentIds: [], shares, collabStore, workspaceId },
+        ),
       )
       const name = route.params.name ?? ''
       if (!snapshot.assets.includes(name)) {

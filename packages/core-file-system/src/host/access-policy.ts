@@ -39,6 +39,27 @@ export type WorkspaceFiles = {
   ): void
   collectionOwnership?(workspaceId: string, collection: string): Map<string, 'personal' | 'workspace' | 'shared'>
   collectionExternalCollaborators?(workspaceId: string, collection: string): Set<string>
+  collectionInheritedSources?(
+    workspaceId: string,
+    collection: string,
+    directKeys: ReadonlySet<string>,
+  ): Map<string, { collection: string; recordId: string }>
+  recordInheritance?(
+    workspaceId: string,
+    collection: string,
+    recordId: string,
+  ): {
+    mode: 'inherit' | 'custom'
+    hasParent: boolean
+    parent: { collection: string; recordId: string } | null
+    ancestors: Array<{ collection: string; recordId: string }>
+  }
+  collectInheritingDescendants?(
+    workspaceId: string,
+    collection: string,
+    rootRecordId: string,
+    maxCount?: number,
+  ): Array<{ collection: string; recordId: string; parentCollection: string; parentRecordId: string }>
   collectionRecordOwners?(workspaceId: string, collection: string): Map<string, string>
   isMember?(accountId: string, workspaceId: string): boolean
   members?(accountId: string, workspaceId: string): Array<{ id: string; member_kind?: string }>
@@ -503,17 +524,33 @@ export class DatabaseAccessPolicy {
   }
 
   recordShareIds(collection: string) {
-    const key = `${this.cacheWorkspaceId()}\t${collection}`
+    const workspaceId = this.resolveWorkspaceId()
+    const key = `${workspaceId || this.cacheWorkspaceId()}\t${collection}`
     const cached = this.recordShareCache.get(key)
     if (cached) return cached
     const ids = new Set<string>()
+    const directKeys = new Set<string>()
     try {
-      for (const share of this.host.shares.listRecords(collection)) {
+      const allShares = typeof this.host.shares.list === 'function'
+        ? this.host.shares.list().filter((share) => share.kind === 'record')
+        : this.host.shares.listRecords(collection)
+      for (const share of allShares) {
+        if (workspaceId && share.workspaceId && share.workspaceId !== workspaceId) continue
         const recordId = String(share.recordId ?? '').trim()
-        if (recordId) ids.add(recordId)
+        if (!recordId) continue
+        const shareCol = share.collection || collection
+        directKeys.add(`${shareCol}\t${recordId}`)
+        if (shareCol === collection) ids.add(recordId)
       }
     } catch {
       /* 分享库还没打开时按无分享处理 */
+    }
+    const store = this.host.collabStore()
+    if (store?.collectionInheritedSources && workspaceId && directKeys.size > 0) {
+      const inherited = store.collectionInheritedSources(workspaceId, collection, directKeys)
+      for (const recordId of inherited.keys()) {
+        ids.add(recordId)
+      }
     }
     this.recordShareCache.set(key, ids)
     return ids
