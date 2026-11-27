@@ -1,14 +1,13 @@
 import { lookup } from 'node:dns/promises'
 import { isIP } from 'node:net'
 import { mkdir, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
-import { currentRequestWorkspaceId } from '@biu/host-plugin-loader/data-dir'
-import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { extractPageImages, extForImage, isImageContentType, looksLikeImageUrl, stripTags } from './html.ts'
-import { loadRaw } from './http.ts'
+import { loadRaw, webImageDir } from './http.ts'
 import { WebError, type WebFetchProvider, type WebFetchRequest, type WebFetchResult } from './types.ts'
+
+export { webImageDir }
 
 const PRIVATE_HOSTNAME = /^(localhost|.*\.localhost|.*\.local|.*\.internal)$/i
 const MAX_CHARS = 16_000
@@ -151,16 +150,6 @@ export async function assertSafeHttpUrl(raw: string, lookupFn?: DnsLookupFn): Pr
     }
   }
   return url
-}
-
-export function webImageDir(): string {
-  const base = join(tmpdir(), 'biu-web')
-  if (!getRuntimePolicy().isolateWorkspaceDirs) return base
-  const workspaceId = currentRequestWorkspaceId().trim().replace(/[^a-zA-Z0-9_-]/g, '')
-  if (!workspaceId) {
-    throw new WebError('WEB_PROVIDER_ERROR', '云端模式缺少工作区上下文，拒绝写入网页缓存目录')
-  }
-  return join(base, 'workspaces', workspaceId)
 }
 
 async function saveImageFile(url: string, mime: string, bytes: Buffer) {
