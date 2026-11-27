@@ -1140,7 +1140,8 @@ test('ensureTrajectory keeps live index on chat route after new session navigate
   assert.equal(view.get().view, 'chat')
 })
 
-test('forkCurrent inserts the child into the sidebar list', async () => {
+test('forkCurrent inserts the child into the sidebar list and forwards upToSeq', async () => {
+  let postedBody: string | undefined
   let sessions: Array<{
     id: string
     title: string
@@ -1148,7 +1149,7 @@ test('forkCurrent inserts the child into the sidebar list', async () => {
     updatedAt: number
     type?: string
     mascot?: { shape: string; color: string }
-  }> = [{ id: 's1', title: 'keep', eventCount: 2, updatedAt: 1 }]
+  }> = [{ id: 's1', title: '第一个', eventCount: 2, updatedAt: 1 }]
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     const method = init?.method ?? 'GET'
@@ -1156,14 +1157,21 @@ test('forkCurrent inserts the child into the sidebar list', async () => {
       return { ok: true, status: 200, json: async () => ({ sessions }) } as Response
     }
     if (url.includes('/api/agents/s1/fork') && method === 'POST') {
+      postedBody = typeof init?.body === 'string' ? init.body : undefined
       sessions = [
-        { id: 's2', title: 'keep', eventCount: 2, updatedAt: 9, mascot: { shape: 'circle', color: '#111' } },
-        { id: 's1', title: 'keep', eventCount: 2, updatedAt: 1 },
+        { id: 's2', title: '第一个的副本', eventCount: 2, updatedAt: 9, mascot: { shape: 'circle', color: '#111' } },
+        { id: 's1', title: '第一个', eventCount: 2, updatedAt: 1 },
       ]
       return {
         ok: true,
         status: 201,
-        json: async () => ({ id: 's2', parentId: 's1', type: 'chat', mascot: { shape: 'circle', color: '#111' } }),
+        json: async () => ({
+          id: 's2',
+          title: '第一个的副本',
+          parentId: 's1',
+          type: 'chat',
+          mascot: { shape: 'circle', color: '#111' },
+        }),
       } as Response
     }
     if (url.includes('/api/agents/s2')) {
@@ -1187,11 +1195,26 @@ test('forkCurrent inserts the child into the sidebar list', async () => {
   await ctx.plugin(sessionView)
   const view = ctx.sessionView as SessionViewService
   view.ingest('s1', { type: 'session/open', version: 1, seq: 0, ts: 1 })
+  view.ingest('s1', { type: 'user/message', text: '第一条', kind: 'wake', seq: 1, ts: 2 })
+  view.ingest('s1', { type: 'turn/start', turn: 1, seq: 2, ts: 3 })
+  view.ingest('s1', { type: 'assistant/message', text: '回复一', seq: 3, ts: 4 })
+  view.ingest('s1', { type: 'turn/end', turn: 1, reason: 'complete', seq: 4, ts: 5 })
+  view.ingest('s1', { type: 'user/message', text: '第二条', kind: 'wake', seq: 5, ts: 6 })
+  view.ingest('s1', { type: 'turn/start', turn: 2, seq: 6, ts: 7 })
+  view.ingest('s1', { type: 'assistant/message', text: '回复二', seq: 7, ts: 8 })
+  view.ingest('s1', { type: 'turn/end', turn: 2, reason: 'complete', seq: 8, ts: 9 })
+
+  const replies = view.get().nodes.filter((node) => node.kind === 'reply')
+  assert.equal(replies.length, 2)
+  assert.equal(replies[0]?.lastSeq, 4)
+  assert.equal(replies[1]?.lastSeq, 8)
+
   await view.refreshSessions()
-  const childId = await view.forkCurrent()
+  const childId = await view.forkCurrent({ upToSeq: replies[0]?.lastSeq })
   assert.equal(childId, 's2')
+  assert.equal(postedBody, JSON.stringify({ upToSeq: 4 }))
   assert.equal(view.get().sessionId, 's2')
-  assert.equal(view.get().sessions.some((item) => item.id === 's2'), true)
+  assert.equal(view.get().sessions.find((item) => item.id === 's2')?.title, '第一个的副本')
 })
 
 test('home cold-start picks latest chat; opening pages or data does not switch session', async () => {

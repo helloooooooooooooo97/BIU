@@ -505,7 +505,7 @@ function NodeView({
   detailsOpen?: boolean
   onToggleDetails?: (replyId: string) => void
   onInspect: (callId: string) => void
-  onFork: () => void | Promise<void>
+  onFork: (upToSeq?: number) => void | Promise<void>
   senderTitle?: string
   senderMascot?: SessionListItem['mascot']
   dispatchTasks?: import('@biu/web-session-view').DispatchedTaskRow[]
@@ -589,7 +589,7 @@ function NodeView({
         </div>
         {!streaming ? (
           <div className="chat-reply-actions-row">
-            <ReplyActions text={node.copyText} onFork={onFork} />
+            <ReplyActions text={node.copyText} onFork={() => onFork(node.lastSeq)} />
           </div>
         ) : null}
       </div>
@@ -616,7 +616,7 @@ export const ChatNodeList = memo(function ChatNodeList({
 }: {
   nodes: ChatNode[]
   onInspect: (callId: string) => void
-  onFork: () => void | Promise<void>
+  onFork: (upToSeq?: number) => void | Promise<void>
   sessions?: SessionListItem[]
   dispatchedTasksByTurn?: Record<
     string,
@@ -776,8 +776,8 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
     [sessionView],
   )
 
-  const onFork = useCallback(() => {
-    return sessionView.forkCurrent().then((id) => {
+  const onFork = useCallback((upToSeq?: number) => {
+    return sessionView.forkCurrent(upToSeq != null ? { upToSeq } : undefined).then((id) => {
       navigate(`/agents/${id}`)
     })
   }, [sessionView, navigate])

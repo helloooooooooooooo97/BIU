@@ -346,6 +346,13 @@ function sessionTitleOf(record: SessionRecord): string {
   return record.id.slice(0, 8)
 }
 
+function forkSessionTitle(source: SessionRecord): string {
+  const base = sessionTitleOf(source).trim()
+  if (!base) return '未命名副本'
+  const suffix = '的副本'
+  return `${base.slice(0, Math.max(1, 80 - suffix.length))}${suffix}`
+}
+
 export class SessionsService extends Service {
   private cache = new Map<string, SessionRecord>()
   private defaultSessionPromise: Promise<string> | null = null
@@ -718,21 +725,42 @@ export class SessionsService extends Service {
     return statInputComposition(record.events)
   }
 
-  async fork(sourceId: string, childId: string = allocateRecordId()) {
+  async fork(
+    sourceId: string,
+    childId: string = allocateRecordId(),
+    options?: { upToSeq?: number },
+  ) {
     const source = await this.require(sourceId)
     const used = await this.collectUsedMascots()
     const mascot = pickSessionMascot(childId, used)
     const sourceConfig = { ...(source.config ?? {}) }
     delete sourceConfig.inspector
+    const rawUpTo = options?.upToSeq
+    const upToSeq =
+      typeof rawUpTo === 'number' && Number.isFinite(rawUpTo) && rawUpTo >= 0
+        ? Math.floor(rawUpTo)
+        : null
+    const sliced =
+      upToSeq == null
+        ? source.events
+        : source.events.filter((event) => event.seq <= upToSeq)
+    const events = sliced.map((event, seq) => ({ ...event, seq }))
+    if (Array.isArray(sourceConfig.omitImageSeqs) && upToSeq != null) {
+      const seqMap = new Map<number, number>()
+      sliced.forEach((event, index) => seqMap.set(event.seq, index))
+      sourceConfig.omitImageSeqs = sourceConfig.omitImageSeqs
+        .map((seq) => seqMap.get(seq))
+        .filter((seq): seq is number => seq !== undefined)
+    }
     const record: SessionRecord = {
       id: childId,
       version: source.version,
-      events: source.events.map((event) => ({ ...event })),
+      events,
       ...(source.project ? { project: { ...source.project } } : {}),
       mascot,
       config: normalizeSessionConfig({
         ...sourceConfig,
-        title: nameFromSessionMascot(mascot),
+        title: forkSessionTitle(source),
         createdAt: Date.now(),
       }),
     }
