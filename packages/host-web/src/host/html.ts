@@ -1,4 +1,4 @@
-export function decodeEntities(text: string) {
+function decodeEntities(text: string) {
   return text
     .replace(/&nbsp;/gi, ' ')
     .replace(/&amp;/gi, '&')
@@ -99,7 +99,7 @@ export function parseWikiOpenSearch(raw: unknown): SearchHit[] {
   return hits
 }
 
-export const BROWSER_HEADERS = {
+const BROWSER_HEADERS = {
   Accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
   'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
   'User-Agent':

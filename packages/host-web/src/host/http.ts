@@ -10,7 +10,7 @@ import { WebError } from './types.ts'
 const MAX_REDIRECTS = 5
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
 
-function tempCacheDir() {
+export function webImageDir(): string {
   const base = join(tmpdir(), 'biu-web')
   if (!getRuntimePolicy().isolateWorkspaceDirs) return base
   const workspaceId = currentRequestWorkspaceId().trim().replace(/[^a-zA-Z0-9_-]/g, '')
@@ -165,7 +165,7 @@ function sniffImageType(bytes: Buffer, url: string) {
 export async function loadRaw(url: string, init: LoadRawOptions = {}) {
   if (process.env.VITEST === 'true') return fetchRaw(url, init)
   if (await hasCurl()) {
-    const dir = tempCacheDir()
+    const dir = webImageDir()
     await mkdir(dir, { recursive: true })
     let currentUrl = url
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
