@@ -147,6 +147,8 @@ test('user and system collection sections fold independently', () => {
   assert.match(sidebar, /label="系统数据"/)
   assert.ok(sidebar.indexOf('label="核心数据"') < sidebar.indexOf('label="公共数据"'))
   assert.ok(sidebar.indexOf('label="公共数据"') < sidebar.indexOf('label="系统数据"'))
+  assert.doesNotMatch(sidebar, /\[\.\.\.user,\s*\.\.\.system,\s*\.\.\.publicTables\]/)
+  assert.match(sidebar, /\[\.\.\.user,\s*\.\.\.publicTables,\s*\.\.\.system\]/)
   assert.match(sidebar, /data-testid="sidebar-public-collections"/)
   assert.match(sidebar, /sidebar-user-collections/)
   assert.match(sidebar, /renderTableRows\(userTables, 'user'\)/)
