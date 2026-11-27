@@ -210,7 +210,9 @@ test('list permission column uses the same capsule and loads the chain on click'
     readFileSync(resolve(import.meta.dirname, './browser-cell-renderer.tsx'), 'utf8')
   assert.match(src, /data-testid="fsdb-role-tag"/)
   assert.match(labelSrc, /className=\{`fsdb-scope-tag is-\$\{accessTone\(label\)\}`\}/)
-  assert.match(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*--biu-tag:var\(--biu-color-ink-gray\)/)
+  assert.match(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*--biu-tag:var\(--biu-color-ink-purple\)/)
+  assert.match(css, /\.fsdb-scope-tag\.is-edit[^{]*\{[^}]*--biu-tag:var\(--biu-color-ink-green\)/)
+  assert.match(css, /\.fsdb-scope-tag\.is-read[^{]*\{[^}]*--biu-tag:var\(--biu-color-ink-gray\)/)
   assert.match(css, /\.fsdb-scope-tag\{[^}]*color:var\(--biu-tag\)/)
   assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*--biu-color-text:/)
   assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*#2c2c2b/)
@@ -266,7 +268,11 @@ test('list share column uses the same capsule and loads the chain on click', () 
   assert.match(css, /\.fsdb-scope-tag\{[^}]*height:var\(--biu-space-5\)/)
   assert.match(
     css,
-    /\.fsdb-scope-tag\.is-workspace,\.fsdb-scope-pill\.is-workspace,\.fsdb-scope-tag\.is-personal,\.fsdb-scope-pill\.is-personal,\.fsdb-scope-tag\.is-manage,\.fsdb-scope-pill\.is-manage,\.fsdb-scope-tag\.is-read,\.fsdb-scope-pill\.is-read\{--biu-tag:var\(--biu-color-ink-gray\)\}/,
+    /\.fsdb-scope-tag\.is-personal,\.fsdb-scope-pill\.is-personal,\.fsdb-scope-tag\.is-read,\.fsdb-scope-pill\.is-read\{--biu-tag:var\(--biu-color-ink-gray\)\}/,
+  )
+  assert.match(
+    css,
+    /\.fsdb-scope-tag\.is-workspace,[\s\S]*?--biu-tag:var\(--biu-color-ink-green\)/,
   )
   assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-workspace\{[^}]*--biu-color-text/)
   assert.match(browser, /fallback=\{<ShareScopeLabel label=\{props\.label\} \/>\}/)

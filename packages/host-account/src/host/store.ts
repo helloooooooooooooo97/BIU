@@ -2505,38 +2505,27 @@ export class CollabStore {
     return this.accessRows(workspaceId, target.collection, target.recordId)
   }
 
-  /** Notion 对齐三态内部域：'workspace'（空间全员） / 'shared'（仅受邀协作者，不论内外） / 'personal'（仅创建者）。 */
+  /** Notion 对齐三态内部域：'workspace'（空间全员） / 'shared'（仅受邀协作者，不论内外，含继承链） / 'personal'（仅创建者）。 */
   collectionOwnership(workspaceId: string, collection: string) {
+    type PolicyRow = {
+      record_id: string
+      access_mode: string
+      owner_account_id: string
+      parent_collection: string
+      parent_record_id: string
+    }
     const policies = this.db
       .prepare(
         `SELECT record_id, access_mode, owner_account_id, parent_collection, parent_record_id
          FROM resource_policies
          WHERE workspace_id = ? AND collection = ?`,
       )
-      .all(workspaceId, collection) as Array<{
-      record_id: string
-      access_mode: string
-      owner_account_id: string
-      parent_collection: string
-      parent_record_id: string
-    }>
-    const map = new Map<string, 'personal' | 'workspace' | 'shared'>()
-    const owners = new Map<string, string>()
+      .all(workspaceId, collection) as PolicyRow[]
+    const policyByKey = new Map<string, PolicyRow>()
     for (const row of policies) {
-      owners.set(row.record_id, row.owner_account_id)
-      const effectiveMode =
-        row.access_mode === 'members'
-          ? 'members'
-          : row.access_mode === 'inherit' && row.parent_record_id
-            ? this.authorization.effectiveAccessMode({
-                type: 'record',
-                workspaceId,
-                collection,
-                recordId: row.record_id,
-              })
-            : 'private'
-      map.set(row.record_id, effectiveMode === 'members' ? 'workspace' : 'personal')
+      policyByKey.set(`${collection}\t${row.record_id}`, row)
     }
+
     const grants = this.db
       .prepare(
         `SELECT record_id, subject_type, subject_id
@@ -2544,26 +2533,115 @@ export class CollabStore {
          WHERE workspace_id = ? AND collection = ?`,
       )
       .all(workspaceId, collection) as Array<{ record_id: string; subject_type: string; subject_id: string }>
+    const directSharedKeys = new Set<string>()
     for (const grant of grants) {
-      if (grant.subject_type === 'account' && grant.subject_id === owners.get(grant.record_id)) continue
-      if (map.get(grant.record_id) === 'personal') {
-        map.set(grant.record_id, 'shared')
-      }
+      const key = `${collection}\t${grant.record_id}`
+      const ownerId = policyByKey.get(key)?.owner_account_id ?? ''
+      if (grant.subject_type === 'account' && ownerId && grant.subject_id === ownerId) continue
+      directSharedKeys.add(key)
     }
-    const owned = this.db
+
+    const ownedRows = this.db
       .prepare(
         `SELECT record_id FROM record_owners WHERE workspace_id = ? AND collection = ?`,
       )
       .all(workspaceId, collection) as Array<{ record_id: string }>
-    for (const row of owned) {
+    const legacyOwnedKeys = new Set<string>(ownedRows.map((row) => `${collection}\t${row.record_id}`))
+
+    // 跨集合继承按需懒查询（极少触发，避免全库扫描）
+    const crossPolicyCache = new Map<string, PolicyRow | null>()
+    const crossSharedCache = new Map<string, boolean>()
+    const crossLegacyCache = new Map<string, boolean>()
+    const getPolicy = (col: string, recId: string): PolicyRow | null => {
+      const key = `${col}\t${recId}`
+      if (col === collection) return policyByKey.get(key) ?? null
+      if (crossPolicyCache.has(key)) return crossPolicyCache.get(key) ?? null
+      const row = this.db
+        .prepare(
+          `SELECT record_id, access_mode, owner_account_id, parent_collection, parent_record_id
+           FROM resource_policies
+           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+        )
+        .get(workspaceId, col, recId) as PolicyRow | undefined
+      const found = row ?? null
+      crossPolicyCache.set(key, found)
+      return found
+    }
+    const hasDirectGrant = (col: string, recId: string, ownerId: string): boolean => {
+      const key = `${col}\t${recId}`
+      if (col === collection) return directSharedKeys.has(key)
+      if (crossSharedCache.has(key)) return crossSharedCache.get(key)!
+      const rows = this.db
+        .prepare(
+          `SELECT subject_type, subject_id FROM record_grants
+           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+        )
+        .all(workspaceId, col, recId) as Array<{ subject_type: string; subject_id: string }>
+      const shared = rows.some((g) => !(g.subject_type === 'account' && ownerId && g.subject_id === ownerId))
+      crossSharedCache.set(key, shared)
+      return shared
+    }
+    const hasLegacyOwner = (col: string, recId: string): boolean => {
+      const key = `${col}\t${recId}`
+      if (col === collection) return legacyOwnedKeys.has(key)
+      if (crossLegacyCache.has(key)) return crossLegacyCache.get(key)!
+      const row = this.db
+        .prepare(`SELECT 1 FROM record_owners WHERE workspace_id = ? AND collection = ? AND record_id = ? LIMIT 1`)
+        .get(workspaceId, col, recId)
+      const hit = Boolean(row)
+      crossLegacyCache.set(key, hit)
+      return hit
+    }
+
+    const resolved = new Map<string, 'personal' | 'workspace' | 'shared'>()
+    const resolveScope = (
+      col: string,
+      recId: string,
+      visiting = new Set<string>(),
+      depth = 0,
+    ): 'personal' | 'workspace' | 'shared' => {
+      const key = `${col}\t${recId}`
+      const cached = resolved.get(key)
+      if (cached) return cached
+      if (visiting.has(key) || depth > 64) return 'personal'
+      visiting.add(key)
+      const policy = getPolicy(col, recId)
+      let scope: 'personal' | 'workspace' | 'shared'
+      if (!policy) {
+        scope = hasLegacyOwner(col, recId) ? 'workspace' : hasDirectGrant(col, recId, '') ? 'shared' : 'personal'
+      } else if (policy.access_mode === 'members') {
+        scope = 'workspace'
+      } else if (policy.access_mode === 'inherit' && policy.parent_record_id) {
+        const parentCol = policy.parent_collection || col
+        const parentScope = resolveScope(parentCol, policy.parent_record_id, visiting, depth + 1)
+        if (parentScope === 'workspace') {
+          scope = 'workspace'
+        } else if (parentScope === 'shared' || hasDirectGrant(col, recId, policy.owner_account_id)) {
+          scope = 'shared'
+        } else {
+          scope = 'personal'
+        }
+      } else {
+        scope = hasDirectGrant(col, recId, policy.owner_account_id) ? 'shared' : 'personal'
+      }
+      visiting.delete(key)
+      resolved.set(key, scope)
+      return scope
+    }
+
+    const map = new Map<string, 'personal' | 'workspace' | 'shared'>()
+    for (const row of policies) {
+      map.set(row.record_id, resolveScope(collection, row.record_id))
+    }
+    for (const row of ownedRows) {
       if (!map.has(row.record_id)) map.set(row.record_id, 'workspace')
     }
     return map
   }
 
-  /** 返回该集合下存在外部协作者/访客授权的记录 ID 集合（正交外部标记，不覆盖内部三态）。 */
+  /** 返回该集合下存在外部协作者/访客授权的记录 ID 集合（含继承链，正交外部标记，不覆盖内部三态）。 */
   collectionExternalCollaborators(workspaceId: string, collection: string): Set<string> {
-    const rows = this.db
+    const directRows = this.db
       .prepare(
         `SELECT DISTINCT g.record_id
          FROM record_grants g
@@ -2575,7 +2653,86 @@ export class CollabStore {
          WHERE g.workspace_id = ? AND g.collection = ?`,
       )
       .all(workspaceId, collection) as Array<{ record_id: string }>
-    return new Set(rows.map((r) => r.record_id))
+    const directSet = new Set(directRows.map((r) => r.record_id))
+
+    const policies = this.db
+      .prepare(
+        `SELECT record_id, access_mode, parent_collection, parent_record_id
+         FROM resource_policies
+         WHERE workspace_id = ? AND collection = ?`,
+      )
+      .all(workspaceId, collection) as Array<{
+      record_id: string
+      access_mode: string
+      parent_collection: string
+      parent_record_id: string
+    }>
+    const policyById = new Map(policies.map((p) => [p.record_id, p]))
+    const memo = new Map<string, boolean>()
+    const crossExtCache = new Map<string, boolean>()
+
+    const hasExternalOn = (col: string, recId: string, visiting = new Set<string>(), depth = 0): boolean => {
+      const key = `${col}\t${recId}`
+      if (memo.has(key)) return memo.get(key)!
+      if (visiting.has(key) || depth > 64) return false
+      visiting.add(key)
+      let result = false
+      if (col === collection) {
+        if (directSet.has(recId)) {
+          result = true
+        } else {
+          const p = policyById.get(recId)
+          if (p?.access_mode === 'inherit' && p.parent_record_id) {
+            result = hasExternalOn(p.parent_collection || col, p.parent_record_id, visiting, depth + 1)
+          }
+        }
+      } else {
+        if (crossExtCache.has(key)) {
+          result = crossExtCache.get(key)!
+        } else {
+          const hit = this.db
+            .prepare(
+              `SELECT 1 FROM record_grants g
+               JOIN workspace_members m
+                 ON g.subject_type = 'account'
+                AND m.workspace_id = g.workspace_id
+                AND m.account_id = g.subject_id
+                AND m.member_kind IN ('external', 'guest')
+               WHERE g.workspace_id = ? AND g.collection = ? AND g.record_id = ?
+               LIMIT 1`,
+            )
+            .get(workspaceId, col, recId)
+          if (hit) {
+            result = true
+          } else {
+            const p = this.db
+              .prepare(
+                `SELECT access_mode, parent_collection, parent_record_id
+                 FROM resource_policies
+                 WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+              )
+              .get(workspaceId, col, recId) as
+              | { access_mode: string; parent_collection: string; parent_record_id: string }
+              | undefined
+            if (p?.access_mode === 'inherit' && p.parent_record_id) {
+              result = hasExternalOn(p.parent_collection || col, p.parent_record_id, visiting, depth + 1)
+            }
+          }
+          crossExtCache.set(key, result)
+        }
+      }
+      visiting.delete(key)
+      memo.set(key, result)
+      return result
+    }
+
+    const out = new Set<string>(directSet)
+    for (const p of policies) {
+      if (p.access_mode === 'inherit' && p.parent_record_id && hasExternalOn(collection, p.record_id)) {
+        out.add(p.record_id)
+      }
+    }
+    return out
   }
 
   collectionRecordOwners(workspaceId: string, collection: string) {
