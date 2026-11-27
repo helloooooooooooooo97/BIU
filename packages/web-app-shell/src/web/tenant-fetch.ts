@@ -6,6 +6,11 @@ export function readWorkspaceId() {
   return readStorageString(WORKSPACE_KEY, 'session') || readStorageString(WORKSPACE_KEY, 'local') || ''
 }
 
+export function writeSessionWorkspaceId(id: string) {
+  if (!id) return
+  writeStorageString(WORKSPACE_KEY, id, { area: 'session' })
+}
+
 export function writeWorkspaceId(id: string) {
   if (!id) return
   writeStorageString(WORKSPACE_KEY, id, { area: 'session' })

@@ -788,3 +788,45 @@ test('workspace settings defaults avatar to circular BIU icon and supports brand
   cleanup()
   localStorage.clear()
 })
+
+test('ShellWorkspaceSwitcher keeps per-tab sessionStorage workspace isolated from other tabs', async () => {
+  localStorage.clear()
+  sessionStorage.clear()
+  localStorage.setItem('biu.account.token', 'tok_multi_tab')
+  // 模拟另一标签页刚刚切到了 ws_b（写入了共享 localStorage），而本标签页固定在 ws_a（sessionStorage）
+  localStorage.setItem('biu.workspaceId', 'ws_b')
+  sessionStorage.setItem('biu.workspaceId', 'ws_a')
+
+  const activeHeaders: Array<string | null> = []
+  globalThis.fetch = (async (path: string, init?: RequestInit) => {
+    const url = String(path)
+    const headers = new Headers(init?.headers)
+    if (url.endsWith('/api/account/me')) return json({ id: 'acc_1', name: 'Ada', email: 'ada@example.com' })
+    if (url.endsWith('/api/account/workspaces')) {
+      return json({
+        workspaces: [
+          { id: 'ws_a', name: '空间 A', role: 'owner', location: 'cloud' },
+          { id: 'ws_b', name: '空间 B', role: 'owner', location: 'cloud' },
+        ],
+      })
+    }
+    if (url.endsWith('/api/account/active')) {
+      const wsHeader = headers.get('x-biu-workspace-id')
+      activeHeaders.push(wsHeader)
+      return json({ workspaceId: wsHeader || 'ws_b' })
+    }
+    if (url.endsWith('/api/account/cloud')) return json({ accounts: [] })
+    return json({})
+  }) as typeof fetch
+
+  render(<ShellWorkspaceSwitcher />)
+  const switcher = await screen.findByTestId('shell-workspace-switcher')
+  assert.match(switcher.textContent ?? '', /空间 A/)
+  assert.deepEqual(activeHeaders, ['ws_a'])
+  assert.equal(sessionStorage.getItem('biu.workspaceId'), 'ws_a')
+  assert.equal(localStorage.getItem('biu.workspaceId'), 'ws_b')
+
+  cleanup()
+  localStorage.clear()
+  sessionStorage.clear()
+})

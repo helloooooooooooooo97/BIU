@@ -47,7 +47,7 @@ import { useWorkspaceProfile } from '@biu/biu-ui/use-workspace-profile'
 import { BrandPrint, useBrandConfig } from './marketing-site/brand-mark.tsx'
 
 const MarketingSite = lazy(() => import('./marketing-site/index.tsx').then((m) => ({ default: m.MarketingSite })))
-import { clearWorkspaceId, readWorkspaceId, writeWorkspaceId } from './tenant-fetch.ts'
+import { clearWorkspaceId, readWorkspaceId, writeSessionWorkspaceId, writeWorkspaceId } from './tenant-fetch.ts'
 
 function isLandingPreview() {
   return typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('landingPreview') === '1'
@@ -1413,11 +1413,13 @@ export function isAuthFailure(err: unknown): boolean {
 }
 
 async function accountFetch(token: string, path: string, init?: RequestInit) {
+  const workspaceId = isLandingPreview() ? '' : readWorkspaceId()
   const res = await fetch(path, {
     ...init,
     headers: {
       'content-type': 'application/json',
       ...(token ? { authorization: `Bearer ${token}` } : {}),
+      ...(workspaceId ? { 'x-biu-workspace-id': workspaceId } : {}),
       ...init?.headers,
     },
   })
@@ -1494,7 +1496,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
         setWorkspaces(listed.workspaces ?? [])
         const workspaceId = String(current.workspaceId ?? '')
         setActive(workspaceId)
-        if (workspaceId) writeWorkspaceId(workspaceId)
+        if (workspaceId) writeSessionWorkspaceId(workspaceId)
         setLocalAccount(String(me.name || me.email || ''))
         setLocalAvatar(String(me.avatar ?? ''))
         setLocalAccountId(String(me.id ?? ''))
