@@ -1,4 +1,5 @@
 import { useCallback, useSyncExternalStore, type ReactNode } from 'react'
+import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import { BrandMascot } from '@biu/public-mascot'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import type { ShareSnapshot } from '../share-snapshot.ts'
@@ -44,6 +45,7 @@ export function ShareOwnerCorner({
 }) {
   const name = owner?.name?.trim() || '分享者'
   const slogan = owner?.slogan?.trim()
+  const avatarSeed = owner?.accountId?.trim() || owner?.name?.trim() || ''
   const extraItems = useSyncExternalStore(subscribeShareOwnerExtras, listShareOwnerExtras, listShareOwnerExtras)
   const close = useCallback(() => onOpenChange(false), [onOpenChange])
 
@@ -62,6 +64,10 @@ export function ShareOwnerCorner({
       >
         {owner?.avatar ? (
           <img className="fsdb-share-owner-face" src={owner.avatar} alt="" data-testid="fsdb-share-owner-face" />
+        ) : avatarSeed ? (
+          <span className="fsdb-share-owner-face" data-testid="fsdb-share-owner-face" aria-hidden>
+            <AiAvatar seed={avatarSeed} size={36} className="fsdb-share-owner-face" />
+          </span>
         ) : (
           <BrandMascot className="size-9" />
         )}
@@ -78,6 +84,8 @@ export function ShareOwnerCorner({
             <div className="fsdb-share-owner-card-head">
               {owner?.avatar ? (
                 <img className="fsdb-share-owner-card-photo" src={owner.avatar} alt="" />
+              ) : avatarSeed ? (
+                <AiAvatar seed={avatarSeed} size={40} className="fsdb-share-owner-card-photo" />
               ) : (
                 <span className="fsdb-share-owner-card-initial" aria-hidden>
                   {name.slice(0, 1)}
