@@ -19,7 +19,7 @@ import type { FieldSpec, FieldType } from '@biu/type-file-system'
 import { CellSelect } from '@biu/biu-ui/db-ui'
 import { HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
 import { HeadlessPopover } from '@biu/biu-ui/headless-popover'
-import { overlayZ } from '@biu/biu-ui/overlay-portal'
+import { OVERLAY_Z, overlayZ } from '@biu/biu-ui/overlay-portal'
 import { DndGrip } from './dnd-grip.tsx'
 import { FieldGlyph } from './fsdb-cells.tsx'
 import { parseGroupByKey, type GroupGrain } from './group-strategies.ts'
@@ -272,7 +272,7 @@ export function SortQueryMenu({
             </SortableContext>
             {typeof document !== 'undefined'
               ? createPortal(
-                  <DragOverlay zIndex={overlayZ(340)}>
+                  <DragOverlay zIndex={overlayZ(OVERLAY_Z.drag)}>
                     {active ? (
                       <div className="fsdb-query-drag-overlay" data-fsdb-sort-overlay>
                         <div className="fsdb-query-row">

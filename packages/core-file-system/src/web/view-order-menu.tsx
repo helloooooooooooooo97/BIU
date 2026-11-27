@@ -22,7 +22,7 @@ import {
   UserIcon,
   UsersIcon,
 } from '@heroicons/react/16/solid'
-import { overlayZ } from '@biu/biu-ui/overlay-portal'
+import { OVERLAY_Z, overlayZ } from '@biu/biu-ui/overlay-portal'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { moveList } from '../query-logic.ts'
 import { DndGrip } from './dnd-grip.tsx'
@@ -374,7 +374,7 @@ export function ViewOrderMenu({
               </SortableContext>
               {typeof document !== 'undefined'
                 ? createPortal(
-                    <DragOverlay zIndex={overlayZ(280)}>
+                    <DragOverlay zIndex={overlayZ(OVERLAY_Z.drag)}>
                       {active ? (
                         <div className="fsdb-query-drag-overlay" data-fsdb-sort-overlay>
                           <ViewRowShell

@@ -117,7 +117,7 @@ test('DragOverlay in popover menus portals to document.body and ViewOrderMenu ov
     ['query-menus.tsx', queryMenus],
     ['column-order-menu.tsx', columnMenu],
   ] as const) {
-    assert.match(src, /createPortal\([\s\S]*?<DragOverlay[\s\S]*?document\.body/, `${name} should portal DragOverlay to document.body`)
+    assert.match(src, /createPortal\([\s\S]*?<DragOverlay zIndex=\{overlayZ\(OVERLAY_Z\.drag\)\}[\s\S]*?document\.body/, `${name} should portal DragOverlay to document.body above popover layers`)
   }
   assert.match(orderMenu, /<DragOverlay[\s\S]*?onToggleLock=\{onToggleLock \? \(\) => undefined : undefined\}[\s\S]*?canRemove=\{canRemove && canDeleteSavedView\(active\) && canRemoveCollectionView\(views, active\)\}/)
 })
