@@ -1579,9 +1579,20 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
         data-testid="shell-workspace-switcher"
         onClick={() => setOpen((value) => !value)}
       >
-        {current.location === 'cloud'
-          ? <CloudIcon aria-hidden className="shell-workspace-switch-icon" />
-          : <ComputerDesktopIcon aria-hidden className="shell-workspace-switch-icon" />}
+        {current.avatar?.trim() ? (
+          <img
+            src={current.avatar.trim()}
+            alt=""
+            className="shell-workspace-switch-icon is-avatar"
+            data-testid="shell-workspace-switch-avatar"
+          />
+        ) : (
+          <WorkspaceAvatar
+            size={18}
+            className="shell-workspace-switch-icon is-avatar"
+            data-testid="shell-workspace-switch-avatar"
+          />
+        )}
         <span className="shell-workspace-switch-copy">
           <strong>{current.name}</strong>
         </span>
@@ -1604,7 +1615,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
         >
           <div className="shell-workspace-menu-list">
             {workspaces.map((workspace) => {
-              const location = workspace.location ?? 'device'
+              const avatar = workspace.avatar?.trim()
               return (
                 <button
                   key={workspace.id}
@@ -1614,9 +1625,11 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                   className={`shell-workspace-menu-item${workspace.id === active ? ' is-active' : ''}`}
                   onClick={() => switchTo(workspace.id)}
                 >
-                  {location === 'cloud'
-                    ? <CloudIcon aria-hidden className="shell-workspace-menu-icon" />
-                    : <ComputerDesktopIcon aria-hidden className="shell-workspace-menu-icon" />}
+                  {avatar ? (
+                    <img src={avatar} alt="" className="shell-workspace-menu-icon is-avatar" />
+                  ) : (
+                    <WorkspaceAvatar size={18} className="shell-workspace-menu-icon is-avatar" />
+                  )}
                   <span className="shell-workspace-menu-copy">
                     <strong>{workspace.name}</strong>
                   </span>
@@ -1882,6 +1895,8 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
   const [inviteCopied, setInviteCopied] = useState(false)
   const [presence, setPresence] = useState<CollabPresence[]>([])
   const [pendingRemove, setPendingRemove] = useState<CollabMember | null>(null)
+  const [pendingTransferOwner, setPendingTransferOwner] = useState<CollabMember | null>(null)
+  const [transferConfirmName, setTransferConfirmName] = useState('')
   const [deleteName, setDeleteName] = useState('')
   const [error, setError] = useState('')
 
@@ -2258,17 +2273,17 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
                     options={MEMBER_ROLE_OPTIONS}
                     menuMinWidth={210}
                     onChange={(nextRole) => {
+                      if (nextRole === 'owner') {
+                        setPendingTransferOwner(row)
+                        setTransferConfirmName('')
+                        return
+                      }
                       void accountFetch(token, `/api/account/workspaces/${workspaceId}/members/${row.id}`, {
                         method: 'PATCH',
                         body: JSON.stringify({ role: nextRole }),
                       })
                         .then((body) => {
                           setMembers(((body as { members?: CollabMember[] }).members) ?? [])
-                          if (nextRole === 'owner') {
-                            setWorkspaces((rows) => rows.map((workspace) =>
-                              workspace.id === workspaceId ? { ...workspace, role: 'admin' } : workspace,
-                            ))
-                          }
                           setError('')
                         })
                         .catch((err) => setError(err instanceof Error ? err.message : '修改角色失败'))
@@ -2425,6 +2440,53 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
           testId="settings-member-remove-dialog"
           onCancel={() => setPendingRemove(null)}
           onConfirm={removePendingMember}
+        />
+      ) : null}
+      {pendingTransferOwner ? (
+        <ConfirmDialog
+          title="移交空间所有者"
+          message={(
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <p style={{ margin: 0 }}>
+                确定将空间「{savedWorkspaceName}」的所有者移交给「{pendingTransferOwner.name || pendingTransferOwner.email || '该成员'}」吗？移交后你将降级为管理员，且<strong>此操作不可撤回</strong>。
+              </p>
+              <input
+                type="text"
+                className="settings-account-input"
+                value={transferConfirmName}
+                placeholder={`请输入空间名称「${savedWorkspaceName}」以确认`}
+                aria-label="输入空间名称以确认移交"
+                data-testid="settings-member-transfer-owner-input"
+                onChange={(event) => setTransferConfirmName(event.target.value)}
+              />
+            </div>
+          )}
+          confirmLabel="确认移交"
+          danger
+          confirmDisabled={!savedWorkspaceName || transferConfirmName.trim() !== savedWorkspaceName}
+          testId="settings-member-transfer-owner-dialog"
+          onCancel={() => {
+            setPendingTransferOwner(null)
+            setTransferConfirmName('')
+          }}
+          onConfirm={() => {
+            if (!savedWorkspaceName || transferConfirmName.trim() !== savedWorkspaceName) return
+            const target = pendingTransferOwner
+            setPendingTransferOwner(null)
+            setTransferConfirmName('')
+            void accountFetch(token, `/api/account/workspaces/${workspaceId}/members/${target.id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ role: 'owner' }),
+            })
+              .then((body) => {
+                setMembers(((body as { members?: CollabMember[] }).members) ?? [])
+                setWorkspaces((rows) => rows.map((workspace) =>
+                  workspace.id === workspaceId ? { ...workspace, role: 'admin' } : workspace,
+                ))
+                setError('')
+              })
+              .catch((err) => setError(err instanceof Error ? err.message : '移交所有者失败'))
+          }}
         />
       ) : null}
     </section>

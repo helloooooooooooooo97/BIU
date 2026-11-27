@@ -3528,6 +3528,15 @@ body {
   color: var(--biu-color-icon-fixed);
 }
 
+.shell-workspace-switch-icon.is-avatar,
+.shell-workspace-menu-icon.is-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
 .shell-workspace-switch-wrap {
   position: relative;
   display: flex;

@@ -9,6 +9,7 @@ export function ConfirmDialog({
   confirmLabel = '确认',
   cancelLabel = '取消',
   danger = false,
+  confirmDisabled = false,
   onConfirm,
   onCancel,
   icon,
@@ -19,6 +20,7 @@ export function ConfirmDialog({
   confirmLabel?: string
   cancelLabel?: string
   danger?: boolean
+  confirmDisabled?: boolean
   onConfirm: () => void
   onCancel: () => void
   icon?: ReactNode
@@ -69,6 +71,7 @@ export function ConfirmDialog({
           </Button>
           <Button
             danger={danger}
+            disabled={confirmDisabled}
             className={`biu-confirm-submit${danger ? ' is-danger' : ''}`}
             onClick={onConfirm}
           >
