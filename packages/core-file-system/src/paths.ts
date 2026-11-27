@@ -6,7 +6,6 @@ export const NOTICES_COLLECTION_PATH = '/notices'
 export const EDITOR_BLOCKS_COLLECTION_PATH = '/editor-blocks'
 export const PAGE_BLOCKS_COLLECTION_PATH = EDITOR_BLOCKS_COLLECTION_PATH
 export const PAGES_COLLECTION_PATH = '/pages'
-export const TASKS_COLLECTION_PATH = '/tasks'
 export const MCP_COLLECTION_PATH = '/mcp'
 export const SKILLS_COLLECTION_PATH = '/skills'
 export const PLUGINS_COLLECTION_PATH = '/plugins'
@@ -33,7 +32,6 @@ const INDEX_COLLECTION_ORDER = [
 /** 纯私人集合（仅创建者本人可见，不支持任何分享或批量权限设置）。 */
 const PERSONAL_ONLY_COLLECTIONS = new Set<string>([
   NOTICES_COLLECTION_PATH,
-  TASKS_COLLECTION_PATH,
   MCP_COLLECTION_PATH,
 ])
 

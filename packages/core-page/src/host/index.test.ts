@@ -371,16 +371,16 @@ test('page-block index keeps non-page editor bodies', async () => {
   const db = await store.sqlite()
   writeEditorContent(
     db,
-    '/tasks',
-    't1',
-    ':::editorBlock {kind=sandbox plugin=page-sandbox id=taskblk1}\n<div>task</div>\n:::\n',
+    '/skills',
+    's1',
+    ':::editorBlock {kind=sandbox plugin=page-sandbox id=skillblk1}\n<div>skill</div>\n:::\n',
   )
   await index.sync()
   const listed = await index.list()
-  assert.equal(listed.some((row) => row.id === '/tasks::t1::taskblk1'), true)
+  assert.equal(listed.some((row) => row.id === '/skills::s1::skillblk1'), true)
   await store.create({ title: 'page', notes: 'no blocks\n' })
   await index.sync()
-  assert.equal((await index.list()).some((row) => row.id === '/tasks::t1::taskblk1'), true)
+  assert.equal((await index.list()).some((row) => row.id === '/skills::s1::skillblk1'), true)
 })
 
 

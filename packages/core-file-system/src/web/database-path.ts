@@ -11,7 +11,6 @@ import {
   PLUGINS_COLLECTION_PATH,
   SKILLS_COLLECTION_PATH,
   TAGS_COLLECTION_PATH,
-  TASKS_COLLECTION_PATH,
   TRASH_COLLECTION_PATH,
   VIEWS_COLLECTION_PATH,
   WORKSPACE_MEMBERS_COLLECTION_PATH,
@@ -35,7 +34,6 @@ export {
   PLUGINS_COLLECTION_PATH,
   SKILLS_COLLECTION_PATH,
   TAGS_COLLECTION_PATH,
-  TASKS_COLLECTION_PATH,
   TRASH_COLLECTION_PATH,
   VIEWS_COLLECTION_PATH,
   WORKSPACE_MEMBERS_COLLECTION_PATH,
@@ -74,18 +72,16 @@ export function databaseRecordPath(collection: string, recordId: string, viewId?
   } satisfies AppRoute)
 }
 
-/** 数据侧栏记录行按 parentId 嵌套：只有页面和任务。 */
+/** 数据侧栏记录行按 parentId 嵌套：目前为页面。 */
 export function isRecordTreeCollection(path: string) {
   const normalized = normalizeCollectionPath(path)
-  return normalized === PAGES_COLLECTION_PATH || normalized === TASKS_COLLECTION_PATH
+  return normalized === PAGES_COLLECTION_PATH
 }
 
-/** 侧栏「核心数据」：代理、任务、页面、标签、组件。 */
+/** 侧栏「核心数据」：代理、页面、组件。 */
 const CORE_COLLECTION_ORDER = [
   AGENTS_COLLECTION_PATH,
-  TASKS_COLLECTION_PATH,
   PAGES_COLLECTION_PATH,
-  TAGS_COLLECTION_PATH,
   PAGE_BLOCKS_COLLECTION_PATH,
 ] as const
 
@@ -97,11 +93,12 @@ const SYSTEM_SIDEBAR_ORDER = [
   TRASH_COLLECTION_PATH,
 ] as const
 
-/** 侧栏「商店数据」：插件、MCP、技能（K+1 深拷贝分发能力）。 */
-const STORE_COLLECTION_ORDER = [
+/** 侧栏「公共数据」：插件、MCP、技能、标签（发布型公共资产）。 */
+const PUBLIC_COLLECTION_ORDER = [
   PLUGINS_COLLECTION_PATH,
   MCP_COLLECTION_PATH,
   SKILLS_COLLECTION_PATH,
+  TAGS_COLLECTION_PATH,
 ] as const
 
 /** 全部数据「新建」菜单优先遵循后端下发的集合能力声明（caps.overviewCreate / caps.create / view.sidebar），缺失时回退路径规则。 */
@@ -121,23 +118,23 @@ export function isOverviewCreatableCollection(
   return normalized !== PLUGINS_COLLECTION_PATH && normalized !== COMMENTS_COLLECTION_PATH
 }
 
-export function dataSidebarKind(path: string): 'user' | 'system' | 'store' {
+export function dataSidebarKind(path: string): 'user' | 'system' | 'public' {
   const normalized = normalizeCollectionPath(path)
-  if ((STORE_COLLECTION_ORDER as readonly string[]).includes(normalized)) return 'store'
+  if ((PUBLIC_COLLECTION_ORDER as readonly string[]).includes(normalized)) return 'public'
   if ((CORE_COLLECTION_ORDER as readonly string[]).includes(normalized)) return 'user'
   if ((SYSTEM_SIDEBAR_ORDER as readonly string[]).includes(normalized)) return 'system'
   if (isSystemCollection(normalized)) return 'system'
   return 'user'
 }
 
-export function sortDataCollections<T extends { path: string }>(tables: T[]): { user: T[]; system: T[]; store: T[] } {
+export function sortDataCollections<T extends { path: string }>(tables: T[]): { user: T[]; system: T[]; public: T[] } {
   const user: T[] = []
   const system: T[] = []
-  const store: T[] = []
+  const pub: T[] = []
   for (const table of tables) {
     if (normalizeCollectionPath(table.path) === DATA_COLLECTION_PATH) continue
     const kind = dataSidebarKind(table.path)
-    if (kind === 'store') store.push(table)
+    if (kind === 'public') pub.push(table)
     else if (kind === 'system') system.push(table)
     else user.push(table)
   }
@@ -147,8 +144,8 @@ export function sortDataCollections<T extends { path: string }>(tables: T[]): { 
   }
   user.sort((a, b) => rank(CORE_COLLECTION_ORDER, a.path) - rank(CORE_COLLECTION_ORDER, b.path) || a.path.localeCompare(b.path))
   system.sort((a, b) => rank(SYSTEM_SIDEBAR_ORDER, a.path) - rank(SYSTEM_SIDEBAR_ORDER, b.path) || a.path.localeCompare(b.path))
-  store.sort((a, b) => rank(STORE_COLLECTION_ORDER, a.path) - rank(STORE_COLLECTION_ORDER, b.path) || a.path.localeCompare(b.path))
-  return { user, system, store }
+  pub.sort((a, b) => rank(PUBLIC_COLLECTION_ORDER, a.path) - rank(PUBLIC_COLLECTION_ORDER, b.path) || a.path.localeCompare(b.path))
+  return { user, system, public: pub }
 }
 
 export function viewsCatalogSource(search: string): string {

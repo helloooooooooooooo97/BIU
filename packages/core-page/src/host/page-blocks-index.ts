@@ -9,7 +9,7 @@ export const PAGE_BLOCK_HOT_WINDOW_MS = 5 * 60 * 1000
 export const PAGE_BLOCK_HOT_LIMIT = 24
 export const PAGE_BLOCK_WARM_LIMIT = 8
 export const PAGE_BLOCK_TICK_MS = 15_000
-export const EDITOR_BLOCK_COLLECTIONS = ['/pages', '/tasks', '/tags', '/skills', '/plugins'] as const
+export const EDITOR_BLOCK_COLLECTIONS = ['/pages', '/tags', '/skills', '/plugins'] as const
 
 type Cover = { collection: string; page_id: string; page_updated_at: number }
 const PAGE_BLOCK_INDEX_COLUMNS =
@@ -85,12 +85,6 @@ function recordMeta(
   try {
     if (collection === '/pages') {
       const row = db.prepare('SELECT title, created_at FROM pages WHERE id = ?').get(recordId) as
-        | { title?: string; created_at?: number }
-        | undefined
-      return { title: String(row?.title ?? '').trim(), createdAt: Number(row?.created_at) || 0 }
-    }
-    if (collection === '/tasks') {
-      const row = db.prepare('SELECT title, created_at FROM tasks WHERE id = ?').get(recordId) as
         | { title?: string; created_at?: number }
         | undefined
       return { title: String(row?.title ?? '').trim(), createdAt: Number(row?.created_at) || 0 }

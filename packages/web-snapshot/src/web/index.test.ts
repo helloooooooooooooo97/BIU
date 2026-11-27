@@ -73,6 +73,8 @@ test('switching workspace endpoint resets snapshot seq so lower-seq target host 
     // Switch to local desktop host whose seq (5) is lower than cloud host's seq (500)
     mode = 'local'
     resetWorkspaceEndpoint()
+    assert.ok(Array.isArray(svc.get().collections), 'reset snapshot must keep a stable empty collections array')
+    assert.equal(svc.get().collections, svc.get().collections)
     await new Promise((resolve) => setTimeout(resolve, 40))
     assert.equal(svc.get().seq, 5)
     assert.equal(svc.get().plugins[0]?.id, 'local-plugin')

@@ -11,27 +11,20 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-test('ShellSidePlaces renders Store button immediately below Settings', () => {
-  const onStore = vi.fn()
+test('ShellSidePlaces does not render Store button in sidebar', () => {
   const { container } = render(
     <MemoryRouter>
       <ShellSidePlaces
         activeId="agent"
         agentHref="/"
         onSettings={() => undefined}
-        onStore={onStore}
       />
     </MemoryRouter>,
   )
   const nav = container.querySelector('[data-testid="shell-side-places"]')
   assert.ok(nav)
-  const buttons = [...nav.querySelectorAll('button[data-testid]')]
-  const settingsIndex = buttons.findIndex((btn) => btn.getAttribute('data-testid') === 'chrome-settings')
-  const storeIndex = buttons.findIndex((btn) => btn.getAttribute('data-testid') === 'chrome-store')
-  assert.ok(settingsIndex >= 0)
-  assert.equal(storeIndex, settingsIndex + 1, '商店入口必须紧跟在设置下方')
-  fireEvent.click(buttons[storeIndex])
-  assert.equal(onStore.mock.calls.length, 1)
+  assert.equal(nav.querySelector('button[data-testid="chrome-store"]'), null)
+  assert.ok(nav.querySelector('button[data-testid="chrome-settings"]'))
 })
 
 test('ShellStoreDialog renders MCP/Skills/Plugins/Templates categories and switches scope tabs', async () => {

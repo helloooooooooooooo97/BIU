@@ -997,7 +997,7 @@ export class CollabStore {
     if (!workspaceId) throw new CollabError('没有工作区', 400)
     if (viewId.trim()) throw new CollabError('视图不支持独立访客邀请，请使用访问规则分享', 400)
     const targetResource = { type: 'record' as const, workspaceId, ...this.recordKey(collection, recordId) }
-    if (targetResource.collection === '/notices' || targetResource.collection === '/tasks' || targetResource.collection === '/mcp') {
+    if (targetResource.collection === '/notices' || targetResource.collection === '/mcp') {
       throw new CollabError('该数据类型仅自己可见，不支持分享', 400)
     }
     if (targetResource.collection === '/comments' || targetResource.collection === '/editor-blocks') {
@@ -1351,7 +1351,7 @@ export class CollabStore {
     const normalizedViewId = viewId.trim()
     if (!normalizedViewId) throw new CollabError('成员视图不能为空', 400)
     const target = this.resolveRecordTarget(collection, recordId)
-    if (target.collection === '/notices' || target.collection === '/tasks' || target.collection === '/mcp') {
+    if (target.collection === '/notices' || target.collection === '/mcp') {
       throw new CollabError('该数据类型仅自己可见，不支持分享', 400)
     }
     if (target.collection === '/comments' || target.collection === '/editor-blocks') {
@@ -2467,7 +2467,7 @@ export class CollabStore {
     if (!workspaceId) throw new CollabError('没有工作区', 400)
     this.requireMember(actorId, workspaceId)
     const target = this.resolveRecordTarget(collection, recordId)
-    if (target.collection === '/notices' || target.collection === '/tasks' || target.collection === '/mcp') {
+    if (target.collection === '/notices' || target.collection === '/mcp') {
       throw new CollabError('该数据类型仅自己可见，不支持分享', 400)
     }
     if (target.collection === '/comments' || target.collection === '/editor-blocks') {
@@ -2516,7 +2516,7 @@ export class CollabStore {
     if (!workspaceId) throw new CollabError('没有工作区', 400)
     this.requireMember(actorId, workspaceId)
     const target = this.resolveRecordTarget(collection, recordId)
-    if (target.collection === '/notices' || target.collection === '/tasks' || target.collection === '/mcp') {
+    if (target.collection === '/notices' || target.collection === '/mcp') {
       throw new CollabError('该数据类型仅自己可见，不支持分享', 400)
     }
     if (target.collection === '/comments' || target.collection === '/editor-blocks') {
@@ -2982,7 +2982,7 @@ export class CollabStore {
     this.requireMember(actorId, workspaceId)
     const normalizedCol = input.collection.trim()
     if (!normalizedCol.startsWith('/')) throw new CollabError('集合路径不合法', 400)
-    if (normalizedCol === '/notices' || normalizedCol === '/tasks' || normalizedCol === '/mcp') {
+    if (normalizedCol === '/notices' || normalizedCol === '/mcp') {
       throw new CollabError('该数据类型仅自己可见，不支持分享', 400)
     }
     if (normalizedCol === '/comments' || normalizedCol === '/editor-blocks') {

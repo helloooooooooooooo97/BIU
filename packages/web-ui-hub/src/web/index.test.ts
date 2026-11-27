@@ -37,7 +37,7 @@ function plugin(id: string, enabled: boolean, web?: string) {
 
 test('store plugin web urls are runtime modules', () => {
   assert.equal(isRuntimeWebModule('/api/plugin-store/files/store-hello/web.js'), true)
-  assert.equal(isRuntimeWebModule('@biu/core-task-system/web'), false)
+  assert.equal(isRuntimeWebModule('@biu/core-page/web'), false)
 })
 
 test('runtime web href keeps snapshot code version instead of Date.now', () => {
@@ -117,11 +117,11 @@ test('session composer plugins mount before the file library and editor', () => 
   const ordered = orderUiPlugins([
     { id: 'core-editor' },
     { id: 'core-file-system' },
-    { id: 'core-task-system' },
+    { id: 'core-page' },
     { id: 'core-chat' },
     { id: 'core-pick' },
   ]).map((row) => row.id)
-  assert.deepEqual(ordered, ['core-pick', 'core-chat', 'core-file-system', 'core-editor', 'core-task-system'])
+  assert.deepEqual(ordered, ['core-pick', 'core-chat', 'core-file-system', 'core-editor', 'core-page'])
 })
 
 test('ui-hub mounts configured ui packages including chat', async () => {
@@ -148,14 +148,14 @@ test('ui-hub mounts configured ui packages including chat', async () => {
   })
   const uiIds = Object.keys(uiPackageLoaders)
   assert.ok(uiIds.length >= 1, 'virtual loaders should come from cordis.plugins.json')
-  const tasksUi = uiIds.find((id) => id.includes('core-task-system/web'))
-  assert.ok(tasksUi, 'core-task-system-web loader missing')
+  const pageUi = uiIds.find((id) => id.includes('core-page/web'))
+  assert.ok(pageUi, 'core-page-web loader missing')
   const chatUi = uiIds.find((id) => id === '@biu/core-chat/web' || id.includes('core-chat/web'))
   assert.ok(chatUi, `chat-ui loader missing in ${uiIds.join(',')}`)
   const base = ctx.snapshot.get()
   ctx.snapshot.get = () => ({
     ...base,
-    plugins: [plugin('core-task-system', true, tasksUi), plugin('core-chat', true, chatUi)],
+    plugins: [plugin('core-page', true, pageUi), plugin('core-chat', true, chatUi)],
   })
   await ctx.plugin(uiHub)
   const deadline = Date.now() + 5000

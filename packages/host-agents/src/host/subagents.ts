@@ -47,4 +47,12 @@ export function apply(ctx: Context) {
         parentSessionId: args.parentSessionId ? String(args.parentSessionId) : undefined,
       }),
   })
+  ctx.tools.register({
+    name: 'clock_now',
+    description: '读取当前 ISO 时间',
+    parameters: { type: 'object', properties: {} },
+    execution: 'parallel',
+    annotations: { readOnly: true, idempotent: true },
+    execute: () => new Date().toISOString(),
+  })
 }

@@ -2,7 +2,6 @@ import type { MentionKind } from './mention-kind.tsx'
 
 export const MENTION_SCOPES: Array<{ kind: MentionKind; label: string; path: string }> = [
   { kind: 'page', label: '页面', path: '/pages' },
-  { kind: 'task', label: '任务', path: '/tasks' },
   { kind: 'tag', label: '标签', path: '/tags' },
   { kind: 'session', label: '代理', path: '/agents' },
 ]
@@ -27,7 +26,6 @@ export function decodeMentionId(id: string) {
 
 export function mentionCollection(kind: MentionKind) {
   if (kind === 'session') return '/agents'
-  if (kind === 'task') return '/tasks'
   if (kind === 'tag') return '/tags'
   return '/pages'
 }

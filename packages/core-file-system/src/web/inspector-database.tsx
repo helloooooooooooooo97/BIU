@@ -46,6 +46,7 @@ export function collectionTabIcon(icon?: string) {
 
 const EMPTY_CHROME: CollectionChrome = {}
 const EMPTY_FILTERS: Record<string, string> = {}
+const EMPTY_COLLECTIONS: CollectionInfo[] = []
 
 type InspectorSnapshot = {
   subscribe: (fn: () => void) => () => void
@@ -64,11 +65,11 @@ function subscribeInspectorSnapshot(fn: () => void) {
 }
 
 function readInspectorCollections() {
-  return (snapshotRef?.get().collections ?? []) as CollectionInfo[]
+  return (snapshotRef?.get().collections ?? EMPTY_COLLECTIONS) as CollectionInfo[]
 }
 
 function useInspectorCollections() {
-  return useSyncExternalStore(subscribeInspectorSnapshot, readInspectorCollections, () => [] as CollectionInfo[])
+  return useSyncExternalStore(subscribeInspectorSnapshot, readInspectorCollections, () => EMPTY_COLLECTIONS)
 }
 
 let viewTick = 0
