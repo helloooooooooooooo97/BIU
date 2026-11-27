@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
-import { currentAccountId, currentRequestWorkspaceId, superAdminEmail, superAdminPassword } from '@biu/host-plugin-loader/data-dir'
+import { currentAccountId, currentRequestWorkspaceId, superAdminEmail, superAdminPassword, wrapPreparedStmtCache } from '@biu/host-plugin-loader/data-dir'
 import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import { AuthorizationService, type ResourcePolicyInput, type ResourceRole, type WorkspaceRole } from './authorization.ts'
 import {
@@ -59,23 +59,7 @@ export class CollabStore {
 
   constructor(rawDb: DatabaseSync) {
     // 复用高频 SQLite prepared statement，避免 200+ 处鉴权/成员查询每次重复编译 SQL。
-    const stmtCache = new Map<string, ReturnType<DatabaseSync['prepare']>>()
-    this.db = new Proxy(rawDb, {
-      get(target, prop, receiver) {
-        if (prop === 'prepare') {
-          return (sql: string) => {
-            let cached = stmtCache.get(sql)
-            if (!cached) {
-              cached = target.prepare(sql)
-              if (stmtCache.size < 256) stmtCache.set(sql, cached)
-            }
-            return cached
-          }
-        }
-        const value = Reflect.get(target, prop, receiver)
-        return typeof value === 'function' ? value.bind(target) : value
-      },
-    })
+    this.db = wrapPreparedStmtCache(rawDb, 256)
     this.authorization = new AuthorizationService(this.db, (accountId) => {
       const requested = currentRequestWorkspaceId()
       if (requested && this.isMember(accountId, requested)) return requested

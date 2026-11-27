@@ -1,4 +1,4 @@
-import { onAppEvent } from './app-events.ts'
+import { KeyedSingleflight, registerWorkspaceCache } from './cache.ts'
 import { getPendingWorkspaceEndpointSync, isHostControlPath, resolveApiRequest } from './workspace-transport.ts'
 
 /**
@@ -19,7 +19,7 @@ export class ApiHttpError extends Error {
   }
 }
 
-const inflightGets = new Map<string, Promise<unknown>>()
+const inflightGets = new KeyedSingleflight<string, unknown>()
 const activeControllers = new Set<AbortController>()
 const DEFAULT_INFLIGHT_HOLD_MS = 300
 
@@ -169,10 +169,12 @@ async function fetchJsonNow<T>(path: string, init?: ApiFetchOptions, retry = tru
 }
 
 export interface ApiJsonOptions {
-  /** Bypass GET in-flight deduplication. */
+  /** Bypass GET post-completion hold cache. */
   fresh?: boolean
   /** Hold completed GET in dedupe map briefly (ms). Defaults to 300ms; 0 disables hold. */
   dedupeHoldMs?: number
+  /** When true alongside `fresh: true`, still coalesce identical currently-in-flight GETs. */
+  shareInflightWhenFresh?: boolean
 }
 
 /**
@@ -180,34 +182,16 @@ export interface ApiJsonOptions {
  */
 export async function apiJson<T>(path: string, init?: ApiFetchOptions, opts?: ApiJsonOptions): Promise<T> {
   const method = String(init?.method ?? 'GET').toUpperCase()
-  if (method !== 'GET' || init?.body || opts?.fresh) {
+  if (method !== 'GET' || init?.body) {
     return fetchJsonNow<T>(path, init)
   }
-  const existing = inflightGets.get(path)
-  if (existing) return existing as Promise<T>
-
-  const holdMs = opts?.dedupeHoldMs ?? DEFAULT_INFLIGHT_HOLD_MS
-  let request: Promise<T>
-  request = fetchJsonNow<T>(path, init).then(
-    (body) => {
-      if (holdMs > 0) {
-        setTimeout(() => {
-          if (inflightGets.get(path) === request) inflightGets.delete(path)
-        }, holdMs)
-      } else if (inflightGets.get(path) === request) {
-        inflightGets.delete(path)
-      }
-      return body
-    },
-    (error) => {
-      if (inflightGets.get(path) === request) inflightGets.delete(path)
-      throw error
-    },
-  )
-  inflightGets.set(path, request)
-  return request
+  return inflightGets.run(path, () => fetchJsonNow<T>(path, init), {
+    fresh: opts?.fresh,
+    holdMs: opts?.dedupeHoldMs ?? DEFAULT_INFLIGHT_HOLD_MS,
+    shareInflightWhenFresh: opts?.shareInflightWhenFresh,
+  }) as Promise<T>
 }
 
-onAppEvent('biu:account-token', () => {
-  abortApiScope('account-token-changed')
+registerWorkspaceCache('api-client', () => {
+  abortApiScope('workspace-cache-reset')
 })

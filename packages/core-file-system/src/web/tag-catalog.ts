@@ -19,7 +19,6 @@ export { OPEN_TAG_EVENT }
 export const TAGS_KEY = 'fsdb.tags'
 
 let memory: CollectionSchemaPack[] | null = null
-let filledMemory: Record<string, Record<string, number>> = {}
 let revision = 0
 let workspaceGen = 0
 const listeners = new Set<() => void>()
@@ -90,7 +89,6 @@ let tagsByIdCache: { source: CollectionSchemaPack[]; map: Map<string, Collection
 registerWorkspaceCache('tag-catalog', () => {
   workspaceGen += 1
   memory = null
-  filledMemory = {}
   tagsByIdCache = null
   emit()
 })
@@ -115,29 +113,10 @@ export function loadTags(_collectionPath?: string): CollectionSchemaPack[] {
   }
 }
 
-function adoptFilled(raw: unknown) {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return
-  const next: Record<string, Record<string, number>> = {}
-  for (const [tagId, bag] of Object.entries(raw as Record<string, unknown>)) {
-    if (!bag || typeof bag !== 'object' || Array.isArray(bag)) continue
-    const counts: Record<string, number> = {}
-    for (const [key, value] of Object.entries(bag as Record<string, unknown>)) {
-      const n = Number(value)
-      if (Number.isFinite(n) && n > 0) counts[key] = Math.floor(n)
-    }
-    if (Object.keys(counts).length) next[tagId] = counts
-  }
-  filledMemory = next
-}
-
 function adoptTags(next: CollectionSchemaPack[]) {
   memory = next
   try {
     writeStorageString(TAGS_KEY, JSON.stringify(next), { scope: 'workspace' })
-    try {
-    } catch {
-      /* ignore */
-    }
   } catch {
     /* ignore */
   }
@@ -151,9 +130,8 @@ export async function persistTags(tags: CollectionSchemaPack[], _collectionPath?
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ tags: incoming }),
   })
-  const body = (await res.json().catch(() => ({}))) as { tags?: unknown[]; filled?: unknown }
+  const body = (await res.json().catch(() => ({}))) as { tags?: unknown[] }
   if (!res.ok) throw new Error(`tags persist failed: ${res.status}`)
-  adoptFilled(body.filled)
   adoptTags(Array.isArray(body.tags) ? parseTags(body.tags) : incoming)
 }
 
@@ -186,12 +164,11 @@ export async function pullTags(_collectionPath?: string, opts?: { filled?: boole
   const startGen = workspaceGen
   try {
     const res = await apiFetch(opts?.filled ? '/api/db/tags?filled=1' : '/api/db/tags')
-    const body = (await res.json()) as { tags?: unknown[]; filled?: unknown }
+    const body = (await res.json()) as { tags?: unknown[] }
     if (workspaceGen !== startGen) return loadTags()
     const listed = body.tags
     if (!res.ok || !Array.isArray(listed)) return loadTags()
     const tags = parseTags(listed)
-    adoptFilled(body.filled)
     const prev = JSON.stringify(memory ?? [])
     const next = JSON.stringify(tags)
     if (prev !== next) adoptTags(tags)

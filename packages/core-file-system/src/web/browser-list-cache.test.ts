@@ -14,6 +14,12 @@ import {
 } from './browser-list-cache.ts'
 import { clearCrumbCache, peekRecord, rememberRecords } from './crumb-cache.ts'
 import { DATA_COLLECTION_PATH, TRASH_COLLECTION_PATH } from './database-path.ts'
+import {
+  getPreviewTotal,
+  invalidatePreviewTotals,
+  invalidatePreviewTotalsForFsdbChange,
+  rememberPreviewTotal,
+} from './sidebar-preview.ts'
 
 describe('browser-list-cache & crumb-cache consistency', () => {
   beforeEach(() => {
@@ -147,5 +153,20 @@ describe('browser-list-cache & crumb-cache consistency', () => {
     // Explicit emoji clear resets cached emoji to empty string
     publishListedMutation({ path: '/pages', op: 'patch', row: { id: 'p1', emoji: '' } })
     assert.equal(peekRecord('/pages', 'p1')?.emoji, '')
+  })
+
+  it('invalidatePreviewTotalsForFsdbChange clears affected table and /data overview totals', () => {
+    invalidatePreviewTotals()
+    rememberPreviewTotal('/pages\0all\0title\0asc\0\0{}\0', 12)
+    rememberPreviewTotal('/tasks\0all\0title\0asc\0\0{}\0', 7)
+    rememberPreviewTotal(`${DATA_COLLECTION_PATH}\0all\0title\0asc\0\0{}\0`, 19)
+
+    invalidatePreviewTotalsForFsdbChange({ scope: 'records', path: '/pages/p1' })
+    assert.equal(getPreviewTotal('/pages\0all\0title\0asc\0\0{}\0'), undefined)
+    assert.equal(getPreviewTotal(`${DATA_COLLECTION_PATH}\0all\0title\0asc\0\0{}\0`), undefined)
+    assert.equal(getPreviewTotal('/tasks\0all\0title\0asc\0\0{}\0'), 7)
+
+    invalidatePreviewTotalsForFsdbChange({ scope: 'tags' })
+    assert.equal(getPreviewTotal('/tasks\0all\0title\0asc\0\0{}\0'), undefined)
   })
 })

@@ -23,7 +23,7 @@ import { BoundedMap } from './bounded-map.ts'
 import { registerWorkspaceCache } from './workspace-client-store.ts'
 import { groupField, groupRecords, parentFieldKey, treeChildren } from './fields.ts'
 import type { DataScope } from '../catalog-views.ts'
-import { DATA_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, normalizeCollectionPath } from '../paths.ts'
+import { DATA_COLLECTION_PATH, TRASH_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, normalizeCollectionPath } from '../paths.ts'
 import { dataSidebarKind, isRecordTreeCollection, sortDataCollections } from './database-path.ts'
 import { rememberInspectorWorkingView } from './inspector-db-route.ts'
 import { readJson } from './db-client.ts'
@@ -762,7 +762,12 @@ export const DataSidebar = memo(function DataSidebar({
       } else {
         for (const key of [...previewCache.keys()]) {
           const tablePath = key.split('\0')[0] ?? ''
-          if (!tablePath || changedPath === tablePath || changedPath.startsWith(`${tablePath}/`)) {
+          if (
+            !tablePath ||
+            changedPath === tablePath ||
+            changedPath.startsWith(`${tablePath}/`) ||
+            (tablePath === DATA_COLLECTION_PATH && !changedPath.startsWith(TRASH_COLLECTION_PATH))
+          ) {
             previewCache.delete(key)
           }
         }

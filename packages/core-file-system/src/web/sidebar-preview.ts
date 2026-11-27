@@ -1,9 +1,10 @@
 import type { CollectionSchema, DbRecord } from '@biu/type-file-system'
+import { BoundedMap, registerWorkspaceCache } from '@biu/biu-ui/cache'
 import type { SavedView } from './saved-view.ts'
+import { DATA_COLLECTION_PATH, TRASH_COLLECTION_PATH } from './database-path.ts'
 import { listCollection, readJson } from './db-client.ts'
 import { FSDB_LIST_READY_EVENT } from './fsdb-events.ts'
 import { viewForPath } from './view-storage.ts'
-import { registerWorkspaceCache } from './workspace-client-store.ts'
 
 export const SIDEBAR_PREVIEW_PAGE = 20
 export const SIDEBAR_PREVIEW_MAX = 100
@@ -98,13 +99,37 @@ export function nextPreviewLimit(loaded: number, total: number) {
   return Math.min(SIDEBAR_PREVIEW_PAGE, SIDEBAR_PREVIEW_MAX - loaded, total - loaded)
 }
 
-const totalCache = new Map<string, number>()
+const totalCache = new BoundedMap<string, number>(256)
 const totalListeners = new Set<() => void>()
 let totalsVersion = 0
 
 registerWorkspaceCache('sidebar-preview-totals', () => {
   invalidatePreviewTotals()
 })
+
+export function invalidatePreviewTotalsForFsdbChange(change: { scope?: string; path?: string } | null | undefined) {
+  if (!change) return
+  if (change.scope === 'tags') {
+    invalidatePreviewTotals()
+    return
+  }
+  if (change.scope !== 'records') return
+  const raw = String(change.path ?? '').trim()
+  if (!raw) {
+    invalidatePreviewTotals()
+    return
+  }
+  const firstSegment = raw.split('/').filter(Boolean)[0]
+  if (!firstSegment) {
+    invalidatePreviewTotals()
+    return
+  }
+  const collection = `/${firstSegment}`
+  forgetPreviewTotalsForPath(collection)
+  if (collection !== DATA_COLLECTION_PATH && collection !== TRASH_COLLECTION_PATH) {
+    forgetPreviewTotalsForPath(DATA_COLLECTION_PATH)
+  }
+}
 
 export function rememberPreviewTotal(key: string, total: number) {
   if (totalCache.get(key) === total) return

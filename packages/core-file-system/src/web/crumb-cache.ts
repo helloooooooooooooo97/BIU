@@ -1,7 +1,9 @@
+import { BoundedMap } from '@biu/biu-ui/cache'
+
 export type CrumbRecord = { id: string; label: string; emoji?: string; mascot?: unknown }
 
-const memoryRecords = new Map<string, CrumbRecord[]>()
-const memoryRecordMeta = new Map<string, CrumbRecord>()
+const memoryRecords = new BoundedMap<string, CrumbRecord[]>(128)
+const memoryRecordMeta = new BoundedMap<string, CrumbRecord>(1000)
 
 function recordsKey(collectionPath: string, viewId?: string) {
   return `${collectionPath}\0${viewId ?? ''}`
@@ -72,7 +74,7 @@ export function applyListedCrumbMutation(
       mascot: mutation.row.mascot !== undefined ? mutation.row.mascot : last?.mascot,
     }
     memoryRecordMeta.set(recordMetaKey(path, mutation.row.id), next)
-    for (const [key, rows] of memoryRecords) {
+    for (const [key, rows] of [...memoryRecords.entries()]) {
       if (!key.startsWith(`${path}\0`)) continue
       const at = rows.findIndex((row) => row.id === next.id)
       if (at < 0) continue
@@ -86,7 +88,7 @@ export function applyListedCrumbMutation(
   if (mutation.op === 'remove') {
     const gone = new Set(mutation.ids.map(String))
     let changed = false
-    for (const [key, rows] of memoryRecords) {
+    for (const [key, rows] of [...memoryRecords.entries()]) {
       if (!key.startsWith(`${path}\0`)) continue
       const next = rows.filter((row) => !gone.has(row.id))
       if (next.length === rows.length) continue

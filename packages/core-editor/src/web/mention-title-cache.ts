@@ -1,17 +1,9 @@
 import { apiFetch } from '@biu/biu-ui/api-client'
+import { BoundedMap, registerWorkspaceCache } from '@biu/biu-ui/cache'
 import { MENTION_KIND_PATH, parseMentionId } from '@biu/core-file-system/mention-markup'
 
 const MAX_MENTION_TITLES = 500
-const titles = new Map<string, string>()
-
-function putTitle(key: string, value: string) {
-  if (titles.has(key)) titles.delete(key)
-  else if (titles.size >= MAX_MENTION_TITLES) {
-    const oldest = titles.keys().next().value
-    if (oldest !== undefined) titles.delete(oldest)
-  }
-  titles.set(key, value)
-}
+const titles = new BoundedMap<string, string>(MAX_MENTION_TITLES)
 const listeners = new Set<() => void>()
 const pending = new Set<string>()
 let inflight: Promise<void> | null = null
@@ -29,6 +21,8 @@ export function clearMentionTitleCache() {
   notify()
 }
 
+registerWorkspaceCache('mention-title-cache', clearMentionTitleCache)
+
 export function peekMentionTitle(id: string) {
   return titles.get(id)
 }
@@ -39,7 +33,7 @@ export function rememberMentionTitle(id: string, title: string) {
   const key = `${parsed.kind}/${parsed.recordId}`
   const next = title.trim()
   if (!next || titles.get(key) === next) return
-  putTitle(key, next)
+  titles.set(key, next)
   notify()
 }
 
@@ -69,7 +63,6 @@ function bindChange() {
   if (bound || typeof window === 'undefined') return
   bound = true
   window.addEventListener('fsdb:change', clearMentionTitleCache)
-  window.addEventListener('biu:account-token', clearMentionTitleCache)
 }
 
 async function flushMentionTitles() {
@@ -110,7 +103,7 @@ async function flushMentionTitles() {
             const title = String(row.title ?? row.name ?? '').trim()
             if (!recordId || !title) continue
             const kind = (Object.entries(MENTION_KIND_PATH).find(([, item]) => item === path)?.[0] ?? 'page') as string
-            putTitle(`${kind}/${recordId}`, title)
+            titles.set(`${kind}/${recordId}`, title)
           }
         }),
       )

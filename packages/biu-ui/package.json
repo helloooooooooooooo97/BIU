@@ -31,6 +31,7 @@
     "./outline-nav": "./src/outline-nav.tsx",
     "./render-boundary": "./src/render-boundary.tsx",
     "./api-client": "./src/api-client.ts",
+    "./cache": "./src/cache.ts",
     "./workspace-transport": "./src/workspace-transport.ts",
     "./app-events": "./src/app-events.ts",
     "./client-storage": "./src/client-storage.ts",
