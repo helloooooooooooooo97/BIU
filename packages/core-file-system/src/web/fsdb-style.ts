@@ -945,8 +945,8 @@ button.fsdb-detail-title-icon:hover{background:color-mix(in srgb,var(--biu-color
 .fsdb-crumbs .fsdb-record-mark.is-sm,.fsdb-crumb-option .fsdb-record-mark.is-sm{width:16px;height:16px}
 .fsdb-crumbs .fsdb-record-mark.is-sm>svg,.fsdb-crumb-option .fsdb-record-mark.is-sm>svg{width:16px;height:16px;display:block}
 .fsdb-record-mark .sidebar-mascot{display:block}
-.fsdb-detail-title{min-width:0;height:auto;max-height:none;overflow:visible;overflow-wrap:anywhere;word-break:break-word;margin:0;color:var(--biu-color-text);font-size:32px;font-weight:var(--biu-font-weight-bold);line-height:1.2}
-.fsdb-detail-title-input{display:block;box-sizing:border-box;width:100%;height:auto;max-height:none;margin:0;border:0;background:transparent;color:inherit;font:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;outline:none;padding:0;resize:none;overflow:hidden;overflow-wrap:anywhere;word-break:break-word;white-space:pre-wrap;field-sizing:content}
+.fsdb-detail-title{min-width:0;height:auto;min-height:38px;max-height:none;overflow:visible;overflow-wrap:anywhere;word-break:break-word;margin:0;color:var(--biu-color-text);font-size:32px;font-weight:var(--biu-font-weight-bold);line-height:38px}
+.fsdb-detail-title-input{display:block;box-sizing:border-box;width:100%;height:auto;min-height:38px;max-height:none;margin:0;border:0;background:transparent;color:inherit;font:inherit;font-size:inherit;font-weight:inherit;line-height:inherit;vertical-align:top;outline:none;padding:0;resize:none;overflow:hidden;overflow-wrap:anywhere;word-break:break-word;white-space:pre-wrap;field-sizing:content}
 .fsdb-detail-title-row .fsdb-detail-title-input{flex:none}
 .fsdb-page .tasks-icon-btn.is-danger:hover{background:color-mix(in srgb,var(--biu-color-danger) 16%,transparent);color:var(--biu-color-danger)}
 .fsdb-detail-id{font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);font-family:inherit;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
