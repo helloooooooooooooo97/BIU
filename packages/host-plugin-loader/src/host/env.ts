@@ -57,18 +57,18 @@ export function isSuperAdminEmail(email: string | null | undefined) {
 
 // ── Unified typed host environment accessors ────────────────────────────────
 
-export function hostEnvString(key: string, fallback = ''): string {
+function hostEnvString(key: string, fallback = ''): string {
   const raw = process.env[key]
   if (raw == null || raw === '') return fallback
   return raw
 }
 
-export function hostEnvUrl(key: string): string {
+function hostEnvUrl(key: string): string {
   const raw = process.env[key]?.trim()
   return raw ? raw.replace(/\/+$/, '') : ''
 }
 
-export function hostEnvNumber(key: string, fallback: number): number {
+function hostEnvNumber(key: string, fallback: number): number {
   const raw = process.env[key]
   if (raw == null || raw === '') return fallback
   const n = Number(raw)

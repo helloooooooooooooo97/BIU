@@ -10,11 +10,11 @@ type DatabaseSync = import('node:sqlite').DatabaseSync
 
 export const ASSET_GC_GRACE_MS = 24 * 60 * 60 * 1000
 export const ASSET_GC_CANDIDATE_MS = 30 * 24 * 60 * 60 * 1000
-export const ASSET_GC_FUSE_RATIO = 0.2
-export const ASSET_GC_FUSE_MIN = 8
+const ASSET_GC_FUSE_RATIO = 0.2
+const ASSET_GC_FUSE_MIN = 8
 export const ASSET_GC_INTERVAL_MS = 6 * 60 * 60 * 1000
 
-function parseFrontmatterBody(text: string) {
+export function parseFrontmatterBody(text: string) {
   const normalized = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n')
   if (!normalized.startsWith('---\n')) return normalized
   const end = normalized.indexOf('\n---', 3)

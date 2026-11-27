@@ -483,7 +483,7 @@ CREATE INDEX IF NOT EXISTS plugin_audit_workspace
   ON plugin_audit_log(workspace_id, created_at DESC);
 `
 
-export const CREATE_EDITOR_SQL = `
+const CREATE_EDITOR_SQL = `
 CREATE TABLE IF NOT EXISTS editor_content (
   collection TEXT NOT NULL,
   record_id TEXT NOT NULL,
@@ -495,13 +495,13 @@ CREATE TABLE IF NOT EXISTS editor_content (
 CREATE INDEX IF NOT EXISTS editor_content_record ON editor_content(collection, record_id);
 `
 
-export const CREATE_LATEST_SQL = `${CREATE_CORE_SQL}\n${CREATE_EDITOR_SQL}`
+const CREATE_LATEST_SQL = `${CREATE_CORE_SQL}\n${CREATE_EDITOR_SQL}`
 
 function hasTable(db: DatabaseSync, name: string) {
   return tableNames(db).includes(name)
 }
 
-export function dropSqliteColumn(db: DatabaseSync, table: string, name: string) {
+function dropSqliteColumn(db: DatabaseSync, table: string, name: string) {
   if (!hasTable(db, table)) return
   if (!tableColumnNames(db, table).includes(name)) return
   db.exec(`ALTER TABLE ${table} DROP COLUMN ${name}`)
@@ -635,7 +635,7 @@ export function ensurePagesPerfIndexes(db: DatabaseSync) {
   `)
 }
 
-export function applyLatestSchemaPatches(db: DatabaseSync) {
+function applyLatestSchemaPatches(db: DatabaseSync) {
   rebuildPageBlockCollectionKeys(db)
   dropLegacyEditorColumns(db)
   ensurePagesPerfIndexes(db)
