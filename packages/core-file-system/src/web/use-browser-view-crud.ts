@@ -66,6 +66,11 @@ export type BrowserViewCrudOptions = {
   rankListedViews: (listed: SavedView[], order?: SavedView[]) => SavedView[]
   selectView: (view: SavedView) => void
   onOpenTable?: (path: string, viewId?: string) => void
+  confirmReleaseMemberView?: (info: {
+    viewName: string
+    action: 'unlock' | 'delete'
+    grantCount: number
+  }) => Promise<'freeze' | 'revoke' | null>
   externalViews?: {
     onChange?: (views: SavedView[], activeViewId: string) => void
   }
@@ -106,6 +111,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     rankListedViews,
     selectView,
     onOpenTable,
+    confirmReleaseMemberView,
     externalViews,
   } = opts
 
@@ -443,18 +449,13 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
       const hit = (data.views ?? []).find((item) => item.id === view.id)
       const grantCount = Number(hit?.grantCount ?? 0)
       if (grantCount <= 0) return 'none'
-      const verb = action === 'delete' ? '删除' : '解锁'
-      const freeze = window.confirm(
-        `锁定成员视图「${view.name}」正被 ${grantCount} 条记录动态引用。\n\n点击「确定」：将当前匹配成员固化为静态授权后${verb}；\n点击「取消」：选择撤销关联授权或放弃操作。`,
-      )
-      let mode: 'freeze' | 'revoke' | null = freeze ? 'freeze' : null
-      if (!mode) {
-        const revoke = window.confirm(
-          `是否改为「取消所有关联授权」并${verb}「${view.name}」？\n\n点击「确定」将撤销这 ${grantCount} 条记录对该视图的动态授权；点击「取消」放弃本次操作。`,
-        )
-        if (!revoke) return 'cancelled'
-        mode = 'revoke'
-      }
+      if (!confirmReleaseMemberView) return 'cancelled'
+      const mode = await confirmReleaseMemberView({
+        viewName: view.name,
+        action,
+        grantCount,
+      })
+      if (!mode) return 'cancelled'
       const releaseRes = await apiFetch(`/api/db/member-views/${encodeURIComponent(view.id)}/release`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },

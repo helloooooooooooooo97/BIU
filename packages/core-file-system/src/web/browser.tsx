@@ -2826,6 +2826,16 @@ export function CollectionBrowser({
     rankListedViews,
     selectView,
     onOpenTable,
+    confirmReleaseMemberView: (info) =>
+      new Promise<'freeze' | 'revoke' | null>((resolve) => {
+        setDlg({
+          kind: 'release-member-view',
+          viewName: info.viewName,
+          action: info.action,
+          grantCount: info.grantCount,
+          resolve,
+        })
+      }),
     externalViews: hasExternalViews
       ? {
           onChange: (nextViews, nextActiveId) => externalViewsOnChangeRef.current?.(nextViews, nextActiveId),
