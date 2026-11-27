@@ -1287,6 +1287,54 @@ export function useActiveWorkspaceLocation(): 'device' | 'cloud' {
   }, [])
   return location
 }
+
+export function useActiveWorkspaceAvatar(): string {
+  const [avatar, setAvatar] = useState('')
+  const activeIdRef = useRef('')
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      const token = readAccountToken()
+      if (!token) {
+        if (!cancelled) {
+          activeIdRef.current = ''
+          setAvatar('')
+        }
+        return
+      }
+      try {
+        const [listed, current] = await Promise.all([
+          accountFetch(token, '/api/account/workspaces') as Promise<{ workspaces?: CollabWorkspace[] }>,
+          accountFetch(token, '/api/account/active') as Promise<{ workspaceId?: string }>,
+        ])
+        if (cancelled) return
+        const id = String(current.workspaceId ?? '')
+        activeIdRef.current = id
+        const workspace = (listed.workspaces ?? []).find((item) => item.id === id) ?? (listed.workspaces ?? [])[0]
+        setAvatar(workspace?.avatar?.trim() ?? '')
+      } catch {
+        if (!cancelled) setAvatar('')
+      }
+    }
+    void load()
+    const offToken = onAppEvent('biu:account-token', load)
+    const offMeta = onAppEvent('biu:workspace-meta', (detail) => {
+      if (!detail?.workspaceId) {
+        void load()
+        return
+      }
+      if (detail.workspaceId === activeIdRef.current && detail.avatar !== undefined) {
+        setAvatar(detail.avatar.trim())
+      }
+    })
+    return () => {
+      cancelled = true
+      offToken()
+      offMeta()
+    }
+  }, [])
+  return avatar
+}
 type CollabMember = { id: string; name: string; email?: string; avatar?: string; role: string }
 type CollabPresence = { accountId: string; name: string; collection: string; recordId: string }
 

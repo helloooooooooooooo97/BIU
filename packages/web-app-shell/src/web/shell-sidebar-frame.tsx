@@ -2,9 +2,10 @@ import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode, typ
 import { createPortal } from 'react-dom'
 import { computeFloatingPosition } from '@biu/biu-ui/floating-position'
 import { TOOLTIP_OVERLAY_Z, overlayZ } from '@biu/biu-ui/overlay-portal'
-import { ChevronDoubleLeftIcon, ChevronDoubleRightIcon, CloudIcon, ComputerDesktopIcon } from '@heroicons/react/16/solid'
+import { ChevronDoubleLeftIcon, ChevronDoubleRightIcon } from '@heroicons/react/16/solid'
+import { WorkspaceAvatar } from '@biu/biu-ui/workspace-avatar'
 import { chromeIcon } from './chrome-icon.ts'
-import { ShellSidePlaces, ShellSidebarAccount, ShellWorkspaceSwitcher, useActiveWorkspaceLocation } from './shell-chrome.tsx'
+import { ShellSidePlaces, ShellSidebarAccount, ShellWorkspaceSwitcher, useActiveWorkspaceAvatar } from './shell-chrome.tsx'
 import {
   isSidebarFlyoutKeepTarget,
   isSidebarFlyoutIgnoreTarget,
@@ -312,7 +313,7 @@ function RailHoverTip({ hostRef }: { hostRef: RefObject<HTMLDivElement | null> }
 }
 
 function ShellRailHead({ onExpand }: { onExpand?: () => void }) {
-  const location = useActiveWorkspaceLocation()
+  const workspaceAvatar = useActiveWorkspaceAvatar()
   return (
     <div className="shell-rail-head" data-biu-ignore>
       <button
@@ -323,7 +324,20 @@ function ShellRailHead({ onExpand }: { onExpand?: () => void }) {
         onClick={onExpand}
       >
         <span className="shell-rail-expand-mark" aria-hidden>
-          {location === 'cloud' ? <CloudIcon {...chromeIcon} /> : <ComputerDesktopIcon {...chromeIcon} />}
+          {workspaceAvatar ? (
+            <img
+              src={workspaceAvatar}
+              alt=""
+              className="shell-workspace-switch-icon is-avatar"
+              data-testid="sidebar-expand-workspace-avatar"
+            />
+          ) : (
+            <WorkspaceAvatar
+              size={18}
+              className="shell-workspace-switch-icon is-avatar"
+              data-testid="sidebar-expand-workspace-avatar"
+            />
+          )}
         </span>
         <span className="shell-rail-expand-chevron" aria-hidden>
           <ChevronDoubleRightIcon {...chromeIcon} />
