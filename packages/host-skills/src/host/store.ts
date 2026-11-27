@@ -56,11 +56,11 @@ export function workspaceSkillRoot(workspaceId: string, cwd = dataHome()) {
   return join(skillRoot(cwd), 'workspaces', sanitizeSkillWorkspaceId(workspaceId))
 }
 
-export function skillsDir(cwd = dataHome()) {
+function skillsDir(cwd = dataHome()) {
   return process.env.BIU_SKILLS_DIR || dataPath(cwd, 'skills')
 }
 
-export function slugify(value: string) {
+function slugify(value: string) {
   const slug = String(value ?? '')
     .trim()
     .toLowerCase()
@@ -70,14 +70,14 @@ export function slugify(value: string) {
   return slug.replace(/^[^a-z]+/, '')
 }
 
-export function trySkillId(raw: string) {
+function trySkillId(raw: string) {
   const wanted = String(raw ?? '').trim()
   if (ID_PATTERN.test(wanted)) return wanted
   const slug = slugify(wanted)
   return ID_PATTERN.test(slug) ? slug : ''
 }
 
-export function assertSkillId(id: string) {
+function assertSkillId(id: string) {
   const wanted = trySkillId(id)
   if (!wanted) {
     throw new Error(`invalid skill id: ${id} (expected lowercase letters, digits and dashes, 2-64 chars)`)
@@ -85,7 +85,7 @@ export function assertSkillId(id: string) {
   return wanted
 }
 
-export function assertSkillRelPath(path: string) {
+function assertSkillRelPath(path: string) {
   const rel = posix.normalize(String(path ?? '').replaceAll('\\', '/')).replace(/^\/+/, '')
   if (!rel || rel === '.' || rel.startsWith('../') || rel.includes('/../') || rel.endsWith('/..')) {
     throw new Error(`invalid skill file path: ${path}`)
