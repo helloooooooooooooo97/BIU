@@ -24,7 +24,7 @@ import {
   type TurnBarStats,
 } from './live-hud.ts'
 
-function MetaItem({
+export function MetaItem({
   icon,
   value,
   title,

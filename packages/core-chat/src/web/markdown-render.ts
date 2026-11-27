@@ -1,6 +1,5 @@
 import DOMPurify from 'dompurify'
 import { Marked, marked } from 'marked'
-import type { MarkdownWorkerRequest, MarkdownWorkerResponse } from './markdown.worker.ts'
 import { markdownHighlight } from './markdown-highlight.ts'
 
 marked.setOptions({
@@ -33,16 +32,6 @@ const htmlCache = new Map<string, string>()
 
 /** 流式前缀增量缓存：段落或代码块闭合后只解析新增 delta，把流式长文从 O(N²) 降到 O(N)。 */
 let streamFrozenCache: { prefix: string; html: string } = { prefix: '', html: '' }
-
-/** 同 text 并发只解析一次，避免虚表快速进出重复 marked */
-const inflight = new Map<string, Promise<string>>()
-
-let worker: Worker | null | undefined
-let nextId = 1
-const pending = new Map<
-  number,
-  { resolve: (html: string) => void; reject: (error: Error) => void }
->()
 
 function touchCache(text: string, html: string) {
   if (htmlCache.has(text)) htmlCache.delete(text)
@@ -154,94 +143,8 @@ export function parseMarkdownLive(text: string): string {
   return resolveStreamFrozenHtml(frozen) + parseLiveFragment(live)
 }
 
-function getWorker(): Worker | null {
-  if (worker !== undefined) return worker
-  if (typeof Worker === 'undefined') {
-    worker = null
-    return null
-  }
-  try {
-    worker = new Worker(new URL('./markdown.worker.ts', import.meta.url), {
-      type: 'module',
-    })
-    worker.onmessage = (event: MessageEvent<MarkdownWorkerResponse>) => {
-      const data = event.data
-      const entry = pending.get(data.id)
-      if (!entry) return
-      pending.delete(data.id)
-      if ('error' in data) {
-        entry.reject(new Error(data.error))
-        return
-      }
-      entry.resolve(data.html)
-    }
-    worker.onerror = () => {
-      // Worker 挂了就改走同步路径
-      for (const [, entry] of pending) {
-        entry.reject(new Error('markdown worker failed'))
-      }
-      pending.clear()
-      worker?.terminate()
-      worker = null
-    }
-  } catch {
-    worker = null
-  }
-  return worker
-}
-
-/**
- * 把 Markdown 解析丢到 Worker；主线程只做 DOMPurify。
- * 无 Worker / 失败时同步 fallback（测例、旧环境）。
- * 同 text 合并 in-flight，虚表抖动不会打爆 Worker。
- */
-export function renderMarkdownHtml(text: string): Promise<string> {
-  const cached = getCachedMarkdownHtml(text)
-  if (cached != null) return Promise.resolve(cached)
-
-  const existing = inflight.get(text)
-  if (existing) return existing
-
-  const w = getWorker()
-  if (!w) {
-    return Promise.resolve(parseMarkdownSync(text))
-  }
-
-  const id = nextId++
-  const job = new Promise<string>((resolve, reject) => {
-    pending.set(id, {
-      resolve: (dirty) => {
-        try {
-          const html = sanitizeMarkdownHtml(dirty)
-          touchCache(text, html)
-          resolve(html)
-        } catch (error) {
-          reject(error instanceof Error ? error : new Error(String(error)))
-        }
-      },
-      reject,
-    })
-    const request: MarkdownWorkerRequest = { id, text }
-    w.postMessage(request)
-  })
-    .catch(() => parseMarkdownSync(text))
-    .finally(() => {
-      inflight.delete(text)
-    })
-
-  inflight.set(text, job)
-  return job
-}
-
-/** 测试用：清空缓存与 Worker 状态 */
+/** 测试用：清空缓存 */
 export function resetMarkdownRenderForTests() {
   htmlCache.clear()
   streamFrozenCache = { prefix: '', html: '' }
-  inflight.clear()
-  for (const [, entry] of pending) {
-    entry.reject(new Error('reset'))
-  }
-  pending.clear()
-  worker?.terminate()
-  worker = undefined
 }

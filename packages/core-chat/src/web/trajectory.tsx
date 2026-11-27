@@ -53,10 +53,6 @@ const toneClass: Record<TagTone, string> = {
   step: 'traj-tag traj-tag-step',
 }
 
-function formatTok(n: number) {
-  return formatTokens(n)
-}
-
 function UsageCard({ usage, label = 'Token usage' }: { usage: TrajectoryUsage; label?: string }) {
   const total = usage.totalTokens ?? usage.inputTokens + usage.outputTokens
   return (
@@ -64,7 +60,7 @@ function UsageCard({ usage, label = 'Token usage' }: { usage: TrajectoryUsage; l
       <div className="traj-usage-card-title">{label}</div>
       <div className="traj-usage-card-row">
         <UsageInline usage={usage} />
-        <span className="traj-usage-total">total {formatTok(total)}</span>
+        <span className="traj-usage-total">total {formatTokens(total)}</span>
       </div>
     </section>
   )
@@ -547,9 +543,9 @@ function RequestDetail({ request, toolsTokens }: { request: DerivedMessage[]; to
         )}
       </CollapseSection>
 
-      <CollapseSection label="工具定义" badge={`≈ ${formatTok(toolsTokens)}`}>
+      <CollapseSection label="工具定义" badge={`≈ ${formatTokens(toolsTokens)}`}>
         <pre className="traj-io-msg-body traj-io-msg-empty">
-          工具 schema 未下发展示，估算 token ≈ {formatTok(toolsTokens)}
+          工具 schema 未下发展示，估算 token ≈ {formatTokens(toolsTokens)}
         </pre>
       </CollapseSection>
 

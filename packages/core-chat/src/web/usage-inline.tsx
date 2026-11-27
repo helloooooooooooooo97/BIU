@@ -46,10 +46,6 @@ function UsageRing({
   )
 }
 
-function formatTok(n: number) {
-  return formatTokens(n)
-}
-
 function cacheHitPct(usage: TrajectoryUsage): number | null {
   if (!usage.inputTokens || !usage.cacheReadTokens) return null
   return Math.min(100, Math.round((usage.cacheReadTokens / usage.inputTokens) * 100))
@@ -113,16 +109,16 @@ export function UsageInline({
   const cacheFill = pct ?? 0
   const cacheTitle =
     pct != null
-      ? `input ${formatTok(usage.inputTokens)} · cache hit ${pct}% (${formatTok(usage.cacheReadTokens!)})`
-      : `input ${formatTok(usage.inputTokens)}`
+      ? `input ${formatTokens(usage.inputTokens)} · cache hit ${pct}% (${formatTokens(usage.cacheReadTokens!)})`
+      : `input ${formatTokens(usage.inputTokens)}`
 
   return (
     <span className="traj-usage" title={formatTrajectoryUsage(usage)}>
       <span className="traj-usage-in-pair">
-        <span className="traj-usage-in">{formatTok(usage.inputTokens)}</span>
+        <span className="traj-usage-in">{formatTokens(usage.inputTokens)}</span>
       </span>
       <span
-        title={`本次上下文 ${ctxPct}%（${formatTok(ctxTokens)} / ${formatTok(contextLimit)}）`}
+        title={`本次上下文 ${ctxPct}%（${formatTokens(ctxTokens)} / ${formatTokens(contextLimit)}）`}
         aria-label={`本次上下文 ${ctxPct}%`}
       >
         <UsageRing className="is-ctx" fill={ctxPct} track={CTX_TRACK} />
@@ -138,8 +134,8 @@ export function UsageInline({
       <span className="traj-usage-arrow" aria-hidden>
         →
       </span>
-      <span className="traj-usage-out" title={`output ${formatTok(usage.outputTokens)}`}>
-        {formatTok(usage.outputTokens)}
+      <span className="traj-usage-out" title={`output ${formatTokens(usage.outputTokens)}`}>
+        {formatTokens(usage.outputTokens)}
       </span>
     </span>
   )

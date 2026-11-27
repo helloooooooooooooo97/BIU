@@ -707,10 +707,6 @@ export class ChatService extends Service {
     return '200k'
   }
 
-  resolverKey(provider: ChatProvider): string {
-    return this.config.apiKeys[provider] ?? ''
-  }
-
   /** 根据有效入口取对应 apiKey + baseUrl。 */
   resolveLlm(sessionId?: string | null): LlmConfig {
     const { effective } = this.resolveEffective(sessionId)

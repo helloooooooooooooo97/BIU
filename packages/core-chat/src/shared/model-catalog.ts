@@ -800,10 +800,6 @@ export function hasKnob(caps: ModelCapabilities, id: ModelKnobId) {
   return (caps.knobs ?? []).some((knob) => knob.id === id)
 }
 
-export function knobIds(caps: ModelCapabilities): ModelKnobId[] {
-  return (caps.knobs ?? []).map((knob) => knob.id)
-}
-
 export function defaultModeValues(caps: ModelCapabilities): ModelModeValues {
   return {
     thinking: hasKnob(caps, 'thinking') || hasKnob(caps, 'speed') || hasKnob(caps, 'effort') ? 'enabled' : 'disabled',
@@ -811,10 +807,6 @@ export function defaultModeValues(caps: ModelCapabilities): ModelModeValues {
     effort: 'high',
     context: '200k',
   }
-}
-
-export function defaultThinkingFor(caps: ModelCapabilities): ThinkingMode {
-  return defaultModeValues(caps).thinking
 }
 
 /** 只有发请求时才把 knobs 收成上游字段；快 ≠ 思考。 */

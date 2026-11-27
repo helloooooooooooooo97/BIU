@@ -9,8 +9,7 @@ import {
   findEndpointPreset,
   normalizeBaseUrl,
   inferModelCapabilities,
-  defaultThinkingFor,
-  knobIds,
+  defaultModeValues,
   applyModeToLlm,
 } from './model-catalog.ts'
 
@@ -97,33 +96,33 @@ test('normalizeBaseUrl strips trailing slash', () => {
 
 test('DeepSeek V4 can toggle thinking and High/Max', () => {
   const caps = inferModelCapabilities('deepseek-v4-flash', 'deepseek')
-  assert.deepEqual(knobIds(caps), ['thinking', 'effort'])
-  assert.equal(defaultThinkingFor(caps), 'enabled')
+  assert.deepEqual((caps.knobs ?? []).map((k) => k.id), ['thinking', 'effort'])
+  assert.equal(defaultModeValues(caps).thinking, 'enabled')
 })
 
 test('Grok exposes a speed switch, not thinking', () => {
   const caps = inferModelCapabilities('grok-4', 'openai')
-  assert.deepEqual(knobIds(caps), ['speed'])
+  assert.deepEqual((caps.knobs ?? []).map((k) => k.id), ['speed'])
 })
 
 test('GPT-4o has no extra knobs', () => {
   const caps = inferModelCapabilities('gpt-4o', 'openai')
-  assert.deepEqual(knobIds(caps), [])
+  assert.deepEqual((caps.knobs ?? []).map((k) => k.id), [])
 })
 
 test('GPT-4.1 exposes context size only', () => {
   const caps = inferModelCapabilities('gpt-4.1', 'openai')
-  assert.deepEqual(knobIds(caps), ['context'])
+  assert.deepEqual((caps.knobs ?? []).map((k) => k.id), ['context'])
 })
 
 test('GPT-5 exposes speed, effort and context', () => {
   const caps = inferModelCapabilities('gpt-5', 'openai')
-  assert.deepEqual(knobIds(caps), ['speed', 'effort', 'context'])
+  assert.deepEqual((caps.knobs ?? []).map((k) => k.id), ['speed', 'effort', 'context'])
 })
 
 test('o3 exposes speed and effort, not a thinking switch', () => {
   const caps = inferModelCapabilities('o3-mini', 'openai')
-  assert.deepEqual(knobIds(caps), ['speed', 'effort'])
+  assert.deepEqual((caps.knobs ?? []).map((k) => k.id), ['speed', 'effort'])
 })
 
 test('applyModeToLlm maps speed without using thinking knobs', () => {

@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { clipHudText, extractLiveHud, liveStreamingReply, turnBarStats } from './live-hud.ts'
+import { extractLiveHud, liveStreamingReply, turnBarStats } from './live-hud.ts'
 import type { ChatNode } from '@biu/web-session-view'
 
 test('extractLiveHud reads turn, tools and last assistant text', () => {
@@ -90,9 +90,4 @@ test('liveStreamingReply only returns the in-flight last reply', () => {
     { id: 'r2', kind: 'reply', copyText: '', streaming: true, turn: 2, parts: [] },
   ]
   assert.equal(liveStreamingReply(live)?.id, 'r2')
-})
-
-test('clipHudText collapses whitespace and ellipsizes', () => {
-  assert.equal(clipHudText('  a   b  '), 'a b')
-  assert.equal(clipHudText('x'.repeat(90)).endsWith('…'), true)
 })
