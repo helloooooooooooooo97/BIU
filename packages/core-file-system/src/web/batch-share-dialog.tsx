@@ -5,7 +5,10 @@ import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import { apiFetch } from '@biu/biu-ui/api-client'
 import { OVERLAY_Z, overlayPortalRoot } from '@biu/biu-ui/overlay-portal'
 import { emitFsdbChange } from '@biu/type-file-system'
+import { WORKSPACE_MEMBERS_COLLECTION_PATH } from './database-path.ts'
+import { listCollection } from './db-client.ts'
 import { FSDB_SHARES_CHANGE_EVENT, emitFsdbEvent } from './fsdb-events.ts'
+import { registerWorkspaceCache } from './workspace-client-store.ts'
 
 export type BatchShareRole = 'viewer' | 'commenter' | 'editor' | 'manager'
 
@@ -67,6 +70,14 @@ function renderMiniAvatar(seed: string, avatar?: string) {
   )
 }
 
+let cachedBatchMembers: MemberOption[] | null = null
+let cachedBatchMemberViews: MemberViewOption[] | null = null
+
+registerWorkspaceCache('batch-share-dialog', () => {
+  cachedBatchMembers = null
+  cachedBatchMemberViews = null
+})
+
 export function BatchShareDialog({
   open,
   target,
@@ -82,8 +93,8 @@ export function BatchShareDialog({
   const [role, setRole] = useState<BatchShareRole>('viewer')
   const [accessMode, setAccessMode] = useState<'private' | 'members'>('members')
   const [memberDefaultRole, setMemberDefaultRole] = useState<'viewer' | 'editor'>('viewer')
-  const [members, setMembers] = useState<MemberOption[]>([])
-  const [memberViews, setMemberViews] = useState<MemberViewOption[]>([])
+  const [members, setMembers] = useState<MemberOption[]>(() => cachedBatchMembers ?? [])
+  const [memberViews, setMemberViews] = useState<MemberViewOption[]>(() => cachedBatchMemberViews ?? [])
   const [selected, setSelected] = useState<SelectedSubject[]>([])
   const [search, setSearch] = useState('')
   const [preview, setPreview] = useState<PreviewResult | null>(null)
@@ -141,38 +152,48 @@ export function BatchShareDialog({
     }
   }, [open, scopePayloadJson])
 
-  // 2. 独立拉取成员与成员视图列表
+  // 2. 独立拉取成员视图列表与空间成员列表（各自返回即渲染，不互相阻塞，并用工作区级内存缓存实现二次秒开）
   useEffect(() => {
     if (!open) return
     let alive = true
-    void Promise.all([
-      apiFetch('/api/account/members')
-        .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null),
-      apiFetch('/api/db/member-views')
-        .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null),
-    ]).then(([membersRes, viewsRes]) => {
-      if (!alive) return
-      const rawMembers = Array.isArray((membersRes as { members?: unknown[] } | null)?.members)
-        ? ((membersRes as { members: Array<{ id?: string; name?: string; email?: string; avatar?: string; member_kind?: string }> }).members)
-        : []
-      setMembers(
-        rawMembers
-          .filter((m) => m.id)
-          .map((m) => ({
-            id: String(m.id),
-            name: String(m.name || m.email || m.id),
-            email: m.email ? String(m.email) : undefined,
-            avatar: m.avatar ? String(m.avatar) : undefined,
-            memberKind: m.member_kind ? String(m.member_kind) : undefined,
-          })),
-      )
-      const rawViews = Array.isArray((viewsRes as { views?: unknown[] } | null)?.views)
-        ? ((viewsRes as { views: MemberViewOption[] }).views)
-        : []
-      setMemberViews(rawViews)
+    if (cachedBatchMemberViews) setMemberViews(cachedBatchMemberViews)
+    if (cachedBatchMembers) setMembers(cachedBatchMembers)
+
+    void apiFetch('/api/db/member-views')
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null)
+      .then((viewsRes) => {
+        if (!alive || !viewsRes) return
+        const rawViews = Array.isArray((viewsRes as { views?: unknown[] }).views)
+          ? ((viewsRes as { views: MemberViewOption[] }).views)
+          : []
+        cachedBatchMemberViews = rawViews
+        setMemberViews(rawViews)
+      })
+
+    void listCollection({
+      path: WORKSPACE_MEMBERS_COLLECTION_PATH,
+      limit: 500,
+      columns: ['title', 'name', 'avatar', 'email', 'role', 'membershipKind'],
     })
+      .then((page) => {
+        if (!alive) return
+        const nextMembers: MemberOption[] = page.items.flatMap((row) => {
+          const id = String(row.id ?? '').trim()
+          if (!id) return []
+          const email = typeof row.email === 'string' && row.email.trim() ? row.email.trim() : undefined
+          const name = String(row.title ?? '').trim() || String(row.name ?? '').trim() || email || id
+          const avatar = typeof row.avatar === 'string' && row.avatar.trim() ? row.avatar.trim() : undefined
+          const memberKind = typeof row.membershipKind === 'string' && row.membershipKind.trim() ? row.membershipKind.trim() : undefined
+          return [{ id, name, ...(email ? { email } : {}), ...(avatar ? { avatar } : {}), ...(memberKind ? { memberKind } : {}) }]
+        })
+        cachedBatchMembers = nextMembers
+        setMembers(nextMembers)
+      })
+      .catch(() => {
+        /* ignore transient member directory failure */
+      })
+
     return () => {
       alive = false
     }
