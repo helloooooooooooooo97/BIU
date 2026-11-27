@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'vitest'
-import { buildShareSnapshot } from './share-payload.ts'
+import { buildShareSnapshot, computeViewPublicStats } from './share-payload.ts'
 import { SharesStore } from './shares-store.ts'
 
 test('shares persist workspaceId and createdBy and support creator revocation', () => {
@@ -119,4 +119,110 @@ test('buildShareSnapshot includes active inheriting descendants for record share
     workspaceId: 'ws-1',
   })
   assert.equal(withChild.contents['child-pub'], '# 需求文档正文')
+})
+
+test('local LAN view share includes all matching view rows across pages without per-record public links while cloud keeps zero-leak', async () => {
+  const store = new SharesStore().open(':memory:')
+  const viewShare = store.upsert({
+    kind: 'record',
+    collection: '/views',
+    recordId: 'pages::v-all',
+    workspaceId: 'ws-local',
+    createdBy: 'local-owner',
+  })
+  // 250 matching rows (> MAX_PAGE_SIZE=200) and only 1 individually shared
+  const allRows = Array.from({ length: 250 }, (_, idx) => ({
+    id: `p-${idx + 1}`,
+    title: `页面 ${idx + 1}`,
+    status: 'done',
+  }))
+  store.upsert({
+    kind: 'record',
+    collection: '/pages',
+    recordId: 'p-1',
+    workspaceId: 'ws-local',
+    createdBy: 'local-owner',
+  })
+  const db = {
+    stat: async () => ({
+      kind: 'collection',
+      label: '页面',
+      schema: {
+        labelField: 'title',
+        fields: {
+          title: { type: 'text', label: '标题' },
+          status: { type: 'text', label: '状态' },
+        },
+      },
+    }),
+    list: async (_path: string, filter?: Record<string, unknown>, page?: { limit?: number; offset?: number }) => {
+      const filtered = filter?.status ? allRows.filter((r) => r.status === filter.status) : allRows
+      const limit = Math.min(200, page?.limit ?? 20)
+      const offset = page?.offset ?? 0
+      return { items: filtered.slice(offset, offset + limit), total: filtered.length }
+    },
+    read: async (path: string) => {
+      const id = path.split('/').pop() ?? ''
+      const hit = allRows.find((r) => r.id === id)
+      if (!hit) throw new Error(`unknown record: ${path}`)
+      return { value: hit }
+    },
+    content: async (path: string) => ({ value: `正文:${path}` }),
+  }
+  const savedViews = {
+    viewsFor: () => [
+      {
+        id: 'v-all',
+        name: '已完成页面',
+        mode: 'table',
+        sortField: 'title',
+        sortDir: 'asc',
+        filters: { status: 'done' },
+        columns: ['title'],
+      },
+    ],
+  }
+
+  // Local LAN mode: all 250 rows across both pages are included
+  const localStats = await computeViewPublicStats(
+    db as never,
+    savedViews as never,
+    store,
+    'pages::v-all',
+    'local-owner',
+    'ws-local',
+    undefined,
+    true,
+  )
+  assert.deepEqual(localStats, { matchedCount: 250, publicCount: 250 })
+
+  const localSnap = await buildShareSnapshot(db as never, savedViews as never, viewShare, {
+    shares: store,
+    workspaceId: 'ws-local',
+    includeAllViewRecords: true,
+    contentIds: ['p-250'],
+  })
+  assert.equal(localSnap.kind, 'view')
+  assert.equal(localSnap.records.length, 250)
+  assert.equal(localSnap.contents['p-250'], '正文:/pages/p-250')
+
+  // Cloud mode (default includeAllViewRecords=false): still strictly zero-leak (only p-1)
+  const cloudStats = await computeViewPublicStats(
+    db as never,
+    savedViews as never,
+    store,
+    'pages::v-all',
+    'local-owner',
+    'ws-local',
+    undefined,
+    false,
+  )
+  assert.deepEqual(cloudStats, { matchedCount: 250, publicCount: 1 })
+
+  const cloudSnap = await buildShareSnapshot(db as never, savedViews as never, viewShare, {
+    shares: store,
+    workspaceId: 'ws-local',
+    includeAllViewRecords: false,
+  })
+  assert.deepEqual(cloudSnap.records.map((r) => r.id), ['p-1'])
 })

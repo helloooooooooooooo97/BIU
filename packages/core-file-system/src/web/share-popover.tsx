@@ -453,9 +453,13 @@ export function SharePanel({
                 data-testid="fsdb-view-public-stats"
                 style={{ marginBottom: 8 }}
               >
-                {viewPublicStats
-                  ? `公开视图仅展示其中已公开的记录 · 当前命中 ${viewPublicStats.matchedCount} 条，其中 ${viewPublicStats.publicCount} 条已公开`
-                  : '公开视图仅展示其中已单独开启公开链接的记录，未公开记录绝不泄露。'}
+                {localOnly
+                  ? viewPublicStats
+                    ? `局域网链接将分享当前视图下的全部数据 · 共 ${viewPublicStats.matchedCount} 条记录`
+                    : '局域网链接将分享当前视图下的全部数据。'
+                  : viewPublicStats
+                    ? `公开视图仅展示其中已公开的记录 · 当前命中 ${viewPublicStats.matchedCount} 条，其中 ${viewPublicStats.publicCount} 条已公开`
+                    : '公开视图仅展示其中已单独开启公开链接的记录，未公开记录绝不泄露。'}
               </p>
             ) : null}
             {!share ? (

@@ -116,6 +116,8 @@ export type ShareSnapshotOpts = {
   shares?: SharesStore
   collabStore?: ShareCollabStore
   workspaceId?: string
+  /** 本机空间无多成员权限边界：局域网分享视图时直接包含当前视图命中的全部记录；云端默认 false，保持零泄露交集。 */
+  includeAllViewRecords?: boolean
 }
 
 export function collectEffectivePublicRecordIds(
@@ -194,8 +196,43 @@ function matchesViewRow(
   return true
 }
 
+const SHARE_VIEW_MAX_RECORDS = 5000
+
+async function listAllViewRows(
+  db: Pick<Database, 'list'>,
+  targetCollection: string,
+  view: StoredView,
+): Promise<{ items: DbRecord[]; total: number }> {
+  const filter = viewFilterObject(view)
+  const filterArg = Object.keys(filter).length ? filter : undefined
+  const queryOpt = view.query ? { q: view.query } : {}
+  const items: DbRecord[] = []
+  let offset = 0
+  let total = 0
+  while (items.length < SHARE_VIEW_MAX_RECORDS) {
+    const listed = (await db.list(targetCollection, filterArg, {
+      ...queryOpt,
+      limit: 200,
+      offset,
+    })) as { items?: DbRecord[]; total?: number }
+    const page = listed.items ?? []
+    if (typeof listed.total === 'number') total = listed.total
+    if (!page.length) break
+    items.push(...page)
+    offset += page.length
+    if (total > 0 && items.length >= total) break
+    if (page.length < 200) break
+  }
+  return {
+    items: items.slice(0, SHARE_VIEW_MAX_RECORDS),
+    total: total > 0 ? total : items.length,
+  }
+}
+
 /**
- * 计算视图公开外链的透明预览计数：当前操作者可见命中数 N，以及其中有效公开（本条公开或继承公开）的记录数 M。
+ * 计算视图外链的透明预览计数：
+ * - 云端空间（includeAllViewRecords = false）：当前操作者可见命中数 N，以及其中有效公开的记录数 M。
+ * - 本机空间（includeAllViewRecords = true）：无多成员权限边界，局域网分享直接包含当前视图命中的全部 N 条记录。
  */
 export async function computeViewPublicStats(
   db: Pick<Database, 'stat' | 'list'> & { tags?: { list: () => CollectionSchemaPack[] } },
@@ -205,30 +242,25 @@ export async function computeViewPublicStats(
   accountId = '',
   workspaceId?: string,
   collabStore?: ShareCollabStore,
+  includeAllViewRecords = false,
 ): Promise<{ matchedCount: number; publicCount: number } | null> {
   const parsed = parseViewShareRecordId(viewRecordId)
   if (!parsed) return null
   const { targetCollection, viewId } = parsed
   const view = savedViews.viewsFor(targetCollection, accountId, workspaceId).find((v) => String(v.id) === viewId)
   if (!view) return null
-  const filter = viewFilterObject(view)
-  const listed = (await db.list(
-    targetCollection,
-    Object.keys(filter).length ? filter : undefined,
-    {
-      ...(view.query ? { q: view.query } : {}),
-      limit: 5000,
-      offset: 0,
-    },
-  )) as { items?: DbRecord[]; total?: number }
-  const items = listed.items ?? []
+  const listed = await listAllViewRows(db, targetCollection, view)
+  const matchedCount = listed.total
+  if (includeAllViewRecords) {
+    return { matchedCount, publicCount: matchedCount }
+  }
   const publicIds = collectEffectivePublicRecordIds(shares, targetCollection, workspaceId, collabStore)
   let publicCount = 0
-  for (const row of items) {
+  for (const row of listed.items) {
     if (publicIds.has(String(row.id ?? ''))) publicCount += 1
   }
   return {
-    matchedCount: typeof listed.total === 'number' ? listed.total : items.length,
+    matchedCount,
     publicCount,
   }
 }
@@ -239,8 +271,9 @@ export async function buildShareSnapshot(
   share: ShareRecord,
   opts?: ShareSnapshotOpts,
 ): Promise<ShareSnapshot> {
-  // 零泄露视图外链：shares 中存储为 kind = 'record', collection = '/views', record_id = '<tableName>::<viewId>'
-  // 匿名访客看到的行集合严格为「目标表中已单独开启公开链接的记录 ∩ 视图筛选条件」，绝不泄露未公开记录。
+  // 视图外链：shares 中存储为 kind = 'record', collection = '/views', record_id = '<tableName>::<viewId>'
+  // - 本机空间（opts.includeAllViewRecords = true）：无多成员权限边界，局域网分享直接返回当前视图命中的全部记录；
+  // - 云端空间（默认 false）：零泄露交集「目标表中已单独开启公开链接的记录 ∩ 视图筛选条件」，绝不泄露未公开记录。
   if (share.kind === 'record' && normalizeCollectionPath(share.collection) === VIEWS_COLLECTION_PATH) {
     const parsed = parseViewShareRecordId(share.recordId)
     if (!parsed) throw new Error('unknown record')
@@ -252,24 +285,29 @@ export async function buildShareSnapshot(
     if (targetStat.kind !== 'collection' || !targetStat.schema) throw new Error('unknown collection')
     const schema = freezeSchema(targetStat.schema)
     const collectionLabel = String(targetStat.view?.title ?? targetStat.label ?? targetCollection.replace(/^\//, ''))
-    const publicRecordIds = collectEffectivePublicRecordIds(
-      opts?.shares,
-      targetCollection,
-      share.workspaceId || opts?.workspaceId,
-      opts?.collabStore,
-    )
-    const packs = db.tags?.list() ?? []
     const matchedRows: DbRecord[] = []
-    for (const publicId of publicRecordIds) {
-      if (!publicId) continue
-      try {
-        const got = asRecordRead(await db.read(`${targetCollection}/${publicId}`))
-        const row = got.value
-        if (!row?.id) continue
-        if (!matchesViewRow(row, view, targetStat.schema, packs)) continue
-        matchedRows.push(row)
-      } catch {
-        /* record removed or unreadable */
+    if (opts?.includeAllViewRecords) {
+      const listed = await listAllViewRows(db, targetCollection, view)
+      matchedRows.push(...listed.items)
+    } else {
+      const publicRecordIds = collectEffectivePublicRecordIds(
+        opts?.shares,
+        targetCollection,
+        share.workspaceId || opts?.workspaceId,
+        opts?.collabStore,
+      )
+      const packs = db.tags?.list() ?? []
+      for (const publicId of publicRecordIds) {
+        if (!publicId) continue
+        try {
+          const got = asRecordRead(await db.read(`${targetCollection}/${publicId}`))
+          const row = got.value
+          if (!row?.id) continue
+          if (!matchesViewRow(row, view, targetStat.schema, packs)) continue
+          matchedRows.push(row)
+        } catch {
+          /* record removed or unreadable */
+        }
       }
     }
     const sorted = sortRecordsBy(
