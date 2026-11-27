@@ -97,7 +97,7 @@ export const StaticMascotMark = memo(function StaticMascotMark({
   )
 })
 
-export const MASCOT_FILL: Record<GrokColor, string> = {
+const MASCOT_FILL: Record<GrokColor, string> = {
   black: '#444',
   brown: '#a86f45',
   red: '#e25555',

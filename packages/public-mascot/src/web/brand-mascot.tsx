@@ -70,7 +70,7 @@ export function SidebarBrandLockup() {
   )
 }
 
-export function rankCornerAgents(agents: CornerAgent[]) {
+function rankCornerAgents(agents: CornerAgent[]) {
   return [...agents].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0) || a.id.localeCompare(b.id))
 }
 

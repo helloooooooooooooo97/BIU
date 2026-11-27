@@ -4,7 +4,6 @@ import {
   isMascotDancing,
   remainingMascotDanceMs,
   startMascotDance,
-  stopMascotDance,
   subscribeMascotDance,
 } from './mascot-dance.ts'
 
@@ -35,12 +34,4 @@ test('subscribe notifies on dance start and end', () => {
   // 开始(→true) 与结束(→false) 都应触发通知
   assert.ok(ticks.includes(true))
   assert.ok(ticks.includes(false))
-})
-
-test('stopMascotDance immediately ends dance', () => {
-  useFakeClock()
-  startMascotDance(10000)
-  assert.ok(isMascotDancing())
-  stopMascotDance()
-  assert.equal(isMascotDancing(), false)
 })

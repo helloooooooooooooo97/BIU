@@ -59,12 +59,3 @@ export function subscribeMascotDance(fn: () => void): () => void {
   listeners.add(fn)
   return () => listeners.delete(fn)
 }
-
-export function stopMascotDance() {
-  if (danceTimer) {
-    clearTimeout(danceTimer)
-    danceTimer = null
-  }
-  delete danceUntilById.all
-  notify()
-}

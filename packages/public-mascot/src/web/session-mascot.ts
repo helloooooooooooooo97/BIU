@@ -32,7 +32,7 @@ function normalizeEye(value: unknown, seed: number): number {
   return GROK_REST_EYES[seed % GROK_REST_EYES.length]!
 }
 
-export function isSessionMascotIdentity(value: unknown): value is SessionMascotIdentity {
+function isSessionMascotIdentity(value: unknown): value is SessionMascotIdentity {
   if (!value || typeof value !== 'object') return false
   const v = value as { shape?: unknown; color?: unknown; eye?: unknown }
   if (!isShape(v.shape) || !isColor(v.color)) return false
