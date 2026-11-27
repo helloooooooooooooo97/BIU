@@ -1,7 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import type { PostStepReq } from '@biu/types/agent-loop'
-import { autoCompactPostStep, contextWindowTokens, mechanicalCompactText, resolveAutoCompactThreshold, shouldAutoCompact } from './auto-compact.ts'
+import { contextWindowTokens, mechanicalCompactText, resolveAutoCompactThreshold, shouldAutoCompact } from './auto-compact.ts'
 
 function step(patch: Partial<PostStepReq> = {}): PostStepReq {
   return {
@@ -26,10 +26,7 @@ test('auto compact threshold is always on and cannot exceed the model window', (
   assert.equal(resolveAutoCompactThreshold(400_000, 200_000), 200_000)
 })
 
-test('post-step does not insert a compact note into the assistant text', () => {
-  const noted = autoCompactPostStep(step())
-  assert.equal(noted.text, '先改文件')
-  assert.equal(autoCompactPostStep(noted), noted)
+test('shouldAutoCompact and mechanicalCompactText respect threshold and compact points', () => {
   assert.equal(shouldAutoCompact(step()), true)
   assert.equal(shouldAutoCompact(step({ inputTokens: 1000 })), false)
   assert.equal(shouldAutoCompact(step({ toolCalls: [{ id: 'c', name: 'db_action', arguments: JSON.stringify({ path: '/agents/s1', action: 'compact', args: { text: '摘要' } }) }] })), false)

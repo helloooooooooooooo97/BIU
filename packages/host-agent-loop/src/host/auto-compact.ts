@@ -46,8 +46,3 @@ export function mechanicalCompactText(
   const body = lines.slice(-12).join('\n').slice(0, 4000)
   return body || '此前上下文已超过上限。旧内容可用检索找回。'
 }
-
-/** 不再改助手正文。压缩在工具结果落盘之后单独写压缩点。 */
-export function autoCompactPostStep(req: PostStepReq): PostStepReq {
-  return req
-}
