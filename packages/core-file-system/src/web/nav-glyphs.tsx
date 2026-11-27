@@ -2,6 +2,7 @@ import {
   CircleStackIcon,
   ShareIcon,
   TableCellsIcon,
+  UserGroupIcon,
   UserIcon,
   UsersIcon,
 } from '@heroicons/react/16/solid'
@@ -57,8 +58,8 @@ export function CrumbItemGlyph({
     if (avatarSeed) {
       return <AiAvatar seed={avatarSeed} size={16} className="size-4 shrink-0 rounded-full" />
     }
-    if (icon === 'workspace') return <UsersIcon aria-hidden className={className} />
-    if (icon === 'shared') return <ShareIcon aria-hidden className={className} />
+    if (icon === 'workspace') return <UserGroupIcon aria-hidden className={className} />
+    if (icon === 'shared') return <UsersIcon aria-hidden className={className} />
     return <UserIcon aria-hidden className={className} />
   }
   if (kind === 'view') return <ViewModeGlyph mode={mode} className={className} />

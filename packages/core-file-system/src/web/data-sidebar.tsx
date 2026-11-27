@@ -880,7 +880,7 @@ export const DataSidebar = memo(function DataSidebar({
         : ' · 已锁定配置'
       : ''
     const fullTip = `${baseTip}${lockTip}`
-    const ScopeIcon = scope === 'personal' ? UserIcon : scope === 'shared' ? UserGroupIcon : UsersIcon
+    const ScopeIcon = scope === 'personal' ? UserIcon : scope === 'shared' ? UsersIcon : UserGroupIcon
     return (
       <span
         className="sidebar-view-status inline-flex items-center gap-1.5 text-(--biu-color-text-muted)"

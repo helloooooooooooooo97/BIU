@@ -40,7 +40,7 @@ export function viewScopeMeta(
   opts?: { isMembersCollection?: boolean },
 ) {
   const scope: ViewShareScope = view.shareScope ?? 'workspace'
-  const ScopeIcon = scope === 'personal' ? UserIcon : scope === 'shared' ? UserGroupIcon : UsersIcon
+  const ScopeIcon = scope === 'personal' ? UserIcon : scope === 'shared' ? UsersIcon : UserGroupIcon
   const scopeLabel =
     scope === 'personal'
       ? '私人视图'

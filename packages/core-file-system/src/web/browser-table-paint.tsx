@@ -249,7 +249,7 @@ export function createBrowserTablePaint(deps: BrowserTablePaintDeps) {
             <span className="sidebar-group-fold-face">
               {groupBy === 'shareScope' ? (
                 <UiGlyph
-                  icon={label === '共享' ? 'globe' : label === '空间' ? 'users' : 'user'}
+                  icon={label === '共享' ? 'users' : label === '空间' ? 'user-group' : 'user'}
                   className={label === '共享' ? 'tasks-queue-gshare' : undefined}
                 />
               ) : groupBy === 'table' || groupBy === 'tablePath' ? (
