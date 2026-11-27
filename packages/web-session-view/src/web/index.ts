@@ -1,5 +1,6 @@
 import { readStorageString } from '@biu/biu-ui/client-storage'
 import { apiFetch } from '@biu/biu-ui/api-client'
+import { onAppEvent } from '@biu/biu-ui/app-events'
 import { BoundedMap, registerWorkspaceCache } from '@biu/biu-ui/cache'
 import { useSyncExternalStore } from 'react'
 import { Service, type Context } from 'cordis'
@@ -339,13 +340,12 @@ export class SessionViewService extends Service {
     if (typeof window === 'undefined' || hasAccountToken()) {
       start()
     } else {
-      const onToken = () => {
+      const off = onAppEvent('biu:account-token', () => {
         if (!hasAccountToken()) return
-        window.removeEventListener('biu:account-token', onToken)
+        off()
         start()
-      }
-      window.addEventListener('biu:account-token', onToken)
-      this.ctx.effect(() => () => window.removeEventListener('biu:account-token', onToken))
+      })
+      this.ctx.effect(() => off)
     }
     this.ctx.effect(() => () => {
       this.stopDispatchedPoll()

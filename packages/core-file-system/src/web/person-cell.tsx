@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ArrowPathIcon, CpuChipIcon, UserIcon } from '@heroicons/react/16/solid'
 import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import { apiFetch } from '@biu/biu-ui/api-client'
+import { onAppEvents } from '@biu/biu-ui/app-events'
 import { resolveSessionMascot, SidebarMascot } from '@biu/public-mascot'
 import { asPerson, asPersonList, personKey, type PersonValue } from '@biu/type-file-system'
 import { PickOption, PickPanel } from '@biu/biu-ui/db-search'
@@ -34,8 +35,6 @@ let membersInflight: Promise<MemberPerson[]> | null = null
 let membersListed: MemberPerson[] | null = null
 let membersListedAt = 0
 const MEMBERS_TTL_MS = 8000
-const ACCOUNT_EVENT = 'biu:account-token'
-const WORKSPACE_PROFILE_EVENT = 'biu:workspace-profile'
 let memberDirCache: Map<string, MemberPerson> | null = null
 let memberDirLoadedAt = 0
 let memberDirInflight: Promise<Map<string, MemberPerson>> | null = null
@@ -109,12 +108,10 @@ export function useMemberDirectory(enabled: boolean): ReadonlyMap<string, Member
       sync()
     }
     sync()
-    window.addEventListener(ACCOUNT_EVENT, onAccountChange)
-    window.addEventListener(WORKSPACE_PROFILE_EVENT, onAccountChange)
+    const off = onAppEvents(['biu:account-token', 'biu:workspace-profile'], onAccountChange)
     return () => {
       cancelled = true
-      window.removeEventListener(ACCOUNT_EVENT, onAccountChange)
-      window.removeEventListener(WORKSPACE_PROFILE_EVENT, onAccountChange)
+      off()
     }
   }, [enabled])
 

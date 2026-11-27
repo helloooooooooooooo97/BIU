@@ -1,5 +1,5 @@
 import { readStorageString, removeStorageKey, writeStorageString } from '@biu/biu-ui/client-storage'
-import { emitAppEvent, onAppEvent } from '@biu/biu-ui/app-events'
+import { emitAppEvent, onAppEvent, onAppEvents } from '@biu/biu-ui/app-events'
 import { apiFetch, registerApiRequestInterceptor } from '@biu/biu-ui/api-client'
 import { KeyedSingleflight, registerWorkspaceCache } from '@biu/biu-ui/cache'
 import { syncWorkspaceEndpoint } from '@biu/biu-ui/workspace-transport'
@@ -135,10 +135,10 @@ export function ShellSettingsAccount() {
       })
     }
     load()
-    window.addEventListener(ACCOUNT_EVENT, load)
+    const off = onAppEvent('biu:account-token', load)
     return () => {
       cancelled = true
-      window.removeEventListener(ACCOUNT_EVENT, load)
+      off()
     }
   }, [token])
 
@@ -204,7 +204,7 @@ export function ShellSettingsAccount() {
         }))
         if (!isAvatarOnly) setAccountName(savedName || savedFallbackName || '')
         setProfileMessage(successText)
-        window.dispatchEvent(new Event(ACCOUNT_EVENT))
+        emitAppEvent('biu:account-token', undefined)
       })
       .catch((error) => {
         if (seq !== saveSeqRef.current) return
@@ -505,7 +505,7 @@ export function ShellSettingsConnections() {
                               .then(() => {
                                 setCloudMessage('已断开当前远程连接。')
                                 void loadCloud()
-                                window.dispatchEvent(new Event(ACCOUNT_EVENT))
+                                emitAppEvent('biu:account-token', undefined)
                               })
                               .catch((error) => setCloudMessage(error instanceof Error ? error.message : '断开失败'))
                           }}
@@ -525,7 +525,7 @@ export function ShellSettingsConnections() {
                               .then(() => {
                                 setCloudMessage('已切换远程连接。')
                                 void loadCloud()
-                                window.dispatchEvent(new Event(ACCOUNT_EVENT))
+                                emitAppEvent('biu:account-token', undefined)
                               })
                               .catch((error) => setCloudMessage(error instanceof Error ? error.message : '连接失败'))
                           }}
@@ -544,7 +544,7 @@ export function ShellSettingsConnections() {
                             .then(() => {
                               setCloudMessage('已移除远程连接。')
                               void loadCloud()
-                              window.dispatchEvent(new Event(ACCOUNT_EVENT))
+                              emitAppEvent('biu:account-token', undefined)
                             })
                             .catch((error) => setCloudMessage(error instanceof Error ? error.message : '移除失败'))
                         }}
@@ -687,7 +687,7 @@ export function ShellSettingsConnections() {
                           setCloudMessage(cloudMode === 'register' ? '独立云端账号已创建并绑定。' : '云端账号已登录并绑定。')
                           setAddingConnection(false)
                           void loadCloud()
-                          window.dispatchEvent(new Event(ACCOUNT_EVENT))
+                          emitAppEvent('biu:account-token', undefined)
                         })
                         .catch((error) =>
                           setCloudMessage(error instanceof Error ? error.message : (cloudMode === 'register' ? '云端注册失败' : '云端登录失败')),
@@ -748,7 +748,7 @@ export function ShellSettingsConnections() {
                             setCloudMessage('云端账号已创建并绑定。')
                             setAddingConnection(false)
                             void loadCloud()
-                            window.dispatchEvent(new Event(ACCOUNT_EVENT))
+                            emitAppEvent('biu:account-token', undefined)
                           })
                           .catch((error) => setCloudMessage(error instanceof Error ? error.message : '创建并绑定失败'))
                       }}
@@ -887,7 +887,6 @@ export function ShellSettingsSecurity() {
 const ACCOUNT_KEY = 'biu.account.token'
 /** 校验失败后的重试间隔（ms）：退避三次，覆盖 dev server 重启的窗口。 */
 const VERIFY_RETRY_DELAYS = [400, 1200, 3000] as const
-const ACCOUNT_EVENT = 'biu:account-token'
 
 function bridgeLegacyAccountCookie() {
   if (typeof localStorage === 'undefined' || typeof document === 'undefined') return
@@ -914,7 +913,7 @@ export function writeAccountToken(next: string) {
     removeStorageKey(ACCOUNT_KEY)
     clearWorkspaceId()
   }
-  if (typeof window !== 'undefined') window.dispatchEvent(new Event(ACCOUNT_EVENT))
+  if (typeof window !== 'undefined') emitAppEvent('biu:account-token', undefined)
 }
 
 function readAuthRoute(): 'login' | 'register' | null {
@@ -950,10 +949,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const sync = () => setToken(readAccountToken())
-    window.addEventListener(ACCOUNT_EVENT, sync)
+    const off = onAppEvent('biu:account-token', sync)
     window.addEventListener('storage', sync)
     return () => {
-      window.removeEventListener(ACCOUNT_EVENT, sync)
+      off()
       window.removeEventListener('storage', sync)
     }
   }, [])
@@ -1280,10 +1279,10 @@ export function useActiveWorkspaceLocation(): 'device' | 'cloud' {
       }
     }
     void load()
-    window.addEventListener(ACCOUNT_EVENT, load)
+    const off = onAppEvent('biu:account-token', load)
     return () => {
       cancelled = true
-      window.removeEventListener(ACCOUNT_EVENT, load)
+      off()
     }
   }, [])
   return location
@@ -1391,6 +1390,10 @@ function workspaceRoleLabel(role: string) {
   return '编辑者'
 }
 
+function canManageWorkspaceRole(role: string | undefined) {
+  return role === 'owner' || role === 'admin'
+}
+
 /** 进入一个空间时打开最近更新的会话。没有会话时回到首页。 */
 export function defaultSessionPath(sessions: Array<{ id?: string; updatedAt?: number }>) {
   let best: { id: string; updatedAt: number } | undefined
@@ -1496,7 +1499,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
       }
     }
     void load()
-    window.addEventListener(ACCOUNT_EVENT, load)
+    const offAccount = onAppEvent('biu:account-token', load)
     const offWorkspaceMeta = onAppEvent('biu:workspace-meta', (detail) => {
       if (!detail?.workspaceId) {
         void load()
@@ -1516,7 +1519,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
     })
     return () => {
       cancelled = true
-      window.removeEventListener(ACCOUNT_EVENT, load)
+      offAccount()
       offWorkspaceMeta()
     }
   }, [])
@@ -1754,7 +1757,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                         }
                         const token = readAccountToken()
                         void accountFetch(token, '/api/account/cloud', { method: 'DELETE' })
-                          .then(() => window.dispatchEvent(new Event(ACCOUNT_EVENT)))
+                          .then(() => emitAppEvent('biu:account-token', undefined))
                           .catch((error) => {
                             console.warn('[shell] cloud logout failed', error)
                           })
@@ -1806,7 +1809,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                 })
                   .then(() => {
                     setCloudMenuOpen(false)
-                    window.dispatchEvent(new Event(ACCOUNT_EVENT))
+                    emitAppEvent('biu:account-token', undefined)
                   })
                   .catch((error) => {
                     console.warn('[shell] cloud account switch failed', item.id, error)
@@ -1957,12 +1960,7 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
       })
     }
     sync()
-    window.addEventListener('biu:workspace-profile', sync)
-    window.addEventListener(ACCOUNT_EVENT, sync)
-    return () => {
-      window.removeEventListener('biu:workspace-profile', sync)
-      window.removeEventListener(ACCOUNT_EVENT, sync)
-    }
+    return onAppEvents(['biu:workspace-profile', 'biu:account-token'], sync)
   }, [panel, token, workspaceId, loadWorkspace])
 
   const currentWorkspace = workspaces.find((row) => row.id === workspaceId)
@@ -1994,7 +1992,7 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
       .catch((err) => setError(err instanceof Error ? err.message : '保存空间头像失败'))
       .finally(() => setSavingWorkspaceAvatar(false))
   }
-  const canManage = workspaceRole === 'owner' || workspaceRole === 'admin'
+  const canManage = canManageWorkspaceRole(workspaceRole)
   const canDeleteWorkspace = workspaceRole === 'owner'
   const canChangeRoles = workspaceRole === 'owner'
   const removePendingMember = () => {
@@ -2186,7 +2184,7 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
               else clearWorkspaceId()
               setDeleteName('')
               setError('')
-              window.dispatchEvent(new Event(ACCOUNT_EVENT))
+              emitAppEvent('biu:account-token', undefined)
             })
             .catch((err) => setError(err instanceof Error ? err.message : '删除空间失败'))
         }}
@@ -2291,7 +2289,7 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
                   />
                   ) : (
                     <span className="settings-member-role-label">
-                      {row.role === 'owner' ? '所有者' : row.role === 'admin' ? '管理者' : row.role === 'viewer' ? '查看者' : '编辑者'}
+                      {workspaceRoleLabel(row.role)}
                     </span>
                   )}
                   {canManage && row.role !== 'owner' && (workspaceRole === 'owner' || row.role === 'member' || row.role === 'viewer') ? (
@@ -3375,10 +3373,10 @@ export function ShellSidebarAccount({
         .catch(() => undefined)
     }
     load()
-    window.addEventListener(ACCOUNT_EVENT, load)
+    const off = onAppEvent('biu:account-token', load)
     return () => {
       cancelled = true
-      window.removeEventListener(ACCOUNT_EVENT, load)
+      off()
     }
   }, [])
 

@@ -2,7 +2,7 @@ import { writeStorageString } from '@biu/biu-ui/client-storage'
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
 import type { DataScope } from '../catalog-views.ts'
 import { DATA_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, normalizeCollectionPath } from '../paths.ts'
-import { apiFetch } from '@biu/biu-ui/api-client'
+import { fetchMemberViews, releaseMemberView } from './authz-api.ts'
 import type { FilterGroup, SortRule } from '../query-logic.ts'
 import type { ViewMode } from './fields.ts'
 import { FSDB_CRUMB_LABELS_EVENT, FSDB_SHARES_CHANGE_EVENT, emitFsdbEvent } from './fsdb-events.ts'
@@ -443,9 +443,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
     action: 'unlock' | 'delete',
   ): Promise<'none' | 'done' | 'cancelled'> {
     try {
-      const res = await apiFetch('/api/db/member-views')
-      if (!res.ok) return 'none'
-      const data = (await res.json()) as { views?: Array<{ id: string; grantCount?: number }> }
+      const data = await fetchMemberViews()
       const hit = (data.views ?? []).find((item) => item.id === view.id)
       const grantCount = Number(hit?.grantCount ?? 0)
       if (grantCount <= 0) return 'none'
@@ -456,12 +454,7 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
         grantCount,
       })
       if (!mode) return 'cancelled'
-      const releaseRes = await apiFetch(`/api/db/member-views/${encodeURIComponent(view.id)}/release`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action, mode }),
-      })
-      if (!releaseRes.ok) return 'cancelled'
+      if (!(await releaseMemberView(view.id, action, mode))) return 'cancelled'
       await pullSavedViews([path], { force: true })
       syncPaintedState(path)
       emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)

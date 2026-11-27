@@ -1,5 +1,6 @@
 import { writeStorageString } from '@biu/biu-ui/client-storage'
-import { onAppEvent } from '@biu/biu-ui/app-events'
+import { onAppEvent, onAppEvents } from '@biu/biu-ui/app-events'
+import { invalidateViewerIdentityCache, loadViewerIdentity } from './authz-api.ts'
 import { apiFetch } from '@biu/biu-ui/api-client'
 import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import { lazy, memo, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react'
@@ -174,9 +175,6 @@ function onSidebarRowClick(event: MouseEvent<HTMLElement>) {
   event.currentTarget.querySelector<HTMLButtonElement>('button.min-w-0.flex-1')?.click()
 }
 
-const ACCOUNT_EVENT = 'biu:account-token'
-const WORKSPACE_PROFILE_EVENT = 'biu:workspace-profile'
-
 function useCloudCreatorContext() {
   const [ctx, setCtx] = useState<{
     isCloud: boolean
@@ -196,34 +194,36 @@ function useCloudCreatorContext() {
 
   useEffect(() => {
     let cancelled = false
-    const load = () => {
+    const load = (fresh = false) => {
       void Promise.all([
-        apiFetch('/api/account/me').then((r) => (r.ok ? r.json() : null)).catch(() => null),
-        apiFetch('/api/account/workspace-profile').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        loadViewerIdentity({ fresh }),
         apiFetch('/api/account/active').then((r) => (r.ok ? r.json() : null)).catch(() => null),
         apiFetch('/api/account/workspaces').then((r) => (r.ok ? r.json() : null)).catch(() => null),
-      ]).then(([me, wp, active, listed]) => {
+      ]).then(([viewer, active, listed]) => {
         if (cancelled) return
-        const meObj = me as { id?: string; name?: string; avatar?: string; online?: boolean } | null
-        const wpObj = wp as { accountId?: string; name?: string; fallbackName?: string; avatar?: string } | null
-        const myAccountId = String(wpObj?.accountId ?? meObj?.id ?? '').trim()
-        const myName = String(wpObj?.name || wpObj?.fallbackName || meObj?.name || '').trim()
-        const myAvatar = wpObj ? String(wpObj.avatar ?? '').trim() : String(meObj?.avatar ?? '').trim()
-        const hostOnline = meObj?.online === true
         const activeId = String((active as { workspaceId?: string } | null)?.workspaceId ?? '').trim()
         const workspaces = Array.isArray((listed as { workspaces?: unknown[] } | null)?.workspaces)
           ? ((listed as { workspaces: Array<{ id?: string; avatar?: string; location?: string; memberKind?: string }> }).workspaces)
           : []
         const current = workspaces.find((w) => w.id === activeId)
-        const isCloud = hostOnline || current?.location === 'cloud'
+        const isCloud = viewer.hostOnline || current?.location === 'cloud'
         const isExternal = current?.memberKind === 'external' || current?.memberKind === 'guest'
         const workspaceAvatar = String(current?.avatar ?? '').trim()
-        setCtx({ isCloud, myAccountId, myName, myAvatar, workspaceAvatar, isExternal })
+        setCtx({
+          isCloud,
+          myAccountId: viewer.accountId,
+          myName: viewer.name,
+          myAvatar: viewer.avatar,
+          workspaceAvatar,
+          isExternal,
+        })
       })
     }
-    load()
-    window.addEventListener(ACCOUNT_EVENT, load)
-    window.addEventListener(WORKSPACE_PROFILE_EVENT, load)
+    load(false)
+    const offAccount = onAppEvents(['biu:account-token', 'biu:workspace-profile'], () => {
+      invalidateViewerIdentityCache()
+      load(true)
+    })
     const offWorkspaceMeta = onAppEvent('biu:workspace-meta', (detail) => {
       if (detail?.avatar === undefined) return
       const nextAvatar = String(detail.avatar ?? '').trim()
@@ -231,8 +231,7 @@ function useCloudCreatorContext() {
     })
     return () => {
       cancelled = true
-      window.removeEventListener(ACCOUNT_EVENT, load)
-      window.removeEventListener(WORKSPACE_PROFILE_EVENT, load)
+      offAccount()
       offWorkspaceMeta()
     }
   }, [])

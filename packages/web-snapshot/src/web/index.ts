@@ -1,5 +1,6 @@
 import { readStorageString } from '@biu/biu-ui/client-storage'
 import { apiFetch } from '@biu/biu-ui/api-client'
+import { onAppEvent } from '@biu/biu-ui/app-events'
 import { getWorkspaceEndpoint, mintWsTicket, resolveWsUrl, subscribeWorkspaceEndpoint } from '@biu/biu-ui/workspace-transport'
 import { useSyncExternalStore } from 'react'
 import { Service, type Context } from 'cordis'
@@ -118,13 +119,12 @@ export class SnapshotService extends Service {
       this.start()
       return
     }
-    const onToken = () => {
+    const off = onAppEvent('biu:account-token', () => {
       if (!hasAccountToken()) return
-      window.removeEventListener('biu:account-token', onToken)
+      off()
       this.start()
-    }
-    window.addEventListener('biu:account-token', onToken)
-    this.ctx.effect(() => () => window.removeEventListener('biu:account-token', onToken))
+    })
+    this.ctx.effect(() => off)
   }
 
   private start() {

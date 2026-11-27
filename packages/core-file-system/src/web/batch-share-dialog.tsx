@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { CheckIcon, LockClosedIcon, ShieldCheckIcon, UserGroupIcon, XMarkIcon } from '@heroicons/react/16/solid'
-import { apiFetch } from '@biu/biu-ui/api-client'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import { emitFsdbChange } from '@biu/type-file-system'
+import {
+  applyBatchPermissions,
+  fetchMemberViews,
+  previewBatchPermissions,
+  resolveMemberView,
+} from './authz-api.ts'
 import { WORKSPACE_MEMBERS_COLLECTION_PATH } from './database-path.ts'
 import { listCollection } from './db-client.ts'
 import { FSDB_SHARES_CHANGE_EVENT, emitFsdbEvent } from './fsdb-events.ts'
@@ -113,12 +118,7 @@ export function BatchShareDialog({
     setError('')
     setDoneNotice('')
     setLoadingPreview(true)
-    void apiFetch('/api/db/batch-permissions/preview', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: scopePayloadJson,
-    })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+    void previewBatchPermissions(scopePayloadJson)
       .then((previewRes) => {
         if (!alive) return
         const p = previewRes as PreviewResult
@@ -146,13 +146,12 @@ export function BatchShareDialog({
     if (cachedBatchMemberViews) setMemberViews(cachedBatchMemberViews)
     if (cachedBatchMembers) setMembers(cachedBatchMembers)
 
-    void apiFetch('/api/db/member-views')
-      .then((r) => (r.ok ? r.json() : null))
+    void fetchMemberViews()
       .catch(() => null)
       .then((viewsRes) => {
         if (!alive || !viewsRes) return
-        const rawViews = Array.isArray((viewsRes as { views?: unknown[] }).views)
-          ? ((viewsRes as { views: MemberViewOption[] }).views)
+        const rawViews = Array.isArray(viewsRes.views)
+          ? (viewsRes.views as MemberViewOption[])
           : []
         cachedBatchMemberViews = rawViews
         setMemberViews(rawViews)
@@ -224,9 +223,7 @@ export function BatchShareDialog({
     setExpandingViewId(v.id)
     setError('')
     try {
-      const res = await apiFetch(`/api/db/member-views/${encodeURIComponent(v.id)}/resolve`)
-      if (!res.ok) throw new Error(`展开成员视图失败 (HTTP ${res.status})`)
-      const data = (await res.json()) as { members?: MemberOption[] }
+      const data = await resolveMemberView<MemberOption>(v.id)
       const resolved = Array.isArray(data.members) ? data.members : []
       if (!resolved.length) {
         setError(`「${v.name}」当前没有匹配的成员`)
@@ -271,17 +268,7 @@ export function BatchShareDialog({
               ...(mode === 'grant' ? { role } : {}),
             }),
       }
-      const res = await apiFetch('/api/db/batch-permissions/apply', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      const data = (await res.json()) as {
-        error?: string
-        updatedCount?: number
-        skippedCount?: number
-      }
-      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`)
+      const data = await applyBatchPermissions(payload)
       const updatedCount = Number(data.updatedCount ?? 0)
       const skippedCount = Number(data.skippedCount ?? 0)
       setDoneNotice(

@@ -5,7 +5,7 @@ import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import { buildAccessExplanation, type AccessExplanation } from '../access-explanation.ts'
 import { roleActionLabel } from '../shared/authz-labels.ts'
-import { readJson } from './db-client.ts'
+import { fetchAccessExplanation } from './authz-api.ts'
 import { AccessMark, accessText, accessTone, ScopeMark, scopeText, scopeTone } from './share-scope-label.tsx'
 
 export function roleLabel(role: string) {
@@ -45,13 +45,7 @@ function useAccessExplanation(
       return
     }
     let cancelled = false
-    const search = new URLSearchParams({
-      collection,
-      recordId,
-      ...(tableLabel ? { tableLabel } : {}),
-      ...(roleHint ? { role: roleHint } : {}),
-    })
-    void readJson<AccessExplanation>(`/api/db/access-explain?${search.toString()}`, undefined, { fresh: true })
+    void fetchAccessExplanation({ collection, recordId, tableLabel, roleHint })
       .then((res) => {
         if (cancelled) return
         setData(res)

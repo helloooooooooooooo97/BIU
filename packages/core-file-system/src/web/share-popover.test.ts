@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 
 function readShareUiSource() {
   return [
+    './authz-api.ts',
     './share-popover.tsx',
     './share-workspace-access.tsx',
     './share-controls.tsx',
@@ -81,8 +82,10 @@ test('permission column opens the same kind of chain as data scope', () => {
     '\n' +
     readFileSync(resolve(import.meta.dirname, './browser-cell-renderer.tsx'), 'utf8')
   const detailSrc = readFileSync(resolve(import.meta.dirname, './share-chain-detail.tsx'), 'utf8')
+  const authzApiSrc = readFileSync(resolve(import.meta.dirname, './authz-api.ts'), 'utf8')
   assert.match(detailSrc, /aria-label="我的权限"/)
-  assert.match(detailSrc, /\/api\/db\/access-explain/)
+  assert.match(authzApiSrc, /\/api\/db\/access-explain/)
+  assert.match(detailSrc, /fetchAccessExplanation\(/)
   assert.match(detailSrc, /fsdb-scope-tree/)
   assert.match(detailSrc, /当前生效/)
   assert.doesNotMatch(detailSrc, /取最宽|取较高/)
@@ -94,7 +97,7 @@ test('permission column opens the same kind of chain as data scope', () => {
   assert.doesNotMatch(browser, /if \(localData\) return <span>\{String\(row\[key\]/)
   const hook = detailSrc.slice(detailSrc.indexOf('function useAccessExplanation'), detailSrc.indexOf('export function ShareScopeDetail'))
   assert.ok(hook.indexOf('if (!open)') >= 0)
-  assert.ok(hook.indexOf('if (!open)') < hook.indexOf('/api/db/access-explain'))
+  assert.ok(hook.indexOf('if (!open)') < hook.indexOf('fetchAccessExplanation('))
   assert.doesNotMatch(detailSrc, /\/api\/account\/access/)
 })
 
@@ -239,7 +242,7 @@ test('list share column uses the same capsule and loads the chain on click', () 
   const detailSrc = readFileSync(resolve(import.meta.dirname, './share-chain-detail.tsx'), 'utf8')
   const hook = detailSrc.slice(detailSrc.indexOf('function useAccessExplanation'), detailSrc.indexOf('export function ShareScopeDetail'))
   const openAt = hook.indexOf('if (!open)')
-  const explainAt = hook.indexOf('/api/db/access-explain')
+  const explainAt = hook.indexOf('fetchAccessExplanation(')
   assert.ok(openAt >= 0)
   assert.ok(openAt < explainAt)
   assert.match(src, /data-testid="fsdb-scope-tag"/)
@@ -271,7 +274,8 @@ test('device share scope detail explains lan record links via unified access-exp
     '\n' +
     readFileSync(resolve(import.meta.dirname, '../host/http-routes.ts'), 'utf8')
   assert.match(detailSrc, /localOnly == null/)
-  assert.match(detailSrc, /\/api\/db\/access-explain/)
+  assert.match(detailSrc, /fetchAccessExplanation\(/)
+  assert.match(readFileSync(resolve(import.meta.dirname, './authz-api.ts'), 'utf8'), /\/api\/db\/access-explain/)
   assert.doesNotMatch(detailSrc, /\/api\/account\/access/)
   assert.doesNotMatch(detailSrc, /未单独开链接|取最宽/)
   assert.match(explainSrc, /已开启局域网分享/)
@@ -331,16 +335,18 @@ test('ShareSelect calls useFloatingPosition with positional (anchor, menuRef, op
   assert.doesNotMatch(batchSrc, /function BatchSelect/)
 })
 
-test('commenter role maps consistently, ShareButton checks inheritedShare & memberViews, and dead grantedBy code is removed', () => {
+test('commenter role maps consistently, ShareButton checks inheritedShare & memberViews, and dead grantedBy code is removed', async () => {
   const popover = readShareUiSource()
-  const detail = readFileSync(resolve(import.meta.dirname, './share-chain-detail.tsx'), 'utf8')
-  const label = readFileSync(resolve(import.meta.dirname, './share-scope-label.tsx'), 'utf8')
+  const labels = readFileSync(resolve(import.meta.dirname, '../shared/authz-labels.ts'), 'utf8')
+  const { roleActionLabel, accessLabel } = await import('../shared/authz-labels.ts')
   const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
   const accountHost = readFileSync(resolve(import.meta.dirname, '../../../host-account/src/host/index.ts'), 'utf8')
 
-  assert.match(detail, /role === 'commenter' \|\| role === '评论'\) return '可评论'/)
-  assert.match(label, /if \(role === 'commenter'\) return '评论'/)
-  assert.match(label, /if \(role === '评论'\) return 'comment'/)
+  assert.equal(roleActionLabel('commenter'), '可评论')
+  assert.equal(roleActionLabel('评论'), '可评论')
+  assert.equal(accessLabel('commenter'), '评论')
+  assert.equal(accessLabel('评论'), '评论')
+  assert.match(labels, /SHARE_ROLE_ENUM.*'评论'/)
   assert.match(css, /\.fsdb-scope-tag\.is-comment/)
   assert.match(popover, /if \(shareData\.share \|\| shareData\.inheritedShare\)/)
   assert.match(popover, /accessData\?\.memberViews\?\.length/)
