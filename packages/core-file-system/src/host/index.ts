@@ -1305,13 +1305,22 @@ export class DatabaseService extends Service implements Database {
     return changed
   }
 
+  private effectiveScopeFilter(filter?: Record<string, unknown>): 'personal' | 'workspace' | 'shared' | '' {
+    const raw =
+      filter?.$scope === 'workspace' || filter?.$scope === 'personal' || filter?.$scope === 'shared'
+        ? filter.$scope
+        : ''
+    if (raw === 'workspace' && this.deviceWorkspace()) return ''
+    return raw
+  }
+
   private async listDataOverview(spec: CollectionSpec, filter?: Record<string, unknown>, page?: ListPage) {
     const schema = { ...schemaFor(spec), actions: this.overviewRowActions() }
     const { limit, offset } = clampPage(page?.limit, page?.offset)
     const q = page?.q ?? ''
     const sortField = page?.sortField?.trim() || 'title'
     const sortDir = page?.sortDir === 'desc' ? 'desc' : 'asc'
-    const scopeFilter = filter?.$scope === 'workspace' || filter?.$scope === 'personal' || filter?.$scope === 'shared' ? filter.$scope : ''
+    const scopeFilter = this.effectiveScopeFilter(filter)
     const columnKeys = listedColumnKeys(page?.columns, schema.labelField ?? 'title', schema)
     const liveFilter = filter ? { ...filter } : undefined
     if (liveFilter) {
@@ -1376,7 +1385,7 @@ export class DatabaseService extends Service implements Database {
     const spec = this.collection(normalizeCollectionPath(path))
     if (!spec || spec.path === DATA_COLLECTION_PATH || !parsed) return { groups: null }
     const liveFilter = { ...filter }
-    const scope = liveFilter.$scope
+    const scope = this.effectiveScopeFilter(liveFilter)
     const ids = asIds(liveFilter.$ids)
     const trash = liveFilter.deleted === true || liveFilter.trash === true
     delete liveFilter.$scope
@@ -1437,7 +1446,7 @@ export class DatabaseService extends Service implements Database {
     const schemaFilter = typeof filter?.tag === 'string' && filter.tag !== ''
       ? filter.tag
       : ''
-    const scopeFilter = filter?.$scope === 'workspace' || filter?.$scope === 'personal' || filter?.$scope === 'shared' ? filter.$scope : ''
+    const scopeFilter = this.effectiveScopeFilter(filter)
     const columnKeys = listedColumnKeys(page?.columns, schema.labelField ?? 'title', schema)
     const trash = filter?.deleted === true || filter?.trash === true
     const liveFilter = filter ? { ...filter } : undefined

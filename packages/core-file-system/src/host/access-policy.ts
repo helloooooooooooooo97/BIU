@@ -385,9 +385,11 @@ export class DatabaseAccessPolicy {
     }
     const id = String(row.id ?? '')
     if (this.host.deviceWorkspace()) {
+      // 本机空间没有云端多成员「空间/私人」边界，所有记录都归属当前本机空间；
+      // 保留 personal / shared 区分，同时让历史或跨端带来的 $scope: 'workspace' 视图正常命中本机全部数据。
       return this.hasPublicShare(collection, id)
-        ? { personal: false, workspace: false, shared: true }
-        : { personal: true, workspace: false, shared: false }
+        ? { personal: false, workspace: true, shared: true }
+        : { personal: true, workspace: true, shared: false }
     }
     const target = resolveScopeTarget(collection, id, row)
     const stored = this.ownershipOf(target.collection, target.id)

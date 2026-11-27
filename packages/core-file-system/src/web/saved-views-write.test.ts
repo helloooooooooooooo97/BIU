@@ -215,6 +215,84 @@ test('addEmptyView optimistically inserts, selects after 200 OK, and rolls back 
   }
 })
 
+test('addEmptyView does not inherit active view $scope catalogLocks into new empty views', async () => {
+  const env = setupBrowserGlobals()
+  const path = '/pages-no-scope-leak'
+  const legacyView: SavedView = {
+    id: 'v-legacy-ws',
+    name: '旧视图',
+    mode: 'table',
+    sortField: 'title',
+    sortDir: 'asc',
+    filters: { $scope: 'workspace' },
+    columns: ['title'],
+    rank: 0,
+  }
+  rememberViews(path, [legacyView])
+  const viewsRef = { current: [legacyView] }
+  let latestViews = [legacyView]
+  const posted: Array<{ upsert?: Array<SavedView> }> = []
+  const crud = createBrowserViewCrud({
+    sheet: false,
+    collectionPath: path,
+    title: '页面',
+    routeScope: null,
+    catalogLocks: { $scope: 'workspace' },
+    lockedFilters: {},
+    schemaDefaultKeys: ['title'],
+    views: latestViews,
+    viewsRef,
+    setViews: (next) => {
+      latestViews = typeof next === 'function' ? next(latestViews) : next
+    },
+    activeViewId: legacyView.id,
+    activeView: legacyView,
+    activeViewIdRef: { current: legacyView.id },
+    viewsWriteGenRef: { current: 0 },
+    setViewsSaveError: () => {},
+    setViewMenuOpen: () => {},
+    pageRef: { current: null },
+    mode: 'table',
+    sortField: 'title',
+    sortDir: 'asc',
+    sorts: [],
+    filterTree: emptyFilterGroup(),
+    columnKeys: ['title'],
+    columnWidths: {},
+    groupBy: '',
+    showTree: false,
+    wrapCells: false,
+    truncateCells: true,
+    freezeTitle: false,
+    query: '',
+    listedViews: (_p, user) => user,
+    paintListedViews: (p) => loadViews(p),
+    rankListedViews,
+    selectView: () => {},
+  })
+  const restoreFetch = mockFetch(async (input, init) => {
+    const url = String(input)
+    if (url.includes('/api/db/saved-views') && init?.method === 'POST') {
+      posted.push(JSON.parse(String(init?.body ?? '{}')))
+      return new Response('{"ok":true}', { status: 200 })
+    }
+    const created = posted[0]?.upsert?.[0]
+    return new Response(
+      JSON.stringify({ views: [legacyView, ...(created ? [{ ...created, rank: 1, revision: 1 }] : [])] }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    )
+  })
+  try {
+    crud.addEmptyView()
+    await new Promise((r) => setTimeout(r, 25))
+    assert.equal(posted.length, 1)
+    assert.deepEqual(posted[0]?.upsert?.[0]?.filters, {})
+  } finally {
+    restoreFetch()
+    env.restore()
+  }
+})
+
 test('commitViewName renames optimistically and rolls back if persist fails', async () => {
   const env = setupBrowserGlobals()
   const path = '/pages-behavior-rename'

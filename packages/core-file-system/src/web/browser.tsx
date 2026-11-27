@@ -2811,6 +2811,7 @@ export function CollectionBrowser({
     title,
     routeScope: effectiveRouteScope,
     catalogLocks,
+    lockedFilters,
     schemaDefaultKeys,
     views,
     viewsRef,
