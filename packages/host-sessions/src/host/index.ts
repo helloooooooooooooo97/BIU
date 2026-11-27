@@ -34,6 +34,7 @@ import {
 import { rebuildHealedEvents } from './session-heal.ts'
 import {
   formatUserMessagesForTitle,
+  lastUserMessages,
   sanitizeGeneratedTitle,
   sessionsCollection,
   TITLE_FROM_USER_PROMPT,
@@ -353,9 +354,21 @@ function forkSessionTitle(source: SessionRecord): string {
   return `${base.slice(0, Math.max(1, 80 - suffix.length))}${suffix}`
 }
 
+/** 判断会话当前标题是否仍是默认占位名（空、id 前缀或形象名），避免覆盖用户显式命名。 */
+export function hasDefaultSessionTitle(
+  record: Pick<SessionRecord, 'id' | 'config' | 'mascot'>,
+): boolean {
+  const current = record.config?.title?.trim() ?? ''
+  if (!current) return true
+  if (current === record.id.slice(0, 8)) return true
+  if (record.mascot && current === nameFromSessionMascot(record.mascot)) return true
+  return false
+}
+
 export class SessionsService extends Service {
   private cache = new Map<string, SessionRecord>()
   private defaultSessionPromise: Promise<string> | null = null
+  private autoRenaming = new Set<string>()
   /** 视图授权能不能看见这条会话。由数据库在启动时接上。 */
   viewAccess: (id: string, record?: { id?: unknown }) => boolean = () => false
 
@@ -552,6 +565,54 @@ export class SessionsService extends Service {
 
   async rename(id: string, title: string) {
     return this.patchConfig(id, { title })
+  }
+
+  /**
+   * 首个完整回复结束后自动触发 `/agents/<id>` 的 `rename` 动作起名：
+   * - 仅在首轮完成（completedTurns === 1）且标题仍为默认名时触发，不覆盖用户显式命名；
+   * - 优先走 `database.action('/agents/<id>', 'rename', { onlyIfUnchanged: true })`，复用同一套命名逻辑并自动广播列表刷新；
+   * - 失败静默忽略，绝不阻断或污染主对话。
+   */
+  async autoRenameOnFirstReply(id: string): Promise<string | null> {
+    if (this.autoRenaming.has(id)) return null
+    const record = await this.get(id)
+    if (!record) return null
+    const completedTurns = record.events.filter(
+      (event) => event.type === 'turn/end' && event.reason === 'complete',
+    ).length
+    if (completedTurns !== 1) return null
+    if (!hasDefaultSessionTitle(record)) return null
+    const userMessages = lastUserMessages(record.events)
+    if (!userMessages.length) return null
+
+    this.autoRenaming.add(id)
+    try {
+      const database = this.ctx.get('database') as
+        | {
+            action?: (
+              path: string,
+              actionId: string,
+              args?: Record<string, unknown>,
+            ) => Promise<{ result?: { title?: string; skipped?: boolean } }>
+          }
+        | undefined
+      if (database?.action) {
+        const res = await database.action(`/agents/${id}`, 'rename', { onlyIfUnchanged: true })
+        const title = String(res?.result?.title ?? '').trim()
+        return res?.result?.skipped ? null : (title || null)
+      }
+      const initialTitle = record.config?.title?.trim() ?? ''
+      const title = sanitizeGeneratedTitle(await this.suggestTitleFromUserMessages(id, userMessages))
+      if (!title) return null
+      const latest = await this.get(id)
+      if (!latest || (latest.config?.title?.trim() ?? '') !== initialTitle) return null
+      await this.rename(id, title)
+      return title
+    } catch {
+      return null
+    } finally {
+      this.autoRenaming.delete(id)
+    }
   }
 
   async suggestTitleFromUserMessages(id: string, messages: Array<{ text: string; ts: number }>) {

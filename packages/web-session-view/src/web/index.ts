@@ -328,6 +328,7 @@ export class SessionViewService extends Service {
   /** 切会话时画面还是上一段：ingest 不能往旧 events 上叠新 session */
   private holdPreviousThread = false
   private sessionsRefreshTimer: ReturnType<typeof setTimeout> | null = null
+  private sessionsRefreshForce = false
   private recordDetailTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(ctx: Context) {
@@ -359,7 +360,7 @@ export class SessionViewService extends Service {
     })
     this.ctx.effect(() => unregisterCache)
     if (typeof window !== 'undefined') {
-      const onLibrary = () => this.scheduleRefreshSessions()
+      const onLibrary = () => this.scheduleRefreshSessions({ refresh: true })
       window.addEventListener('fsdb:change', onLibrary)
       this.ctx.effect(() => () => window.removeEventListener('fsdb:change', onLibrary))
     }
@@ -857,11 +858,14 @@ export class SessionViewService extends Service {
     }, 80)
   }
 
-  private scheduleRefreshSessions() {
+  private scheduleRefreshSessions(opts?: { refresh?: boolean }) {
+    if (opts?.refresh) this.sessionsRefreshForce = true
     if (this.sessionsRefreshTimer != null) return
     this.sessionsRefreshTimer = setTimeout(() => {
       this.sessionsRefreshTimer = null
-      void this.refreshSessions()
+      const refresh = this.sessionsRefreshForce
+      this.sessionsRefreshForce = false
+      void this.refreshSessions(refresh ? { refresh: true } : undefined)
     }, 200)
   }
 

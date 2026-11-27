@@ -515,3 +515,69 @@ test('truncateToolResult keeps head+tail and clips middle when over limit', () =
   const exact = 'x'.repeat(MAX_TOOL_RESULT_CHARS)
   assert.equal(truncateToolResult(exact), exact)
 })
+
+test('first completed reply auto-invokes /agents rename action once and skips subsequent turns', async () => {
+  const { ctx, sessionId } = await spine()
+  const actions: Array<{ path: string; action: string; args?: Record<string, unknown> }> = []
+  let doneResolve: (() => void) | null = null
+  const done = new Promise<void>((resolve) => {
+    doneResolve = resolve
+  })
+  ctx.provide('database' as never)
+  ctx.set('database' as never, {
+    register: () => () => undefined,
+    action: async (path: string, actionId: string, args?: Record<string, unknown>) => {
+      actions.push({ path, action: actionId, args })
+      await ctx.sessions.rename(sessionId, '登录报错排查')
+      doneResolve?.()
+      return { kind: 'record', path, value: { id: sessionId, title: '登录报错排查' }, result: { ok: true, title: '登录报错排查' } }
+    },
+  } as never)
+
+  const loop = new AgentLoop(
+    ctx,
+    new ScriptedLlm([
+      { content: '我来帮你看登录报错', toolCalls: [] },
+      { content: '第二轮回复', toolCalls: [] },
+    ]),
+    sessionId,
+    new AbortController().signal,
+  )
+
+  await loop.run([{ kind: 'wake', text: '帮我排查登录接口 500 错误' }])
+  await done
+  assert.deepEqual(actions, [
+    { path: `/agents/${sessionId}`, action: 'rename', args: { onlyIfUnchanged: true } },
+  ])
+  assert.equal((await ctx.sessions.require(sessionId)).config?.title, '登录报错排查')
+
+  await loop.run([{ kind: 'wake', text: '再看看日志' }])
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  assert.equal(actions.length, 1)
+})
+
+test('first completed reply does not overwrite an explicit custom session title', async () => {
+  const { ctx } = await spine()
+  const custom = await ctx.sessions.create(undefined, { title: '专属架构师' })
+  const actions: unknown[] = []
+  ctx.provide('database' as never)
+  ctx.set('database' as never, {
+    register: () => () => undefined,
+    action: async (...args: unknown[]) => {
+      actions.push(args)
+      return { result: { ok: true, title: '不应覆盖' } }
+    },
+  } as never)
+
+  const loop = new AgentLoop(
+    ctx,
+    new ScriptedLlm([{ content: '好的', toolCalls: [] }]),
+    custom.id,
+    new AbortController().signal,
+  )
+
+  await loop.run([{ kind: 'wake', text: '帮我设计数据库' }])
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  assert.equal(actions.length, 0)
+  assert.equal((await ctx.sessions.require(custom.id)).config?.title, '专属架构师')
+})

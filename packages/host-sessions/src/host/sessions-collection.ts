@@ -299,14 +299,21 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec & { p
         placement: ['row', 'detail'],
         description:
           '根据用户发给这个代理的最近 100 条消息（带时间戳）给这个 agent 起一个准确的名字，并写回 title。不是给某条消息起标题。也不会把这次调用写进对话。',
-        run: async (id) => {
+        run: async (id, _record, args) => {
           if (!sessions.require) throw new Error('session rename unavailable')
           if (!sessions.suggestTitle) throw new Error('session title model unavailable')
           const record = await sessions.require(id)
+          const initialTitle = record.config?.title?.trim() ?? ''
           const userMessages = lastUserMessages(record.events, RENAME_USER_LIMIT)
           if (!userMessages.length) throw new Error('没有用户消息，无法生成标题')
           const title = sanitizeGeneratedTitle(await sessions.suggestTitle(id, userMessages))
           if (!title) throw new Error('模型没有给出标题')
+          if (args?.onlyIfUnchanged === true) {
+            const latest = await sessions.require(id)
+            if ((latest.config?.title?.trim() ?? '') !== initialTitle) {
+              return { ok: true, sessionId: id, title: latest.config?.title ?? '', skipped: true }
+            }
+          }
           await sessions.rename(id, title)
           return { ok: true, sessionId: id, title }
         },
