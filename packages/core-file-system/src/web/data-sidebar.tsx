@@ -9,8 +9,8 @@ import { SidebarFold } from '@biu/biu-ui/sidebar-fold'
 import {
   ChevronDoubleLeftIcon,
   ChevronRightIcon,
-  LinkIcon,
   LockClosedIcon,
+  MagnifyingGlassIcon,
   PlusIcon,
   RectangleStackIcon,
   ShieldCheckIcon,
@@ -941,7 +941,7 @@ export const DataSidebar = memo(function DataSidebar({
       normalized === TRASH_COLLECTION_PATH
     ) {
       kind = 'derived'
-      Icon = LinkIcon
+      Icon = MagnifyingGlassIcon
       tip = '衍生数据 · 权限跟随源记录'
     } else {
       kind = 'acl'

@@ -110,7 +110,7 @@ test('private records grant workspace members and member views from unified sear
   const sidebarSrc = readFileSync(resolve(import.meta.dirname, './data-sidebar.tsx'), 'utf8')
   assert.match(sidebarSrc, /sidebar-collection-kind-/)
   assert.match(sidebarSrc, /ShieldCheckIcon/)
-  assert.match(sidebarSrc, /LinkIcon/)
+  assert.match(sidebarSrc, /MagnifyingGlassIcon/)
   assert.match(sidebarSrc, /纯私人数据 · 仅自己可见/)
   assert.match(src, /调整 \$\{row\.name\} 的权限/)
   assert.match(src, /renderShareAvatar\(row\.id \|\| row\.name, row\.avatar, \{ extraClass: 'is-sm', size: 26 \}\)/)
