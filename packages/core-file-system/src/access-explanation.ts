@@ -1,10 +1,12 @@
-import type { DataScopeName, ViewGrantRole } from './view-access.ts'
+export type DataScopeName = 'personal' | 'workspace' | 'shared'
+export type ViewGrantRole = 'viewer' | 'commenter' | 'editor' | 'manager' | 'owner'
 
 export type AccessExplanation = {
   builtin?: boolean
   localOnly: boolean
   visibility: {
     scope: DataScopeName
+    hasExternal?: boolean
     summary: string
   }
   inheritance: {
@@ -20,14 +22,14 @@ export type AccessExplanation = {
       id: string
       sourceRecordId: string
       sourceTitle: string
-      subjectType: 'account' | 'group' | 'workspace_members'
+      subjectType: 'account' | 'member_view' | 'workspace_members'
       subjectName: string
       audienceKind: 'internal' | 'external'
       role: ViewGrantRole
     }>
     direct: Array<{
       id: string
-      subjectType: 'account' | 'group' | 'workspace_members'
+      subjectType: 'account' | 'member_view' | 'workspace_members'
       subjectId: string
       subjectName: string
       audienceKind: 'internal' | 'external'
@@ -66,7 +68,7 @@ export type RoleChainInput = {
   title: string
   detail: string
   role: string
-  source?: 'ownership' | 'direct-grant' | 'group-grant' | 'workspace-default' | 'inherited' | 'legacy'
+  source?: 'ownership' | 'direct-grant' | 'member-view-grant' | 'workspace-default' | 'inherited' | 'legacy'
 }
 
 export type AncestorAccessInput = {
@@ -76,7 +78,7 @@ export type AncestorAccessInput = {
   scope: DataScopeName
   ownerId: string
   people: Array<{ id: string; name: string; role: string; memberKind: 'member' | 'external' | 'guest' }>
-  groups: Array<{ id: string; name: string; role: string }>
+  memberViews?: Array<{ id: string; name: string; role: string }>
 }
 
 export type PublicShareInput = {
@@ -100,7 +102,7 @@ export type BuildAccessExplanationInput = {
     scope: DataScopeName
     ownerId: string
     people: Array<{ id: string; name: string; role: string; memberKind: 'member' | 'external' | 'guest' }>
-    groups: Array<{ id: string; name: string; role: string }>
+    memberViews?: Array<{ id: string; name: string; role: string }>
     roleChain: RoleChainInput[]
     inheritance?: {
       mode: 'inherit' | 'custom'
@@ -164,7 +166,6 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
 
   const storedScope: DataScopeName = input.localOnly ? 'personal' : (input.access?.scope ?? 'personal')
 
-  // 1. 公开/局域网链接命中
   const publicLinks: AccessExplanation['audience']['publicLinks'] = []
   const seenLinks = new Set<string>()
   for (const share of input.publicShares ?? []) {
@@ -183,7 +184,6 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
     }
   }
 
-  // 2. 本机空间直接返回简洁结果
   if (input.localOnly) {
     const shared = publicLinks.length > 0
     const role = input.fallbackRole ?? 'owner'
@@ -192,6 +192,7 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
       localOnly: true,
       visibility: {
         scope: shared ? 'shared' : 'personal',
+        hasExternal: shared,
         summary: shared ? '已开启局域网分享' : '仅本机可见',
       },
       inheritance: { mode: 'custom', ancestors: [] },
@@ -215,7 +216,6 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
     }
   }
 
-  // 3. 云端空间：父子继承链
   const access = input.access
   const rawAncestors = access?.inheritance?.ancestors ?? []
   const inheritanceMode = access?.inheritance?.mode ?? 'custom'
@@ -243,16 +243,16 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
           role: normalizeRole(person.role),
         })
       }
-      for (const group of ancestor.groups) {
+      for (const mv of ancestor.memberViews ?? []) {
         addedFromAncestor = true
         inheritedAudience.push({
-          id: `inh:${ancestor.recordId}:group:${group.id}`,
+          id: `inh:${ancestor.recordId}:member_view:${mv.id}`,
           sourceRecordId: ancestor.recordId,
           sourceTitle,
-          subjectType: 'group',
-          subjectName: group.name,
+          subjectType: 'member_view',
+          subjectName: mv.name,
           audienceKind: 'internal',
-          role: normalizeRole(group.role),
+          role: normalizeRole(mv.role),
         })
       }
       if (!addedFromAncestor && ancestor.scope === 'workspace') {
@@ -269,7 +269,6 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
     }
   }
 
-  // 4. 本条直接授权（排除创建者本人）
   const ownerId = access?.ownerId ?? ''
   const directAudience: AccessExplanation['audience']['direct'] = []
   for (const person of access?.people ?? []) {
@@ -283,17 +282,17 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
       role: normalizeRole(person.role),
     })
   }
-  for (const group of access?.groups ?? []) {
+  for (const mv of access?.memberViews ?? []) {
     directAudience.push({
-      id: `direct:group:${group.id}`,
-      subjectType: 'group',
-      subjectId: group.id,
-      subjectName: group.name,
+      id: `direct:member_view:${mv.id}`,
+      subjectType: 'member_view',
+      subjectId: mv.id,
+      subjectName: mv.name,
       audienceKind: 'internal',
-      role: normalizeRole(group.role),
+      role: normalizeRole(mv.role),
     })
   }
-  if (!directAudience.length && inheritanceMode !== 'inherit' && storedScope === 'workspace') {
+  if (inheritanceMode !== 'inherit' && storedScope === 'workspace') {
     directAudience.push({
       id: 'direct:workspace_members',
       subjectType: 'workspace_members',
@@ -304,37 +303,35 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
     })
   }
 
-  // 5. 可见范围结论
-  const hasExternal =
-    storedScope === 'shared'
-    || inheritedAudience.some((item) => item.audienceKind === 'external')
+  // Notion 对齐三态内部范围（空间 / 共享 / 私人）+ 正交外部标记（外链 / 外部协作者）
+  const hasExternalCollaborator =
+    inheritedAudience.some((item) => item.audienceKind === 'external')
     || directAudience.some((item) => item.audienceKind === 'external')
   const hasPublicLink = publicLinks.length > 0
-  const hasInternal =
-    storedScope === 'workspace'
-    || inheritedAudience.some((item) => item.audienceKind === 'internal')
-    || directAudience.some((item) => item.audienceKind === 'internal')
-
-  const visibilityScope: DataScopeName = hasPublicLink || hasExternal
-    ? 'shared'
-    : hasInternal
-      ? 'workspace'
+  const hasExternal = hasPublicLink || hasExternalCollaborator
+  const hasAnyCollaborator =
+    inheritedAudience.some((item) => item.subjectType !== 'workspace_members')
+    || directAudience.some((item) => item.subjectType !== 'workspace_members')
+  const visibilityScope: DataScopeName = storedScope === 'workspace'
+    ? 'workspace'
+    : (storedScope === 'shared' || hasAnyCollaborator)
+      ? 'shared'
       : 'personal'
 
-  const hasAllMembers = [...inheritedAudience, ...directAudience].some(
-    (item) => item.subjectType === 'workspace_members',
-  )
-  const visibilitySummary = visibilityScope === 'shared'
-    ? (hasPublicLink && hasExternal
-      ? '已对外开放（公开链接与外部协作者）'
-      : hasPublicLink
-        ? '已开启公开链接'
-        : '已对外部协作者开放')
-    : visibilityScope === 'workspace'
-      ? (hasAllMembers ? '全部空间成员可见' : '空间内指定成员可见')
+  const baseSummary = visibilityScope === 'workspace'
+    ? '全部空间成员可见'
+    : visibilityScope === 'shared'
+      ? '已共享给指定协作者'
       : '仅创建者自己可见'
+  const externalSuffix = hasPublicLink && hasExternalCollaborator
+    ? '（含公开链接与外部协作者）'
+    : hasPublicLink
+      ? '（已开启公开链接）'
+      : hasExternalCollaborator
+        ? '（含外部协作者）'
+        : ''
+  const visibilitySummary = `${baseSummary}${externalSuffix}`
 
-  // 6. 我的权限路径（严格只含命中当前用户的路径）
   const myPaths: AccessExplanation['myAccess']['paths'] = []
   const roleChain = access?.roleChain ?? []
   if (roleChain.length > 1) {
@@ -413,6 +410,7 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
     localOnly: false,
     visibility: {
       scope: visibilityScope,
+      hasExternal,
       summary: visibilitySummary,
     },
     inheritance: {

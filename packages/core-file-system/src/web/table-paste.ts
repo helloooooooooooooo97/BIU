@@ -267,7 +267,7 @@ export function buildTableClipboardPayload(
 }
 
 export function isPasteColumnWritable(col: TablePasteColumn, cellFieldWritable: (field: FieldSpec) => boolean): boolean {
-  if (!col.key || col.key === 'actions' || col.key === 'shareScope' || col.key === 'shareRole' || col.key === 'ownerTable') return false
+  if (!col.key || col.key === 'actions' || col.key === 'shareScope' || col.key === 'shareRole') return false
   if (isViewCatalogField(col.key)) return false
   if (col.field.computed) return false
   if (!cellFieldWritable(col.field)) return false

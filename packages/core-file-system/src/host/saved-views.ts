@@ -4,13 +4,13 @@ import { dirname } from 'node:path'
 import { openAndMigrateBiu } from '@biu/host-plugin-loader/data-dir'
 import type { CollectionInfo, CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { normalizeSchemaValue, recordBuiltinValues } from '@biu/type-file-system'
-import { builtinAllView, builtinAllViewId, defaultTableViewId, isBuiltinAllViewId, isBuiltinCatalogViewId, isNonPersonalView, scopedCollectionName, stubBuiltinCatalogView } from '../catalog-views.ts'
+import { builtinAllView, builtinAllViewId, isBuiltinAllViewId, isBuiltinCatalogViewId, stubBuiltinCatalogView } from '../catalog-views.ts'
 import { normalizeColumnWidths, normalizeGroupConfig, normalizePageSize, normalizeViewProtection, normalizeViewScope, parseViewColumns, type SavedView } from '../shared/saved-view.ts'
 import { normalizeColumnSummaries } from '../shared/column-summary.ts'
 import { normalizeColumnViews } from '../shared/column-sandbox-model.ts'
 import { normalizeTableSandboxViews } from '../shared/table-sandbox-model.ts'
 import { isViewModeId } from '../shared/fields.ts'
-import { DATA_COLLECTION_PATH, VIEWS_COLLECTION_PATH, isIndexCollection, normalizeCollectionPath, tableModeFor } from '../paths.ts'
+import { DATA_COLLECTION_PATH, VIEWS_COLLECTION_PATH, WORKSPACE_MEMBERS_COLLECTION_PATH, isIndexCollection, normalizeCollectionPath } from '../paths.ts'
 import {
   countFilterRules,
   flatFiltersToTree,
@@ -32,7 +32,8 @@ export type StoredView = Partial<SavedView> & Pick<SavedView, 'id' | 'name'> & {
 export type PolicyViewGuard = {
   workspaceOwner?(workspaceId: string): string | null
   isWorkspaceAdmin?(workspaceId: string, accountId: string): boolean
-  sharedOwnersFor?(workspaceId: string, collection: string, accountId: string): string[]
+  memberViewGrantCount?(workspaceId: string, viewId: string): number
+  onMemberViewChanged?(workspaceId: string, viewId: string): void
   canSeeView?(workspaceId: string, collection: string, view: StoredView, accountId: string): boolean
   canModifyView?(workspaceId: string, collection: string, view: StoredView, accountId: string): boolean
   canRemoveView?(workspaceId: string, collection: string, view: StoredView, accountId: string): boolean
@@ -43,23 +44,8 @@ export type PolicyViewGuard = {
 
 type ViewRow = { workspace_id?: string; collection: string; view_id?: string; payload_json: string }
 
-/** 仅 /data 是聚合表；K+1 业务集合（/pages、/tasks 等）彻底移除聚合视图。 */
-function isLegacyKPlus1AggregationView(
-  collection: string,
-  viewId: string,
-  view?: { ownerTable?: string; filters?: Record<string, string> },
-): boolean {
-  const path = normalizeCollectionPath(collection)
-  if (path === DATA_COLLECTION_PATH || tableModeFor(path) !== 'k-plus-1') return false
-  if (isBuiltinAllViewId(viewId)) return true
-  if (view?.ownerTable === 'all') return true
-  if (view?.filters?.$scope === 'shared' && (!view.ownerTable || view.ownerTable === 'all')) return true
-  return false
-}
-
-function collectionHasBuiltinAllView(collection: string): boolean {
-  const path = normalizeCollectionPath(collection)
-  return path === DATA_COLLECTION_PATH || tableModeFor(path) !== 'k-plus-1'
+function collectionHasBuiltinAllView(_collection: string): boolean {
+  return true
 }
 
 function bucketKey(workspaceId: string, collectionPath: string) {
@@ -95,7 +81,7 @@ export class SavedViewsStore {
   }
 
   /** 内置聚合视图（builtin-all:*、builtin:*）按用户隔离存储；自定义 /data 视图拥有独立 id，按 protection 决定可见性。 */
-  private isPerUserPrivateView(viewId: string, _view?: { ownerTable?: string }, _path = ''): boolean {
+  private isPerUserPrivateView(viewId: string, _view?: StoredView, _path = ''): boolean {
     return isBuiltinAllViewId(viewId) || isBuiltinCatalogViewId(viewId)
   }
 
@@ -111,7 +97,6 @@ export class SavedViewsStore {
       return {
         ...view,
         ...(owner ? { createdBy: owner } : {}),
-        ownerTable: 'all',
         scope: 'personal',
         protection: 'personal',
       }
@@ -123,6 +108,34 @@ export class SavedViewsStore {
     return { ...view, createdBy: owner, scope: 'workspace' }
   }
 
+  /** 查找 `/workspace-members` 下的某个存储视图（用于动态成员视图匹配与瞬时展开）。 */
+  getMemberView(workspaceId: string, viewId: string): StoredView | null {
+    const id = viewId.trim()
+    if (!id) return null
+    const list = this.byPath.get(bucketKey(workspaceId, WORKSPACE_MEMBERS_COLLECTION_PATH)) ?? []
+    const hit = list.find((v) => String(v.id) === id)
+    if (hit) return hit
+    if (workspaceId) {
+      const globalList = this.byPath.get(bucketKey('', WORKSPACE_MEMBERS_COLLECTION_PATH)) ?? []
+      return globalList.find((v) => String(v.id) === id) ?? null
+    }
+    return null
+  }
+
+  /** 判断指定 `/workspace-members` 视图是否为管理员锁定视图（可作为动态成员组授权）。 */
+  isLockedMemberView(workspaceId: string, viewId: string): boolean {
+    const view = this.getMemberView(workspaceId, viewId)
+    return Boolean(view && view.protection === 'locked')
+  }
+
+  /** 列出当前用户可见的所有 `/workspace-members` 视图（区分管理员锁定动态组与普通快捷名单）。 */
+  listMemberViews(workspaceId: string, accountId: string): StoredView[] {
+    const list = this.byPath.get(bucketKey(workspaceId, WORKSPACE_MEMBERS_COLLECTION_PATH)) ?? []
+    return list.filter(
+      (v) => !isBuiltinAllViewId(String(v.id)) && this.canAccountSeeView(workspaceId, WORKSPACE_MEMBERS_COLLECTION_PATH, v, accountId),
+    )
+  }
+
   private assertCanModifyView(
     workspaceId: string,
     path: string,
@@ -131,6 +144,20 @@ export class SavedViewsStore {
     accountId: string,
   ) {
     const viewId = String(prev?.id ?? next.id ?? '')
+    if (path === WORKSPACE_MEMBERS_COLLECTION_PATH && !this.isBuiltinView(viewId, prev ?? next)) {
+      const isAdmin = !accountId || !this.policyGuard?.isWorkspaceAdmin
+        ? true
+        : this.policyGuard.isWorkspaceAdmin(workspaceId, accountId)
+      if ((next.protection === 'locked' || prev?.protection === 'locked') && !isAdmin) {
+        throw new Error('permission denied: MEMBER_LOCKED_VIEW_ADMIN_ONLY')
+      }
+      if (prev?.protection === 'locked' && next.protection !== 'locked') {
+        const refCount = this.policyGuard?.memberViewGrantCount?.(workspaceId, viewId) ?? 0
+        if (refCount > 0) {
+          throw new Error(`MEMBER_VIEW_REFERENCED: 该锁定成员视图正被 ${refCount} 条记录动态引用，请先固化为名单或取消关联授权`)
+        }
+      }
+    }
     if (this.isPerUserPrivateView(viewId, prev ?? next)) {
       if (prev?.createdBy && accountId && prev.createdBy !== accountId) {
         throw new Error('permission denied: VIEW_OWNER_ONLY')
@@ -162,6 +189,18 @@ export class SavedViewsStore {
     accountId: string,
     prev?: StoredView,
   ) {
+    if (path === WORKSPACE_MEMBERS_COLLECTION_PATH && prev?.protection === 'locked') {
+      const isAdmin = !accountId || !this.policyGuard?.isWorkspaceAdmin
+        ? true
+        : this.policyGuard.isWorkspaceAdmin(workspaceId, accountId)
+      if (!isAdmin) {
+        throw new Error('permission denied: MEMBER_LOCKED_VIEW_ADMIN_ONLY')
+      }
+      const refCount = this.policyGuard?.memberViewGrantCount?.(workspaceId, viewId) ?? 0
+      if (refCount > 0) {
+        throw new Error(`MEMBER_VIEW_REFERENCED: 该锁定成员视图正被 ${refCount} 条记录动态引用，请先固化为名单或取消关联授权`)
+      }
+    }
     if (this.isPerUserPrivateView(viewId, prev)) {
       if (prev?.createdBy && accountId && prev.createdBy !== accountId) {
         throw new Error('permission denied: VIEW_OWNER_ONLY')
@@ -224,23 +263,19 @@ export class SavedViewsStore {
       const id = String(parsed.id ?? '').trim()
       const name = String(parsed.name ?? id).trim()
       if (!id) continue
-      // 物理清理 K+1 业务集合下历史遗留的聚合视图（仅 /data 为聚合表）
-      if (isLegacyKPlus1AggregationView(collection, id, parsed)) {
-        const storageId = String(row.view_id ?? '').trim() || id
-        staleRows.push({ workspaceId, collection: row.collection, viewId: storageId })
-        continue
-      }
       const key = bucketKey(workspaceId, collection)
       const list = this.byPath.get(key) ?? []
       if (collection === DATA_COLLECTION_PATH) {
         const isBuiltinData = isBuiltinAllViewId(id) || isBuiltinCatalogViewId(id)
         const storedProtection = isBuiltinData
           ? 'personal'
-          : normalizeViewProtection(parsed.protection, normalizeViewScope(parsed.scope), 'all')
+          : normalizeViewProtection(parsed.protection, normalizeViewScope(parsed.scope))
         const storedScope = storedProtection === 'personal' ? 'personal' : 'workspace'
-        list.push({ ...parsed, id, name, ownerTable: 'all', scope: storedScope, protection: storedProtection })
+        list.push({ ...parsed, id, name, scope: storedScope, protection: storedProtection })
       } else {
-        list.push({ ...parsed, id, name })
+        const cleaned = { ...parsed, id, name }
+        delete (cleaned as { ownerTable?: unknown }).ownerTable
+        list.push(cleaned)
       }
       this.byPath.set(key, list)
     }
@@ -304,7 +339,6 @@ export class SavedViewsStore {
   }
 
   private canAccountSeeView(workspaceId: string, path: string, view: StoredView, accountId: string): boolean {
-    if (isLegacyKPlus1AggregationView(path, String(view.id), view)) return false
     if (isIndexCollection(path)) return view.createdBy === accountId
     if (this.isPerUserPrivateView(String(view.id), view, path)) {
       return !accountId || view.createdBy === accountId
@@ -358,7 +392,7 @@ export class SavedViewsStore {
     const isForeign = (view: StoredView) => {
       if (!accountId || !view.createdBy || view.createdBy === accountId) return false
       if (indexScoped || this.isPerUserPrivateView(String(view.id), view, path)) return true
-      const protection = normalizeViewProtection(view.protection, normalizeViewScope(view.scope), view.ownerTable)
+      const protection = normalizeViewProtection(view.protection, normalizeViewScope(view.scope))
       if (protection === 'personal') return true
       return !this.canAccountSeeView(workspaceId, path, view, accountId)
     }
@@ -407,86 +441,24 @@ export class SavedViewsStore {
     )
     this.byPath.set(key, merged)
     for (const item of removedRows) this.policyGuard?.onRemoved?.(workspaceId, path, item.id)
-  }
-
-  /** 保底约束：每张具体多维表（空间表 / 个人表）至少保留 1 个非私有视图（public 或 locked）。 */
-  private assertTableKeepsPublicView(path: string, prev: StoredView[], next: StoredView[]) {
-    if (tableModeFor(path) !== 'k-plus-1') return
-    const concreteTables = new Set<string>()
-    for (const view of prev) {
-      const ot = view.ownerTable?.trim()
-      if (ot && ot !== 'all' && isNonPersonalView(view)) concreteTables.add(ot)
-    }
-    for (const ot of concreteTables) {
-      const remaining = next.filter((view) => view.ownerTable?.trim() === ot && isNonPersonalView(view))
-      if (remaining.length < 1) {
-        throw new Error('每张表至少保留一个公共视图')
-      }
+    if (path === WORKSPACE_MEMBERS_COLLECTION_PATH) {
+      for (const view of incomingList) this.policyGuard?.onMemberViewChanged?.(workspaceId, String(view.id))
+      for (const item of removedRows) this.policyGuard?.onMemberViewChanged?.(workspaceId, item.id)
     }
   }
 
-  /** 为 K+1 具体多维表（空间表 + 当前用户个人表）确保至少存在 1 个普通公共视图（无 builtin 特殊概念）。 */
+  private assertTableKeepsPublicView(_path: string, _prev: StoredView[], _next: StoredView[]) {
+    // 单逻辑表下每张集合始终保留内置顶层视图，不再维护 K+1 分表保底约束
+  }
+
   private ensureDefaultTableViews(
     workspaceId: string,
     path: string,
-    table: CollectionInfo,
-    label: string,
-    accountId: string,
+    _table: CollectionInfo,
+    _label: string,
+    _accountId: string,
   ): StoredView[] {
-    const key = bucketKey(workspaceId, path)
-    const existing = this.byPath.get(key) ?? []
-    if (tableModeFor(path) !== 'k-plus-1') return existing
-    const stored = existing.slice()
-    const created: StoredView[] = []
-    const now = Date.now()
-    const seedTable = (ownerTable: string, scopeLabel: 'workspace' | 'personal', creatorId: string) => {
-      const hasPublic = stored.some((v) => v.ownerTable === ownerTable && isNonPersonalView(v))
-      if (hasPublic) return
-      const id = defaultTableViewId(ownerTable, path)
-      if (stored.some((v) => String(v.id) === id)) return
-      const view: StoredView = {
-        id,
-        name: scopedCollectionName({ path, label, view: table.view }, scopeLabel),
-        mode: 'table',
-        ownerTable,
-        scope: 'workspace',
-        protection: 'public',
-        ...(creatorId ? { createdBy: creatorId } : {}),
-        sortField: 'updatedAt',
-        sortDir: 'desc',
-        sorts: [{ id: 's:updatedAt', field: 'updatedAt', dir: 'desc' }],
-        query: '',
-        groupBy: '',
-        columns: [],
-        filters: {},
-        tree: false,
-        wrap: false,
-        truncate: true,
-        rowNumbers: false,
-        freezeTitle: false,
-        builtin: false,
-        rank: 0,
-        createdAt: now,
-        updatedAt: now,
-      }
-      stored.push(view)
-      created.push(view)
-    }
-    const wsOwner = this.policyGuard?.workspaceOwner?.(workspaceId)?.trim() || accountId
-    seedTable('workspace', 'workspace', wsOwner)
-    if (accountId) {
-      seedTable(`account:${accountId}`, 'personal', accountId)
-      for (const sharedOwnerId of this.policyGuard?.sharedOwnersFor?.(workspaceId, path, accountId) ?? []) {
-        if (sharedOwnerId && sharedOwnerId !== accountId) {
-          seedTable(`account:${sharedOwnerId}`, 'personal', sharedOwnerId)
-        }
-      }
-    }
-    if (created.length > 0) {
-      this.persistDelta(path, created, [], workspaceId)
-      this.byPath.set(key, stored)
-    }
-    return stored
+    return this.byPath.get(bucketKey(workspaceId, path)) ?? []
   }
 
   /** 按差异写视图：只动当前账号本次变更的条目；先落盘 SQLite 再更新内存，返回权威视图列表。 */
@@ -528,8 +500,6 @@ export class SavedViewsStore {
       const { baseUpdatedAt: rawBaseAt, ...incoming } = rawIncoming
       const id = String(incoming.id ?? '').trim()
       if (!id) continue
-      // K+1 业务集合不再允许写入聚合视图（仅 /data 为聚合表）
-      if (isLegacyKPlus1AggregationView(path, id, incoming)) continue
       const isWsAdmin = !accountId || !this.policyGuard?.isWorkspaceAdmin
         ? true
         : this.policyGuard.isWorkspaceAdmin(workspaceId, accountId)
@@ -539,15 +509,16 @@ export class SavedViewsStore {
         (incoming.protection === 'public' || incoming.protection === 'locked' || incoming.protection === 'personal')
           ? incoming.protection
           : 'personal'
+      const cleanedIncoming: StoredView = { ...incoming }
+      delete (cleanedIncoming as { ownerTable?: unknown }).ownerTable
       const normalizedIncoming =
         path === DATA_COLLECTION_PATH
           ? {
-              ...incoming,
-              ownerTable: 'all',
+              ...cleanedIncoming,
               protection: requestedDataProtection,
               scope: requestedDataProtection === 'personal' ? ('personal' as const) : ('workspace' as const),
             }
-          : incoming
+          : cleanedIncoming
       const perUser = indexScoped || this.isPerUserPrivateView(id, normalizedIncoming, path)
       const prevView = prev.find((view) =>
         perUser
@@ -596,6 +567,10 @@ export class SavedViewsStore {
     this.byPath.set(key, next)
     for (const created of createdViews) this.policyGuard?.onCreated?.(workspaceId, path, created, accountId)
     for (const item of removedRows) this.policyGuard?.onRemoved?.(workspaceId, path, item.id)
+    if (path === WORKSPACE_MEMBERS_COLLECTION_PATH) {
+      for (const view of upsertedViews) this.policyGuard?.onMemberViewChanged?.(workspaceId, String(view.id))
+      for (const item of removedRows) this.policyGuard?.onMemberViewChanged?.(workspaceId, item.id)
+    }
     return {
       upserted: upsertedViews,
       removed: removedRows.map((item) => item.id),
@@ -630,7 +605,6 @@ export class SavedViewsStore {
           stored.find((view) => String(view.id) === all.id && (!accountId || view.createdBy === accountId)) ?? {
             ...all,
             ...(accountId ? { createdBy: accountId } : {}),
-            ownerTable: 'all',
             scope: 'personal',
             protection: 'personal',
           }
@@ -670,25 +644,10 @@ export class SavedViewsStore {
     if (views.some((view) => view.id === id)) throw new Error(`view exists: ${id}`)
     const name = uniqueViewName(String(fields.title ?? fields.name ?? '新视图').trim() || '新视图', views)
     const now = Date.now()
-    const rawOwnerTable = typeof fields.ownerTable === 'string' ? fields.ownerTable.trim() : ''
-    let resolvedOwnerTable =
-      tablePath === DATA_COLLECTION_PATH
-        ? 'all'
-        : rawOwnerTable === 'all' && tableModeFor(tablePath) === 'k-plus-1'
-          ? ''
-          : rawOwnerTable || undefined
-    const wantsPersonal = fields.scope === 'personal' || fields.protection === 'personal'
-    if (tablePath !== DATA_COLLECTION_PATH && accountId && !resolvedOwnerTable && wantsPersonal) {
-      resolvedOwnerTable = `account:${accountId}`
-    }
-    if (tablePath !== DATA_COLLECTION_PATH && tableModeFor(tablePath) === 'k-plus-1' && !resolvedOwnerTable) {
-      resolvedOwnerTable = 'workspace'
-    }
     const base: StoredView = {
       id,
       name,
       mode: 'table',
-      ...(resolvedOwnerTable ? { ownerTable: resolvedOwnerTable } : {}),
       query: '',
       groupBy: '',
       columns: [],
@@ -716,7 +675,6 @@ export class SavedViewsStore {
       base,
       {
         ...fields,
-        ...(resolvedOwnerTable ? { ownerTable: resolvedOwnerTable } : {}),
         title: name,
         filters: fields.filters ?? {},
         sorts: fields.sorts,
@@ -724,14 +682,13 @@ export class SavedViewsStore {
       },
       allowAllPublic,
     )
-    // 非表主人在他人个人表下创建视图时，不允许设为锁定视图
-    if (accountId && view.ownerTable?.startsWith('account:') && view.ownerTable !== `account:${accountId}` && view.protection === 'locked') {
-      view.protection = 'personal'
-      view.scope = 'personal'
-    }
+    this.assertCanModifyView(workspaceId, tablePath, undefined, view, accountId)
     this.persistDelta(tablePath, [view], [], workspaceId)
     this.byPath.set(key, [...views, view])
     this.policyGuard?.onCreated?.(workspaceId, tablePath, view, accountId)
+    if (tablePath === WORKSPACE_MEMBERS_COLLECTION_PATH) {
+      this.policyGuard?.onMemberViewChanged?.(workspaceId, view.id)
+    }
     return asRecord(tablePath, label, view, table?.view?.icon)
   }
 
@@ -755,6 +712,9 @@ export class SavedViewsStore {
       this.persistDelta(path, [], [this.storageViewId(targetId, hit.createdBy)], workspaceId)
       this.byPath.set(key, remaining)
       this.policyGuard?.onRemoved?.(workspaceId, path, targetId)
+      if (path === WORKSPACE_MEMBERS_COLLECTION_PATH) {
+        this.policyGuard?.onMemberViewChanged?.(workspaceId, targetId)
+      }
       return true
     }
     throw new Error(`unknown view: ${id}`)
@@ -785,7 +745,6 @@ export class SavedViewsStore {
           ? {
               ...builtinAllView({ path, label: tableLabelOf(table, path), view: table?.view }),
               ...(accountId ? { createdBy: accountId } : {}),
-              ownerTable: 'all',
               scope: 'personal' as const,
               protection: 'personal' as const,
             }
@@ -794,7 +753,6 @@ export class SavedViewsStore {
                 ...(stubBuiltinCatalogView(viewId) ?? {}),
                 name: tableLabelOf(catalogTargetTable, catalogTargetPath),
                 ...(accountId ? { createdBy: accountId } : {}),
-                ownerTable: 'all',
                 scope: 'personal' as const,
                 protection: 'personal' as const,
               }
@@ -814,6 +772,9 @@ export class SavedViewsStore {
       this.assertTableKeepsPublicView(path, views, nextViews)
       this.persistDelta(path, [next], [], workspaceId)
       this.byPath.set(key, nextViews)
+      if (path === WORKSPACE_MEMBERS_COLLECTION_PATH) {
+        this.policyGuard?.onMemberViewChanged?.(workspaceId, next.id)
+      }
       return asRecord(path, tableLabelOf(table, path), next, table?.view?.icon)
     }
     throw new Error(`unknown view: ${id}`)
@@ -827,14 +788,10 @@ function parseViewRowId(id: string) {
 }
 
 /** 统一归一化 create / write 传入的视图字段。 */
-function applyViewPatch(cur: StoredView, patch: Record<string, unknown>, allowAllPublic = false): StoredView {
-  const lockedOwnerTable = cur.ownerTable?.trim() || (typeof patch.ownerTable === 'string' && patch.ownerTable.trim() ? patch.ownerTable.trim() : undefined)
-  const isCrossTableAll = lockedOwnerTable === 'all'
-  const forceAllPersonal = isCrossTableAll && (!allowAllPublic || isBuiltinAllViewId(cur.id) || isBuiltinCatalogViewId(cur.id))
-  const nextScope = forceAllPersonal ? 'personal' : normalizeViewScope(patch.scope)
-  const nextProtection = forceAllPersonal
-    ? 'personal'
-    : normalizeViewProtection(patch.protection)
+function applyViewPatch(cur: StoredView, patch: Record<string, unknown>, _allowAllPublic = false): StoredView {
+  const isBuiltinPersonal = isBuiltinAllViewId(cur.id) || isBuiltinCatalogViewId(cur.id)
+  const nextScope = isBuiltinPersonal ? 'personal' : normalizeViewScope(patch.scope)
+  const nextProtection = isBuiltinPersonal ? 'personal' : normalizeViewProtection(patch.protection)
   const prevUpdatedAt = Number(cur.updatedAt) || 0
   const next: StoredView = {
     ...cur,
@@ -843,7 +800,6 @@ function applyViewPatch(cur: StoredView, patch: Record<string, unknown>, allowAl
     ...(typeof patch.mode === 'string' && isViewModeId(patch.mode) ? { mode: patch.mode } : {}),
     ...(nextScope ? { scope: nextScope } : {}),
     ...(nextProtection ? { protection: nextProtection } : {}),
-    ...(lockedOwnerTable ? { ownerTable: lockedOwnerTable } : {}),
     ...(typeof patch.sortField === 'string' ? { sortField: patch.sortField } : {}),
     ...(patch.sortDir === 'asc' || patch.sortDir === 'desc' ? { sortDir: patch.sortDir } : {}),
     ...(typeof patch.query === 'string' ? { query: patch.query } : {}),
@@ -864,12 +820,13 @@ function applyViewPatch(cur: StoredView, patch: Record<string, unknown>, allowAl
     updatedAt: Math.max(Date.now(), prevUpdatedAt + 1),
     createdAt: Number(cur.createdAt) || Date.now(),
   }
+  delete (next as { ownerTable?: unknown }).ownerTable
   normalizeOptionalViewFields(next, patch, false)
-  if (forceAllPersonal) {
+  if (isBuiltinPersonal) {
     next.protection = 'personal'
     next.scope = 'personal'
-  } else if (next.ownerTable === 'all') {
-    next.protection = normalizeViewProtection(next.protection, normalizeViewScope(next.scope), 'all')
+  } else {
+    next.protection = normalizeViewProtection(next.protection, normalizeViewScope(next.scope))
     next.scope = next.protection === 'personal' ? 'personal' : 'workspace'
   }
   return next
@@ -934,19 +891,9 @@ function mergeIncomingStoredView(
   incomingAt: number,
   indexScoped: boolean,
   accountId: string,
-  allowAllPublic = false,
+  _allowAllPublic = false,
 ): StoredView {
   const owner = prevView?.createdBy || (accountId ? accountId : undefined)
-  const rawIncomingOwnerTable = incoming.ownerTable?.trim() || ''
-  const isPersonalIntent =
-    incoming.scope === 'personal' ||
-    incoming.protection === 'personal' ||
-    incoming.filters?.$scope === 'personal'
-  let lockedOwnerTable = prevView?.ownerTable?.trim() || rawIncomingOwnerTable || undefined
-  // 个人表意图缺省自动绑定到当前用户 `account:<id>`
-  if (!prevView && accountId && !lockedOwnerTable && isPersonalIntent) {
-    lockedOwnerTable = `account:${accountId}`
-  }
   const view: StoredView = {
     ...prevView,
     ...incoming,
@@ -954,30 +901,14 @@ function mergeIncomingStoredView(
     name: String(incoming.name || prevView?.name || id),
     ...(incomingAt ? {} : { updatedAt: Date.now() }),
     ...(owner ? { createdBy: owner } : indexScoped ? { createdBy: accountId } : {}),
-    ...(lockedOwnerTable ? { ownerTable: lockedOwnerTable } : {}),
   }
+  delete (view as { ownerTable?: unknown }).ownerTable
   normalizeOptionalViewFields(view, incoming as Record<string, unknown>, true)
-  // 内置聚合视图（builtin-all:*）强制为个人视图；
-  // /data 自定义视图（ownerTable === 'all'）默认个人视图，空间管理员可设为 public / locked；
-  // 具体多维表（workspace / account:<id>）允许 public / locked / personal 三态。
-  if (isBuiltinAllViewId(id)) {
+  if (isBuiltinAllViewId(id) || isBuiltinCatalogViewId(id)) {
     view.protection = 'personal'
     view.scope = 'personal'
-  } else if (view.ownerTable === 'all') {
-    if (allowAllPublic && (view.protection === 'public' || view.protection === 'locked' || view.protection === 'personal')) {
-      view.scope = view.protection === 'personal' ? 'personal' : 'workspace'
-    } else {
-      view.protection = 'personal'
-      view.scope = 'personal'
-    }
   } else {
-    view.protection = normalizeViewProtection(view.protection, normalizeViewScope(view.scope), view.ownerTable)
-    // 非表主人在他人个人表下创建视图只能为个人视图，修改视图不可设为锁定视图
-    if (accountId && view.ownerTable?.startsWith('account:') && view.ownerTable !== `account:${accountId}`) {
-      if (!prevView || view.protection === 'locked') {
-        view.protection = 'personal'
-      }
-    }
+    view.protection = normalizeViewProtection(view.protection, normalizeViewScope(view.scope))
     view.scope = view.protection === 'personal' ? 'personal' : 'workspace'
   }
   return view
@@ -987,19 +918,16 @@ function mergeIncomingStoredView(
  * 可见性判定（无 policyGuard 时的兜底）：
  * - 索引表（/tags 等）与内置聚合视图（builtin-all:*）按创建者严格隔离；
  * - protection === 'personal'（含 scope === 'personal'）仅创建者可见；
- * - 具体多维表的 public / locked 视图在有 policyGuard 时由 resolveViewDecision 精确判定。
+ * - public / locked 视图空间成员均可见。
  */
 function isViewVisibleTo(view: StoredView, path: string, accountId: string): boolean {
   if (isIndexCollection(path)) return view.createdBy === accountId
-  if (isBuiltinAllViewId(String(view.id)) && accountId) {
+  if ((isBuiltinAllViewId(String(view.id)) || isBuiltinCatalogViewId(String(view.id))) && accountId) {
     return view.createdBy === accountId
   }
-  const protection = normalizeViewProtection(view.protection, normalizeViewScope(view.scope), view.ownerTable)
+  const protection = normalizeViewProtection(view.protection, normalizeViewScope(view.scope))
   if (protection === 'personal' && accountId) {
     return view.createdBy === accountId
-  }
-  if (view.ownerTable?.startsWith('account:') && accountId) {
-    return view.ownerTable === `account:${accountId}` || view.createdBy === accountId
   }
   return true
 }
@@ -1093,15 +1021,11 @@ function asRecord(
   const filters = view.filters && typeof view.filters === 'object' ? view.filters : {}
   const sorts = parseSortsInput(view.sorts, view.sortField, view.sortDir === 'desc' ? 'desc' : 'asc')
   const filterTree = view.filterTree
-  const isCrossTableAll = view.ownerTable === 'all'
   const isBuiltinCrossAll = isBuiltinAllViewId(String(view.id)) || isBuiltinCatalogViewId(String(view.id))
   const resolvedProtection = isBuiltinCrossAll
     ? 'personal'
-    : normalizeViewProtection(view.protection, normalizeViewScope(view.scope), view.ownerTable)
+    : normalizeViewProtection(view.protection, normalizeViewScope(view.scope))
   const resolvedScope = resolvedProtection === 'personal' ? 'personal' : 'workspace'
-  const resolvedOwnerTable = isCrossTableAll
-    ? 'all'
-    : (view.ownerTable ?? ((resolvedScope === 'personal' && view.createdBy) ? `account:${view.createdBy}` : 'workspace'))
   return {
     id: rowId(path, view.id),
     title: view.name,
@@ -1113,7 +1037,6 @@ function asRecord(
     mode: view.mode ?? 'table',
     scope: resolvedScope,
     protection: resolvedProtection,
-    ownerTable: resolvedOwnerTable,
     sortField: sorts[0]?.field || view.sortField || 'title',
     sortDir: sorts[0]?.dir ?? (view.sortDir === 'desc' ? 'desc' : 'asc'),
     query: view.query ?? '',
@@ -1163,7 +1086,6 @@ export function clientViewFromDbRow(row: Record<string, unknown> | undefined) {
     mode: row.mode,
     scope: normalizeViewScope(row.scope),
     protection: normalizeViewProtection(row.protection, normalizeViewScope(row.scope)),
-    ownerTable: typeof row.ownerTable === 'string' && row.ownerTable.trim() ? row.ownerTable.trim() : undefined,
     createdBy:
       typeof row.createdBy === 'string' && row.createdBy.trim()
         ? row.createdBy.trim()

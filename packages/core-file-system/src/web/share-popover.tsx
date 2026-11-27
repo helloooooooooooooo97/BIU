@@ -2,7 +2,7 @@ import { readStorageString, removeStorageKey, writeStorageString } from '@biu/bi
 import { AiAvatar } from '@biu/biu-ui/ai-avatar'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowPathIcon, CheckIcon, ChevronDownIcon, LinkIcon, ShareIcon, UserGroupIcon, XMarkIcon } from '@heroicons/react/16/solid'
+import { ArrowPathIcon, CheckIcon, ChevronDownIcon, LinkIcon, LockClosedIcon, ShareIcon, UserGroupIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { useFloatingPosition } from '@biu/biu-ui/floating-position'
 import { OVERLAY_Z, overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
@@ -15,7 +15,6 @@ export { ShareScopeDetail, ShareRoleDetail } from './share-chain-detail.tsx'
 import { ScopeMark } from './share-scope-label.tsx'
 import { roleLabel } from './share-chain-detail.tsx'
 import { mintSharePin, shareClipboardText } from '../share-resources.ts'
-import { openAccessRulesDrawer } from './access-rules-drawer.tsx'
 
 export type ShareKind = 'record'
 
@@ -295,9 +294,10 @@ function WorkspaceAccess({
   recordId: string
 }) {
   const [email, setEmail] = useState('')
-  const [scope, setScope] = useState<'personal' | 'workspace' | 'shared' | 'external'>('personal')
-  const [ownerTable, setOwnerTable] = useState('')
-  const [accessMode, setAccessMode] = useState<'inherit' | 'private' | 'members' | 'restricted'>('private')
+  const [scope, setScope] = useState<'personal' | 'workspace' | 'shared'>('personal')
+  const [hasExternalCollaborator, setHasExternalCollaborator] = useState(false)
+  const [accessMode, setAccessMode] = useState<'inherit' | 'private' | 'members'>('private')
+  const [memberDefaultRole, setMemberDefaultRole] = useState<'viewer' | 'editor'>('viewer')
   const [ownerId, setOwnerId] = useState('')
   const [currentAccountId, setCurrentAccountId] = useState('')
   const [canManage, setCanManage] = useState(true)
@@ -314,19 +314,19 @@ function WorkspaceAccess({
     canEdit?: boolean
     canRevoke?: boolean
   }>>([])
-  const [groups, setGroups] = useState<Array<{
+  const [memberViews, setMemberViews] = useState<Array<{
     id: string
     name: string
-    kind?: 'static' | 'dynamic'
     role: string
     canEdit?: boolean
     canRevoke?: boolean
   }>>([])
-  const [availableGroups, setAvailableGroups] = useState<Array<{
+  const [availableMemberViews, setAvailableMemberViews] = useState<Array<{
     id: string
     name: string
-    kind?: 'static' | 'dynamic'
-    memberCount?: number
+    protection: 'public' | 'locked' | 'personal'
+    isLocked: boolean
+    memberCount: number
   }>>([])
   const [workspaceMembers, setWorkspaceMembers] = useState<Array<{
     id: string
@@ -338,7 +338,7 @@ function WorkspaceAccess({
   const [memberQuery, setMemberQuery] = useState('')
   const [selectedTarget, setSelectedTarget] = useState<
     | { kind: 'member'; id: string; email: string; name: string }
-    | { kind: 'group'; id: string; name: string }
+    | { kind: 'member_view'; id: string; name: string; isLocked: boolean; memberCount: number }
     | null
   >(null)
   const [memberPickerOpen, setMemberPickerOpen] = useState(false)
@@ -351,9 +351,10 @@ function WorkspaceAccess({
 
   async function load() {
     const data = await readJson<{
-      scope?: 'personal' | 'workspace' | 'shared' | 'external'
-      ownerTable?: string
-      accessMode?: 'inherit' | 'private' | 'members' | 'restricted'
+      scope?: 'personal' | 'workspace' | 'shared'
+      hasExternalCollaborator?: boolean
+      accessMode?: 'inherit' | 'private' | 'members'
+      memberDefaultRole?: 'viewer' | 'editor'
       ownerId?: string
       currentAccountId?: string
       canManage?: boolean
@@ -369,10 +370,9 @@ function WorkspaceAccess({
         canEdit?: boolean
         canRevoke?: boolean
       }>
-      groups?: Array<{
+      memberViews?: Array<{
         id: string
         name: string
-        kind?: 'static' | 'dynamic'
         role: string
         canEdit?: boolean
         canRevoke?: boolean
@@ -383,13 +383,14 @@ function WorkspaceAccess({
       }
     }>(`/api/account/access?collection=${encodeURIComponent(collection)}&recordId=${encodeURIComponent(recordId)}`)
     setScope(data.scope ?? 'personal')
-    setOwnerTable(data.ownerTable ?? '')
-    setAccessMode(data.accessMode ?? (data.ownerTable === 'workspace' || data.scope === 'workspace' ? 'members' : 'private'))
+    setHasExternalCollaborator(Boolean(data.hasExternalCollaborator))
+    setAccessMode(data.accessMode ?? (data.scope === 'workspace' ? 'members' : 'private'))
+    setMemberDefaultRole(data.memberDefaultRole === 'editor' ? 'editor' : 'viewer')
     setOwnerId(data.ownerId ?? '')
     setCurrentAccountId(data.currentAccountId ?? '')
     setCanManage(data.canManage !== false)
     setPeople(data.people ?? [])
-    setGroups(data.groups ?? [])
+    setMemberViews(data.memberViews ?? [])
     setInheritance({
       mode: data.inheritance?.mode === 'inherit' ? 'inherit' : 'custom',
       hasParent: Boolean(data.inheritance?.hasParent),
@@ -401,20 +402,20 @@ function WorkspaceAccess({
       console.warn('[share-popover] load grants failed', collection, error)
       setPeople([])
     })
-    void readJson<{ groups?: Array<{ id: string; name: string; kind?: 'static' | 'dynamic'; memberCount?: number }> }>(
-      '/api/account/groups',
+    void readJson<{ views?: Array<{ id: string; name: string; protection: 'public' | 'locked' | 'personal'; isLocked: boolean; memberCount: number }> }>(
+      '/api/db/member-views',
     )
       .then((res) => {
-        setAvailableGroups(Array.isArray(res.groups) ? res.groups : [])
+        setAvailableMemberViews(Array.isArray(res.views) ? res.views : [])
       })
       .catch((error) => {
-        console.warn('[share-popover] load groups failed', error)
-        setAvailableGroups([])
+        console.warn('[share-popover] load member views failed', error)
+        setAvailableMemberViews([])
       })
     void listCollection({
       path: WORKSPACE_MEMBERS_COLLECTION_PATH,
       limit: 200,
-      columns: ['title', 'avatar', 'email', 'role', 'membershipKind'],
+      columns: ['title', 'name', 'avatar', 'email', 'role', 'membershipKind'],
     })
       .then((page) => {
         setWorkspaceMembers(page.items.flatMap((row) => {
@@ -438,11 +439,12 @@ function WorkspaceAccess({
   }, [collection, recordId])
 
   function grant(
-    input: { email?: string; groupId?: string },
+    input: { email?: string; memberViewId?: string },
     collaboratorKind: 'internal' | 'external' = 'internal',
     nextRole?: string,
   ) {
     setError('')
+    setStatusNotice('')
     return readJson(`/api/account/access`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -467,8 +469,45 @@ function WorkspaceAccess({
       .catch((err) => setError(err instanceof Error ? err.message : '无法授权'))
   }
 
-  async function revoke(subjectType: 'account' | 'group', subjectId: string, grantedBy?: string) {
+  async function grantUnlockedMemberViewSnapshot(viewId: string, viewName: string) {
     setError('')
+    setStatusNotice('')
+    try {
+      const resolved = await readJson<{ members?: Array<{ id: string; name?: string }> }>(
+        `/api/db/member-views/${encodeURIComponent(viewId)}/resolve`,
+      )
+      const matched = (resolved.members ?? []).filter(
+        (m) => m.id && m.id !== ownerId && m.id !== currentAccountId,
+      )
+      if (!matched.length) {
+        setError(`「${viewName}」当前没有可添加的其他成员`)
+        return
+      }
+      await readJson('/api/db/batch-permissions/apply', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          collection,
+          recordIds: [recordId],
+          mode: 'grant',
+          role,
+          subjects: matched.map((m) => ({ type: 'account', id: m.id })),
+        }),
+      })
+      setMemberQuery('')
+      setSelectedTarget(null)
+      setMemberPickerOpen(false)
+      setStatusNotice(`已按「${viewName}」一次性展开添加 ${matched.length} 位成员`)
+      emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '无法展开添加成员')
+    }
+  }
+
+  async function revoke(subjectType: 'account' | 'member_view', subjectId: string, grantedBy?: string) {
+    setError('')
+    setStatusNotice('')
     try {
       await readJson('/api/account/access', {
         method: 'DELETE',
@@ -488,56 +527,7 @@ function WorkspaceAccess({
     }
   }
 
-  async function moveToWorkspaceTable() {
-    if (!recordId || !currentAccountId) return
-    setError('')
-    setStatusNotice('')
-    setInheritanceBusy(true)
-    try {
-      const res = await readJson<{ transferredDescendants?: number }>('/api/account/records/owner-table', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          collection,
-          recordId,
-          ownerTable: 'workspace',
-        }),
-      })
-      const desc = Number(res.transferredDescendants ?? 0)
-      setStatusNotice(desc > 0 ? `已移入空间表（含 ${desc} 篇子内容）` : '已移入空间表')
-      emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
-      await load()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '无法移入空间表')
-    } finally {
-      setInheritanceBusy(false)
-    }
-  }
-
-  async function duplicateToPersonalTable() {
-    if (!recordId || !currentAccountId) return
-    setError('')
-    setStatusNotice('')
-    setInheritanceBusy(true)
-    try {
-      await readJson<{ path?: string }>('/api/db/duplicate', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          path: `${collection}/${recordId}`,
-          scope: 'personal',
-        }),
-      })
-      setStatusNotice('已复制副本到我的个人表')
-      emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '无法复制到个人表')
-    } finally {
-      setInheritanceBusy(false)
-    }
-  }
-
-  async function toggleWorkspaceRestricted(restricted: boolean) {
+  async function updateGeneralAccess(nextAccessMode: 'private' | 'members', nextMemberDefaultRole?: 'viewer' | 'editor') {
     if (!recordId) return
     setError('')
     setStatusNotice('')
@@ -549,13 +539,14 @@ function WorkspaceAccess({
         body: JSON.stringify({
           collection,
           recordId,
-          accessMode: restricted ? 'restricted' : 'members',
+          accessMode: nextAccessMode,
+          ...(nextAccessMode === 'members' ? { memberDefaultRole: nextMemberDefaultRole ?? memberDefaultRole } : {}),
         }),
       })
       emitFsdbEvent(FSDB_SHARES_CHANGE_EVENT)
       await load()
     } catch (err) {
-      setError(err instanceof Error ? err.message : '无法切换空间可见模式')
+      setError(err instanceof Error ? err.message : '无法更新通用访问设置')
     } finally {
       setInheritanceBusy(false)
     }
@@ -612,11 +603,11 @@ function WorkspaceAccess({
   const externalPeople = people.filter((row) => row.memberKind === 'external' || row.memberKind === 'guest')
   const shownScope = scope
   const grantedAccountIds = new Set(people.map((row) => row.id))
-  const grantedGroupIds = new Set(groups.map((row) => row.id))
+  const grantedViewIds = new Set(memberViews.map((row) => row.id))
   const normalizedMemberQuery = memberQuery.trim().toLowerCase()
-  const matchingGroups = availableGroups
-    .filter((row) => !grantedGroupIds.has(row.id))
-    .filter((row) => !normalizedMemberQuery || `${row.name} 成员组 动态成员组`.toLowerCase().includes(normalizedMemberQuery))
+  const matchingMemberViews = availableMemberViews
+    .filter((row) => !(row.isLocked && grantedViewIds.has(row.id)))
+    .filter((row) => !normalizedMemberQuery || `${row.name} 成员视图 动态组 快捷名单`.toLowerCase().includes(normalizedMemberQuery))
     .slice(0, 6)
   const matchingMembers = workspaceMembers
     .filter((row) => row.id !== ownerId && !grantedAccountIds.has(row.id))
@@ -634,7 +625,7 @@ function WorkspaceAccess({
     />
   )
 
-  const internalCount = internalPeople.length + groups.length
+  const internalCount = internalPeople.length + memberViews.length
   const externalCount = externalPeople.length
   const isImageAvatar = (value?: string) => Boolean(value && /^(https?:\/\/|\/|data:image\/)/i.test(value.trim()))
   const renderPersonAvatar = (seed: string, avatar?: string, extraClass = '', size = 28) => {
@@ -657,40 +648,27 @@ function WorkspaceAccess({
     return base
   }
 
-  const isWorkspaceRecord = ownerTable === 'workspace' || (!ownerTable && shownScope === 'workspace')
-  const isMyPersonalRecord = Boolean(
-    !isWorkspaceRecord && currentAccountId && (ownerTable === `account:${currentAccountId}` || ownerId === currentAccountId),
-  )
+  const isMembersOpen = accessMode === 'members' || (accessMode === 'inherit' && shownScope === 'workspace')
 
   return (
     <div className="fsdb-share-link-section" data-testid="fsdb-share-members">
       <div className="fsdb-share-collab-summary">
-        <span>归属与可见范围</span>
+        <span>可见范围</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <strong className={`fsdb-share-scope is-${shownScope}`} data-testid="fsdb-share-scope"><ScopeMark scope={shownScope} /></strong>
-          {recordId && currentAccountId && isMyPersonalRecord ? (
-            <button
-              type="button"
-              disabled={inheritanceBusy}
-              data-testid="fsdb-share-owner-table-toggle"
-              className="fsdb-share-ghost"
-              style={{ fontSize: 11.5, padding: '2px 8px' }}
-              onClick={() => void moveToWorkspaceTable()}
+          {hasExternalCollaborator ? (
+            <span
+              data-testid="fsdb-share-external-pill"
+              style={{
+                fontSize: 11,
+                padding: '1px 6px',
+                borderRadius: 999,
+                border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
+                color: 'var(--biu-color-text-muted)',
+              }}
             >
-              移入空间表
-            </button>
-          ) : null}
-          {recordId && currentAccountId && isWorkspaceRecord ? (
-            <button
-              type="button"
-              disabled={inheritanceBusy}
-              data-testid="fsdb-share-duplicate-personal"
-              className="fsdb-share-ghost"
-              style={{ fontSize: 11.5, padding: '2px 8px' }}
-              onClick={() => void duplicateToPersonalTable()}
-            >
-              复制到个人表
-            </button>
+              含外部协作者
+            </span>
           ) : null}
         </div>
       </div>
@@ -699,26 +677,55 @@ function WorkspaceAccess({
           {statusNotice}
         </div>
       ) : null}
-      {isWorkspaceRecord && canManage ? (
-        <div className="fsdb-share-inherit-row" data-testid="fsdb-share-workspace-restricted">
+      {canManage ? (
+        <div className="fsdb-share-inherit-row" data-testid="fsdb-share-general-access">
           <span>
-            <strong>仅指定成员可见（受限空间）</strong>
-            <em>{accessMode === 'restricted' ? '已开启：仅管理员、下方协作者/成员组及空间规则可见' : '未开启：空间内部成员默认可访问'}</em>
+            <strong>通用访问</strong>
+            <em>{isMembersOpen ? '空间内所有成员均可访问（不影响下方个人/外链授权）' : '仅所有者与下方受邀人员可访问'}</em>
           </span>
-          <ShareToggle
-            on={accessMode === 'restricted'}
-            disabled={inheritanceBusy}
-            label="仅指定成员可见"
-            testId="fsdb-share-workspace-restricted-toggle"
-            onChange={(on) => void toggleWorkspaceRestricted(on)}
-          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <ShareSelect
+              inline
+              value={isMembersOpen ? 'members' : 'private'}
+              options={[
+                { value: 'private', label: '仅受邀人员', hint: '仅所有者与受邀成员可访问' },
+                { value: 'members', label: '空间全员', hint: '空间内所有成员均可访问' },
+              ]}
+              ariaLabel="通用访问范围"
+              placement="bottom-end"
+              minMenuWidth={180}
+              onChange={(next) => {
+                if (next === 'members' || next === 'private') {
+                  void updateGeneralAccess(next)
+                }
+              }}
+            />
+            {isMembersOpen ? (
+              <ShareSelect
+                inline
+                value={memberDefaultRole}
+                options={[
+                  { value: 'viewer', label: '可查看', hint: '空间成员默认可查看' },
+                  { value: 'editor', label: '可编辑', hint: '空间成员默认可编辑' },
+                ]}
+                ariaLabel="空间全员默认权限"
+                placement="bottom-end"
+                minMenuWidth={160}
+                onChange={(next) => {
+                  if (next === 'viewer' || next === 'editor') {
+                    void updateGeneralAccess('members', next)
+                  }
+                }}
+              />
+            ) : null}
+          </div>
         </div>
       ) : null}
       {inheritance.hasParent ? (
         <div className="fsdb-share-inherit-row" data-testid="fsdb-share-inherit">
           <span>
             <strong>继承上级权限</strong>
-            <em>{inheritance.mode === 'inherit' ? '自动沿用上级内容的协作者与权限' : '已断开继承，仅按本条设置与视图规则生效'}</em>
+            <em>{inheritance.mode === 'inherit' ? '自动沿用上级内容的通用访问与协作者权限' : '已断开继承，按本条独立设置生效'}</em>
           </span>
           <ShareToggle
             on={inheritance.mode === 'inherit'}
@@ -774,14 +781,13 @@ function WorkspaceAccess({
               </li>
             )
           })}
-          {groups.map((row) => {
+          {memberViews.map((row) => {
             const canEdit = canManage && row.canEdit !== false
             const canRevoke = canManage && row.canRevoke !== false
-            const groupLabel = row.kind === 'dynamic' ? '动态成员组' : '成员组'
             return (
-              <li key={`group:${row.id}`}>
-                <span className="fsdb-share-avatar is-view" aria-hidden><UserGroupIcon className="size-3.5" /></span>
-                <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong><em>{groupLabel}</em></span>
+              <li key={`member_view:${row.id}`}>
+                <span className="fsdb-share-avatar is-view" aria-hidden><LockClosedIcon className="size-3.5" /></span>
+                <span className="fsdb-share-collaborator-copy"><strong>{row.name}</strong><em>锁定成员视图 · 动态同步</em></span>
                 {canEdit ? (
                   <ShareSelect
                     inline
@@ -791,14 +797,14 @@ function WorkspaceAccess({
                     placement="bottom-end"
                     minMenuWidth={168}
                     onChange={(next) => {
-                      if (next !== row.role) void grant({ groupId: row.id }, 'internal', next)
+                      if (next !== row.role) void grant({ memberViewId: row.id }, 'internal', next)
                     }}
                   />
                 ) : (
                   <span className="fsdb-share-collaborator-role">{roleLabel(row.role)}</span>
                 )}
                 {canRevoke ? (
-                  <button type="button" className="fsdb-share-remove" title="移除成员组" aria-label={`移除 ${row.name}`} onClick={() => void revoke('group', row.id)}>
+                  <button type="button" className="fsdb-share-remove" title="移除成员视图授权" aria-label={`移除 ${row.name}`} onClick={() => void revoke('member_view', row.id)}>
                     <XMarkIcon aria-hidden className="size-3.5" />
                   </button>
                 ) : null}
@@ -814,12 +820,12 @@ function WorkspaceAccess({
               className="fsdb-share-link-field"
               type="search"
               role="combobox"
-              aria-label="搜索空间成员或成员组"
+              aria-label="搜索空间成员或成员视图"
               aria-expanded={memberPickerOpen}
               aria-controls="fsdb-share-member-options"
               autoComplete="off"
               value={memberQuery}
-              placeholder="搜索空间成员或成员组"
+              placeholder="搜索空间成员或成员视图"
               data-testid="fsdb-share-member-search"
               onFocus={() => setMemberPickerOpen(true)}
               onBlur={() => window.setTimeout(() => setMemberPickerOpen(false), 120)}
@@ -831,24 +837,26 @@ function WorkspaceAccess({
             />
             {memberPickerOpen ? (
               <div className="fsdb-share-member-options" id="fsdb-share-member-options" role="listbox">
-                {matchingGroups.map((row) => (
+                {matchingMemberViews.map((row) => (
                   <button
                     type="button"
                     role="option"
-                    aria-selected={selectedTarget?.kind === 'group' && selectedTarget.id === row.id}
-                    data-testid="fsdb-share-group-option"
-                    key={`group:${row.id}`}
+                    aria-selected={selectedTarget?.kind === 'member_view' && selectedTarget.id === row.id}
+                    data-testid="fsdb-share-member-view-option"
+                    key={`member_view:${row.id}`}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => {
-                      setSelectedTarget({ kind: 'group', id: row.id, name: row.name })
+                      setSelectedTarget({ kind: 'member_view', id: row.id, name: row.name, isLocked: row.isLocked, memberCount: row.memberCount })
                       setMemberQuery(row.name)
                       setMemberPickerOpen(false)
                     }}
                   >
-                    <span className="fsdb-share-avatar is-view is-sm" aria-hidden><UserGroupIcon className="size-3.5" /></span>
+                    <span className="fsdb-share-avatar is-view is-sm" aria-hidden>
+                      {row.isLocked ? <LockClosedIcon className="size-3.5" /> : <UserGroupIcon className="size-3.5" />}
+                    </span>
                     <span className="fsdb-share-member-option-copy">
                       <strong>{row.name}</strong>
-                      <em>{row.kind === 'dynamic' ? '动态成员组' : '成员组'}{typeof row.memberCount === 'number' ? ` · ${row.memberCount} 人` : ''}</em>
+                      <em>{row.isLocked ? `动态组 · ${row.memberCount} 人 · 自动同步` : `快捷名单 · 按当前 ${row.memberCount} 人展开`}</em>
                     </span>
                   </button>
                 ))}
@@ -872,15 +880,19 @@ function WorkspaceAccess({
                     </span>
                   </button>
                 ))}
-                {!matchingGroups.length && !matchingMembers.length ? <p>没有可添加的成员或成员组</p> : null}
+                {!matchingMemberViews.length && !matchingMembers.length ? <p>没有可添加的成员或成员视图</p> : null}
               </div>
             ) : null}
           </div>
           {roleSelect}
           <button type="button" className="fsdb-share-publish" disabled={!selectedTarget} data-testid="fsdb-share-member-add" onClick={() => {
             if (!selectedTarget) return
-            if (selectedTarget.kind === 'group') void grant({ groupId: selectedTarget.id }, 'internal')
-            else void grant({ email: selectedTarget.email }, 'internal')
+            if (selectedTarget.kind === 'member_view') {
+              if (selectedTarget.isLocked) void grant({ memberViewId: selectedTarget.id }, 'internal')
+              else void grantUnlockedMemberViewSnapshot(selectedTarget.id, selectedTarget.name)
+            } else {
+              void grant({ email: selectedTarget.email }, 'internal')
+            }
           }}>添加</button>
         </div>
         ) : null}
@@ -998,34 +1010,6 @@ export function SharePanel({
       gone = true
     }
   }, [target.collection, target.recordId])
-
-  const [matchedRules, setMatchedRules] = useState<Array<{
-    ruleId: string
-    ruleName: string
-    createdByName: string
-    isMine: boolean
-    columns: string[] | null
-    grants: Array<{ subjectType: string; subjectId: string; subjectName: string; role: string }>
-  }>>([])
-
-  useEffect(() => {
-    if (localOnly || !target.recordId) {
-      setMatchedRules([])
-      return
-    }
-    let gone = false
-    const qs = new URLSearchParams({ collection: target.collection, recordId: target.recordId })
-    void readJson<{ matchedRules?: typeof matchedRules }>(`/api/db/access-rules/explain?${qs}`)
-      .then((data) => {
-        if (!gone) setMatchedRules(Array.isArray(data.matchedRules) ? data.matchedRules : [])
-      })
-      .catch(() => {
-        if (!gone) setMatchedRules([])
-      })
-    return () => {
-      gone = true
-    }
-  }, [localOnly, target.collection, target.recordId])
 
   function applyPayload(data: SharePayload, nextPin?: string, flagsOnly = false) {
     if (data.share === undefined) return
@@ -1277,71 +1261,6 @@ export function SharePanel({
         </>
       ) : null}
       </> : null}
-      {matchedRules.length > 0 ? (
-        <section
-          className="fsdb-share-settings"
-          aria-label="同时生效的分享规则"
-          data-testid="fsdb-share-matched-rules"
-          style={{ marginTop: 10, paddingTop: 10, borderTop: 'var(--biu-stroke-width) solid var(--biu-color-border)' }}
-        >
-          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--biu-color-text-muted)', marginBottom: 6 }}>
-            同时生效的分享规则（{matchedRules.length}）
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {matchedRules.map((rule) => (
-              <div
-                key={rule.ruleId}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 8,
-                  fontSize: 12,
-                  padding: '6px 8px',
-                  borderRadius: 6,
-                  background: 'var(--biu-color-bg-hover)',
-                  color: 'var(--biu-color-text)',
-                }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 500 }}>
-                    {rule.ruleName}
-                    {!rule.isMine && rule.createdByName ? (
-                      <span style={{ fontWeight: 400, color: 'var(--biu-color-text-muted)' }}> · {rule.createdByName}</span>
-                    ) : null}
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--biu-color-text-subtle)' }}>
-                    {rule.grants.length > 0
-                      ? rule.grants
-                          .map((g) => `${g.subjectType === 'workspace' ? '空间全员' : g.subjectName || g.subjectId}（${roleLabel(g.role)}）`)
-                          .join('、')
-                      : '公开链接 / 未指定成员'}
-                    {rule.columns?.length ? ` · 仅 ${rule.columns.length} 列` : ''}
-                  </div>
-                </div>
-                {rule.isMine ? (
-                  <button
-                    type="button"
-                    onClick={() => openAccessRulesDrawer({ collection: target.collection, editRuleId: rule.ruleId })}
-                    style={{
-                      flexShrink: 0,
-                      fontSize: 11,
-                      padding: '3px 8px',
-                      borderRadius: 6,
-                      border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
-                      background: 'transparent',
-                      color: 'var(--biu-color-text)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    管理
-                  </button>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
       {error ? <p className="fsdb-share-error">{error}</p> : null}
     </div>
   )

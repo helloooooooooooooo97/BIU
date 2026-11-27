@@ -9,7 +9,6 @@ import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 import { openAndMigrateBiu, runWithAccount } from '@biu/host-plugin-loader/data-dir'
 import { CollabStore } from '@biu/host-account/store'
-import { recordMatchesAccessRule } from '../view-access.ts'
 
 const dirs: string[] = []
 afterEach(() => {
@@ -74,14 +73,6 @@ async function setupEnv() {
   const db = new DatabaseService(ctx)
   db.register(docsCollection())
   const collab = new CollabStore(openAndMigrateBiu(join(dir, 'biu.sqlite')))
-  collab.authorization.setAccessRuleMatcher((_ws, _col, filterTreeJson, _recId, ctxInfo) => {
-    try {
-      const tree = JSON.parse(filterTreeJson || '{}') as Record<string, unknown>
-      return recordMatchesAccessRule((ctxInfo.record ?? {}) as DbRecord, tree)
-    } catch {
-      return false
-    }
-  })
 
   class AccountBridge extends Service {
     store = collab
@@ -105,10 +96,9 @@ async function setupEnv() {
   return { db, collab, workspace, ada, bob, cara }
 }
 
-test('duplicating a workspace record to personal table creates an isolated personal copy and leaves source untouched', async () => {
+test('duplicating a workspace record as personal creates an isolated private copy and leaves source untouched', async () => {
   const { db, collab, workspace, ada, bob } = await setupEnv()
 
-  // Ada creates a parent folder and a child doc inside the workspace table
   const parentCreated = await runWithAccount(ada.id, () =>
     db.create('/docs', [{ id: 'ws-folder', title: '团队目录' }], { scope: 'workspace' }),
   )
@@ -131,7 +121,6 @@ test('duplicating a workspace record to personal table creates an isolated perso
     ),
   )
 
-  // Bob duplicates the workspace doc into his own personal table
   const dup = await runWithAccount(bob.id, () => db.duplicate('/docs/ws-doc', { scope: 'personal' }))
   assert.equal(dup.kind, 'duplicated')
   assert.equal(dup.sourcePath, '/docs/ws-doc')
@@ -139,29 +128,25 @@ test('duplicating a workspace record to personal table creates an isolated perso
   assert.notEqual(dup.path, '/docs/ws-doc')
   assert.equal(dup.value.title, '产品方案（副本）')
   assert.equal(dup.value.summary, '公开摘要')
-  // Parent pointer is cleared so the personal copy is NOT attached under the workspace parent
   assert.equal(dup.value.parentId, '')
 
   const copyId = String(dup.value.id)
   assert.equal(
-    collab.authorization.ownerTableOf({ type: 'record', workspaceId: workspace.id, collection: '/docs', recordId: copyId }),
-    `account:${bob.id}`,
+    collab.collectionOwnership(workspace.id, '/docs').get(copyId),
+    'personal',
   )
-  // Body content is copied
   const copyBody = await runWithAccount(bob.id, () => db.content(`/docs/${copyId}`))
   assert.equal(copyBody.value, '# 方案正文\n第一版')
 
-  // Source record stays in workspace table, untouched
   assert.equal(
-    collab.authorization.ownerTableOf({ type: 'record', workspaceId: workspace.id, collection: '/docs', recordId: 'ws-doc' }),
+    collab.collectionOwnership(workspace.id, '/docs').get('ws-doc'),
     'workspace',
   )
-  // Ada cannot read Bob's personal copy
   await assert.rejects(() => runWithAccount(ada.id, () => db.read(`/docs/${copyId}`)), /unknown record/)
 })
 
-test('duplicate enforces read permission and column-level visibility restrictions', async () => {
-  const { db, collab, workspace, ada, bob, cara } = await setupEnv()
+test('duplicate enforces record-level read permission for private and direct-granted records', async () => {
+  const { db, collab, ada, bob, cara } = await setupEnv()
 
   await runWithAccount(ada.id, () =>
     db.create(
@@ -178,25 +163,17 @@ test('duplicate enforces read permission and column-level visibility restriction
       { scope: 'workspace' },
     ),
   )
-  // Switch workspace record to restricted mode -> Bob & Cara lose baseline access
-  collab.setRecordAccessMode(ada.id, '/docs', 'fin-1', 'restricted')
+  // Switch record to private -> Bob & Cara lose baseline workspace access
+  collab.setRecordAccessMode(ada.id, '/docs', 'fin-1', 'private')
 
   // Cara (no read permission) cannot duplicate
   await assert.rejects(() => runWithAccount(cara.id, () => db.duplicate('/docs/fin-1', { scope: 'personal' })), /unknown record/)
 
-  // Ada creates a workspace access rule granting Bob viewer access ONLY to ['title', 'summary'] (excluding 'secret')
-  collab.createAccessRule(ada.id, workspace.id, {
-    collection: '/docs',
-    name: '财务摘要规则',
-    scope: 'workspace',
-    filterTree: { op: 'and', children: [] },
-    columns: ['title', 'summary'],
-    grants: [{ subjectType: 'account', subjectId: bob.id, role: 'viewer' }],
-  })
+  // Ada grants Bob explicit viewer access
+  collab.shareWithEmail(ada.id, '/docs', 'fin-1', bob.email, 'viewer', 'internal')
 
-  // Bob duplicates fin-1 -> copy preserves readable fields but MUST NOT leak restricted column 'secret'
   const dup = await runWithAccount(bob.id, () => db.duplicate('/docs/fin-1', { scope: 'personal' }))
   assert.equal(dup.value.title, '财务预算（副本）')
   assert.equal(dup.value.summary, 'Q4 总览')
-  assert.equal(dup.value.secret, '')
+  assert.equal(dup.value.secret, '高管薪资机密')
 })

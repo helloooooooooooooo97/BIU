@@ -14,9 +14,9 @@ export function roleLabel(role: string) {
   return '可编辑'
 }
 
-function subjectNote(subjectType: 'account' | 'group' | 'workspace_members', audienceKind: 'internal' | 'external') {
+function subjectNote(subjectType: 'account' | 'member_view' | 'workspace_members', audienceKind: 'internal' | 'external') {
   if (subjectType === 'workspace_members') return '空间全员'
-  if (subjectType === 'group') return '成员组'
+  if (subjectType === 'member_view') return '锁定成员视图'
   return audienceKind === 'external' ? '外部协作者' : '空间成员'
 }
 

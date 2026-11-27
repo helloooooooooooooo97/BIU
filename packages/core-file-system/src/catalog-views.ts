@@ -6,14 +6,13 @@ import {
   VIEWS_COLLECTION_PATH,
   WORKSPACE_MEMBERS_COLLECTION_PATH,
   normalizeCollectionPath,
-  tableModeFor,
 } from './paths.ts'
 import { normalizeSavedView, type SavedView } from './web/saved-view.ts'
 
 const ALL_PREFIX = 'builtin-all:'
 const MEMBER_PREFIX = 'builtin-member:'
 export type DataScope = 'personal' | 'workspace' | 'shared'
-/** 视图的逻辑域归属：'all' 为 /data 跨表聚合视图，'workspace' / 'personal' / 'shared' 为依附于 K+1 逻辑表的视图。 */
+/** 视图的逻辑域归属：默认 'all'（单逻辑表展示全部我可见数据），或通过 filters.$scope 筛选 'workspace' / 'personal' / 'shared'。 */
 export type ViewDomain = DataScope | 'all'
 
 export function viewDomainOf(
@@ -21,7 +20,6 @@ export function viewDomainOf(
     id?: string
     builtin?: boolean
     filters?: Record<string, string>
-    ownerTable?: string
     scope?: string
     protection?: string
   } | null | undefined,
@@ -38,13 +36,9 @@ export function viewDomainOf(
     return 'all'
   }
   const filterScope = view.filters?.$scope
-  if (filterScope === 'shared') return 'shared'
-  if (view.ownerTable === 'all') return 'all'
-  if (filterScope === 'workspace' || filterScope === 'personal') return filterScope
-  if (view.ownerTable === 'workspace') return 'workspace'
-  if (view.ownerTable?.startsWith('account:')) return 'personal'
-  if (view.scope === 'personal' || view.protection === 'personal') return 'personal'
-  if (view.scope === 'workspace') return 'workspace'
+  if (filterScope === 'shared' || filterScope === 'workspace' || filterScope === 'personal') {
+    return filterScope
+  }
   return 'all'
 }
 const SCOPE_NAME: Record<DataScope, string> = {
@@ -103,46 +97,8 @@ export function tagIdFromViewId(id: string) {
   return isBuiltinTagViewId(id) ? id.slice(TAG_PREFIX.length) : ''
 }
 
-export function defaultTableViewId(ownerTable: string, collectionPath: string) {
-  return `default:${ownerTable}:${normalizeCollectionPath(collectionPath)}`
-}
-
-export function parseDefaultTableViewId(id: string): { ownerTable: string; collectionPath: string } | null {
-  if (!id.startsWith('default:')) return null
-  const rest = id.slice('default:'.length)
-  const split = rest.lastIndexOf(':/')
-  if (split <= 0) return null
-  const ownerTable = rest.slice(0, split).trim()
-  const collectionPath = normalizeCollectionPath(rest.slice(split + 1))
-  if (!ownerTable || !collectionPath || collectionPath === '/') return null
-  return { ownerTable, collectionPath }
-}
-
-export function stubDefaultTableView(id: string, table?: TableRef): SavedView | null {
-  const parsed = parseDefaultTableViewId(id)
-  if (!parsed) return null
-  const isWorkspace = parsed.ownerTable === 'workspace'
-  const noun = collectionNoun(table ?? { path: parsed.collectionPath, label: parsed.collectionPath.replace(/^\//, '') })
-  return normalizeSavedView({
-    id,
-    name: `${isWorkspace ? '空间' : '私人'}${noun}`,
-    mode: 'table',
-    ownerTable: parsed.ownerTable,
-    scope: 'workspace',
-    protection: 'public',
-    ...builtinViewLayout(),
-    filters: {},
-    columns: [],
-    groupBy: '',
-    wrap: false,
-    truncate: true,
-    query: '',
-    builtin: false,
-  })
-}
-
-export function isNonPersonalView(view: { protection?: string; scope?: string; ownerTable?: string } | null | undefined): boolean {
-  if (!view || view.ownerTable === 'all') return false
+export function isNonPersonalView(view: { protection?: string; scope?: string } | null | undefined): boolean {
+  if (!view) return false
   const p = view.protection ?? (view.scope === 'personal' ? 'personal' : 'public')
   return p === 'public' || p === 'locked'
 }
@@ -268,7 +224,7 @@ export function builtinCatalogViews(tables: CollectionInfo[]): SavedView[] {
         ...builtinViewLayout(),
         filters: { tablePath: path },
         columns: [],
-        groupBy: 'ownerTable',
+        groupBy: 'shareScope',
         wrap: false,
         truncate: true,
         query: '',
@@ -327,11 +283,6 @@ export function mergeCatalogViews(tables: CollectionInfo[], user: SavedView[], s
 export function mergeTableViews(table: TableRef | undefined, user: SavedView[], skipIds: Iterable<string> = []): SavedView[] {
   if (!table?.path || table.path === '/') return overlayListedViews([], user, skipIds)
   const path = normalizeCollectionPath(table.path)
-  // K+1 业务集合不再注入顶层聚合视图（/data 是唯一聚合表）
-  if (path !== DATA_COLLECTION_PATH && tableModeFor(path) === 'k-plus-1') {
-    const concrete = user.filter((v) => !isBuiltinAllViewId(String(v?.id ?? '')) && v?.ownerTable !== 'all')
-    return overlayListedViews([], concrete, skipIds)
-  }
   const seeds = path === WORKSPACE_MEMBERS_COLLECTION_PATH
     ? [builtinAllView(table), ...builtinMemberViews()]
     : [builtinAllView(table)]
@@ -385,52 +336,24 @@ export function stubAnyBuiltinView(id: string): SavedView | null {
 }
 
 /**
- * 视图自己的扁平筛选（含 K+1 逻辑表强绑定）：
- * - 聚合视图（ownerTable='all' 或 builtin-all）不锁 $scope，可跨表筛选所有我可见的数据；
- * - 依附于空间/个人/共享逻辑表的视图始终锁定对应 $scope，即使筛选条件为空也绝不越表读取。
+ * 视图自己的扁平筛选：单逻辑表下直接透传视图自身的 filters（含用户可选的 $scope 筛选）。
  */
 export function catalogLockFilters(
   viewId: string | null | undefined,
-  listed: Array<{ id: string; builtin?: boolean; filters?: Record<string, string>; ownerTable?: string; scope?: string; protection?: string }> = [],
-  viewerAccountId = '',
+  listed: Array<{ id: string; builtin?: boolean; filters?: Record<string, string>; scope?: string; protection?: string }> = [],
+  _viewerAccountId = '',
 ): Record<string, string> {
   const key = String(viewId ?? '').trim()
   if (!key) return {}
   const current = listed.find((view) => view.id === key)
   if (current) {
     const base = { ...(current.filters ?? {}) }
-    const ot = current.ownerTable?.trim()
-    if (ot && ot.startsWith('account:') && viewerAccountId && ot !== `account:${viewerAccountId}`) {
-      base.$scope = 'shared'
-      base.$ownerTable = ot
-      return base
-    }
-    const domain = viewDomainOf(current)
-    if (domain === 'all') {
-      delete base.$scope
-      return base
-    }
-    base.$scope = domain
+    delete base.$ownerTable
     return base
   }
-  const stub = stubDefaultTableView(key) ?? stubAnyBuiltinView(key)
+  const stub = stubAnyBuiltinView(key)
   if (!stub) return {}
-  const base = { ...(stub.filters ?? {}) }
-  const ot = stub.ownerTable?.trim()
-  if (ot && ot.startsWith('account:')) {
-    if (viewerAccountId && ot !== `account:${viewerAccountId}`) {
-      base.$scope = 'shared'
-      base.$ownerTable = ot
-    } else {
-      base.$scope = 'personal'
-    }
-    return base
-  }
-  if (ot === 'workspace') {
-    base.$scope = 'workspace'
-    return base
-  }
-  return base
+  return { ...(stub.filters ?? {}) }
 }
 
 /** /editor-blocks：只内置「全部组件」。 */

@@ -103,6 +103,7 @@ test('member activity aggregates heatmap, coalesces rapid updates, and is transp
   store.addMemberByEmail(ada.id, workspace.id, bob.email)
   store.setActive(ada.id, workspace.id)
   store.setActive(bob.id, workspace.id)
+  store.attach(workspace.id, '/pages', 'p1', now - dayMs, { accessMode: 'members' })
 
   // 昨天 1 次创建
   store.recordActivity({

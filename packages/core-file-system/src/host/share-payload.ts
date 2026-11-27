@@ -6,25 +6,6 @@ import { freezeSchema, type ShareSnapshot } from '../share-snapshot.ts'
 import { collectShareResources } from '../share-resources.ts'
 import type { ShareRecord } from './shares-store.ts'
 import { asPublicProfile } from '@biu/host-workspace'
-import { parseTagFlatColumnKey } from '../query-logic.ts'
-import { viewShareListFilter } from '../share-view-match.ts'
-
-const SHARE_LIMIT = 200
-const CONTENT_CONCURRENCY = 8
-
-async function mapConcurrent<T, R>(items: readonly T[], limit: number, run: (item: T) => Promise<R>): Promise<R[]> {
-  if (!items.length) return []
-  const results = new Array<R>(items.length)
-  let cursor = 0
-  const worker = async () => {
-    while (cursor < items.length) {
-      const index = cursor++
-      results[index] = await run(items[index]!)
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()))
-  return results
-}
 
 function asStat(raw: unknown) {
   return raw as { kind?: string; schema?: CollectionSchema; label?: string; view?: { title?: string } | null }
@@ -49,7 +30,7 @@ function withResources(
 ): ShareSnapshot {
   const resources = collectShareResources(snap.records, snap.contents, {
     skipIds: snap.records.map((row) => String(row.id)),
-    includeRecords: share.kind === 'rule',
+    includeRecords: false,
   })
   return {
     ...snap,
@@ -64,66 +45,13 @@ function withResources(
   }
 }
 
-export type ShareAccessRuleInput = {
-  id: string
-  name: string
-  createdBy: string
-  filterTree: Record<string, unknown>
-  columns: string[] | null
-  displaySnapshot: {
-    mode?: string
-    sorts?: unknown[]
-    groupBy?: string
-    groupConfig?: Record<string, unknown>
-  } | null
-  enabled: boolean
-}
-
 export type ShareSnapshotOpts = {
-  /** View/rule shares skip bodies until the visitor opens a row (or downloads). */
   contentIds?: readonly string[] | 'all'
-  /** Independent access rule definition when share.kind === 'rule'. */
-  accessRule?: ShareAccessRuleInput | null
-  /** Enforce single-hop creator authority (owner/manager) per record in rule shares. */
-  canCreatorShareRecord?: (recordId: string) => boolean
-}
-
-function projectRuleRecordColumns(record: DbRecord, columns: string[] | null): DbRecord {
-  if (!columns || columns.length === 0) return record
-  const allow = new Set(['id', 'title', 'shareRole', 'emoji', ...columns])
-  const out: Record<string, unknown> = { id: record.id }
-  for (const [k, v] of Object.entries(record)) {
-    if (allow.has(k)) out[k] = v
-  }
-  return out as DbRecord
-}
-
-async function loadContents(
-  db: Pick<Database, 'content'>,
-  collection: string,
-  records: DbRecord[],
-  ids: readonly string[],
-) {
-  const allow = new Set(ids.map(String))
-  const wanted = records.filter((row) => allow.has(String(row.id)))
-  const bodies = await mapConcurrent(wanted, CONTENT_CONCURRENCY, async (row) => {
-    try {
-      return asContentRead(await db.content(`${collection}/${row.id}`)).value ?? null
-    } catch {
-      return null
-    }
-  })
-  const contents: Record<string, unknown> = {}
-  wanted.forEach((row, index) => {
-    contents[row.id] = bodies[index] ?? null
-  })
-  return contents
 }
 
 function shareTagCatalog(
   db: { tags?: { list: () => CollectionSchemaPack[] } },
   records: DbRecord[],
-  view?: { groupBy?: string; columns?: string[] },
 ): CollectionSchemaPack[] {
   const catalog = db.tags?.list() ?? []
   if (!catalog.length) return []
@@ -131,25 +59,15 @@ function shareTagCatalog(
   for (const row of records) {
     for (const id of normalizeSchemaValue(row.tag).tags) used.add(id)
   }
-  for (const key of [view?.groupBy, ...(view?.columns ?? [])]) {
-    const parsed = parseTagFlatColumnKey(String(key ?? ''))
-    if (parsed) used.add(parsed.packId)
-  }
   if (!used.size) return []
   return catalog.filter((tag) => used.has(tag.id))
-}
-
-function contentIdsFor(share: ShareRecord, records: DbRecord[], opts?: ShareSnapshotOpts) {
-  if (share.kind === 'record' || opts?.contentIds === 'all') return records.map((row) => String(row.id))
-  const allow = new Set(records.map((row) => String(row.id)))
-  return [...new Set((opts?.contentIds ?? []).map(String))].filter((id) => allow.has(id))
 }
 
 export async function buildShareSnapshot(
   db: Pick<Database, 'stat' | 'list' | 'read' | 'content'> & { tags?: { list: () => CollectionSchemaPack[] } },
   _savedViews: SavedViewsStore,
   share: ShareRecord,
-  opts?: ShareSnapshotOpts,
+  _opts?: ShareSnapshotOpts,
 ): Promise<ShareSnapshot> {
   const stat = asStat(await db.stat(share.collection))
   if (stat.kind !== 'collection' || !stat.schema) throw new Error('unknown collection')
@@ -179,52 +97,6 @@ export async function buildShareSnapshot(
       assets: [...collectAssetNames(record, content, record.banner)],
       banner: record.banner ?? null,
       tags: shareTagCatalog(db, [record]),
-    }, share)
-  }
-  if (share.kind === 'rule') {
-    const rule = opts?.accessRule
-    if (!rule || !rule.enabled) throw new Error('unknown rule')
-    const snap = rule.displaySnapshot ?? {}
-    const view = {
-      id: rule.id,
-      name: rule.name || collectionLabel,
-      mode: (typeof snap.mode === 'string' ? snap.mode : undefined) as never,
-      query: '',
-      sortField: 'title',
-      sortDir: 'asc' as const,
-      sorts: Array.isArray(snap.sorts) ? (snap.sorts as never) : undefined,
-      filterTree: rule.filterTree as never,
-      columns: rule.columns ?? undefined,
-      groupBy: typeof snap.groupBy === 'string' ? snap.groupBy : '',
-      groupConfig: snap.groupConfig && typeof snap.groupConfig === 'object' ? (snap.groupConfig as never) : undefined,
-    }
-    const listed = (await db.list(share.collection, viewShareListFilter(view), {
-      q: '',
-      sortField: view.sortField,
-      sortDir: view.sortDir,
-      sorts: view.sorts,
-      limit: SHARE_LIMIT,
-    })) as { items?: DbRecord[] }
-    const rawItems = (listed.items ?? []).filter((row) =>
-      opts?.canCreatorShareRecord ? opts.canCreatorShareRecord(String(row.id)) : true,
-    )
-    const records = rawItems.map((row) => audienceRecord(projectRuleRecordColumns(row, rule.columns)))
-    const contents = await loadContents(db, share.collection, records, contentIdsFor(share, records, opts))
-    return withResources({
-      kind: 'rule',
-      collection: share.collection,
-      viewId: '',
-      recordId: '',
-      ruleId: rule.id,
-      title: rule.name || collectionLabel,
-      collectionLabel,
-      schema,
-      view,
-      records,
-      contents,
-      assets: [...collectAssetNames(...records, ...Object.values(contents))],
-      banner: null,
-      tags: shareTagCatalog(db, records, view),
     }, share)
   }
   throw new Error('unsupported share kind')

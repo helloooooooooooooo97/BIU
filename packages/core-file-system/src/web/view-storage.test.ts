@@ -79,13 +79,13 @@ test('pickViewForRoute keeps builtin-block from the URL when the list is still o
   assert.equal(picked?.filters.blockKind, 'terminal')
 })
 
-test('/data and system collections default to builtin 全部xx view while K+1 collections do not', () => {
+test('single-table collections and /data all default to builtin 全部xx view', () => {
   assert.equal(defaultViewId('/data'), builtinAllViewId('/data'))
   assert.equal(defaultViewId(VIEWS_COLLECTION_PATH), builtinAllViewId(VIEWS_COLLECTION_PATH))
   assert.equal(viewForPath('/data')?.builtin, true)
   assert.deepEqual(viewForPath('/data')?.filters, {})
-  assert.equal(defaultViewId('/agents'), '')
-  assert.equal(viewForPath('/agents'), null)
+  assert.equal(defaultViewId('/agents'), builtinAllViewId('/agents'))
+  assert.equal(viewForPath('/agents')?.id, builtinAllViewId('/agents'))
 })
 
 test('omitted builtin all view is not restored from the route', () => {
@@ -799,16 +799,15 @@ test('savedViewFromRecord extracts createdBy from overlaid PersonValue objects a
   assert.equal(fromString?.createdBy, 'acc_97')
 })
 
-test('catalogLockFilters and viewsForScope enforce strict K+1 view-to-table binding', () => {
+test('catalogLockFilters and savedViewFromRecord preserve single-table filters and 3-state protection', () => {
   const wsView = {
     id: 'v-ws',
     name: '空间看板',
     mode: 'table' as const,
     sortField: 'title',
     sortDir: 'asc' as const,
-    filters: { status: 'open' },
+    filters: { status: 'open', $scope: 'workspace' },
     columns: [],
-    ownerTable: 'workspace',
     scope: 'workspace' as const,
     protection: 'locked' as const,
   }
@@ -818,43 +817,31 @@ test('catalogLockFilters and viewsForScope enforce strict K+1 view-to-table bind
     mode: 'table' as const,
     sortField: 'title',
     sortDir: 'asc' as const,
-    filters: { status: 'draft' },
+    filters: { status: 'draft', $scope: 'personal' },
     columns: [],
-    ownerTable: 'account:u1',
     scope: 'personal' as const,
     protection: 'personal' as const,
   }
-  const topAllView = {
+  const unfilteredView = {
     id: 'v-all',
-    name: '跨表汇总',
+    name: '全部汇总',
     mode: 'table' as const,
     sortField: 'title',
     sortDir: 'asc' as const,
-    filters: { status: 'open', $scope: 'workspace' },
+    filters: { status: 'open' },
     columns: [],
-    ownerTable: 'all',
-    scope: 'personal' as const,
-    protection: 'personal' as const,
+    scope: 'workspace' as const,
+    protection: 'public' as const,
   }
-  const listed = [wsView, personalView, topAllView]
+  const listed = [wsView, personalView, unfilteredView]
 
-  // Workspace and personal views always lock $scope even when filters omit $scope
   assert.deepEqual(catalogLockFilters('v-ws', listed), { status: 'open', $scope: 'workspace' })
   assert.deepEqual(catalogLockFilters('v-personal', listed), { status: 'draft', $scope: 'personal' })
-  // Legacy personal view with scope='personal' and no ownerTable still locks $scope='personal'
-  const legacyPersonal = {
-    id: 'v-legacy-p',
-    name: '历史个人视图',
-    mode: 'table' as const,
-    sortField: 'title',
-    sortDir: 'asc' as const,
-    filters: {},
-    columns: [],
-    scope: 'personal' as const,
-  }
-  assert.equal(viewDomainOf(legacyPersonal), 'personal')
-  assert.deepEqual(catalogLockFilters('v-legacy-p', [legacyPersonal]), { $scope: 'personal' })
-  // Renamed builtin-all view saved with builtin: false stays in 'all' domain (never leaks into workspace)
+  assert.deepEqual(catalogLockFilters('v-all', listed), { status: 'open' })
+  assert.equal(viewDomainOf(wsView), 'workspace')
+  assert.equal(viewDomainOf(personalView), 'personal')
+  assert.equal(viewDomainOf(unfilteredView), 'all')
+
   const renamedAll = {
     id: builtinAllViewId('/pages'),
     name: '全部页面（重命名）',
@@ -864,80 +851,23 @@ test('catalogLockFilters and viewsForScope enforce strict K+1 view-to-table bind
   }
   assert.equal(viewDomainOf(renamedAll), 'all')
   assert.deepEqual(catalogLockFilters(renamedAll.id, [renamedAll]), {})
-  // Top-level cross-table view never locks $scope
-  assert.deepEqual(catalogLockFilters('v-all', listed), { status: 'open' })
 
-  // savedViewFromRecord preserves ownerTable='all', defaults to personal, and honors explicit public protection
   const hydratedDefault = savedViewFromRecord({
-    viewId: 'v-all-default',
-    title: '跨表汇总',
-    ownerTable: 'all',
+    viewId: 'v-default',
+    title: '普通视图',
   })
-  assert.equal(hydratedDefault?.ownerTable, 'all')
-  assert.equal(hydratedDefault?.protection, 'personal')
-  assert.equal(hydratedDefault?.scope, 'personal')
+  assert.equal(hydratedDefault?.protection, 'public')
+  assert.equal(hydratedDefault?.scope, 'workspace')
 
-  const hydratedPublic = savedViewFromRecord({
-    viewId: 'v-all',
-    title: '跨表公开汇总',
-    ownerTable: 'all',
-    scope: 'workspace',
-    protection: 'public',
+  const hydratedPersonal = savedViewFromRecord({
+    viewId: 'v-priv',
+    title: '个人视图',
+    scope: 'personal',
+    protection: 'personal',
   })
-  assert.equal(hydratedPublic?.ownerTable, 'all')
-  assert.equal(hydratedPublic?.protection, 'public')
-  assert.equal(hydratedPublic?.scope, 'workspace')
+  assert.equal(hydratedPersonal?.protection, 'personal')
+  assert.equal(hydratedPersonal?.scope, 'personal')
 
-  // Real view belonging to another user's personal table locks $scope='shared' + $ownerTable when viewer != owner
-  const bobPublicView = {
-    id: 'default:account:bob:/pages',
-    name: '私人页面',
-    ownerTable: 'account:bob',
-    protection: 'public' as const,
-    filters: {},
-  }
-  assert.deepEqual(catalogLockFilters(bobPublicView.id, [bobPublicView], 'alice'), {
-    $scope: 'shared',
-    $ownerTable: 'account:bob',
-  })
-  assert.deepEqual(catalogLockFilters(bobPublicView.id, [bobPublicView], 'bob'), {
-    $scope: 'personal',
-  })
-
-  // pickViewForRoute on K+1 collection redirects legacy builtin-all / unknown routes to concrete workspace public view
-  const wsReal: SavedView = {
-    id: 'default:workspace:/pages',
-    name: '空间页面',
-    mode: 'table',
-    ownerTable: 'workspace',
-    protection: 'public',
-    scope: 'workspace',
-    sortField: 'updatedAt',
-    sortDir: 'desc',
-    filters: {},
-    columns: ['title'],
-  }
-  const myReal: SavedView = {
-    id: 'default:account:alice:/pages',
-    name: '私人页面',
-    mode: 'table',
-    ownerTable: 'account:alice',
-    protection: 'public',
-    scope: 'workspace',
-    sortField: 'updatedAt',
-    sortDir: 'desc',
-    filters: {},
-    columns: ['title'],
-  }
-  assert.equal(pickViewForRoute([wsReal, myReal], '/pages', builtinAllViewId('/pages'))?.id, wsReal.id)
-  assert.equal(pickViewForRoute([wsReal, myReal], '/pages', myReal.id)?.id, myReal.id)
-
-  // Clicking a shared personal table (default:account:97:/agents) before its server view arrives must NOT bounce back to workspace table
-  const foreignPicked = pickViewForRoute([wsReal, myReal], '/agents', 'default:account:97:/agents')
-  assert.equal(foreignPicked?.id, 'default:account:97:/agents')
-  assert.equal(foreignPicked?.ownerTable, 'account:97')
-  assert.deepEqual(catalogLockFilters('default:account:97:/agents', [], 'wenxin'), {
-    $scope: 'shared',
-    $ownerTable: 'account:97',
-  })
+  assert.equal(pickViewForRoute([wsView, personalView], '/pages', 'v-personal')?.id, 'v-personal')
+  assert.equal(pickViewForRoute([wsView, personalView], '/pages', builtinAllViewId('/pages'))?.id, builtinAllViewId('/pages'))
 })

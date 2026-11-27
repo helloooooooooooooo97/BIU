@@ -25,10 +25,10 @@ test('viewsCollection lists saved views with source table', async () => {
   assert.equal(spec.view?.title, '视图')
   assert.equal(spec.view?.inspector, false)
   const rows = await spec.list()
-  const wsDefault = rows.find((row) => row.ownerTable === 'workspace' && row.viewId !== 'v1')
+  const builtinAll = rows.find((row) => row.viewId === builtinAllViewId('/tasks'))
   const user = rows.find((row) => row.id === 'tasks::v1')
-  assert.equal(wsDefault?.title, '空间Task')
-  assert.equal(wsDefault?.tablePath, '/tasks')
+  assert.equal(builtinAll?.title, '全部Task')
+  assert.equal(builtinAll?.tablePath, '/tasks')
   assert.equal(user?.title, '默认视图')
   assert.equal(user?.table, 'Task')
   assert.equal(user?.sortField, 'dueAt')
@@ -44,7 +44,7 @@ test('viewsCollection lists saved views with source table', async () => {
   assert.equal(sorted.sortField, 'title')
   assert.equal(sorted.sortDir, 'desc')
   assert.equal(String(sorted.sorts).includes('"field":"title"'), true)
-  const renamed = await spec.update!(String(wsDefault?.id), { title: '改掉' })
+  const renamed = await spec.update!(String(builtinAll?.id), { title: '改掉' })
   assert.equal(renamed.title, '改掉')
   const graphed = await spec.update!(String(user?.id), { mode: 'graph' })
   assert.equal(graphed.mode, 'graph')
@@ -79,7 +79,7 @@ test('viewsCollection creates and deletes user views on a registered table', asy
   assert.equal(listed.some((item) => item.id === row?.id), false)
 })
 
-test('every registered K+1 table gets a default workspace public view (no builtin-all aggregation view)', async () => {
+test('every registered table gets a builtin-all view in single-table mode', async () => {
   const store = new SavedViewsStore()
   const spec = viewsCollection(store, () => [
     { path: '/agents', id: 'sessions', kind: 'collection', label: '代理', view: { moduleId: 'sessions', route: '/agents', title: '代理', icon: 'sparkles' } },
@@ -87,9 +87,8 @@ test('every registered K+1 table gets a default workspace public view (no builti
   ])
   const rows = await spec.list()
   assert.equal(rows.length, 2)
-  assert.equal(rows.some((row) => row.ownerTable === 'all'), false)
-  assert.equal(rows.find((row) => row.tablePath === '/agents' && row.ownerTable === 'workspace')?.protection, 'public')
-  assert.equal(rows.find((row) => row.tablePath === '/events' && row.ownerTable === 'workspace')?.protection, 'public')
+  assert.equal(rows.find((row) => row.tablePath === '/agents')?.viewId, builtinAllViewId('/agents'))
+  assert.equal(rows.find((row) => row.tablePath === '/events')?.viewId, builtinAllViewId('/events'))
   assert.equal(rows.find((row) => row.tablePath === '/agents')?.tableIcon, 'sparkles')
 })
 
@@ -314,8 +313,8 @@ test('saved views are isolated by workspace_id', () => {
   assert.equal(store.viewsFor('/pages').length, 0)
   store.applyPatch('/pages', {
     upsert: [
-      { id: 'v0', name: 'Workspace B Keep', ownerTable: 'workspace', protection: 'public' },
-      { id: 'v1', name: 'Workspace B View', ownerTable: 'workspace', protection: 'public', filters: { tag: 'b' } },
+      { id: 'v0', name: 'Workspace B Keep', protection: 'public' },
+      { id: 'v1', name: 'Workspace B View', protection: 'public', filters: { tag: 'b' } },
     ],
   })
   store.applyPatch('/pages', { remove: ['v1'] })
@@ -536,11 +535,9 @@ test('/data builtin-all aggregation views are strictly per-user private and isol
   const bobViews = store.viewsFor('/data', 'bob').filter((v) => v.id === 'builtin-all:/data')
   assert.equal(wenxinViews.length, 1)
   assert.equal(wenxinViews[0]?.name, '文馨的全部数据')
-  assert.equal(wenxinViews[0]?.ownerTable, 'all')
   assert.equal(wenxinViews[0]?.protection, 'personal')
   assert.equal(user97Views.length, 1)
   assert.equal(user97Views[0]?.name, '97的全部数据')
-  assert.equal(user97Views[0]?.ownerTable, 'all')
   assert.equal(user97Views[0]?.protection, 'personal')
   assert.equal(bobViews.length, 0)
 
@@ -561,7 +558,7 @@ test('/data builtin-all aggregation views are strictly per-user private and isol
   assert.equal(bobAllRow?.title, '全部数据')
 })
 
-test('/data views are strictly personal and account-bound, while legacy K+1 aggregation views are physically purged on open', async () => {
+test('/data views isolate non-admin views as personal while admin can publish public /data views', async () => {
   const file = join(mkdtempSync(join(tmpdir(), 'biu-saved-views-purge-')), 'file-system.sqlite')
   const store = new SavedViewsStore().open(file)
   store.setWorkspaceResolver(() => 'ws-1')
@@ -569,7 +566,7 @@ test('/data views are strictly personal and account-bound, while legacy K+1 aggr
     isWorkspaceAdmin: (_ws, accountId) => accountId === 'admin-1',
   })
 
-  // Non-admin /data custom views are forced to ownerTable='all', protection='personal', scope='personal'
+  // Non-admin /data custom views are forced to protection='personal', scope='personal'
   store.applyPatch(
     '/data',
     {
@@ -577,7 +574,6 @@ test('/data views are strictly personal and account-bound, while legacy K+1 aggr
         {
           id: 'v-data-agg',
           name: '我的数据聚合视图',
-          ownerTable: 'workspace',
           scope: 'workspace',
           protection: 'public',
           filters: { status: 'open' },
@@ -588,7 +584,6 @@ test('/data views are strictly personal and account-bound, while legacy K+1 aggr
   )
 
   const aliceData = store.viewsFor('/data', 'alice').find((v) => v.id === 'v-data-agg')
-  assert.equal(aliceData?.ownerTable, 'all')
   assert.equal(aliceData?.protection, 'personal')
   assert.equal(aliceData?.scope, 'personal')
   assert.equal(store.viewsFor('/data', 'bob').some((v) => v.id === 'v-data-agg'), false)
@@ -602,7 +597,6 @@ test('/data views are strictly personal and account-bound, while legacy K+1 aggr
         {
           id: 'v-data-public',
           name: '空间公开数据视图',
-          ownerTable: 'all',
           scope: 'workspace',
           protection: 'public',
           filters: {},
@@ -612,142 +606,91 @@ test('/data views are strictly personal and account-bound, while legacy K+1 aggr
     'admin-1',
   )
   const adminPublic = store.viewsFor('/data', 'admin-1').find((v) => v.id === 'v-data-public')
-  assert.equal(adminPublic?.ownerTable, 'all')
   assert.equal(adminPublic?.protection, 'public')
   assert.equal(adminPublic?.scope, 'workspace')
   assert.equal(store.viewsFor('/data', 'alice').some((v) => v.id === 'v-data-public'), true)
   assert.equal(store.viewsFor('/data', 'bob').some((v) => v.id === 'v-data-public'), true)
 
-  // Attempting to write aggregation views onto a K+1 collection (/pages) is ignored
-  store.applyPatch(
-    '/pages',
-    {
-      upsert: [
-        { id: 'v-illegal-agg', name: '非法聚合', ownerTable: 'all', scope: 'personal', protection: 'personal' },
-        { id: 'builtin-all:/pages', name: '旧全部页面', ownerTable: 'all', scope: 'personal', protection: 'personal' },
-      ],
-    },
-    'alice',
-  )
-  assert.equal(store.viewsFor('/pages', 'alice').length, 0)
-
-  // Seed legacy K+1 aggregation rows directly into SQLite and verify reopen physically deletes them
-  const { openAndMigrateBiu } = await import('@biu/host-plugin-loader/data-dir')
-  const rawDb = openAndMigrateBiu(file, { foreignKeys: false })
-  rawDb.prepare(
-    `INSERT INTO saved_views (workspace_id, collection, view_id, payload_json, updated_at) VALUES (?, ?, ?, ?, ?)`,
-  ).run('ws-1', '/pages', 'builtin-all:/pages::user:alice', JSON.stringify({ id: 'builtin-all:/pages', name: '旧全部页面', ownerTable: 'all', createdBy: 'alice' }), Date.now())
-  rawDb.prepare(
-    `INSERT INTO saved_views (workspace_id, collection, view_id, payload_json, updated_at) VALUES (?, ?, ?, ?, ?)`,
-  ).run('ws-1', '/pages', 'legacy-shared-agg', JSON.stringify({ id: 'legacy-shared-agg', name: '旧共享聚合', ownerTable: 'all', filters: { $scope: 'shared' }, createdBy: 'alice' }), Date.now())
-  rawDb.close()
-
   const reopened = new SavedViewsStore().open(file)
   reopened.setWorkspaceResolver(() => 'ws-1')
-  // /data aggregation view survives reopen
   assert.equal(reopened.viewsFor('/data', 'alice').some((v) => v.id === 'v-data-agg'), true)
-  // legacy /pages aggregation views are physically deleted from SQLite
-  assert.equal(reopened.viewsFor('/pages', 'alice').length, 0)
-  const verifyDb = openAndMigrateBiu(file, { foreignKeys: false })
-  const remainingLegacy = verifyDb
-    .prepare(`SELECT COUNT(*) AS cnt FROM saved_views WHERE collection = '/pages'`)
-    .get() as { cnt: number }
-  verifyDb.close()
-  assert.equal(remainingLegacy.cnt, 0)
 })
 
-test('personal-table views support 3 protection states for owner, force personal for non-owners, and enforce at-least-1 public view per concrete table', () => {
-  const file = join(mkdtempSync(join(tmpdir(), 'fsdb-views-kplus1-')), 'file-system.sqlite')
+test('single-table views support 3 protection states and /workspace-members locked view guardrails', () => {
+  const file = join(mkdtempSync(join(tmpdir(), 'fsdb-views-single-table-')), 'file-system.sqlite')
   const store = new SavedViewsStore().open(file)
   store.setWorkspaceResolver(() => 'ws-1')
-  store.setPolicyGuard({})
+  let refCount = 0
+  let memberViewChanged = 0
+  store.setPolicyGuard({
+    isWorkspaceAdmin: (_ws, accountId) => accountId === 'admin-1',
+    memberViewGrantCount: (_ws, viewId) => (viewId === 'mv-eng' ? refCount : 0),
+    onMemberViewChanged: () => {
+      memberViewChanged += 1
+    },
+  })
 
-  // 1. 首次列出 /views 自动为空间表与当前用户个人表各生成 1 个普通公共视图（无 builtin 特殊态）
-  const tables = [
-    { path: '/pages', id: 'pages', kind: 'collection' as const, label: '页面', view: { moduleId: 'pages', route: '/pages', title: '页面' } },
-  ]
-  const aliceRows = store.rows(tables, 'alice')
-  const wsDefault = aliceRows.find((r) => r.ownerTable === 'workspace')
-  const myDefault = aliceRows.find((r) => r.ownerTable === 'account:alice')
-  assert.ok(wsDefault, '空间表应自动生成默认公共视图')
-  assert.equal(wsDefault?.protection, 'public')
-  assert.ok(myDefault, '个人表应自动生成默认公共视图')
-  assert.equal(myDefault?.protection, 'public')
-
-  // 2. 保底约束：不能删除具体表的最后一个公共/锁定视图，也不能将其切为个人视图
-  assert.throws(
-    () => store.applyPatch('/pages', { remove: [String(myDefault!.viewId)] }, 'alice'),
-    /至少保留一个公共视图/,
-  )
-  assert.throws(
-    () =>
-      store.applyPatch(
-        '/pages',
-        {
-          upsert: [
-            {
-              id: String(myDefault!.viewId),
-              name: String(myDefault!.title),
-              ownerTable: 'account:alice',
-              protection: 'personal',
-              scope: 'personal',
-            },
-          ],
-        },
-        'alice',
-      ),
-    /至少保留一个公共视图/,
-  )
-
-  // 3. 个人表支持三态（public / locked / personal），非表主人在他人个人表下新建强制 personal
+  // 1. Single-table views support public / locked / personal without ownerTable partitioning
   store.applyPatch(
     '/pages',
     {
       upsert: [
-        {
-          id: 'v-my-personal',
-          name: '我的个人视图',
-          scope: 'personal',
-          protection: 'personal',
-          filters: { $scope: 'personal' },
-        },
-        {
-          id: 'v-my-locked',
-          name: '我的锁定视图',
-          ownerTable: 'account:alice',
-          scope: 'workspace',
-          protection: 'locked',
-        },
-        {
-          id: 'v-in-bob-table',
-          name: '在Bob表里建的私有视图',
-          ownerTable: 'account:bob',
-          scope: 'workspace',
-          protection: 'public',
-        },
+        { id: 'v-my-personal', name: '我的个人视图', scope: 'personal', protection: 'personal', filters: { $scope: 'personal' } },
+        { id: 'v-my-locked', name: '我的锁定视图', scope: 'workspace', protection: 'locked' },
+        { id: 'v-public', name: '公共视图', scope: 'workspace', protection: 'public' },
       ],
     },
     'alice',
   )
 
   const aliceViews = store.viewsFor('/pages', 'alice')
-  const mine = aliceViews.find((v) => v.id === 'v-my-personal')
-  assert.equal(mine?.ownerTable, 'account:alice')
-  assert.equal(mine?.scope, 'personal')
-  assert.equal(mine?.protection, 'personal')
-
-  const locked = aliceViews.find((v) => v.id === 'v-my-locked')
-  assert.equal(locked?.ownerTable, 'account:alice')
-  assert.equal(locked?.protection, 'locked')
-
-  // 非表主人 alice 在 bob 个人表下新建视图，强制为 personal，且 bob 看不到 alice 的私有视图
-  const inBob = aliceViews.find((v) => v.id === 'v-in-bob-table')
-  assert.equal(inBob?.ownerTable, 'account:bob')
-  assert.equal(inBob?.protection, 'personal')
-  assert.equal(inBob?.scope, 'personal')
-  assert.equal(store.viewsFor('/pages', 'bob').some((v) => v.id === 'v-in-bob-table'), false)
+  assert.equal(aliceViews.find((v) => v.id === 'v-my-personal')?.protection, 'personal')
+  assert.equal(aliceViews.find((v) => v.id === 'v-my-locked')?.protection, 'locked')
+  assert.equal(aliceViews.find((v) => v.id === 'v-public')?.protection, 'public')
   assert.equal(store.viewsFor('/pages', 'bob').some((v) => v.id === 'v-my-personal'), false)
-  assert.equal(store.viewsFor('/pages', 'admin-1').some((v) => v.id === 'v-my-personal'), false)
+  assert.equal(store.viewsFor('/pages', 'bob').some((v) => v.id === 'v-public'), true)
+
+  // 2. /workspace-members locked views are admin-only and guarded when referenced by record grants
+  assert.throws(
+    () =>
+      store.applyPatch(
+        '/workspace-members',
+        { upsert: [{ id: 'mv-eng', name: '研发部', protection: 'locked', scope: 'workspace' }] },
+        'alice',
+      ),
+    /MEMBER_LOCKED_VIEW_ADMIN_ONLY/,
+  )
+  store.applyPatch(
+    '/workspace-members',
+    { upsert: [{ id: 'mv-eng', name: '研发部', protection: 'locked', scope: 'workspace', filters: { role: 'member' } }] },
+    'admin-1',
+  )
+  assert.equal(store.isLockedMemberView('ws-1', 'mv-eng'), true)
+  assert.ok(memberViewChanged >= 1)
+
+  refCount = 3
+  assert.throws(
+    () =>
+      store.applyPatch(
+        '/workspace-members',
+        { upsert: [{ id: 'mv-eng', name: '研发部', protection: 'public', scope: 'workspace' }] },
+        'admin-1',
+      ),
+    /MEMBER_VIEW_REFERENCED/,
+  )
+  assert.throws(
+    () => store.applyPatch('/workspace-members', { remove: ['mv-eng'] }, 'admin-1'),
+    /MEMBER_VIEW_REFERENCED/,
+  )
+
+  // Once references are released (frozen/revoked), admin can unlock or delete cleanly
+  refCount = 0
+  store.applyPatch(
+    '/workspace-members',
+    { upsert: [{ id: 'mv-eng', name: '研发部', protection: 'public', scope: 'workspace' }] },
+    'admin-1',
+  )
+  assert.equal(store.isLockedMemberView('ws-1', 'mv-eng'), false)
 })
 
 test('builtin workspace views can be modified by workspace admins as well as workspace owner, but not normal members', () => {
@@ -762,7 +705,7 @@ test('builtin workspace views can be modified by workspace admins as well as wor
   })
   store.applyPatch(
     '/pages',
-    { upsert: [{ id: 'v-builtin', name: '内置空间视图', builtin: true, scope: 'workspace', ownerTable: 'workspace' }] },
+    { upsert: [{ id: 'v-builtin', name: '内置空间视图', builtin: true, scope: 'workspace' }] },
     'owner-1',
   )
 
@@ -788,8 +731,8 @@ test('/data admin public/locked views survive asRecord(), write(), and SQLite re
     '/data',
     {
       upsert: [
-        { id: 'v-data-pub', name: '公开总览', ownerTable: 'all', protection: 'public', scope: 'workspace' },
-        { id: 'v-data-lock', name: '锁定总览', ownerTable: 'all', protection: 'locked', scope: 'workspace' },
+        { id: 'v-data-pub', name: '公开总览', protection: 'public', scope: 'workspace' },
+        { id: 'v-data-lock', name: '锁定总览', protection: 'locked', scope: 'workspace' },
       ],
     },
     'admin-1',

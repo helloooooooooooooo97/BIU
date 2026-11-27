@@ -330,7 +330,7 @@ function Shell(props: SlotProps) {
         if (!live) return
         const next = profile?.dataLocation === 'cloud' ? 'cloud' : 'device'
         setWorkspaceLocation(next)
-        if (next === 'device') setSettingsTab((current) => (current === 'members' || current === 'permissions' ? 'workspace' : current))
+        if (next === 'device') setSettingsTab((current) => (current === 'members' ? 'workspace' : current))
       })
       .catch(() => {
         if (live) setWorkspaceLocation('device')
@@ -339,14 +339,6 @@ function Shell(props: SlotProps) {
       live = false
     }
   }, [settingsOpen])
-  useEffect(() => {
-    const onOpenRules = () => {
-      setSettingsTab('permissions')
-      setSettingsOpen(true)
-    }
-    window.addEventListener('biu:open-access-rules', onOpenRules)
-    return () => window.removeEventListener('biu:open-access-rules', onOpenRules)
-  }, [])
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => getSidebarPersist(SIDEBAR_PERSIST.collapsed) === '1')
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const n = Number(getSidebarPersist(SIDEBAR_PERSIST.width))
@@ -1061,7 +1053,7 @@ function Shell(props: SlotProps) {
             onClick={() => setSettingsOpen(false)}
           >
             <div
-              className={`biu-float settings-float${settingsTab === 'permissions' ? ' is-permissions' : ''}`}
+              className="biu-float settings-float"
               role="dialog"
               aria-modal="true"
               aria-label="设置"
@@ -1082,9 +1074,8 @@ function Shell(props: SlotProps) {
                     items: [
                       { key: 'workspace', label: '空间', Icon: CircleStackIcon },
                       { key: 'members', label: '成员', Icon: UserGroupIcon },
-                      { key: 'permissions', label: '权限', Icon: LockClosedIcon },
                       { key: 'mcp', label: 'MCP', Icon: LinkIcon },
-                    ].filter((item) => (item.key !== 'members' && item.key !== 'permissions') || workspaceLocation === 'cloud'),
+                    ].filter((item) => item.key !== 'members' || workspaceLocation === 'cloud'),
                   },
                   {
                     group: '偏好设置',
@@ -1123,13 +1114,12 @@ function Shell(props: SlotProps) {
                 >
                   <XMarkIcon {...chromeIcon} />
                 </button>
-                <div className={`settings-pane${settingsTab === 'permissions' ? ' is-permissions' : ''}`}>
+                <div className="settings-pane">
                   {settingsTab === 'account' ? <ShellSettingsAccount /> : null}
                   {settingsTab === 'connections' ? <ShellSettingsConnections /> : null}
                   {settingsTab === 'security' ? <ShellSettingsSecurity /> : null}
                   {settingsTab === 'workspace' ? <ShellSettingsWorkspace /> : null}
                   {settingsTab === 'members' && workspaceLocation === 'cloud' ? <ShellSettingsMembers /> : null}
-                  {settingsTab === 'permissions' && workspaceLocation === 'cloud' ? props.renderSlot('settings-permissions') : null}
                   {settingsTab === 'style' ? <ShellSettingsAppearance /> : null}
                   {settingsTab === 'mcp' ? <ShellSettingsMcp onLeave={() => setSettingsOpen(false)} /> : null}
                   {settingsTab === 'shortcuts' ? <ShellSettingsShortcuts /> : null}

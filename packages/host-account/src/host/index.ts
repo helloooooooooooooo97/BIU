@@ -1081,90 +1081,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     route.send(200, { members: account.store.members(me.id, route.params.id!) })
   })
 
-  authedRoute('GET', '/api/account/groups', async (route, me) => {
-    const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
-    if (!workspaceId) {
-      route.send(200, { groups: [] })
-      return
-    }
-    requireCollaborativeWorkspace(workspaceId)
-    route.send(200, { groups: account.store.groups(me.id, workspaceId) })
-  })
-
-  authedRoute('POST', '/api/account/groups', async (route, me) => {
-    const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
-    if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
-    requireCollaborativeWorkspace(workspaceId)
-    const body = (await route.json()) as {
-      name?: string
-      kind?: 'static' | 'dynamic'
-      filterTree?: Record<string, unknown> | null
-    }
-    const group = account.store.createGroup(me.id, workspaceId, String(body.name ?? ''), {
-      kind: body.kind === 'dynamic' ? 'dynamic' : 'static',
-      filterTree: body.filterTree ?? null,
-    })
-    broadcastAccessChange(workspaceId, 'records')
-    route.send(201, group)
-  })
-
-  authedRoute('GET', '/api/account/workspaces/:id/groups', async (route, me) => {
-    requireCollaborativeWorkspace(route.params.id!)
-    route.send(200, { groups: account.store.groups(me.id, route.params.id!) })
-  })
-
-  authedRoute('POST', '/api/account/workspaces/:id/groups', async (route, me) => {
-    requireCollaborativeWorkspace(route.params.id!)
-    const body = (await route.json()) as {
-      name?: string
-      kind?: 'static' | 'dynamic'
-      filterTree?: Record<string, unknown> | null
-    }
-    const group = account.store.createGroup(me.id, route.params.id!, String(body.name ?? ''), {
-      kind: body.kind === 'dynamic' ? 'dynamic' : 'static',
-      filterTree: body.filterTree ?? null,
-    })
-    broadcastAccessChange(route.params.id!, 'records')
-    route.send(201, group)
-  })
-
-  authedRoute('PATCH', '/api/account/workspaces/:id/groups/:groupId', async (route, me) => {
-    requireCollaborativeWorkspace(route.params.id!)
-    const body = (await route.json()) as {
-      name?: string
-      filterTree?: Record<string, unknown> | null
-    }
-    const group = account.store.updateGroup(me.id, route.params.id!, route.params.groupId!, {
-      ...(body.name !== undefined ? { name: String(body.name) } : {}),
-      ...(body.filterTree !== undefined ? { filterTree: body.filterTree } : {}),
-    })
-    broadcastAccessChange(route.params.id!, 'records')
-    route.send(200, group)
-  })
-
-  authedRoute('DELETE', '/api/account/workspaces/:id/groups/:groupId', async (route, me) => {
-    requireCollaborativeWorkspace(route.params.id!)
-    const result = account.store.deleteGroup(me.id, route.params.id!, route.params.groupId!)
-    broadcastAccessChange(route.params.id!, 'records')
-    route.send(200, result)
-  })
-
-  authedRoute('POST', '/api/account/workspaces/:id/groups/:groupId/members', async (route, me) => {
-    requireCollaborativeWorkspace(route.params.id!)
-    const body = (await route.json()) as { email?: string }
-    route.send(
-      200,
-      {
-        members: account.store.addGroupMemberByEmail(
-          me.id,
-          route.params.id!,
-          route.params.groupId!,
-          String(body.email ?? ''),
-        ),
-      },
-    )
-  })
-
   authedRoute('GET', '/api/account/member-activity', async (route, me) => {
     const memberId = String(route.query.get('memberId') ?? '').trim() || me.id
     const days = Number(route.query.get('days') ?? 182)
@@ -1278,11 +1194,12 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     if (!activeWorkspace || account.workspaceLocation(activeWorkspace) !== 'cloud') {
       route.send(200, {
         scope: 'personal',
-        ownerTable: `account:${me.id}`,
+        hasExternalCollaborator: false,
         accessMode: 'private',
+        memberDefaultRole: 'viewer',
         ownerId: me.id,
         people: [],
-        groups: [],
+        memberViews: [],
         roleChain: [],
         local: true,
       })
@@ -1310,9 +1227,8 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     const body = (await route.json()) as {
       collection?: string
       recordId?: string
-      viewId?: string
+      memberViewId?: string
       email?: string
-      groupId?: string
       role?: ResourceRole
       collaboratorKind?: 'internal' | 'external'
     }
@@ -1323,8 +1239,8 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         ? body.role
         : 'editor'
     const kind = body.collaboratorKind === 'internal' ? 'internal' : 'external'
-    const result = body.groupId
-      ? account.store.grantGroup(me.id, collection, recordId, String(body.groupId), role)
+    const result = body.memberViewId
+      ? account.store.grantMemberView(me.id, collection, recordId, String(body.memberViewId), role)
       : account.store.shareWithEmail(me.id, collection, recordId, String(body.email ?? ''), role, kind)
     broadcastAccessChange(activeWorkspace, 'records', collection)
     route.send(200, result)
@@ -1337,20 +1253,29 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       collection?: string
       recordId?: string
       inheritanceMode?: 'inherit' | 'custom'
-      accessMode?: 'members' | 'restricted'
+      accessMode?: 'private' | 'members' | 'restricted'
+      memberDefaultRole?: 'viewer' | 'editor'
     }
     const collection = String(body.collection ?? '').trim()
     const recordId = String(body.recordId ?? '').trim()
     const inheritanceMode =
       body.inheritanceMode === 'inherit' ? 'inherit' : body.inheritanceMode === 'custom' ? 'custom' : null
     const accessMode =
-      body.accessMode === 'members' ? 'members' : body.accessMode === 'restricted' ? 'restricted' : null
+      body.accessMode === 'members'
+        ? 'members'
+        : body.accessMode === 'private' || body.accessMode === 'restricted'
+          ? 'private'
+          : null
+    const memberDefaultRole =
+      body.memberDefaultRole === 'viewer' || body.memberDefaultRole === 'editor'
+        ? body.memberDefaultRole
+        : undefined
     if (!collection || !recordId || (!inheritanceMode && !accessMode)) {
       route.send(400, { error: '参数不完整' })
       return
     }
     const result = accessMode
-      ? account.store.setRecordAccessMode(me.id, collection, recordId, accessMode)
+      ? account.store.setRecordAccessMode(me.id, collection, recordId, accessMode, memberDefaultRole)
       : account.store.setRecordInheritance(me.id, collection, recordId, inheritanceMode!)
     broadcastAccessChange(activeWorkspace, 'records', collection)
     route.send(200, result)
@@ -1362,13 +1287,11 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     const body = (await route.json()) as {
       collection?: string
       recordId?: string
-      viewId?: string
-      subjectType?: 'account' | 'group'
+      subjectType?: 'account' | 'member_view'
       subjectId?: string
-      grantedBy?: string
     }
     const collection = String(body.collection ?? '')
-    const subjectType = body.subjectType === 'group' ? 'group' : 'account'
+    const subjectType = body.subjectType === 'member_view' ? 'member_view' : 'account'
     const result = account.store.revokeRecordGrant(
       me.id,
       collection,
@@ -1406,124 +1329,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       path: guestPath,
       ...(origin ? { url: `${origin}${guestPath}` } : {}),
     })
-  })
-  // 独立分享规则（access_rules）CRUD：按 K+1 逻辑表分区（workspace 规则由管理员共管，personal 规则个人持有）
-  authedRoute('GET', '/api/account/access-rules', async (route, me) => {
-    const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
-    if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
-    const collection = route.query.get('collection')?.trim() || undefined
-    const rawScope = route.query.get('scope')?.trim()
-    const scopeFilter = rawScope === 'workspace' || rawScope === 'personal' ? rawScope : 'all'
-    const rules = account.store.listVisibleAccessRules(me.id, workspaceId, collection, scopeFilter)
-    route.send(200, { rules })
-  })
-
-  authedRoute('POST', '/api/account/access-rules', async (route, me) => {
-    const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
-    if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
-    const body = (await route.json()) as {
-      collection?: string
-      name?: string
-      scope?: 'workspace' | 'personal'
-      ownerTable?: string
-      filterTree?: Record<string, unknown>
-      columns?: string[] | null
-      displaySnapshot?: { mode?: string; sorts?: unknown[]; groupBy?: string; groupConfig?: Record<string, unknown> } | null
-      enabled?: boolean
-      grants?: Array<{ subjectType: 'account' | 'workspace' | 'group'; subjectId: string; role: 'viewer' | 'editor' | 'manager' }>
-    }
-    const rule = account.store.createAccessRule(me.id, workspaceId, {
-      collection: String(body.collection ?? ''),
-      name: String(body.name ?? ''),
-      scope: body.scope,
-      ownerTable: body.ownerTable,
-      filterTree: body.filterTree,
-      columns: body.columns,
-      displaySnapshot: body.displaySnapshot,
-      enabled: body.enabled,
-      grants: body.grants,
-    })
-    broadcastAccessChange(workspaceId, 'records', rule.collection)
-    route.send(201, { rule })
-  })
-
-  authedRoute('POST', '/api/account/records/owner-table', async (route, me) => {
-    const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
-    if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
-    const body = (await route.json()) as {
-      collection?: string
-      recordId?: string
-      ownerTable?: string
-    }
-    const collection = String(body.collection ?? '').trim()
-    const recordId = String(body.recordId ?? '').trim()
-    const ownerTable = String(body.ownerTable ?? '').trim()
-    const result = account.store.transferRecordOwnerTable(me.id, workspaceId, collection, recordId, ownerTable)
-    broadcastAccessChange(workspaceId, 'records', collection)
-    route.send(200, result)
-  })
-
-  authedRoute('PATCH', '/api/account/access-rules/:id', async (route, me) => {
-    const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
-    if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
-    const ruleId = String(route.params.id ?? '').trim()
-    const body = (await route.json()) as {
-      name?: string
-      filterTree?: Record<string, unknown>
-      columns?: string[] | null
-      displaySnapshot?: { mode?: string; sorts?: unknown[]; groupBy?: string; groupConfig?: Record<string, unknown> } | null
-      enabled?: boolean
-      grants?: Array<{ subjectType: 'account' | 'workspace' | 'group'; subjectId: string; role: 'viewer' | 'editor' | 'manager' }>
-    }
-    const rule = account.store.updateAccessRule(me.id, workspaceId, ruleId, body)
-    broadcastAccessChange(workspaceId, 'records', rule.collection)
-    route.send(200, { rule })
-  })
-
-  authedRoute('DELETE', '/api/account/access-rules/:id', async (route, me) => {
-    const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
-    if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
-    const ruleId = String(route.params.id ?? '').trim()
-    const result = account.store.deleteAccessRule(me.id, workspaceId, ruleId)
-    broadcastAccessChange(workspaceId, 'records')
-    route.send(200, result)
-  })
-
-  authedRoute('POST', '/api/account/access-rules/:id/grants', async (route, me) => {
-    const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
-    if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
-    const ruleId = String(route.params.id ?? '').trim()
-    const body = (await route.json()) as {
-      subjectType?: 'account' | 'workspace' | 'group'
-      subjectId?: string
-      role?: 'viewer' | 'editor' | 'manager'
-    }
-    const rule = account.store.grantAccessRuleSubject(me.id, workspaceId, ruleId, {
-      subjectType: body.subjectType ?? 'account',
-      subjectId: String(body.subjectId ?? ''),
-      role: body.role ?? 'viewer',
-    })
-    broadcastAccessChange(workspaceId, 'records', rule.collection)
-    route.send(200, { rule })
-  })
-
-  authedRoute('DELETE', '/api/account/access-rules/:id/grants', async (route, me) => {
-    const workspaceId = resolveScopedWorkspaceId(ctx) || account.store.activeWorkspaceId() || ''
-    if (!workspaceId) throw new CollabError('未找到活跃工作区', 400)
-    const ruleId = String(route.params.id ?? '').trim()
-    const body = (await route.json()) as {
-      subjectType?: 'account' | 'workspace' | 'group'
-      subjectId?: string
-    }
-    const rule = account.store.revokeAccessRuleSubject(
-      me.id,
-      workspaceId,
-      ruleId,
-      body.subjectType ?? 'account',
-      String(body.subjectId ?? ''),
-    )
-    broadcastAccessChange(workspaceId, 'records', rule.collection)
-    route.send(200, { rule })
   })
 
   authedRoute('POST', '/api/account/presence', async (route, me) => {

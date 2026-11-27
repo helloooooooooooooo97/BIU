@@ -1,5 +1,5 @@
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
-import type { WorkspaceRole } from './authorization.ts'
+import type { ResourceRole, WorkspaceRole } from './authorization.ts'
 
 export const PRESENCE_STALE_MS = 30_000
 export const DEFAULT_LOCK_MS = 60_000
@@ -23,9 +23,7 @@ export function isRegisteredBuiltinPlugin(pluginId: string) {
   return false
 }
 
-export type PluginAssignmentSubject =
-  | { type: 'account'; id: string }
-  | { type: 'group'; id: string }
+export type PluginAssignmentSubject = { type: 'account'; id: string }
 
 export type PluginPackageInput = {
   id: string
@@ -106,80 +104,34 @@ export type PresenceRow = {
   seenAt: number
 }
 
-export type AccessRuleSubjectType = 'account' | 'workspace' | 'group'
+export type BatchPermissionSubject =
+  | { subjectType: 'account'; subjectId: string }
+  | { subjectType: 'member_view'; subjectId: string }
 
-export type AccessRuleScope = 'workspace' | 'personal'
-
-export type WorkspaceGroupKind = 'static' | 'dynamic'
-
-export type AccessRuleRole = 'viewer' | 'editor' | 'manager'
-
-export type AccessRuleDisplaySnapshot = {
-  mode?: string
-  sorts?: unknown[]
-  groupBy?: string
-  groupConfig?: Record<string, unknown>
-}
-
-export type AccessRuleGrantRecord = {
-  id: string
-  ruleId: string
-  workspaceId: string
-  subjectType: AccessRuleSubjectType
-  subjectId: string
-  role: AccessRuleRole
-  createdAt: number
-  subjectName?: string
-  subjectEmail?: string
-  subjectAvatar?: string
-}
-
-export type AccessRuleRecord = {
-  id: string
-  workspaceId: string
+export type BatchPermissionApplyInput = {
   collection: string
-  name: string
-  createdBy: string
-  createdByName?: string
-  ownerTable: string
-  scope: AccessRuleScope
-  filterTree: Record<string, unknown>
-  columns: string[] | null
-  displaySnapshot: AccessRuleDisplaySnapshot | null
-  enabled: boolean
-  canManage?: boolean
-  createdAt: number
-  updatedAt: number
-  grants: AccessRuleGrantRecord[]
+  recordIds: string[]
+  mode: 'grant' | 'revoke' | 'access_mode'
+  subjects?: BatchPermissionSubject[]
+  role?: ResourceRole
+  accessMode?: 'private' | 'members'
+  memberDefaultRole?: 'viewer' | 'editor'
 }
 
-export type AccessRuleGrantInput = {
-  subjectType: AccessRuleSubjectType
-  subjectId: string
-  role: AccessRuleRole
-}
-
-export type CreateAccessRuleInput = {
+export type BatchPermissionPreviewResult = {
   collection: string
-  name: string
-  scope?: AccessRuleScope
-  ownerTable?: string
-  filterTree?: Record<string, unknown>
-  columns?: string[] | null
-  displaySnapshot?: AccessRuleDisplaySnapshot | null
-  enabled?: boolean
-  grants?: AccessRuleGrantInput[]
+  totalCount: number
+  manageableCount: number
+  skippedCount: number
+  manageableIds: string[]
 }
 
-export type UpdateAccessRuleInput = {
-  name?: string
-  scope?: AccessRuleScope
-  ownerTable?: string
-  filterTree?: Record<string, unknown>
-  columns?: string[] | null
-  displaySnapshot?: AccessRuleDisplaySnapshot | null
-  enabled?: boolean
-  grants?: AccessRuleGrantInput[]
+export type BatchPermissionApplyResult = {
+  collection: string
+  totalCount: number
+  updatedCount: number
+  skippedCount: number
+  updatedIds: string[]
 }
 
 export function id(prefix: string) {

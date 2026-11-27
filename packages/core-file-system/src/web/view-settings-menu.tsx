@@ -281,7 +281,7 @@ export function ViewSettingsMenu({
             ) : null}
 
             {!foreignViewReadOnly && !sheet && activeView && (!activeView.builtin || isBuiltinAllViewId(activeView.id)) ? (
-              isBuiltinAllViewId(activeView.id) || (activeView.ownerTable === 'all' && !viewer.isAdmin) ? (
+              isBuiltinAllViewId(activeView.id) ? (
                 <div
                   className="fsdb-group-panel-row"
                   data-testid="fsdb-vset-all-table-note"
@@ -297,9 +297,7 @@ export function ViewSettingsMenu({
                   value={activeView.protection ?? (activeView.scope === 'personal' ? 'personal' : 'public')}
                   options={[
                     { value: 'public', label: '公共视图（成员可改）' },
-                    ...(!(activeView.ownerTable?.startsWith('account:') && viewer.accountId && activeView.ownerTable !== `account:${viewer.accountId}`)
-                      ? [{ value: 'locked', label: '锁定视图（仅管理者可改）' }]
-                      : []),
+                    { value: 'locked', label: '锁定视图（仅管理者可改）' },
                     { value: 'personal', label: '个人视图（仅自己可见）' },
                   ]}
                   open={openAcc === 'scope'}

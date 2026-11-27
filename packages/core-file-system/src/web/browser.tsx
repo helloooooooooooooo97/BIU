@@ -206,13 +206,10 @@ import {
   mergeTableViews,
   stampRowOpenTarget,
   stubBuiltinBlockKindView,
-  stubDefaultTableView,
   viewDomainOf,
-  defaultTableViewId,
   type DataScope,
   type ViewDomain,
 } from '../catalog-views.ts'
-import { tableModeFor } from '../paths.ts'
 import { SAVED_VIEW_EVENT, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import {
   CLEAR_SHELL_TABLE_CELL,
@@ -640,33 +637,23 @@ export function CollectionBrowser({
   const [views, setViews] = useState<SavedView[]>(() => initialExternalViews ?? paintListedViews(collectionPath))
   const [viewsSaveError, setViewsSaveError] = useState(false)
   const [activeViewId, setActiveViewId] = useState<string | null>(initialSheetView?.id ?? initialView?.id ?? null)
-  const activeView =
-    views.find((view) => view.id === activeViewId) ??
-    (activeViewId ? stubDefaultTableView(activeViewId, { path: collectionPath, label: title }) ?? undefined : undefined)
+  const activeView = views.find((view) => view.id === activeViewId)
   const [routeViewReady, setRouteViewReady] = useState(() => !routeViewNeedsFetch(collectionPath, routeViewId))
   const routeViewReadyRef = useRef(routeViewReady)
   routeViewReadyRef.current = routeViewReady
-  const isKPlus1Cloud = !sheet && !localData && tableModeFor(collectionPath) === 'k-plus-1'
-  const membersById = useMemberDirectory(isKPlus1Cloud)
   const [viewerAccountId, setViewerAccountId] = useState('')
-  const [workspaceAvatar, setWorkspaceAvatar] = useState('')
   useEffect(() => {
-    if (!isKPlus1Cloud) return
+    if (sheet || localData) return
     let alive = true
     const loadIdentity = () => {
       void Promise.all([
         readJson<{ accountId?: string }>('/api/account/workspace-profile').catch(() => null),
         readJson<{ id?: string; account?: { id?: string } | null }>('/api/account/me').catch(() => null),
-        readJson<{ workspaceId?: string }>('/api/account/active').catch(() => null),
-        readJson<{ workspaces?: Array<{ id?: string; avatar?: string }> }>('/api/account/workspaces').catch(() => null),
       ])
-        .then(([wp, data, active, listed]) => {
+        .then(([wp, data]) => {
           if (!alive) return
           const id = String(wp?.accountId ?? data?.id ?? data?.account?.id ?? '').trim()
           if (id) setViewerAccountId(id)
-          const activeId = String(active?.workspaceId ?? '').trim()
-          const currentWs = listed?.workspaces?.find((w) => w.id === activeId)
-          setWorkspaceAvatar(String(currentWs?.avatar ?? '').trim())
         })
         .catch(() => {})
     }
@@ -676,7 +663,7 @@ export function CollectionBrowser({
       alive = false
       window.removeEventListener('biu:account-token', loadIdentity)
     }
-  }, [isKPlus1Cloud])
+  }, [localData, sheet])
   const catalogLocks = useMemo(() => {
     if (sheet) return lockedFilters
     return { ...catalogLockFilters(activeViewId, views, viewerAccountId), ...lockedFilters }
@@ -1784,27 +1771,17 @@ export function CollectionBrowser({
 
   const schema = stat?.schema
   const isDataOverview = dataPath === DATA_COLLECTION_PATH
-  const nonScopeLockedKeys = lockedFilterKeys.filter((key) => key !== '$scope' && key !== '$ownerTable')
+  const nonScopeLockedKeys = lockedFilterKeys.filter((key) => key !== '$scope')
   const subsetLocked = nonScopeLockedKeys.length > 0 && !(isDataOverview && (sheet || lockedSource))
   const isSharedScopeView = catalogLocks.$scope === 'shared'
   const overviewCreateTables = useMemo(
     () => tables.filter((table) => isOverviewCreatableCollection(table)),
     [tables],
   )
-  const foreignOwnerIdForCreate =
-    activeView?.ownerTable?.startsWith('account:') &&
-    viewerAccountId &&
-    activeView.ownerTable !== `account:${viewerAccountId}`
-      ? activeView.ownerTable.slice('account:'.length)
-      : ''
-  const canEditForeignPersonalTable = foreignOwnerIdForCreate
-    ? items.some((row) => row.shareRole === '编辑' || row.shareRole === '管理')
-    : false
-  const createOwnerTable = foreignOwnerIdForCreate ? `account:${foreignOwnerIdForCreate}` : undefined
   const canCreate =
     (isDataOverview ? overviewCreateTables.length > 0 : Boolean(schema?.records?.create)) &&
     !subsetLocked &&
-    (foreignOwnerIdForCreate ? canEditForeignPersonalTable : !isSharedScopeView)
+    !isSharedScopeView
   const canAskNewPlugin = collectionPath === PLUGINS_COLLECTION_PATH && !subsetLocked
   const createTypeTable =
     overviewCreateTables.find((table) => table.path === createTypePath) ??
@@ -1864,7 +1841,6 @@ export function CollectionBrowser({
         if (key === 'actions') return { key, kind: 'action' as const, field: { type: 'action' as const, label: '动作' } }
         if (key === 'shareScope') return { key, kind: 'select' as const, field: { type: 'select' as const, label: '分享' } }
         if (key === 'shareRole') return { key, kind: 'select' as const, field: { type: 'select' as const, label: '权限' } }
-        if (key === 'ownerTable') return { key, kind: 'select' as const, field: { type: 'select' as const, label: '归属' } }
         const tag = parseTagFlatColumnKey(key)
         if (tag) {
           const pack = tagCatalog.find((entry) => entry.id === tag.packId)
@@ -2486,66 +2462,15 @@ export function CollectionBrowser({
     window.dispatchEvent(new Event(FSDB_CRUMB_LABELS_EVENT))
   }, [activeViewId, collectionPath, items, routeViewId, schema?.labelField, selected, sheet])
   const filterActive = countFilterRules(filterTree) > 0
-  const activeSharedOwnerAccountId = useMemo(() => {
-    const ot = activeView?.ownerTable?.trim()
-    if (ot && ot.startsWith('account:')) {
-      const ownerAcc = ot.slice('account:'.length).trim()
-      if ((viewerAccountId && ownerAcc && ownerAcc !== viewerAccountId) || activeView?.filters?.$ownerTable === ot) {
-        return ownerAcc
-      }
-    }
-    return null
-  }, [activeView?.filters?.$ownerTable, activeView?.ownerTable, viewerAccountId])
-  const ownerDisplayName = useMemo(() => {
-    if (!activeSharedOwnerAccountId) return ''
-    for (const row of items) {
-      const ownerVal = row.ownerTable as { kind?: unknown; accountId?: unknown; name?: unknown } | undefined
-      if (ownerVal?.kind === 'user' && ownerVal.accountId === activeSharedOwnerAccountId && typeof ownerVal.name === 'string' && ownerVal.name.trim()) {
-        return ownerVal.name.trim()
-      }
-      const creatorVal = row.createdBy as { kind?: unknown; accountId?: unknown; name?: unknown } | undefined
-      if (creatorVal?.kind === 'user' && creatorVal.accountId === activeSharedOwnerAccountId && typeof creatorVal.name === 'string' && creatorVal.name.trim()) {
-        return creatorVal.name.trim()
-      }
-    }
-    return ''
-  }, [activeSharedOwnerAccountId, items])
   const activeDomain: ViewDomain = isDataOverview
     ? 'all'
-    : activeSharedOwnerAccountId
-      ? 'shared'
-      : activeView
-        ? viewDomainOf(activeView)
-        : (routeScope ?? 'workspace')
-  const activeOwnerTable = useMemo(() => {
-    if (isDataOverview) return 'all'
-    if (activeSharedOwnerAccountId) return `account:${activeSharedOwnerAccountId}`
-    if (activeDomain === 'personal') return viewerAccountId ? `account:${viewerAccountId}` : undefined
-    return 'workspace'
-  }, [activeDomain, activeSharedOwnerAccountId, isDataOverview, viewerAccountId])
+    : activeView
+      ? viewDomainOf(activeView)
+      : (routeScope ?? 'all')
   const effectiveRouteScope: DataScope | null = isDataOverview
     ? null
-    : activeSharedOwnerAccountId
-      ? 'shared'
-      : (routeScope ?? (activeDomain === 'all' ? 'workspace' : activeDomain))
-  const domainViews = useMemo(() => {
-    if (!isKPlus1Cloud) return views
-    if (activeSharedOwnerAccountId) {
-      const targetOwnerTable = `account:${activeSharedOwnerAccountId}`
-      return views.filter((view) => !isBuiltinAllViewId(view.id) && !view.builtin && view.ownerTable === targetOwnerTable)
-    }
-    if (activeDomain === 'personal') {
-      return views.filter(
-        (view) =>
-          !isBuiltinAllViewId(view.id) &&
-          !view.builtin &&
-          (viewerAccountId ? view.ownerTable === `account:${viewerAccountId}` : viewDomainOf(view) === 'personal'),
-      )
-    }
-    return views.filter(
-      (view) => !isBuiltinAllViewId(view.id) && !view.builtin && (view.ownerTable === 'workspace' || (!view.ownerTable && viewDomainOf(view) === 'workspace')),
-    )
-  }, [activeDomain, activeSharedOwnerAccountId, isKPlus1Cloud, viewerAccountId, views])
+    : (routeScope ?? (activeDomain === 'all' ? null : activeDomain))
+  const domainViews = views
   const sandboxViews = useMemo(() => normalizeTableSandboxViews(activeView?.sandboxViews) ?? [], [activeView?.sandboxViews])
   const activeSandboxView = useMemo(() => sandboxViews.find((item) => item.id === mode), [mode, sandboxViews])
   const sortCustom = isCustomSorts(
@@ -2883,7 +2808,6 @@ export function CollectionBrowser({
     collectionPath,
     title,
     routeScope: effectiveRouteScope,
-    activeOwnerTable,
     catalogLocks,
     schemaDefaultKeys,
     views,
@@ -3220,7 +3144,6 @@ export function CollectionBrowser({
     tagCatalog,
     tagCatalogRef,
     createScope,
-    createOwnerTable,
     createTypeTable,
     overviewCreateTables,
     pickedIds,
@@ -3346,88 +3269,12 @@ export function CollectionBrowser({
     claimTableCellPick(embed ? 'inspector' : 'main')
   }
 
-  const sharedOwnerMember = activeSharedOwnerAccountId ? membersById.get(activeSharedOwnerAccountId) : undefined
-  const viewerMember = viewerAccountId ? membersById.get(viewerAccountId) : undefined
   const labelOf = (row: DbRecord) => crumbRecordLabel(row, schema?.labelField)
   const crumbs = useMemo(() => {
     const dataViewId = crumbFromData ? viaDataViewId() : ''
     const dataView = crumbFromData ? viewForPath(DATA_COLLECTION_PATH, dataViewId) : null
     const dataViews = crumbFromData ? paintCollectionViews(DATA_COLLECTION_PATH, tables) : []
     const stampId = crumbFromData ? originStamp : ''
-    const pickScopeViewId = (targetOwnerTable: string) => {
-      const matches = views.filter((v) => !isBuiltinAllViewId(v.id) && !v.builtin && v.ownerTable === targetOwnerTable)
-      const preferred = matches.find((v) => v.protection !== 'personal') ?? matches[0]
-      return preferred ? preferred.id : defaultTableViewId(targetOwnerTable, collectionPath)
-    }
-    const scopeChoices: Array<{
-      id: string
-      label: string
-      icon?: string
-      avatar?: string
-      avatarSeed?: string
-      viewId: string
-    }> = []
-    if (!crumbFromData && isKPlus1Cloud) {
-      scopeChoices.push({
-        id: 'scope:workspace',
-        label: '空间数据',
-        icon: 'workspace',
-        ...(workspaceAvatar ? { avatar: workspaceAvatar } : {}),
-        viewId: pickScopeViewId('workspace'),
-      })
-      if (viewerAccountId) {
-        scopeChoices.push({
-          id: `owner:${viewerAccountId}`,
-          label: '我的数据',
-          icon: 'personal',
-          avatar: viewerMember?.avatar || '',
-          avatarSeed: viewerAccountId,
-          viewId: pickScopeViewId(`account:${viewerAccountId}`),
-        })
-      }
-      const seenOwners = new Set<string>(viewerAccountId ? [viewerAccountId] : [])
-      for (const v of views) {
-        const ot = v.ownerTable?.trim() || ''
-        if (!ot.startsWith('account:')) continue
-        const accId = ot.slice('account:'.length)
-        if (!accId || seenOwners.has(accId)) continue
-        seenOwners.add(accId)
-        const m = membersById.get(accId)
-        scopeChoices.push({
-          id: `owner:${accId}`,
-          label: m?.name?.trim() || (accId === activeSharedOwnerAccountId ? ownerDisplayName : '') || accId.slice(0, 8),
-          icon: 'personal',
-          avatar: m?.avatar || '',
-          avatarSeed: accId,
-          viewId: pickScopeViewId(ot),
-        })
-      }
-      if (activeSharedOwnerAccountId && !seenOwners.has(activeSharedOwnerAccountId)) {
-        scopeChoices.push({
-          id: `owner:${activeSharedOwnerAccountId}`,
-          label: sharedOwnerMember?.name || ownerDisplayName || activeSharedOwnerAccountId.slice(0, 8),
-          icon: 'personal',
-          avatar: sharedOwnerMember?.avatar || '',
-          avatarSeed: activeSharedOwnerAccountId,
-          viewId: pickScopeViewId(`account:${activeSharedOwnerAccountId}`),
-        })
-      }
-    }
-    const personalOwner = !crumbFromData
-      ? activeSharedOwnerAccountId
-        ? {
-            accountId: activeSharedOwnerAccountId,
-            name: sharedOwnerMember?.name || ownerDisplayName || activeSharedOwnerAccountId.slice(0, 8),
-            avatar: sharedOwnerMember?.avatar || '',
-          }
-        : activeDomain === 'personal' && viewerAccountId
-          ? {
-              accountId: viewerAccountId,
-              name: '我的数据',
-              avatar: viewerMember?.avatar || '',
-            }
-          : undefined
-      : undefined
     return buildCrumbs({
       collection: crumbFromData ? DATA_COLLECTION_PATH : collectionPath,
       collectionLabel: crumbFromData ? '数据' : title,
@@ -3437,14 +3284,6 @@ export function CollectionBrowser({
         icon: table.view?.icon,
       })),
       viewId: crumbFromData ? dataViewId : (routeViewId ?? activeViewId ?? undefined),
-      viewScope: crumbFromData
-        ? undefined
-        : activeDomain === 'all'
-          ? undefined
-          : activeDomain,
-      workspaceAvatar: crumbFromData ? undefined : workspaceAvatar,
-      personalOwner,
-      scopeChoices: scopeChoices.length ? scopeChoices : undefined,
       viewName: crumbFromData
         ? displayNameForView(
             dataViewId,
@@ -3467,31 +3306,19 @@ export function CollectionBrowser({
         : undefined,
     })
   }, [
-    activeDomain,
-    activeSharedOwnerAccountId,
     activeView?.name,
     activeViewId,
     collectionPath,
     crumbFromData,
     domainViews,
-    isKPlus1Cloud,
-    membersById,
     originNav,
     originStamp,
-    ownerDisplayName,
     routeViewId,
     schema?.labelField,
     selected,
     selected ? items : null,
-    sharedOwnerMember?.avatar,
-    sharedOwnerMember?.name,
     tables,
     title,
-    viewerAccountId,
-    viewerMember?.avatar,
-    viewerMember?.name,
-    views,
-    workspaceAvatar,
   ])
   const currentTable = tables.find((item) => item.path === collectionPath)
   const recordKind = recordPickKind(currentTable?.view?.moduleId || currentTable?.id)
@@ -3849,12 +3676,11 @@ export function CollectionBrowser({
   function applyFilterTree(next: FilterGroup) {
     setFilterTree(next)
     if (!countFilterRules(next)) setFilters({})
-    // Preserve $scope / $ownerTable locks when writing user filterTree edits.
+    // Preserve $scope lock when writing user filterTree edits.
     if ((!sheet || hasExternalViews) && activeViewId) {
       const current = viewsRef.current.find((view) => view.id === activeViewId)
       const preservedLocks: Record<string, string> = {}
       if (current?.filters?.$scope) preservedLocks.$scope = current.filters.$scope
-      if (current?.filters?.$ownerTable) preservedLocks.$ownerTable = current.filters.$ownerTable
       patchActiveView({ filterTree: next, filters: preservedLocks })
     }
   }
@@ -4110,10 +3936,6 @@ export function CollectionBrowser({
         setCreateScopeOpen={setCreateScopeOpen}
         createScope={createScope}
         setCreateScope={setCreateScope}
-        createOwnerTable={createOwnerTable}
-        createOwnerAccountId={foreignOwnerIdForCreate || undefined}
-        createOwnerName={foreignOwnerIdForCreate ? (sharedOwnerMember?.name || ownerDisplayName || foreignOwnerIdForCreate.slice(0, 8)) : undefined}
-        createOwnerAvatar={foreignOwnerIdForCreate ? (sharedOwnerMember?.avatar || '') : undefined}
         localData={localData}
         hasExternalViews={hasExternalViews}
       />
@@ -4121,8 +3943,7 @@ export function CollectionBrowser({
     [listChromeLock],
   )
 
-  const isUnresolvedPersonalOwner = Boolean(activeView?.ownerTable?.startsWith('account:') && !viewerAccountId)
-  const hideAccessRules = Boolean(activeSharedOwnerAccountId) || isUnresolvedPersonalOwner || isDataOverview
+  const hideAccessRules = isDataOverview
   const listHeaderLock = [
     Number(nested),
     Number(viewsOpen),
@@ -4143,7 +3964,6 @@ export function CollectionBrowser({
     title,
     viewerAccountId,
     activeView?.name ?? '',
-    activeView?.ownerTable ?? '',
     crumbs.map((crumb) => `${crumb.kind}:${crumb.id}:${crumb.label}:${crumb.avatar ?? ''}:${crumb.avatarSeed ?? ''}`).join('\n'),
     views.map((view) => view.id).join(','),
   ].join('\0')

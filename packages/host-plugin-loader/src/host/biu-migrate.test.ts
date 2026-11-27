@@ -44,7 +44,7 @@ test('empty database fast path matches upgraded v1 fixture', () => {
 test('BIU_MIGRATIONS versions are unique and increasing', () => {
   assertBiuMigrationLog()
   assert.equal(BIU_MIGRATIONS.at(-1)?.version, LATEST_BIU_SCHEMA)
-  assert.equal(BIU_MIGRATIONS.at(-1)?.name, 'workspace-members.single-identity')
+  assert.equal(BIU_MIGRATIONS.at(-1)?.name, 'single_table_static_authz_and_member_views')
   assert.throws(() => assertBiuMigrationLog([{ version: 2 }, { version: 2 }]), /重复/)
   assert.throws(() => assertBiuMigrationLog([{ version: 3 }, { version: 1 }]), /单调递增/)
 })
@@ -218,10 +218,9 @@ test('facet field identity migration folds label into key and remaps values', ()
   const row = db.prepare('SELECT tag_json FROM tag_record_values WHERE record_id = ?').get('n1') as { tag_json: string }
   assert.deepEqual(JSON.parse(row.tag_json), { tags: ['dp'], values: { dp: { 复杂度: 'O(n)' } } })
   const view = db.prepare('SELECT payload_json FROM saved_views WHERE view_id = ?').get('v1') as { payload_json: string }
-  assert.deepEqual(JSON.parse(view.payload_json), {
-    columns: ['title', 'tag::dp::复杂度'],
-    groupBy: 'tag::dp::复杂度',
-  })
+  const parsedView = JSON.parse(view.payload_json) as Record<string, unknown>
+  assert.deepEqual(parsedView.columns, ['title', 'tag::dp::复杂度'])
+  assert.equal(parsedView.groupBy, 'tag::dp::复杂度')
   db.close()
 })
 
@@ -254,181 +253,113 @@ test('facet-to-tag migration renames tables, columns, and collection paths', () 
   db.close()
 })
 
-test('v57 migrates view_grants, shared views, and view public shares into independent access_rules', () => {
+test('v61 migrates dynamic groups to locked member views, expands static groups, normalizes views, and drops legacy tables', () => {
   const db = openSqlite(':memory:')
-  migrateBiu(db, {}, 56)
+  migrateBiu(db, {}, 60)
   db.exec(`
-    INSERT INTO saved_views (workspace_id, collection, view_id, payload_json, updated_at)
-    VALUES (
-      'ws_1', '/pages', 'v_q3',
-      '{"id":"v_q3","name":"Q3 客户","scope":"shared","createdBy":"acc_a","mode":"board","groupBy":"status","columns":["title","status"],"filterTree":{"op":"and","rules":[{"field":"tag","op":"eq","value":"q3"}]}}',
-      100
+    CREATE TABLE IF NOT EXISTS workspace_groups (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'static',
+      filter_tree_json TEXT,
+      created_by TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL DEFAULT 0
     );
-    INSERT INTO view_grants (workspace_id, collection, view_id, subject_type, subject_id, role, effect, granted_by, created_at)
+    CREATE TABLE IF NOT EXISTS workspace_group_members (
+      group_id TEXT NOT NULL,
+      account_id TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (group_id, account_id)
+    );
+    CREATE TABLE IF NOT EXISTS access_rules (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT NOT NULL,
+      collection TEXT NOT NULL,
+      name TEXT NOT NULL,
+      created_by TEXT NOT NULL,
+      filter_tree_json TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS access_rule_grants (
+      id TEXT PRIMARY KEY,
+      rule_id TEXT NOT NULL,
+      workspace_id TEXT NOT NULL,
+      subject_type TEXT NOT NULL,
+      subject_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    INSERT INTO workspace_groups (id, workspace_id, name, kind, filter_tree_json, created_by, created_at, updated_at)
     VALUES
-      ('ws_1', '/pages', 'v_q3', 'account', 'acc_b', 'viewer', 'allow', 'acc_a', 101),
-      ('ws_1', '/pages', 'v_q3', 'workspace', 'ws_1', 'editor', 'allow', 'acc_a', 102);
-    INSERT INTO shares (token, kind, collection, view_id, record_id, workspace_id, created_by, created_at, updated_at)
-    VALUES ('tok_keep_1', 'view', '/pages', 'v_q3', '', 'ws_1', 'acc_a', 103, 103);
-  `)
-  migrateBiu(db)
-
-  const rules = db.prepare('SELECT * FROM access_rules WHERE workspace_id = ?').all('ws_1') as Array<{
-    id: string
-    name: string
-    created_by: string
-    filter_tree_json: string
-    columns_json: string
-    display_snapshot_json: string
-    enabled: number
-  }>
-  assert.equal(rules.length, 1)
-  assert.equal(rules[0]!.name, 'Q3 客户')
-  assert.equal(rules[0]!.created_by, 'acc_a')
-  assert.equal(rules[0]!.enabled, 1)
-  assert.deepEqual(JSON.parse(rules[0]!.filter_tree_json), { op: 'and', rules: [{ field: 'tag', op: 'eq', value: 'q3' }] })
-  assert.deepEqual(JSON.parse(rules[0]!.columns_json), ['title', 'status'])
-  assert.deepEqual(JSON.parse(rules[0]!.display_snapshot_json), { mode: 'board', groupBy: 'status' })
-
-  const grants = db.prepare('SELECT subject_type, subject_id, role FROM access_rule_grants WHERE rule_id = ? ORDER BY subject_type').all(rules[0]!.id) as Array<{
-    subject_type: string
-    subject_id: string
-    role: string
-  }>
-  assert.deepEqual(
-    grants.map((g) => ({ ...g })),
-    [
-      { subject_type: 'account', subject_id: 'acc_b', role: 'viewer' },
-      { subject_type: 'workspace', subject_id: 'ws_1', role: 'editor' },
-    ],
-  )
-
-  const migratedView = db.prepare('SELECT payload_json FROM saved_views WHERE view_id = ?').get('v_q3') as { payload_json: string }
-  assert.equal(JSON.parse(migratedView.payload_json).scope, 'personal')
-
-  const migratedShare = db.prepare('SELECT token, kind, view_id, rule_id FROM shares WHERE token = ?').get('tok_keep_1') as {
-    token: string
-    kind: string
-    view_id: string
-    rule_id: string
-  }
-  assert.equal(migratedShare.kind, 'rule')
-  assert.equal(migratedShare.view_id, '')
-  assert.equal(migratedShare.rule_id, rules[0]!.id)
-  db.close()
-})
-
-test('v58 migrates member_view grants to dynamic workspace_groups and backfills view resource_policies', () => {
-  const db = openSqlite(':memory:')
-  migrateBiu(db, {}, 57)
-  db.exec(`
-    INSERT INTO accounts (id, name, token, password_hash, created_at, email)
-    VALUES ('acc_owner', 'Owner', 'tok_o', 'pw', 1, 'owner@example.com');
-    INSERT INTO workspaces (id, name, owner_id, created_at)
-    VALUES ('ws_1', 'W1', 'acc_owner', 1);
-    INSERT INTO workspace_members (workspace_id, account_id, role, created_at)
-    VALUES ('ws_1', 'acc_owner', 'owner', 1);
-    INSERT INTO saved_views (workspace_id, collection, view_id, payload_json, updated_at)
-    VALUES
-      (
-        'ws_1', '/workspace-members', 'mv_admins',
-        '{"id":"mv_admins","name":"管理员组","scope":"workspace","createdBy":"acc_owner","filterTree":{"op":"and","children":[{"field":"role","op":"eq","value":"admin"}]}}',
-        100
-      ),
-      (
-        'ws_1', '/pages', 'v_team',
-        '{"id":"v_team","name":"团队视图","scope":"workspace","createdBy":"acc_owner"}',
-        101
-      );
-    INSERT INTO record_grants (workspace_id, collection, record_id, subject_type, subject_id, role, effect, granted_by, created_at)
-    VALUES
-      ('ws_1', '/pages', 'p1', 'member_view', 'mv_admins', 'editor', 'allow', 'acc_owner', 102),
-      ('ws_1', '/pages', 'p2', 'member_view', 'builtin-member:external', 'viewer', 'allow', 'acc_owner', 103);
-    INSERT INTO access_rules (id, workspace_id, collection, name, created_by, filter_tree_json, enabled, created_at, updated_at)
-    VALUES ('rule_1', 'ws_1', '/pages', 'R1', 'acc_owner', '{"op":"and","children":[]}', 1, 104, 104);
-    INSERT INTO access_rule_grants (id, rule_id, workspace_id, subject_type, subject_id, role, created_at)
-    VALUES ('arg_1', 'rule_1', 'ws_1', 'member_view', 'mv_admins', 'viewer', 105);
-  `)
-  migrateBiu(db, {}, 58)
-
-  const groups = db
-    .prepare(`SELECT id, name, kind, filter_tree_json FROM workspace_groups WHERE workspace_id = 'ws_1' ORDER BY name`)
-    .all() as Array<{ id: string; name: string; kind: string; filter_tree_json: string }>
-  assert.equal(groups.length, 2)
-  const adminGroup = groups.find((g) => g.name === '管理员组')!
-  const extGroup = groups.find((g) => g.name === '外部成员')!
-  assert.equal(adminGroup.kind, 'dynamic')
-  assert.deepEqual(JSON.parse(adminGroup.filter_tree_json), { op: 'and', children: [{ field: 'role', op: 'eq', value: 'admin' }] })
-  assert.equal(extGroup.kind, 'dynamic')
-  assert.deepEqual(JSON.parse(extGroup.filter_tree_json), { op: 'and', children: [{ field: 'membershipKind', op: 'eq', value: 'external' }] })
-
-  const remainingMvRecordGrants = db.prepare(`SELECT COUNT(*) AS cnt FROM record_grants WHERE subject_type = 'member_view'`).get() as { cnt: number }
-  assert.equal(remainingMvRecordGrants.cnt, 0)
-  const migratedP1 = db
-    .prepare(`SELECT subject_type, subject_id, role FROM record_grants WHERE record_id = 'p1'`)
-    .get() as { subject_type: string; subject_id: string; role: string }
-  assert.deepEqual({ ...migratedP1 }, { subject_type: 'group', subject_id: adminGroup.id, role: 'editor' })
-
-  const migratedRuleGrant = db
-    .prepare(`SELECT subject_type, subject_id, role FROM access_rule_grants WHERE id = 'arg_1'`)
-    .get() as { subject_type: string; subject_id: string; role: string }
-  assert.deepEqual({ ...migratedRuleGrant }, { subject_type: 'group', subject_id: adminGroup.id, role: 'viewer' })
-
-  const viewPolicy = db
-    .prepare(`SELECT owner_account_id, access_mode FROM resource_policies WHERE workspace_id = 'ws_1' AND collection = '/views' AND record_id = 'pages::v_team'`)
-    .get() as { owner_account_id: string; access_mode: string } | undefined
-  assert.deepEqual(viewPolicy ? { ...viewPolicy } : null, { owner_account_id: 'acc_owner', access_mode: 'members' })
-  db.close()
-})
-
-test('v59 backfills owner_table, inherit_parent, access_rules.owner_table, and saved_views protection', () => {
-  const db = openSqlite(':memory:')
-  migrateBiu(db, {}, 58)
-  db.exec(`
+      ('grp_dyn', 'ws_1', '管理员组', 'dynamic', '{"op":"and","children":[{"field":"role","op":"eq","value":"admin"}]}', 'acc_owner', 100, 100),
+      ('grp_sta', 'ws_1', '项目A', 'static', NULL, 'acc_owner', 101, 101);
+    INSERT INTO workspace_group_members (group_id, account_id, created_at)
+    VALUES ('grp_sta', 'acc_bob', 102), ('grp_sta', 'acc_carol', 102);
     INSERT INTO resource_policies
       (workspace_id, collection, record_id, owner_account_id, access_mode, member_default_role, parent_collection, parent_record_id, created_by, created_at)
     VALUES
-      ('ws_1', '/pages', 'p_ws', 'acc_a', 'members', 'editor', '', '', 'acc_a', 1),
-      ('ws_1', '/pages', 'p_priv', 'acc_a', 'private', 'viewer', '', '', 'acc_a', 2),
-      ('ws_1', '/pages', 'p_child_ws', 'acc_b', 'inherit', 'viewer', '/pages', 'p_ws', 'acc_b', 3),
-      ('ws_1', '/pages', 'p_child_priv', 'acc_a', 'inherit', 'viewer', '/pages', 'p_priv', 'acc_a', 4);
-    INSERT INTO access_rules
-      (id, workspace_id, collection, name, created_by, filter_tree_json, enabled, created_at, updated_at)
+      ('ws_1', '/pages', 'p1', 'acc_owner', 'restricted', 'viewer', '', '', 'acc_owner', 103);
+    INSERT INTO record_grants
+      (workspace_id, collection, record_id, subject_type, subject_id, role, effect, granted_by, created_at)
     VALUES
-      ('rule_legacy', 'ws_1', '/pages', 'Legacy Rule', 'acc_a', '{"op":"and","children":[]}', 1, 5, 5);
+      ('ws_1', '/pages', 'p1', 'group', 'grp_dyn', 'editor', 'allow', 'acc_owner', 104),
+      ('ws_1', '/pages', 'p2', 'group', 'grp_sta', 'manager', 'allow', 'acc_owner', 105),
+      ('ws_1', '/pages', 'p2', 'account', 'acc_bob', 'viewer', 'allow', 'acc_owner', 105);
     INSERT INTO saved_views (workspace_id, collection, view_id, payload_json, updated_at)
     VALUES
-      ('ws_1', '/pages', 'v_ws', '{"id":"v_ws","name":"空间视图","scope":"workspace","createdBy":"acc_a"}', 6),
-      ('ws_1', '/pages', 'v_priv', '{"id":"v_priv","name":"我的视图","scope":"personal","createdBy":"acc_a"}', 7);
+      ('ws_1', '/pages', 'v_ws', '{"id":"v_ws","name":"空间视图","scope":"workspace","protection":"public","ownerTable":"workspace","filters":{"$ownerTable":"workspace","status":"open"}}', 106),
+      ('ws_1', '/pages', 'default:account:acc_owner:/pages', '{"id":"default:account:acc_owner:/pages","name":"私人页面","ownerTable":"account:acc_owner"}', 107);
   `)
-  migrateBiu(db)
+  migrateBiu(db, {}, 61)
 
-  const policies = new Map(
-    (
-      db
-        .prepare(`SELECT record_id, owner_table, inherit_parent FROM resource_policies WHERE workspace_id = 'ws_1'`)
-        .all() as Array<{ record_id: string; owner_table: string; inherit_parent: number }>
-    ).map((r) => [r.record_id, { owner_table: r.owner_table, inherit_parent: r.inherit_parent }]),
+  const tables = tableNames(db)
+  assert.equal(tables.includes('access_rules'), false)
+  assert.equal(tables.includes('access_rule_grants'), false)
+  assert.equal(tables.includes('workspace_groups'), false)
+  assert.equal(tables.includes('workspace_group_members'), false)
+
+  const lockedViewRow = db
+    .prepare(`SELECT payload_json FROM saved_views WHERE workspace_id = 'ws_1' AND collection = '/workspace-members' AND view_id = 'mv_grp_dyn'`)
+    .get() as { payload_json: string } | undefined
+  assert.ok(lockedViewRow)
+  const lockedView = JSON.parse(lockedViewRow.payload_json) as Record<string, unknown>
+  assert.equal(lockedView.protection, 'locked')
+  assert.equal(lockedView.name, '管理员组')
+
+  const p1Grant = db
+    .prepare(`SELECT subject_type, subject_id, role FROM record_grants WHERE workspace_id = 'ws_1' AND record_id = 'p1'`)
+    .get() as { subject_type: string; subject_id: string; role: string }
+  assert.deepEqual({ ...p1Grant }, { subject_type: 'member_view', subject_id: 'mv_grp_dyn', role: 'editor' })
+
+  const p2Grants = db
+    .prepare(`SELECT subject_type, subject_id, role FROM record_grants WHERE workspace_id = 'ws_1' AND record_id = 'p2' ORDER BY subject_id`)
+    .all() as Array<{ subject_type: string; subject_id: string; role: string }>
+  assert.deepEqual(
+    p2Grants.map((g) => ({ ...g })),
+    [
+      { subject_type: 'account', subject_id: 'acc_bob', role: 'manager' },
+      { subject_type: 'account', subject_id: 'acc_carol', role: 'manager' },
+    ],
   )
-  assert.deepEqual(policies.get('p_ws'), { owner_table: 'workspace', inherit_parent: 0 })
-  assert.deepEqual(policies.get('p_priv'), { owner_table: 'account:acc_a', inherit_parent: 0 })
-  assert.deepEqual(policies.get('p_child_ws'), { owner_table: 'workspace', inherit_parent: 1 })
-  assert.deepEqual(policies.get('p_child_priv'), { owner_table: 'account:acc_a', inherit_parent: 1 })
 
-  const rule = db
-    .prepare(`SELECT owner_table FROM access_rules WHERE id = 'rule_legacy'`)
-    .get() as { owner_table: string }
-  assert.equal(rule.owner_table, 'account:acc_a')
+  const policy = db
+    .prepare(`SELECT access_mode FROM resource_policies WHERE workspace_id = 'ws_1' AND record_id = 'p1'`)
+    .get() as { access_mode: string }
+  assert.equal(policy.access_mode, 'private')
 
-  const vWs = JSON.parse(
+  const normalizedView = JSON.parse(
     (db.prepare(`SELECT payload_json FROM saved_views WHERE view_id = 'v_ws'`).get() as { payload_json: string }).payload_json,
-  )
-  const vPriv = JSON.parse(
-    (db.prepare(`SELECT payload_json FROM saved_views WHERE view_id = 'v_priv'`).get() as { payload_json: string }).payload_json,
-  )
-  assert.equal(vWs.protection, 'locked')
-  assert.equal(vWs.ownerTable, 'workspace')
-  assert.equal(vPriv.protection, 'personal')
-  assert.equal(vPriv.ownerTable, 'account:acc_a')
+  ) as Record<string, unknown>
+  assert.equal('ownerTable' in normalizedView, false)
+  assert.deepEqual(normalizedView.filters, { status: 'open' })
+
+  const removedPersonalDefault = db
+    .prepare(`SELECT view_id FROM saved_views WHERE view_id = 'default:account:acc_owner:/pages'`)
+    .get()
+  assert.equal(removedPersonalDefault, undefined)
   db.close()
 })

@@ -37,6 +37,7 @@ import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 
 const QueryFlyout = lazy(() => import('./query-menus.tsx').then((m) => ({ default: m.QueryFlyout })))
 const ViewSettingsMenu = lazy(() => import('./view-settings-menu.tsx').then((m) => ({ default: m.ViewSettingsMenu })))
+const BatchShareDialog = lazy(() => import('./batch-share-dialog.tsx').then((m) => ({ default: m.BatchShareDialog })))
 import type { ViewSettingsTab } from './view-settings-menu.tsx'
 
 const QUERY_NEST_IGNORE = `${HEADLESS_DISMISS_IGNORE}, .db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`
@@ -162,10 +163,6 @@ export type BrowserListChromeProps = {
   setCreateScopeOpen: (next: boolean | ((open: boolean) => boolean)) => void
   createScope: 'personal' | 'workspace' | 'shared' | 'local'
   setCreateScope: (next: 'personal' | 'workspace' | 'shared' | 'local') => void
-  createOwnerTable?: string
-  createOwnerName?: string
-  createOwnerAvatar?: string
-  createOwnerAccountId?: string
   localData: boolean
   hasExternalViews?: boolean
 }
@@ -292,17 +289,12 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
     setCreateScopeOpen,
     createScope,
     setCreateScope,
-    createOwnerTable,
-    createOwnerName,
-    createOwnerAvatar,
-    createOwnerAccountId,
     localData,
     hasExternalViews = false,
   } = props
 
   const [settingsTab, setSettingsTab] = useState<ViewSettingsTab>('view')
-  const [groupSaveBusy, setGroupSaveBusy] = useState(false)
-  const [groupSaveHint, setGroupSaveHint] = useState('')
+  const [batchShareOpen, setBatchShareOpen] = useState(false)
   const savedBaselineRef = useRef<Map<string, SavedView>>(new Map())
 
   // 记录只读视图初次载入/服务端更新时的基准快照，用于识别前端会话临时修改（重置 / 另存为个人视图）。
@@ -325,33 +317,12 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
       viewStateKey(activeView) !== viewStateKey(readOnlyBaseline),
   )
 
-  const saveAsDynamicGroup = async () => {
-    if (groupSaveBusy) return
-    const defaultName = activeView?.name ? `${activeView.name} 动态组` : '新建动态成员组'
-    const raw = window.prompt('输入动态成员组名称（将拷贝当前成员筛选条件，后续修改视图不影响成员组）：', defaultName)
-    const name = raw?.trim()
-    if (!name) return
-    setGroupSaveBusy(true)
-    setGroupSaveHint('')
-    try {
-      await readJson('/api/account/groups', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          kind: 'dynamic',
-          filterTree,
-        }),
-      })
-      setGroupSaveHint(`已保存动态组「${name}」`)
-      window.setTimeout(() => setGroupSaveHint(''), 2400)
-    } catch (err) {
-      setGroupSaveHint(err instanceof Error ? err.message : '保存动态组失败')
-      window.setTimeout(() => setGroupSaveHint(''), 3000)
-    } finally {
-      setGroupSaveBusy(false)
-    }
-  }
+  const canBulkPermissions =
+    !localData &&
+    !inTrash &&
+    !isDataOverview &&
+    collectionPath !== WORKSPACE_MEMBERS_COLLECTION_PATH &&
+    !isIndexCollection(collectionPath)
 
   const openSettingsTab = (tab: ViewSettingsTab) => {
     if (configOpen && settingsTab === tab) {
@@ -512,6 +483,18 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                 >
                   <ChatBubbleLeftRightIcon aria-hidden className="size-[14px]" />
                 </button>
+                {canBulkPermissions ? (
+                  <button
+                    type="button"
+                    className="tasks-icon-btn"
+                    data-testid="fsdb-bulk-permissions"
+                    aria-label="批量权限"
+                    title={`对选中的 ${pickedIds.length} 条记录批量设置权限`}
+                    onClick={() => setBatchShareOpen(true)}
+                  >
+                    <UsersIcon aria-hidden className="size-[14px]" />
+                  </button>
+                ) : null}
                 {canBulkDelete && pickedIds.some((id) => !(collectionPath === PLUGINS_COLLECTION_PATH && items.find((row) => row.id === id)?.builtin === true)) ? (
                   <button
                     type="button"
@@ -868,20 +851,6 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                   </button>
                 </div>
               ) : null}
-              {!sheet && !localData && collectionPath === WORKSPACE_MEMBERS_COLLECTION_PATH ? (
-                <button
-                  type="button"
-                  className="tasks-refresh"
-                  data-testid="fsdb-save-dynamic-group"
-                  disabled={groupSaveBusy}
-                  title={groupSaveHint || '将当前筛选条件拷贝保存为动态成员组（与视图解耦）'}
-                  onClick={() => void saveAsDynamicGroup()}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, width: 'auto', padding: '0 8px', fontSize: 12 }}
-                >
-                  <UsersIcon aria-hidden className="size-[13px]" />
-                  <span>{groupSaveHint || '保存为动态组'}</span>
-                </button>
-              ) : null}
               <div className="fsdb-refresh-wrap">
                 <button
                   type="button"
@@ -957,33 +926,15 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
                     <button
                       type="button"
                       className="fsdb-create-scope"
-                      aria-label={
-                        createOwnerAccountId
-                          ? `归属 ${createOwnerName || '他人'}`
-                          : viewDomainOf(activeView) === 'workspace'
-                            ? '新建到空间数据'
-                            : '新建到我的数据'
-                      }
-                      title={
-                        createOwnerAccountId
-                          ? `新建到 ${createOwnerName || '他人'} 的数据（归属对方）`
-                          : viewDomainOf(activeView) === 'workspace'
-                            ? '新建到空间数据'
-                            : '新建到我的数据'
-                      }
+                      aria-label={viewDomainOf(activeView) === 'workspace' ? '新建到空间数据' : '新建到我的数据'}
+                      title={viewDomainOf(activeView) === 'workspace' ? '新建到空间数据' : '新建到我的数据'}
                       data-testid="fsdb-create-scope-badge"
                       onClick={() => {
                         if (canAskNewPlugin) askNewPlugin(createScope)
                         else void createRecord()
                       }}
                     >
-                      {createOwnerAccountId ? (
-                        createOwnerAvatar ? (
-                          <img src={createOwnerAvatar} alt="" className="size-3.5 rounded-full object-cover" />
-                        ) : (
-                          <AiAvatar seed={createOwnerAccountId} size={14} />
-                        )
-                      ) : viewDomainOf(activeView) === 'workspace' ? (
+                      {viewDomainOf(activeView) === 'workspace' ? (
                         <UsersIcon aria-hidden className="size-[14px]" />
                       ) : (
                         <UserIcon aria-hidden className="size-[14px]" />
@@ -1063,6 +1014,19 @@ export const BrowserListChrome = memo(function BrowserListChrome(props: BrowserL
           ) : null}
         </div>
       </div>
+      {batchShareOpen && pickedIds.length > 0 ? (
+        <Suspense fallback={null}>
+          <BatchShareDialog
+            open={batchShareOpen}
+            target={{
+              collectionPath,
+              collectionLabel: title,
+              recordIds: pickedIds,
+            }}
+            onClose={() => setBatchShareOpen(false)}
+          />
+        </Suspense>
+      ) : null}
     </>
   )
 })
