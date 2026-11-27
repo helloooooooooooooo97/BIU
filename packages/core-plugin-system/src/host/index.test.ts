@@ -156,7 +156,7 @@ test('online members cannot pack or uninstall a builtin plugin', async () => {
   }
 })
 
-test('online members can pack without instance install permission', async () => {
+test('online members can pack pure web plugins without instance install permission', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'plugin-pack-member-'))
   const previous = process.env.BIU_ONLINE
   const members = new Set(['ada'])
@@ -168,21 +168,132 @@ test('online members can pack without instance install permission', async () => 
         ? { store: { isMember: (accountId: string) => members.has(accountId) } }
         : undefined
     const store = new PluginStoreService(ctx, join(dir, '.plugin'), join(dir, 'store.json'), join(dir, '.plugin-dev')).open()
-    await store.initSandbox({
-      id: 'pack-me',
-      name: '打包',
-      blurb: '成员可装',
-      hostJs: 'export default function apply() {}\n',
-    })
     process.env.BIU_ONLINE = '1'
+    await runWithAccount('ada', () =>
+      runWithRequestWorkspace('ws', () =>
+        store.initSandbox({
+          id: 'pack-me',
+          name: '打包',
+          blurb: '成员可装纯前端插件',
+          headless: true,
+          webJs: 'export default function apply() {}\n',
+        }),
+      ),
+    )
     await assert.rejects(
       () => runWithAccount('bob', () => runWithRequestWorkspace('ws', () => store.pack('pack-me'))),
       /需要登录/,
     )
     const packed = await runWithAccount('ada', () => runWithRequestWorkspace('ws', () => store.pack('pack-me')))
     assert.equal(packed.id, 'pack-me')
-    await access(join(dir, '.plugin', 'pack-me', 'host.js'))
+    await access(join(dir, '.plugin', 'pack-me', 'web.js'))
+    await assert.rejects(() => access(join(dir, '.plugin', 'pack-me', 'host.js')))
   } finally {
+    if (previous === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = previous
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('cloud mode blocks non-builtin host.js in initSandbox, pack, openPlugin, and restore while keeping web-only and builtin plugins working', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'plugin-cloud-host-guard-'))
+  const previous = process.env.BIU_ONLINE
+  const pluginDir = join(dir, '.plugin')
+  const sandboxDir = join(dir, '.plugin-dev')
+  try {
+    const ctx = new Context()
+    const { adopted } = stubHub(ctx)
+    ;(ctx as unknown as { get(name: string): unknown }).get = (name: string) =>
+      name === 'account'
+        ? {
+            store: {
+              isMember: () => true,
+              isSuperAdmin: (accountId?: string | null) => accountId === 'admin',
+              canAccessPlugin: () => true,
+              setPluginLoad: () => {},
+              loadedPluginIds: () => ['legacy-host-plug', 'web-only-plug'],
+              recordPluginPackage: () => {},
+              syncInstalledPluginPackage: () => {},
+            },
+          }
+        : undefined
+    const store = new PluginStoreService(ctx, pluginDir, join(dir, 'store.json'), sandboxDir).open()
+
+    // Desktop mode can author & pack full-stack host.js plugins
+    process.env.BIU_ONLINE = '0'
+    await store.initSandbox({
+      id: 'legacy-host-plug',
+      name: 'Legacy Host',
+      blurb: '本机创建的服务端插件',
+      hostJs: 'export default function apply() { globalThis.__cloudHostExecuted = true }\n',
+    })
+    await store.pack('legacy-host-plug')
+
+    // Switch to cloud mode: non-builtin host.js must be rejected at every entry point
+    process.env.BIU_ONLINE = '1'
+    await assert.rejects(
+      () =>
+        runWithAccount('ada', () =>
+          runWithRequestWorkspace('ws', () =>
+            store.initSandbox({
+              id: 'evil-host',
+              name: 'Evil Host',
+              hostJs: 'export default function apply() {}\n',
+            }),
+          ),
+        ),
+      /云端空间禁止/,
+    )
+    await assert.rejects(
+      () => runWithAccount('ada', () => runWithRequestWorkspace('ws', () => store.pack('legacy-host-plug'))),
+      /云端空间禁止/,
+    )
+    await assert.rejects(
+      () => runWithAccount('ada', () => runWithRequestWorkspace('ws', () => store.openPlugin('legacy-host-plug'))),
+      /云端空间禁止/,
+    )
+    await assert.rejects(
+      () =>
+        runWithAccount('ada', () =>
+          runWithRequestWorkspace('ws', () => store.readInstalledFile('legacy-host-plug', 'host.js')),
+        ),
+      /not found/,
+    )
+
+    // Pure web-only user plugin still works end-to-end in cloud mode
+    await runWithAccount('ada', () =>
+      runWithRequestWorkspace('ws', () =>
+        store.initSandbox({
+          id: 'web-only-plug',
+          name: 'Web Only',
+          headless: true,
+          webJs: 'export default function apply() {}\n',
+        }),
+      ),
+    )
+    await runWithAccount('ada', () => runWithRequestWorkspace('ws', () => store.pack('web-only-plug')))
+    await runWithAccount('ada', () => runWithRequestWorkspace('ws', () => store.openPlugin('web-only-plug')))
+    assert.ok(adopted.includes('web-only-plug'))
+
+    // restore() in cloud mode skips non-builtin host.js without executing it, and restores web-only plugin
+    const ctx2 = new Context()
+    const { adopted: restored } = stubHub(ctx2)
+    ;(ctx2 as unknown as { get(name: string): unknown }).get = (name: string) =>
+      name === 'account'
+        ? {
+            store: {
+              loadedPluginIds: () => ['legacy-host-plug', 'web-only-plug'],
+              syncInstalledPluginPackage: () => {},
+            },
+          }
+        : undefined
+    const store2 = new PluginStoreService(ctx2, pluginDir, join(dir, 'store.json'), sandboxDir).open()
+    await store2.restore()
+    assert.equal(restored.includes('legacy-host-plug'), false)
+    assert.equal(restored.includes('web-only-plug'), true)
+    assert.equal((globalThis as { __cloudHostExecuted?: boolean }).__cloudHostExecuted, undefined)
+  } finally {
+    delete (globalThis as { __cloudHostExecuted?: boolean }).__cloudHostExecuted
     if (previous === undefined) delete process.env.BIU_ONLINE
     else process.env.BIU_ONLINE = previous
     await rm(dir, { recursive: true, force: true })

@@ -22,6 +22,8 @@ export interface RuntimePolicy {
   allowImplicitActiveWorkspace: boolean
   /** Whether spawning arbitrary host processes outside sandbox (lsp_start, stdio MCP) is allowed. */
   allowHostProcess: boolean
+  /** Whether user/store plugins may author, bundle, or load server-side host.js code in the main Node process. */
+  allowHostPluginCode: boolean
   /** Whether binding arbitrary host filesystem paths or OS directory pickers is allowed. */
   allowHostPathBinding: boolean
   /** Whether workspaces are isolated into per-workspace directories under dataHome. */
@@ -47,6 +49,7 @@ export function getRuntimePolicy(online = isOnlineRuntime()): RuntimePolicy {
       sandboxPolicy: 'required',
       allowImplicitActiveWorkspace: false,
       allowHostProcess: false,
+      allowHostPluginCode: false,
       allowHostPathBinding: false,
       isolateWorkspaceDirs: true,
       enforceTenantQuotas: true,
@@ -62,6 +65,7 @@ export function getRuntimePolicy(online = isOnlineRuntime()): RuntimePolicy {
     sandboxPolicy: 'off',
     allowImplicitActiveWorkspace: true,
     allowHostProcess: true,
+    allowHostPluginCode: true,
     allowHostPathBinding: true,
     isolateWorkspaceDirs: false,
     enforceTenantQuotas: false,
