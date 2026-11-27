@@ -107,10 +107,11 @@ test('rankListedViews can put a custom view before the default seed view', () =>
   assert.deepEqual(rankListedViews([all, mine]).map((view) => view.id), ['mine', 'all'])
 })
 
-test('locked view freezes configuration edits while keeping manager unlock/delete permissions', () => {
+test('locked view freezes configuration edits and blocks direct deletion until unlocked', () => {
   const unlocked = normalizeSavedView({ ...base, id: 'v1', viewRole: 'editor', locked: false })
   const lockedEditor = normalizeSavedView({ ...base, id: 'v2', viewRole: 'editor', locked: true })
   const lockedManager = normalizeSavedView({ ...base, id: 'v3', viewRole: 'manager', locked: true })
+  const unlockedManager = normalizeSavedView({ ...base, id: 'v3', viewRole: 'manager', locked: false })
   const ephemeral = normalizeSavedView({ ...base, id: 'v4', viewRole: 'owner', ephemeral: true })
 
   assert.equal(canEditSavedView(unlocked), true)
@@ -119,7 +120,8 @@ test('locked view freezes configuration edits while keeping manager unlock/delet
   assert.equal(canManageSavedView(lockedEditor), false)
   assert.equal(canEditSavedView(lockedManager), false)
   assert.equal(canManageSavedView(lockedManager), true)
-  assert.equal(canDeleteSavedView(lockedManager), true)
+  assert.equal(canDeleteSavedView(lockedManager), false)
+  assert.equal(canDeleteSavedView(unlockedManager), true)
   assert.equal(canEditSavedView(ephemeral), false)
   assert.equal(canManageSavedView(ephemeral), false)
 })

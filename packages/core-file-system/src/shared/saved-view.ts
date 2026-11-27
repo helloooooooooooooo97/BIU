@@ -41,10 +41,11 @@ export function canManageSavedView(
   return view.viewRole === 'owner' || view.viewRole === 'manager'
 }
 
-/** 当前用户是否有权删除该视图（仅创建者与管理者可删）。 */
+/** 当前用户是否有权删除该视图（锁定视图须先解锁后再删除；仅创建者与管理者可删）。 */
 export function canDeleteSavedView(
-  view: Pick<SavedView, 'viewRole' | 'ephemeral'> | null | undefined,
+  view: Pick<SavedView, 'viewRole' | 'locked' | 'ephemeral'> | null | undefined,
 ): boolean {
+  if (!view || view.locked) return false
   return canManageSavedView(view)
 }
 

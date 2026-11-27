@@ -471,6 +471,10 @@ export function createBrowserViewCrud(opts: BrowserViewCrudOptions) {
   function deleteView(view: SavedView, path = collectionPath) {
     setViewMenuOpen(false)
     if (view.ephemeral) return
+    if (view.locked) {
+      setViewsSaveError('视图已锁定，请先解锁后再删除')
+      return
+    }
     if (externalViews) {
       const current = viewsRef.current
       if (current.length <= 1) return
