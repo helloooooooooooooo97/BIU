@@ -27,10 +27,20 @@ test('defaultSeedViewsForCollection produces plain workspace seed views for busi
   assert.equal(pagesSeeds.length, 1)
   assert.equal(pagesSeeds[0]?.view.id, 'all')
   assert.equal(pagesSeeds[0]?.view.name, '全部页面')
-  assert.equal(pagesSeeds[0]?.view.locked, false)
+  assert.equal(pagesSeeds[0]?.view.locked, true)
+  assert.equal(pagesSeeds[0]?.view.tree, true)
+  assert.equal(pagesSeeds[0]?.view.rowNumbers, true)
   assert.equal(pagesSeeds[0]?.view.groupBy, 'shareScope')
   assert.equal(pagesSeeds[0]?.accessMode, 'members')
-  assert.equal(pagesSeeds[0]?.memberDefaultRole, 'editor')
+  assert.equal(pagesSeeds[0]?.memberDefaultRole, 'viewer')
+
+  const taskSeeds = defaultSeedViewsForCollection({ path: '/tasks', label: '任务' })
+  assert.equal(taskSeeds.length, 1)
+  assert.equal(taskSeeds[0]?.view.name, '全部任务')
+  assert.equal(taskSeeds[0]?.view.locked, false)
+  assert.equal(taskSeeds[0]?.view.tree, false)
+  assert.equal(taskSeeds[0]?.view.rowNumbers, false)
+  assert.equal(taskSeeds[0]?.memberDefaultRole, 'editor')
 
   const memberSeeds = defaultSeedViewsForCollection({ path: WORKSPACE_MEMBERS_COLLECTION_PATH, label: '空间成员' })
   assert.deepEqual(
