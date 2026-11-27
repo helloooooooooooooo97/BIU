@@ -11,6 +11,7 @@ import { CollabError, CollabStore } from './store.ts'
 import { authRateLimitMax, clientIp, SlidingWindowLimiter } from './rate-limit.ts'
 import type { AuthorizationService, ResourceRole } from './authorization.ts'
 import { workspaceMembersCollection } from './workspace-members-collection.ts'
+import { bearer, cacheWorkspaceList, fail } from './route-helpers.ts'
 
 export type { Actor, Action, ResourceRef, ResourceRole, WorkspaceRole, Decision } from './authorization.ts'
 
@@ -369,15 +370,6 @@ export class AccountService extends Service implements AccountServicePort {
   }
 }
 
-function bearer(route: RouteContext) {
-  const header = String(route.req.headers.authorization ?? '')
-  const match = /^Bearer\s+(\S+)$/i.exec(header)
-  if (match?.[1]) return match[1]
-  const cookie = String(route.req.headers.cookie ?? '')
-  const encoded = cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith('biu_account='))
-  return encoded ? decodeURIComponent(encoded.slice('biu_account='.length)) : ''
-}
-
 function rememberLogin(route: RouteContext, token: string) {
   route.res.setHeader('set-cookie', `biu_account=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict`)
 }
@@ -445,24 +437,6 @@ async function relayAccount(
   return { status: res.status, payload }
 }
 
-function cacheWorkspaceList(account: AccountService, accountId: string, payload: Record<string, unknown>) {
-  const workspaces = Array.isArray(payload.workspaces) ? payload.workspaces : []
-  for (const item of workspaces) {
-    if (!item || typeof item !== 'object') continue
-    const row = item as { id?: string; name?: string; ownerId?: string; role?: string; createdAt?: number }
-    if (!row.id) continue
-    account.store.upsertPulledWorkspace({
-      accountId,
-      id: String(row.id),
-      name: String(row.name ?? ''),
-      ownerId: row.ownerId,
-      role: row.role,
-      createdAt: row.createdAt,
-    })
-    account.markCloudWorkspace(String(row.id))
-  }
-}
-
 function purgeSessionEvents(sessionIds: string[]) {
   if (!sessionIds.length) return
   const path = eventsSqlitePath()
@@ -476,14 +450,6 @@ function purgeSessionEvents(sessionIds: string[]) {
   } finally {
     db.close()
   }
-}
-
-function fail(route: RouteContext, error: unknown) {
-  if (error instanceof CollabError) {
-    route.send(error.status, { error: error.message })
-    return
-  }
-  route.send(500, { error: String(error instanceof Error ? error.message : error) })
 }
 
 export function apply(ctx: Context, config: AccountConfig = {}) {

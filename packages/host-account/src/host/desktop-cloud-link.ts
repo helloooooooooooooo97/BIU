@@ -3,45 +3,7 @@ import { getRuntimePolicy } from '@biu/host-plugin-loader/runtime'
 import type { RouteContext } from '@biu/types/http'
 import { CollabError } from './store.ts'
 import type { AccountService } from './index.ts'
-
-function bearer(route: RouteContext) {
-  const header = String(route.req.headers.authorization ?? '')
-  const match = /^Bearer\s+(\S+)$/i.exec(header)
-  if (match) return match[1]!
-  const cookie = String(route.req.headers.cookie ?? '')
-  for (const part of cookie.split(';')) {
-    const trimmed = part.trim()
-    if (trimmed.startsWith('biu_account=')) return decodeURIComponent(trimmed.slice('biu_account='.length))
-    if (trimmed.startsWith('biu_legacy_account=')) return decodeURIComponent(trimmed.slice('biu_legacy_account='.length))
-  }
-  return ''
-}
-
-function fail(route: RouteContext, error: unknown) {
-  if (error instanceof CollabError) {
-    route.send(error.status, { error: error.message })
-    return
-  }
-  route.send(500, { error: String(error instanceof Error ? error.message : error) })
-}
-
-function cacheWorkspaceList(account: AccountService, accountId: string, payload: Record<string, unknown>) {
-  const workspaces = Array.isArray(payload.workspaces) ? payload.workspaces : []
-  for (const item of workspaces) {
-    if (!item || typeof item !== 'object') continue
-    const row = item as { id?: string; name?: string; ownerId?: string; role?: string; createdAt?: number }
-    if (!row.id) continue
-    account.store.upsertPulledWorkspace({
-      accountId,
-      id: String(row.id),
-      name: String(row.name ?? ''),
-      ownerId: row.ownerId,
-      role: row.role,
-      createdAt: row.createdAt,
-    })
-    account.markCloudWorkspace(String(row.id))
-  }
-}
+import { bearer, cacheWorkspaceList, fail } from './route-helpers.ts'
 
 export const name = 'desktop-cloud-link'
 export const inject = ['http', 'account'] as const
