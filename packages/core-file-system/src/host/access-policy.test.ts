@@ -109,4 +109,49 @@ describe('DatabaseAccessPolicy Notion 3-state visibility & orthogonal external a
     assert.deepEqual(policy.recordsInScope('/pages', rows, 'personal').map((r) => r.id), [])
     assert.deepEqual(policy.recordsInScope('/pages', rows, 'shared').map((r) => r.id), ['ws-1', 'ada-shared'])
   })
+
+  it('propagates inherited public shares to hasExternalAccess while keeping personal shareScope orthogonal', () => {
+    const store: WorkspaceFiles = {
+      activeWorkspaceId: () => 'ws-1',
+      membership: () => ({ active: 'ws-1', home: 'ws-1', mine: new Set(), any: new Set() }),
+      attach: () => {},
+      collectionOwnership: () => new Map([['parent', 'personal'], ['child', 'personal'], ['detached', 'personal']]),
+      collectionRecordOwners: () => new Map([['parent', 'ada'], ['child', 'ada'], ['detached', 'ada']]),
+      collectionExternalCollaborators: () => new Set(),
+      collectionInheritedSources: (_ws, _col, directKeys) => {
+        const out = new Map<string, { collection: string; recordId: string }>()
+        if (directKeys.has('/pages\tparent')) {
+          out.set('child', { collection: '/pages', recordId: 'parent' })
+        }
+        return out
+      },
+      members: () => [{ id: 'ada', member_kind: 'member' }],
+    }
+    const authorization = {
+      membershipKind: () => 'member' as const,
+      currentActor: () => ({ type: 'account' as const, accountId: 'ada', workspaceId: 'ws-1' }),
+    }
+    const host = {
+      tags: { list: () => [] } as unknown as AccessPolicyHost['tags'],
+      shares: {
+        list: () => [{ kind: 'record', collection: '/pages', recordId: 'parent', workspaceId: 'ws-1' }],
+        listRecords: () => [{ kind: 'record', collection: '/pages', recordId: 'parent', workspaceId: 'ws-1' }],
+      } as unknown as AccessPolicyHost['shares'],
+      collabStore: () => store,
+      authorization: () => authorization as unknown as ReturnType<AccessPolicyHost['authorization']>,
+      deviceWorkspace: () => false,
+      markDeviceRecord: () => {},
+      collection: () => undefined,
+      schemaFor: () => ({ fields: {} }) as ReturnType<AccessPolicyHost['schemaFor']>,
+      applyTagOverlay: (_spec: unknown, row: Record<string, unknown>) => row,
+    } as unknown as AccessPolicyHost
+    const policy = new DatabaseAccessPolicy(host)
+
+    // Public-only parent & inheriting child stay '私人' (orthogonal!) with hasExternalAccess = true; detached is false
+    assert.equal(policy.shareScopeLabel('/pages', 'parent', { id: 'parent' }, 'personal'), '私人')
+    assert.equal(policy.hasExternalAccess('/pages', 'parent'), true)
+    assert.equal(policy.shareScopeLabel('/pages', 'child', { id: 'child' }, 'personal'), '私人')
+    assert.equal(policy.hasExternalAccess('/pages', 'child'), true)
+    assert.equal(policy.hasExternalAccess('/pages', 'detached'), false)
+  })
 })

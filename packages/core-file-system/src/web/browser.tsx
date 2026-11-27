@@ -1357,6 +1357,11 @@ export function CollectionBrowser({
         : listIdentityKey
       loadedColumnsRef.current = reqColumns ? new Set(reqColumns) : null
       loadedPagesRef.current = { ...groupPagesRef.current }
+      if (opts?.force && !pendingView && reqTree && reqParentKey) {
+        for (const parentId of Object.keys(treeKidsByParentRef.current)) {
+          void loadTreeKidsRef.current(parentId, true)
+        }
+      }
       if (!listReadySent.current) listReadySent.current = true
       return true
     } catch (err) {
@@ -1608,33 +1613,46 @@ export function CollectionBrowser({
     let pendingViews = false
     let pendingTags = false
     let pendingData = false
+    let pendingShares = false
     const onChange = (event: Event) => {
-      const change = parseFsdbChange(event)
-      if (change.scope === 'content') {
-        const path = String(change.path ?? '')
-        const id = detailIdRef.current
-        if (id && path.endsWith(`/${id}`)) pullDetailBody()
-        return
+      if (event.type === FSDB_SHARES_CHANGE_EVENT) {
+        pendingShares = true
+        pendingData = true
+      } else {
+        const change = parseFsdbChange(event)
+        if (change.scope === 'content') {
+          const path = String(change.path ?? '')
+          const id = detailIdRef.current
+          if (id && path.endsWith(`/${id}`)) pullDetailBody()
+          return
+        }
+        if (change.scope === 'records' && !fsdbRecordChangeReloadsList(change, dataPathRef.current)) return
+        if (change.scope === 'views') pendingViews = true
+        else if (change.scope === 'tags') pendingTags = true
+        else pendingData = true
       }
-      if (change.scope === 'records' && !fsdbRecordChangeReloadsList(change, dataPathRef.current)) return
-      if (change.scope === 'views') pendingViews = true
-      else if (change.scope === 'tags') pendingTags = true
-      else pendingData = true
       window.clearTimeout(debounce)
       debounce = window.setTimeout(() => {
         const viewsTouched = pendingViews
         const tagsTouched = pendingTags
         const dataTouched = pendingData
+        const sharesTouched = pendingShares
         pendingViews = false
         pendingTags = false
         pendingData = false
+        pendingShares = false
         if (dataTouched) {
           void pullTags()
           // 页面记录打开时不要把整张表（私人/空间/共享三包）再拉一遍。
           // 装全部页面插件会连续 bump /plugins，每个 change 都 force list 会把 Chrome 打到 ERR_INSUFFICIENT_RESOURCES。
           if (detailIdRef.current) {
             refreshOpenDetail()
-          } else if (Date.now() < quietUntil.current) {
+            if (sharesTouched) {
+              for (const parentId of Object.keys(treeKidsByParentRef.current)) {
+                void loadTreeKidsRef.current(parentId, true)
+              }
+            }
+          } else if (!sharesTouched && Date.now() < quietUntil.current) {
             // 刚创建的子行还在本地树里；立刻 force 顶层列表会把子节点从分组里冲掉。
           } else {
             void reloadRef.current({ force: true })

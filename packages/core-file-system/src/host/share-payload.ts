@@ -47,9 +47,52 @@ function withResources(
   }
 }
 
+export type ShareCollabStore = {
+  collectionInheritedSources?(
+    workspaceId: string,
+    collection: string,
+    directKeys: ReadonlySet<string>,
+  ): Map<string, { collection: string; recordId: string }>
+  collectInheritingDescendants?(
+    workspaceId: string,
+    collection: string,
+    rootRecordId: string,
+    maxCount?: number,
+  ): Array<{ collection: string; recordId: string; parentCollection: string; parentRecordId: string }>
+}
+
 export type ShareSnapshotOpts = {
   contentIds?: readonly string[] | 'all'
   shares?: SharesStore
+  collabStore?: ShareCollabStore
+  workspaceId?: string
+}
+
+function effectivePublicRecordIds(
+  shares: SharesStore | undefined,
+  targetCollection: string,
+  workspaceId: string | undefined,
+  collabStore?: ShareCollabStore,
+): string[] {
+  if (!shares) return []
+  const ids = new Set<string>()
+  const directKeys = new Set<string>()
+  const allShares = typeof shares.list === 'function'
+    ? shares.list().filter((item) => item.kind === 'record')
+    : shares.listRecords(targetCollection)
+  for (const item of allShares) {
+    if (!item.recordId) continue
+    if (workspaceId && item.workspaceId && item.workspaceId !== workspaceId) continue
+    directKeys.add(`${item.collection}\t${item.recordId}`)
+    if (item.collection === targetCollection) ids.add(item.recordId)
+  }
+  if (collabStore?.collectionInheritedSources && workspaceId && directKeys.size > 0) {
+    const inherited = collabStore.collectionInheritedSources(workspaceId, targetCollection, directKeys)
+    for (const recordId of inherited.keys()) {
+      ids.add(recordId)
+    }
+  }
+  return [...ids]
 }
 
 function shareTagCatalog(
@@ -100,7 +143,7 @@ function matchesViewRow(
 }
 
 /**
- * 计算视图公开外链的透明预览计数：当前操作者可见命中数 N，以及其中已单独开启公开链接的记录数 M。
+ * 计算视图公开外链的透明预览计数：当前操作者可见命中数 N，以及其中有效公开（本条公开或继承公开）的记录数 M。
  */
 export async function computeViewPublicStats(
   db: Pick<Database, 'stat' | 'list'> & { tags?: { list: () => CollectionSchemaPack[] } },
@@ -109,6 +152,7 @@ export async function computeViewPublicStats(
   viewRecordId: string,
   accountId = '',
   workspaceId?: string,
+  collabStore?: ShareCollabStore,
 ): Promise<{ matchedCount: number; publicCount: number } | null> {
   const parsed = parseViewShareRecordId(viewRecordId)
   if (!parsed) return null
@@ -126,7 +170,7 @@ export async function computeViewPublicStats(
     },
   )) as { items?: DbRecord[]; total?: number }
   const items = listed.items ?? []
-  const publicIds = new Set(shares.listRecords(targetCollection).map((s) => s.recordId))
+  const publicIds = new Set(effectivePublicRecordIds(shares, targetCollection, workspaceId, collabStore))
   let publicCount = 0
   for (const row of items) {
     if (publicIds.has(String(row.id ?? ''))) publicCount += 1
@@ -156,14 +200,18 @@ export async function buildShareSnapshot(
     if (targetStat.kind !== 'collection' || !targetStat.schema) throw new Error('unknown collection')
     const schema = freezeSchema(targetStat.schema)
     const collectionLabel = String(targetStat.view?.title ?? targetStat.label ?? targetCollection.replace(/^\//, ''))
-    const publicShares = opts?.shares ? opts.shares.listRecords(targetCollection) : []
+    const publicRecordIds = effectivePublicRecordIds(
+      opts?.shares,
+      targetCollection,
+      share.workspaceId || opts?.workspaceId,
+      opts?.collabStore,
+    )
     const packs = db.tags?.list() ?? []
     const matchedRows: DbRecord[] = []
-    for (const item of publicShares) {
-      if (!item.recordId) continue
-      if (share.workspaceId && item.workspaceId && item.workspaceId !== share.workspaceId) continue
+    for (const publicId of publicRecordIds) {
+      if (!publicId) continue
       try {
-        const got = asRecordRead(await db.read(`${targetCollection}/${item.recordId}`))
+        const got = asRecordRead(await db.read(`${targetCollection}/${publicId}`))
         const row = got.value
         if (!row?.id) continue
         if (!matchesViewRow(row, view, targetStat.schema, packs)) continue
@@ -223,13 +271,47 @@ export async function buildShareSnapshot(
     const got = asRecordRead(await db.read(`${share.collection}/${share.recordId}`))
     const record = got.value
     if (!record?.id) throw new Error('unknown record')
-    let content: unknown = null
-    try {
-      content = asContentRead(await db.content(`${share.collection}/${record.id}`)).value ?? null
-    } catch {
-      content = null
+    const allRecords: DbRecord[] = [record]
+    const seenIds = new Set<string>([String(record.id)])
+    const wsId = share.workspaceId || opts?.workspaceId || ''
+    if (wsId && opts?.collabStore?.collectInheritingDescendants) {
+      const descendants = opts.collabStore.collectInheritingDescendants(wsId, share.collection, record.id)
+      for (const desc of descendants) {
+        if (desc.collection !== share.collection) continue
+        if (seenIds.has(desc.recordId)) continue
+        try {
+          const childGot = asRecordRead(await db.read(`${desc.collection}/${desc.recordId}`))
+          const child = childGot.value
+          if (!child?.id) continue
+          seenIds.add(String(child.id))
+          allRecords.push(child)
+        } catch {
+          /* 子记录已删除或不可读时跳过 */
+        }
+      }
     }
-    const contents = { [record.id]: content }
+    const wantContentIds =
+      opts?.contentIds === 'all'
+        ? allRecords.map((r) => String(r.id))
+        : Array.isArray(opts?.contentIds)
+          ? [...new Set([String(record.id), ...opts.contentIds.map((id) => String(id))])]
+          : [String(record.id)]
+    const contents: Record<string, unknown> = {}
+    const assetSet = new Set<string>()
+    for (const row of allRecords) {
+      const id = String(row.id)
+      for (const name of collectAssetNames(row, null, row.banner)) assetSet.add(name)
+      if (wantContentIds.includes(id)) {
+        try {
+          const content = asContentRead(await db.content(`${share.collection}/${id}`)).value ?? null
+          contents[id] = content
+          for (const name of collectAssetNames(row, content, row.banner)) assetSet.add(name)
+        } catch {
+          contents[id] = null
+        }
+      }
+    }
+    const contentField = schema.contentField ?? 'notes'
     return withResources({
       kind: 'record',
       collection: share.collection,
@@ -238,11 +320,11 @@ export async function buildShareSnapshot(
       title: String(record.title ?? record.name ?? collectionLabel),
       collectionLabel,
       schema,
-      records: [audienceRecord({ ...record, [schema.contentField ?? 'notes']: undefined })],
+      records: allRecords.map((row) => audienceRecord({ ...row, [contentField]: undefined })),
       contents,
-      assets: [...collectAssetNames(record, content, record.banner)],
+      assets: [...assetSet],
       banner: record.banner ?? null,
-      tags: shareTagCatalog(db, [record]),
+      tags: shareTagCatalog(db, allRecords),
     }, share)
   }
   throw new Error('unsupported share kind')

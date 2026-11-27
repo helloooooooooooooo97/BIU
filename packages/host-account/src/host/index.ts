@@ -1206,10 +1206,49 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       return
     }
     const collection = String(route.query.get('collection') ?? '')
-    route.send(
-      200,
-      account.store.recordAccess(me.id, collection, String(route.query.get('recordId') ?? '')),
-    )
+    const result = account.store.recordAccess(me.id, collection, String(route.query.get('recordId') ?? ''))
+    if (result.inheritance?.ancestors?.length || result.inheritance?.parent) {
+      let db: { read?: (path: string) => Promise<{ value?: Record<string, unknown> }> } | undefined
+      try {
+        db = ctx.get('database') as typeof db
+      } catch {
+        db = undefined
+      }
+      if (db?.read) {
+        const titleCache = new Map<string, string>()
+        const resolveTitle = async (col: string, recId: string) => {
+          const key = `${col}\t${recId}`
+          if (titleCache.has(key)) return titleCache.get(key)!
+          let title = ''
+          try {
+            const got = await db!.read!(`${col}/${recId}`)
+            title = String(got?.value?.title ?? got?.value?.name ?? '').trim()
+          } catch {
+            /* 祖先记录当前用户无权读取或已删除时回退默认文案 */
+          }
+          titleCache.set(key, title)
+          return title
+        }
+        const enrichedAncestors = await Promise.all(
+          (result.inheritance.ancestors ?? []).map(async (anc) => {
+            const title = await resolveTitle(anc.collection, anc.recordId)
+            return title ? { ...anc, title } : anc
+          }),
+        )
+        const parent = result.inheritance.parent
+        const parentTitle = parent ? await resolveTitle(parent.collection, parent.recordId) : ''
+        route.send(200, {
+          ...result,
+          inheritance: {
+            ...result.inheritance,
+            ...(parent ? { parent: parentTitle ? { ...parent, title: parentTitle } : parent } : {}),
+            ancestors: enrichedAncestors,
+          },
+        })
+        return
+      }
+    }
+    route.send(200, result)
   })
 
   const broadcastAccessChange = (workspaceId: string, scope: 'views' | 'records', path?: string) => {

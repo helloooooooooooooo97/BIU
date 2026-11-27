@@ -1206,7 +1206,26 @@ a.fsdb-person.is-link:hover .fsdb-person-name,button.fsdb-person.is-link:hover .
 .fsdb-share-inherit-row>span{display:flex;min-width:0;flex-direction:column;gap:2px}
 .fsdb-share-inherit-row strong{color:var(--biu-color-text);font-size:var(--biu-font-size-2);font-weight:var(--biu-font-weight-semibold)}
 .fsdb-share-inherit-row em{color:var(--biu-color-text-subtle);font-size:11px;font-style:normal;line-height:1.35}
+.fsdb-share-collab-section.is-inherited{margin-bottom:14px;border-bottom:var(--biu-stroke-width) solid color-mix(in srgb,var(--biu-color-border) 75%,transparent);padding-bottom:10px}
 .fsdb-share-collab-section.is-external{margin-top:14px;border-top:var(--biu-stroke-width) solid color-mix(in srgb,var(--biu-color-border) 75%,transparent);padding-top:14px}
+.fsdb-share-inherited-public{margin:0 0 14px;border:var(--biu-stroke-width) solid color-mix(in srgb,var(--biu-color-ink-green) 32%,var(--biu-color-border));border-radius:10px;background:color-mix(in srgb,var(--biu-color-ink-green) 7%,transparent);padding:10px 12px}
+.fsdb-share-inherited-public .fsdb-share-public-state{margin-bottom:8px}
+.fsdb-share-inherited-public .fsdb-share-copy-note{margin:8px 0 0}
+.fsdb-share-subcrumbs{display:flex;align-items:center;gap:4px;min-width:0;overflow:hidden;font-size:var(--biu-font-size-3)}
+.fsdb-share-subcrumb{display:inline-flex;align-items:center;gap:4px;min-width:0}
+.fsdb-share-subcrumb button{border:0;background:transparent;padding:2px 4px;border-radius:6px;color:var(--biu-color-text-muted);font:inherit;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fsdb-share-subcrumb button:hover{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
+.fsdb-share-subcrumb .is-current{color:var(--biu-color-text);font-weight:var(--biu-font-weight-semibold);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fsdb-share-subcrumb-sep{flex:none;color:var(--biu-color-text-subtle)}
+.fsdb-share-subpages{margin:24px auto 40px;max-width:var(--biu-page-max-width,760px);padding:16px 0 0;border-top:var(--biu-stroke-width) solid var(--biu-color-border)}
+.fsdb-share-subpages h2{margin:0 0 10px;color:var(--biu-color-text-subtle);font-size:12px;font-weight:var(--biu-font-weight-semibold);letter-spacing:.02em}
+.fsdb-share-subpages ul{display:flex;flex-direction:column;gap:4px;margin:0;padding:0;list-style:none}
+.fsdb-share-subpage-item{display:flex;align-items:center;gap:8px;width:100%;border:var(--biu-stroke-width) solid transparent;border-radius:8px;background:transparent;padding:8px 10px;color:var(--biu-color-text);font:inherit;font-size:var(--biu-font-size-3);text-align:left;cursor:pointer;transition:background-color 120ms ease,border-color 120ms ease}
+.fsdb-share-subpage-item:hover{background:var(--biu-color-bg-hover-weak);border-color:var(--biu-color-border)}
+.fsdb-share-subpage-icon{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;flex:none;color:var(--biu-color-icon)}
+.fsdb-share-subpage-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:var(--biu-font-weight-medium)}
+.fsdb-share-subpage-count{flex:none;border-radius:999px;background:var(--biu-color-bg-hover);padding:1px 6px;color:var(--biu-color-text-subtle);font-size:11px}
+.fsdb-share-subpage-arrow{flex:none;color:var(--biu-color-text-subtle)}
 .fsdb-share-collaborators{display:flex;flex-direction:column;gap:2px;margin:0 0 10px;padding:0;list-style:none}
 .fsdb-share-collaborators li{display:grid;grid-template-columns:28px minmax(0,1fr) auto 24px;min-height:42px;align-items:center;gap:9px;margin:0 -6px;border-radius:8px;padding:5px 6px;font-size:var(--biu-font-size-2);transition:background-color 120ms ease}
 .fsdb-share-collaborators li.is-inherited{grid-template-columns:28px minmax(0,1fr) auto}

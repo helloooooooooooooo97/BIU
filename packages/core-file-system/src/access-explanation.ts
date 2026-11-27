@@ -40,6 +40,11 @@ export type AccessExplanation = {
       kind: 'record'
       targetName: string
       lanOnly: boolean
+      inheritedFrom?: {
+        collection: string
+        recordId: string
+        title: string
+      }
     }>
   }
   myAccess: {
@@ -227,8 +232,30 @@ export function buildAccessExplanation(input: BuildAccessExplanationInput): Acce
 
   const inheritedAudience: AccessExplanation['audience']['inherited'] = []
   if (inheritanceMode === 'inherit') {
+    const publicShareSet = new Set(
+      (input.publicShares ?? [])
+        .filter((share) => share.kind === 'record' && share.recordId)
+        .map((share) => `${share.collection}\t${share.recordId}`),
+    )
     for (const ancestor of rawAncestors) {
       const sourceTitle = ancestor.title?.trim() || titleOf(input.recordTitles, ancestor.collection, ancestor.recordId, ancestor.recordId)
+      if (publicShareSet.has(`${ancestor.collection}\t${ancestor.recordId}`)) {
+        const linkKey = `inherited:${ancestor.collection}\t${ancestor.recordId}`
+        if (!seenLinks.has(linkKey)) {
+          seenLinks.add(linkKey)
+          publicLinks.push({
+            id: `public:inherited:${ancestor.collection}:${ancestor.recordId}`,
+            kind: 'record',
+            targetName: sourceTitle,
+            lanOnly: false,
+            inheritedFrom: {
+              collection: ancestor.collection,
+              recordId: ancestor.recordId,
+              title: sourceTitle,
+            },
+          })
+        }
+      }
       let addedFromAncestor = false
       for (const person of ancestor.people) {
         if (person.id === ancestor.ownerId) continue

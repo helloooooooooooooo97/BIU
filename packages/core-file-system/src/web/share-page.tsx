@@ -8,6 +8,7 @@ import {
   ArrowDownTrayIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  DocumentTextIcon,
   HashtagIcon,
   MoonIcon,
   SunIcon,
@@ -304,7 +305,10 @@ function SharePage({
 
   const selected = useMemo(() => {
     if (!snapshot) return null
-    if (snapshot.kind === 'record') return snapshot.records[0] ?? null
+    if (snapshot.kind === 'record') {
+      if (recordId) return snapshot.records.find((row) => row.id === recordId) ?? null
+      return snapshot.records[0] ?? null
+    }
     if (!recordId) return null
     return snapshot.records.find((row) => row.id === recordId) ?? null
   }, [snapshot, recordId])
@@ -383,7 +387,7 @@ function SharePage({
 
   async function downloadShare() {
     const packed =
-      (live.kind === 'rule' || live.kind === 'view') && live.records.some((row) => !Object.prototype.hasOwnProperty.call(live.contents, row.id))
+      live.records.length > 1 && live.records.some((row) => !Object.prototype.hasOwnProperty.call(live.contents, row.id))
         ? await loadSnapshot(token, password, { contents: 'all' })
         : live
     if (!packed || 'error' in packed || 'needsPassword' in packed) return
@@ -408,8 +412,53 @@ function SharePage({
     link.remove()
   }
 
+  const parentField = schema.parentField || 'parentId'
+  const rootRecord = snapshot.kind === 'record' ? snapshot.records[0] ?? null : null
+  const recordById = new Map(snapshot.records.map((row) => [String(row.id), row]))
+  const recordTreeTrail = (() => {
+    if (snapshot.kind !== 'record' || !shown || snapshot.records.length <= 1) return []
+    const trail: typeof snapshot.records = []
+    const seen = new Set<string>()
+    let cursor: (typeof snapshot.records)[number] | undefined = shown
+    let depth = 0
+    while (cursor && depth < 32) {
+      const id = String(cursor.id)
+      if (seen.has(id)) break
+      seen.add(id)
+      trail.unshift(cursor)
+      const parentId = String(cursor[parentField] ?? '').trim()
+      cursor = parentId ? recordById.get(parentId) : undefined
+      depth += 1
+    }
+    if (rootRecord && trail[0]?.id !== rootRecord.id) {
+      trail.unshift(rootRecord)
+    }
+    return trail
+  })()
+  const shownSubpages = (() => {
+    if (snapshot.kind !== 'record' || !shown || snapshot.records.length <= 1) return []
+    const shownId = String(shown.id)
+    const direct = snapshot.records.filter(
+      (row) => String(row.id) !== shownId && String(row[parentField] ?? '').trim() === shownId,
+    )
+    return direct
+  })()
+  const subpageCountByParent = (() => {
+    const counts = new Map<string, number>()
+    if (snapshot.kind !== 'record' || snapshot.records.length <= 1) return counts
+    for (const row of snapshot.records) {
+      const p = String(row[parentField] ?? '').trim()
+      if (p) counts.set(p, (counts.get(p) ?? 0) + 1)
+    }
+    return counts
+  })()
+
   function openShareRecord(id: string) {
     if (!id || id === shown?.id) return
+    if (live.kind === 'record' && rootRecord && id === String(rootRecord.id)) {
+      navigate(sharePublicPath(token))
+      return
+    }
     navigate(sharePublicPath(token, id))
   }
 
@@ -460,6 +509,25 @@ function SharePage({
               collapseToLeaf
               onPick={openShareTarget}
             />
+          ) : recordTreeTrail.length > 1 ? (
+            <nav className="fsdb-share-subcrumbs" aria-label="页面路径" data-testid="fsdb-share-subcrumbs">
+              {recordTreeTrail.map((item, idx) => {
+                const isLast = idx === recordTreeTrail.length - 1
+                const itemLabel = crumbRecordLabel(item, schema.labelField)
+                return (
+                  <span key={item.id} className="fsdb-share-subcrumb">
+                    {idx > 0 ? <ChevronRightIcon aria-hidden className="size-3.5 fsdb-share-subcrumb-sep" /> : null}
+                    {isLast ? (
+                      <span className="is-current">{itemLabel}</span>
+                    ) : (
+                      <button type="button" onClick={() => openShareRecord(String(item.id))}>
+                        {itemLabel}
+                      </button>
+                    )}
+                  </span>
+                )
+              })}
+            </nav>
           ) : (
             <div className="chat-view-project">
               <span className="chat-view-project-name">{snapshot.title}</span>
@@ -591,6 +659,7 @@ function SharePage({
       <div className="fsdb-share-body fsdb-right-body">
       <div className="app-pane-in">
       {shown ? (
+        <>
         <RecordDetail
           selected={{ ...shown, banner: rewriteBanner(shown.banner, token, password, shown.id) ?? shown.banner }}
           schema={schema}
@@ -616,7 +685,7 @@ function SharePage({
           setDraft={() => undefined}
           writeOne={() => undefined}
           writePatch={() => undefined}
-          onOpenRecord={undefined}
+          onOpenRecord={openShareRecord}
           readOnly
           headingOutline
           onPrev={
@@ -638,6 +707,35 @@ function SharePage({
           canPrev={viewIndex > 0}
           canNext={viewIndex >= 0 && viewIndex < listed.length - 1}
         />
+        {shownSubpages.length > 0 ? (
+          <section className="fsdb-share-subpages" aria-label="子页面" data-testid="fsdb-share-subpages">
+            <h2>子页面</h2>
+            <ul>
+              {shownSubpages.map((child) => {
+                const emoji = recordPreviewEmoji(child)
+                const childTitle = crumbRecordLabel(child, schema.labelField)
+                const nestedCount = subpageCountByParent.get(String(child.id)) ?? 0
+                return (
+                  <li key={child.id}>
+                    <button
+                      type="button"
+                      className="fsdb-share-subpage-item"
+                      onClick={() => openShareRecord(String(child.id))}
+                    >
+                      <span className="fsdb-share-subpage-icon" aria-hidden>
+                        {emoji || <DocumentTextIcon className="size-4" />}
+                      </span>
+                      <span className="fsdb-share-subpage-title">{childTitle}</span>
+                      {nestedCount > 0 ? <span className="fsdb-share-subpage-count">{nestedCount}</span> : null}
+                      <ChevronRightIcon aria-hidden className="size-4 fsdb-share-subpage-arrow" />
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
+        ) : null}
+        </>
       ) : (
         <div className="tasks-main fsdb-main fsdb-share-list" data-testid="fsdb-share-list">
           {(() => {

@@ -235,8 +235,20 @@ export function ShareScopeDetail({
                       {data.audience.publicLinks.map((link) => (
                         <li key={link.id}>
                           <div>
-                            <strong>{link.lanOnly ? '本条局域网链接' : '本条公开链接'}</strong>
-                            <em>{link.lanOnly ? '同一局域网内打开链接可查看' : '获得链接的人可查看'}</em>
+                            <strong>
+                              {link.inheritedFrom
+                                ? '继承的公开链接'
+                                : link.lanOnly
+                                  ? '本条局域网链接'
+                                  : '本条公开链接'}
+                            </strong>
+                            <em>
+                              {link.inheritedFrom
+                                ? `来自「${link.inheritedFrom.title}」 · 获得链接的人可查看`
+                                : link.lanOnly
+                                  ? '同一局域网内打开链接可查看'
+                                  : '获得链接的人可查看'}
+                            </em>
                           </div>
                           <span>可查看</span>
                         </li>
