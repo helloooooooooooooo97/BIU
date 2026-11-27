@@ -2,6 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import type { SessionEvent } from '@biu/type-session'
 import { formatUserMessagesForTitle, lastUserMessages, sanitizeGeneratedTitle, sessionsCollection } from './sessions-collection.ts'
+import { runWithSession } from './session-scope.ts'
 
 test('sessionsCollection maps summaries and writes title/tag without exposing shared pinned field', async () => {
   const calls: unknown[] = []
@@ -74,11 +75,14 @@ test('sessionsCollection maps summaries and writes title/tag without exposing sh
     ['delete', 's1'],
   ])
   const actionIds = (spec.actions ?? []).map((item) => item.id)
-  assert.deepEqual(actionIds, ['chat', 'rename', 'inspect', 'query', 'progress', 'compact', 'clear', 'retrieve', 'status'])
+  assert.deepEqual(actionIds, ['chat', 'rename', 'send', 'inspect', 'query', 'progress', 'compact', 'clear', 'retrieve', 'status'])
   assert.equal(spec.actions?.find((item) => item.id === 'chat')?.for, 'user')
   assert.deepEqual(spec.actions?.find((item) => item.id === 'chat')?.placement, ['row', 'detail'])
   assert.equal(spec.actions?.find((item) => item.id === 'rename')?.for, 'both')
   assert.deepEqual(spec.actions?.find((item) => item.id === 'rename')?.placement, ['row', 'detail'])
+  assert.equal(spec.actions?.find((item) => item.id === 'send')?.for, 'agent')
+  assert.deepEqual(spec.actions?.find((item) => item.id === 'send')?.placement, [])
+  assert.equal(spec.actions?.find((item) => item.id === 'send')?.requiredAction, 'resource:update')
   assert.equal(spec.actions?.find((item) => item.id === 'progress')?.for, 'agent')
   assert.deepEqual(spec.actions?.find((item) => item.id === 'progress')?.placement, [])
   assert.equal(spec.actions?.find((item) => item.id === 'compact')?.for, 'agent')
@@ -223,5 +227,64 @@ test('rename action with onlyIfUnchanged skips overwriting a concurrent manual r
   assert.equal(got.skipped, true)
   assert.equal(got.title, '用户手改名')
   assert.deepEqual(renamed, [])
+})
+
+test('send action dispatches message to another agent with sender and supports sync/async modes', async () => {
+  const sent: Array<{ id: string; text: string; opts?: unknown }> = []
+  const spec = sessionsCollection({
+    listSummaries: async () => [],
+    rename: async () => undefined,
+    patchConfig: async () => undefined,
+    delete: async () => true,
+    require: async (id) => ({ id, events: [] }),
+    sendMessage: async (id, text, opts) => {
+      sent.push({ id, text, opts })
+      return { text: '收到，已经查完了', steps: [{}, {}] }
+    },
+  })
+  const send = spec.actions?.find((item) => item.id === 'send')
+  assert.ok(send)
+  assert.equal(send.requiredAction, 'resource:update')
+
+  const syncRes = (await runWithSession('caller-1', () =>
+    send.run!('target-2', { id: 'target-2' }, { text: '帮我查一下日志' }),
+  )) as { ok: boolean; sessionId: string; queued: boolean; wait: boolean; text: string; steps: number }
+  assert.deepEqual(syncRes, {
+    ok: true,
+    sessionId: 'target-2',
+    queued: false,
+    wait: true,
+    text: '收到，已经查完了',
+    steps: 2,
+  })
+  assert.deepEqual(sent[0], {
+    id: 'target-2',
+    text: '帮我查一下日志',
+    opts: { wait: true, sender: { type: 'session', sessionId: 'caller-1' } },
+  })
+
+  const asyncRes = (await runWithSession('caller-1', () =>
+    send.run!('target-2', { id: 'target-2' }, { text: '后台跑一下', wait: false }),
+  )) as { ok: boolean; sessionId: string; queued: boolean; wait: boolean }
+  assert.deepEqual(asyncRes, {
+    ok: true,
+    sessionId: 'target-2',
+    queued: true,
+    wait: false,
+  })
+  assert.deepEqual(sent[1], {
+    id: 'target-2',
+    text: '后台跑一下',
+    opts: { wait: false, sender: { type: 'session', sessionId: 'caller-1' } },
+  })
+
+  await assert.rejects(
+    async () => runWithSession('caller-1', () => send.run!('target-2', { id: 'target-2' }, { text: '   ' })),
+    /args\.text is required/,
+  )
+  await assert.rejects(
+    async () => runWithSession('caller-1', () => send.run!('caller-1', { id: 'caller-1' }, { text: 'ping' })),
+    /cannot send message to self/,
+  )
 })
 

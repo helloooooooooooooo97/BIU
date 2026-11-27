@@ -54,7 +54,7 @@
       "id": "core-chat",
       "name": "Core-Chat",
       "layer": "core",
-      "blurb": "代理表 /agents：一行=一个代理（agent）。用户要「再开一个 agent」就是 db_create 一行。改元数据 db_update；动作 inspect/progress/status/compact/clear/retrieve 都是针对那一个代理。",
+      "blurb": "代理表 /agents：一行=一个代理（agent）。用户要「再开一个 agent」就是 db_create 一行。改元数据 db_update；动作 send/inspect/progress/status/compact/clear/retrieve 都是针对那一个代理（send 可直接给另一个代理发消息）。",
       "package": "@biu/core-chat/host",
       "web": "@biu/core-chat/web",
       "togglable": false,
