@@ -73,7 +73,7 @@ function createMockHttp() {
   }
 }
 
-async function setupHttpEnv() {
+async function setupHttpEnv(dataLocation: 'cloud' | 'device' = 'cloud') {
   const dir = mkdtempSync(join(tmpdir(), 'biu-batch-mv-'))
   dirs.push(dir)
   const dbPath = join(dir, 'biu.sqlite')
@@ -126,7 +126,7 @@ async function setupHttpEnv() {
   class AccountBridge extends Service {
     store = collab
     authorization = collab.authorization
-    workspaceLocation = () => 'cloud' as const
+    workspaceLocation = () => dataLocation
     constructor(inner: Context) {
       super(inner, 'account')
     }
@@ -206,7 +206,7 @@ async function setupHttpEnv() {
     shares: db.shares,
     tags: db.tags,
     assets: db.assets,
-    activeDataLocation: () => 'cloud',
+    activeDataLocation: () => dataLocation,
   })
 
   const asUser = <T>(accId: string, fn: () => Promise<T> | T) =>
@@ -505,4 +505,71 @@ test('unified /views record ACL, lazy seed views, field-level patch with revisio
   assert.equal(publicSnap.body.kind, 'view')
   const rows = publicSnap.body.records as Array<{ id: string }>
   assert.deepEqual(rows.map((r) => r.id), ['pub_done'])
+})
+
+test('local device workspace LAN view share exposes all rows matching the view without per-record public links', async () => {
+  const prevOnline = process.env.BIU_ONLINE
+  process.env.BIU_ONLINE = '0'
+  try {
+    const { db, http, ada, ws } = await setupHttpEnv('device')
+    const asUser = <T>(accountId: string, fn: () => T) =>
+      runWithAccount(accountId, () => runWithRequestWorkspace(ws.id, fn))
+
+    const createView = await asUser(ada.id, () =>
+      http.call('POST', '/api/db/saved-views', {
+        path: '/docs',
+        upsert: [
+          {
+            id: 'v_local_done',
+            name: '本机已完成',
+            mode: 'table',
+            filters: { status: 'done' },
+            columns: ['title', 'status'],
+          },
+        ],
+      }),
+    )
+    assert.equal(createView.status, 200)
+
+    await asUser(ada.id, () =>
+      db.create('/docs', [
+        { id: 'd_done_1', title: '本机完成一', status: 'done' },
+        { id: 'd_done_2', title: '本机完成二', status: 'done' },
+        { id: 'd_draft', title: '本机草稿', status: 'draft' },
+      ]),
+    )
+
+    // Enable LAN share on the view ONLY (no individual records are publicly shared)
+    const viewShareRes = await asUser(ada.id, () =>
+      http.call('POST', '/api/db/shares', { kind: 'record', collection: '/views', recordId: 'docs::v_local_done' }),
+    )
+    assert.equal(viewShareRes.status, 200)
+    const token = String((viewShareRes.body.share as { token: string }).token)
+
+    // GET /api/db/shares reports all matching rows as included in local LAN share
+    const statsRes = await asUser(ada.id, () =>
+      http.call('GET', '/api/db/shares?kind=record&collection=%2Fviews&recordId=docs%3A%3Av_local_done'),
+    )
+    assert.equal(statsRes.status, 200)
+    assert.deepEqual(statsRes.body.viewPublicStats, { matchedCount: 2, publicCount: 2 })
+
+    // Opening the LAN link returns ALL matching rows (excluding non-matching draft)
+    const lanSnap = await http.call('GET', `/api/share/${encodeURIComponent(token)}`)
+    assert.equal(lanSnap.status, 200)
+    assert.equal(lanSnap.body.kind, 'view')
+    const rows = lanSnap.body.records as Array<{ id: string }>
+    assert.deepEqual(rows.map((r) => r.id).sort(), ['d_done_1', 'd_done_2'])
+
+    // Clicking any matched row inside the LAN view can fetch its content
+    const contentRes = await http.call('GET', `/api/share/${encodeURIComponent(token)}/content/d_done_2`)
+    assert.equal(contentRes.status, 200)
+    assert.equal(contentRes.body.id, 'd_done_2')
+
+    // Non-matching rows remain hidden (404)
+    const draftRes = await http.call('GET', `/api/share/${encodeURIComponent(token)}/content/d_draft`)
+    assert.equal(draftRes.status, 404)
+  } finally {
+    if (prevOnline === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = prevOnline
+  }
 })

@@ -470,12 +470,23 @@ export function registerDatabaseHttpRoutes(
     }
   })
   const resolveShareCollabStore = () => getAccountService(ctx)?.store
+  const isLocalDeviceShare = (workspaceId?: string) => {
+    if (getRuntimePolicy().hostMode === 'cloud') return false
+    const account = getAccountService(ctx)
+    if (workspaceId && account?.workspaceLocation) {
+      return account.workspaceLocation(workspaceId) === 'device'
+    }
+    return activeDataLocation() === 'device'
+  }
   const shareSnapshotOpts = (query: URLSearchParams, share?: { workspaceId?: string }) => {
     const collabStore = resolveShareCollabStore()
     const workspaceId = share?.workspaceId || currentRequestWorkspaceId() || collabStore?.activeWorkspaceId?.() || ''
-    if (query.get('contents') === 'all') return { contentIds: 'all' as const, shares, collabStore, workspaceId }
+    const includeAllViewRecords = isLocalDeviceShare(workspaceId)
+    if (query.get('contents') === 'all') {
+      return { contentIds: 'all' as const, shares, collabStore, workspaceId, includeAllViewRecords }
+    }
     const record = query.get('record') || ''
-    return { contentIds: record ? [record] : [], shares, collabStore, workspaceId }
+    return { contentIds: record ? [record] : [], shares, collabStore, workspaceId, includeAllViewRecords }
   }
   const sharePasswordOf = (route: { req: { headers: IncomingMessage['headers'] }; query: URLSearchParams }, body?: { password?: unknown }) => {
     const header = String(route.req.headers['x-share-password'] ?? '')
@@ -686,6 +697,7 @@ export function registerDatabaseHttpRoutes(
           currentAccountId(),
           workspaceId,
           collabStore,
+          isLocalDeviceShare(workspaceId),
         )) ?? undefined
     }
     let inheritance: { mode: 'inherit' | 'custom'; hasParent: boolean; parentTitle?: string } | undefined
@@ -883,8 +895,15 @@ export function registerDatabaseHttpRoutes(
     try {
       const collabStore = resolveShareCollabStore()
       const workspaceId = share.workspaceId || currentRequestWorkspaceId() || collabStore?.activeWorkspaceId?.() || ''
+      const includeAllViewRecords = isLocalDeviceShare(workspaceId)
       const snapshot = await runInShareContext(share, () =>
-        buildShareSnapshot(db, savedViews, share, { contentIds: [recordId], shares, collabStore, workspaceId }),
+        buildShareSnapshot(db, savedViews, share, {
+          contentIds: [recordId],
+          shares,
+          collabStore,
+          workspaceId,
+          includeAllViewRecords,
+        }),
       )
       if (!snapshot.records.some((row) => String(row.id) === recordId)) {
         route.send(404, { error: 'not found' })
@@ -915,14 +934,15 @@ export function registerDatabaseHttpRoutes(
       const record = route.query.get('record') || ''
       const collabStore = resolveShareCollabStore()
       const workspaceId = share.workspaceId || currentRequestWorkspaceId() || collabStore?.activeWorkspaceId?.() || ''
+      const includeAllViewRecords = isLocalDeviceShare(workspaceId)
       const snapshot = await runInShareContext(share, () =>
         buildShareSnapshot(
           db,
           savedViews,
           share,
           record
-            ? { contentIds: [record], shares, collabStore, workspaceId }
-            : { contentIds: [], shares, collabStore, workspaceId },
+            ? { contentIds: [record], shares, collabStore, workspaceId, includeAllViewRecords }
+            : { contentIds: [], shares, collabStore, workspaceId, includeAllViewRecords },
         ),
       )
       const name = route.params.name ?? ''
