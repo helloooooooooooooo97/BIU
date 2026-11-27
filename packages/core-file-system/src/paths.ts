@@ -32,7 +32,6 @@ const INDEX_COLLECTION_ORDER = [
 /** 纯私人集合（仅创建者本人可见，不支持任何分享或批量权限设置）。 */
 const PERSONAL_ONLY_COLLECTIONS = new Set<string>([
   NOTICES_COLLECTION_PATH,
-  MCP_COLLECTION_PATH,
 ])
 
 /** 成员、视图、通知、回收站由系统维护。会话事件不进文件系统。 */

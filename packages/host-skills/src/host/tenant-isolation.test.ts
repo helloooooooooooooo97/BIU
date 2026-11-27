@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, test } from 'vitest'
 import { Context } from 'cordis'
-import { runWithRequestWorkspace } from '@biu/host-plugin-loader/data-dir'
+import { runWithAccount, runWithRequestWorkspace } from '@biu/host-plugin-loader/data-dir'
 import { assertSkillSourcePath } from './store.ts'
 import * as skillsPlugin from './index.ts'
 import type { SkillsService } from './index.ts'
@@ -132,4 +132,97 @@ test('host-skills isolates skills, promptSection, and HTTP endpoints per workspa
   const hostFile = join(root, 'secret.txt')
   writeFileSync(hostFile, 'top-secret')
   assert.throws(() => assertSkillSourcePath(hostFile), /不允许通过宿主机路径/)
+})
+
+test('host-skills isolates enabled/disabled state per account within the same workspace', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'biu-skills-per-account-'))
+  tempDirs.push(root)
+  process.env.BIU_ONLINE = '1'
+  process.env.BIU_DATA_DIR = root
+  process.env.BIU_SKILL_ROOT = join(root, 'skill')
+
+  const owners = new Map<string, string>()
+  const readableBy = new Map<string, Set<string>>()
+
+  const ctx = new Context()
+  ctx.provide('tools')
+  ctx.set('tools', { register: () => {} } as never)
+  ctx.provide('database')
+  ctx.set('database', { register: () => {} } as never)
+  ctx.provide('http')
+  ctx.set('http', { route: () => {} } as never)
+  ctx.provide('account' as never)
+  ctx.set('account' as never, {
+    store: {
+      collectionRecordOwners: (_ws: string, col: string) => (col === '/skills' ? owners : new Map()),
+    },
+    authorization: {
+      currentActor: () => null,
+      authorize: (
+        actor: { accountId: string },
+        _action: string,
+        resource: { collection: string; recordId: string },
+      ) => ({
+        allowed:
+          owners.get(resource.recordId) === actor.accountId ||
+          Boolean(readableBy.get(resource.recordId)?.has(actor.accountId)),
+      }),
+    },
+  } as never)
+
+  await ctx.plugin(skillsPlugin)
+  const skills = ctx.get('skills') as unknown as SkillsService
+  const auth = (ctx.get('account' as never) as unknown as { authorization: { currentActor: () => unknown } }).authorization
+  const asUser = <T>(accountId: string, fn: () => T) => {
+    auth.currentActor = () => ({ accountId, workspaceId: 'ws-team' })
+    return runWithRequestWorkspace('ws-team', () => runWithAccount(accountId, fn))
+  }
+
+  // Ada creates a skill (enabled by default for Ada)
+  const created = asUser('acc-ada', () =>
+    skills.create({
+      id: 'shared-review',
+      name: 'Code Review',
+      description: 'REVIEW_SKILL_MARKER',
+      notes: 'Review checklist',
+    }),
+  )
+  owners.set(created.id, 'acc-ada')
+  readableBy.set(created.id, new Set(['acc-bob']))
+
+  // Ada sees it enabled and in her prompt
+  asUser('acc-ada', () => {
+    assert.equal(skills.record(created.id).enabled, true)
+    assert.match(skills.promptSection(), /REVIEW_SKILL_MARKER/)
+  })
+
+  // Bob can see the shared skill, but it defaults to disabled for Bob (no prompt pollution)
+  asUser('acc-bob', () => {
+    assert.equal(skills.list().length, 1)
+    assert.equal(skills.record(created.id).enabled, false)
+    assert.doesNotMatch(skills.promptSection(), /REVIEW_SKILL_MARKER/)
+  })
+
+  // Bob enables it for himself -> Bob sees enabled=true; Ada is unaffected
+  asUser('acc-bob', () => {
+    skills.setEnabled(created.id, true)
+    assert.equal(skills.record(created.id).enabled, true)
+    assert.match(skills.promptSection(), /REVIEW_SKILL_MARKER/)
+  })
+
+  // Ada disables it for herself -> Ada sees enabled=false, while Bob STILL sees enabled=true
+  asUser('acc-ada', () => {
+    skills.setEnabled(created.id, false)
+    assert.equal(skills.record(created.id).enabled, false)
+    assert.doesNotMatch(skills.promptSection(), /REVIEW_SKILL_MARKER/)
+  })
+  asUser('acc-bob', () => {
+    assert.equal(skills.record(created.id).enabled, true)
+    assert.match(skills.promptSection(), /REVIEW_SKILL_MARKER/)
+  })
+
+  // Non-authorized user Carol cannot toggle enabled
+  asUser('acc-carol', () => {
+    assert.throws(() => skills.setEnabled(created.id, true), /permission denied/)
+  })
 })
