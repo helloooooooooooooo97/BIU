@@ -11,14 +11,12 @@ import {
   ENABLE_PAGE_BLOCK_PLUGIN,
   listenEnablePageBlockPlugin,
   pageBlockPluginFromEvent,
-  pluginRecordHref,
   refreshInstalledPageBlocks,
   runningWindowPluginNeedsWeb,
   startStorePlugin,
 } from './page-block-plugin.ts'
 
-test('page block enable href is the plugin record, not guessed from kind', () => {
-  assert.equal(pluginRecordHref('page-excalidraw'), '/database/plugins/record/page-excalidraw')
+test('page block enable event extracts plugin id rather than kind', () => {
   assert.equal(
     pageBlockPluginFromEvent(new CustomEvent(ENABLE_PAGE_BLOCK_PLUGIN, { detail: { plugin: 'page-excalidraw', kind: 'excalidraw' } })),
     'page-excalidraw',
@@ -33,7 +31,6 @@ test('enabling a page block starts the plugin and stays on the page', () => {
   assert.match(listen, /isMissingPlugin\(error\) \? 'missing' : 'failed'/)
   assert.match(listen, /pendingPageBlockEnableIds/)
   assert.doesNotMatch(listen, /pushState/)
-  assert.doesNotMatch(listen, /pluginRecordHref/)
 })
 
 function stubFetch(handler: (url: string, init?: RequestInit) => { status: number; body: unknown }) {

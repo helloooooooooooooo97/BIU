@@ -1,4 +1,3 @@
-export const WIN_CHROME_H = 0
 export const WIN_DEFAULT_W = 480
 export const WIN_DEFAULT_H = 360
 export const WIN_ABS_MIN = 80
@@ -90,10 +89,10 @@ export function parseStoreShell(value: unknown): StoreShell {
 
 export function windowOuterSize(shell: StoreShell, viewport: { w: number; h: number }): { w: number; h: number } {
   const minW = Math.min(viewport.w, Math.max(WIN_ABS_MIN, shell.minWidth))
-  const minH = Math.min(viewport.h, Math.max(WIN_ABS_MIN, shell.minHeight + WIN_CHROME_H))
+  const minH = Math.min(viewport.h, Math.max(WIN_ABS_MIN, shell.minHeight))
   return {
     w: Math.min(viewport.w, Math.max(minW, shell.width)),
-    h: Math.min(viewport.h, Math.max(minH, shell.height + WIN_CHROME_H)),
+    h: Math.min(viewport.h, Math.max(minH, shell.height)),
   }
 }
 
@@ -116,7 +115,7 @@ export function centeredGeom(shell: StoreShell, viewport: { w: number; h: number
 
 export function clampGeom(next: WinGeom, shell: StoreShell, viewport: { w: number; h: number }): WinGeom {
   const minW = Math.max(WIN_ABS_MIN, shell.minWidth)
-  const minH = Math.max(WIN_ABS_MIN, shell.minHeight + WIN_CHROME_H)
+  const minH = Math.max(WIN_ABS_MIN, shell.minHeight)
   const w = Math.min(viewport.w, Math.max(minW, next.w))
   const h = Math.min(viewport.h, Math.max(minH, next.h))
   const maxX = Math.max(0, viewport.w - 64)
